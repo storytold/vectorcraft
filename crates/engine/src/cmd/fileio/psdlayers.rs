@@ -677,7 +677,8 @@ enum Level {
 enum Knocked {
     /// The merged canvas.
     Merged(Canvas),
-    /// Nothing below it draws, or it draws nothing: it comes in as a layer of its own.
+    /// Nothing below it draws, it draws nothing, or what is below it and the merge are both
+    /// transparent: it comes in as a layer of its own.
     Nothing,
     /// The canvases would need more memory than allowed.
     TooLarge,
@@ -834,6 +835,9 @@ struct Builder<'a, F> {
     unclipped: Vec<bool>,
     /// Those records, in the order they were counted.
     unclip_log: Vec<usize>,
+    /// The records that came in as layers of the document (hidden ones too, with `hidden`): not left
+    /// out, though a drawing for a merge that wasn't made counted them.
+    kept: Vec<bool>,
     /// Bytes of layer and mask pixels decoded, and of canvases the merges made, so far.
     spent: Cell<u64>,
     /// The layers whose pixels were read so far (each time they were).
@@ -1162,7 +1166,8 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
     /// applies? Only a layer or group in a group, neither clipped nor a base of clipped layers, does;
     /// in a pass-through group, only when it and the visible units below it are in the Normal mode, so
     /// that none of them blends with what is below the group. Any other knockout is counted as not
-    /// applied.
+    /// applied. One at 0 opacity, or with no visible unit below it, changes nothing below it: it needs
+    /// no merge, and a hidden one isn't left out for it.
     fn knocks(&mut self, u: &Unit<'_>, below: &[Unit<'_>], level: Level) -> Result<bool, String> {
         let rec = self.record(u.record)?;
         if rec.knockout == 0 {
@@ -1171,10 +1176,12 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
         let normal = |u: &Unit<'_>| u.blend == Blend::Mode(BlendMode::Normal);
         let blends_out = level == Level::Pass && !(normal(u) && below.iter().filter(|b| b.visible).all(normal));
         let applies = rec.knockout == 1 && level != Level::Top && !blends_out && !rec.clipped && !u.base && !matches!(u.body, Body::Merged(_));
+        // Its fill opacity isn't checked: at 0 fill it still clears what is below it.
+        let changes = rec.opacity > 0.0 && below.iter().any(|b| b.visible);
         if !applies {
             self.unknock(u.record);
         }
-        Ok(applies)
+        Ok(applies && changes)
     }
 
     /// Count record `i` as a hidden layer left out (once).
@@ -1240,7 +1247,8 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
                         }
                         continue;
                     }
-                    // Nothing below it, or nothing of its own, to knock out: it comes in as a layer.
+                    // Nothing below it, or nothing of its own, to knock out: it comes in as a layer,
+                    // with the hidden layers its drawing left out (see `kept`).
                     Knocked::Nothing => {}
                     Knocked::TooLarge => {
                         self.restore(saved);
@@ -1390,9 +1398,6 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
     /// backdrop) and `top` is drawn there at its fill opacity; its opacity then fades all of that
     /// back toward the units below as they were. Its layer mask shapes the cut.
     fn knock(&mut self, below: &[Unit<'_>], top: &Unit<'_>) -> Result<Knocked, String> {
-        if !below.iter().any(|u| u.visible) {
-            return Ok(Knocked::Nothing);
-        }
         let (fill, opacity) = {
             let rec = self.record(top.record)?;
             (rec.fill, rec.opacity)
@@ -1422,8 +1427,18 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
         if acc.is_none() {
             return Ok(Knocked::Nothing);
         }
+        let clear = |c: &Canvas| c.px.iter().all(|p| p[3] <= 0.0);
+        let below_clear = acc.as_ref().is_some_and(clear);
+        // Nothing below to cut, and nothing of its own drawn at 0 fill: no canvas for the merge is needed.
+        if below_clear && fill <= 0.0 {
+            return Ok(Knocked::Nothing);
+        }
         if !knock_onto(&mut acc, &k, top.blend, fill, opacity, top.record, self.room(), &|n| self.spend(n))? {
             return Ok(Knocked::TooLarge);
+        }
+        // Nothing below to cut, and nothing of its own drawn at its fill opacity.
+        if below_clear && acc.as_ref().is_none_or(clear) {
+            return Ok(Knocked::Nothing);
         }
         Ok(acc.map_or(Knocked::Nothing, Knocked::Merged))
     }
@@ -1604,6 +1619,9 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
     /// The layer of the document unit `u` becomes; `None` for a layer that draws nothing (an
     /// adjustment layer, or one without pixels).
     fn node(&mut self, u: Unit<'_>) -> Result<Option<Node>, String> {
+        if let Some(k) = self.kept.get_mut(u.record) {
+            *k = true;
+        }
         let children = match &u.body {
             Body::Layer(i) => match self.image(*i)? {
                 Some((left, top, img)) => vec![Arc::new(self.image_node(&u.name, left, top, img)?)],
@@ -1861,6 +1879,7 @@ pub(super) fn import(
         clipped_out_log: vec![],
         unclipped: vec![false; records.len()],
         unclip_log: vec![],
+        kept: vec![false; records.len()],
         spent: Cell::new(0),
         painted: Cell::new(0),
         blank: vec![None; records.len()],
@@ -1868,6 +1887,8 @@ pub(super) fn import(
         blank_log: vec![],
     };
     let layers = b.list(&items, Level::Top)?;
+    // A drawing for a knockout or a clip leaves hidden layers out; those that came in anyway aren't.
+    b.notes.hidden = b.skipped.iter().zip(&b.kept).filter(|&(s, k)| *s && !*k).count();
     let Builder { mut doc, notes, .. } = b;
     if !layers.is_empty() {
         doc.layers = layers;

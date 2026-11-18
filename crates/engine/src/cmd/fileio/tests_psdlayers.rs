@@ -752,6 +752,74 @@ fn knockouts_that_arent_applied_are_said() {
     assert_eq!(r["warnings"], json!([]), "{r}");
 }
 
+/// A knockout that changes nothing below it leaves the layers apart, hidden ones included: one at 0
+/// opacity, and one at 0 fill over layers that are transparent. At 0 fill over painted layers, and
+/// at a fill over transparent ones, it still merges. A knockout at 0 fill over a transparent layer
+/// stays apart without a warning when their merge would need more memory than allowed.
+#[test]
+fn knockouts_that_change_nothing_keep_the_layers_apart() {
+    let cms = |c: [f32; 4]| [c[0], c[1], c[2]];
+    let layers = [
+        group_end(),
+        layer("Lower", [0, 0, 2, 2], [255, 0, 0, 0]),
+        knockout(layer("Cut", [2, 2, 4, 4], [0, 0, 255, 255]), 1, 0),
+        group("Group", b"norm"),
+    ];
+    // The two 2 × 2 layers drawn together fit 256 bytes, but not the 4 × 4 canvas covering both.
+    let (doc, warnings) = psdlayers::import(&file(4, 4, &layers, 8, false, false), false, 256, cms).unwrap().unwrap();
+    assert_eq!(doc.layers[0].children().unwrap().iter().map(|c| name(c)).collect::<Vec<_>>(), ["Lower", "Cut"]);
+    assert!(warnings.is_empty(), "{warnings:?}");
+    let lower = |alpha: u8| layer("Lower", [0, 0, 4, 4], [255, 0, 0, alpha]);
+    let hidden = L { hidden: true, ..layer("Hidden", [0, 0, 4, 4], [0, 255, 0, 255]) };
+    let cut = |fill: u8, opacity: u8| knockout(L { opacity, ..layer("Cut", [0, 0, 2, 2], [0, 0, 255, 255]) }, 1, fill);
+    let inner = |s: &Session| s.doc().unwrap().doc.layers[0].children().map_or(vec![], |c| c.iter().map(|l| name(l).to_string()).collect::<Vec<_>>());
+    for (alpha, fill, opacity, apart) in [(255, 0, 0, true), (0, 0, 255, true), (255, 0, 255, false), (0, 128, 255, false)] {
+        let layers = [group_end(), lower(alpha), hidden.clone(), cut(fill, opacity), group("Group", b"norm")];
+        let (s, r) = open(&file(4, 4, &layers, 8, false, false), json!({"hiddenLayers": true}));
+        let (names, warnings) = if apart { (vec!["Lower", "Hidden", "Cut"], json!([])) } else { (vec!["Lower + Cut"], json!([HIDDEN_1])) };
+        assert_eq!((inner(&s), &r["warnings"]), (names.iter().map(|n| n.to_string()).collect(), &warnings), "{alpha} {fill} {opacity}: {r}");
+    }
+    // A hidden knockout that needs no merge comes in with hidden layers: at 0 opacity, and with
+    // nothing below it in its group.
+    let hidden_cut = |opacity: u8| L { hidden: true, ..cut(0, opacity) };
+    for (layers, names) in [
+        (vec![group_end(), lower(255), hidden_cut(0), group("Group", b"norm")], vec!["Lower", "Cut"]),
+        (vec![group_end(), hidden_cut(255), group("Group", b"norm")], vec!["Cut"]),
+    ] {
+        let (s, r) = open(&file(4, 4, &layers, 8, false, false), json!({"hiddenLayers": true}));
+        assert_eq!((inner(&s), &r["warnings"]), (names.iter().map(|n| n.to_string()).collect(), &json!([])), "{r}");
+    }
+}
+
+/// With hidden layers asked for, the hidden layers of a group drawn for a knockout or a clip that
+/// isn't made come in, and aren't counted as left out: a knockout group over a layer that stores no
+/// pixels, and a clipped group whose merge needs more memory than allowed.
+#[test]
+fn hidden_layers_of_a_group_drawn_for_a_merge_not_made_come_in() {
+    let cms = |c: [f32; 4]| [c[0], c[1], c[2]];
+    let children = |l: &Node| l.children().map_or(vec![], |c| c.iter().map(|l| (name(l).to_string(), l.visible)).collect::<Vec<_>>());
+    let shown_and_hidden =
+        || [group_end(), layer("Shown", [0, 0, 2, 2], [0, 0, 255, 255]), L { hidden: true, ..layer("Hidden", [2, 2, 4, 4], [0, 255, 0, 255]) }];
+    let both = vec![("Shown".to_string(), true), ("Hidden".to_string(), false)];
+    // A knockout group over a layer that stores no pixels.
+    let mut layers = vec![group_end(), L { bare: true, ..layer("Lower", [0, 0, 2, 2], [0; 4]) }];
+    layers.extend(shown_and_hidden());
+    layers.extend([knockout(group("Cut", b"norm"), 1, 255), group("Group", b"norm")]);
+    let (s, r) = open(&file(4, 4, &layers, 8, false, false), json!({"hiddenLayers": true}));
+    let d = &s.doc().unwrap().doc;
+    let cut = &d.layers[0].children().unwrap()[0];
+    assert_eq!((name(cut), children(cut), &r["warnings"]), ("Cut", both.clone(), &json!([])), "{r}");
+    // A clipped group whose merge with its base doesn't fit 320 bytes.
+    let mut layers = vec![layer("Base", [0, 0, 2, 2], [255, 0, 0, 255])];
+    layers.extend(shown_and_hidden());
+    layers[2].rect = [0, 0, 4, 4];
+    layers.push(L { clipped: true, ..group("Clipped", b"norm") });
+    let (doc, warnings) = psdlayers::import(&file(4, 4, &layers, 8, false, false), true, 320, cms).unwrap().unwrap();
+    let clipped = &doc.layers[1];
+    assert_eq!((name(clipped), children(clipped)), ("Clipped", both), "{warnings:?}");
+    assert_eq!(warnings, ["1 layer clipped to the layer below came in unclipped: the merge needs more memory than allowed"]);
+}
+
 /// A knockout's merge whose canvases would need more memory than allowed leaves the layers apart,
 /// with a warning.
 #[test]
