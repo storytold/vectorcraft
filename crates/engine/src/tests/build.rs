@@ -582,6 +582,39 @@ fn shape_builder_tool_drives_the_command() {
     assert_eq!(layer_children(&s), 1);
 }
 
+/// A Shape Builder click that builds nothing puts the reason in the status bar and leaves the
+/// document, its undo history and the selection as they were; a click that merges shows no status.
+#[test]
+fn shape_builder_click_that_builds_nothing_shows_why() {
+    use vectorcraft_tools::builder::{NO_REGION, SELECT_ALL_PATHS, SELECT_PATHS};
+    let mut s = session();
+    let (a, _) = two(&mut s);
+    let v = ViewInfo::default();
+    s.select_tool("shapeBuilder", v).unwrap();
+    let click = |s: &mut Session, x: f64, y: f64| {
+        s.pointer(&PointerEvent::new(PointerKind::Down, x, y), v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Up, x, y), v).unwrap()
+    };
+    let state = |s: &Session| {
+        let st = s.doc().unwrap();
+        (st.revision, st.history.undo.len(), st.history.redo.len(), st.selection.objects.clone(), st.is_dirty())
+    };
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    let before = state(&s);
+    assert_eq!(click(&mut s, 125.0, 50.0), vec![UiRequest::Status(SELECT_ALL_PATHS.into())]);
+    assert_eq!(click(&mut s, 400.0, 400.0), vec![UiRequest::Status(NO_REGION.into())]);
+    assert_eq!(state(&s), before, "nothing changed");
+    s.execute("select.none", &json!({})).unwrap();
+    let before = state(&s);
+    assert_eq!(click(&mut s, 75.0, 50.0), vec![UiRequest::Status(SELECT_PATHS.into())]);
+    assert_eq!(state(&s), before, "nothing changed");
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    assert_eq!(click(&mut s, 75.0, 50.0), vec![UiRequest::Status(String::new())], "a click that merges clears the status");
+    assert_eq!(s.journal.last().unwrap().0, "shapeBuilder.merge");
+    assert!(click(&mut s, 25.0, 50.0).is_empty(), "the next merge shows no status");
+    assert_eq!(s.journal.last().unwrap().0, "shapeBuilder.merge");
+}
+
 /// A click of the Shape Builder merges over the map the tool built for the hover, as does the
 /// command over the same inputs with the same gap; another gap needs a map of its own.
 #[test]
