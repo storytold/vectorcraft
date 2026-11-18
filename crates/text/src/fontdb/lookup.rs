@@ -11,8 +11,8 @@ use super::names::{norm, norm_chars, script_families};
 use super::scan::{enumerate_faces, font_files};
 use super::traits::{Alias, FontMatch, FontTraits, regular_rank};
 use super::{
-    Arc, BezPath, CANONICAL_CACHE_MAX, Color, ColourContent, FontDb, GlyphId, GlyphImage, MetadataProvider, NEXT_ID, OUTLINE_CACHE_MAX,
-    Ordering, Size,
+    Arc, BezPath, CANONICAL_CACHE_MAX, Color, ColourContent, FontDb, GlyphId, GlyphImage, MetadataProvider, NEXT_ID, OUTLINE_CACHE_MAX, Ordering,
+    Size,
 };
 
 /// The most faces [`FontDb::postscript_faces`] gives, and the most families it loads.
