@@ -9819,6 +9819,11 @@ breakText	Glyphs	字形
 @msg	A panel is not joined to the rest by a crease.	パネルがどの筋入れ線でも他とつながっていません。
 @msg	A fold line is on a non-printing layer.	折り線が印刷しないレイヤーにあります。
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	パネル: {panels}、ヒンジ: {hinges}、エラー: {errors}、警告: {warnings}
+	Orbit Lines	軌道線
+	Petal Garland	花びらのガーランド
+	Lattice Braid	格子編み
+	Facet Sweep	多面体のストローク
+	Artistic Brushes	アートブラシ
 	Fold Preview	折りプレビュー
 	Fold	折り
 	Show Fold Lines	折り線を表示

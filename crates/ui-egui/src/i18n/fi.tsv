@@ -8387,4 +8387,9 @@ breakText	Glyphs	Merkit
 @msg	A joint does not close by {gap} pt.	Liitos ei sulkeudu, rako {gap} pt.
 @msg	Two panels pass through each other.	Kaksi paneelia kulkee toistensa läpi.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer on oltava "singleLine", "everyLine", "standardSingleLine" tai "standardEveryLine"
+	Orbit Lines	Kiertoradan viivat
+	Petal Garland	Terälehtiköynnös
+	Lattice Braid	Ristikkopunos
+	Facet Sweep	Särmikäs veto
+	Artistic Brushes	Taidesiveltimet
 @msg	text.{key} `{v}`: use "{_1}" or "{_2}"	text.{key} `{v}`: käytä arvoa "{_1}" tai "{_2}"

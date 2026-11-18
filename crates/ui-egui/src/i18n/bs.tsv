@@ -7432,3 +7432,8 @@ shape	Open	Otvoren
 @msg	A joint does not close by {gap} pt.	Spoj se ne zatvara za {gap} pt.
 @msg	Two panels pass through each other.	Dva panela prolaze jedan kroz drugi.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer mora biti "singleLine", "everyLine", "standardSingleLine" ili "standardEveryLine"
+	Orbit Lines	Orbitalne linije
+	Petal Garland	Vijenac od latica
+	Lattice Braid	Rešetkasti preplet
+	Facet Sweep	Fasetni potez
+	Artistic Brushes	Umjetničke četke
