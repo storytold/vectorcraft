@@ -12002,7 +12002,9 @@ EPS files hold its drawn steps, as they do for every blend:
 
 With the Blend tool active, `tool.select {tool: "blend"}` finishes the blend, as a click on the tool's button or W
 does: it drops the object clicked first and stops the next click adding to the blend just made. The document and the
-selection stay as they are. Choosing any other tool that is already active leaves its work as it is.
+selection stay as they are. With the Pen active, `tool.select {tool: "pen"}` ends the path being drawn as Escape does,
+and so do P and a click on the Pen's button: the path stays open and selected (a path inside a compound path leaves
+the compound path selected), and the next click starts a new path. Choosing any other tool that is already active leaves its work as it is.
 
 A blend's spine is the straight lines between its key centres until it is edited. `object.blend.info` lists it
 (`spine.anchors`, `keyAnchors`: the point each key sits on). `object.blend.spine.addAnchor {x, y}` adds a point where
