@@ -29,6 +29,7 @@
 
 mod catalog;
 
+use std::borrow::Cow;
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -640,6 +641,11 @@ pub fn tr_ctx<'a>(lang: Lang, context: &str, s: &'a str) -> &'a str {
     lang.catalog().contextual(context, s).unwrap_or_else(|| tr(lang, s))
 }
 
+/// The translation of `s` in `lang`'s `context` rows alone, or `None` when it has no such row.
+pub fn tr_ctx_row(lang: Lang, context: &str, s: &str) -> Option<&'static str> {
+    lang.catalog().contextual(context, s)
+}
+
 /// A name the app gives something (a default swatch's), translated where the current language has
 /// a `context` row for it; any other name (one the user gave) comes back as it is.
 pub fn t_name<'a>(context: &str, name: &'a str) -> &'a str {
@@ -678,6 +684,23 @@ pub fn trn(lang: Lang, n: u64, one: &str, other: &str) -> String {
 /// `menu_item_name`, `dim_name`).
 pub fn label_or_name(lang: Lang, s: &str, built_in: bool) -> &str {
     if built_in { tr(lang, s) } else { s }
+}
+
+/// A built-in name that may end in a number ("Warm Gray 3") in `lang`: its own row, or the row of
+/// the name before the number followed by the number as it is. Any other name, a color value
+/// such as `K=35` among them, comes back as it is.
+pub fn numbered_label(lang: Lang, s: &str) -> Cow<'_, str> {
+    if let Some(shown) = lang.catalog().plain(s) {
+        return Cow::Borrowed(shown);
+    }
+    if let Some((head, n)) = s.rsplit_once(' ')
+        && !n.is_empty()
+        && n.bytes().all(|b| b.is_ascii_digit())
+        && let Some(shown) = lang.catalog().plain(head)
+    {
+        return Cow::Owned(format!("{shown} {n}"));
+    }
+    Cow::Borrowed(s)
 }
 
 /// How deep [`message`] translates placeholder values that are messages themselves. The status
@@ -909,6 +932,35 @@ pub fn msg(s: &str) -> String {
     let out = message(lang, s);
     *last = Some((lang.code(), s.to_string(), out.clone()));
     out
+}
+
+/// Stands in for the value [`message_keeping`] shows as it is while the text around it is
+/// translated.
+const KEPT_VALUE: char = '\u{FFFC}';
+
+/// The message `before`, `kept` and `after` make, with `before` and `after` translated as
+/// [`message`] translates a message and `kept` (such as text a script threw) shown as it is, even
+/// when it reads like a message that has a translation. When the translation does not hold the
+/// place of `kept` exactly once, the message is shown in English.
+pub fn message_keeping(lang: Lang, before: &str, kept: &str, after: &str) -> String {
+    keeping(|s| message(lang, s), before, kept, after)
+}
+
+/// [`message_keeping`] in the current language, remembering the last translation as [`msg`] does.
+pub fn msg_keeping(before: &str, kept: &str, after: &str) -> String {
+    keeping(msg, before, kept, after)
+}
+
+fn keeping(translate: impl Fn(&str) -> String, before: &str, kept: &str, after: &str) -> String {
+    let english = || format!("{before}{kept}{after}");
+    if before.contains(KEPT_VALUE) || after.contains(KEPT_VALUE) {
+        return english();
+    }
+    let shown = translate(&format!("{before}{KEPT_VALUE}{after}"));
+    match shown.split_once(KEPT_VALUE) {
+        Some((head, tail)) if !tail.contains(KEPT_VALUE) => format!("{head}{kept}{tail}"),
+        _ => english(),
+    }
 }
 
 /// [`trn`] in the current language.

@@ -154,6 +154,67 @@ fn an_ellipse_shows_its_pie_properties() {
     assert!(shown.iter().any(|s| s == "30°") && shown.iter().any(|s| s == "120°"), "{shown:?}");
 }
 
+/// Ellipse Properties' Constrain Pie Angle link, in the Transform panel and the Properties panel's
+/// Transform section: off at first, a click or Space with the keyboard on it toggles it, and while
+/// it is on a typed Pie Start or End Angle moves the other angle by as much, keeping the span, in
+/// one undo step. Off, each angle changes on its own.
+#[test]
+fn the_constrain_pie_angle_link_keeps_the_span() {
+    use egui_kittest::kittest::Queryable;
+    const LINK: &str = "Constrain Pie Angle";
+    let pie = |app: &VectorcraftApp| match &first_selected(app).unwrap().kind {
+        NodeKind::Path { live: Some(l), .. } => match **l {
+            LiveShape::Ellipse { pie, .. } => pie,
+            ref k => panic!("{k:?}"),
+        },
+        k => panic!("{k:?}"),
+    };
+    let undo = |app: &VectorcraftApp| app.session.doc().unwrap().history.undo.len();
+    for draw in [show as fn(&mut VectorcraftApp, &mut Ui), crate::panels::properties::transform_section] {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        app.run("shape.ellipse", json!({"x": 50, "y": 50, "width": 120, "height": 80})).unwrap();
+        app.run("object.setLiveShape", json!({"pieStart": 30, "pieEnd": 120})).unwrap();
+        assert!(!app.ui.constrain_pie_angle, "off at first");
+        let mut fonts = false;
+        let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(320.0, 900.0)).with_accessibility_check(false).build_ui_state(
+            move |ui, app: &mut VectorcraftApp| {
+                if !std::mem::replace(&mut fonts, true) {
+                    crate::theme::install_fonts(ui.ctx());
+                    return;
+                }
+                draw(app, ui);
+            },
+            app,
+        );
+        h.run_steps(3);
+        h.get_by_role_and_label(egui::accesskit::Role::Button, LINK).click();
+        h.run_steps(2);
+        assert!(h.state().ui.constrain_pie_angle, "a click turns it on");
+        h.get_by_role_and_label(egui::accesskit::Role::Button, LINK).focus();
+        h.run_steps(1);
+        h.key_press(egui::Key::Space);
+        h.run_steps(2);
+        assert!(!h.state().ui.constrain_pie_angle, "Space turns it off");
+        h.get_by_role_and_label(egui::accesskit::Role::Button, LINK).click();
+        h.run_steps(2);
+        assert!(h.state().ui.constrain_pie_angle);
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let n = undo(h.state());
+        type_into(&ctx, h.state_mut(), draw, "30°", "60");
+        assert_eq!(pie(h.state()), (60.0, 150.0));
+        assert_eq!(undo(h.state()), n + 1, "one undo step");
+        type_into(&ctx, h.state_mut(), draw, "150°", "200");
+        assert_eq!(pie(h.state()), (110.0, 200.0));
+        h.get_by_role_and_label(egui::accesskit::Role::Button, LINK).click();
+        h.run_steps(2);
+        assert!(!h.state().ui.constrain_pie_angle);
+        type_into(&ctx, h.state_mut(), draw, "110°", "100");
+        assert_eq!(pie(h.state()), (100.0, 200.0), "off, the end stays");
+    }
+}
+
 /// A live line shows its Line Properties in the Transform panel and the Properties panel's
 /// Transform section: a typed length keeps its first end in place and a typed angle turns it
 /// about its midpoint, each one undo step. A line with other objects selected, and a line after
@@ -639,6 +700,75 @@ fn rotate_and_shear_fields_are_named() {
     h.run_steps(3);
     let _ = h.get_by_role_and_label(egui::accesskit::Role::TextInput, "Rotate");
     let _ = h.get_by_role_and_label(egui::accesskit::Role::TextInput, "Shear");
+}
+
+/// A 100 × 60 rectangle at (100, 40), selected, in a new app.
+fn shear_app() -> VectorcraftApp {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app.run("shape.rectangle", json!({"x": 100, "y": 40, "width": 100, "height": 60})).unwrap();
+    app
+}
+
+/// Types `value` into the panel's Shear field (the second field showing "0°") and presses Enter.
+fn type_shear(app: &mut VectorcraftApp, value: &str) {
+    use crate::panels::tests_appearance::{click, frame_events};
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let texts = frame_events(&ctx, app, vec![], show);
+    let at = texts.iter().filter(|(t, _)| t == "0°").nth(1).unwrap_or_else(|| panic!("no Shear field in {texts:?}")).1.center();
+    click(&ctx, app, at, show);
+    let key = |key, modifiers| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers };
+    frame_events(&ctx, app, vec![key(egui::Key::A, egui::Modifiers::COMMAND)], show);
+    frame_events(&ctx, app, vec![egui::Event::Text(value.into())], show);
+    frame_events(&ctx, app, vec![key(egui::Key::Enter, egui::Modifiers::NONE)], show);
+    frame_events(&ctx, app, vec![], show);
+}
+
+/// The Shear field takes -359° to 359°: a typed 120 and -359 shear about the reference point (the
+/// centre) as `object.shear` does with that angle, and 120 slants as -60 does.
+#[test]
+fn the_shear_field_takes_angles_from_minus_359_to_359() {
+    for (typed, angle, like) in [("120", 120.0, Some(-60.0)), ("-359", -359.0, None), ("45", 45.0, None)] {
+        let mut app = shear_app();
+        let before = app.selection_box().unwrap();
+        type_shear(&mut app, typed);
+        assert_eq!(app.ui.status, "", "{typed}: no error");
+        let got = app.selection_box().unwrap();
+        assert_ne!(got, before, "{typed}: sheared");
+        let mut want = shear_app();
+        want.run("object.shear", json!({"angle": angle, "axis": "horizontal", "origin": [150, 70]})).unwrap();
+        assert_eq!(got, want.selection_box().unwrap(), "{typed}");
+        if let Some(like) = like {
+            let mut same = shear_app();
+            same.run("object.shear", json!({"angle": like, "axis": "horizontal", "origin": [150, 70]})).unwrap();
+            let (a, b) = (got.rect, same.selection_box().unwrap().rect);
+            assert!(
+                (a.x0 - b.x0).abs() < 1e-6 && (a.x1 - b.x1).abs() < 1e-6 && (a.y0 - b.y0).abs() < 1e-6 && (a.y1 - b.y1).abs() < 1e-6,
+                "{typed}: {a:?} like {b:?}"
+            );
+        }
+    }
+}
+
+/// A typed ±90 or ±270, which have no shear, and a typed 400 or -400, outside -359 to 359, leave
+/// the rectangle as it is, record no undo step and show `object.shear`'s error in the status bar.
+#[test]
+fn the_shear_field_shows_the_error_for_an_angle_with_no_shear() {
+    let none = |v: &str| format!("invalid parameters for `object.shear`: `angle` cannot be {v}: ±90 and ±270 degrees have no shear");
+    let range = |v: &str| format!("invalid parameters for `object.shear`: `angle` must be from -359 to 359 degrees, not {v}");
+    for (typed, msg) in
+        [("90", none("90")), ("-90", none("-90")), ("270", none("270")), ("-270", none("-270")), ("400", range("400")), ("-400", range("-400"))]
+    {
+        let mut app = shear_app();
+        let (before, revision) = (app.selection_box().unwrap(), app.session.active().unwrap().revision);
+        let undo = app.session.doc().unwrap().history.undo.len();
+        type_shear(&mut app, typed);
+        assert_eq!(app.ui.status, msg, "{typed}");
+        assert_eq!(app.selection_box().unwrap(), before, "{typed}: nothing moved");
+        assert_eq!(app.session.active().unwrap().revision, revision, "{typed}: unchanged");
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo, "{typed}: no undo step");
+    }
 }
 
 /// The Align to Pixel Grid checkbox turns the selected paths' pixel-aligned property on, shows a

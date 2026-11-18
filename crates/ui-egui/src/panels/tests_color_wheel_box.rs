@@ -167,7 +167,7 @@ fn the_strip_takes_the_arrow_keys_and_screen_readers_actions() {
 #[test]
 fn ui_color_wheel_sets_and_reads_the_view_and_the_channel() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    let contrast = json!({"contrast": false, "contrastFor": "normalText", "contrastBackground": null});
+    let contrast = json!({"contrast": false, "contrastFor": "normalText", "contrastBackground": null, "vision": false});
     let with = |view: &str, channel: &str| {
         let mut v = contrast.clone();
         v["view"] = json!(view);
@@ -218,9 +218,9 @@ fn ui_color_wheel_rejects_other_params() {
     let e = app.run("ui.colorWheel", json!([1])).unwrap_err();
     assert_eq!(e, "the params must be an object, not [1]");
     let e = app.run("ui.colorWheel", json!({"veiw": "wheel"})).unwrap_err();
-    assert_eq!(e, "unknown parameter `veiw`; the command takes: view, channel, contrast, contrastFor, contrastBackground");
+    assert_eq!(e, "unknown parameter `veiw`; the command takes: view, channel, contrast, contrastFor, contrastBackground, vision");
     let e = app.run("ui.colorWheel", json!({"view": "wheel", "chanel": "blue"})).unwrap_err();
-    assert_eq!(e, "unknown parameter `chanel`; the command takes: view, channel, contrast, contrastFor, contrastBackground");
+    assert_eq!(e, "unknown parameter `chanel`; the command takes: view, channel, contrast, contrastFor, contrastBackground, vision");
     assert_eq!(app.ui.color_wheel, Settings { view: View::Box, channel: Channel::Red, ..Default::default() }, "an error changes nothing");
 }
 
@@ -278,7 +278,7 @@ fn ui_color_wheel_answers_junk_params_without_a_panic() {
 #[test]
 fn the_settings_are_kept_and_read_leniently() {
     let ui = crate::UiState {
-        color_wheel: Settings { view: View::Box, channel: Channel::Blue, ..Default::default() },
+        color_wheel: Settings { view: View::Box, channel: Channel::Blue, vision: true, ..Default::default() },
         color_rgb_percent: true,
         ..Default::default()
     };

@@ -127,8 +127,13 @@ const PATTERN_MODES: [(&str, &str); 3] = [("object", "Transform Object Only"), (
 /// value) neither is passed: patterns follow General › Transform Pattern Tiles. Errors are
 /// dropped, as the panels' fields have always done.
 pub fn run_transform(app: &mut VectorcraftApp, cmd: &str, params: serde_json::Value) {
+    try_transform(app, cmd, params).ok();
+}
+
+/// [`run_transform`] that returns the command's result, for a field that shows its error.
+fn try_transform(app: &mut VectorcraftApp, cmd: &str, params: serde_json::Value) -> Result<serde_json::Value, String> {
     let params = with_pattern_switches(app, params);
-    app.run(cmd, params).ok();
+    app.run(cmd, params)
 }
 
 /// `params` with the `objects` and `patterns` switches [`run_transform`] adds.
@@ -329,12 +334,15 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             ui.add_space(4.0);
             let icon = icons::icon(ui, "dc-shear", 16.0, t.icon).on_hover_text(tl!("Shear"));
             crate::scrub::note_label(ui, icon.rect);
-            // Shear is relative: the field rests at 0° and a new value shears by it.
-            if let Some(a) = widgets::spin_plain_named(ui, "xfp-shear", Some(tl!("Shear")), 0.0, "°", 2, 96.0, 15.0, -89.0, &SHEAR_PRESETS)
+            // Shear is relative: the field rests at 0° and a new value from -359° to 359° shears
+            // by it. The field has no minimum, so `object.shear` checks every value: it refuses
+            // ±90°, ±270° and a value outside -359° to 359°, and the status bar shows its error.
+            if let Some(a) =
+                widgets::spin_plain_named(ui, "xfp-shear", Some(tl!("Shear")), 0.0, "°", 2, 96.0, 15.0, f64::NEG_INFINITY, &SHEAR_PRESETS)
                 && a != 0.0
-                && a.abs() < 90.0
+                && let Err(e) = try_transform(app, "object.shear", json!({"angle": a, "axis": "horizontal", "origin": origin, "copy": copy}))
             {
-                run_transform(app, "object.shear", json!({"angle": a, "axis": "horizontal", "origin": origin, "copy": copy}));
+                app.status(e);
             }
         });
     });
@@ -491,18 +499,40 @@ pub(crate) fn line_rows(app: &mut VectorcraftApp, ui: &mut Ui, live: &LiveShape,
 }
 
 /// An ellipse's Pie Start and End Angle (degrees, counterclockwise from 3 o'clock; 0 to 360 is the
-/// whole ellipse) and Invert Pie, which shows the other part of it (Transform and Properties panels).
+/// whole ellipse), the Constrain Pie Angle link beside them, and Invert Pie, which shows the other
+/// part of it (Transform and Properties panels). With the link on, a typed angle moves the other
+/// one by as much, so each selected ellipse keeps its span.
 pub(crate) fn pie_rows(app: &mut VectorcraftApp, ui: &mut Ui, pie: (f64, f64), id: &str) {
-    for (label, key, v) in [(tl!("Pie Start Angle:"), "pieStart", pie.0), (tl!("Pie End Angle:"), "pieEnd", pie.1)] {
-        ui.horizontal(|ui| {
-            widgets::dim_label(ui, label);
-            if let Some(a) = widgets::plain_field(ui, (id, key), v, "°", 1, 60.0) {
-                app.run("object.setLiveShape", json!({ key: a })).ok();
+    ui.horizontal(|ui| {
+        ui.vertical(|ui| {
+            for (label, key, v) in [(tl!("Pie Start Angle:"), "pieStart", pie.0), (tl!("Pie End Angle:"), "pieEnd", pie.1)] {
+                ui.horizontal(|ui| {
+                    widgets::dim_label(ui, label);
+                    if let Some(a) = widgets::plain_field(ui, (id, key), v, "°", 1, 60.0) {
+                        let params = if app.ui.constrain_pie_angle { json!({ key: a, "constrainPie": true }) } else { json!({ key: a }) };
+                        app.run("object.setLiveShape", params).ok();
+                    }
+                });
             }
         });
-    }
+        pie_link(app, ui);
+    });
     if widgets::flat_button(ui, tl!("Invert Pie"), 90.0).clicked() {
         app.run("object.setLiveShape", json!({"invertPie": true})).ok();
+    }
+}
+
+/// The Constrain Pie Angle link between Pie Start and End Angle: one toggle for the Transform and
+/// Properties panels, kept while the app runs and off at launch. It is drawn after the fields, so
+/// Tab reaches them first; with the keyboard on it, Space or Enter toggles it.
+fn pie_link(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let (_, at) = ui.allocate_exact_size(egui::Vec2::splat(CONSTRAIN_LINK_SIZE), egui::Sense::click());
+    let on = app.ui.constrain_pie_angle;
+    let tip = tl!("Constrain Pie Angle");
+    let keyed = at.has_focus()
+        && ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Space) | i.consume_key(egui::Modifiers::NONE, egui::Key::Enter));
+    if widgets::paint_icon_button(ui, at, if on { "link" } else { "link-2-off" }, tip, on).clicked() || keyed {
+        app.ui.constrain_pie_angle = !on;
     }
 }
 
