@@ -145,7 +145,7 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
             mods: mods(m, space),
             backquote: ui.input(|i| i.key_down(egui::Key::Backtick)),
             pressure: 1.0,
-            pen: None,
+            pen: pen_pose(app, &xf),
         };
         dispatch(app, &ev, view);
     }
