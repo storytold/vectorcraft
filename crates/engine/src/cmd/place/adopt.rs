@@ -12,7 +12,7 @@ use vectorcraft_brush::{Brush, BrushKind};
 use vectorcraft_color::Paint;
 use vectorcraft_doc::{AppearanceItem, Document, Node, NodeKind, PatternDef, Symbol};
 
-use super::super::compositefonts::{node_families, plan_import};
+use super::super::compositefonts::{CompositeImport, node_families, plan_import};
 use super::super::{Result, bad};
 use super::unique_name;
 
@@ -219,6 +219,28 @@ fn brush_art(b: &mut Brush) -> Vec<&mut Node> {
     }
 }
 
+/// Apply a checked font plan only to the incoming art and definitions it actually uses.
+fn remap_composite_families(src: &Document, nodes: &mut [Node], used: &Used, brushes: &mut [Brush], plan: &CompositeImport) -> Document {
+    let mut staged = src.clone();
+    for n in nodes.iter_mut() {
+        each_mut(n, &mut |n| node_families(n, &mut |family| plan.rename(family)));
+    }
+    for symbol in staged.symbols.iter_mut().filter(|symbol| used.symbols.contains(&symbol.name)) {
+        each_mut(Arc::make_mut(&mut symbol.art), &mut |n| node_families(n, &mut |family| plan.rename(family)));
+    }
+    for pattern in staged.patterns.iter_mut().filter(|pattern| used.patterns.contains(&pattern.name)) {
+        for art in &mut pattern.art {
+            each_mut(Arc::make_mut(art), &mut |n| node_families(n, &mut |family| plan.rename(family)));
+        }
+    }
+    for brush in brushes.iter_mut().filter(|brush| used.brushes.contains(&brush.name)) {
+        for art in brush_art(brush) {
+            each_mut(art, &mut |n| node_families(n, &mut |family| plan.rename(family)));
+        }
+    }
+    staged
+}
+
 /// Bring the resources `nodes` (art from `src`) use into `dst`, renaming on conflict, and point
 /// `nodes` at the names they got.
 pub(crate) fn adopt(dst: &mut Document, src: &Document, nodes: &mut [Node], cmd: &str) -> Result<()> {
@@ -271,25 +293,9 @@ pub(crate) fn adopt(dst: &mut Document, src: &Document, nodes: &mut [Node], cmd:
     };
     // Resource equality must see the incoming aliases. Never remap destination art, unused
     // source definitions or the source document itself.
-    let mut staged;
+    let staged;
     let src = if let Some(plan) = &plan {
-        staged = src.clone();
-        for n in nodes.iter_mut() {
-            each_mut(n, &mut |n| node_families(n, &mut |family| plan.rename(family)));
-        }
-        for symbol in staged.symbols.iter_mut().filter(|symbol| used.symbols.contains(&symbol.name)) {
-            each_mut(Arc::make_mut(&mut symbol.art), &mut |n| node_families(n, &mut |family| plan.rename(family)));
-        }
-        for pattern in staged.patterns.iter_mut().filter(|pattern| used.patterns.contains(&pattern.name)) {
-            for art in &mut pattern.art {
-                each_mut(Arc::make_mut(art), &mut |n| node_families(n, &mut |family| plan.rename(family)));
-            }
-        }
-        for brush in src_brushes.iter_mut().filter(|brush| used.brushes.contains(&brush.name)) {
-            for art in brush_art(brush) {
-                each_mut(art, &mut |n| node_families(n, &mut |family| plan.rename(family)));
-            }
-        }
+        staged = remap_composite_families(src, nodes, &used, &mut src_brushes, plan);
         &staged
     } else {
         src
