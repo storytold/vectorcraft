@@ -6,12 +6,10 @@ use std::process::{Command, Output, Stdio};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
-const BIN: &str = env!("CARGO_BIN_EXE_vectorcraft");
-
 /// Runs the desktop binary without a display and with a control port it cannot parse, so a
 /// regression exits with that error instead of opening a window.
 fn run(args: &[&str], env: &[(&str, &str)]) -> Output {
-    let mut child = Command::new(BIN)
+    let mut child = Command::new(crate::bin())
         .args(args)
         .env_remove("DISPLAY")
         .env_remove("WAYLAND_DISPLAY")
@@ -54,7 +52,17 @@ fn prints_usage(args: &[&str], env: &[(&str, &str)]) {
     assert!(out.status.success(), "{args:?}: {}", String::from_utf8_lossy(&out.stderr));
     assert!(out.stderr.is_empty(), "{args:?}: {}", String::from_utf8_lossy(&out.stderr));
     assert!(stdout.starts_with("Usage: vectorcraft "), "{args:?}: {stdout}");
-    for flag in ["--control", "--automation-read-root", "--automation-write-root", "--in-window-menus", "--safe-mode", "--version", "--help"] {
+    for flag in [
+        "--control",
+        "--automation-read-root",
+        "--automation-write-root",
+        "--in-window-menus",
+        "--safe-mode",
+        "--present-mode",
+        "--frame-latency",
+        "--version",
+        "--help",
+    ] {
         assert!(stdout.contains(flag), "{args:?}: usage doesn't mention {flag}: {stdout}");
     }
     // Headless work is the CLI's: the usage says where to go.
@@ -73,6 +81,32 @@ fn help_prints_usage_and_exits_before_startup() {
 #[test]
 fn help_wins_over_a_bad_control_port_variable() {
     prints_usage(&["--help"], &[("VECTORCRAFT_CONTROL_PORT", "abc")]);
+}
+
+/// A bad presentation variable stops the app with a message before it starts; `--help` and the
+/// matching flag win over it. A run that gets past it stops at the control port `run` makes fail.
+#[test]
+fn a_bad_presentation_variable_is_an_error_unless_help_or_its_flag_is_given() {
+    for (var, value, need) in [
+        ("VECTORCRAFT_FRAME_LATENCY", "0", "needs 1, 2 or 3 frames, not `0`"),
+        ("VECTORCRAFT_PRESENT_MODE", "mailbox", "needs fifo, autovsync or novsync, not `mailbox`"),
+    ] {
+        let out = run(&[], &[(var, value)]);
+        assert!(!out.status.success(), "{var}");
+        assert_eq!(String::from_utf8(out.stderr).unwrap(), format!("vectorcraft: {var} {need}\n"));
+        prints_usage(&["--help"], &[(var, value)]);
+    }
+    for (args, env) in [
+        (&["--frame-latency", "2"][..], ("VECTORCRAFT_FRAME_LATENCY", "0")),
+        (&["--present-mode=fifo"], ("VECTORCRAFT_PRESENT_MODE", "mailbox")),
+        (&[], ("VECTORCRAFT_FRAME_LATENCY", "3")),
+    ] {
+        let stderr = String::from_utf8(run(args, &[env]).stderr).unwrap();
+        assert!(stderr.contains("VECTORCRAFT_CONTROL_PORT") && !stderr.contains(env.0), "{args:?}: {stderr}");
+    }
+    let out = run(&["--frame-latency", "4"], &[]);
+    assert!(!out.status.success());
+    assert_eq!(String::from_utf8(out.stderr).unwrap(), "vectorcraft: --frame-latency needs 1, 2 or 3 frames, not `4`\n");
 }
 
 /// An option the app doesn't know (a typo of `--safe-mode`) is an error, not a file to open with

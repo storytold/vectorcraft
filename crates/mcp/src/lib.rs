@@ -22,6 +22,7 @@ mod prompts;
 mod resources;
 mod server;
 mod tools;
+mod ui_catalog;
 
 pub use backend::{Backend, Remote};
 pub use headless::Headless;

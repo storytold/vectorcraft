@@ -163,6 +163,34 @@ impl Str {
         flat
     }
 
+    /// The code unit at `i` read along the rope without flattening it, visiting at most
+    /// `max_nodes` nodes: `None` when that is not enough, otherwise the unit (when `i` is in
+    /// range) and the number of nodes visited.
+    pub(crate) fn unit_at(&self, mut i: usize, max_nodes: u64) -> Option<(Option<u16>, u64)> {
+        let mut node = self.clone();
+        let mut visited = 0u64;
+        loop {
+            visited += 1;
+            if visited > max_nodes {
+                return None;
+            }
+            let next = match &*node.0.borrow() {
+                Node::Flat(f) => return Some((f.get(i).copied(), visited)),
+                Node::Concat { left, right, .. } => {
+                    let left_len = left.len();
+                    if i < left_len {
+                        left.clone()
+                    } else {
+                        i -= left_len;
+                        right.clone()
+                    }
+                }
+                Node::Taken => return Some((None, visited)),
+            };
+            node = next;
+        }
+    }
+
     pub(crate) fn to_rust_string(&self) -> String {
         String::from_utf16_lossy(&self.flat())
     }

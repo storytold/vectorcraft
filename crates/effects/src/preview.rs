@@ -1,4 +1,4 @@
-//! Use Preview Bounds: objects measured as they are drawn, with their geometry effects.
+//! Use Preview Bounds: objects measured as they are drawn, with geometry and projected 3D effects.
 //!
 //! [`drawn_art`] gives an object whose geometry effects change what it draws as plain art. A path
 //! or compound path is given as its effected geometry, and a fill or stroke with geometry effects
@@ -11,12 +11,17 @@
 //! ([`expanded_live_group`]), with each of those objects given as its own art. A clip group or
 //! layer whose clipping path has strokes with geometry effects is given as that path's geometry
 //! before its effects, which the renderer clips by, and those strokes as drawn. Fills and
-//! strokes that paint nothing (hidden, or painted None) are left out. [`bounds_of`],
+//! strokes that paint nothing (hidden, or painted None) are left out. Extrude & Bevel, Revolve,
+//! Inflate and Rotate are measured by the same projected vector art the renderer draws, with
+//! any geometry effects after projection applied to that art; [`drawn_art`], which clicks and
+//! marquees use, leaves 3D effects unprojected. [`bounds_of`],
 //! [`oriented_bounds`] and [`anchor_bounds`] measure the visual bounds of that art, strokes
 //! included, where [`Document::bounds_of`], [`Document::oriented_bounds`] and
 //! [`Selection::anchor_bounds`] measure the objects themselves. Raster effects (shadows, glows,
 //! blurs) are not measured. In one object, the art of at most 4,096 symbol instances is measured
-//! with its geometry effects, and the other instances in it are measured without them.
+//! with its geometry and 3D effects, and the other instances in it are measured without them.
+//! [`bounds_of_with`], [`oriented_bounds_with`] and [`anchor_bounds_with`] measure as these do and,
+//! with [`Measure::glyphs`], take point type by the ink of its glyphs (Measure Type by Glyph Bounds).
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
@@ -29,12 +34,12 @@ use vectorcraft_geom::{Affine, PathData, Rect, Shape, union_opt};
 use crate::group::has_own_paint;
 use crate::reshape::{geometry_effects, leaf_geometry};
 use crate::{
-    GeomContext, apply_geometry_with, evaluate_container, expanded_live_group, has_geometry, has_item_geometry, has_pathfinder, has_transform_art,
-    needs_outline, outline_art, paints, reshape,
+    GeomContext, apply_geometry_with, evaluate_container, expanded_live_group, has_geometry, has_item_geometry, has_pathfinder, has_revolve,
+    has_solid, has_transform_art, needs_outline, outline_art, paints, reshape, revolve_art_in, solid_art_in,
 };
 
-/// Most symbol instances in one object whose art [`Drawn`] measures with its geometry effects:
-/// past it, the other instances in the object are measured without geometry effects.
+/// Most symbol instances in one object whose art [`Drawn`] measures with geometry or 3D effects:
+/// past it, the other instances in the object are measured without those effects.
 const MAX_INSTANCES: usize = 4096;
 
 /// The bounds of `ids`: with `preview`, their visual bounds as drawn ([`visual_bounds`]), else
@@ -74,8 +79,123 @@ pub fn anchor_bounds(selection: &Selection, doc: &Document, preview: bool) -> Op
     union_opt(bounds_of(doc, &selection.whole(), preview), selection.anchors_box(doc))
 }
 
-/// The visual bounds of `n` as drawn: those of its [`drawn_art`], else
-/// [`Node::visual_bounds_with`].
+/// How [`bounds_of_with`], [`oriented_bounds_with`] and [`anchor_bounds_with`] measure objects:
+/// `preview` as in [`bounds_of`], and with `glyphs` (Preferences › Type › Measure Type by Glyph
+/// Bounds), point type, horizontal or vertical, by the ink of its glyphs instead of its em box
+/// ([`text_ink_in`]).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Measure {
+    pub preview: bool,
+    pub glyphs: bool,
+}
+
+impl Measure {
+    /// See [`by_glyphs`].
+    fn by_glyphs(self, drawn: &Drawn, n: &Node) -> bool {
+        self.glyphs
+            && matches!(&n.kind, NodeKind::Text(t) if matches!(t.kind, vectorcraft_doc::TextKind::Point))
+            && n.projection().is_none()
+            && !(self.preview && drawn.draws_geometry(n))
+    }
+}
+
+/// Whether `m` measures `n` by the ink of its glyphs: point type, not in perspective, and with
+/// `preview` only when no geometry effect changes what it draws.
+pub fn by_glyphs(symbols: &SymbolBoxes, n: &Node, m: Measure) -> bool {
+    m.by_glyphs(&Drawn::new(symbols), n)
+}
+
+/// [`bounds_of`] measured by `m`.
+pub fn bounds_of_with(doc: &Document, ids: &[NodeId], m: Measure) -> Option<Rect> {
+    if !m.glyphs {
+        return bounds_of(doc, ids, m.preview);
+    }
+    let symbols = doc.symbol_boxes();
+    let drawn = Drawn::new(&symbols);
+    if !ids.iter().filter_map(|id| doc.node(*id)).any(|n| m.by_glyphs(&drawn, n)) {
+        return bounds_of(doc, ids, m.preview);
+    }
+    ids.iter().filter_map(|id| doc.node(*id)).fold(None, |acc, n| union_opt(acc, measured_in(&drawn, n, Affine::IDENTITY, m)))
+}
+
+/// [`oriented_bounds`] measured by `m`.
+pub fn oriented_bounds_with(doc: &Document, ids: &[NodeId], m: Measure) -> Option<OrientedBox> {
+    if !m.glyphs {
+        return oriented_bounds(doc, ids, m.preview);
+    }
+    let symbols = doc.symbol_boxes();
+    let drawn = Drawn::new(&symbols);
+    if !ids.iter().filter_map(|id| doc.node(*id)).any(|n| m.by_glyphs(&drawn, n)) {
+        return oriented_bounds(doc, ids, m.preview);
+    }
+    let angle = doc.bbox_angle(ids);
+    let to_local = if angle == 0.0 { Affine::IDENTITY } else { OrientedBox { angle, rect: Rect::ZERO }.to_doc().inverse() };
+    let rect = ids.iter().filter_map(|id| doc.node(*id)).fold(None, |acc, n| union_opt(acc, measured_in(&drawn, n, to_local, m)))?;
+    Some(OrientedBox { angle, rect })
+}
+
+/// [`anchor_bounds`] with the objects selected whole measured by `m`.
+pub fn anchor_bounds_with(selection: &Selection, doc: &Document, m: Measure) -> Option<Rect> {
+    if selection.anchors.is_empty() {
+        return None;
+    }
+    union_opt(bounds_of_with(doc, &selection.whole(), m), selection.anchors_box(doc))
+}
+
+/// The box of `n` as `a` would place it, without changing it, measured by `m`: [`bounds_in`] with
+/// `preview`, else [`Node::bounds_in`] of its geometric bounds, and point type by its glyphs as
+/// [`Measure`] says.
+pub fn bounds_in_with(symbols: &SymbolBoxes, n: &Node, a: Affine, m: Measure) -> Option<Rect> {
+    measured_in(&Drawn::new(symbols), n, a, m)
+}
+
+/// See [`bounds_in_with`].
+fn measured_in(drawn: &Drawn, n: &Node, a: Affine, m: Measure) -> Option<Rect> {
+    if m.by_glyphs(drawn, n)
+        && let NodeKind::Text(t) = &n.kind
+        && let Some(r) = text_ink_in(t, a)
+    {
+        // The fills' and characters' strokes paint around the glyphs, as in `Node::visual_bounds`.
+        let o = if m.preview { n.appearance.outset().max(t.char_stroke_outset()) } else { 0.0 };
+        return Some(r.inflate(o, o));
+    }
+    match (m.preview, a == Affine::IDENTITY) {
+        (true, _) => drawn.next().bounds_in(n, a),
+        (false, true) => n.geometric_bounds_with(drawn.symbols),
+        (false, false) => n.bounds_in(drawn.symbols, a, false),
+    }
+}
+
+/// The box of the ink of type `t`'s glyphs with its text space mapped by `a * t.xf`: the cached
+/// ink ([`vectorcraft_doc::TextObject::ink`]) when that map keeps a rectangle square, else the
+/// glyph outlines and the underline and strikethrough bars mapped point by point
+/// ([`vectorcraft_text::envelope_ink`]). `None` when nothing draws (no text, only spaces without
+/// underline or strikethrough, or glyphs without outlines).
+pub fn text_ink_in(t: &vectorcraft_doc::TextObject, a: Affine) -> Option<Rect> {
+    let m = a * t.xf;
+    let [p, q, r, s, _, _] = m.as_coeffs();
+    let square = (q.abs() <= 1e-12 && r.abs() <= 1e-12) || (p.abs() <= 1e-12 && s.abs() <= 1e-12);
+    if square {
+        let ink = match t.ink() {
+            Some(ink) => ink,
+            None => vectorcraft_text::envelope_ink(t, Affine::IDENTITY, None),
+        };
+        return ink.map(|i| m.transform_rect_bbox(i));
+    }
+    vectorcraft_text::envelope_ink(t, m, None)
+}
+
+/// The ink of type `t` laid out as `layout`, in text space: its glyphs
+/// ([`vectorcraft_text::TextLayout::ink_bounds`]) and its underline and strikethrough bars
+/// ([`vectorcraft_text::decorations`]), what [`text_ink_in`] measures. `None` when nothing draws.
+pub fn laid_out_ink(layout: &vectorcraft_text::TextLayout, t: &vectorcraft_doc::TextObject) -> Option<Rect> {
+    vectorcraft_text::decorations(layout, vectorcraft_text::FontDb::global(), t)
+        .into_iter()
+        .fold(layout.ink_bounds(), |acc, (_, bar)| union_opt(acc, Some(bar.bounding_box())))
+}
+
+/// The visual bounds of `n` as drawn: those of its [`drawn_art`] with its 3D effects projected,
+/// else [`Node::visual_bounds_with`].
 pub fn visual_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
     Drawn::new(symbols).visual_bounds(n)
 }
@@ -87,31 +207,45 @@ pub fn bounds_in(symbols: &SymbolBoxes, n: &Node, a: Affine) -> Option<Rect> {
 }
 
 /// `n` as plain art with the geometry effects in it applied, at every depth, symbol instances
-/// measured by `symbols`. Raster effects stay on the art. A group, layer or intertwine without a
-/// clip is rebuilt with the drawn art of each member that has one. A clip group or layer becomes a
-/// group of its clipping path without strokes and the drawn art of the path's strokes, when they
-/// have one. `None` when no geometry effect in `n` changes what it draws.
+/// measured by `symbols`, for clicks and marquees. Raster effects stay on the art. A group, layer or
+/// intertwine without a clip is rebuilt with the drawn art of each member that has one. A clip group
+/// or layer becomes a group of its clipping path without strokes and the drawn art of the path's
+/// strokes, when they have one. 3D effects stay on the art unprojected, so each object in it keeps
+/// its own id. `None` when no geometry effect in `n` changes what it draws.
 pub fn drawn_art(symbols: &SymbolBoxes, n: &Node) -> Option<Node> {
-    Drawn::new(symbols).drawn_art(n)
+    Drawn::without_3d(symbols).drawn_art(n)
 }
 
-/// Whether [`drawn_art`] gives `n` art of its own, or would give one to an object in it. A symbol
-/// instance in `n` counts when its symbol's art has a geometry effect.
+/// Whether `n` is measured by art of its own with Use Preview Bounds, or an object in it is: a
+/// geometry or 3D effect in it changes what it draws. A symbol instance in `n` counts when its
+/// symbol's art has geometry or 3D effects.
 pub fn draws_geometry(symbols: &SymbolBoxes, n: &Node) -> bool {
     Drawn::new(symbols).draws_geometry(n)
 }
 
-/// One measurement: whether the art of each symbol checked so far draws geometry, by symbol name,
-/// and how many more instances' art it measures with its geometry effects in the current object ([`MAX_INSTANCES`]).
+/// One measurement: whether each symbol checked so far draws geometry or 3D art, by symbol name,
+/// and how many more instances it measures with those effects in the current object ([`MAX_INSTANCES`]).
+/// With `three_d` false, 3D effects are left on the art unprojected ([`drawn_art`]).
 struct Drawn<'s, 'd> {
     symbols: &'s SymbolBoxes<'d>,
     draws: RefCell<HashMap<String, bool>>,
     left: Cell<usize>,
+    three_d: bool,
 }
 
 impl<'s, 'd> Drawn<'s, 'd> {
     fn new(symbols: &'s SymbolBoxes<'d>) -> Self {
-        Drawn { symbols, draws: RefCell::default(), left: Cell::new(MAX_INSTANCES) }
+        Drawn { symbols, draws: RefCell::default(), left: Cell::new(MAX_INSTANCES), three_d: true }
+    }
+
+    /// A measurement that projects no 3D effect, for clicks and marquees ([`drawn_art`]).
+    fn without_3d(symbols: &'s SymbolBoxes<'d>) -> Self {
+        Drawn { three_d: false, ..Self::new(symbols) }
+    }
+
+    /// Whether `n` has a 3D effect of its own that this measurement projects.
+    fn projects(&self, n: &Node) -> bool {
+        self.three_d && (has_revolve(n) || has_solid(n))
     }
 
     /// Sets the count of instances left back to [`MAX_INSTANCES`], for the next object.
@@ -156,6 +290,7 @@ impl<'s, 'd> Drawn<'s, 'd> {
         let mut found = false;
         n.walk(&mut |c| {
             found = found
+                || self.projects(c)
                 || match &c.kind {
                     NodeKind::SymbolInstance { symbol, .. } => !geometry_effects(c).is_empty() || self.symbol_draws(symbol),
                     _ => reshapes(c),
@@ -175,14 +310,29 @@ impl<'s, 'd> Drawn<'s, 'd> {
         d
     }
 
-    /// The art the geometry effects of `n` itself give it, or that a symbol instance gets from the
-    /// geometry effects in its symbol's art. A group or layer with fills or strokes of its own that
+    /// The art the geometry or 3D effects of `n` itself give it, or that a symbol instance gets from
+    /// those effects in its symbol's art, with the instance's appearance overrides applied.
+    /// A group or layer with fills or strokes of its own that
     /// paint, around members with geometry effects, is evaluated too: its fills and strokes paint
     /// the members' geometry before their effects. A blend, envelope or repeat whose objects have
     /// geometry effects is evaluated as the renderer evaluates it ([`expanded_live_group`]), and
     /// the objects in its evaluated art keep their geometry effects. `None` when it has none, and
     /// for a symbol instance past [`MAX_INSTANCES`].
     fn own_art(&self, n: &Node) -> Option<Node> {
+        let doc = Some(self.symbols.document());
+        // A symbol instance with a 3D effect of its own counts toward MAX_INSTANCES before its art is built.
+        let counted = matches!(n.kind, NodeKind::SymbolInstance { .. }) && self.projects(n);
+        if counted {
+            let left = self.left.get().checked_sub(1)?;
+            self.left.set(left);
+        }
+        if self.three_d
+            && let Some(art) = revolve_art_in(doc, n).or_else(|| solid_art_in(doc, n))
+        {
+            // The builders retain later geometry on the projected group. Measure it after that
+            // geometry too; item-level effects are handled by the ordinary member traversal.
+            return Some(self.own_art(&art).unwrap_or(art));
+        }
         let inner = || n.children().is_some_and(|ch| ch.iter().any(|c| self.draws_geometry(c)));
         let painted = || has_own_paint(n) && inner();
         match &n.kind {
@@ -195,9 +345,14 @@ impl<'s, 'd> Drawn<'s, 'd> {
                 if geometry_effects(n).is_empty() && !self.symbol_draws(symbol) {
                     return None;
                 }
-                let left = self.left.get().checked_sub(1)?;
-                self.left.set(left);
+                if !counted {
+                    let left = self.left.get().checked_sub(1)?;
+                    self.left.set(left);
+                }
                 let art = self.symbols.measure_art(symbol, Arc::clone)?;
+                // Paint overrides can remove a projected surface or change its stroke outline.
+                let art =
+                    if n.extras().symbol_overrides.is_empty() { art } else { Arc::new(vectorcraft_doc::symbol_overrides::dynamic_art(&art, n)) };
                 // An instance in perspective is projected by `reshape`.
                 let doc = Some(self.symbols.document());
                 reshape(doc, n, Some(&*art)).or_else(|| outline_art(doc, n, Some(&*art)))

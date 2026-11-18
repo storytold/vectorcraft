@@ -117,6 +117,64 @@ impl GlyphSnap {
     }
 }
 
+/// The Pixel Snapping Options (`view.snapToPixel.options`): which edits View › Snap to Pixel lands
+/// on whole pixels. All on by default.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct PixelSnap {
+    /// While Drawing: points placed by the drawing tools, ruler origins and measurements.
+    pub drawing: bool,
+    /// While Moving: the selection, its anchors and segments, artboards and ruler guides moved.
+    pub moving: bool,
+    /// While Scaling: the edges a bounding-box, Free Transform, Scale tool, artboard or slice
+    /// handle drags.
+    pub scaling: bool,
+}
+
+impl Default for PixelSnap {
+    fn default() -> Self {
+        Self { drawing: true, moving: true, scaling: true }
+    }
+}
+
+impl PixelSnap {
+    /// These options with the ones `p` names (booleans), or why `p` can't set them.
+    pub fn merged(self, p: &serde_json::Value) -> Result<Self, String> {
+        let mut o = serde_json::to_value(self).map_err(|e| e.to_string())?;
+        match (p, o.as_object_mut()) {
+            (serde_json::Value::Null, _) => {}
+            (serde_json::Value::Object(given), Some(cur)) => {
+                for (k, v) in given {
+                    let slot = cur.get_mut(k).ok_or_else(|| format!("unknown Pixel Snapping option `{k}`"))?;
+                    *slot = serde_json::Value::Bool(v.as_bool().ok_or_else(|| format!("`{k}` must be true or false"))?);
+                }
+            }
+            _ => return Err("the Pixel Snapping options must be an object".into()),
+        }
+        serde_json::from_value(o).map_err(|e| e.to_string())
+    }
+}
+
+/// The kind of edit a snap serves, which picks the Pixel Snapping option that applies to it
+/// ([`ToolContext::snaps_to_pixel`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PixelOp {
+    Drawing,
+    Moving,
+    Scaling,
+}
+
+/// The isolated group, layer or object in isolation mode, of `isolation` (the document's isolated
+/// node). Pattern editing mode, opacity mask editing and symbol editing mode isolate their own
+/// layer, which does not count here; an object isolated inside them counts.
+pub fn ordinary_isolation(doc: &Document, isolation: Option<NodeId>) -> Option<NodeId> {
+    isolation.filter(|l| {
+        !doc.pattern_edit.as_ref().is_some_and(|e| e.layer == *l)
+            && !doc.mask_edit.as_ref().is_some_and(|e| e.layer == *l)
+            && !doc.symbol_edit.as_ref().is_some_and(|e| e.layer == *l)
+    })
+}
+
 /// Read-only context a tool sees.
 pub struct ToolContext<'a> {
     pub doc: &'a Document,
@@ -141,16 +199,21 @@ pub struct ToolContext<'a> {
     pub snap_to_grid: bool,
     /// Bounding box shown (View → Show/Hide Bounding Box).
     pub show_bbox: bool,
-    /// View → Snap to Pixel.
+    /// View → Snap to Pixel. Which edits it snaps is [`Self::pixel_snap`]'s choice
+    /// ([`Self::snaps_to_pixel`]).
     pub snap_to_pixel: bool,
+    /// The Pixel Snapping Options: whether Snap to Pixel snaps drawing, moving and scaling.
+    pub pixel_snap: PixelSnap,
     /// View → Snap to Point: with Smart Guides off, dragged selections, drawn points and picked
     /// points (a transform's reference point) land on anchors and ruler guides within
     /// [`Self::snap_tolerance`].
     pub snap_to_point: bool,
     /// View → Snapping → Snap to Tangent: with Smart Guides on, a line drawn
-    /// from an anchor lands where it touches a nearby curve.
+    /// from an anchor lands where it touches a nearby curve, and a Line Segment
+    /// drag from one convex curved path to another lands on their common tangent.
     pub snap_tangent: bool,
-    /// View → Snapping → Snap to Perpendicular: likewise where it meets a nearby segment square.
+    /// View → Snapping → Snap to Perpendicular: with Smart Guides on, a line drawn from an anchor
+    /// lands where it meets a nearby segment square.
     pub snap_perpendicular: bool,
     /// View → Snap to Glyph: drawn points snap to live-text glyph bounds, and on a single line of type
     /// to its baseline, x-height, character widths and glyph anchor points (with Smart Guides).
@@ -178,6 +241,10 @@ pub struct ToolContext<'a> {
     pub raster_sample: u32,
     /// General → Use Preview Bounds: the bounding box measures visual bounds (strokes included).
     pub preview_bounds: bool,
+    /// Type › Measure Type by Glyph Bounds: the bounding box measures each point type object
+    /// selected as an object (not inside a selected group) by the ink of its glyphs
+    /// ([`vectorcraft_effects::preview::Measure`]).
+    pub glyph_bounds: bool,
     /// The session's memo of the selection tools' measurements for the document as it is
     /// ([`select::PreviewMemo`]); without one they measure on every call.
     pub preview_memo: Option<&'a select::PreviewMemo>,
@@ -275,6 +342,8 @@ pub struct ToolContext<'a> {
     pub screen: Option<ScreenFrame>,
     /// Where the Plane Switching Widget sits (Perspective Grid Options); None while it's hidden.
     pub plane_widget: Option<distort::perspective::widget::WidgetCorner>,
+    /// What Automatic Plane Positioning takes a point from (Perspective Grid Options).
+    pub plane_targets: distort::perspective::widget::PlaneTargets,
     /// General › Use Precise Cursors, or Caps Lock while it is on: the drawing tools' pointers are
     /// crosshairs ([`crate::Cursor::precise`]), and the Blob Brush and the Eraser show no tip outline.
     pub precise_cursors: bool,
@@ -284,6 +353,11 @@ pub struct ToolContext<'a> {
 }
 
 impl ToolContext<'_> {
+    /// How the bounding box measures the selection: [`Self::preview_bounds`] and
+    /// [`Self::glyph_bounds`].
+    pub fn bounds_measure(&self) -> vectorcraft_effects::preview::Measure {
+        vectorcraft_effects::preview::Measure { preview: self.preview_bounds, glyphs: self.glyph_bounds }
+    }
     /// Tolerance in document units for `px` screen pixels.
     pub fn tol(&self, px: f64) -> f64 {
         px / self.zoom.max(1e-9)
@@ -332,6 +406,16 @@ impl ToolContext<'_> {
     pub fn segment_measure_label(&self, a: Point, b: Point) -> String {
         let (dist, ang, dx, dy) = xform::measure(a, b);
         format!("D: {}\nAngle: {ang:.1}°\n{}", self.len(dist), self.offset_label(dx, dy))
+    }
+    /// Does View › Snap to Pixel land an edit of kind `op` on whole pixels: is it on, with the
+    /// Pixel Snapping option for `op` on too?
+    pub fn snaps_to_pixel(&self, op: PixelOp) -> bool {
+        self.snap_to_pixel
+            && match op {
+                PixelOp::Drawing => self.pixel_snap.drawing,
+                PixelOp::Moving => self.pixel_snap.moving,
+                PixelOp::Scaling => self.pixel_snap.scaling,
+            }
     }
     /// What Snap to Grid snaps to: the grid's subdivisions (or its lines without any).
     pub fn grid_step(&self) -> f64 {

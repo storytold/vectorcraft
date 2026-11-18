@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use vectorcraft_geom::{BezPath, FillRule, PathData, Rect};
 
 use super::*;
-use crate::{Bevel, Edge};
+use crate::{Bevel, BevelShape, Edge};
 
 fn square(b: &mut BezPath, x: f64, y: f64, s: f64, clockwise: bool) {
     b.move_to((x, y));
@@ -231,7 +231,7 @@ fn a_revolved_profile_is_a_closed_cylinder() {
     let p = PathData::from_bezpath(&b);
     let r = p.bounds().unwrap();
     let o = Revolve { offset: 10.0, edge: Edge::Left, segments: 64, ..Revolve::default() };
-    let m = revolve_mesh(&p, r, o).unwrap();
+    let m = revolve_mesh(&p, FillRule::NonZero, r, o).unwrap();
     assert!(closed(&m));
     let exact = 2.0 * std::f64::consts::PI * 10.0 * 100.0 + 2.0 * std::f64::consts::PI * 100.0;
     assert!((area(&m) - exact).abs() / exact < 0.01, "{} vs {exact}", area(&m));
@@ -239,16 +239,20 @@ fn a_revolved_profile_is_a_closed_cylinder() {
 }
 
 #[test]
-fn a_partial_revolve_caps_its_ends_with_sectors() {
+fn a_partial_revolve_caps_its_ends_with_sectors_and_closes_its_cut_sides() {
     let mut b = BezPath::new();
     b.move_to((20.0, 0.0));
     b.line_to((20.0, 100.0));
     let p = PathData::from_bezpath(&b);
     let r = p.bounds().unwrap();
     let o = Revolve { angle: 90.0, offset: 10.0, segments: 64, ..Revolve::default() };
-    let m = revolve_mesh(&p, r, o).unwrap();
-    let exact = 0.25 * (2.0 * std::f64::consts::PI * 10.0 * 100.0 + 2.0 * std::f64::consts::PI * 100.0);
+    let m = revolve_mesh(&p, FillRule::NonZero, r, o).unwrap();
+    // The side and the two end sectors, and the two cut sides, each 10 pt from the axis by 100 pt.
+    let exact = 0.25 * (2.0 * std::f64::consts::PI * 10.0 * 100.0 + 2.0 * std::f64::consts::PI * 100.0) + 2.0 * 10.0 * 100.0;
     assert!((area(&m) - exact).abs() / exact < 0.01, "{} vs {exact}", area(&m));
+    assert!(closed(&m), "the quarter of a cylinder is a closed solid");
+    let hollow = revolve_mesh(&p, FillRule::NonZero, r, Revolve { cap_ends: false, ..o }).unwrap();
+    assert!(!closed(&hollow));
 }
 
 #[test]
@@ -261,12 +265,68 @@ fn a_revolved_surface_has_unit_normals_facing_out_whatever_its_length_and_direct
         let p = PathData::from_bezpath(&b);
         let r = p.bounds().unwrap();
         let o = Revolve { offset: 10.0, edge: Edge::Left, segments: 64, ..Revolve::default() };
-        let m = revolve_mesh(&p, r, o).unwrap();
+        let m = revolve_mesh(&p, FillRule::NonZero, r, o).unwrap();
         assert!(!m.is_empty(), "{from} to {to}: the revolve made no triangles");
         assert!(m.normals.iter().all(|n| (dot(*n, *n) - 1.0).abs() < 1e-9), "{from} to {to}: a normal is not unit length");
         assert!(closed(&m), "{from} to {to}");
         assert!(outward(&m), "{from} to {to}: a face turns inward");
     }
+}
+
+/// The radial direction of every triangle's normal at the wall `x` pt from the axis, each as the
+/// sign of the normal's part along the way from the axis: 1 away from it, -1 toward it.
+fn wall_directions(m: &Mesh, x: f64) -> Vec<f64> {
+    m.triangles
+        .iter()
+        .filter_map(|t| {
+            let [a, b, c] = corners(m, *t);
+            let centre = [(a[0] + b[0] + c[0]) / 3.0, 0.0, (a[2] + b[2] + c[2]) / 3.0];
+            let radius = centre[0].hypot(centre[2]);
+            let n = m.normals[t[0] as usize];
+            ((radius - x).abs() < 1.0 && n[1].abs() < 0.5).then(|| dot(n, centre).signum())
+        })
+        .collect()
+}
+
+#[test]
+fn the_wall_of_a_counter_faces_into_the_hole() {
+    // A square ring 20 pt thick, its axis at the outer square's left edge minus 10: the outer wall
+    // reaches 110 pt from the axis, and the hole's far wall 90 pt from it.
+    let ring = |hole_clockwise: bool, rule: FillRule| {
+        let mut b = BezPath::new();
+        square(&mut b, 0.0, 0.0, 100.0, false);
+        square(&mut b, 20.0, 20.0, 60.0, hole_clockwise);
+        let (p, r) = shape(&b);
+        revolve_mesh(&p, rule, r, Revolve { offset: 10.0, segments: 32, ..Revolve::default() }).unwrap()
+    };
+    for (clockwise, rule) in [(true, FillRule::NonZero), (true, FillRule::EvenOdd), (false, FillRule::EvenOdd)] {
+        let m = ring(clockwise, rule);
+        let outer = wall_directions(&m, 110.0);
+        assert!(!outer.is_empty() && outer.iter().all(|s| *s > 0.0), "outer wall, {clockwise} {rule:?}");
+        let hole = wall_directions(&m, 90.0);
+        assert!(!hole.is_empty() && hole.iter().all(|s| *s < 0.0), "the hole's far wall faces the axis, {clockwise} {rule:?}");
+    }
+    // Wound the same way under the nonzero rule, the inner square is not a hole.
+    let m = ring(false, FillRule::NonZero);
+    let inner = wall_directions(&m, 90.0);
+    assert!(!inner.is_empty() && inner.iter().all(|s| *s > 0.0));
+}
+
+#[test]
+fn an_edge_that_crosses_another_contour_faces_the_hole_only_where_it_walls_it() {
+    // Two squares overlapping under the even-odd rule leave their overlap empty. The first square's
+    // right edge (110 pt from the axis) and the second's left edge (50 pt from it) each wall the
+    // overlap along part of their length and the outside along the rest.
+    let mut b = BezPath::new();
+    square(&mut b, 0.0, 0.0, 100.0, false);
+    square(&mut b, 40.0, 40.0, 100.0, false);
+    let (p, r) = shape(&b);
+    let m = revolve_mesh(&p, FillRule::EvenOdd, r, Revolve { offset: 10.0, segments: 32, ..Revolve::default() }).unwrap();
+    for radius in [110.0, 50.0] {
+        let walls = wall_directions(&m, radius);
+        assert!(walls.iter().any(|s| *s > 0.0) && walls.iter().any(|s| *s < 0.0), "both ways at {radius}");
+    }
+    assert!(wall_directions(&m, 150.0).iter().all(|s| *s > 0.0), "the second square's far edge faces out");
 }
 
 #[test]
@@ -315,4 +375,131 @@ fn join_numbers_each_parts_corners_after_the_last() {
     assert_eq!(both.triangles.len(), 2 * one.triangles.len());
     assert!(both.triangles.iter().all(|t| t.iter().all(|i| (*i as usize) < both.positions.len())));
     assert_eq!(both.triangles[one.triangles.len()][0], one.triangles[0][0] + one.positions.len() as u32);
+}
+
+/// A mesh's positions and normals as bits, and its triangles.
+type MeshBits = (Vec<[u64; 3]>, Vec<[u64; 3]>, Vec<[u32; 3]>);
+
+/// The bits of every number in `m`, for comparing two meshes exactly.
+fn bits(m: &Mesh) -> MeshBits {
+    (m.positions.iter().map(|p| p.map(f64::to_bits)).collect(), m.normals.iter().map(|n| n.map(f64::to_bits)).collect(), m.triangles.clone())
+}
+
+/// A star of `points` points about (100, 100), with a square hole: curved and straight edges both.
+fn star(points: usize) -> (PathData, Rect) {
+    let mut b = BezPath::new();
+    for k in 0..2 * points {
+        let (s, c) = (k as f64 * std::f64::consts::PI / points as f64).sin_cos();
+        let r = if k % 2 == 0 { 90.0 } else { 45.0 };
+        let p = (100.0 + r * c, 100.0 + r * s);
+        if k == 0 { b.move_to(p) } else { b.curve_to((p.0 + 3.0, p.1), (p.0, p.1 + 3.0), p) }
+    }
+    b.close_path();
+    square(&mut b, 90.0, 90.0, 20.0, true);
+    shape(&b)
+}
+
+/// The views the solids are compared in: straight on, turned, with perspective, and with colored
+/// lights (Inflate's smooth triangles).
+fn views() -> Vec<View> {
+    let turned = View { rotation_x: -25.0, rotation_y: 35.0, rotation_z: 10.0, ..View::default() };
+    vec![front(), turned, View { perspective: 60.0, ..turned }, View { light_color: [1.0, 0.5, 0.25], ..turned }]
+}
+
+/// Extrude & Bevel built once for its facets and its mesh gives what [`crate::extrude`] and
+/// [`extrude_mesh`] give apart, to the bit, errors included.
+#[test]
+fn an_extruded_solid_and_its_mesh_match_the_two_built_apart() {
+    let bevel = Bevel { shape: BevelShape::Rounded, width: 6.0, height: 5.0, ..Bevel::default() };
+    let options = [
+        Extrude::default(),
+        Extrude { depth: 0.0, ..Extrude::default() },
+        Extrude { cap: false, ..Extrude::default() },
+        Extrude { hidden: true, ..Extrude::default() },
+        Extrude { twist: 90.0, taper: 0.6, ..Extrude::default() },
+        Extrude { bevel: Some(bevel), ..Extrude::default() },
+        Extrude { bevel: Some(Bevel { both_sides: true, inside: true, ..bevel }), twist: 45.0, ..Extrude::default() },
+    ];
+    let (p, r) = star(7);
+    for view in views() {
+        for o in options {
+            let meshed = extrude_meshed(&p, FillRule::NonZero, r, o, view).unwrap();
+            let facets = crate::extrude(&p, FillRule::NonZero, r, o, view).unwrap();
+            assert_eq!(format!("{:?}", meshed.facets), format!("{facets:?}"), "{o:?} {view:?}");
+            let apart = extrude_mesh(&p, FillRule::NonZero, r, o, view).unwrap();
+            assert!(!apart.is_empty());
+            assert_eq!(bits(&meshed.mesh().unwrap()), bits(&apart), "{o:?} {view:?}");
+        }
+    }
+    // A solid that can't be built gives the same error.
+    let flat = Rect::new(0.0, 0.0, f64::INFINITY, 10.0);
+    let o = Extrude::default();
+    let error = crate::extrude(&p, FillRule::NonZero, flat, o, front()).err();
+    assert!(error.is_some());
+    assert_eq!(extrude_meshed(&p, FillRule::NonZero, flat, o, front()).err(), error);
+}
+
+/// Inflate's solids built once for their facets and meshes give what [`crate::inflate_each`] and
+/// [`inflate_meshes`] give apart, to the bit: several puffs under one eye, both sides, open
+/// backs, and twisted sides cut finer than room is left for.
+#[test]
+fn inflated_solids_and_their_meshes_match_the_two_built_apart() {
+    let (star, _) = star(5);
+    let mut b = BezPath::new();
+    square(&mut b, 200.0, 20.0, 60.0, false);
+    let (box_, _) = shape(&b);
+    let ring: Vec<vectorcraft_geom::Point> = (0..600)
+        .map(|k| {
+            let (s, c) = (k as f64 * std::f64::consts::TAU / 600.0).sin_cos();
+            vectorcraft_geom::Point::new(100.0 + 90.0 * c, 100.0 + 90.0 * s)
+        })
+        .collect();
+    let ring = PathData::single(vectorcraft_geom::SubPath::polyline(&ring, true));
+    let sets = [vec![(&star, FillRule::NonZero), (&box_, FillRule::NonZero), (&star, FillRule::EvenOdd)], vec![(&ring, FillRule::NonZero)]];
+    let bounds = Rect::new(0.0, 0.0, 280.0, 200.0);
+    let options = [
+        Inflate::default(),
+        Inflate { depth: 30.0, both_sides: true, ..Inflate::default() },
+        Inflate { depth: 20.0, cap: false, volume: 80.0, ..Inflate::default() },
+        Inflate { depth: 40.0, twist: 360.0, taper: 0.7, both_sides: true, ..Inflate::default() },
+        // Thin and barely twisted: the star's sides want more pieces than room is left after its
+        // front and back, and the mesh, which keeps the faces turned away, has less room left.
+        Inflate { depth: 0.1, twist: 0.1, both_sides: true, ..Inflate::default() },
+    ];
+    for shapes in &sets {
+        for view in views() {
+            for o in options {
+                let meshed: Vec<_> = inflate_meshed(shapes, bounds, o, view).collect();
+                let facets: Vec<_> = crate::inflate_each(shapes, bounds, o, view).collect();
+                let apart: Vec<_> = inflate_meshes(shapes, bounds, o, view).collect();
+                assert_eq!(meshed.len(), shapes.len());
+                for ((m, f), a) in meshed.iter().zip(&facets).zip(&apart) {
+                    let (m, f, a) = (m.as_ref().unwrap(), f.as_ref().unwrap(), a.as_ref().unwrap());
+                    assert_eq!(format!("{:?}", m.facets), format!("{f:?}"), "{o:?} {view:?}");
+                    assert!(!a.is_empty());
+                    assert_eq!(bits(&m.mesh().unwrap()), bits(a), "{o:?} {view:?}");
+                }
+            }
+        }
+    }
+}
+
+/// One build gives both the facets and the mesh: each solid is built once.
+#[test]
+fn a_meshed_solid_is_built_once() {
+    let (p, r) = star(5);
+    let extruded = || crate::solid::EXTRUDED.with(|n| n.get());
+    let start = extruded();
+    let solid = extrude_meshed(&p, FillRule::NonZero, r, Extrude::default(), front()).unwrap();
+    assert!(!solid.facets.is_empty() && solid.mesh().is_ok_and(|m| !m.is_empty()));
+    assert_eq!(extruded(), start + 1);
+    let inflated = || crate::solid::INFLATED.with(|n| n.get());
+    let start = inflated();
+    let mut b = BezPath::new();
+    square(&mut b, 200.0, 20.0, 60.0, false);
+    let (q, _) = shape(&b);
+    for solid in inflate_meshed(&[(&p, FillRule::NonZero), (&q, FillRule::NonZero)], Rect::new(0.0, 0.0, 280.0, 200.0), Inflate::default(), front()) {
+        assert!(solid.is_ok_and(|s| !s.facets.is_empty() && s.mesh().is_ok_and(|m| !m.is_empty())));
+    }
+    assert_eq!(inflated(), start + 2);
 }

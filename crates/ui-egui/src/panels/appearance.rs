@@ -385,10 +385,22 @@ pub(crate) fn row_popup(app: &mut VectorcraftApp, ctx: &egui::Context, panel: Re
     let area_id = egui::Id::unique("ap-row-popup");
     let shown = ctx.memory(|m| m.area_rect(area_id));
     // A press outside it (not one that closes a dropdown the popup opened) or Escape puts it away.
+    // With a field in it that has the keyboard, a press draws it once more first, so the field lets
+    // go of the keyboard to that press and commits what was typed, as in a panel (#6429). Escape
+    // drops what was typed.
     let pressed_outside = ctx.input(|i| i.pointer.any_pressed() && i.pointer.interact_pos().is_some_and(|p| shown.is_some_and(|r| !r.contains(p))));
-    if pressed_outside && !egui::Popup::is_any_open(ctx) || ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
+    let mut last = false;
+    if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
         return close(app);
+    } else if pressed_outside && !egui::Popup::is_any_open(ctx) {
+        if !widgets::field_focused_in(ctx, egui::LayerId::new(egui::Order::Foreground, area_id)) {
+            return close(app);
+        }
+        last = true;
     }
+    // Fields let go of the keyboard on a click, which this press isn't yet. The app-wide option
+    // goes back however this function ends, a panic in the panel included.
+    let _surrender = last.then(|| SurrenderOnPress::set(ctx));
     let screen = ctx.content_rect();
     let left = panel.left() - POPUP_GAP - POPUP_W;
     let x = if left >= screen.left() + POPUP_GAP { left } else { (panel.right() + POPUP_GAP).min(screen.right() - POPUP_W - POPUP_GAP) };
@@ -415,6 +427,28 @@ pub(crate) fn row_popup(app: &mut VectorcraftApp, ctx: &egui::Context, panel: Re
             }
         });
     });
+    if last {
+        close(app);
+    }
+}
+
+/// While it lives, a press anywhere makes a field let go of the keyboard, as a click does
+/// otherwise; dropped, egui's previous `surrender_focus_on` is back ([`row_popup`]'s last frame).
+struct SurrenderOnPress(egui::Context, egui::SurrenderFocusOn);
+
+impl SurrenderOnPress {
+    fn set(ctx: &egui::Context) -> Self {
+        let before = ctx.options(|o| o.input_options.surrender_focus_on);
+        ctx.options_mut(|o| o.input_options.surrender_focus_on = egui::SurrenderFocusOn::Presses);
+        Self(ctx.clone(), before)
+    }
+}
+
+impl Drop for SurrenderOnPress {
+    fn drop(&mut self) {
+        let before = self.1;
+        self.0.options_mut(|o| o.input_options.surrender_focus_on = before);
+    }
 }
 
 /// A row's name that edits the row when clicked ([`link`]), with the tooltip "Click to edit".
@@ -432,7 +466,7 @@ fn edit_tip(resp: egui::Response, name: &egui::Response) -> egui::Response {
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let node = first_subject(app);
-    let sel = current_sel(app, ui.ctx(), node.as_ref());
+    let sel = current_sel(app, ui.ctx(), node.as_deref());
     let hide_thumb: bool = pstate(ui.ctx(), "ap-hide-thumb");
     widgets::list_box(ui, |ui| {
         ui.spacing_mut().item_spacing.y = 0.0;
@@ -485,10 +519,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             Some(n) => stack(app, ui, n, sel, r, None),
             None => default_stack(app, ui),
         }
-        // Spacer row like Illustrator's empty tail.
+        // An empty spacer row at the end of the list.
         ui.allocate_exact_size(vec2(ui.available_width(), 10.0), Sense::hover());
     });
-    bottom(app, ui, node.as_ref(), sel);
+    bottom(app, ui, node.as_deref(), sel);
     delete_key(app, ui);
     // A row's popup, beside the panel (in the same window when the panel floats).
     let panel = ui.max_rect();
@@ -509,13 +543,13 @@ fn delete_key(app: &mut VectorcraftApp, ui: &mut Ui) {
     let keys = super::has_row_keys(&ctx, ROW_KEYS) && !pressed_outside;
     super::set_row_keys(&ctx, ROW_KEYS, keys);
     let node = first_subject(app);
-    let sel = current_sel(app, &ctx, node.as_ref());
+    let sel = current_sel(app, &ctx, node.as_deref());
     if keys
         && sel.deletable()
         && ctx.memory(|m| m.focused().is_none())
         && ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Delete) || i.consume_key(egui::Modifiers::NONE, egui::Key::Backspace))
     {
-        delete_selected(app, ui, node.as_ref(), sel);
+        delete_selected(app, ui, node.as_deref(), sel);
     }
 }
 
@@ -524,16 +558,16 @@ fn delete_key(app: &mut VectorcraftApp, ui: &mut Ui) {
 fn thumbnail_drag(ui: &mut Ui, th: Rect, id: NodeId) {
     let resp = ui.interact(th, ui.scope_id().with("ap-thumb"), Sense::drag()).on_hover_text(tl!("Drag onto art to apply this appearance"));
     widgets::drag_source(ui, &resp, || PanelDrag::Appearance(id));
-    if resp.dragged() {
+    if resp.dragged_by(egui::PointerButton::Primary) {
         ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
     }
 }
 
 /// The object the panel lists: the targeted layer, group or object (`layer.target`), else the
-/// first selected one.
-fn first_subject(app: &VectorcraftApp) -> Option<Node> {
+/// first selected one, as the `Arc` the document holds.
+fn first_subject(app: &VectorcraftApp) -> Option<std::sync::Arc<Node>> {
     let st = app.session.active()?;
-    st.selection.subjects().first().and_then(|id| st.doc.node(*id)).cloned()
+    st.selection.subjects().first().and_then(|id| super::layers::node_arc(&st.doc, *id))
 }
 
 /// The selection as the Control bar and the object row name it: "No Selection", the kind ("Path",
@@ -670,13 +704,13 @@ fn stack(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, sel: Sel, object_row: 
     let lit = |item: Option<usize>, k: usize| effects.as_ref().is_some_and(|(list, ks)| *list == item && ks.contains(&k));
     let mut rows = vec![(Slot::Object { top: true }, object_row)];
     let mut stopped = false;
-    // Starts or ends a row drag.
+    // Starts (primary button only) or ends a row drag.
     let frozen = only.is_some();
     let mut track = |resp: &egui::Response, what: Dragged| {
         if frozen {
             return;
         }
-        if resp.drag_started() {
+        if resp.drag_started_by(egui::PointerButton::Primary) {
             set_pstate(&ctx, "ap-drag", Some(what));
             // Where the row was grabbed, for its dimmed copy under the pointer.
             // (From where the button went down: the drag starts once the pointer has moved on.)
@@ -1646,7 +1680,7 @@ pub(crate) fn fx_menu(app: &mut VectorcraftApp, ui: &mut Ui) {
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let node = first_subject(app);
     let has = node.is_some();
-    let sel = current_sel(app, ui.ctx(), node.as_ref());
+    let sel = current_sel(app, ui.ctx(), node.as_deref());
     if menu_item(ui, tl!("Add New Fill"), has, false) {
         app.run("appearance.addFill", json!({})).ok();
     }
@@ -1655,10 +1689,10 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     ui.separator();
     if menu_item(ui, tl!("Duplicate Item"), has && sel.editable(), false) {
-        duplicate_selected(app, ui, node.as_ref(), sel);
+        duplicate_selected(app, ui, node.as_deref(), sel);
     }
     if menu_item(ui, tl!("Remove Item"), has && sel.deletable(), false) {
-        delete_selected(app, ui, node.as_ref(), sel);
+        delete_selected(app, ui, node.as_deref(), sel);
     }
     if menu_item(ui, tl!("Clear Appearance"), has, false) {
         app.run("appearance.clear", json!({})).ok();

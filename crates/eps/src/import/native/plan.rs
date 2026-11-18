@@ -1,7 +1,7 @@
 use super::layers::closed_where_ends_meet;
 use super::slots::{
     Content, MAX_PAIRS, OUTLINE_REACH, PAGE_TYPE_LEFT_OUT, PAGE_TYPE_UNCHECKED, SlotInfo, assign, covered, extent, join_pieces, letters, same_type,
-    words,
+    word_pieces, words,
 };
 use super::{Affine, Arc, Node, NodeId, NodeKind, Point, Rect, Story, TextKind};
 
@@ -59,7 +59,7 @@ pub(super) fn make_slots(
     to_doc: Affine,
     warn: &mut Vec<String>,
 ) -> Vec<Option<Made>> {
-    let (mut taller, mut deeper, mut tabs_left_out) = (0, 0, false);
+    let (mut taller, mut deeper, mut tabs_left_out, mut kinsoku_left_out) = (0, 0, false, false);
     let made = infos
         .iter()
         .enumerate()
@@ -68,6 +68,7 @@ pub(super) fn make_slots(
             let story = stories.get(k)?.as_ref()?;
             let mut node = story.node(NodeId(0), info.frame, t, to_doc)?;
             tabs_left_out |= story.tabs_left_out();
+            kinsoku_left_out |= story.kinsoku_sets_left_out();
             let mut region = story.region(t, to_doc);
             // The first line where the file has it, in the text document's frame (that of a
             // copied object is its original's, as its lines are).
@@ -101,6 +102,9 @@ pub(super) fn make_slots(
     }
     if tabs_left_out {
         warn.push(crate::import::ate::TABS_LEFT_OUT.into());
+    }
+    if kinsoku_left_out {
+        warn.push(crate::import::ate::KINSOKU_SETS_LEFT_OUT.into());
     }
     made
 }
@@ -283,9 +287,10 @@ fn plain_text(n: &Node) -> String {
     if let NodeKind::Text(t) = &n.kind { t.plain_text() } else { String::new() }
 }
 
-/// The words of the page's text object `o`, each as its [`spelling`], the empty ones left out.
+/// The words of the page's text object `o` (see [`word_pieces`]), each as its [`spelling`], the
+/// empty ones left out.
 fn object_words(o: &[Arc<Node>]) -> Vec<String> {
-    o.iter().flat_map(|n| plain_text(n).split_whitespace().map(spelling).collect::<Vec<_>>()).filter(|w| !w.is_empty()).collect()
+    o.iter().flat_map(|n| word_pieces(&plain_text(n)).map(spelling).collect::<Vec<_>>()).filter(|w| !w.is_empty()).collect()
 }
 
 /// Each slot's made type as its content, else nothing yet. Made type that shows has where it draws,

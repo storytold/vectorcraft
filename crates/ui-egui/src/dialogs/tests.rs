@@ -32,7 +32,7 @@ fn open(app: &mut VectorcraftApp, kind: &str, fields: serde_json::Value) {
 }
 
 fn objects(app: &VectorcraftApp) -> usize {
-    app.session.doc().unwrap().doc.layers.iter().map(|l| l.children().map_or(0, |c| c.len())).sum()
+    app.session.doc().unwrap().doc.layers.iter().map(|l| l.children().map_or(0, |c| c.iter().filter(|c| !c.is_ruler_guide()).count())).sum()
 }
 
 #[test]
@@ -176,6 +176,64 @@ fn effect_preview_is_kept_as_one_undo_step() {
     assert_ne!(app.session.doc().unwrap().doc, before);
     app.run("edit.undo", json!({})).unwrap();
     assert_eq!(app.session.doc().unwrap().doc, before);
+}
+
+/// A field label's colon is written as the UI language writes it, in the generic parameter
+/// dialogs and the effect dialogs alike (#7991): French puts a no-break space before it, Chinese
+/// writes a full-width colon, and English is unchanged.
+#[test]
+fn field_label_colons_follow_the_ui_language() {
+    let mut app = app();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
+    let text =
+        app.run("text.create", json!({"x": 20, "y": 80, "text": "Hello", "area": {"width": 100, "height": 100}})).unwrap()["id"].as_u64().unwrap();
+    // Each dialog, opened the way its menu item opens it, and the label it shows.
+    let entries = crate::menus::menu_entries(&app);
+    let clean_up = entries.iter().find(|e| e.path == ["Object", "Path"] && e.label == "Clean Up…").expect("listed");
+    let clean_up = crate::menus::click_target(&clean_up.label, clean_up.command.as_deref().unwrap(), &clean_up.params);
+    let dialogs = [
+        (clean_up.0, clean_up.1, "Stray Points"),
+        ("effect.dialog".to_string(), json!({"effect": "blur.radial"}), "Horizontal"),
+        ("text.areaOptions".to_string(), json!({}), "Text Flow"),
+    ];
+    for (command, params, label) in dialogs {
+        app.run("select.set", json!({"ids": [text]})).unwrap();
+        if command != "text.areaOptions" {
+            app.run("select.all", json!({})).unwrap();
+        }
+        crate::menus::invoke(&mut app, &command, params);
+        assert!(app.ui.dialog.is_some(), "{command} opened no dialog");
+        for (code, colon) in [("fr", "\u{a0}:"), ("zh-hans", "："), ("en", ":")] {
+            let lang = crate::i18n::Lang::from_code(code).unwrap();
+            crate::i18n::set_current(lang);
+            let shown = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui.ctx()));
+            crate::i18n::set_current(crate::i18n::Lang::EN);
+            let want = format!("{}{colon}", crate::i18n::tr(lang, label));
+            assert!(shown.lines().any(|l| l.trim() == want), "{command}, {code}: {want:?} in {shown}");
+            if code == "fr" {
+                let bare: Vec<_> = shown.lines().map(str::trim).filter(|l| l.ends_with(':') && !l.ends_with("\u{a0}:")).collect();
+                assert!(bare.is_empty(), "{command}: French labels with a bare colon: {bare:?}");
+            }
+        }
+        app.ui.dialog = None;
+    }
+    assert_eq!(super::form::humanized("strayPoints"), "Stray Points:", "English is unchanged");
+}
+
+/// A label followed by its value takes the UI language's colon too (#7991): Blur Center's value for
+/// screen readers, and a style's attribute list, which no longer shows a second colon.
+#[test]
+fn label_and_value_colons_follow_the_ui_language() {
+    let fr = crate::i18n::Lang::from_code("fr").unwrap();
+    crate::i18n::set_current(fr);
+    let center = super::effect::blur_center_value([0.5, 0.25]);
+    let attribute = super::form::attribute_line("fontSize", &json!(12));
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let (h, v) = (crate::i18n::tr(fr, "Horizontal"), crate::i18n::tr(fr, "Vertical"));
+    assert_eq!(center, format!("{h}\u{a0}: 50%, {v}\u{a0}: 25%"));
+    assert_eq!(attribute, format!("{}\u{a0}: 12", crate::i18n::tr(fr, "Font Size")));
+    assert_eq!(super::effect::blur_center_value([0.5, 0.25]), "Horizontal: 50%, Vertical: 25%");
+    assert_eq!(super::form::attribute_line("fontSize", &json!(12)), "Font Size: 12");
 }
 
 /// Drop Shadow's Color typed as text the effect can't draw: OK returns the error and keeps the
@@ -428,6 +486,7 @@ fn dialogs_do_not_stretch_to_the_screen() {
         ("ui.colorGuideOptions", json!({})),
         ("ui.colorBalanceDialog", json!({})),
         ("ui.saturateDialog", json!({})),
+        ("ui.indexedColorDialog", json!({})),
         ("ui.saveSwatchLibrary", json!({})),
         ("ui.flattenTransparencyDialog", json!({})),
         ("ui.expandDialog", json!({})),
@@ -570,11 +629,11 @@ fn split_into_grid_opens_at_the_selections_size_and_previews() {
     ]);
     frame(&mut app, Default::default());
     // The preview: 2 × 3 cells and the guides along their edges, not yet an undo step.
-    assert_eq!((objects(&app), app.session.doc().unwrap().doc.guides.len()), (6, 10));
+    assert_eq!((objects(&app), app.session.doc().unwrap().doc.ruler_guides().len()), (6, 10));
     assert!(app.session.in_interaction());
     confirm(&mut app).unwrap();
     let st = app.session.doc().unwrap();
-    assert_eq!((objects(&app), st.doc.guides.len(), st.history.undo.len()), (6, 10, undo + 1));
+    assert_eq!((objects(&app), st.doc.ruler_guides().len(), st.history.undo.len()), (6, 10, undo + 1));
     assert!(app.ui.dialog.is_none() && !app.session.in_interaction());
     // Cancel rolls a preview back.
     app.run("select.all", json!({})).unwrap();
@@ -660,6 +719,7 @@ impl PluginIntField {
             budget: Default::default(),
             paint_output: false,
             commands: Vec::new(),
+            command_allowlist: Vec::new(),
         };
         let mut f = PluginIntField { ctx, d: Dialog::new(plugin::KIND, json!({ "seed": start })), m, pos: egui::Pos2::ZERO };
         fn number_rect(shape: &egui::Shape, text: &str) -> Option<egui::Rect> {
@@ -1126,8 +1186,8 @@ fn a_hex_code_pasted_into_the_hex_field_replaces_its_digits() {
     }
 }
 
-/// #1000: a count typed in Object › Create Object Mosaic… reaches the command (a whole number typed
-/// in a command's dialog is an integer), so the mosaic has that many columns, not the 10 × 10 grid.
+/// #1000: a count typed in Object › Create Object Mosaic…'s Number of Tiles reaches the command, so
+/// the mosaic has that many columns, not the 10 × 10 grid; Enter confirms the dialog.
 #[test]
 fn object_mosaic_makes_the_grid_typed_in_its_dialog() {
     let mut app = app();
@@ -1136,14 +1196,34 @@ fn object_mosaic_makes_the_grid_typed_in_its_dialog() {
     let ctx = egui::Context::default();
     theme::install_fonts(&ctx);
     theme::apply(&ctx, Default::default());
+    // A frame → the texts painted, with their centers.
     let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
         let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| show(app, ui.ctx()));
         out.textures_delta.clear();
+        fn walk(s: &egui::Shape, out: &mut Vec<(String, egui::Pos2)>) {
+            match s {
+                egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
+                egui::Shape::Text(t) => out.push((t.galley.text().to_string(), t.visual_bounding_rect().center())),
+                _ => {}
+            }
+        }
+        let mut texts = vec![];
+        out.shapes.iter().for_each(|c| walk(&c.shape, &mut texts));
+        texts
     };
     let entry = crate::menus::menu_entries(&app).into_iter().find(|e| e.label == "Create Object Mosaic…").expect("menu item");
     let (cmd, params) = crate::menus::click_target(&entry.label, entry.command.as_deref().unwrap(), &entry.params);
     crate::menus::invoke(&mut app, &cmd, params);
-    // Its first field, Columns, is focused: type 3 over it and press Enter.
+    frame(&mut app, vec![]);
+    let texts = frame(&mut app, vec![]);
+    // Number of Tiles' Width field comes right after the row's Width caption.
+    let row = texts.iter().position(|(t, _)| t == "Number of Tiles:").expect("the Number of Tiles row");
+    let columns = texts[row..].iter().position(|(t, _)| t == "Width:").and_then(|i| texts.get(row + i + 1));
+    assert_eq!(columns.map(|(t, _)| t.as_str()), Some("10"), "{texts:?}");
+    let at = columns.map(|(_, p)| *p).unwrap();
+    let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    frame(&mut app, vec![egui::Event::PointerMoved(at), press(true)]);
+    frame(&mut app, vec![press(false)]);
     frame(&mut app, vec![]);
     frame(&mut app, vec![egui::Event::Text("3".into())]);
     let enter = egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
@@ -1754,6 +1834,64 @@ fn new_artboard_options_give_the_new_artboard_its_background_color() {
     }
 }
 
+/// Artboard Options shows the artboard's guide label on its Guide Label: row (None, a layer color's
+/// name, or Custom). OK sets a label picked there in one undo step, keeps it while another field
+/// changes, and a null `guideLabel` clears it; Cancel leaves it. OK with nothing changed adds no
+/// undo step, and a new artboard's Artboard Options gives it the label picked.
+#[test]
+fn artboard_options_shows_sets_and_clears_the_guide_label() {
+    let mut app = app();
+    let label = |app: &VectorcraftApp| app.session.doc().unwrap().doc.artboards[0].guide_label.map(vectorcraft_doc::LayerColor::label_text);
+    let undo = |app: &VectorcraftApp| app.session.doc().unwrap().history.undo.len();
+    let lines = |app: &mut VectorcraftApp| {
+        let text = crate::tests_labels::painted_text(app, |app, ui| show(app, ui.ctx()));
+        text.lines().map(str::trim).map(str::to_string).collect::<Vec<_>>()
+    };
+    crate::dialogs::artboard_options::open(&mut app).unwrap();
+    let shown = lines(&mut app);
+    assert!(shown.iter().any(|l| l == "Guide Label:"), "{shown:?}");
+    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["guideLabel"], json!(null));
+    let u = undo(&app);
+    super::confirm(&mut app).unwrap();
+    assert_eq!((label(&app), undo(&app)), (None, u), "OK with nothing changed");
+    crate::dialogs::artboard_options::open(&mut app).unwrap();
+    app.ui.dialog.as_mut().unwrap().fields.insert("guideLabel".into(), json!("Orange"));
+    super::confirm(&mut app).unwrap();
+    assert_eq!((label(&app).as_deref(), undo(&app)), (Some("Orange"), u + 1));
+    crate::dialogs::artboard_options::open(&mut app).unwrap();
+    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["guideLabel"], json!("Orange"));
+    assert!(lines(&mut app).iter().any(|l| l == "Orange"));
+    app.ui.dialog.as_mut().unwrap().fields.insert("guideLabel".into(), json!("#123456"));
+    cancel(&mut app);
+    assert_eq!(label(&app).as_deref(), Some("Orange"), "Cancel leaves it");
+    crate::dialogs::artboard_options::open(&mut app).unwrap();
+    assert!(lines(&mut app).iter().any(|l| l == "Orange"));
+    app.ui.dialog.as_mut().unwrap().fields.insert("guideLabel".into(), json!("#123456"));
+    super::confirm(&mut app).unwrap();
+    crate::dialogs::artboard_options::open(&mut app).unwrap();
+    assert!(lines(&mut app).iter().any(|l| l == "Custom"));
+    app.ui.dialog.as_mut().unwrap().fields.insert("name".into(), json!("Card"));
+    super::confirm(&mut app).unwrap();
+    assert_eq!(label(&app).as_deref(), Some("#123456"), "kept while another field changes");
+    crate::dialogs::artboard_options::open(&mut app).unwrap();
+    app.ui.dialog.as_mut().unwrap().fields.insert("guideLabel".into(), json!("purple"));
+    assert!(super::confirm(&mut app).is_err(), "a name in other letter case is refused");
+    assert_eq!(label(&app).as_deref(), Some("#123456"));
+    crate::dialogs::artboard_options::open(&mut app).unwrap();
+    app.ui.dialog.as_mut().unwrap().fields.insert("guideLabel".into(), json!(null));
+    super::confirm(&mut app).unwrap();
+    assert_eq!(label(&app), None);
+    for (picked, want) in [(Some(json!("Teal")), Some("Teal")), (None, None)] {
+        app.run("ui.newArtboard", json!({})).unwrap();
+        if let Some(c) = picked {
+            app.ui.dialog.as_mut().unwrap().fields.insert("guideLabel".into(), c);
+        }
+        super::confirm(&mut app).unwrap();
+        let ab = app.session.doc().unwrap().doc.artboards.last().cloned().unwrap();
+        assert_eq!(ab.guide_label.map(vectorcraft_doc::LayerColor::label_text).as_deref(), want);
+    }
+}
+
 /// Artboard Options shows Show Center Mark and Show Cross Hairs, ticked as the artboard has them
 /// whether it opens from the Artboards panel or from a double-click with the Artboard tool. OK
 /// sets them in one undo step, and a new artboard's Artboard Options gives it the ones ticked.
@@ -2230,7 +2368,13 @@ fn dialog_sliders_report_the_numbers_their_fields_show() {
     app.run("tool.options", json!({"tool": "smooth"})).unwrap();
     set(&mut app, "fidelity", json!(0.25));
     let shown = tree(|ui| show(&mut app, ui.ctx()));
-    assert_eq!(slider_value(&shown, "Fidelity:"), v(0.25, (0.05, 20.0), "0.25pt"));
+    assert_eq!(slider_value(&shown, "Fidelity:"), v(0.25, (0.05, 20.0), "0.25px"), "the Smooth tool's Fidelity is on screen (#4671)");
+    // The Blob Brush's Fidelity is in points.
+    app.ui.dialog = None;
+    app.run("tool.options", json!({"tool": "blobBrush"})).unwrap();
+    set(&mut app, "fidelity", json!(2.5));
+    let shown = tree(|ui| show(&mut app, ui.ctx()));
+    assert_eq!(slider_value(&shown, "Fidelity:"), v(2.5, (0.01, 20.0), "2.5pt"));
     app.ui.dialog = None;
     app.run("paint.setFill", json!({"color": "#ff8000"})).unwrap();
     app.run("ui.colorPicker", json!({})).unwrap();
@@ -2458,6 +2602,92 @@ fn flare_options_alt_turns_cancel_into_reset() {
     );
 }
 
+/// While Alt is held, Save PDF's Cancel button reads Reset; Reset puts the chosen preset's settings
+/// back and leaves the dialog open with its path, letting Alt go shows Cancel again, and Cancel
+/// closes the dialog.
+#[test]
+fn save_pdf_alt_turns_cancel_into_reset() {
+    let mut app = app();
+    app.run("ui.savePdfDialog", json!({"path": "/tmp/alt.pdf"})).unwrap();
+    app.ui.dialog.as_mut().unwrap().fields.insert("compatibility".into(), json!("1.4"));
+    let mut f = Frames::new();
+    f.button(&mut app, "Cancel");
+    f.run(&mut app, vec![egui::Event::ModifiersChanged(egui::Modifiers::ALT)]);
+    let reset = f.button(&mut app, "Reset");
+    let texts = f.texts(&mut app);
+    assert!(!texts.iter().any(|(t, _)| t == "Cancel"), "Reset takes Cancel's place: {texts:?}");
+    f.press(&mut app, reset, true);
+    f.press(&mut app, reset, false);
+    let d = app.ui.dialog.as_ref().expect("Reset leaves the dialog open");
+    assert_eq!((d.str("compatibility"), d.str("path")), ("1.7".to_string(), "/tmp/alt.pdf".to_string()));
+    f.run(&mut app, vec![egui::Event::ModifiersChanged(egui::Modifiers::NONE)]);
+    let cancel = f.button(&mut app, "Cancel");
+    f.press(&mut app, cancel, true);
+    f.press(&mut app, cancel, false);
+    assert!(app.ui.dialog.is_none(), "Cancel closes the dialog");
+}
+
+/// While Alt is held, Save for Web's Cancel button reads Reset; Reset puts the remembered settings
+/// back without remembering anything and leaves the dialog open, and letting Alt go shows Cancel again.
+#[test]
+fn save_for_web_alt_turns_cancel_into_reset() {
+    let mut app = app();
+    app.run("webExport.settings", json!({"format": "jpg", "quality": 70})).unwrap();
+    let remembered = app.session.last_web_settings().to_json();
+    app.run("file.saveForWeb", json!({})).unwrap();
+    let d = app.ui.dialog.as_mut().unwrap();
+    for (k, v) in [("format", json!("png8")), ("quality", json!(20)), ("colors", json!(16)), ("__view", json!("optimized"))] {
+        d.fields.insert(k.into(), v);
+    }
+    let mut f = Frames::new();
+    f.button(&mut app, "Cancel");
+    f.run(&mut app, vec![egui::Event::ModifiersChanged(egui::Modifiers::ALT)]);
+    let reset = f.button(&mut app, "Reset");
+    let texts = f.texts(&mut app);
+    assert!(!texts.iter().any(|(t, _)| t == "Cancel"), "Reset takes Cancel's place: {texts:?}");
+    f.press(&mut app, reset, true);
+    f.press(&mut app, reset, false);
+    let d = app.ui.dialog.as_ref().expect("Reset leaves the dialog open");
+    assert_eq!((d.str("format"), d.f64("quality", 0.0), d.f64("colors", 0.0)), ("jpg".into(), 70.0, 128.0));
+    assert_eq!(d.str("__view"), "optimized", "the view stays");
+    assert_eq!(app.session.last_web_settings().to_json(), remembered, "Reset remembers nothing");
+    f.run(&mut app, vec![egui::Event::ModifiersChanged(egui::Modifiers::NONE)]);
+    f.button(&mut app, "Cancel");
+}
+
+/// Reset Actions' question: OK replaces the action sets with the built-in set, Append adds the
+/// built-in set after them, and Cancel or Escape (`cancel`) leaves them as they are.
+#[test]
+fn reset_actions_ok_replaces_append_adds_and_cancel_keeps_the_sets() {
+    use crate::panels::actions::{ActionSet, default_sets};
+    let names = |app: &VectorcraftApp| app.ui.action_sets.iter().map(|s| s.name.clone()).collect::<Vec<_>>();
+    let mut app = app();
+    app.ui.action_sets.push(ActionSet::new("Mine", vec![]));
+    app.ui.action_set = Some(1);
+    let mut f = Frames::new();
+    for (answer, want, current) in [
+        (Some("Cancel"), vec!["Default Actions", "Mine"], Some(1)),
+        (None, vec!["Default Actions", "Mine"], Some(1)),
+        (Some("Append"), vec!["Default Actions", "Mine", "Default Actions 2"], Some(1)),
+        (Some("OK"), vec!["Default Actions"], Some(0)),
+    ] {
+        crate::dialogs::confirm::ask_reset_actions(&mut app);
+        match answer {
+            Some(label) => {
+                let at = f.button(&mut app, label);
+                f.press(&mut app, at, true);
+                f.press(&mut app, at, false);
+            }
+            None => cancel(&mut app),
+        }
+        assert!(app.ui.dialog.is_none(), "{answer:?} closes the question");
+        assert_eq!(names(&app), want, "{answer:?}");
+        assert_eq!(app.ui.action_set, current, "{answer:?}");
+    }
+    let saved = |sets: &[ActionSet]| serde_json::to_value(sets).unwrap();
+    assert_eq!(saved(&app.ui.action_sets), saved(&default_sets()), "OK leaves the built-in set as it comes");
+}
+
 /// The slider that screen readers name `label` in `out`'s tree: its node id, number and text.
 fn slider_node(out: &egui::FullOutput, label: &str) -> (egui::accesskit::NodeId, Option<f64>, Option<String>) {
     let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
@@ -2678,6 +2908,61 @@ fn the_blob_brush_tip_preview_is_a_named_slider_with_arrow_keys() {
     assert_eq!(angle(&app), -45.0, "the drag ends down to the right");
     f.key(&mut app, ArrowRight, M::NONE);
     assert_eq!(angle(&app), -44.0, "the drag gives the preview the focus");
+}
+
+/// A drag that starts on a black dot of the Blob Brush tip preview sets the Roundness from the
+/// pointer's distance from the center along the tip's short axis, leaves the Angle as it is, goes
+/// on past the square's edge (stopping at 100%), and gives the Roundness slider the focus, whose
+/// keys step the Roundness by 1% (10% with Shift) within 0% to 100%. A drag that starts anywhere
+/// else sets only the Angle, and Tab goes from the Angle slider to the Roundness slider.
+#[test]
+fn a_drag_on_a_blob_brush_tip_dot_sets_the_roundness() {
+    use egui::Key::{ArrowDown, ArrowRight, ArrowUp, End, Home, Tab};
+    use egui::Modifiers as M;
+    let mut app = app();
+    app.run("tool.options", json!({"tool": "blobBrush"})).unwrap();
+    let values = |app: &VectorcraftApp| {
+        let d = app.ui.dialog.as_ref().expect("Blob Brush Tool Options is open");
+        (d.f64("angle", f64::NAN), d.f64("roundness", f64::NAN))
+    };
+    let mut f = Frames::new();
+    f.run(&mut app, vec![]);
+    let out = f.run(&mut app, vec![]);
+    let (_, value, text) = slider_node(&out, "Roundness");
+    assert_eq!((value, text.as_deref()), (Some(100.0), Some("100%")));
+    let center = f.control(&mut app, "Roundness", egui::accesskit::Role::Slider);
+    // At 0° the dots are straight above and below the center, 18 pt from it at 100%. A click
+    // pressed 6 pt from the upper dot and released 11 pt from it in the same frame takes the dot.
+    let (down, up) = (center + egui::vec2(0.0, -12.0), center + egui::vec2(0.0, -7.0));
+    let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: M::NONE };
+    f.run(&mut app, vec![egui::Event::PointerMoved(down), button(down, true), egui::Event::PointerMoved(up), button(up, false)]);
+    assert_eq!(values(&app), (0.0, 39.0), "a click that starts on the upper dot");
+    f.drag(&mut app, center + egui::vec2(0.0, -7.0), egui::vec2(1.0, -11.0));
+    assert_eq!(values(&app), (0.0, 100.0), "the upper dot dragged out to the tip's length");
+    f.drag(&mut app, center + egui::vec2(0.0, -18.0), egui::vec2(1.0, 9.0));
+    assert_eq!(values(&app), (0.0, 50.0), "the upper dot dragged half way to the center");
+    f.drag(&mut app, center + egui::vec2(0.0, 9.0), egui::vec2(3.0, 60.0));
+    assert_eq!(values(&app), (0.0, 100.0), "the lower dot dragged out of the square");
+    f.drag(&mut app, center + egui::vec2(0.0, 18.0), egui::vec2(0.0, -18.0));
+    assert_eq!(values(&app), (0.0, 0.0), "the lower dot dragged to the center");
+    let mut seen = vec![];
+    for (key, mods, want) in
+        [(ArrowUp, M::NONE, 1.0), (ArrowRight, M::SHIFT, 11.0), (ArrowDown, M::NONE, 10.0), (End, M::NONE, 100.0), (Home, M::NONE, 0.0)]
+    {
+        f.key(&mut app, key, mods);
+        seen.push((key, mods.shift, values(&app)));
+        assert_eq!(values(&app), (0.0, want), "{seen:?}");
+    }
+    let out = f.run(&mut app, vec![]);
+    assert_eq!(slider_node(&out, "Roundness").2.as_deref(), Some("0%"));
+    // With a 0% tip the dots are at the center; a drag that starts away from them sets the Angle.
+    f.drag(&mut app, center + egui::vec2(20.0, 0.0), egui::vec2(0.0, -20.0));
+    assert_eq!(values(&app), (45.0, 0.0), "the drag ends up to the right");
+    f.key(&mut app, ArrowRight, M::NONE);
+    assert_eq!(values(&app), (46.0, 0.0), "the drag gives the Angle slider the focus");
+    f.key(&mut app, Tab, M::NONE);
+    f.key(&mut app, ArrowUp, M::NONE);
+    assert_eq!(values(&app), (46.0, 1.0), "Tab goes on to the Roundness slider");
 }
 
 /// Screen readers can set the Blob Brush tip preview's Angle to a number: the slider offers the
@@ -3501,4 +3786,95 @@ fn color_halftones_max_radius_stays_in_pixels_whatever_the_units() {
         let shows = out.shapes.iter().any(|s| matches!(&s.shape, egui::Shape::Text(t) if t.galley.text().trim() == shown));
         assert!(shows, "{typed} shows as {shown}, not in centimetres");
     }
+}
+
+/// The resolution fields of Flatten Transparency, Document Raster Effects Settings, Effect ›
+/// Rasterize, the PNG options and the PDF save dialog's Compression section show their unit in the interface
+/// language (French "ppp"), as the `{n} ppi` row writes it.
+#[test]
+fn resolution_fields_show_the_ppi_unit_in_the_interface_language() {
+    fn texts(s: &egui::Shape, out: &mut Vec<String>) {
+        match s {
+            egui::Shape::Text(t) => out.push(t.galley.text().to_string()),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| texts(s, out)),
+            _ => {}
+        }
+    }
+    fn shown(app: &mut VectorcraftApp) -> Vec<String> {
+        let ctx = egui::Context::default();
+        theme::install_fonts(&ctx);
+        theme::apply(&ctx, Default::default());
+        let raw =
+            || egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400.0, 1000.0))), ..Default::default() };
+        // A window is measured in its first frame and drawn from the second.
+        ctx.run_ui(raw(), |ui| show(app, ui.ctx())).textures_delta.clear();
+        let mut out = ctx.run_ui(raw(), |ui| show(app, ui.ctx()));
+        out.textures_delta.clear();
+        let mut all = vec![];
+        out.shapes.iter().for_each(|s| texts(&s.shape, &mut all));
+        all
+    }
+    type Open = fn(&mut VectorcraftApp);
+    let dialogs: [(&str, Open, &str); 5] = [
+        (
+            "Flatten Transparency",
+            |app| {
+                app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
+                app.run("transparency.set", json!({"opacity": 50})).unwrap();
+                app.run("ui.flattenTransparencyDialog", json!({})).unwrap();
+            },
+            "ppp",
+        ),
+        (
+            "Document Raster Effects Settings",
+            |app| {
+                crate::menus::invoke(app, "document.rasterEffectsSettings", json!({}));
+                app.ui.dialog.as_mut().unwrap().fields.insert("resolution".into(), json!(200));
+            },
+            "200 ppp",
+        ),
+        (
+            "Rasterize",
+            |app| {
+                app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
+                crate::menus::invoke(app, "effect.dialog", json!({"effect": "rasterize"}));
+                let d = app.ui.dialog.as_mut().unwrap();
+                d.fields.insert("useDocumentResolution".into(), json!(false));
+                d.fields.insert("resolution".into(), json!(200));
+            },
+            "200 ppp",
+        ),
+        (
+            "PNG Options",
+            |app| {
+                png_options::open(app, vectorcraft_engine::cmd::fileio::format("png").unwrap(), json!({"format": "png", "path": "/out/a.png"}));
+                let d = app.ui.dialog.as_mut().unwrap();
+                d.fields.insert("ppi".into(), json!(200));
+                d.fields.insert("__otherPpi".into(), json!(true));
+            },
+            "200 ppp",
+        ),
+        (
+            "Save PDF",
+            |app| {
+                app.run("ui.savePdfDialog", json!({"path": "/tmp/ppi.pdf"})).unwrap();
+                app.ui.dialog.as_mut().unwrap().fields.insert("__section".into(), json!("Compression"));
+            },
+            " ppp",
+        ),
+    ];
+    let mut bad = vec![];
+    for (name, open, want) in dialogs {
+        let mut app = app();
+        open(&mut app);
+        crate::i18n::set_current(crate::i18n::Lang::from_code("fr").unwrap());
+        let texts = shown(&mut app);
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        let translated = texts.iter().any(|t| t.trim() == want.trim() || (want.starts_with(' ') && t.ends_with(want)));
+        let english = texts.iter().any(|t| t.trim() == "ppi" || t.ends_with(" ppi"));
+        if !translated || english {
+            bad.push(format!("{name}: {texts:?}"));
+        }
+    }
+    assert!(bad.is_empty(), "{}", bad.join("\n"));
 }

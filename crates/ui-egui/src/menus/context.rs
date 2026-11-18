@@ -14,7 +14,8 @@ pub fn context_items(app: &VectorcraftApp) -> Vec<Item> {
     let roots: Vec<&vectorcraft_doc::Node> = st.selection.objects.iter().filter_map(|id| st.doc.node(*id)).collect();
     let any = |f: fn(&NodeKind) -> bool| roots.iter().any(|n| f(&n.kind));
     let several = roots.len() >= 2;
-    let mut v = vec![c("Undo", "edit.undo"), c("Redo", "edit.redo"), Sep];
+    let mut v = spelling_items(app);
+    v.extend([c("Undo", "edit.undo"), c("Redo", "edit.redo"), Sep]);
     if st.isolation.is_some() {
         v.extend([c("Exit Isolation Mode", "object.exitIsolation"), Sep]);
     }
@@ -54,10 +55,19 @@ pub fn context_items(app: &VectorcraftApp) -> Vec<Item> {
         ]);
     } else {
         v.extend([c("Cut", "edit.cut"), c("Copy", "edit.copy"), c("Paste", "edit.paste"), Sep]);
+        // With one group or compound path selected the menu has Isolate Selected Group, and with
+        // one path selected (a member of a group or a compound path too) it has Isolate Selected
+        // Path, as the help page
+        // (https://web.archive.org/web/20210601162814/https://helpx.adobe.com/pdf/illustrator_reference.pdf#page=324)
+        // lists them. Neither shows for an object that `object.isolate` refuses.
         if let [one] = roots.as_slice()
-            && one.is_container()
+            && isolatable(app, &st.doc, one)
         {
-            v.push(c("Isolate Selected Group", "object.isolate"));
+            if one.is_container() {
+                v.push(c("Isolate Selected Group", "object.isolate"));
+            } else if matches!(one.kind, NodeKind::Path { .. }) {
+                v.push(c("Isolate Selected Path", "object.isolate"));
+            }
         }
         if several {
             v.push(c("Group", "object.group"));
@@ -72,6 +82,10 @@ pub fn context_items(app: &VectorcraftApp) -> Vec<Item> {
         if !st.selection.anchors.is_empty() {
             v.extend([c("Remove Anchor Points", "path.removeAnchors"), c("Cut Path at Selected Anchor Points", "path.cutAtAnchors")]);
         }
+        // Object › Path › Smooth…, which opens the Smooth slider (`invoke`). `prune` leaves it out
+        // unless object.path.smooth can run: the selection holds a path, in a group or a compound
+        // path too.
+        v.push(c("Smooth…", "object.path.smooth"));
         if several {
             v.push(c("Make Clipping Mask", "object.clippingMask.make"));
         }
@@ -91,6 +105,13 @@ pub fn context_items(app: &VectorcraftApp) -> Vec<Item> {
         // The paragraphs of the selected type, or those the Type tool's selection touches.
         if crate::panels::character::text_style(app).is_some() {
             v.push(sub("Bullets and Numbering", vec![c("Apply Bullets", "type.applyBullets"), c("Apply Numbers", "type.applyNumbers")]));
+            // A right-click on type turns Auto Spell Check on or off and opens Check Spelling…, as
+            // Edit › Spelling does, per the public [Check and correct spelling](https://helpx.adobe.com/illustrator/desktop/design-with-text/edit-format-text/check-and-correct-spelling.html)
+            // page. The submenu shows Auto Spell Check's check mark (`render_items`).
+            v.push(sub(
+                "Spelling",
+                vec![c("Auto Spell Check", "edit.autoSpellCheck"), c("Check Spelling…", crate::dialogs::check_spelling::COMMAND)],
+            ));
         }
         v.extend([c("Make Guides", "view.guides.make"), Sep, sub("Transform", transform_items())]);
         if intertwine.is_none() {
@@ -106,6 +127,39 @@ pub fn context_items(app: &VectorcraftApp) -> Vec<Item> {
         ]);
     }
     prune(app, v)
+}
+
+/// A right-click on a word Auto Spell Check underlined ([`crate::state::UiState::context_spelling`]):
+/// the words its dictionary suggests, each replacing it (`text.editRange`, one undo step;
+/// `spelling_item_label` shows the word), or No Suggestions; then Ignore All
+/// (`text.spelling.ignoreAll`) and Add to Dictionary (`text.spelling.addWord`), as the public
+/// [Check and correct spelling](https://helpx.adobe.com/illustrator/desktop/design-with-text/edit-format-text/check-and-correct-spelling.html)
+/// page lists them. Nothing for another right-click, or after the document or the word changed.
+fn spelling_items(app: &VectorcraftApp) -> Vec<Item> {
+    let Some(st) = app.session.active() else { return vec![] };
+    let Some(w) = app.ui.context_spelling.as_ref().filter(|w| w.uid == st.uid) else { return vec![] };
+    let still = match st.doc.node(w.id).map(|n| &n.kind) {
+        Some(vectorcraft_doc::NodeKind::Text(t)) => t.plain_text().get(w.start..w.end) == Some(w.word.as_str()),
+        _ => false,
+    };
+    if !still {
+        return vec![];
+    }
+    let mut v: Vec<Item> = w
+        .suggestions
+        .iter()
+        .map(|s| cp("Suggestion", "text.editRange", json!({ "id": w.id.0, "start": w.start, "end": w.end, "insert": s })))
+        .collect();
+    if v.is_empty() {
+        v.push(Item::Header("No Suggestions"));
+    }
+    v.extend([
+        Sep,
+        cp("Ignore All", "text.spelling.ignoreAll", json!({ "word": w.word })),
+        cp("Add to Dictionary", "text.spelling.addWord", json!({ "word": w.word })),
+        Sep,
+    ]);
+    v
 }
 
 /// The locked objects under the pointer at the right-click, each unlocked as the Layers panel's
@@ -202,6 +256,18 @@ fn artboard_items(app: &VectorcraftApp) -> Vec<Item> {
     v
 }
 
+/// Does `object.isolate` take `n`? It and every group and layer above it are shown and unlocked
+/// (for a Shaper Group, its source group, which is the group isolated), it is not on a locked
+/// artboard, it is not a guide path while Lock Guides is on, and while a symbol is edited it is on
+/// the symbol's editing layer. A selection set by a command can still hold an object that fails
+/// this.
+fn isolatable(app: &VectorcraftApp, doc: &vectorcraft_doc::Document, n: &vectorcraft_doc::Node) -> bool {
+    let target = if n.extras().shaper.is_some() { n.children().and_then(|c| c.first()).map_or(n.id, |c| c.id) } else { n.id };
+    doc.is_editable(target)
+        && !(app.session.guides_locked() && doc.node(target).is_some_and(|t| t.is_guide()))
+        && doc.symbol_edit.as_ref().is_none_or(|e| doc.ancestry(target).is_some_and(|a| a.contains(&e.layer)))
+}
+
 /// `items` without the commands that can't run now (Undo and Redo stay, greyed out), submenus
 /// left empty, and separators that no longer separate anything.
 fn prune(app: &VectorcraftApp, items: Vec<Item>) -> Vec<Item> {
@@ -230,8 +296,9 @@ fn prune(app: &VectorcraftApp, items: Vec<Item>) -> Vec<Item> {
 /// The canvas context menu's popup; the item clicked goes in `clicked`, for [`invoke`].
 pub fn context_menu_body(app: &VectorcraftApp, ui: &mut egui::Ui, clicked: &mut Option<(String, Value)>) {
     widgets::menu_scroll(ui, |ui| {
-        ui.set_min_width(200.0);
-        // Its toggles already say what they do (Show Rulers, Hide Guides): no check-mark gutter.
+        widgets::menu_min_width(ui, 200.0);
+        // Its toggles already say what they do (Show Rulers, Hide Guides): no check-mark gutter,
+        // except in a submenu of toggles alone and in Spelling, for Auto Spell Check.
         render_items(app, ui, &context_items(app), false, clicked);
     });
 }
@@ -246,7 +313,7 @@ pub fn ruler_unit_items() -> Vec<Item> {
 /// `clicked`, for [`invoke`].
 pub fn ruler_menu_body(app: &VectorcraftApp, ui: &mut egui::Ui, clicked: &mut Option<(String, Value)>) {
     widgets::menu_scroll(ui, |ui| {
-        ui.set_min_width(160.0);
+        widgets::menu_min_width(ui, 160.0);
         render_items(app, ui, &ruler_unit_items(), true, clicked);
     });
 }

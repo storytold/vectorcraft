@@ -1,7 +1,7 @@
 //! Dynamic symbols (#4938): an instance changes the appearance of objects in its symbol's art and
 //! stays linked; editing the symbol keeps those changes, Reset and Break Link handle them. Direct
-//! Selection picks one path, compound path or type object of an instance's art, and a solid color
-//! Fill or Stroke changes it.
+//! Selection picks one path, compound path or type object of an instance's art, and Fill, Stroke,
+//! opacity and blend change it for that instance.
 
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
@@ -51,8 +51,9 @@ fn pixel(s: &Session, x: u32, y: u32) -> [u8; 4] {
 const RED: [u8; 4] = [255, 0, 0, 255];
 const BLUE: [u8; 4] = [0, 0, 255, 255];
 
-/// The refusal of anything but a solid fill or stroke on a picked object says so.
-const REFUSED: &str = "solid color fill and stroke";
+/// The refusal of a change that is not fill, stroke, opacity or blend on a picked path, compound
+/// path or type (or of selecting any other kind of object) says so.
+const REFUSED: &str = "fill, stroke, opacity and blend";
 
 #[test]
 fn a_dynamic_instance_paints_one_object_its_own_way_and_stays_linked() {
@@ -432,6 +433,30 @@ fn redefining_the_symbol_keeps_the_changes_whose_objects_remain() {
 }
 
 #[test]
+fn redefining_the_symbol_drops_paints_its_new_objects_do_not_draw() {
+    let mut s = session();
+    let inst = pair(&mut s, "dynamic");
+    let p = json!({"id": inst.0, "path": [1], "fill": "#ff0000", "stroke": "#ff0000", "opacity": 50});
+    s.execute("symbol.instance.setAppearance", &p).unwrap();
+    // The second object is now an image, which draws no fill or stroke of its own.
+    let a = square(&mut s, 10.0);
+    place_image(&mut s);
+    let image = top(&s);
+    s.execute("symbol.update", &json!({"name": "Pair", "ids": [a.0, image.0]})).unwrap();
+    let o = node(&s, inst).extras().symbol_overrides.clone();
+    assert_eq!(o.len(), 1, "the opacity change stays: {o:?}");
+    assert_eq!((&o[0].fill, &o[0].stroke, o[0].opacity), (&None, &None, Some(0.5)));
+    // A change of paint alone goes with its paint: the first object is now a blend.
+    s.execute("symbol.instance.setAppearance", &json!({"id": inst.0, "path": [0], "stroke": "#ff0000"})).unwrap();
+    let (b, c) = (square(&mut s, 10.0), square(&mut s, 60.0));
+    let blend = id(&s.execute("object.blend.make", &json!({"ids": [b.0, c.0], "steps": 1})).unwrap());
+    let d = square(&mut s, 120.0);
+    s.execute("symbol.update", &json!({"name": "Pair", "ids": [blend.0, d.0]})).unwrap();
+    let o = node(&s, inst).extras().symbol_overrides.clone();
+    assert_eq!(o.iter().map(|o| o.path.clone()).collect::<Vec<_>>(), [vec![1]], "{o:?}");
+}
+
+#[test]
 fn replace_symbol_drops_the_changes_made_for_the_old_symbol() {
     let mut s = session();
     // "Other": two blue squares in the same places, the instance taken off the canvas.
@@ -655,8 +680,7 @@ fn commands_on_the_selection_leave_a_picked_objects_instance_alone() {
         ("object.repeat.release", json!({})),
         ("object.intertwine.release", json!({})),
         ("object.objectsOnPath.expand", json!({})),
-        ("transparency.set", json!({"opacity": 50})),
-        ("transparency.set", json!({"blend": "multiply"})),
+        ("transparency.set", json!({"opacity": 50, "isolate": true})),
         ("transparency.releaseOpacityMask", json!({})),
         ("transparency.setOpacityMask", json!({"invert": true, "clip": false})),
         ("transparency.disableOpacityMask", json!({})),
@@ -774,7 +798,41 @@ fn a_blend_around_a_picked_objects_instance_is_left_alone() {
 fn image_symbol(s: &mut Session) -> (NodeId, Value) {
     let mut png = Vec::new();
     let pixels = image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(2, 1, vec![0, 255]).unwrap());
-    pixels.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = pixels;
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     let im = s
         .edit("Place", |d, _| {
             d.images.insert("gray".into(), vectorcraft_doc::ImageBlob::png(png));
@@ -858,38 +916,30 @@ fn a_press_on_an_image_of_the_art_is_refused_and_moves_nothing() {
     assert_eq!(overrides(&s, inst), 0);
 }
 
-/// A gradient or pattern for a picked object is refused and changes nothing, new art's paint
-/// included. An object that shows a gradient takes a solid color.
+/// A gradient or pattern for a picked object is stored on the instance; Invert, Complement and the
+/// gradient annotator stay refused. An object that shows a gradient takes a solid color.
 #[test]
-fn gradients_and_patterns_on_a_picked_object_are_refused() {
+fn gradients_and_patterns_on_a_picked_object_are_taken() {
     let mut s = session();
     let inst = pair(&mut s, "dynamic");
     let g = json!({"kind": "linear", "stops": [{"offset": 0, "color": "#ff0000"}, {"offset": 1, "color": "#0000ff"}]});
     s.execute("swatch.new", &json!({"name": "Ramp", "gradient": g})).unwrap();
     let tile = square(&mut s, 150.0);
     s.execute("object.pattern.make", &json!({"ids": [tile.0], "name": "Dots", "edit": false})).unwrap();
-    // An object to sample a gradient from.
     let far = square(&mut s, 150.0);
     s.execute("paint.setFill", &json!({"ids": [far.0], "gradient": g})).unwrap();
     s.execute("symbol.instance.selectPart", &json!({"id": inst.0, "path": [1]})).unwrap();
-    let undo = undo_steps(&s);
-    let (fill, stroke) = (s.paint.fill.clone(), s.paint.stroke.clone());
-    for (cmd, p) in [
-        ("paint.setFill", json!({"gradient": g})),
-        ("paint.setStroke", json!({"gradient": g})),
-        ("paint.setFill", json!({"gradient": g, "span": "selection"})),
-        ("paint.setFill", json!({"swatch": "Ramp"})),
-        ("paint.setFill", json!({"swatch": "Dots"})),
-        ("appearance.copyFrom", json!({"source": far.0})),
-    ] {
-        let e = s.execute(cmd, &p).unwrap_err().to_string();
-        assert!(e.contains(REFUSED), "{cmd} {p}: {e}");
-    }
-    assert_eq!((overrides(&s, inst), undo_steps(&s)), (0, undo), "nothing changes");
-    assert_eq!((&s.paint.fill, &s.paint.stroke), (&fill, &stroke), "new art keeps its paint");
-    // An object whose art has a gradient takes a solid color; Invert, Complement and selecting one
-    // of its stops are refused.
-    s.execute("symbol.instance.setAppearance", &json!({"id": inst.0, "path": [1], "fill": {"gradient": g}})).unwrap();
+    s.execute("paint.setFill", &json!({"gradient": g})).unwrap();
+    assert!(matches!(node(&s, inst).extras().symbol_overrides[0].fill, Some(Paint::Gradient(_))));
+    s.execute("paint.setStroke", &json!({"gradient": g})).unwrap();
+    assert!(matches!(node(&s, inst).extras().symbol_overrides[0].stroke, Some(Paint::Gradient(_))));
+    s.execute("paint.setFill", &json!({"swatch": "Ramp"})).unwrap();
+    assert!(matches!(node(&s, inst).extras().symbol_overrides[0].fill, Some(Paint::Gradient(_))));
+    s.execute("paint.setFill", &json!({"swatch": "Dots"})).unwrap();
+    assert!(matches!(node(&s, inst).extras().symbol_overrides[0].fill, Some(Paint::Pattern { .. })));
+    s.execute("appearance.copyFrom", &json!({"source": far.0})).unwrap();
+    assert!(matches!(node(&s, inst).extras().symbol_overrides[0].fill, Some(Paint::Gradient(_))));
+    // Invert, Complement and selecting a stop are refused on a gradient.
     for cmd in ["paint.invert", "paint.complement"] {
         let e = s.execute(cmd, &json!({"stroke": false})).unwrap_err().to_string();
         assert!(e.contains(REFUSED), "{cmd}: {e}");
@@ -902,15 +952,56 @@ fn gradients_and_patterns_on_a_picked_object_are_refused() {
     assert_eq!(s.selected_stop(), None);
     s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
     assert_eq!(pixel(&s, 80, 30), RED);
-    // The Eyedropper's options can leave the gradient out: the fill stays.
     s.execute("appearance.copyFrom", &json!({"source": far.0, "pickUp": {"appearance": {"fill": {"color": false}}}})).unwrap();
     assert_eq!(pixel(&s, 80, 30), RED);
-    // Options that pick up neither color leave nothing to change, so the click is refused.
     let (undo, fill) = (undo_steps(&s), s.paint.fill.clone());
     let neither = json!({"source": far.0, "pickUp": {"appearance": {"fill": {"color": false}, "stroke": {"color": false}}}});
     let e = s.execute("appearance.copyFrom", &neither).unwrap_err().to_string();
     assert!(e.contains(REFUSED), "{e}");
     assert_eq!((undo_steps(&s), &s.paint.fill), (undo, &fill), "nothing changes");
+}
+
+/// A stop selected on the whole instance's gradient is not selected once a part of its art is
+/// picked, so the Gradient tool does not take Delete for it, and is selected again when the whole
+/// instance is.
+#[test]
+fn picking_a_part_leaves_no_gradient_stop_selected() {
+    let mut s = session();
+    let inst = pair(&mut s, "dynamic");
+    let g = json!({"kind": "linear", "stops": [{"offset": 0, "color": "#ff0000"}, {"offset": 1, "color": "#0000ff"}]});
+    s.execute("select.set", &json!({"ids": [inst.0]})).unwrap();
+    s.execute("paint.setFill", &json!({"gradient": g})).unwrap();
+    s.fill_active = true;
+    let view = ViewInfo::default();
+    s.select_tool("gradient", view).unwrap();
+    s.execute("gradient.selectStop", &json!({"index": 1})).unwrap();
+    assert_eq!(s.selected_stop(), Some(1));
+    assert!(s.tool_claims_key(vectorcraft_tools::ToolKey::Delete, view));
+    s.execute("symbol.instance.selectPart", &json!({"id": inst.0, "path": [1]})).unwrap();
+    assert_eq!(s.selected_stop(), None);
+    assert!(!s.tool_claims_key(vectorcraft_tools::ToolKey::Delete, view));
+    s.execute("select.set", &json!({"ids": [inst.0]})).unwrap();
+    assert_eq!(s.selected_stop(), Some(1));
+}
+
+#[test]
+fn opacity_and_blend_on_a_picked_object_go_through_transparency_set() {
+    let mut s = session();
+    let inst = pair(&mut s, "dynamic");
+    s.execute("symbol.instance.selectPart", &json!({"id": inst.0, "path": [1]})).unwrap();
+    s.execute("transparency.set", &json!({"opacity": 50})).unwrap();
+    assert_eq!(node(&s, inst).extras().symbol_overrides[0].opacity, Some(0.5));
+    s.execute("transparency.set", &json!({"blend": "multiply"})).unwrap();
+    let o = node(&s, inst).extras().symbol_overrides[0].clone();
+    assert_eq!(o.opacity, Some(0.5));
+    assert_eq!(o.blend, Some(vectorcraft_color::BlendMode::Multiply));
+    // A static symbol's instance refuses selectPart, so transparency.set acts on the instance whole.
+    let mut t = session();
+    let static_inst = pair(&mut t, "static");
+    t.execute("select.set", &json!({"ids": [static_inst.0]})).unwrap();
+    t.execute("transparency.set", &json!({"opacity": 40})).unwrap();
+    assert!(node(&t, static_inst).extras().symbol_overrides.is_empty());
+    assert!((node(&t, static_inst).opacity - 0.4).abs() < 1e-6);
 }
 
 #[test]
@@ -1276,7 +1367,7 @@ fn a_lent_selection_tool_moves_the_instance_of_a_picked_object() {
 #[test]
 fn read_only_commands_read_the_instance_of_a_picked_object() {
     let mut failures = Vec::new();
-    for spec in crate::cmd::command_specs().iter().filter(|c| !c.journal) {
+    for spec in crate::cmd::command_specs().iter().filter(|c| !c.journal && crate::runs_with_empty_params(c.id)) {
         let mut s = session();
         let inst = pair(&mut s, "dynamic");
         s.execute("symbol.instance.selectPart", &json!({"id": inst.0, "path": [1]})).unwrap();

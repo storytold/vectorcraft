@@ -307,6 +307,58 @@ impl egui::DroppedFile for MockDrop {
 }
 
 #[test]
+fn an_explicit_float_command_updates_an_existing_native_windows_geometry() {
+    for mode in [json!({}), json!({"group": true}), json!({"column": true})] {
+        let mut h = Harness::new();
+        h.app.run("window.panel.float", json!({"panel": "swatches", "x": 240, "y": 160, "width": 320, "height": 360})).unwrap();
+        h.frames(3);
+        let viewport = h.viewport("swatches");
+        assert_eq!(h.host.borrow().windows[&viewport].rect, Rect::from_min_size(ORIGIN + vec2(240.0, 160.0), vec2(320.0, 360.0)));
+        let mut params = json!({"panel": "swatches", "x": 280, "y": 190, "width": 350, "height": 390});
+        params.as_object_mut().unwrap().extend(mode.as_object().unwrap().clone());
+        h.app.run("window.panel.float", params).unwrap();
+        h.frames(3);
+        assert_eq!(h.viewport("swatches"), viewport);
+        assert_eq!(h.host.borrow().windows[&viewport].rect, Rect::from_min_size(ORIGIN + vec2(280.0, 190.0), vec2(350.0, 390.0)));
+        let moved = Rect::from_min_size(pos2(-500.0, 120.0), vec2(380.0, 410.0));
+        h.host.borrow_mut().windows.get_mut(&viewport).unwrap().rect = moved;
+        h.frames(3);
+        let mut params = json!({"panel": "swatches", "width": 400});
+        params.as_object_mut().unwrap().extend(mode.as_object().unwrap().clone());
+        h.app.run("window.panel.float", params).unwrap();
+        h.frames(3);
+        let resized = Rect::from_min_size(moved.min, vec2(400.0, moved.height()));
+        assert_eq!(h.host.borrow().windows[&viewport].rect, resized);
+        let mut params = json!({"panel": "swatches"});
+        params.as_object_mut().unwrap().extend(mode.as_object().unwrap().clone());
+        h.app.run("window.panel.float", params).unwrap();
+        h.frames(3);
+        assert_eq!(h.host.borrow().windows[&viewport].rect, resized);
+    }
+}
+
+#[test]
+fn saved_native_geometry_updates_before_viewport_metadata_is_available() {
+    let mut h = Harness::new();
+    let viewport = h.float("swatches");
+    h.app.ui_ctx = None;
+    h.app.run("window.panel.float", json!({"panel": "swatches", "x": 280, "y": 190, "height": 390})).unwrap();
+    h.app.run("window.panel.float", json!({"panel": "swatches", "width": 350})).unwrap();
+    h.frames(3);
+    assert_eq!(h.viewport("swatches"), viewport);
+    assert_eq!(h.host.borrow().windows[&viewport].rect, Rect::from_min_size(ORIGIN + vec2(280.0, 190.0), vec2(350.0, 390.0)));
+    h.app.run("window.panel.float", json!({"panel": "color", "onto": "swatches"})).unwrap();
+    h.frames(3);
+    h.app.ui_ctx = None;
+    h.app.run("window.panel.float", json!({"panel": "swatches", "column": true, "x": 480, "y": 260})).unwrap();
+    h.app.run("window.panel.dock", json!({"panel": "swatches", "anchor": "layers", "zone": "tab"})).unwrap();
+    h.frames(3);
+    assert!(!floats(&h.app.ui, "swatches"));
+    assert_eq!(h.viewport("color"), viewport);
+    assert_eq!(h.host.borrow().windows[&viewport].rect.min, ORIGIN + vec2(480.0, 260.0));
+}
+
+#[test]
 fn a_floated_panel_opens_its_own_os_window_where_the_backend_has_viewports() {
     let mut h = Harness::new();
     let viewport = h.float("swatches");
@@ -527,8 +579,8 @@ fn reopened(saved: &craft_ui::docking::Layout<String>, monitors: &[crate::DockMo
 /// Two monitors side by side, with the main window on the left one (#5582).
 #[test]
 fn a_floating_panel_reopens_on_the_monitor_where_it_was_left() {
-    let left = crate::DockMonitor { name: Some("left".into()), rect: [0.0, 0.0, 1920.0, 1080.0], scale: 1.0 };
-    let right = crate::DockMonitor { name: Some("right".into()), rect: [1920.0, 0.0, 1920.0, 1080.0], scale: 1.0 };
+    let left = crate::DockMonitor { name: Some("left".into()), rect: [0.0, 0.0, 1920.0, 1080.0], scale: 1.0, work_area: None };
+    let right = crate::DockMonitor { name: Some("right".into()), rect: [1920.0, 0.0, 1920.0, 1080.0], scale: 1.0, work_area: None };
     let both = [left.clone(), right.clone()];
 
     let mut h = Harness::new();
@@ -842,6 +894,36 @@ fn a_torn_off_strip_or_a_new_toolbar_leaves_the_palette_windows_shown() {
     assert_eq!(take_palette_commands(&h, viewport).0, [false], "still shown: the drawer hides them again");
 }
 
+/// A panel floated while the palette windows are hidden opens hidden too, and shows with the others
+/// once the drawer or the dialog over them closes.
+#[test]
+fn a_panel_floated_while_the_palette_windows_are_hidden_opens_hidden() {
+    let mut h = Harness::new();
+    let navigator = h.float("navigator");
+    h.host.borrow_mut().focus = ViewportId::ROOT;
+    h.frames(2);
+    take_palette_commands(&h, navigator);
+    h.app.run("window.editToolbar", json!({"open": true})).unwrap();
+    h.frames(2);
+    assert_eq!(take_palette_commands(&h, navigator).0, [false], "hidden under the drawer");
+    let layers = h.float("layers");
+    h.host.borrow_mut().focus = ViewportId::ROOT;
+    assert!(h.app.ui.tools_drawer, "the drawer stays open");
+    let (shown, levels) = take_palette_commands(&h, layers);
+    assert_eq!(shown, [false], "the new palette window is hidden under the drawer");
+    assert_eq!(levels, [egui::WindowLevel::Normal], "and out of the top level");
+    h.app.run("window.editToolbar", json!({"open": false})).unwrap();
+    h.frames(2);
+    assert_eq!(take_palette_commands(&h, layers).0, [true], "shown when the drawer closes");
+
+    h.app.ui.palette_open = true;
+    h.frames(2);
+    assert_eq!(take_palette_commands(&h, layers).0, [false], "hidden under the command palette");
+    let swatches = h.float("swatches");
+    h.host.borrow_mut().focus = ViewportId::ROOT;
+    assert_eq!(take_palette_commands(&h, swatches).0, [false], "a panel floated under it is hidden too");
+}
+
 /// The frame in which a click elsewhere closes a flyout or the drawer shows the palette windows, as
 /// no later frame need come while the app is idle.
 #[test]
@@ -1009,6 +1091,9 @@ fn ui_docking_leaves_out_the_controls_of_os_windows() {
 #[test]
 fn wheel_over_a_floating_character_font_field_changes_the_font() {
     let mut h = Harness::new();
+    // The later turns step to whichever families the process has loaded, test fonts without Latin
+    // glyphs included. Missing glyph protection would keep the text in its previous font.
+    h.app.run("prefs.set", json!({"key": "missingGlyphProtection", "value": false})).unwrap();
     h.app.run("text.create", json!({"x": 30, "y": 50, "text": "Hi", "font": "Source Sans 3"})).unwrap();
     let viewport = h.float("character");
     let field = h
@@ -1054,8 +1139,9 @@ fn wheel_over_a_floating_character_font_field_changes_the_font() {
 
     h.host.borrow_mut().child_overlay = None;
     h.frame(vec![]);
+    h.host.borrow_mut().time += crate::widgets::WHEEL_STREAM_GAP;
     h.host.borrow_mut().windows.get_mut(&viewport).unwrap().events.extend([
-        Event::PointerMoved(pointer),
+        Event::PointerMoved(pointer + vec2(1.0, 0.0)),
         Event::MouseWheel {
             unit: egui::MouseWheelUnit::Line,
             delta: vec2(0.0, -1.0),
@@ -1087,8 +1173,9 @@ fn wheel_over_a_floating_character_font_field_changes_the_font() {
     h.host.borrow_mut().child_transparent_overlay = None;
     h.host.borrow_mut().child_pass_through_overlay = Some((viewport, field.expand(10.0)));
     h.frames(2);
+    h.host.borrow_mut().time += crate::widgets::WHEEL_STREAM_GAP;
     h.host.borrow_mut().windows.get_mut(&viewport).unwrap().events.extend([
-        Event::PointerMoved(pointer),
+        Event::PointerMoved(pointer + vec2(2.0, 0.0)),
         Event::MouseWheel {
             unit: egui::MouseWheelUnit::Line,
             delta: vec2(0.0, -1.0),
@@ -1451,6 +1538,75 @@ fn wheel_events_on_both_sides_of_an_overlay_are_checked_separately() {
     h.frame(vec![]);
     assert_ne!(h.app.run("text.fonts", json!({})).unwrap(), before);
     assert_eq!(h.ctx.input_for(viewport, |input| input.pointer.latest_pos()), Some(clear));
+}
+
+#[test]
+fn a_wheel_stream_that_began_outside_a_floating_font_field_stays_outside() {
+    let mut h = Harness::new();
+    h.app.run("text.create", json!({"x": 30, "y": 50, "text": "Hi", "font": "Source Sans 3"})).unwrap();
+    let viewport = h.float("character");
+    let field = h
+        .host
+        .borrow()
+        .windows
+        .get(&viewport)
+        .and_then(|w| w.texts.iter().find(|(text, _)| text == "Source Sans 3").map(|(_, rect)| *rect))
+        .expect("the Character panel's font family field");
+    let on = pos2(field.min.x + 4.0, field.center().y);
+    let off = pos2(field.min.x + 4.0, field.max.y + 60.0);
+    let turn = Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Line,
+        delta: vec2(0.0, -1.0),
+        phase: egui::TouchPhase::Move,
+        modifiers: Default::default(),
+        source: egui::MouseWheelSource::Unknown,
+    };
+    let before = h.app.run("text.fonts", json!({})).unwrap();
+    h.host.borrow_mut().windows.get_mut(&viewport).unwrap().events.extend([Event::PointerMoved(off), turn.clone(), Event::PointerMoved(on), turn]);
+    h.frames(3);
+    assert_eq!(h.app.run("text.fonts", json!({})).unwrap(), before);
+}
+
+#[test]
+fn a_wheel_stream_leaves_a_floating_font_field_that_an_overlay_covered_before_its_queued_turn() {
+    let mut h = Harness::new();
+    h.app.run("text.create", json!({"x": 30, "y": 50, "text": "Hi", "font": "Source Sans 3"})).unwrap();
+    let viewport = h.float("character");
+    let field = h
+        .host
+        .borrow()
+        .windows
+        .get(&viewport)
+        .and_then(|w| w.texts.iter().find(|(text, _)| text == "Source Sans 3").map(|(_, rect)| *rect))
+        .expect("the Character panel's font family field");
+    let pointer = pos2(field.min.x + 4.0, field.center().y);
+    let turn = Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Line,
+        delta: vec2(0.0, -1.0),
+        phase: egui::TouchPhase::Move,
+        modifiers: Default::default(),
+        source: egui::MouseWheelSource::Unknown,
+    };
+    h.host.borrow_mut().child_raise_overlay = Some((viewport, field.expand(10.0), false));
+    h.frames(2);
+    let field_layer = crate::font_menu::wheel_field_layer_for_test(&h.ctx, viewport, pointer).expect("the font field layer");
+    let raise_field = |h: &mut Harness| {
+        h.host.borrow_mut().child_raise_layer = Some((viewport, field_layer));
+        h.frame(vec![]);
+        h.host.borrow_mut().child_raise_layer = None;
+        h.frame(vec![]);
+    };
+    raise_field(&mut h);
+    let before = h.app.run("text.fonts", json!({})).unwrap();
+    h.host.borrow_mut().child_raise_overlay = Some((viewport, field.expand(10.0), true));
+    h.host.borrow_mut().windows.get_mut(&viewport).unwrap().events.extend([Event::PointerMoved(pointer), turn.clone()]);
+    h.frames(2);
+    assert_eq!(h.app.run("text.fonts", json!({})).unwrap(), before, "the overlay covered the field before its queued turn");
+    h.host.borrow_mut().child_raise_overlay = Some((viewport, field.expand(10.0), false));
+    raise_field(&mut h);
+    h.host.borrow_mut().windows.get_mut(&viewport).unwrap().events.push(turn);
+    h.frames(2);
+    assert_eq!(h.app.run("text.fonts", json!({})).unwrap(), before, "the stream left the field when the overlay covered it");
 }
 
 #[test]

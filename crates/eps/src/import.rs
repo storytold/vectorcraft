@@ -24,7 +24,9 @@
 //! from those layers alone, without its page.
 //!
 //! The page is the file's `%%BoundingBox` (`%%HiResBoundingBox` when it has one), the first page
-//! of a PostScript file without one. A file whose program can't be read (an operator the
+//! of a PostScript file without one. A `.ai` in the legacy format ([`import_ai`]) that comes in
+//! through its layers keeps the artboard its header gives, with its art outside it; an EPS comes in
+//! on its page. A file whose program can't be read (an operator the
 //! interpreter doesn't know, an error, a limit reached) or that draws nothing comes in from its
 //! layers when its program has them (a `.ai` in PostScript form whose prolog is named but not
 //! included, as other apps write it), or with its art on one layer when it is in the legacy format
@@ -42,6 +44,7 @@ mod interp;
 mod lex;
 mod native;
 mod obj;
+mod predefined_cmap;
 mod preview;
 mod shading;
 mod text;
@@ -65,6 +68,10 @@ mod tests_images;
 #[cfg(test)]
 mod tests_native;
 #[cfg(test)]
+mod tests_reads;
+#[cfg(test)]
+mod tests_strings;
+#[cfg(test)]
 mod tests_type1;
 #[cfg(test)]
 mod tests_type42;
@@ -74,7 +81,7 @@ use std::sync::Arc;
 
 use vectorcraft_color::Paint;
 use vectorcraft_color::swatch::{REGISTRATION, Swatch};
-use vectorcraft_doc::{ColorMode, Document, LayerColor, Node};
+use vectorcraft_doc::{ColorMode, Document, LayerColor, Node, NodeKind};
 use vectorcraft_geom::{Affine, Rect};
 
 use graphics::{GState, Out};
@@ -84,19 +91,30 @@ use obj::PsError;
 pub use ai::NameEncoding;
 #[cfg(test)]
 pub(crate) use ai::objects_read;
+#[cfg(test)]
+pub(crate) use ai::{ART_STYLE_PARSES, ENVELOPE_DRAWN, ENVELOPE_TYPE_DRAWN};
 pub(crate) use ai::{
-    MAX_EDITING_OBJECTS, MAX_GRADIENT_STOPS, MAX_LISTED, MAX_LISTED_NAME, MAX_SYMBOLS, read_art_style, read_style_list, style_moves_with,
-    symbol_art_member, warp_number,
+    BLEND_BUDGET, BLEND_PLUGIN, BRUSH_MANAGER, BrushesRead, DEFORM_PLUGIN, EnvelopeGridPoint, MAX_BLEND_KEYS, MAX_BLEND_OBJECTS,
+    MAX_CHECKED as ENVELOPE_CHECKS, MAX_EDITING_OBJECTS, MAX_GRADIENT_STOPS, MAX_LISTED, MAX_LISTED_NAME, MAX_MESH_SIDE, MAX_SYMBOLS, ParsedStyle,
+    blend_reads, brush_plugin_name, brushes_kept, envelope_outline, envelope_upright, mesh_reads, parse_art_style, parsed_moves_with,
+    read_brush_object, read_parsed_style, read_style_list, symbol_art_member, turn_brush_art_over, warp_number,
 };
-pub(crate) use ate::{MAX_BYTES as MAX_TEXT_DOCUMENT, MAX_FRAMES, MAX_SEGMENTS, MAX_STORY, MAX_VALUES as MAX_TEXT_VALUES};
+pub(crate) use ate::{MAX_BYTES as MAX_TEXT_DOCUMENT, MAX_FRAMES, MAX_SEGMENTS, MAX_STORY, MAX_VALUES as MAX_TEXT_VALUES, record_version};
 pub use native::{AiLayers, ai_alone, ai_alone_on_page, ai_alone_with, ai_layers_alone, ai_opened_artboard, is_loss, layered_ai, layered_ai_from};
-pub(crate) use native::{MAX_TEXT, scale_document};
+pub(crate) use native::{MAX_TEXT, MAX_WRAP_WORK, scale_document, scale_symbols};
 pub use text::family_style;
+pub(crate) use text::{document_font, postscript_face};
 
 /// The page of a PostScript file without a bounding box (US Letter).
 const LETTER: [f64; 4] = [0.0, 0.0, 612.0, 792.0];
 /// Largest page side read (points).
 const MAX_SIDE: f64 = 1e5;
+
+/// The start of the warning that type was set in fonts that aren't available, before ": " and
+/// their families: PDF import's words, as type in those fonts comes in the same way.
+pub(crate) const MISSING_FONTS_NOTE: &str = "fonts that aren't available show in the fallback font until they are";
+/// Most families named in that warning.
+const MAX_MISSING_FONTS: usize = 64;
 
 /// A read file.
 #[derive(Debug)]
@@ -265,8 +283,59 @@ pub fn import_trusting(bytes: &[u8], editing_data: bool, trust: bool) -> Result<
 
 /// [`import_trusting`], with the names in the editing copy that aren't UTF-8 (layers, objects,
 /// artboards, colors, gradients, patterns, graphic styles, swatches, brushes, symbols, variables
-/// and data sets) read in `names`.
+/// and data sets) read in `names`. The type of the document it gives that is set in families that
+/// aren't available shows in the fallback font, and a warning names them.
 pub fn import_names(bytes: &[u8], editing_data: bool, trust: bool, names: NameEncoding) -> Result<Imported, String> {
+    read_checked(bytes, editing_data, trust, names, false)
+}
+
+/// [`import_names`] for a `.ai` (or `.ait`) in PostScript form: a program in the legacy format
+/// that comes in through its layers keeps the artboard its header gives, with its art outside it,
+/// where an EPS comes in on its page, its art's box. A `.ai` of versions 3 and 4, which doesn't
+/// give its artboard's size, has a US Letter artboard around its template box's center.
+pub fn import_ai(bytes: &[u8], editing_data: bool, trust: bool, names: NameEncoding) -> Result<Imported, String> {
+    read_checked(bytes, editing_data, trust, names, true)
+}
+
+/// [`import_names`] (a `.ai` when `ai_file`, see [`import_ai`]).
+fn read_checked(bytes: &[u8], editing_data: bool, trust: bool, names: NameEncoding, ai_file: bool) -> Result<Imported, String> {
+    let mut r = read_names(bytes, editing_data, trust, names, ai_file)?;
+    let missing = missing_fonts(&r.document);
+    if !missing.is_empty() {
+        r.warnings.push(format!("{MISSING_FONTS_NOTE}: {}", missing.join(", ")));
+    }
+    Ok(r)
+}
+
+/// The families of the type in `d` (its layers and its symbols) that aren't available, each once
+/// in the order the type comes, at most [`MAX_MISSING_FONTS`]: the document's, whether its type
+/// came from the page or from an editing copy, and none for type only measured or outlined.
+fn missing_fonts(d: &Document) -> Vec<String> {
+    let db = vectorcraft_text::FontDb::global();
+    let mut checked: HashSet<String> = HashSet::new();
+    let mut missing: Vec<String> = Vec::new();
+    let mut add = |n: &Node| {
+        let NodeKind::Text(t) = &n.kind else { return };
+        for run in &t.runs {
+            let family = run.style.font_family.as_str();
+            if missing.len() >= MAX_MISSING_FONTS || family.is_empty() || checked.contains(family) {
+                continue;
+            }
+            checked.insert(family.to_string());
+            if db.find_family(family).is_none() {
+                missing.push(family.to_string());
+            }
+        }
+    };
+    d.walk(&mut add);
+    for s in &d.symbols {
+        s.art.walk(&mut add);
+    }
+    missing
+}
+
+/// [`import_names`] before the type's fonts are checked (a `.ai` when `ai_file`, see [`import_ai`]).
+fn read_names(bytes: &[u8], editing_data: bool, trust: bool, names: NameEncoding, ai_file: bool) -> Result<Imported, String> {
     let ps = program(bytes)?;
     let dsc = Dsc::read(ps);
     // A legacy `.ai` VectorCraft wrote: its prolog prints the art plainly (gradients flat, no
@@ -274,7 +343,7 @@ pub fn import_names(bytes: &[u8], editing_data: bool, trust: bool, names: NameEn
     // printed).
     if editing_data
         && dsc.own_legacy
-        && let Some(Ok((document, warnings))) = native::program_alone(ps, dsc.illustrator, names)
+        && let Some(Ok((document, warnings))) = native::program_alone(ps, dsc.illustrator, ai_file, names)
     {
         return Ok(Imported { document, warnings, preview: false });
     }
@@ -294,7 +363,7 @@ pub fn import_names(bytes: &[u8], editing_data: bool, trust: bool, names: NameEn
     }
     let drew = !out.drawn.is_empty();
     let why = match (&result, drew) {
-        (Ok(()), true) if editing_data => return Ok(native::layered(ps, finish(out), trust, dsc.illustrator, names)),
+        (Ok(()), true) if editing_data => return Ok(native::layered(ps, finish(out), trust, dsc.illustrator, ai_file, names)),
         (Ok(()), true) => return Ok(finish(out)),
         (Ok(()), false) => "it draws nothing VectorCraft's PostScript reader can show".to_string(),
         (Err(e), _) => reason(e, fault.as_ref()),
@@ -302,7 +371,7 @@ pub fn import_names(bytes: &[u8], editing_data: bool, trust: bool, names: NameEn
     // A file in the legacy Illustrator format whose program can't be run (a `.ai` that names the
     // prolog defining its operators without including it): its layers, which the program has, or
     // its art on one layer when it has none (Illustrator 3).
-    let why = match editing_data.then(|| native::program_alone(ps, dsc.illustrator, names)).flatten() {
+    let why = match editing_data.then(|| native::program_alone(ps, dsc.illustrator, ai_file, names)).flatten() {
         Some(Ok((document, warnings))) => return Ok(Imported { document, warnings, preview: false }),
         Some(Err(e)) => format!("{why}; its layers couldn't be read either ({e})"),
         None => why,

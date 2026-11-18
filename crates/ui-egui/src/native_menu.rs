@@ -3,12 +3,12 @@
 //! [`Backend`] (the desktop app's, through muda).
 //!
 //! Pure and platform-free, so it is tested everywhere and builds for the web; only the backend
-//! touches AppKit. What the layout does ([`mac_layout`], Illustrator on the Mac as the reference):
+//! touches AppKit. What the layout does ([`mac_layout`]):
 //! - an **app menu** named VectorCraft: About; Settings, a submenu with one item per Preferences
 //!   page (General… ⌘K first); Language; Appearance (the UI brightness); Services; Hide VectorCraft
 //!   ⌃⌘H (⌘H stays View › Hide Edges), Hide Others ⌥⌘H, Show All; and Quit ⌘Q, still the app's own
 //!   `app.quit`, so documents with unsaved changes are asked about. Language and Appearance have
-//!   no in-window menu (as in PhotoCraft) and are synthesized here; Quit is File › Exit in the
+//!   no in-window menu and are synthesized here; Quit is File › Exit in the
 //!   window and reads as Quit in the App menu. These leave the other menus (Edit › Preferences…,
 //!   Help › About), and Join Our Discord stays under Help only;
 //! - **Window** gets Minimize ⌃⌘M, Zoom and Bring All to Front, and **Help** the system's search
@@ -299,7 +299,7 @@ pub struct Layout {
 }
 
 /// The Mac menu bar of `bar` (the in-window menus, [`from_tree`]): see the module docs.
-/// Language and Appearance have no in-window menu (as in PhotoCraft); when the tree doesn't
+/// Language and Appearance have no in-window menu; when the tree doesn't
 /// carry them they are synthesized below, so the App menu keeps them.
 pub fn mac_layout(app: &VectorcraftApp, bar: &MenuBar, lang: Lang) -> Layout {
     let mut bar = bar.clone();
@@ -400,7 +400,7 @@ fn native_item(app: &VectorcraftApp, label: &'static str, command: &'static str,
 }
 
 /// Settings ▸: one item per page of the Preferences dialog (its own list), each opening it there;
-/// the first (General…) has Preferences' shortcut (⌘K), as in Illustrator.
+/// the first (General…) has Preferences' shortcut (⌘K).
 fn settings_pages(preferences: &Item, lang: Lang) -> Vec<Node> {
     vectorcraft_engine::cmd::prefscmds::PREF_CATEGORIES
         .iter()
@@ -499,6 +499,9 @@ pub enum Event {
     /// A key equivalent pressed: the item's key with the modifiers held, to be handled as the key
     /// press it was.
     Key(KeyboardShortcut),
+    /// A menu of the bar opened. The Scripts folder is read again, as when the in-window File menu
+    /// opens; the new listing shows the next time the menu opens.
+    Opened,
 }
 
 /// A platform's native menu bar (the desktop app implements it for macOS with muda).
@@ -517,6 +520,8 @@ pub struct NativeMenu {
     /// Hash of the state the menus were last read in ([`state_hash`]).
     state: Option<u64>,
     clicks: Vec<Item>,
+    /// A menu opened since the last [`run`].
+    opened: bool,
     /// Something was chosen (AppKit may have toggled a check mark itself): read the menus again.
     dirty: bool,
     logged: bool,
@@ -524,17 +529,21 @@ pub struct NativeMenu {
 
 impl NativeMenu {
     pub fn new(backend: Box<dyn Backend>) -> NativeMenu {
-        NativeMenu { backend, state: None, clicks: Vec::new(), dirty: true, logged: false }
+        NativeMenu { backend, state: None, clicks: Vec::new(), opened: false, dirty: true, logged: false }
     }
 
-    /// The key equivalents pressed since the last frame, for [`key_events`]; clicks wait for
-    /// [`run`].
+    /// The key equivalents pressed since the last frame, for [`key_events`]; clicks and menus
+    /// opened wait for [`run`].
     pub fn take_keys(&mut self) -> Vec<KeyboardShortcut> {
         let mut keys = Vec::new();
         for e in self.backend.drain() {
             match e {
                 Event::Key(k) => keys.push(k),
                 Event::Click(it) => self.clicks.push(it),
+                Event::Opened => {
+                    self.opened = true;
+                    continue;
+                }
             }
             self.dirty = true;
         }
@@ -542,9 +551,14 @@ impl NativeMenu {
     }
 }
 
-/// Run the items clicked in the native menu since the last frame, like in-window menu clicks.
+/// Run the items clicked in the native menu since the last frame, like in-window menu clicks, and
+/// read the Scripts folder again when a menu opened.
 pub fn run(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let picking = app.file_dialog_open();
+    let Some(menu) = app.services.native_menu.as_mut() else { return };
+    if std::mem::take(&mut menu.opened) {
+        crate::scripts_menu::refresh(app, Some(ctx));
+    }
     let Some(menu) = app.services.native_menu.as_mut() else { return };
     for it in std::mem::take(&mut menu.clicks) {
         // A click that raced the menu going inert under a file dialog.
@@ -590,13 +604,13 @@ pub fn sync(app: &mut VectorcraftApp, ctx: &egui::Context) {
 
 /// What the menus' rows depend on, cheaply (no allocation): commands run, the active document,
 /// its revision (edits, selection and view changes), history and clipboard, the language,
-/// shortcuts, plug-ins, an open file dialog and the fonts (Type › Font lists the loaded fonts
+/// shortcuts, plug-ins, the Scripts folder's listing, an open file dialog and the fonts (Type › Font lists the loaded fonts
 /// until the installed ones are scanned, then all of them, #5483). `input` forces a change on frames with a click or
 /// a key press, which covers what the hash doesn't list (panels shown, a tool picked). While an
 /// interaction is open (for example a move, scale or shape drag, a dialog's or the font menu's
 /// preview, or a typing session), the revision, which each of its previews changes, is left out:
 /// the hash changes as the interaction begins and as it ends.
-fn state_hash(app: &VectorcraftApp, input: Option<u64>) -> u64 {
+pub(crate) fn state_hash(app: &VectorcraftApp, input: Option<u64>) -> u64 {
     let mut h = DefaultHasher::new();
     input.hash(&mut h);
     app.run_count.hash(&mut h);
@@ -608,7 +622,7 @@ fn state_hash(app: &VectorcraftApp, input: Option<u64>) -> u64 {
     }
     (app.system_paste, app.last_effect.is_some(), app.ui.recent_files.len(), app.ui.recent_files.first(), app.recent_fonts().len()).hash(&mut h);
     app.file_dialog_open().hash(&mut h);
-    (crate::i18n::current().code(), menus::plugin_revision()).hash(&mut h);
+    (crate::i18n::current().code(), menus::plugin_revision(), crate::scripts_menu::revision()).hash(&mut h);
     crate::shortcut_editor::GENERATION.load(std::sync::atomic::Ordering::Relaxed).hash(&mut h);
     let fonts = vectorcraft_text::FontDb::global();
     (fonts.generation(), fonts.installed_fonts_ready()).hash(&mut h);

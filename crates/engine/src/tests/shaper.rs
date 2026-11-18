@@ -259,6 +259,93 @@ fn shaper_double_click_selects_an_original_for_construction_editing() {
     assert_eq!(s.doc().unwrap().selection.objects, vec![g]);
 }
 
+/// With a Shaper Group or one of its faces selected, a Shaper click on an original shape's outline
+/// enters Construction mode with that shape selected, even where the outline lies inside a merged
+/// face. A click away from every outline still selects a face, and a click on an outline of a group
+/// that is not selected selects the group.
+#[test]
+fn shaper_click_on_an_original_outline_enters_construction_mode() {
+    let mut s = session();
+    let a = rectangle(&mut s, 0.0, "#ff0000");
+    let b = rectangle(&mut s, 50.0, "#0000ff");
+    let g = scribble(&mut s, &[[25.0, 20.0], [75.0, 35.0], [30.0, 50.0], [125.0, 65.0]]);
+    let sources = node(&s, g).children().unwrap()[0].id;
+    let v = ViewInfo { smart_guides: false, ..Default::default() };
+    s.select_tool("shaper", v).unwrap();
+    let click = |s: &mut Session, x: f64, y: f64| {
+        for kind in [PointerKind::Down, PointerKind::Up] {
+            s.pointer(&PointerEvent::new(kind, x, y), v).unwrap();
+        }
+    };
+    s.execute("select.none", &json!({})).unwrap();
+    click(&mut s, 101.0, 50.0);
+    assert_eq!(s.doc().unwrap().selection.objects, vec![g]);
+    assert_eq!(s.doc().unwrap().isolation, None);
+    // The right side of the back shape runs through the merged face.
+    click(&mut s, 101.0, 50.0);
+    assert_eq!(s.doc().unwrap().selection.objects, vec![a]);
+    assert_eq!(s.doc().unwrap().isolation, Some(sources));
+    s.execute("object.exitIsolation", &json!({})).unwrap();
+    // A click inside the face, away from the outlines, selects the face.
+    click(&mut s, 75.0, 50.0);
+    let face = s.doc().unwrap().selection.objects.clone();
+    assert_eq!(face.len(), 1);
+    assert_ne!(face, vec![g]);
+    assert_eq!(s.doc().unwrap().isolation, None);
+    // With the face selected, a click on the front shape's outline picks that shape.
+    click(&mut s, 149.0, 50.0);
+    assert_eq!(s.doc().unwrap().selection.objects, vec![b]);
+    assert_eq!(s.doc().unwrap().isolation, Some(sources));
+    s.execute("object.exitIsolation", &json!({})).unwrap();
+    let undo = s.doc().unwrap().history.undo.len();
+    for tolerance in [json!("3"), json!(-1), json!(1e9)] {
+        assert!(s.execute("shaper.select", &json!({"point": [101, 50], "tolerance": tolerance})).is_err(), "{tolerance}");
+        assert_eq!(s.doc().unwrap().selection.objects, vec![g]);
+        assert_eq!(s.doc().unwrap().isolation, None);
+    }
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+    s.execute("shaper.select", &json!({"point": [104, 50], "tolerance": 5})).unwrap();
+    assert_eq!(s.doc().unwrap().selection.objects, vec![a]);
+    s.execute("object.exitIsolation", &json!({})).unwrap();
+    // A wide tolerance (a zoomed-out view) reaches an outline from well outside the group's bounds.
+    s.execute("shaper.select", &json!({"point": [165, 50], "tolerance": 20})).unwrap();
+    assert_eq!(s.doc().unwrap().selection.objects, vec![b]);
+    assert_eq!(s.doc().unwrap().isolation, Some(sources));
+    // A locked or hidden original shape is not picked by its outline.
+    for hide in ["object.lock", "object.hide"] {
+        s.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+        s.execute(hide, &json!({})).unwrap();
+        s.execute("object.exitIsolation", &json!({})).unwrap();
+        s.execute("select.set", &json!({"ids": [g.0]})).unwrap();
+        s.execute("shaper.select", &json!({"point": [149, 50]})).unwrap();
+        assert_ne!(s.doc().unwrap().selection.objects, vec![b], "{hide}");
+        assert_eq!(s.doc().unwrap().isolation, None, "{hide}");
+        s.execute("edit.undo", &json!({})).unwrap();
+        s.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    }
+}
+
+/// A click on a selected Shaper Group's original outline where another Shaper Group lies above it
+/// selects the group above, as a click there did before.
+#[test]
+fn shaper_outline_click_under_another_group_selects_the_group_above() {
+    let mut s = session();
+    rectangle(&mut s, 0.0, "#ff0000");
+    rectangle(&mut s, 50.0, "#0000ff");
+    let lower = scribble(&mut s, &[[25.0, 20.0], [75.0, 35.0], [30.0, 50.0], [125.0, 65.0]]);
+    let c = rectangle(&mut s, 20.0, "#00ff00");
+    let d = rectangle(&mut s, 70.0, "#ffff00");
+    let upper = NodeId(
+        s.execute("shaper.scribble", &json!({"points": [[45, 20], [95, 35], [50, 50], [145, 65]], "ids": [c.0, d.0]})).unwrap()["id"]
+            .as_u64()
+            .unwrap(),
+    );
+    s.execute("select.set", &json!({"ids": [lower.0]})).unwrap();
+    s.execute("shaper.select", &json!({"point": [100, 50]})).unwrap();
+    assert_eq!(s.doc().unwrap().selection.objects, vec![upper]);
+    assert_eq!(s.doc().unwrap().isolation, None);
+}
+
 /// The arrow widget beside a selected Shaper Group switches it to Construction mode and back, with
 /// the Shaper tool and with the Selection tool. In Construction mode a Shaper tap selects a source
 /// shape, and the mode lasts through undo and redo of an edit made in it.

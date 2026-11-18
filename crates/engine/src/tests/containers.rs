@@ -186,9 +186,41 @@ fn type_with_an_inline_graphic_stays_type_when_its_own_stroke_has_an_effect() {
 /// A selected 30×30 red image placed with its frame from (50, 50) to (80, 80).
 fn image(s: &mut Session) -> NodeId {
     let mut png = vec![];
-    image::RgbaImage::from_pixel(30, 30, image::Rgba([255, 0, 0, 255]))
-        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
-        .unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::RgbaImage::from_pixel(30, 30, image::Rgba([255, 0, 0, 255]))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     let r = run(s, "file.place", json!({"name": "red.png", "dataBase64": vectorcraft_format::base64_encode(&png), "at": [65, 65]}));
     NodeId(r["ids"][0].as_u64().unwrap())
 }
@@ -254,6 +286,187 @@ fn an_images_stroke_with_outline_object_draws_exports_and_expands_along_its_fram
     assert_eq!(kids[0].appearance.stroke_paint(), Paint::solid(Color::BLACK));
     assert_eq!(kids[0].appearance.stroke_width(), 4.0);
     assert!(kids[0].appearance.fill_paint().is_none());
+}
+
+/// A 100×100 PNG, transparent but for an opaque red disc of radius 30 in its middle.
+fn disc_png() -> Vec<u8> {
+    let mut png = vec![];
+    {
+        let __dyn: image::DynamicImage = (image::RgbaImage::from_fn(100, 100, |x, y| {
+            let r = (f64::from(x) + 0.5 - 50.0).hypot(f64::from(y) + 0.5 - 50.0);
+            image::Rgba([255, 0, 0, if r <= 30.0 { 255 } else { 0 }])
+        }))
+        .into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
+    png
+}
+
+#[test]
+fn an_images_stroke_with_outline_object_follows_its_opaque_area() {
+    let mut s = session();
+    // The frame runs from 50 to 150, the disc from 70 to 130.
+    let r = run(&mut s, "file.place", json!({"name": "disc.png", "dataBase64": vectorcraft_format::base64_encode(&disc_png()), "at": [100, 100]}));
+    let im = NodeId(r["ids"][0].as_u64().unwrap());
+    run(&mut s, "appearance.addStroke", json!({}));
+    run(&mut s, "appearance.setItem", json!({"index": 0, "weight": 8, "color": "#000000"}));
+    run(&mut s, "effect.apply", json!({"effect": "path.outlineObject", "item": 0}));
+    // Under the image, the stroke's outer 4 pt shows around the disc, from 66 to 70; nothing runs
+    // along the frame.
+    let shade = |s: &Session, x: u32, y: u32| match pixel(s, x, y) {
+        p if p == RED => "red",
+        [r, g, b, _] if r.max(g).max(b) < 40 => "black",
+        [r, g, b, _] if r.min(g).min(b) > 215 => "white",
+        p => panic!("({x}, {y}) is {p:?}"),
+    };
+    assert_eq!([shade(&s, 64, 100), shade(&s, 67, 100), shade(&s, 100, 100), shade(&s, 100, 132)], ["white", "black", "red", "black"]);
+    assert_eq!([shade(&s, 49, 100), shade(&s, 52, 100)], ["white", "white"]);
+    // SVG and PDF hold the disc's outline stroked 8 pt.
+    let doc = s.doc().unwrap().doc.clone();
+    let disc = |b: vectorcraft_geom::Rect| [b.x0 - 70.0, b.y0 - 70.0, b.x1 - 130.0, b.y1 - 130.0].iter().all(|d| d.abs() < 0.5);
+    let svg = vectorcraft_svg::export(&doc, &Default::default());
+    assert!(svg.contains("<image") && svg.contains("stroke-width=\"8\""), "{svg}");
+    let back = vectorcraft_pdf::import(&vectorcraft_pdf::export(&doc, &Default::default()).unwrap()).unwrap();
+    let mut outlines = 0;
+    for l in &back.layers {
+        l.walk(&mut |n| {
+            let stroked = (n.appearance.stroke_width() - 8.0).abs() < 0.01;
+            outlines += usize::from(matches!(n.kind, NodeKind::Path { .. }) && stroked && n.geometric_bounds().is_some_and(disc));
+        });
+    }
+    assert_eq!(outlines, 1);
+    // Expand Appearance leaves the disc's outline below the image.
+    run(&mut s, "effect.expandAppearance", json!({}));
+    let n = node(&s, im);
+    let kids = n.children().unwrap();
+    assert!(kids.len() == 2 && matches!(kids[1].kind, NodeKind::Image(_)), "{n:?}");
+    assert!(disc(kids[0].geometric_bounds().unwrap()), "{:?}", kids[0].geometric_bounds());
+    run(&mut s, "edit.undo", json!({}));
+    // An Offset Path of 3 pt after Outline Object moves the stroke 3 pt out: it shows from 63 to 70.
+    run(&mut s, "effect.apply", json!({"effect": "path.offsetPath", "params": {"offset": 3}, "item": 0}));
+    assert_eq!([shade(&s, 61, 100), shade(&s, 64, 100)], ["white", "black"]);
+    // Relinked to an opaque image, the stroke follows the frame 3 pt out: it shows from 43 to 50.
+    let dir = vectorcraft_testkit::TempDir::new("outline-object-relink");
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("opaque.png");
+    let mut png = vec![];
+    {
+        let __dyn: image::DynamicImage = (image::RgbaImage::from_pixel(100, 100, image::Rgba([255, 0, 0, 255]))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
+    std::fs::write(&path, png).unwrap();
+    run(&mut s, "links.relink", json!({"ids": [im.0], "path": path}));
+    assert_eq!([shade(&s, 41, 100), shade(&s, 45, 100), shade(&s, 64, 100)], ["white", "black", "red"]);
+}
+
+#[test]
+fn an_images_outline_object_stroke_exports_selects_and_measures_along_its_opaque_area() {
+    let mut s = session();
+    // The frame runs from 50 to 150, the disc from 70 to 130.
+    let r = run(&mut s, "file.place", json!({"name": "disc.png", "dataBase64": vectorcraft_format::base64_encode(&disc_png()), "at": [100, 100]}));
+    let im = NodeId(r["ids"][0].as_u64().unwrap());
+    run(&mut s, "appearance.addStroke", json!({}));
+    run(&mut s, "appearance.setItem", json!({"index": 0, "weight": 20, "color": "#000000"}));
+    run(&mut s, "effect.apply", json!({"effect": "path.outlineObject", "item": 0}));
+    // EPS and the PDF-compatible .ai draw the disc's outline stroked 20 pt, 20 pt inside the
+    // image's frame on each side (EPS moves the art to its bounding box).
+    let disc_outlines = |d: &vectorcraft_doc::Document| {
+        let mut frame = None;
+        d.walk(|c| {
+            if matches!(c.kind, NodeKind::Image(_)) {
+                frame = c.geometric_bounds();
+            }
+        });
+        let f = frame.unwrap();
+        let mut n = 0;
+        d.walk(|c| {
+            let disc = |b: vectorcraft_geom::Rect| {
+                [b.x0 - f.x0 - 20.0, b.y0 - f.y0 - 20.0, f.x1 - b.x1 - 20.0, f.y1 - b.y1 - 20.0].iter().all(|d| d.abs() < 0.6)
+            };
+            let stroked = (c.appearance.stroke_width() - 20.0).abs() < 0.01;
+            n += usize::from(matches!(c.kind, NodeKind::Path { .. }) && stroked && c.geometric_bounds().is_some_and(disc));
+        });
+        n
+    };
+    let saved = |s: &mut Session, p: Value| vectorcraft_format::base64_decode(run(s, "file.saveCopy", p)["dataBase64"].as_str().unwrap()).unwrap();
+    let eps = saved(&mut s, json!({"format": "eps", "previewFormat": "none", "thumbnails": false}));
+    assert_eq!(disc_outlines(&vectorcraft_eps::import_with(&eps, false).unwrap().document), 1);
+    let ai = saved(&mut s, json!({"format": "ai"}));
+    assert_eq!(disc_outlines(&crate::cmd::fileio::page_document(&ai, 0, &Default::default()).unwrap().0), 1);
+    // An Offset Path of 30 pt after Outline Object: the stroke runs round a circle of radius 60,
+    // from 30 to 50 on the left, where along the frame it would run from 10 to 30.
+    run(&mut s, "effect.apply", json!({"effect": "path.offsetPath", "params": {"offset": 30}, "item": 0}));
+    assert_eq!((pixel(&s, 35, 100), pixel(&s, 15, 100)), ([0, 0, 0, 255], [255; 4]));
+    run(&mut s, "select.none", json!({}));
+    assert_eq!(click(&mut s, 35.0, 100.0), [im]);
+    run(&mut s, "select.none", json!({}));
+    assert!(click(&mut s, 15.0, 100.0).is_empty());
+    // Use Preview Bounds measures the stroke round the circle.
+    s.prefs.use_preview_bounds = true;
+    let b = s.transform_bounds(&[im]).unwrap();
+    assert!([b.x0 - 30.0, b.y0 - 30.0, b.x1 - 170.0, b.y1 - 170.0].iter().all(|d| d.abs() < 1.0), "{b:?}");
 }
 
 /// Click with the Selection tool at (x, y) on a 100% view: what is selected afterwards.
