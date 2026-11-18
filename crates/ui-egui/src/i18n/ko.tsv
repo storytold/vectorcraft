@@ -4786,6 +4786,8 @@ variable-list-end	{0}, {1}	{0} 및 {1}
 @msg	no such spine point	해당 스파인 포인트가 없습니다
 @msg	`with` must be a list of at most 10000 spine point indexes	`with`는 스파인 포인트 인덱스 최대 10000개의 목록이어야 합니다
 @msg	`with` moves points, not a handle	`with`는 포인트를 이동하며 핸들에는 쓸 수 없습니다
+@msg	`link` and `independent` cannot both be true	`link`와 `independent`를 동시에 true로 지정할 수 없습니다
+@msg	`link` places a handle: give `handle`	`link`는 핸들을 배치합니다. `handle`을 지정하십시오
 @msg	no such spine segment	해당 스파인 세그먼트가 없습니다
 @msg	no such subpath	해당 하위 패스가 없습니다
 @msg	object {id} is not a path	개체 {id}은(는) 패스가 아닙니다
