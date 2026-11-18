@@ -7,12 +7,13 @@
 //! pressed during the drag moves it by a tenth of the pointer's movement (held at the press,
 //! Cmd/Ctrl lends the selection tool as it does for every tool). The segments on either side of the
 //! second one count with it (the first one excepted), and of the circles found the one touching
-//! them nearest the pointer is drawn. While the pointer is over the second segment the circle shows
-//! with its center and radii; where there is none, or none that its three points can draw, a note
-//! says so. The circle is a new ellipse with the current paint, drawn with
-//! `shape.circleThroughPoints` in one undo step, so Align New Objects to Pixel Grid leaves it in
-//! place; the first segment stays picked until the circle is drawn. Escape, an edit or Undo outside
-//! the tool, or another document forgets the first segment.
+//! them nearest the pointer (in a drag, nearest the press) is drawn. While the pointer is over the
+//! second segment the circle shows with its center and radii; where there is none, or none that its
+//! three points can draw, a note says so. The circle is a new ellipse with the current paint, drawn
+//! with `shape.circleThroughPoints` in one undo step, so Align New Objects to Pixel Grid leaves it
+//! in place; the first segment stays picked until the circle is drawn, also when drawing fails or the
+//! press on the second segment is dropped. Escape, an edit or Undo outside the tool, or another
+//! document forgets the first segment.
 
 use kurbo::{CubicBez, Shape};
 use serde_json::{Value, json};
@@ -58,6 +59,8 @@ struct Press {
     second: Vec<CubicBez>,
     /// Where the press was.
     at: Point,
+    /// Whether Shift was held when the click's circle was last looked for.
+    shift: bool,
     /// How far the pointer was from the press last time, and the radius the drag set (none until
     /// the pointer moves far enough).
     reach: f64,
@@ -69,6 +72,8 @@ pub struct TangentCircleTool {
     first: Option<Pick>,
     hover: Option<Pick>,
     press: Option<Press>,
+    /// Whether the press in progress picked the first segment.
+    picking: bool,
     /// The circle the second segment gives, and whether one was looked for.
     found: Option<SegmentCircle>,
     looked: bool,
@@ -82,7 +87,7 @@ type CacheKey = (NodeId, usize, usize, Option<u64>);
 
 impl Default for TangentCircleTool {
     fn default() -> Self {
-        Self { radius: RADIUS, first: None, hover: None, press: None, found: None, looked: false, pointer: Point::ZERO, cache: None }
+        Self { radius: RADIUS, first: None, hover: None, press: None, picking: false, found: None, looked: false, pointer: Point::ZERO, cache: None }
     }
 }
 
@@ -214,11 +219,21 @@ impl TangentCircleTool {
     /// The pointer at `ev` during a press on the second segment: once it is far enough from the
     /// press, the radius follows it (Cmd/Ctrl: a tenth of its movement; Shift: round steps).
     fn drag_to(&mut self, cx: &ToolContext, ev: &PointerEvent) {
+        let radius = self.radius;
         let (Some(first), Some(press)) = (&self.first, &mut self.press) else { return };
         let reach = ev.pos.distance(press.at);
         let gear = if ev.mods.cmd { SLOW } else { 1.0 };
         let r = match press.radius {
-            None if reach <= cx.tol(DRAG_PX) => return,
+            None if reach <= cx.tol(DRAG_PX) => {
+                // Shift pressed or let go before the drag starts: the click's circle, with or
+                // without the tool's radius.
+                if ev.mods.shift != press.shift {
+                    press.shift = ev.mods.shift;
+                    let found = circles(first, &press.second, press.shift.then_some(radius));
+                    self.found = nearest_to(found, press.at, cx.tol(DRAW_PX));
+                }
+                return;
+            }
             None => reach * gear,
             Some(r) => (r + (reach - press.reach) * gear).max(0.0),
         };
@@ -232,6 +247,7 @@ impl TangentCircleTool {
     fn forget(&mut self) {
         self.first = None;
         self.press = None;
+        self.picking = false;
         self.found = None;
         self.looked = false;
         self.cache = None;
@@ -259,6 +275,7 @@ impl Tool for TangentCircleTool {
                 let Some(pick) = pick_at(cx, ev.pos) else { return vec![] };
                 let Some(first) = self.first.clone() else {
                     self.first = Some(pick);
+                    self.picking = true;
                     self.hover = None;
                     self.found = None;
                     self.looked = false;
@@ -269,7 +286,7 @@ impl Tool for TangentCircleTool {
                 self.found = nearest_to(found, ev.pos, cx.tol(DRAW_PX));
                 self.looked = true;
                 self.hover = None;
-                self.press = Some(Press { second, at: ev.pos, reach: 0.0, radius: None });
+                self.press = Some(Press { second, at: ev.pos, shift: ev.mods.shift, reach: 0.0, radius: None });
                 vec![]
             }
             PointerKind::Drag => {
@@ -279,6 +296,7 @@ impl Tool for TangentCircleTool {
             PointerKind::Up => {
                 // The release's own position and keys set the radius of a drag.
                 self.drag_to(cx, ev);
+                self.picking = false;
                 if self.press.take().is_none() {
                     return vec![];
                 }
@@ -296,6 +314,19 @@ impl Tool for TangentCircleTool {
 
     fn key(&mut self, _cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {
         if key == ToolKey::Escape && self.first.is_some() {
+            self.forget();
+        }
+        vec![]
+    }
+
+    /// A dropped press (a canceled touch, a second finger) undoes only what that press did: a press
+    /// on the second segment draws nothing and the first segment stays picked, and a press that
+    /// picked the first segment leaves none picked.
+    fn drop_press(&mut self, _cx: &ToolContext) -> Vec<Action> {
+        if self.press.take().is_some() {
+            self.found = None;
+            self.looked = false;
+        } else if std::mem::take(&mut self.picking) {
             self.forget();
         }
         vec![]
@@ -485,12 +516,30 @@ mod tests {
         let mut t = TangentCircleTool::default();
         t.set_option("radius", &json!(10));
         assert_eq!(t.options()["radius"], json!(10.0));
+        // A value outside 0.01 to 1000000, or not a number, leaves the radius as it is.
+        for bad in [json!(0), json!(0.005), json!(2e6), json!(-5), json!("12"), Value::Null] {
+            t.set_option("radius", &bad);
+            assert_eq!(t.options()["radius"], json!(10.0), "{bad}");
+        }
         // The L's two segments: the circle of radius 10 in its corner.
         t.pointer(&cx, &ev(PointerKind::Down, 150.0, 300.0));
         t.pointer(&cx, &ev(PointerKind::Up, 150.0, 300.0));
         t.pointer(&cx, &shifted(PointerKind::Down, 300.0, 350.0));
         let released = up(&mut t, &cx, &shifted(PointerKind::Up, 300.0, 350.0));
         assert!(close(drawn(&released), (280.0, 300.0, 20.0, 20.0)), "{released:?}");
+        // Shift pressed or let go during a click counts at the release: with a radius of 5 no
+        // circle reaches the line 40 pt away, and without Shift the click's circle is 20 pt.
+        let mut t = TangentCircleTool::default();
+        t.set_option("radius", &json!(5));
+        t.pointer(&cx, &ev(PointerKind::Down, 150.0, 101.0));
+        t.pointer(&cx, &ev(PointerKind::Up, 150.0, 101.0));
+        t.pointer(&cx, &ev(PointerKind::Down, 200.0, 139.0));
+        t.pointer(&cx, &shifted(PointerKind::Drag, 200.0, 139.0));
+        assert!(t.pointer(&cx, &shifted(PointerKind::Up, 200.0, 139.0)).is_empty(), "nothing drawn");
+        assert!(t.first.is_some());
+        t.pointer(&cx, &shifted(PointerKind::Down, 200.0, 139.0));
+        let released = t.pointer(&cx, &ev(PointerKind::Up, 200.0, 139.0));
+        assert!(close(drawn(&released), (130.0, 100.0, 40.0, 40.0)), "{released:?}");
     }
 
     #[test]
@@ -578,6 +627,39 @@ mod tests {
         assert!(t.first.is_some());
         t.history_moved();
         assert!(t.first.is_none() && t.overlays(&cx).is_empty());
+    }
+
+    #[test]
+    fn a_dropped_press_undoes_only_what_it_did() {
+        let d = doc();
+        let (sel, p) = (Selection::default(), paint());
+        let cx = cx(&d, &sel, &p);
+        let mut t = TangentCircleTool::default();
+        // A press on the second segment, dropped: nothing drawn, and the first segment stays.
+        t.pointer(&cx, &ev(PointerKind::Down, 150.0, 101.0));
+        t.pointer(&cx, &ev(PointerKind::Up, 150.0, 101.0));
+        t.pointer(&cx, &ev(PointerKind::Down, 200.0, 139.0));
+        assert!(t.busy());
+        assert!(t.drop_press(&cx).is_empty());
+        assert!(t.pointer(&cx, &ev(PointerKind::Up, 200.0, 139.0)).is_empty(), "the release that follows draws nothing");
+        assert!(t.first.is_some() && !t.busy());
+        // The next click there draws the circle.
+        t.pointer(&cx, &ev(PointerKind::Down, 200.0, 139.0));
+        let released = t.pointer(&cx, &ev(PointerKind::Up, 200.0, 139.0));
+        assert!(close(drawn(&released), (130.0, 100.0, 40.0, 40.0)), "{released:?}");
+        t.notify(&cx, DRAWN);
+        // A press that picked the first segment, dropped: no segment stays picked.
+        t.pointer(&cx, &ev(PointerKind::Down, 150.0, 101.0));
+        assert!(t.drop_press(&cx).is_empty());
+        t.pointer(&cx, &ev(PointerKind::Up, 150.0, 101.0));
+        assert!(t.first.is_none());
+        // A dropped press that picked nothing leaves the first segment picked.
+        t.pointer(&cx, &ev(PointerKind::Down, 150.0, 101.0));
+        t.pointer(&cx, &ev(PointerKind::Up, 150.0, 101.0));
+        t.pointer(&cx, &ev(PointerKind::Down, 50.0, 50.0));
+        assert!(t.drop_press(&cx).is_empty());
+        t.pointer(&cx, &ev(PointerKind::Up, 50.0, 50.0));
+        assert!(t.first.is_some());
     }
 
     #[test]

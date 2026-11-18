@@ -12931,14 +12931,17 @@ Tools:
   movement (held at the press, Cmd/Ctrl lends the selection tool, as for every tool).
   The segments on either side of the second one, on its subpath, count with it (the first segment excepted; the two
   may be on the same path, and the first segment picked again gives no circle), and of the circles found the one
-  touching them nearest the pointer is drawn. A circle touches them when they lie outside it with a point on it, and
-  it never crosses the first segment. The circle is a new ellipse with the current paint, drawn through three of its
-  points with `shape.circleThroughPoints` so that Align New Objects to Pixel Grid leaves it in place, one undo step.
-  A circle too small or too large for its three points to give it back in floating point counts as no circle. With
-  no circle the note shows, a click draws nothing and the first segment stays picked; it also stays when drawing the
-  circle fails. Escape, an edit, Undo or Redo outside the tool, or another document forgets the first segment.
-  Option (`tool.setOption`, or a double-click on the tool): `radius` (pt, 0.01 to 1000000, 36; a value outside that
-  range, or not a number, leaves the radius as it is).
+  touching them nearest the pointer is drawn (in a drag, nearest the press). A circle touches them when they lie
+  outside it with a point on it (within a millionth of its radius); it never crosses the first segment, and it
+  touches the two segments at different points. The circle is a new ellipse with the current paint, drawn through
+  three of its points with `shape.circleThroughPoints` so that Align New Objects to Pixel Grid leaves it in place, one
+  undo step. A circle too small or too large for its three points to give it back in floating point counts as no
+  circle. Shift pressed or let go during a click counts at the release. With no circle the note shows, a click draws
+  nothing and the first segment stays picked; it also stays when drawing the circle fails or the press on the second
+  segment is canceled (a canceled touch). Escape, an edit, Undo or Redo outside the tool, or another document forgets
+  the first segment.
+  Option (`tool.setOption`, or a double-click on the tool): `radius` (pt, 0.01 to 1000000, 36). The value is not
+  checked yet: one outside that range, or not a number, leaves the radius as it is.
 - **Trim at Crossings Tool** (`trimAtCrossings`): removes stretches of paths between the places where they are crossed,
   on any path that can be edited, selected or not. A click runs `addon.pathtools.trim` with `at`, for the path within 4
   screen pixels of the pointer. A drag draws a rectangle and runs it with `rect` on release; once the pointer has

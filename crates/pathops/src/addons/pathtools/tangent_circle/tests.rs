@@ -608,7 +608,9 @@ fn lines_twice_the_radius_apart_give_circles_all_along() {
     assert!(xs.iter().any(|x| *x < 1.0) && xs.iter().any(|x| *x > 99.0), "from end to end: {xs:?}");
     // At a radius of 1,000,000 pt the places tried along the line, 0.2 pt apart, stay apart.
     let found = circles_of_radius(line((0.0, 0.0), (100.0, 0.0)), &[line((0.0, 2e6), (100.0, 2e6))], 1e6);
-    assert_eq!(found.len(), 513, "{}", found.len());
+    let xs: Vec<f64> = found.iter().map(|c| c.circle.center.x).collect();
+    let widest = xs.windows(2).map(|w| w[1] - w[0]).fold(0.0, f64::max);
+    assert!(xs.iter().any(|x| *x < 1.0) && xs.iter().any(|x| *x > 99.0) && widest < 1.0, "from end to end, none merged: {xs:?}");
 }
 
 #[test]

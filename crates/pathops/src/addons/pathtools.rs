@@ -36,7 +36,6 @@ pub use tangent_circle::{Circle, MAX_TANGENT_CIRCLE_SEGMENTS, MAX_TANGENT_CIRCLE
 pub use tangents::{Coincide, MAX_TANGENT_SEGMENTS, Outline, OutlineError, Tangent, TangentKind, common_tangents};
 pub use trim::{Span, slice, span_at, spans, without_spans};
 
-// The Tangent Circle tool's circles on two picked segments.
 pub use tangent_circle::{SegmentCircle, circles_of_radius, circles_through};
 
 use crate::fit::{end_tangent, start_tangent};
