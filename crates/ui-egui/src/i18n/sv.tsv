@@ -9934,17 +9934,12 @@ digits	Hindi	Hindi
 @msg	an XPath step is missing	ett XPath-steg saknas
 @msg	an image couldn't be decoded and is missing from the picture	en bild kunde inte avkodas och saknas i bilden
 @msg	an image of {w} × {h} pixels is too large to convert (at most {_1} pixels)	en bild på {w} × {h} pixlar är för stor för att konverteras (högst {_1} pixlar)
-@msg	apply was called on a value that is not a function	apply anropades på ett värde som inte är en funktion
 @msg	area type in a thread cannot use Dynamic Text: {frames}	områdestext i ett textflöde kan inte använda Dynamisk text: {frames}
-@msg	array literal too long	arrayliteralen är för lång
-@msg	assignment to a constant binding	tilldelning till en konstant bindning
 @msg	at least one row that isn't excluded needs a weight above 0	minst en rad som inte är utesluten behöver en vikt över 0
 @msg	bad point {v}: expected [x, y]	ogiltig punkt {v}: väntade [x, y]
 @msg	blend must be a mode name	blend måste vara namnet på ett läge
 @msg	both sides of an XPath | must select nodes	båda sidor av ett | i XPath måste välja noder
 @msg	canceled	avbrutet
-@msg	cannot convert the object to a primitive value	objektet kan inte konverteras till ett primitivt värde
-@msg	cannot convert undefined or null to an object	undefined eller null kan inte konverteras till ett objekt
 @msg	character dimensions cannot be represented with the source text transform	teckenmåtten kan inte återges med källans texttransformering
 @msg	character dimensions cannot be represented with the target text transform	teckenmåtten kan inte återges med målets texttransformering
 @msg	continuation must be an array of path chunks	continuation måste vara en array av bandelar
@@ -9963,7 +9958,6 @@ digits	Hindi	Hindi
 @msg	give exactly one of `at`, `rect` and `points`	ange exakt en av `at`, `rect` och `points`
 @msg	give exactly one of `path`, `data` and `dataBase64`	ange exakt en av `path`, `data` och `dataBase64`
 @msg	give index or indexes, not both	ange index eller indexes, inte båda
-@msg	give one <filter> element	ange ett <filter>-element
 @msg	give opacity or blend	ange opacity eller blend
 @msg	handler at {_1} expects {_2} values but its range starts with {d}	hanteraren vid {_1} förväntar sig {_2} värden men dess intervall börjar med {d}
 @msg	handler depth too large	hanterarens djup är för stort
@@ -9978,7 +9972,6 @@ digits	Hindi	Hindi
 @msg	instruction out of range	instruktionen ligger utanför intervallet
 @msg	instruction {pc} ({op}) pops below the stack	instruktion {pc} ({op}) hämtar fler värden än stacken innehåller
 @msg	instruction {pc} reached with stack depths {seen} and {d}	instruktion {pc} nås med stackdjupen {seen} och {d}
-@msg	invalid array length	ogiltig arraylängd
 @msg	invalid group	ogiltig grupp
 @msg	invalid object id {v}: expected a non-negative integer	ogiltigt objekt-id {v}: ett icke-negativt heltal förväntades
 @msg	invalid regular expression flag '{_1}'	ogiltig flagga '{_1}' för reguljärt uttryck
@@ -10073,7 +10066,6 @@ digits	Hindi	Hindi
 @msg	the XPath name functions need a node-set	XPath-namnfunktionerna kräver en noduppsättning
 @msg	the XPath prefix {shown} is not bound to a namespace	XPath-prefixet {shown} är inte bundet till en namnrymd
 @msg	the XPath variable ${shown} is not bound	XPath-variabeln ${shown} är inte bunden
-@msg	the argument list is not an object	argumentlistan är inte ett objekt
 @msg	the artwork is too large for EPS: what follows 256 MB of PostScript was left out	grafiken är för stor för EPS: det som följer efter 256 MB PostScript utelämnades
 @msg	the banner has no width or height	bannern saknar bredd eller höjd
 @msg	the bitmaps hold more pixels than one file may	bitmapparna innehåller fler pixlar än en fil får innehålla
@@ -10089,7 +10081,6 @@ digits	Hindi	Hindi
 @msg	the document's swatches hold {_1} colors; the document reduction takes at most 255	dokumentets färgrutor innehåller {_1} färger; reduceringen document tar högst 255
 @msg	the file isn't valid SVG: {e}	filen är inte giltig SVG: {e}
 @msg	the file names no plate	filen anger ingen plåt
-@msg	the function's prototype is not an object	funktionens prototyp är inte ett objekt
 @msg	the grommet inset is too large for the banner	öljetternas avstånd från kanten är för stort för bannern
 @msg	the guide is hidden or locked	stödlinjen är dold eller låst
 @msg	the hem is too deep for the banner	fållen är för djup för bannern
@@ -10106,15 +10097,11 @@ digits	Hindi	Hindi
 @msg	the prompt's text is longer than {MAX_PROMPT_BYTES} bytes	promptens text är längre än {MAX_PROMPT_BYTES} byte
 @msg	the radix must be between 2 and 36	talbasen måste vara mellan 2 och 36
 @msg	the rectangle or line reaches too many paths to check	rektangeln eller linjen når för många banor för att kunna kontrolleras
-@msg	the right side of 'in' is not an object	högersidan av 'in' är inte ett objekt
-@msg	the right side of 'instanceof' is not a function	högersidan av 'instanceof' är inte en funktion
 @msg	the selected art is nested more than {MAX_DEPTH} levels deep	den markerade teckningen är kapslad djupare än {MAX_DEPTH} nivåer
 @msg	the selected art is too large to measure	den markerade teckningen är för stor för att mätas
 @msg	the selection has no outlines to weed around	markeringen har inga ytterlinjer att rensa runt
 @msg	the spacing makes more than {MAX_GROMMETS} grommets	avståndet ger fler än {MAX_GROMMETS} öljetter
 @msg	the value bind was called on is not a function	värdet som bind anropades på är inte en funktion
-@msg	the value is not a constructor	värdet är inte en konstruktor
-@msg	the value is not a function	värdet är inte en funktion
 @msg	the value is not a valid XML name	värdet är inte ett giltigt XML-namn
 @msg	the value is not an XML attribute name	värdet är inte ett XML-attributnamn
 @msg	the value is not an XML name	värdet är inte ett XML-namn
@@ -10137,7 +10124,6 @@ digits	Hindi	Hindi
 @msg	toSource: the value has too many entries	toSource: värdet har för många poster
 @msg	toSource: the value is nested too deep	toSource: värdet är för djupt kapslat
 @msg	toString is not a function	toString är inte en funktion
-@msg	too many arguments	för många argument
 @msg	too many quantifiers	för många kvantifierare
 @msg	turn on at least one side	aktivera minst en sida
 @msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	okänd OpenType-funktion `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; prefixet - stänger av; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom och aalt tar ett alternativs nummer som `tag=N` med N från 0 till {_1}, som `salt=2`)
