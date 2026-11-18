@@ -51,6 +51,30 @@ fn malformed_data_is_refused() {
         assert_eq!(measured::parse(bad.as_bytes()), None, "{bad}");
     }
     assert_eq!(measured::parse(&[0xff, 0xfe, 0x00]), None);
+    // The rows end with END_DATA, and a NUMBER_OF_SETS in the header counts them.
+    let rows = "1 0 0 0 0 95 1 -6\n2 100 0 0 0 55 -37 -50";
+    let header = |sets: &str| format!("ISO28178\nBEGIN_DATA_FORMAT\n{fields}\nEND_DATA_FORMAT\n{sets}\nBEGIN_DATA\n{rows}\n");
+    assert_eq!(measured::parse(header("NUMBER_OF_SETS\t2").as_bytes()), None, "no END_DATA");
+    for (sets, len) in [
+        ("NUMBER_OF_SETS\t2", Some(2)),
+        ("NUMBER_OF_SETS\t3", None),
+        ("NUMBER_OF_SETS\t1", None),
+        ("NUMBER_OF_SETS\tx", None),
+        ("NUMBER_OF_SETS", None),
+    ] {
+        assert_eq!(measured::parse(format!("{}END_DATA\n", header(sets)).as_bytes()).map(|p| p.len()), len, "{sets}");
+    }
+}
+
+/// A paper measured as black has no XYZ to make the other patches relative to.
+#[test]
+fn a_paper_without_light_is_refused() {
+    let c = &measured::CONDITIONS[0];
+    let mut patches = measured::parse(c.data).unwrap();
+    for p in patches.iter_mut().filter(|p| p.cmyk == [0.0; 4]) {
+        p.lab = Lab::new(0.0, 0.0, 0.0);
+    }
+    assert!(measured::fit(c, &patches, measured::SMOOTHING).is_none());
 }
 
 /// ΔE2000 between each measured patch and the model's absolute Lab for its inks: (mean, max).
@@ -75,15 +99,18 @@ fn the_working_spaces_reproduce_the_measured_patches() {
 }
 
 /// A model fitted without every fourth patch (the paper and the solids and overprints stay in)
-/// predicts the patches it left out.
+/// predicts the patches it left out. The data repeats some builds, and every row of a build is
+/// on the side of the build's first row, so the fit never sees a left-out build.
 #[test]
 fn the_fit_predicts_patches_it_left_out() {
     for c in &measured::CONDITIONS {
         let patches = measured::parse(c.data).unwrap();
         let corner = |p: &measured::Patch| p.cmyk.iter().all(|v| *v == 0.0 || *v == 1.0);
-        let (kept, left): (Vec<(usize, &measured::Patch)>, Vec<_>) = patches.iter().enumerate().partition(|(i, p)| i % 4 != 3 || corner(p));
-        let kept: Vec<measured::Patch> = kept.into_iter().map(|(_, p)| *p).collect();
-        let left: Vec<measured::Patch> = left.into_iter().map(|(_, p)| *p).collect();
+        let first = |p: &measured::Patch| patches.iter().position(|q| q.cmyk == p.cmyk).unwrap_or(0);
+        let (kept, left): (Vec<&measured::Patch>, Vec<_>) = patches.iter().partition(|p| first(p) % 4 != 3 || corner(p));
+        assert!(left.iter().all(|l| kept.iter().all(|k| k.cmyk != l.cmyk)), "{}", c.reference);
+        let kept: Vec<measured::Patch> = kept.into_iter().copied().collect();
+        let left: Vec<measured::Patch> = left.into_iter().copied().collect();
         let g = measured::fit(c, &kept, measured::SMOOTHING).unwrap();
         let (mean, max) = accuracy(&g, &left);
         println!("{}: {} patches left out, mean ΔE2000 {mean:.3}, max {max:.3}", c.reference, left.len());
@@ -142,10 +169,13 @@ fn the_working_spaces_follow_generic_cmyk_in_the_list() {
 fn colors_separate_and_come_back_in_the_measured_spaces() {
     for name in [FOGRA51_CMYK, FOGRA52_CMYK] {
         let cms = Cms::new(&ColorSettings { cmyk: name.into(), ..ColorSettings::default() }).unwrap();
-        for srgb in [[0.8, 0.3, 0.2], [0.2, 0.5, 0.7], [0.5, 0.5, 0.5], [0.9, 0.85, 0.6], [0.1, 0.1, 0.1]] {
+        // A 50% gray (L* 53) lies well inside both measured gamuts (the darkest patches measure
+        // L* 11.43 and 26.36), so it comes back whatever the gamut check says.
+        let gray = [0.5, 0.5, 0.5];
+        for srgb in [[0.8, 0.3, 0.2], [0.2, 0.5, 0.7], gray, [0.9, 0.85, 0.6], [0.1, 0.1, 0.1]] {
             let inks = cms.srgb_to_cmyk(srgb, Intent::RelativeColorimetric);
             assert!(inks.iter().sum::<f32>() <= 3.0 + 1e-3, "{name} {srgb:?}: {inks:?}");
-            if cms.gamut_error(&Color::Rgb { r: srgb[0], g: srgb[1], b: srgb[2] }) < GAMUT_THRESHOLD {
+            if srgb == gray || cms.gamut_error(&Color::Rgb { r: srgb[0], g: srgb[1], b: srgb[2] }) < GAMUT_THRESHOLD {
                 let back = cms.cmyk_to_srgb(inks, false);
                 let de = delta_e2000(lab::srgb_to_lab(srgb), lab::srgb_to_lab(back));
                 assert!(de < 1.5, "{name} {srgb:?}: {inks:?} -> {back:?} (ΔE {de})");

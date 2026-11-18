@@ -60,10 +60,19 @@ const MAX_PATCHES: usize = 20_000;
 
 /// The patches of a CGATS / ISO 28178 characterization data file with `CMYK_C`, `CMYK_M`,
 /// `CMYK_Y`, `CMYK_K`, `LAB_L`, `LAB_A` and `LAB_B` fields. `None` when a field is missing, a
-/// row is short or holds a value that is not a finite number, an ink is outside 0 to 100, or the
-/// file has no rows.
+/// row is short or holds a value that is not a finite number, an ink is outside 0 to 100, the
+/// file has no rows, the rows do not end with `END_DATA`, or a `NUMBER_OF_SETS` in the header is
+/// not the number of rows.
 pub fn parse(data: &[u8]) -> Option<Vec<Patch>> {
     let text = std::str::from_utf8(data).ok()?;
+    let sets = text.lines().map(str::trim).take_while(|l| *l != "BEGIN_DATA").find_map(|l| {
+        let mut words = l.split_whitespace();
+        (words.next() == Some("NUMBER_OF_SETS")).then(|| words.next().map(|n| n.trim_matches('"')))
+    });
+    let sets = match sets {
+        Some(n) => Some(n?.parse::<usize>().ok()?),
+        None => None,
+    };
     let mut lines = text.lines().map(str::trim);
     lines.by_ref().find(|l| *l == "BEGIN_DATA_FORMAT")?;
     let mut fields = vec![];
@@ -77,8 +86,10 @@ pub fn parse(data: &[u8]) -> Option<Vec<Patch>> {
     let cols = [at("CMYK_C")?, at("CMYK_M")?, at("CMYK_Y")?, at("CMYK_K")?, at("LAB_L")?, at("LAB_A")?, at("LAB_B")?];
     lines.by_ref().find(|l| *l == "BEGIN_DATA")?;
     let mut out = vec![];
+    let mut ended = false;
     for line in lines {
         if line == "END_DATA" {
+            ended = true;
             break;
         }
         if line.is_empty() {
@@ -97,7 +108,7 @@ pub fn parse(data: &[u8]) -> Option<Vec<Patch>> {
         }
         out.push(Patch { cmyk: [v[0], v[1], v[2], v[3]].map(|x| x / 100.0), lab: Lab::new(v[4], v[5], v[6]) });
     }
-    (!out.is_empty()).then_some(out)
+    (ended && !out.is_empty() && sets.is_none_or(|n| n == out.len())).then_some(out)
 }
 
 /// Absolute Lab → media-relative Lab (`paper` maps to the D50 white).
@@ -164,16 +175,21 @@ fn relative_xyz(lab: Lab, paper: [f32; 3]) -> [f32; 3] {
     [0, 1, 2].map(|i| x[i] * D50[i] / paper[i])
 }
 
-/// The press model of `condition`, computed from its data. `None` when the data does not parse
-/// or lacks the paper, a solid or overprint, or a single-ink ramp.
+/// The press model of `condition`, computed from its data. `None` when the data does not parse,
+/// lacks the paper, a solid or overprint, or a single-ink ramp, or gives a paper whose XYZ is not
+/// positive and finite.
 pub fn model(condition: &Condition) -> Option<GenericCmyk> {
     fit(condition, &parse(condition.data)?, SMOOTHING)
 }
 
-/// The press model of `condition` fitted to `patches`, with the lattice's `smoothing`.
+/// The press model of `condition` fitted to `patches`, with the lattice's `smoothing` (`None` in
+/// the cases [`model`] lists).
 pub(crate) fn fit(condition: &Condition, patches: &[Patch], smoothing: f64) -> Option<GenericCmyk> {
     let paper = mean_lab(patches, [0.0; 4])?;
     let paper_xyz = lab_to_xyz(paper);
+    if paper_xyz.iter().any(|v| !v.is_finite() || *v <= 0.0) {
+        return None;
+    }
     let mut primaries = [Lab::new(0.0, 0.0, 0.0); 15];
     for (i, slot) in primaries.iter_mut().enumerate() {
         let bits = i + 1;

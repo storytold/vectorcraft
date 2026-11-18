@@ -617,8 +617,10 @@ impl Dest {
 
 /// The catalog entries `set` asks for (none in PDF/A files, see [`warnings`]); a PDF/X file's
 /// output intent profile is `cmyk_profile` (the CMYK profile in effect) unless `set` names one.
-/// A profile computed for a registered printing condition ([`cms::characterization`]) gives the
-/// condition identifier and registry the settings leave blank.
+/// When the settings leave the condition identifier blank, a profile computed for a registered
+/// printing condition ([`cms::characterization`]) gives the condition's name as the identifier,
+/// and its registry when the settings leave the registry blank too. An identifier set in the
+/// settings is written as given, with the settings' registry.
 fn catalog(set: &PdfSettings, cmyk_profile: &str) -> Option<Catalog> {
     let o = &set.output;
     if set.standard == Standard::PdfA2b {
