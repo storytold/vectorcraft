@@ -4556,6 +4556,7 @@ imageTrace	Outline	Contorno
 	Bevel	Bisel
 	Offset	Desplazamiento
 	Axis	Eje
+	Axis Angle	Ángulo del eje
 axis	Horizontal	Horizontal
 axis	Vertical	Vertical
 axis	Both	Ambos

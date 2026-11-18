@@ -4553,6 +4553,7 @@ imageTrace	Outline	アウトライン
 	Bevel	ベベル
 	Offset	オフセット
 	Axis	軸
+	Axis Angle	軸の角度
 axis	Horizontal	水平方向
 axis	Vertical	垂直方向
 axis	Both	両方

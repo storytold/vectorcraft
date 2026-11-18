@@ -5812,6 +5812,7 @@ imageTrace	Outline	輪廓
 	Bevel	斜角
 	Offset	位移
 	Axis	軸
+	Axis Angle	軸角度
 axis	Horizontal	水平
 axis	Vertical	垂直
 axis	Both	兩者

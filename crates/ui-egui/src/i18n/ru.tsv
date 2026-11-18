@@ -4590,6 +4590,7 @@ imageTrace	Outline	Контур
 	Bevel	Скос
 	Offset	Смещение
 	Axis	Ось
+	Axis Angle	Угол оси
 axis	Horizontal	Горизонтально
 axis	Vertical	Вертикально
 axis	Both	Оба

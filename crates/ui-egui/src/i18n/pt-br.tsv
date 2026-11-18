@@ -5710,6 +5710,7 @@ variable-list-end	{0}, {1}	{0} e {1}
 	[Normal Paragraph Style]	[Estilo de Parágrafo Normal]
 	Joins	Junções
 	Axis	Eixo
+	Axis Angle	Ângulo do eixo
 	Run	Executar
 	Run Script	Executar script
 	Stop Script	Parar script

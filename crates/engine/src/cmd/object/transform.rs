@@ -420,10 +420,28 @@ pub(super) fn shear(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = selected_roots_to_transform(s)?;
     let o = origin_of(s, p, &ids)?;
     let t = f64_or(p, "angle", 0.0).clamp(-89.0, 89.0).to_radians().tan();
-    let vertical = choice(p, "object.shear", "axis", &["horizontal", "vertical"])? == Some("vertical");
-    let m = if vertical { Affine::new([1.0, t, 0.0, 1.0, 0.0, 0.0]) } else { Affine::new([1.0, 0.0, -t, 1.0, 0.0, 0.0]) };
+    let horizontal = Affine::new([1.0, 0.0, -t, 1.0, 0.0, 0.0]);
+    // A named axis, or a line on the page at an angle in degrees, counter-clockwise from horizontal.
+    let m = match p.get("axis") {
+        None | Some(Value::Null) => horizontal,
+        Some(Value::String(a)) if a == "horizontal" => horizontal,
+        Some(Value::String(a)) if a == "vertical" => Affine::new([1.0, t, 0.0, 1.0, 0.0, 0.0]),
+        Some(Value::Number(n)) if n.as_f64().is_some_and(|a| (-SHEAR_AXIS_MAX..=SHEAR_AXIS_MAX).contains(&a)) => {
+            // y is down, so the page's counter-clockwise angle turns the other way on screen.
+            let r = -n.as_f64().unwrap_or(0.0).to_radians();
+            Affine::rotate(r) * horizontal * Affine::rotate(-r)
+        }
+        Some(v) => {
+            let given = v.as_str().map_or_else(|| v.to_string(), str::to_string);
+            let range = format!("from -{SHEAR_AXIS_MAX} to {SHEAR_AXIS_MAX}");
+            return Err(bad("object.shear", format!("axis must be \"horizontal\", \"vertical\" or an angle in degrees {range}, not `{given}`")));
+        }
+    };
     apply_transform(s, "Shear", ids, about(o, m), p, true)
 }
+
+/// The largest angle, either way from horizontal, of the axis `object.shear` takes in degrees.
+const SHEAR_AXIS_MAX: f64 = 359.0;
 
 /// The last transform on the selection, with the options `last_transform` keeps for it; an option
 /// that `p` sets to true or false (a recorded Transform Again's) takes precedence. A Transform

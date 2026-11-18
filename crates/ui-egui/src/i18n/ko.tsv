@@ -4537,6 +4537,7 @@ imageTrace	Outline	윤곽선
 	Bevel	베벨
 	Offset	오프셋
 	Axis	축
+	Axis Angle	축 각도
 axis	Horizontal	가로
 axis	Vertical	세로
 axis	Both	양쪽
