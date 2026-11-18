@@ -289,6 +289,76 @@ fn save_remembers_and_writes_and_done_only_remembers() {
     assert!(!dir.join("Untitled-1.png").exists());
 }
 
+/// `ui.dialogReset` puts the remembered settings back (the defaults when none are remembered) on
+/// the document's active artboard, drops a pending preset, the preset name being typed and the
+/// selected color, keeps the view, zoom, speed and path, writes and remembers nothing, and leaves
+/// the dialog open; settings changed after it are remembered as usual.
+#[test]
+fn reset_puts_the_remembered_settings_back() {
+    let dir = vectorcraft_testkit::temp_dir("sfw-reset");
+    let (mut app, _) = app(&dir, false);
+    let defaults = vectorcraft_engine::cmd::webexport::WebSettings::default().to_json();
+    app.run("file.saveForWeb", json!({})).unwrap();
+    for (k, v) in [
+        ("format", json!("jpg")),
+        ("quality", json!(20)),
+        ("colorTable", json!({"locked": ["nope"]})),
+        ("preset", json!("PNG-24")),
+        ("__presetName", json!("Mine")),
+        ("__color", json!("#cc3300")),
+        ("__zoom", json!("200")),
+        ("__kbps", json!(1024)),
+        ("path", json!("elsewhere.png")),
+    ] {
+        set(&mut app, k, v);
+    }
+    app.run("ui.dialogReset", json!({})).unwrap();
+    let d = app.ui.dialog.as_ref().expect("Reset leaves the dialog open");
+    for (k, v) in defaults.as_object().unwrap() {
+        let want = if k == "artboard" { &json!(0) } else { v };
+        assert_eq!(d.fields.get(k), Some(want), "{k}");
+    }
+    for k in ["preset", "__presetName", "__color"] {
+        assert!(!d.fields.contains_key(k), "{k}");
+    }
+    assert_eq!((d.str("__zoom"), d.f64("__kbps", 0.0), d.str("path")), ("200".into(), 1024.0, "elsewhere.png".into()));
+    assert_eq!(app.session.last_web_settings().to_json(), defaults, "Reset remembers nothing");
+    assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 0, "Reset writes nothing");
+    set(&mut app, "quality", json!(55));
+    set(&mut app, "discard", json!(true));
+    confirm(&mut app).unwrap();
+    assert_eq!(app.session.last_web_settings().quality, 55);
+
+    // Remembered on another document's second artboard: Reset keeps this document's active one.
+    let mut app = two_artboards(&vectorcraft_testkit::temp_dir("sfw-reset-artboard"));
+    app.run("view.goToArtboard", json!({"index": 1})).unwrap();
+    app.run("webExport.settings", json!({"artboard": 1, "quality": 40})).unwrap();
+    app.run("file.new", json!({"width": 50, "height": 50})).unwrap();
+    app.run("file.saveForWeb", json!({})).unwrap();
+    set(&mut app, "quality", json!(90));
+    set(&mut app, "artboard", json!(3));
+    app.run("ui.dialogReset", json!({})).unwrap();
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!((d.fields["artboard"].clone(), d.f64("quality", 0.0)), (json!(0), 40.0));
+}
+
+/// A Done that failed on a bad setting leaves `discard` in the dialog; Reset drops it, so Save…
+/// after Reset writes the file instead of only remembering the settings.
+#[test]
+fn reset_drops_a_done_that_failed() {
+    let dir = vectorcraft_testkit::temp_dir("sfw-reset-done");
+    let (mut app, _) = app(&dir, false);
+    app.run("file.saveForWeb", json!({})).unwrap();
+    set(&mut app, "colorTable", json!({"locked": ["nope"]}));
+    set(&mut app, "discard", json!(true));
+    assert!(confirm(&mut app).is_err());
+    app.run("ui.dialogReset", json!({})).unwrap();
+    assert!(!app.ui.dialog.as_ref().unwrap().fields.contains_key("discard"));
+    let r = confirm(&mut app).unwrap();
+    let path = r["path"].as_str().expect("Save… writes a file");
+    assert!(std::path::Path::new(path).exists(), "{path}");
+}
+
 #[test]
 fn html_output_with_slices_saves_the_page_and_images() {
     let dir = vectorcraft_testkit::temp_dir("sfw-html");
@@ -655,4 +725,499 @@ fn colour_table_buttons_edit_the_lists() {
     save_for_web::toggle(&mut d, "locked", "#cc3300", false);
     save_for_web::set_table(&mut d, "sort", json!("hue"));
     assert_eq!(d.fields["colorTable"], json!({"locked": [], "webShift": ["#123456"], "sort": "hue"}));
+}
+
+/// A click selects one color, a Shift-click the range from the last one clicked, a Ctrl-click
+/// (Command-click) adds or removes one; Delete Color deletes the whole selection in one edit,
+/// takes it out of the other lists, fixes the palette and refuses to delete every color.
+#[test]
+fn colour_table_selection_and_delete_color() {
+    let mut d = Dialog::new(save_for_web::KIND, json!({}));
+    let order: Vec<String> = ["#000000", "#111111", "#222222", "#333333"].map(String::from).to_vec();
+    let sel = |d: &Dialog| save_for_web::selection(d);
+    assert!(sel(&d).is_empty());
+    save_for_web::pick(&mut d, &order, "#111111", false, false);
+    assert_eq!(sel(&d), ["#111111"]);
+    save_for_web::pick(&mut d, &order, "#333333", true, false);
+    assert_eq!((sel(&d), d.str("__color")), (vec!["#111111".to_string(), "#222222".into(), "#333333".into()], "#111111".into()));
+    save_for_web::pick(&mut d, &order, "#222222", false, true);
+    assert_eq!(sel(&d), ["#111111", "#333333"]);
+    save_for_web::pick(&mut d, &order, "#000000", false, true);
+    assert_eq!((sel(&d), d.str("__color")), (vec!["#111111".to_string(), "#333333".into(), "#000000".into()], "#000000".into()));
+    save_for_web::pick(&mut d, &order, "#000000", false, true);
+    assert_eq!((sel(&d), d.str("__color")), (vec!["#111111".to_string(), "#333333".into()], "#333333".into()));
+    // A Shift-click back from the anchor.
+    save_for_web::pick(&mut d, &order, "#222222", false, false);
+    save_for_web::pick(&mut d, &order, "#000000", true, false);
+    assert_eq!(sel(&d), ["#000000", "#111111", "#222222"]);
+    // `__color` alone (an agent's selection) is the selection too.
+    d.fields.remove("__colors");
+    d.fields.insert("__color".into(), json!("#222222"));
+    assert_eq!(sel(&d), ["#222222"]);
+
+    save_for_web::toggle(&mut d, "locked", "#222222", true);
+    save_for_web::toggle(&mut d, "locked", "#000000", true);
+    save_for_web::toggle(&mut d, "webShift", "#333333", true);
+    save_for_web::pick(&mut d, &order, "#333333", false, true);
+    save_for_web::delete_colors(&mut d, &order).unwrap();
+    assert_eq!(d.fields["colorTable"], json!({"locked": ["#000000"], "webShift": [], "customPalette": order, "deleted": ["#222222", "#333333"]}));
+    assert!(!d.fields.contains_key("__colors") && !d.fields.contains_key("__color") && sel(&d).is_empty());
+    // Nothing selected: nothing deleted.
+    let before = d.fields.clone();
+    save_for_web::delete_colors(&mut d, &order).unwrap();
+    assert_eq!(d.fields, before);
+    // The colors left can't all go: refused, nothing changed.
+    save_for_web::pick(&mut d, &order, "#000000", false, false);
+    save_for_web::pick(&mut d, &order, "#111111", false, true);
+    let before = d.fields.clone();
+    assert_eq!(save_for_web::delete_colors(&mut d, &order), Err(vectorcraft_engine::cmd::webexport::KEEP_ONE.to_string()));
+    assert_eq!(d.fields, before);
+    // Nor can the last color that is not mapped to transparent.
+    save_for_web::toggle(&mut d, "transparent", "#111111", true);
+    save_for_web::pick(&mut d, &order, "#000000", false, false);
+    let before = d.fields.clone();
+    assert_eq!(save_for_web::delete_colors(&mut d, &order), Err(vectorcraft_engine::cmd::webexport::KEEP_ONE.to_string()));
+    assert_eq!(d.fields, before);
+    // Restore Generated Table.
+    save_for_web::restore_table(&mut d);
+    assert_eq!((&d.fields["colorTable"]["deleted"], &d.fields["colorTable"]["customPalette"]), (&json!([]), &json!([])));
+}
+
+/// Delete Color takes only selected colors the table shows: a selection the table no longer holds
+/// (after a change of reduction or color count, or set through `ui.dialog.set`) deletes nothing,
+/// fixes no palette and is cleared, and a selection partly in the table deletes only what it shows.
+#[test]
+fn delete_color_skips_selected_colors_the_table_does_not_show() {
+    let mut d = Dialog::new(save_for_web::KIND, json!({}));
+    let shown: Vec<String> = ["#000000", "#111111"].map(String::from).to_vec();
+    let table = |d: &Dialog, key: &str| d.fields.get("colorTable").and_then(|t| t.get(key)).cloned();
+    d.fields.insert("__colors".into(), json!(["#ABCDEF"]));
+    d.fields.insert("__color".into(), json!("#abcdef"));
+    assert!(save_for_web::selected_in(&d, &shown).is_empty());
+    save_for_web::delete_colors(&mut d, &shown).unwrap();
+    assert_eq!((table(&d, "customPalette"), table(&d, "deleted")), (None, None));
+    assert!(!d.fields.contains_key("__colors") && !d.fields.contains_key("__color"));
+    d.fields.insert("__colors".into(), json!(["#abcdef", "#111111"]));
+    assert_eq!(save_for_web::selected_in(&d, &shown), ["#111111"]);
+    save_for_web::delete_colors(&mut d, &shown).unwrap();
+    assert_eq!((table(&d, "customPalette"), table(&d, "deleted")), (Some(json!(shown)), Some(json!(["#111111"]))));
+}
+
+/// A shift by hand replaces a web shift and selects the color; a shift to the color itself takes it
+/// away; Unshift All Colors clears both kinds; Delete Color takes a deleted color's shift away.
+#[test]
+fn colour_table_shift_unshift_and_unshift_all() {
+    let mut d = Dialog::new(save_for_web::KIND, json!({}));
+    save_for_web::toggle(&mut d, "webShift", "#123456", true);
+    save_for_web::shift_color(&mut d, "#123456", "#FF8800");
+    assert_eq!(d.fields["colorTable"], json!({"webShift": [], "shifted": {"#123456": "#ff8800"}}));
+    assert_eq!(save_for_web::selection(&d), ["#123456"]);
+    // Not a color: nothing changes.
+    let before = d.fields.clone();
+    save_for_web::shift_color(&mut d, "nope", "#000000");
+    save_for_web::shift_color(&mut d, "#123456", "nope");
+    assert_eq!(d.fields, before);
+    save_for_web::shift_color(&mut d, "#ABCDEF", "#00ff00");
+    save_for_web::shift_color(&mut d, "#123456", "#123456");
+    assert_eq!(d.fields["colorTable"]["shifted"], json!({"#abcdef": "#00ff00"}));
+    save_for_web::toggle(&mut d, "webShift", "#222222", true);
+    save_for_web::unshift_all_colors(&mut d);
+    assert_eq!((&d.fields["colorTable"]["shifted"], &d.fields["colorTable"]["webShift"]), (&json!({}), &json!([])));
+    let order: Vec<String> = ["#000000", "#222222"].map(String::from).to_vec();
+    save_for_web::shift_color(&mut d, "#222222", "#ffffff");
+    save_for_web::delete_colors(&mut d, &order).unwrap();
+    assert_eq!((&d.fields["colorTable"]["shifted"], &d.fields["colorTable"]["deleted"]), (&json!({}), &json!(["#222222"])));
+}
+
+/// One frame of `app` in `ctx`, 50 ms after the last.
+fn tick(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) {
+    let time = ctx.input(|i| i.time) + 0.05;
+    let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400.0, 1000.0)));
+    let mut out = ctx.run_ui(egui::RawInput { screen_rect, events, time: Some(time), ..Default::default() }, |ui| show(app, ui.ctx()));
+    out.textures_delta.clear();
+}
+
+/// Double-click the color table's swatch of the source color `source`.
+fn double_click_swatch(app: &mut VectorcraftApp, ctx: &egui::Context, source: &str) {
+    for _ in 0..3 {
+        tick(app, ctx, vec![]);
+    }
+    let pos = ctx.read_response(save_for_web::swatch_id(source)).unwrap_or_else(|| panic!("no swatch for {source}")).rect.center();
+    let button = |pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+    tick(app, ctx, vec![egui::Event::PointerMoved(pos), button(true)]);
+    tick(app, ctx, vec![button(false)]);
+    tick(app, ctx, vec![button(true)]);
+    tick(app, ctx, vec![button(false)]);
+    tick(app, ctx, vec![]);
+}
+
+/// The color the open Color Picker shows.
+fn picker_color(app: &VectorcraftApp) -> Option<String> {
+    let d = app.ui.dialog.as_ref()?;
+    assert_eq!(d.kind, "colorPicker", "the Color Picker is open");
+    d.fields.get("color").and_then(vectorcraft_engine::cmd::color_value).map(|c| c.to_hex())
+}
+
+/// A double-click on a swatch opens the Color Picker on its color. Cancel changes nothing; OK
+/// shifts the color in the table and the saved file. A double-click on a shifted swatch opens the
+/// picker on the source color, and Web Shift replaces the shift by hand.
+#[test]
+fn double_clicking_a_swatch_shifts_its_color() {
+    let dir = vectorcraft_testkit::temp_dir("sfw-shift-color");
+    let (mut app, _) = app(&dir, false);
+    app.run("shape.rectangle", json!({"x": 40, "y": 0, "width": 20, "height": 40})).unwrap();
+    app.run("paint.setFill", json!({"color": "#0000ff"})).unwrap();
+    app.run("file.saveForWeb", json!({})).unwrap();
+    for (k, v) in [("format", json!("gif")), ("antiAlias", json!("none")), ("dither", json!("none"))] {
+        set(&mut app, k, v);
+    }
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let shifted = |app: &VectorcraftApp| app.ui.dialog.as_ref().map(|d| d.fields["colorTable"]["shifted"].clone());
+    double_click_swatch(&mut app, &ctx, "#0000ff");
+    assert_eq!(picker_color(&app).as_deref(), Some("#0000ff"));
+    crate::dialogs::cancel(&mut app);
+    tick(&mut app, &ctx, vec![]);
+    assert_eq!((kind(&app), shifted(&app)), (Some(save_for_web::KIND), Some(json!({}))), "Cancel shifts nothing");
+    double_click_swatch(&mut app, &ctx, "#0000ff");
+    set(&mut app, "color", json!("#00ff00"));
+    confirm(&mut app).unwrap();
+    tick(&mut app, &ctx, vec![]);
+    assert_eq!((kind(&app), shifted(&app)), (Some(save_for_web::KIND), Some(json!({"#0000ff": "#00ff00"}))), "OK shifts the color");
+    // The shifted swatch opens on its source color.
+    double_click_swatch(&mut app, &ctx, "#0000ff");
+    assert_eq!(picker_color(&app).as_deref(), Some("#0000ff"));
+    crate::dialogs::cancel(&mut app);
+    // Web Shift replaces the shift by hand.
+    click_text(&mut app, "Web Shift");
+    let t = app.ui.dialog.as_ref().unwrap().fields["colorTable"].clone();
+    assert_eq!((&t["shifted"], &t["webShift"]), (&json!({}), &json!(["#0000ff"])));
+    // Shifted again, the color reaches the saved file and is remembered.
+    double_click_swatch(&mut app, &ctx, "#0000ff");
+    set(&mut app, "color", json!("#00ff00"));
+    confirm(&mut app).unwrap();
+    tick(&mut app, &ctx, vec![]);
+    let r = confirm(&mut app).unwrap();
+    let image = image::open(r["path"].as_str().unwrap()).unwrap().to_rgba8();
+    assert_eq!((image.get_pixel(50, 20).0, image.get_pixel(20, 14).0), ([0, 255, 0, 255], [204, 51, 0, 255]));
+    let remembered = app.session.last_web_settings().color_table;
+    assert_eq!((remembered.shifted.get("#0000ff").map(String::as_str), remembered.web_shift.len()), (Some("#00ff00"), 0));
+}
+
+/// `ui.dialog.set` accepts `__editColor`, and the next frame opens the Color Picker on that color,
+/// whose OK shifts it.
+#[test]
+fn dialog_set_edit_color_opens_the_color_picker() {
+    let dir = vectorcraft_testkit::temp_dir("sfw-edit-color-set");
+    let (mut app, _) = app(&dir, false);
+    app.run("shape.rectangle", json!({"x": 40, "y": 0, "width": 20, "height": 40})).unwrap();
+    app.run("paint.setFill", json!({"color": "#0000ff"})).unwrap();
+    app.run("file.saveForWeb", json!({})).unwrap();
+    set(&mut app, "format", json!("gif"));
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let (req, _) = crate::control::ControlRequest::new("ui.dialog.set", json!({"field": "__editColor", "value": "#0000ff"}));
+    let crate::control::Outcome::Done(r) = crate::control::handle(&mut app, &ctx, &req) else { panic!("not done") };
+    assert_eq!(r["ok"], true, "{r}");
+    tick(&mut app, &ctx, vec![]);
+    assert_eq!(picker_color(&app).as_deref(), Some("#0000ff"));
+    set(&mut app, "color", json!("#00ff00"));
+    confirm(&mut app).unwrap();
+    tick(&mut app, &ctx, vec![]);
+    let shifted = app.ui.dialog.as_ref().map(|d| d.fields["colorTable"]["shifted"].clone());
+    assert_eq!((kind(&app), shifted), (Some(save_for_web::KIND), Some(json!({"#0000ff": "#00ff00"}))));
+}
+
+/// Lock, Transparent and Web Shift are off while the selected color (`__color`) is one the table
+/// no longer shows, so a click adds it to no list; with a color the table shows, Lock locks it.
+#[test]
+fn table_buttons_skip_a_selected_color_the_table_does_not_show() {
+    let dir = vectorcraft_testkit::temp_dir("sfw-stale-anchor");
+    let (mut app, _) = app(&dir, false);
+    app.run("shape.rectangle", json!({"x": 40, "y": 0, "width": 20, "height": 40})).unwrap();
+    app.run("paint.setFill", json!({"color": "#0000ff"})).unwrap();
+    app.run("file.saveForWeb", json!({})).unwrap();
+    for (k, v) in [("format", json!("gif")), ("antiAlias", json!("none")), ("dither", json!("none"))] {
+        set(&mut app, k, v);
+    }
+    let table = |app: &VectorcraftApp| app.ui.dialog.as_ref().and_then(|d| d.fields.get("colorTable").cloned()).unwrap_or_default();
+    let has = |app: &VectorcraftApp, list: &str, c: &str| table(app)[list].as_array().is_some_and(|l| l.iter().any(|v| v == c));
+    set(&mut app, "__color", json!("#abcdef"));
+    for label in ["Lock", "Transparent", "Web Shift"] {
+        click_text(&mut app, label);
+    }
+    for list in ["locked", "transparent", "webShift"] {
+        assert!(!has(&app, list, "#abcdef"), "{list}: {}", table(&app));
+    }
+    set(&mut app, "__color", json!("#0000ff"));
+    click_text(&mut app, "Lock");
+    assert!(has(&app, "locked", "#0000ff"), "{}", table(&app));
+}
+
+/// Click the dialog's text `label` with the pointer (frames a quarter second apart).
+fn click_text(app: &mut VectorcraftApp, label: &str) {
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+        let time = ctx.input(|i| i.time) + 0.25;
+        let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400.0, 1000.0)));
+        let raw = egui::RawInput { screen_rect, events, time: Some(time), ..Default::default() };
+        let mut out = ctx.run_ui(raw, |ui| show(app, ui.ctx()));
+        out.textures_delta.clear();
+        fn walk(s: &egui::Shape, v: &mut Vec<(String, egui::Rect)>) {
+            match s {
+                egui::Shape::Text(t) => v.push((t.galley.text().to_string(), egui::Rect::from_min_size(t.pos, t.galley.size()))),
+                egui::Shape::Vec(s) => s.iter().for_each(|s| walk(s, v)),
+                _ => {}
+            }
+        }
+        let mut v = vec![];
+        out.shapes.iter().for_each(|c| walk(&c.shape, &mut v));
+        v
+    };
+    frame(app, vec![]);
+    let texts = frame(app, vec![]);
+    let at = texts.iter().find(|(t, _)| t == label).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no `{label}` in {texts:?}"));
+    let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    frame(app, vec![egui::Event::PointerMoved(at)]);
+    frame(app, vec![press(true)]);
+    frame(app, vec![press(false)]);
+}
+
+/// A Custom table whose preview fails (only a color mapped to transparent left) still offers
+/// Restore Generated Table, which brings the preview back.
+#[test]
+fn restore_generated_table_shows_when_the_preview_fails() {
+    let dir = vectorcraft_testkit::temp_dir("sfw-restore-table");
+    let (mut app, _) = app(&dir, false);
+    app.run("shape.rectangle", json!({"x": 40, "y": 0, "width": 20, "height": 40})).unwrap();
+    app.run("paint.setFill", json!({"color": "#0000ff"})).unwrap();
+    app.run("file.saveForWeb", json!({})).unwrap();
+    let table = json!({"deleted": ["#cc3300"], "customPalette": ["#cc3300", "#0000ff"], "transparent": ["#0000ff"]});
+    for (k, v) in [("format", json!("gif")), ("antiAlias", json!("none")), ("dither", json!("none")), ("colorTable", table)] {
+        set(&mut app, k, v);
+    }
+    let p = json!({"format": "gif", "antiAlias": "none", "colorTable": app.ui.dialog.as_ref().unwrap().fields["colorTable"].clone()});
+    assert!(app.session.execute("document.exportForWeb.preview", &p).is_err(), "the preview fails");
+    click_text(&mut app, "Restore Generated Table");
+    let t = &app.ui.dialog.as_ref().unwrap().fields["colorTable"];
+    assert_eq!((&t["deleted"], &t["customPalette"]), (&json!([]), &json!([])));
+}
+
+/// The saved file lacks the deleted color, whose pixels take the color left; the edit is
+/// remembered, reopens with the dialog and stays through a format change.
+#[test]
+fn delete_color_reaches_the_saved_file_and_is_remembered() {
+    let dir = vectorcraft_testkit::temp_dir("sfw-delete-color");
+    let (mut app, _) = app(&dir, false);
+    app.run("shape.rectangle", json!({"x": 40, "y": 0, "width": 20, "height": 40})).unwrap();
+    app.run("paint.setFill", json!({"color": "#0000ff"})).unwrap();
+    app.run("file.saveForWeb", json!({})).unwrap();
+    for (k, v) in [("format", json!("gif")), ("antiAlias", json!("none")), ("dither", json!("none"))] {
+        set(&mut app, k, v);
+    }
+    frame(&mut app);
+    set(&mut app, "__colors", json!(["#cc3300"]));
+    save_for_web::delete_colors(app.ui.dialog.as_mut().unwrap(), &["#cc3300".into(), "#0000ff".into()]).unwrap();
+    frame(&mut app);
+    for format in ["jpg", "gif"] {
+        set(&mut app, "format", json!(format));
+        frame(&mut app);
+    }
+    let r = confirm(&mut app).unwrap();
+    let image = image::open(r["path"].as_str().unwrap()).unwrap().to_rgba8();
+    assert_eq!((image.get_pixel(20, 14).0, image.get_pixel(50, 20).0), ([0, 0, 255, 255], [0, 0, 255, 255]));
+    assert_eq!(app.session.last_web_settings().color_table.deleted, ["#cc3300"]);
+    app.run("file.saveForWeb", json!({})).unwrap();
+    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["colorTable"]["deleted"], json!(["#cc3300"]));
+    frame(&mut app);
+}
+
+#[test]
+fn optimize_to_file_size_takes_the_settings_that_fit() {
+    let dir = vectorcraft_testkit::temp_dir("sfw-optimize");
+    let (mut app, _) = app(&dir, false);
+    app.run("file.saveForWeb", json!({})).unwrap();
+    set(&mut app, "format", json!("jpg"));
+    set(&mut app, "quality", json!(100));
+    frame(&mut app);
+    let full = app.session.execute("document.exportForWeb.preview", &json!({"format": "jpg", "quality": 100})).unwrap()["bytes"].as_u64().unwrap();
+    let field = |app: &VectorcraftApp, k: &str| app.ui.dialog.as_ref().unwrap().fields.get(k).cloned();
+    // A size of 0 is refused: the settings and the rows stay.
+    set(&mut app, "__optimizeK", json!(0));
+    set(&mut app, "__optimizeStart", json!("current"));
+    set(&mut app, "__optimizeGo", json!(true));
+    frame(&mut app);
+    assert_eq!(field(&app, "quality"), Some(json!(100)));
+    assert_eq!(field(&app, "__optimizeK"), Some(json!(0)));
+    assert_eq!((field(&app, "__optimized"), field(&app, "__optimizeGo")), (None, None));
+    // OK takes the settings found and closes the rows.
+    set(&mut app, "__optimizeK", json!(full as f64 * 0.8 / 1024.0));
+    set(&mut app, "__optimizeGo", json!(true));
+    frame(&mut app);
+    let found = field(&app, "__optimized").unwrap();
+    assert_eq!(found["achieved"], json!(true), "{found}");
+    let quality = field(&app, "quality").unwrap().as_u64().unwrap();
+    assert!(quality < 100, "{found}");
+    assert_eq!(field(&app, "__optimizeK"), None);
+    // The result holds for the settings found on the art it measured.
+    let settings = app.session.web_settings(&found["settings"]).unwrap();
+    let shown = |app: &VectorcraftApp| {
+        save_for_web::optimized_result(app.ui.dialog.as_ref().unwrap(), Some(&settings), &save_for_web::art_key(app)).is_some()
+    };
+    assert!(shown(&app));
+    // The result line draws, and Save writes the size found.
+    frame(&mut app);
+    let r = confirm(&mut app).unwrap();
+    let written = std::fs::read(r["path"].as_str().unwrap()).unwrap();
+    assert_eq!(written.len() as u64, found["bytes"].as_u64().unwrap());
+    assert!(written.len() as u64 <= found["targetBytes"].as_u64().unwrap());
+    assert_eq!(app.session.last_web_settings().quality as u64, quality);
+    // A change to the art drops the result.
+    app.run("file.saveForWeb", json!({})).unwrap();
+    app.ui.dialog.as_mut().unwrap().fields.insert("__optimized".into(), found.clone());
+    assert!(shown(&app));
+    app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 5, "height": 5})).unwrap();
+    assert!(!shown(&app));
+    // So does a change to the selection, which decides the slices Save writes with `slices: selected`,
+    // also one that leaves the revision as it is (a click on the canvas).
+    let mut current = found.clone();
+    current["art"] = json!(save_for_web::art_key(&app));
+    app.ui.dialog.as_mut().unwrap().fields.insert("__optimized".into(), current);
+    assert!(shown(&app));
+    let st = app.session.active_mut().unwrap();
+    assert!(!st.selection.objects.is_empty());
+    st.selection.objects.clear();
+    assert!(!shown(&app));
+    // And a change to the selected slices alone (the Slice Selection tool).
+    let mut current = found.clone();
+    current["art"] = json!(save_for_web::art_key(&app));
+    app.ui.dialog.as_mut().unwrap().fields.insert("__optimized".into(), current);
+    assert!(shown(&app));
+    let st = app.session.active_mut().unwrap();
+    let any = st.doc.layers[0].id;
+    st.selection.slices.push(any);
+    assert!(!shown(&app));
+}
+
+/// Enter while the Optimize to File Size rows are open runs the search and writes nothing; once the
+/// search has closed the rows, Enter saves with the settings it found.
+#[test]
+fn enter_in_the_optimize_rows_runs_the_search_and_saves_nothing() {
+    let dir = vectorcraft_testkit::temp_dir("sfw-optimize-enter");
+    let (mut app, _) = app(&dir, false);
+    app.run("file.saveForWeb", json!({})).unwrap();
+    set(&mut app, "format", json!("jpg"));
+    set(&mut app, "quality", json!(100));
+    frame(&mut app);
+    let full = app.session.execute("document.exportForWeb.preview", &json!({"format": "jpg", "quality": 100})).unwrap()["bytes"].as_u64().unwrap();
+    set(&mut app, "__optimizeK", json!(full as f64 * 0.8 / 1024.0));
+    set(&mut app, "__optimizeStart", json!("current"));
+    let files = |dir: &std::path::Path| std::fs::read_dir(dir).map_or(0, |r| r.count());
+    let enter_with = |app: &mut VectorcraftApp, modifiers: egui::Modifiers| {
+        let key = egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers };
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let mut out = ctx.run_ui(egui::RawInput { events: vec![key], ..Default::default() }, |ui| show(app, ui.ctx()));
+        out.textures_delta.clear();
+    };
+    let enter = |app: &mut VectorcraftApp| enter_with(app, egui::Modifiers::NONE);
+    // Ctrl+Enter, which the size field does not commit, neither searches nor saves.
+    enter_with(&mut app, egui::Modifiers::CTRL);
+    frame(&mut app);
+    assert_eq!(kind(&app), Some(save_for_web::KIND), "Ctrl+Enter in the rows does not save");
+    assert!(app.ui.dialog.as_ref().unwrap().fields.contains_key("__optimizeK"), "the rows stay open");
+    assert!(!app.ui.dialog.as_ref().unwrap().fields.contains_key("__optimized"));
+    assert_eq!(files(&dir), 0);
+    enter(&mut app);
+    assert_eq!(kind(&app), Some(save_for_web::KIND), "Enter in the rows does not save");
+    assert_eq!(files(&dir), 0);
+    frame(&mut app);
+    let d = app.ui.dialog.as_ref().unwrap();
+    let found = d.fields.get("__optimized").cloned().unwrap();
+    assert_eq!(found["achieved"], json!(true), "{found}");
+    assert!(!d.fields.contains_key("__optimizeK"), "the search closed the rows");
+    enter(&mut app);
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(files(&dir), 1);
+}
+
+/// An Enter in the Optimize to File Size rows runs no search when a field of the dialog, one drawn
+/// after the rows included, refused the value typed in it on that press, or when a control drawn
+/// after the rows (an open dropdown) took the press.
+#[test]
+fn enter_in_the_optimize_rows_runs_nothing_when_a_later_control_refused_or_took_it() {
+    // `before` stands for the controls drawn after the rows, which act on the press first.
+    let go = |before: fn(&egui::Context)| {
+        let mut d = Dialog::new(save_for_web::KIND, json!({"__optimizeK": 10}));
+        let key = egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+        let ctx = egui::Context::default();
+        let mut out = ctx.run_ui(egui::RawInput { events: vec![key], ..Default::default() }, |ui| {
+            before(ui.ctx());
+            save_for_web::optimize_on_enter(ui.ctx(), &mut d);
+        });
+        out.textures_delta.clear();
+        assert!(d.fields.contains_key("__optimizeK"), "the rows stay open");
+        d.fields.contains_key("__optimizeGo")
+    };
+    assert!(go(|_| {}), "a plain Enter runs the search");
+    assert!(!go(crate::widgets::reject_dialog_commit), "a refused value runs nothing");
+    assert!(!go(|ctx| ctx.input_mut(|i| _ = i.consume_key(egui::Modifiers::NONE, egui::Key::Enter))), "a taken press runs nothing");
+}
+
+#[test]
+fn optimize_to_file_size_starts_at_the_size_of_the_slices_files() {
+    let dir = vectorcraft_testkit::temp_dir("sfw-optimize-slices");
+    let (mut app, _) = app(&dir, false);
+    app.run("object.slice.create", json!({"x": 0, "y": 0, "width": 30, "height": 20})).unwrap();
+    app.run("file.saveForWeb", json!({})).unwrap();
+    set(&mut app, "format", json!("png24"));
+    frame(&mut app);
+    let slices = app.session.execute("webExport.optimizeToFileSize", &json!({"format": "png24", "desiredK": 1048576})).unwrap();
+    let whole = app.session.execute("document.exportForWeb.preview", &json!({"format": "png24"})).unwrap()["bytes"].as_u64().unwrap();
+    let k = |b: u64| json!(save_for_web::size_k(b as usize));
+    assert_ne!(k(slices["bytes"].as_u64().unwrap()), k(whole), "{slices}");
+    // The size asked for holds the files measured.
+    let b = slices["bytes"].as_u64().unwrap();
+    assert!((save_for_web::size_k(b as usize) * 1024.0).floor() as u64 >= b);
+    set(&mut app, "__optimizeOpen", json!(true));
+    frame(&mut app);
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!(d.fields.get("__optimizeK"), Some(&k(slices["bytes"].as_u64().unwrap())));
+    assert_eq!((d.fields.get("__optimizeUse"), d.fields.get("__optimizeOpen")), (Some(&json!("allSlices")), None));
+}
+
+#[test]
+fn optimize_to_file_size_starts_at_the_size_of_the_art_as_it_is_now() {
+    let dir = vectorcraft_testkit::temp_dir("sfw-optimize-revision");
+    let (mut app, _) = app(&dir, false);
+    // One context for every frame, so the preview cache of the first frame is still there.
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let frame = |app: &mut VectorcraftApp| ctx.run_ui(Default::default(), |ui| show(app, ui.ctx())).textures_delta.clear();
+    app.run("file.saveForWeb", json!({})).unwrap();
+    set(&mut app, "format", json!("png24"));
+    frame(&mut app);
+    let bytes = |app: &mut VectorcraftApp| {
+        app.session.execute("document.exportForWeb.preview", &json!({"format": "png24"})).unwrap()["bytes"].as_u64().unwrap()
+    };
+    let before = bytes(&mut app);
+    // The art changes after the preview drew and before the button's click is handled.
+    app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 60, "height": 40})).unwrap();
+    app.run("paint.setFill", json!({"color": "#3366ff"})).unwrap();
+    let after = bytes(&mut app);
+    assert_ne!(save_for_web::size_k(before as usize), save_for_web::size_k(after as usize));
+    set(&mut app, "__optimizeOpen", json!(true));
+    frame(&mut app);
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!(d.fields.get("__optimizeK"), Some(&json!(save_for_web::size_k(after as usize))));
+}
+
+#[test]
+fn size_in_k_holds_sizes_past_4_mib_on_every_target() {
+    assert_eq!(save_for_web::size_k(5 * 1024 * 1024), 5120.0);
+    assert_eq!(save_for_web::size_k(0), 0.001);
+    assert_eq!(save_for_web::size_k(1), 0.001);
+    // The largest size a target can hold still rounds up to a size that holds it.
+    assert!(save_for_web::size_k(usize::MAX) * 1024.0 >= usize::MAX as f64 * 0.999);
 }

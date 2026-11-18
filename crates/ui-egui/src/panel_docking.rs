@@ -45,6 +45,8 @@ pub(crate) const PANEL_MIN_WIDTH: f32 = 220.0;
 /// Docking state that lives for the session only.
 #[derive(Default)]
 pub(crate) struct Runtime {
+    /// Geometry commands waiting for the main window's desktop origin, by floating window id.
+    native_geometry: BTreeMap<u64, (u64, Value)>,
     /// Where the dock area floats panels, as it was last drawn.
     space: Option<FloatSpace<String>>,
     /// A panel a command showed: its floating window comes forward on the next frame.
@@ -745,7 +747,7 @@ fn shared_command_with(app: &mut VectorcraftApp, id: &str, params: &Value, legac
     if let Some(fields) = params.as_object_mut() {
         fields.insert("command".into(), Value::String(id.to_owned()));
     }
-    let command: DockCommand<String> = serde_json::from_value(params).map_err(|e| e.to_string())?;
+    let mut command: DockCommand<String> = serde_json::from_value(params).map_err(|e| e.to_string())?;
     match &command {
         DockCommand::Workspace { name } => return app.run("window.workspace", json!({"name": name})),
         DockCommand::NewWorkspace { name } => return app.run("window.workspace.new", json!({"name": name})),
@@ -788,6 +790,7 @@ fn shared_command_with(app: &mut VectorcraftApp, id: &str, params: &Value, legac
         }
         _ => false,
     };
+    let native = if legacy.is_none() { native_float_geometry(app, &mut command, &txn.workspace.layout) } else { None };
     let mut actions = match (&command, &legacy) {
         (DockCommand::Float { panel, group, .. } | DockCommand::Dock { panel, group, .. }, Some(legacy)) => {
             legacy.actions(&txn.workspace.layout, panel, *group)?
@@ -817,7 +820,77 @@ fn shared_command_with(app: &mut VectorcraftApp, id: &str, params: &Value, legac
     for action in actions {
         closed.extend(txn.apply(action)?);
     }
-    Ok(txn.commit(app, closed, reveal))
+    if let Some(NativeFloatGeometry::Ready { panel, rect, .. }) = &native {
+        closed.extend(txn.apply(Action::SetNative { panel: panel.clone(), rect: Some(*rect) })?);
+    }
+    let result = txn.commit(app, closed, reveal);
+    match native {
+        Some(NativeFloatGeometry::Deferred { window, params }) => {
+            let layout = layout_of(&app.ui);
+            app.dock_rt
+                .native_geometry
+                .retain(|id, (generation, _)| *generation == app.ui.docking_generation && layout.floating.iter().any(|window| window.id == *id));
+            app.dock_rt.native_geometry.insert(window, (app.ui.docking_generation, params));
+        }
+        Some(NativeFloatGeometry::Ready { window, .. }) => {
+            app.dock_rt.native_geometry.remove(&window);
+        }
+        None => {}
+    }
+    Ok(result)
+}
+
+enum NativeFloatGeometry {
+    Ready { window: u64, panel: String, rect: [f32; 4] },
+    Deferred { window: u64, params: Value },
+}
+
+fn native_float_geometry(app: &VectorcraftApp, command: &mut DockCommand<String>, layout: &Layout<String>) -> Option<NativeFloatGeometry> {
+    let DockCommand::Float { panel, x, y, width, height, group, column } = command else { return None };
+    if [*x, *y, *width, *height].iter().all(Option::is_none) {
+        return None;
+    }
+    let window = floating_window(layout, panel)?;
+    let whole = *column || window.panels().count() == 1 || (*group && matches!(window.root, Node::Tabs { .. } | Node::Stack { .. }));
+    if !whole {
+        return None;
+    }
+    let [old_x, old_y, old_width, old_height] = window.native?;
+    if let Some((_, params)) = app.dock_rt.native_geometry.get(&window.id).filter(|(generation, _)| *generation == app.ui.docking_generation) {
+        let previous = |name| params.get(name).and_then(Value::as_f64).map(|value| value as f32);
+        *x = x.or_else(|| previous("x"));
+        *y = y.or_else(|| previous("y"));
+        *width = width.or_else(|| previous("width"));
+        *height = height.or_else(|| previous("height"));
+    }
+    let origin = app
+        .ui_ctx
+        .as_ref()
+        .and_then(|ctx| ctx.input(|input| input.raw.viewports.get(&egui::ViewportId::ROOT).and_then(|v| v.inner_rect)))
+        .map(|rect| rect.min)
+        .filter(|origin| origin.is_finite());
+    let Some(origin) = origin else {
+        let mut params = app
+            .dock_rt
+            .native_geometry
+            .get(&window.id)
+            .filter(|(generation, _)| *generation == app.ui.docking_generation)
+            .map_or_else(|| json!({}), |(_, params)| params.clone());
+        let fields = params.as_object_mut()?;
+        fields.insert("panel".into(), json!(panel));
+        fields.insert("group".into(), json!(group));
+        fields.insert("column".into(), json!(column));
+        for (name, value) in [("x", *x), ("y", *y), ("width", *width), ("height", *height)] {
+            if let Some(value) = value {
+                fields.insert(name.into(), json!(value));
+            }
+        }
+        return Some(NativeFloatGeometry::Deferred { window: window.id, params });
+    };
+    // Native windows report desktop coordinates; float commands use the main window's points.
+    let rect =
+        [*x.get_or_insert(old_x - origin.x), *y.get_or_insert(old_y - origin.y), *width.get_or_insert(old_width), *height.get_or_insert(old_height)];
+    Some(NativeFloatGeometry::Ready { window: window.id, panel: panel.clone(), rect: [origin.x + rect[0], origin.y + rect[1], rect[2], rect[3]] })
 }
 
 /// One action from the renderer: the user's own gesture.
@@ -1128,6 +1201,24 @@ fn known(action: &Action<String>) -> bool {
 pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     let area = area_id();
     let ctx = ui.ctx().clone();
+    let origin = ctx.input(|input| input.raw.viewports.get(&egui::ViewportId::ROOT).and_then(|v| v.inner_rect)).map(|rect| rect.min);
+    if origin.is_some_and(|origin| origin.is_finite()) {
+        for (window, (generation, mut params)) in std::mem::take(&mut app.dock_rt.native_geometry) {
+            if generation != app.ui.docking_generation {
+                continue;
+            }
+            let layout = layout_of(&app.ui);
+            let panel = layout.floating.iter().find(|floating| floating.id == window).and_then(|floating| floating.panels().next()).cloned();
+            let (Some(panel), Some(fields)) = (panel, params.as_object_mut()) else { continue };
+            // The original panel may have docked while other panels kept this native window.
+            fields.insert("panel".into(), json!(panel));
+            fields.insert("column".into(), json!(true));
+            if let Err(error) = shared_command(app, "window.panel.float", &params) {
+                app.ui.status = error;
+            }
+        }
+    }
+    crate::tools_float::set_dock_area_left(&ctx, ui.available_rect_before_wrap().left());
     let changed_workspace = ctx.data_mut(|data| {
         let previous = data.get_temp::<u64>(area.with("generation"));
         data.insert_temp(area.with("generation"), app.ui.docking_generation);
@@ -1305,6 +1396,40 @@ pub(crate) fn modal_open(app: &VectorcraftApp, ctx: &egui::Context) -> bool {
         || ctx.memory(|m| m.areas().is_visible(&crate::dialogs::modal::backdrop()))
 }
 
+/// Is a modal window open in this pass: a dialog, the About window, a file dialog, the update
+/// prompt, or a window such as a progress window drawn over the modal backdrop in this pass?
+pub(crate) fn modal_window_up(app: &VectorcraftApp, ctx: &egui::Context) -> bool {
+    app.ui.dialog.is_some()
+        || app.ui.about
+        || app.file_dialog_open()
+        || crate::updates_ui::blocks_input(app)
+        || crate::dialogs::modal::drawn_this_pass(ctx)
+}
+
+/// The key of whether a modal window was up in the last pass ([`close_overlays_for_modal`]).
+fn modal_window_up_id() -> egui::Id {
+    egui::Id::unique("modal-window-up")
+}
+
+/// While a modal window is up ([`modal_window_up`]), keeps the command palette closed, so a palette
+/// opened over it from the macOS menu bar or by an automation command does not take the keyboard
+/// from the window. In the pass the window opens, also closes a tool group's flyout, the All Tools
+/// drawer and any open popup, whatever opened the window: a press in the window, a pick in the
+/// macOS menu bar, an automation command or a run that ends in a dialog. Popups the window itself
+/// opens later stay open. Called after every window of the pass has drawn.
+pub(crate) fn close_overlays_for_modal(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    let up = modal_window_up(app, ctx);
+    let was = ctx.data_mut(|d| std::mem::replace(d.get_temp_mut_or_default::<bool>(modal_window_up_id()), up));
+    if up {
+        app.ui.palette_open = false;
+    }
+    if up && !was {
+        app.ui.flyout = None;
+        app.ui.tools_drawer = false;
+        egui::Popup::close_all(ctx);
+    }
+}
+
 /// Keys, text and clipboard events that a floating panel's own OS window left over run the main
 /// window's shortcuts, tool keys and clipboard on its next frame ([`VectorcraftApp::raw_input_hook`]).
 /// craft-ui forwards nothing while a field in that window has the keyboard. A field of the main
@@ -1377,6 +1502,7 @@ pub(crate) fn floating_size(panel: &str) -> egui::Vec2 {
         // Tall enough to show its Corners and Shared Edges sections, last in it, which the Corner
         // Tool's and Shared Edge Merge Tool's menu items open.
         crate::addons::pathtools::ID => egui::vec2(260.0, 660.0),
+        crate::addons::packaging::preview::ID => egui::vec2(520.0, 440.0),
         _ => egui::vec2(260.0, 360.0),
     }
 }

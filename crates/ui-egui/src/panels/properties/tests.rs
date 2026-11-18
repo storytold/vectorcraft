@@ -1515,6 +1515,26 @@ fn the_width_profile_shows_for_a_variable_width_or_the_width_tool() {
     assert_eq!(WidthProfile::id_of(profile.as_ref()), "taperStart");
 }
 
+/// A brushed stroke with a variable width: the Width Profile list lists only Uniform, which removes
+/// the profile.
+#[test]
+fn the_width_profile_of_a_brushed_stroke_offers_only_uniform() {
+    let mut app = new_app();
+    let line = app.run("shape.line", json!({"x1": 20, "y1": 100, "x2": 300, "y2": 100})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [line]})).unwrap();
+    app.run("stroke.set", json!({"profile": "lens"})).unwrap();
+    app.run("brush.apply", json!({"ids": [line], "name": "3 pt. Round"})).unwrap();
+    let ctx = egui::Context::default();
+    let texts = tall(&mut app, &ctx, vec![]);
+    let spacing = ctx.global_style().spacing.item_spacing.x;
+    let texts = press(&mut app, &ctx, text_at(&texts, "Profile:").right_center() + vec2(spacing + 50.0, 0.0));
+    assert!(!shows(&texts, "Taper Start"), "{texts:?}");
+    press(&mut app, &ctx, text_at(&texts, "Uniform").center());
+    let profile =
+        app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(line.as_u64().unwrap())).unwrap().appearance.stroke().unwrap().profile.clone();
+    assert_eq!(profile, None);
+}
+
 /// With Direct Selection, a path whose corner is selected shows that corner's kind and radius;
 /// each edit sets that corner alone in one undo step. Not with the Selection tool, nor with the
 /// whole path selected; a live rectangle keeps its own Corner Radius row instead.
@@ -2164,4 +2184,35 @@ fn the_graph_section_needs_one_graph_selected() {
     assert!(graph::shown(&app).is_some(), "two series of one graph");
     app.run("select.set", json!({"ids": [groups[0], series_groups(&app, b)[0]]})).unwrap();
     assert_eq!(graph::shown(&app), None, "series of two graphs");
+}
+
+/// With the Type tool, the Character section's font style shows the style of the first selected
+/// character (or of the character before the caret), not the text object's first run; with the
+/// Selection tool, the first run's (#8189).
+#[test]
+fn character_section_shows_the_type_tool_selections_style() {
+    use vectorcraft_text::test_fonts::{TWO_AXIS_FAMILY, two_axis_font};
+    vectorcraft_text::FontDb::global().add_font(two_axis_font().unwrap());
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    app.session.select_tool("type", Default::default()).unwrap();
+    // Regular 0..8, Bold 8..13, Condensed 13..22.
+    let id = app.run("text.create", json!({"x": 20, "y": 50, "text": "Regular Bold Condensed", "font": TWO_AXIS_FAMILY})).unwrap()["id"].clone();
+    app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+    app.run("text.setRangeStyle", json!({"id": id, "start": 8, "end": 13, "style": "Bold"})).unwrap();
+    app.run("text.setRangeStyle", json!({"id": id, "start": 13, "end": 22, "style": "Condensed"})).unwrap();
+    let ctx = egui::Context::default();
+    let shown = |app: &mut VectorcraftApp| {
+        let texts = panel_frame(app, &ctx, vec![], type_sections);
+        texts.into_iter().map(|(t, _)| t).filter(|t| ["Regular", "Bold", "Condensed"].contains(&t.as_str())).collect::<Vec<_>>()
+    };
+    for (start, end, want) in [(8, 12, "Bold"), (13, 22, "Condensed"), (0, 7, "Regular"), (15, 15, "Condensed"), (13, 13, "Bold")] {
+        app.session.set_tool_option("select", &json!({"start": start, "end": end}));
+        assert_eq!(crate::panels::character::text_editing(&app).map(|(_, a, b)| (a, b)), Some((start, end)));
+        assert_eq!(shown(&mut app), [want], "{start}..{end}");
+    }
+    app.session.select_tool("selection", Default::default()).unwrap();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    assert_eq!(crate::panels::character::text_editing(&app), None);
+    assert_eq!(shown(&mut app), ["Regular"], "the Selection tool shows the first run's style");
 }

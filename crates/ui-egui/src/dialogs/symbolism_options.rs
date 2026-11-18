@@ -12,7 +12,7 @@
 use serde_json::{Map, Value, json};
 use vectorcraft_tools::settings::SYMBOLISM;
 
-use super::{DialogResult, DialogSpec, form, run_and_close};
+use super::{DialogResult, DialogSpec, form, set_tool_options_and_close};
 use crate::state::Dialog;
 use crate::{VectorcraftApp, widgets};
 
@@ -149,7 +149,7 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> DialogResult {
     if d.fields.contains_key(DENSITY_WAS) && from != to && !sets.is_empty() {
         app.run("symbol.setDensity", json!({ "from": from, "to": to, "ids": sets }))?;
     }
-    run_and_close(app, "tool.setOption", json!({ "tool": d.str("tool"), "values": values }))
+    set_tool_options_and_close(app, json!({ "tool": d.str("tool"), "values": values }))
 }
 
 #[cfg(test)]
