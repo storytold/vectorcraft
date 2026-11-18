@@ -4319,7 +4319,7 @@ mark-style	Japanese	Japán
 	Show Vivid/Muted	Élénk/tompa változatok
 	Show Warm/Cool	Meleg/hideg változatok
 	Show {kind} Brushes	Ecsetek megjelenítése: {kind}
-	Show/hide plate (Alt-click: only this plate)	Nyomólemez megjelenítése/elrejtése (Alt+kattintás: csak ez a lemez)
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	Nyomólemez megjelenítése/elrejtése (Alt+kattintás: csak ez a lemez; újabb Alt+kattintás: minden lemez)
 	Show:	Megjelenítés:
 	Shown with the optimised preview.	Az optimalizált előnézettel együtt látható.
 	Shrink Text to Fit	Szöveg zsugorítása a kerethez

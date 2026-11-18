@@ -3501,7 +3501,7 @@ mark-style	Japanese	일본식
 	Show all plates	모든 분판 표시
 	Show handles when multiple anchors are selected	여러 앵커 선택 시 핸들 표시
 	Show {kind} Brushes	{kind} 브러시 표시
-	Show/hide plate (Alt-click: only this plate)	분판 표시/숨기기(Alt 클릭: 이 분판만)
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	분판 표시/숨기기(Alt 클릭: 이 분판만, 다시 Alt 클릭: 모든 분판)
 	Show:	표시:
 	Shown with the optimised preview.	최적화된 미리 보기와 함께 표시됩니다.
 	Side 1:	면 1:

@@ -4603,7 +4603,7 @@ digits	Malayalam	Malaiàlam
 	Show Vivid/Muted	Mostra els vius/apagats
 	Show Warm/Cool	Mostra els càlids/freds
 	Show {kind} Brushes	Mostra els pinzells {kind}
-	Show/hide plate (Alt-click: only this plate)	Mostra o amaga la planxa (Alt+clic: només aquesta planxa)
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	Mostra o amaga la planxa (Alt+clic: només aquesta planxa; Alt+clic de nou: totes les planxes)
 	Show:	Mostra:
 	Shown with the optimised preview.	Es mostra amb la previsualització optimitzada.
 	Shrink Text to Fit	Redueix el text perquè hi càpiga
