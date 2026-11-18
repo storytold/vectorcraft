@@ -1255,6 +1255,12 @@ antiAlias	Sharp	날카롭게
 	Channel	채널
 	Character / Paragraph	문자 / 단락
 	Character Rotation	문자 회전
+	Chinese Big 5	중국어 Big 5
+	Cyrillic	키릴 자모
+	Greek	그리스어
+	Turkish	터키어
+	Baltic	발트어
+	Central European	중앙 유럽어
 	Character Set:	문자 집합:
 	Character Style Options	문자 스타일 옵션
 	Check Links	링크 확인
@@ -9647,3 +9653,13 @@ breakText	Glyphs	글리프
 	Blossom Chain	꽃사슬
 	Pennant Garland	깃발 장식
 	Lantern String	등불 줄
+	Fold Preview	접기 미리 보기
+	Fold	접기
+	Show Fold Lines	접는 선 표시
+	Three-Quarter	3/4 보기
+	Open a document to preview its folded shape.	접은 모양을 미리 보려면 문서를 여세요.
+@msg	Check the fold lines first.	먼저 접는 선을 검사하세요.
+@msg	Panels: {panels}, hinges: {hinges}	패널: {panels}, 힌지: {hinges}
+@msg	Other blanks not shown: {count}	표시되지 않은 다른 전개도: {count}
+@msg	A joint does not close by {gap} pt.	이음매가 {gap} pt만큼 닫히지 않습니다.
+@msg	Two panels pass through each other.	두 패널이 서로 관통합니다.

@@ -3748,6 +3748,12 @@ antiAlias	Sharp	Scherp
 	LF (macOS, Linux)	LF (macOS, Linux)
 	CRLF (Windows)	CRLF (Windows)
 	Text Export Options	Opties tekstexport
+	Chinese Big 5	Chinees Big 5
+	Cyrillic	Cyrillisch
+	Greek	Grieks
+	Turkish	Turks
+	Baltic	Baltisch
+	Central European	Centraal-Europees
 	Character Set:	Tekenset:
 	Join the lines of each paragraph	De regels van elke alinea samenvoegen
 	Line Breaks	Regeleinden
@@ -10083,3 +10089,13 @@ breakText	Glyphs	Glyphs
 	Blossom Chain	Bloemenketting
 	Pennant Garland	Vlaggetjesslinger
 	Lantern String	Lantaarnslinger
+	Fold Preview	Vouwvoorbeeld
+	Fold	Vouwen
+	Show Fold Lines	Vouwlijnen tonen
+	Three-Quarter	Driekwart
+	Open a document to preview its folded shape.	Open een document om de gevouwen vorm te bekijken.
+@msg	Check the fold lines first.	Controleer eerst de vouwlijnen.
+@msg	Panels: {panels}, hinges: {hinges}	Panelen: {panels}, scharnieren: {hinges}
+@msg	Other blanks not shown: {count}	Andere uitslagen niet getoond: {count}
+@msg	A joint does not close by {gap} pt.	Een naad sluit {gap} pt niet.
+@msg	Two panels pass through each other.	Twee panelen gaan door elkaar heen.
