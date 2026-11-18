@@ -622,12 +622,22 @@ fn highlight(s: &mut Session, p: &Value) -> Result<Value> {
         "add" | "toggle" => {}
         other => return Err(bad(C, format!("mode is set, add or toggle, not `{other}`"))),
     }
+    // `rows` keeps the highlight order. With more than 8 ids, `held` holds the same rows as a set and
+    // answers each lookup; with fewer, each lookup searches `rows`.
+    let mut held: Option<HashSet<NodeId>> = (ids.len() > 8).then(|| rows.iter().copied().collect());
     let mut last = None;
     for id in ids {
-        if mode == "toggle" && rows.contains(&id) {
+        let has = held.as_ref().map_or_else(|| rows.contains(&id), |h| h.contains(&id));
+        if mode == "toggle" && has {
             rows.retain(|r| *r != id);
-        } else if !rows.contains(&id) {
+            if let Some(h) = &mut held {
+                h.remove(&id);
+            }
+        } else if !has {
             rows.push(id);
+            if let Some(h) = &mut held {
+                h.insert(id);
+            }
             last = Some(id);
         }
     }
