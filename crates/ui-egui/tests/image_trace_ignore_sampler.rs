@@ -413,24 +413,37 @@ fn a_consumed_stale_sampler_press_does_not_complete_a_double_click() {
     check_sampler_double_click(true);
 }
 
-fn check_sampler_double_click(sampler: bool) {
-    fn frame_at(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, events: Vec<Event>) {
-        let mut raw = RawInput {
-            time: Some(time),
-            events,
-            focused: true,
-            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1600.0, 1400.0))),
-            ..Default::default()
-        };
-        app.raw_input_hook(ctx, &mut raw);
-        let mut out = ctx.run_ui(raw, |ui| {
-            app.tick(ui.ctx());
-            app.ui(ui);
-        });
-        out.textures_delta.clear();
-        assert_eq!(ctx.time(), time, "the real UI frame uses the supplied gesture time");
-    }
+fn frame_at(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, events: Vec<Event>) {
+    let mut raw = RawInput {
+        time: Some(time),
+        events,
+        focused: true,
+        screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1600.0, 1400.0))),
+        ..Default::default()
+    };
+    app.raw_input_hook(ctx, &mut raw);
+    let mut out = ctx.run_ui(raw, |ui| {
+        app.tick(ui.ctx());
+        app.ui(ui);
+    });
+    out.textures_delta.clear();
+    assert_eq!(ctx.time(), time, "the real UI frame uses the supplied gesture time");
+}
 
+fn check_next_ordinary_double_click(app: &mut VectorcraftApp, ctx: &egui::Context, at: Pos2, group: NodeId, next: f64, step: f64) {
+    let press = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+    frame_at(app, ctx, next, vec![Event::PointerMoved(at), press(true)]);
+    frame_at(app, ctx, next + step, vec![press(false)]);
+    assert!(!ctx.input(|i| i.pointer.button_double_clicked(PointerButton::Primary)));
+    assert_eq!(app.session.active().unwrap().selection.objects, vec![group], "the next ordinary first click selects the group");
+    assert_eq!(app.session.active().unwrap().isolation, None);
+    frame_at(app, ctx, next + 3.0 * step, vec![press(true)]);
+    frame_at(app, ctx, next + 4.0 * step, vec![press(false)]);
+    assert!(ctx.input(|i| i.pointer.button_double_clicked(PointerButton::Primary)));
+    assert_eq!(app.session.active().unwrap().isolation, Some(group), "the next ordinary double-click still isolates the group");
+}
+
+fn check_sampler_double_click(sampler: bool) {
     let (mut app, ctx) = fixture(true, [37, 83, 149], false);
     let source = selected(&app).id;
     app.session.prefs.double_click_to_isolate = true;
@@ -487,15 +500,7 @@ fn check_sampler_double_click(sampler: bool) {
         assert_eq!(app.session.tool_id(), "selection");
         // The consumed release must not take the next independent ordinary gesture with it.
         let next = start + 4.0 * step + delay + 1.0;
-        frame_at(&mut app, &ctx, next, vec![Event::PointerMoved(at), press(true)]);
-        frame_at(&mut app, &ctx, next + step, vec![press(false)]);
-        assert!(!ctx.input(|i| i.pointer.button_double_clicked(PointerButton::Primary)));
-        assert_eq!(app.session.active().unwrap().selection.objects, vec![group], "the next ordinary first click selects the group");
-        assert_eq!(app.session.active().unwrap().isolation, None);
-        frame_at(&mut app, &ctx, next + 3.0 * step, vec![press(true)]);
-        frame_at(&mut app, &ctx, next + 4.0 * step, vec![press(false)]);
-        assert!(ctx.input(|i| i.pointer.button_double_clicked(PointerButton::Primary)));
-        assert_eq!(app.session.active().unwrap().isolation, Some(group), "the next ordinary double-click still isolates the group");
+        check_next_ordinary_double_click(&mut app, &ctx, at, group, next, step);
     } else {
         assert_eq!(app.session.active().unwrap().selection.objects, vec![group], "the ordinary first click really selects the group");
         frame_at(&mut app, &ctx, start + 3.0 * step, vec![press(true)]);
