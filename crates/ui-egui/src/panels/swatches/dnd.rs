@@ -64,8 +64,10 @@ pub(super) enum Drop {
     /// (`replace`) it replaces swatch `target` when that is of its kind and neither Registration
     /// nor a tint swatch.
     New { paint: Paint, target: Option<String>, replace: bool },
-    /// Art dragged off the canvas becomes a pattern swatch made of a copy of it (the art stays).
-    Pattern { ids: Vec<u64> },
+    /// Art dragged off the canvas becomes a pattern swatch made of a copy of it (the art stays);
+    /// with Alt held (`replace`) over pattern swatch `target`, a copy of it becomes that pattern's
+    /// tile art instead.
+    Pattern { ids: Vec<u64>, target: Option<String>, replace: bool },
 }
 
 impl Drop {
@@ -80,7 +82,7 @@ impl Drop {
                 Some(Drop::Move { names: r.names.clone(), target, after, with })
             }
             PanelDrag::Paint { paint, .. } => Some(Drop::New { paint: paint.clone(), target, replace }),
-            PanelDrag::Art(ids) => Some(Drop::Pattern { ids: ids.iter().map(|id| id.0).collect() }),
+            PanelDrag::Art(ids) => Some(Drop::Pattern { ids: ids.iter().map(|id| id.0).collect(), target, replace }),
             _ => None,
         }
     }
@@ -159,6 +161,19 @@ pub(super) fn tile_input(ui: &Ui, resp: Response, e: &Entry, items: &[Entry], se
 /// it by the pointer's half, or into a folder); a release there sets the drop.
 fn tile_drop(ui: &Ui, resp: &Response, e: &Entry, list: bool, ev: &mut TileEvents) {
     let Some(d) = held(resp) else { return };
+    // Art held with Alt over a pattern swatch would replace its tile art, and the swatch is
+    // outlined; other art goes to the list (see [`zone_input`]).
+    if let PanelDrag::Art(_) = &*d {
+        if crate::panels::alt_held(ui) && matches!(e, Entry::Swatch { paint: Paint::Pattern { .. }, .. }) {
+            ev.over = true;
+            let t = Tokens::get(ui.ctx());
+            ui.painter().rect_stroke(resp.rect.expand(1.0), 0.0, Stroke::new(1.5, t.accent), StrokeKind::Outside);
+            if resp.dnd_release_payload::<PanelDrag>().is_some() {
+                ev.drop = Drop::of(&d, Some(e.name().to_string()), false, true);
+            }
+        }
+        return;
+    }
     let PanelDrag::Paint { rows, .. } = &*d else { return };
     let name = e.name();
     ev.over = true;
@@ -253,9 +268,18 @@ fn replaces(d: &Document, with: &str, target: &str) -> bool {
     }
 }
 
+/// The pattern swatch `name` paints with.
+fn swatch_pattern(d: &Document, name: &str) -> Option<String> {
+    match &d.swatch(name)?.paint {
+        Paint::Pattern { pattern, .. } => Some(pattern.clone()),
+        _ => None,
+    }
+}
+
 /// Run a drop on the panel: move the swatches, give the paint of a swatch Alt-dropped on another of
-/// its kind to that one, or make a swatch of the proxy's paint (a color dropped on a folder or a
-/// grouped swatch joins that group).
+/// its kind to that one, make a swatch of the proxy's paint (a color dropped on a folder or a
+/// grouped swatch joins that group), or make a pattern swatch of art (Alt-dropped on a pattern
+/// swatch: the art becomes that pattern's tile art).
 pub(super) fn apply_drop(app: &mut VectorcraftApp, drop: Drop) {
     let Some(d) = app.session.active().map(|st| &st.doc) else { return };
     let (cmd, params) = match drop {
@@ -281,7 +305,11 @@ pub(super) fn apply_drop(app: &mut VectorcraftApp, drop: Drop) {
             }
             ("swatch.new", p)
         }
-        Drop::Pattern { ids } => ("object.pattern.make", json!({"ids": ids, "edit": false})),
+        // Alt: over a pattern swatch, the art becomes that pattern's tile art.
+        Drop::Pattern { ids, target, replace } => match target.filter(|_| replace).and_then(|t| swatch_pattern(d, &t)) {
+            Some(name) => ("object.pattern.replaceArt", json!({"name": name, "ids": ids})),
+            None => ("object.pattern.make", json!({"ids": ids, "edit": false})),
+        },
     };
     if let Err(e) = app.run(cmd, params) {
         app.status(e);

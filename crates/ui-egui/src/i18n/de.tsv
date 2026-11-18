@@ -4963,6 +4963,7 @@ liquify-list-end	{0}, {1}	{0} und {1}
 @msg	no native format	kein natives Format
 @msg	no pages	keine Seiten
 @msg	no pattern `{name}`	kein Muster `{name}`
+@msg	art painted with `{name}` can't be its tile	mit `{name}` gefärbtes Bildmaterial kann nicht dessen Kachel sein
 @msg	no perspective grid preset named `{name}`	keine Vorgabe für Perspektivenraster namens `{name}`
 @msg	no plug-in {0} is installed	es ist kein Plug-in {0} installiert
 @msg	no plug-in {id} is installed	es ist kein Plug-in {id} installiert
@@ -7169,6 +7170,7 @@ breakText	Glyphs	Glyphen
 	Remove Strokes	Konturen entfernen
 	Place Brush Art	Pinselgrafik platzieren
 	Replace Brush Art	Pinselgrafik ersetzen
+	Replace Pattern Art	Mustergrafik ersetzen
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Konturen verwenden diesen Pinsel. Die neue Grafik auf diese Konturen anwenden oder sie unverändert lassen und eine Kopie des Pinsels mit der neuen Grafik hinzufügen?
 	Apply to Strokes	Auf Konturen anwenden
 	Leave Strokes	Konturen beibehalten

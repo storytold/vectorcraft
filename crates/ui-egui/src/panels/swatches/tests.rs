@@ -830,6 +830,45 @@ fn art_dropped_on_the_panel_becomes_a_pattern_swatch() {
     assert!(egui::DragAndDrop::payload::<PanelDrag>(&ctx).is_none());
 }
 
+/// Art released with Alt held over a pattern swatch becomes that pattern's tile art in one undo
+/// step: no pattern or swatch is added and the art stays. With Alt over a color swatch, or without
+/// Alt over the pattern swatch, the art becomes a new pattern swatch as before.
+#[test]
+fn art_alt_dropped_on_a_pattern_swatch_replaces_its_tile_art() {
+    let mut app = app();
+    let square = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+    app.run("object.pattern.make", json!({"ids": [square], "name": "Dots", "edit": false})).unwrap();
+    let id = app.run("shape.star", json!({"cx": 50, "cy": 50, "radius1": 20, "radius2": 9, "points": 5})).unwrap()["id"].as_u64().unwrap();
+    let star = vectorcraft_doc::NodeId(id);
+    let count = |app: &mut VectorcraftApp| app.run("pattern.list", json!({})).unwrap()["patterns"].as_array().map(Vec::len);
+    let tile_art = |app: &VectorcraftApp| app.session.doc().unwrap().doc.pattern("Dots").map(|p| p.art.clone());
+    let ctx = context();
+    let drop = |app: &mut VectorcraftApp, on: &str, modifiers: Modifiers, time: f64| {
+        frame(app, &ctx, vec![], time, show);
+        let at = tile_center(&ctx, on);
+        egui::DragAndDrop::set_payload(&ctx, PanelDrag::Art(vec![star]));
+        let release = Event::PointerButton { pos: at, button: PointerButton::Primary, pressed: false, modifiers };
+        frame_with(app, &ctx, vec![Event::PointerMoved(at), release], modifiers, time + 0.5, show);
+        assert!(egui::DragAndDrop::payload::<PanelDrag>(&ctx).is_none(), "{on}: the drop is taken");
+    };
+    let (before, undo, star_before) = (tile_art(&app), undo_steps(&app), app.session.doc().unwrap().doc.node(star).cloned());
+    drop(&mut app, "Dots", Modifiers::ALT, 0.0);
+    let art = tile_art(&app).expect("Dots stays");
+    assert_ne!(Some(&art), before.as_ref(), "{}", app.ui.status);
+    assert_eq!(art.len(), 1);
+    assert_eq!(Some(&art[0].kind), star_before.as_ref().map(|n| &n.kind), "the star is the tile art");
+    assert_eq!(count(&mut app), Some(1), "no new pattern");
+    assert_eq!(undo_steps(&app), undo + 1, "one undo step");
+    assert_eq!(app.session.doc().unwrap().doc.node(star).cloned(), star_before, "the star stays as it was");
+    // Alt over a color swatch: a new pattern.
+    drop(&mut app, "Bright Red", Modifiers::ALT, 1.0);
+    assert_eq!(count(&mut app), Some(2), "Alt over a color swatch makes a pattern");
+    // No Alt over the pattern swatch: a new pattern, and Dots keeps its art.
+    drop(&mut app, "Dots", Modifiers::NONE, 2.0);
+    assert_eq!(count(&mut app), Some(3), "a plain drop on a pattern swatch makes a pattern");
+    assert_eq!(tile_art(&app), Some(art), "Dots keeps its tile art");
+}
+
 #[test]
 fn a_proxy_dropped_on_the_panel_becomes_a_swatch() {
     let mut app = app();

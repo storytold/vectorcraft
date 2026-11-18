@@ -5028,6 +5028,7 @@ liquify-list-end	{0}, {1}	{0} et {1}
 @msg	no native format	aucun format natif
 @msg	no pages	aucune page
 @msg	no pattern `{name}`	aucun motif `{name}`
+@msg	art painted with `{name}` can't be its tile	une illustration peinte avec `{name}` ne peut pas être son carreau
 @msg	no perspective grid preset named `{name}`	aucun paramètre prédéfini de grille de perspective nommé `{name}`
 @msg	no plug-in {0} is installed	aucun plug-in {0} n’est installé
 @msg	no plug-in {id} is installed	aucun plug-in {id} n’est installé
@@ -7571,6 +7572,7 @@ breakText	Glyphs	Glyphes
 	Remove Strokes	Supprimer les contours
 	Place Brush Art	Placer l’illustration de la forme
 	Replace Brush Art	Remplacer l’illustration de la forme
+	Replace Pattern Art	Remplacer l’illustration du motif
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Des contours utilisent cette forme. Appliquer la nouvelle illustration à ces contours, ou les laisser tels quels et ajouter une copie de la forme avec la nouvelle illustration ?
 	Apply to Strokes	Appliquer aux contours
 	Leave Strokes	Conserver les contours

@@ -5421,6 +5421,7 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	no native format	không có định dạng gốc
 @msg	no pages	không có trang
 @msg	no pattern `{name}`	không có họa tiết `{name}`
+@msg	art painted with `{name}` can't be its tile	đối tượng được tô bằng `{name}` không thể làm ô của nó
 @msg	no perspective grid preset named `{name}`	không có thiết lập sẵn lưới phối cảnh tên `{name}`
 @msg	no plug-in {0} is installed	plug-in {0} chưa được cài đặt
 @msg	no plug-in {id} is installed	plug-in {id} chưa được cài đặt
@@ -7218,6 +7219,7 @@ breakText	Glyphs	Glyph
 	Remove Strokes	Gỡ nét
 	Place Brush Art	Đặt đối tượng của cọ
 	Replace Brush Art	Thay đối tượng của cọ
+	Replace Pattern Art	Thay đối tượng của họa tiết
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Có nét đang dùng cọ này. Áp dụng đối tượng mới cho các nét đó, hay giữ nguyên chúng và thêm một bản sao của cọ với đối tượng mới?
 	Apply to Strokes	Áp dụng cho nét
 	Leave Strokes	Giữ nguyên nét

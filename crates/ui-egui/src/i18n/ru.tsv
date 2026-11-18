@@ -5090,6 +5090,7 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	no native format	нет собственного формата
 @msg	no pages	нет страниц
 @msg	no pattern `{name}`	нет узора `{name}`
+@msg	art painted with `{name}` can't be its tile	графика, окрашенная узором `{name}`, не может быть его плиткой
 @msg	no perspective grid preset named `{name}`	нет набора сетки перспективы с именем `{name}`
 @msg	no plug-in {0} is installed	модуль {0} не установлен
 @msg	no plug-in {id} is installed	модуль {id} не установлен
@@ -7566,6 +7567,7 @@ breakText	Glyphs	Глифы
 	Remove Strokes	Убрать обводки
 	Place Brush Art	Поместить рисунок кисти
 	Replace Brush Art	Заменить рисунок кисти
+	Replace Pattern Art	Заменить рисунок узора
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Обводки используют эту кисть. Применить новый рисунок к этим обводкам или оставить их как есть и добавить копию кисти с новым рисунком?
 	Apply to Strokes	Применить к обводкам
 	Leave Strokes	Оставить обводки

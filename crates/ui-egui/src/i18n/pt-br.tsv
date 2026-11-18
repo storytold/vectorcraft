@@ -4370,6 +4370,7 @@ axis	Both	Ambos
 @msg	no native format	sem formato nativo
 @msg	no pages	sem páginas
 @msg	no pattern `{name}`	nenhum padrão `{name}`
+@msg	art painted with `{name}` can't be its tile	uma arte pintada com `{name}` não pode ser o ladrilho dele
 @msg	no perspective grid preset named `{name}`	nenhuma predefinição de grade de perspectiva chamada `{name}`
 @msg	no plug-in {0} is installed	o plug-in {0} não está instalado
 @msg	no plug-in {id} is installed	o plug-in {id} não está instalado
@@ -7608,6 +7609,7 @@ breakText	Glyphs	Glifos
 	Remove Strokes	Remover Traçados
 	Place Brush Art	Colocar Arte do Pincel
 	Replace Brush Art	Substituir Arte do Pincel
+	Replace Pattern Art	Substituir Arte do Padrão
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Traçados usam este pincel. Aplicar a nova arte a esses traçados, ou deixá-los como estão e adicionar uma cópia do pincel com a nova arte?
 	Apply to Strokes	Aplicar aos Traçados
 	Leave Strokes	Manter Traçados

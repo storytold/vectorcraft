@@ -7548,6 +7548,7 @@ imageTrace	Outline	Kontur
 @msg	no native format	intet indbygget format
 @msg	no pages	ingen sider
 @msg	no pattern `{name}`	intet mønster `{name}`
+@msg	art painted with `{name}` can't be its tile	grafik malet med `{name}` kan ikke være dens flise
 @msg	no perspective grid preset named `{name}`	ingen perspektivgitterforudindstilling med navnet `{name}`
 @msg	no plug-in {0} is installed	plug-in'et {0} er ikke installeret
 @msg	no plug-in {id} is installed	plug-in'et {id} er ikke installeret
@@ -9636,6 +9637,7 @@ breakText	Glyphs	Glyffer
 	Remove Strokes	Fjern streger
 	Place Brush Art	Placér penselgrafik
 	Replace Brush Art	Erstat penselgrafik
+	Replace Pattern Art	Erstat mønstergrafik
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Streger bruger denne pensel. Anvend den nye grafik på stregerne, eller lad dem være, som de er, og tilføj en kopi af penslen med den nye grafik?
 	Apply to Strokes	Anvend på streger
 	Leave Strokes	Bevar streger

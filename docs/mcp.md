@@ -5318,6 +5318,20 @@ details are VectorCraft's own rules; the help page says only that the option mov
 (<https://helpx.adobe.com/illustrator/desktop/paint-and-fill/create-and-edit-patterns/edit-patterns.html>).
 `pattern.list` reports it as `moveTileWithArt`. A `pattern.options` call that changes nothing records no undo step.
 
+`object.pattern.replaceArt {name, ids?}` (Replace Pattern Art) makes copies of the selected art, or of `ids`, the tile
+art of pattern `name`, as one undo step, and returns `{name}`. The pattern keeps its name, its swatch and the swatch's
+place, its tile and its options; with `sizeTileToArt` on, the tile is sized to the new art plus `hSpacing` and
+`vSpacing`. Fills and strokes name the pattern, so every object painted with it draws the new tile. The art stays on the
+canvas, selected as it was. Art that matches the tile art already records no undo step. The command is off while a
+pattern is edited ("finish editing the pattern first"), and returns an error, changing nothing, for a missing `name`, a
+pattern that does not exist, no art, and art painted with the pattern itself, directly or through the symbols, other
+patterns, graph designs and brushes it uses, or the series and label paints a graph stores. In the Swatches panel, art dragged off the canvas and released with Alt (Option on macOS) held over a
+pattern swatch runs it with that swatch's pattern; the swatch is outlined while the art is held there. Released anywhere
+else in the list, or without Alt, the art becomes a new pattern swatch as before. The help page describes replacing a
+pattern by dragging its edited tile onto the old swatch with Alt or Option held, with the pattern updated in the file
+(<https://web.archive.org/web/20220911143322/https://helpx.adobe.com/pdf/cs6/illustrator_reference.pdf#page=226>,
+archived copy). Keeping the tile, the options and the source art are VectorCraft's own rules.
+
 ```json
 {"name":"run_command","arguments":{"command":"pattern.options","params":{"showSwatchBounds":true}}}
 {"name":"run_command","arguments":{"command":"prefs.set","params":{"key":"patternTileEdgeColor","value":"#ff4f4f"}}}

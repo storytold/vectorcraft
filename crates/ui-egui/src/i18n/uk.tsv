@@ -5080,6 +5080,7 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	no native format	немає власного формату
 @msg	no pages	немає сторінок
 @msg	no pattern `{name}`	немає візерунка `{name}`
+@msg	art painted with `{name}` can't be its tile	графіка, зафарбована візерунком `{name}`, не може бути його плиткою
 @msg	no perspective grid preset named `{name}`	немає набору сітки перспективи з ім’ям `{name}`
 @msg	no plug-in {0} is installed	модуль {0} не встановлений
 @msg	no plug-in {id} is installed	модуль {id} не встановлений
@@ -7187,6 +7188,7 @@ breakText	Glyphs	Гліфи
 	Remove Strokes	Забрати обведення
 	Place Brush Art	Розмістити малюнок пензля
 	Replace Brush Art	Замінити малюнок пензля
+	Replace Pattern Art	Замінити малюнок візерунка
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Обведення використовують цей пензель. Застосувати новий малюнок до цих обведень чи залишити їх як є і додати копію пензля з новим малюнком?
 	Apply to Strokes	Застосувати до обведень
 	Leave Strokes	Залишити обведення

@@ -4815,6 +4815,7 @@ theme	Appearance	외관
 @msg	{label}: select paths, compound paths, groups or text	{label}: 패스, 컴파운드 패스, 그룹 또는 텍스트를 선택하세요
 @msg	already editing a pattern	이미 패턴을 편집 중입니다
 @msg	no pattern `{name}`	`{name}` 패턴이 없습니다
+@msg	art painted with `{name}` can't be its tile	`{name}` 패턴으로 칠한 아트웍은 그 타일이 될 수 없습니다
 @msg	not in pattern editing mode	패턴 편집 모드가 아닙니다
 @msg	finish editing the pattern first	먼저 패턴 편집을 마치세요
 @msg	pattern missing	패턴이 없습니다
@@ -7169,6 +7170,7 @@ breakText	Glyphs	글리프
 	Remove Strokes	선 제거
 	Place Brush Art	브러시 아트 배치
 	Replace Brush Art	브러시 아트 바꾸기
+	Replace Pattern Art	패턴 아트 바꾸기
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	선에서 이 브러시를 사용합니다. 새 아트를 해당 선에 적용하시겠습니까, 아니면 선을 그대로 두고 새 아트로 브러시 사본을 추가하시겠습니까?
 	Apply to Strokes	선에 적용
 	Leave Strokes	선 유지

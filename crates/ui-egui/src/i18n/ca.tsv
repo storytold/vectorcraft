@@ -6209,6 +6209,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	no native format	no hi ha format natiu
 @msg	no pages	no hi ha pàgines
 @msg	no pattern `{name}`	no hi ha el motiu `{name}`
+@msg	art painted with `{name}` can't be its tile	un art pintat amb `{name}` no pot ser el seu mosaic
 @msg	no pattern swatch `{name}`	no hi ha la mostra de motiu `{name}`
 @msg	no perspective grid preset named `{name}`	no hi ha cap preajust de quadrícula de perspectiva anomenat `{name}`
 @msg	no plug-in {0} is installed	no hi ha instal·lat el complement {0}
@@ -7586,6 +7587,7 @@ breakText	Glyphs	Glifs
 	Remove Strokes	Elimina els traços
 	Place Brush Art	Col·loca l’art del pinzell
 	Replace Brush Art	Substitueix l’art del pinzell
+	Replace Pattern Art	Substitueix l’art del motiu
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Hi ha traços que fan servir aquest pinzell. Voleu aplicar l’art nou a aquests traços, o deixar-los com estan i afegir una còpia del pinzell amb l’art nou?
 	Apply to Strokes	Aplica als traços
 	Leave Strokes	Deixa els traços

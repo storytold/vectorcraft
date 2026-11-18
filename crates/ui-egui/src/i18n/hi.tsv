@@ -4052,6 +4052,7 @@ antiAlias	Sharp	शार्प
 	Remove Strokes	स्ट्रोक हटाएँ
 	Place Brush Art	ब्रश आर्टवर्क रखें
 	Replace Brush Art	ब्रश आर्टवर्क बदलें
+	Replace Pattern Art	पैटर्न आर्टवर्क बदलें
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	स्ट्रोक्स इस ब्रश का उपयोग कर रहे हैं। नया आर्टवर्क उन स्ट्रोक्स पर लागू करें, या उन्हें जैसा है वैसा छोड़कर नए आर्टवर्क वाले ब्रश की एक कॉपी जोड़ें?
 	Apply to Strokes	स्ट्रोक्स पर लागू करें
 	Leave Strokes	स्ट्रोक्स जैसे हैं वैसे छोड़ें
@@ -7741,6 +7742,7 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	no parent layer	कोई अभिभावक लेयर नहीं
 @msg	no Pathfinder operation applied yet	अभी तक कोई पाथफाइंडर ऑपरेशन लागू नहीं है
 @msg	no pattern `{name}`	कोई पैटर्न `{name}` नहीं
+@msg	art painted with `{name}` can't be its tile	`{name}` से रंगी कला उसकी टाइल नहीं हो सकती
 @msg	no pattern named `{choice}`	`{choice}` नाम का कोई पैटर्न नहीं
 @msg	no pattern swatch `{name}`	कोई पैटर्न स्वॉच `{name}` नहीं
 @msg	no PDF preset named `{n}`	कोई PDF प्रीसेट नहीं है जिसका नाम `{n}` है
