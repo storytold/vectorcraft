@@ -326,9 +326,11 @@ fn a_confined_package_names_files_outside_the_read_root_by_name() {
         let zip = unzip(&vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap());
         String::from_utf8(zip["poster Folder/poster Report.txt"].clone()).unwrap()
     };
+    // Reopened existing links use native separators; missing links keep their stored path.
+    let red = dir.0.join("art").join("red.png").to_string_lossy().into_owned();
     let person = report(&run(&mut s, "file.package", json!({})));
     assert!(person.contains(&format!("From: {}\n", dir.file("poster.vectorcraft"))), "{person}");
-    assert!(person.contains(&format!("{} → Links/red.png", dir.file("art/red.png"))), "{person}");
+    assert!(person.contains(&format!("{red} → Links/red.png")), "{person}");
     assert!(person.contains(&format!("blue.png: not found ({})", dir.file("art/blue.png"))), "{person}");
 
     let in_root = dir.0.join("in");
@@ -339,16 +341,19 @@ fn a_confined_package_names_files_outside_the_read_root_by_name() {
     assert!(text.contains("\nred.png → Links/red.png\n") && text.contains("\nblue.png: not found (blue.png), not copied\n"), "{text}");
     let base = dir.0.to_string_lossy().into_owned();
     assert!(!text.contains(&base), "{text}");
+    // Compare serialized JSON with the path encoded the same way, without its outer quotes.
+    let json_base = serde_json::to_string(&base).unwrap();
+    let json_base = &json_base[1..json_base.len() - 1];
     for key in ["missingLinks", "warnings", "files"] {
-        assert!(!client[key].to_string().contains(&base), "{key}: {client}");
+        assert!(!client[key].to_string().contains(json_base), "{key}: {client}");
     }
     // Document Info, whose report the package holds, gives no link either.
     for p in [json!({}), json!({"format": "text"})] {
         let info = crate::file_access::confine(roots.as_ref(), || run(&mut s, "document.info", p.clone()));
-        assert!(!info.to_string().contains(&base), "{p}: {info}");
+        assert!(!info.to_string().contains(json_base), "{p}: {info}");
     }
     let info = run(&mut s, "document.info", json!({"format": "text"}));
-    assert!(info.to_string().contains(&dir.file("art/red.png")), "the person's: {info}");
+    assert!(info["text"].as_str().unwrap().contains(&red), "the person's: {info}");
 }
 
 /// A confined request packages no document that links, or places a native document or a PDF with
