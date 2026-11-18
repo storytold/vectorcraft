@@ -12734,13 +12734,15 @@ Commands:
   anchor: the lines then run from the point to where they touch the path, two when the point lies outside it (one
   that lies along a straight side covers the whole side), one when the point lies on its outline (centered on the
   point and as long as the path is wide along it, or the whole straight side the point lies on), and none when it
-  lies inside. Every `tangents` value gives the same lines, counted in `internal` when `tangents` is `internal` and
-  in `external` otherwise; the centerline runs from the point to the path's center. Two points are refused with
-  "select two closed paths". The lines are stroked with the current stroke color and weight (black when the stroke
-  is None), have no fill, go directly above the upper of the two paths and are selected; one undo step. When there
-  is no tangent of the kind asked for, nothing changes, and the result's `warning` says why. Common Tangents…
-  opens a dialog (Tangents, Centerline) with Preview. → `{ids, external, internal, centerline, warning?}`
-  (`centerline`: the centerline's id, or null).
+  lies inside. The point counts as on the outline when it is less than the touching tolerance from it, with the
+  point's distance from the path's center in place of the distance between centers. Every `tangents` value gives
+  the same lines, counted in `internal` when `tangents` is `internal` and in `external` otherwise; the centerline
+  runs from the point to the path's center. Two points are refused with "select two closed paths". The lines are
+  stroked with the current stroke color and weight (black when the stroke is None), have no fill, go directly above
+  the upper of the two paths and are selected; one undo step. When there is no tangent of the kind asked for,
+  nothing changes, and the result's `warning` says why. Common Tangents… opens a dialog (Tangents, Centerline) with
+  Preview; with a point selected, every Tangents choice gives the same lines. → `{ids, external, internal,
+  centerline, warning?}` (`centerline`: the centerline's id, or null).
 
 A parametric shape is an ordinary path. It keeps its numbers, with a fingerprint of the outline they drew, in one
 entry of its object data (`vc-pathtools-shape`, as `document.node` lists `attrs.data`), which SVG export leaves out;

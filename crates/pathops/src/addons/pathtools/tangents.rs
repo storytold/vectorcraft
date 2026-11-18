@@ -1084,32 +1084,55 @@ mod tests {
     #[test]
     fn a_point_placed_on_a_turned_outline_has_one_tangent() {
         // A point worked out on the outline lies a rounding error inside or outside it, and still
-        // gets the one line there.
-        let one = |p: Point, o: &Outline| {
+        // gets the one line there, as long as the outline is wide along it.
+        let one = |p: Point, o: &Outline, samples: &[Point]| {
             let all = common_tangents(&Outline::point(p).unwrap(), o).unwrap();
             assert_eq!(all.len(), 1, "{p:?}: {all:?}");
             // The line runs through the point.
             let (a, d) = (all[0].from, all[0].to - all[0].from);
             assert!(d.hypot() > 1.0 && ((p - a).cross(d) / d.hypot()).abs() < 1e-6, "{p:?}: {all:?}");
+            // Its length is the outline's width along it, measured on dense samples.
+            let u = d / d.hypot();
+            let (lo, hi) = samples.iter().map(|s| s.to_vec2().dot(u)).fold((f64::MAX, f64::MIN), |(lo, hi), v| (lo.min(v), hi.max(v)));
+            assert!((d.hypot() - (hi - lo)).abs() < 1e-3, "{p:?}: {} against {}", d.hypot(), hi - lo);
         };
         let m = ellipse_map(100.0, 50.0, 40.0, 15.0, 30.0);
-        let oval = Outline::ellipse(m).unwrap();
+        let (oval, oval_samples) = (Outline::ellipse(m).unwrap(), sample_ellipse(m, 20_000));
         for k in 0..37 {
             let a = 0.17 + k as f64 * TAU / 37.0;
-            one(m * Point::new(a.cos(), a.sin()), &oval);
+            one(m * Point::new(a.cos(), a.sin()), &oval, &oval_samples);
         }
         // A closed Bézier circle, turned and moved: on each anchor and partway along each segment.
         let turned = shapes::ellipse(Rect::new(-60.0, -60.0, 60.0, 60.0)).transformed(Affine::translate((37.3, -12.9)) * Affine::rotate(0.7));
         let sp = turned.subpaths[0].clone();
-        let path = Outline::convex(&sp).unwrap();
+        let (path, path_samples) = (Outline::convex(&sp).unwrap(), sample_path(&sp, 5_000));
         for an in sp.anchors.iter() {
-            one(an.p, &path);
+            one(an.p, &path, &path_samples);
         }
         for k in 0..sp.segment_count() {
             for t in [0.21, 0.5, 0.83] {
-                one(sp.segment(k).eval(t), &path);
+                one(sp.segment(k).eval(t), &path, &path_samples);
             }
         }
+    }
+
+    #[test]
+    fn a_point_within_the_touching_tolerance_counts_as_on_the_outline() {
+        // The tolerance is a billionth of the larger of the circle's size and the point's distance
+        // from its center: closer than that, inside or outside, the point gets the one line there.
+        let round = circle(0.0, 0.0, 10.0);
+        let tol = 1e-9 * round.size().max(10.0);
+        let at = |dx: f64| common_tangents(&Outline::point(Point::new(10.0 + dx, 0.0)).unwrap(), &round).unwrap();
+        for dx in [-0.5 * tol, 0.5 * tol] {
+            let on = at(dx);
+            assert_eq!(on.len(), 1, "{dx}: {on:?}");
+            assert!(ends_within(&on[0], Point::new(10.0, -10.0), Point::new(10.0, 10.0), 1e-5), "{dx}: {on:?}");
+        }
+        // Farther than that, a point inside gets none and a point outside gets two.
+        assert!(at(-100.0 * tol).is_empty());
+        assert_eq!(at(100.0 * tol).len(), 2);
+        assert!(at(-1e-6).is_empty());
+        assert_eq!(at(1e-6).len(), 2);
     }
 
     #[test]
