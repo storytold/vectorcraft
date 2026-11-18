@@ -158,6 +158,9 @@
 	Additional Fonts Folder	Thư mục phông bổ sung
 	Additional Plug-ins Folder	Thư mục plug-in bổ sung
 	Adjust Adjoining Width Points	Điều chỉnh các điểm chiều rộng kề nhau
+	Incoming	Phía vào
+	Outgoing	Phía ra
+	Single Width Only	Chỉ một chiều rộng
 	Adjust Color Balance…	Điều chỉnh cân bằng màu…
 	Adjust Colors	Điều chỉnh màu sắc
 	Adjust Options:	Tùy chọn điều chỉnh:
@@ -571,6 +574,8 @@ font-technology	Variable	Biến thiên
 	Choose the file to relink each linked file to. Files with the size and contents saved with the link come first.	Chọn tệp để liên kết lại từng tệp liên kết. Các tệp có kích thước và nội dung đã lưu cùng liên kết được hiển thị trước.
 	Choose…	Chọn…
 	Circle	Hình tròn
+	Circle Tool	Công cụ Hình tròn
+	Circle too large	Hình tròn quá lớn
 	Classic	Cổ điển
 	Classic Defaults	Mặc định cổ điển
 	Clean Up…	Dọn dẹp…
@@ -1473,6 +1478,8 @@ digits	Malayalam	Malayalam
 	Files	Tệp
 	Files of a PDF standard can't be password-protected.	Tệp theo tiêu chuẩn PDF không thể bảo vệ bằng mật khẩu.
 	Files of this standard tag their colours with ICC profiles.	Tệp theo tiêu chuẩn này gắn thẻ màu bằng hồ sơ ICC.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	Tệp theo tiêu chuẩn này gắn thẻ màu bằng hồ sơ ICC, trừ các màu CMYK trong hồ sơ mục đích đầu ra, được ghi dưới dạng DeviceCMYK.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	Với “Không bao gồm hồ sơ” và mục đích đầu ra CMYK, mọi màu CMYK được ghi dưới dạng DeviceCMYK, trừ khi được chuyển đổi sang đích CMYK của hồ sơ khác.
 	Fill	Tô
 	Fill & Stroke	Tô & Nét
 	Fill (X), double-click for the Color Picker	Tô (X), bấm đúp để mở Bộ chọn màu
@@ -2393,6 +2400,7 @@ digits	Hindi	Hindi
 	Load Texture…	Tải kết cấu…
 	Loaded Texture	Kết cấu đã tải
 	Local Libraries	Thư viện cục bộ
+	Locate Layer	Xác định vị trí lớp
 	Locate Object	Xác định vị trí đối tượng
 	Locate Selected Objects	Xác định vị trí đối tượng đã chọn
 	Location	Vị trí
@@ -3076,6 +3084,9 @@ diagnostics	ui	giao diện
 	Polar Grid Tool	Công cụ Lưới cực
 	Polygon	Đa giác
 	Polygon Properties:	Thuộc tính đa giác:
+	Line Properties:	Thuộc tính đường thẳng:
+	Line Length:	Độ dài đường thẳng:
+	Line Angle:	Góc đường thẳng:
 	Polygon Tool	Công cụ Đa giác
 	Portrait	Đứng
 	Portuguese	Tiếng Bồ Đào Nha
@@ -3932,6 +3943,7 @@ mark-style	Japanese	Kiểu Nhật
 	Set Slice Rectangle	Đặt hình chữ nhật lát cắt
 	Set Tab Stops	Đặt vị trí tab
 	Set Text	Đặt văn bản
+	Set the current fill or stroke to the selected color	Đặt tô hoặc nét hiện tại thành màu đã chọn
 	Set the selected color to the current color	Đặt màu đã chọn thành màu hiện tại
 	Set Zoom	Đặt thu phóng
 	Settings	Cài đặt
@@ -4067,7 +4079,7 @@ mark-style	Japanese	Kiểu Nhật
 	Show Vivid/Muted	Hiện màu sống động/tối
 	Show Warm/Cool	Hiện màu nóng/lạnh
 	Show {kind} Brushes	Hiện cọ {kind}
-	Show/hide plate (Alt-click: only this plate)	Hiện/ẩn bản in (Alt-bấm: chỉ bản in này)
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	Hiện/ẩn bản in (Alt-bấm: chỉ bản in này; Alt-bấm lần nữa: tất cả bản in)
 	Show:	Hiện:
 	Shown with the optimised preview.	Hiển thị với bản xem trước được tối ưu hóa.
 	Side 1:	Mặt 1:
@@ -4722,6 +4734,8 @@ mark-style	Japanese	Kiểu Nhật
 	Variable Options	Tùy chọn biến
 	Variable Options…	Tùy chọn biến số…
 	Variable Width Profile	Hồ sơ chiều rộng biến đổi
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Cọ của nét giữ kích thước riêng, nên hồ sơ chiều rộng không thay đổi nét. Gỡ cọ để dùng hồ sơ.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Cọ của nét giữ kích thước riêng, nên hồ sơ chiều rộng không thay đổi nét. Gỡ cọ để dùng hồ sơ.
 	Variables	Biến số
 	Variation:	Biến thể:
 	Vector Effects	Hiệu ứng vector
@@ -5479,8 +5493,8 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	no active document	không có tài liệu đang hoạt động
 @msg	no active perspective plane	không có mặt phẳng phối cảnh đang hoạt động
 @msg	no anchor points selected	chưa chọn điểm neo
-@msg	`points` must be three [x, y] pairs of numbers	`points` phải là ba cặp số [x, y]
-@msg	direct-select three anchor points, or give `points`	hãy chọn trực tiếp ba điểm neo hoặc cung cấp `points`
+@msg	`points` must be two or three [x, y] pairs of numbers	`points` phải là hai hoặc ba cặp số [x, y]
+@msg	direct-select two or three anchor points, or give `points`	hãy chọn trực tiếp hai hoặc ba điểm neo hoặc cung cấp `points`
 @msg	no circle passes through these points: two are the same or all three lie on one line	không có đường tròn nào đi qua các điểm này: hai điểm trùng nhau hoặc cả ba điểm thẳng hàng
 @msg	no app to open files here	không có ứng dụng để mở tệp ở đây
 @msg	no artboard	không có bảng vẽ
@@ -5594,6 +5608,9 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	no such user library	không có thư viện người dùng như vậy
 @msg	no such view	không có chế độ xem như vậy
 @msg	no such width point	không có điểm chiều rộng như vậy
+@msg	`single` must be `incoming` or `outgoing`	`single` phải là `incoming` hoặc `outgoing`
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` và `outIndex` phải là hai nửa của cùng một điểm chiều rộng gián đoạn
+@msg	a discontinuous width point keeps its place	điểm chiều rộng gián đoạn giữ nguyên vị trí
 @msg	no swatch `{name}`	không có mẫu màu `{name}`
 @msg	no swatch library `{l}` (see swatch.library.list)	không có thư viện mẫu màu `{l}` (xem swatch.library.list)
 @msg	no symbol instances selected	chưa chọn đối tượng ký hiệu

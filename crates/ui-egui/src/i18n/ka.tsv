@@ -733,6 +733,7 @@
 @msg	compound {_1} must contain exactly one open path to join	შედგენილი {_1} შესაერთებლად ზუსტად ერთ ღია ტრაექტორიას უნდა შეიცავდეს
 @msg	connect end must be "start" or "end"	connect-ის end უნდა იყოს "start" ან "end"
 @msg	connect needs a path other than the one extended	connect-ს სჭირდება ტრაექტორია, რომელიც გაგრძელებულისგან განსხვავდება
+@msg	connect needs extend	connect-ს სჭირდება extend
 @msg	connect needs id	connect-ს სჭირდება id
 @msg	connect path has no open end	connect-ის ტრაექტორიას ღია ბოლო არ აქვს
 @msg	continuation must be an array of path chunks	continuation უნდა იყოს ტრაექტორიის ნაწილების მასივი
@@ -3856,6 +3857,7 @@ digits	Malayalam	მალაიალამური
 	Rule:	წესი:
 	Save changes to {name}	ცვლილებების შენახვა: {name}
 	Save theme to My Themes	თემის შენახვა „ჩემ თემებში“
+	Set the current fill or stroke to the selected color	მიმდინარე შევსების ან კონტურის მონიშნულ ფერად დაყენება
 	Set the selected color to the current color	მონიშნული ფერის მიმდინარე ფერად დაყენება
 	Copy All Styles	ყველა სტილის კოპირება
 	Exported {path}	ექსპორტირებულია: {path}
@@ -4205,7 +4207,7 @@ digits	Malayalam	მალაიალამური
 	Overprint Preview (separations)	ზედდაბეჭდვის წინასწარი ნახვა (სეპარაციები)
 	Show All Plates	ყველა ფირფიტის ჩვენება
 	Show all plates	ყველა ფირფიტის ჩვენება
-	Show/hide plate (Alt-click: only this plate)	ფირფიტის ჩვენება/დამალვა (Alt-დაწკაპუნებით: მხოლოდ ეს ფირფიტა)
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	ფირფიტის ჩვენება/დამალვა (Alt-დაწკაპუნებით: მხოლოდ ეს ფირფიტა; ხელახლა Alt-დაწკაპუნებით: ყველა ფირფიტა)
 	Simulate Paper	ქაღალდის იმიტაცია
 	Use Black Point Compensation	შავი წერტილის კომპენსაციის გამოყენება
 	Working CMYK (don't tag)	სამუშაო CMYK (ტეგის გარეშე)
@@ -4245,6 +4247,8 @@ digits	Malayalam	მალაიალამური
 	Tip extends past the end point	წვერი ბოლო წერტილს სცდება
 	Tip on the end point	წვერი ბოლო წერტილზე
 	Variable Width Profile	ცვლადი სიგანის პროფილი
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	კონტურის ფუნჯი საკუთარ ზომას ინარჩუნებს, ამიტომ სიგანის პროფილი მას არ ცვლის. პროფილის გამოსაყენებლად მოხსენით ფუნჯი.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	კონტურის ფუნჯი საკუთარ ზომას ინარჩუნებს, ამიტომ სიგანის პროფილი მას არ ცვლის. პროფილის გამოსაყენებლად მოხსენით ფუნჯი.
 	Weight:	სისქე:
 	Art using a deleted global swatch keeps its colour.	წაშლილი გლობალური ფერის ნიმუშის მქონე ნახატი თავის ფერს ინარჩუნებს.
 	Color Group: {name}	ფერთა ჯგუფი: {name}
@@ -4353,6 +4357,9 @@ digits	Malayalam	მალაიალამური
 	Flip Horizontal	ჰორიზონტალურად არეკვლა
 	Flip Vertical	ვერტიკალურად არეკვლა
 	Polygon Properties:	მრავალკუთხედის თვისებები:
+	Line Properties:	ხაზის თვისებები:
+	Line Length:	ხაზის სიგრძე:
+	Line Angle:	ხაზის კუთხე:
 	Rectangle Properties:	მართკუთხედის თვისებები:
 	Shape Properties:	ფიგურის თვისებები:
 	Shape Properties	ფიგურის თვისებები
@@ -5070,6 +5077,8 @@ antiAlias	Sharp	მკვეთრი
 	Every option matches {base}.	ყველა პარამეტრი ემთხვევა {base}-ს.
 	Files of a PDF standard can't be password-protected.	PDF სტანდარტის ფაილების პაროლით დაცვა შეუძლებელია.
 	Files of this standard tag their colours with ICC profiles.	ამ სტანდარტის ფაილები ფერებს ICC პროფილებით აღნიშნავს.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	ამ სტანდარტის ფაილები ფერებს ICC პროფილებით აღნიშნავს, გარდა გამოტანის მიზნის პროფილის CMYK ფერებისა, რომლებიც DeviceCMYK-ად იწერება.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	„პროფილების გარეშე“ და CMYK გამოტანის მიზნით ყველა CMYK ფერი DeviceCMYK-ად იწერება, თუ ის სხვა პროფილის CMYK დანიშნულებაში არ გარდაიქმნება.
 	Flattener preset:	გაბრტყელების პრესეტი:
 	General › Thumbnails	ზოგადი › ესკიზები
 	Grayscale images	ნაცრისფერი გამოსახულებები
@@ -5228,6 +5237,9 @@ antiAlias	Sharp	მკვეთრი
 	Variable Options	ცვლადის პარამეტრები
 	Define a variable first	ჯერ განსაზღვრეთ ცვლადი
 	Adjust Adjoining Width Points	მეზობელი სიგანის წერტილების მორგება
+	Incoming	შემავალი
+	Outgoing	გამავალი
+	Single Width Only	მხოლოდ ერთი სიგანე
 	Keep both sides the same width	ორივე მხარის ერთნაირი სიგანე
 	Side 1:	მხარე 1:
 	Side 2:	მხარე 2:
@@ -5621,6 +5633,7 @@ theme	Appearance	იერსახე
 	Select Art	ნახატის მონიშვნა
 	Set Current Layer	მიმდინარე შრედ დაყენება
 	Flatten Artwork	ნახატის გაბრტყელება
+	Locate Layer	შრის მოძებნა
 	Locate Object	ობიექტის მოძებნა
 	Lock Others	დანარჩენების ჩაკეტვა
 	Merge Selected	მონიშნულების შერწყმა
@@ -6412,6 +6425,8 @@ font-technology	Variable	ცვლადი
 	Couldn't paste from the clipboard: {e}	გაცვლის ბუფერიდან ჩასმა ვერ მოხერხდა: {e}
 	Channel	არხი
 	Circle	წრე
+	Circle Tool	წრის ხელსაწყო
+	Circle too large	წრე ზედმეტად დიდია
 	Clip to Art	ნახატზე მოჭრა
 	Colorize	გაფერადება
 	Gamma	გამა
@@ -6895,8 +6910,8 @@ font-technology	Variable	ცვლადი
 @msg	no active document	აქტიური დოკუმენტი არ არის
 @msg	no active perspective plane	აქტიური პერსპექტივის სიბრტყე არ არის
 @msg	no anchor points selected	საყრდენი წერტილები მონიშნული არ არის
-@msg	`points` must be three [x, y] pairs of numbers	`points` უნდა იყოს რიცხვების სამი [x, y] წყვილი
-@msg	direct-select three anchor points, or give `points`	პირდაპირი მონიშვნით მონიშნეთ სამი საყრდენი წერტილი ან მიუთითეთ `points`
+@msg	`points` must be two or three [x, y] pairs of numbers	`points` უნდა იყოს რიცხვების ორი ან სამი [x, y] წყვილი
+@msg	direct-select two or three anchor points, or give `points`	პირდაპირი მონიშვნით მონიშნეთ ორი ან სამი საყრდენი წერტილი ან მიუთითეთ `points`
 @msg	no circle passes through these points: two are the same or all three lie on one line	ამ წერტილებზე წრეწირი არ გადის: ორი ერთნაირია ან სამივე ერთ წრფეზე მდებარეობს
 @msg	no app to open files here	აქ ფაილების გასახსნელი აპი არ არის
 @msg	no artboard	სამუშაო დაფა არ არის
@@ -6993,6 +7008,9 @@ font-technology	Variable	ცვლადი
 @msg	no such user library	მომხმარებლის ასეთი ბიბლიოთეკა არ არის
 @msg	no such view	ასეთი ხედი არ არის
 @msg	no such width point	ასეთი სიგანის წერტილი არ არის
+@msg	`single` must be `incoming` or `outgoing`	`single` უნდა იყოს `incoming` ან `outgoing`
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` და `outIndex` უნდა იყოს ერთი წყვეტილი სიგანის წერტილის ორი ნახევარი
+@msg	a discontinuous width point keeps its place	წყვეტილი სიგანის წერტილი თავის ადგილს ინარჩუნებს
 @msg	no swatch `{name}`	ფერის ნიმუში `{name}` არ არის
 @msg	no swatch library `{l}` (see swatch.library.list)	ფერის ნიმუშების ბიბლიოთეკა `{l}` არ არის (იხ. swatch.library.list)
 @msg	no symbol instances selected	სიმბოლოს ეგზემპლარები მონიშნული არ არის

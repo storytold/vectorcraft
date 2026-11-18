@@ -122,6 +122,7 @@ mod paintproxy;
 mod panelcmds;
 mod paragraphs;
 mod params;
+mod params_cache;
 mod path_menu_enabled;
 mod pathfinder_clip;
 mod pathops;
@@ -371,9 +372,12 @@ fn a_long_unknown_command_id_is_answered_at_once() {
 fn action_batch_names_the_nearest_command_id() {
     let mut s = session();
     let e = s.execute("action.batch", &json!({"source": "dataSets", "commands": [{"command": "select.al"}]})).unwrap_err();
-    assert_eq!(e.to_string(), "invalid parameters for `action.batch`: commands[0]: unknown command `select.al`; did you mean `select.all`?");
+    assert_eq!(
+        e.to_string(),
+        "invalid parameters for `action.batch`: action step 1 (`select.al`) failed: unknown command `select.al`; did you mean `select.all`?"
+    );
     let e = s.execute("action.batch", &json!({"source": "dataSets", "commands": [{"command": "nope"}]})).unwrap_err();
-    assert_eq!(e.to_string(), "invalid parameters for `action.batch`: commands[0]: unknown command `nope`");
+    assert_eq!(e.to_string(), "invalid parameters for `action.batch`: action step 1 (`nope`) failed: unknown command `nope`");
 }
 
 #[test]

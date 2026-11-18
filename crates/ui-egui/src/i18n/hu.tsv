@@ -212,6 +212,9 @@
 	Additional Fonts Folder	További betűtípusok mappája
 	Additional Plug-ins Folder	További bővítmények mappája
 	Adjust Adjoining Width Points	Szomszédos szélességi pontok igazítása
+	Incoming	Bejövő
+	Outgoing	Kimenő
+	Single Width Only	Csak egy szélesség
 	Adjust Color Balance…	Színegyensúly beállítása…
 	Adjust Colors	Színek beállítása
 	Adjust Options:	Módosítandó:
@@ -655,6 +658,8 @@ font-technology	Variable	Változó
 	Choose a folder	Válassz mappát
 	Choose…	Kiválasztás…
 	Circle	Kör
+	Circle Tool	Kör eszköz
+	Circle too large	A kör túl nagy
 	Circle (open)	Kör (nyitott)
 	Classic Defaults	Klasszikus alapértékek
 	Clean Up…	Tisztítás…
@@ -1587,6 +1592,8 @@ digits	Malayalam	Malajálam
 	Files	Fájlok
 	Files of a PDF standard can't be password-protected.	A PDF-szabványnak megfelelő fájlok nem védhetők jelszóval.
 	Files of this standard tag their colours with ICC profiles.	Ennek a szabványnak a fájljai ICC-profillal jelölik a színeiket.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	Ennek a szabványnak a fájljai ICC-profillal jelölik a színeiket, kivéve a kimeneti cél profiljában lévő CMYK-színeket, amelyek DeviceCMYK-ként íródnak.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	„Profilok nélkül” beállítással és CMYK kimeneti céllal minden CMYK-szín DeviceCMYK-ként íródik, kivéve, ha egy másik profil CMYK-céljába konvertálódik.
 	Fill	Kitöltés
 	Fill & Stroke	Kitöltés és körvonal
 	Fill (X), double-click for the Color Picker	Kitöltés (X), dupla kattintás: Színválasztó
@@ -2554,6 +2561,7 @@ file-filter	Templates	Sablonok
 	Load Texture…	Textúra betöltése…
 	Loaded Texture	Betöltött textúra
 	Local Libraries	Helyi könyvtárak
+	Locate Layer	Réteg megkeresése
 	Locate Object	Objektum megkeresése
 	Locate Selected Objects	Kijelölt objektumok megkeresése
 	Location	Hely
@@ -3271,6 +3279,9 @@ diagnostics	ui	felület
 	Polar Grid Tool	Polárrács
 	Polygon	Sokszög
 	Polygon Properties:	Sokszög tulajdonságai:
+	Line Properties:	Vonal tulajdonságai:
+	Line Length:	Vonal hossza:
+	Line Angle:	Vonal szöge:
 	Polygon Tool	Sokszög
 	Portrait	Álló
 	Portrait (flipped)	Álló (megfordítva)
@@ -4170,6 +4181,7 @@ mark-style	Japanese	Japán
 	Set Slice Rectangle	Szelet téglalapjának beállítása
 	Set Tab Stops	Tabulátorpontok beállítása
 	Set Text	Szöveg beállítása
+	Set the current fill or stroke to the selected color	Az aktuális kitöltés vagy körvonal legyen a kijelölt szín
 	Set the selected color to the current color	A kijelölt szín legyen az aktuális szín
 	Set Zoom	Nagyítás beállítása
 	Set:	Készlet:
@@ -4312,7 +4324,7 @@ mark-style	Japanese	Japán
 	Show Vivid/Muted	Élénk/tompa változatok
 	Show Warm/Cool	Meleg/hideg változatok
 	Show {kind} Brushes	Ecsetek megjelenítése: {kind}
-	Show/hide plate (Alt-click: only this plate)	Nyomólemez megjelenítése/elrejtése (Alt+kattintás: csak ez a lemez)
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	Nyomólemez megjelenítése/elrejtése (Alt+kattintás: csak ez a lemez; újabb Alt+kattintás: minden lemez)
 	Show:	Megjelenítés:
 	Shown with the optimised preview.	Az optimalizált előnézettel együtt látható.
 	Shrink Text to Fit	Szöveg zsugorítása a kerethez
@@ -5013,6 +5025,8 @@ mark-style	Japanese	Japán
 	Variable Options	Változó beállításai
 	Variable Options…	Változó beállításai…
 	Variable Width Profile	Változó szélességprofil
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	A körvonal ecsetje megtartja a saját méretét, ezért a szélességprofil nem változtatja meg. Profil használatához távolítsa el az ecsetet.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	A körvonal ecsetje megtartja a saját méretét, ezért a szélességprofil nem változtatja meg. Profil használatához távolítsa el az ecsetet.
 	Variables	Változók
 	Variation	Ingadozás
 	Variation:	Ingadozás:
@@ -5789,8 +5803,8 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	no active document	nincs aktív dokumentum
 @msg	no active perspective plane	nincs aktív perspektivikus sík
 @msg	no anchor points selected	nincs kijelölt horgonypont
-@msg	`points` must be three [x, y] pairs of numbers	a `points` három [x, y] számpár legyen
-@msg	direct-select three anchor points, or give `points`	jelölj ki közvetlen kijelöléssel három horgonypontot, vagy add meg a `points` értéket
+@msg	`points` must be two or three [x, y] pairs of numbers	a `points` két vagy három [x, y] számpár legyen
+@msg	direct-select two or three anchor points, or give `points`	jelölj ki közvetlen kijelöléssel két vagy három horgonypontot, vagy add meg a `points` értéket
 @msg	no circle passes through these points: two are the same or all three lie on one line	ezeken a pontokon nem halad át kör: kettő egybeesik, vagy mindhárom egy egyenesen van
 @msg	no app to open files here	itt nincs fájlmegnyitó alkalmazás
 @msg	no artboard	nincs rajztábla
@@ -5901,6 +5915,9 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	no such user library	nincs ilyen felhasználói könyvtár
 @msg	no such view	nincs ilyen nézet
 @msg	no such width point	nincs ilyen szélességi pont
+@msg	`single` must be `incoming` or `outgoing`	a `single` értéke `incoming` vagy `outgoing` lehet
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	az `index` és az `outIndex` egyetlen szakadásos szélességi pont két fele kell legyen
+@msg	a discontinuous width point keeps its place	a szakadásos szélességi pont megtartja a helyét
 @msg	no swatch `{name}`	nincs ilyen színminta: `{name}`
 @msg	no swatch library `{l}` (see swatch.library.list)	nincs ilyen színminta-könyvtár: `{l}` (lásd: swatch.library.list)
 @msg	no symbol instances selected	nincs kijelölt szimbólumpéldány
@@ -8695,6 +8712,7 @@ breakText	Glyphs	Glifák
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	összetett alakzatba útvonalak, összetett útvonalak, csoportok, összetett alakzatok, szöveg, összemosások és burkolók kerülhetnek
 @msg	compound {_1} must contain exactly one open path to join	az összetett objektumnak ({_1}) pontosan egy összekapcsolható nyitott útvonalat kell tartalmaznia
 @msg	connect needs a path other than the one extended	connect: a meghosszabbított útvonaltól különböző útvonal kell
+@msg	connect needs extend	connect: extend is kell hozzá
 @msg	connect needs id	connect: id is kell hozzá
 @msg	connect path has no open end	connect: az útvonalnak nincs nyitott vége
 @msg	continuation must be an array of path chunks	continuation: útvonaldarabok tömbje kell

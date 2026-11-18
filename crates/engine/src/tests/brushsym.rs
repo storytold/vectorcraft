@@ -1289,6 +1289,29 @@ fn brush_freehand_continued_by_one_point_follows_keep_selected() {
     assert_eq!(s.doc().unwrap().history.undo.len(), undo, "the same brush again: no undo step");
 }
 
+/// A `brush.freehand` call that continues a path by one point with a bad `connect` is refused
+/// before the path's brush changes: the brush, the selection and the undo history stay as they were.
+#[test]
+fn brush_freehand_continued_by_one_point_refuses_a_bad_connect() {
+    let mut s = session();
+    let r = s.execute("brush.freehand", &json!({"points": [[10, 10], [60, 40], [120, 10]], "style": "brush", "brush": "Charcoal"})).unwrap();
+    let p = NodeId(r["id"].as_u64().unwrap());
+    let a = rect(&mut s, 200.0, 200.0, 10.0, 10.0);
+    select(&mut s, &[a]);
+    let undo = undo_steps(&s);
+    let one = json!({"points": [[120, 10]], "extend": {"id": p.0, "end": "end"}, "brush": "Dots"});
+    for connect in
+        [json!({"id": p.0, "end": "end"}), json!({"id": a.0, "end": "middle"}), json!({"end": "end"}), json!({"id": 999_999, "end": "end"})]
+    {
+        let mut params = one.clone();
+        params["connect"] = connect;
+        assert!(s.execute("brush.freehand", &params).is_err(), "{params}");
+        assert_eq!(brush_of(&s, p).as_deref(), Some("Charcoal"), "{params}: the brush stays");
+        assert_eq!(selected(&s), [a], "{params}: the selection stays");
+        assert_eq!(undo_steps(&s), undo, "{params}: no undo step");
+    }
+}
+
 /// `brush.freehand` refuses a brush for a path with no stroke (a continued path, a redrawn one
 /// and a new filled pencil path while the stroke is None) instead of reporting it painted: the
 /// document, the selection and the undo history stay as they were. Without a brush the path is
@@ -1398,6 +1421,40 @@ fn paintbrush_tool_uses_the_current_brush() {
     let id = s.doc().unwrap().selection.objects[0];
     assert_eq!(brush_of(&s, id).as_deref(), Some("Dots"));
     assert!(s.execute("brush.setCurrent", &json!({"name": "Nope"})).is_err());
+}
+
+/// The current brush and symbol are not undo steps, so undo and redo of other steps leave them as
+/// they are. With nothing else changed outside the history, undo back to the saved document leaves
+/// it saved.
+#[test]
+fn undo_and_redo_keep_the_current_brush_and_symbol() {
+    let mut s = session();
+    rect(&mut s, 10.0, 10.0, 20.0, 20.0);
+    s.execute("symbol.new", &json!({"name": "A"})).unwrap();
+    rect(&mut s, 40.0, 10.0, 20.0, 20.0);
+    s.execute("symbol.new", &json!({"name": "B"})).unwrap();
+    s.doc_mut().unwrap().mark_saved();
+    rect(&mut s, 70.0, 10.0, 20.0, 20.0);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(!s.doc().unwrap().is_dirty(), "back at the saved document");
+    s.execute("edit.redo", &json!({})).unwrap();
+    s.execute("brush.setCurrent", &json!({"name": "Arrow"})).unwrap();
+    s.execute("symbol.setCurrent", &json!({"name": "A"})).unwrap();
+    let current = |s: &mut Session| {
+        let brush = s.execute("brush.list", &json!({})).unwrap()["current"].clone();
+        (brush, s.execute("symbol.list", &json!({})).unwrap()["current"].clone())
+    };
+    let want = (json!("Arrow"), json!("A"));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(current(&mut s), want);
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(current(&mut s), want);
+    // A symbol made current between undoing and redoing its deletion is not kept as current.
+    s.execute("symbol.delete", &json!({"name": "B"})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("symbol.setCurrent", &json!({"name": "B"})).unwrap();
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.unknown.get("currentSymbol"), Some(&json!("A")));
 }
 
 /// A Size: Pressure variant of "3 pt. Round" (3 ± 3 pt).
@@ -1567,6 +1624,34 @@ fn paintbrush_records_the_pens_tilt_on_the_stroke() {
     let doc: Document = (*s.doc().unwrap().doc).clone();
     let back = vectorcraft_format::load(&vectorcraft_format::save(&doc, false)).unwrap();
     assert_eq!(back.node(pen).unwrap().appearance.stroke(), doc.node(pen).unwrap().appearance.stroke());
+}
+
+/// A Bristle path made from pen samples keeps its input when saved and uses it when exported.
+#[test]
+fn bristle_path_keeps_and_draws_its_pen_pose() {
+    let mut s = session();
+    let id = NodeId(
+        s.execute(
+            "brush.freehand",
+            &json!({"points": [[20, 60, 0.1, 10, 0, 0], [200, 60, 0.9, 35, 0, 90]], "style": "brush", "brush": "Bristle Round"}),
+        )
+        .unwrap()["id"]
+            .as_u64()
+            .unwrap(),
+    );
+    let doc: Document = (*s.doc().unwrap().doc).clone();
+    let st = doc.node(id).unwrap().appearance.stroke().unwrap();
+    assert!(st.pressure.is_some() && st.tilt.is_some() && st.bearing.is_some() && st.rotation.is_some());
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&doc, false)).unwrap();
+    assert_eq!(back.node(id).unwrap().appearance.stroke(), Some(st));
+
+    let mut neutral = doc.clone();
+    let st = neutral.node_mut(id).unwrap().appearance.stroke_mut().unwrap();
+    st.pressure = None;
+    st.tilt = None;
+    st.bearing = None;
+    st.rotation = None;
+    assert_ne!(vectorcraft_svg::export(&doc, &Default::default()), vectorcraft_svg::export(&neutral, &Default::default()));
 }
 
 /// Pen pressure belongs to its path: new art, graphic styles and Brush Options' edits leave it.

@@ -143,6 +143,9 @@
 	Additional Plug-ins Folder	Carpeta de plugins adicionales
 	Additional Fonts Folder	Carpeta de fuentes adicionales
 	Adjust Adjoining Width Points	Ajustar puntos de anchura contiguos
+	Incoming	Entrante
+	Outgoing	Saliente
+	Single Width Only	Solo una anchura
 	Adjust Color Balance…	Ajustar equilibrio de color…
 	Adjust Colors	Ajustar colores
 	Adjust Options:	Opciones de ajuste:
@@ -493,6 +496,8 @@ font-technology	Variable	Variables
 	Choose a folder	Elige una carpeta
 	Choose…	Elegir…
 	Circle	Círculo
+	Circle Tool	Herramienta Círculo
+	Circle too large	Círculo demasiado grande
 	Classic Defaults	Valores predeterminados clásicos
 	Clean Up…	Limpiar…
 	Clear	Borrar
@@ -1278,6 +1283,8 @@ font-technology	Variable	Variables
 	Files	Archivos
 	Files of a PDF standard can't be password-protected.	Los archivos de un estándar PDF no se pueden proteger con contraseña.
 	Files of this standard tag their colours with ICC profiles.	Los archivos de este estándar etiquetan sus colores con perfiles ICC.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	Los archivos de este estándar etiquetan sus colores con perfiles ICC, excepto los colores CMYK en el perfil de propósito de salida, que se escriben como DeviceCMYK.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	Con «No incluir perfiles» y un propósito de salida CMYK, cada color CMYK se escribe como DeviceCMYK, salvo que se convierta a un destino CMYK de otro perfil.
 	Fill	Relleno
 	Fill & Stroke	Relleno y trazo
 	Fill (X), double-click for the Color Picker	Relleno (X), doble clic para el selector de color
@@ -2054,6 +2061,7 @@ font-technology	Variable	Variables
 	Load SVG into Clipboard	Cargar SVG en el portapapeles
 	Load Text into Clipboard	Cargar texto en el portapapeles
 	Local Libraries	Bibliotecas locales
+	Locate Layer	Localizar capa
 	Locate Object	Localizar objeto
 	Locate Selected Objects	Localizar objetos seleccionados
 	Location	Ubicación
@@ -2721,6 +2729,9 @@ font-technology	Variable	Variables
 	Polar Grid Tool	Herramienta Cuadrícula polar
 	Polygon	Polígono
 	Polygon Properties:	Propiedades del polígono:
+	Line Properties:	Propiedades de la línea:
+	Line Length:	Longitud de la línea:
+	Line Angle:	Ángulo de la línea:
 	Polygon Tool	Herramienta Polígono
 	Portrait	Vertical
 	Power Saving (integrated)	Ahorro de energía (integrada)
@@ -3535,6 +3546,7 @@ digits	Malayalam	Malayálam
 	Set Slice Rectangle	Definir rectángulo de sector
 	Set Tab Stops	Definir tabulaciones
 	Set Text	Definir texto
+	Set the current fill or stroke to the selected color	Asignar el color seleccionado al relleno o trazo actual
 	Set the selected color to the current color	Asignar el color actual al color seleccionado
 	Set Zoom	Definir zoom
 	Settings…	Ajustes…
@@ -3658,7 +3670,7 @@ digits	Malayalam	Malayálam
 	Show Vivid/Muted	Mostrar vivos/apagados
 	Show Warm/Cool	Mostrar cálidos/fríos
 	Show {kind} Brushes	Mostrar pinceles de {kind}
-	Show/hide plate (Alt-click: only this plate)	Mostrar/ocultar plancha (Alt+clic: solo esta plancha)
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	Mostrar/ocultar plancha (Alt+clic: solo esta plancha; Alt+clic otra vez: todas las planchas)
 	Show:	Mostrar:
 	Shown with the optimised preview.	Se muestra con la vista previa optimizada.
 	Side 1:	Lado 1:
@@ -4265,6 +4277,8 @@ digits	Malayalam	Malayálam
 	V Spacing:	Espaciado V:
 	V:	V:
 	Variable Width Profile	Perfil de anchura variable
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	El pincel del trazo mantiene su propio tamaño, así que un perfil de anchura no lo cambia. Quite el pincel para usar un perfil.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	El pincel del trazo mantiene su propio tamaño, así que un perfil de anchura no lo cambia. Quite el pincel para usar un perfil.
 	Variables	Variables
 	New Variable	Nueva variable
 	Delete Variable	Eliminar variable
@@ -5126,8 +5140,8 @@ liquify-list-end	{0}, {1}	{0}, {1}
 @msg	no active document	no hay ningún documento activo
 @msg	no active perspective plane	no hay ningún plano de perspectiva activo
 @msg	no anchor points selected	no hay puntos de ancla seleccionados
-@msg	`points` must be three [x, y] pairs of numbers	`points` debe ser tres pares de números [x, y]
-@msg	direct-select three anchor points, or give `points`	seleccione directamente tres puntos de ancla o indique `points`
+@msg	`points` must be two or three [x, y] pairs of numbers	`points` debe ser dos o tres pares de números [x, y]
+@msg	direct-select two or three anchor points, or give `points`	seleccione directamente dos o tres puntos de ancla o indique `points`
 @msg	no circle passes through these points: two are the same or all three lie on one line	ningún círculo pasa por estos puntos: dos son iguales o los tres están en una misma línea
 @msg	no app to open files here	aquí no hay ninguna aplicación para abrir archivos
 @msg	no artboard	no hay mesa de trabajo
@@ -5229,6 +5243,9 @@ liquify-list-end	{0}, {1}	{0}, {1}
 @msg	no such user library	no existe esa biblioteca de usuario
 @msg	no such view	no existe esa vista
 @msg	no such width point	no existe ese punto de anchura
+@msg	`single` must be `incoming` or `outgoing`	`single` debe ser `incoming` u `outgoing`
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` y `outIndex` deben ser las dos mitades de un mismo punto de anchura discontinuo
+@msg	a discontinuous width point keeps its place	un punto de anchura discontinuo conserva su posición
 @msg	no swatch `{name}`	no existe la muestra `{name}`
 @msg	no swatch library `{l}` (see swatch.library.list)	no existe la biblioteca de muestras `{l}` (consulta swatch.library.list)
 @msg	no symbol instances selected	no hay instancias de símbolo seleccionadas

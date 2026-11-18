@@ -826,7 +826,7 @@ pub use addons::{fold_source, print_hidden};
 /// Document Info's category titles and the Objects category's count labels.
 pub use docinfo::{CATEGORIES, OBJECT_LABELS};
 pub use docmenu::guide_indexes;
-pub(crate) use edit::{settle_interaction, typing_in_progress};
+pub(crate) use edit::{Unrecorded, settle_interaction, typing_in_progress};
 pub(crate) use object::bounds_rewrite;
 pub(crate) use object::{keep_aligned_in, refresh_pixel_aligned};
 pub use plugin_call::{Location, ParamsPlace, key_location, location_in, location_keys};

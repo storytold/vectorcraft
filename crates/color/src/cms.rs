@@ -347,7 +347,9 @@ pub fn profiles_generation() -> u64 {
 /// Profile `name` as an ICC file to embed in an export: any RGB or CMYK profile of [`profiles`]
 /// (by its current or legacy name), or [`GRAY`]. Built-in profiles are written in code from the
 /// CMS: the RGB spaces from their primaries, the CMYK spaces as lookup tables sampled from their
-/// model (both directions, perceptual and relative colorimetric, Lab PCS); a profile the user
+/// model (both directions, perceptual and relative colorimetric, Lab PCS, with the model's paper
+/// as the media white point; the colorimetric Lab → CMYK table without black-point
+/// compensation, the perceptual and saturation ones with it); a profile the user
 /// loaded is the file it came from. Cached.
 pub fn icc_bytes(name: &str) -> Result<Arc<[u8]>, CmsError> {
     static CACHE: Mutex<Vec<(String, Arc<[u8]>)>> = Mutex::new(Vec::new());
@@ -361,8 +363,17 @@ pub fn icc_bytes(name: &str) -> Result<Arc<[u8]>, CmsError> {
     let bytes: Arc<[u8]> = if name == GRAY {
         icc::encode(&icc::gray_profile(name))?
     } else if BUILTIN_CMYK.contains(&name) {
-        let cms = Cms::new(&ColorSettings { cmyk: name.into(), ..ColorSettings::default() })?;
-        icc::encode(&icc::cmyk_profile(name, |c| cms.cmyk_to_lab(c), |l| cms.lab_to_cmyk(l, Intent::RelativeColorimetric)))?
+        // The perceptual and saturation tables map the shadows with black-point compensation; the
+        // colorimetric table is the inverse of the CMYK → Lab table, without it.
+        let mapped = Cms::new(&ColorSettings { cmyk: name.into(), bpc: true, ..ColorSettings::default() })?;
+        let cms = Cms::new(&ColorSettings { cmyk: name.into(), bpc: false, ..ColorSettings::default() })?;
+        let paper = match &cms.cmyk {
+            CmykSpace::Generic(g) => g.paper_xyz(),
+            CmykSpace::Device | CmykSpace::Icc(_) => lab::D50,
+        };
+        let to_lab = |c| cms.cmyk_to_lab(c);
+        let shadows = |l| mapped.lab_to_cmyk(l, Intent::RelativeColorimetric);
+        icc::encode(&icc::cmyk_profile(name, paper, to_lab, shadows, |l| cms.lab_to_cmyk(l, Intent::RelativeColorimetric)))?
     } else {
         icc::builtin_rgb_bytes(name)?
     }
