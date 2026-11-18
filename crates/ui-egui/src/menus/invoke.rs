@@ -183,7 +183,19 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
     // Object → Align aligns to what the align buttons align to, unless the call names `to`. With
     // anchors selected (Direct Selection) it sends its params unchanged, and the points align to
     // their own bounds.
-    let p = if id == "object.align" { crate::panels::align::menu_align_params(app, p) } else { p };
+    let mut p = if id == "object.align" { crate::panels::align::menu_align_params(app, p) } else { p };
+    // Change Case changes the characters the Type tool selects, not its whole object (#8521).
+    if id == "type.changeCase" && p.is_object() && ["id", "ids", "start", "end"].iter().all(|k| p.get(k).is_none()) {
+        match crate::panels::character::text_editing_kept(app) {
+            Ok(Some((text, a, b))) if a != b => {
+                p["id"] = json!(text.0);
+                p["start"] = json!(a.min(b));
+                p["end"] = json!(a.max(b));
+            }
+            Ok(_) => {}
+            Err(e) => return app.status(e),
+        }
+    }
     // Image Trace traces off the UI thread, with its progress (#3098).
     if matches!(id, "imageTrace.make" | "imageTrace.makeAndExpand") {
         if let Err(e) = crate::trace_runs::start(app, id, p, false) {

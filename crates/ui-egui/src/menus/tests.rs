@@ -826,6 +826,26 @@ fn update_selection_follows_save_selection_and_needs_a_recall() {
     assert_eq!(app.run("select.recall1", json!({})).unwrap()["count"], 2);
 }
 
+/// #8521: Type > Change Case while the Type tool has characters selected changes those
+/// characters only; with a caret alone it changes the whole object, as with the object selected.
+#[test]
+fn change_case_from_the_menu_changes_the_characters_the_type_tool_selects() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let id = app.run("text.create", json!({"x": 40, "y": 40, "text": "hello world"})).unwrap()["id"].as_u64().unwrap();
+    let plain = |app: &VectorcraftApp| match &app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().kind {
+        vectorcraft_doc::NodeKind::Text(t) => t.plain_text(),
+        _ => String::new(),
+    };
+    app.session.select_tool("type", Default::default()).unwrap();
+    app.session.set_tool_option("textSelection", &json!({"editing": id, "anchor": 6, "caret": 11}));
+    invoke(&mut app, "type.changeCase", json!({"case": "upper"}));
+    assert_eq!(plain(&app), "hello WORLD");
+    app.session.set_tool_option("textSelection", &json!({"editing": id, "anchor": 3, "caret": 3}));
+    invoke(&mut app, "type.changeCase", json!({"case": "upper"}));
+    assert_eq!(plain(&app), "HELLO WORLD");
+}
+
 #[test]
 fn select_same_link_block_series_selects_a_thread_from_the_menu() {
     let mut app = app_with_a_rectangle();
