@@ -498,6 +498,12 @@ font-technology	Variable	Változó
 	Brush Definition	Ecsetdefiníció
 	Brush Libraries	Ecsetkönyvtárak
 	Brush Options…	Ecset beállításai…
+	Options of Selected Object…	Kijelölt objektum beállításai…
+	Options of Selected Object	Kijelölt objektum beállításai
+@msg	no path painted with a brush is selected	nincs kijelölt ecsettel festett útvonal
+@msg	the selected paths are painted with brushes of different types	a kijelölt útvonalak különböző típusú ecsetekkel vannak festve
+@msg	give `params` or `reset`, not both	`params` vagy `reset` adható meg, a kettő együtt nem
+@msg	a bristle brush has no options of its own on a path	a sörteecsetnek nincsenek saját beállításai egy útvonalon
 	Brush Scale Options	Ecsetméretezési beállítások
 	Brush Strokes	Ecsetvonások
 	Brushes	Ecsetek

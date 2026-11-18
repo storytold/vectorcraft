@@ -3671,7 +3671,7 @@ already walks Image Trace. Short agent entry points:
 - Brushes: `brush.list`, `brush.get {name}`, `brush.apply {name, ids?}`, `brush.new {type, name?, params?, ids?}`,
   `brush.setCurrent {name}`, `brush.options {name, params?, newName?}`, `brush.delete {name} | {names}`,
   `brush.duplicate {name, newName?} | {names}`, `brush.freehand {…path.freehand params, brush?}`,
-  `object.expandBrush {ids?}`. `brush.freehand` draws the plain path when `brush` is left out or null. It refuses a
+  `object.expandBrush {ids?}`, `brush.objectOptions {ids?, params?, reset?}`. `brush.freehand` draws the plain path when `brush` is left out or null. It refuses a
   `brush` that is not a string with "`brush` must be a string", a name that no brush in the document has (an empty
   name included) with "no brush named `<name>`", a `style` other than "pencil" or "brush", a `brush` for a path
   with no stroke (a continued or redrawn path without one, or a new filled "pencil" path while the stroke is None)
@@ -3704,6 +3704,28 @@ already walks Image Trace. Short agent entry points:
   words. Corner tiles also take `autoCentered`, `autoBetween`, `autoSliced` and `autoOverlap`. A swatch choice copies its whole art and tile frame into the brush. `original`
   keeps the current art and clears its swatch label. `side_tile: "none"` fails with "You must choose a
   side pattern." An unknown swatch name also fails; neither error edits the brush or adds an Undo step.
+  `brush.objectOptions {ids?, params?, reset?}` (the Brushes panel menu's Options of Selected Object…, from the
+  [Modify brushes](https://helpx.adobe.com/illustrator/desktop/paint-and-fill/apply-and-edit-strokes/modify-brushes.html)
+  page) changes the brush settings of the selected brushed paths on those paths only; the brush and its other strokes
+  keep their settings. The fields a path can set are VectorCraft's own choice: calligraphic `angle` (counter-clockwise from
+  level), `roundness`, `size`, `variation` and `modes`; scatter `size`, `spacing`, `scatter`, `rotation`
+  (counter-clockwise), `modes`,
+  `rotation_relative_to_path` and `colorization`; art `width`, `width_mode`, `width_max`, `flip_along`, `flip_across`,
+  `overlap` and `colorization`; pattern `scale`, `spacing`, `fit`, `flip_along`, `flip_across` and `colorization`.
+  Values outside their ranges are clamped as in `brush.options`, a `colorization` object changes only the fields it
+  gives, a `null` item of an array (`size: [40, null]`) keeps each path's own item, else the brush's, and a setting
+  equal to the brush's own value is dropped. The dialog sends only the items and fields changed in it, so editing one
+  end of a range leaves each selected path's other end as it was. A mode that `params` does not set (no `modes`, or
+  a `null` item) stays the one each path draws with, so a changed calligraphic variation or scatter range does not
+  change it. An art `width` without a `width_max` keeps the largest width of each path whose width follows the pen,
+  and a calligraphic path's `modes: null` (modes that follow its values) stays when another value changes. The dialog
+  changes nothing when another document has become the active one. `reset: true` clears a path's settings. The command
+  refuses `params` together with `reset`, a selection with no brushed path, paths whose brushes are of different
+  types, a bristle brush and a field the type does not take. It records one undo step, and none when nothing changes.
+  `brush.options` edits still reach the settings a path does not set, `brush.apply`, a brush change in
+  `stroke.setAdvanced`, Global Edit or a `brush.freehand` extend, and removing the brush clear the path's settings,
+  and renaming the brush keeps them. Without
+  `params` or `reset` the command only returns the first path's settings. The native file saves them on the stroke as `brush_options`.
 - Pen tilt, bearing and barrel rotation (#764): `path.freehand` and `brush.freehand` take points as
   `[x, y, pressure, tiltX, tiltY, rotation]` or `{x, y, pressure?, tiltX?, tiltY?, rotation?}`, with `null` for what a
   point lacks, and a `pointer_gesture` event takes `tiltX`, `tiltY` and `rotation`, which the Paintbrush records.

@@ -341,6 +341,12 @@ font-technology	Variable	Μεταβλητές
 	Brush Definition	Ορισμός πινέλου
 	Brush Libraries	Βιβλιοθήκες πινέλων
 	Brush Options…	Επιλογές πινέλου…
+	Options of Selected Object…	Επιλογές επιλεγμένου αντικειμένου…
+	Options of Selected Object	Επιλογές επιλεγμένου αντικειμένου
+@msg	no path painted with a brush is selected	δεν έχει επιλεγεί διαδρομή βαμμένη με πινέλο
+@msg	the selected paths are painted with brushes of different types	οι επιλεγμένες διαδρομές είναι βαμμένες με πινέλα διαφορετικών τύπων
+@msg	give `params` or `reset`, not both	δώστε `params` ή `reset`, όχι και τα δύο
+@msg	a bristle brush has no options of its own on a path	ένα πινέλο με τρίχες δεν έχει δικές του επιλογές σε διαδρομή
 	Brush Strokes	Πινελιές
 	Brushes	Πινέλα
 	Built-in Libraries	Ενσωματωμένες βιβλιοθήκες

@@ -340,6 +340,12 @@ font-technology	Variable	Variabel
 	Brush Definition	Pinseldefinition
 	Brush Libraries	Pinsel-Bibliotheken
 	Brush Options…	Pinseloptionen…
+	Options of Selected Object…	Optionen für ausgewähltes Objekt…
+	Options of Selected Object	Optionen für ausgewähltes Objekt
+@msg	no path painted with a brush is selected	kein mit einem Pinsel gemalter Pfad ausgewählt
+@msg	the selected paths are painted with brushes of different types	die ausgewählten Pfade sind mit Pinseln verschiedener Typen gemalt
+@msg	give `params` or `reset`, not both	`params` oder `reset` angeben, nicht beides
+@msg	a bristle brush has no options of its own on a path	ein Borstenpinsel hat auf einem Pfad keine eigenen Optionen
 	Brush Strokes	Pinselstriche
 	Brushes	Pinsel
 	Built-in Libraries	Integrierte Bibliotheken

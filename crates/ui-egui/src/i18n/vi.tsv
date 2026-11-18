@@ -418,6 +418,12 @@ font-technology	Variable	Biến thiên
 	Brush Definition	Định nghĩa cọ
 	Brush Libraries	Thư viện cọ
 	Brush Options…	Tùy chọn cọ…
+	Options of Selected Object…	Tùy chọn của đối tượng đã chọn…
+	Options of Selected Object	Tùy chọn của đối tượng đã chọn
+@msg	no path painted with a brush is selected	chưa chọn đường được vẽ bằng cọ
+@msg	the selected paths are painted with brushes of different types	các đường đã chọn được vẽ bằng các loại cọ khác nhau
+@msg	give `params` or `reset`, not both	chỉ cung cấp `params` hoặc `reset`, không cả hai
+@msg	a bristle brush has no options of its own on a path	cọ lông không có tùy chọn riêng trên một đường
 	Brush Scale Options	Tùy chọn tỷ lệ cọ
 	Brush Strokes	Nét cọ
 	Brushes	Cọ

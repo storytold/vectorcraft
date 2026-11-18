@@ -585,6 +585,12 @@ antiAlias	Sharp	Nítid
 	Brush Libraries Menu	Menú de biblioteques de pinzells
 	Brush Library	Biblioteca de pinzells
 	Brush Options…	Opcions del pinzell…
+	Options of Selected Object…	Opcions de l’objecte seleccionat…
+	Options of Selected Object	Opcions de l’objecte seleccionat
+@msg	no path painted with a brush is selected	no hi ha cap traçat pintat amb un pinzell seleccionat
+@msg	the selected paths are painted with brushes of different types	els traçats seleccionats estan pintats amb pinzells de tipus diferents
+@msg	give `params` or `reset`, not both	indiqueu `params` o `reset`, no tots dos
+@msg	a bristle brush has no options of its own on a path	un pinzell de cerres no té opcions pròpies en un traçat
 	Brush Scale Options	Opcions d’escala del pinzell
 	Brush Size	Mida del pinzell
 	Brush Strokes	Traços del pinzell

@@ -523,6 +523,12 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     {
         app.status(e);
     }
+    // The selected brushed paths' own settings: the brush stays as it is.
+    if menu_item(ui, tl!("Options of Selected Object…"), brush_options::object_available(app), false)
+        && let Err(e) = app.run("ui.brushObjectOptions", json!({}))
+    {
+        app.status(e);
+    }
     ui.separator();
     // Selects the brushes no stroke paints with, for Delete Brush and Duplicate Brush.
     if menu_item(ui, tl!("Select All Unused"), app.session.active().is_some(), false)

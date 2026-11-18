@@ -327,6 +327,12 @@ font-technology	Variable	可變
 	Brush Definition	筆刷定義
 	Brush Libraries	筆刷資料庫
 	Brush Options…	筆刷選項…
+	Options of Selected Object…	所選物件的選項…
+	Options of Selected Object	所選物件的選項
+@msg	no path painted with a brush is selected	未選取以筆刷繪製的路徑
+@msg	the selected paths are painted with brushes of different types	所選路徑使用了不同類型的筆刷
+@msg	give `params` or `reset`, not both	請提供 `params` 或 `reset`，不能同時提供
+@msg	a bristle brush has no options of its own on a path	鬃毛筆刷在路徑上沒有自己的選項
 	Brush Strokes	筆刷筆畫
 	Brushes	筆刷
 	Built-in Libraries	內建資料庫

@@ -363,6 +363,12 @@ font-technology	Variable	Variables
 	Brush Definition	Definición del pincel
 	Brush Libraries	Bibliotecas de pinceles
 	Brush Options…	Opciones de pincel…
+	Options of Selected Object…	Opciones del objeto seleccionado…
+	Options of Selected Object	Opciones del objeto seleccionado
+@msg	no path painted with a brush is selected	no hay ningún trazado pintado con un pincel seleccionado
+@msg	the selected paths are painted with brushes of different types	los trazados seleccionados están pintados con pinceles de tipos distintos
+@msg	give `params` or `reset`, not both	indique `params` o `reset`, no ambos
+@msg	a bristle brush has no options of its own on a path	un pincel de cerdas no tiene opciones propias en un trazado
 	Brush Strokes	Trazos de pincel
 	Brushes	Pinceles
 	Built-in Libraries	Bibliotecas integradas

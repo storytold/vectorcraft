@@ -694,6 +694,12 @@ antiAlias	Sharp	शार्प
 	Brush Library	ब्रश लाइब्रेरी
 	Brush Options	ब्रश ऑप्शन्स
 	Brush Options…	ब्रश ऑप्शन्स…
+	Options of Selected Object…	सिलेक्टेड ऑब्जेक्ट के ऑप्शन्स…
+	Options of Selected Object	सिलेक्टेड ऑब्जेक्ट के ऑप्शन्स
+@msg	no path painted with a brush is selected	ब्रश से पेंट किया गया कोई पाथ नहीं चुना गया
+@msg	the selected paths are painted with brushes of different types	चुने गए पाथ अलग-अलग प्रकार के ब्रश से पेंट किए गए हैं
+@msg	give `params` or `reset`, not both	`params` या `reset` दें, दोनों नहीं
+@msg	a bristle brush has no options of its own on a path	ब्रिसल ब्रश के किसी पाथ पर अपने ऑप्शन्स नहीं होते
 	Brush Scale Options	ब्रश स्केल ऑप्शन्स
 	Brush Size	ब्रश साइज़
 	Brush Strokes	ब्रश स्ट्रोक्स

@@ -364,6 +364,12 @@ font-technology	Variable	Variables
 	Brush Definition	Définition de la forme
 	Brush Libraries	Bibliothèques de formes
 	Brush Options…	Options de forme…
+	Options of Selected Object…	Options de l’objet sélectionné…
+	Options of Selected Object	Options de l’objet sélectionné
+@msg	no path painted with a brush is selected	aucun tracé peint avec une forme n’est sélectionné
+@msg	the selected paths are painted with brushes of different types	les tracés sélectionnés sont peints avec des formes de types différents
+@msg	give `params` or `reset`, not both	indiquez `params` ou `reset`, pas les deux
+@msg	a bristle brush has no options of its own on a path	une forme Soies n’a pas d’options propres sur un tracé
 	Brush Strokes	Contours de forme
 	Brushes	Formes
 	Built-in Libraries	Bibliothèques intégrées

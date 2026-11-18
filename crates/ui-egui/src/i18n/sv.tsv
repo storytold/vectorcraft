@@ -352,6 +352,12 @@ font-technology	Variable	Variabla
 	Brush Definition	Penseldefinition
 	Brush Libraries	Penselbibliotek
 	Brush Options…	Penselalternativ…
+	Options of Selected Object…	Alternativ för markerat objekt…
+	Options of Selected Object	Alternativ för markerat objekt
+@msg	no path painted with a brush is selected	ingen bana målad med en pensel är markerad
+@msg	the selected paths are painted with brushes of different types	de markerade banorna är målade med penslar av olika typer
+@msg	give `params` or `reset`, not both	ange `params` eller `reset`, inte båda
+@msg	a bristle brush has no options of its own on a path	en borstpensel har inga egna alternativ på en bana
 	Brush Strokes	Penseldrag
 	Brushes	Penslar
 	Built-in Libraries	Inbyggda bibliotek

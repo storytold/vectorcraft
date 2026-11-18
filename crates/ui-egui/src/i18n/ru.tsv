@@ -361,6 +361,12 @@ font-technology	Variable	Вариативные
 	Brush Definition	Определение кисти
 	Brush Libraries	Библиотеки кистей
 	Brush Options…	Параметры кисти…
+	Options of Selected Object…	Параметры выделенного объекта…
+	Options of Selected Object	Параметры выделенного объекта
+@msg	no path painted with a brush is selected	не выделен контур, нарисованный кистью
+@msg	the selected paths are painted with brushes of different types	выделенные контуры нарисованы кистями разных типов
+@msg	give `params` or `reset`, not both	укажите `params` или `reset`, но не оба
+@msg	a bristle brush has no options of its own on a path	у щетинной кисти нет собственных параметров на контуре
 	Brush Strokes	Мазки кисти
 	Brushes	Кисти
 	Built-in Libraries	Встроенные библиотеки

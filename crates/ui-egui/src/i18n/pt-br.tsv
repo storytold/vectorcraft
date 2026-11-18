@@ -333,6 +333,12 @@ antiAlias	Sharp	Nítido
 	Brush Definition	Definição do Pincel
 	Brush Libraries	Bibliotecas de Pincéis
 	Brush Options…	Opções de Pincel…
+	Options of Selected Object…	Opções do Objeto Selecionado…
+	Options of Selected Object	Opções do Objeto Selecionado
+@msg	no path painted with a brush is selected	nenhum demarcador pintado com pincel selecionado
+@msg	the selected paths are painted with brushes of different types	os demarcadores selecionados estão pintados com pincéis de tipos diferentes
+@msg	give `params` or `reset`, not both	informe `params` ou `reset`, não ambos
+@msg	a bristle brush has no options of its own on a path	um pincel de cerdas não tem opções próprias em um demarcador
 	Brush Strokes	Traços de Pincel
 	Brushes	Pincéis
 	Built-in Libraries	Bibliotecas Integradas
