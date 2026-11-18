@@ -40,8 +40,9 @@ The **Dimension Tool** is in the Modify section of the toolbar. Its strip offers
   pixels of a corner lands on it instead of on the anchor at the same corner of the object's
   geometric bounds, and any other anchor, of that object or of other art, that is nearer the
   pointer than the corner takes the point instead. A corner that is also an anchor, as on a path
-  without a stroke, takes the anchor. The corners of a group's own strokes or effects, and of
-  type, are not snapped to. The point is linked to the path (in a compound path, to the member
+  without a stroke, takes the anchor, and so does another path's anchor right on the corner. The
+  corners of a group's own strokes or effects, of type, of paths made into guides and of the
+  members of a compound path on their own are not snapped to. The point is linked to the path (in a compound path, to the member
   whose own bounds reach nearest to the corner), is held against its anchors and shows the
   "anchor" label. It does not start construction guides for the second point. For an object that
   is not rotated, a horizontal or vertical dimension between two such corners measures, when it

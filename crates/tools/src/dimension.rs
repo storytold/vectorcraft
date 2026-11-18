@@ -230,6 +230,8 @@ struct PreviewBoxes {
     revision: Option<(u64, u64)>,
     geometric: HashMap<NodeId, Option<Rect>>,
     preview: HashMap<NodeId, Option<Rect>>,
+    /// Whether a point at each corner (by object and corner number) can be held against its path.
+    holdable: HashMap<(NodeId, usize), bool>,
 }
 
 /// A corner of an object's preview bounds that a Linear pick can land on.
@@ -275,9 +277,13 @@ fn preview_corner(cx: &ToolContext, p: Point, cache: &mut PreviewBoxes) -> Optio
         };
         let members =
             || compound.into_iter().flatten().map(|c| c.as_ref()).chain(compound.is_none().then_some(n)).filter(|m| m.path_data().is_some());
-        if members().next().is_some()
+        // A path made into a guide draws as a guide, without its strokes or effects. The pointer
+        // test includes the right and bottom edges, as the distance test below does.
+        let within = |r: Rect| (r.x0..=r.x1).contains(&w.p.x) && (r.y0..=r.y1).contains(&w.p.y);
+        if !n.is_guide()
+            && members().next().is_some()
             && let Some(geometric) = *w.cache.geometric.entry(n.id).or_insert_with(|| n.geometric_bounds())
-            && (effects || geometric.inflate(reach, reach).contains(w.p))
+            && (effects || within(geometric.inflate(reach, reach)))
         {
             let doc = w.doc;
             let measured = match w.cache.preview.get(&n.id) {
@@ -310,13 +316,23 @@ fn preview_corner(cx: &ToolContext, p: Point, cache: &mut PreviewBoxes) -> Optio
                         }
                     }
                     let holder = holder.filter(|(.., editable)| *editable).map(|(gap, id, _)| (gap, id));
+                    // A path that cannot hold a point at the corner (a stroked dot, whose anchors
+                    // all coincide) gives no corner.
+                    let holdable = |id: NodeId, cache: &mut PreviewBoxes| {
+                        *cache.holdable.entry((n.id, k)).or_insert_with(|| FreePoint::on(doc, id, q).is_some())
+                    };
+                    let holder = holder.filter(|(_, id)| holdable(*id, w.cache));
                     if let Some(((_, holder), stands_for)) = holder.zip(corners(geometric).get(k).copied()) {
                         w.best = Some((d, PreviewCorner { at: q, holder, stands_for }));
                     }
                 }
             }
         }
-        if let Some(ch) = n.children() {
+        // A compound path draws its members with its own appearance: they give no corners of
+        // their own.
+        if compound.is_none()
+            && let Some(ch) = n.children()
+        {
             for c in ch.iter().rev() {
                 visit(c, w);
             }
@@ -363,7 +379,7 @@ fn anchor_over_corner(cx: &ToolContext, p: Point, corner: &PreviewCorner, anchor
         .into_iter()
         .chain(other)
         .chain(own)
-        .filter(|(q, _)| q.distance(p) < corner.at.distance(p))
+        .filter(|(q, _)| q.distance(p) < corner.at.distance(p) || q.distance(corner.at) <= 1e-9)
         .min_by(|(a, _), (b, _)| a.distance(p).total_cmp(&b.distance(p)))
 }
 
@@ -1462,6 +1478,55 @@ mod tests {
         assert!(near(q, Point::new(100.0, 100.0)) && reference.is_some_and(|r| r.node == line), "{q:?}");
         let (q, reference) = t.snap_linear(&c, Point::new(99.6, 99.6));
         assert!(near(q, Point::new(99.5, 99.5)) && reference.is_none() && t.corner == Some(id), "{q:?}");
+        // Another path's end right on the corner: a click on the rectangle's anchor picks that end.
+        let (mut d, _) = doc_with_rect();
+        let (l, line) = (d.layers[0].id, d.alloc_id());
+        let path = vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::polyline(&[Point::new(99.5, 99.5), Point::new(50.0, 20.0)], false));
+        d.insert(Some(l), 0, Node::path(line, path, Default::default())).expect("the line");
+        let c = ToolContext { preview_bounds: true, ..cx(&d, &s, &p) };
+        let mut t = DimensionTool::default();
+        let (q, reference) = t.snap_linear(&c, Point::new(100.0, 100.0));
+        assert!(near(q, Point::new(99.5, 99.5)) && reference.as_ref().is_some_and(|r| r.node == line), "{q:?} {reference:?}");
+        // A stroked dot, a path whose two anchors coincide, cannot hold a point at a corner: a
+        // click by it picks its anchor.
+        let mut d = vectorcraft_doc::Document::new(500.0, 500.0);
+        let (l, dot) = (d.layers[0].id, d.alloc_id());
+        let path =
+            vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::polyline(&[Point::new(300.0, 300.0), Point::new(300.0, 300.0)], false));
+        let mut round = vectorcraft_doc::Appearance::default_art();
+        let stroke = round.stroke_mut().expect("a stroke");
+        (stroke.width, stroke.cap) = (10.0, vectorcraft_doc::LineCap::Round);
+        d.insert(Some(l), 0, Node::path(dot, path, round)).expect("the dot");
+        let c = ToolContext { preview_bounds: true, ..cx(&d, &s, &p) };
+        let mut t = DimensionTool::default();
+        let (q, reference) = t.snap_linear(&c, Point::new(296.0, 296.0));
+        assert!(near(q, Point::new(300.0, 300.0)) && reference.is_some_and(|r| r.node == dot) && t.corner.is_none(), "{q:?}");
+        // A stroked rectangle made into a guide, and a stroked member of a compound path without
+        // a stroke of its own, give no corners.
+        for kind in ["guide", "member"] {
+            let (mut d, id) = doc_with_rect();
+            let mut wide = vectorcraft_doc::Appearance::default_art();
+            wide.stroke_mut().expect("a stroke").width = 40.0;
+            if kind == "guide" {
+                let n = d.node_mut(id).expect("the rectangle");
+                n.appearance = wide.into();
+                if let NodeKind::Path { guide, .. } = &mut n.kind {
+                    *guide = true;
+                }
+            } else {
+                let mut fresh = vectorcraft_doc::Document::new(500.0, 500.0);
+                let (l, part, whole) = (fresh.layers[0].id, fresh.alloc_id(), fresh.alloc_id());
+                let mut member = Node::path(part, vectorcraft_geom::shapes::rectangle(Rect::new(100.0, 100.0, 200.0, 200.0)), Default::default());
+                member.appearance = wide.into();
+                let n = Node::new(whole, NodeKind::Compound { children: vec![std::sync::Arc::new(member)], rule: Default::default() });
+                fresh.insert(Some(l), 0, n).expect("the compound path");
+                d = fresh;
+            }
+            let c = ToolContext { preview_bounds: true, ..cx(&d, &s, &p) };
+            let mut t = DimensionTool::default();
+            let (q, _) = t.snap_linear(&c, Point::new(81.0, 81.0));
+            assert!(!near(q, Point::new(80.0, 80.0)) && t.corner.is_none(), "{kind}: {q:?}");
+        }
         // Two stroked rectangles sharing the edge x = 200; the right one is on top.
         let (mut d, left) = doc_with_rect();
         let (l, right) = (d.layers[0].id, d.alloc_id());
