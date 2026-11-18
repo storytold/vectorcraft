@@ -373,6 +373,33 @@ fn turkish_draw_labels_use_the_drawing_verb() {
     assert_eq!(message(tr_lang, "Scale must be drawing:real, for example 1:10"), "Ölçek çizim:gerçek biçiminde olmalıdır, örneğin 1:10");
 }
 
+/// Turkish rows that name the Revolve or Extrude & Bevel effect use the catalog's label for that
+/// effect, so a message about Revolve does not read as Rotate. `Revolve angle` names a control,
+/// not the effect, and keeps its own wording.
+#[test]
+fn turkish_three_d_rows_use_the_effect_labels() {
+    let tr_lang = Lang::from_code("tr").expect("tr registered");
+    let revolve = message(tr_lang, "Revolve");
+    let extrude = message(tr_lang, "Extrude & Bevel");
+    assert_eq!(revolve, "Eksen Etrafında Döndür");
+    assert_eq!(extrude, "Ekstrüzyon ve Eğim");
+    let (entries, _) = parse_entries(tr_lang.0.source);
+    let mut wrong = Vec::new();
+    for (_, src, t) in &entries {
+        let names_revolve = src.split(|c: char| !c.is_alphanumeric()).any(|w| w == "Revolve") && src != "Revolve angle";
+        if (names_revolve && (!t.contains(revolve.as_str()) || t.contains("Revolve")))
+            || (src.contains("Extrude & Bevel") && !t.contains(extrude.as_str()))
+        {
+            wrong.push(format!("{src:?} -> {t:?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "Turkish rows that do not use the effect label:\n{}", wrong.join("\n"));
+    assert_eq!(
+        message(tr_lang, "the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)"),
+        "nesnenin 3 boyutlu efekti yok (Ekstrüzyon ve Eğim, Eksen Etrafında Döndür, Şişir veya Döndür)"
+    );
+}
+
 /// The Catalan catalog registers under `ca`, claims complete menus and messages, and passes
 /// locale resolution, vocabulary and count formatting checks.
 #[test]
@@ -568,8 +595,9 @@ fn built_in_library_brush_names_are_in_complete_catalogs() {
         .flat_map(|(_, lib)| lib.brushes.iter().map(|b| b.name.clone()).collect::<Vec<_>>())
         .collect();
     names.sort();
+    let duplicates: Vec<&str> = names.windows(2).filter(|pair| pair[0] == pair[1]).map(|pair| pair[0].as_str()).collect();
+    assert_eq!(duplicates, ["Zigzag"], "only the established Pattern Borders / Game Trails name is shared");
     names.dedup();
-    assert_eq!(names.len(), 46, "{names:?}");
     let mut bad = vec![];
     for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
         let missing: Vec<&String> = names.iter().filter(|n| lang.catalog().plain(n).is_none()).collect();
@@ -607,6 +635,7 @@ fn monitor_profile_labels_are_in_complete_catalogs() {
     for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
         for label in [
             "Use Monitor Profile for Canvas",
+            "Refresh Monitor Profile",
             "The canvas is drawn in sRGB.",
             "Canvas display profile:",
             "The system matches the window to the display's colors.",
@@ -774,6 +803,21 @@ fn anti_aliasing_method_labels_are_in_complete_catalogs() {
         }
         assert!(cat.contextual("antiAlias", "Sharp").is_some(), "{} is missing the antiAlias Sharp row", lang.code);
     }
+}
+
+/// Each row in the `search` context, which adds a language's words to a group of words with the same
+/// meaning for the command palette, names a group and adds single words of no other group. No
+/// catalog has to have these rows.
+#[test]
+fn search_rows_name_a_group_and_add_single_words() {
+    let mut bad = Vec::new();
+    for l in LANGUAGES.iter().filter(|l| !l.source.is_empty()) {
+        let (entries, _) = parse_entries(l.source);
+        for (_, src, tr) in entries.iter().filter(|(ctx, _, _)| ctx == crate::palette::words::CONTEXT) {
+            bad.extend(crate::palette::words::row_problems(src, tr).into_iter().map(|p| format!("{}: {p}", l.code)));
+        }
+    }
+    assert!(bad.is_empty(), "{bad:#?}");
 }
 
 /// The Painted and Sketched graphic style library's name and its styles' names have a row in every
@@ -3601,9 +3645,9 @@ fn three_d_refusals_translate_with_their_values() {
             vec!["0", "100"],
         ),
         (
-            refuse(vectorcraft_effects::validate_three_d(&rect, EXTRUDE, &json!({"graphics": [{"symbol": "S", "face": "side"}]}))),
-            "must be front or back",
-            vec!["`graphics`", "front", "back"],
+            refuse(vectorcraft_effects::validate_three_d(&rect, EXTRUDE, &json!({"graphics": [{"symbol": "S", "face": "top"}]}))),
+            "must be front, back or side",
+            vec!["`graphics`", "front", "back", "side"],
         ),
         (refuse(vectorcraft_effects::validate_three_d(&rect, CLASSIC_EXTRUDE, &json!({"depth": "deep"}))), "must be a number", vec!["`depth`"]),
         (refuse(vectorcraft_effects::validate_three_d(&instance, EXTRUDE, &json!({}))), "the symbol's art isn't available", vec!["Mine 7"]),
@@ -5133,6 +5177,55 @@ fn dataset_import_repeated_column_error_is_translated() {
     }
 }
 
+/// The errors of Automatic Plane Positioning (`perspective.plane.infer`) and of its two options
+/// (`perspective.widget.options`) have their own row in every language that translates every
+/// message, and the status bar shows them translated with the parameter names kept.
+#[test]
+fn automatic_plane_positioning_errors_are_translated() {
+    use serde_json::json;
+    use vectorcraft_engine::{EngineError, Session};
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    let mut errors = vec![];
+    for (cmd, p, want, kept) in [
+        ("perspective.plane.infer", json!({"at": [0, 0], "tolerance": -1}), "tolerance must be 0 or more", &["tolerance"][..]),
+        ("perspective.plane.infer", json!({"at": [0, 0], "clear": true}), "give `at` or `clear`, not both", &["`at`", "`clear`"][..]),
+        ("perspective.widget.options", json!({"anchorPoint": "yes"}), "anchorPoint must be true or false", &["anchorPoint"][..]),
+        (
+            "perspective.widget.options",
+            json!({"gridlineIntersection": 1}),
+            "gridlineIntersection must be true or false",
+            &["gridlineIntersection"][..],
+        ),
+    ] {
+        let e = s.execute(cmd, &p).unwrap_err();
+        assert!(matches!(&e, EngineError::BadParams { msg, .. } if msg == want), "{cmd} {p}: {e}");
+        errors.push((e.to_string(), want, kept));
+    }
+    s.execute("perspective.grid.show", &json!({"visible": false})).unwrap();
+    let hidden = "the perspective grid is hidden";
+    let e = s.execute("perspective.plane.infer", &json!({"at": [0, 0]})).unwrap_err();
+    assert!(matches!(&e, EngineError::Other(msg) if msg == hidden), "{e}");
+    errors.push((e.to_string(), hidden, &[][..]));
+    s.execute("perspective.grid.show", &json!({"visible": true})).unwrap();
+    s.execute("perspective.plane.set", &json!({"plane": "ground"})).unwrap();
+    s.execute("perspective.widget.options", &json!({"anchorPoint": false, "gridlineIntersection": false})).unwrap();
+    let off = "Automatic Plane Positioning is off: turn on anchorPoint or gridlineIntersection (perspective.widget.options)";
+    let e = s.execute("perspective.plane.infer", &json!({"at": [0, 0]})).unwrap_err();
+    assert!(matches!(&e, EngineError::Other(msg) if msg == off), "{e}");
+    errors.push((e.to_string(), off, &["anchorPoint", "gridlineIntersection", "(perspective.widget.options)"][..]));
+    let literals = message_literals();
+    for (e, want, kept) in &errors {
+        assert!(literals.contains(*want), "{want}");
+        for code in COMPLETE_MESSAGES {
+            let lang = Lang::from_code(code).expect("registered");
+            assert!(lang.catalog().exact_message(want).is_some(), "{code} has no row for {want}");
+            let shown = message(lang, e);
+            assert!(!shown.contains(want) && kept.iter().all(|k| shown.contains(k)), "{code}: {shown}");
+        }
+    }
+}
+
 /// The scan reads the refusals `script.run`'s `param(msg)` gives, and not the arguments of a type's
 /// own function of that name.
 #[test]
@@ -5219,6 +5312,85 @@ fn script_answers_errors_are_translated() {
             if want.ends_with("alert, confirm or prompt") {
                 assert!(["alert", "confirm", "prompt"].iter().all(|k| shown.contains(k)), "{code}: {shown}");
             }
+        }
+    }
+}
+
+/// `script.run`'s other refusals of its parameters (`maxFuel`, `args`, `path`, `source`,
+/// `installed`, `name`) and its errors for a script it cannot read are translated in every language
+/// that translates every message, with the code names, the place in `args`, the file suffixes, the
+/// limits and the file's path kept. The command's error stays in English.
+#[test]
+fn script_run_param_errors_are_translated() {
+    use serde_json::{Value, json};
+    use vectorcraft_engine::{EngineError, Session};
+    let refusals = [
+        "`maxFuel` must be a whole number from 1 to {_1}",
+        "`args{place}` is nested more than 64 levels deep",
+        "`args` must be an object",
+        "`args` is larger than 1 MiB",
+        "`path` is empty",
+        "`installed` takes a `path`, not a `source`",
+        "`path` must name a .js or .jsx file",
+        "give exactly one of `path` and `source`",
+    ];
+    let scanned = message_literals();
+    for template in refusals {
+        assert!(scanned.contains(template), "{template}");
+    }
+    let dir = vectorcraft_testkit::TempDir::new("i18n-script-run-params");
+    let not_text = dir.join("not-text.js");
+    std::fs::write(&not_text, [0x66, 0xff, 0xfe]).expect("write");
+    let folder = dir.join("folder.js");
+    std::fs::create_dir(&folder).expect("folder");
+    let (not_text, folder) = (not_text.to_string_lossy().into_owned(), folder.to_string_lossy().into_owned());
+    let mut deep = json!(1);
+    for _ in 0..70 {
+        deep = json!([deep]);
+    }
+    let fuel = vectorcraft_engine::script::MAX_FUEL;
+    // Each call, with the English message its parameter refusal gives, or `None` for an error that
+    // is not one.
+    let bad: Vec<(Value, Option<String>)> = vec![
+        (json!({"source": "1", "maxFuel": 0}), Some(format!("`maxFuel` must be a whole number from 1 to {fuel}"))),
+        (json!({"source": "1", "maxFuel": fuel + 1}), Some(format!("`maxFuel` must be a whole number from 1 to {fuel}"))),
+        (json!({"source": "1", "args": {"a": deep}}), Some(format!("`args.a{}` is nested more than 64 levels deep", "[0]".repeat(64)))),
+        (json!({"source": "1", "args": [1]}), Some("`args` must be an object".into())),
+        (json!({"source": "1", "args": {"x": "x".repeat(1 << 20)}}), Some("`args` is larger than 1 MiB".into())),
+        (json!({"path": ""}), Some("`path` is empty".into())),
+        (json!({"source": "1", "installed": true}), Some("`installed` takes a `path`, not a `source`".into())),
+        (json!({"path": "notes.txt"}), Some("`path` must name a .js or .jsx file".into())),
+        (json!({}), Some("give exactly one of `path` and `source`".into())),
+        (json!({"path": "a.js", "source": "1"}), Some("give exactly one of `path` and `source`".into())),
+        (json!({"path": 1}), Some("`path` must be a string".into())),
+        (json!({"source": "1", "name": false}), Some("`name` must be a string".into())),
+        (json!({"source": "1", "installed": "yes"}), Some("`installed` must be true or false".into())),
+        (json!({"path": "built.jsxbin"}), None),
+        (json!({"source": "x".repeat(vectorcraft_engine::script::MAX_SOURCE_BYTES + 1)}), None),
+        (json!({"path": "listed.js", "installed": true}), None),
+        (json!({"path": not_text}), None),
+        (json!({"path": folder}), None),
+    ];
+    let mut s = Session::new();
+    for (params, want) in bad {
+        let e = s.execute("script.run", &params).unwrap_err();
+        let line = e.to_string();
+        let inner = match (&e, &want) {
+            (EngineError::BadParams { cmd, msg }, Some(want)) if cmd == "script.run" && msg == want => want.clone(),
+            (EngineError::Other(msg), None) => msg.clone(),
+            _ => panic!("{params:.80}: {e}"),
+        };
+        // The code names and the place in `args`, the numbers, the file suffixes and the path.
+        let mut kept: Vec<&str> = inner.split('`').skip(1).step_by(2).collect();
+        kept.extend(inner.split(|c: char| !c.is_ascii_digit()).filter(|n| !n.is_empty()));
+        kept.extend([".jsx", ".js", not_text.as_str(), folder.as_str()].into_iter().filter(|k| inner.contains(*k)));
+        for code in COMPLETE_MESSAGES {
+            let lang = Lang::from_code(code).expect("registered");
+            let shown = message(lang, &line);
+            let translated = message(lang, &inner);
+            assert_ne!(translated, inner, "{code}");
+            assert!(shown.contains(&translated) && !shown.contains("invalid parameters"), "{code}: {shown}");
+            assert!(kept.iter().all(|k| shown.contains(k)), "{code}: {shown}");
         }
     }
 }
@@ -5974,7 +6146,7 @@ const NAMED_KEYS: &[(&str, &[&str])] = &[
     ("`dither` applies to gradient fills (stroke: false)", &["stroke"]),
     ("`strokeMode` applies to strokes (stroke: true)", &["stroke"]),
     ("`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`", &["symbol", "face", "x", "y", "scale", "rotation"]),
-    ("`{GRAPHICS}` face must be front or back", &["face", "front", "back"]),
+    ("`{GRAPHICS}` face must be front, back or side", &["face", "front", "back", "side"]),
     ("`{name}`: give the kanji part", &["kanji"]),
     ("`{name}`: parts must be an object", &["parts"]),
     (
@@ -6180,7 +6352,8 @@ const MESSAGE_MARKERS: &[&str] = &[".status(", "ui.status = ", "status = ", "Oth
 /// a plug-in returned), and the script interpreter's methods that throw an error at a script:
 /// `.type_error(msg)`, `.throw(kind, msg)` and the XPath evaluator's `.error(msg)`, with the reasons
 /// it gives for a property it cannot define or assign (`.reject_bool(throw, key, why)` and
-/// `.reject(throw, key, why)`). A helper that starts with `.` is a method of any receiver; any other
+/// `.reject(throw, key, why)`), and the interface's `unavailable(tool, reason)` (a tool's place that
+/// no toolbar can show, which Help puts in the status bar). A helper that starts with `.` is a method of any receiver; any other
 /// is a function, not a type's own function of the same name (`Grays::param(C, p)`).
 const ERROR_HELPERS: &[(&str, &str, usize)] = &[
     ("engine", "bad(", 1),
@@ -6203,6 +6376,7 @@ const ERROR_HELPERS: &[(&str, &str, usize)] = &[
     ("js", ".error(", 0),
     ("js", ".reject_bool(", 2),
     ("js", ".reject(", 2),
+    ("ui-egui", "unavailable(", 1),
 ];
 
 /// Error variants whose first argument is a name, not a message: a command id
@@ -6800,6 +6974,40 @@ fn polish_plurals_have_three_forms() {
         }
     }
     assert!(count >= 13, "Polish plural rows missing");
+}
+
+/// Every Polish row whose English names art or artwork calls it kompozycja, the catalog's term, and
+/// never grafika (kept for what the English calls a graphic) or rysunek. An artboard's obszar
+/// kompozycji does not count as the term. Line art, the art brush and its class, Art Ribbons,
+/// Art & Illustration, Art Optimized and the literal values `art` and `artwork` are other terms.
+#[test]
+fn polish_rows_call_artwork_kompozycja() {
+    let (entries, _) = parse_entries(pl().0.source);
+    let mut wrong = Vec::new();
+    for (_, src, translation) in &entries {
+        let english = src.to_lowercase();
+        let words: Vec<&str> = english.split(|c: char| !c.is_ascii_alphabetic()).collect();
+        let names = |list: &[&str]| words.iter().any(|w| list.contains(w));
+        let polish = translation.to_lowercase();
+        let polish_words: Vec<&str> = polish.split(|c: char| !c.is_alphabetic()).filter(|w| !w.is_empty()).collect();
+        let other_term = ["line art", "art brush", "art ribbons", "art & illustration", "art optimized"].iter().any(|t| english.contains(t));
+        let literal = polish_words.iter().any(|w| ["art", "artwork"].contains(w));
+        if !names(&["art", "artwork"]) || other_term || literal || english == "art" {
+            continue;
+        }
+        let term = polish_words.iter().enumerate().any(|(i, w)| w.starts_with("kompozyc") && !(i > 0 && polish_words[i - 1].starts_with("obszar")));
+        let graphic = polish.contains("graf") && !names(&["graphic", "graphics"]);
+        if !term || graphic || polish.contains("rysun") {
+            wrong.push(format!("{src:?} -> {translation:?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{} Polish rows name artwork with another word:\n{}", wrong.len(), wrong.join("\n"));
+    assert_eq!(tr(pl(), "Artwork"), "Kompozycja");
+    assert_eq!(tr(pl(), "Off-Artboard Art"), "Kompozycja poza obszarami kompozycji");
+    assert_eq!(message(pl(), "select the art to export first"), "najpierw zaznacz kompozycję do eksportu");
+    assert_eq!(message(pl(), "the selected art has no width"), "zaznaczona kompozycja nie ma szerokości");
+    assert_eq!(tr(pl(), "Line Art and Text Resolution:"), "Rozdzielczość grafiki liniowej i tekstu:");
+    assert_eq!(tr(pl(), "Art Brush"), "Pędzel artystyczny");
 }
 
 /// Every catalog names each numeral system of Character panel menu › Digits, in the `digits`
