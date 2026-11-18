@@ -7428,6 +7428,35 @@ anchor	Points:	Điểm:
 @msg	`{id}` is not a colour adjustment	`{id}` không phải là điều chỉnh màu
 @msg	missing `effect`	thiếu `effect`
 @msg	`params` must be an object	`params` phải là một đối tượng
+# Stroke arrowheads (Stroke panel, Dimension Tool Options and Properties › Arrow Style).
+	Triangle (open)	Tam giác (rỗng)
+	Circle (open)	Hình tròn (rỗng)
+	Square (open)	Hình vuông (rỗng)
+	Arrow (open)	Mũi tên (rỗng)
+	Barbed	Có ngạnh
+	Half Arrow (left)	Nửa mũi tên (trái)
+	Half Arrow (right)	Nửa mũi tên (phải)
+	Double Bar	Thanh đôi
+	Dot on Bar	Chấm trên thanh
+	Chevron	Hình chữ V
+	Plus	Dấu cộng
+	Hexagon (open)	Lục giác (rỗng)
+	Tag	Nhãn
+	Tag (open)	Nhãn (rỗng)
+	Half Circle	Nửa hình tròn
+	Drop	Giọt nước
+	Slash	Gạch chéo
+	Double Slash	Gạch chéo đôi
+	Diamond (open)	Hình thoi (rỗng)
+	Reverse Triangle	Tam giác ngược
+	Swallowtail	Đuôi én
+	Bracket	Ngoặc
+	Fork	Chạc
+	Leaf	Chiếc lá
+	Kite	Hình diều
+	Triangle to Bar	Tam giác đến thanh
+	Oval	Hình bầu dục
+	Line Arrow	Mũi tên nét
 # Path Precision Tools add-on (Object › Plug-ins › Path Precision Tools): its tools, Anchor Inspector panel, commands and messages.
 	Path Precision Tools	Công cụ chính xác cho đường dẫn
 	Anchor Eraser Brush	Cọ tẩy điểm neo

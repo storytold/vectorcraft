@@ -90,8 +90,7 @@ from the object) or **Between Line and Object**; **Alignment** is **Left**, **Ce
 
 **Arrow Style** lists **Filled**, **Open**, **Tick** and **None**, then every other built-in
 arrowhead of the Stroke panel, each with a drawn preview before its name. Custom arrowheads are not
-listed. A dimension with one of the other arrowheads opens in versions without them with
-**Filled** arrows.
+listed.
 
 Scale means **drawing : real size**, independent of zoom. At **1:10** a 1 in line on the page is
 labelled 10 in; at **10:1**, 0.1 in. It scales lengths, not angles or the size of text and arrows.

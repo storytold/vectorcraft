@@ -177,8 +177,7 @@ pub struct DimensionOptions {
     pub line_type: LineType,
     pub line_color: [u8; 3],
     pub arrow_style: ArrowStyle,
-    /// A built-in stroke arrowhead drawn at both ends in place of `arrow_style`'s head. Versions
-    /// that do not read it draw `arrow_style`.
+    /// A built-in stroke arrowhead drawn at both ends in place of `arrow_style`'s head.
     #[serde(deserialize_with = "arrow_head::deserialize")]
     pub arrow_head: Option<crate::Arrowhead>,
     pub arrow_scale: f64,

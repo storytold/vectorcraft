@@ -7384,6 +7384,35 @@ anchor	Points:	Точки:
 @msg	`{id}` is not a colour adjustment	`{id}` не є корекцією кольору
 @msg	missing `effect`	відсутня `effect`
 @msg	`params` must be an object	`params` має бути об’єктом
+# Stroke arrowheads (Stroke panel, Dimension Tool Options and Properties › Arrow Style).
+	Triangle (open)	Трикутник (контурний)
+	Circle (open)	Коло (контурне)
+	Square (open)	Квадрат (контурний)
+	Arrow (open)	Стрілка (контурна)
+	Barbed	Зазубрена
+	Half Arrow (left)	Половина стрілки (ліворуч)
+	Half Arrow (right)	Половина стрілки (праворуч)
+	Double Bar	Подвійна смуга
+	Dot on Bar	Крапка на смузі
+	Chevron	Шеврон
+	Plus	Плюс
+	Hexagon (open)	Шестикутник (контурний)
+	Tag	Ярлик
+	Tag (open)	Ярлик (контурний)
+	Half Circle	Півколо
+	Drop	Крапля
+	Slash	Скісна риска
+	Double Slash	Подвійна скісна риска
+	Diamond (open)	Ромб (контурний)
+	Reverse Triangle	Обернений трикутник
+	Swallowtail	Ластівчин хвіст
+	Bracket	Дужка
+	Fork	Вилка
+	Leaf	Листок
+	Kite	Дельтоїд
+	Triangle to Bar	Трикутник до смуги
+	Oval	Овал
+	Line Arrow	Лінійна стрілка
 # Path Precision Tools add-on (Object › Plug-ins › Path Precision Tools): its tools, Anchor Inspector panel, commands and messages.
 	Path Precision Tools	Інструменти точного редагування контурів
 	Anchor Eraser Brush	Пензель-гумка опорних точок

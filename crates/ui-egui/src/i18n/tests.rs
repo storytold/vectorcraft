@@ -673,6 +673,18 @@ fn built_in_library_style_names_are_in_complete_catalogs() {
     assert!(bad.is_empty(), "{}", bad.join("\n"));
 }
 
+/// The Stroke panel and the Dimension tool's Arrow Style list the built-in arrowheads by name, so
+/// each name has a row in each complete catalog. Feather is not checked: a plain `Feather` row also
+/// names the History steps of the Feather effect, which otherwise take the effect's menu row.
+#[test]
+fn built_in_arrowhead_names_are_in_complete_catalogs() {
+    use vectorcraft_doc::Arrowhead;
+    let names = distinct(Arrowhead::ALL.iter().filter(|h| **h != Arrowhead::Feather).map(|h| h.label().to_string()).collect());
+    assert_eq!(names.len(), 40, "{names:?}");
+    let bad = lacking(&names, |c, n| c.plain(n).is_some());
+    assert!(bad.is_empty(), "{}", bad.join("\n"));
+}
+
 /// A built-in symbol library's panel lists its symbols in the UI language, so every symbol of
 /// every built-in library has a row in each complete catalog.
 #[test]

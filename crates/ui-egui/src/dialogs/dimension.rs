@@ -48,8 +48,7 @@ impl ArrowChoice {
     }
 }
 /// The Arrow Style entries: Filled, Open, Tick and None, then the other built-in stroke arrowheads
-/// in the Stroke panel's order. A stroke arrowhead keeps `filled` as its `arrowStyle`, the head that
-/// versions which do not read `arrowHead` draw.
+/// in the Stroke panel's order. A stroke arrowhead keeps `filled` as its `arrowStyle`.
 fn arrow_choices() -> Vec<ArrowChoice> {
     let named = [(ArrowStyle::Filled, "Filled"), (ArrowStyle::Open, "Open"), (ArrowStyle::Tick, "Tick"), (ArrowStyle::None, "None")];
     let heads = Arrowhead::ALL.into_iter().filter(|h| !named.iter().any(|(s, _)| s.arrowhead().as_ref() == Some(h)));
@@ -496,7 +495,7 @@ mod tests {
     }
 
     /// The Arrow Style list names each arrowhead once, with the four older styles first, and each
-    /// stroke arrowhead keeps Filled for versions that do not read `arrowHead`.
+    /// stroke arrowhead keeps Filled as its `arrowStyle`.
     #[test]
     fn arrow_style_list_names_each_style_once() {
         let choices = arrow_choices();

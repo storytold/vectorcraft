@@ -6095,12 +6095,6 @@ the `…Open` rings…) and marks (`Bar`, `DoubleBar`, `DotOnBar`, `Slash`, `Dou
 `arrowScale`, at least 0.25 pt. `LineArrow` has two arms of the head's weight (the line's weight at 100 % for lines of
 0.25 pt or more) at right angles and spreads twice as wide.
 
-A dimension's options (`dimension.create`, `dimension.update` and the Dimension tool's `style`) take `arrowStyle`
-(`filled`, `open`, `tick` or `none`: `Triangle`, `TriangleOpen`, `Slash` or no head) and `arrowHead`, `null` or one of
-the same built-in head names, drawn at both ends in place of the arrow style's head. Versions that do not read
-`arrowHead` draw `arrowStyle`. The Arrow Style menu sets `arrowStyle` to `filled` when it sets `arrowHead`. A custom
-arrowhead and an unknown name are refused.
-
 Custom arrowheads come from the arrowheads file, `Arrowheads.vectorcraft` next to the preferences (none on the web or
 in runs with `VECTORCRAFT_NO_PREFS`). `stroke.arrowheads.edit` (Stroke panel menu › Edit Arrowheads…) opens it, and
 first creates it with one example head when it is missing. Each symbol in the file is one head, named after the
@@ -6136,6 +6130,11 @@ arrowheads in a separate arrowheads file.
 {"name":"run_command","arguments":{"command":"stroke.arrowheads.list","params":{}}}
 {"name":"run_command","arguments":{"command":"stroke.set","params":{"ids":[9],"endArrow":{"custom":"Example Arrowhead"}}}}
 ```
+
+A dimension's options (`dimension.create`, `dimension.update` and the Dimension tool's `style`) take `arrowStyle`
+(`filled`, `open`, `tick` or `none`: `Triangle`, `TriangleOpen`, `Slash` or no head) and `arrowHead`, `null` or one of
+the built-in head names `stroke.set` takes, drawn at both ends in place of the arrow style's head. The Arrow Style menu
+sets `arrowStyle` to `filled` when it sets `arrowHead`. A custom arrowhead and an unknown name are refused.
 
 ## Stroke bounds and clicks
 
