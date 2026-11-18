@@ -193,6 +193,40 @@ fn colors_separate_and_come_back_in_the_measured_spaces() {
     assert!(coated.gamut_error(&blue) < uncoated.gamut_error(&blue));
 }
 
+/// Absolute Lab of `cmyk` in a context whose CMYK space is one of the Generic-type spaces.
+fn absolute_lab(cms: &Cms, cmyk: [f32; 4]) -> Lab {
+    match &cms.cmyk {
+        CmykSpace::Generic(g) => g.to_lab_abs(cmyk),
+        CmykSpace::Device | CmykSpace::Icc(_) => panic!("not a Generic-type CMYK space"),
+    }
+}
+
+#[test]
+fn absolute_cmyk_to_rgb_shows_the_paper() {
+    for name in [GENERIC_CMYK, FOGRA51_CMYK, FOGRA52_CMYK] {
+        let cms = Cms::new(&ColorSettings { cmyk: name.into(), ..ColorSettings::default() }).unwrap();
+        let paper = cms.cmyk_to_rgb([0.0; 4], Intent::AbsoluteColorimetric);
+        assert_eq!(paper, cms.srgb_to_rgb(cms.cmyk_to_srgb([0.0; 4], true)), "{name}");
+        assert_ne!(paper, cms.cmyk_to_rgb([0.0; 4], Intent::RelativeColorimetric), "{name}");
+    }
+}
+
+#[test]
+fn absolute_cmyk_conversion_keeps_the_source_paper() {
+    // Generic CMYK's paper (L* 93, b* 2.5) is darker and yellower than FOGRA51's (L* 95, b* -6),
+    // so printing it on FOGRA51 paper takes ink.
+    let generic = Cms::new(&ColorSettings { cmyk: GENERIC_CMYK.into(), ..ColorSettings::default() }).unwrap();
+    let coated = Cms::new(&ColorSettings { cmyk: FOGRA51_CMYK.into(), ..ColorSettings::default() }).unwrap();
+    let Color::Cmyk { c, m, y, k } = generic.convert_into(&coated, &Color::Cmyk { c: 0.0, m: 0.0, y: 0.0, k: 0.0 }, Intent::AbsoluteColorimetric)
+    else {
+        panic!("a CMYK colour converts to CMYK");
+    };
+    let inks = [c, m, y, k];
+    assert!(inks.iter().sum::<f32>() > 0.01, "{inks:?}");
+    let de = delta_e2000(absolute_lab(&coated, inks), absolute_lab(&generic, [0.0; 4]));
+    assert!(de < 2.0, "{inks:?}: ΔE {de}");
+}
+
 #[test]
 fn the_profiles_carry_the_paper_and_the_data_source() {
     for c in &measured::CONDITIONS {

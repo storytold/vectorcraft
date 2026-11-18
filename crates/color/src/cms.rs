@@ -508,7 +508,8 @@ impl Cms {
     /// directly into the RGB profile: not through display sRGB, which would clip colours a wider
     /// RGB space holds (Wide Gamut RGB keeps CMYK cyan that sRGB can't show), and with the
     /// settings' black-point compensation. The built-in CMYK spaces go through sRGB as before
-    /// (Generic CMYK compensates in its own model).
+    /// (Generic CMYK compensates in its own model); with the absolute colorimetric intent the
+    /// paper colour shows.
     pub fn cmyk_to_rgb(&self, cmyk: [f32; 4], intent: Intent) -> [f32; 3] {
         let cmyk = cmyk.map(|v| v.clamp(0.0, 1.0));
         let src = match &self.cmyk {
@@ -521,7 +522,7 @@ impl Cms {
         };
         src.zip(dest)
             .and_then(|(s, d)| s.to_rgb_of(&d, &cmyk, intent, self.settings.bpc))
-            .unwrap_or_else(|| self.srgb_to_rgb(self.cmyk_to_srgb(cmyk, false)))
+            .unwrap_or_else(|| self.srgb_to_rgb(self.cmyk_to_srgb(cmyk, intent == Intent::AbsoluteColorimetric)))
     }
     /// Display sRGB → working CMYK with `intent`.
     pub fn srgb_to_cmyk(&self, srgb: [f32; 3], intent: Intent) -> [f32; 4] {
@@ -532,6 +533,14 @@ impl Cms {
         match &self.cmyk {
             CmykSpace::Generic(g) => g.to_lab_rel(cmyk.map(|v| v.clamp(0.0, 1.0))),
             _ => lab::srgb_to_lab(self.cmyk_to_srgb(cmyk, false)),
+        }
+    }
+    /// Lab of a working-space CMYK colour for `intent`: absolute (the paper colour kept) for the
+    /// absolute colorimetric intent in a Generic-type space, otherwise [`Self::cmyk_to_lab`].
+    fn cmyk_to_lab_for(&self, cmyk: [f32; 4], intent: Intent) -> Lab {
+        match &self.cmyk {
+            CmykSpace::Generic(g) if intent == Intent::AbsoluteColorimetric => g.to_lab_abs(cmyk.map(|v| v.clamp(0.0, 1.0))),
+            _ => self.cmyk_to_lab(cmyk),
         }
     }
     /// Lab of working-space CMYK as it displays: [`Self::cmyk_to_lab`] plus, for the built-in
@@ -623,8 +632,9 @@ impl Cms {
     /// space that looks the same, converted with `intent` (Edit → Color Settings › Convert to
     /// Working Space). RGB converts directly from profile to profile, and CMYK between two loaded
     /// profiles through ProPhoto RGB ([`IccProfile::to_same_model_of`]), both with this context's
-    /// black-point compensation; CMYK goes through Lab when either space is built in. Grey and
-    /// Lab colours stay as they are.
+    /// black-point compensation; CMYK goes through Lab when either space is built in, with a
+    /// Generic-type source's paper kept for the absolute colorimetric intent. Grey and Lab colours
+    /// stay as they are.
     pub fn convert_into(&self, dest: &Cms, c: &Color, intent: Intent) -> Color {
         match *c {
             Color::Rgb { r, g, b } => {
@@ -646,7 +656,7 @@ impl Cms {
                 };
                 let [c, m, y, k] = match direct.as_deref() {
                     Some(&[c, m, y, k]) => [c, m, y, k],
-                    _ => dest.lab_to_cmyk(self.cmyk_to_lab(inks), intent),
+                    _ => dest.lab_to_cmyk(self.cmyk_to_lab_for(inks, intent), intent),
                 };
                 Color::Cmyk { c, m, y, k }
             }

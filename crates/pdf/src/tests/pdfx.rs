@@ -216,7 +216,8 @@ fn a_registered_condition_profile_names_its_condition_and_embeds_itself() {
     assert!(t.contains("/OutputConditionIdentifier(FOGRA51)") && t.contains("/RegistryName(https://example.com/registry)"));
     // Other profiles keep their name as the identifier, with no registry.
     let t = text(&export(&d, &opts(Standard::PdfX4, |s| s.output.output_intent = GENERIC_CMYK.into())).unwrap());
-    assert!(!t.contains("/RegistryName"), "{t}");
+    let id = GENERIC_CMYK.replace('(', r"\(").replace(')', r"\)");
+    assert!(t.contains(&format!("/OutputConditionIdentifier({id})")) && !t.contains("/RegistryName"), "{t}");
 }
 
 #[test]
