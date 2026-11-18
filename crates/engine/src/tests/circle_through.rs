@@ -126,8 +126,8 @@ fn two_points_are_the_ends_of_a_diameter() {
 /// With `center`, the circle is centered there and its edge passes through the one point in
 /// `points`: from the bottom-right corner (200, 200) of a 100 pt square through its top-left
 /// corner (100, 100), the radius is the square's diagonal, in one undo step. A point on the center
-/// and a circle past the canvas are refused, and so is a `center` or `points` that is not one
-/// `[x, y]` pair of finite numbers; nothing is drawn and no undo step is recorded.
+/// and a circle past the canvas are refused, and so is a `center` (null included) or `points` that
+/// is not one `[x, y]` pair of finite numbers; nothing is drawn and no undo step is recorded.
 #[test]
 fn a_center_and_a_point_on_the_edge_give_the_circle() {
     let mut s = session();
@@ -157,6 +157,8 @@ fn a_center_and_a_point_on_the_edge_give_the_circle() {
         (json!([0]), json!([[10, 0]])),
         (json!("0,0"), json!([[10, 0]])),
         (json!([0, 0, 1]), json!([[10, 0]])),
+        (Value::Null, json!([[10, 0]])),
+        (Value::Null, json!([[10, 0], [20, 0]])),
     ] {
         let e = s.execute(C, &json!({ "center": center, "points": points })).unwrap_err().to_string();
         assert!(e.contains("`center` must be an [x, y] pair of numbers, with one [x, y] pair in `points`"), "{center} {points}: {e}");

@@ -419,8 +419,9 @@ fn ellipse(s: &mut Session, p: &Value) -> Result<Value> {
 fn circle_through_points(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "shape.circleThroughPoints";
     const SAME: &str = "no circle passes through these points: two are the same or all three lie on one line";
-    let (center, radius) = match p.get("center").filter(|v| !v.is_null()) {
-        // From a center: the circle at `center` whose edge passes through the one point.
+    let (center, radius) = match p.get("center") {
+        // From a center: the circle at `center` whose edge passes through the one point. A null
+        // `center` is refused, as a null `points` with a center is.
         Some(c) => {
             let one = p.get("points").and_then(Value::as_array).and_then(|v| match v.as_slice() {
                 [q] => pair(q),
