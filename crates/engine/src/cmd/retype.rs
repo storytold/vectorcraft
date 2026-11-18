@@ -302,63 +302,67 @@ impl Line {
 /// The glyphs laid out are bounded by a multiple of the number of glyphs.
 fn verified(lines: Vec<Line>, system_layout: bool, unmatched: &mut Vec<NodeId>) -> Vec<Line> {
     // Glyphs laid out in all, at most: past it, the glyphs left unchecked stay outlines.
-    let mut budget = lines.iter().map(|l| l.pieces.len()).sum::<usize>().saturating_mul(8).saturating_add(256);
+    let mut budget = lines.iter().map(|l| l.pieces.len()).sum::<usize>().saturating_mul(16).saturating_add(256);
+    let mut todo: std::collections::VecDeque<Line> = lines.into();
     let mut out = vec![];
-    for l in lines {
+    while let Some(l) = todo.pop_front() {
         let n = l.pieces.len();
-        // Each new line starts at `s`. Its type is laid out over a window from `s` that doubles
-        // while the type draws the window's glyphs as the outlines do, so finding where it stops
-        // costs about twice the glyphs before that point, not the whole rest of the line each time.
-        let mut s = 0;
-        while s < n {
-            let mut w = 8usize;
-            loop {
-                let e = n.min(s.saturating_add(w));
-                let Some(part) = l.part(s, e) else {
-                    s = n;
+        // The line's type is laid out over a window from its start that doubles while the type
+        // draws the window's glyphs as the outlines do, so finding where it stops costs about
+        // twice the glyphs before that point, not the whole rest of the line each time.
+        let mut w = 8usize;
+        loop {
+            let e = n.min(w);
+            let Some(part) = l.part(0, e) else { break };
+            let Some(left) = budget.checked_sub(e) else {
+                // Unchecked glyphs stay outlines.
+                unmatched.extend(l.pieces.iter().copied());
+                break;
+            };
+            budget = left;
+            match part.first_mismatch(&part.text_object(system_layout)) {
+                // The whole line is drawn as it was: one object.
+                None if e == n => {
+                    out.push(part);
                     break;
-                };
-                let Some(left) = budget.checked_sub(e - s) else {
-                    // Unchecked glyphs stay outlines.
-                    unmatched.extend(l.pieces.get(s..).unwrap_or_default().iter().copied());
-                    s = n;
+                }
+                None => w = w.saturating_mul(2),
+                // The first glyph on its own may still be drawn as it was (a contextual form
+                // changed it in the line); else it stays an outline. Checked again either way.
+                Some(0) if n > 1 => {
+                    todo.extend_front_parts(&l, [(0, 1), (1, n)]);
                     break;
-                };
-                budget = left;
-                match part.first_mismatch(&part.text_object(system_layout)) {
-                    // The rest of the line is drawn as it was: one object.
-                    None if e == n => {
-                        out.push(part);
-                        s = n;
-                        break;
-                    }
-                    None => w = w.saturating_mul(2),
-                    // The first glyph on its own may still be drawn as it was (a contextual form
-                    // changed it in the line); else it stays an outline.
-                    Some(0) => {
-                        let alone = if e - s > 1 { l.part(s, s + 1) } else { Some(part) };
-                        match alone {
-                            Some(a) if budget > 0 && a.first_mismatch(&a.text_object(system_layout)).is_none() => {
-                                budget -= 1;
-                                out.push(a);
-                            }
-                            _ => unmatched.extend(l.pieces.get(s).copied()),
-                        }
-                        s += 1;
-                        break;
-                    }
-                    // The glyphs before the mismatch are drawn as they were: one object; the next
-                    // line starts at the mismatch.
-                    Some(k) => {
-                        out.extend(l.part(s, s + k));
-                        s += k;
-                        break;
-                    }
+                }
+                Some(0) => {
+                    unmatched.extend(l.pieces.first().copied());
+                    break;
+                }
+                // The glyphs before the mismatch, then the rest, each checked as a line of its
+                // own: the type before the mismatch may draw otherwise without what follows it (a
+                // font can place a glyph by the glyph after it).
+                Some(k) => {
+                    todo.extend_front_parts(&l, [(0, k), (k, n)]);
+                    break;
                 }
             }
         }
     }
     out
+}
+
+/// Puts parts of a line at the front of the work list, in order.
+trait FrontParts {
+    fn extend_front_parts<const N: usize>(&mut self, l: &Line, ranges: [(usize, usize); N]);
+}
+
+impl FrontParts for std::collections::VecDeque<Line> {
+    fn extend_front_parts<const N: usize>(&mut self, l: &Line, ranges: [(usize, usize); N]) {
+        for (a, b) in ranges.into_iter().rev() {
+            if let Some(p) = l.part(a, b) {
+                self.push_front(p);
+            }
+        }
+    }
 }
 
 fn space_advance(face: &vectorcraft_text::FontFace) -> f64 {
