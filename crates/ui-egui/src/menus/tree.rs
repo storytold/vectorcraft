@@ -472,6 +472,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 ),
                 Sep,
                 c("Create Outlines", "type.createOutlines"),
+                c("Retype", "type.retype"),
                 c("Scale Text Attributes", "type.scaleTextAttributes"),
                 c("Optical Margin Alignment", "type.opticalMarginAlignment"),
                 Sep,
