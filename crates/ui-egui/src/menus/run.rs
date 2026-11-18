@@ -905,7 +905,11 @@ fn run_ui_part9(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
 fn run_ui_part10(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<Value, String>> {
     let s = |k: &str| p.get(k).and_then(Value::as_str).map(str::to_string);
     let r = match id {
-        "ui.expandDialog" => crate::dialogs::expand::open(app),
+        "ui.expandDialog" => match opt_bool(p, "immediate") {
+            Ok(Some(true)) => crate::dialogs::expand::expand_now(app),
+            Ok(_) => crate::dialogs::expand::open(app),
+            Err(e) => Err(e),
+        },
         "ui.simplifyAuto" => crate::dialogs::simplify_slider::auto(app),
         "ui.simplifyMoreOptions" => crate::dialogs::simplify_slider::more_options(app),
         "ui.smoothAuto" => crate::dialogs::smooth_slider::auto(app),
