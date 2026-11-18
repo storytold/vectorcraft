@@ -213,6 +213,14 @@ liquify-list-end	{0}, {1}	{0} en {1}
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	de hoofdscriptengine is bij elke uitvoering nieuw en wordt nooit bewaard, dus kan hij niet worden verwijderd
 @msg	there is no script engine named {name}	er is geen scriptengine met de naam {name}
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` is alleen voor een uitvoering zonder iemand om te vragen: in de app beantwoordt de persoon elk dialoogvenster
+@msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel` moet een geheel getal van 1 tot {_1} zijn
+@msg	`args{place}` is nested more than 64 levels deep	`args{place}` is meer dan 64 niveaus diep genest
+@msg	`args` must be an object	`args` moet een object zijn
+@msg	`args` is larger than 1 MiB	`args` is groter dan 1 MiB
+@msg	`path` is empty	`path` is leeg
+@msg	`installed` takes a `path`, not a `source`	`installed` neemt een `path`, geen `source`
+@msg	`path` must name a .js or .jsx file	`path` moet een .js- of .jsx-bestand aanwijzen
+@msg	give exactly one of `path` and `source`	geef precies een van `path` en `source`
 @msg	Running a script	Er wordt een script uitgevoerd
 @msg	Data Recovery can't keep copies in {path}: {e}	Gegevensherstel kan geen kopieën bewaren in {path}: {e}
 @msg	Plug-ins can't be loaded from {path}: {e}	Plug-ins kunnen niet worden geladen uit {path}: {e}
@@ -2273,6 +2281,7 @@ digits	Malayalam	Malayalam
 	Underline	Onderstrepen
 	Vertical Scale %	Verticale schaal %
 	Axis	As
+	Axis Angle	Ashoek
 	ICF Top/Right	ICF boven/rechts
 	ICF Bottom/Left	ICF onder/links
 	Show Font Height Options	Opties voor letterhoogte tonen
@@ -2828,6 +2837,7 @@ digits	Malayalam	Malayalam
 	Line Properties:	Lijneigenschappen:
 	Line Length:	Lijnlengte:
 	Line Angle:	Lijnhoek:
+	Constrain Pie Angle	Taarthoek vastleggen
 	Rectangle Properties:	Rechthoekeigenschappen:
 	Shape Properties:	Vormeigenschappen:
 	Shape Properties	Vormeigenschappen
@@ -2869,6 +2879,7 @@ digits	Malayalam	Malayalam
 	Scatter:	Verspreiding:
 	Rotation:	Rotatie:
 	Rotation relative to:	Rotatie ten opzichte van:
+	Hue Jitter:	Tintvariatie:
 	Brush Scale Options	Opties voor penseelschaling
 	Scale Proportionately	Proportioneel schalen
 	Stretch to Fit Stroke Length	Uitrekken tot lijnlengte
@@ -2907,6 +2918,7 @@ digits	Malayalam	Malayalam
 	Size:	Grootte:
 	Calligraphic Brush Options	Opties voor kalligrafisch penseel
 	Bristle Brush Options	Opties voor borstelpenseel
+	Roundness	Rondheid
 	Roundness:	Rondheid:
 	Shape:	Vorm:
 	Bristle Length:	Borstellengte:
@@ -3903,6 +3915,8 @@ theme	Appearance	Vormgeving
 	Current Brush	Huidig penseel
 	Current Symbol	Huidig symbool
 	Delete Brush	Penseel verwijderen
+	Delete Color	Kleur verwijderen
+	Restore Generated Table	Gegenereerde tabel herstellen
 	Delete Symbol	Symbool verwijderen
 	Delete the selected symbol?	Het geselecteerde symbool verwijderen?
 	Delete the selected symbols?	De geselecteerde symbolen verwijderen?
@@ -4356,6 +4370,7 @@ theme	Appearance	Vormgeving
 	90° & 45° Angles	Hoeken van 90° & 45°
 	90° Angles	Hoeken van 90°
 	Additional Plug-ins Folder	Extra map met plug-ins
+	Plug-in Instruction Budget	Instructiebudget voor plug-ins
 	Additional Fonts Folder	Extra map met lettertypen
 	Alignment Guides	Uitlijnhulplijnen
 	Anchor Points, Handle, and Bounding Box Display	Weergave van ankerpunten, greep en begrenzingskader
@@ -4382,6 +4397,7 @@ theme	Appearance	Vormgeving
 	Data Recovery	Gegevensherstel
 	Default Language	Standaardtaal
 	Disable Auto Add/Delete	Automatisch toevoegen/verwijderen uitschakelen
+	Interpolate Control Points When Moving Anchors	Richtingsgrepen interpoleren bij het verplaatsen van ankerpunten
 	Display All Blacks Accurately	Alle zwarttinten nauwkeurig weergeven
 	Display All Blacks as Rich Black	Alle zwarttinten weergeven als rijk zwart
 	Display Bitmaps as Anti-aliased Images in Pixel Preview	Bitmaps in pixelvoorbeeld weergeven als afbeeldingen met antialiasing
@@ -4470,6 +4486,9 @@ theme	Appearance	Vormgeving
 	Printing / Exporting	Afdrukken / exporteren
 	Real-time Drawing and Editing	Tekenen en bewerken in realtime
 	Use Monitor Profile for Canvas	Monitorprofiel gebruiken voor canvas
+	Refresh Monitor Profile	Monitorprofiel vernieuwen
+@msg	turn on Use Monitor Profile for Canvas first	schakel eerst 'Monitorprofiel gebruiken voor canvas' in
+@msg	this build doesn't read display profiles	deze versie leest geen beeldschermprofielen
 	The canvas is drawn in sRGB.	Het canvas wordt in sRGB getekend.
 	Canvas display profile:	Weergaveprofiel van het canvas:
 	The system matches the window to the display's colors.	Het systeem stemt het venster af op de kleuren van het scherm.
@@ -4868,6 +4887,9 @@ font-technology	Variable	Variabel
 	Search commands, tools, panels and effects…	Opdrachten, gereedschappen, panelen en effecten zoeken…
 	No commands match	Geen opdrachten gevonden
 	{pos} of {total}: {name}	{pos} van {total}: {name}
+	No menu item	Geen menu-item
+	Toolbar	Gereedschapsbalk
+	{toolbar}, in the {tool} group	{toolbar}, in de groep {tool}
 @plural	{n} result|{n} results	{n} resultaat|{n} resultaten
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} van {n} resultaat. Typ verder om ze te beperken.|{shown} van {n} resultaten. Typ verder om ze te beperken.
 	Recent Commands	Recente opdrachten
@@ -4904,6 +4926,7 @@ font-technology	Variable	Variabel
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Het muiswiel met Cmd/Ctrl ingedrukt schuift het canvas zijwaarts.
 	Dragging sideways on a numeric field's label changes the field's value.	Zijwaarts slepen over het label van een numeriek veld wijzigt de waarde van het veld.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Een draaigebaar met twee vingers op een trackpad draait de weergave van het canvas.
+	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Als u ankerpunten verplaatst, behoudt elke curve met één verplaatst uiteinde zijn vorm ten opzichte van zijn uiteinden.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Als u de sneltoets van een gereedschap ingedrukt houdt, is dat gereedschap gekozen tot u loslaat, en daarna wordt het vorige gereedschap weer gekozen.
 	Shows the bounding box while you move the selection or draw a shape.	Toont het begrenzingskader terwijl u de selectie verplaatst of een vorm tekent.
 	Create Trim Marks draws Japanese-style marks instead of Roman ones.	Afsnijtekens maken tekent tekens in Japanse stijl in plaats van Romeinse.
@@ -5430,6 +5453,7 @@ imageTrace	Outline	Contour
 @msg	choose a folder to export to	kies een map om naar te exporteren
 @msg	choose a location for the package	kies een locatie voor het pakket
 @msg	clipboard is empty	het klembord is leeg
+@msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: er moet ten minste één kleur in de kleurentabel blijven
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` is geen kleur zoals "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: maximaal {MAX_TABLE} kleuren
 @msg	command `{0}` is not available right now: {1}	opdracht `{0}` is nu niet beschikbaar: {1}
@@ -5484,6 +5508,12 @@ imageTrace	Outline	Contour
 @msg	no PNG encoder	geen PNG-encoder
 @msg	no active document	geen actief document
 @msg	no active perspective plane	geen actief perspectiefvlak
+@msg	the perspective grid is hidden	het perspectiefraster is verborgen
+@msg	Automatic Plane Positioning is off: turn on anchorPoint or gridlineIntersection (perspective.widget.options)	Automatische vlakpositionering staat uit: zet anchorPoint of gridlineIntersection aan (perspective.widget.options)
+@msg	anchorPoint must be true or false	anchorPoint moet true of false zijn
+@msg	gridlineIntersection must be true or false	gridlineIntersection moet true of false zijn
+@msg	tolerance must be 0 or more	tolerance moet 0 of meer zijn
+@msg	give `at` or `clear`, not both	geef `at` of `clear`, niet beide
 @msg	no anchor points selected	geen ankerpunten geselecteerd
 @msg	`points` must be two or three [x, y] pairs of numbers	`points` moet uit twee of drie getallenparen [x, y] bestaan
 @msg	direct-select two or three anchor points, or give `points`	selecteer met directe selectie twee of drie ankerpunten of geef `points` op
@@ -5889,6 +5919,8 @@ imageTrace	Outline	Contour
 @msg	Reload the page to go on (changes not saved yet may be lost).	Laad de pagina opnieuw om door te gaan (nog niet opgeslagen wijzigingen kunnen verloren gaan).
 @msg	tool (a tool id) is required	tool (een gereedschaps-id) is vereist
 @msg	{tool} isn't in a toolbar group of several tools	{tool} zit niet in een werkbalkgroep met meerdere gereedschappen
+@msg	Presentation Mode hides the toolbars: change the screen mode to show them	Presentatiemodus verbergt de werkbalken: wijzig de schermmodus om ze te tonen
+@msg	Tab has hidden the toolbars: press Tab to show them	Tab heeft de werkbalken verborgen: druk op Tab om ze te tonen
 @msg	onto must name a panel floating in another group	onto moet een zwevend paneel in een andere groep benoemen
 @msg	below and above must name a panel floating in another group	below en above moeten een zwevend paneel in een andere groep benoemen
 @msg	give only one of onto, below and above	geef slechts één van onto, below en above
@@ -6462,6 +6494,7 @@ imageTrace	Outline	Contour
 @msg	a linked JavaScript file is outside the read roots	een gekoppeld JavaScript-bestand staat buiten de leesroots
 @msg	a linked image file is outside the read roots	een gekoppeld afbeeldingsbestand staat buiten de leesroots
 @msg	a linked file's export folder is outside the read roots	de exportmap van een gekoppeld bestand staat buiten de leesroots
+@msg	a linked file's editing data can't be read to check it against the read roots	de bewerkingsgegevens van een gekoppeld bestand kunnen niet worden gelezen om ze aan de leesroots te toetsen
 @msg	a name names one asset: give multiple: false, or one object	een naam noemt één asset: geef multiple: false, of één object
 @msg	a namespace declaration uses a reserved prefix or URI	een naamruimtedeclaratie gebruikt een gereserveerd voorvoegsel of een gereserveerde URI
 @msg	a namespace qualifier is undefined	een naamruimtekwalificatie is niet gedefinieerd
@@ -8174,6 +8207,7 @@ mark-style	Japanese	Japans
 	Cove	Cove
 	Depth	Diepte
 	Front	Voorkant
+	Side	Zijkant
 	Isometric Bottom	Isometrisch onder
 	Isometric Left	Isometrisch links
 	Isometric Right	Isometrisch rechts
@@ -8268,7 +8302,7 @@ mark-style	Japanese	Japans
 @msg	each of `{GRAPHICS}` must be an object	elk item van `{GRAPHICS}` moet een object zijn
 @msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	items van `{GRAPHICS}` nemen symbol, face, x, y, scale en rotation aan, niet `{k}`
 @msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	elk item van `{GRAPHICS}` heeft `symbol` nodig, de naam van een symbool
-@msg	`{GRAPHICS}` face must be front or back	face in `{GRAPHICS}` moet front of back zijn
+@msg	`{GRAPHICS}` face must be front, back or side	face in `{GRAPHICS}` moet front, back of side zijn
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} in `{GRAPHICS}` moet een getal van {lo} tot {hi} zijn
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` moet een array zijn
 @msg	Graphics map onto planar faces: use the Extrude or Plane object type	Illustraties worden op platte vlakken geplaatst: gebruik het objecttype Extruderen of Vlak
@@ -9638,6 +9672,14 @@ breakText	Glyphs	Glyphs
 	Remove Gaps	Tussenruimten verwijderen
 @msg	that makes too many pieces (at most 100000): make the dashes longer	dat geeft te veel stukken (hoogstens 100000): maak de streepjes langer
 @msg	select paths, or segments, to divide	selecteer paden of segmenten om te verdelen
+# Path Precision Tools add-on: Smooth Bridge.
+	Smooth Bridge…	Vloeiende brug…
+	Smooth Bridge	Vloeiende brug
+	Keep Originals	Originelen behouden
+@msg	select two circles to bridge	selecteer twee cirkels om te verbinden
+@msg	one circle is inside the other	de ene cirkel ligt binnen de andere
+@msg	the circles are too far apart for this radius: raise the radius	de cirkels liggen te ver uit elkaar voor deze straal: vergroot de straal
+@msg	the circles are too far apart for this radius	de cirkels liggen te ver uit elkaar voor deze straal
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	Gemeenschappelijke raaklijnen…
 	Common Tangents	Gemeenschappelijke raaklijnen

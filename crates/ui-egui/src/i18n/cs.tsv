@@ -1779,6 +1779,7 @@ digits	Malayalam	Malajálamské
 	Underline	Podtržení
 	Vertical Scale %	Svislá změna velikosti %
 	Axis	Osa
+	Axis Angle	Úhel osy
 	ICF Top/Right	ICF horní/pravý
 	ICF Bottom/Left	ICF dolní/levý
 	Show Font Height Options	Zobrazit možnosti výšky písma
@@ -2440,6 +2441,7 @@ digits	Malayalam	Malajálamské
 	Line Properties:	Vlastnosti čáry:
 	Line Length:	Délka čáry:
 	Line Angle:	Úhel čáry:
+	Constrain Pie Angle	Zachovat úhel výseče
 	Rectangle Properties:	Vlastnosti obdélníku:
 	Shape Properties:	Vlastnosti tvaru:
 	Shape Properties	Vlastnosti tvaru
@@ -2483,6 +2485,7 @@ digits	Malayalam	Malajálamské
 	Scatter:	Rozptyl:
 	Rotation:	Otočení:
 	Rotation relative to:	Otočení vzhledem k:
+	Hue Jitter:	Kolísání odstínu:
 	Brush Scale Options	Možnosti velikosti štětce
 	Scale Proportionately	Měnit velikost proporcionálně
 	Stretch to Fit Stroke Length	Roztáhnout na délku tahu
@@ -2521,6 +2524,7 @@ digits	Malayalam	Malajálamské
 	Size:	Velikost:
 	Calligraphic Brush Options	Možnosti kaligrafického štětce
 	Bristle Brush Options	Možnosti štětinového štětce
+	Roundness	Zakulacení
 	Roundness:	Zakulacení:
 	Shape:	Tvar:
 	Bristle Length:	Délka štětin:
@@ -3582,6 +3586,8 @@ theme	Appearance	Motiv
 	Current Brush	Aktuální štětec
 	Current Symbol	Aktuální symbol
 	Delete Brush	Odstranit štětec
+	Delete Color	Odstranit barvu
+	Restore Generated Table	Obnovit vygenerovanou tabulku
 	Delete Symbol	Odstranit symbol
 	Delete the selected symbol?	Odstranit vybraný symbol?
 	Delete the selected symbols?	Odstranit vybrané symboly?
@@ -4042,6 +4048,7 @@ theme	Appearance	Motiv
 	90° & 45° Angles	Úhly 90° a 45°
 	90° Angles	Úhly 90°
 	Additional Plug-ins Folder	Další složka zásuvných modulů
+	Plug-in Instruction Budget	Rozpočet instrukcí zásuvných modulů
 	Additional Fonts Folder	Další složka písem
 	Alignment Guides	Vodítka zarovnání
 	Anchor Points, Handle, and Bounding Box Display	Zobrazení kotevních bodů, úchytů a ohraničovacího rámečku
@@ -4068,6 +4075,7 @@ theme	Appearance	Motiv
 	Data Recovery	Obnovení dat
 	Default Language	Výchozí jazyk
 	Disable Auto Add/Delete	Vypnout automatické přidávání/odstraňování
+	Interpolate Control Points When Moving Anchors	Interpolovat směrové úchyty při přesouvání kotevních bodů
 	Display All Blacks Accurately	Zobrazovat všechny černé přesně
 	Display All Blacks as Rich Black	Zobrazovat všechny černé jako sytou černou
 	Display Bitmaps as Anti-aliased Images in Pixel Preview	Zobrazovat bitmapy v náhledu obrazových bodů vyhlazené
@@ -4170,6 +4178,9 @@ theme	Appearance	Motiv
 	Printing / Exporting	Tisk / export
 	Real-time Drawing and Editing	Kreslení a úpravy v reálném čase
 	Use Monitor Profile for Canvas	Použít profil monitoru pro plátno
+	Refresh Monitor Profile	Obnovit profil monitoru
+@msg	turn on Use Monitor Profile for Canvas first	nejprve zapněte „Použít profil monitoru pro plátno“
+@msg	this build doesn't read display profiles	tato verze nečte profily displejů
 	The canvas is drawn in sRGB.	Plátno se vykresluje v sRGB.
 	Canvas display profile:	Profil displeje pro plátno:
 	The system matches the window to the display's colors.	Systém přizpůsobuje okno barvám displeje.
@@ -4579,6 +4590,9 @@ font-technology	Variable	Variabilní
 	Search commands, tools, panels and effects…	Hledat příkazy, nástroje, panely a efekty…
 	No commands match	Žádný příkaz neodpovídá
 	{pos} of {total}: {name}	{pos} z {total}: {name}
+	No menu item	Žádná položka nabídky
+	Toolbar	Panel nástrojů
+	{toolbar}, in the {tool} group	{toolbar}, ve skupině {tool}
 @plural	{n} result|{n} results	{n} výsledek|{n} výsledky|{n} výsledků
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} z {n} výsledku. Pište dál a výsledky se zúží.|{shown} z {n} výsledků. Pište dál a výsledky se zúží.|{shown} z {n} výsledků. Pište dál a výsledky se zúží.
 	Recent Commands	Nedávné příkazy
@@ -4615,6 +4629,7 @@ font-technology	Variable	Variabilní
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Kolečko myši s podrženou klávesou Cmd/Ctrl posouvá plátno do stran.
 	Dragging sideways on a numeric field's label changes the field's value.	Tažení do stran po popisku číselného pole mění hodnotu pole.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Gesto otočení dvěma prsty na trackpadu otáčí zobrazení plátna.
+	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Když přesouváte kotvové body, každá křivka s jedním přesunutým koncem si zachová tvar vůči svým koncům.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Podržení zkratky nástroje vybere nástroj, dokud ji nepustíte, a pak se znovu vybere předchozí nástroj.
 	Shows the bounding box while you move the selection or draw a shape.	Zobrazí ohraničovací rámeček, když přesouváte výběr nebo kreslíte tvar.
 	Create Trim Marks draws Japanese-style marks instead of Roman ones.	Vytvořit značky ořezu nakreslí značky v japonském stylu místo římských.
@@ -5099,6 +5114,14 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	hlavní skriptovací jádro je pro každý běh nové a nikdy se neuchovává, proto je nelze zahodit
 @msg	there is no script engine named {name}	skriptovací jádro s názvem {name} neexistuje
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` je jen pro běh, kde se nemá koho zeptat: v aplikaci odpovídá na každý dialog uživatel
+@msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel` musí být celé číslo od 1 do {_1}
+@msg	`args{place}` is nested more than 64 levels deep	`args{place}` je vnořen hlouběji než 64 úrovní
+@msg	`args` must be an object	`args` musí být objekt
+@msg	`args` is larger than 1 MiB	`args` je větší než 1 MiB
+@msg	`path` is empty	`path` je prázdný
+@msg	`installed` takes a `path`, not a `source`	`installed` přijímá `path`, ne `source`
+@msg	`path` must name a .js or .jsx file	`path` musí označovat soubor .js nebo .jsx
+@msg	give exactly one of `path` and `source`	zadejte právě jedno z `path` a `source`
 @msg	Running a script	Běží skript
 @msg	Copied the script report	Zpráva o skriptu zkopírována
 @msg	Script file access denied: {path}	Přístup skriptu k souborům byl odepřen: {path}
@@ -5362,6 +5385,7 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	choose a folder to export to	zvolte složku pro export
 @msg	choose a location for the package	zvolte umístění balíčku
 @msg	clipboard is empty	schránka je prázdná
+@msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: v tabulce barev musí zůstat alespoň jedna barva
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` není barva jako "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: nejvýše {MAX_TABLE} barev
 @msg	command `{0}` is not available right now: {1}	příkaz `{0}` nyní není k dispozici: {1}
@@ -5429,6 +5453,12 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	no PNG encoder	chybí kodér PNG
 @msg	no active document	žádný aktivní dokument
 @msg	no active perspective plane	žádná aktivní perspektivní rovina
+@msg	the perspective grid is hidden	perspektivní mřížka je skrytá
+@msg	Automatic Plane Positioning is off: turn on anchorPoint or gridlineIntersection (perspective.widget.options)	Automatické umístění roviny je vypnuté: zapněte anchorPoint nebo gridlineIntersection (perspective.widget.options)
+@msg	anchorPoint must be true or false	anchorPoint musí být true nebo false
+@msg	gridlineIntersection must be true or false	gridlineIntersection musí být true nebo false
+@msg	tolerance must be 0 or more	tolerance musí být 0 nebo více
+@msg	give `at` or `clear`, not both	zadejte `at` nebo `clear`, ne obojí
 @msg	no anchor points selected	nejsou vybrány žádné kotevní body
 @msg	`points` must be two or three [x, y] pairs of numbers	`points` musí být dvě nebo tři dvojice čísel [x, y]
 @msg	direct-select two or three anchor points, or give `points`	vyberte přímým výběrem dva nebo tři kotevní body, nebo zadejte `points`
@@ -5900,6 +5930,8 @@ variable-list-end	{0}, {1}	{0} a {1}
 @msg	Reload the page to go on (changes not saved yet may be lost).	Pokračujte obnovením stránky (dosud neuložené změny se mohou ztratit).
 @msg	tool (a tool id) is required	tool (ID nástroje) je povinný
 @msg	{tool} isn't in a toolbar group of several tools	{tool} není ve skupině panelu nástrojů s více nástroji
+@msg	Presentation Mode hides the toolbars: change the screen mode to show them	Režim prezentace skrývá panely nástrojů: zobrazíte je změnou režimu obrazovky
+@msg	Tab has hidden the toolbars: press Tab to show them	Klávesa Tab skryla panely nástrojů: zobrazíte je stisknutím klávesy Tab
 @msg	onto must name a panel floating in another group	onto musí určovat panel plovoucí v jiné skupině
 @msg	below and above must name a panel floating in another group	below a above musí určovat panel plovoucí v jiné skupině
 @msg	give only one of onto, below and above	zadejte jen jedno z onto, below a above
@@ -5990,6 +6022,7 @@ variable-list-end	{0}, {1}	{0} a {1}
 @msg	a linked JavaScript file is outside the read roots	propojený soubor JavaScript je mimo kořeny pro čtení
 @msg	a linked image file is outside the read roots	propojený soubor obrázku je mimo kořeny pro čtení
 @msg	a linked file's export folder is outside the read roots	exportní složka propojeného souboru je mimo kořeny pro čtení
+@msg	a linked file's editing data can't be read to check it against the read roots	editační data propojeného souboru nelze přečíst a ověřit vůči kořenům pro čtení
 @msg	automation path rejected: outside the write root {root}: {path}	cesta automatizace odmítnuta: mimo kořen pro zápis {root}: {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	cesta automatizace odmítnuta: mimo kořeny pro zápis {roots}: {path}
 @msg	automation path rejected: path is empty	cesta automatizace odmítnuta: cesta je prázdná
@@ -6419,6 +6452,7 @@ mark-style	Japanese	Japonské
 	Cove	Žlábek
 	Depth	Hloubka
 	Front	Zepředu
+	Side	Z boku
 	Isometric Bottom	Izometricky zdola
 	Isometric Left	Izometricky zleva
 	Isometric Right	Izometricky zprava
@@ -6513,7 +6547,7 @@ mark-style	Japanese	Japonské
 @msg	each of `{GRAPHICS}` must be an object	každá položka `{GRAPHICS}` musí být objekt
 @msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	položky `{GRAPHICS}` přijímají symbol, face, x, y, scale a rotation, ne `{k}`
 @msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	každá položka `{GRAPHICS}` potřebuje `symbol`, název symbolu
-@msg	`{GRAPHICS}` face must be front or back	face v `{GRAPHICS}` musí být front nebo back
+@msg	`{GRAPHICS}` face must be front, back or side	face v `{GRAPHICS}` musí být front, back nebo side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} v `{GRAPHICS}` musí být číslo od {lo} do {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` musí být pole
 @msg	Graphics map onto the Plane, Extrude and Revolve object types	Grafika se mapuje na typy objektu Rovina, Vysunutí a Rotační těleso
@@ -7746,6 +7780,14 @@ breakText	Glyphs	Glyfy
 	Remove Gaps	Odstranit mezery
 @msg	that makes too many pieces (at most 100000): make the dashes longer	tím vznikne příliš mnoho dílů (nejvýše 100000): prodlužte čárky
 @msg	select paths, or segments, to divide	vyberte cesty nebo segmenty k rozdělení
+# Path Precision Tools add-on: Smooth Bridge.
+	Smooth Bridge…	Hladký most…
+	Smooth Bridge	Hladký most
+	Keep Originals	Zachovat originály
+@msg	select two circles to bridge	vyberte dva kruhy k propojení
+@msg	one circle is inside the other	jeden kruh je uvnitř druhého
+@msg	the circles are too far apart for this radius: raise the radius	kruhy jsou pro tento poloměr příliš daleko od sebe: zvětšete poloměr
+@msg	the circles are too far apart for this radius	kruhy jsou pro tento poloměr příliš daleko od sebe
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	Společné tečny…
 	Common Tangents	Společné tečny

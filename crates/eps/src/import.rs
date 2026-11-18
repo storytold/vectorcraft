@@ -70,6 +70,8 @@ mod tests_native;
 #[cfg(test)]
 mod tests_reads;
 #[cfg(test)]
+mod tests_strings;
+#[cfg(test)]
 mod tests_type1;
 #[cfg(test)]
 mod tests_type42;
