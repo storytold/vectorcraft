@@ -63,7 +63,7 @@ pub(super) fn sb_merge(s: &mut Session, p: &Value) -> Result<Value> {
             && let Some(&q) = pts.first()
             && let Some((i, run)) = map.stroke_at(&outlines, q, tol)
             && let (Some(leaf), Some(drawn)) = (leaves.get(i), outlines.get(i))
-            && let Some(rest) = po::cut_out(drawn, &run, open_filled_as_closed && !leaf.appearance.fill_paint().is_none(), b::outline_snap(drawn))
+            && let Some(rest) = po::cut_out(drawn, &run, open_filled_as_closed && leaf.appearance.has_drawn_fill(), b::outline_snap(drawn))
             && rest.length() > b::outline_snap(drawn)
         {
             // The path keeps the rest of it, and a copy of it with the run under the click goes

@@ -480,8 +480,8 @@ fn reflect_and_shear_tools() {
     assert!((b.width() - 150.0).abs() < 1e-6, "{b:?}");
 }
 
-/// Reflect and Shear return an error for an `axis` they don't take (Reflect's names it and also
-/// takes an angle): nothing moves and no undo step is recorded. A null `axis` counts as not given: Reflect
+/// Reflect and Shear return an error for an `axis` they don't take, naming it (both also take an
+/// angle, Shear's from -359° to 359°): nothing moves and no undo step is recorded. A null `axis` counts as not given: Reflect
 /// then reflects across the vertical axis and Shear shears along the horizontal one.
 #[test]
 fn reflect_and_shear_reject_unknown_axes_without_changing_state() {
@@ -489,13 +489,17 @@ fn reflect_and_shear_reject_unknown_axes_without_changing_state() {
     let a = rect(&mut s, 10.0, 20.0, 30.0, 10.0);
     let n = undo_len(&s);
     let reflect = "axis must be \"vertical\", \"horizontal\" or an angle in degrees";
-    let shear = "`axis` must be one of horizontal, vertical";
+    let shear = "axis must be \"horizontal\", \"vertical\" or an angle in degrees from -359 to 359";
     for (cmd, p, msg) in [
         ("object.reflect", json!({"axis": "diagonal", "origin": [0, 0]}), format!("{reflect}, not `diagonal`")),
         ("object.reflect", json!({"axis": "45", "origin": [0, 0]}), format!("{reflect}, not `45`")),
         ("object.reflect", json!({"axis": true, "origin": [0, 0]}), format!("{reflect}, not `true`")),
-        ("object.shear", json!({"angle": 30, "axis": "diagonal"}), shear.to_string()),
-        ("object.shear", json!({"angle": 30, "axis": 90}), shear.to_string()),
+        ("object.shear", json!({"angle": 30, "axis": "diagonal"}), format!("{shear}, not `diagonal`")),
+        ("object.shear", json!({"angle": 30, "axis": "90"}), format!("{shear}, not `90`")),
+        ("object.shear", json!({"angle": 30, "axis": 360}), format!("{shear}, not `360`")),
+        ("object.shear", json!({"angle": 30, "axis": -359.5}), format!("{shear}, not `-359.5`")),
+        ("object.shear", json!({"angle": 30, "axis": [45]}), format!("{shear}, not `[45]`")),
+        ("object.shear", json!({"angle": 30, "axis": false}), format!("{shear}, not `false`")),
     ] {
         let e = s.execute(cmd, &p).expect_err(&format!("{cmd} {p}"));
         assert_eq!(e.to_string(), format!("invalid parameters for `{cmd}`: {msg}"));
@@ -509,6 +513,56 @@ fn reflect_and_shear_reject_unknown_axes_without_changing_state() {
     s.execute("object.shear", &json!({"angle": 45, "axis": null, "origin": [0, 0]})).unwrap();
     let b = bounds(&s, a);
     assert!((b.y0 + 30.0).abs() < 1e-6 && (b.y1 + 20.0).abs() < 1e-6 && b.width() > 30.0, "along the horizontal axis: {b:?}");
+}
+
+/// Shear along an axis at an angle, counter-clockwise from horizontal on the page: each point
+/// slides along the axis by the tangent of the shear angle times its distance across the axis
+/// from the origin. -359° and 359° are taken, the shear is one undo step and Transform Again
+/// repeats it; 0° and 90° shear as the named axes do, and a copy leaves the original in place.
+#[test]
+fn shear_along_an_axis_at_an_angle() {
+    let anchors = |s: &Session, id: NodeId| -> Vec<Point> {
+        s.doc().unwrap().doc.node(id).unwrap().path_data().unwrap().anchors().map(|(_, _, an)| an.p).collect()
+    };
+    // The axis's direction and the direction a quarter turn counter-clockwise from it, with y down.
+    let sheared = |p: Point, o: Point, axis: f64, angle: f64| {
+        let (a, k) = (axis.to_radians(), angle.to_radians().tan());
+        let (along, across) = (Vec2::new(a.cos(), -a.sin()), Vec2::new(-a.sin(), -a.cos()));
+        p + along * (k * (p - o).dot(across))
+    };
+    let near = |a: &[Point], b: &[Point]| a.len() == b.len() && a.iter().zip(b).all(|(p, q)| p.distance(*q) < 1e-9);
+    let o = Point::new(20.0, 30.0);
+    for (axis, angle) in [(45.0, 30.0), (-120.5, 20.0), (359.0, 30.0), (-359.0, -30.0), (30.0, 30.0)] {
+        let mut s = session();
+        let a = rect(&mut s, 100.0, 100.0, 60.0, 20.0);
+        let before = anchors(&s, a);
+        let n = undo_len(&s);
+        s.execute("object.shear", &json!({"angle": angle, "axis": axis, "origin": [o.x, o.y]})).unwrap();
+        let want: Vec<Point> = before.iter().map(|p| sheared(*p, o, axis, angle)).collect();
+        assert!(near(&anchors(&s, a), &want), "{axis}° {angle}°: {:?}, not {want:?}", anchors(&s, a));
+        assert_eq!(undo_len(&s), n + 1, "one undo step");
+        s.execute("object.transformAgain", &json!({})).unwrap();
+        let again: Vec<Point> = want.iter().map(|p| sheared(*p, o, axis, angle)).collect();
+        assert!(near(&anchors(&s, a), &again), "Transform Again at {axis}°: {:?}", anchors(&s, a));
+    }
+    for (named, axis) in [("horizontal", 0.0), ("vertical", 90.0), ("vertical", -270.0)] {
+        let mut s = session();
+        let a = rect(&mut s, 100.0, 100.0, 60.0, 20.0);
+        s.execute("object.shear", &json!({"angle": 30, "axis": named, "origin": [o.x, o.y]})).unwrap();
+        let by_name = anchors(&s, a);
+        s.execute("edit.undo", &json!({})).unwrap();
+        s.execute("object.shear", &json!({"angle": 30, "axis": axis, "origin": [o.x, o.y]})).unwrap();
+        assert!(near(&anchors(&s, a), &by_name), "{axis}° shears as {named}: {:?}, not {by_name:?}", anchors(&s, a));
+    }
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 60.0, 20.0);
+    let before = anchors(&s, a);
+    s.execute("object.shear", &json!({"angle": 30, "axis": 45, "origin": [o.x, o.y], "copy": true})).unwrap();
+    assert!(near(&anchors(&s, a), &before), "the original stays: {:?}", anchors(&s, a));
+    let copy = *s.doc().unwrap().selection.objects.first().unwrap();
+    assert_ne!(copy, a, "the copy is selected");
+    let want: Vec<Point> = before.iter().map(|p| sheared(*p, o, 45.0, 30.0)).collect();
+    assert!(near(&anchors(&s, copy), &want), "the copy is sheared: {:?}", anchors(&s, copy));
 }
 
 #[test]
@@ -1115,6 +1169,92 @@ fn lasso_picks_gradient_mesh_points() {
     assert_eq!(red, top, "only the points inside the loop are recoloured");
 }
 
+/// With gradient mesh points picked, the Fill proxy (and the Color panel that edits it) shows
+/// the color a solid fill gives them, not the mesh object's own fill: "?" when the picked
+/// points' colors differ, the object's fill again once no point is picked.
+#[test]
+fn the_fill_proxy_shows_the_picked_mesh_points_color() {
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 100.0, 100.0);
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ff8500"})).unwrap();
+    s.execute("object.mesh.create", &json!({"rows": 2, "cols": 2})).unwrap();
+    let object_fill = s.proxy_paints().0;
+    // Round the top row of points.
+    gesture(&mut s, "lasso", &[(90.0, 90.0), (210.0, 90.0), (210.0, 110.0), (90.0, 110.0), (90.0, 110.0)], Mods::default());
+    s.execute("paint.setFill", &json!({"color": "#3366ff"})).unwrap();
+    let shown = s.execute("paint.proxies", &json!({})).unwrap();
+    assert_eq!(s.proxy_paints().0.color().map(|c| c.to_hex()), Some("#3366ff".into()), "the picked points' color: {shown}");
+    assert_eq!(shown["fillMixed"], json!(false));
+    assert_eq!(shown["fill"], json!(s.proxy_paints().0));
+    // One picked point takes another color: the points differ.
+    let Some(NodeKind::Mesh(m)) = s.doc().unwrap().doc.node(a).map(|n| &n.kind) else { panic!("still a gradient mesh") };
+    let first = m.idx(0, 0);
+    s.execute("object.mesh.setPointColor", &json!({"id": a.0, "index": first, "color": "#00ff00"})).unwrap();
+    assert!(s.proxy_mixed().0, "the picked points' colors differ");
+    // Picking none (the Selection tool) shows the object's fill again.
+    s.select_tool("selection", ViewInfo::default()).unwrap();
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    assert_eq!(s.proxy_paints().0, object_fill);
+    assert!(!s.proxy_mixed().0);
+}
+
+/// With the Appearance panel's stroke row active, a solid fill still recolors the picked mesh
+/// points, so the Fill proxy shows them; with its fill row active, the fill goes to that row, and
+/// the proxy shows the row.
+#[test]
+fn the_fill_proxy_follows_where_the_fill_goes_with_an_appearance_row_active() {
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 100.0, 100.0);
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("object.mesh.create", &json!({"rows": 2, "cols": 2})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ff8500"})).unwrap();
+    s.execute("paint.setStroke", &json!({"color": "#000000"})).unwrap();
+    let items = &s.doc().unwrap().doc.node(a).unwrap().appearance.items;
+    let fill_row = items.iter().position(|it| it.is_fill()).expect("a fill row");
+    let stroke_row = items.iter().position(|it| !it.is_fill()).expect("a stroke row");
+    gesture(&mut s, "lasso", &[(90.0, 90.0), (210.0, 90.0), (210.0, 110.0), (90.0, 110.0), (90.0, 110.0)], Mods::default());
+    assert_eq!(s.fill_mesh_points().first().map(|(_, v)| v.len()), Some(3), "the top row is picked");
+    let point_color = |s: &Session| {
+        let Some(NodeKind::Mesh(m)) = s.doc().unwrap().doc.node(a).map(|n| &n.kind) else { panic!("still a gradient mesh") };
+        m.points[m.idx(0, 0)].color.to_hex()
+    };
+
+    s.execute("appearance.setActiveItem", &json!({"index": stroke_row})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#3366ff"})).unwrap();
+    assert_eq!(point_color(&s), "#3366ff", "the stroke row leaves the fill on the picked points");
+    assert_eq!(s.proxy_paints().0.color().map(|c| c.to_hex()), Some("#3366ff".into()));
+    assert!(!s.proxy_mixed().0);
+
+    s.execute("appearance.setActiveItem", &json!({"index": fill_row})).unwrap();
+    assert!(s.fill_mesh_points().is_empty());
+    s.execute("paint.setFill", &json!({"color": "#00ff00"})).unwrap();
+    assert_eq!(point_color(&s), "#3366ff", "the fill row takes the fill");
+    assert_eq!(s.proxy_paints().0.color().map(|c| c.to_hex()), Some("#00ff00".into()));
+}
+
+/// A gradient mesh with points picked selected with another object: a solid fill recolors the
+/// points and fills the other object, and the Fill proxy and its "?" count the points' colors.
+#[test]
+fn the_fill_proxy_counts_picked_mesh_points_beside_other_objects() {
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 100.0, 100.0);
+    let b = rect(&mut s, 300.0, 300.0, 50.0, 50.0);
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("object.mesh.create", &json!({"rows": 2, "cols": 2})).unwrap();
+    gesture(&mut s, "lasso", &[(90.0, 90.0), (210.0, 90.0), (210.0, 110.0), (90.0, 110.0), (90.0, 110.0)], Mods::default());
+    s.execute("select.add", &json!({"ids": [b.0]})).unwrap();
+    assert_eq!(s.doc().unwrap().selection.objects, vec![a, b]);
+    assert_eq!(s.fill_mesh_points().first().map(|(id, v)| (*id, v.len())), Some((a, 3)), "the top row is still picked");
+    s.execute("paint.setFill", &json!({"color": "#3366ff"})).unwrap();
+    let Some(NodeKind::Mesh(m)) = s.doc().unwrap().doc.node(a).map(|n| &n.kind) else { panic!("still a gradient mesh") };
+    assert_eq!(m.points[m.idx(0, 0)].color.to_hex(), "#3366ff");
+    assert_eq!(s.proxy_paints().0.color().map(|c| c.to_hex()), Some("#3366ff".into()));
+    assert!(!s.proxy_mixed().0, "the points and the other object are the same color");
+    s.execute("paint.setFill", &json!({"ids": [b.0], "color": "#00ff00"})).unwrap();
+    assert!(s.proxy_mixed().0, "the picked points and the other object's fill differ");
+}
+
 /// Shift-drag a marquee with the Selection tool (#483): the selected objects it reaches are
 /// deselected and the others selected, the rest of the selection staying as it was.
 #[test]
@@ -1169,9 +1309,11 @@ fn direct_selection_shift_marquee_toggles_anchors() {
     let st = s.doc().unwrap();
     assert_eq!(st.selection.objects, vec![a]);
     assert_eq!(st.selection.partial(a), None);
-    // Group Selection's marquee toggles the same way.
+    // Group Selection's marquee toggles the paths it touches whole: a leaves, b joins (#8047).
     gesture(&mut s, "groupSelection", &top, shift);
-    assert_eq!(s.doc().unwrap().selection.partial(a).map(|p| p.len()), Some(2));
+    let st = s.doc().unwrap();
+    assert_eq!(st.selection.objects, vec![b]);
+    assert_eq!(st.selection.partial(b), None);
 }
 
 /// The Lasso: Shift adds anchors, Alt takes them away, and neither drops the rest of the

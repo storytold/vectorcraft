@@ -531,8 +531,13 @@ fn an_anchor_edit_makes_it_a_plain_path_and_transforms_keep_it_editable() {
     s.execute("addon.pathtools.shape.set", &json!({"id": id.0, "count": 6})).unwrap();
     assert_eq!((path(&s, id).anchor_count(), steps(&s)), (12, n + 1));
     assert!((shape_of(&s, id).unwrap().rotation + 30.0).abs() < 1e-6, "the turn stays");
-    // Stretched across its own axes (it is turned): skewed, so no longer.
+    // Stretched along its turned bounding box: still the shape, wider along its own axis.
     s.execute("object.scale", &json!({"sx": 150, "sy": 100, "origin": [220, 140]})).unwrap();
+    let r = shape_of(&s, id).unwrap();
+    assert!((r.width - 300.0).abs() < 1e-6 && (r.height - 200.0).abs() < 1e-6 && (r.rotation + 30.0).abs() < 1e-6, "{r:?}");
+    s.execute("edit.undo", &json!({})).unwrap();
+    // Stretched across the page's axes (it is turned): skewed, so no longer.
+    s.execute("object.scale", &json!({"sx": 150, "sy": 100, "origin": [220, 140], "basis": "page"})).unwrap();
     assert_eq!(shape_of(&s, id), None);
     s.execute("edit.undo", &json!({})).unwrap();
     assert!(shape_of(&s, id).is_some(), "undo brings it back");
@@ -711,6 +716,71 @@ fn corner_commands_refuse_bad_params() {
     if !s.doc().unwrap().doc.is_editable(id) {
         refuses(&mut s, "addon.pathtools.cornerSet", &[json!({"items": [{"id": i}], "radius": 5})]);
     }
+}
+
+#[test]
+fn corner_commands_refuse_an_unknown_item_key() {
+    let mut s = session();
+    let id = square(&mut s);
+    let i = id.0;
+    let set = json!({"items": [{"id": i, "anchor": [0]}], "radius": 5});
+    let e = s.execute("addon.pathtools.cornerSet", &set).unwrap_err().to_string();
+    assert!(e.contains("unknown parameter `items[0].anchor`; did you mean `items[0].anchors`?"), "{e}");
+    let set_late = json!({"items": [{"id": i, "anchors": [0]}, {"id": i, "radius": 3}], "radius": 5});
+    let e = s.execute("addon.pathtools.cornerSet", &set_late).unwrap_err().to_string();
+    assert!(e.contains("unknown parameter `items[1].radius`; the command takes: items[1].id, items[1].anchors"), "{e}");
+    refuses(&mut s, "addon.pathtools.cornerSet", &[set, set_late]);
+    s.execute("addon.pathtools.cornerSet", &json!({"radius": 10})).unwrap();
+    let remove = json!({"items": [{"id": i, "anchor": [0]}]});
+    let e = s.execute("addon.pathtools.cornerRemove", &remove).unwrap_err().to_string();
+    assert!(e.contains("unknown parameter `items[0].anchor`; did you mean `items[0].anchors`?"), "{e}");
+    refuses(&mut s, "addon.pathtools.cornerRemove", &[remove]);
+    assert_eq!(drawn(&s, id, 0), 10.0);
+}
+
+#[test]
+fn corner_items_take_their_documented_keys() {
+    let mut s = session();
+    let id = square(&mut s);
+    let i = id.0;
+    let r = s.execute("addon.pathtools.cornerSet", &json!({"items": [{"id": i, "anchors": [0]}], "radius": 5})).unwrap();
+    assert_eq!((r["corners"].clone(), drawn(&s, id, 0), drawn(&s, id, 1)), (json!(1), 5.0, 0.0));
+    // A member without `anchors` takes the request's.
+    s.execute("addon.pathtools.cornerSet", &json!({"items": [{"id": i}], "anchors": [2], "radius": 6})).unwrap();
+    assert_eq!(drawn(&s, id, 2), 6.0);
+    let r = s.execute("addon.pathtools.cornerRemove", &json!({"items": [{"id": i, "anchors": [0]}]})).unwrap();
+    assert_eq!((r["corners"].clone(), drawn(&s, id, 0), drawn(&s, id, 2)), (json!(1), 0.0, 6.0));
+    // A null `ids` beside `items` counts as not given.
+    s.execute("addon.pathtools.cornerRemove", &json!({"items": [{"id": i}], "ids": null})).unwrap();
+    assert_eq!(drawn(&s, id, 2), 0.0);
+}
+
+#[test]
+fn corner_commands_refuse_items_with_ids() {
+    let mut s = session();
+    let id = square(&mut s);
+    let other = line(&mut s, &[(350.0, 10.0), (390.0, 10.0), (390.0, 50.0)], false);
+    let both = json!({"items": [{"id": id.0, "anchors": [0]}], "ids": [other.0], "radius": 5});
+    let e = s.execute("addon.pathtools.cornerSet", &both).unwrap_err().to_string();
+    assert!(e.contains("give `items` or `ids`, not both"), "{e}");
+    refuses(&mut s, "addon.pathtools.cornerSet", &[both]);
+    s.execute("addon.pathtools.cornerSet", &json!({"ids": [id.0], "radius": 5})).unwrap();
+    let both = json!({"items": [{"id": id.0}], "ids": [id.0]});
+    let e = s.execute("addon.pathtools.cornerRemove", &both).unwrap_err().to_string();
+    assert!(e.contains("give `items` or `ids`, not both"), "{e}");
+    refuses(&mut s, "addon.pathtools.cornerRemove", &[both]);
+}
+
+#[test]
+fn saved_corner_steps_with_older_item_keys_still_play() {
+    let mut s = session();
+    let id = square(&mut s);
+    let other = line(&mut s, &[(350.0, 10.0), (390.0, 10.0), (390.0, 50.0)], false);
+    let saved = json!({"items": [{"id": id.0, "anchors": [0], "old": 1}], "ids": [other.0], "radius": 5});
+    s.replay("addon.pathtools.cornerSet", &saved).unwrap();
+    assert_eq!((drawn(&s, id, 0), drawn(&s, id, 1)), (5.0, 0.0));
+    s.replay("addon.pathtools.cornerRemove", &json!({"items": [{"id": id.0, "old": 1}]})).unwrap();
+    assert_eq!(drawn(&s, id, 0), 0.0);
 }
 
 /// A closed five-pointed star about (200, 150): its points at the even indices 0, 2… (the odd
@@ -1155,7 +1225,7 @@ fn expand_dashes_keeps_the_fill_below_and_follows_aligned_corners() {
     let mut centred = 0;
     for id in ids(&r) {
         let sp = path(&s, id).subpaths[0].clone();
-        if let [a, b, c] = sp.anchors.as_slice()
+        if let [a, b, c] = &*sp.anchors.to_vec()
             && corners.iter().any(|k| b.p.distance(*k) < 1e-6)
         {
             assert!((a.p.distance(b.p) - 5.0).abs() < 1e-6 && (c.p.distance(b.p) - 5.0).abs() < 1e-6, "{sp:?}");

@@ -53,6 +53,7 @@ pub(super) fn script_families(c: char) -> &'static [&'static str] {
             "Lohit Devanagari",
             "Mangal",
         ],
+        Script::Gujarati => &["Gujarati Sangam MN", "GujaratiMT", "Nirmala UI", "Shruti", "Noto Sans Gujarati", "Noto Sans Gujarati UI"],
         _ => &[],
     }
 }
@@ -162,6 +163,13 @@ mod tests {
         assert_eq!(script_families('ह').first(), Some(&"Nirmala UI"));
         assert!(script_families('ह').contains(&"Noto Sans Devanagari"));
         assert!(script_families('a').is_empty());
+    }
+
+    /// Gujarati takes a font that draws it (macOS Gujarati Sangam MN, Windows Nirmala UI or Shruti).
+    #[test]
+    fn gujarati_prefers_fonts_made_for_it() {
+        assert_eq!(script_families('ગ').first(), Some(&"Gujarati Sangam MN"));
+        assert!(script_families('ગ').contains(&"Nirmala UI"));
     }
 
     #[test]

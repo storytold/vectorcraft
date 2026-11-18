@@ -1,4 +1,4 @@
-//! Edit → Preferences (⌘K): Illustrator-style category list + fields, rendered from the engine's
+//! Edit → Preferences (⌘K): a category list + its fields, rendered from the engine's
 //! preference table ([`PREF_SPECS`]). The dialog edits a working copy in `Dialog::fields`
 //! (one field per preference key, so agents can `ui.dialog.set` any of them) and OK applies it
 //! through `prefs.set`. Also: persistence of engine prefs inside `UiState` and the per-frame
@@ -11,6 +11,8 @@ use vectorcraft_engine::cmd::prefscmds::{GPU_PREFERENCES, PREF_CATEGORIES, PREF_
 use crate::state::Dialog;
 use crate::theme::{self, Accent, Brightness, Scheme, Tokens};
 use crate::{VectorcraftApp, widgets};
+
+mod descriptions;
 
 /// UI-only fields shown in the dialog (backed by `UiState`, not engine prefs).
 pub const UI_FIELDS: &[(&str, &str, &str)] = &[
@@ -42,6 +44,9 @@ pub fn open(app: &mut VectorcraftApp, category: Option<&str>) {
     // Read-only: whether VECTORCRAFT_TITLEBAR chose this window's frame (System Title Bar's dimmed
     // row and VectorCraft Title Bar on Every Desktop's note).
     fields.insert("__titlebarFromEnv".into(), json!(app.titlebar_from_env));
+    // Read-only: whether the desktop would draw this window's frame with System Title Bar on or off
+    // while VectorCraft Title Bar on Every Desktop is off (System Title Bar's note).
+    fields.insert("__desktopKeepsFrame".into(), json!(app.desktop_keeps_frame));
     fields.insert("__search".into(), json!(""));
     fields.insert("__focusSearch".into(), json!(true));
     app.ui.dialog = Some(Dialog { kind: "preferences".into(), fields });
@@ -67,6 +72,7 @@ fn settings() -> impl Iterator<Item = Setting> {
         "appTitleBar" => APP_TITLE_BAR_SHOWN,
         "linuxDisplayServer" => DISPLAY_SERVER_CHOICE,
         "monitorProfileDisplay" => !cfg!(target_arch = "wasm32"),
+        "lowLatencyDrawing" => !cfg!(target_arch = "wasm32"),
         _ => true,
     };
     let prefs =
@@ -395,13 +401,17 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 ui.set_width(530.0);
                 ui.label(egui::RichText::new(tl!(cat)).font(theme::semibold(14.0)).color(t.text_strong));
                 ui.add_space(8.0);
-                egui::ScrollArea::vertical().id_salt(("prefs", cat)).max_height(400.0).auto_shrink([false, false]).show(ui, |ui| {
-                    category_fields(ui, app, &mut d, cat);
-                });
+                // The description line takes its height from the list, so the column stays FIELDS_HEIGHT tall.
+                let list_height = FIELDS_HEIGHT - ui.spacing().item_spacing.y - DESCRIPTION_GAP - DESCRIPTION_HEIGHT;
+                let scroll = egui::ScrollArea::vertical().id_salt(("prefs", cat)).max_height(list_height).auto_shrink([false, false]);
+                let out = scroll.show(ui, |ui| category_fields(ui, app, &mut d, cat));
+                ui.add_space(DESCRIPTION_GAP);
+                description_line(ui, cat, out.inner_rect, &out.inner);
             });
         });
         ui.add_space(14.0);
-        ui.horizontal(|ui| {
+        // Export, Import and Reset share one row, which wraps when it is wider than the dialog.
+        ui.horizontal_wrapped(|ui| {
             if widgets::secondary_button(ui, tl!("Export Preferences…")).on_hover_text(tl!("Save the applied preferences to a JSON file")).clicked()
             {
                 export_preferences(app, &mut d);
@@ -414,15 +424,15 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             {
                 import_preferences(app, &mut d);
             }
-        });
-        ui.add_space(8.0);
-        ui.horizontal(|ui| {
             if widgets::secondary_button(ui, tl!("Reset Preferences"))
                 .on_hover_text(tl!("Restore every preference to its default (applied on OK)"))
                 .clicked()
             {
                 reset = true;
             }
+        });
+        ui.add_space(8.0);
+        ui.horizontal(|ui| {
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if widgets::primary_button(ui, tl!("OK")).clicked() {
                     ok = true;
@@ -473,22 +483,97 @@ pub(crate) fn reset_fields(d: &mut Dialog) {
     d.fields.insert(RESET_UNITS.into(), d.fields.get("unitsGeneral").cloned().unwrap_or(Value::Null));
 }
 
-fn category_fields(ui: &mut egui::Ui, app: &mut VectorcraftApp, d: &mut Dialog, cat: &str) {
+/// The height of the fields column under the category's name: the field list, the gap and the
+/// description line.
+const FIELDS_HEIGHT: f32 = 400.0;
+
+/// The gap above the description line.
+const DESCRIPTION_GAP: f32 = 6.0;
+
+/// The description line's height: three lines of its text.
+const DESCRIPTION_HEIGHT: f32 = 48.0;
+
+/// The line under the field list `list` of the category `cat`: in dim text, the sentence that
+/// describes the setting under the pointer, else the setting with the keyboard focus, or nothing.
+/// It keeps its height either way. While the pointer stays over the list or the line, between rows
+/// too, the line keeps the setting it last described under the pointer.
+fn description_line(ui: &mut egui::Ui, cat: &str, list: egui::Rect, rows: &DescribedRows) {
+    let t = Tokens::get(ui.ctx());
+    let (line, _) = ui.allocate_exact_size(egui::vec2(ui.available_width(), DESCRIPTION_HEIGHT), egui::Sense::hover());
+    let column = list.union(line);
+    // (pass, category, setting last described under the pointer); only the previous pass's counts,
+    // so a dialog closed and opened again starts empty.
+    let id = egui::Id::unique("prefs-description-hovered");
+    let pass = ui.ctx().cumulative_pass_nr();
+    let last = ui
+        .data(|m| m.get_temp::<(u64, String, Option<&'static str>)>(id))
+        .filter(|(p, c, _)| pass.saturating_sub(*p) <= 1 && c == cat)
+        .and_then(|(_, _, k)| k);
+    let hovered = rows.hovered.or_else(|| last.filter(|_| ui.rect_contains_pointer(column)));
+    ui.data_mut(|m| m.insert_temp(id, (pass, cat.to_string(), hovered)));
+    // The tests measure the column and the line.
+    #[cfg(test)]
+    ui.data_mut(|m| m.insert_temp(egui::Id::unique("prefs-description-rects"), (column, line)));
+    let Some(text) = hovered.or(rows.focused).and_then(descriptions::description) else { return };
+    let mut job = egui::text::LayoutJob::simple(tl!(text).to_string(), egui::FontId::proportional(11.5), t.text_dim, line.width());
+    job.wrap.max_rows = 3;
+    let galley = ui.painter().layout_job(job);
+    ui.painter().with_clip_rect(line).galley(line.min, galley, t.text_dim);
+}
+
+/// The rows of the settings the description line can describe: the row under the pointer, and the
+/// row holding the control with the keyboard focus.
+#[derive(Default)]
+struct DescribedRows {
+    hovered: Option<&'static str>,
+    focused: Option<&'static str>,
+}
+
+impl DescribedRows {
+    /// After the row of the setting `key`, drawn from `top` down. A row this platform does not draw
+    /// takes no space and is skipped. A screen reader gets the row's sentence as the description of
+    /// its focused control.
+    fn row(&mut self, ui: &egui::Ui, key: &'static str, top: f32) {
+        let bottom = ui.min_rect().bottom();
+        if bottom <= top {
+            return;
+        }
+        let rect = egui::Rect::from_x_y_ranges(ui.max_rect().x_range(), top..=bottom);
+        if ui.rect_contains_pointer(rect) {
+            self.hovered = Some(key);
+        }
+        let Some(id) = ui.memory(|m| m.focused()) else { return };
+        if ui.ctx().read_response(id).is_some_and(|r| rect.contains(r.rect.center())) {
+            self.focused = Some(key);
+            if let Some(text) = descriptions::description(key) {
+                ui.ctx().accesskit_node_builder(id, |node| node.set_description(tl!(text).to_string()));
+            }
+        }
+    }
+}
+
+/// The fields of the category `cat`. → The rows under the pointer and with the keyboard focus.
+fn category_fields(ui: &mut egui::Ui, app: &mut VectorcraftApp, d: &mut Dialog, cat: &str) -> DescribedRows {
     let t = Tokens::get(ui.ctx());
     let mut section = "";
     let mut first = true;
+    let mut described = DescribedRows::default();
     let specs: Vec<_> = PREF_SPECS.iter().filter(|s| s.category == cat).collect();
     for (key, c, label) in UI_FIELDS {
         if *c == cat && cat != "Smart Guides" {
+            let top = ui.cursor().top();
             let mark = found_mark(ui, d, key);
             bool_row(ui, d, key, label);
             found_paint(ui, d, mark);
+            described.row(ui, key, top);
         }
     }
     if cat == "Smart Guides" {
+        let top = ui.cursor().top();
         let mark = found_mark(ui, d, "__smartGuides");
         bool_row(ui, d, "__smartGuides", UI_FIELDS[0].2);
         found_paint(ui, d, mark);
+        described.row(ui, "__smartGuides", top);
         ui.add_space(4.0);
     }
     for sp in specs {
@@ -504,6 +589,7 @@ fn category_fields(ui: &mut egui::Ui, app: &mut VectorcraftApp, d: &mut Dialog, 
         }
         first = false;
         let v = d.fields.get(sp.key).cloned().unwrap_or(Value::Null);
+        let top = ui.cursor().top();
         let mark = found_mark(ui, d, sp.key);
         match sp.kind {
             // General › Scroll Sideways with Cmd/Ctrl + Wheel acts only while Zoom with Mouse Wheel
@@ -534,6 +620,14 @@ fn category_fields(ui: &mut egui::Ui, app: &mut VectorcraftApp, d: &mut Dialog, 
                     // BSDs the note goes under the next row, which also applies at the next start.
                     if !APP_TITLE_BAR_SHOWN {
                         ui.label(egui::RichText::new(tl!("Applies the next time VectorCraft starts.")).color(t.text_dim).size(11.0));
+                    }
+                    // Where the desktop draws the frame, the desktop's title bar stays with this
+                    // option on or off until VectorCraft Title Bar on Every Desktop is turned on.
+                    if APP_TITLE_BAR_SHOWN && d.bool("__desktopKeepsFrame") && !d.bool("__titlebarFromEnv") && !d.bool("appTitleBar") {
+                        let note = tl!(
+                            "This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off."
+                        );
+                        ui.label(egui::RichText::new(note).color(t.text_dim).size(11.0));
                     }
                 }
             }
@@ -567,6 +661,9 @@ fn category_fields(ui: &mut egui::Ui, app: &mut VectorcraftApp, d: &mut Dialog, 
                     ui.label(egui::RichText::new(note).color(t.text_dim).size(11.0));
                 }
             }
+            // The desktop app only: it sets the window's present mode when it starts, so a note
+            // says the change applies at the next start.
+            PrefKind::Bool if sp.key == "lowLatencyDrawing" => desktop_startup_bool_row(ui, d, sp.key, sp.label, &t),
             PrefKind::Bool => bool_row(ui, d, sp.key, sp.label),
             PrefKind::Num { min, max, unit } => {
                 labeled(ui, sp.label, |ui, label_id| {
@@ -681,7 +778,9 @@ fn category_fields(ui: &mut egui::Ui, app: &mut VectorcraftApp, d: &mut Dialog, 
             }
         }
         found_paint(ui, d, mark);
+        described.row(ui, sp.key, top);
     }
+    described
 }
 
 /// Choose… beside the folder preference `key`: the folder picked becomes the field's value when it
@@ -786,6 +885,16 @@ fn bool_row(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str) {
     if widgets::check(ui, label, on, ui.is_enabled()) {
         d.fields.insert(key.into(), json!(!on));
     }
+}
+
+/// A checkbox the desktop app reads once, when it starts (Performance › Low-Latency Drawing, which
+/// sets the window's present mode), with its restart note. The web build doesn't show it.
+fn desktop_startup_bool_row(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str, t: &Tokens) {
+    if cfg!(target_arch = "wasm32") {
+        return;
+    }
+    bool_row(ui, d, key, label);
+    ui.label(egui::RichText::new(tl!("Applies the next time VectorCraft starts.")).color(t.text_dim).size(11.0));
 }
 
 fn labeled(ui: &mut egui::Ui, label: &str, add: impl FnOnce(&mut egui::Ui, egui::Id)) {

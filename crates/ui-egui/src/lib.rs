@@ -1,8 +1,8 @@
-//! VectorCraft's egui frontend: an Illustrator-style UI over `vectorcraft-engine`.
+//! VectorCraft's egui frontend: menus, tools, panels and dialogs over `vectorcraft-engine`.
 //!
 //! The UI is thin: every action goes through [`VectorcraftApp::run`], which dispatches UI commands
 //! (view/window) here and everything else to the engine. The same entry point serves menus,
-//! shortcuts, the ⌘K palette and the control channel ([`control`]).
+//! shortcuts, the command palette ([`palette`], Help › Search Commands…) and the control channel ([`control`]).
 #![forbid(unsafe_code)]
 
 /// VectorCraft as craft-update knows it, with its 128 px icon and accent colour: the update
@@ -71,6 +71,7 @@ pub mod script_runs;
 pub mod scripts_menu;
 mod scrub;
 pub mod shortcut_editor;
+pub mod shortcut_sheet;
 pub mod shortcuts;
 pub mod state;
 pub mod stylus;
@@ -128,6 +129,7 @@ pub use services::{
 };
 use state::{GeometryStamp, InputGeneration, PendingScreenshot, QueuedScreenshot};
 pub(crate) use state::{InputFrame, take_frame_once};
+pub use ui_fonts::on_missing_glyphs;
 
 pub struct VectorcraftApp {
     pub session: Session,
@@ -235,6 +237,12 @@ pub struct VectorcraftApp {
     /// icon and title. Set by the desktop app when it opens the window; `false` for embedders
     /// without a window of their own.
     pub desktop_frame: bool,
+    /// Linux and the BSDs: `VECTORCRAFT_TITLEBAR` is unset and the desktop would draw the window's
+    /// frame on this session with Preferences › User Interface › System Title Bar on or off while
+    /// VectorCraft Title Bar on Every Desktop is off, so the dialog says so under System Title Bar.
+    /// It stays `true` while VectorCraft Title Bar on Every Desktop gives the app the frame. Set by
+    /// the desktop app when it opens the window; `false` elsewhere.
+    pub desktop_keeps_frame: bool,
     /// Last window title sent to the OS (`ViewportCommand::Title`, see `chrome::sync_window_title`):
     /// sent again only when it changes, so idle frames don't spam the backend.
     pub(crate) last_window_title: String,
@@ -338,6 +346,11 @@ pub struct VectorcraftApp {
     /// The plug-in install the approval dialog asks about, kept out of the dialog's fields, which
     /// `ui.dialog.set` writes.
     pub(crate) pending_plugin_install: Option<dialogs::plugin::PendingInstall>,
+    /// The paths Choose… picked in a script's file dialog, kept out of the dialog's fields, which
+    /// `ui.dialog.set` writes.
+    pub(crate) script_picked: Vec<String>,
+    /// Choose… left out files past the most a script is given.
+    pub(crate) script_picked_left_out: bool,
     /// The pen end the canvas saw last and the tool its eraser end stands in for
     /// ([`stylus::sync_eraser_tool`]).
     pub(crate) pen_end: stylus::PenEnd,
@@ -347,6 +360,10 @@ pub struct VectorcraftApp {
     /// can be driven one simulated frame at a time (production always leaves this `None`).
     #[cfg(test)]
     pub(crate) now_override: Option<f64>,
+    /// An error the next tool choice returns before the engine sees it ([`Self::try_select_tool`]),
+    /// so tests can drive a failed switch (production has no such field).
+    #[cfg(test)]
+    pub(crate) fail_next_tool_choice: Option<String>,
     /// The host iteration [`Self::tick`] ran in (`None`: never): once per iteration, never per pass.
     tick_iteration: Option<u64>,
     /// The context, viewport and frame whose UI-phase input was already taken in this host

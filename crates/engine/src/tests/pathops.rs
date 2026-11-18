@@ -533,6 +533,133 @@ fn offset_path_stops_after_the_first_failure() {
     }
 }
 
+/// A straight line, closed as the Shape Modes close open paths, encloses no area, so it does not
+/// change the result's shape: Unite, Minus Front, Exclude and Minus Back still give the 100 pt square's area
+/// (with a line in a group selected beside it, the group's square too), and the reply carries a
+/// warning that names Outline Stroke, as it does with the line in a compound path or in a group
+/// selected alone; where the line leaves nothing (Intersect, the backmost object in Minus Front, or
+/// the frontmost in Minus Back), the error names it, and where the other objects leave nothing
+/// anyway, a flat closed path included, it doesn't. An open evenodd square traced twice is the same. An open path
+/// that encloses an area once closed (a bow tie whose lobes cancel in signed area included), closed
+/// shapes alone, and Divide, where a line cuts, give no warning (#7849).
+#[test]
+fn shape_modes_report_lines_that_enclose_no_area() {
+    use crate::cmd::SHAPE_MODE_OPEN_PATH_NO_AREA;
+    fn id_of(v: Value) -> NodeId {
+        NodeId(v["id"].as_u64().unwrap())
+    }
+    fn line_of(s: &mut Session) -> NodeId {
+        id_of(s.execute("shape.line", &json!({"x1": 20, "y1": 50, "x2": 80, "y2": 50})).unwrap())
+    }
+    fn vee_of(s: &mut Session) -> NodeId {
+        let anchors = json!([{"x": 20, "y": 50}, {"x": 50, "y": 150}, {"x": 80, "y": 50}]);
+        id_of(s.execute("path.create", &json!({ "anchors": anchors })).unwrap())
+    }
+    fn bow_tie_of(s: &mut Session) -> NodeId {
+        let anchors = json!([{"x": 20, "y": 120}, {"x": 80, "y": 180}, {"x": 80, "y": 120}, {"x": 20, "y": 180}]);
+        id_of(s.execute("path.create", &json!({ "anchors": anchors })).unwrap())
+    }
+    fn twice_around_of(s: &mut Session) -> NodeId {
+        let d = "M20 20 L80 20 L80 80 L20 80 L20 20 L80 20 L80 80 L20 80";
+        let id = id_of(s.execute("path.create", &json!({ "d": d })).unwrap());
+        s.execute("path.setFillRule", &json!({"rule": "evenOdd"})).unwrap();
+        id
+    }
+    fn grouped_line_of(s: &mut Session) -> NodeId {
+        let ids = [line_of(s), rect(s, 200.0, 0.0, 100.0, 100.0)];
+        s.execute("select.set", &json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()})).unwrap();
+        id_of(s.execute("object.group", &json!({})).unwrap())
+    }
+    fn compound_line_of(s: &mut Session) -> NodeId {
+        let ids = [line_of(s), rect(s, 200.0, 0.0, 100.0, 100.0)];
+        s.execute("select.set", &json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()})).unwrap();
+        id_of(s.execute("object.compoundPath.make", &json!({})).unwrap())
+    }
+    fn square_of(s: &mut Session) -> NodeId {
+        rect(s, 50.0, 0.0, 100.0, 100.0)
+    }
+    type Build = fn(&mut Session) -> NodeId;
+    // (case, command, the other object, whether it goes behind the 100 pt square, warned, area drawn)
+    type Case = (&'static str, &'static str, Build, bool, bool, Option<f64>);
+    let cases: [Case; 12] = [
+        ("a line", "unite", line_of, false, true, Some(10_000.0)),
+        ("a line in front", "minusFront", line_of, false, true, Some(10_000.0)),
+        ("a line", "exclude", line_of, false, true, Some(10_000.0)),
+        ("a line behind", "minusBack", line_of, true, true, Some(10_000.0)),
+        ("an open evenodd square traced twice", "unite", twice_around_of, false, true, Some(10_000.0)),
+        ("a group of a line and a square", "unite", grouped_line_of, false, true, Some(20_000.0)),
+        ("a compound path of a line and a square", "unite", compound_line_of, false, true, Some(20_000.0)),
+        ("an open path that encloses an area", "unite", vee_of, false, false, None),
+        ("an open bow tie, whose signed area is zero", "unite", bow_tie_of, false, false, None),
+        ("a square", "unite", square_of, false, false, Some(15_000.0)),
+        ("a square", "minusFront", square_of, false, false, Some(5_000.0)),
+        ("a line, dividing", "divide", line_of, false, false, None),
+    ];
+    for (what, op, build, behind, warned, want) in cases {
+        let mut s = session();
+        let (back, front) = if behind {
+            let other = build(&mut s);
+            (other, rect(&mut s, 0.0, 0.0, 100.0, 100.0))
+        } else {
+            let sq = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+            (sq, build(&mut s))
+        };
+        s.execute("select.set", &json!({"ids": [back.0, front.0]})).unwrap();
+        let r = s.execute(&format!("object.pathfinder.{op}"), &json!({})).unwrap_or_else(|e| panic!("{what}, {op}: {e}"));
+        let warning = r.get("warning").and_then(Value::as_str);
+        assert_eq!(warning, warned.then_some(SHAPE_MODE_OPEN_PATH_NO_AREA), "{what}, {op}: {r}");
+        if let Some(want) = want {
+            let got = area_of(&s, ids(&r)[0]);
+            assert!((got - want).abs() < 1.0, "{what}, {op}: area {got}, want {want}");
+        }
+    }
+    // A group of a line and a square selected alone: its members are the shapes, and the line warns.
+    let mut s = session();
+    let group = grouped_line_of(&mut s);
+    s.execute("select.set", &json!({"ids": [group.0]})).unwrap();
+    let r = s.execute("object.pathfinder.unite", &json!({})).unwrap();
+    assert_eq!(r.get("warning").and_then(Value::as_str), Some(SHAPE_MODE_OPEN_PATH_NO_AREA), "{r}");
+    let got = area_of(&s, ids(&r)[0]);
+    assert!((got - 10_000.0).abs() < 1.0, "a group alone: area {got}");
+    // A line that leaves nothing (Intersect, the backmost object in Minus Front, or the frontmost in
+    // Minus Back) gives an error that names it; two squares that don't meet give the plain one.
+    // (command, the other object, whether it goes behind the square, whether the error names the line)
+    let cases: [(&str, Build, bool, bool); 4] = [
+        ("intersect", line_of, false, true),
+        ("minusFront", line_of, true, true),
+        ("minusBack", line_of, false, true),
+        ("intersect", |s| rect(s, 300.0, 0.0, 50.0, 50.0), false, false),
+    ];
+    for (op, build, behind, named) in cases {
+        let mut s = session();
+        let (back, front) = if behind {
+            let other = build(&mut s);
+            (other, rect(&mut s, 0.0, 0.0, 100.0, 100.0))
+        } else {
+            let sq = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+            (sq, build(&mut s))
+        };
+        s.execute("select.set", &json!({"ids": [back.0, front.0]})).unwrap();
+        let e = s.execute(&format!("object.pathfinder.{op}"), &json!({})).unwrap_err().to_string();
+        assert!(e.contains("produced an empty result"), "{op}: {e}");
+        assert_eq!(e.contains("Outline Stroke"), named, "{op}: {e}");
+    }
+    // Two squares that don't meet leave Intersect empty whatever a line beside them does.
+    let mut s = session();
+    let objects = [rect(&mut s, 0.0, 0.0, 100.0, 100.0), rect(&mut s, 300.0, 0.0, 50.0, 50.0), line_of(&mut s)];
+    s.execute("select.set", &json!({"ids": objects.iter().map(|i| i.0).collect::<Vec<_>>()})).unwrap();
+    let e = s.execute("object.pathfinder.intersect", &json!({})).unwrap_err().to_string();
+    assert!(e.contains("produced an empty result") && !e.contains("Outline Stroke"), "{e}");
+    // A closed path without area (a flat one) leaves Intersect empty with or without the line, so
+    // the error is the plain one.
+    let mut s = session();
+    let flat = id_of(s.execute("path.create", &json!({"d": "M50 0 L50 100 Z"})).unwrap());
+    let objects = [rect(&mut s, 0.0, 0.0, 100.0, 100.0), flat, line_of(&mut s)];
+    s.execute("select.set", &json!({"ids": objects.iter().map(|i| i.0).collect::<Vec<_>>()})).unwrap();
+    let e = s.execute("object.pathfinder.intersect", &json!({})).unwrap_err().to_string();
+    assert!(e.contains("produced an empty result") && !e.contains("Outline Stroke"), "a flat closed path: {e}");
+}
+
 #[test]
 fn outline_stroke_of_line() {
     let mut s = session();
@@ -1086,6 +1213,62 @@ fn create_outlines_keeps_the_objects_own_fills_and_strokes() {
     assert!(close(first.geometric_bounds().unwrap(), glyphs, 1e-6), "{:?} vs {glyphs:?}", first.geometric_bounds());
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(node(&s, t).appearance.items, own, "one undo step brings the type back");
+}
+
+/// The type object's own effects go on the group once, in their order, with their settings and a
+/// hidden one still hidden; a fill's own effect stays on its path of the whole outline, and no
+/// glyph or whole-outline path takes the object's effects. Undo brings the type back with them.
+#[test]
+fn create_outlines_keeps_the_objects_own_effects_on_the_group() {
+    let mut s = session();
+    let t = text(&mut s, "Hi", 64.0);
+    s.execute("select.set", &json!({"ids": [t.0]})).unwrap();
+    for (cmd, p) in [
+        ("appearance.addFill", json!({"target": "object"})),
+        ("appearance.setItem", json!({"index": 0, "color": "#ff0000"})),
+        ("effect.apply", json!({"effect": "path.offsetPath", "params": {"offset": 2}, "item": 0})),
+        ("effect.apply", json!({"effect": "stylize.dropShadow", "params": {"x": 7, "y": 3, "blur": 0, "opacity": 60}, "item": null})),
+        ("effect.apply", json!({"effect": "distort.transform", "params": {"rotate": 15}, "item": null})),
+        ("effect.setParams", json!({"index": 1, "visible": false, "item": null})),
+    ] {
+        s.execute(cmd, &p).unwrap_or_else(|e| panic!("{cmd} {p}: {e}"));
+    }
+    let own: Appearance = (*node(&s, t).appearance).clone();
+    let ids_of = |fx: &[vectorcraft_doc::Effect]| fx.iter().map(|e| (e.id.clone(), e.visible)).collect::<Vec<_>>();
+    assert_eq!(ids_of(&own.effects), [("stylize.dropShadow".to_string(), true), ("distort.transform".to_string(), false)]);
+    assert_eq!(ids_of(own.items[0].effects()), [("path.offsetPath".to_string(), true)]);
+    let r = ids(&s.execute("type.createOutlines", &json!({})).unwrap());
+    let g = node(&s, r[0]);
+    assert_eq!(g.appearance.effects, own.effects, "the group holds the object's effects as they were");
+    let ch = g.children().unwrap();
+    assert!(ch.iter().all(|c| c.appearance.effects.is_empty()), "no piece takes the object's effects");
+    let rows: Vec<_> = ch.iter().filter(|c| c.appearance.items == own.items).collect();
+    assert_eq!(rows.len(), 1, "one path of the whole outline paints the object's fill");
+    assert_eq!(rows[0].appearance.items[0].effects(), own.items[0].effects(), "the fill keeps its own effect");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(*node(&s, t).appearance, own, "one undo step brings the type back with its effects");
+}
+
+/// The group takes the type object's opacity, blend mode, Isolate Blending, Opacity & Mask Define
+/// Knockout Shape and opacity mask.
+#[test]
+fn create_outlines_keeps_the_objects_transparency_and_opacity_mask() {
+    let mut s = session();
+    let t = text(&mut s, "Hi", 64.0);
+    let m = rect(&mut s, 0.0, 0.0, 40.0, 80.0);
+    s.execute("select.set", &json!({"ids": [t.0, m.0]})).unwrap();
+    s.execute("transparency.makeOpacityMask", &json!({})).unwrap();
+    let p = json!({"ids": [t.0], "opacity": 70, "blend": "multiply", "isolate": true, "knockoutShape": true});
+    s.execute("transparency.set", &p).unwrap();
+    let before = node(&s, t);
+    assert!(before.extras().mask.is_some(), "the type has a mask");
+    let look = |n: &vectorcraft_doc::Node| (n.opacity, n.blend, n.isolate, n.knockout_shape);
+    assert_eq!(look(&before), (0.7, vectorcraft_color::BlendMode::Multiply, true, true));
+    s.execute("select.set", &json!({"ids": [t.0]})).unwrap();
+    let r = ids(&s.execute("type.createOutlines", &json!({})).unwrap());
+    let g = node(&s, r[0]);
+    assert_eq!(look(&g), look(&before));
+    assert_eq!(g.extras().mask, before.extras().mask, "the group keeps the type's opacity mask");
 }
 
 /// Colour bitmap glyphs (emoji) become embedded images where they sat; glyphs showing one image

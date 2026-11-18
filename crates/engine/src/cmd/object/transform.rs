@@ -1,7 +1,7 @@
 use super::align::choice;
 use super::{
-    Affine, Arc, Document, EngineError, LastTransform, Node, NodeId, NodeKind, Point, Result, Scaling, Session, Value, Vec2, bad, bool_or,
-    check_numbers, check_switches, duplicate_in, effects, f64_or, f64_req, ids_param, json, matrix_param, ok, outermost, point_param,
+    Affine, Arc, Document, EngineError, LastTransform, Node, NodeId, NodeKind, OrientedBox, Point, Rect, Result, Scaling, Session, Value, Vec2, bad,
+    bool_or, check_numbers, check_switches, duplicate_in, effects, f64_or, f64_req, ids_param, json, matrix_param, ok, outermost, point_param,
     selected_roots_to_transform,
 };
 
@@ -125,9 +125,14 @@ fn apply_transform_moving_guides(
     let d = &s.doc()?.doc;
     let paths = d.index_paths(ids.iter().copied());
     let none = paths.is_empty() && !has_guides;
+    // A move of direct-selected anchors may re-map the handles beside them (`interpolate`).
+    let mut interpolate = None;
     let ids = if anchors && objects && !copy && !s.doc()?.selection.anchors.is_empty() {
+        if c[..4] == [1.0, 0.0, 0.0, 1.0] {
+            interpolate = Some(crate::cmd::path::interpolates_handles(s, p, label)?);
+        }
         if xf != Affine::IDENTITY {
-            crate::cmd::path::transform_anchors(s, label, xf, sc)?;
+            crate::cmd::path::transform_anchors(s, label, xf, sc, interpolate.unwrap_or(false))?;
         }
         ids
     } else if none || (!copy && xf == Affine::IDENTITY) {
@@ -158,6 +163,9 @@ fn apply_transform_moving_guides(
                 }
                 None => ids.clone(),
             };
+            // Pattern editing with Move Tile with Art: the tile art's bounds before a move.
+            let moves_only = c[0] == 1.0 && c[1] == 0.0 && c[2] == 0.0 && c[3] == 1.0;
+            let tile_art = if objects && !copy && moves_only { crate::cmd::patterncmds::tile_art_bounds(d) } else { None };
             // Transforms don't move nodes in the tree, so reuse the paths found for the no-copy
             // case; copies and a settled typing session need paths from the edited document.
             let paths = if reindex { d.index_paths(targets.iter().copied()) } else { paths };
@@ -171,6 +179,10 @@ fn apply_transform_moving_guides(
             if objects {
                 for id in &targets {
                     super::pixelgrid::keep_compound_aligned(d, *id, sc);
+                }
+                // Moving all of the tile art moves the tile as far.
+                if let Some(before) = tile_art {
+                    crate::cmd::patterncmds::move_tile_with_art(d, &targets, before);
                 }
             }
             if with_guides && (delta.x != 0.0 || delta.y != 0.0) {
@@ -187,6 +199,9 @@ fn apply_transform_moving_guides(
         if Scaling::factor(xf).is_some() {
             options["strokes"] = json!(sc.strokes);
             options["corners"] = json!(!sc.keep_corners);
+        }
+        if let Some(on) = interpolate {
+            options["interpolate"] = json!(on);
         }
         st.last_transform = Some(LastTransform::Matrix(xf, options));
         st.last_perspective = None;
@@ -241,7 +256,7 @@ fn resize_type_area(n: &mut Node, xf: Affine) -> bool {
 
 pub(super) fn transform(s: &mut Session, p: &Value) -> Result<Value> {
     check_switches(p, &TRANSFORM_SWITCHES, "object.transform")?;
-    check_switches(p, &["anchors", "releaseOutside"], "object.transform")?;
+    check_switches(p, &["anchors", "releaseOutside", "interpolate"], "object.transform")?;
     let m = matrix_param(p, "matrix").ok_or_else(|| bad("object.transform", "missing matrix [a,b,c,d,e,f]"))?;
     // An object selected in a symbol instance's art stays where the symbol puts it: the selection
     // is left as it is, and the reply's warning goes to the status bar.
@@ -285,6 +300,7 @@ pub(super) fn transform(s: &mut Session, p: &Value) -> Result<Value> {
 pub(super) fn move_cmd(s: &mut Session, p: &Value) -> Result<Value> {
     check_numbers(p, &["dx", "dy"], "object.move")?;
     check_switches(p, &TRANSFORM_SWITCHES, "object.move")?;
+    check_switches(p, &["interpolate"], "object.move")?;
     let ids = selected_roots_to_transform(s)?;
     apply_transform(s, "Move", ids, Affine::translate((f64_or(p, "dx", 0.0), f64_or(p, "dy", 0.0))), p, true)
 }
@@ -304,7 +320,7 @@ pub(crate) fn along_constrain_angle(dx: f64, dy: f64, deg: f64) -> (f64, f64) {
 pub(super) fn nudge(s: &mut Session, p: &Value) -> Result<Value> {
     check_numbers(p, &["dx", "dy"], "object.nudge")?;
     check_switches(p, &TRANSFORM_SWITCHES, "object.nudge")?;
-    check_switches(p, &["big"], "object.nudge")?;
+    check_switches(p, &["big", "interpolate"], "object.nudge")?;
     let k = s.prefs.keyboard_increment * if bool_or(p, "big", false) { 10.0 } else { 1.0 };
     let (dx, dy) = (f64_or(p, "dx", 0.0) * k, f64_or(p, "dy", 0.0) * k);
     // Guides keep to the page's axes; art and anchors move along the constrain angle's.
@@ -315,7 +331,7 @@ pub(super) fn nudge(s: &mut Session, p: &Value) -> Result<Value> {
         if dx == 0.0 && dy == 0.0 {
             return ok();
         }
-        return crate::cmd::path::move_anchors(s, &json!({ "dx": dx, "dy": dy, "patterns": p.get("patterns") }));
+        return crate::cmd::path::move_anchors(s, &json!({ "dx": dx, "dy": dy, "patterns": p.get("patterns"), "interpolate": p.get("interpolate") }));
     }
     if s.doc()?.selection.is_empty() {
         let copy = bool_or(p, "copy", false);
@@ -358,24 +374,50 @@ pub(super) fn scale(s: &mut Session, p: &Value) -> Result<Value> {
     if sx == 0.0 || sy == 0.0 {
         return Err(bad("object.scale", "scale must be non-zero"));
     }
-    apply_transform(s, "Scale", ids, about(o, Affine::scale_non_uniform(sx, sy)), p, true)
+    let frame = basis_frame(s, p, "object.scale", &ids)?;
+    apply_transform(s, "Scale", ids, about(o, frame.conjugate(Affine::scale_non_uniform(sx, sy))), p, true)
+}
+
+/// The frame that `object.scale` and a named `object.reflect` act in, from the `basis` param:
+/// `"box"` (the default) is the bounding box of `ids`, turned with rotated objects until Reset
+/// Bounding Box ([`Document::bbox_angle`]); `"page"` is the page's axes. Anchors selected with
+/// Direct Selection (with no copy and Transform Objects on) transform along the page's axes, as
+/// their own box does. The basis joins the journal entry, so a replay acts in the same frame. A
+/// saved step without `basis` ([`Session::replay`]) was recorded before Scale and Reflect followed
+/// the box, so it acts along the page's axes, as it did when it was recorded.
+fn basis_frame(s: &mut Session, p: &Value, cmd: &str, ids: &[NodeId]) -> Result<OrientedBox> {
+    let basis = choice(p, cmd, "basis", &["box", "page"])?;
+    let page = basis == Some("page") || (basis.is_none() && s.replaying());
+    let st = s.doc()?;
+    let anchors = !bool_or(p, "copy", false)
+        && transforms_objects(p)
+        && effects::preview::anchor_bounds_with(&st.selection, &st.doc, s.bounds_measure()).is_some();
+    let angle = if page || anchors { 0.0 } else { st.doc.bbox_angle(ids) };
+    s.note_journal("basis", json!(if page { "page" } else { "box" }));
+    Ok(OrientedBox { angle, rect: Rect::ZERO })
 }
 
 pub(super) fn reflect(s: &mut Session, p: &Value) -> Result<Value> {
     check_switches(p, &TRANSFORM_SWITCHES, "object.reflect")?;
     let ids = selected_roots_to_transform(s)?;
     let o = origin_of(s, p, &ids)?;
-    let m = match p.get("axis") {
-        Some(Value::String(a)) if a == "horizontal" => Affine::scale_non_uniform(1.0, -1.0),
-        Some(Value::Number(n)) => {
-            let t = -n.as_f64().unwrap_or(90.0).to_radians();
-            Affine::rotate(t) * Affine::scale_non_uniform(1.0, -1.0) * Affine::rotate(-t)
-        }
-        None | Some(Value::Null) => Affine::scale_non_uniform(-1.0, 1.0),
-        Some(Value::String(a)) if a == "vertical" => Affine::scale_non_uniform(-1.0, 1.0),
+    // A named axis is the bounding box's own (see [`basis_frame`]); an angle is a line on the page.
+    let named = match p.get("axis") {
+        Some(Value::String(a)) if a == "horizontal" => Some(Affine::scale_non_uniform(1.0, -1.0)),
+        Some(Value::Number(_)) => None,
+        None | Some(Value::Null) => Some(Affine::scale_non_uniform(-1.0, 1.0)),
+        Some(Value::String(a)) if a == "vertical" => Some(Affine::scale_non_uniform(-1.0, 1.0)),
         Some(v) => {
             let given = v.as_str().map_or_else(|| v.to_string(), str::to_string);
             return Err(bad("object.reflect", format!("axis must be \"vertical\", \"horizontal\" or an angle in degrees, not `{given}`")));
+        }
+    };
+    let m = match named {
+        Some(m) => basis_frame(s, p, "object.reflect", &ids)?.conjugate(m),
+        None => {
+            choice(p, "object.reflect", "basis", &["box", "page"])?;
+            let t = -p.get("axis").and_then(Value::as_f64).unwrap_or(90.0).to_radians();
+            Affine::rotate(t) * Affine::scale_non_uniform(1.0, -1.0) * Affine::rotate(-t)
         }
     };
     apply_transform(s, "Reflect", ids, about(o, m), p, true)
@@ -387,16 +429,35 @@ pub(super) fn shear(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = selected_roots_to_transform(s)?;
     let o = origin_of(s, p, &ids)?;
     let t = f64_or(p, "angle", 0.0).clamp(-89.0, 89.0).to_radians().tan();
-    let vertical = choice(p, "object.shear", "axis", &["horizontal", "vertical"])? == Some("vertical");
-    let m = if vertical { Affine::new([1.0, t, 0.0, 1.0, 0.0, 0.0]) } else { Affine::new([1.0, 0.0, -t, 1.0, 0.0, 0.0]) };
+    let horizontal = Affine::new([1.0, 0.0, -t, 1.0, 0.0, 0.0]);
+    // A named axis, or a line on the page at an angle in degrees, counter-clockwise from horizontal.
+    let m = match p.get("axis") {
+        None | Some(Value::Null) => horizontal,
+        Some(Value::String(a)) if a == "horizontal" => horizontal,
+        Some(Value::String(a)) if a == "vertical" => Affine::new([1.0, t, 0.0, 1.0, 0.0, 0.0]),
+        Some(Value::Number(n)) if n.as_f64().is_some_and(|a| (-SHEAR_AXIS_MAX..=SHEAR_AXIS_MAX).contains(&a)) => {
+            // y is down, so the page's counter-clockwise angle turns the other way on screen.
+            let r = -n.as_f64().unwrap_or(0.0).to_radians();
+            Affine::rotate(r) * horizontal * Affine::rotate(-r)
+        }
+        Some(v) => {
+            let given = v.as_str().map_or_else(|| v.to_string(), str::to_string);
+            let range = format!("from -{SHEAR_AXIS_MAX} to {SHEAR_AXIS_MAX}");
+            return Err(bad("object.shear", format!("axis must be \"horizontal\", \"vertical\" or an angle in degrees {range}, not `{given}`")));
+        }
+    };
     apply_transform(s, "Shear", ids, about(o, m), p, true)
 }
+
+/// The largest angle, either way from horizontal, of the axis `object.shear` takes in degrees.
+const SHEAR_AXIS_MAX: f64 = 359.0;
 
 /// The last transform on the selection, with the options `last_transform` keeps for it; an option
 /// that `p` sets to true or false (a recorded Transform Again's) takes precedence. A Transform
 /// Each is repeated by running it again (its transform is per object, about each one's bounds).
 pub(super) fn transform_again(s: &mut Session, p: &Value) -> Result<Value> {
     check_switches(p, &TRANSFORM_SWITCHES, "object.transformAgain")?;
+    check_switches(p, &["interpolate"], "object.transformAgain")?;
     if let Some(again) = s.doc()?.last_perspective.clone() {
         return crate::cmd::distortcmds::transform_again(s, &again);
     }

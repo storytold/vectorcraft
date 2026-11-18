@@ -134,8 +134,17 @@ fn text_hash(s: &str) -> u64 {
     h.finish()
 }
 
-/// The edited text's layout, keyed by the font database's generation and the text.
+/// The edited text's layout, keyed by [`vectorcraft_text::layout_inputs`] and the text.
 type CachedLayout = ((u64, TextObject), Arc<TextLayout>);
+
+/// The layouts of the frames other than the edited one that the overlays draw (the ports of the
+/// selected area type and type on a path, the other frames of a selected story), by frame, each
+/// kept with the layout inputs and the text it was made from ([`TypeTool::frame_layout`]).
+type FrameLayouts = std::collections::HashMap<NodeId, CachedLayout>;
+
+/// The most other frames' layouts [`TypeTool::frames`] keeps: every port drawn ([`PORTS_MAX`])
+/// and a long story's frames. The frames an overlays call draws past it are laid out on each call.
+const FRAME_LAYOUTS_MAX: usize = 2_048;
 
 /// Process-global Type-tool edit-session counter: the IME target's replacement epoch.
 ///
@@ -220,6 +229,9 @@ pub struct TypeTool {
     /// The state at the start of each `command.batch` still running, innermost last.
     batches: Vec<HistoryState>,
     cache: Mutex<Option<CachedLayout>>,
+    /// The other frames' layouts the last overlays drew ([`FrameLayouts`]): each overlays call
+    /// keeps only the frames it draws.
+    frames: Mutex<FrameLayouts>,
 }
 
 struct BeforePress {
@@ -281,9 +293,9 @@ impl TypeTool {
     }
 
     /// Layout of `t`, cached by content (overlays run every frame) and by the fonts available (the
-    /// web build adds fonts after startup).
+    /// web build adds fonts after startup) and the hyphenation exceptions.
     fn layout(&self, t: &TextObject) -> Arc<TextLayout> {
-        let fonts = FontDb::global().generation();
+        let fonts = vectorcraft_text::layout_inputs();
         let mut c = self.cache.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(((g, k), l)) = c.as_ref()
             && *g == fonts
@@ -293,6 +305,28 @@ impl TypeTool {
         }
         let l = Arc::new(vectorcraft_text::layout(FontDb::global(), t));
         *c = Some(((fonts, t.clone()), l.clone()));
+        l
+    }
+
+    /// Layout of `t`, frame `id`, for an overlays call that draws a frame other than the edited
+    /// one: the layout kept in `now` or `was` for `id` when it was made from the layout inputs
+    /// `fonts` and the same text, otherwise a new one. It is kept in `now` either way while `now`
+    /// holds fewer than [`FRAME_LAYOUTS_MAX`].
+    fn frame_layout(now: &mut FrameLayouts, was: &mut FrameLayouts, fonts: u64, id: NodeId, t: &TextObject) -> Arc<TextLayout> {
+        if let Some(((g, k), l)) = now.get(&id)
+            && *g == fonts
+            && k == t
+        {
+            return l.clone();
+        }
+        let kept = match was.remove(&id) {
+            Some(((g, k), l)) if g == fonts && &k == t => ((g, k), l),
+            _ => ((fonts, t.clone()), Arc::new(vectorcraft_text::layout(FontDb::global(), t))),
+        };
+        let l = kept.1.clone();
+        if now.len() < FRAME_LAYOUTS_MAX {
+            now.insert(id, kept);
+        }
         l
     }
 

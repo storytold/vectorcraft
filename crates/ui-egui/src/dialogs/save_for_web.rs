@@ -2,16 +2,24 @@
 //! as the web image Save writes, beside the original (Original, Optimized, 2-Up and 4-Up views,
 //! each with its file size and download time), and the settings: format (GIF, JPEG, PNG-8,
 //! PNG-24), colour reduction, colours, dither, transparency and matte, interlacing, web snap,
-//! lossy, JPEG quality, the colour table (lock, map to transparent, web shift, sort), image size
-//! and anti-aliasing, Clip to Artboard, sRGB, metadata, slices and HTML output, and presets.
+//! lossy, JPEG quality, the colour table (lock, map to transparent, web shift, sort, Delete Color
+//! and Restore Generated Table), image size and anti-aliasing, Clip to Artboard, sRGB, metadata,
+//! slices and HTML output, and presets.
 //!
 //! Fields are the `document.exportForWeb` settings (`webExport.settings` gives them; set one with
 //! `ui.dialog.set`, or `preset` to load a preset), plus the dialog's own: `__view` (`original`,
 //! `optimized`, `2up`, `4up`), `__zoom` (`fit` or a percentage), `__kbps` (connection speed),
-//! `__color` (the colour table's selected colour, by source), `__presetName` (shown while saving a
-//! preset) and `__hasSlices`. Save… remembers
+//! `__color` (the colour table's selected colour, by source: the one Lock, Transparent and Web
+//! Shift edit, and where a Shift-click range starts), `__colors` (every selected color, by source,
+//! which Delete Color deletes; when it is empty, `__color` alone), `__presetName` (shown while saving a
+//! preset) and `__hasSlices`. Optimize to File Size… (`__optimizeOpen: true`) shows `__optimizeK` (the desired size in K),
+//! `__optimizeStart` (`current`, `auto`) and with slices `__optimizeUse` (`allSlices`,
+//! `eachSlice`, `currentSlice`); `__optimizeGo: true` runs `webExport.optimizeToFileSize` and
+//! takes the settings it finds, and `__optimized` holds its result. Save… remembers
 //! the settings and writes the files (`file.saveForWeb`); Done only remembers them; Preview in
-//! Browser opens the HTML page (`file.saveForWeb.browser`). The previews are what Save writes:
+//! Browser opens the HTML page (`file.saveForWeb.browser`). While Alt (Option on macOS) is held,
+//! Cancel reads Reset, which puts the remembered settings back and leaves the dialog open
+//! (`ui.dialogReset`). The previews are what Save writes:
 //! [`webexport::preview_image`], decoded back, cached until the art or a setting changes.
 
 use std::sync::Arc;
@@ -39,6 +47,7 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
     ok: Some("Save…"),
     ok_label: Some(|app| if io::is_web(app) { "Download" } else { "Save…" }),
     discard: Some("Done"),
+    reset: Some(reset),
     min_width: PREVIEW_W + GAP + SIDE_W,
     inputs: |_| &["path", "preset"],
     ..DialogSpec::FORM
@@ -68,17 +77,16 @@ const MATTES: [&str; 3] = ["none", "white", "black"];
 const MATTE_LABELS: [&str; 4] = ["None", "White", "Black", "Other"];
 /// JPEG quality steps: (label, quality).
 const QUALITIES: [(&str, u8); 5] = [("Low", 10), ("Medium", 30), ("High", 60), ("Very High", 80), ("Maximum", 100)];
+/// Optimize to File Size's Start With (`__optimizeStart`) and Use (`__optimizeUse`) choices.
+const START_WITH: [(&str, &str); 2] = [("current", "Current Settings"), ("auto", "Auto Select GIF/JPEG")];
+const SIZE_USE: [(&str, &str); 3] = [("allSlices", "Total of All Slices"), ("eachSlice", "Each Slice"), ("currentSlice", "Current Slice")];
+/// The fields of Optimize to File Size's rows.
+const OPTIMIZE_FIELDS: [&str; 3] = ["__optimizeK", "__optimizeStart", "__optimizeUse"];
 
 /// Open on the document's active artboard, keeping the other remembered settings.
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
-    let n = app.session.active().ok_or("no document")?.doc.artboards.len();
-    let mut s = app.session.last_web_settings();
-    s.artboard = Some(crate::panels::artboards::selected(app, n));
-    // A document with no artboards has no valid index.
-    if s.artboard.is_some_and(|a| a >= n) {
-        s.artboard = None;
-    }
-    let mut fields = settings_fields(&s);
+    app.session.active().ok_or("no document")?;
+    let mut fields = settings_fields(&remembered(app));
     let slices = app.session.active().is_some_and(|st| !st.doc.slice_layout().is_empty());
     fields.extend([
         ("__view".into(), json!("2up")),
@@ -88,6 +96,28 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     ]);
     app.ui.dialog = Some(Dialog { kind: KIND.into(), fields });
     Ok(Value::Null)
+}
+
+/// The remembered settings (the defaults when none are remembered) on the document's active
+/// artboard; no artboard when the document has none.
+fn remembered(app: &VectorcraftApp) -> WebSettings {
+    let n = app.session.active().map_or(0, |st| st.doc.artboards.len());
+    let mut s = app.session.last_web_settings();
+    s.artboard = Some(crate::panels::artboards::selected(app, n)).filter(|a| *a < n);
+    s
+}
+
+/// Reset (Cancel with Alt or Option held, or `ui.dialogReset`): the settings go back to the
+/// remembered ones on the document's active artboard ([`remembered`]), and a pending `preset`, a
+/// pending Done (`discard`, which a failed Done leaves), the preset name being typed and the
+/// selected color table entries are dropped. The view, zoom, connection speed and `path` stay,
+/// nothing is remembered or written, and the dialog stays open.
+fn reset(app: &VectorcraftApp, d: &mut Dialog) -> Result<(), String> {
+    for key in ["preset", "discard", "__presetName", "__color", "__colors"] {
+        d.fields.remove(key);
+    }
+    d.fields.extend(settings_fields(&remembered(app)));
+    Ok(())
 }
 
 /// The settings as dialog fields.
@@ -393,13 +423,11 @@ fn texture(ctx: &egui::Context, name: &str, px: &[u8], [w, h]: [u32; 2]) -> egui
     ctx.load_texture(name, img, opts)
 }
 
-/// The rendering for `s` and the optimised image for each of `panes`, from the cache when nothing
-/// they depend on changed.
-fn previews(app: &VectorcraftApp, ctx: &egui::Context, s: &WebSettings, panes: &[WebSettings]) -> (Result<Shot, String>, Vec<Result<Shot, String>>) {
-    let Some(st) = app.session.active() else { return (Err("no document".into()), vec![]) };
-    let doc = &st.doc;
-    let mut cache: Cache = ctx.data(|m| m.get_temp(cache_id())).unwrap_or_default();
-    let render_key = format!(
+/// What the rendering for `s` depends on: the active document, its revision and the settings that
+/// change the image's pixels.
+fn render_key(app: &VectorcraftApp, s: &WebSettings) -> Option<String> {
+    let st = app.session.active()?;
+    Some(format!(
         "{}:{}:{:?}:{:?}:{:?}:{}:{}:{:?}:{:?}",
         st.uid,
         st.revision,
@@ -410,7 +438,15 @@ fn previews(app: &VectorcraftApp, ctx: &egui::Context, s: &WebSettings, panes: &
         s.clip_to_artboard,
         s.artboard,
         (!s.clip_to_artboard).then_some(s.slices)
-    );
+    ))
+}
+
+/// The rendering for `s` and the optimised image for each of `panes`, from the cache when nothing
+/// they depend on changed.
+fn previews(app: &VectorcraftApp, ctx: &egui::Context, s: &WebSettings, panes: &[WebSettings]) -> (Result<Shot, String>, Vec<Result<Shot, String>>) {
+    let (Some(st), Some(render_key)) = (app.session.active(), render_key(app, s)) else { return (Err("no document".into()), vec![]) };
+    let doc = &st.doc;
+    let mut cache: Cache = ctx.data(|m| m.get_temp(cache_id())).unwrap_or_default();
     if cache.render_key != render_key || cache.render.is_none() {
         let r = webexport::render(doc, s).map(Arc::new);
         cache.original = r.as_ref().ok().map(|r| Shot {
@@ -489,6 +525,14 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     if let Err(e) = apply_preset(app, d) {
         app.status(e);
     }
+    if d.fields.remove("__optimizeOpen").is_some_and(|v| v == json!(true)) {
+        open_optimize_rows(app, ui, d);
+    }
+    if d.fields.remove("__optimizeGo").is_some_and(|v| v == json!(true))
+        && let Err(e) = optimize_to_size(app, d)
+    {
+        app.status(e);
+    }
     let settings = settings_of(app, d);
     let mut browser = false;
     ui.horizontal_top(|ui| {
@@ -502,6 +546,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
             side(app, ui, d, settings.as_ref().ok());
         });
     });
+    optimize_on_enter(ui.ctx(), d);
     if browser && let Err(e) = app.run("file.saveForWeb.browser", params(d)) {
         app.status(e);
     }
@@ -685,6 +730,7 @@ fn pairs<T: Copy>(all: &[T], key: fn(T) -> &'static str, label: fn(T) -> &'stati
 
 fn side(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, s: Option<&WebSettings>) {
     presets_row(app, ui, d, s);
+    optimize_rows(ui, d, s, &art_key(app));
     widgets::divider(ui);
     egui::ScrollArea::vertical().id_salt("sfw-settings").max_height(PREVIEW_H - 40.0).auto_shrink([false, true]).show(ui, |ui| {
         let choice = |ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str, options: &[(&str, &str)]| {
@@ -694,7 +740,12 @@ fn side(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, s: Option<&
         let format = s.map_or(WebFormat::Gif, |s| s.format);
         match format {
             WebFormat::Gif | WebFormat::Png8 => {
+                let reduction = d.str("reduction");
                 choice(ui, d, "reduction", tl!("Reduction:"), &pairs(&Reduction::ALL, Reduction::id, Reduction::label));
+                // Another reduction makes a new palette.
+                if d.str("reduction") != reduction {
+                    restore_table(d);
+                }
                 colors_row(ui, d);
                 choice(ui, d, "dither", tl!("Dither:"), &pairs(&Dither::ALL, Dither::id, Dither::label));
                 if Dither::from_id(&d.str("dither")).is_some_and(|x| x != Dither::None) {
@@ -722,7 +773,9 @@ fn side(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, s: Option<&
         choice(ui, d, "metadata", tl!("Metadata:"), &pairs(&WebMetadata::ALL, WebMetadata::key, WebMetadata::label));
         if format.palette() {
             widgets::divider(ui);
-            color_table(ui, d, s);
+            if let Err(e) = color_table(ui, d, s) {
+                app.status(e);
+            }
         }
         widgets::divider(ui);
         image_size(app, ui, d, s);
@@ -784,6 +837,157 @@ fn presets_row(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, s: O
             Err(e) => app.status(e),
         }
     }
+}
+
+/// The optimized file size of the settings `s` on the active document as it is now: from the preview
+/// cache when the cache holds that document at its current revision, else made through [`previews`],
+/// which keeps the image for the preview drawn later in the same frame.
+fn previewed_bytes(app: &VectorcraftApp, ui: &egui::Ui, s: &WebSettings) -> Option<usize> {
+    let key = s.to_json().to_string();
+    let cache: Option<Cache> = ui.ctx().data(|m| m.get_temp(cache_id()));
+    let cached = cache
+        .filter(|c| Some(&c.render_key) == render_key(app, s).as_ref())
+        .and_then(|c| c.shots.into_iter().find(|(k, _)| *k == key))
+        .and_then(|(_, shot)| shot.ok())
+        .and_then(|shot| shot.bytes);
+    cached.or_else(|| previews(app, ui.ctx(), s, std::slice::from_ref(s)).1.into_iter().next()?.ok()?.bytes)
+}
+
+/// Optimize to File Size…: the button opens rows ([`open_optimize_rows`]) for the desired size in
+/// K, Start With and, with slices, Use; OK or Enter runs [`optimize_to_size`] and Cancel
+/// closes the rows. A line gives the size it found and whether that is within the desired size
+/// ([`optimized_result`]).
+fn optimize_rows(ui: &mut egui::Ui, d: &mut Dialog, s: Option<&WebSettings>, art: &str) {
+    if d.fields.contains_key("__optimizeK") {
+        widgets::label_row(ui, tl!("Desired File Size:"), LABEL_W, |ui| {
+            let k = d.f64("__optimizeK", 32.0);
+            if let Some(v) = widgets::range_field(ui, "sfw-optimize-k", k, 0.001..=webexport::MAX_DESIRED_K, "K", 3, 100.0) {
+                d.fields.insert("__optimizeK".into(), json!(v));
+            }
+        });
+        form::choice(ui, d, "__optimizeStart", tl!("Start With:"), (LABEL_W, FIELD_W), &START_WITH);
+        if d.bool("__hasSlices") {
+            form::choice(ui, d, "__optimizeUse", tl!("Use:"), (LABEL_W, FIELD_W), &SIZE_USE);
+        }
+        widgets::label_row(ui, "", LABEL_W, |ui| {
+            if widgets::flat_button(ui, tl!("OK"), 64.0).clicked() {
+                d.fields.insert("__optimizeGo".into(), json!(true));
+            }
+            if widgets::flat_button(ui, tl!("Cancel"), 64.0).clicked() {
+                for k in OPTIMIZE_FIELDS {
+                    d.fields.remove(k);
+                }
+            }
+        });
+    } else {
+        widgets::label_row(ui, "", LABEL_W, |ui| {
+            if widgets::flat_button(ui, tl!("Optimize to File Size…"), FIELD_W).clicked() {
+                d.fields.insert("__optimizeOpen".into(), json!(true));
+            }
+        });
+    }
+    if let Some(r) = optimized_result(d, s, art) {
+        let size = size_label(r["bytes"].as_u64().unwrap_or(0) as usize);
+        let target = size_label(r["targetBytes"].as_u64().unwrap_or(0) as usize);
+        let text = if r["achieved"] == json!(true) {
+            crate::i18n::fmt(tl!("{size}, within {target}"), &[("size", &size), ("target", &target)])
+        } else {
+            crate::i18n::fmt(tl!("No setting tried fits in {target}; the smallest is {size}"), &[("size", &size), ("target", &target)])
+        };
+        widgets::label_row(ui, "", LABEL_W, |ui| {
+            widgets::dim_label(ui, &text);
+        });
+    }
+}
+
+/// An Enter while the Optimize to File Size rows ([`optimize_rows`]) are open is their OK: it does
+/// not save. Run after every control of the dialog has drawn, it runs the search unless a control
+/// took the press (an open dropdown), a field refused the value typed in it, or Ctrl, Cmd or Alt was
+/// held, which the size field does not commit.
+pub(super) fn optimize_on_enter(ctx: &egui::Context, d: &mut Dialog) {
+    if !d.fields.contains_key("__optimizeK") || !crate::shortcuts::pressed_anew(ctx, egui::Key::Enter) {
+        return;
+    }
+    let held = ctx.input(|i| {
+        i.events.iter().any(|e| matches!(e, egui::Event::Key { key: egui::Key::Enter, pressed: true, modifiers, .. } if modifiers.ctrl || modifiers.command || modifiers.alt))
+    });
+    let refused = ctx.data(|m| m.get_temp::<bool>(widgets::dialog_reject_commit_flag())).unwrap_or(false);
+    widgets::reject_dialog_commit(ctx);
+    if !held && !refused {
+        d.fields.insert("__optimizeGo".into(), json!(true));
+        ctx.request_repaint();
+    }
+}
+
+/// The last Optimize to File Size result (`__optimized`) while it still holds: the settings are the
+/// ones it found and the art (`art`, from [`art_key`]) is the art it measured.
+pub(super) fn optimized_result<'a>(d: &'a Dialog, s: Option<&WebSettings>, art: &str) -> Option<&'a Value> {
+    d.fields.get("__optimized").filter(|r| r["art"] == json!(art) && s.is_some_and(|s| r["settings"] == s.to_json()))
+}
+
+/// The active document, its revision and its selected objects and slices, which an Optimize to File
+/// Size result was measured on. The selection decides the slices Save writes with `slices: selected`
+/// and the slice Current Slice measures, and a selection made on the canvas or with the Slice
+/// Selection tool leaves the revision as it is.
+pub(super) fn art_key(app: &VectorcraftApp) -> String {
+    app.session.active().map_or_else(String::new, |st| format!("{}:{}:{:?}:{:?}", st.uid, st.revision, st.selection.objects, st.selection.slices))
+}
+
+/// `bytes` in K, rounded up to the Desired File Size field's 0.001 K so the size it asks for holds
+/// them. The product is taken in `u128`, which holds any `usize` times 1000 on every target.
+pub(super) fn size_k(bytes: usize) -> f64 {
+    (bytes as u128 * 1000).div_ceil(1024).max(1) as f64 / 1000.0
+}
+
+/// Optimize to File Size… (`__optimizeOpen`): opens the rows with Current Settings and Total of All
+/// Slices, the desired size starting at the size the current settings give what that Use measures:
+/// the image slices' files together when there are slices, else the preview's file (32 K when it
+/// cannot be measured).
+fn open_optimize_rows(app: &mut VectorcraftApp, ui: &egui::Ui, d: &mut Dialog) {
+    let bytes = if d.bool("__hasSlices") {
+        let mut p = params(d);
+        if let Some(o) = p.as_object_mut() {
+            o.insert("desiredK".into(), json!(webexport::MAX_DESIRED_K));
+            o.insert("use".into(), json!("allSlices"));
+        }
+        let r = app.run("webExport.optimizeToFileSize", p).ok();
+        r.filter(|r| r["achieved"] == json!(true)).and_then(|r| r["bytes"].as_u64()).map(|b| b as usize)
+    } else {
+        settings_of(app, d).ok().and_then(|s| previewed_bytes(app, ui, &s))
+    };
+    let k = bytes.map_or(32.0, size_k);
+    d.fields.insert("__optimizeK".into(), json!(k));
+    d.fields.insert("__optimizeStart".into(), json!("current"));
+    d.fields.insert("__optimizeUse".into(), json!("allSlices"));
+}
+
+/// Optimize to File Size's OK: `webExport.optimizeToFileSize` with the dialog's settings and the
+/// rows' values; the settings it finds replace the dialog's, the rows close and `__optimized`
+/// keeps the result. An error leaves the settings and the rows as they are.
+pub(super) fn optimize_to_size(app: &mut VectorcraftApp, d: &mut Dialog) -> Result<Value, String> {
+    let mut p = params(d);
+    if let Some(o) = p.as_object_mut() {
+        o.insert("desiredK".into(), d.fields.get("__optimizeK").cloned().unwrap_or(Value::Null));
+        let start = d.str("__optimizeStart");
+        if !start.is_empty() {
+            o.insert("startWith".into(), json!(start));
+        }
+        let scope = d.str("__optimizeUse");
+        if d.bool("__hasSlices") && !scope.is_empty() {
+            o.insert("use".into(), json!(scope));
+        }
+    }
+    let r = app.run("webExport.optimizeToFileSize", p)?;
+    if let Some(found) = r["settings"].as_object() {
+        d.fields.extend(found.clone());
+    }
+    for k in OPTIMIZE_FIELDS {
+        d.fields.remove(k);
+    }
+    let result =
+        json!({ "settings": r["settings"], "bytes": r["bytes"], "targetBytes": r["targetBytes"], "achieved": r["achieved"], "art": art_key(app) });
+    d.fields.insert("__optimized".into(), result);
+    Ok(r)
 }
 
 /// Two checkboxes side by side.
@@ -849,10 +1053,13 @@ fn matte_row(ui: &mut egui::Ui, d: &mut Dialog) {
     });
 }
 
-/// The colour table of the current settings' preview: swatches (the selected one ringed; locked
-/// ones with a square, web-safe ones with a diamond, transparent ones over the grid) and the
-/// buttons that edit the selected colour, plus the sort order.
-fn color_table(ui: &mut egui::Ui, d: &mut Dialog, s: Option<&WebSettings>) {
+/// The colour table of the current settings' preview: swatches (the selected ones ringed; locked
+/// ones with a square, web-safe ones with a diamond, transparent ones over the grid), the buttons
+/// that edit the selected colour, Delete Color and the table's menu, plus the sort order. A click
+/// selects one color, a Shift-click the colors from the anchor, and a Ctrl-click
+/// (Command-click on macOS) adds or removes one. Returns an error for a deletion that would leave
+/// no color.
+fn color_table(ui: &mut egui::Ui, d: &mut Dialog, s: Option<&WebSettings>) -> Result<(), String> {
     let t = Tokens::get(ui.ctx());
     let cache: Option<Cache> = ui.ctx().data(|m| m.get_temp(cache_id()));
     let key = s.map(|s| s.to_json().to_string());
@@ -860,10 +1067,20 @@ fn color_table(ui: &mut egui::Ui, d: &mut Dialog, s: Option<&WebSettings>) {
     let Some(shot) = shot else {
         widgets::subheader(ui, tl!("Color Table"));
         widgets::dim_label(ui, tl!("Shown with the optimised preview."));
-        return;
+        // A Custom table the preview can't use (a deletion that left only colors mapped to
+        // transparent) can still go back to the generated palette.
+        if s.is_some_and(|s| s.color_table.is_custom()) && widgets::flat_button_fit(ui, tl!("Restore Generated Table"), 88.0).clicked() {
+            restore_table(d);
+        }
+        return Ok(());
     };
+    let table = s.map(|s| s.color_table.clone()).unwrap_or_default();
     widgets::subheader(ui, &crate::i18n::tn(shot.colors.len() as u64, "Color Table ({n} color)", "Color Table ({n} colors)"));
+    if table.is_custom() {
+        widgets::dim_label(ui, tl!("Custom"));
+    }
     let selected = d.str("__color");
+    let picked = selection(d);
     // (colour shown, source, transparent, locked, web-safe, mapped by hand)
     let rows: Vec<(TableColor, bool)> = shot
         .colors
@@ -875,6 +1092,9 @@ fn color_table(ui: &mut egui::Ui, d: &mut Dialog, s: Option<&WebSettings>) {
     let per_row = ((SIDE_W - 8.0) / (CELL + 2.0)).floor().max(1.0) as usize;
     let lines = rows.len().div_ceil(per_row).max(1);
     let (area, resp) = ui.allocate_exact_size(egui::vec2(SIDE_W - 8.0, lines as f32 * (CELL + 2.0)), egui::Sense::click());
+    // The colors that can be selected, in table order (for Shift-click ranges).
+    let order: Vec<String> = rows.iter().filter(|(c, mapped)| !c.transparent || *mapped).map(|(c, _)| hex(c.source)).collect();
+    let mut clicked = None;
     let p = ui.painter();
     for (i, (c, mapped)) in rows.iter().enumerate() {
         let r = egui::Rect::from_min_size(
@@ -908,14 +1128,17 @@ fn color_table(ui: &mut egui::Ui, d: &mut Dialog, s: Option<&WebSettings>) {
         }
         // The transparent entry itself isn't a colour to edit.
         let pickable = !c.transparent || *mapped;
-        let picked = pickable && hex(c.source) == selected;
-        p.rect_stroke(r, 0.0, egui::Stroke::new(if picked { 2.0 } else { 1.0 }, if picked { t.accent } else { t.border }), egui::StrokeKind::Outside);
+        let ringed = pickable && picked.iter().any(|h| h.eq_ignore_ascii_case(&hex(c.source)));
+        p.rect_stroke(r, 0.0, egui::Stroke::new(if ringed { 2.0 } else { 1.0 }, if ringed { t.accent } else { t.border }), egui::StrokeKind::Outside);
         if pickable && resp.clicked() && resp.interact_pointer_pos().is_some_and(|pos| r.contains(pos)) {
-            d.fields.insert("__color".into(), json!(hex(c.source)));
+            clicked = Some(hex(c.source));
         }
     }
+    if let Some(c) = clicked {
+        let m = ui.input(|i| i.modifiers);
+        pick(d, &order, &c, m.shift, m.command);
+    }
     ui.add_space(4.0);
-    let table = s.map(|s| s.color_table.clone()).unwrap_or_default();
     let on = |list: &[String]| list.iter().any(|h| h.eq_ignore_ascii_case(&selected));
     ui.horizontal(|ui| {
         ui.add_enabled_ui(!selected.is_empty(), |ui| {
@@ -936,6 +1159,23 @@ fn color_table(ui: &mut egui::Ui, d: &mut Dialog, s: Option<&WebSettings>) {
             }
         });
     });
+    // Delete Color (the button and the table's menu) and Restore Generated Table.
+    let (mut delete, mut restore) = (false, false);
+    ui.horizontal(|ui| {
+        delete |= widgets::icon_button_enabled(ui, "trash-2", tl!("Delete Color"), false, !picked.is_empty(), 24.0).clicked();
+        let menu = widgets::icon_button(ui, "menu", tl!("Color Table"), false, 24.0);
+        let open = menu.clicked();
+        let _ = widgets::popover(&menu, open, |ui| {
+            if widgets::menu_item(ui, tl!("Delete Color"), !picked.is_empty(), false) {
+                delete = true;
+                ui.close();
+            }
+            if widgets::menu_item(ui, tl!("Restore Generated Table"), table.is_custom(), false) {
+                restore = true;
+                ui.close();
+            }
+        });
+    });
     let sort = table.sort;
     widgets::label_row(ui, tl!("Order:"), LABEL_W, |ui| {
         let labels = ColorSort::ALL.map(ColorSort::label);
@@ -945,6 +1185,118 @@ fn color_table(ui: &mut egui::Ui, d: &mut Dialog, s: Option<&WebSettings>) {
             set_table(d, "sort", json!(o.id()));
         }
     });
+    if restore {
+        restore_table(d);
+    }
+    if delete {
+        let palette: Vec<String> =
+            shot.colors.iter().filter(|c| !c.transparent).map(|c| hex(c.source)).chain(shot.mapped.iter().map(|c| hex(*c))).collect();
+        delete_colors(d, &palette)?;
+    }
+    Ok(())
+}
+
+/// The colour table's selected colors, by source: `__colors`, else `__color`.
+pub(super) fn selection(d: &Dialog) -> Vec<String> {
+    let many: Vec<String> =
+        d.fields.get("__colors").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str).map(str::to_ascii_lowercase).collect();
+    if !many.is_empty() {
+        return many;
+    }
+    let one = d.str("__color");
+    if one.is_empty() { vec![] } else { vec![one.to_ascii_lowercase()] }
+}
+
+/// A click on the table's color `color`: it alone is selected and becomes the anchor (`__color`);
+/// with `shift`, the colors from the anchor to it in table order (`order`), the anchor unchanged;
+/// with `command` (Ctrl, or Command on macOS), it is added to the selection and becomes the anchor,
+/// or taken out, and the anchor moves to the last color left in the selection.
+pub(super) fn pick(d: &mut Dialog, order: &[String], color: &str, shift: bool, command: bool) {
+    let color = color.to_ascii_lowercase();
+    let at = |c: &str| order.iter().position(|o| o.eq_ignore_ascii_case(c));
+    if shift && let (Some(a), Some(b)) = (at(&d.str("__color")), at(&color)) {
+        let range: Vec<String> = order[a.min(b)..=a.max(b)].iter().map(|c| c.to_ascii_lowercase()).collect();
+        d.fields.insert("__colors".into(), json!(range));
+        return;
+    }
+    let mut set = selection(d);
+    let anchor = if command {
+        match set.iter().position(|c| *c == color) {
+            Some(i) => {
+                set.remove(i);
+                set.last().cloned()
+            }
+            None => {
+                set.push(color.clone());
+                Some(color)
+            }
+        }
+    } else {
+        set = vec![color.clone()];
+        Some(color)
+    };
+    d.fields.insert("__colors".into(), json!(set));
+    match anchor {
+        Some(c) => d.fields.insert("__color".into(), json!(c)),
+        None => d.fields.remove("__color"),
+    };
+}
+
+/// Delete Color: the selected colors join the color table's `deleted` list and leave its other
+/// lists. The first deletion fixes the palette (`customPalette`) to `palette`, the table's colors
+/// (by source) with the deleted ones, so the colors left do not change. A deletion that leaves no
+/// color, or only colors mapped to transparent, is refused with nothing changed. The selection is
+/// cleared.
+pub(super) fn delete_colors(d: &mut Dialog, palette: &[String]) -> Result<(), String> {
+    let picked = selection(d);
+    if picked.is_empty() {
+        return Ok(());
+    }
+    let list = |d: &Dialog, key: &str| -> Vec<String> {
+        d.fields
+            .get("colorTable")
+            .and_then(|t| t.get(key))
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+            .map(str::to_ascii_lowercase)
+            .collect()
+    };
+    let mut custom = list(d, "customPalette");
+    if custom.is_empty() {
+        custom = palette.iter().map(|c| c.to_ascii_lowercase()).collect();
+    }
+    let mut deleted = list(d, "deleted");
+    for c in &picked {
+        if !deleted.contains(c) {
+            deleted.push(c.clone());
+        }
+    }
+    // A color has to stay that is neither deleted nor mapped to transparent.
+    let clear: Vec<String> = list(d, "transparent").into_iter().filter(|c| !picked.contains(c)).collect();
+    if custom.iter().all(|c| deleted.contains(c) || clear.contains(c)) {
+        return Err(webexport::KEEP_ONE.into());
+    }
+    for key in ["locked", "transparent", "webShift"] {
+        if list(d, key).iter().any(|c| picked.contains(c)) {
+            for c in &picked {
+                toggle(d, key, c, false);
+            }
+        }
+    }
+    set_table(d, "customPalette", json!(custom));
+    set_table(d, "deleted", json!(deleted));
+    d.fields.remove("__colors");
+    d.fields.remove("__color");
+    Ok(())
+}
+
+/// Restore Generated Table: no deleted colors and no fixed palette; the reduction makes the
+/// palette again.
+pub(super) fn restore_table(d: &mut Dialog) {
+    set_table(d, "deleted", json!([]));
+    set_table(d, "customPalette", json!([]));
 }
 
 /// Add `color` to the colour table's `list`, or take it out.

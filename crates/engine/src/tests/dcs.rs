@@ -490,6 +490,118 @@ fn a_clipping_mask_of_ones_own_stays_when_the_link_is_updated() {
     assert_eq!(mask_width(&s), Some(4.0), "the mask's path is kept");
 }
 
+/// [`two_plates`] on a 20 × 20 pt page, its composite drawn through the left half of it (same
+/// length, so the plates stay where the header says).
+fn two_plates_square() -> Vec<u8> {
+    let text = String::from_utf8(two_plates()).unwrap();
+    let text = text.replace("0 0 20 10", "0 0 20 20").replace("20 10 scale", "20 20 scale");
+    text.replacen("10 10 lineto 0 10 lineto", "10 20 lineto 0 20 lineto", 1).into_bytes()
+}
+
+/// The bounds (width, height) of the clipping path of clip group `g`.
+fn clip_size(doc: &Document, g: NodeId) -> (f64, f64) {
+    let NodeKind::Group { children, clip: true } = &doc.node(g).unwrap().kind else { panic!("a clip group: {:?}", doc.node(g).unwrap().kind) };
+    let b = children[0].geometric_bounds().expect("a clipping path");
+    (b.width(), b.height())
+}
+
+#[test]
+fn placement_options_clip_a_dcs_image_inside_its_files_clipping_path() {
+    let dir = temp_dir("placement-clip");
+    let path = write(&dir, "pic.eps", &two_plates());
+    let square = write(&dir, "square.eps", &two_plates_square());
+    let mut s = session();
+    let r = s.execute("file.place", &json!({ "path": path, "at": [100, 100] })).unwrap();
+    let id = image_of(&s, &r["ids"][0]).id;
+    s.execute("links.placementOptions", &json!({"ids": [id.0], "preserve": "fill", "clip": true})).unwrap();
+    let depth = |doc: &Document| std::iter::successors(Some(id), |n| doc.parent_of(*n)).count();
+    let mut first = None;
+    // The square file fills the 20 × 10 pt placement and is cut to it; the file's own clipping
+    // path, the left half of its page, still clips the image inside that, on every relink.
+    for _ in 0..2 {
+        s.execute("links.relink", &json!({ "ids": [id.0], "path": square })).unwrap();
+        let doc = &s.doc().unwrap().doc;
+        let file = doc.parent_of(id).expect("the file's clip group");
+        let (w, h) = clip_size(doc, file);
+        assert!((w - 10.0).abs() < 1e-6 && (h - 20.0).abs() < 1e-6, "the file's clipping path: {w} × {h}");
+        let placement = doc.parent_of(file).expect("the placement's clip group");
+        let (w, h) = clip_size(doc, placement);
+        assert!((w - 20.0).abs() < 1e-6 && (h - 10.0).abs() < 1e-6, "the placement's clip: {w} × {h}");
+        assert_eq!(*first.get_or_insert(depth(doc)), depth(doc), "no group is added on a later relink");
+    }
+    // An update of the file keeps both.
+    s.execute("links.update", &json!({ "ids": [id.0] })).unwrap();
+    let doc = &s.doc().unwrap().doc;
+    assert_eq!(first, Some(depth(doc)));
+    let file = doc.parent_of(id).unwrap();
+    assert!((clip_size(doc, file).0 - 10.0).abs() < 1e-6, "the file's clipping path");
+    assert!((clip_size(doc, doc.parent_of(file).unwrap()).1 - 10.0).abs() < 1e-6, "the placement's clip");
+    // The file loses its clipping path and gains it again: the same two groups, no more.
+    let unclipped = String::from_utf8(two_plates_square()).unwrap().replacen("closepath clip newpath", "closepath newpath     ", 1);
+    for _ in 0..2 {
+        std::fs::write(&square, unclipped.as_bytes()).unwrap();
+        s.execute("links.update", &json!({ "ids": [id.0] })).unwrap();
+        let doc = &s.doc().unwrap().doc;
+        assert_eq!(first, Some(depth(doc)), "the file's group stays, without its clip");
+        let plain = doc.parent_of(id).unwrap();
+        assert!(!matches!(doc.node(plain).unwrap().kind, NodeKind::Group { clip: true, .. }), "the file's group is not clipped");
+        assert!((clip_size(doc, doc.parent_of(plain).unwrap()).1 - 10.0).abs() < 1e-6, "the placement's clip stays");
+        std::fs::write(&square, two_plates_square()).unwrap();
+        s.execute("links.update", &json!({ "ids": [id.0] })).unwrap();
+        let doc = &s.doc().unwrap().doc;
+        assert_eq!(first, Some(depth(doc)), "the file's clip group again, at the same depth");
+        let file = doc.parent_of(id).unwrap();
+        assert!((clip_size(doc, file).0 - 10.0).abs() < 1e-6, "the file's clipping path again");
+        assert!((clip_size(doc, doc.parent_of(file).unwrap()).1 - 10.0).abs() < 1e-6, "the placement's clip");
+    }
+}
+
+#[test]
+fn placement_options_clip_a_dcs_image_in_a_symbol_inside_its_files_clipping_path() {
+    let dir = temp_dir("placement-clip-symbol");
+    let path = write(&dir, "pic.eps", &two_plates());
+    let square = write(&dir, "square.eps", &two_plates_square());
+    let mut s = session();
+    let r = s.execute("file.place", &json!({ "path": path, "at": [100, 100] })).unwrap();
+    s.execute("symbol.new", &json!({ "name": "Pic", "ids": [r["ids"][0]] })).unwrap();
+    let list = s.execute("links.list", &json!({})).unwrap();
+    let row = list["links"].as_array().unwrap().iter().find(|r| r["owner"]["kind"] == "symbol").cloned().expect("the symbol's image");
+    let id = row["id"].as_u64().unwrap();
+    s.execute("links.placementOptions", &json!({"ids": [id], "preserve": "fill", "clip": true})).unwrap();
+    // The clip groups around the symbol's image, innermost first.
+    let clips = |s: &Session| {
+        fn find(n: &Node, id: u64, around: &mut Vec<(f64, f64)>) -> bool {
+            if n.id.0 == id {
+                return true;
+            }
+            let Some(children) = n.children() else { return false };
+            if !children.iter().any(|c| find(c, id, around)) {
+                return false;
+            }
+            if let NodeKind::Group { clip: true, .. } = n.kind
+                && let Some(b) = children[0].geometric_bounds()
+            {
+                around.push((b.width(), b.height()));
+            }
+            true
+        }
+        let mut around = vec![];
+        let doc = &s.doc().unwrap().doc;
+        assert!(find(&doc.symbols.iter().find(|w| w.name == "Pic").expect("the symbol").art, id, &mut around));
+        around
+    };
+    for _ in 0..2 {
+        s.execute("links.relink", &json!({ "ids": [id], "path": square })).unwrap();
+        let around = clips(&s);
+        assert_eq!(around.len(), 2, "the file's clip group inside the placement's: {around:?}");
+        // In the symbol's own units: the file's path as wide as the placement is tall, half as
+        // wide as it is tall, and the placement twice as wide as it is tall.
+        let ((fw, fh), (pw, ph)) = (around[0], around[1]);
+        assert!((fh - 2.0 * fw).abs() < 1e-6 && (fw - ph).abs() < 1e-6, "the file's clipping path: {around:?}");
+        assert!((pw - 2.0 * ph).abs() < 1e-6, "the placement's clip: {around:?}");
+    }
+}
+
 #[test]
 fn a_dcs_file_takes_the_place_parameters_an_eps_file_takes() {
     let dir = temp_dir("params");

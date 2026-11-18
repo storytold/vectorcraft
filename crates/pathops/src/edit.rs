@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use kurbo::{CubicBez, Line, ParamCurve, ParamCurveNearest, PathSeg, Point, Rect, Vec2};
 use vectorcraft_geom::path::measured_arclen;
-use vectorcraft_geom::{Anchor, AnchorKind, PathData, SubPath};
+use vectorcraft_geom::{Anchor, AnchorKind, Anchors, PathData, SubPath};
 
 use crate::boolean::{Seg, segs_to_subpath};
 use crate::fit::{end_tangent, fit_cubics, fit_single, fit_single_from, is_straight, largest_second_difference, sample, start_tangent, unit};
@@ -1091,7 +1091,7 @@ pub fn remove_anchor(sp: &mut SubPath, index: usize) -> bool {
 /// Refit the facing handles of anchors `pi` and `ni` so one cubic follows the two segments that
 /// meet at anchor `index` between them ([`remove_anchor`]). Two straight segments are left as
 /// they are, and so are the handles when the fit is not finite.
-fn refit_across(anchors: &mut [Anchor], pi: usize, index: usize, ni: usize) {
+fn refit_across(anchors: &mut Anchors, pi: usize, index: usize, ni: usize) {
     let (Some(&a), Some(&b), Some(&c)) = (anchors.get(pi), anchors.get(index), anchors.get(ni)) else { return };
     let line = |a: &Anchor, b: &Anchor| !a.has_out() && !b.has_in();
     if line(&a, &b) && line(&b, &c) {
@@ -1233,7 +1233,7 @@ pub fn add_anchor_points(path: &PathData) -> PathData {
                 v[2 * seg + 1] = Anchor { p: l.p3, h_in: l.p2, h_out: r.p1, kind: AnchorKind::Smooth };
             }
         }
-        sp.anchors = v;
+        sp.anchors = v.into();
     }
     out
 }

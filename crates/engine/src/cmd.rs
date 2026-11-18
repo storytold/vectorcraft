@@ -43,6 +43,7 @@ pub(crate) mod graph;
 mod halftone;
 pub mod help;
 pub mod importmatches;
+mod info;
 pub(crate) mod inline;
 mod interactivity;
 mod intertwine;
@@ -97,6 +98,8 @@ pub(crate) mod symboledit;
 pub mod symbollib;
 pub(crate) mod tabs;
 mod textedit;
+mod xmlattrs;
+
 pub use textedit::effective_kerning;
 pub mod textstyles;
 pub(crate) mod textwrap;
@@ -232,11 +235,7 @@ pub fn has_multi(s: &Session) -> std::result::Result<(), String> {
 /// editing and symbol editing mode isolate their own layer, which does not count here; an object
 /// isolated inside them counts.
 pub(crate) fn ordinary_isolation(st: &crate::DocState) -> Option<vectorcraft_doc::NodeId> {
-    st.isolation.filter(|l| {
-        !st.doc.pattern_edit.as_ref().is_some_and(|e| e.layer == *l)
-            && !st.doc.mask_edit.as_ref().is_some_and(|e| e.layer == *l)
-            && !st.doc.symbol_edit.as_ref().is_some_and(|e| e.layer == *l)
-    })
+    vectorcraft_tools::ordinary_isolation(&st.doc, st.isolation)
 }
 /// Objects are selected ([`has_selection`]), and in isolation mode ([`ordinary_isolation`]) at
 /// least one of them is inside the isolated object: Object › Lock's and Object › Hide's items.
@@ -344,6 +343,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(docmenu::specs());
         v.extend(variablecmds::specs());
         v.extend(docinfo::specs());
+        v.extend(info::specs());
         v.extend(panelcmds::specs());
         v.extend(artboardalign::specs());
         v.extend(buildcmds::specs());
@@ -407,7 +407,18 @@ pub fn command_specs() -> &'static [CommandSpec] {
 /// The command `id`: a built-in one, or a command an installed plug-in adds
 /// ([`plugin::command_specs`]).
 pub fn find_command(id: &str) -> Option<&'static CommandSpec> {
-    command_specs().iter().find(|c| c.id == id).or_else(|| plugin::find_spec(id))
+    static INDEX: std::sync::OnceLock<std::collections::HashMap<&'static str, &'static CommandSpec>> = std::sync::OnceLock::new();
+    INDEX.get_or_init(|| index_by_id(command_specs())).get(id).copied().or_else(|| plugin::find_spec(id))
+}
+
+/// `specs` by id. An id that more than one spec has names the first of them, as a search of
+/// `specs` in order finds.
+pub(crate) fn index_by_id(specs: &[CommandSpec]) -> std::collections::HashMap<&'static str, &CommandSpec> {
+    let mut index = std::collections::HashMap::with_capacity(specs.len());
+    for spec in specs {
+        index.entry(spec.id).or_insert(spec);
+    }
+    index
 }
 
 /// Runs command `spec`'s implementation with `p`. A plug-in command's runs the plug-in
@@ -438,6 +449,15 @@ pub(crate) fn f64_req(p: &Value, key: &str, cmd: &str) -> Result<f64> {
     match p.get(key) {
         None | Some(Value::Null) => Err(bad(cmd, format!("missing number `{key}`"))),
         Some(v) => v.as_f64().ok_or_else(|| bad(cmd, format!("`{key}` must be a number, not {v}"))),
+    }
+}
+/// The whole number of 0 or more that `p` gives for `key`. A missing key or null is "missing integer
+/// `{key}`"; any other value, such as `"3"`, `2.5`, `-1` or `true`, is "`{key}` must be a whole
+/// number", as [`object_param`] words it.
+pub(crate) fn u64_req(p: &Value, key: &str, cmd: &str) -> Result<u64> {
+    match p.get(key) {
+        None | Some(Value::Null) => Err(bad(cmd, format!("missing integer `{key}`"))),
+        Some(v) => v.as_u64().ok_or_else(|| bad(cmd, format!("`{key}` must be a whole number"))),
     }
 }
 /// The number `p` gives for `key`, or `default` when `p` leaves it out or gives null. Any other
@@ -549,6 +569,15 @@ pub(crate) fn given_object_ids(p: &Value, command: &str) -> Result<Option<Vec<No
 /// `v` as an index, a count or a byte offset: past `usize::MAX` reads as `usize::MAX`, past the end of any list.
 pub(crate) fn index(v: u64) -> usize {
     usize::try_from(v).unwrap_or(usize::MAX)
+}
+/// The whole number of 0 or more that `p` gives for `key`, read with [`index`], or `None` when `p`
+/// leaves it out or gives null. Any other value, such as `"3"`, `2.5`, `-1` or `true`, is an error
+/// under `cmd`: "`{key}` must be a whole number".
+pub(crate) fn index_opt(p: &Value, key: &str, cmd: &str) -> Result<Option<usize>> {
+    match p.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(v) => v.as_u64().map(|n| Some(index(n))).ok_or_else(|| bad(cmd, format!("`{key}` must be a whole number"))),
+    }
 }
 /// Validate all explicit targets before a command changes the document or selection.
 pub(crate) fn checked_ids_param(s: &Session, p: &Value, key: &str, command: &str) -> Result<Vec<NodeId>> {
@@ -803,13 +832,16 @@ pub(crate) fn unique_name_from(base: &str, next: &mut std::collections::HashMap<
 pub(crate) const MAX_IMPORTED_PRESETS: usize = 1000;
 
 pub(crate) use addons::{DecodedImages, refresh_color_masks};
+/// Packaging Tools' blanks and the objects their print leaves out, for the Fold Preview window.
+pub use addons::{fold_source, print_hidden};
 /// Document Info's category titles and the Objects category's count labels.
 pub use docinfo::{CATEGORIES, OBJECT_LABELS};
 pub use docmenu::guide_indexes;
-pub(crate) use edit::{settle_interaction, typing_in_progress};
+pub(crate) use edit::{Unrecorded, settle_interaction, typing_in_progress};
 pub(crate) use object::bounds_rewrite;
 pub(crate) use object::{keep_aligned_in, refresh_pixel_aligned};
-pub use plugin_call::{Location, key_location, location_in, location_keys};
+pub use plugin_call::{Location, ParamsPlace, key_location, location_in, location_keys};
+pub use select::SIMILAR;
 pub(crate) use vectorcraft_doc::range::parse_range;
 
 /// A date param in Unix seconds that defaults to the clock: `None` when absent (now, see
@@ -867,12 +899,30 @@ pub(crate) use buildcmds::TracePresetChanges;
 /// The shapes a group selected alone gives the Pathfinder panel.
 pub use pathops::shape_count;
 
+/// The Shape Mode commands' warning when a selected open path encloses no area.
+pub use pathops::SHAPE_MODE_OPEN_PATH_NO_AREA;
+
 /// The gaps View › Show Live Paint Gaps shows on a Live Paint group.
 pub use buildcmds::live_paint_gaps;
 
 /// Whether Reset Transformation changes a symbol instance (the Symbols panel menu and the
 /// Control bar enable it when it changes one).
 pub use brushsym::reset_transformation_changes;
+
+/// The Symbols panel's current symbol, as `symbol.list` answers it (the panel reads it on every
+/// frame without running the command).
+pub use brushsym::current_symbol;
+
+/// The byte order of UTF-16 text without a byte-order mark, by Import Data Sets' rule (the Graph
+/// Data window reads files by it too).
+pub use variablecmds::utf16_order_without_mark;
+
+/// How the Graph Data window's Import Data and Import Data Sets' `%` columns read a graph data
+/// file: its size limit, its text, its cells and the data `graph.setData` takes from them.
+pub use graph::{MAX_GRAPH_DATA_FILE, graph_cell_text, graph_data_from_grid, graph_data_text, graph_grid_from_text};
+
+/// The Variables panel's sort (`variable.sort`) and its rows in that order.
+pub use variablecmds::{VariableSort, VariableSortKey, variable_order};
 
 /// Command ids kept only so older scripts keep working: `(alias, the command it duplicates)`.
 /// They run as before but the command palette leaves them out (it lists the command once).

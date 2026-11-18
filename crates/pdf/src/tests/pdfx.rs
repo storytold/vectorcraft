@@ -42,6 +42,51 @@ fn text(pdf: &[u8]) -> String {
     String::from_utf8_lossy(pdf).into_owned()
 }
 
+/// The XMP packet of `pdf`, read as its stream's `/Length` says: the packet's end must be inside
+/// those bytes and nothing but the end of line may follow them before `endstream`.
+fn xmp_packet(pdf: &[u8]) -> String {
+    use crate::lab_spot::{find, rfind};
+    let begin = find(pdf, b"<?xpacket begin", 0).expect("an XMP packet");
+    let head = &pdf[..begin];
+    let obj = rfind(head, b" obj").expect("the packet's object");
+    let dict = &head[obj..];
+    let at = find(dict, b"/Length ", 0).expect("its length") + b"/Length ".len();
+    let digits: Vec<u8> = dict[at..].iter().copied().take_while(u8::is_ascii_digit).collect();
+    let length: usize = String::from_utf8(digits).unwrap().parse().unwrap();
+    let mut data = obj + rfind(dict, b"stream").unwrap() + b"stream".len();
+    data += pdf[data..].iter().take(2).take_while(|b| matches!(b, b'\r' | b'\n')).count();
+    let stream = &pdf[data..data + length];
+    let close = find(stream, b"<?xpacket end=", 0).expect("the packet ends inside the stream's length");
+    assert!(find(stream, b"?>", close).is_some(), "the packet ends inside the stream's length");
+    let rest = String::from_utf8_lossy(&pdf[data + length..]);
+    assert!(rest.trim_start_matches(['\r', '\n']).starts_with("endstream"), "the stream ends at its length");
+    String::from_utf8(stream.to_vec()).unwrap()
+}
+
+/// The value of the XMP element `tag` in `xmp`.
+fn xmp_value<'a>(xmp: &'a str, tag: &str) -> Option<&'a str> {
+    let open = format!("<{tag}>");
+    let rest = &xmp[xmp.find(&open)? + open.len()..];
+    Some(&rest[..rest.find(&format!("</{tag}>"))?])
+}
+
+#[test]
+fn pdfx4_metadata_has_a_metadata_date_equal_to_the_modification_date() {
+    let d = doc(&[Color::cmyk(0.0, 1.0, 1.0, 0.0)]);
+    // Dated by the writer (created), then dated again after writing (modified later).
+    for modified in [None, Some(1_800_000_000)] {
+        let mut o = opts(Standard::PdfX4, |_| {});
+        o.modified = modified;
+        let xmp = xmp_packet(&export(&d, &o).unwrap());
+        let modify = xmp_value(&xmp, "xmp:ModifyDate").expect("xmp:ModifyDate");
+        assert_eq!(xmp_value(&xmp, "xmp:MetadataDate"), Some(modify), "{modified:?}: {xmp}");
+        assert_eq!(xmp.matches("<xmp:MetadataDate>").count(), 1, "{modified:?}");
+        if modified.is_some() {
+            assert!(modify.starts_with("2027-01-15T"), "the later date: {modify}");
+        }
+    }
+}
+
 #[test]
 fn each_standard_writes_its_header_output_intent_boxes_and_identification() {
     let mut d = doc(&[Color::cmyk(0.0, 1.0, 1.0, 0.0), Color::rgb(0.2, 0.4, 0.9)]);
@@ -113,7 +158,41 @@ fn pdfx_1a_files_have_no_rgb() {
     let png = {
         let img = image::RgbaImage::from_pixel(4, 4, image::Rgba([10, 200, 30, 255]));
         let mut out = std::io::Cursor::new(vec![]);
-        img.write_to(&mut out, image::ImageFormat::Png).unwrap();
+        {
+            let __dyn: image::DynamicImage = img.into();
+            let (__w, __h) = (__dyn.width(), __dyn.height());
+            let (__layout, __sample, __raw) = match __dyn {
+                image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageLuma16(b) => (
+                    craft_image_codecs::ChannelLayout::Gray,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageLumaA16(b) => (
+                    craft_image_codecs::ChannelLayout::GrayA,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageRgb16(b) => (
+                    craft_image_codecs::ChannelLayout::Rgb,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageRgba16(b) => (
+                    craft_image_codecs::ChannelLayout::Rgba,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+            };
+            let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+            craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+                .map(|__b| out.get_mut().extend_from_slice(&__b))
+        }
+        .unwrap();
         out.into_inner()
     };
     d.images.insert("img".into(), ImageBlob::new("image/png", png));

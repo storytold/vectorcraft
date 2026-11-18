@@ -8,6 +8,12 @@ pub fn icon_button(ui: &mut Ui, icon: &str, tip: &str, selected: bool, size: f32
 
 /// [`icon_button`] drawn for a response the caller made (its own id or sense).
 pub fn paint_icon_button(ui: &mut Ui, resp: Response, icon: &str, tip: &str, selected: bool) -> Response {
+    paint_icon_button_named(ui, resp, icon, tl!(tip), tl!(tip), selected)
+}
+
+/// [`paint_icon_button`] that screen readers call `name` and that shows the tool tip `tip` (none
+/// when empty), both as given.
+pub(crate) fn paint_icon_button_named(ui: &mut Ui, resp: Response, icon: &str, name: &str, tip: &str, selected: bool) -> Response {
     let t = Tokens::get(ui.ctx());
     let rect = resp.rect;
     let size = rect.width();
@@ -21,8 +27,8 @@ pub fn paint_icon_button(ui: &mut Ui, resp: Response, icon: &str, tip: &str, sel
     ui.painter().rect_filled(rect, CornerRadius::same(5), bg);
     let pad = (size * 0.2).round();
     icons::paint(ui, icon, rect.shrink(pad), if selected { t.text_strong } else { t.icon });
-    resp.widget_info(|| icon_button_info(ui.is_enabled(), selected, tl!(tip)));
-    if !tip.is_empty() { resp.on_hover_text(tl!(tip)) } else { resp }
+    resp.widget_info(|| icon_button_info(ui.is_enabled(), selected, name));
+    if !tip.is_empty() { resp.on_hover_text(tip) } else { resp }
 }
 
 /// Small flat text button (Quick Actions style).
@@ -40,8 +46,7 @@ pub fn flat_button(ui: &mut Ui, text: &str, width: f32) -> Response {
 /// A [`flat_button`] that expands to fit localized labels wider than `min_width`.
 pub fn flat_button_fit(ui: &mut Ui, text: &str, min_width: f32) -> Response {
     let t = Tokens::get(ui.ctx());
-    let galley = ui.painter().layout_no_wrap(tl!(text).to_string(), egui::FontId::proportional(12.5), t.text_strong);
-    let width = (galley.size().x + 24.0).max(min_width);
+    let width = flat_button_fit_width(ui, text, min_width);
     let (rect, resp) = ui.allocate_exact_size(vec2(width, 24.0), Sense::click());
     let rect = rect.shrink2(vec2(0.0, 0.5));
     ui.painter().rect_filled(rect, CornerRadius::same(5), t.button);
@@ -49,6 +54,13 @@ pub fn flat_button_fit(ui: &mut Ui, text: &str, min_width: f32) -> Response {
     ui.painter().with_clip_rect(rect).text(rect.center(), egui::Align2::CENTER_CENTER, tl!(text), egui::FontId::proportional(12.5), t.text_strong);
     resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), tl!(text)));
     resp
+}
+
+/// The width [`flat_button_fit`] gives `text`, translated: its label and padding, at least
+/// `min_width`.
+pub(crate) fn flat_button_fit_width(ui: &Ui, text: &str, min_width: f32) -> f32 {
+    let galley = ui.painter().layout_no_wrap(tl!(text).to_string(), egui::FontId::proportional(12.5), Color32::PLACEHOLDER);
+    (galley.size().x + 24.0).max(min_width)
 }
 
 /// Width of a [`split_button`]'s arrow.

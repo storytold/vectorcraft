@@ -25,10 +25,17 @@ pub struct DocState {
     /// Panel state, not art selection: not saved, not undoable (`layer.setCurrent`,
     /// `layer.highlight`).
     pub layer_rows: Vec<NodeId>,
+    /// The row the last Locate Object or Locate Layer (`layer.locate`) highlighted, until the
+    /// Layers panel takes it: the panel opens the layers around that row and scrolls to it, also
+    /// when the row was already highlighted. Panel state: not saved, not undoable.
+    pub locate_reveal: Option<NodeId>,
     /// The variable highlighted in the Variables panel: what its Delete, Options… and Select
     /// Bound Object act on. Panel state, not art selection: not saved, not undoable
     /// (`variable.highlight`). A name, so renaming a variable moves the highlight with it.
     pub variables_highlight: Option<String>,
+    /// The order of the Variables panel's list: the column it is sorted by, and whether it is
+    /// reversed. Panel state: not saved, not undoable (`variable.sort`).
+    pub variables_sort: cmd::VariableSort,
     /// Isolation mode container.
     pub isolation: Option<NodeId>,
     /// Select › Start Global Edit: the objects edited together until Stop Global Edit or Escape
@@ -133,6 +140,10 @@ pub struct DocState {
     /// same document comes to the front, its type set in them is not measured again. While this
     /// reference lasts, its allocation holds no other document. Not saved.
     pub(crate) measured_in_own: Option<(std::sync::Weak<Document>, std::collections::HashSet<String>)>,
+    /// The document as the last edit's refresh of inline graphics left it, and what that refresh
+    /// measured: the next refresh checks only the layer trees that differ from it
+    /// ([`cmd::inline::refresh`]). Not saved.
+    pub(crate) inline_resolved: Option<cmd::inline::Resolved>,
 }
 
 /// Whether a document has an artboard for Delete Empty Artboards to delete, with the document that
@@ -315,7 +326,9 @@ impl DocState {
             revision: 1,
             active_layer,
             layer_rows: vec![],
+            locate_reveal: None,
             variables_highlight: None,
+            variables_sort: Default::default(),
             isolation: None,
             global_edit: None,
             similar_outlines: Default::default(),
@@ -351,6 +364,7 @@ impl DocState {
             plugin_effects: Default::default(),
             art_to_fit: Default::default(),
             measured_in_own: None,
+            inline_resolved: None,
         }
     }
     /// `measure`'s answer for the document now. `measure` runs once for each version of the document,
@@ -369,12 +383,13 @@ impl DocState {
     /// menu asks on every frame it is open, and measuring builds the solids of 3D effects, so the
     /// answer is kept for this version of the document and those artboards, and a change of the
     /// selection or the view keeps it. It is measured again when what the measure reads outside the
-    /// document changes: the installed plug-ins, whose effects draw art, and the installed fonts,
-    /// which set the bounds of all type.
+    /// document changes: the installed plug-ins, whose effects draw art, and the installed fonts and
+    /// the hyphenation exceptions, which set the bounds of all type.
     pub fn any_art_to_fit(&self, indices: &[usize]) -> bool {
-        self.any_art_to_fit_with(indices, (vectorcraft_plugins::registry::revision(), vectorcraft_text::FontDb::global().generation()))
+        self.any_art_to_fit_with(indices, (vectorcraft_plugins::registry::revision(), vectorcraft_text::layout_inputs()))
     }
-    /// [`Self::any_art_to_fit`], with `outside` the generations of the plug-ins and the fonts.
+    /// [`Self::any_art_to_fit`], with `outside` the generations of the plug-ins and the layout inputs
+    /// ([`vectorcraft_text::layout_inputs`]).
     pub(crate) fn any_art_to_fit_with(&self, indices: &[usize], outside: (u64, u64)) -> bool {
         // Measuring runs renderer and plug-in code; should it ever ask again while measuring, it
         // is measured without being kept rather than borrowed twice.

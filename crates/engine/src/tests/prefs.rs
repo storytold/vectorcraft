@@ -109,6 +109,23 @@ fn grid_prefs_apply_to_open_documents() {
     assert_eq!((g.spacing, g.subdivisions), (36.0, 4));
 }
 
+/// The grid preferences are not an undo step in the documents they apply to, so undo and redo
+/// leave the grid as the preferences set it.
+#[test]
+fn undo_and_redo_keep_the_grid_prefs() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();
+    s.execute("prefs.set", &json!({"values": {"gridlineEvery": 36, "gridSubdivisions": 4}})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    let g = &s.doc().unwrap().doc.grid;
+    assert_eq!((g.spacing, g.subdivisions), (36.0, 4));
+    s.execute("prefs.set", &json!({"values": {"gridlineEvery": 18, "gridSubdivisions": 3}})).unwrap();
+    s.execute("edit.redo", &json!({})).unwrap();
+    let g = &s.doc().unwrap().doc.grid;
+    assert_eq!((g.spacing, g.subdivisions), (18.0, 3));
+}
+
 /// Guides & Grid › Gridline every and Subdivisions (#394): set with no document open, as the
 /// desktop app restores them at launch, they give `file.new`'s document their grid.
 #[test]
@@ -447,6 +464,37 @@ fn gpu_preference_defaults_to_automatic_and_validates() {
     assert_eq!(s.prefs.gpu_preference, "automatic");
 }
 
+/// Performance › Low-Latency Drawing (#6013): off by default and for preference files written
+/// before it, a boolean only, kept through a save/load round trip, listed under Performance and
+/// reset with it.
+#[test]
+fn low_latency_drawing_defaults_off_and_takes_only_a_boolean() {
+    let mut s = Session::new();
+    assert!(!s.prefs.low_latency_drawing);
+    assert_eq!(s.execute("prefs.get", &json!({"key": "lowLatencyDrawing"})).unwrap(), json!(false));
+    s.execute("prefs.set", &json!({"key": "lowLatencyDrawing", "value": true})).unwrap();
+    assert!(s.prefs.low_latency_drawing);
+    for bad in [json!(1), json!(null), json!("on"), json!("yes"), json!([true])] {
+        assert!(s.execute("prefs.set", &json!({"key": "lowLatencyDrawing", "value": bad})).is_err(), "{bad}");
+        assert!(s.prefs.low_latency_drawing);
+    }
+    // Booleans may be given as "true" and "false", as for every boolean preference.
+    s.execute("prefs.set", &json!({"key": "lowLatencyDrawing", "value": "false"})).unwrap();
+    assert!(!s.prefs.low_latency_drawing);
+    s.execute("prefs.set", &json!({"key": "lowLatencyDrawing", "value": "true"})).unwrap();
+    assert_eq!(s.prefs.to_json()["lowLatencyDrawing"], json!(true));
+    let back: Prefs = serde_json::from_value(s.prefs.to_json()).unwrap();
+    assert!(back.low_latency_drawing);
+    let old: Prefs = serde_json::from_value(json!({"gpuPerformance": true})).unwrap();
+    assert!(!old.low_latency_drawing);
+    let l = s.execute("prefs.list", &json!({})).unwrap();
+    let row = l.as_array().unwrap().iter().find(|e| e["key"] == "lowLatencyDrawing").unwrap().clone();
+    assert_eq!(row["category"], "Performance");
+    assert_eq!(row["label"], "Low-Latency Drawing");
+    s.execute("prefs.reset", &json!({"category": "Performance"})).unwrap();
+    assert!(!s.prefs.low_latency_drawing);
+}
+
 /// Performance › Linux Display Server (#1151): automatic by default, X11 by value or label, and
 /// anything else is an error that changes nothing.
 #[test]
@@ -693,7 +741,6 @@ fn use_precise_cursors_swaps_the_tools_own_pointers_for_a_crosshair() {
         ("blobBrush", Cursor::BlobBrush),
         ("shaper", Cursor::Shaper),
         ("pencil", Cursor::PencilNew),
-        ("smooth", Cursor::Smooth),
         ("pathEraser", Cursor::PathEraser),
         ("join", Cursor::Join),
         ("eraser", Cursor::Eraser),
@@ -735,6 +782,27 @@ fn use_precise_cursors_swaps_the_tools_own_pointers_for_a_crosshair() {
     s.execute("prefs.set", &json!({"key": "usePreciseCursors", "value": false})).unwrap();
     for (tool, c) in own {
         assert_eq!(cursor(&mut s, tool), c, "{tool} off again");
+    }
+}
+
+/// With no selected path, the Smooth tool shows Not Allowed, and Use Precise Cursors leaves it so; with a
+/// selected path, it shows its own pointer, or a crosshair with the preference on.
+#[test]
+fn use_precise_cursors_keeps_the_smooth_tools_not_allowed_pointer() {
+    use vectorcraft_tools::{Cursor, Mods};
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let at = vectorcraft_geom::Point::new(300.0, 300.0);
+    s.select_tool("smooth", ViewInfo::default()).unwrap();
+    for precise in [false, true] {
+        s.execute("prefs.set", &json!({"key": "usePreciseCursors", "value": precise})).unwrap();
+        assert_eq!(s.cursor(at, Mods::default(), ViewInfo::default()), Cursor::NotAllowed, "precise {precise}");
+    }
+    let id = s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    for (precise, c) in [(false, Cursor::Smooth), (true, Cursor::Crosshair)] {
+        s.execute("prefs.set", &json!({"key": "usePreciseCursors", "value": precise})).unwrap();
+        assert_eq!(s.cursor(at, Mods::default(), ViewInfo::default()), c, "precise {precise}");
     }
 }
 
@@ -1958,6 +2026,26 @@ fn highlight_alternate_glyphs_preference_is_off_by_default() {
     assert!(!s.prefs.highlight_alternate_glyphs);
 }
 
+/// Preferences › Type › Show Character Alternates: on by default, listed in the Type category,
+/// saved with the other preferences, and a value that is not true or false is refused.
+#[test]
+fn show_character_alternates_preference_is_on_by_default_and_saved() {
+    let mut s = Session::new();
+    assert!(s.prefs.show_character_alternates, "on by default");
+    let spec = crate::cmd::prefscmds::PREF_SPECS.iter().find(|p| p.key == "showCharacterAlternates").expect("listed");
+    assert_eq!((spec.category, spec.label), ("Type", "Show Character Alternates"));
+    assert_eq!(s.execute("prefs.get", &json!({"key": "showCharacterAlternates"})).unwrap(), json!(true));
+    set_pref(&mut s, "showCharacterAlternates", json!(false));
+    assert!(!s.prefs.show_character_alternates);
+    assert!(s.execute("prefs.set", &json!({"key": "showCharacterAlternates", "value": "yes"})).is_err(), "not a boolean");
+    assert!(!s.prefs.show_character_alternates, "a refused value changes nothing");
+    let saved: Prefs = serde_json::from_value(serde_json::to_value(&s.prefs).unwrap()).unwrap();
+    assert!(!saved.show_character_alternates);
+    // Preferences saved before the key existed read it as on.
+    let old: Prefs = serde_json::from_value(json!({"highlightAlternateGlyphs": true})).unwrap();
+    assert!(old.show_character_alternates);
+}
+
 /// Preferences › Type › Highlight Substituted Fonts: on by default, listed in the Type category,
 /// and saved with the other preferences.
 /// <https://helpx.adobe.com/illustrator/desktop/design-with-text/fonts-and-scripts/edit-text-without-replacing-missing-fonts.html>
@@ -2564,6 +2652,35 @@ fn settling_typing_for_a_tool_shows_its_preview_warning() {
     let ui = s.pointer(&PointerEvent::new(PointerKind::Down, 50.0, 380.0).with_mods(cmd), ViewInfo::default()).unwrap();
     assert!(warned(&ui), "{ui:?}");
     s.pointer(&PointerEvent::new(PointerKind::Up, 50.0, 380.0).with_mods(cmd), ViewInfo::default()).unwrap();
+}
+
+/// Typing kept as its own step when a dialog or a panel begins its preview, or when the font menus
+/// end the typing session, returns its applied preview's warning for the status bar. A preview
+/// without a warning returns none, and with no typing in progress nothing is kept and no step is
+/// added.
+#[test]
+fn settling_typing_for_a_dialog_returns_its_preview_warning() {
+    let warned = |w: &[String]| w.iter().any(|m| m.contains("type"));
+    let steps = |s: &Session| s.doc().unwrap().history.undo.len();
+    let mut s = deferred_bloat("Typing", true, "selection");
+    let before = steps(&s);
+    let w = s.begin_interaction_warned("Offset Path").unwrap();
+    assert!(warned(&w), "{w:?}");
+    assert_eq!(steps(&s), before + 1, "the typing is a step of its own");
+    assert_eq!(s.doc().unwrap().interaction.as_ref().map(|it| it.label.as_str()), Some("Offset Path"));
+
+    let mut s = deferred_bloat("Typing", true, "selection");
+    let w = s.keep_typing().unwrap();
+    assert!(warned(&w), "{w:?}");
+    assert!(!s.in_interaction());
+    assert_eq!(steps(&s), before + 1);
+    let w = s.keep_typing().unwrap();
+    assert!(w.is_empty(), "{w:?}");
+    assert_eq!(steps(&s), before + 1, "nothing in progress adds no step");
+
+    let mut s = deferred_bloat("Typing", false, "selection");
+    let w = s.begin_interaction_warned("Offset Path").unwrap();
+    assert!(w.is_empty(), "{w:?}");
 }
 
 /// File Handling › Use Low Resolution Proxy for Linked EPS (#394): off by default; toggling it does

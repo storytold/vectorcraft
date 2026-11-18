@@ -41,8 +41,19 @@ impl<'a> Reader<'a> {
     }
 
     /// `X=` in a `/Mask` dictionary: the opacity mask's art starts, read until its `X+`
-    /// ([`Self::end_mask`]).
+    /// ([`Self::end_mask`]). In an envelope's dictionary, its `AIDeformArtKey` block starts
+    /// ([`Reader::envelope_blocks`]).
     fn open_mask_object(&mut self, hidden: bool) -> Result<(), String> {
+        if let Some(Frame { kind: Kind::Obj(o), .. }) = self.frames.last()
+            && o.ty == "ArtDictionary"
+            && o.get("AIDeformOptionsKey").is_some()
+        {
+            // One entry for each open dictionary, however many `X=` it has.
+            if self.envelope_blocks.last() != Some(&self.frames.len()) {
+                self.envelope_blocks.push(self.frames.len());
+            }
+            return Ok(());
+        }
         if !matches!(self.frames.last(), Some(Frame { kind: Kind::Obj(o), .. }) if o.ty == "Mask") {
             // `X=` also introduces legacy text frame art, read by `text_frames`.
             return Ok(());
@@ -61,6 +72,22 @@ impl<'a> Reader<'a> {
             (self.pending_unread_fill, self.pending_unread_stroke) = (f.pending_unread_fill, f.pending_unread_stroke);
         }
         self.open(Kind::Mask, hidden)
+    }
+
+    /// `X+`: a dictionary's art block ends. The block of a dictionary whose `X=` opened no frame (an
+    /// envelope's, in an opacity mask's art too) ends with the dictionary still innermost; an opacity
+    /// mask's ends its art ([`Self::end_mask`]).
+    fn end_block(&mut self) -> Result<(), String> {
+        if matches!(self.frames.last(), Some(Frame { kind: Kind::Obj(_), .. })) {
+            if self.envelope_blocks.last() == Some(&self.frames.len()) {
+                self.envelope_blocks.pop();
+            }
+            return Ok(());
+        }
+        if self.frames.iter().any(|f| matches!(f.kind, Kind::Mask)) {
+            return self.end_mask();
+        }
+        Ok(())
     }
 
     /// `LB`: a graph started in this layer that hasn't ended doesn't go on past it; the layer ends.
@@ -86,6 +113,18 @@ impl<'a> Reader<'a> {
                 Some((m, b, path)) => (p.matrix, p.bounds, p.path) = (Some(m), Some(b), path),
                 None => p.broken = true,
             }
+        }
+    }
+
+    /// `(…) Xt n XD`: samples of the pen along the object before it. They aren't read, so the object
+    /// keeps its drawn look when its style has a Calligraphic brush with a setting that varies with
+    /// the pen ([`Self::style_marker`]).
+    fn pen_samples_op(&mut self) {
+        if !self.after_object || self.pen_samples.len() >= MAX_NODES {
+            return;
+        }
+        if let Some(n) = self.frames.last().and_then(|f| f.children.last()) {
+            self.pen_samples.insert(n.id);
         }
     }
 
@@ -147,8 +186,7 @@ impl<'a> Reader<'a> {
             }
             ";" => return self.end_obj(),
             "X=" => return self.open_mask_object(hidden),
-            "X+" if self.frames.iter().any(|f| matches!(f.kind, Kind::Mask)) => return self.end_mask(),
-            "X+" => return Ok(()),
+            "X+" => return self.end_block(),
             _ => {}
         }
         self.state_block_continues(w);
@@ -188,10 +226,7 @@ impl<'a> Reader<'a> {
                 }
                 ("X!", Some("End")) if self.mesh.is_some() => return self.end_mesh(),
                 ("X#", _) => {
-                    let to_doc = self.space();
-                    if let Some((m, _)) = self.mesh.as_mut() {
-                        m.entry(&vals, to_doc);
-                    }
+                    self.mesh_entry(&vals);
                     return Ok(());
                 }
                 _ if self.mesh.is_some() => return Ok(()),
@@ -418,6 +453,7 @@ impl<'a> Reader<'a> {
                     self.end_envelope();
                 }
             }
+            "XD" => self.pen_samples_op(),
             _ if IGNORED.contains(&w) => {}
             // Before the art, the setup runs procedures of the printing format.
             _ if self.frames.is_empty() => {}
@@ -559,9 +595,9 @@ impl<'a> Reader<'a> {
             return;
         }
         self.image_tail = false;
-        // An object's tags (`XT`, and a graph's `Go`) follow it one after another, and an image's
-        // follow the `XH` that ends its data.
-        if matches!(w, "Xy" | "Xd" | "XW" | "BB" | "LB" | "XT" | "XH" | "Go") {
+        // An object's tags (`XT`, and a graph's `Go`) and samples of the pen (`Xt`, `XD`) follow it
+        // one after another, and an image's tags follow the `XH` that ends its data.
+        if matches!(w, "Xy" | "Xd" | "XW" | "BB" | "LB" | "XT" | "XH" | "Go" | "Xt" | "XD") {
             return;
         }
         self.after_object = false;
@@ -688,6 +724,8 @@ impl<'a> Reader<'a> {
     /// drawn look before it (all on `%_` lines inside another such object). Other markers end what
     /// follows an object.
     fn style_marker(&mut self, vals: &[V], hidden: bool) {
+        use crate::import::ai::brush::PathBrush;
+        use crate::import::ai::style::{ArtStyle, StyleItem};
         let code = Self::nums(vals).last().copied().unwrap_or(0.0);
         let style = vals.iter().rev().find_map(|v| self.names.text(v)).unwrap_or_default();
         let after = std::mem::take(&mut self.after_object);
@@ -754,8 +792,20 @@ impl<'a> Reader<'a> {
         } else {
             look
         };
-        // A style read here: the object, painted as it says.
-        let appearance = self.styles.get(&style).and_then(|st| {
+        // A style read here: the object, painted as it says. An object with samples of the pen
+        // keeps its drawn look when its style has a Calligraphic brush with a setting that varies
+        // with the pen: the samples aren't read, and the brush draws such a stroke at the pen's
+        // middle values.
+        let sampled = self.pen_samples.contains(&object.id);
+        let follows_pen = |st: &ArtStyle| {
+            st.items.iter().any(|i| match i {
+                StyleItem::Stroke { brush: Some((_, PathBrush::Calligraphic(c))), .. } => {
+                    c.modes().iter().zip(c.variation).any(|(m, v)| m.follows_pen() && v != 0.0)
+                }
+                _ => false,
+            })
+        };
+        let appearance = self.styles.get(&style).filter(|st| !(sampled && follows_pen(st))).and_then(|st| {
             styled(
                 object,
                 look,
@@ -992,8 +1042,8 @@ struct StylePaints<'a> {
     brushes: &'a [super::super::brush::BrushDraft],
     /// Which of [`Self::brushes`] are kept as brushes ([`super::super::brush::kept`]).
     kept: &'a [bool],
-    /// The art an Art brush draws as the file does ([`super::super::brush::bending_art`]).
-    bending: &'a HashSet<String>,
+    /// The art an Art brush draws as the file does, with its length ([`super::super::brush::bending_art`]).
+    bending: &'a HashMap<String, f64>,
     space: Affine,
 }
 
@@ -1076,6 +1126,49 @@ fn no_guides(n: &Node, depth: usize) -> bool {
     depth <= MAX_DEPTH && !n.is_guide() && n.children().into_iter().flatten().all(|c| no_guides(c, depth + 1))
 }
 
+/// Is `n` a compound path or group with a guide in it whose bounds reach past the bounds of the rest
+/// of its art, or with guides only? Members are looked into to [`MAX_DEPTH`]; deeper counts as yes.
+/// Any other object counts as no.
+fn guides_reach_past(n: &Node) -> bool {
+    /// Adds the bounds of the guides in `n`'s members to `guides` and of the rest to `art`; false when
+    /// it is deeper than [`MAX_DEPTH`].
+    fn split(n: &Node, depth: usize, guides: &mut Option<Rect>, art: &mut Option<Rect>) -> bool {
+        depth <= MAX_DEPTH
+            && n.children().into_iter().flatten().all(|c| match c.children() {
+                _ if c.is_guide() => {
+                    *guides = vectorcraft_geom::union_opt(*guides, c.geometric_bounds());
+                    true
+                }
+                Some(_) => split(c, depth + 1, guides, art),
+                None => {
+                    *art = vectorcraft_geom::union_opt(*art, c.geometric_bounds());
+                    true
+                }
+            })
+    }
+    if !matches!(n.kind, NodeKind::Compound { .. } | NodeKind::Group { .. }) {
+        return false;
+    }
+    let (mut guides, mut art) = (None, None);
+    !split(n, 0, &mut guides, &mut art) || guides.is_some_and(|g| art.is_none_or(|o| o.union(g) != o))
+}
+
+/// Do Transform params `p` scale, turn or reflect, so that where the object's bounds lie changes
+/// what they draw? Moving alone doesn't.
+fn transform_measures(p: &serde_json::Value) -> bool {
+    p["scaleH"].as_f64() != Some(100.0)
+        || p["scaleV"].as_f64() != Some(100.0)
+        || p["rotate"].as_f64() != Some(0.0)
+        || p["reflectX"].as_bool() != Some(false)
+        || p["reflectY"].as_bool() != Some(false)
+}
+
+/// Do Free Distort params `p` move a corner of the box, so that where the object's bounds lie
+/// changes what they draw?
+fn free_distort_measures(p: &serde_json::Value) -> bool {
+    p["corners"] != serde_json::json!([[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]])
+}
+
 /// The largest Twist angle, in degrees either way, read as a live effect on an object that isn't a
 /// path or compound path with straight segments: VectorCraft's own limit. An object with a larger
 /// Twist keeps the file's drawn look.
@@ -1089,9 +1182,14 @@ const MAX_STRAIGHT_TWIST: f64 = 180.0;
 /// Is `object` one that style `st`, whose effect moves the outline, is read on? It and everything
 /// in it [`moves_alike`], and the style paints no gradient. Twist is read only when nothing is
 /// stroked and its angle is a number: up to [`MAX_STRAIGHT_TWIST`] degrees either way on a path or
-/// compound path with straight segments, or up to [`MAX_TWIST`] degrees either way on another object
+/// compound path with straight segments (only at 0° when its guide members reach past its other
+/// members, see [`guides_reach_past`]), or up to [`MAX_TWIST`] degrees either way on another object
 /// with no guide in it. Transform that scales, turns or reflects is read only when nothing is stroked
-/// (its reference point lies on the bounds without strokes).
+/// (its reference point lies on the bounds without strokes) and, unless Transform Objects is off,
+/// no guide reaches past the rest of the object's art ([`guides_reach_past`]). Free Distort that
+/// moves a corner of a group is read only when no guide in the group reaches past the rest of its
+/// art. The live effect is measured from bounds that take in the guides, so such an object keeps
+/// its drawn look.
 fn moves_with(object: &Node, st: &crate::import::ai::style::ArtStyle) -> bool {
     use crate::import::ai::style::StyleItem;
     let stroked = st.items.iter().any(|i| matches!(i, StyleItem::Stroke { paint, .. } if !paint.is_none()))
@@ -1102,16 +1200,23 @@ fn moves_with(object: &Node, st: &crate::import::ai::style::ArtStyle) -> bool {
         && st.effects.iter().all(|e| match e.id.as_str() {
             "distort.twist" => {
                 let within = |limit: f64| e.params["angle"].as_f64().is_some_and(|a| a.abs() <= limit);
-                !stroked && if straight(object) { within(MAX_STRAIGHT_TWIST) } else { no_guides(object, 0) && within(MAX_TWIST) }
+                !stroked
+                    && if straight(object) {
+                        within(MAX_STRAIGHT_TWIST) && (e.params["angle"].as_f64() == Some(0.0) || !guides_reach_past(object))
+                    } else {
+                        no_guides(object, 0) && within(MAX_TWIST)
+                    }
             }
             "distort.transform" => {
                 let p = &e.params;
-                !stroked
-                    || (p["scaleH"].as_f64() == Some(100.0)
-                        && p["scaleV"].as_f64() == Some(100.0)
-                        && p["rotate"].as_f64() == Some(0.0)
-                        && p["reflectX"].as_bool() == Some(false)
-                        && p["reflectY"].as_bool() == Some(false))
+                // With Transform Objects off, nothing is placed from the bounds: a style read here and
+                // the object's members paint with no pattern for Transform Patterns to move (`simple`,
+                // `moves_alike`).
+                let placed = p["objects"].as_bool() != Some(false);
+                !transform_measures(p) || (!stroked && (!placed || !guides_reach_past(object)))
+            }
+            "distort.freeDistort" => {
+                !matches!(object.kind, NodeKind::Group { .. }) || !free_distort_measures(&e.params) || !guides_reach_past(object)
             }
             _ => true,
         })
@@ -1126,7 +1231,8 @@ fn image_warps(object: &Node, st: &crate::import::ai::style::ArtStyle) -> bool {
 
 /// Does image `object` with `appearance` (its style's Warp) draw as `look`, its drawn look, compared
 /// over all that the warp draws ([`crate::import::ai::envelope::warped_alike`]) on `layer`, a layer
-/// id no other node has? Both are drawn shown, opaque and in the Normal mode. Unless the look is on
+/// id no other node has? Both are drawn shown, opaque and in the Normal mode; a hidden look is drawn
+/// with every object in it shown, as the hidden object's look holds them. Unless the look is on
 /// `%_` lines itself (`hidden`), the copies in it that are on `%_` lines (`hidden_ids`) are left out.
 #[allow(clippy::too_many_arguments)]
 fn image_warp_alike(
@@ -1146,10 +1252,22 @@ fn image_warp_alike(
     if !hidden {
         strip(&mut plain, hidden_ids);
     }
+    if !plain.visible {
+        show_members(&mut plain);
+    }
     for n in [&mut live, &mut plain] {
         (n.visible, n.opacity, n.blend) = (true, 1.0, BlendMode::Normal);
     }
     crate::import::ai::envelope::warped_alike(&live, &plain, layer, shared, page, spent)
+}
+
+/// Show every object in container `n`, at any depth.
+fn show_members(n: &mut Node) {
+    for c in n.children_mut().into_iter().flatten() {
+        let c = Arc::make_mut(c);
+        c.visible = true;
+        show_members(c);
+    }
 }
 
 /// What [`placed_paints`] keys a pattern's name with, apart from the gradients' names.
@@ -1242,7 +1360,7 @@ fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, p
                     if !super::super::brush::draws_as(draft, settings, paints.bending) {
                         return None;
                     }
-                    let art = matches!(settings, super::super::brush::PathBrush::Art);
+                    let art = matches!(settings, super::super::brush::PathBrush::Art(_));
                     let on_a_path = matches!(object.kind, NodeKind::Path { .. } | NodeKind::Compound { .. });
                     if !on_a_path && (art || !slot) {
                         return None;
@@ -1268,9 +1386,11 @@ fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, p
 }
 
 /// A graphic style's appearance from art style `st`, on no object: `None` when the style isn't one
-/// this reads, or paints with a gradient or a pattern (placed on each object as its drawn look has them).
+/// this reads, paints with a pattern, or paints with a gradient that names no swatch of `gradients`.
 /// A style that is one paint is its fill and stroke ([`crate::import::ai::style::ArtStyle::one_paint`]).
-pub(super) fn appearance_from_art_style(st: &crate::import::ai::style::ArtStyle) -> Option<Appearance> {
+/// A style keeps only its gradients' names and angles, so each one's gradient, by VectorCraft's own
+/// rule, is fitted to the bounds of whatever object the style is applied to, at its angle.
+pub(super) fn appearance_from_art_style(st: &crate::import::ai::style::ArtStyle, gradients: &HashMap<String, Gradient>) -> Option<Appearance> {
     use crate::import::ai::style::StyleItem;
     if !st.plain {
         return None;
@@ -1286,14 +1406,29 @@ pub(super) fn appearance_from_art_style(st: &crate::import::ai::style::ArtStyle)
             // A graphic style's brush isn't checked against the file's brushes: it is left out.
             StyleItem::Stroke { brush: Some(_), .. } => return None,
             StyleItem::Stroke { .. } => stroke_layer(item)?,
-            StyleItem::Gradient { .. } | StyleItem::Pattern { .. } => return None,
+            StyleItem::Gradient { name, angle } => AppearanceItem::Fill(FillLayer::new(named_gradient(name.as_deref()?, *angle, gradients)?)),
+            StyleItem::Pattern { .. } => return None,
         };
+        // A one-paint style's gradient stroke names its swatch (`style::OnePaint::items`).
+        if let AppearanceItem::Stroke(s) = &mut layer
+            && let Paint::Gradient(g) = &s.paint
+        {
+            s.paint = named_gradient(g.swatch.as_deref()?, g.angle, gradients)?;
+        }
         if let Some(look) = st.looks.get(n) {
             with_look(&mut layer, look);
         }
         items.push(layer);
     }
     Some(Appearance { items, effects: st.effects.clone(), contents_index: st.contents_index })
+}
+
+/// The gradient of `gradients` named `name` at `angle` degrees, fitted to the bounds of the object it
+/// paints (`None` when there is no such gradient).
+fn named_gradient(name: &str, angle: f64, gradients: &HashMap<String, Gradient>) -> Option<Paint> {
+    let mut g = vectorcraft_color::gradient::GradientPaint::new(gradients.get(name)?.clone());
+    g.angle = angle;
+    Some(Paint::Gradient(Box::new(g)))
 }
 
 /// What the reader makes of art style `name` in `section` (the text between `%AI9_BeginArtStyles`
@@ -1318,16 +1453,30 @@ pub(crate) fn read_style_list(section: &[u8]) -> Vec<String> {
     crate::import::ai::style::art_style_list(section).iter().map(|raw| obj::text(raw)).filter(|name| !name.is_empty()).collect()
 }
 
-/// Art style `name` of `section` as the reader reads it ([`StyleRead`]): [`appearance_from_art_style`],
-/// with a style's one gradient fill as `own_gradient`, the object's own gradient, as [`styled`] reads
-/// it on objects other than type. A stroke that names a brush is read with that brush's name, as
-/// [`styled`] reads it on a path or compound path when the Brushes panel keeps that brush at those
-/// settings, which [`crate::import::ai::brush::BrushesRead::style_reads`] checks. `None` when the section
-/// doesn't define it, the reader doesn't read it, or it paints with a pattern or a gradient that
-/// isn't the object's own.
-pub(crate) fn read_art_style(section: &[u8], name: &str, own_gradient: Option<&Paint>) -> Option<StyleRead> {
+/// An art style as the reader parses it ([`parse_art_style`]), which a writer reads on any number of
+/// objects ([`read_parsed_style`], [`parsed_moves_with`],
+/// [`crate::import::ai::brush::BrushesRead::style_reads`]).
+#[derive(Clone, Debug)]
+pub(crate) struct ParsedStyle {
+    pub(in crate::import::ai) style: crate::import::ai::style::ArtStyle,
+}
+
+/// Art style `name` of `section` (the text between `%AI9_BeginArtStyles` and its end) as the reader
+/// parses it. `None` when the section doesn't define it.
+pub(crate) fn parse_art_style(section: &[u8], name: &str) -> Option<ParsedStyle> {
+    crate::import::ai::style::art_styles(section).remove(name).map(|style| ParsedStyle { style })
+}
+
+/// Art style `parsed` as the reader reads it ([`StyleRead`]): [`appearance_from_art_style`], with a
+/// style's one gradient fill as `own_gradient`, the object's own gradient, as [`styled`] reads it on
+/// objects other than type. A stroke that names a brush is read with that brush's name, as [`styled`]
+/// reads it on a path or compound path when the Brushes panel keeps that brush at those settings,
+/// which [`crate::import::ai::brush::BrushesRead::style_reads`] checks. `None` when the reader doesn't
+/// read it, or it paints with a pattern or a gradient that isn't the object's own. `parsed` is left as
+/// it is, for the next object.
+pub(crate) fn read_parsed_style(parsed: &ParsedStyle, own_gradient: Option<&Paint>) -> Option<StyleRead> {
     use crate::import::ai::style::StyleItem;
-    let mut st = crate::import::ai::style::art_styles(section).remove(name)?;
+    let mut st = parsed.style.clone();
     if st.items.iter().filter(|i| matches!(i, StyleItem::Gradient { .. })).count() == 1 {
         let own = own_gradient?;
         for item in &mut st.items {
@@ -1345,7 +1494,9 @@ pub(crate) fn read_art_style(section: &[u8], name: &str, own_gradient: Option<&P
             _ => None,
         })
         .collect();
-    let mut appearance = appearance_from_art_style(&st)?;
+    // No gradient is taken by name: on an object, one that isn't its own is placed where its drawn
+    // look has it.
+    let mut appearance = appearance_from_art_style(&st, &HashMap::new())?;
     for (item, brush) in appearance.items.iter_mut().zip(brushes) {
         if let (AppearanceItem::Stroke(s), Some(brush)) = (item, brush) {
             s.brush = Some(brush);
@@ -1354,11 +1505,10 @@ pub(crate) fn read_art_style(section: &[u8], name: &str, own_gradient: Option<&P
     Some(StyleRead { appearance, simple: st.simple, image_warp: st.image_warp, pathfinder: st.pathfinder, transparency: st.transparency })
 }
 
-/// Is art style `name` of `section` read on `object` as far as an effect that moves the outline
-/// goes: the style has none, or `object` is one [`moves_with`] reads it on, as [`styled`] checks?
-/// `false` when the section doesn't define it.
-pub(crate) fn style_moves_with(section: &[u8], name: &str, object: &Node) -> bool {
-    crate::import::ai::style::art_styles(section).remove(name).is_some_and(|st| !st.moves_outline() || moves_with(object, &st))
+/// Is art style `parsed` read on `object` as far as an effect that moves the outline goes: the style
+/// has none, or `object` is one [`moves_with`] reads it on, as [`styled`] checks?
+pub(crate) fn parsed_moves_with(parsed: &ParsedStyle, object: &Node) -> bool {
+    !parsed.style.moves_outline() || moves_with(object, &parsed.style)
 }
 
 /// A style's stroke as an appearance item (`None` for a fill).
@@ -1542,7 +1692,7 @@ mod tests {
         let st = &styles["Inked"];
         let brushes = [parse_tool_object(Tool::Calligraphic, "N", "1 4 8 30 50 -150 210 2 5 6 0").unwrap()];
         let (gradients, patterns, names, v7_patterns, bending) =
-            (HashMap::new(), HashMap::new(), ShownNames::default(), HashSet::new(), HashSet::new());
+            (HashMap::new(), HashMap::new(), ShownNames::default(), HashSet::new(), HashMap::new());
         let paints = StylePaints {
             gradients: &gradients,
             patterns: &patterns,
@@ -1588,7 +1738,7 @@ mod tests {
         // GUARDS: an image with a Warp in its art style came in as its drawn look.
         let warp = ("Adobe Deform", "1 /Int (DeformStyle) ,\n0.4 /Real (DeformValue) ,\n"); // brand-ok: the filter's name in the files
         let (gradients, patterns, names, v7_patterns, bending) =
-            (HashMap::new(), HashMap::new(), ShownNames::default(), HashSet::new(), HashSet::new());
+            (HashMap::new(), HashMap::new(), ShownNames::default(), HashSet::new(), HashMap::new());
         let paints = StylePaints {
             gradients: &gradients,
             patterns: &patterns,

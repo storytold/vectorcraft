@@ -1,7 +1,7 @@
 use super::cid::{CidText, FontInfo};
 use super::{
     Affine, Arc, BezPath, BlendMode, Colors, Dash, Families, FillRule, FontNames, FunctionBudget, HashMap, HashSet, ImageBlob, LineCap, LineFacts,
-    LineJoin, LumaData, MaskSpec, Node, NodeId, Paint, PathEl, PatternDef, Rect, Scan, StrokeLayer, StrokeProps, TextAs, TextLine,
+    LineJoin, LumaData, MaskSpec, Node, NodeId, Paint, PathEl, PatternDef, Rect, Scan, StrokeLayer, StrokeProps, TextAs, TextLine, TypeStroke,
 };
 
 /// Decoded RGBA pixels, width, height and hayro's scale factors.
@@ -103,6 +103,9 @@ pub(super) struct Builder<'p> {
     pub(super) raster_scales: HashMap<u128, (f32, f32)>,
     /// The images kept with their CMYK samples ([`crate::import_image`]).
     pub(super) cmyk_keys: HashSet<u128>,
+    /// The file's PDF/X output intent profile of CMYK, which DeviceCMYK images are tagged with
+    /// ([`crate::import_image::output_intent_cmyk`]).
+    pub(super) intent_cmyk: Option<Vec<u8>>,
     /// Images in a Separation space, by key: the paint of their ink, or `None` when they open in
     /// RGB (an ink that can't be told, tints that can't be read).
     pub(super) separation_paints: HashMap<u128, Option<Paint>>,
@@ -235,6 +238,23 @@ pub(super) fn line_width(p: &StrokeProps, scale: f64) -> f64 {
     if p.line_width == 0.0 { HAIRLINE } else { p.line_width as f64 * scale }
 }
 
+/// Do strokes `a` and `b` draw alike: both unstroked, or the same width, caps, joins, miter limit
+/// and dashes ([`stroke_layer`] takes all of them)?
+pub(super) fn same_stroke(a: Option<&StrokeProps>, b: Option<&StrokeProps>) -> bool {
+    match (a, b) {
+        (None, None) => true,
+        (Some(a), Some(b)) => {
+            a.line_width == b.line_width
+                && a.line_cap == b.line_cap
+                && a.line_join == b.line_join
+                && a.miter_limit == b.miter_limit
+                && a.dash_array == b.dash_array
+                && a.dash_offset == b.dash_offset
+        }
+        _ => false,
+    }
+}
+
 pub(super) fn stroke_layer(paint: Paint, opacity: f32, p: &StrokeProps, scale: f64) -> StrokeLayer {
     let mut st = StrokeLayer::new(paint, line_width(p, scale));
     st.opacity = opacity;
@@ -258,6 +278,13 @@ pub(super) fn stroke_layer(paint: Paint, opacity: f32, p: &StrokeProps, scale: f
     // An invalid dash array (a negative value, or all zeros) strokes solid.
     st.dash = dash.is_dashed().then_some(dash);
     st
+}
+
+/// The stroke `p` draws type with in `paint` at `scale`: width, cap, join and miter limit as
+/// [`stroke_layer`] takes them (#7741).
+pub(super) fn type_stroke(paint: Paint, p: &StrokeProps, scale: f64) -> TypeStroke {
+    let st = stroke_layer(paint, 1.0, p, scale);
+    TypeStroke { paint: st.paint, width: st.width, cap: st.cap, join: st.join, miter_limit: st.miter_limit }
 }
 
 /// The most entries of a dash array kept (an even count keeps it a pattern of dashes and gaps).
@@ -312,17 +339,18 @@ pub(super) fn bounds(nodes: &[Arc<Node>]) -> Option<Rect> {
 }
 
 pub(super) fn rgba_png(rgba: Vec<u8>, w: u32, h: u32) -> Option<Vec<u8>> {
-    let img = image::RgbaImage::from_raw(w, h, rgba)?;
-    let mut out = Vec::new();
-    img.write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).ok()?;
-    Some(out)
+    let img = craft_image_codecs::Image::from_raw(w, h, craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, rgba).ok()?;
+    craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).ok()
+}
+
+pub(super) fn rgb_png(rgb: Vec<u8>, w: u32, h: u32) -> Option<Vec<u8>> {
+    let img = craft_image_codecs::Image::from_raw(w, h, craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, rgb).ok()?;
+    craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).ok()
 }
 
 pub(super) fn gray_png(gray: Vec<u8>, w: u32, h: u32) -> Option<Vec<u8>> {
-    let img = image::GrayImage::from_raw(w, h, gray)?;
-    let mut out = Vec::new();
-    img.write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).ok()?;
-    Some(out)
+    let img = craft_image_codecs::Image::from_raw(w, h, craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, gray).ok()?;
+    craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).ok()
 }
 
 pub(super) fn resize_alpha(a: &LumaData, w: u32, h: u32) -> Vec<u8> {

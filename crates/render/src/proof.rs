@@ -4,7 +4,8 @@
 //!   space (CMYK press or RGB/colour-blindness simulation) → display, through a cached 17³ LUT.
 //! * **Separations Preview** recolours the *document* before rendering: each paint colour is split
 //!   into process inks (colour-managed), or a spot ink at the colour's tint when it's linked to a
-//!   spot swatch (solid colours and gradient stops alike). With one plate visible the plate
+//!   spot swatch (solid colours and gradient stops alike), with the process plates a gradient stop
+//!   prints beside its spot ink ([`vectorcraft_color::GradientStop::plates`]). With one plate visible the plate
 //!   renders as greyscale ink coverage (black = 100%); with several, the visible inks are
 //!   composited through the proof profile, spots multiplied on top. Colours linked to the
 //!   Registration swatch print their tint on every plate, spot plates included.
@@ -29,6 +30,7 @@ use vectorcraft_color::cms::{self, Cms, CmykLut, PROCESS_PLATES, ProofLut, lab};
 pub use vectorcraft_color::cms::{Intent, ProofSetup, ProofTarget};
 use vectorcraft_color::{Color, Swatch, SwatchGroup};
 pub use vectorcraft_doc::inks::{Inks, Link, Plate, inks, map_document_colors, map_node_colors, plates, spot_color};
+use vectorcraft_doc::inks::{StopPlates, map_node_inks, stop_inks};
 use vectorcraft_doc::overprint::darken_overprints;
 use vectorcraft_doc::{Document, ImageBlob, Node, NodeId, Shared};
 use vello_cpu::Pixmap;
@@ -59,8 +61,8 @@ fn plate_rgb(c: &Cms, proof: &ProofSetup, visible: &[String], ink: &Inks) -> [f3
     c.proof_cmyk_to_srgb(cmyk, proof)
 }
 
-fn plate_color(doc: &Document, c: &Cms, proof: &ProofSetup, visible: &[String], color: &Color, link: Link) -> Color {
-    let ink = inks(doc, c, color, link, proof.intent);
+fn plate_color(doc: &Document, c: &Cms, proof: &ProofSetup, visible: &[String], color: &Color, link: Link, plates: StopPlates) -> Color {
+    let ink = stop_inks(doc, c, color, link, plates, proof.intent);
     let mut rgb = plate_rgb(c, proof, visible, &ink);
     // Over several plates the visible spot inks print on top.
     for name in visible.iter().filter(|v| visible.len() != 1 && !PROCESS_PLATES.contains(&v.as_str())) {
@@ -355,7 +357,7 @@ impl How<'_> {
     fn apply(&self, a: &mut Arc<Node>) {
         darken_overprints(a, self.discard_white);
         if let Some((c, proof, visible)) = self.plates {
-            map_node_colors(Arc::make_mut(a), &mut |col, sw| plate_color(self.doc, c, proof, visible, col, sw));
+            map_node_inks(Arc::make_mut(a), &mut |col, sw, plates| plate_color(self.doc, c, proof, visible, col, sw, plates));
         }
     }
 }

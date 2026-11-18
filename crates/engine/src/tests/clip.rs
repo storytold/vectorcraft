@@ -119,10 +119,78 @@ fn text_on_top_clips_by_its_glyphs() {
     assert_eq!(hit(&s, (b.x0 + b.x1) / 2.0, (b.y0 + b.y1) / 2.0), Some(art));
     assert!(b.x1 < 95.0, "{b:?}");
     assert_eq!(hit(&s, b.x1 + 3.0, (b.y0 + b.y1) / 2.0), None, "beside the text");
+    // An effect that does not reshape it, such as a drop shadow, leaves clicks on its frame.
+    s.execute("effect.apply", &json!({"effect": "stylize.dropShadow", "params": {}, "ids": [t.0], "item": null})).unwrap();
+    assert_eq!(hit(&s, (b.x0 + b.x1) / 2.0, (b.y0 + b.y1) / 2.0), Some(art), "in the counter, with a drop shadow");
     // Release gives the text back.
     select(&mut s, &[g]);
     s.execute("object.clippingMask.release", &json!({})).unwrap();
     assert!(matches!(s.doc().unwrap().doc.node(t).unwrap().kind, NodeKind::Text(_)));
+}
+
+#[test]
+fn a_hidden_member_of_a_clipping_group_leaves_clicks_on_the_type_frame() {
+    // The clipping path is a group of an "O" and a hidden rectangle with a Transform effect. The
+    // hidden rectangle does not clip, so clicks inside the clip group still count the type by its
+    // frame, the counter of the "O" included.
+    let mut s = session();
+    let art = id_of(&s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 100, "height": 100})).unwrap());
+    let t = id_of(&s.execute("text.create", &json!({"x": 5, "y": 80, "text": "O", "size": 90})).unwrap());
+    let b = s.doc().unwrap().doc.node(t).unwrap().geometric_bounds().unwrap();
+    let r = id_of(&s.execute("shape.rectangle", &json!({"x": 40, "y": 40, "width": 10, "height": 10})).unwrap());
+    s.execute("effect.apply", &json!({"effect": "distort.transform", "params": {"moveH": 20}, "ids": [r.0], "item": null})).unwrap();
+    select(&mut s, &[art, t]);
+    let g = id_of(&s.execute("object.clippingMask.make", &json!({})).unwrap());
+    // Make Clipping Mask takes no group on top, so the group goes in place of the type.
+    let mut d = (*s.doc().unwrap().doc).clone();
+    let mut rect = (*d.remove(r).unwrap()).clone();
+    rect.visible = false;
+    let text = d.remove(t).unwrap();
+    let group = vectorcraft_doc::Node::group(d.alloc_id(), vec![text, Arc::new(rect)]);
+    d.insert(Some(g), 0, group).unwrap();
+    let leaf = |x: f64, y: f64| vectorcraft_doc::hit::hit_test(&d, vectorcraft_geom::Point::new(x, y), Default::default()).map(|h| h.leaf);
+    let middle = ((b.x0 + b.x1) / 2.0, (b.y0 + b.y1) / 2.0);
+    assert_eq!(leaf(middle.0, middle.1), Some(art), "in the counter, inside the frame");
+    assert_eq!(leaf(b.x1 + 3.0, middle.1), None, "beside the text");
+}
+
+#[test]
+fn clicks_follow_the_region_a_clipping_paths_effects_give_it() {
+    // Art from 10 to 90 pt, clipped by the artboard's left half, which a Transform effect moves
+    // 50 pt right: the art shows on the right half, as clicks find it.
+    let mut s = session();
+    let art = id_of(&s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 80, "height": 80})).unwrap());
+    let clip = id_of(&s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 50, "height": 100})).unwrap());
+    select(&mut s, &[art, clip]);
+    let g = id_of(&s.execute("object.clippingMask.make", &json!({})).unwrap());
+    s.execute("effect.apply", &json!({"effect": "distort.transform", "params": {"moveH": 50}, "ids": [clip.0], "item": null})).unwrap();
+    let r = render(&s);
+    assert!(opaque(&r, 75, 50) && !opaque(&r, 25, 50), "the canvas clips by the moved region");
+    assert_eq!(hit(&s, 75.0, 50.0), Some(art), "where the effect moved the clipping path");
+    assert_eq!(hit(&s, 25.0, 50.0), None, "the clipping path's own place");
+    let d = &s.doc().unwrap().doc;
+    let at = |x: f64| vectorcraft_doc::hit::objects_at(d, vectorcraft_geom::Point::new(x, 50.0), Default::default(), None);
+    assert_eq!(at(75.0), [g]);
+    assert!(at(25.0).is_empty());
+    // A marquee across the art's edge reaches it within the moved region only.
+    let marquee = |x0: f64, x1: f64| vectorcraft_doc::hit::marquee(d, vectorcraft_geom::Rect::new(x0, 40.0, x1, 60.0), None, true);
+    assert_eq!(marquee(85.0, 95.0), [art], "the right edge, in the moved region");
+    assert!(marquee(5.0, 15.0).is_empty(), "the left edge, in the clipping path's own place");
+
+    // The same with a sublayer that clips by its first object.
+    let mut d = (**d).clone();
+    let members: Vec<_> = d.node(g).unwrap().children().unwrap().to_vec();
+    let top = d.layers[0].id;
+    d.remove(g).unwrap();
+    let mut sublayer = (*d.layers[0]).clone();
+    sublayer.id = d.alloc_id();
+    if let NodeKind::Layer { children, clip, .. } = &mut sublayer.kind {
+        (*children, *clip) = (members, true);
+    }
+    d.insert(Some(top), 0, sublayer).unwrap();
+    let leaf = |x: f64| vectorcraft_doc::hit::hit_test(&d, vectorcraft_geom::Point::new(x, 50.0), Default::default()).map(|h| h.leaf);
+    assert_eq!(leaf(75.0), Some(art));
+    assert_eq!(leaf(25.0), None);
 }
 
 #[test]
