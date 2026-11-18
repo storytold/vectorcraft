@@ -90,6 +90,42 @@ impl Node {
         matches!(self.kind, NodeKind::RulerGuide { .. } | NodeKind::Path { guide: true, .. })
     }
 
+    /// This object without the paths made into guides among the members of its groups, layers,
+    /// Intertwine groups and compound paths, at any depth, for measuring the art around them while
+    /// Lock Guides or Hide Guides leaves them out (#8538). The clipping path of a clip group or
+    /// layer and the original shapes of a Shaper group stay, guides or not, so the object keeps
+    /// its structure. `None` when it holds no such guide.
+    pub fn without_guides(&self) -> Option<Node> {
+        let (NodeKind::Layer { children, .. }
+        | NodeKind::Group { children, .. }
+        | NodeKind::Intertwine { children }
+        | NodeKind::Compound { children, .. }) = &self.kind
+        else {
+            return None;
+        };
+        let keep = usize::from(self.clips() || self.extras().shaper.is_some());
+        let mut changed = false;
+        let mut out = Vec::with_capacity(children.len());
+        for (i, c) in children.iter().enumerate() {
+            if i >= keep && matches!(c.kind, NodeKind::Path { guide: true, .. }) {
+                changed = true;
+            } else if let Some(stripped) = c.without_guides() {
+                changed = true;
+                out.push(Arc::new(stripped));
+            } else {
+                out.push(c.clone());
+            }
+        }
+        if !changed {
+            return None;
+        }
+        let mut n = self.clone();
+        if let Some(c) = n.children_mut() {
+            *c = out;
+        }
+        Some(n)
+    }
+
     /// A template layer (Layer Options → Template).
     pub fn is_template(&self) -> bool {
         matches!(self.kind, NodeKind::Layer { template: true, .. })
@@ -483,6 +519,12 @@ impl Node {
             && let Some(dimension) = &mut e.dimension
         {
             dimension.transform(a);
+        }
+        // So does a flare's center and end point.
+        if let Some(e) = self.extras_if_any()
+            && let Some(flare) = &mut e.flare
+        {
+            flare.transform(a);
         }
         // The path the objects are attached to, before it is transformed.
         let on_path_before = self.on_path_data().cloned();
