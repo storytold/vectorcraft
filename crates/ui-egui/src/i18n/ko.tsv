@@ -3220,6 +3220,8 @@ mark-style	Japanese	일본식
 	Keep Formatting keeps the styles of text copied from VectorCraft type when it is pasted into type; Keep Plain Text gives it the style where it lands.	서식 유지는 VectorCraft 텍스트 개체에서 복사한 텍스트를 텍스트 개체에 붙여넣을 때 스타일을 유지하고, 일반 텍스트 유지는 붙여넣은 위치의 스타일을 적용합니다.
 	Display All Blacks as Rich Black shows pure CMYK black (black ink alone at 100%) as RGB black on the canvas; Display All Blacks Accurately converts it through the CMYK working space.	모든 검정을 리치 블랙으로 표시는 순수 CMYK 검정(검정 잉크만 100%)을 캔버스에서 RGB 검정으로 표시하고, 모든 검정 정확히 표시는 작업용 CMYK 공간을 통해 변환합니다.
 	Output All Blacks as Rich Black draws pure CMYK black as RGB black in RGB and grayscale raster exports and Print as Bitmap; it does not change vector exports, CMYK JPEG, TIFF and PSD, or other printing.	모든 검정을 리치 블랙으로 출력은 RGB 및 그레이스케일 래스터 내보내기와 비트맵으로 인쇄에서 순수 CMYK 검정을 RGB 검정으로 그리며, 벡터 내보내기, CMYK JPEG, TIFF 및 PSD, 기타 인쇄는 바꾸지 않습니다.
+	On a touch screen, switches to the Touch workspace; turning this off, or losing the touch screen, goes back to the workspace it switched from.	터치 스크린에서는 터치 작업 영역으로 전환합니다. 이 설정을 끄거나 터치 스크린이 사라지면 전환하기 전의 작업 영역으로 돌아갑니다.
+	A two-finger tap on the canvas undoes, or switches between selection and drawing tools in the Touch workspace, and a three-finger tap redoes; neither works in Presentation Mode.	캔버스를 두 손가락으로 탭하면 실행 취소하거나 터치 작업 영역에서 선택 도구와 그리기 도구를 전환하고, 세 손가락으로 탭하면 다시 실행합니다. 프레젠테이션 모드에서는 둘 다 작동하지 않습니다.
 	Reset all preferences to their defaults?	모든 환경 설정을 기본값으로 재설정하시겠습니까?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	기본값은 환경 설정에서 확인을 클릭하면 적용됩니다. 그곳에서 취소를 누르면 현재 환경 설정이 유지됩니다.
 	Restored documents open unsaved: save them to keep them.	복원된 문서는 저장되지 않은 상태로 열립니다. 보존하려면 저장하세요.

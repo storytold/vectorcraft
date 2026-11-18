@@ -307,6 +307,15 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
         "blackOutput",
         "Output All Blacks as Rich Black draws pure CMYK black as RGB black in RGB and grayscale raster exports and Print as Bitmap; it does not change vector exports, CMYK JPEG, TIFF and PSD, or other printing.",
     ),
+    // Devices
+    (
+        "touchWorkspace",
+        "On a touch screen, switches to the Touch workspace; turning this off, or losing the touch screen, goes back to the workspace it switched from.",
+    ),
+    (
+        "touchGestures",
+        "A two-finger tap on the canvas undoes, or switches between selection and drawing tools in the Touch workspace, and a three-finger tap redoes; neither works in Presentation Mode.",
+    ),
 ];
 
 /// The sentence that describes the setting `key`, in English, or `None` when it has none yet.
