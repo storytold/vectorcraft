@@ -215,6 +215,25 @@ fn with_third_point_by_dragging_off_three_clicks_draw_the_circle() {
     assert!(!t.busy());
 }
 
+/// With `dragThird` off, a drag of the second or third point ends where it is let go, also when the
+/// release is away from the last drag.
+#[test]
+fn with_third_point_by_dragging_off_a_drag_ends_where_it_is_let_go() {
+    let (d, _) = doc_with_rect();
+    let (s, p) = (Selection::default(), paint());
+    let cx = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    let (down, drag, up) = (PointerKind::Down, PointerKind::Drag, PointerKind::Up);
+    let mut t = CircleTool::default();
+    t.set_option("dragThird", &json!(false));
+    click(&mut t, &cx, (300.0, 300.0));
+    t.pointer(&cx, &ev(down, (350.0, 300.0), Mods::default()));
+    t.pointer(&cx, &ev(drag, (380.0, 300.0), Mods::default()));
+    assert_eq!(t.pointer(&cx, &ev(up, (400.0, 300.0), Mods::default())), vec![]);
+    t.pointer(&cx, &ev(down, (350.0, 350.0), Mods::default()));
+    t.pointer(&cx, &ev(drag, (320.0, 380.0), Mods::default()));
+    assert_eq!(t.pointer(&cx, &ev(up, (300.0, 400.0), Mods::default())), circle(&[(300.0, 300.0), (400.0, 300.0), (300.0, 400.0)]));
+}
+
 /// With `dragThird` off, an Alt-click places the second point where Alt's rounding of the diameter
 /// puts it (88 pt rounds to 90 pt at 100%), and the tool shows it there: the marker, the preview,
 /// the circle on the two points and the circle through three all use it.
