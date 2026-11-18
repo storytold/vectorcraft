@@ -142,6 +142,14 @@
 @msg	is a prompt's answer, whose `value` must be a string or null	adalah jawaban prompt, yang `value`-nya harus berupa string atau null
 @msg	must have `kind` alert, confirm or prompt	harus memiliki `kind` alert, confirm, atau prompt
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` hanya untuk proses tanpa orang yang dapat ditanya: di aplikasi, pengguna menjawab setiap dialog
+@msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel` harus berupa bilangan bulat dari 1 sampai {_1}
+@msg	`args{place}` is nested more than 64 levels deep	`args{place}` bersarang lebih dari 64 tingkat
+@msg	`args` must be an object	`args` harus berupa objek
+@msg	`args` is larger than 1 MiB	`args` lebih besar dari 1 MiB
+@msg	`path` is empty	`path` kosong
+@msg	`installed` takes a `path`, not a `source`	`installed` menerima `path`, bukan `source`
+@msg	`path` must name a .js or .jsx file	`path` harus menyebut file .js atau .jsx
+@msg	give exactly one of `path` and `source`	berikan tepat satu dari `path` dan `source`
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	vc.document{place} is too large for a script	vc.document{place} terlalu besar untuk skrip
@@ -330,6 +338,7 @@
 @msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	entri `{GRAPHICS}` menerima symbol, face, x, y, scale dan rotation, bukan `{k}`
 @msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	setiap `{GRAPHICS}` memerlukan `symbol`, nama sebuah simbol
 @msg	`{GRAPHICS}` face must be front or back	face `{GRAPHICS}` harus front atau back
+@msg	`{GRAPHICS}` face must be front, back or side	face `{GRAPHICS}` harus front, back, atau side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} `{GRAPHICS}` harus berupa angka dari {lo} sampai {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` harus berupa larik
 @msg	Graphics map onto the Plane, Extrude and Revolve object types	Grafis dipetakan ke jenis objek Plane, Extrude, dan Revolve
@@ -2247,7 +2256,7 @@ digits	Malayalam	Malayalam
 	Composite Fonts	Font komposit
 	Export Composite Fonts	Ekspor font komposit
 	Import Composite Fonts	Impor font komposit
-@msg	each font must be {name, parts}	setiap font harus berupa {name, parts}
+@msg	each font must be {{name, parts}}	setiap font harus berupa {{name, parts}}
 @msg	unknown key `{k}`; a font takes name and parts	kunci tidak dikenal `{k}`; font menerima name dan parts
 @msg	each font needs a name	setiap font memerlukan nama
 @msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` tidak dapat menjadi nama font komposit (1 sampai {COMPOSITE_NAME_MAX} karakter, tanpa karakter kontrol)
@@ -2260,7 +2269,7 @@ digits	Malayalam	Malayalam
 @msg	two composite fonts are named `{_1}`	dua font komposit bernama `{_1}`
 @msg	`{_1}` is the name of an installed font	`{_1}` adalah nama font yang terpasang
 @msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} diatur dengan `{font}`, sebuah font komposit
-@msg	give fonts: [{name, parts}…]	berikan fonts: [{name, parts}…]
+@msg	give fonts: [{{name, parts}}…]	berikan fonts: [{{name, parts}}…]
 @msg	path is empty	path kosong
 @msg	fonts must be a list of composite fonts	fonts harus berupa daftar font komposit
 @msg	names must be strings	names harus berupa string
@@ -5663,6 +5672,12 @@ imageTrace	Outline	Kontur
 @msg	percent must be above 0 and at most 6400, not {p}	percent harus di atas 0 dan paling banyak 6400, bukan {p}
 @msg	pick a colour, gradient or pattern to save as a swatch	pilih warna, gradien, atau pola untuk disimpan sebagai swatch
 @msg	plane must be left, right or ground	plane harus left, right, atau ground
+@msg	tolerance must be 0 or more	tolerance harus 0 atau lebih
+@msg	give `at` or `clear`, not both	berikan `at` atau `clear`, bukan keduanya
+@msg	anchorPoint must be true or false	anchorPoint harus true atau false
+@msg	gridlineIntersection must be true or false	gridlineIntersection harus true atau false
+@msg	the perspective grid is hidden	kisi perspektif disembunyikan
+@msg	Automatic Plane Positioning is off: turn on anchorPoint or gridlineIntersection (perspective.widget.options)	Penempatan bidang otomatis nonaktif: aktifkan anchorPoint atau gridlineIntersection (perspective.widget.options)
 @msg	plug-in ABI: {0}	ABI plug-in: {0}
 @msg	plug-in exceeded its {0}	plug-in melampaui {0}-nya
 @msg	plug-in failed: {0}	plug-in gagal: {0}
@@ -8068,3 +8083,284 @@ breakText	Glyphs	Glif
 	Pulse Stroke	Goresan Berdenyut
 	Round Flow	Aliran Bulat
 	Chisel Flow	Aliran Serong
+
+# Script files and their permissions, the script interpreter's errors, Liquify, SVG filters, image
+# encoders, Revolve, swatch and color book readers, metadata templates, toolbars and other status
+# and error messages.
+@msg	Script file access denied: {path}	Akses file skrip ditolak: {path}
+@msg	Script file access to the app's own folders is not allowed	Akses file skrip ke folder milik aplikasi tidak diizinkan
+@msg	Script file cannot encode the text	File skrip tidak dapat mengodekan teks
+@msg	Script file could not be written	File skrip tidak dapat ditulis
+@msg	Script file dialogs need a person to answer them	Dialog file skrip memerlukan orang untuk menjawabnya
+@msg	Script file is not open for writing	File skrip tidak dibuka untuk ditulis
+@msg	Script file name is already in use	Nama file skrip sudah digunakan
+@msg	Script file name must be a name without a folder	Nama file skrip harus berupa nama tanpa folder
+@msg	Script file permission can be kept only for a script run from a file	Izin file skrip hanya dapat disimpan untuk skrip yang dijalankan dari file
+@msg	Script file permission could not be saved	Izin file skrip tidak dapat disimpan
+@msg	Script folder is not empty	Folder skrip tidak kosong
+@msg	Script files cannot make aliases	File skrip tidak dapat membuat alias
+@msg	Script file hidden setting cannot be changed	Pengaturan tersembunyi file skrip tidak dapat diubah
+@msg	{name}: a file dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: dialog file tidak dapat dibuka di dalam callback fungsi bawaan, getter, konversi, atau file yang dijalankan $.evalFile; panggil dari kode skrip itu sendiri
+@msg	the script wrote more file data than one run may write (32 MiB)	skrip menulis data file lebih banyak daripada yang boleh ditulis dalam satu kali jalan (32 MiB)
+@msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` untuk dialog file skrip harus salah satu dari: once, always, deny, stop
+@msg	choose a file or folder first, or deny	pilih file atau folder terlebih dahulu, atau tolak
+@msg	the script file permissions could not be saved: {e}	izin file skrip tidak dapat disimpan: {e}
+@msg	this script's file access can be allowed only once	akses file skrip ini hanya dapat diizinkan sekali
+@msg	Only the person at the keyboard can allow a script's file access	Hanya orang yang berada di depan keyboard yang dapat mengizinkan akses file skrip
+@msg	A script is given at most 2,048 files: the files picked after them were left out	Skrip diberi paling banyak 2.048 file: file yang dipilih sesudahnya dihilangkan
+@msg	assignment to a constant binding	penetapan nilai ke binding konstanta
+@msg	invalid array length	panjang array tidak valid
+@msg	array literal too long	literal array terlalu panjang
+@msg	the value is not a function	nilai tersebut bukan fungsi
+@msg	apply was called on a value that is not a function	apply dipanggil pada nilai yang bukan fungsi
+@msg	the argument list is not an object	daftar argumen bukan objek
+@msg	too many arguments	terlalu banyak argumen
+@msg	the value is not a constructor	nilai tersebut bukan konstruktor
+@msg	cannot convert the object to a primitive value	objek tidak dapat dikonversi menjadi nilai primitif
+@msg	cannot convert undefined or null to an object	undefined atau null tidak dapat dikonversi menjadi objek
+@msg	the right side of 'in' is not an object	sisi kanan 'in' bukan objek
+@msg	the right side of 'instanceof' is not a function	sisi kanan 'instanceof' bukan fungsi
+@msg	the function's prototype is not an object	prototype fungsi bukan objek
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{ident} is not defined	{ident} tidak didefinisikan
+@msg	cannot read property '{key}' of {base}	properti '{key}' dari {base} tidak dapat dibaca
+@msg	cannot set property '{key}' of {base}	properti '{key}' dari {base} tidak dapat diatur
+@msg	cannot read a property of {base}	properti dari {base} tidak dapat dibaca
+@msg	cannot set a property of {base}	properti dari {base} tidak dapat diatur
+@msg	cannot define property '{key}': {why}	properti '{key}' tidak dapat didefinisikan: {why}
+@msg	cannot assign to property '{key}': {why}	nilai tidak dapat ditetapkan ke properti '{key}': {why}
+@msg	cannot delete property '{key}'	properti '{key}' tidak dapat dihapus
+@msg	cannot declare function {ident}	fungsi {ident} tidak dapat dideklarasikan
+@msg	invalid assignment target	target penetapan tidak valid
+@msg	the array's length is read-only	panjang array bersifat baca-saja
+@msg	the property cannot be redefined	properti tidak dapat didefinisikan ulang
+@msg	the object is not extensible	objek tidak dapat diperluas
+@msg	the length cannot be redefined	panjang tidak dapat didefinisikan ulang
+@msg	it is read-only	properti itu baca-saja
+@msg	an element cannot be deleted	elemen tidak dapat dihapus
+@msg	it has only a getter	properti itu hanya memiliki getter
+@msg	the value is a primitive	nilai tersebut primitif
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	`answers` memiliki {n} jawaban yang tidak digunakan skrip
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1} membiarkan {n} objek di bawah kuas seperti semula ({_2}): alat ini hanya membentuk ulang jalur
+liquify-tool	Warp	Warp
+liquify-tool	Twirl	Pilin
+liquify-tool	Pucker	Pucker
+liquify-tool	Bloat	Bloat
+liquify-tool	Scallop	Scallop
+liquify-tool	Crystallize	Kristalisasi
+liquify-tool	Wrinkle	Kerut
+liquify-kind	graphs	grafik
+liquify-kind	type	teks
+liquify-kind	symbols	simbol
+liquify-kind	images	gambar
+liquify-kind	meshes	mesh
+liquify-kind	envelopes	amplop
+liquify-kind	repeats	pengulangan
+liquify-kind	placed documents	dokumen tertempat
+liquify-kind	blends	blend
+liquify-list-two	{0}, {1}	{0} dan {1}
+liquify-list-middle	{0}, {1}	{0}, {1}
+liquify-list-end	{0}, {1}	{0}, dan {1}
+@msg	give one <filter> element	berikan satu elemen <filter>
+@msg	the <filter> element needs an id, the filter's name	elemen <filter> memerlukan id, yaitu nama filter
+@msg	an SVG filter's id is at most {MAX_NAME} characters	id filter SVG paling banyak {MAX_NAME} karakter
+@msg	<{_1}> isn't an element of an SVG filter	<{_1}> bukan elemen filter SVG
+@msg	an SVG filter has no event attributes such as {_1}	filter SVG tidak boleh memiliki atribut peristiwa seperti {_1}
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	gambar filter SVG berupa URL data: PNG, JPEG, GIF, atau WebP
+@msg	the SVG filter isn't valid XML: {e}	filter SVG bukan XML yang valid: {e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	numOctaves feTurbulence paling banyak {MAX_OCTAVES}
+@msg	{what} is at most {max}	{what} paling banyak {max}
+@msg	feConvolveMatrix's order	order feConvolveMatrix
+@msg	feMorphology's radius	radius feMorphology
+@msg	a blur's stdDeviation	stdDeviation efek kabur
+@msg	the SVG filter has no primitives	filter SVG tidak memiliki primitif
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	filter SVG memiliki paling banyak {MAX_PRIMITIVES} primitif
+@msg	the SVG filter is too large once its attributes are written out	filter SVG terlalu besar setelah atributnya ditulis lengkap
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	gambar filter SVG memiliki total paling banyak {MAX_IMAGE_PIXELS} piksel
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	filter SVG tidak dapat digambar: periksa primitif dan masukannya
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	elemen filter SVG bersarang paling dalam {MAX_DEPTH} tingkat
+@msg	an SVG filter is at most {_1} KB	ukuran filter SVG paling besar {_1} KB
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes` harus berupa [a, b, c, d], masing-masing dari -1000 sampai 1000, dengan a·d - b·c berjarak paling sedikit 0,001 dari 0
+@msg	`angle` must be from -180 to 180 degrees	`angle` harus dari -180 sampai 180 derajat
+@msg	`roundness` must be from 0 to 100%	`roundness` harus dari 0 sampai 100%
+@msg	`fidelity` must be from 0.01 to 100 pt	`fidelity` harus dari 0.01 sampai 100 pt
+@msg	style must be "pencil" or "brush"	style harus "pencil" atau "brush"
+@msg	extend end must be "start" or "end"	extend end harus "start" atau "end"
+@msg	connect end must be "start" or "end"	connect end harus "start" atau "end"
+@msg	`roundness` must be from 1 to 100%	`roundness` harus dari 1 sampai 100%
+@msg	3D effects require finite coordinates within 100 million points	Efek 3D memerlukan koordinat berhingga dalam batas 100 juta poin
+@msg	3D effects require one to ten lights	Efek 3D memerlukan satu sampai sepuluh cahaya
+@msg	BMP depth {_1}: 1, 4, 8, 16, 24 or 32 bits per pixel	Kedalaman BMP {_1}: 1, 4, 8, 16, 24, atau 32 bit per piksel
+@msg	BMP encoding failed: {width} × {height} pixels doesn't fit the format or the pixel buffer	Pengodean BMP gagal: {width} × {height} piksel tidak sesuai dengan format atau buffer piksel
+@msg	GIF encoding failed: the palette image is malformed	Pengodean GIF gagal: gambar palet rusak
+@msg	GIF encoding failed: {e}	Pengodean GIF gagal: {e}
+@msg	JPEG colour profile: {e}	Profil warna JPEG: {e}
+@msg	JPEG encoding failed: pixel buffer doesn't match the image size	Pengodean JPEG gagal: buffer piksel tidak sesuai dengan ukuran gambar
+@msg	JPEG encoding failed: {e}	Pengodean JPEG gagal: {e}
+@msg	PNG encoding failed: pixel buffer doesn't match the image size	Pengodean PNG gagal: buffer piksel tidak sesuai dengan ukuran gambar
+@msg	PNG encoding failed: the palette image is malformed	Pengodean PNG gagal: gambar palet rusak
+@msg	PNG encoding failed: {e}	Pengodean PNG gagal: {e}
+@msg	PNG encoding failed: {width} × {height} pixels is not a valid image size	Pengodean PNG gagal: {width} × {height} piksel bukan ukuran gambar yang valid
+@msg	PSD colour profile: {e}	Profil warna PSD: {e}
+@msg	PSD encoding failed: the pixel buffer doesn't match the image size	Pengodean PSD gagal: buffer piksel tidak sesuai dengan ukuran gambar
+@msg	Revolve profile contains invalid coordinates	Profil Revolusi berisi koordinat yang tidak valid
+@msg	Revolve profile is too complex	Profil Revolusi terlalu rumit
+@msg	Revolve projection is not finite	Proyeksi Revolusi tidak berhingga
+@msg	Revolve requires finite profile coordinates within 100 million points	Revolusi memerlukan koordinat profil berhingga dalam batas 100 juta poin
+@msg	Revolve surface is too complex; reduce Segments or simplify the profile	Permukaan Revolusi terlalu rumit; kurangi Segmen atau sederhanakan profil
+@msg	Revolve surface is too complex; simplify the profile	Permukaan Revolusi terlalu rumit; sederhanakan profil
+@msg	Revolve visibility cannot split the projected boundary	Visibilitas Revolusi tidak dapat membagi batas hasil proyeksi
+@msg	Revolve visibility creates too many fragments	Visibilitas Revolusi menghasilkan terlalu banyak fragmen
+@msg	Revolve visibility creates too many vector anchors	Visibilitas Revolusi menghasilkan terlalu banyak titik jangkar vektor
+@msg	Revolve visibility exceeds its geometry work limit	Visibilitas Revolusi melampaui batas kerja geometrinya
+@msg	Revolve visibility exceeds its spatial index limit	Visibilitas Revolusi melampaui batas indeks spasialnya
+@msg	Revolve visibility has too many boundary crossings	Visibilitas Revolusi memiliki terlalu banyak perpotongan batas
+@msg	Revolve visibility has too many input anchors	Visibilitas Revolusi memiliki terlalu banyak titik jangkar masukan
+@msg	Revolve visibility requires convex cap sectors	Visibilitas Revolusi memerlukan sektor tutup yang cembung
+@msg	Revolve visibility requires finite projected faces	Visibilitas Revolusi memerlukan sisi hasil proyeksi yang berhingga
+@msg	SVG options: {e}	Opsi SVG: {e}
+@msg	Save for Web settings: {e}	Pengaturan Simpan untuk web: {e}
+@msg	TIFF colour profile: {e}	Profil warna TIFF: {e}
+@msg	TIFF encoding failed: the pixel buffer doesn't match the image size	Pengodean TIFF gagal: buffer piksel tidak sesuai dengan ukuran gambar
+@msg	TIFF encoding failed: {e}	Pengodean TIFF gagal: {e}
+@msg	Targa depth {_1}: 16, 24 or 32 bits per pixel	Kedalaman Targa {_1}: 16, 24, atau 32 bit per piksel
+@msg	Targa encoding failed: the pixel buffer doesn't match the image size	Pengodean Targa gagal: buffer piksel tidak sesuai dengan ukuran gambar
+@msg	The 3D projection is not finite	Proyeksi 3D tidak berhingga
+@msg	The 3D shadow is too complex; turn Shadows off or simplify the art	Bayangan 3D terlalu rumit; nonaktifkan Bayangan atau sederhanakan karya
+@msg	The shape contains invalid coordinates	Bentuk berisi koordinat yang tidak valid
+@msg	Too many Revolve faces for visibility evaluation	Terlalu banyak sisi Revolusi untuk evaluasi visibilitas
+@msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft membaca paling banyak {ASE_MAX_ENTRIES} warna dan grup dari file swatch exchange, dan pustaka ini memiliki {entries}
+@msg	WebP encoding failed: {e}	Pengodean WebP gagal: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	Pengodean WebP gagal: gambar terlalu besar untuk WebP lossy: turunkan resolusi atau pilih Tanpa kehilangan
+@msg	`scope` must be "document", {{artboards: [index, …]}} or {{layers: [id, …]}}	`scope` harus "document", {{artboards: [index, …]}}, atau {{layers: [id, …]}}
+@msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` berupa smallThumb, mediumThumb, largeThumb, smallList, atau largeList
+@msg	`{file}` has no swatches of its own	`{file}` tidak memiliki swatch sendiri
+@msg	`{_1}` has pattern swatches, which a .vcswatches file can't hold	`{_1}` memiliki swatch pola, yang tidak dapat disimpan dalam file .vcswatches
+@msg	a line can't run from a point to itself	garis tidak dapat ditarik dari suatu titik ke titik itu sendiri
+@msg	a line needs at least two points	garis memerlukan paling sedikit dua titik
+@msg	a linked image file is outside the read roots	file gambar tertaut berada di luar root baca
+@msg	a linked file's export folder is outside the read roots	folder ekspor file tertaut berada di luar root baca
+@msg	a number cannot be read	sebuah angka tidak dapat dibaca
+@msg	a swatch exchange block is too long	blok swatch exchange terlalu panjang
+@msg	a swatch exchange name is too long	nama swatch exchange terlalu panjang
+@msg	a {sw} × {sh} image can't be resized to {width} × {height} pixels	gambar {sw} × {sh} tidak dapat diubah ukurannya menjadi {width} × {height} piksel
+@msg	a {width} × {height} image is too large	gambar {width} × {height} terlalu besar
+@msg	a {width} × {height} image: {e}	gambar {width} × {height}: {e}
+@msg	an image could not be written: {e}	sebuah gambar tidak dapat ditulis: {e}
+@msg	an image that couldn't be read was left out	gambar yang tidak dapat dibaca dihilangkan
+@msg	can't open “{name}”: {e}	tidak dapat membuka “{name}”: {e}
+@msg	cannot align zip entries to {align} bytes	entri zip tidak dapat diratakan ke {align} byte
+@msg	cannot open the automation {kind} root `{_1}`: {e}	root {kind} otomatisasi `{_1}` tidak dapat dibuka: {e}
+@msg	cannot read profile: {0}	profil tidak dapat dibaca: {0}
+@msg	color book version {version} isn't supported (only 1)	versi buku warna {version} tidak didukung (hanya 1)
+@msg	color books in color space {other} aren't supported (only RGB, CMYK and Lab)	buku warna dalam ruang warna {other} tidak didukung (hanya RGB, CMYK, dan Lab)
+@msg	file name too long to zip: {_1}	nama file terlalu panjang untuk zip: {_1}
+@msg	file name too long to zip: {name}	nama file terlalu panjang untuk zip: {name}
+@msg	freeform line {i}: {e}	garis bentuk bebas {i}: {e}
+@msg	freeform point {i}: {e}	titik bentuk bebas {i}: {e}
+@msg	give `{key}` or `{other}`, not both	berikan `{key}` atau `{other}`, bukan keduanya
+@msg	grayscale profiles can't be working spaces yet	profil skala abu-abu belum dapat menjadi ruang kerja
+@msg	input contains NaN or infinite coordinates	masukan berisi koordinat NaN atau tak hingga
+@msg	input path could not be closed	jalur masukan tidak dapat ditutup
+@msg	invalid ICC profile: {0}	profil ICC tidak valid: {0}
+@msg	invalid scale {scale}	skala {scale} tidak valid
+@msg	its localized names take more than {_1} KB	nama yang dilokalkan memakan lebih dari {_1} KB
+@msg	its objects are nested too deep ({e})	objeknya bersarang terlalu dalam ({e})
+@msg	its tag table lists the `{_1}` tag more than once	tabel tag mencantumkan tag `{_1}` lebih dari sekali
+@msg	no similar objects found (reflected copies are not matched); change the Global Edit Options and try again	tidak ditemukan objek serupa (salinan yang dicerminkan tidak dicocokkan); ubah Opsi edit global lalu coba lagi
+@msg	not a graphic style library: {e}	bukan pustaka gaya grafis: {e}
+@msg	not a swatch library (.vcswatches or .gpl)	bukan pustaka swatch (.vcswatches atau .gpl)
+@msg	not a swatch library (format `{_1}`)	bukan pustaka swatch (format `{_1}`)
+@msg	not a swatch library: {e}	bukan pustaka swatch: {e}
+@msg	not an action set file ({e})	bukan file set tindakan ({e})
+@msg	numbers out of order in {{}} quantifier	angka tidak berurutan dalam kuantifier {{}}
+@msg	profile colour space {other} is not RGB, CMYK or Gray	ruang warna profil {other} bukan RGB, CMYK, atau Gray
+@msg	regular expression too large	ekspresi reguler terlalu besar
+@msg	script file is not UTF-8 text: {value}	file skrip bukan teks UTF-8: {value}
+@msg	step {step} of “{action}” runs the unknown command `{command}`	langkah {step} dari “{action}” menjalankan perintah tidak dikenal `{command}`
+@msg	stop {i}: {e}	perhentian {i}: {e}
+@msg	swatch exchange version {major}.{minor} isn't supported (only 1.x)	versi swatch exchange {major}.{minor} tidak didukung (hanya 1.x)
+@msg	text.{key} `{v}`: use "{_1}" or "{_2}"	text.{key} `{v}`: gunakan "{_1}" atau "{_2}"
+@msg	the SVG's style sheets take too long to match	lembar gaya SVG terlalu lama untuk dicocokkan
+@msg	the SVG's styles expand to more than {0} MB	gaya SVG berkembang menjadi lebih dari {0} MB
+@msg	the color book holds more than {ASE_MAX_ENTRIES} colors	buku warna berisi lebih dari {ASE_MAX_ENTRIES} warna
+@msg	the color book is cut short	buku warna terpotong
+@msg	the color book's names take more than {_1} MB	nama dalam buku warna memakan lebih dari {_1} MB
+@msg	the image would be {w} × {h} pixels; raster exports are limited to {MAX_RASTER_SIDE} pixels per side and {_1} megapixels: lower the scale or resolution	gambar akan berukuran {w} × {h} piksel; ekspor raster dibatasi {MAX_RASTER_SIDE} piksel per sisi dan {_1} megapiksel: turunkan skala atau resolusi
+@msg	the optimised image can't be read back: {e}	gambar yang dioptimalkan tidak dapat dibaca kembali: {e}
+@msg	the paint is not a freeform gradient (apply one with paint.editGradient {{kind: "freeform"}})	cat bukan gradien bentuk bebas (terapkan dengan paint.editGradient {{kind: "freeform"}})
+@msg	the pixel buffer doesn't match the image size	buffer piksel tidak sesuai dengan ukuran gambar
+@msg	the preview: {e}	pratinjau: {e}
+@msg	the request may not read the New Document profiles folder	permintaan tidak boleh membaca folder profil Dokumen baru
+@msg	the shapes are too degenerate to combine	bentuk terlalu degeneratif untuk digabungkan
+@msg	the shapes cross themselves and each other too often to combine	bentuk terlalu sering memotong dirinya sendiri dan satu sama lain untuk digabungkan
+@msg	the swatch exchange file holds more than {ASE_MAX_ENTRIES} colors and groups	file swatch exchange berisi lebih dari {ASE_MAX_ENTRIES} warna dan grup
+@msg	the swatch exchange file is cut short	file swatch exchange terpotong
+@msg	the {_1} plate can't be read: {e}	pelat {_1} tidak dapat dibaca: {e}
+@msg	this binary DXF file is damaged or cut short	file DXF biner ini rusak atau terpotong
+@msg	this is a DWG drawing, which can't be read: save it from the CAD app as a DXF and open that	ini gambar DWG, yang tidak dapat dibaca: simpan dari aplikasi CAD sebagai DXF lalu buka file itu
+@msg	too many classes	terlalu banyak kelas
+@msg	too many groups	terlalu banyak grup
+@msg	too many layers for PSD (at most 32767)	terlalu banyak lapisan untuk PSD (paling banyak 32767)
+@msg	too many swatch exchange blocks	terlalu banyak blok swatch exchange
+@msg	unknown colour profile: {0}	profil warna tidak dikenal: {0}
+@msg	{_1} clashes with a built-in profile name	{_1} bentrok dengan nama profil bawaan
+@msg	{_1} × {_2} pixels is too large for GIF (at most 65535 pixels a side): lower the resolution	{_1} × {_2} piksel terlalu besar untuk GIF (paling banyak 65535 piksel per sisi): turunkan resolusi
+@msg	{_1}: no usable transform to/from sRGB	{_1}: tidak ada transformasi yang dapat digunakan ke/dari sRGB
+@msg	{name} is not a CMYK profile	{name} bukan profil CMYK
+@msg	{name} is not an RGB profile	{name} bukan profil RGB
+@msg	{path}: could not be read	{path}: tidak dapat dibaca
+@msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	{width} × {height} piksel terlalu besar untuk JPEG (paling banyak 65535 piksel per sisi): turunkan resolusi
+@msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} piksel terlalu besar untuk Targa (paling banyak 65535 piksel per sisi): turunkan resolusi
+@msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} piksel terlalu besar untuk PSD (paling banyak {MAX_SIDE} piksel per sisi): turunkan resolusi
+@msg	the template name can't be empty	nama templat tidak boleh kosong
+@msg	the template name isn't usable as a file name	nama templat tidak dapat digunakan sebagai nama file
+@msg	no metadata templates folder here	tidak ada folder templat metadata di sini
+@msg	give `name` or `path`, not both	berikan `name` atau `path`, bukan keduanya
+@msg	give one of `path`, `name` and `data`	berikan salah satu dari `path`, `name`, dan `data`
+@msg	mode must be replace, keep or append	mode harus replace, keep, atau append
+@msg	the file is not an XMP metadata template	file ini bukan templat metadata XMP
+@msg	no path painted with a brush is selected	tidak ada jalur yang dicat dengan kuas yang terseleksi
+@msg	the selected paths are painted with brushes of different types	jalur yang terseleksi dicat dengan kuas dari jenis yang berbeda
+@msg	give `params` or `reset`, not both	berikan `params` atau `reset`, bukan keduanya
+@msg	a bristle brush has no options of its own on a path	kuas bulu tidak memiliki opsi sendiri pada jalur
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	beberapa efek raster tidak dijadikan gambar: efek tersebut akan memerlukan total lebih dari 1.024 gambar atau 256 megapiksel
+@msg	Shape Builder: select all paths you want to merge	Pembangun bentuk: pilih semua jalur yang ingin digabungkan
+@msg	action step {_1} (`{id}`) failed: {reason}	langkah tindakan {_1} (`{id}`) gagal: {reason}
+@msg	`points` must be three [x, y] pairs of numbers	`points` harus berupa tiga pasangan angka [x, y]
+@msg	direct-select three anchor points, or give `points`	pilih langsung tiga titik jangkar, atau berikan `points`
+@msg	no circle passes through these points: two are the same or all three lie on one line	tidak ada lingkaran yang melewati titik-titik ini: dua titik sama atau ketiganya terletak pada satu garis
+@msg	`{panel}` has no display sizes to cycle	`{panel}` tidak memiliki ukuran tampilan untuk diganti bergiliran
+@msg	the panels are not shown	panel tidak ditampilkan
+@msg	a line or other open path that encloses no area does not change the result's shape; to include it, apply Object › Path › Outline Stroke to it first	garis atau jalur terbuka lain yang tidak melingkupi area tidak mengubah bentuk hasil; untuk menyertakannya, terapkan Objek › Jalur › Garis luar stroke padanya terlebih dahulu
+@msg	{label} produced an empty result: a line or other open path encloses no area; to include it, apply Object › Path › Outline Stroke to it first	{label} memberikan hasil kosong: garis atau jalur terbuka lain tidak melingkupi area; untuk menyertakannya, terapkan Objek › Jalur › Garis luar stroke padanya terlebih dahulu
+@msgplural	Unembedded {n} image to {folder}|Unembedded {n} images to {folder}	Sematan {n} gambar dilepaskan ke {folder}
+@msg	every numbered name for {name} is taken in that folder	setiap nama bernomor untuk {name} sudah dipakai di folder itu
+@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	Impor membaca file sumber data yang berakhiran .csv, .tsv, .txt, atau .xml
+variable-kind	Visibility	Visibilitas
+variable-kind	Linked File	File tertaut
+variable-kind	Graph Data	Data grafik
+variable-kind	Unknown	Tidak diketahui
+variable-list-two	{0}, {1}	{0} dan {1}
+variable-list-middle	{0}, {1}	{0}, {1}
+variable-list-end	{0}, {1}	{0}, dan {1}
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: Minimum tidak boleh melebihi Diinginkan, dan Diinginkan tidak boleh melebihi Maksimum
+@msg	side is left or right, not `{v}`	side berupa left atau right, bukan `{v}`
+@msg	order is a whole number from 0 to {others}, not `{v}`	order berupa bilangan bulat dari 0 sampai {others}, bukan `{v}`
+@msg	toolbar (a toolbar's name) must be a string	toolbar (nama bilah alat) harus berupa string
+@msg	no toolbar named `{name}`	tidak ada bilah alat bernama `{name}`
+@msg	toolbar name can't be empty	nama bilah alat tidak boleh kosong
+@msg	a toolbar name has at most {MAX_NAME} characters	nama bilah alat paling banyak {MAX_NAME} karakter
+@msg	there is already a toolbar named `{name}`	sudah ada bilah alat bernama `{name}`
+@msg	there is already a toolbar named `{to}`	sudah ada bilah alat bernama `{to}`
+@msg	a workspace keeps at most {MAX} toolbars	ruang kerja menyimpan paling banyak {MAX} bilah alat
+@msg	name (a toolbar's name) must be a string	name (nama bilah alat) harus berupa string
+@msg	name (a toolbar's name) is required	name (nama bilah alat) wajib diisi
+@msg	to (the new name) is required	to (nama baru) wajib diisi
+@msg	name must be a toolbar's name	name harus berupa nama bilah alat
