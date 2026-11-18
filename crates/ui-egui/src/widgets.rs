@@ -42,18 +42,19 @@ pub use color::{
     harmony_wheel, hex_field, hex_field_named, hsb32, hue_ring, region_texture, ring_square, segment_color, segment_color_on, segmented_wheel,
     stepped_area, wheel_of,
 };
-pub(crate) use color::{HEX_FIELD_CHARS, hex_text, pointer_phase};
+pub(crate) use color::{HEX_FIELD_CHARS, focus_by_pointer, hex_text, pointer_phase};
 #[cfg(test)]
 pub(crate) use color::{SHADE, shade_cells, shade_edges};
 pub use drag::{
-    PanelDrag, RowClick, SwatchRows, apply_row_click, art_drop, doc_preview, drag_ghost, drag_source, drop_target_outline, ghost_row, row_click,
+    PanelDrag, RowClick, SwatchRows, apply_row_click, art_drag_doc, art_drop, doc_preview, drag_art, drag_ghost, drag_source, drop_target_outline,
+    ghost_row, row_click,
 };
 #[cfg(test)]
 use dropdowns::combo_button_id;
 pub(crate) use dropdowns::{combo, combo_menu, combo_menu_field_named, combo_named, field_focused_in, menu_min_width, popover_is_open};
 pub use dropdowns::{
-    dropdown, dropdown_icon_names, dropdown_named, dropdown_names, dropdown_names_named, dropdown_with, dropdown_with_named, list_scroll_style,
-    menu_room, menu_scroll, panel_scroll, popover, set_menu_floor, strip_scroll,
+    dropdown, dropdown_icon_names, dropdown_icon_names_sized, dropdown_named, dropdown_names, dropdown_names_named, dropdown_with,
+    dropdown_with_named, list_scroll_style, menu_room, menu_scroll, panel_scroll, popover, set_menu_floor, strip_scroll,
 };
 #[cfg(test)]
 pub(crate) use dropdowns::{menu_floor, menu_room_either};

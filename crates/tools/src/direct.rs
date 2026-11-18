@@ -384,6 +384,18 @@ pub(crate) fn spines(cx: &ToolContext) -> Vec<(NodeId, PathData)> {
     v
 }
 
+/// [`spines`] of the blends that are themselves selected, topmost first. When no selected object
+/// is a blend, it returns an empty list without walking the document or building any spine.
+pub(crate) fn selected_spines(cx: &ToolContext) -> Vec<(NodeId, PathData)> {
+    let is_blend = |id: &NodeId| cx.doc.node(*id).is_some_and(|n| matches!(n.kind, NodeKind::Blend { .. }));
+    if !cx.selection.objects.iter().any(is_blend) {
+        return vec![];
+    }
+    let mut v = spines(cx);
+    v.retain(|(id, _)| cx.selection.contains(*id));
+    v
+}
+
 /// The spine point under `p`: (blend, anchor, where it is).
 fn hit_spine_point(cx: &ToolContext, p: Point, tol: f64) -> Option<(NodeId, usize, Point)> {
     spines(cx).into_iter().find_map(|(id, path)| {
@@ -395,7 +407,7 @@ fn hit_spine_point(cx: &ToolContext, p: Point, tol: f64) -> Option<(NodeId, usiz
 /// The segment of a selected blend's spine passing within `tol` of `p`: (blend, segment, t, whether
 /// it is straight).
 pub(crate) fn hit_spine_segment(cx: &ToolContext, p: Point, tol: f64) -> Option<(NodeId, usize, f64, bool)> {
-    spines(cx).into_iter().filter(|(id, _)| cx.selection.contains(*id)).find_map(|(id, path)| {
+    selected_spines(cx).into_iter().find_map(|(id, path)| {
         let (si, seg, t, _, dist) = path.nearest(p)?;
         (dist <= tol).then(|| (id, seg, t, path.subpaths.get(si).is_some_and(|sp| sp.segment_is_line(seg))))
     })
@@ -1722,7 +1734,7 @@ impl DirectSelectionTool {
         // marquee that holds none of them drops the points picked before.
         let mut spined: Option<NodeId> = None;
         if !self.group {
-            let found = spines(cx).into_iter().filter(|(id, _)| cx.selection.contains(*id)).find_map(|(id, path)| {
+            let found = selected_spines(cx).into_iter().find_map(|(id, path)| {
                 let inside: BTreeSet<usize> = path.anchors().filter(|(s, _, a)| *s == 0 && r.contains(a.p)).map(|(_, i, _)| i).collect();
                 (!inside.is_empty()).then_some((id, inside))
             });
