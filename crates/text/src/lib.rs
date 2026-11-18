@@ -42,8 +42,8 @@ pub use features::{
 };
 pub use fontdb::{
     CompositeCoverage, FALLBACK_FAMILY, FontClass, FontDb, FontFace, FontLikeness, FontMatch, FontTraits, GlyphAlternate, GlyphCategory,
-    GlyphCategoryKind, GlyphOrigin, IcfMargins, JoiningPosition, LentCompositeFonts, PlatformFontFiles, RECENTLY_ADDED_WITHIN, RecentlyAdded,
-    StylisticSet, Substitution, SubstitutionKind, WantedFont, WantedFonts, app_font_dir, is_font_file, is_suitcase, set_app_font_dir,
+    GlyphCategoryKind, GlyphOrigin, IcfMargins, JoiningPosition, LentCompositeFonts, OutlineFormat, PlatformFontFiles, RECENTLY_ADDED_WITHIN,
+    RecentlyAdded, StylisticSet, Substitution, SubstitutionKind, WantedFont, WantedFonts, app_font_dir, is_font_file, is_suitcase, set_app_font_dir,
     set_platform_font_files, set_user_font_dirs, set_user_font_dirs_confined, style_weight, system_font_dirs, user_font_dirs,
 };
 pub use hyphen::{hyphenation_exceptions, set_hyphenation_exceptions};
