@@ -425,7 +425,7 @@ fn circle_through_points(s: &mut Session, p: &Value) -> Result<Value> {
         None => selected_anchor_points(s)?.ok_or_else(|| bad(C, "direct-select two or three anchor points, or give `points`"))?,
     };
     let key = "anchors";
-    let at_points = match p.get(key).filter(|v| !v.is_null()).map(Value::as_str) {
+    let at_points = match p.get(key).map(Value::as_str) {
         None | Some(Some("standard")) => false,
         Some(Some("points")) => true,
         Some(_) => return Err(bad(C, format!("`{key}` must be one of {}", "standard, points"))),

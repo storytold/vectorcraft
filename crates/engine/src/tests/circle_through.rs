@@ -226,7 +226,7 @@ fn anchors_at_the_points_puts_an_anchor_at_each_point() {
     assert_eq!(anchors.len(), 4, "{anchors:?}");
     assert_eq!((anchors[0], anchors[2]), (Point::new(0.0, 0.0), Point::new(100.0, 0.0)));
     let (count, undo) = (object_count(&s), undo_len(&s));
-    for bad in [json!("corners"), json!(true), json!(4)] {
+    for bad in [json!("corners"), json!(true), json!(4), Value::Null] {
         let e = s.execute(C, &json!({ "points": [[0, 0], [100, 0]], "anchors": bad })).unwrap_err().to_string();
         assert!(e.contains("`anchors` must be one of standard, points"), "{e}");
     }
