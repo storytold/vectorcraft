@@ -62,7 +62,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Circle Through Points",
             [],
             None,
-            "{points?: [[x, y], [x, y], [x, y]] (left out: the three selected anchor points, where a path selected whole counts all its anchors and selected segments' ends do not count)} → {id, cx, cy, radius}: a circle with the current paint whose edge passes through the three points, not pixel-aligned even while Align New Objects to Pixel Grid is on; two points that are the same or three on one line are an error, and nothing is drawn",
+            "{points?: [[x, y], [x, y]] or [[x, y], [x, y], [x, y]] (two: the ends of a diameter; left out: the two or three selected anchor points, where a path selected whole counts all its anchors and selected segments' ends do not count)} → {id, cx, cy, radius}: a circle with the current paint whose edge passes through the points, not pixel-aligned even while Align New Objects to Pixel Grid is on; two points that are the same, three on one line, or a circle reaching past the canvas are an error, and nothing is drawn",
             has_doc,
             circle_through_points
         ),
@@ -126,7 +126,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Create Text",
             [],
             None,
-            "{x, y, text, rotation?: deg clockwise about x, y (0: level), vertical?: bool = false, size?: pt 0.1..1296 (outside it: an error, and no type is made), font?: family, style? (default Regular, or the family's closest style when it has no Regular), color? (#rrggbbaa and #rgba are refused), keepModel?: bool (as paint.setFill), area?: {width, height, fit?: none|autoHeight|shrinkText|block, fitMinPercent?, wordGap?, lineGap? (as text.areaOptions)}, placeholder?: bool (fill it with placeholder text instead, as the Type tools do with prefs placeholderText), justify?: \"auto\" (default: the start of each paragraph's direction)|\"left\"|\"center\"|\"right\"|\"justifyAll\" (point type: aligned on x, so \"center\" centres each line on the point and \"right\" ends it there; text.setStyle changes it later), leadingModel?: \"romanBaseline\"|\"emBoxTop\", charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\" (default: emBoxTop and emBoxCenter while the interface is in Japanese, else romanBaseline)} → {id, bounds: {x, y, width, height} (the new type's box as document.inspect reports it, after justify), overflow?: [id] (area type whose text doesn't fit its frame: the lines past it aren't drawn; left out when it fits), warning?: text (the font or style given isn't available: the type is drawn in the fallback font or the family's closest style)}; new area type gets Auto Size (fit autoHeight) when the autoSizeAreaType preference is on",
+            "{x, y, text, rotation?: deg clockwise about x, y (0: level), vertical?: bool = false, size?: pt 0.1..1296 (outside it: an error, and no type is made), font?: family, style? (default Regular, or the family's closest style when it has no Regular), color? (#rrggbbaa and #rgba are refused; size, font, style and color left out come from [Normal Character Style], the defaults unless the document redefined it), keepModel?: bool (as paint.setFill), area?: {width, height, fit?: none|autoHeight|shrinkText|block, fitMinPercent?, wordGap?, lineGap? (as text.areaOptions)}, placeholder?: bool (fill it with placeholder text instead, as the Type tools do with prefs placeholderText), justify?: \"auto\" (default: the start of each paragraph's direction)|\"left\"|\"center\"|\"right\"|\"justifyAll\" (point type: aligned on x, so \"center\" centres each line on the point and \"right\" ends it there; text.setStyle changes it later), leadingModel?: \"romanBaseline\"|\"emBoxTop\", charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\" (default: emBoxTop and emBoxCenter while the interface is in Japanese, else romanBaseline)} → {id, bounds: {x, y, width, height} (the new type's box as document.inspect reports it, after justify), overflow?: [id] (area type whose text doesn't fit its frame: the lines past it aren't drawn; left out when it fits), warning?: text (the font or style given isn't available: the type is drawn in the fallback font or the family's closest style)}; new area type gets Auto Size (fit autoHeight) when the autoSizeAreaType preference is on",
             has_doc,
             text_create
         ),
@@ -413,16 +413,16 @@ fn ellipse(s: &mut Session, p: &Value) -> Result<Value> {
     add_art_turned(s, "Ellipse", path_kind(live.to_path(), Some(live)), rotation)
 }
 
-/// A live ellipse whose edge passes through three points: `points`, or the three selected anchor
-/// points ([`selected_anchor_points`]). One undo step, named as an Ellipse tool drag is.
+/// A live ellipse whose edge passes through two or three points: `points`, or the two or three
+/// selected anchor points ([`selected_anchor_points`]). Two points are the ends of a diameter. One
+/// undo step, named as an Ellipse tool drag is.
 fn circle_through_points(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "shape.circleThroughPoints";
     let points = match p.get("points").filter(|v| !v.is_null()) {
-        Some(v) => three_points(v).ok_or_else(|| bad(C, "`points` must be three [x, y] pairs of numbers"))?,
-        None => selected_anchor_points(s)?.ok_or_else(|| bad(C, "direct-select three anchor points, or give `points`"))?,
+        Some(v) => two_or_three_points(v).ok_or_else(|| bad(C, "`points` must be two or three [x, y] pairs of numbers"))?,
+        None => selected_anchor_points(s)?.ok_or_else(|| bad(C, "direct-select two or three anchor points, or give `points`"))?,
     };
-    let [a, b, c] = points;
-    let (center, radius) = shapes::circle_through(a, b, c)
+    let (center, radius) = shapes::circle_through_points(&points)
         .ok_or_else(|| bad(C, "no circle passes through these points: two are the same or all three lie on one line"))?;
     let r = Rect::new(center.x - radius, center.y - radius, center.x + radius, center.y + radius);
     let live = LiveShape::Ellipse { w: r.width(), h: r.height(), pie: (0.0, 360.0), xf: Affine::translate(r.origin().to_vec2()) };
@@ -434,24 +434,25 @@ fn circle_through_points(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(out)
 }
 
-/// The three points `[[x, y], [x, y], [x, y]]` holds, each pair two finite numbers.
-fn three_points(v: &Value) -> Option<[Point; 3]> {
+/// The two or three points `[[x, y], [x, y]]` or `[[x, y], [x, y], [x, y]]` holds, each pair two
+/// finite numbers.
+fn two_or_three_points(v: &Value) -> Option<Vec<Point>> {
     let pair = |v: &Value| match v.as_array().map(Vec::as_slice) {
         Some([x, y]) => x.as_f64().zip(y.as_f64()).filter(|(x, y)| x.is_finite() && y.is_finite()).map(|(x, y)| Point::new(x, y)),
         _ => None,
     };
-    match v.as_array().map(Vec::as_slice) {
-        Some([a, b, c]) => Some([pair(a)?, pair(b)?, pair(c)?]),
+    match v.as_array() {
+        Some(pairs) if matches!(pairs.len(), 2 | 3) => pairs.iter().map(pair).collect(),
         _ => None,
     }
 }
 
-/// The positions of the selected anchor points, when there are exactly three. They are counted as
+/// The positions of the selected anchor points, when there are two or three. They are counted as
 /// the other anchor commands count them ([`super::path::anchor_targets`]): a selected path with
 /// anchors picked by Direct Selection gives those, and a path selected whole gives all of its own.
 /// A selected segment's ends are not selected anchor points, so a selection with segments gives
 /// none; so does a selection holding an object that is not a path, or an anchor that is gone.
-fn selected_anchor_points(s: &Session) -> Result<Option<[Point; 3]>> {
+fn selected_anchor_points(s: &Session) -> Result<Option<Vec<Point>>> {
     let st = s.doc()?;
     if st.selection.segments.values().any(|set| !set.is_empty()) {
         return Ok(None);
@@ -472,10 +473,7 @@ fn selected_anchor_points(s: &Session) -> Result<Option<[Point; 3]>> {
             return Ok(None);
         }
     }
-    Ok(match points.as_slice() {
-        &[a, b, c] => Some([a, b, c]),
-        _ => None,
-    })
+    Ok(matches!(points.len(), 2 | 3).then_some(points))
 }
 
 /// The whole-number count `p` gives for `key` (`5` or `5.0`), or `default` when it is left out or
@@ -942,7 +940,13 @@ fn text_create(s: &mut Session, p: &Value) -> Result<Value> {
     let id = made.get("id").and_then(Value::as_u64).map(NodeId);
     let made = super::typecmd::with_bounds(s, id, made);
     let mut made = super::typecmd::with_overflow(s, id.as_slice(), made);
-    if p.get("font").is_some() || p.get("style").is_some() {
+    // A face from a redefined [Normal Character Style] is checked too, as one given here is.
+    let normal_face = s
+        .doc()
+        .ok()
+        .and_then(|d| super::textstyles::style_attrs(&d.doc, false, super::textstyles::NORMAL_CHAR))
+        .is_some_and(|m| m.contains_key("font_family") || m.contains_key("font_style"));
+    if p.get("font").is_some() || p.get("style").is_some() || normal_face {
         let runs = match id.and_then(|i| s.doc().ok()?.doc.node(i)).map(|n| &n.kind) {
             Some(NodeKind::Text(t)) => t.runs.iter().flat_map(super::fonts::run_fonts).collect(),
             _ => Default::default(),
@@ -970,8 +974,9 @@ pub(crate) fn new_type_para() -> vectorcraft_doc::ParaStyle {
 
 /// The paragraph alignment, leading model and character alignment new type starts with (`t`'s
 /// paragraph and runs): `justify` from `p` (else as [`new_type_para`] left it), `leadingModel`
-/// and `charAlign` from `p`, else em box top to top and em box centre while the
-/// interface is in Japanese (#432), else the Roman baseline for both. Noted in the journal, so a
+/// and `charAlign` from `p` (`charAlign` else from a redefined `[Normal Character Style]` that
+/// sets it), else em box top to top and em box centre while the interface is in Japanese (#432),
+/// else the Roman baseline for both. Noted in the journal, so a
 /// replay sets the same whatever the interface.
 pub(crate) fn new_type_alignment(s: &mut Session, p: &Value, cmd: &str, t: &mut TextObject) -> Result<()> {
     use vectorcraft_doc::{CharAlign, LeadingModel};
@@ -991,7 +996,14 @@ pub(crate) fn new_type_alignment(s: &mut Session, p: &Value, cmd: &str, t: &mut 
             l
         }
     };
-    let align = match super::textedit::char_align_param(p, cmd)? {
+    // A redefined [Normal Character Style] that sets Character Alignment gives it to new type.
+    let normal_align = s
+        .doc()
+        .ok()
+        .and_then(|d| super::textstyles::style_attrs(&d.doc, false, super::textstyles::NORMAL_CHAR))
+        .filter(|m| m.contains_key("charAlign"))
+        .and(t.runs.first().map(|r| r.style.char_align));
+    let align = match super::textedit::char_align_param(p, cmd)?.or(normal_align) {
         Some(a) => a,
         None => {
             let a = if japanese { CharAlign::EmBoxCenter } else { CharAlign::RomanBaseline };
@@ -1019,17 +1031,25 @@ pub(crate) fn new_area_fit(s: &Session, p: &Value, c: &str, t: &mut TextObject) 
 }
 
 /// The character style new type gets: `size`, `font`, `style` and `color` from `p` (an RGB
-/// `color` in a CMYK document as [`super::paint::new_color`] stores it), else the defaults,
-/// filled as `[Normal Character Style]` is (black unless redefined; never the current fill,
-/// #7975), in the document's
-/// language. A `size` outside [`super::typecmd::TYPE_SIZES`] is an error.
+/// `color` in a CMYK document as [`super::paint::new_color`] stores it), else
+/// `[Normal Character Style]`'s (the default font, size and black fill unless redefined;
+/// never the current fill, #7975), in the style's language, else the document's. A `size` outside
+/// [`super::typecmd::TYPE_SIZES`] is an error.
 pub(crate) fn new_type_style(s: &Session, p: &Value, cmd: &str) -> Result<CharStyle> {
-    let mut style = CharStyle::default();
+    let mut style = s.doc().map_or_else(|_| CharStyle::default(), |d| super::textstyles::normal_char_style(&d.doc));
     if let Some(sz) = p.get("size").and_then(Value::as_f64) {
         style.size = super::typecmd::given_type_size(sz, cmd)?;
     }
+    if str_param(p, "font").is_some() || str_param(p, "style").is_some() {
+        // A face given to the command takes its own version and axis settings, as a font change
+        // does, not those [Normal Character Style] gave another face.
+        style.font_version = None;
+        style.font_axes.clear();
+    }
     if let Some(f) = str_param(p, "font") {
         style.font_family = f.to_string();
+        // A family alone starts in Regular, whatever style [Normal Character Style] has.
+        style.font_style = CharStyle::default().font_style;
     }
     if let Some(f) = str_param(p, "style") {
         style.font_style = f.to_string();
@@ -1039,12 +1059,15 @@ pub(crate) fn new_type_style(s: &Session, p: &Value, cmd: &str) -> Result<CharSt
     }
     style.fill = match p.get("color").and_then(color_value) {
         Some(c) => vectorcraft_color::Paint::solid(super::paint::new_color(s, p, c)),
-        None => s.doc().map_or_else(|_| CharStyle::default().fill, |d| super::textstyles::normal_char_fill(&d.doc)),
+        None => style.fill,
     };
-    // In the language Document Setup chose, else Preferences › Hyphenation › Default Language; none
-    // for the default. Type already in a document keeps its own.
-    let chosen = |name: &str| vectorcraft_doc::setup::char_language(name).ok().flatten();
-    let document = s.doc().ok().and_then(|d| chosen(&d.doc.setup.language));
-    style.language = document.or_else(|| chosen(&s.prefs.hyphenation_language)).map(str::to_string);
+    // In the language a redefined [Normal Character Style] gives, else the one Document Setup chose,
+    // else Preferences › Hyphenation › Default Language; none for the default. Type already in a
+    // document keeps its own.
+    if style.language.is_none() {
+        let chosen = |name: &str| vectorcraft_doc::setup::char_language(name).ok().flatten();
+        let document = s.doc().ok().and_then(|d| chosen(&d.doc.setup.language));
+        style.language = document.or_else(|| chosen(&s.prefs.hyphenation_language)).map(str::to_string);
+    }
     Ok(style)
 }

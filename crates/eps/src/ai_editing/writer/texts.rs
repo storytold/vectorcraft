@@ -445,8 +445,9 @@ fn held_aki(v: f64) -> f64 {
     if v.is_nan() { 0.0 } else { v.clamp(0.0, MAX_AKI) }
 }
 
-/// Has type `t` attributes the text document leaves out ([`TYPE_ATTRIBUTES`])?
-pub(in crate::ai_editing) fn loses(t: &TextObject) -> bool {
+/// Has type `t` attributes the text document leaves out ([`TYPE_ATTRIBUTES`])? `fonts` holds the
+/// fonts already resolved.
+fn loses(t: &TextObject, fonts: &mut ResolvedFonts) -> bool {
     // Small capitals are read back at Document Setup's default size.
     let default_small_caps = vectorcraft_doc::DocSetup::default().small_caps_size;
     // A run's style as the text document holds it: every other attribute at its default. A color
@@ -484,7 +485,7 @@ pub(in crate::ai_editing) fn loses(t: &TextObject) -> bool {
             ..CharStyle::default()
         }
     };
-    let run_lost = |s: &CharStyle| {
+    let mut run_lost = |s: &CharStyle| {
         let stroked = !s.stroke.is_none();
         // Without a stroke, its weight, cap, join and miter limit draw nothing: nothing is lost.
         let unstroked = CharStyle::default();
@@ -501,7 +502,7 @@ pub(in crate::ai_editing) fn loses(t: &TextObject) -> bool {
         };
         // A Lab color is written as RGB.
         let lab = |p: &Paint| matches!(p, Paint::Solid { color: Color::Lab { .. }, .. });
-        s != held_char(&s) || lab(&s.fill) || lab(&s.stroke) || !font_kept(&s)
+        s != held_char(&s) || lab(&s.fill) || lab(&s.stroke) || !fonts.kept(&s)
     };
     // A paragraph's style as the text document holds it, and its text: aligned to the start of
     // its direction (Auto) without a direction of its own, it comes back aligned left, which
@@ -669,6 +670,84 @@ fn font_kept(st: &CharStyle) -> bool {
         && face(&family, &style, read.as_deref()) == face(&st.font_family, &st.font_style, st.font_version.as_deref())
 }
 
+/// The font fields of a style, as [`ResolvedFonts`] keeps what they resolve to: the family, style
+/// and version, and each Variable Font setting as the bits of its value, so two settings that
+/// differ are two keys even where they are written as one number.
+#[derive(PartialEq, Eq, Hash)]
+struct FontKey {
+    family: String,
+    style: String,
+    version: Option<String>,
+    axes: Vec<(String, u64)>,
+}
+
+impl FontKey {
+    fn of(st: &CharStyle) -> Self {
+        FontKey {
+            family: st.font_family.clone(),
+            style: st.font_style.clone(),
+            version: st.font_version.clone(),
+            axes: st.font_axes.iter().map(|(tag, v)| (tag.clone(), v.to_bits())).collect(),
+        }
+    }
+}
+
+/// What one style's font fields resolved to, each with the font database's generation
+/// ([`vectorcraft_text::FontDb::generation`]) when it was resolved.
+#[derive(Default)]
+struct Resolved {
+    /// Its font record ([`font_name`]).
+    record: Option<(u64, FontRecord)>,
+    /// Whether its font comes back as itself ([`font_kept`]).
+    kept: Option<(u64, bool)>,
+}
+
+/// The fonts of the styles written so far, each resolved once for the whole save. A value is used
+/// again only while the font database's generation is the one it was resolved in: fonts added or
+/// loaded since then resolve it again.
+#[derive(Default)]
+struct ResolvedFonts(HashMap<FontKey, Resolved>);
+
+#[cfg(test)]
+thread_local! {
+    /// While set on this thread, [`ResolvedFonts`] keeps nothing: every run's font is resolved again.
+    pub(in crate::ai_editing) static RESOLVE_EACH_RUN: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// How many times [`ResolvedFonts`] has resolved a font record or checked a font on this thread.
+    pub(in crate::ai_editing) static FONT_RESOLVES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+impl ResolvedFonts {
+    /// The value `slot` holds for the font of style `st` when it was resolved in the font
+    /// database's current generation, else `resolve(st)`, kept for later runs.
+    fn get<T>(&mut self, st: &CharStyle, slot: fn(&mut Resolved) -> &mut Option<(u64, T)>, resolve: fn(&CharStyle) -> T) -> &T {
+        let now = vectorcraft_text::FontDb::global().generation();
+        let held = slot(self.0.entry(FontKey::of(st)).or_default());
+        #[cfg(test)]
+        if RESOLVE_EACH_RUN.get() {
+            *held = None;
+        }
+        if held.as_ref().is_some_and(|(generation, _)| *generation != now) {
+            *held = None;
+        }
+        let (_, value) = held.get_or_insert_with(|| {
+            #[cfg(test)]
+            FONT_RESOLVES.set(FONT_RESOLVES.get() + 1);
+            (now, resolve(st))
+        });
+        value
+    }
+
+    /// The font record of style `st` ([`font_name`]).
+    fn record(&mut self, st: &CharStyle) -> &FontRecord {
+        self.get(st, |r| &mut r.record, font_name)
+    }
+
+    /// Whether the font of style `st` comes back as itself ([`font_kept`]).
+    fn kept(&mut self, st: &CharStyle) -> bool {
+        *self.get(st, |r| &mut r.kept, font_kept)
+    }
+}
+
 /// Whether `c` is a strong right-to-left letter (`Some(true)`: Hebrew, Arabic, Syriac, Thaana, NKo
 /// and their presentation forms) or a strong left-to-right one (`Some(false)`: any other letter).
 fn strong_direction(c: char) -> Option<bool> {
@@ -761,6 +840,8 @@ pub(in crate::ai_editing) struct TextDoc {
     /// reader counts in them.
     doc_bytes: usize,
     doc_values: usize,
+    /// The fonts of the styles written so far, as they resolve.
+    resolved: ResolvedFonts,
 }
 
 impl TextDoc {
@@ -768,9 +849,14 @@ impl TextDoc {
         self.stories.is_empty()
     }
 
+    /// Has type `t` attributes the text document leaves out ([`loses`])?
+    pub(in crate::ai_editing) fn loses(&mut self, t: &TextObject) -> bool {
+        loses(t, &mut self.resolved)
+    }
+
     /// The index of the font of `st` in the font set.
     fn font(&mut self, st: &CharStyle) -> i64 {
-        let font = font_name(st);
+        let font = self.resolved.record(st);
         // Two installed versions of one font are two fonts, so each keeps its own `/5`.
         let same = |f: &FontRecord| {
             f.name == font.name && f.version == font.version && f.design.iter().map(|v| fixed(*v)).eq(font.design.iter().map(|v| fixed(*v)))
@@ -778,7 +864,7 @@ impl TextDoc {
         let i = match self.fonts.iter().position(same) {
             Some(i) => i,
             None => {
-                self.fonts.push(font);
+                self.fonts.push(font.clone());
                 self.fonts.len() - 1
             }
         };
@@ -1004,6 +1090,7 @@ impl TextDoc {
                     FirstBaseline::CapHeight => Some(2),
                     FirstBaseline::Leading => Some(3),
                     FirstBaseline::XHeight => Some(4),
+                    FirstBaseline::EmBoxHeight => Some(5),
                 };
                 if let Some(k) = kind {
                     data.push((10, dict(vec![(0, V::Int(k)), (1, real(o.first_baseline_min / scale))])));
@@ -1156,7 +1243,7 @@ impl TextDoc {
                 if !whole.runs.iter().any(|r| r.text.chars().any(|c| !c.is_whitespace())) || !self.room(&whole, texts.len()) {
                     return None;
                 }
-                let lost = split_differs || texts.iter().any(|t| loses(t));
+                let lost = split_differs || texts.iter().any(|t| loses(t, &mut self.resolved));
                 let frames: Vec<usize> = texts.iter().map(|t| self.frame(t, canvas, scale)).collect();
                 let story = self.story(&whole, &frames, scale);
                 if !self.fits(mark) {
@@ -1350,4 +1437,59 @@ pub(in crate::ai_editing) fn stub(s: &mut String, story: usize, frame: usize, t:
         s.push_str("X+\n; /ConfiningPath ,\n");
     }
     s.push_str("2 /TextAntialiasing ,\n;\n");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A style's font resolved through [`ResolvedFonts`], the first time and again, is the font
+    /// record and the check [`font_name`] and [`font_kept`] give for it: static and variable fonts,
+    /// a version of their own, Variable Font settings within and outside the axis's range, not a
+    /// number, +0 and -0, an axis the font doesn't have, and a family that isn't installed. A font
+    /// resolved before the font database last changed is resolved again.
+    #[test]
+    fn resolved_fonts_are_the_fonts_resolved_for_each_run() {
+        use vectorcraft_text::test_fonts::{VARIABLE_FAMILY, variable_font};
+        vectorcraft_text::FontDb::global().add_font(variable_font().unwrap());
+        let font = |family: &str, style: &str, version: Option<&str>, axes: &[(&str, f64)]| CharStyle {
+            font_family: family.into(),
+            font_style: style.into(),
+            font_version: version.map(str::to_owned),
+            font_axes: axes.iter().map(|(t, v)| (t.to_string(), *v)).collect(),
+            ..CharStyle::default()
+        };
+        let styles = [
+            CharStyle::default(),
+            font("Source Sans 3", "Bold", None, &[]),
+            font("Inter", "Medium", None, &[]),
+            font(VARIABLE_FAMILY, "Regular", None, &[]),
+            font(VARIABLE_FAMILY, "Bold", Some("Version 1.000"), &[]),
+            font(VARIABLE_FAMILY, "Bold", None, &[("wght", 650.0)]),
+            font(VARIABLE_FAMILY, "Bold", None, &[("wght", 900.0)]),
+            font(VARIABLE_FAMILY, "Bold", None, &[("wght", f64::NAN)]),
+            font(VARIABLE_FAMILY, "Bold", None, &[("wght", 0.0)]),
+            font(VARIABLE_FAMILY, "Bold", None, &[("wght", -0.0)]),
+            font(VARIABLE_FAMILY, "Bold", None, &[("wdth", 80.0), ("wght", 500.0)]),
+            font("No Such Family", "Bold", None, &[]),
+            font("No Such Family", "", Some("2.0"), &[]),
+        ];
+        let mut fonts = ResolvedFonts::default();
+        for round in ["first", "again"] {
+            for st in &styles {
+                assert_eq!(fonts.record(st), &font_name(st), "{round}: {st:?}");
+                assert_eq!(fonts.kept(st), font_kept(st), "{round}: {st:?}");
+            }
+        }
+        assert_eq!(fonts.0.len(), styles.len(), "each style's font fields are a key of their own");
+        // What was resolved before the font database last changed is resolved again.
+        let stale = vectorcraft_text::FontDb::global().generation().wrapping_sub(1);
+        let wrong = FontRecord { name: "Wrong".into(), truetype: false, design: vec![], version: String::new() };
+        for st in &styles {
+            let held = fonts.0.entry(FontKey::of(st)).or_default();
+            (held.record, held.kept) = (Some((stale, wrong.clone())), Some((stale, !font_kept(st))));
+            assert_eq!(fonts.record(st), &font_name(st), "{st:?}");
+            assert_eq!(fonts.kept(st), font_kept(st), "{st:?}");
+        }
+    }
 }

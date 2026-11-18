@@ -75,14 +75,33 @@
 @msg	Script file could not be read	Scriptfilen kunne ikke læses
 @msg	Script folder has more than 2,048 entries	Scriptmappen har mere end 2.048 elementer
 @msg	Script file open mode must be r, w, e or a	Scriptfilens åbningstilstand skal være r, w, e eller a
-@msg	Script file writing is not available	Skrivning af scriptfiler er ikke tilgængelig
-@msg	Script file dialogs are not available	Scriptfildialoger er ikke tilgængelige
 @msg	Script files cannot be opened in another application	Scriptfiler kan ikke åbnes i et andet program
 @msg	Script file access is unavailable on the web	Scriptets filadgang er ikke tilgængelig på nettet
 @msg	Script has 256 files open	Scriptet har 256 filer åbne
 @msg	Script file path exceeds 32,767 characters	Scriptfilens sti er længere end 32.767 tegn
 @msg	Script folder mask takes too many steps to match	Scriptmappens maske kræver for mange trin at matche
 @msg	the script opened more file data than one run may open (32 MiB)	scriptet åbnede flere fildata, end én kørsel må åbne (32 MiB)
+@msg	Script file access denied: {path}	Scriptets filadgang blev nægtet: {path}
+@msg	Script file access to the app's own folders is not allowed	Scripts må ikke få adgang til programmets egne mapper
+@msg	Script file cannot encode the text	Scriptfilen kan ikke kode teksten
+@msg	Script file could not be written	Scriptfilen kunne ikke skrives
+@msg	Script file dialogs need a person to answer them	Scriptets fildialoger skal besvares af en person
+@msg	Script file is not open for writing	Scriptfilen er ikke åben for skrivning
+@msg	Script file name is already in use	Scriptfilens navn er allerede i brug
+@msg	Script file name must be a name without a folder	Scriptfilens navn skal være et navn uden en mappe
+@msg	Script file permission can be kept only for a script run from a file	Filtilladelsen kan kun beholdes for et script, der køres fra en fil
+@msg	Script file permission could not be saved	Scriptets filtilladelse kunne ikke gemmes
+@msg	Script folder is not empty	Scriptmappen er ikke tom
+@msg	Script files cannot make aliases	Scriptfiler kan ikke oprette aliasser
+@msg	Script file hidden setting cannot be changed	Scriptfilens indstilling for skjult kan ikke ændres
+@msg	{name}: a file dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: en fildialog kan ikke åbnes i et callback fra en indbygget funktion, en getter, en konvertering eller en fil, som $.evalFile kører; kald den fra scriptets egen kode
+@msg	the script wrote more file data than one run may write (32 MiB)	scriptet skrev flere fildata, end én kørsel må skrive (32 MiB)
+@msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` for et scripts fildialog skal være en af: once, always, deny, stop
+@msg	choose a file or folder first, or deny	vælg først en fil eller mappe, eller afvis
+@msg	the script file permissions could not be saved: {e}	scriptets filtilladelser kunne ikke gemmes: {e}
+@msg	this script's file access can be allowed only once	dette scripts filadgang kan kun tillades én gang
+@msg	Only the person at the keyboard can allow a script's file access	Kun personen ved tastaturet kan tillade et scripts filadgang
+@msg	A script is given at most 2,048 files: the files picked after them were left out	Et script får højst 2.048 filer: de filer, der blev valgt derefter, blev udeladt
 @msg	File.seek: takes a position and a mode	File.seek: tager en position og en tilstand
 @msg	vc.run: give a command id, as a string	vc.run: angiv et kommando-id som en streng
 @msg	vc.run: takes a command id and an object of parameters	vc.run: tager et kommando-id og et objekt med parametre
@@ -216,6 +235,14 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	is a prompt's answer, whose `value` must be a string or null	er svaret på en prompt, hvis `value` skal være en streng eller null
 @msg	must have `kind` alert, confirm or prompt	skal have `kind` alert, confirm eller prompt
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` er kun til en kørsel uden nogen at spørge: i appen besvarer personen hver dialog
+@msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel` skal være et heltal fra 1 til {_1}
+@msg	`args{place}` is nested more than 64 levels deep	`args{place}` er indlejret mere end 64 niveauer dybt
+@msg	`args` must be an object	`args` skal være et objekt
+@msg	`args` is larger than 1 MiB	`args` er større end 1 MiB
+@msg	`path` is empty	`path` er tom
+@msg	`installed` takes a `path`, not a `source`	`installed` tager en `path`, ikke en `source`
+@msg	`path` must name a .js or .jsx file	`path` skal angive en .js- eller .jsx-fil
+@msg	give exactly one of `path` and `source`	angiv præcis én af `path` og `source`
 @msg	Running a script	Kører et script
 @msg	Data Recovery can't keep copies in {path}: {e}	Datagendannelse kan ikke opbevare kopier i {path}: {e}
 @msg	Plug-ins can't be loaded from {path}: {e}	Plug-ins kan ikke indlæses fra {path}: {e}
@@ -406,7 +433,7 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	each of `{GRAPHICS}` must be an object	hvert element i `{GRAPHICS}` skal være et objekt
 @msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	elementer i `{GRAPHICS}` tager symbol, face, x, y, scale og rotation, ikke `{k}`
 @msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	hvert element i `{GRAPHICS}` kræver `symbol`, navnet på et symbol
-@msg	`{GRAPHICS}` face must be front or back	`{GRAPHICS}`: face skal være front eller back
+@msg	`{GRAPHICS}` face must be front, back or side	`{GRAPHICS}`: face skal være front, back eller side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}`: {key} skal være et tal fra {lo} til {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` skal være et array
 @msg	Graphics map onto the Plane, Extrude and Revolve object types	Grafik kortlægges på objekttyperne Plan, Ekstrudér og Omdrej
@@ -766,6 +793,8 @@ liquify-list-end	{0}, {1}	{0} og {1}
 	Check Script	Kontrollér script
 	Some scripts were not listed	Nogle scripter blev ikke vist
 	The Scripts folder cannot be read	Mappen Scripts kan ikke læses
+	Loading scripts…	Indlæser scripter…
+	The Scripts folder is still being read	Mappen Scripts læses stadig
 	Other Script…	Andet script…
 	Document Setup…	Dokumentopsætning…
 	Switch Units	Skift enheder
@@ -869,6 +898,8 @@ liquify-list-end	{0}, {1}	{0} og {1}
 	Shear…	Skæv…
 	Transform Each…	Transformér hver for sig…
 	Reset Bounding Box	Nulstil afgrænsningsramme
+	Rotate Bounding Box	Rotér afgrænsningsramme
+	Rotate Bounding Box…	Rotér afgrænsningsramme…
 	Arrange	Arrangér
 	Bring to Front	Anbring forrest
 	Bring Forward	Flyt fremad
@@ -1277,6 +1308,8 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	`{f}` is the copy of a document open now	`{f}` er kopien af et dokument, der er åbent nu
 @msg	`{id}` is no writable format (see document.formats)	`{id}` er ikke et skrivbart format (se document.formats)
 @msg	`{id}` isn't a loaded library	`{id}` er ikke et indlæst bibliotek
+@msg	`{file}` has no swatches of its own	`{file}` har ingen egne farveprøver
+@msg	`{_1}` has pattern swatches, which a .vcswatches file can't hold	`{_1}` har mønsterprøver, som en .vcswatches-fil ikke kan indeholde
 @msg	`{key}` has no colours	`{key}` har ingen farver
 @msg	`{key}` holds more than {MAX_EDIT_WORDS} words	`{key}` indeholder mere end {MAX_EDIT_WORDS} ord
 @msg	`{key}` is a design name	`{key}` er et designnavn
@@ -1405,6 +1438,8 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	a line needs at least two points	en linje kræver mindst to punkter
 @msg	a linked JavaScript file is outside the read roots	en linket JavaScript-fil ligger uden for læserødderne
 @msg	a linked image file is outside the read roots	en linket billedfil ligger uden for læserødderne
+@msg	a linked file's export folder is outside the read roots	eksportmappen for en linket fil ligger uden for læserødderne
+@msg	a linked file's editing data can't be read to check it against the read roots	redigeringsdataene for en linket fil kan ikke læses for at kontrollere dem mod læserødderne
 @msg	a name names one asset: give multiple: false, or one object	et navn angiver ét aktiv: angiv multiple: false eller ét objekt
 @msg	a namespace declaration uses a reserved prefix or URI	en navnerumserklæring bruger et reserveret præfiks eller en reserveret URI
 @msg	a namespace qualifier is undefined	en navnerumskvalifikator er udefineret
@@ -1610,6 +1645,7 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	sammensatte figurer tager kurver, sammensatte kurver, grupper, sammensatte figurer, tekst, blandinger og konvolutter
 @msg	compound {_1} must contain exactly one open path to join	sammensat {_1} skal indeholde præcis én åben kurve at sammenføje
 @msg	connect needs a path other than the one extended	connect kræver en anden kurve end den, der forlænges
+@msg	connect needs extend	connect kræver extend
 @msg	connect needs id	connect kræver id
 @msg	connect path has no open end	connect-kurven har ingen åben ende
 @msg	continuation must be an array of path chunks	continuation skal være et array af kurvestykker
@@ -3364,6 +3400,13 @@ liquify-list-end	{0}, {1}	{0} og {1}
 	Previous Document	Forrige dokument
 	Cascade	Kaskade
 	Tile	Fliselæg
+	Tile All Vertically	Fliselæg alle lodret
+	Tile All Horizontally	Fliselæg alle vandret
+	2-Up Layout	Layout med 2
+	3-Up Layout	Layout med 3
+	4-Up Layout	Layout med 4
+	6-Up Layout	Layout med 6
+	Arrange Documents	Arrangér dokumenter
 	Float in Window	Flyd i vindue
 	Float All in Windows	Flyd alle i vinduer
 	Consolidate All Windows	Saml alle vinduer
@@ -3409,6 +3452,11 @@ liquify-list-end	{0}, {1}	{0} og {1}
 	Saturation and brightness	Mætning og lysstyrke
 	Color field	Farvefelt
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
+	Wheel View	Hjulvisning
+	Box View	Kvadratvisning
+	Box Channel	Kvadratets kanal
+	Color box	Farvekvadrat
+	Color Wheel Options	Indstillinger for farvehjul
 	CSS Properties	CSS-egenskaber
 	Document Info	Dokumentoplysninger
 	Flattener Preview	Udjævningsforhåndsvisning
@@ -4145,6 +4193,7 @@ lighting	Light	Lys
 	Play Current Selection	Afspil aktuel markering
 	Save Actions…	Gem handlinger…
 	Load Actions…	Indlæs handlinger…
+	Replace Actions…	Erstat handlinger…
 	Reset Actions	Nulstil handlinger
 	Replace the current actions with the default set?	Vil du erstatte de aktuelle handlinger med standardsættet?
 	Append adds the default set after the current sets instead.	Tilføj tilføjer i stedet standardsættet efter de aktuelle sæt.
@@ -4305,7 +4354,6 @@ digits	Malayalam	Malayalam
 	Composite Fonts	Sammensatte skrifttyper
 	Export Composite Fonts	Eksportér sammensatte skrifttyper
 	Import Composite Fonts	Importér sammensatte skrifttyper
-@msg	each font must be {name, parts}	hver skrifttype skal være {name, parts}
 @msg	unknown key `{k}`; a font takes name and parts	ukendt nøgle `{k}`; en skrifttype tager name og parts
 @msg	each font needs a name	hver skrifttype skal have et navn
 @msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` kan ikke være navnet på en sammensat skrifttype (1 til {COMPOSITE_NAME_MAX} tegn, ingen kontroltegn)
@@ -4318,7 +4366,6 @@ digits	Malayalam	Malayalam
 @msg	two composite fonts are named `{_1}`	to sammensatte skrifttyper hedder `{_1}`
 @msg	`{_1}` is the name of an installed font	`{_1}` er navnet på en installeret skrifttype
 @msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} er sat med `{font}`, en sammensat skrifttype
-@msg	give fonts: [{name, parts}…]	angiv fonts: [{name, parts}…]
 @msg	path is empty	path er tom
 @msg	fonts must be a list of composite fonts	fonts skal være en liste med sammensatte skrifttyper
 @msg	names must be strings	names skal være strenge
@@ -4361,6 +4408,7 @@ digits	Malayalam	Malayalam
 	Underline	Understreget
 	Vertical Scale %	Lodret skalering %
 	Axis	Akse
+	Axis Angle	Aksevinkel
 	ICF Top/Right	ICF øverst/højre
 	ICF Bottom/Left	ICF nederst/venstre
 	Show Font Height Options	Vis indstillinger for skrifthøjde
@@ -4403,6 +4451,7 @@ digits	Malayalam	Malayalam
 	Rule:	Regel:
 	Save changes to {name}	Gem ændringer i {name}
 	Save theme to My Themes	Gem tema i Mine temaer
+	Set the current fill or stroke to the selected color	Sæt den aktuelle udfyldning eller streg til den markerede farve
 	Set the selected color to the current color	Sæt den markerede farve til den aktuelle farve
 	Copy All Styles	Kopiér alle typografier
 	Exported {path}	Eksporterede {path}
@@ -4618,7 +4667,7 @@ digits	Malayalam	Malayalam
 	Stroke: click for swatches, Shift-click for the color mixer	Kontur: klik for farveprøver, Skift-klik for farveblanderen
 	This panel is on the roadmap (see the parity plan).	Dette panel er på vejkortet (se paritetsplanen).
 	Open a document to navigate it.	Åbn et dokument for at navigere i det.
-	View Artboard Only	Vis kun tegnebræt
+	View Artboard Contents Only	Vis kun tegnebrættets indhold
 	Contextual Alternates	Kontekstuelle alternativer
 	Default Figure	Standardcifre
 	Discretionary Ligatures	Valgfrie ligaturer
@@ -4761,7 +4810,7 @@ digits	Malayalam	Malayalam
 	Overprint Preview (separations)	Forhåndsvisning af overtryk (separationer)
 	Show All Plates	Vis alle plader
 	Show all plates	Vis alle plader
-	Show/hide plate (Alt-click: only this plate)	Vis/skjul plade (Alt-klik: kun denne plade)
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	Vis/skjul plade (Alt-klik: kun denne plade; Alt-klik igen: alle plader)
 	Simulate Paper	Simulér papir
 	Use Black Point Compensation	Brug sortpunktskompensation
 	Working CMYK (don't tag)	Arbejds-CMYK (mærk ikke)
@@ -4801,6 +4850,8 @@ digits	Malayalam	Malayalam
 	Tip extends past the end point	Spidsen rager ud over endepunktet
 	Tip on the end point	Spidsen på endepunktet
 	Variable Width Profile	Variabel breddeprofil
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Stregens pensel beholder sin egen størrelse, så et breddeprofil ændrer den ikke. Fjern penslen for at bruge et profil.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Stregens pensel beholder sin egen størrelse, så et breddeprofil ændrer den ikke. Fjern penslen for at bruge et profil.
 	Weight:	Vægt:
 	Art using a deleted global swatch keeps its colour.	Grafik, der bruger en slettet global farveprøve, bevarer sin farve.
 	Color Group: {name}	Farvegruppe: {name}
@@ -4910,6 +4961,10 @@ digits	Malayalam	Malayalam
 	Flip Horizontal	Spejl vandret
 	Flip Vertical	Spejl lodret
 	Polygon Properties:	Polygonegenskaber:
+	Line Properties:	Linjeegenskaber:
+	Line Length:	Linjelængde:
+	Line Angle:	Linjevinkel:
+	Constrain Pie Angle	Fasthold udsnittets vinkel
 	Rectangle Properties:	Rektangelegenskaber:
 	Shape Properties:	Figuregenskaber:
 	Shape Properties	Figuregenskaber
@@ -4951,6 +5006,7 @@ digits	Malayalam	Malayalam
 	Scatter:	Spredning:
 	Rotation:	Rotation:
 	Rotation relative to:	Rotation i forhold til:
+	Hue Jitter:	Nuancevariation:
 	Brush Scale Options	Indstillinger for penselskalering
 	Scale Proportionately	Skalér proportionalt
 	Stretch to Fit Stroke Length	Stræk til konturens længde
@@ -4989,6 +5045,7 @@ digits	Malayalam	Malayalam
 	Size:	Størrelse:
 	Calligraphic Brush Options	Indstillinger for kalligrafipensel
 	Bristle Brush Options	Indstillinger for børstepensel
+	Roundness	Rundhed
 	Roundness:	Rundhed:
 	Shape:	Form:
 	Bristle Length:	Børstelængde:
@@ -5306,6 +5363,7 @@ digits	Malayalam	Malayalam
 	BLANK DOCUMENT PRESETS	TOMME DOKUMENTFORUDINDSTILLINGER
 	Bleed	Beskæring
 	Change to Right-to-Left Layout	Skift til højre-til-venstre-layout
+	Columns	Kolonner
 	Columns:	Kolonner:
 	Documents you create appear here.	Dokumenter, du opretter, vises her.
 	More Settings	Flere indstillinger
@@ -5439,6 +5497,9 @@ digits	Malayalam	Malayalam
 	Open a document to preview its pages	Åbn et dokument for at forhåndsvise dets sider
 	Output › Mode	Output › Tilstand
 	Overprint and Transparency Flattener Options	Indstillinger for overtryk og udfladning af gennemsigtighed
+	Custom…	Brugerdefineret…
+	Custom Transparency Flattener Options	Brugerdefinerede indstillinger for udfladning af gennemsigtighed
+	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	EPS har ingen alfa-gennemsigtighed, og Overtryk bestemmer, om overtryk bevares.
 	Place the pages with the placement again	Placér siderne igen med placeringen
 	Placement:	Placering:
 	Preserve CMYK Numbers	Bevar CMYK-tal
@@ -5488,14 +5549,19 @@ digits	Malayalam	Malayalam
 	Around Object	Omkring objektet
 	Background:	Baggrund:
 	Changing these settings changes how raster effects look when exported, flattened or expanded.	Ændring af disse indstillinger ændrer, hvordan rastereffekter ser ud, når de eksporteres, udflades eller udvides.
+	Add Around	Tilføj omkring objektet
+	Anti Alias	Antialiasering
+	Color Model	Farvemodel
 	Color Model:	Farvemodel:
 	Create Clipping Mask	Opret klipemaske
 	Preserve Spot Colors	Bevar spotfarver
+	Resolution	Opløsning
 	Resolution:	Opløsning:
 	Transparent	Gennemsigtig
 	Layout Order:	Layoutrækkefølge:
 	Change to Left-to-Right Layout	Skift til venstre-til-højre-layout
 	Artboards: {n}	Tegnebrætter: {n}
+	Rows	Rækker
 	Rows:	Rækker:
 	Assign	Tildel
 	Color Group:	Farvegruppe:
@@ -5644,6 +5710,8 @@ antiAlias	Sharp	Skarp
 	Every option matches {base}.	Alle indstillinger matcher {base}.
 	Files of a PDF standard can't be password-protected.	Filer med en PDF-standard kan ikke beskyttes med adgangskode.
 	Files of this standard tag their colours with ICC profiles.	Filer med denne standard mærker deres farver med ICC-profiler.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	Filer med denne standard mærker deres farver med ICC-profiler, undtagen CMYK-farver i outputintentens profil, som skrives som DeviceCMYK.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	Med »Medtag ikke profiler« og en CMYK-outputintent skrives alle CMYK-farver som DeviceCMYK, medmindre de konverteres til en CMYK-destination med en anden profil.
 	Flattener preset:	Forudindstilling til fladgøring:
 	General › Thumbnails	Generelt › Miniaturer
 	Grayscale images	Gråtonebilleder
@@ -5827,6 +5895,12 @@ antiAlias	Sharp	Skarp
 	LF (macOS, Linux)	LF (macOS, Linux)
 	CRLF (Windows)	CRLF (Windows)
 	Text Export Options	Indstillinger for teksteksport
+	Chinese Big 5	Kinesisk Big 5
+	Cyrillic	Kyrillisk
+	Greek	Græsk
+	Turkish	Tyrkisk
+	Baltic	Baltisk
+	Central European	Centraleuropæisk
 	Character Set:	Tegnsæt:
 	Join the lines of each paragraph	Forbind linjerne i hvert afsnit
 	Line Breaks	Linjeskift
@@ -5856,6 +5930,9 @@ antiAlias	Sharp	Skarp
 	Variable Options	Indstillinger for variabel
 	Define a variable first	Definér først en variabel
 	Adjust Adjoining Width Points	Justér tilstødende breddepunkter
+	Incoming	Indgående
+	Outgoing	Udgående
+	Single Width Only	Kun én bredde
 	Keep both sides the same width	Bevar samme bredde på begge sider
 	Side 1:	Side 1:
 	Side 2:	Side 2:
@@ -5956,9 +6033,18 @@ theme	Appearance	Udseende
 	Break Link to Symbol	Bryd link til symbol
 	Brush Definition	Penseldefinition
 	Brush Options…	Penselindstillinger…
+	Options of Selected Object…	Indstillinger for markeret objekt…
+	Options of Selected Object	Indstillinger for markeret objekt
+@msg	no path painted with a brush is selected	ingen sti malet med en pensel er markeret
+@msg	the selected paths are painted with brushes of different types	de markerede stier er malet med pensler af forskellige typer
+@msg	give `params` or `reset`, not both	angiv `params` eller `reset`, ikke begge
+@msg	a bristle brush has no options of its own on a path	en børstepensel har ingen egne indstillinger på en sti
 	Current Brush	Aktuel pensel
 	Current Symbol	Aktuelt symbol
 	Delete Brush	Slet pensel
+	Delete Color	Slet farve
+	Restore Generated Table	Gendan genereret tabel
+	Unshift All Colors	Fjern skift af alle farver
 	Delete Symbol	Slet symbol
 	Delete the selected symbol?	Vil du slette det markerede symbol?
 	Delete the selected symbols?	Vil du slette de markerede symboler?
@@ -6235,6 +6321,7 @@ theme	Appearance	Udseende
 	Select Art	Markér grafik
 	Set Current Layer	Angiv aktuelt lag
 	Flatten Artwork	Fladgør grafik
+	Locate Layer	Lokalisér lag
 	Locate Object	Lokalisér objekt
 	Lock Others	Lås andre
 	Merge Selected	Flet valgte
@@ -6411,6 +6498,7 @@ theme	Appearance	Udseende
 	90° & 45° Angles	90° & 45°-vinkler
 	90° Angles	90°-vinkler
 	Additional Plug-ins Folder	Yderligere mappe med plug-ins
+	Plug-in Instruction Budget	Instruktionsbudget for plug-ins
 	Additional Fonts Folder	Yderligere mappe med skrifttyper
 	Alignment Guides	Justeringshjælpelinjer
 	Anchor Points, Handle, and Bounding Box Display	Visning af ankerpunkter, håndtag og afgrænsningsboks
@@ -6437,6 +6525,7 @@ theme	Appearance	Udseende
 	Data Recovery	Datgendannelse
 	Default Language	Standardsprog
 	Disable Auto Add/Delete	Deaktivér automatisk tilføjelse/sletning
+	Interpolate Control Points When Moving Anchors	Interpolér retningshåndtag ved flytning af ankerpunkter
 	Display All Blacks Accurately	Vis alle sorte nøjagtigt
 	Display All Blacks as Rich Black	Vis alle sorte som rich black
 	Display Bitmaps as Anti-aliased Images in Pixel Preview	Vis bitmaps som antialiaserede billeder i pixelforhåndsvisning
@@ -6453,6 +6542,7 @@ theme	Appearance	Udseende
 	Enable Rubber Band for	Aktivér gummibånd for
 	Enable Touch Gestures	Aktivér berøringsbevægelser
 	Switch Selection and Drawing Modes	Skift mellem markerings- og tegnetilstand
+	Select Last Selection Tool	Vælg det seneste markeringsværktøj
 	Enable Touch Workspace	Aktivér touch-arbejdsområde
 	English: UK	Engelsk: UK
 	Every (minutes)	Hvert (minut)
@@ -6524,6 +6614,9 @@ theme	Appearance	Udseende
 	Printing / Exporting	Udskrivning / eksport
 	Real-time Drawing and Editing	Tegning og redigering i realtid
 	Use Monitor Profile for Canvas	Brug skærmprofil til canvas
+	Refresh Monitor Profile	Opdatér skærmprofil
+@msg	turn on Use Monitor Profile for Canvas first	slå først „Brug skærmprofil til canvas“ til
+@msg	this build doesn't read display profiles	denne version læser ikke skærmprofiler
 	The canvas is drawn in sRGB.	Canvasset tegnes i sRGB.
 	Canvas display profile:	Canvassets skærmprofil:
 	The system matches the window to the display's colors.	Systemet tilpasser vinduet til skærmens farver.
@@ -6585,6 +6678,7 @@ theme	Appearance	Udseende
 	Scroll Sideways with Cmd/Ctrl + Wheel	Rul vandret med Cmd/Ctrl + musehjul
 	Scrub Numeric Fields by Dragging	Juster numeriske felter ved at trække
 	Linux Display Server	Linux-visningsserver
+	Low-Latency Drawing	Tegning med lav latens
 	Print Preview	Udskriftsvisning
 	Print Setup	Udskriftsopsætning
 	Bitmap	Bitmap
@@ -6919,6 +7013,12 @@ font-technology	Variable	Variable
 	Search commands, tools, panels and effects…	Søg i kommandoer, værktøjer, paneler og effekter…
 	No commands match	Ingen kommandoer passer
 	{pos} of {total}: {name}	{pos} af {total}: {name}
+	No menu item	Intet menupunkt
+	Toolbar	Værktøjslinje
+	{toolbar}, in the {tool} group	{toolbar}, i gruppen {tool}
+	In the menu bar: {path}	I menulinjen: {path}
+	In the {group} group: press and hold to open it	I gruppen {group}: tryk og hold for at åbne den
+	{home}, not shown now	{home}, vises ikke nu
 @plural	{n} result|{n} results	{n} resultat|{n} resultater
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} af {n} resultat. Skriv videre for at indsnævre dem.|{shown} af {n} resultater. Skriv videre for at indsnævre dem.
 	Recent Commands	Seneste kommandoer
@@ -6955,6 +7055,7 @@ font-technology	Variable	Variable
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Musehjulet med Cmd/Ctrl holdt nede ruller lærredet sidelæns.
 	Dragging sideways on a numeric field's label changes the field's value.	Når du trækker sidelæns på et talfelts etiket, ændres feltets værdi.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	En rotationsbevægelse med to fingre på en pegeplade roterer visningen af lærredet.
+	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Når du flytter ankerpunkter, beholder hver kurve med ét flyttet endepunkt sin form i forhold til sine endepunkter.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Når du holder et værktøjs genvejstast nede, er værktøjet valgt, indtil du slipper, og derefter vælges det forrige værktøj igen.
 	Shows the bounding box while you move the selection or draw a shape.	Viser afgrænsningsboksen, mens du flytter markeringen eller tegner en form.
 	Create Trim Marks draws Japanese-style marks instead of Roman ones.	Opret beskæringsmærker tegner mærker i japansk stil i stedet for romerske.
@@ -6985,6 +7086,29 @@ font-technology	Variable	Variable
 	The unit for East Asian type measurements, which no field uses yet.	Enheden for mål i østasiatisk tekst, som intet felt bruger endnu.
 	When on, a number typed without a unit into a field in picas is read in points.	Når den er slået til, læses et tal, der skrives uden enhed i et felt i pica, i punkter.
 	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	Med XML-id vises objektnavne som XML-id'er i Lag, Variabler og Lagindstillinger.
+	The step for type size and leading: Cmd/Ctrl+Shift+. and Cmd/Ctrl+Shift+, change the size by one step, or five with Alt too; in horizontal type, Alt with the Up or Down Arrow changes the leading by one step, or five with Cmd/Ctrl.	Trinnet for tekststørrelse og linjeafstand: Cmd/Ctrl+Skift+. og Cmd/Ctrl+Skift+, ændrer størrelsen ét trin, eller fem med Alt også; i vandret tekst ændrer Alt med pil op eller ned linjeafstanden ét trin, eller fem med Cmd/Ctrl.
+	The step for tracking and kerning, in thousandths of an em: in horizontal type, Alt with the Left or Right Arrow changes the kerning at the caret or the tracking of the selected text by one step, or five with Cmd/Ctrl.	Trinnet for sporing og knibning, i tusindedele em: i vandret tekst ændrer Alt med pil venstre eller højre knibningen ved markøren eller sporingen af den markerede tekst ét trin, eller fem med Cmd/Ctrl.
+	The step for baseline shift: in horizontal type, Alt and Shift with the Up or Down Arrow move the baseline by one step, or five with Cmd/Ctrl.	Trinnet for forskydning af grundlinjen: i vandret tekst flytter Alt og Skift med pil op eller ned grundlinjen ét trin, eller fem med Cmd/Ctrl.
+	Shows the options for Japanese and other East Asian type in the Character, Paragraph, OpenType and Glyphs panels, and Type › Composite Fonts.	Viser indstillingerne for japansk og anden østasiatisk tekst i panelerne Tegn, Afsnit, OpenType og Glyffer samt kommandoen Sammensatte skrifttyper.
+	Shows the options for Arabic, Hebrew and Indic type in the Character and Paragraph panels, such as paragraph direction, kashidas and digits.	Viser indstillingerne for arabisk, hebraisk og indisk tekst i panelerne Tegn og Afsnit, for eksempel afsnitsretning, kashidaer og cifre.
+	The selection tools select type only on its baseline, its area's frame or its path, not anywhere inside its box.	Markeringsværktøjerne markerer kun tekst på dens grundlinje, områdetekstens ramme eller dens sti, ikke hvor som helst inden for dens boks.
+	Font menus list each font by its English name; off, a font that also has a name in its own language shows that name.	Skrifttypemenuerne viser hver skrifttype med dens engelske navn; slået fra viser en skrifttype, der også har et navn på sit eget sprog, det navn.
+	New area type starts with Auto Size on, so a rectangular frame of horizontal type grows or shrinks in height to fit its text.	Ny områdetekst starter med Automatisk størrelse slået til, så en rektangulær ramme med vandret tekst vokser eller skrumper i højden, så teksten passer.
+	Font lists and the Type › Font menu show a sample of each font beside its name.	Skrifttypelister og menuen Skrifttype viser en prøve på hver skrifttype ved siden af dens navn.
+	Font samples are drawn in dark type on white, whatever the interface's brightness; it applies only while in-menu font previews are on.	Skrifttypeprøver tegnes med mørk tekst på hvidt uanset grænsefladens lysstyrke; det gælder kun, mens forhåndsvisninger af skrifttyper i menuer er slået til.
+	How tall each row is in the font lists of font fields, such as the Character panel's, and so how large each sample is.	Hvor høj hver række er i listerne for skrifttypefelter, som det i panelet Tegn, og dermed hvor stor hver prøve er.
+	How many of the fonts used last, from 1 to 15, Type › Recent Fonts and the font lists show, newest first.	Hvor mange af de senest brugte skrifttyper, fra 1 til 15, Seneste skrifttyper og skrifttypelisterne viser, den nyeste først.
+	When you change the font or font style of text, characters the new font has no glyph for keep the font they had.	Når du skifter skrifttype eller skriftsnit for tekst, beholder tegn, som den nye skrifttype ikke har en glyf til, den skrifttype, de havde.
+	A pink highlight on the canvas marks glyphs that OpenType features replaced, such as ligatures; it does not print or export.	En lyserød fremhævning på lærredet markerer glyffer, som OpenType-funktioner har erstattet, for eksempel ligaturer; den udskrives og eksporteres ikke.
+	With the Type tool, selecting one character shows a row of its alternate glyphs beside it on the canvas to choose from.	Med tekstværktøjet viser markering af et enkelt tegn en række af dets alternative glyffer ved siden af det på lærredet at vælge imellem.
+	A pink highlight on the canvas marks text drawn in a substitute font because its font is missing; it does not print or export.	En lyserød fremhævning på lærredet markerer tekst, der tegnes med en erstatningsskrifttype, fordi dens skrifttype mangler; den udskrives og eksporteres ikke.
+	New type made with a Type tool starts with placeholder text, selected, so typing replaces it.	Ny tekst, der laves med et tekstværktøj, starter med markeret pladsholdertekst, som det, du skriver, erstatter.
+	Typing a list marker such as 1. or * and then a space at the start of a paragraph makes the paragraph a list.	Hvis du skriver en listemarkør som 1. eller * og derefter et mellemrum i starten af et afsnit, bliver afsnittet en liste.
+	Fonts in this folder show in the font menus and can be used without being installed.	Skrifttyper i denne mappe vises i skrifttypemenuerne og kan bruges uden at være installeret.
+	Applying a graphic style to type removes the characters' own fill or stroke where the style has one, so the style's paint shows.	Når en grafisk stil anvendes på tekst, fjernes tegnenes egen udfyldning eller streg, hvor stilen har en, så stilens maling ses.
+	Align and Distribute measure point type by the ink of its glyphs instead of its em box.	Justér og Fordel måler punkttekst efter glyffernes blæk i stedet for dens em-boks.
+	Align and Distribute measure area type by the ink of its glyphs instead of its frame.	Justér og Fordel måler områdetekst efter glyffernes blæk i stedet for dens ramme.
+	The bounding box and the Transform panel measure point type by the ink of its glyphs instead of its em box.	Afgrænsningsboksen og panelet Transformér måler punkttekst efter glyffernes blæk i stedet for dens em-boks.
 	Snaps drawing, moving and scaling to the grid's subdivisions, even while the grid is hidden; while it is on, Snap to Pixel does not apply.	Fastgør tegning, flytning og skalering til gitterets underinddelinger, også mens gitteret er skjult; mens den er slået til, gælder Fastgør til pixel ikke.
 	The color of guides that are not selected; an artboard with a Guide Label draws its own guides in the label's color instead.	Farven på hjælpelinjer, der ikke er markeret; en kunstplade med en hjælpelinjeetiket tegner sine egne hjælpelinjer i etikettens farve.
 	Draws guides as solid lines or as dots, including the guides already in the document.	Tegner hjælpelinjer som hele linjer eller som prikker, også de hjælpelinjer, der allerede er i dokumentet.
@@ -7012,6 +7136,8 @@ font-technology	Variable	Variable
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Hvor tæt på skærmen markøren eller et trukket punkt skal komme på grafik, for at de smarte hjælpelinjer fastgør til den; afstanden er den samme ved alle zoomniveauer.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Fastgør enden af et linjesegment eller en cirkel tegnet fra midten, så den rører en nærliggende kurve.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Fastgør enden af et linjesegment, så det møder et nærliggende lige segment i en ret vinkel.
+	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Viser hvert udsnits nummer i en boks i dets øverste venstre hjørne på lærredet; når den er slået fra, vises udsnittenes konturer stadig.
+	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Farven på konturerne af bruger- og objektudsnit og på boksene med deres numre; automatiske udsnit bruger en svagere nuance af den.
 	Reset all preferences to their defaults?	Nulstil alle præferencer til standard?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Standardværdierne anvendes, når du klikker på OK i Præferencer. Annullér der beholder dine nuværende præferencer.
 	Smaller ↔ Larger	Mindre ↔ Større
@@ -7028,6 +7154,8 @@ font-technology	Variable	Variable
 	Couldn't paste from the clipboard: {e}	Kunne ikke indsætte fra udklipsholderen: {e}
 	Channel	Kanal
 	Circle	Cirkel
+	Circle Tool	Cirkelværktøj
+	Circle too large	Cirklen er for stor
 	Clip to Art	Beskær til grafik
 	Colorize	Farvelæg
 	Gamma	Gamma
@@ -7244,6 +7372,13 @@ imageTrace	Outline	Kontur
 	Show External Script Warning	Vis advarsel om eksterne scripts
 	A Script Is Running	Et script kører
 	Script Alert	Scriptadvarsel
+	Script File Access	Scriptadgang til filer
+	The script asks to read a file you choose.	Scriptet beder om at læse en fil, du vælger.
+	The script asks to read and write a file you choose.	Scriptet beder om at læse og skrive en fil, du vælger.
+	The script asks to read and write a folder you choose, with everything in it.	Scriptet beder om at læse og skrive en mappe, du vælger, med alt indhold.
+	Allow Once	Tillad én gang
+	Always Allow This Script	Tillad altid dette script
+	Deny	Afvis
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Et script kan ændre de åbne dokumenter og skrive filer gennem de kommandoer, det kører. Kør kun scripts, du stoler på.
 	Do not show this warning again	Vis ikke denne advarsel igen
 	Stop the script and undo what it did? Then quit again.	Stop scriptet og fortryd det, det har gjort? Afslut derefter igen.
@@ -7319,6 +7454,7 @@ imageTrace	Outline	Kontur
 @msg	Saved {path}	Gemte {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	Markér tekst, eller klik i tekst med tekstværktøjet, for at indsætte glyffer
 @msg	Shape Builder: no region under the pointer	Figurbygger: intet område under markøren
+@msg	Shape Builder: select all paths you want to merge	Figurbygger: markér alle kurver, du vil flette
 @msg	Shape Builder: select paths or compound paths	Figurbygger: markér kurver eller sammensatte kurver
 @msg	Show All Hidden Attributes: nothing is hidden	Vis alle skjulte attributter: intet er skjult
 @msg	Split Into Grid: select paths large enough for the grid	Opdel i gitter: markér kurver, der er store nok til gitteret
@@ -7429,6 +7565,7 @@ imageTrace	Outline	Kontur
 @msg	bad trailer	ugyldig trailer
 @msg	balance must be between 0 and 100	balance skal være mellem 0 og 100
 @msg	batch step {_1} (`{id}`) failed: {e}	batchtrin {_1} (`{id}`) mislykkedes: {e}
+@msg	action step {_1} (`{id}`) failed: {reason}	handlingstrin {_1} (`{id}`) mislykkedes: {reason}
 @msg	brightness must be dark|mediumDark|mediumLight|light	brightness skal være dark|mediumDark|mediumLight|light
 @msg	can't encode the document: {0}	kan ikke kode dokumentet: {0}
 @msg	can't parse shortcut `{c}`	kan ikke parse genvejen `{c}`
@@ -7446,6 +7583,8 @@ imageTrace	Outline	Kontur
 @msg	choose a folder to export to	vælg en mappe at eksportere til
 @msg	choose a location for the package	vælg en placering til pakken
 @msg	clipboard is empty	udklipsholderen er tom
+@msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: mindst én farve skal blive i farvetabellen
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted: `{k}` angiver en farve, som en anden nøgle også angiver
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` er ikke en farve som "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: højst {MAX_TABLE} farver
 @msg	command `{0}` is not available right now: {1}	kommandoen `{0}` er ikke tilgængelig lige nu: {1}
@@ -7503,8 +7642,8 @@ imageTrace	Outline	Kontur
 @msg	no active document	intet aktivt dokument
 @msg	no active perspective plane	intet aktivt perspektivplan
 @msg	no anchor points selected	ingen ankerpunkter er markeret
-@msg	`points` must be three [x, y] pairs of numbers	`points` skal være tre talpar [x, y]
-@msg	direct-select three anchor points, or give `points`	direkte markér tre ankerpunkter, eller angiv `points`
+@msg	`points` must be two or three [x, y] pairs of numbers	`points` skal være to eller tre talpar [x, y]
+@msg	direct-select two or three anchor points, or give `points`	direkte markér to eller tre ankerpunkter, eller angiv `points`
 @msg	no circle passes through these points: two are the same or all three lie on one line	ingen cirkel går gennem disse punkter: to er ens, eller alle tre ligger på én linje
 @msg	no app to open files here	ingen app til at åbne filer her
 @msg	no artboard	ingen tegneflade
@@ -7595,6 +7734,9 @@ imageTrace	Outline	Kontur
 @msg	no such user library	intet sådant brugerbibliotek
 @msg	no such view	ingen sådan visning
 @msg	no such width point	intet sådant breddepunkt
+@msg	`single` must be `incoming` or `outgoing`	`single` skal være `incoming` eller `outgoing`
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` og `outIndex` skal være de to halvdele af ét diskontinuert breddepunkt
+@msg	a discontinuous width point keeps its place	et diskontinuert breddepunkt bevarer sin placering
 @msg	no swatch `{name}`	ingen farveprøve `{name}`
 @msg	no swatch library `{l}` (see swatch.library.list)	intet farveprøvebibliotek `{l}` (se swatch.library.list)
 @msg	no symbol instances selected	ingen symbolforekomster markeret
@@ -7831,6 +7973,8 @@ imageTrace	Outline	Kontur
 @msg	{label}: lost track of a shape's style	{label}: mistede styr på en forms stil
 @msg	{label}: select paths	{label}: markér stier
 @msg	{label}: select paths, compound paths, groups or text	{label}: markér stier, sammensatte stier, grupper eller tekst
+@msg	a line or other open path that encloses no area does not change the result's shape; to include it, apply Object › Path › Outline Stroke to it first	en linje eller anden åben kurve, der ikke omslutter noget område, ændrer ikke resultatets form; anvend først Objekt › Kurve › Streg til kontur på den for at tage den med
+@msg	{label} produced an empty result: a line or other open path encloses no area; to include it, apply Object › Path › Outline Stroke to it first	{label} gav et tomt resultat: en linje eller anden åben kurve omslutter intet område; anvend først Objekt › Kurve › Streg til kontur på den for at tage den med
 @msg	{label}…	{label}…
 @msg	{name}: CRC mismatch	{name}: CRC matcher ikke
 @msg	{name}: no local header	{name}: ingen lokal header
@@ -7857,6 +8001,9 @@ imageTrace	Outline	Kontur
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Kasserede {n} gendannet dokument|Kasserede {n} gendannede dokumenter
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Gendannede {n} dokument: gem det for at beholde det|Gendannede {n} dokumenter: gem dem for at beholde dem
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Åbnede med {n} note: {first}|Åbnede med {n} noter: {first}
+@msgplural	Copied with {n} note: {first}|Copied with {n} notes: {first}	Kopierede med {n} note: {first}|Kopierede med {n} noter: {first}
+@msgplural	Cut with {n} note: {first}|Cut with {n} notes: {first}	Klippede med {n} note: {first}|Klippede med {n} noter: {first}
+@msgplural	Traced with {n} note: {first}|Traced with {n} notes: {first}	Sporede billedet med {n} note: {first}|Sporede billedet med {n} noter: {first}
 @msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Åbnede med {n} note: {first}|{notice}. Åbnede med {n} noter: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Gemte {path} med {n} note: {first}|Gemte {path} med {n} noter: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Indlejrede {n} billede; {missing} mangler: link dem igen først|Indlejrede {n} billeder; {missing} mangler: link dem igen først
@@ -7883,6 +8030,8 @@ imageTrace	Outline	Kontur
 @msg	All colors are within the CMYK gamut	Alle farver er inden for CMYK-farveomfanget
 @msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	{n} farve er uden for CMYK-farveomfanget|{n} farver er uden for CMYK-farveomfanget
 @msg	Unembedded to {_1}	Fjernede indlejring til {_1}
+@msgplural	Unembedded {n} image to {folder}|Unembedded {n} images to {folder}	Fjernede indlejring af {n} billede til {folder}|Fjernede indlejring af {n} billeder til {folder}
+@msg	every numbered name for {name} is taken in that folder	alle nummererede navne til {name} er optaget i den mappe
 @msg	Reset {_1}	Nulstillede {_1}
 @msg	Sent to {_1}	Sendte til {_1}
 @msg	{_1} files	{_1}-filer
@@ -7896,6 +8045,8 @@ imageTrace	Outline	Kontur
 @msg	Reload the page to go on (changes not saved yet may be lost).	Genindlæs siden for at fortsætte (ændringer, der endnu ikke er gemt, kan gå tabt).
 @msg	tool (a tool id) is required	tool (et værktøj-id) er påkrævet
 @msg	{tool} isn't in a toolbar group of several tools	{tool} er ikke i en værktøjsgruppe med flere værktøjer
+@msg	Presentation Mode hides the toolbars: change the screen mode to show them	Præsentationstilstand skjuler værktøjslinjerne: skift skærmtilstand for at vise dem
+@msg	Tab has hidden the toolbars: press Tab to show them	Tab har skjult værktøjslinjerne: tryk på Tab for at vise dem
 @msg	onto must name a panel floating in another group	onto skal angive et panel, der flyder i en anden gruppe
 @msg	below and above must name a panel floating in another group	below og above skal angive et panel, der flyder i en anden gruppe
 @msg	give only one of onto, below and above	angiv kun én af onto, below og above
@@ -8238,6 +8389,7 @@ imageTrace	Outline	Kontur
 	Ascent	Overhøjde
 	Cap Height	Versalhøjde
 	x Height	x-højde
+	Em Box Height	Em-felthøjde
 	Justify	Justér
 	First Baseline	Første basislinje
 	Vertical Align	Lodret justering
@@ -8345,6 +8497,7 @@ mark-style	Japanese	Japansk
 	Cove	Cove
 	Depth	Dybde
 	Front	Forfra
+	Side	Siden
 	Isometric Bottom	Isometrisk bund
 	Isometric Left	Isometrisk venstre
 	Isometric Right	Isometrisk højre
@@ -8563,6 +8716,8 @@ mark-style	Japanese	Japansk
 	Reset Tracking and Kerning	Nulstil sporing og kerning
 	Reset Horizontal Scale	Nulstil vandret skalering
 	Highlight Font Name	Fremhæv skrifttypenavn
+	Highlight Font Size	Fremhæv skriftstørrelse
+	Other…	Anden…
 	Highlight Kerning	Fremhæv kerning
 	Highlight Tracking	Fremhæv sporing
 @msg	span must be "object" or "selection", got {v}	span skal være "object" eller "selection", fik {v}
@@ -8583,6 +8738,13 @@ mark-style	Japanese	Japansk
 @msg	{k} has control characters	{k} indeholder kontroltegn
 @msg	{k} has control characters or line breaks	{k} indeholder kontroltegn eller linjeskift
 @msg	variables that aren't text were left out: {kinds}	variabler, der ikke er tekst, blev udeladt: {kinds}
+variable-kind	Visibility	Synlighed
+variable-kind	Linked File	Koblet fil
+variable-kind	Graph Data	Grafdata
+variable-kind	Unknown	Ukendt
+variable-list-two	{0}, {1}	{0} og {1}
+variable-list-middle	{0}, {1}	{0}, {1}
+variable-list-end	{0}, {1}	{0} og {1}
 @msg	a new document won't read these variables back with their kind: {names}	et nyt dokument læser ikke disse variabler tilbage med deres type: {names}
 @msg	a new document refuses this file because of these variables: {names}	et nyt dokument afviser denne fil på grund af disse variabler: {names}
 @msg	the header `{header}` for `{name}` would read back as the variable `{other}`: rename one of them	overskriften `{header}` for `{name}` ville blive læst som variablen `{other}`: omdøb en af dem
@@ -8628,6 +8790,11 @@ mark-style	Japanese	Japansk
 	Edge Only	Kun kant
 	Overlay Edge	Overlæg kant
 	Path Length	Stilængde
+	Grid Size	Gitterstørrelse
+	Grid Colors	Gitterfarver
+	Flattener Preset	Forudindstilling til fladgøring
+	X	X
+	Y	Y
 @msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	filens lag blev ikke læst ({_1}): den kommer ind som sin side, i ét lag
 @msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	filens lag blev ikke læst fra dens redigeringsdata ({_1}): de kommer fra dens PDF-del
 @msg	the file's variable bindings weren't all read (bindings skipped: {_1}): those objects aren't bound to their variables	ikke alle filens variabelbindinger blev læst (udeladte bindinger: {_1}): de objekter er ikke bundet til deres variabler
@@ -8635,6 +8802,8 @@ mark-style	Japanese	Japansk
 @msg	the file's variable library couldn't be read: the Variables panel doesn't list it	filens variabelbibliotek kunne ikke læses: variabelpanelet viser det ikke
 @msg	a variable of unknown kind can't be bound to objects	en variabel af ukendt type kan ikke bindes til objekter
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` skal være grayscale, rgb, hsb, cmyk eller websafe
+@msg	`view` must be wheel or box	`view` skal være wheel eller box
+@msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` skal være hue, saturation, brightness, red, green eller blue
 @msg	the Color Picker is not open	farvevælgeren er ikke åben
 @msg	the screen color sampler is already open	skærmfarvesampleren er allerede åben
 @msg	this system has no screen color sampler	dette system har ingen skærmfarvesampler
@@ -9463,6 +9632,12 @@ anchor	Points:	Punkter:
 @msg	`mode` must be "free", "keepAngles" or "symmetric"	`mode` skal være "free", "keepAngles" eller "symmetric"
 @msg	`{key}` must be [x, y]	`{key}` skal være [x, y]
 
+# Unit Converter add-on (Object › Plug-ins › Unit Converter): its panel.
+	Unit Converter	Enhedsomregner
+	Unit Converter Panel	Panelet Enhedsomregner
+	Copy with Units	Kopiér med enheder
+	From Selection	Fra markering
+
 # Color Effects add-on: Select by Color Kind.
 	Select by Color Kind	Markér efter farvetype
 	Objects with Spot Colors	Objekter med spotfarver
@@ -9664,6 +9839,14 @@ breakText	Glyphs	Glyffer
 	Remove Gaps	Fjern mellemrum
 @msg	that makes too many pieces (at most 100000): make the dashes longer	det giver for mange stykker (højst 100000): gør stregerne længere
 @msg	select paths, or segments, to divide	vælg stier eller segmenter, der skal opdeles
+# Path Precision Tools add-on: Smooth Bridge.
+	Smooth Bridge…	Blød bro…
+	Smooth Bridge	Blød bro
+	Keep Originals	Behold originaler
+@msg	select two circles to bridge	vælg to cirkler, der skal forbindes
+@msg	one circle is inside the other	den ene cirkel er inden i den anden
+@msg	the circles are too far apart for this radius: raise the radius	cirklerne er for langt fra hinanden til denne radius: gør radius større
+@msg	the circles are too far apart for this radius	cirklerne er for langt fra hinanden til denne radius
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	Fælles tangenter…
 	Common Tangents	Fælles tangenter
@@ -9680,6 +9863,7 @@ breakText	Glyphs	Glyffer
 @msg	One path lies inside the other, so they have no common tangents	Den ene sti ligger inden i den anden, så de har ingen fælles tangenter
 @msg	The paths overlap, so they have no internal tangents	Stierne overlapper, så de har ingen indre tangenter
 @msg	One path lies inside the other, so they have no internal tangents	Den ene sti ligger inden i den anden, så de har ingen indre tangenter
+@msg	The point lies inside the path, so it has no tangents	Punktet ligger inden i stien, så det har ingen tangenter
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Udvid streger til stier
 @msg	select paths with dashed strokes to expand	vælg stier med stiplet streg, der skal udvides
@@ -10024,4 +10208,19 @@ breakText	Glyphs	Glyffer
 @msg	A panel is not joined to the rest by a crease.	Et panel er ikke forbundet med resten af en rillelinje.
 @msg	A fold line is on a non-printing layer.	En foldelinje ligger på et lag, der ikke udskrives.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Paneler: {panels}, hængsler: {hinges}, fejl: {errors}, advarsler: {warnings}
+	Fold Preview	Forhåndsvisning af foldning
+	Fold	Foldning
+	Show Fold Lines	Vis foldelinjer
+	Three-Quarter	Trekvart
+	Open a document to preview its folded shape.	Åbn et dokument for at se dets foldede form.
+@msg	Check the fold lines first.	Kontrollér foldelinjerne først.
+@msg	Panels: {panels}, hinges: {hinges}	Paneler: {panels}, hængsler: {hinges}
+@msg	Other blanks not shown: {count}	Andre emner vises ikke: {count}
+@msg	A joint does not close by {gap} pt.	En samling lukker ikke med {gap} pt.
+@msg	Two panels pass through each other.	To paneler går gennem hinanden.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer skal være "singleLine", "everyLine", "standardSingleLine" eller "standardEveryLine"
+	Pressure Sensitive	Trykfølsom
+	Flex Ribbon	Fleksibelt bånd
+	Pulse Stroke	Pulserende strøg
+	Round Flow	Rundt strøg
+	Chisel Flow	Skråt strøg
