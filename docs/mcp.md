@@ -1,6 +1,6 @@
 # VectorCraft MCP server
 
-> **Last updated:** 2026-11-14 · **Change:** `text.setFormat {composer}` and paragraph styles also take `standardSingleLine` and `standardEveryLine` (#4935); existing values and responses unchanged. Previously: Pencil ignores Smart Guides and Snap to Point and shows no Smart Guides, #7252; no response-shape change. Previously: Pencil continuation, straight-line and closing cursors; scores and estimates unchanged; no response-shape change. Previously: Snap to Point with Smart Guides off draws no Smart Guides labels or lines, #7250; no response-shape change. Previously: Envelopes: a top object's side whose pieces are all one curve split at anchors follows that curve's parameter (#7097); existing response shapes retained.
+> **Last updated:** 2026-11-18 · **Change:** Production Preflight command and report coverage; previously: `text.setFormat {composer}` and paragraph styles also take `standardSingleLine` and `standardEveryLine` (#4935); existing values and responses unchanged. Previously: Pencil ignores Smart Guides and Snap to Point and shows no Smart Guides, #7252; no response-shape change. Previously: Pencil continuation, straight-line and closing cursors; scores and estimates unchanged; no response-shape change. Previously: Snap to Point with Smart Guides off draws no Smart Guides labels or lines, #7250; no response-shape change. Previously: Envelopes: a top object's side whose pieces are all one curve split at anchors follows that curve's parameter (#7097); existing response shapes retained.
 >
 > Tech Circuit update (2026-11-14): three original procedural brushes; ten built-in brush libraries (G5).
 
@@ -9222,6 +9222,21 @@ Screens doesn't write EPS.
 {"name":"export","arguments":{"path":"/tmp/art.eps","options":{"useArtboards":true,"cmykPostScript":false}}}
 ```
 
+## Production Preflight
+
+`document.preflight {output?: "pdf"|"print"|"screen", minPpi?: 1..9600, artboards?: [index, …]}`
+checks the active document without editing it or writing an export. Defaults: PDF, 300 ppi
+(96 ppi for Screen), all artboards. Indices are zero based. Print uses the saved Print settings
+with the requested artboards, including page scaling; PDF and Screen check visible art on them.
+
+The result contains `checks` for `fonts`, `text`, `links` and `resolution`, each with `status`
+(`passed`, `failed`, `notChecked`), finding `count` and `notChecked` count. `findings` give a
+`code`, canvas `ids` and `name`; link findings also carry `sourceId`, and resolution findings
+carry `effectivePpi` and `threshold`. `outputWarnings` carries the Print preview's output/settings
+warnings. Resource findings point to their first visible canvas owner. Resolution inside resource
+art or placed documents is explicitly not checked; a pass is not certification of an exported file.
+See [Production Preflight](production-preflight.md) for the panel and coverage limits.
+
 ## Print
 
 File → Print lays the job out as a print-ready PDF, in which each page is a sheet of the chosen paper. The desktop app
@@ -14359,6 +14374,7 @@ the error text. The interactive fallback applies only to ordinary File > Save, n
 
 | Date | Change |
 |---|---|
+| 2026-11-18 | Production Preflight: output and artboard scope, four check summaries, clickable canvas ids, effective PPI and explicit unchecked resolution coverage. |
 | 2026-11-14 | Built-in Tech Circuit brush library (id `tech-circuit`): Circuit Trace, Bus Lines and Terminal Nodes; ten built-in libraries. |
 | 2026-11-13 | The Pencil ignores Smart Guides and Snap to Point and shows no Smart Guides; Snap to Grid and Snap to Pixel still move its ends (#7252). |
 | 2026-11-13 | `path.freehand`: `closed`, when given, decides whether a stroke that continues a path (`extend`) closes it; the Pencil and the Paintbrush send it by Close Paths When Ends Are Within. |
