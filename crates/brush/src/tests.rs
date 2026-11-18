@@ -828,6 +828,86 @@ fn bristle_makes_translucent_strands() {
 }
 
 #[test]
+fn bristle_pen_pressure_changes_its_footprint() {
+    let b = Brush { name: "b".into(), kind: BrushKind::Bristle(Bristle::default()) };
+    let render = |pressure| {
+        let s = StrokeLayer { pressure: Some(vectorcraft_doc::PressureProfile { points: vec![(0.0, pressure), (1.0, pressure)] }), ..stroke(1.0) };
+        stroke_pieces(&Document::new(1.0, 1.0), &b, &line(0.0, 0.0, 200.0, 0.0), &s)
+    };
+    let light = render(0.0);
+    let heavy = render(1.0);
+    assert_eq!(light.len(), heavy.len());
+    assert!(bounds(&heavy).height() > bounds(&light).height() * 1.8);
+}
+
+#[test]
+fn bristle_pen_pressure_is_sampled_along_the_stroke() {
+    let b = Brush { name: "b".into(), kind: BrushKind::Bristle(Bristle::default()) };
+    let s = StrokeLayer { pressure: Some(vectorcraft_doc::PressureProfile { points: vec![(0.0, 0.0), (1.0, 1.0)] }), ..stroke(1.0) };
+    let out = stroke_pieces(&Document::new(1.0, 1.0), &b, &line(0.0, 0.0, 200.0, 0.0), &s);
+    let mut points = Vec::new();
+    for n in &out {
+        all_points(n, &mut points);
+    }
+    let early = points.iter().filter(|p| p.x > 20.0 && p.x < 60.0).map(|p| p.y.abs()).fold(0.0_f64, f64::max);
+    let late = points.iter().filter(|p| p.x > 140.0 && p.x < 180.0).map(|p| p.y.abs()).fold(0.0_f64, f64::max);
+    assert!(late > early * 1.4, "spread along stroke: {early} -> {late}");
+}
+
+#[test]
+fn trimmed_bristle_strands_read_pressure_where_they_begin() {
+    let b = Brush { name: "b".into(), kind: BrushKind::Bristle(Bristle { size: 20.0, length: 300.0, ..Default::default() }) };
+    let render = |points| {
+        let s = StrokeLayer { pressure: Some(vectorcraft_doc::PressureProfile { points }), ..stroke(1.0) };
+        stroke_pieces(&Document::new(1.0, 1.0), &b, &line(0.0, 0.0, 80.0, 0.0), &s)
+    };
+    let ramp = render(vec![(0.0, 0.0), (1.0, 1.0)]);
+    let neutral = render(vec![(0.0, 0.5), (1.0, 0.5)]);
+    assert_eq!(ramp.len(), neutral.len());
+    let start = |n: &Node| {
+        let anchors = &n.path_data().unwrap().subpaths[0].anchors;
+        let first = anchors[0].p;
+        let opposite = anchors[anchors.len() - 16].p;
+        (first.x, (first.y - opposite.y).abs())
+    };
+    let mut checked = false;
+    for (ramp, neutral) in ramp.iter().zip(&neutral) {
+        let (x, width) = start(ramp);
+        if x < 12.0 {
+            continue;
+        }
+        let (_, neutral_width) = start(neutral);
+        let expected = 0.5 + x / 80.0;
+        assert!(width / neutral_width > expected - 0.08, "strand at {x}: {width} vs {neutral_width}, expected ratio {expected}");
+        checked = true;
+    }
+    assert!(checked, "at least one strand begins past the pressure ramp's first eighth");
+}
+
+#[test]
+fn bristle_pen_orientation_changes_its_footprint() {
+    let b = Brush { name: "b".into(), kind: BrushKind::Bristle(Bristle::default()) };
+    let render = |tilt, bearing, rotation| {
+        let flat = |x| vec![(0.0, x), (1.0, x)];
+        let s = StrokeLayer {
+            tilt: Some(vectorcraft_doc::PressureProfile { points: flat(tilt) }),
+            bearing: Some(vectorcraft_doc::AngleProfile { points: flat(bearing) }),
+            rotation: Some(vectorcraft_doc::AngleProfile { points: flat(rotation) }),
+            ..stroke(1.0)
+        };
+        stroke_pieces(&Document::new(1.0, 1.0), &b, &line(0.0, 0.0, 200.0, 0.0), &s)
+    };
+    let neutral = bounds(&render(0.5, 0.0, 0.0)).height();
+    let flat = bounds(&render(1.0, 0.0, 0.0)).height();
+    let upright = bounds(&render(0.0, 0.0, 0.0)).height();
+    let bearing = bounds(&render(0.5, 90.0, 0.0)).height();
+    let rotation = bounds(&render(0.5, 0.0, 90.0)).height();
+    assert!(flat > neutral && neutral > upright, "tilt: {flat} > {neutral} > {upright}");
+    assert!(bearing < neutral * 0.7, "bearing: {bearing} vs {neutral}");
+    assert!(rotation < neutral * 0.7, "rotation: {rotation} vs {neutral}");
+}
+
+#[test]
 fn tints_colorization_uses_stroke_colour() {
     let b = art_brush(rect_art(10.0, 4.0), ArtScale::Stretch);
     let BrushKind::Art(mut a) = b.kind else { panic!("not an art brush") };

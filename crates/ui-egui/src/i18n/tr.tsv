@@ -128,6 +128,9 @@
 	Additional Plug-ins Folder	Ek Eklentiler Klasörü
 	Additional Fonts Folder	Ek Yazı Tipleri Klasörü
 	Adjust Adjoining Width Points	Bitişik Genişlik Noktalarını Ayarlayın
+	Incoming	Gelen
+	Outgoing	Giden
+	Single Width Only	Yalnızca Tek Genişlik
 	Adjust Color Balance…	Renk Dengesini Ayarlayın…
 	Adjust Colors	Renkleri Ayarla
 	Adjust Options:	Seçenekleri Ayarlayın:
@@ -408,6 +411,12 @@ font-technology	Variable	Değişken
 	Character Alignment	Karakter Hizalaması
 	Character / Paragraph	Karakter / Paragraf
 	Character Rotation	Karakter Rotasyonu
+	Chinese Big 5	Çince Big 5
+	Cyrillic	Kiril
+	Greek	Yunanca
+	Turkish	Türkçe
+	Baltic	Baltık
+	Central European	Orta Avrupa
 	Character Set:	Karakter Seti:
 	Character Style	Karakter Stili
 	Character Style Options	Karakter Stili Seçenekleri
@@ -469,6 +478,8 @@ font-technology	Variable	Değişken
 	Choose a folder	Bir klasör seçin
 	Choose…	Seç…
 	Circle	daire
+	Circle Tool	Daire Aracı
+	Circle too large	Daire çok büyük
 	Classic Defaults	Klasik Varsayılanlar
 	Clean Up…	Temizleme…
 	Clear	Temizle
@@ -1233,6 +1244,8 @@ font-technology	Variable	Değişken
 	Files	Dosyalar
 	Files of a PDF standard can't be password-protected.	PDF standardının dosyaları parola korumalı olamaz.
 	Files of this standard tag their colours with ICC profiles.	Bu standardın dosyaları renklerini ICC profilleriyle etiketler.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	Bu standardın dosyaları renklerini ICC profilleriyle etiketler, ancak çıkış amacı profilindeki CMYK renkleri DeviceCMYK olarak yazılır.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	“Profilleri ekleme” ve bir CMYK çıkış amacıyla, başka bir profilin CMYK hedefine dönüştürülmedikçe her CMYK rengi DeviceCMYK olarak yazılır.
 	Fill	Dolgu
 	Fill & Stroke	Doldur ve Konturla
 	Fill (X), double-click for the Color Picker	Doldur (X), Renk Seçici için çift tıklayın
@@ -1869,6 +1882,7 @@ font-technology	Variable	Değişken
 	Load SVG into Clipboard	SVG'yi Panoya yükleyin
 	Load Text into Clipboard	Metni Panoya Yükle
 	Local Libraries	Yerel Kütüphaneler
+	Locate Layer	Katmanı Bul
 	Locate Object	Nesneyi Bul
 	Location	Konum
 	Location:	Konum:
@@ -2496,6 +2510,9 @@ shape	Open	Açık
 	Polar Grid Tool	Yuvarlak Izgara Aracı
 	Polygon	Çokgen
 	Polygon Properties:	Poligon Özellikleri:
+	Line Properties:	Çizgi Özellikleri:
+	Line Length:	Çizgi Uzunluğu:
+	Line Angle:	Çizgi Açısı:
 	Polygon Tool	Çokgen Aracı
 	Portrait	Portre
 	Power Saving (integrated)	Güç Tasarrufu (entegre)
@@ -3323,6 +3340,7 @@ digits	Malayalam	Malayalam
 	Set Slice Rectangle	Dilim Dikdörtgenini Ayarla
 	Set Tab Stops	Sekme Duraklarını Ayarla
 	Set Text	Metni Ayarla
+	Set the current fill or stroke to the selected color	Geçerli dolguyu veya konturu seçilen renge ayarla
 	Set the selected color to the current color	Seçilen rengi geçerli renge ayarla
 	Set Zoom	Yakınlaştırmayı Ayarla
 	Settings…	Ayarlar…
@@ -3443,7 +3461,7 @@ digits	Malayalam	Malayalam
 	Show Vivid/Muted	Canlı/Sessiz Göster
 	Show Warm/Cool	Sıcak/Soğuk Göster
 	Show {kind} Brushes	{kind} Fırçalarını Göster
-	Show/hide plate (Alt-click: only this plate)	Plakayı göster/gizle (Alt tuşuyla tıklayın: yalnızca bu plaka)
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	Plakayı göster/gizle (Alt tuşuyla tıklayın: yalnızca bu plaka; yeniden Alt tuşuyla tıklayın: tüm plakalar)
 	Show:	Göster:
 	Shown with the optimised preview.	Optimize edilmiş önizlemeyle gösterilir.
 	Side 1:	1. Taraf:
@@ -4031,6 +4049,8 @@ digits	Malayalam	Malayalam
 	V Spacing:	V Aralığı:
 	V:	V:
 	Variable Width Profile	Değişken Genişlik Profili
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Konturun fırçası kendi boyutunu korur, bu yüzden genişlik profili konturu değiştirmez. Profil kullanmak için fırçayı kaldırın.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Konturun fırçası kendi boyutunu korur, bu yüzden genişlik profili konturu değiştirmez. Profil kullanmak için fırçayı kaldırın.
 	Variables	Değişkenler
 	New Variable	Yeni Değişken
 	Delete Variable	Değişkeni Sil
@@ -4838,8 +4858,8 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	no active document	etkin belge yok
 @msg	no active perspective plane	aktif perspektif düzlemi yok
 @msg	no anchor points selected	bağlantı noktası seçilmedi
-@msg	`points` must be three [x, y] pairs of numbers	`points` üç [x, y] sayı çifti olmalıdır
-@msg	direct-select three anchor points, or give `points`	üç bağlantı noktasını doğrudan seçin veya `points` verin
+@msg	`points` must be two or three [x, y] pairs of numbers	`points` iki veya üç [x, y] sayı çifti olmalıdır
+@msg	direct-select two or three anchor points, or give `points`	iki veya üç bağlantı noktasını doğrudan seçin veya `points` verin
 @msg	no circle passes through these points: two are the same or all three lie on one line	bu noktalardan geçen bir çember yok: ikisi aynı ya da üçü de aynı doğru üzerinde
 @msg	no app to open files here	burada dosyaları açacak uygulama yok
 @msg	no artboard	çalışma yüzeyi yok
@@ -4935,6 +4955,9 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	no such user library	böyle bir kullanıcı kütüphanesi yok
 @msg	no such view	öyle bir görüş yok
 @msg	no such width point	böyle bir genişlik noktası yok
+@msg	`single` must be `incoming` or `outgoing`	`single`, `incoming` veya `outgoing` olmalıdır
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` ve `outIndex`, tek bir süreksiz genişlik noktasının iki yarısı olmalıdır
+@msg	a discontinuous width point keeps its place	süreksiz genişlik noktası yerini korur
 @msg	no swatch `{name}`	renk örneği yok `{name}`
 @msg	no swatch library `{l}` (see swatch.library.list)	renk örneği kitaplığı yok `{l}` (bkz. swatch.library.list)
 @msg	no symbol instances selected	sembol örneği seçilmedi
@@ -8086,6 +8109,7 @@ axis	Y Axis	Y ekseni
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	bileşik şekiller yolları, bileşik yolları, grupları, bileşik şekilleri, metni, karışımları ve zarfları alır
 @msg	compound {_1} must contain exactly one open path to join	bileşik {_1}, birleştirilecek tam olarak bir açık yol içermelidir
 @msg	connect needs a path other than the one extended	connect için uzatılan yoldan başka bir yol gerekir
+@msg	connect needs extend	connect için extend gerekir
 @msg	connect needs id	connect için id gerekir
 @msg	connect path has no open end	connect yolunun açık ucu yok
 @msg	copy needs path: the file to copy into the document's folder	copy için path gerekir: belgenin klasörüne kopyalanacak dosya
@@ -10009,3 +10033,13 @@ breakText	Glyphs	Glifler
 @msg	A panel is not joined to the rest by a crease.	Bir panel geri kalanlara hiçbir pilyaj çizgisiyle bağlı değil.
 @msg	A fold line is on a non-printing layer.	Bir katlama çizgisi yazdırılmayan bir katmanda.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Paneller: {panels}, menteşeler: {hinges}, hatalar: {errors}, uyarılar: {warnings}
+	Fold Preview	Katlama Önizlemesi
+	Fold	Katlama
+	Show Fold Lines	Katlama Çizgilerini Göster
+	Three-Quarter	Dörtte Üç
+	Open a document to preview its folded shape.	Katlanmış şeklini önizlemek için bir belgeyi açın.
+@msg	Check the fold lines first.	Önce katlama çizgilerini denetleyin.
+@msg	Panels: {panels}, hinges: {hinges}	Paneller: {panels}, menteşeler: {hinges}
+@msg	Other blanks not shown: {count}	Gösterilmeyen diğer açınımlar: {count}
+@msg	A joint does not close by {gap} pt.	Bir birleşim {gap} pt kadar kapanmıyor.
+@msg	Two panels pass through each other.	İki panel birbirinin içinden geçiyor.
