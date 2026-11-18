@@ -125,9 +125,14 @@ fn apply_transform_moving_guides(
     let d = &s.doc()?.doc;
     let paths = d.index_paths(ids.iter().copied());
     let none = paths.is_empty() && !has_guides;
+    // A move of direct-selected anchors may re-map the handles beside them (`interpolate`).
+    let mut interpolate = None;
     let ids = if anchors && objects && !copy && !s.doc()?.selection.anchors.is_empty() {
+        if c[..4] == [1.0, 0.0, 0.0, 1.0] {
+            interpolate = Some(crate::cmd::path::interpolates_handles(s, p, label)?);
+        }
         if xf != Affine::IDENTITY {
-            crate::cmd::path::transform_anchors(s, label, xf, sc)?;
+            crate::cmd::path::transform_anchors(s, label, xf, sc, interpolate.unwrap_or(false))?;
         }
         ids
     } else if none || (!copy && xf == Affine::IDENTITY) {
@@ -195,6 +200,9 @@ fn apply_transform_moving_guides(
             options["strokes"] = json!(sc.strokes);
             options["corners"] = json!(!sc.keep_corners);
         }
+        if let Some(on) = interpolate {
+            options["interpolate"] = json!(on);
+        }
         st.last_transform = Some(LastTransform::Matrix(xf, options));
         st.last_perspective = None;
     }
@@ -248,7 +256,7 @@ fn resize_type_area(n: &mut Node, xf: Affine) -> bool {
 
 pub(super) fn transform(s: &mut Session, p: &Value) -> Result<Value> {
     check_switches(p, &TRANSFORM_SWITCHES, "object.transform")?;
-    check_switches(p, &["anchors", "releaseOutside"], "object.transform")?;
+    check_switches(p, &["anchors", "releaseOutside", "interpolate"], "object.transform")?;
     let m = matrix_param(p, "matrix").ok_or_else(|| bad("object.transform", "missing matrix [a,b,c,d,e,f]"))?;
     // An object selected in a symbol instance's art stays where the symbol puts it: the selection
     // is left as it is, and the reply's warning goes to the status bar.
@@ -292,6 +300,7 @@ pub(super) fn transform(s: &mut Session, p: &Value) -> Result<Value> {
 pub(super) fn move_cmd(s: &mut Session, p: &Value) -> Result<Value> {
     check_numbers(p, &["dx", "dy"], "object.move")?;
     check_switches(p, &TRANSFORM_SWITCHES, "object.move")?;
+    check_switches(p, &["interpolate"], "object.move")?;
     let ids = selected_roots_to_transform(s)?;
     apply_transform(s, "Move", ids, Affine::translate((f64_or(p, "dx", 0.0), f64_or(p, "dy", 0.0))), p, true)
 }
@@ -311,7 +320,7 @@ pub(crate) fn along_constrain_angle(dx: f64, dy: f64, deg: f64) -> (f64, f64) {
 pub(super) fn nudge(s: &mut Session, p: &Value) -> Result<Value> {
     check_numbers(p, &["dx", "dy"], "object.nudge")?;
     check_switches(p, &TRANSFORM_SWITCHES, "object.nudge")?;
-    check_switches(p, &["big"], "object.nudge")?;
+    check_switches(p, &["big", "interpolate"], "object.nudge")?;
     let k = s.prefs.keyboard_increment * if bool_or(p, "big", false) { 10.0 } else { 1.0 };
     let (dx, dy) = (f64_or(p, "dx", 0.0) * k, f64_or(p, "dy", 0.0) * k);
     // Guides keep to the page's axes; art and anchors move along the constrain angle's.
@@ -322,7 +331,7 @@ pub(super) fn nudge(s: &mut Session, p: &Value) -> Result<Value> {
         if dx == 0.0 && dy == 0.0 {
             return ok();
         }
-        return crate::cmd::path::move_anchors(s, &json!({ "dx": dx, "dy": dy, "patterns": p.get("patterns") }));
+        return crate::cmd::path::move_anchors(s, &json!({ "dx": dx, "dy": dy, "patterns": p.get("patterns"), "interpolate": p.get("interpolate") }));
     }
     if s.doc()?.selection.is_empty() {
         let copy = bool_or(p, "copy", false);
@@ -453,16 +462,35 @@ pub(super) fn shear(s: &mut Session, p: &Value) -> Result<Value> {
     let t = shear_tangent(f64_or(p, "angle", 0.0)).map_err(|e| bad("object.shear", e))?;
     let ids = selected_roots_to_transform(s)?;
     let o = origin_of(s, p, &ids)?;
-    let vertical = choice(p, "object.shear", "axis", &["horizontal", "vertical"])? == Some("vertical");
-    let m = if vertical { Affine::new([1.0, t, 0.0, 1.0, 0.0, 0.0]) } else { Affine::new([1.0, 0.0, -t, 1.0, 0.0, 0.0]) };
+    let horizontal = Affine::new([1.0, 0.0, -t, 1.0, 0.0, 0.0]);
+    // A named axis, or a line on the page at an angle in degrees, counter-clockwise from horizontal.
+    let m = match p.get("axis") {
+        None | Some(Value::Null) => horizontal,
+        Some(Value::String(a)) if a == "horizontal" => horizontal,
+        Some(Value::String(a)) if a == "vertical" => Affine::new([1.0, t, 0.0, 1.0, 0.0, 0.0]),
+        Some(Value::Number(n)) if n.as_f64().is_some_and(|a| (-SHEAR_AXIS_MAX..=SHEAR_AXIS_MAX).contains(&a)) => {
+            // y is down, so the page's counter-clockwise angle turns the other way on screen.
+            let r = -n.as_f64().unwrap_or(0.0).to_radians();
+            Affine::rotate(r) * horizontal * Affine::rotate(-r)
+        }
+        Some(v) => {
+            let given = v.as_str().map_or_else(|| v.to_string(), str::to_string);
+            let range = format!("from -{SHEAR_AXIS_MAX} to {SHEAR_AXIS_MAX}");
+            return Err(bad("object.shear", format!("axis must be \"horizontal\", \"vertical\" or an angle in degrees {range}, not `{given}`")));
+        }
+    };
     apply_transform(s, "Shear", ids, about(o, m), p, true)
 }
+
+/// The largest angle, either way from horizontal, of the axis `object.shear` takes in degrees.
+const SHEAR_AXIS_MAX: f64 = 359.0;
 
 /// The last transform on the selection, with the options `last_transform` keeps for it; an option
 /// that `p` sets to true or false (a recorded Transform Again's) takes precedence. A Transform
 /// Each is repeated by running it again (its transform is per object, about each one's bounds).
 pub(super) fn transform_again(s: &mut Session, p: &Value) -> Result<Value> {
     check_switches(p, &TRANSFORM_SWITCHES, "object.transformAgain")?;
+    check_switches(p, &["interpolate"], "object.transformAgain")?;
     if let Some(again) = s.doc()?.last_perspective.clone() {
         return crate::cmd::distortcmds::transform_again(s, &again);
     }
