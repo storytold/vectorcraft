@@ -167,6 +167,23 @@ fn a_rectangle_shows_linked_and_unlinked_corner_types() {
     }
 }
 
+/// A corner kind set with no live rectangle selected leaves the selected polygon, the document and
+/// its undo history as they are.
+#[test]
+fn a_rectangle_corner_kind_without_a_selected_rectangle_changes_nothing() {
+    use vectorcraft_geom::shapes::CornerKind::Chamfer;
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    app.run("shape.polygon", json!({"cx": 150, "cy": 150, "radius": 40, "sides": 6})).unwrap();
+    let st = app.session.active().unwrap();
+    let (before, steps) = (st.doc.clone(), st.history.undo.len());
+    crate::panels::set_rectangle_kinds(&mut app, Chamfer, None);
+    crate::panels::set_rectangle_kinds(&mut app, Chamfer, Some(2));
+    let st = app.session.active().unwrap();
+    assert!(st.doc == before, "the document changed");
+    assert_eq!(st.history.undo.len(), steps);
+}
+
 /// #3451: a live ellipse shows pie start/end angles and Invert Pie in the Transform panel and
 /// the Properties panel's Transform section; typed angles update the shape.
 #[test]

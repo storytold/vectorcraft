@@ -140,16 +140,17 @@ fn set_rectangle_kinds(app: &mut VectorcraftApp, kind: CornerKind, corner: Optio
 /// None) of each selected live rectangle, leaving other selected objects as they are: one undo
 /// step, or none when nothing changes.
 fn set_rectangle_corners(app: &mut VectorcraftApp, mut p: Value, corner: Option<usize>) {
-    let corners = corner.map_or(json!([0, 1, 2, 3]), |k| json!([k]));
+    p["corners"] = corner.map_or(json!([0, 1, 2, 3]), |k| json!([k]));
     match app.session.active() {
         // The command refuses the selection, with its message, while part of a symbol's art is
         // selected.
-        Some(st) if st.selection.symbol_part.is_some() => p["corners"] = corners,
+        Some(st) if st.selection.symbol_part.is_some() => {}
+        // The selected live rectangles as `ids`, all sharing `corners`.
         Some(st) => {
             let is_rectangle = |n: &Node| matches!(&n.kind, NodeKind::Path { live: Some(l), .. } if matches!(**l, LiveShape::Rectangle { .. }));
             let rectangle = |id: &&NodeId| st.doc.node(**id).is_some_and(is_rectangle);
-            let items: Vec<Value> = st.selection.objects.iter().filter(rectangle).map(|id| json!({"id": id.0, "corners": corners})).collect();
-            p["items"] = json!(items);
+            let ids: Vec<u64> = st.selection.objects.iter().filter(rectangle).map(|id| id.0).collect();
+            p["ids"] = json!(ids);
         }
         None => return,
     }
