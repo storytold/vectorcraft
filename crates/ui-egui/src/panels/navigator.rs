@@ -2,7 +2,8 @@
 //! cached by document revision, off the UI thread for heavy documents and not during drags: see
 //! [`crate::thumb_worker`]) with the view box you drag to pan, zoom out/in buttons, a zoom slider
 //! and a zoom field. Panel Options… sets the view box's color and whether the thumbnail draws
-//! dashed lines as solid lines ([`PanelOptions`]).
+//! dashed lines as solid lines, and the panel menu's View Artboard Contents Only (on by default)
+//! limits the thumbnail to the art inside the artboards ([`PanelOptions`]).
 
 use std::sync::Arc;
 
@@ -13,7 +14,6 @@ use vectorcraft_color::Color;
 use vectorcraft_doc::LAYER_COLORS;
 use vectorcraft_geom::{Point, Rect as DRect};
 
-use super::{pstate, set_pstate};
 use crate::VectorcraftApp;
 use crate::theme::Tokens;
 use crate::thumb_worker::{Settle, ThumbWorker};
@@ -39,7 +39,8 @@ pub fn resolve(color: &str) -> Option<[u8; 3]> {
     Some([byte(0)?, byte(2)?, byte(4)?])
 }
 
-/// Navigator panel options (≡ › Panel Options…), kept with the UI state.
+/// Navigator panel options (≡ › Panel Options… and ≡ › View Artboard Contents Only), kept with the
+/// UI state.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct PanelOptions {
@@ -48,12 +49,16 @@ pub struct PanelOptions {
     /// Draw Dashed Lines as Solid Lines (off by default): the thumbnail draws dashed strokes
     /// without their dashes. The canvas, printing and exports keep the dashes.
     pub solid_dashes: bool,
+    /// View Artboard Contents Only (the panel menu; on by default, and on for UI state saved
+    /// without it): the thumbnail fits the artboards and draws only the art inside them, cut at
+    /// each artboard's edges. Off, it also fits and draws the art on the pasteboard.
+    pub view_artboard_contents_only: bool,
 }
 
 impl Default for PanelOptions {
     fn default() -> Self {
         let [r, g, b] = VIEW_BOX_RED;
-        Self { color: Color::rgb8(r, g, b).to_hex(), solid_dashes: false }
+        Self { color: Color::rgb8(r, g, b).to_hex(), solid_dashes: false, view_artboard_contents_only: true }
     }
 }
 
@@ -65,11 +70,11 @@ impl PanelOptions {
     }
 }
 
-/// `ui.navigatorPanelOptions {color?, solidDashes?}`: with neither, open Panel Options on the
-/// panel's options; otherwise set the ones given and answer the options.
+/// `ui.navigatorPanelOptions {color?, solidDashes?, viewArtboardContentsOnly?}`: with none, open
+/// Panel Options on the panel's options; otherwise set the ones given and answer the options.
 pub fn set_options(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
-    let (color, solid) = (p.get("color"), p.get("solidDashes"));
-    if color.is_none() && solid.is_none() {
+    let (color, solid, contents_only) = (p.get("color"), p.get("solidDashes"), p.get("viewArtboardContentsOnly"));
+    if color.is_none() && solid.is_none() && contents_only.is_none() {
         return crate::dialogs::navigator_panel_options::open(app);
     }
     let mut o = app.ui.navigator_panel.clone();
@@ -83,6 +88,10 @@ pub fn set_options(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String>
     if let Some(s) = solid {
         let key = "solidDashes";
         o.solid_dashes = s.as_bool().ok_or_else(|| format!("`{key}` must be true or false"))?;
+    }
+    if let Some(v) = contents_only {
+        let key = "viewArtboardContentsOnly";
+        o.view_artboard_contents_only = v.as_bool().ok_or_else(|| format!("`{key}` must be true or false"))?;
     }
     app.ui.navigator_panel = o;
     Ok(serde_json::to_value(&app.ui.navigator_panel).unwrap_or_default())
@@ -218,10 +227,17 @@ impl Cache {
 }
 
 /// How the image `key` names is drawn: as exported (template layers and guides left out),
-/// transparent, with images far smaller than they are sampling their mip levels, and with Draw
-/// Dashed Lines as Solid Lines, dashed strokes without their dashes.
+/// transparent, with images far smaller than they are sampling their mip levels, with Draw
+/// Dashed Lines as Solid Lines, dashed strokes without their dashes, and with View Artboard
+/// Contents Only, the art cut to the artboards (none in the gaps between them).
 fn image_options(key: ImageKey) -> vectorcraft_render::RenderOptions {
-    vectorcraft_render::RenderOptions { skip_templates: true, image_mips: true, solid_dashes: key.solid_dashes, ..Default::default() }
+    vectorcraft_render::RenderOptions {
+        skip_templates: true,
+        image_mips: true,
+        solid_dashes: key.solid_dashes,
+        trim: key.artboard_only,
+        ..Default::default()
+    }
 }
 
 thread_local! {
@@ -282,7 +298,7 @@ fn view_box(region: DRect, thumb: Rect, canvas: Rect, v: &crate::state::View, ui
     pts
 }
 
-/// Slider position (0..1) ↔ zoom percent on Illustrator's log range 3.13 %–64 000 %.
+/// Slider position (0..1) ↔ zoom percent on a log range, 3.13 %–64 000 %.
 pub fn zoom_to_slider(z: f64) -> f64 {
     ((z.clamp(3.13, 64000.0)).ln() - 3.13f64.ln()) / (64000f64.ln() - 3.13f64.ln())
 }
@@ -296,7 +312,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         super::empty_state(ui, "map", tl!("No document"), tl!("Open a document to navigate it."));
         return;
     };
-    let artboard_only: bool = pstate(ui.ctx(), "nav-ab-only");
+    let artboard_only = app.ui.navigator_panel.view_artboard_contents_only;
     let doc = st.doc.clone();
     let (uid, revision) = (st.uid, st.revision);
     // A drag in progress: every pointer move makes a new revision. The image waits for its end.
@@ -373,9 +389,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 }
 
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let ab: bool = pstate(ui.ctx(), "nav-ab-only");
-    if menu_item(ui, tl!("View Artboard Only"), true, ab) {
-        set_pstate(ui.ctx(), "nav-ab-only", !ab);
+    let ab = app.ui.navigator_panel.view_artboard_contents_only;
+    if menu_item(ui, tl!("View Artboard Contents Only"), true, ab) {
+        app.run("ui.navigatorPanelOptions", json!({"viewArtboardContentsOnly": !ab})).ok();
     }
     if menu_item(ui, tl!("Panel Options…"), true, false) {
         app.run("ui.navigatorPanelOptions", json!({})).ok();
@@ -547,7 +563,7 @@ mod tests {
         let shown = || CACHE.with(|c| c.borrow().shown.map(|(k, _)| k.solid_dashes));
         assert_eq!(shown(), Some(false));
         let set = app.run("ui.navigatorPanelOptions", json!({"color": "light blue", "solidDashes": true})).unwrap();
-        assert_eq!(set, json!({"color": "#4f80ff", "solidDashes": true}));
+        assert_eq!(set, json!({"color": "#4f80ff", "solidDashes": true, "viewArtboardContentsOnly": true}));
         assert_eq!((boxes(&mut app, red), boxes(&mut app, blue)), (0, 1));
         for _ in 0..12 {
             boxes(&mut app, blue);
@@ -560,11 +576,15 @@ mod tests {
             json!({"color": "#f00"}),
             json!({"color": null}),
             json!({"color": "Red", "solidDashes": "yes"}),
+            json!({"color": "Red", "viewArtboardContentsOnly": "no"}),
+            json!({"solidDashes": false, "viewArtboardContentsOnly": 0}),
+            json!({"viewArtboardContentsOnly": null}),
         ];
         for bad in bad {
             assert!(app.run("ui.navigatorPanelOptions", bad.clone()).is_err(), "{bad}");
         }
-        assert_eq!(serde_json::to_value(&app.ui.navigator_panel).unwrap(), json!({"color": "#4f80ff", "solidDashes": true}), "nothing changed");
+        let want = json!({"color": "#4f80ff", "solidDashes": true, "viewArtboardContentsOnly": true});
+        assert_eq!(serde_json::to_value(&app.ui.navigator_panel).unwrap(), want, "nothing changed");
         app.run("ui.navigatorPanelOptions", json!({"color": "#123456"})).unwrap();
         assert!(app.ui.navigator_panel.solid_dashes, "an option left out keeps its value");
     }
@@ -598,6 +618,113 @@ mod tests {
         assert!(image_options(on).solid_dashes && !image_options(key).solid_dashes);
         assert_eq!(draw(&line(true), on), solid, "the dashes go with the option");
         assert_eq!(draw(&line(false), on), solid, "a solid stroke draws as it did");
+    }
+
+    /// View Artboard Contents Only is on by default, and on for UI state saved without it, whether
+    /// the panel's options are missing or saved before the option existed; a saved off stays off.
+    #[test]
+    fn view_artboard_contents_only_is_on_by_default_and_a_saved_off_stays_off() {
+        assert!(PanelOptions::default().view_artboard_contents_only);
+        let none: crate::UiState = serde_json::from_value(json!({})).unwrap();
+        assert!(none.navigator_panel.view_artboard_contents_only, "UI state saved without the panel's options");
+        let older: crate::UiState = serde_json::from_value(json!({"navigator_panel": {"color": "#123456", "solidDashes": true}})).unwrap();
+        let o = &older.navigator_panel;
+        assert!(o.view_artboard_contents_only && o.solid_dashes && o.color == "#123456", "options saved before the option existed: {o:?}");
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        assert!(app.ui.navigator_panel.view_artboard_contents_only);
+        let set = app.run("ui.navigatorPanelOptions", json!({"viewArtboardContentsOnly": false})).unwrap();
+        assert_eq!(set, json!({"color": "#ff3030", "solidDashes": false, "viewArtboardContentsOnly": false}));
+        let back: crate::UiState = serde_json::from_value(serde_json::to_value(&app.ui).unwrap()).unwrap();
+        assert!(!back.navigator_panel.view_artboard_contents_only, "a saved off stays off");
+    }
+
+    /// The panel menu's View Artboard Contents Only starts checked, and a click turns it off (the
+    /// same option `ui.navigatorPanelOptions` sets), then on again.
+    #[test]
+    fn view_artboard_contents_only_is_checked_in_the_panel_menu_and_a_click_toggles_it() {
+        use crate::widgets::accessibility_tests::{named, tree};
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        named(&tree(|ui| menu(&mut app, ui)), "✓ View Artboard Contents Only");
+        let ctx = egui::Context::default();
+        let screen = Some(Rect::from_min_size(pos2(0.0, 0.0), vec2(240.0, 400.0)));
+        let raw = |events| egui::RawInput { events, screen_rect: screen, ..Default::default() };
+        let click = |app: &mut VectorcraftApp| {
+            let mut out = ctx.run_ui(raw(vec![]), |ui| menu(app, ui));
+            out.textures_delta.clear();
+            let item = out
+                .shapes
+                .iter()
+                .find_map(|c| match &c.shape {
+                    egui::Shape::Text(t) if t.galley.text().ends_with("View Artboard Contents Only") => Some(t.visual_bounding_rect().center()),
+                    _ => None,
+                })
+                .expect("the menu item");
+            let button =
+                |pressed| egui::Event::PointerButton { pos: item, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+            ctx.run_ui(raw(vec![egui::Event::PointerMoved(item), button(true), button(false)]), |ui| menu(app, ui)).textures_delta.clear();
+        };
+        click(&mut app);
+        assert!(!app.ui.navigator_panel.view_artboard_contents_only, "a click turns it off");
+        named(&tree(|ui| menu(&mut app, ui)), "   View Artboard Contents Only");
+        click(&mut app);
+        assert!(app.ui.navigator_panel.view_artboard_contents_only, "a second click turns it on");
+    }
+
+    /// With View Artboard Contents Only the thumbnail draws only the art inside the artboards: a
+    /// shape in the gap between two artboards is left out and one that crosses an artboard's edge
+    /// is cut there. Without it both draw.
+    #[test]
+    fn the_thumbnail_draws_only_the_art_inside_the_artboards_with_the_option() {
+        use vectorcraft_color::Paint;
+        use vectorcraft_doc::{Appearance, Document, Node};
+        let mut d = Document::new(100.0, 100.0);
+        let mut second = d.artboards[0].clone();
+        second.id = d.artboards.iter().map(|a| a.id).max().unwrap_or(0) + 1;
+        second.rect = DRect::new(150.0, 0.0, 250.0, 100.0);
+        d.artboards.push(second);
+        let l = d.layers[0].id;
+        for (x0, y0, x1, y1) in [(110.0, 20.0, 140.0, 80.0), (20.0, 80.0, 60.0, 130.0)] {
+            let mut bp = vectorcraft_geom::BezPath::new();
+            bp.move_to((x0, y0));
+            bp.line_to((x1, y0));
+            bp.line_to((x1, y1));
+            bp.line_to((x0, y1));
+            bp.close_path();
+            let id = d.alloc_id();
+            let n = Node::path(id, vectorcraft_geom::PathData::from_bezpath(&bp), Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0));
+            d.insert(Some(l), 0, n).unwrap();
+        }
+        let alpha = |artboard_only: bool, x: u32, y: u32| {
+            let key = ImageKey { uid: 1, revision: 1, w: 260, h: 140, artboard_only, solid_dashes: false };
+            vectorcraft_render::Renderer::new().render_region_with(&d, DRect::new(0.0, 0.0, 260.0, 140.0), 1.0, &image_options(key)).pixel(x, y)[3]
+        };
+        assert_eq!([alpha(true, 125, 50), alpha(true, 40, 90), alpha(true, 40, 120)], [0, 255, 0], "the gap and below the artboard are empty");
+        assert_eq!([alpha(false, 125, 50), alpha(false, 40, 90), alpha(false, 40, 120)], [255, 255, 255], "all the art draws");
+    }
+
+    /// Turning View Artboard Contents Only off makes the thumbnail again, fitted to the art on the
+    /// pasteboard as well as the artboards; turning it on fits it to the artboards again.
+    #[test]
+    fn the_thumbnail_is_made_again_when_view_artboard_contents_only_changes() {
+        use vectorcraft_engine::Session;
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        app.session.execute("shape.rectangle", &json!({"x": 400, "y": 50, "width": 50, "height": 50})).unwrap();
+        let ctx = egui::Context::default();
+        let frames = |app: &mut VectorcraftApp| {
+            for _ in 0..12 {
+                let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui));
+                out.textures_delta.clear();
+            }
+            CACHE.with(|c| c.borrow().shown.map(|(k, r)| (k.artboard_only, r.x1)))
+        };
+        let Some((true, right)) = frames(&mut app) else { panic!("an image of the artboards only") };
+        assert!(right < 300.0, "fitted to the artboard: {right}");
+        app.run("ui.navigatorPanelOptions", json!({"viewArtboardContentsOnly": false})).unwrap();
+        let Some((false, right)) = frames(&mut app) else { panic!("an image with the pasteboard's art") };
+        assert!(right > 450.0, "fitted to the art on the pasteboard too: {right}");
+        app.run("ui.navigatorPanelOptions", json!({"viewArtboardContentsOnly": true})).unwrap();
+        assert!(matches!(frames(&mut app), Some((true, r)) if r < 300.0));
     }
 
     #[test]
