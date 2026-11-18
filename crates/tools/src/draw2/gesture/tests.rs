@@ -3110,6 +3110,19 @@ fn bristle_tip_annotator_follows_a_rotation_capable_pen() {
     tool.pointer(&selected_view, &alt_stroke);
     assert_eq!(tool.cursor(&selected_view, alt_stroke.pos, alt_stroke.mods), Cursor::Smooth);
     assert!(bounds(&tool, &selected_view).is_none(), "Alt release borrows Smooth without a stale tip");
+    // A completed stroke can select its new path after `pointer` returns its actions. The overlay
+    // must use that current selection even without a further pointer move.
+    let mut newly_selected = GestureTool::new("paintbrush");
+    let mut new_stroke = light;
+    newly_selected.pointer(&view, &new_stroke);
+    new_stroke.kind = PointerKind::Drag;
+    new_stroke.mods.alt = true;
+    newly_selected.pointer(&view, &new_stroke);
+    new_stroke.kind = PointerKind::Up;
+    newly_selected.pointer(&view, &new_stroke);
+    assert!(bounds(&newly_selected, &view).is_some(), "no selected path borrows Smooth yet");
+    assert_eq!(newly_selected.cursor(&selected_view, new_stroke.pos, new_stroke.mods), Cursor::Smooth);
+    assert!(bounds(&newly_selected, &selected_view).is_none(), "post-commit selection also hides the tip");
     let precise = ToolContext { precise_cursors: true, ..cx(&d, &s, &p) };
     assert!(bounds(&tool, &precise).is_none());
     tool.pointer(&view, &at(Some(0.0)).with_mods(Mods { cmd: true, ..Default::default() }));

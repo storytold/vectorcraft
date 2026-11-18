@@ -200,6 +200,9 @@ pub struct GestureTool {
     /// Where the Blob Brush's or the Eraser's tip outline shows: the pointer over the canvas,
     /// unless Cmd/Ctrl lends a selection tool or Alt the Smooth tool.
     tip_at: Option<Point>,
+    /// Alt as it was at the last pointer event; the release can select a new path after the tool
+    /// returns, so the Bristle tip checks the current selection when overlays are drawn.
+    tip_alt: bool,
     /// The last rotation-capable pen over the Paintbrush's Bristle tip; a mouse or a pen without
     /// barrel rotation has no tip annotator.
     bristle_pen: Option<(PenPose, f64)>,
@@ -902,6 +905,7 @@ impl GestureTool {
             snap: DrawSnap::default(),
             pressed: Point::ZERO,
             tip_at: None,
+            tip_alt: false,
             bristle_pen: None,
             light: false,
             bearing: None,
@@ -1096,6 +1100,7 @@ impl GestureTool {
         if self.varies_size() {
             self.tip_at = (!ev.mods.cmd && !self.blob_alt_smooths(ev.mods)).then_some(ev.pos);
         } else if self.id == "paintbrush" {
+            self.tip_alt = ev.mods.alt;
             self.bristle_pen =
                 ev.pen.filter(|pen| pen.rotation.is_some()).map(|pen| (pen, if ev.kind == PointerKind::Move { 0.5 } else { f64::from(ev.pressure) }));
             let borrows_smooth = !self.active && ev.mods.alt && has_selected_smooth_path(cx);
@@ -1110,6 +1115,9 @@ impl GestureTool {
     fn tip_outline(&self, cx: &ToolContext) -> Vec<Overlay> {
         let Some(at) = self.tip_at.filter(|_| !self.smoothing && !cx.precise_cursors) else { return vec![] };
         if self.id == "paintbrush" {
+            if !self.active && self.tip_alt && has_selected_smooth_path(cx) {
+                return vec![];
+            }
             let Some((pose, pressure)) = self.bristle_pen else { return vec![] };
             let Some(name) = vectorcraft_brush::current(cx.doc) else { return vec![] };
             let Some(brush) = vectorcraft_brush::find(cx.doc, &name) else { return vec![] };
