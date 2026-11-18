@@ -213,6 +213,117 @@ fn the_selection_column_selects_a_rows_art_and_shift_adds_or_removes_it() {
     assert_eq!(ids_sel(&run(&mut s, "layer.target", json!({"id": layer.0}))), vec![c, a, g]);
 }
 
+/// The rows of [`column_start`]: [`tree`]'s, plus a rectangle `o` on a second layer and an empty
+/// third layer `e`.
+#[derive(Clone, Copy)]
+struct Column {
+    layer: NodeId,
+    sub: NodeId,
+    a: NodeId,
+    g: NodeId,
+    b: NodeId,
+    c: NodeId,
+    o: NodeId,
+    e: NodeId,
+}
+
+fn column_start() -> (Session, Column) {
+    let mut s = session();
+    let (layer, sub, a, g, b, c) = tree(&mut s);
+    run(&mut s, "layer.setCurrent", json!({"id": layer.0}));
+    let other = id(&run(&mut s, "layer.new", json!({})));
+    let o = rect(&mut s, 200.0);
+    let e = id(&run(&mut s, "layer.new", json!({})));
+    run(&mut s, "select.none", json!({}));
+    let top: Vec<NodeId> = s.doc().unwrap().doc.layers.iter().map(|l| l.id).collect();
+    assert!(top.contains(&other) && top.contains(&e) && parent(&s, o) == Some(other), "{top:?}");
+    (s, Column { layer, sub, a, g, b, c, o, e })
+}
+
+type Prep = dyn Fn(&mut Session, Column);
+
+/// A Shift-click in the selection column of `row` (whose art is `art`) after `prep` gives the
+/// same selection, reply, current layer, highlighted rows and revision as removing or adding each
+/// id of `art` one at a time. Returns the session the click ran in.
+fn shift_column_matches_each_id(prep: &Prep, row: impl Fn(Column) -> NodeId, art: impl Fn(Column) -> Vec<NodeId>) -> (Session, Column) {
+    let (mut new, t) = column_start();
+    prep(&mut new, t);
+    let row = row(t);
+    let before = new.doc().unwrap().selection.clone();
+    let reply = run(&mut new, "layer.selectAll", json!({"id": row.0, "add": true}));
+    let (mut old, t) = column_start();
+    prep(&mut old, t);
+    let ids = art(t);
+    let st = old.doc().unwrap();
+    let all_selected = !ids.is_empty() && ids.iter().all(|i| st.selection.contains(*i));
+    let rows = st.layer_rows.clone();
+    old.select(|_, sel| {
+        for i in &ids {
+            if all_selected { sel.remove(*i) } else { sel.add(*i) }
+        }
+    })
+    .unwrap();
+    old.doc_mut().unwrap().layer_rows = rows;
+    let (n, o) = (new.doc().unwrap(), old.doc().unwrap());
+    assert_eq!(n.selection, o.selection, "row {row:?} from {before:?}");
+    assert_eq!(ids_sel(&reply), o.selection.objects);
+    assert_eq!(n.active_layer, o.active_layer);
+    assert_eq!(n.highlighted_rows(), o.highlighted_rows());
+    assert_eq!(n.revision, o.revision);
+    assert_eq!(undos(&new), undos(&old));
+    (new, t)
+}
+
+#[test]
+fn a_shift_click_in_the_selection_column_matches_adding_or_removing_each_id() {
+    // `o` outside the layer is selected first and is the key object and the target; `a` is
+    // selected by one anchor, which is the key anchor.
+    let partly: &Prep = &|s, t| {
+        run(s, "layer.setCurrent", json!({"id": t.sub.0}));
+        let sel = &mut s.doc_mut().unwrap().selection;
+        sel.objects = vec![t.o, t.a];
+        sel.anchors.insert(t.a, [(0, 1)].into());
+        sel.key = Some(t.o);
+        sel.key_anchor = Some((t.a, (0, 1)));
+        sel.target = Some(t.o);
+    };
+    let layer_art = |t: Column| vec![t.c, t.a, t.g];
+    // Some of the layer's art is selected: the rest is added after what was selected.
+    let (s, t) = shift_column_matches_each_id(partly, |t| t.layer, layer_art);
+    let sel = &s.doc().unwrap().selection;
+    assert_eq!(sel.objects, vec![t.o, t.a, t.c, t.g]);
+    assert_eq!(sel.anchors.len(), 1, "the picked anchor stays picked");
+    assert!(sel.target.is_none());
+    // All of it is selected, `a` as the key object: it is removed, with its anchors, key and key
+    // anchor.
+    let all: &Prep = &|s, t| {
+        partly(s, t);
+        let sel = &mut s.doc_mut().unwrap().selection;
+        sel.objects.extend([t.c, t.g]);
+        sel.key = Some(t.a);
+    };
+    let (s, t) = shift_column_matches_each_id(all, |t| t.layer, layer_art);
+    let sel = &s.doc().unwrap().selection;
+    assert_eq!(sel.objects, vec![t.o]);
+    assert!(sel.anchors.is_empty() && sel.key.is_none() && sel.key_anchor.is_none());
+    // An object row, a group row and an empty layer's row.
+    shift_column_matches_each_id(all, |t| t.c, |t| vec![t.c]);
+    shift_column_matches_each_id(partly, |t| t.g, |t| vec![t.g]);
+    shift_column_matches_each_id(partly, |t| t.e, |_| vec![]);
+    // A locked sublayer's row, and rows outside and inside the isolated group.
+    let locked: &Prep = &|s, t| {
+        partly(s, t);
+        run(s, "layer.setProps", json!({"id": t.sub.0, "locked": true}));
+    };
+    shift_column_matches_each_id(locked, |t| t.sub, |_| vec![]);
+    let isolated: &Prep = &|s, t| {
+        partly(s, t);
+        s.doc_mut().unwrap().isolation = Some(t.g);
+    };
+    shift_column_matches_each_id(isolated, |t| t.c, |_| vec![]);
+    shift_column_matches_each_id(isolated, |t| t.b, |t| vec![t.b]);
+}
+
 fn ids_sel(v: &Value) -> Vec<NodeId> {
     v["selected"].as_array().unwrap().iter().map(|i| NodeId(i.as_u64().unwrap())).collect()
 }
@@ -481,6 +592,54 @@ fn new_layers_go_below_the_current_one_and_sublayers_under_the_contents() {
     assert_eq!(children(&s, layer), vec![front, under, back]);
 }
 
+/// In Draw Behind a new layer goes directly below the current layer, at its level, in one undo
+/// step; `top` and `below` keep their meaning, Draw Inside and Draw Normal keep it above, and new
+/// sublayers are not affected.
+#[test]
+fn new_layers_go_below_the_current_one_in_draw_behind() {
+    let mut s = session();
+    let (layer, sub, a, g, _, c) = tree(&mut s);
+    run(&mut s, "view.drawMode", json!({"mode": "behind"}));
+    run(&mut s, "layer.setCurrent", json!({"id": sub.0}));
+    let before = undos(&s);
+    let n = id(&run(&mut s, "layer.new", json!({})));
+    assert_eq!(children(&s, layer), vec![c, n, sub], "a sublayer directly below the current sublayer");
+    assert_eq!(undos(&s), before + 1);
+    assert_eq!(s.doc().unwrap().highlighted_rows(), vec![n]);
+    assert_eq!(s.doc().unwrap().current_layer(), Some(n));
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(children(&s, layer), vec![c, sub]);
+    // The Create New Layer button sends `top: false` for a plain click: still below.
+    run(&mut s, "layer.setCurrent", json!({"id": sub.0}));
+    let n = id(&run(&mut s, "layer.new", json!({"top": false})));
+    assert_eq!(children(&s, layer), vec![c, n, sub]);
+    run(&mut s, "edit.undo", json!({}));
+    // At the top level, and with options.
+    run(&mut s, "layer.setCurrent", json!({"id": layer.0}));
+    let back = id(&run(&mut s, "layer.new", json!({"name": "Back", "locked": true})));
+    let order = |s: &Session| s.doc().unwrap().doc.layers.iter().map(|l| l.id).collect::<Vec<_>>();
+    assert_eq!(order(&s), vec![back, layer]);
+    assert!(node(&s, back).locked);
+    // `top` and `below` win over the drawing mode.
+    let top = id(&run(&mut s, "layer.new", json!({"top": true})));
+    assert_eq!(order(&s), vec![back, layer, top]);
+    let below = id(&run(&mut s, "layer.new", json!({"below": true})));
+    assert_eq!(order(&s), vec![back, layer, below, top]);
+    assert!(s.execute("layer.new", &json!({"top": true, "below": true})).is_err());
+    // New sublayers still go on top of the parent's contents.
+    let inner = id(&run(&mut s, "layer.newSublayer", json!({"parent": sub.0})));
+    assert_eq!(children(&s, sub), vec![a, g, inner]);
+    // Draw Inside and Draw Normal put it above.
+    run(&mut s, "select.set", json!({"ids": [c.0]}));
+    for mode in ["inside", "normal"] {
+        run(&mut s, "view.drawMode", json!({"mode": mode}));
+        assert_eq!(s.draw_mode, if mode == "inside" { DrawMode::Inside } else { DrawMode::Normal });
+        run(&mut s, "layer.setCurrent", json!({"id": back.0}));
+        let n = id(&run(&mut s, "layer.new", json!({})));
+        assert_eq!(s.doc().unwrap().doc.layers[1].id, n, "{mode}");
+    }
+}
+
 #[test]
 fn rows_move_above_below_and_into_layers_and_groups() {
     let mut s = session();
@@ -641,6 +800,45 @@ fn alt_drag_copies_rows_and_the_selected_art_moves_between_layers() {
     run(&mut s, "layer.move", json!({"ids": [a.0, g.0], "target": layer.0}));
     assert_eq!(children(&s, layer), vec![c, sub, a, g]);
     assert_eq!(s.doc().unwrap().selection.objects, vec![a, g], "it stays selected");
+}
+
+/// #8237: a copy may go above or below a row it copies, so a lone layer, the top layer dragged up
+/// and the bottom one dragged down can be copied. A move there, or a copy inside the row, is still
+/// refused.
+#[test]
+fn a_copy_goes_above_or_below_a_row_it_copies() {
+    let mut s = session();
+    let layers = |s: &Session| s.doc().unwrap().doc.layers.iter().map(|l| l.id).collect::<Vec<_>>();
+    let [only] = layers(&s)[..] else { panic!("one layer") };
+    for place in ["above", "below", "inside"] {
+        assert!(s.execute("layer.move", &json!({"ids": [only.0], "target": only.0, "place": place})).is_err(), "a move {place} itself");
+    }
+    assert!(s.execute("layer.move", &json!({"ids": [only.0], "target": only.0, "place": "inside", "copy": true})).is_err());
+    assert_eq!(layers(&s), vec![only], "nothing changed");
+    let above = ids(&run(&mut s, "layer.move", json!({"ids": [only.0], "target": only.0, "place": "above", "copy": true})));
+    assert_eq!(layers(&s), vec![only, above[0]], "the copy above the original");
+    let below = ids(&run(&mut s, "layer.move", json!({"ids": [only.0], "target": only.0, "place": "below", "copy": true})));
+    assert_eq!(layers(&s), vec![below[0], only, above[0]], "and one below it");
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(layers(&s), vec![only, above[0]], "each copy is one undo step");
+}
+
+/// #8237 review: rows that hold an object can't sit beside a top-level layer, so copied beside a
+/// top-level layer among them they would go inside it: a copy of that layer inside itself. Refused,
+/// and nothing changes.
+#[test]
+fn a_copy_with_objects_beside_a_copied_top_level_layer_is_refused() {
+    let mut s = session();
+    let bottom = s.doc().unwrap().doc.layers[0].id;
+    let other = id(&run(&mut s, "layer.new", json!({})));
+    let r = rect(&mut s, 0.0);
+    assert_eq!(s.doc().unwrap().doc.parent_of(r), Some(other), "the rectangle is in the other layer");
+    let count = s.doc().unwrap().doc.node_count();
+    for place in ["above", "below"] {
+        let p = json!({"ids": [bottom.0, r.0], "target": bottom.0, "place": place, "copy": true});
+        assert!(s.execute("layer.move", &p).is_err(), "{place}: the layer's copy would go inside it");
+    }
+    assert_eq!(s.doc().unwrap().doc.node_count(), count, "nothing copied");
 }
 
 /// The selected art in rows dragged into a hidden layer or group is deselected, the key object
@@ -902,6 +1100,38 @@ fn locate_object_highlights_its_row() {
     assert_eq!(run(&mut s, "layer.locate", json!({"id": b.0}))["id"], b.0);
     run(&mut s, "select.none", json!({}));
     assert!(s.execute("layer.locate", &json!({})).is_err());
+}
+
+/// Locate Layer (`layersOnly`, sent while Show Layers Only is on) highlights the innermost layer
+/// or sublayer holding the object, through any groups; a layer locates itself.
+#[test]
+fn locate_layer_highlights_the_layer_holding_the_object() {
+    let mut s = session();
+    let (layer, sub, _, g, b, c) = tree(&mut s);
+    run(&mut s, "select.set", json!({"ids": [b.0]}));
+    let r = run(&mut s, "layer.locate", json!({"layersOnly": true}));
+    assert_eq!(r, json!({"id": sub.0, "objectId": b.0, "ancestry": [layer.0, sub.0]}), "the group's sublayer");
+    assert_eq!(s.doc().unwrap().highlighted_rows(), vec![sub]);
+    assert_eq!(s.doc().unwrap().locate_reveal, Some(sub), "the Layers panel reveals the located row");
+    s.doc_mut().unwrap().locate_reveal = None;
+    let undo = s.doc().unwrap().history.undo.len();
+    run(&mut s, "layer.locate", json!({"layersOnly": true}));
+    assert_eq!(s.doc().unwrap().locate_reveal, Some(sub), "again for a row already highlighted");
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "no undo step");
+    assert_eq!(run(&mut s, "layer.locate", json!({"id": c.0, "layersOnly": true}))["id"], layer.0, "art directly in a layer");
+    assert_eq!(s.doc().unwrap().highlighted_rows(), vec![layer]);
+    let r = run(&mut s, "layer.locate", json!({"id": sub.0, "layersOnly": true}));
+    assert_eq!((r["id"].clone(), r["objectId"].clone()), (json!(sub.0), json!(sub.0)), "a sublayer locates itself");
+    // Off, the object's own row is highlighted, as before.
+    assert_eq!(run(&mut s, "layer.locate", json!({"id": g.0, "layersOnly": false})), json!({"id": g.0, "ancestry": [layer.0, sub.0, g.0]}));
+    // Bad input changes nothing.
+    for p in [json!({"id": b.0, "layersOnly": "yes"}), json!({"id": 999_999, "layersOnly": true})] {
+        assert!(s.execute("layer.locate", &p).is_err(), "{p}");
+        assert_eq!(s.doc().unwrap().highlighted_rows(), vec![g], "{p}");
+        assert_eq!(s.doc().unwrap().locate_reveal, Some(g), "{p}");
+    }
+    run(&mut s, "select.none", json!({}));
+    assert!(s.execute("layer.locate", &json!({"layersOnly": true})).is_err(), "nothing selected");
 }
 
 #[test]
