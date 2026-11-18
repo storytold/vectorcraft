@@ -2758,6 +2758,9 @@ diagnostics	ui	інтерфейс
 	Polar Grid Tool	Інструмент «Полярна сітка»
 	Polygon	Багатокутник
 	Polygon Properties:	Властивості багатокутника:
+	Line Properties:	Властивості лінії:
+	Line Length:	Довжина лінії:
+	Line Angle:	Кут лінії:
 	Polygon Tool	Інструмент «Багатокутник»
 	Portrait	Книжкова
 	Power Saving (integrated)	Енергозбереження (вбудована)
