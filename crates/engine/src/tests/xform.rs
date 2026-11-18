@@ -557,6 +557,23 @@ fn shear_rejects_angles_with_no_shear_or_out_of_range() {
     assert_eq!(undo_len(&s), n, "no undo step");
 }
 
+/// Shear by 0, 180 or -180 degrees, along either axis, has no slant: the art keeps its exact
+/// coordinates and no undo step is recorded.
+#[test]
+fn shear_by_0_and_180_changes_nothing() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 20.0, 30.0, 10.0);
+    let before = bounds(&s, a);
+    let n = undo_len(&s);
+    for angle in [180.0, -180.0, 0.0, 180.0 + 1e-12, -180.0 - 1e-12] {
+        for axis in ["horizontal", "vertical"] {
+            s.execute("object.shear", &json!({"angle": angle, "axis": axis})).unwrap();
+            assert_eq!(bounds(&s, a), before, "{angle} {axis}");
+            assert_eq!(undo_len(&s), n, "{angle} {axis}: no undo step");
+        }
+    }
+}
+
 #[test]
 fn distort_command_maps_corners() {
     let mut s = session();

@@ -414,8 +414,8 @@ pub(super) fn reflect(s: &mut Session, p: &Value) -> Result<Value> {
     apply_transform(s, "Reflect", ids, about(o, m), p, true)
 }
 
-/// Angles closer than this many degrees to ±90 or ±270 count as those angles. It is far above the
-/// rounding error of an angle up to 359° and below any angle a field shows.
+/// Angles closer than this many degrees to ±90 or ±270, or to 0 or ±180, count as those angles. It
+/// is far above the rounding error of an angle up to 359° and below any angle a field shows.
 const SHEAR_ANGLE_TOLERANCE: f64 = 1e-9;
 
 pub(super) fn shear(s: &mut Session, p: &Value) -> Result<Value> {
@@ -431,7 +431,9 @@ pub(super) fn shear(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let ids = selected_roots_to_transform(s)?;
     let o = origin_of(s, p, &ids)?;
-    let t = angle.to_radians().tan();
+    // 0 and ±180 have no slant, but the tangent of ±180° in radians is about 1e-16, not 0.
+    let flat = angle.rem_euclid(180.0);
+    let t = if flat < SHEAR_ANGLE_TOLERANCE || 180.0 - flat < SHEAR_ANGLE_TOLERANCE { 0.0 } else { angle.to_radians().tan() };
     let vertical = choice(p, "object.shear", "axis", &["horizontal", "vertical"])? == Some("vertical");
     let m = if vertical { Affine::new([1.0, t, 0.0, 1.0, 0.0, 0.0]) } else { Affine::new([1.0, 0.0, -t, 1.0, 0.0, 0.0]) };
     apply_transform(s, "Shear", ids, about(o, m), p, true)
