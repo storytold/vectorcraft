@@ -34,8 +34,12 @@ const LABEL_W: f32 = 140.0;
 
 pub(super) const SPEC: DialogSpec = DialogSpec { heading: |_| tl!("Proof Setup").into(), body, confirm, min_width: 420.0, ..DialogSpec::FORM };
 
-/// Open the dialog on the current proof setup.
+/// Open the dialog on the current proof setup. While it is open, it stays as it is, so Cancel
+/// still puts back the view it found first.
 pub fn open(app: &mut VectorcraftApp) {
+    if app.ui.dialog.as_ref().is_some_and(|d| d.kind == KIND) {
+        return;
+    }
     let v = proof::view();
     let s = &v.setup;
     let device = match &s.target {
@@ -147,12 +151,30 @@ fn preview(app: &mut VectorcraftApp, d: &mut Dialog) {
     }
 }
 
-/// Put back the proof view the dialog found.
+/// Put back the proof view the dialog found and redraw the documents. The view is set directly,
+/// not through `view.proofSetup`, which refuses a device profile removed since it was set.
 fn restore(app: &mut VectorcraftApp, d: &Dialog) {
-    if let Some(before) = d.fields.get(BEFORE).cloned()
-        && let Err(e) = app.run(CMD, before)
-    {
-        app.ui.status = e;
+    let Some(before) = d.fields.get(BEFORE) else { return };
+    let text = |k: &str| before.get(k).and_then(Value::as_str).unwrap_or_default();
+    let on = |k: &str| before.get(k).and_then(Value::as_bool).unwrap_or_default();
+    let (Some(target), Some(intent)) = (ProofTarget::parse(text("target")), Intent::parse(text("intent"))) else { return };
+    let mut v = proof::view();
+    let was = v.clone();
+    v.setup.target = target;
+    v.setup.intent = intent;
+    v.setup.simulate_paper = on("simulatePaper");
+    v.setup.preserve_numbers = on("preserveNumbers");
+    v.setup.simulate_black = on("simulateBlack");
+    v.proof_colors = on("proof");
+    if v == was {
+        return;
+    }
+    proof::set_view(v);
+    let uids: Vec<u64> = app.session.documents().iter().map(|d| d.uid).collect();
+    for uid in uids {
+        if let Some(d) = app.session.document_mut(uid) {
+            d.revision += 1;
+        }
     }
 }
 
@@ -266,6 +288,52 @@ mod tests {
         super::super::cancel(&mut app);
         assert!(app.ui.dialog.is_none());
         assert_eq!(proof::view(), before, "Cancel puts the view back");
+    }
+
+    /// Cancel and Preview off put back a proof view whose device profile was removed after it was
+    /// set, and redraw the documents.
+    #[test]
+    fn cancel_puts_back_a_view_whose_profile_was_removed() {
+        let _v = DefaultView::new();
+        let (mut app, ctx) = app();
+        let name = "Proof Setup Removed RGB";
+        cms::register_icc(&cms::icc_bytes(cms::DISPLAY_P3).unwrap(), Some(name.into())).unwrap();
+        app.run("view.proofSetup", json!({"target": format!("rgb:{name}"), "proof": true})).unwrap();
+        app.run("color.removeProfile", json!({"name": name})).unwrap();
+        let before = proof::view();
+        assert_eq!(before.setup.target, ProofTarget::Rgb(name.into()), "removing the profile leaves it the device");
+        app.run("ui.proofSetupDialog", json!({})).unwrap();
+        app.ui.dialog.as_mut().unwrap().fields.insert("device".into(), json!(WORKING));
+        frame(&mut app, &ctx);
+        assert_eq!(proof::view().setup.target, ProofTarget::WorkingCmyk, "the preview shows the working CMYK");
+        app.ui.dialog.as_mut().unwrap().fields.insert("preview".into(), json!(false));
+        frame(&mut app, &ctx);
+        assert_eq!(proof::view(), before, "Preview off puts the view back");
+        app.ui.dialog.as_mut().unwrap().fields.insert("preview".into(), json!(true));
+        frame(&mut app, &ctx);
+        let revision = app.session.doc().unwrap().revision;
+        super::super::cancel(&mut app);
+        assert!(app.ui.dialog.is_none());
+        assert_eq!(proof::view(), before, "Cancel puts the view back");
+        assert!(app.session.doc().unwrap().revision > revision, "the document redraws");
+    }
+
+    /// Run again while the dialog is open, Proof Setup keeps the dialog as it is, so Cancel still
+    /// puts back the view it found the first time.
+    #[test]
+    fn running_proof_setup_again_keeps_the_open_dialog() {
+        let _v = DefaultView::new();
+        let (mut app, ctx) = app();
+        let before = proof::view();
+        app.run("ui.proofSetupDialog", json!({})).unwrap();
+        let rgb = format!("rgb:{}", cms::DISPLAY_P3);
+        app.ui.dialog.as_mut().unwrap().fields.insert("device".into(), json!(rgb));
+        frame(&mut app, &ctx);
+        assert_eq!(proof::view().setup.target, ProofTarget::Rgb(cms::DISPLAY_P3.into()));
+        app.run("ui.proofSetupDialog", json!({})).unwrap();
+        assert_eq!(app.ui.dialog.as_ref().unwrap().str("device"), rgb, "the open dialog stays as it is");
+        super::super::cancel(&mut app);
+        assert_eq!(proof::view(), before, "Cancel puts back the view the first run found");
     }
 
     /// A device the dialog can't use (a profile that is not loaded) is refused, and the dialog
