@@ -433,7 +433,8 @@ fn line(i: Result<Value, String>, units: vectorcraft_doc::Unit) -> String {
     match (i["pixelWidth"].as_u64(), i["pixelHeight"].as_u64()) {
         (Some(w), Some(h)) => {
             let ppi = i["ppi"][0].as_f64().unwrap_or(72.0);
-            format!("{w} × {h} px, {} ppi, {} ({size})", fmt_ppi(ppi), i["colorMode"].as_str().unwrap_or("RGB"))
+            let ppi = crate::i18n::fill_once(tl!("{n} ppi"), &[("n", &fmt_ppi(ppi))]);
+            format!("{w} × {h} px, {ppi}, {} ({size})", i["colorMode"].as_str().unwrap_or("RGB"))
         }
         _ => format!("{} ({size})", i["format"].as_str().unwrap_or_default().to_uppercase()),
     }
@@ -927,5 +928,22 @@ pub(crate) fn link_buttons(app: &mut VectorcraftApp, ui: &mut egui::Ui, id: u64,
         }
     } else if button(ui, tl!("Unembed…"), UNEMBED_WIDTH) {
         crate::panels::links::unembed(app, id, name);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The Place dialog's line about an image writes its resolution with the `{n} ppi` row.
+    #[test]
+    fn the_file_line_writes_the_ppi_unit_in_the_interface_language() {
+        let info = json!({ "pixelWidth": 300, "pixelHeight": 150, "ppi": [300.0, 300.0], "colorMode": "RGB", "width": 72.0, "height": 36.0 });
+        let en = line(Ok(info.clone()), vectorcraft_doc::Unit::Points);
+        crate::i18n::set_current(crate::i18n::Lang::from_code("fr").unwrap());
+        let fr = line(Ok(info), vectorcraft_doc::Unit::Points);
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        assert!(en.starts_with("300 × 150 px, 300 ppi, RGB ("), "{en}");
+        assert!(fr.starts_with("300 × 150 px, 300 ppp, RGB ("), "{fr}");
     }
 }
