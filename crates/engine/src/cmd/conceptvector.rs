@@ -190,7 +190,7 @@ impl ConceptRun {
             return Err(bad(C, format!("`{pid}` takes no prompt and makes vector art only")));
         }
         let detail = match p.get("detail") {
-            None | Some(Value::Null) => 50,
+            None => 50,
             Some(v) => v.as_u64().filter(|d| *d <= 100).ok_or_else(|| bad(C, "`detail` must be a whole number from 0 to 100"))? as u8,
         };
         let (source, image, bytes) = source(s, C, p)?;

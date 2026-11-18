@@ -294,7 +294,7 @@ fn a_prompt_is_refused_by_a_provider_without_prompts_and_raster_output_by_every_
     with_fake(&mut r, Fake { raster: true, ..fake(squares) });
     let e = generate(&mut r, json!({"provider": "test.fake", "styles": ["s0"], "output": "raster"})).unwrap_err().to_string();
     assert!(e.contains("`output` must be \"vector\""), "{e}");
-    for detail in [json!(101), json!(-1), json!(2.5), json!("50")] {
+    for detail in [json!(101), json!(-1), json!(2.5), json!("50"), json!(null)] {
         assert!(generate(&mut s, p(json!({"detail": detail}))).unwrap_err().to_string().contains("`detail` must be a whole number"), "{detail}");
     }
     // A provider that takes prompts gets the prompt, trimmed.
