@@ -334,6 +334,26 @@ fn ornamental_brushes_draw_flourishes_and_survive_a_saved_library() {
     assert_eq!(vectorcraft_brush::library(&reopened), lib.brushes);
 }
 
+/// Filigree Arrow's shaft runs into its head with no gap, so a straight stroke draws one arrow.
+#[test]
+fn the_filigree_arrow_shaft_meets_its_head() {
+    let s = session();
+    let (_, lib) = cmd::brushlib::library(&s, "Ornamental").unwrap();
+    let BrushKind::Art(art) = &lib.brush("Filigree Arrow").unwrap().kind else { panic!("Filigree Arrow is not an art brush") };
+    let mut parts = vec![];
+    art.art.walk(&mut |c| {
+        if c.path_data().is_some() {
+            parts.push(c.contains_fn());
+        }
+    });
+    for y in [-0.6, 0.0, 0.6] {
+        for i in 0..=930 {
+            let p = vectorcraft_geom::Point::new(4.05 + 0.1 * f64::from(i), y);
+            assert!(parts.iter().any(|inside| inside(p)), "gap at {p:?}");
+        }
+    }
+}
+
 #[test]
 fn pressure_sensitive_brushes_widen_with_pen_pressure_and_survive_a_saved_library() {
     let mut s = session();

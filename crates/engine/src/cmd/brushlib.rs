@@ -529,7 +529,8 @@ fn ornamental() -> BrushLibrary {
         black(polygon(&[(60.0, 3.0), (66.0, 5.0), (72.0, -1.0), (67.0, -2.0)])),
     ]);
     let arrow = group(vec![
-        black(shapes::rectangle(Rect::new(4.0, -0.7, 84.0, 0.7))),
+        // The shaft runs into the head's notch at x = 85 so the two overlap.
+        black(shapes::rectangle(Rect::new(4.0, -0.7, 86.0, 0.7))),
         black(polygon(&[(80.0, -6.5), (100.0, 0.0), (80.0, 6.5), (85.0, 0.0)])),
         ring(Point::new(7.0, 0.0), 4.0, 1.7),
         black(polygon(&[(25.0, -0.4), (31.0, -4.4), (37.0, -2.0), (31.0, 0.8)])),
