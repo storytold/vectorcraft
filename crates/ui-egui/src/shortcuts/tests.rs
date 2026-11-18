@@ -223,6 +223,163 @@ fn ctrl_alt_chords_without_typed_text_still_run() {
     assert_eq!(text_and_layers(&mut app, id), ("Hi".into(), layers + 1), "no layer is added until OK");
 }
 
+/// A document with the type object "Hi", edited with the Type tool and the caret after "Hi".
+fn editing_hi() -> (VectorcraftApp, u64) {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    let id = app.session.execute("text.create", &json!({"x": 20, "y": 50, "text": "Hi"})).unwrap()["id"].as_u64().unwrap();
+    app.select_tool("type");
+    app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+    app.session.set_tool_option("select", &json!({"start": 2, "end": 2}));
+    assert!(app.session.tool_wants_text());
+    (app, id)
+}
+
+/// The Alt chords that type a character while text is edited on Windows and Linux: the key, Shift,
+/// the text the key types without Alt, and the character.
+const ALT_CHARACTER_CHORDS: [(Key, bool, &str, &str); 15] = [
+    (Key::Num8, false, "8", "\u{2022}"),
+    (Key::G, false, "g", "\u{00A9}"),
+    (Key::Semicolon, false, ";", "\u{2026}"),
+    (Key::Num7, false, "7", "\u{00B6}"),
+    (Key::Num6, false, "6", "\u{00A7}"),
+    (Key::Num2, false, "2", "\u{2122}"),
+    (Key::R, false, "r", "\u{00AE}"),
+    (Key::Minus, true, "_", "\u{2014}"),
+    (Key::Minus, false, "-", "\u{2013}"),
+    (Key::OpenBracket, false, "[", "\u{201C}"),
+    (Key::OpenBracket, true, "{", "\u{201D}"),
+    (Key::OpenCurlyBracket, true, "{", "\u{201D}"),
+    (Key::CloseBracket, false, "]", "\u{2018}"),
+    (Key::CloseBracket, true, "}", "\u{2019}"),
+    (Key::CloseCurlyBracket, true, "}", "\u{2019}"),
+];
+
+/// An Alt press of `key`, with Shift when `shift`, followed by `typed` when given.
+fn alt_press(key: Key, shift: bool, typed: Option<&str>) -> Vec<egui::Event> {
+    let m = if shift { Modifiers::ALT | Modifiers::SHIFT } else { Modifiers::ALT };
+    let mut v = press(key, m);
+    v.extend(typed.map(|t| egui::Event::Text(t.into())));
+    v
+}
+
+/// While the Type tool edits text on Windows and Linux, each Alt chord types its character at the
+/// caret as one undo step, whether or not the key's own character comes with the press, before it
+/// (the web build) or after it, and Undo takes it out.
+#[test]
+fn alt_chords_type_special_characters_while_editing_text() {
+    if crate::keymap::platform().is_mac() {
+        return;
+    }
+    let mut wrong = vec![];
+    for (key, shift, own, character) in ALT_CHARACTER_CHORDS {
+        for (typed, text_first) in [(None, false), (Some(own), false), (Some(own.to_uppercase().as_str()), false), (Some(own), true)] {
+            let (mut app, id) = editing_hi();
+            let mut events = alt_press(key, shift, typed);
+            if text_first {
+                events.swap(1, 2);
+            }
+            frame(&mut app, events);
+            let case = format!("{key:?} shift={shift} text={typed:?} text first={text_first}");
+            let text = text_and_layers(&mut app, id).0;
+            if text != format!("Hi{character}") {
+                wrong.push(format!("{case}: text = {text:?}"));
+                continue;
+            }
+            app.session.execute("edit.undo", &json!({})).unwrap();
+            let undone = text_and_layers(&mut app, id).0;
+            if undone != "Hi" {
+                wrong.push(format!("{case}: after Undo = {undone:?}"));
+            }
+        }
+    }
+    assert!(wrong.is_empty(), "{wrong:#?}");
+}
+
+/// An Alt chord replaces the selected text, and a held chord types its character once per press.
+#[test]
+fn alt_chord_replaces_selected_text_and_repeats() {
+    if crate::keymap::platform().is_mac() {
+        return;
+    }
+    let (mut app, id) = editing_hi();
+    app.session.set_tool_option("select", &json!({"start": 0, "end": 2}));
+    frame(&mut app, alt_press(Key::G, false, Some("g")));
+    assert_eq!(text_and_layers(&mut app, id).0, "\u{00A9}");
+    let mut held = alt_press(Key::Num8, false, Some("8"));
+    held.push(egui::Event::Key { key: Key::Num8, physical_key: Some(Key::Num8), pressed: true, repeat: true, modifiers: Modifiers::ALT });
+    held.push(egui::Event::Text("8".into()));
+    frame(&mut app, held);
+    assert_eq!(text_and_layers(&mut app, id).0, "\u{00A9}\u{2022}\u{2022}");
+}
+
+/// Text the keyboard layout or an input method types with Alt (Option on a Mac) is typed once, as
+/// it came, and AltGr (Ctrl+Alt) types its own character: no chord character is added. A chord
+/// after an input method's text still types its character on Windows and Linux.
+#[test]
+fn alt_chord_text_from_the_layout_is_typed_once() {
+    let bullet = if crate::keymap::platform().is_mac() { "" } else { "\u{2022}" };
+    let mut ime_commit = alt_press(Key::G, false, None);
+    ime_commit.push(egui::Event::Ime(egui::ImeEvent::Commit("\u{011F}".into())));
+    let mut ime_commit_after_release = alt_press(Key::R, false, None);
+    ime_commit_after_release.push(egui::Event::ModifiersChanged(Modifiers::NONE));
+    ime_commit_after_release.push(egui::Event::Ime(egui::ImeEvent::Commit("\u{0159}".into())));
+    // Windows sends an empty pre-edit before each commit, and an input method can delete the text
+    // around the caret between the press and its text.
+    let mut ime_commit_after_empty_preedit = alt_press(Key::G, false, None);
+    ime_commit_after_empty_preedit.extend([
+        egui::Event::Ime(egui::ImeEvent::DeleteSurrounding { before_chars: 0, after_chars: 0 }),
+        egui::Event::Ime(egui::ImeEvent::Preedit { text: String::new(), active_range_chars: None }),
+        egui::Event::Ime(egui::ImeEvent::Commit("\u{011F}".into())),
+    ]);
+    let commit_then_chord = vec![
+        egui::Event::Ime(egui::ImeEvent::Commit("x".into())),
+        egui::Event::Key { key: Key::Num8, physical_key: Some(Key::Num8), pressed: true, repeat: false, modifiers: Modifiers::ALT },
+    ];
+    for (events, expected) in [
+        (ime_commit, "Hi\u{011F}"),
+        (ime_commit_after_release, "Hi\u{0159}"),
+        (ime_commit_after_empty_preedit, "Hi\u{011F}"),
+        (commit_then_chord, format!("Hix{bullet}").as_str()),
+        (alt_press(Key::G, false, Some("\u{00A9}")), "Hi\u{00A9}"),
+        (alt_press(Key::G, false, Some("\u{011F}")), "Hi\u{011F}"),
+        (
+            vec![
+                egui::Event::ModifiersChanged(Modifiers::ALT),
+                egui::Event::Text("\u{00A9}".into()),
+                egui::Event::Key { key: Key::G, physical_key: Some(Key::G), pressed: true, repeat: false, modifiers: Modifiers::ALT },
+            ],
+            "Hi\u{00A9}",
+        ),
+        (alt_press(Key::Num8, false, Some("ab")), "Hiab"),
+        (ctrl_alt_press(Key::Num8, Some("[")), "Hi["),
+        (ctrl_alt_press(Key::G, Some("g")), "Hig"),
+    ] {
+        let (mut app, id) = editing_hi();
+        frame(&mut app, events.clone());
+        assert_eq!(text_and_layers(&mut app, id).0, expected, "{events:?}");
+    }
+}
+
+/// Outside text editing the Alt chords type nothing: with the Selection tool, or the Type tool
+/// not editing, the type object keeps its text.
+#[test]
+fn alt_chords_outside_text_editing_type_nothing() {
+    for tool in ["selection", "type"] {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        let id = app.session.execute("text.create", &json!({"x": 20, "y": 50, "text": "Hi"})).unwrap()["id"].as_u64().unwrap();
+        app.select_tool(tool);
+        app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
+        assert!(!app.session.tool_wants_text(), "{tool}");
+        for (key, shift, own, _) in ALT_CHARACTER_CHORDS {
+            frame(&mut app, alt_press(key, shift, Some(own)));
+            frame(&mut app, alt_press(key, shift, None));
+        }
+        assert_eq!(text_and_layers(&mut app, id).0, "Hi", "{tool}");
+    }
+}
+
 /// Cmd as egui reports it on this platform: the Command key on macOS, Ctrl elsewhere.
 fn cmd() -> Modifiers {
     if crate::keymap::platform().is_mac() { Modifiers::MAC_CMD | Modifiers::COMMAND } else { Modifiers::CTRL | Modifiers::COMMAND }
@@ -934,6 +1091,81 @@ fn cmd_shift_u_and_cmd_alt_shift_c_and_h_toggle_type_formats() {
     for id in ["type.underline", "type.lineComposer", "type.hyphenate"] {
         assert!(!crate::menus::enabled(&app, id), "{id}");
     }
+}
+
+/// Cmd+Shift+= and Cmd+Alt+Shift+= do what the Character panel's Superscript and Subscript
+/// buttons do; with no type selected, Cmd+Shift+= still zooms in, as Cmd+= does.
+#[test]
+fn cmd_shift_equals_and_cmd_alt_shift_equals_toggle_superscript_and_subscript() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    let id = app.session.execute("text.create", &json!({"x": 20, "y": 50, "text": "One\nTwo"})).unwrap()["id"].as_u64().unwrap();
+    let positions = |app: &mut VectorcraftApp| {
+        let r = app.session.execute("text.getRange", &json!({"id": id})).unwrap();
+        // A superscript or subscript run reports its kind with its size and offset; a normal one
+        // reports no position.
+        let kind = |p: &serde_json::Value| if p.is_null() { json!("normal") } else { p.get("kind").unwrap_or(p).clone() };
+        r["runs"].as_array().unwrap().iter().map(|run| (run["text"].clone(), kind(&run["style"]["position"]))).collect::<Vec<_>>()
+    };
+    let zoom = |app: &mut VectorcraftApp| app.view_mut().unwrap().zoom;
+    let press =
+        |key, m: Modifiers| vec![egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::COMMAND | m }];
+    let (shift, alt_shift) = (Modifiers::SHIFT, Modifiers::ALT | Modifiers::SHIFT);
+    let all = |p: &str| [(json!("One\nTwo"), json!(p))];
+    app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let before = zoom(&mut app);
+    // Shift+`=` is reported as `=` or as `+`.
+    frame(&mut app, press(Key::Equals, shift));
+    assert_eq!(positions(&mut app), all("superscript"));
+    frame(&mut app, press(Key::Plus, shift));
+    assert_eq!(positions(&mut app), all("normal"), "a second press turns it off");
+    frame(&mut app, press(Key::Equals, alt_shift));
+    assert_eq!(positions(&mut app), all("subscript"));
+    frame(&mut app, press(Key::Equals, shift));
+    assert_eq!(positions(&mut app), all("superscript"), "superscript replaces subscript");
+    frame(&mut app, press(Key::Plus, alt_shift));
+    assert_eq!(positions(&mut app), all("subscript"));
+    frame(&mut app, press(Key::Equals, alt_shift));
+    assert_eq!(positions(&mut app), all("normal"));
+    assert_eq!(zoom(&mut app), before, "no press zoomed while type is selected");
+    frame(&mut app, press(Key::Equals, Modifiers::NONE));
+    assert!(zoom(&mut app) > before, "Cmd+= zooms in with type selected");
+    // While the Type tool edits: its selected text.
+    app.select_tool("type");
+    app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+    app.session.set_tool_option("select", &json!({"start": 4, "end": 7}));
+    assert!(app.session.tool_wants_text());
+    frame(&mut app, press(Key::Equals, alt_shift));
+    assert_eq!(positions(&mut app), [(json!("One\n"), json!("normal")), (json!("Two"), json!("subscript"))]);
+    // A mixed selection takes the position on every character.
+    app.select_tool("selection");
+    app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
+    frame(&mut app, press(Key::Equals, alt_shift));
+    let subscript = |app: &mut VectorcraftApp| positions(app).iter().all(|(_, p)| *p == json!("subscript"));
+    assert!(subscript(&mut app), "{:?}", positions(&mut app));
+    // Nothing selected: Cmd+Shift+= zooms in, and Cmd+Alt+Shift+= changes nothing.
+    app.session.execute("select.none", &json!({})).unwrap();
+    for id in ["type.superscript", "type.subscript"] {
+        assert!(!crate::menus::enabled(&app, id), "{id}");
+    }
+    for key in [Key::Equals, Key::Plus] {
+        let before = zoom(&mut app);
+        frame(&mut app, press(key, alt_shift));
+        assert_eq!(zoom(&mut app), before, "{key:?} with Cmd+Alt+Shift");
+        frame(&mut app, press(key, shift));
+        assert!(zoom(&mut app) > before, "{key:?} with Cmd+Shift zooms in");
+    }
+    assert!(subscript(&mut app), "{:?}", positions(&mut app));
+    // Cmd+A and Cmd+Shift+= in one frame: Select All runs first, so Cmd+Shift+= applies
+    // Superscript to the text it selected instead of zooming in.
+    let before = zoom(&mut app);
+    frame(&mut app, [press(Key::A, Modifiers::NONE), press(Key::Equals, shift)].concat());
+    assert_eq!(zoom(&mut app), before, "no zoom once Select All selected the type");
+    // The earlier mixed selection left the text in two runs; check that both lines are still
+    // there and every run is superscript.
+    let runs = positions(&mut app);
+    assert_eq!(runs.iter().filter_map(|(t, _)| t.as_str()).collect::<String>(), "One\nTwo", "{runs:?}");
+    assert!(runs.iter().all(|(_, p)| *p == json!("superscript")), "{runs:?}");
 }
 
 /// Tab shows and hides the panels, and in the Type tool it types a tab, without moving the
@@ -2536,6 +2768,36 @@ fn the_blend_tool_shortcut_finishes_the_blend() {
     assert_eq!(app.session.active().unwrap().doc.layers, layers, "no blend was made");
 }
 
+/// P, the Pen's shortcut, pressed between clicks while the Pen draws a path ends that path: the Pen
+/// stays chosen, the path stays open, and the next click starts a new path.
+#[test]
+fn the_pen_shortcut_ends_the_path_being_drawn() {
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 600, "height": 300})).unwrap();
+    app.select_tool("pen");
+    let click = |app: &mut VectorcraftApp, x: f64| {
+        let v = app.view_info();
+        app.session.pointer(&PointerEvent::new(PointerKind::Down, x, 100.0), v).unwrap();
+        app.session.pointer(&PointerEvent::new(PointerKind::Up, x, 100.0), v).unwrap();
+    };
+    let press = |key| egui::Event::Key { key, physical_key: Some(key), pressed: true, repeat: false, modifiers: Modifiers::NONE };
+    let anchors = |app: &VectorcraftApp, id| {
+        let path = app.session.active().unwrap().doc.node(id).and_then(|n| n.path_data());
+        path.map(|pd| pd.subpaths.iter().map(|sp| sp.anchors.len()).collect::<Vec<_>>())
+    };
+    click(&mut app, 100.0);
+    click(&mut app, 200.0);
+    let first = app.session.active().unwrap().selection.objects[0];
+    frame(&mut app, vec![press(Key::P), egui::Event::Text("p".into())]);
+    assert_eq!(app.session.tool_id(), "pen");
+    click(&mut app, 300.0);
+    assert_eq!(anchors(&app, first), Some(vec![2]), "the path keeps its two anchors");
+    let second = app.session.active().unwrap().selection.objects[0];
+    assert_ne!(second, first, "the click starts a new path");
+    assert_eq!(anchors(&app, second), Some(vec![1]));
+}
+
 /// A Blend tool shortcut that arrives only as text (Shift+~ types `~`) also finishes the blend,
 /// while another tool's shifted shortcut does not.
 #[test]
@@ -3206,4 +3468,28 @@ fn artboard_navigation_commands_can_be_given_keys() {
     assert_eq!(at(&app), 2);
     frame(&mut app, press(Key::PageUp));
     assert_eq!(at(&app), 1, "Page Up goes to the previous artboard");
+}
+
+/// Ctrl+` (Windows and Linux) chooses the selection tool chosen last; macOS gives the command no
+/// default key. Edit › Keyboard Shortcuts lists it, and a chord the user assigns runs it.
+#[test]
+fn ctrl_backtick_chooses_the_last_selection_tool() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    let mac = crate::keymap::platform().is_mac();
+    let list = app.run("shortcuts.list", json!({ "query": "tool.selectLastSelection" })).unwrap();
+    let listed = list.as_array().unwrap().iter().find(|e| e["id"] == "tool.selectLastSelection").cloned();
+    let listed = listed.unwrap_or_else(|| panic!("listed: {list}"));
+    assert_eq!(listed["label"], "Select Last Selection Tool");
+    assert_eq!(listed["default"], if mac { json!(null) } else { json!("Cmd+~") });
+    app.select_tool("directSelection");
+    app.select_tool("pen");
+    frame(&mut app, press(Key::Backtick, cmd()));
+    assert_eq!(app.session.tool_id(), if mac { "pen" } else { "directSelection" });
+    crate::keymap::set_override(&mut app.ui.shortcut_overrides, "tool.selectLastSelection", "Alt+~");
+    app.select_tool("groupSelection");
+    app.select_tool("rectangle");
+    frame(&mut app, press(Key::Backtick, Modifiers::ALT));
+    assert_eq!(app.session.tool_id(), "groupSelection", "the user's chord");
+    crate::shortcut_editor::sync(&crate::state::UiState::default());
 }

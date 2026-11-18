@@ -44,12 +44,12 @@ fn native_large_canvas(size: f64, scale: f64, layers: &str) -> String {
 }
 
 /// A layer as the format writes it.
-fn layer(name: &str, visible: bool, body: &str) -> String {
+pub(super) fn layer(name: &str, visible: bool, body: &str) -> String {
     format!("%AI5_BeginLayer\n{} 1 1 1 0 0 1 0 79 128 255 0 50 0 Lb\n({name}) Ln\n{body}\nLB\n%AI5_EndLayer--\n", u8::from(visible))
 }
 
 /// A yellow square of 4 points at (`x`, `y`) in the format's operators.
-fn square(x: u32, y: u32) -> String {
+pub(super) fn square(x: u32, y: u32) -> String {
     format!("0 0 1 0 k\n{x} {y} m\n{} {y} L\n{} {} L\n{x} {} L\nf", x + 4, x + 4, y + 4, y + 4)
 }
 
@@ -3243,9 +3243,9 @@ fn custom_colours_open_paths_and_planar_group_marks_are_read() {
 /// A text document of `stories` (each as the text, its alignment code, its anchor and the frame's
 /// translation, and the start of its first line from the anchor), one font and a 14 point default.
 /// A story: its text, alignment code, anchor, frame translation and first line's start.
-type Story<'a> = (&'a str, u8, (f64, f64), (f64, f64), f64);
+pub(super) type Story<'a> = (&'a str, u8, (f64, f64), (f64, f64), f64);
 
-fn text_document(stories: &[Story<'_>]) -> String {
+pub(super) fn text_document(stories: &[Story<'_>]) -> String {
     let story = |(text, align, anchor, _t, start): &Story<'_>| {
         let n = text.chars().count();
         format!(
@@ -3290,7 +3290,7 @@ fn named_text_document(stories: &[Story<'_>]) -> String {
 
 /// The editing copy of a 100 × 100 file with `layers` and the text `document`; its template box is
 /// centred at (50, 50).
-fn native_with_text(layers: &str, document: &str) -> String {
+pub(super) fn native_with_text(layers: &str, document: &str) -> String {
     let lines: Vec<String> = ascii85(document.as_bytes()).as_bytes().chunks(60).map(|c| format!("%{}", String::from_utf8_lossy(c))).collect();
     format!(
         "%!PS-Adobe-3.0 \n%%BoundingBox: 0 0 100 100\n%%HiResBoundingBox: 0 0 100 100\n%AI3_Cropmarks: 0 0 100 100\n%AI3_TemplateBox: 50 50 50 50\n\
@@ -3299,8 +3299,18 @@ fn native_with_text(layers: &str, document: &str) -> String {
     )
 }
 
+/// [`text_document`] of `stories`, padded so that [`native_with_text`] doesn't split the end of its
+/// data, `~>`, across two lines.
+pub(super) fn unsplit_text_document(stories: &[Story<'_>]) -> String {
+    let mut doc = text_document(stories);
+    while ascii85(doc.as_bytes()).len() % 60 == 1 {
+        doc.push('\n');
+    }
+    doc
+}
+
 /// A text object of story `story`, as the layers hold it.
-fn text_object(story: u32) -> String {
+pub(super) fn text_object(story: u32) -> String {
     format!("/AI11Text :\n0 /FreeUndo ,\n0 /FrameIndex ,\n{story} /StoryIndex ,\n2 /TextAntialiasing ,\n;\n")
 }
 
@@ -5877,12 +5887,18 @@ fn type_envelope_on(keys: &str, shape: &str, drawn: &str, after: &str) -> String
 
 /// [`type_envelope_on`] around the type of story `story`.
 fn type_envelope_on_story(story: u32, keys: &str, shape: &str, drawn: &str, after: &str) -> String {
+    type_envelope_holding(keys, shape, &format!("{}{after}", text_object(story)), drawn)
+}
+
+/// [`type_envelope_on`] whose contents are `contents` (on plain lines, written on `%_` ones), which
+/// hold its text objects.
+fn type_envelope_holding(keys: &str, shape: &str, contents: &str, drawn: &str) -> String {
     let hidden = |s: &str| -> String { s.lines().map(|l| format!("%_{l}\n")).collect() };
     format!(
         "{}{}%_X=\n{}%_X+\n%_ (AIDeformArtKey) ,\n%_1 /Int (AIDeformStyle) ,\n%_;\n%_\n%_9 () XW\nu\n{drawn}U\n9 () XW\n(Adobe Deform Plugin) 1 0 0 XP\n",
         hidden(&format!("u\n{shape}U\n")),
         hidden(&format!("/ArtDictionary :\n{keys}")),
-        hidden(&format!("u\n{}{after}U\n9 () XW\n", text_object(story))),
+        hidden(&format!("u\n{contents}U\n9 () XW\n")),
     )
 }
 
@@ -5988,6 +6004,32 @@ fn an_envelope_of_type_that_draws_as_its_drawn_art_opens_live() {
     assert!(super::tests::program_warnings(&r.warnings).is_empty(), "{:?}", r.warnings);
 }
 
+/// An envelope of type with no fill and no stroke, its drawn art the bent outlines unpainted, opens
+/// live: neither draws a pixel, so they draw alike, and the type stays editable.
+#[test]
+fn an_envelope_of_unpainted_type_whose_drawn_art_paints_nothing_opens_live() {
+    let Some(family) = installed_family() else { return };
+    // The outlines come from the type filled; the file's type has its fill turned off (`/56 false`).
+    let filled = type_envelope_text(&family, None);
+    let mut doc = text_document(&[("FLUX\r", 0, (8170.0, 8180.0), (0.0, 0.0), 0.0)])
+        .replace("(Helvetica)", &format!("({family})"))
+        .replace("/53 <<", "/56 false /53 <<");
+    while ascii85(doc.as_bytes()).len() % 60 == 1 {
+        doc.push('\n');
+    }
+    assert_eq!(text_fill(&made_envelope_type(&doc)), None);
+    let (drawn, _) = drawn_envelope(&arc_envelope(&made_envelope_type(&filled), 30.0));
+    assert!(drawn.contains("f\n"), "{drawn}");
+    let unpainted = drawn.replace("f\n", "n\n");
+    let art = native_with_text(&layer("Art", true, &format!("{}\n{}", square(10, 10), type_envelope(&arc_keys(0.3), &unpainted))), &doc);
+    let r = import(&eps(&page_square(10, 10), &art)).unwrap();
+    assert_eq!(names(&r.document), ["Art"], "{:?}", r.warnings);
+    let (envelopes, loose) = envelopes_and_type(&r.document);
+    assert_eq!(envelopes, [vec!["FLUX".to_string()]], "{:?}", r.warnings);
+    assert!(loose.is_empty(), "{loose:?}");
+    assert!(super::tests::program_warnings(&r.warnings).is_empty(), "{:?}", r.warnings);
+}
+
 /// An envelope of type whose live envelope draws apart from its drawn art (the file's art bends the
 /// other way) keeps its drawn art and its type, hidden, with a note.
 #[test]
@@ -6056,6 +6098,94 @@ fn an_envelope_of_type_waits_on_the_page_of_layers_that_would_open_alone() {
     let (envelopes, loose) = envelopes_and_type(&d);
     assert_eq!(envelopes, [vec!["FLUX".to_string()]], "{notes:?}");
     assert_eq!(loose, [("Note".to_string(), true)], "{notes:?}");
+}
+
+/// What `f` returns, with how many times it read a text document and scanned the text objects'
+/// frames of an editing copy on this thread; with `afresh`, each check and build reads them anew,
+/// keeping nothing for the next.
+fn text_reads<T>(afresh: bool, f: impl FnOnce() -> T) -> (T, u64, u64) {
+    crate::import::ate::TEXTS_READS.set(0);
+    crate::import::ai::TEXT_FRAME_SCANS.set(0);
+    crate::import::native::READ_AFRESH.set(afresh);
+    let out = f();
+    crate::import::native::READ_AFRESH.set(false);
+    (out, crate::import::ate::TEXTS_READS.get(), crate::import::ai::TEXT_FRAME_SCANS.get())
+}
+
+/// A `.ai` that opens without its PDF part reads its text document and scans its text objects'
+/// frames once, for the check that its text document makes all of its type and for the build, and
+/// comes in as it does when each reads them anew.
+#[test]
+fn layers_that_open_alone_read_their_text_once() {
+    let doc = unsplit_text_document(&[("Hi there\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0), ("Mid\r", 2, (8191.5, 8191.5), (0.0, 0.0), -10.0)]);
+    let art = layer("Art", true, &format!("{}\n{}{}", square(10, 10), text_object(0), text_object(1)));
+    let file = private(&native_with_text(&art, &doc));
+    let open = || crate::ai_layers_alone(&file, &[(100.0, 100.0)], 1.0, crate::NameEncoding::default()).ok();
+    let (opened, texts, frames) = text_reads(false, open);
+    let Some((d, notes)) = opened else { panic!("didn't open without the page") };
+    assert_eq!((texts, frames), (1, 1), "{notes:?}");
+    assert_eq!(text_of(&d.layers[0]).iter().map(|t| t.plain_text()).collect::<Vec<_>>(), ["Hi there", "Mid"], "{notes:?}");
+    let (afresh, texts, frames) = text_reads(true, open);
+    assert_eq!((texts, frames), (2, 2));
+    assert_eq!(afresh, Some((d, notes)));
+}
+
+/// Layers whose text document can't be read wait on the PDF part, which then doesn't read the text
+/// document or scan the frames again, and come in as they do when each check and build reads them
+/// anew.
+#[test]
+fn layers_whose_text_document_cannot_be_read_read_it_once_with_the_page() {
+    let art = layer("Art", true, &format!("{}\n{}", square(10, 10), text_object(0)));
+    let file = private(&native_with_text(&art, "not a text document"));
+    let names = crate::NameEncoding::default();
+    let open = || {
+        let Err(layers) = crate::ai_layers_alone(&file, &[(100.0, 100.0)], 1.0, names) else { panic!("opened without the page") };
+        crate::layered_ai_from(layers, pdf_part(10.0, 86.0), vec![], false, false, 1.0, names)
+    };
+    let (opened, texts, frames) = text_reads(false, open);
+    assert_eq!((texts, frames), (1, 1), "{:?}", opened.1);
+    let (afresh, texts, frames) = text_reads(true, open);
+    assert_eq!((texts, frames), (2, 2), "{:?}", afresh.1);
+    assert_eq!(opened, afresh);
+}
+
+/// An envelope of type that waits on the PDF part reads the text document and scans the frames
+/// once, for the check before the PDF part is imported, the build with it, and the build without it
+/// that follows when the envelope doesn't open live, and the file comes in as it does when each of
+/// them reads them anew.
+#[test]
+fn an_envelope_of_type_waiting_on_the_page_reads_the_text_once() {
+    let Some(family) = installed_family() else { return };
+    let stories = [("FLUX\r", 0, (8170.0, 8180.0), (0.0, 0.0), 0.0), ("Note\r", 0, (8170.0, 8220.0), (0.0, 0.0), 0.0)];
+    let mut doc = text_document(&stories).replace("(Helvetica)", &format!("({family})"));
+    while ascii85(doc.as_bytes()).len() % 60 == 1 {
+        doc.push('\n');
+    }
+    let (drawn, _) = drawn_envelope(&arc_envelope(&made_envelope_type(&doc), 30.0));
+    let art = format!("u\n{}U\n{}", text_object(1), type_envelope(&arc_keys(0.3), &drawn));
+    let file = private(&native_with_text(&layer("Art", true, &art), &doc));
+    let names = crate::NameEncoding::default();
+    let open = |page: Document| {
+        let Err(layers) = crate::ai_layers_alone(&file, &[(100.0, 100.0)], 1.0, names) else { panic!("opened without the page") };
+        crate::layered_ai_from(layers, page, vec![], false, false, 1.0, names)
+    };
+    // A PDF part the layers don't draw as: they open alone, after a build with the page and one without.
+    let (opened, texts, frames) = text_reads(false, || open(pdf_part(80.0, 80.0)));
+    assert_eq!((texts, frames), (1, 1), "{:?}", opened.1);
+    let (afresh, texts, frames) = text_reads(true, || open(pdf_part(80.0, 80.0)));
+    assert_eq!((texts, frames), (4, 4), "{:?}", afresh.1);
+    assert_eq!(opened, afresh);
+    let (envelopes, _) = envelopes_and_type(&opened.0);
+    assert!(opened.2 && envelopes.is_empty(), "{envelopes:?} {:?}", opened.1);
+    // A PDF part that draws as those layers, with the drawn art: the envelope opens live.
+    let page = opened.0;
+    let (opened, texts, frames) = text_reads(false, || open(page.clone()));
+    assert_eq!((texts, frames), (1, 1), "{:?}", opened.1);
+    let (afresh, texts, frames) = text_reads(true, || open(page));
+    assert_eq!((texts, frames), (2, 2), "{:?}", afresh.1);
+    assert_eq!(opened, afresh);
+    let (envelopes, _) = envelopes_and_type(&opened.0);
+    assert_eq!(envelopes, [vec!["FLUX".to_string()]], "{:?}", opened.1);
 }
 
 /// The hidden type outside envelopes in the layers of `d`: each text object's name.
@@ -6456,6 +6586,86 @@ fn a_warp_of_type_opens_as_a_mesh_on_its_saved_grid_and_keeps_its_shape_when_its
         let near = anchors.iter().map(|a| (*a - corner).hypot()).fold(f64::INFINITY, f64::min);
         assert!(near < 0.25, "{corner:?} is {near} from the new text");
     }
+}
+
+/// In the layers, type from the text document made a clipping mask (a clipping group with no
+/// clipping path, the type last) clips the group's art as the page draws it: the type comes in as
+/// the group's clipping path, editable, and the art doesn't paint past it.
+#[test]
+fn type_made_a_clipping_mask_clips_its_group_in_the_layers() {
+    use vectorcraft_doc::live::{EnvelopeKind, EnvelopeOptions, envelope_content_bounds};
+    let Some(family) = installed_family() else { return };
+    let doc = type_envelope_text(&family, None);
+    // The page: the type's glyphs in the yellow of the square they clip, which covers the page, and
+    // drawn through a flat mesh over their box, which leaves them where they are.
+    let mut yellow = made_envelope_type(&type_envelope_text(&family, Some("/0 << /0 2 /1 [ 1.0 0.0 0.0 1.0 0.0 ] >>")));
+    yellow.visible = true;
+    let content = vec![std::sync::Arc::new(yellow)];
+    let g = envelope_content_bounds(&content).unwrap();
+    let points = vec![kurbo::Point::new(g.x0, g.y0), kurbo::Point::new(g.x1, g.y0), kurbo::Point::new(g.x0, g.y1), kurbo::Point::new(g.x1, g.y1)];
+    let kind = Box::new(EnvelopeKind::Mesh { rows: 1, cols: 1, points, handles: vec![[kurbo::Vec2::ZERO; 4]; 4] });
+    let options = EnvelopeOptions::NEW;
+    let flat = Node::new(
+        vectorcraft_doc::NodeId(1_000_000),
+        NodeKind::Envelope { content, kind, fidelity: 50.0, editing: false, options, frame: Box::default() },
+    );
+    let (_, page) = drawn_envelope(&flat);
+    let clipped = format!("q\n0 0 1 0 k\n0 0 m\n100 0 L\n100 100 L\n0 100 L\nf\n{}Q\n", text_object(0));
+    let art = native_with_text(&layer("Art", true, &clipped), &doc);
+    let r = import(&eps(&page, &art)).unwrap();
+    // The layers are used, none of their art replaced with the page's (the note on how the type
+    // differs from the page is about the edges of its glyphs).
+    assert_eq!(names(&r.document), ["Art"], "{:?}", r.warnings);
+    assert!(!r.warnings.iter().any(|w| w.contains("came in as its art") || w.contains("weren't read")), "{:?}", r.warnings);
+    let children = r.document.layers[0].children().unwrap();
+    let [group] = children.as_slice() else { panic!("{children:#?}") };
+    let NodeKind::Group { children, clip: true } = &group.kind else { panic!("not clipped: {group:#?}") };
+    let (NodeKind::Text(t), NodeKind::Path { .. }) = (&children[0].kind, &children[1].kind) else { panic!("{children:#?}") };
+    assert_eq!(t.plain_text(), "FLUX");
+}
+
+/// Type made a clipping mask in an envelope's contents (a clipping group with no clipping path, the
+/// type last) clips the art under it there, as the drawn art shows: the envelope opens live, its
+/// type editable as the group's clipping path. The art it clips covers the type's glyphs and stays
+/// inside their box, so the envelope maps from that box however the art past the type would count.
+#[test]
+fn an_envelope_whose_type_clips_its_contents_opens_live_with_the_type_clipping_them() {
+    let Some(family) = installed_family() else { return };
+    let doc = type_envelope_text(&family, None);
+    // What it draws: the type in the yellow of the square it clips, which covers it.
+    let yellow = made_envelope_type(&type_envelope_text(&family, Some("/0 << /0 2 /1 [ 1.0 0.0 0.0 1.0 0.0 ] >>")));
+    let shaped = |text: Node| {
+        let mut text = text;
+        text.visible = true;
+        let options = vectorcraft_doc::live::EnvelopeOptions::NEW;
+        let content = vec![std::sync::Arc::new(text)];
+        Node::new(
+            vectorcraft_doc::NodeId(1_000_000),
+            NodeKind::Envelope { content, kind: Box::new(rising_kind()), fidelity: 50.0, editing: false, options, frame: Box::default() },
+        )
+    };
+    let glyphs = vectorcraft_doc::live::envelope_content_bounds(&[std::sync::Arc::new(yellow.clone())]).unwrap();
+    let (drawn, page) = drawn_envelope(&shaped(yellow));
+    // A yellow square over the glyphs' box, just inside it.
+    let (x0, y0) = to_art(kurbo::Point::new(glyphs.x0 + 0.01, glyphs.y1 - 0.01));
+    let (x1, y1) = to_art(kurbo::Point::new(glyphs.x1 - 0.01, glyphs.y0 + 0.01));
+    let contents = format!("q\n0 0 1 0 k\n{x0} {y0} m\n{x1} {y0} L\n{x1} {y1} L\n{x0} {y1} L\nf\n{}Q\n", text_object(0));
+    let envelope = type_envelope_holding(&arc_keys(0.3), &rising_grid(), &contents, &drawn);
+    let art = native_with_text(&layer("Art", true, &format!("{}\n{envelope}", square(10, 10))), &doc);
+    let r = import(&eps(&format!("{}\n{page}", page_square(10, 10)), &art)).unwrap();
+    assert_eq!(names(&r.document), ["Art"], "{:?}", r.warnings);
+    assert!(super::tests::program_warnings(&r.warnings).is_empty(), "{:?}", r.warnings);
+    let mut live = vec![];
+    r.document.walk(|n| {
+        if let NodeKind::Envelope { content, .. } = &n.kind {
+            live.push(content.clone());
+        }
+    });
+    let [content] = live.as_slice() else { panic!("{:?}", r.warnings) };
+    let [group] = content.as_slice() else { panic!("{content:#?}") };
+    let NodeKind::Group { children, clip: true } = &group.kind else { panic!("not clipped: {group:#?}") };
+    let (NodeKind::Text(t), NodeKind::Path { .. }) = (&children[0].kind, &children[1].kind) else { panic!("{children:#?}") };
+    assert_eq!(t.plain_text(), "FLUX");
 }
 
 /// A warp of stroked type with Distort Appearance whose drawn art maps the type's bounds with its
@@ -7098,6 +7308,147 @@ fn warped_type_that_draws_apart_from_its_look_comes_in_as_the_look() {
         assert_eq!(noted, ["warped text objects that came in as drawn art, not as editable type: 2"], "{notes:?}");
         assert!(crate::is_loss(noted[0]));
     }
+}
+
+/// An art style section with style `Dashed`: a black stroke 2 units wide with butt caps, miter joins
+/// and dashes of 6 and gaps of 4, aligned to corners and path ends (`BSDashAdj`).
+fn aligned_dash_style() -> String {
+    "%AI9_BeginArtStyles\n/KnownStyle :\n(Dashed) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+     /BasicFilter :\n(Stroke Style Filter) 0 0 /Filter ,\n1 /Visible ,\n2 /FillOrStroke ,\n/Dictionary : /NotRecorded ,\n\
+     /Dictionary : /NotRecorded ,\n1 /Bool (BSDashAdj) ,\n; (kAIBeautifulStrokesParamsDictKey) ,\n\
+     /StrokeStyle : 0 R\n0 0 0 1 0 0 0 XA\n0 J 0 j 2 w 10 M [6 4 ]0 d\n0 XR\n1 0 Xd\n/Def ;\n (StrokeStyle) ,\n; /Dict ;\n /Part ,\n;\n%AI9_EndArtStyles\n"
+        .to_string()
+}
+
+/// The open path of [`aligned_dash_file`], a corner at (80, 20), in the document's coordinates.
+fn aligned_dash_path() -> kurbo::BezPath {
+    let mut bp = kurbo::BezPath::new();
+    bp.move_to((20.0, 20.0));
+    bp.line_to((80.0, 20.0));
+    bp.line_to((80.0, 70.0));
+    bp
+}
+
+/// What [`aligned_dash_style`] draws along [`aligned_dash_path`], with its dashes aligned to corners
+/// and path ends by VectorCraft or (`aligned` false) not, as look operators in black.
+fn aligned_dash_look(aligned: bool) -> String {
+    use vectorcraft_color::{Color, Paint};
+    use vectorcraft_doc::{Dash, LineCap, LineJoin, StrokeLayer};
+    let mut stroke = StrokeLayer::new(Paint::solid(Color::BLACK), 2.0);
+    (stroke.cap, stroke.join, stroke.miter_limit) = (LineCap::Butt, LineJoin::Miter, 10.0);
+    stroke.dash = Some(Dash { pattern: vec![6.0, 4.0], offset: 0.0, align_corners: aligned });
+    let outline = vectorcraft_effects::stroke::line_outline(&aligned_dash_path(), &stroke, 2.0, 0.01);
+    assert!(!outline.elements().is_empty());
+    drawn_as_operators(&outline).replace("0 1 1 0 1 0 0 Xa", "0 0 0 1 0 0 0 Xa")
+}
+
+/// The editing copy of [`aligned_dash_path`] under [`aligned_dash_style`], with the look `drawing`.
+fn aligned_dash_file(drawing: &str) -> String {
+    aligned_dash_files(drawing, 1)
+}
+
+/// [`aligned_dash_file`] with `n` such paths.
+fn aligned_dash_files(drawing: &str, n: usize) -> String {
+    let own = "%_0 0 0 1 0 0 0 XA\n%_2 w\n%_20 80 m\n%_80 80 L\n%_80 30 L\n%_S\n";
+    let one = format!("u\n{drawing}\nU\n9 () XW\n{own}1 (Dashed) XW\n");
+    native(&(aligned_dash_style() + &layer("Art", true, &one.repeat(n))))
+}
+
+/// The paths of `d` that stroke with dashes, each with whether its dashes are aligned to corners.
+fn dashed_paths(d: &Document) -> Vec<bool> {
+    let mut out = vec![];
+    d.walk(|n| {
+        if matches!(n.kind, NodeKind::Path { .. }) {
+            for i in &n.appearance.items {
+                if let vectorcraft_doc::AppearanceItem::Stroke(s) = i
+                    && let Some(dash) = &s.dash
+                {
+                    out.push(dash.align_corners);
+                }
+            }
+        }
+    });
+    out
+}
+
+/// A stroke whose dashes are aligned to corners and path ends comes in as the path with that stroke,
+/// editable, where VectorCraft's fitting draws as its drawn look.
+#[test]
+fn dashes_aligned_to_corners_that_draw_as_the_look_come_in_live() {
+    let (d, notes) = crate::ai_alone(&private(&aligned_dash_file(&aligned_dash_look(true)))).unwrap();
+    assert_eq!(dashed_paths(&d), [true], "{notes:?}");
+    assert!(!notes.iter().any(|w| w.contains("drawn look")), "{notes:?}");
+}
+
+/// Where the look draws the dashes elsewhere (here, not fitted), the path keeps its drawn look.
+#[test]
+fn dashes_aligned_to_corners_that_draw_apart_from_the_look_keep_it() {
+    let (d, notes) = crate::ai_alone(&private(&aligned_dash_file(&aligned_dash_look(false)))).unwrap();
+    assert!(dashed_paths(&d).is_empty(), "{notes:?}");
+    let looks = d.layers[0].children().unwrap();
+    assert!(matches!(looks.as_slice(), [l] if matches!(l.kind, NodeKind::Group { .. }) && l.visual_bounds().is_some()), "{looks:#?}");
+}
+
+/// The strokes with aligned dashes one import checks against their looks are limited
+/// ([`crate::import::ai::MAX_DASH_CHECKS`]), apart from the envelopes' checks: past the
+/// limit, a path that would draw as its look keeps the look.
+#[test]
+fn dashes_aligned_to_corners_past_their_checks_keep_the_look() {
+    let n = crate::import::ai::MAX_DASH_CHECKS;
+    let (d, notes) = crate::ai_alone(&private(&aligned_dash_files(&aligned_dash_look(true), n + 1))).unwrap();
+    assert_eq!(dashed_paths(&d).len(), n, "{notes:?}");
+    let looks = d.layers[0].children().unwrap().iter().filter(|c| matches!(c.kind, NodeKind::Group { .. })).count();
+    assert_eq!(looks, 1);
+}
+
+/// The reads of a file apart from its layers check no stroke with dashes aligned to corners in its
+/// layers against its look: the import's checks ([`crate::import::ai::MAX_DASH_CHECKS`]) are its
+/// layers' reader's, though those reads go over all of the data. Its artboards and variable library
+/// are read with no checks at all, and its swatches (and so its brushes, styles and symbols, read
+/// the same way) with none once their reader reaches the layers. The layers' reader still checks
+/// the one such stroke.
+#[test]
+fn the_reads_apart_from_the_layers_check_no_aligned_dashes() {
+    use vectorcraft_testkit::ai::{sample_variable_sets, variable_library_data};
+    let library = variable_library_data(&sample_variable_sets("variableAndTypes", &[]));
+    let own = "%_0 0 0 1 0 0 0 XA\n%_2 w\n%_20 80 m\n%_80 80 L\n%_80 30 L\n%_S\n";
+    let one = format!("u\n{}\nU\n9 () XW\n{own}1 (Dashed) XW\n", aligned_dash_look(true));
+    let data = native(&(library + &aligned_dash_style() + &layer("Art", true, &one)));
+    let checks = |f: &dyn Fn()| {
+        crate::import::ai::DASH_CHECKS_MADE.set(0);
+        f();
+        crate::import::ai::DASH_CHECKS_MADE.get()
+    };
+    let names = crate::import::ai::Names::default;
+    assert_eq!(checks(&|| drop(crate::ai_alone(&private(&data)))), 1);
+    assert_eq!(checks(&|| drop(crate::import::ai::artboards(data.as_bytes(), &mut names()))), 0);
+    assert_eq!(checks(&|| assert!(crate::import::ai::variables(data.as_bytes(), &mut names()).present)), 0);
+    assert_eq!(checks(&|| drop(crate::import::ai::palette(data.as_bytes(), &[], &mut names()))), 0);
+}
+
+/// Type under a style with dashes aligned to corners keeps its drawn look, as before, and takes no
+/// such stroke: the look check isn't made for type.
+#[test]
+fn type_with_dashes_aligned_to_corners_keeps_its_drawn_look() {
+    let doc = text_document(&[("TILT\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]);
+    let own: String = text_object(0).lines().map(|l| format!("%_{l}\n")).collect();
+    let look = format!("u\n{}\nU\n9 () XW\n", aligned_dash_look(true));
+    let file = native_with_text(&(aligned_dash_style() + &layer("Art", true, &format!("{look}{own}1 (Dashed) XW\n"))), &doc);
+    let (d, notes) = crate::ai_alone(&private(&file)).unwrap();
+    // The look stays, and the type takes no stroke with aligned dashes.
+    let kids = d.layers[0].children().unwrap();
+    assert!(kids.iter().any(|c| matches!(c.kind, NodeKind::Group { .. }) && c.visual_bounds().is_some()), "{notes:?}");
+    let mut aligned = false;
+    d.walk(|n| {
+        if matches!(n.kind, NodeKind::Text(_)) {
+            aligned |= n
+                .appearance
+                .items
+                .iter()
+                .any(|i| matches!(i, vectorcraft_doc::AppearanceItem::Stroke(s) if s.dash.as_ref().is_some_and(|d| d.align_corners)));
+        }
+    });
+    assert!(!aligned, "{notes:?}");
 }
 
 /// Warped type that a text variable binds stays type with the effect live and keeps its binding,

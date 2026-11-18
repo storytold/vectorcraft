@@ -92,6 +92,27 @@ fn confirm_runs_export_pdf_with_the_dialog_options() {
     assert!(app.ui.status.starts_with("Saved /tmp/out.pdf"), "{}", app.ui.status);
 }
 
+/// A Save PDF that fails keeps the dialog open and says why inside it (#6861): the status bar is
+/// behind the dialog. Saving again, once it works, clears the message.
+#[test]
+fn a_failed_save_says_why_in_the_dialog() {
+    let (mut app, written, _) = app();
+    app.run("ui.savePdfDialog", json!({"path": "/tmp/out.pdf"})).unwrap();
+    set_field(&mut app, "__allArtboards", json!(false));
+    set_field(&mut app, "range", json!("9"));
+    let e = super::super::confirm(&mut app).unwrap_err();
+    assert!(written.borrow().is_empty(), "nothing was written");
+    let d = app.ui.dialog.as_ref().expect("the dialog stays open");
+    assert_eq!(d.str(ERROR), e, "the dialog holds the reason");
+    assert!(!e.is_empty());
+    assert!(params(d).get(ERROR).is_none(), "the message is not an option of the export");
+    frame(&mut app);
+    set_field(&mut app, "range", json!("1"));
+    super::super::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(written.borrow().len(), 1);
+}
+
 /// Opened for a page of the art's bounds (Export As with Use Artboards off), the dialog has no
 /// Artboards section, and OK writes one page of the art's bounds with its options, a saved preset
 /// and View PDF after Saving included.
@@ -346,6 +367,74 @@ fn presets_reset_the_settings_and_fields_fall_back_to_defaults() {
     assert!(app.run("ui.savePdfDialog", json!({"compatibility": "1.0"})).is_err(), "bad options are refused");
 }
 
+/// Reset (`ui.dialogReset`, or Cancel with Alt or Option held) puts every option back to the
+/// chosen preset's settings, passwords and their checkboxes included, and keeps the preset, the
+/// path, the artboard range, the section and the dialog. After another preset is chosen, Reset
+/// goes back to that one, and choosing it also clears the password checkboxes.
+#[test]
+fn reset_puts_the_chosen_presets_settings_back_and_keeps_the_path_and_artboards() {
+    let (mut app, written, _) = app();
+    app.run("pdf.preset.save", json!({"name": "Mine", "compatibility": "1.5", "marks": {"trim": true}})).unwrap();
+    app.run("ui.savePdfDialog", json!({"path": "/tmp/reset.pdf", "preset": "Mine"})).unwrap();
+    set_field(&mut app, "__allArtboards", json!(false));
+    set_field(&mut app, "range", json!("2"));
+    set_field(&mut app, "__section", json!("Security"));
+    set_field(&mut app, "compatibility", json!("1.7"));
+    set_field(&mut app, "marks.trim", json!(false));
+    set_field(&mut app, "compression.color.ppi", json!(72));
+    set_field(&mut app, OPEN_PASSWORD, json!("secret"));
+    set_field(&mut app, "__restrictPermissions", json!(true));
+    let r = app.run("ui.dialogReset", json!({})).unwrap();
+    assert_eq!(r["kind"], KIND);
+    let d = app.ui.dialog.as_ref().expect("Reset leaves the dialog open");
+    assert_eq!(get(d, "compatibility"), "1.5");
+    assert_eq!(get(d, "marks.trim"), true);
+    assert_eq!(get(d, "compression.color.ppi"), 300.0, "a nested option goes back too");
+    assert_eq!(get(d, OPEN_PASSWORD).as_str().unwrap_or_default(), "", "the password is cleared");
+    assert!(!d.fields.contains_key("__restrictPermissions"), "the checkbox is cleared");
+    assert_eq!(
+        (d.str("preset"), d.str("path"), d.str("range"), d.str("__section")),
+        ("Mine".to_string(), "/tmp/reset.pdf".to_string(), "2".to_string(), "Security".to_string())
+    );
+    assert!(!d.bool("__allArtboards"));
+
+    let mut d = d.clone();
+    d.fields.insert("__requireOpenPassword".into(), json!(true));
+    apply_preset(&mut app, &mut d, pdf::DEFAULT_PRESET);
+    assert!(!d.fields.contains_key("__requireOpenPassword"), "choosing a preset clears the checkbox");
+    app.ui.dialog = Some(d);
+    set_field(&mut app, "compatibility", json!("1.4"));
+    app.run("ui.dialogReset", json!({})).unwrap();
+    let d = app.ui.dialog.as_ref().expect("the dialog stays open");
+    assert_eq!(d.str("preset"), pdf::DEFAULT_PRESET);
+    assert_eq!(get(d, "compatibility"), "1.7");
+    assert_eq!(get(d, "marks.trim"), false);
+    // OK writes the reset options to the kept path and range.
+    super::super::confirm(&mut app).unwrap();
+    let w = written.borrow();
+    assert_eq!((w.len(), w[0].0.as_str()), (1, "/tmp/reset.pdf"));
+    assert!(w[0].1.starts_with(b"%PDF-1.7"));
+    assert_eq!(vectorcraft_pdf::import(&w[0].1).unwrap().artboards.len(), 1, "range 2");
+}
+
+/// Reset with a saved preset deleted while the dialog is open is an error naming the preset, and
+/// it leaves the options and the password as they are rather than switching to another preset's.
+#[test]
+fn reset_with_a_deleted_preset_is_an_error_and_keeps_the_options() {
+    let (mut app, _, _) = app();
+    app.run("pdf.preset.save", json!({"name": "Gone", "compatibility": "1.5"})).unwrap();
+    app.run("ui.savePdfDialog", json!({"preset": "Gone"})).unwrap();
+    set_field(&mut app, "compatibility", json!("1.6"));
+    set_field(&mut app, OPEN_PASSWORD, json!("secret"));
+    app.run("pdf.preset.delete", json!({"name": "Gone"})).unwrap();
+    let e = app.run("ui.dialogReset", json!({})).unwrap_err();
+    assert!(e.contains("unknown PDF preset `Gone`"), "{e}");
+    let d = app.ui.dialog.as_ref().expect("the dialog stays open");
+    assert_eq!(d.str("preset"), "Gone");
+    assert_eq!(get(d, "compatibility"), "1.6");
+    assert_eq!(get(d, OPEN_PASSWORD), "secret");
+}
+
 #[test]
 fn marks_and_bleeds_reach_the_pdf() {
     let (mut app, written, _) = app();
@@ -373,6 +462,201 @@ fn marks_and_bleeds_reach_the_pdf() {
         ellipse |= (b.width() - 20.0).abs() < 0.1 && (b.height() - 20.0).abs() < 0.1;
     });
     assert!(ellipse, "the non-printing layer is included");
+}
+
+/// The four custom bleed values, `[top, bottom, left, right]`.
+fn bleed_of(d: &Dialog) -> [f64; 4] {
+    BLEED_SIDES.map(|p| get(d, p).as_f64().unwrap_or(f64::NAN))
+}
+
+/// Headless frames of the dialog layer with an accessibility tree, as a 1280 × 900 window.
+struct LinkFrames(egui::Context);
+
+impl LinkFrames {
+    fn new() -> Self {
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        theme::install_fonts(&ctx);
+        Self(ctx)
+    }
+
+    fn run(&self, app: &mut VectorcraftApp, events: Vec<egui::Event>) -> egui::FullOutput {
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1280.0, 900.0));
+        let input = egui::RawInput { events, screen_rect: Some(screen), ..Default::default() };
+        let mut out = self.0.run_ui(input, |ui| super::super::show(app, ui.ctx()));
+        out.textures_delta.clear();
+        out
+    }
+
+    /// The bleed link's button once the dialog has settled: its name, whether it shows pressed,
+    /// whether it is grayed out, and its center.
+    fn link(&self, app: &mut VectorcraftApp) -> (String, bool, bool, egui::Pos2) {
+        self.run(app, vec![]);
+        let out = self.run(app, vec![]);
+        let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
+        let names = ["Make the bleed values differ", "Make all bleed settings the same"];
+        let mut found = nodes.iter().filter(|(_, n)| n.role() == egui::accesskit::Role::Button && n.label().is_some_and(|l| names.contains(&l)));
+        let (_, n) = found.next().expect("a bleed link button");
+        assert!(found.next().is_none(), "one bleed link button");
+        let b = n.bounds().expect("bounds");
+        let pressed = n.toggled() == Some(egui::accesskit::Toggled::True) || n.is_selected() == Some(true);
+        let center = egui::pos2((b.x0 + b.x1) as f32 * 0.5, (b.y0 + b.y1) as f32 * 0.5);
+        (n.label().unwrap_or_default().to_string(), pressed, n.is_disabled(), center)
+    }
+
+    fn click(&self, app: &mut VectorcraftApp, at: egui::Pos2) {
+        let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+        self.run(app, vec![egui::Event::PointerMoved(at), press(true)]);
+        self.run(app, vec![press(false)]);
+    }
+}
+
+/// The link button beside the custom bleed values: the built-in presets' equal sides open linked,
+/// an edit to one side sets all four while linked and only that one while unlinked, and linking
+/// again gives every side the top's value. The link isn't an export option, and the linked values
+/// reach the PDF's page boxes.
+#[test]
+fn the_bleed_link_keeps_the_four_sides_the_same() {
+    let (mut app, written, _) = app();
+    app.run("ui.savePdfDialog", json!({"path": "/tmp/bleed.pdf"})).unwrap();
+    set_field(&mut app, "__section", json!("Marks and Bleeds"));
+    let f = LinkFrames::new();
+    let (name, pressed, disabled, at) = f.link(&mut app);
+    assert_eq!((name.as_str(), pressed, disabled), ("Make the bleed values differ", true, false), "equal sides open linked");
+    edit_bleed(app.ui.dialog.as_mut().unwrap(), 2, 6.0);
+    assert_eq!(bleed_of(app.ui.dialog.as_ref().unwrap()), [6.0; 4], "linked: the left value sets all four");
+
+    f.click(&mut app, at);
+    let (name, pressed, ..) = f.link(&mut app);
+    assert_eq!((name.as_str(), pressed), ("Make all bleed settings the same", false), "the click unlinks");
+    let d = app.ui.dialog.as_mut().unwrap();
+    assert_eq!(d.fields.get(BLEED_LINKED), Some(&json!(false)));
+    edit_bleed(d, 1, 9.0);
+    edit_bleed(d, 3, 2.0);
+    assert_eq!(bleed_of(d), [6.0, 9.0, 6.0, 2.0], "unlinked: each side is its own");
+    edit_bleed(d, 0, 4.0);
+    assert_eq!(bleed_of(d), [4.0, 9.0, 6.0, 2.0]);
+
+    let (.., at) = f.link(&mut app);
+    f.click(&mut app, at);
+    let (name, pressed, ..) = f.link(&mut app);
+    assert_eq!((name.as_str(), pressed), ("Make the bleed values differ", true), "the click links again");
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!(bleed_of(d), [4.0; 4], "linking gives every side the top's value");
+    let p = params(d);
+    assert_eq!(p["bleed"], json!({"useDocument": false, "top": 4.0, "bottom": 4.0, "left": 4.0, "right": 4.0}));
+    assert!(p.get(BLEED_LINKED).is_none() && preset_params(d).get(BLEED_LINKED).is_none(), "the link is the dialog's own");
+
+    super::super::confirm(&mut app).unwrap();
+    let bytes = &written.borrow()[0].1;
+    let page = &vectorcraft_pdf::info(bytes, None).unwrap().pages[0];
+    let bleed = page.boxes.iter().find(|(b, _)| *b == vectorcraft_pdf::CropTo::Bleed).expect("a bleed box").1;
+    let trim = page.boxes.iter().find(|(b, _)| *b == vectorcraft_pdf::CropTo::Trim).expect("a trim box").1;
+    assert_eq!((trim.x0 - bleed.x0, trim.y0 - bleed.y0, bleed.x1 - trim.x1, bleed.y1 - trim.y1), (4.0, 4.0, 4.0, 4.0));
+}
+
+/// A preset whose four bleed values differ opens unlinked; choosing a preset or Reset sets the link
+/// from that preset's values rather than keeping the one shown before.
+#[test]
+fn presets_and_reset_set_the_bleed_link_from_their_values() {
+    let (mut app, _, _) = app();
+    app.run("pdf.preset.save", json!({"name": "Uneven", "bleed": {"top": 3, "bottom": 5, "left": 3, "right": 3}})).unwrap();
+    app.run("ui.savePdfDialog", json!({"preset": "Uneven"})).unwrap();
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert!(!bleed_linked(d), "unequal sides open unlinked");
+    assert_eq!(bleed_of(d), [3.0, 5.0, 3.0, 3.0], "opening leaves the values as they are");
+
+    let mut d = d.clone();
+    link_bleed(&mut d, true);
+    apply_preset(&mut app, &mut d, "Uneven");
+    assert!(!bleed_linked(&d) && bleed_of(&d) == [3.0, 5.0, 3.0, 3.0], "choosing the preset takes its values and its link");
+    apply_preset(&mut app, &mut d, pdf::DEFAULT_PRESET);
+    assert!(bleed_linked(&d), "the default preset's sides are equal");
+    link_bleed(&mut d, false);
+    app.ui.dialog = Some(d);
+    app.run("ui.dialogReset", json!({})).unwrap();
+    assert!(bleed_linked(app.ui.dialog.as_ref().unwrap()), "Reset sets the link from the preset's values");
+
+    // The preset editor has the same link.
+    open_preset(&mut app, &json!({"name": "Uneven"})).unwrap();
+    set_field(&mut app, "__section", json!("Marks and Bleeds"));
+    let f = LinkFrames::new();
+    let (name, pressed, disabled, at) = f.link(&mut app);
+    assert_eq!((name.as_str(), pressed, disabled), ("Make all bleed settings the same", false, false));
+    f.click(&mut app, at);
+    assert_eq!(bleed_of(app.ui.dialog.as_ref().unwrap()), [3.0; 4]);
+}
+
+/// With Use Document Bleed Settings on, the fields show the document's bleed and the link is
+/// grayed out; the custom values and the link stay as they were for when it is turned off.
+#[test]
+fn the_document_bleed_grays_the_link_and_keeps_the_custom_values() {
+    let (mut app, _, _) = app();
+    app.run("document.setup", json!({"bleed": 9})).unwrap();
+    app.run("ui.savePdfDialog", json!({"bleed": {"top": 3, "bottom": 5, "left": 3, "right": 3}})).unwrap();
+    set_field(&mut app, "__section", json!("Marks and Bleeds"));
+    set_field(&mut app, "bleed.useDocument", json!(true));
+    let f = LinkFrames::new();
+    let (name, pressed, disabled, at) = f.link(&mut app);
+    assert_eq!((name.as_str(), pressed, disabled), ("Make all bleed settings the same", false, true));
+    f.click(&mut app, at);
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert!(!d.fields.contains_key(BLEED_LINKED), "a grayed-out link does not change");
+    assert_eq!(bleed_of(d), [3.0, 5.0, 3.0, 3.0]);
+    set_field(&mut app, "bleed.useDocument", json!(false));
+    let (name, _, disabled, _) = f.link(&mut app);
+    assert_eq!((name.as_str(), disabled), ("Make all bleed settings the same", false));
+}
+
+/// `ui.dialog.set` can set the link (`__bleedLinked`) as its button does, refuses a value other
+/// than true or false, and a new `bleed` lets the link follow its values.
+#[test]
+fn ui_dialog_set_links_the_bleed() {
+    let (mut app, _, _) = app();
+    app.run("ui.savePdfDialog", json!({"bleed": {"top": 3, "bottom": 5, "left": 3, "right": 3}})).unwrap();
+    let set = |app: &mut VectorcraftApp, field: &str, value: Value| {
+        let d = app.ui.dialog.as_mut().unwrap();
+        assert!(super::super::accepts_field(d, field), "{field}");
+        let old = d.fields.get(field).cloned();
+        super::super::set_field(d, field.into(), value);
+        super::super::field_set(app, field, old.as_ref())
+    };
+    set(&mut app, BLEED_LINKED, json!(true)).unwrap();
+    assert_eq!(bleed_of(app.ui.dialog.as_ref().unwrap()), [3.0; 4], "linking gives every side the top's value");
+    for bad in [json!("yes"), json!(1), Value::Null] {
+        let e = set(&mut app, BLEED_LINKED, bad.clone()).unwrap_err();
+        assert!(e.contains("__bleedLinked must be true or false"), "{bad}: {e}");
+    }
+    set(&mut app, BLEED_LINKED, json!(false)).unwrap();
+    set(&mut app, "bleed", json!({"top": 1, "bottom": 1, "left": 1, "right": 1})).unwrap();
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert!(!d.fields.contains_key(BLEED_LINKED) && bleed_linked(d), "equal values set are linked");
+    set(&mut app, "bleed", json!({"top": 1, "bottom": 2, "left": 1, "right": 1})).unwrap();
+    assert!(!bleed_linked(app.ui.dialog.as_ref().unwrap()), "unequal values set are unlinked");
+
+    // Writing the same `bleed` again also lets the link follow its values; a `__bleedLinked` set
+    // after it in the same request still decides.
+    set(&mut app, "bleed", json!({"top": 1, "bottom": 1, "left": 1, "right": 1})).unwrap();
+    set(&mut app, BLEED_LINKED, json!(false)).unwrap();
+    set(&mut app, "bleed", json!({"top": 1, "bottom": 1, "left": 1, "right": 1})).unwrap();
+    assert!(bleed_linked(app.ui.dialog.as_ref().unwrap()), "the same equal values set again are linked");
+    set(&mut app, BLEED_LINKED, json!(false)).unwrap();
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert!(!bleed_linked(d) && bleed_of(d) == [1.0; 4], "a later __bleedLinked unlinks them");
+}
+
+/// An unlinked edit that makes the four sides equal leaves the link off, so the next edit
+/// changes one side only.
+#[test]
+fn an_unlinked_edit_that_evens_the_sides_keeps_the_link_off() {
+    let (mut app, _, _) = app();
+    app.run("ui.savePdfDialog", json!({"bleed": {"top": 3, "bottom": 5, "left": 3, "right": 3}})).unwrap();
+    let d = app.ui.dialog.as_mut().unwrap();
+    assert!(!bleed_linked(d));
+    edit_bleed(d, 1, 3.0);
+    assert!(!bleed_linked(d), "the link stays off");
+    edit_bleed(d, 2, 6.0);
+    assert_eq!(bleed_of(d), [3.0, 3.0, 6.0, 3.0], "the next edit changes one side");
 }
 
 #[test]
@@ -469,6 +753,39 @@ fn choosing_a_pdfx_standard_sets_its_version_and_writes_the_standard() {
     assert_eq!((get(d, "compatibility"), get(d, "createLayers")), (&json!("1.6"), &json!(true)));
 }
 
+/// Profile inclusion is disabled with a standard, so choosing PDF/X-3 or PDF/X-4 sets it back to
+/// unset: a `none` chosen before would write every CMYK color as DeviceCMYK.
+#[test]
+fn choosing_pdfx3_or_pdfx4_unsets_profile_inclusion() {
+    let (mut app, _, _) = app();
+    for standard in [Standard::PdfX3, Standard::PdfX4] {
+        app.run("ui.savePdfDialog", json!({"path": "/tmp/x.pdf", "output": {"profiles": "none"}})).unwrap();
+        let d = app.ui.dialog.as_mut().unwrap();
+        assert_eq!(get(d, "output.profiles"), &json!("none"));
+        set(d, "standard", json!(standard.id()));
+        standard_chosen(d, standard);
+        assert_eq!(get(d, "output.profiles"), &json!(vectorcraft_pdf::UNSET_CHOICE), "{}", standard.id());
+    }
+}
+
+/// Opened with PDF/X-3 or PDF/X-4 and `none` (params or a preset, without choosing the standard),
+/// the dialog keeps `none` and its Output note says every CMYK color is written as DeviceCMYK.
+#[test]
+fn a_loaded_pdfx_standard_with_no_profiles_says_cmyk_is_device_cmyk() {
+    const NOTE: &str = "every CMYK color is written as DeviceCMYK";
+    let (mut app, _, _) = app();
+    for (standard, profiles, shown) in
+        [(Standard::PdfX4, "none", true), (Standard::PdfX3, "none", true), (Standard::PdfX4, "all", false), (Standard::PdfX1a, "none", false)]
+    {
+        let params = json!({"path": "/tmp/x.pdf", "standard": standard.id(), "output": {"profiles": profiles}});
+        app.run("ui.savePdfDialog", params).unwrap();
+        set_field(&mut app, "__section", json!("Output"));
+        assert_eq!(get(app.ui.dialog.as_ref().unwrap(), "output.profiles"), &json!(profiles));
+        let text = crate::tests_labels::painted_text(&mut app, |app, ui| super::super::show(app, ui.ctx()));
+        assert_eq!(text.contains(NOTE), shown, "{} {profiles}: {text}", standard.id());
+    }
+}
+
 /// "Write pages longer than 200 in at full size in points" is enabled only without a standard, at
 /// PDF 1.5 and later: PDF/X files and PDF 1.3 and 1.4 files write long pages in points anyway, and
 /// PDF/A files keep the `UserUnit`.
@@ -538,4 +855,64 @@ fn pdf_1_3_takes_a_flattener_preset_in_advanced() {
     app.run("pdf.preset.save", json!({"name": "Old", "compatibility": "1.3", "flattenerPreset": "Low Resolution"})).unwrap();
     let saved = app.session.prefs.pdf_presets.iter().find(|p| p.name == "Old").unwrap();
     assert_eq!((saved.settings.compatibility, saved.settings.flattener_preset.as_str()), (Compatibility::Pdf13, "Low Resolution"));
+}
+
+#[test]
+fn save_pdf_flattens_transparent_document_without_modal_prompt() {
+    let (mut app, written, _) = app();
+    // Add transparent artwork to the document
+    app.run("transparency.set", json!({"opacity": 50})).unwrap();
+
+    app.run("ui.savePdfDialog", json!({"path": "/tmp/transparent.pdf", "compatibility": "1.3"})).unwrap();
+    assert_eq!(app.ui.dialog.as_ref().unwrap().kind, KIND);
+
+    // Clicking Save PDF goes ahead without stopping at a confirmation prompt
+    super::super::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none(), "Save PDF closes without a modal prompt");
+    assert_eq!(written.borrow().len(), 1);
+    assert!(written.borrow()[0].1.starts_with(b"%PDF-1.3"));
+}
+
+#[test]
+fn summary_warnings_include_flattener_resolutions_when_flattening_transparency() {
+    let (mut app, _, _) = app();
+    app.run("transparency.set", json!({"opacity": 50})).unwrap();
+
+    app.run("ui.savePdfDialog", json!({"path": "/tmp/out.pdf", "compatibility": "1.3"})).unwrap();
+    let p = params(app.ui.dialog.as_ref().unwrap());
+    let v = summary_of(&mut app, &egui::Context::default(), &p).unwrap();
+    let warnings = v["warnings"].as_array().unwrap();
+    assert!(
+        warnings.iter().any(|w| {
+            let s = w.as_str().unwrap();
+            s.contains("transparency is flattened into opaque art and images")
+                && s.contains("at 1200 ppi line art and text, 300 ppi gradients and meshes")
+        }),
+        "{warnings:?}"
+    );
+
+    // With a custom flattener override, the resolution in the warning reflects the options
+    set_field(&mut app, "flattener.lineArtPpi", json!(600));
+    set_field(&mut app, "flattener.gradientPpi", json!(200));
+    let p2 = params(app.ui.dialog.as_ref().unwrap());
+    let v2 = summary_of(&mut app, &egui::Context::default(), &p2).unwrap();
+    let warnings2 = v2["warnings"].as_array().unwrap();
+    assert!(
+        warnings2.iter().any(|w| {
+            let s = w.as_str().unwrap();
+            s.contains("at 600 ppi line art and text, 200 ppi gradients and meshes")
+        }),
+        "{warnings2:?}"
+    );
+}
+
+#[test]
+fn advanced_section_shows_raster_resolution_note() {
+    let (mut app, _, _) = app();
+    app.run("ui.savePdfDialog", json!({"path": "/tmp/out.pdf", "compatibility": "1.3"})).unwrap();
+    set_field(&mut app, "__section", json!("Advanced"));
+    set_field(&mut app, "flattener.lineArtPpi", json!(600));
+    set_field(&mut app, "flattener.gradientPpi", json!(200));
+    frame(&mut app);
+    assert!(app.ui.dialog.is_some());
 }

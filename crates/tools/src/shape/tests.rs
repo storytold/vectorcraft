@@ -601,6 +601,212 @@ fn click_opens_dialog() {
     assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 10.0, 10.0)), vec![Action::Dialog("star".into(), json!({"x": 10.0, "y": 10.0}))]);
 }
 
+/// With the Ellipse tool, the first two Shift-clicks place points (shown as marks, and with two
+/// placed, the circle through them and the pointer is previewed); the third runs the circle
+/// command through the three. A Shift-click with another shape tool still opens its dialog.
+#[test]
+fn three_shift_clicks_with_the_ellipse_tool_run_the_circle_through_them() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    let shift = Mods { shift: true, ..Default::default() };
+    let mut t = ShapeTool::new("ellipse");
+    let click = |t: &mut ShapeTool, x: f64, y: f64| {
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, x, y).with_mods(shift));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Up, x, y).with_mods(shift))
+    };
+    assert_eq!(click(&mut t, 10.0, 10.0), vec![]);
+    assert_eq!(click(&mut t, 90.0, 10.0), vec![]);
+    assert!(t.ends_on_escape(&cx) && t.claims_key(&cx, ToolKey::Escape));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Move, 10.0, 70.0));
+    let o = t.overlays(&cx);
+    assert_eq!(o.iter().filter(|o| matches!(o, Overlay::Anchor { .. })).count(), 2, "{o:?}");
+    let preview = o.iter().find_map(|o| match o {
+        Overlay::Path { path, dashed: true, .. } => Some(path.clone()),
+        _ => None,
+    });
+    let b = vectorcraft_geom::Shape::bounding_box(&preview.expect("the circle is previewed"));
+    assert!(b.x0.abs() < 1e-9 && (b.y0 + 10.0).abs() < 1e-9 && (b.x1 - 100.0).abs() < 1e-9 && (b.y1 - 90.0).abs() < 1e-9, "{b:?}");
+    assert_eq!(
+        click(&mut t, 10.0, 70.0),
+        vec![Action::Exec("shape.circleThroughPoints".into(), json!({"points": [[10.0, 10.0], [90.0, 10.0], [10.0, 70.0]]}))]
+    );
+    assert!(!t.ends_on_escape(&cx) && t.overlays(&cx).is_empty());
+    // Another shape tool keeps its dialog on a Shift-click.
+    let mut r = ShapeTool::new("rectangle");
+    assert_eq!(click(&mut r, 10.0, 10.0), vec![Action::Dialog("rectangle".into(), json!({"x": 10.0, "y": 10.0}))]);
+}
+
+/// With Smart Guides on, the preview passes through the point the pointer snaps to, which is where
+/// the third Shift-click lands.
+#[test]
+fn the_circle_preview_passes_through_the_snapped_pointer() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let shift = Mods { shift: true, ..Default::default() };
+    let mut t = ShapeTool::new("ellipse");
+    for (x, y) in [(300.0, 0.0), (300.0, 200.0)] {
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, x, y).with_mods(shift));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Up, x, y).with_mods(shift));
+    }
+    // Near the rectangle's corner anchor at (100, 100): the circle through (300, 0), (300, 200)
+    // and (100, 100) has its center at (225, 100) and radius 125.
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Move, 98.0, 102.0));
+    let preview = t.overlays(&cx).into_iter().find_map(|o| match o {
+        Overlay::Path { path, dashed: true, .. } => Some(path),
+        _ => None,
+    });
+    let b = vectorcraft_geom::Shape::bounding_box(&preview.expect("the circle is previewed"));
+    let want = [100.0, -25.0, 350.0, 225.0];
+    assert!([b.x0, b.y0, b.x1, b.y1].iter().zip(want).all(|(a, w)| (a - w).abs() < 1e-9), "{b:?}");
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 98.0, 102.0).with_mods(shift));
+    let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 98.0, 102.0).with_mods(shift));
+    assert!(matches!(&a[..], [Action::Exec(_, v)] if v["points"][2] == json!([100.0, 100.0])), "{a:?}");
+}
+
+/// Escape, a plain click and a drag drop the points Shift-clicks placed, so the next Shift-click
+/// starts a new circle.
+#[test]
+fn escape_a_click_or_a_drag_drops_the_shift_clicked_points() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    let shift = Mods { shift: true, ..Default::default() };
+    let mut t = ShapeTool::new("ellipse");
+    let shift_click = |t: &mut ShapeTool, x: f64, y: f64| {
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, x, y).with_mods(shift));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Up, x, y).with_mods(shift))
+    };
+    shift_click(&mut t, 10.0, 10.0);
+    shift_click(&mut t, 90.0, 10.0);
+    assert_eq!(t.key(&cx, ToolKey::Escape, Mods::default()), vec![]);
+    assert!(!t.ends_on_escape(&cx));
+    shift_click(&mut t, 10.0, 10.0);
+    shift_click(&mut t, 90.0, 10.0);
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 50.0, 50.0));
+    assert_eq!(
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 50.0, 50.0)),
+        vec![Action::Dialog("ellipse".into(), json!({"x": 50.0, "y": 50.0}))]
+    );
+    assert!(!t.ends_on_escape(&cx), "a plain click drops them");
+    shift_click(&mut t, 10.0, 10.0);
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 50.0, 50.0).with_mods(shift));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 90.0, 90.0).with_mods(shift));
+    assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 90.0, 90.0).with_mods(shift)), vec![Action::Commit]);
+    assert!(!t.ends_on_escape(&cx), "a Shift-drag draws a circle and drops them");
+    // A move of the selection by its centre point drops them too.
+    let (d, s) = unfilled_live_rect();
+    let c = ToolContext { smart_guides: false, ..crate::testutil::cx(&d, &s, &p) };
+    let mut t = ShapeTool::new("ellipse");
+    for (x, y) in [(10.0, 10.0), (90.0, 10.0)] {
+        t.pointer(&c, &PointerEvent::new(PointerKind::Down, x, y).with_mods(shift));
+        t.pointer(&c, &PointerEvent::new(PointerKind::Up, x, y).with_mods(shift));
+    }
+    assert!(t.ends_on_escape(&c));
+    t.pointer(&c, &PointerEvent::new(PointerKind::Down, 150.0, 150.0));
+    t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 170.0, 160.0));
+    assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Up, 170.0, 160.0)), vec![Action::Commit]);
+    assert!(!t.ends_on_escape(&c), "a move of the selection drops them");
+}
+
+/// Escape pressed while the third Shift-click is held drops the points and the press, so the
+/// release draws no circle.
+#[test]
+fn escape_during_the_third_shift_click_drops_the_points_and_the_press() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    let shift = Mods { shift: true, ..Default::default() };
+    let mut t = ShapeTool::new("ellipse");
+    for (x, y) in [(10.0, 10.0), (90.0, 10.0)] {
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, x, y).with_mods(shift));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Up, x, y).with_mods(shift));
+    }
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 10.0, 70.0).with_mods(shift));
+    assert!(t.claims_key(&cx, ToolKey::Escape));
+    assert_eq!(t.key(&cx, ToolKey::Escape, shift), vec![]);
+    assert!(!t.ends_on_escape(&cx) && t.overlays(&cx).is_empty());
+    assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 10.0, 70.0).with_mods(shift)), vec![]);
+    assert!(!t.ends_on_escape(&cx), "the release places no point");
+}
+
+/// Once a point is placed, a Shift-click on the selection's side handle or centre point places a
+/// point instead of scaling or moving the selection, and the cursor over them is the crosshair.
+#[test]
+fn shift_clicks_on_the_selection_place_points_once_one_is_placed() {
+    let (d, s) = unfilled_live_rect();
+    let p = paint();
+    let c = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    let shift = Mods { shift: true, ..Default::default() };
+    let mut t = ShapeTool::new("ellipse");
+    let centre = Point::new(150.0, 150.0);
+    assert_eq!(t.cursor(&c, centre, shift), Cursor::Move, "no point placed yet: the centre point moves");
+    let click = |t: &mut ShapeTool, x: f64, y: f64| {
+        t.pointer(&c, &PointerEvent::new(PointerKind::Down, x, y).with_mods(shift));
+        t.pointer(&c, &PointerEvent::new(PointerKind::Up, x, y).with_mods(shift))
+    };
+    assert_eq!(click(&mut t, 10.0, 10.0), vec![]);
+    assert_eq!(t.cursor(&c, centre, shift), Cursor::Crosshair);
+    assert_eq!(t.cursor(&c, centre, Mods::default()), Cursor::Move, "without Shift a press still moves the selection");
+    assert_eq!(click(&mut t, 100.0, 150.0), vec![], "the left side handle");
+    assert!(!t.busy());
+    assert_eq!(
+        click(&mut t, centre.x, centre.y),
+        vec![Action::Exec("shape.circleThroughPoints".into(), json!({"points": [[10.0, 10.0], [100.0, 150.0], [150.0, 150.0]]}))]
+    );
+}
+
+/// The pointer leaving the canvas removes the circle's preview, and an edit, Undo or Redo made
+/// outside the tool drops the points placed so far.
+#[test]
+fn leaving_the_canvas_or_an_outside_edit_clears_the_circle_in_progress() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    let shift = Mods { shift: true, ..Default::default() };
+    let mut t = ShapeTool::new("ellipse");
+    let click = |t: &mut ShapeTool, x: f64, y: f64| {
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, x, y).with_mods(shift));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Up, x, y).with_mods(shift))
+    };
+    let dashed = |t: &ShapeTool| t.overlays(&cx).iter().any(|o| matches!(o, Overlay::Path { dashed: true, .. }));
+    click(&mut t, 10.0, 10.0);
+    click(&mut t, 90.0, 10.0);
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Move, 10.0, 70.0));
+    assert!(dashed(&t));
+    t.hover_ended(&cx);
+    assert!(!dashed(&t), "no preview through a pointer off the canvas");
+    assert!(t.ends_on_escape(&cx), "the points stay");
+    t.history_moved();
+    assert!(!t.ends_on_escape(&cx) && t.overlays(&cx).is_empty());
+    assert_eq!(click(&mut t, 10.0, 70.0), vec![], "the next Shift-click starts a new circle");
+}
+
+/// While the perspective grid shows with an active plane, a Shift-click with the Ellipse tool opens
+/// the size dialog, whose shape goes on the plane, as before.
+#[test]
+fn a_shift_click_on_an_active_perspective_plane_opens_the_dialog() {
+    let (mut d, _) = doc_with_rect();
+    crate::distort::perspective::PerspectiveGrid::preset(2, Rect::new(0.0, 0.0, 612.0, 792.0)).store(&mut d);
+    let s = Selection::default();
+    let p = paint();
+    let cx = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    let shift = Mods { shift: true, ..Default::default() };
+    let mut t = ShapeTool::new("ellipse");
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 10.0, 10.0).with_mods(shift));
+    assert_eq!(
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 10.0, 10.0).with_mods(shift)),
+        vec![Action::Dialog("ellipse".into(), json!({"x": 10.0, "y": 10.0}))]
+    );
+    assert!(!t.ends_on_escape(&cx));
+}
+
 #[test]
 fn alt_click_passes_draw_from_centre_to_the_dialog() {
     let (d, _) = doc_with_rect();
@@ -1103,6 +1309,194 @@ fn a_shape_tool_drags_the_selected_shapes_widgets() {
     assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Up, 200.0, 20.0)), vec![Action::Commit]);
 }
 
+/// With a shape tool, a drag down on a selected live polygon's side widget adds sides instead of
+/// drawing, and Escape puts the count back; Line Segment draws from the widget.
+#[test]
+fn a_shape_tool_drags_a_polygons_side_widget() {
+    use vectorcraft_doc::{Appearance, LiveShape, Node, NodeKind};
+    let shape =
+        LiveShape::Polygon { radius: 80.0, sides: 5, xf: Affine::translate((250.0, 250.0)), radii: vec![], kinds: vec![], radii_relative: false };
+    let mut d = vectorcraft_doc::Document::new(500.0, 500.0);
+    let (l, id) = (d.layers[0].id, d.alloc_id());
+    let mut n = Node::path(id, shape.to_path(), Appearance::default_art());
+    if let NodeKind::Path { live: slot, .. } = &mut n.kind {
+        *slot = Some(Box::new(shape));
+    }
+    d.insert(Some(l), 0, n).unwrap();
+    let mut s = Selection::default();
+    s.add(id);
+    let p = paint();
+    let c = cx(&d, &s, &p);
+    let (w, _) = crate::sidewidget::SideWidget::for_tool(&c).expect("a side widget");
+    let down = |px: f64| PointerEvent::new(PointerKind::Drag, w.at.x, w.at.y + px);
+    for tool in ["rectangle", "roundedRectangle", "ellipse", "polygon", "star"] {
+        let mut t = ShapeTool::new(tool);
+        assert_eq!(t.cursor(&c, w.at, Mods::default()), Cursor::ArrowHollow, "{tool}");
+        assert!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, w.at.x, w.at.y)).is_empty(), "{tool}");
+        let a = t.pointer(&c, &down(25.0));
+        assert_eq!(
+            a,
+            vec![Action::Begin("Live Shape".into()), Action::Preview("object.setLiveShape".into(), json!({ "id": id.0, "sides": 7 }))],
+            "{tool}"
+        );
+        assert!(t.transforming() && !t.drawing_boxed(), "{tool}");
+        assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Up, w.at.x, w.at.y + 25.0)), vec![Action::Commit], "{tool}");
+        assert!(!t.busy(), "{tool}");
+        t.pointer(&c, &PointerEvent::new(PointerKind::Down, w.at.x, w.at.y));
+        t.pointer(&c, &down(-13.0));
+        assert_eq!(t.key(&c, ToolKey::Escape, Mods::default()), vec![Action::Cancel], "{tool}");
+        assert!(!t.busy(), "{tool}");
+    }
+    let mut t = ShapeTool::new("lineSegment");
+    assert_eq!(t.cursor(&c, w.at, Mods::default()), Cursor::Crosshair);
+    t.pointer(&c, &PointerEvent::new(PointerKind::Down, w.at.x, w.at.y));
+    let a = t.pointer(&c, &down(25.0));
+    assert!(matches!(a.last(), Some(Action::Preview(cmd, _)) if cmd == "shape.line"), "{a:?}");
+}
+
+/// Switching away from a shape tool or the Selection tool during a drag of a corner, pie or side
+/// widget cancels it, as Escape does: the shape goes back. After a press that has not moved there
+/// is nothing to put back.
+#[test]
+fn a_tool_switch_cancels_a_widget_drag() {
+    use vectorcraft_doc::{Appearance, LiveShape, Node, NodeKind};
+    let live = |shape: LiveShape| {
+        let mut d = vectorcraft_doc::Document::new(500.0, 500.0);
+        let (l, id) = (d.layers[0].id, d.alloc_id());
+        let mut n = Node::path(id, shape.to_path(), Appearance::default_art());
+        if let NodeKind::Path { live: slot, .. } = &mut n.kind {
+            *slot = Some(Box::new(shape));
+        }
+        d.insert(Some(l), 0, n).unwrap();
+        let mut s = Selection::default();
+        s.add(id);
+        (d, s)
+    };
+    let xf = Affine::translate((100.0, 100.0));
+    let rect = live(LiveShape::Rectangle { w: 100.0, h: 100.0, radii: [0.0; 4], kinds: Default::default(), radii_relative: false, xf });
+    let ellipse = live(LiveShape::Ellipse { w: 200.0, h: 100.0, pie: (0.0, 360.0), xf });
+    let polygon = live(LiveShape::Polygon {
+        radius: 80.0,
+        sides: 5,
+        xf: Affine::translate((250.0, 250.0)),
+        radii: vec![],
+        kinds: vec![],
+        radii_relative: false,
+    });
+    let p = paint();
+    let side = crate::sidewidget::SideWidget::for_tool(&cx(&polygon.0, &polygon.1, &p)).expect("a side widget").0.at;
+    // The corner widget at (110, 110), the pie widget 12 px right of (300, 150), the side widget.
+    let drags = [
+        (&rect, Point::new(110.0, 110.0), Point::new(130.0, 130.0)),
+        (&ellipse, Point::new(312.0, 150.0), Point::new(200.0, 20.0)),
+        (&polygon, side, side + Vec2::new(0.0, 25.0)),
+    ];
+    for ((d, s), at, to) in drags {
+        let c = cx(d, s, &p);
+        let tools: [Box<dyn Tool>; 6] = [
+            Box::new(crate::select::SelectionTool::default()),
+            Box::new(ShapeTool::new("rectangle")),
+            Box::new(ShapeTool::new("roundedRectangle")),
+            Box::new(ShapeTool::new("ellipse")),
+            Box::new(ShapeTool::new("polygon")),
+            Box::new(ShapeTool::new("star")),
+        ];
+        for mut t in tools {
+            let id = t.id();
+            assert!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, at.x, at.y)).is_empty(), "{id} at {at:?}");
+            let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, to.x, to.y));
+            assert!(matches!(a.first(), Some(Action::Begin(_))), "{id} at {at:?}: {a:?}");
+            assert_eq!(t.deactivate(&c), vec![Action::Cancel], "{id} at {at:?}");
+            assert!(!t.busy() && !t.transforming(), "{id} at {at:?}");
+            assert!(t.pointer(&c, &PointerEvent::new(PointerKind::Up, to.x, to.y)).is_empty(), "{id} at {at:?}");
+            t.pointer(&c, &PointerEvent::new(PointerKind::Down, at.x, at.y));
+            assert!(t.busy(), "{id} at {at:?}");
+            assert!(t.deactivate(&c).is_empty(), "{id} at {at:?}");
+            assert!(!t.busy(), "{id} at {at:?}");
+        }
+    }
+}
+
+/// A double-click on a corner widget of a selected live shape, with a shape tool that shows the
+/// widgets, asks for the Transform panel and nothing else: neither click draws, edits or begins an
+/// undo step, and the tool stays idle. Line Segment, a plain path, a pie widget, a hidden or
+/// angle-excluded corner widget and a spot off the widgets ask for nothing.
+#[test]
+fn a_double_click_on_a_corner_widget_shows_the_transform_panel() {
+    use vectorcraft_doc::{Appearance, LiveShape, Node, NodeKind};
+    let live = |shape: LiveShape| {
+        let mut d = vectorcraft_doc::Document::new(500.0, 500.0);
+        let (l, id) = (d.layers[0].id, d.alloc_id());
+        let mut n = Node::path(id, shape.to_path(), Appearance::default_art());
+        if let NodeKind::Path { live: slot, .. } = &mut n.kind {
+            *slot = Some(Box::new(shape));
+        }
+        d.insert(Some(l), 0, n).unwrap();
+        let mut s = Selection::default();
+        s.add(id);
+        (d, s)
+    };
+    let double_click = |t: &mut ShapeTool, c: &ToolContext, at: Point| {
+        let mut out = vec![];
+        for kind in [PointerKind::Down, PointerKind::Up, PointerKind::Down, PointerKind::Up, PointerKind::DoubleClick] {
+            out.push(t.pointer(c, &PointerEvent::new(kind, at.x, at.y)));
+        }
+        out
+    };
+    let panel = vec![Action::Panel("transform".into())];
+    let xf = Affine::translate((100.0, 100.0));
+    let (d, s) = live(LiveShape::Rectangle { w: 100.0, h: 100.0, radii: [0.0; 4], kinds: Default::default(), radii_relative: false, xf });
+    let p = paint();
+    let c = cx(&d, &s, &p);
+    let at = Point::new(110.0, 110.0);
+    for id in ["rectangle", "roundedRectangle", "ellipse", "polygon", "star"] {
+        let mut t = ShapeTool::new(id);
+        let out = double_click(&mut t, &c, at);
+        assert!(out[..4].iter().all(Vec::is_empty), "{id}: {out:?}");
+        assert_eq!(out[4], panel, "{id}");
+        assert!(!t.busy() && !t.transforming(), "{id}");
+        // Off the widgets, a double-click asks for nothing.
+        assert!(t.pointer(&c, &PointerEvent::new(PointerKind::DoubleClick, 300.0, 300.0)).is_empty(), "{id}");
+    }
+    // Line Segment has no shape widgets.
+    let mut t = ShapeTool::new("lineSegment");
+    assert!(t.pointer(&c, &PointerEvent::new(PointerKind::DoubleClick, at.x, at.y)).is_empty());
+    // Show Corner Widget off, or the corner wider than the angle limit: the widget is hidden.
+    let mut hidden = cx(&d, &s, &p);
+    hidden.corner_widgets = false;
+    let mut t = ShapeTool::new("rectangle");
+    assert!(t.pointer(&hidden, &PointerEvent::new(PointerKind::DoubleClick, at.x, at.y)).is_empty());
+    let mut narrow = cx(&d, &s, &p);
+    narrow.corner_widget_max_angle = 80.0;
+    assert!(t.pointer(&narrow, &PointerEvent::new(PointerKind::DoubleClick, at.x, at.y)).is_empty());
+    // A live polygon's corner widget asks for the panel too.
+    let (d, s) = live(LiveShape::Polygon {
+        radius: 100.0,
+        sides: 6,
+        xf: Affine::translate((250.0, 250.0)),
+        radii: vec![],
+        kinds: vec![],
+        radii_relative: false,
+    });
+    let c = cx(&d, &s, &p);
+    let w = corners::CornerWidgets::for_tool(&c, false).and_then(|w| w.visible().next()).unwrap();
+    let mut t = ShapeTool::new("polygon");
+    assert_eq!(double_click(&mut t, &c, w)[4], panel);
+    // A plain path shows no corner widget to a shape tool.
+    let (d, id) = doc_with_rect();
+    let mut s = Selection::default();
+    s.add(id);
+    let c = cx(&d, &s, &p);
+    let mut t = ShapeTool::new("rectangle");
+    assert!(t.pointer(&c, &PointerEvent::new(PointerKind::DoubleClick, at.x, at.y)).is_empty());
+    // A live ellipse's pie widget, 12 px right of (300, 150), is not a corner widget.
+    let (d, s) = live(LiveShape::Ellipse { w: 200.0, h: 100.0, pie: (0.0, 360.0), xf });
+    let c = cx(&d, &s, &p);
+    let mut t = ShapeTool::new("ellipse");
+    assert!(double_click(&mut t, &c, Point::new(312.0, 150.0)).iter().all(Vec::is_empty));
+    assert!(!t.busy());
+}
+
 /// A selected live 100 × 100 rectangle at (100, 100)–(200, 200) with no paint: its centre point
 /// (Attributes › Show Center) is at (150, 150) and its corners at the box's.
 fn unfilled_live_rect() -> (vectorcraft_doc::Document, Selection) {
@@ -1371,6 +1765,18 @@ fn a_move_from_the_centre_point_snaps_and_shows_the_hollow_arrow() {
     let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 160.0, 150.0));
     assert!(matches!(a.last(), Some(Action::Preview(_, v)) if v["matrix"][4] == json!(10.0)), "{a:?}");
     assert_eq!(t.cursor(&c, Point::new(160.0, 150.0), Mods::default()), Cursor::Arrow);
+}
+
+/// `tool.setOption` takes an ellipse's anchor count from 2 to 1000, as the tool keeps it.
+#[test]
+fn the_anchor_count_is_checked_against_its_range() {
+    let t = ShapeTool::new("ellipse");
+    for n in [2, 4, 1000] {
+        assert_eq!(t.check_option("anchors", &json!(n)), Ok(()), "{n}");
+    }
+    for bad in [json!(1), json!(1001), json!(4.5), json!("4")] {
+        assert_eq!(t.check_option("anchors", &bad), Err("`anchors` must be a whole number from 2 to 1000".into()), "{bad}");
+    }
 }
 
 /// A drag event to `(x, y)` with Backtick held or not.

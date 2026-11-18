@@ -209,6 +209,8 @@ struct Row {
     options: Value,
     /// What makes two rows the same file: format, size, suffix and options.
     key: String,
+    /// The row or the format's settings set `bleed` (a PDF row's own bleed, zero included).
+    bleed_given: bool,
 }
 
 impl Row {
@@ -248,12 +250,19 @@ impl Row {
         }
         // A file per artboard is for viewing: it doesn't carry the whole document to edit.
         options.entry("preserveEditing").or_insert(json!(false));
+        let bleed_given = options.get("bleed").is_some_and(|b| !b.is_null());
         let options = Value::Object(options);
         // A PDF preset (built-in or saved) becomes its settings.
         let options = if format.id == "pdf" { super::pdf::expand_preset(s, C, &options)?.into_owned() } else { options };
-        // Two rows that would write the same bytes under the same name are one file.
-        let key = format!("{}|{}|{suffix}|{options}", format.id, size.label());
-        Ok(Self { format, size, suffix, folder, options, key })
+        let mut row = Self { format, size, suffix, folder, options, key: String::new(), bleed_given };
+        row.key = row.file_key();
+        Ok(row)
+    }
+
+    /// What makes two rows the same file: two rows that would write the same bytes under the same
+    /// name are one file.
+    fn file_key(&self) -> String {
+        format!("{}|{}|{}|{}", self.format.id, self.size.label(), self.suffix, self.options)
     }
 
     /// Formats that hold a whole document to edit (native, Illustrator, EPS): written from a
@@ -525,6 +534,8 @@ fn rows_of(s: &Session, p: &Value, preset: Option<&str>) -> Result<Vec<Row>> {
             if let Some(m) = r.options.as_object_mut() {
                 m.entry("antiAlias").or_insert_with(|| aa.clone());
             }
+            // Two rows whose options are now the same are one file.
+            r.key = r.file_key();
         }
     }
     Ok(rows)
@@ -1118,6 +1129,28 @@ fn names_scripts(item: &Item, r: &Row, single: Option<&[usize]>) -> bool {
     super::access::names_linked_scripts(C, "pdf", &options, doc.artboards.len())
 }
 
+/// The document the file of `item` that row `r` writes carries when it carries one
+/// ([`names_scripts`]): Full Document's PDF of every artboard, the item's artboard alone for a
+/// native, `.ai` or EPS row ([`board_document`]), else the item's document.
+fn carried_document<'a>(item: &'a Item, r: &Row, single: Option<&[usize]>) -> std::borrow::Cow<'a, Document> {
+    match (&item.every_artboard, r.format.id, single) {
+        (Some(all), "pdf", None) => std::borrow::Cow::Borrowed(&**all),
+        _ if r.whole_document() && item.artboard.is_some() => std::borrow::Cow::Owned(board_document(item)),
+        _ => std::borrow::Cow::Borrowed(&*item.doc),
+    }
+}
+
+/// The document a native, `.ai` or EPS row writes for `item`'s artboard: that artboard alone, with
+/// its background color and the art on it, as Save's separateArtboards writes it (#3868).
+fn board_document(item: &Item) -> Document {
+    let mut d = single_artboard(&item.doc, item.region, &item.name);
+    if let (Some(a), Some(from)) = (d.artboards.first_mut(), item.doc.artboards.get(item.artboard.unwrap_or(0))) {
+        a.color = from.color;
+    }
+    super::save::keep_art_on(&mut d, item.region);
+    d
+}
+
 /// Every chosen artboard (asset, layer, selected object) in every format row, one file each (a PDF
 /// holds its artboard alone), or with `fullDocument` one file per row (a PDF of every artboard,
 /// else the bounds of all art). Items that share a name get `-2`, `-3`… instead of overwriting, and
@@ -1137,17 +1170,22 @@ pub(crate) fn export(s: &mut Session, p: &Value, asked: &Value) -> Result<Value>
     let naming = Naming::of(&o, st.path.as_deref().unwrap_or(&st.doc.title))?;
     let selection = o.selection_mode()?;
     let selected = if selection.is_some() { selected_artwork(s)? } else { vec![] };
-    let doc = s.doc()?.doc.clone();
+    let original = s.doc()?.doc.clone();
     // Include Bleed: each artboard grown by the document's bleed.
-    let doc = if o.include_bleed && doc.setup.has_bleed() {
-        let mut d = (*doc).clone();
+    let grown = o.include_bleed && original.setup.has_bleed();
+    let doc = if grown {
+        let mut d = (*original).clone();
         for a in &mut d.artboards {
-            a.rect = doc.setup.bleed_rect(a.rect);
+            a.rect = original.setup.bleed_rect(a.rect);
         }
         Arc::new(d)
     } else {
-        doc
+        original.clone()
     };
+    // A PDF page of an artboard keeps the artboard as its TrimBox and puts its row's bleed around
+    // it once: it is written from the document with the artboards as they are. Assets, layers and
+    // a selection are written on a page of their own bounds, which Include Bleed doesn't grow.
+    let ungrown = (grown && o.assets.is_none() && o.layers.is_none() && o.selection.is_none()).then_some(original);
     let crop = rows.iter().any(|r| r.format.id != "pdf");
     let items = items(&doc, &o, selection, &selected, &naming.filename, crop, true)?;
     // Before the folder is made or any row is written, with the artboards each file holds.
@@ -1161,11 +1199,46 @@ pub(crate) fn export(s: &mut Session, p: &Value, asked: &Value) -> Result<Value>
             super::check_images_in(C, r.format.id, &item.doc, base, &r.options_for(item.region, item.artboard)?)?;
         }
     }
+    // The native document the files of the other rows carry, each document looked through once.
+    if crate::file_access::current().is_some() {
+        let mut looked: HashSet<(usize, bool, Option<usize>)> = HashSet::new();
+        for r in rows.iter().filter(|r| !matches!(r.format.id, "svg" | "svgz")) {
+            // A single-file PDF carries the first item's document alone, as the writer writes it.
+            let carried = items.iter().enumerate().filter(|(index, _)| !(single.is_some() && r.format.id == "pdf" && *index > 0));
+            for (_, item) in carried.filter(|(_, i)| names_scripts(i, r, single.as_deref())) {
+                let all = item.every_artboard.is_some() && r.format.id == "pdf" && single.is_none();
+                let board = item.artboard.filter(|_| !all && r.whole_document());
+                if looked.insert((Arc::as_ptr(&item.doc) as usize, all, board))
+                    && crate::cmd::links::names_hidden_file(&carried_document(item, r, single.as_deref()), base)
+                {
+                    return Err(bad(C, super::access::IMAGE_OUTSIDE));
+                }
+            }
+        }
+    }
     // Appearance of Black › Printing / Exporting for RGB raster rows.
     // Include Artboard Fill off: the encoders leave the background colors out.
     let fill = if o.include_artboard_fill == Some(false) { json!({ "includeArtboardFill": false }) } else { json!({}) };
-    let rows = rows.into_iter().map(|r| Row { options: merge(with_black_output(s, &r.options), fill.clone()), ..r }).collect();
-    let export = ScreenExport { cmd: C, o, rows, naming, items, unused, hidden: None };
+    let rows = rows
+        .into_iter()
+        .map(|mut r| {
+            // Include Bleed: a PDF row that sets no bleed of its own, and whose preset gives none,
+            // puts the document's bleed around the artboard, and is the same file as a row that
+            // asks for the document's bleed. A saved preset's bleed values stay, as they do in
+            // that row.
+            if ungrown.is_some() && r.format.id == "pdf" && !r.bleed_given && !pdf_bleeds(&r.options) {
+                match r.options.get_mut("bleed").and_then(Value::as_object_mut) {
+                    Some(b) => {
+                        b.insert("useDocument".into(), json!(true));
+                    }
+                    None => r.options["bleed"] = json!({ "useDocument": true }),
+                }
+                r.key = r.file_key();
+            }
+            Row { options: merge(with_black_output(s, &r.options), fill.clone()), ..r }
+        })
+        .collect();
+    let export = ScreenExport { cmd: C, o, rows, naming, items, unused, hidden: None, ungrown };
     match &mut s.screens_hand_off {
         Some(slot) => {
             *slot = Some(export);
@@ -1173,6 +1246,14 @@ pub(crate) fn export(s: &mut Session, p: &Value, asked: &Value) -> Result<Value>
         }
         None => export.write(&mut |path, bytes| write_file(path, bytes)),
     }
+}
+
+/// Do the PDF `options` (a built-in preset's settings under them) give the pages a bleed: the
+/// document's, or a value above 0 on some side? Options the PDF encoder refuses count as giving
+/// one, so they are left as they are for the encoder to refuse.
+fn pdf_bleeds(options: &Value) -> bool {
+    super::pdf::settings(C, options)
+        .map_or(true, |s| s.bleed.use_document || [s.bleed.top, s.bleed.bottom, s.bleed.left, s.bleed.right].iter().any(|b| *b > 0.0))
 }
 
 /// An export as `document.exportForScreens` and `assets.export` take it from the session: the
@@ -1192,6 +1273,9 @@ pub struct ScreenExport {
     /// folder came from the `exportPreset` and is outside that request's read roots: the reply and
     /// the errors of [`ScreenExport::write`] name it as [`export_for_screens`] does.
     hidden: Option<(String, String)>,
+    /// Include Bleed with artboards: the document with the artboards as they are, which PDF rows
+    /// write (the items hold the artboards grown by the bleed).
+    ungrown: Option<Arc<Document>>,
 }
 
 impl Session {
@@ -1252,7 +1336,7 @@ impl ScreenExport {
 
 /// [`ScreenExport::write`].
 fn encode_and_write(export: ScreenExport, writer: &mut dyn FnMut(&str, &[u8]) -> Result<()>) -> Result<Value> {
-    let ScreenExport { o, rows, naming, items, unused, .. } = export;
+    let ScreenExport { o, rows, naming, items, unused, ungrown, .. } = export;
     let folder = o.folder.as_deref().filter(|f| !f.is_empty());
     if let Some(dir) = folder {
         create_dir(dir)?;
@@ -1263,19 +1347,23 @@ fn encode_and_write(export: ScreenExport, writer: &mut dyn FnMut(&str, &[u8]) ->
     for text in unused {
         add_note(&mut notes, Note::setting(text));
     }
-    // Include Bleed: a grown artboard already holds the bleed. Assets, layers and a selection are
-    // written on a page of their own bounds, which it doesn't grow.
-    let bleed_on_page = o.include_bleed && o.assets.is_none() && o.layers.is_none() && o.selection.is_none();
+    // The document a PDF row writes: with Include Bleed, the artboards as they are.
+    let pdf_doc = ungrown.as_deref();
+    // A PDF page of an artboard has the artboard as its trim, with or without Include Bleed. A
+    // page of its art's bounds has every object at its edge: it doesn't say whether art stops
+    // short of the bleed.
+    let artboard_page = o.assets.is_none() && o.layers.is_none() && o.selection.is_none();
     let mut write = |doc: &Document, format: &str, options: &Value| -> Result<Vec<u8>> {
         // The steps are the files: an encoder's own steps (artboards, pages) are not reported.
         let (bytes, given) = vectorcraft_doc::cancel::quiet(|| encode_with_notes(doc, format, options))?;
-        for n in given.into_iter().filter(|n| !(bleed_on_page && n.text == super::pdf::BLEED_LEFT_OUT)) {
+        for n in given.into_iter().filter(|n| artboard_page || !super::pdf::is_short_of_bleed(&n.text)) {
             add_note(&mut notes, n);
         }
         Ok(bytes)
     };
-    // A whole-document copy of an artboard, for the formats that write documents to edit.
-    let mut board_docs: std::collections::HashMap<usize, Arc<Document>> = std::collections::HashMap::new();
+    // A whole-document copy of an artboard of an item's document, for the formats that write
+    // documents to edit.
+    let mut board_docs: std::collections::HashMap<(usize, usize), Arc<Document>> = std::collections::HashMap::new();
     let mut files = 0u64;
     // One step per item and row, the files a name collision skips included.
     let steps = (items.len() * rows.len()) as u64;
@@ -1306,27 +1394,15 @@ fn encode_and_write(export: ScreenExport, writer: &mut dyn FnMut(&str, &[u8]) ->
             let bytes = if let Some(boards) = single {
                 let mut options = r.options.clone();
                 options["range"] = json!(boards.iter().map(|b| (b + 1).to_string()).collect::<Vec<_>>().join(", "));
-                write(&item.doc, "pdf", &options)?
+                write(pdf_doc.unwrap_or(&item.doc), "pdf", &options)?
             } else if let (Some(all), "pdf") = (&item.every_artboard, r.format.id) {
                 // One page per artboard.
                 let mut options = r.options.clone();
                 options["range"] = json!("all");
-                write(all, "pdf", &options)?
+                write(pdf_doc.unwrap_or(all), "pdf", &options)?
             } else if r.whole_document() && item.artboard.is_some() {
                 let b = item.artboard.unwrap_or(0);
-                // That artboard alone, as Save's separateArtboards writes it: its art, not the others' (#3868).
-                let d = board_docs
-                    .entry(b)
-                    .or_insert_with(|| {
-                        let mut d = single_artboard(&item.doc, item.region, &item.name);
-                        // It keeps its background color.
-                        if let (Some(a), Some(from)) = (d.artboards.first_mut(), item.doc.artboards.get(b)) {
-                            a.color = from.color;
-                        }
-                        super::save::keep_art_on(&mut d, item.region);
-                        Arc::new(d)
-                    })
-                    .clone();
+                let d = board_docs.entry((Arc::as_ptr(&item.doc) as usize, b)).or_insert_with(|| Arc::new(board_document(item))).clone();
                 let mut options = r.options_for(item.region, None)?;
                 // An EPS page is the artboard, not its art's bounds: an artboard without art still writes.
                 if r.format.id == "eps" {
@@ -1334,7 +1410,8 @@ fn encode_and_write(export: ScreenExport, writer: &mut dyn FnMut(&str, &[u8]) ->
                 }
                 write(&d, r.format.id, &options)?
             } else {
-                write(&item.doc, r.format.id, &r.options_for(item.region, item.artboard)?)?
+                let doc = if r.format.id == "pdf" { pdf_doc.unwrap_or(&item.doc) } else { &item.doc };
+                write(doc, r.format.id, &r.options_for(item.region, item.artboard)?)?
             };
             out.put(folder, o.zip, name, bytes, writer)?;
             files += 1;

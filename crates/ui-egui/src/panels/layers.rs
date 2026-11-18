@@ -221,6 +221,14 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         reveal = rows.first().copied();
         ui.data_mut(|d| d.insert_temp(key("seen"), rows.clone()));
     }
+    // Locate Object or Locate Layer (`layer.locate`): the located row is revealed each time, also
+    // when it was already highlighted and a layer around it was closed since or the list scrolled
+    // away. A request for a row no longer highlighted is dropped.
+    let locate = app.session.active_mut().and_then(|st| st.locate_reveal.take()).filter(|id| rows.contains(id));
+    if let Some(id) = locate {
+        open_around(app, &doc, &[id]);
+        reveal = Some(id);
+    }
     let highlighted = reveal.is_some();
     // A new active layer (a canvas selection highlights no row): reveal it too, unless a row
     // highlighted in the panel holds the view.
@@ -330,15 +338,17 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // The column drag: live while it lasts, one undo step when the button is released.
     let released = ui.input(|i| i.pointer.any_released());
     // Layers dragged into the empty space under the last row go below the bottom layer (there is
-    // no row there to take the drop).
+    // no row there to take the drop). The bottom layer itself goes there only as an Alt copy,
+    // which lands below it; moved, it would stay where it is (#8237).
     let below = list_rect.top() - scrolled.inner.state.clamped_offset().y + list.len() as f32 * view.h;
+    let alt = ui.input(|i| i.modifiers.alt);
     if query.is_empty()
         && !app.ui.layers_filter.is_on()
         && let Some(drag) = egui::DragAndDrop::payload::<LayersDrag>(ui.ctx())
         && let LayersDrag::Rows(ids) = &*drag
         && let Some(bottom) = doc.layers.first()
         && !ids.is_empty()
-        && !ids.contains(&bottom.id)
+        && (alt || !ids.contains(&bottom.id))
         && ids.iter().all(|i| doc.node(*i).is_some_and(Node::is_layer))
         && let Some(p) = ui.input(|i| i.pointer.hover_pos())
         && list_rect.contains(p)
@@ -378,6 +388,19 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     {
         drag_ghost(ui, &view, widgets::ghost_row(ids, grabbed), pos);
     }
+    let alt = ui.input(|i| i.modifiers.alt);
+    let over_list = ui.input(|i| i.pointer.hover_pos()).is_some_and(|p| list_rect.contains(p));
+    if !released
+        && let Some(drag) = egui::DragAndDrop::payload::<LayersDrag>(ui.ctx())
+        && let Some(cursor) = drag_cursor(&drag, alt, over_list)
+    {
+        // The copy cursor is the panels' add cursor, which Windows can show (#8217, #8241).
+        if cursor == egui::CursorIcon::Copy {
+            crate::cursors::set_add_cursor(app, ui.ctx());
+        } else {
+            ui.ctx().set_cursor_icon(cursor);
+        }
+    }
     // Keyboard: Delete removes the highlighted rows while the panel has the keyboard (a row was
     // clicked last, not the canvas).
     // The panel keeps it while it is drawn ([`super::has_row_keys`]); the app's shortcuts leave
@@ -407,6 +430,19 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         super::set_row_keys(ui.ctx(), ROW_KEYS, false);
     }
     see_selection(app, ui, selected);
+}
+
+/// The cursor while `drag` is held (`alt` down, `over_list`: the pointer is over the rows): the
+/// copy cursor where a drop copies, as a drop in the list with Alt does, else the grabbing hand.
+/// The trash and New Layer ignore Alt, so outside the list the hand stays. Read every frame, as
+/// the drop reads Alt when it lands (#8217). None for guide rows, which never copy and set their
+/// own cursor.
+fn drag_cursor(drag: &LayersDrag, alt: bool, over_list: bool) -> Option<egui::CursorIcon> {
+    match drag {
+        LayersDrag::Rows(_) | LayersDrag::Art if alt && over_list => Some(egui::CursorIcon::Copy),
+        LayersDrag::Rows(_) | LayersDrag::Art => Some(egui::CursorIcon::Grabbing),
+        LayersDrag::Guides(_) => None,
+    }
 }
 
 /// The search typed into the Layers panel's Search All field, as the panel matches it.
@@ -490,7 +526,7 @@ fn listed_when_opened(doc: &Document, open: &OpenRows, opts: &PanelOptions, quer
     rows.iter().any(|r| r.node.id == id && r.guide.is_none() && !r.spine)
 }
 
-/// The active document's uid and its last selected object, the one Locate Object locates.
+/// The active document's uid and its last selected object.
 fn last_selected(app: &VectorcraftApp) -> Option<(u64, Option<NodeId>)> {
     app.session.active().map(|st| (st.uid, st.selection.objects.last().copied()))
 }
