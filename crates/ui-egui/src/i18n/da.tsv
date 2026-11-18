@@ -6044,6 +6044,7 @@ theme	Appearance	Udseende
 	Delete Brush	Slet pensel
 	Delete Color	Slet farve
 	Restore Generated Table	Gendan genereret tabel
+	Unshift All Colors	Fjern skift af alle farver
 	Delete Symbol	Slet symbol
 	Delete the selected symbol?	Vil du slette det markerede symbol?
 	Delete the selected symbols?	Vil du slette de markerede symboler?
@@ -7580,6 +7581,7 @@ imageTrace	Outline	Kontur
 @msg	choose a location for the package	vælg en placering til pakken
 @msg	clipboard is empty	udklipsholderen er tom
 @msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: mindst én farve skal blive i farvetabellen
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted: `{k}` angiver en farve, som en anden nøgle også angiver
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` er ikke en farve som "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: højst {MAX_TABLE} farver
 @msg	command `{0}` is not available right now: {1}	kommandoen `{0}` er ikke tilgængelig lige nu: {1}
