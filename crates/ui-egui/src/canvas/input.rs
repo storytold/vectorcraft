@@ -5,8 +5,8 @@ use super::drag::{
     tool_drag_moved, tool_frame_moves, tool_holds, tool_press_doc_id,
 };
 use super::view::{
-    HOLD_DELAY, HOLD_ZOOM, SCRUB_SLOP, SCRUB_ZOOM, WheelTurn, animated_zoom, pan_pixels, pan_ppp, rotate_about, scroll_view, touch_gestures,
-    trackpad_turn, wheel, whole_pixels, zoom_about,
+    HOLD_DELAY, HOLD_ZOOM, SCRUB_SLOP, SCRUB_ZOOM, WheelTurn, animated_zoom, edge_scroll, pan_pixels, pan_ppp, rotate_about, scroll_view,
+    touch_gestures, trackpad_turn, wheel, whole_pixels, zoom_about,
 };
 use super::{Color32, Drag, Mods, Point, PointerEvent, PointerKind, Pos2, Shape, Stroke, Ui, VectorcraftApp, View, Xf, json};
 
@@ -438,6 +438,11 @@ fn drag_held(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, d: Drag, p: Pos2) 
             // mouse's, a pen's on X11 among them, take the host's latest. Other tools get
             // the last position only, so a costly drag preview runs once a frame.
             let (moves, last_pose) = tool_frame_moves(ui, app, false);
+            // Held near an edge of the canvas, the drag scrolls the view so it can go on past
+            // what shows (#8551). The moves above came before the scroll and keep the view they
+            // were made in; the pointer's position takes the scrolled one, so the tool gets a
+            // new document position though the pointer stands still.
+            let xf = edge_scroll_held(app, ui, f, p).unwrap_or(xf);
             // A frame whose pointer ends where the last one did still moved in between.
             let backquote = ui.input(|i| i.key_down(egui::Key::Backtick));
             let mods_changed = tool_drag_mods_changed(ui, mods(m, space), backquote);
@@ -462,6 +467,26 @@ fn drag_held(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, d: Drag, p: Pos2) 
             }
         }
     }
+}
+
+/// Scroll the view for a tool drag held at `p` near an edge of the canvas ([`edge_scroll`]), and
+/// return the canvas's transform after it; `None` when the view did not move. Only once the press
+/// has dragged (a click near the edge stays a click), with the pointer over the canvas itself (over
+/// a panel the Selection tools hand the art to the panels), and not under a modal dialog.
+fn edge_scroll_held(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, p: Pos2) -> Option<Xf> {
+    let dragged = ui.data(|d| d.get_temp::<Point>(tool_drag_doc_id()).is_some());
+    if !dragged || f.modal || !ui.input(|i| i.pointer.has_pointer()) || !on_canvas(ui, f.resp, p) {
+        return None;
+    }
+    let by = edge_scroll(f.rect, p, ui.input(|i| i.unstable_dt))?;
+    let before = app.view().map(|v| v.center);
+    scroll_view(app, ui, by);
+    let v = *app.view()?;
+    // Less than half a pixel is kept for the next frame: the view has not moved yet.
+    if before == Some(v.center) {
+        return None;
+    }
+    Some(Xf::at(f.rect, &v, app.canvas_ui_zoom))
 }
 
 /// A drag for each of this frame's moves before the pointer's position ([`tool_frame_moves`]), each

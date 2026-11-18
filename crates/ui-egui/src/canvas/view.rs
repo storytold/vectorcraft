@@ -125,6 +125,47 @@ pub(super) fn rotate_about(vm: &mut View, rect: egui::Rect, p: Pos2, degrees: f6
     vm.center += before - Xf::at(rect, vm, ui_zoom).to_doc(p);
 }
 
+/// How far in from each edge of the canvas a held tool drag scrolls the view ([`edge_scroll`]), in
+/// screen points.
+pub(super) const EDGE_SCROLL_ZONE: f32 = 24.0;
+
+/// How fast the view scrolls with the pointer at the canvas's very edge ([`edge_scroll`]), in
+/// screen points a second. Nearer the inner side of the zone it scrolls slower.
+pub(super) const EDGE_SCROLL_SPEED: f32 = 900.0;
+
+/// How far a tool drag held at `p` near an edge of the canvas `rect` scrolls the view in `dt`
+/// seconds (#8551), as the screen points the content moves: away from that edge, so what lies
+/// past it comes into view, faster the nearer the pointer is to the edge. `None` with the pointer
+/// outside the canvas or away from its edges, or with no time passed. A stalled frame counts a
+/// tenth of a second at most.
+pub(super) fn edge_scroll(rect: egui::Rect, p: Pos2, dt: f32) -> Option<egui::Vec2> {
+    if !rect.contains(p) || !p.x.is_finite() || !p.y.is_finite() || !dt.is_finite() || dt <= 0.0 {
+        return None;
+    }
+    // On a canvas narrower than two zones, each zone reaches the middle at most.
+    let zone_x = EDGE_SCROLL_ZONE.min(rect.width() / 2.0);
+    let zone_y = EDGE_SCROLL_ZONE.min(rect.height() / 2.0);
+    // How deep into a zone the pointer is (0 at its inner side, 1 at the edge), signed by the way
+    // the content moves: near the left or top edge it moves right or down.
+    let depth = |near: f32, far: f32, zone: f32| {
+        if zone <= 0.0 {
+            0.0
+        } else if near < zone {
+            1.0 - near / zone
+        } else if far < zone {
+            far / zone - 1.0
+        } else {
+            0.0
+        }
+    };
+    let dx = depth(p.x - rect.left(), rect.right() - p.x, zone_x);
+    let dy = depth(p.y - rect.top(), rect.bottom() - p.y, zone_y);
+    if dx == 0.0 && dy == 0.0 {
+        return None;
+    }
+    Some(egui::vec2(dx, dy) * (EDGE_SCROLL_SPEED * dt.min(0.1)))
+}
+
 /// Move view `vm`'s content by `(dx, dy)` device pixels along the screen's axes, at `ppp` device
 /// pixels a point of an interface zoomed by `ui_zoom`: the canvas's frame moves by exactly those
 /// pixels.
