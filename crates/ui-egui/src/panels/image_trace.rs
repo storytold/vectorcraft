@@ -316,6 +316,13 @@ pub(crate) fn cancel_ignore_sampler(app: &mut VectorcraftApp, restore: bool) {
     }
 }
 
+/// Presets and restored panel settings can turn Ignore Color off without its checkbox.
+fn cancel_disabled_ignore_sampler(app: &mut VectorcraftApp, params: &Value) {
+    if params["ignoreWhite"] != true {
+        cancel_ignore_sampler(app, true);
+    }
+}
+
 /// Also runs when the panel is closed: document changes and tool changes end the pick.
 pub(crate) fn refresh_ignore_sampler(app: &mut VectorcraftApp) -> bool {
     let Some(s) = app.ui.trace_ignore_sampler.as_ref() else { return false };
@@ -1070,10 +1077,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if is_trace || !preview {
         st.preview_off = !preview;
     }
-    // Presets and restored panel settings can turn Ignore Color off without its checkbox.
-    if st.params["ignoreWhite"] != true {
-        cancel_ignore_sampler(app, true);
-    }
+    cancel_disabled_ignore_sampler(app, &st.params);
     if retrace && is_trace && preview {
         trace(app, ui.ctx(), &mut st);
     }

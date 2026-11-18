@@ -264,13 +264,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         app.ui.home = None;
     }
     let home_showing = crate::menus::home_showing(app);
-    if home_showing || app.session.active().is_none() {
-        // Home and the empty window still advance egui's click history. Observe the same
-        // correction there so it retires after the two ordinary clicks that replace a pick.
-        let id = egui::Id::unique("canvas");
-        begin_ignore_sampler_pointer(ui, id, false);
-        end_ignore_sampler_pointer(ui, id);
-    }
+    observe_hidden_ignore_sampler_pointer(app, ui, home_showing);
     if home_showing {
         // No IME owner this pass (`ime_caret_rect` stays None): the end-of-pass observation marks
         // the context absent and keeps any marked text as typed.
@@ -574,6 +568,16 @@ fn end_ignore_sampler_pointer(ui: &Ui, id: egui::Id) {
             reset_ignore_sampler_clicks(ui, id);
         }
         clear_ignore_sampler_gesture(ui, id);
+    }
+}
+
+fn observe_hidden_ignore_sampler_pointer(app: &VectorcraftApp, ui: &Ui, home_showing: bool) {
+    if home_showing || app.session.active().is_none() {
+        // Home and the empty window still advance egui's click history. Observe the same
+        // correction there so it retires after the two ordinary clicks that replace a pick.
+        let id = egui::Id::unique("canvas");
+        begin_ignore_sampler_pointer(ui, id, false);
+        end_ignore_sampler_pointer(ui, id);
     }
 }
 
