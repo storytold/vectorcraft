@@ -271,6 +271,23 @@ fn rgb_device_proofs_show_the_device_numbers() {
     assert_eq!(c.proof_srgb(red, &gone), red);
 }
 
+/// A CMYK device whose profile is not loaded leaves a color as the screen shows it, with Preserve
+/// CMYK Numbers on as well as off, the same as for a pixel of that color.
+#[test]
+fn missing_cmyk_device_leaves_colors_as_they_are() {
+    let c = cms();
+    let gone = ProofSetup { target: ProofTarget::Cmyk("Nope".into()), preserve_numbers: true, ..Default::default() };
+    let blue = Color::rgb(0.0, 0.0, 1.0);
+    let shown = c.display_rgb(&blue);
+    assert_eq!(c.proof_color(&blue, &gone), shown);
+    assert_eq!(c.proof_srgb(shown, &gone), shown);
+    let off = ProofSetup { preserve_numbers: false, ..gone.clone() };
+    assert_eq!(c.proof_color(&blue, &off), shown);
+    // A CMYK color keeps its inks' display color.
+    let ink = Color::Cmyk { c: 0.2, m: 0.7, y: 0.1, k: 0.05 };
+    assert!(de(c.proof_color(&ink, &gone), c.display_rgb(&ink)) < 0.01);
+}
+
 /// The expected colors were computed separately with NumPy from the same published inputs (linear
 /// sRGB to XYZ from IEC 61966-2-1, Smith & Pokorny's XYZ to LMS, Judd-Vos XYZ at 485 nm and 660 nm),
 /// following Brettel, Viénot & Mollon (1997) with the display's white as the neutral axis.
