@@ -4322,6 +4322,8 @@ axis	Both	Her İkisi
 @msg	the script is no longer in the Scripts folder	betik artık Scripts klasöründe değil
 	Some scripts were not listed	Bazı komut dosyaları listelenmedi
 	The Scripts folder cannot be read	Scripts klasörü okunamıyor
+	Loading scripts…	Betikler yükleniyor…
+	The Scripts folder is still being read	Scripts klasörü hâlâ okunuyor
 @msg	the script's run is no longer available	betiğin çalıştırması artık kullanılamıyor
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	başarısız bir komut geri yüklenemeyen geri alma adımlarını değiştirdi, bu yüzden betik durduruldu
 @msg	a recovery copy could not be written, so the script was not run	kurtarma kopyası yazılamadı, bu nedenle betik çalıştırılmadı

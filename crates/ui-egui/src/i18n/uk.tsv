@@ -4598,6 +4598,8 @@ axis	Both	Обидві
 @msg	the script is no longer in the Scripts folder	скрипт більше не міститься в папці Scripts
 	Some scripts were not listed	Деякі сценарії не показано
 	The Scripts folder cannot be read	Не вдалося прочитати папку Scripts
+	Loading scripts…	Завантаження сценаріїв…
+	The Scripts folder is still being read	Папка Scripts ще читається
 @msg	the script's run is no longer available	виконання скрипта більше не доступне
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	невдала команда змінила кроки скасування, які не вдалося відновити, тому скрипт зупинено
 @msg	a recovery copy could not be written, so the script was not run	не вдалося записати копію для відновлення, тому скрипт не виконано
