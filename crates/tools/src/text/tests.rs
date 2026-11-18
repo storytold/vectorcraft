@@ -1327,6 +1327,7 @@ fn area_type_drag_measure_labels_honor_preference() {
 
 #[test]
 fn layout_cache_follows_fonts_added_later() {
+    let _inputs = crate::testutil::changing_layout_inputs();
     // Other tests can load system fonts; this assertion needs its own process-wide database.
     #[cfg(not(target_arch = "wasm32"))]
     if std::env::var("VECTORCRAFT_FONT_CACHE_TEST_CHILD").as_deref() != Ok("1") {
@@ -1542,6 +1543,7 @@ fn selected_type_shows_its_ports_in_each_state() {
 /// Preferences › Hyphenation › Exceptions change, the selected type is laid out again.
 #[test]
 fn the_out_port_follows_the_hyphenation_exceptions() {
+    let _inputs = crate::testutil::changing_layout_inputs();
     struct Clear;
     impl Drop for Clear {
         fn drop(&mut self) {
@@ -1690,6 +1692,7 @@ const OVERFLOWS: &str = "This text is far too long to fit in a frame of one hund
 /// overlays as a tool that lays every frame out afresh.
 #[test]
 fn type_overlays_keep_the_selected_frames_layouts() {
+    let _inputs = crate::testutil::steady_layout_inputs();
     let (d, ids) = area_frames(&["One", "Two words", "Three words here", OVERFLOWS]);
     let (mut sel, p) = (Selection::default(), paint());
     sel.set(ids.iter().copied());
@@ -1721,6 +1724,7 @@ fn type_overlays_keep_the_selected_frames_layouts() {
 /// out again on the next frame.
 #[test]
 fn type_overlays_keep_a_selected_storys_layouts() {
+    let _inputs = crate::testutil::steady_layout_inputs();
     let (mut d, ids) = area_frames(&["Story one ", "story two ", "story three ", "story four"]);
     d.text_threads.push(ids.clone());
     let (mut sel, p) = (Selection::default(), paint());
@@ -1749,6 +1753,7 @@ fn type_overlays_keep_a_selected_storys_layouts() {
 /// longer drawn is dropped, and choosing another tool drops them all.
 #[test]
 fn type_overlays_lay_out_again_only_the_frames_that_changed() {
+    let _inputs = crate::testutil::steady_layout_inputs();
     let (mut d, ids) = area_frames(&["One", "Two", "Three", OVERFLOWS]);
     let (mut sel, p) = (Selection::default(), paint());
     sel.set(ids.iter().copied());
@@ -1786,6 +1791,7 @@ fn type_overlays_lay_out_again_only_the_frames_that_changed() {
 /// each call, and draws what laying every frame out afresh draws.
 #[test]
 fn type_overlays_keep_at_most_frame_layouts_max() {
+    let _inputs = crate::testutil::steady_layout_inputs();
     let texts = vec!["a "; FRAME_LAYOUTS_MAX + 3];
     let (mut d, ids) = area_frames(&texts);
     d.text_threads.push(ids.clone());
@@ -1806,6 +1812,7 @@ fn type_overlays_keep_at_most_frame_layouts_max() {
 
 #[test]
 fn frame_layouts_follow_fonts_and_hyphenation_exceptions() {
+    let _inputs = crate::testutil::changing_layout_inputs();
     // Other tests can load system fonts; this assertion needs its own process-wide database.
     #[cfg(not(target_arch = "wasm32"))]
     if std::env::var("VECTORCRAFT_FONT_CACHE_TEST_CHILD").as_deref() != Ok("1") {
@@ -1848,6 +1855,7 @@ fn frame_layouts_follow_fonts_and_hyphenation_exceptions() {
 #[test]
 #[ignore = "timing, run by hand"]
 fn type_overlays_timing() {
+    let _inputs = crate::testutil::steady_layout_inputs();
     use std::time::Instant;
     let words = "The quick brown fox jumps over the lazy dog while seven wizards box. ".repeat(6);
     let texts: Vec<String> = (0..200).map(|i| format!("{i} {words}")).collect();
@@ -2162,4 +2170,158 @@ fn soft_return_in_a_list_item_keeps_tab_within_the_paragraph() {
     tool.anchor = 0;
     let acts = key(&mut tool, &d, ToolKey::Tab, Mods::default());
     assert!(acts.iter().any(|a| matches!(a, Action::Exec(cmd, p) if cmd == "text.setFormat" && p["listLevel"] == 2)));
+}
+
+/// A family no computer has.
+const NO_SUCH_FAMILY: &str = "Missing Test Family 7258";
+
+/// Point type at (x, 100) whose runs are `runs` (text, family, style).
+fn add_styled_text(d: &mut Document, x: f64, runs: &[(&str, &str, &str)]) -> NodeId {
+    let id = d.alloc_id();
+    let style =
+        |family: &str, font_style: &str| CharStyle { size: 20.0, font_family: family.into(), font_style: font_style.into(), ..Default::default() };
+    let mut t = TextObject::point(Point::new(x, 100.0), "", style(runs[0].1, runs[0].2));
+    t.runs = runs.iter().map(|(text, family, font_style)| TextRun::new(*text, style(family, font_style))).collect();
+    d.insert(Some(d.layers[0].id), 0, Node::new(id, NodeKind::Text(Box::new(t)))).unwrap();
+    id
+}
+
+/// Where the caret before byte `b` of type `id` is drawn (document space).
+fn caret_at(c: &ToolContext, id: NodeId, b: usize) -> Point {
+    let t = TypeTool::text(c, id).unwrap();
+    let lay = vectorcraft_text::layout(FontDb::global(), t);
+    let (a, bb) = vectorcraft_text::caret_position(&lay, b);
+    let at = t.xf * a.midpoint(bb);
+    Point::new(at.x + 0.1, at.y)
+}
+
+/// The question a click asked → its token and fields.
+fn asked(acts: &[Action]) -> (u64, Value) {
+    match acts {
+        [Action::Dialog(kind, p)] if kind == MISSING_FONT_EDIT => (p["token"].as_u64().unwrap(), p.clone()),
+        _ => panic!("expected only the missing-font question: {acts:?}"),
+    }
+}
+
+/// A click on type set in a family that isn't available asks first and starts no edit; OK starts
+/// it with the caret where the type was clicked, and the font the type names stays as it is.
+#[test]
+fn a_click_on_type_in_a_missing_font_asks_before_editing() {
+    let mut d = Document::new(500.0, 500.0);
+    let id = add_styled_text(&mut d, 100.0, &[("Hello", NO_SUCH_FAMILY, "Regular")]);
+    let mut tool = TypeTool::new("type");
+    let (sel, p) = (Selection::default(), paint());
+    let c = cx(&d, &sel, &p);
+    let at = caret_at(&c, id, 3);
+    let (token, q) = asked(&click(&mut tool, &c, at.x, at.y));
+    assert_eq!(
+        (q["id"].as_u64(), &q["missing"], &q["style"], &q["more"]),
+        (Some(id.0), &json!([format!("{NO_SUCH_FAMILY} Regular")]), &json!([]), &json!(0))
+    );
+    assert_eq!(tool.editing, None);
+    assert!(!tool.waiting());
+    // OK: the next poll starts the edit at the clicked character.
+    tool.set_option("missingFontEdit", &json!({"token": token, "ok": true}));
+    assert!(tool.waiting());
+    let acts = tool.poll(&c, false);
+    assert_eq!(acts, vec![Action::Exec("select.set".into(), json!({"ids": [id.0]}))]);
+    assert_eq!((tool.editing, tool.caret, tool.anchor), (Some(id), 3, 3));
+    assert!(!tool.waiting());
+    let NodeKind::Text(t) = &d.node(id).unwrap().kind else { panic!("text") };
+    assert_eq!(t.runs[0].style.font_family, NO_SUCH_FAMILY);
+    // A click within the type being edited moves the caret without asking again.
+    let at = caret_at(&c, id, 1);
+    let acts = click(&mut tool, &c, at.x, at.y);
+    assert!(!acts.iter().any(|a| matches!(a, Action::Dialog(..))), "{acts:?}");
+    assert_eq!((tool.editing, tool.caret), (Some(id), 1));
+}
+
+/// Cancel starts no edit, and the edit in progress on other type goes on; an answer that names
+/// another question, or one given to a document changed since, starts nothing either.
+#[test]
+fn cancel_or_a_stale_answer_starts_no_edit_in_missing_fonts() {
+    let (mut d, first, mut tool) = editing("First");
+    tool.caret = 2;
+    let other = add_styled_text(&mut d, 300.0, &[("Second", NO_SUCH_FAMILY, "Bold")]);
+    let (sel, p) = (Selection::default(), paint());
+    let c = cx(&d, &sel, &p);
+    let at = caret_at(&c, other, 2);
+    let (token, _) = asked(&click(&mut tool, &c, at.x, at.y));
+    assert_eq!((tool.editing, tool.caret), (Some(first), 2), "the edit in progress goes on while the question is open");
+    tool.set_option("missingFontEdit", &json!({"token": token + 1, "ok": true}));
+    assert!(!tool.waiting(), "another question's answer");
+    tool.set_option("missingFontEdit", &json!({"token": token, "ok": false}));
+    assert!(tool.poll(&c, false).is_empty());
+    assert_eq!((tool.editing, tool.caret), (Some(first), 2));
+    // OK after the document changed: nothing starts.
+    let (token, _) = asked(&click(&mut tool, &c, at.x, at.y));
+    tool.set_option("missingFontEdit", &json!({"token": token, "ok": true}));
+    let changed = ToolContext { revision: (0, 1), ..cx(&d, &sel, &p) };
+    assert!(tool.poll(&changed, false).is_empty());
+    assert_eq!(tool.editing, Some(first));
+    assert!(!tool.waiting());
+}
+
+/// Every new edit of such type asks again, after an earlier OK too, and a style the family lacks
+/// asks as a missing family does; type in available fonts is edited at once.
+#[test]
+fn each_new_edit_of_type_in_unavailable_fonts_asks() {
+    let mut d = Document::new(500.0, 500.0);
+    let styled = add_styled_text(&mut d, 100.0, &[("Wide", "Source Sans 3", "Ultra Condensed Oblique 7258")]);
+    let plain = add_styled_text(&mut d, 300.0, &[("Plain", "Source Sans 3", "Regular")]);
+    let mut tool = TypeTool::new("type");
+    let (sel, p) = (Selection::default(), paint());
+    let c = cx(&d, &sel, &p);
+    let at = caret_at(&c, styled, 1);
+    let (token, q) = asked(&click(&mut tool, &c, at.x, at.y));
+    assert_eq!((&q["missing"], &q["style"]), (&json!([]), &json!(["Source Sans 3 Ultra Condensed Oblique 7258"])));
+    tool.set_option("missingFontEdit", &json!({"token": token, "ok": true}));
+    tool.poll(&c, false);
+    assert_eq!(tool.editing, Some(styled));
+    // Other type in an available font is edited at once.
+    let to = caret_at(&c, plain, 2);
+    let acts = click(&mut tool, &c, to.x, to.y);
+    assert!(acts.contains(&Action::Exec("select.set".into(), json!({"ids": [plain.0]}))), "{acts:?}");
+    assert_eq!(tool.editing, Some(plain));
+    // Back to the first type: a new edit, so the question comes again.
+    asked(&click(&mut tool, &c, at.x, at.y));
+    assert_eq!(tool.editing, Some(plain));
+}
+
+/// The whole story counts: type with one run in a missing font asks even when the click lands in a
+/// run in an available font, and the question names each font once.
+#[test]
+fn a_story_with_one_run_in_a_missing_font_asks() {
+    let mut d = Document::new(500.0, 500.0);
+    let id = add_styled_text(
+        &mut d,
+        100.0,
+        &[("Here ", "Source Sans 3", "Regular"), ("gone ", NO_SUCH_FAMILY, "Regular"), ("again", NO_SUCH_FAMILY, "Regular")],
+    );
+    let mut tool = TypeTool::new("type");
+    let (sel, p) = (Selection::default(), paint());
+    let c = cx(&d, &sel, &p);
+    let at = caret_at(&c, id, 1);
+    let (_, q) = asked(&click(&mut tool, &c, at.x, at.y));
+    assert_eq!(q["missing"], json!([format!("{NO_SUCH_FAMILY} Regular")]));
+    assert_eq!(tool.editing, None);
+}
+
+/// Type set in a CSS generic family is edited without a question, and a press dropped while the
+/// question is open leaves the edit in progress as it was.
+#[test]
+fn generic_families_and_a_dropped_press_ask_nothing_more() {
+    let mut d = Document::new(500.0, 500.0);
+    let generic = add_styled_text(&mut d, 100.0, &[("Generic", "sans-serif", "Regular")]);
+    let missing = add_styled_text(&mut d, 300.0, &[("Missing", NO_SUCH_FAMILY, "Regular")]);
+    let mut tool = TypeTool::new("type");
+    let (sel, p) = (Selection::default(), paint());
+    let c = cx(&d, &sel, &p);
+    let at = caret_at(&c, generic, 1);
+    let acts = click(&mut tool, &c, at.x, at.y);
+    assert!(acts.contains(&Action::Exec("select.set".into(), json!({"ids": [generic.0]}))), "{acts:?}");
+    let to = caret_at(&c, missing, 1);
+    asked(&tool.pointer(&c, &PointerEvent::new(PointerKind::Down, to.x, to.y)));
+    assert!(tool.drop_press(&c).is_empty());
+    assert_eq!(tool.editing, Some(generic));
 }
