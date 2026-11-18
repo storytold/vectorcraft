@@ -4291,6 +4291,7 @@ digits	Malayalam	馬來亞拉姆數字
 	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	即時矩形的屬性中為四個角顯示一個圓角半徑欄位；關閉時，每個角都有自己的欄位。
 	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	變形面板中的編輯所變形的內容：物件、其圖樣拼貼或兩者；預設依照變形圖樣拼貼。
 	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	選取一個符號實體時，變形面板使用符號的註冊點作為參考點。
+	Drawing a rectangle, ellipse, polygon, star or line opens the Transform panel if it is closed.	繪製矩形、橢圓形、多邊形、星形或直線時，如果變形面板已關閉，就會開啟它。
 	Darkens the canvas outside the artboards while the Artboard tool is active.	使用工作區域工具時調暗工作區域以外的畫布。
 	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	調暗工作區域外的區域開啟時，用工作區域工具拖曳期間工作區域以外的區域保持變暗。
 	How near, in pixels, the pointer must be to an object, anchor or handle for a click to select it.	按一下時，指標需距離物件、錨點或控制把手多少像素以內才能選取它。

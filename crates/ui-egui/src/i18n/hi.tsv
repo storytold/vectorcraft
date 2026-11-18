@@ -4223,6 +4223,7 @@ antiAlias	Sharp	शार्प
 	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	लाइव आयत की प्रॉपर्टीज़ चारों कोनों के लिए कोने की त्रिज्या का एक ही फ़ील्ड दिखाती हैं; बंद होने पर हर कोने का अपना फ़ील्ड होता है।
 	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	रूपांतरण पैनल में किए गए बदलाव क्या रूपांतरित करते हैं: ऑब्जेक्ट, उसकी पैटर्न टाइलें या दोनों; डिफ़ॉल्ट ट्रांसफॉर्म पैटर्न टाइलें का पालन करता है।
 	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	एक सिंबल इंस्टेंस चुना होने पर रूपांतरण पैनल सिंबल के रजिस्ट्रेशन पॉइंट को संदर्भ पॉइंट के रूप में इस्तेमाल करता है।
+	Drawing a rectangle, ellipse, polygon, star or line opens the Transform panel if it is closed.	आयत, दीर्घवृत्त, बहुभुज, तारा या रेखा ड्रॉ करने पर रूपांतरण पैनल बंद हो तो खुल जाता है।
 	Darkens the canvas outside the artboards while the Artboard tool is active.	आर्टबोर्ड टूल सक्रिय रहने पर आर्टबोर्ड के बाहर का कैनवास गहरा करता है।
 	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	आर्टबोर्ड के बाहर का क्षेत्र धुंधला करें चालू होने पर आर्टबोर्ड टूल से ड्रैग करते समय आर्टबोर्ड के बाहर का क्षेत्र गहरा बना रहता है।
 	How near, in pixels, the pointer must be to an object, anchor or handle for a click to select it.	किसी क्लिक से ऑब्जेक्ट, एंकर पॉइंट या हैंडल चुनने के लिए पॉइंटर को उससे कितने पिक्सेल पास होना चाहिए।

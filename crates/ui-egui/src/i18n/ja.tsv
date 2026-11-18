@@ -3133,6 +3133,7 @@ mark-style	Japanese	日本式
 	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	ライブ長方形のプロパティで、4 つの角に共通の角丸の半径フィールドを 1 つ表示します。オフのときは角ごとにフィールドを表示します。
 	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	変形パネルでの編集が変形する対象で、オブジェクト、パターンタイル、またはその両方です。デフォルトはパターンタイルを変形に従います。
 	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	シンボルインスタンスを 1 つ選択したとき、変形パネルはシンボルの基準点を基準点として使います。
+	Drawing a rectangle, ellipse, polygon, star or line opens the Transform panel if it is closed.	長方形、楕円形、多角形、スター、直線を描画すると、閉じている変形パネルが開きます。
 	Darkens the canvas outside the artboards while the Artboard tool is active.	アートボードツールを使っている間、アートボードの外側のカンバスを暗く表示します。
 	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	アートボードの外側を暗く表示がオンのとき、アートボードツールでドラッグしている間もアートボードの外側を暗いままにします。
 	How near, in pixels, the pointer must be to an object, anchor or handle for a click to select it.	クリックでオブジェクト、アンカーポイント、ハンドルを選択できる、ポインターからの距離（ピクセル）です。

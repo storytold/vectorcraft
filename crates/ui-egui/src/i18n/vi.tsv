@@ -3463,6 +3463,7 @@ mark-style	Japanese	Kiểu Nhật
 	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	Thuộc tính của một hình chữ nhật động hiển thị một trường Bán kính góc cho cả bốn góc; khi tắt, mỗi góc có trường riêng.
 	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	Những gì thao tác trong bảng Biến đổi biến đổi: đối tượng, các ô họa tiết của nó hoặc cả hai; Mặc định theo Biến đổi ô họa tiết.
 	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	Khi chọn một thể hiện biểu tượng, bảng Biến đổi dùng điểm đăng ký của biểu tượng làm điểm tham chiếu.
+	Drawing a rectangle, ellipse, polygon, star or line opens the Transform panel if it is closed.	Vẽ hình chữ nhật, hình elip, đa giác, ngôi sao hoặc đường thẳng sẽ mở bảng Biến đổi nếu bảng đang đóng.
 	Darkens the canvas outside the artboards while the Artboard tool is active.	Làm tối khung vẽ bên ngoài các bảng vẽ khi công cụ Bảng vẽ đang hoạt động.
 	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	Khi Làm tối vùng bên ngoài bảng vẽ đang bật, vùng bên ngoài các bảng vẽ vẫn tối trong khi bạn kéo bằng công cụ Bảng vẽ.
 	How near, in pixels, the pointer must be to an object, anchor or handle for a click to select it.	Con trỏ phải cách đối tượng, điểm neo hoặc tay nắm bao nhiêu pixel để một cú nhấp chọn được nó.
