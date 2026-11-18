@@ -1,7 +1,7 @@
 use super::*;
 
-fn parse(bytes: &[u8]) -> moxcms::ColorProfile {
-    moxcms::ColorProfile::new_from_slice(bytes).unwrap()
+fn parse(bytes: &[u8]) -> Profile {
+    Profile::parse(bytes).unwrap()
 }
 
 #[test]
@@ -19,7 +19,7 @@ fn builtin_rgb_spaces_encode_under_their_names() {
 fn cmyk_profiles_convert_like_the_cms() {
     for name in BUILTIN_CMYK {
         let bytes = icc_bytes(name).unwrap();
-        assert_eq!(parse(&bytes).color_space, moxcms::DataColorSpace::Cmyk);
+        assert_eq!(parse(&bytes).color_space, ColorSpace::Cmyk);
         let p = IccProfile::from_bytes(None, &bytes).unwrap();
         assert_eq!((p.name.as_str(), p.kind), (name, ProfileKind::Cmyk));
         // The encoded profile converts without black-point compensation, so compare without it.
@@ -202,10 +202,9 @@ fn builtin_profiles_align_their_sizes_and_tags() {
             assert_eq!(off % 4, 0, "{name}: tag {i} at {off}");
             assert!(off + size <= icc.len());
         }
-        let back = moxcms::ColorProfile::new_from_slice(&icc).unwrap();
-        let orig = moxcms::ColorProfile::new_srgb();
+        let back = parse(&icc);
         if name == super::SRGB {
-            assert_eq!((back.red_colorant, back.green_colorant, back.blue_colorant), (orig.red_colorant, orig.green_colorant, orig.blue_colorant));
+            assert_eq!(back.matrix, Builtin::Srgb.profile().matrix);
         }
     }
 }
@@ -227,7 +226,7 @@ fn cmyk_profiles_have_the_tags_of_an_output_profile() {
     }
 }
 
-/// A profile whose localized-name records all point at one long string is refused before moxcms
+/// A profile whose localized-name records all point at one long string is refused before the CMS
 /// copies each of them; a few short names pass.
 #[test]
 fn aliased_localized_names_are_refused() {
@@ -256,7 +255,7 @@ fn aliased_localized_names_are_refused() {
 }
 
 /// A tag table that lists one tag many times, every entry pointing at the same long text, is
-/// refused before moxcms decodes the text once per entry; distinct tags pass.
+/// refused before the CMS decodes the text once per entry; distinct tags pass.
 #[test]
 fn repeated_tags_are_refused() {
     let profile = |sigs: &[&[u8; 4]], text: usize| {

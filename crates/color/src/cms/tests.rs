@@ -23,8 +23,8 @@ fn intents_parse_and_name() {
 }
 
 #[test]
-fn srgb_via_moxcms_matches_analytic() {
-    // The built-in sRGB ICC profile through moxcms agrees with our analytic sRGB maths.
+fn srgb_via_the_cms_matches_analytic() {
+    // The built-in sRGB ICC profile through craft-cms agrees with our analytic sRGB maths.
     let p = icc::builtin_rgb(SRGB).unwrap();
     for rgb in [[0.2, 0.5, 0.8], [1.0, 0.0, 0.0], [0.5, 0.5, 0.5]] {
         let out = p.to_srgb(&rgb, Intent::RelativeColorimetric).unwrap();

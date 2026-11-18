@@ -1,12 +1,12 @@
 //! Colour management: working spaces, RGB ↔ CMYK ↔ Lab conversions with rendering intents,
 //! gamut checks and soft-proof transforms.
 //!
-//! * **RGB working spaces** are ICC matrix/shaper profiles via [`moxcms`] (sRGB, Wide Gamut RGB
+//! * **RGB working spaces** are ICC matrix/shaper profiles via `craft-cms` (sRGB, Wide Gamut RGB
 //!   (1998 primaries), Display P3, ProPhoto RGB) or user `.icc` files. Display output is sRGB;
 //!   the desktop canvas converts it into the display's own profile last ([`display`]).
 //! * **CMYK spaces:** [`GENERIC_CMYK`] is our own documented parametric press model
 //!   ([`generic`]); [`DEVICE_CMYK`] is the old profile-free formula (kept for exact legacy numbers);
-//!   any CMYK `.icc` the user loads goes through `moxcms` (LUT-based profiles).
+//!   any CMYK `.icc` the user loads goes through `craft-cms` (LUT-based profiles).
 //! * The **active settings** are process-wide: the working settings (Edit → Color Settings), with
 //!   the profiles [`use_document_profiles`] last put in place of the working spaces;
 //!   [`crate::Color::to_rgb`] uses them. [`with_active`] puts other settings in their place on one
@@ -373,7 +373,7 @@ pub fn icc_bytes(name: &str) -> Result<Arc<[u8]>, CmsError> {
         };
         let to_lab = |c| cms.cmyk_to_lab(c);
         let shadows = |l| mapped.lab_to_cmyk(l, Intent::RelativeColorimetric);
-        icc::encode(&icc::cmyk_profile(name, paper, to_lab, shadows, |l| cms.lab_to_cmyk(l, Intent::RelativeColorimetric)))?
+        icc::encode(&icc::cmyk_profile(name, paper, to_lab, shadows, |l| cms.lab_to_cmyk(l, Intent::RelativeColorimetric))?)?
     } else {
         icc::builtin_rgb_bytes(name)?
     }

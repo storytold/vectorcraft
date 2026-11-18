@@ -264,7 +264,7 @@ pub(super) fn cmyk_profile(
     to_lab: impl Fn([f32; 4]) -> lab::Lab,
     mapped: impl Fn(lab::Lab) -> [f32; 4],
     colorimetric: impl Fn(lab::Lab) -> [f32; 4],
-) -> Profile {
+) -> Result<Profile, CmsError> {
     let unit = |i: usize, n: usize| i as f32 / (n - 1) as f32;
     let mut a2b_clut = Vec::with_capacity(A2B_GRID.pow(4) * 3);
     for i in 0..A2B_GRID.pow(4) {
@@ -287,16 +287,14 @@ pub(super) fn cmyk_profile(
         let want = lab::Lab::new(l * 100.0, a * 255.0 - 128.0, b * 255.0 - 128.0);
         gamut_clut.push(if lab::delta_e2000(want, to_lab(colorimetric(want))) <= 3.0 { 0.0 } else { 1.0 });
     }
-    let table = |inputs: usize, outputs: usize, grid: usize, clut: Vec<f32>| Lut {
-        kind: LutKind::Ab,
-        inputs,
-        outputs,
-        stages: vec![Stage::Clut(Clut::new(vec![grid; inputs], outputs, clut).expect("valid CLUT dimensions"))],
+    let table = |inputs: usize, outputs: usize, grid: usize, clut: Vec<f32>| -> Result<Lut, CmsError> {
+        let clut = Clut::new(vec![grid; inputs], outputs, clut).map_err(|e| CmsError::BadProfile(format!("{e:?}")))?;
+        Ok(Lut { kind: LutKind::Ab, inputs, outputs, stages: vec![Stage::Clut(clut)] })
     };
-    let a2b = table(4, 3, A2B_GRID, a2b_clut);
-    let b2a_mapped = table(3, 4, B2A_GRID, b2a_mapped_clut);
-    let b2a = table(3, 4, B2A_GRID, b2a_clut);
-    let _gamut = table(3, 1, GAMUT_GRID, gamut_clut);
+    let a2b = table(4, 3, A2B_GRID, a2b_clut)?;
+    let b2a_mapped = table(3, 4, B2A_GRID, b2a_mapped_clut)?;
+    let b2a = table(3, 4, B2A_GRID, b2a_clut)?;
+    let _gamut = table(3, 1, GAMUT_GRID, gamut_clut)?;
     let mut p = Profile::gray([f64::from(paper[0]), f64::from(paper[1]), f64::from(paper[2])], Curve::Gamma(1.0))
         .unwrap_or_else(|_| Builtin::Srgb.profile().clone());
     p.class = ProfileClass::Output;
@@ -309,7 +307,7 @@ pub(super) fn cmyk_profile(
     p.gray_trc = None;
     p.a2b = [Some(a2b.clone()), Some(a2b.clone()), Some(a2b)];
     p.b2a = [Some(b2a_mapped.clone()), Some(b2a), Some(b2a_mapped)];
-    labelled(p, name)
+    Ok(labelled(p, name))
 }
 
 /// The grey space of greyscale exports: sRGB's tone curve, D50 white.
