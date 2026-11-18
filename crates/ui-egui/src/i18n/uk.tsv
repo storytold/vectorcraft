@@ -135,8 +135,12 @@
 	Add to Swatches	Додати до зразків
 	Add Used Colors	Додати використані кольори
 	Additional Plug-ins Folder	Папка додаткових модулів
+	Plug-in Instruction Budget	Бюджет інструкцій модулів
 	Additional Fonts Folder	Папка додаткових шрифтів
 	Adjust Adjoining Width Points	Налаштувати суміжні точки ширини
+	Incoming	Вхідна
+	Outgoing	Вихідна
+	Single Width Only	Лише одна ширина
 	Adjust Color Balance…	Налаштувати колірний баланс…
 	Adjust Colors	Налаштувати кольори
 	Adjust Options:	Параметри налаштування:
@@ -489,6 +493,8 @@ font-technology	Variable	Варіативні
 	Choose a folder	Виберіть папку
 	Choose…	Вибрати…
 	Circle	Коло
+	Circle Tool	Інструмент «Коло»
+	Circle too large	Коло завелике
 	Classic Defaults	Класичні значення за промовчанням
 	Clean Up…	Очистити…
 	Clear	Очистити
@@ -807,6 +813,8 @@ font-technology	Variable	Варіативні
 	Delete Artboard	Видалити монтажну область
 	Delete Artboards	Видалити монтажні області
 	Delete Brush	Видалити пензель
+	Delete Color	Видалити колір
+	Restore Generated Table	Відновити створену таблицю
 	Delete Character Style	Видалити стиль символу
 	Delete Empty Artboards	Видалити порожні монтажні області
 	Delete Freeform Point	Видалити довільну точку
@@ -875,6 +883,7 @@ font-technology	Variable	Варіативні
 	Direct Selection Tool	Інструмент «Пряме виділення»
 	Direction Handles	Маркери напряму
 	Disable Auto Add/Delete	Вимкнути авто-додавання/видалення
+	Interpolate Control Points When Moving Anchors	Інтерполювати маркери напряму під час переміщення опорних точок
 	Disable Opacity Mask	Вимкнути маску непрозорості
 	Discard	Відкинути
 	Preserve	Зберігати
@@ -1284,6 +1293,8 @@ font-technology	Variable	Варіативні
 	Files	Файли
 	Files of a PDF standard can't be password-protected.	Файли стандарту PDF не можуть бути захищені паролем.
 	Files of this standard tag their colours with ICC profiles.	Файли цього стандарту позначають свої кольори профілями ICC.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	Файли цього стандарту позначають свої кольори профілями ICC, крім кольорів CMYK у профілі призначення виведення, які записуються як DeviceCMYK.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	З «Не включати профілі» та призначенням виведення CMYK кожен колір CMYK записується як DeviceCMYK, якщо його не перетворено в призначення CMYK з іншим профілем.
 	Fill	Заливка
 	Fill & Stroke	Заливка та обведення
 	Fill (X), double-click for the Color Picker	Заливка (X), двічі клацніть на палітрі кольорів
@@ -2093,6 +2104,7 @@ file-filter	Templates	Шаблони
 	Load SVG into Clipboard	Завантажити SVG у буфер обміну
 	Load Text into Clipboard	Завантажити текст у буфер обміну
 	Local Libraries	Локальні бібліотеки
+	Locate Layer	Знайти шар
 	Locate Object	Знайти об’єкт
 	Locate Selected Objects	Знаходити виділені об’єкти
 	Location	Розташування
@@ -2287,6 +2299,7 @@ file-filter	Templates	Шаблони
 	Scatter:	Розсіювання:
 	Rotation:	Поворот:
 	Rotation relative to:	Поворот відносно:
+	Hue Jitter:	Розкид відтінку:
 	Brush Scale Options	Параметри масштабування пензля
 	Scale Proportionately	Масштабувати пропорційно
 	Stretch to Fit Stroke Length	Розтягнути за довжиною обведення
@@ -2323,6 +2336,7 @@ file-filter	Templates	Шаблони
 	Black becomes the stroke color and white stays white. Other colors become tints of the stroke color by their lightness.	Чорний стає кольором обведення, а білий залишається білим. Інші кольори стають відтінками кольору обведення, і що світліший колір, то світліший його відтінок.
 	Black and white stay as they are. Dark colors become shades of the stroke color and light colors become tints of it.	Чорний залишається чорним, а білий залишається білим. Інші кольори стають тінями кольору обведення, якщо вони темні, і його відтінками, якщо вони світлі.
 	The key color becomes the stroke color. The other colors shift their hue by the same amount and keep their saturation and brightness.	Ключовий колір стає кольором обведення. Інші кольори зсуваються по колірному колу на стільки ж, на скільки ключовий колір, і зберігають насиченість та яскравість.
+	Roundness	Округлість
 	Roundness:	Округлість:
 	Fixed	Фіксований
 	Pressure	Натиск
@@ -2774,6 +2788,10 @@ diagnostics	ui	інтерфейс
 	Polar Grid Tool	Інструмент «Полярна сітка»
 	Polygon	Багатокутник
 	Polygon Properties:	Властивості багатокутника:
+	Line Properties:	Властивості лінії:
+	Line Length:	Довжина лінії:
+	Line Angle:	Кут лінії:
+	Constrain Pie Angle	Зберігати кут сектора
 	Polygon Tool	Інструмент «Багатокутник»
 	Portrait	Книжкова
 	Power Saving (integrated)	Енергозбереження (вбудована)
@@ -2935,6 +2953,9 @@ digits	Malayalam	Малаялам
 	Real World:	Реальний світ:
 	Real-time Drawing and Editing	Малювання та редагування у реальному часі
 	Use Monitor Profile for Canvas	Використовувати профіль монітора для полотна
+	Refresh Monitor Profile	Оновити профіль монітора
+@msg	turn on Use Monitor Profile for Canvas first	спочатку увімкніть «Використовувати профіль монітора для полотна»
+@msg	this build doesn't read display profiles	ця збірка не читає профілі дисплеїв
 	The canvas is drawn in sRGB.	Полотно відображається в sRGB.
 	Canvas display profile:	Профіль дисплея для полотна:
 	The system matches the window to the display's colors.	Система узгоджує кольори вікна з дисплеєм.
@@ -3197,6 +3218,7 @@ digits	Malayalam	Малаялам
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Колесо миші з натиснутою Cmd/Ctrl прокручує полотно по горизонталі.
 	Dragging sideways on a numeric field's label changes the field's value.	Перетягування вбік по підпису числового поля змінює значення поля.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Жест обертання двома пальцями на трекпаді обертає вигляд полотна.
+	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Коли ви переміщуєте опорні точки, кожна крива з одним переміщеним кінцем зберігає форму відносно своїх кінців.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Поки ви утримуєте клавішу інструмента, його вибрано, а після відпускання знову вибирається попередній інструмент.
 	Shows the bounding box while you move the selection or draw a shape.	Показує обмежувальну рамку, поки ви переміщуєте виділення або малюєте фігуру.
 	Create Trim Marks draws Japanese-style marks instead of Roman ones.	«Створити мітки підрізування» малює мітки в японському стилі замість західних.
@@ -3508,6 +3530,11 @@ digits	Malayalam	Малаялам
 	Search commands, tools, panels and effects…	Пошук команд, інструментів, панелей та ефектів…
 	No commands match	Немає відповідних команд
 	{pos} of {total}: {name}	{pos} з {total}: {name}
+	No menu item	Немає пункту меню
+	Toolbar	Панель інструментів
+	{toolbar}, in the {tool} group	{toolbar}, у групі «{tool}»
+	Tool	Інструмент
+	Command	Команда
 @plural	{n} result|{n} results	{n} результат|{n} результати|{n} результатів
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} з {n} результату. Продовжуйте вводити, щоб звузити їх.|{shown} з {n} результатів. Продовжуйте вводити, щоб звузити їх.|{shown} з {n} результатів. Продовжуйте вводити, щоб звузити їх.
 	Recent Commands	Нещодавні команди
@@ -3588,6 +3615,7 @@ digits	Malayalam	Малаялам
 	Set Slice Rectangle	Вказати прямокутник фрагмента
 	Set Tab Stops	Задати табуляції
 	Set Text	Задати текст
+	Set the current fill or stroke to the selected color	Призначити вибраний колір поточній заливці або обведенню
 	Set the selected color to the current color	Призначити поточний колір вибраному кольору
 	Set Zoom	Задати масштаб
 	Settings…	Параметри…
@@ -3711,7 +3739,7 @@ digits	Malayalam	Малаялам
 	Show Vivid/Muted	Показати яскраві/приглушені
 	Show Warm/Cool	Показати теплі/холодні
 	Show {kind} Brushes	Показати пензлі {kind}
-	Show/hide plate (Alt-click: only this plate)	Показати/приховати пластину (Alt+клацання: тільки цю пластину)
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	Показати/приховати пластину (Alt+клацання: тільки цю пластину; повторне Alt+клацання: усі пластини)
 	Show:	Показати:
 	Shown with the optimised preview.	Показано оптимізованим переглядом.
 	Side 1:	Сторона 1:
@@ -4320,6 +4348,8 @@ effect	Points	Точки
 	V Spacing:	Інтервал по вертикалі:
 	V:	В:
 	Variable Width Profile	Профіль змінної ширини
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Пензель обведення зберігає власний розмір, тому профіль ширини його не змінює. Щоб використати профіль, заберіть пензель.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Пензель обведення зберігає власний розмір, тому профіль ширини його не змінює. Щоб використати профіль, заберіть пензель.
 	Variables	Змінні
 	New Variable	Нова змінна
 	Delete Variable	Видалити змінну
@@ -4599,6 +4629,7 @@ imageTrace	Outline	Контур
 	Bevel	Скіс
 	Offset	Зміщення
 	Axis	Вісь
+	Axis Angle	Кут осі
 axis	Horizontal	Горизонтальна
 axis	Vertical	Вертикальна
 axis	Both	Обидві
@@ -5090,6 +5121,7 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	choose a folder to export to	виберіть папку для експорту
 @msg	choose a location for the package	виберіть розташування для пакета
 @msg	clipboard is empty	буфер обміну порожній
+@msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: у колірній таблиці має залишитися принаймні один колір
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` не є кольором, наприклад "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: не більше {MAX_TABLE} кольорів
 @msg	command `{0}` is not available right now: {1}	команда `{0}` зараз недоступна: {1}
@@ -5157,9 +5189,15 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	no PNG encoder	немає кодера PNG
 @msg	no active document	немає активного документа
 @msg	no active perspective plane	немає активної площини перспективи
+@msg	the perspective grid is hidden	сітку перспективи приховано
+@msg	Automatic Plane Positioning is off: turn on anchorPoint or gridlineIntersection (perspective.widget.options)	Автоматичне розміщення площини вимкнено: увімкніть anchorPoint або gridlineIntersection (perspective.widget.options)
+@msg	anchorPoint must be true or false	anchorPoint має бути true або false
+@msg	gridlineIntersection must be true or false	gridlineIntersection має бути true або false
+@msg	tolerance must be 0 or more	tolerance має бути 0 або більше
+@msg	give `at` or `clear`, not both	укажіть `at` або `clear`, але не обидва
 @msg	no anchor points selected	опорні точки не виділені
-@msg	`points` must be three [x, y] pairs of numbers	`points` має містити три пари чисел [x, y]
-@msg	direct-select three anchor points, or give `points`	виділіть три опорні точки прямим виділенням або задайте `points`
+@msg	`points` must be two or three [x, y] pairs of numbers	`points` має містити дві або три пари чисел [x, y]
+@msg	direct-select two or three anchor points, or give `points`	виділіть дві або три опорні точки прямим виділенням або задайте `points`
 @msg	no circle passes through these points: two are the same or all three lie on one line	через ці точки не проходить жодне коло: дві точки збігаються або всі три лежать на одній прямій
 @msg	no app to open files here	тут немає програми для відкриття файлів
 @msg	no artboard	немає монтажної області
@@ -5261,6 +5299,9 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	no such user library	такої користувацької бібліотеки немає
 @msg	no such view	такого виду немає
 @msg	no such width point	такої точки ширини немає
+@msg	`single` must be `incoming` or `outgoing`	`single` має бути `incoming` або `outgoing`
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` і `outIndex` мають бути двома половинами однієї розривної точки ширини
+@msg	a discontinuous width point keeps its place	розривна точка ширини зберігає своє місце
 @msg	no swatch `{name}`	немає зразка `{name}`
 @msg	no swatch library `{l}` (see swatch.library.list)	немає бібліотеки зразків `{l}` (див. swatch.library.list)
 @msg	no symbol instances selected	екземпляри символів не виділені
@@ -5626,6 +5667,8 @@ variable-list-end	{0}, {1}	{0} і {1}
 @msg	Reload the page to go on (changes not saved yet may be lost).	Перезавантажте сторінку, щоб продовжити (незбережені зміни можуть бути втрачені).
 @msg	tool (a tool id) is required	потрібно tool (ідентифікатор інструменту)
 @msg	{tool} isn't in a toolbar group of several tools	{tool} не входить до групи панелі інструментів з кількох інструментів
+@msg	Presentation Mode hides the toolbars: change the screen mode to show them	Режим презентації приховує панелі інструментів: щоб показати їх, змініть режим екрану
+@msg	Tab has hidden the toolbars: press Tab to show them	клавіша Tab приховала панелі інструментів: щоб показати їх, натисніть Tab
 @msg	onto must name a panel floating in another group	onto має називати панель, що плаває в іншій групі
 @msg	below and above must name a panel floating in another group	below і above мають називати панель, що плаває в іншій групі
 @msg	give only one of onto, below and above	вкажіть лише один із onto, below і above
@@ -5742,6 +5785,7 @@ variable-list-end	{0}, {1}	{0} і {1}
 @msg	a linked JavaScript file is outside the read roots	зв’язаний файл JavaScript перебуває поза кореневими папками для читання
 @msg	a linked image file is outside the read roots	зв’язаний файл зображення перебуває поза кореневими папками для читання
 @msg	a linked file's export folder is outside the read roots	папка експорту зв’язаного файлу перебуває поза кореневими папками для читання
+@msg	a linked file's editing data can't be read to check it against the read roots	не вдається прочитати дані редагування зв’язаного файлу, щоб звірити їх із кореневими папками для читання
 @msg	automation path rejected: outside the write root {root}: {path}	шлях автоматизації відхилено: поза кореневою папкою для запису {root}: {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	шлях автоматизації відхилено: поза кореневими папками для запису {roots}: {path}
 @msg	automation path rejected: path is empty	шлях автоматизації відхилено: шлях порожній
@@ -6022,6 +6066,7 @@ lighting	Light	Світло
 	Cove	Викружка
 	Depth	Глибина
 	Front	Спереду
+	Side	Збоку
 	Isometric Bottom	Ізометрія знизу
 	Isometric Left	Ізометрія ліворуч
 	Isometric Right	Ізометрія праворуч
@@ -6116,7 +6161,7 @@ lighting	Light	Світло
 @msg	each of `{GRAPHICS}` must be an object	кожен елемент `{GRAPHICS}` має бути об’єктом
 @msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	елементи `{GRAPHICS}` приймають symbol, face, x, y, scale і rotation, а не `{k}`
 @msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	кожному елементу `{GRAPHICS}` потрібен `symbol`, назва символу
-@msg	`{GRAPHICS}` face must be front or back	face у `{GRAPHICS}` має бути front або back
+@msg	`{GRAPHICS}` face must be front, back or side	face у `{GRAPHICS}` має бути front, back або side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} у `{GRAPHICS}` має бути числом від {lo} до {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` має бути масивом
 @msg	Graphics map onto the Plane, Extrude and Revolve object types	Графіка наноситься на об’єкти типів «Площина», «Видавлювання» та «Обертання»
@@ -7368,6 +7413,14 @@ breakText	Glyphs	Гліфи
 	Remove Gaps	Прибрати проміжки
 @msg	that makes too many pieces (at most 100000): make the dashes longer	так вийде забагато частин (не більше 100000): подовжте штрихи
 @msg	select paths, or segments, to divide	виділіть контури або сегменти для розділення
+# Path Precision Tools add-on: Smooth Bridge.
+	Smooth Bridge…	Плавний міст…
+	Smooth Bridge	Плавний міст
+	Keep Originals	Зберегти оригінали
+@msg	select two circles to bridge	виділіть два кола для з’єднання
+@msg	one circle is inside the other	одне коло всередині іншого
+@msg	the circles are too far apart for this radius: raise the radius	кола надто далеко одне від одного для цього радіуса: збільште радіус
+@msg	the circles are too far apart for this radius	кола надто далеко одне від одного для цього радіуса
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	Спільні дотичні…
 	Common Tangents	Спільні дотичні
@@ -7914,6 +7967,14 @@ breakText	Glyphs	Гліфи
 @msg	`answers` has more than {MAX_ANSWERS} answers	`answers` містить понад {MAX_ANSWERS} відповідей
 @msg	`answers` is larger than 1 MiB	`answers` більший за 1 МіБ
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` призначений лише для запуску, у якому немає кого запитати: у застосунку людина сама відповідає на кожне діалогове вікно
+@msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel` має бути цілим числом від 1 до {_1}
+@msg	`args{place}` is nested more than 64 levels deep	`args{place}` має вкладеність понад 64 рівні
+@msg	`args` must be an object	`args` має бути об’єктом
+@msg	`args` is larger than 1 MiB	`args` більший за 1 МіБ
+@msg	`path` is empty	параметр `path` порожній
+@msg	`installed` takes a `path`, not a `source`	`installed` приймає `path`, а не `source`
+@msg	`path` must name a .js or .jsx file	`path` має вказувати на файл .js або .jsx
+@msg	give exactly one of `path` and `source`	укажіть рівно одне з: `path`, `source`
 @msg	`answers` must be a list of answers	`answers` має бути списком відповідей
 @msg	`artboard` must be the index of an artboard of the document	`artboard` має бути індексом монтажної області документа
 @msg	`artboardsAt` must be [x, y]	`artboardsAt` має бути [x, y]
@@ -8450,6 +8511,7 @@ breakText	Glyphs	Гліфи
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	складені фігури приймають контури, складені контури, групи, складені фігури, текст, переходи й оболонки
 @msg	compound {_1} must contain exactly one open path to join	складений об’єкт {_1} має містити рівно один відкритий контур для з’єднання
 @msg	connect needs a path other than the one extended	для connect потрібен контур, відмінний від того, що продовжується
+@msg	connect needs extend	для connect потрібен extend
 @msg	connect needs id	для connect потрібен id
 @msg	connect path has no open end	контур для connect не має відкритого кінця
 @msg	continuation must be an array of path chunks	continuation має бути масивом частин контуру
