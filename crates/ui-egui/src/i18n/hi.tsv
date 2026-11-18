@@ -6704,6 +6704,8 @@ antiAlias	Sharp	शार्प
 @msg	`version`, `description` or `author` is too long	`version`, `description` या `author` बहुत लंबा है
 @msg	`warnings` must be a list of strings	`warnings` स्ट्रिंग की एक सूची होना चाहिए
 @msg	`with` moves points, not a handle	`with` पॉइंट मूव करता है, हैंडल नहीं
+@msg	`link` and `independent` cannot both be true	`link` और `independent` दोनों true नहीं हो सकते
+@msg	`link` places a handle: give `handle`	`link` एक हैंडल रखता है: `handle` दें
 @msg	`with` must be a list of at most 10000 spine point indexes	`with` में अधिकतम 10000 स्पाइन पॉइंट इंडेक्स की लिस्ट होनी चाहिए
 @msg	a {_1} series can't go in a {_2} graph	एक {_1} श्रृंखला एक {_2} ग्राफ में नहीं जा सकती
 @msg	a {width}×{height} screenshot's byte count overflows	{width}×{height} स्क्रीनशॉट की बाइट संख्या सीमा से बाहर है

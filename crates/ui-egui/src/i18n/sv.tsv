@@ -5192,6 +5192,8 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	no such spine point	ryggradspunkten finns inte
 @msg	`with` must be a list of at most 10000 spine point indexes	`with` måste vara en lista med högst 10000 ryggradspunktsindex
 @msg	`with` moves points, not a handle	`with` flyttar punkter, inte ett handtag
+@msg	`link` and `independent` cannot both be true	`link` och `independent` kan inte båda vara true
+@msg	`link` places a handle: give `handle`	`link` placerar ett handtag: ange `handle`
 @msg	no such spine segment	ryggradssegmentet finns inte
 @msg	no such subpath	delbanan finns inte
 @msg	no such user library	användarbiblioteket finns inte
