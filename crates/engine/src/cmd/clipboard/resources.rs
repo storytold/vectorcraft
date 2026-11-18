@@ -579,6 +579,11 @@ impl SwatchChoices {
             Some(v) => Ok(Self { all: one(v)?, by_name: BTreeMap::new() }),
         }
     }
+    /// Add for every conflict: each pasted swatch whose name the document gives another color
+    /// comes in renamed.
+    pub(crate) fn add_all() -> Self {
+        Self { all: SwatchChoice::Add, by_name: BTreeMap::new() }
+    }
     fn of(&self, name: &str) -> SwatchChoice {
         self.by_name.get(name).copied().unwrap_or(self.all)
     }

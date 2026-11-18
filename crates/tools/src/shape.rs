@@ -815,6 +815,11 @@ impl Tool for ShapeTool {
                     vec![Action::Dialog(self.id.into(), args)]
                 }
             }
+            // A double-click on a corner widget of the selected live shape shows the Transform
+            // panel; the tool and the selection stay as they are.
+            PointerKind::DoubleClick if shows_shape_widgets(self.id) && corners::over_widget(cx, ev.pos, false) => {
+                vec![Action::Panel("transform".into())]
+            }
             _ => vec![],
         }
     }
