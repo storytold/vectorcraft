@@ -2,15 +2,17 @@
 //! not, to draw the circle that is tangent to the first segment where it was clicked and touches the
 //! second ([`circles_through`]). With Shift held over the second segment the circle has the tool's
 //! `radius` instead, anywhere along the first segment ([`circles_of_radius`]). A drag from the
-//! second segment sets the radius to the drag's length: Shift steps it by a round number of points
-//! about 4 screen pixels long, and Cmd/Ctrl pressed during the drag moves it by a tenth of the
-//! pointer's movement (held at the press, Cmd/Ctrl lends the selection tool as it does for every
-//! tool). The segments on either side of the second one count with it (the first one excepted),
-//! and of the circles found the one touching them nearest the pointer is drawn. While the pointer
-//! is over the second segment the circle shows with its center and radii; where there is none, a
-//! note says so. The circle is a new ellipse with the current paint, drawn with
+//! second segment sets the radius to the drag's length, the circle again anywhere along the first
+//! segment: Shift steps it by a round number of points about 4 screen pixels long, and Cmd/Ctrl
+//! pressed during the drag moves it by a tenth of the pointer's movement (held at the press,
+//! Cmd/Ctrl lends the selection tool as it does for every tool). The segments on either side of the
+//! second one count with it (the first one excepted), and of the circles found the one touching
+//! them nearest the pointer is drawn. While the pointer is over the second segment the circle shows
+//! with its center and radii; where there is none, or none that its three points can draw, a note
+//! says so. The circle is a new ellipse with the current paint, drawn with
 //! `shape.circleThroughPoints` in one undo step, so Align New Objects to Pixel Grid leaves it in
-//! place. Escape, an edit or Undo outside the tool, or another document forgets the first segment.
+//! place; the first segment stays picked until the circle is drawn. Escape, an edit or Undo outside
+//! the tool, or another document forgets the first segment.
 
 use kurbo::{CubicBez, Shape};
 use serde_json::{Value, json};
@@ -117,10 +119,16 @@ fn second_set(cx: &ToolContext, first: &Pick, second: &Pick) -> Vec<CubicBez> {
     indices.into_iter().filter(|k| *k < n && !is_first(*k)).map(|k| sp.segment(k)).collect()
 }
 
-/// Of `circles`, the one touching the second segments nearest `at`.
-fn nearest_to(circles: Vec<SegmentCircle>, at: Point) -> Option<SegmentCircle> {
-    circles.into_iter().min_by(|a, b| (a.second - at).hypot().total_cmp(&(b.second - at).hypot()))
+/// Of `circles`, the one touching the second segments nearest `at`, leaving out those [`draw`] cannot
+/// draw within `tol`.
+fn nearest_to(circles: Vec<SegmentCircle>, at: Point, tol: f64) -> Option<SegmentCircle> {
+    circles.into_iter().filter(|c| draw(c, tol).is_some()).min_by(|a, b| (a.second - at).hypot().total_cmp(&(b.second - at).hypot()))
 }
+
+/// How far (screen pixels) the circle three points give back may be from the circle found.
+const DRAW_PX: f64 = 0.05;
+/// What the tool is told once its circle is drawn: then it forgets the first segment.
+const DRAWN: &str = "tangentCircle.drawn";
 
 /// The circles on `first` and `second`: tangent at the first pick, or of `radius`.
 fn circles(first: &Pick, second: &[CubicBez], radius: Option<f64>) -> Vec<SegmentCircle> {
@@ -199,7 +207,7 @@ impl TangentCircleTool {
         self.looked = false;
         let Some(hover) = self.hover.clone().filter(|_| self.first.is_some()) else { return };
         let found = self.circles_on(cx, &hover, mods.shift.then_some(self.radius));
-        self.found = nearest_to(found, p);
+        self.found = nearest_to(found, p, cx.tol(DRAW_PX));
         self.looked = true;
     }
 
@@ -218,7 +226,7 @@ impl TangentCircleTool {
         press.radius = Some(r);
         let shown = Self::shown_radius(cx, r, ev.mods.shift);
         // Dragged back to the press: a radius of 0, and no circle.
-        self.found = if shown > 0.0 { nearest_to(circles(first, &press.second, Some(shown)), press.at) } else { None };
+        self.found = if shown > 0.0 { nearest_to(circles(first, &press.second, Some(shown)), press.at, cx.tol(DRAW_PX)) } else { None };
     }
 
     fn forget(&mut self) {
@@ -258,7 +266,7 @@ impl Tool for TangentCircleTool {
                 };
                 let second = second_set(cx, &first, &pick);
                 let found = self.circles_on(cx, &pick, ev.mods.shift.then_some(self.radius));
-                self.found = nearest_to(found, ev.pos);
+                self.found = nearest_to(found, ev.pos, cx.tol(DRAW_PX));
                 self.looked = true;
                 self.hover = None;
                 self.press = Some(Press { second, at: ev.pos, reach: 0.0, radius: None });
@@ -268,20 +276,21 @@ impl Tool for TangentCircleTool {
                 self.drag_to(cx, ev);
                 vec![]
             }
-            // The second click of a double-click releases with `DoubleClick` instead of `Up`.
-            PointerKind::Up | PointerKind::DoubleClick => {
+            PointerKind::Up => {
                 // The release's own position and keys set the radius of a drag.
                 self.drag_to(cx, ev);
                 if self.press.take().is_none() {
                     return vec![];
                 }
                 // No circle, or one the three points cannot draw: the first segment stays picked,
-                // for another try.
-                let Some(action) = self.found.take().and_then(|c| draw(&c, cx.tol(0.05))) else { return vec![] };
-                self.forget();
-                vec![action]
+                // for another try. It also stays when the command fails: only a drawn circle tells
+                // the tool (`notify`) to forget it.
+                let Some(action) = self.found.take().and_then(|c| draw(&c, cx.tol(DRAW_PX))) else { return vec![] };
+                self.looked = false;
+                vec![action, Action::Notify(DRAWN.into())]
             }
-            PointerKind::TripleClick => vec![],
+            // The canvas sends a double-click after the second click's `Up`, which drew the circle.
+            PointerKind::DoubleClick | PointerKind::TripleClick => vec![],
         }
     }
 
@@ -294,6 +303,12 @@ impl Tool for TangentCircleTool {
 
     fn claims_key(&self, _cx: &ToolContext, key: ToolKey) -> bool {
         key == ToolKey::Escape && self.first.is_some()
+    }
+
+    fn notify(&mut self, _cx: &ToolContext, what: &str) {
+        if what == DRAWN {
+            self.forget();
+        }
     }
 
     /// An edit, Undo or Redo outside the tool, or another document: the first segment may be gone.
@@ -399,10 +414,22 @@ mod tests {
         e
     }
 
+    /// A release, with the tool told what its actions tell it, as the session does once the command
+    /// before the `Notify` has run.
+    fn up(t: &mut TangentCircleTool, cx: &ToolContext, e: &PointerEvent) -> Vec<Action> {
+        let acts = t.pointer(cx, e);
+        for a in &acts {
+            if let Action::Notify(what) = a {
+                t.notify(cx, what);
+            }
+        }
+        acts
+    }
+
     /// The circle an action list draws, as the box around it: (x, y, width, height).
     fn drawn(actions: &[Action]) -> (f64, f64, f64, f64) {
-        let [Action::Exec(cmd, p)] = actions else { panic!("{actions:?}") };
-        assert_eq!(cmd, "shape.circleThroughPoints");
+        let [Action::Exec(cmd, p), Action::Notify(what)] = actions else { panic!("{actions:?}") };
+        assert_eq!((cmd.as_str(), what.as_str()), ("shape.circleThroughPoints", DRAWN));
         let pts: Vec<Point> = p["points"].as_array().unwrap().iter().map(|q| Point::new(q[0].as_f64().unwrap(), q[1].as_f64().unwrap())).collect();
         let (at, r) = vectorcraft_geom::shapes::circle_through(pts[0], pts[1], pts[2]).unwrap();
         (at.x - r, at.y - r, 2.0 * r, 2.0 * r)
@@ -432,15 +459,22 @@ mod tests {
         t.pointer(&cx, &ev(PointerKind::Move, 250.0, 139.0));
         assert_eq!(t.cache, kept);
         assert!(t.pointer(&cx, &ev(PointerKind::Down, 200.0, 139.0)).is_empty());
-        let up = t.pointer(&cx, &ev(PointerKind::Up, 200.0, 139.0));
-        assert!(close(drawn(&up), (130.0, 100.0, 40.0, 40.0)), "{up:?}");
+        let released = t.pointer(&cx, &ev(PointerKind::Up, 200.0, 139.0));
+        assert!(close(drawn(&released), (130.0, 100.0, 40.0, 40.0)), "{released:?}");
+        // Until the command has run and the tool is told, the first segment stays: a command that
+        // fails leaves it picked.
+        assert!(t.first.is_some() && !t.busy());
+        t.notify(&cx, DRAWN);
         assert!(t.first.is_none() && t.overlays(&cx).is_empty(), "ready for the next circle");
-        // A quick second click on the second segment releases with a double-click: the same circle.
-        t.pointer(&cx, &ev(PointerKind::Down, 150.0, 101.0));
-        t.pointer(&cx, &ev(PointerKind::Up, 150.0, 101.0));
-        t.pointer(&cx, &ev(PointerKind::Down, 200.0, 139.0));
-        let up = t.pointer(&cx, &ev(PointerKind::DoubleClick, 200.0, 139.0));
-        assert!(close(drawn(&up), (130.0, 100.0, 40.0, 40.0)) && !t.busy(), "{up:?}");
+        // A quick second click on the second segment: the canvas sends its `Up` and then a
+        // double-click, which draws nothing more.
+        for (kind, x, y) in [(PointerKind::Down, 150.0, 101.0), (PointerKind::Up, 150.0, 101.0), (PointerKind::Down, 200.0, 139.0)] {
+            assert!(t.pointer(&cx, &ev(kind, x, y)).is_empty());
+        }
+        let released = up(&mut t, &cx, &ev(PointerKind::Up, 200.0, 139.0));
+        assert!(close(drawn(&released), (130.0, 100.0, 40.0, 40.0)), "{released:?}");
+        assert!(t.pointer(&cx, &ev(PointerKind::DoubleClick, 200.0, 139.0)).is_empty());
+        assert!(t.first.is_none() && !t.busy());
     }
 
     #[test]
@@ -450,15 +484,13 @@ mod tests {
         let cx = cx(&d, &sel, &p);
         let mut t = TangentCircleTool::default();
         t.set_option("radius", &json!(10));
-        t.set_option("radius", &json!(0));
-        t.set_option("radius", &json!(f64::NAN));
         assert_eq!(t.options()["radius"], json!(10.0));
         // The L's two segments: the circle of radius 10 in its corner.
         t.pointer(&cx, &ev(PointerKind::Down, 150.0, 300.0));
         t.pointer(&cx, &ev(PointerKind::Up, 150.0, 300.0));
         t.pointer(&cx, &shifted(PointerKind::Down, 300.0, 350.0));
-        let up = t.pointer(&cx, &shifted(PointerKind::Up, 300.0, 350.0));
-        assert!(close(drawn(&up), (280.0, 300.0, 20.0, 20.0)), "{up:?}");
+        let released = up(&mut t, &cx, &shifted(PointerKind::Up, 300.0, 350.0));
+        assert!(close(drawn(&released), (280.0, 300.0, 20.0, 20.0)), "{released:?}");
     }
 
     #[test]
@@ -482,8 +514,8 @@ mod tests {
         slow.mods.cmd = true;
         t.pointer(&cx, &slow);
         assert!((t.found.unwrap().circle.radius - 13.3).abs() < 1e-6, "{:?}", t.found);
-        let up = t.pointer(&cx, &ev(PointerKind::Up, 300.0, 372.3));
-        assert!(close(drawn(&up), (286.7 - 13.3, 300.0, 26.6, 26.6)), "{up:?}");
+        let released = up(&mut t, &cx, &ev(PointerKind::Up, 300.0, 372.3));
+        assert!(close(drawn(&released), (286.7 - 13.3, 300.0, 26.6, 26.6)), "{released:?}");
         // A drag back past its press asks for no radius: no circle, not one through the first click.
         t.pointer(&cx, &ev(PointerKind::Down, 150.0, 300.0));
         t.pointer(&cx, &ev(PointerKind::Up, 150.0, 300.0));
@@ -497,8 +529,8 @@ mod tests {
         // A release away from the last drag event: the release sets the radius.
         t.pointer(&cx, &ev(PointerKind::Down, 300.0, 350.0));
         t.pointer(&cx, &ev(PointerKind::Drag, 300.0, 360.0));
-        let up = t.pointer(&cx, &ev(PointerKind::Up, 300.0, 365.0));
-        assert!(close(drawn(&up), (300.0 - 30.0, 300.0, 30.0, 30.0)), "{up:?}");
+        let released = up(&mut t, &cx, &ev(PointerKind::Up, 300.0, 365.0));
+        assert!(close(drawn(&released), (300.0 - 30.0, 300.0, 30.0, 30.0)), "{released:?}");
         t.pointer(&cx, &ev(PointerKind::Down, 150.0, 300.0));
         t.pointer(&cx, &ev(PointerKind::Up, 150.0, 300.0));
         // Cmd/Ctrl held from the start: a 20 pt drag gives 2 pt.
@@ -562,6 +594,11 @@ mod tests {
         // At 10⁹ pt from the origin, where coordinates step by about 1.2e-7 pt, a radius of 5e-8 pt
         // rounds the three points onto one line.
         assert!(draw(&circle(1e9, 5e-8), 1e-3).is_none());
+        // The preview leaves such a circle out, even nearest the pointer: no red circle for a click
+        // that draws nothing.
+        let at = Point::new(1e9, 0.0);
+        assert_eq!(nearest_to(vec![circle(1e9, 5e-8), circle(100.0, 20.0)], at, 1e-3), Some(circle(100.0, 20.0)));
+        assert_eq!(nearest_to(vec![circle(1e9, 5e-8)], at, 1e-3), None);
         let d = doc();
         let (sel, p) = (Selection::default(), paint());
         let cx = cx(&d, &sel, &p);

@@ -5,9 +5,8 @@
 //! where paths cross ([`crossings`]), the stretches between them ([`spans`]), anchors slid along
 //! their path ([`slide`]), touching edges merged ([`shared_edge`]), paths divided into dashes
 //! ([`divide_dashes`]), the common tangents of two convex outlines ([`common_tangents`]), the
-//! Parametric Shape Tool's shapes ([`shapes`]), the circles that touch two or three shapes
-//! ([`tangent_circles`]) and the Tangent Circle tool's circles on two segments
-//! ([`circles_through`], [`circles_of_radius`]).
+//! Parametric Shape Tool's shapes ([`shapes`]) and the circles that touch two or three shapes
+//! ([`tangent_circles`]).
 
 mod crossings;
 mod dashes;
@@ -33,12 +32,12 @@ pub use shared_edge::{
     COINCIDENCE, EndSide, Follow, MAX_COINCIDENCE, MergePlan, MergePreview, Stretch, apply_merge, ends_at, merge_preview, stretches_at,
 };
 pub use slide::{MAX_SLIDE, slide_anchor, slide_stops, slide_t_at};
-pub use tangent_circle::{
-    Circle, MAX_TANGENT_CIRCLE_SEGMENTS, MAX_TANGENT_CIRCLES, SegmentCircle, TangentCircleError, circles_of_radius, circles_through,
-    tangent_circle_segments, tangent_circles,
-};
+pub use tangent_circle::{Circle, MAX_TANGENT_CIRCLE_SEGMENTS, MAX_TANGENT_CIRCLES, TangentCircleError, tangent_circle_segments, tangent_circles};
 pub use tangents::{Coincide, MAX_TANGENT_SEGMENTS, Outline, OutlineError, Tangent, TangentKind, common_tangents};
 pub use trim::{Span, slice, span_at, spans, without_spans};
+
+// The Tangent Circle tool's circles on two picked segments.
+pub use tangent_circle::{SegmentCircle, circles_of_radius, circles_through};
 
 use crate::fit::{end_tangent, start_tangent};
 

@@ -193,15 +193,18 @@ fn touching(center: Point, r: f64, second: &[CubicBez], scale: f64) -> Option<Po
 }
 
 /// `found` without circles that cross `first`, that touch the two at one point, or that repeat an
-/// earlier one.
+/// earlier one (the same center, touching `first` at the same point).
 fn keep(found: Vec<SegmentCircle>, first: &CubicBez) -> Vec<SegmentCircle> {
+    let own = scale(first, &[]).unwrap_or(0.0);
     let mut out: Vec<SegmentCircle> = vec![];
     for c in found {
         let r = c.circle.radius;
         let crosses = nearest(c.circle.center, std::slice::from_ref(first)).is_none_or(|(d, _)| d < r * (1.0 - 1e-6));
         let one_point = (c.first - c.second).hypot() <= SAME * r;
-        // The roots come in order along their parameter, so a repeat follows its first.
-        let repeat = out.last().is_some_and(|o| (o.circle.center - c.circle.center).hypot() <= SAME * r * 10.0);
+        // The roots come in order along their parameter, so a repeat follows its first. Circles of
+        // one large radius at places tried close together along `first` are not repeats.
+        let repeat =
+            out.last().is_some_and(|o| (o.circle.center - c.circle.center).hypot() <= SAME * r * 10.0 && (o.first - c.first).hypot() <= SAME * own);
         if !(crosses || one_point || repeat) && r.is_finite() && r > 0.0 {
             out.push(c);
         }

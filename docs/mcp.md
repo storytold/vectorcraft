@@ -12869,9 +12869,9 @@ the desktop app it lives in Object › Plug-ins › Path Precision Tools, in its
 and in nine tools: `anchorEraserBrush`, `extendPath`, `measureInspect`, `parametricShape`, `cornerTool`, `slideAnchor`,
 `sharedEdge`, `tangentCircle` and `trimAtCrossings`. The toolbars don't show the first eight until they are added from
 the All Tools drawer (or chosen with `tool.select`); `trimAtCrossings` is in the Scissors tool's group in both shipped
-toolbars, after the Knife, and `ui.tool.list` lists it there. A toolbar edited before it joined keeps its saved layout until
-Reset Toolbar. None has a shortcut; one can be set in Edit › Keyboard Shortcuts › Tools. Each edit is one undo step,
-and an edit that changes nothing makes no step.
+toolbars, after the Knife, and `ui.tool.list` lists it there. A toolbar edited before it joined keeps its saved layout
+until Reset Toolbar. None has a shortcut; one can be set in Edit › Keyboard Shortcuts › Tools. Each edit is one undo
+step, and an edit that changes nothing makes no step.
 
 Tools:
 
@@ -12925,18 +12925,20 @@ Tools:
   center, its radii to the two touch points and its radius, or a note that there is none. A click there draws the
   circle that is tangent to the first segment at the point clicked and touches the second (its center on the first
   segment's normal there). With Shift the circle instead has the tool's `radius` and may touch the first segment
-  anywhere along it. A drag from the second segment sets the radius to the drag's length; Shift steps it by 1, 2 or 5
-  times a power of 10 pt, at least 4 screen pixels long (2 pt at 200%), and Cmd/Ctrl pressed during the drag moves
-  it by a tenth of the pointer's movement (held at the press, Cmd/Ctrl lends the selection tool, as for every tool).
+  anywhere along it. A drag from the second segment sets the radius to the drag's length, and the circle may again
+  touch the first segment anywhere along it; Shift steps the radius by 1, 2 or 5 times a power of 10 pt, at least 4
+  screen pixels long (2 pt at 200%), and Cmd/Ctrl pressed during the drag moves it by a tenth of the pointer's
+  movement (held at the press, Cmd/Ctrl lends the selection tool, as for every tool).
   The segments on either side of the second one, on its subpath, count with it (the first segment excepted; the two
   may be on the same path, and the first segment picked again gives no circle), and of the circles found the one
   touching them nearest the pointer is drawn. A circle touches them when they lie outside it with a point on it, and
   it never crosses the first segment. The circle is a new ellipse with the current paint, drawn through three of its
   points with `shape.circleThroughPoints` so that Align New Objects to Pixel Grid leaves it in place, one undo step.
-  With no circle, or one too small or too large for its three points to give it back in floating point, nothing is
-  drawn and the first segment stays picked. Escape, an edit, Undo or Redo outside the tool, or another document
-  forgets the first segment. Option (`tool.setOption`, or a double-click on the tool): `radius` (pt, 0.01 to 1000000,
-  36).
+  A circle too small or too large for its three points to give it back in floating point counts as no circle. With
+  no circle the note shows, a click draws nothing and the first segment stays picked; it also stays when drawing the
+  circle fails. Escape, an edit, Undo or Redo outside the tool, or another document forgets the first segment.
+  Option (`tool.setOption`, or a double-click on the tool): `radius` (pt, 0.01 to 1000000, 36; a value outside that
+  range, or not a number, leaves the radius as it is).
 - **Trim at Crossings Tool** (`trimAtCrossings`): removes stretches of paths between the places where they are crossed,
   on any path that can be edited, selected or not. A click runs `addon.pathtools.trim` with `at`, for the path within 4
   screen pixels of the pointer. A drag draws a rectangle and runs it with `rect` on release; once the pointer has
