@@ -1082,6 +1082,37 @@ mod tests {
     }
 
     #[test]
+    fn a_point_placed_on_a_turned_outline_has_one_tangent() {
+        // A point worked out on the outline lies a rounding error inside or outside it, and still
+        // gets the one line there.
+        let one = |p: Point, o: &Outline| {
+            let all = common_tangents(&Outline::point(p).unwrap(), o).unwrap();
+            assert_eq!(all.len(), 1, "{p:?}: {all:?}");
+            // The line runs through the point.
+            let (a, d) = (all[0].from, all[0].to - all[0].from);
+            assert!(d.hypot() > 1.0 && ((p - a).cross(d) / d.hypot()).abs() < 1e-6, "{p:?}: {all:?}");
+        };
+        let m = ellipse_map(100.0, 50.0, 40.0, 15.0, 30.0);
+        let oval = Outline::ellipse(m).unwrap();
+        for k in 0..37 {
+            let a = 0.17 + k as f64 * TAU / 37.0;
+            one(m * Point::new(a.cos(), a.sin()), &oval);
+        }
+        // A closed Bézier circle, turned and moved: on each anchor and partway along each segment.
+        let turned = shapes::ellipse(Rect::new(-60.0, -60.0, 60.0, 60.0)).transformed(Affine::translate((37.3, -12.9)) * Affine::rotate(0.7));
+        let sp = turned.subpaths[0].clone();
+        let path = Outline::convex(&sp).unwrap();
+        for an in sp.anchors.iter() {
+            one(an.p, &path);
+        }
+        for k in 0..sp.segment_count() {
+            for t in [0.21, 0.5, 0.83] {
+                one(sp.segment(k).eval(t), &path);
+            }
+        }
+    }
+
+    #[test]
     fn open_concave_empty_and_identical_outlines_are_refused() {
         let open = SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(10.0, 0.0), Point::new(10.0, 10.0)], false);
         assert_eq!(Outline::convex(&open).err(), Some(OutlineError::Open));
