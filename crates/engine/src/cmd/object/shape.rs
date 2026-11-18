@@ -265,18 +265,21 @@ pub(super) fn set_live_shape(s: &mut Session, p: &Value) -> Result<Value> {
         }
         let Some(c) = LiveCorners::new(path, live.as_deref()) else { return true };
         let picked = corners_of(*id).unwrap_or_else(|| c.picked(st.selection.anchors.get(id)));
-        // Setting corners folds a scale left in a rectangle's transform into its size, which
-        // changes it.
-        live.as_deref().is_none_or(|l| l.folded() == *l)
+        // Setting a radius folds a scale left in a rectangle's transform into its size, which
+        // changes it. A kind the corners already have leaves the rectangle as it is.
+        (radius.is_none() || live.as_deref().is_none_or(|l| l.folded() == *l))
             && picked.iter().all(|k| {
                 *k < c.base.anchor_count()
                     && radius.is_none_or(|r| (c.drawn_radius(*k) - r.max(0.0)).abs() < 1e-9)
                     && kind.is_none_or(|kd| c.kind(*k) == kd)
             })
     };
-    if ids.iter().all(has_values) {
+    // The objects every value given already matches stay as they are, beside others that change.
+    let unchanged: BTreeSet<NodeId> = ids.iter().copied().filter(has_values).collect();
+    if ids.iter().all(|id| unchanged.contains(id)) {
         return ok();
     }
+    let ids: Vec<NodeId> = ids.into_iter().filter(|id| !unchanged.contains(id)).collect();
     s.edit("Live Shape", |d, sel| {
         for id in &ids {
             let Some(NodeKind::Path { path, live, .. }) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };

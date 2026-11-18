@@ -81,6 +81,38 @@ fn rectangle_kind_menu_targets_all_or_one_corner_and_skips_noop_undo() {
     assert_eq!(steps(&s), undo + 2);
 }
 
+/// A kind the corners already have leaves a rectangle saved stretched by an older version as it
+/// is, alone or beside a rectangle the kind changes: its scale stays in its transform.
+#[test]
+fn a_kind_the_corners_have_leaves_a_stretched_rectangle() {
+    let (mut s, id) = session();
+    let other = NodeId(s.execute("shape.rectangle", &json!({"x": 200, "y": 10, "width": 40, "height": 40})).unwrap()["id"].as_u64().unwrap());
+    let stretched = LiveShape::Rectangle {
+        w: 50.0,
+        h: 60.0,
+        radii: [10.0; 4],
+        kinds: [CornerKind::Chamfer; 4],
+        radii_relative: false,
+        xf: Affine::translate((10.0, 10.0)) * Affine::scale_non_uniform(2.0, 1.0),
+    };
+    {
+        let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        let NodeKind::Path { path, live: Some(live), .. } = &mut d.node_mut(id).unwrap().kind else { panic!("not live") };
+        **live = stretched.clone();
+        *path = live.to_path();
+    }
+    let live = |s: &Session| node_path(s, id).1;
+    let steps = |s: &Session| s.doc().unwrap().history.undo.len();
+    let undo = steps(&s);
+    run(&mut s, json!({"ids": [id.0], "kind": "chamfer"}));
+    assert_eq!(live(&s), Some(stretched.clone()));
+    assert_eq!(steps(&s), undo, "no step when nothing changes");
+    run(&mut s, json!({"ids": [id.0, other.0], "kind": "chamfer"}));
+    assert_eq!(live(&s), Some(stretched));
+    assert_eq!(corners(&s, other).1, [CornerKind::Chamfer; 4]);
+    assert_eq!(steps(&s), undo + 1);
+}
+
 /// #938: `items` rounds several objects in one step, each its own corners (or all of them).
 #[test]
 fn items_round_several_objects_each_its_own_corners() {

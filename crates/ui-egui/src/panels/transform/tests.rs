@@ -184,6 +184,53 @@ fn a_rectangle_corner_kind_without_a_selected_rectangle_changes_nothing() {
     assert_eq!(st.history.undo.len(), steps);
 }
 
+/// A corner kind picked while a Shape Builder merge is computed on another thread applies the
+/// merge first, and sets the kind on the live rectangles selected after it.
+#[test]
+fn a_rectangle_corner_kind_applies_a_merge_on_another_thread_first() {
+    use vectorcraft_geom::shapes::CornerKind::Chamfer;
+    use vectorcraft_tools::{Mods, PointerEvent, PointerKind};
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 800, "height": 200})).unwrap();
+    for k in 0..40 {
+        app.run("shape.rectangle", json!({"x": k * 10, "y": 0, "width": 20, "height": 20})).unwrap();
+    }
+    app.run("select.all", json!({})).unwrap();
+    app.run("tool.select", json!({"tool": "shapeBuilder"})).unwrap();
+    let view = app.view_info();
+    let at = |kind| PointerEvent {
+        kind,
+        pos: vectorcraft_geom::Point::new(15.0, 10.0),
+        mods: Mods::default(),
+        pressure: 1.0,
+        backquote: false,
+        pen: None,
+    };
+    crate::canvas::dispatch(&mut app, &at(PointerKind::Move), view);
+    app.session.tool_poll(view, true).unwrap();
+    crate::canvas::dispatch(&mut app, &at(PointerKind::Down), view);
+    crate::canvas::dispatch(&mut app, &at(PointerKind::Up), view);
+    assert!(app.session.tool_editing());
+    crate::panels::set_rectangle_kinds(&mut app, Chamfer, None);
+    assert!(!app.session.tool_editing());
+    let st = app.session.active().unwrap();
+    let labels: Vec<_> = st.history.undo.iter().rev().take(2).map(|e| e.label.as_str()).collect();
+    assert_eq!(labels, ["Live Shape", "Shape Builder"]);
+    let kinds: Vec<_> = st
+        .selection
+        .objects
+        .iter()
+        .filter_map(|id| match &st.doc.node(*id)?.kind {
+            NodeKind::Path { live: Some(l), .. } => match &**l {
+                LiveShape::Rectangle { kinds, .. } => Some(*kinds),
+                _ => None,
+            },
+            _ => None,
+        })
+        .collect();
+    assert!(!kinds.is_empty() && kinds.iter().all(|k| *k == [Chamfer; 4]), "{kinds:?}");
+}
+
 /// #3451: a live ellipse shows pie start/end angles and Invert Pie in the Transform panel and
 /// the Properties panel's Transform section; typed angles update the shape.
 #[test]

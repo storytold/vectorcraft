@@ -774,7 +774,11 @@ fn the_shape_properties_popup_changes_a_rectangle_corner_type() {
     assert_eq!(kinds(&app), ([Chamfer; 4], [10.0; 4]), "all four corners, radii kept");
     assert_eq!(steps(&app), before + 1, "one undo step");
     let texts = click(&mut app, at(&texts, "Chamfer"));
-    click(&mut app, entry(&texts, "Chamfer"));
+    // The list is open: its Chamfer row shows as well as the closed menu's, and the pick closes it.
+    assert_eq!(texts.iter().filter(|(t, _)| t == "Chamfer").count(), 2, "{texts:?}");
+    assert!(texts.iter().any(|(t, _)| t == "Inverted Round"), "{texts:?}");
+    let texts = click(&mut app, entry(&texts, "Chamfer"));
+    assert!(!texts.iter().any(|(t, _)| t == "Inverted Round"), "the pick closes the list: {texts:?}");
     assert_eq!(steps(&app), before + 1, "the same kind adds no undo step");
 
     app.run("prefs.set", json!({"key": "singleCornerRadius", "value": false})).unwrap();

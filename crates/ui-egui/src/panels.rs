@@ -142,6 +142,10 @@ fn set_rectangle_kinds(app: &mut VectorcraftApp, kind: CornerKind, corner: Optio
 /// step, or none when nothing changes.
 fn set_rectangle_corners(app: &mut VectorcraftApp, mut p: Value, corner: Option<usize>) {
     p["corners"] = corner.map_or(json!([0, 1, 2, 3]), |k| json!([k]));
+    // The edit the tool computes on another thread comes first: the rectangles are the ones
+    // selected after it.
+    let r = app.session.finish_tool_edit();
+    crate::canvas::apply_requests(app, r);
     match app.session.active() {
         // The command refuses the selection, with its message, while part of a symbol's art is
         // selected.
