@@ -1161,7 +1161,11 @@ fn cmd_shift_equals_and_cmd_alt_shift_equals_toggle_superscript_and_subscript() 
     let before = zoom(&mut app);
     frame(&mut app, [press(Key::A, Modifiers::NONE), press(Key::Equals, shift)].concat());
     assert_eq!(zoom(&mut app), before, "no zoom once Select All selected the type");
-    assert!(positions(&mut app).iter().all(|(_, p)| *p == json!("superscript")), "{:?}", positions(&mut app));
+    // The earlier mixed selection left the text in two runs; check that both lines are still
+    // there and every run is superscript.
+    let runs = positions(&mut app);
+    assert_eq!(runs.iter().filter_map(|(t, _)| t.as_str()).collect::<String>(), "One\nTwo", "{runs:?}");
+    assert!(runs.iter().all(|(_, p)| *p == json!("superscript")), "{runs:?}");
 }
 
 /// Tab shows and hides the panels, and in the Type tool it types a tab, without moving the
