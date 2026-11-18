@@ -147,7 +147,8 @@ impl Session {
             crate::cmd::distortcmds::silent(self, |g| g.visible = true)?;
         }
         // When the tool already active, or the tool lent a selection tool for a drag, is chosen again,
-        // `select_tool` calls its [`Tool::chosen_again`] (the Blend tool finishes its blend).
+        // `select_tool` calls its [`Tool::chosen_again`] (the Blend tool finishes its blend, the Pen
+        // ends its path).
         let again = self.lender.as_ref().unwrap_or(&self.tool).id() == id;
         self.switch_tool(id, view)?;
         // `switch_tool` returns early for the tool already active.
