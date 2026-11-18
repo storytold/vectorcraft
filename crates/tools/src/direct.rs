@@ -1348,7 +1348,7 @@ impl DirectSelectionTool {
         if hit.as_ref().and_then(|h| cx.doc.node(h.leaf)).is_some_and(|n| matches!(n.kind, NodeKind::Text(_))) {
             return vec![Action::SwitchTool("type".into())];
         }
-        // Outside the isolated art it leaves isolation mode, as with the Selection tool (#4466).
+        // Outside the isolated art it runs Exit Isolation Mode, as with the Selection tool (#4466).
         if hit.is_none() && cx.isolation.is_some() {
             return vec![Action::Exec("object.exitIsolation".into(), json!({}))];
         }

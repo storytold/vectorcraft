@@ -1089,6 +1089,9 @@ digits	Malayalam	말라얄람어
 	Additional Plug-ins Folder	추가 플러그인 폴더
 	Additional Fonts Folder	추가 글꼴 폴더
 	Adjust Adjoining Width Points	인접한 너비 점 조정
+	Incoming	들어오는 쪽
+	Outgoing	나가는 쪽
+	Single Width Only	한 너비만
 	Adjust Colors	색상 조정
 	Adjust Options:	조정 옵션:
 	Advanced Options	고급 옵션
@@ -1259,6 +1262,12 @@ antiAlias	Sharp	날카롭게
 	Channel	채널
 	Character / Paragraph	문자 / 단락
 	Character Rotation	문자 회전
+	Chinese Big 5	중국어 Big 5
+	Cyrillic	키릴 자모
+	Greek	그리스어
+	Turkish	터키어
+	Baltic	발트어
+	Central European	중앙 유럽어
 	Character Set:	문자 집합:
 	Character Style Options	문자 스타일 옵션
 	Check Links	링크 확인
@@ -1318,6 +1327,8 @@ antiAlias	Sharp	날카롭게
 	Choose a folder	폴더 선택
 	Choose…	선택…
 	Circle	원
+	Circle Tool	점 기준 원 도구
+	Circle too large	원이 너무 큽니다
 	Clear All Tabs	모든 탭 지우기
 	Above Text	문자 위
 	Position Panel Above Text	패널을 문자 위에 배치
@@ -1853,6 +1864,8 @@ antiAlias	Sharp	날카롭게
 	Files	파일
 	Files of a PDF standard can't be password-protected.	PDF 표준 파일은 암호로 보호할 수 없습니다.
 	Files of this standard tag their colours with ICC profiles.	이 표준의 파일은 ICC 프로파일로 색상을 태그합니다.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	이 표준의 파일은 ICC 프로파일로 색상을 태그합니다. 단, 출력 의도 프로파일의 CMYK 색상은 DeviceCMYK로 기록됩니다.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	'프로파일 포함 안 함'과 CMYK 출력 의도를 사용하면, 다른 프로파일의 CMYK 대상으로 변환되지 않는 한 모든 CMYK 색상이 DeviceCMYK로 기록됩니다.
 	Fill	칠
 	Fill New Type Objects With Placeholder Text	새 문자 개체를 대체 텍스트로 채우기
 	Start Lists From Typed Markers	입력한 기호로 목록 시작
@@ -2357,6 +2370,7 @@ antiAlias	Sharp	날카롭게
 	Load SVG into Clipboard	SVG를 클립보드로 불러오기
 	Load Text into Clipboard	텍스트를 클립보드로 불러오기
 	Local Libraries	로컬 라이브러리
+	Locate Layer	레이어 찾기
 	Locate Object	개체 찾기
 	Locate Selected Objects	선택한 개체 찾기
 	Location	위치
@@ -2847,6 +2861,9 @@ diagnostics	ui	UI
 	Polar Grid Tool	극좌표 격자 도구
 	Polygon	다각형
 	Polygon Properties:	다각형 속성:
+	Line Properties:	선 속성:
+	Line Length:	선 길이:
+	Line Angle:	선 각도:
 	Polygon Tool	다각형 도구
 	Portrait	세로
 	Portuguese	Português
@@ -3429,6 +3446,7 @@ mark-style	Japanese	일본식
 	Set Text	문자 설정
 	Set Zoom	확대/축소 설정
 	Set base color to the current color	기준 색상을 현재 색상으로 설정
+	Set the current fill or stroke to the selected color	현재 칠 또는 선을 선택한 색상으로 설정
 	Set the selected color to the current color	선택한 색상을 현재 색상으로 설정
 	Setup…	설정…
 	Shape Builder	모양 빌더
@@ -3487,7 +3505,7 @@ mark-style	Japanese	일본식
 	Show all plates	모든 분판 표시
 	Show handles when multiple anchors are selected	여러 앵커 선택 시 핸들 표시
 	Show {kind} Brushes	{kind} 브러시 표시
-	Show/hide plate (Alt-click: only this plate)	분판 표시/숨기기(Alt 클릭: 이 분판만)
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	분판 표시/숨기기(Alt 클릭: 이 분판만, 다시 Alt 클릭: 모든 분판)
 	Show:	표시:
 	Shown with the optimised preview.	최적화된 미리 보기와 함께 표시됩니다.
 	Side 1:	면 1:
@@ -3842,6 +3860,8 @@ mark-style	Japanese	일본식
 	User Swatch Library 9	사용자 견본 라이브러리 9
 	V Spacing:	세로 간격:
 	Variable Width Profile	가변 너비 프로파일
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	선의 브러시는 고유한 크기를 유지하므로 너비 프로파일로 바뀌지 않습니다. 프로파일을 사용하려면 브러시를 제거하세요.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	선의 브러시는 고유한 크기를 유지하므로 너비 프로파일로 바뀌지 않습니다. 프로파일을 사용하려면 브러시를 제거하세요.
 	Variation:	변형:
 	Vector Halftone	벡터 하프톤
 	Vector illustration — fast, open, scriptable.	벡터 일러스트레이션 — 빠르고 개방적이며 스크립트 지원.
@@ -4849,8 +4869,8 @@ variable-list-end	{0}, {1}	{0} 및 {1}
 @msg	image would be too large; lower the resolution	이미지가 너무 커집니다. 해상도를 낮추세요
 @msg	clipboard is empty	클립보드가 비어 있습니다
 @msg	no anchor points selected	선택한 앵커 포인트가 없습니다
-@msg	`points` must be three [x, y] pairs of numbers	`points`는 숫자 쌍 [x, y] 세 개여야 합니다
-@msg	direct-select three anchor points, or give `points`	앵커 포인트 세 개를 직접 선택하거나 `points`를 지정하세요
+@msg	`points` must be two or three [x, y] pairs of numbers	`points`는 숫자 쌍 [x, y] 두 개 또는 세 개여야 합니다
+@msg	direct-select two or three anchor points, or give `points`	앵커 포인트 두 개 또는 세 개를 직접 선택하거나 `points`를 지정하세요
 @msg	no circle passes through these points: two are the same or all three lie on one line	이 점들을 지나는 원이 없습니다: 두 점이 같거나 세 점이 모두 한 직선 위에 있습니다
 @msg	select at least two objects	개체를 두 개 이상 선택하세요
 @msg	exit isolation mode first	먼저 격리 모드를 종료하세요
@@ -5272,6 +5292,9 @@ variable-list-end	{0}, {1}	{0} 및 {1}
 @msg	`{color}` is not a colour (#rrggbb or a preset name)	`{color}`은(는) 색상이 아닙니다(#rrggbb 또는 프리셋 이름)
 @msg	give the path `id` and the width point `index`	패스 `id`와 너비 점 `index`를 지정하세요
 @msg	no such width point	해당 너비 점이 없습니다
+@msg	`single` must be `incoming` or `outgoing`	`single`은 `incoming` 또는 `outgoing`이어야 합니다
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index`와 `outIndex`는 하나의 불연속 너비 점의 두 절반이어야 합니다
+@msg	a discontinuous width point keeps its place	불연속 너비 점은 위치를 유지합니다
 @msg	onto must name a panel floating in another group	onto는 다른 그룹에 떠 있는 패널을 지정해야 합니다
 @msg	below and above must name a panel floating in another group	below와 above는 다른 그룹에 떠 있는 패널을 지정해야 합니다
 @msg	give only one of onto, below and above	onto, below, above 중 하나만 지정하세요
@@ -8420,6 +8443,7 @@ breakText	Glyphs	글리프
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	컴파운드 모양에는 패스, 컴파운드 패스, 그룹, 컴파운드 모양, 문자, 블렌드, 엔벨로프를 넣을 수 있습니다
 @msg	compound {_1} must contain exactly one open path to join	컴파운드 {_1}에는 연결할 열린 패스가 정확히 하나 있어야 합니다
 @msg	connect needs a path other than the one extended	connect에는 연장한 패스가 아닌 다른 패스가 필요합니다
+@msg	connect needs extend	connect에는 extend가 필요합니다
 @msg	connect needs id	connect에는 id가 필요합니다
 @msg	connect path has no open end	connect 패스에 열린 끝이 없습니다
 @msg	continuation must be an array of path chunks	continuation은 패스 조각의 배열이어야 합니다
@@ -9647,3 +9671,13 @@ breakText	Glyphs	글리프
 @msg	A panel is not joined to the rest by a crease.	패널이 어떤 오시선으로도 나머지와 연결되어 있지 않습니다.
 @msg	A fold line is on a non-printing layer.	접는 선이 인쇄되지 않는 레이어에 있습니다.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	패널: {panels}, 힌지: {hinges}, 오류: {errors}, 경고: {warnings}
+	Fold Preview	접기 미리 보기
+	Fold	접기
+	Show Fold Lines	접는 선 표시
+	Three-Quarter	3/4 보기
+	Open a document to preview its folded shape.	접은 모양을 미리 보려면 문서를 여세요.
+@msg	Check the fold lines first.	먼저 접는 선을 검사하세요.
+@msg	Panels: {panels}, hinges: {hinges}	패널: {panels}, 힌지: {hinges}
+@msg	Other blanks not shown: {count}	표시되지 않은 다른 전개도: {count}
+@msg	A joint does not close by {gap} pt.	이음매가 {gap} pt만큼 닫히지 않습니다.
+@msg	Two panels pass through each other.	두 패널이 서로 관통합니다.

@@ -137,6 +137,9 @@
 	Additional Plug-ins Folder	Папка додаткових модулів
 	Additional Fonts Folder	Папка додаткових шрифтів
 	Adjust Adjoining Width Points	Налаштувати суміжні точки ширини
+	Incoming	Вхідна
+	Outgoing	Вихідна
+	Single Width Only	Лише одна ширина
 	Adjust Color Balance…	Налаштувати колірний баланс…
 	Adjust Colors	Налаштувати кольори
 	Adjust Options:	Параметри налаштування:
@@ -421,6 +424,12 @@ font-technology	Variable	Варіативні
 	Character Alignment	Вирівнювання символів
 	Character / Paragraph	Символ / Абзац
 	Character Rotation	Поворот символів
+	Chinese Big 5	Китайська Big 5
+	Cyrillic	Кирилиця
+	Greek	Грецька
+	Turkish	Турецька
+	Baltic	Балтійська
+	Central European	Центральноєвропейська
 	Character Set:	Набір символів:
 	Character Style	Стиль символу
 	Character Style Options	Параметри стилю символу
@@ -483,6 +492,8 @@ font-technology	Variable	Варіативні
 	Choose a folder	Виберіть папку
 	Choose…	Вибрати…
 	Circle	Коло
+	Circle Tool	Інструмент «Коло»
+	Circle too large	Коло завелике
 	Classic Defaults	Класичні значення за промовчанням
 	Clean Up…	Очистити…
 	Clear	Очистити
@@ -1282,6 +1293,8 @@ font-technology	Variable	Варіативні
 	Files	Файли
 	Files of a PDF standard can't be password-protected.	Файли стандарту PDF не можуть бути захищені паролем.
 	Files of this standard tag their colours with ICC profiles.	Файли цього стандарту позначають свої кольори профілями ICC.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	Файли цього стандарту позначають свої кольори профілями ICC, крім кольорів CMYK у профілі призначення виведення, які записуються як DeviceCMYK.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	З «Не включати профілі» та призначенням виведення CMYK кожен колір CMYK записується як DeviceCMYK, якщо його не перетворено в призначення CMYK з іншим профілем.
 	Fill	Заливка
 	Fill & Stroke	Заливка та обведення
 	Fill (X), double-click for the Color Picker	Заливка (X), двічі клацніть на палітрі кольорів
@@ -2087,6 +2100,7 @@ file-filter	Templates	Шаблони
 	Load SVG into Clipboard	Завантажити SVG у буфер обміну
 	Load Text into Clipboard	Завантажити текст у буфер обміну
 	Local Libraries	Локальні бібліотеки
+	Locate Layer	Знайти шар
 	Locate Object	Знайти об’єкт
 	Locate Selected Objects	Знаходити виділені об’єкти
 	Location	Розташування
@@ -2756,6 +2770,9 @@ diagnostics	ui	інтерфейс
 	Polar Grid Tool	Інструмент «Полярна сітка»
 	Polygon	Багатокутник
 	Polygon Properties:	Властивості багатокутника:
+	Line Properties:	Властивості лінії:
+	Line Length:	Довжина лінії:
+	Line Angle:	Кут лінії:
 	Polygon Tool	Інструмент «Багатокутник»
 	Portrait	Книжкова
 	Power Saving (integrated)	Енергозбереження (вбудована)
@@ -3570,6 +3587,7 @@ digits	Malayalam	Малаялам
 	Set Slice Rectangle	Вказати прямокутник фрагмента
 	Set Tab Stops	Задати табуляції
 	Set Text	Задати текст
+	Set the current fill or stroke to the selected color	Призначити вибраний колір поточній заливці або обведенню
 	Set the selected color to the current color	Призначити поточний колір вибраному кольору
 	Set Zoom	Задати масштаб
 	Settings…	Параметри…
@@ -3693,7 +3711,7 @@ digits	Malayalam	Малаялам
 	Show Vivid/Muted	Показати яскраві/приглушені
 	Show Warm/Cool	Показати теплі/холодні
 	Show {kind} Brushes	Показати пензлі {kind}
-	Show/hide plate (Alt-click: only this plate)	Показати/приховати пластину (Alt+клацання: тільки цю пластину)
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	Показати/приховати пластину (Alt+клацання: тільки цю пластину; повторне Alt+клацання: усі пластини)
 	Show:	Показати:
 	Shown with the optimised preview.	Показано оптимізованим переглядом.
 	Side 1:	Сторона 1:
@@ -4302,6 +4320,8 @@ effect	Points	Точки
 	V Spacing:	Інтервал по вертикалі:
 	V:	В:
 	Variable Width Profile	Профіль змінної ширини
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Пензель обведення зберігає власний розмір, тому профіль ширини його не змінює. Щоб використати профіль, заберіть пензель.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Пензель обведення зберігає власний розмір, тому профіль ширини його не змінює. Щоб використати профіль, заберіть пензель.
 	Variables	Змінні
 	New Variable	Нова змінна
 	Delete Variable	Видалити змінну
@@ -5135,8 +5155,8 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	no active document	немає активного документа
 @msg	no active perspective plane	немає активної площини перспективи
 @msg	no anchor points selected	опорні точки не виділені
-@msg	`points` must be three [x, y] pairs of numbers	`points` має містити три пари чисел [x, y]
-@msg	direct-select three anchor points, or give `points`	виділіть три опорні точки прямим виділенням або задайте `points`
+@msg	`points` must be two or three [x, y] pairs of numbers	`points` має містити дві або три пари чисел [x, y]
+@msg	direct-select two or three anchor points, or give `points`	виділіть дві або три опорні точки прямим виділенням або задайте `points`
 @msg	no circle passes through these points: two are the same or all three lie on one line	через ці точки не проходить жодне коло: дві точки збігаються або всі три лежать на одній прямій
 @msg	no app to open files here	тут немає програми для відкриття файлів
 @msg	no artboard	немає монтажної області
@@ -5238,6 +5258,9 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	no such user library	такої користувацької бібліотеки немає
 @msg	no such view	такого виду немає
 @msg	no such width point	такої точки ширини немає
+@msg	`single` must be `incoming` or `outgoing`	`single` має бути `incoming` або `outgoing`
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` і `outIndex` мають бути двома половинами однієї розривної точки ширини
+@msg	a discontinuous width point keeps its place	розривна точка ширини зберігає своє місце
 @msg	no swatch `{name}`	немає зразка `{name}`
 @msg	no swatch library `{l}` (see swatch.library.list)	немає бібліотеки зразків `{l}` (див. swatch.library.list)
 @msg	no symbol instances selected	екземпляри символів не виділені
@@ -8422,6 +8445,7 @@ breakText	Glyphs	Гліфи
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	складені фігури приймають контури, складені контури, групи, складені фігури, текст, переходи й оболонки
 @msg	compound {_1} must contain exactly one open path to join	складений об’єкт {_1} має містити рівно один відкритий контур для з’єднання
 @msg	connect needs a path other than the one extended	для connect потрібен контур, відмінний від того, що продовжується
+@msg	connect needs extend	для connect потрібен extend
 @msg	connect needs id	для connect потрібен id
 @msg	connect path has no open end	контур для connect не має відкритого кінця
 @msg	continuation must be an array of path chunks	continuation має бути масивом частин контуру
@@ -9659,3 +9683,13 @@ breakText	Glyphs	Гліфи
 @msg	A panel is not joined to the rest by a crease.	Панель не з’єднана з рештою жодною лінією біговки.
 @msg	A fold line is on a non-printing layer.	Лінія згину лежить на шарі, що не друкується.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Панелі: {panels}, шарніри: {hinges}, помилки: {errors}, попередження: {warnings}
+	Fold Preview	Перегляд згину
+	Fold	Згин
+	Show Fold Lines	Показати лінії згину
+	Three-Quarter	Три чверті
+	Open a document to preview its folded shape.	Відкрийте документ, щоб переглянути його у складеному вигляді.
+@msg	Check the fold lines first.	Спершу перевірте лінії згину.
+@msg	Panels: {panels}, hinges: {hinges}	Панелі: {panels}, шарніри: {hinges}
+@msg	Other blanks not shown: {count}	Інші розгортки не показано: {count}
+@msg	A joint does not close by {gap} pt.	Стик не змикається на {gap} pt.
+@msg	Two panels pass through each other.	Дві панелі проходять одна крізь одну.

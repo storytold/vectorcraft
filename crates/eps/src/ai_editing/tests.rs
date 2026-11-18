@@ -4197,6 +4197,165 @@ fn images_that_cant_be_decoded_are_mid_gray_boxes() {
     assert_eq!(paint(n.appearance.items[0].paint()), paint(&solid(Color::gray(0.5))));
 }
 
+/// A `w` × `h` RGB image whose pixels follow from `seed`, no two of its pixels gray.
+fn seeded_png(seed: u32, (w, h): (u32, u32)) -> Vec<u8> {
+    let px = |x: u32, y: u32| {
+        let v = (x.wrapping_mul(73_856_093) ^ y.wrapping_mul(19_349_663) ^ seed.wrapping_mul(83_492_791)).to_le_bytes();
+        image::Rgb([v[0], v[1] | 1, v[2] & 0xfe])
+    };
+    png_of(image::DynamicImage::ImageRgb8(image::RgbImage::from_fn(w, h, px)))
+}
+
+/// A document placing `blobs` in turn on one layer, each `times` times: the first, the second and
+/// so on, then the first again. Each blob is kept under `keys`' key at its index.
+fn images_in_turn(blobs: &[ImageBlob], keys: &[&str], times: usize) -> Document {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    for (blob, key) in blobs.iter().zip(keys) {
+        doc.images.insert((*key).to_string(), blob.clone());
+    }
+    for i in 0..times * blobs.len() {
+        let key = keys[i % blobs.len()].to_string();
+        let xf = Affine::translate((f64::from(u32::try_from(i).unwrap()), 10.0)) * Affine::scale(2.0);
+        let im = ImageObject { key, width: 4, height: 4, xf, link: None, placement: Default::default(), pixels: None };
+        let node = Node::new(doc.alloc_id(), NodeKind::Image(Box::new(im)));
+        doc.insert(Some(layer), usize::MAX, node).unwrap();
+    }
+    doc
+}
+
+/// `doc` written keeping the pixels of each image read (`last_only` false) or of the image read
+/// last alone, and how many times an image's pixels were read.
+fn export_reading(doc: &Document, last_only: bool) -> (AiEditingOutput, usize) {
+    writer::LAST_SAMPLES_ONLY.with(|l| l.set(last_only));
+    writer::SAMPLE_READS.with(|n| n.set(0));
+    let out = export_ai_editing(doc, &opts());
+    writer::LAST_SAMPLES_ONLY.with(|l| l.set(false));
+    (out.unwrap(), writer::SAMPLE_READS.with(std::cell::Cell::get))
+}
+
+/// `doc` written both ways ([`export_reading`]), the files and warnings compared whole, and the
+/// reads of each way.
+fn reads_for_the_same_file(doc: &Document) -> (usize, usize) {
+    let (kept, kept_reads) = export_reading(doc, false);
+    let (last, last_reads) = export_reading(doc, true);
+    assert!(kept.program == last.program, "the files differ");
+    assert_eq!(kept.header, last.header);
+    assert_eq!(kept.warnings, last.warnings);
+    (kept_reads, last_reads)
+}
+
+/// Two images placed one after the other 25 times each are each read once in a save, and the file
+/// is the same as when only the image read last is kept.
+#[test]
+fn images_placed_in_turn_are_read_once_a_save() {
+    // GUARDS: each image was read again whenever the other was placed between its copies.
+    let blobs = [ImageBlob::png(seeded_png(1, (4, 4))), ImageBlob::png(seeded_png(2, (4, 4)))];
+    let doc = images_in_turn(&blobs, &["a", "b"], 25);
+    assert_eq!(reads_for_the_same_file(&doc), (2, 50));
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert_eq!(String::from_utf8_lossy(&out.program).matches("%AI5_BeginRaster").count(), 50);
+}
+
+/// A document of one image placed many times reads it once, and one without images reads none.
+#[test]
+fn one_image_is_read_once_and_no_image_never() {
+    let doc = images_in_turn(&[ImageBlob::png(seeded_png(3, (4, 4)))], &["a"], 10);
+    assert_eq!(reads_for_the_same_file(&doc), (1, 1));
+    assert_eq!(reads_for_the_same_file(&Document::new(200.0, 100.0)), (0, 0));
+}
+
+/// An image that can't be read, placed between copies of another, is read once too, and each copy
+/// is still its gray outline with the same warning.
+#[test]
+fn an_image_that_cant_be_read_is_read_once_a_save() {
+    // GUARDS: an image that can't be read was read again whenever another image came between.
+    let blobs = [ImageBlob::png(b"not an image".to_vec()), ImageBlob::png(seeded_png(4, (4, 4)))];
+    let doc = images_in_turn(&blobs, &["bad", "good"], 3);
+    assert_eq!(reads_for_the_same_file(&doc), (2, 6));
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert_eq!(out.warnings, [writer::IMAGES]);
+    assert_eq!(String::from_utf8_lossy(&out.program).matches("%AI5_BeginRaster").count(), 3);
+}
+
+/// The same data under two MIME types is two images: each is read once, apart from the other.
+#[test]
+fn the_same_data_of_another_type_is_read_apart() {
+    let png = ImageBlob::png(seeded_png(5, (4, 4)));
+    let other = ImageBlob { mime: "image/x-other".into(), ..png.clone() };
+    assert!(Arc::ptr_eq(&png.bytes, &other.bytes));
+    let doc = images_in_turn(&[png, other], &["png", "other"], 3);
+    assert_eq!(reads_for_the_same_file(&doc), (2, 6));
+}
+
+/// Past the limits on the samples kept (bytes and images), an image is kept beside them in place
+/// of the one before it, and the others are read again where they come: what is kept stays within
+/// both limits, and the file is the same.
+#[test]
+fn images_past_the_limits_are_read_again_and_written_the_same() {
+    // Images of 48, 75 and 108 bytes of samples, then two of 48: 123 bytes and two images fit.
+    let sizes = [(4, 4), (5, 5), (6, 6), (4, 4), (4, 4)];
+    let blobs: Vec<_> = (0u32..).zip(sizes).map(|(i, s)| ImageBlob::png(seeded_png(10 + i, s))).collect();
+    let doc = images_in_turn(&blobs, &["a", "b", "c", "d", "e"], 3);
+    for (limits, kept_most, reads) in [((130, 8), (123, 2), 2 + 3 * 3), ((10_000, 3), (48 + 75 + 108, 3), 3 + 2 * 3)] {
+        writer::SAMPLE_LIMITS.with(|l| l.set(limits));
+        writer::SAMPLES_KEPT.with(|k| k.set((0, 0, false)));
+        let (kept_reads, last_reads) = reads_for_the_same_file(&doc);
+        let (bytes, images, beside) = writer::SAMPLES_KEPT.with(std::cell::Cell::get);
+        writer::SAMPLE_LIMITS.with(|l| l.set((256 << 20, 256)));
+        assert!(bytes <= limits.0 && images <= limits.1, "{limits:?}: kept {bytes} bytes of {images} images");
+        assert_eq!((bytes, images, beside), (kept_most.0, kept_most.1, true), "{limits:?}");
+        assert_eq!((kept_reads, last_reads), (reads, 15), "{limits:?}");
+    }
+}
+
+/// The time this thread has run, and how it was measured.
+fn thread_time() -> (std::time::Duration, &'static str) {
+    if let Some(ns) = std::fs::read_to_string("/proc/thread-self/schedstat").ok().and_then(|s| s.split_whitespace().next()?.parse::<u64>().ok()) {
+        return (std::time::Duration::from_nanos(ns), "thread CPU time");
+    }
+    static START: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+    (START.get_or_init(std::time::Instant::now).elapsed(), "wall-clock time")
+}
+
+/// The time to write two 2048 × 2048 images placed one after the other 25 times each, keeping the
+/// pixels of each image read and of the image read last alone: the median of 7 runs of each,
+/// alternating, with the files compared. Run with
+/// `cargo test --release -p vectorcraft-eps --lib -- --ignored --nocapture images_placed_in_turn_are_written_quickly`.
+#[test]
+#[ignore = "timing"]
+fn images_placed_in_turn_are_written_quickly() {
+    let blobs = [ImageBlob::png(seeded_png(1, (2048, 2048))), ImageBlob::png(seeded_png(2, (2048, 2048)))];
+    let doc = images_in_turn(&blobs, &["a", "b"], 25);
+    let mut times = [vec![], vec![]];
+    let mut files: [Option<Vec<u8>>; 2] = [None, None];
+    let mut reads = [0, 0];
+    let mut how = "";
+    for _ in 0..7 {
+        for (k, last_only) in [false, true].into_iter().enumerate() {
+            let (start, h) = thread_time();
+            let (out, n) = export_reading(&doc, last_only);
+            times[k].push(thread_time().0.saturating_sub(start));
+            how = h;
+            reads[k] = n;
+            files[k].get_or_insert(out.program);
+        }
+    }
+    assert!(files[0] == files[1], "the files differ");
+    assert_eq!(reads, [2, 50]);
+    for t in &mut times {
+        t.sort();
+    }
+    let ms = |d: std::time::Duration| d.as_secs_f64() * 1000.0;
+    println!("50 placements of two 2048 x 2048 images, median of 7 runs ({how}):");
+    println!("| pixels kept | images read | median (ms) | runs (ms) |");
+    println!("|---|---:|---:|---|");
+    for (k, label) in ["each image read", "the image read last"].into_iter().enumerate() {
+        let runs: Vec<String> = times[k].iter().map(|d| format!("{:.0}", ms(*d))).collect();
+        println!("| {label} | {} | {:.0} | {} |", reads[k], ms(times[k][3]), runs.join(", "));
+    }
+}
+
 #[test]
 fn sixteen_bit_images_are_written_at_eight_bits() {
     let mut doc = Document::new(200.0, 100.0);
@@ -7179,6 +7338,166 @@ fn art_styles_are_written_in_their_forms() {
     };
     assert_eq!((two.matches("/KnownStyle :").count(), two.matches("1 (Anon 1) XW\n").count()), (1, 2), "{two}");
     assert!(!two.contains("%AI9_BeginArtStyleList"), "{two}");
+}
+
+/// A document with `k` of each object a save checks a style on, on rows 20 pt apart: objects linked
+/// to a new document's graphic style and to one of the document's own, objects with the same drop
+/// shadow, two objects with different gradients under a drop shadow on the same outline, and paths
+/// with a Calligraphic brush and a drop shadow.
+fn checked_styles_document(k: usize) -> Document {
+    let mut doc = Document::new(400.0, 20.0 * k as f64 + 20.0);
+    vectorcraft_brush::store(&mut doc, &brush_library());
+    let lit_ap = Appearance { effects: vec![drop_shadow()], ..Appearance::basic(solid(Color::rgb(0.2, 0.5, 0.9)), solid(Color::BLACK), 1.0) };
+    let mut lit = vectorcraft_doc::GraphicStyle::new("Lit", lit_ap);
+    lit.id = 40;
+    doc.graphic_styles.push(lit);
+    let ramp = |c: Color| {
+        let stops = vec![GradientStop::new(0.0, Color::WHITE), GradientStop::new(1.0, c)];
+        Paint::Gradient(Box::new(GradientPaint::new(Gradient { kind: GradientKind::Linear, stops, ..Gradient::default() })))
+    };
+    for i in 0..k {
+        let y = 10.0 + 20.0 * i as f64;
+        for (x, name) in [(10.0, "Sunshine"), (60.0, "Lit")] {
+            let g = doc.graphic_style(name).unwrap().clone();
+            let ap = g.appearance_on(&Node::group(vectorcraft_doc::NodeId(0), vec![])).into_owned();
+            let mut n = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(x, y, x + 40.0, y + 15.0)), ap);
+            n.extras_mut().graphic_style = Some(g.id);
+            put(&mut doc, n);
+        }
+        let n = styled_rect(&mut doc, "Shadowed", Rect::new(110.0, y, 150.0, y + 15.0), solid(Color::BLACK), Paint::None, vec![drop_shadow()]);
+        put(&mut doc, n);
+        for c in [Color::BLACK, Color::rgb(0.9, 0.2, 0.1)] {
+            let n = styled_rect(&mut doc, "Graded", Rect::new(160.0, y, 200.0, y + 15.0), ramp(c), Paint::None, vec![drop_shadow()]);
+            put(&mut doc, n);
+        }
+        let stroke = Appearance::basic(Paint::None, solid(Color::rgb(1.0, 0.0, 0.0)), 2.0);
+        let mut line = Node::path(doc.alloc_id(), shapes::line((210.0, y).into(), (380.0, y + 10.0).into()), stroke);
+        line.appearance.stroke_mut().unwrap().brush = Some("Nib".into());
+        line.appearance.effects = vec![drop_shadow()];
+        put(&mut doc, line);
+    }
+    doc
+}
+
+/// A save parses each style text once, however many objects it checks with it: the panel's styles,
+/// objects linked to them, objects with the same style of their own and brushed paths. Each object
+/// is still checked: every linked object keeps its link, each graded object reads back with its own
+/// gradient, and each brushed path with its brush.
+#[test]
+fn a_save_parses_each_style_text_once() {
+    let parses = |doc: &Document| {
+        crate::import::ART_STYLE_PARSES.set(0);
+        let out = export_ai_editing(doc, &opts()).unwrap();
+        (crate::import::ART_STYLE_PARSES.get(), String::from_utf8(out.program).unwrap().replace("\r\n", "\n"))
+    };
+    let (one, _) = parses(&checked_styles_document(1));
+    let doc = checked_styles_document(4);
+    let (four, p) = parses(&doc);
+    assert!(one > 0);
+    assert_eq!(four, one, "parses with one of each object and with four");
+    for linked in ["1 (Sunshine) XW\n", "1 (Lit) XW\n"] {
+        assert_eq!(p.matches(linked).count(), 4, "{linked}");
+    }
+    let back = read_back(&doc);
+    let kids = back.layers[0].children().unwrap();
+    let paints: Vec<&Paint> =
+        kids.iter().filter(|n| n.name.as_deref() == Some("Graded")).filter_map(|n| n.appearance.fill().map(|f| &f.paint)).collect();
+    let graded: Vec<&Paint> = doc.layers[0]
+        .children()
+        .unwrap()
+        .iter()
+        .filter(|n| n.name.as_deref() == Some("Graded"))
+        .map(|n| &n.appearance.fill().unwrap().paint)
+        .collect();
+    assert_eq!(paints.len(), 8);
+    for (got, want) in paints.iter().zip(&graded) {
+        let (Paint::Gradient(got), Paint::Gradient(want)) = (got, want) else { panic!("a gradient fill: {got:?}") };
+        assert_eq!(got.gradient.stops, want.gradient.stops);
+    }
+    let brushed: Vec<&Arc<Node>> = kids.iter().filter(|n| n.appearance.stroke().and_then(|s| s.brush.as_deref()) == Some("Nib")).collect();
+    assert_eq!(brushed.len(), 4);
+    assert!(brushed.iter().all(|n| n.appearance.effects.len() == 1 && matches!(n.kind, NodeKind::Path { .. })));
+}
+
+/// A save that keeps each style text's parse writes the same program, header, warnings and private
+/// data as one that parses the text again at every check.
+#[test]
+fn a_save_writes_the_same_with_each_style_text_parsed_once() {
+    let save = |doc: &Document, reparse: bool| {
+        writer::REPARSE.set(reparse);
+        let out = export_ai_editing(doc, &opts()).unwrap();
+        let private = private_data(doc, &opts()).unwrap();
+        writer::REPARSE.set(false);
+        (out.program, out.header, out.warnings, private.0.data, private.1)
+    };
+    for doc in [styles_document(), checked_styles_document(4), brushes_document()] {
+        let (once, again) = (save(&doc, false), save(&doc, true));
+        assert!(once == again, "{}", String::from_utf8_lossy(&once.0));
+    }
+}
+
+/// The CPU time of saving a document with 40 graphic styles, 20,000 rectangles linked to them in
+/// turn and 5,000 paths with an Outer Glow of their own in 20 settings, with each style text's parse
+/// kept and with the text parsed again at every check: the median of 7 runs of each, alternating.
+/// Run with `cargo test -p vectorcraft-eps --lib -- --ignored --nocapture style_parse_time`.
+#[test]
+#[ignore = "timing; run by hand"]
+fn style_parse_time() {
+    let mut doc = Document::new(2000.0, 2000.0);
+    let mut ids = vec![];
+    for i in 0..40u32 {
+        let shade = i as f32 / 40.0;
+        let mut ap = Appearance::basic(solid(Color::rgb(shade, 0.4, 1.0 - shade)), solid(Color::BLACK), 1.0 + f64::from(i % 4));
+        let round = fx("stylize.roundCorners", serde_json::json!({"radius": 2.0 + f64::from(i % 5)}));
+        ap.effects = vec![fx("stylize.dropShadow", serde_json::json!({"x": f64::from(i % 7), "y": 4.0})), round];
+        let mut g = vectorcraft_doc::GraphicStyle::new(format!("Style {i}"), ap);
+        g.id = 100 + i;
+        ids.push(g.id);
+        doc.graphic_styles.push(g);
+    }
+    for i in 0..20_000usize {
+        let g = doc.graphic_style_by_id(ids[i % ids.len()]).unwrap().clone();
+        let ap = g.appearance_on(&Node::group(vectorcraft_doc::NodeId(0), vec![])).into_owned();
+        let (x, y) = ((i % 200) as f64 * 10.0, (i / 200) as f64 * 10.0);
+        let mut n = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(x, y, x + 8.0, y + 8.0)), ap);
+        n.extras_mut().graphic_style = Some(g.id);
+        put(&mut doc, n);
+    }
+    for i in 0..5_000usize {
+        let glow = fx("stylize.outerGlow", serde_json::json!({"blur": 1.0 + (i % 20) as f64}));
+        let (x, y) = ((i % 100) as f64 * 20.0, 1000.0 + (i / 100) as f64 * 20.0);
+        let n = styled_rect(&mut doc, "Glow", Rect::new(x, y, x + 15.0, y + 15.0), solid(Color::BLACK), Paint::None, vec![glow]);
+        put(&mut doc, n);
+    }
+    // The CPU time this thread has run, in nanoseconds: Linux's scheduler statistics, else the clock.
+    let start = std::time::Instant::now();
+    let cpu = || {
+        std::fs::read_to_string("/proc/thread-self/schedstat")
+            .ok()
+            .and_then(|s| s.split_whitespace().next().and_then(|n| n.parse::<u64>().ok()))
+            .unwrap_or_else(|| u64::try_from(start.elapsed().as_nanos()).unwrap_or(u64::MAX))
+    };
+    let mut times: [Vec<u64>; 2] = [vec![], vec![]];
+    let mut parses = [0, 0];
+    let mut outputs: [Vec<u8>; 2] = [vec![], vec![]];
+    for _ in 0..7 {
+        for (k, reparse) in [(0, true), (1, false)] {
+            writer::REPARSE.set(reparse);
+            crate::import::ART_STYLE_PARSES.set(0);
+            let t = cpu();
+            let out = export_ai_editing(&doc, &opts()).unwrap();
+            times[k].push(cpu() - t);
+            parses[k] = crate::import::ART_STYLE_PARSES.get();
+            outputs[k] = out.program;
+        }
+    }
+    writer::REPARSE.set(false);
+    assert!(outputs[0] == outputs[1]);
+    for (k, label) in [(0, "parsed at every check"), (1, "parsed once")] {
+        times[k].sort_unstable();
+        let ms: Vec<String> = times[k].iter().map(|t| format!("{:.1}", *t as f64 / 1e6)).collect();
+        println!("{label}: median {:.1} ms CPU, {} parses, runs {}", times[k][3] as f64 / 1e6, parses[k], ms.join(" "));
+    }
 }
 
 /// Objects whose appearance the reader wouldn't read with their style are written as their
@@ -10255,6 +10574,40 @@ fn brush_art_of_a_straight_line_comes_back_as_the_line() {
     }
 }
 
+/// A Scatter brush's art is written turned over into its section (y up), so the side that is down the
+/// page in the brush's copies is up in the section: a triangle with its point down comes out with
+/// its point above its base, and comes back with its point down.
+#[test]
+fn a_scatter_brushs_art_is_written_turned_over() {
+    use vectorcraft_brush::{Brush, BrushKind, Scatter};
+    use vectorcraft_geom::{Point, SubPath};
+    let point_down = PathData { subpaths: vec![SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(40.0, 0.0), Point::new(20.0, 10.0)], true)] };
+    let art = Node::path(vectorcraft_doc::NodeId(1), point_down, Appearance::basic(black_fill(), Paint::None, 0.0));
+    let lib = vec![Brush { name: "Wedge".into(), kind: BrushKind::Scatter(Scatter { art, ..Scatter::default() }) }];
+    let mut doc = Document::new(300.0, 200.0);
+    vectorcraft_brush::store(&mut doc, &lib);
+    let text = program(&doc);
+    let start = text.find("%AI8_BeginBrushPattern").unwrap();
+    let end = start + text[start..].find("%AI8_EndBrushPattern").unwrap();
+    // The points of the frame and the triangle: the triangle's point is the one between the
+    // frame's left and right edges.
+    let points: Vec<(f64, f64)> = text[start..end]
+        .lines()
+        .filter_map(|l| l.strip_suffix(" m").or_else(|| l.strip_suffix(" L")))
+        .filter_map(|l| {
+            let mut n = l.split_whitespace().map(|v| v.parse::<f64>().ok());
+            Some((n.next()??, n.next()??))
+        })
+        .collect();
+    let (left, right) = points.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(l, r), p| (l.min(p.0), r.max(p.0)));
+    let bottom = points.iter().map(|p| p.1).fold(f64::INFINITY, f64::min);
+    let tip: Vec<f64> = points.iter().filter(|p| p.0 > left + 1e-3 && p.0 < right - 1e-3).map(|p| p.1).collect();
+    assert!(!tip.is_empty() && tip.iter().all(|y| (y - bottom - 10.0).abs() < 1e-3), "the point is 10 above the base in the section: {points:?}");
+    let back = vectorcraft_brush::library(&read_back(&doc));
+    let (BrushKind::Scatter(got), BrushKind::Scatter(want)) = (&back[0].kind, &lib[0].kind) else { panic!("{back:?}") };
+    assert!(same_tree(&art_tree(&got.art), &art_tree(&want.art)), "{:#?}", got.art);
+}
+
 /// Brush art of a path with several subpaths is written as a compound path, which the reader reads as
 /// a compound path of one path for each subpath, and is weighed as the reader weighs that against the
 /// art it copies into one file's brushes: of two Art brushes whose art is a path of 30,000 squares,
@@ -11039,6 +11392,192 @@ fn variable_font_instances_name_their_design_space() {
         styles[..3],
         [(VARIABLE_FAMILY.into(), "Regular".into()), (VARIABLE_FAMILY.into(), "Bold".into()), (VARIABLE_FAMILY.into(), "Bold".into())]
     );
+}
+
+/// Style 12 pt black in family `family` and style `style`, with the Variable Font settings `axes`.
+fn font_style(family: &str, style: &str, axes: &[(&str, f64)]) -> vectorcraft_doc::CharStyle {
+    vectorcraft_doc::CharStyle {
+        font_family: family.into(),
+        font_style: style.into(),
+        font_axes: axes.iter().map(|(t, v)| (t.to_string(), *v)).collect(),
+        ..style_of(12.0)
+    }
+}
+
+/// A document of `k` rows 30 pt apart, each with point type in three runs (Source Sans 3 Regular
+/// and Bold, and the variable test font's Bold at a weight of 650), point type in four (Inter
+/// Medium, the variable test font's Bold at 500 and at a weight that differs from 500 by less than
+/// the font record's precision, and a family that isn't installed), and area type threaded through
+/// two frames in Bold and the variable test font's Regular.
+fn fonted_document(k: usize) -> Document {
+    use vectorcraft_doc::{TextKind, TextObject, TextRun};
+    use vectorcraft_geom::Point;
+    use vectorcraft_text::test_fonts::{VARIABLE_FAMILY, variable_font};
+    vectorcraft_text::FontDb::global().add_font(variable_font().unwrap());
+    let (regular, bold) = (style_of(12.0), font_style("Source Sans 3", "Bold", &[]));
+    let mut doc = Document::new(400.0, 30.0 * k as f64 + 30.0);
+    let layer = doc.layers[0].id;
+    for i in 0..k {
+        let y = 20.0 + 30.0 * i as f64;
+        let mut three = TextObject::point(Point::new(10.0, y), "", regular.clone());
+        three.runs = vec![
+            TextRun::new("One ", regular.clone()),
+            TextRun::new("two ", bold.clone()),
+            TextRun::new("three", font_style(VARIABLE_FAMILY, "Bold", &[("wght", 650.0)])),
+        ];
+        let mut four = TextObject::point(Point::new(100.0, y), "", regular.clone());
+        four.runs = vec![
+            TextRun::new("four ", font_style("Inter", "Medium", &[])),
+            TextRun::new("five ", font_style(VARIABLE_FAMILY, "Bold", &[("wght", 500.0)])),
+            TextRun::new("six ", font_style(VARIABLE_FAMILY, "Bold", &[("wght", 500.000_001)])),
+            TextRun::new("seven", font_style("No Such Family", "Bold", &[])),
+        ];
+        let mut first = TextObject::point(Point::ZERO, "", bold.clone());
+        first.runs = vec![TextRun::new("eight nine ", bold.clone()), TextRun::new("ten", font_style(VARIABLE_FAMILY, "Regular", &[]))];
+        first.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(250.0, y - 10.0, 315.0, y + 10.0)) };
+        first.xf = Affine::IDENTITY;
+        let mut second = first.clone();
+        second.runs = vec![TextRun::new("", bold.clone())];
+        second.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(325.0, y - 10.0, 390.0, y + 10.0)) };
+        let nodes = [text_node(&mut doc, three), text_node(&mut doc, four), text_node(&mut doc, first), text_node(&mut doc, second)];
+        doc.text_threads.push(vec![nodes[2].id, nodes[3].id]);
+        for n in nodes {
+            doc.insert(Some(layer), usize::MAX, n).unwrap();
+        }
+    }
+    doc
+}
+
+/// A save resolves the font of each style once, however many runs are set in it: as many fonts are
+/// resolved (font records and checks that a font comes back) for one row of type as for four. Two
+/// weights of a variable font that the font record writes as one number are one font written.
+#[test]
+fn a_save_resolves_each_font_once() {
+    // How many fonts a save of `doc` resolves, in a save during which the font database didn't change.
+    let resolves = |doc: &Document| {
+        let db = vectorcraft_text::FontDb::global();
+        for _ in 0..20 {
+            let before = db.generation();
+            writer::FONT_RESOLVES.set(0);
+            export_ai_editing(doc, &opts()).unwrap();
+            if db.generation() == before {
+                return writer::FONT_RESOLVES.get();
+            }
+        }
+        panic!("the font database changed during every save");
+    };
+    let one = resolves(&fonted_document(1));
+    let doc = fonted_document(4);
+    let four = resolves(&doc);
+    assert!(one > 0);
+    assert_eq!(four, one, "fonts resolved with one row of type and with four");
+    let td = text_document(&program(&doc));
+    // 650 × 65536 and 500 × 65536.
+    assert_eq!(td.matches("VaritestSans-Bold) /2 1 /4 [ 42598400 ]").count(), 1, "{td}");
+    assert_eq!(td.matches("VaritestSans-Bold) /2 1 /4 [ 32768000 ]").count(), 1, "{td}");
+    assert_eq!(td.matches("/CoolTypeFont").count(), 8, "seven fonts and the hidden characters' font: {td}");
+}
+
+/// A save that resolves each style's font once writes the same program, header, warnings and private
+/// data as one that resolves the font of every run again: with type in many fonts, threaded type,
+/// type in envelopes, and type taken out again when an envelope is written as its art.
+#[test]
+fn a_save_writes_the_same_with_each_font_resolved_once() {
+    use vectorcraft_doc::live::EnvelopeKind;
+    let save = |doc: &Document, each_run: bool| {
+        writer::RESOLVE_EACH_RUN.set(each_run);
+        let out = export_ai_editing(doc, &opts()).unwrap();
+        let private = private_data(doc, &opts()).unwrap();
+        writer::RESOLVE_EACH_RUN.set(false);
+        (out.program, out.header, out.warnings, private.0.data, private.1)
+    };
+    let mut docs = vec![sample(), typed(), fonted_document(3)];
+    for (_, kind) in live_envelope_kinds() {
+        for editing in [false, true] {
+            let mut doc = Document::new(200.0, 100.0);
+            let envelope = typed_envelope_node(&mut doc, kind.clone(), editing);
+            docs.push(alone(envelope));
+        }
+    }
+    for doc in &docs {
+        let (once, again) = (save(doc, false), save(doc, true));
+        assert!(once == again, "{}", String::from_utf8_lossy(&once.0));
+    }
+    // An envelope of type one object short of room: it is written as its art, and its story and fonts
+    // are taken out again.
+    let kind = EnvelopeKind::Mesh { rows: 2, cols: 3, points: envelope_points(2, 3), handles: vec![] };
+    let mut doc = Document::new(200.0, 100.0);
+    let envelope = typed_envelope_node(&mut doc, kind, false);
+    let doc = alone(envelope);
+    let read = crate::import::objects_read(&export_ai_editing(&doc, &opts()).unwrap().program).unwrap();
+    let within = |each_run: bool| {
+        writer::RESOLVE_EACH_RUN.set(each_run);
+        let out = export_within(&doc, &opts(), read - 1).unwrap();
+        writer::RESOLVE_EACH_RUN.set(false);
+        (out.program, out.warnings)
+    };
+    let (once, again) = (within(false), within(true));
+    assert!(once.1.iter().any(|w| w == writer::OBJECT_LIMIT), "{:?}", once.1);
+    assert!(once == again, "{}", String::from_utf8_lossy(&once.0));
+}
+
+/// The CPU time of saving a document of 10,000 point type objects, each in three runs drawn in turn
+/// from four fonts (Source Sans 3 Regular and Bold, Inter Medium, and the variable test font's Bold
+/// at a weight of 650), with each style's font resolved once and with the font of every run
+/// resolved again: the median of 7 runs of each, alternating.
+/// Run with `cargo test -p vectorcraft-eps --lib -- --ignored --nocapture font_resolve_time`.
+#[test]
+#[ignore = "timing; run by hand"]
+fn font_resolve_time() {
+    use vectorcraft_doc::{TextObject, TextRun};
+    use vectorcraft_text::test_fonts::{VARIABLE_FAMILY, variable_font};
+    vectorcraft_text::FontDb::global().add_font(variable_font().unwrap());
+    let fonts = [
+        style_of(12.0),
+        font_style("Source Sans 3", "Bold", &[]),
+        font_style("Inter", "Medium", &[]),
+        font_style(VARIABLE_FAMILY, "Bold", &[("wght", 650.0)]),
+    ];
+    let mut doc = Document::new(2000.0, 2000.0);
+    let layer = doc.layers[0].id;
+    for i in 0..10_000usize {
+        let (x, y) = ((i % 100) as f64 * 20.0, (i / 100) as f64 * 20.0 + 10.0);
+        let mut t = TextObject::point(vectorcraft_geom::Point::new(x, y), "", fonts[0].clone());
+        t.runs = (0..3).map(|r| TextRun::new(["ab ", "cd ", "ef"][r], fonts[(i + r) % fonts.len()].clone())).collect();
+        let n = text_node(&mut doc, t);
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+    }
+    // The CPU time this thread has run, in nanoseconds: Linux's scheduler statistics, else the clock.
+    let start = std::time::Instant::now();
+    let cpu = || {
+        std::fs::read_to_string("/proc/thread-self/schedstat")
+            .ok()
+            .and_then(|s| s.split_whitespace().next().and_then(|n| n.parse::<u64>().ok()))
+            .unwrap_or_else(|| u64::try_from(start.elapsed().as_nanos()).unwrap_or(u64::MAX))
+    };
+    // A first save loads the faces the document names.
+    export_ai_editing(&doc, &opts()).unwrap();
+    let mut times: [Vec<u64>; 2] = [vec![], vec![]];
+    let mut resolves = [0, 0];
+    let mut outputs: [Vec<u8>; 2] = [vec![], vec![]];
+    for _ in 0..7 {
+        for (k, each_run) in [(0, true), (1, false)] {
+            writer::RESOLVE_EACH_RUN.set(each_run);
+            writer::FONT_RESOLVES.set(0);
+            let t = cpu();
+            let out = export_ai_editing(&doc, &opts()).unwrap();
+            times[k].push(cpu() - t);
+            resolves[k] = writer::FONT_RESOLVES.get();
+            outputs[k] = out.program;
+        }
+    }
+    writer::RESOLVE_EACH_RUN.set(false);
+    assert!(outputs[0] == outputs[1]);
+    for (k, label) in [(0, "resolved for every run"), (1, "resolved once")] {
+        times[k].sort_unstable();
+        let ms: Vec<String> = times[k].iter().map(|t| format!("{:.1}", *t as f64 / 1e6)).collect();
+        println!("{label}: median {:.1} ms CPU, {} fonts resolved, runs {}", times[k][3] as f64 / 1e6, resolves[k], ms.join(" "));
+    }
 }
 
 fn style_of(size: f64) -> vectorcraft_doc::CharStyle {

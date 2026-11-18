@@ -1756,6 +1756,7 @@ digits	Malayalam	Malajalam
 	Rule:	Pravilo:
 	Save changes to {name}	Sačuvaj promjene u {name}
 	Save theme to My Themes	Sačuvaj temu u Moje teme
+	Set the current fill or stroke to the selected color	Postavi odabranu boju kao trenutnu ispunu ili potez
 	Set the selected color to the current color	Postavi odabranu boju na trenutnu boju
 	Copy All Styles	Kopiraj sve stilove
 	Exported {path}	Izvezeno: {path}
@@ -2218,7 +2219,7 @@ digits	Malayalam	Malajalam
 	Overprint Preview (separations)	Pregled pretiska (separacije)
 	Show All Plates	Prikaži sve ploče
 	Show all plates	Prikaži sve ploče
-	Show/hide plate (Alt-click: only this plate)	Prikaži/sakrij ploču (Alt-klik: samo ova ploča)
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	Prikaži/sakrij ploču (Alt-klik: samo ova ploča; ponovni Alt-klik: sve ploče)
 	Simulate Paper	Simuliraj papir
 	Use Black Point Compensation	Koristi kompenzaciju crne tačke
 	Working CMYK (don't tag)	Radni CMYK (bez oznake)
@@ -2258,6 +2259,8 @@ digits	Malayalam	Malajalam
 	Tip extends past the end point	Vrh prelazi preko krajnje tačke
 	Tip on the end point	Vrh na krajnjoj tački
 	Variable Width Profile	Profil promjenjive širine
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Četkica poteza zadržava vlastitu veličinu, pa je profil širine ne mijenja. Uklonite četkicu da biste koristili profil.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Četkica poteza zadržava vlastitu veličinu, pa je profil širine ne mijenja. Uklonite četkicu da biste koristili profil.
 	Weight:	Debljina:
 	Art using a deleted global swatch keeps its colour.	Crtež koji koristi izbrisani globalni uzorak boje zadržava svoju boju.
 	Color Group: {name}	Grupa boja: {name}
@@ -2367,6 +2370,9 @@ digits	Malayalam	Malajalam
 	Flip Horizontal	Preokreni vodoravno
 	Flip Vertical	Preokreni okomito
 	Polygon Properties:	Svojstva mnogougla:
+	Line Properties:	Svojstva linije:
+	Line Length:	Dužina linije:
+	Line Angle:	Ugao linije:
 	Rectangle Properties:	Svojstva pravougaonika:
 	Shape Properties:	Svojstva oblika:
 	Shape Properties	Svojstva oblika
@@ -3117,6 +3123,8 @@ antiAlias	Sharp	Oštro
 	Every option matches {base}.	Sve opcije odgovaraju {base}.
 	Files of a PDF standard can't be password-protected.	Datoteke PDF standarda ne mogu se zaštititi lozinkom.
 	Files of this standard tag their colours with ICC profiles.	Datoteke ovog standarda označavaju svoje boje ICC profilima.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	Datoteke ovog standarda označavaju svoje boje ICC profilima, osim CMYK boja u profilu izlazne namjene, koje se zapisuju kao DeviceCMYK.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	Uz „Ne uključuj profile“ i CMYK izlaznu namjenu, svaka CMYK boja zapisuje se kao DeviceCMYK, osim ako se ne pretvori u CMYK odredište s drugim profilom.
 	Flattener preset:	Predložak spljoštavanja:
 	General › Thumbnails	Općenito › Sličice
 	Grayscale images	Slike u nijansama sive
@@ -3330,6 +3338,12 @@ antiAlias	Sharp	Oštro
 	LF (macOS, Linux)	LF (macOS, Linux)
 	CRLF (Windows)	CRLF (Windows)
 	Text Export Options	Opcije izvoza teksta
+	Chinese Big 5	Kineski Big 5
+	Cyrillic	Ćirilica
+	Greek	Grčki
+	Turkish	Turski
+	Baltic	Baltički
+	Central European	Srednjoevropski
 	Character Set:	Skup znakova:
 	Join the lines of each paragraph	Spoji redove svakog pasusa
 	Line Breaks	Prelomi reda
@@ -3359,6 +3373,9 @@ antiAlias	Sharp	Oštro
 	Variable Options	Opcije varijable
 	Define a variable first	Prvo definišite varijablu
 	Adjust Adjoining Width Points	Podesi susjedne tačke širine
+	Incoming	Ulazna
+	Outgoing	Izlazna
+	Single Width Only	Samo jedna širina
 	Keep both sides the same width	Zadrži obje strane iste širine
 	Side 1:	Strana 1:
 	Side 2:	Strana 2:
@@ -3748,6 +3765,7 @@ theme	Appearance	Izgled
 	Select Art	Odaberi crtež
 	Set Current Layer	Postavi trenutni sloj
 	Flatten Artwork	Spljošti crtež
+	Locate Layer	Pronađi sloj
 	Locate Object	Pronađi objekat
 	Lock Others	Zaključaj ostale
 	Merge Selected	Spoji odabrano
@@ -4589,6 +4607,8 @@ font-technology	Variable	Varijabilni
 	Couldn't paste from the clipboard: {e}	Nije moguće zalijepiti iz međuspremnika: {e}
 	Channel	Kanal
 	Circle	Krug
+	Circle Tool	Alat za krug
+	Circle too large	Krug je prevelik
 	Clip to Art	Isijeci prema crtežu
 	Colorize	Oboji
 	Gamma	Gama
@@ -5217,6 +5237,9 @@ imageTrace	Outline	Obris
 @msg	no such user library	nema takve korisničke biblioteke
 @msg	no such view	nema takvog pogleda
 @msg	no such width point	nema takve tačke širine
+@msg	`single` must be `incoming` or `outgoing`	`single` mora biti `incoming` ili `outgoing`
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` i `outIndex` moraju biti dvije polovine jedne isprekidane tačke širine
+@msg	a discontinuous width point keeps its place	isprekidana tačka širine zadržava svoje mjesto
 @msg	no swatch `{name}`	nema uzorka boje `{name}`
 @msg	no swatch library `{l}` (see swatch.library.list)	nema biblioteke uzoraka boja `{l}` (vidi swatch.library.list)
 @msg	no symbol instances selected	nisu odabrane instance simbola
@@ -7372,4 +7395,14 @@ shape	Open	Otvoren
 @msg	A panel is not joined to the rest by a crease.	Panel nije povezan s ostatkom nijednom linijom bigovanja.
 @msg	A fold line is on a non-printing layer.	Linija savijanja je na sloju koji se ne štampa.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Paneli: {panels}, šarke: {hinges}, greške: {errors}, upozorenja: {warnings}
+	Fold Preview	Pregled savijanja
+	Fold	Savijanje
+	Show Fold Lines	Prikaži linije savijanja
+	Three-Quarter	Tri četvrtine
+	Open a document to preview its folded shape.	Otvorite dokument da pregledate njegov savijeni oblik.
+@msg	Check the fold lines first.	Prvo provjerite linije savijanja.
+@msg	Panels: {panels}, hinges: {hinges}	Paneli: {panels}, šarke: {hinges}
+@msg	Other blanks not shown: {count}	Ostali krojevi nisu prikazani: {count}
+@msg	A joint does not close by {gap} pt.	Spoj se ne zatvara za {gap} pt.
+@msg	Two panels pass through each other.	Dva panela prolaze jedan kroz drugi.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer mora biti "singleLine", "everyLine", "standardSingleLine" ili "standardEveryLine"

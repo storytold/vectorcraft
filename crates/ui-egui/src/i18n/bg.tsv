@@ -129,6 +129,9 @@
 	Additional Plug-ins Folder	Допълнителна папка за плъгини
 	Additional Fonts Folder	Допълнителна папка за шрифтове
 	Adjust Adjoining Width Points	Регулиране на прилежащите точки за ширина
+	Incoming	Входяща
+	Outgoing	Изходяща
+	Single Width Only	Само една ширина
 	Adjust Color Balance…	Коригиране на цветовия баланс…
 	Adjust Colors	Коригиране на цветовете
 	Adjust Options:	Параметри на коригиране:
@@ -408,6 +411,12 @@ font-technology	Variable	Променливи
 	Character Alignment	Подравняване на знаците
 	Character / Paragraph	Знак / Абзац
 	Character Rotation	Въртене на знак
+	Chinese Big 5	Китайски Big 5
+	Cyrillic	Кирилица
+	Greek	Гръцки
+	Turkish	Турски
+	Baltic	Балтийски
+	Central European	Централноевропейски
 	Character Set:	Набор от знаци:
 	Character Style	Стил на знак
 	Character Style Options	Опции за стил на знак
@@ -469,6 +478,8 @@ font-technology	Variable	Променливи
 	Choose a folder	Избор на папка
 	Choose…	Избор…
 	Circle	Кръг
+	Circle Tool	Инструмент Кръг
+	Circle too large	Кръгът е твърде голям
 	Classic Defaults	Класически по подразбиране
 	Clean Up…	Почистване…
 	Clear	Изчистване
@@ -1224,6 +1235,8 @@ font-technology	Variable	Променливи
 	Files	Файлове
 	Files of a PDF standard can't be password-protected.	Файлове от PDF стандарт не могат да бъдат защитени с парола.
 	Files of this standard tag their colours with ICC profiles.	Файловете от този стандарт етикетират цветовете си с ICC профили.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	Файловете от този стандарт етикетират цветовете си с ICC профили, с изключение на CMYK цветовете в профила на предназначението на изхода, които се записват като DeviceCMYK.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	С „Без включване на профили“ и CMYK предназначение на изхода всеки CMYK цвят се записва като DeviceCMYK, освен ако не се преобразува към CMYK местоназначение с друг профил.
 	Fill	Запълване
 	Fill & Stroke	Запълване и щрих
 	Fill (X), double-click for the Color Picker	Запълване (X), щракнете двукратно за избор на цвят
@@ -1965,6 +1978,7 @@ font-technology	Variable	Променливи
 	Load SVG into Clipboard	Зареждане на SVG в клипборда
 	Load Text into Clipboard	Зареждане на текст в клипборда
 	Local Libraries	Локални библиотеки
+	Locate Layer	Намиране на слой
 	Locate Object	Намиране на обект
 	Locate Selected Objects	Намиране на избраните обекти
 	Location	Местоположение
@@ -2621,6 +2635,9 @@ font-technology	Variable	Променливи
 	Polar Grid Tool	Инструмент „Полярна мрежа“
 	Polygon	Многоъгълник
 	Polygon Properties:	Свойства на многоъгълника:
+	Line Properties:	Свойства на линията:
+	Line Length:	Дължина на линията:
+	Line Angle:	Ъгъл на линията:
 	Polygon Tool	Инструмент „Многоъгълник“
 	Portrait	Портретна
 	Power Saving (integrated)	Пестене на енергия (интегрирано)
@@ -3417,6 +3434,7 @@ digits	Malayalam	Малаялам
 	Set Slice Rectangle	Задаване на правоъгълник за резен
 	Set Tab Stops	Задаване на табулатори
 	Set Text	Задаване на текст
+	Set the current fill or stroke to the selected color	Задаване на избрания цвят като текущо запълване или щрих
 	Set the selected color to the current color	Задаване на текущия цвят като избран
 	Set Zoom	Задаване на мащаб
 	Settings…	Настройки…
@@ -3538,7 +3556,7 @@ digits	Malayalam	Малаялам
 	Show Vivid/Muted	Показване на ярки/заглушени
 	Show Warm/Cool	Показване на топли/студени
 	Show {kind} Brushes	Показване на четки от вида {kind}
-	Show/hide plate (Alt-click: only this plate)	Показване/скриване на плака (Alt-клик: само тази плака)
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	Показване/скриване на плака (Alt-клик: само тази плака; Alt-клик отново: всички плаки)
 	Show:	Показване:
 	Shown with the optimised preview.	Показано с оптимизирания преглед.
 	Side 1:	Страна 1:
@@ -4106,6 +4124,8 @@ digits	Malayalam	Малаялам
 	V Spacing:	В. разстояние:
 	V:	В:
 	Variable Width Profile	Профил с променлива ширина
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Четката на щриха запазва собствения си размер, затова профилът на ширината не го променя. Премахнете четката, за да използвате профил.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Четката на щриха запазва собствения си размер, затова профилът на ширината не го променя. Премахнете четката, за да използвате профил.
 	Variables	Променливи
 	New Variable	Нова променлива
 	Delete Variable	Изтриване на променлива
@@ -4805,6 +4825,9 @@ axis	Both	И двете
 @msg	no such user library	няма такава потребителска библиотека
 @msg	no such view	няма такъв изглед
 @msg	no such width point	няма такава точка за ширина
+@msg	`single` must be `incoming` or `outgoing`	`single` трябва да е `incoming` или `outgoing`
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` и `outIndex` трябва да са двете половини на една прекъсната точка за ширина
+@msg	a discontinuous width point keeps its place	прекъснатата точка за ширина запазва мястото си
 @msg	no swatch `{name}`	няма образец `{name}`
 @msg	no swatch library `{l}` (see swatch.library.list)	няма библиотека с образци `{l}` (вижте swatch.library.list)
 @msg	no symbol instances selected	няма избрани екземпляри на символ
@@ -7317,4 +7340,14 @@ breakText	Glyphs	Глифи
 @msg	A panel is not joined to the rest by a crease.	Панел не е свързан с останалите с линия за биговане.
 @msg	A fold line is on a non-printing layer.	Линия на сгъване е на слой, който не се печата.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Панели: {panels}, панти: {hinges}, грешки: {errors}, предупреждения: {warnings}
+	Fold Preview	Преглед на сгъването
+	Fold	Сгъване
+	Show Fold Lines	Покажи линиите на сгъване
+	Three-Quarter	Три четвърти
+	Open a document to preview its folded shape.	Отворете документ, за да прегледате сгънатата му форма.
+@msg	Check the fold lines first.	Първо проверете линиите на сгъване.
+@msg	Panels: {panels}, hinges: {hinges}	Панели: {panels}, панти: {hinges}
+@msg	Other blanks not shown: {count}	Други разкрои не са показани: {count}
+@msg	A joint does not close by {gap} pt.	Една връзка не се затваря с {gap} pt.
+@msg	Two panels pass through each other.	Два панела минават един през друг.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer трябва да е "singleLine", "everyLine", "standardSingleLine" или "standardEveryLine"

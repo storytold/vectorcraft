@@ -524,6 +524,107 @@ fn a_polygon_takes_its_angle_radius_side_length_and_equal_sides() {
     }
 }
 
+/// A live line's Line Properties: Line Length keeps its first end in place, Line Angle (degrees
+/// counterclockwise, any finite value brought into 0 to 360) turns it about its midpoint, the
+/// length applies before the angle, every selected line takes them in one undo step, and a value
+/// that changes nothing records none.
+#[test]
+fn a_line_takes_its_length_and_angle() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let line = |s: &mut Session, a: (f64, f64), b: (f64, f64)| {
+        NodeId(s.execute("shape.line", &json!({"x1": a.0, "y1": a.1, "x2": b.0, "y2": b.1})).unwrap()["id"].as_u64().unwrap())
+    };
+    let id = line(&mut s, (100.0, 100.0), (200.0, 100.0));
+    let ends = |s: &Session, id: NodeId| match &s.doc().unwrap().doc.node(id).unwrap().kind {
+        NodeKind::Path { live: Some(l), path, .. } => {
+            let LiveShape::Line { a, b } = **l else { panic!("{l:?}") };
+            assert_eq!(*path, l.to_path(), "the path follows the line");
+            (a.x, a.y, b.x, b.y)
+        }
+        k => panic!("{k:?}"),
+    };
+    let near = |got: (f64, f64, f64, f64), want: (f64, f64, f64, f64)| {
+        assert!([got.0 - want.0, got.1 - want.1, got.2 - want.2, got.3 - want.3].iter().all(|d| d.abs() < 1e-9), "{got:?} ≠ {want:?}")
+    };
+    let steps = |s: &Session| s.doc().unwrap().history.undo.len();
+    run(&mut s, json!({"lineLength": 50}));
+    near(ends(&s, id), (100.0, 100.0, 150.0, 100.0));
+    // 90° points up the page.
+    run(&mut s, json!({"lineAngle": 90}));
+    near(ends(&s, id), (125.0, 125.0, 125.0, 75.0));
+    let n = steps(&s);
+    for same in [json!({"lineAngle": 450}), json!({"lineAngle": -270}), json!({"lineLength": 50}), json!({"lineLength": 50, "lineAngle": 90})] {
+        run(&mut s, same.clone());
+        assert_eq!(steps(&s), n, "{same} records no undo step");
+    }
+    near(ends(&s, id), (125.0, 125.0, 125.0, 75.0));
+    run(&mut s, json!({"lineLength": 20, "lineAngle": 0}));
+    near(ends(&s, id), (115.0, 115.0, 135.0, 115.0));
+    assert_eq!(steps(&s), n + 1, "both in one step");
+    run(&mut s, json!({"lineAngle": 180}));
+    near(ends(&s, id), (135.0, 115.0, 115.0, 115.0));
+    run(&mut s, json!({"lineAngle": -90}));
+    near(ends(&s, id), (125.0, 105.0, 125.0, 125.0));
+    let LiveShape::Line { .. } = s.doc().unwrap().doc.node(id).unwrap().live_shape().unwrap() else { panic!("still live") };
+    assert_eq!(s.doc().unwrap().doc.node(id).unwrap().live_shape().unwrap().line_angle(), Some(270.0));
+    // Several lines: each keeps its own first end, in one undo step.
+    let other = line(&mut s, (0.0, 0.0), (0.0, 40.0));
+    let n = steps(&s);
+    run(&mut s, json!({"ids": [id.0, other.0], "lineLength": 10}));
+    near(ends(&s, id), (125.0, 105.0, 125.0, 115.0));
+    near(ends(&s, other), (0.0, 0.0, 0.0, 10.0));
+    assert_eq!(steps(&s), n + 1);
+    s.execute("edit.undo", &json!({})).unwrap();
+    near(ends(&s, id), (125.0, 105.0, 125.0, 125.0));
+    near(ends(&s, other), (0.0, 0.0, 0.0, 40.0));
+    // Bad values, and a line that would reach past the coordinate limit, change neither line.
+    let far = line(&mut s, (3_900_000.0, 0.0), (3_900_100.0, 0.0));
+    let n = steps(&s);
+    for bad in [
+        json!({"ids": [id.0], "lineLength": 0}),
+        json!({"ids": [id.0], "lineLength": -3}),
+        json!({"ids": [id.0], "lineLength": "long"}),
+        json!({"ids": [id.0], "lineAngle": "up"}),
+        json!({"ids": [id.0], "lineLength": 1e300}),
+        json!({"ids": [id.0, far.0], "lineLength": 200_000}),
+    ] {
+        assert!(s.execute("object.setLiveShape", &bad).is_err(), "{bad}");
+        assert_eq!(steps(&s), n, "{bad}");
+    }
+    near(ends(&s, id), (125.0, 105.0, 125.0, 125.0));
+    near(ends(&s, far), (3_900_000.0, 0.0, 3_900_100.0, 0.0));
+    // A length past the coordinate limit is fine while both ends stay inside it.
+    let wide = line(&mut s, (-3_500_000.0, 0.0), (3_500_000.0, 0.0));
+    run(&mut s, json!({"ids": [wide.0], "lineLength": 6_000_000}));
+    near(ends(&s, wide), (-3_500_000.0, 0.0, 2_500_000.0, 0.0));
+    // A line whose ends meet reads 0°: an angle leaves it as it is, and a length points it right.
+    let dot = line(&mut s, (10.0, 10.0), (10.0, 10.0));
+    assert_eq!(s.doc().unwrap().doc.node(dot).unwrap().live_shape().unwrap().line_angle(), Some(0.0));
+    let n = steps(&s);
+    run(&mut s, json!({"lineAngle": 45}));
+    assert_eq!(steps(&s), n);
+    run(&mut s, json!({"lineLength": 30}));
+    near(ends(&s, dot), (10.0, 10.0, 40.0, 10.0));
+    // A very short length is applied.
+    let speck = line(&mut s, (20.0, 20.0), (20.0, 20.0));
+    let n = steps(&s);
+    run(&mut s, json!({"ids": [speck.0], "lineLength": 1e-12}));
+    assert_eq!(steps(&s), n + 1, "a length of 1e-12 pt is a change");
+    assert!(ends(&s, speck).2 > 20.0, "{:?}", ends(&s, speck));
+    // A length so short that the rounded ends do not move records no undo step.
+    let dust = line(&mut s, (20.0, 20.0), (20.0, 20.0));
+    let n = steps(&s);
+    run(&mut s, json!({"ids": [dust.0], "lineLength": 1e-20}));
+    assert_eq!(steps(&s), n, "a length of 1e-20 pt changes nothing");
+    near(ends(&s, dust), (20.0, 20.0, 20.0, 20.0));
+    // Other live shapes ignore the line params.
+    let rect = NodeId(s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap());
+    let n = steps(&s);
+    run(&mut s, json!({"ids": [rect.0], "lineLength": 30, "lineAngle": 45}));
+    assert_eq!(steps(&s), n);
+}
+
 #[test]
 fn relative_corner_rounding_keeps_fraction_on_resize() {
     let (mut s, id) = session();
