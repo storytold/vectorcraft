@@ -8004,6 +8004,12 @@ A built-in preset names its category's profile in `file.newPresets` (`profile`).
 profile of the preset they were made from. `file.new {profile: "Print"}` picks a profile for any settings, and
 `profile: null` starts with the defaults. A document made without a preset starts with the defaults.
 
+A profile also sets the default font of its documents: new type starts in [Normal Character Style], so when the profile
+redefines that style (`charStyle.setAttrs {name: "[Normal Character Style]", attrs: {font_family, font_style, size}}` in
+the document `file.newProfiles.edit` opens, then save), type made in the profile's documents takes its font, style, size
+and fill. A `font`, `style`, `size` or `color` given to `text.create` still wins
+([Change the default font](https://helpx.adobe.com/illustrator/desktop/design-with-text/fonts-and-scripts/change-the-default-font-in-illustrator.html)).
+
 The profiles are `.vectorcraft` files named after their category in the `New Document Profiles` folder next to the
 preferences (VectorCraft's own place and form). A category without a file has the shipped profile, which holds the
 defaults. Runs without preferences (`VECTORCRAFT_NO_PREFS`) and the web build have no folder, so every document starts
