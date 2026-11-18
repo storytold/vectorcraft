@@ -472,6 +472,7 @@ impl Tool for TypeTool {
     }
     fn deactivate(&mut self, cx: &ToolContext) -> Vec<Action> {
         self.prev_tool = None;
+        self.frames.get_mut().unwrap_or_else(|e| e.into_inner()).clear();
         self.finish(cx)
     }
     /// Editing ends when a command takes the text out of the selection (Deselect, another object
@@ -652,13 +653,17 @@ impl Tool for TypeTool {
                 o.push(Overlay::Measure { p: d, text: cx.size_label(size.width, size.height) });
             }
         }
+        // The other frames this call draws keep their layouts for the next call; the rest are dropped.
+        let fonts = vectorcraft_text::layout_inputs();
+        let mut now = self.frames.lock().unwrap_or_else(|e| e.into_inner());
+        let mut was = std::mem::take(&mut *now);
         // The ports of selected area type and type on a path, as many as show ([`PORTS_MAX`]), the
         // edited one's included.
         let shown = ports_shown(cx.doc, &cx.selection.objects);
         if shown {
             for id in cx.selection.objects.iter().filter(|id| Some(**id) != self.editing) {
                 if let Some(t) = ported(cx.doc, *id) {
-                    let lay = self.layout(t);
+                    let lay = Self::frame_layout(&mut now, &mut was, fonts, *id, t);
                     ports(cx, *id, t, lay.overflow, &mut o);
                 }
             }
@@ -707,7 +712,7 @@ impl Tool for TypeTool {
         if self.preedit.is_none() {
             for f in self.story_others(cx) {
                 let Some(other) = Self::text(cx, f) else { continue };
-                let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), other);
+                let lay = Self::frame_layout(&mut now, &mut was, fonts, f, other);
                 for q in vectorcraft_text::selection_quads(&lay, 0, edit::runs_len(&other.runs)) {
                     o.push(Overlay::Highlight { quad: q.map(|p| other.xf * p), color: [60, 120, 255, 90] });
                 }
