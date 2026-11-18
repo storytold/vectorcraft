@@ -218,6 +218,25 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
     ),
     ("snapTangent", "Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve."),
     ("snapPerpendicular", "Snaps the end of a line segment so that it meets a nearby straight segment at a right angle."),
+    // Slices
+    ("showSliceNumbers", "Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show."),
+    ("sliceLineColor", "The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it."),
+    // Hyphenation
+    (
+        "hyphenationLanguage",
+        "New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.",
+    ),
+    (
+        "hyphenationExceptions",
+        "In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.",
+    ),
+    // Plug-ins & Scratch Disks
+    (
+        "pluginsFolder",
+        "On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.",
+    ),
+    ("scratchPrimary", "The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet."),
+    ("scratchSecondary", "The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet."),
 ];
 
 /// The sentence that describes the setting `key`, in English, or `None` when it has none yet.
