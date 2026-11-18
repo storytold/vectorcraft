@@ -37,12 +37,12 @@ pub(super) use envelopes::ENVELOPES;
 pub(super) use meshes::MESHES;
 pub(super) use styles::{LARGE_CANVAS_STYLES, style_links, styled_definitions, styled_objects};
 #[cfg(test)]
-pub(super) use styles::{PANEL_EMPTY, PANEL_STYLES, STYLE_LINKS, WARPED_IMAGES, same_appearance};
+pub(super) use styles::{PANEL_EMPTY, PANEL_STYLES, REPARSE, STYLE_LINKS, WARPED_IMAGES, same_appearance};
 pub(super) use texts::wraps_held;
 
 pub(super) use images::PAYLOAD;
 #[cfg(test)]
-pub(super) use images::{IMAGE_DEPTH, IMAGES, LINKS_EMBEDDED};
+pub(super) use images::{IMAGE_DEPTH, IMAGES, LAST_SAMPLES_ONLY, LINKS_EMBEDDED, SAMPLE_LIMITS, SAMPLE_READS, SAMPLES_KEPT};
 #[cfg(test)]
 pub(super) use paints::{
     GRADIENT_COMPARISONS, GRADIENT_DITHER, GRADIENT_HUE, GRADIENT_PERCEPTUAL, GRADIENT_SHAPES, GRADIENTS, SCANNED_DEFINITIONS, STOP_LINKS,
@@ -51,7 +51,7 @@ pub(super) use paints::{
 #[cfg(test)]
 pub(super) use symbols::{MISSING_SYMBOL, SYMBOL_ART, SYMBOL_COUNT, SYMBOL_OPTIONS};
 #[cfg(test)]
-pub(super) use texts::TYPE_ATTRIBUTES;
+pub(super) use texts::{FONT_RESOLVES, RESOLVE_EACH_RUN, TYPE_ATTRIBUTES};
 #[cfg(test)]
 pub(super) use variables::{ACTIVE, BINDINGS, LIMITS, VALUES};
 
@@ -321,9 +321,9 @@ pub(super) struct Writer<'a> {
     /// How many more envelopes and images with a Warp may be written live: as many as the reader
     /// checks in one file ([`crate::import::ENVELOPE_CHECKS`]), which it spends on both.
     checks_left: usize,
-    /// The image read last and its pixels ([`images::Samples::of`], `None` when they can't be
-    /// read): the pieces of a warped image, which follow one another, read them once.
-    last_samples: Option<(vectorcraft_doc::ImageBlob, Option<images::Read>)>,
+    /// The images read so far and their pixels: an image placed again, and each piece of a warped
+    /// image, is read once.
+    read_samples: images::SampleCache,
     /// The images written whole so far, by the address of their data (which each entry keeps), each
     /// with the index of its samples in [`Self::payloads`].
     whole_images: HashMap<usize, (Arc<Vec<u8>>, usize)>,
@@ -423,7 +423,7 @@ impl<'a> Writer<'a> {
             definition_links: 0,
             definition_symbol_nodes: 0,
             max_objects: crate::import::MAX_EDITING_OBJECTS,
-            last_samples: None,
+            read_samples: images::SampleCache::default(),
             whole_images: HashMap::new(),
             shown: vec![],
             windowed: None,
@@ -1605,7 +1605,7 @@ impl<'a> Writer<'a> {
             let placed = self.texts.thread(doc, thread, n.id, self.canvas, &|id| !cut_to_clipping_object(doc, id), &self.wraps_held);
             placed.map(|p| (p, self.texts.take_lost()))
         } else {
-            self.texts.add(t, self.canvas).map(|story| ((story, 0), texts::loses(t)))
+            self.texts.add(t, self.canvas).map(|story| ((story, 0), self.texts.loses(t)))
         };
         let Some(((story, frame), lost)) = placed else {
             // The text document can't hold it: the outlines count their own objects.
