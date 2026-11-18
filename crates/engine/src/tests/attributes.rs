@@ -219,6 +219,39 @@ fn reverse_path_direction_turns_the_width_profile_and_pen_records_with_the_path(
 }
 
 #[test]
+fn reverse_path_direction_turns_a_compound_paths_own_width_profile_and_pen_records() {
+    use vectorcraft_doc::{AngleProfile, PressureProfile, WidthProfile};
+    let mut s = session();
+    let (a, b) = (rect(&mut s, 0.0), rect(&mut s, 50.0));
+    run(&mut s, "select.set", json!({"ids": [a.0, b.0]}));
+    run(&mut s, "object.compoundPath.make", json!({}));
+    let compound = s.doc().unwrap().selection.objects[0];
+    // A lone rectangle of the same shape, whose strokes Reverse Path Direction already turns.
+    let lone = rect(&mut s, 0.0);
+    let profile = WidthProfile { points: vec![(0.0, 0.2, 0.6), (0.3, 1.0, 0.4), (1.0, 0.5, 0.9)] };
+    let pressure = PressureProfile { points: vec![(0.0, 0.1), (0.25, 0.9), (1.0, 0.4)] };
+    let bearing = AngleProfile { points: vec![(0.0, 10.0), (0.6, 80.0), (1.0, 170.0)] };
+    s.edit("set", |d, _| {
+        for id in [compound, lone] {
+            let st = d.node_mut(id).unwrap().appearance.stroke_mut().unwrap();
+            st.profile = Some(profile.clone());
+            st.pressure = Some(pressure.clone());
+            st.bearing = Some(bearing.clone());
+        }
+        Ok(())
+    })
+    .unwrap();
+    run(&mut s, "select.set", json!({"ids": [compound.0, lone.0]}));
+    assert_eq!(run(&mut s, "path.reverse", json!({}))["changed"], 3);
+    let stroke = |id: NodeId| s.doc().unwrap().doc.node(id).unwrap().appearance.stroke().unwrap().clone();
+    let (got, want) = (stroke(compound), stroke(lone));
+    assert_ne!(want.profile.as_ref(), Some(&profile), "the lone rectangle's profile turned");
+    assert_eq!(got.profile, want.profile, "both members turned alike, so the compound path's profile turns as the rectangle's does");
+    assert_eq!(got.pressure, want.pressure);
+    assert_eq!(got.bearing, want.bearing);
+}
+
+#[test]
 fn attributes_survive_a_native_round_trip() {
     let mut s = session();
     let a = rect(&mut s, 10.0);

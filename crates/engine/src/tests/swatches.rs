@@ -262,8 +262,8 @@ fn document_color_mode_converts_effect_colors() {
     assert_eq!((object(&s), style(&s)), before);
 }
 
-/// Document Color Mode converts the series paints and label styles a graph keeps, so a graph drawn
-/// again after the switch paints its series and labels in the new mode.
+/// Document Color Mode converts the series paints, label styles and line rows a graph keeps, so a
+/// graph drawn again after the switch paints its series, labels and lines in the new mode.
 #[test]
 fn document_color_mode_converts_the_paints_a_graph_keeps() {
     let mut s = session();
@@ -284,22 +284,26 @@ fn document_color_mode_converts_the_paints_a_graph_keeps() {
     }
     // A fill row on the label, which the graph keeps with the label's rows.
     run(&mut s, "appearance.addFill", json!({"ids": [label.0]}));
+    // A stroke on an axis line, which the graph keeps for its axis lines and tick marks.
+    let line = part(&s, "Axes").children().unwrap().iter().find(|c| matches!(c.kind, vectorcraft_doc::NodeKind::Path { .. })).unwrap().id;
+    run(&mut s, "paint.setStroke", json!({"color": "#ff0000", "ids": [line.0]}));
     let kept = |s: &Session| -> Vec<Color> {
         let g = doc(s).node(id).unwrap().extras().graph.as_deref().unwrap().clone();
         let rows = [&g.label_styles.values_rows, &g.label_styles.categories_rows, &g.label_styles.legend_rows];
         let rows: Vec<Color> = rows.into_iter().flatten().filter_map(|r| r.paint.fill.as_ref()?.color()).collect();
+        let lines = g.label_styles.axis_rows.iter().filter_map(|r| r.paint.stroke.as_ref()?.color());
         let labels = [g.label_styles.values, g.label_styles.categories, g.label_styles.legend];
         let labels = labels.into_iter().flatten().map(|st| st.fill.color().unwrap());
-        g.series_paints.iter().filter_map(|p| p.fill.as_ref()?.color()).chain(labels).chain(rows).collect()
+        g.series_paints.iter().filter_map(|p| p.fill.as_ref()?.color()).chain(labels).chain(rows).chain(lines).collect()
     };
     let before = kept(&s);
-    assert_eq!(before, [Color::rgb(1.0, 0.0, 0.0); 3]);
+    assert_eq!(before, [Color::rgb(1.0, 0.0, 0.0); 4]);
     let undo = s.doc().unwrap().history.undo.len();
 
     run(&mut s, "file.documentColorMode", json!({"mode": "cmyk"}));
     let cmyk = first_fill(doc(&s).node(red).unwrap());
     assert!(matches!(cmyk, Color::Cmyk { .. }), "{cmyk:?}");
-    assert_eq!(kept(&s), [cmyk; 3]);
+    assert_eq!(kept(&s), [cmyk; 4]);
     assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
     // Drawn again from new data, the series keeps the converted color.
     run(&mut s, "graph.setData", json!({"id": id.0, "rows": [[2, 3], [4, 5]]}));

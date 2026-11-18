@@ -15,7 +15,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
     vec![
         (
             // The application menu: About and Discord only. The in-window bar never shows it (File
-            // is first there, as in Illustrator); on macOS `native_menu::mac_layout` composes the
+            // is first there); on macOS `native_menu::mac_layout` composes the
             // App menu from this entry and the other menus (About from Help, Settings from Edit,
             // Quit from File, Language and Appearance synthesized). It stays first: `from_tree`
             // gives the first menu the App role.
@@ -97,7 +97,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 Sep,
                 cp("Find and Replace…", "edit.findReplace", json!({"find": "", "replace": "", "matchCase": false, "wholeWord": false})),
                 cp("Find Next", "edit.findNext", json!({"find": ""})),
-                sub("Spelling", vec![c("Auto Spell Check", "edit.autoSpellCheck"), todos("Check Spelling…", "Cmd+I")]),
+                sub("Spelling", vec![c("Auto Spell Check", "edit.autoSpellCheck"), c("Check Spelling…", crate::dialogs::check_spelling::COMMAND)]),
                 // Edit › Edit Custom Dictionary…, beside Spelling, on the public Check and correct
                 // spelling page.
                 c("Edit Custom Dictionary…", crate::dialogs::custom_dictionary::COMMAND),
@@ -163,6 +163,23 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                         cp("Vertical Align Top", "object.align", json!({"vertical": "top"})),
                         cp("Vertical Align Center", "object.align", json!({"vertical": "center"})),
                         cp("Vertical Align Bottom", "object.align", json!({"vertical": "bottom"})),
+                    ],
+                ),
+                // The Align panel's Distribute Objects and Distribute Spacing buttons: each item runs
+                // what a click on its button runs (`crate::panels::align::run_button`).
+                sub(
+                    "Distribute",
+                    vec![
+                        c("Horizontal Distribute Left", "align.distributeHorizontalLeft"),
+                        c("Horizontal Distribute Center", "align.distributeHorizontalCenter"),
+                        c("Horizontal Distribute Right", "align.distributeHorizontalRight"),
+                        Sep,
+                        c("Vertical Distribute Top", "align.distributeVerticalTop"),
+                        c("Vertical Distribute Center", "align.distributeVerticalCenter"),
+                        c("Vertical Distribute Bottom", "align.distributeVerticalBottom"),
+                        Sep,
+                        c("Horizontal Distribute Space", "align.distributeHorizontalSpace"),
+                        c("Vertical Distribute Space", "align.distributeVerticalSpace"),
                     ],
                 ),
                 Sep,
@@ -380,7 +397,14 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
             vec![
                 sub("Font", font_items(english_names)),
                 sub("Recent Fonts", RECENT_FONT_IDS.iter().map(|id| c("Recent Font", id)).collect()),
-                sub("Size", TYPE_SIZES.iter().map(|(l, n)| cp(l, "text.setStyle", json!({ "size": n }))).collect()),
+                sub(
+                    "Size",
+                    TYPE_SIZES
+                        .iter()
+                        .map(|(l, n)| cp(l, "text.setStyle", json!({ "size": n })))
+                        .chain([Sep, c("Other…", "type.highlightFontSize")])
+                        .collect(),
+                ),
                 c("Bold", "type.bold"),
                 c("Italic", "type.italic"),
                 Sep,
@@ -436,7 +460,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                         cp("Sentence case", "type.changeCase", json!({"case": "sentence"})),
                     ],
                 ),
-                cp("Smart Punctuation…", "type.smartPunctuation", json!({"quotes": true, "dashes": true, "ellipsis": true, "scope": "selection"})),
+                c("Smart Punctuation…", "type.smartPunctuation"),
                 sub(
                     "Bullets and Numbering",
                     vec![
@@ -721,12 +745,13 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
         (
             "Help",
             vec![
+                c("Search Commands…", "help.commandPalette"),
+                Sep,
                 c("Join Our Discord", "help.discord"),
                 c("ArtCraft Website", "help.website"),
                 c("VectorCraft on getartcraft.com", "help.appPage"),
                 c("VectorCraft on GitHub", "help.github"),
                 Sep,
-                c("Search Commands…", "help.commandPalette"),
                 todos("VectorCraft Help…", "F1"),
                 c("Safe Mode…", "help.safeMode"),
                 c("Copy Troubleshooting Info", "help.copyTroubleshootingInfo"),
@@ -752,6 +777,7 @@ pub(super) fn transform_items() -> Vec<Item> {
         c("Transform Each…", "object.transformEach"),
         Sep,
         c("Reset Bounding Box", "object.resetBoundingBox"),
+        cp("Rotate Bounding Box…", "object.rotateBoundingBox", json!({"angle": 0})),
     ]
 }
 

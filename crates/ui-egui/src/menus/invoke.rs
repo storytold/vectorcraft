@@ -17,10 +17,12 @@ pub fn click_target(label: &str, id: &str, p: &Value) -> (String, Value) {
 /// What an in-window menu click on `target` (a [`click_target`]) runs with `held` held: Object ›
 /// Unlock All and Object › Show All chosen with Shift+Alt (Shift+Option) act only inside the groups
 /// that hold the selected objects (`scope: "group"`); Select Linked, Embedded, Missing and Modified
-/// chosen with Shift add to the selection (`add: true`).
+/// chosen with Shift add to the selection (`add: true`); Object › Expand… chosen with Alt (Option)
+/// expands at once with the choices its dialog last expanded with (`immediate: true`).
 pub(crate) fn with_held_keys(target: (String, Value), held: egui::Modifiers) -> (String, Value) {
     match target.0.as_str() {
         "object.unlockAll" | "object.showAll" if held.shift && held.alt => (target.0, json!({"scope": "group"})),
+        "ui.expandDialog" if held.alt => (target.0, json!({"immediate": true})),
         // Select Linked, Embedded, Missing and Modified with Shift add to the selection.
         crate::addons::select::link_status::COMMAND if held.shift => (target.0, crate::addons::select::link_status::with_shift(target.1)),
         _ => target,
@@ -77,12 +79,17 @@ pub(super) fn menu_dialog(app: &VectorcraftApp, id: &str) -> Option<(&'static st
             (crate::addons::pathtools::set_corners::KIND, crate::addons::pathtools::set_corners::fields(app))
         }
         crate::addons::pathtools::dashes::COMMAND => (crate::addons::pathtools::dashes::KIND, crate::addons::pathtools::dashes::fields()),
+        crate::addons::pathtools::tangent_circle::COMMAND => {
+            (crate::addons::pathtools::tangent_circle::KIND, crate::addons::pathtools::tangent_circle::fields(app))
+        }
         crate::addons::color::nearest::COMMAND => (crate::addons::color::nearest::KIND, crate::addons::color::nearest::fields()),
         crate::addons::color::legend::COMMAND => (crate::addons::color::legend::KIND, crate::addons::color::legend::fields()),
         crate::addons::typetools::COMMAND => (crate::addons::typetools::KIND, crate::addons::typetools::fields(app)),
         crate::addons::select::COMMAND => (crate::addons::select::KIND, crate::addons::select::fields(app)),
         "artboard.rearrange" => (crate::dialogs::rearrange_artboards::KIND, crate::dialogs::rearrange_artboards::open_fields(app)),
         "artboard.rename" => (crate::dialogs::rename_artboards::KIND, crate::dialogs::rename_artboards::open_fields(app)),
+        // Smart Punctuation opens on the fields it was last confirmed with.
+        "type.smartPunctuation" => (crate::dialogs::smart_punctuation::KIND, crate::dialogs::smart_punctuation::fields(app)),
         _ => return None,
     })
 }
@@ -131,9 +138,7 @@ pub(crate) fn graph_dialog(app: &mut VectorcraftApp, id: &str) -> Result<Value, 
     if id == "graph.setData" {
         return crate::dialogs::graph_data::open(app);
     }
-    let v = app.session.execute(id, &json!({})).map_err(|e| e.to_string())?;
-    let (label, fields) = ("Graph Type", v);
-    app.run("ui.paramDialog", json!({"command": id, "label": label, "params": fields})).map(|_| json!({ "dialog": "command" }))
+    crate::dialogs::graph_type::open(app)
 }
 
 pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
@@ -190,6 +195,11 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
         if let Err(e) = r {
             app.status(e);
         }
+        return;
+    }
+    // Check Fold Lines shows its summary and lists its issues in the Fold Lines panel.
+    if id == crate::addons::packaging::CHECK {
+        crate::addons::packaging::check(app, p);
         return;
     }
     // A Paste the user gives decodes a bitmap off the UI thread ([`crate::placing::adopt_for_paste`]).
@@ -294,6 +304,13 @@ fn open_view_dialog(app: &mut VectorcraftApp, id: &str, p: &Value) -> bool {
     // Edit Custom Dictionary…: the custom dictionary's words in a list, to add, delete or change.
     if id == crate::dialogs::custom_dictionary::COMMAND && p.as_object().is_none_or(|o| o.is_empty()) {
         if let Err(e) = crate::dialogs::custom_dictionary::open(app) {
+            app.status(e);
+        }
+        return true;
+    }
+    // Check Spelling…: dialog to walk through unknown words.
+    if id == crate::dialogs::check_spelling::COMMAND && p.as_object().is_none_or(|o| o.is_empty()) {
+        if let Err(e) = crate::dialogs::check_spelling::open(app) {
             app.status(e);
         }
         return true;

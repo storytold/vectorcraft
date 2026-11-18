@@ -95,6 +95,11 @@ impl Edits {
         }
     }
 
+    /// Set the value of attribute `a` to `value` (XML-escaped already).
+    pub(crate) fn set_value(&mut self, a: roxmltree::Attribute, value: &str) {
+        self.list.push((a.range_value(), value.to_string()));
+    }
+
     /// Add the declaration `decl` (XML-escaped already) to the `style` of element `n` (in `svg`),
     /// after the ones already there (so it wins over them and over style sheet rules).
     fn style(&mut self, svg: &str, n: XNode, decl: &str) {
@@ -163,7 +168,8 @@ fn named_made_up_ids(xml: &roxmltree::Document) -> HashSet<usize> {
 /// * so do `<circle>` and `<ellipse>` elements, recorded: usvg makes their arcs into a varying
 ///   number of curves, and they come back as the ellipse VectorCraft draws (not in a file whose
 ///   style sheet has an attribute selector);
-/// * linked files are read ([`files`]);
+/// * linked files are read, and the data URLs of `<image>` and `<feImage>` elements are each
+///   changed to a key that the resolver decodes once ([`files`]);
 /// * percentage lengths in a `<symbol>` with a `viewBox` become numbers ([`symbol_units`]);
 /// * what style sheet rules with a `:not()` set goes in `style` attributes ([`not_rules`]).
 ///
@@ -190,7 +196,7 @@ pub(super) fn prepass<'s>(
         && !events
         && !foreign_attrs
         && !ellipses
-        && !["<a", "display", "<use", ":use", "<image", ":image", vector_effect::NON_SCALING, "data-", "class", "groupmode", "script"]
+        && !["<a", "display", "<use", ":use", "<image", ":image", "feImage", vector_effect::NON_SCALING, "data-", "class", "groupmode", "script"]
             .iter()
             .any(|t| markers.contains(t))
     {

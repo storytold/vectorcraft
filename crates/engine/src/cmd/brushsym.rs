@@ -19,13 +19,16 @@ use super::edit::{outermost, selected_roots};
 use super::pathops::{remove_each, separate};
 use super::swatch::{anchor, names_param};
 use super::{
-    CommandSpec, Result, Session, bad, check_numbers, cmd, color_param, find_command, has_doc, has_selection, id_param, named_ids, number_or, ok,
-    str_param, switch_or,
+    CommandSpec, Result, Session, bad, check_numbers, cmd, color_param, find_command, has_doc, has_selection, named_ids, number_or, ok, str_param,
+    switch_or,
 };
 use crate::EngineError;
 
 /// Whether Reset Transformation changes a symbol instance.
 pub use symbols::reset_transformation_changes;
+
+/// The Symbols panel's current symbol, as `symbol.list` answers it.
+pub use symbols::current_symbol;
 
 mod brushes;
 mod dynamic;
@@ -33,8 +36,8 @@ mod symbols;
 
 pub(crate) use brushes::{apply_brush, brush_targets, stroke_paint};
 use brushes::{
-    brush_apply, brush_delete, brush_duplicate, brush_freehand, brush_get, brush_list, brush_move, brush_new, brush_options, brush_place_art,
-    brush_remove, brush_replace_art, brush_selection_art, brush_set_current, brush_unused, expand_brush,
+    brush_apply, brush_delete, brush_duplicate, brush_freehand, brush_get, brush_list, brush_move, brush_new, brush_object_options, brush_options,
+    brush_place_art, brush_remove, brush_replace_art, brush_selection_art, brush_set_current, brush_unused, expand_brush,
 };
 pub(crate) use dynamic::{edit_part, fit_parts, part_only, selected_part};
 use dynamic::{symbol_instance_reset, symbol_instance_select_part, symbol_instance_set_appearance};
@@ -167,6 +170,15 @@ pub fn specs() -> Vec<CommandSpec> {
             brush_options
         ),
         cmd!(
+            "brush.objectOptions",
+            "Options of Selected Object…",
+            [],
+            None,
+            "{ids?|id?, params?: {…the fields brush.options takes that a path can set for itself: calligraphic angle (counter-clockwise from level), roundness, size, variation, modes; scatter size, spacing, scatter, rotation (counter-clockwise), modes, rotation_relative_to_path, colorization; art width, width_mode, width_max, flip_along, flip_across, overlap, colorization; pattern scale, spacing, fit, flip_along, flip_across, colorization (values outside their ranges are clamped; a colorization object changes only the fields it gives; a null item of an array such as size: [40, null] keeps each stroke's own item, else the brush's)}, reset?: bool} set the brush settings of the brushed strokes of the selected paths on those strokes only, leaving the brush and its other strokes as they are (the Brushes panel's Options of Selected Object); params add to each stroke's own settings, a mode params does not set (no modes, or a null item) stays the one each stroke draws with when a changed variation or range would change it, a setting equal to the brush's own value is dropped, and reset: true clears them so the strokes draw the brush again; without params or reset nothing changes; one undo step, none when nothing changes. The brushes' own edits (brush.options) still reach the settings a stroke does not set, applying a brush (brush.apply, stroke.setAdvanced or a brush.freehand extend with another brush) or removing it clears them, and a renamed brush keeps them. Refused with nothing painted with a brush selected, for paths painted with brushes of different types, for a bristle brush, for a field the type does not take and for a value of the wrong kind → {ids: the brushed paths, changed: the paths whose settings changed, options: the first stroke's own settings}",
+            has_doc,
+            brush_object_options
+        ),
+        cmd!(
             "object.expandBrush",
             "Expand Brush Strokes",
             [],
@@ -180,7 +192,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Paintbrush",
             [],
             None,
-            "{…params as path.freehand, brush?: name} paint a freehand stroke with a brush; without `brush` (or with null) the plain path is drawn; a `brush` that names no brush in the document, or a `style` other than \"pencil\" or \"brush\", is an error and nothing is drawn → {id}",
+            "{…params as path.freehand, brush?: name} paint a freehand stroke with a brush; without `brush` (or with null) the plain path is drawn; a `brush` that names no brush in the document, a `style` other than \"pencil\" or \"brush\", a `brush` for a path with no stroke (a continued or redrawn path without one, or a new filled \"pencil\" path while the stroke is None) and an unknown key are errors and nothing is drawn; the path and its brush are one undo step → {id}",
             has_doc,
             brush_freehand
         ),
@@ -190,7 +202,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Symbols",
             [],
             None,
-            "{} → {symbols: [{name, instances, size: [w,h], registration: 0..8, exportType: movieClip|graphic, nineSlice, type: static|dynamic}], current}",
+            "{} → {symbols: [{name, instances, size: [w,h], registration: 0..8, exportType: movieClip|graphic, nineSlice, type: static|dynamic, alignToPixelGrid: bool}], current}",
             has_doc,
             symbol_list
         ),
@@ -199,7 +211,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "New Symbol…",
             [],
             None,
-            "{name?, ids?|id?, registration?: 0..8 (9-point grid, 4 = centre; Symbol Options › Registration), exportType?: movieClip (default)|graphic, nineSlice?: bool, nineSliceGuides?: array, type?: static (default)|dynamic (Symbol Options › Symbol Type)} make a symbol from the selection and replace it with an instance; a frame of threaded text in the selection leaves its thread with the text it shows, which the symbol's art holds; nineSlice is Symbol Options › Enable Guides for 9-Slice Scaling, nineSliceGuides [left, top, right, bottom] as fractions of the natural size in from each edge, each -16..16 (below 0 or above 1 puts a guide outside the art), with left + right < 1 and top + bottom < 1 (default a quarter each); an instance of a symbol with guides keeps its corners' size when scaled, its edges stretch along their length and its center in both directions → {name, id, registration, exportType, nineSlice, type}",
+            "{name?, ids?|id?, registration?: 0..8 (9-point grid, 4 = centre; Symbol Options › Registration), exportType?: movieClip (default)|graphic, nineSlice?: bool, nineSliceGuides?: array, type?: static (default)|dynamic (Symbol Options › Symbol Type), alignToPixelGrid?: bool (default false; Symbol Options › Align to Pixel Grid)} make a symbol from the selection and replace it with an instance; a frame of threaded text in the selection leaves its thread with the text it shows, which the symbol's art holds; nineSlice is Symbol Options › Enable Guides for 9-Slice Scaling, nineSliceGuides [left, top, right, bottom] as fractions of the natural size in from each edge, each -16..16 (below 0 or above 1 puts a guide outside the art), with left + right < 1 and top + bottom < 1 (default a quarter each); an instance of a symbol with guides keeps its corners' size when scaled, its edges stretch along their length and its center in both directions; alignToPixelGrid keeps the symbol's instances on the pixel grid as symbol.options describes → {name, id, registration, exportType, nineSlice, type, alignToPixelGrid}",
             has_selection,
             symbol_new
         ),
@@ -208,7 +220,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Symbol Options…",
             [],
             None,
-            "{name?, newName?, registration?: 0..8, exportType?: movieClip|graphic, nineSlice?: bool, nineSliceGuides?: array, type?: static|dynamic} rename a symbol (its instances and the graphics mapped onto 3D objects follow the new name) and/or set Symbol Options › Registration, Export Type, 9-slice guides (nineSliceGuides [left, top, right, bottom] fractions in from each edge, each -16..16, with left + right < 1 and top + bottom < 1) and Symbol Type (a dynamic symbol's instances may change the appearance of objects in its art and stay linked; making it static drops those changes); default name: current → {name, registration, exportType, nineSlice, type}",
+            "{name?, newName?, registration?: 0..8, exportType?: movieClip|graphic, nineSlice?: bool, nineSliceGuides?: array, type?: static|dynamic, alignToPixelGrid?: bool} rename a symbol (its instances and the graphics mapped onto 3D objects follow the new name) and/or set Symbol Options › Registration, Export Type, 9-slice guides (nineSliceGuides [left, top, right, bottom] fractions in from each edge, each -16..16, with left + right < 1 and top + bottom < 1), Symbol Type (a dynamic symbol's instances may change the appearance of objects in its art and stay linked; making it static drops those changes) and Align to Pixel Grid (on: the horizontal and vertical straight segments of the paths in the symbol's art snap to whole points, or half points for an odd centered stroke, at the symbol's natural size, its stroke weights become whole points, and every instance placed at that size, reflected across one axis or not, moves to whole points and goes back to them after each move; a scaled, rotated (a half turn included) or sheared instance, and an instance in another symbol's art, is left where it is; the art snaps again after it is edited); alignToPixelGrid alone with the value the symbol already has changes nothing and adds no undo step; default name: current → {name, registration, exportType, nineSlice, type, alignToPixelGrid}",
             has_doc,
             symbol_options
         ),

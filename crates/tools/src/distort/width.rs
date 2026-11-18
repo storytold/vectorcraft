@@ -300,6 +300,7 @@ impl Tool for WidthTool {
                 self.hover = Self::spot_at(cx, p);
                 vec![]
             }
+            PointerKind::TripleClick => vec![],
             PointerKind::DoubleClick => {
                 let Some(spot) = Self::spot_at(cx, p) else { return vec![] };
                 let Some((w, _)) = Self::hit(cx, &spot, p) else {

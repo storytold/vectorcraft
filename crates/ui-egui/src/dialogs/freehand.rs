@@ -9,11 +9,16 @@
 //! Brush), `closeWithin` and `editWithin` (screen pixels, 0 turns it off; Pencil and Paintbrush),
 //! `angle` (degrees) and `roundness` (percent; Blob Brush and Eraser), `livePreview` (Pencil: the stroke shows
 //! with its fill and stroke while it is drawn, or as a thin line until the release), `size`
-//! (points; Blob Brush and Eraser), and `sizeMode` (`fixed` or `pressure`) and `sizeVariation`
-//! (points; Blob Brush and Eraser: with Pressure the tip is Size − Variation wide at the lightest
-//! pen pressure and Size + Variation at the heaviest).
+//! (points; Blob Brush and Eraser), and `sizeMode` and `sizeVariation` (points; Blob Brush and
+//! Eraser: with Pressure the tip is Size − Variation wide at the lightest pen pressure and Size +
+//! Variation at the heaviest). The Blob Brush's `sizeMode` is `fixed` or `pressure`. The Eraser's
+//! Angle, Roundness and Size each have a menu (`angleMode`, `roundnessMode`, `sizeMode`: `fixed`,
+//! `random`, `pressure`, `tilt`, `bearing` or `rotation`) before the field and a Variation field
+//! under it (`angleVariation` in degrees, `roundnessVariation` in percent, `sizeVariation`),
+//! greyed while the menu is Fixed.
 
 use serde_json::{Map, Value, json};
+use vectorcraft_brush::Variation;
 
 use super::document_setup::check;
 use super::{DialogSpec, form, run_and_close};
@@ -30,10 +35,14 @@ pub(super) const SPEC: DialogSpec = DialogSpec { heading, body, confirm, min_wid
 pub const TOOLS: [&str; 5] = ["pencil", "paintbrush", "smooth", "blobBrush", "eraser"];
 
 /// The options the dialog edits, in the order it shows them (a tool has those it reports).
-const KEYS: [&str; 14] = [
+const KEYS: [&str; 18] = [
     "fidelity",
     "angle",
+    "angleMode",
+    "angleVariation",
     "roundness",
+    "roundnessMode",
+    "roundnessVariation",
     "size",
     "sizeMode",
     "sizeVariation",
@@ -95,6 +104,23 @@ fn fidelity_step(v: f64, n: f64) -> f64 {
     v
 }
 
+/// The unit of tool `tool`'s Fidelity. The Pencil's, the Paintbrush's and the Smooth tool's
+/// Fidelity is on screen, the same at any zoom (#5729); the Blob Brush's is in points.
+fn fidelity_unit(tool: &str) -> &'static str {
+    if matches!(tool, "pencil" | "paintbrush" | "smooth") { "px" } else { "pt" }
+}
+
+/// Width of the Fidelity field.
+pub(crate) const FIDELITY_FIELD_W: f32 = FIELD_W;
+
+/// The Fidelity field of tool `tool`, showing `v` to two decimals from the tool's lowest Fidelity to
+/// 100 and stepping by [`fidelity_step`], named by the label drawn just before it. Returns the value
+/// typed or stepped to. The Contextual Task Bar shows the Smooth tool's.
+pub(crate) fn fidelity_field(ui: &mut egui::Ui, id: &str, v: f64, tool: &str) -> Option<f64> {
+    let min = vectorcraft_tools::draw2::min_fidelity(tool);
+    widgets::range_field_stepped(ui, id, v, min..=100.0, fidelity_unit(tool), 2, FIELD_W, fidelity_step)
+}
+
 /// Where Fidelity `v` sits on a slider over `(min, max)`, from 0 to 1. The rail is logarithmic, so
 /// the low values, where the stroke is followed closely, get as much of it as the high ones
 /// (0.01–1 takes most of a 0.01–20 rail, in the tool's unit).
@@ -140,26 +166,58 @@ fn number(ui: &mut egui::Ui, d: &mut Dialog, (key, label): (&str, &str), suffix:
     });
 }
 
-/// Width of the Blob Brush's and the Eraser's Size mode menu.
+/// Width of the Blob Brush's and the Eraser's variation menus.
 const MODE_W: f32 = 96.0;
 
-/// The Blob Brush's and the Eraser's Size rows: Size with its Fixed or Pressure menu before the
-/// field, then the Variation that Pressure adds and takes (greyed while Size is Fixed).
-fn blob_size(ui: &mut egui::Ui, d: &mut Dialog) {
-    const MODES: [&str; 2] = ["fixed", "pressure"];
-    let pressure = d.str("sizeMode") == "pressure";
-    let labels = ["Fixed", "Pressure"];
-    let label_w = label_w(ui) - MODE_W - ui.spacing().item_spacing.x;
-    let size = d.f64("size", 10.0);
-    widgets::label_row(ui, tl!("Size:"), label_w, |ui| {
-        if let Some(m) = widgets::dropdown(ui, "freehand-size-mode", labels[usize::from(pressure)], &labels, MODE_W).and_then(|i| MODES.get(i)) {
-            d.fields.insert("sizeMode".into(), json!(m));
+/// A tip value with a variation menu: its field.
+struct Varied<'a> {
+    /// The value's key; the menu's is `<key>Mode` and the Variation's `<key>Variation`.
+    key: &'a str,
+    label: &'a str,
+    unit: &'a str,
+    decimals: usize,
+    range: (f64, f64),
+    /// The value's default.
+    default: f64,
+    /// The Variation field's range.
+    variation: (f64, f64),
+}
+
+/// The rows of a tip value with a variation menu: the value with its menu of `modes` before the
+/// field, then the Variation field the menu's modes other than Fixed take (greyed while the
+/// menu is Fixed). The Blob Brush's Size offers Fixed and Pressure, and the Eraser's Angle,
+/// Roundness and Size every mode.
+fn varied(ui: &mut egui::Ui, d: &mut Dialog, v: &Varied, modes: &[Variation]) {
+    let (mode_key, var_key) = (format!("{}Mode", v.key), format!("{}Variation", v.key));
+    let mode = Variation::parse(&d.str(&mode_key)).filter(|m| modes.contains(m)).unwrap_or_default();
+    let labels: Vec<&str> = modes.iter().map(|m| m.label()).collect();
+    let menu_label_w = label_w(ui) - MODE_W - ui.spacing().item_spacing.x;
+    let value = d.f64(v.key, v.default);
+    widgets::label_row(ui, v.label, menu_label_w, |ui| {
+        if let Some(m) = widgets::dropdown(ui, ("freehand-mode", v.key), mode.label(), &labels, MODE_W).and_then(|i| modes.get(i)) {
+            d.fields.insert(mode_key.clone(), json!(m.id()));
         }
-        if let Some(x) = widgets::range_field(ui, ("freehand-field", "size"), size, 0.1..=1000.0, "pt", 1, FIELD_W) {
-            d.fields.insert("size".into(), json!(x));
+        if let Some(x) = widgets::range_field(ui, ("freehand-field", v.key), value, v.range.0..=v.range.1, v.unit, v.decimals, FIELD_W) {
+            d.fields.insert(v.key.into(), json!(x));
         }
     });
-    ui.add_enabled_ui(pressure, |ui| number(ui, d, ("sizeVariation", tl!("Variation:")), "pt", 1, (0.0, 1000.0)));
+    ui.add_enabled_ui(mode != Variation::Fixed, |ui| {
+        let label_w = label_w(ui);
+        let x = d.f64(&var_key, 0.0);
+        widgets::label_row(ui, tl!("Variation:"), label_w, |ui| {
+            if let Some(x) =
+                widgets::range_field(ui, ("freehand-field", var_key.as_str()), x, v.variation.0..=v.variation.1, v.unit, v.decimals, FIELD_W)
+            {
+                d.fields.insert(var_key.clone(), json!(x));
+            }
+        });
+    });
+}
+
+/// The Blob Brush's and the Eraser's Size: [`varied`] in points.
+fn size_rows(ui: &mut egui::Ui, d: &mut Dialog, modes: &[Variation]) {
+    let size = Varied { key: "size", label: tl!("Size:"), unit: "pt", decimals: 1, range: (0.1, 1000.0), default: 10.0, variation: (0.0, 1000.0) };
+    varied(ui, d, &size, modes);
 }
 
 /// The Fidelity rows: the label on a line of its own, then a logarithmic slider from the tool's
@@ -170,9 +228,7 @@ fn fidelity(ui: &mut egui::Ui, d: &mut Dialog) {
     let v = d.f64("fidelity", 1.5);
     let tool = d.str("tool");
     let rail = (vectorcraft_tools::draw2::min_fidelity(&tool), FIDELITY_MAX);
-    // The Pencil's, the Paintbrush's and the Smooth tool's Fidelity is on screen, the same at any
-    // zoom (#5729).
-    let unit = if matches!(tool.as_str(), "pencil" | "paintbrush" | "smooth") { "px" } else { "pt" };
+    let unit = fidelity_unit(&tool);
     let rail_w = label_w(ui);
     let mut new = None;
     ui.label(egui::RichText::new(tl!("Fidelity:")).size(12.5).color(t.text));
@@ -181,7 +237,7 @@ fn fidelity(ui: &mut egui::Ui, d: &mut Dialog) {
         let (x, _, keyed) =
             widgets::color_slider_stepped(ui, "freehand-fidelity", tl!("Fidelity:"), Some(shown), fidelity_at(v, rail), rail_w, &|_| t.input_border);
         new = x.map(|x| fidelity_from(x, rail)).or(keyed);
-        if let Some(x) = widgets::range_field_stepped(ui, "freehand-fidelity-field", v, rail.0..=100.0, unit, 2, FIELD_W, fidelity_step) {
+        if let Some(x) = fidelity_field(ui, "freehand-fidelity-field", v, &tool) {
             new = Some(x);
         }
     });
@@ -208,19 +264,39 @@ fn body(_app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         fidelity(ui, d);
         ui.add_space(10.0);
     }
-    if d.fields.contains_key("angle") {
-        number(ui, d, ("angle", tl!("Angle:")), "°", 0, (-180.0, 180.0));
-    }
-    if d.fields.contains_key("roundness") {
-        let min = if d.str("tool") == "blobBrush" { 0.0 } else { 1.0 };
-        number(ui, d, ("roundness", tl!("Roundness:")), "%", 0, (min, 100.0));
+    let eraser = d.fields.contains_key("angleMode");
+    if eraser {
+        // The Eraser: Angle, Roundness and Size each with every variation mode.
+        let angle =
+            Varied { key: "angle", label: tl!("Angle:"), unit: "°", decimals: 0, range: (-180.0, 180.0), default: 0.0, variation: (0.0, 180.0) };
+        varied(ui, d, &angle, &Variation::ALL);
+        let roundness = Varied {
+            key: "roundness",
+            label: tl!("Roundness:"),
+            unit: "%",
+            decimals: 0,
+            range: (1.0, 100.0),
+            default: 100.0,
+            variation: (0.0, 100.0),
+        };
+        varied(ui, d, &roundness, &Variation::ALL);
+        size_rows(ui, d, &Variation::ALL);
+    } else {
+        if d.fields.contains_key("angle") {
+            number(ui, d, ("angle", tl!("Angle:")), "°", 0, (-180.0, 180.0));
+        }
+        if d.fields.contains_key("roundness") {
+            let min = if d.str("tool") == "blobBrush" { 0.0 } else { 1.0 };
+            number(ui, d, ("roundness", tl!("Roundness:")), "%", 0, (min, 100.0));
+        }
     }
     if d.str("tool") == "blobBrush" {
         blob_tip_preview(ui, d);
     }
-    if d.fields.contains_key("sizeMode") {
-        blob_size(ui, d);
-    } else if d.fields.contains_key("size") {
+    // The Eraser's Size rows are above.
+    if !eraser && d.fields.contains_key("sizeMode") {
+        size_rows(ui, d, &[Variation::Fixed, Variation::Pressure]);
+    } else if !eraser && d.fields.contains_key("size") {
         number(ui, d, ("size", tl!("Size:")), "pt", 1, (0.1, 1000.0));
     }
     if d.fields.contains_key("fill") {

@@ -492,6 +492,111 @@ fn options_set_tile_type_spacing_and_overlap() {
     assert!(s.execute("pattern.options", &json!({"name": "Dots", "width": -1})).is_err());
 }
 
+/// Move Tile with Art: in pattern editing mode, a move of all of the tile art moves the tile by the
+/// same offset, through `object.move`, `object.nudge` and `object.transform`. With the option off
+/// (a new pattern's default), a move of part of the art, a rotation or a copy, the tile stays.
+/// Undo puts the tile back, and Done keeps the moved tile.
+#[test]
+fn move_tile_with_art_moves_the_tile_when_all_of_the_art_moves() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    let b = rect(&mut s, 12.0, 0.0, 6.0, 6.0);
+    sel(&mut s, &[a, b]);
+    s.execute("object.pattern.make", &json!({"name": "P"})).unwrap();
+    let tile = |s: &Session| doc(s).pattern("P").unwrap().tile;
+    let start = tile(&s);
+    let art: Vec<NodeId> = s.doc().unwrap().selection.objects.to_vec();
+    assert_eq!(art.len(), 2);
+    assert!(!doc(&s).pattern("P").unwrap().move_tile_with_art, "off for a new pattern");
+    s.execute("object.move", &json!({"dx": 5, "dy": 0})).unwrap();
+    assert_eq!(tile(&s), start, "with the option off the tile stays");
+    s.execute("object.move", &json!({"dx": -5, "dy": 0})).unwrap();
+
+    s.execute("pattern.options", &json!({"moveTileWithArt": true})).unwrap();
+    assert_eq!(s.execute("pattern.list", &json!({})).unwrap()["patterns"][0]["moveTileWithArt"], true);
+    s.execute("object.move", &json!({"dx": 3, "dy": 4})).unwrap();
+    assert_eq!(tile(&s), start + vectorcraft_geom::Vec2::new(3.0, 4.0));
+    s.execute("object.transform", &json!({"matrix": [1, 0, 0, 1, -1, 2]})).unwrap();
+    assert_eq!(tile(&s), start + vectorcraft_geom::Vec2::new(2.0, 6.0));
+    let k = s.prefs.keyboard_increment;
+    s.execute("object.nudge", &json!({"dx": 1, "dy": 0})).unwrap();
+    assert_eq!(tile(&s), start + vectorcraft_geom::Vec2::new(2.0 + k, 6.0));
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(tile(&s), start + vectorcraft_geom::Vec2::new(3.0, 4.0), "undo puts the tile back");
+    let moved = tile(&s);
+
+    sel(&mut s, &art[..1]);
+    s.execute("object.move", &json!({"dx": 7, "dy": 0})).unwrap();
+    assert_eq!(tile(&s), moved, "a move of part of the art leaves the tile");
+    sel(&mut s, &art);
+    s.execute("object.rotate", &json!({"angle": 90})).unwrap();
+    assert_eq!(tile(&s), moved, "a rotation leaves the tile");
+    s.execute("object.move", &json!({"dx": 1, "dy": 1, "copy": true})).unwrap();
+    assert_eq!(tile(&s), moved, "a copy leaves the tile");
+
+    s.execute("object.pattern.done", &json!({})).unwrap();
+    assert_eq!(tile(&s), moved, "Done keeps the moved tile");
+    assert!(doc(&s).pattern("P").unwrap().move_tile_with_art);
+}
+
+/// Move Tile with Art counts a group in the tile art as moved when each of its members moved, one
+/// by one selected.
+#[test]
+fn move_tile_with_art_counts_a_group_whose_members_all_moved() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    let b = rect(&mut s, 12.0, 0.0, 6.0, 6.0);
+    sel(&mut s, &[a, b]);
+    s.execute("object.group", &json!({})).unwrap();
+    s.execute("object.pattern.make", &json!({"name": "G"})).unwrap();
+    s.execute("pattern.options", &json!({"moveTileWithArt": true})).unwrap();
+    let start = doc(&s).pattern("G").unwrap().tile;
+    let layer = doc(&s).pattern_edit.as_ref().unwrap().layer;
+    let group = doc(&s).node(layer).unwrap().children().unwrap()[0].clone();
+    let members: Vec<NodeId> = group.children().unwrap().iter().map(|c| c.id).collect();
+    assert_eq!(members.len(), 2);
+    sel(&mut s, &members[..1]);
+    s.execute("object.move", &json!({"dx": 4, "dy": 0})).unwrap();
+    assert_eq!(doc(&s).pattern("G").unwrap().tile, start, "one member of two");
+    sel(&mut s, &members);
+    s.execute("object.move", &json!({"dx": 0, "dy": 5})).unwrap();
+    assert_eq!(doc(&s).pattern("G").unwrap().tile, start + vectorcraft_geom::Vec2::new(0.0, 5.0), "every member");
+}
+
+/// Move Tile with Art moves the tile as far as the art moved: when the art is aligned to the pixel
+/// grid and a move snaps it to the grid, the tile moves by the snapped distance.
+#[test]
+fn move_tile_with_art_follows_art_that_snaps_to_the_pixel_grid() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    sel(&mut s, &[a]);
+    s.execute("object.pattern.make", &json!({"name": "P"})).unwrap();
+    s.execute("pattern.options", &json!({"moveTileWithArt": true})).unwrap();
+    let art = s.doc().unwrap().selection.objects[0];
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(art).unwrap().extras_mut().pixel_aligned = true;
+    let start = doc(&s).pattern("P").unwrap().tile;
+    let origin = |s: &Session| doc(s).node(art).unwrap().geometric_bounds().unwrap().origin();
+    let before = origin(&s);
+    s.execute("object.move", &json!({"dx": 0.3, "dy": 0})).unwrap();
+    let moved = origin(&s) - before;
+    assert!((moved.x - 0.3).abs() > 1e-6, "the art snapped to the grid: {moved:?}");
+    assert_eq!(doc(&s).pattern("P").unwrap().tile, start + moved, "the tile moved as far");
+}
+
+/// Pattern Options that change nothing record no undo step.
+#[test]
+fn options_that_change_nothing_record_no_undo_step() {
+    let mut s = session();
+    make_dots(&mut s);
+    let steps = |s: &Session| s.doc().unwrap().history.undo.len();
+    let before = steps(&s);
+    s.execute("pattern.options", &json!({"name": "Dots", "moveTileWithArt": false, "copies": 5})).unwrap();
+    assert_eq!(steps(&s), before);
+    s.execute("pattern.options", &json!({"name": "Dots", "moveTileWithArt": true})).unwrap();
+    assert_eq!(steps(&s), before + 1);
+}
+
 #[test]
 fn options_rename_updates_swatch_and_paints() {
     let mut s = session();
@@ -1625,6 +1730,7 @@ fn pattern_commands_refuse_a_param_of_the_wrong_type() {
             ("pattern.options", options(json!({"copies": "5"})), number("copies", json!("5"))),
             ("pattern.options", options(json!({"dimCopies": "50"})), number("dimCopies", json!("50"))),
             ("pattern.options", options(json!({"sizeTileToArt": "true"})), switch("sizeTileToArt")),
+            ("pattern.options", options(json!({"moveTileWithArt": "yes"})), switch("moveTileWithArt")),
             ("pattern.options", options(json!({"showTileEdge": 1})), switch("showTileEdge")),
             ("pattern.options", options(json!({"showSwatchBounds": "no"})), switch("showSwatchBounds")),
             ("pattern.options", options(json!({"overlap": "right"})), "`overlap` must be an object, not \"right\"".into()),

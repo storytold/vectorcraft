@@ -212,6 +212,44 @@ fn text_composer_round_trips() {
     assert!(!String::from_utf8_lossy(&save(&d2, false)).contains("composer"));
 }
 
+/// Every composer reads back as it was saved (the two Standard ones as their own values), and the
+/// ME&SA names are the ones files have always used: `everyLine` stays the unwritten default and
+/// `singleLine` keeps its spelling, so a document that never picks a Standard composer is unchanged.
+#[test]
+fn all_four_composers_round_trip() {
+    use vectorcraft_doc::{TextKind, TextObject};
+    let one = |c: Composer| {
+        let mut d = Document::new(200.0, 200.0);
+        let mut t = TextObject::point(vectorcraft_geom::Point::ZERO, "ક\u{ACD}ક", Default::default());
+        t.para.composer = c;
+        t.kind = TextKind::Point;
+        let id = d.alloc_id();
+        d.insert(None, usize::MAX, Node::new(id, NodeKind::Text(Box::new(t)))).unwrap();
+        d
+    };
+    for (c, written) in [
+        (Composer::SingleLine, Some("singleLine")),
+        (Composer::EveryLine, None),
+        (Composer::StandardSingleLine, Some("standardSingleLine")),
+        (Composer::StandardEveryLine, Some("standardEveryLine")),
+    ] {
+        let bytes = save(&one(c), false);
+        let text = String::from_utf8_lossy(&bytes);
+        match written {
+            Some(w) => assert!(text.contains(&format!("\"composer\":\"{w}\"")), "{c:?}"),
+            None => assert!(!text.contains("\"composer\""), "{c:?}"),
+        }
+        let back = load(&bytes).unwrap();
+        let mut got = None;
+        back.walk(|n| {
+            if let NodeKind::Text(t) = &n.kind {
+                got = Some(t.para.composer);
+            }
+        });
+        assert_eq!(got, Some(c));
+    }
+}
+
 /// A document as the first version wrote it (format name `drawcraft`, anchors as maps).
 const V1_FILE: &str = r#"{"format":"drawcraft","version":1,"generator":"DrawCraft 0.1.0","document":{"version":1,"title":"Old","artboards":[{"id":1,"name":"Artboard 1","rect":{"x0":0.0,"y0":0.0,"x1":100.0,"y1":80.0}}],
 "layers":[{"id":1,"name":"Layer 1","visible":true,"locked":false,"opacity":1.0,"kind":{"type":"layer","children":[

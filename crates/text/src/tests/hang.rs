@@ -293,3 +293,38 @@ fn burasagari_counts_the_hung_start() {
     assert!((quote.origin.x + quote.advance).abs() < EPS, "the quote hangs: {:?}", quote.origin);
     assert!((comma.origin.x + comma.advance - 100.0).abs() < EPS, "、 inside, on the edge: {:?} {}", comma.origin, comma.advance);
 }
+
+/// A right-to-left paragraph draws a burasagari full stop inside its line, so the line breaks where
+/// it fits with the stop: in a frame too narrow for the whole line by half the stop, the line ends
+/// after the first word and nothing is drawn past the frame.
+#[test]
+fn right_to_left_burasagari_keeps_the_line_inside_the_frame() {
+    use vectorcraft_doc::{Burasagari, Kinsoku, ParaDirection};
+    const EPS: f64 = 1e-6;
+    let text = "\u{05D0}\u{05D1} \u{05D2}\u{05D3}\u{3002}";
+    let lay = |width: f64| {
+        let mut t = area(text, 20.0, Rect::new(0.0, 0.0, width, 400.0), Justify::Auto);
+        t.para.direction = Some(ParaDirection::RightToLeft);
+        t.para.burasagari = Burasagari::Standard;
+        t.para.kinsoku = Kinsoku::Hard;
+        let l = layout(db(), &t);
+        (t, l)
+    };
+    let (_, wide) = lay(1000.0);
+    assert_eq!(wide.lines.len(), 1);
+    let full: f64 = wide.glyphs.iter().map(|g| g.advance).sum();
+    let Some(stop) = wide.glyphs.iter().find(|g| g.byte == text.len() - '\u{3002}'.len_utf8()) else {
+        panic!("。 is set as a glyph of its own");
+    };
+    let (t, l) = lay(full - stop.advance / 2.0);
+    assert!(!l.overflow);
+    assert_eq!(l.lines.len(), 2, "the line ends after the first word");
+    for (li, gs) in inked(&t, &l) {
+        // A right-to-left line's trailing space is set at its left, outside the aligned text.
+        for g in gs.into_iter().filter(|g| !is_space(ch(&t, g))) {
+            let c = ch(&t, g);
+            assert!(g.origin.x >= li.avail.0 - EPS, "{c:?} starts at {} before {}", g.origin.x, li.avail.0);
+            assert!(g.origin.x + g.advance <= li.avail.1 + EPS, "{c:?} ends at {} past {}", g.origin.x + g.advance, li.avail.1);
+        }
+    }
+}

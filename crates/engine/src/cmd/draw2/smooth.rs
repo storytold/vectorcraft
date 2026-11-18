@@ -117,11 +117,10 @@ fn smooth_corners(anchors: &[Anchor], closed: bool, reach: f64) -> Vec<bool> {
     // eighth of the way round a closed path. Over that much of a circle the path turns by 45°, so a
     // loop shorter than the reach is not all corners, while a square's or a triangle's corners still are.
     let mut spans = [reach, 2.0 * reach];
+    // The lengths along the path ahead and back, measured once when an anchor needs them.
+    let (mut ahead, mut back) = (None, None);
     if closed {
-        let mut total = 0.0;
-        for i in 0..n {
-            total += walk(anchors, closed, (i, true), [f64::INFINITY; 2], reach, 1).1;
-        }
+        let total = ahead.get_or_insert_with(|| walk_blocks(anchors, closed, true, reach)).first().map_or(0.0, |lens| lens.iter().take(n).sum());
         if !(total.is_finite() && total > 0.0) {
             return corners;
         }
@@ -137,8 +136,10 @@ fn smooth_corners(anchors: &[Anchor], closed: bool, reach: f64) -> Vec<bool> {
         if !turn_between(arrive, leave).is_some_and(|t| t > SMOOTH_CORNER_DEG) {
             continue;
         }
-        let [Some(back_near), Some(back_far)] = walk(anchors, closed, (i, false), spans, reach, MAX_CORNER_WALK).0 else { continue };
-        let [Some(ahead_near), Some(ahead_far)] = walk(anchors, closed, (i, true), spans, reach, MAX_CORNER_WALK).0 else { continue };
+        let back = back.get_or_insert_with(|| walk_blocks(anchors, closed, false, reach));
+        let [Some(back_near), Some(back_far)] = spans.map(|r| point_along(anchors, closed, (i, false), r, back, reach)) else { continue };
+        let ahead = ahead.get_or_insert_with(|| walk_blocks(anchors, closed, true, reach));
+        let [Some(ahead_near), Some(ahead_far)] = spans.map(|r| point_along(anchors, closed, (i, true), r, ahead, reach)) else { continue };
         *flag = [(back_near, ahead_near, spans[0]), (back_far, ahead_far, spans[1])]
             .into_iter()
             .all(|(back, ahead, r)| r <= 0.0 || turn_between(a.p - back, ahead - a.p).is_some_and(|t| t > SMOOTH_CORNER_DEG));
@@ -146,9 +147,54 @@ fn smooth_corners(anchors: &[Anchor], closed: bool, reach: f64) -> Vec<bool> {
     corners
 }
 
-/// Most segments [`walk`] passes from an anchor before it stops, which bounds the work for each
-/// anchor on a path of very many very short segments.
-const MAX_CORNER_WALK: usize = 256;
+/// The lengths [`walk`] measures along the segments of `anchors`, in the order a walk ahead
+/// (`forward`) or back passes them, twice round, starting at the first anchor ahead or the last
+/// anchor back, and added up in blocks: element `l` holds the lengths of each run of 2^`l`
+/// segments that starts at a multiple of 2^`l`. Each block adds up only its own segments, so a short
+/// stretch keeps its length next to very long ones. The segment past an open path's end has no
+/// length.
+fn walk_blocks(anchors: &[Anchor], closed: bool, forward: bool, reach: f64) -> Vec<Vec<f64>> {
+    let n = anchors.len();
+    let lens: Vec<f64> =
+        (0..n).map(|k| walk(anchors, closed, (if forward { k } else { n - 1 - k }, forward), [f64::INFINITY; 2], reach, 1).1).collect();
+    let mut blocks = vec![(0..2 * n).map(|k| lens[k % n]).collect::<Vec<f64>>()];
+    while let Some(last) = blocks.last().filter(|b| b.len() > 1) {
+        let next = last.as_chunks::<2>().0.iter().map(|[a, b]| a + b).collect();
+        blocks.push(next);
+    }
+    blocks
+}
+
+/// The point `dist` along the path `anchors` from anchor `from.0`, ahead when `from.1` and back
+/// otherwise, as [`walk`] finds it: an open path's end for a distance beyond the end, and `None`
+/// when a length is not a number or is too large to add. The walk skips whole blocks of `blocks`
+/// ([`walk_blocks`] in the same direction) that end no more than `dist` along the path, so a path of
+/// very many short segments is not walked one segment at a time from each anchor.
+fn point_along(anchors: &[Anchor], closed: bool, from: (usize, bool), dist: f64, blocks: &[Vec<f64>], reach: f64) -> Option<Point> {
+    let (n, (i, forward)) = (anchors.len(), from);
+    let start = if forward { i } else { n - 1 - i };
+    let end = start
+        + if closed {
+            n
+        } else if forward {
+            n - 1 - i
+        } else {
+            i
+        };
+    let (mut pos, mut gone) = (start, 0.0);
+    // The largest block that starts at `pos`, stays within the walk and ends within `dist`, until
+    // none does; a block whose length is not a number is never skipped.
+    while let Some((size, len)) = blocks.iter().enumerate().rev().find_map(|(l, lens)| {
+        let size = 1usize << l;
+        let len = lens.get(pos >> l).copied()?;
+        (pos % size == 0 && pos + size <= end && gone + len <= dist).then_some((size, len))
+    }) {
+        pos += size;
+        gone += len;
+    }
+    let at = if forward { pos % n } else { n - 1 - pos % n };
+    walk(anchors, closed, (at, forward), [(dist - gone).max(0.0); 2], reach, n).0[0]
+}
 
 /// A walk along the path `anchors` from anchor `from.0`, ahead when `from.1` and back otherwise,
 /// past no more than `segments` segments, measured along the lines between each curved segment's
@@ -274,7 +320,7 @@ fn refit_run(anchors: &[Anchor], tol: f64, sigma: f64, free: [bool; 2]) -> Vec<A
     for a in &mut out {
         *a = Anchor::with_handles(a.p, a.h_in, a.h_out);
     }
-    out
+    out.into_vec()
 }
 
 /// Distance (points) from an anchor within which a smoothed closed path starts at that anchor
@@ -549,7 +595,7 @@ fn smooth_subpath(sp: &SubPath, pts: &[Point], radius: f64, share: usize, tol: f
     if sp.closed {
         let start = sp.anchors[0].p;
         let Some(k) = marked.iter().position(|m| !m) else {
-            let corners = smooth_corners(&sp.anchors, true, radius);
+            let corners = smooth_corners(&sp.anchors.contiguous(), true, radius);
             let Some(c) = corners.iter().position(|c| *c) else {
                 // Everything is in range and nothing is a corner: smooth the whole closed path,
                 // across its start too.
@@ -557,7 +603,7 @@ fn smooth_subpath(sp: &SubPath, pts: &[Point], radius: f64, share: usize, tol: f
                 return f.subpaths.into_iter().next().map(|r| start_nearest(r, start, sp));
             };
             // Cut the path open at a corner, which then ends the last part as well as starting the first.
-            let mut open = sp.anchors.clone();
+            let mut open = sp.anchors.to_vec();
             open.rotate_left(c);
             let mut cut = corners;
             cut.rotate_left(c);
@@ -576,15 +622,14 @@ fn smooth_subpath(sp: &SubPath, pts: &[Point], radius: f64, share: usize, tol: f
             return Some(start_nearest(SubPath::new(res, true), start, sp));
         };
         // Rotate so an untouched anchor comes first, duplicate it at the end and treat as open.
-        let mut open = sp.clone();
-        open.anchors.rotate_left(k);
+        let mut open = sp.anchors.to_vec();
+        open.rotate_left(k);
         let mut m = marked.clone();
         m.rotate_left(k);
-        open.anchors.push(open.anchors[0]);
+        open.push(open[0]);
         m.push(false);
-        open.closed = false;
-        let mut res = smooth_open(&open.anchors, &m, near, tol, sigma, radius, false);
-        if same_anchors(&res, &open.anchors) {
+        let mut res = smooth_open(&open, &m, near, tol, sigma, radius, false);
+        if same_anchors(&res, &open) {
             return None;
         }
         let l = res.pop()?;
@@ -595,8 +640,9 @@ fn smooth_subpath(sp: &SubPath, pts: &[Point], radius: f64, share: usize, tol: f
         let res = SubPath::new(res, true);
         return Some(if k == 0 { res } else { start_nearest(res, start, sp) });
     }
-    let res = smooth_open(&sp.anchors, &marked, near, tol, sigma, radius, true);
-    (!same_anchors(&res, &sp.anchors)).then(|| SubPath::new(res, false))
+    let anchors = sp.anchors.contiguous();
+    let res = smooth_open(&anchors, &marked, near, tol, sigma, radius, true);
+    (!same_anchors(&res, &anchors)).then(|| SubPath::new(res, false))
 }
 
 /// The segment `c`, which ends in the drag's reach (`near`) and starts outside it, split where it
@@ -1099,11 +1145,12 @@ mod tests {
     }
 
     /// A 90° bump 400 pt high cut into 1 pt segments, between two long straight segments: with a reach
-    /// of 10 pt its top is a corner, and with a reach of 1,000 pt, where the walk passes more segments
-    /// than it measures before it gets that far, its top is not one, as the path turns by about 51°
-    /// over that reach.
+    /// of 10 pt, and of 300 pt, where twice the reach passes the bump's 566 segments on each side, its
+    /// top is a corner, and with a reach of 1,000 pt its top is not one, as the path turns by about 51°
+    /// over that reach. The turns into and between 1 pt segments that follow two segments 1e16 pt long
+    /// are corners too.
     #[test]
-    fn a_corner_is_not_kept_where_the_reach_is_not_measured() {
+    fn a_bump_of_many_short_segments_is_a_corner_where_it_turns_over_the_reach() {
         let side = 400.0 * std::f64::consts::SQRT_2;
         let steps = side.ceil() as usize;
         let mut pts = vec![(-3000.0, 0.0)];
@@ -1120,6 +1167,10 @@ mod tests {
         let top = steps + 1;
         assert_eq!(anchors[top].p, Point::new(0.0, 400.0));
         assert!(smooth_corners(&anchors, false, 10.0)[top]);
+        assert!(smooth_corners(&anchors, false, 300.0)[top]);
+        let long = polyline(&[(0.0, 0.0), (1e16, 0.0), (0.0, 0.0), (0.0, 1.0), (1.0, 1.0), (1.0, 2.0)]);
+        let corners = smooth_corners(&long, false, 0.5);
+        assert!(corners[2] && corners[3] && corners[4], "{corners:?}");
         assert!(!smooth_corners(&anchors, false, 1000.0)[top]);
     }
 

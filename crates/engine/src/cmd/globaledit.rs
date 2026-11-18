@@ -769,6 +769,7 @@ fn give_item(a: &AppearanceItem, b: &AppearanceItem, m: &AppearanceItem, n: &mut
                 arrow_scale,
                 profile,
                 brush,
+                brush_options,
                 opacity,
                 blend,
                 visible,
@@ -781,7 +782,11 @@ fn give_item(a: &AppearanceItem, b: &AppearanceItem, m: &AppearanceItem, n: &mut
                 bearing: _,
                 rotation: _,
             } = m;
-            give_fields!(a, b, n: paint, width, cap, join, miter_limit, align, dash, start_arrow, end_arrow, arrow_scale, profile, brush, opacity, blend, visible, effects, arrow_align, overprint, gradient_mode);
+            give_fields!(a, b, n: paint, width, cap, join, miter_limit, align, dash, start_arrow, end_arrow, arrow_scale, profile, brush, brush_options, opacity, blend, visible, effects, arrow_align, overprint, gradient_mode);
+            // A stroke's own brush settings go with the brush they set: a new brush takes the model's.
+            if a.brush != b.brush {
+                n.brush_options = brush_options.clone();
+            }
         }
         _ => {}
     }
@@ -865,7 +870,8 @@ pub(crate) fn propagate(before: &Document, d: &mut Document, ge: &GlobalEdit, se
 }
 
 /// Store on their graphs what the members `edited`, and the objects in them, took on the paths directly in a graph
-/// series, for the graph's next redraw. The edited member is left to the edit's own command.
+/// series, and the transparency a series group among them took, for the graph's next redraw. The edited member is left to
+/// the edit's own command.
 fn keep_series_changes(before: &Document, d: &mut Document, edited: &[NodeId]) {
     let mut taken = vec![];
     for id in edited {
@@ -874,6 +880,8 @@ fn keep_series_changes(before: &Document, d: &mut Document, edited: &[NodeId]) {
         }
     }
     super::appearance::capture_series_changes(before, d, &taken);
+    let groups = super::graph::series_groups_among(d, &taken);
+    super::graph::capture_series_object_opacity(d, &groups);
 }
 
 /// The outlines of the members of the active document's Global Edit that are not selected, hold
