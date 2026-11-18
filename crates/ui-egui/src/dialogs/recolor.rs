@@ -998,6 +998,19 @@ pub(crate) fn step(app: &mut VectorcraftApp, back: bool) -> Result<Value, String
     let changed = h.step(&mut d, back);
     let r = json!({"changed": changed, "canUndo": h.can(&d, true), "canRedo": h.can(&d, false)});
     app.ui.recolor_history = h;
+    // The art previews the step at once, as the frame after a button would preview it.
+    if changed && d.bool("__art") {
+        sync_weights(app, &mut d);
+        match find_params(&d) {
+            Some(p) => {
+                let _ = form::preview_now(app, &mut d, "Recolor Artwork", "command.batch", p);
+            }
+            None => {
+                let p = apply_params(&d);
+                form::preview_without_check(app, &mut d, "Recolor Artwork", CMD, p);
+            }
+        }
+    }
     app.ui.dialog = Some(d);
     Ok(r)
 }

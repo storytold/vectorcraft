@@ -1778,6 +1778,28 @@ fn rows_and_weights_set_before_the_art_is_read_are_no_step() {
         assert!(!dialogs::recolor::can_step(&app, true), "{k}: Undo Changes is not available");
         let r = app.run("ui.recolorUndo", json!({})).unwrap();
         assert_eq!(r, json!({"changed": false, "canUndo": false, "canRedo": false}), "{k}");
+        assert!(!app.session.in_interaction(), "{k}: a step that changes nothing previews nothing");
         assert_eq!(field(&app, "rows").as_array().unwrap().len(), 2, "{k}: the rows of the art");
     }
+}
+
+/// `ui.recolorUndo` and `ui.recolorRedo` preview the step they go to at once, without a frame
+/// between, as the buttons do.
+#[test]
+fn the_recolor_undo_and_redo_commands_preview_the_step() {
+    let mut app = app();
+    let ctx = context();
+    art(&mut app, &["#ff0000", "#e01010", "#0000ff", "#1010e0"]);
+    app.run("ui.recolorDialog", json!({})).unwrap();
+    dialog_frame(&mut app, &ctx);
+    let start = fills(&app);
+    set(&mut app, "globalAdjust", json!({"saturation": -100}));
+    dialog_frame(&mut app, &ctx);
+    let adjusted = fills(&app);
+    assert_ne!(adjusted, start, "the adjustment previews");
+    app.run("ui.recolorUndo", json!({})).unwrap();
+    assert_eq!(fills(&app), start, "Undo Changes previews the step before");
+    app.run("ui.recolorRedo", json!({})).unwrap();
+    assert_eq!(fills(&app), adjusted, "Redo Changes previews the step after");
+    dialogs::cancel(&mut app);
 }
