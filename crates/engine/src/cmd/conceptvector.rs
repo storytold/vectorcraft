@@ -318,6 +318,12 @@ fn style_label(registry: &cv::Registry, provider: &str, style: &str) -> String {
     caps.and_then(|c| c.styles.iter().find(|s| s.id == style).map(|s| s.label.to_string())).unwrap_or_else(|| style.to_string())
 }
 
+/// Where `style` comes in the styles `provider` lists; after them when it lists no such style.
+fn style_rank(registry: &cv::Registry, provider: &str, style: &str) -> usize {
+    let caps = registry.get(provider).map(|p| &p.capabilities);
+    caps.and_then(|c| c.styles.iter().position(|s| s.id == style)).unwrap_or(usize::MAX)
+}
+
 /// Where `image`'s pixels lie in the document.
 fn image_rect(image: &ImageObject) -> Option<Rect> {
     let r = Rect::new(0.0, 0.0, f64::from(image.width.max(1)), f64::from(image.height.max(1)));
@@ -452,11 +458,12 @@ fn insert(s: &mut Session, p: &Value) -> Result<Value> {
             return Err(list_error());
         }
         let unique = chosen.iter().enumerate().all(|(i, id)| !chosen.get(..i).unwrap_or_default().contains(id));
-        // In the provider's order, whatever order they were listed in.
-        let picked: Vec<Variation> = all.iter().filter(|v| chosen.contains(&v.style)).cloned().collect();
+        let mut picked: Vec<Variation> = all.iter().filter(|v| chosen.contains(&v.style)).cloned().collect();
         if !unique || picked.len() != chosen.len() {
             return Err(list_error());
         }
+        // In the provider's order, whatever order they were listed or generated in.
+        picked.sort_by_key(|v| style_rank(&s.concept.registry, &j.provider, &v.style));
         let labels: Vec<String> = picked.iter().map(|v| style_label(&s.concept.registry, &j.provider, &v.style)).collect();
         (j.doc, j.source, j.image.clone(), Arc::clone(&j.bytes), picked, labels)
     };

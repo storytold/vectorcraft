@@ -645,6 +645,20 @@ fn insert_puts_the_chosen_styles_right_of_the_image_as_one_undo_step() {
     assert!(s.doc().unwrap().doc == after, "redo restores the same groups");
 }
 
+/// Styles generated in another order than the provider lists them are inserted in the provider's
+/// order, left to right.
+#[test]
+fn insert_follows_the_providers_order_whatever_order_generate_was_given() {
+    let (mut s, _) = doc_with(&art());
+    let job = generate(&mut s, json!({"provider": ID, "styles": ["grayTones", "outline"]})).unwrap()["job"].as_u64().unwrap();
+    let r = s.execute("conceptVector.insert", &json!({"job": job, "variations": ["grayTones", "outline"]})).unwrap();
+    let ids: Vec<u64> = r["ids"].as_array().unwrap().iter().map(|v| v.as_u64().unwrap()).collect();
+    let d = &s.doc().unwrap().doc;
+    let names: Vec<_> = ids.iter().map(|i| d.node(NodeId(*i)).unwrap().name.clone().unwrap()).collect();
+    assert_eq!(names, ["Outline", "Gray Tones"]);
+    assert!(bounds(&s, ids[0]).x1 < bounds(&s, ids[1]).x0);
+}
+
 #[test]
 fn insert_moves_the_row_past_art_in_its_way() {
     let (mut s, img) = doc_with(&art());
