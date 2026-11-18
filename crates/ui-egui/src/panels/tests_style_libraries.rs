@@ -143,6 +143,29 @@ fn paper_cutouts_opens_from_the_window_menu_and_applies_a_layered_style() {
     assert_eq!(appearance.effects[0].id, "stylize.dropShadow");
 }
 
+/// A built-in library's list rows and Find field use the UI language; a user library's styles keep
+/// their names, and clicks still name the stored style.
+#[test]
+fn built_in_style_names_show_in_the_ui_language() {
+    let mut app = app();
+    let ctx = context();
+    app.run("window.graphicStyleLibrary", json!({"library": "paper-cutouts"})).unwrap();
+    app.run("ui.libraryPanel", json!({"panel": "library:graphicStyles:paper-cutouts", "view": "largeList"})).unwrap();
+    crate::i18n::set_current(crate::i18n::Lang::from_code("fr").unwrap());
+    let mut texts = vec![];
+    for t in [0.0, 0.25] {
+        texts = frame(&ctx, vec![], Modifiers::NONE, t, |ui| library_panel::show_window(&mut app, ui.ctx()));
+    }
+    let (_, lib) = GraphicStyleLibraries::get(&app, "paper-cutouts").unwrap();
+    let found: Vec<&str> = GraphicStyleLibraries::rows(&lib, "paper-cutouts", "corail").iter().map(|r| r.name).collect();
+    let user = GraphicStyleLibraries::label("user/Mine", "Coral Layers").to_string();
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    assert!(texts.iter().any(|t| t == "Couches corail"), "{texts:?}");
+    assert!(!texts.iter().any(|t| t == "Coral Layers"), "{texts:?}");
+    assert_eq!(found, ["Coral Layers"]);
+    assert_eq!(user, "Coral Layers");
+}
+
 #[test]
 fn the_window_menu_and_the_panel_open_every_library() {
     let mut app = app();
