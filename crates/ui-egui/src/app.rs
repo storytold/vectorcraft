@@ -89,6 +89,7 @@ impl VectorcraftApp {
                 selection_box: None,
                 selection_bounds: None,
                 content_bounds: None,
+                three_d_exportable: None,
                 pixel_aligned: None,
                 symbol_instances: None,
                 plugin_keys: Default::default(),
