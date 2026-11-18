@@ -623,6 +623,13 @@ pub fn t(s: &str) -> &str {
     tr(current(), s)
 }
 
+/// `label`, already in the current language, followed by a field label's colon as the current
+/// language writes it (its catalog row for ":"): French puts a no-break space before the colon, and
+/// Chinese and Japanese write a full-width colon.
+pub fn colon(label: &str) -> String {
+    format!("{label}{}", t(":"))
+}
+
 /// Translate an English UI string; unknown strings come back unchanged.
 pub fn tr(lang: Lang, s: &str) -> &str {
     lang.catalog().plain(s).unwrap_or(s)
