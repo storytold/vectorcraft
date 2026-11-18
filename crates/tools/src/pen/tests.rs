@@ -865,6 +865,27 @@ fn anchors_snap_to_smart_guides() {
     assert_eq!(a[1], Action::Preview("path.create".into(), json!({"anchors": [{"x": 100.0, "y": 100.0}]})));
 }
 
+/// The rubber band after a smooth anchor is the curve the click then adds: it leaves along the
+/// anchor's outgoing handle and arrives at the new corner anchor without a handle, so the segment
+/// keeps its shape when the anchor goes down (#8296).
+#[test]
+fn rubber_band_is_the_segment_a_click_adds() {
+    let (last, out) = (Point::new(60.0, 300.0), Point::new(110.0, 250.0));
+    let sub = vectorcraft_geom::SubPath::new(vec![Anchor::corner(Point::new(10.0, 300.0)), Anchor::smooth(last, out)], false);
+    let (d, id, s) = drawing(sub);
+    let p = paint();
+    let cx = ToolContext { zoom: 1.0, smart_guides: false, snap_to_point: false, snap_to_pixel: false, snap_to_grid: false, ..cx(&d, &s, &p) };
+    let h = Point::new(237.0, 361.0);
+    let mut t = PenTool { drawing: true, ..PenTool::default() };
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Move, h.x, h.y));
+    let band: Vec<_> =
+        t.overlays(&cx).into_iter().filter_map(|o| if let Overlay::Path { path, .. } = o { Some(path.elements().to_vec()) } else { None }).collect();
+    assert_eq!(band, vec![vec![vectorcraft_geom::PathEl::MoveTo(last), vectorcraft_geom::PathEl::CurveTo(out, h, h)]]);
+    // The click adds a corner anchor there: the segment drawn is the one previewed.
+    let a = click(&mut t, &cx, h.x, h.y, Mods::default());
+    assert_eq!(a[1], Action::Preview("path.appendAnchor".into(), json!({"id": id.0, "x": h.x, "y": h.y, "subpath": 0})));
+}
+
 /// With Enable Rubber Band off, the preview segment is hidden but Measurement Labels still shows
 /// the D / Angle / dX / dY readout at the snapped point before the next click.
 #[test]
