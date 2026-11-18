@@ -20,6 +20,7 @@ const WRAPPED: &[(&str, &str)] = &[
     ("layer.delete", "ui.layerDelete"),
     ("brush.new", "ui.newBrush"),
     ("brush.options", "ui.brushOptions"),
+    ("brush.objectOptions", "ui.brushObjectOptions"),
     ("symbol.options", "ui.symbolOptions"),
     ("svgFilter.import", "ui.importSvgFilter"),
     ("text.convertListToText", "type.convertListToText"),
@@ -1764,10 +1765,12 @@ mod tests {
         assert_eq!(panels.len(), crate::state::all_panels().count());
         // Many results hold "layers" in their menu path; the panel, named Layers, is shown first, and "color guide" shows the Color Guide panel first too.
         for (query, want) in [("layers", "panel:layers"), ("color guide", "panel:colorGuide"), ("Layers ", "panel:layers")] {
-            let all = entries.iter().filter(|e| query.to_lowercase().split_whitespace().all(|w| e.haystack.contains(w))).count();
+            let all: Vec<&str> =
+                entries.iter().filter(|e| query.to_lowercase().split_whitespace().all(|w| e.haystack.contains(w))).map(|e| e.id.as_str()).collect();
             let shown: Vec<&str> = matching(&entries, &query.to_lowercase()).into_iter().map(|e| e.id.as_str()).collect();
             assert_eq!(shown.first(), Some(&want), "{query}: {shown:?}");
-            assert_eq!(shown.len(), all, "{query}");
+            // English plural and verb forms can find more results than the text alone.
+            assert!(all.iter().all(|id| shown.contains(id)), "{query}");
         }
         let layers = entries.iter().find(|e| e.id == "panel:layers").unwrap();
         assert_eq!(layers.shown, "Window › Show Panel › Layers");
@@ -1804,8 +1807,16 @@ mod tests {
     /// does, and changes nothing until the dialog is confirmed.
     #[test]
     fn an_effect_is_a_result_whose_pick_runs_its_menu_item() {
-        let entries = build(Lang::EN);
-        let effects = crate::shortcut_editor::effect_items();
+        // Both reads see the same plug-in revision: another test may install or remove a live
+        // effect plug-in between them.
+        let (entries, effects) = loop {
+            let revision = menus::plugin_revision();
+            let entries = build(Lang::EN);
+            let effects = crate::shortcut_editor::effect_items();
+            if menus::plugin_revision() == revision {
+                break (entries, effects);
+            }
+        };
         for e in effects.iter() {
             let key = format!("effect:{}", e.effect);
             assert_eq!(entries.iter().filter(|r| r.id == key).count(), 1, "{key}");
@@ -2543,13 +2554,13 @@ mod tests {
         }
     }
 
-    /// The click on the app bar's search button that opens the palette leaves it open; the next
-    /// click on the button closes it.
+    /// The click on the app bar's search field that opens the palette leaves it open; the next
+    /// click on the field closes it.
     #[test]
     fn the_click_that_opens_the_palette_does_not_close_it() {
         let mut window = Window::new();
         let nodes = window.frame(vec![]);
-        let at = button_at(&nodes, "Search commands, tools, panels and effects");
+        let at = button_at(&nodes, "Search commands");
         window.click(at);
         assert!(window.app.ui.palette_open, "the click opens the palette");
         window.frame(vec![]);

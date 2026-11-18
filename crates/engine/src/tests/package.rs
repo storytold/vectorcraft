@@ -405,6 +405,66 @@ fn a_confined_package_refuses_a_linked_javascript_file_outside_the_read_root() {
     assert_eq!(r["links"], 1, "{r}");
 }
 
+/// A confined request packages no linked file it would copy as it is (a PDF with Preserve Editing,
+/// or a native document it does not rewrite) whose native document keeps an Export for Screens
+/// folder outside its read roots: the package is refused before anything is written, with an error
+/// that names no file or folder. A native document the package rewrites leaves the folder out, a
+/// folder inside the roots is packaged, and the person's package copies every file.
+#[test]
+fn a_confined_package_refuses_a_linked_file_that_keeps_an_export_folder_outside_the_read_root() {
+    let away = Folder::new("package-folder-away");
+    let home = Folder::new("package-folder-home");
+    let roots = crate::file_access::AutomationRoots::new(&[&home.0], &[&home.0]).unwrap().unwrap();
+    let hidden = [away.0.to_string_lossy().into_owned(), home.0.to_string_lossy().into_owned()];
+    let out = home.file("out");
+    let package = |s: &mut Session, p: Value| crate::file_access::confine(Some(&roots), || s.execute("file.package", &p));
+    let refused = |s: &mut Session, p: Value| {
+        let e = package(s, p.clone()).expect_err("refused");
+        assert!(matches!(e, EngineError::BadParams { .. }), "{p}: {e:?}");
+        let e = e.to_string();
+        assert!(e.contains("a linked file's export folder is outside the read roots"), "{p}: {e}");
+        for h in &hidden {
+            assert!(!e.contains(h.as_str()), "{p} names {h}: {e}");
+        }
+        assert!(!std::path::Path::new(&out).exists(), "{p}");
+    };
+    let mut part = session();
+    run(&mut part, "shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 30}));
+    std::fs::create_dir_all(home.0.join("art")).unwrap();
+    let native = home.file("art/part.vectorcraft");
+    let pdf = home.file("art/part.pdf");
+    let keep = |part: &mut Session, folder: &str| {
+        std::sync::Arc::make_mut(&mut part.doc_mut().unwrap().doc).export_settings = serde_json::from_value(json!({"folder": folder})).unwrap();
+        save(part, &native);
+        let r = run(part, "document.serialize", json!({"format": "pdf"}));
+        write(&pdf, &vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap());
+    };
+    keep(&mut part, &away.0.to_string_lossy());
+    let poster = |placed: &str| {
+        let mut s = session();
+        let r = run(&mut s, "file.place", json!({"path": placed, "link": true}));
+        assert_eq!(r["linked"], true, "{r}");
+        save(&mut s, &home.file("poster.vectorcraft"));
+        s
+    };
+    let mut s = poster(&pdf);
+    refused(&mut s, json!({"folder": out}));
+    refused(&mut s, json!({"relink": false}));
+    assert_eq!(run(&mut s, "file.package", json!({}))["links"], 1, "the person's package");
+    let mut s = poster(&native);
+    refused(&mut s, json!({"folder": out, "relink": false}));
+    // Rewritten, the copy leaves the folder out.
+    let r = package(&mut s, json!({"folder": out})).unwrap();
+    assert_eq!(r["links"], 1, "{r}");
+    let copied = std::fs::read(std::path::Path::new(&out).join("poster Folder/Links/part.vectorcraft")).unwrap();
+    assert_eq!(vectorcraft_format::load_file(&copied).unwrap().doc.export_settings.get("folder"), None);
+    std::fs::remove_dir_all(&out).unwrap();
+    // A folder inside the read roots.
+    keep(&mut part, &home.file("screens"));
+    let mut s = poster(&pdf);
+    assert_eq!(package(&mut s, json!({"folder": out})).unwrap()["links"], 1);
+}
+
 /// A missing link stored as a path relative to the document names a file inside a confined
 /// request's read root: the package report and Document Info give its stored path.
 #[test]

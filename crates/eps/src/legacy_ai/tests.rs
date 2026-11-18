@@ -272,6 +272,81 @@ fn hue_wheel_gradients_are_written_with_the_stops_on_their_curve() {
     }
 }
 
+/// The written definition of the gradient named `name` in `text`, and how many stops it holds.
+fn definition<'a>(text: &'a str, name: &str) -> (&'a str, usize) {
+    let def = text.split(&format!("%AI5_BeginGradient: ({name})\n")).nth(1).and_then(|d| d.split("%AI5_EndGradient").next()).unwrap();
+    (def, def.matches(" %_Bs\n").count())
+}
+
+/// The format's gradients mix their stops' colors directly: a Perceptual gradient is written in
+/// process colors with the colors on its curve as stops, no more than the reader reads, in a
+/// definition of its own rather than its swatch's, with a warning, and opens with the colors it
+/// had. A Classic gradient keeps its own stops and gives no warning.
+#[test]
+fn perceptual_gradients_are_written_with_the_stops_on_their_curve() {
+    use vectorcraft_color::{GradientMethod, Swatch};
+    let mut doc = Document::new(200.0, 100.0);
+    for (name, color) in [("Night", Color::cmyk(1.0, 1.0, 0.0, 0.0)), ("Sun", Color::cmyk(0.0, 0.0, 1.0, 0.0))] {
+        doc.swatches.push(Swatch { name: name.into(), paint: Paint::solid(color), global: true, spot: true });
+    }
+    let stop = |offset: f32, color: Color, swatch: &str| GradientStop { swatch: Some(swatch.into()), ..GradientStop::new(offset, color) };
+    let stops = vec![stop(0.0, Color::cmyk(1.0, 1.0, 0.0, 0.0), "Night"), stop(1.0, Color::cmyk(0.0, 0.0, 1.0, 0.0), "Sun")];
+    let mut g = GradientPaint::new(Gradient { method: GradientMethod::Perceptual, ..Gradient::new(GradientKind::Linear, stops) });
+    g.swatch = Some("Dusk".into());
+    let want = g.gradient.clone();
+    // The same stops mixed directly stray from the Perceptual curve, so a file holding only the
+    // two stops would not open with the colors it had.
+    let classic = Gradient { method: GradientMethod::Classic, ..want.clone() };
+    assert!(
+        (0..=100).any(|k| {
+            let t = k as f32 / 100.0;
+            want.sample(t).0.to_rgb().iter().zip(classic.sample(t).0.to_rgb()).any(|(a, b)| (a - b).abs() > 0.05)
+        }),
+        "the methods mix alike"
+    );
+    let n = shape(&mut doc, shapes::rectangle(Rect::new(20.0, 10.0, 180.0, 90.0)), Paint::Gradient(Box::new(g)), Paint::None);
+    let l = doc.layers[0].id;
+    doc.insert(Some(l), 0, n).unwrap();
+    let out = write(&doc);
+    assert!(out.warnings.iter().any(|w| w == PERCEPTUAL_STOPS), "{:?}", out.warnings);
+    assert!(!out.warnings.iter().any(|w| w == HUE_STOPS), "{:?}", out.warnings);
+    let text = String::from_utf8_lossy(&out.bytes).into_owned();
+    assert!(!text.contains("(Dusk)"), "the curve is not the swatch's gradient");
+    assert!(!text.contains("(Night)") && !text.contains("(Sun)"), "the stops are process colors: {text}");
+    let (_, written) = definition(&text, "Gradient");
+    assert!((3..=crate::import::MAX_GRADIENT_STOPS).contains(&written), "{written} stops");
+    let read = crate::import(&out.bytes).unwrap().document;
+    let mut back = None;
+    read.walk(|n| {
+        if let (None, Paint::Gradient(g)) = (&back, n.appearance.fill_paint()) {
+            back = Some(g.gradient.clone());
+        }
+    });
+    let back = back.unwrap();
+    assert!(back.method.is_classic());
+    assert_eq!(back.stops.len(), written, "every stop written is read");
+    assert!(back.stops.iter().all(|s| s.swatch.is_none()), "{:?}", back.stops);
+    for k in 0..=100 {
+        let t = k as f32 / 100.0;
+        let (a, b) = (want.sample(t).0.to_rgb(), back.sample(t).0.to_rgb());
+        assert!(a.iter().zip(b).all(|(x, y)| (x - y).abs() < 0.03), "at {t}: {a:?} vs {b:?}");
+    }
+
+    // Classic: its own two stops, its spot colors and its swatch's name, without the warning.
+    let mut doc = Document::new(200.0, 100.0);
+    doc.swatches.push(Swatch { name: "Night".into(), paint: Paint::solid(Color::cmyk(1.0, 1.0, 0.0, 0.0)), global: true, spot: true });
+    let mut g = GradientPaint::new(classic);
+    g.swatch = Some("Dusk".into());
+    let n = shape(&mut doc, shapes::rectangle(Rect::new(20.0, 10.0, 180.0, 90.0)), Paint::Gradient(Box::new(g)), Paint::None);
+    let l = doc.layers[0].id;
+    doc.insert(Some(l), 0, n).unwrap();
+    let out = write(&doc);
+    assert!(!out.warnings.iter().any(|w| w == PERCEPTUAL_STOPS), "{:?}", out.warnings);
+    let text = String::from_utf8_lossy(&out.bytes).into_owned();
+    assert_eq!(definition(&text, "Dusk").1, 2);
+    assert!(text.contains("%%DocumentCustomColors: (Night)"), "{text}");
+}
+
 /// A radial gradient repeated out from a center far from the shape is written with its ramp points
 /// (percent) to five decimals, so its runs keep their places hundreds of runs out.
 #[test]
@@ -728,6 +803,51 @@ fn images_are_written_in_the_form_the_specification_shows() {
     assert!(rgb.iter().zip([247.0, 148.0, 29.0]).all(|(c, want)| (c * 255.0 - want).abs() < 0.1), "{rgb:?}");
 }
 
+/// An image's samples are written as upper-case hex on `%` comment lines (§8.1, §8.4) of 60
+/// digits, the last line shorter, each line ending with a newline: no samples write no line, and
+/// samples that fill their last line exactly write no empty `%` line after it.
+#[test]
+fn image_samples_are_written_as_hex_lines() {
+    let hex = |samples: &[u8]| {
+        let mut s = String::new();
+        super::writer::Writer::push_hex(&mut s, samples);
+        s
+    };
+    let mut samples = vec![0x00, 0x09, 0x0A, 0xAF, 0xFF];
+    samples.extend(0x10..=0x29);
+    assert_eq!(hex(&samples), "%00090AAFFF101112131415161718191A1B1C1D1E1F202122232425262728\n%29\n");
+    assert_eq!(hex(&samples[..30]), "%00090AAFFF101112131415161718191A1B1C1D1E1F202122232425262728\n");
+    assert_eq!(hex(&samples[..29]), "%00090AAFFF101112131415161718191A1B1C1D1E1F2021222324252627\n");
+    assert_eq!(hex(&[0xAB]), "%AB\n");
+    assert_eq!(hex(&[]), "");
+    // Appended after what is already written.
+    let mut s = String::from("0 0 1 1 1 1 8 3 0 0 0 0 XI\n");
+    super::writer::Writer::push_hex(&mut s, &[0xC0, 0xFF, 0xEE]);
+    assert_eq!(s, "0 0 1 1 1 1 8 3 0 0 0 0 XI\n%C0FFEE\n");
+}
+
+/// The hex lines are the same as formatting each sample with `{:02X}` and breaking the digits
+/// into lines of [`HEX_LINE`], for every length up to three lines and one more sample, and for
+/// every byte value.
+#[test]
+fn image_hex_matches_formatted_samples() {
+    let formatted = |samples: &[u8]| {
+        let digits: String = samples.iter().map(|c| format!("{c:02X}")).collect();
+        let lines: Vec<String> = digits.as_bytes().chunks(HEX_LINE).map(|l| format!("%{}\n", std::str::from_utf8(l).unwrap())).collect();
+        lines.concat()
+    };
+    let all: Vec<u8> = (0..=255u8).cycle().skip(7).take(3 * HEX_LINE / 2 + 1).collect();
+    for n in 0..=all.len() {
+        let mut s = String::new();
+        super::writer::Writer::push_hex(&mut s, &all[..n]);
+        assert_eq!(s, formatted(&all[..n]), "{n} samples");
+    }
+    let every: Vec<u8> = (0..=255u8).collect();
+    let mut s = String::new();
+    super::writer::Writer::push_hex(&mut s, &every);
+    assert_eq!(s, formatted(&every));
+}
+
 /// The pieces of an image cut into a raster mesh warp (as Object › Expand leaves a Warp on an
 /// image) are written as the image whole once, then each as the part of it that its triangle shows,
 /// and the file draws as the document does ([`write`] runs it).
@@ -1028,6 +1148,63 @@ fn rgb_stops_are_written_again_unchanged() {
     let (first, again) = (stops(first), stops(again));
     assert_eq!(first.len(), 12, "{first:?}");
     assert_eq!(again, first);
+}
+
+/// With a working RGB space other than sRGB, a Lab fill and a freeform gradient's average color
+/// are written as RGB values in the working RGB space, so they read back as RGB colors that show as
+/// the colors they were written for.
+#[test]
+fn a_lab_fill_reads_back_as_the_same_color_in_a_wide_gamut_working_space() {
+    const CHILD: &str = "VECTORCRAFT_TEST_LEGACY_AI_WIDE_GAMUT_LAB";
+    if std::env::var_os(CHILD).is_none() {
+        // Color settings are process-wide: exercise this profile in a separate test process.
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "legacy_ai::tests::a_lab_fill_reads_back_as_the_same_color_in_a_wide_gamut_working_space", "--nocapture"])
+            .env(CHILD, "1")
+            .output()
+            .unwrap();
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            output.status.success() && stdout.contains("test result: ok. 1 passed; 0 failed;"),
+            "isolated color profile test failed:\n{stdout}\n{}",
+            String::from_utf8_lossy(&output.stderr),
+        );
+        return;
+    }
+    use vectorcraft_color::cms;
+    cms::set_active(&cms::ColorSettings { rgb: cms::WIDE_GAMUT_RGB.into(), ..Default::default() }).unwrap();
+    assert!(!cms::active().rgb_is_srgb());
+    let lab = Color::lab(60.0, 20.0, -30.0);
+    let mut doc = Document::new(100.0, 100.0);
+    let n = shape(&mut doc, shapes::rectangle(Rect::new(10.0, 10.0, 50.0, 50.0)), Paint::solid(lab), Paint::None);
+    let layer = doc.layers[0].id;
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    // A freeform gradient is written as the average of its stops' display colors.
+    let (a, b) = (Color::rgb(0.9, 0.2, 0.1), Color::lab(50.0, -40.0, -20.0));
+    let stops = vec![GradientStop::new(0.0, a), GradientStop::new(1.0, b)];
+    let free = Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Freeform, stops))));
+    let n = shape(&mut doc, shapes::rectangle(Rect::new(60.0, 10.0, 90.0, 50.0)), free, Paint::None);
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    let average = {
+        let (a, b) = (a.to_rgb(), b.to_rgb());
+        [0, 1, 2].map(|i| (a[i] + b[i]) / 2.0)
+    };
+    // Written without [`write`]'s printed comparison, which paints a gradient in its first stop's
+    // color and not in the average color the writer writes for a freeform gradient.
+    let back = crate::import(&export_legacy_ai(&doc, &LegacyAiOptions::default()).unwrap().bytes).unwrap().document;
+    let mut read = vec![];
+    back.walk(|n| {
+        if let NodeKind::Path { .. } = n.kind {
+            read.push(n.appearance.fill_paint());
+        }
+    });
+    let [Paint::Solid { color: got @ Color::Rgb { .. }, .. }, Paint::Solid { color: avg @ Color::Rgb { .. }, .. }] = read.as_slice() else {
+        panic!("two RGB fills: {read:?}")
+    };
+    for (got, w, what) in [(got, lab.to_rgb(), "Lab fill"), (avg, average, "freeform gradient's average")] {
+        let g = got.to_rgb();
+        assert!(g.iter().zip(w).all(|(a, b)| (a - b).abs() < 2e-3), "{what} {got:?} shows as {g:?}, not {w:?}");
+    }
 }
 
 /// A gradient from white to #1b2a6b, the colors of #2687's circle, placed at `geom` (None: fitted

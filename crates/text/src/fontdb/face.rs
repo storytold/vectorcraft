@@ -368,6 +368,28 @@ impl FontFace {
     pub fn line_gap(&self) -> f64 {
         self.skrifa().map_or(0.0, |f| f64::from(f.metrics(Size::unscaled(), self.location()).leading)).max(0.0)
     }
+    /// The height of the face's character cell on Windows (the OS/2 table's `usWinAscent` plus
+    /// `usWinDescent`, at the face's location in a variable font), in font units; `None` when the
+    /// font has no OS/2 table or the sum isn't positive.
+    pub fn win_cell_height(&self) -> Option<f64> {
+        use skrifa::raw::TableProvider;
+        let f = self.skrifa()?;
+        let o = f.os2().ok()?;
+        // A variable font's MVAR table moves usWinAscent (`hcla`) and usWinDescent (`hcld`):
+        // https://learn.microsoft.com/en-us/typography/opentype/spec/mvar
+        let varied = |tag: &[u8; 4]| {
+            f.mvar().ok().and_then(|m| m.metric_delta(skrifa::Tag::new(tag), self.location().coords()).ok()).map_or(0.0, |d| d.to_f64())
+        };
+        let h = f64::from(o.us_win_ascent()) + varied(b"hcla") + f64::from(o.us_win_descent()) + varied(b"hcld");
+        (h > 0.0 && h.is_finite()).then_some(h)
+    }
+    /// The average width of the face's characters (the OS/2 table's `xAvgCharWidth`), in font
+    /// units; `None` when the font has no OS/2 table or gives no positive width.
+    pub fn average_char_width(&self) -> Option<f64> {
+        use skrifa::raw::TableProvider;
+        let w = f64::from(self.skrifa()?.os2().ok()?.x_avg_char_width());
+        (w > 0.0).then_some(w)
+    }
     /// Every mapped character and its glyph id, sorted by code point (the Glyphs panel).
     pub fn chars(&self) -> Vec<(char, u32)> {
         self.mapped_chars().to_vec()

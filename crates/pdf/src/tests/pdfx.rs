@@ -42,6 +42,51 @@ fn text(pdf: &[u8]) -> String {
     String::from_utf8_lossy(pdf).into_owned()
 }
 
+/// The XMP packet of `pdf`, read as its stream's `/Length` says: the packet's end must be inside
+/// those bytes and nothing but the end of line may follow them before `endstream`.
+fn xmp_packet(pdf: &[u8]) -> String {
+    use crate::lab_spot::{find, rfind};
+    let begin = find(pdf, b"<?xpacket begin", 0).expect("an XMP packet");
+    let head = &pdf[..begin];
+    let obj = rfind(head, b" obj").expect("the packet's object");
+    let dict = &head[obj..];
+    let at = find(dict, b"/Length ", 0).expect("its length") + b"/Length ".len();
+    let digits: Vec<u8> = dict[at..].iter().copied().take_while(u8::is_ascii_digit).collect();
+    let length: usize = String::from_utf8(digits).unwrap().parse().unwrap();
+    let mut data = obj + rfind(dict, b"stream").unwrap() + b"stream".len();
+    data += pdf[data..].iter().take(2).take_while(|b| matches!(b, b'\r' | b'\n')).count();
+    let stream = &pdf[data..data + length];
+    let close = find(stream, b"<?xpacket end=", 0).expect("the packet ends inside the stream's length");
+    assert!(find(stream, b"?>", close).is_some(), "the packet ends inside the stream's length");
+    let rest = String::from_utf8_lossy(&pdf[data + length..]);
+    assert!(rest.trim_start_matches(['\r', '\n']).starts_with("endstream"), "the stream ends at its length");
+    String::from_utf8(stream.to_vec()).unwrap()
+}
+
+/// The value of the XMP element `tag` in `xmp`.
+fn xmp_value<'a>(xmp: &'a str, tag: &str) -> Option<&'a str> {
+    let open = format!("<{tag}>");
+    let rest = &xmp[xmp.find(&open)? + open.len()..];
+    Some(&rest[..rest.find(&format!("</{tag}>"))?])
+}
+
+#[test]
+fn pdfx4_metadata_has_a_metadata_date_equal_to_the_modification_date() {
+    let d = doc(&[Color::cmyk(0.0, 1.0, 1.0, 0.0)]);
+    // Dated by the writer (created), then dated again after writing (modified later).
+    for modified in [None, Some(1_800_000_000)] {
+        let mut o = opts(Standard::PdfX4, |_| {});
+        o.modified = modified;
+        let xmp = xmp_packet(&export(&d, &o).unwrap());
+        let modify = xmp_value(&xmp, "xmp:ModifyDate").expect("xmp:ModifyDate");
+        assert_eq!(xmp_value(&xmp, "xmp:MetadataDate"), Some(modify), "{modified:?}: {xmp}");
+        assert_eq!(xmp.matches("<xmp:MetadataDate>").count(), 1, "{modified:?}");
+        if modified.is_some() {
+            assert!(modify.starts_with("2027-01-15T"), "the later date: {modify}");
+        }
+    }
+}
+
 #[test]
 fn each_standard_writes_its_header_output_intent_boxes_and_identification() {
     let mut d = doc(&[Color::cmyk(0.0, 1.0, 1.0, 0.0), Color::rgb(0.2, 0.4, 0.9)]);

@@ -44,12 +44,12 @@ fn native_large_canvas(size: f64, scale: f64, layers: &str) -> String {
 }
 
 /// A layer as the format writes it.
-fn layer(name: &str, visible: bool, body: &str) -> String {
+pub(super) fn layer(name: &str, visible: bool, body: &str) -> String {
     format!("%AI5_BeginLayer\n{} 1 1 1 0 0 1 0 79 128 255 0 50 0 Lb\n({name}) Ln\n{body}\nLB\n%AI5_EndLayer--\n", u8::from(visible))
 }
 
 /// A yellow square of 4 points at (`x`, `y`) in the format's operators.
-fn square(x: u32, y: u32) -> String {
+pub(super) fn square(x: u32, y: u32) -> String {
     format!("0 0 1 0 k\n{x} {y} m\n{} {y} L\n{} {} L\n{x} {} L\nf", x + 4, x + 4, y + 4, y + 4)
 }
 
@@ -3243,9 +3243,9 @@ fn custom_colours_open_paths_and_planar_group_marks_are_read() {
 /// A text document of `stories` (each as the text, its alignment code, its anchor and the frame's
 /// translation, and the start of its first line from the anchor), one font and a 14 point default.
 /// A story: its text, alignment code, anchor, frame translation and first line's start.
-type Story<'a> = (&'a str, u8, (f64, f64), (f64, f64), f64);
+pub(super) type Story<'a> = (&'a str, u8, (f64, f64), (f64, f64), f64);
 
-fn text_document(stories: &[Story<'_>]) -> String {
+pub(super) fn text_document(stories: &[Story<'_>]) -> String {
     let story = |(text, align, anchor, _t, start): &Story<'_>| {
         let n = text.chars().count();
         format!(
@@ -3290,7 +3290,7 @@ fn named_text_document(stories: &[Story<'_>]) -> String {
 
 /// The editing copy of a 100 × 100 file with `layers` and the text `document`; its template box is
 /// centred at (50, 50).
-fn native_with_text(layers: &str, document: &str) -> String {
+pub(super) fn native_with_text(layers: &str, document: &str) -> String {
     let lines: Vec<String> = ascii85(document.as_bytes()).as_bytes().chunks(60).map(|c| format!("%{}", String::from_utf8_lossy(c))).collect();
     format!(
         "%!PS-Adobe-3.0 \n%%BoundingBox: 0 0 100 100\n%%HiResBoundingBox: 0 0 100 100\n%AI3_Cropmarks: 0 0 100 100\n%AI3_TemplateBox: 50 50 50 50\n\
@@ -3299,8 +3299,18 @@ fn native_with_text(layers: &str, document: &str) -> String {
     )
 }
 
+/// [`text_document`] of `stories`, padded so that [`native_with_text`] doesn't split the end of its
+/// data, `~>`, across two lines.
+pub(super) fn unsplit_text_document(stories: &[Story<'_>]) -> String {
+    let mut doc = text_document(stories);
+    while ascii85(doc.as_bytes()).len() % 60 == 1 {
+        doc.push('\n');
+    }
+    doc
+}
+
 /// A text object of story `story`, as the layers hold it.
-fn text_object(story: u32) -> String {
+pub(super) fn text_object(story: u32) -> String {
     format!("/AI11Text :\n0 /FreeUndo ,\n0 /FrameIndex ,\n{story} /StoryIndex ,\n2 /TextAntialiasing ,\n;\n")
 }
 
@@ -6056,6 +6066,94 @@ fn an_envelope_of_type_waits_on_the_page_of_layers_that_would_open_alone() {
     let (envelopes, loose) = envelopes_and_type(&d);
     assert_eq!(envelopes, [vec!["FLUX".to_string()]], "{notes:?}");
     assert_eq!(loose, [("Note".to_string(), true)], "{notes:?}");
+}
+
+/// What `f` returns, with how many times it read a text document and scanned the text objects'
+/// frames of an editing copy on this thread; with `afresh`, each check and build reads them anew,
+/// keeping nothing for the next.
+fn text_reads<T>(afresh: bool, f: impl FnOnce() -> T) -> (T, u64, u64) {
+    crate::import::ate::TEXTS_READS.set(0);
+    crate::import::ai::TEXT_FRAME_SCANS.set(0);
+    crate::import::native::READ_AFRESH.set(afresh);
+    let out = f();
+    crate::import::native::READ_AFRESH.set(false);
+    (out, crate::import::ate::TEXTS_READS.get(), crate::import::ai::TEXT_FRAME_SCANS.get())
+}
+
+/// A `.ai` that opens without its PDF part reads its text document and scans its text objects'
+/// frames once, for the check that its text document makes all of its type and for the build, and
+/// comes in as it does when each reads them anew.
+#[test]
+fn layers_that_open_alone_read_their_text_once() {
+    let doc = unsplit_text_document(&[("Hi there\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0), ("Mid\r", 2, (8191.5, 8191.5), (0.0, 0.0), -10.0)]);
+    let art = layer("Art", true, &format!("{}\n{}{}", square(10, 10), text_object(0), text_object(1)));
+    let file = private(&native_with_text(&art, &doc));
+    let open = || crate::ai_layers_alone(&file, &[(100.0, 100.0)], 1.0, crate::NameEncoding::default()).ok();
+    let (opened, texts, frames) = text_reads(false, open);
+    let Some((d, notes)) = opened else { panic!("didn't open without the page") };
+    assert_eq!((texts, frames), (1, 1), "{notes:?}");
+    assert_eq!(text_of(&d.layers[0]).iter().map(|t| t.plain_text()).collect::<Vec<_>>(), ["Hi there", "Mid"], "{notes:?}");
+    let (afresh, texts, frames) = text_reads(true, open);
+    assert_eq!((texts, frames), (2, 2));
+    assert_eq!(afresh, Some((d, notes)));
+}
+
+/// Layers whose text document can't be read wait on the PDF part, which then doesn't read the text
+/// document or scan the frames again, and come in as they do when each check and build reads them
+/// anew.
+#[test]
+fn layers_whose_text_document_cannot_be_read_read_it_once_with_the_page() {
+    let art = layer("Art", true, &format!("{}\n{}", square(10, 10), text_object(0)));
+    let file = private(&native_with_text(&art, "not a text document"));
+    let names = crate::NameEncoding::default();
+    let open = || {
+        let Err(layers) = crate::ai_layers_alone(&file, &[(100.0, 100.0)], 1.0, names) else { panic!("opened without the page") };
+        crate::layered_ai_from(layers, pdf_part(10.0, 86.0), vec![], false, false, 1.0, names)
+    };
+    let (opened, texts, frames) = text_reads(false, open);
+    assert_eq!((texts, frames), (1, 1), "{:?}", opened.1);
+    let (afresh, texts, frames) = text_reads(true, open);
+    assert_eq!((texts, frames), (2, 2), "{:?}", afresh.1);
+    assert_eq!(opened, afresh);
+}
+
+/// An envelope of type that waits on the PDF part reads the text document and scans the frames
+/// once, for the check before the PDF part is imported, the build with it, and the build without it
+/// that follows when the envelope doesn't open live, and the file comes in as it does when each of
+/// them reads them anew.
+#[test]
+fn an_envelope_of_type_waiting_on_the_page_reads_the_text_once() {
+    let Some(family) = installed_family() else { return };
+    let stories = [("FLUX\r", 0, (8170.0, 8180.0), (0.0, 0.0), 0.0), ("Note\r", 0, (8170.0, 8220.0), (0.0, 0.0), 0.0)];
+    let mut doc = text_document(&stories).replace("(Helvetica)", &format!("({family})"));
+    while ascii85(doc.as_bytes()).len() % 60 == 1 {
+        doc.push('\n');
+    }
+    let (drawn, _) = drawn_envelope(&arc_envelope(&made_envelope_type(&doc), 30.0));
+    let art = format!("u\n{}U\n{}", text_object(1), type_envelope(&arc_keys(0.3), &drawn));
+    let file = private(&native_with_text(&layer("Art", true, &art), &doc));
+    let names = crate::NameEncoding::default();
+    let open = |page: Document| {
+        let Err(layers) = crate::ai_layers_alone(&file, &[(100.0, 100.0)], 1.0, names) else { panic!("opened without the page") };
+        crate::layered_ai_from(layers, page, vec![], false, false, 1.0, names)
+    };
+    // A PDF part the layers don't draw as: they open alone, after a build with the page and one without.
+    let (opened, texts, frames) = text_reads(false, || open(pdf_part(80.0, 80.0)));
+    assert_eq!((texts, frames), (1, 1), "{:?}", opened.1);
+    let (afresh, texts, frames) = text_reads(true, || open(pdf_part(80.0, 80.0)));
+    assert_eq!((texts, frames), (4, 4), "{:?}", afresh.1);
+    assert_eq!(opened, afresh);
+    let (envelopes, _) = envelopes_and_type(&opened.0);
+    assert!(opened.2 && envelopes.is_empty(), "{envelopes:?} {:?}", opened.1);
+    // A PDF part that draws as those layers, with the drawn art: the envelope opens live.
+    let page = opened.0;
+    let (opened, texts, frames) = text_reads(false, || open(page.clone()));
+    assert_eq!((texts, frames), (1, 1), "{:?}", opened.1);
+    let (afresh, texts, frames) = text_reads(true, || open(page));
+    assert_eq!((texts, frames), (2, 2), "{:?}", afresh.1);
+    assert_eq!(opened, afresh);
+    let (envelopes, _) = envelopes_and_type(&opened.0);
+    assert_eq!(envelopes, [vec!["FLUX".to_string()]], "{:?}", opened.1);
 }
 
 /// The hidden type outside envelopes in the layers of `d`: each text object's name.
