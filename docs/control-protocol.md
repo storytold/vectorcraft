@@ -500,7 +500,10 @@ the desktop each floating window is an OS window of its own; on the web and on W
 window. `ui.toolbar_pos` in `ui.inspect` is the Tools panel's corner (null: docked); `window.panel.float` and
 `window.panel.dock` with `panel: "tools"` float it at `x`, `y` or dock it on the window's left edge. With
 `window.toolsBesideCanvas {on?}` (Window › Toolbars › Keep Tools Beside the Canvas, off by default; `ui.tools_beside_canvas`)
-the docked Tools panel sits between left-side panels and the canvas, and `window.panel.dock` docks it there.
+the docked Tools panel sits between left-side panels and the canvas, and `window.panel.dock` docks it there. Dropping
+a floating Tools panel on the canvas's left edge, right of panels docked on the left, turns the setting on, and on the
+window's left edge turns it off; with no panels docked on the left, a drop leaves the setting as it is
+(`docs/mcp.md` › Tools panel placement).
 
 Flatten Transparency: `ui.flattenTransparencyDialog` opens the `flattenTransparency` dialog for the selection
 (fields `preset`: a preset name, setting it loads that preset's options; the option keys of

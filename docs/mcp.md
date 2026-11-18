@@ -3226,10 +3226,15 @@ By default the docked Tools panel sits at the window's left edge, outside any pa
 `window.toolsBesideCanvas {on?}` (Window › Toolbars › Keep Tools Beside the Canvas, remote mode, `invoke_menu`)
 docks it between those panels and the canvas instead (`on: true`), back at the window's edge (`on: false`), or
 toggles it (`on` omitted or null), and answers the new state. Any other value of `on` is an error and changes
-nothing. With the setting on, a floating Tools panel docks when it is dropped on the canvas's left edge as well as
-on the window's left edge, and `window.panel.dock {panel: "tools"}` docks it beside the canvas. A floating Tools
-panel stays floating when the setting changes. The setting is VectorCraft's own layout option, off by default; it is
-kept with the workspace, and built-in workspaces and workspaces saved without it keep Tools at the window's edge.
+nothing. A floating Tools panel dropped on the canvas's left edge, right of any panels docked on the left, docks
+beside the canvas and turns the setting on; dropped on the window's left edge, it docks there and turns the setting
+off. With no panels docked on the left, both edges put Tools in the same place (left of any toolbars made with
+New Toolbar docked there), and a drop on either docks it where the setting puts it and leaves the setting as it
+is; so does a drop in the column both edges share when left-side panels are collapsed to icons narrower than the
+window's edge strip. With the setting on, `window.panel.dock {panel: "tools"}` docks it beside the canvas. A
+floating Tools panel stays floating when the setting changes. The setting is VectorCraft's own layout option, off
+by default; it is kept with the workspace, and built-in workspaces and workspaces saved without it keep Tools at
+the window's edge.
 
 ```json
 {"name":"invoke_menu","arguments":{"command":"window.toolsBesideCanvas","params":{"on":true}}}
