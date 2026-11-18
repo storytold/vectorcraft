@@ -596,7 +596,12 @@ fn with_object_bounds<R>(cx: &ToolContext, walk: impl FnOnce(&mut dyn FnMut(Node
 pub(crate) fn inside(cx: &ToolContext, r: Rect, ids: Vec<NodeId>) -> Vec<NodeId> {
     let symbols = cx.doc.symbol_boxes();
     let within = |b: Rect| r.min_x() <= b.min_x() && b.max_x() <= r.max_x() && r.min_y() <= b.min_y() && b.max_y() <= r.max_y();
-    ids.into_iter().filter(|id| cx.doc.node(*id).and_then(|n| n.geometric_bounds_with(&symbols)).is_some_and(within)).collect()
+    // Locked or hidden guides, which the marquee leaves out, don't count toward a group's box (#8538).
+    let measure = |n: &vectorcraft_doc::Node| match n.without_guides().filter(|_| !cx.guides) {
+        Some(art) => art.geometric_bounds_with(&symbols),
+        None => n.geometric_bounds_with(&symbols),
+    };
+    ids.into_iter().filter(|id| cx.doc.node(*id).and_then(measure).is_some_and(within)).collect()
 }
 
 /// What of the bounding box is under the pointer.
@@ -1199,7 +1204,7 @@ impl Tool for SelectionTool {
                 if r.width() < Self::drag_threshold(cx) && r.height() < Self::drag_threshold(cx) {
                     return if toggle { vec![] } else { vec![Action::Exec("select.none".into(), json!({}))] };
                 }
-                let touched = marquee_in_view(cx.doc, r, cx.isolation, false, cx.outline);
+                let touched = marquee_in_view(cx.doc, r, cx.isolation, false, cx.outline, !cx.guides);
                 let enclosed = marquee_enclosed(cx, enclosed, marquee_direction(cx, start, p, directional_inside));
                 let ids = if enclosed { inside(cx, r, touched) } else { touched };
                 let art = Action::Exec(if toggle { "select.toggle" } else { "select.set" }.into(), json!({ "ids": json_ids(&ids) }));

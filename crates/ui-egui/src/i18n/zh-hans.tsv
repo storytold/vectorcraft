@@ -90,6 +90,7 @@
 	Add to Swatches	添加到色板
 	Add Used Colors	添加已用颜色
 	Additional Plug-ins Folder	附加增效工具文件夹
+	Plug-in Instruction Budget	增效工具指令预算
 	Additional Fonts Folder	附加字体文件夹
 	Adjust Adjoining Width Points	调整相邻宽度点
 	Incoming	入侧
@@ -760,6 +761,9 @@ antiAlias	Sharp	锐利
 	Delete Artboard	删除画板
 	Delete Artboards	删除画板
 	Delete Brush	删除画笔
+	Delete Color	删除颜色
+	Restore Generated Table	恢复生成的颜色表
+	Unshift All Colors	取消偏移所有颜色
 	Delete Character Style	删除字符样式
 	Delete Empty Artboards	删除空白画板
 	Delete Freeform Point	删除自由点
@@ -827,6 +831,7 @@ antiAlias	Sharp	锐利
 	Direct Selection Tool	直接选择工具
 	Direction Handles	方向手柄
 	Disable Auto Add/Delete	禁用自动添加/删除锚点
+	Interpolate Control Points When Moving Anchors	移动锚点时插值方向手柄
 	Disable Opacity Mask	禁用不透明度蒙版
 	Discard	不存储
 	Discard Empty Type	丢弃空文字
@@ -2173,6 +2178,7 @@ file-filter	Templates	模板
 	Scatter:	散布：
 	Rotation:	旋转：
 	Rotation relative to:	旋转相对于：
+	Hue Jitter:	色相抖动：
 	Brush Scale Options	画笔缩放选项
 	Scale Proportionately	等比缩放
 	Stretch to Fit Stroke Length	伸展以适合描边长度
@@ -2199,6 +2205,7 @@ file-filter	Templates	模板
 	Approximate path	近似路径
 	Colorization	着色
 	Key Color:	主色：
+	Roundness	圆度
 	Roundness:	圆度：
 	Fixed	固定
 	Pressure	压力
@@ -2637,6 +2644,7 @@ diagnostics	ui	界面
 	Line Properties:	直线属性：
 	Line Length:	直线长度：
 	Line Angle:	直线角度：
+	Constrain Pie Angle	约束扇形角度
 	Polygon Tool	多边形工具
 	Portrait	纵向
 	Portuguese	葡萄牙语
@@ -2799,6 +2807,9 @@ digits	Malayalam	马拉雅拉姆数字
 	Real World:	真实世界：
 	Real-time Drawing and Editing	实时绘图和编辑
 	Use Monitor Profile for Canvas	画布使用显示器配置文件
+	Refresh Monitor Profile	刷新显示器配置文件
+@msg	turn on Use Monitor Profile for Canvas first	请先打开“画布使用显示器配置文件”
+@msg	this build doesn't read display profiles	此版本不读取显示器配置文件
 	The canvas is drawn in sRGB.	画布以 sRGB 绘制。
 	Canvas display profile:	画布显示配置文件：
 	The system matches the window to the display's colors.	系统会使窗口匹配显示器的颜色。
@@ -3058,6 +3069,7 @@ digits	Malayalam	马拉雅拉姆数字
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	按住 Cmd/Ctrl 滚动鼠标滚轮会横向滚动画布。
 	Dragging sideways on a numeric field's label changes the field's value.	在数值字段的标签上横向拖动可更改字段的值。
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	在触控板上用双指旋转手势可旋转画布视图。
+	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	移动锚点时，只有一端移动的每条曲线都会保持其相对于两端的形状。
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	按住工具的快捷键时选择该工具，松开后重新选择之前的工具。
 	Shows the bounding box while you move the selection or draw a shape.	移动所选对象或绘制形状时显示定界框。
 	Create Trim Marks draws Japanese-style marks instead of Roman ones.	创建裁切标记绘制日式标记，而不是西式标记。
@@ -3138,6 +3150,8 @@ digits	Malayalam	马拉雅拉姆数字
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	指针或拖动的点在屏幕上需离图稿多近，智能参考线才会吸附；该距离在任何缩放比例下都相同。
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	吸附线段的端点或从中心绘制的圆，使其与附近的曲线相切。
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	吸附线段的端点，使其与附近的直线段成直角相交。
+	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	在画布上于每个切片左上角的方框中显示其编号；关闭时，切片轮廓仍会显示。
+	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	用户切片和对象切片的轮廓及其编号方框的颜色；自动切片使用此颜色较淡的色调。
 	Reset all preferences to their defaults?	将所有首选项重置为默认值？
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	在首选项中点击确定后才会应用默认值。在那里点击取消会保留当前首选项。
 	Restore Recovered Documents	恢复已恢复的文档
@@ -3337,6 +3351,12 @@ digits	Malayalam	马拉雅拉姆数字
 	Search commands, tools, panels and effects…	搜索命令、工具、面板和效果…
 	No commands match	没有匹配的命令
 	{pos} of {total}: {name}	第 {pos} 个，共 {total} 个：{name}
+	No menu item	无菜单项
+	Toolbar	工具栏
+	{toolbar}, in the {tool} group	{toolbar}，位于 {tool} 组中
+	In the menu bar: {path}	在菜单栏中：{path}
+	In the {group} group: press and hold to open it	在“{group}”组中：按住即可打开
+	{home}, not shown now	{home}，当前未显示
 @plural	{n} result|{n} results	{n} 个结果
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	共 {n} 个结果，显示 {shown} 个。继续输入以缩小范围。
 	Recent Commands	最近使用的命令
@@ -4763,6 +4783,8 @@ imageTrace	Outline	轮廓
 @msg	Create Outlines: select text objects	创建轮廓：请选择文本对象
 @msg	paste unavailable	无法粘贴
 @msg	Save for Web: the image is empty	存储为 Web 所用格式：图像为空
+@msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted：颜色表中至少要保留一种颜色
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted：`{k}` 与另一个键指的是同一种颜色
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}：`{h}` 不是颜色，例如 "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}：最多 {MAX_TABLE} 种颜色
 @msg	no artboard {i} (0-based; the document has {_1})	没有画板 {i} (从 0 开始计数；文档有 {_1} 个)
@@ -4999,6 +5021,12 @@ imageTrace	Outline	轮廓
 @msg	no preset editor	没有预设编辑器
 @msg	no perspective grid preset named `{name}`	没有名为 `{name}` 的透视网格预设
 @msg	no active perspective plane	没有活动的透视平面
+@msg	the perspective grid is hidden	透视网格已隐藏
+@msg	Automatic Plane Positioning is off: turn on anchorPoint or gridlineIntersection (perspective.widget.options)	自动平面定位已关闭：请打开 anchorPoint 或 gridlineIntersection (perspective.widget.options)
+@msg	anchorPoint must be true or false	anchorPoint 必须为 true 或 false
+@msg	gridlineIntersection must be true or false	gridlineIntersection 必须为 true 或 false
+@msg	tolerance must be 0 or more	tolerance 必须大于或等于 0
+@msg	give `at` or `clear`, not both	请给出 `at` 或 `clear`，不能两者都给
 @msg	plane must be left, right or ground	plane 必须是 left、right 或 ground
 @msg	missing `id` (see plugin.list)	缺少 `id` (请参阅 plugin.list)
 @msg	no plug-in {id} is installed	未安装增效工具 {id}
@@ -5428,6 +5456,8 @@ liquify-list-end	{0}, {1}	{0}和{1}
 @msg	the {tool} tool has no options	{tool} 工具没有选项
 @msg	unknown tool `{tool}`	未知工具 `{tool}`
 @msg	{tool} isn't in a toolbar group of several tools	{tool} 不在包含多个工具的工具栏组中
+@msg	Presentation Mode hides the toolbars: change the screen mode to show them	演示模式会隐藏工具栏：请更改屏幕模式以显示工具栏
+@msg	Tab has hidden the toolbars: press Tab to show them	Tab 已隐藏工具栏：请按 Tab 以显示工具栏
 @msg	no such document	没有此文档
 @msg	{_1}: not saved, so not closed	{_1}：未保存，因此未关闭
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` 是内置工作区；请选择其他名称
@@ -5477,6 +5507,7 @@ liquify-list-end	{0}, {1}	{0}和{1}
 @msg	a linked JavaScript file is outside the read roots	链接的 JavaScript 文件位于所有读取根目录之外
 @msg	a linked image file is outside the read roots	链接的图像文件位于所有读取根目录之外
 @msg	a linked file's export folder is outside the read roots	链接文件的导出文件夹位于所有读取根目录之外
+@msg	a linked file's editing data can't be read to check it against the read roots	无法读取链接文件的编辑数据，因此无法对照读取根目录进行检查
 @msg	automation path rejected: outside the write root {root}: {path}	已拒绝自动化路径：位于写入根目录 {root} 之外：{path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	已拒绝自动化路径：位于所有写入根目录 {roots} 之外：{path}
 @msg	automation path rejected: path is empty	已拒绝自动化路径：路径为空
@@ -5986,6 +6017,7 @@ font-technology	Variable	可变
 	Bevel	斜角
 	Offset	偏移
 	Axis	轴
+	Axis Angle	轴角度
 axis	Horizontal	水平
 axis	Vertical	垂直
 axis	Both	两者
@@ -6299,6 +6331,7 @@ lighting	Light	光源
 	Cove	凹圆
 	Depth	深度
 	Front	正面
+	Side	侧面
 	Isometric Bottom	等角底部
 	Isometric Left	等角左侧
 	Isometric Right	等角右侧
@@ -6393,7 +6426,7 @@ lighting	Light	光源
 @msg	each of `{GRAPHICS}` must be an object	`{GRAPHICS}` 的每个条目必须是对象
 @msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	`{GRAPHICS}` 的条目接受 symbol、face、x、y、scale 和 rotation，不接受 `{k}`
 @msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	`{GRAPHICS}` 的每个条目都需要 `symbol`，即符号的名称
-@msg	`{GRAPHICS}` face must be front or back	`{GRAPHICS}` 的 face 必须是 front 或 back
+@msg	`{GRAPHICS}` face must be front, back or side	`{GRAPHICS}` 的 face 必须是 front、back 或 side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}` 的 {key} 必须是 {lo} 到 {hi} 之间的数字
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` 必须是数组
 @msg	Graphics map onto the Plane, Extrude and Revolve object types	图形映射到平面、突出和回转对象类型上
@@ -7598,6 +7631,14 @@ breakText	Glyphs	字形
 	Remove Gaps	移除间隙
 @msg	that makes too many pieces (at most 100000): make the dashes longer	这会产生过多片段（最多 100000 个）：请加长短划线
 @msg	select paths, or segments, to divide	请选择要分割的路径或线段
+# Path Precision Tools add-on: Smooth Bridge.
+	Smooth Bridge…	平滑桥接…
+	Smooth Bridge	平滑桥接
+	Keep Originals	保留原稿
+@msg	select two circles to bridge	请选择两个要桥接的圆
+@msg	one circle is inside the other	一个圆位于另一个圆内部
+@msg	the circles are too far apart for this radius: raise the radius	对于此半径，两个圆相距太远：请增大半径
+@msg	the circles are too far apart for this radius	对于此半径，两个圆相距太远
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	公切线…
 	Common Tangents	公切线
@@ -7614,6 +7655,7 @@ breakText	Glyphs	字形
 @msg	One path lies inside the other, so they have no common tangents	一条路径位于另一条之内，因此它们没有公切线
 @msg	The paths overlap, so they have no internal tangents	路径相互重叠，因此它们没有内公切线
 @msg	One path lies inside the other, so they have no internal tangents	一条路径位于另一条之内，因此它们没有内公切线
+@msg	The point lies inside the path, so it has no tangents	该点位于路径之内，因此没有切线
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	将短划线扩展为路径
 @msg	select paths with dashed strokes to expand	请选择要扩展的虚线描边路径
@@ -7970,6 +8012,14 @@ breakText	Glyphs	字形
 @msg	`answers` has more than {MAX_ANSWERS} answers	`answers` 中的回答超过 {MAX_ANSWERS} 个
 @msg	`answers` is larger than 1 MiB	`answers` 大于 1 MiB
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` 仅用于无人可问的运行：在应用中，由用户回答每个对话框
+@msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel` 必须是 1 到 {_1} 之间的整数
+@msg	`args{place}` is nested more than 64 levels deep	`args{place}` 的嵌套超过 64 层
+@msg	`args` must be an object	`args` 必须是对象
+@msg	`args` is larger than 1 MiB	`args` 大于 1 MiB
+@msg	`path` is empty	`path` 为空
+@msg	`installed` takes a `path`, not a `source`	`installed` 需要 `path`，而不是 `source`
+@msg	`path` must name a .js or .jsx file	`path` 必须指向 .js 或 .jsx 文件
+@msg	give exactly one of `path` and `source`	`path` 和 `source` 中必须且只能给出一个
 @msg	`answers` must be a list of answers	`answers` 必须是回答的列表
 @msg	`artboard` must be the index of an artboard of the document	`artboard` 必须是文档中某个画板的索引
 @msg	`artboardsAt` must be [x, y]	`artboardsAt` 必须是 [x, y]
@@ -9928,3 +9978,8 @@ breakText	Glyphs	字形
 @msg	A joint does not close by {gap} pt.	有一处接缝相差 {gap} pt 未闭合。
 @msg	Two panels pass through each other.	两个面板相互穿插。
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} 像素对 PSD 而言过大 (每边最多 {MAX_SIDE} 像素)：请降低分辨率
+	Pressure Sensitive	压感画笔
+	Flex Ribbon	柔韧色带
+	Pulse Stroke	脉动笔触
+	Round Flow	圆头流线
+	Chisel Flow	斜头流线

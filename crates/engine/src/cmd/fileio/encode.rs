@@ -1053,12 +1053,14 @@ fn encode_all_of(doc: &Document, format: &str, p: &Value) -> Result<Encoded> {
 
 /// The file exporter plug-in `plugin` writes of `doc` in its format `f`
 /// ([`vectorcraft_plugins::export`]). The plug-in is given the native file's JSON
-/// ([`vectorcraft_format::json_part`]) and `p`'s `params`, for the file `p`'s `path` names (else
-/// one named after the document) with that path's extension when the plug-in lists it, else its
-/// first. Its warnings come back with the file, as losses (the plug-in gives them no kind).
+/// ([`vectorcraft_format::json_part`]), without an Export for Screens folder outside the read roots
+/// ([`super::access::with_readable_settings_folder`]), and `p`'s `params`, for the file `p`'s `path`
+/// names (else one named after the document) with that path's extension when the plug-in lists it,
+/// else its first. Its warnings come back with the file, as losses (the plug-in gives them no kind).
 fn plugin_file(doc: &Document, plugin: &vectorcraft_plugins::Plugin, f: &Format, p: &Value) -> Result<Encoded> {
     use vectorcraft_plugins::{Error, export};
-    let doc = &*doc.without_edit_modes();
+    let doc = doc.without_edit_modes();
+    let doc = &*super::access::with_readable_settings_folder(&doc);
     let file = vectorcraft_format::save_with(doc, &vectorcraft_format::SaveOptions::default()).map_err(|e| EngineError::Other(e.to_string()))?;
     let path = p.get("path").and_then(Value::as_str);
     let listed = path.map(super::extension).and_then(|e| f.extensions.iter().copied().find(|x| *x == e));
