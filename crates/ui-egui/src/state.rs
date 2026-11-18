@@ -101,7 +101,7 @@ pub fn sync_zoom_stops_display_print_size(v: bool) {
     ZOOM_STOPS_PRINT_SIZE.store(v, Ordering::Relaxed);
 }
 
-/// Illustrator's preset zoom stops, in percent.
+/// The preset zoom stops, in percent.
 pub const ZOOM_STOPS: [f64; 26] = [
     3.13, 4.17, 6.25, 8.33, 12.5, 16.67, 25.0, 33.33, 50.0, 66.67, 100.0, 150.0, 200.0, 300.0, 400.0, 600.0, 800.0, 1200.0, 1600.0, 2400.0, 3200.0,
     4800.0, 6400.0, 12800.0, 25600.0, 64000.0,
@@ -135,7 +135,7 @@ pub fn next_zoom_with_display(z: f64, up: bool, display_print_size: bool) -> f64
     zoom_from_display_percent(stop, display_print_size)
 }
 
-/// Format like Illustrator's tab/zoom field: up to 2 decimals, no trailing zeros.
+/// Format for the tab/zoom field: up to 2 decimals, no trailing zeros.
 pub fn zoom_label(z: f64, display_print_size: bool) -> String {
     let s = format!("{:.2}", zoom_display_percent(z, display_print_size));
     let s = s.trim_end_matches('0').trim_end_matches('.');
@@ -219,18 +219,22 @@ pub const ICON_PANELS: &[(&str, &str, &str)] = &[
     ("colorThemes", "Color Themes", "sun"),
     (crate::panels::color_wheel::ID, "Color Wheel", "circle"),
     (crate::panels::links::ID, "Links", "link"),
+    (crate::panels::preflight::ID, "Production Preflight", "dc-list-view"),
     (crate::panels::asset_export::ID, "Asset Export", "share-2"),
     (crate::panels::css_properties::ID, "CSS Properties", "globe"),
     (crate::panels::three_d::ID, "3D and Materials", "dc-cube"),
     (crate::panels::variables::ID, "Variables", "chart-column"),
     (crate::panels::script_console::ID, "Script Console", "message-circle"),
     (crate::panels::learn::ID, "Learn", "graduation-cap"),
+    (crate::panels::discover::ID, "VectorCraft Help…", "search"),
     (crate::addons::cleanup::ID, "Artwork Cleanup", "sparkles"),
     (crate::addons::color::ID, "Color Effects", "sun"),
     (crate::addons::packaging::ID, "Fold Lines", "scissors"),
+    (crate::addons::packaging::preview::ID, "Fold Preview", "box"),
     (crate::addons::pathtools::ID, "Anchor Inspector", "dc-anchor-smooth"),
     (crate::addons::pathtools::shape::ID, "Parametric Shape", "hexagon"),
     (crate::addons::pen::ID, "Smart Pen", "spline-pointer"),
+    (crate::addons::units::ID, "Unit Converter", "ruler"),
 ];
 
 /// Groups of icon panels separated by dividers in the collapsed column.
@@ -418,9 +422,16 @@ pub struct UiState {
     /// Type › Find Font…'s last Find In choice (`find_font::FIND_IN`), kept while the app runs.
     #[serde(skip)]
     pub find_font_in: String,
+    /// Ellipse Properties' Constrain Pie Angle link (Transform and Properties panels): a Pie Start
+    /// or End Angle typed while it is on keeps each selected ellipse's pie span. Kept while the app
+    /// runs; off at every launch.
+    #[serde(skip)]
+    pub constrain_pie_angle: bool,
     /// The Learn panel's tab, skill and tutorial, kept while the app runs.
     #[serde(skip)]
     pub learn: crate::panels::learn::View,
+    #[serde(skip)]
+    pub discover: crate::panels::discover::View,
     /// The tool whose place a Learn tutorial step's link shows (`learn.locateTool`), while its mark
     /// is on screen. Not saved.
     #[serde(skip)]
@@ -454,7 +465,7 @@ pub struct UiState {
     pub toolbar_advanced: bool,
     #[serde(default = "yes")]
     pub task_bar: bool,
-    /// Where the Contextual Task Bar was dragged or pinned. Not saved, as in Illustrator: the bar
+    /// Where the Contextual Task Bar was dragged or pinned. Not saved: the bar
     /// starts under the selection at every launch.
     #[serde(skip)]
     pub task_bar_place: TaskBarPlace,
@@ -542,7 +553,9 @@ pub struct UiState {
     pub toolbar_pos: Option<[f32; 2]>,
     /// The docked Tools panel sits between the left-side panels and the canvas instead of at the
     /// window's left edge (Window › Toolbars › Keep Tools Beside the Canvas,
-    /// `window.toolsBesideCanvas`). Off by default, and off in state saved without it.
+    /// `window.toolsBesideCanvas`). Dropping Tools on the canvas's left edge, right of panels docked
+    /// on the left, turns it on, and on the window's left edge turns it off; with no panels docked on
+    /// the left, a drop leaves it as it is. Off by default, and off in state saved without it.
     #[serde(default)]
     pub tools_beside_canvas: bool,
     /// The docked Tools panel stands on the right, between the canvas and the panels, instead of on
@@ -603,6 +616,10 @@ pub struct UiState {
     /// Consolidate All Windows. Not saved: the reference app does not save windows with a document.
     #[serde(skip)]
     pub tiled: bool,
+    /// How Tile lays the panes out: in a grid, side by side, stacked, or 2-up to 6-up. Not saved,
+    /// as `tiled` is not.
+    #[serde(skip)]
+    pub tile_layout: crate::canvas::TileLayout,
     /// Window › Arrange › Float in Window, Float All in Windows and Cascade: the documents in
     /// floating windows of their own, out of the tab strip, until Consolidate All Windows. Not
     /// saved, as `tiled` is not.
@@ -712,6 +729,10 @@ pub struct UiState {
     /// Flattener Preview panel: highlight, overprints, preset and options (`ui.flattenerPreview`).
     #[serde(default)]
     pub flattener_preview: crate::panels::flattener_preview::Settings,
+    /// Fold Preview window: fold amount, view, zoom, perspective, inside color, fold lines and
+    /// base panel (`ui.foldPreview`).
+    #[serde(default)]
+    pub fold_preview: crate::addons::packaging::preview::Settings,
     /// Color Guide panel: Limit to Library, a swatch library id, "document" (the document's
     /// swatches) or "" (none) (`ui.colorGuideLimit`).
     #[serde(default)]
@@ -751,6 +772,10 @@ pub struct UiState {
     /// of an RGB field, `ui.colorPanel`, [`crate::panels::color::deserialize_rgb_percent`]).
     #[serde(default, deserialize_with = "crate::panels::color::deserialize_rgb_percent")]
     pub color_rgb_percent: bool,
+    /// Color Wheel panel: the wheel or the box, and the box's channel (`ui.colorWheel`,
+    /// [`crate::panels::color_wheel::deserialize_settings`]).
+    #[serde(default, deserialize_with = "crate::panels::color_wheel::deserialize_settings")]
+    pub color_wheel: crate::panels::color_wheel::Settings,
     /// Swatches panel: Show Recent Colors in its panel menu, which draws the panel's Recent Colors
     /// row (#6617; read as [`Self::color_show_recent_colors`] is). Separate from the Color panel's.
     #[serde(default = "yes", deserialize_with = "crate::panels::color::deserialize_show_recent_colors")]
@@ -832,6 +857,11 @@ pub struct UiState {
     /// them (#1732).
     #[serde(default)]
     pub transform_each: Value,
+    /// The Expand choices OK last expanded with in this run of the app (object, fill, stroke,
+    /// gradient, steps; null: none yet): the Expand dialog opens on them, and Object › Expand…
+    /// chosen with Alt (Option) expands with them at once. They are not kept across launches.
+    #[serde(skip)]
+    pub expand_options: Value,
     /// The spacing used the last time Rearrange All Artboards was confirmed.
     #[serde(default)]
     pub rearrange_artboards_spacing: Value,
@@ -854,7 +884,8 @@ pub struct UiState {
     /// Layers panel › Panel Options… (row size, thumbnails, Show Layers Only, Locate Selected Objects).
     #[serde(default)]
     pub layers_panel: crate::panels::layers::PanelOptions,
-    /// Navigator panel › Panel Options… (the view box color, Draw Dashed Lines as Solid Lines).
+    /// Navigator panel › Panel Options… (the view box color, Draw Dashed Lines as Solid Lines) and
+    /// the panel menu's View Artboard Contents Only.
     #[serde(default)]
     pub navigator_panel: crate::panels::navigator::PanelOptions,
     /// The Layers panel's Filter (`ui.layersFilter`). It is not saved and lasts the session, as the
@@ -1153,7 +1184,9 @@ impl Default for UiState {
             transient_focus: false,
             color_settings_scroll: false,
             find_font_in: String::new(),
+            constrain_pie_angle: false,
             learn: Default::default(),
+            discover: Default::default(),
             learn_locate: None,
             learn_practice: Default::default(),
             learn_progress: Default::default(),
@@ -1211,6 +1244,7 @@ impl Default for UiState {
             palette_query: String::new(),
             screen_mode: 0,
             tiled: false,
+            tile_layout: crate::canvas::TileLayout::Grid,
             floating: Vec::new(),
             tab_document: None,
             draw_mode: 0,
@@ -1241,6 +1275,7 @@ impl Default for UiState {
             color_guide: Default::default(),
             library_panels: vec![],
             flattener_preview: Default::default(),
+            fold_preview: Default::default(),
             color_guide_limit: String::new(),
             color_guide_base: None,
             color_guide_spot: None,
@@ -1250,6 +1285,7 @@ impl Default for UiState {
             color_hide_options: false,
             color_show_recent_colors: true,
             color_rgb_percent: false,
+            color_wheel: Default::default(),
             swatches_show_recent_colors: true,
             svg_options: Value::Null,
             place_link: true,
@@ -1271,6 +1307,7 @@ impl Default for UiState {
             simplify: Value::Null,
             move_options: Value::Null,
             transform_each: Value::Null,
+            expand_options: Value::Null,
             rearrange_artboards_spacing: Value::Null,
             dxf_import: Value::Null,
             psd_import: Value::Null,
