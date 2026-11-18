@@ -2371,6 +2371,7 @@ antiAlias	Sharp	シャープ
 	Load SVG into Clipboard	SVG をクリップボードに読み込む
 	Load Text into Clipboard	テキストをクリップボードに読み込む
 	Local Libraries	ローカルライブラリ
+	Locate Layer	レイヤーを検索
 	Locate Object	オブジェクトを検索
 	Locate Selected Objects	選択したオブジェクトを検索
 	Location	場所

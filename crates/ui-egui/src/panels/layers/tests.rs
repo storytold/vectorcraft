@@ -2184,6 +2184,97 @@ fn the_panel_menu_lists_every_operation() {
     }
 }
 
+/// With Show Layers Only on, Locate Object becomes Locate Layer in the panel menu and a row's
+/// menu, and the bottom bar's Locate button highlights the sublayer holding the selected art,
+/// opening the layer around it. Off, the button highlights the art's own row.
+#[test]
+fn with_show_layers_only_locate_object_becomes_locate_layer() {
+    let (mut app, [layer, sub, _, b, _, _]) = nested();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let shown = |app: &mut VectorcraftApp, events: Vec<egui::Event>, f: fn(&mut VectorcraftApp, &mut egui::Ui)| {
+        super::super::tests_appearance::frame_events(&ctx, app, events, f).into_iter().map(|(t, _)| t.trim().to_string()).collect::<Vec<_>>()
+    };
+    let has = |texts: &[String], s: &str| texts.iter().any(|t| t == s);
+    app.session.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+    let off = shown(&mut app, vec![], menu);
+    assert!(has(&off, "Locate Object") && !has(&off, "Locate Layer"), "{off:?}");
+    let locate = |app: &mut VectorcraftApp| {
+        let at = bar_buttons(app, &ctx)[4];
+        click_with(app, &ctx, at, egui::Modifiers::NONE);
+    };
+    locate(&mut app);
+    assert_eq!(rows_of(&app), vec![b], "off: the art's own row");
+
+    app.ui.layers_panel.layers_only = true;
+    let on = shown(&mut app, vec![], menu);
+    assert!(has(&on, "Locate Layer") && !has(&on, "Locate Object"), "{on:?}");
+    app.session.active_mut().unwrap().layers_open.set(layer, false);
+    shown(&mut app, vec![], show);
+    locate(&mut app);
+    assert_eq!(rows_of(&app), vec![sub], "on: the sublayer holding the art");
+    shown(&mut app, vec![], show);
+    assert!(app.session.active().unwrap().layers_open.contains(layer), "the layer around the sublayer opens");
+    assert!(has(&shown(&mut app, vec![], show), "Sub"), "the sublayer's row shows");
+
+    // A row's menu says Locate Layer too.
+    let c = frame(&mut app, &ctx, vec![], false).0;
+    let at = egui::pos2(150.0, c[0].y);
+    let right = egui::PointerButton::Secondary;
+    for e in [egui::Event::PointerMoved(at), button_by(at, true, right), button_by(at, false, right)] {
+        frame(&mut app, &ctx, vec![e], false);
+    }
+    let row_menu = shown(&mut app, vec![], show);
+    assert!(has(&row_menu, "Locate Layer") && !has(&row_menu, "Locate Object"), "{row_menu:?}");
+}
+
+/// Locate Layer or Locate Object run again on the row it already highlighted reveals that row
+/// again: the layers around it that were closed since open, once per Locate.
+#[test]
+fn a_repeated_locate_reveals_the_row_it_already_highlighted() {
+    let (mut app, [layer, sub, g, b, _, _]) = nested();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let draw = |app: &mut VectorcraftApp| {
+        super::super::tests_appearance::frame_events(&ctx, app, vec![], show).into_iter().map(|(t, _)| t.trim().to_string()).collect::<Vec<_>>()
+    };
+    let open = |app: &VectorcraftApp, id: NodeId| app.session.active().unwrap().layers_open.contains(id);
+    let close = |app: &mut VectorcraftApp, ids: &[NodeId]| {
+        for id in ids {
+            app.session.active_mut().unwrap().layers_open.set(*id, false);
+        }
+    };
+    app.session.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+
+    // Locate Layer: the sublayer stays highlighted while its layer is closed, and Locate Layer again opens it.
+    app.ui.layers_panel.layers_only = true;
+    app.session.execute("layer.locate", &json!({"layersOnly": true})).unwrap();
+    draw(&mut app);
+    assert_eq!(rows_of(&app), vec![sub]);
+    close(&mut app, &[layer]);
+    assert!(!draw(&mut app).iter().any(|t| t == "Sub"), "the closed layer hides the sublayer");
+    app.session.execute("layer.locate", &json!({"layersOnly": true})).unwrap();
+    assert!(draw(&mut app).iter().any(|t| t == "Sub"), "the sublayer's row shows again");
+    assert!(open(&app, layer), "the layer around the sublayer opens again");
+    assert_eq!(rows_of(&app), vec![sub]);
+    // Once per Locate: a later frame leaves a layer closed after that alone.
+    close(&mut app, &[layer]);
+    draw(&mut app);
+    assert!(!open(&app, layer), "a frame without a Locate opens nothing");
+
+    // Locate Object: the same for the object's row inside a closed sublayer and group.
+    app.ui.layers_panel.layers_only = false;
+    app.session.execute("layer.locate", &json!({})).unwrap();
+    draw(&mut app);
+    assert_eq!(rows_of(&app), vec![b]);
+    close(&mut app, &[sub, g]);
+    draw(&mut app);
+    app.session.execute("layer.locate", &json!({})).unwrap();
+    draw(&mut app);
+    assert!(open(&app, layer) && open(&app, sub) && open(&app, g), "the layers and group around the object open again");
+    assert_eq!(rows_of(&app), vec![b]);
+}
+
 /// ≡ › Save Selection lists the saved selections: choosing one recalls it, Update Selection
 /// makes it hold the selected objects, and Save Selection… opens the name dialog.
 #[test]

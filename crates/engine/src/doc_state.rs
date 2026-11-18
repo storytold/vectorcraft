@@ -25,6 +25,10 @@ pub struct DocState {
     /// Panel state, not art selection: not saved, not undoable (`layer.setCurrent`,
     /// `layer.highlight`).
     pub layer_rows: Vec<NodeId>,
+    /// The row the last Locate Object or Locate Layer (`layer.locate`) highlighted, until the
+    /// Layers panel takes it: the panel opens the layers around that row and scrolls to it, also
+    /// when the row was already highlighted. Panel state: not saved, not undoable.
+    pub locate_reveal: Option<NodeId>,
     /// The variable highlighted in the Variables panel: what its Delete, Options… and Select
     /// Bound Object act on. Panel state, not art selection: not saved, not undoable
     /// (`variable.highlight`). A name, so renaming a variable moves the highlight with it.
@@ -322,6 +326,7 @@ impl DocState {
             revision: 1,
             active_layer,
             layer_rows: vec![],
+            locate_reveal: None,
             variables_highlight: None,
             variables_sort: Default::default(),
             isolation: None,
