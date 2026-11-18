@@ -447,6 +447,9 @@ antiAlias	Sharp	Nítido
 	Choose…	Escolher…
 	Circle	Círculo
 	Circle Tool	Ferramenta Círculo
+	Curvature Circle Tool	Ferramenta Círculo de curvatura
+	Cusp	Cúspide
+	Straight segment	Segmento reto
 	Circle too large	Círculo grande demais
 	Clean Up…	Limpar…
 	Clear	Limpar
@@ -4327,6 +4330,9 @@ axis	Both	Ambos
 @msg	no anchor points selected	nenhum ponto de ancoragem selecionado
 @msg	`points` must be two or three [x, y] pairs of numbers	`points` deve ter dois ou três pares de números [x, y]
 @msg	direct-select two or three anchor points, or give `points`	selecione diretamente dois ou três pontos de ancoragem ou informe `points`
+@msg	the path is straight there, so no circle matches its curvature	o caminho é reto nesse ponto, então nenhum círculo corresponde à sua curvatura
+@msg	the path has a cusp there, so it has no single curvature	o caminho tem uma cúspide nesse ponto, então não tem uma curvatura única
+@msg	the circle that matches the path there would reach past the canvas	o círculo que corresponde ao caminho nesse ponto ultrapassaria a tela
 @msg	no circle passes through these points: two are the same or all three lie on one line	nenhum círculo passa por esses pontos: dois são iguais ou os três estão na mesma reta
 @msg	no app to open files here	nenhum aplicativo para abrir arquivos aqui
 @msg	no artboard	nenhuma prancheta

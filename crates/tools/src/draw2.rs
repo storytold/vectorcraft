@@ -365,7 +365,7 @@ pub(crate) fn walk_pickable<'a>(cx: &ToolContext<'a>, mut f: impl FnMut(&'a vect
 }
 
 /// Editable path nodes, selected ones first, then the rest top-most first ([`walk_pickable`]).
-fn candidate_paths(cx: &ToolContext) -> Vec<NodeId> {
+pub(crate) fn candidate_paths(cx: &ToolContext) -> Vec<NodeId> {
     let mut v: Vec<NodeId> = cx.selection.objects.iter().copied().filter(|id| cx.doc.node(*id).is_some_and(|n| n.path_data().is_some())).collect();
     let mut rest = vec![];
     walk_pickable(cx, |n| {
@@ -374,8 +374,10 @@ fn candidate_paths(cx: &ToolContext) -> Vec<NodeId> {
         }
     });
     rest.reverse();
+    // A set keeps this linear: hover runs it on every pointer move, over every path.
+    let mut seen: std::collections::HashSet<NodeId> = v.iter().copied().collect();
     for id in rest {
-        if !v.contains(&id) {
+        if seen.insert(id) {
             v.push(id);
         }
     }

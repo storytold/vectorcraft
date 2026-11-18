@@ -4524,6 +4524,9 @@ font-technology	Variable	Varijabilni
 	Couldn't copy to the system clipboard: {e}	Nije moguće kopirati u sistemski međuspremnik: {e}
 	Couldn't paste from the clipboard: {e}	Nije moguće zalijepiti iz međuspremnika: {e}
 	Channel	Kanal
+	Curvature Circle Tool	Alat Krug zakrivljenosti
+	Cusp	Šiljak
+	Straight segment	Ravan segment
 	Circle	Krug
 	Circle Tool	Alat za krug
 	Circle too large	Krug je prevelik

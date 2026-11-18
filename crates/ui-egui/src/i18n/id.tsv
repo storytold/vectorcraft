@@ -4279,6 +4279,9 @@ font-technology	Variable	Variabel
 	Couldn't copy to the system clipboard: {e}	Tidak dapat menyalin ke papan klip sistem: {e}
 	Couldn't paste from the clipboard: {e}	Tidak dapat menempel dari papan klip: {e}
 	Channel	Saluran
+	Curvature Circle Tool	Alat Lingkaran kelengkungan
+	Cusp	Titik tajam
+	Straight segment	Segmen lurus
 	Circle	Lingkaran
 	Circle Tool	Alat lingkaran
 	Circle too large	Lingkaran terlalu besar

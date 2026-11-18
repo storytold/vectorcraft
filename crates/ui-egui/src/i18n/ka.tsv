@@ -6347,6 +6347,9 @@ font-technology	Variable	ცვლადი
 	Channel	არხი
 	Circle	წრე
 	Circle Tool	წრის ხელსაწყო
+	Curvature Circle Tool	სიმრუდის წრის ხელსაწყო
+	Cusp	წვეტი
+	Straight segment	სწორი სეგმენტი
 	Circle too large	წრე ზედმეტად დიდია
 	Clip to Art	ნახატზე მოჭრა
 	Colorize	გაფერადება
@@ -6832,6 +6835,9 @@ font-technology	Variable	ცვლადი
 @msg	no anchor points selected	საყრდენი წერტილები მონიშნული არ არის
 @msg	`points` must be two or three [x, y] pairs of numbers	`points` უნდა იყოს რიცხვების ორი ან სამი [x, y] წყვილი
 @msg	direct-select two or three anchor points, or give `points`	პირდაპირი მონიშვნით მონიშნეთ ორი ან სამი საყრდენი წერტილი ან მიუთითეთ `points`
+@msg	the path is straight there, so no circle matches its curvature	ტრაექტორია იქ სწორია, ამიტომ არცერთი წრეწირი არ შეესაბამება მის სიმრუდეს
+@msg	the path has a cusp there, so it has no single curvature	ტრაექტორიას იქ წვეტი აქვს, ამიტომ მას ერთი სიმრუდე არ აქვს
+@msg	the circle that matches the path there would reach past the canvas	წრეწირი, რომელიც იქ ტრაექტორიას შეესაბამება, ტილოს გასცდებოდა
 @msg	no circle passes through these points: two are the same or all three lie on one line	ამ წერტილებზე წრეწირი არ გადის: ორი ერთნაირია ან სამივე ერთ წრფეზე მდებარეობს
 @msg	no app to open files here	აქ ფაილების გასახსნელი აპი არ არის
 @msg	no artboard	სამუშაო დაფა არ არის

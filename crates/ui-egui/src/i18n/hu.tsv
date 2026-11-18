@@ -642,6 +642,9 @@ font-technology	Variable	Változó
 	Choose…	Kiválasztás…
 	Circle	Kör
 	Circle Tool	Kör eszköz
+	Curvature Circle Tool	Simulókör eszköz
+	Cusp	Csúcspont
+	Straight segment	Egyenes szakasz
 	Circle too large	A kör túl nagy
 	Circle (open)	Kör (nyitott)
 	Classic Defaults	Klasszikus alapértékek
@@ -5686,6 +5689,9 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	no anchor points selected	nincs kijelölt horgonypont
 @msg	`points` must be two or three [x, y] pairs of numbers	a `points` két vagy három [x, y] számpár legyen
 @msg	direct-select two or three anchor points, or give `points`	jelölj ki közvetlen kijelöléssel két vagy három horgonypontot, vagy add meg a `points` értéket
+@msg	the path is straight there, so no circle matches its curvature	az útvonal ott egyenes, így egyetlen kör sem illeszkedik a görbületéhez
+@msg	the path has a cusp there, so it has no single curvature	az útvonalnak ott csúcspontja van, így nincs egyértelmű görbülete
+@msg	the circle that matches the path there would reach past the canvas	az útvonalhoz ott illeszkedő kör túlnyúlna a vásznon
 @msg	no circle passes through these points: two are the same or all three lie on one line	ezeken a pontokon nem halad át kör: kettő egybeesik, vagy mindhárom egy egyenesen van
 @msg	no app to open files here	itt nincs fájlmegnyitó alkalmazás
 @msg	no artboard	nincs rajztábla

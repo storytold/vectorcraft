@@ -481,6 +481,9 @@ font-technology	Variable	Variables
 	Choose…	Choisir…
 	Circle	Cercle
 	Circle Tool	Outil Cercle
+	Curvature Circle Tool	Outil Cercle de courbure
+	Cusp	Point de rebroussement
+	Straight segment	Segment droit
 	Circle too large	Cercle trop grand
 	Classic Defaults	Valeurs par défaut classiques
 	Clean Up…	Nettoyer…
@@ -4985,6 +4988,9 @@ liquify-list-end	{0}, {1}	{0} et {1}
 @msg	no anchor points selected	aucun point d’ancrage sélectionné
 @msg	`points` must be two or three [x, y] pairs of numbers	`points` doit contenir deux ou trois paires de nombres [x, y]
 @msg	direct-select two or three anchor points, or give `points`	sélectionnez deux ou trois points d’ancrage avec l’outil Sélection directe, ou indiquez `points`
+@msg	the path is straight there, so no circle matches its curvature	le tracé est droit à cet endroit, donc aucun cercle ne correspond à sa courbure
+@msg	the path has a cusp there, so it has no single curvature	le tracé a un point de rebroussement à cet endroit, donc il n’a pas de courbure unique
+@msg	the circle that matches the path there would reach past the canvas	le cercle qui correspond au tracé à cet endroit dépasserait la zone de travail
 @msg	no circle passes through these points: two are the same or all three lie on one line	aucun cercle ne passe par ces points : deux sont identiques ou les trois sont alignés
 @msg	no app to open files here	aucune application pour ouvrir des fichiers ici
 @msg	no artboard	aucun plan de travail
