@@ -126,6 +126,7 @@
 	Add to Swatches	Renk Örneklerine Ekle
 	Add Used Colors	Kullanılan Renkleri Ekle
 	Additional Plug-ins Folder	Ek Eklentiler Klasörü
+	Plug-in Instruction Budget	Eklenti Talimat Bütçesi
 	Additional Fonts Folder	Ek Yazı Tipleri Klasörü
 	Adjust Adjoining Width Points	Bitişik Genişlik Noktalarını Ayarlayın
 	Incoming	Gelen
@@ -3270,6 +3271,9 @@ digits	Malayalam	Malayalam
 	Search commands, tools, panels and effects…	Komutları, araçları, panelleri ve efektleri arayın…
 	No commands match	Eşleşen komut yok
 	{pos} of {total}: {name}	{pos}/{total}: {name}
+	No menu item	Menü öğesi yok
+	Toolbar	Araç Çubuğu
+	{toolbar}, in the {tool} group	{toolbar}, {tool} grubunda
 @plural	{n} result|{n} results	{n} sonuç
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} sonuçtan {shown} tanesi. Daraltmak için yazmaya devam edin.
 	Recent Commands	Son komutlar

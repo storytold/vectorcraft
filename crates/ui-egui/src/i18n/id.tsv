@@ -3724,6 +3724,7 @@ theme	Appearance	Tampilan
 	90° & 45° Angles	Sudut 90° & 45°
 	90° Angles	Sudut 90°
 	Additional Plug-ins Folder	Folder plug-in tambahan
+	Plug-in Instruction Budget	Anggaran instruksi plug-in
 	Additional Fonts Folder	Folder font tambahan
 	Alignment Guides	Panduan perataan
 	Anchor Points, Handle, and Bounding Box Display	Tampilan titik jangkar, pegangan, dan kotak pembatas
@@ -4236,6 +4237,9 @@ font-technology	Variable	Variabel
 	Search commands, tools, panels and effects…	Cari perintah, alat, panel, dan efek…
 	No commands match	Tidak ada perintah yang cocok
 	{pos} of {total}: {name}	{pos} dari {total}: {name}
+	No menu item	Tidak ada item menu
+	Toolbar	Bilah alat
+	{toolbar}, in the {tool} group	{toolbar}, dalam grup {tool}
 @plural	{n} result|{n} results	{n} hasil
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} dari {n} hasil. Terus ketik untuk mempersempitnya.
 	Recent Commands	Perintah terbaru

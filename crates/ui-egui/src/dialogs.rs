@@ -848,6 +848,10 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     }
     let focus_first = focus_first && !clicked;
     let spec = spec(&d.kind);
+    // Opened over another dialog, which Cancel shows again: that one keeps where it was scrolled to.
+    if d.fields.get(PARENT).is_some_and(|p| !p.is_null()) {
+        modal::over_parent(ctx);
+    }
     if let Some(window) = spec.window {
         return window(app, ctx);
     }
@@ -890,14 +894,16 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         if focus_first {
             ui.data_mut(|m| m.insert_temp(widgets::dialog_focus_flag(), true));
         }
+        // When the dialog is taller than the window, its body scrolls, and the heading and the
+        // buttons stay in view.
         if let Some(body) = spec.body_with_actions {
-            match body(app, ui, &mut d) {
+            match modal::body_rows(ui, |ui| body(app, ui, &mut d)) {
                 DialogAction::None => {}
                 DialogAction::Confirm => ok = true,
                 DialogAction::Cancel => cancel = true,
             }
         } else {
-            cancel = (spec.body)(app, ui, &mut d);
+            cancel = modal::body_rows(ui, |ui| (spec.body)(app, ui, &mut d));
         }
         // Taken (the flag is gone): done. Still there (the window's measuring frame): next frame.
         if focus_first && ui.data_mut(|m| m.remove_temp::<bool>(widgets::dialog_focus_flag())).is_none() {
@@ -1077,6 +1083,9 @@ mod tests_perspective;
 
 #[cfg(test)]
 mod tests_modal;
+
+#[cfg(test)]
+mod tests_scroll;
 
 #[cfg(test)]
 mod tests_rectangular_grid;

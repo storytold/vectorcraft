@@ -4057,6 +4057,7 @@ theme	Appearance	Motiv
 	90° & 45° Angles	Úhly 90° a 45°
 	90° Angles	Úhly 90°
 	Additional Plug-ins Folder	Další složka zásuvných modulů
+	Plug-in Instruction Budget	Rozpočet instrukcí zásuvných modulů
 	Additional Fonts Folder	Další složka písem
 	Alignment Guides	Vodítka zarovnání
 	Anchor Points, Handle, and Bounding Box Display	Zobrazení kotevních bodů, úchytů a ohraničovacího rámečku
@@ -4596,6 +4597,9 @@ font-technology	Variable	Variabilní
 	Search commands, tools, panels and effects…	Hledat příkazy, nástroje, panely a efekty…
 	No commands match	Žádný příkaz neodpovídá
 	{pos} of {total}: {name}	{pos} z {total}: {name}
+	No menu item	Žádná položka nabídky
+	Toolbar	Panel nástrojů
+	{toolbar}, in the {tool} group	{toolbar}, ve skupině {tool}
 @plural	{n} result|{n} results	{n} výsledek|{n} výsledky|{n} výsledků
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} z {n} výsledku. Pište dál a výsledky se zúží.|{shown} z {n} výsledků. Pište dál a výsledky se zúží.|{shown} z {n} výsledků. Pište dál a výsledky se zúží.
 	Recent Commands	Nedávné příkazy

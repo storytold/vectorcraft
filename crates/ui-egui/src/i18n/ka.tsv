@@ -5819,6 +5819,7 @@ theme	Appearance	იერსახე
 	90° & 45° Angles	90° და 45° კუთხეები
 	90° Angles	90° კუთხეები
 	Additional Plug-ins Folder	დამატებითი პლაგინები
+	Plug-in Instruction Budget	პლაგინების ინსტრუქციების ბიუჯეტი
 	Additional Fonts Folder	შრიფტების დამატებითი საქაღალდე
 	Alignment Guides	გასწორების დამხმარე ხაზები
 	Anchor Points, Handle, and Bounding Box Display	საყრდენი წერტილების, სახელურებისა და შემომსაზღვრელი ჩარჩოს ჩვენება
@@ -6307,6 +6308,9 @@ font-technology	Variable	ცვლადი
 	Search commands, tools, panels and effects…	ბრძანებების, ხელსაწყოების, პანელებისა და ეფექტების ძიება…
 	No commands match	შესაბამისი ბრძანება არ არის
 	{pos} of {total}: {name}	{pos} / {total}: {name}
+	No menu item	მენიუს ელემენტი არ არის
+	Toolbar	ხელსაწყოთა ზოლი
+	{toolbar}, in the {tool} group	{toolbar}, ჯგუფში {tool}
 @plural	{n} result|{n} results	{n} შედეგი
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} შედეგიდან {shown}. გააგრძელეთ აკრეფა მათ შესამცირებლად.
 	Recent Commands	ბოლოდროინდელი ბრძანებები

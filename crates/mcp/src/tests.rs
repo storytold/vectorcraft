@@ -1637,6 +1637,33 @@ fn doc_json(s: &mut Server) -> Value {
 }
 
 #[test]
+fn transform_refused_by_a_later_operation_changes_nothing() {
+    let mut s = server();
+    let count = |s: &mut Server| -> u64 {
+        let r = call(s, 90, "inspect_document", json!({}));
+        serde_json::from_str::<Value>(&text_of(&r)).unwrap()["objects"].as_u64().unwrap()
+    };
+    let base = count(&mut s);
+    let r = id_of(&call(&mut s, 1, "draw_shape", json!({"shape": "rectangle", "x": 100, "y": 100, "width": 100, "height": 50})));
+    let before = doc_json(&mut s);
+    for (id, args, says) in [
+        (2, json!({"ids": [r], "scale": 50, "shear": 90}), "object.shear"),
+        (3, json!({"ids": [r], "dx": 10, "rotate": 30, "shear": -270}), "object.shear"),
+        (4, json!({"ids": [r], "scale": 50, "shear": 400}), "object.shear"),
+        (5, json!({"ids": [r], "scale": 50, "reflect": "diagonal"}), "object.reflect"),
+        (6, json!({"ids": [r], "dx": 10, "rotate": 30, "scaleX": 0}), "object.scale"),
+    ] {
+        let t = call(&mut s, id, "transform", args.clone());
+        assert_eq!(t["isError"], true, "{args}: {t}");
+        assert!(text_of(&t).contains(says), "{args}: {t}");
+        assert_eq!(doc_json(&mut s), before, "{args}");
+    }
+    // No undo step was recorded: one undo removes the rectangle.
+    assert_eq!(call(&mut s, 7, "undo", json!({}))["isError"], false);
+    assert_eq!(count(&mut s), base, "one undo removes the rectangle");
+}
+
+#[test]
 fn add_text_rejects_invalid_path_effects_before_editing() {
     let mut s = server();
     let path = id_of(&call(&mut s, 1, "draw_path", json!({"d": "M40 400 C150 300 250 500 360 400 Z"})));
