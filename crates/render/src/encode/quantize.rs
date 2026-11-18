@@ -190,16 +190,32 @@ pub fn quantize_locked(rgba: &[u8], width: u32, height: u32, o: &PaletteOptions,
 
 /// [`quantize`] to the fixed `palette`: each pixel takes its nearest entry, with `o`'s dither,
 /// transparency and matte; `o.reduction` sets only the distance weights, and `o.colors` is not
-/// used. Only the first 255 colors of `palette` are used, leaving room for the transparent entry.
-/// Entries no pixel uses are left out.
+/// used. Only the first 256 colors of `palette` are used, or the first 255 when a pixel becomes
+/// transparent, leaving room for the transparent entry. Entries no pixel uses are left out.
 pub fn quantize_to(rgba: &[u8], width: u32, height: u32, o: &PaletteOptions, palette: &[[u8; 3]]) -> Indexed {
     let px = rgba.as_chunks::<4>().0;
     let colors = opaque_colors(px, o, false);
-    let mut palette: Vec<[u8; 3]> = palette.iter().take(255).copied().collect();
+    let has_clear = o.transparency && px.iter().any(|p| p[3] < 128);
+    let mut palette: Vec<[u8; 3]> = palette.iter().take(256 - usize::from(has_clear)).copied().collect();
     if palette.is_empty() {
         palette.push(o.matte.unwrap_or([255; 3]));
     }
     finish(px, &colors, width, height, &palette, o, o.dither)
+}
+
+/// For each pixel of `rgba`, the entry of `palette` nearest its color, as [`quantize_to`] measures
+/// it (the matte, transparency and `o.reduction`'s distance weights) without dither; `None` for a
+/// pixel that becomes transparent, and for every pixel when `palette` is empty.
+pub fn nearest_entries(rgba: &[u8], o: &PaletteOptions, palette: &[[u8; 3]]) -> Vec<Option<usize>> {
+    let px = rgba.as_chunks::<4>().0;
+    let colors = opaque_colors(px, o, false);
+    let pal: Vec<[f32; 3]> = palette.iter().map(|c| c.map(f32::from)).collect();
+    let index = PaletteIndex::new(&pal, o.reduction.weights());
+    colors
+        .iter()
+        .zip(px)
+        .map(|(c, p)| if pal.is_empty() || (o.transparency && p[3] < 128) { None } else { Some(index.nearest(c.map(f32::from))) })
+        .collect()
 }
 
 /// The color of each pixel when opaque: blended over the matte, and gray when `gray`.

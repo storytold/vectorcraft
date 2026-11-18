@@ -1,10 +1,11 @@
 use super::common::{
-    PenRecord, SIZE_VARIATIONS, SIZES, Sample, center_strokes, dist_to_polyline, fill_targets, ids_json, path_mut, path_of, points_param,
-    poly_bounds, pressure_region, ranged, replace_with_pieces, samples_param, sibling_with, size_pressure, target_paths, usize_opt,
+    PenRecord, SIZE_VARIATIONS, SIZES, Sample, center_strokes, dist_to_polyline, fill_targets, has_fill, has_painted_ancestor_stroke,
+    has_painted_stroke, ids_json, path_mut, path_of, points_param, poly_bounds, pressure_region, ranged, replace_with_pieces, samples_param,
+    set_geometry, sibling_with, size_pressure, target_paths, usize_opt,
 };
 use super::{
-    Anchor, AnchorKind, Beside, BezPath, BoolOp, Cap, EngineError, FillRule, Join, NodeId, Paint, ParamCurve, PathData, Point, Rect, Result, Session,
-    SubPath, Value, Vec2, bad, eraser_area, eraser_tip, f64_or, fill_contains, json, number_or, object_param, po,
+    Anchor, AnchorKind, Beside, BezPath, BoolOp, Cap, Document, EngineError, FillRule, Join, NodeId, NodeKind, Paint, ParamCurve, PathData, Point,
+    Rect, Result, Session, SubPath, Value, Vec2, bad, eraser_area, eraser_tip, f64_or, fill_contains, json, number_or, object_param, po,
 };
 use kurbo::{CubicBez, Line, PathSeg};
 use vectorcraft_brush::{Brush, BrushKind, Calligraphic, Variation};
@@ -266,7 +267,7 @@ pub(super) fn knife(s: &mut Session, p: &Value) -> Result<Value> {
     let st = s.doc()?;
     let strip = po::outline_stroke(&PathData::single(SubPath::polyline(&pts, false)), KNIFE_GAP, Cap::Butt, Join::Round, 4.0);
     let mut plan: Vec<(NodeId, Vec<PathData>)> = vec![];
-    for (id, pd, rule) in fill_targets(&st.doc, &st.selection, poly_bounds(&pts, 1.0))? {
+    for (id, pd, rule) in fill_targets(&st.doc, &st.selection, poly_bounds(&pts, 1.0), false)? {
         if !pd.is_closed() {
             continue;
         }
@@ -340,8 +341,9 @@ pub(super) fn erase_region(s: &mut Session, p: &Value) -> Result<Value> {
         None => dist_to_polyline(&round, squash * q) <= r,
     };
     let mut plan: Vec<(NodeId, Vec<PathData>)> = vec![];
-    for (id, pd, rule) in fill_targets(&st.doc, &st.selection, poly_bounds(&pts, reach))? {
-        if pd.is_closed() {
+    for (id, pd, rule) in fill_targets(&st.doc, &st.selection, poly_bounds(&pts, reach), true)? {
+        if erase_as_area(&st.doc, id, &pd) {
+            let pd = eraser_fill_operand(pd);
             if po::area(&po::boolean(&pd, rule, &region, FillRule::NonZero, BoolOp::Intersect), FillRule::NonZero) <= 1e-6 {
                 continue;
             }
@@ -351,6 +353,34 @@ pub(super) fn erase_region(s: &mut Session, p: &Value) -> Result<Value> {
         }
     }
     apply_plan(s, "Eraser", plan)
+}
+
+/// Whether the target is erased as filled area rather than as an open outline.
+fn erase_as_area(doc: &Document, id: NodeId, pd: &PathData) -> bool {
+    // An unaggregated compound member keeps the outline route: its own appearance does not
+    // paint it. Eligible fill-only compounds were collected as one parent target above.
+    let compound_member =
+        doc.parent_of(id).and_then(|parent| doc.node(parent)).is_some_and(|parent| matches!(parent.kind, NodeKind::Compound { .. }));
+    let filled_open =
+        !compound_member && !has_painted_ancestor_stroke(doc, id) && doc.node(id).is_some_and(|node| has_fill(node) && !has_painted_stroke(node));
+    pd.is_closed() || filled_open
+}
+
+/// Close only Eraser's temporary fill operand, preserving an open path's straight closing edge.
+fn eraser_fill_operand(mut pd: PathData) -> PathData {
+    for sp in &mut pd.subpaths {
+        if !sp.closed {
+            // These endpoint handles are unused by an open path. Closing it must not activate them.
+            if let Some(first) = sp.anchors.first_mut() {
+                first.h_in = first.p;
+            }
+            if let Some(last) = sp.anchors.last_mut() {
+                last.h_out = last.p;
+            }
+            sp.closed = true;
+        }
+    }
+    pd
 }
 
 /// `path.eraseRegion`'s `rect: [x, y, width, height]`: four finite numbers, with a width and a
@@ -369,7 +399,7 @@ fn marquee_param(v: &Value, cmd: &str) -> Result<Rect> {
 }
 
 /// `path.eraseRegion` with a marquee: everything inside `r` is erased from the paths (selected, or
-/// all). Closed paths lose the rectangle's area, and open paths are cut where they cross its edges.
+/// all). Closed paths and fill-only open paths lose the rectangle's area; other open paths are cut where they cross its edges.
 fn erase_rect(s: &mut Session, r: Rect) -> Result<Value> {
     let region =
         PathData::single(SubPath::polyline(&[Point::new(r.x0, r.y0), Point::new(r.x1, r.y0), Point::new(r.x1, r.y1), Point::new(r.x0, r.y1)], true));
@@ -392,8 +422,9 @@ fn erase_rect(s: &mut Session, r: Rect) -> Result<Value> {
     };
     let st = s.doc()?;
     let mut plan: Vec<(NodeId, Vec<PathData>)> = vec![];
-    for (id, pd, rule) in fill_targets(&st.doc, &st.selection, r)? {
-        if pd.is_closed() {
+    for (id, pd, rule) in fill_targets(&st.doc, &st.selection, r, true)? {
+        if erase_as_area(&st.doc, id, &pd) {
+            let pd = eraser_fill_operand(pd);
             if po::area(&po::boolean(&pd, rule, &region, FillRule::NonZero, BoolOp::Intersect), FillRule::NonZero) <= 1e-6 {
                 continue;
             }
@@ -492,8 +523,9 @@ fn erase_varied(s: &mut Session, samples: &[Sample], tip: [f64; 3], vary: [(Vari
     let short = low(2).max(MIN_BRUSH_SIZE) * low(1).clamp(1.0, 100.0) / 100.0;
     let reach = (size + sv) / 2.0;
     let mut plan: Vec<(NodeId, Vec<PathData>)> = vec![];
-    for (id, pd, rule) in fill_targets(&st.doc, &st.selection, poly_bounds(&pts, reach))? {
-        if pd.is_closed() {
+    for (id, pd, rule) in fill_targets(&st.doc, &st.selection, poly_bounds(&pts, reach), true)? {
+        if erase_as_area(&st.doc, id, &pd) {
+            let pd = eraser_fill_operand(pd);
             if po::area(&po::boolean(&pd, rule, &region, FillRule::NonZero, BoolOp::Intersect), FillRule::NonZero) <= 1e-6 {
                 continue;
             }
@@ -510,10 +542,36 @@ fn apply_plan(s: &mut Session, label: &str, plan: Vec<(NodeId, Vec<PathData>)>) 
         return Ok(json!({ "ids": [] }));
     }
     let ids = s.edit(label, |d, sel| {
+        // Measure every original painting owner before any geometry or appearance changes.
+        // This includes a Compound above a Path Eraser target and containers above live art.
+        let owners: std::collections::BTreeSet<_> = plan.iter().flat_map(|(id, _)| d.ancestry(*id).unwrap_or_default()).collect();
+        let pinned: Vec<_> = owners
+            .into_iter()
+            .filter_map(|id| {
+                let node = d.node(id)?;
+                if !node.appearance.has_unplaced_gradient() {
+                    return None;
+                }
+                vectorcraft_render::pinned_appearance_for_geometry_edit(d, node).map(|appearance| (id, appearance))
+            })
+            .collect();
+        for (id, appearance) in pinned {
+            if let Some(node) = d.node_mut(id) {
+                node.appearance = appearance.into();
+            }
+        }
         let mut all = vec![];
         let mut cut = Beside::replacing(d, &plan.iter().map(|(id, _)| *id).collect::<Vec<_>>());
         for (id, pieces) in plan {
-            all.extend(replace_with_pieces(d, &mut cut, id, pieces)?);
+            let clipping_path = d.position(id).is_some_and(|(parent, i, _)| i == 0 && parent.and_then(|p| d.node(p)).is_some_and(|p| p.clips()));
+            if clipping_path {
+                // Keep every clipping contour in its original first child slot. An empty mask
+                // must also stay there so the clipped artwork cannot become the new mask.
+                set_geometry(d, id, PathData::new(pieces.into_iter().flat_map(|p| p.subpaths).collect()))?;
+                all.push(id);
+            } else {
+                all.extend(replace_with_pieces(d, &mut cut, id, pieces)?);
+            }
         }
         cut.finish(d)?;
         sel.set(all.iter().copied());
@@ -522,13 +580,13 @@ fn apply_plan(s: &mut Session, label: &str, plan: Vec<(NodeId, Vec<PathData>)>) 
     Ok(ids_json(&ids))
 }
 
+/// The Path Eraser's band width, in points (VectorCraft's own range).
+const PATH_ERASER_WIDTHS: (f64, f64) = (0.001, 1000.0);
+
 pub(super) fn erase_segments(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "path.eraseSegments";
     let pts = points_param(p, "points", C)?;
-    let w = number_or(p, "width", 8.0, C)?;
-    if !(w.is_finite() && w > 0.0) {
-        return Err(bad(C, "width must be positive"));
-    }
+    let w = ranged(p, "width", 8.0, PATH_ERASER_WIDTHS, C)?;
     let st = s.doc()?;
     let mut plan = vec![];
     for id in target_paths(&st.doc, &st.selection, poly_bounds(&pts, w)) {

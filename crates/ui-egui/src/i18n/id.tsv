@@ -57,6 +57,8 @@
 	Check Script	Periksa skrip
 	Some scripts were not listed	Beberapa skrip tidak dicantumkan
 	The Scripts folder cannot be read	Folder Scripts tidak dapat dibaca
+	Loading scripts…	Memuat skrip…
+	The Scripts folder is still being read	Folder Scripts masih dibaca
 	Other Script…	Skrip lain…
 	Document Setup…	Pengaturan dokumen…
 	Switch Units	Ganti satuan
@@ -160,6 +162,8 @@
 	Shear…	Miringkan…
 	Transform Each…	Transformasi masing-masing…
 	Reset Bounding Box	Atur ulang kotak pembatas
+	Rotate Bounding Box	Putar kotak pembatas
+	Rotate Bounding Box…	Putar kotak pembatas…
 	Arrange	Susun
 	Bring to Front	Bawa ke depan
 	Bring Forward	Majukan
@@ -665,6 +669,13 @@
 	Previous Document	Dokumen sebelumnya
 	Cascade	Bertingkat
 	Tile	Ubin
+	Tile All Vertically	Ubin semua secara vertikal
+	Tile All Horizontally	Ubin semua secara horizontal
+	2-Up Layout	Tata letak 2
+	3-Up Layout	Tata letak 3
+	4-Up Layout	Tata letak 4
+	6-Up Layout	Tata letak 6
+	Arrange Documents	Susun dokumen
 	Float in Window	Mengambang di jendela
 	Float All in Windows	Mengambangkan semua di jendela
 	Consolidate All Windows	Konsolidasikan semua jendela
@@ -710,6 +721,11 @@
 	Saturation and brightness	Saturasi dan kecerahan
 	Color field	Kolom warna
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
+	Wheel View	Tampilan roda
+	Box View	Tampilan kotak
+	Box Channel	Saluran kotak
+	Color box	Kotak warna
+	Color Wheel Options	Opsi roda warna
 	CSS Properties	Properti CSS
 	Document Info	Info dokumen
 	Flattener Preview	Pratinjau perata
@@ -1446,6 +1462,7 @@ lighting	Light	Cahaya
 	Play Current Selection	Putar seleksi saat ini
 	Save Actions…	Simpan tindakan…
 	Load Actions…	Muat tindakan…
+	Replace Actions…	Ganti tindakan…
 	Reset Actions	Atur ulang tindakan
 	Replace the current actions with the default set?	Ganti tindakan saat ini dengan set default?
 	Append adds the default set after the current sets instead.	Tambahkan justru menambahkan set default setelah set saat ini.
@@ -1620,6 +1637,7 @@ digits	Malayalam	Malayalam
 	Underline	Garis bawah
 	Vertical Scale %	Skala vertikal %
 	Axis	Sumbu
+	Axis Angle	Sudut sumbu
 	ICF Top/Right	ICF atas/kanan
 	ICF Bottom/Left	ICF bawah/kiri
 	Show Font Height Options	Tampilkan opsi tinggi font
@@ -1662,6 +1680,7 @@ digits	Malayalam	Malayalam
 	Rule:	Aturan:
 	Save changes to {name}	Simpan perubahan ke {name}
 	Save theme to My Themes	Simpan tema ke Tema saya
+	Set the current fill or stroke to the selected color	Atur isian atau stroke saat ini ke warna terpilih
 	Set the selected color to the current color	Atur warna terpilih ke warna saat ini
 	Copy All Styles	Salin semua gaya
 	Exported {path}	Diekspor ke {path}
@@ -1877,7 +1896,7 @@ digits	Malayalam	Malayalam
 	Stroke: click for swatches, Shift-click for the color mixer	Stroke: klik untuk swatch, Shift+klik untuk pencampur warna
 	This panel is on the roadmap (see the parity plan).	Panel ini masih dalam roadmap (lihat rencana paritas).
 	Open a document to navigate it.	Buka dokumen untuk menjelajahinya.
-	View Artboard Only	Tampilkan artboard saja
+	View Artboard Contents Only	Tampilkan isi artboard saja
 	Contextual Alternates	Alternatif kontekstual
 	Default Figure	Angka default
 	Discretionary Ligatures	Ligatur opsional
@@ -2020,7 +2039,7 @@ digits	Malayalam	Malayalam
 	Overprint Preview (separations)	Pratinjau overprint (separasi)
 	Show All Plates	Tampilkan semua pelat
 	Show all plates	Tampilkan semua pelat
-	Show/hide plate (Alt-click: only this plate)	Tampilkan/sembunyikan pelat (Alt-klik: hanya pelat ini)
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	Tampilkan/sembunyikan pelat (Alt-klik: hanya pelat ini; Alt-klik lagi: semua pelat)
 	Simulate Paper	Simulasikan kertas
 	Use Black Point Compensation	Gunakan kompensasi titik hitam
 	Working CMYK (don't tag)	CMYK kerja (tanpa tag)
@@ -2060,6 +2079,8 @@ digits	Malayalam	Malayalam
 	Tip extends past the end point	Ujung melewati titik akhir
 	Tip on the end point	Ujung pada titik akhir
 	Variable Width Profile	Profil lebar variabel
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Kuas pada guratan mempertahankan ukurannya sendiri, sehingga profil lebar tidak mengubahnya. Hapus kuas untuk menggunakan profil.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Kuas pada guratan mempertahankan ukurannya sendiri, sehingga profil lebar tidak mengubahnya. Hapus kuas untuk menggunakan profil.
 	Weight:	Ketebalan:
 	Art using a deleted global swatch keeps its colour.	Karya seni yang memakai swatch global terhapus tetap mempertahankan warnanya.
 	Color Group: {name}	Grup warna: {name}
@@ -2169,6 +2190,10 @@ digits	Malayalam	Malayalam
 	Flip Horizontal	Balik horizontal
 	Flip Vertical	Balik vertikal
 	Polygon Properties:	Properti poligon:
+	Line Properties:	Properti garis:
+	Line Length:	Panjang garis:
+	Line Angle:	Sudut garis:
+	Constrain Pie Angle	Kendalikan sudut pai
 	Rectangle Properties:	Properti persegi panjang:
 	Shape Properties:	Properti bentuk:
 	Shape Properties	Properti bentuk
@@ -2210,6 +2235,7 @@ digits	Malayalam	Malayalam
 	Scatter:	Sebaran:
 	Rotation:	Rotasi:
 	Rotation relative to:	Rotasi relatif terhadap:
+	Hue Jitter:	Variasi rona:
 	Brush Scale Options	Opsi skala kuas
 	Scale Proportionately	Skalakan proporsional
 	Stretch to Fit Stroke Length	Regangkan sesuai panjang stroke
@@ -2248,6 +2274,7 @@ digits	Malayalam	Malayalam
 	Size:	Ukuran:
 	Calligraphic Brush Options	Opsi kuas kaligrafi
 	Bristle Brush Options	Opsi kuas bristle
+	Roundness	Kebulatan
 	Roundness:	Kebulatan:
 	Shape:	Bentuk:
 	Bristle Length:	Panjang bristle:
@@ -2558,6 +2585,7 @@ digits	Malayalam	Malayalam
 	BLANK DOCUMENT PRESETS	PRESET DOKUMEN KOSONG
 	Bleed	Bleed
 	Change to Right-to-Left Layout	Ubah ke tata letak kanan ke kiri
+	Columns	Kolom
 	Columns:	Kolom:
 	Documents you create appear here.	Dokumen yang Anda buat muncul di sini.
 	More Settings	Pengaturan lainnya
@@ -2691,6 +2719,9 @@ digits	Malayalam	Malayalam
 	Open a document to preview its pages	Buka dokumen untuk melihat pratinjau halamannya
 	Output › Mode	Keluaran › Mode
 	Overprint and Transparency Flattener Options	Opsi overprint dan perataan transparansi
+	Custom…	Kustom…
+	Custom Transparency Flattener Options	Opsi perataan transparansi kustom
+	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	EPS tidak memiliki transparansi alfa, dan Overprint menentukan apakah overprint dipertahankan.
 	Place the pages with the placement again	Tempatkan halaman lagi dengan penempatan tersebut
 	Placement:	Penempatan:
 	Preserve CMYK Numbers	Pertahankan angka CMYK
@@ -2740,14 +2771,19 @@ digits	Malayalam	Malayalam
 	Around Object	Di sekeliling objek
 	Background:	Latar belakang:
 	Changing these settings changes how raster effects look when exported, flattened or expanded.	Mengubah pengaturan ini mengubah tampilan efek raster saat diekspor, diratakan, atau diperluas.
+	Add Around	Tambah di sekeliling objek
+	Anti Alias	Anti-aliasing
+	Color Model	Model warna
 	Color Model:	Model warna:
 	Create Clipping Mask	Buat clipping mask
 	Preserve Spot Colors	Pertahankan warna spot
+	Resolution	Resolusi
 	Resolution:	Resolusi:
 	Transparent	Transparan
 	Layout Order:	Urutan tata letak:
 	Change to Left-to-Right Layout	Ubah ke tata letak kiri ke kanan
 	Artboards: {n}	Artboard: {n}
+	Rows	Baris
 	Rows:	Baris:
 	Assign	Tetapkan
 	Color Group:	Grup warna:
@@ -2896,6 +2932,8 @@ antiAlias	Sharp	Tajam
 	Every option matches {base}.	Setiap opsi cocok dengan {base}.
 	Files of a PDF standard can't be password-protected.	File standar PDF tidak dapat dilindungi kata sandi.
 	Files of this standard tag their colours with ICC profiles.	File standar ini menandai warnanya dengan profil ICC.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	File standar ini menandai warnanya dengan profil ICC, kecuali warna CMYK dalam profil output intent, yang ditulis sebagai DeviceCMYK.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	Dengan “Jangan sertakan profil” dan output intent CMYK, setiap warna CMYK ditulis sebagai DeviceCMYK, kecuali dikonversi ke tujuan CMYK dengan profil lain.
 	Flattener preset:	Preset flattener:
 	General › Thumbnails	Umum › Miniatur
 	Grayscale images	Gambar skala abu-abu
@@ -3079,6 +3117,12 @@ antiAlias	Sharp	Tajam
 	LF (macOS, Linux)	LF (macOS, Linux)
 	CRLF (Windows)	CRLF (Windows)
 	Text Export Options	Opsi ekspor teks
+	Chinese Big 5	Tionghoa Big 5
+	Cyrillic	Sirilik
+	Greek	Yunani
+	Turkish	Turki
+	Baltic	Baltik
+	Central European	Eropa Tengah
 	Character Set:	Set karakter:
 	Join the lines of each paragraph	Gabungkan baris setiap paragraf
 	Line Breaks	Pemisah baris
@@ -3108,6 +3152,9 @@ antiAlias	Sharp	Tajam
 	Variable Options	Opsi variabel
 	Define a variable first	Tentukan variabel terlebih dahulu
 	Adjust Adjoining Width Points	Sesuaikan titik lebar bersebelahan
+	Incoming	Masuk
+	Outgoing	Keluar
+	Single Width Only	Hanya satu lebar
 	Keep both sides the same width	Pertahankan kedua sisi tetap sama lebar
 	Side 1:	Sisi 1:
 	Side 2:	Sisi 2:
@@ -3208,9 +3255,14 @@ theme	Appearance	Tampilan
 	Break Link to Symbol	Putuskan tautan ke simbol
 	Brush Definition	Definisi kuas
 	Brush Options…	Opsi kuas…
+	Options of Selected Object…	Opsi objek yang dipilih…
+	Options of Selected Object	Opsi objek yang dipilih
 	Current Brush	Kuas saat ini
 	Current Symbol	Simbol saat ini
 	Delete Brush	Hapus kuas
+	Delete Color	Hapus warna
+	Restore Generated Table	Pulihkan tabel yang dibuat
+	Unshift All Colors	Batalkan pergeseran semua warna
 	Delete Symbol	Hapus simbol
 	Delete the selected symbol?	Hapus simbol yang dipilih?
 	Delete the selected symbols?	Hapus simbol yang dipilih?
@@ -3487,6 +3539,7 @@ theme	Appearance	Tampilan
 	Select Art	Pilih karya seni
 	Set Current Layer	Tetapkan lapisan saat ini
 	Flatten Artwork	Ratakan karya seni
+	Locate Layer	Temukan lapisan
 	Locate Object	Temukan objek
 	Lock Others	Kunci lainnya
 	Merge Selected	Gabungkan terpilih
@@ -3663,6 +3716,7 @@ theme	Appearance	Tampilan
 	90° & 45° Angles	Sudut 90° & 45°
 	90° Angles	Sudut 90°
 	Additional Plug-ins Folder	Folder plug-in tambahan
+	Plug-in Instruction Budget	Anggaran instruksi plug-in
 	Additional Fonts Folder	Folder font tambahan
 	Alignment Guides	Panduan perataan
 	Anchor Points, Handle, and Bounding Box Display	Tampilan titik jangkar, pegangan, dan kotak pembatas
@@ -3689,6 +3743,7 @@ theme	Appearance	Tampilan
 	Data Recovery	Pemulihan data
 	Default Language	Bahasa standar
 	Disable Auto Add/Delete	Nonaktifkan tambah/hapus otomatis
+	Interpolate Control Points When Moving Anchors	Interpolasikan gagang arah saat memindahkan titik jangkar
 	Display All Blacks Accurately	Tampilkan semua warna hitam secara akurat
 	Display All Blacks as Rich Black	Tampilkan semua warna hitam sebagai rich black
 	Display Bitmaps as Anti-aliased Images in Pixel Preview	Tampilkan bitmap sebagai gambar anti-alias dalam pratinjau piksel
@@ -3705,6 +3760,7 @@ theme	Appearance	Tampilan
 	Enable Rubber Band for	Aktifkan rubber band untuk
 	Enable Touch Gestures	Aktifkan gestur sentuh
 	Switch Selection and Drawing Modes	Beralih antara mode seleksi dan menggambar
+	Select Last Selection Tool	Pilih alat seleksi terakhir
 	Enable Touch Workspace	Aktifkan ruang kerja sentuh
 	English: UK	Inggris: UK
 	Every (minutes)	Setiap (menit)
@@ -3776,6 +3832,7 @@ theme	Appearance	Tampilan
 	Printing / Exporting	Pencetakan / Ekspor
 	Real-time Drawing and Editing	Penggambaran dan pengeditan waktu nyata
 	Use Monitor Profile for Canvas	Gunakan profil monitor untuk kanvas
+	Refresh Monitor Profile	Segarkan profil monitor
 	The canvas is drawn in sRGB.	Kanvas digambar dalam sRGB.
 	Canvas display profile:	Profil layar kanvas:
 	The system matches the window to the display's colors.	Sistem menyesuaikan jendela dengan warna layar.
@@ -3837,6 +3894,7 @@ theme	Appearance	Tampilan
 	Scroll Sideways with Cmd/Ctrl + Wheel	Gulir horizontal dengan Cmd/Ctrl + roda mouse
 	Scrub Numeric Fields by Dragging	Atur nilai kolom numerik dengan menyeret
 	Linux Display Server	Server tampilan Linux
+	Low-Latency Drawing	Penggambaran latensi rendah
 	Print Preview	Pratinjau cetak
 	Print Setup	Pengaturan cetak
 	Bitmap	Bitmap
@@ -4171,6 +4229,12 @@ font-technology	Variable	Variabel
 	Search commands, tools, panels and effects…	Cari perintah, alat, panel, dan efek…
 	No commands match	Tidak ada perintah yang cocok
 	{pos} of {total}: {name}	{pos} dari {total}: {name}
+	No menu item	Tidak ada item menu
+	Toolbar	Bilah alat
+	{toolbar}, in the {tool} group	{toolbar}, dalam grup {tool}
+	In the menu bar: {path}	Di bilah menu: {path}
+	In the {group} group: press and hold to open it	Di grup {group}: tekan dan tahan untuk membukanya
+	{home}, not shown now	{home}, tidak ditampilkan sekarang
 @plural	{n} result|{n} results	{n} hasil
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} dari {n} hasil. Terus ketik untuk mempersempitnya.
 	Recent Commands	Perintah terbaru
@@ -4207,6 +4271,7 @@ font-technology	Variable	Variabel
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Roda mouse dengan Cmd/Ctrl ditahan menggulir kanvas ke samping.
 	Dragging sideways on a numeric field's label changes the field's value.	Menyeret ke samping pada label bidang angka mengubah nilai bidang itu.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Gerakan putar dua jari pada trackpad memutar tampilan kanvas.
+	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Saat Anda memindahkan titik jangkar, setiap kurva dengan satu ujung yang dipindahkan mempertahankan bentuknya terhadap ujung-ujungnya.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Menahan tombol pintasan alat memilih alat itu sampai Anda melepasnya, lalu alat sebelumnya dipilih lagi.
 	Shows the bounding box while you move the selection or draw a shape.	Menampilkan kotak pembatas saat Anda memindahkan seleksi atau menggambar bentuk.
 	Create Trim Marks draws Japanese-style marks instead of Roman ones.	Buat tanda potong menggambar tanda bergaya Jepang, bukan Romawi.
@@ -4237,6 +4302,29 @@ font-technology	Variable	Variabel
 	The unit for East Asian type measurements, which no field uses yet.	Satuan untuk ukuran teks Asia Timur, yang belum digunakan bidang mana pun.
 	When on, a number typed without a unit into a field in picas is read in points.	Jika aktif, angka yang diketik tanpa satuan di bidang dalam pica dibaca dalam titik.
 	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	Dengan ID XML, nama objek ditampilkan sebagai ID XML di Lapisan, Variabel, dan Opsi lapisan.
+	The step for type size and leading: Cmd/Ctrl+Shift+. and Cmd/Ctrl+Shift+, change the size by one step, or five with Alt too; in horizontal type, Alt with the Up or Down Arrow changes the leading by one step, or five with Cmd/Ctrl.	Langkah untuk ukuran teks dan spasi baris: Cmd/Ctrl+Shift+. dan Cmd/Ctrl+Shift+, mengubah ukuran satu langkah, atau lima dengan Alt juga; pada teks horizontal, Alt dengan panah atas atau bawah mengubah spasi baris satu langkah, atau lima dengan Cmd/Ctrl.
+	The step for tracking and kerning, in thousandths of an em: in horizontal type, Alt with the Left or Right Arrow changes the kerning at the caret or the tracking of the selected text by one step, or five with Cmd/Ctrl.	Langkah untuk tracking dan kerning, dalam perseribu em: pada teks horizontal, Alt dengan panah kiri atau kanan mengubah kerning di kursor atau tracking teks yang dipilih satu langkah, atau lima dengan Cmd/Ctrl.
+	The step for baseline shift: in horizontal type, Alt and Shift with the Up or Down Arrow move the baseline by one step, or five with Cmd/Ctrl.	Langkah untuk pergeseran garis dasar: pada teks horizontal, Alt dan Shift dengan panah atas atau bawah menggeser garis dasar satu langkah, atau lima dengan Cmd/Ctrl.
+	Shows the options for Japanese and other East Asian type in the Character, Paragraph, OpenType and Glyphs panels, and Type › Composite Fonts.	Menampilkan opsi untuk teks Jepang dan teks Asia Timur lainnya di panel Karakter, Paragraf, OpenType, dan Glif, serta perintah Font komposit.
+	Shows the options for Arabic, Hebrew and Indic type in the Character and Paragraph panels, such as paragraph direction, kashidas and digits.	Menampilkan opsi untuk teks Arab, Ibrani, dan India di panel Karakter dan Paragraf, seperti arah paragraf, kashida, dan digit.
+	The selection tools select type only on its baseline, its area's frame or its path, not anywhere inside its box.	Alat seleksi memilih teks hanya pada garis dasarnya, bingkai teks area, atau jalurnya, bukan di sembarang tempat di dalam kotaknya.
+	Font menus list each font by its English name; off, a font that also has a name in its own language shows that name.	Menu font mencantumkan setiap font dengan nama bahasa Inggrisnya; jika nonaktif, font yang juga punya nama dalam bahasanya sendiri menampilkan nama itu.
+	New area type starts with Auto Size on, so a rectangular frame of horizontal type grows or shrinks in height to fit its text.	Teks area baru dimulai dengan Ukuran otomatis aktif, sehingga bingkai persegi panjang berisi teks horizontal bertambah atau berkurang tingginya agar teksnya muat.
+	Font lists and the Type › Font menu show a sample of each font beside its name.	Daftar font dan menu Font menampilkan contoh setiap font di samping namanya.
+	Font samples are drawn in dark type on white, whatever the interface's brightness; it applies only while in-menu font previews are on.	Contoh font digambar dengan teks gelap di atas putih, apa pun kecerahan antarmuka; ini hanya berlaku selama pratinjau font di menu aktif.
+	How tall each row is in the font lists of font fields, such as the Character panel's, and so how large each sample is.	Tinggi setiap baris dalam daftar bidang font, seperti di panel Karakter, dan karenanya besar setiap contoh.
+	How many of the fonts used last, from 1 to 15, Type › Recent Fonts and the font lists show, newest first.	Berapa banyak font yang terakhir dipakai, dari 1 sampai 15, yang ditampilkan Font terbaru dan daftar font, yang terbaru lebih dulu.
+	When you change the font or font style of text, characters the new font has no glyph for keep the font they had.	Saat Anda mengganti font atau gaya font teks, karakter yang tidak memiliki glif di font baru tetap memakai font sebelumnya.
+	A pink highlight on the canvas marks glyphs that OpenType features replaced, such as ligatures; it does not print or export.	Sorotan merah muda di kanvas menandai glif yang diganti oleh fitur OpenType, seperti ligatur; sorotan ini tidak dicetak atau diekspor.
+	With the Type tool, selecting one character shows a row of its alternate glyphs beside it on the canvas to choose from.	Dengan alat teks, memilih satu karakter menampilkan deretan glif alternatifnya di sampingnya di kanvas untuk dipilih.
+	A pink highlight on the canvas marks text drawn in a substitute font because its font is missing; it does not print or export.	Sorotan merah muda di kanvas menandai teks yang digambar dengan font pengganti karena fontnya tidak ada; sorotan ini tidak dicetak atau diekspor.
+	New type made with a Type tool starts with placeholder text, selected, so typing replaces it.	Teks baru yang dibuat dengan alat teks dimulai dengan teks pengganti yang terpilih, sehingga ketikan Anda menggantikannya.
+	Typing a list marker such as 1. or * and then a space at the start of a paragraph makes the paragraph a list.	Mengetik penanda daftar seperti 1. atau * lalu spasi di awal paragraf mengubah paragraf itu menjadi daftar.
+	Fonts in this folder show in the font menus and can be used without being installed.	Font di folder ini muncul di menu font dan dapat dipakai tanpa diinstal.
+	Applying a graphic style to type removes the characters' own fill or stroke where the style has one, so the style's paint shows.	Menerapkan gaya grafis pada teks menghapus isian atau garis milik karakter jika gaya memilikinya, sehingga cat gaya itu terlihat.
+	Align and Distribute measure point type by the ink of its glyphs instead of its em box.	Sejajarkan dan Distribusikan mengukur teks titik menurut tinta glifnya, bukan kotak em-nya.
+	Align and Distribute measure area type by the ink of its glyphs instead of its frame.	Sejajarkan dan Distribusikan mengukur teks area menurut tinta glifnya, bukan bingkainya.
+	The bounding box and the Transform panel measure point type by the ink of its glyphs instead of its em box.	Kotak pembatas dan panel Transformasi mengukur teks titik menurut tinta glifnya, bukan kotak em-nya.
 	Snaps drawing, moving and scaling to the grid's subdivisions, even while the grid is hidden; while it is on, Snap to Pixel does not apply.	Menempelkan penggambaran, pemindahan, dan penskalaan ke subdivisi kisi, bahkan saat kisi disembunyikan; selama opsi ini aktif, Snap ke piksel tidak berlaku.
 	The color of guides that are not selected; an artboard with a Guide Label draws its own guides in the label's color instead.	Warna panduan yang tidak dipilih; artboard yang memiliki Label panduan menggambar panduannya sendiri dengan warna label tersebut.
 	Draws guides as solid lines or as dots, including the guides already in the document.	Menggambar panduan sebagai garis utuh atau sebagai titik, termasuk panduan yang sudah ada di dokumen.
@@ -4264,6 +4352,8 @@ font-technology	Variable	Variabel
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Seberapa dekat penunjuk atau titik yang diseret harus mendekati karya di layar agar panduan cerdas menjepret; jaraknya sama pada setiap zoom.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Menjepretkan ujung segmen garis, atau lingkaran yang digambar dari pusatnya, agar menyentuh kurva di dekatnya.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Menjepretkan ujung segmen garis agar bertemu segmen lurus di dekatnya pada sudut siku-siku.
+	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Menampilkan nomor setiap irisan dalam kotak di sudut kiri atasnya di kanvas; saat nonaktif, garis tepi irisan tetap ditampilkan.
+	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Warna garis tepi irisan pengguna dan objek serta kotak nomornya; irisan otomatis memakai nuansa yang lebih redup dari warna ini.
 	Reset all preferences to their defaults?	Atur ulang semua preferensi ke defaultnya?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Nilai default diterapkan saat Anda mengklik OK di Preferensi. Batal di sana mempertahankan preferensi Anda saat ini.
 	Smaller ↔ Larger	Lebih kecil ↔ Lebih besar
@@ -4280,6 +4370,8 @@ font-technology	Variable	Variabel
 	Couldn't paste from the clipboard: {e}	Tidak dapat menempel dari papan klip: {e}
 	Channel	Saluran
 	Circle	Lingkaran
+	Circle Tool	Alat lingkaran
+	Circle too large	Lingkaran terlalu besar
 	Clip to Art	Pangkas ke karya seni
 	Colorize	Warnai
 	Gamma	Gamma
@@ -4496,6 +4588,13 @@ imageTrace	Outline	Kontur
 	Show External Script Warning	Tampilkan Peringatan Skrip Eksternal
 	A Script Is Running	Skrip Sedang Berjalan
 	Script Alert	Peringatan Skrip
+	Script File Access	Akses Berkas Skrip
+	The script asks to read a file you choose.	Skrip meminta izin untuk membaca berkas yang Anda pilih.
+	The script asks to read and write a file you choose.	Skrip meminta izin untuk membaca dan menulis berkas yang Anda pilih.
+	The script asks to read and write a folder you choose, with everything in it.	Skrip meminta izin untuk membaca dan menulis folder yang Anda pilih, beserta seluruh isinya.
+	Allow Once	Izinkan Sekali
+	Always Allow This Script	Selalu Izinkan Skrip Ini
+	Deny	Tolak
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Skrip dapat mengubah dokumen yang terbuka dan menulis file melalui perintah yang dijalankannya. Jalankan hanya skrip yang Anda percayai.
 	Do not show this warning again	Jangan tampilkan peringatan ini lagi
 	Stop the script and undo what it did? Then quit again.	Hentikan skrip dan batalkan yang telah dilakukannya? Lalu keluar lagi.
@@ -4697,6 +4796,8 @@ imageTrace	Outline	Kontur
 @msg	choose a folder to export to	pilih folder tujuan ekspor
 @msg	choose a location for the package	pilih lokasi untuk paket
 @msg	clipboard is empty	papan klip kosong
+@msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: setidaknya satu warna harus tetap ada di tabel warna
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted: `{k}` menyebut warna yang juga disebut kunci lain
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` bukan warna seperti "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: maksimal {MAX_TABLE} warna
 @msg	command `{0}` is not available right now: {1}	perintah `{0}` tidak tersedia saat ini: {1}
@@ -4842,6 +4943,9 @@ imageTrace	Outline	Kontur
 @msg	no such user library	tidak ada pustaka pengguna seperti itu
 @msg	no such view	tidak ada tampilan seperti itu
 @msg	no such width point	tidak ada titik lebar seperti itu
+@msg	`single` must be `incoming` or `outgoing`	`single` harus `incoming` atau `outgoing`
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` dan `outIndex` harus berupa dua bagian dari satu titik lebar terputus
+@msg	a discontinuous width point keeps its place	titik lebar terputus tetap di tempatnya
 @msg	no swatch `{name}`	tidak ada swatch `{name}`
 @msg	no swatch library `{l}` (see swatch.library.list)	tidak ada pustaka swatch `{l}` (lihat swatch.library.list)
 @msg	no symbol instances selected	tidak ada instans simbol yang dipilih
@@ -5101,6 +5205,9 @@ imageTrace	Outline	Kontur
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	{n} dokumen hasil pemulihan dibuang
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	{n} dokumen hasil pemulihan dipulihkan: simpan agar tidak hilang
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Dibuka dengan {n} catatan: {first}
+@msgplural	Copied with {n} note: {first}|Copied with {n} notes: {first}	Disalin dengan {n} catatan: {first}
+@msgplural	Cut with {n} note: {first}|Cut with {n} notes: {first}	Dipotong dengan {n} catatan: {first}
+@msgplural	Traced with {n} note: {first}|Traced with {n} notes: {first}	Gambar dilacak dengan {n} catatan: {first}
 @msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Dibuka dengan {n} catatan: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	{path} disimpan dengan {n} catatan: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	{n} gambar tersemat; {missing} hilang: tautkan ulang dulu
@@ -5482,6 +5589,7 @@ imageTrace	Outline	Kontur
 	Ascent	Ascent
 	Cap Height	Tinggi kapital
 	x Height	Tinggi x
+	Em Box Height	Tinggi Em Box
 	Justify	Ratakan
 	First Baseline	Baseline pertama
 	Vertical Align	Perataan vertikal
@@ -5589,6 +5697,7 @@ mark-style	Japanese	Jepang
 	Cove	Cove
 	Depth	Kedalaman
 	Front	Depan
+	Side	Samping
 	Isometric Bottom	Isometrik bawah
 	Isometric Left	Isometrik kiri
 	Isometric Right	Isometrik kanan
@@ -5807,6 +5916,8 @@ mark-style	Japanese	Jepang
 	Reset Tracking and Kerning	Atur ulang tracking dan kerning
 	Reset Horizontal Scale	Atur ulang skala horizontal
 	Highlight Font Name	Sorot nama font
+	Highlight Font Size	Sorot ukuran font
+	Other…	Lainnya…
 	Highlight Kerning	Sorot kerning
 	Highlight Tracking	Sorot tracking
 @msg	span must be "object" or "selection", got {v}	span harus "object" atau "selection", diterima {v}
@@ -5869,6 +5980,11 @@ mark-style	Japanese	Jepang
 	Edge Only	Hanya tepi
 	Overlay Edge	Hamparkan tepi
 	Path Length	Panjang jalur
+	Grid Size	Ukuran kisi
+	Grid Colors	Warna kisi
+	Flattener Preset	Preset flattener
+	X	X
+	Y	Y
 @msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	lapisan file tidak terbaca ({_1}): file masuk sebagai halamannya, dalam satu lapisan
 @msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	lapisan file tidak terbaca dari data pengeditannya ({_1}): lapisannya berasal dari bagian PDF file
 @msg	the file's variable bindings weren't all read (bindings skipped: {_1}): those objects aren't bound to their variables	tidak semua ikatan variabel file terbaca (ikatan yang dilewati: {_1}): objek-objek itu tidak terikat ke variabelnya
@@ -5876,6 +5992,8 @@ mark-style	Japanese	Jepang
 @msg	the file's variable library couldn't be read: the Variables panel doesn't list it	pustaka variabel file tidak dapat dibaca: panel Variabel tidak menampilkannya
 @msg	a variable of unknown kind can't be bound to objects	variabel bertipe tidak dikenal tidak dapat diikat ke objek
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` harus grayscale, rgb, hsb, cmyk atau websafe
+@msg	`view` must be wheel or box	`view` harus wheel atau box
+@msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` harus hue, saturation, brightness, red, green atau blue
 @msg	the Color Picker is not open	Pemilih Warna tidak terbuka
 @msg	the screen color sampler is already open	pengambil warna layar sudah terbuka
 @msg	this system has no screen color sampler	sistem ini tidak memiliki pengambil warna layar
@@ -6703,6 +6821,12 @@ anchor	Points:	Titik:
 @msg	`mode` must be "free", "keepAngles" or "symmetric"	`mode` harus "free", "keepAngles" atau "symmetric"
 @msg	`{key}` must be [x, y]	`{key}` harus [x, y]
 
+# Unit Converter add-on (Object › Plug-ins › Unit Converter): its panel.
+	Unit Converter	Pengonversi Satuan
+	Unit Converter Panel	Panel Pengonversi Satuan
+	Copy with Units	Salin dengan Satuan
+	From Selection	Dari Seleksi
+
 # Color Effects add-on: Select by Color Kind.
 	Select by Color Kind	Pilih menurut Jenis Warna
 	Objects with Spot Colors	Objek dengan Warna Spot
@@ -6904,6 +7028,14 @@ breakText	Glyphs	Glif
 	Remove Gaps	Hapus celah
 @msg	that makes too many pieces (at most 100000): make the dashes longer	itu menghasilkan terlalu banyak potongan (paling banyak 100000): perpanjang garisnya
 @msg	select paths, or segments, to divide	pilih jalur atau segmen yang akan dibagi
+# Path Precision Tools add-on: Smooth Bridge.
+	Smooth Bridge…	Jembatan Halus…
+	Smooth Bridge	Jembatan Halus
+	Keep Originals	Pertahankan Asli
+@msg	select two circles to bridge	pilih dua lingkaran untuk dijembatani
+@msg	one circle is inside the other	satu lingkaran berada di dalam lingkaran lainnya
+@msg	the circles are too far apart for this radius: raise the radius	lingkaran terlalu berjauhan untuk radius ini: perbesar radius
+@msg	the circles are too far apart for this radius	lingkaran terlalu berjauhan untuk radius ini
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	Garis Singgung Persekutuan…
 	Common Tangents	Garis Singgung Persekutuan
@@ -6920,6 +7052,7 @@ breakText	Glyphs	Glif
 @msg	One path lies inside the other, so they have no common tangents	Satu jalur berada di dalam jalur lainnya, sehingga tidak ada garis singgung persekutuan
 @msg	The paths overlap, so they have no internal tangents	Jalur-jalur saling tumpang tindih, sehingga tidak ada garis singgung dalam
 @msg	One path lies inside the other, so they have no internal tangents	Satu jalur berada di dalam jalur lainnya, sehingga tidak ada garis singgung dalam
+@msg	The point lies inside the path, so it has no tangents	Titik berada di dalam jalur, sehingga tidak ada garis singgung
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Perluas garis putus menjadi jalur
 @msg	select paths with dashed strokes to expand	pilih jalur dengan stroke putus-putus yang akan diperluas
@@ -7251,4 +7384,19 @@ breakText	Glyphs	Glif
 @msg	A panel is not joined to the rest by a crease.	Sebuah panel tidak tersambung ke bagian lain oleh garis lekuk apa pun.
 @msg	A fold line is on a non-printing layer.	Sebuah garis lipat berada di lapisan yang tidak dicetak.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panel: {panels}, engsel: {hinges}, galat: {errors}, peringatan: {warnings}
+	Fold Preview	Pratinjau lipatan
+	Fold	Lipat
+	Show Fold Lines	Tampilkan garis lipat
+	Three-Quarter	Tiga perempat
+	Open a document to preview its folded shape.	Buka dokumen untuk melihat pratinjau bentuk terlipatnya.
+@msg	Check the fold lines first.	Periksa garis lipat terlebih dahulu.
+@msg	Panels: {panels}, hinges: {hinges}	Panel: {panels}, engsel: {hinges}
+@msg	Other blanks not shown: {count}	Bentangan lain tidak ditampilkan: {count}
+@msg	A joint does not close by {gap} pt.	Sebuah sambungan tidak menutup sejauh {gap} pt.
+@msg	Two panels pass through each other.	Dua panel saling menembus.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer harus "singleLine", "everyLine", "standardSingleLine", atau "standardEveryLine"
+	Pressure Sensitive	Peka Tekanan
+	Flex Ribbon	Pita Lentur
+	Pulse Stroke	Goresan Berdenyut
+	Round Flow	Aliran Bulat
+	Chisel Flow	Aliran Serong
