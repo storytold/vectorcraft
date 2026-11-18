@@ -928,6 +928,32 @@ fn dialog_set_edit_color_opens_the_color_picker() {
     assert_eq!((kind(&app), shifted), (Some(save_for_web::KIND), Some(json!({"#0000ff": "#00ff00"}))));
 }
 
+/// Lock, Transparent and Web Shift are off while the selected color (`__color`) is one the table
+/// no longer shows, so a click adds it to no list; with a color the table shows, Lock locks it.
+#[test]
+fn table_buttons_skip_a_selected_color_the_table_does_not_show() {
+    let dir = vectorcraft_testkit::temp_dir("sfw-stale-anchor");
+    let (mut app, _) = app(&dir, false);
+    app.run("shape.rectangle", json!({"x": 40, "y": 0, "width": 20, "height": 40})).unwrap();
+    app.run("paint.setFill", json!({"color": "#0000ff"})).unwrap();
+    app.run("file.saveForWeb", json!({})).unwrap();
+    for (k, v) in [("format", json!("gif")), ("antiAlias", json!("none")), ("dither", json!("none"))] {
+        set(&mut app, k, v);
+    }
+    let table = |app: &VectorcraftApp| app.ui.dialog.as_ref().and_then(|d| d.fields.get("colorTable").cloned()).unwrap_or_default();
+    let has = |app: &VectorcraftApp, list: &str, c: &str| table(app)[list].as_array().is_some_and(|l| l.iter().any(|v| v == c));
+    set(&mut app, "__color", json!("#abcdef"));
+    for label in ["Lock", "Transparent", "Web Shift"] {
+        click_text(&mut app, label);
+    }
+    for list in ["locked", "transparent", "webShift"] {
+        assert!(!has(&app, list, "#abcdef"), "{list}: {}", table(&app));
+    }
+    set(&mut app, "__color", json!("#0000ff"));
+    click_text(&mut app, "Lock");
+    assert!(has(&app, "locked", "#0000ff"), "{}", table(&app));
+}
+
 /// Click the dialog's text `label` with the pointer (frames a quarter second apart).
 fn click_text(app: &mut VectorcraftApp, label: &str) {
     let ctx = egui::Context::default();

@@ -1177,10 +1177,15 @@ fn color_table(ui: &mut egui::Ui, d: &mut Dialog, s: Option<&WebSettings>) -> Re
         d.fields.insert("__editStart".into(), json!(start));
     }
     let shifted = |c: &str| table.shifted.keys().any(|k| k.eq_ignore_ascii_case(c));
+    // The colors the table shows, by source: Lock, Transparent, Web Shift and Delete Color act only
+    // on these.
+    let palette: Vec<String> =
+        shot.colors.iter().filter(|c| !c.transparent).map(|c| hex(c.source)).chain(shot.mapped.iter().map(|c| hex(*c))).collect();
+    let shown = palette.iter().any(|p| p.eq_ignore_ascii_case(&selected));
     ui.add_space(4.0);
     let on = |list: &[String]| list.iter().any(|h| h.eq_ignore_ascii_case(&selected));
     ui.horizontal(|ui| {
-        ui.add_enabled_ui(!selected.is_empty(), |ui| {
+        ui.add_enabled_ui(shown, |ui| {
             for (list, on_label, off_label) in [
                 ("transparent", tl!("Restore"), tl!("Transparent")),
                 ("webShift", tl!("Unshift"), tl!("Web Shift")),
@@ -1207,8 +1212,6 @@ fn color_table(ui: &mut egui::Ui, d: &mut Dialog, s: Option<&WebSettings>) -> Re
     });
     // Delete Color (the button and the table's menu) and Restore Generated Table. Delete Color
     // takes only selected colors the table shows (`palette`, by source).
-    let palette: Vec<String> =
-        shot.colors.iter().filter(|c| !c.transparent).map(|c| hex(c.source)).chain(shot.mapped.iter().map(|c| hex(*c))).collect();
     let deletable = !selected_in(d, &palette).is_empty();
     let (mut delete, mut restore, mut unshift_all) = (false, false, false);
     ui.horizontal(|ui| {
