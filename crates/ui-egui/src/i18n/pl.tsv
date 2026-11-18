@@ -5743,6 +5743,8 @@ variable-list-end	{0}, {1}	{0} i {1}
 @msg	Reload the page to go on (changes not saved yet may be lost).	Odśwież stronę, aby kontynuować (niezapisane zmiany mogą zostać utracone).
 @msg	tool (a tool id) is required	wymagane jest tool (identyfikator narzędzia)
 @msg	{tool} isn't in a toolbar group of several tools	{tool} nie należy do grupy kilku narzędzi na pasku narzędzi
+@msg	Presentation Mode hides the toolbars: change the screen mode to show them	Tryb prezentacji ukrywa paski narzędzi: zmień tryb ekranu, aby je pokazać
+@msg	Tab has hidden the toolbars: press Tab to show them	klawisz Tab ukrył paski narzędzi: naciśnij Tab, aby je pokazać
 @msg	onto must name a panel floating in another group	onto musi wskazywać panel pływający w innej grupie
 @msg	below and above must name a panel floating in another group	below i above muszą wskazywać panel pływający w innej grupie
 @msg	give only one of onto, below and above	podaj tylko jedno z: onto, below, above

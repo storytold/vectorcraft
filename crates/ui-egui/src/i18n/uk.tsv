@@ -5639,6 +5639,8 @@ variable-list-end	{0}, {1}	{0} і {1}
 @msg	Reload the page to go on (changes not saved yet may be lost).	Перезавантажте сторінку, щоб продовжити (незбережені зміни можуть бути втрачені).
 @msg	tool (a tool id) is required	потрібно tool (ідентифікатор інструменту)
 @msg	{tool} isn't in a toolbar group of several tools	{tool} не входить до групи панелі інструментів з кількох інструментів
+@msg	Presentation Mode hides the toolbars: change the screen mode to show them	Режим презентації приховує панелі інструментів: щоб показати їх, змініть режим екрану
+@msg	Tab has hidden the toolbars: press Tab to show them	клавіша Tab приховала панелі інструментів: щоб показати їх, натисніть Tab
 @msg	onto must name a panel floating in another group	onto має називати панель, що плаває в іншій групі
 @msg	below and above must name a panel floating in another group	below і above мають називати панель, що плаває в іншій групі
 @msg	give only one of onto, below and above	вкажіть лише один із onto, below і above
