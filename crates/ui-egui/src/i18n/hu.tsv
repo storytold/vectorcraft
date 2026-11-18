@@ -1635,6 +1635,18 @@ digits	Malayalam	Malajálam
 	Find Fonts	Betűtípusok keresése
 	Find Fonts in Folder…	Betűtípusok keresése mappában…
 	Find Font…	Betűtípus keresése…
+	Retype	Újragépelés
+	Find Matching Fonts	Egyező betűtípusok keresése
+	Find more font matches	További egyező betűtípusok keresése
+	Type your text to preview	Írja be az előnézet szövegét
+	Select outlined text, then Find Matching Fonts.	Jelöljön ki körvonalakká alakított szöveget, majd válassza az Egyező betűtípusok keresése parancsot.
+	No font matches the selected shapes.	Egyik betűtípus sem egyezik a kijelölt alakzatokkal.
+	Reset Retype Panel	Újragépelés panel visszaállítása
+	List Matching Fonts	Egyező betűtípusok listázása
+	Retype Preview	Újragépelés panel előnézete
+@msg	`count` must be a whole number from 1 to 96	`count`: 1 és 96 közötti egész szám kell
+@msg	`size` must be small, medium or large	`size`: small, medium vagy large kell
+@msg	`text` must be a string of at most 100 characters	`text`: legfeljebb 100 karakteres karakterlánc kell
 	Find in Folder…	Keresés mappában…
 	Find Next	Következő keresése
 	Find Objects	Objektumok keresése

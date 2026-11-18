@@ -1874,6 +1874,17 @@ pub(crate) fn menu_item_sample(ui: &Ui, slot: egui::Rect, family: &str, on_white
     }
 }
 
+/// A sample of `family` in `style` drawn in `slot`: `text` set in it (a generic sample when it is
+/// `None` or the font lacks its characters), filling the slot's height (the Retype panel's rows).
+/// With `on_white` (Show samples on white), the sample is drawn in dark type on a white slot.
+pub(crate) fn styled_sample(ui: &Ui, slot: egui::Rect, family: &str, style: &str, text: Option<&str>, on_white: bool) {
+    let ink = sample_ink(on_white, Tokens::get(ui.ctx()).text);
+    let area = sample_area(ui, slot, ink, PAPER_INSET);
+    if let Some(tex) = sample_texture(ui.ctx(), family, Some(style), text, area.height()) {
+        paint_sample(ui, area, &tex, ink);
+    }
+}
+
 /// What a sample is drawn on with Show samples on white.
 pub(crate) const SAMPLE_PAPER: Color32 = Color32::WHITE;
 

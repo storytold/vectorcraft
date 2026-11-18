@@ -992,6 +992,18 @@ liquify-list-end	{0}, {1}	{0} en {1}
 	Break Thread	Koppeling verbreken
 	Fit Headline	Kop passend maken
 	Find Font…	Lettertype zoeken…
+	Retype	Opnieuw typen
+	Find Matching Fonts	Overeenkomende lettertypen zoeken
+	Find more font matches	Meer overeenkomende lettertypen zoeken
+	Type your text to preview	Typ de tekst voor het voorbeeld
+	Select outlined text, then Find Matching Fonts.	Selecteer omgezette tekst en kies dan Overeenkomende lettertypen zoeken.
+	No font matches the selected shapes.	Geen lettertype komt overeen met de geselecteerde vormen.
+	Reset Retype Panel	Paneel Opnieuw typen herstellen
+	List Matching Fonts	Overeenkomende lettertypen weergeven
+	Retype Preview	Voorbeeld in paneel Opnieuw typen
+@msg	`count` must be a whole number from 1 to 96	`count` moet een geheel getal van 1 tot 96 zijn
+@msg	`size` must be small, medium or large	`size` moet small, medium of large zijn
+@msg	`text` must be a string of at most 100 characters	`text` moet een tekenreeks van hoogstens 100 tekens zijn
 	Change Case	Hoofdlettergebruik wijzigen
 	UPPERCASE	HOOFDLETTERS
 	lowercase	kleine letters

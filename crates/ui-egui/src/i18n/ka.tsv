@@ -2556,6 +2556,18 @@
 	Break Thread	დაკავშირების გაწყვეტა
 	Fit Headline	სათაურის მორგება
 	Find Font…	შრიფტის ძებნა…
+	Retype	ხელახლა აკრეფა
+	Find Matching Fonts	შესაბამისი შრიფტების ძებნა
+	Find more font matches	მეტი შესაბამისი შრიფტის ძებნა
+	Type your text to preview	აკრიფეთ ტექსტი წინასწარი ნახვისთვის
+	Select outlined text, then Find Matching Fonts.	მონიშნეთ კონტურებად გარდაქმნილი ტექსტი, შემდეგ აირჩიეთ შესაბამისი შრიფტების ძებნა.
+	No font matches the selected shapes.	არცერთი შრიფტი არ შეესაბამება მონიშნულ ფიგურებს.
+	Reset Retype Panel	ხელახლა აკრეფის პანელის ჩამოყრა
+	List Matching Fonts	შესაბამისი შრიფტების სია
+	Retype Preview	ხელახლა აკრეფის პანელის წინასწარი ნახვა
+@msg	`count` must be a whole number from 1 to 96	`count` უნდა იყოს მთელი რიცხვი 1-დან 96-მდე
+@msg	`size` must be small, medium or large	`size` უნდა იყოს small, medium ან large
+@msg	`text` must be a string of at most 100 characters	`text` უნდა იყოს არაუმეტეს 100 სიმბოლოს სტრიქონი
 	Change Case	რეგისტრის შეცვლა
 	UPPERCASE	მთავრული
 	lowercase	პატარა ასოები

@@ -1263,6 +1263,18 @@ antiAlias	Sharp	锐利
 	Find and Replace…	查找和替换…
 	Find Font	查找字体
 	Find Font…	查找字体…
+	Retype	重新键入
+	Find Matching Fonts	查找匹配字体
+	Find more font matches	查找更多匹配字体
+	Type your text to preview	输入要预览的文本
+	Select outlined text, then Find Matching Fonts.	选择已转为轮廓的文字，然后查找匹配字体。
+	No font matches the selected shapes.	没有字体与所选形状匹配。
+	Reset Retype Panel	重置重新键入面板
+	List Matching Fonts	列出匹配字体
+	Retype Preview	重新键入面板预览
+@msg	`count` must be a whole number from 1 to 96	`count` 必须是 1 到 96 之间的整数
+@msg	`size` must be small, medium or large	`size` 必须是 small、medium 或 large
+@msg	`text` must be a string of at most 100 characters	`text` 必须是不超过 100 个字符的字符串
 	Find Next	查找下一个
 	Find Objects	查找对象
 	Compare with Image	与图像比较

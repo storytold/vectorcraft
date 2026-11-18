@@ -1318,6 +1318,18 @@ font-technology	Variable	Вариативные
 	Find and Replace…	Найти и заменить…
 	Find Font	Найти шрифт
 	Find Font…	Найти шрифт…
+	Retype	Перенабор
+	Find Matching Fonts	Найти подходящие шрифты
+	Find more font matches	Найти другие подходящие шрифты
+	Type your text to preview	Введите текст для просмотра
+	Select outlined text, then Find Matching Fonts.	Выделите текст, преобразованный в кривые, затем выберите «Найти подходящие шрифты».
+	No font matches the selected shapes.	Ни один шрифт не подходит к выделенным фигурам.
+	Reset Retype Panel	Сбросить панель «Перенабор»
+	List Matching Fonts	Список подходящих шрифтов
+	Retype Preview	Просмотр в панели «Перенабор»
+@msg	`count` must be a whole number from 1 to 96	`count` должно быть целым числом от 1 до 96
+@msg	`size` must be small, medium or large	`size` должно быть small, medium или large
+@msg	`text` must be a string of at most 100 characters	`text` должно быть строкой длиной не более 100 символов
 	Find Next	Найти далее
 	Find Objects	Найти объекты
 	Compare with Image	Сравнить с изображением

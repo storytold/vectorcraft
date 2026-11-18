@@ -1245,6 +1245,18 @@ font-technology	Variable	Μεταβλητές
 	Find and Replace…	Εύρεση και αντικατάσταση…
 	Find Font	Εύρεση γραμματοσειράς
 	Find Font…	Εύρεση γραμματοσειράς…
+	Retype	Επαναπληκτρολόγηση
+	Find Matching Fonts	Εύρεση αντίστοιχων γραμματοσειρών
+	Find more font matches	Εύρεση περισσότερων αντίστοιχων γραμματοσειρών
+	Type your text to preview	Πληκτρολογήστε κείμενο για προεπισκόπηση
+	Select outlined text, then Find Matching Fonts.	Επιλέξτε κείμενο που έχει μετατραπεί σε περιγράμματα και μετά Εύρεση αντίστοιχων γραμματοσειρών.
+	No font matches the selected shapes.	Καμία γραμματοσειρά δεν αντιστοιχεί στα επιλεγμένα σχήματα.
+	Reset Retype Panel	Επαναφορά πίνακα Επαναπληκτρολόγησης
+	List Matching Fonts	Λίστα αντίστοιχων γραμματοσειρών
+	Retype Preview	Προεπισκόπηση πίνακα Επαναπληκτρολόγησης
+@msg	`count` must be a whole number from 1 to 96	Το `count` πρέπει να είναι ακέραιος από 1 έως 96
+@msg	`size` must be small, medium or large	Το `size` πρέπει να είναι small, medium ή large
+@msg	`text` must be a string of at most 100 characters	Το `text` πρέπει να είναι συμβολοσειρά έως 100 χαρακτήρων
 	Find Next	Εύρεση επόμενου
 	Find Objects	Εύρεση αντικειμένων
 	Compare with Image	Σύγκριση με εικόνα

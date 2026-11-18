@@ -1310,6 +1310,18 @@ font-technology	Variable	Variables
 	Find and Replace…	Rechercher et remplacer…
 	Find Font	Rechercher une police
 	Find Font…	Rechercher une police…
+	Retype	Retaper
+	Find Matching Fonts	Rechercher les polices correspondantes
+	Find more font matches	Rechercher d’autres polices correspondantes
+	Type your text to preview	Saisissez le texte à prévisualiser
+	Select outlined text, then Find Matching Fonts.	Sélectionnez du texte vectorisé, puis Rechercher les polices correspondantes.
+	No font matches the selected shapes.	Aucune police ne correspond aux formes sélectionnées.
+	Reset Retype Panel	Réinitialiser le panneau Retaper
+	List Matching Fonts	Lister les polices correspondantes
+	Retype Preview	Aperçu du panneau Retaper
+@msg	`count` must be a whole number from 1 to 96	`count` doit être un nombre entier compris entre 1 et 96
+@msg	`size` must be small, medium or large	`size` doit valoir small, medium ou large
+@msg	`text` must be a string of at most 100 characters	`text` doit être une chaîne d’au plus 100 caractères
 	Find Next	Rechercher le suivant
 	Find Objects	Rechercher des objets
 	Compare with Image	Comparer à une image

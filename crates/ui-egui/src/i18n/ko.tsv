@@ -468,6 +468,18 @@ digits	Malayalam	말라얄람어
 	Highlight Tracking	자간 강조 표시
 	Step Type	단계별 문자
 	Find Font…	글꼴 찾기…
+	Retype	리타입
+	Find Matching Fonts	일치하는 글꼴 찾기
+	Find more font matches	일치하는 글꼴 더 찾기
+	Type your text to preview	미리 볼 텍스트 입력
+	Select outlined text, then Find Matching Fonts.	윤곽선으로 만든 텍스트를 선택한 다음 일치하는 글꼴 찾기를 누르세요.
+	No font matches the selected shapes.	선택한 모양과 일치하는 글꼴이 없습니다.
+	Reset Retype Panel	리타입 패널 재설정
+	List Matching Fonts	일치하는 글꼴 목록
+	Retype Preview	리타입 패널 미리 보기
+@msg	`count` must be a whole number from 1 to 96	`count`는 1에서 96 사이의 정수여야 합니다
+@msg	`size` must be small, medium or large	`size`는 small, medium 또는 large여야 합니다
+@msg	`text` must be a string of at most 100 characters	`text`는 최대 100자의 문자열이어야 합니다
 	Change Case	대소문자 변경
 	UPPERCASE	대문자
 	lowercase	소문자

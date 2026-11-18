@@ -1297,6 +1297,18 @@ font-technology	Variable	可變
 	Find and Replace…	尋找與取代…
 	Find Font	尋找字體
 	Find Font…	尋找字體…
+	Retype	重新鍵入
+	Find Matching Fonts	尋找相符字體
+	Find more font matches	尋找更多相符字體
+	Type your text to preview	輸入要預覽的文字
+	Select outlined text, then Find Matching Fonts.	選取已轉為外框的文字，然後尋找相符字體。
+	No font matches the selected shapes.	沒有字體與所選形狀相符。
+	Reset Retype Panel	重設重新鍵入面板
+	List Matching Fonts	列出相符字體
+	Retype Preview	重新鍵入面板預覽
+@msg	`count` must be a whole number from 1 to 96	`count` 必須是介於 1 到 96 的整數
+@msg	`size` must be small, medium or large	`size` 必須是 small、medium 或 large
+@msg	`text` must be a string of at most 100 characters	`text` 必須是不超過 100 個字元的字串
 	Find Next	尋找下一個
 	Find Objects	尋找物件
 	Compare with Image	與影像比較

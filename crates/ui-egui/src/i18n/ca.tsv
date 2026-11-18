@@ -1773,6 +1773,18 @@ digits	Malayalam	Malaiàlam
 	Find Fonts	Cerca tipus de lletra
 	Find Fonts in Folder…	Cerca tipus de lletra en una carpeta…
 	Find Font…	Cerca un tipus de lletra…
+	Retype	Torna a escriure
+	Find Matching Fonts	Cerca tipus de lletra coincidents
+	Find more font matches	Cerca més tipus de lletra coincidents
+	Type your text to preview	Escriviu el text de la previsualització
+	Select outlined text, then Find Matching Fonts.	Seleccioneu text contornejat i després Cerca tipus de lletra coincidents.
+	No font matches the selected shapes.	Cap tipus de lletra no coincideix amb les formes seleccionades.
+	Reset Retype Panel	Restableix el panell Torna a escriure
+	List Matching Fonts	Llista els tipus de lletra coincidents
+	Retype Preview	Previsualització del panell Torna a escriure
+@msg	`count` must be a whole number from 1 to 96	`count` ha de ser un nombre enter entre 1 i 96
+@msg	`size` must be small, medium or large	`size` ha de ser small, medium o large
+@msg	`text` must be a string of at most 100 characters	`text` ha de ser una cadena de 100 caràcters com a màxim
 	Find in Folder…	Cerca en una carpeta…
 	Find Linked Files	Cerca fitxers enllaçats
 	Find Linked Files in Folder…	Cerca fitxers enllaçats en una carpeta…

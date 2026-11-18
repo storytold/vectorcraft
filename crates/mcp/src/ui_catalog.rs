@@ -780,6 +780,30 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{} clear the Learn panel's progress, every tutorial finished and every step marked done, as Reset progress under the list of skills does; open documents, opened practice samples and the Learn view stay as they are; returns what learn.list returns",
     ),
+    (
+        "retype.find",
+        "Find Matching Fonts",
+        "",
+        "{more?: bool} show the Retype panel and list the fonts whose glyphs the selected outlined text is, ranked as type.retypeFonts ranks them: ten, as Find Matching Fonts does, or with more: true the next five fonts the last search found (whatever is selected now; before any search, a first search), as Find more font matches does; the document does not change; a selection with no path or compound path, or a more that is not true or false, is an error and leaves the list as it was; returns what retype.list returns",
+    ),
+    (
+        "retype.list",
+        "List Matching Fonts",
+        "",
+        "{} what the Retype panel shows: {searched (a search ran since the last reset), fonts: [{family, style, matched (shapes it matches)}], shapes (shapes the last search compared), more (more fonts match than the list holds), size: small|medium|large, text (the samples' text; empty for a generic sample)}",
+    ),
+    (
+        "retype.preview",
+        "Retype Preview",
+        "",
+        "{size?: small|medium|large, text?: string} the size of the Retype panel's samples, as its panel menu sets it, and the text they show, as its sample field sets it (at most 100 characters; empty for a generic sample); any other value is an error and changes nothing; returns what retype.list returns",
+    ),
+    (
+        "retype.reset",
+        "Reset Retype Panel",
+        "",
+        "{} clear the Retype panel's list of matching fonts, as Reset Retype Panel in its panel menu does; the samples' size and text stay; returns what retype.list returns",
+    ),
     ("window.brightness", "UI Brightness", "", "{brightness: dark|mediumDark|mediumLight|light}"),
     (
         "window.workspace",

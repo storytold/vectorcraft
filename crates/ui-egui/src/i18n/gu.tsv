@@ -1429,6 +1429,18 @@
 	Find Fonts	ફૉન્ટ્સ શોધો
 	Find Fonts in Folder…	ફોલ્ડરમાં ફૉન્ટ્સ શોધો…
 	Find Font…	ફૉન્ટ શોધો…
+	Retype	ફરી ટાઇપ કરો
+	Find Matching Fonts	મેળ ખાતા ફૉન્ટ શોધો
+	Find more font matches	વધુ મેળ ખાતા ફૉન્ટ શોધો
+	Type your text to preview	પૂર્વાવલોકન માટે તમારું લખાણ ટાઇપ કરો
+	Select outlined text, then Find Matching Fonts.	આઉટલાઇન કરેલું લખાણ પસંદ કરો, પછી મેળ ખાતા ફૉન્ટ શોધો.
+	No font matches the selected shapes.	કોઈ ફૉન્ટ પસંદ કરેલા આકારો સાથે મેળ ખાતો નથી.
+	Reset Retype Panel	ફરી ટાઇપ કરો પેનલ રીસેટ કરો
+	List Matching Fonts	મેળ ખાતા ફૉન્ટની યાદી
+	Retype Preview	ફરી ટાઇપ કરો પેનલનું પૂર્વાવલોકન
+@msg	`count` must be a whole number from 1 to 96	`count` 1 થી 96 સુધીની પૂર્ણ સંખ્યા હોવી જોઈએ
+@msg	`size` must be small, medium or large	`size` small, medium અથવા large હોવું જોઈએ
+@msg	`text` must be a string of at most 100 characters	`text` વધુમાં વધુ 100 અક્ષરોની સ્ટ્રિંગ હોવી જોઈએ
 	Find In	આમાં શોધો
 	Find Linked Files	લિંક્ડ ફાઇલો શોધો
 	Find Linked Files in Folder…	ફોલ્ડરમાં લિંક્ડ ફાઇલો શોધો…

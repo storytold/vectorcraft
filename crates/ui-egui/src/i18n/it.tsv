@@ -1332,6 +1332,18 @@ font-technology	Variable	Variabili
 	Find and Replace…	Trova e sostituisci…
 	Find Font	Trova font
 	Find Font…	Trova font…
+	Retype	Ridigita
+	Find Matching Fonts	Trova font corrispondenti
+	Find more font matches	Trova altri font corrispondenti
+	Type your text to preview	Digita il testo dell’anteprima
+	Select outlined text, then Find Matching Fonts.	Seleziona testo vettorializzato, poi Trova font corrispondenti.
+	No font matches the selected shapes.	Nessun font corrisponde alle forme selezionate.
+	Reset Retype Panel	Reimposta pannello Ridigita
+	List Matching Fonts	Elenca font corrispondenti
+	Retype Preview	Anteprima del pannello Ridigita
+@msg	`count` must be a whole number from 1 to 96	`count` deve essere un numero intero compreso tra 1 e 96
+@msg	`size` must be small, medium or large	`size` deve essere small, medium o large
+@msg	`text` must be a string of at most 100 characters	`text` deve essere una stringa di al massimo 100 caratteri
 	Find Next	Trova successivo
 	Find Objects	Trova oggetti
 	Compare with Image	Confronta con immagine

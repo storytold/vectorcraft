@@ -386,6 +386,18 @@
 	Break Thread	Przerwij wątek
 	Fit Headline	Dopasuj nagłówek
 	Find Font…	Znajdź czcionkę…
+	Retype	Przepisz
+	Find Matching Fonts	Znajdź pasujące czcionki
+	Find more font matches	Znajdź więcej pasujących czcionek
+	Type your text to preview	Wpisz tekst do podglądu
+	Select outlined text, then Find Matching Fonts.	Zaznacz tekst zamieniony na kontury, a następnie wybierz Znajdź pasujące czcionki.
+	No font matches the selected shapes.	Żadna czcionka nie pasuje do zaznaczonych kształtów.
+	Reset Retype Panel	Resetuj panel Przepisz
+	List Matching Fonts	Wyświetl pasujące czcionki
+	Retype Preview	Podgląd w panelu Przepisz
+@msg	`count` must be a whole number from 1 to 96	`count` musi być liczbą całkowitą od 1 do 96
+@msg	`size` must be small, medium or large	`size` musi mieć wartość small, medium lub large
+@msg	`text` must be a string of at most 100 characters	`text` musi być ciągiem o długości co najwyżej 100 znaków
 	Change Case	Zmień wielkość liter
 	UPPERCASE	WIELKIE LITERY
 	lowercase	małe litery

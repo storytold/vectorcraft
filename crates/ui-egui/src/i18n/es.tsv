@@ -1320,6 +1320,18 @@ font-technology	Variable	Variables
 	Find and Replace…	Buscar y reemplazar…
 	Find Font	Buscar fuente
 	Find Font…	Buscar fuente…
+	Retype	Reescribir
+	Find Matching Fonts	Buscar fuentes coincidentes
+	Find more font matches	Buscar más fuentes coincidentes
+	Type your text to preview	Escriba el texto de la vista previa
+	Select outlined text, then Find Matching Fonts.	Seleccione texto contorneado y luego Buscar fuentes coincidentes.
+	No font matches the selected shapes.	Ninguna fuente coincide con las formas seleccionadas.
+	Reset Retype Panel	Restablecer panel Reescribir
+	List Matching Fonts	Enumerar fuentes coincidentes
+	Retype Preview	Vista previa del panel Reescribir
+@msg	`count` must be a whole number from 1 to 96	`count` debe ser un número entero entre 1 y 96
+@msg	`size` must be small, medium or large	`size` debe ser small, medium o large
+@msg	`text` must be a string of at most 100 characters	`text` debe ser una cadena de 100 caracteres como máximo
 	Find Next	Buscar siguiente
 	Find Objects	Buscar objetos
 	Compare with Image	Comparar con imagen

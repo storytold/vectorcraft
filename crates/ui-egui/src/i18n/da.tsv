@@ -3121,6 +3121,18 @@ liquify-list-end	{0}, {1}	{0} og {1}
 	Break Thread	Bryd sammenkædning
 	Fit Headline	Tilpas overskrift
 	Find Font…	Find skrifttype…
+	Retype	Genindtast
+	Find Matching Fonts	Find matchende skrifttyper
+	Find more font matches	Find flere matchende skrifttyper
+	Type your text to preview	Skriv teksten til forhåndsvisningen
+	Select outlined text, then Find Matching Fonts.	Markér tekst konverteret til konturer, og vælg derefter Find matchende skrifttyper.
+	No font matches the selected shapes.	Ingen skrifttype matcher de markerede former.
+	Reset Retype Panel	Nulstil panelet Genindtast
+	List Matching Fonts	Vis matchende skrifttyper
+	Retype Preview	Forhåndsvisning i panelet Genindtast
+@msg	`count` must be a whole number from 1 to 96	`count` skal være et heltal fra 1 til 96
+@msg	`size` must be small, medium or large	`size` skal være small, medium eller large
+@msg	`text` must be a string of at most 100 characters	`text` skal være en streng på højst 100 tegn
 	Change Case	Ændr store/små bogstaver
 	UPPERCASE	STORE BOGSTAVER
 	lowercase	små bogstaver

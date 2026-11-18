@@ -422,6 +422,18 @@
 	Break Thread	Prekini nit
 	Fit Headline	Uklopi naslov
 	Find Font…	Pronađi font…
+	Retype	Ponovo otkucaj
+	Find Matching Fonts	Pronađi odgovarajuće fontove
+	Find more font matches	Pronađi još odgovarajućih fontova
+	Type your text to preview	Upišite tekst za pregled
+	Select outlined text, then Find Matching Fonts.	Odaberite tekst pretvoren u obrise, zatim Pronađi odgovarajuće fontove.
+	No font matches the selected shapes.	Nijedan font ne odgovara odabranim oblicima.
+	Reset Retype Panel	Vrati panel Ponovo otkucaj na početno
+	List Matching Fonts	Prikaži odgovarajuće fontove
+	Retype Preview	Pregled u panelu Ponovo otkucaj
+@msg	`count` must be a whole number from 1 to 96	`count` mora biti cijeli broj od 1 do 96
+@msg	`size` must be small, medium or large	`size` mora biti small, medium ili large
+@msg	`text` must be a string of at most 100 characters	`text` mora biti niz od najviše 100 znakova
 	Change Case	Promijeni veličinu slova
 	UPPERCASE	VELIKA SLOVA
 	lowercase	mala slova

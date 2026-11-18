@@ -1548,6 +1548,18 @@ digits	Malayalam	Malayalam
 	Find Fonts	Tìm phông chữ
 	Find Fonts in Folder…	Tìm phông chữ trong thư mục…
 	Find Font…	Tìm phông…
+	Retype	Gõ lại
+	Find Matching Fonts	Tìm phông khớp
+	Find more font matches	Tìm thêm phông khớp
+	Type your text to preview	Nhập văn bản để xem trước
+	Select outlined text, then Find Matching Fonts.	Chọn văn bản đã chuyển thành đường viền, rồi Tìm phông khớp.
+	No font matches the selected shapes.	Không có phông nào khớp với các hình đã chọn.
+	Reset Retype Panel	Đặt lại bảng Gõ lại
+	List Matching Fonts	Liệt kê phông khớp
+	Retype Preview	Xem trước trong bảng Gõ lại
+@msg	`count` must be a whole number from 1 to 96	`count` phải là số nguyên từ 1 đến 96
+@msg	`size` must be small, medium or large	`size` phải là small, medium hoặc large
+@msg	`text` must be a string of at most 100 characters	`text` phải là chuỗi tối đa 100 ký tự
 	Find in Folder…	Tìm trong thư mục…
 	Find Linked Files	Tìm tệp liên kết
 	Find Linked Files in Folder…	Tìm tệp liên kết trong thư mục…

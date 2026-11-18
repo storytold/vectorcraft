@@ -1326,6 +1326,18 @@ font-technology	Variable	Варіативні
 	Find and Replace…	Знайти та замінити…
 	Find Font	Знайти шрифт
 	Find Font…	Знайти шрифт…
+	Retype	Повторний набір
+	Find Matching Fonts	Знайти відповідні шрифти
+	Find more font matches	Знайти інші відповідні шрифти
+	Type your text to preview	Введіть текст для перегляду
+	Select outlined text, then Find Matching Fonts.	Виділіть текст, перетворений на криві, потім виберіть «Знайти відповідні шрифти».
+	No font matches the selected shapes.	Жоден шрифт не відповідає виділеним фігурам.
+	Reset Retype Panel	Скинути панель «Повторний набір»
+	List Matching Fonts	Список відповідних шрифтів
+	Retype Preview	Перегляд у панелі «Повторний набір»
+@msg	`count` must be a whole number from 1 to 96	`count` має бути цілим числом від 1 до 96
+@msg	`size` must be small, medium or large	`size` має бути small, medium або large
+@msg	`text` must be a string of at most 100 characters	`text` має бути рядком довжиною не більше 100 символів
 	Find Next	Знайти далі
 	Find Objects	Знайти об’єкти
 	Compare with Image	Порівняти із зображенням
