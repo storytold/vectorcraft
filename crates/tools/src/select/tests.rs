@@ -1,6 +1,6 @@
 use super::*;
 use crate::testutil::*;
-use vectorcraft_doc::Selection;
+use vectorcraft_doc::{Document, NodeKind, Selection};
 
 /// While an opacity mask is edited, a press on a selected Shaper original shape moves it, over the
 /// art the group shows and over a part of the shape the group does not show. A press on an original
@@ -144,6 +144,66 @@ fn a_press_where_a_mask_hides_a_selected_object_drags_it() {
     d.insert(Some(l), 2, vectorcraft_doc::Node::path(front, square, vectorcraft_doc::Appearance::default_art())).unwrap();
     let a = SelectionTool::default().pointer(&cx(&d, &picked, &p), &ev(PointerKind::Down, 370.0, 450.0));
     assert!(a.iter().any(|a| matches!(a, Action::Exec(c, v) if c == "select.set" && v["ids"] == json!([front.0]))), "{a:?}");
+}
+
+/// #8538: while guides are locked or hidden (`guides` off), a Selection tool marquee that touches
+/// only a guide path in a group selects nothing, so a drag can't move the guide; one that touches
+/// the group's other member selects the group. With guides unlocked, the guide takes the group.
+#[test]
+fn a_marquee_over_a_locked_guide_in_a_group_selects_nothing() {
+    let mut d = Document::new(800.0, 600.0);
+    let l = d.layers[0].id;
+    let (gid, guide_id, art_id) = (d.alloc_id(), d.alloc_id(), d.alloc_id());
+    let mut guide = vectorcraft_doc::Node::path(
+        guide_id,
+        vectorcraft_geom::shapes::rectangle(Rect::new(100.0, 100.0, 120.0, 120.0)),
+        vectorcraft_doc::Appearance::default_art(),
+    );
+    if let NodeKind::Path { guide, .. } = &mut guide.kind {
+        *guide = true;
+    }
+    let art = vectorcraft_doc::Node::path(
+        art_id,
+        vectorcraft_geom::shapes::rectangle(Rect::new(300.0, 100.0, 320.0, 120.0)),
+        vectorcraft_doc::Appearance::default_art(),
+    );
+    d.insert(Some(l), 0, vectorcraft_doc::Node::group(gid, vec![std::sync::Arc::new(guide), std::sync::Arc::new(art)])).unwrap();
+    let (none, p) = (Selection::default(), paint());
+    let marquee = |guides: bool, x0: f64, x1: f64| {
+        let c = ToolContext { guides, ..cx(&d, &none, &p) };
+        let mut t = SelectionTool::default();
+        t.pointer(&c, &ev(PointerKind::Down, x0, 50.0));
+        t.pointer(&c, &ev(PointerKind::Drag, x1, 110.0));
+        let up = t.pointer(&c, &ev(PointerKind::Up, x1, 110.0));
+        up.iter().find_map(|a| match a {
+            Action::Exec(c, v) if c == "select.set" => Some(v["ids"].clone()),
+            _ => None,
+        })
+    };
+    assert_eq!(marquee(false, 90.0, 130.0), Some(json!([])), "locked: only the guide");
+    assert_eq!(marquee(false, 290.0, 330.0), Some(json!([gid.0])), "locked: the group's art");
+    assert_eq!(marquee(true, 90.0, 130.0), Some(json!([gid.0])), "unlocked: the guide");
+}
+
+/// #8538: an enclosing marquee measures a group without the locked or hidden guides in it, as the
+/// marquee leaves them out: a group whose art lies inside is taken though a guide in it reaches
+/// past the marquee. While guides can be picked, the guide counts.
+#[test]
+fn an_enclosing_marquee_measures_a_group_without_its_locked_guides() {
+    let mut d = Document::new(800.0, 600.0);
+    let l = d.layers[0].id;
+    let (gid, guide_id, art_id) = (d.alloc_id(), d.alloc_id(), d.alloc_id());
+    let square = |id, r| vectorcraft_doc::Node::path(id, vectorcraft_geom::shapes::rectangle(r), vectorcraft_doc::Appearance::default_art());
+    let mut guide = square(guide_id, Rect::new(500.0, 100.0, 520.0, 120.0));
+    if let NodeKind::Path { guide, .. } = &mut guide.kind {
+        *guide = true;
+    }
+    let art = square(art_id, Rect::new(100.0, 100.0, 120.0, 120.0));
+    d.insert(Some(l), 0, vectorcraft_doc::Node::group(gid, vec![std::sync::Arc::new(guide), std::sync::Arc::new(art)])).unwrap();
+    let (none, p) = (Selection::default(), paint());
+    let r = Rect::new(50.0, 50.0, 200.0, 200.0);
+    assert_eq!(crate::select::inside(&ToolContext { guides: false, ..cx(&d, &none, &p) }, r, vec![gid]), [gid], "locked or hidden");
+    assert!(crate::select::inside(&ToolContext { guides: true, ..cx(&d, &none, &p) }, r, vec![gid]).is_empty(), "shown and unlocked");
 }
 
 /// #955: grabbed by an anchor and dropped near another object's anchor, the anchor lands

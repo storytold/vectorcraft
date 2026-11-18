@@ -180,6 +180,8 @@
 	Shear…	Vinouta…
 	Transform Each…	Muunna kutakin…
 	Reset Bounding Box	Palauta rajausruutu
+	Rotate Bounding Box	Kierrä rajausruutua
+	Rotate Bounding Box…	Kierrä rajausruutua…
 	Arrange	Järjestä
 	Bring to Front	Tuo eteen
 	Bring Forward	Tuo eteenpäin
@@ -301,7 +303,7 @@
 	Move Plane to Match Object	Siirrä taso objektin mukaan
 	Edit Text	Muokkaa tekstiä
 	Live Paint	Elävä maalaus
-	Merge	Yhdistä
+	Merge	Sulauta
 	Gap Options…	Aukkojen asetukset…
 	Gap Options	Aukkojen asetukset
 	Gap Detection	Aukkojen tunnistus
@@ -710,6 +712,13 @@
 	Previous Document	Edellinen asiakirja
 	Cascade	Porrasta
 	Tile	Vierekkäin
+	Tile All Vertically	Kaikki vierekkäin pystysuunnassa
+	Tile All Horizontally	Kaikki vierekkäin vaakasuunnassa
+	2-Up Layout	2 ikkunan asettelu
+	3-Up Layout	3 ikkunan asettelu
+	4-Up Layout	4 ikkunan asettelu
+	6-Up Layout	6 ikkunan asettelu
+	Arrange Documents	Järjestä asiakirjat
 	Float in Window	Kelluta ikkunassa
 	Float All in Windows	Kelluta kaikki ikkunoissa
 	Consolidate All Windows	Yhdistä kaikki ikkunat
@@ -756,6 +765,11 @@
 	Saturation and brightness	Kylläisyys ja kirkkaus
 	Color field	Värikenttä
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
+	Wheel View	Ympyränäkymä
+	Box View	Ruutunäkymä
+	Box Channel	Ruudun kanava
+	Color box	Väriruutu
+	Color Wheel Options	Väriympyrän asetukset
 	CSS Properties	CSS-ominaisuudet
 	Document Info	Asiakirjan tiedot
 	Flattener Preview	Litistyksen esikatselu
@@ -1521,6 +1535,7 @@ lighting	Light	Valo
 	Play Current Selection	Toista nykyinen valinta
 	Save Actions…	Tallenna toiminnot…
 	Load Actions…	Lataa toiminnot…
+	Replace Actions…	Korvaa toiminnot…
 	Reset Actions	Palauta toiminnot
 	Replace the current actions with the default set?	Korvataanko nykyiset toiminnot oletussarjalla?
 	Append adds the default set after the current sets instead.	Lisää-painike lisää sen sijaan oletussarjan nykyisten sarjojen perään.
@@ -1681,7 +1696,7 @@ digits	Malayalam	Malajalam
 	Composite Fonts	Yhdistelmäfontit
 	Export Composite Fonts	Vie yhdistelmäfontit
 	Import Composite Fonts	Tuo yhdistelmäfontit
-@msg	each font must be {name, parts}	jokaisen fontin on oltava {name, parts}
+@msg	each font must be {{name, parts}}	jokaisen fontin on oltava {{name, parts}}
 @msg	unknown key `{k}`; a font takes name and parts	tuntematon avain `{k}`; fontti ottaa name ja parts
 @msg	each font needs a name	jokainen fontti tarvitsee nimen
 @msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` ei kelpaa yhdistelmäfontin nimeksi (1–{COMPOSITE_NAME_MAX} merkkiä, ei ohjausmerkkejä)
@@ -1694,7 +1709,10 @@ digits	Malayalam	Malajalam
 @msg	two composite fonts are named `{_1}`	kahden yhdistelmäfontin nimi on `{_1}`
 @msg	`{_1}` is the name of an installed font	`{_1}` on asennetun fontin nimi
 @msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} käyttää fonttia `{font}`, joka on yhdistelmäfontti
-@msg	give fonts: [{name, parts}…]	anna fonts: [{name, parts}…]
+@msg	give fonts: [{{name, parts}}…]	anna fonts: [{{name, parts}}…]
+@msg	`scope` must be "document", {{artboards: [index, …]}} or {{layers: [id, …]}}	`scope`-arvon on oltava "document", {{artboards: [index, …]}} tai {{layers: [id, …]}}
+@msg	numbers out of order in {{}} quantifier	luvut väärässä järjestyksessä kvanttorissa {{}}
+@msg	the paint is not a freeform gradient (apply one with paint.editGradient {{kind: "freeform"}})	maali ei ole vapaamuotoinen liukuväri (käytä sellaista komennolla paint.editGradient {{kind: "freeform"}})
 @msg	path is empty	path on tyhjä
 @msg	fonts must be a list of composite fonts	fonts on oltava luettelo yhdistelmäfonteista
 @msg	names must be strings	names on oltava merkkijonoja
@@ -1737,6 +1755,7 @@ digits	Malayalam	Malajalam
 	Underline	Alleviivaus
 	Vertical Scale %	Pystyskaalaus %
 	Axis	Akseli
+	Axis Angle	Akselin kulma
 	ICF Top/Right	ICF ylä/oikea
 	ICF Bottom/Left	ICF ala/vasen
 	Show Font Height Options	Näytä fontin korkeuden asetukset
@@ -1779,6 +1798,7 @@ digits	Malayalam	Malajalam
 	Rule:	Sääntö:
 	Save changes to {name}	Tallenna muutokset kohteeseen {name}
 	Save theme to My Themes	Tallenna teema Omiin teemoihin
+	Set the current fill or stroke to the selected color	Aseta nykyiseksi täytöksi tai viivaksi valittu väri
 	Set the selected color to the current color	Aseta valituksi väriksi nykyinen väri
 	Copy All Styles	Kopioi kaikki tyylit
 	Exported {path}	Viety: {path}
@@ -2081,7 +2101,7 @@ digits	Malayalam	Malajalam
 	Stroke: click for swatches, Shift-click for the color mixer	Viiva: napsauta avataksesi värimallit, Vaihto-napsauta avataksesi värisekoittimen
 	This panel is on the roadmap (see the parity plan).	Tämä paneeli on suunnitteilla (katso yhdenmukaisuussuunnitelma).
 	Open a document to navigate it.	Avaa asiakirja, niin voit liikkua siinä.
-	View Artboard Only	Näytä vain piirtoalusta
+	View Artboard Contents Only	Näytä vain piirtoalustan sisältö
 	Contextual Alternates	Kontekstuaaliset vaihtoehdot
 	Default Figure	Oletusnumerot
 	Discretionary Ligatures	Valinnaiset ligatuurit
@@ -2231,7 +2251,7 @@ digits	Malayalam	Malajalam
 	Overprint Preview (separations)	Päällepainatuksen esikatselu (erottelut)
 	Show All Plates	Näytä kaikki painolevyt
 	Show all plates	Näytä kaikki painolevyt
-	Show/hide plate (Alt-click: only this plate)	Näytä/piilota painolevy (Alt-napsautus: vain tämä painolevy)
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	Näytä/piilota painolevy (Alt-napsautus: vain tämä painolevy; uusi Alt-napsautus: kaikki painolevyt)
 	Simulate Paper	Simuloi paperia
 	Use Black Point Compensation	Käytä mustan pisteen kompensointia
 	Working CMYK (don't tag)	Työ-CMYK (ei tunnistetta)
@@ -2271,6 +2291,8 @@ digits	Malayalam	Malajalam
 	Tip extends past the end point	Kärki ulottuu päätepisteen yli
 	Tip on the end point	Kärki päätepisteessä
 	Variable Width Profile	Muuttuvan leveyden profiili
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Viivan sivellin säilyttää oman kokonsa, joten leveysprofiili ei muuta sitä. Poista sivellin, jos haluat käyttää profiilia.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Viivan sivellin säilyttää oman kokonsa, joten leveysprofiili ei muuta sitä. Poista sivellin, jos haluat käyttää profiilia.
 	Weight:	Paksuus:
 	Art using a deleted global swatch keeps its colour.	Poistettua globaalia värimallia käyttävä kuvitus säilyttää värinsä.
 	Color Group: {name}	Väriryhmä: {name}
@@ -2380,6 +2402,10 @@ digits	Malayalam	Malajalam
 	Flip Horizontal	Käännä vaakasuunnassa
 	Flip Vertical	Käännä pystysuunnassa
 	Polygon Properties:	Monikulmion ominaisuudet:
+	Line Properties:	Viivan ominaisuudet:
+	Line Length:	Viivan pituus:
+	Line Angle:	Viivan kulma:
+	Constrain Pie Angle	Säilytä sektorin kulma
 	Rectangle Properties:	Suorakulmion ominaisuudet:
 	Shape Properties:	Muodon ominaisuudet:
 	Shape Properties	Muodon ominaisuudet
@@ -2421,6 +2447,7 @@ digits	Malayalam	Malajalam
 	Scatter:	Sirottelu:
 	Rotation:	Kierto:
 	Rotation relative to:	Kierto suhteessa:
+	Hue Jitter:	Sävyn vaihtelu:
 	Brush Scale Options	Siveltimen skaalausasetukset
 	Scale Proportionately	Skaalaa suhteellisesti
 	Stretch to Fit Stroke Length	Venytä viivan pituuteen
@@ -2459,6 +2486,7 @@ digits	Malayalam	Malajalam
 	Size:	Koko:
 	Calligraphic Brush Options	Kalligrafisen siveltimen asetukset
 	Bristle Brush Options	Harjassiveltimen asetukset
+	Roundness	Pyöreys
 	Roundness:	Pyöreys:
 	Shape:	Muoto:
 	Bristle Length:	Harjasten pituus:
@@ -2777,6 +2805,7 @@ digits	Malayalam	Malajalam
 	BLANK DOCUMENT PRESETS	TYHJÄN ASIAKIRJAN ESIASETUKSET
 	Bleed	Leikkuuvara
 	Change to Right-to-Left Layout	Vaihda oikealta vasemmalle -asetteluun
+	Columns	Sarakkeet
 	Columns:	Sarakkeet:
 	Documents you create appear here.	Luomasi asiakirjat näkyvät tässä.
 	More Settings	Lisää asetuksia
@@ -2910,6 +2939,9 @@ digits	Malayalam	Malajalam
 	Open a document to preview its pages	Avaa asiakirja, niin voit esikatsella sen sivuja
 	Output › Mode	Tuloste › Tila
 	Overprint and Transparency Flattener Options	Päällepainatuksen ja läpinäkyvyyden litistyksen asetukset
+	Custom…	Mukautettu…
+	Custom Transparency Flattener Options	Läpinäkyvyyden litistyksen mukautetut asetukset
+	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	EPS:ssä ei ole alfa-läpinäkyvyyttä, ja Päällepainatukset määrää, säilytetäänkö päällepainatukset.
 	Place the pages with the placement again	Sijoita sivut uudelleen sijoittelun mukaan
 	Placement:	Sijoittelu:
 	Preserve CMYK Numbers	Säilytä CMYK-arvot
@@ -2959,14 +2991,19 @@ digits	Malayalam	Malajalam
 	Around Object	Objektin ympärillä
 	Background:	Tausta:
 	Changing these settings changes how raster effects look when exported, flattened or expanded.	Näiden asetusten muuttaminen vaikuttaa rasteritehosteiden ulkoasuun vietäessä, litistettäessä tai laajennettaessa.
+	Add Around	Lisää objektin ympärille
+	Anti Alias	Reunanpehmennys
+	Color Model	Värijärjestelmä
 	Color Model:	Värijärjestelmä:
 	Create Clipping Mask	Luo leikkausmaski
 	Preserve Spot Colors	Säilytä spottivärit
+	Resolution	Tarkkuus
 	Resolution:	Tarkkuus:
 	Transparent	Läpinäkyvä
 	Layout Order:	Asettelujärjestys:
 	Change to Left-to-Right Layout	Vaihda vasemmalta oikealle -asetteluun
 	Artboards: {n}	Piirtoalustat: {n}
+	Rows	Rivit
 	Rows:	Rivit:
 	Assign	Määritä
 	Color Group:	Väriryhmä:
@@ -3115,6 +3152,8 @@ antiAlias	Sharp	Terävä
 	Every option matches {base}.	Kaikki asetukset vastaavat kohdetta {base}.
 	Files of a PDF standard can't be password-protected.	PDF-standardin mukaisia tiedostoja ei voi suojata salasanalla.
 	Files of this standard tag their colours with ICC profiles.	Tämän standardin tiedostot merkitsevät värinsä ICC-profiileilla.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	Tämän standardin tiedostot merkitsevät värinsä ICC-profiileilla, paitsi tulostustavoitteen profiilin CMYK-värit, jotka kirjoitetaan DeviceCMYK-muodossa.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	Kun valintana on ”Älä sisällytä profiileja” ja tulostustavoite on CMYK, jokainen CMYK-väri kirjoitetaan DeviceCMYK-muodossa, ellei sitä muunneta toisen profiilin CMYK-kohteeseen.
 	Flattener preset:	Litistyksen esiasetus:
 	General › Thumbnails	Yleiset › Pikkukuvat
 	Grayscale images	Harmaasävykuvat
@@ -3334,6 +3373,12 @@ antiAlias	Sharp	Terävä
 	LF (macOS, Linux)	LF (macOS, Linux)
 	CRLF (Windows)	CRLF (Windows)
 	Text Export Options	Tekstin vientiasetukset
+	Chinese Big 5	Kiina Big 5
+	Cyrillic	Kyrillinen
+	Greek	Kreikka
+	Turkish	Turkki
+	Baltic	Balttilainen
+	Central European	Keskieurooppalainen
 	Character Set:	Merkistö:
 	Join the lines of each paragraph	Yhdistä kunkin kappaleen rivit
 	Line Breaks	Rivinvaihdot
@@ -3363,6 +3408,9 @@ antiAlias	Sharp	Terävä
 	Variable Options	Muuttujan asetukset
 	Define a variable first	Määritä ensin muuttuja
 	Adjust Adjoining Width Points	Säädä viereisiä leveyspisteitä
+	Incoming	Saapuva
+	Outgoing	Lähtevä
+	Single Width Only	Vain yksi leveys
 	Keep both sides the same width	Pidä molemmat puolet samanlevyisinä
 	Side 1:	Puoli 1:
 	Side 2:	Puoli 2:
@@ -3471,9 +3519,18 @@ theme	Appearance	Ulkoasu
 	Break Link to Symbol	Katkaise linkki symboliin
 	Brush Definition	Siveltimen määritys
 	Brush Options…	Siveltimen asetukset…
+	Options of Selected Object…	Valitun objektin asetukset…
+	Options of Selected Object	Valitun objektin asetukset
+@msg	no path painted with a brush is selected	siveltimellä maalattua polkua ei ole valittu
+@msg	the selected paths are painted with brushes of different types	valitut polut on maalattu eri tyyppisillä siveltimillä
+@msg	give `params` or `reset`, not both	anna `params` tai `reset`, ei molempia
+@msg	a bristle brush has no options of its own on a path	harjassiveltimellä ei ole polulla omia asetuksia
 	Current Brush	Nykyinen sivellin
 	Current Symbol	Nykyinen symboli
 	Delete Brush	Poista sivellin
+	Delete Color	Poista väri
+	Restore Generated Table	Palauta luotu taulukko
+	Unshift All Colors	Peru kaikkien värien siirto
 	Delete Symbol	Poista symboli
 	Delete the selected symbol?	Poistetaanko valittu symboli?
 	Delete the selected symbols?	Poistetaanko valitut symbolit?
@@ -3751,6 +3808,7 @@ theme	Appearance	Ulkoasu
 	Select Art	Valitse kuvitus
 	Set Current Layer	Aseta nykyinen taso
 	Flatten Artwork	Litistä kuvitus
+	Locate Layer	Paikanna taso
 	Locate Object	Paikanna objekti
 	Lock Others	Lukitse muut
 	Merge Selected	Yhdistä valitut
@@ -3927,6 +3985,7 @@ theme	Appearance	Ulkoasu
 	90° & 45° Angles	90° ja 45° kulmat
 	90° Angles	90° kulmat
 	Additional Plug-ins Folder	Lisälaajennusten kansio
+	Plug-in Instruction Budget	Laajennusten käskybudjetti
 	Additional Fonts Folder	Lisäfonttien kansio
 	Alignment Guides	Tasausapuviivat
 	Anchor Points, Handle, and Bounding Box Display	Ankkuripisteiden, kahvojen ja rajausruudun näyttö
@@ -3953,6 +4012,7 @@ theme	Appearance	Ulkoasu
 	Data Recovery	Tietojen palautus
 	Default Language	Oletuskieli
 	Disable Auto Add/Delete	Poista automaattinen lisäys/poisto käytöstä
+	Interpolate Control Points When Moving Anchors	Interpoloi suuntakahvat siirrettäessä ankkuripisteitä
 	Display All Blacks Accurately	Näytä kaikki mustat tarkasti
 	Display All Blacks as Rich Black	Näytä kaikki mustat syvämustina
 	Display Bitmaps as Anti-aliased Images in Pixel Preview	Näytä bittikartat reunanpehmennettyinä kuvina pikseliesikatselussa
@@ -3969,6 +4029,7 @@ theme	Appearance	Ulkoasu
 	Enable Rubber Band for	Ota kumilankavalinta käyttöön kohteelle
 	Enable Touch Gestures	Ota kosketuseleet käyttöön
 	Switch Selection and Drawing Modes	Vaihda valinta- ja piirtotilan välillä
+	Select Last Selection Tool	Valitse viimeksi käytetty valintatyökalu
 	Enable Touch Workspace	Ota kosketustyötila käyttöön
 	English: UK	Englanti: UK
 	Every (minutes)	Välein (minuuttia)
@@ -4040,6 +4101,9 @@ theme	Appearance	Ulkoasu
 	Printing / Exporting	Tulostus / vienti
 	Real-time Drawing and Editing	Reaaliaikainen piirto ja muokkaus
 	Use Monitor Profile for Canvas	Käytä näytön profiilia kankaalle
+	Refresh Monitor Profile	Päivitä näytön profiili
+@msg	turn on Use Monitor Profile for Canvas first	ota ensin käyttöön ”Käytä näytön profiilia kankaalle”
+@msg	this build doesn't read display profiles	tämä versio ei lue näyttöjen profiileja
 	The canvas is drawn in sRGB.	Kangas piirretään sRGB-tilassa.
 	Canvas display profile:	Kankaan näyttöprofiili:
 	The system matches the window to the display's colors.	Järjestelmä sovittaa ikkunan näytön väreihin.
@@ -4101,6 +4165,7 @@ theme	Appearance	Ulkoasu
 	Scroll Sideways with Cmd/Ctrl + Wheel	Vieritä vaakasuunnassa Cmd/Ctrl + hiiren rullalla
 	Scrub Numeric Fields by Dragging	Muuta numerokenttiä vetämällä
 	Linux Display Server	Linuxin näyttöpalvelin
+	Low-Latency Drawing	Pienen viiveen piirto
 	Print Preview	Tulostuksen esikatselu
 	Print Setup	Tulostusasetukset
 	Bitmap	Bittikartta
@@ -4439,6 +4504,12 @@ font-technology	Variable	Muuttuvat
 	Search commands, tools, panels and effects…	Hae komentoja, työkaluja, paneeleita ja tehosteita…
 	No commands match	Mikään komento ei vastaa hakua
 	{pos} of {total}: {name}	{pos}/{total}: {name}
+	No menu item	Ei valikkokohdetta
+	Toolbar	Työkalurivi
+	{toolbar}, in the {tool} group	{toolbar}, ryhmässä {tool}
+	In the menu bar: {path}	Valikkorivillä: {path}
+	In the {group} group: press and hold to open it	Ryhmässä {group}: avaa painamalla pitkään
+	{home}, not shown now	{home}, ei näkyvissä nyt
 @plural	{n} result|{n} results	{n} tulos|{n} tulosta
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown}/{n} tulosta. Kirjoita lisää rajataksesi tuloksia.|{shown}/{n} tulosta. Kirjoita lisää rajataksesi tuloksia.
 	Recent Commands	Viimeisimmät komennot
@@ -4475,6 +4546,7 @@ font-technology	Variable	Muuttuvat
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Hiiren rulla vierittää piirtopintaa sivuttain, kun Cmd/Ctrl on painettuna.
 	Dragging sideways on a numeric field's label changes the field's value.	Numerokentän nimiön vetäminen sivuttain muuttaa kentän arvoa.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Kahden sormen kiertoele kosketuslevyllä kiertää piirtopinnan näkymää.
+	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Kun siirrät ankkuripisteitä, jokainen käyrä, jonka toinen pää siirtyy, säilyttää muotonsa suhteessa päihinsä.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Työkalun pikanäppäimen pitäminen painettuna valitsee työkalun, kunnes päästät irti, ja sitten edellinen työkalu valitaan uudelleen.
 	Shows the bounding box while you move the selection or draw a shape.	Näyttää rajausruudun, kun siirrät valintaa tai piirrät muotoa.
 	Create Trim Marks draws Japanese-style marks instead of Roman ones.	Luo leikkuumerkit piirtää japanilaistyyliset merkit roomalaisten sijaan.
@@ -4505,6 +4577,29 @@ font-technology	Variable	Muuttuvat
 	The unit for East Asian type measurements, which no field uses yet.	Itä-Aasian tekstin mittojen yksikkö, jota mikään kenttä ei vielä käytä.
 	When on, a number typed without a unit into a field in picas is read in points.	Kun asetus on käytössä, picoina näytettävään kenttään ilman yksikköä kirjoitettu luku luetaan pisteinä.
 	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	XML-tunnus-asetuksella objektien nimet näytetään XML-tunnuksina kohteissa Tasot, Muuttujat ja Tason asetukset.
+	The step for type size and leading: Cmd/Ctrl+Shift+. and Cmd/Ctrl+Shift+, change the size by one step, or five with Alt too; in horizontal type, Alt with the Up or Down Arrow changes the leading by one step, or five with Cmd/Ctrl.	Tekstin koon ja rivivälin askel: Cmd/Ctrl+Vaihto+. ja Cmd/Ctrl+Vaihto+, muuttavat kokoa yhden askeleen, Alt-näppäimen kanssa viisi; vaakasuuntaisessa tekstissä Alt ja ylä- tai alanuoli muuttavat riviväliä yhden askeleen, Cmd/Ctrl-näppäimen kanssa viisi.
+	The step for tracking and kerning, in thousandths of an em: in horizontal type, Alt with the Left or Right Arrow changes the kerning at the caret or the tracking of the selected text by one step, or five with Cmd/Ctrl.	Merkkivälin ja parivälistyksen askel em-yksikön tuhannesosina: vaakasuuntaisessa tekstissä Alt ja vasen tai oikea nuoli muuttavat kohdistimen kohdan parivälistystä tai valitun tekstin merkkiväliä yhden askeleen, Cmd/Ctrl-näppäimen kanssa viisi.
+	The step for baseline shift: in horizontal type, Alt and Shift with the Up or Down Arrow move the baseline by one step, or five with Cmd/Ctrl.	Perusviivan siirron askel: vaakasuuntaisessa tekstissä Alt, vaihtonäppäin ja ylä- tai alanuoli siirtävät perusviivaa yhden askeleen, Cmd/Ctrl-näppäimen kanssa viisi.
+	Shows the options for Japanese and other East Asian type in the Character, Paragraph, OpenType and Glyphs panels, and Type › Composite Fonts.	Näyttää japanin ja muiden Itä-Aasian kielten tekstin asetukset paneeleissa Merkki, Kappale, OpenType ja Merkit sekä komennon Yhdistelmäfontit.
+	Shows the options for Arabic, Hebrew and Indic type in the Character and Paragraph panels, such as paragraph direction, kashidas and digits.	Näyttää arabian, heprean ja intialaisten kielten tekstin asetukset paneeleissa Merkki ja Kappale, kuten kappaleen suunnan, kashidat ja numerot.
+	The selection tools select type only on its baseline, its area's frame or its path, not anywhere inside its box.	Valintatyökalut valitsevat tekstin vain sen perusviivalta, aluetekstin kehyksestä tai sen polulta, eivät mistä tahansa sen laatikon sisältä.
+	Font menus list each font by its English name; off, a font that also has a name in its own language shows that name.	Fonttivalikot näyttävät jokaisen fontin englanninkielisellä nimellä; pois päältä fontti, jolla on nimi myös omalla kielellään, näyttää sen nimen.
+	New area type starts with Auto Size on, so a rectangular frame of horizontal type grows or shrinks in height to fit its text.	Uusi aluetekstin kehys alkaa automaattinen koko päällä, joten vaakasuuntaisen tekstin suorakulmainen kehys kasvaa tai pienenee korkeudeltaan tekstinsä mukaan.
+	Font lists and the Type › Font menu show a sample of each font beside its name.	Fonttiluettelot ja Fontti-valikko näyttävät jokaisen fontin näytteen sen nimen vieressä.
+	Font samples are drawn in dark type on white, whatever the interface's brightness; it applies only while in-menu font previews are on.	Fonttinäytteet piirretään tummalla tekstillä valkoiselle käyttöliittymän kirkkaudesta riippumatta; tämä koskee vain aikaa, jolloin valikkojen fonttiesikatselut ovat päällä.
+	How tall each row is in the font lists of font fields, such as the Character panel's, and so how large each sample is.	Kuinka korkea kukin rivi on fonttikenttien luetteloissa, kuten Merkki-paneelin kentässä, ja siten kuinka suuri kukin näyte on.
+	How many of the fonts used last, from 1 to 15, Type › Recent Fonts and the font lists show, newest first.	Kuinka monta viimeksi käytettyä fonttia, 1–15, Viimeisimmät fontit ja fonttiluettelot näyttävät, uusin ensin.
+	When you change the font or font style of text, characters the new font has no glyph for keep the font they had.	Kun vaihdat tekstin fontin tai fonttityylin, merkit, joille uudessa fontissa ei ole glyfiä, säilyttävät aiemman fonttinsa.
+	A pink highlight on the canvas marks glyphs that OpenType features replaced, such as ligatures; it does not print or export.	Vaaleanpunainen korostus piirtoalueella merkitsee glyfit, jotka OpenType-ominaisuudet ovat korvanneet, kuten ligatuurit; sitä ei tulosteta eikä viedä.
+	With the Type tool, selecting one character shows a row of its alternate glyphs beside it on the canvas to choose from.	Tekstityökalulla yhden merkin valitseminen näyttää sen vieressä piirtoalueella rivin sen vaihtoehtoisia glyfejä valittavaksi.
+	A pink highlight on the canvas marks text drawn in a substitute font because its font is missing; it does not print or export.	Vaaleanpunainen korostus piirtoalueella merkitsee tekstin, joka piirretään korvaavalla fontilla, koska sen oma fontti puuttuu; sitä ei tulosteta eikä viedä.
+	New type made with a Type tool starts with placeholder text, selected, so typing replaces it.	Tekstityökalulla luotu uusi teksti alkaa valitulla paikkamerkkitekstillä, jonka kirjoittaminen korvaa.
+	Typing a list marker such as 1. or * and then a space at the start of a paragraph makes the paragraph a list.	Luettelomerkin, kuten 1. tai *, ja sen jälkeen välilyönnin kirjoittaminen kappaleen alkuun tekee kappaleesta luettelon.
+	Fonts in this folder show in the font menus and can be used without being installed.	Tämän kansion fontit näkyvät fonttivalikoissa, ja niitä voi käyttää asentamatta.
+	Applying a graphic style to type removes the characters' own fill or stroke where the style has one, so the style's paint shows.	Grafiikkatyylin käyttäminen tekstiin poistaa merkkien oman täytön tai viivan, kun tyylissä on sellainen, joten tyylin väri näkyy.
+	Align and Distribute measure point type by the ink of its glyphs instead of its em box.	Tasaa ja Jaa mittaavat pistetekstin sen glyfien musteen mukaan eivätkä sen em-laatikon mukaan.
+	Align and Distribute measure area type by the ink of its glyphs instead of its frame.	Tasaa ja Jaa mittaavat aluetekstin sen glyfien musteen mukaan eivätkä sen kehyksen mukaan.
+	The bounding box and the Transform panel measure point type by the ink of its glyphs instead of its em box.	Rajausruutu ja Muunna-paneeli mittaavat pistetekstin sen glyfien musteen mukaan eivätkä sen em-laatikon mukaan.
 	Snaps drawing, moving and scaling to the grid's subdivisions, even while the grid is hidden; while it is on, Snap to Pixel does not apply.	Kohdistaa piirtämisen, siirtämisen ja skaalaamisen ruudukon jakoihin myös silloin, kun ruudukko on piilossa; kun asetus on päällä, Kohdista pikseliin ei ole käytössä.
 	The color of guides that are not selected; an artboard with a Guide Label draws its own guides in the label's color instead.	Valitsemattomien apuviivojen väri; piirtoalusta, jolla on apuviivojen tunniste, piirtää omat apuviivansa tunnisteen värillä.
 	Draws guides as solid lines or as dots, including the guides already in the document.	Piirtää apuviivat yhtenäisinä viivoina tai pisteinä, myös asiakirjassa jo olevat apuviivat.
@@ -4532,6 +4627,8 @@ font-technology	Variable	Muuttuvat
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Kuinka lähelle grafiikkaa osoittimen tai vedettävän pisteen on tultava näytöllä, jotta älykkäät apuviivat kohdistavat siihen; etäisyys on sama kaikilla zoomauksilla.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Kohdistaa janan pään tai keskipisteestä piirretyn ympyrän niin, että se koskettaa lähellä olevaa käyrää.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Kohdistaa janan pään niin, että se kohtaa lähellä olevan suoran segmentin suorassa kulmassa.
+	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Näyttää piirtopinnalla kunkin viipaleen numeron ruudussa sen vasemmassa yläkulmassa; kun asetus on pois päältä, viipaleiden ääriviivat näkyvät edelleen.
+	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Käyttäjä- ja objektiviipaleiden ääriviivojen ja niiden numeroruutujen väri; automaattiset viipaleet käyttävät siitä himmeämpää sävyä.
 	Reset all preferences to their defaults?	Palautetaanko kaikki asetukset oletuksiin?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Oletukset otetaan käyttöön, kun valitset Asetuksissa OK. Peruuta siellä säilyttää nykyiset asetuksesi.
 	Smaller ↔ Larger	Pienempi ↔ Suurempi
@@ -4548,6 +4645,8 @@ font-technology	Variable	Muuttuvat
 	Couldn't paste from the clipboard: {e}	Leikepöydältä ei voitu liittää: {e}
 	Channel	Kanava
 	Circle	Ympyrä
+	Circle Tool	Ympyrätyökalu
+	Circle too large	Ympyrä on liian suuri
 	Clip to Art	Rajaa kuvitukseen
 	Colorize	Väritä
 	Gamma	Gamma
@@ -4777,6 +4876,13 @@ imageTrace	Outline	Ääriviiva
 	Show External Script Warning	Näytä ulkoisten komentosarjojen varoitus
 	A Script Is Running	Komentosarja on käynnissä
 	Script Alert	Komentosarjan ilmoitus
+	Script File Access	Komentosarjan tiedostojen käyttö
+	The script asks to read a file you choose.	Komentosarja pyytää lupaa lukea valitsemasi tiedoston.
+	The script asks to read and write a file you choose.	Komentosarja pyytää lupaa lukea ja kirjoittaa valitsemasi tiedoston.
+	The script asks to read and write a folder you choose, with everything in it.	Komentosarja pyytää lupaa lukea ja kirjoittaa valitsemasi kansion ja kaiken sen sisällön.
+	Allow Once	Salli kerran
+	Always Allow This Script	Salli tämä komentosarja aina
+	Deny	Estä
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Komentosarja voi muuttaa avoimia asiakirjoja ja kirjoittaa tiedostoja suorittamillaan komennoilla. Suorita vain komentosarjoja, joihin luotat.
 	Do not show this warning again	Älä näytä tätä varoitusta uudelleen
 	Stop the script and undo what it did? Then quit again.	Pysäytetäänkö komentosarja ja kumotaan sen muutokset? Lopeta sitten uudelleen.
@@ -4793,6 +4899,8 @@ imageTrace	Outline	Ääriviiva
 @msg	the script is no longer in the Scripts folder	komentosarja ei ole enää Scripts-kansiossa
 	Some scripts were not listed	Kaikkia komentosarjoja ei ole lueteltu
 	The Scripts folder cannot be read	Scripts-kansiota ei voi lukea
+	Loading scripts…	Ladataan komentosarjoja…
+	The Scripts folder is still being read	Scripts-kansiota luetaan vielä
 @msg	the script's run is no longer available	komentosarjan suoritus ei ole enää käytettävissä
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	epäonnistunut komento muutti kumoamisvaiheita, joita ei voitu palauttaa, joten komentosarja pysäytettiin
 @msg	a recovery copy could not be written, so the script was not run	palautuskopiota ei voitu kirjoittaa, joten komentosarjaa ei suoritettu
@@ -4805,8 +4913,6 @@ imageTrace	Outline	Ääriviiva
 @msg	Script file could not be read	Komentosarjatiedostoa ei voitu lukea
 @msg	Script folder has more than 2,048 entries	Komentosarjakansiossa on yli 2 048 kohdetta
 @msg	Script file open mode must be r, w, e or a	Komentosarjatiedoston avaustilan on oltava r, w, e tai a
-@msg	Script file writing is not available	Komentosarjatiedostojen kirjoittaminen ei ole käytettävissä
-@msg	Script file dialogs are not available	Komentosarjojen tiedostovalintaikkunat eivät ole käytettävissä
 @msg	Script files cannot be opened in another application	Komentosarjatiedostoja ei voi avata toisessa sovelluksessa
 @msg	Script file access is unavailable on the web	Komentosarjatiedostojen käyttö ei ole mahdollista verkossa
 @msg	Script has 256 files open	Komentosarjalla on 256 tiedostoa auki
@@ -4945,8 +5051,37 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	is a prompt's answer, whose `value` must be a string or null	on prompt-vastaus, joten sen `value`-arvon on oltava merkkijono tai null
 @msg	must have `kind` alert, confirm or prompt	`kind`-arvon on oltava alert, confirm tai prompt
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` on vain ajolle, jossa ei ole ketään kysyttävää: sovelluksessa henkilö vastaa jokaiseen valintaikkunaan
+@msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel` on oltava kokonaisluku väliltä 1–{_1}
+@msg	`args{place}` is nested more than 64 levels deep	`args{place}` on sisäkkäin yli 64 tason syvyydellä
+@msg	`args` must be an object	`args` on oltava objekti
+@msg	`args` is larger than 1 MiB	`args` on suurempi kuin 1 MiB
+@msg	`path` is empty	`path` on tyhjä
+@msg	`installed` takes a `path`, not a `source`	`installed` ottaa `path`-arvon, ei `source`-arvoa
+@msg	`path` must name a .js or .jsx file	`path` on oltava .js- tai .jsx-tiedosto
+@msg	give exactly one of `path` and `source`	anna tasan yksi arvoista `path` ja `source`
 @msg	Running a script	Suoritetaan komentosarjaa
 @msg	Copied the script report	Komentosarjan raportti kopioitiin
+@msg	Script file access denied: {path}	Komentosarjan tiedostojen käyttö estettiin: {path}
+@msg	Script file access to the app's own folders is not allowed	Komentosarjat eivät saa käyttää sovelluksen omia kansioita
+@msg	Script file cannot encode the text	Komentosarjan tiedosto ei voi koodata tekstiä
+@msg	Script file could not be written	Komentosarjan tiedostoa ei voitu kirjoittaa
+@msg	Script file dialogs need a person to answer them	Komentosarjan tiedostovalintaikkunoihin tarvitaan vastaava henkilö
+@msg	Script file is not open for writing	Komentosarjan tiedosto ei ole auki kirjoittamista varten
+@msg	Script file name is already in use	Komentosarjan tiedoston nimi on jo käytössä
+@msg	Script file name must be a name without a folder	Komentosarjan tiedoston nimen on oltava nimi ilman kansiota
+@msg	Script file permission can be kept only for a script run from a file	Tiedostolupa voidaan säilyttää vain tiedostosta suoritetulle komentosarjalle
+@msg	Script file permission could not be saved	Komentosarjan tiedostolupaa ei voitu tallentaa
+@msg	Script folder is not empty	Komentosarjan kansio ei ole tyhjä
+@msg	Script files cannot make aliases	Komentosarjan tiedostot eivät voi luoda aliaksia
+@msg	Script file hidden setting cannot be changed	Komentosarjan tiedoston piilotusasetusta ei voi muuttaa
+@msg	{name}: a file dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: tiedostovalintaikkunaa ei voi avata sisäänrakennetun funktion, getterin, muunnoksen tai $.evalFile-funktion suorittaman tiedoston takaisinkutsussa; kutsu sitä komentosarjan omasta koodista
+@msg	the script wrote more file data than one run may write (32 MiB)	komentosarja kirjoitti enemmän tiedostodataa kuin yksi suoritus saa kirjoittaa (32 MiB)
+@msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	komentosarjan tiedostovalintaikkunan `answer`-arvon on oltava jokin seuraavista: once, always, deny, stop
+@msg	choose a file or folder first, or deny	valitse ensin tiedosto tai kansio tai estä
+@msg	the script file permissions could not be saved: {e}	komentosarjojen tiedostolupia ei voitu tallentaa: {e}
+@msg	this script's file access can be allowed only once	tämän komentosarjan tiedostojen käytön voi sallia vain kerran
+@msg	Only the person at the keyboard can allow a script's file access	Vain näppäimistön ääressä oleva ihminen voi sallia komentosarjan tiedostojen käytön
+@msg	A script is given at most 2,048 files: the files picked after them were left out	Komentosarja saa enintään 2 048 tiedostoa: niiden jälkeen valitut tiedostot jätettiin pois
 @msg	Copied the link info	Linkin tiedot kopioitiin
 @msg	Corners edits the corners of a path	Kulmat-toiminto muokkaa polun kulmia
 @msg	Couldn't copy to the system clipboard: {e}	Järjestelmän leikepöydälle ei voitu kopioida: {e}
@@ -5022,6 +5157,7 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	Saved {path}	Tallennettiin {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	Valitse tekstiä tai napsauta tekstiin tekstityökalulla, niin voit lisätä merkkejä
 @msg	Shape Builder: no region under the pointer	Muodonmuodostin: osoittimen alla ei ole aluetta
+@msg	Shape Builder: select all paths you want to merge	Muodonmuodostin: valitse kaikki polut, jotka haluat yhdistää
 @msg	Shape Builder: select paths or compound paths	Muodonmuodostin: valitse polkuja tai yhdistelmäpolkuja
 @msg	Show All Hidden Attributes: nothing is hidden	Näytä kaikki piilotetut attribuutit: mitään ei ole piilotettu
 @msg	Split Into Grid: select paths large enough for the grid	Jaa ruudukoksi: valitse ruudukolle riittävän suuret polut
@@ -5156,6 +5292,7 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	bad trailer	virheellinen trailer
 @msg	balance must be between 0 and 100	balance-arvon on oltava väliltä 0–100
 @msg	batch step {_1} (`{id}`) failed: {e}	erävaihe {_1} (`{id}`) epäonnistui: {e}
+@msg	action step {_1} (`{id}`) failed: {reason}	toiminnon vaihe {_1} (`{id}`) epäonnistui: {reason}
 @msg	brightness must be dark|mediumDark|mediumLight|light	brightness-arvon on oltava dark|mediumDark|mediumLight|light
 @msg	can't encode the document: {0}	asiakirjaa ei voi koodata: {0}
 @msg	can't parse shortcut `{c}`	pikanäppäintä `{c}` ei voi jäsentää
@@ -5175,6 +5312,8 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	choose a folder to export to	valitse kansio, johon viedään
 @msg	choose a location for the package	valitse paketin sijainti
 @msg	clipboard is empty	leikepöytä on tyhjä
+@msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: väritaulukkoon on jäätävä vähintään yksi väri
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted: `{k}` nimeää värin, jonka myös toinen avain nimeää
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` ei ole väri, kuten "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: enintään {MAX_TABLE} väriä
 @msg	command `{0}` is not available right now: {1}	komento `{0}` ei ole nyt käytettävissä: {1}
@@ -5242,9 +5381,15 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	no PNG encoder	ei PNG-kooderia
 @msg	no active document	ei aktiivista asiakirjaa
 @msg	no active perspective plane	ei aktiivista perspektiivitasoa
+@msg	the perspective grid is hidden	perspektiiviruudukko on piilotettu
+@msg	Automatic Plane Positioning is off: turn on anchorPoint or gridlineIntersection (perspective.widget.options)	Tason automaattinen sijoittaminen on pois päältä: ota käyttöön anchorPoint tai gridlineIntersection (perspective.widget.options)
+@msg	anchorPoint must be true or false	anchorPoint-arvon on oltava true tai false
+@msg	gridlineIntersection must be true or false	gridlineIntersection-arvon on oltava true tai false
+@msg	tolerance must be 0 or more	tolerance-arvon on oltava 0 tai enemmän
+@msg	give `at` or `clear`, not both	anna `at` tai `clear`, ei molempia
 @msg	no anchor points selected	ankkuripisteitä ei ole valittu
-@msg	`points` must be three [x, y] pairs of numbers	`points` on annettava kolmena lukuparina [x, y]
-@msg	direct-select three anchor points, or give `points`	valitse suoraan kolme ankkuripistettä tai anna `points`
+@msg	`points` must be two or three [x, y] pairs of numbers	`points` on annettava kahtena tai kolmena lukuparina [x, y]
+@msg	direct-select two or three anchor points, or give `points`	valitse suoraan kaksi tai kolme ankkuripistettä tai anna `points`
 @msg	no circle passes through these points: two are the same or all three lie on one line	näiden pisteiden kautta ei kulje ympyrää: kaksi pisteistä on samoja tai kaikki kolme ovat samalla suoralla
 @msg	no app to open files here	täällä ei ole sovellusta tiedostojen avaamiseen
 @msg	no artboard	ei piirtoalustaa
@@ -5346,12 +5491,17 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	no such user library	käyttäjäkirjastoa ei ole
 @msg	no such view	näkymää ei ole
 @msg	no such width point	leveyspistettä ei ole
+@msg	`single` must be `incoming` or `outgoing`	`single` on oltava `incoming` tai `outgoing`
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` ja `outIndex` on oltava saman epäjatkuvan leveyspisteen kaksi puolikasta
+@msg	a discontinuous width point keeps its place	epäjatkuva leveyspiste pysyy paikallaan
 @msg	no swatch `{name}`	ei värimallia `{name}`
 @msg	no swatch library `{l}` (see swatch.library.list)	ei värimallikirjastoa `{l}` (ks. swatch.library.list)
 @msg	no symbol instances selected	symboli-ilmentymiä ei ole valittu
 @msg	no target object has an opacity mask: select one or give `id`	millään kohdeobjektilla ei ole peittävyysmaskia: valitse sellainen tai anna `id`
 @msg	no threaded text selected	ketjutettua tekstiä ei ole valittu
 @msg	no user library folder here	täällä ei ole käyttäjäkirjastokansiota
+@msg	`{file}` has no swatches of its own	tiedostossa `{file}` ei ole omia värimalleja
+@msg	`{_1}` has pattern swatches, which a .vcswatches file can't hold	kirjastossa `{_1}` on kuviomalleja, joita .vcswatches-tiedosto ei voi sisältää
 @msg	no user workspace `{from}`	ei käyttäjän työtilaa `{from}`
 @msg	node {_1} is not text	solmu {_1} ei ole tekstiä
 @msg	node {_1} is on a locked artboard	solmu {_1} on lukitulla piirtoalustalla
@@ -5599,6 +5749,13 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	more than {MAX_CSV_ROWS} data sets: Import Data Sets reads at most {MAX_CSV_ROWS}	yli {MAX_CSV_ROWS} tietojoukkoa: Tuo tietojoukot lukee enintään {MAX_CSV_ROWS}
 @msg	more than {MAX_CSV_COLS} variables: Import Data Sets reads at most {MAX_CSV_COLS}	yli {MAX_CSV_COLS} muuttujaa: Tuo tietojoukot lukee enintään {MAX_CSV_COLS}
 @msg	variables that aren't text were left out: {kinds}	muut kuin tekstimuuttujat jätettiin pois: {kinds}
+variable-kind	Visibility	Näkyvyys
+variable-kind	Linked File	Linkitetty tiedosto
+variable-kind	Graph Data	Kaavion tiedot
+variable-kind	Unknown	Tuntematon
+variable-list-two	{0}, {1}	{0} ja {1}
+variable-list-middle	{0}, {1}	{0}, {1}
+variable-list-end	{0}, {1}	{0} ja {1}
 @msg	a new document won't read these variables back with their kind: {names}	uusi asiakirja ei lue näitä muuttujia takaisin niiden lajin mukaisina: {names}
 @msg	a new document refuses this file because of these variables: {names}	uusi asiakirja hylkää tämän tiedoston näiden muuttujien vuoksi: {names}
 @msg	the header `{header}` for `{name}` would read back as the variable `{other}`: rename one of them	muuttujan `{name}` otsikko `{header}` luettaisiin muuttujaksi `{other}`: nimeä toinen niistä uudelleen
@@ -5624,6 +5781,8 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	{label}: lost track of a shape's style	{label}: muodon tyyli kadotettiin
 @msg	{label}: select paths	{label}: valitse polkuja
 @msg	{label}: select paths, compound paths, groups or text	{label}: valitse polkuja, yhdistelmäpolkuja, ryhmiä tai tekstiä
+@msg	a line or other open path that encloses no area does not change the result's shape; to include it, apply Object › Path › Outline Stroke to it first	viiva tai muu avoin polku, joka ei rajaa aluetta, ei muuta tuloksen muotoa; jos haluat sisällyttää sen, käytä siihen ensin komentoa Objekti › Polku › Ääriviivaa viiva
+@msg	{label} produced an empty result: a line or other open path encloses no area; to include it, apply Object › Path › Outline Stroke to it first	{label} tuotti tyhjän tuloksen: viiva tai muu avoin polku ei rajaa aluetta; jos haluat sisällyttää sen, käytä siihen ensin komentoa Objekti › Polku › Ääriviivaa viiva
 @msg	{label}…	{label}…
 @msg	{name}: CRC mismatch	{name}: CRC ei täsmää
 @msg	{name}: no local header	{name}: ei paikallista otsaketta
@@ -5650,6 +5809,9 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Hylättiin {n} palautettu asiakirja|Hylättiin {n} palautettua asiakirjaa
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Palautettiin {n} asiakirja: tallenna se säilyttääksesi sen|Palautettiin {n} asiakirjaa: tallenna ne säilyttääksesi ne
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Avattiin, {n} huomautus: {first}|Avattiin, {n} huomautusta: {first}
+@msgplural	Copied with {n} note: {first}|Copied with {n} notes: {first}	Kopioitiin, {n} huomautus: {first}|Kopioitiin, {n} huomautusta: {first}
+@msgplural	Cut with {n} note: {first}|Cut with {n} notes: {first}	Leikattiin, {n} huomautus: {first}|Leikattiin, {n} huomautusta: {first}
+@msgplural	Traced with {n} note: {first}|Traced with {n} notes: {first}	Kuva jäljitettiin, {n} huomautus: {first}|Kuva jäljitettiin, {n} huomautusta: {first}
 @msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Avattiin, {n} huomautus: {first}|{notice}. Avattiin, {n} huomautusta: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Tallennettiin {path}, {n} huomautus: {first}|Tallennettiin {path}, {n} huomautusta: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Upotettiin {n} kuva; {missing} puuttuu: linkitä ne ensin uudelleen|Upotettiin {n} kuvaa; {missing} puuttuu: linkitä ne ensin uudelleen
@@ -5676,6 +5838,8 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	All colors are within the CMYK gamut	Kaikki värit ovat CMYK-väriavaruuden sisällä
 @msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	{n} väri on CMYK-väriavaruuden ulkopuolella|{n} väriä on CMYK-väriavaruuden ulkopuolella
 @msg	Unembedded to {_1}	Upotus purettiin kohteeseen {_1}
+@msgplural	Unembedded {n} image to {folder}|Unembedded {n} images to {folder}	Upotus purettiin {n} kuvalta kohteeseen {folder}|Upotus purettiin {n} kuvalta kohteeseen {folder}
+@msg	every numbered name for {name} is taken in that folder	kaikki kohteen {name} numeroidut nimet ovat jo käytössä siinä kansiossa
 @msg	Reset {_1}	Palautettiin oletukseksi {_1}
 @msg	Sent to {_1}	Lähetettiin kohteeseen {_1}
 @msg	{_1} files	{_1}-tiedostot
@@ -5691,6 +5855,8 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	Reload the page to go on (changes not saved yet may be lost).	Lataa sivu uudelleen jatkaaksesi (tallentamattomat muutokset voivat kadota).
 @msg	tool (a tool id) is required	tool (työkalun tunnus) vaaditaan
 @msg	{tool} isn't in a toolbar group of several tools	{tool} ei ole usean työkalun työkaluriviryhmässä
+@msg	Presentation Mode hides the toolbars: change the screen mode to show them	Esitystila piilottaa työkalurivit: tuo ne näkyviin vaihtamalla näyttötilaa
+@msg	Tab has hidden the toolbars: press Tab to show them	Tab on piilottanut työkalurivit: tuo ne näkyviin painamalla Tab-näppäintä
 @msg	onto must name a panel floating in another group	onto-arvon on nimettävä toisessa ryhmässä kelluva paneeli
 @msg	below and above must name a panel floating in another group	below- ja above-arvojen on nimettävä toisessa ryhmässä kelluva paneeli
 @msg	give only one of onto, below and above	anna vain yksi arvoista onto, below ja above
@@ -5779,6 +5945,9 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	automation path rejected: outside the read root {root}: {path}	automaation polku hylättiin: lukujuuren {root} ulkopuolella: {path}
 @msg	automation path rejected: outside the read roots {roots}: {path}	automaation polku hylättiin: lukujuurten {roots} ulkopuolella: {path}
 @msg	a linked JavaScript file is outside the read roots	linkitetty JavaScript-tiedosto on lukujuurten ulkopuolella
+@msg	a linked image file is outside the read roots	linkitetty kuvatiedosto on lukujuurten ulkopuolella
+@msg	a linked file's export folder is outside the read roots	linkitetyn tiedoston vientikansio on lukujuurten ulkopuolella
+@msg	a linked file's editing data can't be read to check it against the read roots	linkitetyn tiedoston muokkaustietoja ei voi lukea niiden tarkistamiseksi lukujuuria vasten
 @msg	the library's file is outside the read roots	kirjaston tiedosto on lukujuurten ulkopuolella
 @msg	{file} names more than one linked JavaScript file	{file} vastaa useampaa kuin yhtä linkitettyä JavaScript-tiedostoa
 @msg	automation path rejected: outside the write root {root}: {path}	automaation polku hylättiin: kirjoitusjuuren {root} ulkopuolella: {path}
@@ -6058,6 +6227,7 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 	Ascent	Nousu
 	Cap Height	Versaalikorkeus
 	x Height	x-korkeus
+	Em Box Height	Em-laatikon korkeus
 	Justify	Tasaa molemmat reunat
 	First Baseline	Ensimmäinen perusviiva
 	Vertical Align	Pystytasaus
@@ -6191,6 +6361,7 @@ mark-style	Japanese	Japanilainen
 	Cove	Kouru
 	Depth	Syvyys
 	Front	Edestä
+	Side	Sivulta
 	Isometric Bottom	Isometrinen ala
 	Isometric Left	Isometrinen vasen
 	Isometric Right	Isometrinen oikea
@@ -6286,7 +6457,7 @@ mark-style	Japanese	Japanilainen
 @msg	each of `{GRAPHICS}` must be an object	jokaisen `{GRAPHICS}`-kohteen on oltava objekti
 @msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	`{GRAPHICS}`-kohteet hyväksyvät arvot symbol, face, x, y, scale ja rotation, eivät arvoa `{k}`
 @msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	jokainen `{GRAPHICS}`-kohde tarvitsee arvon `symbol`, symbolin nimen
-@msg	`{GRAPHICS}` face must be front or back	`{GRAPHICS}`-kohteen face-arvon on oltava front tai back
+@msg	`{GRAPHICS}` face must be front, back or side	`{GRAPHICS}`-kohteen face-arvon on oltava front, back tai side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}`-kohteen {key}-arvon on oltava luku, joka on vähintään {lo} ja enintään {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` on oltava taulukko
 @msg	Graphics map onto the Plane, Extrude and Revolve object types	Grafiikat sijoitetaan objektityypeille Taso, Pursota ja Pyöräytä
@@ -6468,6 +6639,8 @@ mark-style	Japanese	Japanilainen
 	Reset Horizontal Scale	Palauta vaakaskaalaus
 	Reset Tracking and Kerning	Palauta merkkiväli ja parivälistys
 	Highlight Font Name	Korosta fontin nimi
+	Highlight Font Size	Korosta fonttikoko
+	Other…	Muu…
 	Highlight Kerning	Korosta parivälistys
 	Highlight Tracking	Korosta merkkiväli
 	Sample Color from Screen	Poimi väri näytöltä
@@ -6509,6 +6682,8 @@ mark-style	Japanese	Japanilainen
 @msg	Unknown dimension option {k}	Tuntematon mitoitusasetus {k}
 @msg	Unknown dimension orientation	Tuntematon mitan suunta
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode`-arvon on oltava grayscale, rgb, hsb, cmyk tai websafe
+@msg	`view` must be wheel or box	`view`-arvon on oltava wheel tai box
+@msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel`-arvon on oltava hue, saturation, brightness, red, green tai blue
 @msg	`{key}` must be an array of these names: {_1}	`{key}`-arvon on oltava taulukko, jossa on näitä nimiä: {_1}
 @msg	choose a destination folder	valitse kohdekansio
 @msg	choose a source folder	valitse lähdekansio
@@ -6689,6 +6864,11 @@ mark-style	Japanese	Japanilainen
 	Edge Only	Vain reunat
 	Overlay Edge	Reunat päällä
 	Path Length	Polun pituus
+	Grid Size	Ruudukon koko
+	Grid Colors	Ruudukon värit
+	Flattener Preset	Litistyksen esiasetus
+	X	X
+	Y	Y
 swatch	[None]	[Ei mitään]
 swatch	[Registration]	[Kohdistus]
 swatch	White	Valkoinen
@@ -7439,6 +7619,12 @@ anchor	Points:	Pisteet:
 @msg	`mode` must be "free", "keepAngles" or "symmetric"	`mode` on oltava "free", "keepAngles" tai "symmetric"
 @msg	`{key}` must be [x, y]	`{key}` on oltava [x, y]
 
+# Unit Converter add-on (Object › Plug-ins › Unit Converter): its panel.
+	Unit Converter	Yksikkömuunnin
+	Unit Converter Panel	Yksikkömuunnin-paneeli
+	Copy with Units	Kopioi yksiköineen
+	From Selection	Valinnasta
+
 # Color Effects add-on: Select by Color Kind.
 	Select by Color Kind	Valitse värityypin mukaan
 	Objects with Spot Colors	Objektit, joissa on spottivärejä
@@ -7663,6 +7849,14 @@ breakText	Glyphs	Merkit
 	Remove Gaps	Poista välit
 @msg	that makes too many pieces (at most 100000): make the dashes longer	siitä tulee liian monta osaa (enintään 100000): pidennä viivoja
 @msg	select paths, or segments, to divide	valitse jaettavat polut tai segmentit
+# Path Precision Tools add-on: Smooth Bridge.
+	Smooth Bridge…	Pehmeä silta…
+	Smooth Bridge	Pehmeä silta
+	Keep Originals	Säilytä alkuperäiset
+@msg	select two circles to bridge	valitse kaksi yhdistettävää ympyrää
+@msg	one circle is inside the other	toinen ympyrä on toisen sisällä
+@msg	the circles are too far apart for this radius: raise the radius	ympyrät ovat liian kaukana toisistaan tälle säteelle: suurenna sädettä
+@msg	the circles are too far apart for this radius	ympyrät ovat liian kaukana toisistaan tälle säteelle
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	Yhteiset tangentit…
 	Common Tangents	Yhteiset tangentit
@@ -7679,6 +7873,7 @@ breakText	Glyphs	Merkit
 @msg	One path lies inside the other, so they have no common tangents	Toinen polku on toisen sisällä, joten niillä ei ole yhteisiä tangentteja
 @msg	The paths overlap, so they have no internal tangents	Polut ovat päällekkäin, joten niillä ei ole sisäisiä tangentteja
 @msg	One path lies inside the other, so they have no internal tangents	Toinen polku on toisen sisällä, joten niillä ei ole sisäisiä tangentteja
+@msg	The point lies inside the path, so it has no tangents	Piste on polun sisällä, joten sillä ei ole tangentteja
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Laajenna viivat poluiksi
 @msg	select paths with dashed strokes to expand	valitse laajennettavat polut, joissa on katkoviiva
@@ -8182,4 +8377,20 @@ breakText	Glyphs	Merkit
 @msg	A panel is not joined to the rest by a crease.	Paneelia ei ole liitetty muihin millään nuuttausviivalla.
 @msg	A fold line is on a non-printing layer.	Taittoviiva on tasolla, jota ei tulosteta.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Paneelit: {panels}, saranat: {hinges}, virheet: {errors}, varoitukset: {warnings}
+	Fold Preview	Taiton esikatselu
+	Fold	Taitto
+	Show Fold Lines	Näytä taittoviivat
+	Three-Quarter	Kolme neljäsosaa
+	Open a document to preview its folded shape.	Avaa asiakirja, niin voit esikatsella sen taitettua muotoa.
+@msg	Check the fold lines first.	Tarkista ensin taittoviivat.
+@msg	Panels: {panels}, hinges: {hinges}	Paneelit: {panels}, saranat: {hinges}
+@msg	Other blanks not shown: {count}	Muita aihioita ei näytetä: {count}
+@msg	A joint does not close by {gap} pt.	Liitos ei sulkeudu, rako {gap} pt.
+@msg	Two panels pass through each other.	Kaksi paneelia kulkee toistensa läpi.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer on oltava "singleLine", "everyLine", "standardSingleLine" tai "standardEveryLine"
+	Pressure Sensitive	Paineherkkä
+	Flex Ribbon	Joustava nauha
+	Pulse Stroke	Sykkivä veto
+	Round Flow	Pyöreä veto
+	Chisel Flow	Viisto veto
+@msg	text.{key} `{v}`: use "{_1}" or "{_2}"	text.{key} `{v}`: käytä arvoa "{_1}" tai "{_2}"

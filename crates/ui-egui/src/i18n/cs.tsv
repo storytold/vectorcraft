@@ -173,6 +173,8 @@
 	Shear…	Zkosit…
 	Transform Each…	Transformovat jednotlivě…
 	Reset Bounding Box	Obnovit ohraničovací rámeček
+	Rotate Bounding Box	Otočit ohraničovací rámeček
+	Rotate Bounding Box…	Otočit ohraničovací rámeček…
 	Arrange	Uspořádat
 	Bring to Front	Přenést do popředí
 	Bring Forward	Přenést blíž
@@ -719,6 +721,13 @@
 	Previous Document	Předchozí dokument
 	Cascade	Do kaskády
 	Tile	Vedle sebe
+	Tile All Vertically	Vše vedle sebe svisle
+	Tile All Horizontally	Vše vedle sebe vodorovně
+	2-Up Layout	Rozvržení po 2
+	3-Up Layout	Rozvržení po 3
+	4-Up Layout	Rozvržení po 4
+	6-Up Layout	Rozvržení po 6
+	Arrange Documents	Uspořádat dokumenty
 	Float in Window	Uvolnit do samostatného okna
 	Float All in Windows	Uvolnit vše do samostatných oken
 	Consolidate All Windows	Sloučit všechna okna
@@ -765,6 +774,11 @@
 	Saturation and brightness	Sytost a jas
 	Color field	Barevné pole
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
+	Wheel View	Zobrazení kola
+	Box View	Zobrazení čtverce
+	Box Channel	Kanál čtverce
+	Color box	Barevný čtverec
+	Color Wheel Options	Možnosti barevného kola
 	CSS Properties	Vlastnosti CSS
 	Document Info	Informace o dokumentu
 	Flattener Preview	Náhled sloučení
@@ -994,7 +1008,7 @@
 	Free Transform	Volná transformace
 	Perspective Distort	Perspektivní deformace
 
-# Photoshop-style raster effects (Effect menu, their dialogs).
+# Raster effects (Effect menu, their dialogs).
 	Radial Blur…	Radiální rozostření…
 	Blur Center	Střed rozostření
 	Smart Blur…	Chytré rozostření…
@@ -1547,6 +1561,7 @@ lighting	Light	Světlo
 	Play Current Selection	Přehrát aktuální výběr
 	Save Actions…	Uložit akce…
 	Load Actions…	Načíst akce…
+	Replace Actions…	Nahradit akce…
 	Reset Actions	Obnovit akce
 	Replace the current actions with the default set?	Nahradit aktuální akce výchozí sadou?
 	Append adds the default set after the current sets instead.	Tlačítko Připojit místo toho přidá výchozí sadu za aktuální sady.
@@ -1708,7 +1723,7 @@ digits	Malayalam	Malajálamské
 	Composite Fonts	Složená písma
 	Export Composite Fonts	Exportovat složená písma
 	Import Composite Fonts	Importovat složená písma
-@msg	each font must be {name, parts}	každé písmo musí být {name, parts}
+@msg	each font must be {{name, parts}}	každé písmo musí být {{name, parts}}
 @msg	unknown key `{k}`; a font takes name and parts	neznámý klíč `{k}`; písmo přijímá name a parts
 @msg	each font needs a name	každé písmo potřebuje název
 @msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` nemůže být názvem složeného písma (1 až {COMPOSITE_NAME_MAX} znaků, bez řídicích znaků)
@@ -1721,7 +1736,7 @@ digits	Malayalam	Malajálamské
 @msg	two composite fonts are named `{_1}`	dvě složená písma se jmenují `{_1}`
 @msg	`{_1}` is the name of an installed font	`{_1}` je název nainstalovaného písma
 @msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} používá `{font}`, což je složené písmo
-@msg	give fonts: [{name, parts}…]	zadejte fonts: [{name, parts}…]
+@msg	give fonts: [{{name, parts}}…]	zadejte fonts: [{{name, parts}}…]
 @msg	path is empty	path je prázdné
 @msg	fonts must be a list of composite fonts	fonts musí být seznam složených písem
 @msg	names must be strings	names musí být řetězce
@@ -1764,6 +1779,7 @@ digits	Malayalam	Malajálamské
 	Underline	Podtržení
 	Vertical Scale %	Svislá změna velikosti %
 	Axis	Osa
+	Axis Angle	Úhel osy
 	ICF Top/Right	ICF horní/pravý
 	ICF Bottom/Left	ICF dolní/levý
 	Show Font Height Options	Zobrazit možnosti výšky písma
@@ -1806,6 +1822,7 @@ digits	Malayalam	Malajálamské
 	Rule:	Pravidlo:
 	Save changes to {name}	Uložit změny do {name}
 	Save theme to My Themes	Uložit motiv do Mých motivů
+	Set the current fill or stroke to the selected color	Nastavit vybranou barvu jako aktuální výplň nebo tah
 	Set the selected color to the current color	Nastavit vybranou barvu jako aktuální barvu
 	Copy All Styles	Kopírovat všechny styly
 	Exported {path}	Exportováno: {path}
@@ -2120,7 +2137,7 @@ digits	Malayalam	Malajálamské
 	Stroke: click for swatches, Shift-click for the color mixer	Tah: kliknutím otevřete vzorník, Shift+kliknutím míchání barev
 	This panel is on the roadmap (see the parity plan).	Tento panel je v plánu (viz plán parity).
 	Open a document to navigate it.	Otevřete dokument, abyste v něm mohli navigovat.
-	View Artboard Only	Zobrazit jen pracovní plochu
+	View Artboard Contents Only	Zobrazit jen obsah pracovní plochy
 	Contextual Alternates	Kontextové alternativy
 	Default Figure	Výchozí číslice
 	Discretionary Ligatures	Volitelné ligatury
@@ -2270,7 +2287,7 @@ digits	Malayalam	Malajálamské
 	Overprint Preview (separations)	Náhled přetisků (separace)
 	Show All Plates	Zobrazit všechny desky
 	Show all plates	Zobrazit všechny desky
-	Show/hide plate (Alt-click: only this plate)	Zobrazit/skrýt desku (Alt+kliknutí: jen tato deska)
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	Zobrazit/skrýt desku (Alt+kliknutí: jen tato deska; další Alt+kliknutí: všechny desky)
 	Simulate Paper	Simulovat papír
 	Use Black Point Compensation	Použít kompenzaci černého bodu
 	Working CMYK (don't tag)	Pracovní CMYK (neoznačovat)
@@ -2310,6 +2327,8 @@ digits	Malayalam	Malajálamské
 	Tip extends past the end point	Hrot přesahuje koncový bod
 	Tip on the end point	Hrot na koncovém bodu
 	Variable Width Profile	Profil proměnné šířky
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Štětec tahu si zachovává vlastní velikost, takže ho profil šířky nemění. Chcete-li použít profil, odeberte štětec.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Štětec tahu si zachovává vlastní velikost, takže ho profil šířky nemění. Chcete-li použít profil, odeberte štětec.
 	Weight:	Tloušťka:
 	Art using a deleted global swatch keeps its colour.	Kresba, která používá odstraněnou globální položku vzorníku, si barvu ponechá.
 	Color Group: {name}	Skupina barev: {name}
@@ -2419,6 +2438,10 @@ digits	Malayalam	Malajálamské
 	Flip Horizontal	Překlopit vodorovně
 	Flip Vertical	Překlopit svisle
 	Polygon Properties:	Vlastnosti mnohoúhelníku:
+	Line Properties:	Vlastnosti čáry:
+	Line Length:	Délka čáry:
+	Line Angle:	Úhel čáry:
+	Constrain Pie Angle	Zachovat úhel výseče
 	Rectangle Properties:	Vlastnosti obdélníku:
 	Shape Properties:	Vlastnosti tvaru:
 	Shape Properties	Vlastnosti tvaru
@@ -2462,6 +2485,7 @@ digits	Malayalam	Malajálamské
 	Scatter:	Rozptyl:
 	Rotation:	Otočení:
 	Rotation relative to:	Otočení vzhledem k:
+	Hue Jitter:	Kolísání odstínu:
 	Brush Scale Options	Možnosti velikosti štětce
 	Scale Proportionately	Měnit velikost proporcionálně
 	Stretch to Fit Stroke Length	Roztáhnout na délku tahu
@@ -2500,6 +2524,7 @@ digits	Malayalam	Malajálamské
 	Size:	Velikost:
 	Calligraphic Brush Options	Možnosti kaligrafického štětce
 	Bristle Brush Options	Možnosti štětinového štětce
+	Roundness	Zakulacení
 	Roundness:	Zakulacení:
 	Shape:	Tvar:
 	Bristle Length:	Délka štětin:
@@ -2833,6 +2858,7 @@ digits	Malayalam	Malajálamské
 	BLANK DOCUMENT PRESETS	PŘEDNASTAVENÍ PRÁZDNÝCH DOKUMENTŮ
 	Bleed	Spadávka
 	Change to Right-to-Left Layout	Změnit na rozvržení zprava doleva
+	Columns	Sloupce
 	Columns:	Sloupce:
 	Documents you create appear here.	Zde se zobrazí dokumenty, které vytvoříte.
 	More Settings	Další nastavení
@@ -2966,6 +2992,9 @@ digits	Malayalam	Malajálamské
 	Open a document to preview its pages	Otevřete dokument, abyste viděli náhled jeho stránek
 	Output › Mode	Výstup › Režim
 	Overprint and Transparency Flattener Options	Možnosti přetisku a sloučení průhlednosti
+	Custom…	Vlastní nastavení…
+	Custom Transparency Flattener Options	Vlastní možnosti sloučení průhlednosti
+	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	EPS nemá průhlednost alfa a Přetisky určují, zda se přetisky zachovají.
 	Place the pages with the placement again	Znovu rozmístit stránky podle umístění
 	Placement:	Umístění:
 	Preserve CMYK Numbers	Zachovat hodnoty CMYK
@@ -3015,14 +3044,19 @@ digits	Malayalam	Malajálamské
 	Around Object	Kolem objektu
 	Background:	Pozadí:
 	Changing these settings changes how raster effects look when exported, flattened or expanded.	Změna těchto nastavení mění vzhled rastrových efektů při exportu, sloučení nebo rozložení.
+	Add Around	Přidat kolem objektu
+	Anti Alias	Vyhlazování
+	Color Model	Barevný model
 	Color Model:	Barevný model:
 	Create Clipping Mask	Vytvořit ořezovou masku
 	Preserve Spot Colors	Zachovat přímé barvy
+	Resolution	Rozlišení
 	Resolution:	Rozlišení:
 	Transparent	Průhledné
 	Layout Order:	Pořadí rozvržení:
 	Change to Left-to-Right Layout	Změnit na rozvržení zleva doprava
 	Artboards: {n}	Pracovní plochy: {n}
+	Rows	Řádky
 	Rows:	Řádky:
 	Assign	Přiřadit
 	Color Group:	Skupina barev:
@@ -3171,6 +3205,8 @@ antiAlias	Sharp	Ostré
 	Every option matches {base}.	Všechny možnosti odpovídají: {base}.
 	Files of a PDF standard can't be password-protected.	Soubory podle standardu PDF nelze chránit heslem.
 	Files of this standard tag their colours with ICC profiles.	Soubory tohoto standardu označují své barvy profily ICC.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	Soubory tohoto standardu označují své barvy profily ICC, kromě barev CMYK v profilu výstupního záměru, které se zapisují jako DeviceCMYK.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	S volbou „Nezahrnovat profily“ a výstupním záměrem CMYK se každá barva CMYK zapíše jako DeviceCMYK, pokud se nepřevede do cíle CMYK s jiným profilem.
 	Flattener preset:	Přednastavení sloučení:
 	General › Thumbnails	Obecné › Miniatury
 	Grayscale images	Obrazy ve stupních šedi
@@ -3390,6 +3426,12 @@ antiAlias	Sharp	Ostré
 	LF (macOS, Linux)	LF (macOS, Linux)
 	CRLF (Windows)	CRLF (Windows)
 	Text Export Options	Možnosti exportu textu
+	Chinese Big 5	Čínština Big 5
+	Cyrillic	Cyrilice
+	Greek	Řečtina
+	Turkish	Turečtina
+	Baltic	Baltské jazyky
+	Central European	Středoevropské jazyky
 	Character Set:	Znaková sada:
 	Join the lines of each paragraph	Spojit řádky každého odstavce
 	Line Breaks	Zalomení řádků
@@ -3419,6 +3461,9 @@ antiAlias	Sharp	Ostré
 	Variable Options	Možnosti proměnné
 	Define a variable first	Nejprve definujte proměnnou
 	Adjust Adjoining Width Points	Upravit sousední body šířky
+	Incoming	Příchozí
+	Outgoing	Odchozí
+	Single Width Only	Pouze jedna šířka
 	Keep both sides the same width	Zachovat stejnou šířku obou stran
 	Side 1:	Strana 1:
 	Side 2:	Strana 2:
@@ -3532,9 +3577,18 @@ theme	Appearance	Motiv
 	Break Link to Symbol	Zrušit propojení se symbolem
 	Brush Definition	Definice štětce
 	Brush Options…	Možnosti štětce…
+	Options of Selected Object…	Možnosti vybraného objektu…
+	Options of Selected Object	Možnosti vybraného objektu
+@msg	no path painted with a brush is selected	není vybrána žádná cesta malovaná štětcem
+@msg	the selected paths are painted with brushes of different types	vybrané cesty jsou malovány štětci různých typů
+@msg	give `params` or `reset`, not both	zadejte `params` nebo `reset`, ne obojí
+@msg	a bristle brush has no options of its own on a path	štětinový štětec nemá na cestě vlastní možnosti
 	Current Brush	Aktuální štětec
 	Current Symbol	Aktuální symbol
 	Delete Brush	Odstranit štětec
+	Delete Color	Odstranit barvu
+	Restore Generated Table	Obnovit vygenerovanou tabulku
+	Unshift All Colors	Zrušit posun všech barev
 	Delete Symbol	Odstranit symbol
 	Delete the selected symbol?	Odstranit vybraný symbol?
 	Delete the selected symbols?	Odstranit vybrané symboly?
@@ -3662,6 +3716,11 @@ theme	Appearance	Motiv
 	Objects	Objekty
 	Paths	Cesty
 	Path Length	Délka cest
+	Grid Size	Velikost mřížky
+	Grid Colors	Barvy mřížky
+	Flattener Preset	Přednastavení sloučení
+	X	X
+	Y	Y
 	Add Guide	Přidat vodítko
 	Edit Selection	Upravit výběr
 	Recall Selection	Vyvolat výběr
@@ -3813,6 +3872,7 @@ theme	Appearance	Motiv
 	Select Art	Vybrat kresbu
 	Set Current Layer	Nastavit aktuální vrstvu
 	Flatten Artwork	Sloučit kresbu
+	Locate Layer	Najít vrstvu
 	Locate Object	Najít objekt
 	Lock Others	Zamknout ostatní
 	Merge Selected	Sloučit vybrané
@@ -3989,6 +4049,7 @@ theme	Appearance	Motiv
 	90° & 45° Angles	Úhly 90° a 45°
 	90° Angles	Úhly 90°
 	Additional Plug-ins Folder	Další složka zásuvných modulů
+	Plug-in Instruction Budget	Rozpočet instrukcí zásuvných modulů
 	Additional Fonts Folder	Další složka písem
 	Alignment Guides	Vodítka zarovnání
 	Anchor Points, Handle, and Bounding Box Display	Zobrazení kotevních bodů, úchytů a ohraničovacího rámečku
@@ -4015,6 +4076,7 @@ theme	Appearance	Motiv
 	Data Recovery	Obnovení dat
 	Default Language	Výchozí jazyk
 	Disable Auto Add/Delete	Vypnout automatické přidávání/odstraňování
+	Interpolate Control Points When Moving Anchors	Interpolovat směrové úchyty při přesouvání kotevních bodů
 	Display All Blacks Accurately	Zobrazovat všechny černé přesně
 	Display All Blacks as Rich Black	Zobrazovat všechny černé jako sytou černou
 	Display Bitmaps as Anti-aliased Images in Pixel Preview	Zobrazovat bitmapy v náhledu obrazových bodů vyhlazené
@@ -4031,6 +4093,7 @@ theme	Appearance	Motiv
 	Enable Rubber Band for	Povolit gumovou čáru pro
 	Enable Touch Gestures	Povolit dotyková gesta
 	Switch Selection and Drawing Modes	Přepnout mezi režimem výběru a kreslení
+	Select Last Selection Tool	Vybrat poslední nástroj výběru
 	Enable Touch Workspace	Povolit dotykový pracovní prostor
 	English: UK	Angličtina: Spojené království
 	Every (minutes)	Každých (minut)
@@ -4116,6 +4179,9 @@ theme	Appearance	Motiv
 	Printing / Exporting	Tisk / export
 	Real-time Drawing and Editing	Kreslení a úpravy v reálném čase
 	Use Monitor Profile for Canvas	Použít profil monitoru pro plátno
+	Refresh Monitor Profile	Obnovit profil monitoru
+@msg	turn on Use Monitor Profile for Canvas first	nejprve zapněte „Použít profil monitoru pro plátno“
+@msg	this build doesn't read display profiles	tato verze nečte profily displejů
 	The canvas is drawn in sRGB.	Plátno se vykresluje v sRGB.
 	Canvas display profile:	Profil displeje pro plátno:
 	The system matches the window to the display's colors.	Systém přizpůsobuje okno barvám displeje.
@@ -4177,6 +4243,7 @@ theme	Appearance	Motiv
 	Scroll Sideways with Cmd/Ctrl + Wheel	Posouvat vodorovně kolečkem s Cmd/Ctrl
 	Scrub Numeric Fields by Dragging	Měnit číselné hodnoty tažením
 	Linux Display Server	Zobrazovací server Linuxu
+	Low-Latency Drawing	Kreslení s nízkou latencí
 	Print Preview	Náhled tisku
 	Print Setup	Nastavení tisku
 	Bitmap	Bitmapa
@@ -4385,6 +4452,8 @@ axis	Both	Obě
 	Reset Tracking and Kerning	Obnovit prostrkání a vyrovnání párů
 	Reset Horizontal Scale	Obnovit vodorovnou změnu velikosti
 	Highlight Font Name	Zvýraznit název písma
+	Highlight Font Size	Zvýraznit velikost písma
+	Other…	Jiná…
 	Highlight Kerning	Zvýraznit vyrovnání párů
 	Highlight Tracking	Zvýraznit prostrkání
 	Step Type	Krokovat text
@@ -4520,6 +4589,12 @@ font-technology	Variable	Variabilní
 	Search commands, tools, panels and effects…	Hledat příkazy, nástroje, panely a efekty…
 	No commands match	Žádný příkaz neodpovídá
 	{pos} of {total}: {name}	{pos} z {total}: {name}
+	No menu item	Žádná položka nabídky
+	Toolbar	Panel nástrojů
+	{toolbar}, in the {tool} group	{toolbar}, ve skupině {tool}
+	In the menu bar: {path}	V řádku nabídek: {path}
+	In the {group} group: press and hold to open it	Ve skupině {group}: stisknutím a podržením ji otevřete
+	{home}, not shown now	{home}, nyní není zobrazeno
 @plural	{n} result|{n} results	{n} výsledek|{n} výsledky|{n} výsledků
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} z {n} výsledku. Pište dál a výsledky se zúží.|{shown} z {n} výsledků. Pište dál a výsledky se zúží.|{shown} z {n} výsledků. Pište dál a výsledky se zúží.
 	Recent Commands	Nedávné příkazy
@@ -4556,6 +4631,7 @@ font-technology	Variable	Variabilní
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Kolečko myši s podrženou klávesou Cmd/Ctrl posouvá plátno do stran.
 	Dragging sideways on a numeric field's label changes the field's value.	Tažení do stran po popisku číselného pole mění hodnotu pole.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Gesto otočení dvěma prsty na trackpadu otáčí zobrazení plátna.
+	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Když přesouváte kotvové body, každá křivka s jedním přesunutým koncem si zachová tvar vůči svým koncům.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Podržení zkratky nástroje vybere nástroj, dokud ji nepustíte, a pak se znovu vybere předchozí nástroj.
 	Shows the bounding box while you move the selection or draw a shape.	Zobrazí ohraničovací rámeček, když přesouváte výběr nebo kreslíte tvar.
 	Create Trim Marks draws Japanese-style marks instead of Roman ones.	Vytvořit značky ořezu nakreslí značky v japonském stylu místo římských.
@@ -4586,6 +4662,29 @@ font-technology	Variable	Variabilní
 	The unit for East Asian type measurements, which no field uses yet.	Jednotka pro míry východoasijského písma, kterou zatím žádné pole nepoužívá.
 	When on, a number typed without a unit into a field in picas is read in points.	Když je zapnuto, číslo zadané bez jednotky do pole v pica se čte v bodech.
 	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	S volbou XML ID se názvy objektů zobrazují jako XML ID ve Vrstvách, Proměnných a Možnostech vrstvy.
+	The step for type size and leading: Cmd/Ctrl+Shift+. and Cmd/Ctrl+Shift+, change the size by one step, or five with Alt too; in horizontal type, Alt with the Up or Down Arrow changes the leading by one step, or five with Cmd/Ctrl.	Krok velikosti textu a prokladu: Cmd/Ctrl+Shift+. a Cmd/Ctrl+Shift+, změní velikost o jeden krok, s Alt o pět; ve vodorovném textu Alt se šipkou nahoru nebo dolů změní proklad o jeden krok, s Cmd/Ctrl o pět.
+	The step for tracking and kerning, in thousandths of an em: in horizontal type, Alt with the Left or Right Arrow changes the kerning at the caret or the tracking of the selected text by one step, or five with Cmd/Ctrl.	Krok prostrkání a vyrovnání párů, v tisícinách em: ve vodorovném textu Alt se šipkou doleva nebo doprava změní vyrovnání páru u kurzoru nebo prostrkání vybraného textu o jeden krok, s Cmd/Ctrl o pět.
+	The step for baseline shift: in horizontal type, Alt and Shift with the Up or Down Arrow move the baseline by one step, or five with Cmd/Ctrl.	Krok posunu účaří: ve vodorovném textu Alt a Shift se šipkou nahoru nebo dolů posunou účaří o jeden krok, s Cmd/Ctrl o pět.
+	Shows the options for Japanese and other East Asian type in the Character, Paragraph, OpenType and Glyphs panels, and Type › Composite Fonts.	Zobrazí možnosti japonského a jiného východoasijského textu v panelech Znak, Odstavec, OpenType a Glyfy a příkaz Složená písma.
+	Shows the options for Arabic, Hebrew and Indic type in the Character and Paragraph panels, such as paragraph direction, kashidas and digits.	Zobrazí možnosti arabského, hebrejského a indického textu v panelech Znak a Odstavec, například směr odstavce, kašídy a číslice.
+	The selection tools select type only on its baseline, its area's frame or its path, not anywhere inside its box.	Nástroje výběru vybírají text jen na jeho účaří, rámečku plošného textu nebo jeho cestě, ne kdekoli uvnitř jeho ohraničení.
+	Font menus list each font by its English name; off, a font that also has a name in its own language shows that name.	Nabídky písem uvádějí každé písmo pod anglickým názvem; po vypnutí písmo, které má i název ve vlastním jazyce, ukáže tento název.
+	New area type starts with Auto Size on, so a rectangular frame of horizontal type grows or shrinks in height to fit its text.	Nový plošný text začíná se zapnutou automatickou velikostí, takže obdélníkový rámeček vodorovného textu roste nebo se zmenšuje na výšku podle textu.
+	Font lists and the Type › Font menu show a sample of each font beside its name.	Seznamy písem a nabídka Písmo zobrazují vedle názvu ukázku každého písma.
+	Font samples are drawn in dark type on white, whatever the interface's brightness; it applies only while in-menu font previews are on.	Ukázky písem se kreslí tmavým textem na bílé bez ohledu na jas rozhraní; platí to jen při zapnutých náhledech písem v nabídkách.
+	How tall each row is in the font lists of font fields, such as the Character panel's, and so how large each sample is.	Jak vysoký je každý řádek v seznamech polí písma, například v panelu Znak, a tedy jak velká je každá ukázka.
+	How many of the fonts used last, from 1 to 15, Type › Recent Fonts and the font lists show, newest first.	Kolik naposledy použitých písem, od 1 do 15, zobrazují Nedávná písma a seznamy písem, nejnovější první.
+	When you change the font or font style of text, characters the new font has no glyph for keep the font they had.	Když změníte písmo nebo řez písma textu, znaky, pro které nové písmo nemá glyf, si ponechají své dosavadní písmo.
+	A pink highlight on the canvas marks glyphs that OpenType features replaced, such as ligatures; it does not print or export.	Růžové zvýraznění na plátně označuje glyfy nahrazené funkcemi OpenType, například ligatury; netiskne se ani neexportuje.
+	With the Type tool, selecting one character shows a row of its alternate glyphs beside it on the canvas to choose from.	S nástrojem Text výběr jednoho znaku zobrazí vedle něj na plátně řadu jeho alternativních glyfů k výběru.
+	A pink highlight on the canvas marks text drawn in a substitute font because its font is missing; it does not print or export.	Růžové zvýraznění na plátně označuje text vykreslený náhradním písmem, protože jeho písmo chybí; netiskne se ani neexportuje.
+	New type made with a Type tool starts with placeholder text, selected, so typing replaces it.	Nový text vytvořený textovým nástrojem začíná vybraným zástupným textem, který psaní nahradí.
+	Typing a list marker such as 1. or * and then a space at the start of a paragraph makes the paragraph a list.	Napsání značky seznamu, například 1. nebo *, a pak mezery na začátku odstavce změní odstavec na seznam.
+	Fonts in this folder show in the font menus and can be used without being installed.	Písma v této složce se zobrazí v nabídkách písem a lze je použít bez instalace.
+	Applying a graphic style to type removes the characters' own fill or stroke where the style has one, so the style's paint shows.	Použití grafického stylu na text odebere znakům jejich vlastní výplň nebo tah tam, kde ho styl má, takže je vidět barva stylu.
+	Align and Distribute measure point type by the ink of its glyphs instead of its em box.	Zarovnat a Rozmístit měří bodový text podle inkoustu jeho glyfů místo podle jeho čtverce em.
+	Align and Distribute measure area type by the ink of its glyphs instead of its frame.	Zarovnat a Rozmístit měří plošný text podle inkoustu jeho glyfů místo podle jeho rámečku.
+	The bounding box and the Transform panel measure point type by the ink of its glyphs instead of its em box.	Ohraničovací rámeček a panel Transformace měří bodový text podle inkoustu jeho glyfů místo podle jeho čtverce em.
 	Snaps drawing, moving and scaling to the grid's subdivisions, even while the grid is hidden; while it is on, Snap to Pixel does not apply.	Přichytává kreslení, přesouvání a změnu velikosti k dělení mřížky, i když je mřížka skrytá; dokud je zapnuto, Přichytávat k obrazovým bodům se neuplatní.
 	The color of guides that are not selected; an artboard with a Guide Label draws its own guides in the label's color instead.	Barva vodítek, která nejsou vybraná; pracovní plocha se Štítkem vodítek kreslí svá vodítka v barvě štítku.
 	Draws guides as solid lines or as dots, including the guides already in the document.	Kreslí vodítka jako plné čáry nebo jako tečky, včetně vodítek, která už v dokumentu jsou.
@@ -4613,6 +4712,8 @@ font-technology	Variable	Variabilní
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Jak blízko na obrazovce musí ukazatel nebo tažený bod přijít ke kresbě, aby se chytrá vodítka přichytila; vzdálenost je stejná při každém zvětšení.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Přichytí konec úsečky nebo kružnici kreslenou od středu tak, aby se dotýkala blízké křivky.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Přichytí konec úsečky tak, aby se s blízkým rovným segmentem setkal v pravém úhlu.
+	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Zobrazí na plátně číslo každého řezu v rámečku v jeho levém horním rohu; když je vypnuto, obrysy řezů zůstanou zobrazené.
+	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Barva obrysů uživatelských a objektových řezů a rámečků s jejich čísly; automatické řezy používají tlumenější odstín této barvy.
 	Reset all preferences to their defaults?	Obnovit všechny předvolby na výchozí hodnoty?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Výchozí hodnoty se použijí po klepnutí na OK v Předvolbách. Zrušit tam zachová vaše současné předvolby.
 	Smaller ↔ Larger	Menší ↔ Větší
@@ -4629,6 +4730,8 @@ font-technology	Variable	Variabilní
 	Couldn't paste from the clipboard: {e}	Nelze vložit ze schránky: {e}
 	Channel	Kanál
 	Circle	Kruh
+	Circle Tool	Nástroj Kruh
+	Circle too large	Kruh je příliš velký
 	Clip to Art	Oříznout podle kresby
 	Colorize	Obarvit
 	Gamma	Gama
@@ -4863,6 +4966,13 @@ imageTrace	Outline	Obrys
 	Show External Script Warning	Zobrazit upozornění u externích skriptů
 	A Script Is Running	Běží skript
 	Script Alert	Upozornění skriptu
+	Script File Access	Přístup skriptu k souborům
+	The script asks to read a file you choose.	Skript žádá o čtení souboru, který vyberete.
+	The script asks to read and write a file you choose.	Skript žádá o čtení a zápis souboru, který vyberete.
+	The script asks to read and write a folder you choose, with everything in it.	Skript žádá o čtení a zápis složky, kterou vyberete, se vším, co obsahuje.
+	Allow Once	Povolit jednou
+	Always Allow This Script	Vždy povolit tento skript
+	Deny	Zamítnout
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Skript může měnit otevřené dokumenty a prostřednictvím příkazů, které spouští, zapisovat soubory. Spouštějte jen skripty, kterým důvěřujete.
 	Do not show this warning again	Toto upozornění již nezobrazovat
 	Stop the script and undo what it did? Then quit again.	Zastavit skript a vrátit jeho změny? Potom aplikaci ukončete znovu.
@@ -4879,6 +4989,8 @@ imageTrace	Outline	Obrys
 @msg	the script is no longer in the Scripts folder	skript už není ve složce Scripts
 	Some scripts were not listed	Některé skripty nebyly uvedeny
 	The Scripts folder cannot be read	Složku Scripts nelze přečíst
+	Loading scripts…	Načítání skriptů…
+	The Scripts folder is still being read	Složka Scripts se stále načítá
 @msg	the script's run is no longer available	běh skriptu již není k dispozici
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	neúspěšný příkaz změnil kroky zpět, které nebylo možné obnovit, proto byl skript zastaven
 @msg	a recovery copy could not be written, so the script was not run	záložní kopii se nepodařilo zapsat, proto skript nebyl spuštěn
@@ -4891,8 +5003,6 @@ imageTrace	Outline	Obrys
 @msg	Script file could not be read	Soubor skriptu se nepodařilo přečíst
 @msg	Script folder has more than 2,048 entries	Složka skriptu má více než 2 048 položek
 @msg	Script file open mode must be r, w, e or a	Režim otevření souboru skriptu musí být r, w, e nebo a
-@msg	Script file writing is not available	Zápis souborů skriptu není k dispozici
-@msg	Script file dialogs are not available	Dialogy souborů skriptu nejsou k dispozici
 @msg	Script files cannot be opened in another application	Soubory skriptu nelze otevřít v jiné aplikaci
 @msg	Script file access is unavailable on the web	Přístup k souborům skriptu není na webu k dispozici
 @msg	Script has 256 files open	Skript má otevřeno 256 souborů
@@ -5008,8 +5118,37 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	hlavní skriptovací jádro je pro každý běh nové a nikdy se neuchovává, proto je nelze zahodit
 @msg	there is no script engine named {name}	skriptovací jádro s názvem {name} neexistuje
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` je jen pro běh, kde se nemá koho zeptat: v aplikaci odpovídá na každý dialog uživatel
+@msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel` musí být celé číslo od 1 do {_1}
+@msg	`args{place}` is nested more than 64 levels deep	`args{place}` je vnořen hlouběji než 64 úrovní
+@msg	`args` must be an object	`args` musí být objekt
+@msg	`args` is larger than 1 MiB	`args` je větší než 1 MiB
+@msg	`path` is empty	`path` je prázdný
+@msg	`installed` takes a `path`, not a `source`	`installed` přijímá `path`, ne `source`
+@msg	`path` must name a .js or .jsx file	`path` musí označovat soubor .js nebo .jsx
+@msg	give exactly one of `path` and `source`	zadejte právě jedno z `path` a `source`
 @msg	Running a script	Běží skript
 @msg	Copied the script report	Zpráva o skriptu zkopírována
+@msg	Script file access denied: {path}	Přístup skriptu k souborům byl odepřen: {path}
+@msg	Script file access to the app's own folders is not allowed	Skript nemá povolen přístup k vlastním složkám aplikace
+@msg	Script file cannot encode the text	Soubor skriptu nemůže zakódovat text
+@msg	Script file could not be written	Soubor skriptu nelze zapsat
+@msg	Script file dialogs need a person to answer them	Dialogy souborů skriptu potřebují osobu, která na ně odpoví
+@msg	Script file is not open for writing	Soubor skriptu není otevřený pro zápis
+@msg	Script file name is already in use	Název souboru skriptu se už používá
+@msg	Script file name must be a name without a folder	Název souboru skriptu musí být název bez složky
+@msg	Script file permission can be kept only for a script run from a file	Oprávnění k souborům lze zachovat jen pro skript spuštěný ze souboru
+@msg	Script file permission could not be saved	Oprávnění skriptu k souborům nelze uložit
+@msg	Script folder is not empty	Složka skriptu není prázdná
+@msg	Script files cannot make aliases	Soubory skriptu nemohou vytvářet aliasy
+@msg	Script file hidden setting cannot be changed	Nastavení skrytí souboru skriptu nelze změnit
+@msg	{name}: a file dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: dialog souboru nelze otevřít uvnitř zpětného volání vestavěné funkce, getteru, převodu ani souboru, který spouští $.evalFile; volejte jej z vlastního kódu skriptu
+@msg	the script wrote more file data than one run may write (32 MiB)	skript zapsal více dat souborů, než smí zapsat jeden běh (32 MiB)
+@msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` pro dialog souboru skriptu musí být jedna z hodnot: once, always, deny, stop
+@msg	choose a file or folder first, or deny	nejprve vyberte soubor nebo složku, nebo odmítněte
+@msg	the script file permissions could not be saved: {e}	oprávnění skriptů k souborům nelze uložit: {e}
+@msg	this script's file access can be allowed only once	přístup tohoto skriptu k souborům lze povolit jen jednou
+@msg	Only the person at the keyboard can allow a script's file access	Přístup skriptu k souborům může povolit jen člověk u klávesnice
+@msg	A script is given at most 2,048 files: the files picked after them were left out	Skript dostane nejvýše 2 048 souborů: soubory vybrané po nich byly vynechány
 @msg	Copied the link info	Informace o propojení zkopírovány
 @msg	Corners edits the corners of a path	Rohy upravuje rohy cesty
 @msg	Couldn't copy to the system clipboard: {e}	Nelze kopírovat do systémové schránky: {e}
@@ -5085,6 +5224,7 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	Saved {path}	Uloženo: {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	Glyfy vložíte, když vyberete text nebo do něj kliknete nástrojem Text
 @msg	Shape Builder: no region under the pointer	Tvorba tvarů: pod ukazatelem není žádná oblast
+@msg	Shape Builder: select all paths you want to merge	Tvorba tvarů: vyberte všechny cesty, které chcete sloučit
 @msg	Shape Builder: select paths or compound paths	Tvorba tvarů: vyberte cesty nebo složené cesty
 @msg	Show All Hidden Attributes: nothing is hidden	Zobrazit všechny skryté atributy: nic není skryto
 @msg	Split Into Grid: select paths large enough for the grid	Rozdělit do mřížky: vyberte cesty dost velké pro mřížku
@@ -5139,6 +5279,8 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	`{min_key}` is greater than `{max_key}`	`{min_key}` je větší než `{max_key}`
 @msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	zadejte alespoň jeden z parametrů `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` musí být grayscale, rgb, hsb, cmyk nebo websafe
+@msg	`view` must be wheel or box	`view` musí být wheel nebo box
+@msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` musí být hue, saturation, brightness, red, green nebo blue
 @msg	`{k}` must be [x, y]	`{k}` musí být [x, y]
 @msg	`{name}` has no options	`{name}` nemá žádné možnosti
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` je vestavěný pracovní prostor; zvolte jiný název
@@ -5227,6 +5369,7 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	bad trailer	chybný trailer
 @msg	balance must be between 0 and 100	balance musí být mezi 0 a 100
 @msg	batch step {_1} (`{id}`) failed: {e}	krok dávky {_1} (`{id}`) selhal: {e}
+@msg	action step {_1} (`{id}`) failed: {reason}	krok akce {_1} (`{id}`) selhal: {reason}
 @msg	brightness must be dark|mediumDark|mediumLight|light	brightness musí být dark|mediumDark|mediumLight|light
 @msg	can't encode the document: {0}	dokument nelze zakódovat: {0}
 @msg	can't parse shortcut `{c}`	klávesovou zkratku `{c}` nelze analyzovat
@@ -5246,6 +5389,8 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	choose a folder to export to	zvolte složku pro export
 @msg	choose a location for the package	zvolte umístění balíčku
 @msg	clipboard is empty	schránka je prázdná
+@msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: v tabulce barev musí zůstat alespoň jedna barva
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted: `{k}` označuje barvu, kterou označuje i jiný klíč
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` není barva jako "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: nejvýše {MAX_TABLE} barev
 @msg	command `{0}` is not available right now: {1}	příkaz `{0}` nyní není k dispozici: {1}
@@ -5313,9 +5458,15 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	no PNG encoder	chybí kodér PNG
 @msg	no active document	žádný aktivní dokument
 @msg	no active perspective plane	žádná aktivní perspektivní rovina
+@msg	the perspective grid is hidden	perspektivní mřížka je skrytá
+@msg	Automatic Plane Positioning is off: turn on anchorPoint or gridlineIntersection (perspective.widget.options)	Automatické umístění roviny je vypnuté: zapněte anchorPoint nebo gridlineIntersection (perspective.widget.options)
+@msg	anchorPoint must be true or false	anchorPoint musí být true nebo false
+@msg	gridlineIntersection must be true or false	gridlineIntersection musí být true nebo false
+@msg	tolerance must be 0 or more	tolerance musí být 0 nebo více
+@msg	give `at` or `clear`, not both	zadejte `at` nebo `clear`, ne obojí
 @msg	no anchor points selected	nejsou vybrány žádné kotevní body
-@msg	`points` must be three [x, y] pairs of numbers	`points` musí být tři dvojice čísel [x, y]
-@msg	direct-select three anchor points, or give `points`	vyberte přímým výběrem tři kotevní body, nebo zadejte `points`
+@msg	`points` must be two or three [x, y] pairs of numbers	`points` musí být dvě nebo tři dvojice čísel [x, y]
+@msg	direct-select two or three anchor points, or give `points`	vyberte přímým výběrem dva nebo tři kotevní body, nebo zadejte `points`
 @msg	no circle passes through these points: two are the same or all three lie on one line	těmito body neprochází žádná kružnice: dva jsou stejné nebo všechny tři leží na jedné přímce
 @msg	no app to open files here	zde chybí aplikace pro otevírání souborů
 @msg	no artboard	žádná pracovní plocha
@@ -5417,6 +5568,9 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	no such user library	taková uživatelská knihovna neexistuje
 @msg	no such view	takové zobrazení neexistuje
 @msg	no such width point	takový bod šířky neexistuje
+@msg	`single` must be `incoming` or `outgoing`	`single` musí být `incoming` nebo `outgoing`
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` a `outIndex` musí být dvě poloviny jednoho nespojitého bodu šířky
+@msg	a discontinuous width point keeps its place	nespojitý bod šířky si zachovává své místo
 @msg	no swatch `{name}`	položka vzorníku `{name}` neexistuje
 @msg	no swatch library `{l}` (see swatch.library.list)	knihovna vzorníku `{l}` neexistuje (viz swatch.library.list)
 @msg	no symbol instances selected	nejsou vybrány žádné instance symbolů
@@ -5675,6 +5829,13 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	more than {MAX_CSV_ROWS} data sets: Import Data Sets reads at most {MAX_CSV_ROWS}	více než {MAX_CSV_ROWS} sad dat: Importovat sady dat načte nejvýše {MAX_CSV_ROWS}
 @msg	more than {MAX_CSV_COLS} variables: Import Data Sets reads at most {MAX_CSV_COLS}	více než {MAX_CSV_COLS} proměnných: Importovat sady dat načte nejvýše {MAX_CSV_COLS}
 @msg	variables that aren't text were left out: {kinds}	proměnné, které nejsou textové, byly vynechány: {kinds}
+variable-kind	Visibility	Viditelnost
+variable-kind	Linked File	Propojený soubor
+variable-kind	Graph Data	Data grafu
+variable-kind	Unknown	Neznámý
+variable-list-two	{0}, {1}	{0} a {1}
+variable-list-middle	{0}, {1}	{0}, {1}
+variable-list-end	{0}, {1}	{0} a {1}
 @msg	a new document won't read these variables back with their kind: {names}	nový dokument tyto proměnné nenačte zpět s jejich druhem: {names}
 @msg	a new document refuses this file because of these variables: {names}	nový dokument tento soubor kvůli těmto proměnným odmítne: {names}
 @msg	the header `{header}` for `{name}` would read back as the variable `{other}`: rename one of them	záhlaví `{header}` pro `{name}` by se načetlo jako proměnná `{other}`: jednu z nich přejmenujte
@@ -5700,6 +5861,8 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	{label}: lost track of a shape's style	{label}: ztratil se styl tvaru
 @msg	{label}: select paths	{label}: vyberte cesty
 @msg	{label}: select paths, compound paths, groups or text	{label}: vyberte cesty, složené cesty, skupiny nebo text
+@msg	a line or other open path that encloses no area does not change the result's shape; to include it, apply Object › Path › Outline Stroke to it first	čára nebo jiná otevřená cesta, která neohraničuje žádnou plochu, nemění tvar výsledku; chcete-li ji zahrnout, použijte na ni nejprve Objekt › Cesta › Převést tah na obrys
+@msg	{label} produced an empty result: a line or other open path encloses no area; to include it, apply Object › Path › Outline Stroke to it first	{label} vytvořil prázdný výsledek: čára nebo jiná otevřená cesta neohraničuje žádnou plochu; chcete-li ji zahrnout, použijte na ni nejprve Objekt › Cesta › Převést tah na obrys
 @msg	{label}…	{label}…
 @msg	{name}: CRC mismatch	{name}: nesouhlasí CRC
 @msg	{name}: no local header	{name}: chybí lokální hlavička
@@ -5726,6 +5889,9 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Zahozen {n} obnovený dokument|Zahozeny {n} obnovené dokumenty|Zahozeno {n} obnovených dokumentů
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Obnoven {n} dokument; pokud ho chcete zachovat, uložte ho|Obnoveny {n} dokumenty; pokud je chcete zachovat, uložte je|Obnoveno {n} dokumentů; pokud je chcete zachovat, uložte je
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Otevřeno, {n} poznámka: {first}|Otevřeno, {n} poznámky: {first}|Otevřeno, {n} poznámek: {first}
+@msgplural	Copied with {n} note: {first}|Copied with {n} notes: {first}	Zkopírováno, {n} poznámka: {first}|Zkopírováno, {n} poznámky: {first}|Zkopírováno, {n} poznámek: {first}
+@msgplural	Cut with {n} note: {first}|Cut with {n} notes: {first}	Vyjmuto, {n} poznámka: {first}|Vyjmuto, {n} poznámky: {first}|Vyjmuto, {n} poznámek: {first}
+@msgplural	Traced with {n} note: {first}|Traced with {n} notes: {first}	Obraz vektorizován, {n} poznámka: {first}|Obraz vektorizován, {n} poznámky: {first}|Obraz vektorizován, {n} poznámek: {first}
 @msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Otevřeno, {n} poznámka: {first}|{notice}. Otevřeno, {n} poznámky: {first}|{notice}. Otevřeno, {n} poznámek: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Uloženo: {path}, {n} poznámka: {first}|Uloženo: {path}, {n} poznámky: {first}|Uloženo: {path}, {n} poznámek: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Vložen {n} obrázek; chybí {missing}: nejprve je znovu propojte|Vloženy {n} obrázky; chybí {missing}: nejprve je znovu propojte|Vloženo {n} obrázků; chybí {missing}: nejprve je znovu propojte
@@ -5752,6 +5918,8 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	All colors are within the CMYK gamut	Všechny barvy jsou v gamutu CMYK
 @msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	{n} barva je mimo gamut CMYK|{n} barvy jsou mimo gamut CMYK|{n} barev je mimo gamut CMYK
 @msg	Unembedded to {_1}	Vložení zrušeno, uloženo do: {_1}
+@msgplural	Unembedded {n} image to {folder}|Unembedded {n} images to {folder}	Vložení zrušeno u {n} obrázku, uloženo do: {folder}|Vložení zrušeno u {n} obrázků, uloženo do: {folder}|Vložení zrušeno u {n} obrázků, uloženo do: {folder}
+@msg	every numbered name for {name} is taken in that folder	v této složce jsou obsazena všechna číslovaná jména pro {name}
 @msg	Reset {_1}	Obnoveno: {_1}
 @msg	Sent to {_1}	Odesláno do {_1}
 @msg	{_1} files	Soubory {_1}
@@ -5767,6 +5935,8 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	Reload the page to go on (changes not saved yet may be lost).	Pokračujte obnovením stránky (dosud neuložené změny se mohou ztratit).
 @msg	tool (a tool id) is required	tool (ID nástroje) je povinný
 @msg	{tool} isn't in a toolbar group of several tools	{tool} není ve skupině panelu nástrojů s více nástroji
+@msg	Presentation Mode hides the toolbars: change the screen mode to show them	Režim prezentace skrývá panely nástrojů: zobrazíte je změnou režimu obrazovky
+@msg	Tab has hidden the toolbars: press Tab to show them	Klávesa Tab skryla panely nástrojů: zobrazíte je stisknutím klávesy Tab
 @msg	onto must name a panel floating in another group	onto musí určovat panel plovoucí v jiné skupině
 @msg	below and above must name a panel floating in another group	below a above musí určovat panel plovoucí v jiné skupině
 @msg	give only one of onto, below and above	zadejte jen jedno z onto, below a above
@@ -5855,6 +6025,9 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	automation path rejected: outside the read root {root}: {path}	cesta automatizace odmítnuta: mimo kořen pro čtení {root}: {path}
 @msg	automation path rejected: outside the read roots {roots}: {path}	cesta automatizace odmítnuta: mimo kořeny pro čtení {roots}: {path}
 @msg	a linked JavaScript file is outside the read roots	propojený soubor JavaScript je mimo kořeny pro čtení
+@msg	a linked image file is outside the read roots	propojený soubor obrázku je mimo kořeny pro čtení
+@msg	a linked file's export folder is outside the read roots	exportní složka propojeného souboru je mimo kořeny pro čtení
+@msg	a linked file's editing data can't be read to check it against the read roots	editační data propojeného souboru nelze přečíst a ověřit vůči kořenům pro čtení
 @msg	automation path rejected: outside the write root {root}: {path}	cesta automatizace odmítnuta: mimo kořen pro zápis {root}: {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	cesta automatizace odmítnuta: mimo kořeny pro zápis {roots}: {path}
 @msg	automation path rejected: path is empty	cesta automatizace odmítnuta: cesta je prázdná
@@ -6142,6 +6315,7 @@ liquify-list-end	{0}, {1}	{0} a {1}
 	Ascent	Výška nad účařím
 	Cap Height	Výška verzálek
 	x Height	Výška x
+	Em Box Height	Výška čtverčíku
 	Justify	Do bloku
 	First Baseline	První účaří
 	Vertical Align	Svislé zarovnání
@@ -6283,6 +6457,7 @@ mark-style	Japanese	Japonské
 	Cove	Žlábek
 	Depth	Hloubka
 	Front	Zepředu
+	Side	Z boku
 	Isometric Bottom	Izometricky zdola
 	Isometric Left	Izometricky zleva
 	Isometric Right	Izometricky zprava
@@ -6377,7 +6552,7 @@ mark-style	Japanese	Japonské
 @msg	each of `{GRAPHICS}` must be an object	každá položka `{GRAPHICS}` musí být objekt
 @msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	položky `{GRAPHICS}` přijímají symbol, face, x, y, scale a rotation, ne `{k}`
 @msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	každá položka `{GRAPHICS}` potřebuje `symbol`, název symbolu
-@msg	`{GRAPHICS}` face must be front or back	face v `{GRAPHICS}` musí být front nebo back
+@msg	`{GRAPHICS}` face must be front, back or side	face v `{GRAPHICS}` musí být front, back nebo side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} v `{GRAPHICS}` musí být číslo od {lo} do {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` musí být pole
 @msg	Graphics map onto the Plane, Extrude and Revolve object types	Grafika se mapuje na typy objektu Rovina, Vysunutí a Rotační těleso
@@ -7380,6 +7555,12 @@ anchor	Points:	Body:
 @msg	`mode` must be "free", "keepAngles" or "symmetric"	`mode` musí být "free", "keepAngles" nebo "symmetric"
 @msg	`{key}` must be [x, y]	`{key}` musí být [x, y]
 
+# Unit Converter add-on (Object › Plug-ins › Unit Converter): its panel.
+	Unit Converter	Převodník jednotek
+	Unit Converter Panel	Panel Převodník jednotek
+	Copy with Units	Kopírovat s jednotkami
+	From Selection	Z výběru
+
 # Color Effects add-on: Select by Color Kind.
 	Select by Color Kind	Vybrat podle druhu barvy
 	Objects with Spot Colors	Objekty s přímými barvami
@@ -7604,6 +7785,14 @@ breakText	Glyphs	Glyfy
 	Remove Gaps	Odstranit mezery
 @msg	that makes too many pieces (at most 100000): make the dashes longer	tím vznikne příliš mnoho dílů (nejvýše 100000): prodlužte čárky
 @msg	select paths, or segments, to divide	vyberte cesty nebo segmenty k rozdělení
+# Path Precision Tools add-on: Smooth Bridge.
+	Smooth Bridge…	Hladký most…
+	Smooth Bridge	Hladký most
+	Keep Originals	Zachovat originály
+@msg	select two circles to bridge	vyberte dva kruhy k propojení
+@msg	one circle is inside the other	jeden kruh je uvnitř druhého
+@msg	the circles are too far apart for this radius: raise the radius	kruhy jsou pro tento poloměr příliš daleko od sebe: zvětšete poloměr
+@msg	the circles are too far apart for this radius	kruhy jsou pro tento poloměr příliš daleko od sebe
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	Společné tečny…
 	Common Tangents	Společné tečny
@@ -7620,6 +7809,7 @@ breakText	Glyphs	Glyfy
 @msg	One path lies inside the other, so they have no common tangents	Jedna cesta leží uvnitř druhé, takže nemají žádné společné tečny
 @msg	The paths overlap, so they have no internal tangents	Cesty se překrývají, takže nemají žádné vnitřní tečny
 @msg	One path lies inside the other, so they have no internal tangents	Jedna cesta leží uvnitř druhé, takže nemají žádné vnitřní tečny
+@msg	The point lies inside the path, so it has no tangents	Bod leží uvnitř cesty, takže nemá žádné tečny
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Rozložit čárky na cesty
 @msg	select paths with dashed strokes to expand	vyberte cesty s čárkovaným tahem k rozložení
@@ -8308,7 +8498,7 @@ breakText	Glyphs	Glyfy
 @msg	`scale` must be a number from 0.001 to 1000	`scale` musí být číslo od 0.001 do 1000
 @msg	`scale` must be a number in (0, 100]	`scale` musí být číslo v rozsahu (0, 100]
 @msg	`scope.{key}` must be a non-empty array	`scope.{key}` musí být neprázdné pole
-@msg	`scope` must be "document", {artboards} or {layers}	`scope` musí být "document", {artboards} nebo {layers}
+@msg	`scope` must be "document", {{artboards: [index, …]}} or {{layers: [id, …]}}	`scope` musí být "document", {{artboards: [index, …]}} nebo {{layers: [id, …]}}
 @msg	`scope` must be "selection" or "document", not {other}	`scope` musí být "selection" nebo "document", ne {other}
 @msg	`script` must be a string	`script` musí být řetězec
 @msg	`seriesIndexes` is a non-empty list of series indexes	`seriesIndexes` je neprázdný seznam indexů řad
@@ -8387,6 +8577,8 @@ breakText	Glyphs	Glyfy
 @msg	`{f}` is the copy of a document open now	`{f}` je kopie právě otevřeného dokumentu
 @msg	`{id}` is no writable format (see document.formats)	`{id}` není formát, který lze zapisovat (viz document.formats)
 @msg	`{id}` isn't a loaded library	`{id}` není načtená knihovna
+@msg	`{file}` has no swatches of its own	`{file}` nemá žádné vlastní vzorky
+@msg	`{_1}` has pattern swatches, which a .vcswatches file can't hold	`{_1}` obsahuje vzorkové položky vzorníku, které soubor .vcswatches nepojme
 @msg	`{key}` has no colours	`{key}` neobsahuje žádné barvy
 @msg	`{key}` holds more than {MAX_EDIT_WORDS} words	`{key}` obsahuje více než {MAX_EDIT_WORDS} slov
 @msg	`{key}` is a design name	`{key}` je název návrhu
@@ -8678,7 +8870,13 @@ breakText	Glyphs	Glyfy
 @msg	colorModel must be {own} (the document's mode), grayscale or bitmap	colorModel musí být {own} (režim dokumentu), grayscale nebo bitmap
 @msg	colour groups can't go into colour groups	skupiny barev nelze vkládat do skupin barev
 @msg	colour, mode and spot apply to solid-colour swatches only	colour, mode a spot platí jen pro položky vzorníku s plnou barvou
-@msg	column {column}: `{cell}` is a `%` column of graph data files, which are not read	sloupec {column}: `{cell}` je sloupec `%` pro soubory dat grafu, které se nečtou
+@msg	line {line}, column {column}: the graph data file `{path}` for `{var}` is a relative path: give `base`, or an absolute path	řádek {line}, sloupec {column}: soubor dat grafu `{path}` pro `{var}` je zadán relativní cestou: zadejte `base` nebo absolutní cestu
+@msg	line {line}, column {column}: the graph data file for `{var}` can't be read: {e}	řádek {line}, sloupec {column}: soubor dat grafu pro `{var}` nelze přečíst: {e}
+@msg	line {line}, column {column}: the graph data file `{path}` for `{var}` isn't followed: {r}	řádek {line}, sloupec {column}: soubor dat grafu `{path}` pro `{var}` se nenačítá: {r}
+@msg	line {line}, column {column}: the graph data file `{path}` for `{var}` is larger than {MAX_GRAPH_DATA_FILE} bytes	řádek {line}, sloupec {column}: soubor dat grafu `{path}` pro `{var}` je větší než {MAX_GRAPH_DATA_FILE} bajtů
+@msg	line {line}, column {column}: the graph data file `{path}` for `{var}` gives a graph value longer than {MAX_GRAPH_CSV} bytes	řádek {line}, sloupec {column}: soubor dat grafu `{path}` pro `{var}` dává hodnotu grafu delší než {MAX_GRAPH_CSV} bajtů
+@msg	line {line}, column {column}: the graph data files hold more than {MAX_GRAPH_FILES_TOTAL} bytes in all	řádek {line}, sloupec {column}: soubory dat grafu obsahují celkem více než {MAX_GRAPH_FILES_TOTAL} bajtů
+@msg	`base` is empty	`base` je prázdné
 @msg	column {column}: `{cell}` names `{name}`, which is a {_1} variable	sloupec {column}: `{cell}` uvádí `{name}`, což je proměnná typu {_1}
 @msg	column {column}: `{cell}` names no variable	sloupec {column}: `{cell}` neuvádí žádnou proměnnou
 @msg	column {column}: the variable name is longer than {MAX_NAME} characters	sloupec {column}: název proměnné je delší než {MAX_NAME} znaků
@@ -8689,6 +8887,7 @@ breakText	Glyphs	Glyfy
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	složené tvary přijímají cesty, složené cesty, skupiny, složené tvary, text, prolnutí a obálky
 @msg	compound {_1} must contain exactly one open path to join	složený objekt {_1} musí ke spojení obsahovat právě jednu otevřenou cestu
 @msg	connect needs a path other than the one extended	connect vyžaduje jinou cestu než tu prodlužovanou
+@msg	connect needs extend	connect vyžaduje extend
 @msg	connect needs id	connect vyžaduje id
 @msg	connect path has no open end	cesta v connect nemá žádný otevřený konec
 @msg	continuation must be an array of path chunks	continuation musí být pole úseků cesty
@@ -9201,7 +9400,7 @@ breakText	Glyphs	Glyfy
 @msg	nothing to print: every artboard picked is blank	není co tisknout: každá zvolená pracovní plocha je prázdná
 @msg	nothing to print: the document has no art that prints	není co tisknout: dokument nemá žádnou kresbu, která se tiskne
 @msg	nothing to repeat	není co opakovat
-@msg	numbers out of order in {_1} quantifier	čísla v kvantifikátoru {_1} jsou ve špatném pořadí
+@msg	numbers out of order in {{}} quantifier	čísla v kvantifikátoru {{}} jsou ve špatném pořadí
 @msg	object is not a path	objekt není cesta
 @msg	object transparency cannot be sampled onto highlighted characters; disable Transparency in Eyedropper Options or select the whole object	průhlednost objektu nelze nabrat na zvýrazněné znaky; vypněte Průhlednost ve volbách kapátka nebo vyberte celý objekt
 @msg	object {_1} can't be set as point type	objekt {_1} nelze nastavit jako bodový text
@@ -9561,7 +9760,7 @@ breakText	Glyphs	Glyfy
 @msg	the page has no area	stránka nemá plochu
 @msg	the page's type in an unread object's box isn't in its page art	text stránky v rámečku nepřečteného objektu není v kresbě jeho stránky
 @msg	the paint behind the proxy is not a gradient	nátěr za aktivním políčkem není přechod
-@msg	the paint is not a freeform gradient (apply one with paint.editGradient {kind})	nátěr není volný přechod (použijte ho pomocí paint.editGradient {kind})
+@msg	the paint is not a freeform gradient (apply one with paint.editGradient {{kind: "freeform"}})	nátěr není volný přechod (použijte ho pomocí paint.editGradient {{kind: "freeform"}})
 @msg	the parameters or body do not form one function	parametry nebo tělo netvoří jednu funkci
 @msg	the parent must be a layer or sublayer	nadřazený prvek musí být vrstva nebo podvrstva
 @msg	the pasted SVG filter {name} draws differently from the document's filter of that name, and no free name fits it	vložený filtr SVG {name} se vykresluje jinak než filtr dokumentu s tímto názvem a nehodí se pro něj žádný volný název
@@ -9917,3 +10116,18 @@ breakText	Glyphs	Glyfy
 @msg	A panel is not joined to the rest by a crease.	Panel není se zbytkem spojen žádnou linií bigu.
 @msg	A fold line is on a non-printing layer.	Linie skladu je na netisknutelné vrstvě.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panely: {panels}, panty: {hinges}, chyby: {errors}, upozornění: {warnings}
+	Pressure Sensitive	Citlivé na tlak
+	Flex Ribbon	Pružná stuha
+	Pulse Stroke	Pulzující tah
+	Round Flow	Kulatý tah
+	Chisel Flow	Zkosený tah
+	Fold Preview	Náhled skládání
+	Fold	Složení
+	Show Fold Lines	Zobrazit linie skladu
+	Three-Quarter	Tři čtvrtě
+	Open a document to preview its folded shape.	Otevřete dokument, abyste zobrazili náhled jeho složeného tvaru.
+@msg	Check the fold lines first.	Nejprve zkontrolujte linie skladu.
+@msg	Panels: {panels}, hinges: {hinges}	Panely: {panels}, panty: {hinges}
+@msg	Other blanks not shown: {count}	Další přířezy nejsou zobrazeny: {count}
+@msg	A joint does not close by {gap} pt.	Spoj se nezavírá o {gap} pt.
+@msg	Two panels pass through each other.	Dva panely procházejí jeden druhým.
