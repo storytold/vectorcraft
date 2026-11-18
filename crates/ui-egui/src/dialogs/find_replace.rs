@@ -88,13 +88,7 @@ pub fn open(app: &mut VectorcraftApp, params: &Map<String, Value>) -> Result<Val
     for key in SWITCHES.into_iter().chain(["backwards"]) {
         fields.insert(key.into(), json!(false));
     }
-    for (k, v) in params.iter().filter(|(_, v)| !v.is_null()) {
-        match fields.get(k) {
-            Some(Value::String(_)) if !v.is_string() => return Err(format!("`{k}` must be a string")),
-            Some(Value::Bool(_)) if !v.is_boolean() => return Err(format!("`{k}` must be true or false")),
-            _ => {}
-        }
-    }
+    check_types(params, true)?;
     let last = app.ui.last_find.as_ref().and_then(Value::as_object).cloned().unwrap_or_default();
     for (k, v) in last.iter().chain(params) {
         // Only the dialog's own fields, each of its own type.
@@ -113,6 +107,21 @@ pub fn open(app: &mut VectorcraftApp, params: &Map<String, Value>) -> Result<Val
     fields.insert("__command".into(), json!(COMMAND));
     app.ui.dialog = Some(Dialog { kind: KIND.into(), fields });
     Ok(Value::Null)
+}
+
+/// The first of the dialog's fields in `fields` that holds a value of another type than its own,
+/// as an error: `find` and `replace` are strings, and `backwards` and the [`SWITCHES`] are true or
+/// false. A null value is no error when `null_gives_none` is true.
+fn check_types(fields: &Map<String, Value>, null_gives_none: bool) -> Result<(), String> {
+    for (k, v) in fields.iter().filter(|(_, v)| !(null_gives_none && v.is_null())) {
+        if matches!(k.as_str(), "find" | "replace") && !v.is_string() {
+            return Err(format!("`{k}` must be a string"));
+        }
+        if (k == "backwards" || SWITCHES.contains(&k.as_str())) && !v.is_boolean() {
+            return Err(format!("`{k}` must be true or false"));
+        }
+    }
+    Ok(())
 }
 
 /// Edit › Find Next with no text to find: the next match of the last search, from the place it
@@ -249,10 +258,17 @@ fn replace_all(app: &mut VectorcraftApp, d: &mut Dialog) -> Result<Value, String
 }
 
 /// A button or `ui.dialog.confirm`: run the `action` and keep the dialog open, or close it for
-/// `done`. What a command refuses is the note, and the dialog stays open.
+/// `done`. What a command refuses is the note, and the dialog stays open. A field set to a value
+/// of another type than its own ([`check_types`]) runs no action: the error is the note, shown
+/// under the match found, which Replace still changes once the field is set right.
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let mut d = d.clone();
     let action = d.fields.insert("action".into(), json!("find")).and_then(|a| a.as_str().map(str::to_string)).unwrap_or_default();
+    if let Err(e) = check_types(&d.fields, false) {
+        d.fields.insert(NOTE.into(), json!(e));
+        app.ui.dialog = Some(d);
+        return Err(e);
+    }
     let r = match action.as_str() {
         "done" => {
             remember(app, &d);
@@ -345,7 +361,9 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> DialogAc
             ui.colored_label(t.text_strong, egui::RichText::new(hit).strong().underline());
             widgets::dim_name(ui, &after);
         });
-    } else if let Some(note) = d.fields.get(NOTE).and_then(Value::as_str) {
+    }
+    // Find and Replace remove the note, so it shows under a match only when an action was refused.
+    if let Some(note) = d.fields.get(NOTE).and_then(Value::as_str) {
         widgets::dim_name(ui, &crate::i18n::message(crate::i18n::current(), note));
     }
     // Enter finds, as the Find button does.

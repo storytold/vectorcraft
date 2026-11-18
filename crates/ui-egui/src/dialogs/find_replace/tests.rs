@@ -132,10 +132,34 @@ fn the_edit_menu_opens_the_find_and_replace_dialog() {
 }
 
 /// A field given a value of another type than its own is an error and the dialog does not open; a
-/// null value gives no field.
+/// null value gives no field. A field set to such a value once the dialog is open runs no action:
+/// the error is the note, shown under the match found, and the text, the match and the last search
+/// stay as they were.
 #[test]
 fn the_dialog_rejects_a_field_of_the_wrong_type() {
-    let (mut app, _) = app_with(&["cat"]);
+    let (mut app, ids) = app_with(&["cat"]);
+    choose(&mut app);
+    set(&mut app, "find", json!("cat"));
+    crate::dialogs::confirm(&mut app).unwrap();
+    let last = app.ui.last_find.clone();
+    for (k, v, want) in [
+        ("replace", json!(5), "`replace` must be a string"),
+        ("replace", Value::Null, "`replace` must be a string"),
+        ("matchCase", json!("yes"), "`matchCase` must be true or false"),
+    ] {
+        set(&mut app, k, v.clone());
+        set(&mut app, "action", json!("replaceAll"));
+        assert_eq!(crate::dialogs::confirm(&mut app).unwrap_err(), want, "{k}: {v}");
+        assert_eq!((plain(&app, ids[0]), field(&app, "__note"), app.ui.last_find.clone()), ("cat".to_string(), json!(want), last.clone()));
+        assert_eq!(matched(&app), Some((ids[0], 0, 3)), "Replace still changes the match found");
+        let ctx = context();
+        frame(&mut app, &ctx, vec![]);
+        let texts: Vec<String> = frame(&mut app, &ctx, vec![]).into_iter().map(|(t, _)| t).collect();
+        assert!(texts.iter().any(|t| t == want) && texts.iter().any(|t| t == "cat"), "the note shows under the match: {texts:?}");
+        set(&mut app, k, if k == "replace" { json!("dog") } else { json!(false) });
+    }
+    set(&mut app, "action", json!("done"));
+    crate::dialogs::confirm(&mut app).unwrap();
     let open = |app: &mut VectorcraftApp, params: Value| app.run("ui.paramDialog", json!({"command": super::COMMAND, "params": params}));
     for (params, want) in [
         (json!({"find": 17}), "`find` must be a string"),
@@ -147,7 +171,7 @@ fn the_dialog_rejects_a_field_of_the_wrong_type() {
         assert!(app.ui.dialog.is_none(), "{params}");
     }
     open(&mut app, json!({"find": null, "replace": "dog", "wholeWord": true})).unwrap();
-    assert_eq!((field(&app, "find"), field(&app, "replace"), field(&app, "wholeWord")), (json!(""), json!("dog"), json!(true)));
+    assert_eq!((field(&app, "find"), field(&app, "replace"), field(&app, "wholeWord")), (json!("cat"), json!("dog"), json!(true)));
 }
 
 /// The dialog stays open from match to match: Find goes to the next match and selects its
