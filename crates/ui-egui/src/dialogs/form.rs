@@ -843,11 +843,17 @@ pub(crate) fn humanize(k: &str) -> String {
     }
 }
 
-/// [`humanize`] translated where it is painted: the ":" stays outside the translated text.
+/// A style attribute as the style dialogs list it: the [`humanized`] key, then its value.
+pub(super) fn attribute_line(key: &str, value: &Value) -> String {
+    format!("{} {value}", humanized(key))
+}
+
+/// [`humanize`] translated where it is painted: the ":" stays outside the translated text and is
+/// written as the UI language writes a label's colon ([`crate::i18n::colon`]).
 pub(super) fn humanized(k: &str) -> String {
     let h = humanize(k);
     match h.strip_suffix(':') {
-        Some(base) => format!("{}:", tl!(base)),
+        Some(base) => crate::i18n::colon(tl!(base)),
         None => tl!(&h).to_string(),
     }
 }
