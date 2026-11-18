@@ -10,10 +10,7 @@ use super::names::{norm, norm_chars, script_families};
 #[cfg(not(target_arch = "wasm32"))]
 use super::scan::{enumerate_faces, font_files};
 use super::traits::{Alias, FontMatch, FontTraits, regular_rank};
-use super::{
-    Arc, BezPath, CANONICAL_CACHE_MAX, Color, ColourContent, DrawSettings, FontDb, GlyphId, GlyphImage, MetadataProvider, NEXT_ID, OUTLINE_CACHE_MAX,
-    Ordering, Size,
-};
+use super::{Arc, BezPath, CANONICAL_CACHE_MAX, Color, ColourContent, FontDb, GlyphImage, MetadataProvider, NEXT_ID, OUTLINE_CACHE_MAX, Ordering};
 
 /// The most faces [`FontDb::postscript_faces`] gives, and the most families it loads.
 const MAX_POSTSCRIPT_FACES: usize = 16;
@@ -368,6 +365,12 @@ impl FontDb {
         loaded.or_else(|| self.instance_by_id(id))
     }
 
+    /// The faces loaded so far (the bundled fonts and the installed ones type has used), in load
+    /// order. Installed fonts that nothing has asked for yet are not among them.
+    pub fn loaded_faces(&self) -> Vec<Arc<FontFace>> {
+        self.read_faces().clone()
+    }
+
     /// The face of character style `st`: [`Self::face_version`] of its font, instanced at its
     /// Variable Font settings ([`Self::instance`]).
     pub fn style_face(&self, st: &vectorcraft_doc::CharStyle) -> Option<Arc<FontFace>> {
@@ -654,19 +657,24 @@ impl FontDb {
         if let Some(p) = self.outlines.lock().unwrap_or_else(|e| e.into_inner()).get(&key) {
             return p.clone();
         }
-        let mut pen = FlipPen(BezPath::new());
-        if let Some(f) = face.skrifa()
-            && let Some(g) = f.outline_glyphs().get(GlyphId::new(gid))
-        {
-            let _ = g.draw(DrawSettings::unhinted(Size::unscaled(), face.location()), &mut pen);
-        }
-        let p = Arc::new(pen.0);
+        let p = Arc::new(self.outline_uncached(face, gid));
         let mut cache = self.outlines.lock().unwrap_or_else(|e| e.into_inner());
         if cache.len() >= OUTLINE_CACHE_MAX {
             cache.clear();
         }
         cache.insert(key, p.clone());
         p
+    }
+
+    /// [`Self::outline`] without the cache: for reading many glyphs once (Retype's index), which
+    /// would otherwise push out the outlines the canvas keeps there.
+    pub fn outline_uncached(&self, face: &FontFace, gid: u32) -> BezPath {
+        let mut pen = FlipPen(BezPath::new());
+        if let Ok(font) = craft_font_catalog::FontOutline::from_bytes(face.data(), face.index(), face.variations()) {
+            // As before, keep the prefix emitted before a malformed glyph reports an error.
+            let _ = font.draw_to(gid, &mut pen);
+        }
+        pen.0
     }
 
     /// Glyph `gid`'s colour bitmap (`sbix`, `CBDT`) in `face`, cached per (face, glyph).
@@ -720,5 +728,91 @@ impl FontDb {
         let key = (face.id, gid, if used { coloured } else { None });
         self.colours.lock().unwrap_or_else(std::sync::PoisonError::into_inner).keep(key, content.clone());
         content
+    }
+}
+
+#[cfg(test)]
+mod shared_outline_tests {
+    use super::super::glyph_pen::FlipPen;
+    use super::*;
+    use skrifa::instance::Size;
+    use skrifa::outline::DrawSettings;
+    use skrifa::{GlyphId, MetadataProvider};
+
+    #[test]
+    fn shared_outlines_match_original_pen_for_variable_instances() {
+        let db = FontDb::with_font_dirs(vec![]);
+        let Some(bytes) = crate::test_fonts::variable_font() else { return };
+        assert!(db.add_font(bytes) > 0);
+        let face = db.face(crate::test_fonts::VARIABLE_FAMILY, "Bold").expect("named instance is registered");
+        let f = face.skrifa().expect("font parses");
+        for ch in ['A', 'V', ' ', 'a'] {
+            let Some(glyph) = f.charmap().map(ch) else { continue };
+            let mut old = FlipPen(BezPath::new());
+            if let Some(outline) = f.outline_glyphs().get(GlyphId::new(glyph.to_u32())) {
+                // Match the prior production behavior, including a partial path on error.
+                let _ = outline.draw(DrawSettings::unhinted(Size::unscaled(), face.location()), &mut old);
+            }
+            assert_eq!(*db.outline(&face, glyph.to_u32()), old.0, "glyph {ch}");
+        }
+    }
+
+    // Generated CFF keeps the differential tests independent of installed fonts.
+    fn cff_font(program: &[u8]) -> Vec<u8> {
+        let mut cff = vec![1, 0, 4, 4, 0, 1, 1, 1, 2, b'X', 0, 1, 1, 1, 7, 29, 0, 0, 0, 25, 17, 0, 0, 0, 0];
+        cff.extend_from_slice(&[0, 1, 4]);
+        cff.extend_from_slice(&1u32.to_be_bytes());
+        cff.extend_from_slice(&((program.len() as u32) + 1).to_be_bytes());
+        cff.extend_from_slice(program);
+        let mut builder = write_fonts::FontBuilder::new();
+        let mut head = vec![0; 54];
+        head[18..20].copy_from_slice(&1000u16.to_be_bytes());
+        let mut hhea = vec![0; 36];
+        hhea[34..36].copy_from_slice(&1u16.to_be_bytes());
+        for (tag, data) in [(b"head", head), (b"hhea", hhea), (b"hmtx", vec![0, 100, 0, 0]), (b"maxp", vec![0, 0, 0x50, 0, 0, 1]), (b"CFF ", cff)] {
+            builder.add_raw(write_fonts::types::Tag::new(tag), data);
+        }
+        builder.build()
+    }
+
+    #[test]
+    fn malformed_cff_prefix_matches_original_pen() {
+        let bytes = cff_font(&[139, 139, 21, 239, 139, 5, 10, 14]);
+        let gid = 0;
+        let f = skrifa::FontRef::new(&bytes).unwrap();
+        let mut old = FlipPen(BezPath::new());
+        let result = f
+            .outline_glyphs()
+            .get(GlyphId::new(gid))
+            .unwrap()
+            .draw(DrawSettings::unhinted(Size::unscaled(), skrifa::instance::LocationRef::default()), &mut old);
+        assert!(result.is_err());
+        assert!(!old.0.elements().is_empty());
+        let shared = craft_font_catalog::FontOutline::from_bytes(&bytes, 0, &[]).unwrap();
+        let mut streamed = FlipPen(BezPath::new());
+        assert!(shared.draw_to(gid, &mut streamed).is_err());
+        assert_eq!(streamed.0, old.0);
+    }
+
+    #[test]
+    fn large_valid_outline_matches_original_pen() {
+        let mut program = vec![139, 139, 21];
+        for _ in 0..100_001 {
+            program.extend_from_slice(&[140, 6]);
+        }
+        program.push(14);
+        let bytes = cff_font(&program);
+        let f = skrifa::FontRef::new(&bytes).unwrap();
+        let mut old = FlipPen(BezPath::new());
+        f.outline_glyphs()
+            .get(GlyphId::new(0))
+            .unwrap()
+            .draw(DrawSettings::unhinted(Size::unscaled(), skrifa::instance::LocationRef::default()), &mut old)
+            .unwrap();
+        assert!(old.0.elements().len() > 100_000);
+        let shared = craft_font_catalog::FontOutline::from_bytes(&bytes, 0, &[]).unwrap();
+        let mut streamed = FlipPen(BezPath::new());
+        shared.draw_to(0, &mut streamed).unwrap();
+        assert_eq!(streamed.0, old.0);
     }
 }
