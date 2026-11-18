@@ -712,6 +712,13 @@
 	Previous Document	Edellinen asiakirja
 	Cascade	Porrasta
 	Tile	Vierekkäin
+	Tile All Vertically	Kaikki vierekkäin pystysuunnassa
+	Tile All Horizontally	Kaikki vierekkäin vaakasuunnassa
+	2-Up Layout	2 ikkunan asettelu
+	3-Up Layout	3 ikkunan asettelu
+	4-Up Layout	4 ikkunan asettelu
+	6-Up Layout	6 ikkunan asettelu
+	Arrange Documents	Järjestä asiakirjat
 	Float in Window	Kelluta ikkunassa
 	Float All in Windows	Kelluta kaikki ikkunoissa
 	Consolidate All Windows	Yhdistä kaikki ikkunat
@@ -1790,6 +1797,7 @@ digits	Malayalam	Malajalam
 	Rule:	Sääntö:
 	Save changes to {name}	Tallenna muutokset kohteeseen {name}
 	Save theme to My Themes	Tallenna teema Omiin teemoihin
+	Set the current fill or stroke to the selected color	Aseta nykyiseksi täytöksi tai viivaksi valittu väri
 	Set the selected color to the current color	Aseta valituksi väriksi nykyinen väri
 	Copy All Styles	Kopioi kaikki tyylit
 	Exported {path}	Viety: {path}
@@ -2092,7 +2100,7 @@ digits	Malayalam	Malajalam
 	Stroke: click for swatches, Shift-click for the color mixer	Viiva: napsauta avataksesi värimallit, Vaihto-napsauta avataksesi värisekoittimen
 	This panel is on the roadmap (see the parity plan).	Tämä paneeli on suunnitteilla (katso yhdenmukaisuussuunnitelma).
 	Open a document to navigate it.	Avaa asiakirja, niin voit liikkua siinä.
-	View Artboard Only	Näytä vain piirtoalusta
+	View Artboard Contents Only	Näytä vain piirtoalustan sisältö
 	Contextual Alternates	Kontekstuaaliset vaihtoehdot
 	Default Figure	Oletusnumerot
 	Discretionary Ligatures	Valinnaiset ligatuurit
@@ -2242,7 +2250,7 @@ digits	Malayalam	Malajalam
 	Overprint Preview (separations)	Päällepainatuksen esikatselu (erottelut)
 	Show All Plates	Näytä kaikki painolevyt
 	Show all plates	Näytä kaikki painolevyt
-	Show/hide plate (Alt-click: only this plate)	Näytä/piilota painolevy (Alt-napsautus: vain tämä painolevy)
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	Näytä/piilota painolevy (Alt-napsautus: vain tämä painolevy; uusi Alt-napsautus: kaikki painolevyt)
 	Simulate Paper	Simuloi paperia
 	Use Black Point Compensation	Käytä mustan pisteen kompensointia
 	Working CMYK (don't tag)	Työ-CMYK (ei tunnistetta)
@@ -2282,6 +2290,8 @@ digits	Malayalam	Malajalam
 	Tip extends past the end point	Kärki ulottuu päätepisteen yli
 	Tip on the end point	Kärki päätepisteessä
 	Variable Width Profile	Muuttuvan leveyden profiili
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Viivan sivellin säilyttää oman kokonsa, joten leveysprofiili ei muuta sitä. Poista sivellin, jos haluat käyttää profiilia.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Viivan sivellin säilyttää oman kokonsa, joten leveysprofiili ei muuta sitä. Poista sivellin, jos haluat käyttää profiilia.
 	Weight:	Paksuus:
 	Art using a deleted global swatch keeps its colour.	Poistettua globaalia värimallia käyttävä kuvitus säilyttää värinsä.
 	Color Group: {name}	Väriryhmä: {name}
@@ -2391,6 +2401,9 @@ digits	Malayalam	Malajalam
 	Flip Horizontal	Käännä vaakasuunnassa
 	Flip Vertical	Käännä pystysuunnassa
 	Polygon Properties:	Monikulmion ominaisuudet:
+	Line Properties:	Viivan ominaisuudet:
+	Line Length:	Viivan pituus:
+	Line Angle:	Viivan kulma:
 	Rectangle Properties:	Suorakulmion ominaisuudet:
 	Shape Properties:	Muodon ominaisuudet:
 	Shape Properties	Muodon ominaisuudet
@@ -3135,6 +3148,8 @@ antiAlias	Sharp	Terävä
 	Every option matches {base}.	Kaikki asetukset vastaavat kohdetta {base}.
 	Files of a PDF standard can't be password-protected.	PDF-standardin mukaisia tiedostoja ei voi suojata salasanalla.
 	Files of this standard tag their colours with ICC profiles.	Tämän standardin tiedostot merkitsevät värinsä ICC-profiileilla.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	Tämän standardin tiedostot merkitsevät värinsä ICC-profiileilla, paitsi tulostustavoitteen profiilin CMYK-värit, jotka kirjoitetaan DeviceCMYK-muodossa.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	Kun valintana on ”Älä sisällytä profiileja” ja tulostustavoite on CMYK, jokainen CMYK-väri kirjoitetaan DeviceCMYK-muodossa, ellei sitä muunneta toisen profiilin CMYK-kohteeseen.
 	Flattener preset:	Litistyksen esiasetus:
 	General › Thumbnails	Yleiset › Pikkukuvat
 	Grayscale images	Harmaasävykuvat
@@ -3354,6 +3369,12 @@ antiAlias	Sharp	Terävä
 	LF (macOS, Linux)	LF (macOS, Linux)
 	CRLF (Windows)	CRLF (Windows)
 	Text Export Options	Tekstin vientiasetukset
+	Chinese Big 5	Kiina Big 5
+	Cyrillic	Kyrillinen
+	Greek	Kreikka
+	Turkish	Turkki
+	Baltic	Balttilainen
+	Central European	Keskieurooppalainen
 	Character Set:	Merkistö:
 	Join the lines of each paragraph	Yhdistä kunkin kappaleen rivit
 	Line Breaks	Rivinvaihdot
@@ -3383,6 +3404,9 @@ antiAlias	Sharp	Terävä
 	Variable Options	Muuttujan asetukset
 	Define a variable first	Määritä ensin muuttuja
 	Adjust Adjoining Width Points	Säädä viereisiä leveyspisteitä
+	Incoming	Saapuva
+	Outgoing	Lähtevä
+	Single Width Only	Vain yksi leveys
 	Keep both sides the same width	Pidä molemmat puolet samanlevyisinä
 	Side 1:	Puoli 1:
 	Side 2:	Puoli 2:
@@ -3777,6 +3801,7 @@ theme	Appearance	Ulkoasu
 	Select Art	Valitse kuvitus
 	Set Current Layer	Aseta nykyinen taso
 	Flatten Artwork	Litistä kuvitus
+	Locate Layer	Paikanna taso
 	Locate Object	Paikanna objekti
 	Lock Others	Lukitse muut
 	Merge Selected	Yhdistä valitut
@@ -4599,6 +4624,8 @@ font-technology	Variable	Muuttuvat
 	Couldn't paste from the clipboard: {e}	Leikepöydältä ei voitu liittää: {e}
 	Channel	Kanava
 	Circle	Ympyrä
+	Circle Tool	Ympyrätyökalu
+	Circle too large	Ympyrä on liian suuri
 	Clip to Art	Rajaa kuvitukseen
 	Colorize	Väritä
 	Gamma	Gamma
@@ -4828,6 +4855,13 @@ imageTrace	Outline	Ääriviiva
 	Show External Script Warning	Näytä ulkoisten komentosarjojen varoitus
 	A Script Is Running	Komentosarja on käynnissä
 	Script Alert	Komentosarjan ilmoitus
+	Script File Access	Komentosarjan tiedostojen käyttö
+	The script asks to read a file you choose.	Komentosarja pyytää lupaa lukea valitsemasi tiedoston.
+	The script asks to read and write a file you choose.	Komentosarja pyytää lupaa lukea ja kirjoittaa valitsemasi tiedoston.
+	The script asks to read and write a folder you choose, with everything in it.	Komentosarja pyytää lupaa lukea ja kirjoittaa valitsemasi kansion ja kaiken sen sisällön.
+	Allow Once	Salli kerran
+	Always Allow This Script	Salli tämä komentosarja aina
+	Deny	Estä
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Komentosarja voi muuttaa avoimia asiakirjoja ja kirjoittaa tiedostoja suorittamillaan komennoilla. Suorita vain komentosarjoja, joihin luotat.
 	Do not show this warning again	Älä näytä tätä varoitusta uudelleen
 	Stop the script and undo what it did? Then quit again.	Pysäytetäänkö komentosarja ja kumotaan sen muutokset? Lopeta sitten uudelleen.
@@ -4858,8 +4892,6 @@ imageTrace	Outline	Ääriviiva
 @msg	Script file could not be read	Komentosarjatiedostoa ei voitu lukea
 @msg	Script folder has more than 2,048 entries	Komentosarjakansiossa on yli 2 048 kohdetta
 @msg	Script file open mode must be r, w, e or a	Komentosarjatiedoston avaustilan on oltava r, w, e tai a
-@msg	Script file writing is not available	Komentosarjatiedostojen kirjoittaminen ei ole käytettävissä
-@msg	Script file dialogs are not available	Komentosarjojen tiedostovalintaikkunat eivät ole käytettävissä
 @msg	Script files cannot be opened in another application	Komentosarjatiedostoja ei voi avata toisessa sovelluksessa
 @msg	Script file access is unavailable on the web	Komentosarjatiedostojen käyttö ei ole mahdollista verkossa
 @msg	Script has 256 files open	Komentosarjalla on 256 tiedostoa auki
@@ -5000,6 +5032,27 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` on vain ajolle, jossa ei ole ketään kysyttävää: sovelluksessa henkilö vastaa jokaiseen valintaikkunaan
 @msg	Running a script	Suoritetaan komentosarjaa
 @msg	Copied the script report	Komentosarjan raportti kopioitiin
+@msg	Script file access denied: {path}	Komentosarjan tiedostojen käyttö estettiin: {path}
+@msg	Script file access to the app's own folders is not allowed	Komentosarjat eivät saa käyttää sovelluksen omia kansioita
+@msg	Script file cannot encode the text	Komentosarjan tiedosto ei voi koodata tekstiä
+@msg	Script file could not be written	Komentosarjan tiedostoa ei voitu kirjoittaa
+@msg	Script file dialogs need a person to answer them	Komentosarjan tiedostovalintaikkunoihin tarvitaan vastaava henkilö
+@msg	Script file is not open for writing	Komentosarjan tiedosto ei ole auki kirjoittamista varten
+@msg	Script file name is already in use	Komentosarjan tiedoston nimi on jo käytössä
+@msg	Script file name must be a name without a folder	Komentosarjan tiedoston nimen on oltava nimi ilman kansiota
+@msg	Script file permission can be kept only for a script run from a file	Tiedostolupa voidaan säilyttää vain tiedostosta suoritetulle komentosarjalle
+@msg	Script file permission could not be saved	Komentosarjan tiedostolupaa ei voitu tallentaa
+@msg	Script folder is not empty	Komentosarjan kansio ei ole tyhjä
+@msg	Script files cannot make aliases	Komentosarjan tiedostot eivät voi luoda aliaksia
+@msg	Script file hidden setting cannot be changed	Komentosarjan tiedoston piilotusasetusta ei voi muuttaa
+@msg	{name}: a file dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: tiedostovalintaikkunaa ei voi avata sisäänrakennetun funktion, getterin, muunnoksen tai $.evalFile-funktion suorittaman tiedoston takaisinkutsussa; kutsu sitä komentosarjan omasta koodista
+@msg	the script wrote more file data than one run may write (32 MiB)	komentosarja kirjoitti enemmän tiedostodataa kuin yksi suoritus saa kirjoittaa (32 MiB)
+@msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	komentosarjan tiedostovalintaikkunan `answer`-arvon on oltava jokin seuraavista: once, always, deny, stop
+@msg	choose a file or folder first, or deny	valitse ensin tiedosto tai kansio tai estä
+@msg	the script file permissions could not be saved: {e}	komentosarjojen tiedostolupia ei voitu tallentaa: {e}
+@msg	this script's file access can be allowed only once	tämän komentosarjan tiedostojen käytön voi sallia vain kerran
+@msg	Only the person at the keyboard can allow a script's file access	Vain näppäimistön ääressä oleva ihminen voi sallia komentosarjan tiedostojen käytön
+@msg	A script is given at most 2,048 files: the files picked after them were left out	Komentosarja saa enintään 2 048 tiedostoa: niiden jälkeen valitut tiedostot jätettiin pois
 @msg	Copied the link info	Linkin tiedot kopioitiin
 @msg	Corners edits the corners of a path	Kulmat-toiminto muokkaa polun kulmia
 @msg	Couldn't copy to the system clipboard: {e}	Järjestelmän leikepöydälle ei voitu kopioida: {e}
@@ -5075,6 +5128,7 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	Saved {path}	Tallennettiin {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	Valitse tekstiä tai napsauta tekstiin tekstityökalulla, niin voit lisätä merkkejä
 @msg	Shape Builder: no region under the pointer	Muodonmuodostin: osoittimen alla ei ole aluetta
+@msg	Shape Builder: select all paths you want to merge	Muodonmuodostin: valitse kaikki polut, jotka haluat yhdistää
 @msg	Shape Builder: select paths or compound paths	Muodonmuodostin: valitse polkuja tai yhdistelmäpolkuja
 @msg	Show All Hidden Attributes: nothing is hidden	Näytä kaikki piilotetut attribuutit: mitään ei ole piilotettu
 @msg	Split Into Grid: select paths large enough for the grid	Jaa ruudukoksi: valitse ruudukolle riittävän suuret polut
@@ -5297,8 +5351,8 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	no active document	ei aktiivista asiakirjaa
 @msg	no active perspective plane	ei aktiivista perspektiivitasoa
 @msg	no anchor points selected	ankkuripisteitä ei ole valittu
-@msg	`points` must be three [x, y] pairs of numbers	`points` on annettava kolmena lukuparina [x, y]
-@msg	direct-select three anchor points, or give `points`	valitse suoraan kolme ankkuripistettä tai anna `points`
+@msg	`points` must be two or three [x, y] pairs of numbers	`points` on annettava kahtena tai kolmena lukuparina [x, y]
+@msg	direct-select two or three anchor points, or give `points`	valitse suoraan kaksi tai kolme ankkuripistettä tai anna `points`
 @msg	no circle passes through these points: two are the same or all three lie on one line	näiden pisteiden kautta ei kulje ympyrää: kaksi pisteistä on samoja tai kaikki kolme ovat samalla suoralla
 @msg	no app to open files here	täällä ei ole sovellusta tiedostojen avaamiseen
 @msg	no artboard	ei piirtoalustaa
@@ -5400,6 +5454,9 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	no such user library	käyttäjäkirjastoa ei ole
 @msg	no such view	näkymää ei ole
 @msg	no such width point	leveyspistettä ei ole
+@msg	`single` must be `incoming` or `outgoing`	`single` on oltava `incoming` tai `outgoing`
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` ja `outIndex` on oltava saman epäjatkuvan leveyspisteen kaksi puolikasta
+@msg	a discontinuous width point keeps its place	epäjatkuva leveyspiste pysyy paikallaan
 @msg	no swatch `{name}`	ei värimallia `{name}`
 @msg	no swatch library `{l}` (see swatch.library.list)	ei värimallikirjastoa `{l}` (ks. swatch.library.list)
 @msg	no symbol instances selected	symboli-ilmentymiä ei ole valittu
@@ -6130,6 +6187,7 @@ variable-list-end	{0}, {1}	{0} ja {1}
 	Ascent	Nousu
 	Cap Height	Versaalikorkeus
 	x Height	x-korkeus
+	Em Box Height	Em-laatikon korkeus
 	Justify	Tasaa molemmat reunat
 	First Baseline	Ensimmäinen perusviiva
 	Vertical Align	Pystytasaus
@@ -8270,4 +8328,15 @@ breakText	Glyphs	Merkit
 @msg	A panel is not joined to the rest by a crease.	Paneelia ei ole liitetty muihin millään nuuttausviivalla.
 @msg	A fold line is on a non-printing layer.	Taittoviiva on tasolla, jota ei tulosteta.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Paneelit: {panels}, saranat: {hinges}, virheet: {errors}, varoitukset: {warnings}
+	Fold Preview	Taiton esikatselu
+	Fold	Taitto
+	Show Fold Lines	Näytä taittoviivat
+	Three-Quarter	Kolme neljäsosaa
+	Open a document to preview its folded shape.	Avaa asiakirja, niin voit esikatsella sen taitettua muotoa.
+@msg	Check the fold lines first.	Tarkista ensin taittoviivat.
+@msg	Panels: {panels}, hinges: {hinges}	Paneelit: {panels}, saranat: {hinges}
+@msg	Other blanks not shown: {count}	Muita aihioita ei näytetä: {count}
+@msg	A joint does not close by {gap} pt.	Liitos ei sulkeudu, rako {gap} pt.
+@msg	Two panels pass through each other.	Kaksi paneelia kulkee toistensa läpi.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer on oltava "singleLine", "everyLine", "standardSingleLine" tai "standardEveryLine"
+@msg	text.{key} `{v}`: use "{_1}" or "{_2}"	text.{key} `{v}`: käytä arvoa "{_1}" tai "{_2}"

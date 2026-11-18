@@ -137,6 +137,9 @@
 	Additional Plug-ins Folder	Папка додаткових модулів
 	Additional Fonts Folder	Папка додаткових шрифтів
 	Adjust Adjoining Width Points	Налаштувати суміжні точки ширини
+	Incoming	Вхідна
+	Outgoing	Вихідна
+	Single Width Only	Лише одна ширина
 	Adjust Color Balance…	Налаштувати колірний баланс…
 	Adjust Colors	Налаштувати кольори
 	Adjust Options:	Параметри налаштування:
@@ -421,6 +424,12 @@ font-technology	Variable	Варіативні
 	Character Alignment	Вирівнювання символів
 	Character / Paragraph	Символ / Абзац
 	Character Rotation	Поворот символів
+	Chinese Big 5	Китайська Big 5
+	Cyrillic	Кирилиця
+	Greek	Грецька
+	Turkish	Турецька
+	Baltic	Балтійська
+	Central European	Центральноєвропейська
 	Character Set:	Набір символів:
 	Character Style	Стиль символу
 	Character Style Options	Параметри стилю символу
@@ -483,6 +492,8 @@ font-technology	Variable	Варіативні
 	Choose a folder	Виберіть папку
 	Choose…	Вибрати…
 	Circle	Коло
+	Circle Tool	Інструмент «Коло»
+	Circle too large	Коло завелике
 	Classic Defaults	Класичні значення за промовчанням
 	Clean Up…	Очистити…
 	Clear	Очистити
@@ -1062,6 +1073,9 @@ font-technology	Variable	Варіативні
 	Cap Height	Висота великих літер
 	x-Height	Висота малих літер
 	ICF Box	Рамка ICF
+	Ascent	Підйом
+	x Height	Висота малих літер
+	Em Box Height	Висота кегельного майданчика
 	Show Sample	Показати зразок
 	Hide Sample	Приховати зразок
 	Max Ascent/Descent	Макс. висота/глибина
@@ -1275,6 +1289,8 @@ font-technology	Variable	Варіативні
 	Files	Файли
 	Files of a PDF standard can't be password-protected.	Файли стандарту PDF не можуть бути захищені паролем.
 	Files of this standard tag their colours with ICC profiles.	Файли цього стандарту позначають свої кольори профілями ICC.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	Файли цього стандарту позначають свої кольори профілями ICC, крім кольорів CMYK у профілі призначення виведення, які записуються як DeviceCMYK.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	З «Не включати профілі» та призначенням виведення CMYK кожен колір CMYK записується як DeviceCMYK, якщо його не перетворено в призначення CMYK з іншим профілем.
 	Fill	Заливка
 	Fill & Stroke	Заливка та обведення
 	Fill (X), double-click for the Color Picker	Заливка (X), двічі клацніть на палітрі кольорів
@@ -2080,6 +2096,7 @@ file-filter	Templates	Шаблони
 	Load SVG into Clipboard	Завантажити SVG у буфер обміну
 	Load Text into Clipboard	Завантажити текст у буфер обміну
 	Local Libraries	Локальні бібліотеки
+	Locate Layer	Знайти шар
 	Locate Object	Знайти об’єкт
 	Locate Selected Objects	Знаходити виділені об’єкти
 	Location	Розташування
@@ -2749,6 +2766,9 @@ diagnostics	ui	інтерфейс
 	Polar Grid Tool	Інструмент «Полярна сітка»
 	Polygon	Багатокутник
 	Polygon Properties:	Властивості багатокутника:
+	Line Properties:	Властивості лінії:
+	Line Length:	Довжина лінії:
+	Line Angle:	Кут лінії:
 	Polygon Tool	Інструмент «Багатокутник»
 	Portrait	Книжкова
 	Power Saving (integrated)	Енергозбереження (вбудована)
@@ -3563,6 +3583,7 @@ digits	Malayalam	Малаялам
 	Set Slice Rectangle	Вказати прямокутник фрагмента
 	Set Tab Stops	Задати табуляції
 	Set Text	Задати текст
+	Set the current fill or stroke to the selected color	Призначити вибраний колір поточній заливці або обведенню
 	Set the selected color to the current color	Призначити поточний колір вибраному кольору
 	Set Zoom	Задати масштаб
 	Settings…	Параметри…
@@ -3686,7 +3707,7 @@ digits	Malayalam	Малаялам
 	Show Vivid/Muted	Показати яскраві/приглушені
 	Show Warm/Cool	Показати теплі/холодні
 	Show {kind} Brushes	Показати пензлі {kind}
-	Show/hide plate (Alt-click: only this plate)	Показати/приховати пластину (Alt+клацання: тільки цю пластину)
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	Показати/приховати пластину (Alt+клацання: тільки цю пластину; повторне Alt+клацання: усі пластини)
 	Show:	Показати:
 	Shown with the optimised preview.	Показано оптимізованим переглядом.
 	Side 1:	Сторона 1:
@@ -4093,6 +4114,13 @@ effect	Points	Точки
 	Thumbnail View	Мініатюри
 	Thumbnails:	Мініатюри:
 	Tile	Плитка
+	Tile All Vertically	Усі плиткою вертикально
+	Tile All Horizontally	Усі плиткою горизонтально
+	2-Up Layout	Макет на 2
+	3-Up Layout	Макет на 3
+	4-Up Layout	Макет на 4
+	6-Up Layout	Макет на 6
+	Arrange Documents	Упорядкувати документи
 	Tile Edge Color	Колір краю плитки
 	Tile Edge Color…	Колір краю плитки…
 	Tile Full Pages	Плитка цілих сторінок
@@ -4288,6 +4316,8 @@ effect	Points	Точки
 	V Spacing:	Інтервал по вертикалі:
 	V:	В:
 	Variable Width Profile	Профіль змінної ширини
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Пензель обведення зберігає власний розмір, тому профіль ширини його не змінює. Щоб використати профіль, заберіть пензель.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Пензель обведення зберігає власний розмір, тому профіль ширини його не змінює. Щоб використати профіль, заберіть пензель.
 	Variables	Змінні
 	New Variable	Нова змінна
 	Delete Variable	Видалити змінну
@@ -4352,7 +4382,7 @@ effect	Points	Точки
 	Vertical:	По вертикалі:
 	Very High	Дуже висока
 	View	Перегляд
-	View Artboard Only	Перегляд лише монтажної області
+	View Artboard Contents Only	Перегляд лише вмісту монтажної області
 	View Opacity Mask	Перегляд маски непрозорості
 	View PDF after saving	Переглядати PDF після збереження
 	View {n}	Вигляд {n}
@@ -4638,6 +4668,13 @@ axis	Both	Обидві
 	Show External Script Warning	Показувати попередження про зовнішні скрипти
 	A Script Is Running	Виконується скрипт
 	Script Alert	Повідомлення скрипту
+	Script File Access	Доступ скрипту до файлів
+	The script asks to read a file you choose.	Скрипт просить дозволу прочитати вибраний вами файл.
+	The script asks to read and write a file you choose.	Скрипт просить дозволу читати й записувати вибраний вами файл.
+	The script asks to read and write a folder you choose, with everything in it.	Скрипт просить дозволу читати й записувати вибрану вами папку з усім її вмістом.
+	Allow Once	Дозволити один раз
+	Always Allow This Script	Завжди дозволяти цей скрипт
+	Deny	Заборонити
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Скрипт може змінювати відкриті документи й записувати файли за допомогою команд, які виконує. Запускайте лише ті скрипти, яким довіряєте.
 	Do not show this warning again	Більше не показувати це попередження
 	Stop the script and undo what it did? Then quit again.	Зупинити скрипт і скасувати його зміни? Потім вийдіть ще раз.
@@ -4668,8 +4705,6 @@ axis	Both	Обидві
 @msg	Script file could not be read	Не вдалося прочитати файл скрипта
 @msg	Script folder has more than 2,048 entries	Тека скрипта має понад 2048 елементів
 @msg	Script file open mode must be r, w, e or a	Режим відкриття файлу скрипта має бути r, w, e або a
-@msg	Script file writing is not available	Запис файлів скрипта недоступний
-@msg	Script file dialogs are not available	Діалогові вікна файлів скрипта недоступні
 @msg	Script files cannot be opened in another application	Файли скрипта не можна відкрити в іншому застосунку
 @msg	Script file access is unavailable on the web	Доступ до файлів скрипта у вебверсії недоступний
 @msg	Script has 256 files open	Скрипт має 256 відкритих файлів
@@ -4786,6 +4821,27 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	there is no script engine named {name}	рушія скриптів з назвою {name} немає
 @msg	Running a script	Виконується скрипт
 @msg	Copied the script report	Звіт про сценарій скопійовано
+@msg	Script file access denied: {path}	Доступ скрипту до файлів заборонено: {path}
+@msg	Script file access to the app's own folders is not allowed	Скрипту не дозволено доступ до власних папок застосунку
+@msg	Script file cannot encode the text	Файл скрипту не може закодувати текст
+@msg	Script file could not be written	Не вдалося записати файл скрипту
+@msg	Script file dialogs need a person to answer them	Для відповіді на файлові діалоги скрипту потрібна людина
+@msg	Script file is not open for writing	Файл скрипту не відкрито для запису
+@msg	Script file name is already in use	Ім’я файлу скрипту вже використовується
+@msg	Script file name must be a name without a folder	Ім’я файлу скрипту має бути іменем без папки
+@msg	Script file permission can be kept only for a script run from a file	Дозвіл на файли можна зберегти лише для скрипту, запущеного з файлу
+@msg	Script file permission could not be saved	Не вдалося зберегти дозвіл скрипту на файли
+@msg	Script folder is not empty	Папка скрипту не порожня
+@msg	Script files cannot make aliases	Файли скрипту не можуть створювати псевдоніми
+@msg	Script file hidden setting cannot be changed	Не можна змінити параметр прихованості файлу скрипту
+@msg	{name}: a file dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: файловий діалог не можна відкрити всередині зворотного виклику вбудованої функції, гетера, перетворення або файлу, який виконує $.evalFile; викличте його з власного коду скрипту
+@msg	the script wrote more file data than one run may write (32 MiB)	скрипт записав більше даних файлів, ніж може записати один запуск (32 MiB)
+@msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` для файлового діалогу скрипту має бути одним із: once, always, deny, stop
+@msg	choose a file or folder first, or deny	спершу виберіть файл або папку чи відмовте
+@msg	the script file permissions could not be saved: {e}	не вдалося зберегти дозволи скриптів на файли: {e}
+@msg	this script's file access can be allowed only once	доступ цього скрипту до файлів можна дозволити лише один раз
+@msg	Only the person at the keyboard can allow a script's file access	Дозволити скрипту доступ до файлів може лише людина за клавіатурою
+@msg	A script is given at most 2,048 files: the files picked after them were left out	Скрипт отримує щонайбільше 2 048 файлів: файли, вибрані після них, пропущено
 @msg	Copied the link info	Відомості про зв’язок скопійовано
 @msg	Corners edits the corners of a path	«Кути» редагує кути контуру
 @msg	Couldn't copy to the system clipboard: {e}	Не вдалося скопіювати до системного буфера обміну: {e}
@@ -4861,6 +4917,7 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	Saved {path}	Збережено: {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	Виділіть текст або клацніть всередині тексту інструментом «Текст», щоб вставити гліфи
 @msg	Shape Builder: no region under the pointer	Створення фігур: під вказівником немає області
+@msg	Shape Builder: select all paths you want to merge	Створення фігур: виділіть усі контури, які потрібно об’єднати
 @msg	Shape Builder: select paths or compound paths	Створення фігур: виділіть контури або складені контури
 @msg	Show All Hidden Attributes: nothing is hidden	Показати всі приховані атрибути: нічого не приховано
 @msg	Split Into Grid: select paths large enough for the grid	Поділ на сітку: виділіть контури, досить великі для сітки
@@ -5094,8 +5151,8 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	no active document	немає активного документа
 @msg	no active perspective plane	немає активної площини перспективи
 @msg	no anchor points selected	опорні точки не виділені
-@msg	`points` must be three [x, y] pairs of numbers	`points` має містити три пари чисел [x, y]
-@msg	direct-select three anchor points, or give `points`	виділіть три опорні точки прямим виділенням або задайте `points`
+@msg	`points` must be two or three [x, y] pairs of numbers	`points` має містити дві або три пари чисел [x, y]
+@msg	direct-select two or three anchor points, or give `points`	виділіть дві або три опорні точки прямим виділенням або задайте `points`
 @msg	no circle passes through these points: two are the same or all three lie on one line	через ці точки не проходить жодне коло: дві точки збігаються або всі три лежать на одній прямій
 @msg	no app to open files here	тут немає програми для відкриття файлів
 @msg	no artboard	немає монтажної області
@@ -5197,6 +5254,9 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	no such user library	такої користувацької бібліотеки немає
 @msg	no such view	такого виду немає
 @msg	no such width point	такої точки ширини немає
+@msg	`single` must be `incoming` or `outgoing`	`single` має бути `incoming` або `outgoing`
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` і `outIndex` мають бути двома половинами однієї розривної точки ширини
+@msg	a discontinuous width point keeps its place	розривна точка ширини зберігає своє місце
 @msg	no swatch `{name}`	немає зразка `{name}`
 @msg	no swatch library `{l}` (see swatch.library.list)	немає бібліотеки зразків `{l}` (див. swatch.library.list)
 @msg	no symbol instances selected	екземпляри символів не виділені
@@ -8382,6 +8442,7 @@ breakText	Glyphs	Гліфи
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	складені фігури приймають контури, складені контури, групи, складені фігури, текст, переходи й оболонки
 @msg	compound {_1} must contain exactly one open path to join	складений об’єкт {_1} має містити рівно один відкритий контур для з’єднання
 @msg	connect needs a path other than the one extended	для connect потрібен контур, відмінний від того, що продовжується
+@msg	connect needs extend	для connect потрібен extend
 @msg	connect needs id	для connect потрібен id
 @msg	connect path has no open end	контур для connect не має відкритого кінця
 @msg	continuation must be an array of path chunks	continuation має бути масивом частин контуру
@@ -9619,3 +9680,13 @@ breakText	Glyphs	Гліфи
 @msg	A panel is not joined to the rest by a crease.	Панель не з’єднана з рештою жодною лінією біговки.
 @msg	A fold line is on a non-printing layer.	Лінія згину лежить на шарі, що не друкується.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Панелі: {panels}, шарніри: {hinges}, помилки: {errors}, попередження: {warnings}
+	Fold Preview	Перегляд згину
+	Fold	Згин
+	Show Fold Lines	Показати лінії згину
+	Three-Quarter	Три чверті
+	Open a document to preview its folded shape.	Відкрийте документ, щоб переглянути його у складеному вигляді.
+@msg	Check the fold lines first.	Спершу перевірте лінії згину.
+@msg	Panels: {panels}, hinges: {hinges}	Панелі: {panels}, шарніри: {hinges}
+@msg	Other blanks not shown: {count}	Інші розгортки не показано: {count}
+@msg	A joint does not close by {gap} pt.	Стик не змикається на {gap} pt.
+@msg	Two panels pass through each other.	Дві панелі проходять одна крізь одну.
