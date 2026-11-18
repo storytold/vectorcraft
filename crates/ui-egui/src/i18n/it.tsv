@@ -2666,6 +2666,8 @@ file-filter	Templates	Modelli
 	Overprint and Transparency Flattener Options	Opzioni sovrastampa e appiattimento trasparenza
 	Custom…	Personalizzato…
 	Custom Transparency Flattener Options	Opzioni di appiattimento trasparenza personalizzate
+	The PDF preset keeps the flattener preset but not the Custom… settings.	Il preset PDF mantiene il preset di appiattimento, ma non le impostazioni di Personalizzato….
+	PDF 1.3 files clip rasterized areas to their regions, and Overprint sets whether overprints are kept.	I file PDF 1.3 ritagliano le aree rasterizzate alle loro regioni, e Sovrastampa stabilisce se le sovrastampe vengono mantenute.
 	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	EPS non ha trasparenza alfa, e Sovrastampe stabilisce se le sovrastampe vengono mantenute.
 	Overprint Black…	Sovrastampa nero…
 	Overprint Fill	Sovrastampa riempimento

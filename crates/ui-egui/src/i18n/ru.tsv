@@ -2650,6 +2650,8 @@ file-filter	Templates	Шаблоны
 	Overprint and Transparency Flattener Options	Параметры наложения и объединения прозрачностей
 	Custom…	Пользовательские…
 	Custom Transparency Flattener Options	Пользовательские параметры объединения прозрачностей
+	The PDF preset keeps the flattener preset but not the Custom… settings.	Набор PDF сохраняет набор объединения, но не параметры из «Пользовательские…».
+	PDF 1.3 files clip rasterized areas to their regions, and Overprint sets whether overprints are kept.	Файлы PDF 1.3 обрезают растрированные области по их контурам, а параметр «Наложение» определяет, сохраняются ли наложения.
 	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	В EPS нет альфа-прозрачности, а параметр «Наложения» определяет, сохраняются ли наложения.
 	Overprint Black…	Наложение чёрного…
 	Overprint Fill	Наложение заливки

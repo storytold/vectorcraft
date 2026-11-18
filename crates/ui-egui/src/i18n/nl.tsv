@@ -3384,6 +3384,8 @@ digits	Malayalam	Malayalam
 	Overprint and Transparency Flattener Options	Opties voor overprint en transparantiepletter
 	Custom…	Aangepast…
 	Custom Transparency Flattener Options	Aangepaste opties voor transparantieafvlakking
+	The PDF preset keeps the flattener preset but not the Custom… settings.	De PDF-voorinstelling bewaart de afvlakvoorinstelling, maar niet de instellingen van Aangepast….
+	PDF 1.3 files clip rasterized areas to their regions, and Overprint sets whether overprints are kept.	PDF 1.3-bestanden snijden gerasterde gebieden bij tot hun regio's, en Overprint bepaalt of overdrukken behouden blijven.
 	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	EPS heeft geen alfatransparantie, en Overdrukken bepaalt of overdrukken behouden blijven.
 	Place the pages with the placement again	Plaats de pagina's opnieuw met de plaatsing
 	Placement:	Plaatsing:

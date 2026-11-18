@@ -2170,6 +2170,8 @@ antiAlias	Sharp	Nítido
 	Overprint and Transparency Flattener Options	Opções de Sobreimpressão e Achatamento de Transparência
 	Custom…	Personalizado…
 	Custom Transparency Flattener Options	Opções Personalizadas de Achatamento de Transparência
+	The PDF preset keeps the flattener preset but not the Custom… settings.	O predefinido PDF mantém o predefinido de achatamento, mas não as configurações de Personalizado….
+	PDF 1.3 files clip rasterized areas to their regions, and Overprint sets whether overprints are kept.	Arquivos PDF 1.3 recortam as áreas rasterizadas às suas regiões, e Sobreimpressão define se as sobreimpressões são mantidas.
 	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	O EPS não tem transparência alfa, e Sobreimpressões define se as sobreimpressões são mantidas.
 	Overprint:	Sobreimpressão:
 	Overprints:	Sobreimpressões:
