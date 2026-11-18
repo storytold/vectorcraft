@@ -429,6 +429,75 @@ fn transform_panel_sizes_follow_the_turned_box() {
 }
 
 #[test]
+fn set_bounds_whole_number_references_match_integer_references() {
+    for direct in [false, true] {
+        for index in 0..=9 {
+            let run = |reference: Value| {
+                let mut s = session();
+                let a = rect(&mut s, 10.0, 20.0, 100.0, 50.0);
+                sel(&mut s, &[a]);
+                if direct {
+                    s.execute("select.anchors", &json!({"id": a.0, "anchors": [[0, 0], [0, 2]], "mode": "set"})).unwrap();
+                }
+                let before = anchors(&s, a);
+                let selection = s.doc().unwrap().selection.clone();
+                let n = undo_len(&s);
+                s.execute("object.setBounds", &json!({"x": 200, "y": 300, "reference": reference})).unwrap();
+                assert_eq!(undo_len(&s), n + 1);
+                assert_eq!(s.doc().unwrap().selection, selection);
+                if !direct {
+                    let b = selection_box(&s);
+                    assert!(b.reference_point(index.min(8)).distance(Point::new(200.0, 300.0)) < 1e-6, "{b:?}");
+                }
+                let after = anchors(&s, a);
+                s.execute("edit.undo", &json!({})).unwrap();
+                assert_eq!(anchors(&s, a), before);
+                s.execute("edit.redo", &json!({})).unwrap();
+                assert_eq!(anchors(&s, a), after);
+                after
+            };
+            assert_eq!(run(json!(index as f64)), run(json!(index)), "reference {index}, direct {direct}");
+            if index == 8 {
+                assert_eq!(run(json!(u64::MAX)), run(json!(8)), "large reference, direct {direct}");
+                assert_eq!(run(json!(1e100)), run(json!(8)), "large float reference, direct {direct}");
+            }
+        }
+    }
+    for reference in [None, Some(Value::Null)] {
+        let mut s = session();
+        let a = rect(&mut s, 10.0, 20.0, 100.0, 50.0);
+        sel(&mut s, &[a]);
+        let mut p = json!({"x": 200, "y": 300});
+        if let Some(reference) = reference {
+            p["reference"] = reference;
+        }
+        s.execute("object.setBounds", &p).unwrap();
+        assert!(selection_box(&s).center().distance(Point::new(200.0, 300.0)) < 1e-6);
+    }
+}
+
+#[test]
+fn set_bounds_rejects_invalid_references_without_changes() {
+    for direct in [false, true] {
+        for reference in [json!(-1), json!(-1.0), json!(0.5), json!(8.5), json!("0"), json!(true), json!([]), json!({})] {
+            let mut s = session();
+            let a = rect(&mut s, 10.0, 20.0, 100.0, 50.0);
+            sel(&mut s, &[a]);
+            if direct {
+                s.execute("select.anchors", &json!({"id": a.0, "anchors": [[0, 0], [0, 2]], "mode": "set"})).unwrap();
+            }
+            let before = anchors(&s, a);
+            let selection = s.doc().unwrap().selection.clone();
+            let n = undo_len(&s);
+            assert!(s.execute("object.setBounds", &json!({"x": 200, "y": 300, "reference": reference})).is_err(), "{reference}, direct {direct}");
+            assert_eq!(anchors(&s, a), before);
+            assert_eq!(s.doc().unwrap().selection, selection);
+            assert_eq!(undo_len(&s), n);
+        }
+    }
+}
+
+#[test]
 fn reset_bounding_box_squares_the_box_in_one_step() {
     let mut s = session();
     let a = turned_rect(&mut s);

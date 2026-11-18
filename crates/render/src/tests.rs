@@ -314,6 +314,76 @@ fn past_the_measured_placements_an_instance_is_culled_by_an_estimate_of_its_art_
     assert!(img.pixel(3, 20)[3] > 0, "{:?}", img.pixel(3, 20));
 }
 
+/// 2,000 symbols, then two named "Mark" (a red square, then a blue one), and an instance of
+/// "Mark" at (25, 25) and one with a drop shadow at (70, 70). With `second` the blue square's
+/// symbol is named that instead.
+fn marks(second: &str) -> Document {
+    let mut d = Document::new(100.0, 100.0);
+    for i in 0..2000 {
+        let art = rect_node(&mut d, Rect::new(0.0, 0.0, 1.0, 1.0), Paint::solid(Color::BLACK), Paint::None, 0.0);
+        d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: format!("Filler {i}"), art: Arc::new(art) });
+    }
+    for (name, color) in [("Mark", Color::rgb(1.0, 0.0, 0.0)), (second, Color::rgb(0.0, 0.0, 1.0))] {
+        let art = rect_node(&mut d, Rect::new(-10.0, -10.0, 10.0, 10.0), Paint::solid(color), Paint::None, 0.0);
+        d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: name.into(), art: Arc::new(art) });
+    }
+    let l = d.layers[0].id;
+    let plain = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Mark".into(), xf: Affine::translate((25.0, 25.0)) });
+    let mut shadowed = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Mark".into(), xf: Affine::translate((70.0, 70.0)) });
+    shadowed.appearance.effects.push(vectorcraft_doc::Effect {
+        id: "stylize.dropShadow".into(),
+        params: serde_json::json!({"x": 4, "y": 4, "blur": 0}),
+        visible: true,
+    });
+    d.insert(Some(l), 0, plain).unwrap();
+    d.insert(Some(l), 1, shadowed).unwrap();
+    d
+}
+
+/// Instances among many symbols draw the first symbol of their name, the same pixels as when no
+/// other symbol has that name.
+#[test]
+fn instances_draw_the_first_symbol_of_their_name() {
+    let img = render(&marks("Mark"));
+    assert_eq!(img.pixel(25, 25), [255, 0, 0, 255]);
+    assert_eq!(img.pixel(70, 70), [255, 0, 0, 255]);
+    assert!(img.pixels == render(&marks("Other")).pixels, "the pixels differ");
+}
+
+/// A frame that draws 300 instances with drop shadows, among 2,000 symbols, and an envelope around
+/// instances reads the symbol list once to find their symbols.
+#[test]
+fn a_frame_reads_the_symbol_list_once() {
+    let mut d = marks("Other");
+    let l = d.layers[0].id;
+    for i in 0..300 {
+        let xf = Affine::translate((f64::from(i % 20) * 5.0, f64::from(i / 20) * 5.0)) * Affine::scale(0.2);
+        let mut n = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Mark".into(), xf });
+        n.appearance.effects.push(vectorcraft_doc::Effect {
+            id: "stylize.dropShadow".into(),
+            params: serde_json::json!({"x": 1, "y": 1, "blur": 0}),
+            visible: true,
+        });
+        d.insert(Some(l), usize::MAX, n).unwrap();
+    }
+    let content = Arc::new(Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Mark".into(), xf: Affine::translate((50.0, 50.0)) }));
+    let kind = vectorcraft_doc::live::EnvelopeKind::Warp { style: "arc".into(), bend: 30.0, h: 0.0, v: 0.0, horizontal: true, version: 0 };
+    let envelope = NodeKind::Envelope {
+        content: vec![content],
+        kind: Box::new(kind),
+        fidelity: 50.0,
+        editing: false,
+        options: Default::default(),
+        frame: Box::new(Affine::IDENTITY),
+    };
+    let envelope = Node::new(d.alloc_id(), envelope);
+    d.insert(Some(l), usize::MAX, envelope).unwrap();
+    let before = vectorcraft_doc::symbols_read();
+    render(&d);
+    let read = vectorcraft_doc::symbols_read() - before;
+    assert!(read <= d.symbols.len(), "{read} symbols read, {} in the document", d.symbols.len());
+}
+
 /// Symbols 0 to 29 each hold two instances of the next, sheared two ways, so that the 2^30
 /// instances drawn from the first are all placed differently. Symbol 30 holds a square with a drop
 /// shadow. An instance of symbol 0 lies far left of the view. With `effect`, every instance has

@@ -91,7 +91,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Placed File Info",
             [],
             None,
-            "{path | name | dataBase64 (a file's path, or its name with its bytes), page?, crop?, password?, thumbnail?: px, link?: bool, dxf?: {…}, layers?, hiddenLayers?, importSlices? (all as file.place)} what file.place would place, without placing it → {name, format, width, height (pt at 100%), pixelWidth?, pixelHeight?, ppi?: [x, y], colorMode?: RGB|Grayscale|CMYK (raster images), plates?: [ink names] (a DCS file), slices?: the user slices a PSD or PSB file would bring in, warnings, thumbnailBase64?: PNG of at most `thumbnail` (≤ 512) px on its longer side}",
+            "{path | name | dataBase64 (a file's path, or its name with its bytes), page?, crop?, password?, thumbnail?: px, link?: bool, dxf?: {…}, layers?, hiddenLayers?, importSlices? (all as file.place)} what file.place would place, without placing it → {name, format, width, height (pt at 100%), pixelWidth?, pixelHeight?, ppi?: [x, y], colorMode?: RGB|Grayscale|CMYK (raster images; opaque CMYK PSD/PSB merged images keep 8- or 16-bit inks within VectorCraft's 67,108,864-pixel native CMYK limit and allocation allowance; other CMYK composites use the RGB decoder's allocation limit), plates?: [ink names] (a DCS file), slices?: the user slices a PSD or PSB file would bring in, warnings, thumbnailBase64?: PNG of at most `thumbnail` (≤ 512) px on its longer side}",
             always,
             info
         ),

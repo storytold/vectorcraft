@@ -94,13 +94,13 @@ pub use revolve::{
     CLASSIC_REVOLVE, REVOLVE, has_revolve, is_revolve, revolve_art, revolve_art_in, revolve_options, validate_revolve, validate_revolve_in,
 };
 pub use solids::{
-    CLASSIC_EXTRUDE, CLASSIC_ROTATE, EXTRUDE, GRAPHICS, GraphicFrame, INFLATE, MAX_GRAPHICS, MappedGraphic, RENDER, RENDER_MODES, ROTATE,
-    ROTATE_SURFACES, ROTATION_PRESETS, SHADING_COLORS, SOLIDS, SolidMesh, THREE_D_TYPES, classic_extrude_options, classic_shading, extrude_options,
-    graphic_bounds, graphic_frame, graphic_symbols, has_solid, inflate_options, is_classic_three_d, is_three_d, mapped_graphics, missing_symbol,
-    names_graphic_symbol, rename_graphic_symbol, rename_graphic_symbol_in, renders_wireframe, solid_art, solid_art_in, takes_graphics,
-    three_d_meshes, three_d_meshes_in, three_d_meshes_of, three_d_meshes_of_in, three_d_params_as, three_d_wireframe_in, validate_solid,
-    validate_solid_in, validate_three_d, validate_three_d_at, validate_three_d_at_in, validate_three_d_in, validate_three_d_params, view_options,
-    with_graphic,
+    CLASSIC_EXTRUDE, CLASSIC_ROTATE, EXTRUDE, GRAPHICS, GraphicFrame, INFLATE, MAX_GRAPHICS, MappedGraphic, MeshGraphics, RENDER, RENDER_MODES,
+    ROTATE, ROTATE_SURFACES, ROTATION_PRESETS, SHADING_COLORS, SOLIDS, SolidMesh, THREE_D_TYPES, classic_extrude_options, classic_shading,
+    extrude_options, graphic_bounds, graphic_frame, graphic_symbols, has_solid, inflate_options, is_classic_three_d, is_three_d, mapped_graphics,
+    mesh_graphics_art, missing_symbol, names_graphic_symbol, rename_graphic_symbol, rename_graphic_symbol_in, renders_wireframe, solid_art,
+    solid_art_in, takes_graphics, three_d_meshes, three_d_meshes_in, three_d_meshes_of, three_d_meshes_of_in, three_d_params_as,
+    three_d_wireframe_in, validate_solid, validate_solid_in, validate_three_d, validate_three_d_at, validate_three_d_at_in, validate_three_d_in,
+    validate_three_d_params, view_options, with_graphic,
 };
 pub use solids::{
     GRAPHIC_MAX_OFFSET, GRAPHIC_SCALE_RANGE, GRAPHICS_NOT_TAKEN, appearance_graphic_symbols, exports_three_d, graphic_frame_at,
