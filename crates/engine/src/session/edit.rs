@@ -309,6 +309,7 @@ impl Session {
             variables_highlight: st.variables_highlight.clone(),
             isolation: st.isolation,
             perspective_again: None,
+            artboards_again: None,
             plane_placed: false,
             copies: None,
             move_box: std::sync::OnceLock::new(),
@@ -400,6 +401,7 @@ impl Session {
             after.clone_from(&paint);
         }
         let perspective_again = it.perspective_again.take();
+        let artboards_again = it.artboards_again.take();
         let plane_placed = it.plane_placed;
         let copy = preview.0 == "object.transform" && preview.1.get("copy").and_then(Value::as_bool).unwrap_or(false);
         // Alt pressed or released during a move drag turns it into a copy or back: name it for
@@ -453,6 +455,12 @@ impl Session {
             // Transform Again repeats it as it stood when OK was pressed.
             st.last_transform = Some(LastTransform::Each(preview.1.clone()));
             st.last_perspective = None;
+        } else if preview.0 == "artboard.move" && changed {
+            // The Artboard tool's drag: Transform Again moves or copies the artboards it left.
+            if let Some(again) = artboards_again {
+                st.last_transform = Some(LastTransform::Artboards(again));
+                st.last_perspective = None;
+            }
         }
         if perspective_again.is_some() {
             st.last_perspective = perspective_again;

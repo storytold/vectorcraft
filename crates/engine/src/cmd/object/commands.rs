@@ -9,6 +9,16 @@ use super::transform::{move_cmd, nudge, reflect, rotate, scale, shear, transform
 use super::{CommandSpec, cmd, has_doc, has_multi, has_selection, has_selection_or_guides};
 use crate::cmd::has_selected_member_or_guide;
 
+/// Transform Again needs a selection to transform, except after an artboard move or copy, which it
+/// repeats on the artboards that one left (#8581).
+fn can_transform_again(s: &crate::Session) -> std::result::Result<(), String> {
+    let st = s.active().ok_or("no document open")?;
+    if st.last_perspective.is_none() && matches!(st.last_transform, Some(crate::LastTransform::Artboards(_))) {
+        return Ok(());
+    }
+    has_selection(s)
+}
+
 pub fn specs() -> Vec<CommandSpec> {
     vec![
         cmd!(
@@ -70,8 +80,8 @@ pub fn specs() -> Vec<CommandSpec> {
             "Transform Again",
             ["Object", "Transform"],
             Some("Cmd+D"),
-            "{copy?, strokes?, corners?, patterns?, typeAreas?, interpolate?: bool (as object.transform's; default: the value the transform it repeats used, else object.transform's default)} the last transform's matrix on the selection (after a perspective move or scale: that plane-space transform, without these params)",
-            has_selection,
+            "{copy?, strokes?, corners?, patterns?, typeAreas?, interpolate?: bool (as object.transform's; default: the value the transform it repeats used, else object.transform's default)} the last transform's matrix on the selection (after a perspective move or scale: that plane-space transform, without these params; after an artboard move or copy: the same move or copy of the artboards it left, with no selection needed)",
+            can_transform_again,
             transform_again
         ),
         cmd!(
