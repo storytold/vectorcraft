@@ -82,6 +82,31 @@ fn set_options(ctx: &egui::Context, f: impl FnOnce(&mut Options)) {
     set_pstate(ctx, "links-options", o);
 }
 
+/// Show the Links panel on the selected image (the Control bar's Linked File or Embedded label),
+/// wherever the panel is docked or floats; a panel that is already shown stays where it is. The
+/// Link Info section opens, a Show filter that leaves out the image's row goes back to Show All,
+/// and the list scrolls to the row when the panel next draws it. The sort, thumbnail size and DCS
+/// option keep their settings.
+pub(crate) fn show_selected_image(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    let o = options(ctx);
+    let listed = |list: Value, id: u64| list["links"].as_array().is_some_and(|rows| rows.iter().any(|r| r["id"].as_u64() == Some(id)));
+    let first = selected_images(app).first().copied();
+    let hidden = match first {
+        Some(id) if o.show != "all" => app.session.execute("links.list", &json!({ "show": o.show, "sort": o.sort })).is_ok_and(|l| !listed(l, id)),
+        _ => false,
+    };
+    set_pstate(ctx, "links-scroll-to", first);
+    set_options(ctx, |o| {
+        o.info = true;
+        if hidden {
+            o.show = "all";
+        }
+    });
+    if let Err(e) = crate::panel_docking::reveal_panel(app, ID) {
+        app.status(e);
+    }
+}
+
 /// The rows to show (cached per document revision, the files looked at again every [`RECHECK`]
 /// seconds) and the Link Info of the first selected image when the section is open.
 fn cached(app: &mut VectorcraftApp, ctx: &egui::Context, o: &Options) -> Option<Cache> {
@@ -566,11 +591,19 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             super::empty_state(ui, "link", tl!("No images"), detail);
             return;
         }
+        // The row that `show_selected_image` asks the list to scroll to, once.
+        let scroll_to: Option<u64> = pstate(ui.ctx(), "links-scroll-to");
+        if scroll_to.is_some() {
+            set_pstate::<Option<u64>>(ui.ctx(), "links-scroll-to", None);
+        }
         egui::ScrollArea::vertical().max_height(260.0).auto_shrink([false, true]).show(ui, |ui| {
             let h = o.thumb.max(16.0) + 6.0;
             for r in rows {
                 let Some(id) = r["id"].as_u64() else { continue };
                 let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), h), Sense::click());
+                if scroll_to == Some(id) {
+                    ui.scroll_to_rect(rect, Some(egui::Align::Center));
+                }
                 if !ui.is_rect_visible(rect) {
                     continue;
                 }

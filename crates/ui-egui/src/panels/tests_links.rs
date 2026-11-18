@@ -136,6 +136,89 @@ fn the_panel_lists_the_images_with_link_info_for_the_selected_one() {
     }
 }
 
+/// Click the flyout item `name`, checked or not (frames at `time` and just after).
+fn click_menu_item(app: &mut VectorcraftApp, ctx: &egui::Context, name: &str, time: f64) {
+    let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>, time: f64| {
+        super::tests_appearance::frame_raw(ctx, app, egui::RawInput { events, time: Some(time), ..Default::default() }, super::links::menu)
+    };
+    let texts = frame(app, vec![], time);
+    let item = texts.iter().find(|(t, _)| t.trim_start_matches('✓').trim() == name);
+    let at = item.unwrap_or_else(|| panic!("`{name}` not drawn: {texts:?}")).1.center();
+    let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    for (i, e) in [egui::Event::PointerMoved(at), button(true), button(false)].into_iter().enumerate() {
+        frame(app, vec![e], time + 0.01 * (i + 1) as f64);
+    }
+}
+
+/// Opening the panel on the selected image (the Control bar's Linked File or Embedded label) opens
+/// Link Info when it was closed, and sets a Show filter that leaves out the image's row back to
+/// Show All; a filter that lists the row stays.
+#[test]
+fn opening_the_panel_on_the_selected_image_shows_its_row_and_link_info() {
+    let dir = Folder::new("show-selected");
+    let (mut app, linked, embedded) = app(&dir);
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let text = |app: &mut VectorcraftApp, time: f64| {
+        let raw = egui::RawInput { time: Some(time), ..Default::default() };
+        let texts = super::tests_appearance::frame_raw(&ctx, app, raw, super::links::show);
+        texts.into_iter().map(|(t, _)| t).collect::<Vec<_>>().join("\n")
+    };
+    app.run("select.set", json!({"ids": [linked]})).unwrap();
+    click_menu_item(&mut app, &ctx, "Show Link Info", 1.0);
+    click_menu_item(&mut app, &ctx, "Show Embedded", 2.0);
+    let before = text(&mut app, 3.0);
+    assert!(!before.contains("linked.png") && !before.contains("Location"), "the filter hides the row, Link Info is closed: {before}");
+    app.run("window.panel.close", json!({"panel": super::links::ID})).ok();
+    super::links::show_selected_image(&mut app, &ctx);
+    assert!(crate::panel_docking::visible(&app.ui, super::links::ID), "status: {}", app.ui.status);
+    let after = text(&mut app, 4.0);
+    assert!(after.contains("linked.png") && after.contains("embedded.png"), "Show All lists every row: {after}");
+    assert!(after.contains("Location") && after.contains("300 × 200 px"), "Link Info shows the linked image: {after}");
+    // An embedded image under Show Embedded keeps the filter.
+    app.run("select.set", json!({"ids": [embedded]})).unwrap();
+    click_menu_item(&mut app, &ctx, "Show Link Info", 5.0);
+    click_menu_item(&mut app, &ctx, "Show Embedded", 6.0);
+    super::links::show_selected_image(&mut app, &ctx);
+    assert!(crate::panel_docking::visible(&app.ui, super::links::ID), "an open panel stays open");
+    let embedded_only = text(&mut app, 7.0);
+    assert!(embedded_only.contains("embedded.png") && !embedded_only.contains("linked.png"), "Show Embedded stays: {embedded_only}");
+    assert!(embedded_only.contains("Effective PPI"), "Link Info shows the embedded image: {embedded_only}");
+}
+
+/// Opening the panel on the selected image scrolls the list to the image's row when it is out of
+/// view.
+#[test]
+fn opening_the_panel_on_the_selected_image_scrolls_to_its_row() {
+    let dir = Folder::new("show-selected-scroll");
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    // The panel lists the image placed first last, below the list's view.
+    let mut first = None;
+    for i in 0..20 {
+        let path = dir.file(&format!("img{i:02}.png"), &png(10, 10));
+        let id = app.run("file.place", json!({"path": path, "at": [10 + 15 * i, 100]})).unwrap()["ids"][0].as_u64().unwrap();
+        first.get_or_insert(id);
+    }
+    app.run("select.set", json!({"ids": [first]})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    // How many times the first image's name is drawn: its row while in view, and Link Info.
+    let drawn = |app: &mut VectorcraftApp, time: f64| {
+        let raw = egui::RawInput { time: Some(time), ..Default::default() };
+        let texts = super::tests_appearance::frame_raw(&ctx, app, raw, super::links::show);
+        texts.iter().filter(|(t, _)| t == "img00.png").count()
+    };
+    let before = drawn(&mut app, 1.0);
+    assert_eq!(drawn(&mut app, 2.0), before, "the list stays at the top");
+    super::links::show_selected_image(&mut app, &ctx);
+    // The list scrolls over the frames after the one that asks.
+    for time in [3.0, 4.0, 5.0] {
+        drawn(&mut app, time);
+    }
+    assert_eq!(drawn(&mut app, 6.0), before + 1, "the row scrolled into view");
+}
+
 /// Copy Info copies the file names of the selected links, or of `ids` in the order given, one per
 /// line; it is off with nothing selected, and a bad `ids` leaves the clipboard as it was.
 #[test]

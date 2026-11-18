@@ -922,6 +922,19 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
 }
 
+/// The Control bar's object label, `label`, while the bar has room for it. For one selected image
+/// (`image`: Linked File or Embedded) it is an underlined link, and a click opens the Links panel on
+/// the image with its Link Info.
+fn object_label(app: &mut VectorcraftApp, ui: &mut Ui, label: egui::RichText, image: bool) {
+    if ui.available_width() < widgets::text_width(ui, label.clone()) {
+        left_out(ui);
+    } else if !image {
+        ui.label(label);
+    } else if ui.link(label.underline()).clicked() {
+        crate::panels::links::show_selected_image(app, ui.ctx());
+    }
+}
+
 /// The Control bar's gripper, controls and panel menu, in the bar `bar`. A `floating` bar clips its
 /// controls to the room left of the panel menu button, and always shows the button.
 fn contents(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, bar: egui::Rect, dock_room: egui::Rect, floating: bool) {
@@ -954,30 +967,22 @@ fn contents(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, bar: egui::Rect, 
         let units = app.session.general_unit();
         let first = sel.first().and_then(|id| st.doc.node(*id));
         let anchors = anchor_controls(app);
-        let label = match first {
-            _ if app.session.tool_id() == "artboard" => tl!("Artboard"),
-            Some(_) if sel.len() == 1 && anchors != AnchorControls::None => {
-                tl!("Anchor Point")
-            }
+        // The label, and whether it names one selected image.
+        let (label, image) = match first {
+            _ if app.session.tool_id() == "artboard" => (tl!("Artboard"), false),
+            Some(_) if sel.len() == 1 && anchors != AnchorControls::None => (tl!("Anchor Point"), false),
             Some(vectorcraft_doc::Node { kind: NodeKind::Image(im), .. }) if sel.len() == 1 => {
                 if im.link.is_some() {
-                    tl!("Linked File")
+                    (tl!("Linked File"), true)
                 } else {
-                    tl!("Embedded")
+                    (tl!("Embedded"), true)
                 }
             }
-            Some(n) if sel.len() == 1 && crate::panels::image_trace::is_trace(n) => {
-                tl!("Image Tracing")
-            }
-            _ => tl!(crate::panels::appearance::object_label(app)),
+            Some(n) if sel.len() == 1 && crate::panels::image_trace::is_trace(n) => (tl!("Image Tracing"), false),
+            _ => (tl!(crate::panels::appearance::object_label(app)), false),
         };
         let has_first = first.is_some();
-        let label = egui::RichText::new(label).font(theme::semibold(12.0)).color(t.text);
-        if ui.available_width() >= widgets::text_width(ui, label.clone()) {
-            ui.label(label);
-        } else {
-            left_out(ui);
-        }
+        object_label(app, ui, egui::RichText::new(label).font(theme::semibold(12.0)).color(t.text), image);
         // With the Artboard tool in use, the bar shows the active artboard's controls in place
         // of the object controls.
         let (artboard_options, transform) = (group_on(app, "artboardOptions"), group_on(app, "transform"));
