@@ -116,6 +116,11 @@ fn x_is_a_multiplication_sign() {
         (Unit::Points, "2px x 3", 6.0),
         (Unit::Points, "2pxx3", 6.0),
         (Unit::Millimeters, "4x3 px", 12.0),
+        // Only a lowercase x after a p is the px suffix.
+        (Unit::Points, "2pX3", 72.0),
+        (Unit::Points, "2p×3", 72.0),
+        // Text that used to be refused now reads as a product.
+        (Unit::Points, "8.5x11 in", 93.5 * 72.0),
     ] {
         let got = u.parse(s).unwrap_or_else(|| panic!("{u:?} can't read `{s}`"));
         assert!((got - want).abs() < 1e-9, "{u:?}: `{s}` → {got}, want {want}");
@@ -132,6 +137,8 @@ fn x_is_a_multiplication_sign() {
     assert_eq!(Unit::Points.parse(&format!("1{}", "x1".repeat(128))), Some(1.0));
     assert_eq!(Unit::Points.parse(&format!("1{}", "x1".repeat(129))), None);
     assert_eq!(crate::parse_number(&format!("1{}", "×1".repeat(129))), None);
+    assert_eq!(crate::arithmetic_signs("1+2x3X4×5*6/7-8"), 7);
+    assert_eq!(crate::arithmetic_signs("2px x 3"), 1);
 }
 
 proptest! {
