@@ -4467,6 +4467,7 @@ theme	Appearance	Vormgeving
 	Scroll Sideways with Cmd/Ctrl + Wheel	Horizontaal scrollen met Cmd/Ctrl + muiswiel
 	Scrub Numeric Fields by Dragging	Numerieke velden aanpassen door te slepen
 	Linux Display Server	Linux-weergaveserver
+	Low-Latency Drawing	Tekenen met lage latentie
 	Print Preview	Afdrukvoorbeeld
 	Print Setup	Afdrukinstellingen
 	Bitmap	Bitmap

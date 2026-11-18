@@ -447,6 +447,37 @@ fn gpu_preference_defaults_to_automatic_and_validates() {
     assert_eq!(s.prefs.gpu_preference, "automatic");
 }
 
+/// Performance › Low-Latency Drawing (#6013): off by default and for preference files written
+/// before it, a boolean only, kept through a save/load round trip, listed under Performance and
+/// reset with it.
+#[test]
+fn low_latency_drawing_defaults_off_and_takes_only_a_boolean() {
+    let mut s = Session::new();
+    assert!(!s.prefs.low_latency_drawing);
+    assert_eq!(s.execute("prefs.get", &json!({"key": "lowLatencyDrawing"})).unwrap(), json!(false));
+    s.execute("prefs.set", &json!({"key": "lowLatencyDrawing", "value": true})).unwrap();
+    assert!(s.prefs.low_latency_drawing);
+    for bad in [json!(1), json!(null), json!("on"), json!("yes"), json!([true])] {
+        assert!(s.execute("prefs.set", &json!({"key": "lowLatencyDrawing", "value": bad})).is_err(), "{bad}");
+        assert!(s.prefs.low_latency_drawing);
+    }
+    // Booleans may be given as "true" and "false", as for every boolean preference.
+    s.execute("prefs.set", &json!({"key": "lowLatencyDrawing", "value": "false"})).unwrap();
+    assert!(!s.prefs.low_latency_drawing);
+    s.execute("prefs.set", &json!({"key": "lowLatencyDrawing", "value": "true"})).unwrap();
+    assert_eq!(s.prefs.to_json()["lowLatencyDrawing"], json!(true));
+    let back: Prefs = serde_json::from_value(s.prefs.to_json()).unwrap();
+    assert!(back.low_latency_drawing);
+    let old: Prefs = serde_json::from_value(json!({"gpuPerformance": true})).unwrap();
+    assert!(!old.low_latency_drawing);
+    let l = s.execute("prefs.list", &json!({})).unwrap();
+    let row = l.as_array().unwrap().iter().find(|e| e["key"] == "lowLatencyDrawing").unwrap().clone();
+    assert_eq!(row["category"], "Performance");
+    assert_eq!(row["label"], "Low-Latency Drawing");
+    s.execute("prefs.reset", &json!({"category": "Performance"})).unwrap();
+    assert!(!s.prefs.low_latency_drawing);
+}
+
 /// Performance › Linux Display Server (#1151): automatic by default, X11 by value or label, and
 /// anything else is an error that changes nothing.
 #[test]

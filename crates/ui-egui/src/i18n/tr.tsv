@@ -5613,6 +5613,7 @@ lighting	Light	Işık
 @msg	missing panel layout	eksik panel düzeni
 @msg	unsupported native docking operation	desteklenmeyen yerel yerleştirme işlemi
 	Linux Display Server	Linux Görüntü Sunucusu
+	Low-Latency Drawing	Düşük Gecikmeli Çizim
 	X11 (XWayland)	X11 (XWayland)
 	Ruler Origin	Cetvelin Kökeni
 	Reset Ruler Origin	Cetvel Başlangıç Noktasını Sıfırla

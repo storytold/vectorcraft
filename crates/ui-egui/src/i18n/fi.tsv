@@ -4107,6 +4107,7 @@ theme	Appearance	Ulkoasu
 	Scroll Sideways with Cmd/Ctrl + Wheel	Vieritä vaakasuunnassa Cmd/Ctrl + hiiren rullalla
 	Scrub Numeric Fields by Dragging	Muuta numerokenttiä vetämällä
 	Linux Display Server	Linuxin näyttöpalvelin
+	Low-Latency Drawing	Pienen viiveen piirto
 	Print Preview	Tulostuksen esikatselu
 	Print Setup	Tulostusasetukset
 	Bitmap	Bittikartta
