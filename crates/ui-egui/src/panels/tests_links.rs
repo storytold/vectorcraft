@@ -219,6 +219,29 @@ fn opening_the_panel_on_the_selected_image_scrolls_to_its_row() {
     assert_eq!(drawn(&mut app, 6.0), before + 1, "the row scrolled into view");
 }
 
+/// Opening the panel on the selected image draws a list read after the request, so a row that a
+/// file change brought into the Show filter since the list was last read is there to scroll to.
+#[test]
+fn opening_the_panel_on_the_selected_image_reads_the_list_again() {
+    let dir = Folder::new("show-selected-fresh");
+    let (mut app, linked, _) = app(&dir);
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    // How many times the linked image's name is drawn: its row, and Link Info.
+    let drawn = |app: &mut VectorcraftApp, time: f64| {
+        let raw = egui::RawInput { time: Some(time), ..Default::default() };
+        let texts = super::tests_appearance::frame_raw(&ctx, app, raw, super::links::show);
+        texts.iter().filter(|(t, _)| t == "linked.png").count()
+    };
+    app.run("select.set", json!({"ids": [linked]})).unwrap();
+    click_menu_item(&mut app, &ctx, "Show Missing", 1.0);
+    assert_eq!(drawn(&mut app, 2.0), 1, "Link Info only: nothing is missing yet");
+    std::fs::remove_file(dir.0.join("linked.png")).unwrap();
+    // Within the time the panel keeps its list before it looks at the files again.
+    super::links::show_selected_image(&mut app, &ctx);
+    assert_eq!(drawn(&mut app, 2.1), 2, "the missing image's row and its Link Info are drawn");
+}
+
 /// Copy Info copies the file names of the selected links, or of `ids` in the order given, one per
 /// line; it is off with nothing selected, and a bad `ids` leaves the clipboard as it was.
 #[test]

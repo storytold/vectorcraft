@@ -96,6 +96,11 @@ pub(crate) fn show_selected_image(app: &mut VectorcraftApp, ctx: &egui::Context)
         _ => false,
     };
     set_pstate(ctx, "links-scroll-to", first);
+    // The list drawn next is read after this request, so a row a file change has just brought
+    // into the Show filter is there to scroll to.
+    let mut c: Cache = pstate(ctx, "links-cache");
+    c.at = f64::NEG_INFINITY;
+    set_pstate(ctx, "links-cache", c);
     set_options(ctx, |o| {
         o.info = true;
         if hidden {
