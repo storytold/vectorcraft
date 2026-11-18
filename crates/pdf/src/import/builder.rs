@@ -16,15 +16,19 @@ use super::{
 
 /// The most lines of type kept for a text-showing operator's stroke pass ([`Builder::park_text`]):
 /// beyond them the oldest is finished, and strokes over its glyphs come in as type of their own.
+/// They are the lines its fill pass finished, besides the open one: a `TJ` over up to 65 lines is
+/// filled and stroked, one over more is a filled object and a stroked one for each part.
 const MAX_PARKED: usize = 64;
 
 /// The most strokes of a stroke pass held to be matched to the glyphs they go over
-/// ([`Builder::hold_stroke`]): beyond them, those held are matched to the first glyphs filled one
-/// after another that they go over ([`Builder::replayed`]), and the pass goes on from there.
+/// ([`Builder::hold_stroke`]): beyond them, those held are matched to the last glyphs filled one
+/// after another that they go over, with as many glyphs filled from there on as strokes held
+/// ([`Builder::replayed`]), and the pass goes on from there.
 const MAX_HELD: usize = 4096;
 
 /// The most glyphs [`Builder::replayed`] compares to the strokes held, for bounded work on
-/// hostile input: beyond them, each stroke goes over the first glyph it may go over.
+/// hostile input: beyond them, each stroke goes over the first glyph it may go over after the one
+/// the stroke before it goes over.
 const MAX_REPLAY_WORK: usize = 1 << 20;
 
 fn is_colour_face(face: &vectorcraft_text::FontFace) -> bool {
@@ -622,16 +626,34 @@ impl<'p> Builder<'p> {
     }
 
     /// The glyphs the strokes `held` go over when they are the start of a stroke pass that goes
-    /// on after them ([`MAX_HELD`]): the first glyphs filled one right after another that they
-    /// may go over, in order. The pass replays its operator's fill pass, whose glyphs were
-    /// filled one right after another, so the strokes don't go over a glyph filled before those
-    /// (another operator's), nor skip one. `None` when there are none, or beyond
-    /// [`MAX_REPLAY_WORK`].
+    /// on after them ([`MAX_HELD`]): the last glyphs filled one right after another that they
+    /// may go over, in order, with at least as many glyphs filled from the first of them on as
+    /// there are strokes held. The pass replays its operator's fill pass, the glyphs filled
+    /// last, one right after another, right before the pass, so the strokes don't go over a
+    /// glyph filled before those, nor skip one. The device isn't told where an operator starts:
+    /// an operator before it that filled the same glyphs at the same places stays unstroked, as
+    /// the first glyphs of the pass are the last such run the pass still has room for. `None`
+    /// when there are none, or beyond [`MAX_REPLAY_WORK`].
     fn replayed(&self, held: &[HeldStroke]) -> Option<Vec<(usize, usize)>> {
         let (head, rest) = held.split_first()?;
         let mut work = 0usize;
-        let mut start = Some(head.first);
+        // The glyphs filled from `at` on, up to as many as there are strokes held.
+        let left = |(slot, i): (usize, usize)| {
+            (slot..=self.parked.len())
+                .filter_map(|s| self.line_at(s).map(|line| line.filled_len().saturating_sub(if s == slot { i } else { 0 })))
+                .fold(0usize, |n, len| n.saturating_add(len).min(held.len()))
+        };
+        let mut start = self.last_fill(None, head);
         while let Some(first) = start {
+            start = self.last_fill(Some(first), head);
+            work = work.saturating_add(1);
+            if work > MAX_REPLAY_WORK {
+                return None;
+            }
+            // Too few glyphs filled after it for the strokes held: not where the pass starts.
+            if left(first) < held.len() {
+                continue;
+            }
             let mut places = Vec::with_capacity(held.len());
             places.push(first);
             let mut at = first;
@@ -649,7 +671,6 @@ impl<'p> Builder<'p> {
             if places.len() == held.len() {
                 return Some(places);
             }
-            start = self.next_fill(Some(first), head);
         }
         None
     }

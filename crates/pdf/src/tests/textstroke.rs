@@ -501,3 +501,44 @@ fn a_tj_over_more_lines_than_are_kept_comes_in_as_fill_and_stroke_apart() {
     let want: Vec<_> = std::iter::repeat_n(fill, 66).chain(std::iter::repeat_n(stroke, 66)).collect();
     assert_eq!(type_runs(&content(66)), want);
 }
+
+/// The start and end of an ActualText span end the stroke pass of the glyphs filled before them,
+/// for the stroke over the glyph filled last too: a stroke after the span over the glyph its
+/// replacement text came with, or over a glyph filled before an empty span, is type of its own,
+/// and the glyph keeps its fill only (#8543).
+#[test]
+fn a_stroke_after_an_actual_text_span_does_not_take_a_glyph_filled_before_it() {
+    let run = |text: &str, fill: bool, stroke: bool| vec![(text.to_string(), fill, stroke)];
+    let cases = [
+        "/Span << /ActualText (A) >> BDC 1 0 0 1 20 80 Tm (A) Tj EMC 1 Tr 1 0 0 1 20 80 Tm (A) Tj",
+        "1 0 0 1 20 80 Tm (A) Tj /Span << /ActualText (B) >> BDC EMC 1 Tr 1 0 0 1 20 80 Tm (A) Tj",
+    ];
+    for show in cases {
+        let content = format!("BT /F1 48 Tf 0 Tr {show} 0 Tr ET");
+        assert_eq!(type_runs(&content), [run("A", true, false), run("A", false, true)], "{content}");
+    }
+}
+
+/// A glyph stroked twice where it was drawn, by stroke rendering or by fill and stroke rendering
+/// then stroke rendering, is one type object, as before: a stroke over the glyph drawn last
+/// restyles it when nothing ended its stroke pass (#7741, #8015).
+#[test]
+fn a_glyph_stroked_again_where_it_was_drawn_stays_one_type_object() {
+    for (show, fill) in [("1 Tr (A) Tj", false), ("2 Tr (A) Tj", true)] {
+        let content = format!("BT /F1 48 Tf {show} 1 Tr 1 0 0 1 20 80 Tm (A) Tj 0 Tr ET").replace("Tf ", "Tf 1 0 0 1 20 80 Tm ");
+        assert_eq!(type_runs(&content), [vec![("A".to_string(), fill, true)]], "{content}");
+    }
+}
+
+/// A stroke pass longer than the importer holds at once ([`MAX_HELD`] strokes) goes over its own
+/// operator's glyphs, filled right before it, also when an operator before it filled the same
+/// glyphs at the same places: `A` and 4,095 `B`s filled, then `A` and 4,096 `B`s filled and
+/// stroked from the same place strokes the second operator's glyphs, not the first one's (#8543).
+#[test]
+fn a_long_stroke_pass_does_not_take_the_same_glyphs_filled_by_an_operator_before() {
+    let (before, now) = ("B".repeat(4095), "B".repeat(4096));
+    let content = format!("BT /F1 2 Tf 1 0 0 1 20 80 Tm 0 Tr (A{before}) Tj 1 0 0 1 20 80 Tm 2 Tr (A{now}) Tj 0 Tr ET");
+    let looks: Vec<Vec<(String, bool, bool)>> = type_runs(&content);
+    let want = [vec![(format!("A{before}"), true, false)], vec![(format!("A{now}"), true, true)]];
+    assert!(looks == want, "{:?}", looks.iter().map(|t| t.iter().map(|r| (r.0.len(), r.1, r.2)).collect::<Vec<_>>()).collect::<Vec<_>>());
+}

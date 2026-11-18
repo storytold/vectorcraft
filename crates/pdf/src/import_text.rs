@@ -244,6 +244,10 @@ pub(crate) struct TextLine {
     pending: Option<PendingStroke>,
     /// The last glyph's placement.
     last_at: Placement,
+    /// The last glyph was drawn before a boundary of stroke passes ([`end_fills`](Self::end_fills)):
+    /// no stroke drawn since goes over it, not even as the glyph just drawn
+    /// ([`stroke_last`](Self::stroke_last)).
+    last_closed: bool,
     /// The first glyph was set vertically ([`Upright`]).
     upright: Option<Upright>,
     /// The glyphs make a column (vertical type), each below the last.
@@ -336,6 +340,7 @@ impl TextLine {
             stroked: 0,
             pending: None,
             last_at: at,
+            last_closed: false,
             upright: None,
             column: false,
             ink: vec![],
@@ -385,6 +390,7 @@ impl TextLine {
             self.record_filled(look, at, content);
             self.authored.extend(text.chars().map(|_| content.authored()));
             (self.upright, self.next, self.last, self.last_at) = (Some(upright), at.origin + down * at.size, at.origin, at);
+            self.last_closed = false;
             return true;
         };
         let across = (at.origin - self.at.origin).dot(self.at.dir);
@@ -424,6 +430,7 @@ impl TextLine {
         self.next = at.origin + down * at.size;
         self.last = at.origin;
         self.last_at = at;
+        self.last_closed = false;
         true
     }
 
@@ -536,6 +543,7 @@ impl TextLine {
         }
         self.last = at.origin;
         self.last_at = at;
+        self.last_closed = false;
         self.last_dir = at.dir;
         self.last_size = at.size;
         self.baseline.push(at.origin);
@@ -726,9 +734,11 @@ impl TextLine {
 
     /// No stroke drawn from now on goes over a glyph the line filled so far: a stroke pass does
     /// not go back past a stroke of its own (one over no glyph filled) or the start or end of an
-    /// ActualText span ([`stroke_filled`](Self::stroke_filled)).
+    /// ActualText span ([`stroke_filled`](Self::stroke_filled)). Nor does one restyle the glyph
+    /// drawn last ([`stroke_last`](Self::stroke_last)).
     pub fn end_fills(&mut self) {
         self.stroked = self.filled.len();
+        self.last_closed = true;
     }
 
     /// Restyle the glyphs gathered for a stroke ([`stroke_filled`](Self::stroke_filled)): their
@@ -811,7 +821,14 @@ impl TextLine {
     /// ([`Look::takes`]): then the glyph's text becomes a run of its own with this stroke, and
     /// the glyphs before it stay unstroked (#7741). The line's text is the same either way, so
     /// the characters' slots, gaps and authored flags, kept along the whole line, still line up.
+    ///
+    /// Not a glyph drawn before a boundary of stroke passes ([`end_fills`](Self::end_fills)):
+    /// a stroke after the end of an ActualText span would otherwise stroke the span's replacement
+    /// text, and one after its start a glyph filled before the span (#8543).
     fn stroke_last(&mut self, font: u128, at: Placement, glyph: &str, stroke: TypeStroke, overprint: bool) -> bool {
+        if self.last_closed {
+            return false;
+        }
         self.flush_stroke();
         let start = self.last_start;
         let last_at = self.last_at;
