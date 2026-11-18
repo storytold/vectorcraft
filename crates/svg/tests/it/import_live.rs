@@ -2,6 +2,7 @@
 //! with `<use>` a symbol and its instances, blurs and drop-shadow chains live effects; and
 //! export → import keeps them.
 
+use craft_svg::tree::draw::resvg;
 use std::sync::Arc;
 
 use serde_json::json;

@@ -53,7 +53,15 @@ pub fn specs() -> Vec<CommandSpec> {
             has_doc,
             style_delete
         ),
-        cmd!("graphicStyle.duplicate", "Duplicate Graphic Style", ["Window", "Graphic Styles"], None, "{name} → {name}", has_doc, style_duplicate),
+        cmd!(
+            "graphicStyle.duplicate",
+            "Duplicate Graphic Style",
+            ["Window", "Graphic Styles"],
+            None,
+            "{name} a copy of the style at the end of the list, named `<name> copy` (`<name> copy 2`… when that is taken); no object is linked to it → {name}",
+            has_doc,
+            style_duplicate
+        ),
         cmd!(
             query "graphicStyle.list",
             "List Graphic Styles",
@@ -310,8 +318,14 @@ impl Session {
     /// it is still linked (still has that style's look). A graph series group that holds nothing of its own stands
     /// for the topmost path directly inside it, which a style applied to the group links.
     pub fn selection_graphic_style(&self) -> Option<(&GraphicStyle, bool)> {
+        self.graphic_style_of(*self.active()?.selection.subjects().first()?)
+    }
+
+    /// The graphic style of object `id` of the active document, as [`Self::selection_graphic_style`]
+    /// gives it for the first selected object.
+    pub fn graphic_style_of(&self, id: NodeId) -> Option<(&GraphicStyle, bool)> {
         let st = self.active()?;
-        let n = super::appearance::look_holder(&st.doc, st.doc.node(*st.selection.subjects().first()?)?);
+        let n = super::appearance::look_holder(&st.doc, st.doc.node(id)?);
         let g = st.doc.graphic_style_by_id(n.extras().graphic_style?)?;
         Some((g, in_sync(n, g)))
     }
@@ -431,7 +445,7 @@ fn style_duplicate(s: &mut Session, p: &Value) -> Result<Value> {
         let pos = style_index(d, &name)?;
         let nm = unique_name(&format!("{name} copy"), |n| d.graphic_style(n).is_some());
         let g = GraphicStyle { name: nm.clone(), id: d.next_graphic_style_id(), ..d.graphic_styles[pos].clone() };
-        d.graphic_styles.insert(pos + 1, g);
+        d.graphic_styles.push(g);
         Ok(nm)
     })?;
     Ok(json!({"name": new}))

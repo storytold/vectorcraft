@@ -33,12 +33,12 @@ const STRIP_BUTTON: egui::Vec2 = vec2(32.0, PITCH);
 
 /// The Basic toolbar: (category, slots); each slot is a flyout group (first = default).
 pub const BASIC: &[(&str, &[&[&str]])] = &[
-    ("Select", &[&["selection"], &["directSelection", "groupSelection"], &["lasso", "magicWand"]]),
+    ("Select", &[&["selection"], &["directSelection", "groupSelection"], &["lasso", "enclosingLasso", "magicWand"]]),
     (
         "Shapes",
         &[
             &["rectangle", "roundedRectangle", "star", "lineSegment", "arc", "spiral", "rectangularGrid", "polarGrid", "flare"],
-            &["ellipse"],
+            &["ellipse", "circle"],
             &["polygon"],
             &["shaper"],
         ],
@@ -47,7 +47,7 @@ pub const BASIC: &[(&str, &[&[&str]])] = &[
         "Draw",
         &[
             &["pencil", "smooth", "pathEraser", "join"],
-            &["eraser", "scissors", "knife", "mirrorCut", "lineCut", "rectCut"],
+            &["eraser", "scissors", "knife", "trimAtCrossings", "mirrorCut", "lineCut", "rectCut"],
             &["paintbrush", "blobBrush"],
             &["pen", "addAnchor", "deleteAnchor", "anchorPoint"],
             &["curvature"],
@@ -127,21 +127,20 @@ pub(crate) fn docked_width(ui: &crate::state::UiState) -> f32 {
     }
 }
 
-/// With `UiState::tools_beside_canvas` on, the canvas-edge redocking target, registered even
-/// while Tools floats, and the docked panel, which follows the canvas's left edge as dock columns
-/// resize, collapse or hide. With it off, `app.rs` draws Tools before the docking layout.
+/// The canvas-edge redocking targets, registered even while Tools floats, whichever way
+/// `UiState::tools_beside_canvas` is (a drop on the left one turns it on), and, with it on, the
+/// docked panel, which follows the canvas's left edge as dock columns resize, collapse or hide.
+/// With it off, `app.rs` draws Tools before the docking layout.
 ///
-/// The canvas's right edge, left of the panels, is a redocking target too, and Tools docked there
-/// (`UiState::toolbar_right`) is drawn at it whichever way the setting is.
+/// Tools docked on the canvas's right edge, left of the panels (`UiState::toolbar_right`), is
+/// drawn there whichever way the setting is.
 pub(crate) fn show_beside_canvas(app: &mut VectorcraftApp, ui: &mut Ui) {
     if !app.ui.toolbar || app.ui.screen_mode >= 3 {
         return;
     }
     let canvas = ui.available_rect_before_wrap();
     crate::tools_float::set_right_dock_zone(ui.ctx(), canvas, WIDTH);
-    if app.ui.tools_beside_canvas {
-        crate::tools_float::set_dock_zones(ui.ctx(), canvas, WIDTH);
-    }
+    crate::tools_float::set_dock_zones(ui.ctx(), canvas, WIDTH);
     if app.ui.toolbar_pos.is_none() && (app.ui.tools_beside_canvas || app.ui.toolbar_right) {
         show(app, ui);
     }
@@ -1212,7 +1211,7 @@ fn puppet_warp_options(app: &mut VectorcraftApp, ui: &mut Ui, reserve: f32) {
         ui.label(text);
         let unit = app.session.general_unit();
         if let Some(v) = widgets::num_field(ui, ("cb-tool", "expand"), opts["expand"].as_f64(), unit, 64.0) {
-            app.run("tool.setOption", json!({ "key": "expand", "value": v })).ok();
+            app.run("tool.setOption", json!({ "key": "expand", "value": v.clamp(0.0, 1000.0) })).ok();
         }
     }
     let show = opts["showMesh"].as_bool().unwrap_or(true);
