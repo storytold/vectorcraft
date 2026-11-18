@@ -4370,6 +4370,7 @@ theme	Appearance	Vormgeving
 	90° & 45° Angles	Hoeken van 90° & 45°
 	90° Angles	Hoeken van 90°
 	Additional Plug-ins Folder	Extra map met plug-ins
+	Plug-in Instruction Budget	Instructiebudget voor plug-ins
 	Additional Fonts Folder	Extra map met lettertypen
 	Alignment Guides	Uitlijnhulplijnen
 	Anchor Points, Handle, and Bounding Box Display	Weergave van ankerpunten, greep en begrenzingskader
@@ -4884,6 +4885,9 @@ font-technology	Variable	Variabel
 	Search commands, tools, panels and effects…	Opdrachten, gereedschappen, panelen en effecten zoeken…
 	No commands match	Geen opdrachten gevonden
 	{pos} of {total}: {name}	{pos} van {total}: {name}
+	No menu item	Geen menu-item
+	Toolbar	Gereedschapsbalk
+	{toolbar}, in the {tool} group	{toolbar}, in de groep {tool}
 @plural	{n} result|{n} results	{n} resultaat|{n} resultaten
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} van {n} resultaat. Typ verder om ze te beperken.|{shown} van {n} resultaten. Typ verder om ze te beperken.
 	Recent Commands	Recente opdrachten
@@ -6488,6 +6492,7 @@ imageTrace	Outline	Contour
 @msg	a linked JavaScript file is outside the read roots	een gekoppeld JavaScript-bestand staat buiten de leesroots
 @msg	a linked image file is outside the read roots	een gekoppeld afbeeldingsbestand staat buiten de leesroots
 @msg	a linked file's export folder is outside the read roots	de exportmap van een gekoppeld bestand staat buiten de leesroots
+@msg	a linked file's editing data can't be read to check it against the read roots	de bewerkingsgegevens van een gekoppeld bestand kunnen niet worden gelezen om ze aan de leesroots te toetsen
 @msg	a name names one asset: give multiple: false, or one object	een naam noemt één asset: geef multiple: false, of één object
 @msg	a namespace declaration uses a reserved prefix or URI	een naamruimtedeclaratie gebruikt een gereserveerd voorvoegsel of een gereserveerde URI
 @msg	a namespace qualifier is undefined	een naamruimtekwalificatie is niet gedefinieerd
