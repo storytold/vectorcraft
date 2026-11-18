@@ -88,7 +88,7 @@ pub(super) fn bottom_bar(app: &mut VectorcraftApp, ui: &mut Ui, view: &View, doc
             actions.push(("layer.new".into(), json!({"top": m.command})));
         }
     }
-    // Rows dropped on the trash are deleted, on New Layer duplicated, as in Illustrator. Both are
+    // Rows dropped on the trash are deleted, on New Layer duplicated. Both are
     // outlined while rows (or, on the trash, a target circle) hang over them. Guide rows dropped on
     // the trash delete their guides (`guide.remove`); New Layer does not take them.
     for (button, cmd) in [(&trash, "ui.layerDelete"), (&new_layer, "layer.duplicate")] {
@@ -123,8 +123,11 @@ pub(super) fn bottom_bar(app: &mut VectorcraftApp, ui: &mut Ui, view: &View, doc
     if widgets::icon_button(&mut child, "frame", tl!("Make/Release Clipping Mask"), false, 24.0).clicked() {
         actions.push(("layer.clippingMask.toggle".into(), json!({})));
     }
-    if widgets::icon_button(&mut child, "search", tl!("Locate Object"), false, 24.0).clicked() {
-        actions.push(("layer.locate".into(), json!({})));
+    // With Show Layers Only on, Locate Object becomes Locate Layer: it highlights the layer row.
+    let layers_only = view.opts.layers_only;
+    let locate = if layers_only { tl!("Locate Layer") } else { tl!("Locate Object") };
+    if widgets::icon_button(&mut child, "search", locate, false, 24.0).clicked() {
+        actions.push(("layer.locate".into(), json!({ "layersOnly": layers_only })));
     }
 }
 
@@ -139,6 +142,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let current = st.current_layer();
     let has_sel = !st.selection.is_empty();
     let isolated = st.isolation.is_some();
+    let layers_only = app.ui.layers_panel.layers_only;
     let targets: Vec<NodeId> = if rows.is_empty() { listed_current_layer(st).into_iter().collect() } else { rows.clone() };
     let (new_layer_ok, new_sublayer_ok) = (!new_layer_unlisted(st, false, false), !new_layer_unlisted(st, true, false));
     // A copy of the isolated node goes beside it, outside the isolated art.
@@ -176,7 +180,11 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     });
     items.extend([
         None,
-        Some(("Locate Object", "layer.locate", json!({}), has_sel, false)),
+        Some(if layers_only {
+            ("Locate Layer", "layer.locate", json!({"layersOnly": true}), has_sel, false)
+        } else {
+            ("Locate Object", "layer.locate", json!({}), has_sel, false)
+        }),
         // Sentinel: rendered as the Save Selection submenu (the Select menu's saved-selection items).
         Some(("Save Selection", "", json!({}), true, false)),
         None,
