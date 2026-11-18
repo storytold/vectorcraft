@@ -3255,6 +3255,8 @@ digits	Malayalam	Malayálam
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Cuánto debe acercarse en pantalla el puntero o un punto arrastrado a la ilustración para que las guías inteligentes se ajusten a ella; la distancia es la misma con cualquier zoom.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Ajusta el extremo de un segmento de línea, o un círculo dibujado desde su centro, para que toque una curva cercana.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Ajusta el extremo de un segmento de línea para que encuentre un segmento recto cercano en ángulo recto.
+	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Muestra en el lienzo el número de cada sector en un recuadro en su esquina superior izquierda; si está desactivado, los contornos de los sectores siguen visibles.
+	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	El color de los contornos de los sectores de usuario y de objeto y de los recuadros con su número; los sectores automáticos usan un tono más apagado de ese color.
 	Reset all preferences to their defaults?	¿Restablecer todas las preferencias a sus valores predeterminados?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Los valores predeterminados se aplican al hacer clic en Aceptar en Preferencias. Cancelar ahí conserva sus preferencias actuales.
 	Restore Recovered Documents	Restaurar documentos recuperados

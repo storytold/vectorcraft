@@ -3310,6 +3310,8 @@
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	સ્માર્ટ ગાઇડ સ્નેપ કરે તે માટે પોઇન્ટર અથવા ખેંચેલું બિંદુ સ્ક્રીન પર આર્ટની કેટલું નજીક આવવું જોઈએ; આ અંતર દરેક ઝૂમ પર સમાન રહે છે.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	લાઇન સેગમેન્ટના છેડાને, અથવા કેન્દ્રથી દોરેલા વર્તુળને, એ રીતે સ્નેપ કરે છે કે તે નજીકના વળાંકને સ્પર્શે.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	લાઇન સેગમેન્ટના છેડાને એ રીતે સ્નેપ કરે છે કે તે નજીકના સીધા સેગમેન્ટને કાટખૂણે મળે.
+	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	કેનવાસ પર દરેક સ્લાઇસનો નંબર તેના ઉપરના ડાબા ખૂણે એક બૉક્સમાં બતાવે છે; બંધ હોય ત્યારે પણ સ્લાઇસની રૂપરેખાઓ દેખાય છે.
+	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	યુઝર અને ઑબ્જેક્ટ સ્લાઇસની રૂપરેખાઓ અને તેમના નંબર બૉક્સનો રંગ; ઑટો સ્લાઇસ તેની ઝાંખી છાયા વાપરે છે.
 	Restored documents open unsaved: save them to keep them.	પુનઃસ્થાપિત દસ્તાવેજો અસાચવેલા ખુલશે: તેમને રાખવા માટે સાચવો.
 	Restrict printing, editing and other tasks	છાપકામ, સંપાદન અને અન્ય કાર્યો પર પ્રતિબંધ મૂકો
 	Reticulation…	રેટિક્યુલેશન…
