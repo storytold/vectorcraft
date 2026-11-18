@@ -468,9 +468,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 
 /// A press arriving with an invalidated sampler and its release belong to that cancelled pick.
 fn input_after_sampler_refresh(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: egui::Rect, cancelled: bool) {
-    let (pressed, released, down, any_pressed) = ui.input(|i| {
-        (i.pointer.primary_pressed(), i.pointer.primary_released(), i.pointer.primary_down(), i.pointer.any_pressed())
-    });
+    let (pressed, released, down, any_pressed) =
+        ui.input(|i| (i.pointer.primary_pressed(), i.pointer.primary_released(), i.pointer.primary_down(), i.pointer.any_pressed()));
     let consumed_primary = ui.data_mut(|data| {
         let id = resp.id.with("image-trace-consumed-primary");
         // A fresh press replaces any ownership whose release this canvas did not observe.
