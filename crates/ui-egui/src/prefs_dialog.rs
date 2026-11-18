@@ -1,4 +1,4 @@
-//! Edit → Preferences (⌘K): Illustrator-style category list + fields, rendered from the engine's
+//! Edit → Preferences (⌘K): a category list + its fields, rendered from the engine's
 //! preference table ([`PREF_SPECS`]). The dialog edits a working copy in `Dialog::fields`
 //! (one field per preference key, so agents can `ui.dialog.set` any of them) and OK applies it
 //! through `prefs.set`. Also: persistence of engine prefs inside `UiState` and the per-frame
