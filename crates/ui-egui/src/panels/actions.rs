@@ -2281,6 +2281,76 @@ fn replace_sets(app: &mut VectorcraftApp, sets: Vec<ActionSet>) -> bool {
     true
 }
 
+/// The command that deletes every action set in the panel ([`clear`]).
+pub const CLEAR: &str = "ui.actionSet.clear";
+
+/// The panel menu's Clear Actions: asks whether to delete every set, naming them by their ids
+/// ([`ActionSet::id`]), so OK deletes only the sets that were there when the question opened.
+fn ask_clear(app: &mut VectorcraftApp) {
+    let ids: Vec<u64> = app.ui.action_sets.iter().map(|s| s.id).collect();
+    crate::dialogs::confirm::ask(app, tl!("Delete all action sets and their actions?"), "", CLEAR, json!({ "ids": ids }));
+}
+
+/// `ui.actionSet.clear {ids?: [id]}`: Clear Actions. Deletes every set in the panel with its
+/// actions, the built-in Default Actions set included, so no set is current or selected; the
+/// panel's selected action and step, its expanded actions and a step being dragged are cleared, and
+/// an open Set Options, New Action, Batch or step dialog that names a set closes. `ids` holds the
+/// panel's own set ids in panel order, which the menu's question passes: when the sets are no
+/// longer exactly those, nothing is deleted. With no sets, nothing changes. Omitted params (`null`)
+/// count as `{}`. Params of another type, another key, `ids` that is not a list of ids, or a clear
+/// while an action records or plays (also while it waits at a stop) is an error, and then nothing
+/// changes. No undo step is recorded. → {cleared: the number of sets deleted}
+pub fn clear(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    const SELECTED: &str = "actions-selected";
+    const EXPANDED: &str = "actions-expanded";
+    let ids = match p {
+        Value::Null => None,
+        Value::Object(m) => {
+            if let Some(key) = m.keys().find(|k| *k != "ids") {
+                let keys = "ids";
+                return Err(format!("unknown parameter `{key}`; the command takes: {keys}"));
+            }
+            match m.get("ids") {
+                None => None,
+                Some(v) => Some(
+                    v.as_array()
+                        .ok_or("the action set ids are not a list")?
+                        .iter()
+                        .map(|id| id.as_u64().ok_or("the action set ids are not a list"))
+                        .collect::<Result<Vec<u64>, _>>()?,
+                ),
+            }
+        }
+        got => return Err(format!("the params must be an object, not {got}")),
+    };
+    if app.ui.recording.is_some() {
+        return Err("an action is already recording".into());
+    }
+    if app.ui.action_playing.is_some() {
+        return Err("an action is already playing".into());
+    }
+    if ids.is_some_and(|ids| !ids.iter().copied().eq(app.ui.action_sets.iter().map(|s| s.id))) {
+        return Err("the action sets changed; nothing was deleted".into());
+    }
+    let cleared = app.ui.action_sets.len();
+    if cleared == 0 {
+        return Ok(json!({ "cleared": 0 }));
+    }
+    app.ui.action_sets.clear();
+    app.ui.action_set = None;
+    app.ui.action_sets_selected.clear();
+    if app.ui.dialog.as_ref().is_some_and(holds_set) {
+        app.ui.dialog = None;
+    }
+    if let Some(ctx) = app.ui_ctx.clone() {
+        set_pstate::<Option<(usize, usize)>>(&ctx, SELECTED, None);
+        set_pstate::<Option<(u64, usize)>>(&ctx, SELECTED_STEP, None);
+        set_pstate::<Option<DraggedStep>>(&ctx, DRAGGED_STEP, None);
+        set_pstate(&ctx, EXPANDED, BTreeSet::<u64>::new());
+    }
+    Ok(json!({ "cleared": cleared }))
+}
+
 /// The panel's (≡) menu.
 pub fn menu(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     // Button Mode is off while an action records, so the Stop button the list shows stays in reach.
@@ -2378,6 +2448,10 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
         {
             app.status(e);
         }
+    }
+    // Asks first: OK deletes every set. Off with no sets and while an action records or plays.
+    if widgets::menu_item(ui, tl!("Clear Actions"), idle && !app.ui.action_sets.is_empty(), false) {
+        ask_clear(app);
     }
     // Asks first: OK replaces the sets with the built-in set, Append adds it after them.
     if widgets::menu_item(ui, tl!("Reset Actions"), idle, false) {
@@ -4049,6 +4123,168 @@ mod tests {
         for mode in ["replace", "append"] {
             assert_eq!(app.run(RESET, json!({ "mode": mode })).unwrap_err(), "an action is already playing");
         }
+        assert_eq!(saved_sets(&app.ui.action_sets), before, "the playing set stays");
+    }
+
+    /// The panel menu's Clear Actions asks before it deletes anything, naming the sets by their ids:
+    /// Cancel keeps every set, and OK deletes every set, the built-in one included, and the selected
+    /// action with them, so Batch… and Play Current Selection are off afterwards. The item is off
+    /// with no sets and while an action records or plays, waiting at a stop included.
+    #[test]
+    fn the_panel_menus_clear_actions_asks_first_and_ok_deletes_every_set() {
+        let ctx = egui::Context::default();
+        let mut app = app_with_sets();
+        app.ui.action_set = Some(1);
+        let before = saved_sets(&app.ui.action_sets);
+        let ids: Vec<u64> = app.ui.action_sets.iter().map(|s| s.id).collect();
+        menu_click(&ctx, &mut app, "Clear Actions");
+        let d = app.ui.dialog.as_ref().expect("Clear Actions asks first");
+        assert_eq!((d.kind.as_str(), d.str("__command")), (crate::dialogs::confirm::KIND, CLEAR.to_string()));
+        assert_eq!(d.str("message"), "Delete all action sets and their actions?");
+        assert_eq!(d.fields["__params"], json!({ "ids": ids }));
+        assert_eq!(saved_sets(&app.ui.action_sets), before, "asking changes no set");
+        crate::dialogs::cancel(&mut app);
+        assert!(app.ui.dialog.is_none());
+        assert_eq!(saved_sets(&app.ui.action_sets), before, "Cancel keeps every set");
+        assert_eq!(app.ui.action_set, Some(1));
+
+        app.ui_ctx = Some(ctx.clone());
+        set_pstate::<Option<(usize, usize)>>(&ctx, "actions-selected", Some((1, 0)));
+        menu_click(&ctx, &mut app, "Clear Actions");
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert!(app.ui.action_sets.is_empty(), "OK deletes every set, the built-in one included");
+        assert_eq!(app.ui.action_set, None);
+        assert!(app.ui.dialog.is_none());
+        for label in ["Clear Actions", "Batch…", "Play Current Selection", "Duplicate", "Set Options…"] {
+            menu_click(&ctx, &mut app, label);
+            let idle = app.ui.dialog.is_none() && app.ui.action_playing.is_none() && app.ui.action_sets.is_empty();
+            assert!(idle, "{label} is off with no sets");
+        }
+
+        let mut app = app_with_sets();
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        app.run(START_RECORDING, json!({})).unwrap();
+        menu_click(&ctx, &mut app, "Clear Actions");
+        assert!(app.ui.dialog.is_none(), "off while an action records");
+        app.run(STOP_RECORDING, json!({})).unwrap();
+
+        let (mut app, _) = app_with_a_stop(true);
+        play(&mut app, 0, 0).unwrap();
+        assert!(waiting_at_stop(&app));
+        app.ui.dialog = None;
+        menu_click(&ctx, &mut app, "Clear Actions");
+        assert!(app.ui.dialog.is_none(), "off while playback waits at a stop");
+    }
+
+    /// `ui.actionSet.clear` deletes every set (the built-in one edited, the others and a loaded
+    /// one), leaves no set current or selected, clears the panel's selected action and step,
+    /// expanded actions and a dragged step, closes a dialog that holds a set index and records no
+    /// undo step. A clear with no sets changes nothing, the empty list stays empty after a save
+    /// and a restart, a dialog that names no set stays open, and Load Actions… and Reset Actions
+    /// add sets again. Thousands of sets go in one clear.
+    #[test]
+    fn clear_deletes_every_set_and_clears_what_named_them() {
+        let mut app = app_with_sets();
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+        let undo = undo_steps(&app);
+        app.ui.action_sets[0].name = "Renamed".into();
+        let loaded = files::write_set(&app.ui.action_sets[1]);
+        app.run(LOAD_SET, json!({ "data": loaded })).unwrap();
+        assert_eq!(app.ui.action_sets.len(), 4);
+        app.ui.action_set = Some(2);
+        app.ui.action_sets_selected = vec![1, 2];
+        let ctx = egui::Context::default();
+        app.ui_ctx = Some(ctx.clone());
+        let nudge = app.ui.action_sets[1].actions[1].id;
+        set_pstate::<Option<(usize, usize)>>(&ctx, "actions-selected", Some((1, 1)));
+        set_pstate::<Option<(u64, usize)>>(&ctx, SELECTED_STEP, Some((nudge, 0)));
+        set_pstate(&ctx, "actions-expanded", BTreeSet::from([nudge]));
+        let dragged: DraggedStep = (nudge, 0, std::sync::Arc::new((vec![], BTreeSet::new())));
+        set_pstate::<Option<DraggedStep>>(&ctx, DRAGGED_STEP, Some(dragged));
+        crate::dialogs::action_batch::open(&mut app, 1, 1).unwrap();
+
+        assert_eq!(app.run(CLEAR, json!({})).unwrap(), json!({"cleared": 4}));
+        assert!(app.ui.action_sets.is_empty());
+        assert_eq!((app.ui.action_set, app.ui.action_sets_selected.clone()), (None, vec![]), "no set is current or selected");
+        assert_eq!(pstate::<Option<(usize, usize)>>(&ctx, "actions-selected"), None);
+        assert_eq!(pstate::<Option<(u64, usize)>>(&ctx, SELECTED_STEP), None);
+        assert!(pstate::<BTreeSet<u64>>(&ctx, "actions-expanded").is_empty());
+        assert!(pstate::<Option<DraggedStep>>(&ctx, DRAGGED_STEP).is_none());
+        assert!(app.ui.dialog.is_none(), "the Batch dialog of a deleted set closes");
+        assert_eq!(undo_steps(&app), undo, "no undo step");
+
+        assert_eq!(app.run(CLEAR, Value::Null).unwrap(), json!({"cleared": 0}), "nothing left to clear");
+        assert_eq!(app.run(CLEAR, json!({"ids": []})).unwrap(), json!({"cleared": 0}));
+        assert!(app.ui.action_sets.is_empty());
+        let restarted: crate::UiState = serde_json::from_value(serde_json::to_value(&app.ui).unwrap()).unwrap();
+        assert!(restarted.action_sets.is_empty(), "no sets after a restart either");
+        assert_eq!(restarted.action_set, None);
+
+        app.run(LOAD_SET, json!({ "data": loaded })).unwrap();
+        assert_eq!(set_names(&app), ["Mine"], "Load Actions… adds a set again");
+        crate::dialogs::action_set_options::open_new(&mut app);
+        assert_eq!(app.run(CLEAR, json!({})).unwrap(), json!({"cleared": 1}));
+        assert!(app.ui.dialog.is_some(), "a New Set dialog names no set and stays open");
+        app.ui.dialog = None;
+        assert_eq!(app.run(RESET, json!({"mode": "append"})).unwrap()["set"], 0);
+        assert_eq!(saved_sets(&app.ui.action_sets), saved_sets(&default_sets()), "Reset Actions adds the built-in set again");
+
+        app.ui.action_sets.extend((0..5000).map(|i| ActionSet::new(format!("Set {i}"), vec![])));
+        assert_eq!(app.run(CLEAR, json!({})).unwrap(), json!({"cleared": 5001}));
+        assert!(app.ui.action_sets.is_empty());
+    }
+
+    /// `ui.actionSet.clear` refuses params that are not an object, another key, `ids` that is not a
+    /// list of ids (`null` included), `ids` that are not exactly the panel's sets in order (a set added after the
+    /// question opened included), and a clear while an action records or plays, waiting at a stop
+    /// included, and then deletes no set and keeps the current set.
+    #[test]
+    fn clear_refuses_bad_params_changed_sets_and_a_running_action() {
+        let mut app = app_with_sets();
+        app.ui.action_set = Some(1);
+        let ids: Vec<u64> = app.ui.action_sets.iter().map(|s| s.id).collect();
+        let before = saved_sets(&app.ui.action_sets);
+        let changed = "the action sets changed; nothing was deleted";
+        let not_ids = "the action set ids are not a list";
+        for (p, error) in [
+            (json!(1), "the params must be an object, not 1"),
+            (json!("all"), "the params must be an object, not \"all\""),
+            (json!([]), "the params must be an object, not []"),
+            (json!({"sets": [0]}), "unknown parameter `sets`; the command takes: ids"),
+            (json!({"ids": 5}), not_ids),
+            (json!({"ids": null}), not_ids),
+            (json!({"ids": [ids[0], "x"]}), not_ids),
+            (json!({"ids": [-1]}), not_ids),
+            (json!({"ids": []}), changed),
+            (json!({"ids": [ids[0], ids[1]]}), changed),
+            (json!({"ids": [ids[2], ids[1], ids[0]]}), changed),
+            (json!({"ids": [ids[0], ids[1], ids[2], ids[2]]}), changed),
+        ] {
+            assert_eq!(app.run(CLEAR, p.clone()).unwrap_err(), error, "{p}");
+            assert_eq!(saved_sets(&app.ui.action_sets), before, "{p} changes nothing");
+            assert_eq!(app.ui.action_set, Some(1));
+        }
+        let asked = json!({ "ids": ids });
+        app.ui.action_sets.push(ActionSet::new("Later", vec![]));
+        assert_eq!(app.run(CLEAR, asked.clone()).unwrap_err(), changed);
+        assert_eq!(set_names(&app), ["Default Actions", "Mine", "Other", "Later"], "a set added after the question keeps every set");
+        app.ui.action_sets.pop();
+        assert_eq!(app.run(CLEAR, asked).unwrap(), json!({"cleared": 3}), "the sets the question named");
+
+        let mut app = app_with_sets();
+        let before = saved_sets(&app.ui.action_sets);
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        app.run(START_RECORDING, json!({})).unwrap();
+        assert_eq!(app.run(CLEAR, json!({})).unwrap_err(), "an action is already recording");
+        assert_eq!(saved_sets(&app.ui.action_sets), before, "a recording keeps its set");
+        app.run(STOP_RECORDING, json!({})).unwrap();
+
+        let (mut app, _) = app_with_a_stop(true);
+        let before = saved_sets(&app.ui.action_sets);
+        play(&mut app, 0, 0).unwrap();
+        assert!(waiting_at_stop(&app));
+        assert_eq!(app.run(CLEAR, json!({})).unwrap_err(), "an action is already playing");
         assert_eq!(saved_sets(&app.ui.action_sets), before, "the playing set stays");
     }
 
