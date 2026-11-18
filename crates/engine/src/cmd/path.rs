@@ -1,10 +1,10 @@
 //! Path editing commands (used by the Pen and Direct Selection tools and Object → Path).
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{Document, Node, NodeId, NodeKind, Scaling, Selection};
+use vectorcraft_doc::{AnchorRef, Document, Node, NodeId, NodeKind, Scaling, Selection};
 use vectorcraft_geom::{Anchor, AnchorKind, Anchors, PathData, Point, SubPath, Vec2};
 
 use super::create::anchor_from_json;
@@ -41,7 +41,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move Anchors",
             [],
             None,
-            "{dx, dy, patterns?: bool (Transform Patterns: pattern fills and strokes transform with the objects that move whole; default: prefs transformPatternTiles)} move direct-selected anchors (whole paths if fully selected); refused while an object of a symbol instance's art is selected",
+            "{dx, dy, patterns?: bool (Transform Patterns: pattern fills and strokes transform with the objects that move whole; default: prefs transformPatternTiles), interpolate?: bool (Interpolate Control Points: the handles of each segment with one moved end are re-mapped by the turn, scale and move that take its old ends to its new ends; default: prefs interpolateControlPoints)} move direct-selected anchors (whole paths if fully selected); refused while an object of a symbol instance's art is selected",
             has_selection,
             move_anchors
         ),
@@ -245,28 +245,43 @@ fn close(s: &mut Session, p: &Value) -> Result<Value> {
 
 pub(crate) fn move_anchors(s: &mut Session, p: &Value) -> Result<Value> {
     let d = Vec2::new(number_or(p, "dx", 0.0, "path.moveAnchors")?, number_or(p, "dy", 0.0, "path.moveAnchors")?);
-    check_switches(p, &["patterns"], "path.moveAnchors")?;
+    check_switches(p, &["patterns", "interpolate"], "path.moveAnchors")?;
     // An object selected in a symbol instance's art stays where the symbol puts it.
     super::edit::refuse_symbol_part(s)?;
     // Objects selected whole move as objects, and their pattern tiles move with them when
     // `patterns` (default: General › Transform Pattern Tiles) is on.
     let whole = s.doc()?.selection.whole();
     let sc = Scaling { patterns: super::object::transform_patterns(s, p, &whole)?, ..Scaling::default() };
-    transform_anchors(s, "Move", vectorcraft_geom::Affine::translate(d), sc)?;
+    let interpolate = interpolates_handles(s, p, "path.moveAnchors")?;
+    transform_anchors(s, "Move", vectorcraft_geom::Affine::translate(d), sc, interpolate)?;
     // Transform Again repeats a move that moved something; a drag records it when it commits.
     let st = s.doc_mut()?;
     if st.interaction.is_none() && (d.x != 0.0 || d.y != 0.0) {
-        let options = json!({ "copy": false, "patterns": sc.patterns });
+        let options = json!({ "copy": false, "patterns": sc.patterns, "interpolate": interpolate });
         st.last_transform = Some(crate::LastTransform::Matrix(vectorcraft_geom::Affine::translate(d), options));
         st.last_perspective = None;
     }
     ok()
 }
 
+/// Interpolate Control Points: does a move of direct-selected anchors re-map the handles of the
+/// segments beside them (`interpolate` param, else General › Interpolate Control Points When
+/// Moving Anchors)? Noted in the journal, so a replay re-maps them alike whatever the preference
+/// is then. A saved step without `interpolate` ([`Session::replay`]) was recorded before the
+/// preference existed, so it moves the handles as it did then, without re-mapping them.
+pub(crate) fn interpolates_handles(s: &mut Session, p: &Value, cmd: &str) -> Result<bool> {
+    let default = s.prefs.interpolate_control_points && !s.replaying();
+    let on = switch_or(p, "interpolate", default, cmd)?;
+    s.note_journal("interpolate", json!(on));
+    Ok(on)
+}
+
 /// Apply `xf` to the direct-selected anchors, their handles with them, and (with `sc`) to the
 /// objects selected whole (those with no entry in the selection's `anchors`). An object inside
 /// another selected object, such as a path in a selected group, moves once, with that object.
-pub(crate) fn transform_anchors(s: &mut Session, label: &str, xf: vectorcraft_geom::Affine, sc: Scaling) -> Result<()> {
+/// When `xf` is a move and `interpolate` is on, the handles of each segment with one moved end
+/// are re-mapped ([`move_interpolating_handles`]).
+pub(crate) fn transform_anchors(s: &mut Session, label: &str, xf: vectorcraft_geom::Affine, sc: Scaling, interpolate: bool) -> Result<()> {
     let sel = s.doc()?.selection.clone();
     let ids = super::edit::outermost(&s.doc()?.doc, sel.objects.clone());
     let c = xf.as_coeffs();
@@ -277,9 +292,15 @@ pub(crate) fn transform_anchors(s: &mut Session, label: &str, xf: vectorcraft_ge
             match sel.anchors.get(id) {
                 Some(set) => {
                     let path = path_mut(doc, *id)?;
-                    for &(si, ai) in set {
-                        if let Some(a) = path.anchor_mut(si, ai) {
-                            *a = a.transform(xf);
+                    // Only an exact move takes the interpolating path: a near-identity scale or
+                    // turn still transforms the anchors as asked.
+                    if interpolate && c[..4] == [1.0, 0.0, 0.0, 1.0] {
+                        move_interpolating_handles(path, set, delta);
+                    } else {
+                        for &(si, ai) in set {
+                            if let Some(a) = path.anchor_mut(si, ai) {
+                                *a = a.transform(xf);
+                            }
                         }
                     }
                     // A pixel-aligned path, or the pixel-aligned compound path that holds it, snaps
@@ -305,6 +326,129 @@ pub(crate) fn transform_anchors(s: &mut Session, label: &str, xf: vectorcraft_ge
         }
         Ok(())
     })
+}
+
+/// Move the anchors `set` of `path` by `d`, their handles with them, then re-map the two handles
+/// of each segment with exactly one moved end by the map that takes the segment's old ends to its
+/// new ends: a turn, a uniform scale and a move. Between two corner anchors the segment keeps its
+/// shape relative to its ends. A segment with both ends moved, or with its ends at the same place
+/// before or after the move, moves as it does without the preference. A smooth anchor keeps its
+/// two handles in line ([`line_up_handles`]).
+fn move_interpolating_handles(path: &mut PathData, set: &BTreeSet<AnchorRef>, d: Vec2) {
+    // (subpath, anchor, outgoing handle?, new position)
+    let mut placed: Vec<(usize, usize, bool, Point)> = Vec::new();
+    if d != Vec2::ZERO {
+        // Only the segments beside a moved anchor can have one moved end: (subpath, first anchor).
+        let mut segments: BTreeSet<AnchorRef> = BTreeSet::new();
+        for &(si, ai) in set {
+            let Some(sp) = path.subpaths.get(si) else { continue };
+            let n = sp.anchors.len();
+            if ai >= n || n < 2 {
+                continue;
+            }
+            if ai > 0 || sp.closed {
+                segments.insert((si, (ai + n - 1) % n));
+            }
+            if ai + 1 < n || sp.closed {
+                segments.insert((si, ai));
+            }
+        }
+        for (si, from) in segments {
+            let Some(sp) = path.subpaths.get(si) else { continue };
+            let to = (from + 1) % sp.anchors.len().max(1);
+            let (moved_from, moved_to) = (set.contains(&(si, from)), set.contains(&(si, to)));
+            if moved_from == moved_to {
+                continue;
+            }
+            let (Some(a), Some(b)) = (sp.anchors.get(from), sp.anchors.get(to)) else { continue };
+            let old = b.p - a.p;
+            let len2 = old.hypot2();
+            if len2 <= 1e-12 || !len2.is_finite() {
+                continue;
+            }
+            let start = if moved_from { a.p + d } else { a.p };
+            let end = if moved_to { b.p + d } else { b.p };
+            let new = end - start;
+            // A move that puts the two ends at the same place would collapse both handles onto
+            // them, past recovering by moving back.
+            if new.hypot2() <= 1e-12 {
+                continue;
+            }
+            // `new / old` as complex numbers: the turn and scale between the two chords.
+            let (re, im) = ((new.x * old.x + new.y * old.y) / len2, (new.y * old.x - new.x * old.y) / len2);
+            let map = |h: Point| {
+                let v = h - a.p;
+                start + Vec2::new(v.x * re - v.y * im, v.x * im + v.y * re)
+            };
+            // A retracted handle goes to its anchor's new place exactly: mapped, it could land a
+            // rounding error away, which `line_up_handles` would read as a direction.
+            let h_out = if a.h_out == a.p { start } else { map(a.h_out) };
+            let h_in = if b.h_in == b.p { end } else { map(b.h_in) };
+            if h_out.is_finite() && h_in.is_finite() {
+                placed.push((si, from, true, h_out));
+                placed.push((si, to, false, h_in));
+            }
+        }
+    }
+    for &(si, ai) in set {
+        if let Some(a) = path.anchor_mut(si, ai) {
+            a.translate(d);
+        }
+    }
+    // For each anchor with a re-mapped handle: its handles as the plain move left them, and which
+    // of them (outgoing, incoming) were re-mapped.
+    let mut touched: BTreeMap<AnchorRef, (Point, Point, bool, bool)> = BTreeMap::new();
+    for &(si, ai, out, pos) in &placed {
+        if let Some(a) = path.anchor_mut(si, ai) {
+            let e = touched.entry((si, ai)).or_insert((a.h_out, a.h_in, false, false));
+            if out {
+                a.h_out = pos;
+                e.2 = true;
+            } else {
+                a.h_in = pos;
+                e.3 = true;
+            }
+        }
+    }
+    for ((si, ai), (rigid_out, rigid_in, out, inn)) in touched {
+        let Some(a) = path.anchor_mut(si, ai) else { continue };
+        if a.kind == AnchorKind::Smooth && !line_up_handles(a, out, inn) {
+            a.h_out = rigid_out;
+            a.h_in = rigid_in;
+        }
+    }
+}
+
+/// Put the handles of the smooth anchor `a` back in line after [`move_interpolating_handles`]
+/// re-mapped its outgoing handle (`out`), its incoming handle (`inn`) or both. A re-mapped handle
+/// turns to point away from the other handle, at its own new length; when both were re-mapped,
+/// both point along the mean of their directions. A retracted handle is left as it is. False when
+/// both were re-mapped to point the same way, which has no mean direction: the caller then moves
+/// both handles with the anchor.
+fn line_up_handles(a: &mut Anchor, out: bool, inn: bool) -> bool {
+    let (v_out, v_in) = (a.h_out - a.p, a.h_in - a.p);
+    let (l_out, l_in) = (v_out.hypot(), v_in.hypot());
+    if l_out <= 0.0 || l_in <= 0.0 || !l_out.is_finite() || !l_in.is_finite() {
+        return true;
+    }
+    let dir = match (out, inn) {
+        (true, true) => v_out / l_out - v_in / l_in,
+        (true, false) => -v_in / l_in,
+        (false, true) => v_out / l_out,
+        (false, false) => return true,
+    };
+    let l = dir.hypot();
+    if l <= 1e-12 || !l.is_finite() {
+        return false;
+    }
+    let dir = dir / l;
+    if out {
+        a.h_out = a.p + dir * l_out;
+    }
+    if inn {
+        a.h_in = a.p - dir * l_in;
+    }
+    true
 }
 
 fn set_handle(s: &mut Session, p: &Value) -> Result<Value> {
