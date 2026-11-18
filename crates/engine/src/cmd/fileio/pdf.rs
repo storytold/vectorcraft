@@ -338,7 +338,9 @@ pub(super) fn encode_at(cmd: &str, doc: &Document, p: &Value, modified: Option<i
     // Keep the editable object tree independent of preview fallbacks used by the drawn pages.
     let (full, placed) = crate::cmd::place::document::full_documents(doc);
     let mut notes: Vec<Note> = placed.into_iter().map(Note::loss).collect();
-    let (bytes, drawn) = encode_carrying_at(cmd, &full, p, modified, || Ok(vectorcraft_format::save(doc, false)), || Ok(None))?;
+    // The editing data leaves out an Export for Screens folder outside the read roots.
+    let native = || Ok(vectorcraft_format::save(&super::access::with_readable_settings_folder(doc), false));
+    let (bytes, drawn) = encode_carrying_at(cmd, &full, p, modified, native, || Ok(None))?;
     notes.extend(drawn);
     if notes.iter().any(|n| n.text.ends_with(SHOWN_SMALLER)) && options(cmd, &full, p)?.settings.standard == Standard::None {
         for n in notes.iter_mut().filter(|n| n.text.ends_with(SHOWN_SMALLER)) {
@@ -504,6 +506,7 @@ fn export_pdf(s: &mut Session, p: &Value) -> Result<Value> {
     let p = &*expanded;
     let st = s.doc()?;
     super::check_linked_scripts(C, "pdf", st, p)?;
+    super::check_linked_images(C, "pdf", st, &st.doc, p)?;
     let display_doc_title = super::has_own_title(&st.doc);
     let titled = super::titled_for_export(&st.doc, st.path.as_deref(), "pdf");
     let mut q = p.clone();
