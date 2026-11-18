@@ -265,10 +265,9 @@ fn place(points: &mut Vec<(f64, f64, f64)>, mut pt: (f64, f64, f64), from_below:
 }
 
 /// Adjust Adjoining Width Points: point `i` changes from `old` to `new` widths, and the nearest
-/// points at other positions on the sides `sides` names (before, after) change in proportion (by
-/// the same amount from zero).
-fn adjust_adjoining(points: &mut [(f64, f64, f64)], i: usize, old: (f64, f64, f64), new: (f64, f64, f64), sides: [bool; 2]) {
-    let t = points[i].0;
+/// points farther than [`SAME_T`] from place `t` on the sides `sides` names (before, after)
+/// change in proportion (by the same amount from zero).
+fn adjust_adjoining(points: &mut [(f64, f64, f64)], i: usize, t: f64, old: (f64, f64, f64), new: (f64, f64, f64), sides: [bool; 2]) {
     let scale = |v: f64, o: f64, n: f64| {
         let width = if o > 1e-9 {
             let product = v * n;
@@ -331,9 +330,11 @@ fn set_pair(
         Some(false) => ((old_in.0, inc.1, inc.2), (old_in.0, inc.1, inc.2)),
         Some(true) => ((old_in.0, out.1, out.2), (old_in.0, out.1, out.2)),
     };
+    // Both halves measure their neighbors from the point's place, so a point within SAME_T of the
+    // outgoing half but not of that place is the point after the pair.
     if adjust {
-        adjust_adjoining(points, i, old_in, new_in, [true, false]);
-        adjust_adjoining(points, j, old_out, new_out, [false, true]);
+        adjust_adjoining(points, i, at, old_in, new_in, [true, false]);
+        adjust_adjoining(points, j, at, old_out, new_out, [false, true]);
     }
     points[i] = new_in;
     points[j] = new_out;
@@ -393,7 +394,7 @@ fn width_point_set(s: &mut Session, p: &Value) -> Result<Value> {
             (Some(i), None) => {
                 let old = prof.points[i];
                 if adjust {
-                    adjust_adjoining(&mut prof.points, i, old, pt, [true, true]);
+                    adjust_adjoining(&mut prof.points, i, old.0, old, pt, [true, true]);
                 }
                 if (old.0 - t).abs() <= SAME_T {
                     // Widths only: it keeps its place (and its side of a discontinuous point).
@@ -409,7 +410,7 @@ fn width_point_set(s: &mut Session, p: &Value) -> Result<Value> {
                 prof.points.retain(|q| (q.0 - t).abs() > SAME_T);
                 let i = place(&mut prof.points, pt, true);
                 if let Some((left, right)) = old {
-                    adjust_adjoining(&mut prof.points, i, (t, left, right), pt, [true, true]);
+                    adjust_adjoining(&mut prof.points, i, pt.0, (t, left, right), pt, [true, true]);
                 }
                 i
             }

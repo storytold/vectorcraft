@@ -212,6 +212,18 @@ fn paired_set_adjusts_the_point_before_and_the_point_after_once_each() {
     assert_eq!(points(&s, id), vec![(0.0, 2.0, 2.0), (0.0, 4.0, 4.0), (1.0, 2.0, 2.0)]);
 }
 
+/// Three points each within 1e-6 of the next: the first two are the pair, and the third, though
+/// within 1e-6 of the outgoing half, is the point after the pair that the outgoing half adjusts.
+#[test]
+fn paired_set_adjusts_the_point_after_a_chained_pair() {
+    let (mut s, id) = pair_session(json!([[0, 1, 1], [0.5, 1, 1], [0.50000075, 2, 2], [0.5000015, 1, 1], [1, 1, 1]]));
+    set(
+        &mut s,
+        json!({"id": id.0, "index": 1, "t": 0.5, "left": 5, "right": 5, "outIndex": 2, "outLeft": 5, "outRight": 5, "adjustAdjoining": true}),
+    );
+    assert_eq!(points(&s, id), vec![(0.0, 1.0, 1.0), (0.5, 1.0, 1.0), (0.50000075, 1.0, 1.0), (0.5000015, 0.5, 0.5), (1.0, 1.0, 1.0)]);
+}
+
 #[test]
 fn single_width_only_leaves_one_continuous_point() {
     for (single, kept) in [("incoming", (2.0, 1.0)), ("outgoing", (3.0, 4.0))] {
