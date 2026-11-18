@@ -1,6 +1,7 @@
 //! Color Themes panel (local only): the Create tab makes a five-colour theme on a harmony wheel (a
 //! harmony rule from the selected colour, or Custom: each colour moves on its own; with a rule the
-//! colours move together), the My Themes tab lists the themes saved in the preferences. Themes are
+//! colours move together), the My Themes tab lists the themes saved in the preferences (the panel
+//! menu's Show Find Field adds a field that lists only the themes whose names hold its text). Themes are
 //! saved, edited, deleted and added to Swatches as colour groups through `colorTheme.*`; the theme
 //! being made is panel state.
 
@@ -90,9 +91,35 @@ fn set_draft(ctx: &egui::Context, d: Draft) {
     set_pstate(ctx, "ct-draft", Some(d));
 }
 
-/// The saved theme picked on the My Themes tab.
+/// The saved theme picked on the My Themes tab, while the list shows it: a theme that the find
+/// field hides stays picked, but nothing acts on it until the list shows it again.
 fn picked(app: &VectorcraftApp, ctx: &egui::Context) -> Option<String> {
-    pstate::<Option<String>>(ctx, "ct-picked").filter(|n| app.session.prefs.color_themes.iter().any(|t| t.name == *n))
+    let q = query(ctx);
+    pstate::<Option<String>>(ctx, "ct-picked").filter(|n| app.session.prefs.color_themes.iter().any(|t| t.name == *n && matches(&t.name, &q)))
+}
+
+/// The My Themes find field's text, kept while the panel menu hides the field.
+fn find_id() -> egui::Id {
+    egui::Id::unique("ct-find")
+}
+
+/// Whether the panel menu's Show Find Field shows the find field (off in a new session).
+fn show_find(ctx: &egui::Context) -> bool {
+    pstate(ctx, "ct-show-find")
+}
+
+/// The find field's text, trimmed and lowercased; empty while the field is hidden.
+fn query(ctx: &egui::Context) -> String {
+    if !show_find(ctx) {
+        return String::new();
+    }
+    ctx.data(|d| d.get_temp::<String>(find_id())).unwrap_or_default().trim().to_lowercase()
+}
+
+/// Whether the find field lists theme `name` for `query` (trimmed and lowercased): its name holds
+/// the text anywhere, in any letter case. An empty query lists every theme.
+fn matches(name: &str, query: &str) -> bool {
+    query.is_empty() || name.to_lowercase().contains(query)
 }
 
 /// The tab shown: 0 Create, 1 My Themes.
@@ -257,6 +284,12 @@ enum Action {
 fn my_themes(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let ctx = ui.ctx().clone();
+    // The find field lists the saved themes whose names hold its text, in their saved order.
+    if show_find(&ctx) {
+        widgets::search_field(ui, find_id(), tl!("Find"));
+        ui.add_space(4.0);
+    }
+    let q = query(&ctx);
     let pick = picked(app, &ctx);
     let mut action = None;
     if app.session.prefs.color_themes.is_empty() {
@@ -264,7 +297,11 @@ fn my_themes(app: &mut VectorcraftApp, ui: &mut Ui) {
     } else {
         widgets::list_box(ui, |ui| {
             egui::ScrollArea::vertical().id_salt("ct-list").max_height(300.0).auto_shrink([false, true]).show(ui, |ui| {
-                for th in &app.session.prefs.color_themes {
+                let mut shown = app.session.prefs.color_themes.iter().filter(|th| matches(&th.name, &q)).peekable();
+                if shown.peek().is_none() {
+                    widgets::dim_label(ui, tl!("No matches."));
+                }
+                for th in shown {
                     let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 44.0), Sense::hover());
                     let resp = ui.interact(r, ui.scope_id().with(("ct-theme", &th.name)), Sense::click());
                     let selected = pick.as_deref() == Some(th.name.as_str());
@@ -355,6 +392,11 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
             && let Some(n) = &pick
         {
             delete(app, &ctx, n);
+        }
+        ui.separator();
+        let find = show_find(&ctx);
+        if menu_item(ui, tl!("Show Find Field"), true, find) {
+            set_pstate(&ctx, "ct-show-find", !find);
         }
     } else {
         if menu_item(ui, tl!("Save Theme"), true, false) {
@@ -468,6 +510,169 @@ mod tests {
         assert_eq!(draft(&app, &ctx).editing, None);
         assert_eq!(picked(&app, &ctx), None);
         frame(&mut app, &ctx);
+    }
+
+    /// The texts one frame draws: the panel, or with `menu_only` its panel menu, with `events`.
+    fn drawn(app: &mut VectorcraftApp, ctx: &egui::Context, menu_only: bool, events: Vec<egui::Event>) -> Vec<(String, Rect)> {
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        let screen = Rect::from_min_size(egui::Pos2::ZERO, vec2(320.0, 700.0));
+        let input = egui::RawInput { events, screen_rect: Some(screen), ..Default::default() };
+        let mut out = ctx.run_ui(input, |ui| if menu_only { menu(app, ui) } else { show(app, ui) });
+        out.textures_delta.clear();
+        fn texts(s: &egui::Shape, out: &mut Vec<(String, Rect)>) {
+            match s {
+                egui::Shape::Text(t) => out.push((t.galley.text().to_string(), t.visual_bounding_rect())),
+                egui::Shape::Vec(v) => v.iter().for_each(|s| texts(s, out)),
+                _ => {}
+            }
+        }
+        let mut found = vec![];
+        out.shapes.iter().for_each(|s| texts(&s.shape, &mut found));
+        found
+    }
+
+    /// The saved themes the My Themes list draws, in order.
+    fn listed(app: &mut VectorcraftApp, ctx: &egui::Context) -> Vec<String> {
+        drawn(app, ctx, false, vec![]);
+        let names: Vec<String> = themes(app).iter().map(|t| t.name.clone()).collect();
+        drawn(app, ctx, false, vec![]).into_iter().map(|(t, _)| t).filter(|t| names.contains(t)).collect()
+    }
+
+    /// Click panel menu item `label` (with its check mark, or three spaces when unchecked).
+    fn click_menu(app: &mut VectorcraftApp, ctx: &egui::Context, label: &str) {
+        let texts = drawn(app, ctx, true, vec![]);
+        let at = texts.iter().find(|(t, _)| t == label).unwrap_or_else(|| panic!("no {label:?} in {texts:?}")).1.center();
+        let button =
+            |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+        drawn(app, ctx, true, vec![egui::Event::PointerMoved(at), button(true), button(false)]);
+    }
+
+    /// My Themes with three saved themes and the find field holding `text`.
+    fn three_themes(text: &str) -> (VectorcraftApp, egui::Context) {
+        let mut app = app();
+        for (name, color) in [("Harbor", "#2266aa"), ("Harvest", "#cc8822"), ("Forest", "#227744")] {
+            app.run("colorTheme.save", json!({"color": color, "rule": "complementary", "name": name})).unwrap();
+        }
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        set_pstate(&ctx, "ct-tab", 1usize);
+        set_pstate(&ctx, "ct-show-find", true);
+        ctx.data_mut(|d| d.insert_temp(find_id(), text.to_string()));
+        (app, ctx)
+    }
+
+    /// Show Find Field is a checked item of the My Themes menu only, off in a new session; each
+    /// choice turns the field on or off.
+    #[test]
+    fn show_find_field_toggles_the_find_field_on_my_themes() {
+        let mut app = app();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let has = |texts: &[(String, Rect)], label: &str| texts.iter().any(|(t, _)| t == label);
+        let texts = drawn(&mut app, &ctx, true, vec![]);
+        assert!(!has(&texts, "   Show Find Field") && !has(&texts, "✓ Show Find Field"), "the Create tab has no find field");
+        set_pstate(&ctx, "ct-tab", 1usize);
+        assert!(has(&drawn(&mut app, &ctx, true, vec![]), "   Show Find Field"), "off in a new session");
+        assert!(!has(&drawn(&mut app, &ctx, false, vec![]), "Find"), "no field while it is off");
+        click_menu(&mut app, &ctx, "   Show Find Field");
+        assert!(show_find(&ctx));
+        assert!(has(&drawn(&mut app, &ctx, true, vec![]), "✓ Show Find Field"));
+        assert!(has(&drawn(&mut app, &ctx, false, vec![]), "Find"), "the field shows its hint");
+        click_menu(&mut app, &ctx, "✓ Show Find Field");
+        assert!(!show_find(&ctx));
+    }
+
+    /// The find field lists the themes whose names hold its text, in any letter case, anywhere in
+    /// the name, in their saved order; it reads names only, and its text is plain text.
+    #[test]
+    fn the_find_field_lists_themes_whose_names_hold_its_text() {
+        let (mut app, ctx) = three_themes("  HAR ");
+        assert_eq!(listed(&mut app, &ctx), ["Harbor", "Harvest"]);
+        ctx.data_mut(|d| d.insert_temp(find_id(), "vest".to_string()));
+        assert_eq!(listed(&mut app, &ctx), ["Harvest"], "a match in the middle of a name");
+        // Colours are not searched: no name holds "2266aa".
+        ctx.data_mut(|d| d.insert_temp(find_id(), "2266aa".to_string()));
+        assert!(listed(&mut app, &ctx).is_empty());
+        assert!(drawn(&mut app, &ctx, false, vec![]).iter().any(|(t, _)| t == "No matches."));
+        assert_eq!(themes(&app).len(), 3, "the saved themes stay");
+        // Pattern characters are plain text, and letters outside ASCII match in either case.
+        app.run("colorTheme.save", json!({"color": "#aa2266", "rule": "complementary", "name": "Été a.b*"})).unwrap();
+        ctx.data_mut(|d| d.insert_temp(find_id(), "ÉTÉ A.B*".to_string()));
+        assert_eq!(listed(&mut app, &ctx), ["Été a.b*"]);
+        ctx.data_mut(|d| d.insert_temp(find_id(), ".*".to_string()));
+        assert!(listed(&mut app, &ctx).is_empty());
+        // Blank text, or the field turned off, lists every theme; turned on again the text applies.
+        ctx.data_mut(|d| d.insert_temp(find_id(), "   ".to_string()));
+        assert_eq!(listed(&mut app, &ctx).len(), 4);
+        ctx.data_mut(|d| d.insert_temp(find_id(), "har".to_string()));
+        set_pstate(&ctx, "ct-show-find", false);
+        assert_eq!(listed(&mut app, &ctx).len(), 4);
+        set_pstate(&ctx, "ct-show-find", true);
+        assert_eq!(listed(&mut app, &ctx), ["Harbor", "Harvest"]);
+    }
+
+    /// With no saved themes the panel says so, whatever the find field holds.
+    #[test]
+    fn no_saved_themes_is_not_no_matches() {
+        let mut app = app();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        set_pstate(&ctx, "ct-tab", 1usize);
+        set_pstate(&ctx, "ct-show-find", true);
+        ctx.data_mut(|d| d.insert_temp(find_id(), "har".to_string()));
+        drawn(&mut app, &ctx, false, vec![]);
+        let texts: Vec<String> = drawn(&mut app, &ctx, false, vec![]).into_iter().map(|(t, _)| t).collect();
+        assert!(texts.iter().any(|t| t == "No saved themes"), "{texts:?}");
+        assert!(!texts.iter().any(|t| t == "No matches."));
+    }
+
+    /// A picked theme that the find field hides stays picked, but neither the menu nor the footer
+    /// acts on it until the list shows it again.
+    #[test]
+    fn a_theme_the_find_field_hides_is_not_acted_on() {
+        let (mut app, ctx) = three_themes("har");
+        set_pstate(&ctx, "ct-picked", Some("Forest".to_string()));
+        assert_eq!(picked(&app, &ctx), None);
+        drawn(&mut app, &ctx, true, vec![]);
+        click_menu(&mut app, &ctx, "   Delete Theme");
+        assert_eq!(themes(&app).len(), 3, "Delete Theme is off");
+        click_menu(&mut app, &ctx, "   Edit Theme");
+        assert_eq!(tab(&ctx), 1, "Edit Theme is off");
+        let undo = undo_len(&app);
+        click_menu(&mut app, &ctx, "   Add to Swatches");
+        assert_eq!(undo_len(&app), undo, "Add to Swatches is off");
+        // Cleared, the field lists Forest again and it is picked as before.
+        ctx.data_mut(|d| d.insert_temp(find_id(), String::new()));
+        assert_eq!(picked(&app, &ctx).as_deref(), Some("Forest"));
+        ctx.data_mut(|d| d.insert_temp(find_id(), "har".to_string()));
+        set_pstate(&ctx, "ct-show-find", false);
+        assert_eq!(picked(&app, &ctx).as_deref(), Some("Forest"), "the field turned off lists it too");
+        set_pstate(&ctx, "ct-show-find", true);
+        // A theme the field shows is acted on.
+        set_pstate(&ctx, "ct-picked", Some("Harvest".to_string()));
+        click_menu(&mut app, &ctx, "   Delete Theme");
+        assert_eq!(themes(&app).iter().map(|t| t.name.as_str()).collect::<Vec<_>>(), ["Harbor", "Forest"]);
+    }
+
+    /// The footer buttons are off for a picked theme that the find field hides.
+    #[test]
+    fn footer_buttons_are_off_for_a_hidden_pick() {
+        use crate::widgets::accessibility_tests::{named, tree};
+        let mut app = app();
+        app.run("colorTheme.save", json!({"color": "#227744", "rule": "complementary", "name": "Forest"})).unwrap();
+        for (text, off) in [("har", true), ("for", false)] {
+            let shown = tree(|ui| {
+                let ctx = ui.ctx().clone();
+                set_pstate(&ctx, "ct-tab", 1usize);
+                set_pstate(&ctx, "ct-show-find", true);
+                set_pstate(&ctx, "ct-picked", Some("Forest".to_string()));
+                ctx.data_mut(|d| d.insert_temp(find_id(), text.to_string()));
+                show(&mut app, ui);
+            });
+            for label in ["Edit theme", "Add to Swatches", "Delete theme"] {
+                assert_eq!(named(&shown, label).is_disabled(), off, "{label} with {text:?}");
+            }
+        }
     }
 
     const SET_ACTIVE: &str = "Set the current fill or stroke to the selected color";
