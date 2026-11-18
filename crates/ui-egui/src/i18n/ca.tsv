@@ -223,6 +223,7 @@
 	Add Used Colors	Afegeix els colors utilitzats
 	Additional Fonts Folder	Carpeta addicional de tipus de lletra
 	Additional Plug-ins Folder	Carpeta addicional de complements
+	Plug-in Instruction Budget	Pressupost d’instruccions dels complements
 	Adjust Adjoining Width Points	Ajusta els punts d’amplada contigus
 	Incoming	Entrant
 	Outgoing	Sortint
@@ -4307,6 +4308,9 @@ digits	Malayalam	Malaiàlam
 	Search commands, tools, panels and effects…	Cerca ordres, eines, panells i efectes…
 	No commands match	Cap ordre coincideix
 	{pos} of {total}: {name}	{pos} de {total}: {name}
+	No menu item	Cap element de menú
+	Toolbar	Barra d’eines
+	{toolbar}, in the {tool} group	{toolbar}, al grup {tool}
 @plural	{n} result|{n} results	{n} resultat|{n} resultats
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} de {n} resultat. Continueu escrivint per reduir-los.|{shown} de {n} resultats. Continueu escrivint per reduir-los.
 	Recent Commands	Ordres recents
@@ -5810,6 +5814,7 @@ digits	Malayalam	Malaiàlam
 @msg	a linked JavaScript file is outside the read roots	un fitxer JavaScript enllaçat és fora de les arrels de lectura
 @msg	a linked image file is outside the read roots	un fitxer d’imatge enllaçat és fora de les arrels de lectura
 @msg	a linked file's export folder is outside the read roots	la carpeta d’exportació d’un fitxer enllaçat és fora de les arrels de lectura
+@msg	a linked file's editing data can't be read to check it against the read roots	no es poden llegir les dades d’edició d’un fitxer enllaçat per comprovar-les amb les arrels de lectura
 @msg	the library's file is outside the read roots	el fitxer de la biblioteca és fora de les arrels de lectura
 @msg	{file} names more than one linked JavaScript file	{file} correspon a més d’un fitxer JavaScript enllaçat
 @msg	automation path rejected: outside the write root {root}: {path}	camí d’automatització rebutjat: fora de l’arrel d’escriptura {root}: {path}
