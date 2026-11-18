@@ -805,16 +805,19 @@ fn anti_aliasing_method_labels_are_in_complete_catalogs() {
 }
 
 /// Each row in the `search` context, which adds a language's words to a group of words with the same
-/// meaning for the command palette, names a group and adds single words of no other group. No
-/// catalog has to have these rows.
+/// meaning for the command palette, names a group and adds single words of no other group, and no
+/// two rows of one catalog add the same word. No catalog has to have these rows.
 #[test]
 fn search_rows_name_a_group_and_add_single_words() {
     let mut bad = Vec::new();
     for l in LANGUAGES.iter().filter(|l| !l.source.is_empty()) {
         let (entries, _) = parse_entries(l.source);
-        for (_, src, tr) in entries.iter().filter(|(ctx, _, _)| ctx == crate::palette::words::CONTEXT) {
+        let rows: Vec<(&str, &str)> =
+            entries.iter().filter(|(ctx, _, _)| ctx == crate::palette::words::CONTEXT).map(|(_, src, tr)| (src.as_str(), tr.as_str())).collect();
+        for &(src, tr) in &rows {
             bad.extend(crate::palette::words::row_problems(src, tr).into_iter().map(|p| format!("{}: {p}", l.code)));
         }
+        bad.extend(crate::palette::words::shared_row_words(&rows).into_iter().map(|p| format!("{}: {p}", l.code)));
     }
     assert!(bad.is_empty(), "{bad:#?}");
 }

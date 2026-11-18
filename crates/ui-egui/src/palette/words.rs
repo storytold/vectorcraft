@@ -91,6 +91,29 @@ pub(crate) fn row_problems(source: &str, text: &str) -> Vec<String> {
     problems
 }
 
+/// The words that more than one of a catalog's `search` rows, given as `(source, text)`, add, each
+/// with the first two rows that add it.
+#[cfg(test)]
+pub(crate) fn shared_row_words(rows: &[(&str, &str)]) -> Vec<String> {
+    let mut first: std::collections::HashMap<String, &str> = std::collections::HashMap::new();
+    let mut problems = vec![];
+    for &(source, text) in rows {
+        for (w, single) in row_words(text) {
+            if !single {
+                continue;
+            }
+            match first.get(&w) {
+                Some(&other) if other != source => problems.push(format!("{w:?} is a word of {other:?} and {source:?}")),
+                Some(_) => {}
+                None => {
+                    first.insert(w, source);
+                }
+            }
+        }
+    }
+    problems
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -121,5 +144,15 @@ mod tests {
         assert_eq!(row_problems("remove, delete, erase, clear", "entfernen,, löschen").len(), 1, "an empty word");
         assert_eq!(row_problems("remove, delete, erase, clear", "ganz entfernen").len(), 1, "two words");
         assert_eq!(row_problems("remove, delete, erase, clear", "Text").len(), 1, "a word of another group once lowercased");
+    }
+
+    /// A word that two `search` rows of one catalog add is reported; a word repeated in one row is not.
+    #[test]
+    fn a_word_in_two_rows_of_a_catalog_is_reported() {
+        let remove = "remove, delete, erase, clear";
+        let image = "image, picture, photo, img, bitmap";
+        assert!(shared_row_words(&[(remove, "entfernen, löschen"), (image, "bild, foto")]).is_empty());
+        assert!(shared_row_words(&[(remove, "entfernen, Entfernen")]).is_empty(), "one row");
+        assert_eq!(shared_row_words(&[(remove, "entfernen, löschen"), (image, "Bild, Löschen")]).len(), 1);
     }
 }
