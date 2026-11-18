@@ -1,6 +1,6 @@
 //! Object menu long tail: Lock/Hide All Artwork Above & Other Layers, Transform Each, Reset
-//! Bounding Box, Rasterize, Crop Image, Mask (an image), Create Trim Marks, Convert to Shape and
-//! Artboards → Convert / Rearrange. (Live blends are in `live.rs`.)
+//! Bounding Box, Rotate Bounding Box, Rasterize, Crop Image, Mask (an image), Create Trim Marks,
+//! Convert to Shape and Artboards → Convert / Rearrange. (Live blends are in `live.rs`.)
 
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::sync::Arc;
@@ -15,8 +15,8 @@ use vectorcraft_render::encode::{RasterExportOptions, RasterFormat};
 
 use super::edit::{duplicate_in, selected_roots, selected_roots_to_transform};
 use super::{
-    CommandSpec, EngineError, Result, Session, bad, check_numbers, check_switches, cmd, f64_or, fileio, find_command, has_doc, has_selected_member,
-    has_selection, switch_or,
+    CommandSpec, EngineError, Result, Session, bad, check_numbers, check_switches, cmd, f64_or, f64_req, fileio, find_command, has_doc,
+    has_selected_member, has_selection, switch_or,
 };
 
 /// Session-level (not saved) state owned by the menu commands.
@@ -109,6 +109,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{} square the bounding box of the selected objects, and of every object inside them (the children of groups, compound paths, clip groups, blends, envelopes, repeats and intertwines, and the art of linked opacity masks), to the page again after a rotation (their geometry stays; one undo step, none when no box is rotated) → {changed: objects reset, the objects inside included}",
             has_selection,
             reset_bounding_box
+        ),
+        cmd!(
+            "object.rotateBoundingBox",
+            "Rotate Bounding Box…",
+            ["Object", "Transform"],
+            None,
+            "{angle: degrees (counter-clockwise), absolute?: bool (true: turn the box to angle; default false: turn it by angle from the angle the selected objects share, 0 when theirs differ)} turn the bounding box of the selected objects to one angle without moving their art; the objects inside them (the children of groups, compound paths, clip groups, blends, envelopes, repeats and intertwines, and the art of linked opacity masks) turn with them and keep their angle relative to them; a path of a compound path selected on its own turns only its own box; one undo step, none when every box is already at the angle; object.resetBoundingBox squares the boxes again; a missing or non-numeric angle is an error → {angle: the new angle of the boxes, in (-180, 180], changed: objects whose box turned, the objects inside the selected ones included}",
+            has_selection,
+            rotate_bounding_box
         ),
         cmd!(
             "object.rasterize",
@@ -225,9 +234,10 @@ pub(crate) fn squash(s: &mut Session, from: usize, label: &str) {
 // ---------- Reset Bounding Box ----------
 
 /// Squares each selected object and every object inside it: the children of groups, compound paths,
-/// clip groups, blends, envelopes, repeats and intertwines, and the art of linked opacity masks.
+/// clip groups, blends, envelopes, repeats and intertwines, and the art of linked opacity masks. A
+/// path of a compound path selected on its own is squared alone, as the transforms move it alone.
 fn reset_bounding_box(s: &mut Session, _: &Value) -> Result<Value> {
-    let ids = selected_roots(s)?;
+    let ids = selected_roots_to_transform(s)?;
     let d = &s.doc()?.doc;
     let mut changed = 0;
     let squared: Vec<(NodeId, Node)> = ids
@@ -249,6 +259,69 @@ fn reset_bounding_box(s: &mut Session, _: &Value) -> Result<Value> {
         })?;
     }
     Ok(json!({ "changed": changed }))
+}
+
+// ---------- Rotate Bounding Box ----------
+
+/// Turns the bounding box of the selected objects to one angle without moving their art: by `angle`
+/// from the angle they share (0 when it differs), or to `angle` with `absolute`. Each object's box
+/// turns by what takes it there, and so do the boxes of the objects inside it (the children of
+/// groups and the art of linked opacity masks), which keep their angle relative to it.
+fn rotate_bounding_box(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "object.rotateBoundingBox";
+    // A JSON number is always finite.
+    let angle = f64_req(p, "angle", C)?;
+    let absolute = switch_or(p, "absolute", false, C)?;
+    // The same objects the transforms move: a path of a compound path selected on its own turns
+    // its own box. Layers are left out, as they have no box.
+    let owners = selected_roots_to_transform(s)?;
+    let d = &s.doc()?.doc;
+    let start = if absolute { 0.0 } else { d.bbox_angle(&owners) };
+    // An angle within the tolerance of 0 is stored as 0, as `Node::turn_boxes` stores it.
+    let target = match vectorcraft_geom::normalize_deg(start + angle) {
+        a if a.abs() <= BOX_EPS_DEG => 0.0,
+        a => a,
+    };
+    let mut changed = 0;
+    let turned: Vec<(NodeId, Node)> = owners
+        .iter()
+        .filter_map(|id| {
+            let n = d.node(*id)?;
+            let by = vectorcraft_geom::normalize_deg(target - n.bbox_angle);
+            (by.abs() > BOX_EPS_DEG).then(|| {
+                let mut c = n.clone();
+                c.turn_boxes(by);
+                // The selected object's box is set to the target itself, so repeated turns add no
+                // rounding error to it.
+                c.bbox_angle = target;
+                changed += boxes(&c);
+                (*id, c)
+            })
+        })
+        .collect();
+    if !turned.is_empty() {
+        s.edit("Rotate Bounding Box", |d, _| {
+            for (id, n) in turned {
+                if let Some(slot) = d.node_mut(id) {
+                    *slot = n;
+                }
+            }
+            Ok(())
+        })?;
+    }
+    Ok(json!({ "angle": target, "changed": changed }))
+}
+
+/// Angles closer than this (degrees) are the same, as `vectorcraft_doc::orient` compares them.
+const BOX_EPS_DEG: f64 = 1e-6;
+
+/// The number of objects in `n`'s subtree whose box [`Node::turn_boxes`] turns: `n`, its children
+/// and the art of a linked opacity mask, layers left out.
+fn boxes(n: &Node) -> usize {
+    let own = usize::from(!n.is_layer());
+    let children: usize = n.children().into_iter().flatten().map(|c| boxes(c)).sum();
+    let mask = n.extras().mask.as_ref().filter(|m| m.linked).map_or(0, |m| boxes(&m.art));
+    own + children + mask
 }
 
 /// A copy of `n` with the angle of every object in its subtree set to 0, or `None` when no box in

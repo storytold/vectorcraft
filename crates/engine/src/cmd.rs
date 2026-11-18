@@ -888,6 +888,8 @@ pub use pathops::shape_count;
 
 /// The tile counts Create Object Mosaic would use (the dialog's Use Ratio button sets them).
 pub use menucmds::mosaic_counts;
+/// The Shape Mode commands' warning when a selected open path encloses no area.
+pub use pathops::SHAPE_MODE_OPEN_PATH_NO_AREA;
 
 /// The gaps View › Show Live Paint Gaps shows on a Live Paint group.
 pub use buildcmds::live_paint_gaps;
@@ -903,6 +905,10 @@ pub use brushsym::current_symbol;
 /// The byte order of UTF-16 text without a byte-order mark, by Import Data Sets' rule (the Graph
 /// Data window reads files by it too).
 pub use variablecmds::utf16_order_without_mark;
+
+/// How the Graph Data window's Import Data and Import Data Sets' `%` columns read a graph data
+/// file: its size limit, its text, its cells and the data `graph.setData` takes from them.
+pub use graph::{MAX_GRAPH_DATA_FILE, graph_cell_text, graph_data_from_grid, graph_data_text, graph_grid_from_text};
 
 /// The Variables panel's sort (`variable.sort`) and its rows in that order.
 pub use variablecmds::{VariableSort, VariableSortKey, variable_order};
