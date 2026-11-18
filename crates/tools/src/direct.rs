@@ -1674,7 +1674,7 @@ impl DirectSelectionTool {
         // marquee or an Alt-marquee, every object it touches, each whole (#8047).
         if enclosed || whole || self.group {
             (self.spine, self.spine_more) = (None, vec![]);
-            let mut touched = vectorcraft_doc::hit::marquee_in_view(cx.doc, r, cx.isolation, true, cx.outline);
+            let mut touched = vectorcraft_doc::hit::marquee_in_view(cx.doc, r, cx.isolation, true, cx.outline, !cx.guides);
             let editable = cx.doc.editable();
             touched.retain(|id| editable(*id));
             let picked = if enclosed { crate::select::inside(cx, r, touched) } else { touched };
@@ -1684,8 +1684,11 @@ impl DirectSelectionTool {
         }
         // Anchors inside the rect, on editable paths inside isolation mode.
         let mut sel: Vec<(NodeId, Vec<AnchorRef>)> = vec![];
+        // Guide paths only while guides can be picked: not while they are locked or hidden (#8538).
         walk_pickable(cx.doc, cx.isolation, |n| {
-            if let NodeKind::Path { path, .. } = &n.kind {
+            if let NodeKind::Path { path, guide, .. } = &n.kind
+                && (cx.guides || !*guide)
+            {
                 let v: Vec<AnchorRef> = path.anchors().filter(|(_, _, a)| r.contains(a.p)).map(|(s, i, _)| (s, i)).collect();
                 if !v.is_empty() {
                     sel.push((n.id, v));
@@ -1773,7 +1776,7 @@ impl DirectSelectionTool {
         }
         // Objects without anchors to pick (type, images, symbols…) are selected whole when
         // the marquee touches them, as with the Selection tool (#927).
-        for id in vectorcraft_doc::hit::marquee_in_view(cx.doc, r, cx.isolation, true, cx.outline) {
+        for id in vectorcraft_doc::hit::marquee_in_view(cx.doc, r, cx.isolation, true, cx.outline, !cx.guides) {
             let whole = cx.doc.node(id).is_some_and(|n| !matches!(n.kind, NodeKind::Path { .. } | NodeKind::Compound { .. }));
             if whole && !sel.iter().any(|(s, _)| *s == id) && !framed.iter().any(|(f, _)| *f == id) && !meshed.contains(&id) && spined != Some(id) {
                 sel.push((id, vec![]));
@@ -1785,7 +1788,8 @@ impl DirectSelectionTool {
         let mut crossed: Vec<(NodeId, Vec<AnchorRef>)> = vec![];
         if !self.group {
             walk_pickable(cx.doc, cx.isolation, |n| {
-                if let NodeKind::Path { path, .. } = &n.kind
+                if let NodeKind::Path { path, guide, .. } = &n.kind
+                    && (cx.guides || !*guide)
                     && editable(n.id)
                 {
                     let segs = crossed_segments(path, r);

@@ -807,6 +807,7 @@ font-technology	Variable	Variabla
 	Delete Brush	Radera pensel
 	Delete Color	Radera färg
 	Restore Generated Table	Återställ genererad tabell
+	Unshift All Colors	Ta bort förskjutning av alla färger
 	Delete Character Style	Radera teckenstil
 	Delete Empty Artboards	Radera tomma ritytor
 	Delete Freeform Point	Radera fri punkt
@@ -3167,6 +3168,8 @@ digits	Malayalam	Malayalam
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Hur nära på skärmen pekaren eller en dragen punkt måste komma teckningen för att de smarta stödlinjerna ska fästa mot den; avståndet är detsamma vid alla zoomnivåer.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Fäster änden av ett linjesegment, eller en cirkel ritad från sin mitt, så att den rör en närliggande kurva.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Fäster änden av ett linjesegment så att det möter ett närliggande rakt segment i rät vinkel.
+	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Visar varje skivas nummer i en ruta i dess övre vänstra hörn på arbetsytan; när det är avstängt visas skivornas konturer fortfarande.
+	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Färgen på konturerna för användar- och objektskivor och på deras nummerrutor; automatiska skivor använder en blekare nyans av den.
 	Reset all preferences to their defaults?	Återställa alla inställningar till standard?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Standardvärdena verkställs när du klickar på OK i Inställningar. Avbryt där behåller dina nuvarande inställningar.
 	Restore Recovered Documents	Återställ återskapade dokument
@@ -3387,6 +3390,9 @@ digits	Malayalam	Malayalam
 	No menu item	Inget menyalternativ
 	Toolbar	Verktygsfält
 	{toolbar}, in the {tool} group	{toolbar}, i gruppen {tool}
+	In the menu bar: {path}	I menyraden: {path}
+	In the {group} group: press and hold to open it	I gruppen {group}: tryck och håll ned för att öppna den
+	{home}, not shown now	{home}, visas inte nu
 @plural	{n} result|{n} results	{n} resultat|{n} resultat
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} av {n} resultat. Fortsätt skriva för att begränsa dem.|{shown} av {n} resultat. Fortsätt skriva för att begränsa dem.
 	Recent Commands	Senaste kommandon
@@ -4981,6 +4987,7 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	choose a location for the package	välj en plats för paketet
 @msg	clipboard is empty	urklippet är tomt
 @msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: minst en färg måste finnas kvar i färgtabellen
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted: `{k}` anger en färg som även en annan nyckel anger
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` är inte en färg som "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: högst {MAX_TABLE} färger
 @msg	command `{0}` is not available right now: {1}	kommandot `{0}` är inte tillgängligt just nu: {1}
@@ -7836,6 +7843,7 @@ breakText	Glyphs	Glyfer
 @msg	One path lies inside the other, so they have no common tangents	Den ena banan ligger inuti den andra, så de har inga gemensamma tangenter
 @msg	The paths overlap, so they have no internal tangents	Banorna överlappar, så de har inga inre tangenter
 @msg	One path lies inside the other, so they have no internal tangents	Den ena banan ligger inuti den andra, så de har inga inre tangenter
+@msg	The point lies inside the path, so it has no tangents	Punkten ligger inuti banan, så den har inga tangenter
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Expandera streck till banor
 @msg	select paths with dashed strokes to expand	markera banor med streckad kontur att expandera
@@ -9813,3 +9821,8 @@ digits	Hindi	Hindi
 	Halftone Field	Halvtonsfält
 	Solar Grain	Solkorn
 	Color Flecks	Färgstänk
+	Pressure Sensitive	Tryckkänslig
+	Flex Ribbon	Flexibelt band
+	Pulse Stroke	Pulserande drag
+	Round Flow	Runt flöde
+	Chisel Flow	Snedflöde
