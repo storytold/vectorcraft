@@ -40,8 +40,9 @@ const WRAPPED: &[(&str, &str)] = &[
 /// selection's gradient matches, Pixel Snapping Options…
 /// opens its dialog, the three Asset Export commands open the Asset Export panel (#4864), New
 /// Symbol makes a symbol of the selection, Gradient Vector gives the selection the default
-/// gradient, Define Perspective Grid makes the document's grid, and Select Slice deselects the
-/// slices.
+/// gradient, Define Perspective Grid makes the document's grid, Select Slice deselects the
+/// slices, and Find Next goes on from the last Find and Replace search or opens its dialog, as
+/// its menu item does.
 const PICK_RUNS: &[&str] = &[
     "script.stop",
     "script.console.clear",
@@ -65,6 +66,7 @@ const PICK_RUNS: &[&str] = &[
     "paint.setGradientGeom",
     "perspective.grid.set",
     "object.slice.select",
+    "edit.findNext",
 ];
 
 /// The menu path of a panel's result: a pick runs Show Panel (`window.panel`) for the panel.
