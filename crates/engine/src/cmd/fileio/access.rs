@@ -144,8 +144,9 @@ pub(crate) fn check_scripts_of(cmd: &str, doc: &vectorcraft_doc::Document, doc_p
 }
 
 /// Does a file of a document with `artboards` artboards, written in format `format` with options
-/// `p`, name the JavaScript files the document links? SVG, SVGZ, native files, native templates and
-/// EPS files always do. A `.ai` or `.ait` file does unless it is a legacy version 7 `.ai` file or `p`
+/// `p`, name the JavaScript files the document links? SVG, SVGZ, native files, native templates,
+/// EPS files and the files of an exporter plug-in's format (`plugin.<id>`, whose plug-in is given
+/// the native document's JSON) always do. A `.ai` or `.ait` file does unless it is a legacy version 7 `.ai` file or `p`
 /// picks only some of the artboards; a PDF does with Preserve Editing on (as its preset, standard and
 /// options leave it) unless `p` picks only some of the artboards. Neither a `.ai` file nor a PDF
 /// does when `useArtboards` is false in `p` (one page, the bounds of the art). Options the encoder
@@ -159,6 +160,7 @@ pub(crate) fn names_linked_scripts(cmd: &str, format: &str, p: &Value, artboards
     let art_page = || super::encode::use_artboards(cmd, p).is_ok_and(|u| u == Some(false));
     match format {
         "svg" | "svgz" | "vectorcraft" | "template" | "eps" => true,
+        _ if vectorcraft_plugins::export::plugin_id(format).is_some() => true,
         "ai" | "ait" => {
             let legacy = super::format(format).is_some_and(|f| super::legacy_ai::wanted(cmd, f, p).unwrap_or(false));
             !legacy && !(format == "ai" && art_page()) && every_artboard()
@@ -228,7 +230,8 @@ pub(crate) fn check_images_in(cmd: &str, format: &str, d: &vectorcraft_doc::Docu
 
 /// `cmd` may write `d` in format `format` (a format id other than SVG and SVGZ) with options `p`:
 /// always, unless read roots are in force, the file carries the native document (a native file or
-/// template, an EPS file, a `.ai` or `.ait` file or a PDF with Preserve Editing, as
+/// template, an EPS file, a `.ai` or `.ait` file, a PDF with Preserve Editing or an exporter
+/// plug-in's file, as
 /// [`names_linked_scripts`] counts them with `d`'s artboards) and that document names a file
 /// outside them ([`crate::cmd::links::names_hidden_file`]: a linked image or placed file, the
 /// relative path kept of one taken from `base`, a data set's image, or stored brushes that can't be
