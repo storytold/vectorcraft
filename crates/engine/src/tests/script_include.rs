@@ -77,6 +77,31 @@ fn script_missing_include_reports_origin() {
     assert!(report["message"].as_str().unwrap().contains("include file not found: nope.jsxinc"), "{report}");
     assert_eq!(report["log"], json!([]), "nothing ran before the include was read");
     assert!(report.get("file").is_none(), "the line is the script's own");
+    assert_eq!(report["messageOrigin"], "built-in");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// An error in an included file keeps where its message came from: a value the file threw is the
+/// script's own text, and an error the app raised for it, or for a file `$.evalFile` could not run, is not.
+#[test]
+fn script_include_errors_keep_their_message_origin() {
+    let base = folder("origin");
+    write(&base.join("main/lib.jsxinc"), "var a = 1;\n  throw new RangeError('invalid array length');");
+    write(&base.join("main/native.jsxinc"), "var a = 1;\n  new Array(-1);");
+    for (text, message, origin) in [
+        ("#include \"lib.jsxinc\"", "RangeError: invalid array length", "script"),
+        ("#include \"native.jsxinc\"", "RangeError: invalid array length", "built-in"),
+        ("try {\n#include \"native.jsxinc\"\n} catch (e) { throw e; }", "RangeError: invalid array length", "built-in"),
+        ("try {\n#include \"native.jsxinc\"\n} catch (e) { throw e.message; }", "invalid array length", "script"),
+    ] {
+        let report = failed(&base, text);
+        assert_eq!((report["message"].as_str(), report["messageOrigin"].as_str()), (Some(message), Some(origin)), "{text}: {report}");
+    }
+    let report = failed(&base, "#include \"lib.jsxinc\"");
+    let file = report["file"].as_str().map(|f| Path::new(f).ends_with("lib.jsxinc"));
+    assert_eq!((file, report["line"].as_u64(), report["column"].as_u64()), (Some(true), Some(2), Some(3)), "{report}");
+    let report = failed(&base, "$.evalFile('nope.jsx');");
+    assert_eq!(report["messageOrigin"], "built-in", "{report}");
     let _ = std::fs::remove_dir_all(base);
 }
 
