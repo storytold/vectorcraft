@@ -466,7 +466,7 @@ fn edit_tip(resp: egui::Response, name: &egui::Response) -> egui::Response {
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let node = first_subject(app);
-    let sel = current_sel(app, ui.ctx(), node.as_ref());
+    let sel = current_sel(app, ui.ctx(), node.as_deref());
     let hide_thumb: bool = pstate(ui.ctx(), "ap-hide-thumb");
     widgets::list_box(ui, |ui| {
         ui.spacing_mut().item_spacing.y = 0.0;
@@ -519,10 +519,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             Some(n) => stack(app, ui, n, sel, r, None),
             None => default_stack(app, ui),
         }
-        // Spacer row like Illustrator's empty tail.
+        // An empty spacer row at the end of the list.
         ui.allocate_exact_size(vec2(ui.available_width(), 10.0), Sense::hover());
     });
-    bottom(app, ui, node.as_ref(), sel);
+    bottom(app, ui, node.as_deref(), sel);
     delete_key(app, ui);
     // A row's popup, beside the panel (in the same window when the panel floats).
     let panel = ui.max_rect();
@@ -543,13 +543,13 @@ fn delete_key(app: &mut VectorcraftApp, ui: &mut Ui) {
     let keys = super::has_row_keys(&ctx, ROW_KEYS) && !pressed_outside;
     super::set_row_keys(&ctx, ROW_KEYS, keys);
     let node = first_subject(app);
-    let sel = current_sel(app, &ctx, node.as_ref());
+    let sel = current_sel(app, &ctx, node.as_deref());
     if keys
         && sel.deletable()
         && ctx.memory(|m| m.focused().is_none())
         && ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Delete) || i.consume_key(egui::Modifiers::NONE, egui::Key::Backspace))
     {
-        delete_selected(app, ui, node.as_ref(), sel);
+        delete_selected(app, ui, node.as_deref(), sel);
     }
 }
 
@@ -564,10 +564,10 @@ fn thumbnail_drag(ui: &mut Ui, th: Rect, id: NodeId) {
 }
 
 /// The object the panel lists: the targeted layer, group or object (`layer.target`), else the
-/// first selected one.
-fn first_subject(app: &VectorcraftApp) -> Option<Node> {
+/// first selected one, as the `Arc` the document holds.
+fn first_subject(app: &VectorcraftApp) -> Option<std::sync::Arc<Node>> {
     let st = app.session.active()?;
-    st.selection.subjects().first().and_then(|id| st.doc.node(*id)).cloned()
+    st.selection.subjects().first().and_then(|id| super::layers::node_arc(&st.doc, *id))
 }
 
 /// The selection as the Control bar and the object row name it: "No Selection", the kind ("Path",
@@ -1680,7 +1680,7 @@ pub(crate) fn fx_menu(app: &mut VectorcraftApp, ui: &mut Ui) {
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let node = first_subject(app);
     let has = node.is_some();
-    let sel = current_sel(app, ui.ctx(), node.as_ref());
+    let sel = current_sel(app, ui.ctx(), node.as_deref());
     if menu_item(ui, tl!("Add New Fill"), has, false) {
         app.run("appearance.addFill", json!({})).ok();
     }
@@ -1689,10 +1689,10 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     ui.separator();
     if menu_item(ui, tl!("Duplicate Item"), has && sel.editable(), false) {
-        duplicate_selected(app, ui, node.as_ref(), sel);
+        duplicate_selected(app, ui, node.as_deref(), sel);
     }
     if menu_item(ui, tl!("Remove Item"), has && sel.deletable(), false) {
-        delete_selected(app, ui, node.as_ref(), sel);
+        delete_selected(app, ui, node.as_deref(), sel);
     }
     if menu_item(ui, tl!("Clear Appearance"), has, false) {
         app.run("appearance.clear", json!({})).ok();

@@ -838,13 +838,13 @@ fn other_open_filters() -> impl Iterator<Item = (&'static str, &'static [&'stati
 /// Open-dialog filters for Swatch Libraries and Graphic Style Libraries Other Library… and Locate
 /// Library…. The library formats come first so Linux file portals (which grey out files that don't
 /// match the default filter) still list `.ase` and the other library extensions; then the same
-/// filters as [`builtin_open_filters`], without a second copy of the library filter, so a document
+/// filters as [`builtin_open_filters`], without a second filter of that label, so a document
 /// can be picked for its swatches or graphic styles.
 pub fn library_open_filters(
     library_label: &'static str,
     library_exts: &'static [&'static str],
 ) -> impl Iterator<Item = (&'static str, &'static [&'static str])> {
-    std::iter::once((library_label, library_exts)).chain(builtin_open_filters().filter(move |f| *f != (library_label, library_exts)))
+    std::iter::once((library_label, library_exts)).chain(builtin_open_filters().filter(move |f| f.0 != library_label))
 }
 
 /// File → Place dialog filters: "All placeable files", then one per placeable format, then text,

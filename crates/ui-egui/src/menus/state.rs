@@ -235,7 +235,7 @@ fn ui_enabled(app: &VectorcraftApp, id: &str) -> bool {
     match id {
         // Save is off for a clean document that already has its own file.
         "file.save" => app.session.active().is_some_and(|d| d.path.is_none() || d.converted || d.is_dirty()),
-        "type.bold" | "type.italic" | "type.underline" | "type.lineComposer" | "type.hyphenate" => {
+        "type.bold" | "type.italic" | "type.underline" | "type.lineComposer" | "type.hyphenate" | "type.highlightFontSize" => {
             crate::panels::character::text_style(app).is_some()
         }
         id if crate::panels::paragraph::ALIGN_COMMANDS.iter().any(|c| c.0 == id) => crate::panels::character::text_style(app).is_some(),
@@ -302,6 +302,7 @@ fn ui_enabled(app: &VectorcraftApp, id: &str) -> bool {
         "ui.sampleScreenColor" => crate::screen_color::available(app),
         "ui.newBrush" => app.session.active().is_some(),
         "ui.brushOptions" => crate::dialogs::brush_options::available(app),
+        "ui.brushObjectOptions" => crate::dialogs::brush_options::object_available(app),
         "ui.hyphenation" | "ui.justification" | "ui.tateChuYokoSettings" | "ui.warichuSettings" => {
             crate::panels::character::text_style(app).is_some()
         }
