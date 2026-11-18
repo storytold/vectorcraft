@@ -504,6 +504,62 @@ fn bunri_kinshi_is_set_per_paragraph_and_saved_only_when_on() {
     assert!(!text(&s).para_at(0).bunri_kinshi && !text(&s).para_at(1).bunri_kinshi);
 }
 
+/// Paragraph panel menu › Kurikaeshi Moji Shori: off for new type and for a paragraph saved before
+/// it, and saved only when on; `text.setFormat {kurikaeshiMojiShori}` sets it per paragraph in one
+/// undo step, records nothing when the paragraphs already have the value, refuses a value that is
+/// not true or false, and paragraph styles carry it. The text keeps its repeat marks.
+#[test]
+fn kurikaeshi_moji_shori_is_set_per_paragraph_and_saved_only_when_on() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 10, "size": 20, "text": "時々\nすゝ"})).unwrap()["id"].as_u64().unwrap();
+    let text = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => (**t).clone(),
+        _ => panic!("text"),
+    };
+    assert!(!text(&s).para_at(0).kurikaeshi_moji_shori, "new type has it off");
+    assert!(serde_json::to_value(text(&s).para_at(0)).unwrap().get("kurikaeshi_moji_shori").is_none());
+    let old: vectorcraft_doc::ParaStyle = serde_json::from_value(json!({"justify": "Left"})).unwrap();
+    assert!(!old.kurikaeshi_moji_shori, "saved before the option: off");
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let steps = s.doc().unwrap().history.undo.len();
+    // Only the second paragraph.
+    let second = "時々\n".len();
+    s.execute("text.setFormat", &json!({"kurikaeshiMojiShori": true, "start": second, "end": second})).unwrap();
+    assert!(!text(&s).para_at(0).kurikaeshi_moji_shori && text(&s).para_at(1).kurikaeshi_moji_shori);
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1);
+    assert_eq!(text(&s).plain_text(), "時々\nすゝ", "the text keeps its marks");
+    // The same value again records nothing.
+    s.execute("text.setFormat", &json!({"kurikaeshiMojiShori": true, "start": second, "end": second})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1);
+    let saved = serde_json::to_value(text(&s).para_at(1)).unwrap();
+    assert_eq!(saved["kurikaeshi_moji_shori"], true);
+    let back: vectorcraft_doc::ParaStyle = serde_json::from_value(saved).unwrap();
+    assert!(back.kurikaeshi_moji_shori);
+    let reopened = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let Some(NodeKind::Text(back)) = reopened.node(NodeId(id)).map(|n| &n.kind) else { panic!("text") };
+    assert!(!back.para_at(0).kurikaeshi_moji_shori && back.para_at(1).kurikaeshi_moji_shori, "the file keeps it per paragraph");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(!text(&s).para_at(1).kurikaeshi_moji_shori);
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert!(text(&s).para_at(1).kurikaeshi_moji_shori);
+    for bad in [json!("yes"), json!(1)] {
+        assert!(s.execute("text.setFormat", &json!({"ids": [id], "kurikaeshiMojiShori": bad, "kinsoku": "none"})).is_err(), "{bad}");
+    }
+    assert!(s.execute("text.setRangeStyle", &json!({"id": id, "kurikaeshiMojiShori": false})).is_err());
+    assert!(
+        text(&s).para_at(1).kurikaeshi_moji_shori && text(&s).para_at(1).kinsoku != vectorcraft_doc::Kinsoku::None,
+        "a refused call changes nothing"
+    );
+    // A paragraph style carries it.
+    s.execute("paraStyle.new", &json!({"name": "Repeats", "attrs": {"kurikaeshi_moji_shori": true}})).unwrap();
+    s.execute("paraStyle.apply", &json!({"name": "Repeats", "id": id})).unwrap();
+    assert!(text(&s).para_at(0).kurikaeshi_moji_shori && text(&s).para_at(1).kurikaeshi_moji_shori);
+    s.execute("paraStyle.new", &json!({"name": "Marks", "attrs": {"kurikaeshi_moji_shori": false}})).unwrap();
+    s.execute("paraStyle.apply", &json!({"name": "Marks", "id": id})).unwrap();
+    assert!(!text(&s).para_at(0).kurikaeshi_moji_shori && !text(&s).para_at(1).kurikaeshi_moji_shori);
+}
+
 /// Paragraph panel › Insert Kashidas: `text.setFormat {kashida}` sets it per paragraph in one
 /// undo step, the paragraph is saved with it only when it is not None and opens with it, an
 /// unknown value changes nothing, and paragraph styles carry it.
@@ -678,6 +734,189 @@ fn numbered_lists_are_set_per_paragraph_saved_and_styled() {
     assert_eq!(t.para_at(0).list, roman);
     s.execute("paraStyle.apply", &json!({"name": "Plain", "id": id})).unwrap();
     assert_eq!((list(&s, 0), list(&s, 1), list(&s, 2)), (None, None, None));
+}
+
+/// `text.setFormat {startNumber}` gives the first numbered paragraph it touches a number, and the
+/// paragraphs after it count on from it; `restartNumbering` true gives it 1 and false takes the
+/// numbers away. Each change is one undo step, a call that changes nothing records none, and a
+/// bad value or both keys change nothing. The file keeps the number, Return and paragraph styles
+/// do not take it, a bulleted paragraph keeps none, and Convert to Text writes the numbers shown.
+#[test]
+fn a_numbered_paragraph_starts_at_a_given_number_or_restarts() {
+    use vectorcraft_doc::text::{Bullet, ParaList};
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s
+        .execute("text.create", &json!({"x": 10, "y": 10, "text": "Intro\nOne\nTwo\nThree\nFour", "area": {"width": 300, "height": 200}}))
+        .unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    let text = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => (**t).clone(),
+        _ => panic!("text"),
+    };
+    let starts = |s: &Session| text(s).paragraph_styles().iter().map(|p| p.list.and_then(|l| l.start)).collect::<Vec<_>>();
+    let numbers = |s: &Session| {
+        vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &text(s)).markers.iter().map(|m| m.text.clone()).collect::<Vec<_>>()
+    };
+    let undo = |s: &Session| s.active().unwrap().history.undo.len();
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    // A call over all the text gives the number to the first paragraph the same call numbers.
+    s.execute("text.setFormat", &json!({"start": 6, "end": 24, "number": "arabic", "startNumber": 5})).unwrap();
+    assert_eq!(starts(&s), [None, Some(5), None, None, None]);
+    assert_eq!(numbers(&s), ["5.", "6.", "7.", "8."]);
+    // On "Three": `restartNumbering` gives it 1, and "Four" counts on from it.
+    let steps = undo(&s);
+    s.execute("text.setFormat", &json!({"start": 14, "end": 14, "restartNumbering": true})).unwrap();
+    assert_eq!((numbers(&s), undo(&s)), (vec!["5.".to_string(), "6.".into(), "1.".into(), "2.".into()], steps + 1));
+    // The same number again, or a call on a paragraph in no list, changes nothing.
+    s.execute("text.setFormat", &json!({"start": 14, "end": 14, "startNumber": 1.0})).unwrap();
+    s.execute("text.setFormat", &json!({"start": 0, "end": 0, "startNumber": 3})).unwrap();
+    assert_eq!((starts(&s), undo(&s)), (vec![None, Some(5), None, Some(1), None], steps + 1));
+    // Bad values and both keys at once are errors and change nothing.
+    for bad in [
+        json!({"startNumber": 0}),
+        json!({"startNumber": -2}),
+        json!({"startNumber": 2.5}),
+        json!({"startNumber": 1_000_000_000}),
+        json!({"startNumber": "5"}),
+        json!({"restartNumbering": "yes"}),
+        json!({"startNumber": 3, "restartNumbering": true}),
+    ] {
+        assert!(s.execute("text.setFormat", &bad).is_err(), "{bad}");
+    }
+    assert_eq!((starts(&s), undo(&s)), (vec![None, Some(5), None, Some(1), None], steps + 1));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(numbers(&s), ["5.", "6.", "7.", "8."], "one Undo takes the restart back");
+    s.execute("edit.redo", &json!({})).unwrap();
+    // The file keeps the numbers.
+    assert_eq!(serde_json::to_value(text(&s).para_at(1)).unwrap()["list"], json!({"bullet": "dot", "number": "arabic", "start": 5}));
+    let reopened = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let Some(NodeKind::Text(back)) = reopened.node(NodeId(id)).map(|n| &n.kind) else { panic!("text") };
+    assert_eq!(back.paragraph_styles(), text(&s).paragraph_styles());
+    // Return at the end of "One" makes an item that counts on, without a number of its own.
+    s.execute("text.editRange", &json!({"id": id, "start": 9, "end": 9, "insert": "\nOne and a half"})).unwrap();
+    assert_eq!(numbers(&s), ["5.", "6.", "7.", "1.", "2."]);
+    assert_eq!(starts(&s), [None, Some(5), None, None, Some(1), None]);
+    // A paragraph style made from the paragraph does not keep its number, and a style's list
+    // with a number is an error.
+    s.execute("paraStyle.new", &json!({"name": "Item", "id": id, "start": 6, "end": 6})).unwrap();
+    s.execute("paraStyle.apply", &json!({"name": "Item", "id": id})).unwrap();
+    assert_eq!(starts(&s), [None; 6]);
+    assert_eq!(numbers(&s), ["1.", "2.", "3.", "4.", "5.", "6."]);
+    let given = json!({"name": "Given", "attrs": {"list": {"number": "arabic", "start": 4}}});
+    assert!(s.execute("paraStyle.new", &given).is_err());
+    // `restartNumbering` false takes every number the call touches away; a paragraph made bulleted
+    // keeps none.
+    s.execute("text.setFormat", &json!({"start": 0, "end": 0, "startNumber": 7})).unwrap();
+    s.execute("text.setFormat", &json!({"start": 6, "end": 6, "startNumber": 3})).unwrap();
+    assert_eq!(starts(&s)[..2], [Some(7), Some(3)]);
+    s.execute("text.setFormat", &json!({"restartNumbering": false})).unwrap();
+    assert_eq!(starts(&s), [None; 6]);
+    s.execute("text.setFormat", &json!({"start": 0, "end": 0, "startNumber": 7})).unwrap();
+    s.execute("text.setFormat", &json!({"start": 0, "end": 0, "bullet": "dot"})).unwrap();
+    assert_eq!(text(&s).para_at(0).list, Some(ParaList::bulleted(Bullet::Dot)));
+    s.execute("text.setFormat", &json!({"start": 0, "end": 0, "number": "upperRoman"})).unwrap();
+    assert_eq!(text(&s).para_at(0).list.and_then(|l| l.start), None, "numbered again, it counts on");
+    // Convert to Text writes the numbers the paragraphs showed.
+    s.execute("text.setFormat", &json!({"start": 0, "end": 0, "number": "arabic", "startNumber": 10})).unwrap();
+    s.execute("text.setFormat", &json!({"start": 30, "end": 30, "restartNumbering": true})).unwrap();
+    let shown = numbers(&s);
+    assert_eq!(shown, ["10.", "11.", "12.", "13.", "1.", "2."]);
+    s.execute("text.convertListToText", &json!({})).unwrap();
+    let written: Vec<String> = text(&s).plain_text().split('\n').map(|p| p.split('\t').next().unwrap_or("").to_string()).collect();
+    assert_eq!(written, shown);
+    assert_eq!(starts(&s), [None; 6]);
+    assert!(text(&s).paragraph_styles().iter().all(|p| p.list.is_none()));
+}
+
+/// In threaded type, a paragraph given a number in the first frame carries its count on through
+/// the later frames, and a paragraph given 1 in a later frame starts the count again there.
+#[test]
+fn a_given_number_carries_through_threaded_frames() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 300})).unwrap();
+    let numbers = |s: &Session, id: u64| {
+        let Some(NodeKind::Text(t)) = s.doc().unwrap().doc.node(NodeId(id)).map(|n| &n.kind) else { panic!("text") };
+        vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t).markers.iter().map(|m| m.text.clone()).collect::<Vec<_>>()
+    };
+    let story = (1..=10).map(|i| format!("Item {i}")).collect::<Vec<_>>().join("\n");
+    let a =
+        s.execute("text.create", &json!({"x": 10, "y": 10, "text": story, "area": {"width": 150, "height": 60}})).unwrap()["id"].as_u64().unwrap();
+    let b = s.execute("shape.rectangle", &json!({"x": 200, "y": 10, "width": 150, "height": 200})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    s.execute("text.thread.create", &json!({})).unwrap();
+    s.execute("text.setFormat", &json!({"ids": [a, b], "list": "number"})).unwrap();
+    let first = numbers(&s, a).len();
+    assert!((2..10).contains(&first), "both frames hold items: {first}");
+    s.execute("text.setFormat", &json!({"ids": [a], "start": 0, "end": 0, "startNumber": 20})).unwrap();
+    let want: Vec<String> = (20..30).map(|n| format!("{n}.")).collect();
+    assert_eq!([numbers(&s, a), numbers(&s, b)].concat(), want);
+    // The first paragraph of the second frame given 1: the second frame counts from 1.
+    s.execute("text.setFormat", &json!({"ids": [b], "start": 0, "end": 0, "restartNumbering": true})).unwrap();
+    let want: Vec<String> = (20..20 + first).chain(1..=10 - first).map(|n| format!("{n}.")).collect();
+    assert_eq!([numbers(&s, a), numbers(&s, b)].concat(), want);
+    // Editing the first frame's number moves every later number on with it.
+    s.execute("text.setFormat", &json!({"ids": [a], "start": 0, "end": 0, "startNumber": 2})).unwrap();
+    let want: Vec<String> = (2..2 + first).chain(1..=10 - first).map(|n| format!("{n}.")).collect();
+    assert_eq!([numbers(&s, a), numbers(&s, b)].concat(), want);
+}
+
+/// A number given in a threaded frame whose first paragraph continues from the frame before goes
+/// to the next numbered paragraph that begins in that frame, not to the item the earlier frame shows,
+/// and `restartNumbering` false there leaves that item's number alone.
+#[test]
+fn a_given_number_skips_the_paragraph_continued_from_the_frame_before() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 300})).unwrap();
+    let text = |s: &Session, id: u64| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => (**t).clone(),
+        _ => panic!("text"),
+    };
+    let numbers = |s: &Session, id: u64| {
+        vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &text(s, id)).markers.iter().map(|m| m.text.clone()).collect::<Vec<_>>()
+    };
+    let long = (1..=40).map(|i| format!("word{i}")).collect::<Vec<_>>().join(" ");
+    let story = format!("One\n{long}\nThree");
+    let a =
+        s.execute("text.create", &json!({"x": 10, "y": 10, "text": story, "area": {"width": 150, "height": 60}})).unwrap()["id"].as_u64().unwrap();
+    let b = s.execute("shape.rectangle", &json!({"x": 200, "y": 10, "width": 150, "height": 250})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    s.execute("text.thread.create", &json!({})).unwrap();
+    s.execute("text.setFormat", &json!({"ids": [a, b], "list": "number"})).unwrap();
+    assert!(text(&s, b).first_para_continues, "the second frame starts inside the long paragraph");
+    assert_eq!((numbers(&s, a), numbers(&s, b)), (vec!["1.".to_string(), "2.".into()], vec!["3.".to_string()]));
+    s.execute("text.setFormat", &json!({"ids": [b], "startNumber": 5})).unwrap();
+    assert_eq!((numbers(&s, a), numbers(&s, b)), (vec!["1.".to_string(), "2.".into()], vec!["5.".to_string()]));
+    // The long item, numbered in the first frame, keeps its number when the second frame's are taken away.
+    s.execute("text.setFormat", &json!({"ids": [a], "start": 4, "end": 4, "startNumber": 8})).unwrap();
+    assert_eq!((numbers(&s, a), numbers(&s, b)), (vec!["1.".to_string(), "8.".into()], vec!["5.".to_string()]));
+    s.execute("text.setFormat", &json!({"ids": [b], "restartNumbering": false})).unwrap();
+    assert_eq!((numbers(&s, a), numbers(&s, b)), (vec!["1.".to_string(), "8.".into()], vec!["9.".to_string()]));
+}
+
+/// `startNumber` over several type objects goes to the first numbered paragraph with text among
+/// all of them, past an empty numbered object listed first; with no text anywhere it goes to the
+/// first numbered paragraph.
+#[test]
+fn a_given_number_goes_to_the_first_numbered_text_across_objects() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let make =
+        |s: &mut Session, y: u32, text: &str| s.execute("text.create", &json!({"x": 10, "y": y, "text": text})).unwrap()["id"].as_u64().unwrap();
+    let empty = make(&mut s, 10, "");
+    let full = make(&mut s, 60, "One\nTwo");
+    let start = |s: &Session, id: u64| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.para_at(0).list.and_then(|l| l.start),
+        _ => panic!("text"),
+    };
+    s.execute("text.setFormat", &json!({"ids": [empty, full], "number": "arabic"})).unwrap();
+    s.execute("text.setFormat", &json!({"ids": [empty, full], "startNumber": 4})).unwrap();
+    assert_eq!((start(&s, empty), start(&s, full)), (None, Some(4)));
+    let other = make(&mut s, 120, "");
+    s.execute("text.setFormat", &json!({"ids": [other, empty], "number": "arabic"})).unwrap();
+    s.execute("text.setFormat", &json!({"ids": [other, empty], "startNumber": 6})).unwrap();
+    assert_eq!((start(&s, other), start(&s, empty)), (Some(6), None));
 }
 
 /// Bullets and Numbering… › Alignment: `text.setFormat {listAlign}` sets where the marker
@@ -2555,6 +2794,44 @@ fn area_options_columns_change_layout() {
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(lay(&s).frames.len(), 1);
     assert!(s.execute("text.areaOptions", &json!({"firstBaseline": "nope"})).is_err());
+}
+
+/// First Baseline Em Box Height: set, reported and undone like the other kinds, with Min as the
+/// least distance; setting it again adds no undo step, and the refusal of an unknown kind lists it.
+#[test]
+fn area_options_set_the_em_box_height_first_baseline() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 10, "text": "word ".repeat(20), "area": {"width": 300, "height": 120}})).unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let first = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t).lines[0].first_baseline,
+        _ => panic!("area type"),
+    };
+    let ascent = first(&s);
+    let r = s.execute("text.areaOptions", &json!({"firstBaseline": "emBoxHeight"})).unwrap();
+    assert_eq!((r["firstBaseline"].as_str(), r["firstBaselineMin"].as_f64()), (Some("emBoxHeight"), Some(0.0)));
+    let em_box = first(&s);
+    assert!(em_box > 0.0 && (em_box - ascent).abs() > 0.1, "{em_box} {ascent}");
+    let steps = s.doc().unwrap().history.undo.len();
+    s.execute("text.areaOptions", &json!({"firstBaseline": "emBoxHeight"})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps, "no change, no undo step");
+    // A Min nearer the top keeps the em box; one further down is the distance.
+    s.execute("text.areaOptions", &json!({"firstBaselineMin": em_box / 2.0})).unwrap();
+    assert!((first(&s) - em_box).abs() < 1e-9);
+    let r = s.execute("text.areaOptions", &json!({"firstBaselineMin": 30})).unwrap();
+    assert_eq!((r["firstBaseline"].as_str(), r["firstBaselineMin"].as_f64()), (Some("emBoxHeight"), Some(30.0)));
+    assert!((first(&s) - 30.0).abs() < 1e-9);
+    for _ in 0..3 {
+        s.execute("edit.undo", &json!({})).unwrap();
+    }
+    assert_eq!(s.execute("text.areaOptions", &json!({})).unwrap()["firstBaseline"], "ascent");
+    assert!((first(&s) - ascent).abs() < 1e-9);
+    let e = s.execute("text.areaOptions", &json!({"firstBaseline": "emBox"})).unwrap_err().to_string();
+    assert!(e.contains("emBoxHeight"), "{e}");
+    assert_eq!(s.execute("text.areaOptions", &json!({})).unwrap()["firstBaseline"], "ascent");
 }
 
 /// `rowGutter` sets a gutter between rows of its own, the reply passes it back, and a gutter

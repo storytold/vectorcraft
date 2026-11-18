@@ -3,6 +3,7 @@
 //! linear light, which a document gradient (mixed in display RGB) shows through extra stops.
 
 use super::{Color, GradientStop, HashMap, HashSet, css, roxmltree};
+use craft_svg::tree::usvg;
 use vectorcraft_color::cms::lab::{linear_to_srgb, srgb_to_linear};
 
 /// How far (display RGB, 0..1) the straight line between neighbouring baked stops may stray from

@@ -151,7 +151,7 @@ fill or stroke (fields as in `swatchOptions` plus `group`; a gradient or pattern
 
 The Color Picker is a dialog too: `engine.execute {command: "ui.colorPicker", params: {stroke?, color?}}` opens it for the fill (or stroke) proxy; `ui.dialog.set {field: "hex", value: "00FF00"}` (or `color`, `channel`, `webOnly`, `swatches`) then `ui.dialog.confirm` applies the colour through `paint.setFill` / `paint.setStroke`.
 
-Sample Color from Screen: `ui.sampleScreenColor {stroke?, picker?}` shows the system's color sampler (macOS; Linux through the XDG desktop portal's [PickColor](https://flatpak.github.io/xdg-desktop-portal/docs/doc-org.freedesktop.portal.Screenshot.html); browsers with an EyeDropper) and returns `null` at once. When the person at the computer clicks a color anywhere on the screen, it runs `paint.setFill` (or `paint.setStroke`) with that color as one undo step, or with `picker: true` sets the open Color Picker's `color`; a cancel (Escape on macOS and in browsers) leaves the colors as they were. The sampled display sRGB color is converted into the working RGB space. `ui.inspect` reports `screenSampler: true` until the sampler answers. On Linux, a session without a portal that has PickColor, a portal that does not return from the call within 25 seconds (VectorCraft's own limit) or leaves the bus before it answers, and a portal that ends the request in another way each put a message in the status bar and end the wait, so the sampler can be shown again. A portal that returns from the call and then neither answers nor leaves the bus keeps the sampler open. Without a sampler (Windows, FreeBSD, DragonFly BSD, NetBSD, OpenBSD, other browsers) the call returns an error. To read a color from VectorCraft's own window without a person, call `ui.screenshot`.
+Sample Color from Screen: `ui.sampleScreenColor {stroke?, picker?}` shows the system's color sampler (macOS; Linux through the XDG desktop portal's [PickColor](https://flatpak.github.io/xdg-desktop-portal/docs/doc-org.freedesktop.portal.Screenshot.html); Windows; browsers with an EyeDropper) and returns `null` at once. When the person at the computer clicks a color anywhere on the screen, it runs `paint.setFill` (or `paint.setStroke`) with that color as one undo step, or with `picker: true` sets the open Color Picker's `color`; a cancel (Escape on macOS, Windows and in browsers) leaves the colors as they were. The sampled display sRGB color is converted into the working RGB space. `ui.inspect` reports `screenSampler: true` until the sampler answers. On Windows, the sampler copies every monitor when it is shown and covers them with that still copy under a crosshair: a left click picks the copied pixel, read as sRGB (the colors of HDR and wide-gamut displays are not converted), and Escape, a click of another mouse button or switching to another window cancels. A screen that can't be copied puts a message in the status bar and ends the wait. On Linux, a session without a portal that has PickColor, a portal that does not return from the call within 25 seconds (VectorCraft's own limit) or leaves the bus before it answers, and a portal that ends the request in another way each put a message in the status bar and end the wait, so the sampler can be shown again. A portal that returns from the call and then neither answers nor leaves the bus keeps the sampler open. Without a sampler (FreeBSD, DragonFly BSD, NetBSD, OpenBSD, other browsers) the call returns an error. To read a color from VectorCraft's own window without a person, call `ui.screenshot`.
 
 Graphic styles: `ui.graphicStyleOptions {name}` opens the `graphicStyleOptions` dialog (field `name`) for a style and
 `ui.dialog.confirm` renames it with `graphicStyle.rename` (a name another style has returns an error and keeps the
@@ -265,7 +265,9 @@ My Themes tab lists the saved themes; every action runs a command (`colorTheme.s
 Color Wheel panel (`window.panel {panel: "colorWheel"}`): a hue ring around a saturation and brightness square. A
 pick runs the commands the Color panel's sliders run: `paint.setFill` or `paint.setStroke` with `keepModel`,
 `paint.editGradient` for a gradient's selected stop, and `paint.freeform.setPoint` for a freeform gradient's selected
-point (the first stop or point when none is selected).
+point (the first stop or point when none is selected). `ui.colorWheel {view?, channel?}` shows the wheel or the box (a
+color field with a channel strip at its right) and picks the box's channel; it returns the settings, and `ui.inspect`
+reports them as `ui.color_wheel`.
 
 Edit Colors dialogs: `ui.colorBalanceDialog` opens Adjust Colors (`colorBalance`: fields `mode` `gray`/`rgb`/`cmyk`/
 `global`, the channels `r` `g` `b` / `c` `m` `y` `k` / `gray` / `tint` (global mode) from −100 to 100, `convert`, `fill`, `stroke`,
@@ -290,8 +292,23 @@ luminosity}`, percent from -100 to 100, 0 by default). The dialog sends a non-ze
 colors; colors opened alone are saved as a group with the change. `display` sets how the Edit tab shows the new
 colors: `smooth` (the smooth wheel, also when unset; each opening starts there), `segmented` (a wheel of solid patches,
 24 hues by 5 saturations, whose markers move as freely) or `bars` (a solid bar per recolored color in row order; a click
-selects its row for the sliders and a drag moves the row without changing a color). Setting
-`colors`, a preserve flag or `limitTo` reduces the rows again (also on `ui.dialog.confirm`). The dialog previews
+selects its row for the sliders and a drag moves the row without changing a color). `wheelTool` turns on a wheel tool
+on either wheel: `add` (the Add Color tool) adds a click as a new color, the hue and saturation clicked at the base
+color's brightness (the patch's color on the segmented wheel), in a new row with no current colors (`from: []`) and
+`added: true` that becomes the selected row; `remove` (the Remove Color tool) removes the color of the marker clicked.
+`wheelAxes: "hueBrightness"` makes both wheels show hue and brightness: brightness runs from black at the center to
+full at the edge, the wheel is drawn at the base color's saturation, a marker drag sets hue and brightness, the slider
+under the wheel sets saturation, and Add Color adds the hue and brightness clicked at the base color's saturation.
+`hueSaturation`, unset (each opening) or any other value shows hue and saturation; switching changes no color. A color bar's
+right-click menu has Remove Color too. The base color can't be removed. A removed color's row is dropped, unless it
+has current colors and art or a group is open: it then keeps them with `to: null`, that art keeps its colors, and the
+group's swatch at that place is removed. A row with no current colors recolors no art; with a group, the new color of
+one with `added: true` that is not excluded is added to the group after the group's other colors, and a row made with New Row adds none.
+`groupStorage` shows the Color Groups list (true when the dialog opens); setting `group` to a color group's name makes
+it the group being edited, as opening on it does, and refuses a name no group has; `groupAction` (`save`, `new` or
+`delete`) runs the list's Save Changes, New Color Group or Delete button on the next frame, or first on confirm (see
+`docs/mcp.md`). Setting `colors`, a preserve flag or `limitTo` reduces the rows again (also on `ui.dialog.confirm`).
+The dialog previews
 `recolor.apply` on the canvas; confirm keeps it as one undo step (with a group, the group is rewritten in the same
 step; with no art selected only the group changes). In the Swatches panel, double-clicking a colour group's folder,
 or the options button while a group is selected, opens it.
@@ -485,7 +502,10 @@ the desktop each floating window is an OS window of its own; on the web and on W
 window. `ui.toolbar_pos` in `ui.inspect` is the Tools panel's corner (null: docked); `window.panel.float` and
 `window.panel.dock` with `panel: "tools"` float it at `x`, `y` or dock it on the window's left edge. With
 `window.toolsBesideCanvas {on?}` (Window › Toolbars › Keep Tools Beside the Canvas, off by default; `ui.tools_beside_canvas`)
-the docked Tools panel sits between left-side panels and the canvas, and `window.panel.dock` docks it there.
+the docked Tools panel sits between left-side panels and the canvas, and `window.panel.dock` docks it there. Dropping
+a floating Tools panel on the canvas's left edge, right of panels docked on the left, turns the setting on, and on the
+window's left edge turns it off; with no panels docked on the left, a drop leaves the setting as it is
+(`docs/mcp.md` › Tools panel placement).
 
 Flatten Transparency: `ui.flattenTransparencyDialog` opens the `flattenTransparency` dialog for the selection
 (fields `preset`: a preset name, setting it loads that preset's options; the option keys of
@@ -658,7 +678,9 @@ agents) opens the `rasterEffectsSettings` dialog. Its fields are what `document.
 (`resolution`, `colorModel`, `background`, `antiAlias`, `clippingMask`, `addAround` in pt, `preserveSpotColors`);
 `ui.dialog.confirm` runs it with them as one undo step; a bad value keeps the dialog open. Object → Rasterize… opens a
 `command` dialog for `object.rasterize` whose fields (`ppi`, `colorModel`, `background`, `antiAlias`, `clippingMask`,
-`addAround`) start from these settings.
+`addAround`) start from these settings. `colorModel`, `antiAlias` (`none`, `art`, `type`) and `background` (`white`,
+`transparent`) are dropdowns; `ui.dialog.set` also takes any other value the command takes, and the dialog sends it
+unchanged.
 
 Missing linked files: `app.open` of a document whose linked images' files can't be found (`document.open`'s
 `missingLinks`) opens the `missingLinks` dialog for the first (fields `missing`: `[{name, path, ids}]`, `modified`,
@@ -722,7 +744,8 @@ type with those options (`file.place {text: {…}}`).
 
 System clipboard formats: through the desktop app, `edit.copy`, `edit.cut`, `artboard.copy` and `artboard.cut` publish what `clipboard.flavours`
 lists to the system clipboard (once they are written, the status bar shows the first of the PNG's and PDF's
-`warnings`, such as an image that couldn't be decoded), and every Paste command first loads what another app copied (`clipboard.importSvg`,
+`warnings`, such as an image that couldn't be decoded, and how many there are, and hovering the message lists them, unless
+another message has replaced the Copy or Cut's meanwhile), and every Paste command first loads what another app copied (`clipboard.importSvg`,
 `importPdf`, `importEps`, `importText` or `importImage`, centred in the view; the desktop app reads PDF and EPS from
 the Windows clipboard and, with SVG, from the macOS pasteboard, and an `.eps` file, or a `.ai` or `.ait` file that holds a PDF or PostScript, copied in a file manager anywhere; a copied `.ai` or `.ait` file that holds a PDF loads with `importPdf {editingData: true}`, which reads its editing data); an import error answers the Paste with that error
 and pastes nothing. Cmd+V also pastes a bitmap or PDF with no text beside it (on the key's release, as egui sends no
@@ -805,12 +828,20 @@ selected slices. Hidden or locked slices (`view.slices.hide`, `view.slices.lock`
 EPS Options: Export As… with the EPS format (`file.exportAs {format: "eps"}`, then the save dialog), or
 `ui.epsOptionsDialog {path?, …document.exportEps options}` for agents, opens the `epsOptions` dialog. Its fields are
 `document.export` params: `previewFormat` (`none`, `tiffBw`, `tiffColor`), `transparentPreview`, `overprints`
-(`preserve`, `discard`), `flattenerPreset` (a built-in or saved preset's name), `includeLinkedFiles`, `thumbnails`,
+(`preserve`, `discard`), `flattenerPreset` (a built-in or saved preset's name), `flattener` (custom flattener options
+over the preset, as `object.flattenTransparency` takes them), `includeLinkedFiles`, `thumbnails`,
 `cmykPostScript`, `compatibleGradients`, `level` (`2`, `3`), plus `path` and the artboard choice (`useArtboards`,
 `range`). `ui.dialog.confirm` checks them (a bad value or an unknown preset keeps the dialog open), remembers them for
 the next EPS Options and writes the file(s), asking for a path when there is none. With Use Artboards and two or more
 artboards, it writes a central file of the whole document under the chosen name and one `{stem}_{artboard}.eps` per
 artboard. When no art shows, it writes only the artboard files.
+
+The Custom… button beside the preset opens the `epsFlattenerOptions` dialog over EPS Options, on the options the
+export would use. Its fields are the flattener options; `preserveAlpha` is always off, and overprints are kept only
+with `overprints: "preserve"`. Its `ui.dialog.confirm` sets every option as `flattener` (the preset then shows
+[Custom]) and goes back to EPS Options; `ui.dialog.cancel` goes back with the options unchanged. Choosing a preset,
+in the dropdown or with `ui.dialog.set {flattenerPreset}`, drops `flattener`, and so does `ui.epsOptionsDialog` with
+a `flattenerPreset` and no `flattener`.
 
 Data Recovery: at launch, copies left behind by a crash open the `recovery` dialog (never copies another running
 instance keeps, so instances started side by side for screenshots don't get it). Fields: `copies` (`[{file, title,
@@ -867,8 +898,8 @@ writes the HTML page to a temporary folder and opens it in the default browser (
 PSD Options: Export As… with the PSD format (`file.exportAs {format: "psd"}`, then the save dialog) opens `psdOptions`:
 the raster rows of PNG Options (`ppi`, `background`, `antiAlias`), then `colorModel` (`rgb`, `cmyk`, `gray`; a CMYK
 document starts on `cmyk`), `layers` (true: Write Layers; false: Flat Image, whose background list starts at White),
-`maxEditability` and `hiddenLayers` (with layers) and `embedIcc`. `ui.dialog.set` the fields and `ui.dialog.confirm`
-writes the file(s) with `document.export`.
+`preserveText`, `maxEditability` and `hiddenLayers` (with layers) and `embedIcc`. `ui.dialog.set` the fields and
+`ui.dialog.confirm` writes the file(s) with `document.export`; with Flat Image it leaves `preserveText` out.
 
 Print: File → Print… (`file.print` with no params, Ctrl/Cmd+P) opens the `print` dialog on the document's print
 settings. Its fields are the `print.setup` settings (`copies`, `artboards`, `range`, `media`, `orientation`,
@@ -1061,6 +1092,7 @@ Commands (`panel` and every panel parameter take a panel id in any case or its d
 | `window.panel.activate`, `.close`, `.closeGroup`, `.closeOthers` | `{panel}` | shows and selects, or hides |
 | `window.panel.minimize` | `{panel, minimized?}` | minimizes a dock group to its tabs, or a floating window to its title bar; omitted toggles |
 | `window.panel.collapse` | `{panel, collapsed?}` | `window.panel.minimize`; returns `{panel, collapsed, layout}` |
+| `window.panel.cycleOptions` | `{panel}` | shows the panel at its next display size (its Show/Hide Options states, largest first), as the double triangle on its tab strip does; a panel without sizes is an error; returns `{panel, size, sizes}` |
 | `window.panel.iconic` | `{panel, iconic?}` | collapses the panel's dock column to icons, or expands it |
 | `window.panel.layout`, `ui.dock` | `{action}` | one craft-ui `Action`, externally tagged, e.g. `{"MoveFloating":{"panel":"swatches","rect":[44,66,360,450]}}` or `{"ResizeSplit":{"path":[],"size":{"Ratio":0.35}}}`; `ui.dock` also takes craft-ui's `{operation, …}` |
 

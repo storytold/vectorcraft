@@ -55,7 +55,7 @@ plus review. Native-speaker review is human work and isn't in the hours.
 | Traditional Chinese (Taiwan) | `zh-hant` | 8,820 rows, 3,438 of them `@msg` and 48 `@msgplural` (counted 2026-11-13): the untranslated report lists 40 missing messages for it; menus, `tl!` literals and messages were complete when counted on 2026-10-21 (80% overall) | partial |
 | Italian | `it` | 8,924 rows, 3,560 of them `@msg` and 48 `@msgplural` (counted 2026-11-13): the untranslated report lists 54 missing messages for it, which open #7116, #7211, #7378 and #7405 translate | full |
 | Dutch | `nl` | 3,447 `@msg` and 48 `@msgplural` rows (counted 2026-11-13): in `COMPLETE_MESSAGES`, and the untranslated report lists 41 missing messages for it; one/other plurals | full |
-| Danish | `da` | 7,422 rows, 1,636 of them `@msg` and 48 `@msgplural` (counted 2026-11-14 on `main` at `edb228ac3`): in `COMPLETE_MESSAGES`, and the untranslated report lists the same missing messages for it as for Greek, Spanish and Finnish; one/other plurals | full |
+| Danish | `da` | 9,616 rows, 3,702 of them `@msg` and 49 `@msgplural` (counted 2026-11-15): in `COMPLETE_MESSAGES`, and the untranslated report lists 81 missing messages for it, 46 of them missing in every language; one/other plurals | full |
 | Russian | `ru` | 9,259 rows, 3,444 of them `@msg` and 48 `@msgplural` (counted 2026-11-13): in `COMPLETE_MESSAGES`; the untranslated report lists 46 menu strings, 21 `tl!` literals and 11 undo labels as missing | full |
 | Ukrainian | `uk` | 8,802 rows, 3,439 of them `@msg` and 48 `@msgplural` (counted 2026-11-13); one/few/many plurals | full |
 | Hungarian | `hu` | 9,166 rows, 3,444 of them `@msg` and 48 `@msgplural` (counted 2026-11-13): the untranslated report lists 40 missing messages for it, and lists 47 menu strings, 25 `tl!` strings, 11 undo labels and 45 swatch names without a row; one plural form | full |
@@ -66,7 +66,7 @@ plus review. Native-speaker review is human work and isn't in the hours.
 | Swedish | `sv` | 8,991 rows, 3,106 of them `@msg` and 48 `@msgplural` (counted 2026-11-14): the untranslated report lists 518 missing messages for it, and 12 menu strings, 1 `tl!` literal and 3 undo labels; one/other plurals | full; native review welcome |
 | Bulgarian | `bg` | 5,245 rows, 763 of them `@msg` (counted 2026-10-21): menus and `tl!` literals complete when counted; its messages are partial | full; AI-drafted, native review pending |
 | Greek | `el` | 5,251 rows, 795 of them `@msg` (counted 2026-10-21): menus, `tl!` literals and messages complete when counted | full; native review welcome |
-| Georgian | `ka` | 5,200 rows (counted 2026-10-21): menus, panels, dialogs, plurals (one count-neutral form) and messages, tested complete; reviewed by a native speaker | full |
+| Georgian | `ka` | 9,758 rows, 3,740 of them `@msg` and 49 `@msgplural` (counted 2026-11-15): menus, panels, dialogs and plurals (one count-neutral form); the untranslated report lists 1 missing Georgian message; reviewed by a native speaker | full |
 | Turkish | `tr` | 9,175 rows, 3,446 of them `@msg` and 48 `@msgplural` (counted 2026-11-13); 41 messages, 62 menu strings, 26 `tl!` literals, 13 undo labels and the default swatch names still fall back to English | full |
 | Catalan | `ca` | 5,626 rows, 881 of them `@msg` (counted 2026-10-28): menus, `tl!` literals and messages complete when counted; one/other plurals; every `ca-*` locale resolves here | full; AI-drafted, native review welcome |
 

@@ -75,10 +75,19 @@ orthographic view); a partial turn produces a sector. Body faces share the same 
 so no triangle patches interrupt the cap edge. Caps share the surface's rotation, perspective and paint, and appear in preview,
 SVG/PDF export and Expand Appearance. The checkbox has a reset dot and is included in Reset all.
 
-An endpoint on the axis needs no cap. Closed profiles and open profiles whose endpoints coincide
-keep their existing geometry. Each open subpath of a compound profile is capped independently.
-A partial revolve adds only the swept sector at each endpoint; the angular cut sides remain open.
-This option does not make intersecting or compound profiles into a watertight solid.
+An endpoint on the axis needs no cap. Each open subpath of a compound profile is capped independently.
+
+With an Angle below 360°, Cap also closes the two angular cut sides, so the object appears solid; with Cap
+off it is hollow ([Revolve options](https://web.archive.org/web/20210601162814/https://helpx.adobe.com/pdf/illustrator_reference.pdf#page=185)).
+Each cut side is flat and uniformly shaded, and is drawn in depth order with the rest of the surface. It covers the
+region between each open subpath and the axis, and the area the closed subpaths fill together under the object's
+fill rule, with one face for each region. A closed subpath that walls a hole leaves that hole open in the face of
+the region around it, and where closed subpaths overlap, the overlap is filled or left open as the fill rule fills
+it. A self-intersecting open subpath, or a self-intersecting closed subpath that is the only closed one, fills what
+the nonzero rule fills, with one face for each loop it encloses; this is VectorCraft's own rule. A cut side seen edge
+on is not drawn.
+The cut sides appear in preview, SVG/PDF export, Expand Appearance, Expand as Wireframes, Revolve (Classic) and
+exported 3D meshes. Cap does not make intersecting profiles into a watertight solid.
 
 In **Advanced**, **Keep visible surfaces only when expanding** is on by default. Expansion removes
 completely covered faces and trims partially covered ones using the current rotation and perspective.
@@ -98,12 +107,12 @@ with the standard command.
 - Lighting offers Standard, Diffuse, Top Left and Right, using the [shared original rigs](three-d.md#presets).
   Other effective settings show Custom; changing the view does not change the recognized lighting preset.
 - Paths, compound paths, type, clipping groups, blends, symbol instances, and groups or layers of them. A clipping group, a blend or a symbol instance sweeps the art it shows about one axis, as described in [three-d.md](three-d.md#clipping-groups-blends-and-symbol-instances). Images must be traced first with Object › Image Trace › Make, and other live objects expanded.
-- Open profiles have circular end caps by default; turning Cap off keeps them open. Partial-sweep angular cut sides remain open. Closed profile boundaries are swept as provided.
+- Open profiles have circular end caps by default, and a partial sweep closes its angular cut sides; turning Cap off keeps both open. Closed profile boundaries are swept as provided.
 - One Revolve per source object. Edit its options rather than applying another.
 - Object-level Revolve uses the top visible fill, falling back to a stroke. Per-item Revolve uses that item's paint.
 - Smooth diffuse shading, one to ten directional lights, no textures, cast shadows or physical materials. Smooth shading interpolates lighting in projected triangles; it does not smooth the silhouette or add specular highlights.
 - Faces are drawn back to front by the depths of their centers. When that order draws the nearer of two overlapping faces of a surface first, every pair of overlapping faces goes in the order of their depths at the middle of where they overlap; the sort compares at most 4,000,000 pairs (VectorCraft's own limit), and the pairs past that keep the depths of their centers. Caps facing the camera cover their rim seams; a cap facing away is drawn behind the body except where it is nearer than a body face it overlaps. Intersecting profiles can have incorrect visibility.
-- Curves use sixteen samples per segment, and as few as four when a surface would otherwise pass its limits. Surfaces are limited to 16,384 profile points and 163,840 faces, the members of a group together. A straight segment takes one point, a curve takes at least four, and each contour takes one. Smooth shaded side quads become two triangles and share the face limit. A continuous cap retains its original radial mesh cost within this limit. Projected ring curves have a 0.001-point fitting tolerance and a shared 32,768-curve limit.
+- Curves use sixteen samples per segment, and as few as four when a surface would otherwise pass its limits. Surfaces are limited to 16,384 profile points and 163,840 faces, the members of a group together. A straight segment takes one point, a curve takes at least four, and each contour takes one. Smooth shaded side quads become two triangles and share the face limit. A continuous cap retains its original radial mesh cost within this limit, and each region of a cut side counts as one face. Projected ring curves have a 0.001-point fitting tolerance and a shared 32,768-curve limit.
 - Axis, bounds and ordinary selection handles continue to refer to the editable 2D source profile.
 - Extrude & Bevel, Inflate and Rotate are described in [three-d.md](three-d.md). Materials remain unimplemented.
 

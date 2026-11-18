@@ -155,8 +155,18 @@ fn copied_file(paths: Vec<PathBuf>, mimes: &[&'static str]) -> Option<Flavour> {
     copied_file_within(paths, mimes, MAX_BYTES)
 }
 
+/// Whether a paste of one of `mimes` can take a copied file: one of them is not text.
+#[cfg_attr(windows, allow(dead_code))]
+fn takes_files(mimes: &[&'static str]) -> bool {
+    mimes.iter().any(|&m| m != TEXT)
+}
+
 /// [`copied_file`] with a file of more than `limit` bytes skipped.
 fn copied_file_within(paths: Vec<PathBuf>, mimes: &[&'static str], limit: usize) -> Option<Flavour> {
+    // A list of more than MAX_URIS files (untrusted data) names none, before any file is looked at.
+    if paths.len() > MAX_URIS {
+        return None;
+    }
     paths.into_iter().find_map(|path| {
         // text/uri-list lines end in CRLF (RFC 2483), but arboard splits them on LF only.
         let path = match path.to_str() {
@@ -195,6 +205,53 @@ fn read_rest(file: impl Read, mut data: Vec<u8>, limit: usize) -> Option<Vec<u8>
     let more = (limit + 1).saturating_sub(data.len());
     file.take(more as u64).read_to_end(&mut data).ok()?;
     (data.len() <= limit).then_some(data)
+}
+
+/// The data `copy` takes off the clipboard, called only when `size` (what the clipboard reports
+/// before the copy) is known and from 1 to `limit` bytes. `None` without a call otherwise, and
+/// when the copy comes to more than `limit` bytes.
+#[cfg_attr(not(any(windows, target_os = "macos")), allow(dead_code))]
+fn copy_within(size: Option<usize>, limit: usize, copy: impl FnOnce() -> Option<Vec<u8>>) -> Option<Vec<u8>> {
+    size.filter(|&n| n > 0 && n <= limit)?;
+    copy().filter(|data| data.len() <= limit)
+}
+
+/// The most bytes of UTF-8 that `utf16` bytes of UTF-16 text come to: a code unit (2 bytes) is at
+/// most 3 bytes of UTF-8, and a surrogate pair (4 bytes) is 4.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn utf8_most(utf16: usize) -> usize {
+    utf16.div_ceil(2).saturating_mul(3)
+}
+
+/// Whether a Windows file list (`CF_HDROP`: a `DROPFILES` header, then file names each ended by a
+/// NUL and the list by one more, in UTF-16 when the header's `fWide` is set) names at most `limit`
+/// files. Counting stops at the first name past `limit`. A block too short for its header, or
+/// whose names would start past its end, is not within.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn drop_files_within(block: &[u8], limit: usize) -> bool {
+    let field = |at: usize| Some(u32::from_le_bytes(block.get(at..at.checked_add(4)?)?.try_into().ok()?));
+    let (Some(start), Some(wide)) = (field(0), field(16)) else {
+        return false;
+    };
+    let Some(names) = usize::try_from(start).ok().and_then(|start| block.get(start..)) else {
+        return false;
+    };
+    let (mut count, mut in_name) = (0usize, false);
+    for unit in names.chunks_exact(if wide != 0 { 2 } else { 1 }) {
+        if unit.iter().all(|&b| b == 0) {
+            if !in_name {
+                break;
+            }
+            in_name = false;
+        } else if !in_name {
+            in_name = true;
+            count += 1;
+            if count > limit {
+                return false;
+            }
+        }
+    }
+    true
 }
 
 /// The most URIs a copied file list may hold, VectorCraft's own limit: a longer list (untrusted
@@ -278,12 +335,13 @@ fn file_uri_path(uri: &str) -> Option<PathBuf> {
 
 #[cfg(windows)]
 mod win {
-    use std::num::NonZeroU32;
+    use std::num::{NonZeroU32, NonZeroUsize};
 
     use clipboard_win::{formats, options::NoClear, raw};
 
     use super::{
-        BITMAP, ClipboardRead, Cursor, Flavour, PNG, SVG, SystemClipboard, TEXT, copied_file, decode_png, dib_image, png_flavour, windows_formats,
+        BITMAP, ClipboardRead, Cursor, Flavour, MAX_BYTES, MAX_URIS, PNG, SVG, SystemClipboard, TEXT, copied_file, copy_within, decode_png,
+        dib_image, drop_files_within, png_flavour, utf8_most, windows_formats,
     };
 
     /// The device-independent bitmaps, the one that carries alpha first. Each is there whenever the
@@ -370,8 +428,11 @@ mod win {
             let mut files = vec![];
             {
                 let _open = clipboard_win::Clipboard::new_attempts(10).ok()?;
-                // None copied when the clipboard holds no file list.
-                let _ = raw::get_file_list_path(&mut files);
+                // None copied when the clipboard holds no file list, or one of more than MAX_BYTES
+                // or MAX_URIS files: the list is counted before its names are copied.
+                if copy_registered(formats::CF_HDROP, MAX_BYTES).is_some_and(|block| drop_files_within(&block, MAX_URIS)) {
+                    let _ = raw::get_file_list_path(&mut files);
+                }
             }
             // The files are read with the clipboard closed again, not keeping other apps waiting.
             copied_file(files, mimes).map(ClipboardRead::Now).or_else(|| {
@@ -390,12 +451,25 @@ mod win {
         }
     }
 
-    /// Read the first registered format of `mime` the clipboard holds into `data`.
-    fn read_registered(mime: &str, data: &mut Vec<u8>) -> bool {
-        formats_of(mime).filter(|id| raw::is_format_avail(*id)).any(|id| {
-            data.clear();
-            raw::get_vec(id, data).is_ok() && !data.is_empty()
+    /// The size the clipboard reports for format `id`, while it is open.
+    fn size_of(id: u32) -> Option<usize> {
+        raw::size(id).map(NonZeroUsize::get)
+    }
+
+    /// The data of format `id`, while the clipboard is open, copied only when its size is at most
+    /// `limit` bytes ([`copy_within`]).
+    fn copy_registered(id: u32, limit: usize) -> Option<Vec<u8>> {
+        copy_within(size_of(id), limit, || {
+            let mut data = vec![];
+            raw::get_vec(id, &mut data).ok()?;
+            Some(data)
         })
+    }
+
+    /// The first registered format of `mime` the clipboard holds that is not empty and at most
+    /// [`MAX_BYTES`]; a larger one is skipped and the next tried.
+    fn read_registered(mime: &str) -> Option<Vec<u8>> {
+        formats_of(mime).filter(|id| raw::is_format_avail(*id)).find_map(|id| copy_registered(id, MAX_BYTES).filter(|data| !data.is_empty()))
     }
 
     /// A device-independent bitmap as a PNG flavour.
@@ -404,30 +478,37 @@ mod win {
     }
 
     /// Copy both bitmap formats while the clipboard is open, then decode them in preference order.
-    pub(super) fn read_dibs(mut get: impl FnMut(u32) -> Option<Vec<u8>>) -> Option<ClipboardRead> {
-        let dibs: Vec<_> = DIBS.into_iter().filter_map(&mut get).collect();
+    /// `size` gives each format's size before `get` copies it, and a format of more than
+    /// [`MAX_BYTES`] is not copied ([`copy_within`]) and the next one is tried.
+    pub(super) fn read_dibs(mut size: impl FnMut(u32) -> Option<usize>, mut get: impl FnMut(u32) -> Option<Vec<u8>>) -> Option<ClipboardRead> {
+        let dibs: Vec<_> = DIBS.into_iter().filter_map(|id| copy_within(size(id), MAX_BYTES, || get(id))).collect();
         (!dibs.is_empty()).then_some(ClipboardRead::Later(Box::new(move || dibs.iter().find_map(|dib| dib_png(dib)))))
     }
 
     /// One flavour, while the clipboard is open. A device-independent bitmap is copied here, and
-    /// the work that comes back decodes each captured format in preference order.
+    /// the work that comes back decodes each captured format in preference order. Text whose
+    /// UTF-16 block could come to more than [`MAX_BYTES`] as UTF-8 ([`utf8_most`]) is not read.
     fn read_one(mime: &'static str) -> Option<ClipboardRead> {
-        let mut data = vec![];
-        let mime = match mime {
-            BITMAP if read_registered(PNG, &mut data) => PNG,
-            BITMAP => {
-                return read_dibs(|id| {
-                    let mut dib = vec![];
-                    raw::get_vec(id, &mut dib).ok()?;
-                    Some(dib)
-                });
-            }
+        let (mime, mut data) = match mime {
+            BITMAP => match read_registered(PNG) {
+                Some(png) => (PNG, png),
+                None => {
+                    return read_dibs(size_of, |id| {
+                        let mut dib = vec![];
+                        raw::get_vec(id, &mut dib).ok()?;
+                        Some(dib)
+                    });
+                }
+            },
             TEXT => {
-                raw::get_string(&mut data).ok()?;
-                TEXT
+                let text = copy_within(size_of(formats::CF_UNICODETEXT).map(utf8_most), MAX_BYTES, || {
+                    let mut text = vec![];
+                    raw::get_string(&mut text).ok()?;
+                    Some(text)
+                })?;
+                (TEXT, text)
             }
-            m if read_registered(m, &mut data) => m,
-            _ => return None,
+            m => (m, read_registered(m)?),
         };
         // Memory blocks can be longer than the data: SVG text ends at its first NUL.
         if mime == SVG
@@ -727,7 +808,7 @@ mod portable {
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::time::{Duration, Instant};
 
-    use super::{BITMAP, ClipboardRead, Flavour, PNG, SystemClipboard, TEXT, copied_file, decode_png, png_flavour, text_of};
+    use super::{BITMAP, ClipboardRead, Flavour, PNG, SystemClipboard, TEXT, copied_file, decode_png, png_flavour, takes_files, text_of};
 
     /// What our last write put on the clipboard.
     #[derive(Clone)]
@@ -741,7 +822,7 @@ mod portable {
     }
 
     /// A read of arboard's clipboard.
-    #[derive(Clone, Copy, PartialEq, Eq)]
+    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
     enum Request {
         Text,
         Image,
@@ -811,6 +892,19 @@ mod portable {
             Request::Image => Answer::Image(cb.get_image().map_err(|e| e.to_string())),
             Request::Files => Answer::Files(cb.get().file_list().unwrap_or_default()),
         }
+    }
+
+    /// Whether a paste of one of `mimes` can take what `cb` holds: text that is not empty when one
+    /// of `mimes` is text (`text` reads it), else files copied in a file manager when one of `mimes`
+    /// is not text (`files` reads the list). The list is read only when the text doesn't do, and no
+    /// copied file is opened: Paste checks the files themselves.
+    fn arboard_has<B>(
+        mimes: &[&'static str],
+        cb: &mut B,
+        text: impl FnOnce(&mut B) -> Result<String, String>,
+        files: impl FnOnce(&mut B) -> Vec<PathBuf>,
+    ) -> bool {
+        (mimes.contains(&TEXT) && text(cb).is_ok_and(|t| !t.is_empty())) || (takes_files(mimes) && !files(cb).is_empty())
     }
 
     /// `request` read on `reads`' worker, waiting `wait` at most.
@@ -1441,10 +1535,11 @@ mod portable {
             read
         }
 
-        /// Text, on macOS vector art or a bitmap (by the pasteboard's types), and on the Wayland
-        /// core protocol copied files, SVG, text or PNG (by the types offered, nothing read).
+        /// Text or files copied in a file manager (their list read, no file opened:
+        /// [`arboard_has`]), on macOS vector art or a bitmap (by the pasteboard's types), and on the
+        /// Wayland core protocol copied files, SVG, text or PNG (by the types offered, nothing read).
         /// arboard has no cheap way to ask for a bitmap (reading one costs as much as pasting it):
-        /// the paste keys take it, the menu item waits for text.
+        /// the paste keys take it, the menu item waits for text or copied files.
         fn has(&mut self, mimes: &[&'static str]) -> bool {
             #[cfg(target_os = "macos")]
             if super::mac::has(mimes) {
@@ -1455,7 +1550,7 @@ mod portable {
             if let Backend::Wayland(wl) = cb {
                 return wl.has(mimes);
             }
-            mimes.contains(&TEXT) && cb.get_text().is_ok_and(|t| !t.is_empty())
+            arboard_has(mimes, cb, Backend::get_text, Backend::file_list)
         }
     }
 
@@ -1617,6 +1712,40 @@ mod portable {
             assert_eq!(Answer::Files(vec![]).text(), Err(MIXED.to_string()));
             assert!(Answer::Text(Ok(String::new())).image().is_err());
             assert!(Answer::Text(Ok("art.svg".into())).files().is_empty());
+        }
+
+        #[test]
+        fn paste_is_available_for_files_copied_in_a_file_manager() {
+            use vectorcraft_engine::cmd::clipboard::{PASTE_ORDER, SVG};
+            /// What the clipboard holds, and which reads [`arboard_has`] made.
+            struct Held {
+                text: Option<String>,
+                files: Vec<PathBuf>,
+                reads: Vec<Request>,
+            }
+            fn has(mimes: &[&'static str], text: Option<&str>, files: &[&str]) -> (bool, Vec<Request>) {
+                let mut held = Held { text: text.map(String::from), files: files.iter().map(PathBuf::from).collect(), reads: vec![] };
+                let text = |h: &mut Held| {
+                    h.reads.push(Request::Text);
+                    h.text.clone().ok_or_else(|| "no text".to_string())
+                };
+                let files = |h: &mut Held| {
+                    h.reads.push(Request::Files);
+                    h.files.clone()
+                };
+                let has = arboard_has(mimes, &mut held, text, files);
+                (has, held.reads)
+            }
+            // Files a file manager copied, with no text: the Paste menu item is available.
+            assert_eq!(has(&PASTE_ORDER, None, &["/tmp/art.svg"]), (true, vec![Request::Text, Request::Files]));
+            assert_eq!(has(&PASTE_ORDER, Some(""), &["/tmp/art.svg"]), (true, vec![Request::Text, Request::Files]));
+            assert_eq!(has(&[SVG], None, &["/tmp/art.svg"]), (true, vec![Request::Files]));
+            // Text does, and the list is not read.
+            assert_eq!(has(&PASTE_ORDER, Some("hello"), &[]), (true, vec![Request::Text]));
+            // An empty list and no text: nothing to paste.
+            assert_eq!(has(&PASTE_ORDER, None, &[]), (false, vec![Request::Text, Request::Files]));
+            // A paste of text alone can't take copied files, and their list is not read.
+            assert_eq!(has(&[TEXT], None, &["/tmp/art.svg"]), (false, vec![Request::Text]));
         }
 
         #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
@@ -1925,7 +2054,7 @@ mod wayland {
     use wayland_client::{Connection, Dispatch, Proxy, QueueHandle, WEnum};
 
     use super::loads::{Asker, GONE, LOAD_WAIT, Loads, wait_for_answer};
-    use super::{BITMAP, Flavour, MAX_BYTES, PNG, PathBuf, SVG, TEXT, copied_file, gnome_copied_paths, uri_list_paths};
+    use super::{BITMAP, Flavour, MAX_BYTES, PNG, PathBuf, SVG, TEXT, copied_file, gnome_copied_paths, takes_files, uri_list_paths};
 
     /// The types text is offered under and read from, best first: `text/plain;charset=utf-8` (GTK
     /// and Qt apps), `UTF8_STRING` (X11 apps through XWayland) and `text/plain`.
@@ -2014,11 +2143,6 @@ mod wayland {
             }
         }
         Some(first)
-    }
-
-    /// Whether a paste of one of `mimes` can take a copied file: one of them is not text.
-    fn takes_files(mimes: &[&'static str]) -> bool {
-        mimes.iter().any(|&m| m != TEXT)
     }
 
     /// The first type among `offered` that lists copied files ([`FILE_LISTS`]), in any letter case.
@@ -3092,7 +3216,7 @@ mod mac {
     use objc2_app_kit::NSPasteboard;
     use objc2_foundation::{NSArray, NSString};
 
-    use super::{Flavour, pasteboard_types};
+    use super::{Flavour, MAX_BYTES, copy_within, pasteboard_types};
 
     /// Does the pasteboard hold one of `mimes` ([`pasteboard_types`])? Asks for its types only.
     pub fn has(mimes: &[&'static str]) -> bool {
@@ -3103,13 +3227,16 @@ mod mac {
         })
     }
 
-    /// The pasteboard's data for `mime`, the first of its types held ([`pasteboard_types`]).
+    /// The pasteboard's data for `mime`, the first of its types held ([`pasteboard_types`]) that is
+    /// not empty and at most [`MAX_BYTES`]: its length is checked before it is copied, and a larger
+    /// type is skipped and the next tried.
     pub fn read(mime: &str) -> Option<Flavour> {
         autoreleasepool(|_| {
             let pasteboard = NSPasteboard::generalPasteboard();
             pasteboard_types(mime).iter().find_map(|&(t, mime)| {
-                let data = pasteboard.dataForType(&NSString::from_str(t))?.to_vec();
-                (!data.is_empty()).then_some(Flavour { mime, data })
+                let held = pasteboard.dataForType(&NSString::from_str(t))?;
+                let data = copy_within(Some(held.len()), MAX_BYTES, || Some(held.to_vec()))?;
+                Some(Flavour { mime, data })
             })
         })
     }
@@ -3296,6 +3423,102 @@ mod tests {
         assert!(uri_list_paths(list(MAX_URIS + 1).as_bytes()).is_empty());
     }
 
+    /// A copied file list of more than 1,024 files pastes none, before any file is looked at,
+    /// wherever the list came from; 1,024 files paste the first that is art.
+    #[test]
+    fn a_copied_file_list_longer_than_the_limit_pastes_no_file() {
+        let d = dir("many");
+        let art = d.path().join("art.svg");
+        std::fs::write(&art, "<svg xmlns=\"http://www.w3.org/2000/svg\"/>").unwrap();
+        let missing = |n: usize| (0..n).map(|i| d.path().join(format!("gone{i}.png"))).collect::<Vec<_>>();
+        let last = [missing(MAX_URIS - 1), vec![art.clone()]].concat();
+        assert_eq!(copied_file(last, &PASTE_ORDER).map(|f| f.mime), Some(SVG));
+        // The art first: no file is opened past the count.
+        let first = [vec![art.clone()], missing(MAX_URIS)].concat();
+        assert!(copied_file(first, &PASTE_ORDER).is_none());
+        assert!(copied_file([missing(MAX_URIS), vec![art]].concat(), &PASTE_ORDER).is_none());
+    }
+
+    /// Clipboard data is copied only when the size the clipboard gives is from 1 byte to the limit,
+    /// and the copy is not asked for otherwise.
+    #[test]
+    fn clipboard_data_is_copied_only_when_its_size_fits() {
+        let copy = |size: Option<usize>, got: usize| {
+            let mut asked = false;
+            let data = copy_within(size, 8, || {
+                asked = true;
+                Some(vec![1; got])
+            });
+            (data.map(|d| d.len()), asked)
+        };
+        assert_eq!(copy(Some(8), 8), (Some(8), true));
+        assert_eq!(copy(Some(1), 1), (Some(1), true));
+        for size in [None, Some(0), Some(9), Some(usize::MAX)] {
+            assert_eq!(copy(size, 1), (None, false), "{size:?}");
+        }
+        // Data that comes to more than the limit after all is refused.
+        assert_eq!(copy(Some(8), 9), (None, true));
+        assert_eq!(MAX_BYTES, 64 << 20);
+    }
+
+    /// The UTF-8 that UTF-16 text comes to is bounded from the UTF-16 block's size alone, before
+    /// the text is converted: a block that could pass the limit as UTF-8 is not read.
+    #[test]
+    fn text_is_bounded_by_what_its_utf8_could_come_to() {
+        for text in ["", "a", "\u{20ac}\u{20ac}\u{20ac}", "\u{1f600}", "a\u{20ac}\u{1f600}\u{ffff}"] {
+            let utf16 = text.encode_utf16().count() * 2;
+            assert!(utf8_most(utf16) >= text.len(), "{text:?}");
+        }
+        // Every code unit at 3 bytes of UTF-8: the bound is exact.
+        assert_eq!(utf8_most("\u{20ac}\u{20ac}".encode_utf16().count() * 2), "\u{20ac}\u{20ac}".len());
+        let copied = |utf16: usize| copy_within(Some(utf8_most(utf16)), MAX_BYTES, || Some(vec![])).is_some();
+        assert!(copied(MAX_BYTES / 3 * 2));
+        assert!(!copied(MAX_BYTES / 3 * 2 + 2));
+        assert!(!copied(MAX_BYTES));
+        assert_eq!(utf8_most(usize::MAX), usize::MAX);
+    }
+
+    /// A Windows file list (CF_HDROP) of `names`: a DROPFILES header, the names in UTF-16 or one
+    /// byte a character, each ended by a NUL, and one more NUL.
+    fn drop_files(names: &[&str], wide: bool) -> Vec<u8> {
+        let mut block = vec![];
+        block.extend(20u32.to_le_bytes());
+        block.extend([0u8; 12]);
+        block.extend(u32::from(wide).to_le_bytes());
+        for name in names.iter().copied().chain([""]) {
+            for unit in name.encode_utf16().chain([0]) {
+                if wide {
+                    block.extend(unit.to_le_bytes());
+                } else {
+                    block.push(unit as u8);
+                }
+            }
+        }
+        block
+    }
+
+    #[test]
+    fn a_windows_file_list_is_counted_before_its_names_are_read() {
+        let names = |n: usize| (0..n).map(|i| format!("C:\\art\\{i}.svg")).collect::<Vec<_>>();
+        for wide in [true, false] {
+            let list = |n: usize| drop_files(&names(n).iter().map(String::as_str).collect::<Vec<_>>(), wide);
+            assert!(drop_files_within(&list(MAX_URIS), MAX_URIS), "{wide}");
+            assert!(!drop_files_within(&list(MAX_URIS + 1), MAX_URIS), "{wide}");
+            assert!(drop_files_within(&list(0), MAX_URIS), "{wide}");
+            // Names past the list's closing NUL are not counted.
+            let mut ended = list(2);
+            ended.extend(list(MAX_URIS + 1).get(20..).unwrap());
+            assert!(drop_files_within(&ended, 2), "{wide}");
+            // A list cut short counts the names it holds.
+            assert!(!drop_files_within(&list(3)[..list(3).len() - 4], 2), "{wide}");
+        }
+        // A header cut short, or names that would start past the block's end.
+        assert!(!drop_files_within(&drop_files(&["a"], true)[..19], MAX_URIS));
+        let mut past = drop_files(&["a"], true);
+        past[0..4].copy_from_slice(&u32::MAX.to_le_bytes());
+        assert!(!drop_files_within(&past, MAX_URIS));
+    }
+
     #[test]
     fn gnome_files_list_names_its_files_after_copy_or_cut() {
         let paths = |list: &[u8]| gnome_copied_paths(list).into_iter().map(|p| p.to_string_lossy().into_owned()).collect::<Vec<_>>();
@@ -3349,19 +3572,48 @@ mod tests {
 
         let valid = dib(40, 1, 1, 32, 0, &[], &bgra(&[RED]));
         let mut captured = Vec::new();
-        let read = win::read_dibs(|id| {
-            captured.push(id);
-            match id {
-                CF_DIBV5 => Some(vec![40, 0, 0]),
-                CF_DIB => Some(valid.clone()),
-                _ => None,
-            }
-        })
+        let get = |id: u32| match id {
+            CF_DIBV5 => Some(vec![40, 0, 0]),
+            CF_DIB => Some(valid.clone()),
+            _ => None,
+        };
+        let read = win::read_dibs(
+            |id| get(id).map(|d| d.len()),
+            |id| {
+                captured.push(id);
+                get(id)
+            },
+        )
         .unwrap();
         assert_eq!(captured, [CF_DIBV5, CF_DIB]);
         let flavour = read.flavour().unwrap();
         assert_eq!(flavour.mime, PNG);
         assert_eq!(pixels(&decode_png(&flavour.data).unwrap()), [RED]);
+        // A bitmap larger than the limit is not copied, and the other one still pastes.
+        captured.clear();
+        let read = win::read_dibs(
+            |id| if id == CF_DIBV5 { Some(MAX_BYTES + 1) } else { get(id).map(|d| d.len()) },
+            |id| {
+                captured.push(id);
+                get(id)
+            },
+        )
+        .unwrap();
+        assert_eq!(captured, [CF_DIB]);
+        assert_eq!(read.flavour().map(|f| f.mime), Some(PNG));
+        // Each format has the limit to itself: a first one at the limit that doesn't decode
+        // leaves the second to paste.
+        captured.clear();
+        let read = win::read_dibs(
+            |id| if id == CF_DIBV5 { Some(MAX_BYTES) } else { get(id).map(|d| d.len()) },
+            |id| {
+                captured.push(id);
+                get(id)
+            },
+        )
+        .unwrap();
+        assert_eq!(captured, [CF_DIBV5, CF_DIB]);
+        assert_eq!(read.flavour().map(|f| f.mime), Some(PNG));
     }
 
     #[test]
