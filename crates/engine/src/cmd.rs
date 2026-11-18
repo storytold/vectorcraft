@@ -886,7 +886,8 @@ pub use compoundshape::OPEN_PATHS_ADD_NO_AREA;
 /// Pathfinder Options (`Prefs::pathfinder`).
 pub use pathops::{PATHFINDER_PRECISION_RANGE, PathfinderOptions};
 
-/// The Attributes panel's state ([`Session::attributes_info`]).
+/// The Attributes panel's state ([`Session::attributes_info`]) and how many recent URLs it keeps.
+pub use attributes::RECENT_URLS;
 pub use overprint::AttributesInfo;
 
 /// Object → Flatten Transparency settings (`object.flattenTransparency`).
