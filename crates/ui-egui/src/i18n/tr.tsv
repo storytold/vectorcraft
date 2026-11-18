@@ -798,6 +798,7 @@ font-technology	Variable	Değişken
 	Delete Brush	Fırçayı Sil
 	Delete Color	Rengi Sil
 	Restore Generated Table	Oluşturulan Tabloyu Geri Yükle
+	Unshift All Colors	Tüm Renklerin Kaydırmasını Kaldır
 	Delete Character Style	Karakter Stilini Sil
 	Delete Empty Artboards	Boş Çalışma Yüzeylerini Sil
 	Delete Freeform Point	Serbest Biçim Noktasını Sil
@@ -3012,6 +3013,8 @@ digits	Malayalam	Malayalam
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Akıllı Kılavuzların yaslaması için işaretçinin veya sürüklenen noktanın ekranda çizime ne kadar yaklaşması gerektiği; mesafe her yakınlaştırmada aynıdır.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Bir çizgi parçasının ucunu veya merkezinden çizilen bir daireyi yakındaki bir eğriye değecek şekilde yaslar.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Bir çizgi parçasının ucunu yakındaki düz bir parçayla dik açıyla buluşacak şekilde yaslar.
+	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Tuvalde her dilimin numarasını sol üst köşesindeki bir kutuda gösterir; kapalıyken dilimlerin dış çizgileri görünmeye devam eder.
+	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Kullanıcı ve nesne dilimlerinin dış çizgilerinin ve numara kutularının rengi; otomatik dilimler bu rengin daha soluk bir tonunu kullanır.
 	Reset all preferences to their defaults?	Tüm tercihler varsayılanlarına sıfırlansın mı?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Varsayılanlar, Tercihler'de Tamam'a tıkladığınızda uygulanır. Oradaki İptal, mevcut tercihlerinizi korur.
 	Restore Recovered Documents	Kurtarılan Belgeleri Geri Yükle
@@ -3267,6 +3270,9 @@ digits	Malayalam	Malayalam
 	No menu item	Menü öğesi yok
 	Toolbar	Araç Çubuğu
 	{toolbar}, in the {tool} group	{toolbar}, {tool} grubunda
+	In the menu bar: {path}	Menü çubuğunda: {path}
+	In the {group} group: press and hold to open it	{group} grubunda: açmak için basılı tutun
+	{home}, not shown now	{home}, şu anda gösterilmiyor
 @plural	{n} result|{n} results	{n} sonuç
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} sonuçtan {shown} tanesi. Daraltmak için yazmaya devam edin.
 	Recent Commands	Son komutlar
@@ -4800,6 +4806,7 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	choose a location for the package	paket için bir yer seçin
 @msg	clipboard is empty	pano boş
 @msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: renk tablosunda en az bir renk kalmalı
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted: `{k}` başka bir anahtarın da belirttiği bir rengi belirtiyor
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}`, "#ff8800" gibi bir renk değil
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: en fazla {MAX_TABLE} renginde
 @msg	command `{0}` is not available right now: {1}	`{0}` komutu şu anda kullanılamıyor: {1}
@@ -9694,6 +9701,7 @@ breakText	Glyphs	Glifler
 @msg	One path lies inside the other, so they have no common tangents	Bir yol diğerinin içinde, bu yüzden ortak teğetleri yok
 @msg	The paths overlap, so they have no internal tangents	Yollar örtüşüyor, bu yüzden iç teğetleri yok
 @msg	One path lies inside the other, so they have no internal tangents	Bir yol diğerinin içinde, bu yüzden iç teğetleri yok
+@msg	The point lies inside the path, so it has no tangents	Nokta yolun içinde, bu yüzden teğeti yok
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Tireleri Yollara Genişlet
 @msg	select paths with dashed strokes to expand	genişletilecek kesikli konturlu yolları seçin
@@ -10078,6 +10086,11 @@ breakText	Glyphs	Glifler
 @msg	A panel is not joined to the rest by a crease.	Bir panel geri kalanlara hiçbir pilyaj çizgisiyle bağlı değil.
 @msg	A fold line is on a non-printing layer.	Bir katlama çizgisi yazdırılmayan bir katmanda.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Paneller: {panels}, menteşeler: {hinges}, hatalar: {errors}, uyarılar: {warnings}
+	Pressure Sensitive	Basınca Duyarlı
+	Flex Ribbon	Esnek Şerit
+	Pulse Stroke	Atımlı Çizgi
+	Round Flow	Yuvarlak Akış
+	Chisel Flow	Eğimli Akış
 	Fold Preview	Katlama Önizlemesi
 	Fold	Katlama
 	Show Fold Lines	Katlama Çizgilerini Göster

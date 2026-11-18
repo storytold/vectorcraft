@@ -220,6 +220,9 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
     ),
     ("snapTangent", "Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve."),
     ("snapPerpendicular", "Snaps the end of a line segment so that it meets a nearby straight segment at a right angle."),
+    // Slices
+    ("showSliceNumbers", "Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show."),
+    ("sliceLineColor", "The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it."),
 ];
 
 /// The sentence that describes the setting `key`, in English, or `None` when it has none yet.

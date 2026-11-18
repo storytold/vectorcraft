@@ -1890,8 +1890,11 @@ fn a_row_without_a_description_leaves_the_line_empty() {
     description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(at(&texts, "General:"))]);
     let (texts, _) = description_frame(&mut a, &ctx, vec![]);
     assert!(painted(&texts, general), "the General row's sentence shows: {texts:?}");
-    // Go to the Slices category and point at a row with no sentence.
-    let button = at(&texts, "Slices");
+    // Go to the first other category that still has a row with no sentence (Slices when none is
+    // left) and point at that row.
+    let bare = settings().find(|s| s.category != "Units" && descriptions::description(s.key).is_none());
+    let category = bare.map_or("Slices", |s| s.category);
+    let button = at(&texts, category);
     let press = |pressed| egui::Event::PointerButton { pos: button, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
     description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(button), press(true), press(false)]);
     let (texts, _) = description_frame(&mut a, &ctx, vec![]);
@@ -1905,22 +1908,29 @@ fn a_row_without_a_description_leaves_the_line_empty() {
     description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(line.center())]);
     let (after, _) = description_frame(&mut a, &ctx, vec![]);
     empty(&after, "on the line after changing category");
-    assert_eq!(descriptions::description("showSliceNumbers"), None);
-    description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(at(&texts, "Show Slice Numbers"))]);
-    let (after, _) = description_frame(&mut a, &ctx, vec![]);
-    empty(&after, "on Show Slice Numbers");
-    description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(line.center())]);
-    let (after, _) = description_frame(&mut a, &ctx, vec![]);
-    empty(&after, "on the line after Show Slice Numbers");
+    if bare.is_some() {
+        // A checkbox shows its label as it is; other rows show it with a colon.
+        let (label, pos) = settings()
+            .filter(|s| s.category == category && descriptions::description(s.key).is_none())
+            .find_map(|s| texts.iter().find(|(t, _)| *t == s.label || *t == format!("{}:", s.label)).map(|(_, r)| (s.label, r.center())))
+            .unwrap_or_else(|| panic!("no row of {category} without a sentence is drawn: {texts:?}"));
+        description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(pos)]);
+        let (after, _) = description_frame(&mut a, &ctx, vec![]);
+        empty(&after, &format!("on {label}"));
+        description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(line.center())]);
+        let (after, _) = description_frame(&mut a, &ctx, vec![]);
+        empty(&after, &format!("on the line after {label}"));
+    }
     assert_eq!(preferences_window(&ctx).size(), size);
 }
 
-/// Every setting the General, Selection & Anchor Display, Guides & Grid and Smart Guides categories
-/// show, the Smart Guides box included, has exactly one sentence, and no key has two.
+/// Every setting the General, Selection & Anchor Display, Guides & Grid, Smart Guides and Slices
+/// categories show, the Smart Guides box included, has exactly one sentence, and no key has two.
 #[test]
-fn every_general_selection_guides_and_smart_guides_setting_has_one_description() {
+fn every_general_selection_guides_smart_guides_and_slices_setting_has_one_description() {
     let mut bad = vec![];
-    for s in settings().filter(|s| ["General", "Selection & Anchor Display", "Guides & Grid", "Smart Guides"].contains(&s.category)) {
+    let categories = ["General", "Selection & Anchor Display", "Guides & Grid", "Smart Guides", "Slices"];
+    for s in settings().filter(|s| categories.contains(&s.category)) {
         match descriptions::DESCRIPTIONS.iter().filter(|(k, _)| *k == s.key).count() {
             1 => {}
             n => bad.push(format!("`{}` ({}) has {n} sentences", s.key, s.label)),
@@ -2200,6 +2210,53 @@ fn keyboard_focus_on_a_smart_guides_row_shows_its_description() {
     }
     let described = shown.expect("Tab reaches the Smart Guides row and its sentence shows");
     assert!(described.iter().any(|d| d == smart), "the focused control carries the sentence: {described:?}");
+}
+
+/// The pointer over Slices' Show Slice Numbers row and over its Line Color row shows each row's
+/// sentence.
+#[test]
+fn hovering_a_slices_row_shows_its_description() {
+    let mut a = app();
+    open(&mut a, Some("Slices"));
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    description_frame(&mut a, &ctx, vec![]);
+    let (texts, _) = description_frame(&mut a, &ctx, vec![]);
+    let row = |texts: &[(String, egui::Rect)], label: &str| {
+        texts.iter().find(|(t, _)| t == label).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no `{label}` in {texts:?}"))
+    };
+    let numbers = descriptions::description("showSliceNumbers").expect("Show Slice Numbers has a sentence");
+    let color = descriptions::description("sliceLineColor").expect("Line Color has a sentence");
+    description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(row(&texts, "Show Slice Numbers"))]);
+    let (after, _) = description_frame(&mut a, &ctx, vec![]);
+    assert!(painted(&after, numbers) && !painted(&after, color), "the Show Slice Numbers row's sentence shows: {after:?}");
+    description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(row(&texts, "Line Color:"))]);
+    let (after, _) = description_frame(&mut a, &ctx, vec![]);
+    assert!(painted(&after, color) && !painted(&after, numbers), "the Line Color row's sentence shows: {after:?}");
+}
+
+/// Tab from the search field reaches Slices' first control, the Show Slice Numbers box: the line
+/// shows its sentence and a screen reader gets it as the control's description.
+#[test]
+fn keyboard_focus_on_a_slices_row_shows_its_description() {
+    let mut a = app();
+    open(&mut a, Some("Slices"));
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    description_frame(&mut a, &ctx, vec![]);
+    description_frame(&mut a, &ctx, vec![]);
+    let numbers = descriptions::description("showSliceNumbers").expect("Show Slice Numbers has a sentence");
+    let mut shown = None;
+    for _ in 0..40 {
+        let (texts, described) = description_frame(&mut a, &ctx, key_press(egui::Key::Tab, egui::Modifiers::NONE));
+        if painted(&texts, numbers) {
+            shown = Some(described);
+            break;
+        }
+    }
+    let described = shown.expect("Tab reaches the Show Slice Numbers row and its sentence shows");
+    assert!(described.iter().any(|d| d == numbers), "the focused control carries the sentence: {described:?}");
 }
 
 /// A sentence shown when the dialog closed does not come back when it opens again with the

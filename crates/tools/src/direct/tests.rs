@@ -2767,3 +2767,30 @@ fn outline_view_marquees_measure_clipped_art_by_the_plain_clipping_path() {
     let a = marquee(false);
     assert!(!selects(&a), "preview: {a:?}");
 }
+
+/// #8538: while guides are locked or hidden (`guides` off), a Direct Selection marquee takes
+/// neither the anchors nor the crossed segments of a guide path; while guides can be picked, it
+/// takes them as on any path.
+#[test]
+fn a_marquee_skips_the_anchors_and_segments_of_guides_that_cannot_be_picked() {
+    let (mut d, id) = doc_with_rect();
+    if let Some(NodeKind::Path { guide, .. }) = d.node_mut(id).map(|n| &mut n.kind) {
+        *guide = true;
+    }
+    let (s, p) = (Selection::default(), paint());
+    let marquee = |guides: bool, from: (f64, f64), to: (f64, f64)| {
+        let cx = ToolContext { guides, ..cx(&d, &s, &p) };
+        let mut t = DirectSelectionTool::new(false);
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, from.0, from.1));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, to.0, to.1));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Up, to.0, to.1))
+    };
+    let anchors = |items: Value| vec![Action::Exec("select.anchorsMany".into(), json!({"items": items, "mode": "set"}))];
+    // Over the corner at (200, 100).
+    assert_eq!(marquee(false, (150.0, 50.0), (250.0, 150.0)), anchors(json!([])), "locked or hidden: no anchor");
+    assert_eq!(marquee(true, (150.0, 50.0), (250.0, 150.0)), anchors(json!([{"id": id.0, "anchors": [[0, 1]]}])), "shown and unlocked");
+    // Across the middle of the top edge.
+    let crossed = |a: &[Action]| a.iter().any(|a| matches!(a, Action::Exec(c, _) if c == "select.segments"));
+    assert!(!crossed(&marquee(false, (140.0, 80.0), (160.0, 120.0))), "locked or hidden: no segment");
+    assert!(crossed(&marquee(true, (140.0, 80.0), (160.0, 120.0))), "shown and unlocked");
+}
