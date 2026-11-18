@@ -188,9 +188,9 @@ const INLINE_FIELD_WIDTH: f32 = 80.0;
 /// The keys and labels of the Control bar's inline X/Y/W/H fields, in their order.
 const INLINE_FIELDS: [(&str, &str); 4] = [("x", "X:"), ("y", "Y:"), ("width", "W:"), ("height", "H:")];
 
-/// The label of an inline X/Y/W/H field.
+/// The label of an inline X/Y/W/H field, underlined: a click on it opens the Transform panel.
 fn inline_label(t: &Tokens, lbl: &str) -> egui::RichText {
-    egui::RichText::new(tl!(lbl)).size(12.0).color(t.text_dim)
+    egui::RichText::new(tl!(lbl)).size(12.0).color(t.text).underline()
 }
 
 /// The room the Control bar's inline X/Y/W/H fields take: their labels as drawn in the current
@@ -201,6 +201,53 @@ fn inline_transform_width(ui: &Ui, t: &Tokens) -> f32 {
     let fields = INLINE_FIELD_WIDTH * INLINE_FIELDS.len() as f32;
     let items = 2 * INLINE_FIELDS.len() + 1;
     labels + fields + crate::panels::transform::CONSTRAIN_LINK_SIZE + ui.spacing().item_spacing.x * items as f32
+}
+
+/// The Control bar's inline X/Y/W/H fields for the selection's box `b`, rotated with rotated
+/// objects: X/Y are its reference point on the page (or a symbol instance's registration point),
+/// shared with the Transform panel, and W/H its own sides. Edits keep or move that point, and the
+/// Transform panel's menu choice of objects, patterns or both applies to them.
+fn inline_transform_fields(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, units: vectorcraft_doc::Unit, b: &vectorcraft_doc::OrientedBox) {
+    let reference = crate::panels::transform::panel_reference(app, ui, b);
+    let (refi, rp) = (reference.index, reference.point);
+    let origin = app.ruler_origin();
+    let link = crate::panels::transform::proportional(app, ui);
+    let copy = crate::panels::transform::alt_enter_copies(app, ui);
+    let values = [(rp.x, origin.x), (rp.y, origin.y), (b.rect.width(), 0.0), (b.rect.height(), 0.0)];
+    // The W/H link sits between W and H, but is made after H so Tab goes from W
+    // straight to H and finds the link after it.
+    let mut link_room = None;
+    let mut labels = Vec::with_capacity(INLINE_FIELDS.len());
+    for ((k, lbl), (v, offset)) in INLINE_FIELDS.into_iter().zip(values) {
+        if k == "height" {
+            link_room = Some(crate::panels::transform::constrain_link_room(ui));
+        }
+        // A click on the label opens the Transform panel, as the Transform link does; a drag scrubs.
+        let label = widgets::field_panel_label(ui, inline_label(t, lbl)).on_hover_text(tl!("Transform options"));
+        let (id, shown) = (("cb", k), Some(v - offset));
+        let set = if matches!(k, "width" | "height") {
+            widgets::size_field(ui, id, shown, units, INLINE_FIELD_WIDTH)
+        } else {
+            widgets::num_field(ui, id, shown, units, INLINE_FIELD_WIDTH)
+        };
+        labels.push(label);
+        if let Some(nv) = set {
+            let params = match k {
+                "x" => json!({"x": reference.bounds_xy(nv + offset, 0.0).0, "reference": refi, "copy": copy}),
+                "y" => json!({"y": reference.bounds_xy(0.0, nv + offset).1, "reference": refi, "copy": copy}),
+                _ => json!({k: nv, "reference": refi, "proportional": link, "copy": copy}),
+            };
+            crate::panels::transform::run_transform(app, "object.setBounds", params);
+        }
+    }
+    if let Some(room) = link_room {
+        let id = ui.scope_id().with("cb-constrain-link");
+        crate::panels::transform::constrain_link_at(app, ui, ui.interact(room, id, Sense::click()));
+    }
+    // After the fields, which each take the label before them as their own.
+    for label in &labels {
+        crate::panels::transform::popover(app, label);
+    }
 }
 
 /// The size of the Control bar's Align, Distribute and area type vertical alignment buttons, and
@@ -710,7 +757,7 @@ fn fill_and_stroke(app: &mut VectorcraftApp, ui: &mut Ui, reserve: f32) {
         stroke_panel::weight_field(app, ui, "cb-stroke", weight, WEIGHT_FIELD_WIDTH);
         if ui.available_width() < row_width(ui, &[stroke_panel::PROFILE_DROPDOWN_WIDTH]) + reserve {
             left_out(ui);
-        } else if let Some(id) = stroke_panel::profile_dropdown(app, ui, shown_stroke.as_ref().and_then(|s| s.profile.as_ref())) {
+        } else if let Some(id) = stroke_panel::profile_dropdown(app, ui, shown_stroke.as_ref()) {
             app.run("stroke.set", json!({"profile": id})).ok();
         }
     } else {
@@ -886,7 +933,7 @@ fn gripper(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, bar: egui::Rect, d
     }
 }
 
-/// The Control bar (Window → Control), context-sensitive like Illustrator's, docked to the top or
+/// The Control bar (Window → Control), context-sensitive, docked to the top or
 /// the bottom of the window, or floating over the window below the menu bar, where it takes no room
 /// from the canvas. A floating bar is [`FLOAT_WIDTH`] wide, or as wide as the window when that is
 /// narrower, and is kept inside the window when the window shrinks.
@@ -1036,38 +1083,11 @@ fn contents(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, bar: egui::Rect, 
             return;
         }
         crate::panels::transform::link(app, ui);
-        // The bounding box, rotated with rotated objects: its centre and its own sides.
         let selection_box = app.selection_box();
         if selection_box.is_some() && ui.available_width() < inline_transform_width(ui, t) {
             left_out(ui);
         } else if let Some(b) = selection_box {
-            let c = b.center();
-            let origin = app.ruler_origin();
-            let link = crate::panels::transform::proportional(app, ui);
-            let copy = crate::panels::transform::alt_enter_copies(app, ui);
-            let values = [(c.x, origin.x), (c.y, origin.y), (b.rect.width(), 0.0), (b.rect.height(), 0.0)];
-            // The W/H link sits between W and H, but is made after H so Tab goes from W
-            // straight to H and finds the link after it.
-            let mut link_room = None;
-            for ((k, lbl), (v, offset)) in INLINE_FIELDS.into_iter().zip(values) {
-                if k == "height" {
-                    link_room = Some(crate::panels::transform::constrain_link_room(ui));
-                }
-                widgets::field_label(ui, inline_label(t, lbl));
-                let (id, shown) = (("cb", k), Some(v - offset));
-                let set = if matches!(k, "width" | "height") {
-                    widgets::size_field(ui, id, shown, units, INLINE_FIELD_WIDTH)
-                } else {
-                    widgets::num_field(ui, id, shown, units, INLINE_FIELD_WIDTH)
-                };
-                if let Some(nv) = set {
-                    app.run("object.setBounds", json!({k: nv + offset, "reference": 4, "proportional": link, "copy": copy})).ok();
-                }
-            }
-            if let Some(room) = link_room {
-                let id = ui.scope_id().with("cb-constrain-link");
-                crate::panels::transform::constrain_link_at(app, ui, ui.interact(room, id, Sense::click()));
-            }
+            inline_transform_fields(app, ui, t, units, &b);
         }
         // Select Similar Objects comes last: it takes only the room every control ahead of it left.
         trailing_select_similar(app, ui);

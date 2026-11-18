@@ -18,7 +18,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Document Info",
             ["Window", "Document Info"],
             None,
-            "{selectionOnly?, category?: document|objects|graphicStyles|brushes|spotColors|patterns|gradients|symbols|fonts|fontDetails|linkedImages|embeddedImages|repeats (only that one in sections and the text), format?: \"text\" (→ {text}: the report Document Info › Save… and Package write)} → {document: {…, units (English), unitId: the units' Preferences › Units id (points, millimeters, feetInches, …), rasterEffectsPpi}, objects: {paths, compoundPaths, groups, …}, pathLength: pt (the paths' total length, compound paths' included, guides left out), fonts (the type in opacity masks and in the art of symbols and patterns included; with selectionOnly: the selected type's), fontDetails: [{font, match: exact|style|missingWithFallback|missing, family, style, file, embedding: allowed|editing|previewPrint|forbidden|null}] (each font of fonts, in order: how it was found, the face shown (null when none), that face's file name (null for a built-in face) and what its license allows), images, imageObjects: [{name, width, height, linked, file}] (the image objects in the order Linked Images and Embedded Images list them; file: what a linked image's row shows, null for an embedded one), swatches, graphicStyleNames (with selectionOnly: the styles the selected objects are linked to), brushNames (the brushes the art's drawn strokes use, each once; with selectionOnly: those the selected objects' strokes use), brushes: [{name, type: calligraphic|scatter|art|pattern|bristle|null}] (those brushes with their types; null: not in the Brushes panel), panelBrushNames (the Brushes panel's brushes), repeatObjects: [{id, name, type: radial|grid|mirror, instances, rows?, cols?}] (the Repeat objects, those in groups and other repeats included; with selectionOnly: those in the selection), spotObjects: [{id, name, spotColors}] (the objects filled or stroked with a spot color swatch, as a solid color or in the stops of a gradient that color a part of it above opacity 0 (a stop at opacity 0 counts only where it mixes with a stop above opacity 0 over a stretch of some width), at a tint above 0, and grayscale images colorized with one, each once, by the rules patternObjects follows, with the spot colors they use; Registration and process colors are not spot colors; objects.spots counts them), spotColorNames and spotColors (the spot colors those objects use), patternObjects: [{id, name, patterns}] (the objects filled or stroked with a pattern, each once, those in groups and type whose drawn characters use one included, hidden fills and strokes, fills and strokes at an opacity of 0, strokes with no width, guides, compound path members' own fills and strokes, images' fills and strokes without a shape and characters that draw nothing left out, with the patterns they use, which objects.patterns counts; with selectionOnly: those in the selection), patternNames (the patterns those objects use), gradientObjects: [{id, name, gradients, kinds}] (the objects filled or stroked with a gradient, by the same rules, with the gradients they use: a linked gradient swatch's name, else its kind's name, such as Linear gradient; kinds gives each one's kind, linear|radial|conic|diamond|freeform, when it is named by its kind, else null; objects.gradients counts them), gradientNames (the gradients those objects use), …, sections: [{id, title, rows: [[label, value]]}] (the panel's categories; fontDetails: each font's file and whether its license lets it be embedded)}. An image linked to a file outside the automation read roots has link null, and its Linked Images row names the file alone. brushNames, brushes, spotObjects, patternObjects and gradientObjects leave out hidden objects, objects at an opacity of 0 and the objects inside a hidden group or layer or one at an opacity of 0 (with selectionOnly too), their characters' paints and colorized images included; objects still counts them as paths, groups and the other kinds",
+            "{selectionOnly?, category?: document|objects|graphicStyles|brushes|spotColors|patterns|gradients|symbols|fonts|fontDetails|linkedImages|embeddedImages|repeats (only that one in sections and the text), format?: \"text\" (→ {text}: the report Document Info › Save… and Package write)} → {document: {…, units (English), unitId: the units' Preferences › Units id (points, millimeters, feetInches, …), rasterEffectsPpi, transparency: {gridSize: small|medium|large, gridColors: [#rrggbb, #rrggbb], gridColorsName (a preset's name or Custom), simulatePaper, flattenerPreset} (File › Document Setup's transparency settings, which the document category lists), selectedArtboards: [{index, name, width, height, x, y}] (while the Artboard tool is the current tool, the artboards it has selected, in the document's units, x and y those of the top-left corner from the ruler origin of its active artboard, which the document category lists after the artboards; else empty)}, objects: {paths, compoundPaths, groups, …}, pathLength: pt (the paths' total length, compound paths' included, guides left out), fonts (the type in opacity masks and in the art of symbols and patterns included; with selectionOnly: the selected type's), fontDetails: [{font, match: exact|style|missingWithFallback|missing, family, style, file, embedding: allowed|editing|previewPrint|forbidden|null}] (each font of fonts, in order: how it was found, the face shown (null when none), that face's file name (null for a built-in face) and what its license allows), images, imageObjects: [{name, width, height, linked, file}] (the image objects in the order Linked Images and Embedded Images list them; file: what a linked image's row shows, null for an embedded one), swatches, graphicStyleNames (with selectionOnly: the styles the selected objects are linked to), brushNames (the brushes the art's drawn strokes use, each once; with selectionOnly: those the selected objects' strokes use), brushes: [{name, type: calligraphic|scatter|art|pattern|bristle|null}] (those brushes with their types; null: not in the Brushes panel), panelBrushNames (the Brushes panel's brushes), repeatObjects: [{id, name, type: radial|grid|mirror, instances, rows?, cols?}] (the Repeat objects, those in groups and other repeats included; with selectionOnly: those in the selection), spotObjects: [{id, name, spotColors}] (the objects filled or stroked with a spot color swatch, as a solid color or in the stops of a gradient that color a part of it above opacity 0 (a stop at opacity 0 counts only where it mixes with a stop above opacity 0 over a stretch of some width), at a tint above 0, and grayscale images colorized with one, each once, by the rules patternObjects follows, with the spot colors they use; Registration and process colors are not spot colors; objects.spots counts them), spotColorNames and spotColors (the spot colors those objects use), patternObjects: [{id, name, patterns}] (the objects filled or stroked with a pattern, each once, those in groups and type whose drawn characters use one included, hidden fills and strokes, fills and strokes at an opacity of 0, strokes with no width, guides, compound path members' own fills and strokes, images' fills and strokes without a shape and characters that draw nothing left out, with the patterns they use, which objects.patterns counts; with selectionOnly: those in the selection), patternNames (the patterns those objects use), gradientObjects: [{id, name, gradients, kinds}] (the objects filled or stroked with a gradient, by the same rules, with the gradients they use: a linked gradient swatch's name, else its kind's name, such as Linear gradient; kinds gives each one's kind, linear|radial|conic|diamond|freeform, when it is named by its kind, else null; objects.gradients counts them), gradientNames (the gradients those objects use), …, sections: [{id, title, rows: [[label, value]]}] (the panel's categories; fontDetails: each font's file and whether its license lets it be embedded)}. An image linked to a file outside the automation read roots has link null, and its Linked Images row names the file alone. brushNames, brushes, spotObjects, patternObjects and gradientObjects leave out hidden objects, objects at an opacity of 0 and the objects inside a hidden group or layer or one at an opacity of 0 (with selectionOnly too), their characters' paints and colorized images included; objects still counts them as paths, groups and the other kinds",
             has_doc,
             info
         ),
@@ -178,14 +178,58 @@ fn repeat_entry(d: &Document, n: &Node, spec: &RepeatSpec) -> (Value, (String, S
     (entry, (name, format!("{}, {detail}", kind.label())))
 }
 
+/// The artboards the Artboard tool has selected while it is the current tool, in artboard order,
+/// with the index of its active artboard; none with another tool or when it has none of the
+/// document's artboards selected. Indices the document does not have are left out.
+fn artboard_tool_selection(s: &Session) -> Option<(Vec<usize>, usize)> {
+    if s.tool_id() != "artboard" {
+        return None;
+    }
+    let n = s.active().map_or(0, |d| d.doc.artboards.len());
+    let t = s.tool_options_of("artboard");
+    let index = |v: &Value| v.as_u64().and_then(|i| usize::try_from(i).ok()).filter(|i| *i < n);
+    let mut picked: Vec<usize> = t["selected"].as_array().into_iter().flatten().filter_map(index).collect();
+    picked.sort_unstable();
+    picked.dedup();
+    let first = *picked.first()?;
+    let active = index(&t["active"]).filter(|a| picked.contains(a)).unwrap_or(first);
+    Some((picked, active))
+}
+
+/// The artboards `picked` as Document Info › Document lists them while the Artboard tool is the
+/// current tool: their `selectedArtboards` entries (in the document's units), and for each its
+/// rows: its name, width, height and the X and Y of its top-left corner from the ruler origin of
+/// artboard `active`.
+fn selected_artboard_rows(d: &Document, picked: &[usize], active: usize) -> (Vec<Value>, Vec<(String, String)>) {
+    let (u, per) = (d.units, d.units.points());
+    let origin = d.ruler_origin_for(active);
+    let mut entries = vec![];
+    let mut rows = vec![];
+    for &i in picked {
+        let Some(a) = d.artboards.get(i) else { continue };
+        let (w, h, x, y) = (a.rect.width(), a.rect.height(), a.rect.x0 - origin.x, a.rect.y0 - origin.y);
+        entries.push(json!({ "index": i, "name": a.name, "width": w / per, "height": h / per, "x": x / per, "y": y / per }));
+        rows.extend([
+            ("Artboard".to_string(), a.name.clone()),
+            ("Width".into(), u.format(w)),
+            ("Height".into(), u.format(h)),
+            ("X".into(), u.format(x)),
+            ("Y".into(), u.format(y)),
+        ]);
+    }
+    (entries, rows)
+}
+
 /// The Document Info categories of `d` (only `category` when given) from `info` (what
-/// `document.info` reports), its fonts and their Font Details rows, its image objects, the rows of
-/// the brushes its art uses, the rows of its Repeat objects and the rows of its objects filled or
-/// stroked with a spot color, with a pattern and with a gradient.
+/// `document.info` reports), the rows of the artboards the Artboard tool has selected, its fonts
+/// and their Font Details rows, its image objects, the rows of the brushes its art uses, the rows
+/// of its Repeat objects and the rows of its objects filled or stroked with a spot color, with a
+/// pattern and with a gradient.
 #[allow(clippy::too_many_arguments)]
 fn sections(
     d: &Document,
     info: &Value,
+    selected_artboards: &[(String, String)],
     fonts: &BTreeSet<super::fonts::UsedFont>,
     font_details: &[(String, String)],
     images: &[ImageRow],
@@ -215,7 +259,19 @@ fn sections(
                     rows.extend(
                         d.artboards.iter().map(|a| (a.name.clone(), format!("{} × {}", u.format(a.rect.width()), u.format(a.rect.height())))),
                     );
+                    rows.extend(selected_artboards.iter().cloned());
                     rows.push(("Raster Effects".into(), format!("{} ppi", d.raster_effects_ppi)));
+                    let setup = &d.setup;
+                    let colors = match setup.grid_colors_name() {
+                        "Custom" => setup.grid_colors.map(|c| c.to_hex()).join(", "),
+                        name => name.to_string(),
+                    };
+                    rows.extend([
+                        ("Grid Size".to_string(), setup.grid_size.label().to_string()),
+                        ("Grid Colors".into(), colors),
+                        ("Simulate Colored Paper".into(), if setup.simulate_paper { "On" } else { "Off" }.into()),
+                        ("Flattener Preset".into(), setup.flattener().to_string()),
+                    ]);
                     let counts = [
                         ("Swatches", "swatches"),
                         ("Character Styles", "characterStyles"),
@@ -556,6 +612,7 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
         Some("text") => true,
         Some(f) => return Err(bad(C, format!("format `{f}`: text or json"))),
     };
+    let artboard_tool = artboard_tool_selection(s);
     let st = s.doc()?;
     let d = &st.doc;
     let selection_only = bool_or(p, "selectionOnly", false);
@@ -787,7 +844,22 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
     });
     // The document's name: its file's, else its title.
     out["document"]["name"] = json!(st.title());
-    let sections = sections(d, &out, &fonts, &font_rows, &image_rows, &brush_rows, &repeat_rows, &spot_rows, &pattern_rows, &gradient_rows, category);
+    let (selected_entries, selected_rows) = artboard_tool.map(|(picked, active)| selected_artboard_rows(d, &picked, active)).unwrap_or_default();
+    out["document"]["selectedArtboards"] = json!(selected_entries);
+    let sections = sections(
+        d,
+        &out,
+        &selected_rows,
+        &fonts,
+        &font_rows,
+        &image_rows,
+        &brush_rows,
+        &repeat_rows,
+        &spot_rows,
+        &pattern_rows,
+        &gradient_rows,
+        category,
+    );
     if text {
         return Ok(json!({ "text": report_text(&st.title(), selection_only, &sections) }));
     }
@@ -804,6 +876,13 @@ fn document_summary(d: &Document) -> Value {
         "unitId": d.units.key(),
         "artboards": d.artboards.iter().map(|a| json!({ "name": a.name, "width": a.rect.width() / u, "height": a.rect.height() / u })).collect::<Vec<_>>(),
         "rasterEffectsPpi": d.raster_effects_ppi,
+        "transparency": {
+            "gridSize": d.setup.grid_size.id(),
+            "gridColors": d.setup.grid_colors.map(|c| c.to_hex()),
+            "gridColorsName": d.setup.grid_colors_name(),
+            "simulatePaper": d.setup.simulate_paper,
+            "flattenerPreset": d.setup.flattener(),
+        },
     })
 }
 
@@ -873,6 +952,101 @@ mod tests {
         s.execute("select.set", &json!({"ids": [r]})).unwrap();
         let i = s.execute("document.info", &json!({"selectionOnly": true})).unwrap();
         assert!(i["objects"]["textObjects"].is_null() && i["objects"]["paths"] == 1);
+    }
+
+    /// The Document category's rows from `info`, as (label, value) pairs.
+    fn document_rows(i: &Value) -> Vec<(String, String)> {
+        let doc = i["sections"].as_array().unwrap().iter().find(|s| s["id"] == "document").unwrap();
+        doc["rows"].as_array().unwrap().iter().map(|r| (r[0].as_str().unwrap().to_string(), r[1].as_str().unwrap().to_string())).collect()
+    }
+
+    /// Document lists File › Document Setup's transparency settings: the grid's size and colors
+    /// (a preset's name, else both colors), Simulate Colored Paper and the flattener preset.
+    #[test]
+    fn info_lists_the_transparency_settings() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
+        let i = s.execute("document.info", &json!({})).unwrap();
+        let t = &i["document"]["transparency"];
+        assert_eq!(
+            (t["gridSize"].clone(), t["gridColorsName"].clone(), t["simulatePaper"].clone(), t["flattenerPreset"].clone()),
+            (json!("medium"), json!("Light"), json!(false), json!("Medium Resolution"))
+        );
+        let rows = document_rows(&i);
+        let at = rows.iter().position(|(l, _)| l == "Raster Effects").unwrap();
+        let expected =
+            [("Grid Size", "Medium"), ("Grid Colors", "Light"), ("Simulate Colored Paper", "Off"), ("Flattener Preset", "Medium Resolution")];
+        assert_eq!(rows[at + 1..at + 5], expected.map(|(l, v)| (l.to_string(), v.to_string())), "{rows:?}");
+        s.execute(
+            "document.setup",
+            &json!({"gridSize": "large", "gridColors": ["#ff0000", "#00ff00"], "simulatePaper": true, "flattenerPreset": "High Resolution"}),
+        )
+        .unwrap();
+        let i = s.execute("document.info", &json!({})).unwrap();
+        assert_eq!(i["document"]["transparency"]["gridColors"], json!(["#ff0000", "#00ff00"]));
+        assert_eq!(i["document"]["transparency"]["gridColorsName"], "Custom");
+        let rows = document_rows(&i);
+        let expected =
+            [("Grid Size", "Large"), ("Grid Colors", "#ff0000, #00ff00"), ("Simulate Colored Paper", "On"), ("Flattener Preset", "High Resolution")];
+        assert_eq!(rows[at + 1..at + 5], expected.map(|(l, v)| (l.to_string(), v.to_string())), "{rows:?}");
+        let report = s.execute("document.info", &json!({"category": "document", "format": "text"})).unwrap()["text"].as_str().unwrap().to_string();
+        assert!(report.contains("Grid Colors: #ff0000, #00ff00\nSimulate Colored Paper: On\nFlattener Preset: High Resolution\n"), "{report}");
+    }
+
+    /// While the Artboard tool is the current tool, Document lists each artboard it has selected
+    /// after the artboards: its name, width, height and the X and Y of its top-left corner from the
+    /// ruler origin of the tool's active artboard. With another tool it lists none.
+    #[test]
+    fn info_lists_the_artboards_the_artboard_tool_selected() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        s.execute("artboard.new", &json!({"x": 150, "y": 40, "width": 60, "height": 80})).unwrap();
+        s.execute("artboard.new", &json!({"x": 400, "y": 10, "width": 100, "height": 50})).unwrap();
+        s.execute("artboard.setProps", &json!({"index": 2, "name": "Back"})).unwrap();
+        let before = s.execute("document.info", &json!({})).unwrap();
+        assert_eq!(before["document"]["selectedArtboards"], json!([]));
+        s.select_tool("artboard", crate::tooling::ViewInfo::default()).unwrap();
+        s.set_tool_option("selected", &json!([2, 1, 7]));
+        let i = s.execute("document.info", &json!({})).unwrap();
+        // Artboard 2 is active: positions are measured from its top-left corner.
+        assert_eq!(
+            i["document"]["selectedArtboards"],
+            json!([
+                {"index": 1, "name": "Artboard 2", "width": 60.0, "height": 80.0, "x": -250.0, "y": 30.0},
+                {"index": 2, "name": "Back", "width": 100.0, "height": 50.0, "x": 0.0, "y": 0.0},
+            ])
+        );
+        let rows = document_rows(&i);
+        let at = rows.iter().position(|(l, _)| l == "Artboards").unwrap() + 4;
+        let expected = [
+            ("Artboard", "Artboard 2"),
+            ("Width", "60 pt"),
+            ("Height", "80 pt"),
+            ("X", "-250 pt"),
+            ("Y", "30 pt"),
+            ("Artboard", "Back"),
+            ("Width", "100 pt"),
+            ("Height", "50 pt"),
+            ("X", "0 pt"),
+            ("Y", "0 pt"),
+            ("Raster Effects", "72 ppi"),
+        ];
+        assert_eq!(rows[at..at + 11], expected.map(|(l, v)| (l.to_string(), v.to_string())), "{rows:?}");
+        // The rows follow the document's units and its ruler origin.
+        s.execute("document.setup", &json!({"units": "Millimeters"})).unwrap();
+        s.execute("document.setRulerOrigin", &json!({"x": 390, "y": 0, "artboard": 2})).unwrap();
+        s.set_tool_option("selected", &json!([2]));
+        let i = s.execute("document.info", &json!({"category": "document"})).unwrap();
+        let entry = &i["document"]["selectedArtboards"];
+        assert_eq!((entry.as_array().unwrap().len(), entry[0]["index"].clone()), (1, json!(2)));
+        assert!((entry[0]["x"].as_f64().unwrap() - 10.0 * 25.4 / 72.0).abs() < 1e-9, "{entry}");
+        let rows = document_rows(&i);
+        assert!(rows.contains(&("X".into(), "3.5278 mm".into())) && rows.contains(&("Y".into(), "3.5278 mm".into())), "{rows:?}");
+        // Another tool: no artboard rows.
+        s.select_tool("selection", crate::tooling::ViewInfo::default()).unwrap();
+        let i = s.execute("document.info", &json!({})).unwrap();
+        assert_eq!(i["document"]["selectedArtboards"], json!([]));
+        assert!(!document_rows(&i).iter().any(|(l, _)| l == "X"), "{:?}", document_rows(&i));
     }
 
     /// Document Info's fonts include the type in an opacity mask, in a symbol's art and in a

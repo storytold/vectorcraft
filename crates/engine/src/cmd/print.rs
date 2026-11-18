@@ -147,6 +147,32 @@ fn preview(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(v)
 }
 
+/// Reuse the Print dialog's saved settings and page geometry for production preflight, without
+/// printing, writing a file or duplicating its type warnings.
+pub(super) struct PreflightContext {
+    pub layers: PrintLayers,
+    pub pages: Vec<(Rect, Affine)>,
+    pub warnings: Vec<String>,
+}
+
+pub(super) fn preflight_context(s: &Session, indices: &[usize]) -> Result<PreflightContext> {
+    let settings =
+        json!({ "settings": { "artboards": "range", "range": indices.iter().map(|i| (i + 1).to_string()).collect::<Vec<_>>().join(",") } });
+    let set = preset_or_saved("document.preflight", s, &s.doc()?.doc, &settings)?;
+    super::printadvanced::flattener("document.preflight", &set, &s.prefs.flattener_presets)?;
+    let mut pv = vectorcraft_pdf::preview(&s.doc()?.doc, &set).map_err(|e| pdf_error("document.preflight", e))?;
+    let pages = pv
+        .sheets
+        .iter()
+        .filter_map(|p| {
+            let to_page = Affine::new(p.transform);
+            on_page(Rect::new(p.area[0], p.area[1], p.area[2], p.area[3]), to_page, (p.width, p.height)).map(|area| (area, to_page))
+        })
+        .collect();
+    pv.warnings.extend(pv.setting_notes);
+    Ok(PreflightContext { layers: set.print_layers, pages, warnings: pv.warnings })
+}
+
 /// The parts of the document (document space) that the pages of `pv` print.
 fn areas(pv: &PrintPreview) -> Vec<Rect> {
     pv.sheets
