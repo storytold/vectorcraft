@@ -2931,6 +2931,9 @@
 	Magic Wand	ჯადოსნური ჯოხი
 	Navigator	ნავიგატორი
 	Navigator Panel Options	ნავიგატორის პანელის პარამეტრები
+	Attributes Panel Options	ატრიბუტების პანელის პარამეტრები
+	Number of Recent URLs:	ბოლოდროინდელი URL-ების რაოდენობა:
+@msg	`count` must be a whole number from 1 to 30	`count` უნდა იყოს მთელი რიცხვი 1-დან 30-მდე
 	Draw Dashed Lines as Solid Lines	ტირეებიანი ხაზების უწყვეტ ხაზებად დახატვა
 	Pattern Options	პატერნის პარამეტრები
 	Properties	თვისებები
@@ -3626,6 +3629,7 @@ lighting	Light	სინათლე
 	Save Actions…	მოქმედებების შენახვა…
 	Load Actions…	მოქმედებების ჩატვირთვა…
 	Replace Actions…	მოქმედებების ჩანაცვლება…
+	Clear Actions	მოქმედებების გასუფთავება
 	Reset Actions	მოქმედებების ჩამოყრა
 	Replace the current actions with the default set?	ჩანაცვლდეს მიმდინარე მოქმედებები ნაგულისხმევი ნაკრებით?
 	Append adds the default set after the current sets instead.	„დამატება“ ამის ნაცვლად ნაგულისხმევ ნაკრებს მიმდინარე ნაკრებების შემდეგ ამატებს.
@@ -3976,6 +3980,7 @@ digits	Malayalam	მალაიალამური
 	Duplicate Action or Action Set	მოქმედების ან მოქმედებების ნაკრების დუბლირება
 	Delete the action set “{name}” and its actions?	წაიშალოს მოქმედებების ნაკრები „{name}“ და მისი მოქმედებები?
 	Delete the selected action sets and their actions?	წაიშალოს მონიშნული მოქმედებების ნაკრებები და მათი მოქმედებები?
+	Delete all action sets and their actions?	წაიშალოს ყველა მოქმედებების ნაკრები და მათი მოქმედებები?
 	Delete these {n} graphic styles?	წაიშალოს ეს გრაფიკული სტილები ({n})?
 	Delete this {n} graphic style?	წაიშალოს ეს გრაფიკული სტილი ({n})?
 	Graphic Style Libraries Menu	გრაფიკული სტილების ბიბლიოთეკების მენიუ
@@ -6108,6 +6113,7 @@ theme	Appearance	იერსახე
 	Set Tab Stops	ტაბულაციის გაჩერებების დაყენება
 	Tab Stops	ტაბულაციის გაჩერებები
 	Flare	ბლიკი
+	Edit Flare	ბლიკის რედაქტირება
 	Rays	სხივები
 	Rectangle	მართკუთხედი
 	Paintbrush	ფუნჯი
@@ -6369,6 +6375,8 @@ font-technology	Variable	ცვლადი
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	დაჭერილი Cmd/Ctrl-ით მაუსის ბორბალი ტილოს გვერდულად გადაახვევს.
 	Dragging sideways on a numeric field's label changes the field's value.	რიცხვითი ველის წარწერაზე გვერდულად გადათრევა ველის მნიშვნელობას ცვლის.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	ტრეკპადზე ორი თითით მობრუნების ჟესტი ტილოს ხედს აბრუნებს.
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	კლავიშის ხანგრძლივი დაჭერა უშვებს ხელსაწყოს ან ბრძანებას კლავიატურის მალსახმობების დაჭერის სვეტიდან; მოკლე დაჭერა უშვებს მის ჩვეულ მალსახმობს.
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	რამდენი წამი უნდა იყოს კლავიში დაჭერილი, სანამ ჩვეული მალსახმობის ნაცვლად მისი ხანგრძლივი დაჭერის მალსახმობი გაეშვება.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	როცა ღუზის წერტილებს გადაადგილებთ, ყოველი მრუდი, რომლის ერთი ბოლოც გადაადგილდა, ინარჩუნებს ფორმას თავის ბოლოებთან მიმართებით.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	სანამ ხელსაწყოს მალსახმობ კლავიშს დაჭერილს გიჭირავთ, ეს ხელსაწყოა არჩეული; კლავიშის აშვების შემდეგ ისევ წინა ხელსაწყო აირჩევა.
 	Shows the bounding box while you move the selection or draw a shape.	აჩვენებს შემომსაზღვრელ ჩარჩოს, სანამ მონიშნულს გადაადგილებთ ან ფიგურას ხატავთ.
@@ -7001,6 +7009,7 @@ font-technology	Variable	ცვლადი
 @msg	no graphic style `{n}`	გრაფიკული სტილი `{n}` არ არის
 @msg	no interaction in progress	მიმდინარე ურთიერთქმედება არ არის
 @msg	no key object	საკვანძო ობიექტი არ არის
+@msg	Align to Key Object isn't available with the Artboard tool	„საკვანძო ობიექტზე სწორება“ სამუშაო დაფის ხელსაწყოსთან მიუწვდომელია
 @msg	no library `{key}` (see {list})	ბიბლიოთეკა `{key}` არ არის (იხ. {list})
 @msg	no native format	საკუთარი ფორმატი არ არის
 @msg	no pages	გვერდები არ არის
@@ -7132,6 +7141,7 @@ font-technology	Variable	ცვლადი
 @msg	select a Live Paint group	მონიშნეთ ცოცხალი შეღებვის ჯგუფი
 @msg	select a blend	მონიშნეთ გადასვლა
 @msg	select a clip group	მონიშნეთ მომჭრელი ჯგუფი
+@msg	select a flare	მონიშნეთ ბლიკი
 @msg	select a gradient mesh	მონიშნეთ გრადიენტული ბადე
 @msg	select a linked image: an embedded one has no file	მონიშნეთ დაკავშირებული გამოსახულება: ჩაშენებულს ფაილი არ აქვს
 @msg	select a repeat	მონიშნეთ გამეორება
@@ -7362,6 +7372,7 @@ font-technology	Variable	ცვლადი
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	დაკავშირებული გამოსახულებები შეიცვალა დისკზე ({n}): ბმულების განახლება აჩვენებს ახალ ვერსიებს
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	განახლდა დისკზე შეცვლილი დაკავშირებული ფაილები: {n}
 @msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	დოკუმენტი ადგენს ჭრისპირა არეს, რომელსაც ეს PDF/X ფაილი გამოტოვებს: ჩართეთ „დოკუმენტის ჭრისპირა არის პარამეტრების გამოყენება“
+@msgplural	{n} object reaches the trim edge but stops short of the bleed|{n} objects reach the trim edge but stop short of the bleed	ობიექტები, რომლებიც ჭრის კიდეს აღწევს, მაგრამ ჭრისპირა არემდე ვერა: {n}
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	ექსპორტირებულია {what}, შენიშვნები: {n}: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	შრიფტის ფაილები ({n}) ახლა აქ არის: {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	შრიფტის ფაილები ({n}) ახლა აქ არის: {folder}; ვერ დაემატა {failed}: {reason}
@@ -8905,6 +8916,8 @@ liquify-list-end	{0}, {1}	{0} და {1}
 @msg	no such spine point	ხერხემლის ასეთი წერტილი არ არსებობს
 @msg	`with` must be a list of at most 10000 spine point indexes	`with` უნდა იყოს ხერხემლის წერტილების არაუმეტეს 10000 ინდექსის სია
 @msg	`with` moves points, not a handle	`with` წერტილებს გადაადგილებს და არა სახელურს
+@msg	`link` and `independent` cannot both be true	`link` და `independent` ერთდროულად ვერ იქნება true
+@msg	`link` places a handle: give `handle`	`link` სახელურს ათავსებს: მიუთითეთ `handle`
 @msg	no such spine segment	ხერხემლის ასეთი სეგმენტი არ არსებობს
 @msg	not a blend	ეს გადასვლა არ არის
 @msg	only http, https and mailto URLs open in the browser, not “{url}”	ბრაუზერში მხოლოდ http, https და mailto URL-ები იხსნება და არა „{url}“
@@ -8936,6 +8949,9 @@ variable-list-end	{0}, {1}	{0} და {1}
 	Cancel Export	ექსპორტირების გაუქმება
 @plural	{n} more export waiting|{n} more exports waiting	რიგში მომლოდინე სხვა ექსპორტირება: {n}
 @msg	Export cancelled	ექსპორტირება გაუქმდა
+	Cancel Save	შენახვის გაუქმება
+@plural	{n} more save waiting|{n} more saves waiting	რიგში მომლოდინე სხვა შენახვა: {n}
+@msg	Save canceled	შენახვა გაუქმდა
 	Clear History	ისტორიის გასუფთავება
 	New Document from State	ახალი დოკუმენტი მდგომარეობიდან
 	Continue in Background	ფონურ რეჟიმში გაგრძელება
@@ -9507,6 +9523,12 @@ axis	Y Axis	Y ღერძი
 	Circuit Trace	სქემის გამტარი
 	Bus Lines	სალტის ხაზები
 	Terminal Nodes	ტერმინალური კვანძები
+
+# Original arrow art brushes.
+	Arrows	ისრები
+	Solid Arrow	მყარი ისარი
+	Open Arrow	ღია ისარი
+	Chevron Arrow	შევრონიანი ისარი
 
 	Notched Ribbon	დაკბილული ლენტი
 	Double Line	ორმაგი ხაზი
@@ -10265,10 +10287,18 @@ breakText	Glyphs	გლიფები
 	Smooth Bridge…	გლუვი ხიდი…
 	Smooth Bridge	გლუვი ხიდი
 	Keep Originals	ორიგინალების შენარჩუნება
-@msg	select two circles to bridge	აირჩიეთ ორი წრე დასაკავშირებლად
+@msg	select two or more circles to bridge	აირჩიეთ ორი ან მეტი წრე დასაკავშირებლად
 @msg	one circle is inside the other	ერთი წრე მეორის შიგნითაა
 @msg	the circles are too far apart for this radius: raise the radius	ამ რადიუსისთვის წრეები ერთმანეთისგან ძალიან შორსაა: გაზარდეთ რადიუსი
 @msg	the circles are too far apart for this radius	ამ რადიუსისთვის წრეები ერთმანეთისგან ძალიან შორსაა
+	Constant Gap	მუდმივი ღრეჩო
+	Reach:	მიწვდომა:
+@msg	the circles are too far apart for this gap: raise the gap	ამ ღრეჩოსთვის წრეები ერთმანეთისგან ძალიან შორსაა: გაზარდეთ ღრეჩო
+@msg	the circles are too far apart for this gap	ამ ღრეჩოსთვის წრეები ერთმანეთისგან ძალიან შორსაა
+@msg	no two circles are within reach: raise the reach	არცერთი ორი წრე არ არის მიწვდომის ფარგლებში: გაზარდეთ მიწვდომა
+@msg	select at most 2000 circles to bridge	აირჩიეთ არაუმეტეს 2000 წრე დასაკავშირებლად
+@msg	that makes too many bridges (at most 8000): lower the reach	ეს ძალიან ბევრ ხიდს ქმნის (არაუმეტეს 8000): შეამცირეთ მიწვდომა
+@msg	the bridged circles are too complex to unite	დაკავშირებული წრეები ძალიან რთულია გასაერთიანებლად
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	საერთო მხებები…
 	Common Tangents	საერთო მხებები
@@ -10747,6 +10777,17 @@ font-script	Japanese	იაპონური
 @msg	A joint does not close by {gap} pt.	შეერთება არ იხურება {gap} pt-ით.
 @msg	Two panels pass through each other.	ორი პანელი ერთმანეთში გადის.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer უნდა იყოს "singleLine", "everyLine", "standardSingleLine" ან "standardEveryLine"
+	Tap	მოკლე დაჭერა
+	Clear Hold	ხანგრძლივი დაჭერის გასუფთავება
+	Hold Shortcuts	ხანგრძლივი დაჭერის მალსახმობები
+	Hold Shortcut Delay	ხანგრძლივი დაჭერის დაყოვნება
+	How hold shortcuts work	როგორ მუშაობს ხანგრძლივი დაჭერის მალსახმობები
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	დაწკაპეთ, შემდეგ დააჭირეთ კლავიშს, რომელიც ამისთვის უნდა დაიჭიროთ (Esc აუქმებს). კლავიშის ხანგრძლივი დაჭერა ამას უშვებს; მოკლე დაჭერა კლავიშის საკუთარ მალსახმობს უშვებს.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	კლავიშის მოკლე დაჭერა მის მალსახმობს უშვებს. თუ კლავიშს დაყოვნების ხანგრძლივობით დაიჭერთ, ამის ნაცვლად გაეშვება მისი „დაჭერა“ სვეტის ხელსაწყო ან ბრძანება. ხანგრძლივი დაჭერის მალსახმობი არის ასოს, ციფრის ან სასვენი ნიშნის კლავიში, ცალკე ან Shift კლავიშთან ერთად.
+@msg	Hold {_1} is already used by {_2}	ხანგრძლივი დაჭერა {_1} უკვე გამოიყენება ამისთვის: {_2}
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	ხანგრძლივი დაჭერის მალსახმობი არის კლავიში, რომელიც სიმბოლოს წერს, ცალკე ან Shift კლავიშთან ერთად ({shown} შეიცავს Cmd, Ctrl ან Alt კლავიშს)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} ვერ იქნება ხანგრძლივი დაჭერის მალსახმობი: გამოიყენეთ ასო, ციფრი ან სასვენი ნიშნის კლავიში
+	Dashed Arrow	წყვეტილი ისარი
 	Pressure Sensitive	წნევაზე მგრძნობიარე
 	Flex Ribbon	მოქნილი ლენტი
 	Pulse Stroke	პულსირებადი მონასმი
