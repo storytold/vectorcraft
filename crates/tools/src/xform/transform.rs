@@ -95,6 +95,16 @@ impl Drag {
     }
 }
 
+/// The pointer drag [`TransformTool::solve`] turns into a transform.
+struct SolveDrag {
+    start: Point,
+    p: Point,
+    /// The pointer's own movement since the press, before snapping (#6324).
+    moved: Vec2,
+    shift: bool,
+    bounds: Rect,
+}
+
 pub struct TransformTool {
     kind: TransformKind,
     /// Custom reference point and the selection it was set for.
@@ -159,7 +169,7 @@ impl TransformTool {
     /// and Shift's 45° steps start from the box's axes. A Reflect axis drawn by the drag is the
     /// line the pointer draws on the page.
     pub fn matrix_in(&self, angle: f64, o: Point, start: Point, p: Point, shift: bool, bounds: Rect) -> (Affine, String) {
-        let (m, a, b) = self.solve(angle, o, start, p, p - start, shift, bounds);
+        let (m, a, b) = self.solve(angle, o, SolveDrag { start, p, moved: p - start, shift, bounds });
         (m, self.label(a, b))
     }
 
@@ -190,7 +200,8 @@ impl TransformTool {
     /// axis in degrees counter-clockwise (Reflect), the scale along the box's width and height
     /// (Scale), or the angle of the shear axis (0 horizontal, 90 vertical) and the shear angle as
     /// `object.shear` takes it (Shear).
-    fn solve(&self, angle: f64, o: Point, start: Point, p: Point, moved: Vec2, shift: bool, bounds: Rect) -> (Affine, f64, f64) {
+    fn solve(&self, angle: f64, o: Point, d: SolveDrag) -> (Affine, f64, f64) {
+        let SolveDrag { start, p, moved, shift, bounds } = d;
         let frame = OrientedBox { angle, rect: Rect::ZERO };
         let local = |v: Vec2| frame.to_doc().inverse() * v.to_point();
         match self.kind {
@@ -349,7 +360,11 @@ impl Tool for TransformTool {
                 let moved = p - d.start;
                 let (p, guides) = self.snap.as_ref().map_or((p, vec![]), |s| s.snap(cx, p));
                 self.hover = guides;
-                let (m, a, b) = self.solve(d.angle_for(ev.mods.alt, ev.backquote), d.origin, d.pick, p, moved, ev.mods.shift, d.bounds);
+                let (m, a, b) = self.solve(
+                    d.angle_for(ev.mods.alt, ev.backquote),
+                    d.origin,
+                    SolveDrag { start: d.pick, p, moved, shift: ev.mods.shift, bounds: d.bounds },
+                );
                 (d.last, d.pointer, d.shift, d.moved) = (m, p, ev.mods.shift, moved);
                 self.drag = Some(d);
                 self.measure = Some((p, self.label(a, b)));
@@ -364,7 +379,12 @@ impl Tool for TransformTool {
                     // or moves only pattern tiles, and with anchors selected, whether it acts
                     // along the box or the page.
                     let m = if d.anchors {
-                        self.solve(d.angle_for(ev.mods.alt, ev.backquote), d.origin, d.pick, d.pointer, d.moved, d.shift, d.bounds).0
+                        self.solve(
+                            d.angle_for(ev.mods.alt, ev.backquote),
+                            d.origin,
+                            SolveDrag { start: d.pick, p: d.pointer, moved: d.moved, shift: d.shift, bounds: d.bounds },
+                        )
+                        .0
                     } else {
                         d.last
                     };
