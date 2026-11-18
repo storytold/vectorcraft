@@ -404,7 +404,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if !over_symbol && let Some(ids) = widgets::art_drop(ui, &zone) {
         // Shift held at the release keeps the dropped art as ordinary art.
         let mut p = json!({ "ids": ids, "type": "dynamic" });
-        if modifiers_at_release(ui).shift {
+        if modifiers_released_in(ui, zone.rect).shift {
             p["keepArt"] = json!(true);
         }
         if let Err(e) = app.run("symbol.new", p) {
@@ -452,7 +452,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         } else if new.clicked() {
             // Alt skips Symbol Options: the symbol is made under the default name, dynamic as the
             // dialog's default. Shift keeps the selected art as ordinary art, with or without Alt.
-            let m = ui.input(|i| i.modifiers);
+            // Both are read as the button went up on it.
+            let m = modifiers_released_in(ui, new.rect);
             let (cmd, mut p) = if m.alt { ("symbol.new", json!({"type": "dynamic"})) } else { ("ui.symbolOptions", json!({})) };
             if m.shift {
                 p["keepArt"] = json!(true);
@@ -465,9 +466,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         // it: the dragged symbol, or every symbol Select All Unused picked when it is one of them.
         if let Some(name) = symbol_dropped(ui, &trash, &names, uid) {
             let picked = if marked.contains(&name) { &marked[..] } else { &[] };
-            delete(app, picked, Some(&name), super::alt_held(ui));
+            delete(app, picked, Some(&name), modifiers_released_in(ui, trash.rect).alt);
         } else if trash.clicked() {
-            delete(app, &marked, sel.as_deref(), super::alt_held(ui));
+            delete(app, &marked, sel.as_deref(), modifiers_released_in(ui, trash.rect).alt);
         }
     });
 }
@@ -480,17 +481,20 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let has_sel = app.session.active().is_some_and(|d| !d.selection.is_empty());
     let inst = has_instances_selected(app);
     let name = json!({"name": sel});
-    // Shift keeps the selected art as ordinary art instead of making it an instance.
-    let shift = ui.input(|i| i.modifiers.shift);
-    let redefine = if shift { json!({"name": sel, "keepArt": true}) } else { name.clone() };
-    let new = if shift { json!({"keepArt": true}) } else { json!({}) };
-    let items: [(&str, bool, &str, Value); 3] = [
-        (tl!("New Symbol…"), has_sel, "ui.symbolOptions", new),
-        (tl!("Redefine Symbol"), has_sel && sel.is_some(), "symbol.update", redefine),
-        (tl!("Duplicate Symbol"), sel.is_some(), "symbol.duplicate", name.clone()),
+    // Shift, held as the button went up on New Symbol… or Redefine Symbol, keeps the selected art
+    // as ordinary art instead of making it an instance.
+    let items: [(&str, bool, &str, Value, bool); 3] = [
+        (tl!("New Symbol…"), has_sel, "ui.symbolOptions", json!({}), true),
+        (tl!("Redefine Symbol"), has_sel && sel.is_some(), "symbol.update", name.clone(), true),
+        (tl!("Duplicate Symbol"), sel.is_some(), "symbol.duplicate", name.clone(), false),
     ];
-    for (label, enabled, cmd, params) in items {
+    for (label, enabled, cmd, mut params, keeps_art) in items {
+        let top = ui.cursor().min.y;
         if menu_item(ui, label, enabled, false) {
+            let row = egui::Rect::from_x_y_ranges(ui.max_rect().x_range(), top..=ui.cursor().min.y);
+            if keeps_art && modifiers_released_in(ui, row).shift {
+                params["keepArt"] = json!(true);
+            }
             app.run(cmd, params).ok();
         }
     }
@@ -589,18 +593,33 @@ fn art_redefine_drop(ui: &Ui, item: &egui::Response, doc: &Document, uid: Option
     item.dnd_release_payload::<PanelDrag>().map(|_| ids.iter().map(|id| id.0).collect())
 }
 
-/// Whether Alt (Option) is held for a drop: when the primary button went up in this frame, as it
-/// went up, else now.
+/// Whether Alt (Option) is held for a click or a drop: when the primary button went up in this
+/// frame, as it went up, else now.
 fn alt_at_release(ui: &Ui) -> bool {
     modifiers_at_release(ui).alt
 }
 
-/// The modifiers held for a drop: when the primary button went up in this frame, as it went up,
-/// else now.
+/// The modifiers held for a click or a drop on `rect`: when the primary button last went up over
+/// `rect` in this frame, as it went up, else as [`modifiers_at_release`] gives them.
+fn modifiers_released_in(ui: &Ui, rect: egui::Rect) -> egui::Modifiers {
+    ui.input(|i| {
+        i.events.iter().rev().find_map(|e| match e {
+            egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed: false, modifiers } if rect.contains(*pos) => {
+                Some(*modifiers)
+            }
+            _ => None,
+        })
+    })
+    .unwrap_or_else(|| modifiers_at_release(ui))
+}
+
+/// The modifiers held for a click or a drop: when the primary button went up in this frame, as it
+/// last went up (egui reports the click of the last release in the frame), else now.
 fn modifiers_at_release(ui: &Ui) -> egui::Modifiers {
     ui.input(|i| {
         i.events
             .iter()
+            .rev()
             .find_map(|e| match e {
                 egui::Event::PointerButton { button: egui::PointerButton::Primary, pressed: false, modifiers, .. } => Some(*modifiers),
                 _ => None,
@@ -1043,6 +1062,69 @@ mod tests {
         frame_held(&ctx, &mut app, vec![egui::Event::PointerMoved(at)], egui::Modifiers::NONE);
         frame_held(&ctx, &mut app, vec![release(egui::Modifiers::NONE)], egui::Modifiers::NONE);
         assert_eq!(art(&app, "New Symbol 2"), (1, 0), "without Shift the rectangle becomes an instance");
+    }
+
+    /// A click of the primary button off the panel with no modifiers held, the pointer then back
+    /// at `at`.
+    fn stray_click(at: Pos2) -> [egui::Event; 4] {
+        let off = pos2(-10.0, -10.0);
+        let button =
+            |pressed| egui::Event::PointerButton { pos: off, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+        [egui::Event::PointerMoved(off), button(true), button(false), egui::Event::PointerMoved(at)]
+    }
+
+    /// Clicks the panel button labeled `label` with `modifiers` held as the primary button goes up,
+    /// between two clicks off the panel without them, and lets them go later in the same frame.
+    fn click_button_let_go(app: &mut VectorcraftApp, label: &str, modifiers: egui::Modifiers) {
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let out = frame_held(&ctx, app, vec![], modifiers);
+        let at = clickable(&out).into_iter().find(|(l, _)| l == label).unwrap_or_else(|| panic!("a {label} button")).1;
+        let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers };
+        let let_go = egui::Event::ModifiersChanged(egui::Modifiers::NONE);
+        let mut events = stray_click(at).to_vec();
+        events.extend([press(true), press(false), let_go]);
+        events.extend(stray_click(at));
+        frame_held(&ctx, app, events, modifiers);
+    }
+
+    /// Clicks the menu item labeled `label` with `modifiers` held as the primary button goes up,
+    /// between two clicks off the menu without them, and lets them go later in the same frame.
+    fn click_menu_let_go(ctx: &egui::Context, app: &mut VectorcraftApp, label: &str, modifiers: egui::Modifiers) {
+        let held = egui::Event::ModifiersChanged(modifiers);
+        let labels = menu_frame(ctx, app, vec![held.clone()]);
+        let item = labels.iter().find(|(t, _)| t.trim() == label).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("{label} in the menu"));
+        let press = |pressed| egui::Event::PointerButton { pos: item, button: egui::PointerButton::Primary, pressed, modifiers };
+        let mut events = vec![held];
+        events.extend(stray_click(item));
+        events.extend([press(true), press(false), egui::Event::ModifiersChanged(egui::Modifiers::NONE)]);
+        events.extend(stray_click(item));
+        menu_frame(ctx, app, events);
+    }
+
+    /// The New Symbol and Delete Symbol buttons and the menu's New Symbol… and Redefine Symbol read
+    /// Shift and Alt as the primary button goes up on them, though clicks elsewhere without them
+    /// come before and after and they are let go later in the same frame.
+    #[test]
+    fn symbol_clicks_read_the_modifiers_as_the_button_goes_up() {
+        let (mut app, rect) = leaf_dot_and_rect();
+        click_button_let_go(&mut app, "New Symbol", egui::Modifiers::SHIFT | egui::Modifiers::ALT);
+        assert_eq!(dialog_kind(&app), None, "Alt skips Symbol Options");
+        assert_eq!(symbols(&mut app), ["Leaf", "Dot", "New Symbol"]);
+        assert_eq!(art(&app, "New Symbol"), (0, 1), "Shift: the rectangle stays ordinary art");
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        click_menu_let_go(&ctx, &mut app, "New Symbol…", egui::Modifiers::SHIFT);
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(art(&app, "New Symbol 2"), (0, 1), "the menu's Shift keeps the rectangle as ordinary art");
+        app.run("symbol.setCurrent", json!({"name": "Dot"})).unwrap();
+        click_menu_let_go(&ctx, &mut app, "Redefine Symbol", egui::Modifiers::SHIFT);
+        assert_eq!(art(&app, "Dot"), (0, 1), "Redefine Symbol with Shift keeps the rectangle as ordinary art");
+        assert_eq!(app.session.active().unwrap().selection.objects, vec![rect]);
+        // Dot holds the rectangle now and nothing places it, so Alt deletes it without asking.
+        click_button_let_go(&mut app, "Delete Symbol", egui::Modifiers::ALT);
+        assert_eq!(dialog_kind(&app), None, "Alt deletes an unused symbol without asking");
+        assert_eq!(symbols(&mut app), ["Leaf", "New Symbol", "New Symbol 2"]);
     }
 
     /// `ui.symbolOptions` takes `keepArt` only as true or false, and only for a new symbol.
@@ -2425,7 +2507,8 @@ mod tests {
         frame(ctx, app, vec![egui::Event::PointerMoved(from + vec2(40.0, 40.0))]);
         frame(ctx, app, vec![egui::Event::PointerMoved(from + vec2(80.0, 80.0))]);
         let held = frame_held(ctx, app, vec![egui::Event::PointerMoved(to)], egui::Modifiers::NONE);
-        frame_held(ctx, app, vec![button(to, false)], modifiers);
+        let release = egui::Event::PointerButton { pos: to, button: egui::PointerButton::Primary, pressed: false, modifiers };
+        frame_held(ctx, app, vec![release], modifiers);
         held
     }
 
