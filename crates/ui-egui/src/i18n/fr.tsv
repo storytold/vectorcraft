@@ -2284,6 +2284,7 @@ font-technology	Variable	Variables
 	Black and white stay as they are. Dark colors become shades of the stroke color and light colors become tints of it.	Le noir reste noir et le blanc reste blanc. Les autres couleurs deviennent des ombres de la couleur du contour quand elles sont foncées et des teintes de celle-ci quand elles sont claires.
 	The key color becomes the stroke color. The other colors shift their hue by the same amount and keep their saturation and brightness.	La couleur clé devient la couleur du contour. Les autres couleurs tournent sur le cercle chromatique autant que la couleur clé et gardent leur saturation et leur luminosité.
 	Key Color:	Couleur clé :
+	Roundness	Arrondi
 	Roundness:	Arrondi :
 	Fixed	Fixe
 	Pressure	Pression
