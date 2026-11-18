@@ -535,11 +535,12 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
   and Russian have break points, and German, Polish, Portuguese and Italian have them in builds that embed
   their patterns; other languages stay whole apart from the Exceptions list (#394, #4947).
 - **Done (2026-11-14):** Layers panel row context menu: right-clicking a layer, group, or object row shows a context menu (Options…, Duplicate, Delete, Lock Others / Unlock All, Hide Others / Show All, Locate Object, Collect for Export) with proper selection behavior and Undo/Redo tracking. Tests in `crates/ui-egui/src/panels/layers/tests.rs`.
+- **Done (2026-11-18):** Layers panel guide row context menu: right-clicking a guide row presents specialized actions (Release Guide, Duplicate, Delete Guide, Lock/Unlock, Hide/Show). Clicking "Release Guide" converts the guide back to a normal unpainted path using `view.guides.release` in one undo step. Tests in `crates/ui-egui/src/panels/layers/tests.rs`.
 - **Missing:** 2 Preferences options stored but not acted on (#394), each waiting on a subsystem of its own:
   Plug-ins & Scratch Disks › Primary and Secondary (documents are kept in memory; nothing pages to
   disk), and Clipboard Handling › Legacy vector clipboard with its Preserve Paths / Preserve Appearance and
   Overprints choice (Illustrator's own clipboard flavour, which has no public specification). Also Properties
-  panel per context, context menus in the panels that have none, and menus on guide and blend spine rows in the Layers panel.
+  panel per context, context menus in the panels that have none, and menus on blend spine rows in the Layers panel (guide row menus are done).
 - **Impact:** settings that silently do nothing erode trust.
 - **Estimate:** 13–20 h.
 
@@ -923,6 +924,7 @@ trap, and the defaults (0.25 pt, 100%, 40%) are VectorCraft's own, the pages giv
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-18 | minor | G12: Layers panel context menu on guide rows (Release Guide, Duplicate, Delete Guide, Lock/Unlock, Hide/Show); regression tests in `crates/ui-egui/src/panels/layers/tests.rs`; scores and estimates unchanged. |
 | 2026-11-18 | minor | G4 type: Retype phase 1 (#4934), `type.retype` for outlined text that exactly matches an available font; near matches, the ranked font list and images remain. Scores and estimates unchanged |
 | 2026-11-18 | minor | Production Preflight: output-aware fonts, text overflow, linked files and effective image resolution, clickable findings and automatic rechecking; scores and estimates unchanged. See [production-preflight.md](production-preflight.md) for scope and limits. |
 | 2026-11-16 | minor | Recolor Artwork follow-up (#8031, remaining #4028): native Lab input, picker swatch libraries and Assign-row menus; UI interaction regression coverage; scores and estimates unchanged. |
