@@ -596,10 +596,7 @@ fn a_marquee_selects_frame_anchors_of_area_type() {
     let mut g = DirectSelectionTool::new(true);
     g.pointer(&cx1, &ev(PointerKind::Down, 400.0, 280.0));
     g.pointer(&cx1, &ev(PointerKind::Drag, 440.0, 360.0));
-    assert_eq!(
-        g.pointer(&cx1, &ev(PointerKind::Up, 440.0, 360.0)),
-        vec![Action::Exec("select.anchorsMany".into(), json!({"items": [{"id": text.0, "anchors": []}], "mode": "set"}))]
-    );
+    assert_eq!(g.pointer(&cx1, &ev(PointerKind::Up, 440.0, 360.0)), vec![Action::Exec("select.set".into(), json!({"ids": [text.0]}))]);
 }
 
 /// A click without a drag on one of several selected frame anchors selects it alone, as a click on
@@ -1364,8 +1361,9 @@ fn marquee_selects_type_it_touches() {
     assert_eq!(a, vec![Action::Exec("select.anchorsMany".into(), json!({"items": [{"id": rect.0, "anchors": [[0, 1]]}], "mode": "set"}))]);
 }
 
-/// A marquee across a member of an Intertwine group selects the member's anchors, as in a
-/// plain group, and not the Intertwine group whole.
+/// A Direct Selection marquee across a member of an Intertwine group selects the member's anchors,
+/// as in a plain group, and not the Intertwine group whole; a Group Selection marquee selects the
+/// member whole.
 #[test]
 fn marquee_selects_the_anchors_of_intertwine_members() {
     let mut d = vectorcraft_doc::Document::new(500.0, 500.0);
@@ -1389,11 +1387,17 @@ fn marquee_selects_the_anchors_of_intertwine_members() {
         t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 150.0, 50.0));
         let actions = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 250.0, 150.0));
         let items = json!([{"id": a.0, "anchors": [[0, 1]]}]);
-        assert_eq!(actions, vec![Action::Exec("select.anchorsMany".into(), json!({"items": items, "mode": "set"}))], "group: {group}");
+        let want = if group {
+            Action::Exec("select.set".into(), json!({"ids": [a.0]}))
+        } else {
+            Action::Exec("select.anchorsMany".into(), json!({"items": items, "mode": "set"}))
+        };
+        assert_eq!(actions, vec![want], "group: {group}");
     }
 }
 
-/// Shift-drag a marquee: the anchors inside toggle (#483), with Group Selection too.
+/// Shift-drag a marquee: the anchors inside toggle (#483); with Group Selection, the objects it
+/// touches toggle whole.
 #[test]
 fn shift_marquee_toggles_anchors() {
     let (d, id) = doc_with_rect();
@@ -1406,8 +1410,44 @@ fn shift_marquee_toggles_anchors() {
         t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 150.0, 50.0).with_mods(shift));
         t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 250.0, 150.0).with_mods(shift));
         let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 250.0, 150.0).with_mods(shift));
-        assert_eq!(a, vec![Action::Exec("select.anchorsMany".into(), json!({"items": [{"id": id.0, "anchors": [[0, 1]]}], "mode": "toggle"}))]);
+        let want = if group {
+            Action::Exec("select.toggle".into(), json!({"ids": [id.0]}))
+        } else {
+            Action::Exec("select.anchorsMany".into(), json!({"items": [{"id": id.0, "anchors": [[0, 1]]}], "mode": "toggle"}))
+        };
+        assert_eq!(a, vec![want], "group: {group}");
     }
+}
+
+/// #8047: a Group Selection marquee across part of two members of a group selects both members
+/// whole, not the anchors inside it and not the group, and leaves the member it misses.
+#[test]
+fn a_group_selection_marquee_selects_the_members_it_touches_whole() {
+    let mut d = vectorcraft_doc::Document::new(600.0, 400.0);
+    let l = d.layers[0].id;
+    let (g, a, b, c) = (d.alloc_id(), d.alloc_id(), d.alloc_id(), d.alloc_id());
+    let path = |id, x: f64| {
+        vectorcraft_doc::Node::path(
+            id,
+            vectorcraft_geom::shapes::rectangle(Rect::new(x, 120.0, x + 100.0, 240.0)),
+            vectorcraft_doc::Appearance::default_art(),
+        )
+    };
+    d.insert(Some(l), 0, vectorcraft_doc::Node::group(g, vec![])).unwrap();
+    for (i, (id, x)) in [(a, 100.0), (b, 250.0), (c, 400.0)].into_iter().enumerate() {
+        d.insert(Some(g), i, path(id, x)).unwrap();
+    }
+    let (s, p) = (Selection::default(), paint());
+    let cx = cx(&d, &s, &p);
+    let mut t = DirectSelectionTool::new(true);
+    // From (150, 95) to (300, 265): the right side of A and the left side of B.
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 150.0, 95.0));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 300.0, 265.0));
+    let up = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 300.0, 265.0));
+    let Some(Action::Exec(cmd, params)) = up.first() else { panic!("{up:?}") };
+    assert_eq!(cmd, "select.set");
+    let ids: BTreeSet<String> = params["ids"].as_array().unwrap().iter().map(|v| v.to_string()).collect();
+    assert_eq!(ids, [json!(a.0), json!(b.0)].iter().map(|v| v.to_string()).collect());
 }
 
 /// #4890: Alt held at the press makes a Direct Selection marquee Group Selection's for the drag:

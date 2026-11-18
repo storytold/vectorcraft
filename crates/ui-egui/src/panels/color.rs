@@ -870,7 +870,7 @@ pub(crate) fn show_sized(app: &mut VectorcraftApp, ui: &mut Ui, height: f32) {
     }
     if let (Some((t, phase)), Some(tint)) = (tinted, tgt.tint()) {
         if phase == Live::Released {
-            super::color_guide::choose_base(app, tint.base.tinted(t));
+            super::color_guide::choose_linked_base(app, tint.base.tinted(t), Some((tint.swatch.clone(), t)));
         }
         apply_tint(app, &tgt, tint, t, phase);
     }
