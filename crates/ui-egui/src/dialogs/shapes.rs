@@ -709,6 +709,26 @@ mod tests {
         assert_eq!(app.session.tool_options_of("spiral"), json!({"decay": 65.0, "segments": 12, "clockwise": true}));
     }
 
+    /// With General › Constrain Angle at 90°, the Spiral dialog's spiral starts straight up from the
+    /// click, and the tool's options keep no turn.
+    #[test]
+    fn spiral_click_dialog_starts_along_the_constrain_angle() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        app.run("prefs.set", json!({"key": "constrainAngle", "value": 90})).unwrap();
+        app.run("tool.select", json!({"tool": "spiral"})).unwrap();
+        super::super::open_tool_dialog(&mut app, "spiral", json!({"x": 40.0, "y": 60.0}));
+        app.ui.dialog.as_mut().expect("Spiral dialog").fields.insert("radius".into(), json!(35.0));
+        super::super::confirm(&mut app).unwrap();
+
+        let st = app.session.doc().unwrap();
+        let id = *st.selection.objects.first().unwrap();
+        let path = st.doc.node(id).unwrap().path_data().unwrap();
+        let outer = path.subpaths[0].anchors.last().unwrap().p;
+        assert_eq!(outer, vectorcraft_geom::Point::new(40.0, 25.0));
+        assert!(app.session.tool_options_of("spiral").get("rotation").is_none());
+    }
+
     #[test]
     fn alt_click_centres_the_typed_size_on_the_click() {
         let fields = |alt: bool| Dialog::new("rectangle", json!({"x": 100.0, "y": 50.0, "alt": alt, "width": "40 pt", "height": "20 pt"}));

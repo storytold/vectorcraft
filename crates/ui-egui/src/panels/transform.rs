@@ -126,7 +126,13 @@ const PATTERN_MODES: [(&str, &str); 3] = [("object", "Transform Object Only"), (
 /// Only (the pattern tiles alone) or Transform Both. Until one is chosen (`default`, or any other
 /// value) neither is passed: patterns follow General › Transform Pattern Tiles. Errors are
 /// dropped, as the panels' fields have always done.
-pub fn run_transform(app: &mut VectorcraftApp, cmd: &str, mut params: serde_json::Value) {
+pub fn run_transform(app: &mut VectorcraftApp, cmd: &str, params: serde_json::Value) {
+    let params = with_pattern_switches(app, params);
+    app.run(cmd, params).ok();
+}
+
+/// `params` with the `objects` and `patterns` switches [`run_transform`] adds.
+pub fn with_pattern_switches(app: &VectorcraftApp, mut params: serde_json::Value) -> serde_json::Value {
     let switches = match app.session.prefs.transform_panel_patterns.as_str() {
         "object" => Some((true, false)),
         "pattern" => Some((false, true)),
@@ -137,7 +143,7 @@ pub fn run_transform(app: &mut VectorcraftApp, cmd: &str, mut params: serde_json
         params["objects"] = json!(objects);
         params["patterns"] = json!(patterns);
     }
-    app.run(cmd, params).ok();
+    params
 }
 
 /// The panel menu's checked choice of [`PATTERN_MODES`]: the one chosen, else (`default`) what
