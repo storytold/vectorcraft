@@ -4532,7 +4532,10 @@ A graphic style holds an appearance (fills, strokes, effects) plus opacity, blen
 object's, type its characters'). `graphicStyle.apply {name, ids?}` gives the objects the style and links them;
 `add: true` adds the style on top of the existing appearance instead. Linked objects stay linked while they keep the
 style's look: editing their appearance or transparency breaks the link, and `graphicStyle.redefine {name?, id?}`
-updates only the objects still linked. The art of a column or marker design in a graph series is never linked:
+updates only the objects still linked. Art dragged off the canvas, or the Appearance panel's thumbnail, dropped on a
+style in the Graphic Styles panel with Alt held runs `graphicStyle.redefine` with that style's `name` and the object's
+`id` (the first object of the art); an object already linked to the style with its look changes nothing. The art of a
+column or marker design in a graph series is never linked:
 `graphicStyle.new` can make a style from it, and `graphicStyle.redefine` leaves its look as it was and unlinks it,
 whether it is the source or a linked object. `graphicStyle.list` returns each style with the ids linked to it and the
 style of the first selected object; `select.same.graphicStyle` selects an object's fellow users.
