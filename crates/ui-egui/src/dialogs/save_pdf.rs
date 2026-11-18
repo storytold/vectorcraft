@@ -1041,8 +1041,7 @@ fn write_summary(app: &mut VectorcraftApp, path: Option<String>, text: &str) -> 
 pub(super) fn option_rows<'a>(ui: &mut egui::Ui, changed: impl IntoIterator<Item = &'a Value>, label: impl Fn(&str) -> String) {
     let t = Tokens::get(ui.ctx());
     for c in changed {
-        let value = option_value(c);
-        ui.label(egui::RichText::new(format!("{} {value}", crate::i18n::colon(&label(c["option"].as_str().unwrap_or_default())))).color(t.text));
+        ui.label(egui::RichText::new(option_line(c, &label)).color(t.text));
     }
 }
 
@@ -1056,9 +1055,10 @@ fn option_value(c: &Value) -> String {
     }
 }
 
-/// The Summary's line for the changed option `c` (`{option, value}`), labeled by `label`.
+/// The Summary's line for the changed option `c` (`{option, value}`), labeled by `label`, with the
+/// colon the interface language writes.
 fn option_line(c: &Value, label: impl Fn(&str) -> String) -> String {
-    format!("{}: {}", label(c["option"].as_str().unwrap_or_default()), option_value(c))
+    format!("{} {}", crate::i18n::colon(&label(c["option"].as_str().unwrap_or_default())), option_value(c))
 }
 
 /// The Summary's warnings ("None." without any).

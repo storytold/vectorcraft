@@ -389,6 +389,20 @@ fn the_save_summary_button_writes_the_summary() {
     assert!(String::from_utf8(d[0].1.clone()).unwrap().starts_with("Options\n"));
 }
 
+/// The saved Summary writes each option line with the colon the interface language uses, as the
+/// Summary section shows it: French puts a no-break space before the colon, Japanese writes a
+/// full-width colon.
+#[test]
+fn the_summary_text_uses_the_languages_colon() {
+    let changed = json!({"option": "thumbnails", "value": true});
+    for (code, colon) in [("en", ":"), ("fr", "\u{a0}:"), ("ja", "：")] {
+        crate::i18n::set_current(crate::i18n::Lang::from_code(code).expect("registered"));
+        let line = option_line(&changed, |_| "X".to_string());
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        assert!(line.starts_with(&format!("X{colon} ")), "{code}: {line:?}");
+    }
+}
+
 /// Click the Summary section's Save Summary… button in frames of the dialog layer (the dialog's
 /// window draws nothing in its first frame, which sizes it).
 fn click_save_summary(app: &mut VectorcraftApp, ctx: &egui::Context) {
