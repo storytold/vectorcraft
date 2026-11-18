@@ -307,6 +307,58 @@ impl egui::DroppedFile for MockDrop {
 }
 
 #[test]
+fn an_explicit_float_command_updates_an_existing_native_windows_geometry() {
+    for mode in [json!({}), json!({"group": true}), json!({"column": true})] {
+        let mut h = Harness::new();
+        h.app.run("window.panel.float", json!({"panel": "swatches", "x": 240, "y": 160, "width": 320, "height": 360})).unwrap();
+        h.frames(3);
+        let viewport = h.viewport("swatches");
+        assert_eq!(h.host.borrow().windows[&viewport].rect, Rect::from_min_size(ORIGIN + vec2(240.0, 160.0), vec2(320.0, 360.0)));
+        let mut params = json!({"panel": "swatches", "x": 280, "y": 190, "width": 350, "height": 390});
+        params.as_object_mut().unwrap().extend(mode.as_object().unwrap().clone());
+        h.app.run("window.panel.float", params).unwrap();
+        h.frames(3);
+        assert_eq!(h.viewport("swatches"), viewport);
+        assert_eq!(h.host.borrow().windows[&viewport].rect, Rect::from_min_size(ORIGIN + vec2(280.0, 190.0), vec2(350.0, 390.0)));
+        let moved = Rect::from_min_size(pos2(-500.0, 120.0), vec2(380.0, 410.0));
+        h.host.borrow_mut().windows.get_mut(&viewport).unwrap().rect = moved;
+        h.frames(3);
+        let mut params = json!({"panel": "swatches", "width": 400});
+        params.as_object_mut().unwrap().extend(mode.as_object().unwrap().clone());
+        h.app.run("window.panel.float", params).unwrap();
+        h.frames(3);
+        let resized = Rect::from_min_size(moved.min, vec2(400.0, moved.height()));
+        assert_eq!(h.host.borrow().windows[&viewport].rect, resized);
+        let mut params = json!({"panel": "swatches"});
+        params.as_object_mut().unwrap().extend(mode.as_object().unwrap().clone());
+        h.app.run("window.panel.float", params).unwrap();
+        h.frames(3);
+        assert_eq!(h.host.borrow().windows[&viewport].rect, resized);
+    }
+}
+
+#[test]
+fn saved_native_geometry_updates_before_viewport_metadata_is_available() {
+    let mut h = Harness::new();
+    let viewport = h.float("swatches");
+    h.app.ui_ctx = None;
+    h.app.run("window.panel.float", json!({"panel": "swatches", "x": 280, "y": 190, "height": 390})).unwrap();
+    h.app.run("window.panel.float", json!({"panel": "swatches", "width": 350})).unwrap();
+    h.frames(3);
+    assert_eq!(h.viewport("swatches"), viewport);
+    assert_eq!(h.host.borrow().windows[&viewport].rect, Rect::from_min_size(ORIGIN + vec2(280.0, 190.0), vec2(350.0, 390.0)));
+    h.app.run("window.panel.float", json!({"panel": "color", "onto": "swatches"})).unwrap();
+    h.frames(3);
+    h.app.ui_ctx = None;
+    h.app.run("window.panel.float", json!({"panel": "swatches", "column": true, "x": 480, "y": 260})).unwrap();
+    h.app.run("window.panel.dock", json!({"panel": "swatches", "anchor": "layers", "zone": "tab"})).unwrap();
+    h.frames(3);
+    assert!(!floats(&h.app.ui, "swatches"));
+    assert_eq!(h.viewport("color"), viewport);
+    assert_eq!(h.host.borrow().windows[&viewport].rect.min, ORIGIN + vec2(480.0, 260.0));
+}
+
+#[test]
 fn a_floated_panel_opens_its_own_os_window_where_the_backend_has_viewports() {
     let mut h = Harness::new();
     let viewport = h.float("swatches");

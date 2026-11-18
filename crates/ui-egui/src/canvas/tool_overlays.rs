@@ -464,6 +464,10 @@ pub(super) fn thread_overlays(app: &VectorcraftApp, zoom: f64) -> Vec<Overlay> {
             first_lookup = false;
             return selection.contains(id);
         }
+        // Two early selection hits need no index.
+        if selected.is_none() && selection[..2].contains(id) {
+            return true;
+        }
         selected.get_or_insert_with(|| selection.iter().copied().collect::<HashSet<_>>()).contains(id)
     };
     let mut o = vec![];

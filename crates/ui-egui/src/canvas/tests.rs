@@ -12918,6 +12918,7 @@ fn text_thread_overlays_keep_document_order_with_mixed_selection() {
     app.run("select.set", json!({"ids": [second_next.0, unrelated.0, first.0]})).unwrap();
 
     let state = app.session.active().unwrap();
+    assert_eq!(state.selection.objects, [second_next, unrelated, first]);
     assert_eq!(state.doc.text_threads, [vec![first, first_next], vec![second, second_next], vec![unselected, unselected_next]]);
     let frame = |id| match &state.doc.node(id).unwrap().kind {
         NodeKind::Text(text) => (**text).clone(),
@@ -12946,6 +12947,71 @@ fn text_thread_overlays_keep_document_order_with_mixed_selection() {
         })
         .collect();
     assert_eq!(ports, expected.into_iter().flat_map(|(from, to)| [from, to]).collect::<Vec<_>>());
+}
+
+/// Two document-order threads hit the first two selected IDs among 512 unrelated paths.
+/// Their real port geometry and document-order output remain unchanged.
+#[test]
+fn text_thread_overlays_keep_two_early_hits_with_many_unrelated_paths() {
+    use std::sync::Arc;
+    use vectorcraft_doc::NodeId;
+    use vectorcraft_tools::text::{Port, port_centre, ports_shown};
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 600, "height": 400})).unwrap();
+    let text = "Words that fill more than the frame holds. ".repeat(10);
+    let id = |value: serde_json::Value| NodeId(value["id"].as_u64().unwrap());
+    let mut threads = vec![];
+    for y in [20, 200] {
+        let first = id(app.run("text.create", json!({"x": 20, "y": y, "text": text, "area": {"width": 150, "height": 60}})).unwrap());
+        let next = id(app.run("text.thread.add", json!({"from": first.0, "at": [300, y]})).unwrap());
+        threads.push([first, next]);
+    }
+    let path = id(app.run("shape.rectangle", json!({"x": 450, "y": 300, "width": 20, "height": 20})).unwrap());
+    let mut selected = vec![threads[0][0], threads[1][0], path];
+    {
+        let st = app.session.active_mut().unwrap();
+        let doc = Arc::make_mut(&mut st.doc);
+        let template = doc.node(path).unwrap().clone();
+        let mut additions = Vec::with_capacity(511);
+        for _ in 1..512 {
+            let mut p = template.clone();
+            p.id = doc.alloc_id();
+            selected.push(p.id);
+            additions.push(Arc::new(p));
+        }
+        Arc::make_mut(&mut doc.layers[0]).children_mut().unwrap().extend(additions);
+        doc.drop_lookup_cache();
+    }
+    app.run("select.set", json!({"ids": selected.iter().map(|id| id.0).collect::<Vec<_>>()})).unwrap();
+    let st = app.session.active().unwrap();
+    assert_eq!(st.doc.text_threads, threads.iter().map(|t| t.to_vec()).collect::<Vec<_>>());
+    assert_eq!(st.selection.objects, selected);
+    assert_eq!(st.selection.objects.len(), 514);
+    assert!(ports_shown(&st.doc, &st.selection.objects));
+    let frame = |id| match &st.doc.node(id).unwrap().kind {
+        NodeKind::Text(t) => (**t).clone(),
+        _ => panic!("thread member is text"),
+    };
+    let expected: Vec<_> =
+        threads.iter().map(|[a, b]| (port_centre(&frame(*a), Port::Out, 1.0).unwrap(), port_centre(&frame(*b), Port::In, 1.0).unwrap())).collect();
+    let overlays = thread_overlays(&app, 1.0);
+    let links: Vec<_> = overlays
+        .iter()
+        .filter_map(|o| match o {
+            Overlay::Line { a, b, .. } if expected.contains(&(*a, *b)) => Some((*a, *b)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(links, expected, "the two thread links stay in document order");
+    assert_eq!(overlays.iter().filter(|o| matches!(o, Overlay::Line { .. })).count(), 14, "two links and their port arrows only");
+    let ports: Vec<_> = overlays
+        .iter()
+        .filter_map(|o| match o {
+            Overlay::Highlight { quad, .. } => Some(quad[0].midpoint(quad[2])),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(ports, expected.into_iter().flat_map(|(a, b)| [a, b]).collect::<Vec<_>>());
 }
 
 /// A double-click with the Selection tool on the out port of a threaded frame breaks the
