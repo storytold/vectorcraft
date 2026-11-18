@@ -115,6 +115,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         .or_else(|| crate::edit_toolbar::command(app, id, p))
         .or_else(|| crate::custom_toolbars::command(app, id, p))
         .or_else(|| crate::panels::learn::command(app, id, p))
+        .or_else(|| crate::panels::discover::command(app, id, p))
     {
         return Some(r);
     }
@@ -261,6 +262,13 @@ fn run_ui_part2(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
                 app.session.execute(id, p).map_err(|e| e.to_string())
             })
         }
+        // Edit › Refresh Monitor Profile: the desktop app's next frame reads the display's profile.
+        "view.refreshMonitorProfile" => app.display_profile.request_read(app.session.prefs.monitor_profile_display).map(|()| {
+            if let Some(ctx) = &app.ui_ctx {
+                ctx.request_repaint();
+            }
+            json!({ "requested": true })
+        }),
         // Outline or Preview is a setting of the active document's view.
         "view.outline" => match app.view_mut() {
             Some(v) => flag(&mut v.outline),
@@ -793,10 +801,17 @@ fn run_ui_part7(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
                 Ok(edit) => edit.unwrap_or(false),
                 Err(e) => return Some(Err(e)),
             };
+            let keep_art = match opt_bool(p, "keepArt") {
+                Ok(keep) => keep.unwrap_or(false),
+                Err(e) => return Some(Err(e)),
+            };
             if edit || name.is_some() {
+                if keep_art {
+                    return Some(Err("`keepArt` applies only to a new symbol".into()));
+                }
                 crate::dialogs::symbol_options::open_edit(app, name.as_deref())
             } else {
-                crate::dialogs::symbol_options::open(app)
+                crate::dialogs::symbol_options::open(app, keep_art)
             }
         }
         "ui.newBrush" => crate::dialogs::new_brush::open(app, p.get("ids").cloned()),
@@ -873,6 +888,7 @@ fn run_ui_part9(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         }
         "ui.imageTracePresetDialog" => crate::dialogs::trace_presets::open(app, p),
         "ui.flattenerPreview" => crate::panels::flattener_preview::command(app, p),
+        "ui.foldPreview" => crate::addons::packaging::preview::command(app, p),
         "ui.copyScriptConsole" => crate::panels::script_console::copy(app, p),
         "window.graphicStyleLibrary" => crate::panels::graphic_styles::open_library(app, p),
         "ui.libraryPanel" => crate::panels::library_panel::command(app, p),
