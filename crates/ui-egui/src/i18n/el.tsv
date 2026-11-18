@@ -5938,6 +5938,7 @@ variable-list-end	{0}, {1}	{0} και {1}
 @msg	`{GRAPHICS}` must be an array	το `{GRAPHICS}` πρέπει να είναι πίνακας
 @msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	Τα γραφικά αντιστοιχίζονται στους τύπους αντικειμένου Επίπεδο, Εξώθηση, Περιστροφή γύρω από άξονα και Φούσκωμα
 @msg	Revolve maps graphics onto its side: map them onto the front	Η Περιστροφή γύρω από άξονα αντιστοιχίζει τα γραφικά στην πλευρική της επιφάνεια: αντιστοιχίστε τα στην μπροστινή όψη
+@msg	Inflate maps graphics onto its front and back, not onto a side	Το Φούσκωμα αντιστοιχίζει τα γραφικά στην μπροστινή και την πίσω όψη, όχι σε πλευρική επιφάνεια
 @msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	το αντικείμενο {_1}: η πίσω όψη του Φουσκώματος δέχεται γραφικά μόνο με ενεργά τα Και οι δύο πλευρές και Κλείσιμο άκρου
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Τα γραφικά είναι πολύ σύνθετα για αυτή την επιφάνεια: απλοποιήστε το σχέδιο των συμβόλων ή μειώστε τα Τμήματα
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	το `{GRAPHICS}` δέχεται το πολύ {MAX_GRAPHICS} γραφικά

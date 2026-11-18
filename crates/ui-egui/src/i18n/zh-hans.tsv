@@ -6416,6 +6416,7 @@ lighting	Light	光源
 @msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	图形映射到平面、突出、回转和膨胀对象类型上
 	Graphics map onto the Plane, Extrude, Revolve and Inflate object types.	图形映射到平面、突出、回转和膨胀对象类型上。
 @msg	Revolve maps graphics onto its side: map them onto the front	回转将图形映射到其侧面：请将图形映射到正面
+@msg	Inflate maps graphics onto its front and back, not onto a side	膨胀将图形映射到正面和背面，不映射到侧面
 @msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	对象 {_1}：只有打开“双面”和“封口”后，膨胀的背面才能贴图
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	图形对此表面过于复杂：请简化符号的图稿或减少分段数
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` 最多接受 {MAX_GRAPHICS} 个图形
