@@ -231,7 +231,7 @@ fn a_warichu_line_keeps_the_auto_leading_of_its_own_size() {
 #[test]
 fn the_first_baseline_measures_a_block_at_its_own_size() {
     use vectorcraft_doc::FirstBaseline;
-    for first in [FirstBaseline::Ascent, FirstBaseline::CapHeight, FirstBaseline::XHeight, FirstBaseline::Leading] {
+    for first in [FirstBaseline::Ascent, FirstBaseline::CapHeight, FirstBaseline::XHeight, FirstBaseline::Leading, FirstBaseline::EmBoxHeight] {
         let baseline = |inside: CharStyle| {
             let mut t = area("", style(20.0), Rect::new(0.0, 0.0, 300.0, 300.0), Justify::Left);
             t.area.first_baseline = first;

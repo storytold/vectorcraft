@@ -9,6 +9,9 @@ use super::{
 /// Mixed into an image's cache key when it is read white inside an alpha soft mask.
 pub(super) const WHITE_KEY: u128 = 0x7717_e000_a1fa;
 
+/// Mixed into an image's cache key when a DeviceCMYK image there takes the output intent's profile.
+pub(super) const INTENT_KEY: u128 = 0x1e7e_0c3c_0b5a;
+
 /// The name of the paths text imports as.
 pub(super) const TEXT_OUTLINES: &str = "<Text Outlines>";
 
@@ -239,6 +242,14 @@ pub fn imports_of(bytes: &[u8]) -> usize {
     IMPORTS.lock().ok().and_then(|i| i.get(&(bytes.as_ptr() as usize)).copied()).unwrap_or(0)
 }
 
+/// The widest bleed of `pages` on each side (`[top, bottom, left, right]`, see [`crate::pages::bleed`]).
+fn widest_bleed<'p, 'd: 'p>(pages: impl Iterator<Item = &'p craft_pdf::syntax::page::Page<'d>>) -> [f64; 4] {
+    pages.fold([0.0; 4], |widest, page| {
+        let bleed = crate::pages::bleed(page);
+        std::array::from_fn(|i| widest[i].max(bleed[i]))
+    })
+}
+
 /// [`read_with_reader_options`] of `original`, the PDF `bytes` read with `reader`.
 fn read_opened(
     bytes: &[u8],
@@ -273,6 +284,7 @@ fn read_opened(
     b.unsure = route && ocgs.list.iter().any(|g| (all_on && !g.on) || !g.print);
     b.taken = taken;
     b.warnings = notes;
+    b.intent_cmyk = crate::import_image::output_intent_cmyk(pdf);
     b.colors.uncalibrated_rgb = opts.uncalibrated_rgb && picked.iter().filter_map(|&n| pages.get(n)).any(crate::pages::has_private_data);
     let cache = InterpreterCache::new();
     let mut x = 0.0;
@@ -286,15 +298,17 @@ fn read_opened(
     let mut nesting = Nesting::new();
     // The top-level groups in the order the pages mark them, bottom first.
     let (mut order, mut known) = (vec![], HashSet::new());
+    // Artboards on the trim boxes have the bleed boxes round them as the document's bleed, so the
+    // art there shows and prints as bleed.
+    if opts.crop == CropTo::Trim {
+        doc.setup.bleed = widest_bleed(picked.iter().filter_map(|&n| pages.get(n)));
+    }
+    // The artboards are the gap apart plus the document's bleed on both sides, which export adds
+    // round every artboard, so no page's bleed reaches into the next artboard.
+    let [_, _, bleed_left, bleed_right] = doc.setup.bleed;
+    let spacing = opts.artboard_gap + bleed_left + bleed_right;
     for (i, &number) in picked.iter().enumerate() {
         let Some(page) = pages.get(number) else { continue };
-        // Artboards on the trim boxes have the bleed boxes round them as the document's bleed
-        // (the widest of the pages' on each side), so the art there shows and prints as bleed.
-        if opts.crop == CropTo::Trim {
-            for (side, b) in doc.setup.bleed.iter_mut().zip(crate::pages::bleed(page)) {
-                *side = side.max(b);
-            }
-        }
         // The chosen box sits at (x, 0); the page draws round it.
         let (init, frame) = crate::pages::frame(page, opts.crop);
         let mut ab = Rect::new(x, 0.0, x + frame.width(), frame.height());
@@ -371,7 +385,7 @@ fn read_opened(
             right = right.max(art.x1);
             ab = art;
         }
-        x = right + opts.artboard_gap;
+        x = right + spacing;
         clear = right.max(art_right) + opts.artboard_gap;
         doc.artboards.push(Artboard {
             id: i as u32 + 1,

@@ -6,19 +6,38 @@
 //! under every path, fills those pixels with that color: drawing the two paths over it then gives
 //! each pixel the colors of the two paths in the shares each covers. The paths themselves are not
 //! changed, and an edge a path shares with no other path (the image's border, a transparent area,
-//! a color left out) gets no stroke.
+//! a color left out) gets no stroke. The strokes are clipped to the image's box. Where a shared
+//! edge ends at, or runs within half the stroke's width of, a transparent area or a color left
+//! out, its stroke can reach that far into that area.
 
 use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
 
 use vectorcraft_geom::{Anchor, PathData, Point, SubPath};
 
-use super::params::{Method, Mode, TraceParams};
-use super::pipeline::TracedPath;
+use crate::{Method, Mode, TraceParams, TracedPath};
 
 /// How wide each seam fill's stroke is, in pixels: it covers every pixel the shared edge passes
 /// through, at any angle (a pixel's corner is up to 0.71 px from a line through it).
-pub const SEAM_WIDTH: f64 = 1.5;
+const SEAM_WIDTH: f64 = 1.5;
+
+/// The seam fills of an Abutting trace ([`seam_fills`]).
+#[derive(Clone, Debug, PartialEq)]
+pub struct SeamFills {
+    /// For each color, one path stroked 1.5 pixels wide along the edges where a filled path of
+    /// that color meets a filled path drawn after it, with `color` and `gradient` that path's; the
+    /// paths with a gradient get one each. Bottom-most first, as the paths they lie under.
+    pub strokes: Vec<TracedPath>,
+    /// The area to clip `strokes` to, in the same pixel coordinates: the image's box.
+    pub clip: PathData,
+}
+
+impl SeamFills {
+    /// The anchors of the strokes and the clip together.
+    pub fn anchor_count(&self) -> usize {
+        self.strokes.iter().map(|s| s.path.anchor_count()).sum::<usize>() + self.clip.anchor_count()
+    }
+}
 
 /// A segment, the same for the segment and the segment run backwards: two 64-bit hashes of its
 /// points' bits, 16 bytes a segment instead of 64. Two different segments with the same key would
@@ -36,18 +55,23 @@ fn key(a: &Anchor, b: &Anchor) -> Key {
     (u128::from(hash(0)) << 64) | u128::from(hash(1))
 }
 
-/// The seam fills of a trace made with `params`: for Abutting with Fills (not Flat Logo), thin
-/// strokes to draw under every path of `paths` (bottom-most first). For each color, one path
-/// stroked [`SEAM_WIDTH`] pixels wide along the edges where a filled path of that color meets a
-/// filled path drawn after it, with `color` and `gradient` that path's; the paths with a gradient
-/// get one each. Bottom-most first, as the paths they lie under. The stroke has at most as many
-/// anchors as `paths` (each of its segments is a segment of a path), and finding them keeps about
-/// 40 bytes for each segment of `paths` while it runs. Empty for any other trace.
-pub fn seam_fills(paths: &[TracedPath], params: &TraceParams) -> Vec<TracedPath> {
+/// The seam fills of a trace of a `size` (width, height in pixels) image made with `params`, for
+/// Abutting with Fills (not Flat Logo): strokes to draw under every path of `paths` (bottom-most
+/// first), clipped to the image's box. Filled paths that became a live shape (Shapes) take no part:
+/// their outline is not the traced one. The strokes have at most as many anchors as `paths` (each
+/// of their segments is a segment of a path), and the clip has four; finding them keeps about 40
+/// bytes for each segment of `paths` while it runs. `None` for any other trace, or when no filled
+/// paths share an edge.
+pub fn seam_fills(paths: &[TracedPath], params: &TraceParams, size: (u32, u32)) -> Option<SeamFills> {
     if params.method != Method::Abutting || !params.fills || params.mode == Mode::Logo {
-        return vec![];
+        return None;
     }
-    fills(paths)
+    fills(paths, size)
+}
+
+/// Whether `p` takes part in the seam fills: filled, and drawn with its traced outline.
+fn filled(p: &TracedPath) -> bool {
+    p.stroke.is_none() && p.shape.is_none()
 }
 
 /// The segments of `sp`: each anchor and the one after it (back to the first, if closed).
@@ -57,11 +81,11 @@ fn segments(sp: &SubPath) -> impl Iterator<Item = (&Anchor, &Anchor)> {
     (0..count).filter_map(move |k| Some((sp.anchors.get(k)?, sp.anchors.get((k + 1) % n)?)))
 }
 
-/// [`seam_fills`] of Abutting `paths`, whatever the settings.
-fn fills(paths: &[TracedPath]) -> Vec<TracedPath> {
+/// [`seam_fills`] of Abutting `paths` traced from a `size` image, whatever the settings.
+fn fills(paths: &[TracedPath], size: (u32, u32)) -> Option<SeamFills> {
     // For each segment, the first path it is in, and whether another path has it too.
     let mut owner: HashMap<Key, (usize, bool)> = HashMap::new();
-    for (i, p) in paths.iter().enumerate().filter(|(_, p)| p.stroke.is_none()) {
+    for (i, p) in paths.iter().enumerate().filter(|(_, p)| filled(p)) {
         for sp in &p.path.subpaths {
             for (a, b) in segments(sp).filter(|(a, b)| a.p != b.p) {
                 let e = owner.entry(key(a, b)).or_insert((i, false));
@@ -74,11 +98,10 @@ fn fills(paths: &[TracedPath]) -> Vec<TracedPath> {
     // One fill per color (per path, for a gradient), in the order of the first path it lies under.
     let mut out: Vec<TracedPath> = vec![];
     let mut by_color: HashMap<[u8; 3], usize> = HashMap::new();
-    for (i, p) in paths.iter().enumerate().filter(|(_, p)| p.stroke.is_none()) {
+    for (i, p) in paths.iter().enumerate().filter(|(_, p)| filled(p)) {
         let mut runs: Vec<SubPath> = vec![];
         for sp in &p.path.subpaths {
-            let lower = |a: &Anchor, b: &Anchor| a.p != b.p && owner.get(&key(a, b)) == Some(&(i, true));
-            let marks: Vec<bool> = segments(sp).map(|(a, b)| lower(a, b)).collect();
+            let marks: Vec<bool> = segments(sp).map(|(a, b)| a.p != b.p && owner.get(&key(a, b)) == Some(&(i, true))).collect();
             let n = sp.anchors.len();
             if marks.is_empty() {
                 continue;
@@ -129,7 +152,12 @@ fn fills(paths: &[TracedPath]) -> Vec<TracedPath> {
             }
         }
     }
-    out
+    if out.is_empty() {
+        return None;
+    }
+    let (w, h) = (f64::from(size.0), f64::from(size.1));
+    let clip = PathData::single(SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(w, 0.0), Point::new(w, h), Point::new(0.0, h)], true));
+    Some(SeamFills { strokes: out, clip })
 }
 
 /// An open run of anchors: the last one has no handle out.
@@ -143,11 +171,16 @@ fn open_run(mut run: Vec<Anchor>) -> SubPath {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Method, Mode, Raster, TraceParams, trace};
+    use crate::{Method, Mode, Raster, TraceParams, TracedGradient, TracedShape, trace};
 
     fn polygon(rings: &[&[(f64, f64)]], color: u8) -> TracedPath {
         let subpaths = rings.iter().map(|r| SubPath::polyline(&r.iter().map(|&(x, y)| Point::new(x, y)).collect::<Vec<_>>(), true)).collect();
         TracedPath { path: PathData::new(subpaths), color: [color; 3], pixels: 1, stroke: None, shape: None, gradient: None, square_caps: false }
+    }
+
+    /// The strokes of [`fills`] for `paths` in a box that no test path reaches the border of.
+    fn strokes(paths: &[TracedPath]) -> Vec<TracedPath> {
+        fills(paths, (100, 100)).map(|f| f.strokes).unwrap_or_default()
     }
 
     fn points(sp: &SubPath) -> Vec<(f64, f64)> {
@@ -163,7 +196,7 @@ mod tests {
     fn a_shared_edge_gets_a_stroke_in_the_color_of_the_path_drawn_first() {
         let left = polygon(&[&[(0.0, 0.0), (2.0, 0.0), (2.0, 2.0), (0.0, 2.0)]], 10);
         let right = polygon(&[&[(2.0, 0.0), (4.0, 0.0), (4.0, 2.0), (2.0, 2.0)]], 20);
-        let fills = fills(&[left.clone(), right.clone()]);
+        let fills = strokes(&[left.clone(), right.clone()]);
         assert_eq!(fills.len(), 1, "{fills:?}");
         assert_eq!((fills[0].color, fills[0].stroke, fills[0].gradient.as_ref()), ([10; 3], Some(SEAM_WIDTH), None));
         assert_eq!(fills[0].path.subpaths.len(), 1);
@@ -171,7 +204,7 @@ mod tests {
         assert!(!sp.closed);
         assert_eq!(points(sp), [(2.0, 0.0), (2.0, 2.0)]);
         // Drawn the other way round, the stroke takes the other color.
-        let swapped = super::fills(&[right, left]);
+        let swapped = strokes(&[right, left]);
         assert_eq!(swapped.len(), 1);
         assert_eq!((swapped[0].color, points(&swapped[0].path.subpaths[0])), ([20; 3], vec![(2.0, 2.0), (2.0, 0.0)]));
     }
@@ -181,7 +214,7 @@ mod tests {
         let hole: &[(f64, f64)] = &[(2.0, 2.0), (2.0, 4.0), (4.0, 4.0), (4.0, 2.0)];
         let around = polygon(&[&[(0.0, 0.0), (6.0, 0.0), (6.0, 6.0), (0.0, 6.0)], hole], 10);
         let island = polygon(&[&[(2.0, 2.0), (4.0, 2.0), (4.0, 4.0), (2.0, 4.0)]], 20);
-        let fills = fills(&[around, island]);
+        let fills = strokes(&[around, island]);
         assert_eq!(fills.len(), 1, "{fills:?}");
         assert_eq!(fills[0].color, [10; 3]);
         assert_eq!(fills[0].path.subpaths.len(), 1);
@@ -195,7 +228,7 @@ mod tests {
         // at the same point.
         let left = polygon(&[&[(2.0, 1.0), (2.0, 2.0), (0.0, 2.0), (0.0, 0.0), (2.0, 0.0)]], 10);
         let right = polygon(&[&[(2.0, 0.0), (4.0, 0.0), (4.0, 2.0), (2.0, 2.0), (2.0, 1.0)]], 20);
-        let fills = fills(&[left, right]);
+        let fills = strokes(&[left, right]);
         assert_eq!(fills.len(), 1, "{fills:?}");
         assert_eq!(fills[0].path.subpaths.len(), 1);
         assert_eq!(points(&fills[0].path.subpaths[0]), [(2.0, 0.0), (2.0, 1.0), (2.0, 2.0)]);
@@ -204,11 +237,15 @@ mod tests {
     #[test]
     fn edges_shared_with_no_other_filled_path_get_no_stroke() {
         let square = polygon(&[&[(0.0, 0.0), (2.0, 0.0), (2.0, 2.0), (0.0, 2.0)]], 10);
-        assert_eq!(fills(std::slice::from_ref(&square)), []);
-        // A stroked line along the square's edge is not a filled neighbour.
-        let mut line = polygon(&[&[(2.0, 0.0), (4.0, 0.0), (4.0, 2.0), (2.0, 2.0)]], 20);
-        line.stroke = Some(1.0);
-        assert_eq!(fills(&[square, line]), []);
+        assert_eq!(fills(std::slice::from_ref(&square), (100, 100)), None);
+        // A stroked path along the square's edge is not a filled neighbor.
+        let mut stroked = polygon(&[&[(2.0, 0.0), (4.0, 0.0), (4.0, 2.0), (2.0, 2.0)]], 20);
+        stroked.stroke = Some(1.0);
+        assert_eq!(fills(&[square.clone(), stroked], (100, 100)), None);
+        // Nor is a path drawn as a live shape, whose outline is not the traced one.
+        let mut shape = polygon(&[&[(2.0, 0.0), (4.0, 0.0), (4.0, 2.0), (2.0, 2.0)]], 20);
+        shape.shape = Some(TracedShape::Rectangle { center: Point::new(3.0, 1.0), width: 2.0, height: 2.0, radius: 0.0, rotation: 0.0 });
+        assert_eq!(fills(&[square, shape], (100, 100)), None);
     }
 
     #[test]
@@ -216,9 +253,34 @@ mod tests {
         let a = polygon(&[&[(0.0, 0.0), (2.0, 0.0), (2.0, 2.0), (0.0, 2.0)]], 10);
         let b = polygon(&[&[(0.0, 4.0), (2.0, 4.0), (2.0, 6.0), (0.0, 6.0)]], 10);
         let c = polygon(&[&[(2.0, 0.0), (4.0, 0.0), (4.0, 6.0), (2.0, 6.0), (2.0, 4.0), (2.0, 2.0)]], 20);
-        let fills = fills(&[a, b, c]);
+        let fills = strokes(&[a.clone(), b.clone(), c.clone()]);
         assert_eq!(fills.len(), 1, "{fills:?}");
         assert_eq!(fills[0].path.subpaths.iter().map(points).collect::<Vec<_>>(), [vec![(2.0, 0.0), (2.0, 2.0)], vec![(2.0, 4.0), (2.0, 6.0)]]);
+        // With a gradient each, the two paths of one color get a stroke each, with their gradient.
+        let ramp = |to: u8| TracedGradient { start: Point::new(0.0, 0.0), end: Point::new(2.0, 0.0), stops: vec![(0.0, [10; 3]), (1.0, [to; 3])] };
+        let (mut a, mut b) = (a, b);
+        (a.gradient, b.gradient) = (Some(ramp(30)), Some(ramp(40)));
+        let fills = strokes(&[a.clone(), b.clone(), c]);
+        assert_eq!(fills.len(), 2, "{fills:?}");
+        assert_eq!(fills.iter().map(|f| f.gradient.clone()).collect::<Vec<_>>(), [a.gradient, b.gradient]);
+        assert_eq!(
+            fills.iter().map(|f| points(&f.path.subpaths[0])).collect::<Vec<_>>(),
+            [vec![(2.0, 0.0), (2.0, 2.0)], vec![(2.0, 4.0), (2.0, 6.0)]]
+        );
+    }
+
+    #[test]
+    fn the_strokes_are_clipped_to_the_images_box() {
+        // A diagonal edge meeting the border: a corner of the stroke's butt end reaches past the
+        // box, and the clip is the box.
+        let lower = polygon(&[&[(0.0, 0.0), (3.0, 0.0), (1.0, 2.0), (0.0, 2.0)]], 10);
+        let upper = polygon(&[&[(3.0, 0.0), (4.0, 0.0), (4.0, 2.0), (1.0, 2.0)]], 20);
+        let diagonal = fills(&[lower, upper], (4, 2)).unwrap();
+        assert_eq!(points(&diagonal.strokes[0].path.subpaths[0]), [(3.0, 0.0), (1.0, 2.0)]);
+        assert_eq!(diagonal.clip.subpaths.len(), 1);
+        assert!(diagonal.clip.subpaths[0].closed);
+        assert_eq!(points(&diagonal.clip.subpaths[0]), [(0.0, 0.0), (4.0, 0.0), (4.0, 2.0), (0.0, 2.0)]);
+        assert_eq!(diagonal.anchor_count(), 2 + 4);
     }
 
     /// Two colors side by side, the edge between them anti-aliased at `x = 10.4`.
@@ -239,9 +301,9 @@ mod tests {
         let params = color(Method::Abutting);
         let res = trace(&two_colors(), &params);
         assert_eq!(res.paths.len(), 2, "{res:?}");
-        let seams = seam_fills(&res.paths, &params);
-        assert_eq!(seams.len(), 1, "{seams:?}");
-        let seam = &seams[0];
+        let fills = seam_fills(&res.paths, &params, (24, 16)).unwrap();
+        assert_eq!(fills.strokes.len(), 1, "{fills:?}");
+        let seam = &fills.strokes[0];
         assert_eq!((seam.color, seam.stroke), (res.paths[0].color, Some(SEAM_WIDTH)));
         // Every piece of the stroke is a piece of both paths, and it runs from the image's top to
         // its bottom along the edge, not along the image's border.
@@ -253,25 +315,28 @@ mod tests {
         }
         let ys: Vec<f64> = seam.path.subpaths.iter().flat_map(|sp| sp.anchors.iter().map(|a| a.p.y)).collect();
         assert_eq!((ys.iter().copied().fold(f64::INFINITY, f64::min), ys.iter().copied().fold(f64::NEG_INFINITY, f64::max)), (0.0, 16.0));
+        // The clip is the image's box.
+        let corners: Vec<(f64, f64)> = fills.clip.subpaths.iter().flat_map(points).collect();
+        assert_eq!(corners, [(0.0, 0.0), (24.0, 0.0), (24.0, 16.0), (0.0, 16.0)]);
     }
 
     #[test]
     fn only_abutting_fills_get_seam_strokes() {
-        let seams = |img: &Raster, params: &TraceParams| seam_fills(&trace(img, params).paths, params);
+        let seams = |img: &Raster, params: &TraceParams| seam_fills(&trace(img, params).paths, params, (img.width, img.height));
         let img = two_colors();
-        assert_eq!(seams(&img, &color(Method::Overlapping)), []);
-        assert_eq!(seams(&img, &TraceParams { fills: false, strokes: true, ..color(Method::Abutting) }), []);
+        assert_eq!(seams(&img, &color(Method::Overlapping)), None);
+        assert_eq!(seams(&img, &TraceParams { fills: false, strokes: true, ..color(Method::Abutting) }), None);
         // Flat Logo's shapes are stacked, whatever the method says.
         let abutting = trace(&img, &color(Method::Abutting));
-        assert_eq!(seam_fills(&abutting.paths, &TraceParams { mode: Mode::Logo, ..color(Method::Abutting) }), []);
-        // A color left out leaves no neighbour: a dark bar on white, with Ignore White.
+        assert_eq!(seam_fills(&abutting.paths, &TraceParams { mode: Mode::Logo, ..color(Method::Abutting) }, (24, 16)), None);
+        // A color left out leaves no neighbor: a dark bar on white, with Ignore White.
         let bar = Raster::from_fn(24, 16, |x, _| if (8..16).contains(&x) { [0, 0, 0, 255] } else { [255; 4] });
         let bw = TraceParams { mode: Mode::BlackAndWhite, method: Method::Abutting, ignore_white: true, ..TraceParams::default() };
         let res = trace(&bar, &bw);
         assert_eq!(res.paths.len(), 1, "{res:?}");
-        assert_eq!(seam_fills(&res.paths, &bw), []);
+        assert_eq!(seam_fills(&res.paths, &bw, (24, 16)), None);
         // Both colors traced, the bar's two sides are shared.
-        let both = seams(&bar, &TraceParams { ignore_white: false, ..bw });
-        assert_eq!(both.iter().map(|s| s.path.subpaths.len()).sum::<usize>(), 2, "{both:?}");
+        let both = seams(&bar, &TraceParams { ignore_white: false, ..bw }).unwrap();
+        assert_eq!(both.strokes.iter().map(|s| s.path.subpaths.len()).sum::<usize>(), 2, "{both:?}");
     }
 }
