@@ -433,7 +433,7 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	each of `{GRAPHICS}` must be an object	hvert element i `{GRAPHICS}` skal være et objekt
 @msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	elementer i `{GRAPHICS}` tager symbol, face, x, y, scale og rotation, ikke `{k}`
 @msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	hvert element i `{GRAPHICS}` kræver `symbol`, navnet på et symbol
-@msg	`{GRAPHICS}` face must be front or back	`{GRAPHICS}`: face skal være front eller back
+@msg	`{GRAPHICS}` face must be front, back or side	`{GRAPHICS}`: face skal være front, back eller side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}`: {key} skal være et tal fra {lo} til {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` skal være et array
 @msg	Graphics map onto the Plane, Extrude and Revolve object types	Grafik kortlægges på objekttyperne Plan, Ekstrudér og Omdrej
@@ -8479,6 +8479,7 @@ mark-style	Japanese	Japansk
 	Cove	Cove
 	Depth	Dybde
 	Front	Forfra
+	Side	Siden
 	Isometric Bottom	Isometrisk bund
 	Isometric Left	Isometrisk venstre
 	Isometric Right	Isometrisk højre
