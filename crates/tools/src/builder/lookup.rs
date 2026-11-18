@@ -38,14 +38,20 @@ fn named(n: &Node, name: &str) -> bool {
     n.name.as_deref() == Some(name)
 }
 
+/// Is `n` a Live Paint group's part named `name` ([`FACE_NAME`] or [`EDGE_NAME`]): a path with that
+/// name? Type, groups and other objects drawn in the group under such a name are not parts.
+fn part(n: &Node, name: &str) -> bool {
+    named(n, name) && n.path_data().is_some()
+}
+
 /// Face children of a Live Paint group (paint order).
 pub fn faces(group: &Node) -> Vec<&Arc<Node>> {
-    group.children().map(|c| c.iter().filter(|n| named(n, FACE_NAME)).collect()).unwrap_or_default()
+    group.children().map(|c| c.iter().filter(|n| part(n, FACE_NAME)).collect()).unwrap_or_default()
 }
 
 /// Edge children of a Live Paint group.
 pub fn edges(group: &Node) -> Vec<&Arc<Node>> {
-    group.children().map(|c| c.iter().filter(|n| named(n, EDGE_NAME)).collect()).unwrap_or_default()
+    group.children().map(|c| c.iter().filter(|n| part(n, EDGE_NAME)).collect()).unwrap_or_default()
 }
 
 /// The hidden sources group of a Live Paint group.
