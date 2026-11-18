@@ -6706,6 +6706,7 @@ the release, the tool shows the circle as a dashed outline (solid once it is mor
 with its points, a small cross at its center, a line from
 the center to each point and, with Measurement Labels on, the diameter by the pointer. Three different points on one
 line, or a circle past the canvas, show "Circle too large" by the pointer instead, and the release draws nothing.
+A press let go within 2 screen points of where it was pressed is a click, also after a drag that came back to it.
 Escape, a dropped press, and an edit, Undo or Redo made outside the tool drop the first point. A second press within 3
 screen points of the first point, or one that snaps to it, is a press on it: let go there (a double-click), it places no second point, and
 dragged out, it draws the circle on the diameter it drags out.
