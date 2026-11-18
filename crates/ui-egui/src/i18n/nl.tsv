@@ -3917,6 +3917,7 @@ theme	Appearance	Vormgeving
 	Delete Brush	Penseel verwijderen
 	Delete Color	Kleur verwijderen
 	Restore Generated Table	Gegenereerde tabel herstellen
+	Unshift All Colors	Verschuiving van alle kleuren ongedaan maken
 	Delete Symbol	Symbool verwijderen
 	Delete the selected symbol?	Het geselecteerde symbool verwijderen?
 	Delete the selected symbols?	De geselecteerde symbolen verwijderen?
@@ -4888,6 +4889,9 @@ font-technology	Variable	Variabel
 	No menu item	Geen menu-item
 	Toolbar	Gereedschapsbalk
 	{toolbar}, in the {tool} group	{toolbar}, in de groep {tool}
+	In the menu bar: {path}	In de menubalk: {path}
+	In the {group} group: press and hold to open it	In de groep {group}: ingedrukt houden om te openen
+	{home}, not shown now	{home}, nu niet zichtbaar
 @plural	{n} result|{n} results	{n} resultaat|{n} resultaten
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} van {n} resultaat. Typ verder om ze te beperken.|{shown} van {n} resultaten. Typ verder om ze te beperken.
 	Recent Commands	Recente opdrachten
@@ -5005,6 +5009,8 @@ font-technology	Variable	Variabel
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Hoe dicht de aanwijzer of een gesleept punt op het scherm bij een illustratie moet komen voordat slimme hulplijnen erop uitlijnen; de afstand is bij elke zoom gelijk.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Lijnt het einde van een lijnsegment, of een cirkel getekend vanuit het middelpunt, zo uit dat het een curve in de buurt raakt.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Lijnt het einde van een lijnsegment zo uit dat het een recht segment in de buurt onder een rechte hoek raakt.
+	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Toont op het canvas het nummer van elke slice in een vakje linksboven in de slice; staat dit uit, dan blijven de omtrekken van de slices zichtbaar.
+	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	De kleur van de omtrekken van gebruikers- en objectslices en van hun nummervakjes; automatische slices gebruiken een vagere tint ervan.
 	Reset all preferences to their defaults?	Alle voorkeuren terugzetten naar de standaardwaarden?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	De standaardwaarden worden toegepast wanneer u in Voorkeuren op OK klikt. Annuleren daar behoudt uw huidige voorkeuren.
 	Smaller ↔ Larger	Kleiner ↔ Groter
@@ -5452,6 +5458,7 @@ imageTrace	Outline	Contour
 @msg	choose a location for the package	kies een locatie voor het pakket
 @msg	clipboard is empty	het klembord is leeg
 @msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: er moet ten minste één kleur in de kleurentabel blijven
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted: `{k}` noemt een kleur die ook een andere sleutel noemt
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` is geen kleur zoals "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: maximaal {MAX_TABLE} kleuren
 @msg	command `{0}` is not available right now: {1}	opdracht `{0}` is nu niet beschikbaar: {1}
@@ -9694,6 +9701,7 @@ breakText	Glyphs	Glyphs
 @msg	One path lies inside the other, so they have no common tangents	Het ene pad ligt binnen het andere, dus ze hebben geen gemeenschappelijke raaklijnen
 @msg	The paths overlap, so they have no internal tangents	De paden overlappen, dus ze hebben geen inwendige raaklijnen
 @msg	One path lies inside the other, so they have no internal tangents	Het ene pad ligt binnen het andere, dus ze hebben geen inwendige raaklijnen
+@msg	The point lies inside the path, so it has no tangents	Het punt ligt binnen het pad, dus het heeft geen raaklijnen
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Streepjes uitbreiden tot paden
 @msg	select paths with dashed strokes to expand	selecteer paden met een streepjeslijn om uit te breiden
@@ -10147,6 +10155,11 @@ breakText	Glyphs	Glyphs
 @msg	A panel is not joined to the rest by a crease.	Een paneel is door geen rillijn met de rest verbonden.
 @msg	A fold line is on a non-printing layer.	Een vouwlijn staat op een laag die niet wordt afgedrukt.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panelen: {panels}, scharnieren: {hinges}, fouten: {errors}, waarschuwingen: {warnings}
+	Pressure Sensitive	Drukgevoelig
+	Flex Ribbon	Flexibel lint
+	Pulse Stroke	Pulserende streek
+	Round Flow	Ronde vloei
+	Chisel Flow	Schuine vloei
 	Fold Preview	Vouwvoorbeeld
 	Fold	Vouwen
 	Show Fold Lines	Vouwlijnen tonen
