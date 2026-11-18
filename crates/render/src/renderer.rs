@@ -57,6 +57,7 @@ impl Renderer {
             live_root: None,
             fx_geom: PtrMap::default(),
             fx_stages: PtrMap::default(),
+            fx_placement: None,
             stamp: 0,
             alpha: 1.0,
             contexts: Vec::new(),

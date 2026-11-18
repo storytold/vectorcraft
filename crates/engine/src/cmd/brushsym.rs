@@ -27,6 +27,9 @@ use crate::EngineError;
 /// Whether Reset Transformation changes a symbol instance.
 pub use symbols::reset_transformation_changes;
 
+/// The Symbols panel's current symbol, as `symbol.list` answers it.
+pub use symbols::current_symbol;
+
 mod brushes;
 mod dynamic;
 mod symbols;

@@ -162,7 +162,7 @@ pub(super) fn symbol_sort(s: &mut Session, _: &Value) -> Result<Value> {
     if d.symbols.is_sorted_by_key(key) {
         return ok();
     }
-    let current = current_symbol(d).or_else(|| symbol_names(d).into_iter().next());
+    let current = current_symbol(d);
     s.edit("Sort by Name", |d, _| {
         if let Some(name) = current {
             d.unknown.insert(CURRENT_SYMBOL.into(), json!(name));
@@ -173,12 +173,15 @@ pub(super) fn symbol_sort(s: &mut Session, _: &Value) -> Result<Value> {
     ok()
 }
 
-fn symbol_names(d: &Document) -> Vec<String> {
-    d.symbols.iter().map(|s| s.name.clone()).collect()
-}
-
-fn current_symbol(d: &Document) -> Option<String> {
-    d.unknown.get(CURRENT_SYMBOL).and_then(Value::as_str).filter(|n| d.symbols.iter().any(|s| s.name == *n)).map(str::to_string)
+/// The Symbols panel's current symbol, as `symbol.list` answers it: the stored current symbol
+/// while `d` has a symbol of that name, else the first symbol; `None` when `d` has no symbols.
+pub fn current_symbol(d: &Document) -> Option<String> {
+    d.unknown
+        .get(CURRENT_SYMBOL)
+        .and_then(Value::as_str)
+        .filter(|n| d.symbols.iter().any(|s| s.name == *n))
+        .or_else(|| d.symbols.first().map(|s| s.name.as_str()))
+        .map(str::to_string)
 }
 
 pub(super) fn symbol_list(s: &mut Session, _: &Value) -> Result<Value> {
@@ -200,7 +203,7 @@ pub(super) fn symbol_list(s: &mut Session, _: &Value) -> Result<Value> {
             })
         })
         .collect();
-    Ok(json!({ "symbols": list, "current": current_symbol(d).or_else(|| symbol_names(d).into_iter().next()) }))
+    Ok(json!({ "symbols": list, "current": current_symbol(d) }))
 }
 
 /// Store `art` ([`normalize`]d, of natural size `size`) as symbol `name`, which becomes the
@@ -398,9 +401,7 @@ fn resolve_symbol(d: &Document, p: &Value, cmd: &str) -> Result<String> {
     match str_param(p, "name") {
         Some(n) if d.symbols.iter().any(|s| s.name == n) => Ok(n.to_string()),
         Some(n) => Err(bad(cmd, format!("no symbol named `{n}`"))),
-        None => {
-            current_symbol(d).or_else(|| symbol_names(d).into_iter().next()).ok_or_else(|| EngineError::Other("the document has no symbols".into()))
-        }
+        None => current_symbol(d).ok_or_else(|| EngineError::Other("the document has no symbols".into())),
     }
 }
 

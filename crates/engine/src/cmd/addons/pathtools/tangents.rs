@@ -96,7 +96,8 @@ fn common_tangents(s: &mut Session, p: &Value) -> Result<Value> {
         };
         return Ok(json!({ "ids": [], "external": 0, "internal": 0, "centerline": null, "warning": warning.to_string() }));
     }
-    let center = (centerline && (a.center() - b.center()).hypot() > 1e-9).then(|| (a.center(), b.center()));
+    // Centers closer than a billionth of the larger path's size count as one point: no line.
+    let center = (centerline && (a.center() - b.center()).hypot() > 1e-9 * a.size().max(b.size())).then(|| (a.center(), b.center()));
     let fill = Paint::None;
     let stroke = if s.paint.stroke.is_none() { Paint::solid(Color::BLACK) } else { s.paint.stroke.clone() };
     let mut look = s.new_art_look(fill, stroke, s.paint.stroke_width.max(0.1));
