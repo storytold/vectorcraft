@@ -5308,6 +5308,7 @@ digits	Malayalam	Malayalam
 	BLANK DOCUMENT PRESETS	TOMME DOKUMENTFORUDINDSTILLINGER
 	Bleed	Beskæring
 	Change to Right-to-Left Layout	Skift til højre-til-venstre-layout
+	Columns	Kolonner
 	Columns:	Kolonner:
 	Documents you create appear here.	Dokumenter, du opretter, vises her.
 	More Settings	Flere indstillinger
@@ -5498,6 +5499,7 @@ digits	Malayalam	Malayalam
 	Layout Order:	Layoutrækkefølge:
 	Change to Left-to-Right Layout	Skift til venstre-til-højre-layout
 	Artboards: {n}	Tegnebrætter: {n}
+	Rows	Rækker
 	Rows:	Rækker:
 	Assign	Tildel
 	Color Group:	Farvegruppe:

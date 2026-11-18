@@ -3182,6 +3182,7 @@ digits	Malayalam	Malayalam
 	BLANK DOCUMENT PRESETS	LEGE DOCUMENTVOORINSTELLINGEN
 	Bleed	Afrulling
 	Change to Right-to-Left Layout	Omschakelen naar lay-out van rechts naar links
+	Columns	Kolommen
 	Columns:	Kolommen:
 	Documents you create appear here.	Documenten die je maakt, verschijnen hier.
 	More Settings	Meer instellingen
@@ -3372,6 +3373,7 @@ digits	Malayalam	Malayalam
 	Layout Order:	Indelingsvolgorde:
 	Change to Left-to-Right Layout	Omschakelen naar lay-out van links naar rechts
 	Artboards: {n}	Tekenborden: {n}
+	Rows	Rijen
 	Rows:	Rijen:
 	Assign	Toewijzen
 	Color Group:	Kleurgroep:
