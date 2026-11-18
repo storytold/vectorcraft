@@ -36,21 +36,33 @@ fn stream(dict: &str, data: &[u8]) -> Vec<u8> {
 /// A 300 × 100 pt page with a CMYK rectangle and image XObjects `images` (dictionary entries
 /// after the type, stream data), 50 pt wide each: objects 5…, then the `extra` objects.
 fn pdf_with_images(images: &[(String, Vec<u8>)], extra: &[Vec<u8>]) -> Vec<u8> {
+    pdf_with(images, extra, "", "")
+}
+
+/// [`pdf_with_images`] with `catalog` added to the catalog's entries and `resources` to the
+/// page's resources.
+fn pdf_with(images: &[(String, Vec<u8>)], extra: &[Vec<u8>], catalog: &str, resources: &str) -> Vec<u8> {
     let xobjects: String = (0..images.len()).map(|i| format!("/Im{i} {} 0 R ", 5 + i)).collect();
     let mut content = String::from("0 1 0.6 0.2 k 0 80 300 20 re f\n");
     for i in 0..images.len() {
         content.push_str(&format!("q 50 0 0 50 {} 10 cm /Im{i} Do Q\n", 10 + 60 * i));
     }
     let mut objs = vec![
-        b"<< /Type /Catalog /Pages 2 0 R >>".to_vec(),
+        format!("<< /Type /Catalog /Pages 2 0 R {catalog}>>").into_bytes(),
         b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_vec(),
-        format!("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 100] /Resources << /XObject << {xobjects}>> >> /Contents 4 0 R >>").into_bytes(),
+        format!("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 100] /Resources << /XObject << {xobjects}>> {resources}>> /Contents 4 0 R >>")
+            .into_bytes(),
         stream("", content.as_bytes()),
     ];
     for (dict, data) in images {
         objs.push(stream(&format!("/Type /XObject /Subtype /Image {dict}"), data));
     }
     objs.extend_from_slice(extra);
+    pdf_of(&objs)
+}
+
+/// A PDF file of `objs`, numbered from 1, whose catalog is object 1.
+fn pdf_of(objs: &[Vec<u8>]) -> Vec<u8> {
     let mut out = b"%PDF-1.4\n".to_vec();
     let mut at = vec![];
     for (i, o) in objs.iter().enumerate() {
@@ -164,8 +176,9 @@ fn a_cmyk_jpeg_passes_through_open_and_every_pdf_export() {
         (json!({}), "DeviceCMYK", None),
         (json!({"output": {"conversion": "preserveNumbers"}}), "DeviceCMYK", None),
         (json!({"standard": "pdfX1a"}), "DeviceCMYK", None),
-        (json!({"standard": "pdfX3"}), "ICCBased", Some(4)),
-        (json!({"standard": "pdfX4"}), "ICCBased", Some(4)),
+        // CMYK in the output intent's profile (the CMYK profile in effect) is DeviceCMYK.
+        (json!({"standard": "pdfX3"}), "DeviceCMYK", None),
+        (json!({"standard": "pdfX4"}), "DeviceCMYK", None),
         (json!({"output": {"profiles": "all"}}), "ICCBased", Some(4)),
     ] {
         let out = export_with_report(&r.document, &opts(settings.clone())).unwrap();
@@ -178,12 +191,14 @@ fn a_cmyk_jpeg_passes_through_open_and_every_pdf_export() {
         assert!(out.warnings.iter().all(|w| !w.contains("image")), "{settings}: {:?}", out.warnings);
         // And open again: the same JPEG, carrying the profile it was written in when it was
         // ICC-based.
+        // ICC-based, or DeviceCMYK in a PDF/X file, whose output intent's profile it then carries.
         let back = import(&out.bytes).unwrap();
         let blob = blobs(&back)[0];
-        if icc_n.is_some() {
+        let intent = settings.get("standard").is_some().then(|| cms::icc_bytes(&cms::active_settings().cmyk).unwrap().to_vec());
+        if let Some(icc) = w[0].icc.clone().or(intent) {
             assert_eq!(blob.mime, "image/jpeg", "{settings}");
             assert_eq!(blob.cmyk(), b[0].cmyk(), "{settings}: the same samples");
-            assert_eq!(blob.cmyk_icc_profile(), w[0].icc, "{settings}: the profile it was written in");
+            assert_eq!(blob.cmyk_icc_profile().as_deref(), Some(&*icc), "{settings}: the profile it was written in");
         } else {
             assert_eq!(blob.bytes.as_slice(), jpg.as_slice(), "{settings}");
         }
@@ -423,6 +438,43 @@ fn a_dcs_spot_plate_printing_as_process_takes_the_documents_swatch() {
     assert_eq!(get(&own, "Yellow"), Some(vec![0, 0]));
 }
 
+/// A DCS image's spot plate converted to process on its own prints as the document's swatch of
+/// its ink, while its other spot plate keeps printing on its ink.
+#[test]
+fn a_dcs_image_converts_only_the_spot_ink_chosen() {
+    use vectorcraft_doc::separated::{InkPlate, Separated};
+    let plate = |name: &str, cmyk: [f32; 4], data: [u8; 2]| InkPlate { name: name.into(), cmyk, data: data.to_vec() };
+    let s = Separated::new(
+        2,
+        1,
+        vec![
+            plate("Cyan", [0.0; 4], [0, 0]),
+            plate("Spot Orange", [0.0, 0.6, 1.0, 0.0], [128, 0]),
+            plate("Spot Green", [0.0, 0.0, 1.0, 0.0], [0, 128]),
+        ],
+    )
+    .unwrap();
+    let mut d = image_doc(ImageBlob::separated_tiff(&s, None, &[]).unwrap(), 2, 1);
+    d.swatches.push(Swatch { name: "Spot Orange".into(), paint: Paint::solid(Color::cmyk(0.0, 0.6, 1.0, 0.0)), global: true, spot: true });
+    // The document's Spot Green is cyan, where its file says yellow.
+    d.swatches.push(Swatch { name: "Spot Green".into(), paint: Paint::solid(Color::cmyk(1.0, 0.0, 0.0, 0.0)), global: true, spot: true });
+    let settings: PrintSettings =
+        serde_json::from_value(json!({"output": {"mode": "separations", "inks": [{"name": "Spot Green", "convertToProcess": true}]}})).unwrap();
+    let names: Vec<String> = print_inks(&d, &settings).0.into_iter().map(|i| i.name).collect();
+    assert_eq!(names, ["Cyan", "Magenta", "Yellow", "Black", "Spot Orange"]);
+    let job = plan(&d, &PrintOptions { settings, ..Default::default() }).unwrap();
+    let coverage = job.plates.iter().map(|p| {
+        let NodeKind::Image(im) = &p.layers[0].children().unwrap()[0].kind else { panic!("an image") };
+        p.image_blob(im).and_then(|b| b.coverage()).unwrap().2
+    });
+    let all: Vec<(String, Vec<u8>)> = names.into_iter().zip(coverage).collect();
+    let get = |name: &str| all.iter().find(|(n, _)| n == name).map(|(_, c)| c.clone());
+    assert_eq!(get("Cyan"), Some(vec![0, 128]), "the swatch's cyan");
+    assert_eq!(get("Yellow"), Some(vec![0, 0]), "not the file's yellow");
+    assert_eq!(get("Magenta"), Some(vec![0, 0]), "Spot Orange stays on its own plate");
+    assert_eq!(get("Spot Orange"), Some(vec![128, 0]));
+}
+
 #[test]
 fn the_output_settings_convert_cmyk_images_and_compression_recompresses_them_in_cmyk() {
     let ink = [0u8, 102, 255, 0];
@@ -608,6 +660,117 @@ fn a_cmyk_image_that_keeps_its_numbers_carries_its_cmyk_profile() {
     assert!(!String::from_utf8_lossy(&bytes).contains("/S/Luminosity"), "no luminosity soft mask");
 }
 
+/// When CMYK colors are DeviceCMYK in the output intent's profile, a CMYK image that carries that
+/// profile is DeviceCMYK too, and with `none` so is one that carries another profile; elsewhere
+/// it keeps its own (#1954).
+#[test]
+fn a_cmyk_image_in_the_output_intents_profile_is_device_cmyk() {
+    let ink = [0u8, 102, 255, 0];
+    let working = cms::icc_bytes(&cms::active_settings().cmyk).unwrap();
+    let other = cmyk_profile(|_| {});
+    let export = |icc: &[u8], s: serde_json::Value| {
+        let tiff = cmyk_tiff_with(ink, 4, 4, icc);
+        let inks = tiff.cmyk().unwrap().data;
+        let d = image_doc(tiff, 4, 4);
+        let out = export_with_report(&d, &opts(s.clone())).unwrap_or_else(|e| panic!("{s}: {e}"));
+        let w: Vec<Written> = written(&out.bytes).into_iter().filter(|w| w.space != "DeviceGray").collect();
+        assert_eq!(w.len(), 1, "{s}: {w:?}");
+        assert_eq!(blobs(&import(&out.bytes).unwrap())[0].cmyk().unwrap().data, inks, "{s}: the inks as they were");
+        w.into_iter().next().unwrap()
+    };
+    for s in [json!({"standard": "pdfX4"}), json!({"standard": "pdfX3"}), json!({"standard": "pdfX4", "output": {"profiles": "none"}})] {
+        let w = export(&working, s.clone());
+        assert_eq!((w.space.as_str(), w.icc_n), ("DeviceCMYK", None), "{s}: the output intent's profile");
+    }
+    let w = export(&other, json!({"standard": "pdfX4"}));
+    assert!((w.space.as_str(), w.icc.as_deref()) == ("ICCBased", Some(other.as_slice())), "another profile is kept: {w:?}");
+    let w = export(&other, json!({"standard": "pdfX4", "output": {"profiles": "none"}}));
+    assert_eq!((w.space.as_str(), w.icc_n), ("DeviceCMYK", None), "with none: {w:?}");
+    // Without an output intent, the image keeps the profile it carries.
+    let w = export(&working, json!({"output": {"profiles": "all"}}));
+    assert!(w.space == "ICCBased" && w.icc.as_deref() == Some(&*working), "{w:?}");
+}
+
+/// A DeviceCMYK image in a file with a PDF/X output intent of CMYK opens tagged with the intent's
+/// profile, so a CMYK image written as DeviceCMYK in that profile opens with it again. Without an
+/// output intent it opens untagged.
+#[test]
+fn a_device_cmyk_image_opens_with_the_pdfx_output_intents_profile() {
+    let ink = [0u8, 102, 255, 0];
+    let working = cms::icc_bytes(&cms::active_settings().cmyk).unwrap();
+    for (s, tagged) in [(json!({"standard": "pdfX4"}), true), (json!({"standard": "pdfX3"}), true), (json!({}), false)] {
+        let d = image_doc(cmyk_tiff_with(ink, 4, 4, &working), 4, 4);
+        let out = export_with_report(&d, &opts(s.clone())).unwrap_or_else(|e| panic!("{s}: {e}"));
+        let w: Vec<Written> = written(&out.bytes).into_iter().filter(|w| w.space != "DeviceGray").collect();
+        assert!(w.len() == 1 && w[0].space == "DeviceCMYK", "{s}: {w:?}");
+        let opened = import(&out.bytes).unwrap();
+        let icc = blobs(&opened)[0].cmyk_icc_profile();
+        assert_eq!(icc.as_deref(), tagged.then_some(&*working), "{s}");
+    }
+}
+
+/// In a file whose catalog has a CMYK `/GTS_PDFX` output intent, a DeviceCMYK image opens tagged
+/// with the intent's profile; another kind of output intent tags nothing, and neither does the
+/// intent on a page whose resources replace DeviceCMYK with a `/DefaultCMYK`.
+#[test]
+fn a_device_cmyk_image_takes_the_output_intent_unless_a_default_cmyk_replaces_it() {
+    let (intent, other) = (cmyk_profile(|_| {}), cms::icc_bytes(&cms::active_settings().cmyk).unwrap().to_vec());
+    assert_ne!(intent, other);
+    let image = [(cmyk_dict(2, 2, ""), flat([0, 102, 255, 0], 4))];
+    let profiles = [stream("/N 4", &intent), stream("/N 4", &other)];
+    let pdfx = "/OutputIntents [<< /Type /OutputIntent /S /GTS_PDFX /OutputConditionIdentifier (Test) /DestOutputProfile 6 0 R >>] ";
+    let pdfa = "/OutputIntents [<< /Type /OutputIntent /S /GTS_PDFA1 /OutputConditionIdentifier (Test) /DestOutputProfile 6 0 R >>] ";
+    let default_cmyk = "/ColorSpace << /DefaultCMYK [/ICCBased 7 0 R] >> ";
+    for (catalog, resources, expected) in [(pdfx, "", Some(&intent)), ("", "", None), (pdfa, "", None), (pdfx, default_cmyk, None)] {
+        let d = import(&pdf_with(&image, &profiles, catalog, resources)).unwrap();
+        let b = blobs(&d);
+        assert_eq!(b.len(), 1, "{catalog} {resources}");
+        assert_eq!(b[0].cmyk().unwrap().data, flat([0, 102, 255, 0], 4), "{catalog} {resources}: the inks as they were");
+        assert_eq!(b[0].cmyk_icc_profile().as_deref(), expected.map(Vec::as_slice), "{catalog} {resources}");
+    }
+}
+
+/// A `/DefaultCMYK` stops the output intent from tagging a DeviceCMYK image only where it is in
+/// scope: on the page's own image when only a form on the page has one, the image keeps the
+/// intent's profile; drawn inside that form, it opens untagged; and the same image drawn on a page
+/// with a `/DefaultCMYK` and then on a page without one opens untagged on the first and tagged on
+/// the second.
+#[test]
+fn the_output_intent_tags_a_device_cmyk_image_only_where_no_default_cmyk_is_in_scope() {
+    let (intent, other) = (cmyk_profile(|_| {}), cms::icc_bytes(&cms::active_settings().cmyk).unwrap().to_vec());
+    let default = "/ColorSpace << /DefaultCMYK [/ICCBased 8 0 R] >>";
+    // Objects: 1 catalog, 2 pages, 3 and 4 the pages, 5 their content, 6 the image, 7 and 8 the
+    // profiles, 9 a form with a `/DefaultCMYK`.
+    let file = |pages: &[&str], content: &str, form: &str| {
+        let kids: String = (0..pages.len()).map(|i| format!("{} 0 R ", 3 + i)).collect();
+        let page = |res: &str| format!("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 100] /Resources << {res} >> /Contents 5 0 R >>").into_bytes();
+        let form_dict = format!("/Type /XObject /Subtype /Form /BBox [0 0 1 1] /Resources << /XObject << /Im0 6 0 R >> {default} >>");
+        pdf_of(&[
+            b"<< /Type /Catalog /Pages 2 0 R /OutputIntents [<< /Type /OutputIntent /S /GTS_PDFX /OutputConditionIdentifier (Test) /DestOutputProfile 7 0 R >>] >>".to_vec(),
+            format!("<< /Type /Pages /Kids [{kids}] /Count {} >>", pages.len()).into_bytes(),
+            page(pages[0]),
+            page(pages.get(1).copied().unwrap_or("")),
+            stream("", content.as_bytes()),
+            stream(&format!("/Type /XObject /Subtype /Image {}", cmyk_dict(2, 2, "")), &flat([0, 102, 255, 0], 4)),
+            stream("/N 4", &intent),
+            stream("/N 4", &other),
+            stream(&form_dict, form.as_bytes()),
+        ])
+    };
+    let image = "q 50 0 0 50 10 10 cm /Im0 Do Q ";
+    let form = "q 50 0 0 50 80 10 cm /Fm0 Do Q ";
+    let cases = [
+        (file(&["/XObject << /Im0 6 0 R /Fm0 9 0 R >>"], &format!("{image}{form}"), "0 0 0 1 k 0 0 1 1 re f"), vec![Some(&intent)]),
+        (file(&["/XObject << /Fm0 9 0 R >>"], form, "/Im0 Do"), vec![None]),
+        (file(&[&format!("/XObject << /Im0 6 0 R >> {default}"), "/XObject << /Im0 6 0 R >>"], image, ""), vec![None, Some(&intent)]),
+    ];
+    for (i, (bytes, expected)) in cases.into_iter().enumerate() {
+        let d = import(&bytes).unwrap();
+        let profiles: Vec<Option<Vec<u8>>> = all_images(&d).iter().map(|b| b.cmyk_icc_profile().map(|p| p.to_vec())).collect();
+        assert_eq!(profiles, expected.into_iter().map(|p| p.cloned()).collect::<Vec<_>>(), "case {i}");
+    }
+}
+
 /// With Don't Include Profiles set, a CMYK JPEG kept as it is is DeviceCMYK without its own
 /// `ICC_PROFILE` segments, its compressed inks unchanged; one resampled and compressed again is
 /// written without a profile too. Left unset, the JPEG data stays as it is.
@@ -635,6 +798,16 @@ fn a_set_dont_include_profiles_takes_a_cmyk_jpegs_profile_out() {
     let s = json!({"output": {"profiles": "none"}, "compression": {"color": {"downsample": "bicubic", "ppi": 72.0, "abovePpi": 100.0}}});
     let (w, _) = export(s.clone());
     assert!(w.icc.is_none() && !segment(&w.data), "{s}: {w:?}");
+    // A PDF/X file whose CMYK colors are DeviceCMYK takes the profile out of a JPEG it untags.
+    let s = json!({"standard": "pdfX4", "output": {"profiles": "none"}});
+    let (w, _) = export(s.clone());
+    assert!(w.space == "DeviceCMYK" && w.data == vectorcraft_doc::cmyk::jpeg_without_icc(&jpg).unwrap(), "{s}: {w:?}");
+    let working = cms::icc_bytes(&cms::active_settings().cmyk).unwrap();
+    let own = cmyk_jpeg_with(&flat(ink, 64 * 64), 64, 64, &working);
+    let d = image_doc(ImageBlob::new("image/jpeg", own.clone()), 64, 64);
+    let out = export_with_report(&d, &opts(json!({"standard": "pdfX4"}))).unwrap();
+    let w: Vec<Written> = written(&out.bytes).into_iter().filter(|w| w.space != "DeviceGray").collect();
+    assert!(w.len() == 1 && w[0].space == "DeviceCMYK" && w[0].data == vectorcraft_doc::cmyk::jpeg_without_icc(&own).unwrap(), "{w:?}");
 }
 
 /// A CMYK JPEG kept as it is whose header declares far more pixels than the app reads is left out

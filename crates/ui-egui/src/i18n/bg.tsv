@@ -105,6 +105,7 @@
 	Add Anchor Point	Добавяне на опорна точка
 	Add Anchor Point Tool	Инструмент „Добавяне на опорна точка“
 	Add Anchor Points	Добавяне на опорни точки
+	Add Around	Добавяне около обекта
 	Add Effect	Добавяне на ефект
 	Add Freeform Line	Добавяне на свободна линия
 	Add Freeform Point	Добавяне на свободна точка
@@ -126,8 +127,12 @@
 	Add to Swatches	Добавяне към образци
 	Add Used Colors	Добавяне на използваните цветове
 	Additional Plug-ins Folder	Допълнителна папка за плъгини
+	Plug-in Instruction Budget	Бюджет на инструкции за плъгини
 	Additional Fonts Folder	Допълнителна папка за шрифтове
 	Adjust Adjoining Width Points	Регулиране на прилежащите точки за ширина
+	Incoming	Входяща
+	Outgoing	Изходяща
+	Single Width Only	Само една ширина
 	Adjust Color Balance…	Коригиране на цветовия баланс…
 	Adjust Colors	Коригиране на цветовете
 	Adjust Options:	Параметри на коригиране:
@@ -182,6 +187,7 @@
 	Angle:	Ъгъл:
 	Angles	Ъгли
 	Animated Zoom	Анимирано мащабиране
+	Anti Alias	Заглаждане
 	Anti-alias	Заглаждане
 	Anti-Alias	Заглаждане
 	Anti-alias Rasters	Заглаждане на растери
@@ -348,6 +354,8 @@ font-technology	Variable	Променливи
 	Brush Definition	Дефиниция на четка
 	Brush Libraries	Библиотеки с четки
 	Brush Options…	Опции за четката…
+	Options of Selected Object…	Опции на избрания обект…
+	Options of Selected Object	Опции на избрания обект
 	Brush Strokes	Щрихи с четка
 	Brushes	Четки
 	Built-in Libraries	Вградени библиотеки
@@ -404,6 +412,12 @@ font-technology	Variable	Променливи
 	Character Alignment	Подравняване на знаците
 	Character / Paragraph	Знак / Абзац
 	Character Rotation	Въртене на знак
+	Chinese Big 5	Китайски Big 5
+	Cyrillic	Кирилица
+	Greek	Гръцки
+	Turkish	Турски
+	Baltic	Балтийски
+	Central European	Централноевропейски
 	Character Set:	Набор от знаци:
 	Character Style	Стил на знак
 	Character Style Options	Опции за стил на знак
@@ -465,6 +479,8 @@ font-technology	Variable	Променливи
 	Choose a folder	Избор на папка
 	Choose…	Избор…
 	Circle	Кръг
+	Circle Tool	Инструмент Кръг
+	Circle too large	Кръгът е твърде голям
 	Classic Defaults	Класически по подразбиране
 	Clean Up…	Почистване…
 	Clear	Изчистване
@@ -539,6 +555,7 @@ font-technology	Variable	Променливи
 	Color Mixer (Shift-click the chip)	Цветов смесител (Shift-щракване върху блокчето)
 	Color Mode	Цветен режим
 	Color Mode:	Цветен режим:
+	Color Model	Цветен модел
 	Color Model:	Цветен модел:
 	Color Models	Цветни модели
 	Color Picker	Палитра с цвят
@@ -559,12 +576,18 @@ font-technology	Variable	Променливи
 	Saturation and brightness	Насищане и яркост
 	Color field	Цветово поле
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
+	Wheel View	Изглед „Колело“
+	Box View	Изглед „Квадрат“
+	Box Channel	Канал на квадрата
+	Color box	Цветови квадрат
+	Color Wheel Options	Опции на цветното колело
 	Color Type:	Цветен тип:
 	Color:	Цвят:
 	Colorize	Оцветяване
 	Colors	Цветове
 	Colors:	Цветове:
 	Column Graph Tool	Инструмент „Колонна диаграма“
+	Columns	Колони
 	Columns:	Колони:
 	Column…	Колона…
 	Combine Slices	Обединяване на парчетата
@@ -603,6 +626,8 @@ font-technology	Variable	Променливи
 	Control	Контрол
 	Convert	Конвертиране
 	Convert All Spot Colors to Process	Конвертиране на всички спот цветове в трихромни
+	Convert {name} to process	Конвертиране на {name} в трихромен
+	Keep {name} as spot	Запазване на {name} като спот
 	Convert All Strokes to Outlines	Конвертиране на всички щрихове в контури
 	Convert All Text to Outlines	Конвертиране на целия текст в контури
 	Convert Anchor Point	Преобразуване на опорна точка
@@ -766,6 +791,9 @@ font-technology	Variable	Променливи
 	Delete Artboard	Изтриване на работна област
 	Delete Artboards	Изтриване на работни области
 	Delete Brush	Изтриване на четка
+	Delete Color	Изтриване на цвят
+	Restore Generated Table	Възстановяване на генерираната таблица
+	Unshift All Colors	Преместване назад на всички цветове
 	Delete Character Style	Изтриване на стил за знаци
 	Delete Empty Artboards	Изтриване на празни работни области
 	Delete Freeform Point	Изтриване на свободна точка
@@ -834,6 +862,7 @@ font-technology	Variable	Променливи
 	Direct Selection Tool	Инструмент „Директен избор“
 	Direction Handles	Маркери за посока
 	Disable Auto Add/Delete	Изключване на автоматично добавяне/изтриване
+	Interpolate Control Points When Moving Anchors	Интерполиране на маркерите за посока при преместване на опорни точки
 	Disable Opacity Mask	Изключване на маска за непрозрачност
 	Discard	Отхвърляне
 	Discard Empty Type	Отхвърляне на празен текст
@@ -1038,6 +1067,7 @@ font-technology	Variable	Променливи
 	Enable text access for screen readers	Разрешаване на достъп до текст за екранни четци
 	Enable Touch Gestures	Разрешаване на докосващи жестове
 	Switch Selection and Drawing Modes	Превключване между режим на селекция и рисуване
+	Select Last Selection Tool	Избор на последния инструмент за селекция
 	Enable Touch Workspace	Разрешаване на работно пространство за докосване
 	Encoding	Кодиране
 	Encoding:	Кодиране:
@@ -1160,7 +1190,7 @@ font-technology	Variable	Променливи
 	Extrude & Bevel…	Избутване и фасетка…
 	3D (Classic)	3D (класически)
 	Extrude & Bevel (Classic)…	Избутване и фасетка (класически)…
-	Revolve (Classic)…	Завъртане (класическо)…
+	Revolve (Classic)…	Завъртане около ос (класическо)…
 	Rotate (Classic)…	Ротация (класическа)…
 	Surface	Повърхност
 	Wireframe	Телена рамка
@@ -1206,6 +1236,8 @@ font-technology	Variable	Променливи
 	Files	Файлове
 	Files of a PDF standard can't be password-protected.	Файлове от PDF стандарт не могат да бъдат защитени с парола.
 	Files of this standard tag their colours with ICC profiles.	Файловете от този стандарт етикетират цветовете си с ICC профили.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	Файловете от този стандарт етикетират цветовете си с ICC профили, с изключение на CMYK цветовете в профила на предназначението на изхода, които се записват като DeviceCMYK.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	С „Без включване на профили“ и CMYK предназначение на изхода всеки CMYK цвят се записва като DeviceCMYK, освен ако не се преобразува към CMYK местоназначение с друг профил.
 	Fill	Запълване
 	Fill & Stroke	Запълване и щрих
 	Fill (X), double-click for the Color Picker	Запълване (X), щракнете двукратно за избор на цвят
@@ -1947,6 +1979,7 @@ font-technology	Variable	Променливи
 	Load SVG into Clipboard	Зареждане на SVG в клипборда
 	Load Text into Clipboard	Зареждане на текст в клипборда
 	Local Libraries	Локални библиотеки
+	Locate Layer	Намиране на слой
 	Locate Object	Намиране на обект
 	Locate Selected Objects	Намиране на избраните обекти
 	Location	Местоположение
@@ -2141,6 +2174,7 @@ font-technology	Variable	Променливи
 	Scatter:	Разпръскване:
 	Rotation:	Завъртане:
 	Rotation relative to:	Завъртане спрямо:
+	Hue Jitter:	Вариация на оттенъка:
 	Brush Scale Options	Опции за мащабиране на четката
 	Scale Proportionately	Мащабиране пропорционално
 	Stretch to Fit Stroke Length	Разтягане за запълване дължината на щриха
@@ -2177,6 +2211,7 @@ font-technology	Variable	Променливи
 	Black becomes the stroke color and white stays white. Other colors become tints of the stroke color by their lightness.	Черното става цвят на щриха, а бялото остава бяло. Другите цветове стават оттенъци на цвета на щриха и колкото по-светъл е един цвят, толкова по-светъл е оттенъкът му.
 	Black and white stay as they are. Dark colors become shades of the stroke color and light colors become tints of it.	Черното остава черно, а бялото остава бяло. Другите цветове стават тъмни нюанси на цвета на щриха, когато са тъмни, и негови оттенъци, когато са светли.
 	The key color becomes the stroke color. The other colors shift their hue by the same amount and keep their saturation and brightness.	Основният цвят става цвят на щриха. Другите цветове се завъртат по цветовото колело толкова, колкото и основният цвят, и запазват насищането и яркостта си.
+	Roundness	Закръгленост
 	Roundness:	Закръгленост:
 	Fixed	Фиксирано
 	Pressure	Натиск
@@ -2450,6 +2485,8 @@ font-technology	Variable	Променливи
 	Other Library…	Друга библиотека…
 	Some scripts were not listed	Някои скриптове не са изброени
 	The Scripts folder cannot be read	Папката Scripts не може да бъде прочетена
+	Loading scripts…	Зареждане на скриптовете…
+	The Scripts folder is still being read	Папката Scripts все още се чете
 	Other Script…	Друг скрипт…
 	Out of Gamut Warning	Предупреждение за излизане извън цветовата гама
 	Out of Web Color Warning	Предупреждение за цвят извън уеб палитрата
@@ -2478,6 +2515,9 @@ font-technology	Variable	Променливи
 	Overprint	Напечатване върху друго
 	Overprint and Transparency Flattener	Сплескване на надпечатването и прозрачността
 	Overprint and Transparency Flattener Options	Опции за сплескване на надпечатването и прозрачността
+	Custom…	Потребителски…
+	Custom Transparency Flattener Options	Потребителски опции за сплескване на прозрачността
+	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	EPS няма алфа прозрачност, а „Надпечати“ определя дали надпечатванията се запазват.
 	Overprint Black…	Напечатване на черното върху друго…
 	Overprint Fill	Напечатване на запълването върху друго
 	Overprint Preview	Преглед на напечатването върху друго
@@ -2582,6 +2622,7 @@ font-technology	Variable	Променливи
 	Play Current Selection	Изпълнение на текущия избор
 	Save Actions…	Запазване на действия…
 	Load Actions…	Зареждане на действия…
+	Replace Actions…	Замяна на действия…
 	Reset Actions	Нулиране на действия
 	Replace the current actions with the default set?	Да се заменят ли текущите действия с набора по подразбиране?
 	Append adds the default set after the current sets instead.	С „Добавяне“ наборът по подразбиране се добавя след текущите набори.
@@ -2597,6 +2638,10 @@ font-technology	Variable	Променливи
 	Polar Grid Tool	Инструмент „Полярна мрежа“
 	Polygon	Многоъгълник
 	Polygon Properties:	Свойства на многоъгълника:
+	Line Properties:	Свойства на линията:
+	Line Length:	Дължина на линията:
+	Line Angle:	Ъгъл на линията:
+	Constrain Pie Angle	Запазване на ъгъла на сектора
 	Polygon Tool	Инструмент „Многоъгълник“
 	Portrait	Портретна
 	Power Saving (integrated)	Пестене на енергия (интегрирано)
@@ -2635,6 +2680,18 @@ font-technology	Variable	Променливи
 	Preview:	Преглед:
 	Preview All Layers	Преглед на всички слоеве
 	Preview in Browser	Преглед в браузър
+	Optimize to File Size…	Оптимизиране до размер на файла…
+	Optimize to File Size	Оптимизиране до размер на файла
+	Desired File Size:	Желан размер на файла:
+	Start With:	Начало с:
+	Use:	Използване:
+	Current Settings	Текущи настройки
+	Auto Select GIF/JPEG	Автоматичен избор на GIF/JPEG
+	Total of All Slices	Общо за всички откъси
+	Each Slice	Всеки откъс
+	Current Slice	Текущ откъс
+	{size}, within {target}	{size}, в рамките на {target}
+	No setting tried fits in {target}; the smallest is {size}	Никоя изпробвана настройка не се побира в {target}; най-малкият размер е {size}
 	Preview in Browser needs the desktop app (the web downloads files instead)	Прегледът в браузър изисква настолното приложение (уеб версията изтегля файловете вместо това)
 	Preview Mode	Режим на преглед
 	Preview the document as it is now	Преглед на документа в текущия му вид
@@ -2744,6 +2801,7 @@ digits	Malayalam	Малаялам
 	Real World:	Реален свят:
 	Real-time Drawing and Editing	Чертане и редактиране в реално време
 	Use Monitor Profile for Canvas	Използване на профила на монитора за платното
+	Refresh Monitor Profile	Обновяване на профила на монитора
 	The canvas is drawn in sRGB.	Платното се изобразява в sRGB.
 	Canvas display profile:	Профил на дисплея за платното:
 	The system matches the window to the display's colors.	Системата съгласува цветовете на прозореца с дисплея.
@@ -2935,6 +2993,8 @@ digits	Malayalam	Малаялам
 	Reselect	Избиране отново
 	Reset	Нулиране
 	Reset Bounding Box	Нулиране на ограничителната рамка
+	Rotate Bounding Box	Завъртане на ограничителната рамка
+	Rotate Bounding Box…	Завъртане на ограничителната рамка…
 	Reset Envelope Mesh	Нулиране на мрежата на обвивката
 	Reset Envelope Shape	Нулиране на формата на обвивката
 	Reset Essentials	Нулиране на основните
@@ -2975,6 +3035,7 @@ digits	Malayalam	Малаялам
 	Reshape Segment	Преоформяне на сегмент
 	Reshape Tool	Инструмент „Преоформяне“
 	Reshape Type Area	Преоформяне на текстова област
+	Resolution	Разделителна способност
 	Resolution:	Разделителна способност:
 	Responsive	Адаптивен
 	Restore	Възстановяване
@@ -3001,6 +3062,7 @@ digits	Malayalam	Малаялам
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Колелцето на мишката с натиснат Cmd/Ctrl превърта платното настрани.
 	Dragging sideways on a numeric field's label changes the field's value.	Влаченето настрани върху етикета на числово поле променя стойността на полето.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Жест за завъртане с два пръста върху тъчпад завърта изгледа на платното.
+	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Когато премествате котвени точки, всяка крива с една преместена крайна точка запазва формата си спрямо краищата си.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Задържането на клавишната комбинация на инструмент го избира, докато я пуснете, а след това отново се избира предишният инструмент.
 	Shows the bounding box while you move the selection or draw a shape.	Показва ограничителната рамка, докато премествате селекцията или рисувате форма.
 	Create Trim Marks draws Japanese-style marks instead of Roman ones.	„Създаване на режещи знаци“ рисува знаци в японски стил вместо в римски.
@@ -3011,12 +3073,78 @@ digits	Malayalam	Малаялам
 	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	Когато е избран един екземпляр на символ, панелът „Трансформиране“ използва регистрационната точка на символа като опорна точка.
 	Darkens the canvas outside the artboards while the Artboard tool is active.	Затъмнява платното извън работните области, докато инструментът „Работна област“ е активен.
 	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	Когато „Затъмняване на областта извън работната област“ е включено, областта извън работните области остава тъмна, докато влачите с инструмента „Работна област“.
+	How near, in pixels, the pointer must be to an object, anchor or handle for a click to select it.	Колко близо в пиксели трябва да е показалецът до обект, опорна точка или дръжка, за да го избере щракване.
+	Whether the Selection tool's box selects objects it touches or only those fully inside; Drag Direction selects those inside on a drag to the right. E reverses it mid-drag.	Дали рамката на инструмента „Селекция“ избира докоснатите обекти или само изцяло обхванатите; „Посока на плъзгане“ избира обхванатите при плъзгане надясно. E обръща правилото по време на плъзгане.
+	A click selects a filled object only on its path, not inside its fill.	Щракване избира запълнен обект само по контура му, а не в запълването.
+	How near, in pixels, a point must come to an anchor or ruler guide for Snap to Point to snap it; with Smart Guides on, Smart Guides' Snapping Tolerance applies instead.	Колко близо в пиксели трябва да стигне точка до опорна точка или водач от линийката, за да я прилепи „Прилепване към точка“; при включени интелигентни водачи важи техният толеранс на прилепване.
+	With the Selection tool, Cmd/Ctrl-click selects the object under the selected one at the pointer; each further click goes one object deeper.	С инструмента „Селекция“ Cmd/Ctrl-щракване избира обекта под избрания при показалеца; всяко следващо щракване слиза с един обект по-надолу.
+	Zoom In and Zoom Out bring the center of the selection to the middle of the view.	„Увеличаване“ и „Намаляване“ поставят центъра на селекцията в средата на изгледа.
+	Locked and hidden artwork inside an artboard moves, scales and is copied with the artboard, as the other artwork does.	Заключените и скритите обекти в работна област се местят, мащабират и копират с нея като останалите обекти.
+	The size of anchor points and direction handle ends on the canvas; larger anchors can also be picked from farther away.	Размерът на опорните точки и краищата на дръжките за посока върху платното; по-големите опорни точки се хващат и от по-далеч.
+	Draws the ends of direction handles as solid dots, hollow dots or larger solid dots.	Рисува краищата на дръжките за посока като плътни точки, кухи точки или по-големи плътни точки.
+	With the Direct Selection tool, the anchor under the pointer is highlighted.	С инструмента „Директен избор“ опорната точка под показалеца се осветява.
+	Shows direction handles when more than one anchor is selected; off, they show only while a single anchor is selected.	Показва дръжките за посока, когато са избрани повече от една опорна точка; ако е изключено, те се виждат само при една избрана опорна точка.
+	Corner widgets hide on corners whose angle is greater than this many degrees.	Приспособленията за ъгли се скриват при ъгли, по-големи от толкова градуса.
+	The Pen tool previews the next segment from the last anchor to the pointer before you click.	Инструментът „Перо“ показва следващия сегмент от последната опорна точка до показалеца, преди да щракнете.
+	The Curvature tool previews the curve to the pointer before you place the next point.	Инструментът „Кривина“ показва кривата до показалеца, преди да поставите следващата точка.
 	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	Единицата за новите документи от вградените размери, освен тези в пиксели, и за отворените файлове без записана единица; ако я изберете тук и натиснете ОК, тя става и единица на активния документ.
 	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Дебелините на щрихите, тиретата и междините се показват в тази единица и въведените за тях числа се четат в нея.
 	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Размерите на текста, междуредието и отстъпът на базовата линия се показват в тази единица и въведените за тях числа се четат в нея.
 	The unit for East Asian type measurements, which no field uses yet.	Единицата за мерките на източноазиатски текст, която засега не се използва от нито едно поле.
 	When on, a number typed without a unit into a field in picas is read in points.	Когато е включено, число, въведено без единица в поле в пики, се чете в точки.
 	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	При XML ID имената на обектите се показват като XML ID в Слоеве, Променливи и Опции за слоя.
+	The step for type size and leading: Cmd/Ctrl+Shift+. and Cmd/Ctrl+Shift+, change the size by one step, or five with Alt too; in horizontal type, Alt with the Up or Down Arrow changes the leading by one step, or five with Cmd/Ctrl.	Стъпката за размер на текста и междуредие: Cmd/Ctrl+Shift+. и Cmd/Ctrl+Shift+, променят размера с една стъпка, а с Alt – с пет; в хоризонтален текст Alt със стрелка нагоре или надолу променя междуредието с една стъпка, а с Cmd/Ctrl – с пет.
+	The step for tracking and kerning, in thousandths of an em: in horizontal type, Alt with the Left or Right Arrow changes the kerning at the caret or the tracking of the selected text by one step, or five with Cmd/Ctrl.	Стъпката за разредка и кернинг в хилядни от em: в хоризонтален текст Alt със стрелка наляво или надясно променя кернинга при курсора или разредката на избрания текст с една стъпка, а с Cmd/Ctrl – с пет.
+	The step for baseline shift: in horizontal type, Alt and Shift with the Up or Down Arrow move the baseline by one step, or five with Cmd/Ctrl.	Стъпката за изместване на базовата линия: в хоризонтален текст Alt и Shift със стрелка нагоре или надолу преместват базовата линия с една стъпка, а с Cmd/Ctrl – с пет.
+	Shows the options for Japanese and other East Asian type in the Character, Paragraph, OpenType and Glyphs panels, and Type › Composite Fonts.	Показва опциите за японски и друг източноазиатски текст в панелите Знак, Абзац, OpenType и Глифи, както и командата Съставни шрифтове.
+	Shows the options for Arabic, Hebrew and Indic type in the Character and Paragraph panels, such as paragraph direction, kashidas and digits.	Показва опциите за арабски, иврит и индийски текст в панелите Знак и Абзац, например посока на абзаца, кашиди и цифри.
+	The selection tools select type only on its baseline, its area's frame or its path, not anywhere inside its box.	Инструментите за селекция избират текст само по базовата му линия, рамката на текста в област или пътя му, а не навсякъде в кутията му.
+	Font menus list each font by its English name; off, a font that also has a name in its own language shows that name.	Менютата за шрифтове показват всеки шрифт с английското му име; ако е изключено, шрифт, който има име и на собствения си език, показва това име.
+	New area type starts with Auto Size on, so a rectangular frame of horizontal type grows or shrinks in height to fit its text.	Новият текст в област започва с включен автоматичен размер, така че правоъгълна рамка с хоризонтален текст става по-висока или по-ниска според текста си.
+	Font lists and the Type › Font menu show a sample of each font beside its name.	Списъците с шрифтове и менюто Шрифт показват мостра на всеки шрифт до името му.
+	Font samples are drawn in dark type on white, whatever the interface's brightness; it applies only while in-menu font previews are on.	Мострите на шрифтовете се рисуват с тъмен текст на бяло независимо от яркостта на интерфейса; това важи само докато визуализациите на шрифтове в менюто са включени.
+	How tall each row is in the font lists of font fields, such as the Character panel's, and so how large each sample is.	Колко висок е всеки ред в списъците на полетата за шрифт, например в панела Знак, и съответно колко голяма е всяка мостра.
+	How many of the fonts used last, from 1 to 15, Type › Recent Fonts and the font lists show, newest first.	Колко от последно използваните шрифтове, от 1 до 15, показват Скорошни шрифтове и списъците с шрифтове, най-новите първи.
+	When you change the font or font style of text, characters the new font has no glyph for keep the font they had.	Когато смените шрифта или стила на шрифта на текст, знаците, за които новият шрифт няма глиф, запазват предишния си шрифт.
+	A pink highlight on the canvas marks glyphs that OpenType features replaced, such as ligatures; it does not print or export.	Розово открояване върху платното отбелязва глифите, заменени от функции на OpenType, например лигатури; то не се отпечатва и не се експортира.
+	With the Type tool, selecting one character shows a row of its alternate glyphs beside it on the canvas to choose from.	С инструмента Текст избирането на един знак показва до него върху платното ред с алтернативните му глифи за избор.
+	A pink highlight on the canvas marks text drawn in a substitute font because its font is missing; it does not print or export.	Розово открояване върху платното отбелязва текст, изобразен със заместващ шрифт, защото шрифтът му липсва; то не се отпечатва и не се експортира.
+	New type made with a Type tool starts with placeholder text, selected, so typing replaces it.	Новият текст, създаден с инструмент за текст, започва с избран примерен текст, който въвеждането заменя.
+	Typing a list marker such as 1. or * and then a space at the start of a paragraph makes the paragraph a list.	Въвеждането на знак за списък, например 1. или *, и след това интервал в началото на абзац превръща абзаца в списък.
+	Fonts in this folder show in the font menus and can be used without being installed.	Шрифтовете в тази папка се показват в менютата за шрифтове и могат да се използват, без да са инсталирани.
+	Applying a graphic style to type removes the characters' own fill or stroke where the style has one, so the style's paint shows.	Прилагането на графичен стил към текст премахва собствените запълване или контур на знаците, където стилът има такива, така че се вижда боята на стила.
+	Align and Distribute measure point type by the ink of its glyphs instead of its em box.	Подравняване и Разпределяне измерват точковия текст по мастилото на глифите му вместо по em-кутията му.
+	Align and Distribute measure area type by the ink of its glyphs instead of its frame.	Подравняване и Разпределяне измерват текста в област по мастилото на глифите му вместо по рамката му.
+	The bounding box and the Transform panel measure point type by the ink of its glyphs instead of its em box.	Ограничаващата рамка и панелът Трансформиране измерват точковия текст по мастилото на глифите му вместо по em-кутията му.
+	Snaps drawing, moving and scaling to the grid's subdivisions, even while the grid is hidden; while it is on, Snap to Pixel does not apply.	Прилепва рисуването, преместването и мащабирането към подразделенията на мрежата, дори когато мрежата е скрита; докато е включено, „Прилепване към пиксел“ не действа.
+	The color of guides that are not selected; an artboard with a Guide Label draws its own guides in the label's color instead.	Цветът на водачите, които не са избрани; работна област с „Етикет на водачите“ рисува своите водачи в цвета на етикета.
+	Draws guides as solid lines or as dots, including the guides already in the document.	Рисува водачите като плътни линии или като точки, включително водачите, които вече са в документа.
+	With this on, guides are locked when VectorCraft starts; changing this option locks or unlocks them at once, and View › Guides › Lock Guides still changes the lock.	Когато е включено, водачите са заключени при стартиране на VectorCraft; промяната на опцията веднага ги заключва или отключва, а „Изглед › Водачи › Заключване на водачите“ продължава да променя заключването.
+	With this on, holding Cmd/Ctrl as you start dragging from a ruler makes a guide on the active artboard only, or a canvas guide with the Artboard tool.	Когато е включено, задържането на Cmd/Ctrl в началото на плъзгане от линийка създава водач само в активната работна област, а с инструмента „Работна област“ създава водач за цялото платно.
+	The color of the grid; the lines between major gridlines are drawn in a fainter shade of it.	Цветът на мрежата; линиите между основните линии на мрежата се рисуват в по-блед нюанс на този цвят.
+	Draws the grid as lines, or as dots along the major gridlines at each subdivision.	Рисува мрежата като линии или като точки по основните линии на мрежата при всяко подразделение.
+	The distance between major gridlines, in every open document and in new ones; a VectorCraft document opens with the grid it was saved with.	Разстоянието между основните линии на мрежата във всеки отворен документ и в новите; документ на VectorCraft се отваря с мрежата, с която е записан.
+	How many parts each major grid square is divided into; Snap to Grid snaps to these parts, even when the zoom hides their lines.	На колко части се дели всеки основен квадрат на мрежата; „Прилепване към мрежа“ прилепва към тези части, дори когато мащабът скрива линиите им.
+	Draws the grid behind the artwork; off, the grid is drawn over it.	Рисува мрежата зад графиката; когато е изключено, мрежата се рисува върху нея.
+	In Pixel Preview at 600% zoom or more, the active view shows a line at the edge of every document pixel over the artwork.	В „Пикселен преглед“ при увеличение 600% или повече активният изглед показва линия по ръба на всеки пиксел на документа върху графиката.
+	The color of the tile edge and the dashed swatch bounds shown while you edit a pattern.	Цветът на ръба на плочката и на пунктирните граници на образеца, които се показват, докато редактирате мостра.
+	Snaps drawing, moving and transforming to nearby art and shows guides and labels; Pixel Preview turns them off, and Snap to Grid snaps to the grid instead.	Прилепва рисуването, преместването и трансформирането към близки обекти и показва водачи и етикети; „Пикселен преглед“ ги изключва, а „Прилепване към мрежа“ прилепва към мрежата вместо тях.
+	The color of Smart Guide lines and labels.	Цветът на линиите и етикетите на интелигентните водачи.
+	Shows a line along the edge or center that art lines up with; off, art still lines up without the line, and Snap to Glyph does not apply.	Показва линия по ръба или центъра, с който обектите се подравняват; когато е изключено, те пак се подравняват без линията, а „Прилепване към глиф“ не действа.
+	With a selection tool, outlines the unselected object under the pointer in its layer color while you are not dragging.	С инструмент за селекция очертава неселектирания обект под показалеца в цвета на неговия слой, докато не влачите.
+	Shows the size or angle next to the pointer while you scale, rotate, shear or reflect art.	Показва размера или ъгъла до показалеца, докато мащабирате, завъртате, срязвате или отразявате обекти.
+	While you draw, points snap to lines at the chosen Angles through the point the segment or shape starts from.	Докато рисувате, точките прилепват към линии под избраните ъгли през точката, от която започва сегментът или фигурата.
+	The set of angles the construction guides follow while Construction Guides is on.	Наборът ъгли, които конструкционните водачи следват, докато „Конструкционни водачи“ е включено.
+	Names what a point snaps to, such as an anchor, a path or an alignment; off, points snap the same way without the names.	Назовава към какво прилепва точката, например опорна точка, път или подравняване; когато е изключено, точките прилепват по същия начин без имената.
+	Shows distances, angles and how far art has moved next to the pointer while you draw or move it.	Показва до показалеца разстояния, ъгли и колко е преместен обектът, докато рисувате или премествате.
+	Snaps moved or resized art to the same gap as between nearby objects, and marks the equal gaps.	Прилепва преместени или преоразмерени обекти към същата междина като между близките обекти и отбелязва равните междини.
+	With something selected, holding Alt/Option over another object or an artboard shows the distances between it and the selection.	При избран обект задържането на Alt/Option над друг обект или работна област показва разстоянията между него и селекцията.
+	A selection dragged back to within the Snapping Tolerance of where the drag began goes back to exactly that place; a copy does not.	Селекция, върната с влачене в рамките на толеранса на прилепване от мястото, където е започнало влаченето, се връща точно там; копие не се връща.
+	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Колко близо на екрана показалецът или влачена точка трябва да стигне до обект, за да прилепнат интелигентните водачи; разстоянието е еднакво при всеки мащаб.
+	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Прилепва края на линеен сегмент или окръжност, начертана от центъра си, така че да докосва близка крива.
+	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Прилепва края на линеен сегмент така, че да среща близък прав сегмент под прав ъгъл.
+	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Показва номера на всяка отрязана част в каре в горния ѝ ляв ъгъл върху платното; когато е изключено, контурите на отрязаните части остават видими.
+	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Цветът на контурите на потребителските и обектните отрязани части и на каретата с номерата им; автоматичните отрязани части използват по-блед нюанс на този цвят.
 	Reset all preferences to their defaults?	Да се нулират ли всички настройки до стойностите по подразбиране?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Стойностите по подразбиране се прилагат, когато щракнете върху ОК в Настройки. Отказ там запазва текущите ви настройки.
 	Restore Recovered Documents	Възстановяване на възстановените документи
@@ -3071,6 +3199,7 @@ digits	Malayalam	Малаялам
 	Rounded Rectangle Tool	Инструмент „Закръглен правоъгълник“
 	Rounded Rectangle…	Закръглен правоъгълник…
 	Row Size:	Размер на реда:
+	Rows	Ленти
 	Rows:	Ленти:
 	Rule:	Линия:
 	Rulers	Линийки
@@ -3233,6 +3362,12 @@ digits	Malayalam	Малаялам
 	Search commands, tools, panels and effects…	Търсене на команди, инструменти, панели и ефекти…
 	No commands match	Няма съвпадащи команди
 	{pos} of {total}: {name}	{pos} от {total}: {name}
+	No menu item	Няма елемент в менюто
+	Toolbar	Лента с инструменти
+	{toolbar}, in the {tool} group	{toolbar}, в групата на {tool}
+	In the menu bar: {path}	В лентата с менюта: {path}
+	In the {group} group: press and hold to open it	В групата {group}: натиснете и задръжте, за да я отворите
+	{home}, not shown now	{home}, не се показва сега
 @plural	{n} result|{n} results	{n} резултат|{n} резултата
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} от {n} резултат. Продължете да пишете, за да ги стесните.|{shown} от {n} резултата. Продължете да пишете, за да ги стесните.
 	Recent Commands	Последни команди
@@ -3313,6 +3448,7 @@ digits	Malayalam	Малаялам
 	Set Slice Rectangle	Задаване на правоъгълник за резен
 	Set Tab Stops	Задаване на табулатори
 	Set Text	Задаване на текст
+	Set the current fill or stroke to the selected color	Задаване на избрания цвят като текущо запълване или щрих
 	Set the selected color to the current color	Задаване на текущия цвят като избран
 	Set Zoom	Задаване на мащаб
 	Settings…	Настройки…
@@ -3434,7 +3570,7 @@ digits	Malayalam	Малаялам
 	Show Vivid/Muted	Показване на ярки/заглушени
 	Show Warm/Cool	Показване на топли/студени
 	Show {kind} Brushes	Показване на четки от вида {kind}
-	Show/hide plate (Alt-click: only this plate)	Показване/скриване на плака (Alt-клик: само тази плака)
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	Показване/скриване на плака (Alt-клик: само тази плака; Alt-клик отново: всички плаки)
 	Show:	Показване:
 	Shown with the optimised preview.	Показано с оптимизирания преглед.
 	Side 1:	Страна 1:
@@ -3572,6 +3708,11 @@ digits	Malayalam	Малаялам
 	Opacity Masks	Маски за непрозрачност
 	Objects with Effects	Обекти с ефекти
 	Path Length	Дължина на пътя
+	Grid Size	Размер на мрежата
+	Grid Colors	Цветове на мрежата
+	Flattener Preset	Предварителна настройка за сплескване
+	X	X
+	Y	Y
 	Spot Colors	Спот цветове
 	Spot Colors…	Спот цветове…
 	Spread:	Разпространение:
@@ -3797,6 +3938,13 @@ digits	Malayalam	Малаялам
 	Thumbnail View	Изглед с миниатюри
 	Thumbnails:	Миниатюри:
 	Tile	Мозайка
+	Tile All Vertically	Всички в мозайка вертикално
+	Tile All Horizontally	Всички в мозайка хоризонтално
+	2-Up Layout	Подредба по 2
+	3-Up Layout	Подредба по 3
+	4-Up Layout	Подредба по 4
+	6-Up Layout	Подредба по 6
+	Arrange Documents	Подреждане на документите
 	Tile Edge Color	Цвят на ръба на плочката
 	Tile Edge Color…	Цвят на ръба на плочката…
 	Tile Full Pages	Покриване на цели страници
@@ -3990,6 +4138,8 @@ digits	Malayalam	Малаялам
 	V Spacing:	В. разстояние:
 	V:	В:
 	Variable Width Profile	Профил с променлива ширина
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Четката на щриха запазва собствения си размер, затова профилът на ширината не го променя. Премахнете четката, за да използвате профил.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Четката на щриха запазва собствения си размер, затова профилът на ширината не го променя. Премахнете четката, за да използвате профил.
 	Variables	Променливи
 	New Variable	Нова променлива
 	Delete Variable	Изтриване на променлива
@@ -4054,7 +4204,7 @@ digits	Malayalam	Малаялам
 	Vertical:	Вертикално:
 	Very High	Много високо
 	View	Изглед
-	View Artboard Only	Преглед само на работна област
+	View Artboard Contents Only	Преглед само на съдържанието на работната област
 	View Opacity Mask	Преглед на маска за непрозрачност
 	View PDF after saving	Преглед на PDF след запазване
 	View {n}	Изглед {n}
@@ -4263,6 +4413,7 @@ imageTrace	Outline	Контур
 	Bevel	Фаска
 	Offset	Отстъп
 	Axis	Ос
+	Axis Angle	Ъгъл на оста
 axis	Horizontal	Хоризонтално
 axis	Vertical	Вертикално
 axis	Both	И двете
@@ -4320,6 +4471,13 @@ axis	Both	И двете
 	Show External Script Warning	Показвай предупреждение за външни скриптове
 	A Script Is Running	Изпълнява се скрипт
 	Script Alert	Известие от скрипт
+	Script File Access	Достъп на скрипт до файлове
+	The script asks to read a file you choose.	Скриптът иска да прочете файл, който изберете.
+	The script asks to read and write a file you choose.	Скриптът иска да чете и записва файл, който изберете.
+	The script asks to read and write a folder you choose, with everything in it.	Скриптът иска да чете и записва папка, която изберете, с цялото ѝ съдържание.
+	Allow Once	Разреши веднъж
+	Always Allow This Script	Винаги разрешавай този скрипт
+	Deny	Откажи
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Скриптът може да променя отворените документи и да записва файлове чрез командите, които изпълнява. Изпълнявайте само скриптове, на които имате доверие.
 	Do not show this warning again	Не показвай повече това предупреждение
 	Stop the script and undo what it did? Then quit again.	Да се спре ли скриптът и да се отменят ли промените му? След това излезте отново.
@@ -4376,6 +4534,11 @@ axis	Both	И двете
 @msg	PDF writer error: {0}	Грешка на PDF записа: {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Пакетиран е {n} файл в {folder} ({note})|Пакетирани са {n} файла в {folder} ({note})
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Прегледът в браузър изисква настолното приложение (уеб версията изтегля файловете вместо това)
+@msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	задайте `desiredK`, желания размер на файла в K (1024 байта): число над 0 и най-много 1048576
+@msg	`startWith` is `current` or `auto`	`startWith` е `current` или `auto`
+@msg	`use` is `allSlices`, `eachSlice` or `currentSlice`	`use` е `allSlices`, `eachSlice` или `currentSlice`
+@msg	`slice` is a slice number from `slice.list`, with `use: currentSlice`	`slice` е номер на откъс от `slice.list`, заедно с `use: currentSlice`
+@msg	Optimize to File Size: there is no image to measure	Оптимизиране до размер на файла: няма изображение за измерване
 @msg	Release Guides: no guides	Освобождаване на водачи: няма водачи
 @msg	Release: no layer to put the rectangle in	Освобождаване: няма слой, в който да се постави правоъгълникът
 @msg	Replace Spine: select a blend and a path	Замяна на оста: изберете плавно преливане и път
@@ -4523,6 +4686,8 @@ axis	Both	И двете
 @msg	choose a folder to export to	изберете папка за експортиране
 @msg	choose a location for the package	изберете местоположение за пакета
 @msg	clipboard is empty	клипбордът е празен
+@msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: поне един цвят трябва да остане в цветовата таблица
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted: `{k}` назовава цвят, който друг ключ също назовава
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` не е цвят като "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: най-много {MAX_TABLE} цвята
 @msg	command `{0}` is not available right now: {1}	команда `{0}` не е налична в момента: {1}
@@ -4677,6 +4842,9 @@ axis	Both	И двете
 @msg	no such user library	няма такава потребителска библиотека
 @msg	no such view	няма такъв изглед
 @msg	no such width point	няма такава точка за ширина
+@msg	`single` must be `incoming` or `outgoing`	`single` трябва да е `incoming` или `outgoing`
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` и `outIndex` трябва да са двете половини на една прекъсната точка за ширина
+@msg	a discontinuous width point keeps its place	прекъснатата точка за ширина запазва мястото си
 @msg	no swatch `{name}`	няма образец `{name}`
 @msg	no swatch library `{l}` (see swatch.library.list)	няма библиотека с образци `{l}` (вижте swatch.library.list)
 @msg	no symbol instances selected	няма избрани екземпляри на символ
@@ -4949,6 +5117,9 @@ axis	Both	И двете
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Изхвърлен е {n} възстановен документ|Изхвърлени са {n} възстановени документа
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Възстановен е {n} документ: запазете го, за да го съхраните|Възстановени са {n} документа: запазете ги, за да ги съхраните
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Отворено с {n} бележка: {first}|Отворено с {n} бележки: {first}
+@msgplural	Copied with {n} note: {first}|Copied with {n} notes: {first}	Копирано с {n} бележка: {first}|Копирано с {n} бележки: {first}
+@msgplural	Cut with {n} note: {first}|Cut with {n} notes: {first}	Изрязано с {n} бележка: {first}|Изрязано с {n} бележки: {first}
+@msgplural	Traced with {n} note: {first}|Traced with {n} notes: {first}	Трасирано с {n} бележка: {first}|Трасирано с {n} бележки: {first}
 @msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Отворено с {n} бележка: {first}|{notice}. Отворено с {n} бележки: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	{path} е запазен с {n} бележка: {first}|{path} е запазен с {n} бележки: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Вградено е {n} изображение; {missing} липсват: първо ги свържете наново|Вградени са {n} изображения; {missing} липсват: първо ги свържете наново
@@ -5323,6 +5494,7 @@ lighting	Light	Светлина
 @msg	missing panel layout	липсващо оформление на панели
 @msg	unsupported native docking operation	неподдържана вградена операция за скачване
 	Linux Display Server	Дисплейен сървър за Linux
+	Low-Latency Drawing	Рисуване с ниско забавяне
 	X11 (XWayland) When a Pen Is Attached	X11 (XWayland) при свързана писалка
 	If a drawing tablet's pen doesn't draw, choose an X11 (XWayland) option.	Ако писалката на графичния таблет не рисува, изберете опция X11 (XWayland).
 	X11 (XWayland)	X11 (XWayland)
@@ -5375,6 +5547,7 @@ lighting	Light	Светлина
 	Cove	Извивка
 	Depth	Дълбочина
 	Front	Отпред
+	Side	Страна
 	Isometric Bottom	Изометрично отдолу
 	Isometric Left	Изометрично отляво
 	Isometric Right	Изометрично отдясно
@@ -5410,6 +5583,19 @@ lighting	Light	Светлина
 	Transform Objects	Трансформиране на обекти
 @msg	unknown parameter `{key}`; did you mean `{near}`?	неизвестен параметър `{key}`; имахте ли предвид `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	неизвестен параметър `{key}`; командата не приема параметри
+@msg	unknown parameter `{key}`; `{object}` takes: {keys}	неизвестен параметър `{key}`; `{object}` приема: {keys}
+@msg	unknown parameter `{key}`; {why_not}	неизвестен параметър `{key}`; {why_not}
+@msg	no format takes it (see document.formats)	никой формат не го приема (вижте document.formats)
+@msg	no save format takes it (see file.formatOptions)	никой формат за записване не го приема (вижте file.formatOptions)
+@msg	PDF doesn't take it (see document.formats)	PDF не го приема (вижте document.formats)
+@msg	EPS doesn't take it (see document.formats)	EPS не го приема (вижте document.formats)
+@msg	DXF doesn't take it (see document.formats)	DXF не го приема (вижте document.formats)
+@msg	{name} must be {range} (got {v})	{name} трябва да бъде {range} (получено {v})
+@msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	Първият опит на графичния процесор да покаже прозореца не успя, затова VectorCraft стартира отново на {summary} (Настройки › Производителност › Графичен процесор › Автоматично използва този, който управлява вашия дисплей)
+@msg	Sent “{title}” to {to}	“{title}” е изпратено към {to}
+@msg	Sent “{title}” to {to}. The spooler replied: {note}	“{title}” е изпратено към {to}. Отговор на опашката за печат: {note}
+@msg	the default printer	принтера по подразбиране
+@msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	растерни ефекти върху обект {object}: поискани {requested} ppi, постигнати {achieved} ppi заради ограничението от 64 милиона пиксела
 @msg	unknown parameter `{key}`; the command takes: {keys}	неизвестен параметър `{key}`; командата приема: {keys}
 	1 Layer	1 слой
 	1 bit	1 бит
@@ -5809,6 +5995,7 @@ lighting	Light	Светлина
 	of	от
 	sRGB IEC61966-2.1	sRGB IEC61966-2.1
 	x Height	Височина на x
+	Em Box Height	Височина на квадратната касетка
 	▾ Default Actions	▾ Действия по подразбиране
 	⚠ {chord} was already used by {names} — it has been removed there.	Внимание: Комбинацията {chord} вече се използва от {names} — премахната е там.
 @id	file.close	Затваряне
@@ -5989,6 +6176,8 @@ theme	Appearance	Външен вид
 	Reset Tracking and Kerning	Нулиране на разредката и кернинга
 	Reset Horizontal Scale	Нулиране на хоризонталния мащаб
 	Highlight Font Name	Маркиране на името на шрифта
+	Highlight Font Size	Маркиране на размера на шрифта
+	Other…	Друг…
 	Highlight Kerning	Маркиране на кернинга
 	Highlight Tracking	Маркиране на разредката
 @msg	span must be "object" or "selection", got {v}	span трябва да е "object" или "selection", а не {v}
@@ -6614,6 +6803,12 @@ anchor	Points:	Точки:
 @msg	`mode` must be "free", "keepAngles" or "symmetric"	`mode` трябва да е "free", "keepAngles" или "symmetric"
 @msg	`{key}` must be [x, y]	`{key}` трябва да е [x, y]
 
+# Unit Converter add-on (Object › Plug-ins › Unit Converter): its panel.
+	Unit Converter	Преобразувател на мерни единици
+	Unit Converter Panel	Панел „Преобразувател на мерни единици“
+	Copy with Units	Копиране с мерните единици
+	From Selection	От селекцията
+
 # Color Effects add-on: Select by Color Kind.
 	Select by Color Kind	Избиране по вид цвят
 	Objects with Spot Colors	Обекти с плакатни цветове
@@ -6816,6 +7011,14 @@ breakText	Glyphs	Глифи
 	Remove Gaps	Премахване на разстоянията
 @msg	that makes too many pieces (at most 100000): make the dashes longer	така се получават твърде много части (най-много 100000): удължете тиретата
 @msg	select paths, or segments, to divide	изберете пътища или сегменти за разделяне
+# Path Precision Tools add-on: Smooth Bridge.
+	Smooth Bridge…	Плавен мост…
+	Smooth Bridge	Плавен мост
+	Keep Originals	Запазване на оригиналите
+@msg	select two circles to bridge	изберете два кръга за свързване
+@msg	one circle is inside the other	единият кръг е вътре в другия
+@msg	the circles are too far apart for this radius: raise the radius	кръговете са твърде далеч един от друг за този радиус: увеличете радиуса
+@msg	the circles are too far apart for this radius	кръговете са твърде далеч един от друг за този радиус
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	Общи допирателни…
 	Common Tangents	Общи допирателни
@@ -6832,6 +7035,7 @@ breakText	Glyphs	Глифи
 @msg	One path lies inside the other, so they have no common tangents	Единият път е вътре в другия, затова нямат общи допирателни
 @msg	The paths overlap, so they have no internal tangents	Пътищата се припокриват, затова нямат вътрешни допирателни
 @msg	One path lies inside the other, so they have no internal tangents	Единият път е вътре в другия, затова нямат вътрешни допирателни
+@msg	The point lies inside the path, so it has no tangents	Точката е вътре в пътя, затова няма допирателни
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Разширяване на тиретата в пътища
 @msg	select paths with dashed strokes to expand	изберете пътища с прекъснат щрих за разширяване
@@ -7163,4 +7367,19 @@ breakText	Glyphs	Глифи
 @msg	A panel is not joined to the rest by a crease.	Панел не е свързан с останалите с линия за биговане.
 @msg	A fold line is on a non-printing layer.	Линия на сгъване е на слой, който не се печата.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Панели: {panels}, панти: {hinges}, грешки: {errors}, предупреждения: {warnings}
+	Fold Preview	Преглед на сгъването
+	Fold	Сгъване
+	Show Fold Lines	Покажи линиите на сгъване
+	Three-Quarter	Три четвърти
+	Open a document to preview its folded shape.	Отворете документ, за да прегледате сгънатата му форма.
+@msg	Check the fold lines first.	Първо проверете линиите на сгъване.
+@msg	Panels: {panels}, hinges: {hinges}	Панели: {panels}, панти: {hinges}
+@msg	Other blanks not shown: {count}	Други разкрои не са показани: {count}
+@msg	A joint does not close by {gap} pt.	Една връзка не се затваря с {gap} pt.
+@msg	Two panels pass through each other.	Два панела минават един през друг.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer трябва да е "singleLine", "everyLine", "standardSingleLine" или "standardEveryLine"
+	Pressure Sensitive	Чувствителни на натиск
+	Flex Ribbon	Гъвкава лента
+	Pulse Stroke	Пулсиращ щрих
+	Round Flow	Кръгъл поток
+	Chisel Flow	Скосен поток
