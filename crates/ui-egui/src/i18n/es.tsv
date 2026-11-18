@@ -819,6 +819,7 @@ font-technology	Variable	Variables
 	Delete Brush	Eliminar pincel
 	Delete Color	Eliminar color
 	Restore Generated Table	Restaurar tabla generada
+	Unshift All Colors	Deshacer cambio de todos los colores
 	Delete Character Style	Eliminar estilo de carácter
 	Delete Empty Artboards	Eliminar mesas de trabajo vacías
 	Delete Freeform Point	Eliminar punto libre
@@ -3245,6 +3246,8 @@ digits	Malayalam	Malayálam
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Cuánto debe acercarse en pantalla el puntero o un punto arrastrado a la ilustración para que las guías inteligentes se ajusten a ella; la distancia es la misma con cualquier zoom.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Ajusta el extremo de un segmento de línea, o un círculo dibujado desde su centro, para que toque una curva cercana.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Ajusta el extremo de un segmento de línea para que encuentre un segmento recto cercano en ángulo recto.
+	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Muestra en el lienzo el número de cada sector en un recuadro en su esquina superior izquierda; si está desactivado, los contornos de los sectores siguen visibles.
+	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	El color de los contornos de los sectores de usuario y de objeto y de los recuadros con su número; los sectores automáticos usan un tono más apagado de ese color.
 	Reset all preferences to their defaults?	¿Restablecer todas las preferencias a sus valores predeterminados?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Los valores predeterminados se aplican al hacer clic en Aceptar en Preferencias. Cancelar ahí conserva sus preferencias actuales.
 	Restore Recovered Documents	Restaurar documentos recuperados
@@ -3477,6 +3480,9 @@ digits	Malayalam	Malayálam
 	No menu item	Sin elemento de menú
 	Toolbar	Barra de herramientas
 	{toolbar}, in the {tool} group	{toolbar}, en el grupo {tool}
+	In the menu bar: {path}	En la barra de menús: {path}
+	In the {group} group: press and hold to open it	En el grupo {group}: mantén pulsado para abrirlo
+	{home}, not shown now	{home}, no se muestra ahora
 @plural	{n} result|{n} results	{n} resultado|{n} resultados
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} de {n} resultado. Sigue escribiendo para acotarlos.|{shown} de {n} resultados. Sigue escribiendo para acotarlos.
 	Recent Commands	Comandos recientes
@@ -5093,6 +5099,7 @@ liquify-list-end	{0}, {1}	{0}, {1}
 @msg	choose a location for the package	elige una ubicación para el paquete
 @msg	clipboard is empty	el portapapeles está vacío
 @msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: al menos un color debe quedar en la tabla de colores
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted: `{k}` indica un color que también indica otra clave
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` no es un color como "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: como máximo {MAX_TABLE} colores
 @msg	command `{0}` is not available right now: {1}	el comando `{0}` no está disponible ahora: {1}
@@ -7780,6 +7787,7 @@ breakText	Glyphs	Glifos
 @msg	One path lies inside the other, so they have no common tangents	Un trazado está dentro del otro, por lo que no tienen tangentes comunes
 @msg	The paths overlap, so they have no internal tangents	Los trazados se superponen, por lo que no tienen tangentes internas
 @msg	One path lies inside the other, so they have no internal tangents	Un trazado está dentro del otro, por lo que no tienen tangentes internas
+@msg	The point lies inside the path, so it has no tangents	El punto está dentro del trazado, por lo que no tiene tangentes
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Expandir guiones en trazados
 @msg	select paths with dashed strokes to expand	seleccione trazados con trazo discontinuo para expandir
@@ -8286,4 +8294,9 @@ breakText	Glyphs	Glifos
 @msg	A joint does not close by {gap} pt.	Una unión no cierra por {gap} pt.
 @msg	Two panels pass through each other.	Dos paneles se atraviesan entre sí.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer debe ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"
+	Pressure Sensitive	Sensible a la presión
+	Flex Ribbon	Cinta flexible
+	Pulse Stroke	Trazo pulsante
+	Round Flow	Flujo redondo
+	Chisel Flow	Flujo biselado
 @msg	text.{key} `{v}`: use "{_1}" or "{_2}"	text.{key} `{v}`: use "{_1}" o "{_2}"

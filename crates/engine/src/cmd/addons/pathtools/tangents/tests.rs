@@ -248,6 +248,84 @@ fn nested_and_overlapping_paths_change_nothing_and_say_why() {
     assert_eq!((r["external"].as_u64(), r["internal"].as_u64()), (Some(1), Some(0)), "{r}");
 }
 
+fn point(s: &mut Session, x: f64, y: f64) -> NodeId {
+    id_of(&s.execute("path.create", &json!({"anchors": [{"x": x, "y": y}]})).unwrap())
+}
+
+#[test]
+fn a_point_and_an_ellipse_get_the_two_lines_from_the_point_and_the_centerline() {
+    let mut s = session();
+    // The point is drawn after the oval, so it is the upper object; the lines still start at it.
+    let oval = id_of(&s.execute("shape.ellipse", &json!({"x": 260, "y": 170, "width": 80, "height": 60})).unwrap());
+    let dot = point(&mut s, 100.0, 200.0);
+    select(&mut s, &[oval, dot]);
+    let before = steps(&s);
+    let r = s.execute(C, &json!({"centerline": true})).unwrap();
+    assert_eq!((r["external"].as_u64(), r["internal"].as_u64()), (Some(2), Some(0)), "{r}");
+    assert_eq!(steps(&s), before + 1);
+    let found = lines(&s, &r);
+    assert_eq!(found.len(), 3, "two tangents and the centerline");
+    let (p, c) = (Point::new(100.0, 200.0), Point::new(300.0, 200.0));
+    // From (-200, 0) to an ellipse with semi-axes 40 and 30 about the origin: the touching points
+    // are x = -a²/200 = -8, y = ±b √(1 - x²/a²).
+    let y = 30.0 * (1.0f64 - (8.0f64 / 40.0).powi(2)).sqrt();
+    for sy in [1.0, -1.0] {
+        let touch = c + Vec2::new(-8.0, sy * y);
+        assert!(found[..2].iter().any(|(a, b)| near(*a, p) && near(*b, touch)), "{touch:?} in {found:?}");
+    }
+    assert_eq!(r["centerline"], r["ids"][2]);
+    assert!(near(found[2].0, p) && near(found[2].1, c), "{:?}", found[2]);
+    // Every `tangents` value gives the same two lines.
+    for (kind, external, internal) in [("external", 2, 0), ("internal", 0, 2)] {
+        let r = s.execute(C, &json!({"ids": [oval.0, dot.0], "tangents": kind})).unwrap();
+        assert_eq!((r["external"].as_u64(), r["internal"].as_u64()), (Some(external), Some(internal)), "{kind}: {r}");
+        assert_eq!(lines(&s, &r).len(), 2, "{kind}");
+    }
+}
+
+#[test]
+fn a_point_below_the_path_still_starts_the_lines() {
+    let mut s = session();
+    // The point is drawn first, so it is the lower object and needs no swap.
+    let dot = point(&mut s, 100.0, 200.0);
+    let round = circle(&mut s, 300.0, 200.0, 50.0);
+    let r = s.execute(C, &json!({"ids": [round.0, dot.0], "centerline": true})).unwrap();
+    assert_eq!((r["external"].as_u64(), r["internal"].as_u64()), (Some(2), Some(0)), "{r}");
+    let found = lines(&s, &r);
+    assert_eq!(found.len(), 3, "two tangents and the centerline");
+    let p = Point::new(100.0, 200.0);
+    assert!(found.iter().all(|(a, _)| near(*a, p)), "every line starts at the point: {found:?}");
+    // From 200 away to a circle of radius 50, each tangent is √(200² - 50²) long.
+    let length = (200.0f64 * 200.0 - 50.0 * 50.0).sqrt();
+    assert!(found[..2].iter().all(|(a, b)| (a.distance(*b) - length).abs() < 1e-6), "{found:?}");
+    assert!(near(found[2].1, Point::new(300.0, 200.0)), "{:?}", found[2]);
+}
+
+#[test]
+fn a_point_on_or_inside_a_path_and_two_points() {
+    let mut s = session();
+    let round = circle(&mut s, 200.0, 200.0, 50.0);
+    // On the circle: one line, centered on the point and as long as the circle is wide.
+    let on = point(&mut s, 250.0, 200.0);
+    let r = s.execute(C, &json!({"ids": [round.0, on.0]})).unwrap();
+    assert_eq!(r["external"].as_u64(), Some(1), "{r}");
+    let (p, q) = lines(&s, &r)[0];
+    assert!((p.x - 250.0).abs() < 1e-5 && (q.x - 250.0).abs() < 1e-5 && (p.distance(q) - 100.0).abs() < 1e-5, "{p:?} {q:?}");
+    // Inside: nothing changes, and the warning says why.
+    let inside = point(&mut s, 210.0, 190.0);
+    let before = (steps(&s), s.doc().unwrap().doc.node_count());
+    let r = s.execute(C, &json!({"ids": [round.0, inside.0], "centerline": true})).unwrap();
+    assert_eq!(r["ids"], json!([]));
+    assert!(r["warning"].as_str().unwrap().contains("point lies inside the path"), "{r}");
+    assert_eq!((steps(&s), s.doc().unwrap().doc.node_count()), before, "nothing changes");
+    // Two points, or a point and an open path, are refused.
+    let err = |s: &mut Session, p: Value| s.execute(C, &p).unwrap_err().to_string();
+    assert!(err(&mut s, json!({"ids": [on.0, inside.0]})).contains("select two closed paths"));
+    let open = id_of(&s.execute("path.create", &json!({"anchors": [{"x": 0, "y": 0}, {"x": 50, "y": 0}, {"x": 50, "y": 50}]})).unwrap());
+    assert!(err(&mut s, json!({"ids": [open.0, on.0]})).contains("open"));
+    assert_eq!((steps(&s), s.doc().unwrap().doc.node_count()), (before.0 + 1, before.1 + 1), "only the open path was added");
+}
+
 #[test]
 fn bad_selections_and_params_are_refused() {
     let mut s = session();
