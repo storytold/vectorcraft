@@ -5580,6 +5580,8 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	All colors are within the CMYK gamut	Wszystkie kolory mieszczą się w gamucie CMYK
 @msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	{n} kolor nie mieści się w gamucie CMYK|{n} kolory nie mieszczą się w gamucie CMYK|{n} kolorów nie mieści się w gamucie CMYK
 @msg	Unembedded to {_1}	Wyodrębniono do {_1}
+@msgplural	Unembedded {n} image to {folder}|Unembedded {n} images to {folder}	Wyodrębniono {n} obraz do {folder}|Wyodrębniono {n} obrazy do {folder}|Wyodrębniono {n} obrazów do {folder}
+@msg	every numbered name for {name} is taken in that folder	wszystkie numerowane nazwy dla {name} są zajęte w tym folderze
 @msg	Reset {_1}	Zresetowano {_1}
 @msg	Sent to {_1}	Wysłano do {_1}
 @msg	{_1} files	Pliki {_1}

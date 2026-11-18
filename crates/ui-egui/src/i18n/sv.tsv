@@ -5350,6 +5350,8 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	All colors are within the CMYK gamut	Alla färger ligger inom CMYK-färgomfånget
 @msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	{n} färg ligger utanför CMYK-färgomfånget|{n} färger ligger utanför CMYK-färgomfånget
 @msg	Unembedded to {_1}	Extraherad till {_1}
+@msgplural	Unembedded {n} image to {folder}|Unembedded {n} images to {folder}	Extraherade {n} bild till {folder}|Extraherade {n} bilder till {folder}
+@msg	every numbered name for {name} is taken in that folder	alla numrerade namn för {name} är upptagna i den mappen
 @msg	Reset {_1}	Återställ {_1}
 @msg	Sent to {_1}	Skickat till {_1}
 @msg	{_1} files	{_1}-filer

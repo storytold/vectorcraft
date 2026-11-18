@@ -5236,6 +5236,8 @@ liquify-list-end	{0}, {1}	{0}和{1}
 @msg	All colors are within the CMYK gamut	所有颜色皆在 CMYK 色域内
 @msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	{n} 个颜色超出 CMYK 色域
 @msg	Unembedded to {_1}	已取消嵌入到 {_1}
+@msgplural	Unembedded {n} image to {folder}|Unembedded {n} images to {folder}	已将 {n} 张图像取消嵌入到 {folder}
+@msg	every numbered name for {name} is taken in that folder	该文件夹中 {name} 的所有带编号的名称均已被占用
 @msg	no swatch library `{l}` (see swatch.library.list)	没有色板库 `{l}` (请参阅 swatch.library.list)
 @msg	no user library folder here	此处没有用户库文件夹
 @msg	Couldn't place {name}: the document it was dropped on was closed	无法置入 {name}：将它拖放到的文档已关闭

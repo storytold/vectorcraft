@@ -5486,6 +5486,8 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	All colors are within the CMYK gamut	Все цвета входят в цветовой охват CMYK
 @msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	{n} цвет выходит за пределы цветового охвата CMYK|{n} цвета выходят за пределы цветового охвата CMYK|{n} цветов выходят за пределы цветового охвата CMYK
 @msg	Unembedded to {_1}	Извлечено в {_1}
+@msgplural	Unembedded {n} image to {folder}|Unembedded {n} images to {folder}	Извлечено {n} изображение в {folder}|Извлечено {n} изображения в {folder}|Извлечено {n} изображений в {folder}
+@msg	every numbered name for {name} is taken in that folder	все нумерованные имена для {name} уже заняты в этой папке
 @msg	Reset {_1}	Сброшено: {_1}
 @msg	Sent to {_1}	Отправлено в {_1}
 @msg	{_1} files	{_1} файлов

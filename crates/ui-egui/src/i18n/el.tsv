@@ -5409,6 +5409,8 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	All colors are within the CMYK gamut	Όλα τα χρώματα βρίσκονται εντός της χρωματικής γκάμας CMYK
 @msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	{n} χρώμα βρίσκεται εκτός της χρωματικής γκάμας CMYK|{n} χρώματα βρίσκονται εκτός της χρωματικής γκάμας CMYK
 @msg	Unembedded to {_1}	Καταργήθηκε η ενσωμάτωση στο {_1}
+@msgplural	Unembedded {n} image to {folder}|Unembedded {n} images to {folder}	Καταργήθηκε η ενσωμάτωση {n} εικόνας στο {folder}|Καταργήθηκε η ενσωμάτωση {n} εικόνων στο {folder}
+@msg	every numbered name for {name} is taken in that folder	όλα τα αριθμημένα ονόματα για το {name} χρησιμοποιούνται ήδη σε αυτόν τον φάκελο
 @msg	Reset {_1}	Επαναφορά {_1}
 @msg	Sent to {_1}	Στάλθηκε στο {_1}
 @msg	{_1} files	{_1} αρχεία
