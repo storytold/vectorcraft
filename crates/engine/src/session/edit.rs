@@ -255,6 +255,21 @@ impl Session {
         (r, settled)
     }
 
+    /// [`Session::begin_interaction`] for a dialog or a panel that starts a preview → the warnings
+    /// of the preview that keeping typing in progress applied, for its status bar.
+    pub fn begin_interaction_warned(&mut self, label: &str) -> Result<Vec<String>> {
+        let (r, settled) = self.collect_settled_warnings(|s| s.begin_interaction(label));
+        r.map(|()| settled)
+    }
+
+    /// Keep typing in progress as one undo step, applying the preview Real-time Drawing off left
+    /// unapplied, and end the Type tool's typing session → the applied preview's warnings. Nothing
+    /// changes when no typing is in progress.
+    pub fn keep_typing(&mut self) -> Result<Vec<String>> {
+        let (r, settled) = self.collect_settled_warnings(|s| if cmd::typing_in_progress(s) { cmd::settle_interaction(s) } else { Ok(()) });
+        r.map(|()| settled)
+    }
+
     pub fn begin_interaction(&mut self, label: &str) -> Result<()> {
         if self.script_running() {
             return Err(EngineError::Busy);
