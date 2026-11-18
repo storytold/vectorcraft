@@ -774,6 +774,143 @@ fn a_knockout_merge_past_the_memory_allowed_leaves_the_layers_apart() {
     assert!(warnings.is_empty(), "{warnings:?}");
 }
 
+/// A Dissolve knockout at part opacity clears each pixel below it fully or not at all, at the share
+/// its opacity gives, as a Dissolve layer merges.
+#[test]
+fn a_dissolve_knockout_at_part_opacity_clears_whole_pixels() {
+    let cut = knockout(L { blend: b"diss", opacity: 128, ..layer("Cut", [0, 0, 16, 16], [0, 0, 255, 255]) }, 1, 0);
+    let layers = [group_end(), layer("Lower", [0, 0, 16, 16], [255, 0, 0, 255]), cut, group("Group", b"norm")];
+    let (s, r) = open(&file(16, 16, &layers, 8, false, false), json!({}));
+    let d = &s.doc().unwrap().doc;
+    let (_, px) = image_of(&s, &d.layers[0].children().unwrap()[0]);
+    assert!(px.pixels().all(|p| p.0 == [255, 0, 0, 255] || p.0[3] == 0), "{r}");
+    let red = px.pixels().filter(|p| p.0 == [255, 0, 0, 255]).count();
+    assert!((32..=224).contains(&red), "{red} of 256 pixels keep the lower layer: {r}");
+}
+
+/// The knockout of a layer that another is clipped to isn't applied, also when the clipped layer's
+/// merge with it needs more memory than allowed and the two come in apart.
+#[test]
+fn a_clipping_base_knockout_isnt_applied_when_its_clip_doesnt_fit() {
+    let cms = |c: [f32; 4]| [c[0], c[1], c[2]];
+    // The 4 × 4 clipped layer and its 2 × 2 base don't fit 320 bytes together for the clip; the
+    // base's knockout merge with the 2 × 2 layer below would.
+    let layers = [
+        group_end(),
+        layer("Lower", [0, 0, 2, 2], [255, 0, 0, 255]),
+        knockout(layer("Base", [0, 0, 2, 2], [0, 0, 255, 255]), 1, 0),
+        L { clipped: true, ..layer("Clipped", [0, 0, 4, 4], [0, 255, 0, 255]) },
+        group("Group", b"norm"),
+    ];
+    let (doc, warnings) = psdlayers::import(&file(4, 4, &layers, 8, false, false), false, 320, cms).unwrap().unwrap();
+    assert_eq!(doc.layers[0].children().unwrap().iter().map(|c| name(c)).collect::<Vec<_>>(), ["Lower", "Base", "Clipped"], "{warnings:?}");
+    assert_eq!(
+        warnings,
+        ["the knockout of 1 layer wasn't applied", "1 layer clipped to the layer below came in unclipped: the merge needs more memory than allowed"]
+    );
+}
+
+/// A knockout group that comes in as a layer counts each layer clipped in it once in the warnings,
+/// though its layers are also drawn for the knockout: one clipped to a fill that isn't drawn, and
+/// one that a merge past the memory allowed leaves unclipped.
+#[test]
+fn a_knockout_group_that_comes_in_as_a_layer_counts_its_clipped_layers_once() {
+    let cms = |c: [f32; 4]| [c[0], c[1], c[2]];
+    let empty = L { bare: true, ..layer("Empty", [0, 0, 2, 2], [0, 0, 0, 0]) };
+    // A fill whose shape is a vector mask, with a layer clipped to it: neither is drawn.
+    let mut soco = vec![0; 8];
+    for (key, v) in [(b"Rd  doub", 255.0f64), (b"Grn doub", 0.0), (b"Bl  doub", 51.0)] {
+        soco.extend(key);
+        soco.extend(v.to_be_bytes());
+    }
+    let mut outline = layer("Outline", [0, 0, 0, 0], [0; 4]);
+    outline.blocks.push((*b"SoCo", soco));
+    outline.blocks.push((*b"vsms", vec![0; 8]));
+    let on_outline = L { clipped: true, ..layer("On outline", [0, 0, 2, 2], [1, 1, 1, 255]) };
+    // Each 2 × 2 layer fits 128 bytes, and so do the two drawn together, but not the merge of the
+    // clipped one with the one below.
+    let base = layer("Base", [0, 0, 2, 2], [255, 0, 0, 255]);
+    let clipped = L { clipped: true, ..layer("Clipped", [0, 0, 2, 2], [0, 0, 255, 255]) };
+    for (inner, said) in [
+        (vec![outline, on_outline], "1 layer clipped to a fill layer that wasn't drawn was left out"),
+        (vec![base, clipped], "1 layer clipped to the layer below came in unclipped: the merge needs more memory than allowed"),
+    ] {
+        let mut layers = vec![layer("Outside", [0, 0, 4, 4], [0, 255, 0, 255]), group_end(), empty.clone(), group_end()];
+        layers.extend(inner);
+        layers.extend([knockout(group("Cut", b"norm"), 1, 255), group("Group", b"norm")]);
+        let (doc, warnings) = psdlayers::import(&file(4, 4, &layers, 8, false, false), false, 128, cms).unwrap().unwrap();
+        assert_eq!(doc.layers.iter().map(|l| name(l)).collect::<Vec<_>>(), ["Outside", "Group"]);
+        assert!(warnings.iter().any(|w| w == said), "{said}: {warnings:?}");
+    }
+}
+
+/// A pass-through group that draws nothing still counts what its layers count in it, also when it
+/// is drawn again inside a group that merges: a knockout above a Multiply layer isn't applied in a
+/// pass-through group, though drawn alone it would be.
+#[test]
+fn a_pass_through_group_that_draws_nothing_still_counts_its_unapplied_knockouts() {
+    let cms = |c: [f32; 4]| [c[0], c[1], c[2]];
+    let empty = |name: &'static str, blend: &'static [u8; 4]| L { bare: true, blend, ..layer(name, [0, 0, 2, 2], [0, 0, 0, 0]) };
+    let layers = [
+        layer("Lower", [0, 0, 4, 4], [255, 0, 0, 255]),
+        group_end(),
+        empty("Empty", b"norm"),
+        group_end(),
+        empty("Multiplied", b"mul "),
+        knockout(empty("Cut", b"norm"), 1, 255),
+        knockout(group("Through", b"pass"), 1, 255),
+        group("Dissolved", b"diss"),
+    ];
+    let (doc, warnings) = psdlayers::import(&file(4, 4, &layers, 8, false, false), false, 1 << 20, cms).unwrap().unwrap();
+    assert_eq!(doc.layers.iter().map(|l| name(l)).collect::<Vec<_>>(), ["Lower + Dissolved"], "{warnings:?}");
+    assert_eq!(warnings, ["the knockout of 1 layer wasn't applied".to_string(), psdlayers::MERGED_WARNING.replace("{modes}", "Dissolve")]);
+}
+
+/// A group that draws nothing is drawn once, however deep the groups like it nest: here each holds
+/// a layer that stores no pixels and, above it, the next group, with a knockout. The import walks
+/// at most as many layer lists as the file has records, with isolated groups, with groups that
+/// alternate with pass-through ones, with pass-through groups inside the outermost one (whose
+/// knockouts aren't applied), and with a layer in a mode VectorCraft lacks in each (a merge of
+/// nothing, a canvas without pixels).
+#[test]
+fn groups_that_draw_nothing_are_drawn_once_however_deep_they_nest() {
+    const LEVELS: usize = 48;
+    let cms = |c: [f32; 4]| [c[0], c[1], c[2]];
+    let empty = |name: &'static str, blend: &'static [u8; 4]| L { bare: true, blend, ..layer(name, [0, 0, 2, 2], [0, 0, 0, 0]) };
+    // Which levels are pass-through groups.
+    let none: fn(usize) -> bool = |_| false;
+    let odd: fn(usize) -> bool = |k| k % 2 == 1;
+    let all: fn(usize) -> bool = |k| k > 0;
+    for (case, pass, dissolve, warned) in [
+        ("isolated", none, false, vec![]),
+        ("alternating", odd, false, vec![]),
+        ("pass-through", all, false, vec![format!("the knockout of {} layers wasn't applied", LEVELS - 1)]),
+        ("dissolved", none, true, vec![psdlayers::MERGED_WARNING.replace("{modes}", "Dissolve")]),
+    ] {
+        let mut layers = vec![layer("Outside", [0, 0, 4, 4], [0, 255, 0, 255])];
+        for _ in 0..=LEVELS {
+            layers.push(group_end());
+            if dissolve {
+                layers.push(empty("Dissolved", b"diss"));
+            }
+            layers.push(empty("Empty", b"norm"));
+        }
+        for k in (0..=LEVELS).rev() {
+            let g = group("Group", if pass(k) { b"pass" } else { b"norm" });
+            layers.push(if k == 0 { g } else { knockout(g, 1, 255) });
+        }
+        psdlayers::WALKS.set((0, layers.len()));
+        let imported = psdlayers::import(&file(4, 4, &layers, 8, false, false), false, 1 << 20, cms);
+        let (walked, _) = psdlayers::WALKS.replace((0, usize::MAX));
+        let (doc, warnings) = imported.unwrap().unwrap();
+        assert!(walked <= layers.len(), "{case}: {walked} walks for {} records", layers.len());
+        assert_eq!(doc.layers.iter().map(|l| name(l)).collect::<Vec<_>>(), ["Outside", "Group"], "{case}");
+        let mut expected = warned;
+        expected.push(vectorcraft_doc::depth::merged_note());
+        assert_eq!(warnings, expected, "{case}");
+    }
+}
+
 #[test]
 fn what_doesnt_come_in_is_said() {
     let mut text = layer("Words", [0, 0, 2, 2], [0, 0, 0, 255]);
