@@ -162,6 +162,28 @@ fn anchors_at_the_points_asks_for_them() {
     assert_eq!(acts, vec![Action::Exec("shape.circleThroughPoints".into(), json!({"points": points, "anchors": "points"}))]);
 }
 
+/// With `standardAnchors` off, a circle within 1 pt of the canvas edge whose path with anchors at
+/// the points curves past that edge is not shown and not drawn; with standard anchors it is.
+#[test]
+fn anchors_at_the_points_keep_the_path_on_the_canvas() {
+    let (d, _) = doc_with_rect();
+    let (s, p) = (Selection::default(), paint());
+    let cx = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    let r = MAX_COORD - 1.0;
+    let at = |deg: f64| (r * deg.to_radians().cos(), r * deg.to_radians().sin());
+    let points = [at(0.0), at(70.0), at(180.0)];
+    let geom: Vec<Point> = points.iter().map(|(x, y)| Point::new(*x, *y)).collect();
+    assert!(drawn_circle(&geom, true).is_some());
+    assert_eq!(drawn_circle(&geom, false), None);
+    let mut t = CircleTool::default();
+    t.set_option("standardAnchors", &json!(false));
+    click(&mut t, &cx, points[0]);
+    t.pointer(&cx, &ev(PointerKind::Down, points[1], Mods::default()));
+    t.pointer(&cx, &ev(PointerKind::Drag, points[2], Mods::default()));
+    assert_eq!(preview(&t.overlays(&cx)), None);
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, points[2], Mods::default())), vec![]);
+}
+
 /// With `dragThird` off, a second click places the second point and a third click draws the circle
 /// through the three; a click on the second point again (as a double-click there does) draws the
 /// circle on the two; a second point let go on the first places nothing; a drag from the first
@@ -419,8 +441,8 @@ fn points_on_one_line_say_the_circle_is_too_large() {
     assert_eq!(label(&t), None, "a circle is shown");
     t.pointer(&cx, &ev(PointerKind::Drag, (200.0, 200.0), Mods::default()));
     assert_eq!(label(&t), None, "the third point is on the second");
-    assert!(too_large(&[Point::new(0.0, 0.0), Point::new(4.1e6, 0.0)]));
-    assert!(!too_large(&[Point::new(0.0, 0.0)]) && !too_large(&[Point::new(1.0, 0.0), Point::new(1.0, 0.0)]));
+    assert!(too_large(&[Point::new(0.0, 0.0), Point::new(4.1e6, 0.0)], true));
+    assert!(!too_large(&[Point::new(0.0, 0.0)], true) && !too_large(&[Point::new(1.0, 0.0), Point::new(1.0, 0.0)], true));
 }
 
 /// Escape drops the first point; so do a dropped press and an edit made outside the tool. A

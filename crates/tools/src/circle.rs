@@ -159,6 +159,17 @@ pub fn circle_of(points: &[Point]) -> Option<(Point, f64)> {
     shapes::circle_through_points(points).filter(on_canvas)
 }
 
+/// [`circle_of`], as the tool draws it: with `standard_anchors` off, also none where the path with
+/// an anchor at each point ([`shapes::circle_with_anchors_at`]) reaches past the canvas, since its
+/// curves can reach slightly outside the circle.
+fn drawn_circle(points: &[Point], standard_anchors: bool) -> Option<(Point, f64)> {
+    let fits = |(c, r): &(Point, f64)| {
+        let b = vectorcraft_geom::Shape::bounding_box(&shapes::circle_with_anchors_at(*c, *r, points).to_bezpath());
+        [b.x0, b.y0, b.x1, b.y1].iter().all(|v| v.is_finite() && v.abs() <= MAX_COORD)
+    };
+    circle_of(points).filter(|c| standard_anchors || fits(c))
+}
+
 /// With Alt, `p` moved along the line from `first` so that their distance (the diameter) is on
 /// the nearest ruler tick at the current zoom, in the General unit; `p` itself without Alt, and
 /// when that rounding leaves no distance.
@@ -170,9 +181,9 @@ fn round_diameter(cx: &ToolContext, first: Point, p: Point, mods: Mods) -> Point
 
 /// Are the points two or more different points through which no circle is drawn: three on one
 /// line, or a circle that would reach past the canvas?
-fn too_large(points: &[Point]) -> bool {
+fn too_large(points: &[Point], standard_anchors: bool) -> bool {
     let distinct = points.iter().enumerate().all(|(i, p)| !points.iter().take(i).any(|q| q == p));
-    points.len() >= 2 && distinct && circle_of(points).is_none()
+    points.len() >= 2 && distinct && drawn_circle(points, standard_anchors).is_none()
 }
 
 impl CircleTool {
@@ -231,7 +242,7 @@ impl CircleTool {
     /// (the tool showed none), it only starts afresh.
     fn draw(&mut self, points: &[Point]) -> Vec<Action> {
         self.clear();
-        if circle_of(points).is_none() {
+        if drawn_circle(points, self.options.standard_anchors).is_none() {
             return vec![];
         }
         let (c, v) = command(points, self.options.standard_anchors);
@@ -247,7 +258,7 @@ impl CircleTool {
         if on_second && !dragged {
             return self.draw(&[a, b]);
         }
-        if (on_first && !dragged) || circle_of(&[a, b, at]).is_none() {
+        if (on_first && !dragged) || drawn_circle(&[a, b, at], self.options.standard_anchors).is_none() {
             self.snap.clear();
             return vec![];
         }
@@ -431,7 +442,7 @@ impl Tool for CircleTool {
         let mut o = self.snap.guides().to_vec();
         let points = self.points();
         let color = crate::draw2::FEEDBACK;
-        if let Some((c, r)) = circle_of(&points) {
+        if let Some((c, r)) = drawn_circle(&points, self.options.standard_anchors) {
             let path = shapes::ellipse(Rect::new(c.x - r, c.y - r, c.x + r, c.y + r)).to_bezpath();
             // The canvas draws a dashed outline dash by dash along its whole length: a circle longer
             // than DASHED_PX on screen is drawn solid instead.
@@ -452,7 +463,7 @@ impl Tool for CircleTool {
             if let Some(p) = self.pointer.filter(|_| cx.measurement_labels && opts.diameter) {
                 o.push(Overlay::Measure { p: p + Vec2::new(cx.tol(12.0), cx.tol(12.0)), text: format!("D: {}", cx.len(2.0 * r)) });
             }
-        } else if let Some(p) = self.pointer.filter(|_| too_large(&points)) {
+        } else if let Some(p) = self.pointer.filter(|_| too_large(&points, self.options.standard_anchors)) {
             o.push(Overlay::Label { p, text: "Circle too large".into(), color });
         }
         for p in self.first.into_iter().chain(self.second()) {
