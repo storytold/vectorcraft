@@ -5613,6 +5613,7 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	no graphic style `{n}`	không có kiểu đồ họa `{n}`
 @msg	no interaction in progress	không có tương tác nào đang tiến hành
 @msg	no key object	không có đối tượng khóa
+@msg	Align to Key Object isn't available with the Artboard tool	không thể dùng Căn theo đối tượng chính với Công cụ Bảng vẽ
 @msg	no library `{id}`	không có thư viện `{id}`
 @msg	the library has another item of that kind named `{name}`	thư viện đã có một mục khác cùng loại tên là `{name}`
 @msg	no library `{key}` (see {list})	không có thư viện `{key}` (xem {list})

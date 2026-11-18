@@ -4939,6 +4939,7 @@ variable-list-end	{0}, {1}	{0} 및 {1}
 @msg	no bounds	경계가 없습니다
 @msg	no current layer	현재 레이어가 없습니다
 @msg	no key object	키 개체가 없습니다
+@msg	Align to Key Object isn't available with the Artboard tool	아트보드 도구에서는 키 개체에 정렬을 사용할 수 없습니다
 @msg	no previous transform	이전 변형이 없습니다
 @msg	nothing to align	정렬할 항목이 없습니다
 @msg	select a clip group	클립 그룹을 선택하세요

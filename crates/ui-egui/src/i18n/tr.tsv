@@ -4966,6 +4966,7 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	no graphic style `{n}`	grafik stili yok `{n}`
 @msg	no interaction in progress	herhangi bir etkileşim devam etmiyor
 @msg	no key object	anahtar nesne yok
+@msg	Align to Key Object isn't available with the Artboard tool	Anahtar Nesneye Hizala, Çalışma Yüzeyi Aracı ile kullanılamaz
 @msg	no library `{key}` (see {list})	`{key}` kitaplığı yok (bkz. {list})
 @msg	no native format	yerel format yok
 @msg	no pages	sayfa yok

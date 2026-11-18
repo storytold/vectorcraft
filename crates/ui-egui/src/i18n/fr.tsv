@@ -5213,6 +5213,7 @@ liquify-list-end	{0}, {1}	{0} et {1}
 @msg	no graphic style `{n}`	aucun style graphique `{n}`
 @msg	no interaction in progress	aucune interaction en cours
 @msg	no key object	aucun objet clé
+@msg	Align to Key Object isn't available with the Artboard tool	L’alignement sur l’objet clé n’est pas disponible avec l’outil Plan de travail
 @msg	no library `{key}` (see {list})	aucune bibliothèque `{key}` (voir {list})
 @msg	no native format	aucun format natif
 @msg	no pages	aucune page

@@ -5199,6 +5199,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	no graphic style `{n}`	δεν υπάρχει στυλ γραφικών `{n}`
 @msg	no interaction in progress	δεν υπάρχει αλληλεπίδραση σε εξέλιξη
 @msg	no key object	δεν υπάρχει βασικό αντικείμενο
+@msg	Align to Key Object isn't available with the Artboard tool	η «Στοίχιση ως προς το βασικό αντικείμενο» δεν είναι διαθέσιμη με το εργαλείο πίνακα σχεδίασης
 @msg	no library `{key}` (see {list})	δεν υπάρχει βιβλιοθήκη `{key}` (δείτε {list})
 @msg	no native format	δεν υπάρχει εγγενής μορφή
 @msg	no pages	δεν υπάρχουν σελίδες

@@ -5465,6 +5465,7 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	no graphic style `{n}`	ei grafiikkatyyliä `{n}`
 @msg	no interaction in progress	mikään vuorovaikutus ei ole käynnissä
 @msg	no key object	ei avainobjektia
+@msg	Align to Key Object isn't available with the Artboard tool	”Tasaa avainobjektiin” ei ole käytettävissä piirtoalustatyökalulla
 @msg	no library `{key}` (see {list})	ei kirjastoa `{key}` (ks. {list})
 @msg	no native format	ei omaa tiedostomuotoa
 @msg	no pages	ei sivuja

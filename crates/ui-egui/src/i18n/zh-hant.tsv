@@ -2157,6 +2157,7 @@ file-filter	Templates	範本
 @msg	no bounds	沒有邊界
 @msg	no current layer	沒有目前圖層
 @msg	no key object	沒有關鍵物件
+@msg	Align to Key Object isn't available with the Artboard tool	使用工作區域工具時無法對齊關鍵物件
 @msg	no previous transform	沒有上一次的變形
 @msg	nothing to align	沒有可對齊的內容
 @msg	select a clip group	請選取剪裁群組

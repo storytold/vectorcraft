@@ -5229,6 +5229,7 @@ imageTrace	Outline	Obris
 @msg	no graphic style `{n}`	nema grafičkog stila `{n}`
 @msg	no interaction in progress	nema interakcije u toku
 @msg	no key object	nema ključnog objekta
+@msg	Align to Key Object isn't available with the Artboard tool	„Poravnaj s ključnim objektom“ nije dostupno s alatom radna ploča
 @msg	no library `{key}` (see {list})	nema biblioteke `{key}` (vidi {list})
 @msg	no native format	nema izvornog formata
 @msg	no pages	nema stranica

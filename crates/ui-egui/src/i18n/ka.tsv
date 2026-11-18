@@ -7007,6 +7007,7 @@ font-technology	Variable	ცვლადი
 @msg	no graphic style `{n}`	გრაფიკული სტილი `{n}` არ არის
 @msg	no interaction in progress	მიმდინარე ურთიერთქმედება არ არის
 @msg	no key object	საკვანძო ობიექტი არ არის
+@msg	Align to Key Object isn't available with the Artboard tool	„საკვანძო ობიექტზე სწორება“ სამუშაო დაფის ხელსაწყოსთან მიუწვდომელია
 @msg	no library `{key}` (see {list})	ბიბლიოთეკა `{key}` არ არის (იხ. {list})
 @msg	no native format	საკუთარი ფორმატი არ არის
 @msg	no pages	გვერდები არ არის
