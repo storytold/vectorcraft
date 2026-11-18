@@ -179,6 +179,48 @@ impl LiveShape {
             *xf = Affine::rotate_about((now - angle).to_radians(), centre) * *xf;
         }
     }
+    /// A line's length in the document, from its first end to its second. None for other shapes.
+    pub fn line_length(&self) -> Option<f64> {
+        let LiveShape::Line { a, b } = self else { return None };
+        Some((*b - *a).hypot())
+    }
+    /// A line's angle: the counterclockwise degrees in [0, 360) from the page's horizontal to the
+    /// direction from its first end to its second (the Rotate field's sense). 0 for a line whose
+    /// ends meet. None for other shapes.
+    pub fn line_angle(&self) -> Option<f64> {
+        let LiveShape::Line { a, b } = self else { return None };
+        if a == b {
+            return Some(0.0);
+        }
+        // No −0° or 360° from rounding: a line drawn left to right reads 0°.
+        let a = (-self.angle_deg()).rem_euclid(360.0);
+        Some(if a > 360.0 - 1e-9 { 0.0 } else { a + 0.0 })
+    }
+    /// Make a line `len` long (0 or more), keeping its first end in place and its direction, or
+    /// pointing it to the right when its ends meet.
+    pub fn set_line_length(&mut self, len: f64) {
+        let LiveShape::Line { a, b } = self else { return };
+        if !len.is_finite() || len < 0.0 {
+            return;
+        }
+        let now = (*b - *a).hypot();
+        *b = if now > 0.0 { *a + (*b - *a) * (len / now) } else { Point::new(a.x + len, a.y) };
+    }
+    /// Turn a line about its midpoint to `angle` (degrees, as [`LiveShape::line_angle`]). A line
+    /// whose ends meet stays as it is.
+    pub fn set_line_angle(&mut self, angle: f64) {
+        let LiveShape::Line { a, b } = self else { return };
+        let half = (*b - *a).hypot() / 2.0;
+        if !angle.is_finite() || half <= 0.0 {
+            return;
+        }
+        let mid = a.midpoint(*b);
+        let t = angle.to_radians();
+        // The page's y axis points down, so a counterclockwise angle goes up the page.
+        let (dx, dy) = (half * t.cos(), -half * t.sin());
+        *a = Point::new(mid.x - dx, mid.y - dy);
+        *b = Point::new(mid.x + dx, mid.y + dy);
+    }
     /// Make a polygon's sides equal (Make Sides Equal): drop the uneven scale and the shear from
     /// `xf`, keeping its centre, angle, reflection and [`LiveShape::polygon_radius`].
     pub fn make_sides_equal(&mut self) {
