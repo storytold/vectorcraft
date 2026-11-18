@@ -1037,13 +1037,28 @@ fn names_a_required_field(params: &str) -> bool {
 /// offset and the number of `{`, `[` and `(` groups open before it. A closing `}`, `]` or `)` comes
 /// with a count that includes the group it closes, and one with no group open counts none.
 pub(crate) fn outside_quotes(text: &str) -> impl Iterator<Item = (usize, char, usize)> + '_ {
-    let (mut depth, mut quoted) = (0usize, false);
+    outside_marks(text, &['"'])
+}
+
+/// [`outside_quotes`], with a span between backticks skipped as well, as the engine's params object
+/// reads it: inside a span opened by a double quote or a backtick, only the same mark closes it.
+pub(crate) fn outside_quotes_and_backticks(text: &str) -> impl Iterator<Item = (usize, char, usize)> + '_ {
+    outside_marks(text, &['"', '`'])
+}
+
+/// Each character of `text` that is not one of `marks` or inside a span a mark opens and the same
+/// mark closes, as [`outside_quotes`] counts them.
+fn outside_marks<'a>(text: &'a str, marks: &'static [char]) -> impl Iterator<Item = (usize, char, usize)> + 'a {
+    let (mut depth, mut quote) = (0usize, None::<char>);
     text.char_indices().filter_map(move |(i, ch)| {
-        if ch == '"' {
-            quoted = !quoted;
+        if let Some(q) = quote {
+            if ch == q {
+                quote = None;
+            }
             return None;
         }
-        if quoted {
+        if marks.contains(&ch) {
+            quote = Some(ch);
             return None;
         }
         let before = depth;

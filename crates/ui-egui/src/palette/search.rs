@@ -84,8 +84,9 @@ pub(crate) struct Index {
     initials_text: String,
     /// Each result's offset and length in `initials_text`.
     initials: Vec<(u32, u16)>,
-    /// Each word of a group of words with the same meaning ([`super::words::GROUPS`], and the
-    /// words the UI language's catalog adds), with the group's place in the table.
+    /// Each word of a group of words with the same meaning ([`super::words::GROUPS`], the words the
+    /// UI language's catalog adds and the stem forms of the table's words), with the group's place
+    /// in the table.
     synonyms: HashMap<Box<str>, u16>,
 }
 
@@ -96,8 +97,10 @@ pub(crate) fn is_one_word(w: &str) -> bool {
 }
 
 /// The words of each group of [`super::words::GROUPS`], with the words `search_row` gives for the
-/// group's catalog row ([`super::words::row_key`]) in the UI language. A word the catalog gives
-/// that is not a single word, or that is already a word of a group, is left out.
+/// group's catalog row ([`super::words::row_key`]) in the UI language, and then the English stem
+/// forms ([`stems`]) of each word of [`super::words::GROUPS`] ("setting" of settings). A word the
+/// catalog gives that is not a single word, and a word or stem form that is already a word of a
+/// group, is left out.
 fn synonym_groups(search_row: impl Fn(&str) -> Option<String>) -> HashMap<Box<str>, u16> {
     let mut out: HashMap<Box<str>, u16> = HashMap::new();
     let groups = super::words::GROUPS.iter().enumerate().filter_map(|(g, words)| u16::try_from(g).ok().map(|g| (g, words)));
@@ -106,11 +109,18 @@ fn synonym_groups(search_row: impl Fn(&str) -> Option<String>) -> HashMap<Box<st
             out.insert(w.into(), g);
         }
     }
-    for (g, words) in groups {
+    for (g, words) in groups.clone() {
         let Some(text) = search_row(&super::words::row_key(words)) else { continue };
         for (w, single) in super::words::row_words(&text) {
             if single {
                 out.entry(w.into()).or_insert(g);
+            }
+        }
+    }
+    for (g, words) in groups {
+        for &w in *words {
+            for form in stems(w) {
+                out.entry(form.into()).or_insert(g);
             }
         }
     }
@@ -281,7 +291,8 @@ fn split_name(name: &str) -> (&str, &str) {
 }
 
 /// A command's description, read from its params text: the text without each `{…}` group that is
-/// not inside a `{`, `[` or `(` group (braces inside double quotes are text), without each such
+/// not inside a `{`, `[` or `(` group (brackets inside double quotes or backticks are text, as in
+/// the engine's params object), without each such
 /// `[…]` or `(…)` group just after a `→`, and without the `→` just before a removed group, with
 /// each run of whitespace made one space and cut to its first [`DESCRIPTION_CHARS`] characters at
 /// the end of a word. A group that is never closed stays in the text, and so does a result written
@@ -290,7 +301,7 @@ pub(crate) fn description(params: &str) -> String {
     let mut out = String::new();
     // The end of the text copied to `out`, and whether a removed group is open.
     let (mut copied, mut open) = (0, false);
-    for (i, ch, depth) in crate::shortcut_editor::outside_quotes(params) {
+    for (i, ch, depth) in crate::shortcut_editor::outside_quotes_and_backticks(params) {
         let before = params.get(copied..i).unwrap_or_default();
         match ch {
             '{' | '[' | '(' if depth == 0 && (ch == '{' || before.trim_end().ends_with('→')) => {
@@ -530,7 +541,8 @@ impl Index {
     }
 
     /// The other words of the group of words with the same meaning that `word`, or a stem form of
-    /// it, is in ("bg" and background, "flipped" and reflect), as places in `terms`; the words of the
+    /// it, is in ("bg" and background, "flipped" and reflect, "setting" and preferences), with the
+    /// stem forms of the group's words ("prefs" and setting), as places in `terms`; the words of the
     /// group no result holds are left out.
     fn synonyms_of(&self, word: &str) -> Vec<usize> {
         let group = std::iter::once(word.to_string()).chain(stems(word)).find_map(|w| self.synonyms.get(w.as_str()).copied());
@@ -1215,6 +1227,24 @@ mod tests {
         assert_eq!(ranked(&c, "colour"), ["c.three", "panel:color", "tool:zz"]);
     }
 
+    /// A query word that is an English stem form of a word of a group ("setting" of settings,
+    /// "preference" of preferences) finds the group, and a stem form of a word of the group meets a
+    /// result's word ("prefs" and Zz Setting). A result whose label holds the query word itself
+    /// still ranks first.
+    #[test]
+    fn a_stem_form_of_a_group_word_meets_the_group() {
+        let c = synthetic(vec![entry("Zz Preferences", "a.one"), entry("Zz Setting", "b.two"), entry("Zz Settings", "c.three")]);
+        let setting = ranked(&c, "setting");
+        assert_eq!(setting.first().map(String::as_str), Some("b.two"), "{setting:?}");
+        assert!(setting.iter().any(|id| id == "a.one"), "{setting:?}");
+        assert!(ranked(&c, "preference").iter().any(|id| id == "c.three"), "a singular query word finds the group");
+        let prefs = ranked(&c, "prefs");
+        for id in ["a.one", "b.two", "c.three"] {
+            assert!(prefs.iter().any(|r| r == id), "{id} in {prefs:?}");
+        }
+        assert!(ranked(&c, "set").iter().all(|id| id != "a.one"), "a stem form of a query word that is no group word finds no group");
+    }
+
     /// A catalog row adds words in the UI language to a group, and a word that is not a single word
     /// or that is a word of another group is left out.
     #[test]
@@ -1255,6 +1285,11 @@ mod tests {
             // A group inside parentheses is text, and so is a group that is never closed.
             ("fits it (as {x} does) here", "fits it (as {x} does) here"),
             ("{a: 1 never closed", "{a: 1 never closed"),
+            // A bracket or a double quote inside a backtick span is text, as in the engine's params
+            // object, and so is a group inside a backtick span outside a group.
+            ("{pattern?: `(`} transparent background", "transparent background"),
+            ("{sep: `}`, quote: `\"`} split the text", "split the text"),
+            ("uses `{x}` as text", "uses `{x}` as text"),
             // No group at all.
             ("plain   words\n here", "plain words here"),
             ("", ""),
