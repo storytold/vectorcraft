@@ -656,7 +656,7 @@ impl FontDb {
             // As before, keep the prefix emitted before a malformed glyph reports an error.
             let _ = font.draw_to(gid, &mut pen);
         }
-        let p = Arc::new(pen.0);
+        let p = Arc::new(pen.finish());
         let mut cache = self.outlines.lock().unwrap_or_else(|e| e.into_inner());
         if cache.len() >= OUTLINE_CACHE_MAX {
             cache.clear();
