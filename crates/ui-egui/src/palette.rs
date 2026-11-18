@@ -418,9 +418,9 @@ fn build_in(lang: crate::i18n::Lang, native: bool) -> Vec<Entry> {
 /// Runs the palette result `id`: selects a tool, or invokes a command with the params its entry
 /// stands for. A command whose menu bar item gives params runs what a click on that item runs
 /// ([`crate::shortcut_editor::menu_target_now`]), so Clean Up… and Find and Replace… open their
-/// dialogs. While that item is dimmed, no dialog opens and the status line says why the command
-/// can't run. A panel's result shows the panel, and an effect's result runs what its Effect menu
-/// item runs ([`crate::keymap::command_of`]).
+/// dialogs. While a result is dimmed ([`unavailable`]), its pick runs nothing, opens no dialog or
+/// panel, and the status line says why the command can't run. A panel's result shows the panel,
+/// and an effect's result runs what its Effect menu item runs ([`crate::keymap::command_of`]).
 pub(crate) fn run_pick(app: &mut VectorcraftApp, id: &str) {
     if let Some(tool) = id.strip_prefix("tool:") {
         app.select_tool(tool);
@@ -435,11 +435,9 @@ pub(crate) fn run_pick(app: &mut VectorcraftApp, id: &str) {
         }
     } else if id.starts_with("plugin:") || id.starts_with("effect:") {
         let command = crate::keymap::command_of(id);
-        // While the Effect menu dims the item (nothing selected), no dialog opens and the status
-        // line says why.
-        if id.starts_with("effect:")
-            && let Some(why) = crate::shortcut_editor::dimmed(app, &command.id, &command.id)
-        {
+        // While the item is dimmed (an effect with nothing selected), no dialog opens and the
+        // status line says why.
+        if let Some(why) = crate::shortcut_editor::dimmed(app, &command.id, &command.id) {
             app.status(why);
         } else {
             menus::invoke(app, &command.id, command.params);
@@ -448,7 +446,12 @@ pub(crate) fn run_pick(app: &mut VectorcraftApp, id: &str) {
         match crate::shortcut_editor::menu_target_now(app, id) {
             Some(Ok((id, p))) => menus::invoke(app, &id, p),
             Some(Err(why)) => app.status(why),
-            None => menus::invoke(app, id, json!({})),
+            // A dimmed result does not run: the Asset Export commands with no document open show
+            // no panel.
+            None => match crate::shortcut_editor::dimmed(app, id, id) {
+                Some(why) => app.status(why),
+                None => menus::invoke(app, id, json!({})),
+            },
         }
     }
 }
@@ -1417,6 +1420,22 @@ mod tests {
             assert!(crate::panel_docking::showing(&app.ui, crate::panels::asset_export::ID), "{id}: floating");
             run_pick(&mut app, id);
             assert!(crate::panel_docking::showing(&app.ui, crate::panels::asset_export::ID), "{id}: floating, picked again");
+        }
+    }
+
+    /// With no document open, the Asset Export commands are dimmed, and a pick of one shows no panel
+    /// and says why it can't run, as the row's description does.
+    #[test]
+    fn a_dimmed_asset_export_command_does_not_open_its_panel() {
+        let ids = ["assets.export", "assets.remove", "assets.rename", "assets.settings.set", "assets.export3D", "assets.set3DFormat"];
+        for id in ids {
+            let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+            let why = unavailable(&app, id, id);
+            assert!(why.is_some(), "{id} is dimmed with no document open");
+            app.ui.status.clear();
+            run_pick(&mut app, id);
+            assert!(!crate::panel_docking::showing(&app.ui, crate::panels::asset_export::ID), "{id}: {}", app.ui.status);
+            assert_eq!(Some(app.ui.status.clone()), why, "{id}");
         }
     }
 
