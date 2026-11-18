@@ -8819,6 +8819,7 @@ shape	Open	Открытый
 @msg	compound {_1} must contain exactly one open path to join	составной объект {_1} должен содержать ровно один открытый контур для соединения
 @msg	connect end must be "start" or "end"	end для connect должно быть "start" или "end"
 @msg	connect needs a path other than the one extended	для connect нужен контур, отличный от продлеваемого
+@msg	connect needs extend	для connect нужен extend
 @msg	connect needs id	для connect нужен id
 @msg	connect path has no open end	у контура для connect нет открытого конца
 @msg	continuation must be an array of path chunks	continuation должно быть массивом фрагментов контура

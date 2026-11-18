@@ -8900,6 +8900,7 @@ swatch	Yellow Green	Verde-amarelado
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	formas compostas aceitam caminhos, caminhos compostos, grupos, formas compostas, texto, mesclagens e envelopes
 @msg	compound {_1} must contain exactly one open path to join	o composto {_1} deve conter exatamente um caminho aberto para unir
 @msg	connect needs a path other than the one extended	connect precisa de um caminho diferente do que foi estendido
+@msg	connect needs extend	connect precisa de extend
 @msg	connect needs id	connect precisa de id
 @msg	connect path has no open end	o caminho de connect não tem extremidade aberta
 @msg	continuation must be an array of path chunks	continuation deve ser uma matriz de trechos de caminho

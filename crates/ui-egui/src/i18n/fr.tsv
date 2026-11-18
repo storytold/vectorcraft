@@ -8698,6 +8698,7 @@ breakText	Glyphs	Glyphes
 @msg	compound {_1} must contain exactly one open path to join	le tracé transparent {_1} doit contenir exactement un tracé ouvert à joindre
 @msg	connect end must be "start" or "end"	l’extrémité de connect doit valoir "start" ou "end"
 @msg	connect needs a path other than the one extended	connect nécessite un tracé autre que celui qui est prolongé
+@msg	connect needs extend	connect nécessite extend
 @msg	connect needs id	connect nécessite id
 @msg	connect path has no open end	le tracé de connect n’a pas d’extrémité ouverte
 @msg	continuation must be an array of path chunks	continuation doit être une liste de fragments de tracé

@@ -8814,6 +8814,7 @@ breakText	Glyphs	Glify
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	kształty złożone przyjmują ścieżki, ścieżki złożone, grupy, kształty złożone, tekst, przejścia i koperty
 @msg	compound {_1} must contain exactly one open path to join	obiekt złożony {_1} musi zawierać dokładnie jedną otwartą ścieżkę do połączenia
 @msg	connect needs a path other than the one extended	connect wymaga ścieżki innej niż przedłużana
+@msg	connect needs extend	connect wymaga extend
 @msg	connect needs id	connect wymaga id
 @msg	connect path has no open end	ścieżka w connect nie ma otwartego końca
 @msg	copy needs path: the file to copy into the document's folder	copy wymaga path: pliku do skopiowania do folderu dokumentu
