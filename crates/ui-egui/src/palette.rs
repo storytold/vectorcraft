@@ -999,6 +999,13 @@ fn recent<'a>(entries: &'a [Entry], ids: &[String]) -> Vec<&'a Entry> {
     ids.iter().take(MAX_SAVED_RECENT_COMMANDS).filter_map(|id| entries.iter().find(|e| e.id == *id)).take(MAX_RECENT_COMMANDS).collect()
 }
 
+/// The results the palette lists for the search `query`: for an empty search, or one of spaces
+/// only, the recent picks (`recent`), most recent first, so Enter runs the last pick again; for
+/// any other search, its matches.
+fn results<'a>(catalog: &'a Catalog, recent: &[&'a Entry], query: &str) -> Vec<&'a Entry> {
+    if query.trim().is_empty() { recent.to_vec() } else { matching(catalog, &query.to_lowercase()) }
+}
+
 /// The id of the Recent Commands list's popup.
 fn recent_list_id() -> egui::Id {
     egui::Id::unique("palette-recent-commands")
@@ -1061,9 +1068,8 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let q = app.ui.palette_query.to_lowercase();
     let entries = entries_in(ctx, crate::i18n::current(), app.services.native_menu.is_some());
     let recent = recent(&entries.list, &app.ui.recent_commands);
-    // An empty search lists the recent picks, most recent first, so Enter runs the last pick again.
     let empty = app.ui.palette_query.trim().is_empty();
-    let mut matches = if empty { recent.clone() } else { matching(&entries, &q) };
+    let mut matches = results(&entries, &recent, &app.ui.palette_query);
     let total = matches.len();
     // The highlighted result (#1757): Up and Down move it (wrapping), Page Up and Page Down move it
     // by a page, the pointer over a result takes it, and a new query starts again from the first.
@@ -1333,12 +1339,17 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                     }
                 });
             });
-            if !list_open
-                && !history_focused
-                && ui.input(|i| i.key_pressed(egui::Key::Enter))
-                && let Some(e) = matches.get(sel)
-            {
-                run = Some(e.id.clone());
+            if !list_open && !history_focused && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                // Text typed or pasted in this frame, before Enter, changed the query after the
+                // results were drawn: Enter runs the first result of the query the field now shows.
+                let id = if app.ui.palette_query.to_lowercase() == q {
+                    matches.get(sel).map(|e| e.id.clone())
+                } else {
+                    results(&entries, &recent, &app.ui.palette_query).first().map(|e| e.id.clone())
+                };
+                if let Some(id) = id {
+                    run = Some(id);
+                }
             }
         });
     });
@@ -2013,6 +2024,28 @@ mod tests {
         assert!(!open.app.ui.palette_open, "the palette closes");
         assert_eq!(open.app.session.active().unwrap().history.undo.len(), before + 1, "{}", open.app.ui.status);
         assert_eq!(open.app.ui.recent_commands, ["paint.swap", "object.group"]);
+    }
+
+    /// Text typed or pasted into an empty search and Enter in the same frame run the first result
+    /// of the typed query, not the last pick the empty search listed.
+    #[test]
+    fn enter_after_text_in_the_same_frame_runs_the_typed_query() {
+        let first = Open::new("eyedropper", WINDOW).listed().first().cloned().expect("a result for eyedropper");
+        assert_ne!(first, "paint.swap");
+        for typed in [egui::Event::Text("eyedropper".into()), egui::Event::Paste("eyedropper".into())] {
+            let mut open = Open::new("", WINDOW);
+            open.app = VectorcraftApp::new(vectorcraft_testkit::fixtures::Fixture::Multi.session(), crate::Services::default());
+            open.app.ui.recent_commands = vec!["paint.swap".into()];
+            open.app.ui.palette_open = true;
+            open.frame(vec![]);
+            let before = open.app.session.active().unwrap().history.undo.len();
+            let enter =
+                egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
+            open.frame(vec![typed.clone(), enter]);
+            assert!(!open.app.ui.palette_open, "{typed:?}: the palette closes");
+            assert_eq!(open.app.session.active().unwrap().history.undo.len(), before, "{typed:?}: Swap Fill and Stroke did not run");
+            assert_eq!(open.app.ui.recent_commands.first(), Some(&first), "{typed:?}");
+        }
     }
 
     /// A pick of Clear Recent Commands empties the recent picks without keeping itself, so the
