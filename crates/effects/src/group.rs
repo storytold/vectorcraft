@@ -890,7 +890,9 @@ pub fn evaluate_container(doc: Option<&Document>, n: &Node) -> Option<Node> {
             |items: &[AppearanceItem]| -> Vec<Arc<Node>> { items.iter().filter_map(|i| item_art(n.id, i, &shapes, bounds)).map(Arc::new).collect() };
         let (below, above) = m.appearance.split_contents();
         let (below, above) = (art(below), art(above));
-        let at = usize::from(m.clips());
+        // Below the members the clipping path clips: above the clipping path only when it is the
+        // bottom member.
+        let at = usize::from(m.clipping_path_index() == Some(0));
         if let Some(ch) = m.children_mut() {
             let at = at.min(ch.len());
             ch.splice(at..at, below);

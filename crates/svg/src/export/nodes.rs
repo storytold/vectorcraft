@@ -129,10 +129,13 @@ fn image_pieces(children: &[std::sync::Arc<Node>]) -> bool {
     children.len() > 1
         && children.iter().all(|c| {
             let (shape, im) = match (&c.kind, c.extras().mask.as_deref()) {
-                (NodeKind::Group { children, clip: true }, _) => match children.as_slice() {
-                    [clip, im] => (&**clip, &**im),
-                    _ => return false,
-                },
+                // The triangle below or above the image ([`vectorcraft_doc::split_clipping_path`]).
+                (NodeKind::Group { children, clip: true }, _) if children.len() == 2 => {
+                    let Some((clip, mut clipped)) = vectorcraft_doc::split_clipping_path(children) else { return false };
+                    let Some(im) = clipped.next() else { return false };
+                    (&**clip, &**im)
+                }
+                (NodeKind::Group { clip: true, .. }, _) => return false,
                 (NodeKind::Image(_), Some(m)) => (&*m.art, &**c),
                 _ => return false,
             };

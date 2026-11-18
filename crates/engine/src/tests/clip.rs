@@ -611,3 +611,50 @@ fn inspect_names_the_clipping_path_wherever_it_is() {
     assert!(group.get("clippingPathId").is_none());
     assert!(group["children"].as_array().unwrap().iter().all(|c| c.get("clippingPath").is_none()));
 }
+
+/// A half transparent image whose warp envelope is expanded into pieces, each a clip group of a
+/// triangle and the image, saved and opened again: each triangle goes on top of its image, and the
+/// pieces are still found as the pieces of one image. The SVG output keeps masking where they
+/// overlap, so the image keeps its alpha there, and draws one copy of the image, as before saving.
+#[test]
+fn mesh_warp_pieces_saved_and_opened_again_are_still_pieces_of_one_image() {
+    let img = craft_image_codecs::Image::from_raw(
+        20,
+        20,
+        craft_image_codecs::ChannelLayout::Rgba,
+        craft_image_codecs::SampleType::U8,
+        [255, 0, 0, 128].repeat(400),
+    )
+    .unwrap();
+    let png = craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap();
+    let mut s = session();
+    s.execute("file.place", &json!({"name": "half.png", "dataBase64": vectorcraft_format::base64_encode(&png), "at": [50, 50]})).unwrap();
+    s.execute("object.envelope.makeWithWarp", &json!({"style": "arc", "bend": 50})).unwrap();
+    s.execute("object.envelope.expand", &json!({})).unwrap();
+    let svg = |s: &mut Session| {
+        let v = s.execute("document.export", &json!({"format": "svg"})).unwrap();
+        String::from_utf8(vectorcraft_format::base64_decode(v["dataBase64"].as_str().unwrap()).unwrap()).unwrap()
+    };
+    let before = svg(&mut s);
+    let masks = before.matches("<mask").count();
+    assert!(masks > 0, "the overlaps are masked");
+    assert_eq!(before.matches("data:image/png;base64,").count(), 1);
+
+    let data = s.execute("document.export", &json!({"format": "vectorcraft"})).unwrap()["dataBase64"].clone();
+    let mut o = Session::new();
+    o.execute("document.open", &json!({"name": "warp.vectorcraft", "dataBase64": data})).unwrap();
+    let mut pieces = vec![];
+    o.doc().unwrap().doc.walk(|n| {
+        if n.extras().warp_piece {
+            pieces.push(n.clone());
+        }
+    });
+    assert!(pieces.len() > 1);
+    for p in &pieces {
+        assert_eq!(p.clipping_path_index(), Some(1), "the triangle on top");
+        assert!(p.warp_piece_image().is_some(), "the image found below it");
+    }
+    let after = svg(&mut o);
+    assert_eq!(after.matches("<mask").count(), masks, "still masked");
+    assert_eq!(after.matches("data:image/png;base64,").count(), 1, "still one copy");
+}

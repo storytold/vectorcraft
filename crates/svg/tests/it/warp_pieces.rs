@@ -73,6 +73,29 @@ fn a_half_transparent_image_is_half_transparent_where_its_warp_pieces_overlap() 
     }
 }
 
+/// Opened from a file, each piece has its triangle on top of its image (a clipping path goes on
+/// top in a document): the pieces are still found, so the image keeps its alpha where they overlap
+/// and they draw one copy of it.
+#[test]
+fn warp_pieces_with_the_triangle_on_top_keep_their_alpha_and_share_the_image() {
+    let same = |p: Point| p;
+    let mut d = warped(&same, false);
+    d.put_clipping_paths(vectorcraft_doc::ClippingPathAt::Top);
+    let mut on_top = 0;
+    d.walk(|n| {
+        if n.extras().warp_piece {
+            assert_eq!(n.clipping_path_index(), Some(1));
+            on_top += 1;
+        }
+    });
+    assert_eq!(on_top, 32);
+    let svg = export_full(&d, &ExportOptions::default(), None).svg;
+    let (most, least) = alpha_range(&svg);
+    assert!(most.2 <= 134, "{most:?}");
+    assert!(least.2 >= 104, "{least:?}");
+    assert_eq!(svg.matches("data:image/png;base64,").count(), 1);
+}
+
 /// An image whose left half is opaque and whose right half is at half alpha, cut into 4 × 4 cells:
 /// its opaque pixels stay opaque on the pieces' antialiased edges, away from the partly
 /// transparent pixels, and the right half stays half transparent.

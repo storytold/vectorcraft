@@ -2154,3 +2154,23 @@ fn a_groups_own_fill_follows_a_clip_groups_clipping_path_not_its_hidden_art() {
     let b = member_shapes(None, &own)[0].0.bounds().unwrap();
     assert!(near(b, Rect::new(100.0, 100.0, 200.0, 200.0)), "the clipping path's region: {b:?}");
 }
+
+/// A clip group's own fill below its contents paints below every member its clipping path clips,
+/// wherever the clipping path sits: on top, as in a document, or at the bottom, as in a file.
+#[test]
+fn a_clip_groups_fill_below_its_contents_goes_below_all_the_clipped_members() {
+    let mut mask = Node::path(NodeId(3), shapes::rectangle(Rect::new(-5.0, -5.0, 20.0, 20.0)), Appearance::default());
+    mask.set_clipping_path(true);
+    let mask = Arc::new(mask);
+    for on_top in [true, false] {
+        let (a, b) = (sq(1, 0.0, Color::rgb(1.0, 0.0, 0.0)), sq(2, 5.0, Color::rgb(0.0, 0.0, 1.0)));
+        let children = if on_top { vec![a, b, mask.clone()] } else { vec![mask.clone(), a, b] };
+        let mut g = Node::new(NodeId(10), NodeKind::Group { children, clip: true });
+        g.appearance.items.push(AppearanceItem::Fill(FillLayer::new(Paint::solid(Color::rgb(0.0, 1.0, 0.0)))));
+        g.appearance.set_contents_at(1);
+        let m = evaluate_container(None, &g).unwrap();
+        let ids: Vec<u64> = m.children().unwrap().iter().map(|c| c.id.0).collect();
+        // The fill's art takes the group's id.
+        assert_eq!(ids, if on_top { [10, 1, 2, 3] } else { [3, 10, 1, 2] }, "clipping path on top: {on_top}");
+    }
+}

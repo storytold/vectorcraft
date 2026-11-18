@@ -782,14 +782,18 @@ impl Node {
     }
 
     /// The image a piece of a mesh-warped image draws ([`Self::knockout_outline`]): the piece itself
-    /// when an opacity mask cuts it, else the image its clip group clips. `None` for other objects.
+    /// when an opacity mask cuts it, else the image its clip group clips, below or above its
+    /// clipping path ([`split_clipping_path`]). `None` for other objects.
     pub fn warp_piece_image(&self) -> Option<&Node> {
         if !self.extras().warp_piece {
             return None;
         }
         match &self.kind {
             NodeKind::Image(_) => Some(self),
-            NodeKind::Group { children, clip: true } => children.get(1).map(|c| &**c).filter(|c| matches!(c.kind, NodeKind::Image(_))),
+            NodeKind::Group { children, clip: true } => split_clipping_path(children)
+                .and_then(|(_, mut clipped)| clipped.next())
+                .map(|c| &**c)
+                .filter(|c| matches!(c.kind, NodeKind::Image(_))),
             _ => None,
         }
     }
