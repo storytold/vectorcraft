@@ -552,10 +552,12 @@ fn apply_preset(app: &mut VectorcraftApp, d: &mut Dialog, name: &str) {
 const OPTION_FLAGS: [&str; 2] = ["__requireOpenPassword", "__restrictPermissions"];
 
 /// Replace every option with `settings` (from [`settings_fields`]), the password checkboxes
-/// included. The preset, the artboard choice, the path and the other UI-only fields (the section,
-/// the Save Preset name) stay.
+/// included, and let the bleed link follow the new values. The preset, the artboard choice, the
+/// path and the other UI-only fields (the section, the Save Preset name) stay.
 fn replace_settings(d: &mut Dialog, settings: Map<String, Value>) {
-    d.fields.retain(|k, _| matches!(k.as_str(), "preset" | "range" | "path") || (k.starts_with("__") && !OPTION_FLAGS.contains(&k.as_str())));
+    d.fields.retain(|k, _| {
+        matches!(k.as_str(), "preset" | "range" | "path") || (k.starts_with("__") && !OPTION_FLAGS.contains(&k.as_str()) && k != BLEED_LINKED)
+    });
     d.fields.extend(settings);
 }
 
@@ -687,23 +689,104 @@ pub(super) fn marks_and_bleeds(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut 
     flag(ui, d, "bleed.useDocument", tl!("Use document bleed settings"), true);
     // With the document's bleed the fields show it (Document Setup's `[top, bottom, left, right]`).
     let document = (get(d, "bleed.useDocument").as_bool() == Some(true)).then(|| app.session.active().map_or([0.0; 4], |s| s.doc.setup.bleed));
-    egui::Grid::new("pdf-bleed").num_columns(4).spacing([10.0, 6.0]).show(ui, |ui| {
-        for pair in [
-            [(0, "bleed.top", tl!("Top:")), (1, "bleed.bottom", tl!("Bottom:"))],
-            [(2, "bleed.left", tl!("Left:")), (3, "bleed.right", tl!("Right:"))],
-        ] {
-            for (i, p, label) in pair {
-                ui.label(label);
-                match document {
-                    Some(b) => {
-                        ui.add_enabled_ui(false, |ui| widgets::num_field(ui, p, b.get(i).copied(), unit, 80.0));
+    // Save PDF and the PDF preset editor link the four sides; Print's Marks and Bleed doesn't.
+    let pdf = d.kind == KIND || d.kind == PRESET_KIND;
+    ui.horizontal(|ui| {
+        egui::Grid::new("pdf-bleed").num_columns(4).spacing([10.0, 6.0]).show(ui, |ui| {
+            for pair in [
+                [(0, "bleed.top", tl!("Top:")), (1, "bleed.bottom", tl!("Bottom:"))],
+                [(2, "bleed.left", tl!("Left:")), (3, "bleed.right", tl!("Right:"))],
+            ] {
+                for (i, p, label) in pair {
+                    ui.label(label);
+                    match document {
+                        Some(b) => {
+                            ui.add_enabled_ui(false, |ui| widgets::num_field(ui, p, b.get(i).copied(), unit, 80.0));
+                        }
+                        None if pdf => {
+                            if let Some(x) = widgets::num_field(ui, p, get(d, p).as_f64(), unit, 80.0) {
+                                edit_bleed(d, i, x);
+                            }
+                        }
+                        None => length(ui, d, p, unit, true),
                     }
-                    None => length(ui, d, p, unit, true),
                 }
+                ui.end_row();
             }
-            ui.end_row();
+        });
+        if pdf {
+            let linked = bleed_linked(d);
+            let tip = if linked { tl!("Make the bleed values differ") } else { tl!("Make all bleed settings the same") };
+            // With the document's bleed the link is grayed out and keeps its state for the custom values.
+            let clicked = ui
+                .add_enabled_ui(document.is_none(), |ui| widgets::icon_button(ui, if linked { "link" } else { "link-2-off" }, tip, linked, 24.0))
+                .inner
+                .clicked();
+            if clicked {
+                link_bleed(d, !linked);
+            }
         }
     });
+}
+
+/// The custom bleed's sides in Save PDF and the PDF preset editor, `[top, bottom, left, right]`.
+const BLEED_SIDES: [&str; 4] = ["bleed.top", "bleed.bottom", "bleed.left", "bleed.right"];
+/// The field holding whether the link keeps the four custom bleed values the same. Without it,
+/// the sides are linked when they are equal (a preset's, or ones `ui.dialog.set` set).
+const BLEED_LINKED: &str = "__bleedLinked";
+
+/// Whether the custom bleed's sides are linked.
+fn bleed_linked(d: &Dialog) -> bool {
+    d.fields.get(BLEED_LINKED).and_then(Value::as_bool).unwrap_or_else(|| {
+        let top = get(d, BLEED_SIDES[0]).as_f64();
+        BLEED_SIDES[1..].iter().all(|p| get(d, p).as_f64() == top)
+    })
+}
+
+/// Link (every side takes the top's value) or unlink (the sides keep their values) the bleed.
+fn link_bleed(d: &mut Dialog, on: bool) {
+    d.fields.insert(BLEED_LINKED.into(), json!(on));
+    if on {
+        let top = get(d, BLEED_SIDES[0]).as_f64().unwrap_or(0.0);
+        for p in &BLEED_SIDES[1..] {
+            set(d, p, json!(top));
+        }
+    }
+}
+
+/// Side `side` of the custom bleed was edited to `value`: linked, every side takes it. The link
+/// keeps the state it had before the edit, so an unlinked edit that makes the sides equal leaves
+/// it off.
+fn edit_bleed(d: &mut Dialog, side: usize, value: f64) {
+    let linked = bleed_linked(d);
+    d.fields.insert(BLEED_LINKED.into(), json!(linked));
+    if linked {
+        for p in BLEED_SIDES {
+            set(d, p, json!(value));
+        }
+    } else if let Some(p) = BLEED_SIDES.get(side) {
+        set(d, p, json!(value));
+    }
+}
+
+/// `ui.dialog.set` set `field` of Save PDF or the PDF preset editor: `__bleedLinked` links or
+/// unlinks the bleed as its button does, and must be true or false; every write of `bleed`, the
+/// same values included, drops the link's state, so the link follows the values set.
+pub(super) fn field_set(d: &mut Dialog, field: &str) -> Result<(), String> {
+    match field {
+        BLEED_LINKED => match d.fields.get(BLEED_LINKED).cloned() {
+            Some(Value::Bool(on)) => {
+                link_bleed(d, on);
+                Ok(())
+            }
+            v => Err(format!("{BLEED_LINKED} must be true or false, not {}", v.unwrap_or(Value::Null))),
+        },
+        "bleed" => {
+            d.fields.remove(BLEED_LINKED);
+            Ok(())
+        }
+        _ => Ok(()),
+    }
 }
 
 /// A dropdown of names such as colour profiles or flattener presets (`names`, the first one

@@ -545,10 +545,10 @@ fn hidden_controls(d: &Dialog) -> &'static [&'static str] {
         Some(DialogKind::Preferences) => &["__category", "__search", "__smartGuides", "__snapToGrid", "__taskBar"],
         // The section shown, the sheet the preview shows and the preset name being typed.
         Some(DialogKind::Print | DialogKind::PrintPreset) => &["__savePresetAs", "__section", "__sheet"],
-        // The section shown, All or a range of artboards, the two password checkboxes and the
-        // preset name being typed.
+        // The section shown, All or a range of artboards, the bleed link, the two password
+        // checkboxes and the preset name being typed.
         Some(DialogKind::SavePdf | DialogKind::PdfPreset) => {
-            &["__allArtboards", "__requireOpenPassword", "__restrictPermissions", "__savePresetAs", "__section"]
+            &["__allArtboards", "__bleedLinked", "__requireOpenPassword", "__restrictPermissions", "__savePresetAs", "__section"]
         }
         // The selected rows and Randomize's seed.
         Some(DialogKind::Recolor) => &["__seed", "__sel"],
@@ -692,8 +692,9 @@ pub(crate) fn parent(d: &Dialog) -> Option<Dialog> {
 /// `flattenerPreset`, which drops the Custom… options), a change
 /// to Export for Screens' sub-folder controls ends an applied preset's item folders, as it does in
 /// the dialog, Transform Each's Relative / Absolute keeps the Scale fields' size, and Recolor
-/// Artwork's `group` selects that color group and its `groupAction` runs the button at once. A value
-/// Composite Fonts' Show Sample can't take is refused.
+/// Artwork's `group` selects that color group and its `groupAction` runs the button at once. Save
+/// PDF's bleed link links the bleed as its button does. A value Composite Fonts' Show Sample or
+/// Save PDF's bleed link can't take is refused.
 pub(crate) fn field_set(app: &mut VectorcraftApp, field: &str, old: Option<&Value>) -> Result<(), String> {
     if app.ui.dialog.as_ref().is_some_and(|d| d.kind == transform_each::KIND) {
         transform_each::field_set(app, field, old);
@@ -704,6 +705,9 @@ pub(crate) fn field_set(app: &mut VectorcraftApp, field: &str, old: Option<&Valu
     }
     if let Some(d) = app.ui.dialog.as_ref().filter(|d| d.kind == composite_fonts::KIND) {
         return composite_fonts::field_set(d, field);
+    }
+    if let Some(d) = app.ui.dialog.as_mut().filter(|d| d.kind == save_pdf::KIND || d.kind == save_pdf::PRESET_KIND) {
+        return save_pdf::field_set(d, field);
     }
     if let Some(d) = app.ui.dialog.as_mut().filter(|d| d.kind == eps_options::KIND) {
         eps_options::field_set(d, field);
