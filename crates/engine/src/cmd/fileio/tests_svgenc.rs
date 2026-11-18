@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use serde_json::json;
-use vectorcraft_doc::Document;
+use vectorcraft_doc::{Document, Node, NodeKind};
 
 use super::*;
 
@@ -210,6 +210,44 @@ fn a_chosen_artboard_s_svg_keeps_nested_brush_art_but_not_unpainted_or_clipped_a
     assert!(kept.node(clipped).is_none(), "a clipping group whose clip misses the artboard");
     assert!(kept.node(compounds[0]).is_none(), "a compound path that is not brushed itself");
     assert!(kept.node(compounds[1]).is_some(), "a compound path that is brushed itself");
+}
+
+/// The art over an artboard, among 300 instances with drop shadows and 2,000 symbols, is found
+/// reading the symbol list once, and keeps the instances over it.
+#[test]
+fn art_over_an_artboard_reads_the_symbol_list_once() {
+    let mut d = Document::new(100.0, 100.0);
+    let square = |d: &mut Document, side: f64| {
+        let r = vectorcraft_geom::Rect::new(-side, -side, side, side);
+        let ap =
+            vectorcraft_doc::Appearance::basic(vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK), vectorcraft_color::Paint::None, 0.0);
+        Arc::new(Node::path(d.alloc_id(), vectorcraft_geom::shapes::rectangle(r), ap))
+    };
+    for i in 0..2000 {
+        let art = square(&mut d, 0.5);
+        d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: format!("Filler {i}"), art });
+    }
+    let art = square(&mut d, 2.0);
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Mark".into(), art });
+    let layer = d.layers[0].id;
+    // Twenty rows of 15: the first ten over the artboard, the rest below it.
+    let ids: Vec<_> = (0..300)
+        .map(|i| {
+            let xf = vectorcraft_geom::Affine::translate((f64::from(i % 15) * 6.0 + 5.0, f64::from(i / 15) * 10.0 + 5.0));
+            let mut n = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Mark".into(), xf });
+            n.appearance.effects.push(vectorcraft_doc::Effect {
+                id: "stylize.dropShadow".into(),
+                params: json!({"x": 1, "y": 1, "blur": 0}),
+                visible: true,
+            });
+            d.insert(Some(layer), usize::MAX, n).unwrap()
+        })
+        .collect();
+    let before = vectorcraft_doc::symbols_read();
+    let kept = export::art_over(&d, d.artboards[0].rect, &mut vectorcraft_render::Renderer::new());
+    let read = vectorcraft_doc::symbols_read() - before;
+    assert!(read <= d.symbols.len(), "{read} symbols read, {} in the document", d.symbols.len());
+    assert_eq!(ids.iter().filter(|id| kept.node(**id).is_some()).count(), 150);
 }
 
 /// #3544: an SVG of one artboard on its own (an `artboard` or `range`, Export for Screens, an asset)
