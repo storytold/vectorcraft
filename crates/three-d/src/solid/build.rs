@@ -533,6 +533,16 @@ struct Step {
     face: f64,
 }
 
+/// How far the walls are inset (negative: outset). With the bevel inside, the cap is inset by its
+/// width and the wall is the outline; outside, the cap is the outline and the wall is outset by
+/// the width.
+fn wall_inset(o: &Extrude) -> f64 {
+    match o.bevel.filter(|b| b.width > 0.0 || b.height > 0.0) {
+        Some(b) if !b.inside => -b.width,
+        _ => 0.0,
+    }
+}
+
 /// The outline's steps from the front cap's edge to the back cap's edge.
 fn steps(o: &Extrude) -> Vec<Step> {
     let d = o.depth.max(1e-6);
@@ -562,12 +572,7 @@ fn steps(o: &Extrude) -> Vec<Step> {
         }
         pts
     };
-    // With the bevel inside, the cap is inset by its width and the wall is the outline; outside,
-    // the cap is the outline and the wall is outset by the width.
-    let wall = match bevel {
-        Some(b) if !b.inside => -b.width,
-        _ => 0.0,
-    };
+    let wall = wall_inset(o);
     // A twist turns a bevel's steps too: each step between two samples is cut into steps that
     // turn no further than 6°, as the walls' slices do at most.
     let refine = |pts: Vec<(f64, f64)>| -> Vec<(f64, f64)> {
@@ -694,7 +699,7 @@ pub(crate) fn extrude_faces(path: &PathData, rule: FillRule, bounds: Rect, optio
         .collect();
     let mut budget = Budget::default();
     // The numbered surfaces of the sides, for a solid whose walls stay flat.
-    let layout = (o.map_surfaces && o.twist == 0.0 && o.taper == 1.0).then(|| (sides(&traced), band_spans(&steps, o.depth)));
+    let layout = (o.map_surfaces && o.twist == 0.0 && o.taper == 1.0).then(|| (sides(&traced, wall_inset(&o)), band_spans(&steps, o.depth)));
     for (r, ((ring, traced), pieces)) in rings.iter().zip(&traced).zip(&pieces).enumerate() {
         let placed: Vec<Vec<V3>> = steps.iter().map(|s| ring_at(ring, s)).collect();
         for (k, pair) in placed.windows(2).enumerate() {
@@ -750,17 +755,22 @@ const CORNER: f64 = 20.0;
 /// no corner is one surface from its first point. The edges of one curve of the outline are never
 /// parted. An edge of no length belongs to no surface. An edge starts farther along its surface
 /// than it ends: the surface is measured from its left edge as it is seen from outside the solid.
+/// Lengths are measured on the ring moved to the walls' inset `wall`, so a wall set out by a bevel
+/// is laid out at its own length, and a bevel band at the length of the wall below it.
 struct Sides {
     edges: Vec<Vec<Option<(usize, f64, f64)>>>,
     lengths: Vec<f64>,
 }
 
-fn sides(rings: &[Ring]) -> Sides {
+fn sides(rings: &[Ring], wall: f64) -> Sides {
     let mut out = Sides { edges: vec![], lengths: vec![] };
     for ring in rings {
         let n = ring.points.len();
         let point = |i: usize| ring.points.get(i % n.max(1)).copied().unwrap_or_default();
-        let length = |i: usize| point(i).distance(point(i + 1));
+        let at_wall = inset(&ring.points, wall);
+        let wall_point = |i: usize| at_wall.get(i % n.max(1)).copied().unwrap_or_default();
+        // An edge of the outline with no length (a corner cut square) stays off every surface.
+        let length = |i: usize| if point(i).distance(point(i + 1)) > 1e-9 { wall_point(i).distance(wall_point(i + 1)) } else { 0.0 };
         let direction = |i: usize| {
             let d = point(i + 1) - point(i);
             let l = d.hypot();
@@ -858,7 +868,7 @@ pub fn extrude_surfaces(path: &PathData, rule: FillRule, bounds: Rect, options: 
     if o.twist != 0.0 || o.taper != 1.0 {
         return Ok(out);
     }
-    let sides = sides(&traced);
+    let sides = sides(&traced, wall_inset(&o));
     let spans = band_spans(&steps, o.depth);
     let across = |bevel: bool| spans.iter().flatten().filter(|s| s.0 == bevel).map(|s| s.2).fold(0.0, f64::max);
     let kinds = [(SurfaceKind::Wall, false)].into_iter().chain(spans.iter().flatten().any(|s| s.0).then_some((SurfaceKind::Bevel, true)));

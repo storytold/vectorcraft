@@ -4688,7 +4688,8 @@ Rotate (Classic) and the other 3D effects take no map.
 - `surface` is a whole number from 1 to the object's surface count. Extrude & Bevel (Classic) numbers the surfaces
   through the object's solids in the order they are built: each solid's front cap and back cap, then each side wall
   from corner to corner of the outline, then the bevel above each wall. A hollow solid (`cap` false) has no caps, so
-  its numbering starts at its first side wall. Revolve (Classic) has one surface, its swept
+  its numbering starts at its first side wall. A side wall is laid out at its own length, and a bevel at the length of
+  the wall below it. Revolve (Classic) has one surface, its swept
   side; on a group it is the side of the member with the longest profile, and the other members take no map. The
   numbering is VectorCraft's own.
 - `symbol` names the symbol mapped onto the surface, and `null` removes the surface's map, also a map kept past the

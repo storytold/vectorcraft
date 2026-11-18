@@ -154,6 +154,25 @@ fn a_map_on_a_side_wall_reads_the_right_way_round_from_outside() {
 }
 
 #[test]
+fn a_wall_beside_a_bevel_is_laid_out_at_its_own_length() {
+    let d = document();
+    // A bevel 10 wide added around the square sets each wall 10 out, so each wall is 120 long; a
+    // bevel takes the length of the wall it sits above. Carved in, the walls are the square's own.
+    for (inside, length) in [(false, 120.0), (true, 100.0)] {
+        let solid = object(CLASSIC_EXTRUDE, json!({"bevel": "classic", "bevelHeight": 10, "bevelInside": inside}));
+        for side in surfaces(&solid).iter().skip(2) {
+            assert!((side.width - length).abs() < 1e-6, "inside {inside}: {side:?}");
+        }
+        // Seen from one side, the art on the wall that faces the viewer keeps its size.
+        let walls: Vec<Value> = (3..=6).map(|k| json!({"surface": k, "symbol": "Corner"})).collect();
+        let n = object(CLASSIC_EXTRUDE, json!({"bevel": "classic", "bevelHeight": 10, "bevelInside": inside, "rotationY": 90, "mapArt": walls}));
+        let art = solid_art_in(Some(&d), &n).unwrap();
+        let whole = bounds_of(&[filled(&art, RED), filled(&art, BLUE), filled(&art, GREEN)].concat());
+        assert!((whole.width() - 30.0).abs() < 1e-6 && (whole.height() - 30.0).abs() < 1e-6, "inside {inside}: {whole:?}");
+    }
+}
+
+#[test]
 fn a_map_on_the_back_cap_reads_the_right_way_round_from_behind() {
     let d = document();
     let n = object(CLASSIC_EXTRUDE, json!({"rotationY": 180, "mapArt": [{"surface": 1, "symbol": "Corner"}, {"surface": 2, "symbol": "Corner"}]}));

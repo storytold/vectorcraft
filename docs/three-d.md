@@ -567,7 +567,9 @@ Rotate (Classic) and the other 3D effects take no map. The command is `threeD.ma
 Extrude & Bevel (Classic) numbers its surfaces through the object's solids in the order they are built (the top fill's
 solid, then each stroke's): each solid's front cap and back cap, then each side wall from corner to corner of the
 outline, then the bevel above each wall. An extruded square has six surfaces. A hollow solid has no caps to number.
-Revolve (Classic) has one surface, its swept side, unrolled around the axis as Revolve's graphics are; on a group it is
+A side wall is laid out at its own length, which a bevel added around the shape makes longer than the outline. A bevel
+is laid out at the length of the wall below it, so mapped art on a bevel is stretched or squeezed along its edge
+nearer the cap. Revolve (Classic) has one surface, its swept side, unrolled around the axis as Revolve's graphics are; on a group it is
 the side of the member with the longest profile, and Invisible Geometry leaves out every member's faces. The numbering
 is VectorCraft's own.
 
