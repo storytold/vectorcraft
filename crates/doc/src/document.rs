@@ -339,6 +339,7 @@ impl Document {
     /// Index path from the top-level layer list to `id` (e.g. `[0, 3, 1]`): the first place in
     /// tree order where `id` appears.
     pub fn index_path(&self, id: NodeId) -> Option<Vec<usize>> {
+        crate::id_index::note_path_lookup();
         // The cached path, while the node there still has the id ([`id_index`]).
         let cached = self.index.get();
         match cached.as_ref().and_then(|m| m.get(&id)) {
@@ -419,6 +420,44 @@ impl Document {
             let mut rest = HashMap::with_capacity(want.len());
             walk(&self.layers, &want, &mut Vec::new(), &mut rest);
             out.extend(rest);
+        }
+        out
+    }
+
+    /// Every node whose id is in `ids`, in tree order (the order of [`Document::walk`]): unlike
+    /// [`Document::index_paths`], an id that appears more than once (a damaged file) gives every
+    /// node that has it. When the cache ([`id_index`]) holds each id once, at a path that still
+    /// checks out, the nodes are found along those paths; otherwise one walk of the tree finds
+    /// them. As for every cached lookup, a second node given an existing id after the cache was
+    /// built is not found while the first one's cached path checks out (see [`id_index`]).
+    pub fn nodes_in_order(&self, ids: impl IntoIterator<Item = NodeId>) -> Vec<&Node> {
+        let want: std::collections::HashSet<NodeId, std::hash::BuildHasherDefault<crate::id_index::IdHasher>> = ids.into_iter().collect();
+        // As in `index_paths`, one walk is quicker than checking the cached paths of a good share
+        // of the document.
+        if let Some(cache) = self.index.get().filter(|c| want.len().saturating_mul(8) < c.len()) {
+            let mut paths = Vec::with_capacity(want.len());
+            let cached = want.iter().all(|id| match cache.get(id) {
+                Some(Some(p)) if self.node_at(&p).is_some_and(|n| n.id == *id) => {
+                    paths.push(p);
+                    true
+                }
+                _ => false,
+            });
+            if cached {
+                // A node's path sorts after the paths of the nodes before it in tree order, its
+                // ancestors included.
+                paths.sort_unstable();
+                return paths.iter().filter_map(|p| self.node_at(p)).collect();
+            }
+        }
+        let mut out = Vec::new();
+        if !want.is_empty() {
+            crate::id_index::note_tree_walk();
+            self.walk(|n| {
+                if want.contains(&n.id) {
+                    out.push(n);
+                }
+            });
         }
         out
     }

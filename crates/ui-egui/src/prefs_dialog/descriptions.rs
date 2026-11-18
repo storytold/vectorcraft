@@ -39,6 +39,7 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
     ("ctrlWheelScrollsSideways", "The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways."),
     ("scrubNumericFields", "Dragging sideways on a numeric field's label changes the field's value."),
     ("trackpadRotateView", "A two-finger rotate gesture on a trackpad rotates the canvas view."),
+    ("interpolateControlPoints", "When you move anchor points, each curve with one moved end keeps its shape relative to its ends."),
     ("holdToolKeys", "Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again."),
     ("boundingBoxWhileMovingAndDrawing", "Shows the bounding box while you move the selection or draw a shape."),
     ("japaneseCropMarks", "Create Trim Marks draws Japanese-style marks instead of Roman ones."),
@@ -61,6 +62,63 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
         "artboardUpdateWhileDragging",
         "With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.",
     ),
+    // Type
+    (
+        "typeSizeIncrement",
+        "The step for type size and leading: Cmd/Ctrl+Shift+. and Cmd/Ctrl+Shift+, change the size by one step, or five with Alt too; in horizontal type, Alt with the Up or Down Arrow changes the leading by one step, or five with Cmd/Ctrl.",
+    ),
+    (
+        "trackingIncrement",
+        "The step for tracking and kerning, in thousandths of an em: in horizontal type, Alt with the Left or Right Arrow changes the kerning at the caret or the tracking of the selected text by one step, or five with Cmd/Ctrl.",
+    ),
+    (
+        "baselineShiftIncrement",
+        "The step for baseline shift: in horizontal type, Alt and Shift with the Up or Down Arrow move the baseline by one step, or five with Cmd/Ctrl.",
+    ),
+    (
+        "showEastAsianOptions",
+        "Shows the options for Japanese and other East Asian type in the Character, Paragraph, OpenType and Glyphs panels, and Type › Composite Fonts.",
+    ),
+    (
+        "showIndicOptions",
+        "Shows the options for Arabic, Hebrew and Indic type in the Character and Paragraph panels, such as paragraph direction, kashidas and digits.",
+    ),
+    ("typeSelectionByPathOnly", "The selection tools select type only on its baseline, its area's frame or its path, not anywhere inside its box."),
+    ("fontNamesInEnglish", "Font menus list each font by its English name; off, a font that also has a name in its own language shows that name."),
+    (
+        "autoSizeAreaType",
+        "New area type starts with Auto Size on, so a rectangular frame of horizontal type grows or shrinks in height to fit its text.",
+    ),
+    ("fontPreview", "Font lists and the Type › Font menu show a sample of each font beside its name."),
+    (
+        "fontSamplesOnWhite",
+        "Font samples are drawn in dark type on white, whatever the interface's brightness; it applies only while in-menu font previews are on.",
+    ),
+    ("fontPreviewSize", "How tall each row is in the font lists of font fields, such as the Character panel's, and so how large each sample is."),
+    ("recentFontsCount", "How many of the fonts used last, from 1 to 15, Type › Recent Fonts and the font lists show, newest first."),
+    ("missingGlyphProtection", "When you change the font or font style of text, characters the new font has no glyph for keep the font they had."),
+    (
+        "highlightAlternateGlyphs",
+        "A pink highlight on the canvas marks glyphs that OpenType features replaced, such as ligatures; it does not print or export.",
+    ),
+    (
+        "showCharacterAlternates",
+        "With the Type tool, selecting one character shows a row of its alternate glyphs beside it on the canvas to choose from.",
+    ),
+    (
+        "highlightSubstitutedFonts",
+        "A pink highlight on the canvas marks text drawn in a substitute font because its font is missing; it does not print or export.",
+    ),
+    ("placeholderText", "New type made with a Type tool starts with placeholder text, selected, so typing replaces it."),
+    ("typedLists", "Typing a list marker such as 1. or * and then a space at the start of a paragraph makes the paragraph a list."),
+    ("fontsFolder", "Fonts in this folder show in the font menus and can be used without being installed."),
+    (
+        "overrideCharColor",
+        "Applying a graphic style to type removes the characters' own fill or stroke where the style has one, so the style's paint shows.",
+    ),
+    ("alignGlyphBoundsPoint", "Align and Distribute measure point type by the ink of its glyphs instead of its em box."),
+    ("alignGlyphBoundsArea", "Align and Distribute measure area type by the ink of its glyphs instead of its frame."),
+    ("typeGlyphBounds", "The bounding box and the Transform panel measure point type by the ink of its glyphs instead of its em box."),
     // Selection & Anchor Display
     ("selectionTolerance", "How near, in pixels, the pointer must be to an object, anchor or handle for a click to select it."),
     (
@@ -160,6 +218,9 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
     ),
     ("snapTangent", "Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve."),
     ("snapPerpendicular", "Snaps the end of a line segment so that it meets a nearby straight segment at a right angle."),
+    // Slices
+    ("showSliceNumbers", "Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show."),
+    ("sliceLineColor", "The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it."),
 ];
 
 /// The sentence that describes the setting `key`, in English, or `None` when it has none yet.
