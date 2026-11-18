@@ -1956,6 +1956,91 @@ fn an_anchor_beside_a_drawn_dimension_takes_the_point() {
     assert_eq!(linear_marker(&mut s, zoomed, 125.5, 358.3), (Some((pt(126.0, 358.0), 10.0)), vec!["anchor".to_string()]));
 }
 
+/// The Smart Guide lines a pointer move at (`x`, `y`) shows, as their ends.
+fn guide_lines(s: &mut Session, view: ViewInfo, x: f64, y: f64) -> Vec<(vectorcraft_geom::Point, vectorcraft_geom::Point)> {
+    use vectorcraft_engine::tools::Overlay;
+    s.pointer(&PointerEvent::new(PointerKind::Move, x, y), view).unwrap();
+    s.overlays(view).into_iter().filter_map(|o| if let Overlay::Line { a, b, .. } = o { Some((a, b)) } else { None }).collect()
+}
+
+/// A dimension placed next to another, with its line within the Smart Guides snapping tolerance of
+/// the level of the other's parallel line, has its line on that level, and an alignment guide
+/// runs across both lines while it is placed. A level further off, Smart Guides off, a locked
+/// dimension or one that is not parallel leaves the line where the pointer puts it. A dimension
+/// dragged out from a segment lands on the level too.
+#[test]
+fn a_dimension_line_placed_beside_another_lands_on_its_level() {
+    let plain = ViewInfo::default();
+    let off = ViewInfo { smart_guides: false, ..plain };
+    let pt = vectorcraft_geom::Point::new;
+    // An edge with anchors at x 100, 200 and 300, and a dimension from 100 to 200 placed 30 points
+    // above it.
+    let start = |view: ViewInfo| {
+        let mut s = session();
+        run(&mut s, "path.create", json!({"d": "M100 200 L200 200 L300 200 L300 300 L100 300 Z"}));
+        run(&mut s, "select.none", json!({}));
+        s.select_tool("dimension", view).unwrap();
+        linear_click(&mut s, view, 100.0, 200.0);
+        linear_click(&mut s, view, 200.0, 200.0);
+        linear_click(&mut s, view, 150.0, 170.0);
+        let first = s.doc().unwrap().selection.objects[0].0;
+        assert_eq!(recipe(&s, first).line_ends(), (pt(100.0, 170.0), pt(200.0, 170.0)));
+        run(&mut s, "select.none", json!({}));
+        (s, first)
+    };
+    // The next dimension, from 200 to 300, placed with the pointer at `y`: where its line lies.
+    let next = |s: &mut Session, view: ViewInfo, y: f64| {
+        linear_click(s, view, 200.0, 200.0);
+        linear_click(s, view, 300.0, 200.0);
+        linear_click(s, view, 250.0, y);
+        let id = s.doc().unwrap().selection.objects[0].0;
+        recipe(s, id).line_ends()
+    };
+    // 2.5 points below the first line's level, and 3.5 above it: on the level.
+    for y in [172.5, 166.5] {
+        let (mut s, _) = start(plain);
+        assert_eq!(next(&mut s, plain, y), (pt(200.0, 170.0), pt(300.0, 170.0)), "pointer at y {y}");
+    }
+    // While it is placed, one guide runs along the level from the first line's left end to the
+    // new line's right end.
+    let (mut s, _) = start(plain);
+    linear_click(&mut s, plain, 200.0, 200.0);
+    linear_click(&mut s, plain, 300.0, 200.0);
+    let guides = guide_lines(&mut s, plain, 250.0, 172.5);
+    assert!(guides.iter().any(|(a, b)| near(*a, pt(100.0, 170.0)) && near(*b, pt(300.0, 170.0))), "{guides:?}");
+    assert!(guide_lines(&mut s, plain, 250.0, 180.0).is_empty(), "no guide off the level");
+    // 10 points off: where the pointer is.
+    let (mut s, _) = start(plain);
+    assert_eq!(next(&mut s, plain, 180.0), (pt(200.0, 180.0), pt(300.0, 180.0)));
+    // Smart Guides off: where the pointer is.
+    let (mut s, _) = start(off);
+    assert_eq!(next(&mut s, off, 172.5), (pt(200.0, 172.5), pt(300.0, 172.5)));
+    // A locked dimension does not pull the line.
+    let (mut s, first) = start(plain);
+    run(&mut s, "select.set", json!({"ids":[first]}));
+    run(&mut s, "object.lock", json!({}));
+    assert_eq!(next(&mut s, plain, 172.5), (pt(200.0, 172.5), pt(300.0, 172.5)));
+    // A dimension of the right edge has a vertical line, which is not parallel to the first: the
+    // pointer 2.5 points below the first line's level places it where the pointer is.
+    let (mut s, _) = start(plain);
+    linear_click(&mut s, plain, 300.0, 200.0);
+    linear_click(&mut s, plain, 300.0, 300.0);
+    linear_click(&mut s, plain, 330.0, 172.5);
+    let id = s.doc().unwrap().selection.objects[0].0;
+    assert_eq!(recipe(&s, id).line_ends(), (pt(330.0, 200.0), pt(330.0, 300.0)));
+    // The bottom edge dragged out to 2 points below the level of the first line, 130 points
+    // above the edge: on the level.
+    let (mut s, _) = start(plain);
+    for (kind, y) in
+        [(PointerKind::Move, 300.0), (PointerKind::Down, 300.0), (PointerKind::Drag, 240.0), (PointerKind::Drag, 172.0), (PointerKind::Up, 172.0)]
+    {
+        s.pointer(&PointerEvent::new(kind, 160.0, y), plain).unwrap();
+    }
+    let id = s.doc().unwrap().selection.objects[0].0;
+    let (a, b) = recipe(&s, id).line_ends();
+    assert!(near(a, pt(300.0, 170.0)) && near(b, pt(100.0, 170.0)) || near(a, pt(100.0, 170.0)) && near(b, pt(300.0, 170.0)), "{a:?} {b:?}");
+}
+
 /// The page content streams of exported PDF `v`, inflated.
 fn pdf_content(v: &Value) -> String {
     let bytes = vectorcraft_format::base64_decode(v["dataBase64"].as_str().unwrap()).unwrap();
