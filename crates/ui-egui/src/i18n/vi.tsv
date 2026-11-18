@@ -3381,6 +3381,8 @@ mark-style	Japanese	Kiểu Nhật
 	Reset all Revolve settings to their defaults.	Đặt lại tất cả cài đặt Revolve về mặc định.
 	Reset Bar Position	Đặt lại vị trí thanh
 	Reset Bounding Box	Đặt lại hộp bao
+	Rotate Bounding Box	Xoay hộp bao
+	Rotate Bounding Box…	Xoay hộp bao…
 	Reset Envelope Mesh	Đặt lại lưới Envelope
 	Reset Envelope Shape	Đặt lại hình dạng Envelope
 	Reset Essentials	Đặt lại Essentials

@@ -3839,6 +3839,8 @@ digits	Malayalam	Μαλαγιάλαμ
 	Replaces the saved preset of that name.	Αντικαθιστά την αποθηκευμένη προεπιλογή με αυτό το όνομα.
 	Require a password to open the document	Απαίτηση κωδικού για το άνοιγμα εγγράφου
 	Reset Bounding Box	Επαναφορά πλαισίου οριοθέτησης
+	Rotate Bounding Box	Περιστροφή πλαισίου οριοθέτησης
+	Rotate Bounding Box…	Περιστροφή πλαισίου οριοθέτησης…
 	Reset Envelope Mesh	Επαναφορά πλέγματος περιβλήματος
 	Reset Envelope Shape	Επαναφορά σχήματος περιβλήματος
 	Reset Essentials	Επαναφορά χώρου εργασίας Essentials
