@@ -79,6 +79,7 @@ pub mod sysclip;
 pub mod theme;
 pub mod thumb_worker;
 pub mod titlebar;
+pub mod toasts;
 pub mod toolbar;
 mod tools_float;
 pub mod touch;
@@ -129,6 +130,7 @@ pub use services::{
 };
 use state::{GeometryStamp, InputGeneration, PendingScreenshot, QueuedScreenshot};
 pub(crate) use state::{InputFrame, take_frame_once};
+pub use ui_fonts::on_missing_glyphs;
 
 pub struct VectorcraftApp {
     pub session: Session,
@@ -291,6 +293,8 @@ pub struct VectorcraftApp {
     pub placing: placing::Placing,
     /// Image Traces running off the UI thread ([`trace_runs`]).
     pub trace_runs: trace_runs::TraceRuns,
+    /// The messages shown over the window ([`toasts`]).
+    pub toasts: toasts::Shown,
     /// Data Recovery's timer and startup question ([`recovery`]).
     pub recovery: recovery::Timer,
     /// Modifiers the keyboard holds (from the host's input), given back after synthetic input.

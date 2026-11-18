@@ -116,8 +116,12 @@
 	Add to Swatches	Zu Farbfeldern hinzufügen
 	Add Used Colors	Verwendete Farben hinzufügen
 	Additional Plug-ins Folder	Zusätzlicher Plug-in-Ordner
+	Plug-in Instruction Budget	Anweisungsbudget für Plug-ins
 	Additional Fonts Folder	Zusätzlicher Schriftenordner
 	Adjust Adjoining Width Points	Angrenzende Breitenpunkte anpassen
+	Incoming	Eingehend
+	Outgoing	Ausgehend
+	Single Width Only	Nur eine Breite
 	Adjust Color Balance…	Farbbalance anpassen…
 	Adjust Colors	Farben anpassen
 	Adjust Options:	Anpassungsoptionen:
@@ -402,6 +406,12 @@ font-technology	Variable	Variabel
 	Character Alignment	Zeichenausrichtung
 	Character / Paragraph	Zeichen / Absatz
 	Character Rotation	Zeichendrehung
+	Chinese Big 5	Chinesisch Big 5
+	Cyrillic	Kyrillisch
+	Greek	Griechisch
+	Turkish	Türkisch
+	Baltic	Baltisch
+	Central European	Mitteleuropäisch
 	Character Set:	Zeichensatz:
 	Character Style	Zeichenformat
 	Character Style Options	Zeichenformatoptionen
@@ -464,6 +474,8 @@ font-technology	Variable	Variabel
 	Choose a folder	Ordner wählen
 	Choose…	Wählen…
 	Circle	Kreis
+	Circle Tool	Kreis-Werkzeug
+	Circle too large	Kreis zu groß
 	Classic Defaults	Klassische Standardwerte
 	Clean Up…	Aufräumen…
 	Clear	Löschen
@@ -526,6 +538,11 @@ font-technology	Variable	Variabel
 	Color blindness – Deuteranopia-type	Farbenblindheit – Deuteranopie
 	Color blindness – Protanopia-type	Farbenblindheit – Protanopie
 	Color blindness – Tritanopia-type	Farbenblindheit – Tritanopie
+	Show Color Vision Preview	Farbsehvorschau einblenden
+	Protanopia	Protanopie
+	Deuteranopia	Deuteranopie
+	Tritanopia	Tritanopie
+	Achromatopsia	Achromatopsie
 	Color Burn	Farbig nachbelichten
 	Color conversion:	Farbkonvertierung:
 	Color Dodge	Farbig abwedeln
@@ -699,6 +716,16 @@ font-technology	Variable	Variabel
 	Create New Swatch…	Neues Farbfeld erstellen…
 	Create New {kind} Style	Neues {kind}format erstellen
 	Create Object Mosaic…	Objektmosaik erstellen…
+	Create Object Mosaic	Objektmosaik erstellen
+	Current Size:	Aktuelle Größe:
+	New Size:	Neue Größe:
+	Tile Spacing:	Kachelabstand:
+	Number of Tiles:	Anzahl der Kacheln:
+	Constrain Ratio:	Proportionen beschränken:
+	Result:	Ergebnis:
+	Resize Using Percentages	Größe in Prozent ändern
+	Delete Raster	Pixelbild löschen
+	Use Ratio	Verhältnis verwenden
 	Create Outlines	In Pfade umwandeln
 	Create Path	Pfad erstellen
 	Create PDF layers from layers and sublayers	PDF-Ebenen aus Ebenen und Unterebenen erstellen
@@ -786,6 +813,9 @@ font-technology	Variable	Variabel
 	Delete Artboard	Zeichenfläche löschen
 	Delete Artboards	Zeichenflächen löschen
 	Delete Brush	Pinsel löschen
+	Delete Color	Farbe löschen
+	Restore Generated Table	Generierte Tabelle wiederherstellen
+	Unshift All Colors	Verschiebung aller Farben aufheben
 	Delete Character Style	Zeichenformat löschen
 	Delete Empty Artboards	Leere Zeichenflächen löschen
 	Delete Freeform Point	Freiformpunkt löschen
@@ -854,6 +884,7 @@ font-technology	Variable	Variabel
 	Direct Selection Tool	Direktauswahl-Werkzeug
 	Direction Handles	Richtungsgriffe
 	Disable Auto Add/Delete	Automatisches Hinzufügen/Löschen deaktivieren
+	Interpolate Control Points When Moving Anchors	Richtungsgriffe beim Verschieben von Ankerpunkten interpolieren
 	Disable Opacity Mask	Deckkraftmaske deaktivieren
 	Discard	Verwerfen
 	Preserve	Beibehalten
@@ -967,6 +998,8 @@ font-technology	Variable	Variabel
 	Duplicate	Duplizieren
 	Duplicate and Offset 10 pt	Duplizieren und um 10 pt versetzen
 	Duplicate Artboard	Zeichenfläche duplizieren
+	Click to add an artboard on this side; Alt-click to duplicate this artboard with its art	Klicken fügt auf dieser Seite eine Zeichenfläche hinzu, Alt-Klick dupliziert diese Zeichenfläche mit ihrem Bildmaterial
+	Click to add an artboard on this side	Klicken fügt auf dieser Seite eine Zeichenfläche hinzu
 	Copy Artboard	Zeichenfläche kopieren
 	Cut Artboard	Zeichenfläche ausschneiden
 	Rename Artboards	Zeichenflächen umbenennen
@@ -1247,6 +1280,8 @@ font-technology	Variable	Variabel
 	Files	Dateien
 	Files of a PDF standard can't be password-protected.	Dateien eines PDF-Standards können nicht mit einem Kennwort geschützt werden.
 	Files of this standard tag their colours with ICC profiles.	Dateien dieses Standards kennzeichnen ihre Farben mit ICC-Profilen.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	Dateien dieses Standards kennzeichnen ihre Farben mit ICC-Profilen, außer CMYK-Farben im Profil der Ausgabemethode, die als DeviceCMYK geschrieben werden.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	Mit „Profile nicht einschließen“ und einer CMYK-Ausgabemethode wird jede CMYK-Farbe als DeviceCMYK geschrieben, sofern sie nicht in ein CMYK-Ziel mit einem anderen Profil konvertiert wird.
 	Fill	Fläche
 	Fill & Stroke	Fläche und Kontur
 	Fill (X), double-click for the Color Picker	Fläche (X), Doppelklick öffnet den Farbwähler
@@ -1275,6 +1310,19 @@ font-technology	Variable	Variabel
 	Fill: click for swatches, Shift-click for the color mixer	Fläche: Klicken für Farbfelder, Shift-Klick für den Farbmischer
 	Find	Suchen
 	Find and Replace…	Suchen und ersetzen…
+	Find and Replace	Suchen und ersetzen
+	Find:	Suchen:
+	Replace With:	Ersetzen durch:
+	Replace & Find	Ersetzen und suchen
+	Replace All	Alle ersetzen
+	Match Case	Groß-/Kleinschreibung beachten
+	Find Whole Word	Ganzes Wort suchen
+	Search Backwards	Rückwärts suchen
+	Check Hidden Layers	Ausgeblendete Ebenen durchsuchen
+	Check Locked Layers	Gesperrte Ebenen durchsuchen
+@msg	No matches found	Keine Treffer gefunden
+@msg	Matches replaced: {n}	Ersetzte Treffer: {n}
+@msg	no match of `find` at bytes {_1}..{_2} of object {_3}	kein Treffer für `find` bei Byte {_1}..{_2} von Objekt {_3}
 	Find Font	Schrift suchen
 	Find Font…	Schrift suchen…
 	Find Next	Weitersuchen
@@ -2049,6 +2097,7 @@ file-filter	Templates	Vorlagen
 	Load SVG into Clipboard	SVG in die Zwischenablage laden
 	Load Text into Clipboard	Text in die Zwischenablage laden
 	Local Libraries	Lokale Bibliotheken
+	Locate Layer	Ebene ausfindig machen
 	Locate Object	Objekt ausfindig machen
 	Locate Selected Objects	Ausgewählte Objekte ausfindig machen
 	Location	Speicherort
@@ -2237,6 +2286,7 @@ file-filter	Templates	Vorlagen
 	New Bristle Brush	Neuer Borstenpinsel
 	Calligraphic Brush Options	Optionen für Kalligrafiepinsel
 	Bristle Brush Options	Optionen für Borstenpinsel
+	Roundness	Rundheit
 	Roundness:	Rundheit:
 	Fixed	Fest
 	Pressure	Druck
@@ -2678,6 +2728,10 @@ diagnostics	ui	Oberfläche
 	Polar Grid Tool	Radiales-Raster-Werkzeug
 	Polygon	Polygon
 	Polygon Properties:	Polygoneigenschaften:
+	Line Properties:	Linieneigenschaften:
+	Line Length:	Linienlänge:
+	Line Angle:	Linienwinkel:
+	Constrain Pie Angle	Winkel des Kreissegments beibehalten
 	Polygon Tool	Polygon-Werkzeug
 	Portrait	Hochformat
 	Power Saving (integrated)	Energiesparen (integriert)
@@ -2839,6 +2893,9 @@ digits	Malayalam	Malayalam
 	Real World:	Reale Welt:
 	Real-time Drawing and Editing	Zeichnen und Bearbeiten in Echtzeit
 	Use Monitor Profile for Canvas	Monitorprofil für Arbeitsfläche verwenden
+	Refresh Monitor Profile	Monitorprofil aktualisieren
+@msg	turn on Use Monitor Profile for Canvas first	aktivieren Sie zuerst „Monitorprofil für Arbeitsfläche verwenden“
+@msg	this build doesn't read display profiles	diese Version liest keine Bildschirmprofile
 	The canvas is drawn in sRGB.	Die Arbeitsfläche wird in sRGB dargestellt.
 	Canvas display profile:	Bildschirmprofil der Arbeitsfläche:
 	The system matches the window to the display's colors.	Das System passt das Fenster an die Farben des Bildschirms an.
@@ -3101,6 +3158,7 @@ digits	Malayalam	Malayalam
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Mit gedrückter Befehls-/Strg-Taste scrollt das Mausrad die Arbeitsfläche seitwärts.
 	Dragging sideways on a numeric field's label changes the field's value.	Seitliches Ziehen auf der Beschriftung eines Zahlenfelds ändert den Wert des Felds.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Eine Drehgeste mit zwei Fingern auf einem Trackpad dreht die Ansicht der Arbeitsfläche.
+	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Wenn Sie Ankerpunkte verschieben, behält jede Kurve mit einem verschobenen Ende ihre Form relativ zu ihren Enden.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Solange Sie das Tastaturkürzel eines Werkzeugs gedrückt halten, ist dieses Werkzeug gewählt; danach wird wieder das vorherige gewählt.
 	Shows the bounding box while you move the selection or draw a shape.	Zeigt den Begrenzungsrahmen an, während Sie die Auswahl verschieben oder eine Form zeichnen.
 	Create Trim Marks draws Japanese-style marks instead of Roman ones.	„Schnittmarken erstellen“ zeichnet japanische statt römische Marken.
@@ -3181,6 +3239,9 @@ digits	Malayalam	Malayalam
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Wie nah der Zeiger oder ein gezogener Punkt auf dem Bildschirm an Bildmaterial kommen muss, damit intelligente Hilfslinien einrasten; der Abstand ist bei jedem Zoom gleich.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Richtet das Ende eines Liniensegments oder einen von der Mitte aus gezeichneten Kreis so aus, dass er eine nahe Kurve berührt.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Richtet das Ende eines Liniensegments so aus, dass es ein nahes gerades Segment im rechten Winkel trifft.
+	Edit type set in fonts that aren't available?	Text in Schriften bearbeiten, die nicht verfügbar sind?
+	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Zeigt auf der Arbeitsfläche die Nummer jedes Slices in einem Kästchen oben links im Slice; ist die Option aus, werden die Slice-Umrisse weiterhin angezeigt.
+	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Die Farbe der Umrisse von Benutzer- und Objekt-Slices und ihrer Nummernkästchen; automatische Slices verwenden einen blasseren Ton davon.
 	Reset all preferences to their defaults?	Alle Voreinstellungen auf ihre Standardwerte zurücksetzen?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Die Standardwerte werden angewendet, wenn Sie in den Voreinstellungen auf OK klicken. Abbrechen dort behält Ihre aktuellen Voreinstellungen.
 	Restore Recovered Documents	Wiederhergestellte Dokumente öffnen
@@ -3412,6 +3473,14 @@ digits	Malayalam	Malayalam
 	Search commands, tools, panels and effects…	Befehle, Werkzeuge, Bedienfelder und Effekte suchen…
 	No commands match	Keine passenden Befehle
 	{pos} of {total}: {name}	{pos} von {total}: {name}
+	No menu item	Kein Menüeintrag
+	Toolbar	Werkzeugleiste
+	{toolbar}, in the {tool} group	{toolbar}, in der Gruppe „{tool}“
+	In the menu bar: {path}	In der Menüleiste: {path}
+	In the {group} group: press and hold to open it	In der Gruppe {group}: zum Öffnen gedrückt halten
+	{home}, not shown now	{home}, derzeit nicht angezeigt
+	Tool	Werkzeug
+	Command	Befehl
 @plural	{n} result|{n} results	{n} Ergebnis|{n} Ergebnisse
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} von {n} Ergebnis. Tippen Sie weiter, um sie einzugrenzen.|{shown} von {n} Ergebnissen. Tippen Sie weiter, um sie einzugrenzen.
 	Recent Commands	Zuletzt verwendete Befehle
@@ -3492,6 +3561,7 @@ digits	Malayalam	Malayalam
 	Set Slice Rectangle	Slice-Rechteck festlegen
 	Set Tab Stops	Tabstopps festlegen
 	Set Text	Text festlegen
+	Set the current fill or stroke to the selected color	Aktuelle Fläche oder Kontur auf die ausgewählte Farbe setzen
 	Set the selected color to the current color	Ausgewählte Farbe auf die aktuelle Farbe setzen
 	Set Zoom	Zoom festlegen
 	Settings…	Einstellungen…
@@ -3554,6 +3624,7 @@ digits	Malayalam	Malayalam
 	Show Brush Size	Pinselgröße anzeigen
 	Show Center	Mittelpunkt anzeigen
 	Show Code	Code einblenden
+	Show in Browser	Im Browser anzeigen
 	Show Color Groups	Farbgruppen einblenden
 	Show Color Swatches	Farbfelder einblenden
 	Show Corner Widget	Ecken-Widget einblenden
@@ -3615,7 +3686,7 @@ digits	Malayalam	Malayalam
 	Show Vivid/Muted	Lebhaft/Gedeckt einblenden
 	Show Warm/Cool	Warm/Kalt einblenden
 	Show {kind} Brushes	{kind}pinsel einblenden
-	Show/hide plate (Alt-click: only this plate)	Platte ein-/ausblenden (Alt-Klick: nur diese Platte)
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	Platte ein-/ausblenden (Alt-Klick: nur diese Platte; erneuter Alt-Klick: alle Platten)
 	Show:	Anzeigen:
 	Shown with the optimised preview.	Wird mit der optimierten Vorschau angezeigt.
 	Side 1:	Seite 1:
@@ -4204,6 +4275,8 @@ effect	Points	Punkte
 	V Spacing:	V-Abstand:
 	V:	V:
 	Variable Width Profile	Variables Breitenprofil
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Der Pinsel der Kontur behält seine eigene Größe, daher ändert ein Breitenprofil die Kontur nicht. Entfernen Sie den Pinsel, um ein Profil zu verwenden.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Der Pinsel der Kontur behält seine eigene Größe, daher ändert ein Breitenprofil die Kontur nicht. Entfernen Sie den Pinsel, um ein Profil zu verwenden.
 	Variables	Variablen
 	Variation:	Variation:
 	Vector Effects	Vektoreffekte
@@ -4452,6 +4525,7 @@ imageTrace	Outline	Kontur
 	Bevel	Abgeflacht
 	Offset	Versatz
 	Axis	Achse
+	Axis Angle	Achsenwinkel
 axis	Horizontal	Horizontal
 axis	Vertical	Vertikal
 axis	Both	Beide
@@ -4743,6 +4817,7 @@ liquify-list-end	{0}, {1}	{0} und {1}
 @msg	Installed plug-in {_1}	Plug-in {_1} installiert
 @msg	Internal error: {msg} (please report this bug)	Interner Fehler: {msg} (bitte melden Sie diesen Fehler)
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	Interaktiv malen – Zusammenfügen: Wählen Sie eine Interaktiv-malen-Gruppe und die hinzuzufügenden Pfade aus
+@msg	`Face` and `Edge` name the faces and edges of a Live Paint group: give the path another name	`Face` und `Edge` benennen die Teilflächen und Kanten einer Interaktiv-malen-Gruppe: Geben Sie dem Pfad einen anderen Namen
 @msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	Interaktiv malen nimmt Pfade und zusammengesetzte Pfade an: Wandeln Sie Text, Bilder und andere Objekte zuerst in Pfade um
 @msg	Live Paint: select paths or compound paths	Interaktiv malen: Wählen Sie Pfade oder zusammengesetzte Pfade aus
 @msg	Live Paint: these paths are too degenerate to paint	Interaktiv malen: Diese Pfade sind zu entartet, um sie zu bemalen
@@ -4944,6 +5019,8 @@ liquify-list-end	{0}, {1}	{0} und {1}
 @msg	choose a folder to export to	wählen Sie einen Ordner für den Export
 @msg	choose a location for the package	wählen Sie einen Speicherort für das Paket
 @msg	clipboard is empty	die Zwischenablage ist leer
+@msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: Mindestens eine Farbe muss in der Farbtabelle bleiben
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted: `{k}` bezeichnet eine Farbe, die auch ein anderer Schlüssel bezeichnet
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` ist keine Farbe wie "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: höchstens {MAX_TABLE} Farben
 @msg	command `{0}` is not available right now: {1}	der Befehl `{0}` ist derzeit nicht verfügbar: {1}
@@ -5011,9 +5088,15 @@ liquify-list-end	{0}, {1}	{0} und {1}
 @msg	no PNG encoder	kein PNG-Encoder
 @msg	no active document	kein aktives Dokument
 @msg	no active perspective plane	keine aktive Perspektivebene
+@msg	the perspective grid is hidden	das Perspektivenraster ist ausgeblendet
+@msg	Automatic Plane Positioning is off: turn on anchorPoint or gridlineIntersection (perspective.widget.options)	Die automatische Ebenenpositionierung ist ausgeschaltet: Schalten Sie anchorPoint oder gridlineIntersection ein (perspective.widget.options)
+@msg	anchorPoint must be true or false	anchorPoint muss true oder false sein
+@msg	gridlineIntersection must be true or false	gridlineIntersection muss true oder false sein
+@msg	tolerance must be 0 or more	tolerance muss 0 oder größer sein
+@msg	give `at` or `clear`, not both	geben Sie `at` oder `clear` an, nicht beides
 @msg	no anchor points selected	keine Ankerpunkte ausgewählt
-@msg	`points` must be three [x, y] pairs of numbers	`points` muss aus drei Zahlenpaaren [x, y] bestehen
-@msg	direct-select three anchor points, or give `points`	wählen Sie drei Ankerpunkte direkt aus oder geben Sie `points` an
+@msg	`points` must be two or three [x, y] pairs of numbers	`points` muss aus zwei oder drei Zahlenpaaren [x, y] bestehen
+@msg	direct-select two or three anchor points, or give `points`	wählen Sie zwei oder drei Ankerpunkte direkt aus oder geben Sie `points` an
 @msg	no circle passes through these points: two are the same or all three lie on one line	durch diese Punkte verläuft kein Kreis: zwei sind gleich oder alle drei liegen auf einer Linie
 @msg	no app to open files here	hier gibt es keine App zum Öffnen von Dateien
 @msg	no artboard	keine Zeichenfläche
@@ -5116,6 +5199,9 @@ liquify-list-end	{0}, {1}	{0} und {1}
 @msg	no such user library	keine solche Benutzerbibliothek
 @msg	no such view	keine solche Ansicht
 @msg	no such width point	kein solcher Breitenpunkt
+@msg	`single` must be `incoming` or `outgoing`	`single` muss `incoming` oder `outgoing` sein
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` und `outIndex` müssen die beiden Hälften eines unterbrochenen Breitenpunkts sein
+@msg	a discontinuous width point keeps its place	ein unterbrochener Breitenpunkt behält seine Position
 @msg	no swatch `{name}`	kein Farbfeld `{name}`
 @msg	no swatch library `{l}` (see swatch.library.list)	keine Farbfeldbibliothek `{l}` (siehe swatch.library.list)
 @msg	no symbol instances selected	keine Symbolinstanzen ausgewählt
@@ -5481,6 +5567,8 @@ variable-list-end	{0}, {1}	{0} und {1}
 @msg	Reload the page to go on (changes not saved yet may be lost).	Laden Sie die Seite neu, um fortzufahren (noch nicht gespeicherte Änderungen können verloren gehen).
 @msg	tool (a tool id) is required	tool (eine Werkzeug-ID) ist erforderlich
 @msg	{tool} isn't in a toolbar group of several tools	{tool} gehört zu keiner Werkzeuggruppe mit mehreren Werkzeugen
+@msg	Presentation Mode hides the toolbars: change the screen mode to show them	der Präsentationsmodus blendet die Werkzeugleisten aus: Ändern Sie den Bildschirmmodus, um sie anzuzeigen
+@msg	Tab has hidden the toolbars: press Tab to show them	die Tabulatortaste hat die Werkzeugleisten ausgeblendet: Drücken Sie die Tabulatortaste, um sie anzuzeigen
 @msg	onto must name a panel floating in another group	onto muss ein Bedienfeld nennen, das in einer anderen Gruppe schwebt
 @msg	below and above must name a panel floating in another group	below und above müssen ein Bedienfeld nennen, das in einer anderen Gruppe schwebt
 @msg	give only one of onto, below and above	nur eines von onto, below und above angeben
@@ -5687,6 +5775,7 @@ variable-list-end	{0}, {1}	{0} und {1}
 	Scatter:	Streuung:
 	Rotation:	Drehung:
 	Rotation relative to:	Drehung relativ zu:
+	Hue Jitter:	Farbtonvariation:
 	Side Tile	Seitenkachel
 	Outer Corner Tile	Äußere Eckkachel
 	Inner Corner Tile	Innere Eckkachel
@@ -5971,6 +6060,7 @@ lighting	Light	Licht
 	Cove	Hohlkehle
 	Depth	Tiefe
 	Front	Vorne
+	Side	Seite
 	Isometric Bottom	Isometrisch unten
 	Isometric Left	Isometrisch links
 	Isometric Right	Isometrisch rechts
@@ -6065,7 +6155,7 @@ lighting	Light	Licht
 @msg	each of `{GRAPHICS}` must be an object	jeder Eintrag von `{GRAPHICS}` muss ein Objekt sein
 @msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	`{GRAPHICS}`-Einträge nehmen symbol, face, x, y, scale und rotation an, nicht `{k}`
 @msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	jeder Eintrag von `{GRAPHICS}` braucht `symbol`, den Namen eines Symbols
-@msg	`{GRAPHICS}` face must be front or back	face in `{GRAPHICS}` muss front oder back sein
+@msg	`{GRAPHICS}` face must be front, back or side	face in `{GRAPHICS}` muss front, back oder side sein
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} in `{GRAPHICS}` muss eine Zahl von {lo} bis {hi} sein
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` muss ein Array sein
 @msg	Graphics map onto the Plane, Extrude and Revolve object types	Grafiken werden auf die Objekttypen Ebene, Extrudieren und Kreiseln abgebildet
@@ -6775,6 +6865,7 @@ axis	Y Axis	Y-Achse
 	Checkpoint	Kontrollpunkt
 	Inventory Icons	Inventar-Symbole
 	Skill Icons	Fähigkeitssymbole
+	Weather Icons	Wettersymbole
 	Attack	Angriff
 	Defend	Verteidigung
 	Heal	Heilung
@@ -6896,6 +6987,259 @@ axis	Y Axis	Y-Achse
 	Stars	Sterne
 	Triangles	Dreiecke
 	Sparkles	Funkeln
+	Warm Gray	Warmgrau
+	Cool Gray	Kühlgrau
+	Neutrals	Neutraltöne
+	Ivory	Elfenbein
+	Linen	Leinen
+	Oat	Hafer
+	Greige	Greige
+	Stone	Stein
+	Taupe	Taupe
+	Slate	Schiefer
+	Clay	Ton
+	Terracotta	Terrakotta
+	Ochre	Ocker
+	Umber	Umbra
+	Sand	Sand
+	Olive	Oliv
+	Moss	Moos
+	Rosy	Rosig
+	Neutral	Neutral
+	Golden	Golden
+	Pastel	Pastell
+	Pastel Red	Pastellrot
+	Pastel Orange	Pastellorange
+	Pastel Amber	Pastellbernstein
+	Pastel Yellow	Pastellgelb
+	Pastel Lime	Pastelllimette
+	Pastel Green	Pastellgrün
+	Pastel Teal	Pastellpetrol
+	Pastel Cyan	Pastellcyan
+	Pastel Azure	Pastellazur
+	Pastel Blue	Pastellblau
+	Pastel Violet	Pastellviolett
+	Pastel Magenta	Pastellmagenta
+	Soft Red	Sanftes Rot
+	Soft Orange	Sanftes Orange
+	Soft Amber	Sanfter Bernstein
+	Soft Yellow	Sanftes Gelb
+	Soft Lime	Sanfte Limette
+	Soft Green	Sanftes Grün
+	Soft Teal	Sanftes Petrol
+	Soft Cyan	Sanftes Cyan
+	Soft Azure	Sanftes Azur
+	Soft Blue	Sanftes Blau
+	Soft Violet	Sanftes Violett
+	Soft Magenta	Sanftes Magenta
+	Vivid Red	Leuchtendes Rot
+	Vivid Orange	Leuchtendes Orange
+	Vivid Amber	Leuchtender Bernstein
+	Vivid Yellow	Leuchtendes Gelb
+	Vivid Lime	Leuchtende Limette
+	Vivid Green	Leuchtendes Grün
+	Vivid Teal	Leuchtendes Petrol
+	Vivid Cyan	Leuchtendes Cyan
+	Vivid Azure	Leuchtendes Azur
+	Vivid Blue	Leuchtendes Blau
+	Vivid Violet	Leuchtendes Violett
+	Vivid Magenta	Leuchtendes Magenta
+	Deep	Tief
+	Deep Red	Tiefrot
+	Deep Orange	Tieforange
+	Deep Amber	Tiefbernstein
+	Deep Yellow	Tiefgelb
+	Deep Lime	Tieflimette
+	Deep Green	Tiefgrün
+	Deep Teal	Tiefpetrol
+	Deep Cyan	Tiefcyan
+	Deep Azure	Tiefazur
+	Deep Blue	Tiefblau
+	Deep Violet	Tiefviolett
+	Deep Magenta	Tiefmagenta
+	Gold	Gold
+	Silver	Silber
+	Bronze	Bronze
+	Copper	Kupfer
+	Brass	Messing
+	Rose Gold	Roségold
+	Gunmetal	Anthrazitmetall
+	Platinum	Platin
+	Pewter	Zinn
+	Ember	Glut
+	Lagoon	Lagune
+	Dusk	Abenddämmerung
+	Clay to Teal	Ton zu Petrol
+	Plum to Olive	Pflaume zu Oliv
+	Complementary Coral	Koralle komplementär
+	Split Complementary Coral	Koralle geteilt komplementär
+	Analogous Coral	Koralle analog
+	Triad Coral	Koralle Triade
+	Tetrad Coral	Koralle Tetrade
+	Pentagram Coral	Koralle Pentagramm
+	Complementary Teal	Petrol komplementär
+	Split Complementary Teal	Petrol geteilt komplementär
+	Analogous Teal	Petrol analog
+	Triad Teal	Petrol Triade
+	Tetrad Teal	Petrol Tetrade
+	Pentagram Teal	Petrol Pentagramm
+	Soft Spectrum	Sanftes Spektrum
+	Red to Amber	Rot zu Bernstein
+	Orange to Yellow	Orange zu Gelb
+	Amber to Lime	Bernstein zu Limette
+	Yellow to Green	Gelb zu Grün
+	Lime to Teal	Limette zu Petrol
+	Green to Cyan	Grün zu Cyan
+	Teal to Azure	Petrol zu Azur
+	Cyan to Blue	Cyan zu Blau
+	Azure to Violet	Azur zu Violett
+	Blue to Magenta	Blau zu Magenta
+	Violet to Red	Violett zu Rot
+	Magenta to Orange	Magenta zu Orange
+	Dawn	Morgendämmerung
+	Noon	Mittag
+	Sunset	Sonnenuntergang
+	Night	Nacht
+	Overcast	Bewölkt
+	White to Black	Weiß zu Schwarz
+	Light Grays	Helle Grautöne
+	Dark Grays	Dunkle Grautöne
+	Warm Grays	Warme Grautöne
+	Cool Grays	Kühle Grautöne
+	Fade to Transparent	Verlauf zu transparent
+	White Fade	Weißer Verlauf
+	Vignette	Vignette
+	Mist	Nebel
+	Petal	Blütenblatt
+	Fern	Farn
+	Smoke	Rauch
+	Honey	Honig
+	Seafoam	Meerschaum
+	Lavender	Lavendel
+	Driftwood	Treibholz
+	Ink Wash	Tuschelavierung
+	Tide	Gezeiten
+	Bloom	Blüte
+	Dew	Tau
+	Pollen	Pollen
+	Lichen	Flechte
+	Prism Veil	Prismenschleier
+	Opal Ribbon	Opalband
+	Pearl Flash	Perlmuttblitz
+	Aurora Foil	Polarlichtfolie
+	Iris Sheen	Irisschimmer
+	Frost Spectrum	Frostspektrum
+	Silver Tide	Silberflut
+	Rose Quartz Gleam	Rosenquarzglanz
+	Moonstone Shift	Mondsteinschimmer
+	Violet Edge	Violetter Rand
+	Mint Halo	Minzhof
+	Amber Corona	Bernsteinkorona
+	Polar Glint	Polarglanz
+	Pastel Orbit	Pastellorbit
+	Coral and Navy	Koralle und Marineblau
+	Plum and Lime	Pflaume und Limette
+	Teal and Gold	Petrol und Gold
+	Indigo and Peach	Indigo und Pfirsich
+	Forest and Rose	Wald und Rosé
+	Red Glow	Rotes Leuchten
+	Orange Glow	Oranges Leuchten
+	Amber Glow	Bernsteinleuchten
+	Yellow Glow	Gelbes Leuchten
+	Lime Glow	Limettenleuchten
+	Green Glow	Grünes Leuchten
+	Teal Glow	Petrolleuchten
+	Cyan Glow	Cyanleuchten
+	Azure Glow	Azurleuchten
+	Blue Glow	Blaues Leuchten
+	Violet Glow	Violettes Leuchten
+	Magenta Glow	Magentaleuchten
+	Polka Dots	Tupfen
+	Vertical Stripes	Senkrechte Streifen
+	Horizontal Stripes	Waagerechte Streifen
+	Diagonal Stripes	Diagonale Streifen
+	Checkerboard	Schachbrett
+	Diamonds	Rauten
+	Crosses	Kreuze
+	Coarse Grit	Grobe Körnung
+	Stipple	Punktierung
+	Scratches	Kratzer
+	Sparse Flecks	Lockere Sprenkel
+	Dense Flecks	Dichte Sprenkel
+	Sine Bands	Sinusbänder
+	Ripple Lines	Wellenlinien
+	Interference Rings	Interferenzringe
+	Offset Rings	Versetzte Ringe
+	Warped Checks	Verzerrte Karos
+	Pinched Stripes	Eingeschnürte Streifen
+	Chevron Pulse	Winkelpuls
+	Radiating Lenses	Strahlende Linsen
+	Soft Shadow	Weicher Schatten
+	Hard Shadow	Harter Schatten
+	Lifted Card	Angehobene Karte
+	Neon Tube	Neonröhre
+	Inner Light	Inneres Licht
+	Feathered	Weiche Kante
+	Haze	Dunst
+	Double Rule	Doppellinie
+	Triple Rule	Dreifachlinie
+	Dashed Border	Gestrichelter Rahmen
+	Dotted Border	Gepunkteter Rahmen
+	Offset Keyline	Versetzte Kontur
+	Inset Keyline	Innere Kontur
+	Outside Stroke	Außenkontur
+	Pointer	Zeiger
+	Highlighter	Textmarker
+	Sketchy Line	Skizzenlinie
+	Scribble Fill	Kritzelfüllung
+	Wobble	Wackeln
+	Zig Zag Edge	Zickzackkante
+	Wavy Edge	Wellenkante
+	Puffy	Aufgebläht
+	Starburst	Sternexplosion
+	Glossy	Glänzend
+	Brushed Metal	Gebürstetes Metall
+	Spotlight	Spotlicht
+	Sunset Band	Abendrotband
+	Sea Glass	Meerglas
+	Pearl	Perle
+	Chrome Rim	Chromrand
+	Glow Orb	Leuchtkugel
+	Pill Badge	Pillenabzeichen
+	Round Badge	Rundes Abzeichen
+	Flag Wave	Flaggenwelle
+	Bulge	Wölbung
+	Twisted	Verdreht
+	Echo	Echo
+	Spiral Copies	Spiralkopien
+	Multiply Tint	Multiplizieren-Tönung
+	Darken Veil	Abdunkeln-Schleier
+	Ghosted	Geisterhaft
+	Two Tone	Zweifarbig
+	Overlay Glaze	Ineinanderkopieren-Lasur
+	Screen Light	Negativ-multiplizieren-Licht
+	Soft Light Wash	Weiches-Licht-Lavierung
+	Cyan Neon	Cyan-Neon
+	Magenta Laser	Magenta-Laser
+	Amber Tube	Bernsteinröhre
+	Electric Lime	Elektrisches Limettengrün
+	Pulse Violet	Pulsierendes Violett
+	Cobalt Phosphor	Kobalt-Phosphor
+	Burst	Strahlenkranz
+	Rounded Square	Abgerundetes Quadrat
+	Sun	Sonne
+	Moon	Mond
+	Cloud	Wolke
+	Rain	Regen
+	Thunder	Donner
+	Snow	Schnee
+	Bar	Balken
+	Fine Dots	Feine Punkte
+	Hexagon	Sechseck
+	Speckle	Sprenkel
+	Spectrum	Spektrum
+	Triangle	Dreieck
+	Vivid	Leuchtend
 	Save Brush Library…	Pinsel-Bibliothek speichern…
 @msg	`{_1}` has no brushes to apply	`{_1}` hat keine Pinsel zum Anwenden
 @msg	missing `library` (see brush.libraries)	`library` fehlt (siehe brush.libraries)
@@ -7318,6 +7662,14 @@ breakText	Glyphs	Glyphen
 	Remove Gaps	Lücken entfernen
 @msg	that makes too many pieces (at most 100000): make the dashes longer	das ergibt zu viele Teile (höchstens 100000): machen Sie die Striche länger
 @msg	select paths, or segments, to divide	wählen Sie Pfade oder Segmente zum Aufteilen aus
+# Path Precision Tools add-on: Smooth Bridge.
+	Smooth Bridge…	Weiche Brücke…
+	Smooth Bridge	Weiche Brücke
+	Keep Originals	Originale beibehalten
+@msg	select two circles to bridge	wählen Sie zwei Kreise zum Verbinden aus
+@msg	one circle is inside the other	ein Kreis liegt im anderen
+@msg	the circles are too far apart for this radius: raise the radius	die Kreise liegen für diesen Radius zu weit auseinander: vergrößern Sie den Radius
+@msg	the circles are too far apart for this radius	die Kreise liegen für diesen Radius zu weit auseinander
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	Gemeinsame Tangenten…
 	Common Tangents	Gemeinsame Tangenten
@@ -7334,6 +7686,7 @@ breakText	Glyphs	Glyphen
 @msg	One path lies inside the other, so they have no common tangents	Ein Pfad liegt im anderen, daher haben sie keine gemeinsamen Tangenten
 @msg	The paths overlap, so they have no internal tangents	Die Pfade überlappen sich, daher haben sie keine inneren Tangenten
 @msg	One path lies inside the other, so they have no internal tangents	Ein Pfad liegt im anderen, daher haben sie keine inneren Tangenten
+@msg	The point lies inside the path, so it has no tangents	Der Punkt liegt im Pfad, daher hat er keine Tangenten
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Striche in Pfade umwandeln
 @msg	select paths with dashed strokes to expand	wählen Sie Pfade mit gestrichelter Kontur zum Umwandeln aus
@@ -7684,6 +8037,14 @@ breakText	Glyphs	Glyphen
 @msg	`answers` has more than {MAX_ANSWERS} answers	`answers` hat mehr als {MAX_ANSWERS} Antworten
 @msg	`answers` is larger than 1 MiB	`answers` ist größer als 1 MiB
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` ist nur für einen Lauf ohne jemanden, der gefragt werden kann: In der App beantwortet die Person jeden Dialog
+@msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel` muss eine ganze Zahl von 1 bis {_1} sein
+@msg	`args{place}` is nested more than 64 levels deep	`args{place}` ist mehr als 64 Ebenen tief verschachtelt
+@msg	`args` must be an object	`args` muss ein Objekt sein
+@msg	`args` is larger than 1 MiB	`args` ist größer als 1 MiB
+@msg	`path` is empty	`path` ist leer
+@msg	`installed` takes a `path`, not a `source`	`installed` nimmt einen `path`, keine `source`
+@msg	`path` must name a .js or .jsx file	`path` muss eine .js- oder .jsx-Datei angeben
+@msg	give exactly one of `path` and `source`	geben Sie genau eines von `path` und `source` an
 @msg	`answers` must be a list of answers	`answers` muss eine Liste von Antworten sein
 @msg	`artboard` must be the index of an artboard of the document	`artboard` muss der Index einer Zeichenfläche des Dokuments sein
 @msg	`artboardsAt` must be [x, y]	`artboardsAt` muss [x, y] sein
@@ -8498,6 +8859,7 @@ breakText	Glyphs	Glyphen
 @msg	compound {_1} must contain exactly one open path to join	zusammengesetzter Pfad {_1} muss genau einen offenen Pfad zum Zusammenfügen enthalten
 @msg	connect end must be "start" or "end"	connect end muss „start“ oder „end“ sein
 @msg	connect needs a path other than the one extended	connect braucht einen anderen Pfad als den verlängerten
+@msg	connect needs extend	connect braucht extend
 @msg	connect needs id	connect braucht id
 @msg	connect path has no open end	der connect-Pfad hat kein offenes Ende
 @msg	copy needs path: the file to copy into the document's folder	copy braucht path: die Datei, die in den Ordner des Dokuments kopiert werden soll
@@ -9160,6 +9522,7 @@ breakText	Glyphs	Glyphen
 @msg	the artboards don't fit on the canvas: fewer artboards, less spacing or a smaller size	die Zeichenflächen passen nicht auf die Arbeitsfläche: weniger Zeichenflächen, weniger Abstand oder eine kleinere Größe
 @msg	the character's size can't be measured	die Größe des Zeichens kann nicht gemessen werden
 @msg	the compound shape is too complex to expand	die zusammengesetzte Form ist zu komplex zum Umwandeln
+@msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	eine Linie oder ein anderer offener Pfad, der keine Fläche umschließt, trägt keine Fläche zur zusammengesetzten Form bei; um ihn einzubeziehen, wenden Sie zuerst Objekt › Pfad › Konturlinie darauf an
 @msg	the container of the listed objects is gone	der Container der aufgelisteten Objekte ist nicht mehr vorhanden
 @msg	the copy `{user_id}` can't be read as a library	die Kopie `{user_id}` kann nicht als Bibliothek gelesen werden
 @msg	the copy would leave the canvas	die Kopie würde die Arbeitsfläche verlassen
@@ -9522,6 +9885,7 @@ breakText	Glyphs	Glyphen
 @msg	a linked JavaScript file is outside the read roots	eine verknüpfte JavaScript-Datei liegt außerhalb der Lesestammordner
 @msg	a linked image file is outside the read roots	eine verknüpfte Bilddatei liegt außerhalb der Lesestammordner
 @msg	a linked file's export folder is outside the read roots	der Exportordner einer verknüpften Datei liegt außerhalb der Lesestammordner
+@msg	a linked file's editing data can't be read to check it against the read roots	die Bearbeitungsdaten einer verknüpften Datei können nicht gelesen werden, um sie mit den Lesestammordnern abzugleichen
 @msg	a number cannot be read	eine Zahl kann nicht gelesen werden
 @msg	a swatch exchange block is too long	ein Block der Farbfeld-Austauschdatei ist zu lang
 @msg	a swatch exchange name is too long	ein Name in der Farbfeld-Austauschdatei ist zu lang
@@ -9646,3 +10010,18 @@ breakText	Glyphs	Glyphen
 @msg	A panel is not joined to the rest by a crease.	Ein Feld ist durch keine Rilllinie mit den übrigen verbunden.
 @msg	A fold line is on a non-printing layer.	Eine Faltlinie liegt auf einer nicht druckbaren Ebene.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Felder: {panels}, Scharniere: {hinges}, Fehler: {errors}, Warnungen: {warnings}
+	Pressure Sensitive	Druckempfindlich
+	Flex Ribbon	Flexibles Band
+	Pulse Stroke	Pulsierender Strich
+	Round Flow	Runder Fluss
+	Chisel Flow	Schräger Fluss
+	Fold Preview	Faltvorschau
+	Fold	Falten
+	Show Fold Lines	Faltlinien einblenden
+	Three-Quarter	Dreiviertelansicht
+	Open a document to preview its folded shape.	Öffnen Sie ein Dokument, um seine gefaltete Form in der Vorschau zu sehen.
+@msg	Check the fold lines first.	Prüfen Sie zuerst die Faltlinien.
+@msg	Panels: {panels}, hinges: {hinges}	Felder: {panels}, Scharniere: {hinges}
+@msg	Other blanks not shown: {count}	Weitere Zuschnitte nicht angezeigt: {count}
+@msg	A joint does not close by {gap} pt.	Eine Verbindung schließt um {gap} pt nicht.
+@msg	Two panels pass through each other.	Zwei Felder durchdringen einander.
