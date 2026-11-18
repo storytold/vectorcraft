@@ -355,6 +355,35 @@ fn new_color_group_from_artwork_lists_each_color_once_with_free_names() {
     assert_eq!(*doc(&s), before);
 }
 
+/// New Color Group takes the named solid swatches in the order given. A name listed twice takes
+/// the next swatch of that name, found ungrouped first and then in each colour group, and the
+/// lists the swatches leave keep their order. Gradients and names no swatch has take nothing.
+#[test]
+fn new_color_group_takes_named_swatches_in_order_from_every_list() {
+    let mut s = session();
+    let twin = vectorcraft_color::Swatch { name: "Red".into(), paint: Paint::solid(Color::rgb(0.5, 0.0, 0.0)), global: false, spot: false };
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc)
+        .swatch_groups
+        .iter_mut()
+        .find(|g| g.name == "Brights")
+        .unwrap()
+        .swatches
+        .push(twin.clone());
+    let red = doc(&s).swatch("Red").cloned().unwrap();
+    let mut ungrouped = names(&s, None);
+    let mut brights = names(&s, Some("Brights"));
+    let r = run(&mut s, "swatch.newGroup", json!({"name": "Mine", "swatches": ["Red", "Orange", "Sunset", "Red", "Missing", "Bright Red"]}));
+    assert_eq!(r["swatches"], json!(["Red", "Orange", "Red", "Bright Red"]));
+    let group = &doc(&s).swatch_groups.iter().find(|g| g.name == "Mine").unwrap().swatches;
+    assert_eq!(group[0], red);
+    assert_eq!(group[2], twin);
+    ungrouped.retain(|n| n != "Red" && n != "Orange");
+    brights.retain(|n| n != "Red" && n != "Bright Red");
+    assert_eq!(names(&s, None), ungrouped);
+    assert_eq!(names(&s, Some("Brights")), brights);
+    assert!(doc(&s).swatch("Sunset").is_some());
+}
+
 #[test]
 fn edit_color_group_numbers_extra_colors_after_the_names_it_keeps() {
     let mut s = session();
@@ -392,6 +421,71 @@ fn edit_color_group_numbers_extra_colors_after_the_names_it_keeps() {
     assert_eq!(undo_len(&s), undo + 1);
     run(&mut s, "edit.undo", json!({}));
     assert_eq!(*doc(&s), before);
+}
+
+/// `swatch.editGroup` with the group's own colors, in order, and its own name (or a blank one)
+/// records no undo step; a new order, a new color or a new name records one.
+#[test]
+fn edit_color_group_with_its_own_colors_records_no_undo_step() {
+    let mut s = session();
+    run(&mut s, "swatch.newGroup", json!({"name": "Mine", "colors": ["#ff0000", "#00ff00"], "keepModel": true}));
+    let undo = undo_len(&s);
+    for p in [
+        json!({"group": "Mine", "colors": ["#ff0000", "#00ff00"]}),
+        json!({"group": "Mine", "colors": ["#ff0000", "#00ff00"], "rename": "Mine"}),
+        json!({"group": "Mine", "colors": ["#ff0000", "#00ff00"], "rename": " "}),
+    ] {
+        let r = run(&mut s, "swatch.editGroup", p.clone());
+        assert_eq!(r, json!({"name": "Mine", "swatches": ["R=255 G=0 B=0", "R=0 G=255 B=0"], "relinked": 0}), "{p}");
+        assert_eq!(undo_len(&s), undo, "{p}: no undo step");
+    }
+    run(&mut s, "swatch.editGroup", json!({"group": "Mine", "colors": ["#00ff00", "#ff0000"]}));
+    assert_eq!(undo_len(&s), undo + 1, "a new order is a step");
+    run(&mut s, "swatch.editGroup", json!({"group": "Mine", "colors": ["#00ff00", "#ff0000"], "rename": "Yours"}));
+    assert_eq!(undo_len(&s), undo + 2, "a new name is a step");
+}
+
+/// `swatch.editGroup` with the color keys of the group's own colors records no undo step when a
+/// color lies between the keys' steps, and a rename keeps that color unrounded; a color given as a
+/// value is taken as it is.
+#[test]
+fn edit_color_group_with_its_own_color_keys_keeps_the_colors() {
+    let mut s = session();
+    run(&mut s, "swatch.newGroup", json!({"name": "Mine", "colors": [{"c": 60.005, "m": 0, "y": 0, "k": 0}, "#00ff00"], "keepModel": true}));
+    let colors = |s: &Session| -> Vec<Color> {
+        doc(s).swatch_groups.iter().find(|g| g.name == "Mine" || g.name == "Yours").unwrap().swatches.iter().filter_map(|w| w.paint.color()).collect()
+    };
+    let own = colors(&s);
+    let keys: Vec<String> = own.iter().map(|c| vectorcraft_color::recolor::ColorKey::of(c).to_string()).collect();
+    assert_ne!(crate::cmd::color_value(&json!(keys[0])), Some(own[0]), "the key rounds the color");
+    let undo = undo_len(&s);
+    run(&mut s, "swatch.editGroup", json!({"group": "Mine", "colors": keys}));
+    assert_eq!(undo_len(&s), undo, "the group's own colors record no step");
+    run(&mut s, "swatch.editGroup", json!({"group": "Mine", "colors": keys, "rename": "Yours"}));
+    assert_eq!(undo_len(&s), undo + 1, "a new name is a step");
+    assert_eq!(colors(&s), own, "the colors are kept unrounded");
+    // A color given as a value, not a key, is taken exactly, also within a key's step.
+    let Color::Cmyk { c, .. } = own[0] else { panic!("a CMYK swatch: {:?}", own[0]) };
+    let nudged = Color::cmyk(c - 0.000_002, 0.0, 0.0, 0.0);
+    assert_eq!(vectorcraft_color::recolor::ColorKey::of(&nudged), vectorcraft_color::recolor::ColorKey::of(&own[0]));
+    let p = json!({"group": "Yours", "colors": [{"c": c - 0.000_002, "m": 0, "y": 0, "k": 0}, "#00ff00"], "keepModel": true});
+    run(&mut s, "swatch.editGroup", p);
+    assert_eq!(undo_len(&s), undo + 2, "a new value is a step");
+    assert_eq!(colors(&s)[0], nudged);
+}
+
+#[test]
+fn edit_color_group_with_a_null_removes_that_swatch() {
+    let mut s = session();
+    run(&mut s, "swatch.newGroup", json!({"name": "Mine", "colors": ["#ff0000", "#00ff00", "#0000ff"], "keepModel": true}));
+    let undo = undo_len(&s);
+    let r = run(&mut s, "swatch.editGroup", json!({"group": "Mine", "colors": ["#ff0000", null, "#0000ff"]}));
+    assert_eq!(r["swatches"], json!(["R=255 G=0 B=0", "R=0 G=0 B=255"]));
+    assert_eq!(names(&s, Some("Mine")), ["R=255 G=0 B=0", "R=0 G=0 B=255"]);
+    assert_eq!(undo_len(&s), undo + 1, "a removed swatch is a step");
+    run(&mut s, "swatch.editGroup", json!({"group": "Mine", "colors": ["#ff0000", "#0000ff", null]}));
+    assert_eq!(undo_len(&s), undo + 1, "a null past the swatches removes nothing and records no step");
+    assert!(s.execute("swatch.editGroup", &json!({"group": "Mine", "colors": ["#ff0000", "nope"]})).is_err());
 }
 
 #[test]
@@ -503,7 +597,7 @@ fn a_cmyk_document_starts_with_cmyk_swatches_and_stores_new_colours_as_cmyk() {
     // A swatch made from a hex colour is CMYK as well; the document round-trips natively.
     let name = run(&mut s, "swatch.new", json!({"color": "#00ff00"}))["name"].as_str().unwrap().to_string();
     assert_eq!(doc(&s).swatch(&name).and_then(|w| w.paint.color()), Some(managed(Color::rgb(0.0, 1.0, 0.0))));
-    assert_eq!(name, "C=61 M=0 Y=100 K=0");
+    assert_eq!(name, "C=65 M=0 Y=100 K=0");
     let json = serde_json::to_string(doc(&s)).unwrap();
     assert_eq!(serde_json::from_str::<vectorcraft_doc::Document>(&json).unwrap(), *doc(&s));
 }

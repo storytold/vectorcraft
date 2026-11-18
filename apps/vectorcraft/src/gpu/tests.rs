@@ -820,3 +820,10 @@ fn crashes_are_forgotten_in_another_version_or_under_another_preference() {
     assert_eq!(record.crashed.len(), CRASHED_LIMIT);
     assert_eq!(record.crashed.last().map(|c| c.key.as_str()), Some("Dx12:10de:0013"));
 }
+
+/// `u32::from_str_radix` accepts a leading `+`; a device id with one is not a PCI id.
+#[test]
+fn pci_ids_reject_a_sign_in_the_hex_digits() {
+    assert_eq!(pci_ids("PCI\\VEN_+10DE&DEV_2204"), None);
+    assert_eq!(pci_ids("PCI\\VEN_10DE&DEV_+2204"), None);
+}

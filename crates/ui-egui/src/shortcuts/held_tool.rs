@@ -91,9 +91,9 @@ pub(super) fn follow(app: &mut VectorcraftApp, ctx: &egui::Context, focused: boo
     // Each pass looks at the key held last; one that goes back hands over to the key under it.
     loop {
         let gesture = app.session.tool_busy() || app.session.pointer_held();
-        // A dialog, or a canvas drag that does not reach the tool (a pan, zoom or turn of the view),
-        // defers the decision.
-        let dialog = app.ui.dialog.is_some() || crate::canvas::dragging(ctx);
+        // A dialog, an update dialog, or a canvas drag that does not reach the tool (a pan, zoom or
+        // turn of the view), defers the decision.
+        let dialog = app.ui.dialog.is_some() || crate::updates_ui::blocks_input(app) || crate::canvas::dragging(ctx);
         let active = app.session.tool_id();
         let on = app.session.prefs.hold_tool_keys;
         let Some(held) = app.held_tool.last_mut() else { return };

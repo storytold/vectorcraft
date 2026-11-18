@@ -88,6 +88,7 @@ impl Builder {
                 show_video_safe_areas: false,
                 video_ruler_pixel_aspect_ratio: 1.0,
                 color: None,
+                guide_label: None,
             })
             .collect();
         if self.doc.artboards.is_empty() {

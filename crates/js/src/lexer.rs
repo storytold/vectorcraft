@@ -13,7 +13,7 @@
 //!
 //! The lexer moves forward through the source one character at a time and never recurses.
 
-use crate::chars::{hex_value, is_decimal_digit, is_id_part, is_id_start, is_line_terminator, is_octal_digit, is_whitespace};
+use crate::chars::{hex_value, is_decimal_digit, is_id_part, is_id_start, is_line_terminator, is_octal_digit, is_whitespace, radix_value};
 use crate::error::SyntaxError;
 use crate::regexp;
 use crate::token::{Directive, DirectiveName, Keyword, Punct, Span, Token, TokenKind};
@@ -47,13 +47,30 @@ pub struct Lexer<'s> {
     preprocessor_lines: bool,
     /// The deepest nesting of groups a regular expression literal may have.
     max_depth: usize,
+    /// Read the E4X punctuators `..`, `::` and `@`.
+    e4x: bool,
 }
 
 impl<'s> Lexer<'s> {
     /// A lexer of `src`. `preprocessor_lines` turns on the reading of preprocessor lines;
     /// `max_depth` limits how deeply a regular expression literal's groups may nest.
     pub fn new(src: &'s [u16], preprocessor_lines: bool, max_depth: usize) -> Self {
-        Self { src, pos: 0, line: 1, line_start: 0, blank_line: true, preprocessor_lines, max_depth }
+        Self { src, pos: 0, line: 1, line_start: 0, blank_line: true, preprocessor_lines, max_depth, e4x: false }
+    }
+
+    /// The same lexer, reading the E4X punctuators when `e4x` is true.
+    pub fn with_e4x(mut self, e4x: bool) -> Self {
+        self.e4x = e4x;
+        self
+    }
+
+    /// Moves to source offset `pos`, at the given line and column (both from 1), after the parser
+    /// has read an XML literal up to there.
+    pub(crate) fn seek(&mut self, pos: usize, line: u32, column: u32) {
+        self.pos = pos;
+        self.line = line;
+        self.line_start = pos.saturating_sub(column.saturating_sub(1) as usize);
+        self.blank_line = false;
     }
 
     /// The code unit at `pos`, as a code point value.
@@ -341,7 +358,7 @@ impl<'s> Lexer<'s> {
         } else {
             self.decimal()
         };
-        if self.peek().is_some_and(|c| c == BACKSLASH || is_id_start(c) || is_decimal_digit(c)) {
+        if self.code_point(self.pos).is_some_and(|(c, _)| c == BACKSLASH || is_id_start(c) || is_decimal_digit(c)) {
             return Err(self.error_at(self.pos, "identifier starts immediately after numeric literal"));
         }
         let mut token = self.token(TokenKind::Number(value), start, line, column, false);
@@ -352,26 +369,10 @@ impl<'s> Lexer<'s> {
     /// Reads digits in `radix` (8 or 16) and returns their value, or `None` when there are none.
     fn radix_digits(&mut self, radix: u32) -> Option<f64> {
         let begin = self.pos;
-        let mut exact: u128 = 0;
-        let mut value = 0.0_f64;
-        let mut overflow = false;
-        while let Some(d) = self.peek().and_then(hex_value).filter(|&d| d < radix) {
-            match exact.checked_mul(u128::from(radix)).and_then(|v| v.checked_add(u128::from(d))) {
-                Some(v) if !overflow => exact = v,
-                _ => {
-                    if !overflow {
-                        value = exact as f64;
-                        overflow = true;
-                    }
-                    value = value * f64::from(radix) + f64::from(d);
-                }
-            }
+        while self.peek().and_then(hex_value).is_some_and(|d| d < radix) {
             self.pos += 1;
         }
-        if self.pos == begin {
-            return None;
-        }
-        Some(if overflow { value } else { exact as f64 })
+        radix_value(self.src[begin..self.pos].iter().filter_map(|&u| hex_value(u32::from(u))), radix)
     }
 
     /// After `0` and a digit: an octal literal when every digit is octal, else a decimal literal
@@ -594,6 +595,9 @@ impl<'s> Lexer<'s> {
     fn punct(&mut self) -> Option<Punct> {
         let rest = &self.src[self.pos..];
         for (spelling, punct) in Punct::ALL {
+            if !self.e4x && matches!(punct, Punct::DotDot | Punct::ColonColon | Punct::At) {
+                continue;
+            }
             let bytes = spelling.as_bytes();
             if rest.len() >= bytes.len() && rest.iter().zip(bytes).all(|(&u, &b)| u == u16::from(b)) {
                 self.pos += bytes.len();

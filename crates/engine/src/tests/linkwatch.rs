@@ -47,6 +47,30 @@ fn update_changed_reads_changed_files_again_once() {
     assert_eq!(s.execute("links.check", &json!({})).unwrap()["modified"], 1);
 }
 
+/// A file only a symbol's art shows is watched too, and read again by the id of the symbol's image.
+#[test]
+fn update_changed_reads_a_file_only_a_symbol_shows() {
+    let dir = Folder::new("watch-symbol");
+    let path = dir.file("art.png");
+    std::fs::write(&path, png(40, 40, RED)).unwrap();
+    let mut s = session();
+    let id = place(&mut s, &path);
+    s.execute("symbol.new", &json!({"name": "Mark", "ids": [id.0]})).unwrap();
+    let instance = s.doc().unwrap().selection.objects[0];
+    s.execute("edit.clear", &json!({"ids": [instance.0]})).unwrap();
+    let mut in_symbol = None;
+    s.doc().unwrap().doc.symbols[0].art.walk(&mut |n| {
+        if matches!(n.kind, vectorcraft_doc::NodeKind::Image(_)) {
+            in_symbol = Some(n.id.0);
+        }
+    });
+    let in_symbol = in_symbol.expect("the symbol's image");
+    assert_eq!(s.execute("links.updateChanged", &json!({})).unwrap()["updated"], json!([]));
+    save(&path, &png(40, 40, BLUE));
+    assert_eq!(s.execute("links.updateChanged", &json!({})).unwrap()["updated"], json!([in_symbol]));
+    assert_eq!(s.execute("links.check", &json!({})).unwrap()["modified"], 0);
+}
+
 #[test]
 fn a_background_look_follows_update_links() {
     for (mode, key) in [("automatically", "updated"), ("askWhenModified", "ask"), ("manually", "modified")] {
@@ -145,6 +169,26 @@ fn a_look_that_stores_its_stamps_between_the_polls_reads_keeps_them() {
     worker.join().unwrap();
     assert_eq!(s.poll_link_scan().expect("the stamps are applied").unwrap()["updated"], json!([id.0]));
     assert!(s.link_scan.is_none());
+}
+
+#[test]
+fn a_change_during_a_script_waits_for_the_script_to_end() {
+    let dir = Folder::new("watch-script");
+    let path = dir.file("art.png");
+    std::fs::write(&path, png(40, 40, RED)).unwrap();
+    let mut s = session();
+    s.prefs.update_links = "automatically".into();
+    let id = place(&mut s, &path);
+    look(&mut s);
+    save(&path, &png(40, 40, BLUE));
+    s.start_link_scan();
+    s.wait_link_scan();
+    s.script_frames = true;
+    s.execute("script.run", &json!({"source": "while (true) {}"})).unwrap();
+    assert!(s.poll_link_scan().is_none(), "the finished look waits");
+    assert!(s.script_abandon());
+    assert_eq!(s.poll_link_scan().expect("the stamps are applied").unwrap()["updated"], json!([id.0]));
+    assert_eq!(colour(&s), BLUE);
 }
 
 #[test]

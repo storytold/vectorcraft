@@ -32,6 +32,26 @@ fn use_preview_bounds_shows_the_visual_size_and_checks_the_align_flyout() {
     assert!(texts(&mut app, crate::panels::align::menu).iter().any(|t| t == "✓ Use Preview Bounds"));
 }
 
+/// The panel menu's Measure Type by Glyph Bounds is checked while `typeGlyphBounds` is on, and the
+/// bounding box of selected point type then measures its glyphs without a change to the document.
+#[test]
+fn measure_type_by_glyph_bounds_is_checked_and_resizes_the_box() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    app.run("text.create", json!({"x": 20, "y": 200, "size": 100, "text": "Hg"})).unwrap();
+    assert!(texts(&mut app, menu).iter().any(|t| t == "   Measure Type by Glyph Bounds"));
+    let em = app.selection_box().unwrap().rect;
+    let revision = app.session.active().unwrap().revision;
+    set_pref(&mut app, "typeGlyphBounds", true);
+    assert!(app.session.prefs.type_glyph_bounds);
+    assert!(texts(&mut app, menu).iter().any(|t| t == "✓ Measure Type by Glyph Bounds"));
+    assert_eq!(app.session.active().unwrap().revision, revision);
+    let glyphs = app.selection_box().unwrap().rect;
+    assert!(glyphs.height() < em.height() - 10.0, "{glyphs:?} inside {em:?}");
+    set_pref(&mut app, "typeGlyphBounds", false);
+    assert_eq!(app.selection_box().unwrap().rect, em);
+}
+
 #[test]
 fn use_preview_bounds_shows_the_size_after_geometry_effects() {
     // A 100 × 50 rectangle without a stroke, with Offset Path 10: 120 × 70 as drawn.
@@ -60,6 +80,35 @@ fn rotation_field_shows_the_angle_the_box_keeps() {
     app.run("object.resetBoundingBox", json!({})).unwrap();
     let shown = texts(&mut app, show);
     assert!(shown.iter().any(|t| t == "0°") && !shown.iter().any(|t| t == "100 pt"), "{shown:?}");
+}
+
+/// Object › Transform › Rotate Bounding Box… asks for an angle and turns the box, not the art, in
+/// one undo step: the panel then shows the box's angle.
+#[test]
+fn rotate_bounding_box_menu_item_turns_the_box_by_the_dialog_angle() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 100, "height": 50})).unwrap();
+    let entry = crate::menus::menu_entries(&app)
+        .into_iter()
+        .find(|e| e.path == ["Object", "Transform"] && e.label == "Rotate Bounding Box…")
+        .expect("menu item");
+    let (id, p) = crate::menus::click_target(&entry.label, entry.command.as_deref().unwrap(), &entry.params);
+    crate::menus::invoke(&mut app, &id, p);
+    let d = app.ui.dialog.as_mut().expect("a dialog opens");
+    assert_eq!(d.str("__command"), "object.rotateBoundingBox");
+    d.fields.insert("angle".into(), json!(90));
+    let bounds = |app: &VectorcraftApp| {
+        let st = app.session.doc().unwrap();
+        st.doc.bounds_of(&st.selection.objects, false)
+    };
+    let art = bounds(&app);
+    let undo = app.session.doc().unwrap().history.undo.len();
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1);
+    assert_eq!(bounds(&app), art, "the art stays where it is");
+    let shown = texts(&mut app, show);
+    assert!(shown.iter().any(|t| t == "90°"), "{shown:?}");
 }
 
 /// #812: a selected live polygon shows its Polygon Properties in the Transform panel and the
@@ -103,6 +152,113 @@ fn an_ellipse_shows_its_pie_properties() {
     app.run("object.setLiveShape", json!({"pieStart": 30, "pieEnd": 120})).unwrap();
     let shown = texts(&mut app, show);
     assert!(shown.iter().any(|s| s == "30°") && shown.iter().any(|s| s == "120°"), "{shown:?}");
+}
+
+/// Ellipse Properties' Constrain Pie Angle link, in the Transform panel and the Properties panel's
+/// Transform section: off at first, a click or Space with the keyboard on it toggles it, and while
+/// it is on a typed Pie Start or End Angle moves the other angle by as much, keeping the span, in
+/// one undo step. Off, each angle changes on its own.
+#[test]
+fn the_constrain_pie_angle_link_keeps_the_span() {
+    use egui_kittest::kittest::Queryable;
+    const LINK: &str = "Constrain Pie Angle";
+    let pie = |app: &VectorcraftApp| match &first_selected(app).unwrap().kind {
+        NodeKind::Path { live: Some(l), .. } => match **l {
+            LiveShape::Ellipse { pie, .. } => pie,
+            ref k => panic!("{k:?}"),
+        },
+        k => panic!("{k:?}"),
+    };
+    let undo = |app: &VectorcraftApp| app.session.doc().unwrap().history.undo.len();
+    for draw in [show as fn(&mut VectorcraftApp, &mut Ui), crate::panels::properties::transform_section] {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        app.run("shape.ellipse", json!({"x": 50, "y": 50, "width": 120, "height": 80})).unwrap();
+        app.run("object.setLiveShape", json!({"pieStart": 30, "pieEnd": 120})).unwrap();
+        assert!(!app.ui.constrain_pie_angle, "off at first");
+        let mut fonts = false;
+        let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(320.0, 900.0)).with_accessibility_check(false).build_ui_state(
+            move |ui, app: &mut VectorcraftApp| {
+                if !std::mem::replace(&mut fonts, true) {
+                    crate::theme::install_fonts(ui.ctx());
+                    return;
+                }
+                draw(app, ui);
+            },
+            app,
+        );
+        h.run_steps(3);
+        h.get_by_role_and_label(egui::accesskit::Role::Button, LINK).click();
+        h.run_steps(2);
+        assert!(h.state().ui.constrain_pie_angle, "a click turns it on");
+        h.get_by_role_and_label(egui::accesskit::Role::Button, LINK).focus();
+        h.run_steps(1);
+        h.key_press(egui::Key::Space);
+        h.run_steps(2);
+        assert!(!h.state().ui.constrain_pie_angle, "Space turns it off");
+        h.get_by_role_and_label(egui::accesskit::Role::Button, LINK).click();
+        h.run_steps(2);
+        assert!(h.state().ui.constrain_pie_angle);
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let n = undo(h.state());
+        type_into(&ctx, h.state_mut(), draw, "30°", "60");
+        assert_eq!(pie(h.state()), (60.0, 150.0));
+        assert_eq!(undo(h.state()), n + 1, "one undo step");
+        type_into(&ctx, h.state_mut(), draw, "150°", "200");
+        assert_eq!(pie(h.state()), (110.0, 200.0));
+        h.get_by_role_and_label(egui::accesskit::Role::Button, LINK).click();
+        h.run_steps(2);
+        assert!(!h.state().ui.constrain_pie_angle);
+        type_into(&ctx, h.state_mut(), draw, "110°", "100");
+        assert_eq!(pie(h.state()), (100.0, 200.0), "off, the end stays");
+    }
+}
+
+/// A live line shows its Line Properties in the Transform panel and the Properties panel's
+/// Transform section: a typed length keeps its first end in place and a typed angle turns it
+/// about its midpoint, each one undo step. A line with other objects selected, and a line after
+/// Expand Shape, show none.
+#[test]
+fn a_line_shows_and_takes_its_line_properties() {
+    let ends = |app: &VectorcraftApp| match &first_selected(app).unwrap().kind {
+        NodeKind::Path { live: Some(l), .. } => match **l {
+            LiveShape::Line { a, b } => (a, b),
+            ref k => panic!("{k:?}"),
+        },
+        k => panic!("{k:?}"),
+    };
+    let near = |p: Point, x: f64, y: f64| (p.x - x).abs() < 1e-6 && (p.y - y).abs() < 1e-6;
+    for draw in [show as fn(&mut VectorcraftApp, &mut Ui), crate::panels::properties::transform_section] {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        // 100 pt long, going down the page to the right: 53.13° clockwise, 306.87° counterclockwise.
+        let id = app.run("shape.line", json!({"x1": 50, "y1": 50, "x2": 110, "y2": 130})).unwrap()["id"].as_u64().unwrap();
+        let shown = texts(&mut app, draw);
+        for t in ["Line Properties:", "Line Length:", "100 pt", "Line Angle:", "306.9°"] {
+            assert!(shown.iter().any(|s| s == t), "{t} in {shown:?}");
+        }
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        type_into(&ctx, &mut app, draw, "100 pt", "50");
+        let (a, b) = ends(&app);
+        assert!(near(a, 50.0, 50.0) && near(b, 80.0, 90.0), "{a:?} {b:?}");
+        type_into(&ctx, &mut app, draw, "306.9°", "90");
+        let (a, b) = ends(&app);
+        assert!(near(a, 65.0, 95.0) && near(b, 65.0, 45.0), "{a:?} {b:?}");
+        assert!(texts(&mut app, draw).iter().any(|s| s == "90°"));
+        app.run("edit.undo", json!({})).unwrap();
+        let (a, b) = ends(&app);
+        assert!(near(a, 50.0, 50.0) && near(b, 80.0, 90.0), "one undo step: {a:?} {b:?}");
+        // With a rectangle selected too, the fields would set the line alone: they don't show.
+        let rect = app.run("shape.rectangle", json!({"x": 200, "y": 200, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.set", json!({"ids": [id, rect]})).unwrap();
+        assert!(!texts(&mut app, draw).iter().any(|s| s == "Line Properties:" || s == "Line Length:"));
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        assert!(texts(&mut app, draw).iter().any(|s| s == "Line Properties:"));
+        app.run("object.expandShape", json!({})).unwrap();
+        assert!(!texts(&mut app, draw).iter().any(|s| s == "Line Properties:" || s == "Line Length:"));
+    }
 }
 
 #[test]
@@ -213,8 +369,9 @@ fn type_into(ctx: &egui::Context, app: &mut VectorcraftApp, draw: fn(&mut Vector
 }
 
 /// The panel menu's Transform Object Only, Transform Pattern Only and Transform Both, one
-/// checked: a new X typed in the panel (or the Properties panel's Transform section) moves the
-/// pattern-filled rectangle and leaves its tiles, moves its tiles alone, or moves both. Until
+/// checked: a new X typed in the panel (or the Properties panel's Transform section, or the
+/// Control bar) moves the pattern-filled rectangle and leaves its tiles, moves its tiles alone, or
+/// moves both. Until
 /// one is chosen the panels do as General › Transform Pattern Tiles says, as they did before
 /// the menu acted, and the menu checks Transform Both while it is on, Transform Object Only
 /// while it is off; a choice overrides it, and resetting the preferences returns to it.
@@ -228,7 +385,7 @@ fn the_menu_chooses_whether_the_object_its_pattern_or_both_transform() {
     let labels = ["Transform Object Only", "Transform Pattern Only", "Transform Both"];
     let modes = ["object", "pattern", "both"];
     let checked = |shown: &[String]| -> Vec<usize> { (0..3).filter(|i| shown.contains(&format!("✓ {}", labels[*i]))).collect() };
-    for draw in [show as fn(&mut VectorcraftApp, &mut Ui), crate::panels::properties::transform_section] {
+    for draw in [show as fn(&mut VectorcraftApp, &mut Ui), crate::panels::properties::transform_section, crate::chrome::control_bar] {
         for general in [false, true] {
             for pick in [None, Some(0), Some(1), Some(2)] {
                 let case = format!("General › Transform Pattern Tiles {general}, menu choice {pick:?}");
@@ -313,12 +470,12 @@ fn the_menu_choice_also_applies_to_rotation_and_shear() {
     }
 }
 
-/// Use Registration Point for Symbol: with one symbol instance selected, the panel and the
-/// Properties panel's Transform section show and set X and Y at its symbol's registration point
-/// (here the top-left one) instead of the reference point (the centre).
+/// Use Registration Point for Symbol: with one symbol instance selected, the panel, the
+/// Properties panel's Transform section and the Control bar show and set X and Y at its symbol's
+/// registration point (here the top-left one) instead of the reference point (the center).
 #[test]
 fn use_registration_point_for_symbol_measures_an_instance_from_its_registration_point() {
-    for draw in [show as fn(&mut VectorcraftApp, &mut Ui), crate::panels::properties::transform_section] {
+    for draw in [show as fn(&mut VectorcraftApp, &mut Ui), crate::panels::properties::transform_section, crate::chrome::control_bar] {
         let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
         app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
         app.run("shape.rectangle", json!({"x": 100, "y": 50, "width": 80, "height": 40})).unwrap();
@@ -343,6 +500,47 @@ fn use_registration_point_for_symbol_measures_an_instance_from_its_registration_
         app.run("shape.rectangle", json!({"x": 200, "y": 200, "width": 20, "height": 20})).unwrap();
         let rect = shown(&mut app);
         assert!(rect.iter().any(|t| t == "210 pt") && !rect.iter().any(|t| t == "200 pt"), "the centre: {rect:?}");
+    }
+}
+
+/// The Control bar's X, Y, W and H use the reference point the Transform panel's locator chose:
+/// X and Y show that point of the selection's box and a new X or Y moves it there, a new W or H
+/// keeps it in place, and choosing another point changes what the fields show without editing the
+/// art. Each field edit is one undo step.
+#[test]
+fn the_control_bar_fields_use_the_shared_reference_point() {
+    use crate::panels::tests_appearance::frame_events;
+    let draw = crate::chrome::control_bar as fn(&mut VectorcraftApp, &mut Ui);
+    // The reference point (top-left, center, bottom-right): X/Y shown for the rectangle at
+    // (10, 20), 100 × 50; the box after X becomes `x`, and after W becomes 200 and H 100.
+    let cases = [
+        (0usize, ("10 pt", "20 pt"), "30", Rect::new(30.0, 20.0, 130.0, 70.0), Rect::new(30.0, 20.0, 230.0, 120.0)),
+        (4, ("60 pt", "45 pt"), "80", Rect::new(30.0, 20.0, 130.0, 70.0), Rect::new(-20.0, -5.0, 180.0, 95.0)),
+        (8, ("110 pt", "70 pt"), "130", Rect::new(30.0, 20.0, 130.0, 70.0), Rect::new(-70.0, -30.0, 130.0, 70.0)),
+    ];
+    for (refi, (x, y), new_x, moved, sized) in cases {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 20, "width": 100, "height": 50})).unwrap();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let revision = |app: &VectorcraftApp| app.session.active().unwrap().revision;
+        let shown = |app: &mut VectorcraftApp| frame_events(&ctx, app, vec![], draw).into_iter().map(|(t, _)| t).collect::<Vec<_>>();
+        shown(&mut app);
+        let before = revision(&app);
+        ctx.data_mut(|d| d.insert_temp(egui::Id::unique("refpt"), refi));
+        let texts = shown(&mut app);
+        assert!(texts.iter().any(|t| t == x) && texts.iter().any(|t| t == y), "reference {refi}: X {x}, Y {y} in {texts:?}");
+        assert_eq!(revision(&app), before, "reference {refi}: choosing the point leaves the art");
+        type_into(&ctx, &mut app, draw, x, new_x);
+        assert_eq!(app.selection_box().unwrap().rect, moved, "reference {refi}: X");
+        assert_eq!(revision(&app), before + 1, "reference {refi}: one undo step");
+        type_into(&ctx, &mut app, draw, "100 pt", "200");
+        type_into(&ctx, &mut app, draw, "50 pt", "100");
+        assert_eq!(app.selection_box().unwrap().rect, sized, "reference {refi}: W and H");
+        app.run("edit.undo", json!({})).unwrap();
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(app.selection_box().unwrap().rect, moved, "reference {refi}: undo");
     }
 }
 
@@ -502,4 +700,260 @@ fn rotate_and_shear_fields_are_named() {
     h.run_steps(3);
     let _ = h.get_by_role_and_label(egui::accesskit::Role::TextInput, "Rotate");
     let _ = h.get_by_role_and_label(egui::accesskit::Role::TextInput, "Shear");
+}
+
+/// The Align to Pixel Grid checkbox turns the selected paths' pixel-aligned property on, shows a
+/// dash when they differ (a click then turns it on for both), turns it off when it is on for all,
+/// and is unavailable with type selected.
+#[test]
+fn align_to_pixel_grid_shows_and_sets_the_property() {
+    use crate::panels::tests_appearance::{click, frame_events, text_rect};
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    let a = app.run("shape.rectangle", json!({"x": 10.3, "y": 20.6, "width": 30.4, "height": 9.7})).unwrap()["id"].as_u64().unwrap();
+    let b = app.run("shape.rectangle", json!({"x": 60.3, "y": 20.6, "width": 30.4, "height": 9.7})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    let aligned = |app: &VectorcraftApp, id: u64| app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().extras().pixel_aligned;
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let toggle = |ctx: &egui::Context, app: &mut VectorcraftApp| {
+        let texts = frame_events(ctx, app, vec![], show);
+        click(ctx, app, text_rect(&texts, "Align to Pixel Grid").center(), show);
+    };
+    assert_eq!(pixel_aligned_state(&app).map(|s| (s.0, s.1)), Some((Some(false), true)));
+    toggle(&ctx, &mut app);
+    assert!(aligned(&app, a) && aligned(&app, b));
+    let x0 = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(a)).unwrap().geometric_bounds().unwrap().x0;
+    // The default 1 pt stroke is odd and centered: the edges go to half points.
+    assert_eq!(x0, 10.5);
+    app.run("object.setPixelAligned", json!({"ids": [b], "on": false})).unwrap();
+    assert_eq!(pixel_aligned_state(&app).map(|s| s.0), Some(None));
+    toggle(&ctx, &mut app);
+    assert!(aligned(&app, a) && aligned(&app, b));
+    toggle(&ctx, &mut app);
+    assert!(!aligned(&app, a) && !aligned(&app, b));
+    let t = app.run("text.create", json!({"x": 10, "y": 100, "text": "Hi"})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [a, t]})).unwrap();
+    assert_eq!(pixel_aligned_state(&app).map(|s| s.1), Some(false));
+    toggle(&ctx, &mut app);
+    assert!(!aligned(&app, a));
+    // A path inside a compound path snaps with the compound path, so it cannot be aligned alone.
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    let c = app.run("object.compoundPath.make", json!({})).unwrap()["id"].as_u64().unwrap();
+    assert_eq!(pixel_aligned_state(&app).map(|s| s.1), Some(true));
+    let member = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(c)).unwrap().children().unwrap()[0].id.0;
+    app.run("select.set", json!({"ids": [member]})).unwrap();
+    assert_eq!(pixel_aligned_state(&app).map(|s| s.1), Some(false));
+}
+
+/// The Align to Pixel Grid state measured from scratch in one pass over the selection, with the ids
+/// a click sends: what [`pixel_aligned_shown`] and [`pixel_aligned_ids`] are compared with.
+fn full_pixel_aligned_state(app: &VectorcraftApp) -> Option<(Option<bool>, bool, Vec<u64>)> {
+    let st = app.session.active()?;
+    let nodes: Vec<&Node> = st.selection.objects.iter().filter_map(|id| st.doc.node(*id)).collect();
+    let first = nodes.first()?.extras().pixel_aligned;
+    let value = nodes.iter().all(|n| n.extras().pixel_aligned == first).then_some(first);
+    let in_compound = |n: &Node| st.doc.parent_of(n.id).and_then(|p| st.doc.node(p)).is_some_and(|p| matches!(p.kind, NodeKind::Compound { .. }));
+    let alignable = nodes.iter().all(|n| matches!(n.kind, NodeKind::Path { guide: false, .. } | NodeKind::Compound { .. }) && !in_compound(n));
+    Some((value, alignable, nodes.iter().map(|n| n.id.0).collect()))
+}
+
+/// The Align to Pixel Grid state the panel shows, and the ids a click sends, equal a full measure
+/// of the selection: with no document, nothing selected, mixed values, a guide, a compound path,
+/// a path inside a compound path and a selection that holds both.
+#[test]
+fn align_to_pixel_grid_kept_state_equals_a_full_measure() {
+    fn same(app: &mut VectorcraftApp, why: &str) -> Option<PixelAligned> {
+        let full = full_pixel_aligned_state(app);
+        let shown = pixel_aligned_shown(app);
+        assert_eq!(shown, full.as_ref().map(|f| (f.0, f.1)), "{why}");
+        assert_eq!(pixel_aligned_ids(app), full.map_or(vec![], |f| f.2), "{why}");
+        shown
+    }
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    assert_eq!(same(&mut app, "no document"), None);
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    assert_eq!(same(&mut app, "nothing selected"), None);
+    let rect = |app: &mut VectorcraftApp, x: f64| {
+        app.run("shape.rectangle", json!({"x": x, "y": 20, "width": 30, "height": 10})).unwrap()["id"].as_u64().unwrap()
+    };
+    let (a, b, g) = (rect(&mut app, 10.0), rect(&mut app, 60.0), rect(&mut app, 110.0));
+    app.run("object.setPixelAligned", json!({"ids": [a], "on": true})).unwrap();
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    assert_eq!(same(&mut app, "mixed"), Some((None, true)));
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    assert_eq!(same(&mut app, "on"), Some((Some(true), true)));
+    app.run("select.set", json!({"ids": [g]})).unwrap();
+    app.run("view.guides.make", json!({})).unwrap();
+    app.run("select.set", json!({"ids": [g, b]})).unwrap();
+    assert_eq!(same(&mut app, "a guide"), Some((Some(false), false)));
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    let c = app.run("object.compoundPath.make", json!({})).unwrap()["id"].as_u64().unwrap();
+    assert_eq!(same(&mut app, "a compound path").map(|s| s.1), Some(true));
+    let member = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(c)).unwrap().children().unwrap()[0].id.0;
+    app.run("select.set", json!({"ids": [member]})).unwrap();
+    assert_eq!(same(&mut app, "a path inside a compound path").map(|s| s.1), Some(false));
+    app.run("select.set", json!({"ids": [c, member]})).unwrap();
+    assert_eq!(same(&mut app, "a compound path and its member").map(|s| s.1), Some(false));
+    app.run("select.none", json!({})).unwrap();
+    assert_eq!(same(&mut app, "deselected"), None);
+}
+
+/// A frame of the panel measures the Align to Pixel Grid state once and keeps it for the document's
+/// revision: later frames read it. An edit, Undo, Redo, a new selection, another document and a
+/// document read back from its file measure it again.
+#[test]
+fn align_to_pixel_grid_state_is_measured_once_per_revision() {
+    const PLANTED: Option<PixelAligned> = Some((None, false));
+    fn key(app: &VectorcraftApp) -> (u64, u64) {
+        app.session.active().map(|st| (st.uid, st.revision)).unwrap()
+    }
+    fn measured_again(app: &mut VectorcraftApp, why: &str, change: impl FnOnce(&mut VectorcraftApp)) {
+        app.canvas.pixel_aligned = Some((key(app), PLANTED));
+        change(app);
+        let shown = pixel_aligned_shown(app);
+        assert_ne!(shown, PLANTED, "{why}");
+        assert_eq!(shown, pixel_aligned_state(app), "{why}");
+    }
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    let a = app.run("shape.rectangle", json!({"x": 10, "y": 20, "width": 30, "height": 10})).unwrap()["id"].as_u64().unwrap();
+    let b = app.run("shape.rectangle", json!({"x": 60, "y": 20, "width": 30, "height": 10})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    let saved = (*app.session.active().unwrap().doc).clone();
+    texts(&mut app, show);
+    assert_eq!(app.canvas.pixel_aligned, Some((key(&app), Some((Some(false), true)))));
+    // A wrong answer planted for this revision shows: the state is not measured again.
+    app.canvas.pixel_aligned = Some((key(&app), PLANTED));
+    assert_eq!(pixel_aligned_shown(&mut app), PLANTED);
+    texts(&mut app, show);
+    assert_eq!(app.canvas.pixel_aligned, Some((key(&app), PLANTED)));
+    measured_again(&mut app, "an edit", |app| {
+        app.run("object.setPixelAligned", json!({"ids": [a], "on": true})).unwrap();
+    });
+    measured_again(&mut app, "Undo", |app| {
+        app.run("edit.undo", json!({})).unwrap();
+    });
+    measured_again(&mut app, "Redo", |app| {
+        app.run("edit.redo", json!({})).unwrap();
+    });
+    measured_again(&mut app, "a new selection", |app| {
+        app.run("select.set", json!({"ids": [a]})).unwrap();
+    });
+    measured_again(&mut app, "a new document", |app| {
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 20, "width": 30, "height": 10})).unwrap();
+    });
+    measured_again(&mut app, "back to the first document", |app| {
+        app.session.set_active(0);
+    });
+    assert_eq!(pixel_aligned_shown(&mut app), Some((Some(true), true)));
+    measured_again(&mut app, "the document read back", |app| {
+        assert!(app.session.replace_document(0, saved));
+    });
+}
+
+/// The thread's CPU time in nanoseconds, where Linux gives it.
+fn thread_cpu_ns() -> Option<u128> {
+    std::fs::read_to_string("/proc/thread-self/schedstat").ok()?.split_whitespace().next()?.parse().ok()
+}
+
+/// Time the Align to Pixel Grid state with Select All in a document of 100,000 paths, 1,000 of
+/// them inside 500 compound paths: measured from scratch on every frame
+/// ([`full_pixel_aligned_state`]), by [`pixel_aligned_shown`] on the first frame of a revision, and
+/// by [`pixel_aligned_shown`] on later frames of the same revision. The sides alternate, and the
+/// median time per frame of 7 runs is printed.
+/// Run with `cargo test --release -p vectorcraft-ui-egui --lib pixel_aligned_state_timing -- --ignored --nocapture`.
+#[test]
+#[ignore = "manual timing probe; performance depends on machine load"]
+fn pixel_aligned_state_timing() {
+    const PATHS: usize = 100_000;
+    const COMPOUNDS: usize = 500;
+    const MEASURES: u32 = 20;
+    const KEPT: u32 = 1_000_000;
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 2000, "height": 2000})).unwrap();
+    for i in 0..COMPOUNDS {
+        let (x, y) = ((i % 40 * 40) as f64, (i / 40 * 40) as f64);
+        let a = app.run("shape.rectangle", json!({"x": x, "y": y, "width": 30, "height": 30})).unwrap()["id"].clone();
+        let b = app.run("shape.rectangle", json!({"x": x + 5.0, "y": y + 5.0, "width": 10, "height": 10})).unwrap()["id"].clone();
+        app.run("select.set", json!({"ids": [a, b]})).unwrap();
+        app.run("object.compoundPath.make", json!({})).unwrap();
+    }
+    let rect = app.run("shape.rectangle", json!({"x": 0, "y": 1000, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+    let rect = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(rect)).cloned().unwrap();
+    app.session
+        .edit("Fill", |d, _| {
+            let layer = d.layers[0].id;
+            for _ in 0..PATHS - 2 * COMPOUNDS - 1 {
+                let mut n = rect.clone();
+                n.id = d.alloc_id();
+                d.insert(Some(layer), usize::MAX, n)?;
+            }
+            Ok(())
+        })
+        .unwrap();
+    app.run("select.all", json!({})).unwrap();
+    let selected = app.session.active().unwrap().selection.objects.len();
+    let mut paths = 0;
+    app.session.active().unwrap().doc.walk(|n| paths += usize::from(matches!(n.kind, NodeKind::Path { .. })));
+    let expected = full_pixel_aligned_state(&app).map(|f| (f.0, f.1));
+    assert_eq!(expected, Some((Some(false), true)));
+    let mut time = |frames: u32, f: &mut dyn FnMut(&mut VectorcraftApp) -> Option<PixelAligned>| {
+        let (cpu, wall) = (thread_cpu_ns(), std::time::Instant::now());
+        for _ in 0..frames {
+            assert_eq!(f(&mut app), expected);
+        }
+        let ns = thread_cpu_ns().zip(cpu).map_or_else(|| wall.elapsed().as_nanos(), |(b, a)| b - a);
+        ns as f64 / f64::from(frames) / 1000.0
+    };
+    let (mut full, mut first, mut kept) = (vec![], vec![], vec![]);
+    for _ in 0..7 {
+        full.push(time(MEASURES, &mut |app| full_pixel_aligned_state(app).map(|f| (f.0, f.1))));
+        first.push(time(MEASURES, &mut |app| {
+            app.canvas.pixel_aligned = None;
+            pixel_aligned_shown(app)
+        }));
+        kept.push(time(KEPT, &mut pixel_aligned_shown));
+    }
+    let median = |v: &mut Vec<f64>| {
+        v.sort_by(f64::total_cmp);
+        v[v.len() / 2]
+    };
+    let clock = if thread_cpu_ns().is_some() { "thread CPU time" } else { "wall-clock time" };
+    eprintln!("{paths} paths, {selected} objects selected; {clock} per frame, median of 7 runs");
+    eprintln!("every frame measured ({MEASURES} frames a run): {:>12.3} us  {full:.3?}", median(&mut full));
+    eprintln!("first frame of a revision ({MEASURES} a run):  {:>12.3} us  {first:.3?}", median(&mut first));
+    eprintln!("later frames ({KEPT} frames a run):         {:>12.4} us  {kept:.4?}", median(&mut kept));
+}
+
+/// The panel menu's Align New Objects to Pixel Grid shows and toggles the active document's
+/// setting, follows a switch to another document, and is unavailable with no document open.
+#[test]
+fn align_new_objects_menu_item_toggles_the_active_document() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let item = "Align New Objects to Pixel Grid";
+    let shown =
+        |ctx: &egui::Context, app: &mut VectorcraftApp| menu_texts(ctx, app).into_iter().find(|t| t.trim_start_matches('✓').trim_start() == item);
+    assert!(shown(&ctx, &mut app).is_some_and(|t| !t.starts_with('✓')), "no document");
+    menu_click(&ctx, &mut app, item);
+    assert!(app.session.active().is_none());
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    app.run("file.new", json!({"preset": "Web 1920×1080"})).unwrap();
+    let on = |app: &VectorcraftApp, i: usize| app.session.documents()[i].doc.setup.align_new_objects_to_pixel_grid;
+    assert_eq!((on(&app, 0), on(&app, 1)), (false, true));
+    assert!(shown(&ctx, &mut app).is_some_and(|t| t.starts_with('✓')), "the Web document");
+    app.session.set_active(0);
+    assert!(shown(&ctx, &mut app).is_some_and(|t| !t.starts_with('✓')), "the Letter-sized document");
+    menu_click(&ctx, &mut app, item);
+    assert_eq!((on(&app, 0), on(&app, 1)), (true, true));
+    assert!(shown(&ctx, &mut app).is_some_and(|t| t.starts_with('✓')));
+    let r = app.run("shape.rectangle", json!({"x": 10.3, "y": 20.6, "width": 30.4, "height": 9.7})).unwrap();
+    let id = vectorcraft_doc::NodeId(r["id"].as_u64().unwrap());
+    assert!(app.session.active().unwrap().doc.node(id).unwrap().extras().pixel_aligned);
+    app.session.set_active(1);
+    menu_click(&ctx, &mut app, item);
+    assert_eq!((on(&app, 0), on(&app, 1)), (true, false));
 }

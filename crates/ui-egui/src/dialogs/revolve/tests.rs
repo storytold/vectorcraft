@@ -52,6 +52,22 @@ impl Harness {
         }
     }
 
+    /// Scrolls the dialog's body to its end with the wheel over `text`, and lets the scroll finish.
+    fn scroll_to_end(&mut self, text: &str) {
+        let p = self.rect(text).center();
+        let wheel = Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: vec2(0.0, -4000.0),
+            phase: egui::TouchPhase::Move,
+            modifiers: Default::default(),
+            source: egui::MouseWheelSource::Unknown,
+        };
+        self.frame(vec![Event::PointerMoved(p), wheel]);
+        for _ in 0..60 {
+            self.frame(vec![]);
+        }
+    }
+
     fn rect(&self, text: &str) -> Rect {
         self.texts.iter().find(|(s, _)| s == text).map(|(_, r)| *r).unwrap_or_else(|| panic!("missing text {text:?}"))
     }
@@ -59,6 +75,11 @@ impl Harness {
     /// Return the rectangle of the widget drawn under `Id::unique(id)` in the revolve test harness.
     fn response(&self, id: impl std::hash::Hash + std::fmt::Debug) -> Rect {
         self.ctx.read_response(Id::unique(id)).unwrap().rect
+    }
+
+    /// The open dialog's track cube.
+    fn cube_id(&self) -> Id {
+        super::super::three_d_classic::cube_id(&self.app.ui.dialog.as_ref().unwrap().kind)
     }
 
     fn click(&mut self, p: Pos2) {
@@ -149,6 +170,24 @@ fn command_driven_fields_preview_and_small_windows_keep_the_buttons_reachable() 
 }
 
 #[test]
+fn the_shadows_switch_shows_its_settings_and_turns_the_shadow_on_in_one_undo_step() {
+    let mut h = Harness::with("M100 100 L200 100 L200 200 L100 200 Z", EXTRUDE, vec2(1280.0, 900.0));
+    let before = h.app.session.doc().unwrap().doc.clone();
+    h.settle();
+    h.click(h.rect("Lighting").center());
+    assert!(!h.texts.iter().any(|(s, _)| s == "Shadow Bounds"), "the settings show only while shadows are on");
+    h.click(h.rect("Shadows").center());
+    assert_eq!(h.app.ui.dialog.as_ref().unwrap().fields.get("shadow"), Some(&json!(true)));
+    assert!(h.texts.iter().any(|(s, _)| s == "Distance from Object"));
+    let state = h.app.session.doc().unwrap();
+    let node = state.doc.node(state.selection.objects[0]).unwrap();
+    assert_eq!(node.appearance.effects[0].params["shadow"], json!(true), "the preview draws the shadow");
+    dialogs::confirm(&mut h.app).unwrap();
+    h.app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(h.app.session.doc().unwrap().doc, before);
+}
+
+#[test]
 fn lighting_tab_shows_light_fields_and_keeps_the_dialog_compact() {
     let mut h = Harness::new(vec2(1280.0, 900.0));
     h.settle();
@@ -158,7 +197,9 @@ fn lighting_tab_shows_light_fields_and_keeps_the_dialog_compact() {
         assert!(Rect::from_min_size(Pos2::ZERO, h.screen).contains_rect(h.rect(label)));
     }
     let panel = h.ctx.memory(|m| m.area_rect(Id::unique(("dialog", "effect")).with("revolve"))).unwrap();
-    assert!(panel.width() < 420.0 && panel.height() < 570.0, "compact lighting controls with light management: {panel:?}");
+    // The Shadows switch adds one 28-point row to the 570-point bound; its settings show only
+    // while it is on.
+    assert!(panel.width() < 420.0 && panel.height() < 600.0, "compact lighting controls with light management: {panel:?}");
     h.drag(h.rect("Height").center(), vec2(24.0, 0.0));
     assert_ne!(h.value("lightHeight"), 30.0);
     h.click(h.response(("revolve-reset", "lightHeight")).center());
@@ -297,6 +338,234 @@ fn the_other_3d_effects_show_their_options_and_position_presets() {
     }
 }
 
+/// Extrude & Bevel (Classic): its extrude and bevel options on the Object tab, Position on the
+/// Rotation tab, and the surface with its lights, highlight, blend steps and shading color on the
+/// Lighting tab; OK keeps the edit as one undo step.
+#[test]
+fn classic_extrude_bevel_shows_its_options_and_applies_as_one_step() {
+    use vectorcraft_effects::CLASSIC_EXTRUDE;
+    let mut h = Harness::with("M100 100 L200 100 L200 200 L100 200 Z", CLASSIC_EXTRUDE, vec2(1400.0, 1000.0));
+    let before = h.app.session.doc().unwrap().doc.clone();
+    h.settle();
+    for text in ["Depth", "Cap", "Bevel Shape", "Height", "Bevel Inside"] {
+        h.rect(text);
+    }
+    assert!(!h.texts.iter().any(|(t, _)| t == "Twist" || t == "Taper" || t == "Width"), "the newer effect's options stay out");
+    assert!(!h.ctx.read_response(Id::unique(("revolve-reset", "bevelHeight"))).unwrap().enabled(), "no bevel: its height is off");
+    h.app.ui.dialog.as_mut().unwrap().fields.insert("__tab".into(), json!("rotation"));
+    h.settle();
+    for text in ["Presets", "Rotation X", "Perspective", "Off-Axis Front"] {
+        h.rect(text);
+    }
+    h.click(h.rect("Lighting").center());
+    h.settle();
+    for text in ["Surface", "Plastic", "Move Light to Back", "Light Intensity"] {
+        h.rect(text);
+    }
+    // The lighting sphere makes the tab taller than the dialog's body, which scrolls.
+    h.scroll_to_end("Light Intensity");
+    for text in ["Ambient Light", "Highlight Intensity", "Highlight Size", "Blend Steps", "Shading Color", "Draw Hidden Faces"] {
+        h.rect(text);
+    }
+    assert!(h.ctx.read_response(Id::unique(("revolve-reset", "highlightSize"))).unwrap().enabled());
+    // The light gizmo is on for a lit surface.
+    assert_eq!(dialogs::revolve_gizmo::hint(h.app.ui.dialog.as_ref().unwrap()), "Drag the light, or its rings. Shift snaps to 15°.");
+    // Diffuse has no highlight; Wireframe and No Shading take no light.
+    h.app.ui.dialog.as_mut().unwrap().fields.insert("surface".into(), json!("diffuse"));
+    h.settle();
+    assert!(!h.ctx.read_response(Id::unique(("revolve-reset", "highlightSize"))).unwrap().enabled());
+    assert!(h.ctx.read_response(Id::unique(("revolve-reset", "ambient"))).unwrap().enabled());
+    h.app.ui.dialog.as_mut().unwrap().fields.insert("surface".into(), json!("wireframe"));
+    h.settle();
+    assert!(!h.ctx.read_response(Id::unique(("revolve-reset", "ambient"))).unwrap().enabled());
+    assert!(h.ctx.read_response(Id::unique(("revolve-reset", "drawHiddenFaces"))).unwrap().enabled());
+    assert_eq!(dialogs::revolve_gizmo::hint(h.app.ui.dialog.as_ref().unwrap()), "Drag values or labels. Double-click a value to type.");
+    // A custom shading color shows its color row.
+    let d = h.app.ui.dialog.as_mut().unwrap();
+    d.fields.insert("surface".into(), json!("diffuse"));
+    d.fields.insert("shadingColor".into(), json!("custom"));
+    h.settle();
+    h.rect("#000000");
+    dialogs::confirm(&mut h.app).unwrap();
+    let state = h.app.session.doc().unwrap();
+    let fx = &state.doc.node(state.selection.objects[0]).unwrap().appearance.effects[0];
+    assert_eq!(fx.id, CLASSIC_EXTRUDE);
+    assert_eq!((fx.params["surface"].clone(), fx.params["shadingColor"].clone()), (json!("diffuse"), json!("custom")));
+    h.app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(h.app.session.doc().unwrap().doc, before);
+}
+
+/// Revolve (Classic): its angle, cap, offset and axis side on the Object tab, Position on the
+/// Rotation tab, and the classic surface on the Lighting tab, without Draw Hidden Faces; OK keeps
+/// the edit as one undo step.
+#[test]
+fn classic_revolve_shows_its_options_and_applies_as_one_step() {
+    use vectorcraft_effects::CLASSIC_REVOLVE;
+    let mut h = Harness::with("M100 40 L130 60 L130 140 L100 160", CLASSIC_REVOLVE, vec2(1400.0, 1000.0));
+    let before = h.app.session.doc().unwrap().doc.clone();
+    h.settle();
+    for text in ["Angle", "Cap", "Offset", "Axis side", "Left"] {
+        h.rect(text);
+    }
+    assert!(!h.texts.iter().any(|(t, _)| t == "Segments" || t == "Revolve angle" || t == "Depth"), "the other effects' options stay out");
+    h.app.ui.dialog.as_mut().unwrap().fields.insert("__tab".into(), json!("rotation"));
+    h.settle();
+    for text in ["Presets", "Rotation X", "Perspective", "Off-Axis Front"] {
+        h.rect(text);
+    }
+    h.click(h.rect("Lighting").center());
+    h.settle();
+    for text in ["Surface", "Plastic", "Move Light to Back", "Light Intensity"] {
+        h.rect(text);
+    }
+    h.scroll_to_end("Light Intensity");
+    for text in ["Ambient Light", "Highlight Size", "Blend Steps", "Shading Color"] {
+        h.rect(text);
+    }
+    assert!(!h.texts.iter().any(|(t, _)| t == "Draw Hidden Faces"), "every face is drawn");
+    assert_eq!(dialogs::revolve_gizmo::hint(h.app.ui.dialog.as_ref().unwrap()), "Drag the light, or its rings. Shift snaps to 15°.");
+    let d = h.app.ui.dialog.as_mut().unwrap();
+    d.fields.insert("edge".into(), json!("right"));
+    d.fields.insert("offset".into(), json!(12.0));
+    d.fields.insert("surface".into(), json!("wireframe"));
+    h.settle();
+    assert_eq!(dialogs::revolve_gizmo::hint(h.app.ui.dialog.as_ref().unwrap()), "Drag values or labels. Double-click a value to type.");
+    dialogs::confirm(&mut h.app).unwrap();
+    let state = h.app.session.doc().unwrap();
+    let fx = &state.doc.node(state.selection.objects[0]).unwrap().appearance.effects[0];
+    assert_eq!(fx.id, CLASSIC_REVOLVE);
+    assert_eq!(
+        (fx.params["edge"].clone(), fx.params["offset"].as_f64(), fx.params["surface"].clone()),
+        (json!("right"), Some(12.0), json!("wireframe"))
+    );
+    h.app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(h.app.session.doc().unwrap().doc, before);
+}
+
+/// Rotate (Classic): Position on the Rotation tab, with no Object tab, and No Shading or Diffuse
+/// on the Lighting tab, without the highlight or Draw Hidden Faces; OK keeps the edit as one undo
+/// step.
+#[test]
+fn classic_rotate_shows_its_options_and_applies_as_one_step() {
+    use vectorcraft_effects::CLASSIC_ROTATE;
+    let mut h = Harness::with("M100 100 L200 100 L200 200 L100 200 Z", CLASSIC_ROTATE, vec2(1400.0, 1000.0));
+    let before = h.app.session.doc().unwrap().doc.clone();
+    h.settle();
+    for text in ["Rotation", "Presets", "Rotation X", "Perspective", "Off-Axis Front"] {
+        h.rect(text);
+    }
+    assert!(!h.texts.iter().any(|(t, _)| t == "Object" || t == "Depth" || t == "Angle"), "no Object tab");
+    h.click(h.rect("Lighting").center());
+    h.settle();
+    for text in ["Surface", "Diffuse", "Move Light to Back", "Light Intensity"] {
+        h.rect(text);
+    }
+    h.scroll_to_end("Light Intensity");
+    for text in ["Ambient Light", "Blend Steps", "Shading Color"] {
+        h.rect(text);
+    }
+    assert!(
+        !h.texts.iter().any(|(t, _)| t == "Highlight Intensity" || t == "Highlight Size" || t == "Draw Hidden Faces"),
+        "no highlight and no hidden faces"
+    );
+    assert_eq!(dialogs::revolve_gizmo::hint(h.app.ui.dialog.as_ref().unwrap()), "Drag the light, or its rings. Shift snaps to 15°.");
+    let d = h.app.ui.dialog.as_mut().unwrap();
+    d.fields.insert("surface".into(), json!("none"));
+    d.fields.insert("rotationY".into(), json!(40.0));
+    h.settle();
+    assert_eq!(dialogs::revolve_gizmo::hint(h.app.ui.dialog.as_ref().unwrap()), "Drag values or labels. Double-click a value to type.");
+    dialogs::confirm(&mut h.app).unwrap();
+    let state = h.app.session.doc().unwrap();
+    let fx = &state.doc.node(state.selection.objects[0]).unwrap().appearance.effects[0];
+    assert_eq!(fx.id, CLASSIC_ROTATE);
+    assert_eq!((fx.params["surface"].clone(), fx.params["rotationY"].as_f64()), (json!("none"), Some(40.0)));
+    assert!(fx.params.get("highlightSize").is_none() && fx.params.get("drawHiddenFaces").is_none());
+    h.app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(h.app.session.doc().unwrap().doc, before);
+}
+
+/// The classic effects' track cube: a drag on its face turns the object live and the presets show
+/// Custom, Escape during a drag puts the angles back, the ring turns Z alone, the arrow keys turn
+/// it with the keyboard focus, and OK keeps it all as one undo step. The newer effects have no cube.
+#[test]
+fn the_track_cube_turns_the_classic_effects_live_in_one_undo_step() {
+    use vectorcraft_effects::{CLASSIC_EXTRUDE, CLASSIC_REVOLVE, CLASSIC_ROTATE, EXTRUDE, ROTATE};
+    let square = "M100 100 L200 100 L200 200 L100 200 Z";
+    for effect in [EXTRUDE, ROTATE] {
+        let mut h = Harness::with(square, effect, vec2(1400.0, 1000.0));
+        h.app.ui.dialog.as_mut().unwrap().fields.insert("__tab".into(), json!("rotation"));
+        h.settle();
+        assert!(!h.texts.iter().any(|(t, _)| t == "Track cube"), "{effect} has no track cube");
+    }
+    for effect in [CLASSIC_EXTRUDE, CLASSIC_REVOLVE] {
+        let mut h = Harness::with(square, effect, vec2(1400.0, 1000.0));
+        h.app.ui.dialog.as_mut().unwrap().fields.insert("__tab".into(), json!("rotation"));
+        h.settle();
+        h.rect("Track cube");
+    }
+    let mut h = Harness::with(square, CLASSIC_ROTATE, vec2(1400.0, 1000.0));
+    let before = h.app.session.doc().unwrap().doc.clone();
+    h.settle();
+    h.rect("Off-Axis Front");
+    let start = ["rotationX", "rotationY", "rotationZ"].map(|k| h.value(k));
+    let cube = h.ctx.read_response(h.cube_id()).unwrap().rect;
+    // A face, dragged right: the object turns, the document previews it, and the preset is Custom.
+    h.drag(cube.center(), vec2(30.0, 0.0));
+    let turned = ["rotationX", "rotationY", "rotationZ"].map(|k| h.value(k));
+    assert_ne!(turned, start, "the drag turned the object");
+    h.rect("Custom");
+    let fx = |h: &Harness| {
+        let state = h.app.session.doc().unwrap();
+        state.doc.node(state.selection.objects[0]).unwrap().appearance.effects[0].params.clone()
+    };
+    assert_eq!(fx(&h)["rotationY"].as_f64(), Some(turned[1]), "the preview follows the cube");
+    // Escape during a drag puts the angles back and keeps the dialog open.
+    let p = cube.center();
+    h.frame(vec![Event::PointerMoved(p), button(p, true)]);
+    h.frame(vec![Event::PointerMoved(p + vec2(0.0, 30.0))]);
+    h.frame(vec![Event::PointerMoved(p + vec2(0.0, 40.0))]);
+    assert_ne!(h.value("rotationX"), turned[0]);
+    h.frame(vec![Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }]);
+    h.frame(vec![button(p + vec2(0.0, 40.0), false)]);
+    h.settle();
+    assert!(h.app.ui.dialog.is_some(), "Escape ends the drag, not the dialog");
+    assert_eq!(["rotationX", "rotationY", "rotationZ"].map(|k| h.value(k)), turned);
+    // The ring turns in the screen plane: Z alone.
+    let top = pos2(cube.center().x, cube.center().y - 53.5);
+    h.drag(top, vec2(12.0, 2.0));
+    assert_eq!((h.value("rotationX"), h.value("rotationY")), (turned[0], turned[1]));
+    assert!(h.value("rotationZ") > turned[2], "clockwise: {} -> {}", turned[2], h.value("rotationZ"));
+    // With the keyboard focus (the drags gave it), Right turns about the screen's vertical axis.
+    let z = h.value("rotationZ");
+    assert!(h.ctx.memory(|m| m.has_focus(h.cube_id())), "the drag gave the cube the keyboard focus");
+    h.frame(vec![Event::Key { key: egui::Key::PageUp, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }]);
+    h.settle();
+    assert!((h.value("rotationZ") - (z - 1.0)).abs() < 0.011, "Page Up turns 1° counterclockwise");
+    let y = h.value("rotationY");
+    h.frame(vec![Event::Key { key: egui::Key::ArrowRight, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }]);
+    h.settle();
+    assert_ne!(h.value("rotationY"), y, "Right turns the cube");
+    let last = h.value("rotationZ");
+    dialogs::confirm(&mut h.app).unwrap();
+    assert_eq!(fx(&h)["rotationZ"].as_f64(), Some(last));
+    h.app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(h.app.session.doc().unwrap().doc, before);
+}
+
+/// A mixed rotation (the 3D and Materials panel's selected effects differ) leaves the cube off.
+#[test]
+fn the_track_cube_is_off_while_a_rotation_is_mixed() {
+    use vectorcraft_effects::CLASSIC_ROTATE;
+    let mut h = Harness::with("M100 100 L200 100 L200 200 L100 200 Z", CLASSIC_ROTATE, vec2(1400.0, 1000.0));
+    h.app.ui.dialog.as_mut().unwrap().fields.insert("rotationX".into(), Value::Null);
+    h.settle();
+    let cube = h.ctx.read_response(h.cube_id()).unwrap().rect;
+    h.drag(cube.center(), vec2(30.0, 0.0));
+    let d = h.app.ui.dialog.as_ref().unwrap();
+    assert_eq!(d.fields.get("rotationX"), Some(&Value::Null));
+    assert!(!h.ctx.read_response(h.cube_id()).unwrap().sense.senses_drag());
+}
+
 #[test]
 fn extrude_bevel_options_enable_with_a_bevel_shape() {
     let mut h = Harness::with("M100 100 L200 100 L200 200 L100 200 Z", vectorcraft_effects::EXTRUDE, vec2(1400.0, 1000.0));
@@ -307,6 +576,42 @@ fn extrude_bevel_options_enable_with_a_bevel_shape() {
     h.settle();
     assert!(h.ctx.read_response(Id::unique(("revolve-reset", "bevelWidth"))).unwrap().enabled());
     assert_eq!(h.response(("revolve-reset", "bevelWidth")), width);
+}
+
+#[test]
+fn the_bevel_reset_restores_the_bevel_settings_and_keeps_the_others() {
+    let mut h = Harness::with("M100 100 L200 100 L200 200 L100 200 Z", vectorcraft_effects::EXTRUDE, vec2(1400.0, 1000.0));
+    let before = h.app.session.doc().unwrap().doc.clone();
+    h.settle();
+    let enabled = |h: &Harness| h.ctx.read_response(Id::unique("revolve-reset-bevel")).unwrap().enabled();
+    assert!(!enabled(&h), "every bevel setting at its default: Reset is off");
+    let changed = json!({"bevel": "step", "bevelWidth": 12.0, "bevelHeight": 3.0, "bevelRepeat": 4, "bevelSpace": 30.0, "bevelInside": true, "bevelBothSides": true, "depth": 90.0, "twist": 45.0, "rotationX": 10.0});
+    h.app.ui.dialog.as_mut().unwrap().fields.extend(changed.as_object().unwrap().clone());
+    h.settle();
+    assert!(enabled(&h));
+    h.click(h.response("revolve-reset-bevel").center());
+    let defaults = vectorcraft_effects::default_params(vectorcraft_effects::EXTRUDE).unwrap();
+    let dialog = h.app.ui.dialog.as_ref().unwrap();
+    for key in ["bevel", "bevelWidth", "bevelHeight", "bevelRepeat", "bevelSpace", "bevelInside", "bevelBothSides"] {
+        assert_eq!(dialog.fields.get(key), defaults.get(key), "reset: {key}");
+    }
+    for key in ["depth", "twist", "rotationX"] {
+        assert_eq!(dialog.fields.get(key), changed.get(key), "kept: {key}");
+    }
+    assert!(!enabled(&h), "Reset turns itself off");
+    // One bevel setting off its default is enough to turn Reset on again.
+    h.app.ui.dialog.as_mut().unwrap().fields.insert("bevelBothSides".into(), json!(true));
+    h.settle();
+    assert!(enabled(&h));
+    dialogs::confirm(&mut h.app).unwrap();
+    let state = h.app.session.doc().unwrap();
+    let params = vectorcraft_effects::merged_params(
+        vectorcraft_effects::EXTRUDE,
+        &state.doc.node(state.selection.objects[0]).unwrap().appearance.effects[0].params,
+    );
+    assert_eq!((params["depth"].clone(), params["bevelBothSides"].clone(), params["bevel"].clone()), (json!(90.0), json!(true), json!("none")));
+    h.app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(h.app.session.doc().unwrap().doc, before);
 }
 
 #[test]

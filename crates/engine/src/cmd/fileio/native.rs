@@ -48,7 +48,7 @@ pub const OPTIONS: &[FormatOption] = &[
     FormatOption {
         name: "pdfCompatible",
         ty: "boolean",
-        default: "false",
+        default: "true",
         description: "also carry a PDF of every artboard, for apps that read PDF (a larger file)",
     },
 ];
@@ -133,7 +133,7 @@ pub const AI_OPTIONS: &[FormatOption] = &[
         name: "outlineText",
         ty: "boolean",
         default: "false",
-        description: "with aiVersion 7, type as its outlines instead of text (which apps reading the file set in the fonts it names: they need them installed); type 8-bit text can't hold (characters outside Windows Latin-1, vertical type, ruby, inline graphics, gradient or pattern fills) and type with rotated characters are always outlines",
+        description: "with aiVersion 7, type as its outlines instead of text (which apps reading the file set in the fonts it names: they need them installed); type 8-bit text can't hold (characters outside Windows Latin-1, vertical type, ruby, warichu, inline graphics, gradient or pattern fills) and type with rotated characters are always outlines",
     },
 ];
 
@@ -146,7 +146,7 @@ struct NativeOptions {
     precision: Option<Value>,
     include_linked: bool,
     embed_profiles: Option<bool>,
-    pdf_compatible: bool,
+    pdf_compatible: Option<bool>,
 }
 
 /// What [`save_options`] leaves to [`encode`] (rendering and encoding take time).
@@ -171,7 +171,9 @@ pub(super) fn save_options(cmd: &str, f: &Format, doc: &Document, p: &Value) -> 
         so.profiles = embedded_profiles(doc);
     }
     so.check().map_err(|e| bad(cmd, e.to_string()))?;
-    Ok((so, Extras { preview: o.preview, pdf: o.pdf_compatible }))
+    let pdf = o.pdf_compatible.unwrap_or(true);
+    so.pdf_compatible = Some(pdf);
+    Ok((so, Extras { preview: o.preview, pdf }))
 }
 
 /// The `precision` option `v`: a whole number of decimal places, 0 to
@@ -213,9 +215,11 @@ pub(super) fn encode_to(cmd: &str, f: &Format, doc: &Document, p: &Value, w: imp
     if extras.preview {
         so.preview = preview_png(&drawn)?;
     }
-    if extras.pdf {
-        // Every artboard as PDF pages (no editing data: the file is the native document).
-        so.pdf = Some(super::pdf::encode(cmd, &drawn, &json!({ "range": "all", "preserveEditing": false }))?.0);
+    if extras.pdf && !drawn.artboards.is_empty() {
+        // Every artboard as PDF pages (no editing data: the file is the native document), dated by
+        // the document's File Info, so the same document and dates give the same bytes.
+        let at = drawn.metadata.modified.or(drawn.metadata.created);
+        so.pdf = Some(super::pdf::encode_at(cmd, &drawn, &json!({ "range": "all", "preserveEditing": false }), at)?.0);
     }
     drop(drawn);
     let native = match full {
@@ -227,20 +231,20 @@ pub(super) fn encode_to(cmd: &str, f: &Format, doc: &Document, p: &Value, w: imp
         }
         other => other,
     };
+    // Without an Export for Screens folder outside the read roots.
+    let native = super::access::with_readable_settings_folder(&native);
     so.pretty = so.pretty_fits(&native);
     vectorcraft_format::save_to(&native, &so, w).map_err(|e| bad(cmd, e.to_string()))
 }
 
 /// `doc` with its path geometry rounded to `decimals` places, as [`vectorcraft_format::save_to`]
-/// writes it for `version`: placed documents become groups of their art for older versions.
+/// writes it for `version`: placed documents, those in the stored brushes' art included, become
+/// groups of their art for older versions.
 fn rounded(doc: &Document, version: u32, decimals: u8) -> Document {
-    let mut d = if version < vectorcraft_format::VERSION && doc.has_placed() {
-        let mut d = doc.with_placed_art().into_owned();
-        d.placed_as_groups();
-        d
-    } else {
-        doc.clone()
-    };
+    let mut d = doc.clone();
+    if version < vectorcraft_format::VERSION {
+        vectorcraft_format::placed_as_groups(&mut d);
+    }
     d.round_geometry(decimals.min(vectorcraft_format::MAX_PRECISION));
     d
 }
@@ -306,6 +310,8 @@ pub(super) fn ai_native(cmd: &str, doc: &Document, so: &SaveOptions) -> Result<V
     } else {
         Cow::Borrowed(doc)
     };
+    // Without an Export for Screens folder outside the read roots.
+    let native = super::access::with_readable_settings_folder(&native);
     vectorcraft_format::save_with(&native, so).map_err(|e| bad(cmd, e.to_string()))
 }
 

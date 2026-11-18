@@ -34,19 +34,41 @@ use std::io::Read as _;
 use super::lex::find;
 use crate::ps;
 
-pub(crate) use envelope::DRAWN as ENVELOPE_DRAWN;
-#[cfg(test)]
-pub(crate) use envelope::MAX_CHECKED;
-pub(crate) use envelope::{WARPED_TYPE_DRAWN, WarpedType};
-pub(crate) use frames::text_frames;
-pub(crate) use paint::MAX_STOPS as MAX_GRADIENT_STOPS;
-pub use read::{
-    BindingRef, Brushes, IMAGE_TOO_LARGE, PaletteSwatches, Structure, active_artboard, artboards, bindings_note, brushes, graphic_styles, palette,
-    read, read_beside, variables,
+pub(crate) use blend::{MAX_BLEND_OBJECTS, MAX_KEYS as MAX_BLEND_KEYS, PLUGIN as BLEND_PLUGIN, blend_reads};
+pub(crate) use brush::{
+    BrushesRead, MANAGER_NAME as BRUSH_MANAGER, brushes_kept, plugin_name as brush_plugin_name, read_brush_object, turn_over as turn_brush_art_over,
 };
-pub(crate) use read::{MAX_SYMBOLS, join_and, read_art_style, slot_frame, slot_of, symbol_art_member};
+pub(crate) use envelope::DRAWN as ENVELOPE_DRAWN;
+pub(crate) use envelope::MAX_CHECKED;
+pub(crate) use envelope::TYPE_DRAWN as ENVELOPE_TYPE_DRAWN;
+pub(crate) use envelope::{GridPoint as EnvelopeGridPoint, PLUGIN as DEFORM_PLUGIN, outline as envelope_outline, upright as envelope_upright};
+pub(crate) use envelope::{MAX_ANY as ENVELOPE_MAX_ANY, MAX_SOLID as ENVELOPE_MAX_SOLID};
+pub(crate) use envelope::{WARPED_TYPE_DRAWN, WarpedType};
+#[cfg(test)]
+pub(crate) use frames::TEXT_FRAME_SCANS;
+pub(crate) use frames::text_frames;
+pub(crate) use mesh::{MAX_SIDE as MAX_MESH_SIDE, mesh_reads};
+pub use obj::{NameEncoding, Names};
+pub(crate) use paint::MAX_STOPS as MAX_GRADIENT_STOPS;
+#[cfg(test)]
+pub(crate) use read::objects_read;
+#[cfg(test)]
+pub use read::read;
+#[cfg(test)]
+pub(crate) use read::with_image_limits;
+pub(crate) use read::{
+    BLEND_BUDGET, MAX_NODES as MAX_EDITING_OBJECTS, MAX_SYMBOLS, ParsedStyle, join_and, parse_art_style, parsed_moves_with, read_over_page,
+    read_parsed_style, read_program, read_style_list, slot_frame, slot_of, symbol_art_member,
+};
+pub use read::{
+    BindingRef, Brushes, PaletteSwatches, PlacedPage, Structure, Symbols, active_artboard, artboards, bindings_note, brushes, graphic_styles,
+    palette, read_beside, read_in, symbols, variables,
+};
+#[cfg(test)]
+pub(crate) use style::ART_STYLE_PARSES;
 
 pub(crate) use read::is_look_slot;
+pub(crate) use style::{MAX_LISTED, MAX_LISTED_NAME, warp_number};
 
 #[cfg(test)]
 mod tests;

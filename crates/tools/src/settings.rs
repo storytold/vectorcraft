@@ -43,12 +43,16 @@ const ROWS: &[Row] = &[
     (&["blobBrush"], None, &["fidelity", "keepSelected", "mergeOnlySelection"]),
     // Eraser Tool Options' tip shape.
     (&["blobBrush", "eraser"], None, &["angle", "roundness"]),
+    // Eraser Tool Options' Angle and Roundness variation menus and fields.
+    (&["eraser"], None, &["angleMode", "angleVariation", "roundnessMode", "roundnessVariation"]),
     // Live Paint Selection Tool Options (`builder::LivePaintSelectionTool`).
     (&["livePaintSelection"], None, &["selectFills", "selectStrokes", "color", "width"]),
     // Live Paint Bucket Options (`builder::LivePaintBucketTool`).
-    (&["livePaintBucket"], None, &["paintFills", "paintStrokes", "highlight", "color", "width"]),
+    (&["livePaintBucket"], None, &["paintFills", "paintStrokes", "cursorSwatchPreview", "highlight", "color", "width"]),
     (&["polygon"], None, &["sides"]),
     (&["star"], None, &["points"]),
+    // The Ellipse dialog's Anchors.
+    (&["ellipse"], None, &["anchors"]),
     (&["freeTransform"], None, &["constrain"]),
     // Shape Builder Tool Options (`builder::ShapeBuilderOptions`).
     (

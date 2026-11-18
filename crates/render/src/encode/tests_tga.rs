@@ -14,7 +14,7 @@ fn targa_depths_alpha_and_footer() {
         assert_eq!((u16_at(&file, 12), u16_at(&file, 14)), (7, 3));
         assert_eq!(file.len(), 18 + (w * h) as usize * usize::from(depth / 8) + 26);
         assert!(file.ends_with(b"TRUEVISION-XFILE.\0"));
-        let img = decode(&file, image::ImageFormat::Tga);
+        let img = decode(&file, craft_image_codecs::Format::Tga);
         assert_eq!(img.dimensions(), (w, h));
         let want = on_white(px[(2 * w as usize + 3) * 4..][..4].try_into().unwrap());
         let got = img.get_pixel(3, 2).0;
