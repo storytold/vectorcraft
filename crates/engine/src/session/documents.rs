@@ -149,6 +149,7 @@ impl Session {
             global_edit_options: Default::default(),
             select_similar: crate::cmd::SIMILAR[0].0,
             keyboard_text: false,
+            toasts: Default::default(),
             script_key: None,
             script_engines: crate::script::EnginesKey::new(),
             script_stop: vectorcraft_js::Interrupt::new(),
@@ -204,8 +205,7 @@ impl Session {
         let _ = self.finish_tool_edit_later();
         // The switch goes on whatever the lent tool's last actions did, as for the deactivation.
         let _ = self.give_back_tool(view);
-        let acts = self.with_tool_cx(view, |t, cx| t.deactivate(cx));
-        let _ = self.apply_actions(acts);
+        let _ = self.deactivate_tool(view);
         // A batch leaves its interaction open in the document it leaves, to keep or roll back with
         // the rest of the batch; anything else in progress (a drag) is cancelled.
         if self.batch_stash.is_none() {
