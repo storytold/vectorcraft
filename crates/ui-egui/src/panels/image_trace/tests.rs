@@ -2,7 +2,7 @@ use super::super::tests_long_popups::{
     PopupWindow, assert_last_row_scrolls_into_view, assert_rows_stay_on_one_line, assert_short_list_does_not_scroll,
 };
 use super::*;
-use crate::panels::library_panel;
+use crate::panels::{first_selected, library_panel};
 use egui::{Event, PointerButton, Pos2, Rect, vec2};
 
 /// One headless frame of the panel (and its menu) with `events`: the texts drawn, with where.
@@ -209,7 +209,10 @@ fn a_large_image_traced_as_a_flat_logo_shows_the_size_it_was_traced_at() {
     app.run("file.place", json!({"name": "logo.png", "dataBase64": data, "link": false})).unwrap();
     trace_with(&mut app, "Flat Logo");
     assert!(target(&app).2.is_some(), "the image is traced: {}", app.ui.status);
-    assert_eq!(app.ui.status, "Flat Logo traced the image at 801 × 801 pixels, averaged down from 1602 × 1602.");
+    let note = "Flat Logo traced the image at 801 × 801 pixels, averaged down from 1602 × 1602.";
+    let status = format!("Traced with 1 note: {note}");
+    assert_eq!(app.ui.status, status);
+    assert_eq!(app.ui.status_notes, Some((status, vec![note.to_string()])));
 }
 
 #[test]

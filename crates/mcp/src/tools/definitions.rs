@@ -466,7 +466,7 @@ pub fn tool_definitions() -> Vec<Value> {
         tool(
             "transform",
             "Transform",
-            "Move, rotate, scale, reflect or shear the selection (or `ids`); several may be combined and run in that order. Angles in degrees (counter-clockwise), scale in %. Scale and reflect act along the selection's bounding box, turned with rotated objects until Reset Bounding Box. `origin` [x,y] defaults to the selection centre; `copy` transforms a copy.",
+            "Move, rotate, scale, reflect or shear the selection (or `ids`); several may be combined and run in that order. Angles in degrees (counter-clockwise), scale in %. Scale and reflect act along the selection's bounding box, turned with rotated objects until Reset Bounding Box. `origin` [x,y] defaults to the selection center; `copy` transforms a copy. A scale, reflect or shear its command refuses, or an argument of the wrong type, returns that error before any step runs, and nothing changes.",
             obj(
                 json!({
                     "ids": {"type": "array", "items": {"type": "integer"}},

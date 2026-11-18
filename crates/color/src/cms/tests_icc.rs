@@ -60,6 +60,25 @@ fn cmyk_profiles_convert_like_the_cms() {
 }
 
 #[test]
+fn cmyk_profiles_separate_saturated_inks_back_without_clipping_to_srgb() {
+    // CMYK → PCS → CMYK through the profile's own colorimetric tables, by way of linear ProPhoto
+    // RGB, which holds every color these profiles print, so no display gamut clips the inks.
+    // Inks that print outside sRGB come back to inks that print the same color.
+    for name in BUILTIN_CMYK {
+        let p = IccProfile::from_bytes(None, &icc_bytes(name).unwrap()).unwrap();
+        let cms = Cms::new(&ColorSettings { cmyk: name.into(), bpc: false, ..Default::default() }).unwrap();
+        for inks in
+            [[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0], [1.0, 1.0, 0.0, 0.0], [0.0, 1.0, 1.0, 0.0], [1.0, 0.0, 1.0, 0.0]]
+        {
+            let back = p.to_same_model_of(&p, &inks, Intent::RelativeColorimetric, false).unwrap();
+            let de = delta_e2000(cms.cmyk_to_lab(inks), cms.cmyk_to_lab([back[0], back[1], back[2], back[3]]));
+            // Within the ΔE of 3 that the gamut tag counts as reproduced.
+            assert!(de <= 3.0, "{name} {inks:?} -> {back:?} (ΔE {de})");
+        }
+    }
+}
+
+#[test]
 fn cmyk_profiles_carry_their_paper_as_the_media_white() {
     let generic = generic::swop_like();
     let p = parse(&icc_bytes(GENERIC_CMYK).unwrap());
