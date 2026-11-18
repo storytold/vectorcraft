@@ -610,3 +610,88 @@ fn anchor_point_shift_drag_honors_measurement_labels() {
     assert!(t.overlays(&on).iter().any(|o| matches!(o, Overlay::Measure { text, .. } if text == &want)));
     assert!(!t.overlays(&off).iter().any(|o| matches!(o, Overlay::Measure { .. })));
 }
+
+/// Alt held while dragging a handle links it with the opposite handle (`link`), making the
+/// anchor smooth; without Alt the handle moves on its own. Shift with Alt keeps the 45° steps, an
+/// Alt-click still retracts the handle, and Escape cancels the linking drag. The Pen, lending the
+/// tool for its Alt gestures, keeps moving the handle on its own.
+#[test]
+fn anchor_point_alt_drag_links_a_handle_with_the_opposite_one() {
+    let (mut d, _) = doc_with_rect();
+    let l = d.layers[0].id;
+    let id = d.alloc_id();
+    let mut sp = vectorcraft_geom::SubPath::polyline(&[Point::new(100.0, 300.0), Point::new(200.0, 300.0), Point::new(300.0, 300.0)], false);
+    // A corner: handles at (240, 320) and (170, 320), not in line.
+    sp.anchors[1] = Anchor::with_handles(Point::new(200.0, 300.0), Point::new(170.0, 320.0), Point::new(240.0, 320.0));
+    let path = vectorcraft_geom::PathData::single(sp);
+    d.insert(Some(l), 1, vectorcraft_doc::Node::path(id, path, vectorcraft_doc::Appearance::default_art())).unwrap();
+    let mut s = Selection::default();
+    s.set([id]);
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let alt = Mods { alt: true, ..Mods::default() };
+    let drag = |t: &mut AnchorTool, mods: Mods, x: f64, y: f64| {
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 240.0, 320.0).with_mods(mods));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, x, y).with_mods(mods))
+    };
+    let set = |x: f64, y: f64, key: &str| {
+        let mut params = json!({"id": id.0, "subpath": 0, "anchor": 1, "which": "out", "x": x, "y": y});
+        params[key] = json!(true);
+        Action::Preview("path.setHandle".into(), params)
+    };
+
+    let mut t = AnchorTool::new("anchorPoint");
+    assert_eq!(drag(&mut t, alt, 250.0, 340.0), vec![Action::Begin("Reshape".into()), set(250.0, 340.0, "link")]);
+    assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 250.0, 340.0).with_mods(alt)), vec![Action::Commit]);
+    // Without Alt the handle moves on its own, as before.
+    assert_eq!(drag(&mut t, Mods::default(), 250.0, 340.0), vec![Action::Begin("Reshape".into()), set(250.0, 340.0, "independent")]);
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 250.0, 340.0));
+
+    // Shift with Alt: the linked handle stays at 45° steps round its anchor.
+    let shift_alt = Mods { shift: true, alt: true, ..Mods::default() };
+    let a = drag(&mut t, shift_alt, 250.0, 345.0);
+    let Some(Action::Preview(c, args)) = a.get(1) else { panic!("{a:?}") };
+    assert_eq!((c.as_str(), &args["link"], args.get("independent")), ("path.setHandle", &json!(true), None));
+    let (dx, dy) = (args["x"].as_f64().unwrap_or(f64::NAN) - 200.0, args["y"].as_f64().unwrap_or(f64::NAN) - 300.0);
+    assert!(dx > 0.0 && (dx - dy).abs() < 1e-6, "{args}");
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 250.0, 345.0));
+
+    // An Alt-click on the handle retracts it, as a click without Alt does.
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 240.0, 320.0).with_mods(alt));
+    assert_eq!(
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 240.0, 320.0).with_mods(alt)),
+        vec![Action::Exec(
+            "path.setHandle".into(),
+            json!({"id": id.0, "subpath": 0, "anchor": 1, "which": "out", "x": 200.0, "y": 300.0, "independent": true})
+        )]
+    );
+
+    // Escape cancels the linking drag; its release does nothing.
+    drag(&mut t, alt, 250.0, 340.0);
+    assert_eq!(t.key(&cx, ToolKey::Escape, Mods::default()), vec![Action::Cancel]);
+    assert!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 250.0, 340.0).with_mods(alt)).is_empty());
+
+    // Lent by the Pen, Alt-drag moves the handle on its own.
+    let mut lent = AnchorTool::lent_by_pen();
+    assert_eq!(drag(&mut lent, alt, 250.0, 340.0), vec![Action::Begin("Reshape".into()), set(250.0, 340.0, "independent")]);
+}
+
+/// Alt-dragging a selected blend's spine handle links it with the opposite one.
+#[test]
+fn anchor_point_alt_drag_links_a_blend_spine_handle() {
+    let (d, id, sel) = blend_spine_doc(true);
+    let p = paint();
+    let c = cx(&d, &sel, &p);
+    let alt = Mods { alt: true, ..Mods::default() };
+    let mut tool = AnchorTool::new("anchorPoint");
+    tool.pointer(&c, &PointerEvent::new(PointerKind::Down, 190.0, 330.0).with_mods(alt));
+    let actions = tool.pointer(&c, &PointerEvent::new(PointerKind::Drag, 190.0, 350.0).with_mods(alt));
+    assert_eq!(
+        actions.get(1),
+        Some(&Action::Preview(
+            "object.blend.spine.moveAnchor".into(),
+            json!({"id": id.0, "anchor": 1, "handle": "out", "x": 190.0, "y": 350.0, "link": true})
+        ))
+    );
+    assert_eq!(tool.pointer(&c, &PointerEvent::new(PointerKind::Up, 190.0, 350.0).with_mods(alt)), vec![Action::Commit]);
+}

@@ -202,7 +202,8 @@ fn the_window_menu_and_the_brushes_panel_open_brush_libraries() {
             json!("game-trails"),
             json!("energy-beams"),
             json!("dry-media"),
-            json!("tech-circuit")
+            json!("tech-circuit"),
+            json!("arrows")
         ]
     );
     let dry = entries.iter().find(|e| under(e) && e.params["library"] == "dry-media").map(|e| e.label.as_str());
