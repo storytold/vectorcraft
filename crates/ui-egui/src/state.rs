@@ -705,6 +705,12 @@ pub struct UiState {
     /// stored in the form every earlier version reads.
     #[serde(default, with = "crate::keymap::stored")]
     pub shortcut_overrides: craft_keymap::Overrides,
+    /// Hold shortcuts: command id, `tool:<id>` or `panel:<id>` → a character key, alone or with
+    /// Shift ("X", "Shift+X", "."). Holding the key for the Hold Shortcut Delay runs the entry; a
+    /// quick press runs the key's own shortcut when it is let go. Kept apart from
+    /// `shortcut_overrides`, so earlier versions read the settings without them.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub shortcut_holds: std::collections::BTreeMap<String, String>,
     /// Name of the shortcut set (preset or "Custom").
     #[serde(default = "default_shortcut_set", deserialize_with = "crate::shortcut_editor::deserialize_set_name")]
     pub shortcut_set: String,
@@ -909,6 +915,9 @@ pub struct UiState {
     /// the panel menu's View Artboard Contents Only.
     #[serde(default)]
     pub navigator_panel: crate::panels::navigator::PanelOptions,
+    /// Attributes panel › Panel Options… (how many recent URLs the URL menu lists).
+    #[serde(default)]
+    pub attributes_panel: crate::panels::attributes::PanelOptions,
     /// The Layers panel's Filter (`ui.layersFilter`). It is not saved and lasts the session, as the
     /// Search All text does.
     #[serde(skip)]
@@ -1285,6 +1294,7 @@ impl Default for UiState {
             action_playback: Default::default(),
             action_playing: None,
             shortcut_overrides: Default::default(),
+            shortcut_holds: Default::default(),
             shortcut_set: default_shortcut_set(),
             workspace: default_workspace(),
             touch_workspace_restore: None,
@@ -1339,6 +1349,7 @@ impl Default for UiState {
             trace_ignore_sampler: None,
             layers_panel: Default::default(),
             navigator_panel: Default::default(),
+            attributes_panel: Default::default(),
             layers_filter: Default::default(),
             swatches_view: Default::default(),
             graphic_styles_view: Default::default(),

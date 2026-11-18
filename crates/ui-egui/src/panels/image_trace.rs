@@ -150,28 +150,72 @@ pub(crate) fn is_trace(n: &Node) -> bool {
         && n.children().is_some_and(|c| c.first().is_some_and(|i| matches!(i.kind, NodeKind::Image(_))))
 }
 
+/// What Trace acts on in the active document, and whether any selected object is an Image Trace
+/// object (wherever it is in the selection).
+#[derive(Clone, Debug, Default, PartialEq)]
+struct Target {
+    /// The active document's uid and the object Trace acts on.
+    object: Option<(u64, NodeId)>,
+    /// The object is an Image Trace object.
+    is_trace: bool,
+    /// The object is a plain image.
+    is_image: bool,
+    /// The object's stored trace settings.
+    stored: Option<Value>,
+    any_trace: bool,
+}
+
+#[cfg(test)]
+thread_local! {
+    /// How many times [`find_target`] looked the target up in an active document on this thread.
+    static TARGET_LOOKUPS: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
+}
+
 /// The object Trace acts on: the first selected image or Image Trace object in paint order, as
-/// `imageTrace.make` takes it, else the first selected object.
-fn target_node(app: &VectorcraftApp) -> Option<&Node> {
-    let st = app.session.active()?;
-    let traceable = |n: &&Node| is_trace(n) || matches!(n.kind, NodeKind::Image(_));
-    st.selection.in_paint_order(&st.doc).into_iter().find_map(|id| st.doc.node(id).filter(traceable)).or_else(|| first_node(app))
+/// `imageTrace.make` takes it, else the first selected object. Only the selected images and Image
+/// Trace objects are put in paint order.
+fn find_target(app: &VectorcraftApp) -> Target {
+    let Some(st) = app.session.active() else { return Target::default() };
+    #[cfg(test)]
+    TARGET_LOOKUPS.with(|n| n.set(n.get() + 1));
+    let mut any_trace = false;
+    let traceable: Vec<NodeId> = st
+        .selection
+        .objects
+        .iter()
+        .copied()
+        .filter(|id| {
+            st.doc.node(*id).is_some_and(|n| {
+                let trace = is_trace(n);
+                any_trace |= trace;
+                trace || matches!(n.kind, NodeKind::Image(_))
+            })
+        })
+        .collect();
+    let node = st.doc.paint_order(traceable).into_iter().find_map(|id| st.doc.node(id)).or_else(|| first_node(app));
+    let Some(n) = node else { return Target { any_trace, ..Target::default() } };
+    Target {
+        object: Some((st.uid, n.id)),
+        is_trace: is_trace(n),
+        is_image: matches!(n.kind, NodeKind::Image(_)),
+        stored: n.extras().trace.as_deref().cloned(),
+        any_trace,
+    }
 }
 
-/// The active document and the object Trace acts on.
-fn target_key(app: &VectorcraftApp) -> Option<(u64, NodeId)> {
-    Some((app.session.active()?.uid, target_node(app)?.id))
-}
-
-/// What Trace acts on: an Image Trace object (with its stored settings), a plain image, or neither.
-fn target(app: &VectorcraftApp) -> (bool, bool, Option<Value>) {
-    let Some(n) = target_node(app) else { return (false, false, None) };
-    (is_trace(n), matches!(n.kind, NodeKind::Image(_)), n.extras().trace.as_deref().cloned())
-}
-
-/// Whether any selected object is an Image Trace object, wherever it is in the selection.
-fn any_trace(app: &VectorcraftApp) -> bool {
-    app.session.active().is_some_and(|st| st.selection.objects.iter().any(|id| st.doc.node(*id).is_some_and(is_trace)))
+/// [`find_target`], looked up once for each document and revision of it: the panel reads it on
+/// every frame.
+fn target(app: &VectorcraftApp, ctx: &egui::Context) -> Target {
+    let Some(st) = app.session.active() else { return Target::default() };
+    let key = (st.uid, st.revision);
+    match pstate::<Option<((u64, u64), Target)>>(ctx, "image-trace-target") {
+        Some((k, t)) if k == key => t,
+        _ => {
+            let t = find_target(app);
+            set_pstate(ctx, "image-trace-target", Some((key, t.clone())));
+            t
+        }
+    }
 }
 
 /// The one selected Image Trace object's preset ("Custom" once its settings were changed) and view.
@@ -249,7 +293,7 @@ fn sampler_valid(app: &VectorcraftApp, s: &crate::state::TraceIgnoreSampler) -> 
     let Some(doc) = app.session.active() else { return false };
     doc.uid == s.doc
         && doc.revision == s.revision
-        && target_key(app) == Some((s.doc, s.target))
+        && find_target(app).object == Some((s.doc, s.target))
         && doc.doc.node(s.target).and_then(source_image).is_some_and(|image| doc.doc.images.contains_key(&image.key))
 }
 
@@ -301,7 +345,7 @@ fn start_ignore_sampler(app: &mut VectorcraftApp, ctx: &egui::Context) {
         cancel_ignore_sampler(app, true);
         return;
     }
-    let Some((doc, target)) = target_key(app) else { return };
+    let Some((doc, target)) = target(app, ctx).object else { return };
     let Some(revision) = app.session.active().map(|d| d.revision) else { return };
     let s = crate::state::TraceIgnoreSampler { doc, target, revision, back: app.session.tool_id().to_string() };
     if !sampler_valid(app, &s) {
@@ -365,7 +409,7 @@ pub(crate) fn apply_ignore_color_sample(app: &mut VectorcraftApp, p: &Value) {
     cancel_ignore_sampler(app, false);
     let all = presets(app, &ctx);
     let mut st: TraceUi = pstate(&ctx, "image-trace");
-    let (is_trace, _, stored) = target(app);
+    let Target { is_trace, stored, .. } = target(app, &ctx);
     follow_preset_changes(app, &mut st, &all);
     let changes: Vec<&TracePresetChange> = app.session.trace_preset_changes_since(0).collect();
     sync_with_object(&mut st, stored, Some((s.doc, s.target)), &all, &changes);
@@ -538,7 +582,7 @@ fn trace(app: &mut VectorcraftApp, ctx: &egui::Context, st: &mut TraceUi) {
     match crate::trace_runs::start(app, "imageTrace.make", p, true) {
         // Traced off the UI thread: the result comes to [`traced`].
         Ok(r) if r["background"] == true => {}
-        Ok(r) => adopt(app, st, &r),
+        Ok(r) => adopt(app, ctx, st, &r),
         Err(e) => app.ui.status = e,
     }
 }
@@ -546,11 +590,12 @@ fn trace(app: &mut VectorcraftApp, ctx: &egui::Context, st: &mut TraceUi) {
 /// The panel takes trace `r`'s counts and the traced object's stored settings at once: Undo before
 /// the next panel frame must still be recognized as a change, even when it returns to the previous
 /// settings.
-fn adopt(app: &VectorcraftApp, st: &mut TraceUi, r: &Value) {
+fn adopt(app: &VectorcraftApp, ctx: &egui::Context, st: &mut TraceUi, r: &Value) {
     st.info = Some((r["paths"].as_u64().unwrap_or(0), r["anchors"].as_u64().unwrap_or(0), r["colors"].as_u64().unwrap_or(0)));
-    if let Some(stored) = target(app).2 {
+    let target = target(app, ctx);
+    if let Some(stored) = target.stored {
         st.synced = stored;
-        st.object = target_key(app);
+        st.object = target.object;
     }
 }
 
@@ -558,7 +603,7 @@ fn adopt(app: &VectorcraftApp, st: &mut TraceUi, r: &Value) {
 pub(crate) fn traced(app: &VectorcraftApp, r: &Value) {
     let Some(ctx) = app.ui_ctx.clone() else { return };
     let mut st: TraceUi = pstate(&ctx, "image-trace");
-    adopt(app, &mut st, r);
+    adopt(app, &ctx, &mut st, r);
     set_pstate(&ctx, "image-trace", st);
 }
 
@@ -723,9 +768,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         st.preset = "Default".into();
         st.params = all.first().map(|p| p.1.clone()).unwrap_or_default();
     }
-    let (is_trace, is_image, stored) = target(app);
-    let any_trace = any_trace(app);
-    let object = target_key(app);
+    let Target { object, is_trace, is_image, stored, any_trace } = target(app, ui.ctx());
     // The saved preset changes since the last frame apply to the panel's settings before the selected object's
     // settings, which `sync_with_object` resolves against every change, are adopted.
     follow_preset_changes(app, &mut st, &all);
@@ -1034,7 +1077,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 }
 
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let any_trace = any_trace(app);
+    let any_trace = target(app, ui.ctx()).any_trace;
     if menu_item(ui, tl!("Release"), any_trace, false) {
         app.run("imageTrace.release", json!({})).ok();
     }

@@ -97,6 +97,13 @@ pub struct Prefs {
     /// A single-key tool shortcut held down chooses its tool until the key is let go, and then the
     /// tool active before comes back; a quick press chooses the tool for good.
     pub hold_tool_keys: bool,
+    /// Hold shortcuts act (Edit › Keyboard Shortcuts › Hold Shortcuts, off by default): a key with a
+    /// hold shortcut runs it when held for [`Self::key_hold_delay`], and its own shortcut when let go
+    /// sooner. Off, every key runs on its press and the dialog shows no Hold column.
+    pub hold_shortcuts: bool,
+    /// Seconds a key with a hold shortcut must stay down before the hold shortcut runs (Hold
+    /// Shortcut Delay, 0.2 to 1.0). VectorCraft's own default, 0.35.
+    pub key_hold_delay: f64,
     /// With View › Show Bounding Box on, the bounding box stays visible while a drag moves the
     /// selection, and the shape tools that show it draw it around the shape being drawn. Off (the
     /// default), it hides during a move and while a shape is drawn, except that a Selection tool
@@ -420,6 +427,21 @@ pub struct Prefs {
     pub import_matches: Vec<cmd::importmatches::ImportMatch>,
 }
 
+/// The default Hold Shortcut Delay, in seconds (VectorCraft's own value).
+pub const KEY_HOLD_DELAY: f64 = 0.35;
+/// The range of the Hold Shortcut Delay, in seconds.
+pub const KEY_HOLD_DELAY_RANGE: (f64, f64) = (0.2, 1.0);
+
+impl Prefs {
+    /// The Hold Shortcut Delay in seconds, inside its range. A restored settings file is not
+    /// checked against the range, so a value outside it is brought inside, and one that is not a
+    /// number gives the default.
+    pub fn key_hold_delay(&self) -> f64 {
+        let (min, max) = KEY_HOLD_DELAY_RANGE;
+        if self.key_hold_delay.is_finite() { self.key_hold_delay.clamp(min, max) } else { KEY_HOLD_DELAY }
+    }
+}
+
 impl Default for Prefs {
     fn default() -> Self {
         let s = |v: &str| v.to_string();
@@ -451,6 +473,8 @@ impl Default for Prefs {
             scrub_numeric_fields: true,
             trackpad_rotate_view: true,
             hold_tool_keys: true,
+            hold_shortcuts: false,
+            key_hold_delay: KEY_HOLD_DELAY,
             bounding_box_while_moving_and_drawing: false,
             paste_offset: 10.0,
             selection_tolerance: 3.0,
