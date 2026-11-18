@@ -23,7 +23,7 @@ use vectorcraft_engine::cmd::swatchlib::LibraryInfo;
 
 use super::library_panel::{self, LibraryKind, LibraryRef, Row};
 use super::memo::Memo;
-use super::{first_selected, pstate, set_pstate};
+use super::{first_node, pstate, set_pstate};
 use crate::VectorcraftApp;
 use crate::dialogs::brush_options;
 use crate::menus::Item;
@@ -67,6 +67,16 @@ pub(crate) fn document_brushes(st: &DocState) -> Rc<Vec<Shown>> {
         static MEMO: RefCell<Memo<Document, Vec<Shown>>> = RefCell::new(Memo::default());
     }
     MEMO.with(|m| m.borrow_mut().get(&st.doc, st.revision, || vectorcraft_brush::library(&st.doc).iter().map(|b| Shown::of(&st.doc, b)).collect()))
+}
+
+/// The brushes of `shown` by name: of two with one name, the first, the one a stroke that names
+/// it draws with and `brush.get` gives.
+fn by_name(shown: &[Shown]) -> HashMap<&str, &Shown> {
+    let mut map = HashMap::new();
+    for b in shown {
+        map.entry(b.name.as_str()).or_insert(b);
+    }
+    map
 }
 
 /// The cache key of the stroke preview of brush definition `def` in `doc` (`art`: its art): the
@@ -158,7 +168,7 @@ pub(crate) fn definition_chip(ui: &Ui, r: egui::Rect, st: Option<&DocState>, def
 }
 
 fn selected_brush(app: &VectorcraftApp) -> Option<String> {
-    first_selected(app).and_then(|n| n.appearance.stroke().and_then(|s| s.brush.clone()))
+    first_node(app).and_then(|n| n.appearance.stroke().and_then(|s| s.brush.clone()))
 }
 
 /// What the panel's last click was made with: the document, its selected objects and the current
@@ -298,7 +308,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // definitions and preview keys are the document version's, worked out once.
     let doc = app.session.active().map(|d| d.doc.clone());
     let memo = app.session.active().map(document_brushes).unwrap_or_default();
-    let defs: HashMap<&str, &Shown> = memo.iter().map(|b| (b.name.as_str(), b)).collect();
+    let defs = by_name(&memo);
     let mut clicked: Option<(String, egui::Modifiers)> = None;
     let mut options: Option<String> = None;
     let mut moved: Option<Value> = None;
@@ -513,6 +523,12 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     {
         app.status(e);
     }
+    // The selected brushed paths' own settings: the brush stays as it is.
+    if menu_item(ui, tl!("Options of Selected Object…"), brush_options::object_available(app), false)
+        && let Err(e) = app.run("ui.brushObjectOptions", json!({}))
+    {
+        app.status(e);
+    }
     ui.separator();
     // Selects the brushes no stroke paints with, for Delete Brush and Duplicate Brush.
     if menu_item(ui, tl!("Select All Unused"), app.session.active().is_some(), false)
@@ -637,9 +653,15 @@ impl LibraryKind for BrushLibraries {
     fn path(app: &VectorcraftApp, id: &str) -> Option<String> {
         app.session.brush_libraries.path(id).map(str::to_string)
     }
-    fn rows<'a>(lib: &'a Self::Lib, query: &str) -> Vec<Row<'a, LibBrush>> {
-        let found = |n: &str| query.is_empty() || n.to_lowercase().contains(query);
+    /// Find matches a brush's name as shown and as stored.
+    fn rows<'a>(lib: &'a Self::Lib, id: &str, query: &str) -> Vec<Row<'a, LibBrush>> {
+        let found = |n: &str| query.is_empty() || n.to_lowercase().contains(query) || Self::label(id, n).to_lowercase().contains(query);
         lib.iter().filter(|b| found(b.name())).map(|b| Row { name: b.name(), item: Some(b) }).collect()
+    }
+    /// A built-in library's brush in the UI language; a User Defined or loaded library's brush as
+    /// it is named.
+    fn label<'a>(id: &str, name: &'a str) -> &'a str {
+        super::label_or_name(name, brushlib::BUILTIN.iter().any(|b| b.id == id))
     }
     /// The brush's stroke preview, drawn with the library's resources.
     fn draw(_: &VectorcraftApp, ui: &Ui, r: egui::Rect, b: &LibBrush, selected: bool, hovered: bool) {

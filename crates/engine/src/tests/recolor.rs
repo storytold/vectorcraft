@@ -303,6 +303,91 @@ fn methods_and_bad_params() {
     assert!(s.execute("recolor.apply", &json!({"map": {}})).is_err(), "needs art or a group");
 }
 
+/// A row with no current colors (Recolor Artwork's New Row) recolors nothing, and records no
+/// undo step on its own; beside it the other rows recolor as before, and the weights and
+/// randomize keep it. A row without `from`, or with a bad current color, is still refused.
+#[test]
+fn an_empty_row_recolors_nothing() {
+    let mut s = session();
+    let red = rect(&mut s, json!("#ff0000"));
+    let blue = rect(&mut s, json!("#0000ff"));
+    select_all(&mut s);
+    let undo = s.doc().unwrap().history.undo.len();
+    let empty = json!({"from": [], "to": "rgb 0 255 0"});
+    let r = run(&mut s, "recolor.apply", json!({"map": [empty]}));
+    assert_eq!(r["changed"], json!(0));
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "no undo step");
+    let map = json!([empty, {"from": ["rgb 0 0 255"], "to": "rgb 255 255 0"}]);
+    let w = run(&mut s, "recolor.weigh", json!({"map": map}));
+    assert_eq!(w["map"], map, "the rows as given");
+    assert_eq!(w["shares"], json!([0.0, 100.0]));
+    let shuffled = run(&mut s, "recolor.randomize", json!({"map": map, "seed": 1}));
+    assert_eq!(shuffled["map"][0]["from"], json!([]));
+    run(&mut s, "recolor.apply", json!({"map": map}));
+    assert_eq!((fill(&s, red).to_hex(), fill(&s, blue).to_hex()), ("#ff0000".into(), "#ffff00".into()));
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+    for bad in [json!([{"to": "rgb 0 255 0"}]), json!([{"from": ["nonsense"], "to": "rgb 0 255 0"}])] {
+        assert!(s.execute("recolor.apply", &json!({"map": bad})).is_err(), "{bad}");
+    }
+}
+
+/// An empty row adds no library swatch with `limitTo`, and gives a rewritten group no color: the
+/// group keeps one color per row that holds current colors.
+#[test]
+fn an_empty_row_adds_no_swatch_and_no_group_color() {
+    let mut s = session();
+    rect(&mut s, json!("#ff0000"));
+    rect(&mut s, json!("#0000ff"));
+    select_all(&mut s);
+    let undo = s.doc().unwrap().history.undo.len();
+    let swatches = s.doc().unwrap().doc.swatches.len();
+    let r = run(&mut s, "recolor.apply", json!({"map": [{"from": [], "to": "#ff0033"}], "limitTo": "web-safe-216"}));
+    assert_eq!(r["swatches"], json!([]), "{r}");
+    assert_eq!(s.doc().unwrap().doc.swatches.len(), swatches);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "no undo step");
+    run(&mut s, "swatch.newGroup", json!({"name": "Pair", "colors": ["#ff0000", "#0000ff"]}));
+    select_all(&mut s);
+    let map = json!([
+        {"from": [], "to": "rgb 0 255 0"},
+        {"from": ["rgb 255 0 0"], "to": "rgb 255 0 0"},
+        {"from": ["rgb 0 0 255"], "to": "rgb 0 0 255"},
+    ]);
+    run(&mut s, "recolor.apply", json!({"map": map, "group": "Pair"}));
+    let d = &s.doc().unwrap().doc;
+    let g = d.swatch_groups.iter().find(|g| g.name == "Pair").unwrap();
+    let hexes: Vec<String> = g.swatches.iter().map(|w| w.paint.color().unwrap().to_hex()).collect();
+    assert_eq!(hexes, ["#ff0000", "#0000ff"]);
+}
+
+/// An empty row with `added` (a color the Add Color tool added) recolors nothing, and without
+/// `groupColors` gives a rewritten group its new color after the colors of the rows with current
+/// colors; randomize keeps the flag, and an `added` that is not true or false is refused.
+#[test]
+fn an_added_empty_row_gives_the_group_its_color_after_the_others() {
+    let mut s = session();
+    let red = rect(&mut s, json!("#ff0000"));
+    let blue = rect(&mut s, json!("#0000ff"));
+    run(&mut s, "swatch.newGroup", json!({"name": "Pair", "colors": ["#ff0000", "#0000ff"]}));
+    select_all(&mut s);
+    let map = json!([
+        {"from": [], "to": "rgb 0 255 0", "added": true},
+        {"from": [], "to": "rgb 9 9 9"},
+        {"from": ["rgb 255 0 0"], "to": "rgb 255 0 0"},
+        {"from": ["rgb 0 0 255"], "to": "rgb 0 0 255"},
+    ]);
+    let shuffled = run(&mut s, "recolor.randomize", json!({"map": map, "seed": 1}));
+    assert_eq!(shuffled["map"][0]["added"], json!(true), "{shuffled}");
+    assert_eq!(shuffled["map"][1].get("added"), None, "{shuffled}");
+    run(&mut s, "recolor.apply", json!({"map": map, "group": "Pair"}));
+    let d = &s.doc().unwrap().doc;
+    let g = d.swatch_groups.iter().find(|g| g.name == "Pair").unwrap();
+    let hexes: Vec<String> = g.swatches.iter().map(|w| w.paint.color().unwrap().to_hex()).collect();
+    assert_eq!(hexes, ["#ff0000", "#0000ff", "#00ff00"]);
+    assert_eq!((fill(&s, red).to_hex(), fill(&s, blue).to_hex()), ("#ff0000".into(), "#0000ff".into()), "no art is recolored");
+    let bad = json!([{"from": [], "to": "rgb 0 255 0", "added": "yes"}]);
+    assert!(s.execute("recolor.apply", &json!({"map": bad})).is_err());
+}
+
 #[test]
 fn randomize_shuffles_new_colours_and_skips_excluded_rows() {
     let mut s = session();
@@ -322,6 +407,27 @@ fn randomize_shuffles_new_colours_and_skips_excluded_rows() {
     let sb = run(&mut s, "recolor.randomize", json!({"map": map, "order": false, "saturationBrightness": true}));
     let hue = |v: &Value| color_value(v).unwrap().to_hsb()[0];
     assert!((hue(&sb["map"][0]["to"]) - 0.0).abs() < 1.0 && (hue(&sb["map"][1]["to"]) - 120.0).abs() < 1.0, "hue kept");
+}
+
+/// A row with no current colors (New Row) keeps its new color through Randomize, and its color
+/// goes to no row that holds current colors: the other rows shuffle their own colors only.
+#[test]
+fn randomize_leaves_an_empty_row_out() {
+    let mut s = session();
+    let map = json!([
+        {"from": [], "to": "rgb 0 255 0"},
+        {"from": ["rgb 255 0 0"], "to": "rgb 255 0 0"},
+        {"from": ["rgb 0 0 255"], "to": "rgb 0 0 255"},
+    ]);
+    for seed in 0..16 {
+        let r = run(&mut s, "recolor.randomize", json!({"map": map, "seed": seed}));
+        assert_eq!(r["map"][0], map[0], "seed {seed}: the empty row keeps its color");
+        let mut tos: Vec<String> = [1, 2].iter().map(|i| r["map"][*i]["to"].as_str().unwrap().to_string()).collect();
+        tos.sort();
+        assert_eq!(tos, ["rgb 0 0 255", "rgb 255 0 0"], "seed {seed}: a permutation of the filled rows' colors");
+    }
+    let sb = run(&mut s, "recolor.randomize", json!({"map": map, "order": false, "saturationBrightness": true, "seed": 3}));
+    assert_eq!(sb["map"][0], map[0], "the empty row keeps its saturation and brightness");
 }
 
 #[test]
@@ -383,6 +489,17 @@ fn edit_group_relinks_art_and_apply_rewrites_the_group_with_the_art() {
     run(&mut s, "recolor.apply", json!({"map": [], "group": "Theme", "groupColors": ["#010203", "cmyk 0 0 0 20"]}));
     let g = s.doc().unwrap().doc.swatch_groups.iter().find(|g| g.name == "Theme").unwrap().clone();
     assert_eq!(g.swatches.iter().map(|w| w.paint.color().unwrap()).collect::<Vec<_>>(), [Color::rgb8(1, 2, 3), Color::cmyk(0.0, 0.0, 0.0, 0.2)]);
+    // "keep" leaves a swatch its color, without the Global Adjust that the other colors take.
+    let adjust = json!({"brightness": -50});
+    run(&mut s, "recolor.apply", json!({"map": [], "group": "Theme", "groupColors": ["keep", "#ffffff"], "globalAdjust": adjust}));
+    let g = s.doc().unwrap().doc.swatch_groups.iter().find(|g| g.name == "Theme").unwrap().clone();
+    let colors: Vec<Color> = g.swatches.iter().map(|w| w.paint.color().unwrap()).collect();
+    assert_eq!(colors[0], Color::rgb8(1, 2, 3));
+    assert_ne!(colors[1].to_hex(), "#ffffff", "the other color takes the Global Adjust");
+    // Past the group's swatches it adds nothing.
+    run(&mut s, "recolor.apply", json!({"map": [], "group": "Theme", "groupColors": ["keep", "keep", "keep"]}));
+    let g = s.doc().unwrap().doc.swatch_groups.iter().find(|g| g.name == "Theme").unwrap().clone();
+    assert_eq!(g.swatches.iter().map(|w| w.paint.color().unwrap()).collect::<Vec<_>>(), colors);
 }
 
 /// Art linked to a global swatch of the group that `recolor.apply` rewrites stays linked when the
@@ -686,6 +803,65 @@ fn recolor_of_everything_counts_locked_art_that_only_loses_its_group_swatch_link
     assert_eq!(fill(&s, open).to_hex(), "#00ff00");
     assert_eq!(fill(&s, locked).to_hex(), "#ff0000", "the locked art keeps its color");
     assert_eq!(r["notChanged"], json!({"locked": 1, "hidden": 0}), "{r}");
+}
+
+#[test]
+fn a_null_in_group_colors_removes_that_swatch_and_the_ones_after_it_keep_their_places() {
+    let mut s = session();
+    run(&mut s, "swatch.newGroup", json!({"name": "Brand", "colors": ["#2878f0", "#ff0000", "#00ff00"]}));
+    let group = |s: &Session| -> Vec<(String, String)> {
+        let g = s.doc().unwrap().doc.swatch_groups.iter().find(|g| g.name == "Brand").unwrap().swatches.clone();
+        g.iter().map(|w| (w.name.clone(), w.paint.color().unwrap().to_hex())).collect()
+    };
+    let names: Vec<String> = group(&s).into_iter().map(|(n, _)| n).collect();
+    for name in &names {
+        run(&mut s, "swatch.edit", json!({"name": name, "global": true}));
+    }
+    let red = rect(&mut s, json!("#000000"));
+    let green = rect(&mut s, json!("#000000"));
+    run(&mut s, "paint.setFill", json!({"ids": [red.0], "swatch": names[1]}));
+    run(&mut s, "paint.setFill", json!({"ids": [green.0], "swatch": names[2]}));
+    select_all(&mut s);
+    // The middle swatch goes; the last keeps its name and color, and a color added after them is new.
+    run(&mut s, "recolor.apply", json!({"map": [], "group": "Brand", "groupColors": ["#2878f0", null, "#00ff00", "#123456"]}));
+    let g = group(&s);
+    assert_eq!(g.len(), 3, "{g:?}");
+    assert_eq!(g[..2], [(names[0].clone(), "#2878f0".into()), (names[2].clone(), "#00ff00".into())]);
+    assert_eq!(g[2].1, "#123456");
+    let link = |s: &Session, id: NodeId| match s.doc().unwrap().doc.node(id).unwrap().appearance.fill_paint() {
+        vectorcraft_color::Paint::Solid { color, swatch, .. } => (color.to_hex(), swatch),
+        p => panic!("{p:?}"),
+    };
+    assert_eq!(link(&s, red), ("#ff0000".into(), None), "art linked to the removed swatch keeps its color, unlinked");
+    assert_eq!(link(&s, green), ("#00ff00".into(), Some(names[2].clone())), "art linked to a swatch that stays keeps its link");
+}
+
+/// A row whose new color was removed keeps its art's colors: art in it linked to another swatch of
+/// the group, which the rewrite gives another color, loses the link instead of following it.
+#[test]
+fn art_of_a_row_without_a_new_color_keeps_its_color_when_its_swatch_takes_another() {
+    let mut s = session();
+    run(&mut s, "swatch.newGroup", json!({"name": "Brand", "colors": ["#ff0000", "#0000ff", "#00ff00"]}));
+    let names: Vec<String> =
+        s.doc().unwrap().doc.swatch_groups.iter().find(|g| g.name == "Brand").unwrap().swatches.iter().map(|w| w.name.clone()).collect();
+    for name in &names {
+        run(&mut s, "swatch.edit", json!({"name": name, "global": true}));
+    }
+    let blue = rect(&mut s, json!("#000000"));
+    let green = rect(&mut s, json!("#000000"));
+    run(&mut s, "paint.setFill", json!({"ids": [blue.0], "swatch": names[1]}));
+    run(&mut s, "paint.setFill", json!({"ids": [green.0], "swatch": names[2]}));
+    select_all(&mut s);
+    // The rows are blue, red and green; the blue row's new color is removed, so the group's first
+    // swatch goes and its second takes the red row's new color.
+    let map = json!([{"from": ["#0000ff"], "to": null}, {"from": ["#ff0000"], "to": "#ff0000"}, {"from": ["#00ff00"], "to": "#00ff00"}]);
+    run(&mut s, "recolor.apply", json!({"map": map, "group": "Brand", "groupColors": [null, "#ff0000", "#00ff00"]}));
+    let link = |s: &Session, id: NodeId| match s.doc().unwrap().doc.node(id).unwrap().appearance.fill_paint() {
+        vectorcraft_color::Paint::Solid { color, swatch, .. } => (color.to_hex(), swatch),
+        p => panic!("{p:?}"),
+    };
+    assert_eq!(link(&s, blue), ("#0000ff".into(), None), "the art keeps its color, unlinked");
+    assert_eq!(link(&s, green), ("#00ff00".into(), Some(names[2].clone())), "art of another row keeps its link");
 }
 
 #[test]
@@ -1085,7 +1261,41 @@ fn global_adjust_refuses_params_of_the_wrong_form() {
 fn halves_image(s: &mut Session, w: u32, h: u32, left: [u8; 4], right: [u8; 4]) -> (NodeId, vectorcraft_geom::Rect) {
     let img = image::RgbaImage::from_fn(w, h, |x, _| image::Rgba(if x < w / 2 { left } else { right }));
     let mut png = Vec::new();
-    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = img.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     let r = run(s, "file.place", json!({"name": "halves.png", "dataBase64": vectorcraft_format::base64_encode(&png)}));
     let id = NodeId(r["ids"][0].as_u64().unwrap());
     let b = s.doc().unwrap().doc.node(id).unwrap().visual_bounds().unwrap();
@@ -1210,7 +1420,41 @@ fn theme_picker_reads_symbol_art_and_nested_patterns() {
 fn theme_picker_reads_the_color_of_a_colorized_image() {
     let mut s = session();
     let mut png = Vec::new();
-    image::GrayImage::from_pixel(8, 8, image::Luma([90])).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::GrayImage::from_pixel(8, 8, image::Luma([90]))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     let r = run(&mut s, "file.place", json!({"name": "gray.png", "dataBase64": vectorcraft_format::base64_encode(&png)}));
     let id = NodeId(r["ids"][0].as_u64().unwrap());
     let b = s.doc().unwrap().doc.node(id).unwrap().visual_bounds().unwrap();
@@ -1265,7 +1509,41 @@ fn theme_picker_reads_an_image_inside_its_clipping_path() {
         image::Rgba(if corner { [0, 0, 255, 255] } else { [255, 0, 0, 255] })
     });
     let mut png = Vec::new();
-    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = img.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     let r = run(&mut s, "file.place", json!({"name": "corners.png", "dataBase64": vectorcraft_format::base64_encode(&png)}));
     let id = NodeId(r["ids"][0].as_u64().unwrap());
     let b = s.doc().unwrap().doc.node(id).unwrap().visual_bounds().unwrap();
@@ -1345,6 +1623,162 @@ fn theme_picker_refuses_bad_params() {
         (json!({"picks": [{"at": [0, 0]}], "colors": 2.5}), "`colors` must be a whole number"),
     ] {
         let e = s.execute("recolor.pickTheme", &p).unwrap_err().to_string();
+        assert!(e.contains(msg), "{p}: {e}");
+    }
+}
+
+const RED: &str = "rgb 255 0 0";
+const PURPLE: &str = "rgb 128 0 204";
+const BLUE: &str = "rgb 0 0 255";
+
+/// Two red rectangles, a purple one and a blue one, selected.
+fn prominent_art(s: &mut Session) -> [NodeId; 4] {
+    let ids = [rect(s, json!("#ff0000")), rect(s, json!("#ff0000")), rect(s, json!("#8000cc")), rect(s, json!("#0000ff"))];
+    select_all(s);
+    ids
+}
+
+#[test]
+fn weigh_gives_each_rows_share_of_the_uses() {
+    let mut s = session();
+    prominent_art(&mut s);
+    let map = json!([{"from": [RED, PURPLE], "to": "#00ff00"}, {"from": BLUE, "to": null, "tint": 50}]);
+    let r = run(&mut s, "recolor.weigh", json!({"map": map}));
+    assert_eq!(r["shares"], json!([75.0, 25.0]));
+    assert_eq!(
+        r["map"],
+        json!([{"from": [RED, PURPLE], "to": "#00ff00"}, {"from": [BLUE], "to": null, "tint": 50}]),
+        "rows as given, from as a list"
+    );
+    // An excluded row has no share, and the others share the uses.
+    let excl = json!([{"from": [RED, PURPLE], "to": null}, {"from": [BLUE], "to": null, "exclude": true}]);
+    assert_eq!(run(&mut s, "recolor.weigh", json!({"map": excl}))["shares"], json!([100.0, 0.0]));
+    // An excluded row before another that lists the same colour doesn't take its uses.
+    let first = json!([{"from": [RED], "exclude": true}, {"from": [RED]}, {"from": [BLUE, PURPLE]}]);
+    assert_eq!(run(&mut s, "recolor.weigh", json!({"map": first}))["shares"], json!([0.0, 50.0, 50.0]));
+    // A current colour that no art uses counts nothing, and a use counts for the first row only.
+    let twice = json!({"map": [{"from": [RED, "#123456"]}, {"from": [RED, PURPLE, BLUE]}]});
+    assert_eq!(run(&mut s, "recolor.weigh", twice)["shares"], json!([50.0, 50.0]));
+    // As recolor.apply matches them: an exact colour before a hex one, a row with a new colour first.
+    let exact = json!({"map": [{"from": ["#ff0000", PURPLE], "to": "#00ff00"}, {"from": [RED, BLUE], "to": "#ffff00"}]});
+    assert_eq!(run(&mut s, "recolor.weigh", exact)["shares"], json!([25.0, 75.0]));
+    let recolored = json!({"map": [{"from": [RED, PURPLE]}, {"from": [RED, BLUE], "to": "#ffff00"}]});
+    assert_eq!(run(&mut s, "recolor.weigh", recolored)["shares"], json!([25.0, 75.0]));
+}
+
+#[test]
+fn weigh_moves_colors_to_the_rows_weights_and_changes_nothing() {
+    let mut s = session();
+    let [_, _, purple, blue] = prominent_art(&mut s);
+    let map = json!([{"from": [RED, PURPLE], "to": "#00ff00"}, {"from": [BLUE], "to": "#ffff00"}]);
+    let r = run(&mut s, "recolor.weigh", json!({"map": map, "weights": [1, 1]}));
+    assert_eq!(r["map"], json!([{"from": [RED], "to": "#00ff00"}, {"from": [BLUE, PURPLE], "to": "#ffff00"}]));
+    assert_eq!(r["shares"], json!([50.0, 50.0]));
+    assert_eq!(fill(&s, purple).to_hex(), "#8000cc", "a query leaves the art alone");
+    // Recoloring with the weighed rows gives the moved colour its new row's colour.
+    select_all(&mut s);
+    run(&mut s, "recolor.apply", json!({"map": r["map"]}));
+    assert_eq!(fill(&s, purple).to_hex(), "#ffff00");
+    assert_eq!(fill(&s, blue).to_hex(), "#ffff00");
+    // A row's first colour stays, however small its weight.
+    let mut s = session();
+    prominent_art(&mut s);
+    let r = run(&mut s, "recolor.weigh", json!({"map": map, "weights": [0, 1]}));
+    assert_eq!(r["map"][0]["from"], json!([RED]));
+    assert_eq!(r["shares"], json!([50.0, 50.0]));
+    // Excluded rows keep their colours and take none; their weights are ignored.
+    let three =
+        json!([{"from": [RED, PURPLE], "to": "#000000"}, {"from": [BLUE], "to": "#000000", "exclude": true}, {"from": ["#00ff00"], "to": "#000000"}]);
+    let r = run(&mut s, "recolor.weigh", json!({"map": three, "weights": [1, 50, 1]}));
+    assert_eq!(r["map"][1]["from"], json!([BLUE]));
+    assert_eq!(r["map"][2]["from"], json!(["#00ff00", PURPLE]));
+    // A row without a new colour recolors nothing, so it neither gives nor takes colours.
+    let keep = json!([{"from": [RED, PURPLE], "to": "#000000"}, {"from": [BLUE]}, {"from": ["#00ff00"], "to": "#000000"}]);
+    let r = run(&mut s, "recolor.weigh", json!({"map": keep, "weights": [0, 1, 1]}));
+    assert_eq!(r["map"][1]["from"], json!([BLUE]));
+    assert_eq!(r["map"][2]["from"], json!(["#00ff00", PURPLE]));
+}
+
+/// A colour that two rows list moves only where recolor.apply recolors it with the row it moved
+/// to, so the shares describe the recolor.
+#[test]
+fn weigh_keeps_a_moved_color_from_rows_that_also_list_it() {
+    const GREEN: &str = "rgb 0 255 0";
+    let mut s = session();
+    let [_, _, purple, _] = prominent_art(&mut s);
+    rect(&mut s, json!("#00ff00"));
+    select_all(&mut s);
+    // The purple moves from the first row to the third; the second row's entry for it goes.
+    let map = json!([{"from": [RED, PURPLE], "to": "#000000"}, {"from": [BLUE, PURPLE], "to": "#ffffff"}, {"from": [GREEN], "to": "#ffff00"}]);
+    let r = run(&mut s, "recolor.weigh", json!({"map": map, "weights": [2, 1, 2]}));
+    assert_eq!(r["map"][0]["from"], json!([RED]));
+    assert_eq!(r["map"][1]["from"], json!([BLUE]));
+    assert_eq!(r["map"][2]["from"], json!([GREEN, PURPLE]));
+    assert_eq!(r["shares"], json!([40.0, 20.0, 40.0]));
+    run(&mut s, "recolor.apply", json!({"map": r["map"], "method": "exact"}));
+    assert_eq!(fill(&s, purple).to_hex(), "#ffff00", "the purple takes the row it moved to");
+    // A colour that another row lists first stays: that row would take it back.
+    let mut s = session();
+    let [_, _, purple, _] = prominent_art(&mut s);
+    rect(&mut s, json!("#00ff00"));
+    select_all(&mut s);
+    let map = json!([{"from": [RED, PURPLE], "to": "#000000"}, {"from": [PURPLE, BLUE], "to": "#ffffff"}, {"from": [GREEN], "to": "#ffff00"}]);
+    let r = run(&mut s, "recolor.weigh", json!({"map": map, "weights": [2, 1, 2]}));
+    assert_eq!(r["map"][0]["from"], json!([RED, PURPLE]));
+    assert_eq!(r["map"][1]["from"], json!([PURPLE, BLUE]));
+    assert_eq!(r["shares"], json!([60.0, 20.0, 20.0]));
+    run(&mut s, "recolor.apply", json!({"map": r["map"], "method": "exact"}));
+    assert_eq!(fill(&s, purple).to_hex(), "#000000", "the purple keeps the first row's colour");
+}
+
+#[test]
+fn weigh_moves_the_tints_of_a_global_swatch_together() {
+    let mut s = session();
+    run(&mut s, "swatch.new", json!({"name": "Brand", "color": {"c": 0, "m": 80, "y": 90, "k": 0}, "global": true}));
+    rect(&mut s, json!("#ff0000"));
+    let full = rect(&mut s, json!("#00ff00"));
+    let tint = rect(&mut s, json!("#00ff00"));
+    rect(&mut s, json!("#0000ff"));
+    run(&mut s, "paint.setFill", json!({"ids": [full.0], "swatch": "Brand"}));
+    run(&mut s, "paint.setFill", json!({"ids": [tint.0], "swatch": "Brand", "tint": 50}));
+    select_all(&mut s);
+    let brand: Vec<Value> = run(&mut s, "recolor.colors", json!({}))["colors"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|c| c["swatch"] == "Brand")
+        .map(|c| c["key"].clone())
+        .collect();
+    assert_eq!(brand.len(), 2);
+    let map = json!([{"from": [RED, brand[0], brand[1]], "to": "#000000"}, {"from": [BLUE], "to": "#ffffff"}]);
+    // Even weights would take one tint alone, which would split the swatch: nothing moves.
+    let r = run(&mut s, "recolor.weigh", json!({"map": map, "weights": [1, 1]}));
+    assert_eq!(r["map"][1]["from"], json!([BLUE]));
+    // The swatch's two colours move to the blue row as one.
+    let r = run(&mut s, "recolor.weigh", json!({"map": map, "weights": [1, 3]}));
+    assert_eq!(r["map"][1]["from"], json!([BLUE, brand[0], brand[1]]));
+    assert_eq!(r["shares"], json!([25.0, 75.0]));
+    // Colours that stay keep their order, a swatch's colours with another between them included.
+    let split = json!([{"from": [brand[0], RED, brand[1]], "to": "#000000"}, {"from": [BLUE], "to": "#ffffff"}]);
+    let r = run(&mut s, "recolor.weigh", json!({"map": split, "weights": [3, 1]}));
+    assert_eq!(r["map"][0]["from"], json!([brand[0], RED, brand[1]]));
+}
+
+#[test]
+fn weigh_refuses_bad_weights() {
+    let mut s = session();
+    prominent_art(&mut s);
+    let map = json!([{"from": [RED]}, {"from": [BLUE], "exclude": true}]);
+    for (p, msg) in [
+        (json!({"map": map, "weights": [1]}), "`weights` must be a list of 2 numbers, one per row"),
+        (json!({"map": map, "weights": "1, 1"}), "`weights` must be a list of 2 numbers"),
+        (json!({"map": map, "weights": [1, -1]}), "each weight must be a number of 0 or more (got -1)"),
+        (json!({"map": map, "weights": [1, "2"]}), "each weight must be a number of 0 or more"),
+        (json!({"map": map, "weights": [0, 5]}), "at least one row that isn't excluded needs a weight above 0"),
+        (json!({"weights": [1, 1]}), "missing `map`"),
+        (json!({"map": [{"to": "#ff0000"}]}), "each row needs `from`"),
+    ] {
+        let e = s.execute("recolor.weigh", &p).unwrap_err().to_string();
         assert!(e.contains(msg), "{p}: {e}");
     }
 }

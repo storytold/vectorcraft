@@ -271,6 +271,41 @@ fn a_frozen_getter_gives_a_frozen_value_each_time() {
     assert_eq!(r.run(source).unwrap(), JsValue::String("true,true,true,1,false,false".into()));
 }
 
+/// A site getter is told the source tag, line and column of the code that reads it: a function an
+/// earlier script or an evaluator's source defined keeps that source's tag, and code that `eval`
+/// compiled has none.
+#[test]
+fn a_site_getter_is_told_where_the_code_that_reads_it_is() {
+    let mut r = realm(10_000_000);
+    let seen: Rc<RefCell<Vec<CallSite>>> = Rc::default();
+    let log = seen.clone();
+    let site: SiteFunction = Rc::new(move |s| {
+        log.borrow_mut().push(s);
+        Ok(Data::Number(f64::from(s.line)))
+    });
+    let source: HostFunction = Rc::new(|_| Ok(Data::String("\n\nfunction inEval() { return host.site; }".into())));
+    let load = HostItem::Evaluator { source, end: Rc::new(|| {}), strict_writes: Rc::new(|| None) };
+    r.define_host_object("host", vec![("site".into(), HostItem::SiteGetter(site)), ("load".into(), load)]).unwrap();
+    r.run("function early() {\n  return  host.site;\n}\nhost.load();").unwrap();
+    let first = r.script_tag();
+    assert_eq!(r.run("\n\n\n\nhost.site + early() + inEval() + eval('host.site')").unwrap(), JsValue::Number(5.0 + 2.0 + 3.0 + 1.0));
+    let second = r.script_tag();
+    let sites = seen.borrow().clone();
+    assert_eq!(
+        sites,
+        vec![
+            CallSite { source: second, line: 5, column: 1 },
+            CallSite { source: first, line: 2, column: 11 },
+            CallSite { source: first + 1, line: 3, column: 28 },
+            CallSite { source: UNKNOWN_SOURCE, line: 1, column: 1 },
+        ]
+    );
+    seen.borrow_mut().clear();
+    // A getter a built-in calls is at the place of the code that called the built-in.
+    assert_eq!(r.run("\nObject.getOwnPropertyDescriptor(host, 'site').get.call(host)").unwrap(), JsValue::Number(2.0));
+    assert_eq!(seen.borrow().first().map(|s| s.source), Some(r.script_tag()));
+}
+
 #[test]
 fn a_text_function_takes_each_argument_as_string_gives_it() {
     let mut r = realm(1_000_000);
@@ -636,6 +671,24 @@ fn error_sources_count_from_the_last_script_and_code_from_an_earlier_one_is_unkn
     assert_eq!(r.error_source(), 1, "counted again from this run's script");
     assert!(r.run("var = 1").is_err());
     assert_eq!(r.error_source(), 0, "a syntax error is in the script");
+}
+
+#[test]
+fn the_code_observer_sees_every_source_evaluated_at_run_time() {
+    let mut r = realm(10_000_000);
+    let seen = Rc::new(RefCell::new(Vec::<String>::new()));
+    let s = seen.clone();
+    r.observe_code(move |units| s.borrow_mut().push(String::from_utf16_lossy(units)));
+    let source: HostFunction = Rc::new(|_| Ok(Data::String("40 + 2".into())));
+    let load = HostItem::Evaluator { source, end: Rc::new(|| {}), strict_writes: Rc::new(|| None) };
+    r.define_host_object("host", vec![("load".into(), load)]).unwrap();
+    let out = r.run("function f() { return eval('1 + 1'); } f() + (0, eval)('2') + Function('a', 'return a')(3) + host.load()").unwrap();
+    assert_eq!(out, JsValue::Number(49.0));
+    let want = ["1 + 1", "2", "(function anonymous(a\n) {\nreturn a\n})", "40 + 2"];
+    assert_eq!(*seen.borrow(), want, "the script's own text is not observed");
+    seen.borrow_mut().clear();
+    r.run("eval(7); Function.prototype.toString.call(f)").unwrap();
+    assert!(seen.borrow().is_empty(), "eval of a value that is not a string compiles nothing");
 }
 
 #[test]

@@ -18,8 +18,8 @@ impl Image {
     }
     /// Decode a PNG.
     pub fn from_png(bytes: &[u8]) -> Result<Self, String> {
-        let img = image::load_from_memory_with_format(bytes, image::ImageFormat::Png).map_err(|e| e.to_string())?.to_rgba8();
-        Ok(Self { width: img.width(), height: img.height(), rgba: img.into_raw() })
+        let img = craft_image_codecs::decode_as(craft_image_codecs::Format::Png, bytes).map_err(|e| e.to_string())?;
+        Ok(Self { width: img.width(), height: img.height(), rgba: img.to_rgba8() })
     }
     pub fn pixel(&self, x: u32, y: u32) -> [u8; 4] {
         let i = ((y * self.width + x) * 4) as usize;
@@ -41,8 +41,15 @@ impl Image {
     }
     /// Save as PNG (for debugging failed comparisons).
     pub fn save_png(&self, path: &std::path::Path) {
-        if let Some(img) = image::RgbaImage::from_raw(self.width, self.height, self.rgba.clone()) {
-            let _ = img.save(path);
+        if let Ok(img) = craft_image_codecs::Image::from_raw(
+            self.width,
+            self.height,
+            craft_image_codecs::ChannelLayout::Rgba,
+            craft_image_codecs::SampleType::U8,
+            self.rgba.clone(),
+        ) && let Ok(png) = craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+        {
+            let _ = std::fs::write(path, png);
         }
     }
     /// Luminance over white, 0..255 as f64, per pixel.

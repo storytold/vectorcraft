@@ -133,6 +133,11 @@ pub struct GenericCmyk {
 }
 
 impl GenericCmyk {
+    /// Absolute XYZ (D50) of the paper.
+    pub fn paper_xyz(&self) -> [f32; 3] {
+        self.paper_xyz
+    }
+
     pub fn new(params: GenericCmykParams) -> Self {
         let paper_xyz = lab_to_xyz(params.paper);
         let mut prim = [D50; 16];

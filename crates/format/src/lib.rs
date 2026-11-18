@@ -52,16 +52,19 @@ use std::sync::Arc;
 use craft_vectorcraft_format::{Contents, Head, Image, ReadError, Tail};
 use serde::de::{DeserializeSeed, IgnoredAny, MapAccess, SeqAccess, Visitor};
 use serde::{Deserializer, Serialize};
+use vectorcraft_brush::stored_art::StoredArt;
 use vectorcraft_doc::{Document, ImageBlob};
 
 #[cfg(not(target_arch = "wasm32"))]
 pub use atomic::{read_only_location, sync_file, write_atomic, write_atomic_with, write_new_with};
+use craft_gzip::Gz;
 pub use craft_vectorcraft_format::base64::{decode as base64_decode, decoded_len as base64_decoded_len, encode as base64_encode};
+use craft_vectorcraft_format::stream::{FileHeader, Indent, KeyScan, write_file_json};
 pub use craft_vectorcraft_format::{
     BLOB_MAGIC, COMPRESSED_SINCE, EXTENSION, ICC_MIME, INLINE_MAX, LEGACY_EXTENSION, MIN_VERSION, PREVIEW_MAX, VERSION, is_compressed, json_part,
     sniff,
 };
-use stream::{Gz, Indent, KeyScan, Out};
+use stream::Out;
 
 /// Most bytes the JSON of a compressed file may unpack to (a guard against decompression bombs,
 /// as are [`MAX_BLOB`] and [`MAX_BLOBS`]). A compressed save refuses a document past any of them,
@@ -243,18 +246,20 @@ fn body(doc: &Document, o: &SaveOptions) -> Result<Body, FormatError> {
     // version reads them.
     d.guides_to_saved();
     // Older apps don't know placed documents: they get the art the objects show, with its
-    // resources. Otherwise resources only exporting adds are never saved.
-    if version < VERSION && d.has_placed() {
-        d = d.with_placed_art().into_owned();
-        d.placed_as_groups();
-    } else {
-        d.drop_placed_resources();
-    }
+    // resources. Otherwise resources only exporting adds are never saved. The images and placed
+    // documents in the stored brushes' art count as those in the layers do.
+    let linked = with_brush_art(&mut d, |d| {
+        if version < VERSION {
+            placed_as_groups(d);
+        } else {
+            d.drop_placed_resources();
+        }
+        d.linked_only_images()
+    });
     // The art placed documents became for older versions is rounded too.
     if let Some(decimals) = o.precision {
         d.round_geometry(decimals.min(MAX_PRECISION));
     }
-    let linked = d.linked_only_images();
     // The blobs go in the file's `images` (only those the document uses).
     let blobs = std::mem::take(&mut d.images);
     if version < 3 {
@@ -275,6 +280,39 @@ fn body(doc: &Document, o: &SaveOptions) -> Result<Body, FormatError> {
         None
     };
     Ok(Body { d, v1, blobs, linked })
+}
+
+/// `f` run on `d` with the art of its stored brushes set on it with the ids it is stored with
+/// ([`StoredArt::mount_as_stored`]); the brushes whose art `f` changed are then written back into
+/// the library, and the art is taken off `d` again. `f` runs on `d` as it is when no stored brush's
+/// art holds an image or a placed document, or when art is set on `d` already.
+pub fn with_brush_art<T>(d: &mut Document, f: impl FnOnce(&mut Document) -> T) -> T {
+    if !d.mounted_art.is_empty() {
+        return f(d);
+    }
+    let art = StoredArt::read(d);
+    if art.is_empty() {
+        return f(d);
+    }
+    art.mount_as_stored(d);
+    let out = f(d);
+    art.write_back(d);
+    out
+}
+
+/// Every placed document in `d`'s art, the art of its stored brushes included, replaced by a group
+/// of the art it shows, with the resources that art uses, as a save for a version older than
+/// [`VERSION`] writes it. Without a placed document, the resources only exporting adds are dropped
+/// ([`Document::drop_placed_resources`]).
+pub fn placed_as_groups(d: &mut Document) {
+    with_brush_art(d, |d| {
+        if d.has_placed() {
+            *d = d.with_placed_art().into_owned();
+            d.placed_as_groups();
+        } else {
+            d.drop_placed_resources();
+        }
+    });
 }
 
 /// Serialize a document (pretty = human-diffable) in the current version. Editing-mode working
@@ -331,35 +369,44 @@ pub fn save_to(doc: &Document, o: &SaveOptions, w: impl Write) -> Result<(), For
     let profiles: BTreeMap<&str, Image> = o.profiles.iter().map(|(name, icc)| (name.as_str(), out_blobs.image(ICC_MIME, icc, false))).collect();
     let pdf = o.pdf.as_deref().map(|p| out_blobs.image("application/pdf", p, false));
     let mut out = if o.compress { Out::Gz(Box::new(Gz::new(w).map_err(encode_err)?)) } else { Out::Plain(w) };
-    let mut env = Envelope { pretty, first: true };
-    // Older apps only know the name from before the rename.
-    env.field(&mut out, "format", &if o.version < 3 { LEGACY_EXTENSION } else { EXTENSION })?;
-    env.field(&mut out, "version", &o.version)?;
-    env.field(&mut out, "generator", &format!("VectorCraft {}", env!("CARGO_PKG_VERSION")))?;
-    if let Some(compatible) = o.pdf_compatible {
-        env.field(&mut out, "pdfCompatible", &compatible)?;
-    }
-    if let Some(png) = &o.preview {
-        env.field(&mut out, "preview", &Image::inline("image/png", png))?;
-    }
-    if !profiles.is_empty() {
-        env.field(&mut out, "profiles", &profiles)?;
-    }
-    if let Some(pdf) = &pdf {
-        env.field(&mut out, "pdf", pdf)?;
-    }
-    env.key(&mut out, "document")?;
-    let mut scan = KeyScan::new(Indent { inner: &mut out, on: pretty });
-    // Without blobs no key matters.
-    scan.active = images.is_none() && !blobs.is_empty();
-    let mut buffered = std::io::BufWriter::with_capacity(JSON_CHUNK, &mut scan);
-    write_body(&mut buffered, v1.as_ref(), &d, pretty)?;
-    buffered.flush().map_err(encode_err)?;
-    drop(buffered);
-    let used = std::mem::take(&mut scan.keys);
-    let images = images.unwrap_or_else(|| entries.images(&used, &mut out_blobs));
-    env.field(&mut out, "images", &images)?;
-    env.finish(&mut out)?;
+    let generator = format!("VectorCraft {}", env!("CARGO_PKG_VERSION"));
+    let preview = o.preview.as_deref().map(|png| Image::inline("image/png", png));
+    let header = FileHeader {
+        version: o.version,
+        generator: &generator,
+        pdf_compatible: o.pdf_compatible,
+        preview: preview.as_ref(),
+        profiles: &profiles,
+        pdf: pdf.as_ref(),
+    };
+    write_file_json(&mut out, &header, pretty, |document| {
+        let mut scan = KeyScan::new(document);
+        // Without blobs no key matters.
+        scan.active = images.is_none() && !blobs.is_empty();
+        let mut buffered = std::io::BufWriter::with_capacity(JSON_CHUNK, &mut scan);
+        match v1.as_ref() {
+            Some(v) => {
+                if pretty {
+                    serde_json::to_writer_pretty(&mut buffered, v)
+                } else {
+                    serde_json::to_writer(&mut buffered, v)
+                }
+            }
+            None => {
+                if pretty {
+                    serde_json::to_writer_pretty(&mut buffered, &d)
+                } else {
+                    serde_json::to_writer(&mut buffered, &d)
+                }
+            }
+        }
+        .map_err(std::io::Error::other)?;
+        buffered.flush()?;
+        drop(buffered);
+        let used = std::mem::take(&mut scan.keys);
+        Ok(images.unwrap_or_else(|| entries.images(&used, &mut out_blobs)))
+    })
+    .map_err(encode_err)?;
     if o.compress {
         let json = out.written().unwrap_or(0);
         let tail: Vec<u64> = out_blobs.parts().iter().map(|p| p.bytes.len() as u64).collect();
@@ -373,13 +420,7 @@ pub fn save_to(doc: &Document, o: &SaveOptions, w: impl Write) -> Result<(), For
             return Err(FormatError::TooBigToCompress(format!("{} MB of images, at most {} MB", out_blobs.len() >> 20, MAX_BLOBS >> 20)));
         }
     }
-    if !out_blobs.is_empty() {
-        out.write_all(BLOB_MAGIC).map_err(encode_err)?;
-        for part in out_blobs.parts() {
-            out.packed(is_packed(&part.mime)).map_err(encode_err)?;
-            out.write_all(part.bytes).map_err(encode_err)?;
-        }
-    }
+    out_blobs.write_to_with(&mut out, |out, mime| out.packed(is_packed(mime))).map_err(encode_err)?;
     out.finish().map_err(encode_err)
 }
 
@@ -414,10 +455,6 @@ fn encode_err(e: impl std::fmt::Display) -> FormatError {
     FormatError::Encode(e.to_string())
 }
 
-fn to_json(v: &impl Serialize, pretty: bool) -> Result<Vec<u8>, FormatError> {
-    if pretty { serde_json::to_vec_pretty(v) } else { serde_json::to_vec(v) }.map_err(encode_err)
-}
-
 /// The document's JSON: its version 1 form `v1`, else `d` (generic, not `dyn Write`: serde_json
 /// writes token by token).
 fn write_body(w: impl Write, v1: Option<&serde_json::Value>, d: &Document, pretty: bool) -> Result<(), FormatError> {
@@ -429,33 +466,6 @@ fn write_body(w: impl Write, v1: Option<&serde_json::Value>, d: &Document, prett
 
 fn write_json(w: impl Write, v: &impl Serialize, pretty: bool) -> Result<(), FormatError> {
     if pretty { serde_json::to_writer_pretty(w, v) } else { serde_json::to_writer(w, v) }.map_err(encode_err)
-}
-
-/// The file's top-level object, written member by member (the document is streamed in).
-struct Envelope {
-    pretty: bool,
-    first: bool,
-}
-
-impl Envelope {
-    fn field(&mut self, out: &mut impl Write, key: &str, value: &impl Serialize) -> Result<(), FormatError> {
-        let json = to_json(value, self.pretty)?;
-        self.key(out, key)?;
-        Indent { inner: out, on: self.pretty }.write_all(&json).map_err(encode_err)
-    }
-
-    /// The start of member `key` (a plain name): its value follows, indented one level when
-    /// pretty (as serde_json would: see [`Indent`]).
-    fn key(&mut self, out: &mut impl Write, key: &str) -> Result<(), FormatError> {
-        let sep: &[u8] = if std::mem::take(&mut self.first) { b"{" } else { b"," };
-        let indent: &[u8] = if self.pretty { b"\n  " } else { b"" };
-        let colon: &[u8] = if self.pretty { b"\": " } else { b"\":" };
-        [sep, indent, b"\"", key.as_bytes(), colon].iter().try_for_each(|part| out.write_all(part)).map_err(encode_err)
-    }
-
-    fn finish(self, out: &mut impl Write) -> Result<(), FormatError> {
-        out.write_all(if self.pretty { b"\n}" } else { b"}" }).map_err(encode_err)
-    }
 }
 
 pub fn load(bytes: &[u8]) -> Result<Document, FormatError> {

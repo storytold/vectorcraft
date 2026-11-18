@@ -207,40 +207,83 @@ mod tests {
         assert_eq!((d.str("note"), d.str("command")), ("none".to_string(), "object.ungroup".to_string()), "a failed Find keeps the pick");
     }
 
-    /// The list holds the menu items that run an engine command without asking for values first,
-    /// outside the application, File, Window and Help menus, and leaves out Undo, Redo, the Pastes,
-    /// Object › Align, Image Trace's Make and Make and Expand, Pattern's Make and Edit Pattern and the
-    /// saved-selection, saved-view and recent-font items.
+    /// The list holds the menu items that run an engine command, and the View menu items that the
+    /// app runs itself, without asking for values first, outside the application, File, Window and
+    /// Help menus, and leaves out Undo, Redo, the Pastes, Image Trace's Make and Make and Expand,
+    /// Pattern's Make and Edit Pattern and the saved-selection, saved-view and recent-font items.
     #[test]
     fn the_list_holds_only_menu_items_that_can_be_steps() {
         let items = menus::insertable_items(true);
         assert!(items.len() > 100, "only {} items", items.len());
         for item in &items {
-            assert!(vectorcraft_engine::find_command(item.command).is_some(), "{item:?}");
+            let in_app = menus::plays_in_app(item.command);
+            assert!(vectorcraft_engine::find_command(item.command).is_some() != in_app, "{item:?}");
+            assert!(!in_app || item.path[0] == "View", "{item:?}");
             assert!(!item.label.ends_with('…'), "{item:?}");
             assert!(!["VectorCraft", "File", "Window", "Help"].contains(&item.path[0]), "{item:?}");
             assert!(item.params.is_object(), "{item:?}");
         }
         let has = |command: &str| items.iter().any(|i| i.command == command);
-        for command in ["object.group", "object.ungroup", "object.arrange.bringToFront"] {
+        for command in [
+            "object.group",
+            "object.ungroup",
+            "object.arrange.bringToFront",
+            "object.align",
+            "view.outline",
+            "view.zoomIn",
+            "view.fitArtboard",
+            "view.rotate",
+            "view.rulers",
+            "view.snapToGrid",
+            "view.guides.lock",
+        ] {
             assert!(has(command), "{command}");
         }
+        let aligns = items.iter().filter(|i| i.command == "object.align").count();
+        assert_eq!(aligns, 7, "each Object › Align item, by its params");
         for command in [
             "edit.undo",
             "edit.redo",
             "edit.paste",
             "edit.pasteInFront",
             "object.move",
-            "object.align",
             "imageTrace.make",
             "imageTrace.makeAndExpand",
             "object.pattern.make",
             "object.pattern.edit",
             "file.save",
-            "view.zoomIn",
+            "window.panel",
+            "view.goto1",
+            "view.saved.new",
             "select.recall1",
         ] {
             assert!(!has(command), "{command}");
+        }
+    }
+
+    /// Every View menu item that the app runs itself is listed, apart from the saved-view slots, the
+    /// Perspective Grid presets (`ui.` commands, whose items follow the presets in the preferences)
+    /// and the items that ask for values first.
+    #[test]
+    fn every_view_item_the_app_runs_is_listed() {
+        let items = menus::insertable_items(true);
+        let view = menus::menu_tree_named(true).into_iter().find(|(title, _)| *title == "View").map(|(_, items)| items).unwrap();
+        fn walk(items: &[menus::Item], out: &mut Vec<(&'static str, &'static str)>) {
+            for it in items {
+                match it {
+                    menus::Item::Cmd(label, id, _) => out.push((label, id)),
+                    menus::Item::Sub(_, children) => walk(children, out),
+                    _ => {}
+                }
+            }
+        }
+        let mut all = vec![];
+        walk(&view, &mut all);
+        for (label, id) in all {
+            let ui = vectorcraft_engine::find_command(id).is_none() && menus::UI_COMMANDS.iter().any(|c| c.0 == id);
+            if ui && !label.ends_with('…') && !id.starts_with("view.goto") && !id.starts_with("ui.") {
+                assert!(items.iter().any(|i| i.command == id), "{label} ({id})");
+            }
         }
     }
 

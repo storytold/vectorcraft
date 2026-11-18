@@ -53,17 +53,23 @@ pub fn entry<'a>(app: &VectorcraftApp, it: &'a Item) -> Option<Entry<'a>> {
             Entry::Item(Row {
                 command: Some((id, p)),
                 source: label,
-                label: effect_item_label(id, p)
-                    .or_else(|| unlock_item_label(app, id, p, crate::i18n::current()))
-                    .or_else(|| spelling_item_label(id, p))
-                    .unwrap_or_else(|| display_label(app, id, label))
-                    .into(),
+                label: shown_label(app, id, p, label).into(),
                 shortcut: item_shortcut(id, p),
                 enabled,
                 checked,
             })
         }
     })
+}
+
+/// The label of the menu item that runs `id` with `p` and reads `label` in English, as the menus
+/// draw it in the UI language: an effect's own name (Pathfinder › Add), an object's name, a
+/// spelling suggestion, or [`display_label`].
+pub fn shown_label(app: &VectorcraftApp, id: &str, p: &Value, label: &str) -> String {
+    effect_item_label(id, p)
+        .or_else(|| unlock_item_label(app, id, p, crate::i18n::current()))
+        .or_else(|| spelling_item_label(id, p))
+        .unwrap_or_else(|| display_label(app, id, label))
 }
 
 /// `Cmd+Shift+]` → `⇧⌘]` on macOS, `Ctrl+Shift+]` elsewhere.
@@ -109,13 +115,17 @@ pub struct MenuEntry {
     pub params: Value,
     pub enabled: bool,
     pub shortcut: String,
+    /// `path` as the menus draw it in the UI language: a plug-in's submenu and a Scripts folder
+    /// keep their names.
+    #[serde(skip)]
+    pub shown_path: Vec<String>,
 }
 
 /// Flattened menu for `ui.menu.list`.
 pub fn menu_entries(app: &VectorcraftApp) -> Vec<MenuEntry> {
     let mut out = vec![];
     for (title, items) in menu_tree_named(app.session.prefs.font_names_in_english) {
-        flatten(app, vec![title.to_string()], &items, &mut out);
+        flatten(app, vec![title.to_string()], vec![crate::i18n::t(title).to_string()], &items, &mut out);
     }
     out
 }
@@ -123,7 +133,7 @@ pub fn menu_entries(app: &VectorcraftApp) -> Vec<MenuEntry> {
 /// Flattened canvas context menu for `ui.contextMenu.list` (paths are its submenus).
 pub fn context_entries(app: &VectorcraftApp) -> Vec<MenuEntry> {
     let mut out = vec![];
-    flatten(app, vec![], &context_items(app), &mut out);
+    flatten(app, vec![], vec![], &context_items(app), &mut out);
     out
 }
 
@@ -150,20 +160,65 @@ const NOT_INSERTED_MENUS: [&str; 4] = ["VectorCraft", "File", "Window", "Help"];
 /// Options panel.
 const MENU_ONLY_COMMANDS: [&str; 4] = ["imageTrace.make", "imageTrace.makeAndExpand", "object.pattern.make", "object.pattern.edit"];
 
+/// The View menu commands that the app runs itself, not the engine, and that can be steps of an
+/// action ([`plays_in_app`]): Outline, Pixel Preview, Trim View, Presentation Mode and Screen Mode,
+/// the zoom, fit and rotate view items, and the items that show or hide or turn snapping on or off.
+/// The saved-view slots are not among them.
+const UI_STEP_COMMANDS: [&str; 30] = [
+    "view.outline",
+    "view.pixelPreview",
+    "view.trimView",
+    "view.presentation",
+    "view.screenMode",
+    "view.zoomIn",
+    "view.zoomOut",
+    "view.fitArtboard",
+    "view.fitAll",
+    "view.actualSize",
+    "view.rotate",
+    "view.rotateToSelection",
+    "view.rotateReset",
+    "view.edges",
+    "view.artboards",
+    "view.template",
+    "view.rulers",
+    "view.videoRulers",
+    "view.boundingBox",
+    "view.textThreads",
+    "view.gradientAnnotator",
+    "view.cornerWidget",
+    "view.livePaintGaps",
+    "view.guides",
+    "view.smartGuides",
+    "view.grid",
+    "view.snapToGrid",
+    "view.snapToPixel",
+    "view.snapToPoint",
+    "view.snapToGlyph",
+];
+
+/// Whether a step that runs command `id` is a View menu command that the app runs itself
+/// ([`UI_STEP_COMMANDS`]). Action playback runs such a step on its own, as its menu item runs it,
+/// and not inside `command.batch`.
+pub fn plays_in_app(id: &str) -> bool {
+    UI_STEP_COMMANDS.contains(&id)
+}
+
 /// Whether the item labeled `label` in menu `title`, which runs command `id` with `p`, can be a step
 /// of an action. It can when it runs an engine command, which action playback runs as the menu
-/// does; its label does not end with "…", the mark of an item that asks for values first; it is not
-/// in a menu of [`NOT_INSERTED_MENUS`]; and it is not Undo, Redo, a Paste, an item that stands for a
-/// saved selection, a saved view or a recent font, a plug-in's item or an action's own command. Nor
-/// is it Object › Align, whose menu items add the Align To choice and the selection's key to their
-/// params when clicked ([`crate::panels::align::with_align_to`]), which playback does not, or another
-/// item of [`MENU_ONLY_COMMANDS`].
+/// does, or is a View menu item that the app runs itself ([`plays_in_app`]); its label does not end
+/// with "…", the mark of an item that asks for values first; it is not in a menu of
+/// [`NOT_INSERTED_MENUS`]; and it is not Undo, Redo, a Paste, an item that stands for a saved
+/// selection, a saved view or a recent font, a plug-in's item, an action's own command or another
+/// item of [`MENU_ONLY_COMMANDS`]. An Object › Align item can be a step: inserting it adds the Align
+/// To choice of that moment to its params, as clicking it does
+/// ([`crate::panels::align::with_align_to`]).
 pub fn insertable(title: &str, label: &str, id: &str, p: &Value) -> bool {
     use super::slots::{RECENT_FONT_IDS, SAVED_SELECTION_IDS, SAVED_VIEW_IDS};
-    vectorcraft_engine::find_command(id).is_some()
+    (vectorcraft_engine::find_command(id).is_some() || (title == "View" && plays_in_app(id)))
         && !label.ends_with('…')
         && !NOT_INSERTED_MENUS.contains(&title)
-        && !matches!(id, "edit.undo" | "edit.redo" | "command.batch" | "object.align")
+        && !matches!(id, "edit.undo" | "edit.redo" | "command.batch")
         && !MENU_ONLY_COMMANDS.contains(&id)
         && !id.starts_with("edit.paste")
         && !id.starts_with("prefs.")
@@ -200,7 +255,7 @@ pub fn insertable_items(english_names: bool) -> Vec<InsertableItem> {
     out
 }
 
-fn flatten(app: &VectorcraftApp, path: Vec<String>, items: &[Item], out: &mut Vec<MenuEntry>) {
+pub(super) fn flatten(app: &VectorcraftApp, path: Vec<String>, shown: Vec<String>, items: &[Item], out: &mut Vec<MenuEntry>) {
     for it in items {
         match it {
             Item::Cmd(l, id, p) => {
@@ -221,6 +276,7 @@ fn flatten(app: &VectorcraftApp, path: Vec<String>, items: &[Item], out: &mut Ve
                     params: p.clone(),
                     enabled,
                     shortcut: item_shortcut(id, p).or_else(|| shortcut_of(id)).unwrap_or("").to_string(),
+                    shown_path: shown.clone(),
                 })
             }
             Item::Todo(l, sc) => out.push(MenuEntry {
@@ -230,11 +286,16 @@ fn flatten(app: &VectorcraftApp, path: Vec<String>, items: &[Item], out: &mut Ve
                 params: Value::Null,
                 enabled: false,
                 shortcut: sc.to_string(),
+                shown_path: shown.clone(),
             }),
             Item::Sub(l, ch) => {
                 let mut p = path.clone();
                 p.push(l.to_string());
-                flatten(app, p, ch, out);
+                // The menus draw a plug-in's submenu and a Scripts folder by their own names ([`entry`]).
+                let mut s = shown.clone();
+                let own = super::labels::holds_plugin_commands(ch) || crate::scripts_menu::is_folder(ch);
+                s.push(if own { l.to_string() } else { crate::i18n::t(l).to_string() });
+                flatten(app, p, s, ch, out);
             }
             _ => {}
         }

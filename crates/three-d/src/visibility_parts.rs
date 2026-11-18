@@ -91,6 +91,22 @@ fn triangulate(mut points: Vec<Point>, epsilon: f64, work: &mut usize, depth: us
     Ok(out)
 }
 
+/// Triangles covering a flat face drawn as several straight-edged contours, such as a cut side of a
+/// partial Revolve whose profile has holes: outlines one way round and holes the other, the holes
+/// left uncovered. The work is checked before the face is cut, at four times its corners squared.
+fn with_holes(outline: &vectorcraft_geom::PathData, epsilon: f64, work: &mut usize) -> Result<Vec<Vec<Point>>, String> {
+    const LIMIT: &str = "Revolve visibility exceeds its geometry work limit";
+    let rings: Vec<Vec<crate::V3>> = outline.subpaths.iter().map(|s| s.anchors.iter().map(|a| crate::V3(a.p.x, a.p.y, 0.0)).collect()).collect();
+    let corners: usize = rings.iter().map(Vec::len).sum();
+    *work = work.saturating_add(corners.saturating_mul(corners).saturating_mul(4));
+    if *work > MAX_WORK {
+        return Err(LIMIT.into());
+    }
+    let mut spent = 0;
+    let triangles = crate::mesh::triangulate(&rings, crate::mesh::newell(&rings), &mut spent)?;
+    Ok(triangles.into_iter().map(|t| clean(t.iter().map(|v| Point::new(v.0, v.1)).collect(), epsilon)).filter(|t| !t.is_empty()).collect())
+}
+
 pub(super) fn pieces(face: &Face, epsilon: f64, work: &mut usize) -> Result<Vec<Vec<Point>>, String> {
     if let Some(strips) = &face.visibility_pieces {
         let mut out = vec![];
@@ -98,6 +114,9 @@ pub(super) fn pieces(face: &Face, epsilon: f64, work: &mut usize) -> Result<Vec<
             out.extend(triangulate(clean(strip.clone(), epsilon), epsilon, work, 0)?);
         }
         return Ok(out);
+    }
+    if let Some(outline) = face.outline.as_ref().filter(|o| !face.cap && o.subpaths.len() > 1) {
+        return with_holes(outline, epsilon, work);
     }
     if !face.cap {
         return triangulate(clean(face.points.clone(), epsilon), epsilon, work, 0);

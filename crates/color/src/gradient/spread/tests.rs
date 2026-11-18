@@ -118,6 +118,46 @@ fn reflect_mirrors_every_other_run_and_its_midpoints() {
     assert!((p.gradient.stops[2].midpoint - 0.7).abs() < 1e-6, "{:?}", p.gradient.stops);
 }
 
+/// A gradient mixed around the hue wheel that reflects: a mirrored run turns the wheel back the
+/// way it came, so every point keeps its color when the runs are written out as a gradient that
+/// pads, unrolled along the vector, or as one cycle, with a repeating one's too.
+#[test]
+fn reflected_and_repeated_hue_turns_keep_every_color() {
+    let geom = GradientGeom { start: Point::new(0.0, 0.0), end: Point::new(10.0, 0.0), aspect: 1.0, focal: None };
+    let stops = || {
+        let mut red = GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0));
+        red.midpoint = 0.3;
+        vec![red, GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))]
+    };
+    let near = |a: Color, b: Color, what: &str| {
+        assert!(a.to_rgb().iter().zip(b.to_rgb()).all(|(x, y)| (x - y).abs() < 1.0 / 255.0), "{what}: {a:?} vs {b:?}");
+    };
+    for method in [GradientMethod::HueClockwise, GradientMethod::HueCounterclockwise] {
+        for spread in [GradientSpread::Reflect, GradientSpread::Repeat] {
+            let g = Gradient { method, spread, repeats: 2, ..Gradient::new(GradientKind::Linear, stops()) };
+            let p = g.padded_over(&geom, Rect::new(-10.0, 0.0, 20.0, 10.0)).unwrap();
+            assert_eq!((p.gradient.spread, p.gradient.repeats), (GradientSpread::Pad, 1));
+            for k in 0..300 {
+                let q = Point::new(-10.0 + f64::from(k) * 0.1 + 0.013, 5.0);
+                let want = g.sample(g.spread_param(geom.param_at(GradientKind::Linear, q)) as f32).0;
+                let got = p.gradient.sample(p.geom.param_at(GradientKind::Linear, q) as f32).0;
+                near(want, got, &format!("{method:?} {spread:?} padded at {}", q.x));
+            }
+            let unrolled = g.unrolled();
+            let (cycle, runs) = g.cycle().unwrap();
+            for k in 0..=200 {
+                let t = (k as f32 + 0.37) / 201.0;
+                let want = g.sample(g.spread_param(f64::from(t)) as f32).0;
+                near(want, unrolled.sample(t).0, &format!("{method:?} {spread:?} unrolled at {t}"));
+                // One cycle covers `runs` of the two runs between 0 and 1.
+                let along = t * runs as f32 / 2.0;
+                let want = g.sample(g.spread_param(f64::from(along)) as f32).0;
+                near(want, cycle.sample(t).0, &format!("{method:?} {spread:?} cycle at {t}"));
+            }
+        }
+    }
+}
+
 #[test]
 fn stops_inside_a_run_hold_their_colors_to_its_ends() {
     let geom = GradientGeom { start: Point::new(0.0, 0.0), end: Point::new(10.0, 0.0), aspect: 1.0, focal: None };

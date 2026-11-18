@@ -79,6 +79,10 @@ impl<'a> Reader<'a> {
                 }
                 return Ok(());
             }
+            if let Some(v) = bytes.strip_prefix(b"%Creator:") {
+                self.symbols_own_size = v.trim_ascii() == crate::ai_editing::CREATOR_TEXT.as_bytes();
+                return Ok(());
+            }
             if bytes == b"%EndComments" {
                 self.header_done = true;
             }
@@ -238,10 +242,13 @@ impl<'a> Reader<'a> {
             && let Ok(n) = v.trim().parse::<u8>()
         {
             self.ruler_units = Some(n);
+        } else if self.frames.is_empty() && line.starts_with("AI5_FileFormat") {
+            self.file_format = true;
         } else if let Some(v) = line.strip_prefix("AI5_ArtSize:") {
             self.art_size = two(v);
         } else if let Some(v) = line.strip_prefix("AI3_TemplateBox:").or_else(|| line.strip_prefix("%TemplateBox:")) {
-            self.template_center = two(v);
+            // The center of the box (a file without a template writes it with no width or height).
+            self.template_center = four(v).map(|[x0, y0, x1, y1]| ((x0 + x1) / 2.0, (y0 + y1) / 2.0)).or_else(|| two(v));
             self.template = four(v).or(self.template);
         } else if let Some(v) = line.strip_prefix("AI24_LargeCanvasScale:") {
             self.large_canvas_scale(v);
@@ -1181,7 +1188,7 @@ mod tests {
         assert!(nodes > 0);
         let draft = |i: usize| brush::BrushDraft {
             name: format!("Brush {i}"),
-            kind: brush::DraftKind::Art { brush: vectorcraft_brush::ArtBrush::default(), art: "A".to_string(), plain: false },
+            kind: brush::DraftKind::Art { brush: vectorcraft_brush::ArtBrush::default(), art: "A".to_string(), settings: None },
         };
         let drafts: Vec<_> = (0..5).map(draft).collect();
         let (kept, left_out) = brush::finish_brushes_within(drafts.clone(), &reader.brush_art, None, 3 * nodes);
