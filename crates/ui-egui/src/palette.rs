@@ -1273,9 +1273,9 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             // The list shows as many rows as fit above the footer in the window, up to
             // VISIBLE_ROWS; a page is that many rows.
             let spacing = ui.spacing().item_spacing.y;
-            // Under the recent picks no footer line is drawn.
-            let footer_line = if empty { 0.0 } else { spacing + 6.0 + ui.text_style_height(&egui::TextStyle::Body) };
-            let footer_height = footer_line + f32::from(margin) + BOTTOM_GAP;
+            // Under the recent picks the footer line holds only where the highlighted pick's home is,
+            // when no callout shows it, so the line's room is kept there too.
+            let footer_height = spacing + 6.0 + ui.text_style_height(&egui::TextStyle::Body) + f32::from(margin) + BOTTOM_GAP;
             let room = screen.bottom() - footer_height - ui.cursor().top() - spacing;
             let rows = ((room / ROW_HEIGHT).floor().max(1.0) as usize).min(VISIBLE_ROWS);
             sel = moves.apply(sel, n, rows);
@@ -1385,15 +1385,17 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 Some(Pointer::Footer(text)) => hint = Some(text),
                 None => {}
             }
-            // Under the recent picks no count is shown; with none, one dimmed line says what a search
-            // finds.
-            if !empty {
+            // Under the recent picks no count is shown, only where the highlighted pick's home is when
+            // no callout shows it; with no picks, one dimmed line says what a search finds.
+            if !empty || (n > 0 && hint.is_some()) {
                 ui.add_space(6.0);
                 ui.scope(|ui| {
                     // The footer stays one line of text tall, as the list's height counts it.
                     ui.spacing_mut().interact_size.y = 0.0;
                     ui.horizontal(|ui| {
-                        ui.label(egui::RichText::new(footer(n, total)).color(t.text_dim));
+                        if !empty {
+                            ui.label(egui::RichText::new(footer(n, total)).color(t.text_dim));
+                        }
                         if let Some(hint) = hint {
                             ui.add(egui::Label::new(egui::RichText::new(hint).color(t.text_dim)).truncate());
                         }
@@ -2354,7 +2356,8 @@ mod tests {
         assert!(open.app.ui.dialog.is_some(), "{}", open.app.ui.status);
         assert_eq!(open.app.ui.recent_commands, [id, "paint.swap"]);
         // Cancel closes the dialog without running the command.
-        open.app.ui.dialog = None;
+        crate::dialogs::cancel(&mut open.app);
+        assert!(open.app.ui.dialog.is_none());
         open.frame(vec![]);
         assert_eq!(open.app.ui.recent_commands, [id, "paint.swap"]);
     }
@@ -4445,6 +4448,21 @@ mod tests {
         let footer = window.popup_labels(&nodes);
         assert!(footer.contains(&"Drawing".to_string()), "{footer:?}");
         assert!(!footer.iter().any(|l| l.contains("not shown now")), "{footer:?}");
+    }
+
+    /// Under the recent picks of an empty search, the footer still says where the highlighted
+    /// pick's home is when no callout can show it, without a count of the results.
+    #[test]
+    fn under_the_recent_picks_the_footer_names_a_home_out_of_view() {
+        let mut window = Window::new();
+        window.app.ui.recent_commands = vec!["tool:pen".into()];
+        window.app.ui.screen_mode = 3;
+        let nodes = window.search("");
+        assert_eq!(window.highlighted(), "tool:pen");
+        assert_eq!(window.callout(), None);
+        let footer = window.popup_labels(&nodes);
+        assert!(footer.contains(&"Toolbar, not shown now".to_string()), "{footer:?}");
+        assert!(!footer.iter().any(|l| l.ends_with(" result") || l.ends_with(" results")), "no count: {footer:?}");
     }
 
     /// No callout where no control in view shows the home: in Presentation Mode, with the Tools
