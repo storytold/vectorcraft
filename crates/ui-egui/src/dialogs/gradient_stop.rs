@@ -92,9 +92,8 @@ fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let chip = Point::new(d.f64("x", 0.0), d.f64("y", 0.0));
     let area = egui::Id::unique("gradient-stop-popover");
     let size = ctx.memory(|m| m.area_rect(area)).map_or(POPOVER_SIZE, |r| r.size());
-    let pos = screen.unwrap_or_else(|| match app.canvas_rect.zip(app.view().copied()) {
-        Some((canvas, v)) => {
-            let xf = Xf::new(canvas, &v);
+    let pos = screen.unwrap_or_else(|| match app.canvas_rect.zip(app.canvas_xf()) {
+        Some((canvas, xf)) => {
             let at = xf.to_screen(chip);
             selection_on_screen(app, &xf).map_or(at + vec2(14.0, 14.0), |art| beside_art(at, art, size, canvas))
         }

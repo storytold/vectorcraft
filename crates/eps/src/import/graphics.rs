@@ -21,9 +21,13 @@ mod ops;
 mod paint;
 mod path;
 mod state;
+mod strips;
 
 pub(crate) use paint::collapse;
+#[cfg(test)]
+pub(crate) use paint::tilings_compared;
 pub(crate) use state::{GState, Out, Space, process};
+pub(crate) use strips::merge_strips;
 
 /// Most objects one file makes.
 const MAX_NODES: usize = 1 << 20;
@@ -42,7 +46,7 @@ const MAX_DASH_ENTRIES: usize = 65_535;
 /// Most entries an indexed colour space's table has.
 const MAX_HIVAL: usize = 4095;
 /// Most elements the current path may have.
-const MAX_PATH: usize = 1 << 20;
+pub(crate) const MAX_PATH: usize = 1 << 20;
 /// Most path elements drawn in all (each object's clips and groups counting as elements too).
 const MAX_DRAWN: usize = 1 << 24;
 /// Samples taken of a shading function that isn't a plain interpolation.

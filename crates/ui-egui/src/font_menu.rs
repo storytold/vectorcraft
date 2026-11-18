@@ -4,14 +4,29 @@
 //! or reached with ↑/↓ previews its font on the selected text (one live interaction, nothing in
 //! the history); a click or Enter applies it as one step, Escape or closing the menu puts the text
 //! back. The Glyphs panel and Find Font only pick a font ([`picked`]): nothing is previewed on the
-//! document. A star marks a favourite family, and the ★ filter lists only those. The Font
+//! document. A star marks a favourite family, and the ★ filter lists only those. The Document
+//! filter lists only the families that type in the current document is set in
+//! ([`document_families`]), and is unavailable while no document is open. The Recently Added
+//! filter lists only the installed families with a font file created in the last 30 days, the
+//! newest first and without the Recent Fonts section ([`vectorcraft_text::FontDb::recently_added`]).
+//! The ≈ button before a family's star (Show Similar Fonts) orders the listed families by how alike
+//! they look to it ([`vectorcraft_text::FontDb::similar_families`]), that family first and without the Recent
+//! Fonts section, until the ≈ chip under the filters clears it or the menu closes. The Font
 //! Technology filter's Variable lists only variable font families. Preferences › Type › Enable
-//! in-menu font previews and Font Preview Size turn the samples off or size the rows. Recently
-//! used families appear first, in the order they were last applied, within the same search and
-//! filters as the remaining families. In the Character and Properties panels and the Control bar,
+//! in-menu font previews and Font Preview Size turn the samples off or size the rows. While the
+//! samples are shown, a row under the filters sets Font Preview Size to Small, Medium or Large
+//! ([`apply_preview_size`]), which sizes the rows of every font menu, and the list stays on the
+//! rows it showed. The menu lays out its filters on the same five rows wherever it opens, with the
+//! size row under them while the samples are shown. However narrow its field, it opens at least
+//! wide enough for those rows and for a family name up to 220 points wide with its sample
+//! beside it, up to 60% of the window; each sample fills its row's height. Recently used families
+//! appear first, in the order they were last applied, within the same search and filters as the
+//! remaining families. In the Character and Properties panels and the Control bar,
 //! the mouse wheel turned over the closed field applies the next family (or previous one) to the
 //! selected text, one undo step per notch. The menu's order at the first turn stays fixed until the
 //! pointer leaves the field or the text selection changes; steps stop at its first and last family.
+//! The field takes the wheel only when the pointer was moved onto it after the field last moved or
+//! was covered by a window or overlay, and the wheel stream began there.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -24,6 +39,7 @@ use vectorcraft_text::FontClass;
 use crate::VectorcraftApp;
 use crate::theme::Tokens;
 use crate::widgets;
+use crate::widgets::{ArmedWheelField, WheelStream, WheelStreamOwner};
 
 /// What happened in the menu this frame.
 #[derive(Clone, Debug, PartialEq)]
@@ -49,6 +65,8 @@ pub enum WheelOwner {
     Control,
     /// The Character popover attached to this Control bar link.
     ControlPopover(egui::Id),
+    /// The Contextual Task Bar's type controls.
+    TaskBar,
 }
 
 impl WheelOwner {
@@ -61,6 +79,12 @@ impl WheelOwner {
             Self::Control => return app.ui.control_bar && app.ui.screen_mode < 2,
             Self::ControlPopover(anchor) => {
                 return app.ui.control_bar && app.ui.screen_mode < 2 && widgets::popover_is_open(ctx, anchor);
+            }
+            Self::TaskBar => {
+                return app.ui.task_bar
+                    && app.ui.screen_mode < 3
+                    && crate::canvas::task_bar_shows_type(app)
+                    && crate::canvas::task_bar_shows_fonts(ctx);
             }
             Self::Character => "character",
             Self::Properties => {
@@ -84,6 +108,9 @@ impl WheelOwner {
 pub struct MenuLook<'a> {
     /// Show each family's sample (Preferences › Type › Enable in-menu font previews).
     pub samples: bool,
+    /// Preferences › Type › Show samples on white: each sample is drawn in dark type on a white
+    /// area, whatever the interface's brightness (off by default).
+    pub on_white: bool,
     /// Preferences › Type › Show Font Names in English (on by default).
     pub english_names: bool,
     /// Row height in points (Font Preview Size).
@@ -97,42 +124,135 @@ pub struct MenuLook<'a> {
     pub wheel: bool,
     /// Its owner, so a field hidden before the next layout cannot capture wheel input.
     pub wheel_owner: Option<WheelOwner>,
+    /// The name screen readers give the closed field when no label stands beside it.
+    pub name: Option<&'a str>,
+    /// The current document, which the Document filter lists the families of. `None`: no document
+    /// is open, and the filter is unavailable.
+    pub document: Option<MenuDocument<'a>>,
+    /// The time the Recently Added filter counts back from. `None`: the system clock.
+    pub clock: Option<std::time::SystemTime>,
+}
+
+/// The current document as the Document filter reads it.
+#[derive(Clone, Copy, Debug)]
+pub struct MenuDocument<'a> {
+    /// The document's identity.
+    pub uid: u64,
+    /// Its content: while an interaction is open (a font previewed from the menu), the content it
+    /// started from, so a preview does not change the families listed. Its families are listed
+    /// again when this is another version of the document.
+    pub doc: &'a Arc<vectorcraft_doc::Document>,
+}
+
+impl MenuDocument<'_> {
+    /// Which document and which version of it the families were read from.
+    fn key(&self) -> DocumentKey {
+        DocumentKey { uid: self.uid, doc: Arc::downgrade(self.doc) }
+    }
+}
+
+/// A document and a version of its content, compared by identity. The weak reference keeps the
+/// version's allocation, so a later version is never placed at the same address while the key is
+/// kept.
+#[derive(Clone, Debug)]
+struct DocumentKey {
+    uid: u64,
+    doc: std::sync::Weak<vectorcraft_doc::Document>,
+}
+
+impl PartialEq for DocumentKey {
+    fn eq(&self, other: &Self) -> bool {
+        self.uid == other.uid && std::sync::Weak::ptr_eq(&self.doc, &other.doc)
+    }
 }
 
 impl Default for MenuLook<'static> {
-    /// Samples on, English names, medium rows, no favourites, no wheel.
+    /// Samples on in the theme's colors, English names, medium rows, no favorites, no wheel, no
+    /// document, the system clock.
     fn default() -> Self {
-        Self { samples: true, english_names: true, row: ROW, favorites: &[], recent: &[], wheel: false, wheel_owner: None }
+        Self {
+            samples: true,
+            on_white: false,
+            english_names: true,
+            row: ROW,
+            favorites: &[],
+            recent: &[],
+            wheel: false,
+            wheel_owner: None,
+            name: None,
+            document: None,
+            clock: None,
+        }
     }
 }
 
 impl<'a> MenuLook<'a> {
     pub fn of(app: &'a VectorcraftApp) -> Self {
-        let row = match app.session.prefs.font_preview_size.as_str() {
-            "small" => 20.0,
-            "large" => 32.0,
-            _ => ROW,
-        };
+        let row = preview_row(&app.session.prefs.font_preview_size);
         Self {
             samples: app.session.prefs.font_preview,
+            on_white: app.session.prefs.font_samples_on_white,
             english_names: app.session.prefs.font_names_in_english,
             row,
             favorites: &app.ui.favorite_fonts,
             recent: app.recent_fonts(),
             wheel: false,
             wheel_owner: None,
+            name: None,
+            document: app
+                .session
+                .active()
+                .map(|state| MenuDocument { uid: state.uid, doc: state.interaction.as_ref().map_or(&state.doc, |interaction| &interaction.doc) }),
+            clock: None,
         }
     }
 }
 
 /// Height of a row, in points (Font Preview Size: Medium).
 const ROW: f32 = 24.0;
+/// Font Preview Size's values (Preferences › Type), each with the row height it gives.
+const PREVIEW_SIZES: [(&str, f32); 3] = [("small", 20.0), ("medium", ROW), ("large", 32.0)];
+
+/// The row height of Font Preview Size `size`: Medium's for a value it does not have.
+fn preview_row(size: &str) -> f32 {
+    PREVIEW_SIZES.iter().find(|(key, _)| *key == size).map_or(ROW, |(_, row)| *row)
+}
+
+/// The label of Font Preview Size `size`, as Preferences names it.
+fn preview_size_label(size: &str) -> &'static str {
+    match size {
+        "small" => tl!("Small"),
+        "large" => tl!("Large"),
+        _ => tl!("Medium"),
+    }
+}
 /// Width of the star at the end of a family's row.
 const STAR: f32 = 18.0;
-/// The share of a row the family's name takes; the sample fills the rest.
+/// Width of the Show Similar Fonts button before the star.
+const SIMILAR: f32 = 18.0;
+/// The least share of a row the family's name takes when the row is too narrow for the widest
+/// name and [`SAMPLE_W`]; the sample fills the rest.
 const NAME_SHARE: f32 = 0.5;
+/// Size of a family's name in its row.
+const NAME_SIZE: f32 = 12.0;
+/// The widest name the menu widens itself for. A longer name takes more of a row only in a menu
+/// wider than that.
+pub(crate) const NAME_MAX: f32 = 220.0;
+/// Space between a family's name and its sample.
+const NAME_GAP: f32 = 8.0;
+/// How much wider than the sum of its characters' advances a name may lay out once shaped
+/// (kerning, ligatures, contextual forms), as a share of that sum.
+const SHAPING: f32 = 0.1;
+/// The room the menu keeps for a sample beside the widest name.
+const SAMPLE_W: f32 = 150.0;
+/// The greatest share of the window's width the menu takes.
+const WINDOW_SHARE: f32 = 0.6;
+/// Size of the filters' labels.
+const FILTER_SIZE: f32 = 11.0;
 /// Width of the disclosure triangle of a family with several styles.
 const DISCLOSURE: f32 = 14.0;
+/// How far a family's style rows are indented past the triangle.
+const STYLE_INDENT: f32 = 12.0;
 /// The list's greatest height, under the search field and filters.
 const LIST_HEIGHT: f32 = 600.0;
 /// Samples rendered (or asked for) per frame, across every menu, so a long list doesn't stall the UI.
@@ -255,8 +375,52 @@ fn remap_highlight(before: &[Row], selected: Option<usize>, after: &[Row]) -> Op
 
 /// What the rows were listed for: the query, the script, kind, font technology (variable only) and
 /// favourites filters, Show Font Names in English, the expanded families, favourites, recent
-/// history and font list generation.
-type RowsKey = (String, usize, Option<FontClass>, bool, bool, bool, Vec<String>, Vec<String>, Vec<String>, u64);
+/// history, font list generation, the family Show Similar Fonts orders by, the document version
+/// while the Document filter lists its families, and the recently added families while the
+/// Recently Added filter lists them.
+type RowsKey = (
+    String,
+    usize,
+    Option<FontClass>,
+    bool,
+    bool,
+    bool,
+    Vec<String>,
+    Vec<String>,
+    Vec<String>,
+    u64,
+    Option<String>,
+    (Option<DocumentKey>, Option<Arc<AddedFonts>>),
+);
+
+/// The installed families the Recently Added filter lists: each one's place in the list
+/// (lowercase name to place, newest first), and the instant from which they are to be found again
+/// ([`vectorcraft_text::RecentlyAdded::recheck_at`]).
+#[derive(Debug, Default, PartialEq, Eq)]
+struct AddedFonts {
+    place: HashMap<String, usize>,
+    recheck_at: Option<std::time::SystemTime>,
+}
+
+impl AddedFonts {
+    fn of(list: &vectorcraft_text::RecentlyAdded) -> Self {
+        Self { place: list.families.iter().enumerate().map(|(i, f)| (f.to_lowercase(), i)).collect(), recheck_at: list.recheck_at }
+    }
+
+    /// Orders `families` (the listed ones) newest first.
+    fn order(&self, families: &mut [String]) {
+        families.sort_by_cached_key(|f| self.place.get(&f.to_lowercase()).copied().unwrap_or(usize::MAX));
+    }
+}
+
+/// The recently added families a [`MenuState`] found, the database and font list generation they
+/// were found in ([`vectorcraft_text::FontDb::id`], [`vectorcraft_text::FontDb::generation`]), and
+/// the time they were found for.
+type RecentlyAddedFonts = ((u64, u64), std::time::SystemTime, Arc<AddedFonts>);
+
+/// The families a [`MenuState`] found in a document (lowercase), and the document version and font
+/// list generation they were found for.
+type DocumentFonts = ((DocumentKey, u64), Arc<HashSet<String>>);
 
 /// The menu's state between frames.
 #[derive(Clone, Default)]
@@ -271,14 +435,30 @@ struct MenuState {
     /// The highlighted row and the query and filters it belongs to.
     highlight: Option<usize>,
     query: String,
-    /// The filters (kept from one opening to the next): script (0..[`SCRIPTS`]), kind, font
-    /// technology (variable fonts only) and favourites only.
+    /// The filters (kept from one opening to the next, and the same in every font menu:
+    /// [`Filters`]): script (0..[`SCRIPTS`]), kind, font technology (variable fonts only),
+    /// favorites only, the current document's families only and recently added families only.
     script: usize,
     class: Option<FontClass>,
     variable_only: bool,
     favorites_only: bool,
+    document_only: bool,
+    added_only: bool,
+    /// The recently added families the Recently Added filter last listed.
+    added: Option<RecentlyAddedFonts>,
+    /// The families of the current document the Document filter last listed.
+    document_fonts: Option<DocumentFonts>,
+    /// The Document filter lists nothing because the document's type uses none of the menu's
+    /// families (none at all, or only missing ones), whatever the other filters.
+    none_used: bool,
     /// Families whose styles are listed (lowercase).
     expanded: Vec<String>,
+    /// Show Similar Fonts: the family the list is ordered by likeness to, until it is cleared or
+    /// the menu closes.
+    similar: Option<String>,
+    /// Show Similar Fonts was chosen or cleared: the family it ordered by, which is highlighted
+    /// and scrolled to once (to the top while the list is ordered by it).
+    similar_moved: Option<String>,
     /// What was previewed last (None: nothing is previewed).
     previewed: Option<(String, Option<String>)>,
     /// The rows listed, and what for: built again only when that changes, not every frame.
@@ -286,11 +466,155 @@ struct MenuState {
     rows_key: Option<RowsKey>,
     /// The height of the search field and filters last frame.
     header: f32,
+    /// The width of the widest row of filters without wrapping, last frame.
+    filters: f32,
+    /// The rows' height last frame, and how far down the list its view began, in rows. At a new
+    /// height (Font Preview Size) the list scrolls back to the same row.
+    scrolled: Option<(f32, f32)>,
     /// The families the wheel steps through, listed at its first notch over the closed field and
     /// kept for that text selection while the pointer stays on it: each step makes its family a recent one, which would
-    /// otherwise move it in the order.
+    /// otherwise move it in the order. The Document filter's families are kept the same way: a
+    /// step that leaves a family unused keeps it in the order, so turning the wheel back returns
+    /// to it. They are listed again at the first notch after the pointer leaves the field or the
+    /// selection changes.
     wheel_order: Option<Arc<[String]>>,
     wheel_target: Option<WheelTarget>,
+}
+
+/// The filters of [`MenuState`], one set for every font menu (the Character panel's, the Control
+/// bar's, the Properties panel's…): a filter chosen in one menu is on in all of them. They last
+/// for the session.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+struct Filters {
+    script: usize,
+    class: Option<FontClass>,
+    variable_only: bool,
+    favorites_only: bool,
+    document_only: bool,
+    added_only: bool,
+}
+
+impl Filters {
+    fn of(st: &MenuState) -> Self {
+        Self {
+            script: st.script,
+            class: st.class,
+            variable_only: st.variable_only,
+            favorites_only: st.favorites_only,
+            document_only: st.document_only,
+            added_only: st.added_only,
+        }
+    }
+
+    fn apply(self, st: &mut MenuState) {
+        st.script = self.script;
+        st.class = self.class;
+        st.variable_only = self.variable_only;
+        st.favorites_only = self.favorites_only;
+        st.document_only = self.document_only;
+        st.added_only = self.added_only;
+    }
+}
+
+/// The families the type in `doc` is set in, lowercase and by the name the menu lists them under
+/// ([`vectorcraft_text::FontDb::canonical`]): the runs of every text object in the layers, symbols,
+/// patterns, graph designs and stored scatter brushes, hidden, locked and masked ones included, with
+/// a composite font named as such. A pattern being edited is read from its editing layer only. Each
+/// run's family is looked up with its style, so a family and style split from a PostScript name
+/// (`Honoka`, `Mincho`) find the installed font of that name. Styles no type uses are left out.
+fn document_families(db: &vectorcraft_text::FontDb, doc: &vectorcraft_doc::Document) -> HashSet<String> {
+    // Each family and style once, so a document with many runs in a few fonts looks each one up
+    // once.
+    let mut named: HashMap<String, HashSet<String>> = HashMap::new();
+    let mut add = |n: &vectorcraft_doc::Node| {
+        if let vectorcraft_doc::NodeKind::Text(t) = &n.kind {
+            for r in &t.runs {
+                let (family, style) = (&r.style.font_family, &r.style.font_style);
+                match named.get_mut(family) {
+                    Some(styles) => {
+                        if !styles.contains(style) {
+                            styles.insert(style.clone());
+                        }
+                    }
+                    None => {
+                        named.insert(family.clone(), HashSet::from([style.clone()]));
+                    }
+                }
+            }
+        }
+    };
+    let editing = doc.pattern_edit.as_ref().map(|e| e.pattern.as_str());
+    let patterns = doc.patterns.iter().filter(|p| Some(p.name.as_str()) != editing).flat_map(|p| p.art.iter().map(|a| &**a));
+    let designs = doc.graph_designs.iter().map(|g| &*g.art);
+    for n in doc.layers.iter().map(|l| &**l).chain(doc.symbols.iter().map(|s| &*s.art)).chain(patterns).chain(designs) {
+        vectorcraft_doc::swatches::walk_with_masks(n, &mut add);
+    }
+    // A scatter brush draws copies of its art's type along a stroke; art and pattern brushes drop
+    // type when they bend their art. Malformed library entries are skipped.
+    let brushes = doc.unknown.get(vectorcraft_brush::DOC_KEY).map(vectorcraft_brush::parse_library).unwrap_or_default();
+    for b in &brushes {
+        if let vectorcraft_brush::BrushKind::Scatter(s) = &b.kind {
+            vectorcraft_doc::swatches::walk_with_masks(&s.art, &mut add);
+        }
+    }
+    named.iter().flat_map(|(f, styles)| styles.iter().map(move |s| db.canonical(f, s).0.to_lowercase())).collect()
+}
+
+/// The families the Document filter lists, when it is on and a document is open: those of
+/// `look`'s document, found again only when the document, its version or the font list changed.
+fn used_families(db: &vectorcraft_text::FontDb, st: &mut MenuState, look: MenuLook) -> Option<Arc<HashSet<String>>> {
+    let document = look.document.filter(|_| st.document_only)?;
+    let key = (document.key(), db.generation());
+    if let Some((k, families)) = &st.document_fonts
+        && *k == key
+    {
+        return Some(families.clone());
+    }
+    let families = Arc::new(document_families(db, document.doc));
+    st.document_fonts = Some((key, families.clone()));
+    Some(families)
+}
+
+/// The time the Recently Added filter counts back from: `look`'s clock, else the system clock. On
+/// wasm, which has no installed fonts to date, the Unix epoch.
+fn added_clock(look: MenuLook) -> std::time::SystemTime {
+    look.clock.unwrap_or_else(|| {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            std::time::SystemTime::now()
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            std::time::SystemTime::UNIX_EPOCH
+        }
+    })
+}
+
+/// The families the Recently Added filter lists, when it is on: those `db` dates within
+/// [`vectorcraft_text::RECENTLY_ADDED_WITHIN`] before `look`'s clock, found again only when the
+/// font list changed, the clock reached the instant the list may change at, or the clock went back
+/// before the time the list was found for.
+fn added_families(db: &vectorcraft_text::FontDb, st: &mut MenuState, look: MenuLook) -> Option<Arc<AddedFonts>> {
+    if !st.added_only {
+        return None;
+    }
+    let now = added_clock(look);
+    let key = (db.id(), db.generation());
+    if let Some((k, asked, added)) = &st.added
+        && *k == key
+        && *asked <= now
+        && added.recheck_at.is_none_or(|t| now < t)
+    {
+        return Some(added.clone());
+    }
+    let added = Arc::new(AddedFonts::of(&db.recently_added(now)));
+    st.added = Some((key, now, added.clone()));
+    Some(added)
+}
+
+/// Where the filters every font menu shares are kept ([`Filters`]).
+fn filters_id() -> egui::Id {
+    egui::Id::unique("font-menu-filters")
 }
 
 /// The font family menu showing `current`, `width` points wide, rows sampling `sample` (the
@@ -305,7 +629,12 @@ pub fn font_menu(
 ) -> Option<FontPick> {
     let state_id = ui.scope_id().with(&id).with("font-menu");
     let mut st: MenuState = ui.data(|d| d.get_temp(state_id)).unwrap_or_default();
-    let target = ui.data(|d| d.get_temp(wheel_fields_id(ui.ctx().viewport_id()).with("target")));
+    ui.data(|d| d.get_temp::<Filters>(filters_id())).unwrap_or_default().apply(&mut st);
+    // The viewport is read outside `ui.data`. The closure of `ui.data` runs with the context
+    // locked, and a second lock taken inside it blocks once a font-sample thread is waiting to
+    // request a repaint.
+    let wheel_fields = wheel_fields_id(ui.ctx().viewport_id());
+    let target = ui.data(|d| d.get_temp(wheel_fields.with("target")));
     let target_changed = st.wheel_target != target;
     if target_changed {
         st.wheel_order = None;
@@ -316,9 +645,13 @@ pub fn font_menu(
     // The search field and filters stay in place over the rows, which scroll. The rows are all
     // one height (a family's styles too), so only those in view are laid out: there are thousands
     // of families.
-    let (field, shown) = widgets::combo_menu_field(ui, &id, current, width, |menu| {
+    let (field, shown) = widgets::combo_menu_field_named(ui, &id, look.name, current, width, |menu| {
         menu.height(height).show_rows_with_header(
-            |ui| header(ui, state_id, state, current, look),
+            |ui| {
+                // Wider than a narrow field, so the filters keep their rows and long names show.
+                ui.set_min_width(menu_width(ui, state, look));
+                header(ui, vectorcraft_text::FontDb::global(), state_id, state, current, look)
+            },
             look.row,
             |h| h.rows.len(),
             |ui, range, h| rows(ui, range, h, sample, look),
@@ -346,7 +679,7 @@ pub fn font_menu(
                     WheelInput::Leave => st.wheel_order = None,
                     WheelInput::Notches(notches) => {
                         if st.wheel_order.is_none() {
-                            st.wheel_order = Some(wheel_order(&st, look).into());
+                            st.wheel_order = Some(wheel_order(&mut st, look).into());
                         }
                         if let Some(order) = st.wheel_order.as_deref() {
                             let next = wheel_steps(order, &own, notches);
@@ -369,10 +702,8 @@ pub fn font_menu(
                 out = Some(FontPick::Wheel(steps));
             }
         }
-        let queued = ui.data(|d| {
-            d.get_temp::<WheelFields>(wheel_fields_id(ui.ctx().viewport_id()))
-                .is_some_and(|fields| fields.queued.iter().any(|event| event.field == field.id))
-        });
+        let queued =
+            ui.data(|d| d.get_temp::<WheelFields>(wheel_fields).is_some_and(|fields| fields.queued.iter().any(|event| event.field == field.id)));
         if drawn || (!field.contains_pointer() && !queued) {
             st.wheel_order = None;
             ui.data_mut(|d| d.remove::<f32>(field.id.with("wheel")));
@@ -381,12 +712,31 @@ pub fn font_menu(
     if matches!(out, Some(FontPick::Chosen(..))) {
         st.previewed = None;
     }
-    ui.data_mut(|d| d.insert_temp(state_id, st));
+    ui.data_mut(|d| {
+        d.insert_temp(filters_id(), Filters::of(&st));
+        d.insert_temp(state_id, st);
+    });
     out
 }
 
-/// Does the menu list family `f` for search `query` (lowercase) under the filters of `st`?
-fn listed(db: &vectorcraft_text::FontDb, f: &str, query: &str, st: &MenuState, look: MenuLook) -> bool {
+/// Does the menu list family `f` for search `query` (lowercase) under the filters of `st`, among
+/// `used` (lowercase) while the Document filter lists the document's families, and among `added`
+/// while the Recently Added filter lists the recently added ones?
+fn listed(
+    db: &vectorcraft_text::FontDb,
+    f: &str,
+    query: &str,
+    st: &MenuState,
+    look: MenuLook,
+    used: Option<&HashSet<String>>,
+    added: Option<&AddedFonts>,
+) -> bool {
+    if used.is_some_and(|used| !used.contains(&f.to_lowercase())) {
+        return false;
+    }
+    if added.is_some_and(|added| !added.place.contains_key(&f.to_lowercase())) {
+        return false;
+    }
     let label = db.family_display_name(f, look.english_names);
     if !(query.is_empty() || f.to_lowercase().contains(query) || label.to_lowercase().contains(query)) {
         return false;
@@ -402,11 +752,22 @@ fn listed(db: &vectorcraft_text::FontDb, f: &str, query: &str, st: &MenuState, l
 }
 
 /// The families the closed field's wheel steps through, in the open menu's order with no search:
-/// the recent families first, then the others, under the menu's filters.
-fn wheel_order(st: &MenuState, look: MenuLook) -> Vec<String> {
-    let db = vectorcraft_text::FontDb::global();
-    let families: Vec<_> = db.menu_family_list().iter().filter(|f| listed(db, f, "", st, look)).cloned().collect();
-    grouped_rows(&families, look.recent, &[], |_| vec![])
+/// the recent families first, then the others, under the menu's filters; with Recently Added, the
+/// newest first. Listed once per wheel gesture ([`MenuState`]'s `wheel_order`).
+fn wheel_order(st: &mut MenuState, look: MenuLook) -> Vec<String> {
+    wheel_order_in(vectorcraft_text::FontDb::global(), st, look)
+}
+
+/// [`wheel_order`] of the families in `db`.
+fn wheel_order_in(db: &vectorcraft_text::FontDb, st: &mut MenuState, look: MenuLook) -> Vec<String> {
+    let used = used_families(db, st, look);
+    let added = added_families(db, st, look);
+    let mut families: Vec<_> =
+        db.menu_family_list().iter().filter(|f| listed(db, f, "", st, look, used.as_deref(), added.as_deref())).cloned().collect();
+    if let Some(added) = &added {
+        added.order(&mut families);
+    }
+    grouped_rows(&families, if added.is_some() { &[] } else { look.recent }, &[], |_| vec![])
         .into_iter()
         .filter_map(|r| match r {
             Row::Family(f) => Some(f),
@@ -443,12 +804,17 @@ struct WheelField {
 
 #[derive(Clone)]
 struct QueuedWheel {
+    #[cfg(not(target_arch = "wasm32"))]
     frame: u64,
     field: egui::Id,
+    #[cfg(not(target_arch = "wasm32"))]
     menu: egui::Id,
+    #[cfg(not(target_arch = "wasm32"))]
     position: egui::Pos2,
     rect: egui::Rect,
+    #[cfg(not(target_arch = "wasm32"))]
     event: egui::Event,
+    #[cfg(not(target_arch = "wasm32"))]
     amount: f32,
     reset_after: bool,
     positions_after: Vec<egui::Pos2>,
@@ -456,6 +822,7 @@ struct QueuedWheel {
 
 #[derive(Clone)]
 struct ReplayWheel {
+    #[cfg(not(target_arch = "wasm32"))]
     target: egui::LayerId,
     position: egui::Pos2,
     event: egui::Event,
@@ -472,6 +839,8 @@ struct WheelFields {
     pending: HashMap<egui::Id, Vec<WheelInput>>,
     queued: Vec<QueuedWheel>,
     replay: Vec<ReplayWheel>,
+    armed: Option<ArmedWheelField>,
+    stream: WheelStream,
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -518,6 +887,7 @@ impl egui::Plugin for WheelLayerSnapshot {
             let id = event.field.with("wheel");
             if !active {
                 ctx.data_mut(|d| d.remove::<f32>(id));
+                fields.stream.release(event.field);
                 if let Some(target) = ctx.layer_id_at(event.position) {
                     fields.replay.push(ReplayWheel { target, position: event.position, event: event.event });
                 }
@@ -630,7 +1000,8 @@ pub(crate) fn sync_wheel_target(app: &VectorcraftApp, ctx: &egui::Context, viewp
     let key = wheel_fields_id(viewport);
     let (previous, mut fields) = ctx.data(|d| (d.get_temp::<WheelTarget>(key.with("target")), d.get_temp::<WheelFields>(key)));
     if previous.is_some_and(|old| old != target) {
-        fields = None;
+        // A new target keeps the armed field and the running wheel stream.
+        fields = fields.map(|old| WheelFields { pass: old.pass, armed: old.armed, stream: old.stream, ..Default::default() });
     }
     let mut hidden = Vec::new();
     if let Some(fields) = &mut fields {
@@ -672,6 +1043,9 @@ fn remember_wheel_field(ui: &Ui, resp: &egui::Response, enabled: bool) -> Vec<Wh
 fn remember_owned_wheel_field(ui: &Ui, resp: &egui::Response, enabled: bool, menu: egui::Id, owner: Option<WheelOwner>) -> Vec<WheelInput> {
     let key = wheel_fields_id(ui.ctx().viewport_id());
     let pass = ui.ctx().cumulative_pass_nr();
+    // A window or overlay over the pointer covers the field even when no input arrives.
+    let pointer = ui.data_mut(|d| d.get_temp_mut_or_default::<WheelFields>(key).pointer).or_else(|| ui.ctx().input(|i| i.pointer.latest_pos()));
+    let covered = pointer.is_some_and(|p| resp.interact_rect.contains(p) && ui.ctx().layer_id_at(p) != Some(resp.layer_id));
     ui.data_mut(|d| {
         let mut fields: WheelFields = d.get_temp(key).unwrap_or_default();
         if fields.pass != pass {
@@ -679,6 +1053,16 @@ fn remember_owned_wheel_field(ui: &Ui, resp: &egui::Response, enabled: bool, men
             fields.fields.clear();
         }
         fields.fields.retain(|f| f.id != resp.id);
+        if let Some(armed) = &mut fields.armed
+            && armed.id == resp.id
+        {
+            if armed.rect == resp.interact_rect && pass.saturating_sub(armed.pass) <= 1 && !covered {
+                armed.pass = pass;
+            } else {
+                fields.armed = None;
+                fields.stream.release(resp.id);
+            }
+        }
         if enabled {
             fields.fields.push(WheelField { id: resp.id, menu, owner, rect: resp.interact_rect, layer: resp.layer_id });
         }
@@ -689,7 +1073,10 @@ fn remember_owned_wheel_field(ui: &Ui, resp: &egui::Response, enabled: bool, men
 }
 
 /// Take the closed font fields' wheel events before egui smooths and combines them. Other
-/// events stay in the input, so scrolling elsewhere keeps its own delta and event order.
+/// events stay in the input, so scrolling elsewhere keeps its own delta and event order. A field
+/// takes a wheel stream only when the stream begins with the pointer over it and the pointer was
+/// moved onto it after the field last moved or was covered. A stream that began anywhere else
+/// stays there until it ends, and a stream that leaves its field does not return to it.
 pub(crate) fn take_raw_wheel(ctx: &egui::Context, raw: &mut egui::RawInput) {
     let key = wheel_fields_id(raw.viewport_id);
     let Some(mut fields) = ctx.data(|d| d.get_temp::<WheelFields>(key)) else { return };
@@ -706,7 +1093,10 @@ pub(crate) fn take_raw_wheel(ctx: &egui::Context, raw: &mut egui::RawInput) {
     if pass < fields.pass || pass.saturating_sub(fields.pass) > 1 {
         fields.fields.clear();
         fields.pointer = None;
+        fields.armed = None;
+        fields.stream.release_any();
     }
+    let now = raw.time.unwrap_or_else(|| ctx.input_for(raw.viewport_id, |i| i.time) + f64::from(raw.predicted_dt));
     if fields.pending_frame != frame {
         fields.pending_frame = frame;
         fields.pending.clear();
@@ -760,8 +1150,20 @@ pub(crate) fn take_raw_wheel(ctx: &egui::Context, raw: &mut egui::RawInput) {
         {
             fields.activating.push(id);
         }
+        if matches!(event, egui::Event::MouseWheel { .. }) {
+            fields.stream.note_input(now);
+        }
         match event {
             egui::Event::PointerMoved(p) | egui::Event::PointerButton { pos: p, .. } => {
+                if pointer != Some(*p) {
+                    let pass = fields.pass;
+                    fields.armed = fields.fields.iter().rev().find(|f| over(f, Some(*p))).map(|f| ArmedWheelField { id: f.id, rect: f.rect, pass });
+                    if let Some(WheelStreamOwner::Field(id)) = fields.stream.owner
+                        && !fields.fields.iter().any(|f| f.id == id && over(f, Some(*p)))
+                    {
+                        fields.stream.release(id);
+                    }
+                }
                 mark_queued_wheel_leaves(&mut fields, Some(*p));
                 for field in &fields.fields {
                     if pointer.is_some_and(|point| field.rect.contains(point))
@@ -776,6 +1178,8 @@ pub(crate) fn take_raw_wheel(ctx: &egui::Context, raw: &mut egui::RawInput) {
             }
             egui::Event::PointerGone => {
                 pointer = None;
+                fields.armed = None;
+                fields.stream.release_any();
                 mark_queued_wheel_leaves(&mut fields, None);
                 for field in &fields.fields {
                     if !fields.queued.iter().any(|event| event.field == field.id) {
@@ -784,13 +1188,19 @@ pub(crate) fn take_raw_wheel(ctx: &egui::Context, raw: &mut egui::RawInput) {
                     }
                 }
             }
-            egui::Event::MouseWheel { unit, delta, modifiers, .. } if modifiers.is_none() && delta.y != 0.0 => {
-                if let Some(field) = fields.fields.iter().rev().find(|f| !fields.activating.contains(&f.id) && over(f, pointer)).copied() {
+            egui::Event::MouseWheel { unit, delta, modifiers, source, .. } if modifiers.is_none() && delta.y != 0.0 => {
+                let under = fields.fields.iter().rev().find(|f| !fields.activating.contains(&f.id) && over(f, pointer)).copied();
+                let starts_on_field = under
+                    .filter(|f| fields.armed.is_some_and(|armed| armed.id == f.id) && !matches!(source, egui::MouseWheelSource::Momentum))
+                    .map(|f| f.id);
+                let owner = *fields.stream.owner.get_or_insert(starts_on_field.map_or(WheelStreamOwner::Elsewhere, WheelStreamOwner::Field));
+                if let Some(field) = under.filter(|f| owner == WheelStreamOwner::Field(f.id)) {
                     let amount = -match unit {
                         egui::MouseWheelUnit::Point => delta.y / line,
                         egui::MouseWheelUnit::Line | egui::MouseWheelUnit::Page => delta.y,
                     };
                     if cfg!(not(target_arch = "wasm32")) && ctx.viewport_id() != raw.viewport_id {
+                        #[cfg(not(target_arch = "wasm32"))]
                         if let Some(position) = pointer {
                             fields.queued.push(QueuedWheel {
                                 frame,
@@ -816,6 +1226,10 @@ pub(crate) fn take_raw_wheel(ctx: &egui::Context, raw: &mut egui::RawInput) {
                     captured = true;
                     return false;
                 }
+                fields.stream.owner = Some(WheelStreamOwner::Elsewhere);
+            }
+            egui::Event::MouseWheel { delta, .. } if *delta != egui::Vec2::ZERO => {
+                fields.stream.owner.get_or_insert(WheelStreamOwner::Elsewhere);
             }
             _ => {}
         }
@@ -841,12 +1255,15 @@ pub(crate) fn take_raw_wheel(ctx: &egui::Context, raw: &mut egui::RawInput) {
     fields.pointer = pointer;
     ctx.data_mut(|d| d.insert_temp(key, fields));
     if captured {
+        ctx.data_mut(|d| d.insert_temp(widgets::taken_from_raw_id(raw.viewport_id), now));
         ctx.request_repaint();
     }
 }
 
 /// What the menu's header hands its rows.
 struct Listed<'s> {
+    /// The fonts listed: [`vectorcraft_text::FontDb::global`] outside the unit tests.
+    db: &'s vectorcraft_text::FontDb,
     st: &'s mut MenuState,
     /// The rows listed.
     rows: Arc<[Row]>,
@@ -862,14 +1279,28 @@ struct Listed<'s> {
 /// [`craft_ui::combo::Menu::show_rows_with_header`] lays them out.
 #[cfg(test)]
 fn list(ui: &mut Ui, state_id: egui::Id, st: &mut MenuState, current: &str, sample: Option<&str>, look: MenuLook) -> Option<FontPick> {
-    let h = header(ui, state_id, st, current, look);
+    list_of(ui, vectorcraft_text::FontDb::global(), state_id, st, current, sample, look).inner
+}
+
+/// [`list`] of the families in `db`, with the rows' scroll area as laid out.
+#[cfg(test)]
+fn list_of(
+    ui: &mut Ui,
+    db: &vectorcraft_text::FontDb,
+    state_id: egui::Id,
+    st: &mut MenuState,
+    current: &str,
+    sample: Option<&str>,
+    look: MenuLook,
+) -> egui::scroll_area::ScrollAreaOutput<Option<FontPick>> {
+    let h = header(ui, db, state_id, st, current, look);
     let total = h.rows.len();
-    egui::ScrollArea::vertical().max_height(ui.available_height()).show_rows(ui, look.row, total, |ui, range| rows(ui, range, h, sample, look)).inner
+    egui::ScrollArea::vertical().max_height(ui.available_height()).show_rows(ui, look.row, total, |ui, range| rows(ui, range, h, sample, look))
 }
 
 /// The top of the open menu, which stays in place: the search field, the filters, and the rows
-/// they list.
-fn header<'s>(ui: &mut Ui, state_id: egui::Id, st: &'s mut MenuState, current: &str, look: MenuLook) -> Listed<'s> {
+/// of `db` they list.
+fn header<'s>(ui: &mut Ui, db: &'s vectorcraft_text::FontDb, state_id: egui::Id, st: &'s mut MenuState, current: &str, look: MenuLook) -> Listed<'s> {
     let t = Tokens::get(ui.ctx());
     ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
     // Each time the menu opens: no query, the current family highlighted and in view (the
@@ -881,6 +1312,8 @@ fn header<'s>(ui: &mut Ui, state_id: egui::Id, st: &'s mut MenuState, current: &
         st.highlight = None;
         st.query.clear();
         st.current = current.to_string();
+        st.similar = None;
+        st.similar_moved = None;
     }
     st.last = pass;
     // For [`end_stale_preview`]: the menu is open, in this layer.
@@ -900,44 +1333,15 @@ fn header<'s>(ui: &mut Ui, state_id: egui::Id, st: &'s mut MenuState, current: &
         ui.memory_mut(|m| m.request_focus(field.with("edit")));
     }
     let query = widgets::search_field(ui, field, tl!("Search")).to_lowercase();
-    // The filters: script, then kind, then font technology.
-    let mut refilter = false;
-    ui.horizontal_wrapped(|ui| {
-        ui.spacing_mut().item_spacing = vec2(4.0, 2.0);
-        for i in 0..SCRIPTS {
-            if ui.selectable_label(st.script == i, egui::RichText::new(script_label(i)).size(11.0)).clicked() {
-                st.script = i;
-                refilter = true;
-            }
-        }
-    });
-    ui.horizontal_wrapped(|ui| {
-        ui.spacing_mut().item_spacing = vec2(4.0, 2.0);
-        if ui.selectable_label(st.favorites_only, egui::RichText::new("★").size(11.0)).on_hover_text(tl!("Favorites")).clicked() {
-            st.favorites_only = !st.favorites_only;
-            refilter = true;
-        }
-        if ui.selectable_label(st.class.is_none(), egui::RichText::new(tl!("Any Kind")).size(11.0)).clicked() {
-            st.class = None;
-            refilter = true;
-        }
-        for c in FontClass::ALL {
-            if ui.selectable_label(st.class == Some(c), egui::RichText::new(class_label(c)).size(11.0)).clicked() {
-                st.class = if st.class == Some(c) { None } else { Some(c) };
-                refilter = true;
-            }
-        }
-    });
-    ui.horizontal_wrapped(|ui| {
-        ui.spacing_mut().item_spacing = vec2(4.0, 2.0);
-        ui.label(egui::RichText::new(tl!("Font Technology")).size(11.0).color(t.text_dim));
-        if ui.selectable_label(st.variable_only, egui::RichText::new(variable_label()).size(11.0)).clicked() {
-            st.variable_only = !st.variable_only;
-            refilter = true;
-        }
-    });
+    let refilter = filters(ui, st, &t, look.document.is_some(), look.samples.then_some(look.row));
+    let added = added_families(db, st, look);
+    // On the system clock, the list is drawn again when a family's 30 days end.
+    if let (Some(at), None) = (added.as_ref().and_then(|a| a.recheck_at), look.clock)
+        && let Ok(wait) = at.duration_since(added_clock(look))
+    {
+        ui.ctx().request_repaint_after(wait);
+    }
     let enter = ui.input(|i| i.key_pressed(egui::Key::Enter));
-    let db = vectorcraft_text::FontDb::global();
     // The current family by its own name (a document may name it in Japanese: ヒラギノ角ゴシック),
     // as it was before any preview.
     let current = db.canonical(&st.current, "").0;
@@ -954,10 +1358,28 @@ fn header<'s>(ui: &mut Ui, state_id: egui::Id, st: &'s mut MenuState, current: &
         look.favorites.to_vec(),
         look.recent.to_vec(),
         db.generation(),
+        st.similar.clone(),
+        (look.document.filter(|_| st.document_only).map(|d| d.key()), added.clone()),
     );
     if st.rows_key.as_ref() != Some(&key) {
-        let families: Vec<_> = db.menu_family_list().iter().filter(|f| listed(db, f, &query, st, look)).cloned().collect();
-        let rows = grouped_rows(&families, look.recent, &st.expanded, |f| db.styles(f));
+        let used = used_families(db, st, look);
+        let mut families: Vec<_> =
+            db.menu_family_list().iter().filter(|f| listed(db, f, &query, st, look, used.as_deref(), added.as_deref())).cloned().collect();
+        st.none_used = families.is_empty() && used.is_some_and(|used| !db.menu_family_list().iter().any(|f| used.contains(&f.to_lowercase())));
+        // Recently Added lists every family it finds once, newest first: the recent ones among
+        // them, without the Recent Fonts section.
+        let recent = match &added {
+            Some(added) => {
+                added.order(&mut families);
+                &[]
+            }
+            None => look.recent,
+        };
+        // Show Similar Fonts orders every listed family by likeness, the recent ones among them.
+        let rows = match &st.similar {
+            Some(base) => grouped_rows(&db.similar_families(base, &families), &[], &st.expanded, |f| db.styles(f)),
+            None => grouped_rows(&families, recent, &st.expanded, |f| db.styles(f)),
+        };
         // Filter changes (including un-starring a favourite) may remove rows; expanding
         // another family or a background font scan can insert rows before the highlight.
         // Never preview an unrelated family because the old numeric index now points to it.
@@ -969,6 +1391,9 @@ fn header<'s>(ui: &mut Ui, state_id: egui::Id, st: &'s mut MenuState, current: &
     if query != st.query || refilter {
         st.query = query.clone();
         st.highlight = None;
+    }
+    if let Some(base) = &st.similar_moved {
+        st.highlight = rows.iter().position(|r| matches!(r, Row::Family(f) if f.eq_ignore_ascii_case(base)));
     }
     if st.highlight.is_none() && query.is_empty() {
         st.highlight = rows.iter().position(|r| matches!(r, Row::Family(f) if f.eq_ignore_ascii_case(current)));
@@ -998,13 +1423,221 @@ fn header<'s>(ui: &mut Ui, state_id: egui::Id, st: &'s mut MenuState, current: &
     }
     st.header = ui.min_rect().height();
     if rows.is_empty() {
-        widgets::dim_label(ui, tl!("No matching fonts"));
+        // The Document filter on a document whose type uses none of the listed families (none at
+        // all, or only missing ones) says so, whatever the other filters.
+        widgets::dim_label(ui, if st.none_used { tl!("This document uses no available fonts") } else { tl!("No matching fonts") });
     }
     ui.spacing_mut().item_spacing.y = 0.0;
     // The scroll bar beside the rows, not over them: a floating one covered the stars at their
     // right ends, so a favourite was hard to click (#2277).
     ui.spacing_mut().scroll = widgets::list_scroll_style();
-    Listed { st, rows, current: current.to_string(), enter, keyed, opening }
+    Listed { db, st, rows, current: current.to_string(), enter, keyed, opening }
+}
+
+/// One of the filters' chips.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Chip {
+    /// A script ([`SCRIPTS`]).
+    Script(usize),
+    Favorites,
+    /// The families the current document's type uses.
+    Document,
+    /// The families installed in the last 30 days.
+    Added,
+    AnyKind,
+    Class(FontClass),
+    /// The Font Technology label, which filters nothing.
+    Technology,
+    Variable,
+}
+
+/// The filters, row by row, the same wherever the menu opens: the scripts; favorites, the
+/// document's fonts, any kind and the first three kinds; the other kinds; font technology; the
+/// recently added fonts.
+fn filter_rows() -> [Vec<Chip>; 5] {
+    let (first, rest) = FontClass::ALL.split_at(3);
+    [
+        (0..SCRIPTS).map(Chip::Script).collect(),
+        [Chip::Favorites, Chip::Document, Chip::AnyKind].into_iter().chain(first.iter().copied().map(Chip::Class)).collect(),
+        rest.iter().copied().map(Chip::Class).collect(),
+        vec![Chip::Technology, Chip::Variable],
+        vec![Chip::Added],
+    ]
+}
+
+/// The filters on their rows ([`filter_rows`]): a row wraps only where the menu is narrower than
+/// it. The Document filter is unavailable without a `document`. With `row` (the rows' height while
+/// samples are shown), a row under them offers Font Preview Size's values, the one of that height
+/// selected; a click on one asks for it ([`apply_preview_size`]). Records in `st` the width of the
+/// widest row unwrapped, the size row included; whether a filter changed.
+fn filters(ui: &mut Ui, st: &mut MenuState, t: &Tokens, document: bool, row: Option<f32>) -> bool {
+    let mut refilter = false;
+    let mut widest = 0.0_f32;
+    for row in filter_rows() {
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing = vec2(4.0, 2.0);
+            let gap = ui.spacing().item_spacing.x;
+            let text = |s: &str| egui::RichText::new(s).size(FILTER_SIZE);
+            let mut width = -gap;
+            for chip in row {
+                let resp = match chip {
+                    Chip::Script(i) => ui.selectable_label(st.script == i, text(script_label(i))),
+                    Chip::Favorites => ui.selectable_label(st.favorites_only, text("★")).on_hover_text(tl!("Favorites")),
+                    Chip::Document => {
+                        let on = st.document_only && document;
+                        let tip = tl!("Fonts used in this document");
+                        let resp = ui
+                            .add_enabled(document, egui::Button::selectable(on, text(tl!("Document"))))
+                            .on_hover_text(tip)
+                            .on_disabled_hover_text(tip);
+                        resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, document, on, tip));
+                        resp
+                    }
+                    Chip::Added => {
+                        ui.selectable_label(st.added_only, text(tl!("Recently Added"))).on_hover_text(tl!("Fonts added in the last 30 days"))
+                    }
+                    Chip::AnyKind => ui.selectable_label(st.class.is_none(), text(tl!("Any Kind"))),
+                    Chip::Class(c) => ui.selectable_label(st.class == Some(c), text(class_label(c))),
+                    Chip::Technology => ui.label(text(tl!("Font Technology")).color(t.text_dim)),
+                    Chip::Variable => ui.selectable_label(st.variable_only, text(variable_label())),
+                };
+                width += resp.rect.width() + gap;
+                if !resp.clicked() {
+                    continue;
+                }
+                match chip {
+                    Chip::Script(i) => st.script = i,
+                    Chip::Favorites => st.favorites_only = !st.favorites_only,
+                    Chip::Document => st.document_only = !st.document_only,
+                    Chip::Added => st.added_only = !st.added_only,
+                    Chip::AnyKind => st.class = None,
+                    Chip::Class(c) => st.class = if st.class == Some(c) { None } else { Some(c) },
+                    Chip::Technology => continue,
+                    Chip::Variable => st.variable_only = !st.variable_only,
+                }
+                refilter = true;
+            }
+            widest = widest.max(width);
+        });
+    }
+    if let Some(row) = row {
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing = vec2(4.0, 2.0);
+            let gap = ui.spacing().item_spacing.x;
+            let text = |s: &str| egui::RichText::new(s).size(FILTER_SIZE);
+            let mut width = ui.label(text(tl!("Font Preview Size")).color(t.text_dim)).rect.width();
+            // Screen readers find the three sizes in a radio group named after the row.
+            let group = egui::UiBuilder::new().accessibility_role(egui::accesskit::Role::RadioGroup).accessibility_label(tl!("Font Preview Size"));
+            ui.scope_builder(group, |ui| {
+                for (size, height) in PREVIEW_SIZES {
+                    let on = (height - row).abs() < 0.5;
+                    let label = preview_size_label(size);
+                    let resp = ui.selectable_label(on, text(label));
+                    resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::RadioButton, true, on, label));
+                    width += gap + resp.rect.width();
+                    if resp.clicked() {
+                        ui.data_mut(|d| d.insert_temp(preview_size_id(), size));
+                        // A focused button is activated by Enter; the list must not read it as a pick.
+                        ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter));
+                    }
+                }
+            });
+            widest = widest.max(width);
+        });
+    }
+    st.filters = widest;
+    // While Show Similar Fonts orders the list: the family it orders by, which clears it. Its
+    // width is left out of the widest row: a long name wraps instead of widening the menu.
+    if let Some(base) = st.similar.clone() {
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing = vec2(4.0, 2.0);
+            let chip = egui::RichText::new(format!("≈ {base}  ✕")).size(FILTER_SIZE);
+            if ui.selectable_label(true, chip).on_hover_text(tl!("Clear Similar Fonts")).clicked() {
+                st.similar_moved = st.similar.take();
+                refilter = true;
+            }
+        });
+    }
+    refilter
+}
+
+/// The width the open menu takes at least: the widest row of filters last frame, and the widest
+/// name up to [`NAME_MAX`] with room for its sample, the Show Similar Fonts button, the star and the
+/// scroll bar beside it, within [`WINDOW_SHARE`] of the window. The menu is never narrower than its
+/// field.
+fn menu_width(ui: &Ui, st: &MenuState, look: MenuLook) -> f32 {
+    let sample = if look.samples { SAMPLE_W } else { 0.0 };
+    let names = name_width(ui, vectorcraft_text::FontDb::global(), look.english_names, &st.rows).min(NAME_MAX);
+    let row = DISCLOSURE + names + NAME_GAP + sample + SIMILAR + STAR + 2.0 + widgets::list_scroll_style().allocated_width();
+    // Rounding in the chips' widths must not wrap the widest row.
+    let filters = if st.filters > 0.0 { st.filters.ceil() + 1.0 } else { 0.0 };
+    filters.max(row).min(ui.ctx().content_rect().width() * WINDOW_SHARE)
+}
+
+/// The width of the widest name the menu lists after the disclosure triangle: the family names of
+/// `db` as Show Font Names in English shows them, and the style names among `rows` after their
+/// indent.
+fn name_width(ui: &Ui, db: &vectorcraft_text::FontDb, english: bool, rows: &[Row]) -> f32 {
+    let font = egui::FontId::proportional(NAME_SIZE);
+    let measure = |name: &str| ui.painter().layout_no_wrap(name.to_string(), font.clone(), Color32::WHITE).size().x;
+    let styles = rows.iter().filter_map(Row::style).map(|s| STYLE_INDENT + measure(s)).fold(0.0, f32::max);
+    family_name_width(ui, db, english).max(styles)
+}
+
+/// What the widest family name was measured for: the font database and its generation, Show Font
+/// Names in English, and the number of fonts the interface draws with, which grows as faces for
+/// other scripts are added to it.
+fn family_name_key(ui: &Ui, db: &vectorcraft_text::FontDb, english: bool) -> (u64, u64, bool, usize) {
+    let faces = ui.ctx().fonts(|f| f.definitions().font_data.len());
+    (db.id(), db.generation(), english, faces)
+}
+
+/// The id under which the widest family name's width is kept with its [`family_name_key`].
+fn family_name_id() -> egui::Id {
+    egui::Id::unique("font-menu-name-width")
+}
+
+/// The width of the widest family name the menu lists from `db`, labeled as Show Font Names in
+/// English (`english`) labels it; worked out again only when its [`family_name_key`] changes.
+fn family_name_width(ui: &Ui, db: &vectorcraft_text::FontDb, english: bool) -> f32 {
+    let key = family_name_key(ui, db, english);
+    if let Some((k, w)) = ui.data(|d| d.get_temp::<((u64, u64, bool, usize), f32)>(family_name_id()))
+        && k == key
+    {
+        return w;
+    }
+    let w = widest_label(ui, db.menu_family_list().iter().map(|f| db.family_display_name(f, english)).collect());
+    ui.data_mut(|d| d.insert_temp(family_name_id(), (key, w)));
+    w
+}
+
+/// The width of the widest of `labels` laid out at the names' size. Each label's characters'
+/// advances are added up, and the labels are laid out widest sum first, until no sum left could
+/// reach the widest layout, allowing [`SHAPING`] for shaping.
+fn widest_label(ui: &Ui, labels: Vec<String>) -> f32 {
+    let font = egui::FontId::proportional(NAME_SIZE);
+    let mut sums: Vec<(f32, String)> =
+        ui.ctx().fonts_mut(|f| labels.into_iter().map(|l| (l.chars().map(|c| f.glyph_width(&font, c)).sum(), l)).collect());
+    sums.sort_by(|a, b| b.0.total_cmp(&a.0));
+    let mut w = 0.0_f32;
+    for (sum, label) in sums {
+        if sum * (1.0 + SHAPING) + 1.0 <= w {
+            break;
+        }
+        w = w.max(ui.painter().layout_no_wrap(label, font.clone(), Color32::WHITE).size().x);
+    }
+    w
+}
+
+/// Where a row `width` wide puts its sample, after the name column: room for the widest name
+/// (`widest`) and a gap, as far as that leaves [`SAMPLE_W`], the Show Similar Fonts button and the
+/// star for the sample or [`NAME_SHARE`] of the row for the name. Without samples the name runs to
+/// the Show Similar Fonts button.
+fn name_column(width: f32, widest: f32, samples: bool) -> f32 {
+    if !samples {
+        return width - SIMILAR - STAR;
+    }
+    (DISCLOSURE + widest + NAME_GAP).min((width - SIMILAR - STAR - 2.0 - SAMPLE_W).max(width * NAME_SHARE))
 }
 
 /// The disclosure triangle of a family with several styles; whether the pointer is on it.
@@ -1024,6 +1657,18 @@ fn star_cell(p: &egui::Painter, resp: &egui::Response, star: egui::Rect, (on, hi
     resp.interact_pointer_pos().is_some_and(|pos| star.contains(pos))
 }
 
+/// The Show Similar Fonts button before a family's star, shown when the row is hovered or
+/// highlighted, or is the family the list is ordered by; whether the pointer hovers it, and whether
+/// it presses it.
+fn similar_cell(p: &egui::Painter, resp: &egui::Response, cell: egui::Rect, (on, highlighted): (bool, bool), t: &Tokens) -> (bool, bool) {
+    let hot = resp.hover_pos().is_some_and(|pos| cell.contains(pos));
+    if on || highlighted || resp.hovered() {
+        let color = if on || hot { t.accent } else { t.text_dim };
+        p.text(cell.center(), egui::Align2::CENTER_CENTER, "≈", egui::FontId::proportional(13.0), color);
+    }
+    (hot, resp.interact_pointer_pos().is_some_and(|pos| cell.contains(pos)))
+}
+
 /// A heading row (Recent Fonts, Fonts), which cannot preview or apply a font.
 fn heading_row(ui: &mut Ui, row_h: f32, label: &str, t: &Tokens) {
     let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), row_h), Sense::hover());
@@ -1035,15 +1680,45 @@ fn heading_row(ui: &mut Ui, row_h: f32, label: &str, t: &Tokens) {
     ui.painter_at(rect).text(rect.left_center() + vec2(4.0, 0.0), egui::Align2::LEFT_CENTER, label, egui::FontId::proportional(11.0), t.text_dim);
 }
 
+/// The row the list scrolls to this frame, and how it aligns it. Opening, the list shows the recent
+/// section even when the current family is farther down the list, else centres the current font;
+/// key presses keep the highlight in view. Show Similar Fonts goes to the first row, the family it
+/// orders by, and clearing it goes back to that family, highlighted.
+fn scroll_target(st: &mut MenuState, rows: &[Row], opening: bool, keyed: bool) -> Option<(usize, Option<egui::Align>)> {
+    if st.similar_moved.take().is_some() {
+        return match st.similar {
+            Some(_) => Some((0, Some(egui::Align::TOP))),
+            None => st.highlight.map(|i| (i, Some(egui::Align::Center))),
+        };
+    }
+    if opening && matches!(rows.first(), Some(Row::Heading("Recent Fonts"))) {
+        return Some((0, Some(egui::Align::TOP)));
+    }
+    st.highlight.filter(|_| opening || keyed).map(|i| (i, opening.then_some(egui::Align::Center)))
+}
+
+/// The Show Similar Fonts button of family `f`'s row `i` before its star (`star`); whether the
+/// pointer presses it. A click on it asks for the list ordered by likeness to `f`.
+fn similar_button(p: &egui::Painter, resp: &egui::Response, star: egui::Rect, f: &str, (st, i): (&MenuState, usize), t: &Tokens) -> (bool, bool) {
+    let cell = egui::Rect::from_min_max(egui::pos2(star.min.x - SIMILAR, star.min.y), egui::pos2(star.min.x, star.max.y));
+    let ordering = st.similar.as_deref().is_some_and(|s| s.eq_ignore_ascii_case(f));
+    let (hot, pressed) = similar_cell(p, resp, cell, (ordering, st.highlight == Some(i)), t);
+    if hot {
+        resp.clone().on_hover_text(tl!("Show Similar Fonts"));
+    }
+    (pressed, resp.clicked() && pressed)
+}
+
 /// The rows of the open menu in `range`, the ones in view: the menu's one scrolling part, under
 /// the search field and filters (#555).
 fn rows(ui: &mut Ui, range: std::ops::Range<usize>, h: Listed<'_>, sample: Option<&str>, look: MenuLook) -> Option<FontPick> {
-    let Listed { st, rows, current, enter, keyed, opening } = h;
+    let Listed { db, st, rows, current, enter, keyed, opening } = h;
     let current = current.as_str();
     let row_h = look.row;
     let t = Tokens::get(ui.ctx());
-    let db = vectorcraft_text::FontDb::global();
+    let ink = sample_ink(look.on_white, t.text);
     let favorite = |f: &str| look.favorites.iter().any(|x| x.eq_ignore_ascii_case(f));
+    let widest = name_width(ui, db, look.english_names, &rows);
     if rows.is_empty() {
         // A filter or a font rescan can remove the row whose font was previewed.
         // Do not leave that font applied while the list has no candidate to highlight.
@@ -1057,19 +1732,22 @@ fn rows(ui: &mut Ui, range: std::ops::Range<usize>, h: Listed<'_>, sample: Optio
         let place = egui::Rect::from_min_size(egui::pos2(left, top + i as f32 * row_h), vec2(width, row_h));
         ui.scroll_to_rect_animation(place, align, egui::style::ScrollAnimation::none());
     };
-    // Open at the recent section even when the current family is farther down the list.
-    // Otherwise centre the current font; subsequent key presses keep the highlight in view.
-    if opening && matches!(rows.first(), Some(Row::Heading("Recent Fonts"))) {
-        scroll_to(ui, 0, Some(egui::Align::TOP));
-    } else if let Some(i) = st.highlight
-        && (opening || keyed)
-    {
-        scroll_to(ui, i, opening.then_some(egui::Align::Center));
+    // At a new row height (Font Preview Size, set from the menu), the view stays on the rows it
+    // showed: the scroll offset is in points.
+    let at = (ui.clip_rect().top() - top) / row_h;
+    let kept = st.scrolled.filter(|&(h, _)| !opening && (h - row_h).abs() > 0.5).map(|(_, at)| at);
+    st.scrolled = Some((row_h, kept.unwrap_or(at)));
+    if let Some((i, align)) = scroll_target(st, &rows, opening, keyed) {
+        scroll_to(ui, i, align);
+    } else if let Some(at) = kept {
+        let place = egui::Rect::from_min_size(egui::pos2(left, top + at * row_h), vec2(width, row_h));
+        ui.scroll_to_rect_animation(place, Some(egui::Align::TOP), egui::style::ScrollAnimation::none());
     }
     let mut chosen: Option<(String, Option<String>)> = None;
     let mut hovered: Option<usize> = None;
     let mut toggled: Option<String> = None;
     let mut starred: Option<String> = None;
+    let mut similar: Option<String> = None;
     for i in range {
         let Some(row) = rows.get(i) else { continue };
         if let Row::Heading(label) = row {
@@ -1109,8 +1787,14 @@ fn rows(ui: &mut Ui, range: std::ops::Range<usize>, h: Listed<'_>, sample: Optio
                 starred = Some(f.clone());
             }
         }
-        let indent = if row.style().is_some() { DISCLOSURE + 12.0 } else { DISCLOSURE };
-        let name_w = rect.width() * NAME_SHARE;
+        let mut on_similar = false;
+        if let Row::Family(f) = row {
+            let (pressed, clicked) = similar_button(&p, &resp, star, f, (&*st, i), &t);
+            on_similar = pressed;
+            similar = similar.or(clicked.then(|| f.clone()));
+        }
+        let indent = if row.style().is_some() { DISCLOSURE + STYLE_INDENT } else { DISCLOSURE };
+        let name_w = name_column(rect.width(), widest, look.samples);
         let name_rect = egui::Rect::from_min_max(rect.min + vec2(indent, 0.0), egui::pos2(rect.min.x + name_w - 4.0, rect.max.y));
         // Family rows follow Show Font Names in English; style rows keep the style name (#394).
         let name = match row {
@@ -1118,15 +1802,25 @@ fn rows(ui: &mut Ui, range: std::ops::Range<usize>, h: Listed<'_>, sample: Optio
             Row::Family(f) => db.family_display_name(f, look.english_names),
             Row::Heading(_) => continue,
         };
-        ui.painter_at(name_rect).text(name_rect.left_center(), egui::Align2::LEFT_CENTER, name, egui::FontId::proportional(12.0), t.text);
-        let sample_rect = egui::Rect::from_min_max(rect.min + vec2(name_w, 2.0), rect.max - vec2(STAR + 2.0, 2.0));
-        if !look.samples {
-        } else if let Some(tex) = sample_texture(ui.ctx(), family, row.style(), sample, sample_rect.height()) {
-            paint_sample(ui, sample_rect, &tex, t.text);
+        ui.painter_at(name_rect).text(name_rect.left_center(), egui::Align2::LEFT_CENTER, name, egui::FontId::proportional(NAME_SIZE), t.text);
+        // The sample takes the row's whole height.
+        let sample_rect = egui::Rect::from_min_max(rect.min + vec2(name_w, 0.0), rect.max - vec2(SIMILAR + STAR + 2.0, 0.0));
+        if look.samples {
+            // The paper is drawn while the sample is still rendering, and for a family whose sample fails.
+            let area = sample_area(ui, sample_rect, ink, PAPER_INSET);
+            if let Some(tex) = sample_texture(ui.ctx(), family, row.style(), sample, area.height()) {
+                paint_sample(ui, area, &tex, ink);
+            }
         }
-        if resp.clicked() && !on_triangle && !on_star {
+        if resp.clicked() && !on_triangle && !on_star && !on_similar {
             chosen = row.pick();
         }
+    }
+    if let Some(f) = similar {
+        // The rows are ordered again next frame, which highlights `f` and scrolls to it.
+        st.similar_moved = Some(f.clone());
+        st.similar = Some(f);
+        return None;
     }
     if let Some(f) = toggled {
         if st.expanded.contains(&f) {
@@ -1171,19 +1865,67 @@ pub(crate) const MENU_SAMPLE_SIZE: egui::Vec2 = vec2(90.0, 16.0);
 
 /// A generic sample of `family` drawn in `slot` (the room a Type → Font item of the in-window
 /// menu bar keeps for it; the native macOS menu shows names only).
-pub(crate) fn menu_item_sample(ui: &Ui, slot: egui::Rect, family: &str) {
-    if let Some(tex) = sample_texture(ui.ctx(), family, None, None, slot.height()) {
-        paint_sample(ui, slot, &tex, Tokens::get(ui.ctx()).text_dim);
+/// With `on_white` (Show samples on white), the sample is drawn in dark type on a white slot.
+pub(crate) fn menu_item_sample(ui: &Ui, slot: egui::Rect, family: &str, on_white: bool) {
+    let ink = sample_ink(on_white, Tokens::get(ui.ctx()).text_dim);
+    let area = sample_area(ui, slot, ink, 0.0);
+    if let Some(tex) = sample_texture(ui.ctx(), family, None, None, area.height()) {
+        paint_sample(ui, area, &tex, ink);
     }
 }
 
-/// Draw sample `tex` (tinted `tint`) at the left of `area`, centred vertically, cut at its right.
-fn paint_sample(ui: &Ui, area: egui::Rect, tex: &egui::TextureHandle, tint: Color32) {
+/// What a sample is drawn on with Show samples on white.
+pub(crate) const SAMPLE_PAPER: Color32 = Color32::WHITE;
+
+/// How a sample is drawn: in `theme` (an interface text color) on the menu's own background, or,
+/// with Show samples on white, in the Light brightness's text color on [`SAMPLE_PAPER`].
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct SampleInk {
+    pub ink: Color32,
+    pub paper: Option<Color32>,
+}
+
+pub(crate) fn sample_ink(on_white: bool, theme: Color32) -> SampleInk {
+    if on_white {
+        SampleInk { ink: Tokens::for_brightness(crate::theme::Brightness::Light).text, paper: Some(SAMPLE_PAPER) }
+    } else {
+        SampleInk { ink: theme, paper: None }
+    }
+}
+
+/// Space between the left edge of a sample's paper and its type.
+const PAPER_PAD: f32 = 3.0;
+
+/// Space above and below a menu row's paper, where the row's highlight color shows.
+pub(crate) const PAPER_INSET: f32 = 2.0;
+
+/// The part of `slot` a sample is drawn in: `slot` itself, or, when `ink` has paper, the paper
+/// painted in `slot` with `inset` points left above and below it.
+fn sample_area(ui: &Ui, slot: egui::Rect, ink: SampleInk, inset: f32) -> egui::Rect {
+    let Some(paper) = ink.paper else { return slot };
+    let area = slot.shrink2(vec2(0.0, inset));
+    if area.is_positive() {
+        ui.painter_at(slot).rect_filled(area, 2.0, paper);
+    }
+    area
+}
+
+/// Draw sample `tex` at the left of `area`, centered vertically, cut at its right; on paper,
+/// [`PAPER_PAD`] in from its left edge.
+fn paint_sample(ui: &Ui, area: egui::Rect, tex: &egui::TextureHandle, ink: SampleInk) {
+    let painter = ui.painter_at(area);
+    let mut start = area.left_center();
+    if ink.paper.is_some() {
+        start.x += PAPER_PAD;
+    }
     let size = tex.size_vec2() / ui.ctx().pixels_per_point();
-    let at = egui::Rect::from_min_size(area.left_center() - vec2(0.0, size.y * 0.5), size);
+    let at = egui::Rect::from_min_size(start - vec2(0.0, size.y * 0.5), size);
     let shown = at.intersect(area);
+    if !shown.is_positive() {
+        return;
+    }
     let uv = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2((shown.width() / size.x).clamp(0.0, 1.0), 1.0));
-    ui.painter_at(area).image(tex.id(), shown, uv, tint);
+    painter.image(tex.id(), shown, uv, ink.ink);
 }
 
 type Key = (String, String, String, u32);
@@ -1319,6 +2061,23 @@ pub(crate) fn render_sample_for_test(family: &str, text: &str, px: u32) -> Optio
     render_sample(family, "Regular", text, px)
 }
 
+/// Waits for the samples rendering on this thread's behalf and keeps them, so the next frame
+/// draws them. Returns `false` when no sample was rendering.
+#[cfg(all(test, not(target_arch = "wasm32")))]
+pub(crate) fn wait_for_samples(ctx: &egui::Context) -> bool {
+    SAMPLES.with(|s| {
+        let mut s = s.borrow_mut();
+        let pending: Vec<_> = s.pending.drain().collect();
+        let waited = !pending.is_empty();
+        for (key, rx) in pending {
+            let tex =
+                rx.recv().ok().flatten().map(|img| ctx.load_texture(format!("font-sample-{}-{}", key.0, key.3), img, egui::TextureOptions::LINEAR));
+            s.ready.insert(key, tex);
+        }
+        waited
+    })
+}
+
 // ---------- applying a pick ----------
 
 /// Is a font previewed on the text (an interaction is open for it)?
@@ -1327,6 +2086,31 @@ const PREVIEWING: &str = "font-previewing";
 /// Where the open font menu was drawn last: (pass, its popup's layer).
 fn open_id() -> egui::Id {
     egui::Id::unique("font-menu-open")
+}
+
+/// The id under which a font menu keeps the Font Preview Size its buttons asked for, until
+/// [`apply_preview_size`] sets it.
+fn preview_size_id() -> egui::Id {
+    egui::Id::unique("font-menu-preview-size")
+}
+
+/// Set the Font Preview Size (Preferences › Type) that a font menu's Small, Medium or Large button
+/// asked for in the last pass, which sizes the rows of every font menu, and have the host write the
+/// preferences file as it does when Preferences is confirmed. Nothing runs when it is already that
+/// size; a saved value that is none of the sizes is replaced. The shell calls it at the start of
+/// each frame.
+pub(crate) fn apply_preview_size(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    let Some(size) = ctx.data_mut(|d| d.remove_temp::<&'static str>(preview_size_id())) else { return };
+    if app.session.prefs.font_preview_size == size {
+        return;
+    }
+    match app.run("prefs.set", json!({"key": "fontPreviewSize", "value": size})) {
+        Ok(_) => {
+            crate::prefs_dialog::snapshot(app);
+            app.prefs_changed = true;
+        }
+        Err(e) => app.ui.status = e,
+    }
 }
 
 /// Undo a preview whose menu is gone (its panel wasn't drawn: the text was deselected, the panel
@@ -1352,14 +2136,15 @@ pub(crate) fn end_stale_preview(app: &mut VectorcraftApp, ctx: &egui::Context) {
 }
 
 /// What the font menus preview on and apply to: the Type tool's selected range while it edits
-/// text (the whole text when nothing is selected), else the selected text objects.
+/// text (the whole text when nothing is selected), else every frame of each selected story.
 pub(crate) fn apply(app: &mut VectorcraftApp, ctx: &egui::Context, pick: FontPick) {
     let previewing = crate::panels::pstate::<bool>(ctx, PREVIEWING);
     match pick {
         FontPick::Preview(f, style) => {
             if !previewing {
                 crate::panels::character::end_typing(app);
-                if app.session.begin_interaction("Font").is_err() {
+                if let Err(e) = app.begin_interaction("Font") {
+                    app.status(e);
                     return;
                 }
                 crate::panels::set_pstate(ctx, PREVIEWING, true);
@@ -1452,7 +2237,11 @@ fn font_command(app: &VectorcraftApp, family: &str, style: Option<&str>) -> (&'s
             }
             ("text.setRangeStyle", p)
         }
-        None => ("text.setStyle", p),
+        None => {
+            // With the Selection tool: every frame of each selected story.
+            crate::panels::character::target_selected_stories(app, &mut p);
+            ("text.setStyle", p)
+        }
     }
 }
 

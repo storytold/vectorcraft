@@ -2,12 +2,14 @@ use super::grid::{clip_segment, pref_color};
 use super::outline::{OVERLAY_MAX_ANCHORS, c32, stroke_path};
 use super::{Color32, CornerRadius, Node, NodeKind, Overlay, Point, Pos2, Rect, Shape, Stroke, StrokeKind, Tokens, VectorcraftApp, Xf, pos2, vec2};
 
-/// Type → Show Hidden Characters: spaces as dots, ¶ at paragraph ends, # at the end of a story.
-/// The marks of each text object are kept from one frame to the next ([`HiddenChars`]).
+/// Type → Show Hidden Characters: the characters that print no ink, and the ends of paragraphs,
+/// lines and stories ([`HiddenMarks`]). The marks of each text object are kept from one frame to
+/// the next ([`HiddenChars`]).
 pub(super) fn hidden_chars_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf) {
     let Some(st) = app.session.active() else { return };
     let clip = p.clip_rect();
     let color = Color32::from_rgb(0x4f, 0x9d, 0xff);
+    let stroke = Stroke::new(1.0, color);
     let font = egui::FontId::proportional(((10.0 * xf.zoom) as f32).clamp(7.0, 18.0));
     let kept = &mut app.canvas.hidden_chars;
     // `last` holds the marks of the last frame. The marks of the objects this frame doesn't draw
@@ -43,11 +45,60 @@ pub(super) fn hidden_chars_overlay(app: &mut VectorcraftApp, p: &egui::Painter, 
         for &at in &marks.spaces {
             p.circle_filled(xf.to_screen(at), 1.2, color);
         }
-        for &(at, glyph) in &marks.ends {
-            p.text(xf.to_screen(at), egui::Align2::LEFT_BOTTOM, glyph, font.clone(), color);
+        for &(mark, a, b) in &marks.chars {
+            draw_char_mark(p, mark, xf.to_screen(a), xf.to_screen(b), stroke, &font);
+        }
+        for &(at, along, up) in &marks.breaks {
+            let at = xf.to_screen(at);
+            let u = unit_or(xf.to_screen(along) - at, vec2(1.0, 0.0));
+            let n = unit_or(xf.to_screen(up) - at, vec2(0.0, -1.0));
+            // A bent arrow: down from above the line's end, then back along the line.
+            let corner = at + u * 7.0 + n * 2.0;
+            let tip = at + u + n * 2.0;
+            p.add(Shape::line(vec![at + u * 7.0 + n * 8.0, corner, tip], stroke));
+            p.add(Shape::line(vec![tip + u * 3.0 + n * 3.0, tip, tip + u * 3.0 - n * 3.0], stroke));
+        }
+        for &(at, glyph, align) in &marks.ends {
+            p.text(xf.to_screen(at), align, glyph, font.clone(), color);
         }
         kept.marks.insert(n.id, (n.clone(), marks));
     });
+}
+
+/// `v` scaled to length 1, or `or` when `v` has no length.
+fn unit_or(v: egui::Vec2, or: egui::Vec2) -> egui::Vec2 {
+    let len = v.length();
+    if len > 1e-3 { v / len } else { or }
+}
+
+/// Draws the mark of one character on screen. `a` and `b` are the start and end of the
+/// character's advance, in the direction the text reads, above its baseline.
+fn draw_char_mark(p: &egui::Painter, mark: CharMark, a: Pos2, b: Pos2, stroke: Stroke, font: &egui::FontId) {
+    let u = unit_or(b - a, vec2(1.0, 0.0));
+    let mid = a + (b - a) * 0.5;
+    match mark {
+        CharMark::Tab => {
+            // An arrow across the tab's advance, at least 6 px long.
+            let end = if (b - a).length() < 6.0 { a + u * 6.0 } else { b };
+            let n = vec2(u.y, -u.x);
+            p.line_segment([a, end], stroke);
+            p.add(Shape::line(vec![end - u * 3.0 + n * 2.5, end, end - u * 3.0 - n * 2.5], stroke));
+        }
+        CharMark::NoBreakSpace => {
+            p.circle_stroke(mid, 2.0, stroke);
+        }
+        CharMark::NarrowNoBreakSpace => {
+            p.circle_stroke(mid, 1.4, stroke);
+        }
+        CharMark::FixedSpace => {
+            // A short tick across the baseline's direction.
+            let n = vec2(u.y, -u.x) * 2.5;
+            p.line_segment([mid - n, mid + n], stroke);
+        }
+        CharMark::DiscretionaryHyphen => {
+            p.text(mid, egui::Align2::CENTER_BOTTOM, "¬", font.clone(), stroke.color);
+        }
+    }
 }
 
 /// The Show Hidden Characters marks of the text objects drawn in the last frame
@@ -63,12 +114,51 @@ pub struct HiddenChars {
     pub(super) marks: std::collections::HashMap<vectorcraft_doc::NodeId, (std::sync::Arc<Node>, std::sync::Arc<HiddenMarks>)>,
 }
 
-/// One text object's marks in document space: a dot over each space, and ¶ or # after the lines
-/// that end a paragraph or the story. Type on a path has none.
+/// The mark Show Hidden Characters draws over a character other than a plain space.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum CharMark {
+    /// A tab (U+0009): an arrow across its advance, to the tab stop.
+    Tab,
+    /// A nonbreaking space (U+00A0): a ring.
+    NoBreakSpace,
+    /// A narrow nonbreaking space (U+202F): a smaller ring.
+    NarrowNoBreakSpace,
+    /// The spaces of a set width (U+2000 to U+200A, U+205F, U+3000): a short tick.
+    FixedSpace,
+    /// A discretionary hyphen (U+00AD): ¬, where the word can break.
+    DiscretionaryHyphen,
+}
+
+impl CharMark {
+    /// The mark of `c`, `None` for a character with no mark of its own.
+    pub(super) fn of(c: char) -> Option<Self> {
+        Some(match c {
+            '\t' => Self::Tab,
+            '\u{00A0}' => Self::NoBreakSpace,
+            '\u{202F}' => Self::NarrowNoBreakSpace,
+            '\u{2000}'..='\u{200A}' | '\u{205F}' | '\u{3000}' => Self::FixedSpace,
+            '\u{00AD}' => Self::DiscretionaryHyphen,
+            _ => return None,
+        })
+    }
+}
+
+/// One text object's marks in document space: a dot over each space, a [`CharMark`] over each
+/// tab, nonbreaking space, space of a set width and discretionary hyphen, a bent arrow after
+/// each line a forced line break (U+2028) ends, and ¶ or # after the lines that end a paragraph
+/// or the story. Type on a path has the marks over characters, ¶ and the bent arrow at its
+/// breaks, and # after its last character when all of its text is drawn.
 #[derive(Default)]
 pub(super) struct HiddenMarks {
     pub(super) spaces: Vec<Point>,
-    ends: Vec<(Point, &'static str)>,
+    /// Each mark over a character, with the start and end of the character's advance 3 pt above
+    /// its baseline, in the direction the text reads.
+    pub(super) chars: Vec<(CharMark, Point, Point)>,
+    /// Each forced line break: where its arrow starts, a point 1 pt further along the line and a
+    /// point 1 pt above the baseline from there.
+    pub(super) breaks: Vec<(Point, Point, Point)>,
+    /// ¶ and #, where they are drawn and how the text is aligned to that point.
+    pub(super) ends: Vec<(Point, &'static str, egui::Align2)>,
 }
 
 impl HiddenMarks {
@@ -76,34 +166,277 @@ impl HiddenMarks {
     pub(super) fn of(tx: &vectorcraft_doc::TextObject) -> Self {
         let mut marks = Self::default();
         let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), tx);
-        if lay.on_path {
-            return marks;
-        }
         let text = tx.plain_text();
         let to = |q: Point| tx.xf * q;
-        // A list marker's glyphs (length 0) stand for no character.
-        for g in lay.glyphs.iter().filter(|g| g.len > 0) {
-            if text.get(g.byte..).is_some_and(|s| s.starts_with(' ')) {
-                marks.spaces.push(to(Point::new(g.origin.x + g.advance / 2.0, g.origin.y - 3.0)));
+        // The direction a glyph's baseline runs, and up from it (y points down).
+        let along = |angle: f64| vectorcraft_geom::Vec2::new(angle.cos(), angle.sin());
+        let up = |angle: f64| {
+            let d = along(angle);
+            vectorcraft_geom::Vec2::new(d.y, -d.x)
+        };
+        // A list marker's glyphs and a hyphen the layout adds at a break (length 0) stand for no
+        // character. Glyphs before the start of an open path draw nothing. A character drawn with
+        // several glyphs gets one mark.
+        let mut marked = None;
+        for g in lay.glyphs.iter().filter(|g| g.len > 0 && !g.off_path) {
+            let Some(c) = text.get(g.byte..).and_then(|s| s.chars().next()) else { continue };
+            if marked == Some(g.byte) {
+                continue;
             }
+            let (d, n) = (along(g.angle), up(g.angle));
+            let start = g.origin + n * 3.0;
+            let end = start + d * g.advance;
+            if c == ' ' {
+                marks.spaces.push(to(start + d * (g.advance / 2.0)));
+            } else if let Some(mark) = CharMark::of(c) {
+                let (a, b) = if g.rtl { (end, start) } else { (start, end) };
+                marks.chars.push((mark, to(a), to(b)));
+            } else if lay.on_path && (c == '\n' || c == '\u{2028}') {
+                // Type on a path is one line: its breaks are marked where their glyphs are.
+                if c == '\n' {
+                    marks.ends.push((to(g.origin), "¶", egui::Align2::LEFT_BOTTOM));
+                } else {
+                    marks.breaks.push((to(g.origin), to(g.origin + d), to(g.origin + d + n)));
+                }
+            } else {
+                continue;
+            }
+            marked = Some(g.byte);
         }
+        if lay.on_path {
+            // # after the last character, when the path holds all of the text.
+            let last = lay.glyphs.iter().filter(|g| g.len > 0 && !g.off_path).max_by_key(|g| g.byte + g.len);
+            if let Some(g) = last.filter(|g| g.byte + g.len >= text.len() && !lay.overflow) {
+                let d = along(g.angle);
+                let at = if g.rtl { g.origin - d } else { g.origin + d * (g.advance + 1.0) };
+                marks.ends.push((to(at), "#", egui::Align2::LEFT_BOTTOM));
+            }
+            return marks;
+        }
+        // Lines are in line space: `physical_point` turns them into columns in vertical type.
+        let at = |x: f64, y: f64| to(lay.physical_point(Point::new(x, y)));
         for (i, line) in lay.lines.iter().enumerate() {
             let last = i + 1 == lay.lines.len();
-            let breaks = text.get(line.end..).is_some_and(|s| s.starts_with('\n'));
-            let (glyph, at) = if last && line.end >= text.len() {
-                ("#", true)
-            } else if breaks {
-                ("¶", true)
-            } else {
-                ("", false)
+            // A right-to-left line ends at its left edge.
+            let (x, dx) = if line.rtl { (line.x0 - 1.0, -1.0) } else { (line.x1 + 1.0, 1.0) };
+            let align = match (lay.vertical, line.rtl) {
+                (true, _) => egui::Align2::CENTER_TOP,
+                (false, true) => egui::Align2::RIGHT_BOTTOM,
+                (false, false) => egui::Align2::LEFT_BOTTOM,
             };
-            if at {
-                marks.ends.push((to(Point::new(line.x1 + 1.0, line.baseline)), glyph));
+            let soft = text.get(line.start..line.end).is_some_and(|s| s.ends_with('\u{2028}'));
+            if last && line.end >= text.len() {
+                marks.ends.push((at(x, line.baseline), "#", align));
+            } else if soft {
+                marks.breaks.push((at(x, line.baseline), at(x + dx, line.baseline), at(x, line.baseline - 1.0)));
+            } else if text.get(line.end..).is_some_and(|s| s.starts_with('\n')) {
+                marks.ends.push((at(x, line.baseline), "¶", align));
             }
         }
         marks
     }
 }
+
+/// Edit › Spelling › Auto Spell Check: a red wavy line under each word of the visible type its
+/// dictionaries don't know ([`vectorcraft_engine::cmd::spelling::misspellings`], what
+/// `text.spelling.check` lists), in the run's language, without the active document's Ignore All
+/// words. Type with effects isn't underlined
+/// ([Check and correct spelling](https://helpx.adobe.com/illustrator/desktop/design-with-text/edit-format-text/check-and-correct-spelling.html)).
+/// Each text object's lines are kept from one frame to the next ([`SpellingMarks`]).
+pub(super) fn spelling_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf) {
+    let kept = &mut app.canvas.spelling;
+    let Some(st) = app.session.active() else {
+        *kept = SpellingMarks::default();
+        return;
+    };
+    let clip = p.clip_rect();
+    // `last` holds the lines of the last frame; the objects this frame doesn't draw are dropped.
+    let mut last = std::mem::take(&mut kept.lines);
+    let inputs = SpellingInputs {
+        fonts: vectorcraft_text::FontDb::global().generation(),
+        hyphenation: vectorcraft_text::hyphenation_exceptions(),
+        dictionary: vectorcraft_engine::cmd::spelling::dictionary_generation(),
+        doc: st.uid,
+        // Ignore All only adds words while the document is open.
+        ignored: st.spelling_ignored.len(),
+    };
+    if kept.inputs.as_ref() != Some(&inputs) {
+        last.clear();
+        kept.inputs = Some(inputs);
+    }
+    let stroke = Stroke::new(1.0, Color32::from_rgb(0xe0, 0x20, 0x20));
+    // Depth first in paint order, leaving out hidden objects and what is inside them.
+    fn walk(nodes: &[std::sync::Arc<Node>], f: &mut impl FnMut(&std::sync::Arc<Node>)) {
+        for n in nodes.iter().filter(|n| n.visible) {
+            f(n);
+            if let Some(children) = n.children() {
+                walk(children, f);
+            }
+        }
+    }
+    walk(&st.doc.layers, &mut |n| {
+        let NodeKind::Text(tx) = &n.kind else { return };
+        if !auto_spell_checks(n) || n.geometric_bounds().is_none_or(|b| !egui::Rect::from_points(&xf.quad(b)).intersects(clip)) {
+            return;
+        }
+        let lines = match last.remove(&n.id) {
+            Some((was, lines)) if std::sync::Arc::ptr_eq(&was, n) => lines,
+            _ => std::sync::Arc::new(underlines(tx, &st.spelling_ignored)),
+        };
+        for &(a, b) in lines.iter() {
+            wavy_line(p, xf.to_screen(a), xf.to_screen(b), stroke);
+        }
+        kept.lines.insert(n.id, (n.clone(), lines));
+    });
+}
+
+/// Whether Auto Spell Check marks `n`'s words: not with an effect shown (the Appearance panel's
+/// eye) on the type or on one of its fills or strokes, as the helpx page says "Auto spell check
+/// isn't available for text with effects applied".
+fn auto_spell_checks(n: &Node) -> bool {
+    let shown = |fx: &[vectorcraft_doc::Effect]| fx.iter().any(|e| e.visible);
+    !shown(&n.appearance.effects) && !n.appearance.items.iter().any(|i| shown(i.effects()))
+}
+
+/// The word with Auto Spell Check's red line at `p` (document space): in the topmost visible type
+/// object whose glyphs `p` is on, when that object isn't locked and Auto Spell Check marks it and
+/// its word at `p` is one it underlines, with what its language's dictionary suggests instead. For the context menu's suggestions, Ignore All and Add
+/// to Dictionary ([Check and correct spelling](https://helpx.adobe.com/illustrator/desktop/design-with-text/edit-format-text/check-and-correct-spelling.html)).
+pub(crate) fn misspelled_word_at(app: &mut VectorcraftApp, p: Point) -> Option<crate::state::ContextSpelling> {
+    let st = app.session.active()?;
+    // The topmost type whose glyphs `p` is on, and whether it or a layer or group holding it is
+    // locked: a word under other type isn't the one right-clicked, whether that type's word there
+    // is right or not.
+    let mut top: Option<(vectorcraft_doc::NodeId, bool)> = None;
+    // Back to front as drawn at `p`: an Intertwine group's members by their tier there, those of
+    // one tier in their stacking order ([`vectorcraft_doc::intertwine`]).
+    fn walk(nodes: &[std::sync::Arc<Node>], p: Point, locked: bool, f: &mut impl FnMut(&Node, bool)) {
+        for n in nodes.iter().filter(|n| n.visible) {
+            let locked = locked || n.locked;
+            f(n, locked);
+            let Some(children) = n.children() else { continue };
+            if matches!(n.kind, NodeKind::Intertwine { .. }) {
+                let mut drawn = children.to_vec();
+                drawn.sort_by_key(|c| vectorcraft_doc::intertwine::tier_at(c, p));
+                walk(&drawn, p, locked, f);
+            } else {
+                walk(children, p, locked, f);
+            }
+        }
+    }
+    // A later hit is on top.
+    walk(&st.doc.layers, p, false, &mut |n, locked| {
+        let NodeKind::Text(tx) = &n.kind else { return };
+        if n.geometric_bounds().is_none_or(|b| !b.contains(p)) {
+            return;
+        }
+        let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), tx);
+        let on = vectorcraft_text::selection_quads(&lay, 0, tx.plain_text().len()).iter().any(|q| in_quad(q.map(|c| tx.xf * c), p));
+        if on {
+            top = Some((n.id, locked));
+        }
+    });
+    let (id, locked) = top?;
+    let n = st.doc.node(id)?;
+    let NodeKind::Text(tx) = &n.kind else { return None };
+    if locked || !auto_spell_checks(n) {
+        return None;
+    }
+    let (words, _) = vectorcraft_engine::cmd::spelling::misspellings(tx, &st.spelling_ignored, MAX_UNDERLINED);
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), tx);
+    let w = words
+        .into_iter()
+        .find(|w| vectorcraft_text::selection_quads(&lay, w.range.start, w.range.end).iter().any(|q| in_quad(q.map(|c| tx.xf * c), p)))?;
+    let word = tx.plain_text().get(w.range.clone())?.to_string();
+    let uid = st.uid;
+    let suggestions = app
+        .session
+        .execute("text.spelling.suggest", &serde_json::json!({ "word": word, "lang": w.lang.tag() }))
+        .ok()
+        .and_then(|r| r.get("suggestions").and_then(|s| s.as_array()).map(|a| a.iter().filter_map(|s| s.as_str().map(str::to_string)).collect()))
+        .unwrap_or_default();
+    Some(crate::state::ContextSpelling { uid, id, start: w.range.start, end: w.range.end, word, suggestions })
+}
+
+/// Whether `p` is inside the convex quad `q` (its corners in order, either way round) or on its
+/// edge.
+fn in_quad(q: [Point; 4], p: Point) -> bool {
+    let sides = (0..4).map(|i| {
+        let (a, b) = (q[i], q[(i + 1) % 4]);
+        (b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x)
+    });
+    let sides: Vec<f64> = sides.collect();
+    sides.iter().all(|s| *s >= 0.0) || sides.iter().all(|s| *s <= 0.0)
+}
+
+/// The most words underlined in one text object: past it the rest of the object isn't checked,
+/// so a long story of unknown words costs one check's worth.
+const MAX_UNDERLINED: usize = 1_000;
+
+/// The document-space segments under the unknown words of `tx`: for each word, the bottom edge of
+/// each piece of it on a line, from the start of the line to its end.
+fn underlines(tx: &vectorcraft_doc::TextObject, ignored: &std::collections::BTreeSet<String>) -> Vec<(Point, Point)> {
+    let (words, _) = vectorcraft_engine::cmd::spelling::misspellings(tx, ignored, MAX_UNDERLINED);
+    if words.is_empty() {
+        return vec![];
+    }
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), tx);
+    words
+        .iter()
+        .flat_map(|w| vectorcraft_text::selection_quads(&lay, w.range.start, w.range.end))
+        // Clockwise from the top left: q[3] and q[2] are the bottom left and right.
+        .map(|q| (tx.xf * q[3], tx.xf * q[2]))
+        .collect()
+}
+
+/// A wavy line from `a` to `b` on screen, waves 4 pixels long and 1.5 high.
+fn wavy_line(p: &egui::Painter, a: Pos2, b: Pos2, stroke: Stroke) {
+    const STEP: f32 = 2.0;
+    const HIGH: f32 = 1.5;
+    let d = b - a;
+    let len = d.length();
+    if !len.is_finite() || len < 1.0 {
+        return;
+    }
+    let along = d / len;
+    // Down the page from the line, whichever way the type runs.
+    let across = vec2(-along.y, along.x);
+    // At most 2000 waves on one line, however far the view is zoomed in.
+    let n = ((len / STEP) as usize).clamp(1, 4_000);
+    let step = len / n as f32;
+    let points: Vec<Pos2> = (0..=n).map(|i| a + along * (step * i as f32) + across * if i % 2 == 0 { 0.0 } else { HIGH }).collect();
+    p.add(Shape::line(points, stroke));
+}
+
+/// What Auto Spell Check's kept lines depend on beyond the text object itself: when any of it
+/// changes, all type is checked again.
+#[derive(Clone, Debug, PartialEq)]
+pub(super) struct SpellingInputs {
+    /// The fonts' generation ([`vectorcraft_text::FontDb::generation`]).
+    fonts: u64,
+    /// The hyphenation exceptions, which move line breaks.
+    hyphenation: String,
+    /// The custom dictionary's generation
+    /// ([`vectorcraft_engine::cmd::spelling::dictionary_generation`]).
+    dictionary: u64,
+    /// The document the lines are of.
+    doc: u64,
+    /// How many Ignore All words the document has.
+    ignored: usize,
+}
+
+/// The lines Auto Spell Check drew under each text object in the last frame
+/// ([`crate::CanvasCache::spelling`]). Each is kept with the object it was found in: an edited
+/// object is a new `Arc` and is checked again.
+#[derive(Default)]
+pub struct SpellingMarks {
+    pub(super) inputs: Option<SpellingInputs>,
+    /// Each text object drawn, by id: the node it was checked in and its lines in document space.
+    pub(super) lines: std::collections::HashMap<vectorcraft_doc::NodeId, (std::sync::Arc<Node>, Underlines)>,
+}
+
+/// One text object's Auto Spell Check lines: the document-space ends of each.
+pub(super) type Underlines = std::sync::Arc<Vec<(Point, Point)>>;
 
 /// View › Show Text Threads: for each thread with a selected frame, a line in its first frame's
 /// layer colour from each frame's out port to the next frame's in port, both showing the arrow of a
@@ -328,6 +661,38 @@ pub(super) fn grid_repeat_overlay(app: &mut VectorcraftApp, p: &egui::Painter, x
             p.line_segment(ends, Stroke::new(6.0, t.measure_bg));
             p.line_segment(ends, Stroke::new(2.5, t.selection));
         } else {
+            p.circle_filled(c, HANDLE_RADIUS, t.measure_bg);
+            p.circle_stroke(c, HANDLE_RADIUS, Stroke::new(2.0, t.selection));
+        }
+    }
+}
+
+/// A selected radial repeat's circle with its radius handle and its splitter on it, and its
+/// instances handle below it, at the places the Selection tool's hit testing finds them. The
+/// splitter also has a short line across the circle.
+pub(super) fn radial_repeat_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf) {
+    use vectorcraft_tools::repeat_radial::{HANDLE_RADIUS, RadialHandles, RadialPart};
+    if app.session.tool_id() != "selection" || !app.ui.view.bounding_box {
+        return;
+    }
+    let frame = app.selection_box();
+    let Some(st) = app.session.active() else { return };
+    let Some(h) = RadialHandles::of(&st.doc, &st.selection, frame, xf.zoom) else { return };
+    let t = Tokens::get(p.ctx());
+    // The circle the instances' centers sit on, while it is a sensible size on screen.
+    let (c, r) = (xf.to_screen(h.center), (h.radius * xf.zoom) as f32);
+    if c.is_finite() && r.is_finite() && r > 0.5 && r < 20_000.0 {
+        p.circle_stroke(c, r, Stroke::new(3.0, t.measure_bg));
+        p.circle_stroke(c, r, Stroke::new(1.0, t.selection));
+    }
+    for (part, at) in h.parts() {
+        let c = xf.to_screen(at);
+        let across = (c - xf.to_screen(h.center)).normalized() * (HANDLE_RADIUS + 4.0);
+        if part == RadialPart::Splitter && c.is_finite() && across.is_finite() {
+            p.line_segment([c - across, c + across], Stroke::new(3.0, t.measure_bg));
+            p.line_segment([c - across, c + across], Stroke::new(1.5, t.selection));
+        }
+        if c.is_finite() {
             p.circle_filled(c, HANDLE_RADIUS, t.measure_bg);
             p.circle_stroke(c, HANDLE_RADIUS, Stroke::new(2.0, t.selection));
         }

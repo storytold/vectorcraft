@@ -263,6 +263,40 @@ mod tests {
         assert_eq!((d.str("size"), d.f64("custom", 0.0)), ("large".to_string(), GapSize::LARGE));
     }
 
+    /// OK on the options the group has, with Preview on or off, closes the dialog and records no
+    /// undo step: the redo step stays and a saved document stays saved.
+    #[test]
+    fn ok_on_unchanged_options_records_no_undo_step() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        app.run("shape.rectangle", json!({"x": 50, "y": 50, "width": 100, "height": 100})).unwrap();
+        app.run("select.all", json!({})).unwrap();
+        let g = app.run("livePaint.make", json!({})).unwrap()["id"].as_u64().unwrap();
+        app.run("shape.rectangle", json!({"x": 200, "y": 200, "width": 10, "height": 10})).unwrap();
+        app.run("edit.undo", json!({})).unwrap();
+        app.run("select.set", json!({"ids": [g]})).unwrap();
+        app.session.doc_mut().unwrap().mark_saved();
+        let state = |app: &VectorcraftApp| {
+            let st = app.session.doc().unwrap();
+            (st.history.undo.len(), st.history.redo.len(), st.is_dirty())
+        };
+        let before = state(&app);
+        for preview in [false, true] {
+            app.run("ui.livePaintGapOptions", json!({})).unwrap();
+            app.ui.dialog.as_mut().unwrap().fields.insert("preview".into(), json!(preview));
+            frame(&mut app);
+            crate::dialogs::confirm(&mut app).unwrap();
+            assert!(app.ui.dialog.is_none(), "preview={preview}: OK closes the dialog");
+            assert_eq!(state(&app), before, "preview={preview}: no undo step");
+            assert_eq!(options(&app, g), GapOptions::default());
+        }
+        // A changed option is one undo step.
+        app.run("ui.livePaintGapOptions", json!({})).unwrap();
+        app.ui.dialog.as_mut().unwrap().fields.insert("detect".into(), json!(true));
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(state(&app).0, before.0 + 1);
+    }
+
     /// A Gap Preview Color with an alpha part is refused and leaves the group's options as they
     /// were; `#rrggbb` still sets them.
     #[test]

@@ -2,8 +2,13 @@
 //! asks which pages (a preview with page navigation), the box to crop to and the password.
 //!
 //! Fields: `mode` (`open` | `place`), `name`, `path?`, `pageCount`, `page` (the page shown, and the
-//! one placed; 1-based), `allPages` and `range` (open), `cropTo` and `password`. `__locked` is set
-//! until the password is accepted: OK then unlocks the file. `__place` keeps the other `file.place`
+//! one placed; 1-based), `allPages`, `range` and `linkPages` (open: Import PDF Pages as Links, for
+//! a file read from a path and opened without a password; `null` until it is checked or cleared,
+//! when it follows the pages picked: on for All, off for a range; picking the other of All and
+//! Range sets it back to `null`; `__linkable` is false for a file `linkPages` does not take, such as
+//! one over its size limit), `cropTo` and `password`. `__locked` is set
+//! until the password is accepted: OK then unlocks the file, and with `__passwordOnly` (Place with
+//! Show Import Options off) places its first page at once. `__place` keeps the other `file.place`
 //! params (Link, Template, `at`…). The file's bytes stay out of the fields, in
 //! [`crate::state::UiState::dialog_file`].
 
@@ -114,17 +119,19 @@ pub(super) fn show_preview(ui: &mut egui::Ui, tex: Option<&egui::TextureHandle>,
 
 /// Open `bytes` (or place them with the `file.place` params `place`) through the dialog when the
 /// file is a PDF (or `.ai`/`.ait`) with several pages or a password; false when there's nothing to
-/// ask (the caller goes on), including a file that carries its VectorCraft document when opening.
+/// ask (the caller goes on), including, when opening, a file that carries its VectorCraft document
+/// and a `.ai`/`.ait` with its editing data.
 pub fn offer(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Option<String>, place: Option<&Value>) -> bool {
-    if !fileio::detect(name, bytes).is_some_and(|f| matches!(f.id, "pdf" | "ai" | "ait")) {
+    let Some(format) = fileio::detect(name, bytes).map(|f| f.id).filter(|id| matches!(*id, "pdf" | "ai" | "ait")) else {
         return false;
-    }
+    };
     // A file carrying its VectorCraft document (a saved .ai, or a PDF saved with Preserve Editing)
-    // opens as that document, every artboard and layer: there are no pages to pick. Placing still
-    // asks, since a place takes one page.
+    // opens as that document, every artboard and layer: there are no pages to pick. So does a .ai
+    // or .ait with its editing data, which holds them all (#6135); a PDF with editing data still
+    // asks, as its pages are what it is. Placing still asks, since a place takes one page.
     // The file is read once for both checks.
     let opened = vectorcraft_pdf::open_pdf(bytes, None);
-    if place.is_none() && opened.as_ref().is_ok_and(|o| o.editing().is_some()) {
+    if place.is_none() && opened.as_ref().is_ok_and(|o| o.editing().is_some() || (format != "pdf" && o.has_illustrator_data())) {
         return false;
     }
     let (pages, locked) = match opened.map(|o| o.page_count()) {
@@ -140,9 +147,11 @@ pub fn offer(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Option<St
         "page": 1,
         "allPages": true,
         "range": "",
+        "linkPages": null,
         "cropTo": CropTo::default().id(),
         "password": "",
         "__locked": locked,
+        "__linkable": fileio::pages_can_link(name, bytes),
     });
     if let Some(p) = path {
         fields["path"] = json!(p);
@@ -164,6 +173,33 @@ pub fn offer_place(app: &mut VectorcraftApp, p: &Value) -> bool {
     offer(app, &name, &bytes, path, Some(p))
 }
 
+/// [`offer_place`] when Show Import Options is off: asks (true) only for the password of an
+/// encrypted PDF given no `password`, which nothing else opens, and places its first page (or
+/// `page`) and crop box once it is unlocked; any other PDF is placed that way without asking.
+pub fn offer_place_password(app: &mut VectorcraftApp, p: &Value) -> bool {
+    // A `page` that isn't a page number is left for `file.place` to refuse.
+    if p.get("password").is_some() || p.get("page").is_some_and(|v| v.as_u64().is_none_or(|n| n == 0)) {
+        return false;
+    }
+    let Some((name, bytes, path)) = place_source(app, p, |ext| matches!(ext, "pdf" | "ai" | "ait")) else { return false };
+    if !matches!(vectorcraft_pdf::open_pdf(&bytes, None).map(|_| ()), Err(PdfError::NeedsPassword)) {
+        return false;
+    }
+    let offered = offer(app, &name, &bytes, path, Some(p));
+    if let (true, Some(d)) = (offered, app.ui.dialog.as_mut()) {
+        d.fields.insert("__passwordOnly".into(), json!(true));
+        // A `page` and `crop` given are placed as given, for `file.place` to check.
+        if let Some(place) = d.fields.get_mut("__place").and_then(Value::as_object_mut) {
+            for k in ["page", "crop"] {
+                if let Some(v) = p.get(k) {
+                    place.insert(k.into(), v.clone());
+                }
+            }
+        }
+    }
+    offered
+}
+
 fn page_count(d: &Dialog) -> usize {
     d.fields.get("pageCount").and_then(Value::as_u64).unwrap_or(0) as usize
 }
@@ -181,6 +217,43 @@ fn password(d: &Dialog) -> Option<String> {
     Some(d.str("password")).filter(|p| !p.is_empty())
 }
 
+/// Can the pages open linked: the file was read from a path (a linked page is read from its
+/// file again), `document.open`'s `linkPages` takes its size, and it opens without a password
+/// (`linkPages` refuses one).
+fn can_link(d: &Dialog) -> bool {
+    d.fields.get("path").and_then(Value::as_str).is_some() && d.bool("__linkable") && password(d).is_none()
+}
+
+/// Import PDF Pages as Links as checked or cleared, or, when it is `null`, as the pages picked
+/// default it: on for All, off for a range.
+fn link_pages(d: &Dialog) -> bool {
+    d.fields.get("linkPages").and_then(Value::as_bool).unwrap_or_else(|| d.bool("allPages"))
+}
+
+/// Import PDF Pages as Links is checked, and can be.
+pub(super) fn links_on(d: &Dialog) -> bool {
+    link_pages(d) && can_link(d)
+}
+
+/// Picks All (true) or Range. A change of pick sets Import PDF Pages as Links back to that pick's
+/// default; picking the one already picked keeps the box as it is.
+fn pick_all_pages(d: &mut Dialog, all: bool) {
+    if d.bool("allPages") != all {
+        d.fields.insert("allPages".into(), json!(all));
+        d.fields.insert("linkPages".into(), Value::Null);
+    }
+}
+
+/// Records that `ui.dialog.set` sets `field` to `value`: a change of `allPages` sets Import PDF
+/// Pages as Links back to its default, as a click on All or Range does.
+pub(super) fn note_set(d: &mut Dialog, field: &str, value: &Value) {
+    if field == "allPages"
+        && let Some(all) = value.as_bool()
+    {
+        pick_all_pages(d, all);
+    }
+}
+
 /// OK: unlock the file with the password, else open the pages or place the page.
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let file = app.ui.dialog_file.clone().ok_or("the PDF is no longer loaded")?;
@@ -189,7 +262,7 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
         let info = vectorcraft_pdf::info(&file.bytes, password(&d).as_deref()).map_err(|e| e.to_string())?;
         d.fields.insert("__locked".into(), json!(false));
         d.fields.insert("pageCount".into(), json!(info.pages.len()));
-        if info.pages.len() > 1 {
+        if info.pages.len() > 1 && !d.bool("__passwordOnly") {
             // Unlocked: now pick the pages.
             app.ui.dialog = Some(d);
             return Ok(Value::Null);
@@ -199,8 +272,14 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let path = d.fields.get("path").and_then(Value::as_str).map(str::to_string);
     let r = if d.str("mode") == "place" {
         let mut p = with_file(d.fields.get("__place"), &d, &file);
-        p["page"] = json!(page(&d));
-        p["crop"] = json!(crop(&d).id());
+        // Asked only for the password: a `page` and `crop` given with the file stand.
+        let [page_given, crop_given] = ["page", "crop"].map(|k| d.bool("__passwordOnly") && p.get(k).is_some());
+        if !page_given {
+            p["page"] = json!(page(&d));
+        }
+        if !crop_given {
+            p["crop"] = json!(crop(&d).id());
+        }
         if let Some(pw) = password(&d) {
             p["password"] = json!(pw);
         }
@@ -210,6 +289,9 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
         let range = d.str("range");
         if !d.bool("allPages") && !range.trim().is_empty() {
             p["pages"] = json!(range);
+        }
+        if links_on(&d) {
+            p["linkPages"] = json!(true);
         }
         io::open_document(app, &name, &file.bytes, path, &p).map(|_| ())
     };
@@ -278,17 +360,21 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
                 ui.label(egui::RichText::new(tl!("Pages")).color(t.text));
                 let all = d.bool("allPages");
                 if widgets::radio(ui, tl!("All"), all, true) {
-                    d.fields.insert("allPages".into(), json!(true));
+                    pick_all_pages(d, true);
                 }
                 ui.horizontal(|ui| {
                     if widgets::radio(ui, tl!("Range:"), !all, true) {
-                        d.fields.insert("allPages".into(), json!(false));
+                        pick_all_pages(d, false);
                     }
                     if super::form::text_edit_named(ui, d, "range", tl!("Range:"), 90.0).gained_focus() {
-                        d.fields.insert("allPages".into(), json!(false));
+                        pick_all_pages(d, false);
                     }
                 });
                 widgets::dim_label(ui, tl!("e.g. 1-3, 5"));
+                ui.add_space(10.0);
+                if widgets::check(ui, tl!("Import PDF pages as links"), links_on(d), can_link(d)) {
+                    d.fields.insert("linkPages".into(), json!(!link_pages(d)));
+                }
             }
         });
     });

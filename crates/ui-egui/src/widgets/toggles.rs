@@ -1,5 +1,11 @@
 use super::{Color32, CornerRadius, Rect, Response, Sense, Stroke, StrokeKind, Tokens, Ui, Vec2, pos2, vec2};
 
+/// The width a [`check`] or [`radio`] row takes with `label`, translated: the box and the text
+/// after it, as [`choice_row`] allocates them.
+pub(crate) fn choice_width(ui: &Ui, label: &str) -> f32 {
+    18.0 + ui.painter().layout_no_wrap(tl!(label).to_string(), egui::FontId::proportional(12.5), Color32::PLACEHOLDER).size().x
+}
+
 /// The row of a checkbox or radio button: allocates a 13 pt box plus `text` (already translated),
 /// draws the text and returns the box, the response and the box's border colour.
 fn choice_row(ui: &mut Ui, text: &str, enabled: bool) -> (Rect, Response, Color32) {
@@ -26,7 +32,12 @@ pub fn check(ui: &mut Ui, label: &str, value: bool, enabled: bool) -> bool {
 
 /// [`check`] with tooltip `tip` on the box and its label. Returns true when toggled.
 pub fn check_tip(ui: &mut Ui, label: &str, value: bool, enabled: bool, tip: &str) -> bool {
-    let (clicked, resp) = check_row(ui, tl!(label), Some(value), enabled);
+    check3_tip(ui, label, Some(value), enabled, tip)
+}
+
+/// [`check3`] with tooltip `tip` on the box and its label. Returns true when clicked.
+pub fn check3_tip(ui: &mut Ui, label: &str, value: Option<bool>, enabled: bool, tip: &str) -> bool {
+    let (clicked, resp) = check_row(ui, tl!(label), value, enabled);
     resp.on_hover_text(tip);
     clicked
 }
