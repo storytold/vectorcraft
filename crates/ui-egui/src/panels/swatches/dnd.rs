@@ -308,7 +308,8 @@ pub(crate) fn drag_preview(app: &VectorcraftApp, ctx: &egui::Context) {
             None => return,
         },
         PanelDrag::GraphicStyle(name) => return pointer_chip(ctx, |ui, r| crate::panels::graphic_styles::paint_style(app, ui, r, name)),
-        PanelDrag::Symbol(name) => match app.session.active() {
+        // Drawn from the document it was dragged from, whichever document is active now.
+        PanelDrag::Symbol { document, name } => match app.session.documents().iter().find(|st| st.uid == *document) {
             Some(st) => {
                 return pointer_chip(ctx, |ui, r| crate::panels::symbols::chip(ui, &st.doc, &crate::panels::symbols::document_symbols(st), r, name));
             }

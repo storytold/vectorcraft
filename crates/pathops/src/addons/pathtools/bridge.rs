@@ -3,25 +3,20 @@
 //! many circles joined at once, each to the others within reach ([`bridge_many`]).
 
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::f64::consts::{FRAC_PI_2, PI, TAU};
+use std::f64::consts::{FRAC_PI_2, PI, SQRT_2, TAU};
 
 use kurbo::{CubicBez, ParamCurve, Point, Shape, Vec2};
 use vectorcraft_geom::{Anchor, AnchorKind, FillRule, PathData, SubPath, shapes};
 
 use crate::boolean::{DEFAULT_PRECISION, try_unite_all_with};
 
+use super::Circle;
+
 /// How far (as a share of the radius) a path's outline may stray from a circle and still be read
 /// as that circle.
 const ROUND: f64 = 1e-3;
 /// Points [`circle_of`] checks on each segment, its ends included.
 const SAMPLES: usize = 9;
-
-/// A circle: its center and radius (pt).
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Circle {
-    pub center: Point,
-    pub radius: f64,
-}
 
 /// Why [`smooth_bridge`] makes no outline.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -31,7 +26,7 @@ pub enum BridgeError {
     /// The circles are too far apart for the radius: the two arcs would not reach both circles,
     /// or would cross before they do.
     TooFar,
-    /// A radius or circle that is not a finite size above 0.
+    /// A radius or circle that is not a finite size above 0, or an outline too large for `f64`.
     Bad,
 }
 
@@ -73,7 +68,7 @@ pub fn smooth_bridge(a: Circle, b: Circle, radius: f64) -> Result<SubPath, Bridg
     arc(&mut segs, t.p2, radius, t.a2, t.b2, None);
     arc(&mut segs, b.center, b.radius, t.b2, t.b1, Some(t.u));
     arc(&mut segs, t.p1, radius, t.b1, t.a1, None);
-    Ok(closed(&segs, AnchorKind::Smooth))
+    closed(&segs, AnchorKind::Smooth)
 }
 
 /// The part of [`smooth_bridge`]'s outline between the circles: the two arcs, joined across each
@@ -88,20 +83,24 @@ fn neck(a: Circle, b: Circle, radius: f64) -> Result<SubPath, BridgeError> {
     segs.push(line(t.b2, t.b1));
     arc(&mut segs, t.p1, radius, t.b1, t.a1, None);
     segs.push(line(t.a1, t.a2));
-    Ok(closed(&segs, AnchorKind::Corner))
+    closed(&segs, AnchorKind::Corner)
 }
 
 /// A closed subpath through the cubics `segs`, each starting where the one before it ends, with
-/// anchors of `kind`.
-fn closed(segs: &[CubicBez], kind: AnchorKind) -> SubPath {
+/// anchors of `kind`; [`BridgeError::Bad`] when a point does not fit in `f64`.
+fn closed(segs: &[CubicBez], kind: AnchorKind) -> Result<SubPath, BridgeError> {
     let count = segs.len();
-    let anchors = (0..count)
+    let anchors: Vec<Anchor> = (0..count)
         .filter_map(|i| {
             let (prev, seg) = (segs.get((i + count - 1) % count)?, segs.get(i)?);
             Some(Anchor { p: seg.p0, h_in: prev.p2, h_out: seg.p1, kind })
         })
         .collect();
-    SubPath::new(anchors, true)
+    let finite_point = |p: Point| p.x.is_finite() && p.y.is_finite();
+    if !anchors.iter().all(|q| finite_point(q.p) && finite_point(q.h_in) && finite_point(q.h_out)) {
+        return Err(BridgeError::Bad);
+    }
+    Ok(SubPath::new(anchors, true))
 }
 
 /// Where the arcs of radius `radius` that bridge circles `a` and `b` lie: the unit vector from
@@ -127,20 +126,25 @@ fn touches(a: Circle, b: Circle, radius: f64) -> Result<Touches, BridgeError> {
         return Err(BridgeError::Bad);
     }
     let axis = b.center - a.center;
-    let d = axis.hypot();
+    // `f64::hypot`: `Vec2::hypot` squares the length, which overflows above about 1e154 pt.
+    let d = axis.x.hypot(axis.y);
     if d + a.radius.min(b.radius) <= a.radius.max(b.radius) * (1.0 + 1e-9) {
         return Err(BridgeError::Inside);
     }
     // The arcs' centers are `radius` outside both circles: where circles about the two centers,
     // `radius` larger than each, cross.
     let (ra, rb) = (radius + a.radius, radius + b.radius);
-    if d > ra + rb {
+    if !ra.is_finite() || !rb.is_finite() {
+        return Err(BridgeError::Bad);
+    }
+    // Halves and no squares, so no step overflows while the lengths fit in `f64`.
+    let half = ra / 2.0 + rb / 2.0;
+    if d / 2.0 > half {
         return Err(BridgeError::TooFar);
     }
-    let along = (d * d + ra * ra - rb * rb) / (2.0 * d);
-    let across = (ra * ra - along * along).max(0.0).sqrt();
-    // Sizes near the largest float overflow when squared.
-    if !(along.is_finite() && across.is_finite()) {
+    let along = d / 2.0 + (ra - rb) / d * half;
+    let across = (ra - along).max(0.0).sqrt() * (ra / 2.0 + along / 2.0).max(0.0).sqrt() * SQRT_2;
+    if !along.is_finite() || !across.is_finite() {
         return Err(BridgeError::Bad);
     }
     // Each arc runs between its points on `a` and `b`, which lie towards the two centers from the
@@ -595,8 +599,6 @@ mod tests {
         assert_eq!(smooth_bridge(a, b, 0.0), Err(BridgeError::Bad));
         assert_eq!(smooth_bridge(a, b, f64::NAN), Err(BridgeError::Bad));
         assert_eq!(smooth_bridge(circle(f64::INFINITY, 0.0, 10.0), b, 10.0), Err(BridgeError::Bad));
-        // Finite sizes whose squares overflow.
-        assert_eq!(smooth_bridge(circle(0.0, 0.0, 1e154), circle(1e154, 0.0, 1e154), 1e154), Err(BridgeError::Bad));
     }
 
     /// A 3 × 3 grid of circles of radius 10, 4 apart (centers 24 apart), top-left at the origin.
@@ -789,6 +791,22 @@ mod tests {
         assert_eq!(bridge_many(&far, ArcRadius::Share(1.0), f64::NAN), Err(ManyError::Bad));
         assert_eq!(bridge_many(&far, ArcRadius::Share(1.0), -1.0), Err(ManyError::Bad));
         assert_eq!(bridge_many(&[circle(f64::INFINITY, 0.0, 1.0), far[0]], ArcRadius::Share(1.0), 1.0), Err(ManyError::Bad));
+    }
+
+    #[test]
+    fn huge_circles_bridge_with_finite_anchors_or_are_refused() {
+        // Squaring these lengths overflows f64.
+        let (a, b) = (circle(0.0, 0.0, 5e153), circle(1.5e154, 0.0, 5e153));
+        let sp = smooth_bridge(a, b, 5e153).unwrap();
+        assert!(sp.anchors.iter().all(|q| [q.p, q.h_in, q.h_out].iter().all(|p| p.x.is_finite() && p.y.is_finite())));
+        assert_smooth(&sp);
+        // The two radius sums fit in f64, but not their total.
+        let (a, b) = (circle(-5e307, 0.0, 1e307), circle(5e307, 0.0, 1e307));
+        let sp = smooth_bridge(a, b, 1.5e308).unwrap();
+        assert!(sp.anchors.iter().all(|q| [q.p, q.h_in, q.h_out].iter().all(|p| p.x.is_finite() && p.y.is_finite())));
+        // The arcs' centers would lie beyond the largest f64.
+        let (a, b) = (circle(0.0, 0.0, 1e308), circle(1.5e308, 0.0, 1e308));
+        assert_eq!(smooth_bridge(a, b, 1e308), Err(BridgeError::Bad));
     }
 
     #[test]

@@ -3,8 +3,8 @@
 //! anchor edits, Split / Add Points at Crossings, Slide Anchor Along Path, the Corner Tool's corners
 //! ([`corners`]), the Parametric Shape Tool's shapes ([`shape`]), the Shared Edge Merge Tool's
 //! merges with Keep Shared Points Together ([`shared_edge`]), Divide into Dashes, Expand Dashes
-//! into Paths, Trim at Crossings ([`trim`]), Common Tangents ([`tangents`]), Smooth Bridge
-//! ([`bridge`]) and Tangent Circle
+//! into Paths, Trim at Crossings ([`trim`]), Smooth Bridge ([`bridge`]), Common Tangents
+//! ([`tangents`]) and Tangent Circle
 //! ([`tangent_circle`]).
 //! Its tools, panels and submenu (Object › Plug-ins › Path Precision Tools) are the tools crate's
 //! and the UI's.

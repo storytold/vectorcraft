@@ -4,10 +4,10 @@
 //! tool shows over a path, open paths lengthened or shortened at an end ([`extend`]), the places
 //! where paths cross ([`crossings`]), the stretches between them ([`spans`]), anchors slid along
 //! their path ([`slide`]), touching edges merged ([`shared_edge`]), paths divided into dashes
-//! ([`divide_dashes`]), the common tangents of two convex outlines ([`common_tangents`]), two
-//! circles joined by a smooth bridge ([`smooth_bridge`]) or many circles joined to their neighbors
-//! ([`bridge_many`]), the Parametric Shape Tool's shapes ([`shapes`]) and the circles that touch two
-//! or three shapes ([`tangent_circles`]).
+//! ([`divide_dashes`]), two circles joined by a smooth bridge ([`smooth_bridge`]) or many circles
+//! joined to their neighbors ([`bridge_many`]), the common tangents of two convex outlines
+//! ([`common_tangents`]), the Parametric Shape Tool's shapes ([`shapes`]) and the circles that touch
+//! two or three shapes ([`tangent_circles`]).
 
 mod bridge;
 mod crossings;
@@ -28,7 +28,7 @@ use kurbo::{CubicBez, ParamCurve, ParamCurveArclen, ParamCurveNearest, Point, Ve
 use vectorcraft_geom::{Anchor, AnchorKind, PathData, SubPath};
 
 pub use bridge::{
-    ArcRadius, BridgeError, Bridged, Circle, Joined, MAX_BRIDGED_CIRCLES, MAX_BRIDGES, ManyError, bridge_many, bridges_any, circle_of, smooth_bridge,
+    ArcRadius, BridgeError, Bridged, Joined, MAX_BRIDGED_CIRCLES, MAX_BRIDGES, ManyError, bridge_many, bridges_any, circle_of, smooth_bridge,
 };
 pub use crossings::{MAX_CROSSED_BY_SEGMENTS, MAX_CROSSING_SEGMENTS, Place, Work, crossings, crossings_on, crossings_on_within, insert_at};
 pub use dashes::{DashSpec, Piece, divide_dashes};
@@ -37,9 +37,7 @@ pub use shared_edge::{
     COINCIDENCE, EndSide, Follow, MAX_COINCIDENCE, MergePlan, MergePreview, Stretch, apply_merge, ends_at, merge_preview, stretches_at,
 };
 pub use slide::{MAX_SLIDE, slide_anchor, slide_stops, slide_t_at};
-pub use tangent_circle::{
-    Circle as TangentCircle, MAX_TANGENT_CIRCLE_SEGMENTS, MAX_TANGENT_CIRCLES, TangentCircleError, tangent_circle_segments, tangent_circles,
-};
+pub use tangent_circle::{Circle, MAX_TANGENT_CIRCLE_SEGMENTS, MAX_TANGENT_CIRCLES, TangentCircleError, tangent_circle_segments, tangent_circles};
 pub use tangents::{Coincide, MAX_TANGENT_SEGMENTS, Outline, OutlineError, Tangent, TangentKind, common_tangents};
 pub use trim::{Span, slice, span_at, spans, without_spans};
 

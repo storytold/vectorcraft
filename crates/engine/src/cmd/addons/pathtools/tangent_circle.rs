@@ -99,7 +99,7 @@ fn tangent_circle(s: &mut Session, p: &Value) -> Result<Value> {
     if found.is_empty() {
         return Err(bad(COMMAND, "no circle touches these shapes"));
     }
-    let chosen: Vec<pt::TangentCircle> = match pick {
+    let chosen: Vec<pt::Circle> = match pick {
         0 => found.clone(),
         n => match found.get(n - 1) {
             Some(c) => vec![*c],
