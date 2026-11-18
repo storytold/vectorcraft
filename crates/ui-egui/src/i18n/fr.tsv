@@ -5809,7 +5809,7 @@ variable-list-end	{0}, {1}	{0} et {1}
 	Assign profile:	Attribuer le profil :
 	Preserve the color numbers	Conserver les valeurs des couleurs
 	Convert to keep the colors' appearance	Convertir pour conserver l’aspect des couleurs
-@msg	`{path}` goes with `{key}`: "assign" only	`{path}` ne s’utilise qu’avec `{key}` : "assign"
+@msg	`{path}` goes with `{key}`: "assign" only	`{path}` ne s’utilise qu’avec `{key}` égal à "assign"
 	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	Les couleurs collées proviennent d’un document dont le profil {model} est « {from} » ; celui de ce document est « {to} ».
 	Texture	Texture
 	Craquelure…	Craquelure…
