@@ -868,8 +868,8 @@ fn ui_color_wheel_sets_and_reads_the_sliders() {
 fn ui_color_wheel_sliders_errors_are_translated() {
     let errors = [("`sliders` must be none or oklch", &["none", "oklch"][..]), ("OKLCH needs sRGB as the working RGB space", &["OKLCH", "sRGB"][..])];
     for code in [
-        "bg", "bs", "ca", "cs", "da", "de", "el", "es", "fi", "fr", "gu", "hi", "hu", "id", "it", "ja", "ka", "ko", "nl", "pl", "pt-br", "ru", "sv", "tr",
-        "uk", "vi", "zh-hans", "zh-hant",
+        "bg", "bs", "ca", "cs", "da", "de", "el", "es", "fi", "fr", "gu", "hi", "hu", "id", "it", "ja", "ka", "ko", "nl", "pl", "pt-br", "ru", "sv",
+        "tr", "uk", "vi", "zh-hans", "zh-hant",
     ] {
         let lang = crate::i18n::Lang::from_code(code).expect("registered");
         for (error, values) in errors {
