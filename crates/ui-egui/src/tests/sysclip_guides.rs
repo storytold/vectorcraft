@@ -10,11 +10,11 @@ use vectorcraft_doc::NodeKind;
 use vectorcraft_engine::Session;
 use vectorcraft_engine::cmd::clipboard::{PNG, TEXT};
 
-use crate::tests_sysclip::{app, app_with_busy_worker, copy_elsewhere, copy_rect, count, frame, pasted, run, written};
+use crate::tests_sysclip::{UNDECODED, app, app_with_busy_worker, copy_elsewhere, copy_rect, count, cut_short_png, frame, pasted, run, written};
 use crate::{Services, VectorcraftApp, background};
 
 fn guides(app: &VectorcraftApp) -> usize {
-    app.session.active().unwrap().doc.guides.len()
+    app.session.active().unwrap().doc.ruler_guides().len()
 }
 
 /// Add a vertical guide at `pos`, select only it and copy it.
@@ -35,10 +35,23 @@ fn a_guides_only_copy_pastes_the_guides_not_what_another_app_copied_before() {
     run(&mut app, "edit.paste", json!({}));
     assert_eq!(guides(&app), 2, "the copied guide was pasted");
     assert_eq!(count(&app), 0, "and not the other app's text");
-    assert_eq!(app.session.active().unwrap().selection.guides, [1]);
+    let st = app.session.active().unwrap();
+    assert_eq!(vectorcraft_engine::cmd::guide_indexes(&st.doc, &st.selection.guides), [1]);
     // A second Paste takes the guides again.
     run(&mut app, "edit.paste", json!({}));
     assert_eq!((guides(&app), count(&app)), (3, 0));
+}
+
+/// A guides-only Copy has no notes: it clears the message an earlier Copy's notes left.
+#[test]
+fn a_guides_only_copy_clears_an_earlier_copys_notes() {
+    let (mut app, _) = app();
+    vectorcraft_testkit::fixtures::place_cut_png(&mut app.session, &cut_short_png(), json!({}));
+    run(&mut app, "edit.copy", json!({}));
+    background::wait_all(&mut app);
+    assert_eq!(app.ui.status, format!("Copied with 1 note: {UNDECODED}"));
+    copy_guide(&mut app, 120.0);
+    assert_eq!((app.ui.status.as_str(), &app.ui.status_notes), ("", &None));
 }
 
 #[test]

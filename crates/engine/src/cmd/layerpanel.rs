@@ -255,9 +255,9 @@ fn merge_into(d: &mut Document, into: NodeId, others: &[NodeId]) -> Result<()> {
     let mut all = std::mem::take(ch);
     all.extend(taken);
     all.sort_by(|a, b| keys.get(&a.id).cmp(&keys.get(&b.id)));
+    // Ruler guides (the merged layers' among them) stay above the art, each kind in that order.
+    all.sort_by_key(|c| c.is_ruler_guide());
     *ch = all;
-    // The merged layers' guides go to it too.
-    d.rehome_guides(into);
     Ok(())
 }
 
@@ -318,9 +318,8 @@ fn flatten(s: &mut Session, p: &Value) -> Result<Value> {
     let others: Vec<NodeId> = d.layers.iter().filter(|l| l.id != into && l.visible && !l.is_template()).map(|l| l.id).collect();
     let hidden: Vec<NodeId> = d.layers.iter().filter(|l| l.id != into && !l.visible && !l.is_template()).map(|l| l.id).collect();
     s.edit("Flatten Artwork", |d, sel| {
-        d.remove_many(&hidden)?;
         // Hidden layers are discarded with their guides.
-        d.drop_guides_of_deleted_layers(sel);
+        d.remove_many(&hidden)?;
         merge_into(d, into, &others)?;
         sel.prune(d);
         sel.deselect_uneditable(d);
@@ -349,8 +348,8 @@ fn release(s: &mut Session, p: &Value) -> Result<Value> {
         NodeKind::Group { .. } => true,
         _ => return Err(bad(C, "release a layer or a group")),
     };
-    // Its objects, bottom first (sublayers stay as they are).
-    let objects: Vec<NodeId> = n.children().into_iter().flatten().filter(|c| !c.is_layer()).map(|c| c.id).collect();
+    // Its objects, bottom first (sublayers and ruler guides stay as they are).
+    let objects: Vec<NodeId> = n.children().into_iter().flatten().filter(|c| !c.is_layer() && !c.is_ruler_guide()).map(|c| c.id).collect();
     if objects.is_empty() {
         return Err(EngineError::Other("there are no objects to release".into()));
     }
@@ -386,7 +385,8 @@ fn release(s: &mut Session, p: &Value) -> Result<Value> {
         }
         let new: Vec<NodeId> = layers.iter().map(|l| l.id).collect();
         let ch = d.children_mut(Some(parent))?;
-        let at = index.min(ch.len());
+        // Below the parent's ruler guides.
+        let at = index.min(Node::guide_run_start(ch));
         ch.splice(at..at, layers);
         // Copied type whose layout caches `reid` dropped has them again.
         if build {

@@ -1,14 +1,14 @@
 //! File → Package…: where the package folder goes, its name, and what it collects (the linked
 //! files, in a folder of their own or not, relinked or not; the fonts; the report). A document
-//! never saved is saved first (Save As); unsaved changes are saved before packaging. The web
-//! downloads the package as a zip.
+//! never saved is saved first (Save As); unsaved changes are saved before packaging, and when that
+//! save fails no package is written. The web downloads the package as a zip.
 //!
 //! Fields: `folder` (the location), `name` (the package folder), `copyLinks`, `linksFolder`,
 //! `relink`, `copyFonts`, `report`. OK runs `file.package` with them, then offers to show the
 //! package folder (`file.showPackage`). On the desktop with Background Export on, the package is
 //! collected and written on the background thread ([`crate::background`]) after the dialog closes.
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use serde_json::{Value, json};
@@ -108,21 +108,35 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     } else if d.str("folder").trim().is_empty() {
         return Err("choose a location for the package".into());
     }
-    // The package holds the document as saved.
+    // The package holds the document as saved: when the save fails, or asks a question and writes
+    // nothing yet, no package is written.
+    let mut saving = None;
     if app.session.active().is_some_and(|st| st.is_dirty()) {
         let r = io::save(app, vectorcraft_engine::cmd::fileio::SaveMode::Save, &json!({}), false)?;
         // The save asks first (it would replace a file that loses what opening it left out).
         if r.get("pending").is_some() {
             return Ok(r);
         }
+        // Background Save: the save is written on the worker, and its result decides the package.
+        if r["background"] == true {
+            saving = app.background.jobs.last().map(background::Job::id);
+        }
     }
     // Background Export (Preferences › File Handling): the linked files and fonts are collected
     // and the package is written from the document as it is now, while editing goes on. The jobs
-    // started before it (a save started above, an earlier package to the same folder) are written
-    // first: the worker runs its jobs in order, and a package made at once waits for them.
+    // started before it (an earlier package to the same folder) are written first: the worker
+    // runs its jobs in order, and a package made at once waits for them.
     let enabled = app.session.prefs.background_export;
     if !enabled {
+        let outcome: Rc<RefCell<Option<Result<Value, String>>>> = Rc::default();
+        if let Some(id) = saving {
+            let applied = outcome.clone();
+            background::after(app, id, move |_, r| *applied.borrow_mut() = Some(r.clone()));
+        }
         background::wait_all(app);
+        if let Some(r) = outcome.take().filter(|r| !saved(r)) {
+            return r;
+        }
     }
     let package = app.session.prepare_package(&params).map_err(|e| e.to_string()).inspect_err(|e| app.ui.status = e.clone())?;
     let label = format!("Packaging {}", d.str("name"));
@@ -134,12 +148,35 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
             |path: &str, bytes: &[u8]| write(path, bytes).map_err(|e| EngineError::Other(if e.contains(path) { e } else { format!("{path}: {e}") }));
         package.write(&mut write).map_err(|e| e.to_string())
     };
-    let r = background::run(app, enabled, label, None, work, move |app, r| packaged(app, r, web, in_background.get()))?;
+    let start =
+        move |app: &mut VectorcraftApp| background::run(app, enabled, label, None, work, move |app, r| packaged(app, r, web, in_background.get()));
+    // Both in the background: the package, collected from the document as it is now, starts once
+    // the save is written, with the automation roots in force at OK.
+    if let Some(id) = saving.filter(|_| enabled) {
+        later.set(true);
+        app.ui.dialog = None;
+        let scope = vectorcraft_engine::file_access::ScopeHandle::capture();
+        background::after(app, id, move |app, r| {
+            if saved(r)
+                && let Err(e) = scope.run(|| start(app))
+            {
+                app.status(e);
+            }
+        });
+        return Ok(json!({ "background": true }));
+    }
+    let r = start(app)?;
     if r["background"] == true {
         later.set(true);
         app.ui.dialog = None;
     }
     Ok(r)
+}
+
+/// Did a save whose applied result is `r` write the document (no error, and no question asked
+/// before writing)?
+fn saved(r: &Result<Value, String>) -> bool {
+    r.as_ref().is_ok_and(|r| r.get("pending").is_none())
 }
 
 /// Report the package `r` (`file.package`'s reply): the status bar, the web's download, and the

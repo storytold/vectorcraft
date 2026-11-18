@@ -1,5 +1,8 @@
 use super::{Deserialize, NodeId, Serialize, Vec2};
 
+/// A ruler guide as a value: an entry of the saved `guides` list, or a ruler guide node of a
+/// document as [`crate::Document::ruler_guides`] lists it. In a document, ruler guides are
+/// [`crate::NodeKind::RulerGuide`] nodes on their layers.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Guide {
     /// true = vertical guide at `pos` (x), false = horizontal at `pos` (y).
@@ -14,12 +17,25 @@ pub struct Guide {
     /// from before guides had layers, and from files that don't say), always there.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub layer: Option<NodeId>,
+    /// The id of its node. None in an entry written before ruler guides were nodes: it gets a new
+    /// id when the document is read.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<NodeId>,
+    /// The name it shows in the Layers panel, if it was given one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// Locked on its own (its layer's lock is separate).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub locked: bool,
+    /// Hidden on its own (its layer's visibility is separate).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub hidden: bool,
 }
 
 impl Guide {
     /// A canvas guide.
     pub fn new(vertical: bool, pos: f64) -> Self {
-        Self { vertical, pos, artboard: None, layer: None }
+        Self { vertical, pos, artboard: None, layer: None, id: None, name: None, locked: false, hidden: false }
     }
 
     /// Moved by `d` (a vertical guide across, a horizontal one down).

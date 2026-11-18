@@ -166,8 +166,18 @@ fn an_error_names_the_script_its_place_and_kind() {
     let e = run(&mut s, "var = 1;").unwrap_err().to_string();
     assert!(e.starts_with("t.js: line 1,") && e.ends_with("(syntax)"), "{e}");
     assert!(run(&mut s, "app.activeDocument;").unwrap_err().to_string().contains("`vc`"));
-    assert!(run(&mut s, "#target x\n1").unwrap_err().to_string().contains("#target"));
+    assert!(run(&mut s, "#targetengine 9x\n1").unwrap_err().to_string().contains("#targetengine needs a name of letters, digits and _"));
     assert_eq!(s.script_report().unwrap()["line"], 1);
+}
+
+/// An error raised where the run has no place for it, such as in code `eval` compiled, is named
+/// with the script and its kind alone, with one colon after the script's name.
+#[test]
+fn an_error_without_a_place_names_the_script_and_kind() {
+    let mut s = two_docs();
+    let e = run(&mut s, "eval(\"throw new TypeError('no')\");").unwrap_err().to_string();
+    assert_eq!(s.script_report().unwrap()["line"], 0);
+    assert_eq!(e, "t.js: TypeError: no (thrown)");
 }
 
 #[test]
@@ -279,6 +289,11 @@ fn a_failed_run_puts_back_the_choices_its_commands_made() {
         {command: 'no.such', params: {}}]}); } catch (e) {}";
     run(&mut s, source).unwrap();
     assert_eq!(s.global_edit_options, before, "the failed command's choice went back");
+
+    let source = "vc.run('shape.rectangle', {x: 0, y: 0, width: 10, height: 10}); \
+        if (vc.run('select.similar', {by: 'opacity'}).by !== 'opacity') throw new Error('not run'); throw new Error('x');";
+    assert!(matches!(run(&mut s, source), Err(e) if !format!("{e:?}").contains("not run")));
+    assert_eq!(s.select_similar, "all", "the Select Similar Objects attribute went back");
 
     assert!(!s.caps_lock);
     assert!(run(&mut s, "vc.run('view.capsLock', {on: true}); throw new Error('x');").is_err());
@@ -846,6 +861,30 @@ fn a_person_can_let_a_growing_run_go_on_or_stop_it() {
 }
 
 #[test]
+fn a_run_waiting_to_grow_stops_at_the_next_slice_once_its_work_is_canceled() {
+    TEST_GROWTH.with(|g| g.set(Some(20)));
+    let mut s = two_docs();
+    let before = state(&s);
+    s.script_frames = true;
+    run(&mut s, "for (var i = 0; i < 25; i++) vc.run('shape.rectangle', {x:i,y:1,width:1,height:1});").unwrap();
+    let token = crate::cancel::CancelToken::new();
+    for _ in 0..1_000 {
+        if s.script_waiting() {
+            break;
+        }
+        assert!(crate::cancel::scope(&token, None, || s.script_pump()).is_none());
+    }
+    assert!(s.script_waiting());
+    token.cancel();
+    let ended = crate::cancel::scope(&token, None, || s.script_pump());
+    TEST_GROWTH.with(|g| g.set(None));
+    assert!(ended.expect("the run goes on waiting for Continue").is_err());
+    assert_eq!(s.script_report().unwrap()["kind"], "stopped");
+    assert!(!s.script_running());
+    assert_eq!(state(&s), before);
+}
+
+#[test]
 fn a_file_saved_before_a_failure_stays_written_and_is_named() {
     let path = std::env::temp_dir().join(format!("vc-script-save-{}.svg", std::process::id()));
     let _ = std::fs::remove_file(&path);
@@ -860,6 +899,44 @@ fn a_file_saved_before_a_failure_stays_written_and_is_named() {
     assert_eq!(s.script_report().unwrap()["written"], json!([p]));
     assert_eq!(state(&s), before, "the document does not keep the new path");
     let _ = std::fs::remove_file(&path);
+}
+
+/// A run in the app's frames keeps the file-access scope its `script.run` came in, whatever scope
+/// the frames that advance it run in.
+#[test]
+fn a_framed_run_keeps_the_file_access_scope_it_started_in() {
+    let dir = std::env::temp_dir().join(format!("vc-script-scope-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let (allowed, outside) = (dir.join("allowed"), dir.join("outside"));
+    std::fs::create_dir_all(&allowed).unwrap();
+    std::fs::create_dir_all(&outside).unwrap();
+    let roots = crate::file_access::AutomationRoots::new(&[&allowed], &[&allowed]).unwrap().unwrap();
+    let export = |target: &std::path::Path| {
+        let p = target.to_string_lossy().into_owned();
+        format!("try {{ vc.run('document.export', {{path: {p:?}, format: 'svg'}}); vc.log('ok'); }} catch (e) {{ vc.log(e.name); }}")
+    };
+    let finish = |s: &mut Session| {
+        loop {
+            if let Some(r) = s.script_pump() {
+                return r;
+            }
+        }
+    };
+    let mut s = two_docs();
+    s.script_frames = true;
+    let confined_target = outside.join("confined.svg");
+    let started = crate::file_access::confine(Some(&roots), || run(&mut s, &export(&confined_target))).unwrap();
+    assert_eq!(started["running"], true);
+    let r = crate::file_access::unconfined(|| finish(&mut s)).unwrap();
+    assert_eq!(r["log"], json!(["Error"]), "a confined caller's run stays confined: {r}");
+    assert!(!confined_target.exists());
+    let user_target = outside.join("user.svg");
+    let started = crate::file_access::unconfined(|| run(&mut s, &export(&user_target))).unwrap();
+    assert_eq!(started["running"], true);
+    let r = crate::file_access::confine(Some(&roots), || finish(&mut s)).unwrap();
+    assert_eq!(r["log"], json!(["ok"]), "a run the person started is not confined by a later caller: {r}");
+    assert!(user_target.exists());
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -951,6 +1028,15 @@ fn source_text() -> impl proptest::strategy::Strategy<Value = String> {
         Just("{".to_string()),
         Just("try {".to_string()),
         Just("} catch (e) {}".to_string()),
+        Just("\n#include \"x.jsxinc\"\n".to_string()),
+        Just("\n//@include 'x\n".to_string()),
+        Just("\n#includepath \";;..;\"\n".to_string()),
+        Just("\n#script \"\"\n".to_string()),
+        Just("\n#target\n".to_string()),
+        Just("\n#strict on\n".to_string()),
+        Just("\n#\u{0}\n".to_string()),
+        Just("try { $.evalFile('x.jsx', NaN); } catch (e) {}".to_string()),
+        "\n#[a-z]{0,12}[ -~]{0,20}\n",
         "[ -~]{0,30}",
         "\\PC{0,10}",
     ];

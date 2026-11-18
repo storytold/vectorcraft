@@ -1,6 +1,6 @@
 use super::entry::{INVISIBLE_TEXT_NOTE, MAX_NESTED, OUTLINED_TEXT_NOTE, UNSORTED, WHITE_KEY};
 use super::state::{
-    Builder, Decoded, Frame, FrameKind, GlyphRun, blend, fill_rule, gray_png, line_width, mean_scale, resize_alpha, rgba_png, same_outline,
+    Builder, Decoded, Frame, FrameKind, GlyphRun, blend, fill_rule, gray_png, line_width, mean_scale, resize_alpha, rgb_png, rgba_png, same_outline,
     stroke_layer, stroke_outline,
 };
 use super::{
@@ -33,6 +33,7 @@ impl<'a> Device<'a> for Builder<'_> {
 
     fn draw_path(&mut self, path: &BezPath, transform: Affine, paint: &craft_pdf::interpret::Paint<'a>, draw_mode: &PathDrawMode) {
         self.flush_glyphs();
+        self.flush_type3();
         let walked = self.walked(false);
         if self.hold_glyph_stroke(path, transform, paint, draw_mode, walked) {
             return;
@@ -174,7 +175,7 @@ impl<'a> Device<'a> for Builder<'_> {
             GlyphDrawMode::Invisible => {
                 let typed = match glyph {
                     Glyph::Outline(o) => self.type_glyph(o, transform * glyph_transform, mean_scale(transform), None, None, false),
-                    Glyph::Type3(_) => false,
+                    Glyph::Type3(t3) => self.type_type3_glyph(t3, transform * glyph_transform, mean_scale(transform), None, None, false),
                 };
                 if !typed {
                     self.warn(INVISIBLE_TEXT_NOTE);
@@ -186,12 +187,14 @@ impl<'a> Device<'a> for Builder<'_> {
         };
         match glyph {
             Glyph::Outline(o) => {
+                self.flush_type3();
                 let scale = mean_scale(transform);
                 let overprint = self.glyph_overprint(stroke.is_some());
                 if self.type_glyph(o, transform * glyph_transform, scale, Some(paint), stroke.as_ref(), overprint) {
                     return;
                 }
-                self.flush_text();
+                // A line kept as outlines leaves them open: this glyph joins them.
+                self.end_text();
                 let mut bp = o.outline();
                 bp.apply_affine(transform * glyph_transform);
                 let (paint, opacity) = self.paint(paint, stroke.is_some(), self.walked(true));
@@ -215,16 +218,26 @@ impl<'a> Device<'a> for Builder<'_> {
                 if self.nested >= MAX_NESTED {
                     return;
                 }
-                self.flush();
-                self.nested += 1;
-                t3.interpret(self, transform, glyph_transform, paint);
-                self.nested -= 1;
+                let scale = mean_scale(transform);
+                let overprint = self.glyph_overprint(stroke.is_some());
+                if self.type_type3_glyph(t3, transform * glyph_transform, scale, Some(paint), stroke.as_ref(), overprint) {
+                    return;
+                }
+                self.flush_glyphs();
+                self.flush_text();
+                let art = self.nested(self.page, self.blend, |b| {
+                    t3.interpret(b, transform, glyph_transform, paint);
+                });
+                if let Some(nodes) = art {
+                    self.push_type3_nodes(nodes);
+                }
             }
         }
     }
 
     fn draw_image(&mut self, image: Image<'a, '_>, transform: Affine) {
         self.flush_glyphs();
+        self.flush_type3();
         self.flush_text();
         match image {
             Image::Raster(r) => {
@@ -285,26 +298,45 @@ impl<'a> Device<'a> for Builder<'_> {
                     self.add_image(key, || Some((ImageBlob::new("image/jpeg", bytes), w, h)), transform);
                     return;
                 }
-                let mut decoded: Option<Decoded> = None;
+                // Drawn before: the image is there already, so its pixels aren't converted again.
+                if let Some(sf) = self.raster_scales.get(&key).copied().filter(|_| self.image_keys.contains_key(&key)) {
+                    let xf = transform * Affine::scale_non_uniform(sf.0 as f64, sf.1 as f64);
+                    self.add_image(key, || None, xf);
+                    return;
+                }
+                // RGB samples, or RGBA when the image has an alpha channel or is drawn white.
+                let mut decoded: Option<(Decoded, bool)> = None;
                 r.with_rgba(
                     |img, alpha| {
                         let (w, h, sf) = (img.width(), img.height(), img.scale_factors());
-                        let a = alpha.map(|a| resize_alpha(&a, w, h)).unwrap_or_else(|| vec![255; (w * h) as usize]);
-                        let rgba: Vec<u8> = match img {
-                            _ if white => a.into_iter().flat_map(|a| [255, 255, 255, a]).collect(),
-                            ImageData::Rgb(d) => d.data.as_chunks::<3>().0.iter().zip(a).flat_map(|(c, a)| [c[0], c[1], c[2], a]).collect(),
-                            ImageData::Luma(d) => d.data.iter().zip(a).flat_map(|(g, a)| [*g, *g, *g, a]).collect(),
+                        let px = match (img, alpha) {
+                            // An opaque image's RGB samples are encoded as they are, with no copy.
+                            (ImageData::Rgb(d), None) if !white => (d.data, false),
+                            // Gray samples are stored as RGB: as a gray PNG, the image would become a
+                            // grayscale image that a fill color colorizes.
+                            (ImageData::Luma(d), None) if !white => (d.data.iter().flat_map(|g| [*g; 3]).collect(), false),
+                            (img, alpha) => {
+                                let a = alpha.map(|a| resize_alpha(&a, w, h)).unwrap_or_else(|| vec![255; (w * h) as usize]);
+                                let rgba: Vec<u8> = match img {
+                                    _ if white => a.into_iter().flat_map(|a| [255, 255, 255, a]).collect(),
+                                    ImageData::Rgb(d) => d.data.as_chunks::<3>().0.iter().zip(a).flat_map(|(c, a)| [c[0], c[1], c[2], a]).collect(),
+                                    ImageData::Luma(d) => d.data.iter().zip(a).flat_map(|(g, a)| [*g, *g, *g, a]).collect(),
+                                };
+                                (rgba, true)
+                            }
                         };
-                        decoded = Some((rgba, w, h, sf));
+                        decoded = Some(((px.0, w, h, sf), px.1));
                     },
                     None,
                 );
-                let Some((rgba, w, h, sf)) = decoded else {
+                let Some(((px, w, h, sf), alpha)) = decoded else {
                     self.warn("an image could not be decoded and was skipped");
                     return;
                 };
+                self.raster_scales.insert(key, sf);
                 let xf = transform * Affine::scale_non_uniform(sf.0 as f64, sf.1 as f64);
-                self.add_image(key, || rgba_png(rgba, w, h).map(|png| (ImageBlob::new("image/png", png), w, h)), xf);
+                let png = move || if alpha { rgba_png(px, w, h) } else { rgb_png(px, w, h) };
+                self.add_image(key, || png().map(|png| (ImageBlob::new("image/png", png), w, h)), xf);
             }
             Image::Stencil(s) => {
                 let white = self.white_images;

@@ -201,6 +201,15 @@ pub struct FontFace {
     pub(super) colour_layers: bool,
     /// Has an `SVG ` table: OpenType SVG glyphs ([`FontDb::glyph_colour`]).
     pub(super) svg_glyphs: bool,
+    /// What the `GSUB` table substitutes ([`Self::substitutions`]), read the first time it is asked
+    /// for.
+    pub(super) gsub: std::sync::OnceLock<super::gsub::GsubIndex>,
+    /// [`Self::unencoded_glyphs`], read once.
+    pub(super) unencoded: std::sync::OnceLock<std::sync::Arc<[u32]>>,
+    /// [`Self::mapped_chars`], read once.
+    pub(super) char_list: std::sync::OnceLock<Arc<[(char, u32)]>>,
+    /// [`Self::name_owner`]'s glyph names to characters, read once.
+    pub(super) named_chars: std::sync::OnceLock<std::collections::HashMap<String, char>>,
 }
 
 /// Where the ideographic character face (ICF) lies inside the ideographic em box: its distance
@@ -349,18 +358,54 @@ impl FontFace {
     pub fn x_height(&self) -> f64 {
         self.x_height
     }
+    /// The height of the capital letters in font units, positive (estimated from the ascent when
+    /// the font has no OS/2 value).
+    pub fn cap_height(&self) -> f64 {
+        self.cap_height
+    }
     /// The line gap the font asks for between lines, in font units (from the same table as
     /// [`vertical_metrics`](Self::vertical_metrics); 0 when it has none).
     pub fn line_gap(&self) -> f64 {
         self.skrifa().map_or(0.0, |f| f64::from(f.metrics(Size::unscaled(), self.location()).leading)).max(0.0)
     }
+    /// The height of the face's character cell on Windows (the OS/2 table's `usWinAscent` plus
+    /// `usWinDescent`, at the face's location in a variable font), in font units; `None` when the
+    /// font has no OS/2 table or the sum isn't positive.
+    pub fn win_cell_height(&self) -> Option<f64> {
+        use skrifa::raw::TableProvider;
+        let f = self.skrifa()?;
+        let o = f.os2().ok()?;
+        // A variable font's MVAR table moves usWinAscent (`hcla`) and usWinDescent (`hcld`):
+        // https://learn.microsoft.com/en-us/typography/opentype/spec/mvar
+        let varied = |tag: &[u8; 4]| {
+            f.mvar().ok().and_then(|m| m.metric_delta(skrifa::Tag::new(tag), self.location().coords()).ok()).map_or(0.0, |d| d.to_f64())
+        };
+        let h = f64::from(o.us_win_ascent()) + varied(b"hcla") + f64::from(o.us_win_descent()) + varied(b"hcld");
+        (h > 0.0 && h.is_finite()).then_some(h)
+    }
+    /// The average width of the face's characters (the OS/2 table's `xAvgCharWidth`), in font
+    /// units; `None` when the font has no OS/2 table or gives no positive width.
+    pub fn average_char_width(&self) -> Option<f64> {
+        use skrifa::raw::TableProvider;
+        let w = f64::from(self.skrifa()?.os2().ok()?.x_avg_char_width());
+        (w > 0.0).then_some(w)
+    }
     /// Every mapped character and its glyph id, sorted by code point (the Glyphs panel).
     pub fn chars(&self) -> Vec<(char, u32)> {
-        let Some(f) = self.skrifa() else { return vec![] };
-        let mut v: Vec<(char, u32)> = f.charmap().mappings().filter_map(|(cp, g)| char::from_u32(cp).map(|c| (c, g.to_u32()))).collect();
-        v.sort_unstable_by_key(|x| x.0);
-        v.dedup_by_key(|x| x.0);
-        v
+        self.mapped_chars().to_vec()
+    }
+    /// [`Self::chars`], read from the font once for the face and shared by every caller. Empty when
+    /// the font cannot be read or maps no character.
+    pub fn mapped_chars(&self) -> Arc<[(char, u32)]> {
+        self.char_list
+            .get_or_init(|| {
+                let Some(f) = self.skrifa() else { return Arc::from([]) };
+                let mut v: Vec<(char, u32)> = f.charmap().mappings().filter_map(|(cp, g)| char::from_u32(cp).map(|c| (c, g.to_u32()))).collect();
+                v.sort_unstable_by_key(|x| x.0);
+                v.dedup_by_key(|x| x.0);
+                v.into()
+            })
+            .clone()
     }
     /// Advance width of glyph `gid` in font units.
     pub fn advance(&self, gid: u32) -> f64 {

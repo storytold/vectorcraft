@@ -222,7 +222,7 @@ fn each_copy_of_a_strokes_own_transform_scales_its_weight_once_more() {
 }
 
 #[test]
-fn a_fills_own_transform_with_scale_strokes_and_effects_scales_its_later_effects() {
+fn a_fills_own_transform_with_scale_strokes_and_effects_leaves_its_later_effects() {
     let mut n = stroke_with_effect(json!({}));
     if let Some(AppearanceItem::Fill(f)) = n.appearance.items.first_mut() {
         f.effects.push(transform(json!({"scaleH": 300, "scaleV": 300, "strokes": true})));
@@ -231,10 +231,10 @@ fn a_fills_own_transform_with_scale_strokes_and_effects_scales_its_later_effects
     let art = reshape(None, &n, None).unwrap();
     let fill = leaves(&art).into_iter().find(|p| p.appearance.stroke().is_none()).unwrap();
     let AppearanceItem::Fill(f) = &fill.appearance.items[0] else { panic!("not a fill") };
-    // The Offset Path, scaled from 5 to 15, applies to the transformed fill's path.
+    // The Offset Path applies to the transformed fill's path at its own 5 pt.
     assert!(f.effects.is_empty(), "{:?}", f.effects);
     let w = fill.geometric_bounds().unwrap().width();
-    assert!(close(w, 330.0), "{w}");
+    assert!(close(w, 310.0), "{w}");
 }
 
 #[test]

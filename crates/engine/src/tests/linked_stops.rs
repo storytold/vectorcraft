@@ -214,6 +214,93 @@ fn spot_stops_with_process_plates_export_both_in_device_n_shadings() {
 }
 
 #[test]
+fn deleting_a_spot_swatch_takes_the_process_plates_of_the_stops_it_unlinks() {
+    let (mut s, id) = setup();
+    let plated = json!({"stops": [{"offset": 0, "color": "#ffffff"}, {"offset": 1, "swatch": "Ink", "tint": 50, "plates": [0.3, 0, 0, 0]}]});
+    run(&mut s, "paint.editGradient", plated.clone());
+    run(&mut s, "swatch.new", json!({"name": "Glow", "gradient": plated}));
+    let linked = gradient(&s, id).gradient.stops[1].clone();
+    assert_eq!((linked.swatch.as_deref(), linked.plates), (Some("Ink"), Some([0.3, 0.0, 0.0, 0.0])));
+    run(&mut s, "swatch.delete", json!({"name": "Ink"}));
+    // The art's stop and the gradient swatch's stop keep the color they show, unlinked and without plates.
+    let Paint::Gradient(sw) = doc(&s).swatch("Glow").unwrap().paint.clone() else { panic!("a gradient swatch") };
+    for st in [&gradient(&s, id).gradient.stops[1], &sw.gradient.stops[1]] {
+        assert_eq!((st.color, st.swatch.as_deref(), st.tint, st.plates), (linked.color, None, 1.0, None), "{st:?}");
+    }
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(gradient(&s, id).gradient.stops[1], linked, "undo brings back the link and the plates");
+}
+
+/// The stops of the gradients the merge test puts in place: the art's fill, gradient swatch "Glow",
+/// graphic style "Style", the art of brush "Brush" and the fill new art takes.
+fn merge_test_stops(s: &Session, id: NodeId) -> Vec<(&'static str, Vec<GradientStop>)> {
+    let d = doc(s);
+    let stops = |p: Paint| match p {
+        Paint::Gradient(g) => g.gradient.stops,
+        p => panic!("not a gradient: {p:?}"),
+    };
+    let style = d.graphic_style("Style").unwrap().appearance.items.iter().find_map(|it| match it {
+        vectorcraft_doc::AppearanceItem::Fill(f) => Some(f.paint.clone()),
+        vectorcraft_doc::AppearanceItem::Stroke(_) => None,
+    });
+    let mut brush = None;
+    for n in vectorcraft_brush::find(d, "Brush").unwrap().art() {
+        n.walk(&mut |m| {
+            if brush.is_none() && matches!(m.appearance.fill_paint(), Paint::Gradient(_)) {
+                brush = Some(m.appearance.fill_paint());
+            }
+        });
+    }
+    vec![
+        ("art", stops(d.node(id).unwrap().appearance.fill_paint())),
+        ("gradient swatch", stops(d.swatch("Glow").unwrap().paint.clone())),
+        ("graphic style", stops(style.unwrap())),
+        ("brush art", stops(brush.unwrap())),
+        ("new art", stops(s.paint.fill.clone())),
+    ]
+}
+
+#[test]
+fn merging_swatches_takes_the_process_plates_of_the_stops_it_relinks() {
+    // Kept swatch "Keep": spot, global process, and process that isn't global.
+    for (spot, global) in [(true, true), (false, true), (false, false)] {
+        let (mut s, id) = setup();
+        run(&mut s, "swatch.new", json!({"name": "Keep", "color": "#00ff00", "spot": spot, "global": global}));
+        run(&mut s, "swatch.new", json!({"name": "Other", "color": {"c": 1, "m": 0, "y": 0, "k": 0}, "spot": true}));
+        // Ink at 50 % over a 30 % cyan plate, and Other over its own 20 % magenta plate, which the
+        // merge leaves alone.
+        let plated = json!({"stops": [
+            {"offset": 0, "swatch": "Ink", "tint": 50, "plates": [0.3, 0, 0, 0]},
+            {"offset": 1, "swatch": "Other", "plates": [0, 0.2, 0, 0]},
+        ]});
+        run(&mut s, "paint.editGradient", plated.clone());
+        run(&mut s, "swatch.new", json!({"name": "Glow", "gradient": plated}));
+        run(&mut s, "graphicStyle.new", json!({"name": "Style"}));
+        run(&mut s, "brush.new", json!({"type": "art", "name": "Brush"}));
+        s.paint.fill = doc(&s).node(id).unwrap().appearance.fill_paint();
+        let before = merge_test_stops(&s, id);
+        let kept = doc(&s).linked_color(doc(&s).swatch("Keep").unwrap().paint.color().unwrap(), spot);
+        assert!(before.iter().all(|(_, st)| st[0].plates == Some([0.3, 0.0, 0.0, 0.0])), "{before:?}");
+
+        run(&mut s, "swatch.merge", json!({"names": ["Keep", "Ink"]}));
+        let after = merge_test_stops(&s, id);
+        // The stop shows its tint of the kept color, unlinked when the kept swatch isn't global.
+        let (link, tint, color) = if global { (Some("Keep"), 0.5, kept.tinted(0.5)) } else { (None, 1.0, kept.tinted(0.5)) };
+        for (place, st) in &after {
+            let what = format!("spot {spot}, global {global}, {place}: {st:?}");
+            assert_eq!((st[0].swatch.as_deref(), st[0].tint, st[0].plates), (link, tint, None), "{what}");
+            assert_eq!(st[0].color, color, "{what}");
+            assert_eq!((st[1].swatch.as_deref(), st[1].plates), (Some("Other"), Some([0.0, 0.2, 0.0, 0.0])), "{what}");
+        }
+
+        run(&mut s, "edit.undo", json!({}));
+        assert_eq!(merge_test_stops(&s, id), before, "undo brings back the links and the plates");
+        run(&mut s, "edit.redo", json!({}));
+        assert_eq!(merge_test_stops(&s, id), after, "redo merges again");
+    }
+}
+
+#[test]
 fn radial_spot_gradients_mixed_with_other_inks_export_as_device_n_shadings() {
     let (mut s, _) = setup();
     run(
@@ -350,6 +437,41 @@ fn perceptual_spot_gradients_with_rgb_stops_in_a_cmyk_document_export_as_device_
 }
 
 #[test]
+fn classic_spot_gradients_with_rgb_stops_in_a_cmyk_document_export_as_device_n_shadings() {
+    let (mut s, _) = setup();
+    run(&mut s, "paint.editGradient", json!({"stops": [{"offset": 0, "swatch": "Ink"}, {"offset": 1, "color": "#00ff00"}]}));
+    let (pdf, warnings) = pdf_of(&s);
+    assert!(!pdf.contains("/DeviceN") && warnings.iter().any(|w| w.contains("spot")), "an RGB document drops the ink: {warnings:?}");
+    // A CMYK document, or a conversion to a CMYK destination, writes the RGB stop in CMYK: a
+    // DeviceN shading that keeps the ink.
+    let mut cmyk = doc(&s).clone();
+    cmyk.color_mode = vectorcraft_doc::ColorMode::Cmyk;
+    let plain = vectorcraft_pdf::PdfOptions { created: Some(0), ..vectorcraft_pdf::PdfOptions::uncompressed() };
+    let mut converted = plain.clone();
+    converted.settings.output = vectorcraft_pdf::OutputSettings {
+        conversion: vectorcraft_pdf::ColorConversion::Destination,
+        destination: vectorcraft_pdf::DOCUMENT_CMYK.into(),
+        ..Default::default()
+    };
+    for (what, d, opts) in [("CMYK document", &cmyk, &plain), ("CMYK destination", doc(&s), &converted)] {
+        let r = vectorcraft_pdf::export_with_report(d, opts).unwrap();
+        let pdf = String::from_utf8_lossy(&r.bytes);
+        assert!(pdf.contains("/ShadingType 2") && pdf.contains("/Ink]/DeviceCMYK"), "{what}: a DeviceN shading with Ink");
+        assert!(!r.warnings.iter().any(|w| w.contains("spot")), "{what}: {:?}", r.warnings);
+    }
+    // A conversion to an RGB destination keeps the RGB stop in RGB, in a CMYK document too.
+    let mut to_rgb = plain.clone();
+    to_rgb.settings.output = vectorcraft_pdf::OutputSettings {
+        conversion: vectorcraft_pdf::ColorConversion::Destination,
+        destination: vectorcraft_color::cms::SRGB.into(),
+        ..Default::default()
+    };
+    let r = vectorcraft_pdf::export_with_report(&cmyk, &to_rgb).unwrap();
+    assert!(!String::from_utf8_lossy(&r.bytes).contains("/DeviceN"), "RGB destination: no DeviceN shading");
+    assert!(r.warnings.iter().any(|w| w.contains("spot")), "RGB destination: {:?}", r.warnings);
+}
+
+#[test]
 fn spot_gradients_drawn_as_images_warn() {
     let (mut s, _) = setup();
     let spot_warning = |w: &[String]| w.iter().any(|w| w.contains("spot colors in gradients exported as images"));
@@ -379,6 +501,34 @@ fn spot_gradients_drawn_as_images_warn() {
     let (pdf, warnings) = pdf_of(&s);
     assert!(pdf.contains("/Subtype/Image") && !pdf.contains("/Separation"), "a process Perceptual gradient");
     assert!(!spot_warning(&warnings), "{warnings:?}");
+}
+
+/// A spot gradient mixed around the hue wheel is an image in process colors with the warning,
+/// where the same stops mixed by Perceptual are a Separation or DeviceN shading: the colors
+/// between its stops are not tints or mixes of the stops' inks.
+#[test]
+fn hue_wheel_spot_gradients_export_as_images_and_warn() {
+    let (mut s, _) = setup();
+    run(&mut s, "swatch.new", json!({"name": "Leaf", "color": {"c": 1, "m": 0, "y": 1, "k": 0}, "spot": true}));
+    let spot_warning = |w: &[String]| w.iter().any(|w| w.contains("spot colors in gradients exported as images"));
+    let ink_to_leaf = json!({"stops": [{"offset": 0, "swatch": "Ink"}, {"offset": 1, "swatch": "Leaf"}]});
+    for method in ["hue-clockwise", "hue-counterclockwise"] {
+        for (what, stops) in [("Ink → paper", ink_to_white(80.0)), ("Ink → Leaf", ink_to_leaf.clone())] {
+            for kind in ["linear", "radial", "conic", "diamond"] {
+                run(&mut s, "paint.editGradient", with(stops.clone(), json!({"method": method, "kind": kind})));
+                let (pdf, warnings) = pdf_of(&s);
+                assert!(pdf.contains("/Subtype/Image"), "{method} {kind} {what}: an image");
+                assert!(!pdf.contains("/Separation") && !pdf.contains("/DeviceN"), "{method} {kind} {what}: no spot ink shading");
+                assert!(spot_warning(&warnings), "{method} {kind} {what}: {warnings:?}");
+            }
+        }
+        // Without spot inks: an image, without the warning.
+        let red_blue = json!({"stops": [{"offset": 0, "color": "#ff0000"}, {"offset": 1, "color": "#0000ff"}], "kind": "linear"});
+        run(&mut s, "paint.editGradient", with(red_blue, json!({"method": method})));
+        let (pdf, warnings) = pdf_of(&s);
+        assert!(pdf.contains("/Subtype/Image"), "{method}: a process gradient is an image");
+        assert!(!spot_warning(&warnings), "{method}: {warnings:?}");
+    }
 }
 
 #[test]

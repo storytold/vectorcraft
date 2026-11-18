@@ -138,15 +138,35 @@ fn no_adjoining_edges_is_a_clear_error_that_changes_nothing() {
 }
 
 #[test]
-fn out_of_range_and_unreadable_numbers_are_refused_or_defaulted() {
+fn out_of_range_and_unreadable_numbers_are_refused() {
     let (mut s, _, _) = abutting();
+    let before = s.doc().unwrap().doc.clone();
+    let undo_len = s.doc().unwrap().history.undo.len();
     for p in [json!({"thickness": 1e300}), json!({"thickness": 0}), json!({"heightWidth": 0}), json!({"tintReduction": 101})] {
         assert!(s.execute("object.pathfinder.trap", &p).is_err(), "{p}");
     }
-    // A thickness that isn't a number falls back to the default.
-    let r = s.execute("object.pathfinder.trap", &json!({"thickness": "NaN", "tintReduction": 100})).unwrap();
+    // A value of the wrong type is refused with an error naming the param, and changes nothing.
+    for (p, want) in [
+        (json!({"thickness": "NaN"}), "`thickness` must be a number, not \"NaN\""),
+        (json!({"thickness": true}), "`thickness` must be a number, not true"),
+        (json!({"heightWidth": [100]}), "`heightWidth` must be a number, not [100]"),
+        (json!({"tintReduction": false}), "`tintReduction` must be a number, not false"),
+        (json!({"trapsWithProcessColor": "yes"}), "`trapsWithProcessColor` must be true or false"),
+        (json!({"reverseTraps": 1}), "`reverseTraps` must be true or false"),
+    ] {
+        let r = s.execute("object.pathfinder.trap", &p);
+        assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if msg == want), "{p}: {r:?}");
+    }
+    assert_eq!(s.doc().unwrap().doc, before);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo_len);
+    // Null keeps the default thickness, 0.25 pt; a thickness with a unit is read as a distance.
+    let r = s.execute("object.pathfinder.trap", &json!({"thickness": null, "reverseTraps": null, "tintReduction": 100})).unwrap();
     let bb = traps(&s, &r)[0].geometric_bounds().unwrap();
     assert!(near(bb.x1, 50.25), "{bb:?}");
+    s.execute("edit.undo", &json!({})).unwrap();
+    let r = s.execute("object.pathfinder.trap", &json!({"thickness": "0.1 in", "tintReduction": 100})).unwrap();
+    let bb = traps(&s, &r)[0].geometric_bounds().unwrap();
+    assert!(near(bb.x1, 57.2), "{bb:?}");
 }
 
 #[test]

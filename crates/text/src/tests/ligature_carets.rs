@@ -629,8 +629,93 @@ fn an_upright_ligature_takes_its_caret_down_its_cell() {
     assert!((at(900) - 0.5).abs() < 1e-9, "{}", at(900));
 }
 
+#[test]
+fn feature_only_settings_keep_a_ligature_whole() {
+    let db = db_with(vertical_ligature_caret_font(280));
+    for vertical in [false, true] {
+        let mut text = point("fi", VERTICAL_LIGATURE_CARET_FAMILY);
+        text.vertical = vertical;
+        let before = layout(&db, &text);
+        assert_eq!(before.glyphs.len(), 1, "the fixture ligates fi");
+        let plain = &before.glyphs[0];
+        for byte in [0, 1] {
+            for feature in ["salt=2", "ss03"] {
+                let mut featured = text.clone();
+                crate::edit::style_range(&mut featured.runs, byte, byte + 1, |st| st.features = vec![feature.into()]);
+                let after = layout(&db, &featured);
+                assert_eq!(after.glyphs.len(), 1, "{feature} at {byte}, vertical {vertical}: an unchanged fi stays ligated");
+                let glyph = &after.glyphs[0];
+                assert_eq!((glyph.gid, glyph.byte, glyph.len), (plain.gid, 0, 2));
+                assert_eq!(glyph.origin, plain.origin);
+                assert_eq!(glyph.xf, plain.xf);
+                assert_eq!(glyph.advance, plain.advance);
+                assert_eq!(glyph.carets, plain.carets);
+            }
+        }
+    }
+}
+
+#[test]
+fn drawing_differences_still_split_a_feature_styled_ligature() {
+    let db = db_with(ligature_caret_font(None));
+    let face = db.face(LIGATURE_CARET_FAMILY, "Regular").expect("the test face");
+    let changes: [fn(&mut CharStyle); 3] =
+        [|st| st.fill = vectorcraft_doc::color::Paint::None, |st| st.baseline_shift = 10.0, |st| st.underline = true];
+    for (i, change) in changes.into_iter().enumerate() {
+        for byte in [0, 1] {
+            let mut text = point("fi", LIGATURE_CARET_FAMILY);
+            crate::edit::style_range(&mut text.runs, byte, byte + 1, |st| {
+                st.features = vec!["salt=2".into()];
+                change(st);
+            });
+            let after = layout(&db, &text);
+            assert_eq!(after.glyphs.iter().map(|g| g.gid).collect::<Vec<_>>(), [face.glyph_for('f'), face.glyph_for('i')], "attribute {i} at {byte}");
+            for (byte, glyph) in after.glyphs.iter().enumerate() {
+                assert_eq!((glyph.byte, glyph.len, glyph.run), (byte, 1, byte), "split glyphs keep their own drawing style");
+            }
+        }
+    }
+}
+
+#[test]
+fn a_ligature_feature_still_applies_only_to_its_character_range() {
+    let db = db_with(ligature_caret_font(None));
+    let face = db.face(LIGATURE_CARET_FAMILY, "Regular").expect("the test face");
+    let mut text = point("fifi", LIGATURE_CARET_FAMILY);
+    crate::edit::style_range(&mut text.runs, 0, 1, |st| st.features = vec!["-liga".into()]);
+    let after = layout(&db, &text);
+    let glyphs = after.glyphs.iter().map(|g| (g.gid, g.byte, g.len)).collect::<Vec<_>>();
+    let ligature = u32::from(source_sans_gid(LIGATURE_CARET_GLYPH).expect("the fixture's unencoded ligature glyph"));
+    assert_eq!(glyphs, [(face.glyph_for('f'), 0, 1), (face.glyph_for('i'), 1, 1), (ligature, 2, 2)]);
+}
+
+/// Horizontal type does not read Standard Vertical Roman Alignment or the tate-chu-yoko offsets, so
+/// setting one of them on the f of "fi" keeps the ligature. Vertical type reads them per glyph, so
+/// there the f is shaped apart from the i.
+#[test]
+fn vertical_only_settings_keep_a_horizontal_ligature_whole() {
+    let db = db_with(vertical_ligature_caret_font(280));
+    let marks: [fn(&mut CharStyle); 3] = [|s| s.standard_vertical_roman = true, |s| s.tcy_up_down = 10.0, |s| s.tcy_left_right = 10.0];
+    for (i, mark) in marks.into_iter().enumerate() {
+        for vertical in [false, true] {
+            let mut t = point("fi", VERTICAL_LIGATURE_CARET_FAMILY);
+            t.vertical = vertical;
+            let plain = t.runs[0].style.clone();
+            let mut marked = plain.clone();
+            mark(&mut marked);
+            t.runs = vec![
+                vectorcraft_doc::TextRun { text: "f".into(), style: marked, inline: None },
+                vectorcraft_doc::TextRun { text: "i".into(), style: plain, inline: None },
+            ];
+            let l = layout(&db, &t);
+            let joined = l.glyphs.iter().any(|g| g.len == 2);
+            assert_eq!(joined, !vertical, "setting {i}, vertical {vertical}: {:?}", l.glyphs);
+        }
+    }
+}
+
 /// On a path, an upright ligature in vertical type stands with its top toward the path's start, and
-/// its cell runs from 0.12 em before the pen to 0.88 em after it, with or without the font's vertical
+/// its cell runs one em from the pen, as in vertical point type, with or without the font's vertical
 /// metrics. The inner stop lies at the middle of that cell, and the first character's selection ends
 /// there.
 #[test]
@@ -648,21 +733,21 @@ fn an_upright_ligature_on_a_path_takes_its_stop_in_its_turned_cell() {
         assert!(l.on_path);
         let Some(g) = l.glyphs.iter().find(|g| g.len == 2) else { panic!("f + i is one glyph: {:?}", l.glyphs) };
         assert_eq!(g.carets, vec![(1, 0.5)], "{family}");
-        assert!((g.width - 100.0).abs() < 1e-9 && (g.width_start + 12.0).abs() < 1e-9, "{family}: {} {}", g.width, g.width_start);
+        assert!((g.width - 100.0).abs() < 1e-9 && g.width_start.abs() < 1e-9, "{family}: {} {}", g.width, g.width_start);
         let x = |b| caret_position(&l, b).0.x - g.origin.x;
-        assert!((x(1) - 38.0).abs() < 1e-6, "{family}: {}", x(1));
+        assert!((x(1) - 50.0).abs() < 1e-6, "{family}: {}", x(1));
         let q = selection_quads(&l, 0, 1);
         assert_eq!(q.len(), 1, "{q:?}");
-        assert!(((q[0][1] - q[0][0]).hypot() - 38.0).abs() < 1e-6, "{family}: {q:?}");
-        // A baseline shift moves the turned glyph along the path, and its stop with it.
-        let ink = g.outline.bounding_box().x0;
+        assert!(((q[0][1] - q[0][0]).hypot() - 50.0).abs() < 1e-6, "{family}: {q:?}");
+        // A baseline shift moves the turned glyph across the path, and leaves its stop in place.
+        let ink = g.outline.bounding_box();
         t.runs[0].style.baseline_shift = 10.0;
         let l = layout(&db, &t);
         let Some(s) = l.glyphs.iter().find(|g| g.len == 2) else { panic!("f + i is one glyph: {:?}", l.glyphs) };
-        let moved = s.outline.bounding_box().x0 - ink;
-        assert!(moved.abs() > 1.0, "{family}: the shift moves the glyph along the path: {moved}");
+        let moved = s.outline.bounding_box().center() - ink.center();
+        assert!((moved.x.abs()) < 1e-6 && (moved.y + 10.0).abs() < 1e-6, "{family}: the shift moves the glyph to the path's left: {moved:?}");
         let stop = caret_position(&l, 1).0.x - s.origin.x;
-        assert!((stop - 38.0 - moved).abs() < 1e-6, "{family}: {stop} against {}", 38.0 + moved);
+        assert!((stop - 50.0).abs() < 1e-6, "{family}: {stop}");
         // Horizontal Scale widens the glyph across the path; its stop stays inside the glyph.
         t.runs[0].style.baseline_shift = 0.0;
         t.runs[0].style.h_scale = 200.0;
@@ -693,7 +778,7 @@ fn an_upright_ligature_on_a_path_takes_its_stop_in_its_turned_cell() {
 /// On a path, an upright ligature in vertical type reads along the path in order: the top of its
 /// cell comes first, and its font caret (600 units down the cell) is drawn where the caret, a click
 /// and the selection put the stop, on a path running either way with any path effect. A glyph lying
-/// on its side keeps its top toward the path's end.
+/// on its side is a quarter turn clockwise from that, as horizontal type on the path sets it.
 #[test]
 fn an_upright_ligature_on_a_path_reads_along_it_in_order() {
     use vectorcraft_doc::PathEffect;
@@ -738,8 +823,8 @@ fn an_upright_ligature_on_a_path_reads_along_it_in_order() {
         let (q0, q1) = (along(q[0][0]), along(q[0][1]));
         assert!((q0.min(q1) - drawn.min(0.0)).abs() < 1e-6 && (q0.max(q1) - drawn.max(0.0)).abs() < 1e-6, "{to} {effect:?}: {q:?} against {drawn}");
     }
-    // Without Standard Vertical Roman Alignment the letter lies on its side: its top still faces
-    // the path's end and its advance runs across the path, to its right.
+    // Without Standard Vertical Roman Alignment the letter lies on its side: its top faces the
+    // path's left and its advance runs along the path.
     let mut line = BezPath::new();
     line.move_to((0.0, 0.0));
     line.line_to((1000.0, 0.0));
@@ -749,9 +834,9 @@ fn an_upright_ligature_on_a_path_reads_along_it_in_order() {
     let l = layout(&db, &t);
     let Some(s) = l.glyphs.iter().find(|g| g.len == 2) else { panic!("f + i is one glyph: {:?}", l.glyphs) };
     let tangent = Vec2::new(s.angle.cos(), s.angle.sin());
-    let right = Vec2::new(-tangent.y, tangent.x);
+    let left = Vec2::new(tangent.y, -tangent.x);
     let (pen, up, ahead) = (s.xf * Point::ZERO, s.xf * Point::new(0.0, -500.0), s.xf * Point::new(500.0, 0.0));
-    assert!((up - pen).dot(tangent) > 1.0 && (ahead - pen).dot(right) > 1.0, "{pen:?} {up:?} {ahead:?}");
+    assert!((up - pen).dot(left) > 1.0 && (ahead - pen).dot(tangent) > 1.0, "{pen:?} {up:?} {ahead:?}");
 }
 
 /// On a path, an upright ligature whose cell Proportional Metrics shortens (`vpal`, from 1000 units

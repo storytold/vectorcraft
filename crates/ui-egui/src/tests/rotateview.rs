@@ -117,7 +117,8 @@ fn control_rotate_view_keeps_press_coordinates_and_shift_snapping_across_request
         send(&mut app, &ctx, "ui.pointer", json!({"mods": {"shift": true}, "events": [{"kind": "drag", "x": x, "y": y}]}));
         assert_eq!(app.view().unwrap().rotation, 45.0, "the same document point does not turn again as the view changes");
     }
-    send(&mut app, &ctx, "ui.pointer", json!({"events": [{"kind": "up", "x": x, "y": y}]}));
+    // Null `mods` keep the default, as an omitted value does.
+    send(&mut app, &ctx, "ui.pointer", json!({"mods": null, "events": [{"kind": "up", "x": x, "y": y, "mods": null}]}));
     assert_eq!(app.view().unwrap().rotation, 45.0);
 }
 
@@ -532,6 +533,23 @@ fn escape_that_ends_a_path_being_drawn_keeps_the_rotation() {
         assert!(!w.app.session.tool_ends_on_escape(w.app.view_info()), "{tool}: the path is ended");
         w.escape(3.0);
         assert_eq!(w.rotation(), 0.0, "{tool}, rubber band {rubber_band}: the next Escape");
+    }
+}
+
+/// A path that is no longer selected is not being drawn: the next Escape resets the view.
+#[test]
+fn escape_after_deselecting_the_path_resets_the_view() {
+    for tool in ["pen", "smartPen", "curvature"] {
+        let mut w = Window::new();
+        w.app.select_tool(tool);
+        let c = w.app.canvas_rect.unwrap().center();
+        w.click(0.0, egui::PointerButton::Primary, c);
+        w.click(0.1, egui::PointerButton::Primary, c + egui::vec2(60.0, 10.0));
+        assert!(w.app.session.tool_ends_on_escape(w.app.view_info()), "{tool}: a path is being drawn");
+        w.app.run("select.none", json!({})).unwrap();
+        assert!(!w.app.session.tool_ends_on_escape(w.app.view_info()), "{tool}: the path is not selected");
+        w.escape(0.2);
+        assert_eq!(w.rotation(), 0.0, "{tool}: one Escape resets the view");
     }
 }
 

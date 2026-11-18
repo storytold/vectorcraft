@@ -17,7 +17,7 @@ use vectorcraft_doc::{Node, NodeId, NodeKind, TraceView};
 use vectorcraft_engine::cmd::TracePresetChange;
 use vectorcraft_engine::cmd::swatchlib::DOCUMENT_SWATCHES;
 
-use super::{first_selected, pstate, set_pstate, swatches};
+use super::{first_node, pstate, set_pstate, swatches};
 use crate::VectorcraftApp;
 use crate::widgets::{self, menu_item};
 
@@ -152,10 +152,10 @@ pub(crate) fn is_trace(n: &Node) -> bool {
 
 /// The object Trace acts on: the first selected image or Image Trace object in paint order, as
 /// `imageTrace.make` takes it, else the first selected object.
-fn target_node(app: &VectorcraftApp) -> Option<Node> {
+fn target_node(app: &VectorcraftApp) -> Option<&Node> {
     let st = app.session.active()?;
     let traceable = |n: &&Node| is_trace(n) || matches!(n.kind, NodeKind::Image(_));
-    st.selection.in_paint_order(&st.doc).into_iter().find_map(|id| st.doc.node(id).filter(traceable).cloned()).or_else(|| first_selected(app))
+    st.selection.in_paint_order(&st.doc).into_iter().find_map(|id| st.doc.node(id).filter(traceable)).or_else(|| first_node(app))
 }
 
 /// The active document and the object Trace acts on.
@@ -166,7 +166,7 @@ fn target_key(app: &VectorcraftApp) -> Option<(u64, NodeId)> {
 /// What Trace acts on: an Image Trace object (with its stored settings), a plain image, or neither.
 fn target(app: &VectorcraftApp) -> (bool, bool, Option<Value>) {
     let Some(n) = target_node(app) else { return (false, false, None) };
-    (is_trace(&n), matches!(n.kind, NodeKind::Image(_)), n.extras().trace.as_deref().cloned())
+    (is_trace(n), matches!(n.kind, NodeKind::Image(_)), n.extras().trace.as_deref().cloned())
 }
 
 /// Whether any selected object is an Image Trace object, wherever it is in the selection.
@@ -349,19 +349,25 @@ pub(crate) fn preset_dropdown(app: &mut VectorcraftApp, ui: &mut Ui, traced_with
 }
 
 /// The Control bar for one selected Image Trace object: its preset, view, the Image Trace panel
-/// and Expand. Whether it is one.
-pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) -> bool {
+/// and Expand. Whether it is one. Each label with its menu, and each button, shows only while the row
+/// has room for it and `reserve` after it, and the controls after one left out are left out too.
+pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui, reserve: f32) -> bool {
     let Some((preset, view)) = selected_trace(app) else { return false };
-    widgets::dim_label(ui, tl!("Preset:"));
-    preset_dropdown(app, ui, &preset, 150.0);
-    view_row(app, ui, view, 190.0);
-    if widgets::icon_button(ui, "image", tl!("Image Trace"), false, 24.0).clicked() {
+    let mut fit = crate::chrome::Fit::new(reserve);
+    if fit.room(ui, &[widgets::dim_label_width(ui, tl!("Preset:")), 150.0]) {
+        widgets::dim_label(ui, tl!("Preset:"));
+        preset_dropdown(app, ui, &preset, 150.0);
+    }
+    if fit.room(ui, &[widgets::dim_label_width(ui, tl!("View:")), 190.0]) {
+        view_row(app, ui, view, 190.0);
+    }
+    if fit.room(ui, &[24.0]) && widgets::icon_button(ui, "image", tl!("Image Trace"), false, 24.0).clicked() {
         open_settings(app);
     }
-    if widgets::flat_button(ui, tl!("Expand"), 64.0).clicked() {
+    if fit.room(ui, &[widgets::flat_button_fit_width(ui, tl!("Expand"), 64.0)]) && widgets::flat_button_fit(ui, tl!("Expand"), 64.0).clicked() {
         app.run("imageTrace.expand", json!({})).ok();
     }
-    ui.separator();
+    fit.separator(ui);
     true
 }
 

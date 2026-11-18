@@ -425,7 +425,7 @@ pub fn report() -> String {
         }
     }
     let mut md = String::from(
-        "## Centre lines\n\nCode-drawn scenes only: 23 scenes, each anti-aliased (8×8 coverage samples) and hard (that coverage thresholded at 0.5). Coordinates, widths and scene Stroke values are fixed; junction/letter/crossing coordinates include the 0.27/0.41 px offset. Create Fills and Strokes are on, Stroke is the scene's limit (13 px, mix 6 px, varying 12 px), Black and White threshold 128, Noise 4, Ignore White on, other settings at their defaults. Today's tracer has no minimum-length setting (the dashed scenes specify 0 for future use).\n\nDistances use dense exact centre samples (≤0.25 px), emitted curves sampled at ≤0.5 px control-polygon steps, and nearest-point searches capped at 30 px. Found is the fraction of true samples within 1.5 px; width errors use output samples within 2 px of a true stroke. Samples inside exact fills are excluded. Topology is recovered from emitted subpath endpoints and intersections, merging coincident positions within 0.05 px; an endpoint contributes one arm, an interior two. Junction matching radius is local true width + 3 px; ends use half-width + 4 px. Each match is used once. Free ends exclude true junctions, corners, other strokes and fills; unmatched emitted ends are spurs. Junctions/ends within 2 px of fills are excluded. End error is distance, with signed error along the outward tangent in parentheses. Coverage is a union of painted output at pixel centres (0.02 px flattening tolerance, actual emitted caps), compared with the exact swept shape at pixel centres, for both input variants. Area error is signed relative to exact area. Anchors counts stroke anchors, including all compound subpaths; paths counts stroked + filled paths. Time covers tracing only, one scene at a time. Profile-dependent columns are unavailable (–).\n\n### Centre line and width (px)\n\n| scene | input | paths | out→true mean / p95 | true→out mean / p95 | found % | width err uniform mean / p95 | variable mean / p95 | profile mean |\n|---|---|---|---|---|---|---|---|---|\n",
+        "## Centre lines\n\nCode-drawn scenes only: 24 scenes, each anti-aliased (8×8 coverage samples) and hard (that coverage thresholded at 0.5). Coordinates, widths and scene Stroke values are fixed; junction/letter/crossing/mixed-width body coordinates include the 0.27/0.41 px offset. Create Fills and Strokes are on, Stroke is the scene's limit (13 px, mix and mixed-width body 6 px, varying 12 px), Black and White threshold 128, Noise 4, Ignore White on, other settings at their defaults. Today's tracer has no minimum-length setting (the dashed scenes specify 0 for future use).\n\nDistances use dense exact centre samples (≤0.25 px), emitted curves sampled at ≤0.5 px control-polygon steps, and nearest-point searches capped at 30 px. Found is the fraction of true samples within 1.5 px; width errors use output samples within 2 px of a true stroke. Samples inside exact fills are excluded. Topology is recovered from emitted subpath endpoints and intersections, merging coincident positions within 0.05 px; an endpoint contributes one arm, an interior two. Junction matching radius is local true width + 3 px; ends use half-width + 4 px. Each match is used once. Free ends exclude true junctions, corners, other strokes and fills; unmatched emitted ends are spurs. Junctions/ends within 2 px of fills are excluded. End error is distance, with signed error along the outward tangent in parentheses. Coverage is a union of painted output at pixel centres (0.02 px flattening tolerance, actual emitted caps), compared with the exact swept shape at pixel centres, for both input variants. Area error is signed relative to exact area. Anchors counts stroke anchors, including all compound subpaths; paths counts stroked + filled paths. Time covers tracing only, one scene at a time. Profile-dependent columns are unavailable (–).\n\n### Centre line and width (px)\n\n| scene | input | paths | out→true mean / p95 | true→out mean / p95 | found % | width err uniform mean / p95 | variable mean / p95 | profile mean |\n|---|---|---|---|---|---|---|---|---|\n",
     );
     for m in &rows {
         writeln!(
@@ -544,7 +544,44 @@ fn known_geometry_measures_junctions_ends_missing_ink_and_caps() {
     let square = render(&TraceResult { paths: vec![TracedPath { square_caps: true, ..diagonal }], ..Default::default() }, 50, 50, false);
     assert!(square.iter().filter(|p| **p).count() > round.iter().filter(|p| **p).count());
     // Preserve the exact catalogue and special scene limits.
-    assert_eq!(scenes::all().len(), 23);
-    assert_eq!((scenes::mix().wmax, scenes::varying().wmax, scenes::dashed(2.0).min_len), (6.0, 12.0, 0.0));
+    assert_eq!(scenes::all().len(), 24);
+    assert_eq!((scenes::mix().wmax, scenes::mixed_width_body().wmax, scenes::varying().wmax, scenes::dashed(2.0).min_len), (6.0, 6.0, 12.0, 0.0));
     assert_eq!(scenes::junctions(4.0).junctions[0].0, P::new(60.27, 40.41));
+}
+
+#[test]
+fn mixed_width_body_is_one_shape_traced_as_a_fill_and_strokes() {
+    let sc = scenes::mixed_width_body();
+    assert_eq!((sc.fills.len(), sc.strokes.len(), sc.junctions.len(), sc.corners.len()), (1, 3, 0, 0));
+    let cov = sc.rasterise();
+    let hard: Vec<f32> = cov.iter().map(|&c| if c >= 0.5 { 1.0 } else { 0.0 }).collect();
+    // The inked pixels form one 8-connected component.
+    let ink: Vec<bool> = hard.iter().map(|&c| c > 0.0).collect();
+    let start = ink.iter().position(|&v| v).unwrap();
+    let mut seen = vec![false; ink.len()];
+    let mut stack = vec![start];
+    seen[start] = true;
+    let mut reached = 0;
+    while let Some(i) = stack.pop() {
+        reached += 1;
+        let (x, y) = ((i % sc.w) as i64, (i / sc.w) as i64);
+        for (dx, dy) in [(-1, -1), (0, -1), (1, -1), (-1, 0), (1, 0), (-1, 1), (0, 1), (1, 1)] {
+            let (nx, ny) = (x + dx, y + dy);
+            if nx < 0 || ny < 0 || nx >= sc.w as i64 || ny >= sc.h as i64 {
+                continue;
+            }
+            let j = ny as usize * sc.w + nx as usize;
+            if ink[j] && !seen[j] {
+                seen[j] = true;
+                stack.push(j);
+            }
+        }
+    }
+    assert_eq!(reached, ink.iter().filter(|&&v| v).count());
+    // Create Strokes splits the shape: its body is one fill and each arm is a stroke reaching its free end.
+    for (input, c) in [("aa", &cov), ("hard", &hard)] {
+        let m = evaluate(&sc, input, c);
+        assert_eq!((m.strokes, m.fills, m.ends_gt, m.ends_found), (3, 1, 3, 3), "{m:?}");
+        assert!(m.complete > 0.95 && m.fill_as_fill > 0.95, "{m:?}");
+    }
 }

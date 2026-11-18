@@ -118,7 +118,8 @@ fn the_legacy_name_is_read_and_plain_pdfs_have_no_editing_data() {
     assert_eq!(editing(&plain), None);
     assert_eq!(import_with_report(&plain, &ImportOptions::default()).unwrap().native, None);
     let r = pdf_with(None, true);
-    assert!(r.warnings.len() == 1 && r.warnings[0].contains("Preserve editing"), "{:?}", r.warnings);
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+    assert!(r.setting_notes.len() == 1 && r.setting_notes[0].contains("Preserve editing"), "{:?}", r.setting_notes);
     assert_eq!(editing(&r.bytes), None);
 }
 
