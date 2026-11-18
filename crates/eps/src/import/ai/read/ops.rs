@@ -1138,13 +1138,47 @@ fn no_guides(n: &Node, depth: usize) -> bool {
     depth <= MAX_DEPTH && !n.is_guide() && n.children().into_iter().flatten().all(|c| no_guides(c, depth + 1))
 }
 
-/// Is `n` a compound path with a guide member whose bounds reach past the bounds of its members that
-/// aren't guides, or with guide members only? Any other object counts as no.
+/// Is `n` a compound path or group with a guide in it whose bounds reach past the bounds of the rest
+/// of its art, or with guides only? Members are looked into to [`MAX_DEPTH`]; deeper counts as yes.
+/// Any other object counts as no.
 fn guides_reach_past(n: &Node) -> bool {
-    let NodeKind::Compound { children, .. } = &n.kind else { return false };
-    let bounds =
-        |guides: bool| children.iter().filter(|c| c.is_guide() == guides).fold(None, |acc, c| vectorcraft_geom::union_opt(acc, c.geometric_bounds()));
-    bounds(true).is_some_and(|g| bounds(false).is_none_or(|o| o.union(g) != o))
+    /// Adds the bounds of the guides in `n`'s members to `guides` and of the rest to `art`; false when
+    /// it is deeper than [`MAX_DEPTH`].
+    fn split(n: &Node, depth: usize, guides: &mut Option<Rect>, art: &mut Option<Rect>) -> bool {
+        depth <= MAX_DEPTH
+            && n.children().into_iter().flatten().all(|c| match c.children() {
+                _ if c.is_guide() => {
+                    *guides = vectorcraft_geom::union_opt(*guides, c.geometric_bounds());
+                    true
+                }
+                Some(_) => split(c, depth + 1, guides, art),
+                None => {
+                    *art = vectorcraft_geom::union_opt(*art, c.geometric_bounds());
+                    true
+                }
+            })
+    }
+    if !matches!(n.kind, NodeKind::Compound { .. } | NodeKind::Group { .. }) {
+        return false;
+    }
+    let (mut guides, mut art) = (None, None);
+    !split(n, 0, &mut guides, &mut art) || guides.is_some_and(|g| art.is_none_or(|o| o.union(g) != o))
+}
+
+/// Do Transform params `p` scale, turn or reflect, so that where the object's bounds lie changes
+/// what they draw? Moving alone doesn't.
+fn transform_measures(p: &serde_json::Value) -> bool {
+    p["scaleH"].as_f64() != Some(100.0)
+        || p["scaleV"].as_f64() != Some(100.0)
+        || p["rotate"].as_f64() != Some(0.0)
+        || p["reflectX"].as_bool() != Some(false)
+        || p["reflectY"].as_bool() != Some(false)
+}
+
+/// Do Free Distort params `p` move a corner of the box, so that where the object's bounds lie
+/// changes what they draw?
+fn free_distort_measures(p: &serde_json::Value) -> bool {
+    p["corners"] != serde_json::json!([[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]])
 }
 
 /// The largest Twist angle, in degrees either way, read as a live effect on an object that isn't a
@@ -1163,7 +1197,11 @@ const MAX_STRAIGHT_TWIST: f64 = 180.0;
 /// compound path with straight segments (only at 0° when its guide members reach past its other
 /// members, see [`guides_reach_past`]), or up to [`MAX_TWIST`] degrees either way on another object
 /// with no guide in it. Transform that scales, turns or reflects is read only when nothing is stroked
-/// (its reference point lies on the bounds without strokes).
+/// (its reference point lies on the bounds without strokes) and, unless Transform Objects is off,
+/// no guide reaches past the rest of the object's art ([`guides_reach_past`]). Free Distort that
+/// moves a corner of a group is read only when no guide in the group reaches past the rest of its
+/// art. The live effect is measured from bounds that take in the guides, so such an object keeps
+/// its drawn look.
 fn moves_with(object: &Node, st: &crate::import::ai::style::ArtStyle) -> bool {
     use crate::import::ai::style::StyleItem;
     let stroked = st.items.iter().any(|i| matches!(i, StyleItem::Stroke { paint, .. } if !paint.is_none()))
@@ -1183,12 +1221,14 @@ fn moves_with(object: &Node, st: &crate::import::ai::style::ArtStyle) -> bool {
             }
             "distort.transform" => {
                 let p = &e.params;
-                !stroked
-                    || (p["scaleH"].as_f64() == Some(100.0)
-                        && p["scaleV"].as_f64() == Some(100.0)
-                        && p["rotate"].as_f64() == Some(0.0)
-                        && p["reflectX"].as_bool() == Some(false)
-                        && p["reflectY"].as_bool() == Some(false))
+                // With Transform Objects off, nothing is placed from the bounds: a style read here and
+                // the object's members paint with no pattern for Transform Patterns to move (`simple`,
+                // `moves_alike`).
+                let placed = p["objects"].as_bool() != Some(false);
+                !transform_measures(p) || (!stroked && (!placed || !guides_reach_past(object)))
+            }
+            "distort.freeDistort" => {
+                !matches!(object.kind, NodeKind::Group { .. }) || !free_distort_measures(&e.params) || !guides_reach_past(object)
             }
             _ => true,
         })
@@ -1432,16 +1472,30 @@ pub(crate) fn read_style_list(section: &[u8]) -> Vec<String> {
     crate::import::ai::style::art_style_list(section).iter().map(|raw| obj::text(raw)).filter(|name| !name.is_empty()).collect()
 }
 
-/// Art style `name` of `section` as the reader reads it ([`StyleRead`]): [`appearance_from_art_style`],
-/// with a style's one gradient fill as `own_gradient`, the object's own gradient, as [`styled`] reads
-/// it on objects other than type. A stroke that names a brush is read with that brush's name, as
-/// [`styled`] reads it on a path or compound path when the Brushes panel keeps that brush at those
-/// settings, which [`crate::import::ai::brush::BrushesRead::style_reads`] checks. `None` when the section
-/// doesn't define it, the reader doesn't read it, or it paints with a pattern or a gradient that
-/// isn't the object's own.
-pub(crate) fn read_art_style(section: &[u8], name: &str, own_gradient: Option<&Paint>) -> Option<StyleRead> {
+/// An art style as the reader parses it ([`parse_art_style`]), which a writer reads on any number of
+/// objects ([`read_parsed_style`], [`parsed_moves_with`],
+/// [`crate::import::ai::brush::BrushesRead::style_reads`]).
+#[derive(Clone, Debug)]
+pub(crate) struct ParsedStyle {
+    pub(in crate::import::ai) style: crate::import::ai::style::ArtStyle,
+}
+
+/// Art style `name` of `section` (the text between `%AI9_BeginArtStyles` and its end) as the reader
+/// parses it. `None` when the section doesn't define it.
+pub(crate) fn parse_art_style(section: &[u8], name: &str) -> Option<ParsedStyle> {
+    crate::import::ai::style::art_styles(section).remove(name).map(|style| ParsedStyle { style })
+}
+
+/// Art style `parsed` as the reader reads it ([`StyleRead`]): [`appearance_from_art_style`], with a
+/// style's one gradient fill as `own_gradient`, the object's own gradient, as [`styled`] reads it on
+/// objects other than type. A stroke that names a brush is read with that brush's name, as [`styled`]
+/// reads it on a path or compound path when the Brushes panel keeps that brush at those settings,
+/// which [`crate::import::ai::brush::BrushesRead::style_reads`] checks. `None` when the reader doesn't
+/// read it, or it paints with a pattern or a gradient that isn't the object's own. `parsed` is left as
+/// it is, for the next object.
+pub(crate) fn read_parsed_style(parsed: &ParsedStyle, own_gradient: Option<&Paint>) -> Option<StyleRead> {
     use crate::import::ai::style::StyleItem;
-    let mut st = crate::import::ai::style::art_styles(section).remove(name)?;
+    let mut st = parsed.style.clone();
     if st.items.iter().filter(|i| matches!(i, StyleItem::Gradient { .. })).count() == 1 {
         let own = own_gradient?;
         for item in &mut st.items {
@@ -1470,11 +1524,10 @@ pub(crate) fn read_art_style(section: &[u8], name: &str, own_gradient: Option<&P
     Some(StyleRead { appearance, simple: st.simple, image_warp: st.image_warp, pathfinder: st.pathfinder, transparency: st.transparency })
 }
 
-/// Is art style `name` of `section` read on `object` as far as an effect that moves the outline
-/// goes: the style has none, or `object` is one [`moves_with`] reads it on, as [`styled`] checks?
-/// `false` when the section doesn't define it.
-pub(crate) fn style_moves_with(section: &[u8], name: &str, object: &Node) -> bool {
-    crate::import::ai::style::art_styles(section).remove(name).is_some_and(|st| !st.moves_outline() || moves_with(object, &st))
+/// Is art style `parsed` read on `object` as far as an effect that moves the outline goes: the style
+/// has none, or `object` is one [`moves_with`] reads it on, as [`styled`] checks?
+pub(crate) fn parsed_moves_with(parsed: &ParsedStyle, object: &Node) -> bool {
+    !parsed.style.moves_outline() || moves_with(object, &parsed.style)
 }
 
 /// A style's stroke as an appearance item (`None` for a fill).
