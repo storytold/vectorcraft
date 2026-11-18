@@ -7605,7 +7605,7 @@ breakText	Glyphs	Glyphes
 	Keep Originals	Conserver les originaux
 @msg	select two circles to bridge	sélectionnez deux cercles à relier
 @msg	one circle is inside the other	un cercle est à l’intérieur de l’autre
-@msg	the circles are too far apart for this radius: raise the radius	les cercles sont trop éloignés pour ce rayon : augmentez le rayon
+@msg	the circles are too far apart for this radius: raise the radius	les cercles sont trop éloignés pour ce rayon : augmentez le rayon
 @msg	the circles are too far apart for this radius	les cercles sont trop éloignés pour ce rayon
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	Tangentes communes…
