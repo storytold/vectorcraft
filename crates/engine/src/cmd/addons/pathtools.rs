@@ -147,7 +147,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add Points at Crossings",
             ["Object", "Plug-ins", "Path Precision Tools"],
             None,
-            "{cut?: bool (false: add anchors where the paths cross; true: also cut them there), selfCrossings?: bool (false: where a path crosses itself too, a curved segment that loops over itself included), ids?: [id…] (default: the selection)} where the paths under the objects cross one another, as one undo step; at most 10000 segments → {ids, crossings (anchors placed)}",
+            "{cut?: bool (false: add anchors where the paths cross; true: also cut them there), selfCrossings?: bool (false: where a path crosses itself too, a curved segment that loops over itself included), ids?: [id…] (default: the selection)} where the paths under the objects cross one another, an open end that lies within 0.001 pt of another path counting as crossing it there, as one undo step; at most 10000 segments → {ids, crossings (anchors placed)}",
             has_selection,
             crossings
         ),

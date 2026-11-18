@@ -1241,9 +1241,10 @@ fn symbol_instances_with_effects_are_charged_to_the_symbol_budget() {
     let inst = d.layers[0].children().unwrap()[0].clone();
     let mut r = Renderer::new();
     r.symbol_nodes = vectorcraft_doc::MAX_SYMBOL_NODES - 1;
-    assert!(r.charge_fx_instance(&d, &inst), "one object fits");
+    let symbols = d.symbol_boxes();
+    assert!(r.charge_fx_instance(&symbols, &inst), "one object fits");
     assert_eq!(r.symbol_nodes, vectorcraft_doc::MAX_SYMBOL_NODES);
-    assert!(!r.charge_fx_instance(&d, &inst), "the next does not");
+    assert!(!r.charge_fx_instance(&symbols, &inst), "the next does not");
     assert_eq!(r.symbol_nodes, vectorcraft_doc::MAX_SYMBOL_NODES);
 }
 
@@ -1348,6 +1349,46 @@ fn each_copy_of_a_fills_or_strokes_transform_draws_its_own_shadow() {
     assert_eq!(img.pixel(50, 20), [0, 255, 0, 255], "the square's stroke shadow");
     assert_eq!(img.pixel(80, 80), [0, 255, 0, 255], "the copy's stroke shadow, 40 pt to the right of its edge");
     assert_eq!(img.pixel(60, 80), [255, 255, 255, 255], "inside the copy's stroke shadow");
+}
+
+/// Each copy of a group's or layer's Transform effect draws the drop shadow listed before the
+/// effect under itself, of all its members together and scaled with it: two red squares side by
+/// side (10..30 together) have one green shadow 20 pt to their right, and their copy scaled 200 %
+/// and moved 60 pt down (0..40 across, 60..100 down) has its own 40 pt to its right. The bounds
+/// reach as far as the copy's shadow, and no further.
+#[test]
+fn each_copy_of_a_groups_or_layers_transform_effect_draws_its_own_shadow() {
+    let shadow = fx("stylize.dropShadow", json!({"x": 20, "y": 0, "blur": 0, "opacity": 100, "mode": "normal", "color": "#00ff00"}));
+    let copies = fx("distort.transform", json!({"scaleH": 200, "scaleV": 200, "moveV": 60, "copies": 1}));
+    let red = Appearance::basic(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+    for layer in [false, true] {
+        let mut d = Document::new(100.0, 100.0);
+        let members: Vec<Arc<Node>> = [Rect::new(10.0, 10.0, 20.0, 30.0), Rect::new(20.0, 10.0, 30.0, 30.0)]
+            .into_iter()
+            .map(|r| Arc::new(Node::path(d.alloc_id(), shapes::rectangle(r), red.clone())))
+            .collect();
+        if layer {
+            let l = Arc::make_mut(&mut d.layers[0]);
+            if let Some(ch) = l.children_mut() {
+                *ch = members;
+            }
+            l.appearance.effects = vec![shadow.clone(), copies.clone()];
+        } else {
+            let mut g = Node::group(d.alloc_id(), members);
+            g.appearance.effects = vec![shadow.clone(), copies.clone()];
+            let l = d.layers[0].id;
+            d.insert(Some(l), 0, g).unwrap();
+        }
+        let img = render(&d);
+        assert_eq!(img.pixel(20, 20), [255, 0, 0, 255], "layer {layer}: the squares");
+        assert_eq!(img.pixel(45, 20), [0, 255, 0, 255], "layer {layer}: the squares' shadow");
+        assert_eq!(img.pixel(20, 80), [255, 0, 0, 255], "layer {layer}: the copy");
+        assert_eq!(img.pixel(70, 80), [0, 255, 0, 255], "layer {layer}: the copy's shadow, 40 pt to its right");
+        assert_eq!(img.pixel(85, 80), [255, 255, 255, 255], "layer {layer}: past the copy's shadow");
+        let n = if layer { d.layers[0].clone() } else { d.layers[0].children().unwrap()[0].clone() };
+        let b = crate::brush_fx::cull_bounds(&d.symbol_boxes(), &n).unwrap();
+        assert!((b.x1 - 80.0).abs() < 1e-9, "layer {layer}: {b:?}");
+    }
 }
 
 /// Each copy of an image's Transform effect draws the drop shadow listed before the effect under

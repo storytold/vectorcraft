@@ -451,8 +451,9 @@ pub fn hit_test_visible_skipping(doc: &Document, p: Point, opt: HitOptions, skip
 /// outline, as a click there hits it.
 pub fn selected_hidden_at(doc: &Document, p: Point, opt: HitOptions, selected: &[NodeId]) -> Option<NodeId> {
     let _walk = ArtWalk::open();
-    let symbols = doc.symbol_boxes();
-    let locks = doc.locked_artboards();
+    // The locks first: they copy the kept art boxes that `symbols` takes, and `symbols` keeps theirs.
+    let locks = doc.locked_artboards_kept();
+    let symbols = doc.kept_symbol_boxes().keeping(&locks.symbols);
     selected.iter().rev().copied().find(|&id| {
         let Some(chain) = doc.ancestry(id) else { return false };
         let nodes: Vec<&Node> = chain.iter().filter_map(|a| doc.node(*a)).collect();
@@ -520,7 +521,9 @@ pub fn objects_at(doc: &Document, p: Point, opt: HitOptions, scope: Option<NodeI
     }
     let mut tops = Vec::new();
     let mut seen = HashSet::new();
-    let symbols = doc.symbol_boxes();
+    // The locks first: they copy the kept art boxes that `symbols` takes, and `symbols` keeps theirs.
+    let locks = doc.locked_artboards_kept();
+    let symbols = doc.kept_symbol_boxes().keeping(&locks.symbols);
     for layer in doc.layers.iter().rev() {
         if !layer.visible || layer.locked || layer.is_template() || doc.pattern_edit.as_ref().is_some_and(|e| e.layer != layer.id) {
             continue;
@@ -535,7 +538,6 @@ pub fn objects_at(doc: &Document, p: Point, opt: HitOptions, scope: Option<NodeI
         }
     }
     // The objects on a locked artboard can't be selected, as `hit_test_skipping` passes over them.
-    let locks = doc.locked_artboards();
     if !locks.is_empty() {
         tops.retain(|id| !doc.node(*id).is_some_and(|n| locks.holds(n)));
     }
@@ -625,7 +627,7 @@ pub const MAX_LOCKED_AT: usize = 20;
 /// (`opt.scope`) only what is inside the isolated group or object.
 pub fn locked_objects_at(doc: &Document, p: Point, opt: HitOptions) -> Vec<NodeId> {
     let _walk = ArtWalk::open();
-    let symbols = doc.symbol_boxes();
+    let symbols = doc.kept_symbol_boxes();
     let mut out = Vec::new();
     if let Some(scope) = opt.scope
         && let Some(isolated) = doc.node(scope)
@@ -725,7 +727,7 @@ fn hit_test_skipping(doc: &Document, p: Point, opt: HitOptions, skip: &dyn Fn(No
         h.layers = h.ancestry.iter().take_while(|a| doc.node(**a).is_some_and(Node::is_layer)).count();
         h
     };
-    let locks = doc.locked_artboards();
+    let locks = doc.locked_artboards_kept();
     let on_locked = |id: NodeId| {
         editable_only
             && !locks.is_empty()
@@ -733,7 +735,8 @@ fn hit_test_skipping(doc: &Document, p: Point, opt: HitOptions, skip: &dyn Fn(No
             && doc.node(id).is_some_and(|n| locks.holds(n))
     };
     let skip = &|id| skip(id) || on_locked(id);
-    let symbols = doc.symbol_boxes();
+    // `locks` copies the kept art boxes that `symbols` takes, and `symbols` keeps theirs.
+    let symbols = doc.kept_symbol_boxes().keeping(&locks.symbols);
     // Isolation mode: only what is inside the isolated container hits. The art around it is
     // locked, and clicks pass through it (#833).
     if editable_only
@@ -799,6 +802,12 @@ static CLIP_REGION: OnceLock<ClipRegion> = OnceLock::new();
 pub fn set_clip_region(f: ClipRegion) {
     // Already set: the same engine, registered by another session.
     let _ = CLIP_REGION.set(f);
+}
+
+/// What the regions of clipping paths with live effects depend on outside the document: the
+/// registered [`LiveInputs`] now, and whether a [`ClipRegion`] is registered.
+pub(crate) fn clip_region_inputs() -> (u64, bool) {
+    (live_inputs(), CLIP_REGION.get().is_some())
 }
 
 /// Does `clip`, or anything it holds, have a visible effect of its own or on a fill or stroke? Only
@@ -1620,7 +1629,7 @@ fn moved(n: &Node, xf: vectorcraft_geom::Affine) -> Node {
 pub fn symbol_part_at(doc: &Document, inst: &Node, p: Point, opt: HitOptions) -> Option<Vec<u32>> {
     let _walk = ArtWalk::open();
     let art = InstanceArt::of(doc, inst)?;
-    let symbols = doc.symbol_boxes();
+    let symbols = doc.kept_symbol_boxes();
     let mut path = vec![];
     let outline = opt.outline || below_preview_off(doc, inst, opt.scope);
     let find = FindPart { art: &art, p, opt, symbols: &symbols, whole_instance: false };
@@ -2042,7 +2051,9 @@ fn previews_off(n: &Node) -> bool {
 fn marquee_with(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool, whole_compounds: bool, outline: bool) -> Vec<NodeId> {
     let _walk = ArtWalk::open();
     let mut out = Vec::new();
-    let symbols = doc.symbol_boxes();
+    // The locks first: they copy the kept art boxes that `symbols` takes, and `symbols` keeps theirs.
+    let locks = doc.locked_artboards_kept();
+    let symbols = doc.kept_symbol_boxes().keeping(&locks.symbols);
     // The objects the marquee may touch ([`Top`]).
     let tops: Vec<Top> = match scope.and_then(|s| doc.node(s)) {
         // Isolated art whose layer, or a group around it, was locked or hidden afterwards: the
@@ -2284,7 +2295,6 @@ fn marquee_with(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool, wh
             }
         }
     }
-    let locks = doc.locked_artboards();
     for (t, r, outline, edge, drawn) in tops {
         if !t.visible || t.locked || locks.holds_id(t.id) {
             continue;

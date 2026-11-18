@@ -608,6 +608,18 @@ impl Node {
         }
     }
 
+    /// [`Self::walk`] that ends at the first node for which `f` returns [`std::ops::ControlFlow::Break`]: no
+    /// node after it is visited, and the break is returned.
+    pub fn try_walk<'a, B>(&'a self, f: &mut impl FnMut(&'a Node) -> std::ops::ControlFlow<B>) -> std::ops::ControlFlow<B> {
+        f(self)?;
+        if let Some(ch) = self.children() {
+            for c in ch {
+                c.try_walk(f)?;
+            }
+        }
+        std::ops::ControlFlow::Continue(())
+    }
+
     /// Count of nodes in this subtree, ruler guides left out.
     pub fn count(&self) -> usize {
         let mut n = 0;
