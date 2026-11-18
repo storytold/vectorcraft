@@ -4532,7 +4532,10 @@ A graphic style holds an appearance (fills, strokes, effects) plus opacity, blen
 object's, type its characters'). `graphicStyle.apply {name, ids?}` gives the objects the style and links them;
 `add: true` adds the style on top of the existing appearance instead. Linked objects stay linked while they keep the
 style's look: editing their appearance or transparency breaks the link, and `graphicStyle.redefine {name?, id?}`
-updates only the objects still linked. The art of a column or marker design in a graph series is never linked:
+updates only the objects still linked. Art dragged off the canvas, or the Appearance panel's thumbnail, dropped on a
+style in the Graphic Styles panel with Alt held runs `graphicStyle.redefine` with that style's `name` and the object's
+`id` (the first object of the art); an object already linked to the style with its look changes nothing. The art of a
+column or marker design in a graph series is never linked:
 `graphicStyle.new` can make a style from it, and `graphicStyle.redefine` leaves its look as it was and unlinks it,
 whether it is the source or a linked object. `graphicStyle.list` returns each style with the ids linked to it and the
 style of the first selected object; `select.same.graphicStyle` selects an object's fellow users.
@@ -5666,7 +5669,10 @@ and `layerRows`, the rows highlighted in the panel.
   layer, group or Intertwine group (on top of its contents), keeping their stacking order; `copy` (Alt-drag) moves
   copies. Layers go only in layers or at the top level and objects in layers, groups and Intertwine groups (see
   Intertwine for the members an Intertwine group takes; an object placed beside a top-level layer goes
-  inside it); a row never goes into itself or a row inside it, and a locked layer or group takes nothing. Dragging the
+  inside it); a row never goes into itself or a row inside it, and a locked layer or group takes nothing. With `copy`,
+  the target may be one of the rows copied: the copies go above or below it, as an Alt-drag onto a row's own row (or a
+  bottom layer's into the empty space under the list) places them, unless objects are copied with a top-level layer
+  that is the target, which would put them inside it (#8237). Dragging the
   selected-art square is `layer.move` with the selected objects. `node.move {id, parent?, index}` is the low-level
   form with the same nesting rules; unlike `layer.move`, it also moves a row into a locked layer or group.
 - **Buttons**: `layer.new {name?, top?, below?, …options}` (above the current layer at its level; `top` with
@@ -7330,8 +7336,8 @@ Guides change where a snapped point lands:
 - `anchorPathLabels` (on by default): off, no "anchor", "center", "path" or "align" label.
 - `measurementLabels` (on by default): off, no size or offset readout while drawing, moving (Free Transform's move
   too), dragging a ruler guide, drawing and resizing an artboard, or moving and resizing a slice.
-- `transformToolsGuides` (on by default): off, no readout while scaling or rotating with the Selection tool, the
-  Free Transform tool or the Rotate, Scale, Shear and Reflect tools.
+- `transformToolsGuides` (on by default): off, no readout while scaling, rotating or shearing with the Selection
+  tool, the Free Transform tool or the Rotate, Scale, Shear and Reflect tools.
 - `objectHighlighting` (on by default; desktop app): off, the Selection tools no longer outline the object under the
   pointer. The outline also needs View › Smart Guides on.
 - `snappingTolerance` (0–40 px, 4 by default): how near an anchor, edge, centre or artboard edge pulls a drawn point,
