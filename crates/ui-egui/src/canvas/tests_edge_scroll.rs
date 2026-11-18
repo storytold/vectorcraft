@@ -2,7 +2,7 @@
 //! shows (#8551): a Selection tool move carries the art along, a drawing tool's shape grows, and
 //! the view stops once the pointer leaves the edge. A click near the edge scrolls nothing.
 
-use super::view::{EDGE_SCROLL_SPEED, EDGE_SCROLL_ZONE, edge_scroll};
+use super::view::{EDGE_SCROLL_SPEED, EDGE_SCROLL_ZONE, edge_scroll, edge_scroll_pixels};
 use super::*;
 use vectorcraft_engine::Session;
 
@@ -57,9 +57,34 @@ fn edge_scroll_moves_the_content_away_from_the_edge_the_pointer_is_near() {
     assert!(edge_scroll(r, pos2(r.left() + 1.0, r.center().y), dt).unwrap().x > 0.0);
     let corner = edge_scroll(r, pos2(r.left() + 1.0, r.top() + 1.0), dt).unwrap();
     assert!(corner.x > 0.0 && corner.y > 0.0, "{corner:?}");
+    // In a corner both ways, but no faster than at one edge.
+    let corner = edge_scroll(r, pos2(r.right() - 1.0, r.bottom() - 1.0), dt).unwrap();
+    assert!(corner.x < 0.0 && corner.y < 0.0 && corner.length() <= full + 1e-3, "{corner:?}");
     assert!(edge_scroll(r, pos2(r.center().x, r.bottom() - 1.0), dt).unwrap().y < 0.0);
     // A stalled frame scrolls a tenth of a second's worth at most.
     assert_eq!(edge_scroll(r, pos2(r.right(), r.center().y), 5.0), Some(right));
+}
+
+/// The view moves by whole device pixels, keeping the rest for the press's next scroll; an axis
+/// the scroll does not move keeps its remainder untouched rather than rounding it each frame.
+#[test]
+fn edge_scroll_pixels_keep_the_remainder_of_an_axis_that_does_not_scroll() {
+    // 10.5 pixels: 11 now (rounded away from zero), half a pixel back owed.
+    let (d, rest) = edge_scroll_pixels((0.0, 0.0), vec2(-10.5, 0.0), 1.0);
+    assert_eq!(d, (-11.0, 0.0));
+    assert_eq!(rest, (0.5, 0.0));
+    // Along the top edge only: x keeps its half pixel, frame after frame, and does not move.
+    let mut rest = rest;
+    for _ in 0..4 {
+        let (d, r) = edge_scroll_pixels(rest, vec2(0.0, 7.0), 1.0);
+        assert_eq!(d, (0.0, 7.0));
+        assert_eq!(r.0, 0.5, "x keeps its remainder");
+        rest = r;
+    }
+    // Scrolling that way again, it counts: 0.5 + 1.5 = 2 pixels.
+    assert_eq!(edge_scroll_pixels(rest, vec2(1.5, 0.0), 1.0).0, (2.0, 0.0));
+    // At 2 device pixels a point.
+    assert_eq!(edge_scroll_pixels((0.0, 0.0), vec2(0.25, -1.0), 2.0), ((1.0, -2.0), (-0.5, 0.0)));
 }
 
 /// The issue's case: zoomed in, a selected object dragged towards the panels on the right reaches
@@ -118,8 +143,22 @@ fn a_rectangle_drag_held_near_the_bottom_edge_keeps_growing() {
     let edge = pos2(start.x + 10.0, rect.bottom() - 2.0);
     frame(&mut app, &ctx, vec![egui::Event::PointerMoved(edge)]);
     let c0 = center(&app);
+    // The bottom of the rectangle drawn so far: the preview in the document.
+    let preview_bottom = |app: &VectorcraftApp| {
+        let st = app.session.active().unwrap();
+        let mut bottom = f64::MIN;
+        st.doc.walk(|n| {
+            if let Some(b) = n.geometric_bounds() {
+                bottom = bottom.max(b.y1);
+            }
+        });
+        bottom
+    };
     for _ in 0..4 {
         frame(&mut app, &ctx, vec![]);
+        // Each held frame the preview reaches the pointer in the view as it is now.
+        let now = Xf::new(rect, app.view().unwrap()).to_doc(edge).y;
+        assert!((preview_bottom(&app) - now).abs() < 0.5, "the preview follows the pointer: {} vs {now}", preview_bottom(&app));
     }
     let c1 = center(&app);
     assert!(c1.y > c0.y && (c1.x - c0.x).abs() < 1e-9, "the view scrolls down: {c0:?} then {c1:?}");
@@ -162,4 +201,31 @@ fn a_hand_drag_held_near_the_edge_does_not_scroll_on() {
     }
     assert_eq!(center(&app), c0);
     frame(&mut app, &ctx, vec![button(edge, false)]);
+}
+
+/// A press held still near the edge while the wheel scrolls the view is not a drag: the pointer
+/// has not moved on screen, so the view does not go on scrolling after the wheel stops.
+#[test]
+fn a_wheel_scroll_under_a_still_press_near_the_edge_does_not_start_edge_scrolling() {
+    let (mut app, ctx, _) = zoomed_in("selection");
+    let rect = app.canvas_rect.unwrap();
+    let at = pos2(rect.right() - 4.0, rect.center().y);
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at), button(at, true)]);
+    let wheel = egui::Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Point,
+        delta: vec2(0.0, 40.0),
+        phase: egui::TouchPhase::Move,
+        modifiers: Default::default(),
+        source: egui::MouseWheelSource::Unknown,
+    };
+    let c0 = center(&app);
+    frame(&mut app, &ctx, vec![wheel]);
+    let wheeled = center(&app);
+    assert_ne!(wheeled, c0, "the wheel scrolls the view");
+    for _ in 0..4 {
+        frame(&mut app, &ctx, vec![]);
+    }
+    // The wheel's own scroll eases out along y over these frames; the right edge would scroll x.
+    assert_eq!(center(&app).x, wheeled.x, "no edge scrolling");
+    frame(&mut app, &ctx, vec![button(at, false)]);
 }

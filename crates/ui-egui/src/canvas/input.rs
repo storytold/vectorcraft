@@ -5,8 +5,8 @@ use super::drag::{
     tool_drag_moved, tool_frame_moves, tool_holds, tool_press_doc_id,
 };
 use super::view::{
-    HOLD_DELAY, HOLD_ZOOM, SCRUB_SLOP, SCRUB_ZOOM, WheelTurn, animated_zoom, edge_scroll, pan_pixels, pan_ppp, rotate_about, scroll_view,
-    touch_gestures, trackpad_turn, wheel, whole_pixels, zoom_about,
+    HOLD_DELAY, HOLD_ZOOM, SCRUB_SLOP, SCRUB_ZOOM, WheelTurn, animated_zoom, edge_scroll, edge_scroll_pixels, pan_pixels, pan_ppp, rotate_about,
+    scroll_view, touch_gestures, trackpad_turn, wheel, whole_pixels, zoom_about,
 };
 use super::{Color32, Drag, Mods, Point, PointerEvent, PointerKind, Pos2, Shape, Stroke, Ui, VectorcraftApp, View, Xf, json};
 
@@ -357,6 +357,8 @@ fn begin_drag(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, p: Pos2) {
         // A new press has not dragged yet, whatever an interrupted one left behind.
         dd.remove::<Point>(tool_drag_doc_id());
         dd.insert_temp(tool_press_doc_id(), xf.to_doc(p));
+        // Edge scrolling waits for the pointer to move away from the press ([`edge_scroll_held`]).
+        dd.insert_temp(edge_scroll_id(), EdgeScroll { press: p, armed: false, rest: (0.0, 0.0) });
         // Space held at the press (Cmd+Space lends the Zoom tool) sizes the marquee until
         // it is let go ([`zoom_marquee_start`]).
         if matches!(d, Drag::ZoomBox { .. }) {
@@ -469,24 +471,54 @@ fn drag_held(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, d: Drag, p: Pos2) 
     }
 }
 
+/// How far the pointer moves on screen from the press, in points, before a held tool drag
+/// scrolls the view at an edge of the canvas ([`edge_scroll_held`]).
+const EDGE_SCROLL_SLOP: f32 = 3.0;
+
+/// A tool press's edge scrolling ([`edge_scroll_held`]), set when the press begins: where on screen
+/// it was pressed, whether the pointer has since moved away from there, and the part of a device
+/// pixel the scrolls of this press have left along each axis. Its own remainder, so the scrolls of
+/// one press neither take nor leave part of a wheel scroll's.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct EdgeScroll {
+    press: Pos2,
+    armed: bool,
+    rest: (f64, f64),
+}
+
+fn edge_scroll_id() -> egui::Id {
+    egui::Id::unique("canvas-edge-scroll")
+}
+
 /// Scroll the view for a tool drag held at `p` near an edge of the canvas ([`edge_scroll`]), and
-/// return the canvas's transform after it; `None` when the view did not move. Only once the press
-/// has dragged (a click near the edge stays a click), with the pointer over the canvas itself (over
-/// a panel the Selection tools hand the art to the panels), and not under a modal dialog.
+/// return the canvas's transform after it; `None` when the view did not move. Only once the pointer
+/// has moved [`EDGE_SCROLL_SLOP`] from the press on screen (a click near the edge stays a click, and
+/// a view scrolled by the wheel under a still press is not a drag), with the pointer over the
+/// canvas itself (over a panel the Selection tools hand the art to the panels), and not under a
+/// modal dialog. The view moves by whole device pixels; the part of a pixel left over waits for the
+/// next frame on an axis that scrolls on, and stays as it is on one that does not.
 fn edge_scroll_held(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, p: Pos2) -> Option<Xf> {
-    let dragged = ui.data(|d| d.get_temp::<Point>(tool_drag_doc_id()).is_some());
-    if !dragged || f.modal || !ui.input(|i| i.pointer.has_pointer()) || !on_canvas(ui, f.resp, p) {
+    let mut st = ui.data(|d| d.get_temp::<EdgeScroll>(edge_scroll_id()))?;
+    if !st.armed && (p - st.press).length() >= EDGE_SCROLL_SLOP {
+        st.armed = true;
+        ui.data_mut(|d| d.insert_temp(edge_scroll_id(), st));
+    }
+    if !st.armed || f.modal || !ui.input(|i| i.pointer.has_pointer()) || !on_canvas(ui, f.resp, p) {
         return None;
     }
     let by = edge_scroll(f.rect, p, ui.input(|i| i.unstable_dt))?;
-    let before = app.view().map(|v| v.center);
-    scroll_view(app, ui, by);
-    let v = *app.view()?;
-    // Less than half a pixel is kept for the next frame: the view has not moved yet.
-    if before == Some(v.center) {
+    let ppp = pan_ppp(app, ui);
+    let ui_zoom = app.canvas_ui_zoom;
+    let ((dx, dy), rest) = edge_scroll_pixels(st.rest, by, ppp);
+    st.rest = rest;
+    ui.data_mut(|d| d.insert_temp(edge_scroll_id(), st));
+    if dx == 0.0 && dy == 0.0 {
         return None;
     }
-    Some(Xf::at(f.rect, &v, app.canvas_ui_zoom))
+    let vm = app.view_mut()?;
+    pan_pixels(vm, (ppp, ui_zoom), (dx, dy));
+    let v = *vm;
+    Some(Xf::at(f.rect, &v, ui_zoom))
 }
 
 /// A drag for each of this frame's moves before the pointer's position ([`tool_frame_moves`]), each

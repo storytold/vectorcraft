@@ -137,7 +137,7 @@ pub(super) const EDGE_SCROLL_SPEED: f32 = 900.0;
 /// seconds (#8551), as the screen points the content moves: away from that edge, so what lies
 /// past it comes into view, faster the nearer the pointer is to the edge. `None` with the pointer
 /// outside the canvas or away from its edges, or with no time passed. A stalled frame counts a
-/// tenth of a second at most.
+/// tenth of a second at most, and in a corner the content moves no faster than near one edge.
 pub(super) fn edge_scroll(rect: egui::Rect, p: Pos2, dt: f32) -> Option<egui::Vec2> {
     if !rect.contains(p) || !p.x.is_finite() || !p.y.is_finite() || !dt.is_finite() || dt <= 0.0 {
         return None;
@@ -163,7 +163,27 @@ pub(super) fn edge_scroll(rect: egui::Rect, p: Pos2, dt: f32) -> Option<egui::Ve
     if dx == 0.0 && dy == 0.0 {
         return None;
     }
-    Some(egui::vec2(dx, dy) * (EDGE_SCROLL_SPEED * dt.min(0.1)))
+    // In a corner the scroll goes both ways, no faster than along one edge.
+    let v = egui::vec2(dx, dy);
+    let v = if v.length() > 1.0 { v / v.length() } else { v };
+    Some(v * (EDGE_SCROLL_SPEED * dt.min(0.1)))
+}
+
+/// An edge scroll of `by` screen points ([`edge_scroll`]) at `ppp` device pixels a point, after the
+/// scrolls of the same press left `rest` device pixels along each axis: the whole device pixels to
+/// move the content by, and what is left. An axis this scroll does not move keeps its remainder as
+/// it is: rounding a half pixel there would move the view one pixel back and forth each frame.
+pub(super) fn edge_scroll_pixels(rest: (f64, f64), by: egui::Vec2, ppp: f32) -> ((f64, f64), (f64, f64)) {
+    let step = |rest: f64, by: f32| {
+        if by == 0.0 {
+            return (0.0, rest);
+        }
+        let total = rest + f64::from(by) * f64::from(ppp);
+        let whole = total.round();
+        (whole, total - whole)
+    };
+    let ((dx, rx), (dy, ry)) = (step(rest.0, by.x), step(rest.1, by.y));
+    ((dx, dy), (rx, ry))
 }
 
 /// Move view `vm`'s content by `(dx, dy)` device pixels along the screen's axes, at `ppp` device
