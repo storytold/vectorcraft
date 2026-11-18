@@ -4026,6 +4026,23 @@ fn selected_path_reason_is_translated() {
     }
 }
 
+/// The error of a played action step is translated in every language of [`COMPLETE_MESSAGES`], with
+/// its reason; the step's number and command id stay as they are.
+#[test]
+fn action_step_errors_are_translated() {
+    let template = "action step {_1} (`{id}`) failed: {reason}";
+    assert!(message_literals().contains(template));
+    let reason = "select a path";
+    let error = format!("action step 4 (`path.reverse`) failed: {reason}");
+    assert_eq!(message(Lang::EN, &error), error);
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        let shown = message(lang, &error);
+        assert!(!shown.starts_with("action step") && shown.contains('4') && shown.contains("`path.reverse`"), "{code}: {shown}");
+        assert!(shown.contains(&message(lang, reason)) && !shown.contains(reason), "{code}: {shown}");
+    }
+}
+
 /// The refusals of a linked JavaScript file or a library's file outside the read roots, of a file
 /// name that fits more than one linked JavaScript file, and of an appearance edit of the art a
 /// graph design draws in a graph series have translated rows in languages that translate every
