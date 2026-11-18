@@ -475,7 +475,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 }
 
 /// Two non-sampler clicks replace egui's last two click times after a consumed pick.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 struct IgnoreSamplerClicks {
     last: Option<(f64, Pos2)>,
     remaining: u8,
