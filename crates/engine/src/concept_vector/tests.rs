@@ -3,13 +3,13 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use serde_json::{Value, json};
 use vectorcraft_doc::{ImageBlob, ImageObject, Node, NodeId, NodeKind, OpacityMask};
-use vectorcraft_geom::{Affine, PathData, Point, SubPath};
+use vectorcraft_geom::{Affine, PathData, Point, Rect, SubPath};
 use vectorcraft_trace::Raster;
 
 use super::offline::{self, ID};
 use super::*;
 use crate::Session;
-use crate::cmd::conceptvector::{ConceptRun, GAP, KEEP_JOBS, PartRun};
+use crate::cmd::conceptvector::{ConceptRun, GAP, KEEP_JOBS, LOOKS, PartRun, place_row};
 
 /// Shapes in four colors on white: a red disc, a blue bar, a green square and a thin black line.
 fn art() -> Raster {
@@ -1187,4 +1187,34 @@ fn insert_moves_the_row_past_a_long_run_of_objects_in_its_way() {
     let placed = bounds(&s, r["ids"][0].as_u64().unwrap());
     let last = 380.0 + 200.0 * f64::from(n - 1) + 10.0;
     assert!((placed.x0 - (last + GAP)).abs() <= 2.0, "{placed:?}");
+}
+
+/// Long objects level with only the second box, and short ones the first box moves past one at a
+/// time: the row ends where moving each box past everything it meets puts it, and each object is
+/// looked at a bounded number of times rather than once for every move.
+#[test]
+fn placing_the_row_looks_at_each_object_a_bounded_number_of_times() {
+    let n = 1000;
+    let row = |x0: f64| vec![Rect::new(x0, 0.0, x0 + 100.0, 100.0), Rect::new(x0 + 124.0, -100.0, x0 + 224.0, 100.0)];
+    // The short objects are 110 apart, too close for the first box (100 wide, GAP each side).
+    let mut obstacles = vec![Rect::new(124.0, -80.0, 120.0 * f64::from(n) + 500.0, -70.0); 1000];
+    obstacles.extend((0..n).map(|i| {
+        let x = 200.0 + 120.0 * f64::from(i);
+        Rect::new(x, 10.0, x + 10.0, 20.0)
+    }));
+    // Every object against every box at every move.
+    let mut x0 = 124.0;
+    let expected = loop {
+        let meets = |a: &Rect, b: &Rect| a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
+        let shift =
+            row(x0).iter().find_map(|r| obstacles.iter().filter(|o| meets(o, r)).map(|o| o.x1).reduce(f64::max).map(|right| right + GAP - r.x0));
+        match shift {
+            None => break x0,
+            Some(by) => x0 += by,
+        }
+    };
+    LOOKS.with(|l| l.set(0));
+    assert_eq!(place_row(&row, 124.0, &obstacles), Some(expected));
+    let looks = LOOKS.with(std::cell::Cell::get);
+    assert!(looks <= 2 * obstacles.len() * 2, "{looks} looks at {} objects", obstacles.len());
 }

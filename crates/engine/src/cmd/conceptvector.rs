@@ -594,42 +594,13 @@ fn insert(s: &mut Session, p: &Value) -> Result<Value> {
             obstacles.push(b);
         }
     }
-    let meets = |a: &Rect, b: &Rect| a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
-    // Only objects level with some box can be in the row's way.
-    let top = boxes.iter().map(|b| b.y0).fold(src.y0, f64::min);
-    let bottom = boxes.iter().map(|b| b.y1).fold(src.y1, f64::max);
-    obstacles.retain(|o| o.y0 < bottom && top < o.y1);
-    // By their left edges. The row only moves right, so only the objects between the row's left
-    // and right edges are looked at: those it has passed are dropped, and the next ones join as
-    // the row reaches them.
-    obstacles.sort_by(|a, b| a.x0.total_cmp(&b.x0));
-    let mut joined = 0;
-    let mut near: Vec<Rect> = vec![];
-    let mut x0 = src.x1 + GAP;
-    let mut placed = false;
-    // Each move takes one box past one obstacle for good, as the row only moves right.
-    for _ in 0..=obstacles.len() * boxes.len() {
-        let at = row(x0);
-        let left = at.iter().map(|r| r.x0).fold(f64::INFINITY, f64::min);
-        let right = at.iter().map(|r| r.x1).fold(f64::NEG_INFINITY, f64::max);
-        while let Some(o) = obstacles.get(joined).filter(|o| o.x0 < right) {
-            near.push(*o);
-            joined += 1;
-        }
-        near.retain(|o| o.x1 > left);
-        // The first box in the way, moved past the rightmost object it meets.
-        let shift = at.iter().find_map(|r| near.iter().filter(|o| meets(o, r)).map(|o| o.x1).reduce(f64::max).map(|right| right + GAP - r.x0));
-        match shift {
-            None => {
-                placed = true;
-                break;
-            }
-            Some(by) => x0 += by,
-        }
-    }
-    let right = row(x0).iter().map(|r| r.x1).fold(f64::NEG_INFINITY, f64::max);
+    let placed = place_row(&row, src.x1 + GAP, &obstacles);
     let room = || bad(C, "there is no room for the results to the right of the image");
-    if !placed || !x0.is_finite() || right > crate::MAX_COORD {
+    let Some(x0) = placed.filter(|x0| x0.is_finite()) else {
+        return Err(room());
+    };
+    let right = row(x0).iter().map(|r| r.x1).fold(f64::NEG_INFINITY, f64::max);
+    if right > crate::MAX_COORD {
         return Err(room());
     }
     let ids = s.edit("Concept to Vector", |d, sel| {
@@ -657,6 +628,55 @@ fn insert(s: &mut Session, p: &Value) -> Result<Value> {
         Ok(ids)
     })?;
     Ok(json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() }))
+}
+
+#[cfg(test)]
+thread_local! {
+    /// How many times [`place_row`] has looked at an object on this thread.
+    pub(crate) static LOOKS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Where the left edge of the row's first box goes, from `start` rightward, so that no box meets
+/// one of `obstacles`: a box in the way moves GAP past the rightmost object it meets. `row(x0)`
+/// gives the boxes with the first one's left edge at `x0`. `None` when the moves run out.
+pub(crate) fn place_row(row: &dyn Fn(f64) -> Vec<Rect>, start: f64, obstacles: &[Rect]) -> Option<f64> {
+    // Each box's objects: those level with it, by their left edges. The row only moves right, so
+    // each object joins its box's list once, when the box's right edge passes its left edge, and
+    // stays: of those joined, only the rightmost right edge matters, and the box meets that object
+    // exactly when the edge is right of the box's left edge.
+    let lanes: Vec<Vec<Rect>> = row(start)
+        .iter()
+        .map(|b| {
+            let mut lane: Vec<Rect> = obstacles.iter().filter(|o| o.y0 < b.y1 && b.y0 < o.y1).copied().collect();
+            lane.sort_by(|a, b| a.x0.total_cmp(&b.x0));
+            lane
+        })
+        .collect();
+    let mut joined = vec![0usize; lanes.len()];
+    let mut reach = vec![f64::NEG_INFINITY; lanes.len()];
+    let mut x0 = start;
+    // Each move takes a box past every object joined to it, so another move of that box needs a
+    // new object to join.
+    for _ in 0..=lanes.iter().map(Vec::len).sum::<usize>() {
+        let mut shift = None;
+        for ((r, lane), (j, far)) in row(x0).iter().zip(&lanes).zip(joined.iter_mut().zip(reach.iter_mut())) {
+            while let Some(o) = lane.get(*j).filter(|o| o.x0 < r.x1) {
+                #[cfg(test)]
+                LOOKS.with(|n| n.set(n.get() + 1));
+                *far = far.max(o.x1);
+                *j += 1;
+            }
+            // The first box in the way, moved past the rightmost object it meets.
+            if shift.is_none() && *far > r.x0 {
+                shift = Some(*far + GAP - r.x0);
+            }
+        }
+        match shift {
+            None => return Some(x0),
+            Some(by) => x0 += by,
+        }
+    }
+    None
 }
 
 pub fn specs() -> Vec<CommandSpec> {
