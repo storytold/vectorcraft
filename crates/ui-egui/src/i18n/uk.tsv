@@ -135,6 +135,7 @@
 	Add to Swatches	Додати до зразків
 	Add Used Colors	Додати використані кольори
 	Additional Plug-ins Folder	Папка додаткових модулів
+	Plug-in Instruction Budget	Бюджет інструкцій модулів
 	Additional Fonts Folder	Папка додаткових шрифтів
 	Adjust Adjoining Width Points	Налаштувати суміжні точки ширини
 	Incoming	Вхідна
@@ -3515,6 +3516,11 @@ digits	Malayalam	Малаялам
 	Search commands, tools, panels and effects…	Пошук команд, інструментів, панелей та ефектів…
 	No commands match	Немає відповідних команд
 	{pos} of {total}: {name}	{pos} з {total}: {name}
+	No menu item	Немає пункту меню
+	Toolbar	Панель інструментів
+	{toolbar}, in the {tool} group	{toolbar}, у групі «{tool}»
+	Tool	Інструмент
+	Command	Команда
 @plural	{n} result|{n} results	{n} результат|{n} результати|{n} результатів
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} з {n} результату. Продовжуйте вводити, щоб звузити їх.|{shown} з {n} результатів. Продовжуйте вводити, щоб звузити їх.|{shown} з {n} результатів. Продовжуйте вводити, щоб звузити їх.
 	Recent Commands	Нещодавні команди
@@ -5760,6 +5766,7 @@ variable-list-end	{0}, {1}	{0} і {1}
 @msg	a linked JavaScript file is outside the read roots	зв’язаний файл JavaScript перебуває поза кореневими папками для читання
 @msg	a linked image file is outside the read roots	зв’язаний файл зображення перебуває поза кореневими папками для читання
 @msg	a linked file's export folder is outside the read roots	папка експорту зв’язаного файлу перебуває поза кореневими папками для читання
+@msg	a linked file's editing data can't be read to check it against the read roots	не вдається прочитати дані редагування зв’язаного файлу, щоб звірити їх із кореневими папками для читання
 @msg	automation path rejected: outside the write root {root}: {path}	шлях автоматизації відхилено: поза кореневою папкою для запису {root}: {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	шлях автоматизації відхилено: поза кореневими папками для запису {roots}: {path}
 @msg	automation path rejected: path is empty	шлях автоматизації відхилено: шлях порожній

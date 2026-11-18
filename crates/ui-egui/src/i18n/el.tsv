@@ -121,6 +121,7 @@
 	Add to Swatches	Προσθήκη στα δείγματα χρωμάτων
 	Add Used Colors	Προσθήκη των χρησιμοποιημένων χρωμάτων
 	Additional Plug-ins Folder	Πρόσθετος φάκελος επεκτάσεων
+	Plug-in Instruction Budget	Προϋπολογισμός εντολών επεκτάσεων
 	Additional Fonts Folder	Πρόσθετος φάκελος γραμματοσειρών
 	Adjust Adjoining Width Points	Ρύθμιση γειτονικών σημείων πλάτους
 	Incoming	Εισερχόμενο
@@ -4179,6 +4180,9 @@ digits	Malayalam	Μαλαγιάλαμ
 	Search commands, tools, panels and effects…	Αναζήτηση εντολών, εργαλείων, πλαισίων και εφέ…
 	No commands match	Καμία εντολή δεν ταιριάζει
 	{pos} of {total}: {name}	{pos} από {total}: {name}
+	No menu item	Χωρίς στοιχείο μενού
+	Toolbar	Γραμμή εργαλείων
+	{toolbar}, in the {tool} group	{toolbar}, στην ομάδα {tool}
 @plural	{n} result|{n} results	{n} αποτέλεσμα|{n} αποτελέσματα
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} από {n} αποτέλεσμα. Συνεχίστε να πληκτρολογείτε για να τα περιορίσετε.|{shown} από {n} αποτελέσματα. Συνεχίστε να πληκτρολογείτε για να τα περιορίσετε.
 	Recent Commands	Πρόσφατες εντολές
@@ -5715,6 +5719,7 @@ variable-list-end	{0}, {1}	{0} και {1}
 @msg	a linked JavaScript file is outside the read roots	ένα συνδεδεμένο αρχείο JavaScript είναι εκτός των ριζών ανάγνωσης
 @msg	a linked image file is outside the read roots	ένα συνδεδεμένο αρχείο εικόνας είναι εκτός των ριζών ανάγνωσης
 @msg	a linked file's export folder is outside the read roots	ο φάκελος εξαγωγής ενός συνδεδεμένου αρχείου είναι εκτός των ριζών ανάγνωσης
+@msg	a linked file's editing data can't be read to check it against the read roots	τα δεδομένα επεξεργασίας ενός συνδεδεμένου αρχείου δεν μπορούν να διαβαστούν για έλεγχο με τις ρίζες ανάγνωσης
 @msg	the library's file is outside the read roots	το αρχείο της βιβλιοθήκης είναι εκτός των ριζών ανάγνωσης
 @msg	{file} names more than one linked JavaScript file	το {file} αντιστοιχεί σε περισσότερα από ένα συνδεδεμένα αρχεία JavaScript
 @msg	automation path rejected: outside the write root {root}: {path}	απορρίφθηκε η διαδρομή αυτοματισμού: εκτός ρίζας εγγραφής {root}: {path}
