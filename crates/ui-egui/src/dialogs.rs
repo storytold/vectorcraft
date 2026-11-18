@@ -419,6 +419,7 @@ registry! {
     SliceOptions: [slices::OPTIONS] => slices::OPTIONS_SPEC,
     DivideSlices: [slices::DIVIDE] => slices::DIVIDE_SPEC,
     EpsOptions: [eps_options::KIND] => eps_options::SPEC,
+    EpsFlattenerOptions: [eps_options::CUSTOM_KIND] => eps_options::CUSTOM_SPEC,
     Recovery: [crate::recovery::KIND] => recovery::SPEC,
     PluginStopped: [safe_mode::STOPPED] => safe_mode::STOPPED_SPEC,
     SafeMode: [safe_mode::KIND] => safe_mode::SPEC,
@@ -656,7 +657,8 @@ pub(crate) fn parent(d: &Dialog) -> Option<Dialog> {
 }
 
 /// `ui.dialog.set` changed `field` of the open dialog from `old`: a choice that sets other fields
-/// sets them as choosing it in the dialog does (Export for Screens' `exportPreset`), a change
+/// sets them as choosing it in the dialog does (Export for Screens' `exportPreset`, EPS Options'
+/// `flattenerPreset`, which drops the Custom… options), a change
 /// to Export for Screens' sub-folder controls ends an applied preset's item folders, as it does in
 /// the dialog, Transform Each's Relative / Absolute keeps the Scale fields' size, and Recolor
 /// Artwork's `group` selects that color group and its `groupAction` runs the button at once. A value
@@ -671,6 +673,10 @@ pub(crate) fn field_set(app: &mut VectorcraftApp, field: &str, old: Option<&Valu
     }
     if let Some(d) = app.ui.dialog.as_ref().filter(|d| d.kind == composite_fonts::KIND) {
         return composite_fonts::field_set(d, field);
+    }
+    if let Some(d) = app.ui.dialog.as_mut().filter(|d| d.kind == eps_options::KIND) {
+        eps_options::field_set(d, field);
+        return Ok(());
     }
     let Some(d) = app.ui.dialog.as_mut().filter(|d| d.kind == export_for_screens::KIND) else { return Ok(()) };
     match field {
@@ -836,6 +842,9 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     if after_panel && !ctx.input(|i| i.key_down(egui::Key::Enter) || i.key_pressed(egui::Key::Enter)) {
         d.fields.remove(AFTER_PANEL);
     }
+    // A body can open another dialog in its place (EPS Options' Custom…): this frame's Enter
+    // doesn't confirm that one.
+    let opened = d.kind.clone();
     let heading = (spec.heading)(&d);
     let revolves = revolve_gizmo::active(&d);
     if revolves {
@@ -935,7 +944,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     if ok_clicked && !rejected && !refused_during_click {
         ok = true;
     }
-    if spec.ok.is_some() && ok_enabled && !after_panel && !rejected && crate::shortcuts::pressed_anew(ctx, egui::Key::Enter) {
+    if spec.ok.is_some() && ok_enabled && !after_panel && !rejected && d.kind == opened && crate::shortcuts::pressed_anew(ctx, egui::Key::Enter) {
         ok = true;
     }
     if discard {
