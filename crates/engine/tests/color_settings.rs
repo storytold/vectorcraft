@@ -978,6 +978,52 @@ fn preserve_cmyk_numbers_proofs_each_color_from_its_inks() {
     assert!(tint != [255; 3] && near(bare, tint), "the bare page shows the paper: {bare:?} vs {tint:?}");
 }
 
+/// With Preserve CMYK Numbers, an image in an opacity mask keeps its pixels as they are, so the
+/// mask covers the same in a pattern's tile as outside one.
+#[test]
+fn preserve_cmyk_numbers_leaves_mask_images_in_pattern_tiles_as_they_are() {
+    let _g = settings();
+    let old = cms::active_settings();
+    let mut s = session();
+    // A K100 square masked by a blue image, the same at (0, 0) and as a pattern's tile.
+    let masked = |s: &mut Session, x: f64| {
+        let obj = rect(s, x, 0.0, 20.0, 20.0);
+        exec(s, "paint.setFill", json!({"ids": [obj.0], "color": {"c": 0, "m": 0, "y": 0, "k": 100}}));
+        let blue = rect(s, x, 0.0, 20.0, 20.0);
+        exec(s, "paint.setFill", json!({"ids": [blue.0], "color": "#0000ff"}));
+        select(s, &[blue]);
+        exec(s, "object.rasterize", json!({"ppi": 72}));
+        let image = s.doc().unwrap().selection.objects[0];
+        select(s, &[obj, image]);
+        exec(s, "transparency.makeOpacityMask", json!({"clip": true}));
+        obj
+    };
+    masked(&mut s, 0.0);
+    let tile = masked(&mut s, 300.0);
+    exec(&mut s, "object.pattern.make", json!({"ids": [tile.0], "name": "Masked Tile", "edit": false}));
+    let band = rect(&mut s, 0.0, 100.0, 200.0, 40.0);
+    exec(&mut s, "paint.setFill", json!({"ids": [band.0], "swatch": "Masked Tile"}));
+    let proof = vectorcraft_render::proof::ProofSetup {
+        target: vectorcraft_render::proof::ProofTarget::Cmyk(cms::GENERIC_CMYK.into()),
+        preserve_numbers: true,
+        ..Default::default()
+    };
+    let doc = s.doc().unwrap().doc.clone();
+    let pixel = |px: &[u8], x: usize, y: usize| [px[(y * 200 + x) * 4], px[(y * 200 + x) * 4 + 1], px[(y * 200 + x) * 4 + 2]];
+    let shown = |proof: Option<vectorcraft_render::proof::ProofSetup>| {
+        let opts = RenderOptions { proof, background: Some([255, 255, 255, 255]), ..Default::default() };
+        let px = Renderer::new().render(&doc, 200, 200, Affine::IDENTITY, &opts).pixels;
+        // The middle of a tile: the tiles start at the art's left and top edges, every 20 points.
+        (pixel(&px, 10, 10), pixel(&px, 50, 130))
+    };
+    let (plain, plain_tile) = shown(None);
+    let (proofed, proofed_tile) = shown(Some(proof));
+    cms::set_active(&old).unwrap();
+    let near = |a: [u8; 3], b: [u8; 3]| a.iter().zip(b).all(|(a, b)| (i32::from(*a) - i32::from(b)).abs() <= 2);
+    assert!(plain != [255; 3] && near(plain, plain_tile), "the tile shows the masked square: {plain:?} vs {plain_tile:?}");
+    assert!(near(proofed, proofed_tile), "the tile's mask covers as the square's does: {proofed:?} vs {proofed_tile:?}");
+}
+
 /// Edit › Color Settings' color management policies decide what opening a document tagged with
 /// profiles other than the working spaces does with them: Preserve Embedded Profiles keeps them,
 /// Off and Preserve Numbers take them off and keep the color numbers, and Convert to Working Space

@@ -699,6 +699,8 @@ impl Cms {
             return self.proof_srgb(self.display_rgb(c), proof);
         }
         match &proof.target {
+            // A device whose profile is not loaded leaves the color as it is, as for a pixel.
+            ProofTarget::Cmyk(name) if cmyk_space(name).is_err() => self.display_rgb(c),
             ProofTarget::WorkingCmyk | ProofTarget::Cmyk(_) => self.proof_cmyk_to_srgb(self.to_cmyk(c, Intent::RelativeColorimetric), proof),
             ProofTarget::Rgb(name) => {
                 // A CMYK color converts straight into the RGB space, so a wide space keeps it.

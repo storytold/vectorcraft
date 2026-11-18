@@ -309,8 +309,9 @@ impl Renderer {
         let failures = crate::paint::decode_failures();
         let pattern_images_left_out = crate::pattern::images_left_out();
         // A proof that preserves the colors' numbers leaves the mask's images as they are, as it
-        // leaves its colors.
-        let plates = if crate::proof::preserving(f.opts).is_some() { None } else { f.plates };
+        // leaves its colors: the frame's, or the ink's in a pattern's tile drawn for that proof.
+        let preserving = crate::proof::preserving(f.opts).is_some() || crate::ink::proof_of(f.ink).is_some_and(|p| crate::proof::preserves(&p));
+        let plates = if preserving { None } else { f.plates };
         self.draw_kept_node(&mut mctx, &Frame { mt: false, ink: Ink::Display, plates, ..*f }, &m.art);
         let incomplete = self.image_left_out.unwrap_or(false)
             || crate::pattern::images_left_out() > pattern_images_left_out
