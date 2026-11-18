@@ -788,6 +788,7 @@ font-technology	Variable	Μεταβλητές
 	Delete Brush	Διαγραφή πινέλου
 	Delete Color	Διαγραφή χρώματος
 	Restore Generated Table	Επαναφορά του παραγόμενου πίνακα
+	Unshift All Colors	Αναίρεση μετατόπισης όλων των χρωμάτων
 	Delete Character Style	Διαγραφή στυλ χαρακτήρων
 	Delete Empty Artboards	Διαγραφή κενών πινάκων σχεδίασης
 	Delete Freeform Point	Διαγραφή ελεύθερου σημείου
@@ -5073,6 +5074,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	choose a location for the package	επιλέξτε τοποθεσία συσκευασίας
 @msg	clipboard is empty	το πρόχειρο είναι κενό
 @msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: τουλάχιστον ένα χρώμα πρέπει να παραμείνει στον πίνακα χρωμάτων
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted: το `{k}` ορίζει ένα χρώμα που ορίζει και άλλο κλειδί
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: το `{h}` δεν είναι έγκυρο χρώμα, όπως το "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: επιτρέπονται το πολύ {MAX_TABLE} χρώματα
 @msg	command `{0}` is not available right now: {1}	η εντολή `{0}` δεν είναι διαθέσιμη αυτήν τη στιγμή: {1}

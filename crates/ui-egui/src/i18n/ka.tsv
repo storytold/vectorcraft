@@ -5379,6 +5379,7 @@ theme	Appearance	იერსახე
 	Delete Brush	ფუნჯის წაშლა
 	Delete Color	ფერის წაშლა
 	Restore Generated Table	გენერირებული ცხრილის აღდგენა
+	Unshift All Colors	ყველა ფერის წანაცვლების მოხსნა
 	Delete Symbol	სიმბოლოს წაშლა
 	Delete the selected symbol?	წაიშალოს მონიშნული სიმბოლო?
 	Delete the selected symbols?	წაიშალოს მონიშნული სიმბოლოები?
@@ -6884,6 +6885,7 @@ font-technology	Variable	ცვლადი
 @msg	choose a location for the package	აირჩიეთ შეფუთვის მდებარეობა
 @msg	clipboard is empty	გაცვლის ბუფერი ცარიელია
 @msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: ფერების ცხრილში ერთი ფერი მაინც უნდა დარჩეს
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted: `{k}` ასახელებს ფერს, რომელსაც სხვა გასაღებიც ასახელებს
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` ფერი არ არის, მაგალითად "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: არაუმეტეს {MAX_TABLE} ფერი
 @msg	command `{0}` is not available right now: {1}	ბრძანება `{0}` ახლა ხელმისაწვდომი არ არის: {1}
