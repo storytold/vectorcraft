@@ -1410,6 +1410,7 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	a linked JavaScript file is outside the read roots	en linket JavaScript-fil ligger uden for læserødderne
 @msg	a linked image file is outside the read roots	en linket billedfil ligger uden for læserødderne
 @msg	a linked file's export folder is outside the read roots	eksportmappen for en linket fil ligger uden for læserødderne
+@msg	a linked file's editing data can't be read to check it against the read roots	redigeringsdataene for en linket fil kan ikke læses for at kontrollere dem mod læserødderne
 @msg	a name names one asset: give multiple: false, or one object	et navn angiver ét aktiv: angiv multiple: false eller ét objekt
 @msg	a namespace declaration uses a reserved prefix or URI	en navnerumserklæring bruger et reserveret præfiks eller en reserveret URI
 @msg	a namespace qualifier is undefined	en navnerumskvalifikator er udefineret

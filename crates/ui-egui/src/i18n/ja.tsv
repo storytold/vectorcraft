@@ -5694,6 +5694,7 @@ liquify-list-end	{0}, {1}	{0}、{1}
 @msg	a linked JavaScript file is outside the read roots	リンクされた JavaScript ファイルが読み込みルートの外にあります
 @msg	a linked image file is outside the read roots	リンクされた画像ファイルが読み込みルートの外にあります
 @msg	a linked file's export folder is outside the read roots	リンクされたファイルの書き出しフォルダーが読み込みルートの外にあります
+@msg	a linked file's editing data can't be read to check it against the read roots	リンクされたファイルの編集データを読み込めないため、読み込みルートと照合できません
 @msg	automation path rejected: outside the write root {root}: {path}	自動化のパスを拒否しました: 書き込みルート {root} の外です: {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	自動化のパスを拒否しました: 書き込みルート {roots} のいずれの中でもありません: {path}
 @msg	automation path rejected: path is empty	自動化のパスを拒否しました: パスが空です

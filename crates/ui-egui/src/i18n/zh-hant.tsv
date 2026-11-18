@@ -2872,6 +2872,7 @@ liquify-list-end	{0}, {1}	{0}和{1}
 @msg	a linked JavaScript file is outside the read roots	連結的 JavaScript 檔案位於所有讀取根目錄之外
 @msg	a linked image file is outside the read roots	連結的影像檔案位於所有讀取根目錄之外
 @msg	a linked file's export folder is outside the read roots	連結檔案的匯出資料夾位於所有讀取根目錄之外
+@msg	a linked file's editing data can't be read to check it against the read roots	無法讀取連結檔案的編輯資料，因此無法對照讀取根目錄進行檢查
 @msg	automation path rejected: outside the write root {root}: {path}	已拒絕自動化路徑：位於寫入根目錄 {root} 之外：{path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	已拒絕自動化路徑：位於所有寫入根目錄 {roots} 之外：{path}
 @msg	automation path rejected: path is empty	已拒絕自動化路徑：路徑是空的

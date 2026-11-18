@@ -5734,6 +5734,7 @@ digits	Malayalam	Malaiàlam
 @msg	a linked JavaScript file is outside the read roots	un fitxer JavaScript enllaçat és fora de les arrels de lectura
 @msg	a linked image file is outside the read roots	un fitxer d’imatge enllaçat és fora de les arrels de lectura
 @msg	a linked file's export folder is outside the read roots	la carpeta d’exportació d’un fitxer enllaçat és fora de les arrels de lectura
+@msg	a linked file's editing data can't be read to check it against the read roots	no es poden llegir les dades d’edició d’un fitxer enllaçat per comprovar-les amb les arrels de lectura
 @msg	the library's file is outside the read roots	el fitxer de la biblioteca és fora de les arrels de lectura
 @msg	{file} names more than one linked JavaScript file	{file} correspon a més d’un fitxer JavaScript enllaçat
 @msg	automation path rejected: outside the write root {root}: {path}	camí d’automatització rebutjat: fora de l’arrel d’escriptura {root}: {path}

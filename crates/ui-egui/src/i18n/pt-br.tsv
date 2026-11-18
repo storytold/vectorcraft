@@ -4884,6 +4884,7 @@ axis	Both	Ambos
 @msg	a linked JavaScript file is outside the read roots	um arquivo JavaScript vinculado está fora das raízes de leitura
 @msg	a linked image file is outside the read roots	um arquivo de imagem vinculado está fora das raízes de leitura
 @msg	a linked file's export folder is outside the read roots	a pasta de exportação de um arquivo vinculado está fora das raízes de leitura
+@msg	a linked file's editing data can't be read to check it against the read roots	não é possível ler os dados de edição de um arquivo vinculado para verificá-los em relação às raízes de leitura
 @msg	automation path rejected: outside the write root {root}: {path}	caminho da automação rejeitado: fora da raiz de gravação {root}: {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	caminho da automação rejeitado: fora das raízes de gravação {roots}: {path}
 @msg	automation path rejected: path is empty	caminho da automação rejeitado: o caminho está vazio

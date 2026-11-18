@@ -2065,6 +2065,7 @@
 @msg	{var_key} must be at most {most}	{var_key} უნდა იყოს მაქსიმუმ {most}
 @msg	a linked image file is outside the read roots	დაკავშირებული გამოსახულების ფაილი წაკითხვის ძირეული საქაღალდეების გარეთაა
 @msg	a linked file's export folder is outside the read roots	დაკავშირებული ფაილის ექსპორტის საქაღალდე წაკითხვის ძირეული საქაღალდეების გარეთაა
+@msg	a linked file's editing data can't be read to check it against the read roots	დაკავშირებული ფაილის რედაქტირების მონაცემების წაკითხვა ვერ ხერხდება წაკითხვის ძირეულ საქაღალდეებთან შესამოწმებლად
 	Neon & Glow	ნეონი და ნათება
 	Show Hidden Panels at Edge	დამალული პანელების ჩვენება კიდესთან
 @msg	`anchor` must be a [subpath, anchor] pair	`anchor` უნდა იყოს წყვილი [subpath, anchor]

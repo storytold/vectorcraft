@@ -5891,6 +5891,7 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	a linked JavaScript file is outside the read roots	propojený soubor JavaScript je mimo kořeny pro čtení
 @msg	a linked image file is outside the read roots	propojený soubor obrázku je mimo kořeny pro čtení
 @msg	a linked file's export folder is outside the read roots	exportní složka propojeného souboru je mimo kořeny pro čtení
+@msg	a linked file's editing data can't be read to check it against the read roots	editační data propojeného souboru nelze přečíst a ověřit vůči kořenům pro čtení
 @msg	automation path rejected: outside the write root {root}: {path}	cesta automatizace odmítnuta: mimo kořen pro zápis {root}: {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	cesta automatizace odmítnuta: mimo kořeny pro zápis {roots}: {path}
 @msg	automation path rejected: path is empty	cesta automatizace odmítnuta: cesta je prázdná
