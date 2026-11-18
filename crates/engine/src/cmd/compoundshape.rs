@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use serde_json::{Value, json};
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind, ShapeMode};
-use vectorcraft_geom::{FillRule, PathData};
+use vectorcraft_geom::{FillRule, PathData, SubPath};
 use vectorcraft_pathops as po;
 use vectorcraft_render::effects;
 
@@ -195,9 +195,11 @@ fn make(s: &mut Session, p: &Value) -> Result<Value> {
 
 /// Member `n` holds an open path that adds no area to a compound shape: one of the paths it takes
 /// part as ([`effects::member_leaves`]), inside a group or a compound path too, has an open subpath
-/// that encloses no area once closed (a straight line, or an evenodd contour traced twice). The area
-/// is the one the path's fill rule gives, which also keeps a self-crossing path whose signed area
-/// is zero (a bow tie) from the warning, as Divide measures it.
+/// that encloses no area once closed (a straight line, or an evenodd contour traced twice), or it
+/// has an open subpath and its subpaths, all closed, enclose no area together (open evenodd
+/// subpaths that cancel one another or a closed subpath). The area is the one the path's fill rule
+/// gives, which also keeps a self-crossing path whose signed area is zero (a bow tie) from the
+/// warning, as Divide measures it. An area that can't be measured gives no warning.
 fn adds_no_area(d: &Document, n: &Node, hook: effects::OutlineHook) -> bool {
     effects::member_leaves(Some(d), n, Some(hook)).iter().any(|leaf| {
         let (paths, rule): (Vec<&PathData>, FillRule) = match &leaf.kind {
@@ -205,13 +207,22 @@ fn adds_no_area(d: &Document, n: &Node, hook: effects::OutlineHook) -> bool {
             NodeKind::Path { path, rule, .. } => (vec![path], *rule),
             _ => return false,
         };
-        paths.iter().flat_map(|p| &p.subpaths).filter(|sp| !sp.closed).any(|sp| {
-            let mut closed = sp.clone();
-            closed.closed = true;
+        let subpaths: Vec<&SubPath> = paths.iter().flat_map(|p| &p.subpaths).collect();
+        if subpaths.iter().all(|sp| sp.closed) {
+            return false;
+        }
+        let closed = |sp: &SubPath| {
+            let mut sp = sp.clone();
+            sp.closed = true;
+            sp
+        };
+        // An area that can't be measured counts as an area, so a failed measurement gives no warning.
+        let no_area = |p: PathData| po::try_area(&p, rule).is_ok_and(|a| a <= 0.0);
+        subpaths.iter().filter(|sp| !sp.closed).any(|sp| {
             // The signed-area test alone only holds for nonzero: evenodd can fill nothing where
             // the signed area is not zero (a contour traced twice).
-            !(rule == FillRule::NonZero && po::encloses_area(sp)) && po::area(&PathData::single(closed), rule) <= 0.0
-        })
+            !(rule == FillRule::NonZero && po::encloses_area(sp)) && no_area(PathData::single(closed(sp)))
+        }) || (subpaths.len() > 1 && no_area(PathData::new(subpaths.iter().map(|sp| closed(sp)).collect())))
     })
 }
 

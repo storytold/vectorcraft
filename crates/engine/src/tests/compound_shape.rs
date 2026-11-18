@@ -702,7 +702,8 @@ fn a_locked_or_hidden_layer_keeps_the_isolated_compound_shape_from_clicks() {
 /// place in the stack, and its reply carries a warning that names Outline Stroke. The shape draws
 /// the area the other members make in that mode: the square alone in Add, or on top in Subtract,
 /// and nothing in Intersect or when the line is the backmost member in Subtract. A line in a group,
-/// beside a closed path too, and an open evenodd square traced twice are the same. An open path that encloses an area once closed (a bow tie
+/// beside a closed path too, an open evenodd square traced twice, and open evenodd subpaths that cancel one another or a closed
+/// subpath of the same path are the same. An open path that encloses an area once closed (a bow tie
 /// whose lobes cancel in signed area included) and closed shapes alone give no warning (#7849).
 #[test]
 fn lines_that_add_no_area_are_reported() {
@@ -724,6 +725,17 @@ fn lines_that_add_no_area_are_reported() {
         run(s, "path.setFillRule", json!({"rule": "evenOdd"}));
         id
     }
+    fn evenodd_of(s: &mut Session, d: &str) -> NodeId {
+        let id = NodeId(run(s, "path.create", json!({ "d": d }))["id"].as_u64().unwrap());
+        run(s, "path.setFillRule", json!({"rule": "evenOdd"}));
+        id
+    }
+    fn two_open_squares_of(s: &mut Session) -> NodeId {
+        evenodd_of(s, "M20 20 L80 20 L80 80 L20 80 M20 20 L80 20 L80 80 L20 80")
+    }
+    fn open_over_closed_of(s: &mut Session) -> NodeId {
+        evenodd_of(s, "M20 20 L80 20 L80 80 L20 80 Z M20 20 L80 20 L80 80 L20 80")
+    }
     fn group_of(s: &mut Session, ids: &[NodeId]) -> NodeId {
         run(s, "select.set", json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()}));
         NodeId(run(s, "object.group", json!({}))["id"].as_u64().unwrap())
@@ -731,8 +743,10 @@ fn lines_that_add_no_area_are_reported() {
     type Build = fn(&mut Session) -> NodeId;
     // (case, mode, the other member, whether it goes behind the 100 pt square, warned, area drawn)
     type Case = (&'static str, &'static str, Build, bool, bool, Option<f64>);
-    let cases: [Case; 11] = [
+    let cases: [Case; 13] = [
         ("an open evenodd square traced twice", "add", twice_around_of, false, true, Some(10_000.0)),
+        ("two open evenodd squares on one another", "add", two_open_squares_of, false, true, Some(10_000.0)),
+        ("an open evenodd square on the same closed square", "add", open_over_closed_of, false, true, Some(10_000.0)),
         ("a line", "add", line_of, false, true, Some(10_000.0)),
         ("a line, subtracting", "subtract", line_of, false, true, Some(10_000.0)),
         ("a line, intersecting", "intersect", line_of, false, true, Some(0.0)),
