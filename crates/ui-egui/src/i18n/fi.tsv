@@ -98,6 +98,19 @@
 	Paste without Formatting	Liitä ilman muotoilua
 	Clear	Tyhjennä
 	Find and Replace…	Etsi ja korvaa…
+	Find and Replace	Etsi ja korvaa
+	Find:	Etsi:
+	Replace With:	Korvaa tekstillä:
+	Replace & Find	Korvaa ja etsi
+	Replace All	Korvaa kaikki
+	Match Case	Sama kirjainkoko
+	Find Whole Word	Etsi koko sana
+	Search Backwards	Etsi taaksepäin
+	Check Hidden Layers	Tarkista piilotetut tasot
+	Check Locked Layers	Tarkista lukitut tasot
+@msg	No matches found	Osumia ei löytynyt
+@msg	Matches replaced: {n}	Korvattuja osumia: {n}
+@msg	no match of `find` at bytes {_1}..{_2} of object {_3}	objektin {_3} tavuissa {_1}..{_2} ei ole haun `find` osumaa
 	Find Next	Etsi seuraava
 	Spelling	Oikeinkirjoitus
 	Auto Spell Check	Automaattinen oikeinkirjoituksen tarkistus
@@ -237,6 +250,16 @@
 	To Center	Keskustaa kohti
 	To Edge	Reunaa kohti
 	Create Object Mosaic…	Luo objektimosaiikki…
+	Create Object Mosaic	Luo objektimosaiikki
+	Current Size:	Nykyinen koko:
+	New Size:	Uusi koko:
+	Tile Spacing:	Laattojen välistys:
+	Number of Tiles:	Laattojen määrä:
+	Constrain Ratio:	Rajoita suhdetta:
+	Result:	Tulos:
+	Resize Using Percentages	Muuta kokoa prosentteina
+	Delete Raster	Poista rasterikuva
+	Use Ratio	Käytä suhdetta
 	Vector Halftone…	Vektorirasterointi…
 	Create Trim Marks	Luo leikkuumerkit
 	Flatten Transparency…	Litistä läpinäkyvyys…
@@ -787,6 +810,9 @@
 	Magic Wand	Taikasauva
 	Navigator	Navigaattori
 	Navigator Panel Options	Navigaattori-paneelin asetukset
+	Attributes Panel Options	Määritteet-paneelin asetukset
+	Number of Recent URLs:	Viimeisimpien URL-osoitteiden määrä:
+@msg	`count` must be a whole number from 1 to 30	`count` on oltava kokonaisluku 1–30
 	Draw Dashed Lines as Solid Lines	Piirrä katkoviivat yhtenäisinä viivoina
 	Pattern Options	Kuvion asetukset
 	Properties	Ominaisuudet
@@ -1536,6 +1562,7 @@ lighting	Light	Valo
 	Save Actions…	Tallenna toiminnot…
 	Load Actions…	Lataa toiminnot…
 	Replace Actions…	Korvaa toiminnot…
+	Clear Actions	Tyhjennä toiminnot
 	Reset Actions	Palauta toiminnot
 	Replace the current actions with the default set?	Korvataanko nykyiset toiminnot oletussarjalla?
 	Append adds the default set after the current sets instead.	Lisää-painike lisää sen sijaan oletussarjan nykyisten sarjojen perään.
@@ -1885,6 +1912,7 @@ digits	Malayalam	Malajalam
 	Duplicate Action or Action Set	Monista toiminto tai toimintosarja
 	Delete the action set “{name}” and its actions?	Poistetaanko toimintosarja ”{name}” ja sen toiminnot?
 	Delete the selected action sets and their actions?	Poistetaanko valitut toimintosarjat ja niiden toiminnot?
+	Delete all action sets and their actions?	Poistetaanko kaikki toimintosarjat ja niiden toiminnot?
 	Delete these {n} graphic styles?	Poistetaanko nämä {n} grafiikkatyyliä?
 	Delete this {n} graphic style?	Poistetaanko tämä {n} grafiikkatyyli?
 	Graphic Style Libraries Menu	Grafiikkatyylikirjastojen valikko
@@ -3305,6 +3333,7 @@ antiAlias	Sharp	Terävä
 	Preserve Editing Capabilities	Säilytä muokkausominaisuudet
 	Responsive	Responsiivinen
 	Show Code	Näytä koodi
+	Show in Browser	Näytä selaimessa
 	Style Attributes	Tyyliattribuutit
 	Style Attributes (Entity References)	Tyyliattribuutit (entiteettiviittaukset)
 	Styling:	Tyylit:
@@ -4264,6 +4293,7 @@ theme	Appearance	Ulkoasu
 	Set Tab Stops	Aseta sarkainkohdat
 	Tab Stops	Sarkainkohdat
 	Flare	Häikäisy
+	Edit Flare	Muokkaa häikäisyä
 	Rays	Säteet
 	Rectangle	Suorakulmio
 	Paintbrush	Maalaussivellin
@@ -4366,6 +4396,8 @@ axis	Both	Molemmat
 	Show	Näytä
 	Copy Width Point	Kopioi leveyspiste
 	Duplicate Artboard	Monista piirtoalusta
+	Click to add an artboard on this side; Alt-click to duplicate this artboard with its art	Lisää piirtoalusta tälle puolelle napsauttamalla, monista piirtoalusta kuvituksineen Alt-napsautuksella
+	Click to add an artboard on this side	Lisää piirtoalusta tälle puolelle napsauttamalla
 	Area / Path Type	Alue- / polkuteksti
 	Decrease Font Size	Pienennä fonttikokoa
 	Decrease Font Size by Five Steps	Pienennä fonttikokoa viisi askelta
@@ -4546,6 +4578,8 @@ font-technology	Variable	Muuttuvat
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Hiiren rulla vierittää piirtopintaa sivuttain, kun Cmd/Ctrl on painettuna.
 	Dragging sideways on a numeric field's label changes the field's value.	Numerokentän nimiön vetäminen sivuttain muuttaa kentän arvoa.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Kahden sormen kiertoele kosketuslevyllä kiertää piirtopinnan näkymää.
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Näppäimen pitäminen painettuna suorittaa työkalun tai komennon sen Pidä pohjassa -sarakkeesta Pikanäppäimissä; lyhyt painallus suorittaa sen tavallisen pikanäppäimen.
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Kuinka monta sekuntia näppäintä on pidettävä painettuna, ennen kuin tavallisen pikanäppäimen sijaan suoritetaan sen pitkän painalluksen pikanäppäin.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Kun siirrät ankkuripisteitä, jokainen käyrä, jonka toinen pää siirtyy, säilyttää muotonsa suhteessa päihinsä.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Työkalun pikanäppäimen pitäminen painettuna valitsee työkalun, kunnes päästät irti, ja sitten edellinen työkalu valitaan uudelleen.
 	Shows the bounding box while you move the selection or draw a shape.	Näyttää rajausruudun, kun siirrät valintaa tai piirrät muotoa.
@@ -4627,6 +4661,7 @@ font-technology	Variable	Muuttuvat
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Kuinka lähelle grafiikkaa osoittimen tai vedettävän pisteen on tultava näytöllä, jotta älykkäät apuviivat kohdistavat siihen; etäisyys on sama kaikilla zoomauksilla.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Kohdistaa janan pään tai keskipisteestä piirretyn ympyrän niin, että se koskettaa lähellä olevaa käyrää.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Kohdistaa janan pään niin, että se kohtaa lähellä olevan suoran segmentin suorassa kulmassa.
+	Edit type set in fonts that aren't available?	Muokataanko tekstiä, jonka fontit eivät ole käytettävissä?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Näyttää piirtopinnalla kunkin viipaleen numeron ruudussa sen vasemmassa yläkulmassa; kun asetus on pois päältä, viipaleiden ääriviivat näkyvät edelleen.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Käyttäjä- ja objektiviipaleiden ääriviivojen ja niiden numeroruutujen väri; automaattiset viipaleet käyttävät siitä himmeämpää sävyä.
 	Reset all preferences to their defaults?	Palautetaanko kaikki asetukset oletuksiin?
@@ -5122,6 +5157,7 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	Installed plug-in {_1}	Asennettiin laajennus {_1}
 @msg	Internal error: {msg} (please report this bug)	Sisäinen virhe: {msg} (ilmoita tästä virheestä)
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	Elävän maalauksen yhdistäminen: valitse elävän maalauksen ryhmä ja lisättävät polut
+@msg	`Face` and `Edge` name the faces and edges of a Live Paint group: give the path another name	`Face` ja `Edge` ovat elävän maalauksen ryhmän pintojen ja reunojen nimiä: anna polulle toinen nimi
 @msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	Elävä maalaus ottaa polkuja ja yhdistelmäpolkuja: muunna teksti, kuvat ja muut objektit ensin poluiksi
 @msg	Live Paint: select paths or compound paths	Elävä maalaus: valitse polkuja tai yhdistelmäpolkuja
 @msg	Live Paint: these paths are too degenerate to paint	Elävä maalaus: nämä polut ovat liian surkastuneita maalattaviksi
@@ -5431,6 +5467,7 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	no graphic style `{n}`	ei grafiikkatyyliä `{n}`
 @msg	no interaction in progress	mikään vuorovaikutus ei ole käynnissä
 @msg	no key object	ei avainobjektia
+@msg	Align to Key Object isn't available with the Artboard tool	”Tasaa avainobjektiin” ei ole käytettävissä piirtoalustatyökalulla
 @msg	no library `{key}` (see {list})	ei kirjastoa `{key}` (ks. {list})
 @msg	no native format	ei omaa tiedostomuotoa
 @msg	no pages	ei sivuja
@@ -5486,6 +5523,8 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	no such spine point	selkärangan pistettä ei ole
 @msg	`with` must be a list of at most 10000 spine point indexes	`with`-arvon on oltava luettelo, jossa on enintään 10000 selkärangan pisteen indeksiä
 @msg	`with` moves points, not a handle	`with` siirtää pisteitä, ei kahvaa
+@msg	`link` and `independent` cannot both be true	`link` ja `independent` eivät voi olla molemmat true
+@msg	`link` places a handle: give `handle`	`link` sijoittaa kahvan: anna `handle`
 @msg	no such spine segment	selkärangan segmenttiä ei ole
 @msg	no such subpath	alipolkua ei ole
 @msg	no such user library	käyttäjäkirjastoa ei ole
@@ -5578,6 +5617,7 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	select a blend	valitse sulautus
 @msg	select a blend or give `id`	valitse sulautus tai anna sen `id`
 @msg	select a clip group	valitse leikkausryhmä
+@msg	select a flare	valitse häikäisy
 @msg	select a gradient mesh	valitse liukuväriverkko
 @msg	select a linked image: an embedded one has no file	valitse linkitetty kuva: upotetulla kuvalla ei ole tiedostoa
 @msg	select a repeat	valitse toisto
@@ -5828,6 +5868,7 @@ variable-list-end	{0}, {1}	{0} ja {1}
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} linkitetty kuva muuttui levyllä: Päivitä linkit näyttää uuden version|{n} linkitettyä kuvaa muuttui levyllä: Päivitä linkit näyttää uudet versiot
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Päivitettiin {n} levyllä muuttunut linkitetty tiedosto|Päivitettiin {n} levyllä muuttunutta linkitettyä tiedostoa
 @msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	asiakirjassa on leikkuuvara, jonka tämä PDF/X-tiedosto jättää pois: ota käyttöön ”Käytä asiakirjan leikkuuvara-asetuksia”
+@msgplural	{n} object reaches the trim edge but stops short of the bleed|{n} objects reach the trim edge but stop short of the bleed	{n} objekti ulottuu leikkuureunaan mutta ei leikkuuvaraan|{n} objektia ulottuu leikkuureunaan mutta ei leikkuuvaraan
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	Vietiin {what}, {n} huomautus: {first}|Vietiin {what}, {n} huomautusta: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} fonttitiedosto on nyt kansiossa {folder}|{n} fonttitiedostoa on nyt kansiossa {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} fonttitiedosto on nyt kansiossa {folder}; {failed} ei voitu lisätä: {reason}|{n} fonttitiedostoa on nyt kansiossa {folder}; {failed} ei voitu lisätä: {reason}
@@ -6579,6 +6620,11 @@ mark-style	Japanese	Japanilainen
 	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Sulje avointen profiilien pyöreät päät. Osittaiset pyöräytykset sulkevat myös leikkauspintansa.
 	Color Panel Options	Väri-paneelin asetukset
 	Color blindness – Tritanopia-type	Värisokeus – tritanopia
+	Show Color Vision Preview	Näytä värinäön esikatselu
+	Protanopia	Protanopia
+	Deuteranopia	Deuteranopia
+	Tritanopia	Tritanopia
+	Achromatopsia	Akromatopsia
 	Create Dimension	Luo mitta
 	Darkness	Tummuus
 	Destination Folder:	Kohdekansio:
@@ -6825,6 +6871,9 @@ mark-style	Japanese	Japanilainen
 	Continue in Background	Jatka taustalla
 	Cancel Export	Peruuta vienti
 @msg	Export cancelled	Vienti peruutettiin
+	Cancel Save	Peruuta tallennus
+@plural	{n} more save waiting|{n} more saves waiting	{n} tallennus odottaa|{n} tallennusta odottaa
+@msg	Save canceled	Tallennus peruutettiin
 # Paragraph panel menu › Justification…
 	Desired	Haluttu
 	Word Spacing:	Sanaväli:
@@ -7310,6 +7359,7 @@ axis	Y Axis	Y-akseli
 	Checkpoint	Tarkastuskohta
 	Inventory Icons	Inventaarioikonit
 	Skill Icons	Taitoikonit
+	Weather Icons	Sääikonit
 	Attack	Hyökkäys
 	Defend	Puolustus
 	Heal	Parannus
@@ -7415,6 +7465,12 @@ axis	Y Axis	Y-akseli
 	Bus Lines	Väylälinjat
 	Terminal Nodes	Liitäntäpisteet
 
+# Original arrow art brushes.
+	Arrows	Nuolet
+	Solid Arrow	Umpinainen nuoli
+	Open Arrow	Avoin nuoli
+	Chevron Arrow	Kulmanuoli
+
 	Notched Ribbon	Lovettu nauha
 	Double Line	Kaksoisviiva
 	Wave	Aalto
@@ -7431,6 +7487,252 @@ axis	Y Axis	Y-akseli
 	Stars	Tähdet
 	Triangles	Kolmiot
 	Sparkles	Kipinät
+	Warm Gray	Lämmin harmaa
+	Cool Gray	Viileä harmaa
+	Neutrals	Neutraalit
+	Ivory	Norsunluu
+	Linen	Pellava
+	Oat	Kaura
+	Greige	Greige
+	Stone	Kivi
+	Taupe	Taupe
+	Slate	Liuskekivi
+	Clay	Savi
+	Terracotta	Terrakotta
+	Ochre	Okra
+	Umber	Umbra
+	Sand	Hiekka
+	Olive	Oliivi
+	Moss	Sammal
+	Rosy	Ruusuinen
+	Neutral	Neutraali
+	Golden	Kultainen
+	Pastel	Pastelli
+	Pastel Red	Pastellinpunainen
+	Pastel Orange	Pastellinoranssi
+	Pastel Amber	Pastellinmeripihka
+	Pastel Yellow	Pastellinkeltainen
+	Pastel Lime	Pastellinlime
+	Pastel Green	Pastellinvihreä
+	Pastel Teal	Pastellinsinivihreä
+	Pastel Cyan	Pastellinsyaani
+	Pastel Azure	Pastellinasuuri
+	Pastel Blue	Pastellinsininen
+	Pastel Violet	Pastellinvioletti
+	Pastel Magenta	Pastellinmagenta
+	Soft Red	Pehmeä punainen
+	Soft Orange	Pehmeä oranssi
+	Soft Amber	Pehmeä meripihka
+	Soft Yellow	Pehmeä keltainen
+	Soft Lime	Pehmeä lime
+	Soft Green	Pehmeä vihreä
+	Soft Teal	Pehmeä sinivihreä
+	Soft Cyan	Pehmeä syaani
+	Soft Azure	Pehmeä asuuri
+	Soft Blue	Pehmeä sininen
+	Soft Violet	Pehmeä violetti
+	Soft Magenta	Pehmeä magenta
+	Vivid Red	Eloisa punainen
+	Vivid Orange	Eloisa oranssi
+	Vivid Amber	Eloisa meripihka
+	Vivid Yellow	Eloisa keltainen
+	Vivid Lime	Eloisa lime
+	Vivid Green	Eloisa vihreä
+	Vivid Teal	Eloisa sinivihreä
+	Vivid Cyan	Eloisa syaani
+	Vivid Azure	Eloisa asuuri
+	Vivid Blue	Eloisa sininen
+	Vivid Violet	Eloisa violetti
+	Vivid Magenta	Eloisa magenta
+	Deep	Syvät
+	Deep Red	Syvä punainen
+	Deep Orange	Syvä oranssi
+	Deep Amber	Syvä meripihka
+	Deep Yellow	Syvä keltainen
+	Deep Lime	Syvä lime
+	Deep Green	Syvä vihreä
+	Deep Teal	Syvä sinivihreä
+	Deep Cyan	Syvä syaani
+	Deep Azure	Syvä asuuri
+	Deep Blue	Syvä sininen
+	Deep Violet	Syvä violetti
+	Deep Magenta	Syvä magenta
+	Gold	Kulta
+	Silver	Hopea
+	Bronze	Pronssi
+	Copper	Kupari
+	Brass	Messinki
+	Rose Gold	Ruusukulta
+	Gunmetal	Tykkimetalli
+	Platinum	Platina
+	Pewter	Tina
+	Ember	Hiillos
+	Lagoon	Laguuni
+	Dusk	Iltahämärä
+	Clay to Teal	Savesta sinivihreään
+	Plum to Olive	Luumusta oliiviin
+	Complementary Coral	Koralli, vastaväri
+	Split Complementary Coral	Koralli, jaettu vastaväri
+	Analogous Coral	Koralli, analoginen
+	Triad Coral	Koralli, triadi
+	Tetrad Coral	Koralli, tetradi
+	Pentagram Coral	Koralli, pentagrammi
+	Complementary Teal	Sinivihreä, vastaväri
+	Split Complementary Teal	Sinivihreä, jaettu vastaväri
+	Analogous Teal	Sinivihreä, analoginen
+	Triad Teal	Sinivihreä, triadi
+	Tetrad Teal	Sinivihreä, tetradi
+	Pentagram Teal	Sinivihreä, pentagrammi
+	Soft Spectrum	Pehmeä spektri
+	Red to Amber	Punaisesta meripihkaan
+	Orange to Yellow	Oranssista keltaiseen
+	Amber to Lime	Meripihkasta limeen
+	Yellow to Green	Keltaisesta vihreään
+	Lime to Teal	Limestä sinivihreään
+	Green to Cyan	Vihreästä syaaniin
+	Teal to Azure	Sinivihreästä asuuriin
+	Cyan to Blue	Syaanista siniseen
+	Azure to Violet	Asuurista violettiin
+	Blue to Magenta	Sinisestä magentaan
+	Violet to Red	Violetista punaiseen
+	Magenta to Orange	Magentasta oranssiin
+	Dawn	Aamunkoitto
+	Noon	Keskipäivä
+	Sunset	Auringonlasku
+	Night	Yö
+	Overcast	Pilvinen
+	White to Black	Valkoisesta mustaan
+	Light Grays	Vaaleat harmaat
+	Dark Grays	Tummat harmaat
+	Warm Grays	Lämpimät harmaat
+	Cool Grays	Viileät harmaat
+	Fade to Transparent	Häivytys läpinäkyvään
+	White Fade	Valkoinen häivytys
+	Vignette	Vinjetti
+	Mist	Usva
+	Petal	Terälehti
+	Fern	Saniainen
+	Smoke	Savu
+	Honey	Hunaja
+	Seafoam	Merivaahto
+	Lavender	Laventeli
+	Driftwood	Ajopuu
+	Ink Wash	Tussilaveeraus
+	Tide	Vuorovesi
+	Bloom	Kukinta
+	Dew	Kaste
+	Pollen	Siitepöly
+	Lichen	Jäkälä
+	Prism Veil	Prismaharso
+	Opal Ribbon	Opaalinauha
+	Pearl Flash	Helmiäisvälähdys
+	Aurora Foil	Revontulifolio
+	Iris Sheen	Iiriskiilto
+	Frost Spectrum	Huurrespektri
+	Silver Tide	Hopeavuoksi
+	Rose Quartz Gleam	Ruusukvartsin hohde
+	Moonstone Shift	Kuukiven väreily
+	Violet Edge	Violetti reuna
+	Mint Halo	Mintunvärinen kehä
+	Amber Corona	Meripihkakorona
+	Polar Glint	Napakiilto
+	Pastel Orbit	Pastellirata
+	Coral and Navy	Koralli ja laivastonsininen
+	Plum and Lime	Luumu ja lime
+	Teal and Gold	Sinivihreä ja kulta
+	Indigo and Peach	Indigo ja persikka
+	Forest and Rose	Metsä ja ruusu
+	Red Glow	Punainen hehku
+	Orange Glow	Oranssi hehku
+	Amber Glow	Meripihkan hehku
+	Yellow Glow	Keltainen hehku
+	Lime Glow	Limen hehku
+	Green Glow	Vihreä hehku
+	Teal Glow	Sinivihreä hehku
+	Cyan Glow	Syaani hehku
+	Azure Glow	Asuurin hehku
+	Blue Glow	Sininen hehku
+	Violet Glow	Violetti hehku
+	Magenta Glow	Magentan hehku
+	Polka Dots	Pallokuvio
+	Vertical Stripes	Pystyraidat
+	Horizontal Stripes	Vaakaraidat
+	Diagonal Stripes	Vinoraidat
+	Checkerboard	Shakkiruudukko
+	Diamonds	Vinoneliöt
+	Crosses	Ristit
+	Coarse Grit	Karkea rae
+	Stipple	Pisteytys
+	Scratches	Naarmut
+	Sparse Flecks	Harvat täplät
+	Dense Flecks	Tiheät täplät
+	Sine Bands	Siniaaltovyöt
+	Ripple Lines	Väreviivat
+	Interference Rings	Interferenssirenkaat
+	Offset Rings	Siirretyt renkaat
+	Warped Checks	Vääristyneet ruudut
+	Pinched Stripes	Puristetut raidat
+	Chevron Pulse	Nuolikuviopulssi
+	Radiating Lenses	Säteilevät linssit
+	Soft Shadow	Pehmeä varjo
+	Hard Shadow	Terävä varjo
+	Lifted Card	Kohotettu kortti
+	Neon Tube	Neonputki
+	Inner Light	Sisävalo
+	Feathered	Pehmeäreunainen
+	Haze	Utu
+	Double Rule	Kaksoisviiva
+	Triple Rule	Kolmoisviiva
+	Dashed Border	Katkoviivareuna
+	Dotted Border	Pisteviivareuna
+	Offset Keyline	Siirretty ääriviiva
+	Inset Keyline	Sisäinen ääriviiva
+	Outside Stroke	Ulkoreunan viiva
+	Pointer	Osoitin
+	Highlighter	Korostuskynä
+	Sketchy Line	Luonnosviiva
+	Scribble Fill	Töherrystäyttö
+	Wobble	Huojunta
+	Zig Zag Edge	Siksakreuna
+	Wavy Edge	Aaltoreuna
+	Puffy	Pullistunut
+	Starburst	Tähtiräjähdys
+	Glossy	Kiiltävä
+	Brushed Metal	Harjattu metalli
+	Spotlight	Kohdevalo
+	Sunset Band	Auringonlaskun vyö
+	Sea Glass	Merilasi
+	Pearl	Helmi
+	Chrome Rim	Kromireuna
+	Glow Orb	Hehkupallo
+	Pill Badge	Pillerimerkki
+	Round Badge	Pyöreä merkki
+	Flag Wave	Liehuva lippu
+	Bulge	Pullistuma
+	Twisted	Kierretty
+	Echo	Kaiku
+	Spiral Copies	Spiraalikopiot
+	Multiply Tint	Kerro-sävy
+	Darken Veil	Tummenna-harso
+	Ghosted	Haamumainen
+	Two Tone	Kaksivärinen
+	Overlay Glaze	Sulautus-lasite
+	Screen Light	Rasteri-valo
+	Soft Light Wash	Pehmeä valo -laveeraus
+	Cyan Neon	Syaani neon
+	Magenta Laser	Magenta laser
+	Amber Tube	Meripihkaputki
+	Electric Lime	Sähköinen lime
+	Pulse Violet	Sykkivä violetti
+	Cobalt Phosphor	Kobolttifosfori
+	Burst	Purkaus
+	Rounded Square	Pyöristetty neliö
+	Sun	Aurinko
+	Moon	Kuu
+	Cloud	Pilvi
+	Rain	Sade
+	Thunder	Ukkonen
+	Snow	Lumi
 	Save Brush Library…	Tallenna sivellinkirjasto…
 @msg	`{_1}` has no brushes to apply	Kohteessa `{_1}` ei ole käytettäviä siveltimiä
 @msg	missing `library` (see brush.libraries)	`library` puuttuu (katso brush.libraries)
@@ -7853,10 +8155,18 @@ breakText	Glyphs	Merkit
 	Smooth Bridge…	Pehmeä silta…
 	Smooth Bridge	Pehmeä silta
 	Keep Originals	Säilytä alkuperäiset
-@msg	select two circles to bridge	valitse kaksi yhdistettävää ympyrää
+@msg	select two or more circles to bridge	valitse vähintään kaksi yhdistettävää ympyrää
 @msg	one circle is inside the other	toinen ympyrä on toisen sisällä
 @msg	the circles are too far apart for this radius: raise the radius	ympyrät ovat liian kaukana toisistaan tälle säteelle: suurenna sädettä
 @msg	the circles are too far apart for this radius	ympyrät ovat liian kaukana toisistaan tälle säteelle
+	Constant Gap	Vakioväli
+	Reach:	Ulottuvuus:
+@msg	the circles are too far apart for this gap: raise the gap	ympyrät ovat liian kaukana toisistaan tälle välille: suurenna väliä
+@msg	the circles are too far apart for this gap	ympyrät ovat liian kaukana toisistaan tälle välille
+@msg	no two circles are within reach: raise the reach	mitkään kaksi ympyrää eivät ole ulottuvilla: suurenna ulottuvuutta
+@msg	select at most 2000 circles to bridge	valitse enintään 2000 yhdistettävää ympyrää
+@msg	that makes too many bridges (at most 8000): lower the reach	siitä tulee liikaa siltoja (enintään 8000): pienennä ulottuvuutta
+@msg	the bridged circles are too complex to unite	yhdistetyt ympyrät ovat liian monimutkaisia koottaviksi yhdeksi muodoksi
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	Yhteiset tangentit…
 	Common Tangents	Yhteiset tangentit
@@ -8388,6 +8698,18 @@ breakText	Glyphs	Merkit
 @msg	A joint does not close by {gap} pt.	Liitos ei sulkeudu, rako {gap} pt.
 @msg	Two panels pass through each other.	Kaksi paneelia kulkee toistensa läpi.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer on oltava "singleLine", "everyLine", "standardSingleLine" tai "standardEveryLine"
+	Tap	Lyhyt painallus
+	Clear Hold	Tyhjennä pitkä painallus
+	Hold Shortcuts	Pitkän painalluksen pikanäppäimet
+	Hold Shortcut Delay	Pitkän painalluksen viive
+	How hold shortcuts work	Näin pitkän painalluksen pikanäppäimet toimivat
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	Napsauta ja paina sitten näppäintä, jota pidetään pohjassa tätä varten (Esc peruuttaa). Näppäimen pitäminen pohjassa suorittaa tämän; lyhyt painallus suorittaa näppäimen oman pikanäppäimen.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	Näppäimen lyhyt painallus suorittaa sen pikanäppäimen. Kun näppäintä pidetään pohjassa viiveen ajan, suoritetaan sen sijaan sen Pidä pohjassa -sarakkeen työkalu tai komento. Pitkän painalluksen pikanäppäin on kirjain-, numero- tai välimerkkinäppäin yksin tai Shiftin kanssa.
+@msg	Hold {_1} is already used by {_2}	Pitkä painallus {_1} on jo käytössä kohteella {_2}
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	pitkän painalluksen pikanäppäin on merkin kirjoittava näppäin yksin tai Shiftin kanssa ({shown} sisältää Cmd-, Ctrl- tai Alt-näppäimen)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} ei voi olla pitkän painalluksen pikanäppäin: käytä kirjainta, numeroa tai välimerkkinäppäintä
+	Dashed Arrow	Katkoviivanuoli
+@msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	viiva tai muu avoin polku, joka ei rajaa aluetta, ei lisää yhdistelmämuotoon aluetta; jos haluat sisällyttää sen, käytä siihen ensin komentoa Objekti › Polku › Ääriviivaa viiva
 	Pressure Sensitive	Paineherkkä
 	Flex Ribbon	Joustava nauha
 	Pulse Stroke	Sykkivä veto

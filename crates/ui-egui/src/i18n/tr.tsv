@@ -540,6 +540,11 @@ font-technology	Variable	Değişken
 	Color blindness – Deuteranopia-type	Renk körlüğü – Döteranopi tipi
 	Color blindness – Protanopia-type	Renk körlüğü – Protanopi tipi
 	Color blindness – Tritanopia-type	Renk körlüğü – Tritanopia tipi
+	Show Color Vision Preview	Renk Görme Önizlemesini Göster
+	Protanopia	Protanopi
+	Deuteranopia	Döteranopi
+	Tritanopia	Tritanopi
+	Achromatopsia	Akromatopsi
 	Color Burn	Renkli Yanık
 	Color conversion:	Renk dönüşümü:
 	Color Dodge	Renk Soldurma
@@ -710,6 +715,16 @@ font-technology	Variable	Değişken
 	Create New Swatch…	Yeni Renk Örneği Oluştur…
 	Create New {kind} Style	Yeni {kind} Stili Oluşturun
 	Create Object Mosaic…	Nesne Mozaiği Oluştur…
+	Create Object Mosaic	Nesne Mozaiği Oluştur
+	Current Size:	Geçerli Boyut:
+	New Size:	Yeni Boyut:
+	Tile Spacing:	Döşeme Aralığı:
+	Number of Tiles:	Döşeme Sayısı:
+	Constrain Ratio:	Oranı Sınırla:
+	Result:	Sonuç:
+	Resize Using Percentages	Yüzdelerle Yeniden Boyutlandır
+	Delete Raster	Raster Görüntüyü Sil
+	Use Ratio	Oranı Kullan
 	Create Outlines	Anahatlar Oluştur
 	Create Path	Yol Oluştur
 	Create PDF layers from layers and sublayers	Katmanlardan ve alt katmanlardan PDF katmanları oluşturun
@@ -837,6 +852,7 @@ font-technology	Variable	Değişken
 	Duplicate Action or Action Set	Eylemi veya Eylem Setini Çoğalt
 	Delete the action set “{name}” and its actions?	“{name}” eylem seti ve eylemleri silinsin mi?
 	Delete the selected action sets and their actions?	Seçili eylem setleri ve eylemleri silinsin mi?
+	Delete all action sets and their actions?	Tüm eylem setleri ve eylemleri silinsin mi?
 	Delete Theme	Temayı Sil
 	Delete theme	Temayı sil
 	Delete these {n} graphic styles?	Bu {n} grafik stilleri silinsin mi?
@@ -973,6 +989,8 @@ font-technology	Variable	Değişken
 	Duplicate	Çoğalt
 	Duplicate and Offset 10 pt	Çoğalt ve Ofset 10 pt
 	Duplicate Artboard	Çalışma Yüzeyini Çoğalt
+	Click to add an artboard on this side; Alt-click to duplicate this artboard with its art	Bu tarafa çalışma yüzeyi eklemek için tıklayın, bu çalışma yüzeyini çizimiyle birlikte çoğaltmak için Alt tuşunu basılı tutarak tıklayın
+	Click to add an artboard on this side	Bu tarafa çalışma yüzeyi eklemek için tıklayın
 	Copy Artboard	Çalışma Yüzeyini Kopyala
 	Cut Artboard	Çalışma Yüzeyini Kes
 	Rename Artboards	Çalışma Yüzeylerini Yeniden Adlandır
@@ -1267,6 +1285,19 @@ font-technology	Variable	Değişken
 	Fill: click for swatches, Shift-click for the color mixer	Doldur: renk örnekleri için tıklayın, renk karıştırıcı için Shift tuşunu basılı tutarak tıklayın
 	Find	Bul
 	Find and Replace…	Bul ve Değiştir…
+	Find and Replace	Bul ve Değiştir
+	Find:	Bul:
+	Replace With:	Şununla Değiştir:
+	Replace & Find	Değiştir ve Bul
+	Replace All	Tümünü Değiştir
+	Match Case	Büyük/Küçük Harf Eşleştir
+	Find Whole Word	Tam Sözcüğü Bul
+	Search Backwards	Geriye Doğru Ara
+	Check Hidden Layers	Gizli Katmanları Denetle
+	Check Locked Layers	Kilitli Katmanları Denetle
+@msg	No matches found	Eşleşme bulunamadı
+@msg	Matches replaced: {n}	Değiştirilen eşleşmeler: {n}
+@msg	no match of `find` at bytes {_1}..{_2} of object {_3}	{_3} nesnesinin {_1}..{_2} baytlarında `find` eşleşmesi yok
 	Find Font	Yazı Tipi Bul
 	Find Font…	Yazı Tipi Bul…
 	Find Next	Sonrakini Bul
@@ -1301,6 +1332,7 @@ font-technology	Variable	Değişken
 	Fit to Selected Art	Seçilen Sanata Sığdır
 	Flag…	Bayrak…
 	Flare	parlama
+	Edit Flare	Parlamayı Düzenle
 	Flare Tool	Mercek Parlaması Aracı
 	Flare Tool Options	Genişletme Aracı Seçenekleri
 	Halo	Hale
@@ -2059,6 +2091,9 @@ font-technology	Variable	Değişken
 	Navigate	Gezin
 	Navigator	Gezgin
 	Navigator Panel Options	Gezgin Paneli Seçenekleri
+	Attributes Panel Options	Nitelikler Paneli Seçenekleri
+	Number of Recent URLs:	Son URL Sayısı:
+@msg	`count` must be a whole number from 1 to 30	`count` 1 ile 30 arasında bir tam sayı olmalıdır
 	Draw Dashed Lines as Solid Lines	Kesikli Çizgileri Düz Çizgi Olarak Çiz
 	Needs the desktop app	Masaüstü uygulaması gerekiyor
 	Neutral Gradients	Nötr Degradeler
@@ -2493,6 +2528,7 @@ shape	Open	Açık
 	Save Actions…	Eylemleri Kaydet…
 	Load Actions…	Eylemleri Yükle…
 	Replace Actions…	Eylemleri Değiştir…
+	Clear Actions	Eylemleri Temizle
 	Reset Actions	Eylemleri Sıfırla
 	Replace the current actions with the default set?	Geçerli eylemler varsayılan setle değiştirilsin mi?
 	Append adds the default set after the current sets instead.	Ekle bunun yerine varsayılan seti geçerli setlerin sonuna ekler.
@@ -2930,6 +2966,8 @@ digits	Malayalam	Malayalam
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Cmd/Ctrl basılıyken fare tekerleği tuvali yana kaydırır.
 	Dragging sideways on a numeric field's label changes the field's value.	Sayısal bir alanın etiketi üzerinde yana sürüklemek alanın değerini değiştirir.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	İzleme dörtgeninde iki parmakla döndürme hareketi tuvalin görünümünü döndürür.
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Bir tuşu basılı tutmak, Klavye Kısayolları'ndaki Basılı tutun sütununda bulunan aracı veya komutu çalıştırır; kısa basış olağan kısayolunu çalıştırır.
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Olağan kısayolu yerine basılı tutma kısayolunun çalışması için bir tuşun kaç saniye basılı tutulması gerektiği.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Bağlantı noktalarını taşıdığınızda, bir ucu taşınan her eğri uçlarına göre şeklini korur.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Bir aracın kısayol tuşunu basılı tutmak, tuşu bırakana kadar o aracı seçer, ardından önceki araç yeniden seçilir.
 	Shows the bounding box while you move the selection or draw a shape.	Seçimi taşırken veya bir şekil çizerken sınırlayıcı kutuyu gösterir.
@@ -3011,6 +3049,7 @@ digits	Malayalam	Malayalam
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Akıllı Kılavuzların yaslaması için işaretçinin veya sürüklenen noktanın ekranda çizime ne kadar yaklaşması gerektiği; mesafe her yakınlaştırmada aynıdır.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Bir çizgi parçasının ucunu veya merkezinden çizilen bir daireyi yakındaki bir eğriye değecek şekilde yaslar.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Bir çizgi parçasının ucunu yakındaki düz bir parçayla dik açıyla buluşacak şekilde yaslar.
+	Edit type set in fonts that aren't available?	Mevcut olmayan yazı tiplerindeki metin düzenlensin mi?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Tuvalde her dilimin numarasını sol üst köşesindeki bir kutuda gösterir; kapalıyken dilimlerin dış çizgileri görünmeye devam eder.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Kullanıcı ve nesne dilimlerinin dış çizgilerinin ve numara kutularının rengi; otomatik dilimler bu rengin daha soluk bir tonunu kullanır.
 	Reset all preferences to their defaults?	Tüm tercihler varsayılanlarına sıfırlansın mı?
@@ -3414,6 +3453,7 @@ digits	Malayalam	Malayalam
 	Show Brush Size	Fırça Boyutunu Göster
 	Show Center	Gösteri Merkezi
 	Show Code	Kodu Göster
+	Show in Browser	Tarayıcıda Göster
 	Show Color Groups	Renk Gruplarını Göster
 	Show Color Swatches	Renk Örneklerini Göster
 	Show Corner Widget	Köşe Widget'ını Göster
@@ -3655,9 +3695,9 @@ digits	Malayalam	Malayalam
 	Styling:	Şekillendirme:
 	Stylize	Stilize Et
 	Subdivisions	Alt bölümler
-	Subscript	Abonelik
-	Subscript (on the roadmap)	Abonelik (yol haritasında)
-	Subscript:	Abonelik:
+	Subscript	Alt simge
+	Subscript (on the roadmap)	Alt simge (yol haritasında)
+	Subscript:	Alt simge:
 	Subset fonts below:	Aşağıdaki yazı tiplerinin alt kümesi:
 	Subtract	Çıkar
 	Suffix	son ek
@@ -4631,6 +4671,7 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	Installed plug-in {_1}	Yüklü eklenti {_1}
 @msg	Internal error: {msg} (please report this bug)	Dahili hata: {msg} (lütfen bu hatayı bildirin)
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	Canlı Boyama Birleştirme: Canlı Boyama grubunu ve eklenecek yolları seçin
+@msg	`Face` and `Edge` name the faces and edges of a Live Paint group: give the path another name	`Face` ve `Edge`, Canlı Boyama grubunun yüzlerinin ve kenarlarının adlarıdır: yola başka bir ad verin
 @msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	Canlı Boyama yolları ve bileşik yolları kabul eder: önce metni, görüntüleri ve diğer nesneleri yollara dönüştürün
 @msg	Live Paint: select paths or compound paths	Canlı Boyama: yolları veya bileşik yolları seçin
 @msg	Live Paint: these paths are too degenerate to paint	Canlı Boyama: Bu yollar boyanamayacak kadar yozlaşmış
@@ -4927,6 +4968,7 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	no graphic style `{n}`	grafik stili yok `{n}`
 @msg	no interaction in progress	herhangi bir etkileşim devam etmiyor
 @msg	no key object	anahtar nesne yok
+@msg	Align to Key Object isn't available with the Artboard tool	Anahtar Nesneye Hizala, Çalışma Yüzeyi Aracı ile kullanılamaz
 @msg	no library `{key}` (see {list})	`{key}` kitaplığı yok (bkz. {list})
 @msg	no native format	yerel format yok
 @msg	no pages	sayfa yok
@@ -5093,6 +5135,7 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	select a Live Paint group	bir Canlı Boyama grubu seçin
 @msg	select a blend	bir karışım seç
 @msg	select a clip group	bir klip grubu seçin
+@msg	select a flare	bir parlama seçin
 @msg	select a gradient mesh	bir degrade ağı seçin
 @msg	select a linked image: an embedded one has no file	bağlantılı bir görsel seçin: gömülü görselin dosyası yok
 @msg	select a repeat	bir tekrar seç
@@ -5325,6 +5368,7 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} bağlantılı görsel diskte değişti: Bağlantıları Güncelle yeni sürümleri gösterir
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Diskte değişen {n} bağlantılı dosya güncellendi
 @msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	belge, bu PDF/X dosyasının dışarıda bıraktığı bir taşma payı ayarlıyor: "Belge taşma payı ayarlarını kullan" seçeneğini açın
+@msgplural	{n} object reaches the trim edge but stops short of the bleed|{n} objects reach the trim edge but stop short of the bleed	{n} nesne kesim kenarına ulaşıyor ancak taşma payından önce bitiyor
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	{what} {n} notla dışa aktarıldı: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} yazı tipi dosyası artık {folder} içinde
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} yazı tipi dosyası artık {folder} içinde; {failed} eklenemedi: {reason}
@@ -6651,6 +6695,8 @@ theme	Appearance	Görünüm
 @msg	no such spine point	böyle bir omurga noktası yok
 @msg	`with` must be a list of at most 10000 spine point indexes	`with` en fazla 10000 omurga noktası dizininden oluşan bir liste olmalıdır
 @msg	`with` moves points, not a handle	`with` noktaları taşır, tutamacı değil
+@msg	`link` and `independent` cannot both be true	`link` ve `independent` aynı anda true olamaz
+@msg	`link` places a handle: give `handle`	`link` bir tutamaç yerleştirir: `handle` verin
 @msg	no such spine segment	böyle bir omurga segmenti yok
 @msg	not a blend	bir karışım değil
 @msg	select a blend or give `id`	bir karışım seçin veya `id` belirtin
@@ -6942,6 +6988,9 @@ variable-list-end	{0}, {1}	{0} ve {1}
 @msg	Flat Logo traced the image at {_1} × {_2} pixels, averaged down from {_3} × {_4}.	Düz Logo modu görüntüyü {_3} × {_4} boyutundan ortalama alarak küçültüp {_1} × {_2} pikselde izledi.
 @plural	{n} more export waiting|{n} more exports waiting	{n} dışa aktarma daha bekliyor|{n} dışa aktarma daha bekliyor
 @msg	Export cancelled	Dışa aktarma iptal edildi
+	Cancel Save	Kaydetmeyi İptal Et
+@plural	{n} more save waiting|{n} more saves waiting	{n} kaydetme daha bekliyor|{n} kaydetme daha bekliyor
+@msg	Save canceled	Kaydetme iptal edildi
 	Add filters from the list above	Yukarıdaki listeden filtre ekleyin
 	Add to Stack	Yığına Ekle
 	Applied Filters	Uygulanan Filtreler
@@ -8801,6 +8850,7 @@ axis	Y Axis	Y ekseni
 @msg	the artboards don't fit on the canvas: fewer artboards, less spacing or a smaller size	çalışma yüzeyleri tuvale sığmıyor: daha az çalışma yüzeyi, daha az aralık veya daha küçük bir boyut kullanın
 @msg	the character's size can't be measured	karakterin boyutu ölçülemiyor
 @msg	the compound shape is too complex to expand	bileşik şekil genişletilemeyecek kadar karmaşık
+@msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	alan çevrelemeyen bir çizgi veya başka bir açık yol bileşik şekle hiçbir alan eklemez; dahil etmek için önce ona Nesne › Yol › Anahat Konturu uygulayın
 @msg	the container of the listed objects is gone	listelenen nesnelerin kapsayıcısı artık yok
 @msg	the copy `{user_id}` can't be read as a library	`{user_id}` kopyası bir kütüphane olarak okunamıyor
 @msg	the copy would leave the canvas	kopya tuvalin dışına çıkardı
@@ -9067,7 +9117,6 @@ axis	Y Axis	Y ekseni
 @msg	{kind} files have no transparency, and the file would have {what}: flatten it first (object.flattenTransparency)	{kind} dosyalarında saydamlık yoktur ve dosyada {what} olurdu: önce düzleştirin (object.flattenTransparency)
 @msg	{kind} images can't be opened (see document.formats)	{kind} görüntüleri açılamıyor (bkz. document.formats)
 @msg	{k} `{v}` is not one of the choices	{k} `{v}` seçeneklerden biri değil
-@msg	{k} has control characters{_1}	{k} denetim karakterleri içeriyor{_1}
 @msg	{k} is too long (at most {MAX_TEXT} characters)	{k} çok uzun (en fazla {MAX_TEXT} karakter)
 @msg	{k} must be > 0	{k} > 0 olmalıdır
 @msg	{k} must be a number (pt) or a length such as "210 mm"	{k} bir sayı (pt) veya "210 mm" gibi bir uzunluk olmalıdır
@@ -9136,6 +9185,7 @@ axis	Y Axis	Y ekseni
 	Checkpoint	Kontrol noktası
 	Inventory Icons	Envanter Simgeleri
 	Skill Icons	Yetenek Simgeleri
+	Weather Icons	Hava Durumu Simgeleri
 	Attack	Saldırı
 	Defend	Savunma
 	Heal	İyileştirme
@@ -9241,6 +9291,12 @@ axis	Y Axis	Y ekseni
 	Bus Lines	Veriyolu hatları
 	Terminal Nodes	Bağlantı düğümleri
 
+# Original arrow art brushes.
+	Arrows	Oklar
+	Solid Arrow	Dolu Ok
+	Open Arrow	Açık Ok
+	Chevron Arrow	Köşeli Ok
+
 	Notched Ribbon	Çentikli Şerit
 	Double Line	Çift Çizgi
 	Wave	Dalga
@@ -9257,6 +9313,252 @@ axis	Y Axis	Y ekseni
 	Stars	Yıldızlar
 	Triangles	Üçgenler
 	Sparkles	Parıltılar
+	Warm Gray	Sıcak Gri
+	Cool Gray	Soğuk Gri
+	Neutrals	Nötrler
+	Ivory	Fildişi
+	Linen	Keten
+	Oat	Yulaf
+	Greige	Grej
+	Stone	Taş
+	Taupe	Vizon
+	Slate	Arduvaz
+	Clay	Kil
+	Terracotta	Terrakota
+	Ochre	Aşı Boyası
+	Umber	Toprak Kahve
+	Sand	Kum
+	Olive	Zeytin
+	Moss	Yosun
+	Rosy	Pembemsi
+	Neutral	Nötr
+	Golden	Altın Sarısı
+	Pastel	Pastel
+	Pastel Red	Pastel Kırmızı
+	Pastel Orange	Pastel Turuncu
+	Pastel Amber	Pastel Kehribar
+	Pastel Yellow	Pastel Sarı
+	Pastel Lime	Pastel Limon Yeşili
+	Pastel Green	Pastel Yeşil
+	Pastel Teal	Pastel Petrol Mavisi
+	Pastel Cyan	Pastel Camgöbeği
+	Pastel Azure	Pastel Gök Mavisi
+	Pastel Blue	Pastel Mavi
+	Pastel Violet	Pastel Menekşe
+	Pastel Magenta	Pastel Macenta
+	Soft Red	Yumuşak Kırmızı
+	Soft Orange	Yumuşak Turuncu
+	Soft Amber	Yumuşak Kehribar
+	Soft Yellow	Yumuşak Sarı
+	Soft Lime	Yumuşak Limon Yeşili
+	Soft Green	Yumuşak Yeşil
+	Soft Teal	Yumuşak Petrol Mavisi
+	Soft Cyan	Yumuşak Camgöbeği
+	Soft Azure	Yumuşak Gök Mavisi
+	Soft Blue	Yumuşak Mavi
+	Soft Violet	Yumuşak Menekşe
+	Soft Magenta	Yumuşak Macenta
+	Vivid Red	Canlı Kırmızı
+	Vivid Orange	Canlı Turuncu
+	Vivid Amber	Canlı Kehribar
+	Vivid Yellow	Canlı Sarı
+	Vivid Lime	Canlı Limon Yeşili
+	Vivid Green	Canlı Yeşil
+	Vivid Teal	Canlı Petrol Mavisi
+	Vivid Cyan	Canlı Camgöbeği
+	Vivid Azure	Canlı Gök Mavisi
+	Vivid Blue	Canlı Mavi
+	Vivid Violet	Canlı Menekşe
+	Vivid Magenta	Canlı Macenta
+	Deep	Koyu
+	Deep Red	Koyu Kırmızı
+	Deep Orange	Koyu Turuncu
+	Deep Amber	Koyu Kehribar
+	Deep Yellow	Koyu Sarı
+	Deep Lime	Koyu Limon Yeşili
+	Deep Green	Koyu Yeşil
+	Deep Teal	Koyu Petrol Mavisi
+	Deep Cyan	Koyu Camgöbeği
+	Deep Azure	Koyu Gök Mavisi
+	Deep Blue	Koyu Mavi
+	Deep Violet	Koyu Menekşe
+	Deep Magenta	Koyu Macenta
+	Gold	Altın
+	Silver	Gümüş
+	Bronze	Bronz
+	Copper	Bakır
+	Brass	Pirinç
+	Rose Gold	Rose Altın
+	Gunmetal	Füme Metal
+	Platinum	Platin
+	Pewter	Kalay
+	Ember	Kor
+	Lagoon	Lagün
+	Dusk	Alacakaranlık
+	Clay to Teal	Kilden Petrol Mavisine
+	Plum to Olive	Erikten Zeytine
+	Complementary Coral	Mercan Tamamlayıcı
+	Split Complementary Coral	Mercan Bölünmüş Tamamlayıcı
+	Analogous Coral	Mercan Benzer
+	Triad Coral	Mercan Üçlü
+	Tetrad Coral	Mercan Dörtlü
+	Pentagram Coral	Mercan Pentagram
+	Complementary Teal	Petrol Mavisi Tamamlayıcı
+	Split Complementary Teal	Petrol Mavisi Bölünmüş Tamamlayıcı
+	Analogous Teal	Petrol Mavisi Benzer
+	Triad Teal	Petrol Mavisi Üçlü
+	Tetrad Teal	Petrol Mavisi Dörtlü
+	Pentagram Teal	Petrol Mavisi Pentagram
+	Soft Spectrum	Yumuşak Spektrum
+	Red to Amber	Kırmızıdan Kehribara
+	Orange to Yellow	Turuncudan Sarıya
+	Amber to Lime	Kehribardan Limon Yeşiline
+	Yellow to Green	Sarıdan Yeşile
+	Lime to Teal	Limon Yeşilinden Petrol Mavisine
+	Green to Cyan	Yeşilden Camgöbeğine
+	Teal to Azure	Petrol Mavisinden Gök Mavisine
+	Cyan to Blue	Camgöbeğinden Maviye
+	Azure to Violet	Gök Mavisinden Menekşeye
+	Blue to Magenta	Maviden Macentaya
+	Violet to Red	Menekşeden Kırmızıya
+	Magenta to Orange	Macentadan Turuncuya
+	Dawn	Şafak
+	Noon	Öğle
+	Sunset	Gün Batımı
+	Night	Gece
+	Overcast	Kapalı Hava
+	White to Black	Beyazdan Siyaha
+	Light Grays	Açık Griler
+	Dark Grays	Koyu Griler
+	Warm Grays	Sıcak Griler
+	Cool Grays	Soğuk Griler
+	Fade to Transparent	Saydama Geçiş
+	White Fade	Beyaz Geçiş
+	Vignette	Vinyet
+	Mist	Pus
+	Petal	Taç Yaprağı
+	Fern	Eğrelti
+	Smoke	Duman
+	Honey	Bal
+	Seafoam	Deniz Köpüğü
+	Lavender	Lavanta
+	Driftwood	Dalga Odunu
+	Ink Wash	Mürekkep Lavisi
+	Tide	Gelgit
+	Bloom	Çiçeklenme
+	Dew	Çiy
+	Pollen	Polen
+	Lichen	Liken
+	Prism Veil	Prizma Tül
+	Opal Ribbon	Opal Şerit
+	Pearl Flash	İnci Parıltısı
+	Aurora Foil	Kutup Işığı Folyosu
+	Iris Sheen	İris Parlaklığı
+	Frost Spectrum	Kırağı Spektrumu
+	Silver Tide	Gümüş Gelgit
+	Rose Quartz Gleam	Pembe Kuvars Işıltısı
+	Moonstone Shift	Aytaşı Yansıması
+	Violet Edge	Menekşe Kenar
+	Mint Halo	Nane Hale
+	Amber Corona	Kehribar Korona
+	Polar Glint	Kutup Pırıltısı
+	Pastel Orbit	Pastel Yörünge
+	Coral and Navy	Mercan ve Lacivert
+	Plum and Lime	Erik ve Limon Yeşili
+	Teal and Gold	Petrol Mavisi ve Altın
+	Indigo and Peach	Çivit ve Şeftali
+	Forest and Rose	Orman ve Gül
+	Red Glow	Kırmızı Işıma
+	Orange Glow	Turuncu Işıma
+	Amber Glow	Kehribar Işıma
+	Yellow Glow	Sarı Işıma
+	Lime Glow	Limon Yeşili Işıma
+	Green Glow	Yeşil Işıma
+	Teal Glow	Petrol Mavisi Işıma
+	Cyan Glow	Camgöbeği Işıma
+	Azure Glow	Gök Mavisi Işıma
+	Blue Glow	Mavi Işıma
+	Violet Glow	Menekşe Işıma
+	Magenta Glow	Macenta Işıma
+	Polka Dots	Puantiye
+	Vertical Stripes	Dikey Çizgiler
+	Horizontal Stripes	Yatay Çizgiler
+	Diagonal Stripes	Çapraz Çizgiler
+	Checkerboard	Dama Tahtası
+	Diamonds	Baklavalar
+	Crosses	Artılar
+	Coarse Grit	İri Gren
+	Stipple	Noktalama
+	Scratches	Çizikler
+	Sparse Flecks	Seyrek Benekler
+	Dense Flecks	Sık Benekler
+	Sine Bands	Sinüs Bantları
+	Ripple Lines	Dalgacık Çizgileri
+	Interference Rings	Girişim Halkaları
+	Offset Rings	Kaydırılmış Halkalar
+	Warped Checks	Bükülmüş Kareler
+	Pinched Stripes	Sıkıştırılmış Çizgiler
+	Chevron Pulse	Şerit Darbesi
+	Radiating Lenses	Işıyan Mercekler
+	Soft Shadow	Yumuşak Gölge
+	Hard Shadow	Sert Gölge
+	Lifted Card	Kaldırılmış Kart
+	Neon Tube	Neon Tüp
+	Inner Light	İç Işık
+	Feathered	Yumuşak Kenarlı
+	Haze	Sis
+	Double Rule	Çift Çizgi Kenar
+	Triple Rule	Üçlü Çizgi Kenar
+	Dashed Border	Kesik Çizgili Kenarlık
+	Dotted Border	Noktalı Kenarlık
+	Offset Keyline	Kaydırılmış Kontur
+	Inset Keyline	İç Kontur
+	Outside Stroke	Dış Kontur
+	Pointer	İşaretçi
+	Highlighter	Fosforlu Kalem
+	Sketchy Line	Eskiz Çizgisi
+	Scribble Fill	Karalama Dolgu
+	Wobble	Titreşim
+	Zig Zag Edge	Zikzak Kenar
+	Wavy Edge	Dalgalı Kenar
+	Puffy	Kabarık
+	Starburst	Yıldız Patlaması
+	Glossy	Parlak
+	Brushed Metal	Fırçalanmış Metal
+	Spotlight	Spot Işık
+	Sunset Band	Gün Batımı Bandı
+	Sea Glass	Deniz Camı
+	Pearl	İnci
+	Chrome Rim	Krom Kenar
+	Glow Orb	Işıyan Küre
+	Pill Badge	Hap Rozet
+	Round Badge	Yuvarlak Rozet
+	Flag Wave	Dalgalanan Bayrak
+	Bulge	Şişkinlik
+	Twisted	Bükülmüş
+	Echo	Yankı
+	Spiral Copies	Sarmal Kopyalar
+	Multiply Tint	Çarp Tonu
+	Darken Veil	Koyulaştır Örtüsü
+	Ghosted	Hayalet
+	Two Tone	İki Renkli
+	Overlay Glaze	Kaplama Sırı
+	Screen Light	Ekran Işığı
+	Soft Light Wash	Yumuşak Işık Lavisi
+	Cyan Neon	Camgöbeği Neon
+	Magenta Laser	Macenta Lazer
+	Amber Tube	Kehribar Tüp
+	Electric Lime	Elektrik Yeşili
+	Pulse Violet	Nabız Moru
+	Cobalt Phosphor	Kobalt Fosfor
+	Burst	Patlama
+	Rounded Square	Yuvarlatılmış Kare
+	Sun	Güneş
+	Moon	Ay
+	Cloud	Bulut
+	Rain	Yağmur
+	Thunder	Gök Gürültüsü
+	Snow	Kar
 	Save Brush Library…	Fırça Kitaplığını Kaydet…
 @msg	`{_1}` has no brushes to apply	`{_1}` içinde uygulanacak fırça yok
 @msg	missing `library` (see brush.libraries)	`library` eksik (bkz. brush.libraries)
@@ -9679,10 +9981,18 @@ breakText	Glyphs	Glifler
 	Smooth Bridge…	Yumuşak Köprü…
 	Smooth Bridge	Yumuşak Köprü
 	Keep Originals	Orijinalleri Koru
-@msg	select two circles to bridge	köprüyle birleştirilecek iki daire seçin
+@msg	select two or more circles to bridge	köprüyle birleştirilecek iki veya daha fazla daire seçin
 @msg	one circle is inside the other	bir daire diğerinin içinde
 @msg	the circles are too far apart for this radius: raise the radius	daireler bu yarıçap için birbirinden çok uzak: yarıçapı artırın
 @msg	the circles are too far apart for this radius	daireler bu yarıçap için birbirinden çok uzak
+	Constant Gap	Sabit Boşluk
+	Reach:	Erişim:
+@msg	the circles are too far apart for this gap: raise the gap	daireler bu boşluk için birbirinden çok uzak: boşluğu artırın
+@msg	the circles are too far apart for this gap	daireler bu boşluk için birbirinden çok uzak
+@msg	no two circles are within reach: raise the reach	erişim içinde hiçbir iki daire yok: erişimi artırın
+@msg	select at most 2000 circles to bridge	köprüyle birleştirmek için en fazla 2000 daire seçin
+@msg	that makes too many bridges (at most 8000): lower the reach	bu çok fazla köprü oluşturur (en fazla 8000): erişimi azaltın
+@msg	the bridged circles are too complex to unite	köprülenen daireler birleştirilemeyecek kadar karmaşık
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	Ortak Teğetler…
 	Common Tangents	Ortak Teğetler
@@ -10054,6 +10364,16 @@ breakText	Glyphs	Glifler
 	No objects are selected.	Hiçbir nesne seçili değil.
 	Open a document to mark its fold lines.	Katlama çizgilerini işaretlemek için bir belgeyi açın.
 	Remove Fold Line Role	Çizgi Türünü Kaldır
+	Tap	Kısa Basma
+	Clear Hold	Basılı Tutmayı Temizle
+	Hold Shortcuts	Basılı Tutma Kısayolları
+	Hold Shortcut Delay	Basılı Tutma Kısayolu Gecikmesi
+	How hold shortcuts work	Basılı tutma kısayolları nasıl çalışır
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	Tıklayın, ardından bunun için basılı tutulacak tuşa basın (Esc iptal edilir). Tuşu basılı tutmak bunu çalıştırır; kısa basmak tuşun kendi kısayolunu çalıştırır.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	Bir tuşa kısa basmak onun kısayolunu çalıştırır. Tuşu gecikme süresi boyunca basılı tutmak bunun yerine Basılı tutun sütunundaki aracı veya komutu çalıştırır. Basılı tutma kısayolu, tek başına veya Shift ile bir harf, rakam ya da noktalama tuşudur.
+@msg	Hold {_1} is already used by {_2}	Basılı tutma {_1} zaten {_2} tarafından kullanılıyor
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	basılı tutma kısayolu, tek başına veya Shift ile bir karakter yazan tuştur ({shown} Cmd, Ctrl veya Alt içeriyor)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} basılı tutma kısayolu olamaz: bir harf, rakam veya noktalama tuşu kullanın
 	Check	Denetle
 	Check Fold Lines	Katlama Çizgilerini Denetle
 @msg	No cut lines are in the selection.	Seçimde kesim çizgisi yok.
@@ -10074,6 +10394,7 @@ breakText	Glyphs	Glifler
 @msg	A panel is not joined to the rest by a crease.	Bir panel geri kalanlara hiçbir pilyaj çizgisiyle bağlı değil.
 @msg	A fold line is on a non-printing layer.	Bir katlama çizgisi yazdırılmayan bir katmanda.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Paneller: {panels}, menteşeler: {hinges}, hatalar: {errors}, uyarılar: {warnings}
+	Dashed Arrow	Kesikli Ok
 	Pressure Sensitive	Basınca Duyarlı
 	Flex Ribbon	Esnek Şerit
 	Pulse Stroke	Atımlı Çizgi

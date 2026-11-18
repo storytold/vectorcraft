@@ -87,6 +87,16 @@
 	Paste without Formatting	Zalijepi bez oblikovanja
 	Clear	Očisti
 	Find and Replace…	Pronađi i zamijeni…
+	Find and Replace	Pronađi i zamijeni
+	Find:	Pronađi:
+	Replace With:	Zamijeni sa:
+	Replace & Find	Zamijeni i pronađi
+	Replace All	Zamijeni sve
+	Match Case	Razlikuj velika i mala slova
+	Find Whole Word	Pronađi cijelu riječ
+	Search Backwards	Pretraži unazad
+	Check Hidden Layers	Provjeri skrivene slojeve
+	Check Locked Layers	Provjeri zaključane slojeve
 	Find Next	Pronađi sljedeće
 	Spelling	Pravopis
 	Auto Spell Check	Automatska provjera pravopisa
@@ -226,6 +236,16 @@
 	To Center	Prema sredini
 	To Edge	Prema ivici
 	Create Object Mosaic…	Kreiraj mozaik objekata…
+	Create Object Mosaic	Kreiraj mozaik objekata
+	Current Size:	Trenutna veličina:
+	New Size:	Nova veličina:
+	Tile Spacing:	Razmak između pločica:
+	Number of Tiles:	Broj pločica:
+	Constrain Ratio:	Ograniči omjer:
+	Result:	Rezultat:
+	Resize Using Percentages	Promijeni veličinu u postocima
+	Delete Raster	Izbriši rastersku sliku
+	Use Ratio	Koristi omjer
 	Vector Halftone…	Vektorski polutonovi…
 	Create Trim Marks	Kreiraj oznake za obrezivanje
 	Flatten Transparency…	Spljošti prozirnost…
@@ -613,6 +633,11 @@
 	Color blindness – Protanopia-type	Daltonizam – tip protanopije
 	Color blindness – Deuteranopia-type	Daltonizam – tip deuteranopije
 	Color blindness – Tritanopia-type	Daltonizam – tip tritanopije
+	Show Color Vision Preview	Prikaži pregled vida boja
+	Protanopia	Protanopija
+	Deuteranopia	Deuteranopija
+	Tritanopia	Tritanopija
+	Achromatopsia	Ahromatopsija
 	Customize…	Prilagodi…
 	Proof Colors	Probne boje
 	Zoom In	Uvećaj
@@ -785,6 +810,9 @@
 	Magic Wand	Čarobni štapić
 	Navigator	Navigator
 	Navigator Panel Options	Opcije panela navigatora
+	Attributes Panel Options	Opcije panela atributa
+	Number of Recent URLs:	Broj nedavnih URL-ova:
+@msg	`count` must be a whole number from 1 to 30	`count` mora biti cijeli broj od 1 do 30
 	Draw Dashed Lines as Solid Lines	Crtaj isprekidane linije kao pune
 	Pattern Options	Opcije uzorka
 	Properties	Svojstva
@@ -1536,6 +1564,7 @@ lighting	Light	Svjetlo
 	Save Actions…	Sačuvaj akcije…
 	Load Actions…	Učitaj akcije…
 	Replace Actions…	Zamijeni akcije…
+	Clear Actions	Očisti akcije
 	Reset Actions	Vrati akcije na početno
 	Replace the current actions with the default set?	Zamijeniti trenutne akcije zadanim skupom?
 	Append adds the default set after the current sets instead.	Dugme Dodaj umjesto toga dodaje zadani skup iza trenutnih skupova.
@@ -1840,6 +1869,7 @@ digits	Malayalam	Malajalam
 	Duplicate Action or Action Set	Dupliciraj akciju ili skup akcija
 	Delete the action set “{name}” and its actions?	Izbrisati skup akcija „{name}” i njegove akcije?
 	Delete the selected action sets and their actions?	Izbrisati odabrane skupove akcija i njihove akcije?
+	Delete all action sets and their actions?	Izbrisati sve skupove akcija i njihove akcije?
 	Delete these {n} graphic styles?	Izbrisati ove grafičke stilove ({n})?
 	Delete this {n} graphic style?	Izbrisati ovaj grafički stil ({n})?
 	Graphic Style Libraries Menu	Meni biblioteka grafičkih stilova
@@ -3276,6 +3306,7 @@ antiAlias	Sharp	Oštro
 	Preserve Editing Capabilities	Očuvaj mogućnosti uređivanja
 	Responsive	Responzivno
 	Show Code	Prikaži kod
+	Show in Browser	Prikaži u pregledniku
 	Style Attributes	Atributi stila
 	Style Attributes (Entity References)	Atributi stila (reference entiteta)
 	Styling:	Stilizovanje:
@@ -4234,6 +4265,7 @@ theme	Appearance	Izgled
 	Set Tab Stops	Postavi tabulatore
 	Tab Stops	Tabulatori
 	Flare	Odsjaj
+	Edit Flare	Uredi odsjaj
 	Rays	Zrake
 	Rectangle	Pravougaonik
 	Paintbrush	Kist
@@ -4336,6 +4368,8 @@ axis	Both	Obje
 	Show	Prikaži
 	Copy Width Point	Kopiraj tačku širine
 	Duplicate Artboard	Dupliciraj radnu ploču
+	Click to add an artboard on this side; Alt-click to duplicate this artboard with its art	Kliknite da dodate radnu ploču na ovu stranu, Alt-klik duplicira ovu radnu ploču s njenim crtežom
+	Click to add an artboard on this side	Kliknite da dodate radnu ploču na ovu stranu
 	Area / Path Type	Tekst u području / na putanji
 	Decrease Font Size	Smanji veličinu fonta
 	Decrease Font Size by Five Steps	Smanji veličinu fonta za pet koraka
@@ -4523,6 +4557,8 @@ font-technology	Variable	Varijabilni
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Točkić miša uz pritisnut Cmd/Ctrl pomjera platno u stranu.
 	Dragging sideways on a numeric field's label changes the field's value.	Prevlačenje u stranu po oznaci brojčanog polja mijenja vrijednost polja.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Pokret rotacije s dva prsta na dodirnoj podlozi rotira prikaz platna.
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Držanje tipke pokreće alat ili naredbu iz njene kolone „Zadrži“ u Prečicama na tastaturi; kratki pritisak pokreće njenu uobičajenu prečicu.
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Koliko sekundi tipka mora biti pritisnuta prije nego što se umjesto uobičajene prečice pokrene njena prečica zadržavanjem.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Kada pomjerate sidrene tačke, svaka kriva s jednim pomjerenim krajem zadržava svoj oblik u odnosu na svoje krajeve.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Držanje prečice alata bira taj alat dok je ne pustite, a zatim se ponovo bira prethodni alat.
 	Shows the bounding box while you move the selection or draw a shape.	Prikazuje granični okvir dok pomjerate odabir ili crtate oblik.
@@ -4604,6 +4640,7 @@ font-technology	Variable	Varijabilni
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Koliko blizu na ekranu pokazivač ili prevučena tačka mora doći do objekta da bi ga pametne vodilice uhvatile; udaljenost je ista pri svakom zumu.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Hvata kraj segmenta linije ili krug nacrtan iz središta tako da dodiruje obližnju krivu.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Hvata kraj segmenta linije tako da pod pravim uglom susreće obližnji ravni segment.
+	Edit type set in fonts that aren't available?	Urediti tekst u fontovima koji nisu dostupni?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Prikazuje broj svakog isječka u okviru u njegovom gornjem lijevom uglu na platnu; kada je isključeno, obrisi isječaka i dalje se prikazuju.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Boja obrisa korisničkih i objektnih isječaka i okvira s njihovim brojevima; automatski isječci koriste blijeđu nijansu te boje.
 	Reset all preferences to their defaults?	Vratiti sve postavke na zadane vrijednosti?
@@ -5194,6 +5231,7 @@ imageTrace	Outline	Obris
 @msg	no graphic style `{n}`	nema grafičkog stila `{n}`
 @msg	no interaction in progress	nema interakcije u toku
 @msg	no key object	nema ključnog objekta
+@msg	Align to Key Object isn't available with the Artboard tool	„Poravnaj s ključnim objektom“ nije dostupno s alatom radna ploča
 @msg	no library `{key}` (see {list})	nema biblioteke `{key}` (vidi {list})
 @msg	no native format	nema izvornog formata
 @msg	no pages	nema stranica
@@ -5249,6 +5287,8 @@ imageTrace	Outline	Obris
 @msg	no such spine point	nema takve tačke kičme
 @msg	`with` must be a list of at most 10000 spine point indexes	`with` mora biti lista od najviše 10000 indeksa tačaka kičme
 @msg	`with` moves points, not a handle	`with` pomjera tačke, ne ručicu
+@msg	`link` and `independent` cannot both be true	`link` i `independent` ne mogu oba biti true
+@msg	`link` places a handle: give `handle`	`link` postavlja ručicu: navedite `handle`
 @msg	no such spine segment	nema takvog segmenta kičme
 @msg	no such subpath	nema takve podputanje
 @msg	no such user library	nema takve korisničke biblioteke
@@ -5337,6 +5377,7 @@ imageTrace	Outline	Obris
 @msg	select a blend	odaberite stapanje
 @msg	select a blend or give `id`	odaberite stapanje ili navedite `id`
 @msg	select a clip group	odaberite grupu isijecanja
+@msg	select a flare	odaberite odsjaj
 @msg	select a gradient mesh	odaberite gradijentnu mrežu
 @msg	select a linked image: an embedded one has no file	odaberite povezanu sliku: ugrađena nema datoteku
 @msg	select a repeat	odaberite ponavljanje
@@ -5560,6 +5601,7 @@ imageTrace	Outline	Obris
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} povezana slika promijenjena je na disku: Ažuriraj veze prikazuje novu verziju|{n} povezane slike promijenjene su na disku: Ažuriraj veze prikazuje nove verzije|{n} povezanih slika promijenjeno je na disku: Ažuriraj veze prikazuje nove verzije
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Ažurirana je {n} povezana datoteka promijenjena na disku|Ažurirane su {n} povezane datoteke promijenjene na disku|Ažurirano je {n} povezanih datoteka promijenjenih na disku
 @msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	dokument zadaje napust koji ova PDF/X datoteka izostavlja: uključite „Koristi postavke napusta dokumenta“
+@msgplural	{n} object reaches the trim edge but stops short of the bleed|{n} objects reach the trim edge but stop short of the bleed	{n} objekt doseže rub obreza, ali ne doseže napust|{n} objekta dosežu rub obreza, ali ne dosežu napust|{n} objekata doseže rub obreza, ali ne doseže napust
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	Izvezeno {what} s {n} bilješkom: {first}|Izvezeno {what} s {n} bilješke: {first}|Izvezeno {what} s {n} bilješki: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} datoteka fonta sada je u {folder}|{n} datoteke fontova sada su u {folder}|{n} datoteka fontova sada je u {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} datoteka fonta sada je u {folder}; {failed} nije moguće dodati: {reason}|{n} datoteke fontova sada su u {folder}; {failed} nije moguće dodati: {reason}|{n} datoteka fontova sada je u {folder}; {failed} nije moguće dodati: {reason}
@@ -6329,6 +6371,9 @@ mark-style	Japanese	Japanski
 	Continue in Background	Nastavi u pozadini
 	Cancel Export	Otkaži izvoz
 @msg	Export cancelled	Izvoz otkazan
+	Cancel Save	Otkaži čuvanje
+@plural	{n} more save waiting|{n} more saves waiting	Čeka još {n} čuvanje|Čekaju još {n} čuvanja|Čeka još {n} čuvanja
+@msg	Save canceled	Čuvanje otkazano
 	Desired	Željeno
 	Word Spacing:	Razmak riječi:
 	Letter Spacing:	Razmak slova:
@@ -6558,6 +6603,7 @@ axis	Y Axis	Y osa
 	Checkpoint	Kontrolna tačka
 	Inventory Icons	Ikone inventara
 	Skill Icons	Ikone vještina
+	Weather Icons	Ikone vremena
 	Attack	Napad
 	Defend	Odbrana
 	Heal	Iscjeljenje
@@ -6663,6 +6709,12 @@ axis	Y Axis	Y osa
 	Bus Lines	Linije sabirnice
 	Terminal Nodes	Priključni čvorovi
 
+# Original arrow art brushes.
+	Arrows	Strelice
+	Solid Arrow	Puna strelica
+	Open Arrow	Otvorena strelica
+	Chevron Arrow	Strelica sa ševronom
+
 	Notched Ribbon	Zarezana traka
 	Double Line	Dvostruka linija
 	Wave	Talas
@@ -6679,6 +6731,252 @@ axis	Y Axis	Y osa
 	Stars	Zvijezde
 	Triangles	Trouglovi
 	Sparkles	Iskrice
+	Warm Gray	Topla siva
+	Cool Gray	Hladna siva
+	Neutrals	Neutralne
+	Ivory	Slonovača
+	Linen	Lan
+	Oat	Zob
+	Greige	Greige
+	Stone	Kamen
+	Taupe	Taupe
+	Slate	Škriljac
+	Clay	Glina
+	Terracotta	Terakota
+	Ochre	Oker
+	Umber	Umbra
+	Sand	Pijesak
+	Olive	Maslinasta
+	Moss	Mahovina
+	Rosy	Ružičasta
+	Neutral	Neutralna
+	Golden	Zlatna
+	Pastel	Pastelne
+	Pastel Red	Pastelna crvena
+	Pastel Orange	Pastelna narandžasta
+	Pastel Amber	Pastelni jantar
+	Pastel Yellow	Pastelna žuta
+	Pastel Lime	Pastelna limeta
+	Pastel Green	Pastelna zelena
+	Pastel Teal	Pastelna plavozelena
+	Pastel Cyan	Pastelni cijan
+	Pastel Azure	Pastelna azurna
+	Pastel Blue	Pastelna plava
+	Pastel Violet	Pastelna ljubičasta
+	Pastel Magenta	Pastelna magenta
+	Soft Red	Blaga crvena
+	Soft Orange	Blaga narandžasta
+	Soft Amber	Blagi jantar
+	Soft Yellow	Blaga žuta
+	Soft Lime	Blaga limeta
+	Soft Green	Blaga zelena
+	Soft Teal	Blaga plavozelena
+	Soft Cyan	Blagi cijan
+	Soft Azure	Blaga azurna
+	Soft Blue	Blaga plava
+	Soft Violet	Blaga ljubičasta
+	Soft Magenta	Blaga magenta
+	Vivid Red	Živa crvena
+	Vivid Orange	Živa narandžasta
+	Vivid Amber	Živi jantar
+	Vivid Yellow	Živa žuta
+	Vivid Lime	Živa limeta
+	Vivid Green	Živa zelena
+	Vivid Teal	Živa plavozelena
+	Vivid Cyan	Živi cijan
+	Vivid Azure	Živa azurna
+	Vivid Blue	Živa plava
+	Vivid Violet	Živa ljubičasta
+	Vivid Magenta	Živa magenta
+	Deep	Tamne
+	Deep Red	Tamnocrvena
+	Deep Orange	Tamnonarandžasta
+	Deep Amber	Tamni jantar
+	Deep Yellow	Tamnožuta
+	Deep Lime	Tamna limeta
+	Deep Green	Tamnozelena
+	Deep Teal	Tamna plavozelena
+	Deep Cyan	Tamni cijan
+	Deep Azure	Tamna azurna
+	Deep Blue	Tamnoplava
+	Deep Violet	Tamnoljubičasta
+	Deep Magenta	Tamna magenta
+	Gold	Zlato
+	Silver	Srebro
+	Bronze	Bronza
+	Copper	Bakar
+	Brass	Mesing
+	Rose Gold	Rozo zlato
+	Gunmetal	Čelično siva
+	Platinum	Platina
+	Pewter	Kalaj
+	Ember	Žar
+	Lagoon	Laguna
+	Dusk	Sumrak
+	Clay to Teal	Od gline do plavozelene
+	Plum to Olive	Od šljive do maslinaste
+	Complementary Coral	Koralna, komplementarne
+	Split Complementary Coral	Koralna, podijeljene komplementarne
+	Analogous Coral	Koralna, analogne
+	Triad Coral	Koralna, trijada
+	Tetrad Coral	Koralna, tetrada
+	Pentagram Coral	Koralna, pentagram
+	Complementary Teal	Plavozelena, komplementarne
+	Split Complementary Teal	Plavozelena, podijeljene komplementarne
+	Analogous Teal	Plavozelena, analogne
+	Triad Teal	Plavozelena, trijada
+	Tetrad Teal	Plavozelena, tetrada
+	Pentagram Teal	Plavozelena, pentagram
+	Soft Spectrum	Blagi spektar
+	Red to Amber	Od crvene do jantara
+	Orange to Yellow	Od narandžaste do žute
+	Amber to Lime	Od jantara do limete
+	Yellow to Green	Od žute do zelene
+	Lime to Teal	Od limete do plavozelene
+	Green to Cyan	Od zelene do cijana
+	Teal to Azure	Od plavozelene do azurne
+	Cyan to Blue	Od cijana do plave
+	Azure to Violet	Od azurne do ljubičaste
+	Blue to Magenta	Od plave do magente
+	Violet to Red	Od ljubičaste do crvene
+	Magenta to Orange	Od magente do narandžaste
+	Dawn	Zora
+	Noon	Podne
+	Sunset	Zalazak sunca
+	Night	Noć
+	Overcast	Oblačno
+	White to Black	Od bijele do crne
+	Light Grays	Svijetle sive
+	Dark Grays	Tamne sive
+	Warm Grays	Tople sive
+	Cool Grays	Hladne sive
+	Fade to Transparent	Prelaz u providno
+	White Fade	Bijeli prelaz
+	Vignette	Vinjeta
+	Mist	Izmaglica
+	Petal	Latica
+	Fern	Paprat
+	Smoke	Dim
+	Honey	Med
+	Seafoam	Morska pjena
+	Lavender	Lavanda
+	Driftwood	Naplavljeno drvo
+	Ink Wash	Lavirani tuš
+	Tide	Plima
+	Bloom	Cvjetanje
+	Dew	Rosa
+	Pollen	Polen
+	Lichen	Lišaj
+	Prism Veil	Prizmatični veo
+	Opal Ribbon	Opalna traka
+	Pearl Flash	Biserni bljesak
+	Aurora Foil	Folija polarne svjetlosti
+	Iris Sheen	Sjaj irisa
+	Frost Spectrum	Mrazni spektar
+	Silver Tide	Srebrna plima
+	Rose Quartz Gleam	Sjaj ružičastog kvarca
+	Moonstone Shift	Prelivanje mjesečevog kamena
+	Violet Edge	Ljubičasta ivica
+	Mint Halo	Oreol boje mente
+	Amber Corona	Jantarna korona
+	Polar Glint	Polarni odsjaj
+	Pastel Orbit	Pastelna orbita
+	Coral and Navy	Koralna i mornarsko plava
+	Plum and Lime	Šljiva i limeta
+	Teal and Gold	Plavozelena i zlatna
+	Indigo and Peach	Indigo i breskva
+	Forest and Rose	Šuma i ruža
+	Red Glow	Crveni sjaj
+	Orange Glow	Narandžasti sjaj
+	Amber Glow	Jantarni sjaj
+	Yellow Glow	Žuti sjaj
+	Lime Glow	Sjaj limete
+	Green Glow	Zeleni sjaj
+	Teal Glow	Plavozeleni sjaj
+	Cyan Glow	Cijan sjaj
+	Azure Glow	Azurni sjaj
+	Blue Glow	Plavi sjaj
+	Violet Glow	Ljubičasti sjaj
+	Magenta Glow	Magenta sjaj
+	Polka Dots	Tufne
+	Vertical Stripes	Vertikalne pruge
+	Horizontal Stripes	Horizontalne pruge
+	Diagonal Stripes	Dijagonalne pruge
+	Checkerboard	Šahovska tabla
+	Diamonds	Rombovi
+	Crosses	Krstići
+	Coarse Grit	Grubo zrno
+	Stipple	Tačkanje
+	Scratches	Ogrebotine
+	Sparse Flecks	Rijetke mrlje
+	Dense Flecks	Guste mrlje
+	Sine Bands	Sinusne trake
+	Ripple Lines	Talasaste linije
+	Interference Rings	Interferentni prstenovi
+	Offset Rings	Pomaknuti prstenovi
+	Warped Checks	Iskrivljene kocke
+	Pinched Stripes	Stisnute pruge
+	Chevron Pulse	Pulsirajući ševroni
+	Radiating Lenses	Zračeća sočiva
+	Soft Shadow	Meka sjena
+	Hard Shadow	Oštra sjena
+	Lifted Card	Podignuta kartica
+	Neon Tube	Neonska cijev
+	Inner Light	Unutrašnje svjetlo
+	Feathered	Omekšane ivice
+	Haze	Sumaglica
+	Double Rule	Dvostruka linija
+	Triple Rule	Trostruka linija
+	Dashed Border	Isprekidani okvir
+	Dotted Border	Tačkasti okvir
+	Offset Keyline	Pomaknuta kontura
+	Inset Keyline	Unutrašnja kontura
+	Outside Stroke	Vanjski potez
+	Pointer	Pokazivač
+	Highlighter	Marker
+	Sketchy Line	Skicirana linija
+	Scribble Fill	Išarana ispuna
+	Wobble	Klimanje
+	Zig Zag Edge	Cik-cak ivica
+	Wavy Edge	Talasasta ivica
+	Puffy	Napuhan
+	Starburst	Zvjezdana eksplozija
+	Glossy	Sjajan
+	Brushed Metal	Brušeni metal
+	Spotlight	Reflektor
+	Sunset Band	Traka zalaska sunca
+	Sea Glass	Morsko staklo
+	Pearl	Biser
+	Chrome Rim	Hromirani rub
+	Glow Orb	Svjetleća kugla
+	Pill Badge	Značka u obliku pilule
+	Round Badge	Okrugla značka
+	Flag Wave	Vijoreća zastava
+	Bulge	Ispupčenje
+	Twisted	Uvrnut
+	Echo	Eho
+	Spiral Copies	Kopije u spirali
+	Multiply Tint	Nijansa množenja
+	Darken Veil	Veo potamnjivanja
+	Ghosted	Sablasno
+	Two Tone	Dvobojno
+	Overlay Glaze	Glazura prekrivanja
+	Screen Light	Svjetlo ekrana
+	Soft Light Wash	Laviranje mekim svjetlom
+	Cyan Neon	Cijan neon
+	Magenta Laser	Magenta laser
+	Amber Tube	Jantarna cijev
+	Electric Lime	Električna limeta
+	Pulse Violet	Pulsirajuća ljubičasta
+	Cobalt Phosphor	Kobaltni fosfor
+	Burst	Prasak
+	Rounded Square	Zaobljeni kvadrat
+	Sun	Sunce
+	Moon	Mjesec
+	Cloud	Oblak
+	Rain	Kiša
+	Thunder	Grom
+	Snow	Snijeg
 	Save Brush Library…	Sačuvaj biblioteku četkica…
 @msg	`{_1}` has no brushes to apply	`{_1}` nema četkica za primjenu
 @msg	missing `library` (see brush.libraries)	nedostaje `library` (pogledajte brush.libraries)
@@ -7064,10 +7362,18 @@ shape	Open	Otvoren
 	Smooth Bridge…	Glatki most…
 	Smooth Bridge	Glatki most
 	Keep Originals	Zadrži originale
-@msg	select two circles to bridge	odaberite dva kruga za premošćavanje
+@msg	select two or more circles to bridge	odaberite dva ili više krugova za premošćavanje
 @msg	one circle is inside the other	jedan krug je unutar drugog
 @msg	the circles are too far apart for this radius: raise the radius	krugovi su predaleko jedan od drugog za ovaj radijus: povećajte radijus
 @msg	the circles are too far apart for this radius	krugovi su predaleko jedan od drugog za ovaj radijus
+	Constant Gap	Stalni razmak
+	Reach:	Domet:
+@msg	the circles are too far apart for this gap: raise the gap	krugovi su predaleko jedan od drugog za ovaj razmak: povećajte razmak
+@msg	the circles are too far apart for this gap	krugovi su predaleko jedan od drugog za ovaj razmak
+@msg	no two circles are within reach: raise the reach	nijedna dva kruga nisu u dometu: povećajte domet
+@msg	select at most 2000 circles to bridge	odaberite najviše 2000 krugova za premošćavanje
+@msg	that makes too many bridges (at most 8000): lower the reach	to daje previše mostova (najviše 8000): smanjite domet
+@msg	the bridged circles are too complex to unite	premošteni krugovi su previše složeni za spajanje
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	Zajedničke tangente…
 	Common Tangents	Zajedničke tangente
@@ -7433,6 +7739,17 @@ shape	Open	Otvoren
 @msg	A joint does not close by {gap} pt.	Spoj se ne zatvara za {gap} pt.
 @msg	Two panels pass through each other.	Dva panela prolaze jedan kroz drugi.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer mora biti "singleLine", "everyLine", "standardSingleLine" ili "standardEveryLine"
+	Tap	Kratki pritisak
+	Clear Hold	Očisti zadržavanje
+	Hold Shortcuts	Prečice zadržavanjem
+	Hold Shortcut Delay	Kašnjenje prečica zadržavanjem
+	How hold shortcuts work	Kako rade prečice zadržavanjem
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	Kliknite, zatim pritisnite tipku koju treba zadržati za ovo (Esc otkazuje). Zadržavanje tipke pokreće ovo; kratki pritisak pokreće vlastitu prečicu tipke.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	Kratki pritisak tipke pokreće njenu prečicu. Zadržavanje tipke tokom kašnjenja umjesto toga pokreće alat ili naredbu iz njene kolone Zadrži. Prečica zadržavanjem je tipka sa slovom, cifrom ili interpunkcijskim znakom, sama ili sa Shift.
+@msg	Hold {_1} is already used by {_2}	Zadržavanje {_1} već koristi {_2}
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	prečica zadržavanjem je tipka koja upisuje znak, sama ili sa Shift ({shown} ima Cmd, Ctrl ili Alt)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} ne može biti prečica zadržavanjem: koristite slovo, cifru ili interpunkcijsku tipku
+	Dashed Arrow	Isprekidana strelica
 	Pressure Sensitive	Osjetljivo na pritisak
 	Flex Ribbon	Savijajuća traka
 	Pulse Stroke	Pulsirajući potez

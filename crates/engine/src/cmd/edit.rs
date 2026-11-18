@@ -1613,6 +1613,7 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
                     }
                 } else {
                     super::object::keep_pixel_aligned(&mut c, sc);
+                    super::buildcmds::clear_part_name(d, par, &mut c);
                     new_ids.push(d.insert(par, idx, c)?);
                 }
             }

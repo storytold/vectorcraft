@@ -176,3 +176,61 @@ fn a_handle_already_in_place_on_a_smooth_anchor_records_no_undo_step() {
         .unwrap();
     assert_eq!(undo_steps(&s), 1);
 }
+
+/// `path.setHandle` with `link` makes a corner smooth: the other handle turns in line at its own
+/// length, a retracted one is pulled out to the moved handle's length where a segment leaves the
+/// anchor on its side and stays retracted at an open end. A handle already in place on a corner
+/// still links; a request that changes nothing records no undo step; `link` that is not a boolean
+/// or goes with `independent` is refused.
+#[test]
+fn a_linked_handle_makes_the_anchor_smooth() {
+    let (mut s, id) = long_path(100);
+    let p = anchor(&s, id, 5).p;
+    let corner = Anchor { p, h_in: p + Vec2::new(-6.0, 8.0), h_out: p + Vec2::new(3.0, 0.0), kind: AnchorKind::Corner };
+    let path = Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(id).unwrap().path_data_mut().unwrap();
+    path.subpaths[0].anchors[5] = corner;
+    let link = |x: f64, y: f64, ai: usize| json!({"id": id.0, "anchor": ai, "which": "out", "x": x, "y": y, "link": true});
+    let near = |a: Point, b: Point| a.distance(b) < 1e-9;
+
+    // The out handle stays where it is; the corner becomes smooth, the in handle turned opposite it.
+    s.execute("path.setHandle", &link(corner.h_out.x, corner.h_out.y, 5)).unwrap();
+    assert_eq!(undo_steps(&s), 1);
+    let a = anchor(&s, id, 5);
+    assert_eq!((a.kind, a.h_out), (AnchorKind::Smooth, corner.h_out));
+    assert!(near(a.h_in, p + Vec2::new(-10.0, 0.0)), "{a:?}");
+    // Moved: the in handle keeps its length of 10.
+    let to = p + Vec2::new(4.0, 3.0);
+    s.execute("path.setHandle", &link(to.x, to.y, 5)).unwrap();
+    assert_eq!(undo_steps(&s), 2);
+    let a = anchor(&s, id, 5);
+    assert!(a.kind == AnchorKind::Smooth && a.h_out == to && near(a.h_in, p + Vec2::new(-8.0, -6.0)), "{a:?}");
+    // The same request again changes nothing.
+    s.execute("path.setHandle", &link(to.x, to.y, 5)).unwrap();
+    assert_eq!(undo_steps(&s), 2);
+
+    // A retracted in handle on an inner anchor is pulled out; at the open start it stays retracted.
+    let q = anchor(&s, id, 7).p;
+    s.execute("path.setHandle", &link(q.x, q.y + 5.0, 7)).unwrap();
+    let a = anchor(&s, id, 7);
+    assert!(a.kind == AnchorKind::Smooth && near(a.h_in, q + Vec2::new(0.0, -5.0)), "{a:?}");
+    let q = anchor(&s, id, 0).p;
+    s.execute("path.setHandle", &link(q.x, q.y + 5.0, 0)).unwrap();
+    let a = anchor(&s, id, 0);
+    assert!(a.kind == AnchorKind::Smooth && a.h_in == q && a.h_out == q + Vec2::new(0.0, 5.0), "{a:?}");
+
+    let before = s.doc().unwrap().doc.clone();
+    let undo = undo_steps(&s);
+    for bad in [
+        json!({"id": id.0, "anchor": 5, "which": "out", "x": 0, "y": 0, "link": "yes"}),
+        json!({"id": id.0, "anchor": 5, "which": "out", "x": 0, "y": 0, "link": 1}),
+        json!({"id": id.0, "anchor": 5, "which": "out", "x": 0, "y": 0, "link": true, "independent": true}),
+        json!({"id": id.0, "anchor": 5, "which": "out", "x": 0, "y": 0, "link": true, "independent": "no"}),
+        json!({"id": id.0, "anchor": 100, "which": "out", "x": 0, "y": 0, "link": true}),
+        json!({"id": id.0, "anchor": 7, "which": "out", "x": 1.7e308, "y": 1.7e308, "link": true}),
+        json!({"id": id.0, "anchor": 7, "which": "out", "x": 0, "y": -1e9, "link": true}),
+    ] {
+        assert!(s.execute("path.setHandle", &bad).is_err(), "{bad}");
+    }
+    assert!(s.doc().unwrap().doc == before, "a refused request changed the document");
+    assert_eq!(undo_steps(&s), undo);
+}
