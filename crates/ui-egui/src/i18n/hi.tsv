@@ -258,6 +258,9 @@
 	Additional Fonts Folder	अतिरिक्त फ़ॉन्ट फ़ोल्डर
 	Additional Plug-ins Folder	अतिरिक्त प्लग-इन फ़ोल्डर
 	Adjust Adjoining Width Points	सटे हुए चौड़ाई पॉइंट समायोजित करें
+	Incoming	आने वाली ओर
+	Outgoing	जाने वाली ओर
+	Single Width Only	केवल एक चौड़ाई
 	Adjust Color Balance…	कलर बैलेंस समायोजित करें…
 	Adjust Colors	रंग समायोजित करें
 	Adjust Options:	समायोजन ऑप्शन्स:
@@ -801,6 +804,11 @@ antiAlias	Sharp	शार्प
 	Character Direction	कैरेक्टर दिशा
 	Character options	कैरेक्टर ऑप्शन्स
 	Character Rotation	कैरेक्टर रोटेशन
+	Chinese Big 5	चीनी Big 5
+	Cyrillic	सिरिलिक
+	Greek	ग्रीक
+	Baltic	बाल्टिक
+	Central European	मध्य यूरोपीय
 	Character Set:	कैरेक्टर सेट:
 	Character Style	कैरेक्टर स्टाइल
 	Character Style Options	कैरेक्टर स्टाइल ऑप्शन्स
@@ -828,6 +836,8 @@ antiAlias	Sharp	शार्प
 	Chrome	क्रोम
 	Chrome…	क्रोम…
 	Circle	वृत्त
+	Circle Tool	वृत्त टूल
+	Circle too large	वृत्त बहुत बड़ा है
 	Circle (open)	सर्किल (ओपन)
 	Circle:	वृत्त:
 	Classic	क्लासिक
@@ -1915,6 +1925,8 @@ antiAlias	Sharp	शार्प
 	Files	फ़ाइलें
 	Files of a PDF standard can't be password-protected.	एक PDF मानक की फ़ाइलें पासवर्ड की रक्षा नहीं की जा सकती है।
 	Files of this standard tag their colours with ICC profiles.	इस मानक की फ़ाइलें ICC प्रोफ़ाइल के साथ उनके रंगों को टैग करती हैं।
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	इस मानक की फ़ाइलें ICC प्रोफ़ाइल के साथ उनके रंगों को टैग करती हैं, आउटपुट इंटेंट प्रोफ़ाइल के CMYK रंगों को छोड़कर, जो DeviceCMYK के रूप में लिखे जाते हैं।
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	“प्रोफ़ाइल शामिल नहीं है” और CMYK आउटपुट इंटेंट के साथ, हर CMYK रंग DeviceCMYK के रूप में लिखा जाता है, जब तक कि उसे किसी अन्य प्रोफ़ाइल के CMYK गंतव्य में रूपांतरित न किया जाए।
 	Fill	फ़िल
 	Fill (X), double-click for the Color Picker	फ़िल (X), कलर पिकर के लिए डबल-क्लिक करें
 	Fill & Stroke	भरें और स्ट्रोक करें
@@ -2809,6 +2821,7 @@ antiAlias	Sharp	शार्प
 	Loads native code	मूल कोड लोड करता है
 	Local Libraries	स्थानीय लाइब्रेरी
 	Locate Library…	लाइब्रेरी…
+	Locate Layer	लेयर का पता लगाएं
 	Locate Object	ऑब्जेक्ट का पता लगाएं
 	Locate Selected Objects	सिलेक्टेड ऑब्जेक्ट्स का पता लगाएँ
 	Location	स्थान
@@ -3727,6 +3740,9 @@ antiAlias	Sharp	शार्प
 	Polish	पोलिश
 	Polygon	बहुभुज
 	Polygon Properties:	बहुभुज प्रॉपर्टीज़:
+	Line Properties:	रेखा प्रॉपर्टीज़:
+	Line Length:	रेखा की लंबाई:
+	Line Angle:	रेखा का कोण:
 	Polygon Tool	पॉलीगोन टूल
 	Polygonal Lasso	बहुभुज लैस्सो
 	Polygonal Lasso Tool	बहुभुज लैस्सो टूल
@@ -4756,6 +4772,7 @@ antiAlias	Sharp	शार्प
 	Set Slice Rectangle	सेट स्लाइस आयत
 	Set Tab Stops	टैब स्टॉप्स सेट करें
 	Set Text	टेक्स्ट सेट करें
+	Set the current fill or stroke to the selected color	वर्तमान फ़िल या स्ट्रोक को सिलेक्टेड रंग में सेट करें
 	Set the selected color to the current color	सिलेक्टेड रंग को वर्तमान रंग में सेट करें
 	Set Zoom	ज़ूम सेट करें
 	Set:	सेट:
@@ -4930,7 +4947,7 @@ antiAlias	Sharp	शार्प
 	Show Vivid/Muted	चमकीले/मंद दिखाएँ
 	Show Warm/Cool	शो वार्म / कूल
 	Show:	दिखाएँ:
-	Show/hide plate (Alt-click: only this plate)	प्लेट दिखाएँ/छिपाएँ (Alt-क्लिक: केवल यही प्लेट)
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	प्लेट दिखाएँ/छिपाएँ (Alt-क्लिक: केवल यही प्लेट; फिर से Alt-क्लिक: सभी प्लेटें)
 	Shown with the optimised preview.	आशावादी प्रीव्यू के साथ दिखाया गया है।
 	Shrink Text to Fit	टेक्स्ट को फिट करने के लिए सिकोड़ें
 	Side 1:	साइड 1:
@@ -5477,6 +5494,13 @@ antiAlias	Sharp	शार्प
 	TIFF (8-bit Color)	TIFF (8-बिट रंग)
 	TIFF (Black & White)	TIFF (ब्लैक एंड व्हाइट)
 	Tile	टाइल
+	Tile All Vertically	सभी को लंबवत टाइल करें
+	Tile All Horizontally	सभी को क्षैतिज टाइल करें
+	2-Up Layout	2 का लेआउट
+	3-Up Layout	3 का लेआउट
+	4-Up Layout	4 का लेआउट
+	6-Up Layout	6 का लेआउट
+	Arrange Documents	दस्तावेज़ व्यवस्थित करें
 	tile {number}	टाइल {number}
 	Tile Edge Color	टाइल एज रंग
 	Tile Edge Color…	टाइल एज रंग…
@@ -5784,6 +5808,8 @@ antiAlias	Sharp	शार्प
 	Variable Options	वेरिएबल ऑप्शन्स
 	Variable Options…	वेरिएबल ऑप्शन्स…
 	Variable Width Profile	वेरिएबल चौड़ाई प्रोफ़ाइल
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	स्ट्रोक का ब्रश अपना आकार बनाए रखता है, इसलिए चौड़ाई प्रोफ़ाइल उसे नहीं बदलती। प्रोफ़ाइल का उपयोग करने के लिए ब्रश निकालें।
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	स्ट्रोक का ब्रश अपना आकार बनाए रखता है, इसलिए चौड़ाई प्रोफ़ाइल उसे नहीं बदलती। प्रोफ़ाइल का उपयोग करने के लिए ब्रश निकालें।
 	Variables	वेरिएबल्स
 	Variation	वैरिएशन
 	Variation:	भिन्नता:
@@ -5841,7 +5867,7 @@ antiAlias	Sharp	शार्प
 	Video Thumbnail 1280×720	वीडियो थंबनेल 1280 × 720
 	View	व्यू
 	View {n}	{n}
-	View Artboard Only	केवल आर्टबोर्ड देखें
+	View Artboard Contents Only	केवल आर्टबोर्ड की सामग्री देखें
 	View Opacity Mask	ओपेसिटी मास्क देखें
 	View PDF after saving	सेव करने के बाद PDF देखें
 	View:	व्यू:
@@ -5914,6 +5940,7 @@ antiAlias	Sharp	शार्प
 	Write Layers	लेयर लिखें
 	Writes, moves or deletes files	फ़ाइलों को राइट्स, मूव या डिलीट करता है
 	x Height	x ऊँचाई
+	Em Box Height	एम बॉक्स ऊँचाई
 	X Position	X स्थिति
 	x-height	x-ऊँचाई
 	x-Height	x-ऊँचाई
@@ -6960,6 +6987,7 @@ antiAlias	Sharp	शार्प
 @msg	compressed (RLE) bitmaps can't be read yet	संकुचित (RLE) bitmaps अभी तक पढ़ा नहीं जा सकता है
 @msg	connect end must be "start" or "end"	कनेक्ट अंत "start" या "end" होना चाहिए
 @msg	connect needs a path other than the one extended	connect के लिए बढ़ाए गए पाथ के अलावा कोई दूसरा पाथ चाहिए
+@msg	connect needs extend	connect के लिए extend चाहिए
 @msg	connect needs id	connect के लिए id चाहिए
 @msg	connect path has no open end	कनेक्ट पाथ का कोई खुला अंत नहीं है
 @msg	Contour: select paths or shapes	कंटूर: पाथ या आकृतियों सिलेक्ट करें
@@ -6973,6 +7001,13 @@ antiAlias	Sharp	शार्प
 	Show External Script Warning	बाहरी स्क्रिप्ट की चेतावनी दिखाएँ
 	A Script Is Running	एक स्क्रिप्ट चल रही है
 	Script Alert	स्क्रिप्ट सूचना
+	Script File Access	स्क्रिप्ट की फ़ाइल पहुँच
+	The script asks to read a file you choose.	स्क्रिप्ट आपकी चुनी हुई फ़ाइल पढ़ने की अनुमति माँगती है।
+	The script asks to read and write a file you choose.	स्क्रिप्ट आपकी चुनी हुई फ़ाइल पढ़ने और लिखने की अनुमति माँगती है।
+	The script asks to read and write a folder you choose, with everything in it.	स्क्रिप्ट आपका चुना हुआ फ़ोल्डर और उसकी सारी सामग्री पढ़ने और लिखने की अनुमति माँगती है।
+	Allow Once	एक बार अनुमति दें
+	Always Allow This Script	इस स्क्रिप्ट को हमेशा अनुमति दें
+	Deny	अस्वीकार करें
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	स्क्रिप्ट खुले दस्तावेज़ बदल सकती है और अपने चलाए कमांड से फ़ाइलें लिख सकती है। केवल भरोसेमंद स्क्रिप्ट चलाएँ।
 	Do not show this warning again	यह चेतावनी फिर न दिखाएँ
 	Stop the script and undo what it did? Then quit again.	स्क्रिप्ट रोककर उसके बदलाव पूर्ववत करें? फिर दोबारा बाहर निकलें।
@@ -7003,8 +7038,6 @@ antiAlias	Sharp	शार्प
 @msg	Script file could not be read	स्क्रिप्ट फ़ाइल पढ़ी नहीं जा सकी
 @msg	Script folder has more than 2,048 entries	स्क्रिप्ट फ़ोल्डर में 2,048 से अधिक प्रविष्टियाँ हैं
 @msg	Script file open mode must be r, w, e or a	स्क्रिप्ट फ़ाइल खोलने का मोड r, w, e या a होना चाहिए
-@msg	Script file writing is not available	स्क्रिप्ट फ़ाइल लिखना उपलब्ध नहीं है
-@msg	Script file dialogs are not available	स्क्रिप्ट फ़ाइल संवाद उपलब्ध नहीं हैं
 @msg	Script files cannot be opened in another application	स्क्रिप्ट फ़ाइलें किसी अन्य ऐप्लिकेशन में नहीं खोली जा सकतीं
 @msg	Script file access is unavailable on the web	वेब पर स्क्रिप्ट फ़ाइल पहुँच उपलब्ध नहीं है
 @msg	Script has 256 files open	स्क्रिप्ट ने 256 फ़ाइलें खोल रखी हैं
@@ -7146,6 +7179,27 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` केवल ऐसे रन के लिए है जिसमें पूछने के लिए कोई नहीं है: ऐप में, व्यक्ति हर डायलॉग का उत्तर देता है
 @msg	Running a script	स्क्रिप्ट चल रही है
 @msg	Copied the script report	Copied स्क्रिप्ट रिपोर्ट
+@msg	Script file access denied: {path}	स्क्रिप्ट की फ़ाइल पहुँच अस्वीकार की गई: {path}
+@msg	Script file access to the app's own folders is not allowed	स्क्रिप्ट को ऐप के अपने फ़ोल्डरों तक पहुँचने की अनुमति नहीं है
+@msg	Script file cannot encode the text	स्क्रिप्ट फ़ाइल टेक्स्ट को एन्कोड नहीं कर सकती
+@msg	Script file could not be written	स्क्रिप्ट फ़ाइल लिखी नहीं जा सकी
+@msg	Script file dialogs need a person to answer them	स्क्रिप्ट के फ़ाइल डायलॉग को उत्तर देने के लिए किसी व्यक्ति की ज़रूरत है
+@msg	Script file is not open for writing	स्क्रिप्ट फ़ाइल लिखने के लिए खुली नहीं है
+@msg	Script file name is already in use	स्क्रिप्ट फ़ाइल का नाम पहले से उपयोग में है
+@msg	Script file name must be a name without a folder	स्क्रिप्ट फ़ाइल का नाम बिना फ़ोल्डर वाला नाम होना चाहिए
+@msg	Script file permission can be kept only for a script run from a file	फ़ाइल अनुमति केवल फ़ाइल से चलाई गई स्क्रिप्ट के लिए रखी जा सकती है
+@msg	Script file permission could not be saved	स्क्रिप्ट की फ़ाइल अनुमति सेव नहीं की जा सकी
+@msg	Script folder is not empty	स्क्रिप्ट फ़ोल्डर खाली नहीं है
+@msg	Script files cannot make aliases	स्क्रिप्ट फ़ाइलें उपनाम नहीं बना सकतीं
+@msg	Script file hidden setting cannot be changed	स्क्रिप्ट फ़ाइल की छिपी सेटिंग बदली नहीं जा सकती
+@msg	{name}: a file dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: फ़ाइल डायलॉग किसी बिल्ट-इन फ़ंक्शन, getter, रूपांतरण या $.evalFile द्वारा चलाई गई फ़ाइल के callback के भीतर नहीं खुल सकता; इसे स्क्रिप्ट के अपने कोड से कॉल करें
+@msg	the script wrote more file data than one run may write (32 MiB)	स्क्रिप्ट ने एक रन में लिखे जा सकने वाले फ़ाइल डेटा से अधिक लिखा (32 MiB)
+@msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	स्क्रिप्ट के फ़ाइल डायलॉग के लिए `answer` इनमें से एक होना चाहिए: once, always, deny, stop
+@msg	choose a file or folder first, or deny	पहले कोई फ़ाइल या फ़ोल्डर चुनें, या अस्वीकार करें
+@msg	the script file permissions could not be saved: {e}	स्क्रिप्ट की फ़ाइल अनुमतियाँ सेव नहीं की जा सकीं: {e}
+@msg	this script's file access can be allowed only once	इस स्क्रिप्ट की फ़ाइल पहुँच केवल एक बार दी जा सकती है
+@msg	Only the person at the keyboard can allow a script's file access	किसी स्क्रिप्ट को फ़ाइल पहुँच केवल कीबोर्ड पर मौजूद व्यक्ति दे सकता है
+@msg	A script is given at most 2,048 files: the files picked after them were left out	किसी स्क्रिप्ट को अधिकतम 2,048 फ़ाइलें दी जाती हैं: उनके बाद चुनी गई फ़ाइलें छोड़ दी गईं
 @msg	Copied the link info	लिंक जानकारी कॉपी की गई
 @msg	copy needs path: the file to copy into the document's folder	copy के लिए path चाहिए: डॉक्यूमेंट के फ़ोल्डर में कॉपी करने वाली फ़ाइल
 @msg	copy takes images only: relink placed documents where their files are	copy केवल इमेज लेता है: प्लेस किए गए डॉक्यूमेंट्स को वहीं फिर से लिंक करें जहाँ उनकी फ़ाइलें हैं
@@ -7710,8 +7764,8 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	no active document	कोई सक्रिय डॉक्यूमेंट
 @msg	no active perspective plane	कोई सक्रिय पर्सपेक्टिव विमान नहीं
 @msg	no anchor points selected	कोई एंकर पॉइंट सिलेक्ट नहीं है
-@msg	`points` must be three [x, y] pairs of numbers	`points` में संख्याओं के तीन [x, y] जोड़े होने चाहिए
-@msg	direct-select three anchor points, or give `points`	तीन एंकर पॉइंट्स डायरेक्ट-सिलेक्ट करें, या `points` दें
+@msg	`points` must be two or three [x, y] pairs of numbers	`points` में संख्याओं के दो या तीन [x, y] जोड़े होने चाहिए
+@msg	direct-select two or three anchor points, or give `points`	दो या तीन एंकर पॉइंट्स डायरेक्ट-सिलेक्ट करें, या `points` दें
 @msg	no circle passes through these points: two are the same or all three lie on one line	इन पॉइंट्स से होकर कोई वृत्त नहीं गुज़रता: दो एक जैसे हैं या तीनों एक ही रेखा पर हैं
 @msg	no app to open files here	यहां फ़ाइलों को ओपन करने के लिए कोई ऐप नहीं है
 @msg	no appearance item {index}	कोई उपस्थिति आइटम {index}
@@ -7910,6 +7964,9 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	no such user library	ऐसी कोई उपयोगकर्ता लाइब्रेरी नहीं
 @msg	no such view	कोई ऐसा दृश्य नहीं
 @msg	no such width point	ऐसी कोई चौड़ाई बिंदु नहीं
+@msg	`single` must be `incoming` or `outgoing`	`single` का मान `incoming` या `outgoing` होना चाहिए
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` और `outIndex` एक ही असतत चौड़ाई बिंदु के दो हिस्से होने चाहिए
+@msg	a discontinuous width point keeps its place	असतत चौड़ाई बिंदु अपनी जगह पर रहता है
 @msg	no swatch `{keep}`	कोई स्वॉच `{keep}` नहीं
 @msg	no swatch `{n}`	कोई स्वॉच `{n}` नहीं
 @msg	no swatch `{n}` (swatches and colour groups move separately)	कोई स्वॉच `{n}` नहीं (स्वॉच और रंग समूह अलग-अलग मूव होते हैं)
@@ -8421,6 +8478,7 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	shadings of more than 4096 patches or triangles were left out	4096 से अधिक पैच या त्रिकोणों के छायांकन को छोड़ दिया गया था
 @msg	shadings whose functions are of an unknown type are filled with their middle colour	छायांकन जिसका कार्य अज्ञात प्रकार के होते हैं, उनके मध्य रंग से भरे होते हैं
 @msg	Shape Builder: no region under the pointer	आकृति बिल्डर: सूचक के तहत कोई क्षेत्र नहीं
+@msg	Shape Builder: select all paths you want to merge	आकृति बिल्डर: वे सभी पाथ सिलेक्ट करें जिन्हें आप मर्ज करना चाहते हैं
 @msg	Shape Builder: select paths or compound paths	आकृति बिल्डर: पाथ या मिश्रित पाथ सिलेक्ट करें
 @msg	Shaper needs 1–64 source paths	शेपर के लिए 1–64 स्रोत पाथ चाहिए
 @msg	shortcut for `{k}` must be a string	`{k}` के लिए शॉर्टकट एक स्ट्रिंग होना चाहिए
@@ -9615,3 +9673,13 @@ theme	Appearance	अपीयरेंस
 @msg	A panel is not joined to the rest by a crease.	कोई पैनल किसी क्रीज़ लाइन से बाकी से जुड़ा नहीं है।
 @msg	A fold line is on a non-printing layer.	एक फ़ोल्ड लाइन नॉन-प्रिंटिंग लेयर पर है।
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	पैनल: {panels}, हिंज: {hinges}, एरर: {errors}, वॉर्निंग: {warnings}
+	Fold Preview	फ़ोल्ड प्रीव्यू
+	Fold	फ़ोल्ड
+	Show Fold Lines	फ़ोल्ड लाइनें दिखाएँ
+	Three-Quarter	तीन-चौथाई
+	Open a document to preview its folded shape.	इसका फ़ोल्ड किया हुआ आकार देखने के लिए कोई डॉक्यूमेंट ओपन करें।
+@msg	Check the fold lines first.	पहले फ़ोल्ड लाइनें चेक करें।
+@msg	Panels: {panels}, hinges: {hinges}	पैनल: {panels}, हिंज: {hinges}
+@msg	Other blanks not shown: {count}	दूसरे ब्लैंक नहीं दिखाए गए: {count}
+@msg	A joint does not close by {gap} pt.	एक जोड़ {gap} pt से बंद नहीं होता।
+@msg	Two panels pass through each other.	दो पैनल एक-दूसरे के आर-पार जाते हैं।

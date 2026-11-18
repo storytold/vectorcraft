@@ -75,14 +75,33 @@
 @msg	Script file could not be read	Scriptfilen kunne ikke læses
 @msg	Script folder has more than 2,048 entries	Scriptmappen har mere end 2.048 elementer
 @msg	Script file open mode must be r, w, e or a	Scriptfilens åbningstilstand skal være r, w, e eller a
-@msg	Script file writing is not available	Skrivning af scriptfiler er ikke tilgængelig
-@msg	Script file dialogs are not available	Scriptfildialoger er ikke tilgængelige
 @msg	Script files cannot be opened in another application	Scriptfiler kan ikke åbnes i et andet program
 @msg	Script file access is unavailable on the web	Scriptets filadgang er ikke tilgængelig på nettet
 @msg	Script has 256 files open	Scriptet har 256 filer åbne
 @msg	Script file path exceeds 32,767 characters	Scriptfilens sti er længere end 32.767 tegn
 @msg	Script folder mask takes too many steps to match	Scriptmappens maske kræver for mange trin at matche
 @msg	the script opened more file data than one run may open (32 MiB)	scriptet åbnede flere fildata, end én kørsel må åbne (32 MiB)
+@msg	Script file access denied: {path}	Scriptets filadgang blev nægtet: {path}
+@msg	Script file access to the app's own folders is not allowed	Scripts må ikke få adgang til programmets egne mapper
+@msg	Script file cannot encode the text	Scriptfilen kan ikke kode teksten
+@msg	Script file could not be written	Scriptfilen kunne ikke skrives
+@msg	Script file dialogs need a person to answer them	Scriptets fildialoger skal besvares af en person
+@msg	Script file is not open for writing	Scriptfilen er ikke åben for skrivning
+@msg	Script file name is already in use	Scriptfilens navn er allerede i brug
+@msg	Script file name must be a name without a folder	Scriptfilens navn skal være et navn uden en mappe
+@msg	Script file permission can be kept only for a script run from a file	Filtilladelsen kan kun beholdes for et script, der køres fra en fil
+@msg	Script file permission could not be saved	Scriptets filtilladelse kunne ikke gemmes
+@msg	Script folder is not empty	Scriptmappen er ikke tom
+@msg	Script files cannot make aliases	Scriptfiler kan ikke oprette aliasser
+@msg	Script file hidden setting cannot be changed	Scriptfilens indstilling for skjult kan ikke ændres
+@msg	{name}: a file dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: en fildialog kan ikke åbnes i et callback fra en indbygget funktion, en getter, en konvertering eller en fil, som $.evalFile kører; kald den fra scriptets egen kode
+@msg	the script wrote more file data than one run may write (32 MiB)	scriptet skrev flere fildata, end én kørsel må skrive (32 MiB)
+@msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` for et scripts fildialog skal være en af: once, always, deny, stop
+@msg	choose a file or folder first, or deny	vælg først en fil eller mappe, eller afvis
+@msg	the script file permissions could not be saved: {e}	scriptets filtilladelser kunne ikke gemmes: {e}
+@msg	this script's file access can be allowed only once	dette scripts filadgang kan kun tillades én gang
+@msg	Only the person at the keyboard can allow a script's file access	Kun personen ved tastaturet kan tillade et scripts filadgang
+@msg	A script is given at most 2,048 files: the files picked after them were left out	Et script får højst 2.048 filer: de filer, der blev valgt derefter, blev udeladt
 @msg	File.seek: takes a position and a mode	File.seek: tager en position og en tilstand
 @msg	vc.run: give a command id, as a string	vc.run: angiv et kommando-id som en streng
 @msg	vc.run: takes a command id and an object of parameters	vc.run: tager et kommando-id og et objekt med parametre
@@ -1617,6 +1636,7 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	sammensatte figurer tager kurver, sammensatte kurver, grupper, sammensatte figurer, tekst, blandinger og konvolutter
 @msg	compound {_1} must contain exactly one open path to join	sammensat {_1} skal indeholde præcis én åben kurve at sammenføje
 @msg	connect needs a path other than the one extended	connect kræver en anden kurve end den, der forlænges
+@msg	connect needs extend	connect kræver extend
 @msg	connect needs id	connect kræver id
 @msg	connect path has no open end	connect-kurven har ingen åben ende
 @msg	continuation must be an array of path chunks	continuation skal være et array af kurvestykker
@@ -3371,6 +3391,13 @@ liquify-list-end	{0}, {1}	{0} og {1}
 	Previous Document	Forrige dokument
 	Cascade	Kaskade
 	Tile	Fliselæg
+	Tile All Vertically	Fliselæg alle lodret
+	Tile All Horizontally	Fliselæg alle vandret
+	2-Up Layout	Layout med 2
+	3-Up Layout	Layout med 3
+	4-Up Layout	Layout med 4
+	6-Up Layout	Layout med 6
+	Arrange Documents	Arrangér dokumenter
 	Float in Window	Flyd i vindue
 	Float All in Windows	Flyd alle i vinduer
 	Consolidate All Windows	Saml alle vinduer
@@ -4414,6 +4441,7 @@ digits	Malayalam	Malayalam
 	Rule:	Regel:
 	Save changes to {name}	Gem ændringer i {name}
 	Save theme to My Themes	Gem tema i Mine temaer
+	Set the current fill or stroke to the selected color	Sæt den aktuelle udfyldning eller streg til den markerede farve
 	Set the selected color to the current color	Sæt den markerede farve til den aktuelle farve
 	Copy All Styles	Kopiér alle typografier
 	Exported {path}	Eksporterede {path}
@@ -4629,7 +4657,7 @@ digits	Malayalam	Malayalam
 	Stroke: click for swatches, Shift-click for the color mixer	Kontur: klik for farveprøver, Skift-klik for farveblanderen
 	This panel is on the roadmap (see the parity plan).	Dette panel er på vejkortet (se paritetsplanen).
 	Open a document to navigate it.	Åbn et dokument for at navigere i det.
-	View Artboard Only	Vis kun tegnebræt
+	View Artboard Contents Only	Vis kun tegnebrættets indhold
 	Contextual Alternates	Kontekstuelle alternativer
 	Default Figure	Standardcifre
 	Discretionary Ligatures	Valgfrie ligaturer
@@ -4772,7 +4800,7 @@ digits	Malayalam	Malayalam
 	Overprint Preview (separations)	Forhåndsvisning af overtryk (separationer)
 	Show All Plates	Vis alle plader
 	Show all plates	Vis alle plader
-	Show/hide plate (Alt-click: only this plate)	Vis/skjul plade (Alt-klik: kun denne plade)
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	Vis/skjul plade (Alt-klik: kun denne plade; Alt-klik igen: alle plader)
 	Simulate Paper	Simulér papir
 	Use Black Point Compensation	Brug sortpunktskompensation
 	Working CMYK (don't tag)	Arbejds-CMYK (mærk ikke)
@@ -4812,6 +4840,8 @@ digits	Malayalam	Malayalam
 	Tip extends past the end point	Spidsen rager ud over endepunktet
 	Tip on the end point	Spidsen på endepunktet
 	Variable Width Profile	Variabel breddeprofil
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Stregens pensel beholder sin egen størrelse, så et breddeprofil ændrer den ikke. Fjern penslen for at bruge et profil.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Stregens pensel beholder sin egen størrelse, så et breddeprofil ændrer den ikke. Fjern penslen for at bruge et profil.
 	Weight:	Vægt:
 	Art using a deleted global swatch keeps its colour.	Grafik, der bruger en slettet global farveprøve, bevarer sin farve.
 	Color Group: {name}	Farvegruppe: {name}
@@ -4921,6 +4951,9 @@ digits	Malayalam	Malayalam
 	Flip Horizontal	Spejl vandret
 	Flip Vertical	Spejl lodret
 	Polygon Properties:	Polygonegenskaber:
+	Line Properties:	Linjeegenskaber:
+	Line Length:	Linjelængde:
+	Line Angle:	Linjevinkel:
 	Rectangle Properties:	Rektangelegenskaber:
 	Shape Properties:	Figuregenskaber:
 	Shape Properties	Figuregenskaber
@@ -5664,6 +5697,8 @@ antiAlias	Sharp	Skarp
 	Every option matches {base}.	Alle indstillinger matcher {base}.
 	Files of a PDF standard can't be password-protected.	Filer med en PDF-standard kan ikke beskyttes med adgangskode.
 	Files of this standard tag their colours with ICC profiles.	Filer med denne standard mærker deres farver med ICC-profiler.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	Filer med denne standard mærker deres farver med ICC-profiler, undtagen CMYK-farver i outputintentens profil, som skrives som DeviceCMYK.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	Med »Medtag ikke profiler« og en CMYK-outputintent skrives alle CMYK-farver som DeviceCMYK, medmindre de konverteres til en CMYK-destination med en anden profil.
 	Flattener preset:	Forudindstilling til fladgøring:
 	General › Thumbnails	Generelt › Miniaturer
 	Grayscale images	Gråtonebilleder
@@ -5847,6 +5882,12 @@ antiAlias	Sharp	Skarp
 	LF (macOS, Linux)	LF (macOS, Linux)
 	CRLF (Windows)	CRLF (Windows)
 	Text Export Options	Indstillinger for teksteksport
+	Chinese Big 5	Kinesisk Big 5
+	Cyrillic	Kyrillisk
+	Greek	Græsk
+	Turkish	Tyrkisk
+	Baltic	Baltisk
+	Central European	Centraleuropæisk
 	Character Set:	Tegnsæt:
 	Join the lines of each paragraph	Forbind linjerne i hvert afsnit
 	Line Breaks	Linjeskift
@@ -5876,6 +5917,9 @@ antiAlias	Sharp	Skarp
 	Variable Options	Indstillinger for variabel
 	Define a variable first	Definér først en variabel
 	Adjust Adjoining Width Points	Justér tilstødende breddepunkter
+	Incoming	Indgående
+	Outgoing	Udgående
+	Single Width Only	Kun én bredde
 	Keep both sides the same width	Bevar samme bredde på begge sider
 	Side 1:	Side 1:
 	Side 2:	Side 2:
@@ -6261,6 +6305,7 @@ theme	Appearance	Udseende
 	Select Art	Markér grafik
 	Set Current Layer	Angiv aktuelt lag
 	Flatten Artwork	Fladgør grafik
+	Locate Layer	Lokalisér lag
 	Locate Object	Lokalisér objekt
 	Lock Others	Lås andre
 	Merge Selected	Flet valgte
@@ -7079,6 +7124,8 @@ font-technology	Variable	Variable
 	Couldn't paste from the clipboard: {e}	Kunne ikke indsætte fra udklipsholderen: {e}
 	Channel	Kanal
 	Circle	Cirkel
+	Circle Tool	Cirkelværktøj
+	Circle too large	Cirklen er for stor
 	Clip to Art	Beskær til grafik
 	Colorize	Farvelæg
 	Gamma	Gamma
@@ -7295,6 +7342,13 @@ imageTrace	Outline	Kontur
 	Show External Script Warning	Vis advarsel om eksterne scripts
 	A Script Is Running	Et script kører
 	Script Alert	Scriptadvarsel
+	Script File Access	Scriptadgang til filer
+	The script asks to read a file you choose.	Scriptet beder om at læse en fil, du vælger.
+	The script asks to read and write a file you choose.	Scriptet beder om at læse og skrive en fil, du vælger.
+	The script asks to read and write a folder you choose, with everything in it.	Scriptet beder om at læse og skrive en mappe, du vælger, med alt indhold.
+	Allow Once	Tillad én gang
+	Always Allow This Script	Tillad altid dette script
+	Deny	Afvis
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Et script kan ændre de åbne dokumenter og skrive filer gennem de kommandoer, det kører. Kør kun scripts, du stoler på.
 	Do not show this warning again	Vis ikke denne advarsel igen
 	Stop the script and undo what it did? Then quit again.	Stop scriptet og fortryd det, det har gjort? Afslut derefter igen.
@@ -7370,6 +7424,7 @@ imageTrace	Outline	Kontur
 @msg	Saved {path}	Gemte {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	Markér tekst, eller klik i tekst med tekstværktøjet, for at indsætte glyffer
 @msg	Shape Builder: no region under the pointer	Figurbygger: intet område under markøren
+@msg	Shape Builder: select all paths you want to merge	Figurbygger: markér alle kurver, du vil flette
 @msg	Shape Builder: select paths or compound paths	Figurbygger: markér kurver eller sammensatte kurver
 @msg	Show All Hidden Attributes: nothing is hidden	Vis alle skjulte attributter: intet er skjult
 @msg	Split Into Grid: select paths large enough for the grid	Opdel i gitter: markér kurver, der er store nok til gitteret
@@ -7555,8 +7610,8 @@ imageTrace	Outline	Kontur
 @msg	no active document	intet aktivt dokument
 @msg	no active perspective plane	intet aktivt perspektivplan
 @msg	no anchor points selected	ingen ankerpunkter er markeret
-@msg	`points` must be three [x, y] pairs of numbers	`points` skal være tre talpar [x, y]
-@msg	direct-select three anchor points, or give `points`	direkte markér tre ankerpunkter, eller angiv `points`
+@msg	`points` must be two or three [x, y] pairs of numbers	`points` skal være to eller tre talpar [x, y]
+@msg	direct-select two or three anchor points, or give `points`	direkte markér to eller tre ankerpunkter, eller angiv `points`
 @msg	no circle passes through these points: two are the same or all three lie on one line	ingen cirkel går gennem disse punkter: to er ens, eller alle tre ligger på én linje
 @msg	no app to open files here	ingen app til at åbne filer her
 @msg	no artboard	ingen tegneflade
@@ -7647,6 +7702,9 @@ imageTrace	Outline	Kontur
 @msg	no such user library	intet sådant brugerbibliotek
 @msg	no such view	ingen sådan visning
 @msg	no such width point	intet sådant breddepunkt
+@msg	`single` must be `incoming` or `outgoing`	`single` skal være `incoming` eller `outgoing`
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` og `outIndex` skal være de to halvdele af ét diskontinuert breddepunkt
+@msg	a discontinuous width point keeps its place	et diskontinuert breddepunkt bevarer sin placering
 @msg	no swatch `{name}`	ingen farveprøve `{name}`
 @msg	no swatch library `{l}` (see swatch.library.list)	intet farveprøvebibliotek `{l}` (se swatch.library.list)
 @msg	no symbol instances selected	ingen symbolforekomster markeret
@@ -8297,6 +8355,7 @@ imageTrace	Outline	Kontur
 	Ascent	Overhøjde
 	Cap Height	Versalhøjde
 	x Height	x-højde
+	Em Box Height	Em-felthøjde
 	Justify	Justér
 	First Baseline	Første basislinje
 	Vertical Align	Lodret justering
@@ -10105,4 +10164,14 @@ breakText	Glyphs	Glyffer
 @msg	A panel is not joined to the rest by a crease.	Et panel er ikke forbundet med resten af en rillelinje.
 @msg	A fold line is on a non-printing layer.	En foldelinje ligger på et lag, der ikke udskrives.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Paneler: {panels}, hængsler: {hinges}, fejl: {errors}, advarsler: {warnings}
+	Fold Preview	Forhåndsvisning af foldning
+	Fold	Foldning
+	Show Fold Lines	Vis foldelinjer
+	Three-Quarter	Trekvart
+	Open a document to preview its folded shape.	Åbn et dokument for at se dets foldede form.
+@msg	Check the fold lines first.	Kontrollér foldelinjerne først.
+@msg	Panels: {panels}, hinges: {hinges}	Paneler: {panels}, hængsler: {hinges}
+@msg	Other blanks not shown: {count}	Andre emner vises ikke: {count}
+@msg	A joint does not close by {gap} pt.	En samling lukker ikke med {gap} pt.
+@msg	Two panels pass through each other.	To paneler går gennem hinanden.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer skal være "singleLine", "everyLine", "standardSingleLine" eller "standardEveryLine"

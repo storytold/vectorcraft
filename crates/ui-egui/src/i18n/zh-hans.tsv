@@ -92,6 +92,9 @@
 	Additional Plug-ins Folder	附加增效工具文件夹
 	Additional Fonts Folder	附加字体文件夹
 	Adjust Adjoining Width Points	调整相邻宽度点
+	Incoming	入侧
+	Outgoing	出侧
+	Single Width Only	仅保留一个宽度
 	Adjust Color Balance…	调整色彩平衡…
 	Adjust Colors	调整颜色
 	Adjust Options:	调整选项：
@@ -374,6 +377,12 @@ antiAlias	Sharp	锐利
 	Character Alignment	字符对齐
 	Character / Paragraph	字符/段落
 	Character Rotation	字符旋转
+	Chinese Big 5	繁体中文 Big 5
+	Cyrillic	西里尔文
+	Greek	希腊文
+	Turkish	土耳其文
+	Baltic	波罗的海文
+	Central European	中欧文
 	Character Set:	字符集：
 	Character Style	字符样式
 	Character Style Options	字符样式选项
@@ -436,6 +445,8 @@ antiAlias	Sharp	锐利
 	Choose a folder	选择文件夹
 	Choose…	选择…
 	Circle	圆形
+	Circle Tool	圆形工具
+	Circle too large	圆形过大
 	Classic Defaults	经典默认
 	Clean Up…	清理…
 	Clear	清除
@@ -999,6 +1010,9 @@ antiAlias	Sharp	锐利
 	Cap Height	大写字母高度
 	x-Height	x 字高
 	ICF Box	ICF 框
+	Ascent	上缘
+	x Height	x 字高
+	Em Box Height	全角字框高度
 	Show Sample	显示样本
 	Hide Sample	隐藏样本
 	Max Ascent/Descent	最大上升/下降
@@ -1211,6 +1225,8 @@ antiAlias	Sharp	锐利
 	Files	文件
 	Files of a PDF standard can't be password-protected.	PDF 标准的文件无法设置密码保护。
 	Files of this standard tag their colours with ICC profiles.	此标准的文件会以 ICC 配置文件标记颜色。
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	此标准的文件会以 ICC 配置文件标记颜色，但输出意图配置文件中的 CMYK 颜色会写为 DeviceCMYK。
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	选择“不包含配置文件”且输出意图为 CMYK 时，除非转换为其他配置文件的 CMYK 目标，否则每种 CMYK 颜色都会写为 DeviceCMYK。
 	Fill	填色
 	Fill & Stroke	填色和描边
 	Fill (X), double-click for the Color Picker	填色 (X)，双击打开拾色器
@@ -1957,6 +1973,7 @@ file-filter	Templates	模板
 	Load SVG into Clipboard	将 SVG 载入剪贴板
 	Load Text into Clipboard	将文本载入剪贴板
 	Local Libraries	本地库
+	Locate Layer	查找图层
 	Locate Object	查找对象
 	Locate Selected Objects	查找所选对象
 	Location	位置
@@ -2608,6 +2625,9 @@ diagnostics	ui	界面
 	Polar Grid Tool	极坐标网格工具
 	Polygon	多边形
 	Polygon Properties:	多边形属性：
+	Line Properties:	直线属性：
+	Line Length:	直线长度：
+	Line Angle:	直线角度：
 	Polygon Tool	多边形工具
 	Portrait	纵向
 	Portuguese	葡萄牙语
@@ -3385,6 +3405,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Set Slice Rectangle	设置切片矩形
 	Set Tab Stops	设置制表位
 	Set Text	设置文本
+	Set the current fill or stroke to the selected color	将当前填色或描边设为选择的颜色
 	Set the selected color to the current color	将选择的颜色设为当前颜色
 	Set Zoom	设置缩放
 	Settings…	设置…
@@ -3506,7 +3527,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Show Vivid/Muted	显示鲜艳/柔和
 	Show Warm/Cool	显示暖色/冷色
 	Show {kind} Brushes	显示{kind}画笔
-	Show/hide plate (Alt-click: only this plate)	显示／隐藏色版 (Alt-单击：仅此色版)
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	显示／隐藏色版 (Alt-单击：仅此色版；再次 Alt-单击：所有色版)
 	Show:	显示：
 	Shown with the optimised preview.	与优化预览一起显示。
 	Side 1:	侧边 1：
@@ -3910,6 +3931,13 @@ digits	Malayalam	马拉雅拉姆数字
 	Threshold	阈值
 	Thumbnail View	缩略图视图
 	Tile	平铺
+	Tile All Vertically	全部垂直平铺
+	Tile All Horizontally	全部水平平铺
+	2-Up Layout	双联布局
+	3-Up Layout	三联布局
+	4-Up Layout	四联布局
+	6-Up Layout	六联布局
+	Arrange Documents	排列文档
 	Tile Edge Color	拼贴边缘颜色
 	Tile Edge Color…	拼贴边缘颜色…
 	Tile Full Pages	并排完整页面
@@ -4115,6 +4143,8 @@ digits	Malayalam	马拉雅拉姆数字
 	V Spacing:	垂直间距：
 	V:	V：
 	Variable Width Profile	变量宽度配置文件
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	描边的画笔保持其自身大小，因此宽度配置文件不会改变它。移除画笔即可使用配置文件。
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	描边的画笔保持其自身大小，因此宽度配置文件不会改变它。移除画笔即可使用配置文件。
 	Variables	变量
 	New Variable	新建变量
 	Delete Variable	删除变量
@@ -4194,7 +4224,7 @@ variable-list-end	{0}, {1}	{0}和{1}
 	Vertical:	垂直：
 	Very High	极高
 	View	视图
-	View Artboard Only	仅查看画板
+	View Artboard Contents Only	仅查看画板内容
 	View Opacity Mask	查看不透明度蒙版
 	View PDF after saving	存储后查看 PDF
 	View {n}	查看 {n}
@@ -4455,6 +4485,7 @@ imageTrace	Outline	轮廓
 @msg	Live Paint: select paths or compound paths	实时上色：请选择路径或复合路径
 @msg	Live Paint: these paths are too degenerate to paint	实时上色：这些路径过于退化，无法上色
 @msg	Shape Builder: no region under the pointer	形状生成器：指针下方没有区域
+@msg	Shape Builder: select all paths you want to merge	形状生成器：请选择要合并的所有路径
 @msg	Shape Builder: select paths or compound paths	形状生成器：请选择路径或复合路径
 @msg	image data `{_1}` is missing	缺少图像数据 `{_1}`
 @msg	no Live Paint edge near that point	该点附近没有实时上色边缘
@@ -4603,8 +4634,8 @@ imageTrace	Outline	轮廓
 @msg	image would be too large; lower the resolution	图像将过大；请降低分辨率
 @msg	clipboard is empty	剪贴板为空
 @msg	no anchor points selected	未选择锚点
-@msg	`points` must be three [x, y] pairs of numbers	`points` 必须是三对数字 [x, y]
-@msg	direct-select three anchor points, or give `points`	请直接选择三个锚点，或提供 `points`
+@msg	`points` must be two or three [x, y] pairs of numbers	`points` 必须是两对或三对数字 [x, y]
+@msg	direct-select two or three anchor points, or give `points`	请直接选择两个或三个锚点，或提供 `points`
 @msg	no circle passes through these points: two are the same or all three lie on one line	没有圆经过这些点：有两点相同，或三点共线
 @msg	select at least two objects	请至少选择两个对象
 @msg	exit isolation mode first	请先退出隔离模式
@@ -5009,6 +5040,9 @@ imageTrace	Outline	轮廓
 @msg	`{color}` is not a colour (#rrggbb or a preset name)	`{color}` 不是颜色 (#rrggbb 或预设名称)
 @msg	give the path `id` and the width point `index`	请给出路径的 `id` 和宽度点的 `index`
 @msg	no such width point	没有此宽度点
+@msg	`single` must be `incoming` or `outgoing`	`single` 必须是 `incoming` 或 `outgoing`
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` 和 `outIndex` 必须是同一个不连续宽度点的两半
+@msg	a discontinuous width point keeps its place	不连续宽度点保持原位
 @msg	onto must name a panel floating in another group	onto 必须指定浮动在另一个组中的面板
 @msg	below and above must name a panel floating in another group	below 和 above 必须指定浮动在另一个组中的面板
 @msg	give only one of onto, below and above	onto、below 和 above 只能给出一个
@@ -5118,6 +5152,13 @@ imageTrace	Outline	轮廓
 	Show External Script Warning	显示外部脚本警告
 	A Script Is Running	脚本正在运行
 	Script Alert	脚本提示
+	Script File Access	脚本文件访问
+	The script asks to read a file you choose.	脚本请求读取您选择的文件。
+	The script asks to read and write a file you choose.	脚本请求读写您选择的文件。
+	The script asks to read and write a folder you choose, with everything in it.	脚本请求读写您选择的文件夹及其中的所有内容。
+	Allow Once	允许一次
+	Always Allow This Script	始终允许此脚本
+	Deny	拒绝
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	脚本可以更改打开的文档，并可通过其运行的命令写入文件。请只运行您信任的脚本。
 	Do not show this warning again	不再显示此警告
 	Stop the script and undo what it did? Then quit again.	要停止脚本并撤销其更改吗？然后请再次退出。
@@ -5148,8 +5189,6 @@ imageTrace	Outline	轮廓
 @msg	Script file could not be read	无法读取脚本文件
 @msg	Script folder has more than 2,048 entries	脚本文件夹的条目超过 2,048 个
 @msg	Script file open mode must be r, w, e or a	脚本文件的打开模式必须是 r、w、e 或 a
-@msg	Script file writing is not available	脚本文件写入不可用
-@msg	Script file dialogs are not available	脚本文件对话框不可用
 @msg	Script files cannot be opened in another application	脚本文件无法在其他应用程序中打开
 @msg	Script file access is unavailable on the web	网页版无法访问脚本文件
 @msg	Script has 256 files open	脚本已打开 256 个文件
@@ -5266,6 +5305,27 @@ liquify-list-end	{0}, {1}	{0}和{1}
 @msg	there is no script engine named {name}	没有名为 {name} 的脚本引擎
 @msg	Running a script	正在运行脚本
 @msg	Copied the script report	已复制脚本报告
+@msg	Script file access denied: {path}	脚本的文件访问被拒绝：{path}
+@msg	Script file access to the app's own folders is not allowed	不允许脚本访问应用自身的文件夹
+@msg	Script file cannot encode the text	脚本的文件无法编码该文本
+@msg	Script file could not be written	无法写入脚本的文件
+@msg	Script file dialogs need a person to answer them	脚本的文件对话框需要有人回答
+@msg	Script file is not open for writing	脚本的文件未以写入方式打开
+@msg	Script file name is already in use	脚本的文件名已被使用
+@msg	Script file name must be a name without a folder	脚本的文件名必须是不含文件夹的名称
+@msg	Script file permission can be kept only for a script run from a file	只有从文件运行的脚本才能保留文件权限
+@msg	Script file permission could not be saved	无法保存脚本的文件权限
+@msg	Script folder is not empty	脚本的文件夹不为空
+@msg	Script files cannot make aliases	脚本的文件无法创建别名
+@msg	Script file hidden setting cannot be changed	无法更改脚本文件的隐藏设置
+@msg	{name}: a file dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}：文件对话框不能在内置函数、getter、转换或 $.evalFile 运行的文件的回调中打开；请从脚本自身的代码中调用
+@msg	the script wrote more file data than one run may write (32 MiB)	脚本写入的文件数据超过了一次运行可写入的上限 (32 MiB)
+@msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	脚本文件对话框的 `answer` 必须是以下之一：once、always、deny、stop
+@msg	choose a file or folder first, or deny	请先选择文件或文件夹，或拒绝
+@msg	the script file permissions could not be saved: {e}	无法保存脚本的文件权限：{e}
+@msg	this script's file access can be allowed only once	此脚本的文件访问只能允许一次
+@msg	Only the person at the keyboard can allow a script's file access	只有键盘前的人才能允许脚本访问文件
+@msg	A script is given at most 2,048 files: the files picked after them were left out	脚本最多获得 2,048 个文件：之后选择的文件已被略去
 @msg	Copied the link info	已复制链接信息
 @msg	Exported {path}	已导出 {path}
 @msg	no CSS to copy: select objects with CSS of their own	没有可复制的 CSS：请选择带有自身 CSS 的对象
@@ -8736,6 +8796,7 @@ breakText	Glyphs	字形
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	复合形状接受路径、复合路径、编组、复合形状、文字、混合和封套
 @msg	compound {_1} must contain exactly one open path to join	复合对象 {_1} 必须恰好包含一条要连接的开放路径
 @msg	connect needs a path other than the one extended	connect 需要一条不同于被延伸路径的路径
+@msg	connect needs extend	connect 需要 extend
 @msg	connect needs id	connect 需要 id
 @msg	connect path has no open end	connect 的路径没有开放的端点
 @msg	copy needs path: the file to copy into the document's folder	copy 需要 path：即要复制到文档所在文件夹的文件
@@ -9847,4 +9908,14 @@ breakText	Glyphs	字形
 @msg	A panel is not joined to the rest by a crease.	一个面板没有通过任何压痕线与其余部分相连。
 @msg	A fold line is on a non-printing layer.	一条折线位于不打印的图层上。
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	面板：{panels}，铰链：{hinges}，错误：{errors}，警告：{warnings}
+	Fold Preview	折叠预览
+	Fold	折叠
+	Show Fold Lines	显示折线
+	Three-Quarter	四分之三视图
+	Open a document to preview its folded shape.	打开文档以预览其折叠后的形状。
+@msg	Check the fold lines first.	请先检查折线。
+@msg	Panels: {panels}, hinges: {hinges}	面板：{panels}，铰链：{hinges}
+@msg	Other blanks not shown: {count}	未显示的其他展开图：{count}
+@msg	A joint does not close by {gap} pt.	有一处接缝相差 {gap} pt 未闭合。
+@msg	Two panels pass through each other.	两个面板相互穿插。
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} 像素对 PSD 而言过大 (每边最多 {MAX_SIDE} 像素)：请降低分辨率
