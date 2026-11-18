@@ -16,6 +16,8 @@
 //! [`import`] reads either format (an EMF with its EMF+ records too, through `craft_metafile`)
 //! into a document of one artboard (the picture's frame) and one layer: paths with fills and
 //! strokes, clipping, images and text. Records it doesn't read are skipped, with one warning.
+//! A picture cut short by a reader limit, images and pattern brushes that can't be read, clips
+//! that can't be applied and raster operations other than a plain copy each add a warning.
 //! [`import_pict`] reads QuickDraw pictures (PICT, versions 1 and 2) into the same kind of
 //! document.
 //!
