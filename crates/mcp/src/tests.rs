@@ -21,6 +21,7 @@ mod pen;
 mod persp;
 mod place;
 mod protocol;
+mod shapewidgets;
 mod svg;
 
 fn server() -> Server {
