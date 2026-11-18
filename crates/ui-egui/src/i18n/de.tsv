@@ -4220,6 +4220,8 @@ effect	Points	Punkte
 	V Spacing:	V-Abstand:
 	V:	V:
 	Variable Width Profile	Variables Breitenprofil
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Der Pinsel der Kontur behält seine eigene Größe, daher ändert ein Breitenprofil die Kontur nicht. Entfernen Sie den Pinsel, um ein Profil zu verwenden.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Der Pinsel der Kontur behält seine eigene Größe, daher ändert ein Breitenprofil die Kontur nicht. Entfernen Sie den Pinsel, um ein Profil zu verwenden.
 	Variables	Variablen
 	Variation:	Variation:
 	Vector Effects	Vektoreffekte

@@ -2714,6 +2714,8 @@ digits	Malayalam	Malayalam
 	Tip extends past the end point	Punt steekt uit voorbij het eindpunt
 	Tip on the end point	Punt op het eindpunt
 	Variable Width Profile	Variabel breedteprofiel
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Het penseel van de contour behoudt zijn eigen grootte, dus een breedteprofiel verandert de contour niet. Verwijder het penseel om een profiel te gebruiken.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Het penseel van de contour behoudt zijn eigen grootte, dus een breedteprofiel verandert de contour niet. Verwijder het penseel om een profiel te gebruiken.
 	Weight:	Dikte:
 	Art using a deleted global swatch keeps its colour.	Artwork met een verwijderd globaal staal behoudt zijn kleur.
 	Color Group: {name}	Kleurgroep: {name}

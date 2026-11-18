@@ -2244,6 +2244,8 @@ digits	Malayalam	Malajalam
 	Tip extends past the end point	Czubek wystaje poza punkt końcowy
 	Tip on the end point	Czubek na punkcie końcowym
 	Variable Width Profile	Profil zmiennej szerokości
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Pędzel obrysu zachowuje własny rozmiar, więc profil szerokości go nie zmienia. Usuń pędzel, aby użyć profilu.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Pędzel obrysu zachowuje własny rozmiar, więc profil szerokości go nie zmienia. Usuń pędzel, aby użyć profilu.
 	Weight:	Grubość:
 	Art using a deleted global swatch keeps its colour.	Kompozycja używająca usuniętej próbki globalnej zachowa swój kolor.
 	Color Group: {name}	Grupa kolorów: {name}

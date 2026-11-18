@@ -2078,6 +2078,8 @@ digits	Malayalam	Malayalam
 	Tip extends past the end point	Ujung melewati titik akhir
 	Tip on the end point	Ujung pada titik akhir
 	Variable Width Profile	Profil lebar variabel
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Kuas pada guratan mempertahankan ukurannya sendiri, sehingga profil lebar tidak mengubahnya. Hapus kuas untuk menggunakan profil.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Kuas pada guratan mempertahankan ukurannya sendiri, sehingga profil lebar tidak mengubahnya. Hapus kuas untuk menggunakan profil.
 	Weight:	Ketebalan:
 	Art using a deleted global swatch keeps its colour.	Karya seni yang memakai swatch global terhapus tetap mempertahankan warnanya.
 	Color Group: {name}	Grup warna: {name}

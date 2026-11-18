@@ -4301,6 +4301,8 @@ digits	Malayalam	Малаялам
 	V Spacing:	Интервал по вертикали:
 	V:	В:
 	Variable Width Profile	Профиль переменной ширины
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Кисть обводки сохраняет собственный размер, поэтому профиль ширины её не меняет. Чтобы использовать профиль, уберите кисть.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Кисть обводки сохраняет собственный размер, поэтому профиль ширины её не меняет. Чтобы использовать профиль, уберите кисть.
 	Variables	Переменные
 	New Variable	Новая переменная
 	Delete Variable	Удалить переменную

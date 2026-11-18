@@ -2290,6 +2290,8 @@ digits	Malayalam	Malajalam
 	Tip extends past the end point	Kärki ulottuu päätepisteen yli
 	Tip on the end point	Kärki päätepisteessä
 	Variable Width Profile	Muuttuvan leveyden profiili
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Viivan sivellin säilyttää oman kokonsa, joten leveysprofiili ei muuta sitä. Poista sivellin, jos haluat käyttää profiilia.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Viivan sivellin säilyttää oman kokonsa, joten leveysprofiili ei muuta sitä. Poista sivellin, jos haluat käyttää profiilia.
 	Weight:	Paksuus:
 	Art using a deleted global swatch keeps its colour.	Poistettua globaalia värimallia käyttävä kuvitus säilyttää värinsä.
 	Color Group: {name}	Väriryhmä: {name}

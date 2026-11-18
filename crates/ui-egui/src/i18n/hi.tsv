@@ -5808,6 +5808,8 @@ antiAlias	Sharp	शार्प
 	Variable Options	वेरिएबल ऑप्शन्स
 	Variable Options…	वेरिएबल ऑप्शन्स…
 	Variable Width Profile	वेरिएबल चौड़ाई प्रोफ़ाइल
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	स्ट्रोक का ब्रश अपना आकार बनाए रखता है, इसलिए चौड़ाई प्रोफ़ाइल उसे नहीं बदलती। प्रोफ़ाइल का उपयोग करने के लिए ब्रश निकालें।
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	स्ट्रोक का ब्रश अपना आकार बनाए रखता है, इसलिए चौड़ाई प्रोफ़ाइल उसे नहीं बदलती। प्रोफ़ाइल का उपयोग करने के लिए ब्रश निकालें।
 	Variables	वेरिएबल्स
 	Variation	वैरिएशन
 	Variation:	भिन्नता:

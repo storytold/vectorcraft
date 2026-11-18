@@ -757,7 +757,7 @@ fn fill_and_stroke(app: &mut VectorcraftApp, ui: &mut Ui, reserve: f32) {
         stroke_panel::weight_field(app, ui, "cb-stroke", weight, WEIGHT_FIELD_WIDTH);
         if ui.available_width() < row_width(ui, &[stroke_panel::PROFILE_DROPDOWN_WIDTH]) + reserve {
             left_out(ui);
-        } else if let Some(id) = stroke_panel::profile_dropdown(app, ui, shown_stroke.as_ref().and_then(|s| s.profile.as_ref())) {
+        } else if let Some(id) = stroke_panel::profile_dropdown(app, ui, shown_stroke.as_ref()) {
             app.run("stroke.set", json!({"profile": id})).ok();
         }
     } else {

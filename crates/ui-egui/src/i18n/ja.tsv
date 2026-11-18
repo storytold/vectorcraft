@@ -3867,6 +3867,8 @@ mark-style	Japanese	日本式
 	User Swatch Library 9	ユーザースウォッチライブラリ 9
 	V Spacing:	垂直方向の間隔:
 	Variable Width Profile	可変幅プロファイル
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	線のブラシは独自のサイズを保つため、幅プロファイルでは変わりません。プロファイルを使うにはブラシを削除してください。
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	線のブラシは独自のサイズを保つため、幅プロファイルでは変わりません。プロファイルを使うにはブラシを削除してください。
 	Variation:	バリエーション:
 	Vector Halftone	ベクトルハーフトーン
 	Vector illustration — fast, open, scriptable.	ベクターイラスト — 高速・オープン・スクリプト対応

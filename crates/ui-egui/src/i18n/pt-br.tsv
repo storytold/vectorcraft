@@ -3500,6 +3500,8 @@ digits	Malayalam	Malaiala
 	V Spacing:	Espaçamento V:
 	V:	V:
 	Variable Width Profile	Perfil de Largura Variável
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	O pincel do traçado mantém o próprio tamanho, então um perfil de largura não o altera. Remova o pincel para usar um perfil.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	O pincel do traçado mantém o próprio tamanho, então um perfil de largura não o altera. Remova o pincel para usar um perfil.
 	Variables	Variáveis
 	New Variable…	Nova variável…
 	Unbind Variable	Desassociar variável

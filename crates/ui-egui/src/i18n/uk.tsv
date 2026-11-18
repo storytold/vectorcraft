@@ -4316,6 +4316,8 @@ effect	Points	Точки
 	V Spacing:	Інтервал по вертикалі:
 	V:	В:
 	Variable Width Profile	Профіль змінної ширини
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Пензель обведення зберігає власний розмір, тому профіль ширини його не змінює. Щоб використати профіль, заберіть пензель.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Пензель обведення зберігає власний розмір, тому профіль ширини його не змінює. Щоб використати профіль, заберіть пензель.
 	Variables	Змінні
 	New Variable	Нова змінна
 	Delete Variable	Видалити змінну
