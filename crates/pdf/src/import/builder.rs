@@ -4,7 +4,9 @@ use super::entry::{
     UNNAMED_CHARACTERS_NOTE, max_objects,
 };
 use super::reshaped;
-use super::state::{Builder, Frame, FrameKind, GlyphRun, Saved, bounds, grouped, mean_scale, paints, round3, same_stroke, stroke_layer, type_stroke};
+use super::state::{
+    Builder, Frame, FrameKind, GlyphRun, HeldStroke, Saved, bounds, grouped, mean_scale, paints, round3, same_stroke, stroke_layer, type_stroke,
+};
 use super::{
     Affine, Appearance, AppearanceItem, Arc, BezPath, BfString, BlendMode, CacheKey, Color, Colors, Families, FillLayer, FillRule, FunctionBudget,
     FunctionPaint, HashMap, HashSet, ImageBlob, ImageObject, Knockout, Look, MaskSpec, MaskType, Native, Node, NodeId, NodeKind, OpacityMask, Paint,
@@ -15,6 +17,11 @@ use super::{
 /// The most lines of type kept for a text-showing operator's stroke pass ([`Builder::park_text`]):
 /// beyond them the oldest is finished, and strokes over its glyphs come in as type of their own.
 const MAX_PARKED: usize = 64;
+
+/// The most strokes of a stroke pass held to be matched to the glyphs they go over
+/// ([`Builder::hold_stroke`]): beyond them, those held are matched each to the first glyph it
+/// may go over, and the pass goes on from there.
+const MAX_HELD: usize = 4096;
 
 fn is_colour_face(face: &vectorcraft_text::FontFace) -> bool {
     use skrifa::Tag;
@@ -42,6 +49,7 @@ impl<'p> Builder<'p> {
             text: None,
             text_glyphs: vec![],
             parked: vec![],
+            held: vec![],
             text_as,
             actual: Default::default(),
             images: HashMap::new(),
@@ -125,6 +133,7 @@ impl<'p> Builder<'p> {
         self.text = None;
         self.text_glyphs.clear();
         self.parked.clear();
+        self.held.clear();
         self.mask = None;
         self.masked.clear();
         self.marked.clear();
@@ -426,7 +435,10 @@ impl<'p> Builder<'p> {
         }
     }
 
+    /// Finish the open run of glyphs kept as outlines, once the strokes held are matched
+    /// ([`Self::settle_strokes`]): whatever is drawn next ends their stroke pass.
     pub(super) fn flush_glyphs(&mut self) {
+        self.settle_strokes();
         let Some(run) = self.glyphs.take() else { return };
         if run.path.elements().is_empty() {
             return;
@@ -460,6 +472,7 @@ impl<'p> Builder<'p> {
     /// `true`: the open line was kept as outlines instead ([`reshaped`]), which are left open as
     /// the glyph run for an outline drawn next to join.
     pub(super) fn end_text(&mut self) -> bool {
+        self.settle_strokes();
         self.release_parked(usize::MAX);
         let glyphs = std::mem::take(&mut self.text_glyphs);
         let Some(line) = self.text.take() else { return false };
@@ -488,8 +501,9 @@ impl<'p> Builder<'p> {
     /// before it.
     ///
     /// Parked lines are finished, oldest first, when the stroke pass goes past them (a stroke is
-    /// drawn over a later line, the open one, or none of them: [`Self::stroke_parked`]), when
-    /// anything else ends the open line ([`Self::end_text`]), and beyond [`MAX_PARKED`] lines.
+    /// drawn over a later line or the open one: [`Self::settle_strokes`], [`Self::stroke_parked`];
+    /// or over none of them), when anything else ends the open line ([`Self::end_text`]), and
+    /// beyond [`MAX_PARKED`] lines.
     pub(super) fn park_text(&mut self, park: bool) {
         match self.text.take() {
             Some(line) if park && line.awaits_stroke() => {
@@ -504,13 +518,13 @@ impl<'p> Builder<'p> {
         }
     }
 
-    /// Whether a stroke goes over a glyph of a parked line ([`Self::park_text`]), which `takes`
-    /// tells of each line (a glyph it filled that the stroke is drawn over). The open line comes
-    /// first, then the parked lines from the last parked back: the same glyph filled at the same
-    /// place twice is stroked where it was filled last, by the operator that strokes it. `true`:
-    /// a parked line takes it, the stroke pass is on it, and the lines before it are finished,
-    /// so it is the first. `false`: the open line takes it or none does, so the stroke pass is
-    /// past them all, and they are finished.
+    /// Whether a stroke over a glyph of an ActualText span goes over a glyph of a parked line
+    /// ([`Self::park_text`]), which `takes` tells of each line (a glyph it filled that the
+    /// stroke is drawn over). The open line comes first, then the parked lines from the last
+    /// parked back: the same glyph filled at the same place twice is stroked where it was filled
+    /// last, by the operator that strokes it. `true`: a parked line takes it, the stroke pass is
+    /// on it, and the lines before it are finished, so it is the first. `false`: the open line
+    /// takes it or none does, so the stroke pass is past them all, and they are finished.
     pub(super) fn stroke_parked(&mut self, takes: impl Fn(&TextLine) -> bool) -> bool {
         if self.parked.is_empty() {
             return false;
@@ -518,6 +532,124 @@ impl<'p> Builder<'p> {
         let found = if self.text.as_ref().is_some_and(&takes) { None } else { self.parked.iter().rposition(|(line, _)| takes(line)) };
         self.release_parked(found.unwrap_or(usize::MAX));
         found.is_some()
+    }
+
+    /// The parked line at `slot` ([`Self::park_text`]), or the open line at the slot after them.
+    fn line_at(&self, slot: usize) -> Option<&TextLine> {
+        match self.parked.get(slot) {
+            Some((line, _)) => Some(line),
+            None if slot == self.parked.len() => self.text.as_ref(),
+            None => None,
+        }
+    }
+
+    /// The first glyph filled after `after` that stroke `h` may go over
+    /// ([`TextLine::next_filled`]), as its line's slot ([`Self::line_at`]) and its index among
+    /// the line's filled glyphs: the lines in the order they were drawn, each line's glyphs in
+    /// the order they were filled. From the first glyph with no `after`.
+    fn next_fill(&self, after: Option<(usize, usize)>, h: &HeldStroke) -> Option<(usize, usize)> {
+        let first = after.map_or(0, |(slot, _)| slot);
+        (first..=self.parked.len()).find_map(|slot| {
+            let from = match after {
+                Some((s, i)) if s == slot => i.saturating_add(1),
+                _ => 0,
+            };
+            let i = self.line_at(slot)?.next_filled(from, h.font, h.at, h.opacity, &h.text)?;
+            Some((slot, i))
+        })
+    }
+
+    /// The last glyph filled before `before` that stroke `h` may go over ([`Self::next_fill`]).
+    /// From the last glyph with no `before`.
+    fn last_fill(&self, before: Option<(usize, usize)>, h: &HeldStroke) -> Option<(usize, usize)> {
+        let last = before.map_or(self.parked.len(), |(slot, _)| slot);
+        (0..=last).rev().find_map(|slot| {
+            let until = match before {
+                Some((s, i)) if s == slot => i,
+                _ => usize::MAX,
+            };
+            let i = self.line_at(slot)?.last_filled(until, h.font, h.at, h.opacity, &h.text)?;
+            Some((slot, i))
+        })
+    }
+
+    /// Hold stroke `h`, over a glyph filled on the open line or a parked one, until its stroke
+    /// pass ends ([`Self::settle_strokes`]). `false`: no glyph filled after those the strokes
+    /// held go over is one it may go over (the strokes held are matched first, and if it may go
+    /// over none then, it isn't held either: it goes over the line as it stands).
+    ///
+    /// The reader fills all the glyphs of a text-showing operator, then strokes the same glyphs
+    /// in the same order (fill and stroke rendering, #8015). Which glyph a stroke goes over is
+    /// only told once the pass has ended: a `TJ` can draw the same glyph at the same place twice
+    /// (its kerning goes back), and an operator can fill and stroke a glyph where one filled
+    /// before it stands, which the device can't tell from a glyph the operator filled (#8543).
+    pub(super) fn hold_stroke(&mut self, mut h: HeldStroke) -> bool {
+        if self.held.len() >= MAX_HELD {
+            self.settle(false);
+        }
+        let mut first = self.next_fill(self.held.last().map(|l| l.first), &h);
+        if first.is_none() && !self.held.is_empty() {
+            self.settle_strokes();
+            first = self.next_fill(None, &h);
+        }
+        let Some(first) = first else { return false };
+        h.first = first;
+        self.held.push(h);
+        true
+    }
+
+    /// Match the strokes held ([`Self::hold_stroke`]) to the glyphs they go over, now that their
+    /// stroke pass has ended, and stroke them. The pass strokes the glyphs filled last, in the
+    /// order they were filled: each stroke goes over the last glyph it may go over that is filled
+    /// before the one the stroke after it goes over. So a `TJ` that draws a glyph twice at the
+    /// same place strokes each where it filled it, and a glyph filled and stroked where one
+    /// filled before it stands strokes the one filled last (#8015, #8543).
+    pub(super) fn settle_strokes(&mut self) {
+        self.settle(true);
+    }
+
+    /// [`Self::settle_strokes`], each stroke matched to the last glyph it may go over (`last`),
+    /// or to the first ([`Self::hold_stroke`] when too many are held).
+    fn settle(&mut self, last: bool) {
+        if self.held.is_empty() {
+            return;
+        }
+        let held = std::mem::take(&mut self.held);
+        let mut places = vec![];
+        if last {
+            let mut before = None;
+            for h in held.iter().rev() {
+                let Some(p) = self.last_fill(before, h) else { break };
+                places.push(p);
+                before = Some(p);
+            }
+            places.reverse();
+        }
+        // Each held stroke goes over the first glyph it may go over after the one before it
+        // does ([`Self::hold_stroke`]), so the last ones are found too: this is only a guard.
+        if places.len() != held.len() {
+            places = held.iter().map(|h| h.first).collect();
+        }
+        // The slots of the parked lines finished so far, which the later places count in.
+        let mut finished = 0usize;
+        for (h, (slot, index)) in held.into_iter().zip(places) {
+            let slot = slot.saturating_sub(finished);
+            let parked = self.parked.len();
+            // The lines before the one stroked are past the stroke pass: they are finished.
+            self.release_parked(slot);
+            finished = finished.saturating_add(slot.min(parked));
+            let target = match self.parked.first_mut() {
+                Some((line, glyphs)) if slot < parked => Some((line, glyphs)),
+                _ => self.text.as_mut().map(|line| (line, &mut self.text_glyphs)),
+            };
+            if let Some((line, glyphs)) = target
+                && line.stroke_filled_at(index, h.stroke, h.overprint)
+            {
+                // Upright glyphs aren't kept as outlines (nor are those filled only): a vertical
+                // line that came in as its outlines would lose the ones filled only.
+                glyphs.extend(h.glyph);
+            }
+        }
     }
 
     /// Finish `line` of type, whose `glyphs` are its outlines ([`Self::keep_glyph`]). `true`:
@@ -1214,22 +1346,19 @@ impl<'p> Builder<'p> {
             Some(top) => line.push_upright(&look, at, opacity, Upright { top }, &text),
             None => line.push(&look, at, opacity, advance, &text),
         };
-        self.flush_glyphs();
         let stroking = look.fill.is_none() && look.stroke.is_some();
-        // A stroke over a glyph filled on a line the same operator's kerning finished.
+        // A stroke over a glyph filled before it, on the open line or one the same operator's
+        // kerning finished: matched once its stroke pass ends.
         if let Some(s) = &look.stroke
             && stroking
-            && self.stroke_parked(|line| line.has_filled(key, at, opacity, &text))
-            && let Some((line, glyphs)) = self.parked.first_mut()
         {
-            line.stroke_filled(key, at, opacity, &text, s.clone(), overprint);
-            if top.is_none()
-                && let Some(g) = glyph_run(o, m, drawn, opacity, scale, overprint)
-            {
-                glyphs.push(g);
+            let glyph = if top.is_none() { glyph_run(o, m, drawn.clone(), opacity, scale, overprint) } else { None };
+            let h = HeldStroke { font: key, at, opacity, text: text.clone(), stroke: s.clone(), overprint, glyph, first: (0, 0) };
+            if self.hold_stroke(h) {
+                return true;
             }
-            return true;
         }
+        self.flush_glyphs();
         // A stroke over the glyph just filled (fill and stroke rendering).
         if let (Some(s), Some(line)) = (&look.stroke, &mut self.text)
             && stroking

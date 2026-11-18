@@ -58,6 +58,23 @@ pub(super) struct GlyphRun {
     pub(super) overprint: bool,
 }
 
+/// A stroke over a glyph filled before it (fill and stroke rendering), held with the stroke pass
+/// it is part of ([`Builder::hold_stroke`]): the glyph's font, placement, opacity and text, the
+/// stroke, whether it overprints, the glyph's outline as drawn (kept as for a line of type kept
+/// as outlines; none for a glyph set upright), and the first glyph filled so it may go over, as
+/// its line's place among the parked lines and the open one and its index in the line's filled
+/// glyphs.
+pub(super) struct HeldStroke {
+    pub(super) font: u128,
+    pub(super) at: super::Placement,
+    pub(super) opacity: f32,
+    pub(super) text: String,
+    pub(super) stroke: TypeStroke,
+    pub(super) overprint: bool,
+    pub(super) glyph: Option<GlyphRun>,
+    pub(super) first: (usize, usize),
+}
+
 /// How often a tiling pattern was read, and the art (as its paints) each reading drew with the
 /// swatch made for it.
 pub(super) type PatternReadings = (u32, Vec<(Vec<Paint>, String)>);
@@ -99,6 +116,10 @@ pub(super) struct Builder<'p> {
     /// its [`text_glyphs`](Self::text_glyphs): written before the open line, in this order
     /// ([`Builder::park_text`]).
     pub(super) parked: Vec<(TextLine, Vec<GlyphRun>)>,
+    /// The strokes of a text-showing operator's stroke pass over glyphs it filled on the
+    /// [`parked`](Self::parked) lines and the open one, held until the pass ends to be matched to
+    /// the glyphs it strokes ([`Builder::settle_strokes`]).
+    pub(super) held: Vec<HeldStroke>,
     pub(super) text_as: TextAs,
     pub(super) actual: super::actual_text::ActualText,
     pub(super) images: HashMap<String, ImageBlob>,

@@ -350,9 +350,10 @@ fn glyphs_filled_and_stroked_one_by_one_stay_one_run() {
 /// Fill and stroke rendering of a `TJ` whose kerning starts a new line part way through: the
 /// reader fills every glyph of the operator before it strokes them, and each part comes in as
 /// type filled and stroked, in the order drawn, not as each part filled and then each part
-/// stroked over it (#8543). So too a `TJ` that jumps back to start a line before it, one whose
-/// kerning starts two new lines, and one in a span with replacement text (`ActualText`); small
-/// kerning keeps one line as before.
+/// stroked over it (#8543). So too a `TJ` that jumps back to start a line before it and one whose
+/// kerning starts two new lines. In a span with replacement text (`ActualText`) it stays one type
+/// object, on the first glyph's line and in its style, filled and stroked; small kerning keeps
+/// one line as before.
 #[test]
 fn a_tj_whose_kerning_starts_a_new_line_is_filled_and_stroked() {
     // Each type object as its text, and whether all of it is filled and all of it stroked.
@@ -408,4 +409,32 @@ fn a_translucent_tj_whose_kerning_starts_a_new_line_stays_fill_and_stroke_apart(
     });
     let part = |text: &str, fill: bool| (text.to_string(), true, fill, !fill);
     assert_eq!(types, [part("AB", true), part("CD", true), part("AB", false), part("CD", false)], "{content}");
+}
+
+/// Fill and stroke rendering of a `TJ` whose kerning goes back to draw a glyph again where it
+/// drew one before, on a line of its own: the reader strokes the glyphs in the order it filled
+/// them, so each copy is filled and stroked, whether the copy drawn last ends the operator (the
+/// open line) or a line after it does (a finished one), and however often it comes back
+/// (#8543). A glyph filled and stroked by an operator of its own where one filled before stands
+/// still strokes only the one filled last (#8015).
+#[test]
+fn a_tj_that_draws_a_glyph_again_where_it_drew_one_strokes_each_copy() {
+    let both = |text: &str| vec![(text.to_string(), true, true)];
+    // Helvetica at 48 points: A and B are 667 units wide, so 4834 back after B (3500 on from A)
+    // draws A again where the first A stands.
+    for mode in ["2", "6"] {
+        let cases = [
+            ("[(A) -3500 (B) 4834 (A)] TJ", vec![both("A"), both("B"), both("A")]),
+            ("[(A) -3500 (B) 4834 (A) -6000 (C)] TJ", vec![both("A"), both("B"), both("A"), both("C")]),
+            ("[(A) -3500 (B) 4834 (A) -3500 (B)] TJ", vec![both("A"), both("B"), both("A"), both("B")]),
+            ("[(A) -3500 (B) 4834 (A) -3500 (B) 4834 (A)] TJ", vec![both("A"), both("B"), both("A"), both("B"), both("A")]),
+        ];
+        for (show, want) in cases {
+            let content = format!("BT {mode} Tr /F1 48 Tf 20 80 Td {show} 0 Tr ET");
+            assert_eq!(type_runs(&content), want, "{content}");
+        }
+    }
+    let content = "BT 0 Tr /F1 48 Tf 20 80 Td [(A) -3500 (B) 4834] TJ 2 Tr (A) Tj 0 Tr ET";
+    let want = [vec![("A".to_string(), true, false)], vec![("B".to_string(), true, false)], both("A")];
+    assert_eq!(type_runs(content), want, "{content}");
 }
