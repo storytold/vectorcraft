@@ -1084,7 +1084,7 @@ pub fn stroke_pieces(doc: &Document, brush: &Brush, bp: &BezPath, stroke: &Strok
     let w = if stroke.width > 0.0 { stroke.width } else { 1.0 };
     let mut out = match &brush.kind {
         BrushKind::Calligraphic(c) => calli::calligraphic(c, bp, w, stroke, &brush.name),
-        BrushKind::Bristle(b) => calli::bristle(b, bp, w, &stroke.paint, &brush.name),
+        BrushKind::Bristle(b) => calli::bristle(b, bp, w, stroke, &brush.name),
         BrushKind::Art(a) => warp::art(a, bp, w, stroke),
         BrushKind::Scatter(s) => warp::scatter(s, bp, w, stroke, &brush.name),
         BrushKind::Pattern(p) => warp::pattern(p, bp, w),

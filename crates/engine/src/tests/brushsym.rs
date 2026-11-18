@@ -1603,6 +1603,34 @@ fn paintbrush_records_the_pens_tilt_on_the_stroke() {
     assert_eq!(back.node(pen).unwrap().appearance.stroke(), doc.node(pen).unwrap().appearance.stroke());
 }
 
+/// A Bristle path made from pen samples keeps its input when saved and uses it when exported.
+#[test]
+fn bristle_path_keeps_and_draws_its_pen_pose() {
+    let mut s = session();
+    let id = NodeId(
+        s.execute(
+            "brush.freehand",
+            &json!({"points": [[20, 60, 0.1, 10, 0, 0], [200, 60, 0.9, 35, 0, 90]], "style": "brush", "brush": "Bristle Round"}),
+        )
+        .unwrap()["id"]
+            .as_u64()
+            .unwrap(),
+    );
+    let doc: Document = (*s.doc().unwrap().doc).clone();
+    let st = doc.node(id).unwrap().appearance.stroke().unwrap();
+    assert!(st.pressure.is_some() && st.tilt.is_some() && st.bearing.is_some() && st.rotation.is_some());
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&doc, false)).unwrap();
+    assert_eq!(back.node(id).unwrap().appearance.stroke(), Some(st));
+
+    let mut neutral = doc.clone();
+    let st = neutral.node_mut(id).unwrap().appearance.stroke_mut().unwrap();
+    st.pressure = None;
+    st.tilt = None;
+    st.bearing = None;
+    st.rotation = None;
+    assert_ne!(vectorcraft_svg::export(&doc, &Default::default()), vectorcraft_svg::export(&neutral, &Default::default()));
+}
+
 /// Pen pressure belongs to its path: new art, graphic styles and Brush Options' edits leave it.
 #[test]
 fn pressure_stays_with_its_own_path() {
