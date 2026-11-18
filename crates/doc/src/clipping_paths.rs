@@ -83,6 +83,18 @@ impl Document {
     }
 }
 
+impl Node {
+    /// Put the clipping path of every clip in this object (itself, its members and their
+    /// opacity-mask art) at `at`, as [`Document::put_clipping_paths`] puts those of a document's
+    /// stored art: for art kept elsewhere, as a brush keeps its art (first, as files keep it) and
+    /// the art it draws into a document (on top, marked).
+    pub fn put_clipping_paths(&mut self, at: ClippingPathAt) {
+        if let Some(n) = placed(&Arc::new(self.clone()), at, &mut vec![], &mut Moves::new()) {
+            *self = n;
+        }
+    }
+}
+
 /// [`placed`] in place for the tree `root`.
 fn put_tree(root: &mut Arc<Node>, at: ClippingPathAt, moves: &mut Moves) {
     if let Some(n) = placed(root, at, &mut vec![], moves) {

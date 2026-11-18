@@ -792,3 +792,48 @@ fn the_layers_panels_clipping_button_clips_by_the_topmost_member_alone() {
     assert_eq!(clips_by(&s, g), Some(c), "the topmost member clips");
     assert!(!s.doc().unwrap().doc.node(a).unwrap().is_clipping_path());
 }
+
+/// An art brush made from a clip group whose clipping path, on top, is a compound path, whose mark
+/// the brush's stored art doesn't keep: the brush keeps the clipping path first, made or replaced,
+/// and a stroke it paints, its art placed back on the canvas and its expanded art all clip by the
+/// compound path, on top and marked.
+#[test]
+fn a_brush_made_from_a_clip_with_a_compound_clipping_path_clips_by_it() {
+    let mut s = session();
+    let art = id_of(&s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 100, "height": 100})).unwrap());
+    let (a, b) = (ellipse(&mut s, 10.0, 30.0), ellipse(&mut s, 60.0, 30.0));
+    select(&mut s, &[a, b]);
+    let compound = id_of(&s.execute("object.compoundPath.make", &json!({})).unwrap());
+    select(&mut s, &[art, compound]);
+    let g = id_of(&s.execute("object.clippingMask.make", &json!({})).unwrap());
+    select(&mut s, &[g]);
+    s.execute("brush.new", &json!({"type": "art", "name": "Clip"})).unwrap();
+    let first = |s: &mut Session| s.execute("brush.get", &json!({"name": "Clip"})).unwrap()["art"]["kind"]["children"][0]["kind"]["type"].clone();
+    assert_eq!(first(&mut s), json!("compound"), "kept first");
+    // Replaced by the same clip group, which takes it as it is.
+    select(&mut s, &[g]);
+    s.execute("brush.replaceArt", &json!({"name": "Clip"})).unwrap();
+    assert_eq!(first(&mut s), json!("compound"), "kept first when replaced");
+    fn clip_in(n: &vectorcraft_doc::Node) -> Option<vectorcraft_doc::Node> {
+        if n.clips() {
+            return Some(n.clone());
+        }
+        n.children()?.iter().find_map(|c| clip_in(c))
+    }
+    fn clips_by_the_compound(c: &vectorcraft_doc::Node) {
+        let last = c.children().unwrap().len() - 1;
+        assert_eq!(c.clipping_path_index(), Some(last), "on top");
+        let path = c.clipping_path().unwrap();
+        assert!(matches!(path.kind, NodeKind::Compound { .. }) && path.is_clipping_path(), "the compound path, marked");
+    }
+    let line = id_of(&s.execute("shape.line", &json!({"x1": 0, "y1": 50, "x2": 100, "y2": 50})).unwrap());
+    s.execute("brush.apply", &json!({"name": "Clip", "ids": [line.0]})).unwrap();
+    let d = s.doc().unwrap().doc.clone();
+    let pieces = vectorcraft_brush::node_pieces(&d, d.node(line).unwrap()).unwrap();
+    clips_by_the_compound(&pieces.iter().find_map(clip_in).unwrap());
+    let placed = id_of(&s.execute("brush.placeArt", &json!({"name": "Clip"})).unwrap());
+    clips_by_the_compound(&clip_in(s.doc().unwrap().doc.node(placed).unwrap()).unwrap());
+    select(&mut s, &[line]);
+    let expanded = s.execute("object.expandBrush", &json!({})).unwrap()["ids"][0].as_u64().unwrap();
+    clips_by_the_compound(&clip_in(s.doc().unwrap().doc.node(NodeId(expanded)).unwrap()).unwrap());
+}

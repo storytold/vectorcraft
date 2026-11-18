@@ -2,6 +2,7 @@ use super::{
     AppearanceItem, Arc, BTreeSet, Bristle, Brush, BrushKind, Color, Document, EngineError, Node, NodeId, NodeKind, Paint, Result, Session, Value,
     anchor, bad, brush, check_numbers, find_command, ids_json, json, name_param, names_param, ok, roots, selection_art, set_unknown, str_param,
 };
+use vectorcraft_doc::ClippingPathAt;
 
 // ---------- brushes ----------
 
@@ -36,7 +37,10 @@ pub(super) fn brush_get(s: &mut Session, p: &Value) -> Result<Value> {
 
 /// The art `brush.new` takes from `ids` or `id`, else from the selection ([`selection_art`]).
 pub(super) fn brush_selection_art(s: &mut Session, p: &Value) -> Result<Value> {
-    let art = selection_art(s, p)?;
+    let art = selection_art(s, p)?.map(|mut n| {
+        n.put_clipping_paths(ClippingPathAt::First);
+        n
+    });
     Ok(json!({ "art": art.map(|n| serde_json::to_value(&n).unwrap_or_default()) }))
 }
 
@@ -238,10 +242,13 @@ pub(super) fn brush_new(s: &mut Session, p: &Value) -> Result<Value> {
     if let Some(k) = art_key
         && v.get(k).is_none()
     {
-        let art = selection_art(s, p)?.ok_or_else(|| bad(C, format!("{ty} brushes need selected art (or params.{k})")))?;
+        let mut art = selection_art(s, p)?.ok_or_else(|| bad(C, format!("{ty} brushes need selected art (or params.{k})")))?;
         if !has_width(&art, &s.doc()?.doc.symbol_boxes()) {
             return Err(bad(C, "the selected art has no width"));
         }
+        // As a brush keeps its art ([`brush::store`]): a clipping path first, found there without
+        // the mark of a compound path or type, which JSON doesn't keep.
+        art.put_clipping_paths(ClippingPathAt::First);
         v[k] = serde_json::to_value(&art).unwrap_or_default();
     }
     lib.push(parse_brush(C, v)?);
@@ -462,7 +469,8 @@ pub(super) fn brush_options(s: &mut Session, p: &Value) -> Result<Value> {
                     }
                 } else {
                     let pattern = s.doc()?.doc.pattern(choice).ok_or_else(|| bad(C, format!("no pattern named `{choice}`")))?;
-                    let copy = Node::new(NodeId(0), NodeKind::Group { children: pattern.art.clone(), clip: false });
+                    let mut copy = Node::new(NodeId(0), NodeKind::Group { children: pattern.art.clone(), clip: false });
+                    copy.put_clipping_paths(ClippingPathAt::First);
                     v[art] = serde_json::to_value(copy).unwrap_or_default();
                     v[frame.as_str()] = serde_json::to_value(pattern.tile).unwrap_or_default();
                     v[swatch.as_str()] = json!(choice);
@@ -579,6 +587,8 @@ pub(super) fn brush_place_art(s: &mut Session, p: &Value) -> Result<Value> {
     let b = brush::find(d, &name).ok_or_else(|| bad(C, format!("no brush named `{name}`")))?;
     let symbols = d.symbol_boxes();
     let mut art = placed_art(&b, &symbols).ok_or_else(|| bad(C, no_art(&name)))?;
+    // Art in the document: each clip's clipping path on top, marked.
+    art.put_clipping_paths(ClippingPathAt::Top);
     if let Some(r) = art.geometric_bounds_with(&symbols) {
         art.transform(vectorcraft_geom::Affine::translate(at - r.center()), false);
     }
