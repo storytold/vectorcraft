@@ -690,3 +690,337 @@ fn cancelling_a_borrowed_sampler_clears_the_restored_eyedropper() {
         assert_eq!(ordinary_sample(&mut app, &ctx, point), expected_sample_effects, "the next real click follows the ordinary eyedropper path");
     }
 }
+
+fn review_gesture_group_fixture() -> (VectorcraftApp, egui::Context, Point, NodeId) {
+    let (mut app, ctx) = fixture(true, [37, 83, 149], false);
+    let source = selected(&app).id;
+    app.session.prefs.double_click_to_isolate = true;
+    let first = app.run("shape.rectangle", json!({"x": 100, "y": 140, "width": 20, "height": 20})).unwrap()["id"].clone();
+    let second = app.run("shape.rectangle", json!({"x": 120, "y": 140, "width": 20, "height": 20})).unwrap()["id"].clone();
+    app.run("paint.setFill", json!({"ids": [first.clone(), second.clone()], "color": "#cc3322"})).unwrap();
+    app.run("select.set", json!({"ids": [first, second]})).unwrap();
+    let group = NodeId(app.run("object.group", json!({})).unwrap()["id"].as_u64().unwrap());
+    app.run("select.set", json!({"ids": [source.0]})).unwrap();
+    settle(&mut app, &ctx);
+    let point = Point::new(110.0, 150.0);
+    assert!(point.x < source_point(&app, 0.0).x - 40.0, "the gesture group is outside the sampled image");
+    (app, ctx, point, group)
+}
+
+fn review_gesture_screen(app: &VectorcraftApp, ctx: &egui::Context, point: Point) -> Pos2 {
+    let rect = app.canvas_rect.unwrap();
+    let at = canvas::Xf::at(rect, app.view().unwrap(), ctx.zoom_factor()).to_screen(point);
+    assert!(rect.contains(at), "the real canvas contains the gesture point");
+    at
+}
+
+fn review_gesture_times(ctx: &egui::Context) -> (f64, f64) {
+    let (delay, hold) = ctx.options(|o| (o.input_options.max_double_click_delay, o.input_options.max_click_duration));
+    assert!(delay.is_finite() && delay > 0.0 && hold.is_finite() && hold > 0.0);
+    (ctx.time() + delay + 1.0, delay.min(hold) / 8.0)
+}
+
+fn review_gesture_press(app: &mut VectorcraftApp, ctx: &egui::Context, at: Pos2, time: f64) {
+    let event = Event::PointerButton { pos: at, button: PointerButton::Primary, pressed: true, modifiers: Default::default() };
+    frame_at(app, ctx, time, vec![Event::PointerMoved(at), event]);
+}
+
+fn review_gesture_release(app: &mut VectorcraftApp, ctx: &egui::Context, at: Pos2, time: f64) {
+    let event = Event::PointerButton { pos: at, button: PointerButton::Primary, pressed: false, modifiers: Default::default() };
+    frame_at(app, ctx, time, vec![event]);
+}
+
+fn review_gesture_state(app: &VectorcraftApp) -> impl PartialEq + std::fmt::Debug + use<> {
+    let state = app.session.active().unwrap();
+    (
+        state.doc.clone(),
+        state.selection.clone(),
+        state.revision,
+        (state.history.undo.len(), state.history.redo.len()),
+        app.session.paint.clone(),
+        state.isolation,
+    )
+}
+
+fn review_gesture_observation(app: &VectorcraftApp, ctx: &egui::Context) -> (bool, bool, Vec<NodeId>, Option<NodeId>) {
+    let state = app.session.active().unwrap();
+    (
+        ctx.input(|i| i.pointer.button_double_clicked(PointerButton::Primary)),
+        ctx.input(|i| i.pointer.button_triple_clicked(PointerButton::Primary)),
+        state.selection.objects.clone(),
+        state.isolation,
+    )
+}
+
+fn review_gesture_ordinary_pair(app: &mut VectorcraftApp, ctx: &egui::Context, first: Pos2, second: Pos2, group: NodeId) {
+    let (start, step) = review_gesture_times(ctx);
+    review_gesture_press(app, ctx, first, start);
+    review_gesture_release(app, ctx, first, start + step);
+    assert!(!ctx.input(|i| i.pointer.button_double_clicked(PointerButton::Primary)));
+    assert_eq!(app.session.active().unwrap().selection.objects, vec![group], "the ordinary first click selects the group");
+    assert_eq!(app.session.active().unwrap().isolation, None);
+    review_gesture_press(app, ctx, second, start + 3.0 * step);
+    frame_at(app, ctx, start + 3.5 * step, vec![]);
+    review_gesture_release(app, ctx, second, start + 4.0 * step);
+    assert!(ctx.input(|i| i.pointer.button_double_clicked(PointerButton::Primary)));
+    assert_eq!(app.session.active().unwrap().isolation, Some(group), "the ordinary held double-click isolates the group");
+}
+
+#[test]
+fn review_followup_sampler_cancelled_mid_hold_keeps_release_owned() {
+    let (mut control, control_ctx, control_point, control_group) = review_gesture_group_fixture();
+    let control_at = review_gesture_screen(&control, &control_ctx, control_point);
+    review_gesture_ordinary_pair(&mut control, &control_ctx, control_at, control_at, control_group);
+
+    let (mut app, ctx, point, _) = review_gesture_group_fixture();
+    let source = selected(&app).id;
+    click_control(&mut app, &ctx, SAMPLE_TIP);
+    let at = review_gesture_screen(&app, &ctx, point);
+    let (start, step) = review_gesture_times(&ctx);
+    review_gesture_press(&mut app, &ctx, at, start);
+    review_gesture_release(&mut app, &ctx, at, start + step);
+    assert_eq!(app.session.tool_id(), "eyedropper");
+    assert!(app.ui.trace_ignore_sampler.is_some(), "the first canvas click is a sampler miss");
+    assert_eq!(app.session.active().unwrap().selection.objects, vec![source]);
+    assert_eq!(app.session.active().unwrap().isolation, None);
+    review_gesture_press(&mut app, &ctx, at, start + 3.0 * step);
+    assert!(app.ui.trace_ignore_sampler.is_some(), "the second Down still belongs to the valid sampler");
+    app.run("select.none", json!({})).unwrap();
+    let expected = review_gesture_state(&app);
+    frame_at(&mut app, &ctx, start + 3.5 * step, vec![]);
+    assert!(ctx.input(|i| i.pointer.primary_down()));
+    assert!(!ctx.input(|i| i.pointer.primary_pressed()));
+    assert_eq!(app.session.tool_id(), "selection");
+    assert!(app.ui.trace_ignore_sampler.is_none(), "the held frame cancelled the invalid binding");
+    review_gesture_release(&mut app, &ctx, at, start + 4.0 * step);
+    assert!(ctx.input(|i| i.pointer.button_double_clicked(PointerButton::Primary)));
+    assert_eq!(review_gesture_state(&app), expected, "a mid-hold cancellation must retain ownership through release");
+    assert_eq!(app.session.tool_id(), "selection");
+}
+
+#[test]
+fn review_followup_consumed_prefix_keeps_two_fresh_clicks_single_then_double() {
+    let (mut control, control_ctx, control_point, control_group) = review_gesture_group_fixture();
+    let control_at = review_gesture_screen(&control, &control_ctx, control_point);
+    review_gesture_ordinary_pair(&mut control, &control_ctx, control_at, control_at, control_group);
+
+    let (mut app, ctx, point, group) = review_gesture_group_fixture();
+    click_control(&mut app, &ctx, SAMPLE_TIP);
+    app.run("select.none", json!({})).unwrap();
+    let at = review_gesture_screen(&app, &ctx, point);
+    let expected = review_gesture_state(&app);
+    let (start, step) = review_gesture_times(&ctx);
+    review_gesture_press(&mut app, &ctx, at, start);
+    review_gesture_release(&mut app, &ctx, at, start + step);
+    assert!(!ctx.input(|i| i.pointer.button_double_clicked(PointerButton::Primary)));
+    assert_eq!(review_gesture_state(&app), expected, "the single stale prefix itself is consumed");
+    assert_eq!(app.session.tool_id(), "selection");
+
+    review_gesture_press(&mut app, &ctx, at, start + 3.0 * step);
+    review_gesture_release(&mut app, &ctx, at, start + 4.0 * step);
+    let first = review_gesture_observation(&app, &ctx);
+    // Always run the second fresh click, even when the first app-level oracle was wrong.
+    review_gesture_press(&mut app, &ctx, at, start + 6.0 * step);
+    review_gesture_release(&mut app, &ctx, at, start + 7.0 * step);
+    let second = review_gesture_observation(&app, &ctx);
+    assert!(first.0 && !first.1 && !second.0 && second.1, "expected raw Double then Triple: first={first:?}, second={second:?}");
+    assert!(
+        first.2 == vec![group] && first.3.is_none() && second.3 == Some(group),
+        "fresh clicks must select without isolation, then isolate: first={first:?}, second={second:?}"
+    );
+}
+
+fn review_gesture_enclose_source(app: &mut VectorcraftApp, source: NodeId) -> NodeId {
+    let background = app.run("shape.rectangle", json!({"x": 50, "y": 30, "width": 300, "height": 240})).unwrap()["id"].clone();
+    app.run("paint.setFill", json!({"ids": [background.clone()], "color": "#e020c0"})).unwrap();
+    app.run("select.set", json!({"ids": [source.0, background]})).unwrap();
+    let group = NodeId(app.run("object.group", json!({})).unwrap()["id"].as_u64().unwrap());
+    app.run("select.set", json!({"ids": [source.0]})).unwrap();
+    group
+}
+
+fn review_gesture_original_pixels(app: &VectorcraftApp) {
+    let trace = selected(app);
+    let original = trace.children().unwrap()[0].as_ref();
+    let NodeKind::Image(image) = &original.kind else { panic!("the fixture retains its original image") };
+    let state = app.session.active().unwrap();
+    let blob = &state.doc.images[&image.key];
+    assert!(blob.sample_object(19.5, 10.0, (image.width, image.height), 1).is_none(), "the first point is really transparent");
+    assert_eq!(blob.sample_object(5.0, 10.0, (image.width, image.height), 1), Some([37, 83, 149, 255]), "the second point has a distinct nonwhite source color");
+}
+
+fn review_gesture_close_pair(app: &VectorcraftApp, ctx: &egui::Context, miss: Point, hit: Point) -> (Pos2, Pos2) {
+    let miss = review_gesture_screen(app, ctx, miss);
+    let hit = review_gesture_screen(app, ctx, hit);
+    let distance = ctx.options(|o| o.input_options.max_click_dist);
+    assert!(distance.is_finite() && distance > 0.0);
+    assert!(miss.distance_sq(hit) < distance * distance, "the actual transformed miss/hit pair satisfies egui's click distance");
+    (miss, hit)
+}
+
+fn review_gesture_completion_fixture() -> (VectorcraftApp, egui::Context, Point, Point, NodeId) {
+    let (mut app, ctx) = fixture_with_transparent_edge(true, [37, 83, 149], false, true);
+    let source = selected(&app).id;
+    review_gesture_original_pixels(&app);
+    app.session.prefs.double_click_to_isolate = true;
+    let group = review_gesture_enclose_source(&mut app, source);
+    // view.setZoom takes display percent; use its public 10% setting, then assert actual geometry.
+    app.run("view.setZoom", json!({"zoom": 10.0, "center": [200, 150]})).unwrap();
+    settle(&mut app, &ctx);
+    let miss = source_point(&app, 0.975);
+    let hit = source_point(&app, 0.25);
+    (app, ctx, miss, hit, group)
+}
+
+#[test]
+fn review_followup_valid_sampler_down_completes_without_lending_its_release() {
+    let (mut control, control_ctx, control_miss, control_hit, control_group) = review_gesture_completion_fixture();
+    control.run("select.none", json!({})).unwrap();
+    settle(&mut control, &control_ctx);
+    let (control_miss, control_hit) = review_gesture_close_pair(&control, &control_ctx, control_miss, control_hit);
+    review_gesture_ordinary_pair(&mut control, &control_ctx, control_miss, control_hit, control_group);
+
+    let (mut app, ctx, miss, hit, _) = review_gesture_completion_fixture();
+    click_control(&mut app, &ctx, SAMPLE_TIP);
+    let (miss, hit) = review_gesture_close_pair(&app, &ctx, miss, hit);
+    let (start, step) = review_gesture_times(&ctx);
+    review_gesture_press(&mut app, &ctx, miss, start);
+    review_gesture_release(&mut app, &ctx, miss, start + step);
+    assert_eq!(app.session.tool_id(), "eyedropper");
+    assert!(app.ui.trace_ignore_sampler.is_some(), "the transparent first click keeps the sampler armed");
+    let expected = review_gesture_state(&app);
+    review_gesture_press(&mut app, &ctx, hit, start + 3.0 * step);
+    assert_eq!(app.session.tool_id(), "selection", "the opaque Down completes sampling and restores the tool");
+    assert!(app.ui.trace_ignore_sampler.is_none());
+    assert_eq!(review_gesture_state(&app), expected, "Preview off sampling changes only the panel draft");
+    review_gesture_release(&mut app, &ctx, hit, start + 4.0 * step);
+    assert!(ctx.input(|i| i.pointer.button_double_clicked(PointerButton::Primary)));
+    assert_eq!(review_gesture_state(&app), expected, "a completed sampler still owns its matching release");
+    assert_eq!(app.session.tool_id(), "selection");
+    // A fix that merely cancels the valid Down must not pass without accepting its actual color.
+    click_control(&mut app, &ctx, "Trace");
+    assert_eq!(settings(&app)["params"]["ignoreColor"], "#255395", "Trace persists the real opaque source sample");
+    assert_eq!(settings(&app)["params"]["ignoreWhite"], true);
+}
+
+fn review_preset_checkbox(app: &mut VectorcraftApp, ctx: &egui::Context, label: &str) -> bool {
+    for _ in 0..3 {
+        let mut output = frame(app, ctx, vec![]);
+        let checked = output.platform_output.accesskit_update.as_ref().and_then(|update| {
+            update.nodes.iter().find(|(_, node)| node.label() == Some(label) && node.role() == egui::accesskit::Role::CheckBox).and_then(|(_, node)| {
+                match node.toggled() {
+                    Some(egui::accesskit::Toggled::True) => Some(true),
+                    Some(egui::accesskit::Toggled::False) => Some(false),
+                    _ => None,
+                }
+            })
+        });
+        output.textures_delta.clear();
+        if let Some(checked) = checked {
+            return checked;
+        }
+    }
+    panic!("fixture: missing accessible Image Trace checkbox state: {label}");
+}
+
+fn review_preset_assert_shown(app: &mut VectorcraftApp, ctx: &egui::Context, preset: &str) {
+    fn contains(shape: &egui::Shape, text: &str) -> bool {
+        match shape {
+            egui::Shape::Text(drawn) => drawn.galley.text() == text,
+            egui::Shape::Vec(shapes) => shapes.iter().any(|shape| contains(shape, text)),
+            _ => false,
+        }
+    }
+    let mut output = frame(app, ctx, vec![]);
+    let shown = output.shapes.iter().any(|clipped| contains(&clipped.shape, preset));
+    output.textures_delta.clear();
+    assert!(shown, "fixture: the real Preset control must show {preset}");
+}
+
+fn review_preset_click_opaque_source(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    let point = source_point(app, 0.25);
+    let source = selected(app);
+    let original = source.children().and_then(|children| children.first()).unwrap();
+    let NodeKind::Image(image) = &original.kind else { panic!("fixture: the live trace retains its original image") };
+    assert_eq!(
+        app.session.active().unwrap().doc.images[&image.key].sample_object(
+            f64::from(image.width) * 0.25,
+            f64::from(image.height) * 0.5,
+            (image.width, image.height),
+            1,
+        ),
+        Some([37, 83, 149, 255]),
+        "fixture: the actual canvas point is an opaque original pixel"
+    );
+    let at = canvas::Xf::at(app.canvas_rect.unwrap(), app.view().unwrap(), ctx.zoom_factor()).to_screen(point);
+    assert!(app.canvas_rect.unwrap().contains(at), "fixture: the source point lies on the actual canvas");
+    let press = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+    frame(app, ctx, vec![Event::PointerMoved(at), press(true)]).textures_delta.clear();
+    frame(app, ctx, vec![press(false)]).textures_delta.clear();
+    settle(app, ctx);
+}
+
+fn review_preset_enhanced_on_control() {
+    // Legitimate control first: the real Enhanced pair retains Ignore Color and a valid pick.
+    let (mut control, control_ctx) = fixture(true, [37, 83, 149], false);
+    click_control(&mut control, &control_ctx, "Black and White");
+    review_preset_assert_shown(&mut control, &control_ctx, "Black and White Logo");
+    assert!(review_preset_checkbox(&mut control, &control_ctx, "Ignore Color"));
+    let enhanced = review_preset_checkbox(&mut control, &control_ctx, "Enhanced");
+    click_control(&mut control, &control_ctx, SAMPLE_TIP);
+    assert_eq!(control.session.tool_id(), "eyedropper");
+    assert!(control.ui.trace_ignore_sampler.is_some());
+    click_control(&mut control, &control_ctx, "Enhanced");
+    assert_ne!(review_preset_checkbox(&mut control, &control_ctx, "Enhanced"), enhanced, "fixture: the real Enhanced checkbox changed");
+    assert!(review_preset_checkbox(&mut control, &control_ctx, "Ignore Color"), "Enhanced keeps this preset's Ignore Color on");
+    assert!(control.ui.trace_ignore_sampler.is_some(), "an on-to-on settings change keeps the pick armed");
+    assert_eq!(control.session.tool_id(), "eyedropper");
+    assert!(!control.session.tool_options()["imageTraceIgnoreColor"].is_null());
+    review_preset_click_opaque_source(&mut control, &control_ctx);
+    assert!(control.ui.trace_ignore_sampler.is_none(), "the opaque pick completes normally");
+    assert_eq!(control.session.tool_id(), "selection");
+    click_control(&mut control, &control_ctx, "Trace");
+    assert_eq!(settings(&control)["params"]["ignoreWhite"], true);
+    assert_eq!(settings(&control)["params"]["ignoreColor"], "#255395", "the on-to-on control really accepted the source color");
+
+}
+
+#[test]
+fn review_followup_preset_off_cancels_sampler_but_enhanced_on_keeps_it() {
+    review_preset_enhanced_on_control();
+
+    // Separate causal fixture: Preview off leaves the target/revision valid when a preset turns Ignore Color off.
+    let (mut app, ctx) = fixture(true, [37, 83, 149], false);
+    let presets = app.run("imageTrace.presets", json!({})).unwrap();
+    let expected = presets["presets"].as_array().unwrap().iter().find(|preset| preset["name"] == "High Fidelity Photo").unwrap()["params"].clone();
+    assert_eq!(expected["ignoreWhite"], false, "fixture: High Color's public preset disables Ignore Color");
+    assert_ne!(expected["ignoreColor"], "#255395");
+    click_control(&mut app, &ctx, "Black and White");
+    assert!(review_preset_checkbox(&mut app, &ctx, "Ignore Color"));
+    click_control(&mut app, &ctx, SAMPLE_TIP);
+    assert!(app.ui.trace_ignore_sampler.is_some());
+    assert_eq!(app.session.tool_id(), "eyedropper");
+    let state = app.session.active().unwrap();
+    let (document, revision) = (state.doc.clone(), state.revision);
+    let history = (state.history.undo.len(), state.history.redo.len());
+    let paint = app.session.paint.clone();
+    click_control(&mut app, &ctx, "High Color");
+    review_preset_assert_shown(&mut app, &ctx, "High Fidelity Photo");
+    assert!(!review_preset_checkbox(&mut app, &ctx, "Ignore Color"), "the actual preset button made Ignore Color off");
+    let state = app.session.active().unwrap();
+    assert_eq!(state.doc, document, "Preview off changes the panel draft, not the document");
+    assert_eq!(state.revision, revision, "the sampler target binding was not invalidated by a trace");
+    assert_eq!((state.history.undo.len(), state.history.redo.len()), history);
+    assert!(app.ui.trace_ignore_sampler.is_none(), "choosing an Ignore Color-off preset must cancel the armed sampler");
+    assert_eq!(app.session.tool_id(), "selection", "cancelling the panel pick restores the previous tool");
+    assert!(app.session.tool_options_of("eyedropper")["imageTraceIgnoreColor"].is_null());
+    review_preset_click_opaque_source(&mut app, &ctx);
+    assert!(app.ui.trace_ignore_sampler.is_none());
+    assert_eq!(app.session.tool_id(), "selection");
+    assert_eq!(app.session.paint, paint);
+    review_preset_assert_shown(&mut app, &ctx, "High Fidelity Photo");
+    assert!(!review_preset_checkbox(&mut app, &ctx, "Ignore Color"));
+    click_control(&mut app, &ctx, "Trace");
+    assert_eq!(settings(&app)["preset"], "High Fidelity Photo", "the following opaque canvas click cannot turn the off preset into Custom");
+    assert_eq!(settings(&app)["params"], expected, "the hidden pick cannot replace the off preset's ignored color");
+}
