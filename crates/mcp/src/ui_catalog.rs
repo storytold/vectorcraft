@@ -382,6 +382,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{} show the Character panel if it is hidden and open its font family menu, whose search field takes the keyboard focus: type to search, Enter applies the highlighted font → {field: \"fontName\"}. Without selected type (or text the Type tool edits) the panel shows, and the error says to select type first",
     ),
     (
+        "type.highlightFontSize",
+        "Highlight Font Size",
+        "",
+        "{} (Type › Size › Other…) show the Character panel if it is hidden and give its Font Size field the keyboard focus with its value selected (blank where the selected sizes differ): type a size and press Enter → {field: \"fontSize\"}. Without selected type (or text the Type tool edits) the panel shows, and the error says to select type first",
+    ),
+    (
         "type.highlightKerning",
         "Highlight Kerning",
         "Cmd+Alt+K",

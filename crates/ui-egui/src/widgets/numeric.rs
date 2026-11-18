@@ -120,7 +120,8 @@ fn unit_field(
 
 /// [`unit_field`] whose blank field (`value` is `None`) steps from `blank_from` (points) with
 /// ↑/↓ and the wheel instead of doing nothing. With `refuse_outside`, a value typed outside
-/// `bounds` is refused as text that doesn't read is, rather than kept at the nearer end.
+/// `bounds` is refused as text that doesn't read is, rather than kept at the nearer end. Armed
+/// with id salt `id` ([`arm_field_focus`]), it takes the keyboard focus with its value selected.
 #[allow(clippy::too_many_arguments)]
 fn unit_field_from(
     ui: &mut Ui,
@@ -138,10 +139,18 @@ fn unit_field_from(
     empty: &str,
     refuse_outside: bool,
 ) -> Option<f64> {
+    let armed = take_armed_focus(ui, &id);
     let id = id_with(ui.scope_id(), id);
     let shown = value.map(|v| unit.format(v)).unwrap_or_else(|| empty.to_string());
     take_dialog_focus(ui, id, &shown);
+    if armed {
+        focus_field(ui, id, &shown);
+    }
     let (mut buf, commit, resp, rect) = recessed_text(ui, id, &shown, width, 1, label, name);
+    if armed {
+        // A field armed while it has focus keeps the text typed into it: select all of that text.
+        select_all(ui, id, &buf);
+    }
     select_all_on_focus(ui, &resp, &buf);
     // ↑/↓ and the wheel step in the field's unit; a drag on its label scrubs it.
     let typed = typed_unit(ui.ctx(), unit);
