@@ -6452,6 +6452,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	the selected objects' colors differ: give `color`	els colors dels objectes seleccionats són diferents: indiqueu `color`
 @msg	the active fill or stroke has no color: give `color`	l’emplenament o el traç actiu no té color: indiqueu `color`
 @msg	the active fill or stroke is hidden: give `color`	l’emplenament o el traç actiu està ocult: indiqueu `color`
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	l’emplenament o el traç actiu es dibuixa a través d’una màscara d’opacitat: indiqueu `color`
 @msg	nothing to align	no hi ha res per alinear
 @msg	nothing to distort	no hi ha res per distorsionar
 @msg	nothing to export: the document has no visible art (or turn on Use Artboards)	no hi ha res per exportar: el document no té art visible (o activeu Utilitza els taulers)

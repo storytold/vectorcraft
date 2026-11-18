@@ -5172,6 +5172,7 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	the selected objects' colors differ: give `color`	de markerade objektens färger skiljer sig: ange `color`
 @msg	the active fill or stroke has no color: give `color`	den aktiva fyllningen eller linjen har ingen färg: ange `color`
 @msg	the active fill or stroke is hidden: give `color`	den aktiva fyllningen eller linjen är dold: ange `color`
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	den aktiva fyllningen eller linjen ritas genom en opacitetsmask: ange `color`
 @msg	nothing selected is in a group	inget av det markerade ligger i en grupp
 @msg	nothing to align	inget att justera
 @msg	nothing to distort	inget att förvränga

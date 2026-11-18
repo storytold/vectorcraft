@@ -5574,6 +5574,7 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	the selected objects' colors differ: give `color`	barvy vybraných objektů se liší: zadejte `color`
 @msg	the active fill or stroke has no color: give `color`	aktivní výplň nebo tah nemá barvu: zadejte `color`
 @msg	the active fill or stroke is hidden: give `color`	aktivní výplň nebo tah je skrytý: zadejte `color`
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	aktivní výplň nebo tah je kreslen přes masku krytí: zadejte `color`
 @msg	nothing selected is in a group	nic z výběru není ve skupině
 @msg	nothing to align	není co zarovnat
 @msg	nothing to distort	není co deformovat

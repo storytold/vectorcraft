@@ -5298,6 +5298,7 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	the selected objects' colors differ: give `color`	кольори виділених об’єктів відрізняються: укажіть `color`
 @msg	the active fill or stroke has no color: give `color`	активна заливка чи обведення не має кольору: укажіть `color`
 @msg	the active fill or stroke is hidden: give `color`	активна заливка чи обведення приховані: укажіть `color`
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	активна заливка чи обведення малюються крізь маску непрозорості: укажіть `color`
 @msg	nothing selected is in a group	нічого з виділеного не перебуває в групі
 @msg	nothing to align	нічого вирівнювати
 @msg	nothing to distort	нічого спотворювати

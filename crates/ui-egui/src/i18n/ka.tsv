@@ -7045,6 +7045,7 @@ font-technology	Variable	ცვლადი
 @msg	the selected objects' colors differ: give `color`	მონიშნული ობიექტების ფერები განსხვავდება: მიუთითეთ `color`
 @msg	the active fill or stroke has no color: give `color`	აქტიურ შევსებას ან კონტურს ფერი არ აქვს: მიუთითეთ `color`
 @msg	the active fill or stroke is hidden: give `color`	აქტიური შევსება ან კონტური დამალულია: მიუთითეთ `color`
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	აქტიური შევსება ან კონტური იხატება გაუმჭვირვალობის ნიღბით: მიუთითეთ `color`
 @msg	nothing selected is in a group	მონიშნულთაგან არაფერია ჯგუფში
 @msg	nothing to align	გასასწორებელი არაფერია
 @msg	nothing to distort	დასადეფორმირებელი არაფერია

@@ -1140,7 +1140,9 @@ is drawn); a picked object of a dynamic symbol instance hides only itself, and t
 These are errors: `"below"` with nothing selected; a "?" proxy (hidden objects count there, as in the Color panel);
 selected objects that draw one color with different blend modes, or at different opacities without `opacity` (with
 `"below"`, also in different groups or layers that are translucent, have a blend mode or isolate their blending),
-where hidden objects do not count; and a proxy of None, a pattern or a hidden row without `color`. `against` in the
+where hidden objects do not count; a proxy of None, a pattern or a hidden row without `color`; and without `color`, a
+proxy's object drawn through an opacity mask that is not disabled, its own or that of a group, layer or instance
+around it, since the mask sets how much of the color shows at each point. `against` in the
 answer is the background as a working RGB `#rrggbb`, the form `against` takes; the sampled background is rounded to 8
 bits, so giving it back answers the same ratio, except when `opacity` is omitted and a group or layer around the
 object is translucent, has a blend mode or isolates its blending, or the measured row is translucent or blends over

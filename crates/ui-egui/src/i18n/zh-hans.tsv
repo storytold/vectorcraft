@@ -5430,6 +5430,7 @@ liquify-list-end	{0}, {1}	{0}和{1}
 @msg	the selected objects' colors differ: give `color`	所选对象的颜色不同：请提供 `color`
 @msg	the active fill or stroke has no color: give `color`	现用填色或描边没有颜色：请提供 `color`
 @msg	the active fill or stroke is hidden: give `color`	现用填色或描边已隐藏：请提供 `color`
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	现用填色或描边通过不透明度蒙版绘制：请提供 `color`
 @msg	nothing selected is in a group	所选对象均不在编组中
 @msg	the {tool} tool has no options	{tool} 工具没有选项
 @msg	unknown tool `{tool}`	未知工具 `{tool}`

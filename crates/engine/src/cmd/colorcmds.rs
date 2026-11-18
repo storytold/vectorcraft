@@ -1137,6 +1137,13 @@ struct Level {
     blend: BlendMode,
     isolate: bool,
     part: Part,
+    /// Whether it has an opacity mask that is not disabled.
+    masked: bool,
+}
+
+/// Whether object `n` has an opacity mask that is not disabled.
+fn masked(n: &Node) -> bool {
+    n.extras().mask.as_ref().is_some_and(|m| !m.disabled)
 }
 
 /// How the proxy's color is drawn: the object's opacity, its fill or stroke row's blend mode and
@@ -1330,6 +1337,10 @@ fn drawn_settings(s: &Session, n: &Node, item: Option<usize>, stroke: bool) -> s
     // The groups and layer the object is in draw it too (`enclosing` lists the outermost first).
     let mut around = enclosing(s, n.id);
     around.reverse();
+    // An opacity mask sets how much of the color shows at each point, which no one opacity gives.
+    if masked(n) || around.iter().any(|l| l.masked) {
+        return Err("the active fill or stroke is drawn through an opacity mask: give `color`".to_string());
+    }
     Ok(Drawn { opacity: n.opacity, row: own.map(|o| (o.1, o.0)), blend: n.blend, isolate: n.isolate, around })
 }
 
@@ -1354,7 +1365,7 @@ fn stained(s: &Session, color: Color) -> Color {
 fn enclosing(s: &Session, id: NodeId) -> Vec<Level> {
     let Some(st) = s.active() else { return vec![] };
     let doc = &st.doc;
-    let level = |n: &Node, part: Part| Level { opacity: n.opacity, blend: n.blend, isolate: n.isolate, part };
+    let level = |n: &Node, part: Part| Level { opacity: n.opacity, blend: n.blend, isolate: n.isolate, part, masked: masked(n) };
     // `ancestry` lists the object itself last.
     let in_doc = |id: NodeId, own: bool| {
         let ids = doc.ancestry(id).unwrap_or_default();

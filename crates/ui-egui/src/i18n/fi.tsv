@@ -5499,6 +5499,7 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	the selected objects' colors differ: give `color`	valittujen objektien värit eroavat: anna `color`
 @msg	the active fill or stroke has no color: give `color`	aktiivisella täytöllä tai viivalla ei ole väriä: anna `color`
 @msg	the active fill or stroke is hidden: give `color`	aktiivinen täyttö tai viiva on piilotettu: anna `color`
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	aktiivinen täyttö tai viiva piirretään peittävyysmaskin läpi: anna `color`
 @msg	nothing selected is in a group	mikään valituista ei ole ryhmässä
 @msg	nothing to align	ei tasattavaa
 @msg	nothing to distort	ei vääristettävää

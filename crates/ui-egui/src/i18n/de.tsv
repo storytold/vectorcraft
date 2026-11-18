@@ -5178,6 +5178,7 @@ liquify-list-end	{0}, {1}	{0} und {1}
 @msg	the selected objects' colors differ: give `color`	die Farben der ausgewählten Objekte unterscheiden sich: geben Sie `color` an
 @msg	the active fill or stroke has no color: give `color`	die aktive Fläche oder Kontur hat keine Farbe: geben Sie `color` an
 @msg	the active fill or stroke is hidden: give `color`	die aktive Fläche oder Kontur ist ausgeblendet: geben Sie `color` an
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	die aktive Fläche oder Kontur wird durch eine Deckkraftmaske gezeichnet: geben Sie `color` an
 @msg	nothing selected is in a group	nichts Ausgewähltes befindet sich in einer Gruppe
 @msg	nothing to align	nichts auszurichten
 @msg	nothing to distort	nichts zu verzerren

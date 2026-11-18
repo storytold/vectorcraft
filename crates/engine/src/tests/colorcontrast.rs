@@ -508,6 +508,43 @@ fn a_hidden_fill_row_has_no_color_to_measure() {
     assert!((ratio(&given) - 21.0).abs() < 1e-6, "{given}");
 }
 
+/// An opacity mask on the object, or on a group around it, sets how much of the color shows at each
+/// point, so the color has no one opacity to measure; a disabled mask draws nothing.
+#[test]
+fn a_color_drawn_through_an_opacity_mask_has_no_one_answer() {
+    let mut s = session();
+    let rect = |s: &mut Session, color: &str| {
+        let id = s.execute("shape.rectangle", &json!({"x": 50, "y": 50, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+        s.execute("paint.setFill", &json!({"color": color, "ids": [id]})).unwrap();
+        id
+    };
+    let masked = |s: &mut Session, owner: u64, color: &str| {
+        let m = rect(s, color);
+        s.execute("select.set", &json!({"ids": [owner, m]})).unwrap();
+        s.execute("transparency.makeOpacityMask", &json!({})).unwrap();
+        s.execute("select.set", &json!({"ids": [owner]})).unwrap();
+    };
+    let black = rect(&mut s, "#000000");
+    masked(&mut s, black, "#000000");
+    let e = s.execute("color.contrast", &json!({})).unwrap_err().to_string();
+    assert!(e.contains("drawn through an opacity mask: give `color`"), "{e}");
+    let e = s.execute("color.contrast", &json!({"against": "#ffffff", "opacity": 100})).unwrap_err().to_string();
+    assert!(e.contains("drawn through an opacity mask"), "{e}");
+    let given = s.execute("color.contrast", &json!({"color": "#000000", "against": "#ffffff"})).unwrap();
+    assert!((ratio(&given) - 21.0).abs() < 1e-6, "{given}");
+    s.execute("transparency.disableOpacityMask", &json!({})).unwrap();
+    let r = s.execute("color.contrast", &json!({})).unwrap();
+    assert!((ratio(&r) - 21.0).abs() < 1e-3, "a disabled mask leaves the black as it is: {r}");
+    // A group's mask counts for the objects inside it.
+    let mut s = session();
+    let inner = rect(&mut s, "#000000");
+    let group = s.execute("object.group", &json!({"ids": [inner]})).unwrap()["id"].as_u64().unwrap();
+    masked(&mut s, group, "#000000");
+    s.execute("select.set", &json!({"ids": [inner]})).unwrap();
+    let e = s.execute("color.contrast", &json!({})).unwrap_err().to_string();
+    assert!(e.contains("drawn through an opacity mask"), "{e}");
+}
+
 /// A background sampled across an edge averages two colors; the answer's `against` is exactly the
 /// background the ratio used, so giving it back answers the same ratio.
 #[test]

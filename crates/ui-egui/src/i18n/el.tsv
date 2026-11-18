@@ -5234,6 +5234,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	the selected objects' colors differ: give `color`	τα χρώματα των επιλεγμένων αντικειμένων διαφέρουν: δώστε `color`
 @msg	the active fill or stroke has no color: give `color`	το ενεργό γέμισμα ή η πινελιά δεν έχει χρώμα: δώστε `color`
 @msg	the active fill or stroke is hidden: give `color`	το ενεργό γέμισμα ή η πινελιά είναι κρυφό: δώστε `color`
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	το ενεργό γέμισμα ή η πινελιά σχεδιάζεται μέσα από μάσκα αδιαφάνειας: δώστε `color`
 @msg	nothing selected is in a group	τίποτα από τα επιλεγμένα δεν βρίσκεται σε ομάδα
 @msg	nothing to align	δεν υπάρχει τίποτα για στοίχιση
 @msg	nothing to distort	δεν υπάρχει τίποτα για παραμόρφωση
