@@ -128,9 +128,25 @@ pub(super) fn first_tab_shown(widths: &[f32], active: Option<usize>, room: f32) 
     first
 }
 
+/// The × of a document tab `w` wide, drawn in `xr` and clicked within 3 pt of it, or `None` for a
+/// tab shortened narrower than the × and its click area.
+fn tab_close_box(ui: &Ui, t: &Tokens, xr: egui::Rect, w: f32, id: egui::Id) -> Option<egui::Response> {
+    /// The least width of a tab that holds its × and the ×'s click area.
+    const CLOSE_ROOM: f32 = 25.0;
+    if w < CLOSE_ROOM {
+        return None;
+    }
+    let xresp = ui.interact(xr.expand(3.0), id, Sense::click());
+    icons::paint(ui, "x", xr, if xresp.hovered() { t.text_strong } else { t.text });
+    Some(xresp)
+}
+
 /// Document tab strip: "Name* @ 66.67% (RGB/Preview)". User Interface › Large Tabs makes the tabs
 /// taller, with larger titles. Tabs that don't fit are reached from a » button at the strip's
-/// right end, which lists every open document, and the active tab is always in view (#746).
+/// right end, which lists every open document, and the active tab is always in view (#746). The
+/// first tab that doesn't fit whole fills the room left before the » button with its title
+/// shortened, when that room holds some of the title (#8584), and an active tab wider than the
+/// whole strip is shortened to it.
 /// Each view Window › New Window opened has a tab of its own. Windows floating have no tab
 /// ([`crate::doc_windows`]); while the current window is a floating one, the tab of the window the
 /// strip shows is the highlighted one. A tab dragged more than [`crate::doc_windows::TEAR_OFF`]
@@ -140,6 +156,10 @@ pub(super) fn first_tab_shown(widths: &[f32], active: Option<usize>, room: f32) 
 pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
     /// The width of the » button.
     const MORE: f32 = 30.0;
+    /// A tab's width beyond its title's: the margins and the ×.
+    const TAB_PADDING: f32 = 50.0;
+    /// The least width of title a tab shortened to fit the strip shows.
+    const MIN_TITLE: f32 = 40.0;
     let t = Tokens::get(ui.ctx());
     let (height, title_size) = tab_size(app);
     let (strip, _) = ui.allocate_exact_size(vec2(ui.available_width(), height), Sense::hover());
@@ -160,7 +180,7 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
             (title.clone(), ui.painter().layout_no_wrap(title, theme::semibold(title_size), color))
         })
         .collect();
-    let widths: Vec<f32> = tabs.iter().map(|(_, g)| g.size().x + 50.0).collect();
+    let widths: Vec<f32> = tabs.iter().map(|(_, g)| g.size().x + TAB_PADDING).collect();
     let overflow = widths.iter().sum::<f32>() > strip.width();
     let room = strip.width() - if overflow { MORE } else { 0.0 };
     let first = if overflow { first_tab_shown(&widths, active, room) } else { 0 };
@@ -173,15 +193,33 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
     // the drag just ended), for moving it along the strip.
     let mut slots: Vec<(usize, egui::Rect)> = vec![];
     let mut dragged = None;
-    for (k, ((_, galley), w)) in tabs.iter().zip(&widths).enumerate().skip(first) {
-        if x + w > strip.left() + room && Some(k) != active {
-            break;
-        }
+    for (k, ((title, galley), w)) in tabs.iter().zip(&widths).enumerate().skip(first) {
+        // A tab that doesn't fit whole takes the rest of the strip with its title shortened, as
+        // long as some of the title fits (#8584); its tooltip shows the whole title. The active
+        // tab always shows, shortened to the strip when it is wider than the whole strip.
+        let left = strip.left() + room - x;
+        // A shortened title too wide for its room even as "…" is not drawn, so it stays clear of
+        // the ×.
+        let (galley, w, shortened, title_fits) = if *w > left {
+            if left < TAB_PADDING + MIN_TITLE && Some(k) != active {
+                break;
+            }
+            let color = if Some(k) == active { t.text_strong } else { t.text_dim };
+            let mut job = egui::text::LayoutJob::simple_singleline(title.clone(), theme::semibold(title_size), color);
+            let max_width = (left - TAB_PADDING).max(0.0);
+            job.wrap = egui::text::TextWrapping { max_width, max_rows: 1, break_anywhere: true, overflow_character: Some('…') };
+            let galley = ui.painter().layout_job(job);
+            let fits = galley.size().x <= max_width;
+            (galley, left.max(0.0), true, fits)
+        } else {
+            (galley.clone(), *w, false, true)
+        };
         let Some(&win) = docked.get(k) else { break };
         let i = win.0;
         let is_active = Some(k) == active;
-        let r = egui::Rect::from_min_size(egui::pos2(x, strip.top()), vec2(*w, strip.height() - 1.0));
+        let r = egui::Rect::from_min_size(egui::pos2(x, strip.top()), vec2(w, strip.height() - 1.0));
         let resp = ui.interact(r, ui.scope_id().with(("tab", i, win.1)), Sense::click_and_drag());
+        let resp = if shortened { super::status_bar::full_text_tooltip(resp, title.as_str()) } else { resp };
         slots.push((i, r));
         if resp.dragged() || resp.drag_stopped() {
             dragged = Some((i, resp.drag_stopped()));
@@ -196,13 +234,16 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
         // (#673).
         let (x_center, title_left) = if CLOSE_BEFORE_TITLE { (r.left() + 16.0, r.left() + 32.0) } else { (r.right() - 16.0, r.left() + 14.0) };
         let xr = egui::Rect::from_center_size(egui::pos2(x_center, r.center().y), vec2(12.0, 12.0));
-        let xresp = ui.interact(xr.expand(3.0), ui.scope_id().with(("tabx", i, win.1)), Sense::click());
-        icons::paint(ui, "x", xr, if xresp.hovered() { t.text_strong } else { t.text });
-        ui.painter().galley(egui::pos2(title_left, r.center().y - galley.size().y / 2.0), galley.clone(), t.text);
-        hovering_art |= crate::document_drag::hover_tab(app, &resp, win, xr.expand(3.0));
+        let xresp = tab_close_box(ui, &t, xr, w, ui.scope_id().with(("tabx", i, win.1)));
+        if title_fits {
+            ui.painter().galley(egui::pos2(title_left, r.center().y - galley.size().y / 2.0), galley, t.text);
+        }
+        let x_area = if xresp.is_some() { xr.expand(3.0) } else { egui::Rect::NOTHING };
+        hovering_art |= crate::document_drag::hover_tab(app, &resp, win, x_area);
         // A middle-click anywhere on the tab closes it as the × does (#6506), so closing a
         // modified document's last view still asks to save first.
-        if xresp.clicked() || resp.middle_clicked() || xresp.middle_clicked() {
+        let x_clicked = xresp.as_ref().is_some_and(|x| x.clicked() || x.middle_clicked());
+        if x_clicked || resp.middle_clicked() {
             close = Some(win);
         } else if resp.clicked() {
             activate = Some(win);
