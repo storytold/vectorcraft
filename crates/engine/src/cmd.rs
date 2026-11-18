@@ -886,6 +886,9 @@ pub(crate) use buildcmds::TracePresetChanges;
 /// The shapes a group selected alone gives the Pathfinder panel.
 pub use pathops::shape_count;
 
+/// The Shape Mode commands' warning when a selected open path encloses no area.
+pub use pathops::SHAPE_MODE_OPEN_PATH_NO_AREA;
+
 /// The gaps View › Show Live Paint Gaps shows on a Live Paint group.
 pub use buildcmds::live_paint_gaps;
 
