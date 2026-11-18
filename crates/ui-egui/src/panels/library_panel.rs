@@ -13,6 +13,7 @@
 //! panel whose library can't be found shows the library as missing, with its file and Locate
 //! Library… (`ui.libraryPanel.locate`). The find text and the selection are panel state.
 
+use std::borrow::Cow;
 use std::sync::{Mutex, PoisonError};
 
 use egui::{Rect, Sense, Ui};
@@ -108,8 +109,8 @@ pub(crate) trait LibraryKind {
     fn rows<'a>(lib: &'a Self::Lib, id: &str, query: &str) -> Vec<Row<'a, Self::Item>>;
     /// Row `name` of library `id` as its list row and tooltips show it (by default as it is). The
     /// row keeps `name` for its tile, selection, clicks, drags and the commands they run.
-    fn label<'a>(_id: &str, name: &'a str) -> &'a str {
-        name
+    fn label<'a>(_id: &str, name: &'a str) -> Cow<'a, str> {
+        Cow::Borrowed(name)
     }
     /// An item's thumbnail in `r`.
     fn draw(app: &VectorcraftApp, ui: &Ui, r: Rect, item: &Self::Item, selected: bool, hovered: bool);
@@ -665,7 +666,7 @@ fn body<K: LibraryKind>(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
                         None => super::swatches::draw_folder(ui, chip),
                     }
                     let label = K::label(id, row.name);
-                    list_row_name(ui, r, chip, label);
+                    list_row_name(ui, r, chip, &label);
                     drag_out::<K>(ui, &resp, id, row);
                     let tip = || row.item.map_or_else(|| label.to_string(), |i| format!("{label} ({})", K::describe(i)));
                     click(ui, resp, row, &tip);
@@ -678,7 +679,7 @@ fn body<K: LibraryKind>(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
                         None => folder_tile(ui, cell, is_sel(row.name)),
                     }
                     drag_out::<K>(ui, &resp, id, row);
-                    click(ui, resp, row, &|| K::label(id, row.name).to_string());
+                    click(ui, resp, row, &|| K::label(id, row.name).into_owned());
                 }
             }
         });
