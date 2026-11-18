@@ -3905,6 +3905,19 @@ already walks Image Trace. Short agent entry points:
   than 8 MiB`. The Actions panel menu's Save Actions… and Load Actions… run these; Load Actions… is
   disabled where there is no open dialog (the web). `ui.actionSet.load` also reads the action sets other apps save as
   text (`.aia`); see "Action sets from other apps".
+  `ui.actionSet.replace {path? | data?}` is the Actions panel menu's Replace Actions…. It reads the file at `path`, else
+  a picked one, or the file's text `data`, as `ui.actionSet.load` does, with the same formats (`.vcactions` and `.aia`),
+  limits, errors and reports of left-out steps and unknown commands, and replaces every set in the panel, the built-in
+  Default Actions set included, with the file's set, which keeps its name. It returns `{changed, set: 0, name,
+  actions}` with `unknownCommands` and `unknownCount`, or `skipped` and `leftOut`, as a load does. The set becomes
+  current and selected, the panel's selected action and step and its expanded actions are cleared, and an open Set
+  Options, New Action, Batch or step dialog that names a set closes; when the panel already holds only a set that saves
+  alike, in that state, nothing changes, the set keeps its ids and `changed` is false. Omitted params count as `{}`.
+  Params of another type, another key, a `path` or `data` that is not a string, a file that can't be read or is
+  refused (an empty one too), a canceled pick (`cancelled`), or a replace while an action records or plays (also while
+  it waits at a stop) is an error and changes nothing. Replace records no undo step. The menu item asks no question
+  first, and it is disabled where there is no open dialog (the web) and while an action records or plays. These are
+  VectorCraft's own rules.
 - Actions: `ui.action.rename {set, action, name}` renames the Actions panel's action at `action` in set `set` (0 is
   the top set) to `name` with spaces trimmed from both ends, keeps its steps, function key and color, and returns
   `{name}`. An index past the last set or action, or an empty name, is an error, and then nothing is renamed. So is a
