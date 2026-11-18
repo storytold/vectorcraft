@@ -476,6 +476,7 @@ antiAlias	Sharp	Nítid
 	Checkpoint	Punt de control
 	Inventory Icons	Icones d’inventari
 	Skill Icons	Icones d'habilitat
+	Weather Icons	Icones del temps
 	Attack	Atac
 	Defend	Defensa
 	Heal	Curació
@@ -807,6 +808,11 @@ antiAlias	Sharp	Nítid
 	Color blindness – Deuteranopia-type	Daltonisme – tipus deuteranòpsia
 	Color blindness – Protanopia-type	Daltonisme – tipus protanòpsia
 	Color blindness – Tritanopia-type	Daltonisme – tipus tritanòpsia
+	Show Color Vision Preview	Mostra la previsualització de la visió del color
+	Protanopia	Protanòpsia
+	Deuteranopia	Deuteranòpsia
+	Tritanopia	Tritanòpsia
+	Achromatopsia	Acromatòpsia
 	Color Burn	Subexposa el color
 	Color conversion:	Conversió de color:
 	Color Dodge	Sobreexposició de color
@@ -1033,6 +1039,16 @@ antiAlias	Sharp	Nítid
 	Create New Swatch…	Crea una mostra nova…
 	Create New {kind} Style	Crea un estil de {kind} nou
 	Create Object Mosaic…	Crea un mosaic d’objectes…
+	Create Object Mosaic	Crea un mosaic d’objectes
+	Current Size:	Mida actual:
+	New Size:	Mida nova:
+	Tile Spacing:	Espaiat de les tessel·les:
+	Number of Tiles:	Nombre de tessel·les:
+	Constrain Ratio:	Restringeix la proporció:
+	Result:	Resultat:
+	Resize Using Percentages	Canvia la mida amb percentatges
+	Delete Raster	Suprimeix la imatge ràster
+	Use Ratio	Usa la proporció
 	Create Outlines	Crea contorns
 	Create Path	Crea un traçat
 	Create PDF layers from layers and sublayers	Crea capes de PDF a partir de capes i subcapes
@@ -1211,6 +1227,7 @@ antiAlias	Sharp	Nítid
 	Duplicate Action or Action Set	Duplica l’acció o el conjunt d’accions
 	Delete the action set “{name}” and its actions?	Voleu suprimir el conjunt d’accions “{name}” i les seves accions?
 	Delete the selected action sets and their actions?	Voleu suprimir els conjunts d’accions seleccionats i les seves accions?
+	Delete all action sets and their actions?	Voleu suprimir tots els conjunts d’accions i les seves accions?
 	Delete the library “{name}”?	Voleu suprimir la biblioteca “{name}”?
 	Delete Theme	Suprimeix el tema
 	Delete theme	Suprimeix el tema
@@ -1428,6 +1445,8 @@ antiAlias	Sharp	Nítid
 	Duplicate	Duplica
 	Duplicate and Offset 10 pt	Duplica i desplaça 10 pt
 	Duplicate Artboard	Duplica el tauler
+	Click to add an artboard on this side; Alt-click to duplicate this artboard with its art	Fes clic per afegir un tauler en aquest costat i Alt+clic per duplicar aquest tauler amb la il·lustració
+	Click to add an artboard on this side	Fes clic per afegir un tauler en aquest costat
 	Duplicate Artboards	Duplica els taulers
 	Duplicate Brush	Duplica el pinzell
 	Duplicate Character Style	Duplica l’estil de caràcter
@@ -1768,6 +1787,19 @@ digits	Malayalam	Malaiàlam
 	Filters	Filtres
 	Find	Cerca
 	Find and Replace…	Cerca i reemplaça…
+	Find and Replace	Cerca i reemplaça
+	Find:	Cerca:
+	Replace With:	Reemplaça per:
+	Replace & Find	Reemplaça i cerca
+	Replace All	Reemplaça-ho tot
+	Match Case	Distingeix majúscules i minúscules
+	Find Whole Word	Cerca la paraula sencera
+	Search Backwards	Cerca cap enrere
+	Check Hidden Layers	Comprova les capes ocultes
+	Check Locked Layers	Comprova les capes bloquejades
+@msg	No matches found	No s’ha trobat cap coincidència
+@msg	Matches replaced: {n}	Coincidències reemplaçades: {n}
+@msg	no match of `find` at bytes {_1}..{_2} of object {_3}	no hi ha cap coincidència de `find` als bytes {_1}..{_2} de l’objecte {_3}
 	Find Font	Cerca un tipus de lletra
 	Find Font Files	Cerca fitxers de tipus de lletra
 	Find Fonts	Cerca tipus de lletra
@@ -1805,6 +1837,7 @@ digits	Malayalam	Malaiàlam
 	Fixed	Fix
 	Flag…	Marca…
 	Flare	Resplendor
+	Edit Flare	Edita el resplendor
 	Flare Tool	Eina de resplendor
 	Flare Tool Options	Opcions de l’eina de resplendor
 	Flat Angle	Angle pla
@@ -2830,6 +2863,9 @@ digits	Malayalam	Malaiàlam
 	Navigate	Navega
 	Navigator	Navegador
 	Navigator Panel Options	Opcions del panell Navegador
+	Attributes Panel Options	Opcions del panell Atributs
+	Number of Recent URLs:	Nombre d’URL recents:
+@msg	`count` must be a whole number from 1 to 30	`count` ha de ser un nombre enter d’1 a 30
 	Draw Dashed Lines as Solid Lines	Dibuixa les línies discontínues com a contínues
 	Needs a choice	Necessita una tria
 	Needs a key	Necessita una clau
@@ -3392,6 +3428,7 @@ digits	Malayalam	Malaiàlam
 	Save Actions…	Desa les accions…
 	Load Actions…	Carrega accions…
 	Replace Actions…	Reemplaça les accions…
+	Clear Actions	Esborra les accions
 	Reset Actions	Restableix les accions
 	Replace the current actions with the default set?	Voleu reemplaçar les accions actuals pel conjunt predeterminat?
 	Append adds the default set after the current sets instead.	Amb Afegeix, el conjunt predeterminat s’afegeix després dels conjunts actuals.
@@ -3904,6 +3941,8 @@ digits	Malayalam	Malaiàlam
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	La roda del ratolí amb Cmd/Ctrl premut desplaça el llenç en horitzontal.
 	Dragging sideways on a numeric field's label changes the field's value.	Arrossegar en horitzontal sobre l’etiqueta d’un camp numèric canvia el valor del camp.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Un gest de rotació amb dos dits al trackpad gira la vista del llenç.
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Mantenir premuda una tecla executa l’eina o l’ordre de la seva columna Mantén a Dreceres de teclat; una pulsació breu executa la seva drecera habitual.
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Quants segons cal mantenir premuda una tecla perquè s’executi la seva drecera de pulsació llarga en lloc de la drecera habitual.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Quan moveu punts d’ancoratge, cada corba amb un extrem desplaçat conserva la forma respecte dels seus extrems.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Mantenir premuda la drecera d’una eina la tria fins que la deixeu anar, i després es torna a triar l’eina anterior.
 	Shows the bounding box while you move the selection or draw a shape.	Mostra el quadre delimitador mentre moveu la selecció o dibuixeu una forma.
@@ -3985,6 +4024,7 @@ digits	Malayalam	Malaiàlam
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Com d’a prop a la pantalla han d’arribar el punter o un punt arrossegat a l’art perquè les guies intel·ligents s’hi ajustin; la distància és la mateixa a qualsevol zoom.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Ajusta l’extrem d’un segment de línia, o un cercle dibuixat des del centre, perquè toqui una corba propera.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Ajusta l’extrem d’un segment de línia perquè trobi un segment recte proper en angle recte.
+	Edit type set in fonts that aren't available?	Voleu editar el text en tipus de lletra que no estan disponibles?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Mostra al llenç el número de cada tall en un requadre a la seva cantonada superior esquerra; si està desactivat, els contorns dels talls continuen visibles.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	El color dels contorns dels talls d’usuari i d’objecte i dels requadres amb el seu número; els talls automàtics fan servir un to més apagat d’aquest color.
 	Reset all preferences to their defaults?	Voleu restablir totes les preferències als valors predeterminats?
@@ -4269,6 +4309,12 @@ digits	Malayalam	Malaiàlam
 	Bus Lines	Línies de bus
 	Terminal Nodes	Nodes terminals
 
+# Original arrow art brushes.
+	Arrows	Fletxes
+	Solid Arrow	Fletxa sòlida
+	Open Arrow	Fletxa oberta
+	Chevron Arrow	Fletxa amb galó
+
 	Notched Ribbon	Cinta dentada
 	Double Line	Línia doble
 	Wave	Ona
@@ -4285,6 +4331,252 @@ digits	Malayalam	Malaiàlam
 	Stars	Estrelles
 	Triangles	Triangles
 	Sparkles	Espurnes
+	Warm Gray	Gris càlid
+	Cool Gray	Gris fred
+	Neutrals	Neutres
+	Ivory	Ivori
+	Linen	Lli
+	Oat	Civada
+	Greige	Greige
+	Stone	Pedra
+	Taupe	Talp
+	Slate	Pissarra
+	Clay	Argila
+	Terracotta	Terracota
+	Ochre	Ocre
+	Umber	Ombra
+	Sand	Sorra
+	Olive	Oliva
+	Moss	Molsa
+	Rosy	Rosat
+	Neutral	Neutre
+	Golden	Daurat
+	Pastel	Pastel
+	Pastel Red	Vermell pastel
+	Pastel Orange	Taronja pastel
+	Pastel Amber	Ambre pastel
+	Pastel Yellow	Groc pastel
+	Pastel Lime	Llima pastel
+	Pastel Green	Verd pastel
+	Pastel Teal	Verd blavós pastel
+	Pastel Cyan	Cian pastel
+	Pastel Azure	Atzur pastel
+	Pastel Blue	Blau pastel
+	Pastel Violet	Violeta pastel
+	Pastel Magenta	Magenta pastel
+	Soft Red	Vermell suau
+	Soft Orange	Taronja suau
+	Soft Amber	Ambre suau
+	Soft Yellow	Groc suau
+	Soft Lime	Llima suau
+	Soft Green	Verd suau
+	Soft Teal	Verd blavós suau
+	Soft Cyan	Cian suau
+	Soft Azure	Atzur suau
+	Soft Blue	Blau suau
+	Soft Violet	Violeta suau
+	Soft Magenta	Magenta suau
+	Vivid Red	Vermell viu
+	Vivid Orange	Taronja viu
+	Vivid Amber	Ambre viu
+	Vivid Yellow	Groc viu
+	Vivid Lime	Llima viu
+	Vivid Green	Verd viu
+	Vivid Teal	Verd blavós viu
+	Vivid Cyan	Cian viu
+	Vivid Azure	Atzur viu
+	Vivid Blue	Blau viu
+	Vivid Violet	Violeta viu
+	Vivid Magenta	Magenta viu
+	Deep	Foscos
+	Deep Red	Vermell fosc
+	Deep Orange	Taronja fosc
+	Deep Amber	Ambre fosc
+	Deep Yellow	Groc fosc
+	Deep Lime	Llima fosc
+	Deep Green	Verd fosc
+	Deep Teal	Verd blavós fosc
+	Deep Cyan	Cian fosc
+	Deep Azure	Atzur fosc
+	Deep Blue	Blau fosc
+	Deep Violet	Violeta fosc
+	Deep Magenta	Magenta fosc
+	Gold	Or
+	Silver	Plata
+	Bronze	Bronze
+	Copper	Coure
+	Brass	Llautó
+	Rose Gold	Or rosa
+	Gunmetal	Gris metall
+	Platinum	Platí
+	Pewter	Peltre
+	Ember	Brasa
+	Lagoon	Llacuna
+	Dusk	Capvespre
+	Clay to Teal	Argila a verd blavós
+	Plum to Olive	Pruna a oliva
+	Complementary Coral	Corall complementari
+	Split Complementary Coral	Corall complementari dividit
+	Analogous Coral	Corall anàleg
+	Triad Coral	Corall en tríada
+	Tetrad Coral	Corall en tètrada
+	Pentagram Coral	Corall en pentagrama
+	Complementary Teal	Verd blavós complementari
+	Split Complementary Teal	Verd blavós complementari dividit
+	Analogous Teal	Verd blavós anàleg
+	Triad Teal	Verd blavós en tríada
+	Tetrad Teal	Verd blavós en tètrada
+	Pentagram Teal	Verd blavós en pentagrama
+	Soft Spectrum	Espectre suau
+	Red to Amber	Vermell a ambre
+	Orange to Yellow	Taronja a groc
+	Amber to Lime	Ambre a llima
+	Yellow to Green	Groc a verd
+	Lime to Teal	Llima a verd blavós
+	Green to Cyan	Verd a cian
+	Teal to Azure	Verd blavós a atzur
+	Cyan to Blue	Cian a blau
+	Azure to Violet	Atzur a violeta
+	Blue to Magenta	Blau a magenta
+	Violet to Red	Violeta a vermell
+	Magenta to Orange	Magenta a taronja
+	Dawn	Alba
+	Noon	Migdia
+	Sunset	Posta de sol
+	Night	Nit
+	Overcast	Ennuvolat
+	White to Black	Blanc a negre
+	Light Grays	Grisos clars
+	Dark Grays	Grisos foscos
+	Warm Grays	Grisos càlids
+	Cool Grays	Grisos freds
+	Fade to Transparent	Esvaïment a transparent
+	White Fade	Esvaïment blanc
+	Vignette	Vinyeta
+	Mist	Boira
+	Petal	Pètal
+	Fern	Falguera
+	Smoke	Fum
+	Honey	Mel
+	Seafoam	Escuma de mar
+	Lavender	Espígol
+	Driftwood	Fusta de deriva
+	Ink Wash	Aiguada de tinta
+	Tide	Marea
+	Bloom	Floració
+	Dew	Rosada
+	Pollen	Pol·len
+	Lichen	Liquen
+	Prism Veil	Vel prismàtic
+	Opal Ribbon	Cinta d’òpal
+	Pearl Flash	Llampec nacrat
+	Aurora Foil	Làmina aurora
+	Iris Sheen	Lluentor iris
+	Frost Spectrum	Espectre gebrat
+	Silver Tide	Marea platejada
+	Rose Quartz Gleam	Resplendor de quars rosa
+	Moonstone Shift	Reflex de pedra de lluna
+	Violet Edge	Vora violeta
+	Mint Halo	Halo menta
+	Amber Corona	Corona ambre
+	Polar Glint	Espurneig polar
+	Pastel Orbit	Òrbita pastel
+	Coral and Navy	Corall i blau marí
+	Plum and Lime	Pruna i llima
+	Teal and Gold	Verd blavós i or
+	Indigo and Peach	Indi i préssec
+	Forest and Rose	Bosc i rosa
+	Red Glow	Resplendor vermella
+	Orange Glow	Resplendor taronja
+	Amber Glow	Resplendor ambre
+	Yellow Glow	Resplendor groga
+	Lime Glow	Resplendor llima
+	Green Glow	Resplendor verda
+	Teal Glow	Resplendor verd blavós
+	Cyan Glow	Resplendor cian
+	Azure Glow	Resplendor atzur
+	Blue Glow	Resplendor blava
+	Violet Glow	Resplendor violeta
+	Magenta Glow	Resplendor magenta
+	Polka Dots	Pics
+	Vertical Stripes	Ratlles verticals
+	Horizontal Stripes	Ratlles horitzontals
+	Diagonal Stripes	Ratlles diagonals
+	Checkerboard	Escaquer
+	Diamonds	Rombes
+	Crosses	Creus
+	Coarse Grit	Gra gruixut
+	Stipple	Puntejat
+	Scratches	Ratllades
+	Sparse Flecks	Taques disperses
+	Dense Flecks	Taques denses
+	Sine Bands	Bandes sinusoidals
+	Ripple Lines	Línies ondulades
+	Interference Rings	Anells d’interferència
+	Offset Rings	Anells desplaçats
+	Warped Checks	Quadres deformats
+	Pinched Stripes	Ratlles pinçades
+	Chevron Pulse	Pols de galons
+	Radiating Lenses	Lents radiants
+	Soft Shadow	Ombra suau
+	Hard Shadow	Ombra dura
+	Lifted Card	Targeta elevada
+	Neon Tube	Tub de neó
+	Inner Light	Llum interior
+	Feathered	Difuminat
+	Haze	Calitja
+	Double Rule	Filet doble
+	Triple Rule	Filet triple
+	Dashed Border	Vora discontínua
+	Dotted Border	Vora puntejada
+	Offset Keyline	Filet desplaçat
+	Inset Keyline	Filet interior
+	Outside Stroke	Traç exterior
+	Pointer	Punter
+	Highlighter	Retolador
+	Sketchy Line	Línia esbossada
+	Scribble Fill	Emplenament gargotejat
+	Wobble	Tremolós
+	Zig Zag Edge	Vora en ziga-zaga
+	Wavy Edge	Vora ondulada
+	Puffy	Inflat
+	Starburst	Esclat estel·lar
+	Glossy	Brillant
+	Brushed Metal	Metall raspallat
+	Spotlight	Focus
+	Sunset Band	Banda de posta de sol
+	Sea Glass	Vidre de mar
+	Pearl	Perla
+	Chrome Rim	Vora cromada
+	Glow Orb	Orbe lluminós
+	Pill Badge	Insígnia de càpsula
+	Round Badge	Insígnia rodona
+	Flag Wave	Bandera onejant
+	Bulge	Bombament
+	Twisted	Recargolat
+	Echo	Eco
+	Spiral Copies	Còpies en espiral
+	Multiply Tint	Tint multiplica
+	Darken Veil	Vel enfosqueix
+	Ghosted	Fantasma
+	Two Tone	Bicolor
+	Overlay Glaze	Veladura superposició
+	Screen Light	Llum pantalla
+	Soft Light Wash	Aiguada llum suau
+	Cyan Neon	Neó cian
+	Magenta Laser	Làser magenta
+	Amber Tube	Tub ambre
+	Electric Lime	Llima elèctrica
+	Pulse Violet	Violeta polsant
+	Cobalt Phosphor	Fòsfor cobalt
+	Burst	Esclat
+	Rounded Square	Quadrat arrodonit
+	Sun	Sol
+	Moon	Lluna
+	Cloud	Núvol
+	Rain	Pluja
+	Thunder	Tro
+	Snow	Neu
 	Scatter:	Dispersió:
 	Scissors	Tisores
 	Scissors Tool	Eina de tisores
@@ -4564,6 +4856,7 @@ digits	Malayalam	Malaiàlam
 	Show Center	Mostra el centre
 	Show Center Mark	Mostra la marca del centre
 	Show Code	Mostra el codi
+	Show in Browser	Mostra al navegador
 	Show Color Groups	Mostra els grups de colors
 	Show Color Swatches	Mostra les mostres de color
 	Show Corner Widget	Mostra el giny de cantonada
@@ -6147,6 +6440,9 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	Expand: no gradient fills	Expandeix: no hi ha farciments de degradat
 @msg	Expand: nothing to expand	Expandeix: no hi ha res per expandir
 @msg	Export cancelled	Exportació cancel·lada
+	Cancel Save	Cancel·la el desament
+@plural	{n} more save waiting|{n} more saves waiting	{n} desament més en espera|{n} desaments més en espera
+@msg	Save canceled	Desament cancel·lat
 @msg	Exported {path}	S’ha exportat {path}
 @msg	Exported {what}	S’ha exportat {what}
 @msg	Exporting {_1}	S’està exportant {_1}
@@ -6263,6 +6559,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	el text usat com a màscara en àrees enllaçades, en text ajustat o en un traçat compost no retalla
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	les imatges enllaçades sense previsualització al fitxer mostren un marcador de posició fins que es trobin els seus fitxers: torneu-les a enllaçar al panell Enllaços
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	Fusió de pintura interactiva: seleccioneu un grup de pintura interactiva i els traçats que voleu afegir
+@msg	`Face` and `Edge` name the faces and edges of a Live Paint group: give the path another name	`Face` i `Edge` són els noms de les cares i les arestes d’un grup de pintura interactiva: doneu un altre nom al traçat
 @msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	La pintura interactiva accepta traçats i traçats compostos: convertiu abans el text, les imatges i altres objectes a traçats
 @msg	Live Paint: select paths or compound paths	Pintura interactiva: seleccioneu traçats o traçats compostos
 @msg	Live Paint: these paths are too degenerate to paint	Pintura interactiva: aquests traçats són massa degenerats per pintar-los
@@ -6356,6 +6653,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	no history state {v}	no hi ha cap estat de l’historial {v}
 @msg	no interaction in progress	no hi ha cap interacció en curs
 @msg	no key object	no hi ha objecte clau
+@msg	Align to Key Object isn't available with the Artboard tool	«Alinea a l’objecte clau» no està disponible amb l’eina de tauler
 @msg	no library `{id}`	no hi ha la biblioteca `{id}`
 @msg	the library has another item of that kind named `{name}`	la biblioteca ja té un altre element d’aquest tipus anomenat `{name}`
 @msg	no library `{key}` (see {list})	no hi ha la biblioteca `{key}` (vegeu {list})
@@ -6427,6 +6725,8 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	no such spine point	no existeix aquest punt de l’espina
 @msg	`with` must be a list of at most 10000 spine point indexes	`with` ha de ser una llista d’un màxim de 10000 índexs de punts de l’espina
 @msg	`with` moves points, not a handle	`with` mou punts, no una nansa
+@msg	`link` and `independent` cannot both be true	`link` i `independent` no poden ser true alhora
+@msg	`link` places a handle: give `handle`	`link` col·loca una nansa: indiqueu `handle`
 @msg	no such spine segment	no existeix aquest segment de l’espina
 @msg	no such subpath	no existeix aquest subtraçat
 @msg	no such user library	no existeix aquesta biblioteca d’usuari
@@ -6572,6 +6872,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} imatge enllaçada ha canviat al disc: Actualitza els enllaços mostra la versió nova|{n} imatges enllaçades han canviat al disc: Actualitza els enllaços mostra les versions noves
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	S’ha actualitzat {n} fitxer enllaçat que ha canviat al disc|S’han actualitzat {n} fitxers enllaçats que han canviat al disc
 @msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	el document defineix un sangrat que aquest fitxer PDF/X omet: activeu «Utilitza la configuració de sangrat del document»
+@msgplural	{n} object reaches the trim edge but stops short of the bleed|{n} objects reach the trim edge but stop short of the bleed	{n} objecte arriba a la vora de tall però no arriba al sangrat|{n} objectes arriben a la vora de tall però no arriben al sangrat
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	S’ha exportat {what} amb {n} nota: {first}|S’ha exportat {what} amb {n} notes: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} fitxer de tipus de lletra ja és a {folder}|{n} fitxers de tipus de lletra ja són a {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} fitxer de tipus de lletra ja és a {folder}; {failed} no s’han pogut afegir: {reason}|{n} fitxers de tipus de lletra ja són a {folder}; {failed} no s’han pogut afegir: {reason}
@@ -6616,6 +6917,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	select a blend	selecciona una fusió
 @msg	select a blend or give `id`	selecciona una fusió o dona `id`
 @msg	select a clip group	selecciona un grup de retall
+@msg	select a flare	selecciona un resplendor
 @msg	select a gradient mesh	selecciona una malla de degradat
 @msg	select a linked image: an embedded one has no file	selecciona una imatge enllaçada: una d’incrustada no té fitxer
 @msg	select a Live Paint group	selecciona un grup de pintura interactiva
@@ -7804,10 +8106,18 @@ breakText	Glyphs	Glifs
 	Smooth Bridge…	Pont suau…
 	Smooth Bridge	Pont suau
 	Keep Originals	Conserva els originals
-@msg	select two circles to bridge	seleccioneu dos cercles per unir-los
+@msg	select two or more circles to bridge	seleccioneu dos o més cercles per unir-los
 @msg	one circle is inside the other	un cercle és dins de l’altre
 @msg	the circles are too far apart for this radius: raise the radius	els cercles estan massa separats per a aquest radi: augmenteu el radi
 @msg	the circles are too far apart for this radius	els cercles estan massa separats per a aquest radi
+	Constant Gap	Separació constant
+	Reach:	Abast:
+@msg	the circles are too far apart for this gap: raise the gap	els cercles estan massa separats per a aquesta separació: augmenteu la separació
+@msg	the circles are too far apart for this gap	els cercles estan massa separats per a aquesta separació
+@msg	no two circles are within reach: raise the reach	no hi ha dos cercles dins de l’abast: augmenteu l’abast
+@msg	select at most 2000 circles to bridge	seleccioneu com a màxim 2000 cercles per unir-los
+@msg	that makes too many bridges (at most 8000): lower the reach	això fa massa ponts (com a màxim 8000): reduïu l’abast
+@msg	the bridged circles are too complex to unite	els cercles units són massa complexos per combinar-los
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	Tangents comunes…
 	Common Tangents	Tangents comunes
@@ -8331,6 +8641,18 @@ breakText	Glyphs	Glifs
 @msg	A joint does not close by {gap} pt.	Una unió no es tanca per {gap} pt.
 @msg	Two panels pass through each other.	Dos panells es travessen l’un a l’altre.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer ha de ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"
+	Tap	Pulsació breu
+	Clear Hold	Esborra la pulsació llarga
+	Hold Shortcuts	Dreceres de pulsació llarga
+	Hold Shortcut Delay	Retard de les dreceres de pulsació llarga
+	How hold shortcuts work	Com funcionen les dreceres de pulsació llarga
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	Fes clic i prem una tecla per mantenir premuda per a això (Esc cancel·la). Mantenir premuda la tecla executa això; una pulsació breu executa la drecera pròpia de la tecla.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	Una pulsació breu d’una tecla executa la seva drecera. Mantenir premuda la tecla durant el retard executa en canvi l’eina o l’ordre de la seva columna Mantén. Una drecera de pulsació llarga és una tecla de lletra, xifra o puntuació, sola o amb Shift.
+@msg	Hold {_1} is already used by {_2}	La pulsació llarga de {_1} ja la fa servir {_2}
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	una drecera de pulsació llarga és una tecla que escriu un caràcter, sola o amb Shift ({shown} té Cmd, Ctrl o Alt)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} no pot ser una drecera de pulsació llarga: fes servir una lletra, una xifra o una tecla de puntuació
+	Dashed Arrow	Fletxa discontínua
+@msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	una línia o un altre traçat obert que no tanca cap àrea no aporta cap àrea a la forma composta; per incloure’l, apliqueu-hi primer Objecte › Traçat › Contorneja el traç
 	Pressure Sensitive	Sensible a la pressió
 	Flex Ribbon	Cinta flexible
 	Pulse Stroke	Traç pulsant

@@ -719,6 +719,16 @@ font-technology	Variable	Variabla
 	Create New Swatch…	Skapa ny färgruta…
 	Create New {kind} Style	Skapa ny stil ({kind})
 	Create Object Mosaic…	Skapa objektmosaik…
+	Create Object Mosaic	Skapa objektmosaik
+	Current Size:	Aktuell storlek:
+	New Size:	Ny storlek:
+	Tile Spacing:	Avstånd mellan plattor:
+	Number of Tiles:	Antal plattor:
+	Constrain Ratio:	Begränsa förhållande:
+	Result:	Resultat:
+	Resize Using Percentages	Ändra storlek med procent
+	Delete Raster	Ta bort rasterbild
+	Use Ratio	Använd förhållande
 	Create Outlines	Skapa konturbanor
 	Create Path	Skapa bana
 	Create PDF layers from layers and sublayers	Skapa PDF-lager från lager och underlager
@@ -846,6 +856,7 @@ font-technology	Variable	Variabla
 	Duplicate Action or Action Set	Duplicera åtgärd eller åtgärdsuppsättning
 	Delete the action set “{name}” and its actions?	Radera åtgärdsuppsättningen ”{name}” och dess åtgärder?
 	Delete the selected action sets and their actions?	Radera de markerade åtgärdsuppsättningarna och deras åtgärder?
+	Delete all action sets and their actions?	Radera alla åtgärdsuppsättningar och deras åtgärder?
 	Delete Theme	Radera tema
 	Delete theme	Radera tema
 	Delete these {n} graphic styles?	Radera dessa {n} grafikstilar?
@@ -982,6 +993,8 @@ font-technology	Variable	Variabla
 	Duplicate	Duplicera
 	Duplicate and Offset 10 pt	Duplicera och förskjut 10 pt
 	Duplicate Artboard	Duplicera rityta
+	Click to add an artboard on this side; Alt-click to duplicate this artboard with its art	Klicka för att lägga till en rityta på den här sidan, Alt-klicka för att duplicera ritytan med dess grafik
+	Click to add an artboard on this side	Klicka för att lägga till en rityta på den här sidan
 	Copy Artboard	Kopiera rityta
 	Cut Artboard	Klipp ut rityta
 	Rename Artboards	Byt namn på ritytor
@@ -1277,6 +1290,19 @@ font-technology	Variable	Variabla
 	Fill: click for swatches, Shift-click for the color mixer	Fyllning: klicka för färgrutor, Shift-klicka för färgmixern
 	Find	Sök
 	Find and Replace…	Sök och ersätt…
+	Find and Replace	Sök och ersätt
+	Find:	Sök:
+	Replace With:	Ersätt med:
+	Replace & Find	Ersätt och sök
+	Replace All	Ersätt alla
+	Match Case	Matcha skiftläge
+	Find Whole Word	Sök hela ord
+	Search Backwards	Sök bakåt
+	Check Hidden Layers	Kontrollera dolda lager
+	Check Locked Layers	Kontrollera låsta lager
+@msg	No matches found	Inga träffar hittades
+@msg	Matches replaced: {n}	Ersatta träffar: {n}
+@msg	no match of `find` at bytes {_1}..{_2} of object {_3}	ingen träff för `find` vid byte {_1}..{_2} i objekt {_3}
 	Find Font	Sök typsnitt
 	Find Font…	Sök typsnitt…
 	Find Next	Sök nästa
@@ -1304,6 +1330,7 @@ font-technology	Variable	Variabla
 	Fit to Selected Art	Anpassa till markerad grafik
 	Flag…	Flagga…
 	Flare	Ljusreflex
+	Edit Flare	Redigera ljusreflex
 	Flare Tool	Ljusreflexverktyg
 	Flare Tool Options	Alternativ för ljusreflexverktyget
 	Halo	Halo
@@ -2178,6 +2205,9 @@ font-technology	Variable	Variabla
 	Navigate	Navigera
 	Navigator	Navigator
 	Navigator Panel Options	Alternativ för panelen Navigator
+	Attributes Panel Options	Alternativ för panelen Attribut
+	Number of Recent URLs:	Antal senaste URL:er:
+@msg	`count` must be a whole number from 1 to 30	`count` måste vara ett heltal från 1 till 30
 	Draw Dashed Lines as Solid Lines	Rita streckade linjer som heldragna linjer
 	Needs the desktop app	Kräver skrivbordsappen
 	Neutral Gradients	Neutrala gradienter
@@ -2646,6 +2676,7 @@ font-technology	Variable	Variabla
 	Save Actions…	Spara åtgärder…
 	Load Actions…	Läs in åtgärder…
 	Replace Actions…	Ersätt åtgärder…
+	Clear Actions	Rensa åtgärder
 	Reset Actions	Återställ åtgärder
 	Replace the current actions with the default set?	Vill du ersätta de aktuella åtgärderna med standarduppsättningen?
 	Append adds the default set after the current sets instead.	Lägg till lägger i stället till standarduppsättningen efter de aktuella uppsättningarna.
@@ -3087,6 +3118,8 @@ digits	Malayalam	Malayalam
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Mushjulet med Cmd/Ctrl nedtryckt rullar arbetsytan i sidled.
 	Dragging sideways on a numeric field's label changes the field's value.	Att dra i sidled på ett sifferfälts etikett ändrar fältets värde.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	En rotationsgest med två fingrar på en styrplatta roterar arbetsytans vy.
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Om du håller ned en tangent körs verktyget eller kommandot i dess Håll-kolumn i Kortkommandon; ett kort tryck kör dess vanliga kortkommando.
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Hur många sekunder en tangent måste hållas ned innan dess hållkortkommando körs i stället för dess vanliga kortkommando.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	När du flyttar ankarpunkter behåller varje kurva med en flyttad ände sin form i förhållande till sina ändar.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	När du håller ned ett verktygs kortkommando är verktyget valt tills du släpper, och sedan väljs det föregående verktyget igen.
 	Shows the bounding box while you move the selection or draw a shape.	Visar avgränsningsramen medan du flyttar markeringen eller ritar en form.
@@ -3168,6 +3201,7 @@ digits	Malayalam	Malayalam
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Hur nära på skärmen pekaren eller en dragen punkt måste komma teckningen för att de smarta stödlinjerna ska fästa mot den; avståndet är detsamma vid alla zoomnivåer.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Fäster änden av ett linjesegment, eller en cirkel ritad från sin mitt, så att den rör en närliggande kurva.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Fäster änden av ett linjesegment så att det möter ett närliggande rakt segment i rät vinkel.
+	Edit type set in fonts that aren't available?	Redigera text i typsnitt som inte är tillgängliga?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Visar varje skivas nummer i en ruta i dess övre vänstra hörn på arbetsytan; när det är avstängt visas skivornas konturer fortfarande.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Färgen på konturerna för användar- och objektskivor och på deras nummerrutor; automatiska skivor använder en blekare nyans av den.
 	Reset all preferences to their defaults?	Återställa alla inställningar till standard?
@@ -3536,6 +3570,7 @@ digits	Malayalam	Malayalam
 	Show Brush Size	Visa penselstorlek
 	Show Center	Visa mittpunkt
 	Show Code	Visa kod
+	Show in Browser	Visa i webbläsare
 	Show Color Groups	Visa färggrupper
 	Show Color Swatches	Visa färgrutor
 	Show Corner Widget	Visa hörnwidget
@@ -4796,6 +4831,7 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	Installed plug-in {_1}	Installerade pluginet {_1}
 @msg	Internal error: {msg} (please report this bug)	Internt fel: {msg} (rapportera gärna felet)
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	Sammanfoga Live Paint: markera en Live Paint-grupp och de banor som ska läggas till
+@msg	`Face` and `Edge` name the faces and edges of a Live Paint group: give the path another name	`Face` och `Edge` är namnen på ytorna och kanterna i en Live Paint-grupp: ge banan ett annat namn
 @msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	Live Paint tar banor och sammansatta banor: konvertera först text, bilder och andra objekt till banor
 @msg	Live Paint: select paths or compound paths	Live Paint: markera banor eller sammansatta banor
 @msg	Live Paint: these paths are too degenerate to paint	Live Paint: de här banorna är för degenererade för att målas
@@ -5105,6 +5141,7 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	no graphic style `{n}`	ingen grafisk stil `{n}`
 @msg	no interaction in progress	ingen interaktion pågår
 @msg	no key object	inget nyckelobjekt
+@msg	Align to Key Object isn't available with the Artboard tool	Justera mot nyckelobjekt är inte tillgängligt med ritytsverktyget
 @msg	no library `{key}` (see {list})	inget bibliotek `{key}` (se {list})
 @msg	no native format	inget eget format
 @msg	no pages	inga sidor
@@ -5160,6 +5197,8 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	no such spine point	ryggradspunkten finns inte
 @msg	`with` must be a list of at most 10000 spine point indexes	`with` måste vara en lista med högst 10000 ryggradspunktsindex
 @msg	`with` moves points, not a handle	`with` flyttar punkter, inte ett handtag
+@msg	`link` and `independent` cannot both be true	`link` och `independent` kan inte båda vara true
+@msg	`link` places a handle: give `handle`	`link` placerar ett handtag: ange `handle`
 @msg	no such spine segment	ryggradssegmentet finns inte
 @msg	no such subpath	delbanan finns inte
 @msg	no such user library	användarbiblioteket finns inte
@@ -5249,6 +5288,7 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	select a blend	markera en blandning
 @msg	select a blend or give `id`	markera en blandning eller ange dess `id`
 @msg	select a clip group	markera en urklippsgrupp
+@msg	select a flare	markera en ljusreflex
 @msg	select a gradient mesh	markera ett gradientnät
 @msg	select a linked image: an embedded one has no file	markera en länkad bild: en inbäddad bild har ingen fil
 @msg	select a repeat	markera en upprepning
@@ -5499,6 +5539,7 @@ variable-list-end	{0}, {1}	{0} och {1}
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} länkad bild har ändrats på disken: Uppdatera länkar visar den nya versionen|{n} länkade bilder har ändrats på disken: Uppdatera länkar visar de nya versionerna
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Uppdaterade {n} länkad fil som ändrats på disken|Uppdaterade {n} länkade filer som ändrats på disken
 @msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	dokumentet anger ett utfall som den här PDF/X-filen utelämnar: slå på ”Använd dokumentets inställningar för utfall”
+@msgplural	{n} object reaches the trim edge but stops short of the bleed|{n} objects reach the trim edge but stop short of the bleed	{n} objekt når skärkanten men slutar före utfallet|{n} objekt når skärkanten men slutar före utfallet
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	Exporterade {what} med {n} anteckning: {first}|Exporterade {what} med {n} anteckningar: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} typsnittsfil finns nu i {folder}|{n} typsnittsfiler finns nu i {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} typsnittsfil finns nu i {folder}; {failed} kunde inte läggas till: {reason}|{n} typsnittsfiler finns nu i {folder}; {failed} kunde inte läggas till: {reason}
@@ -6564,6 +6605,11 @@ theme	Appearance	Utseende
 	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Stäng de cirkulära ändarna på öppna profiler. Partiella svep stänger även sina snittsidor.
 	Color Panel Options	Alternativ för panelen Färg
 	Color blindness – Tritanopia-type	Färgblindhet – tritanopi
+	Show Color Vision Preview	Visa förhandsvisning av färgseende
+	Protanopia	Protanopi
+	Deuteranopia	Deuteranopi
+	Tritanopia	Tritanopi
+	Achromatopsia	Akromatopsi
 	Create Dimension	Skapa mått
 	Darkness	Mörkhet
 	Destination Folder:	Målmapp:
@@ -6880,6 +6926,9 @@ swatch	Yellow Green	Gulgrön
 	Continue in Background	Fortsätt i bakgrunden
 	Cancel Export	Avbryt export
 @msg	Export cancelled	Exporten avbröts
+	Cancel Save	Avbryt sparande
+@plural	{n} more save waiting|{n} more saves waiting	{n} sparande till väntar|{n} sparanden till väntar
+@msg	Save canceled	Sparandet avbröts
 # Paragraph panel menu › Justification…
 	Desired	Önskat
 	Word Spacing:	Ordavstånd:
@@ -7252,6 +7301,7 @@ axis	Y Axis	Y-axel
 	Checkpoint	Kontrollpunkt
 	Inventory Icons	Inventarieikoner
 	Skill Icons	Färdighetsikoner
+	Weather Icons	Väderikoner
 	Attack	Attack
 	Defend	Försvar
 	Heal	Retuschering
@@ -7357,6 +7407,12 @@ axis	Y Axis	Y-axel
 	Bus Lines	Bussledningar
 	Terminal Nodes	Anslutningspunkter
 
+# Original arrow art brushes.
+	Arrows	Pilar
+	Solid Arrow	Massiv pil
+	Open Arrow	Öppen pil
+	Chevron Arrow	Chevronpil
+
 	Notched Ribbon	Hackat band
 	Double Line	Dubbellinje
 	Wave	Våg
@@ -7373,6 +7429,252 @@ axis	Y Axis	Y-axel
 	Stars	Stjärnor
 	Triangles	Trianglar
 	Sparkles	Gnistor
+	Warm Gray	Varmgrå
+	Cool Gray	Kallgrå
+	Neutrals	Neutrala toner
+	Ivory	Elfenben
+	Linen	Linne
+	Oat	Havre
+	Greige	Greige
+	Stone	Sten
+	Taupe	Taupe
+	Slate	Skiffer
+	Clay	Lera
+	Terracotta	Terrakotta
+	Ochre	Ockra
+	Umber	Umbra
+	Sand	Sand
+	Olive	Oliv
+	Moss	Mossa
+	Rosy	Rosig
+	Neutral	Neutral
+	Golden	Gyllene
+	Pastel	Pastell
+	Pastel Red	Pastellröd
+	Pastel Orange	Pastellorange
+	Pastel Amber	Pastellbärnsten
+	Pastel Yellow	Pastellgul
+	Pastel Lime	Pastellime
+	Pastel Green	Pastellgrön
+	Pastel Teal	Pastellblågrön
+	Pastel Cyan	Pastellcyan
+	Pastel Azure	Pastellazur
+	Pastel Blue	Pastellblå
+	Pastel Violet	Pastellviolett
+	Pastel Magenta	Pastellmagenta
+	Soft Red	Mjuk röd
+	Soft Orange	Mjuk orange
+	Soft Amber	Mjuk bärnsten
+	Soft Yellow	Mjuk gul
+	Soft Lime	Mjuk lime
+	Soft Green	Mjuk grön
+	Soft Teal	Mjuk blågrön
+	Soft Cyan	Mjuk cyan
+	Soft Azure	Mjuk azur
+	Soft Blue	Mjuk blå
+	Soft Violet	Mjuk violett
+	Soft Magenta	Mjuk magenta
+	Vivid Red	Livfull röd
+	Vivid Orange	Livfull orange
+	Vivid Amber	Livfull bärnsten
+	Vivid Yellow	Livfull gul
+	Vivid Lime	Livfull lime
+	Vivid Green	Livfull grön
+	Vivid Teal	Livfull blågrön
+	Vivid Cyan	Livfull cyan
+	Vivid Azure	Livfull azur
+	Vivid Blue	Livfull blå
+	Vivid Violet	Livfull violett
+	Vivid Magenta	Livfull magenta
+	Deep	Djupa
+	Deep Red	Djupröd
+	Deep Orange	Djuporange
+	Deep Amber	Djup bärnsten
+	Deep Yellow	Djupgul
+	Deep Lime	Djup lime
+	Deep Green	Djupgrön
+	Deep Teal	Djup blågrön
+	Deep Cyan	Djup cyan
+	Deep Azure	Djup azur
+	Deep Blue	Djupblå
+	Deep Violet	Djupviolett
+	Deep Magenta	Djup magenta
+	Gold	Guld
+	Silver	Silver
+	Bronze	Brons
+	Copper	Koppar
+	Brass	Mässing
+	Rose Gold	Roséguld
+	Gunmetal	Gunmetal
+	Platinum	Platina
+	Pewter	Tenn
+	Ember	Glöd
+	Lagoon	Lagun
+	Dusk	Skymning
+	Clay to Teal	Lera till blågrön
+	Plum to Olive	Plommon till oliv
+	Complementary Coral	Korall komplementär
+	Split Complementary Coral	Korall delade komplementfärger
+	Analogous Coral	Korall analog
+	Triad Coral	Korall triad
+	Tetrad Coral	Korall tetrad
+	Pentagram Coral	Korall pentagram
+	Complementary Teal	Blågrön komplementär
+	Split Complementary Teal	Blågrön delade komplementfärger
+	Analogous Teal	Blågrön analog
+	Triad Teal	Blågrön triad
+	Tetrad Teal	Blågrön tetrad
+	Pentagram Teal	Blågrön pentagram
+	Soft Spectrum	Mjukt spektrum
+	Red to Amber	Röd till bärnsten
+	Orange to Yellow	Orange till gul
+	Amber to Lime	Bärnsten till lime
+	Yellow to Green	Gul till grön
+	Lime to Teal	Lime till blågrön
+	Green to Cyan	Grön till cyan
+	Teal to Azure	Blågrön till azur
+	Cyan to Blue	Cyan till blå
+	Azure to Violet	Azur till violett
+	Blue to Magenta	Blå till magenta
+	Violet to Red	Violett till röd
+	Magenta to Orange	Magenta till orange
+	Dawn	Gryning
+	Noon	Middag
+	Sunset	Solnedgång
+	Night	Natt
+	Overcast	Mulet
+	White to Black	Vit till svart
+	Light Grays	Ljusa gråtoner
+	Dark Grays	Mörka gråtoner
+	Warm Grays	Varma gråtoner
+	Cool Grays	Kalla gråtoner
+	Fade to Transparent	Tona till genomskinlig
+	White Fade	Vit toning
+	Vignette	Vinjett
+	Mist	Dimma
+	Petal	Kronblad
+	Fern	Ormbunke
+	Smoke	Rök
+	Honey	Honung
+	Seafoam	Havsskum
+	Lavender	Lavendel
+	Driftwood	Drivved
+	Ink Wash	Tuschlavering
+	Tide	Tidvatten
+	Bloom	Blomning
+	Dew	Dagg
+	Pollen	Pollen
+	Lichen	Lav
+	Prism Veil	Prismaslöja
+	Opal Ribbon	Opalband
+	Pearl Flash	Pärlblixt
+	Aurora Foil	Norrskensfolie
+	Iris Sheen	Irisglans
+	Frost Spectrum	Frostspektrum
+	Silver Tide	Silvertidvatten
+	Rose Quartz Gleam	Rosenkvartsglans
+	Moonstone Shift	Månstensskimmer
+	Violet Edge	Violett kant
+	Mint Halo	Mintgloria
+	Amber Corona	Bärnstenskorona
+	Polar Glint	Polarglimt
+	Pastel Orbit	Pastellbana
+	Coral and Navy	Korall och marinblå
+	Plum and Lime	Plommon och lime
+	Teal and Gold	Blågrön och guld
+	Indigo and Peach	Indigo och persika
+	Forest and Rose	Skog och rosa
+	Red Glow	Rött sken
+	Orange Glow	Orange sken
+	Amber Glow	Bärnstenssken
+	Yellow Glow	Gult sken
+	Lime Glow	Limesken
+	Green Glow	Grönt sken
+	Teal Glow	Blågrönt sken
+	Cyan Glow	Cyansken
+	Azure Glow	Azursken
+	Blue Glow	Blått sken
+	Violet Glow	Violett sken
+	Magenta Glow	Magentasken
+	Polka Dots	Prickar
+	Vertical Stripes	Lodräta ränder
+	Horizontal Stripes	Vågräta ränder
+	Diagonal Stripes	Diagonala ränder
+	Checkerboard	Schackruta
+	Diamonds	Ruter
+	Crosses	Kors
+	Coarse Grit	Grovt korn
+	Stipple	Punktering
+	Scratches	Repor
+	Sparse Flecks	Glesa fläckar
+	Dense Flecks	Täta fläckar
+	Sine Bands	Sinusband
+	Ripple Lines	Krusningslinjer
+	Interference Rings	Interferensringar
+	Offset Rings	Förskjutna ringar
+	Warped Checks	Förvrängda rutor
+	Pinched Stripes	Klämda ränder
+	Chevron Pulse	Chevronpuls
+	Radiating Lenses	Strålande linser
+	Soft Shadow	Mjuk skugga
+	Hard Shadow	Hård skugga
+	Lifted Card	Upplyft kort
+	Neon Tube	Neonrör
+	Inner Light	Inre ljus
+	Feathered	Mjuk kant
+	Haze	Dis
+	Double Rule	Dubbel linje
+	Triple Rule	Trippel linje
+	Dashed Border	Streckad kant
+	Dotted Border	Prickad kant
+	Offset Keyline	Förskjuten konturlinje
+	Inset Keyline	Inre konturlinje
+	Outside Stroke	Yttre linje
+	Pointer	Visare
+	Highlighter	Överstrykningspenna
+	Sketchy Line	Skissartad linje
+	Scribble Fill	Klotterfyllning
+	Wobble	Vingel
+	Zig Zag Edge	Sicksackkant
+	Wavy Edge	Vågig kant
+	Puffy	Uppblåst
+	Starburst	Stjärnexplosion
+	Glossy	Blank
+	Brushed Metal	Borstad metall
+	Spotlight	Strålkastare
+	Sunset Band	Solnedgångsband
+	Sea Glass	Havsglas
+	Pearl	Pärla
+	Chrome Rim	Kromkant
+	Glow Orb	Lysande klot
+	Pill Badge	Pillermärke
+	Round Badge	Runt märke
+	Flag Wave	Vajande flagga
+	Bulge	Utbuktning
+	Twisted	Vriden
+	Echo	Eko
+	Spiral Copies	Spiralkopior
+	Multiply Tint	Multiplicera-ton
+	Darken Veil	Mörkare-slöja
+	Ghosted	Spöklik
+	Two Tone	Tvåfärgad
+	Overlay Glaze	Överlägg-glasyr
+	Screen Light	Skärm-ljus
+	Soft Light Wash	Mjukt ljus-lavering
+	Cyan Neon	Cyan neon
+	Magenta Laser	Magenta laser
+	Amber Tube	Bärnstensrör
+	Electric Lime	Elektrisk lime
+	Pulse Violet	Pulserande violett
+	Cobalt Phosphor	Koboltfosfor
+	Burst	Utbrott
+	Rounded Square	Rundad kvadrat
+	Sun	Sol
+	Moon	Måne
+	Cloud	Moln
+	Rain	Regn
+	Thunder	Åska
+	Snow	Snö
 	Save Brush Library…	Spara penselbibliotek…
 @msg	`{_1}` has no brushes to apply	`{_1}` har inga penslar att använda
 @msg	missing `library` (see brush.libraries)	`library` saknas (se brush.libraries)
@@ -7823,10 +8125,18 @@ breakText	Glyphs	Glyfer
 	Smooth Bridge…	Mjuk brygga…
 	Smooth Bridge	Mjuk brygga
 	Keep Originals	Behåll original
-@msg	select two circles to bridge	markera två cirklar att förbinda
+@msg	select two or more circles to bridge	markera två eller fler cirklar att förbinda
 @msg	one circle is inside the other	den ena cirkeln ligger inuti den andra
 @msg	the circles are too far apart for this radius: raise the radius	cirklarna ligger för långt ifrån varandra för den här radien: öka radien
 @msg	the circles are too far apart for this radius	cirklarna ligger för långt ifrån varandra för den här radien
+	Constant Gap	Konstant mellanrum
+	Reach:	Räckvidd:
+@msg	the circles are too far apart for this gap: raise the gap	cirklarna ligger för långt ifrån varandra för det här mellanrummet: öka mellanrummet
+@msg	the circles are too far apart for this gap	cirklarna ligger för långt ifrån varandra för det här mellanrummet
+@msg	no two circles are within reach: raise the reach	inga två cirklar ligger inom räckvidd: öka räckvidden
+@msg	select at most 2000 circles to bridge	markera högst 2000 cirklar att förbinda
+@msg	that makes too many bridges (at most 8000): lower the reach	det ger för många bryggor (högst 8000): minska räckvidden
+@msg	the bridged circles are too complex to unite	de förbundna cirklarna är för komplexa för att slås ihop
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	Gemensamma tangenter…
 	Common Tangents	Gemensamma tangenter
@@ -9224,6 +9534,7 @@ digits	Hindi	Hindi
 @msg	the character's size can't be measured	tecknets storlek kan inte mätas
 @msg	the CMYK image couldn't be written	CMYK-bilden kunde inte skrivas
 @msg	the compound shape is too complex to expand	den sammansatta formen är för komplex för att expanderas
+@msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	en linje eller annan öppen bana som inte omsluter någon yta lägger inte till någon yta i den sammansatta formen; för att ta med den, använd först Objekt › Bana › Konvertera kontur till form på den
 @msg	the container of the listed objects is gone	behållaren för de listade objekten finns inte längre
 @msg	the copy `{user_id}` can't be read as a library	kopian `{user_id}` kan inte läsas som ett bibliotek
 @msg	the copy would leave the canvas	kopian skulle hamna utanför arbetsytan
@@ -9816,6 +10127,17 @@ digits	Hindi	Hindi
 @msg	A joint does not close by {gap} pt.	En fog sluter inte med {gap} pt.
 @msg	Two panels pass through each other.	Två paneler går igenom varandra.
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} pixlar är för stort för PSD (högst {MAX_SIDE} pixlar per sida): sänk upplösningen
+	Tap	Kort tryck
+	Clear Hold	Rensa håll
+	Hold Shortcuts	Hållkortkommandon
+	Hold Shortcut Delay	Fördröjning för hållkortkommandon
+	How hold shortcuts work	Så fungerar hållkortkommandon
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	Klicka och tryck sedan på en tangent som ska hållas ned för detta (Esc avbryter). Att hålla ned tangenten kör detta; ett kort tryck kör tangentens eget kortkommando.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	Ett kort tryck på en tangent kör dess kortkommando. Att hålla ned tangenten under fördröjningen kör i stället verktyget eller kommandot i dess Håll-kolumn. Ett hållkortkommando är en bokstavs-, siffer- eller skiljeteckentangent, ensam eller med Shift.
+@msg	Hold {_1} is already used by {_2}	Håll {_1} används redan av {_2}
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	ett hållkortkommando är en tangent som skriver ett tecken, ensam eller med Shift ({shown} har Cmd, Ctrl eller Alt)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} kan inte vara ett hållkortkommando: använd en bokstav, en siffra eller en skiljeteckentangent
+	Dashed Arrow	Streckad pil
 	Pressure Sensitive	Tryckkänslig
 	Flex Ribbon	Flexibelt band
 	Pulse Stroke	Pulserande drag

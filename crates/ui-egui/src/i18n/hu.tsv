@@ -737,6 +737,11 @@ font-technology	Variable	Változó
 	Color blindness – Deuteranopia-type	Színvakság – deuteranópia
 	Color blindness – Protanopia-type	Színvakság – protanópia
 	Color blindness – Tritanopia-type	Színvakság – tritanópia
+	Show Color Vision Preview	Színlátás-előnézet megjelenítése
+	Protanopia	Protanópia
+	Deuteranopia	Deuteranópia
+	Tritanopia	Tritanópia
+	Achromatopsia	Akromatopszia
 	Color Burn	Színsötétítés
 	Color conversion:	Színátalakítás:
 	Color Dodge	Színvilágosítás
@@ -935,6 +940,16 @@ font-technology	Variable	Változó
 	Create New Swatch…	Új színminta létrehozása…
 	Create New {kind} Style	Új stílus létrehozása: {kind}
 	Create Object Mosaic…	Objektummozaik létrehozása…
+	Create Object Mosaic	Objektummozaik létrehozása
+	Current Size:	Jelenlegi méret:
+	New Size:	Új méret:
+	Tile Spacing:	Csempék térköze:
+	Number of Tiles:	Csempék száma:
+	Constrain Ratio:	Arány rögzítése:
+	Result:	Eredmény:
+	Resize Using Percentages	Átméretezés százalékban
+	Delete Raster	Raszterkép törlése
+	Use Ratio	Arány használata
 	Create Outlines	Átalakítás útvonallá
 	Create Path	Útvonal létrehozása
 	Create PDF layers from layers and sublayers	PDF-rétegek létrehozása a rétegekből és alrétegekből
@@ -1092,6 +1107,7 @@ font-technology	Variable	Változó
 	Duplicate Action or Action Set	Művelet vagy műveletkészlet kettőzése
 	Delete the action set “{name}” and its actions?	Törlöd ezt a műveletkészletet és a műveleteit: „{name}”?
 	Delete the selected action sets and their actions?	Törlöd a kijelölt műveletkészleteket és a műveleteiket?
+	Delete all action sets and their actions?	Törlöd az összes műveletkészletet és a műveleteiket?
 	Delete the library “{name}”?	Törlöd ezt a könyvtárat: „{name}”?
 	Delete Theme	Téma törlése
 	Delete theme	Téma törlése
@@ -1283,6 +1299,8 @@ font-technology	Variable	Változó
 	Duplicate	Kettőzés
 	Duplicate and Offset 10 pt	Kettőzés és eltolás 10 pt-tal
 	Duplicate Artboard	Rajztábla kettőzése
+	Click to add an artboard on this side; Alt-click to duplicate this artboard with its art	Kattintás: rajztábla hozzáadása ezen az oldalon, Alt+kattintás: a rajztábla kettőzése a grafikájával együtt
+	Click to add an artboard on this side	Kattintás: rajztábla hozzáadása ezen az oldalon
 	Duplicate Artboards	Rajztáblák kettőzése
 	Duplicate Brush	Ecset kettőzése
 	Duplicate Character Style	Karakterstílus kettőzése
@@ -1630,6 +1648,19 @@ digits	Malayalam	Malajálam
 	Film & Video	Film és videó
 	Find	Keresés
 	Find and Replace…	Keresés és csere…
+	Find and Replace	Keresés és csere
+	Find:	Keresés:
+	Replace With:	Csere erre:
+	Replace & Find	Csere és keresés
+	Replace All	Az összes cseréje
+	Match Case	Kis- és nagybetűk megkülönböztetése
+	Find Whole Word	Teljes szó keresése
+	Search Backwards	Keresés visszafelé
+	Check Hidden Layers	Rejtett rétegek ellenőrzése
+	Check Locked Layers	Zárolt rétegek ellenőrzése
+@msg	No matches found	Nincs találat
+@msg	Matches replaced: {n}	Cserélt találatok: {n}
+@msg	no match of `find` at bytes {_1}..{_2} of object {_3}	nincs `find` találat a(z) {_3} objektum {_1}..{_2} bájtjain
 	Find Font	Betűtípus keresése
 	Find Font Files	Betűtípusfájlok keresése
 	Find Fonts	Betűtípusok keresése
@@ -1669,6 +1700,7 @@ digits	Malayalam	Malajálam
 	Fixed	Rögzített
 	Flag…	Zászló…
 	Flare	Fényvillanás
+	Edit Flare	Fényvillanás szerkesztése
 	Flare Tool	Fényvillanás
 	Flare Tool Options	Fényvillanás beállításai
 	Flat Angle	Lapos, ferde
@@ -2788,6 +2820,9 @@ file-filter	Templates	Sablonok
 	Navigate	Navigálás
 	Navigator	Navigátor
 	Navigator Panel Options	Navigátor panel beállításai
+	Attributes Panel Options	Attribútumok panel beállításai
+	Number of Recent URLs:	Legutóbbi URL-ek száma:
+@msg	`count` must be a whole number from 1 to 30	`count`: 1 és 30 közötti egész szám kell
 	Draw Dashed Lines as Solid Lines	Szaggatott vonalak rajzolása folytonosként
 	Needs the desktop app	Az asztali alkalmazás kell hozzá
 	Negative	Negatív
@@ -3266,6 +3301,7 @@ diagnostics	ui	felület
 	Save Actions…	Műveletek mentése…
 	Load Actions…	Műveletek betöltése…
 	Replace Actions…	Műveletek cseréje…
+	Clear Actions	Műveletek törlése
 	Reset Actions	Műveletek visszaállítása
 	Replace the current actions with the default set?	Lecseréled az aktuális műveleteket az alapértelmezett készletre?
 	Append adds the default set after the current sets instead.	A Hozzáfűzés ehelyett az aktuális készletek után adja hozzá az alapértelmezett készletet.
@@ -3744,6 +3780,8 @@ mark-style	Japanese	Japán
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Az egérgörgő lenyomott Cmd/Ctrl billentyűvel oldalirányban görgeti a vásznat.
 	Dragging sideways on a numeric field's label changes the field's value.	Egy számmező címkéjén oldalirányban húzva módosul a mező értéke.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Az érintőpadon végzett kétujjas forgató kézmozdulat elforgatja a vászon nézetét.
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Egy billentyű nyomva tartása a Billentyűparancsok Nyomva tartás oszlopában lévő eszközt vagy parancsot futtatja; egy rövid lenyomás a szokásos billentyűparancsát futtatja.
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Hány másodpercig kell nyomva tartani egy billentyűt, hogy a szokásos billentyűparancsa helyett a nyomva tartásos billentyűparancsa fusson.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Horgonypontok mozgatásakor minden olyan görbe, amelynek egyik vége elmozdul, megtartja az alakját a végeihez képest.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Egy eszköz billentyűparancsát lenyomva tartva az eszköz a felengedésig ki van választva, utána ismét az előző eszköz lesz kiválasztva.
 	Shows the bounding box while you move the selection or draw a shape.	Megjeleníti a befoglaló keretet, miközben a kijelölést mozgatja vagy alakzatot rajzol.
@@ -3825,6 +3863,7 @@ mark-style	Japanese	Japán
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Milyen közel kell a mutatónak vagy egy húzott pontnak a képernyőn a grafikához érnie, hogy az intelligens segédvonalak illesszenek; a távolság minden nagyításnál azonos.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Egy szakasz végét vagy a középpontjából rajzolt kört úgy illeszti, hogy érintse a közeli görbét.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Egy szakasz végét úgy illeszti, hogy derékszögben találkozzon egy közeli egyenes szakasszal.
+	Edit type set in fonts that aren't available?	Szerkeszti a nem elérhető betűtípusokkal szedett szöveget?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	A vásznon minden szelet számát egy keretben mutatja a szelet bal felső sarkában; kikapcsolva a szeletek körvonalai továbbra is látszanak.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	A felhasználói és objektumszeletek körvonalainak és számkereteinek színe; az automatikus szeletek ennek egy halványabb árnyalatát használják.
 	Reset all preferences to their defaults?	Visszaállítja az összes beállítást az alapértékre?
@@ -4278,6 +4317,7 @@ mark-style	Japanese	Japán
 	Show Brush Size	Ecsetméret megjelenítése
 	Show Center	Középpont megjelenítése
 	Show Code	Kód megjelenítése
+	Show in Browser	Megjelenítés böngészőben
 	Show Color Groups	Színcsoportok megjelenítése
 	Show Color Swatches	Színes színminták megjelenítése
 	Show Corner Widget	Sarokfogantyú megjelenítése
@@ -5808,6 +5848,7 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	line {line}: value for `{var}` must be true or false	{line}. sor: a(z) `{var}` értéke csak true vagy false lehet
 @msg	line {line}: value for `{var}` is longer than {MAX_GRAPH_CSV} bytes	{line}. sor: a(z) `{var}` értéke hosszabb {MAX_GRAPH_CSV} bájtnál
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	Élő festés egyesítése: jelölj ki egy élőfestés-csoportot és a hozzáadandó útvonalakat
+@msg	`Face` and `Edge` name the faces and edges of a Live Paint group: give the path another name	A `Face` és az `Edge` az élőfestés-csoport felületeinek és éleinek neve: adj más nevet az útvonalnak
 @msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	Az élő festés útvonalakat és összetett útvonalakat fogad: előbb alakítsd útvonallá a szöveget, a képeket és a többi objektumot
 @msg	Live Paint: select paths or compound paths	Élő festés: jelölj ki útvonalakat vagy összetett útvonalakat
 @msg	Live Paint: these paths are too degenerate to paint	Élő festés: ezek az útvonalak túlságosan elfajultak a festéshez
@@ -5881,6 +5922,7 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	no graphic style `{n}`	nincs ilyen grafikai stílus: `{n}`
 @msg	no interaction in progress	nincs folyamatban lévő művelet
 @msg	no key object	nincs kulcsobjektum
+@msg	Align to Key Object isn't available with the Artboard tool	az „Igazítás a kulcsobjektumhoz” nem érhető el a Rajztábla eszközzel
 @msg	no library `{id}`	nincs ilyen könyvtár: `{id}`
 @msg	the library has another item of that kind named `{name}`	a könyvtárban már van egy másik ilyen fajta elem `{name}` néven
 @msg	no library `{key}` (see {list})	nincs ilyen könyvtár: `{key}` (lásd: {list})
@@ -5943,6 +5985,8 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	no such spine point	nincs ilyen gerincpont
 @msg	`with` must be a list of at most 10000 spine point indexes	`with`: legfeljebb 10000 gerincpont-indexből álló lista kell
 @msg	`with` moves points, not a handle	`with` pontokat mozgat, nem fogantyút
+@msg	`link` and `independent` cannot both be true	`link` és `independent` nem lehet egyszerre true
+@msg	`link` places a handle: give `handle`	`link` fogantyút helyez el: adja meg a `handle` értéket
 @msg	no such spine segment	nincs ilyen gerincszakasz
 @msg	no such subpath	nincs ilyen részútvonal
 @msg	no such user library	nincs ilyen felhasználói könyvtár
@@ -6073,6 +6117,7 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	A lemezen módosult csatolt képek: {n}; a Csatolások frissítése az új változatokat mutatja
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Frissített, a lemezen módosult csatolt fájlok: {n}
 @msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	a dokumentum kifutót állít be, amelyet ez a PDF/X-fájl kihagy: kapcsolja be „A dokumentum kifutóbeállításainak használata” beállítást
+@msgplural	{n} object reaches the trim edge but stops short of the bleed|{n} objects reach the trim edge but stop short of the bleed	{n} objektum eléri a vágási élt, de nem ér ki a kifutóig
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	Exportálva: {what}; megjegyzések: {n}, az első: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	Betűtípusfájlok száma: {n}, mappa: {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	Betűtípusfájlok száma: {n}, mappa: {folder}; nem sikerült hozzáadni: {failed} ({reason})
@@ -6113,6 +6158,7 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	select a blend	jelölj ki egy összemosást
 @msg	select a blend or give `id`	jelölj ki egy összemosást, vagy add meg az `id` értékét
 @msg	select a clip group	jelölj ki egy vágócsoportot
+@msg	select a flare	jelölj ki egy fényvillanást
 @msg	select a gradient mesh	jelölj ki egy színátmenetes hálót
 @msg	select a linked image: an embedded one has no file	jelölj ki egy csatolt képet: a beágyazottnak nincs fájlja
 @msg	select a Live Paint group	jelölj ki egy élőfestés-csoportot
@@ -6818,6 +6864,9 @@ variable-list-end	{0}, {1}	{0} és {1}
 	Continue in Background	Folytatás a háttérben
 	Cancel Export	Exportálás megszakítása
 @msg	Export cancelled	Az exportálás megszakítva
+	Cancel Save	Mentés megszakítása
+@plural	{n} more save waiting|{n} more saves waiting	Még {n} mentés várakozik
+@msg	Save canceled	A mentés megszakítva
 # Paragraph panel menu › Justification…
 	Desired	Kívánt
 	Word Spacing:	Szóköz:
@@ -7230,6 +7279,7 @@ axis	Y Axis	Y tengely
 	Checkpoint	Ellenőrzőpont
 	Inventory Icons	Leltári ikonok
 	Skill Icons	Képességikonok
+	Weather Icons	Időjárás-ikonok
 	Attack	Támadás
 	Defend	Védelem
 	Heal	Gyógyítás
@@ -7335,6 +7385,12 @@ axis	Y Axis	Y tengely
 	Bus Lines	Buszvonalak
 	Terminal Nodes	Csatlakozási pontok
 
+# Original arrow art brushes.
+	Arrows	Nyilak
+	Solid Arrow	Tömör nyíl
+	Open Arrow	Nyitott nyíl
+	Chevron Arrow	Ékmintás nyíl
+
 	Notched Ribbon	Csipkézett szalag
 	Double Line	Dupla vonal
 	Wave	Hullám
@@ -7351,6 +7407,252 @@ axis	Y Axis	Y tengely
 	Stars	Csillagok
 	Triangles	Háromszögek
 	Sparkles	Szikrák
+	Warm Gray	Meleg szürke
+	Cool Gray	Hideg szürke
+	Neutrals	Semleges tónusok
+	Ivory	Elefántcsont
+	Linen	Len
+	Oat	Zab
+	Greige	Greige
+	Stone	Kő
+	Taupe	Tópszürke
+	Slate	Pala
+	Clay	Agyag
+	Terracotta	Terrakotta
+	Ochre	Okker
+	Umber	Umbra
+	Sand	Homok
+	Olive	Olíva
+	Moss	Moha
+	Rosy	Rózsás
+	Neutral	Semleges
+	Golden	Aranyos
+	Pastel	Pasztell
+	Pastel Red	Pasztellpiros
+	Pastel Orange	Pasztellnarancs
+	Pastel Amber	Pasztellborostyán
+	Pastel Yellow	Pasztellsárga
+	Pastel Lime	Pasztell-lime
+	Pastel Green	Pasztellzöld
+	Pastel Teal	Pasztell kékeszöld
+	Pastel Cyan	Pasztellcián
+	Pastel Azure	Pasztellazúr
+	Pastel Blue	Pasztellkék
+	Pastel Violet	Pasztellibolya
+	Pastel Magenta	Pasztellmagenta
+	Soft Red	Lágy piros
+	Soft Orange	Lágy narancs
+	Soft Amber	Lágy borostyán
+	Soft Yellow	Lágy sárga
+	Soft Lime	Lágy lime
+	Soft Green	Lágy zöld
+	Soft Teal	Lágy kékeszöld
+	Soft Cyan	Lágy cián
+	Soft Azure	Lágy azúr
+	Soft Blue	Lágy kék
+	Soft Violet	Lágy ibolya
+	Soft Magenta	Lágy magenta
+	Vivid Red	Élénk piros
+	Vivid Orange	Élénk narancs
+	Vivid Amber	Élénk borostyán
+	Vivid Yellow	Élénk sárga
+	Vivid Lime	Élénk lime
+	Vivid Green	Élénk zöld
+	Vivid Teal	Élénk kékeszöld
+	Vivid Cyan	Élénk cián
+	Vivid Azure	Élénk azúr
+	Vivid Blue	Élénk kék
+	Vivid Violet	Élénk ibolya
+	Vivid Magenta	Élénk magenta
+	Deep	Mély
+	Deep Red	Mélypiros
+	Deep Orange	Mélynarancs
+	Deep Amber	Mély borostyán
+	Deep Yellow	Mélysárga
+	Deep Lime	Mély lime
+	Deep Green	Mélyzöld
+	Deep Teal	Mély kékeszöld
+	Deep Cyan	Mély cián
+	Deep Azure	Mély azúr
+	Deep Blue	Mélykék
+	Deep Violet	Mély ibolya
+	Deep Magenta	Mély magenta
+	Gold	Arany
+	Silver	Ezüst
+	Bronze	Bronz
+	Copper	Réz
+	Brass	Sárgaréz
+	Rose Gold	Rozéarany
+	Gunmetal	Ágyúfém
+	Platinum	Platina
+	Pewter	Ón
+	Ember	Parázs
+	Lagoon	Lagúna
+	Dusk	Alkonyat
+	Clay to Teal	Agyagtól kékeszöldig
+	Plum to Olive	Szilvától olíváig
+	Complementary Coral	Korall, kiegészítő
+	Split Complementary Coral	Korall, felosztott kiegészítő
+	Analogous Coral	Korall, analóg
+	Triad Coral	Korall, triád
+	Tetrad Coral	Korall, tetrád
+	Pentagram Coral	Korall, pentagram
+	Complementary Teal	Kékeszöld, kiegészítő
+	Split Complementary Teal	Kékeszöld, felosztott kiegészítő
+	Analogous Teal	Kékeszöld, analóg
+	Triad Teal	Kékeszöld, triád
+	Tetrad Teal	Kékeszöld, tetrád
+	Pentagram Teal	Kékeszöld, pentagram
+	Soft Spectrum	Lágy spektrum
+	Red to Amber	Pirostól borostyánig
+	Orange to Yellow	Narancstól sárgáig
+	Amber to Lime	Borostyántól lime-ig
+	Yellow to Green	Sárgától zöldig
+	Lime to Teal	Lime-tól kékeszöldig
+	Green to Cyan	Zöldtől ciánig
+	Teal to Azure	Kékeszöldtől azúrig
+	Cyan to Blue	Ciántól kékig
+	Azure to Violet	Azúrtól ibolyáig
+	Blue to Magenta	Kéktől magentáig
+	Violet to Red	Ibolyától pirosig
+	Magenta to Orange	Magentától narancsig
+	Dawn	Hajnal
+	Noon	Dél
+	Sunset	Naplemente
+	Night	Éjszaka
+	Overcast	Borult ég
+	White to Black	Fehértől feketéig
+	Light Grays	Világos szürkék
+	Dark Grays	Sötét szürkék
+	Warm Grays	Meleg szürkék
+	Cool Grays	Hideg szürkék
+	Fade to Transparent	Áttűnés átlátszóba
+	White Fade	Fehér áttűnés
+	Vignette	Vignetta
+	Mist	Köd
+	Petal	Szirom
+	Fern	Páfrány
+	Smoke	Füst
+	Honey	Méz
+	Seafoam	Tajték
+	Lavender	Levendula
+	Driftwood	Uszadékfa
+	Ink Wash	Tuslavírozás
+	Tide	Árapály
+	Bloom	Virágzás
+	Dew	Harmat
+	Pollen	Virágpor
+	Lichen	Zuzmó
+	Prism Veil	Prizmafátyol
+	Opal Ribbon	Opálszalag
+	Pearl Flash	Gyöngyházvillanás
+	Aurora Foil	Sarki fény fólia
+	Iris Sheen	Íriszfény
+	Frost Spectrum	Deres spektrum
+	Silver Tide	Ezüst dagály
+	Rose Quartz Gleam	Rózsakvarc csillogás
+	Moonstone Shift	Holdkő játék
+	Violet Edge	Ibolya szegély
+	Mint Halo	Menta fényudvar
+	Amber Corona	Borostyán korona
+	Polar Glint	Sarki csillanás
+	Pastel Orbit	Pasztell pálya
+	Coral and Navy	Korall és tengerészkék
+	Plum and Lime	Szilva és lime
+	Teal and Gold	Kékeszöld és arany
+	Indigo and Peach	Indigó és barack
+	Forest and Rose	Erdő és rózsa
+	Red Glow	Piros izzás
+	Orange Glow	Narancs izzás
+	Amber Glow	Borostyán izzás
+	Yellow Glow	Sárga izzás
+	Lime Glow	Lime izzás
+	Green Glow	Zöld izzás
+	Teal Glow	Kékeszöld izzás
+	Cyan Glow	Cián izzás
+	Azure Glow	Azúr izzás
+	Blue Glow	Kék izzás
+	Violet Glow	Ibolya izzás
+	Magenta Glow	Magenta izzás
+	Polka Dots	Pöttyök
+	Vertical Stripes	Függőleges csíkok
+	Horizontal Stripes	Vízszintes csíkok
+	Diagonal Stripes	Átlós csíkok
+	Checkerboard	Sakktábla
+	Diamonds	Rombuszok
+	Crosses	Keresztek
+	Coarse Grit	Durva szemcse
+	Stipple	Pontozás
+	Scratches	Karcolások
+	Sparse Flecks	Ritka pöttyözés
+	Dense Flecks	Sűrű pöttyözés
+	Sine Bands	Szinuszsávok
+	Ripple Lines	Fodrozódó vonalak
+	Interference Rings	Interferenciagyűrűk
+	Offset Rings	Eltolt gyűrűk
+	Warped Checks	Torzított kockák
+	Pinched Stripes	Összecsípett csíkok
+	Chevron Pulse	Chevronlüktetés
+	Radiating Lenses	Sugárzó lencsék
+	Soft Shadow	Lágy árnyék
+	Hard Shadow	Éles árnyék
+	Lifted Card	Kiemelt kártya
+	Neon Tube	Neoncső
+	Inner Light	Belső fény
+	Feathered	Lágy szélű
+	Haze	Pára
+	Double Rule	Dupla vonal
+	Triple Rule	Tripla vonal
+	Dashed Border	Szaggatott szegély
+	Dotted Border	Pontozott szegély
+	Offset Keyline	Eltolt körvonal
+	Inset Keyline	Belső körvonal
+	Outside Stroke	Külső körvonal
+	Pointer	Mutató
+	Highlighter	Kiemelő
+	Sketchy Line	Vázlatos vonal
+	Scribble Fill	Firkált kitöltés
+	Wobble	Remegés
+	Zig Zag Edge	Cikcakkos szél
+	Wavy Edge	Hullámos szél
+	Puffy	Puffadt
+	Starburst	Csillagrobbanás
+	Glossy	Fényes
+	Brushed Metal	Szálcsiszolt fém
+	Spotlight	Reflektor
+	Sunset Band	Naplementesáv
+	Sea Glass	Tengeri üveg
+	Pearl	Gyöngy
+	Chrome Rim	Krómperem
+	Glow Orb	Izzó gömb
+	Pill Badge	Kapszula jelvény
+	Round Badge	Kerek jelvény
+	Flag Wave	Lobogó zászló
+	Bulge	Kidudorodás
+	Twisted	Csavart
+	Echo	Visszhang
+	Spiral Copies	Spirális másolatok
+	Multiply Tint	Szorzás árnyalat
+	Darken Veil	Sötétítés fátyol
+	Ghosted	Áttetsző
+	Two Tone	Kéttónusú
+	Overlay Glaze	Átfedés máz
+	Screen Light	Képernyő fény
+	Soft Light Wash	Lágy fény lavírozás
+	Cyan Neon	Ciánneon
+	Magenta Laser	Bíbor lézer
+	Amber Tube	Borostyáncső
+	Electric Lime	Elektromos lime
+	Pulse Violet	Pulzáló ibolya
+	Cobalt Phosphor	Kobaltfoszfor
+	Burst	Robbanás
+	Rounded Square	Lekerekített négyzet
+	Sun	Nap
+	Moon	Hold
+	Cloud	Felhő
+	Rain	Eső
+	Thunder	Mennydörgés
+	Snow	Hó
 	Save Brush Library…	Ecsetkönyvtár mentése…
 @msg	`{_1}` has no brushes to apply	A(z) `{_1}` nem tartalmaz alkalmazható ecsetet
 @msg	missing `library` (see brush.libraries)	hiányzik a `library` (lásd: brush.libraries)
@@ -7774,10 +8076,18 @@ breakText	Glyphs	Glifák
 	Smooth Bridge…	Sima híd…
 	Smooth Bridge	Sima híd
 	Keep Originals	Eredetik megtartása
-@msg	select two circles to bridge	jelöljön ki két kört az összekötéshez
+@msg	select two or more circles to bridge	jelöljön ki legalább két kört az összekötéshez
 @msg	one circle is inside the other	az egyik kör a másikon belül van
 @msg	the circles are too far apart for this radius: raise the radius	a körök túl messze vannak egymástól ehhez a sugárhoz: növelje a sugarat
 @msg	the circles are too far apart for this radius	a körök túl messze vannak egymástól ehhez a sugárhoz
+	Constant Gap	Állandó hézag
+	Reach:	Hatótávolság:
+@msg	the circles are too far apart for this gap: raise the gap	a körök túl messze vannak egymástól ehhez a hézaghoz: növelje a hézagot
+@msg	the circles are too far apart for this gap	a körök túl messze vannak egymástól ehhez a hézaghoz
+@msg	no two circles are within reach: raise the reach	nincs két kör hatótávolságon belül: növelje a hatótávolságot
+@msg	select at most 2000 circles to bridge	legfeljebb 2000 kört jelöljön ki az összekötéshez
+@msg	that makes too many bridges (at most 8000): lower the reach	ez túl sok hidat eredményez (legfeljebb 8000): csökkentse a hatótávolságot
+@msg	the bridged circles are too complex to unite	az összekötött körök túl összetettek az egyesítéshez
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	Közös érintők…
 	Common Tangents	Közös érintők
@@ -9559,6 +9869,7 @@ breakText	Glyphs	Glifák
 @msg	the character's size can't be measured	a karakter mérete nem mérhető meg
 @msg	the code runs past its last instruction	a kód túlfut az utolsó utasításán
 @msg	the compound shape is too complex to expand	az összetett alakzat túl bonyolult a kibontáshoz
+@msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	egy vonal vagy más nyitott útvonal, amely nem zár közre területet, nem ad területet az összetett alakzathoz; a felvételéhez előbb alkalmazza rá az Objektum › Útvonal › Körvonal útvonallá alakítása parancsot
 @msg	the container of the listed objects is gone	a felsorolt objektumok tárolója már nincs meg
 @msg	the copy `{user_id}` can't be read as a library	a másolat nem olvasható be könyvtárként: `{user_id}`
 @msg	the copy would leave the canvas	a másolat kikerülne a vászonról
@@ -9899,7 +10210,6 @@ breakText	Glyphs	Glifák
 @msg	{kind} files have no transparency, and the file would have {what}: flatten it first (object.flattenTransparency)	{kind} fájlokban nincs átlátszóság, a fájlban viszont ez lenne: {what}; előbb lapítsd (object.flattenTransparency)
 @msg	{kind} images can't be opened (see document.formats)	{kind} képek nem nyithatók meg (lásd: document.formats)
 @msg	{k} `{v}` is not one of the choices	{k} `{v}`: nem a választási lehetőségek egyike
-@msg	{k} has control characters{_1}	{k}: vezérlőkaraktereket tartalmaz{_1}
 @msg	{k} is too long (at most {MAX_TEXT} characters)	{k}: túl hosszú (legfeljebb {MAX_TEXT} karakter)
 @msg	{k} must be > 0	{k}: > 0 érték kell
 @msg	{k} must be a number (pt) or a length such as "210 mm"	{k}: szám (pt) vagy hosszúság kell, például "210 mm"
@@ -10084,6 +10394,16 @@ breakText	Glyphs	Glifák
 	No objects are selected.	Nincs kijelölt objektum.
 	Open a document to mark its fold lines.	Nyiss meg egy dokumentumot a hajtásvonalai megjelöléséhez.
 	Remove Fold Line Role	Vonaltípus eltávolítása
+	Tap	Rövid lenyomás
+	Clear Hold	Nyomva tartás törlése
+	Hold Shortcuts	Nyomva tartásos billentyűparancsok
+	Hold Shortcut Delay	Nyomva tartás késleltetése
+	How hold shortcuts work	Így működnek a nyomva tartásos billentyűparancsok
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	Kattints, majd nyomd le a billentyűt, amelyet ehhez nyomva kell tartani (Esc: mégse). A billentyű nyomva tartása ezt futtatja; a rövid lenyomás a billentyű saját billentyűparancsát futtatja.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	Egy billentyű rövid lenyomása a billentyűparancsát futtatja. Ha a késleltetés idejéig nyomva tartod, helyette a Nyomva tartás oszlopában lévő eszköz vagy parancs fut. Nyomva tartásos billentyűparancs lehet egy betű-, szám- vagy írásjelbillentyű, önmagában vagy Shifttel.
+@msg	Hold {_1} is already used by {_2}	már foglalt: nyomva tartás {_1} (használja: {_2})
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	a nyomva tartásos billentyűparancs egy karaktert beíró billentyű, önmagában vagy Shifttel ({shown} Cmd, Ctrl vagy Alt billentyűt tartalmaz)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} nem lehet nyomva tartásos billentyűparancs: használj betű-, szám- vagy írásjelbillentyűt
 	Check	Ellenőrzés
 	Check Fold Lines	Hajtásvonalak ellenőrzése
 @msg	No cut lines are in the selection.	A kijelölésben nincs vágóvonal.
@@ -10104,6 +10424,7 @@ breakText	Glyphs	Glifák
 @msg	A panel is not joined to the rest by a crease.	Egy panelt egyetlen bigvonal sem köt a többihez.
 @msg	A fold line is on a non-printing layer.	Egy hajtásvonal nem nyomtatható rétegen van.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panelek: {panels}, zsanérok: {hinges}, hibák: {errors}, figyelmeztetések: {warnings}
+	Dashed Arrow	Szaggatott nyíl
 	Pressure Sensitive	Nyomásérzékeny
 	Flex Ribbon	Rugalmas szalag
 	Pulse Stroke	Lüktető vonás

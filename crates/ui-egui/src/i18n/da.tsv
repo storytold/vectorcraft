@@ -295,6 +295,8 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	no such spine point	intet sådant rygradpunkt
 @msg	`with` must be a list of at most 10000 spine point indexes	`with` skal være en liste med højst 10000 rygradpunktindekser
 @msg	`with` moves points, not a handle	`with` flytter punkter, ikke et håndtag
+@msg	`link` and `independent` cannot both be true	`link` og `independent` kan ikke begge være true
+@msg	`link` places a handle: give `handle`	`link` placerer et håndtag: angiv `handle`
 @msg	no such spine segment	intet sådant rygradsegment
 @msg	node {_1} is on a locked artboard	node {_1} ligger på en låst tegneflade
 @msg	not a blend	ikke en blanding
@@ -816,6 +818,19 @@ liquify-list-end	{0}, {1}	{0} og {1}
 	Paste without Formatting	Indsæt uden formatering
 	Clear	Fjern
 	Find and Replace…	Find og erstat…
+	Find and Replace	Find og erstat
+	Find:	Find:
+	Replace With:	Erstat med:
+	Replace & Find	Erstat og find
+	Replace All	Erstat alle
+	Match Case	Forskel på store og små bogstaver
+	Find Whole Word	Find hele ord
+	Search Backwards	Søg baglæns
+	Check Hidden Layers	Kontrollér skjulte lag
+	Check Locked Layers	Kontrollér låste lag
+@msg	No matches found	Ingen forekomster fundet
+@msg	Matches replaced: {n}	Erstattede forekomster: {n}
+@msg	no match of `find` at bytes {_1}..{_2} of object {_3}	ingen forekomst af `find` ved byte {_1}..{_2} i objekt {_3}
 	Find Next	Find næste
 	Spelling	Stavekontrol
 	Auto Spell Check	Automatisk stavekontrol
@@ -2950,6 +2965,16 @@ liquify-list-end	{0}, {1}	{0} og {1}
 	To Center	Mod midten
 	To Edge	Mod kanten
 	Create Object Mosaic…	Opret objektmosaik…
+	Create Object Mosaic	Opret objektmosaik
+	Current Size:	Aktuel størrelse:
+	New Size:	Ny størrelse:
+	Tile Spacing:	Mellemrum mellem fliser:
+	Number of Tiles:	Antal fliser:
+	Constrain Ratio:	Begræns forhold:
+	Result:	Resultat:
+	Resize Using Percentages	Tilpas størrelse med procenter
+	Delete Raster	Slet rasterbillede
+	Use Ratio	Brug forhold
 	Vector Halftone…	Vektorhalvtone…
 	Create Trim Marks	Opret beskæringsmærker
 	Flatten Transparency…	Udjævn gennemsigtighed…
@@ -3474,6 +3499,9 @@ liquify-list-end	{0}, {1}	{0} og {1}
 	Magic Wand	Magisk tryllestav
 	Navigator	Navigator
 	Navigator Panel Options	Indstillinger for navigatorpanelet
+	Attributes Panel Options	Indstillinger for attributpanelet
+	Number of Recent URLs:	Antal seneste URL'er:
+@msg	`count` must be a whole number from 1 to 30	`count` skal være et heltal fra 1 til 30
 	Draw Dashed Lines as Solid Lines	Tegn stiplede linjer som hele linjer
 	Pattern Options	Mønsterindstillinger
 	Properties	Egenskaber
@@ -4194,6 +4222,7 @@ lighting	Light	Lys
 	Save Actions…	Gem handlinger…
 	Load Actions…	Indlæs handlinger…
 	Replace Actions…	Erstat handlinger…
+	Clear Actions	Ryd handlinger
 	Reset Actions	Nulstil handlinger
 	Replace the current actions with the default set?	Vil du erstatte de aktuelle handlinger med standardsættet?
 	Append adds the default set after the current sets instead.	Tilføj tilføjer i stedet standardsættet efter de aktuelle sæt.
@@ -4538,6 +4567,7 @@ digits	Malayalam	Malayalam
 	Duplicate Action or Action Set	Duplikér handling eller handlingssæt
 	Delete the action set “{name}” and its actions?	Slet handlingssættet »{name}« og dets handlinger?
 	Delete the selected action sets and their actions?	Slet de markerede handlingssæt og deres handlinger?
+	Delete all action sets and their actions?	Slet alle handlingssæt og deres handlinger?
 	Delete these {n} graphic styles?	Slet disse {n} grafiske typografier?
 	Delete this {n} graphic style?	Slet denne {n} grafiske typografi?
 	Graphic Style Libraries Menu	Menu med biblioteker af grafiske typografier
@@ -5863,6 +5893,7 @@ antiAlias	Sharp	Skarp
 	Preserve Editing Capabilities	Bevar redigeringsfunktioner
 	Responsive	Responsiv
 	Show Code	Vis kode
+	Show in Browser	Vis i browser
 	Style Attributes	Stilattributter
 	Style Attributes (Entity References)	Stilattributter (enhedsreferencer)
 	Styling:	Styling:
@@ -6777,6 +6808,7 @@ theme	Appearance	Udseende
 	Set Tab Stops	Angiv tabulatorstop
 	Tab Stops	Tabulatorstop
 	Flare	Flare
+	Edit Flare	Redigér flare
 	Rays	Stråler
 	Rectangle	Rektangel
 	Paintbrush	Malerpensel
@@ -6879,6 +6911,8 @@ axis	Both	Begge
 	Show	Vis
 	Copy Width Point	Kopiér breddepunkt
 	Duplicate Artboard	Duplikér tegneflade
+	Click to add an artboard on this side; Alt-click to duplicate this artboard with its art	Klik for at tilføje en kunstplade på denne side, Alt-klik for at duplikere kunstpladen med dens grafik
+	Click to add an artboard on this side	Klik for at tilføje en kunstplade på denne side
 	Area / Path Type	Arealtekst / kurvetekst
 	Decrease Font Size	Formindsk skriftstørrelse
 	Increase Font Size	Forøg skriftstørrelse
@@ -7055,6 +7089,8 @@ font-technology	Variable	Variable
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Musehjulet med Cmd/Ctrl holdt nede ruller lærredet sidelæns.
 	Dragging sideways on a numeric field's label changes the field's value.	Når du trækker sidelæns på et talfelts etiket, ændres feltets værdi.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	En rotationsbevægelse med to fingre på en pegeplade roterer visningen af lærredet.
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Når du holder en tast nede, køres værktøjet eller kommandoen i dens Hold-kolonne i Tastaturgenveje; et kort tryk kører dens sædvanlige genvej.
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Hvor mange sekunder en tast skal holdes nede, før dens holdegenvej køres i stedet for dens sædvanlige genvej.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Når du flytter ankerpunkter, beholder hver kurve med ét flyttet endepunkt sin form i forhold til sine endepunkter.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Når du holder et værktøjs genvejstast nede, er værktøjet valgt, indtil du slipper, og derefter vælges det forrige værktøj igen.
 	Shows the bounding box while you move the selection or draw a shape.	Viser afgrænsningsboksen, mens du flytter markeringen eller tegner en form.
@@ -7136,6 +7172,7 @@ font-technology	Variable	Variable
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Hvor tæt på skærmen markøren eller et trukket punkt skal komme på grafik, for at de smarte hjælpelinjer fastgør til den; afstanden er den samme ved alle zoomniveauer.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Fastgør enden af et linjesegment eller en cirkel tegnet fra midten, så den rører en nærliggende kurve.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Fastgør enden af et linjesegment, så det møder et nærliggende lige segment i en ret vinkel.
+	Edit type set in fonts that aren't available?	Rediger tekst i skrifttyper, der ikke er tilgængelige?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Viser hvert udsnits nummer i en boks i dets øverste venstre hjørne på lærredet; når den er slået fra, vises udsnittenes konturer stadig.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Farven på konturerne af bruger- og objektudsnit og på boksene med deres numre; automatiske udsnit bruger en svagere nuance af den.
 	Reset all preferences to their defaults?	Nulstil alle præferencer til standard?
@@ -7421,6 +7458,7 @@ imageTrace	Outline	Kontur
 @msg	Installed plug-in {_1}	Installerede plug-in'en {_1}
 @msg	Internal error: {msg} (please report this bug)	Intern fejl: {msg} (meld venligst denne fejl)
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	Live Paint-fletning: markér en Live Paint-gruppe og de kurver, der skal tilføjes
+@msg	`Face` and `Edge` name the faces and edges of a Live Paint group: give the path another name	`Face` og `Edge` er navnene på fladerne og kanterne i en Live Paint-gruppe: giv kurven et andet navn
 @msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	Live Paint tager kurver og sammensatte kurver: konvertér først tekst, billeder og andre objekter til kurver
 @msg	Live Paint: select paths or compound paths	Live Paint: markér kurver eller sammensatte kurver
 @msg	Live Paint: these paths are too degenerate to paint	Live Paint: disse kurver er for degenererede til at blive malet
@@ -7683,6 +7721,7 @@ imageTrace	Outline	Kontur
 @msg	no graphic style `{n}`	ingen grafisk stil `{n}`
 @msg	no interaction in progress	ingen interaktion i gang
 @msg	no key object	intet nøgleobjekt
+@msg	Align to Key Object isn't available with the Artboard tool	Juster til nøgleobjekt er ikke tilgængelig med tegnebrætværktøjet
 @msg	no library `{key}` (see {list})	intet bibliotek `{key}` (se {list})
 @msg	no native format	intet indbygget format
 @msg	no pages	ingen sider
@@ -7813,6 +7852,7 @@ imageTrace	Outline	Kontur
 @msg	select a Live Paint group	markér en Live Paint-gruppe
 @msg	select a blend	markér en blanding
 @msg	select a clip group	markér en klipgruppe
+@msg	select a flare	markér en flare
 @msg	select a gradient mesh	markér et gradientnet
 @msg	select a linked image: an embedded one has no file	markér et linket billede: et indlejret har ingen fil
 @msg	select a repeat	markér en gentagelse
@@ -8020,6 +8060,7 @@ imageTrace	Outline	Kontur
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} linket billede er ændret på disken: Opdatér links viser den nye version|{n} linkede billeder er ændret på disken: Opdatér links viser de nye versioner
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Opdaterede {n} linket fil ændret på disken|Opdaterede {n} linkede filer ændret på disken
 @msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	dokumentet angiver et udløb, som denne PDF/X-fil udelader: slå „Brug dokumentets udløbsindstillinger“ til
+@msgplural	{n} object reaches the trim edge but stops short of the bleed|{n} objects reach the trim edge but stop short of the bleed	{n} objekt når til beskæringskanten, men stopper før udløbet|{n} objekter når til beskæringskanten, men stopper før udløbet
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	Eksporterede {what} med {n} note: {first}|Eksporterede {what} med {n} noter: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} skrifttypefil er nu i {folder}|{n} skrifttypefiler er nu i {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} skrifttypefil er nu i {folder}; {failed} kunne ikke tilføjes: {reason}|{n} skrifttypefiler er nu i {folder}; {failed} kunne ikke tilføjes: {reason}
@@ -8712,6 +8753,11 @@ mark-style	Japanese	Japansk
 	The active document changed while the screen color sampler was open	Det aktive dokument ændrede sig, mens skærmfarvesampleren var åben
 	This system has no screen color sampler	Dette system har ingen skærmfarvesampler
 	Color blindness – Tritanopia-type	Farveblindhed – tritanopitype
+	Show Color Vision Preview	Vis eksempel på farvesyn
+	Protanopia	Protanopi
+	Deuteranopia	Deuteranopi
+	Tritanopia	Tritanopi
+	Achromatopsia	Akromatopsi
 	Panels Except Tools and Control	Paneler undtagen værktøjer og kontrol
 	Reset Tracking and Kerning	Nulstil sporing og kerning
 	Reset Horizontal Scale	Nulstil vandret skalering
@@ -9116,6 +9162,9 @@ swatch	Bright Violet	Kraftig violet
 	Continue in Background	Fortsæt i baggrunden
 	Cancel Export	Annullér eksport
 @msg	Export cancelled	Eksport annulleret
+	Cancel Save	Annullér gemning
+@plural	{n} more save waiting|{n} more saves waiting	{n} gemning mere venter|{n} gemninger mere venter
+@msg	Save canceled	Gemning annulleret
 # Paragraph panel menu › Justification…
 	Desired	Ønsket
 	Word Spacing:	Ordafstand:
@@ -9337,6 +9386,7 @@ axis	Y Axis	Y-akse
 	Checkpoint	Kontrolpunkt
 	Inventory Icons	Inventarikoner
 	Skill Icons	Færdighedsikoner
+	Weather Icons	Vejrikoner
 	Attack	Angreb
 	Defend	Forsvar
 	Heal	Helbredelse
@@ -9436,6 +9486,12 @@ axis	Y Axis	Y-akse
 	Bus Lines	Buslinjer
 	Terminal Nodes	Terminalpunkter
 
+# Original arrow art brushes.
+	Arrows	Pile
+	Solid Arrow	Massiv pil
+	Open Arrow	Åben pil
+	Chevron Arrow	Chevronpil
+
 	Notched Ribbon	Takket bånd
 	Double Line	Dobbelt linje
 	Wave	Bølge
@@ -9452,6 +9508,252 @@ axis	Y Axis	Y-akse
 	Stars	Stjerner
 	Triangles	Trekanter
 	Sparkles	Gnister
+	Warm Gray	Varm grå
+	Cool Gray	Kølig grå
+	Neutrals	Neutrale toner
+	Ivory	Elfenben
+	Linen	Hør
+	Oat	Havre
+	Greige	Greige
+	Stone	Sten
+	Taupe	Taupe
+	Slate	Skifer
+	Clay	Ler
+	Terracotta	Terrakotta
+	Ochre	Okker
+	Umber	Umbra
+	Sand	Sand
+	Olive	Oliven
+	Moss	Mos
+	Rosy	Rosa
+	Neutral	Neutral
+	Golden	Gylden
+	Pastel	Pastel
+	Pastel Red	Pastelrød
+	Pastel Orange	Pastelorange
+	Pastel Amber	Pastelrav
+	Pastel Yellow	Pastelgul
+	Pastel Lime	Pastellime
+	Pastel Green	Pastelgrøn
+	Pastel Teal	Pastelblågrøn
+	Pastel Cyan	Pastelcyan
+	Pastel Azure	Pastelazur
+	Pastel Blue	Pastelblå
+	Pastel Violet	Pastelviolet
+	Pastel Magenta	Pastelmagenta
+	Soft Red	Blød rød
+	Soft Orange	Blød orange
+	Soft Amber	Blød rav
+	Soft Yellow	Blød gul
+	Soft Lime	Blød lime
+	Soft Green	Blød grøn
+	Soft Teal	Blød blågrøn
+	Soft Cyan	Blød cyan
+	Soft Azure	Blød azur
+	Soft Blue	Blød blå
+	Soft Violet	Blød violet
+	Soft Magenta	Blød magenta
+	Vivid Red	Intens rød
+	Vivid Orange	Intens orange
+	Vivid Amber	Intens rav
+	Vivid Yellow	Intens gul
+	Vivid Lime	Intens lime
+	Vivid Green	Intens grøn
+	Vivid Teal	Intens blågrøn
+	Vivid Cyan	Intens cyan
+	Vivid Azure	Intens azur
+	Vivid Blue	Intens blå
+	Vivid Violet	Intens violet
+	Vivid Magenta	Intens magenta
+	Deep	Dybe
+	Deep Red	Dyb rød
+	Deep Orange	Dyb orange
+	Deep Amber	Dyb rav
+	Deep Yellow	Dyb gul
+	Deep Lime	Dyb lime
+	Deep Green	Dyb grøn
+	Deep Teal	Dyb blågrøn
+	Deep Cyan	Dyb cyan
+	Deep Azure	Dyb azur
+	Deep Blue	Dyb blå
+	Deep Violet	Dyb violet
+	Deep Magenta	Dyb magenta
+	Gold	Guld
+	Silver	Sølv
+	Bronze	Bronze
+	Copper	Kobber
+	Brass	Messing
+	Rose Gold	Rosaguld
+	Gunmetal	Gunmetal
+	Platinum	Platin
+	Pewter	Tin
+	Ember	Glød
+	Lagoon	Lagune
+	Dusk	Skumring
+	Clay to Teal	Ler til blågrøn
+	Plum to Olive	Blomme til oliven
+	Complementary Coral	Koral komplementær
+	Split Complementary Coral	Koral delt komplementær
+	Analogous Coral	Koral analog
+	Triad Coral	Koral triade
+	Tetrad Coral	Koral tetrad
+	Pentagram Coral	Koral pentagram
+	Complementary Teal	Blågrøn komplementær
+	Split Complementary Teal	Blågrøn delt komplementær
+	Analogous Teal	Blågrøn analog
+	Triad Teal	Blågrøn triade
+	Tetrad Teal	Blågrøn tetrad
+	Pentagram Teal	Blågrøn pentagram
+	Soft Spectrum	Blødt spektrum
+	Red to Amber	Rød til rav
+	Orange to Yellow	Orange til gul
+	Amber to Lime	Rav til lime
+	Yellow to Green	Gul til grøn
+	Lime to Teal	Lime til blågrøn
+	Green to Cyan	Grøn til cyan
+	Teal to Azure	Blågrøn til azur
+	Cyan to Blue	Cyan til blå
+	Azure to Violet	Azur til violet
+	Blue to Magenta	Blå til magenta
+	Violet to Red	Violet til rød
+	Magenta to Orange	Magenta til orange
+	Dawn	Daggry
+	Noon	Middag
+	Sunset	Solnedgang
+	Night	Nat
+	Overcast	Overskyet
+	White to Black	Hvid til sort
+	Light Grays	Lyse gråtoner
+	Dark Grays	Mørke gråtoner
+	Warm Grays	Varme gråtoner
+	Cool Grays	Kølige gråtoner
+	Fade to Transparent	Udtoning til gennemsigtig
+	White Fade	Hvid udtoning
+	Vignette	Vignet
+	Mist	Dis
+	Petal	Kronblad
+	Fern	Bregne
+	Smoke	Røg
+	Honey	Honning
+	Seafoam	Havskum
+	Lavender	Lavendel
+	Driftwood	Drivtømmer
+	Ink Wash	Tuschlavering
+	Tide	Tidevand
+	Bloom	Blomstring
+	Dew	Dug
+	Pollen	Pollen
+	Lichen	Lav
+	Prism Veil	Prismeslør
+	Opal Ribbon	Opalbånd
+	Pearl Flash	Perleglimt
+	Aurora Foil	Nordlysfolie
+	Iris Sheen	Irisglans
+	Frost Spectrum	Frostspektrum
+	Silver Tide	Sølvtidevand
+	Rose Quartz Gleam	Rosakvartsglans
+	Moonstone Shift	Månestensskær
+	Violet Edge	Violet kant
+	Mint Halo	Mynteglorie
+	Amber Corona	Ravkorona
+	Polar Glint	Polarglimt
+	Pastel Orbit	Pastelbane
+	Coral and Navy	Koral og marineblå
+	Plum and Lime	Blomme og lime
+	Teal and Gold	Blågrøn og guld
+	Indigo and Peach	Indigo og fersken
+	Forest and Rose	Skov og rosa
+	Red Glow	Rød glød
+	Orange Glow	Orange glød
+	Amber Glow	Ravglød
+	Yellow Glow	Gul glød
+	Lime Glow	Limeglød
+	Green Glow	Grøn glød
+	Teal Glow	Blågrøn glød
+	Cyan Glow	Cyanglød
+	Azure Glow	Azurglød
+	Blue Glow	Blå glød
+	Violet Glow	Violet glød
+	Magenta Glow	Magentaglød
+	Polka Dots	Prikker
+	Vertical Stripes	Lodrette striber
+	Horizontal Stripes	Vandrette striber
+	Diagonal Stripes	Diagonale striber
+	Checkerboard	Skakbræt
+	Diamonds	Ruder
+	Crosses	Kryds
+	Coarse Grit	Groft korn
+	Stipple	Punktering
+	Scratches	Ridser
+	Sparse Flecks	Spredte pletter
+	Dense Flecks	Tætte pletter
+	Sine Bands	Sinusbånd
+	Ripple Lines	Bølgelinjer
+	Interference Rings	Interferensringe
+	Offset Rings	Forskudte ringe
+	Warped Checks	Forvredne tern
+	Pinched Stripes	Klemte striber
+	Chevron Pulse	Chevronpuls
+	Radiating Lenses	Strålende linser
+	Soft Shadow	Blød skygge
+	Hard Shadow	Hård skygge
+	Lifted Card	Løftet kort
+	Neon Tube	Neonrør
+	Inner Light	Indre lys
+	Feathered	Blød kant
+	Haze	Dunst
+	Double Rule	Dobbelt streg
+	Triple Rule	Tredobbelt streg
+	Dashed Border	Stiplet kant
+	Dotted Border	Prikket kant
+	Offset Keyline	Forskudt konturlinje
+	Inset Keyline	Indre konturlinje
+	Outside Stroke	Ydre streg
+	Pointer	Viser
+	Highlighter	Overstregningstusch
+	Sketchy Line	Skitseagtig linje
+	Scribble Fill	Kruseduldefyld
+	Wobble	Slinger
+	Zig Zag Edge	Zigzagkant
+	Wavy Edge	Bølget kant
+	Puffy	Oppustet
+	Starburst	Stjerneudbrud
+	Glossy	Blank
+	Brushed Metal	Børstet metal
+	Spotlight	Spotlys
+	Sunset Band	Solnedgangsbånd
+	Sea Glass	Havglas
+	Pearl	Perle
+	Chrome Rim	Kromkant
+	Glow Orb	Lyskugle
+	Pill Badge	Pillemærke
+	Round Badge	Rundt mærke
+	Flag Wave	Vajende flag
+	Bulge	Bule
+	Twisted	Snoet
+	Echo	Ekko
+	Spiral Copies	Spiralkopier
+	Multiply Tint	Multiplikationstone
+	Darken Veil	Mørkere slør
+	Ghosted	Spøgelsesagtig
+	Two Tone	Tofarvet
+	Overlay Glaze	Overlejringsglasur
+	Screen Light	Skærmlys
+	Soft Light Wash	Blødt lys-lavering
+	Cyan Neon	Cyan neon
+	Magenta Laser	Magenta laser
+	Amber Tube	Ravfarvet rør
+	Electric Lime	Elektrisk lime
+	Pulse Violet	Pulserende violet
+	Cobalt Phosphor	Koboltfosfor
+	Burst	Udbrud
+	Rounded Square	Afrundet kvadrat
+	Sun	Sol
+	Moon	Måne
+	Cloud	Sky
+	Rain	Regn
+	Thunder	Torden
+	Snow	Sne
 	Save Brush Library…	Gem penselbibliotek…
 @msg	no empty artboards to delete	ingen tomme tegneflader at slette
 	Scale Presets	Skaleringsforudindstillinger
@@ -9843,10 +10145,18 @@ breakText	Glyphs	Glyffer
 	Smooth Bridge…	Blød bro…
 	Smooth Bridge	Blød bro
 	Keep Originals	Behold originaler
-@msg	select two circles to bridge	vælg to cirkler, der skal forbindes
+@msg	select two or more circles to bridge	vælg to eller flere cirkler, der skal forbindes
 @msg	one circle is inside the other	den ene cirkel er inden i den anden
 @msg	the circles are too far apart for this radius: raise the radius	cirklerne er for langt fra hinanden til denne radius: gør radius større
 @msg	the circles are too far apart for this radius	cirklerne er for langt fra hinanden til denne radius
+	Constant Gap	Konstant afstand
+	Reach:	Rækkevidde:
+@msg	the circles are too far apart for this gap: raise the gap	cirklerne er for langt fra hinanden til denne afstand: gør afstanden større
+@msg	the circles are too far apart for this gap	cirklerne er for langt fra hinanden til denne afstand
+@msg	no two circles are within reach: raise the reach	ingen to cirkler er inden for rækkevidde: gør rækkevidden større
+@msg	select at most 2000 circles to bridge	vælg højst 2000 cirkler, der skal forbindes
+@msg	that makes too many bridges (at most 8000): lower the reach	det giver for mange broer (højst 8000): gør rækkevidden mindre
+@msg	the bridged circles are too complex to unite	de forbundne cirkler er for komplekse til at blive samlet
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	Fælles tangenter…
 	Common Tangents	Fælles tangenter
@@ -10219,6 +10529,18 @@ breakText	Glyphs	Glyffer
 @msg	A joint does not close by {gap} pt.	En samling lukker ikke med {gap} pt.
 @msg	Two panels pass through each other.	To paneler går gennem hinanden.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer skal være "singleLine", "everyLine", "standardSingleLine" eller "standardEveryLine"
+	Tap	Kort tryk
+	Clear Hold	Ryd hold
+	Hold Shortcuts	Holdegenveje
+	Hold Shortcut Delay	Forsinkelse for holdegenveje
+	How hold shortcuts work	Sådan virker holdegenveje
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	Klik, og tryk derefter på en tast, der skal holdes nede for dette (Esc annullerer). Når tasten holdes nede, køres dette; et kort tryk kører tastens egen genvej.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	Et kort tryk på en tast kører dens genvej. Når tasten holdes nede i forsinkelsens varighed, køres i stedet værktøjet eller kommandoen i dens Hold-kolonne. En holdegenvej er en bogstav-, ciffer- eller tegnsætningstast, alene eller med Shift.
+@msg	Hold {_1} is already used by {_2}	Hold {_1} bruges allerede af {_2}
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	en holdegenvej er en tast, der skriver et tegn, alene eller med Shift ({shown} har Cmd, Ctrl eller Alt)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} kan ikke være en holdegenvej: brug et bogstav, et ciffer eller en tegnsætningstast
+	Dashed Arrow	Stiplet pil
+@msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	en linje eller anden åben kurve, der ikke omslutter noget område, tilføjer intet område til den sammensatte figur; anvend først Objekt › Kurve › Streg til kontur på den for at tage den med
 	Pressure Sensitive	Trykfølsom
 	Flex Ribbon	Fleksibelt bånd
 	Pulse Stroke	Pulserende strøg

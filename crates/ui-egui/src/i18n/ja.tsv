@@ -174,6 +174,19 @@ digits	Malayalam	マラヤーラム数字
 	Paste without Formatting	書式なしでペースト
 	Clear	消去
 	Find and Replace…	検索と置換…
+	Find and Replace	検索と置換
+	Find:	検索:
+	Replace With:	置換文字列:
+	Replace & Find	置換して検索
+	Replace All	すべて置換
+	Match Case	大文字と小文字を区別
+	Find Whole Word	単語単位で検索
+	Search Backwards	逆方向に検索
+	Check Hidden Layers	非表示レイヤーを検索
+	Check Locked Layers	ロックされたレイヤーを検索
+@msg	No matches found	一致する文字列が見つかりません
+@msg	Matches replaced: {n}	置換した一致: {n}
+@msg	no match of `find` at bytes {_1}..{_2} of object {_3}	オブジェクト {_3} のバイト {_1}..{_2} に `find` の一致はありません
 	Find Next	次を検索
 	Find Objects	オブジェクトを検索
 	Compare with Image	画像と比較
@@ -277,6 +290,16 @@ digits	Malayalam	マラヤーラム数字
 	To Center	中心へ
 	To Edge	エッジへ
 	Create Object Mosaic…	モザイクオブジェクトを作成…
+	Create Object Mosaic	モザイクオブジェクトを作成
+	Current Size:	現在のサイズ:
+	New Size:	新しいサイズ:
+	Tile Spacing:	タイルの間隔:
+	Number of Tiles:	タイル数:
+	Constrain Ratio:	比率を固定:
+	Result:	結果:
+	Resize Using Percentages	パーセントでサイズを変更
+	Delete Raster	ラスター画像を削除
+	Use Ratio	比率を使用
 	Vector Halftone…	ベクターハーフトーン…
 	Create Trim Marks	トリムマークを作成
 	Flatten Transparency…	透明部分を分割・統合…
@@ -672,6 +695,11 @@ digits	Malayalam	マラヤーラム数字
 	Color blindness – Protanopia-type	P 型（1 型）色覚
 	Color blindness – Deuteranopia-type	D 型（2 型）色覚
 	Color blindness – Tritanopia-type	T 型（3 型）色覚
+	Show Color Vision Preview	色覚のプレビューを表示
+	Protanopia	P 型色覚
+	Deuteranopia	D 型色覚
+	Tritanopia	T 型色覚
+	Achromatopsia	1 色覚
 	Customize…	カスタマイズ…
 	Proof Colors	色の校正
 	Zoom In	ズームイン
@@ -820,6 +848,9 @@ digits	Malayalam	マラヤーラム数字
 	Magic Wand	自動選択
 	Navigator	ナビゲーター
 	Navigator Panel Options	ナビゲーターパネルオプション
+	Attributes Panel Options	属性パネルオプション
+	Number of Recent URLs:	最近使った URL の数:
+@msg	`count` must be a whole number from 1 to 30	`count` には 1 から 30 までの整数を指定してください
 	Draw Dashed Lines as Solid Lines	破線を実線で表示
 	Pattern Options	パターンオプション
 	Properties	プロパティ
@@ -1565,6 +1596,7 @@ antiAlias	Sharp	シャープ
 	Duplicate Action or Action Set	アクションまたはアクションセットを複製
 	Delete the action set “{name}” and its actions?	アクションセット「{name}」とそのアクションを削除しますか？
 	Delete the selected action sets and their actions?	選択したアクションセットとそのアクションを削除しますか？
+	Delete all action sets and their actions?	すべてのアクションセットとそのアクションを削除しますか？
 	Delete theme	テーマを削除
 	Delete this saved preset	この保存済みプリセットを削除
 	Delete {kind} Style	{kind}スタイルを削除
@@ -1675,6 +1707,8 @@ antiAlias	Sharp	シャープ
 	Drawing Mode	描画モード
 	Duplicate	複製
 	Duplicate Artboard	アートボードを複製
+	Click to add an artboard on this side; Alt-click to duplicate this artboard with its art	クリックでこの辺にアートボードを追加、Alt+クリックでこのアートボードをアートワークごと複製
+	Click to add an artboard on this side	クリックでこの辺にアートボードを追加
 	Copy Artboard	アートボードをコピー
 	Cut Artboard	アートボードをカット
 	Rename Artboards	アートボード名を変更
@@ -1907,6 +1941,7 @@ antiAlias	Sharp	シャープ
 	Fit in Window	ウィンドウに合わせる
 	Fit on Screen	画面にフィット
 	Flare	フレア
+	Edit Flare	フレアを編集
 	Flare Tool	フレアツール
 	Flat Image	統合イメージ
 	Flatness:	フラットネス:
@@ -2862,6 +2897,7 @@ diagnostics	ui	UI
 	Save Actions…	アクションを保存…
 	Load Actions…	アクションを読み込み…
 	Replace Actions…	アクションを置き換え…
+	Clear Actions	アクションを消去
 	Reset Actions	アクションをリセット
 	Replace the current actions with the default set?	現在のアクションを初期設定のセットで置き換えますか？
 	Append adds the default set after the current sets instead.	「追加」を選ぶと、初期設定のセットを現在のセットの後に追加します。
@@ -3195,6 +3231,8 @@ mark-style	Japanese	日本式
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Cmd/Ctrl キーを押しながらマウスホイールを回すとカンバスを横にスクロールします。
 	Dragging sideways on a numeric field's label changes the field's value.	数値フィールドのラベルを横にドラッグすると、フィールドの値が変わります。
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	トラックパッドで 2 本指の回転ジェスチャーをすると、カンバスの表示が回転します。
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	キーを長押しすると、キーボードショートカットの長押し列にあるツールまたはコマンドを実行します。短く押すと通常のショートカットを実行します。
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	通常のショートカットの代わりに長押しショートカットを実行するまで、キーを押し続ける秒数です。
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	アンカーポイントを移動すると、一方の端が移動した各曲線は、両端に対する形状を保ちます。
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	ツールのショートカットキーを押している間はそのツールを選び、離すと前のツールに戻ります。
 	Shows the bounding box while you move the selection or draw a shape.	選択範囲の移動中や図形の描画中にバウンディングボックスを表示します。
@@ -3276,6 +3314,7 @@ mark-style	Japanese	日本式
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	スマートガイドがスナップするために、ポインターやドラッグしたポイントが画面上でアートにどこまで近づく必要があるかです。この距離はどのズームでも同じです。
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	直線セグメントの端、または中心から描いた円を、近くの曲線に接するようにスナップします。
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	直線セグメントの端を、近くの直線セグメントと直角に交わるようにスナップします。
+	Edit type set in fonts that aren't available?	使用できないフォントのテキストを編集しますか？
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	カンバス上で、各スライスの番号をスライスの左上のボックスに表示します。オフでもスライスの輪郭は表示されます。
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	ユーザースライスとオブジェクトスライスの輪郭、およびその番号のボックスの色です。自動スライスにはこの色の淡い色合いが使われます。
 	Reset all preferences to their defaults?	すべての環境設定を初期値に戻しますか？
@@ -3495,6 +3534,7 @@ mark-style	Japanese	日本式
 	Show Brush Size	ブラシサイズを表示
 	Show Center	中心を表示
 	Show Code	コードを表示
+	Show in Browser	ブラウザーで表示
 	Show East Asian Options	東アジアのオプションを表示
 	Show Find Field	検索フィールドを表示
 	Show Font Names in English	フォント名を英語で表示
@@ -4783,6 +4823,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	the art has no bounds	アートに境界がありません
 @msg	Image Trace: the traced image is missing	画像トレース: トレース元の画像が見つかりません
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	ライブペイントの結合: ライブペイントグループと、追加するパスを選択してください
+@msg	`Face` and `Edge` name the faces and edges of a Live Paint group: give the path another name	`Face` と `Edge` はライブペイントグループの面とエッジの名前です: パスには別の名前を付けてください
 @msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	ライブペイントで扱えるのはパスと複合パスです: テキスト、画像、その他のオブジェクトは先にパスに変換してください
 @msg	Live Paint: select paths or compound paths	ライブペイント: パスまたは複合パスを選択してください
 @msg	Live Paint: these paths are too degenerate to paint	ライブペイント: これらのパスは形状がつぶれすぎていてペイントできません
@@ -4847,6 +4888,8 @@ variable-list-end	{0}, {1}	{0}、{1}
 @msg	no such spine point	指定されたスパインポイントが見つかりません
 @msg	`with` must be a list of at most 10000 spine point indexes	`with` には最大 10000 個のスパインポイントのインデックスのリストを指定してください
 @msg	`with` moves points, not a handle	`with` はポイントを移動します。ハンドルには使えません
+@msg	`link` and `independent` cannot both be true	`link` と `independent` を同時に true にすることはできません
+@msg	`link` places a handle: give `handle`	`link` はハンドルを配置します：`handle` を指定してください
 @msg	no such spine segment	指定されたスパインセグメントが見つかりません
 @msg	no such subpath	指定されたサブパスが見つかりません
 @msg	object {id} is not a path	オブジェクト {id} はパスではありません
@@ -4969,9 +5012,11 @@ variable-list-end	{0}, {1}	{0}、{1}
 @msg	no bounds	境界がありません
 @msg	no current layer	現在のレイヤーがありません
 @msg	no key object	キーオブジェクトが設定されていません
+@msg	Align to Key Object isn't available with the Artboard tool	アートボードツールでは「キーオブジェクトに整列」を使用できません
 @msg	no previous transform	前回の変形がありません
 @msg	nothing to align	整列するものがありません
 @msg	select a clip group	クリップグループを選択してください
+@msg	select a flare	フレアを選択してください
 @msg	select two or more objects to distribute	分布させるオブジェクトを 2 つ以上選択してください
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis には "vertical"、"horizontal"、度単位の角度のいずれかを指定してください (`{v}` は指定できません)
 @msg	give horizontal or vertical	horizontal または vertical を指定してください
@@ -5714,6 +5759,7 @@ liquify-list-end	{0}, {1}	{0}、{1}
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} 個のリンク画像がディスク上で変更されました: 「リンクを更新」で新しいバージョンを表示できます
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	ディスク上で変更された {n} 個のリンクファイルを更新しました
 @msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	ドキュメントに設定された裁ち落としがこの PDF/X ファイルには含まれません: 「ドキュメントの裁ち落とし設定を使用」をオンにしてください
+@msgplural	{n} object reaches the trim edge but stops short of the bleed|{n} objects reach the trim edge but stop short of the bleed	{n} 個のオブジェクトが仕上がり線に達していますが、裁ち落としまで届いていません
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	{what} を書き出しましたが、注意事項が {n} 件あります: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} 個のフォントファイルが {folder} に入りました
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} 個のフォントファイルが {folder} に入りましたが、{failed} 個は追加できませんでした: {reason}
@@ -6505,6 +6551,9 @@ lighting	Light	ライト
 	Continue in Background	バックグラウンドで続行
 	Cancel Export	書き出しをキャンセル
 @msg	Export cancelled	書き出しをキャンセルしました
+	Cancel Save	保存をキャンセル
+@plural	{n} more save waiting|{n} more saves waiting	待機中の保存: あと {n} 件
+@msg	Save canceled	保存をキャンセルしました
 # Paragraph panel menu › Justification…
 	Desired	最適
 	Word Spacing:	単語間隔:
@@ -8424,6 +8473,7 @@ axis	Y Axis	Y 軸
 @msg	the artboards don't fit on the canvas: fewer artboards, less spacing or a smaller size	アートボードがキャンバスに収まりません: アートボードの数を減らすか、間隔またはサイズを小さくしてください
 @msg	the character's size can't be measured	文字のサイズを計測できません
 @msg	the compound shape is too complex to expand	複合シェイプが複雑すぎて拡張できません
+@msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	領域を囲まない直線などのオープンパスは、複合シェイプに領域を加えません。含めるには、先にそのパスに「オブジェクト › パス › パスのアウトライン」を適用してください
 @msg	the container of the listed objects is gone	指定したオブジェクトを含むコンテナがなくなりました
 @msg	the copy `{user_id}` can't be read as a library	コピー `{user_id}` をライブラリとして読み込めません
 @msg	the copy would leave the canvas	コピーがキャンバスからはみ出します
@@ -8690,7 +8740,6 @@ axis	Y Axis	Y 軸
 @msg	{kind} files have no transparency, and the file would have {what}: flatten it first (object.flattenTransparency)	{kind} ファイルは透明に対応していませんが、ファイルに {what} が含まれます: 先に分割・統合してください (object.flattenTransparency)
 @msg	{kind} images can't be opened (see document.formats)	{kind} 画像は開けません (document.formats を参照)
 @msg	{k} `{v}` is not one of the choices	{k} `{v}` は選択肢にありません
-@msg	{k} has control characters{_1}	{k} に制御文字{_1} が含まれています
 @msg	{k} is too long (at most {MAX_TEXT} characters)	{k} が長すぎます (最大 {MAX_TEXT} 文字)
 @msg	{k} must be > 0	{k} には 0 より大きい値を指定してください
 @msg	{k} must be a number (pt) or a length such as "210 mm"	{k} には数値 (pt)、または "210 mm" のような長さを指定してください
@@ -8759,6 +8808,7 @@ axis	Y Axis	Y 軸
 	Checkpoint	チェックポイント
 	Inventory Icons	インベントリアイコン
 	Skill Icons	スキルアイコン
+	Weather Icons	天気アイコン
 	Attack	攻撃
 	Defend	防御
 	Heal	回復
@@ -8864,6 +8914,13 @@ axis	Y Axis	Y 軸
 	Bus Lines	バス配線
 	Terminal Nodes	端子ノード
 
+# Original arrow art brushes.
+	Arrows	矢印ブラシ
+	Solid Arrow	塗りつぶし矢印
+	Open Arrow	中抜き矢印
+	Double Arrow	両矢印
+	Chevron Arrow	山形付き矢印
+
 	Notched Ribbon	ノッチリボン
 	Double Line	二重線
 	Wave	波
@@ -8880,6 +8937,257 @@ axis	Y Axis	Y 軸
 	Stars	星
 	Triangles	三角形
 	Sparkles	きらめき
+	Warm Gray	ウォームグレー
+	Cool Gray	クールグレー
+	Neutrals	ニュートラル系
+	Ivory	アイボリー
+	Linen	リネン
+	Oat	オート
+	Greige	グレージュ
+	Stone	ストーン
+	Taupe	トープ
+	Slate	スレート
+	Clay	クレイ
+	Terracotta	テラコッタ
+	Ochre	オーカー
+	Umber	焦げ茶
+	Sand	サンド
+	Olive	オリーブ
+	Moss	モス
+	Rosy	ロージー
+	Neutral	ニュートラル
+	Golden	ゴールデン
+	Pastel	パステル
+	Pastel Red	パステルレッド
+	Pastel Orange	パステルオレンジ
+	Pastel Amber	パステルアンバー
+	Pastel Yellow	パステルイエロー
+	Pastel Lime	パステルライム
+	Pastel Green	パステルグリーン
+	Pastel Teal	パステルティール
+	Pastel Cyan	パステルシアン
+	Pastel Azure	パステルアジュール
+	Pastel Blue	パステルブルー
+	Pastel Violet	パステルバイオレット
+	Pastel Magenta	パステルマゼンタ
+	Soft Red	ソフトレッド
+	Soft Orange	ソフトオレンジ
+	Soft Amber	ソフトアンバー
+	Soft Yellow	ソフトイエロー
+	Soft Lime	ソフトライム
+	Soft Green	ソフトグリーン
+	Soft Teal	ソフトティール
+	Soft Cyan	ソフトシアン
+	Soft Azure	ソフトアジュール
+	Soft Blue	ソフトブルー
+	Soft Violet	ソフトバイオレット
+	Soft Magenta	ソフトマゼンタ
+	Vivid Red	ビビッドレッド
+	Vivid Orange	ビビッドオレンジ
+	Vivid Amber	ビビッドアンバー
+	Vivid Yellow	ビビッドイエロー
+	Vivid Lime	ビビッドライム
+	Vivid Green	ビビッドグリーン
+	Vivid Teal	ビビッドティール
+	Vivid Cyan	ビビッドシアン
+	Vivid Azure	ビビッドアジュール
+	Vivid Blue	ビビッドブルー
+	Vivid Violet	ビビッドバイオレット
+	Vivid Magenta	ビビッドマゼンタ
+	Deep	ディープ
+	Deep Red	ディープレッド
+	Deep Orange	ディープオレンジ
+	Deep Amber	ディープアンバー
+	Deep Yellow	ディープイエロー
+	Deep Lime	ディープライム
+	Deep Green	ディープグリーン
+	Deep Teal	ディープティール
+	Deep Cyan	ディープシアン
+	Deep Azure	ディープアジュール
+	Deep Blue	ディープブルー
+	Deep Violet	ディープバイオレット
+	Deep Magenta	ディープマゼンタ
+	Gold	ゴールド
+	Silver	シルバー
+	Bronze	ブロンズ
+	Copper	カッパー
+	Brass	ブラス
+	Rose Gold	ローズゴールド
+	Gunmetal	ガンメタル
+	Platinum	プラチナ
+	Pewter	ピューター
+	Ember	残り火
+	Lagoon	ラグーン
+	Dusk	夕暮れ
+	Clay to Teal	クレイからティール
+	Plum to Olive	プラムからオリーブ
+	Complementary Coral	コーラル (補色)
+	Split Complementary Coral	コーラル (分割補色)
+	Analogous Coral	コーラル (類似色)
+	Triad Coral	コーラル (トライアド)
+	Tetrad Coral	コーラル (テトラード)
+	Pentagram Coral	コーラル (ペンタグラム)
+	Complementary Teal	ティール (補色)
+	Split Complementary Teal	ティール (分割補色)
+	Analogous Teal	ティール (類似色)
+	Triad Teal	ティール (トライアド)
+	Tetrad Teal	ティール (テトラード)
+	Pentagram Teal	ティール (ペンタグラム)
+	Soft Spectrum	ソフトスペクトル
+	Red to Amber	レッドからアンバー
+	Orange to Yellow	オレンジからイエロー
+	Amber to Lime	アンバーからライム
+	Yellow to Green	イエローからグリーン
+	Lime to Teal	ライムからティール
+	Green to Cyan	グリーンからシアン
+	Teal to Azure	ティールからアジュール
+	Cyan to Blue	シアンからブルー
+	Azure to Violet	アジュールからバイオレット
+	Blue to Magenta	ブルーからマゼンタ
+	Violet to Red	バイオレットからレッド
+	Magenta to Orange	マゼンタからオレンジ
+	Dawn	夜明け
+	Noon	正午
+	Sunset	夕焼け
+	Night	夜
+	Overcast	曇り空
+	White to Black	ホワイトからブラック
+	Light Grays	ライトグレー
+	Dark Grays	ダークグレー
+	Warm Grays	ウォームグレー系
+	Cool Grays	クールグレー系
+	Fade to Transparent	透明へフェード
+	White Fade	ホワイトフェード
+	Vignette	ビネット
+	Mist	ミスト
+	Petal	花びら
+	Fern	シダ
+	Smoke	スモーク
+	Honey	ハニー
+	Seafoam	シーフォーム
+	Lavender	ラベンダー
+	Driftwood	流木
+	Ink Wash	墨のにじみ
+	Tide	潮
+	Bloom	開花
+	Dew	露
+	Pollen	花粉
+	Lichen	地衣
+	Prism Veil	プリズムベール
+	Opal Ribbon	オパールリボン
+	Pearl Flash	パールフラッシュ
+	Aurora Foil	オーロラ箔
+	Iris Sheen	虹彩の光沢
+	Frost Spectrum	霜のスペクトル
+	Silver Tide	銀の潮
+	Rose Quartz Gleam	ローズクォーツの輝き
+	Moonstone Shift	ムーンストーンの揺らめき
+	Violet Edge	バイオレットの縁
+	Mint Halo	ミントのハロー
+	Amber Corona	アンバーのコロナ
+	Polar Glint	極光のきらめき
+	Pastel Orbit	パステルの軌道
+	Coral and Navy	コーラルとネイビー
+	Plum and Lime	プラムとライム
+	Teal and Gold	ティールとゴールド
+	Indigo and Peach	インディゴとピーチ
+	Forest and Rose	フォレストとローズ
+	Red Glow	レッドグロー
+	Orange Glow	オレンジグロー
+	Amber Glow	アンバーグロー
+	Yellow Glow	イエローグロー
+	Lime Glow	ライムグロー
+	Green Glow	グリーングロー
+	Teal Glow	ティールグロー
+	Cyan Glow	シアングロー
+	Azure Glow	アジュールグロー
+	Blue Glow	ブルーグロー
+	Violet Glow	バイオレットグロー
+	Magenta Glow	マゼンタグロー
+	Polka Dots	水玉
+	Vertical Stripes	縦ストライプ
+	Horizontal Stripes	横ストライプ
+	Diagonal Stripes	斜めストライプ
+	Checkerboard	市松模様
+	Diamonds	ダイヤ柄
+	Crosses	十字柄
+	Coarse Grit	粗い粒子
+	Stipple	点描
+	Scratches	引っかき傷
+	Sparse Flecks	まばらな斑点
+	Dense Flecks	密な斑点
+	Sine Bands	正弦波の帯
+	Ripple Lines	波紋線
+	Interference Rings	干渉リング
+	Offset Rings	ずれたリング
+	Warped Checks	ゆがんだチェック
+	Pinched Stripes	すぼまったストライプ
+	Chevron Pulse	山形パルス
+	Radiating Lenses	放射状レンズ
+	Soft Shadow	ソフトシャドウ
+	Hard Shadow	ハードシャドウ
+	Lifted Card	浮き上がったカード
+	Neon Tube	ネオン管
+	Inner Light	内側の光
+	Feathered	ぼかし
+	Haze	もや
+	Double Rule	二重罫線
+	Triple Rule	三重罫線
+	Dashed Border	破線の枠
+	Dotted Border	点線の枠
+	Offset Keyline	オフセットキーライン
+	Inset Keyline	内側キーライン
+	Outside Stroke	外側の線
+	Pointer	ポインター
+	Highlighter	蛍光ペン
+	Sketchy Line	スケッチ風の線
+	Scribble Fill	落書き風塗り
+	Wobble	揺らぎ
+	Zig Zag Edge	ジグザグの縁
+	Wavy Edge	波形の縁
+	Puffy	ふくらみ
+	Starburst	スターバースト
+	Glossy	光沢
+	Brushed Metal	ヘアライン金属
+	Spotlight	スポットライト
+	Sunset Band	夕焼けの帯
+	Sea Glass	シーグラス
+	Pearl	パール
+	Chrome Rim	クロームの縁
+	Glow Orb	光る球
+	Pill Badge	ピル型バッジ
+	Round Badge	丸型バッジ
+	Flag Wave	旗のなびき
+	Bulge	膨らみ
+	Twisted	ねじれ
+	Echo	エコー
+	Spiral Copies	らせん状のコピー
+	Multiply Tint	乗算の色合い
+	Darken Veil	比較 (暗) のベール
+	Ghosted	半透明
+	Two Tone	ツートーン
+	Overlay Glaze	オーバーレイの釉
+	Screen Light	スクリーンの光
+	Soft Light Wash	ソフトライトのにじみ
+	Cyan Neon	シアンのネオン
+	Magenta Laser	マゼンタのレーザー
+	Amber Tube	琥珀色の管
+	Electric Lime	エレクトリックライム
+	Pulse Violet	脈打つ紫
+	Cobalt Phosphor	コバルトの蛍光体
+	Burst	バースト
+	Rounded Square	角丸の正方形
+	Sun	太陽
+	Moon	月
+	Cloud	雲
+	Rain	雨
+	Thunder	雷
+	Snow	雪
+	Bar	バー
+	Hexagon	六角形
+	Spectrum	スペクトル
+	Triangle	三角形
+	Vivid	ビビッド
 	Save Brush Library…	ブラシライブラリを保存…
 @msg	`{_1}` has no brushes to apply	`{_1}` に適用できるブラシがありません
 @msg	missing `library` (see brush.libraries)	`library` がありません (brush.libraries を参照)
@@ -9306,10 +9614,18 @@ breakText	Glyphs	字形
 	Smooth Bridge…	スムーズブリッジ…
 	Smooth Bridge	スムーズブリッジ
 	Keep Originals	オリジナルを保持
-@msg	select two circles to bridge	ブリッジでつなぐ円を 2 つ選択してください
+@msg	select two or more circles to bridge	ブリッジでつなぐ円を 2 つ以上選択してください
 @msg	one circle is inside the other	一方の円がもう一方の円の内側にあります
 @msg	the circles are too far apart for this radius: raise the radius	この半径では円が離れすぎています：半径を大きくしてください
 @msg	the circles are too far apart for this radius	この半径では円が離れすぎています
+	Constant Gap	一定の間隔
+	Reach:	到達距離:
+@msg	the circles are too far apart for this gap: raise the gap	この間隔では円が離れすぎています：間隔を大きくしてください
+@msg	the circles are too far apart for this gap	この間隔では円が離れすぎています
+@msg	no two circles are within reach: raise the reach	到達距離内にある円の組がありません：到達距離を大きくしてください
+@msg	select at most 2000 circles to bridge	ブリッジでつなぐ円は 2000 個以下で選択してください
+@msg	that makes too many bridges (at most 8000): lower the reach	ブリッジが多すぎます（最大 8000）：到達距離を小さくしてください
+@msg	the bridged circles are too complex to unite	ブリッジでつないだ円が複雑すぎて合体できません
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	共通接線…
 	Common Tangents	共通接線
@@ -9800,6 +10116,16 @@ breakText	Glyphs	字形
 	No objects are selected.	オブジェクトが選択されていません。
 	Open a document to mark its fold lines.	ドキュメントを開くと折り線を設定できます。
 	Remove Fold Line Role	線種を解除
+	Tap	短押し
+	Clear Hold	長押しを消去
+	Hold Shortcuts	長押しショートカット
+	Hold Shortcut Delay	長押しショートカットの遅延
+	How hold shortcuts work	長押しショートカットのしくみ
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	クリックしてから、これに使う長押しのキーを押します (Esc でキャンセル)。キーを長押しするとこれを実行し、短く押すとキー自体のショートカットを実行します。
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	キーを短く押すと、そのショートカットを実行します。遅延の時間だけキーを押し続けると、代わりに長押し列のツールまたはコマンドを実行します。長押しショートカットには、文字、数字、句読点のキーを単独で、または Shift と組み合わせて使用できます。
+@msg	Hold {_1} is already used by {_2}	長押し {_1} はすでに {_2} で使用されています
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	長押しショートカットは、文字を入力するキーを単独で、または Shift と組み合わせたものです ({shown} には Cmd、Ctrl、Alt のいずれかが含まれています)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} は長押しショートカットにできません: 文字、数字、句読点のいずれかのキーを使用してください
 	Check	チェック
 	Check Fold Lines	折り線をチェック
 @msg	No cut lines are in the selection.	選択範囲にカット線がありません。
@@ -9820,6 +10146,7 @@ breakText	Glyphs	字形
 @msg	A panel is not joined to the rest by a crease.	パネルがどの筋入れ線でも他とつながっていません。
 @msg	A fold line is on a non-printing layer.	折り線が印刷しないレイヤーにあります。
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	パネル: {panels}、ヒンジ: {hinges}、エラー: {errors}、警告: {warnings}
+	Dashed Arrow	破線矢印
 	Pressure Sensitive	筆圧対応
 	Flex Ribbon	しなやかなリボン
 	Pulse Stroke	脈打つ線

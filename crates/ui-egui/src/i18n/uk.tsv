@@ -554,6 +554,11 @@ font-technology	Variable	Варіативні
 	Color blindness – Deuteranopia-type	Дальтонізм - дейтеранопія
 	Color blindness – Protanopia-type	Дальтонізм - протанопія
 	Color blindness – Tritanopia-type	Дальтонізм - тританопія
+	Show Color Vision Preview	Показати імітацію колірного зору
+	Protanopia	Протанопія
+	Deuteranopia	Дейтеранопія
+	Tritanopia	Тританопія
+	Achromatopsia	Ахроматопсія
 	Color Burn	Затемнення основи
 	Color conversion:	Перетворення кольору:
 	Color Dodge	Освітлення основи
@@ -727,6 +732,16 @@ font-technology	Variable	Варіативні
 	Create New Swatch…	Створити новий зразок…
 	Create New {kind} Style	Створити новий стиль {kind}
 	Create Object Mosaic…	Створити мозаїку об’єктів…
+	Create Object Mosaic	Створити мозаїку об’єктів
+	Current Size:	Поточний розмір:
+	New Size:	Новий розмір:
+	Tile Spacing:	Інтервал між плитками:
+	Number of Tiles:	Кількість плиток:
+	Constrain Ratio:	Зберігати пропорції:
+	Result:	Результат:
+	Resize Using Percentages	Змінити розмір у відсотках
+	Delete Raster	Видалити растрове зображення
+	Use Ratio	Використати пропорції
 	Create Outlines	Створити контури
 	Create Path	Створити контур
 	Create PDF layers from layers and sublayers	Створювати шари PDF із шарів та підшарів
@@ -854,6 +869,7 @@ font-technology	Variable	Варіативні
 	Duplicate Action or Action Set	Дублювати дію або набір дій
 	Delete the action set “{name}” and its actions?	Видалити набір дій «{name}» і його дії?
 	Delete the selected action sets and their actions?	Видалити вибрані набори дій і їхні дії?
+	Delete all action sets and their actions?	Видалити всі набори дій і їхні дії?
 	Delete Theme	Видалити тему
 	Delete theme	Видалити тему
 	Delete these {n} graphic styles?	Видалити ці графічні стилі ({n})?
@@ -998,6 +1014,8 @@ font-technology	Variable	Варіативні
 	Duplicate	Дублювати
 	Duplicate and Offset 10 pt	Дублювати та змістити на 10 пунктів
 	Duplicate Artboard	Дублювати монтажну область
+	Click to add an artboard on this side; Alt-click to duplicate this artboard with its art	Клацніть, щоб додати монтажну область із цього боку; клацніть з Alt, щоб дублювати цю монтажну область разом із графікою
+	Click to add an artboard on this side	Клацніть, щоб додати монтажну область із цього боку
 	Copy Artboard	Копіювати монтажну область
 	Cut Artboard	Вирізати монтажну область
 	Rename Artboards	Перейменувати монтажні області
@@ -1324,6 +1342,19 @@ font-technology	Variable	Варіативні
 	Fill: click for swatches, Shift-click for the color mixer	Заливка: клацніть для зразків, Shift+клацання — для змішувача кольорів
 	Find	Знайти
 	Find and Replace…	Знайти та замінити…
+	Find and Replace	Знайти та замінити
+	Find:	Знайти:
+	Replace With:	Замінити на:
+	Replace & Find	Замінити та знайти
+	Replace All	Замінити все
+	Match Case	Враховувати регістр
+	Find Whole Word	Знайти слово цілком
+	Search Backwards	Шукати назад
+	Check Hidden Layers	Перевіряти приховані шари
+	Check Locked Layers	Перевіряти заблоковані шари
+@msg	No matches found	Збігів не знайдено
+@msg	Matches replaced: {n}	Замінено збігів: {n}
+@msg	no match of `find` at bytes {_1}..{_2} of object {_3}	у байтах {_1}..{_2} об’єкта {_3} немає збігу з `find`
 	Find Font	Знайти шрифт
 	Find Font…	Знайти шрифт…
 	Find Next	Знайти далі
@@ -1358,6 +1389,7 @@ font-technology	Variable	Варіативні
 	Fit to Selected Art	Вписати у виділений малюнок
 	Flag…	Прапор…
 	Flare	Відблиск
+	Edit Flare	Редагувати відблиск
 	Flare Tool	Інструмент «Відблиск»
 	Flare Tool Options	Параметри інструменту «Відблиск»
 	Halo	Ореол
@@ -2279,6 +2311,9 @@ file-filter	Templates	Шаблони
 	Navigate	Навігація
 	Navigator	Навігатор
 	Navigator Panel Options	Параметри панелі «Навігатор»
+	Attributes Panel Options	Параметри панелі «Атрибути»
+	Number of Recent URLs:	Кількість останніх URL:
+@msg	`count` must be a whole number from 1 to 30	`count` має бути цілим числом від 1 до 30
 	Draw Dashed Lines as Solid Lines	Малювати штрихові лінії суцільними
 	Needs the desktop app	Потрібен настільний додаток
 	Neutral Gradients	Нейтральні градієнти
@@ -2758,6 +2793,7 @@ diagnostics	ui	інтерфейс
 	Save Actions…	Зберегти дії…
 	Load Actions…	Завантажити дії…
 	Replace Actions…	Замінити дії…
+	Clear Actions	Очистити дії
 	Reset Actions	Скинути дії
 	Replace the current actions with the default set?	Замінити поточні дії набором за умовчанням?
 	Append adds the default set after the current sets instead.	Кнопка «Додати» натомість додає набір за умовчанням після поточних наборів.
@@ -3203,6 +3239,8 @@ digits	Malayalam	Малаялам
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Колесо миші з натиснутою Cmd/Ctrl прокручує полотно по горизонталі.
 	Dragging sideways on a numeric field's label changes the field's value.	Перетягування вбік по підпису числового поля змінює значення поля.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Жест обертання двома пальцями на трекпаді обертає вигляд полотна.
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Утримання клавіші запускає інструмент або команду з її стовпця «Утримувати» в «Поєднаннях клавіш»; коротке натискання запускає її звичайне поєднання.
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Скільки секунд потрібно утримувати клавішу, перш ніж замість її звичайного поєднання спрацює поєднання утримання.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Коли ви переміщуєте опорні точки, кожна крива з одним переміщеним кінцем зберігає форму відносно своїх кінців.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Поки ви утримуєте клавішу інструмента, його вибрано, а після відпускання знову вибирається попередній інструмент.
 	Shows the bounding box while you move the selection or draw a shape.	Показує обмежувальну рамку, поки ви переміщуєте виділення або малюєте фігуру.
@@ -3284,6 +3322,7 @@ digits	Malayalam	Малаялам
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Наскільки близько на екрані вказівник або перетягувана точка мають підійти до об’єкта, щоб розумні напрямні їх прив’язали; відстань однакова за будь-якого масштабу.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Прив’язує кінець відрізка або коло, намальоване від центру, так, щоб воно торкалося найближчої кривої.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Прив’язує кінець відрізка так, щоб він зустрічав найближчий прямий сегмент під прямим кутом.
+	Edit type set in fonts that aren't available?	Редагувати текст, набраний недоступними шрифтами?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Показує на полотні номер кожного фрагмента в рамці в його лівому верхньому куті; коли параметр вимкнено, контури фрагментів і далі видно.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Колір контурів користувацьких і об’єктних фрагментів та рамок з їхніми номерами; автоматичні фрагменти використовують блідіший відтінок цього кольору.
 	Reset all preferences to their defaults?	Скинути всі налаштування до значень за промовчанням?
@@ -3668,6 +3707,7 @@ digits	Malayalam	Малаялам
 	Show Brush Size	Показати розмір пензля
 	Show Center	Показати центр
 	Show Code	Показати код
+	Show in Browser	Показати у браузері
 	Show Color Groups	Показати групи кольорів
 	Show Color Swatches	Показати колірні зразки
 	Show Corner Widget	Показати кутовий віджет
@@ -4905,6 +4945,7 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	Installed plug-in {_1}	Встановлено модуль {_1}
 @msg	Internal error: {msg} (please report this bug)	Внутрішня помилка: {msg} (будь ласка, повідомте про цю помилку)
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	Об’єднання швидкої заливки: виділіть групу швидкої заливки та контури для додавання
+@msg	`Face` and `Edge` name the faces and edges of a Live Paint group: give the path another name	Імена `Face` і `Edge` мають грані та межі групи швидкої заливки: дайте контуру інше ім'я
 @msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	Швидка заливка приймає контури та складені контури: спершу перетворіть текст, зображення й інші об'єкти на контури
 @msg	Live Paint: select paths or compound paths	Швидка заливка: виділіть контури або складені контури
 @msg	Live Paint: these paths are too degenerate to paint	Швидка заливка: ці контури занадто вироджені для заливки
@@ -5225,6 +5266,7 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	no graphic style `{n}`	немає графічного стилю `{n}`
 @msg	no interaction in progress	немає взаємодії у процесі
 @msg	no key object	немає ключового об’єкта
+@msg	Align to Key Object isn't available with the Artboard tool	«Вирівняти за ключовим об’єктом» недоступно з інструментом «Монтажна область»
 @msg	no library `{key}` (see {list})	немає бібліотеки `{key}` (див. {list})
 @msg	no native format	немає власного формату
 @msg	no pages	немає сторінок
@@ -5280,6 +5322,8 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	no such spine point	такої точки осі немає
 @msg	`with` must be a list of at most 10000 spine point indexes	`with` має бути списком щонайбільше з 10000 індексів точок осі
 @msg	`with` moves points, not a handle	`with` переміщує точки, а не маркер
+@msg	`link` and `independent` cannot both be true	`link` і `independent` не можуть одночасно бути true
+@msg	`link` places a handle: give `handle`	`link` розміщує маркер: укажіть `handle`
 @msg	no such spine segment	такого сегмента осі немає
 @msg	no such subpath	такого вкладеного контуру немає
 @msg	no such user library	такої користувацької бібліотеки немає
@@ -5369,6 +5413,7 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	select a blend	виділіть перехід
 @msg	select a blend or give `id`	виділіть перехід або вкажіть `id`
 @msg	select a clip group	виділіть відсічну групу
+@msg	select a flare	виділіть відблиск
 @msg	select a gradient mesh	виділіть градієнтну сітку
 @msg	select a linked image: an embedded one has no file	виділіть пов’язане зображення: у вбудованого немає файлу
 @msg	select a repeat	виділіть повтор
@@ -5626,6 +5671,7 @@ variable-list-end	{0}, {1}	{0} і {1}
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} пов’язане зображення змінилося на диску: «Оновити зв’язки» покаже нову версію|{n} пов’язані зображення змінилися на диску: «Оновити зв’язки» покаже нові версії|{n} пов’язаних зображень змінилися на диску: «Оновити зв’язки» покаже нові версії
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Оновлено {n} пов’язаний файл, змінений на диску|Оновлено {n} пов’язані файли, змінені на диску|Оновлено {n} пов’язаних файлів, змінених на диску
 @msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	у документі задано виліт, який цей файл PDF/X не містить: увімкніть «Використовувати параметри вильоту документа»
+@msgplural	{n} object reaches the trim edge but stops short of the bleed|{n} objects reach the trim edge but stop short of the bleed	об’єктів, що доходять до краю обрізу, але не до вильоту: {n}|об’єктів, що доходять до краю обрізу, але не до вильоту: {n}|об’єктів, що доходять до краю обрізу, але не до вильоту: {n}
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	Експортовано: {what} з {n} приміткою: {first}|Експортовано: {what} з {n} примітками: {first}|Експортовано: {what} з {n} примітками: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} файл шрифту тепер у {folder}|{n} файли шрифтів тепер у {folder}|{n} файлів шрифтів тепер у {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} файл шрифту тепер у {folder}; не вдалося додати {failed}: {reason}|{n} файли шрифтів тепер у {folder}; не вдалося додати {failed}: {reason}|{n} файлів шрифтів тепер у {folder}; не вдалося додати {failed}: {reason}
@@ -6434,6 +6480,9 @@ lighting	Light	Світло
 	Continue in Background	Продовжити у фоні
 	Cancel Export	Скасувати експорт
 @msg	Export cancelled	Експорт скасовано
+	Cancel Save	Скасувати збереження
+@plural	{n} more save waiting|{n} more saves waiting	Ще {n} збереження в очікуванні|Ще {n} збереження в очікуванні|Ще {n} збережень в очікуванні
+@msg	Save canceled	Збереження скасовано
 # Paragraph panel menu › Justification…
 	Desired	Бажане
 	Word Spacing:	Інтервал між словами:
@@ -6851,6 +6900,7 @@ axis	Y Axis	Вісь Y
 	Checkpoint	Контрольна точка
 	Inventory Icons	Піктограми інвентарю
 	Skill Icons	Іконки навичок
+	Weather Icons	Іконки погоди
 	Attack	Атака
 	Defend	Захист
 	Heal	Лікування
@@ -6956,6 +7006,13 @@ axis	Y Axis	Вісь Y
 	Bus Lines	Лінії шини
 	Terminal Nodes	Контактні вузли
 
+# Original arrow art brushes.
+	Arrows	Пензлі-стрілки
+	Solid Arrow	Суцільна стрілка
+	Open Arrow	Відкрита стрілка
+	Double Arrow	Подвійна стрілка
+	Chevron Arrow	Стрілка з шевроном
+
 	Notched Ribbon	Стрічка з насічками
 	Double Line	Подвійна лінія
 	Wave	Хвиля
@@ -6972,6 +7029,257 @@ axis	Y Axis	Вісь Y
 	Stars	Зірки
 	Triangles	Трикутники
 	Sparkles	Іскри
+	Warm Gray	Теплий сірий
+	Cool Gray	Холодний сірий
+	Neutrals	Нейтральні
+	Ivory	Слонова кістка
+	Linen	Льон
+	Oat	Овес
+	Greige	Грейж
+	Stone	Камінь
+	Taupe	Сіро-коричневий
+	Slate	Сланець
+	Clay	Глина
+	Terracotta	Теракота
+	Ochre	Охра
+	Umber	Умбра
+	Sand	Пісок
+	Olive	Оливковий
+	Moss	Мох
+	Rosy	Рожевуватий
+	Neutral	Нейтральний
+	Golden	Золотистий
+	Pastel	Пастельні
+	Pastel Red	Пастельний червоний
+	Pastel Orange	Пастельний помаранчевий
+	Pastel Amber	Пастельний бурштиновий
+	Pastel Yellow	Пастельний жовтий
+	Pastel Lime	Пастельний лаймовий
+	Pastel Green	Пастельний зелений
+	Pastel Teal	Пастельний синьо-зелений
+	Pastel Cyan	Пастельний блакитний
+	Pastel Azure	Пастельний лазуровий
+	Pastel Blue	Пастельний синій
+	Pastel Violet	Пастельний фіолетовий
+	Pastel Magenta	Пастельний пурпурний
+	Soft Red	М’який червоний
+	Soft Orange	М’який помаранчевий
+	Soft Amber	М’який бурштиновий
+	Soft Yellow	М’який жовтий
+	Soft Lime	М’який лаймовий
+	Soft Green	М’який зелений
+	Soft Teal	М’який синьо-зелений
+	Soft Cyan	М’який блакитний
+	Soft Azure	М’який лазуровий
+	Soft Blue	М’який синій
+	Soft Violet	М’який фіолетовий
+	Soft Magenta	М’який пурпурний
+	Vivid Red	Яскравий червоний
+	Vivid Orange	Яскравий помаранчевий
+	Vivid Amber	Яскравий бурштиновий
+	Vivid Yellow	Яскравий жовтий
+	Vivid Lime	Яскравий лаймовий
+	Vivid Green	Яскравий зелений
+	Vivid Teal	Яскравий синьо-зелений
+	Vivid Cyan	Яскравий блакитний
+	Vivid Azure	Яскравий лазуровий
+	Vivid Blue	Яскравий синій
+	Vivid Violet	Яскравий фіолетовий
+	Vivid Magenta	Яскравий пурпурний
+	Deep	Глибокі
+	Deep Red	Темно-червоний
+	Deep Orange	Темно-помаранчевий
+	Deep Amber	Темно-бурштиновий
+	Deep Yellow	Темно-жовтий
+	Deep Lime	Темно-лаймовий
+	Deep Green	Темно-зелений
+	Deep Teal	Темний синьо-зелений
+	Deep Cyan	Темно-блакитний
+	Deep Azure	Темно-лазуровий
+	Deep Blue	Темно-синій
+	Deep Violet	Темно-фіолетовий
+	Deep Magenta	Темно-пурпурний
+	Gold	Золото
+	Silver	Срібло
+	Bronze	Бронза
+	Copper	Мідь
+	Brass	Латунь
+	Rose Gold	Рожеве золото
+	Gunmetal	Збройовий метал
+	Platinum	Платина
+	Pewter	Олово
+	Ember	Жар
+	Lagoon	Лагуна
+	Dusk	Сутінки
+	Clay to Teal	Від глини до синьо-зеленого
+	Plum to Olive	Від сливового до оливкового
+	Complementary Coral	Кораловий, доповняльна
+	Split Complementary Coral	Кораловий, розщеплена доповняльна
+	Analogous Coral	Кораловий, аналогова
+	Triad Coral	Кораловий, тріада
+	Tetrad Coral	Кораловий, тетрада
+	Pentagram Coral	Кораловий, пентаграма
+	Complementary Teal	Синьо-зелений, доповняльна
+	Split Complementary Teal	Синьо-зелений, розщеплена доповняльна
+	Analogous Teal	Синьо-зелений, аналогова
+	Triad Teal	Синьо-зелений, тріада
+	Tetrad Teal	Синьо-зелений, тетрада
+	Pentagram Teal	Синьо-зелений, пентаграма
+	Soft Spectrum	М’який спектр
+	Red to Amber	Від червоного до бурштинового
+	Orange to Yellow	Від помаранчевого до жовтого
+	Amber to Lime	Від бурштинового до лаймового
+	Yellow to Green	Від жовтого до зеленого
+	Lime to Teal	Від лаймового до синьо-зеленого
+	Green to Cyan	Від зеленого до блакитного
+	Teal to Azure	Від синьо-зеленого до лазурового
+	Cyan to Blue	Від блакитного до синього
+	Azure to Violet	Від лазурового до фіолетового
+	Blue to Magenta	Від синього до пурпурного
+	Violet to Red	Від фіолетового до червоного
+	Magenta to Orange	Від пурпурного до помаранчевого
+	Dawn	Світанок
+	Noon	Полудень
+	Sunset	Захід сонця
+	Night	Ніч
+	Overcast	Похмуро
+	White to Black	Від білого до чорного
+	Light Grays	Світло-сірі
+	Dark Grays	Темно-сірі
+	Warm Grays	Теплі сірі
+	Cool Grays	Холодні сірі
+	Fade to Transparent	Перехід у прозорість
+	White Fade	Білий перехід
+	Vignette	Віньєтка
+	Mist	Серпанок
+	Petal	Пелюстка
+	Fern	Папороть
+	Smoke	Дим
+	Honey	Мед
+	Seafoam	Морська піна
+	Lavender	Лаванда
+	Driftwood	Викинуте морем дерево
+	Ink Wash	Розмивка тушшю
+	Tide	Приплив
+	Bloom	Цвітіння
+	Dew	Роса
+	Pollen	Пилок
+	Lichen	Лишайник
+	Prism Veil	Призматична вуаль
+	Opal Ribbon	Опалова стрічка
+	Pearl Flash	Перлинний спалах
+	Aurora Foil	Фольга полярного сяйва
+	Iris Sheen	Райдужний полиск
+	Frost Spectrum	Морозний спектр
+	Silver Tide	Срібний приплив
+	Rose Quartz Gleam	Блиск рожевого кварцу
+	Moonstone Shift	Перелив місячного каменю
+	Violet Edge	Фіолетовий край
+	Mint Halo	М’ятний ореол
+	Amber Corona	Бурштинова корона
+	Polar Glint	Полярний відблиск
+	Pastel Orbit	Пастельна орбіта
+	Coral and Navy	Кораловий і темно-синій
+	Plum and Lime	Сливовий і лаймовий
+	Teal and Gold	Синьо-зелений і золотий
+	Indigo and Peach	Індиго і персиковий
+	Forest and Rose	Лісовий і рожевий
+	Red Glow	Червоне сяйво
+	Orange Glow	Помаранчеве сяйво
+	Amber Glow	Бурштинове сяйво
+	Yellow Glow	Жовте сяйво
+	Lime Glow	Лаймове сяйво
+	Green Glow	Зелене сяйво
+	Teal Glow	Синьо-зелене сяйво
+	Cyan Glow	Блакитне сяйво
+	Azure Glow	Лазурове сяйво
+	Blue Glow	Синє сяйво
+	Violet Glow	Фіолетове сяйво
+	Magenta Glow	Пурпурне сяйво
+	Polka Dots	Горошок
+	Vertical Stripes	Вертикальні смуги
+	Horizontal Stripes	Горизонтальні смуги
+	Diagonal Stripes	Діагональні смуги
+	Checkerboard	Шахівниця
+	Diamonds	Ромби
+	Crosses	Хрестики
+	Coarse Grit	Велике зерно
+	Stipple	Пунктир
+	Scratches	Подряпини
+	Sparse Flecks	Рідкі цятки
+	Dense Flecks	Густі цятки
+	Sine Bands	Синусоїдні смуги
+	Ripple Lines	Лінії брижів
+	Interference Rings	Інтерференційні кільця
+	Offset Rings	Зміщені кільця
+	Warped Checks	Викривлена клітинка
+	Pinched Stripes	Стиснуті смуги
+	Chevron Pulse	Пульсуючі шеврони
+	Radiating Lenses	Променисті лінзи
+	Soft Shadow	М’яка тінь
+	Hard Shadow	Різка тінь
+	Lifted Card	Піднята картка
+	Neon Tube	Неонова трубка
+	Inner Light	Внутрішнє світло
+	Feathered	Розтушований
+	Haze	Імла
+	Double Rule	Подвійна лінійка
+	Triple Rule	Потрійна лінійка
+	Dashed Border	Штрихова рамка
+	Dotted Border	Точкова рамка
+	Offset Keyline	Зміщений контур
+	Inset Keyline	Внутрішній контур
+	Outside Stroke	Зовнішня обвідка
+	Pointer	Вказівник
+	Highlighter	Маркер
+	Sketchy Line	Ескізна лінія
+	Scribble Fill	Заливка каракулями
+	Wobble	Тремтіння
+	Zig Zag Edge	Зигзагоподібний край
+	Wavy Edge	Хвилястий край
+	Puffy	Пухкий
+	Starburst	Зоряний вибух
+	Glossy	Глянцевий
+	Brushed Metal	Шліфований метал
+	Spotlight	Прожектор
+	Sunset Band	Смуга заходу
+	Sea Glass	Морське скло
+	Pearl	Перлина
+	Chrome Rim	Хромований обідок
+	Glow Orb	Сяйна куля
+	Pill Badge	Значок-капсула
+	Round Badge	Круглий значок
+	Flag Wave	Майоріючий прапор
+	Bulge	Опуклість
+	Twisted	Закручений
+	Echo	Відлуння
+	Spiral Copies	Копії по спіралі
+	Multiply Tint	Відтінок множення
+	Darken Veil	Затемнювальна вуаль
+	Ghosted	Примарний
+	Two Tone	Двоколірний
+	Overlay Glaze	Глазур накладання
+	Screen Light	Світло екрана
+	Soft Light Wash	Розмивка м’яким світлом
+	Cyan Neon	Блакитний неон
+	Magenta Laser	Пурпуровий лазер
+	Amber Tube	Бурштинова трубка
+	Electric Lime	Електричний лайм
+	Pulse Violet	Пульсуючий фіолетовий
+	Cobalt Phosphor	Кобальтовий люмінофор
+	Burst	Спалах
+	Rounded Square	Округлений квадрат
+	Sun	Сонце
+	Moon	Місяць
+	Cloud	Хмара
+	Rain	Дощ
+	Thunder	Грім
+	Snow	Сніг
+	Bar	Панель
+	Hexagon	Шестикутник
+	Spectrum	Спектр
+	Triangle	Трикутник
+	Vivid	Яскраві
 	Save Brush Library…	Зберегти бібліотеку пензлів…
 @msg	`{_1}` has no brushes to apply	У `{_1}` немає пензлів для застосування
 @msg	missing `library` (see brush.libraries)	не вказано `library` (див. brush.libraries)
@@ -7398,10 +7706,18 @@ breakText	Glyphs	Гліфи
 	Smooth Bridge…	Плавний міст…
 	Smooth Bridge	Плавний міст
 	Keep Originals	Зберегти оригінали
-@msg	select two circles to bridge	виділіть два кола для з’єднання
+@msg	select two or more circles to bridge	виділіть два або більше кіл для з’єднання
 @msg	one circle is inside the other	одне коло всередині іншого
 @msg	the circles are too far apart for this radius: raise the radius	кола надто далеко одне від одного для цього радіуса: збільште радіус
 @msg	the circles are too far apart for this radius	кола надто далеко одне від одного для цього радіуса
+	Constant Gap	Сталий проміжок
+	Reach:	Охоплення:
+@msg	the circles are too far apart for this gap: raise the gap	кола надто далеко одне від одного для цього проміжку: збільште проміжок
+@msg	the circles are too far apart for this gap	кола надто далеко одне від одного для цього проміжку
+@msg	no two circles are within reach: raise the reach	жодні два кола не перебувають у межах охоплення: збільште охоплення
+@msg	select at most 2000 circles to bridge	виділіть не більше 2000 кіл для з’єднання
+@msg	that makes too many bridges (at most 8000): lower the reach	це дає забагато мостів (не більше 8000): зменште охоплення
+@msg	the bridged circles are too complex to unite	з’єднані кола надто складні для об’єднання
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	Спільні дотичні…
 	Common Tangents	Спільні дотичні
@@ -9292,6 +9608,7 @@ breakText	Glyphs	Гліфи
 @msg	the character's size can't be measured	розмір символу не можна виміряти
 @msg	the code runs past its last instruction	код виконується далі своєї останньої інструкції
 @msg	the compound shape is too complex to expand	складена фігура занадто складна для розбирання
+@msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	лінія чи інший відкритий контур, що не охоплює площі, не додає площі до складеної фігури; щоб включити його, спершу застосуйте до нього Об’єкт › Контур › Обвести обведення
 @msg	the container of the listed objects is gone	контейнера перелічених об’єктів більше немає
 @msg	the copy `{user_id}` can't be read as a library	копію `{user_id}` не вдалося прочитати як бібліотеку
 @msg	the copy would leave the canvas	копія вийшла б за межі полотна
@@ -9711,6 +10028,16 @@ breakText	Glyphs	Гліфи
 	No objects are selected.	Об’єкти не виділено.
 	Open a document to mark its fold lines.	Відкрийте документ, щоб позначити його лінії згину.
 	Remove Fold Line Role	Прибрати тип лінії
+	Tap	Коротке натискання
+	Clear Hold	Очистити утримання
+	Hold Shortcuts	Клавіші утримання
+	Hold Shortcut Delay	Затримка клавіш утримання
+	How hold shortcuts work	Як працюють клавіші утримання
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	Клацніть, потім натисніть клавішу, яку слід утримувати для цього (Esc скасовує). Утримання клавіші запускає це; коротке натискання запускає власне сполучення клавіші.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	Коротке натискання клавіші запускає її сполучення. Утримання клавіші протягом затримки запускає натомість інструмент або команду з її стовпця «Утримувати». Клавіша утримання — це клавіша літери, цифри або розділового знака, окремо або з Shift.
+@msg	Hold {_1} is already used by {_2}	Утримання {_1} вже використовується для {_2}
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	клавіша утримання — це клавіша, що вводить символ, окремо або з Shift ({shown} містить Cmd, Ctrl або Alt)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} не може бути клавішею утримання: використайте літеру, цифру або клавішу розділового знака
 	Check	Перевірити
 	Check Fold Lines	Перевірити лінії згину
 @msg	No cut lines are in the selection.	У виділенні немає ліній різу.
@@ -9731,6 +10058,7 @@ breakText	Glyphs	Гліфи
 @msg	A panel is not joined to the rest by a crease.	Панель не з’єднана з рештою жодною лінією біговки.
 @msg	A fold line is on a non-printing layer.	Лінія згину лежить на шарі, що не друкується.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Панелі: {panels}, шарніри: {hinges}, помилки: {errors}, попередження: {warnings}
+	Dashed Arrow	Пунктирна стрілка
 	Pressure Sensitive	Чутливі до натиску
 	Flex Ribbon	Гнучка стрічка
 	Pulse Stroke	Пульсуючий штрих

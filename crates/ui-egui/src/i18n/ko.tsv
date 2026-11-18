@@ -167,6 +167,19 @@ digits	Malayalam	말라얄람어
 	Paste without Formatting	서식 없이 붙여넣기
 	Clear	지우기
 	Find and Replace…	찾기 및 바꾸기…
+	Find and Replace	찾기 및 바꾸기
+	Find:	찾기:
+	Replace With:	바꿀 내용:
+	Replace & Find	바꾼 후 찾기
+	Replace All	모두 바꾸기
+	Match Case	대/소문자 구분
+	Find Whole Word	단어 단위로 찾기
+	Search Backwards	역방향 검색
+	Check Hidden Layers	숨겨진 레이어 확인
+	Check Locked Layers	잠긴 레이어 확인
+@msg	No matches found	일치하는 항목이 없습니다
+@msg	Matches replaced: {n}	바꾼 일치 항목: {n}
+@msg	no match of `find` at bytes {_1}..{_2} of object {_3}	개체 {_3}의 바이트 {_1}..{_2}에 `find`와 일치하는 항목이 없습니다
 	Find Next	다음 찾기
 	Find Objects	개체 찾기
 	Compare with Image	이미지와 비교
@@ -270,6 +283,16 @@ digits	Malayalam	말라얄람어
 	To Center	가운데로
 	To Edge	가장자리로
 	Create Object Mosaic…	개체 모자이크 만들기…
+	Create Object Mosaic	개체 모자이크 만들기
+	Current Size:	현재 크기:
+	New Size:	새 크기:
+	Tile Spacing:	타일 간격:
+	Number of Tiles:	타일 수:
+	Constrain Ratio:	비율 제한:
+	Result:	결과:
+	Resize Using Percentages	백분율로 크기 조정
+	Delete Raster	래스터 이미지 삭제
+	Use Ratio	비율 사용
 	Vector Halftone…	벡터 하프톤…
 	Create Trim Marks	트림 마크 만들기
 	Flatten Transparency…	투명도 병합…
@@ -665,6 +688,11 @@ digits	Malayalam	말라얄람어
 	Color blindness – Protanopia-type	색맹 – 적색맹 유형
 	Color blindness – Deuteranopia-type	색맹 – 녹색맹 유형
 	Color blindness – Tritanopia-type	색맹 – 청색맹 유형
+	Show Color Vision Preview	색각 미리 보기 표시
+	Protanopia	적색맹
+	Deuteranopia	녹색맹
+	Tritanopia	청색맹
+	Achromatopsia	전색맹
 	Customize…	사용자 지정…
 	Proof Colors	교정 색상
 	Zoom In	확대
@@ -813,6 +841,9 @@ digits	Malayalam	말라얄람어
 	Magic Wand	마술봉
 	Navigator	내비게이터
 	Navigator Panel Options	내비게이터 패널 옵션
+	Attributes Panel Options	속성 패널 옵션
+	Number of Recent URLs:	최근 URL 수:
+@msg	`count` must be a whole number from 1 to 30	`count`은(는) 1에서 30 사이의 정수여야 합니다
 	Draw Dashed Lines as Solid Lines	점선을 실선으로 그리기
 	Pattern Options	패턴 옵션
 	Properties	속성
@@ -1555,6 +1586,7 @@ antiAlias	Sharp	날카롭게
 	Duplicate Action or Action Set	액션 또는 액션 세트 복제
 	Delete the action set “{name}” and its actions?	액션 세트 “{name}”과(와) 해당 액션을 삭제하시겠습니까?
 	Delete the selected action sets and their actions?	선택한 액션 세트와 해당 액션을 삭제하시겠습니까?
+	Delete all action sets and their actions?	모든 액션 세트와 해당 액션을 삭제하시겠습니까?
 	Delete theme	테마 삭제
 	Delete this saved preset	저장된 이 프리셋 삭제
 	Delete {kind} Style	{kind} 스타일 삭제
@@ -1665,6 +1697,8 @@ antiAlias	Sharp	날카롭게
 	Drawing Mode	그리기 모드
 	Duplicate	복제
 	Duplicate Artboard	아트보드 복제
+	Click to add an artboard on this side; Alt-click to duplicate this artboard with its art	클릭하여 이쪽에 아트보드 추가, Alt-클릭하여 이 아트보드를 아트워크와 함께 복제
+	Click to add an artboard on this side	클릭하여 이쪽에 아트보드 추가
 	Copy Artboard	아트보드 복사
 	Cut Artboard	아트보드 잘라내기
 	Rename Artboards	아트보드 이름 바꾸기
@@ -1897,6 +1931,7 @@ antiAlias	Sharp	날카롭게
 	Fit in Window	창에 맞추기
 	Fit on Screen	화면에 맞추기
 	Flare	플레어
+	Edit Flare	플레어 편집
 	Flare Tool	플레어 도구
 	Flat Image	단일 이미지
 	Flatness:	평탄도:
@@ -2852,6 +2887,7 @@ diagnostics	ui	UI
 	Save Actions…	액션 저장…
 	Load Actions…	액션 불러오기…
 	Replace Actions…	액션 바꾸기…
+	Clear Actions	액션 지우기
 	Reset Actions	액션 재설정
 	Replace the current actions with the default set?	현재 액션을 기본 세트로 바꾸시겠습니까?
 	Append adds the default set after the current sets instead.	추가를 누르면 대신 기본 세트를 현재 세트 뒤에 추가합니다.
@@ -3184,6 +3220,8 @@ mark-style	Japanese	일본식
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Cmd/Ctrl 키를 누른 채 마우스 휠을 돌리면 캔버스가 가로로 스크롤됩니다.
 	Dragging sideways on a numeric field's label changes the field's value.	숫자 필드의 레이블을 옆으로 드래그하면 필드 값이 바뀝니다.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	트랙패드에서 두 손가락으로 회전하는 동작을 하면 캔버스 보기가 회전합니다.
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	키를 누르고 있으면 키보드 단축키의 누르고 있기 열에 있는 도구나 명령이 실행되고, 짧게 누르면 평소 단축키가 실행됩니다.
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	평소 단축키 대신 길게 누르기 단축키가 실행되기 전까지 키를 누르고 있어야 하는 시간(초)입니다.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	고정점을 이동하면 한쪽 끝이 이동한 각 곡선은 양 끝을 기준으로 모양을 유지합니다.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	도구의 바로 가기 키를 누르고 있는 동안 그 도구가 선택되고, 키를 놓으면 이전 도구가 다시 선택됩니다.
 	Shows the bounding box while you move the selection or draw a shape.	선택 영역을 이동하거나 모양을 그리는 동안 테두리 상자를 표시합니다.
@@ -3265,6 +3303,7 @@ mark-style	Japanese	일본식
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	스마트 안내선이 스냅하려면 포인터나 드래그한 점이 화면에서 아트에 얼마나 가까이 와야 하는지입니다. 이 거리는 모든 확대/축소에서 같습니다.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	선 세그먼트의 끝이나 중심에서 그린 원을 가까운 곡선에 닿도록 스냅합니다.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	선 세그먼트의 끝을 가까운 직선 세그먼트와 직각으로 만나도록 스냅합니다.
+	Edit type set in fonts that aren't available?	사용할 수 없는 글꼴로 설정된 문자를 편집하시겠습니까?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	캔버스에서 각 슬라이스의 번호를 왼쪽 위의 상자에 표시합니다. 끄더라도 슬라이스 윤곽선은 계속 표시됩니다.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	사용자 슬라이스와 개체 슬라이스의 윤곽선 및 번호 상자의 색상입니다. 자동 슬라이스에는 이 색상의 더 흐린 색조가 사용됩니다.
 	Reset all preferences to their defaults?	모든 환경 설정을 기본값으로 재설정하시겠습니까?
@@ -3486,6 +3525,7 @@ mark-style	Japanese	일본식
 	Show Brush Size	브러시 크기 표시
 	Show Center	중심 표시
 	Show Code	코드 표시
+	Show in Browser	브라우저에서 보기
 	Show East Asian Options	동아시아 옵션 표시
 	Show Find Field	찾기 필드 표시
 	Show Font Names in English	글꼴 이름을 영어로 표시
@@ -4712,6 +4752,7 @@ theme	Appearance	외관
 @msg	the art has no bounds	아트웍에 경계가 없습니다
 @msg	Image Trace: the traced image is missing	이미지 추적: 추적한 이미지가 없습니다
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	라이브 페인트 병합: 라이브 페인트 그룹과 추가할 패스를 선택하세요
+@msg	`Face` and `Edge` name the faces and edges of a Live Paint group: give the path another name	`Face`와 `Edge`는 라이브 페인트 그룹의 면과 가장자리 이름입니다: 패스에 다른 이름을 지정하세요
 @msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	라이브 페인트는 패스와 컴파운드 패스만 사용할 수 있습니다: 텍스트, 이미지 및 기타 개체를 먼저 패스로 변환하세요
 @msg	Live Paint: select paths or compound paths	라이브 페인트: 패스 또는 컴파운드 패스를 선택하세요
 @msg	Live Paint: these paths are too degenerate to paint	라이브 페인트: 이 패스는 퇴화되어 칠할 수 없습니다
@@ -4776,6 +4817,8 @@ variable-list-end	{0}, {1}	{0} 및 {1}
 @msg	no such spine point	해당 스파인 포인트가 없습니다
 @msg	`with` must be a list of at most 10000 spine point indexes	`with`는 스파인 포인트 인덱스 최대 10000개의 목록이어야 합니다
 @msg	`with` moves points, not a handle	`with`는 포인트를 이동하며 핸들에는 쓸 수 없습니다
+@msg	`link` and `independent` cannot both be true	`link`와 `independent`를 동시에 true로 지정할 수 없습니다
+@msg	`link` places a handle: give `handle`	`link`는 핸들을 배치합니다. `handle`을 지정하십시오
 @msg	no such spine segment	해당 스파인 세그먼트가 없습니다
 @msg	no such subpath	해당 하위 패스가 없습니다
 @msg	object {id} is not a path	개체 {id}은(는) 패스가 아닙니다
@@ -4898,9 +4941,11 @@ variable-list-end	{0}, {1}	{0} 및 {1}
 @msg	no bounds	경계가 없습니다
 @msg	no current layer	현재 레이어가 없습니다
 @msg	no key object	키 개체가 없습니다
+@msg	Align to Key Object isn't available with the Artboard tool	아트보드 도구에서는 키 개체에 정렬을 사용할 수 없습니다
 @msg	no previous transform	이전 변형이 없습니다
 @msg	nothing to align	정렬할 항목이 없습니다
 @msg	select a clip group	클립 그룹을 선택하세요
+@msg	select a flare	플레어를 선택하세요
 @msg	select two or more objects to distribute	분포할 개체를 두 개 이상 선택하세요
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis는 "vertical", "horizontal" 또는 도 단위 각도여야 합니다: `{v}`
 @msg	give horizontal or vertical	horizontal 또는 vertical을 지정하세요
@@ -5643,6 +5688,7 @@ liquify-list-end	{0}, {1}	{0} 및 {1}
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	링크된 이미지 {n}개가 디스크에서 바뀌었습니다: 링크 업데이트를 하면 새 버전이 표시됩니다
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	디스크에서 바뀐 링크된 파일 {n}개를 업데이트했습니다
 @msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	문서에 설정된 도련이 이 PDF/X 파일에서 빠집니다: "문서 도련 설정 사용"을 켜세요
+@msgplural	{n} object reaches the trim edge but stops short of the bleed|{n} objects reach the trim edge but stop short of the bleed	객체 {n}개가 재단선에 닿지만 도련까지 이어지지 않습니다
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	참고 {n}건과 함께 {what}을(를) 내보냈습니다: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	글꼴 파일 {n}개가 이제 {folder}에 있습니다
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	글꼴 파일 {n}개가 이제 {folder}에 있으며, {failed}개는 추가할 수 없었습니다: {reason}
@@ -6424,6 +6470,9 @@ lighting	Light	광원
 	Continue in Background	백그라운드에서 계속
 	Cancel Export	내보내기 취소
 @msg	Export cancelled	내보내기를 취소했습니다
+	Cancel Save	저장 취소
+@plural	{n} more save waiting|{n} more saves waiting	대기 중인 저장 {n}개 더
+@msg	Save canceled	저장을 취소했습니다
 # Paragraph panel menu › Justification…
 	Desired	희망
 	Word Spacing:	단어 간격:
@@ -6841,6 +6890,7 @@ axis	Y Axis	Y축
 	Checkpoint	체크포인트
 	Inventory Icons	인벤토리 아이콘
 	Skill Icons	스킬 아이콘
+	Weather Icons	날씨 아이콘
 	Attack	공격
 	Defend	방어
 	Heal	치유
@@ -6946,6 +6996,13 @@ axis	Y Axis	Y축
 	Bus Lines	버스 배선
 	Terminal Nodes	단자 노드
 
+# Original arrow art brushes.
+	Arrows	화살표 브러시
+	Solid Arrow	채워진 화살표
+	Open Arrow	속이 빈 화살표
+	Double Arrow	양방향 화살표
+	Chevron Arrow	갈매기형 화살표
+
 	Notched Ribbon	노치 리본
 	Double Line	이중선
 	Wave	물결
@@ -6962,6 +7019,257 @@ axis	Y Axis	Y축
 	Stars	별
 	Triangles	삼각형
 	Sparkles	반짝임
+	Warm Gray	따뜻한 회색
+	Cool Gray	차가운 회색
+	Neutrals	뉴트럴
+	Ivory	아이보리
+	Linen	리넨
+	Oat	오트
+	Greige	그레이지
+	Stone	스톤
+	Taupe	토프
+	Slate	슬레이트
+	Clay	점토
+	Terracotta	테라코타
+	Ochre	황토색
+	Umber	엄버
+	Sand	모래
+	Olive	올리브
+	Moss	이끼
+	Rosy	장밋빛
+	Neutral	중성
+	Golden	황금빛
+	Pastel	파스텔
+	Pastel Red	파스텔 빨강
+	Pastel Orange	파스텔 주황
+	Pastel Amber	파스텔 호박색
+	Pastel Yellow	파스텔 노랑
+	Pastel Lime	파스텔 라임
+	Pastel Green	파스텔 초록
+	Pastel Teal	파스텔 청록
+	Pastel Cyan	파스텔 시안
+	Pastel Azure	파스텔 하늘색
+	Pastel Blue	파스텔 파랑
+	Pastel Violet	파스텔 보라
+	Pastel Magenta	파스텔 마젠타
+	Soft Red	부드러운 빨강
+	Soft Orange	부드러운 주황
+	Soft Amber	부드러운 호박색
+	Soft Yellow	부드러운 노랑
+	Soft Lime	부드러운 라임
+	Soft Green	부드러운 초록
+	Soft Teal	부드러운 청록
+	Soft Cyan	부드러운 시안
+	Soft Azure	부드러운 하늘색
+	Soft Blue	부드러운 파랑
+	Soft Violet	부드러운 보라
+	Soft Magenta	부드러운 마젠타
+	Vivid Red	선명한 빨강
+	Vivid Orange	선명한 주황
+	Vivid Amber	선명한 호박색
+	Vivid Yellow	선명한 노랑
+	Vivid Lime	선명한 라임
+	Vivid Green	선명한 초록
+	Vivid Teal	선명한 청록
+	Vivid Cyan	선명한 시안
+	Vivid Azure	선명한 하늘색
+	Vivid Blue	선명한 파랑
+	Vivid Violet	선명한 보라
+	Vivid Magenta	선명한 마젠타
+	Deep	짙은 색
+	Deep Red	짙은 빨강
+	Deep Orange	짙은 주황
+	Deep Amber	짙은 호박색
+	Deep Yellow	짙은 노랑
+	Deep Lime	짙은 라임
+	Deep Green	짙은 초록
+	Deep Teal	짙은 청록
+	Deep Cyan	짙은 시안
+	Deep Azure	짙은 하늘색
+	Deep Blue	짙은 파랑
+	Deep Violet	짙은 보라
+	Deep Magenta	짙은 마젠타
+	Gold	금
+	Silver	은
+	Bronze	청동
+	Copper	구리
+	Brass	황동
+	Rose Gold	로즈 골드
+	Gunmetal	건메탈
+	Platinum	백금
+	Pewter	백랍
+	Ember	잔불
+	Lagoon	석호
+	Dusk	땅거미
+	Clay to Teal	점토에서 청록으로
+	Plum to Olive	자두색에서 올리브로
+	Complementary Coral	코럴, 보색
+	Split Complementary Coral	코럴, 분할 보색
+	Analogous Coral	코럴, 유사색
+	Triad Coral	코럴, 3색 조화
+	Tetrad Coral	코럴, 4색 조화
+	Pentagram Coral	코럴, 오각별
+	Complementary Teal	청록, 보색
+	Split Complementary Teal	청록, 분할 보색
+	Analogous Teal	청록, 유사색
+	Triad Teal	청록, 3색 조화
+	Tetrad Teal	청록, 4색 조화
+	Pentagram Teal	청록, 오각별
+	Soft Spectrum	부드러운 스펙트럼
+	Red to Amber	빨강에서 호박색으로
+	Orange to Yellow	주황에서 노랑으로
+	Amber to Lime	호박색에서 라임으로
+	Yellow to Green	노랑에서 초록으로
+	Lime to Teal	라임에서 청록으로
+	Green to Cyan	초록에서 시안으로
+	Teal to Azure	청록에서 하늘색으로
+	Cyan to Blue	시안에서 파랑으로
+	Azure to Violet	하늘색에서 보라로
+	Blue to Magenta	파랑에서 마젠타로
+	Violet to Red	보라에서 빨강으로
+	Magenta to Orange	마젠타에서 주황으로
+	Dawn	새벽
+	Noon	정오
+	Sunset	노을
+	Night	밤
+	Overcast	흐린 하늘
+	White to Black	흰색에서 검정으로
+	Light Grays	밝은 회색
+	Dark Grays	어두운 회색
+	Warm Grays	따뜻한 회색 계열
+	Cool Grays	차가운 회색 계열
+	Fade to Transparent	투명으로 페이드
+	White Fade	흰색 페이드
+	Vignette	비네트
+	Mist	안개
+	Petal	꽃잎
+	Fern	고사리
+	Smoke	연기
+	Honey	꿀
+	Seafoam	바다 거품
+	Lavender	라벤더
+	Driftwood	유목
+	Ink Wash	수묵 번짐
+	Tide	조수
+	Bloom	개화
+	Dew	이슬
+	Pollen	꽃가루
+	Lichen	지의류
+	Prism Veil	프리즘 베일
+	Opal Ribbon	오팔 리본
+	Pearl Flash	진주 섬광
+	Aurora Foil	오로라 호일
+	Iris Sheen	무지갯빛 광택
+	Frost Spectrum	서리 스펙트럼
+	Silver Tide	은빛 물결
+	Rose Quartz Gleam	로즈 쿼츠 광채
+	Moonstone Shift	월장석 일렁임
+	Violet Edge	보라 가장자리
+	Mint Halo	민트 후광
+	Amber Corona	호박색 코로나
+	Polar Glint	극지의 반짝임
+	Pastel Orbit	파스텔 궤도
+	Coral and Navy	코럴과 네이비
+	Plum and Lime	자두색과 라임
+	Teal and Gold	청록과 금색
+	Indigo and Peach	인디고와 복숭아색
+	Forest and Rose	숲과 장미
+	Red Glow	빨강 광채
+	Orange Glow	주황 광채
+	Amber Glow	호박색 광채
+	Yellow Glow	노랑 광채
+	Lime Glow	라임 광채
+	Green Glow	초록 광채
+	Teal Glow	청록 광채
+	Cyan Glow	시안 광채
+	Azure Glow	하늘색 광채
+	Blue Glow	파랑 광채
+	Violet Glow	보라 광채
+	Magenta Glow	마젠타 광채
+	Polka Dots	물방울무늬
+	Vertical Stripes	세로 줄무늬
+	Horizontal Stripes	가로 줄무늬
+	Diagonal Stripes	사선 줄무늬
+	Checkerboard	체커보드
+	Diamonds	마름모
+	Crosses	십자
+	Coarse Grit	거친 입자
+	Stipple	점묘
+	Scratches	긁힌 자국
+	Sparse Flecks	성긴 반점
+	Dense Flecks	촘촘한 반점
+	Sine Bands	사인파 띠
+	Ripple Lines	물결선
+	Interference Rings	간섭 고리
+	Offset Rings	어긋난 고리
+	Warped Checks	뒤틀린 체크
+	Pinched Stripes	오므린 줄무늬
+	Chevron Pulse	셰브런 펄스
+	Radiating Lenses	방사형 렌즈
+	Soft Shadow	부드러운 그림자
+	Hard Shadow	선명한 그림자
+	Lifted Card	들린 카드
+	Neon Tube	네온관
+	Inner Light	안쪽 빛
+	Feathered	가장자리 흐림
+	Haze	아지랑이
+	Double Rule	이중 괘선
+	Triple Rule	삼중 괘선
+	Dashed Border	파선 테두리
+	Dotted Border	점선 테두리
+	Offset Keyline	오프셋 윤곽선
+	Inset Keyline	안쪽 윤곽선
+	Outside Stroke	바깥쪽 획
+	Pointer	포인터
+	Highlighter	형광펜
+	Sketchy Line	스케치 선
+	Scribble Fill	낙서 칠
+	Wobble	흔들림
+	Zig Zag Edge	지그재그 가장자리
+	Wavy Edge	물결 가장자리
+	Puffy	부풀림
+	Starburst	별 폭발
+	Glossy	광택
+	Brushed Metal	브러시드 메탈
+	Spotlight	스포트라이트
+	Sunset Band	노을 띠
+	Sea Glass	바다 유리
+	Pearl	진주
+	Chrome Rim	크롬 테
+	Glow Orb	빛나는 구
+	Pill Badge	알약 배지
+	Round Badge	원형 배지
+	Flag Wave	펄럭이는 깃발
+	Bulge	불룩
+	Twisted	비틀림
+	Echo	메아리
+	Spiral Copies	나선형 복사본
+	Multiply Tint	곱하기 색조
+	Darken Veil	어둡게 베일
+	Ghosted	반투명
+	Two Tone	투톤
+	Overlay Glaze	오버레이 유약
+	Screen Light	스크린 빛
+	Soft Light Wash	소프트 라이트 번짐
+	Cyan Neon	시안 네온
+	Magenta Laser	마젠타 레이저
+	Amber Tube	호박색 튜브
+	Electric Lime	일렉트릭 라임
+	Pulse Violet	펄스 바이올렛
+	Cobalt Phosphor	코발트 형광체
+	Burst	폭발
+	Rounded Square	둥근 사각형
+	Sun	해
+	Moon	달
+	Cloud	구름
+	Rain	비
+	Thunder	천둥
+	Snow	눈
+	Bar	막대
+	Hexagon	육각형
+	Spectrum	스펙트럼
+	Triangle	삼각형
+	Vivid	선명한 색
 	Save Brush Library…	브러시 라이브러리 저장…
 @msg	`{_1}` has no brushes to apply	`{_1}`에 적용할 브러시가 없습니다
 @msg	missing `library` (see brush.libraries)	`library`가 없습니다(brush.libraries 참조)
@@ -7388,10 +7696,18 @@ breakText	Glyphs	글리프
 	Smooth Bridge…	부드러운 브리지…
 	Smooth Bridge	부드러운 브리지
 	Keep Originals	원본 유지
-@msg	select two circles to bridge	연결할 원 두 개를 선택하십시오
+@msg	select two or more circles to bridge	연결할 원을 두 개 이상 선택하십시오
 @msg	one circle is inside the other	한 원이 다른 원 안에 있습니다
 @msg	the circles are too far apart for this radius: raise the radius	이 반경에서는 원이 너무 멀리 떨어져 있습니다. 반경을 늘리십시오
 @msg	the circles are too far apart for this radius	이 반경에서는 원이 너무 멀리 떨어져 있습니다
+	Constant Gap	일정한 간격
+	Reach:	도달 거리:
+@msg	the circles are too far apart for this gap: raise the gap	이 간격에서는 원이 너무 멀리 떨어져 있습니다. 간격을 늘리십시오
+@msg	the circles are too far apart for this gap	이 간격에서는 원이 너무 멀리 떨어져 있습니다
+@msg	no two circles are within reach: raise the reach	도달 거리 안에 있는 두 원이 없습니다. 도달 거리를 늘리십시오
+@msg	select at most 2000 circles to bridge	연결할 원을 2000개 이하로 선택하십시오
+@msg	that makes too many bridges (at most 8000): lower the reach	브리지가 너무 많아집니다(최대 8000개). 도달 거리를 줄이십시오
+@msg	the bridged circles are too complex to unite	연결된 원이 너무 복잡하여 합칠 수 없습니다
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	공통 접선…
 	Common Tangents	공통 접선
@@ -9295,6 +9611,7 @@ breakText	Glyphs	글리프
 @msg	the character's size can't be measured	글자의 크기를 잴 수 없습니다
 @msg	the code runs past its last instruction	코드가 마지막 명령을 지나 실행됩니다
 @msg	the compound shape is too complex to expand	컴파운드 모양이 너무 복잡해서 확장할 수 없습니다
+@msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	영역을 둘러싸지 않는 선이나 기타 열린 패스는 컴파운드 모양에 영역을 더하지 않습니다. 포함하려면 먼저 개체 › 패스 › 선 윤곽선화를 적용하세요
 @msg	the container of the listed objects is gone	나열한 개체의 컨테이너가 없어졌습니다
 @msg	the copy `{user_id}` can't be read as a library	복사본 `{user_id}`을(를) 라이브러리로 읽을 수 없습니다
 @msg	the copy would leave the canvas	복사본이 캔버스를 벗어납니다
@@ -9641,7 +9958,6 @@ breakText	Glyphs	글리프
 @msg	{kind} files have no transparency, and the file would have {what}: flatten it first (object.flattenTransparency)	{kind} 파일에는 투명도가 없는데 이 파일에는 {what}이(가) 있게 됩니다: 먼저 병합하세요(object.flattenTransparency)
 @msg	{kind} images can't be opened (see document.formats)	{kind} 이미지는 열 수 없습니다(document.formats 참조)
 @msg	{k} `{v}` is not one of the choices	{k} `{v}`은(는) 선택 항목 중 하나가 아닙니다
-@msg	{k} has control characters{_1}	{k}에 제어 문자가 있습니다{_1}
 @msg	{k} is too long (at most {MAX_TEXT} characters)	{k}이(가) 너무 깁니다(최대 {MAX_TEXT}자)
 @msg	{k} must be > 0	{k}은(는) 0보다 커야 합니다
 @msg	{k} must be a number (pt) or a length such as "210 mm"	{k}은(는) 숫자(pt) 또는 "210 mm" 같은 길이여야 합니다
@@ -9699,6 +10015,16 @@ breakText	Glyphs	글리프
 	No objects are selected.	선택한 개체가 없습니다.
 	Open a document to mark its fold lines.	접는 선을 지정하려면 문서를 여세요.
 	Remove Fold Line Role	선 종류 제거
+	Tap	짧게 누르기
+	Clear Hold	길게 누르기 지우기
+	Hold Shortcuts	길게 누르기 단축키
+	Hold Shortcut Delay	길게 누르기 단축키 지연 시간
+	How hold shortcuts work	길게 누르기 단축키 작동 방식
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	클릭한 다음 이 항목에 길게 누를 키를 누르세요 (Esc로 취소). 키를 길게 누르면 이 항목이 실행되고, 짧게 누르면 키 자체의 단축키가 실행됩니다.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	키를 짧게 누르면 해당 단축키가 실행됩니다. 지연 시간 동안 키를 누르고 있으면 대신 누르고 있기 열의 도구나 명령이 실행됩니다. 길게 누르기 단축키는 문자, 숫자 또는 문장 부호 키이며, 단독으로 또는 Shift와 함께 사용합니다.
+@msg	Hold {_1} is already used by {_2}	길게 누르기 {_1}은(는) 이미 {_2}에서 사용 중입니다
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	길게 누르기 단축키는 문자를 입력하는 키를 단독으로 또는 Shift와 함께 사용해야 합니다 ({shown}에 Cmd, Ctrl 또는 Alt가 있음)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown}은(는) 길게 누르기 단축키가 될 수 없습니다: 문자, 숫자 또는 문장 부호 키를 사용하세요
 	Check	검사
 	Check Fold Lines	접는 선 검사
 @msg	No cut lines are in the selection.	선택 영역에 재단선이 없습니다.
@@ -9719,6 +10045,7 @@ breakText	Glyphs	글리프
 @msg	A panel is not joined to the rest by a crease.	패널이 어떤 오시선으로도 나머지와 연결되어 있지 않습니다.
 @msg	A fold line is on a non-printing layer.	접는 선이 인쇄되지 않는 레이어에 있습니다.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	패널: {panels}, 힌지: {hinges}, 오류: {errors}, 경고: {warnings}
+	Dashed Arrow	점선 화살표
 	Pressure Sensitive	압력 감지
 	Flex Ribbon	유연한 리본
 	Pulse Stroke	맥동 획

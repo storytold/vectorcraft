@@ -164,6 +164,7 @@ impl VectorcraftApp {
             plugin_runs: Default::default(),
             placing: Default::default(),
             trace_runs: Default::default(),
+            toasts: Default::default(),
             recovery: Default::default(),
             host_modifiers: Default::default(),
             forwarded: Vec::new(),
@@ -197,6 +198,7 @@ impl VectorcraftApp {
             input_frames: vec![],
             shortcuts_frames: vec![],
             held_tool: Vec::new(),
+            hold_keys: Default::default(),
             synthetic_injected: false,
             injected_events: vec![],
             injected_generation: InputGeneration::default(),
@@ -638,6 +640,7 @@ impl VectorcraftApp {
         // After every window this pass may open, and before the palette's field takes the keyboard.
         panel_docking::close_overlays_for_modal(self, &ctx);
         palette::show(self, &ctx);
+        crate::toasts::show(self, &ctx);
         // After every panel had its chance to draw in this pass.
         crate::panels::three_d::end_stale_drag(self, &ctx);
         if self.custom_titlebar {

@@ -560,6 +560,11 @@ font-technology	Variable	Variabili
 	Color blindness – Deuteranopia-type	Daltonismo – tipo deuteranopia
 	Color blindness – Protanopia-type	Daltonismo – tipo protanopia
 	Color blindness – Tritanopia-type	Daltonismo – tipo tritanopia
+	Show Color Vision Preview	Mostra anteprima della visione dei colori
+	Protanopia	Protanopia
+	Deuteranopia	Deuteranopia
+	Tritanopia	Tritanopia
+	Achromatopsia	Acromatopsia
 	Color Burn	Brucia colore
 	Color conversion:	Conversione colore:
 	Color Dodge	Scherma colore
@@ -733,6 +738,16 @@ font-technology	Variable	Variabili
 	Create New Swatch…	Crea nuovo campione…
 	Create New {kind} Style	Crea nuovo stile {kind}
 	Create Object Mosaic…	Crea mosaico di oggetti…
+	Create Object Mosaic	Crea mosaico di oggetti
+	Current Size:	Dimensione attuale:
+	New Size:	Nuova dimensione:
+	Tile Spacing:	Spaziatura tessere:
+	Number of Tiles:	Numero di tessere:
+	Constrain Ratio:	Vincola proporzioni:
+	Result:	Risultato:
+	Resize Using Percentages	Ridimensiona in percentuale
+	Delete Raster	Elimina immagine raster
+	Use Ratio	Usa proporzioni
 	Create Outlines	Crea contorni
 	Create Path	Crea tracciato
 	Create PDF layers from layers and sublayers	Crea livelli PDF dai livelli e sottolivelli
@@ -860,6 +875,7 @@ font-technology	Variable	Variabili
 	Duplicate Action or Action Set	Duplica azione o set di azioni
 	Delete the action set “{name}” and its actions?	Eliminare il set di azioni “{name}” e le sue azioni?
 	Delete the selected action sets and their actions?	Eliminare i set di azioni selezionati e le loro azioni?
+	Delete all action sets and their actions?	Eliminare tutti i set di azioni e le loro azioni?
 	Delete Theme	Elimina tema
 	Delete theme	Elimina tema
 	Delete these {n} graphic styles?	Eliminare questi {n} stili grafici?
@@ -1004,6 +1020,8 @@ font-technology	Variable	Variabili
 	Duplicate	Duplica
 	Duplicate and Offset 10 pt	Duplica e sposta di 10 pt
 	Duplicate Artboard	Duplica tavola da disegno
+	Click to add an artboard on this side; Alt-click to duplicate this artboard with its art	Fai clic per aggiungere una tavola da disegno su questo lato, Alt+clic per duplicare questa tavola da disegno con la sua grafica
+	Click to add an artboard on this side	Fai clic per aggiungere una tavola da disegno su questo lato
 	Copy Artboard	Copia tavola da disegno
 	Cut Artboard	Taglia tavola da disegno
 	Rename Artboards	Rinomina tavole da disegno
@@ -1330,6 +1348,19 @@ font-technology	Variable	Variabili
 	Fill: click for swatches, Shift-click for the color mixer	Riempimento: fai clic per i campioni, Shift+clic per il miscelatore colori
 	Find	Trova
 	Find and Replace…	Trova e sostituisci…
+	Find and Replace	Trova e sostituisci
+	Find:	Trova:
+	Replace With:	Sostituisci con:
+	Replace & Find	Sostituisci e trova
+	Replace All	Sostituisci tutto
+	Match Case	Maiuscole/minuscole
+	Find Whole Word	Trova parola intera
+	Search Backwards	Cerca all'indietro
+	Check Hidden Layers	Controlla livelli nascosti
+	Check Locked Layers	Controlla livelli bloccati
+@msg	No matches found	Nessuna corrispondenza trovata
+@msg	Matches replaced: {n}	Corrispondenze sostituite: {n}
+@msg	no match of `find` at bytes {_1}..{_2} of object {_3}	nessuna corrispondenza di `find` ai byte {_1}..{_2} dell'oggetto {_3}
 	Find Font	Trova font
 	Find Font…	Trova font…
 	Find Next	Trova successivo
@@ -1364,6 +1395,7 @@ font-technology	Variable	Variabili
 	Fit to Selected Art	Adatta alla grafica selezionata
 	Flag…	Bandiera…
 	Flare	Riflesso
+	Edit Flare	Modifica riflesso
 	Flare Tool	Strumento Riflesso
 	Flare Tool Options	Opzioni strumento Riflesso
 	Halo	Alone
@@ -2285,6 +2317,9 @@ file-filter	Templates	Modelli
 	Navigate	Naviga
 	Navigator	Navigatore
 	Navigator Panel Options	Opzioni pannello Navigatore
+	Attributes Panel Options	Opzioni pannello Attributi
+	Number of Recent URLs:	Numero di URL recenti:
+@msg	`count` must be a whole number from 1 to 30	`count` deve essere un numero intero compreso tra 1 e 30
 	Draw Dashed Lines as Solid Lines	Disegna le linee tratteggiate come linee continue
 	Needs the desktop app	Richiede l'app desktop
 	Neutral Gradients	Sfumature neutre
@@ -2766,6 +2801,7 @@ diagnostics	ui	interfaccia
 	Save Actions…	Salva azioni…
 	Load Actions…	Carica azioni…
 	Replace Actions…	Sostituisci azioni…
+	Clear Actions	Cancella azioni
 	Reset Actions	Ripristina azioni
 	Replace the current actions with the default set?	Sostituire le azioni correnti con il set predefinito?
 	Append adds the default set after the current sets instead.	Aggiungi aggiunge invece il set predefinito dopo i set correnti.
@@ -3211,6 +3247,8 @@ digits	Malayalam	Malayalam
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	La rotellina del mouse con Cmd/Ctrl premuto scorre l'area di lavoro in orizzontale.
 	Dragging sideways on a numeric field's label changes the field's value.	Trascinare in orizzontale sull'etichetta di un campo numerico ne cambia il valore.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Un gesto di rotazione con due dita sul trackpad ruota la vista dell'area di lavoro.
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Tenere premuto un tasto esegue lo strumento o il comando della sua colonna Tieni premuto in Scelte rapide da tastiera; una pressione breve esegue la sua scorciatoia abituale.
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Per quanti secondi va tenuto premuto un tasto prima che venga eseguita la sua scorciatoia a pressione prolungata invece di quella abituale.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Quando sposti i punti di ancoraggio, ogni curva con un’estremità spostata mantiene la propria forma rispetto alle sue estremità.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Tenere premuta la scorciatoia di uno strumento lo sceglie finché non la rilasci, poi viene scelto di nuovo lo strumento precedente.
 	Shows the bounding box while you move the selection or draw a shape.	Mostra il riquadro di delimitazione mentre sposti la selezione o disegni una forma.
@@ -3292,6 +3330,7 @@ digits	Malayalam	Malayalam
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Quanto vicino sullo schermo il puntatore o un punto trascinato deve arrivare alla grafica perché le guide sensibili vi si aggancino; la distanza è la stessa a ogni zoom.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Aggancia l’estremità di un segmento di linea, o un cerchio disegnato dal centro, in modo che tocchi una curva vicina.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Aggancia l’estremità di un segmento di linea in modo che incontri un segmento rettilineo vicino ad angolo retto.
+	Edit type set in fonts that aren't available?	Modificare il testo in font non disponibili?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Mostra sull’area di lavoro il numero di ogni sezione in un riquadro nel suo angolo in alto a sinistra; se è disattivata, i contorni delle sezioni restano visibili.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Il colore dei contorni delle sezioni utente e oggetto e dei riquadri con il loro numero; le sezioni automatiche usano una tonalità più tenue di questo colore.
 	Reset all preferences to their defaults?	Ripristinare tutte le preferenze ai valori predefiniti?
@@ -3676,6 +3715,7 @@ digits	Malayalam	Malayalam
 	Show Brush Size	Mostra dimensione pennello
 	Show Center	Mostra centro
 	Show Code	Mostra codice
+	Show in Browser	Mostra nel browser
 	Show Color Groups	Mostra gruppi colori
 	Show Color Swatches	Mostra campioni colore
 	Show Corner Widget	Mostra widget angolo
@@ -4921,6 +4961,7 @@ liquify-list-end	{0}, {1}	{0} e {1}
 @msg	Installed plug-in {_1}	Plug-in installato: {_1}
 @msg	Internal error: {msg} (please report this bug)	Errore interno: {msg} (segnala questo bug)
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	Fondi pittura dinamica: seleziona un gruppo di pittura dinamica e i tracciati da aggiungere
+@msg	`Face` and `Edge` name the faces and edges of a Live Paint group: give the path another name	`Face` ed `Edge` sono i nomi delle facce e dei bordi di un gruppo di pittura dinamica: assegna un altro nome al tracciato
 @msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	La pittura dinamica accetta tracciati e tracciati composti: converti prima in tracciati testo, immagini e altri oggetti
 @msg	Live Paint: select paths or compound paths	Pittura dinamica: seleziona tracciati o tracciati composti
 @msg	Live Paint: these paths are too degenerate to paint	Pittura dinamica: questi tracciati sono troppo degeneri per essere dipinti
@@ -5241,6 +5282,7 @@ liquify-list-end	{0}, {1}	{0} e {1}
 @msg	no graphic style `{n}`	nessuno stile grafico `{n}`
 @msg	no interaction in progress	nessuna interazione in corso
 @msg	no key object	nessun oggetto chiave
+@msg	Align to Key Object isn't available with the Artboard tool	«Allinea all'oggetto chiave» non è disponibile con lo strumento Tavola da disegno
 @msg	no library `{key}` (see {list})	nessuna libreria `{key}` (vedi {list})
 @msg	no native format	nessun formato nativo
 @msg	no pages	nessuna pagina
@@ -5296,6 +5338,8 @@ liquify-list-end	{0}, {1}	{0} e {1}
 @msg	no such spine point	punto della dorsale inesistente
 @msg	`with` must be a list of at most 10000 spine point indexes	`with` deve essere un elenco di al massimo 10000 indici di punti della dorsale
 @msg	`with` moves points, not a handle	`with` sposta punti, non una maniglia
+@msg	`link` and `independent` cannot both be true	`link` e `independent` non possono essere entrambi true
+@msg	`link` places a handle: give `handle`	`link` posiziona una maniglia: indica `handle`
 @msg	no such spine segment	segmento della dorsale inesistente
 @msg	no such subpath	sottotracciato inesistente
 @msg	no such user library	libreria utente inesistente
@@ -5385,6 +5429,7 @@ liquify-list-end	{0}, {1}	{0} e {1}
 @msg	select a blend	seleziona una fusione
 @msg	select a blend or give `id`	seleziona una fusione o specifica il suo `id`
 @msg	select a clip group	seleziona un gruppo di ritaglio
+@msg	select a flare	seleziona un riflesso
 @msg	select a gradient mesh	seleziona una trama sfumatura
 @msg	select a linked image: an embedded one has no file	seleziona un'immagine collegata: un'immagine incorporata non ha un file
 @msg	select a repeat	seleziona una ripetizione
@@ -5642,6 +5687,7 @@ variable-list-end	{0}, {1}	{0} e {1}
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} immagine collegata modificata su disco: Aggiorna collegamenti mostra la nuova versione|{n} immagini collegate modificate su disco: Aggiorna collegamenti mostra le nuove versioni
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Aggiornato {n} file collegato modificato su disco|Aggiornati {n} file collegati modificati su disco
 @msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	il documento imposta un'abbondanza che questo file PDF/X omette: attiva «Usa impostazioni abbondanza del documento»
+@msgplural	{n} object reaches the trim edge but stops short of the bleed|{n} objects reach the trim edge but stop short of the bleed	{n} oggetto raggiunge il bordo di rifilo ma si ferma prima dell'abbondanza|{n} oggetti raggiungono il bordo di rifilo ma si fermano prima dell'abbondanza
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	Esportato {what} con {n} nota: {first}|Esportato {what} con {n} note: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} file di font ora in {folder}|{n} file di font ora in {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} file di font ora in {folder}; impossibile aggiungerne {failed}: {reason}|{n} file di font ora in {folder}; impossibile aggiungerne {failed}: {reason}
@@ -6452,6 +6498,9 @@ lighting	Light	Luce
 	Continue in Background	Continua in background
 	Cancel Export	Annulla esportazione
 @msg	Export cancelled	Esportazione annullata
+	Cancel Save	Annulla salvataggio
+@plural	{n} more save waiting|{n} more saves waiting	{n} altro salvataggio in attesa|{n} altri salvataggi in attesa
+@msg	Save canceled	Salvataggio annullato
 # Paragraph panel menu › Justification…
 	Desired	Desiderato
 	Word Spacing:	Spaziatura parole:
@@ -6869,6 +6918,7 @@ axis	Y Axis	Asse Y
 	Checkpoint	Punto di controllo
 	Inventory Icons	Icone inventario
 	Skill Icons	Icone abilità
+	Weather Icons	Icone meteo
 	Attack	Attacco
 	Defend	Difesa
 	Heal	Cura
@@ -6974,6 +7024,13 @@ axis	Y Axis	Asse Y
 	Bus Lines	Linee del bus
 	Terminal Nodes	Nodi terminali
 
+# Original arrow art brushes.
+	Arrows	Frecce
+	Solid Arrow	Freccia piena
+	Open Arrow	Freccia aperta
+	Double Arrow	Doppia freccia
+	Chevron Arrow	Freccia con gallone
+
 	Notched Ribbon	Nastro dentellato
 	Double Line	Doppia linea
 	Wave	Onda
@@ -6990,6 +7047,257 @@ axis	Y Axis	Asse Y
 	Stars	Stelle
 	Triangles	Triangoli
 	Sparkles	Scintille
+	Warm Gray	Grigio caldo
+	Cool Gray	Grigio freddo
+	Neutrals	Neutri
+	Ivory	Avorio
+	Linen	Lino
+	Oat	Avena
+	Greige	Greige
+	Stone	Pietra
+	Taupe	Tortora
+	Slate	Ardesia
+	Clay	Argilla
+	Terracotta	Terracotta
+	Ochre	Ocra
+	Umber	Terra d'ombra
+	Sand	Sabbia
+	Olive	Oliva
+	Moss	Muschio
+	Rosy	Rosato
+	Neutral	Neutro
+	Golden	Dorato
+	Pastel	Pastello
+	Pastel Red	Rosso pastello
+	Pastel Orange	Arancione pastello
+	Pastel Amber	Ambra pastello
+	Pastel Yellow	Giallo pastello
+	Pastel Lime	Lime pastello
+	Pastel Green	Verde pastello
+	Pastel Teal	Verde acqua pastello
+	Pastel Cyan	Ciano pastello
+	Pastel Azure	Azzurro pastello
+	Pastel Blue	Blu pastello
+	Pastel Violet	Viola pastello
+	Pastel Magenta	Magenta pastello
+	Soft Red	Rosso tenue
+	Soft Orange	Arancione tenue
+	Soft Amber	Ambra tenue
+	Soft Yellow	Giallo tenue
+	Soft Lime	Lime tenue
+	Soft Green	Verde tenue
+	Soft Teal	Verde acqua tenue
+	Soft Cyan	Ciano tenue
+	Soft Azure	Azzurro tenue
+	Soft Blue	Blu tenue
+	Soft Violet	Viola tenue
+	Soft Magenta	Magenta tenue
+	Vivid Red	Rosso vivo
+	Vivid Orange	Arancione vivo
+	Vivid Amber	Ambra vivo
+	Vivid Yellow	Giallo vivo
+	Vivid Lime	Lime vivo
+	Vivid Green	Verde vivo
+	Vivid Teal	Verde acqua vivo
+	Vivid Cyan	Ciano vivo
+	Vivid Azure	Azzurro vivo
+	Vivid Blue	Blu vivo
+	Vivid Violet	Viola vivo
+	Vivid Magenta	Magenta vivo
+	Deep	Scuri
+	Deep Red	Rosso scuro
+	Deep Orange	Arancione scuro
+	Deep Amber	Ambra scuro
+	Deep Yellow	Giallo scuro
+	Deep Lime	Lime scuro
+	Deep Green	Verde scuro
+	Deep Teal	Verde acqua scuro
+	Deep Cyan	Ciano scuro
+	Deep Azure	Azzurro scuro
+	Deep Blue	Blu scuro
+	Deep Violet	Viola scuro
+	Deep Magenta	Magenta scuro
+	Gold	Oro
+	Silver	Argento
+	Bronze	Bronzo
+	Copper	Rame
+	Brass	Ottone
+	Rose Gold	Oro rosa
+	Gunmetal	Canna di fucile
+	Platinum	Platino
+	Pewter	Peltro
+	Ember	Brace
+	Lagoon	Laguna
+	Dusk	Crepuscolo
+	Clay to Teal	Argilla a verde acqua
+	Plum to Olive	Prugna a oliva
+	Complementary Coral	Corallo complementare
+	Split Complementary Coral	Corallo complementare diviso
+	Analogous Coral	Corallo analogo
+	Triad Coral	Corallo in triade
+	Tetrad Coral	Corallo in tetrade
+	Pentagram Coral	Corallo in pentagramma
+	Complementary Teal	Verde acqua complementare
+	Split Complementary Teal	Verde acqua complementare diviso
+	Analogous Teal	Verde acqua analogo
+	Triad Teal	Verde acqua in triade
+	Tetrad Teal	Verde acqua in tetrade
+	Pentagram Teal	Verde acqua in pentagramma
+	Soft Spectrum	Spettro tenue
+	Red to Amber	Da rosso ad ambra
+	Orange to Yellow	Da arancione a giallo
+	Amber to Lime	Da ambra a lime
+	Yellow to Green	Da giallo a verde
+	Lime to Teal	Da lime a verde acqua
+	Green to Cyan	Da verde a ciano
+	Teal to Azure	Da verde acqua ad azzurro
+	Cyan to Blue	Da ciano a blu
+	Azure to Violet	Da azzurro a viola
+	Blue to Magenta	Da blu a magenta
+	Violet to Red	Da viola a rosso
+	Magenta to Orange	Da magenta ad arancione
+	Dawn	Alba
+	Noon	Mezzogiorno
+	Sunset	Tramonto
+	Night	Notte
+	Overcast	Nuvoloso
+	White to Black	Da bianco a nero
+	Light Grays	Grigi chiari
+	Dark Grays	Grigi scuri
+	Warm Grays	Grigi caldi
+	Cool Grays	Grigi freddi
+	Fade to Transparent	Dissolvenza a trasparente
+	White Fade	Dissolvenza bianca
+	Vignette	Vignettatura
+	Mist	Foschia
+	Petal	Petalo
+	Fern	Felce
+	Smoke	Fumo
+	Honey	Miele
+	Seafoam	Schiuma di mare
+	Lavender	Lavanda
+	Driftwood	Legno di mare
+	Ink Wash	Acquerello a inchiostro
+	Tide	Marea
+	Bloom	Fioritura
+	Dew	Rugiada
+	Pollen	Polline
+	Lichen	Lichene
+	Prism Veil	Velo prismatico
+	Opal Ribbon	Nastro opale
+	Pearl Flash	Lampo perlato
+	Aurora Foil	Lamina aurora
+	Iris Sheen	Riflesso iride
+	Frost Spectrum	Spettro brinato
+	Silver Tide	Marea argentata
+	Rose Quartz Gleam	Bagliore quarzo rosa
+	Moonstone Shift	Riflesso pietra di luna
+	Violet Edge	Bordo viola
+	Mint Halo	Alone menta
+	Amber Corona	Corona ambrata
+	Polar Glint	Luccichio polare
+	Pastel Orbit	Orbita pastello
+	Coral and Navy	Corallo e blu navy
+	Plum and Lime	Prugna e lime
+	Teal and Gold	Verde acqua e oro
+	Indigo and Peach	Indaco e pesca
+	Forest and Rose	Foresta e rosa
+	Red Glow	Bagliore rosso
+	Orange Glow	Bagliore arancione
+	Amber Glow	Bagliore ambra
+	Yellow Glow	Bagliore giallo
+	Lime Glow	Bagliore lime
+	Green Glow	Bagliore verde
+	Teal Glow	Bagliore verde acqua
+	Cyan Glow	Bagliore ciano
+	Azure Glow	Bagliore azzurro
+	Blue Glow	Bagliore blu
+	Violet Glow	Bagliore viola
+	Magenta Glow	Bagliore magenta
+	Polka Dots	Pois
+	Vertical Stripes	Righe verticali
+	Horizontal Stripes	Righe orizzontali
+	Diagonal Stripes	Righe diagonali
+	Checkerboard	Scacchiera
+	Diamonds	Rombi
+	Crosses	Croci
+	Coarse Grit	Grana grossa
+	Stipple	Puntinato
+	Scratches	Graffi
+	Sparse Flecks	Macchioline rade
+	Dense Flecks	Macchioline fitte
+	Sine Bands	Bande sinusoidali
+	Ripple Lines	Linee increspate
+	Interference Rings	Anelli di interferenza
+	Offset Rings	Anelli sfalsati
+	Warped Checks	Quadretti deformati
+	Pinched Stripes	Righe strozzate
+	Chevron Pulse	Impulso a chevron
+	Radiating Lenses	Lenti radianti
+	Soft Shadow	Ombra morbida
+	Hard Shadow	Ombra netta
+	Lifted Card	Scheda sollevata
+	Neon Tube	Tubo al neon
+	Inner Light	Luce interna
+	Feathered	Sfumato
+	Haze	Velatura
+	Double Rule	Filetto doppio
+	Triple Rule	Filetto triplo
+	Dashed Border	Bordo tratteggiato
+	Dotted Border	Bordo punteggiato
+	Offset Keyline	Filetto sfalsato
+	Inset Keyline	Filetto interno
+	Outside Stroke	Traccia esterna
+	Pointer	Puntatore
+	Highlighter	Evidenziatore
+	Sketchy Line	Linea abbozzata
+	Scribble Fill	Riempimento scarabocchiato
+	Wobble	Tremolio
+	Zig Zag Edge	Bordo a zigzag
+	Wavy Edge	Bordo ondulato
+	Puffy	Gonfio
+	Starburst	Esplosione stellare
+	Glossy	Lucido
+	Brushed Metal	Metallo spazzolato
+	Spotlight	Riflettore
+	Sunset Band	Fascia tramonto
+	Sea Glass	Vetro di mare
+	Pearl	Perla
+	Chrome Rim	Bordo cromato
+	Glow Orb	Sfera luminosa
+	Pill Badge	Badge a pillola
+	Round Badge	Badge rotondo
+	Flag Wave	Bandiera ondeggiante
+	Bulge	Rigonfiamento
+	Twisted	Ritorto
+	Echo	Eco
+	Spiral Copies	Copie a spirale
+	Multiply Tint	Tinta moltiplica
+	Darken Veil	Velo scurisci
+	Ghosted	Fantasma
+	Two Tone	Bicolore
+	Overlay Glaze	Velatura sovrapponi
+	Screen Light	Luce schermo
+	Soft Light Wash	Acquerello luce soffusa
+	Cyan Neon	Neon ciano
+	Magenta Laser	Laser magenta
+	Amber Tube	Tubo ambra
+	Electric Lime	Lime elettrico
+	Pulse Violet	Viola pulsante
+	Cobalt Phosphor	Fosforo cobalto
+	Burst	Esplosione
+	Rounded Square	Quadrato arrotondato
+	Sun	Sole
+	Moon	Luna
+	Cloud	Nuvola
+	Rain	Pioggia
+	Thunder	Tuono
+	Snow	Neve
+	Bar	Barra
+	Hexagon	Esagono
+	Spectrum	Spettro
+	Triangle	Triangolo
+	Vivid	Vivi
 	Save Brush Library…	Salva libreria pennelli…
 @msg	`{_1}` has no brushes to apply	`{_1}` non ha pennelli da applicare
 @msg	missing `library` (see brush.libraries)	manca `library` (vedi brush.libraries)
@@ -7416,10 +7724,18 @@ breakText	Glyphs	Glifi
 	Smooth Bridge…	Ponte morbido…
 	Smooth Bridge	Ponte morbido
 	Keep Originals	Mantieni originali
-@msg	select two circles to bridge	seleziona due cerchi da unire
+@msg	select two or more circles to bridge	seleziona due o più cerchi da unire
 @msg	one circle is inside the other	un cerchio è dentro l’altro
 @msg	the circles are too far apart for this radius: raise the radius	i cerchi sono troppo distanti per questo raggio: aumenta il raggio
 @msg	the circles are too far apart for this radius	i cerchi sono troppo distanti per questo raggio
+	Constant Gap	Distanza costante
+	Reach:	Portata:
+@msg	the circles are too far apart for this gap: raise the gap	i cerchi sono troppo lontani per questa distanza: aumenta la distanza
+@msg	the circles are too far apart for this gap	i cerchi sono troppo lontani per questa distanza
+@msg	no two circles are within reach: raise the reach	nessuna coppia di cerchi è entro la portata: aumenta la portata
+@msg	select at most 2000 circles to bridge	seleziona al massimo 2000 cerchi da unire
+@msg	that makes too many bridges (at most 8000): lower the reach	così si creano troppi ponti (al massimo 8000): riduci la portata
+@msg	the bridged circles are too complex to unite	i cerchi uniti sono troppo complessi da fondere
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	Tangenti comuni…
 	Common Tangents	Tangenti comuni
@@ -9287,6 +9603,7 @@ breakText	Glyphs	Glifi
 @msg	the artboards don't fit on the canvas: fewer artboards, less spacing or a smaller size	le tavole da disegno non entrano nell'area di lavoro: usa meno tavole da disegno, una spaziatura minore o una dimensione più piccola
 @msg	the character's size can't be measured	impossibile misurare la dimensione del carattere
 @msg	the compound shape is too complex to expand	la forma composta è troppo complessa da espandere
+@msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	una linea o un altro tracciato aperto che non racchiude alcuna area non aggiunge alcuna area alla forma composta; per includerlo, applica prima Oggetto › Tracciato › Contorna traccia
 @msg	the container of the listed objects is gone	il contenitore degli oggetti elencati non esiste più
 @msg	the copy `{user_id}` can't be read as a library	la copia `{user_id}` non può essere letta come libreria
 @msg	the copy would leave the canvas	la copia uscirebbe dall'area di lavoro
@@ -9735,6 +10052,16 @@ breakText	Glyphs	Glifi
 	No objects are selected.	Nessun oggetto selezionato.
 	Open a document to mark its fold lines.	Apri un documento per segnarne le linee di piega.
 	Remove Fold Line Role	Rimuovi tipo di linea
+	Tap	Pressione breve
+	Clear Hold	Cancella pressione prolungata
+	Hold Shortcuts	Scorciatoie a pressione prolungata
+	Hold Shortcut Delay	Ritardo delle scorciatoie a pressione prolungata
+	How hold shortcuts work	Come funzionano le scorciatoie a pressione prolungata
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	Fai clic, poi premi un tasto da tenere premuto per questo (Esc annulla). Tenere premuto il tasto esegue questo; una pressione breve esegue la scorciatoia del tasto stesso.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	Una pressione breve di un tasto esegue la sua scorciatoia. Tenere premuto il tasto per la durata del ritardo esegue invece lo strumento o il comando della sua colonna Tieni premuto. Una scorciatoia a pressione prolungata è un tasto di lettera, cifra o punteggiatura, da solo o con Shift.
+@msg	Hold {_1} is already used by {_2}	La pressione prolungata di {_1} è già usata da {_2}
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	una scorciatoia a pressione prolungata è un tasto che digita un carattere, da solo o con Shift ({shown} ha Cmd, Ctrl o Alt)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} non può essere una scorciatoia a pressione prolungata: usa una lettera, una cifra o un tasto di punteggiatura
 	Check	Verifica
 	Check Fold Lines	Verifica linee di piega
 @msg	No cut lines are in the selection.	Nella selezione non ci sono linee di taglio.
@@ -9755,6 +10082,7 @@ breakText	Glyphs	Glifi
 @msg	A panel is not joined to the rest by a crease.	Un pannello non è unito al resto da alcuna linea di cordonatura.
 @msg	A fold line is on a non-printing layer.	Una linea di piega si trova su un livello non stampabile.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Pannelli: {panels}, cerniere: {hinges}, errori: {errors}, avvisi: {warnings}
+	Dashed Arrow	Freccia tratteggiata
 	Pressure Sensitive	Sensibile alla pressione
 	Flex Ribbon	Nastro flessibile
 	Pulse Stroke	Tratto pulsante

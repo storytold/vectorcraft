@@ -464,6 +464,201 @@ fn marks_and_bleeds_reach_the_pdf() {
     assert!(ellipse, "the non-printing layer is included");
 }
 
+/// The four custom bleed values, `[top, bottom, left, right]`.
+fn bleed_of(d: &Dialog) -> [f64; 4] {
+    BLEED_SIDES.map(|p| get(d, p).as_f64().unwrap_or(f64::NAN))
+}
+
+/// Headless frames of the dialog layer with an accessibility tree, as a 1280 × 900 window.
+struct LinkFrames(egui::Context);
+
+impl LinkFrames {
+    fn new() -> Self {
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        theme::install_fonts(&ctx);
+        Self(ctx)
+    }
+
+    fn run(&self, app: &mut VectorcraftApp, events: Vec<egui::Event>) -> egui::FullOutput {
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1280.0, 900.0));
+        let input = egui::RawInput { events, screen_rect: Some(screen), ..Default::default() };
+        let mut out = self.0.run_ui(input, |ui| super::super::show(app, ui.ctx()));
+        out.textures_delta.clear();
+        out
+    }
+
+    /// The bleed link's button once the dialog has settled: its name, whether it shows pressed,
+    /// whether it is grayed out, and its center.
+    fn link(&self, app: &mut VectorcraftApp) -> (String, bool, bool, egui::Pos2) {
+        self.run(app, vec![]);
+        let out = self.run(app, vec![]);
+        let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
+        let names = ["Make the bleed values differ", "Make all bleed settings the same"];
+        let mut found = nodes.iter().filter(|(_, n)| n.role() == egui::accesskit::Role::Button && n.label().is_some_and(|l| names.contains(&l)));
+        let (_, n) = found.next().expect("a bleed link button");
+        assert!(found.next().is_none(), "one bleed link button");
+        let b = n.bounds().expect("bounds");
+        let pressed = n.toggled() == Some(egui::accesskit::Toggled::True) || n.is_selected() == Some(true);
+        let center = egui::pos2((b.x0 + b.x1) as f32 * 0.5, (b.y0 + b.y1) as f32 * 0.5);
+        (n.label().unwrap_or_default().to_string(), pressed, n.is_disabled(), center)
+    }
+
+    fn click(&self, app: &mut VectorcraftApp, at: egui::Pos2) {
+        let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+        self.run(app, vec![egui::Event::PointerMoved(at), press(true)]);
+        self.run(app, vec![press(false)]);
+    }
+}
+
+/// The link button beside the custom bleed values: the built-in presets' equal sides open linked,
+/// an edit to one side sets all four while linked and only that one while unlinked, and linking
+/// again gives every side the top's value. The link isn't an export option, and the linked values
+/// reach the PDF's page boxes.
+#[test]
+fn the_bleed_link_keeps_the_four_sides_the_same() {
+    let (mut app, written, _) = app();
+    app.run("ui.savePdfDialog", json!({"path": "/tmp/bleed.pdf"})).unwrap();
+    set_field(&mut app, "__section", json!("Marks and Bleeds"));
+    let f = LinkFrames::new();
+    let (name, pressed, disabled, at) = f.link(&mut app);
+    assert_eq!((name.as_str(), pressed, disabled), ("Make the bleed values differ", true, false), "equal sides open linked");
+    edit_bleed(app.ui.dialog.as_mut().unwrap(), 2, 6.0);
+    assert_eq!(bleed_of(app.ui.dialog.as_ref().unwrap()), [6.0; 4], "linked: the left value sets all four");
+
+    f.click(&mut app, at);
+    let (name, pressed, ..) = f.link(&mut app);
+    assert_eq!((name.as_str(), pressed), ("Make all bleed settings the same", false), "the click unlinks");
+    let d = app.ui.dialog.as_mut().unwrap();
+    assert_eq!(d.fields.get(BLEED_LINKED), Some(&json!(false)));
+    edit_bleed(d, 1, 9.0);
+    edit_bleed(d, 3, 2.0);
+    assert_eq!(bleed_of(d), [6.0, 9.0, 6.0, 2.0], "unlinked: each side is its own");
+    edit_bleed(d, 0, 4.0);
+    assert_eq!(bleed_of(d), [4.0, 9.0, 6.0, 2.0]);
+
+    let (.., at) = f.link(&mut app);
+    f.click(&mut app, at);
+    let (name, pressed, ..) = f.link(&mut app);
+    assert_eq!((name.as_str(), pressed), ("Make the bleed values differ", true), "the click links again");
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!(bleed_of(d), [4.0; 4], "linking gives every side the top's value");
+    let p = params(d);
+    assert_eq!(p["bleed"], json!({"useDocument": false, "top": 4.0, "bottom": 4.0, "left": 4.0, "right": 4.0}));
+    assert!(p.get(BLEED_LINKED).is_none() && preset_params(d).get(BLEED_LINKED).is_none(), "the link is the dialog's own");
+
+    super::super::confirm(&mut app).unwrap();
+    let bytes = &written.borrow()[0].1;
+    let page = &vectorcraft_pdf::info(bytes, None).unwrap().pages[0];
+    let bleed = page.boxes.iter().find(|(b, _)| *b == vectorcraft_pdf::CropTo::Bleed).expect("a bleed box").1;
+    let trim = page.boxes.iter().find(|(b, _)| *b == vectorcraft_pdf::CropTo::Trim).expect("a trim box").1;
+    assert_eq!((trim.x0 - bleed.x0, trim.y0 - bleed.y0, bleed.x1 - trim.x1, bleed.y1 - trim.y1), (4.0, 4.0, 4.0, 4.0));
+}
+
+/// A preset whose four bleed values differ opens unlinked; choosing a preset or Reset sets the link
+/// from that preset's values rather than keeping the one shown before.
+#[test]
+fn presets_and_reset_set_the_bleed_link_from_their_values() {
+    let (mut app, _, _) = app();
+    app.run("pdf.preset.save", json!({"name": "Uneven", "bleed": {"top": 3, "bottom": 5, "left": 3, "right": 3}})).unwrap();
+    app.run("ui.savePdfDialog", json!({"preset": "Uneven"})).unwrap();
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert!(!bleed_linked(d), "unequal sides open unlinked");
+    assert_eq!(bleed_of(d), [3.0, 5.0, 3.0, 3.0], "opening leaves the values as they are");
+
+    let mut d = d.clone();
+    link_bleed(&mut d, true);
+    apply_preset(&mut app, &mut d, "Uneven");
+    assert!(!bleed_linked(&d) && bleed_of(&d) == [3.0, 5.0, 3.0, 3.0], "choosing the preset takes its values and its link");
+    apply_preset(&mut app, &mut d, pdf::DEFAULT_PRESET);
+    assert!(bleed_linked(&d), "the default preset's sides are equal");
+    link_bleed(&mut d, false);
+    app.ui.dialog = Some(d);
+    app.run("ui.dialogReset", json!({})).unwrap();
+    assert!(bleed_linked(app.ui.dialog.as_ref().unwrap()), "Reset sets the link from the preset's values");
+
+    // The preset editor has the same link.
+    open_preset(&mut app, &json!({"name": "Uneven"})).unwrap();
+    set_field(&mut app, "__section", json!("Marks and Bleeds"));
+    let f = LinkFrames::new();
+    let (name, pressed, disabled, at) = f.link(&mut app);
+    assert_eq!((name.as_str(), pressed, disabled), ("Make all bleed settings the same", false, false));
+    f.click(&mut app, at);
+    assert_eq!(bleed_of(app.ui.dialog.as_ref().unwrap()), [3.0; 4]);
+}
+
+/// With Use Document Bleed Settings on, the fields show the document's bleed and the link is
+/// grayed out; the custom values and the link stay as they were for when it is turned off.
+#[test]
+fn the_document_bleed_grays_the_link_and_keeps_the_custom_values() {
+    let (mut app, _, _) = app();
+    app.run("document.setup", json!({"bleed": 9})).unwrap();
+    app.run("ui.savePdfDialog", json!({"bleed": {"top": 3, "bottom": 5, "left": 3, "right": 3}})).unwrap();
+    set_field(&mut app, "__section", json!("Marks and Bleeds"));
+    set_field(&mut app, "bleed.useDocument", json!(true));
+    let f = LinkFrames::new();
+    let (name, pressed, disabled, at) = f.link(&mut app);
+    assert_eq!((name.as_str(), pressed, disabled), ("Make all bleed settings the same", false, true));
+    f.click(&mut app, at);
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert!(!d.fields.contains_key(BLEED_LINKED), "a grayed-out link does not change");
+    assert_eq!(bleed_of(d), [3.0, 5.0, 3.0, 3.0]);
+    set_field(&mut app, "bleed.useDocument", json!(false));
+    let (name, _, disabled, _) = f.link(&mut app);
+    assert_eq!((name.as_str(), disabled), ("Make all bleed settings the same", false));
+}
+
+/// `ui.dialog.set` can set the link (`__bleedLinked`) as its button does, refuses a value other
+/// than true or false, and a new `bleed` lets the link follow its values.
+#[test]
+fn ui_dialog_set_links_the_bleed() {
+    let (mut app, _, _) = app();
+    app.run("ui.savePdfDialog", json!({"bleed": {"top": 3, "bottom": 5, "left": 3, "right": 3}})).unwrap();
+    let set = |app: &mut VectorcraftApp, field: &str, value: Value| {
+        let d = app.ui.dialog.as_mut().unwrap();
+        assert!(super::super::accepts_field(d, field), "{field}");
+        let old = d.fields.get(field).cloned();
+        super::super::set_field(d, field.into(), value);
+        super::super::field_set(app, field, old.as_ref())
+    };
+    set(&mut app, BLEED_LINKED, json!(true)).unwrap();
+    assert_eq!(bleed_of(app.ui.dialog.as_ref().unwrap()), [3.0; 4], "linking gives every side the top's value");
+    for bad in [json!("yes"), json!(1), Value::Null] {
+        let e = set(&mut app, BLEED_LINKED, bad.clone()).unwrap_err();
+        assert!(e.contains("__bleedLinked must be true or false"), "{bad}: {e}");
+    }
+    set(&mut app, BLEED_LINKED, json!(false)).unwrap();
+    set(&mut app, "bleed", json!({"top": 1, "bottom": 1, "left": 1, "right": 1})).unwrap();
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert!(!d.fields.contains_key(BLEED_LINKED) && bleed_linked(d), "equal values set are linked");
+    set(&mut app, "bleed", json!({"top": 1, "bottom": 2, "left": 1, "right": 1})).unwrap();
+    assert!(!bleed_linked(app.ui.dialog.as_ref().unwrap()), "unequal values set are unlinked");
+
+    // Writing the same `bleed` again also lets the link follow its values; a `__bleedLinked` set
+    // after it in the same request still decides.
+    set(&mut app, "bleed", json!({"top": 1, "bottom": 1, "left": 1, "right": 1})).unwrap();
+    set(&mut app, BLEED_LINKED, json!(false)).unwrap();
+    set(&mut app, "bleed", json!({"top": 1, "bottom": 1, "left": 1, "right": 1})).unwrap();
+    assert!(bleed_linked(app.ui.dialog.as_ref().unwrap()), "the same equal values set again are linked");
+    set(&mut app, BLEED_LINKED, json!(false)).unwrap();
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert!(!bleed_linked(d) && bleed_of(d) == [1.0; 4], "a later __bleedLinked unlinks them");
+}
+
+/// An unlinked edit that makes the four sides equal leaves the link off, so the next edit
+/// changes one side only.
+#[test]
+fn an_unlinked_edit_that_evens_the_sides_keeps_the_link_off() {
+    let (mut app, _, _) = app();
+    app.run("ui.savePdfDialog", json!({"bleed": {"top": 3, "bottom": 5, "left": 3, "right": 3}})).unwrap();
+    let d = app.ui.dialog.as_mut().unwrap();
+    assert!(!bleed_linked(d));
+    edit_bleed(d, 1, 3.0);
+    assert!(!bleed_linked(d), "the link stays off");
+    edit_bleed(d, 2, 6.0);
+    assert_eq!(bleed_of(d), [3.0, 3.0, 6.0, 3.0], "the next edit changes one side");
+}
+
 #[test]
 fn option_labels_read_well() {
     assert_eq!(option_label("compression.color.abovePpi"), "Compression › Color › Above Ppi");

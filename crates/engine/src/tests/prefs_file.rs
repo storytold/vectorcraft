@@ -176,3 +176,24 @@ fn a_file_over_the_limit_is_refused_before_it_is_parsed() {
     assert!(s.execute("prefs.import", &json!({"path": missing.to_string_lossy()})).is_err());
     assert_eq!(s.prefs.to_json().to_string(), before);
 }
+
+/// Hold Shortcuts is off by default. The Hold Shortcut Delay takes 0.2 to 1.0 s and refuses other
+/// values; a value from a settings file outside the range is brought inside it.
+#[test]
+fn hold_shortcut_preferences() {
+    let mut s = Session::new();
+    assert!(!s.prefs.hold_shortcuts);
+    assert_eq!(s.prefs.key_hold_delay(), 0.35);
+    for ok in [0.2, 1.0] {
+        s.execute("prefs.set", &json!({"key": "keyHoldDelay", "value": ok})).unwrap();
+        assert_eq!(s.prefs.key_hold_delay(), ok);
+    }
+    for bad in [0.1, 1.5] {
+        assert!(is_bad_params(s.execute("prefs.set", &json!({"key": "keyHoldDelay", "value": bad}))), "{bad}");
+    }
+    s.execute("prefs.set", &json!({"key": "holdShortcuts", "value": true})).unwrap();
+    assert!(s.prefs.hold_shortcuts);
+    let restored: Prefs = serde_json::from_value(json!({"keyHoldDelay": 5.0})).unwrap();
+    assert_eq!(restored.key_hold_delay(), 1.0);
+    assert!(!restored.hold_shortcuts);
+}

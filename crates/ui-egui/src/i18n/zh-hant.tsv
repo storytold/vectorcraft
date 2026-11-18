@@ -522,6 +522,11 @@ font-technology	Variable	可變
 	Color blindness – Deuteranopia-type	色盲 – 綠色盲型
 	Color blindness – Protanopia-type	色盲 – 紅色盲型
 	Color blindness – Tritanopia-type	色盲 – 藍色盲型
+	Show Color Vision Preview	顯示色覺預覽
+	Protanopia	紅色盲
+	Deuteranopia	綠色盲
+	Tritanopia	藍色盲
+	Achromatopsia	全色盲
 	Color Burn	加深顏色
 	Color conversion:	色彩轉換：
 	Color Dodge	加亮顏色
@@ -695,6 +700,16 @@ font-technology	Variable	可變
 	Create New Swatch…	建立新色票…
 	Create New {kind} Style	建立新的{kind}樣式
 	Create Object Mosaic…	建立物件馬賽克…
+	Create Object Mosaic	建立物件馬賽克
+	Current Size:	目前大小：
+	New Size:	新大小：
+	Tile Spacing:	拼貼間距：
+	Number of Tiles:	拼貼數量：
+	Constrain Ratio:	限制比例：
+	Result:	結果：
+	Resize Using Percentages	使用百分比調整大小
+	Delete Raster	刪除點陣圖
+	Use Ratio	使用比例
 	Create Outlines	建立外框
 	Create Path	建立路徑
 	Create PDF layers from layers and sublayers	從圖層和子圖層建立 PDF 圖層
@@ -822,6 +837,7 @@ font-technology	Variable	可變
 	Duplicate Action or Action Set	製作動作或動作組複本
 	Delete the action set “{name}” and its actions?	要刪除動作組「{name}」及其中的動作嗎？
 	Delete the selected action sets and their actions?	要刪除所選動作組及其中的動作嗎？
+	Delete all action sets and their actions?	要刪除所有動作組及其中的動作嗎？
 	Delete Theme	刪除主題
 	Delete theme	刪除主題
 	Delete these {n} graphic styles?	要刪除這 {n} 個繪圖樣式嗎？
@@ -966,6 +982,8 @@ font-technology	Variable	可變
 	Duplicate	製作複本
 	Duplicate and Offset 10 pt	製作複本並位移 10 pt
 	Duplicate Artboard	製作工作區域複本
+	Click to add an artboard on this side; Alt-click to duplicate this artboard with its art	按一下以在這一側新增工作區域，Alt 加按一下以製作此工作區域及其圖稿的複本
+	Click to add an artboard on this side	按一下以在這一側新增工作區域
 	Copy Artboard	複製工作區域
 	Cut Artboard	剪下工作區域
 	Rename Artboards	重新命名工作區域
@@ -1295,6 +1313,19 @@ font-technology	Variable	可變
 	Fill: click for swatches, Shift-click for the color mixer	填色：按一下開啟色票，按住 Shift 按一下開啟混色器
 	Find	尋找
 	Find and Replace…	尋找與取代…
+	Find and Replace	尋找與取代
+	Find:	尋找：
+	Replace With:	取代為：
+	Replace & Find	取代並尋找
+	Replace All	全部取代
+	Match Case	大小寫須相符
+	Find Whole Word	尋找全字
+	Search Backwards	反向搜尋
+	Check Hidden Layers	檢查隱藏圖層
+	Check Locked Layers	檢查鎖定圖層
+@msg	No matches found	找不到相符項目
+@msg	Matches replaced: {n}	已取代的相符項目：{n}
+@msg	no match of `find` at bytes {_1}..{_2} of object {_3}	物件 {_3} 的位元組 {_1}..{_2} 處沒有 `find` 的相符項目
 	Find Font	尋找字體
 	Find Font…	尋找字體…
 	Find Next	尋找下一個
@@ -1329,6 +1360,7 @@ font-technology	Variable	可變
 	Fit to Selected Art	符合選取的圖稿
 	Flag…	旗形…
 	Flare	光暈
+	Edit Flare	編輯光暈
 	Flare Tool	光暈工具
 	Flare Tool Options	光暈工具選項
 	Halo	光暈
@@ -1964,6 +1996,7 @@ file-filter	Templates	範本
 @msg	the art has no bounds	圖稿沒有邊界
 @msg	Image Trace: the traced image is missing	影像描圖：找不到描圖的影像
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	即時上色合併：請選取即時上色群組和要加入的路徑
+@msg	`Face` and `Edge` name the faces and edges of a Live Paint group: give the path another name	`Face` 和 `Edge` 是即時上色群組中表面和邊緣的名稱：請為路徑另取名稱
 @msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	即時上色只接受路徑和複合路徑：請先將文字、影像和其他物件轉換為路徑
 @msg	Live Paint: select paths or compound paths	即時上色：請選取路徑或複合路徑
 @msg	Live Paint: these paths are too degenerate to paint	即時上色：這些路徑過度退化，無法上色
@@ -2125,9 +2158,11 @@ file-filter	Templates	範本
 @msg	no bounds	沒有邊界
 @msg	no current layer	沒有目前圖層
 @msg	no key object	沒有關鍵物件
+@msg	Align to Key Object isn't available with the Artboard tool	使用工作區域工具時無法對齊關鍵物件
 @msg	no previous transform	沒有上一次的變形
 @msg	nothing to align	沒有可對齊的內容
 @msg	select a clip group	請選取剪裁群組
+@msg	select a flare	請選取光暈
 @msg	select two or more objects to distribute	請選取兩個以上要均分的物件
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis 必須是 "vertical"、"horizontal" 或以度為單位的角度，而非 `{v}`
 @msg	give horizontal or vertical	請提供 horizontal 或 vertical
@@ -2853,6 +2888,7 @@ liquify-list-end	{0}, {1}	{0}和{1}
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	有 {n} 個連結影像已在磁碟上變更：「更新連結」可顯示新版本
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	已更新 {n} 個在磁碟上變更的連結檔案
 @msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	文件設定了出血，但此 PDF/X 檔案未包含：請開啟「使用文件的出血設定」
+@msgplural	{n} object reaches the trim edge but stops short of the bleed|{n} objects reach the trim edge but stop short of the bleed	{n} 個物件到達裁切線，但未延伸到出血區域
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	已匯出 {what}，附有 {n} 則註解：{first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} 個字體檔案現已位於 {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} 個字體檔案現已位於 {folder}；有 {failed} 個無法加入：{reason}
@@ -3454,6 +3490,8 @@ liquify-list-end	{0}, {1}	{0}和{1}
 @msg	no such spine point	沒有這個脊線點
 @msg	`with` must be a list of at most 10000 spine point indexes	`with` 必須是最多 10000 個脊線點索引的清單
 @msg	`with` moves points, not a handle	`with` 移動的是點，不是控制把手
+@msg	`link` and `independent` cannot both be true	`link` 和 `independent` 不能同時為 true
+@msg	`link` places a handle: give `handle`	`link` 用於放置控制把手：請提供 `handle`
 @msg	no such spine segment	沒有這個脊線線段
 @msg	a key object sits on that point	該點上有關鍵物件
 @msg	a spine keeps at least two points	脊線至少要保留兩個點
@@ -3478,6 +3516,9 @@ liquify-list-end	{0}, {1}	{0}和{1}
 	Navigate	導覽
 	Navigator	導覽器
 	Navigator Panel Options	導覽器面板選項
+	Attributes Panel Options	屬性面板選項
+	Number of Recent URLs:	最近使用的網址數量：
+@msg	`count` must be a whole number from 1 to 30	`count` 必須是 1 到 30 之間的整數
 	Draw Dashed Lines as Solid Lines	將虛線繪製為實線
 	Needs the desktop app	需要桌面版應用程式
 	Neutral Gradients	中性漸層
@@ -3961,6 +4002,7 @@ diagnostics	ui	介面
 	Save Actions…	儲存動作…
 	Load Actions…	載入動作…
 	Replace Actions…	取代動作…
+	Clear Actions	清除動作
 	Reset Actions	重設動作
 	Replace the current actions with the default set?	要用預設動作組取代目前的動作嗎？
 	Append adds the default set after the current sets instead.	「附加」會改為將預設動作組加到目前動作組之後。
@@ -4409,6 +4451,8 @@ digits	Malayalam	馬來亞拉姆數字
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	按住 Cmd/Ctrl 捲動滑鼠滾輪會橫向捲動畫布。
 	Dragging sideways on a numeric field's label changes the field's value.	在數值欄位的標籤上橫向拖曳可變更欄位的值。
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	在觸控式軌跡板上以雙指旋轉手勢可旋轉畫布檢視。
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	按住某個鍵會執行鍵盤快速鍵中其按住欄的工具或命令；快速按下則執行其一般快速鍵。
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	按住某個鍵多少秒後，執行其按住快速鍵而不是一般快速鍵。
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	移動錨點時，只有一端移動的每條曲線都會保持其相對於兩端的形狀。
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	按住工具的快速鍵時選擇該工具，放開後重新選擇之前的工具。
 	Shows the bounding box while you move the selection or draw a shape.	移動選取範圍或繪製形狀時顯示邊框。
@@ -4490,6 +4534,7 @@ digits	Malayalam	馬來亞拉姆數字
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	指標或拖曳的點在螢幕上需離圖稿多近，智慧型參考線才會靠齊；此距離在任何縮放比例下都相同。
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	靠齊線段的端點或從中心繪製的圓，使其與附近的曲線相切。
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	靠齊線段的端點，使其與附近的直線段成直角相交。
+	Edit type set in fonts that aren't available?	要編輯使用了無法使用之字體的文字嗎？
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	在畫布上於每個切片左上角的方框中顯示其編號；關閉時，切片輪廓仍會顯示。
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	使用者切片和物件切片的輪廓及其編號方框的顏色；自動切片使用此顏色較淡的色調。
 	Reset all preferences to their defaults?	要將所有偏好設定重設為預設值嗎？
@@ -4872,6 +4917,7 @@ digits	Malayalam	馬來亞拉姆數字
 	Show Brush Size	顯示筆刷大小
 	Show Center	顯示中心點
 	Show Code	顯示程式碼
+	Show in Browser	在瀏覽器中顯示
 	Show Color Groups	顯示顏色群組
 	Show Color Swatches	顯示顏色色票
 	Show Corner Widget	顯示轉角 Widget
@@ -6476,6 +6522,9 @@ lighting	Light	光源
 	Continue in Background	在背景繼續
 	Cancel Export	取消匯出
 @msg	Export cancelled	已取消匯出
+	Cancel Save	取消儲存
+@plural	{n} more save waiting|{n} more saves waiting	另有 {n} 個儲存等待中
+@msg	Save canceled	已取消儲存
 # Paragraph panel menu › Justification…
 	Desired	所需
 	Word Spacing:	字間距：
@@ -6900,6 +6949,7 @@ axis	Y Axis	Y 軸
 	Checkpoint	檢查點
 	Inventory Icons	物品欄圖示
 	Skill Icons	技能圖示
+	Weather Icons	天氣圖示
 	Attack	攻擊
 	Defend	防禦
 	Heal	治療
@@ -7005,6 +7055,13 @@ axis	Y Axis	Y 軸
 	Bus Lines	匯流排
 	Terminal Nodes	端子節點
 
+# Original arrow art brushes.
+	Arrows	箭頭筆刷
+	Solid Arrow	實心箭頭
+	Open Arrow	空心箭頭
+	Double Arrow	雙向箭頭
+	Chevron Arrow	人字紋箭頭
+
 	Notched Ribbon	凹口緞帶
 	Double Line	雙線
 	Wave	波浪
@@ -7021,6 +7078,257 @@ axis	Y Axis	Y 軸
 	Stars	星形
 	Triangles	三角形
 	Sparkles	閃光
+	Warm Gray	暖灰
+	Cool Gray	冷灰
+	Neutrals	中性色
+	Ivory	象牙白
+	Linen	亞麻
+	Oat	燕麥
+	Greige	灰米色
+	Stone	石色
+	Taupe	灰褐
+	Slate	石板灰
+	Clay	陶土
+	Terracotta	赤陶
+	Ochre	赭石
+	Umber	棕土
+	Sand	沙色
+	Olive	橄欖
+	Moss	苔蘚
+	Rosy	玫瑰調
+	Neutral	中性
+	Golden	金黃
+	Pastel	粉彩
+	Pastel Red	粉彩紅
+	Pastel Orange	粉彩橙
+	Pastel Amber	粉彩琥珀
+	Pastel Yellow	粉彩黃
+	Pastel Lime	粉彩萊姆
+	Pastel Green	粉彩綠
+	Pastel Teal	粉彩藍綠
+	Pastel Cyan	粉彩青
+	Pastel Azure	粉彩天藍
+	Pastel Blue	粉彩藍
+	Pastel Violet	粉彩紫羅蘭
+	Pastel Magenta	粉彩洋紅
+	Soft Red	柔和紅
+	Soft Orange	柔和橙
+	Soft Amber	柔和琥珀
+	Soft Yellow	柔和黃
+	Soft Lime	柔和萊姆
+	Soft Green	柔和綠
+	Soft Teal	柔和藍綠
+	Soft Cyan	柔和青
+	Soft Azure	柔和天藍
+	Soft Blue	柔和藍
+	Soft Violet	柔和紫羅蘭
+	Soft Magenta	柔和洋紅
+	Vivid Red	鮮豔紅
+	Vivid Orange	鮮豔橙
+	Vivid Amber	鮮豔琥珀
+	Vivid Yellow	鮮豔黃
+	Vivid Lime	鮮豔萊姆
+	Vivid Green	鮮豔綠
+	Vivid Teal	鮮豔藍綠
+	Vivid Cyan	鮮豔青
+	Vivid Azure	鮮豔天藍
+	Vivid Blue	鮮豔藍
+	Vivid Violet	鮮豔紫羅蘭
+	Vivid Magenta	鮮豔洋紅
+	Deep	深色
+	Deep Red	深紅
+	Deep Orange	深橙
+	Deep Amber	深琥珀
+	Deep Yellow	深黃
+	Deep Lime	深萊姆
+	Deep Green	深綠
+	Deep Teal	深藍綠
+	Deep Cyan	深青
+	Deep Azure	深天藍
+	Deep Blue	深藍
+	Deep Violet	深紫羅蘭
+	Deep Magenta	深洋紅
+	Gold	金
+	Silver	銀
+	Bronze	青銅
+	Copper	銅
+	Brass	黃銅
+	Rose Gold	玫瑰金
+	Gunmetal	槍灰
+	Platinum	白金
+	Pewter	錫鑞
+	Ember	餘燼
+	Lagoon	潟湖
+	Dusk	黃昏
+	Clay to Teal	陶土到藍綠
+	Plum to Olive	梅紫到橄欖
+	Complementary Coral	珊瑚色，互補色
+	Split Complementary Coral	珊瑚色，分割互補色
+	Analogous Coral	珊瑚色，類似色
+	Triad Coral	珊瑚色，三色組
+	Tetrad Coral	珊瑚色，四色組
+	Pentagram Coral	珊瑚色，五角星
+	Complementary Teal	藍綠，互補色
+	Split Complementary Teal	藍綠，分割互補色
+	Analogous Teal	藍綠，類似色
+	Triad Teal	藍綠，三色組
+	Tetrad Teal	藍綠，四色組
+	Pentagram Teal	藍綠，五角星
+	Soft Spectrum	柔和光譜
+	Red to Amber	紅到琥珀
+	Orange to Yellow	橙到黃
+	Amber to Lime	琥珀到萊姆
+	Yellow to Green	黃到綠
+	Lime to Teal	萊姆到藍綠
+	Green to Cyan	綠到青
+	Teal to Azure	藍綠到天藍
+	Cyan to Blue	青到藍
+	Azure to Violet	天藍到紫羅蘭
+	Blue to Magenta	藍到洋紅
+	Violet to Red	紫羅蘭到紅
+	Magenta to Orange	洋紅到橙
+	Dawn	黎明
+	Noon	正午
+	Sunset	日落
+	Night	夜晚
+	Overcast	陰天
+	White to Black	白到黑
+	Light Grays	淺灰
+	Dark Grays	深灰
+	Warm Grays	暖灰系
+	Cool Grays	冷灰系
+	Fade to Transparent	漸隱到透明
+	White Fade	白色漸隱
+	Vignette	暈影
+	Mist	薄霧
+	Petal	花瓣
+	Fern	蕨
+	Smoke	煙
+	Honey	蜂蜜
+	Seafoam	海沫
+	Lavender	薰衣草
+	Driftwood	漂流木
+	Ink Wash	水墨
+	Tide	潮汐
+	Bloom	綻放
+	Dew	露珠
+	Pollen	花粉
+	Lichen	地衣
+	Prism Veil	稜鏡紗
+	Opal Ribbon	蛋白石緞帶
+	Pearl Flash	珍珠閃光
+	Aurora Foil	極光箔
+	Iris Sheen	虹彩光澤
+	Frost Spectrum	霜之光譜
+	Silver Tide	銀潮
+	Rose Quartz Gleam	粉晶微光
+	Moonstone Shift	月光石流光
+	Violet Edge	紫羅蘭邊
+	Mint Halo	薄荷光暈
+	Amber Corona	琥珀日冕
+	Polar Glint	極地閃爍
+	Pastel Orbit	粉彩軌道
+	Coral and Navy	珊瑚色與海軍藍
+	Plum and Lime	梅紫與萊姆
+	Teal and Gold	藍綠與金
+	Indigo and Peach	靛藍與桃色
+	Forest and Rose	森林與玫瑰
+	Red Glow	紅色光暈
+	Orange Glow	橙色光暈
+	Amber Glow	琥珀光暈
+	Yellow Glow	黃色光暈
+	Lime Glow	萊姆光暈
+	Green Glow	綠色光暈
+	Teal Glow	藍綠光暈
+	Cyan Glow	青色光暈
+	Azure Glow	天藍光暈
+	Blue Glow	藍色光暈
+	Violet Glow	紫羅蘭光暈
+	Magenta Glow	洋紅光暈
+	Polka Dots	圓點
+	Vertical Stripes	直條紋
+	Horizontal Stripes	橫條紋
+	Diagonal Stripes	斜條紋
+	Checkerboard	棋盤格
+	Diamonds	菱形
+	Crosses	十字
+	Coarse Grit	粗顆粒
+	Stipple	點畫
+	Scratches	刮痕
+	Sparse Flecks	稀疏斑點
+	Dense Flecks	密集斑點
+	Sine Bands	正弦帶
+	Ripple Lines	漣漪線
+	Interference Rings	干涉環
+	Offset Rings	錯位環
+	Warped Checks	扭曲方格
+	Pinched Stripes	收縮條紋
+	Chevron Pulse	人字脈衝
+	Radiating Lenses	放射透鏡
+	Soft Shadow	柔和陰影
+	Hard Shadow	硬陰影
+	Lifted Card	浮起卡片
+	Neon Tube	霓虹燈管
+	Inner Light	內光
+	Feathered	羽化
+	Haze	霧靄
+	Double Rule	雙線
+	Triple Rule	三線
+	Dashed Border	虛線邊框
+	Dotted Border	點線邊框
+	Offset Keyline	位移輪廓線
+	Inset Keyline	內縮輪廓線
+	Outside Stroke	外側筆畫
+	Pointer	指標
+	Highlighter	螢光筆
+	Sketchy Line	草圖線
+	Scribble Fill	塗鴉填色
+	Wobble	搖晃
+	Zig Zag Edge	鋸齒邊
+	Wavy Edge	波浪邊
+	Puffy	鼓起
+	Starburst	星爆
+	Glossy	光澤
+	Brushed Metal	拉絲金屬
+	Spotlight	聚光燈
+	Sunset Band	日落條帶
+	Sea Glass	海玻璃
+	Pearl	珍珠
+	Chrome Rim	鍍鉻邊
+	Glow Orb	發光球
+	Pill Badge	膠囊徽章
+	Round Badge	圓形徽章
+	Flag Wave	飄揚的旗幟
+	Bulge	凸起
+	Twisted	扭轉
+	Echo	回聲
+	Spiral Copies	螺旋副本
+	Multiply Tint	色彩增值色調
+	Darken Veil	變暗薄紗
+	Ghosted	半透明
+	Two Tone	雙色調
+	Overlay Glaze	覆蓋釉
+	Screen Light	濾色光
+	Soft Light Wash	柔光暈染
+	Cyan Neon	青色霓虹
+	Magenta Laser	洋紅雷射
+	Amber Tube	琥珀燈管
+	Electric Lime	電光萊姆
+	Pulse Violet	脈衝紫
+	Cobalt Phosphor	鈷藍螢光
+	Burst	爆發
+	Rounded Square	圓角正方形
+	Sun	太陽
+	Moon	月亮
+	Cloud	雲
+	Rain	雨
+	Thunder	雷
+	Snow	雪
+	Bar	長條
+	Hexagon	六邊形
+	Spectrum	光譜
+	Triangle	三角
+	Vivid	鮮豔
 	Save Brush Library…	儲存筆刷資料庫…
 @msg	`{_1}` has no brushes to apply	`{_1}` 中沒有可套用的筆刷
 @msg	missing `library` (see brush.libraries)	未提供 `library`（請參閱 brush.libraries）
@@ -7447,10 +7755,18 @@ breakText	Glyphs	字符
 	Smooth Bridge…	平滑橋接…
 	Smooth Bridge	平滑橋接
 	Keep Originals	保留原始物件
-@msg	select two circles to bridge	請選取兩個要橋接的圓形
+@msg	select two or more circles to bridge	請選取兩個或更多要橋接的圓形
 @msg	one circle is inside the other	一個圓形位於另一個圓形內
 @msg	the circles are too far apart for this radius: raise the radius	就此半徑而言，兩個圓形相距太遠：請增加半徑
 @msg	the circles are too far apart for this radius	就此半徑而言，兩個圓形相距太遠
+	Constant Gap	固定間隙
+	Reach:	範圍：
+@msg	the circles are too far apart for this gap: raise the gap	就此間隙而言，兩個圓形相距太遠：請增加間隙
+@msg	the circles are too far apart for this gap	就此間隙而言，兩個圓形相距太遠
+@msg	no two circles are within reach: raise the reach	範圍內沒有任何兩個圓形：請增加範圍
+@msg	select at most 2000 circles to bridge	最多選取 2000 個圓形進行橋接
+@msg	that makes too many bridges (at most 8000): lower the reach	這會產生過多橋接（最多 8000 個）：請減少範圍
+@msg	the bridged circles are too complex to unite	橋接的圓形過於複雜，無法合併
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	公切線…
 	Common Tangents	公切線
@@ -9442,6 +9758,7 @@ breakText	Glyphs	字符
 @msg	the artboards don't fit on the canvas: fewer artboards, less spacing or a smaller size	工作區域無法容納於畫布：請減少工作區域、縮小間距或縮小尺寸
 @msg	the character's size can't be measured	無法測量字元的大小
 @msg	the compound shape is too complex to expand	複合形狀過於複雜，無法展開
+@msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	直線或其他不圍成區域的開放路徑不會為複合形狀增加任何區域；若要納入，請先對其套用「物件 › 路徑 › 外框筆畫」
 @msg	the container of the listed objects is gone	所列物件的容器已不存在
 @msg	the copy `{user_id}` can't be read as a library	複本 `{user_id}` 無法讀取為資料庫
 @msg	the copy would leave the canvas	複本會超出畫布
@@ -9708,7 +10025,6 @@ breakText	Glyphs	字符
 @msg	{kind} files have no transparency, and the file would have {what}: flatten it first (object.flattenTransparency)	{kind} 檔案沒有透明度，而檔案中會有 {what}：請先將它平面化 (object.flattenTransparency)
 @msg	{kind} images can't be opened (see document.formats)	無法開啟 {kind} 影像 (請參閱 document.formats)
 @msg	{k} `{v}` is not one of the choices	{k} `{v}` 不是選項之一
-@msg	{k} has control characters{_1}	{k} 含有控制字元{_1}
 @msg	{k} is too long (at most {MAX_TEXT} characters)	{k} 過長 (最多 {MAX_TEXT} 個字元)
 @msg	{k} must be > 0	{k} 必須 > 0
 @msg	{k} must be a number (pt) or a length such as "210 mm"	{k} 必須是數字 (pt) 或 "210 mm" 這類長度
@@ -9783,6 +10099,17 @@ breakText	Glyphs	字符
 @msg	A joint does not close by {gap} pt.	有一處接縫相差 {gap} pt 未閉合。
 @msg	Two panels pass through each other.	兩個面板相互穿插。
 @msg	{what} would print on more than {MAX_TILES} tiles: scale it down	{what} 會列印在超過 {MAX_TILES} 個拼貼上：請縮小
+	Tap	短按
+	Clear Hold	清除按住
+	Hold Shortcuts	按住快速鍵
+	Hold Shortcut Delay	按住快速鍵延遲
+	How hold shortcuts work	按住快速鍵的運作方式
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	按一下後按下要為此按住的按鍵 (Esc 取消)。按住該按鍵會執行此項；短按會執行該按鍵本身的快速鍵。
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	短按按鍵會執行它的快速鍵。按住按鍵達延遲時間，則改為執行其「按住」欄中的工具或命令。按住快速鍵是字母、數字或標點符號按鍵，可單獨使用或搭配 Shift。
+@msg	Hold {_1} is already used by {_2}	按住 {_1} 已被 {_2} 使用
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	按住快速鍵是可輸入字元的按鍵，可單獨使用或搭配 Shift ({shown} 含有 Cmd、Ctrl 或 Alt)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} 不能作為按住快速鍵：請使用字母、數字或標點符號按鍵
+	Dashed Arrow	虛線箭頭
 	Pressure Sensitive	壓感筆刷
 	Flex Ribbon	柔韌色帶
 	Pulse Stroke	脈動筆觸

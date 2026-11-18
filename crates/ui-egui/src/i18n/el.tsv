@@ -690,6 +690,16 @@ font-technology	Variable	Μεταβλητές
 	Create New Swatch…	Δημιουργία νέου δείγματος χρώματος…
 	Create New {kind} Style	Δημιουργία νέου στυλ {kind}
 	Create Object Mosaic…	Δημιουργία μωσαϊκού αντικειμένων…
+	Create Object Mosaic	Δημιουργία μωσαϊκού αντικειμένων
+	Current Size:	Τρέχον μέγεθος:
+	New Size:	Νέο μέγεθος:
+	Tile Spacing:	Απόσταση πλακιδίων:
+	Number of Tiles:	Αριθμός πλακιδίων:
+	Constrain Ratio:	Περιορισμός αναλογίας:
+	Result:	Αποτέλεσμα:
+	Resize Using Percentages	Αλλαγή μεγέθους με ποσοστά
+	Delete Raster	Διαγραφή εικόνας εικονοστοιχείων
+	Use Ratio	Χρήση αναλογίας
 	Create Outlines	Δημιουργία περιγραμμάτων
 	Create Path	Δημιουργία διαδρομής
 	Create PDF layers from layers and sublayers	Δημιουργία επιπέδων PDF από επίπεδα και υποεπίπεδα
@@ -817,6 +827,7 @@ font-technology	Variable	Μεταβλητές
 	Duplicate Action or Action Set	Δημιουργία αντιγράφου ενέργειας ή συνόλου ενεργειών
 	Delete the action set “{name}” and its actions?	Να διαγραφεί το σύνολο ενεργειών «{name}» και οι ενέργειές του;
 	Delete the selected action sets and their actions?	Να διαγραφούν τα επιλεγμένα σύνολα ενεργειών και οι ενέργειές τους;
+	Delete all action sets and their actions?	Να διαγραφούν όλα τα σύνολα ενεργειών και οι ενέργειές τους;
 	Delete Theme	Διαγραφή θέματος
 	Delete theme	Διαγραφή θέματος
 	Delete these {n} graphic styles?	Να διαγραφούν αυτά τα {n} στυλ γραφικών;
@@ -951,6 +962,8 @@ font-technology	Variable	Μεταβλητές
 	Duplicate	Δημιουργία αντιγράφου
 	Duplicate and Offset 10 pt	Δημιουργία αντιγράφου με μετατόπιση 10 pt
 	Duplicate Artboard	Δημιουργία αντιγράφου πίνακα σχεδίασης
+	Click to add an artboard on this side; Alt-click to duplicate this artboard with its art	Κλικ για προσθήκη πίνακα σχεδίασης σε αυτή την πλευρά, Alt-κλικ για αντίγραφο αυτού του πίνακα σχεδίασης μαζί με τα γραφικά του
+	Click to add an artboard on this side	Κλικ για προσθήκη πίνακα σχεδίασης σε αυτή την πλευρά
 	Copy Artboard	Αντιγραφή πίνακα σχεδίασης
 	Cut Artboard	Αποκοπή πίνακα σχεδίασης
 	Rename Artboards	Μετονομασία πινάκων σχεδίασης
@@ -1243,6 +1256,19 @@ font-technology	Variable	Μεταβλητές
 	Fill: click for swatches, Shift-click for the color mixer	Γέμισμα: κλικ για δείγματα, Shift-κλικ για τον μείκτη χρωμάτων
 	Find	Εύρεση
 	Find and Replace…	Εύρεση και αντικατάσταση…
+	Find and Replace	Εύρεση και αντικατάσταση
+	Find:	Εύρεση:
+	Replace With:	Αντικατάσταση με:
+	Replace & Find	Αντικατάσταση και εύρεση
+	Replace All	Αντικατάσταση όλων
+	Match Case	Ταίριασμα πεζών-κεφαλαίων
+	Find Whole Word	Εύρεση ολόκληρης λέξης
+	Search Backwards	Αναζήτηση προς τα πίσω
+	Check Hidden Layers	Έλεγχος κρυφών επιπέδων
+	Check Locked Layers	Έλεγχος κλειδωμένων επιπέδων
+@msg	No matches found	Δεν βρέθηκαν αντιστοιχίες
+@msg	Matches replaced: {n}	Αντιστοιχίες που αντικαταστάθηκαν: {n}
+@msg	no match of `find` at bytes {_1}..{_2} of object {_3}	καμία αντιστοιχία του `find` στα byte {_1}..{_2} του αντικειμένου {_3}
 	Find Font	Εύρεση γραμματοσειράς
 	Find Font…	Εύρεση γραμματοσειράς…
 	Find Next	Εύρεση επόμενου
@@ -1270,6 +1296,7 @@ font-technology	Variable	Μεταβλητές
 	Fit to Selected Art	Προσαρμογή στο επιλεγμένο γραφικό
 	Flag…	Σημαία…
 	Flare	Λάμψη
+	Edit Flare	Επεξεργασία λάμψης
 	Flare Tool	Λάμψη (Flare Tool)
 	Flare Tool Options	Επιλογές εργαλείου λάμψης
 	Halo	Άλως
@@ -1934,6 +1961,9 @@ font-technology	Variable	Μεταβλητές
 	Name:	Όνομα:
 	Navigator	Πλοήγηση
 	Navigator Panel Options	Επιλογές πίνακα πλοήγησης
+	Attributes Panel Options	Επιλογές πίνακα χαρακτηριστικών
+	Number of Recent URLs:	Αριθμός πρόσφατων διευθύνσεων URL:
+@msg	`count` must be a whole number from 1 to 30	Το `count` πρέπει να είναι ακέραιος από 1 έως 30
 	Draw Dashed Lines as Solid Lines	Σχεδίαση διακεκομμένων γραμμών ως συνεχών
 	New	Νέο
 	Scatter:	Διασπορά:
@@ -2729,6 +2759,7 @@ liquify-list-end	{0}, {1}	{0} και {1}
 @msg	Installed plug-in {_1}	Εγκαταστάθηκε η επέκταση {_1}
 @msg	Internal error: {msg} (please report this bug)	Εσωτερικό σφάλμα: {msg} (παρακαλούμε αναφέρετε αυτό το σφάλμα)
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	Συγχώνευση δυναμικής βαφής: επιλέξτε ομάδα δυναμικής βαφής και τις διαδρομές προς προσθήκη
+@msg	`Face` and `Edge` name the faces and edges of a Live Paint group: give the path another name	Τα `Face` και `Edge` ονομάζουν τις επιφάνειες και τις ακμές μιας ομάδας δυναμικής βαφής: δώστε άλλο όνομα στη διαδρομή
 @msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	Η δυναμική βαφή δέχεται διαδρομές και σύνθετες διαδρομές: μετατρέψτε πρώτα κείμενο, εικόνες και άλλα αντικείμενα σε διαδρομές
 @msg	Live Paint: select paths or compound paths	Δυναμική βαφή: επιλέξτε διαδρομές ή σύνθετες διαδρομές
 @msg	Live Paint: these paths are too degenerate to paint	Δυναμική βαφή: αυτές οι διαδρομές είναι πολύ εκφυλισμένες για να χρωματιστούν
@@ -3630,6 +3661,7 @@ theme	Appearance	Εμφάνιση
 	Save Actions…	Αποθήκευση ενεργειών…
 	Load Actions…	Φόρτωση ενεργειών…
 	Replace Actions…	Αντικατάσταση ενεργειών…
+	Clear Actions	Απαλοιφή ενεργειών
 	Reset Actions	Επαναφορά ενεργειών
 	Replace the current actions with the default set?	Να αντικατασταθούν οι τρέχουσες ενέργειες με το προεπιλεγμένο σύνολο;
 	Append adds the default set after the current sets instead.	Η Προσάρτηση προσθέτει αντί γι’ αυτό το προεπιλεγμένο σύνολο μετά τα τρέχοντα σύνολα.
@@ -3981,6 +4013,8 @@ digits	Malayalam	Μαλαγιάλαμ
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Ο τροχός του ποντικιού με πατημένο το Cmd/Ctrl κυλά τον καμβά οριζόντια.
 	Dragging sideways on a numeric field's label changes the field's value.	Η μεταφορά προς τα πλάγια πάνω στην ετικέτα ενός αριθμητικού πεδίου αλλάζει την τιμή του πεδίου.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Μια κίνηση περιστροφής με δύο δάχτυλα σε επιφάνεια αφής περιστρέφει την προβολή του καμβά.
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Το παρατεταμένο πάτημα ενός πλήκτρου εκτελεί το εργαλείο ή την εντολή της στήλης «Κρατήστε πατημένο» στις Συντομεύσεις πληκτρολογίου· ένα σύντομο πάτημα εκτελεί τη συνηθισμένη συντόμευσή του.
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Πόσα δευτερόλεπτα πρέπει να μένει πατημένο ένα πλήκτρο πριν εκτελεστεί η συντόμευση παρατεταμένου πατήματος αντί για τη συνηθισμένη συντόμευσή του.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Όταν μετακινείτε σημεία αγκύρωσης, κάθε καμπύλη με ένα μετακινημένο άκρο διατηρεί το σχήμα της σε σχέση με τα άκρα της.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Όσο κρατάτε πατημένη τη συντόμευση ενός εργαλείου, το εργαλείο είναι επιλεγμένο, και μετά επιλέγεται ξανά το προηγούμενο εργαλείο.
 	Shows the bounding box while you move the selection or draw a shape.	Εμφανίζει το πλαίσιο οριοθέτησης όσο μετακινείτε την επιλογή ή σχεδιάζετε ένα σχήμα.
@@ -4062,6 +4096,7 @@ digits	Malayalam	Μαλαγιάλαμ
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Πόσο κοντά στην οθόνη πρέπει να φτάσει ο δείκτης ή ένα σημείο που σύρεται σε γραφικά για να προσκολληθούν οι έξυπνοι οδηγοί· η απόσταση είναι ίδια σε κάθε ζουμ.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Προσκολλά το άκρο ενός ευθύγραμμου τμήματος ή έναν κύκλο που σχεδιάζεται από το κέντρο του ώστε να αγγίζει μια κοντινή καμπύλη.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Προσκολλά το άκρο ενός ευθύγραμμου τμήματος ώστε να συναντά ένα κοντινό ευθύ τμήμα σε ορθή γωνία.
+	Edit type set in fonts that aren't available?	Επεξεργασία κειμένου σε γραμματοσειρές που δεν είναι διαθέσιμες;
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Εμφανίζει στον καμβά τον αριθμό κάθε τομής σε ένα πλαίσιο πάνω αριστερά της· όταν είναι απενεργοποιημένο, τα περιγράμματα των τομών εξακολουθούν να εμφανίζονται.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Το χρώμα των περιγραμμάτων των τομών χρήστη και αντικειμένου και των πλαισίων με τους αριθμούς τους· οι αυτόματες τομές χρησιμοποιούν μια πιο αχνή απόχρωσή του.
 	Reset all preferences to their defaults?	Επαναφορά όλων των προτιμήσεων στις προεπιλογές τους;
@@ -4306,6 +4341,7 @@ digits	Malayalam	Μαλαγιάλαμ
 	Show Brush Size	Εμφάνιση μεγέθους πινέλου
 	Show Center	Εμφάνιση κέντρου
 	Show Code	Εμφάνιση κώδικα
+	Show in Browser	Εμφάνιση στο πρόγραμμα περιήγησης
 	Show Color Groups	Εμφάνιση ομάδων χρωμάτων
 	Show Color Swatches	Εμφάνιση δειγμάτων χρωμάτων
 	Show Corner Widget	Εμφάνιση στοιχείου γωνιών
@@ -5165,6 +5201,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	no graphic style `{n}`	δεν υπάρχει στυλ γραφικών `{n}`
 @msg	no interaction in progress	δεν υπάρχει αλληλεπίδραση σε εξέλιξη
 @msg	no key object	δεν υπάρχει βασικό αντικείμενο
+@msg	Align to Key Object isn't available with the Artboard tool	η «Στοίχιση ως προς το βασικό αντικείμενο» δεν είναι διαθέσιμη με το εργαλείο πίνακα σχεδίασης
 @msg	no library `{key}` (see {list})	δεν υπάρχει βιβλιοθήκη `{key}` (δείτε {list})
 @msg	no native format	δεν υπάρχει εγγενής μορφή
 @msg	no pages	δεν υπάρχουν σελίδες
@@ -5220,6 +5257,8 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	no such spine point	δεν υπάρχει τέτοιο σημείο κεντρικής καμπύλης
 @msg	`with` must be a list of at most 10000 spine point indexes	το `with` πρέπει να είναι λίστα με έως 10000 δείκτες σημείων κεντρικής καμπύλης
 @msg	`with` moves points, not a handle	το `with` μετακινεί σημεία, όχι λαβή
+@msg	`link` and `independent` cannot both be true	Τα `link` και `independent` δεν μπορούν να είναι και τα δύο true
+@msg	`link` places a handle: give `handle`	το `link` τοποθετεί μια λαβή: δώστε `handle`
 @msg	no such spine segment	δεν υπάρχει τέτοιο τμήμα κεντρικής καμπύλης
 @msg	no such subpath	δεν υπάρχει τέτοια υποδιαδρομή
 @msg	no such user library	δεν υπάρχει τέτοια βιβλιοθήκη χρήστη
@@ -5313,6 +5352,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	select a blend	επιλέξτε ανάμειξη
 @msg	select a blend or give `id`	επιλέξτε ανάμειξη ή δώστε το `id`
 @msg	select a clip group	επιλέξτε ομάδα αποκοπής
+@msg	select a flare	επιλέξτε λάμψη
 @msg	select a gradient mesh	επιλέξτε πλέγμα ντεγκραντέ
 @msg	select a linked image: an embedded one has no file	επιλέξτε συνδεδεμένη εικόνα: η ενσωματωμένη δεν έχει αρχείο
 @msg	select a repeat	επιλέξτε επανάληψη
@@ -5563,6 +5603,7 @@ variable-list-end	{0}, {1}	{0} και {1}
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} συνδεδεμένη εικόνα άλλαξε στον δίσκο: η Ενημέρωση συνδέσμων εμφανίζει τη νέα έκδοση|{n} συνδεδεμένες εικόνες άλλαξαν στον δίσκο: η Ενημέρωση συνδέσμων εμφανίζει τις νέες εκδόσεις
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Ενημερώθηκε {n} συνδεδεμένο αρχείο που άλλαξε στον δίσκο|Ενημερώθηκαν {n} συνδεδεμένα αρχεία που άλλαξαν στον δίσκο
 @msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	το έγγραφο ορίζει ξάκρισμα που αυτό το αρχείο PDF/X παραλείπει: ενεργοποιήστε τη «Χρήση ρυθμίσεων ξακρίσματος εγγράφου»
+@msgplural	{n} object reaches the trim edge but stops short of the bleed|{n} objects reach the trim edge but stop short of the bleed	{n} αντικείμενο φτάνει στο άκρο κοπής αλλά σταματά πριν από το ξάκρισμα|{n} αντικείμενα φτάνουν στο άκρο κοπής αλλά σταματούν πριν από το ξάκρισμα
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	Εξήχθη το {what} με {n} σημείωση: {first}|Εξήχθη το {what} με {n} σημειώσεις: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} αρχείο γραμματοσειράς βρίσκεται πλέον στον φάκελο {folder}|{n} αρχεία γραμματοσειρών βρίσκονται πλέον στον φάκελο {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} αρχείο γραμματοσειράς βρίσκεται πλέον στον φάκελο {folder}· δεν ήταν δυνατή η προσθήκη {failed}: {reason}|{n} αρχεία γραμματοσειρών βρίσκονται πλέον στον φάκελο {folder}· δεν ήταν δυνατή η προσθήκη {failed}: {reason}
@@ -6574,6 +6615,11 @@ effect	Points	Σημεία
 	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Κλείσιμο των κυκλικών άκρων των ανοιχτών προφίλ. Οι μερικές περιστροφές κλείνουν επίσης τις πλευρές τομής τους.
 	Color Panel Options	Επιλογές πίνακα χρώματος
 	Color blindness – Tritanopia-type	Αχρωματοψία – τύπου τριτανοπίας
+	Show Color Vision Preview	Εμφάνιση προεπισκόπησης χρωματικής όρασης
+	Protanopia	Πρωτανοπία
+	Deuteranopia	Δευτερανοπία
+	Tritanopia	Τριτανοπία
+	Achromatopsia	Ολική αχρωματοψία
 	Create Dimension	Δημιουργία διάστασης
 	Darkness	Σκουρότητα
 	Destination Folder:	Φάκελος προορισμού:
@@ -6820,6 +6866,9 @@ effect	Points	Σημεία
 	Continue in Background	Συνέχεια στο παρασκήνιο
 	Cancel Export	Ακύρωση εξαγωγής
 @msg	Export cancelled	Η εξαγωγή ακυρώθηκε
+	Cancel Save	Ακύρωση αποθήκευσης
+@plural	{n} more save waiting|{n} more saves waiting	{n} ακόμη αποθήκευση σε αναμονή|{n} ακόμη αποθηκεύσεις σε αναμονή
+@msg	Save canceled	Η αποθήκευση ακυρώθηκε
 # Paragraph panel menu › Justification…
 	Desired	Επιθυμητό
 	Word Spacing:	Απόσταση λέξεων:
@@ -7233,6 +7282,7 @@ axis	Y Axis	Άξονας Y
 	Checkpoint	Σημείο ελέγχου
 	Inventory Icons	Εικονίδια αποθέματος
 	Skill Icons	Εικονίδια δεξιοτήτων
+	Weather Icons	Εικονίδια καιρού
 	Attack	Επίθεση
 	Defend	Άμυνα
 	Heal	Θεραπεία
@@ -7338,6 +7388,12 @@ axis	Y Axis	Άξονας Y
 	Bus Lines	Γραμμές διαύλου
 	Terminal Nodes	Τερματικοί κόμβοι
 
+# Original arrow art brushes.
+	Arrows	Βέλη
+	Solid Arrow	Συμπαγές βέλος
+	Open Arrow	Ανοιχτό βέλος
+	Chevron Arrow	Βέλος με σεβρόν
+
 	Notched Ribbon	Οδοντωτή κορδέλα
 	Double Line	Διπλή γραμμή
 	Wave	Κύμα
@@ -7354,6 +7410,252 @@ axis	Y Axis	Άξονας Y
 	Stars	Αστέρια
 	Triangles	Τρίγωνα
 	Sparkles	Σπίθες
+	Warm Gray	Θερμό γκρι
+	Cool Gray	Ψυχρό γκρι
+	Neutrals	Ουδέτερα
+	Ivory	Ελεφαντόδοντο
+	Linen	Λινό
+	Oat	Βρόμη
+	Greige	Γκρεζ
+	Stone	Πέτρα
+	Taupe	Γκριζοκαφέ
+	Slate	Σχιστόλιθος
+	Clay	Πηλός
+	Terracotta	Τερακότα
+	Ochre	Ώχρα
+	Umber	Σκιά
+	Sand	Άμμος
+	Olive	Λαδί
+	Moss	Βρύα
+	Rosy	Ροδαλό
+	Neutral	Ουδέτερο
+	Golden	Χρυσαφί
+	Pastel	Παστέλ
+	Pastel Red	Παστέλ κόκκινο
+	Pastel Orange	Παστέλ πορτοκαλί
+	Pastel Amber	Παστέλ κεχριμπαρί
+	Pastel Yellow	Παστέλ κίτρινο
+	Pastel Lime	Παστέλ λάιμ
+	Pastel Green	Παστέλ πράσινο
+	Pastel Teal	Παστέλ γαλαζοπράσινο
+	Pastel Cyan	Παστέλ κυανό
+	Pastel Azure	Παστέλ γαλάζιο
+	Pastel Blue	Παστέλ μπλε
+	Pastel Violet	Παστέλ βιολετί
+	Pastel Magenta	Παστέλ ματζέντα
+	Soft Red	Απαλό κόκκινο
+	Soft Orange	Απαλό πορτοκαλί
+	Soft Amber	Απαλό κεχριμπαρί
+	Soft Yellow	Απαλό κίτρινο
+	Soft Lime	Απαλό λάιμ
+	Soft Green	Απαλό πράσινο
+	Soft Teal	Απαλό γαλαζοπράσινο
+	Soft Cyan	Απαλό κυανό
+	Soft Azure	Απαλό γαλάζιο
+	Soft Blue	Απαλό μπλε
+	Soft Violet	Απαλό βιολετί
+	Soft Magenta	Απαλό ματζέντα
+	Vivid Red	Έντονο κόκκινο
+	Vivid Orange	Έντονο πορτοκαλί
+	Vivid Amber	Έντονο κεχριμπαρί
+	Vivid Yellow	Έντονο κίτρινο
+	Vivid Lime	Έντονο λάιμ
+	Vivid Green	Έντονο πράσινο
+	Vivid Teal	Έντονο γαλαζοπράσινο
+	Vivid Cyan	Έντονο κυανό
+	Vivid Azure	Έντονο γαλάζιο
+	Vivid Blue	Έντονο μπλε
+	Vivid Violet	Έντονο βιολετί
+	Vivid Magenta	Έντονο ματζέντα
+	Deep	Βαθιά
+	Deep Red	Βαθύ κόκκινο
+	Deep Orange	Βαθύ πορτοκαλί
+	Deep Amber	Βαθύ κεχριμπαρί
+	Deep Yellow	Βαθύ κίτρινο
+	Deep Lime	Βαθύ λάιμ
+	Deep Green	Βαθύ πράσινο
+	Deep Teal	Βαθύ γαλαζοπράσινο
+	Deep Cyan	Βαθύ κυανό
+	Deep Azure	Βαθύ γαλάζιο
+	Deep Blue	Βαθύ μπλε
+	Deep Violet	Βαθύ βιολετί
+	Deep Magenta	Βαθύ ματζέντα
+	Gold	Χρυσό
+	Silver	Ασημί
+	Bronze	Μπρούντζος
+	Copper	Χαλκός
+	Brass	Ορείχαλκος
+	Rose Gold	Ροζ χρυσό
+	Gunmetal	Ατσαλί
+	Platinum	Πλατίνα
+	Pewter	Κασσίτερος
+	Ember	Θράκα
+	Lagoon	Λιμνοθάλασσα
+	Dusk	Σούρουπο
+	Clay to Teal	Από πηλό σε γαλαζοπράσινο
+	Plum to Olive	Από δαμασκηνί σε λαδί
+	Complementary Coral	Κοραλλί, συμπληρωματικά
+	Split Complementary Coral	Κοραλλί, διαίρεση συμπληρωματικών
+	Analogous Coral	Κοραλλί, ανάλογα
+	Triad Coral	Κοραλλί, τριάδα
+	Tetrad Coral	Κοραλλί, τετράδα
+	Pentagram Coral	Κοραλλί, πεντάγραμμο
+	Complementary Teal	Γαλαζοπράσινο, συμπληρωματικά
+	Split Complementary Teal	Γαλαζοπράσινο, διαίρεση συμπληρωματικών
+	Analogous Teal	Γαλαζοπράσινο, ανάλογα
+	Triad Teal	Γαλαζοπράσινο, τριάδα
+	Tetrad Teal	Γαλαζοπράσινο, τετράδα
+	Pentagram Teal	Γαλαζοπράσινο, πεντάγραμμο
+	Soft Spectrum	Απαλό φάσμα
+	Red to Amber	Από κόκκινο σε κεχριμπαρί
+	Orange to Yellow	Από πορτοκαλί σε κίτρινο
+	Amber to Lime	Από κεχριμπαρί σε λάιμ
+	Yellow to Green	Από κίτρινο σε πράσινο
+	Lime to Teal	Από λάιμ σε γαλαζοπράσινο
+	Green to Cyan	Από πράσινο σε κυανό
+	Teal to Azure	Από γαλαζοπράσινο σε γαλάζιο
+	Cyan to Blue	Από κυανό σε μπλε
+	Azure to Violet	Από γαλάζιο σε βιολετί
+	Blue to Magenta	Από μπλε σε ματζέντα
+	Violet to Red	Από βιολετί σε κόκκινο
+	Magenta to Orange	Από ματζέντα σε πορτοκαλί
+	Dawn	Αυγή
+	Noon	Μεσημέρι
+	Sunset	Ηλιοβασίλεμα
+	Night	Νύχτα
+	Overcast	Συννεφιά
+	White to Black	Από λευκό σε μαύρο
+	Light Grays	Ανοιχτά γκρι
+	Dark Grays	Σκούρα γκρι
+	Warm Grays	Θερμά γκρι
+	Cool Grays	Ψυχρά γκρι
+	Fade to Transparent	Σβήσιμο σε διαφανές
+	White Fade	Λευκό σβήσιμο
+	Vignette	Βινιέτα
+	Mist	Ομίχλη
+	Petal	Πέταλο
+	Fern	Φτέρη
+	Smoke	Καπνός
+	Honey	Μέλι
+	Seafoam	Αφρός θάλασσας
+	Lavender	Λεβάντα
+	Driftwood	Ξύλο θάλασσας
+	Ink Wash	Αραιωμένο μελάνι
+	Tide	Παλίρροια
+	Bloom	Άνθιση
+	Dew	Δροσιά
+	Pollen	Γύρη
+	Lichen	Λειχήνα
+	Prism Veil	Πέπλο πρίσματος
+	Opal Ribbon	Κορδέλα οπαλίου
+	Pearl Flash	Μαργαριταρένια λάμψη
+	Aurora Foil	Φύλλο σέλαος
+	Iris Sheen	Ιριδίζουσα γυαλάδα
+	Frost Spectrum	Παγωμένο φάσμα
+	Silver Tide	Ασημένια παλίρροια
+	Rose Quartz Gleam	Λάμψη ροζ χαλαζία
+	Moonstone Shift	Ανταύγεια σεληνόπετρας
+	Violet Edge	Βιολετί άκρη
+	Mint Halo	Άλως μέντας
+	Amber Corona	Κεχριμπαρένιο στέμμα
+	Polar Glint	Πολική αναλαμπή
+	Pastel Orbit	Παστέλ τροχιά
+	Coral and Navy	Κοραλλί και ναυτικό μπλε
+	Plum and Lime	Δαμασκηνί και λάιμ
+	Teal and Gold	Γαλαζοπράσινο και χρυσό
+	Indigo and Peach	Λουλακί και ροδακινί
+	Forest and Rose	Δάσος και τριαντάφυλλο
+	Red Glow	Κόκκινη λάμψη
+	Orange Glow	Πορτοκαλί λάμψη
+	Amber Glow	Κεχριμπαρένια λάμψη
+	Yellow Glow	Κίτρινη λάμψη
+	Lime Glow	Λάμψη λάιμ
+	Green Glow	Πράσινη λάμψη
+	Teal Glow	Γαλαζοπράσινη λάμψη
+	Cyan Glow	Κυανή λάμψη
+	Azure Glow	Γαλάζια λάμψη
+	Blue Glow	Μπλε λάμψη
+	Violet Glow	Βιολετί λάμψη
+	Magenta Glow	Λάμψη ματζέντα
+	Polka Dots	Πουά
+	Vertical Stripes	Κάθετες ρίγες
+	Horizontal Stripes	Οριζόντιες ρίγες
+	Diagonal Stripes	Διαγώνιες ρίγες
+	Checkerboard	Σκακιέρα
+	Diamonds	Ρόμβοι
+	Crosses	Σταυροί
+	Coarse Grit	Χοντρός κόκκος
+	Stipple	Στικτό
+	Scratches	Γρατσουνιές
+	Sparse Flecks	Αραιές κηλίδες
+	Dense Flecks	Πυκνές κηλίδες
+	Sine Bands	Ημιτονοειδείς ζώνες
+	Ripple Lines	Γραμμές κυματισμού
+	Interference Rings	Δακτύλιοι συμβολής
+	Offset Rings	Μετατοπισμένοι δακτύλιοι
+	Warped Checks	Παραμορφωμένο καρό
+	Pinched Stripes	Στενεμένες ρίγες
+	Chevron Pulse	Παλμός σεβρόν
+	Radiating Lenses	Ακτινωτοί φακοί
+	Soft Shadow	Απαλή σκιά
+	Hard Shadow	Σκληρή σκιά
+	Lifted Card	Ανυψωμένη κάρτα
+	Neon Tube	Σωλήνας νέον
+	Inner Light	Εσωτερικό φως
+	Feathered	Απαλές άκρες
+	Haze	Θολούρα
+	Double Rule	Διπλή γραμμή
+	Triple Rule	Τριπλή γραμμή
+	Dashed Border	Διακεκομμένο περίγραμμα
+	Dotted Border	Περίγραμμα με τελείες
+	Offset Keyline	Μετατοπισμένη γραμμή περιγράμματος
+	Inset Keyline	Εσωτερική γραμμή περιγράμματος
+	Outside Stroke	Εξωτερική πινελιά
+	Pointer	Δείκτης
+	Highlighter	Μαρκαδόρος υπογράμμισης
+	Sketchy Line	Γραμμή σκίτσου
+	Scribble Fill	Γέμισμα με μουτζούρες
+	Wobble	Τρεμούλιασμα
+	Zig Zag Edge	Ζιγκζάγκ άκρη
+	Wavy Edge	Κυματιστή άκρη
+	Puffy	Φουσκωτό
+	Starburst	Έκρηξη αστεριού
+	Glossy	Γυαλιστερό
+	Brushed Metal	Βουρτσισμένο μέταλλο
+	Spotlight	Προβολέας
+	Sunset Band	Ζώνη ηλιοβασιλέματος
+	Sea Glass	Γυαλί θάλασσας
+	Pearl	Μαργαριτάρι
+	Chrome Rim	Χρωμιωμένο χείλος
+	Glow Orb	Φωτεινή σφαίρα
+	Pill Badge	Σήμα κάψουλα
+	Round Badge	Στρογγυλό σήμα
+	Flag Wave	Κυματιστή σημαία
+	Bulge	Διόγκωση
+	Twisted	Στριμμένο
+	Echo	Ηχώ
+	Spiral Copies	Αντίγραφα σε σπείρα
+	Multiply Tint	Απόχρωση πολλαπλασιασμού
+	Darken Veil	Πέπλο σκοτεινιάσματος
+	Ghosted	Φαντασματικό
+	Two Tone	Δίχρωμο
+	Overlay Glaze	Βερνίκι επικάλυψης
+	Screen Light	Φως αρνητικού πολλαπλασιασμού
+	Soft Light Wash	Αραίωση απαλού φωτός
+	Cyan Neon	Κυανό νέον
+	Magenta Laser	Ματζέντα λέιζερ
+	Amber Tube	Κεχριμπαρένιος σωλήνας
+	Electric Lime	Ηλεκτρικό λάιμ
+	Pulse Violet	Παλλόμενο βιολετί
+	Cobalt Phosphor	Φωσφόρος κοβαλτίου
+	Burst	Έκρηξη
+	Rounded Square	Στρογγυλεμένο τετράγωνο
+	Sun	Ήλιος
+	Moon	Φεγγάρι
+	Cloud	Σύννεφο
+	Rain	Βροχή
+	Thunder	Βροντή
+	Snow	Χιόνι
 	Save Brush Library…	Αποθήκευση βιβλιοθήκης πινέλων…
 @msg	`{_1}` has no brushes to apply	Η `{_1}` δεν έχει πινέλα για εφαρμογή
 @msg	missing `library` (see brush.libraries)	λείπει το `library` (δείτε brush.libraries)
@@ -7777,10 +8079,18 @@ breakText	Glyphs	Γλύφοι
 	Smooth Bridge…	Ομαλή γέφυρα…
 	Smooth Bridge	Ομαλή γέφυρα
 	Keep Originals	Διατήρηση πρωτοτύπων
-@msg	select two circles to bridge	επιλέξτε δύο κύκλους για γεφύρωση
+@msg	select two or more circles to bridge	επιλέξτε δύο ή περισσότερους κύκλους για γεφύρωση
 @msg	one circle is inside the other	ο ένας κύκλος βρίσκεται μέσα στον άλλο
 @msg	the circles are too far apart for this radius: raise the radius	οι κύκλοι απέχουν πολύ μεταξύ τους για αυτή την ακτίνα: αυξήστε την ακτίνα
 @msg	the circles are too far apart for this radius	οι κύκλοι απέχουν πολύ μεταξύ τους για αυτή την ακτίνα
+	Constant Gap	Σταθερή απόσταση
+	Reach:	Εμβέλεια:
+@msg	the circles are too far apart for this gap: raise the gap	οι κύκλοι απέχουν πολύ μεταξύ τους για αυτή την απόσταση: αυξήστε την απόσταση
+@msg	the circles are too far apart for this gap	οι κύκλοι απέχουν πολύ μεταξύ τους για αυτή την απόσταση
+@msg	no two circles are within reach: raise the reach	δεν υπάρχουν δύο κύκλοι εντός εμβέλειας: αυξήστε την εμβέλεια
+@msg	select at most 2000 circles to bridge	επιλέξτε έως 2000 κύκλους για γεφύρωση
+@msg	that makes too many bridges (at most 8000): lower the reach	αυτό δημιουργεί πάρα πολλές γέφυρες (έως 8000): μειώστε την εμβέλεια
+@msg	the bridged circles are too complex to unite	οι γεφυρωμένοι κύκλοι είναι πολύ σύνθετοι για ένωση
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	Κοινές εφαπτόμενες…
 	Common Tangents	Κοινές εφαπτόμενες
@@ -8305,6 +8615,18 @@ breakText	Glyphs	Γλύφοι
 @msg	A joint does not close by {gap} pt.	Μια ένωση δεν κλείνει κατά {gap} pt.
 @msg	Two panels pass through each other.	Δύο πάνελ διαπερνούν το ένα το άλλο.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	το composer πρέπει να είναι "singleLine", "everyLine", "standardSingleLine" ή "standardEveryLine"
+	Tap	Σύντομο πάτημα
+	Clear Hold	Εκκαθάριση παρατεταμένου πατήματος
+	Hold Shortcuts	Συντομεύσεις παρατεταμένου πατήματος
+	Hold Shortcut Delay	Καθυστέρηση συντομεύσεων παρατεταμένου πατήματος
+	How hold shortcuts work	Πώς λειτουργούν οι συντομεύσεις παρατεταμένου πατήματος
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	Κάντε κλικ και πατήστε ένα πλήκτρο που θα κρατάτε πατημένο για αυτό (Esc για ακύρωση). Το παρατεταμένο πάτημα του πλήκτρου εκτελεί αυτό. Ένα σύντομο πάτημα εκτελεί τη συντόμευση του ίδιου του πλήκτρου.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	Ένα σύντομο πάτημα πλήκτρου εκτελεί τη συντόμευσή του. Αν κρατήσετε πατημένο το πλήκτρο για τον χρόνο καθυστέρησης, εκτελείται αντί γι’ αυτό το εργαλείο ή η εντολή της στήλης «Κρατήστε πατημένο». Μια συντόμευση παρατεταμένου πατήματος είναι ένα πλήκτρο γράμματος, ψηφίου ή σημείου στίξης, μόνο του ή με Shift.
+@msg	Hold {_1} is already used by {_2}	το παρατεταμένο πάτημα του {_1} χρησιμοποιείται ήδη από το {_2}
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	μια συντόμευση παρατεταμένου πατήματος είναι ένα πλήκτρο που πληκτρολογεί έναν χαρακτήρα, μόνο του ή με Shift (το {shown} έχει Cmd, Ctrl ή Alt)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	το {shown} δεν μπορεί να είναι συντόμευση παρατεταμένου πατήματος: χρησιμοποιήστε γράμμα, ψηφίο ή πλήκτρο στίξης
+	Dashed Arrow	Διακεκομμένο βέλος
+@msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	μια γραμμή ή άλλη ανοιχτή διαδρομή που δεν περικλείει εμβαδόν δεν προσθέτει εμβαδόν στο σύνθετο σχήμα· για να τη συμπεριλάβετε, εφαρμόστε της πρώτα Αντικείμενο › Διαδρομή › Μετατροπή περιγράμματος σε διαδρομή
 	Pressure Sensitive	Ευαίσθητα στην πίεση
 	Flex Ribbon	Εύκαμπτη κορδέλα
 	Pulse Stroke	Παλμική πινελιά

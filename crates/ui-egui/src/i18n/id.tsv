@@ -80,6 +80,16 @@
 	Paste without Formatting	Tempel tanpa pemformatan
 	Clear	Hapus
 	Find and Replace…	Cari dan ganti…
+	Find and Replace	Cari dan ganti
+	Find:	Cari:
+	Replace With:	Ganti dengan:
+	Replace & Find	Ganti dan cari
+	Replace All	Ganti semua
+	Match Case	Cocokkan huruf besar/kecil
+	Find Whole Word	Cari seluruh kata
+	Search Backwards	Cari mundur
+	Check Hidden Layers	Periksa lapisan tersembunyi
+	Check Locked Layers	Periksa lapisan terkunci
 	Find Next	Cari berikutnya
 	Spelling	Ejaan
 	Auto Spell Check	Pemeriksaan ejaan otomatis
@@ -219,6 +229,16 @@
 	To Center	Ke tengah
 	To Edge	Ke tepi
 	Create Object Mosaic…	Buat mozaik objek…
+	Create Object Mosaic	Buat mozaik objek
+	Current Size:	Ukuran saat ini:
+	New Size:	Ukuran baru:
+	Tile Spacing:	Spasi ubin:
+	Number of Tiles:	Jumlah ubin:
+	Constrain Ratio:	Batasi rasio:
+	Result:	Hasil:
+	Resize Using Percentages	Ubah ukuran dengan persentase
+	Delete Raster	Hapus gambar raster
+	Use Ratio	Gunakan rasio
 	Vector Halftone…	Halftone vektor…
 	Create Trim Marks	Buat tanda potong
 	Flatten Transparency…	Ratakan transparansi…
@@ -743,6 +763,9 @@
 	Magic Wand	Tongkat ajaib
 	Navigator	Navigator
 	Navigator Panel Options	Opsi panel navigator
+	Attributes Panel Options	Opsi panel atribut
+	Number of Recent URLs:	Jumlah URL terbaru:
+@msg	`count` must be a whole number from 1 to 30	`count` harus bilangan bulat dari 1 sampai 30
 	Draw Dashed Lines as Solid Lines	Gambar garis putus-putus sebagai garis utuh
 	Pattern Options	Opsi pola
 	Properties	Properti
@@ -1463,6 +1486,7 @@ lighting	Light	Cahaya
 	Save Actions…	Simpan tindakan…
 	Load Actions…	Muat tindakan…
 	Replace Actions…	Ganti tindakan…
+	Clear Actions	Bersihkan tindakan
 	Reset Actions	Atur ulang tindakan
 	Replace the current actions with the default set?	Ganti tindakan saat ini dengan set default?
 	Append adds the default set after the current sets instead.	Tambahkan justru menambahkan set default setelah set saat ini.
@@ -1767,6 +1791,7 @@ digits	Malayalam	Malayalam
 	Duplicate Action or Action Set	Duplikatkan tindakan atau set tindakan
 	Delete the action set “{name}” and its actions?	Hapus set tindakan “{name}” beserta tindakannya?
 	Delete the selected action sets and their actions?	Hapus set tindakan yang dipilih beserta tindakannya?
+	Delete all action sets and their actions?	Hapus semua set tindakan beserta tindakannya?
 	Delete these {n} graphic styles?	Hapus {n} gaya grafis ini?
 	Delete this {n} graphic style?	Hapus {n} gaya grafis ini?
 	Graphic Style Libraries Menu	Menu pustaka gaya grafis
@@ -3085,6 +3110,7 @@ antiAlias	Sharp	Tajam
 	Preserve Editing Capabilities	Pertahankan kemampuan pengeditan
 	Responsive	Responsif
 	Show Code	Tampilkan kode
+	Show in Browser	Tampilkan di browser
 	Style Attributes	Atribut gaya
 	Style Attributes (Entity References)	Atribut gaya (referensi entitas)
 	Styling:	Penataan gaya:
@@ -3993,6 +4019,7 @@ theme	Appearance	Tampilan
 	Set Tab Stops	Atur hentian tab
 	Tab Stops	Hentian tab
 	Flare	Flare
+	Edit Flare	Edit flare
 	Rays	Sinar
 	Rectangle	Persegi panjang
 	Paintbrush	Kuas lukis
@@ -4095,6 +4122,8 @@ axis	Both	Keduanya
 	Show	Tampilkan
 	Copy Width Point	Salin titik lebar
 	Duplicate Artboard	Duplikatkan artboard
+	Click to add an artboard on this side; Alt-click to duplicate this artboard with its art	Klik untuk menambahkan artboard di sisi ini, Alt+klik untuk menduplikatkan artboard ini beserta karya seninya
+	Click to add an artboard on this side	Klik untuk menambahkan artboard di sisi ini
 	Area / Path Type	Teks area / teks jalur
 	Decrease Font Size	Perkecil ukuran font
 	Increase Font Size	Perbesar ukuran font
@@ -4271,6 +4300,8 @@ font-technology	Variable	Variabel
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Roda mouse dengan Cmd/Ctrl ditahan menggulir kanvas ke samping.
 	Dragging sideways on a numeric field's label changes the field's value.	Menyeret ke samping pada label bidang angka mengubah nilai bidang itu.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Gerakan putar dua jari pada trackpad memutar tampilan kanvas.
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Menahan tombol menjalankan alat atau perintah di kolom Tahan pada Pintasan papan ketik; tekanan singkat menjalankan pintasan biasanya.
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Berapa detik tombol harus ditahan sebelum pintasan tahannya berjalan sebagai ganti pintasan biasanya.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Saat Anda memindahkan titik jangkar, setiap kurva dengan satu ujung yang dipindahkan mempertahankan bentuknya terhadap ujung-ujungnya.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Menahan tombol pintasan alat memilih alat itu sampai Anda melepasnya, lalu alat sebelumnya dipilih lagi.
 	Shows the bounding box while you move the selection or draw a shape.	Menampilkan kotak pembatas saat Anda memindahkan seleksi atau menggambar bentuk.
@@ -4352,6 +4383,7 @@ font-technology	Variable	Variabel
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Seberapa dekat penunjuk atau titik yang diseret harus mendekati karya di layar agar panduan cerdas menjepret; jaraknya sama pada setiap zoom.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Menjepretkan ujung segmen garis, atau lingkaran yang digambar dari pusatnya, agar menyentuh kurva di dekatnya.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Menjepretkan ujung segmen garis agar bertemu segmen lurus di dekatnya pada sudut siku-siku.
+	Edit type set in fonts that aren't available?	Edit teks dengan font yang tidak tersedia?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Menampilkan nomor setiap irisan dalam kotak di sudut kiri atasnya di kanvas; saat nonaktif, garis tepi irisan tetap ditampilkan.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Warna garis tepi irisan pengguna dan objek serta kotak nomornya; irisan otomatis memakai nuansa yang lebih redup dari warna ini.
 	Reset all preferences to their defaults?	Atur ulang semua preferensi ke defaultnya?
@@ -4893,6 +4925,7 @@ imageTrace	Outline	Kontur
 @msg	no graphic style `{n}`	tidak ada gaya grafis `{n}`
 @msg	no interaction in progress	tidak ada interaksi yang berlangsung
 @msg	no key object	tidak ada objek kunci
+@msg	Align to Key Object isn't available with the Artboard tool	Ratakan ke objek kunci tidak tersedia dengan alat artboard
 @msg	no library `{key}` (see {list})	tidak ada pustaka `{key}` (lihat {list})
 @msg	no native format	tidak ada format asli
 @msg	no pages	tidak ada halaman
@@ -5021,6 +5054,7 @@ imageTrace	Outline	Kontur
 @msg	select a Live Paint group	pilih grup Live Paint
 @msg	select a blend	pilih blend
 @msg	select a clip group	pilih grup klip
+@msg	select a flare	pilih flare
 @msg	select a gradient mesh	pilih mesh gradien
 @msg	select a linked image: an embedded one has no file	pilih gambar tertaut: gambar yang tersemat tidak memiliki berkas
 @msg	select a repeat	pilih pengulangan
@@ -5224,6 +5258,7 @@ imageTrace	Outline	Kontur
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} gambar tertaut di disk telah berubah: Perbarui Tautan menampilkan versi barunya
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Telah memperbarui {n} berkas tertaut yang berubah di disk
 @msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	dokumen menetapkan bleed yang dihilangkan oleh file PDF/X ini: aktifkan "Gunakan pengaturan bleed dokumen"
+@msgplural	{n} object reaches the trim edge but stops short of the bleed|{n} objects reach the trim edge but stop short of the bleed	{n} objek mencapai tepi potong tetapi berhenti sebelum bleed
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	{what} diekspor dengan {n} catatan: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} berkas font kini berada di {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} berkas font kini berada di {folder}; {failed} tidak dapat ditambahkan: {reason}
@@ -5912,6 +5947,11 @@ mark-style	Japanese	Jepang
 	The active document changed while the screen color sampler was open	Dokumen aktif berubah saat pengambil warna layar terbuka
 	This system has no screen color sampler	Sistem ini tidak memiliki pengambil warna layar
 	Color blindness – Tritanopia-type	Buta warna – tipe Tritanopia
+	Show Color Vision Preview	Tampilkan pratinjau penglihatan warna
+	Protanopia	Protanopia
+	Deuteranopia	Deuteranopia
+	Tritanopia	Tritanopia
+	Achromatopsia	Akromatopsia
 	Panels Except Tools and Control	Semua panel kecuali Alat dan Kontrol
 	Reset Tracking and Kerning	Atur ulang tracking dan kerning
 	Reset Horizontal Scale	Atur ulang skala horizontal
@@ -6306,6 +6346,9 @@ swatch	Bright Violet	Violet cerah
 	Continue in Background	Lanjutkan di latar belakang
 	Cancel Export	Batalkan ekspor
 @msg	Export cancelled	Ekspor dibatalkan
+	Cancel Save	Batalkan penyimpanan
+@plural	{n} more save waiting|{n} more saves waiting	{n} penyimpanan lagi menunggu
+@msg	Save canceled	Penyimpanan dibatalkan
 # Paragraph panel menu › Justification…
 	Desired	Diinginkan
 	Word Spacing:	Spasi Kata:
@@ -6526,6 +6569,7 @@ axis	Y Axis	Sumbu Y
 	Checkpoint	Pos pemeriksaan
 	Inventory Icons	Ikon Inventaris
 	Skill Icons	Ikon Keahlian
+	Weather Icons	Ikon Cuaca
 	Attack	Serang
 	Defend	Bertahan
 	Heal	Pulihkan
@@ -6625,6 +6669,12 @@ axis	Y Axis	Sumbu Y
 	Bus Lines	Jalur bus
 	Terminal Nodes	Simpul terminal
 
+# Original arrow art brushes.
+	Arrows	Kuas panah
+	Solid Arrow	Panah solid
+	Open Arrow	Panah terbuka
+	Chevron Arrow	Panah chevron
+
 	Notched Ribbon	Pita bertakik
 	Double Line	Garis ganda
 	Wave	Gelombang
@@ -6641,6 +6691,252 @@ axis	Y Axis	Sumbu Y
 	Stars	Bintang
 	Triangles	Segitiga
 	Sparkles	Kilauan
+	Warm Gray	Abu-abu hangat
+	Cool Gray	Abu-abu sejuk
+	Neutrals	Warna netral
+	Ivory	Gading
+	Linen	Linen
+	Oat	Gandum
+	Greige	Greige
+	Stone	Batu
+	Taupe	Taupe
+	Slate	Batu tulis
+	Clay	Tanah liat
+	Terracotta	Terakota
+	Ochre	Oker
+	Umber	Umber
+	Sand	Pasir
+	Olive	Zaitun
+	Moss	Lumut
+	Rosy	Kemerahan
+	Neutral	Netral
+	Golden	Keemasan
+	Pastel	Pastel
+	Pastel Red	Merah pastel
+	Pastel Orange	Oranye pastel
+	Pastel Amber	Amber pastel
+	Pastel Yellow	Kuning pastel
+	Pastel Lime	Limau pastel
+	Pastel Green	Hijau pastel
+	Pastel Teal	Hijau toska pastel
+	Pastel Cyan	Sian pastel
+	Pastel Azure	Biru langit pastel
+	Pastel Blue	Biru pastel
+	Pastel Violet	Violet pastel
+	Pastel Magenta	Magenta pastel
+	Soft Red	Merah lembut
+	Soft Orange	Oranye lembut
+	Soft Amber	Amber lembut
+	Soft Yellow	Kuning lembut
+	Soft Lime	Limau lembut
+	Soft Green	Hijau lembut
+	Soft Teal	Hijau toska lembut
+	Soft Cyan	Sian lembut
+	Soft Azure	Biru langit lembut
+	Soft Blue	Biru lembut
+	Soft Violet	Violet lembut
+	Soft Magenta	Magenta lembut
+	Vivid Red	Merah cerah
+	Vivid Orange	Oranye cerah
+	Vivid Amber	Amber cerah
+	Vivid Yellow	Kuning cerah
+	Vivid Lime	Limau cerah
+	Vivid Green	Hijau cerah
+	Vivid Teal	Hijau toska cerah
+	Vivid Cyan	Sian cerah
+	Vivid Azure	Biru langit cerah
+	Vivid Blue	Biru cerah
+	Vivid Violet	Violet cerah
+	Vivid Magenta	Magenta cerah
+	Deep	Pekat
+	Deep Red	Merah pekat
+	Deep Orange	Oranye pekat
+	Deep Amber	Amber pekat
+	Deep Yellow	Kuning pekat
+	Deep Lime	Limau pekat
+	Deep Green	Hijau pekat
+	Deep Teal	Hijau toska pekat
+	Deep Cyan	Sian pekat
+	Deep Azure	Biru langit pekat
+	Deep Blue	Biru pekat
+	Deep Violet	Violet pekat
+	Deep Magenta	Magenta pekat
+	Gold	Emas
+	Silver	Perak
+	Bronze	Perunggu
+	Copper	Tembaga
+	Brass	Kuningan
+	Rose Gold	Emas mawar
+	Gunmetal	Abu-abu logam
+	Platinum	Platina
+	Pewter	Timah
+	Ember	Bara
+	Lagoon	Laguna
+	Dusk	Senja
+	Clay to Teal	Tanah liat ke hijau toska
+	Plum to Olive	Prem ke zaitun
+	Complementary Coral	Koral komplementer
+	Split Complementary Coral	Koral komplementer terpisah
+	Analogous Coral	Koral analog
+	Triad Coral	Koral triad
+	Tetrad Coral	Koral tetrad
+	Pentagram Coral	Koral pentagram
+	Complementary Teal	Hijau toska komplementer
+	Split Complementary Teal	Hijau toska komplementer terpisah
+	Analogous Teal	Hijau toska analog
+	Triad Teal	Hijau toska triad
+	Tetrad Teal	Hijau toska tetrad
+	Pentagram Teal	Hijau toska pentagram
+	Soft Spectrum	Spektrum lembut
+	Red to Amber	Merah ke amber
+	Orange to Yellow	Oranye ke kuning
+	Amber to Lime	Amber ke limau
+	Yellow to Green	Kuning ke hijau
+	Lime to Teal	Limau ke hijau toska
+	Green to Cyan	Hijau ke sian
+	Teal to Azure	Hijau toska ke biru langit
+	Cyan to Blue	Sian ke biru
+	Azure to Violet	Biru langit ke violet
+	Blue to Magenta	Biru ke magenta
+	Violet to Red	Violet ke merah
+	Magenta to Orange	Magenta ke oranye
+	Dawn	Fajar
+	Noon	Tengah hari
+	Sunset	Matahari terbenam
+	Night	Malam
+	Overcast	Mendung
+	White to Black	Putih ke hitam
+	Light Grays	Abu-abu terang
+	Dark Grays	Abu-abu gelap
+	Warm Grays	Gradasi abu-abu hangat
+	Cool Grays	Gradasi abu-abu sejuk
+	Fade to Transparent	Memudar ke transparan
+	White Fade	Pudar putih
+	Vignette	Vinyet
+	Mist	Kabut
+	Petal	Kelopak
+	Fern	Pakis
+	Smoke	Asap
+	Honey	Madu
+	Seafoam	Buih laut
+	Lavender	Lavender
+	Driftwood	Kayu apung
+	Ink Wash	Sapuan tinta
+	Tide	Pasang surut
+	Bloom	Mekar
+	Dew	Embun
+	Pollen	Serbuk sari
+	Lichen	Lumut kerak
+	Prism Veil	Selubung prisma
+	Opal Ribbon	Pita opal
+	Pearl Flash	Kilatan mutiara
+	Aurora Foil	Foil aurora
+	Iris Sheen	Kilau iris
+	Frost Spectrum	Spektrum beku
+	Silver Tide	Pasang perak
+	Rose Quartz Gleam	Kilau kuarsa mawar
+	Moonstone Shift	Kilau batu bulan
+	Violet Edge	Tepi violet
+	Mint Halo	Halo mint
+	Amber Corona	Korona amber
+	Polar Glint	Kerlip kutub
+	Pastel Orbit	Orbit pastel
+	Coral and Navy	Koral dan biru dongker
+	Plum and Lime	Prem dan limau
+	Teal and Gold	Hijau toska dan emas
+	Indigo and Peach	Nila dan persik
+	Forest and Rose	Hutan dan mawar
+	Red Glow	Pendar merah
+	Orange Glow	Pendar oranye
+	Amber Glow	Pendar amber
+	Yellow Glow	Pendar kuning
+	Lime Glow	Pendar limau
+	Green Glow	Pendar hijau
+	Teal Glow	Pendar hijau toska
+	Cyan Glow	Pendar sian
+	Azure Glow	Pendar biru langit
+	Blue Glow	Pendar biru
+	Violet Glow	Pendar violet
+	Magenta Glow	Pendar magenta
+	Polka Dots	Polkadot
+	Vertical Stripes	Garis vertikal
+	Horizontal Stripes	Garis horizontal
+	Diagonal Stripes	Garis diagonal
+	Checkerboard	Papan catur
+	Diamonds	Belah ketupat
+	Crosses	Silang
+	Coarse Grit	Butiran kasar
+	Stipple	Titik-titik
+	Scratches	Goresan
+	Sparse Flecks	Bintik jarang
+	Dense Flecks	Bintik rapat
+	Sine Bands	Pita sinus
+	Ripple Lines	Garis riak
+	Interference Rings	Cincin interferensi
+	Offset Rings	Cincin bergeser
+	Warped Checks	Kotak melengkung
+	Pinched Stripes	Garis terjepit
+	Chevron Pulse	Denyut chevron
+	Radiating Lenses	Lensa memancar
+	Soft Shadow	Bayangan lembut
+	Hard Shadow	Bayangan tajam
+	Lifted Card	Kartu terangkat
+	Neon Tube	Tabung neon
+	Inner Light	Cahaya dalam
+	Feathered	Tepi lembut
+	Haze	Kabut tipis
+	Double Rule	Garis ganda
+	Triple Rule	Garis rangkap tiga
+	Dashed Border	Bingkai putus-putus
+	Dotted Border	Bingkai bertitik
+	Offset Keyline	Garis kontur bergeser
+	Inset Keyline	Garis kontur dalam
+	Outside Stroke	Goresan luar
+	Pointer	Penunjuk
+	Highlighter	Stabilo
+	Sketchy Line	Garis sketsa
+	Scribble Fill	Isian coretan
+	Wobble	Goyang
+	Zig Zag Edge	Tepi zigzag
+	Wavy Edge	Tepi bergelombang
+	Puffy	Menggembung
+	Starburst	Ledakan bintang
+	Glossy	Mengilap
+	Brushed Metal	Logam disikat
+	Spotlight	Lampu sorot
+	Sunset Band	Pita senja
+	Sea Glass	Kaca laut
+	Pearl	Mutiara
+	Chrome Rim	Bingkai krom
+	Glow Orb	Bola berpendar
+	Pill Badge	Lencana pil
+	Round Badge	Lencana bulat
+	Flag Wave	Bendera berkibar
+	Bulge	Menggelembung
+	Twisted	Terpuntir
+	Echo	Gema
+	Spiral Copies	Salinan spiral
+	Multiply Tint	Rona multiply
+	Darken Veil	Selubung menggelapkan
+	Ghosted	Samar
+	Two Tone	Dua warna
+	Overlay Glaze	Glasir menimpa
+	Screen Light	Cahaya layar
+	Soft Light Wash	Sapuan cahaya lembut
+	Cyan Neon	Neon sian
+	Magenta Laser	Laser magenta
+	Amber Tube	Tabung amber
+	Electric Lime	Limau elektrik
+	Pulse Violet	Ungu berdenyut
+	Cobalt Phosphor	Fosfor kobalt
+	Burst	Ledakan
+	Rounded Square	Persegi bulat
+	Sun	Matahari
+	Moon	Bulan
+	Cloud	Awan
+	Rain	Hujan
+	Thunder	Guntur
+	Snow	Salju
 	Save Brush Library…	Simpan pustaka kuas…
 @msg	no empty artboards to delete	tidak ada artboard kosong untuk dihapus
 	Scale Presets	Preset skala
@@ -7032,10 +7328,18 @@ breakText	Glyphs	Glif
 	Smooth Bridge…	Jembatan Halus…
 	Smooth Bridge	Jembatan Halus
 	Keep Originals	Pertahankan Asli
-@msg	select two circles to bridge	pilih dua lingkaran untuk dijembatani
+@msg	select two or more circles to bridge	pilih dua lingkaran atau lebih untuk dijembatani
 @msg	one circle is inside the other	satu lingkaran berada di dalam lingkaran lainnya
 @msg	the circles are too far apart for this radius: raise the radius	lingkaran terlalu berjauhan untuk radius ini: perbesar radius
 @msg	the circles are too far apart for this radius	lingkaran terlalu berjauhan untuk radius ini
+	Constant Gap	Celah Tetap
+	Reach:	Jangkauan:
+@msg	the circles are too far apart for this gap: raise the gap	lingkaran terlalu berjauhan untuk celah ini: perbesar celah
+@msg	the circles are too far apart for this gap	lingkaran terlalu berjauhan untuk celah ini
+@msg	no two circles are within reach: raise the reach	tidak ada dua lingkaran dalam jangkauan: perbesar jangkauan
+@msg	select at most 2000 circles to bridge	pilih paling banyak 2000 lingkaran untuk dijembatani
+@msg	that makes too many bridges (at most 8000): lower the reach	itu membuat terlalu banyak jembatan (paling banyak 8000): perkecil jangkauan
+@msg	the bridged circles are too complex to unite	lingkaran yang dijembatani terlalu rumit untuk disatukan
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	Garis Singgung Persekutuan…
 	Common Tangents	Garis Singgung Persekutuan
@@ -7395,6 +7699,17 @@ breakText	Glyphs	Glif
 @msg	A joint does not close by {gap} pt.	Sebuah sambungan tidak menutup sejauh {gap} pt.
 @msg	Two panels pass through each other.	Dua panel saling menembus.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer harus "singleLine", "everyLine", "standardSingleLine", atau "standardEveryLine"
+	Tap	Tekan singkat
+	Clear Hold	Hapus Tahan
+	Hold Shortcuts	Pintasan tahan
+	Hold Shortcut Delay	Jeda pintasan tahan
+	How hold shortcuts work	Cara kerja pintasan tahan
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	Klik, lalu tekan tombol yang ditahan untuk ini (Esc membatalkan). Menahan tombol menjalankan ini; tekan singkat menjalankan pintasan milik tombol itu sendiri.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	Tekan singkat sebuah tombol menjalankan pintasannya. Menahan tombol selama jeda menjalankan alat atau perintah di kolom Tahan sebagai gantinya. Pintasan tahan adalah tombol huruf, angka, atau tanda baca, sendiri atau dengan Shift.
+@msg	Hold {_1} is already used by {_2}	Tahan {_1} sudah digunakan oleh {_2}
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	pintasan tahan adalah tombol yang mengetik karakter, sendiri atau dengan Shift ({shown} memakai Cmd, Ctrl, atau Alt)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} tidak bisa menjadi pintasan tahan: gunakan huruf, angka, atau tombol tanda baca
+	Dashed Arrow	Panah Putus-putus
 	Pressure Sensitive	Peka Tekanan
 	Flex Ribbon	Pita Lentur
 	Pulse Stroke	Goresan Berdenyut

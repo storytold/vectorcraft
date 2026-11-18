@@ -556,6 +556,11 @@ font-technology	Variable	Вариативные
 	Color blindness – Deuteranopia-type	Дальтонизм — дейтеранопия
 	Color blindness – Protanopia-type	Дальтонизм — протанопия
 	Color blindness – Tritanopia-type	Дальтонизм — тританопия
+	Show Color Vision Preview	Показать имитацию цветового зрения
+	Protanopia	Протанопия
+	Deuteranopia	Дейтеранопия
+	Tritanopia	Тританопия
+	Achromatopsia	Ахроматопсия
 	Color Burn	Затемнение основы
 	Color conversion:	Преобразование цвета:
 	Color Dodge	Осветление основы
@@ -729,6 +734,16 @@ font-technology	Variable	Вариативные
 	Create New Swatch…	Создать новый образец…
 	Create New {kind} Style	Создать новый стиль {kind}
 	Create Object Mosaic…	Создать мозаику объектов…
+	Create Object Mosaic	Создать мозаику объектов
+	Current Size:	Текущий размер:
+	New Size:	Новый размер:
+	Tile Spacing:	Интервал между плитками:
+	Number of Tiles:	Количество плиток:
+	Constrain Ratio:	Сохранять пропорции:
+	Result:	Результат:
+	Resize Using Percentages	Изменить размер в процентах
+	Delete Raster	Удалить растровое изображение
+	Use Ratio	Использовать пропорции
 	Create Outlines	Создать контуры
 	Create Path	Создать контур
 	Create PDF layers from layers and sublayers	Создавать слои PDF из слоёв и подслоёв
@@ -856,6 +871,7 @@ font-technology	Variable	Вариативные
 	Duplicate Action or Action Set	Дублировать действие или набор действий
 	Delete the action set “{name}” and its actions?	Удалить набор действий «{name}» и его действия?
 	Delete the selected action sets and their actions?	Удалить выбранные наборы действий и их действия?
+	Delete all action sets and their actions?	Удалить все наборы действий и их действия?
 	Delete Theme	Удалить тему
 	Delete theme	Удалить тему
 	Delete these {n} graphic styles?	Удалить эти графические стили ({n})?
@@ -992,6 +1008,8 @@ font-technology	Variable	Вариативные
 	Duplicate	Дублировать
 	Duplicate and Offset 10 pt	Дублировать и сместить на 10 пт
 	Duplicate Artboard	Дублировать монтажную область
+	Click to add an artboard on this side; Alt-click to duplicate this artboard with its art	Щёлкните, чтобы добавить монтажную область с этой стороны; щёлкните с Alt, чтобы дублировать эту монтажную область вместе с графикой
+	Click to add an artboard on this side	Щёлкните, чтобы добавить монтажную область с этой стороны
 	Copy Artboard	Копировать монтажную область
 	Cut Artboard	Вырезать монтажную область
 	Rename Artboards	Переименовать монтажные области
@@ -1316,6 +1334,19 @@ font-technology	Variable	Вариативные
 	Fill: click for swatches, Shift-click for the color mixer	Заливка: щёлкните для образцов, Shift+щелчок — для смесителя цветов
 	Find	Найти
 	Find and Replace…	Найти и заменить…
+	Find and Replace	Найти и заменить
+	Find:	Найти:
+	Replace With:	Заменить на:
+	Replace & Find	Заменить и найти
+	Replace All	Заменить все
+	Match Case	Учитывать регистр
+	Find Whole Word	Найти слово целиком
+	Search Backwards	Искать назад
+	Check Hidden Layers	Проверять скрытые слои
+	Check Locked Layers	Проверять заблокированные слои
+@msg	No matches found	Совпадений не найдено
+@msg	Matches replaced: {n}	Заменено совпадений: {n}
+@msg	no match of `find` at bytes {_1}..{_2} of object {_3}	в байтах {_1}..{_2} объекта {_3} нет совпадения с `find`
 	Find Font	Найти шрифт
 	Find Font…	Найти шрифт…
 	Find Next	Найти далее
@@ -1350,6 +1381,7 @@ font-technology	Variable	Вариативные
 	Fit to Selected Art	Вписать в выделенный рисунок
 	Flag…	Флаг…
 	Flare	Блик
+	Edit Flare	Редактировать блик
 	Flare Tool	Инструмент «Блик»
 	Flare Tool Options	Параметры инструмента «Блик»
 	Halo	Ореол
@@ -2271,6 +2303,9 @@ file-filter	Templates	Шаблоны
 	Navigate	Навигация
 	Navigator	Навигатор
 	Navigator Panel Options	Параметры панели «Навигатор»
+	Attributes Panel Options	Параметры панели «Атрибуты»
+	Number of Recent URLs:	Число последних URL:
+@msg	`count` must be a whole number from 1 to 30	`count` должно быть целым числом от 1 до 30
 	Draw Dashed Lines as Solid Lines	Рисовать штриховые линии сплошными
 	Needs the desktop app	Требуется настольное приложение
 	Neutral Gradients	Нейтральные градиенты
@@ -2748,6 +2783,7 @@ diagnostics	ui	интерфейс
 	Save Actions…	Сохранить действия…
 	Load Actions…	Загрузить действия…
 	Replace Actions…	Заменить действия…
+	Clear Actions	Очистить действия
 	Reset Actions	Сбросить действия
 	Replace the current actions with the default set?	Заменить текущие действия набором по умолчанию?
 	Append adds the default set after the current sets instead.	Кнопка «Добавить» вместо этого добавляет набор по умолчанию после текущих наборов.
@@ -3193,6 +3229,8 @@ digits	Malayalam	Малаялам
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Колесо мыши с нажатой Cmd/Ctrl прокручивает холст по горизонтали.
 	Dragging sideways on a numeric field's label changes the field's value.	Перетаскивание по подписи числового поля в сторону меняет значение поля.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Жест поворота двумя пальцами на трекпаде поворачивает вид холста.
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Удержание клавиши запускает инструмент или команду из её столбца «Удерживать» в «Сочетаниях клавиш»; короткое нажатие запускает её обычное сочетание.
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Сколько секунд нужно удерживать клавишу, прежде чем вместо её обычного сочетания сработает сочетание удержания.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	При перемещении опорных точек каждая кривая с одним перемещённым концом сохраняет форму относительно своих концов.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Пока вы удерживаете клавишу инструмента, он остаётся выбранным, а после отпускания снова выбирается предыдущий инструмент.
 	Shows the bounding box while you move the selection or draw a shape.	Показывает ограничивающую рамку, пока вы перемещаете выделение или рисуете фигуру.
@@ -3274,6 +3312,7 @@ digits	Malayalam	Малаялам
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Насколько близко на экране указатель или перетаскиваемая точка должны подойти к объекту, чтобы умные направляющие привязали их; расстояние одинаково при любом масштабе.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Привязывает конец отрезка или окружность, нарисованную от центра, так, чтобы она касалась ближайшей кривой.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Привязывает конец отрезка так, чтобы он встречал ближайший прямой сегмент под прямым углом.
+	Edit type set in fonts that aren't available?	Редактировать текст, набранный недоступными шрифтами?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Показывает на холсте номер каждого фрагмента в рамке в его левом верхнем углу; если параметр выключен, контуры фрагментов по-прежнему видны.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Цвет контуров пользовательских и объектных фрагментов и рамок с их номерами; автоматические фрагменты используют более бледный оттенок этого цвета.
 	Reset all preferences to their defaults?	Сбросить все настройки до значений по умолчанию?
@@ -3656,6 +3695,7 @@ digits	Malayalam	Малаялам
 	Show Brush Size	Показать размер кисти
 	Show Center	Показать центр
 	Show Code	Показать код
+	Show in Browser	Показать в браузере
 	Show Color Groups	Показать цветовые группы
 	Show Color Swatches	Показать цветовые образцы
 	Show Corner Widget	Показать угловой виджет
@@ -4916,6 +4956,7 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	Installed plug-in {_1}	Установлен модуль {_1}
 @msg	Internal error: {msg} (please report this bug)	Внутренняя ошибка: {msg} (пожалуйста, сообщите об этой ошибке)
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	Объединение быстрой заливки: выделите группу быстрой заливки и контуры для добавления
+@msg	`Face` and `Edge` name the faces and edges of a Live Paint group: give the path another name	Имена `Face` и `Edge` носят грани и границы группы быстрой заливки: дайте контуру другое имя
 @msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	Быстрая заливка принимает контуры и составные контуры: сначала преобразуйте текст, изображения и другие объекты в контуры
 @msg	Live Paint: select paths or compound paths	Быстрая заливка: выделите контуры или составные контуры
 @msg	Live Paint: these paths are too degenerate to paint	Быстрая заливка: эти контуры слишком вырождены для заливки
@@ -5236,6 +5277,7 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	no graphic style `{n}`	нет графического стиля `{n}`
 @msg	no interaction in progress	нет взаимодействия в процессе
 @msg	no key object	нет ключевого объекта
+@msg	Align to Key Object isn't available with the Artboard tool	«Выровнять по ключевому объекту» недоступно с инструментом «Монтажная область»
 @msg	no library `{key}` (see {list})	нет библиотеки `{key}` (см. {list})
 @msg	no native format	нет собственного формата
 @msg	no pages	нет страниц
@@ -5291,6 +5333,8 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	no such spine point	такой точки остова нет
 @msg	`with` must be a list of at most 10000 spine point indexes	`with` должен быть списком не более чем из 10000 индексов точек остова
 @msg	`with` moves points, not a handle	`with` перемещает точки, а не маркер
+@msg	`link` and `independent` cannot both be true	`link` и `independent` не могут одновременно быть true
+@msg	`link` places a handle: give `handle`	`link` размещает маркер: укажите `handle`
 @msg	no such spine segment	такого сегмента остова нет
 @msg	no such subpath	такого вложенного контура нет
 @msg	no such user library	такой пользовательской библиотеки нет
@@ -5382,6 +5426,7 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	select a blend	выделите переход
 @msg	select a blend or give `id`	выделите переход или укажите `id`
 @msg	select a clip group	выделите группу обрезки
+@msg	select a flare	выделите блик
 @msg	select a gradient mesh	выделите градиентную сетку
 @msg	select a linked image: an embedded one has no file	выделите связанное изображение: у внедрённого нет файла
 @msg	select a repeat	выделите повтор
@@ -5639,6 +5684,7 @@ variable-list-end	{0}, {1}	{0} и {1}
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} связанное изображение изменилось на диске: «Обновить связи» покажет новую версию|{n} связанных изображения изменились на диске: «Обновить связи» покажет новые версии|{n} связанных изображений изменились на диске: «Обновить связи» покажет новые версии
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Обновлён {n} связанный файл, изменённый на диске|Обновлено {n} связанных файла, изменённых на диске|Обновлено {n} связанных файлов, изменённых на диске
 @msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	в документе задан вылет, который этот файл PDF/X не включает: включите «Использовать параметры вылета документа»
+@msgplural	{n} object reaches the trim edge but stops short of the bleed|{n} objects reach the trim edge but stop short of the bleed	Объектов, доходящих до обрезного края, но не до вылета: {n}|Объектов, доходящих до обрезного края, но не до вылета: {n}|Объектов, доходящих до обрезного края, но не до вылета: {n}
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	Экспортировано: {what} с {n} примечанием: {first}|Экспортировано: {what} с {n} примечаниями: {first}|Экспортировано: {what} с {n} примечаниями: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} файл шрифта теперь в {folder}|{n} файла шрифтов теперь в {folder}|{n} файлов шрифтов теперь в {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} файл шрифта теперь в {folder}; не удалось добавить {failed}: {reason}|{n} файла шрифтов теперь в {folder}; не удалось добавить {failed}: {reason}|{n} файлов шрифтов теперь в {folder}; не удалось добавить {failed}: {reason}
@@ -6451,6 +6497,9 @@ lighting	Light	Свет
 	Continue in Background	Продолжить в фоне
 	Cancel Export	Отменить экспорт
 @msg	Export cancelled	Экспорт отменён
+	Cancel Save	Отменить сохранение
+@plural	{n} more save waiting|{n} more saves waiting	Ещё {n} сохранение в очереди|Ещё {n} сохранения в очереди|Ещё {n} сохранений в очереди
+@msg	Save canceled	Сохранение отменено
 # Paragraph panel menu › Justification…
 	Desired	Желательно
 	Word Spacing:	Интервал между словами:
@@ -6869,6 +6918,7 @@ axis	Y Axis	Ось Y
 	Checkpoint	Контрольная точка
 	Inventory Icons	Иконки инвентаря
 	Skill Icons	Иконки навыков
+	Weather Icons	Иконки погоды
 	Attack	Атака
 	Defend	Защита
 	Heal	Лечение
@@ -6974,6 +7024,12 @@ axis	Y Axis	Ось Y
 	Bus Lines	Линии шины
 	Terminal Nodes	Контактные узлы
 
+# Original arrow art brushes.
+	Arrows	Кисти-стрелки
+	Solid Arrow	Сплошная стрелка
+	Open Arrow	Открытая стрелка
+	Chevron Arrow	Стрелка с шевроном
+
 	Notched Ribbon	Лента с насечками
 	Double Line	Двойная линия
 	Wave	Волна
@@ -6990,6 +7046,252 @@ axis	Y Axis	Ось Y
 	Stars	Звёзды
 	Triangles	Треугольники
 	Sparkles	Искры
+	Warm Gray	Тёплый серый
+	Cool Gray	Холодный серый
+	Neutrals	Нейтральные
+	Ivory	Слоновая кость
+	Linen	Лён
+	Oat	Овёс
+	Greige	Грейж
+	Stone	Камень
+	Taupe	Серо-коричневый
+	Slate	Сланец
+	Clay	Глина
+	Terracotta	Терракота
+	Ochre	Охра
+	Umber	Умбра
+	Sand	Песок
+	Olive	Оливковый
+	Moss	Мох
+	Rosy	Розоватый
+	Neutral	Нейтральный
+	Golden	Золотистый
+	Pastel	Пастельные
+	Pastel Red	Пастельный красный
+	Pastel Orange	Пастельный оранжевый
+	Pastel Amber	Пастельный янтарный
+	Pastel Yellow	Пастельный жёлтый
+	Pastel Lime	Пастельный лаймовый
+	Pastel Green	Пастельный зелёный
+	Pastel Teal	Пастельный сине-зелёный
+	Pastel Cyan	Пастельный голубой
+	Pastel Azure	Пастельный лазурный
+	Pastel Blue	Пастельный синий
+	Pastel Violet	Пастельный фиолетовый
+	Pastel Magenta	Пастельный пурпурный
+	Soft Red	Мягкий красный
+	Soft Orange	Мягкий оранжевый
+	Soft Amber	Мягкий янтарный
+	Soft Yellow	Мягкий жёлтый
+	Soft Lime	Мягкий лаймовый
+	Soft Green	Мягкий зелёный
+	Soft Teal	Мягкий сине-зелёный
+	Soft Cyan	Мягкий голубой
+	Soft Azure	Мягкий лазурный
+	Soft Blue	Мягкий синий
+	Soft Violet	Мягкий фиолетовый
+	Soft Magenta	Мягкий пурпурный
+	Vivid Red	Яркий красный
+	Vivid Orange	Яркий оранжевый
+	Vivid Amber	Яркий янтарный
+	Vivid Yellow	Яркий жёлтый
+	Vivid Lime	Яркий лаймовый
+	Vivid Green	Яркий зелёный
+	Vivid Teal	Яркий сине-зелёный
+	Vivid Cyan	Яркий голубой
+	Vivid Azure	Яркий лазурный
+	Vivid Blue	Яркий синий
+	Vivid Violet	Яркий фиолетовый
+	Vivid Magenta	Яркий пурпурный
+	Deep	Глубокие
+	Deep Red	Тёмно-красный
+	Deep Orange	Тёмно-оранжевый
+	Deep Amber	Тёмно-янтарный
+	Deep Yellow	Тёмно-жёлтый
+	Deep Lime	Тёмно-лаймовый
+	Deep Green	Тёмно-зелёный
+	Deep Teal	Тёмный сине-зелёный
+	Deep Cyan	Тёмно-голубой
+	Deep Azure	Тёмно-лазурный
+	Deep Blue	Тёмно-синий
+	Deep Violet	Тёмно-фиолетовый
+	Deep Magenta	Тёмно-пурпурный
+	Gold	Золото
+	Silver	Серебро
+	Bronze	Бронза
+	Copper	Медь
+	Brass	Латунь
+	Rose Gold	Розовое золото
+	Gunmetal	Оружейный металл
+	Platinum	Платина
+	Pewter	Олово
+	Ember	Тлеющие угли
+	Lagoon	Лагуна
+	Dusk	Сумерки
+	Clay to Teal	От глины к сине-зелёному
+	Plum to Olive	От сливового к оливковому
+	Complementary Coral	Коралловый, дополнительная
+	Split Complementary Coral	Коралловый, расщепленная дополнительная
+	Analogous Coral	Коралловый, аналоговая
+	Triad Coral	Коралловый, триада
+	Tetrad Coral	Коралловый, тетрада
+	Pentagram Coral	Коралловый, пентаграмма
+	Complementary Teal	Сине-зелёный, дополнительная
+	Split Complementary Teal	Сине-зелёный, расщепленная дополнительная
+	Analogous Teal	Сине-зелёный, аналоговая
+	Triad Teal	Сине-зелёный, триада
+	Tetrad Teal	Сине-зелёный, тетрада
+	Pentagram Teal	Сине-зелёный, пентаграмма
+	Soft Spectrum	Мягкий спектр
+	Red to Amber	От красного к янтарному
+	Orange to Yellow	От оранжевого к жёлтому
+	Amber to Lime	От янтарного к лаймовому
+	Yellow to Green	От жёлтого к зелёному
+	Lime to Teal	От лаймового к сине-зелёному
+	Green to Cyan	От зелёного к голубому
+	Teal to Azure	От сине-зелёного к лазурному
+	Cyan to Blue	От голубого к синему
+	Azure to Violet	От лазурного к фиолетовому
+	Blue to Magenta	От синего к пурпурному
+	Violet to Red	От фиолетового к красному
+	Magenta to Orange	От пурпурного к оранжевому
+	Dawn	Рассвет
+	Noon	Полдень
+	Sunset	Закат
+	Night	Ночь
+	Overcast	Пасмурно
+	White to Black	От белого к чёрному
+	Light Grays	Светло-серые
+	Dark Grays	Тёмно-серые
+	Warm Grays	Тёплые серые
+	Cool Grays	Холодные серые
+	Fade to Transparent	Переход в прозрачность
+	White Fade	Белый переход
+	Vignette	Виньетка
+	Mist	Дымка
+	Petal	Лепесток
+	Fern	Папоротник
+	Smoke	Дым
+	Honey	Мёд
+	Seafoam	Морская пена
+	Lavender	Лаванда
+	Driftwood	Плавник
+	Ink Wash	Размывка тушью
+	Tide	Прилив
+	Bloom	Цветение
+	Dew	Роса
+	Pollen	Пыльца
+	Lichen	Лишайник
+	Prism Veil	Призматическая вуаль
+	Opal Ribbon	Опаловая лента
+	Pearl Flash	Жемчужная вспышка
+	Aurora Foil	Фольга северного сияния
+	Iris Sheen	Радужный отлив
+	Frost Spectrum	Морозный спектр
+	Silver Tide	Серебряный прилив
+	Rose Quartz Gleam	Блеск розового кварца
+	Moonstone Shift	Перелив лунного камня
+	Violet Edge	Фиолетовый край
+	Mint Halo	Мятный ореол
+	Amber Corona	Янтарная корона
+	Polar Glint	Полярный блик
+	Pastel Orbit	Пастельная орбита
+	Coral and Navy	Коралловый и тёмно-синий
+	Plum and Lime	Сливовый и лаймовый
+	Teal and Gold	Сине-зелёный и золотой
+	Indigo and Peach	Индиго и персиковый
+	Forest and Rose	Лесной и розовый
+	Red Glow	Красное свечение
+	Orange Glow	Оранжевое свечение
+	Amber Glow	Янтарное свечение
+	Yellow Glow	Жёлтое свечение
+	Lime Glow	Лаймовое свечение
+	Green Glow	Зелёное свечение
+	Teal Glow	Сине-зелёное свечение
+	Cyan Glow	Голубое свечение
+	Azure Glow	Лазурное свечение
+	Blue Glow	Синее свечение
+	Violet Glow	Фиолетовое свечение
+	Magenta Glow	Пурпурное свечение
+	Polka Dots	Горошек
+	Vertical Stripes	Вертикальные полосы
+	Horizontal Stripes	Горизонтальные полосы
+	Diagonal Stripes	Диагональные полосы
+	Checkerboard	Шахматная доска
+	Diamonds	Ромбы
+	Crosses	Крестики
+	Coarse Grit	Крупное зерно
+	Stipple	Пунктир
+	Scratches	Царапины
+	Sparse Flecks	Редкие крапинки
+	Dense Flecks	Густые крапинки
+	Sine Bands	Синусоидальные полосы
+	Ripple Lines	Линии ряби
+	Interference Rings	Интерференционные кольца
+	Offset Rings	Смещённые кольца
+	Warped Checks	Искажённая клетка
+	Pinched Stripes	Сжатые полосы
+	Chevron Pulse	Пульсирующие шевроны
+	Radiating Lenses	Лучистые линзы
+	Soft Shadow	Мягкая тень
+	Hard Shadow	Жёсткая тень
+	Lifted Card	Приподнятая карточка
+	Neon Tube	Неоновая трубка
+	Inner Light	Внутренний свет
+	Feathered	Растушёванный
+	Haze	Марево
+	Double Rule	Двойная линейка
+	Triple Rule	Тройная линейка
+	Dashed Border	Штриховая рамка
+	Dotted Border	Точечная рамка
+	Offset Keyline	Смещённый контур
+	Inset Keyline	Внутренний контур
+	Outside Stroke	Внешняя обводка
+	Pointer	Указатель
+	Highlighter	Маркер
+	Sketchy Line	Набросочная линия
+	Scribble Fill	Заливка каракулями
+	Wobble	Дрожание
+	Zig Zag Edge	Зигзагообразный край
+	Wavy Edge	Волнистый край
+	Puffy	Пухлый
+	Starburst	Звёздный взрыв
+	Glossy	Глянцевый
+	Brushed Metal	Шлифованный металл
+	Spotlight	Прожектор
+	Sunset Band	Полоса заката
+	Sea Glass	Морское стекло
+	Pearl	Жемчуг
+	Chrome Rim	Хромированный ободок
+	Glow Orb	Светящийся шар
+	Pill Badge	Значок-капсула
+	Round Badge	Круглый значок
+	Flag Wave	Развевающийся флаг
+	Bulge	Выпуклость
+	Twisted	Закрученный
+	Echo	Эхо
+	Spiral Copies	Копии по спирали
+	Multiply Tint	Оттенок умножения
+	Darken Veil	Затемняющая вуаль
+	Ghosted	Призрачный
+	Two Tone	Двухцветный
+	Overlay Glaze	Глазурь перекрытия
+	Screen Light	Свет растра
+	Soft Light Wash	Размывка мягким светом
+	Cyan Neon	Голубой неон
+	Magenta Laser	Пурпурный лазер
+	Amber Tube	Янтарная трубка
+	Electric Lime	Электрический лайм
+	Pulse Violet	Пульсирующий фиолетовый
+	Cobalt Phosphor	Кобальтовый люминофор
+	Burst	Вспышка
+	Rounded Square	Скруглённый квадрат
+	Sun	Солнце
+	Moon	Луна
+	Cloud	Облако
+	Rain	Дождь
+	Thunder	Гром
+	Snow	Снег
 	Save Brush Library…	Сохранить библиотеку кистей…
 @msg	`{_1}` has no brushes to apply	В `{_1}` нет кистей для применения
 @msg	missing `library` (see brush.libraries)	не указан `library` (см. brush.libraries)
@@ -7779,10 +8081,18 @@ breakText	Glyphs	Глифы
 	Smooth Bridge…	Плавный мост…
 	Smooth Bridge	Плавный мост
 	Keep Originals	Сохранить оригиналы
-@msg	select two circles to bridge	выделите две окружности для соединения
+@msg	select two or more circles to bridge	выделите две или более окружностей для соединения
 @msg	one circle is inside the other	одна окружность находится внутри другой
 @msg	the circles are too far apart for this radius: raise the radius	окружности слишком далеко друг от друга для этого радиуса: увеличьте радиус
 @msg	the circles are too far apart for this radius	окружности слишком далеко друг от друга для этого радиуса
+	Constant Gap	Постоянный зазор
+	Reach:	Охват:
+@msg	the circles are too far apart for this gap: raise the gap	окружности слишком далеко друг от друга для этого зазора: увеличьте зазор
+@msg	the circles are too far apart for this gap	окружности слишком далеко друг от друга для этого зазора
+@msg	no two circles are within reach: raise the reach	нет двух окружностей в пределах охвата: увеличьте охват
+@msg	select at most 2000 circles to bridge	выделите не более 2000 окружностей для соединения
+@msg	that makes too many bridges (at most 8000): lower the reach	получается слишком много мостов (не более 8000): уменьшите охват
+@msg	the bridged circles are too complex to unite	соединяемые окружности слишком сложны для объединения
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	Общие касательные…
 	Common Tangents	Общие касательные
@@ -9661,6 +9971,7 @@ shape	Open	Открытый
 @msg	the character's size can't be measured	размер символа невозможно измерить
 @msg	the code runs past its last instruction	код выполняется дальше своей последней инструкции
 @msg	the compound shape is too complex to expand	составная фигура слишком сложна, чтобы её разобрать
+@msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	линия или другой открытый контур, не охватывающий площади, не добавляет площади к составной фигуре; чтобы включить его, сначала примените к нему Объект › Контур › Обвести обводку
 @msg	the container of the listed objects is gone	контейнер перечисленных объектов больше не существует
 @msg	the copy `{user_id}` can't be read as a library	копию `{user_id}` невозможно прочитать как библиотеку
 @msg	the copy would leave the canvas	копия вышла бы за пределы холста
@@ -10008,7 +10319,6 @@ shape	Open	Открытый
 @msg	{kind} files have no transparency, and the file would have {what}: flatten it first (object.flattenTransparency)	в файлах {kind} нет прозрачности, а в файле оказалось бы {what}: сначала объедините прозрачность (object.flattenTransparency)
 @msg	{kind} images can't be opened (see document.formats)	изображения {kind} невозможно открыть (см. document.formats)
 @msg	{k} `{v}` is not one of the choices	{k} `{v}` не входит в число допустимых вариантов
-@msg	{k} has control characters{_1}	{k} содержит управляющие символы{_1}
 @msg	{k} is too long (at most {MAX_TEXT} characters)	{k} слишком длинно (не более {MAX_TEXT} символов)
 @msg	{k} must be > 0	{k} должно быть > 0
 @msg	{k} must be a number (pt) or a length such as "210 mm"	{k} должно быть числом (pt) или длиной, например "210 mm"
@@ -10214,6 +10524,17 @@ shape	Open	Открытый
 @msg	Two panels pass through each other.	Две панели проходят друг сквозь друга.
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} пикселей — слишком большой размер для PSD (не более {MAX_SIDE} пикселей по стороне): уменьшите разрешение
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer должен быть "singleLine", "everyLine", "standardSingleLine" или "standardEveryLine"
+	Tap	Короткое нажатие
+	Clear Hold	Очистить удержание
+	Hold Shortcuts	Клавиши удержания
+	Hold Shortcut Delay	Задержка клавиш удержания
+	How hold shortcuts work	Как работают клавиши удержания
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	Щелкните, затем нажмите клавишу, которую нужно удерживать для этого (Esc отменяет). Удержание клавиши запускает это; короткое нажатие запускает собственное сочетание клавиши.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	Короткое нажатие клавиши запускает ее сочетание. Удержание клавиши в течение задержки запускает вместо этого инструмент или команду из ее столбца «Удерживать». Клавиша удержания — это клавиша буквы, цифры или знака препинания, отдельно или с Shift.
+@msg	Hold {_1} is already used by {_2}	Удержание {_1} уже используется для {_2}
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	клавиша удержания — это клавиша, которая вводит символ, отдельно или с Shift ({shown} содержит Cmd, Ctrl или Alt)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} не может быть клавишей удержания: используйте букву, цифру или клавишу знака препинания
+	Dashed Arrow	Пунктирная стрелка
 	Pressure Sensitive	Чувствительные к нажиму
 	Flex Ribbon	Гибкая лента
 	Pulse Stroke	Пульсирующий штрих
