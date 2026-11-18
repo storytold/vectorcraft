@@ -10,7 +10,8 @@
 //! locally, never committed): the blend's own art on `%_` lines, a group holding the key objects
 //! and the spine, each object's `/ArtDictionary` naming its part (`ShapeBlendPathType`: `K` a key,
 //! `S` the spine) and a key's id (`ShapeBlendPathID`); then the steps drawn, a group on plain
-//! lines; then `(Adobe Path Blends) 1 0 n XP` and `n` bytes as hex on `%` lines. Those bytes
+//! lines; then `(Adobe Path Blends) 1 0 n XP` and `n` bytes as hex on `%` lines (`%_%` lines
+//! for a blend in hidden art, as an opacity mask's is: all of it is on `%_` lines). Those bytes
 //! start `DCBA`. A blend whose spine was never edited has no spine part: only its keys.
 //!
 //! The reader reads the words after `DCBA` (little endian) this way. Word 1 is the spacing: 0 is

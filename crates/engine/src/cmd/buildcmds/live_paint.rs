@@ -1,8 +1,8 @@
 use super::{
     Appearance, AppearanceItem, Arc, Beside, Document, EDGE_NAME, EngineError, FACE_NAME, GapOptions, GapSize, LIVE_PAINT_NAME, Node, NodeId,
-    PathData, Point, Rect, Result, Selection, Session, SubPath, Value, b, bad, build_children, edge_near, face_at, finite, fit_to_old_edge, ids_json,
-    is_live_paint, json, number_or, object_param, paint_from, po, point_param, repaint_from, replace_roots, root_ids, source_nodes, source_shapes,
-    switch_or,
+    PathData, Point, Rect, Result, SOURCES_NAME, Selection, Session, SubPath, Value, b, bad, build_children, edge_near, face_at, finite,
+    fit_to_old_edge, ids_json, is_live_paint, json, number_or, object_param, paint_from, po, point_param, repaint_from, replace_roots, root_ids,
+    source_nodes, source_shapes, switch_or,
 };
 
 /// `options` as stored on a Live Paint group: none for the defaults.
@@ -72,6 +72,44 @@ fn set_parts(g: &mut Node, mut parts: Vec<Arc<Node>>, gone: &[NodeId]) {
     if let Some(ch) = g.children_mut() {
         *ch = parts;
     }
+}
+
+/// Whether a path named `name` directly in a Live Paint group is one of its faces or edges: the
+/// name is [`FACE_NAME`] or [`EDGE_NAME`].
+fn part_name(name: Option<&str>) -> bool {
+    matches!(name, Some(FACE_NAME | EDGE_NAME))
+}
+
+/// Whether `n` is a path whose parent `parent` is a Live Paint group.
+fn path_in_live_paint(d: &Document, parent: Option<NodeId>, n: &Node) -> bool {
+    n.path_data().is_some() && parent.and_then(|p| d.node(p)).is_some_and(is_live_paint)
+}
+
+/// Clear the name of `n`, put directly in `parent`, when it is a path named like a face or an edge
+/// ([`part_name`]) and `parent` is a Live Paint group, so that the group's other children
+/// ([`others_in`]) keep it when its faces and edges are made again. Paste uses it.
+pub(crate) fn clear_part_name(d: &Document, parent: Option<NodeId>, n: &mut Node) {
+    if part_name(n.name.as_deref()) && path_in_live_paint(d, parent, n) {
+        n.name = None;
+    }
+}
+
+/// Refuse naming rows `ids` `name` when it is the name of a face or an edge ([`part_name`]) and one
+/// of them is a path directly in a Live Paint group that is not named `name` already. Checked
+/// before anything changes.
+pub(crate) fn check_part_name(d: &Document, ids: &[NodeId], name: &str) -> Result<()> {
+    if !part_name(Some(name)) {
+        return Ok(());
+    }
+    for id in ids {
+        if let Some(n) = d.node(*id)
+            && n.name.as_deref() != Some(name)
+            && path_in_live_paint(d, d.parent_of(*id), n)
+        {
+            return Err(EngineError::Other("`Face` and `Edge` name the faces and edges of a Live Paint group: give the path another name".into()));
+        }
+    }
+    Ok(())
 }
 
 /// Select `ids` alone, without an undo step, when they are not selected that way already.
@@ -149,11 +187,16 @@ fn merge_live(d: &mut Document, sel: &mut Selection, roots: &[NodeId]) -> Result
         .ok_or_else(|| EngineError::Other("Live Paint Merge: select a Live Paint group and the paths to add".into()))?;
     check_live_paint_takes(d, roots)?;
     let old = d.node(target).cloned().ok_or(EngineError::NoNode(target))?;
+    // The rows that join are children of the group already when Merge runs after a drag, and a joining
+    // path named like a face or an edge is not one of the group's parts.
+    let mut old_parts = old.clone();
+    if let Some(ch) = old_parts.children_mut() {
+        ch.retain(|c| !roots.contains(&c.id));
+    }
     // Paint to carry over: (point inside face, paint) for faces that draw; edges are matched to the
     // old edges below.
     let keep_faces: Vec<(Point, Carried)> =
-        b::faces(&old).iter().filter(|f| draws(f)).filter_map(|f| Some((po::interior_point(f.path_data()?)?, Carried::of(f)))).collect();
-    let old_parts = old.clone();
+        b::faces(&old_parts).iter().filter(|f| draws(f)).filter_map(|f| Some((po::interior_point(f.path_data()?)?, Carried::of(f)))).collect();
     let mut sources = source_nodes(&old);
     // The objects drawn in the other Live Paint groups besides their parts stay in the merged group.
     let mut others = vec![];
@@ -227,19 +270,22 @@ pub(super) fn lp_merge(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "id": id.0, "faces": faces, "edges": edges }))
 }
 
-/// The Live Paint group whose drawn art is added when isolation mode leaves `isolated`: the innermost
-/// Live Paint group that is `isolated` or holds it, such as a group drawn in an isolated Live Paint
-/// group and then isolated itself. None when `isolated` is not in a Live Paint group.
-pub(crate) fn isolated_live_paint(d: &Document, isolated: NodeId) -> Option<NodeId> {
-    d.ancestry(isolated)?.into_iter().rev().find(|id| d.node(*id).is_some_and(is_live_paint))
+/// The Live Paint groups whose drawn art can be added when isolation mode leaves `isolated`, innermost
+/// first: every Live Paint group that is `isolated` or holds it, such as a group drawn in an isolated
+/// Live Paint group and then isolated itself, and the group it was drawn in. Empty when `isolated` is
+/// not in a Live Paint group.
+pub(crate) fn isolated_live_paints(d: &Document, isolated: NodeId) -> Vec<NodeId> {
+    d.ancestry(isolated).unwrap_or_default().into_iter().rev().filter(|id| d.node(*id).is_some_and(is_live_paint)).collect()
 }
 
 /// The children of Live Paint group `g` besides its parts ([`others_in`]) that Live Paint takes
 /// ([`b::live_paint_takes`]) and that are shown and unlocked with everything in them, back to
-/// front: the paths drawn in it in isolation mode.
+/// front: the paths drawn in it in isolation mode. A Live Paint group's sources group, which is
+/// always hidden, does not count.
 fn drawn_in(g: &Node) -> Vec<NodeId> {
     fn open(n: &Node) -> bool {
-        n.visible && !n.locked && n.children().is_none_or(|ch| ch.iter().all(|c| open(c)))
+        let src = b::sources(n).filter(|_| is_live_paint(n)).map(|s| s.id);
+        n.visible && !n.locked && n.children().is_none_or(|ch| ch.iter().filter(|c| Some(c.id) != src).all(|c| open(c)))
     }
     others_in(g).filter(|c| open(c) && b::live_paint_takes(c)).map(|c| c.id).collect()
 }
@@ -257,6 +303,189 @@ pub(crate) fn merge_drawn_in_isolation(s: &mut Session, g: NodeId) -> Result<boo
     let roots: Vec<NodeId> = std::iter::once(g).chain(drawn).collect();
     s.edit("Merge Live Paint", |d, sel| merge_live(d, sel, &roots))?;
     Ok(true)
+}
+
+/// Where a row sits for Live Paint: among the paths of a Live Paint group (in its sources group,
+/// at any depth), directly in a Live Paint group, or neither.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Spot {
+    Source(NodeId),
+    In(NodeId),
+    Outside,
+}
+
+/// The [`Spot`] of a row whose parent is `parent` (None: the top level).
+fn spot_in(d: &Document, parent: Option<NodeId>) -> Spot {
+    let Some(p) = parent else { return Spot::Outside };
+    for x in d.ancestry(p).unwrap_or_default().into_iter().rev() {
+        let n = d.node(x);
+        if n.is_some_and(is_live_paint) {
+            return if x == p { Spot::In(x) } else { Spot::Outside };
+        }
+        if let Some(g) = d.parent_of(x)
+            && d.node(g).filter(|n| is_live_paint(n)).and_then(b::sources).is_some_and(|s| s.id == x)
+        {
+            return Spot::Source(g);
+        }
+    }
+    Spot::Outside
+}
+
+/// The Live Paint groups that hold Live Paint group `g` among their paths (in their sources group,
+/// at any depth), innermost first.
+fn enclosing_live_paints(d: &Document, g: NodeId) -> Vec<NodeId> {
+    let mut out = vec![];
+    let mut at = g;
+    while let Spot::Source(o) = spot_in(d, d.parent_of(at)) {
+        if out.contains(&o) {
+            break;
+        }
+        out.push(o);
+        at = o;
+    }
+    out
+}
+
+/// What moving rows in the Layers panel (`layer.move`, `node.move`) does to Live Paint groups.
+/// Rows that go into a Live Paint group from elsewhere are added to it as `livePaint.merge` adds
+/// paths. Rows that go into or leave a group's paths (its sources group) change those paths, and
+/// the group's faces and edges are made again from them, keeping the paint of the faces and edges
+/// that stay, and so are those of every Live Paint group that holds a changed group among its
+/// paths. Rows moved within one group's paths, or among a group's own children, change no faces.
+pub(crate) struct LivePaintMove {
+    /// The Live Paint group the rows go into, and for each row whether it joins the group's paths.
+    join: Option<(NodeId, Vec<bool>)>,
+    /// The Live Paint group the rows go among the children of, with its sources group as it is
+    /// before the move.
+    keep_sources: Option<(NodeId, NodeId)>,
+    /// The Live Paint groups whose paths change.
+    rebuild: Vec<NodeId>,
+}
+
+impl LivePaintMove {
+    /// Plan moving `rows` (with `copy`, copies of them) into `parent`, before anything changes.
+    /// Refuses rows Live Paint can't take ([`b::live_paint_takes`]) that would go among a group's
+    /// paths, with the message Make and Merge give.
+    pub(crate) fn plan(d: &Document, rows: &[NodeId], parent: Option<NodeId>, copy: bool) -> Result<Self> {
+        let to = spot_in(d, parent);
+        let from: Vec<Spot> = rows.iter().map(|r| if copy { Spot::Outside } else { spot_in(d, d.parent_of(*r)) }).collect();
+        let mut rebuild = vec![];
+        for f in &from {
+            if let Spot::Source(g) = *f
+                && *f != to
+                && !rebuild.contains(&g)
+            {
+                rebuild.push(g);
+            }
+        }
+        if let Spot::Source(g) = to
+            && from.iter().any(|f| *f != to)
+            && !rebuild.contains(&g)
+        {
+            rebuild.push(g);
+        }
+        let entering: Vec<NodeId> = rows.iter().zip(&from).filter(|(_, f)| **f != to).map(|(r, _)| *r).collect();
+        let join = match to {
+            Spot::In(g) if !entering.is_empty() => Some((g, from.iter().map(|f| *f != to).collect())),
+            _ => None,
+        };
+        if to != Spot::Outside {
+            check_live_paint_takes(d, &entering)?;
+        }
+        let keep_sources = match to {
+            Spot::In(g) => d.node(g).and_then(b::sources).map(|s| (g, s.id)),
+            _ => None,
+        };
+        Ok(Self { join, keep_sources, rebuild })
+    }
+
+    /// Whether rows join a Live Paint group, which makes the move a "Merge Live Paint" step.
+    pub(crate) fn joins(&self) -> bool {
+        self.join.is_some()
+    }
+
+    /// After the rows were moved, now `moved` (in the order [`LivePaintMove::plan`] took them),
+    /// make the faces and edges of the groups whose paths changed again, and add the rows that
+    /// joined a group to it. → `moved` with the joined rows replaced by their group, once, and
+    /// without the faces and edges that were made again.
+    pub(crate) fn finish(self, d: &mut Document, sel: &mut Selection, moved: &[NodeId]) -> Result<Vec<NodeId>> {
+        // A moved object named like the sources group may now sit before it, where a lookup by name
+        // finds the object first. The group's own sources group goes back in front.
+        if let Some((g, src)) = self.keep_sources {
+            let ch = d.children_mut(Some(g))?;
+            if let Some(at) = ch.iter().position(|c| c.id == src)
+                && ch[..at].iter().any(|c| c.name.as_deref() == Some(SOURCES_NAME))
+            {
+                let s = ch.remove(at);
+                ch.insert(0, s);
+            }
+        }
+        if self.join.is_none() && self.rebuild.is_empty() {
+            return Ok(moved.to_vec());
+        }
+        // The group the rows join is made again by the merge below, from its paths as they are now
+        // and with the paint of its faces and edges as they were before the move.
+        let join_group = self.join.as_ref().map(|(g, _)| *g);
+        // A Live Paint group among another group's paths gives that group its faces and edges, so
+        // the groups holding a changed group among their paths are made again too, innermost first.
+        let mut groups: Vec<NodeId> = vec![];
+        for g in self.rebuild.iter().copied().chain(join_group) {
+            for x in std::iter::once(g).chain(enclosing_live_paints(d, g)) {
+                if !groups.contains(&x) {
+                    groups.push(x);
+                }
+            }
+        }
+        groups.sort_by_cached_key(|g| std::cmp::Reverse(d.ancestry(*g).map_or(0, |a| a.len())));
+        let joined: Vec<NodeId> = match &self.join {
+            Some((_, mask)) => moved.iter().zip(mask).filter(|(_, j)| **j).map(|(r, _)| *r).collect(),
+            None => vec![],
+        };
+        for g in groups {
+            if Some(g) == join_group {
+                let roots: Vec<NodeId> = std::iter::once(g).chain(joined.iter().copied()).collect();
+                merge_live(d, sel, &roots)?;
+            } else if d.node(g).is_some() {
+                rebuild_paths(d, g)?;
+            }
+        }
+        let Some((g, mask)) = self.join else { return Ok(moved.iter().copied().filter(|r| d.node(*r).is_some()).collect()) };
+        // `moved` holds each row once, so only the group can come twice. Faces and edges of the
+        // group moved along with the joining rows were made again, so they are left out.
+        let mut out = vec![];
+        let mut listed = false;
+        for (r, j) in moved.iter().zip(&mask) {
+            if *j {
+                if !listed {
+                    out.push(g);
+                    listed = true;
+                }
+            } else if d.node(*r).is_some() {
+                out.push(*r);
+            }
+        }
+        Ok(out)
+    }
+}
+
+/// Make Live Paint group `g`'s faces and edges again from the paths its sources group holds now,
+/// with its Gap Options, carrying over the paint of the faces and edges that stay. With no path
+/// left, the group keeps its sources group and its other children, and has no faces or edges.
+fn rebuild_paths(d: &mut Document, g: NodeId) -> Result<()> {
+    let old = d.node(g).cloned().ok_or(EngineError::NoNode(g))?;
+    let sources = source_nodes(&old);
+    let mut n = old.clone();
+    if source_shapes(&sources).0.is_empty() {
+        let src = b::sources(&old).cloned().ok_or(EngineError::NoNode(g))?;
+        set_parts(&mut n, vec![src], &[]);
+    } else {
+        let (children, _, _) = build_children(d, sources, old.gap_options().max_gap())?;
+        set_parts(&mut n, children, &[]);
+        repaint_from(&mut n, &old);
+    }
+    let mut changed = Beside::replacing(d, &[g]);
+    changed.put(d, g, vec![n])?;
+    changed.finish(d)
 }
 
 fn live_targets(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
