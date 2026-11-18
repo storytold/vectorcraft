@@ -1,6 +1,6 @@
 # VectorCraft MCP server
 
-> **Last updated:** 2026-11-14 · **Change:** `text.setFormat {composer}` and paragraph styles also take `standardSingleLine` and `standardEveryLine` (#4935); existing values and responses unchanged. Previously: Pencil ignores Smart Guides and Snap to Point and shows no Smart Guides, #7252; no response-shape change. Previously: Pencil continuation, straight-line and closing cursors; scores and estimates unchanged; no response-shape change. Previously: Snap to Point with Smart Guides off draws no Smart Guides labels or lines, #7250; no response-shape change. Previously: Envelopes: a top object's side whose pieces are all one curve split at anchors follows that curve's parameter (#7097); existing response shapes retained.
+> **Last updated:** 2026-11-18 · **Change:** Production Preflight command and report coverage; previously: `text.setFormat {composer}` and paragraph styles also take `standardSingleLine` and `standardEveryLine` (#4935); existing values and responses unchanged. Previously: Pencil ignores Smart Guides and Snap to Point and shows no Smart Guides, #7252; no response-shape change. Previously: Pencil continuation, straight-line and closing cursors; scores and estimates unchanged; no response-shape change. Previously: Snap to Point with Smart Guides off draws no Smart Guides labels or lines, #7250; no response-shape change. Previously: Envelopes: a top object's side whose pieces are all one curve split at anchors follows that curve's parameter (#7097); existing response shapes retained.
 >
 > Tech Circuit update (2026-11-14): three original procedural brushes; ten built-in brush libraries (G5).
 
@@ -724,7 +724,7 @@ ends the wait, so the sampler can be shown again. The BSDs and headless sessions
 | `add_text` | `{text, x?, y?, width?, height?, fit?, fitMinPercent?, path?, mode?, pathEffect?, size?, font?, color?, justify?, vertical?}` | Point type at (x, y) (`justify`: `left`, `center` or `right` starts, centres or ends each line on x); area type with `width`/`height` (`fit`: `none`, `autoHeight`, `shrinkText`, as `text.areaOptions`); or `path` + `mode` (`area`/`onPath`) to flow text in or along a path, with `pathEffect` for type on a path (`rainbow`, `skew`, `3dRibbon`, `stairStep`, `gravity`; SVG export writes type on a path with any effect other than `rainbow` as outlines, with a warning). An invalid effect is rejected before editing. `justify` (also `auto`, `justifyAll`) aligns the paragraphs of every kind, as `text.setStyle` does later. `vertical: true` uses the existing vertical writing mode for every kind (default `false`, horizontal). Returns `{id}`, with `overflow: true` when the text doesn't fit its frame or path. |
 | `apply_effect` | `{effect?, params?, ids?}` | Appends a live effect. Without `effect`, returns the effect catalogue with parameters and defaults. |
 | `pathfinder` | `{operation, ids?}` | `unite`, `minusFront`, `intersect`, `exclude`, `divide`, `trim`, `merge`, `crop`, `outline`, `minusBack`. For a live version, apply the `pathfinder.*` effect to a group (`effect.apply` groups several loose selected objects first). In remote desktop mode, `run_command` and `invoke_menu` can both call `pathfinder.repeat` with `{}`. Successful panel operations, direct `object.pathfinder.*` commands, and `command.batch` steps (including Actions panel playback) set its history. Repeat applies it to the current selection using current Pathfinder Options. Trap, compound-shape edits, live effects and `action.batch` do not set history. With no history it returns "no Pathfinder operation applied yet". |
-| `transform` | `{ids?, dx?, dy?, rotate?, scale?, scaleX?, scaleY?, reflect?, shear?, origin?, copy?}` | Runs move, rotate, scale, reflect, shear in that order. `rotate` is in degrees counter-clockwise; a positive `shear` moves the top to the right. With `copy`, the first step duplicates. |
+| `transform` | `{ids?, dx?, dy?, rotate?, scale?, scaleX?, scaleY?, reflect?, shear?, origin?, copy?}` | Runs move, rotate, scale, reflect, shear in that order. `rotate` is in degrees counter-clockwise; a positive `shear` moves the top to the right. With `copy`, the first step duplicates. A `scale`, `reflect` or `shear` that its command would refuse returns that error before any step runs; nothing changes and no undo step is recorded. |
 | `create_graph` | `{type?, x, y, width, height, csv? \| series?, categories?, rows?}` | The nine Illustrator graph types: column, stacked column, bar, stacked bar, line, area, scatter, pie and radar. An empty CSV cell or a `null` in `rows` is a blank value; a number in straight quotes is a label. Edit later with `graph.setData` / `graph.setType` via `run_command`. `graph.column {design, columnType: vertical\|uniform\|repeating\|sliding, each, fractions: chop\|scale}` draws the columns or bars of the series picked with Group Selection (or `seriesIndexes`, or all of them) with a graph design saved by `graph.design`; with no `design` it returns the series' current design and options. Type in the design that holds a `%` followed by two digits shows each column's value, with at least the first digit's places before the decimal point and the second digit's places after it. |
 | `text_wrap` | `{ids?, offset?, invert?, release?}` | Area type below the objects (same layer) flows around them. `offset` is in points, from -1000 to 1000 (default 6). An offset outside that range or not a number, or an `invert` or `release` that is not true or false, is an error and changes nothing; `object.textWrap.make` and `object.textWrap.options` refuse the same values. |
 | `undo` / `redo` | `{}` | Many calls that change nothing record no undo step, for example `object.align` with nothing to move, `object.move` by 0 without `copy` and `object.showAll` with nothing hidden. `undo` (`edit.undo`) after such a call undoes the step before it. Settings that change without an undo step stay as they are when `undo` or `redo` brings back a step that did not change them: the perspective grid's view options and active plane, the grid preferences (`gridlineEvery`, `gridSubdivisions`), the export settings (`assets.settings.set`), and the current brush and symbol. A step that changed one of them, such as a perspective grid preset that shows the grid, takes that change back. The point Automatic Plane Positioning holds comes back with the step, and is let go when the active plane kept is another one. `inspect_document` lists the undo steps as `history`. `run_command` with `edit.clearHistory` removes every undo and redo step of the active document and returns `{cleared}`, the number of steps removed; the document stays as it is, and the command records no undo step. `run_command` with `edit.newDocumentFromState` and `{index?, created?}` makes a new document holding the art as it was at that state and makes it the active document, and returns `{index, title}`. `index` is a row of the History panel, with 0 the oldest state kept, and an omitted or null `index` uses the current state. An `index` that names no state fails with `no history state N`, one that is not a whole number with `` `index` must be a whole number ``, and either changes nothing. `created` is File Info's created date in Unix seconds or null, and defaults to now. The new document takes the next `Untitled-N` name, is marked unsaved, has nothing selected and has no steps to undo or redo. It is out of symbol, opacity-mask and pattern editing, and the art drawn in a pattern's tile is stored in the pattern, as `object.pattern.done` stores it. The source document and its steps stay as they are, except that typing or a drag in progress is first kept as a step. When a command keeps a drag whose preview Real-time Drawing off had not applied yet (`edit.undo`, `edit.redo`, `edit.clearHistory`, `edit.newDocumentFromState` and the other commands that end a drag first), and applying that preview gives a warning, the command's result carries it as `previewWarning`, and as `warning` too when the command gives no warning of its own; the app's status bar shows `warning`. While the Type tool edits type, `undo` and `redo` put its caret, with no characters selected, at the end of the text the step changed: after the text it puts back or retypes, or where the text it takes out was. A step that changes no characters, such as a formatting change, leaves the caret and the selection where they are. |
@@ -3667,7 +3667,13 @@ already walks Image Trace. Short agent entry points:
 
 - Symbols: `symbol.list` (each row includes `registration` 0..8, `exportType`: `movieClip`|`graphic`, `type`:
   `static`|`dynamic` and `alignToPixelGrid`),
-  `symbol.new {name?, registration?, exportType?, nineSlice?, nineSliceGuides?, type?, alignToPixelGrid?, ids?}`,
+  `symbol.new {name?, registration?, exportType?, nineSlice?, nineSliceGuides?, type?, alignToPixelGrid?, ids?, keepArt?: false}`
+  (New Symbol: the selection, or `ids`, becomes the symbol's art and an instance of it in one undo step; with
+  `keepArt: true` the art stays ordinary art in its place, with its ids, and stays selected unless it is hidden or
+  locked, and the result's `id` is null; a `keepArt` other than true or false is an error; the Symbols panel sends
+  `keepArt: true` when its New Symbol button, with or without Alt, or its New Symbol… menu item is used with Shift
+  held, through Symbol Options' OK (`ui.symbolOptions {keepArt: true}`), and when art dragged off the canvas is
+  released on the panel with Shift held),
   `symbol.options {name?, newName?, registration?, exportType?, nineSlice?, nineSliceGuides?, type?, alignToPixelGrid?}` (`nineSlice` bool turns
   9-slice guides on or off; `nineSliceGuides` is `[left, top, right, bottom]`, fractions of the symbol size in from
   each edge, each -16..16 with `left + right < 1` and `top + bottom < 1`, a quarter each when none are given; below 0
@@ -4625,8 +4631,14 @@ object's, type its characters'). `graphicStyle.apply {name, ids?}` gives the obj
 style's look: editing their appearance or transparency breaks the link, and `graphicStyle.redefine {name?, id?}`
 updates only the objects still linked. Art dragged off the canvas, or the Appearance panel's thumbnail, dropped on a
 style in the Graphic Styles panel with Alt held runs `graphicStyle.redefine` with that style's `name` and the object's
-`id` (the first object of the art); an object already linked to the style with its look changes nothing. The art of a
-column or marker design in a graph series is never linked:
+`id` (the first object of the art); an object already linked to the style with its look changes nothing.
+`graphicStyle.redefine {name, from}` gives the style `name` the look of the style `from` instead (fills, strokes,
+effects, opacity, blend mode, isolate and knockout): `name` keeps its name, place and id, its objects still linked
+follow in one undo step, and `from` and its objects stay as they are. `from` naming the same style, or a style with
+the same look, records nothing; a `from` that names no style or is not a string, or `from` with `id`, is an error. A
+style dragged onto another in the Graphic Styles panel with Alt held runs it with the dragged style as `from`;
+without Alt the style moves (`graphicStyle.move`). The art of a column or marker design in a graph series is never
+linked:
 `graphicStyle.new` can make a style from it, and `graphicStyle.redefine` leaves its look as it was and unlinks it,
 whether it is the source or a linked object. `graphicStyle.list` returns each style with the ids linked to it and the
 style of the first selected object; `select.same.graphicStyle` selects an object's fellow users.
@@ -6762,8 +6774,9 @@ and Shift steps follow the box the same way; a Reflect axis drawn with the tool 
 line on the page at that angle, counter-clockwise from horizontal, as `object.reflect`'s numeric `axis` is, and the art
 slides along that line about `origin` by the shear `angle`, which stays a separate value. 0 shears as `"horizontal"`
 and 90 as `"vertical"`. A numeric `axis` outside the range, a number given as a string, or any other value is an
-error, and nothing changes. The shear `angle` is clamped to -89 through 89. The Shear dialog's Axis has Horizontal,
-Vertical and Angle; the Axis Angle field beside it starts at 0° and takes input while Angle is chosen. The [help page](https://helpx.adobe.com/illustrator/desktop/manage-objects/reshape-transform-objects/shear-objects.html)
+error, and nothing changes. The shear `angle` runs from -359 to 359 along every axis and is sheared by its tangent;
+±90 and ±270 are an error. The Shear dialog's Axis has Horizontal, Vertical and Angle; the Axis Angle field beside it
+starts at 0° and takes input while Angle is chosen. The [help page](https://helpx.adobe.com/illustrator/desktop/manage-objects/reshape-transform-objects/shear-objects.html)
 describes the Angle axis as a custom slant direction between -359° and 359°, measured from the horizontal. The
 counter-clockwise direction on the page and the 0° starting value are VectorCraft's own.
 
@@ -7282,8 +7295,12 @@ wide.
 `object.align` needs `horizontal` or `vertical`. The three Align commands, `object.reflect` and `object.shear` return
 an error that lists the choices of a `horizontal`, `vertical`, `to`, `axis` or `bounds` param given another value
 (`object.reflect` and `object.shear` also take a numeric `axis` and name the value given; `object.shear`'s numeric
-`axis` runs from -359 to 359, while its `angle` is clamped to -89 through 89), and one for a `spacing` that is not a
-number; nothing moves.
+`axis` runs from -359 to 359), and one for a `spacing` that is not a number; nothing moves. `object.shear` takes an `angle` from -359 to 359 degrees, the range of the
+[Shear dialog](https://helpx.adobe.com/illustrator/desktop/manage-objects/reshape-transform-objects/shear-objects.html),
+and shears by its tangent, so 120 slants as -60. An angle of 0 or ±180 (within 1e-9 degrees) has no slant: without
+`copy`, nothing moves and no undo step is recorded, and with `copy` the copies keep the art's place. It returns an error for an angle outside that range, and, as
+VectorCraft's own rule, for ±90 and ±270 (within 1e-9 degrees), which have no finite shear; nothing moves and no undo
+step is recorded.
 
 ## Glyph bounds for type
 
@@ -9205,6 +9222,21 @@ Screens doesn't write EPS.
 {"name":"export","arguments":{"path":"/tmp/art.eps","options":{"useArtboards":true,"cmykPostScript":false}}}
 ```
 
+## Production Preflight
+
+`document.preflight {output?: "pdf"|"print"|"screen", minPpi?: 1..9600, artboards?: [index, …]}`
+checks the active document without editing it or writing an export. Defaults: PDF, 300 ppi
+(96 ppi for Screen), all artboards. Indices are zero based. Print uses the saved Print settings
+with the requested artboards, including page scaling; PDF and Screen check visible art on them.
+
+The result contains `checks` for `fonts`, `text`, `links` and `resolution`, each with `status`
+(`passed`, `failed`, `notChecked`), finding `count` and `notChecked` count. `findings` give a
+`code`, canvas `ids` and `name`; link findings also carry `sourceId`, and resolution findings
+carry `effectivePpi` and `threshold`. `outputWarnings` carries the Print preview's output/settings
+warnings. Resource findings point to their first visible canvas owner. Resolution inside resource
+art or placed documents is explicitly not checked; a pass is not certification of an exported file.
+See [Production Preflight](production-preflight.md) for the panel and coverage limits.
+
 ## Print
 
 File → Print lays the job out as a print-ready PDF, in which each page is a sheet of the chosen paper. The desktop app
@@ -10377,7 +10409,7 @@ thread. When `effect.expandAppearance` keeps a frame as type in a group (type wi
 effects are shadows, outer glows or Crop Marks), the type stays in the thread in the frame's place. Object › Expand
 (`object.expand`) outlines type with these two commands. `object.flattenTransparency` takes each frame of threaded text
 that it outlines (`textToOutlines`) or turns into flat regions or an image out of its thread in the same way.
-`symbol.new` (New Symbol) and `symbol.update` (Redefine Symbol, without `keepArt: true`) take each frame of threaded text in the selection out
+`symbol.new` (New Symbol) and `symbol.update` (Redefine Symbol), without `keepArt: true`, take each frame of threaded text in the selection out
 of its thread in the same way, and the symbol's art holds a copy of the frame with the text it shows. When every frame
 of a thread goes into the symbol, the copy of the last frame keeps the text it has no room for.
 
@@ -11912,6 +11944,10 @@ no file, and an import opens no document). A filter whose manifest asks for a he
 `plugin.inspect {path | dataBase64}` entry) needs a person's approval, and `plugin.install` refuses `allowHeavy: true`
 from a request. `plugin.run`
 runs it where it is called, so the call may take minutes; `notifications/cancelled` stops it.
+The preference `pluginInstructionBudget` (`normal`, the default, or `large`; `prefs.set` refuses any other value)
+sets the instructions every object filter run gets: Large gives a light filter 250 M instructions instead of 50 M,
+plus 4,000 per input byte either way, with its 60 s time budget unchanged; a heavy filter keeps its own budget with
+either value. The next `plugin.run` or plug-in command uses the value set ([plug-ins](plugins.md#instruction-budget-preference)).
 A plug-in whose manifest lists permissions (`permissions` in its `plugin.inspect` entry, with `needsApproval: true`)
 needs a person's approval too, and `plugin.install` refuses `grant: [permission]` from a request. With a desktop
 app connected, `ui.installPlugin` opens the approval dialog and returns `{pending: "pluginInstall"}`; `answer_dialog`,
@@ -12004,6 +12040,7 @@ Disable and Continue can't save the plug-in it turns off, this launch skips it a
 {"name":"run_command","arguments":{"command":"plugin.setEnabled","params":{"id":"org.example.wobble","enabled":true}}}
 {"name":"run_command","arguments":{"command":"plugin.install","params":{"path":"/plugins/desaturate.wasm"}}}
 {"name":"run_command","arguments":{"command":"plugin.run","params":{"id":"org.vectorcraft.example.desaturate","params":{"amount":60}}}}
+{"name":"run_command","arguments":{"command":"prefs.set","params":{"key":"pluginInstructionBudget","value":"large"}}}
 {"name":"run_command","arguments":{"command":"effect.apply","params":{"effect":"plugin.org.example.wobble","params":{"size":4}}}}
 {"name":"run_command","arguments":{"command":"document.open","params":{"path":"/tmp/plot.hpgl","importer":"plugin.org.example.hpgl"}}}
 {"name":"run_command","arguments":{"command":"plugin.org.example.tidy.grow","params":{"by":3}}}
@@ -14337,6 +14374,7 @@ the error text. The interactive fallback applies only to ordinary File > Save, n
 
 | Date | Change |
 |---|---|
+| 2026-11-18 | Production Preflight: output and artboard scope, four check summaries, clickable canvas ids, effective PPI and explicit unchecked resolution coverage. |
 | 2026-11-14 | Built-in Tech Circuit brush library (id `tech-circuit`): Circuit Trace, Bus Lines and Terminal Nodes; ten built-in libraries. |
 | 2026-11-13 | The Pencil ignores Smart Guides and Snap to Point and shows no Smart Guides; Snap to Grid and Snap to Pixel still move its ends (#7252). |
 | 2026-11-13 | `path.freehand`: `closed`, when given, decides whether a stroke that continues a path (`extend`) closes it; the Pencil and the Paintbrush send it by Close Paths When Ends Are Within. |
