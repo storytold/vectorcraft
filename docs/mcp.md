@@ -6479,17 +6479,32 @@ slider (`ui.menuDialog {command: "object.path.smooth"}`, dialog `smoothSlider` w
 Auto-Smooth level, and the slider previews the result until `ui.dialog.confirm`; `ui.smoothAuto` moves the open
 slider back to the Auto-Smooth level.
 
-## Circle through three points
+## Circle through two or three points
 
-`shape.circleThroughPoints {points?: [[x, y], [x, y], [x, y]]}` draws the circle whose edge passes through three
-points, as a live ellipse with the current paint, and selects it. Without `points`, it uses the three selected anchor
-points, from one path or several: anchor points selected with Direct Selection, or all the anchor points of a path
-selected whole, such as a triangle. The ends of selected segments do not count. The result is `{id, cx, cy, radius}`,
-and one undo removes the circle. The circle is not pixel-aligned, even while the document's
-[Align New Objects to Pixel Grid](#align-new-objects-to-pixel-grid) is on, so it stays through the points. The command
-returns an error and draws nothing when two points are the same or the three lie on one line (twice the triangle's area
-at most 10⁻¹⁰ of its longest side squared), when `points` is not three pairs of numbers, and when `points` is left out
-and the selection does not hold exactly three anchor points of paths.
+`shape.circleThroughPoints {points?: [[x, y], [x, y]] or [[x, y], [x, y], [x, y]]}` draws the circle whose edge passes
+through the points, as a live ellipse with the current paint, and selects it. Two points are the ends of a diameter.
+Without `points`, it uses the two or three selected anchor points, from one path or several: anchor points selected with
+Direct Selection, or all the anchor points of a path selected whole, such as a triangle. The ends of selected segments
+do not count. The result is `{id, cx, cy, radius}`, and one undo removes the circle. The circle is not pixel-aligned,
+even while the document's [Align New Objects to Pixel Grid](#align-new-objects-to-pixel-grid) is on, so it stays
+through the points. The command returns an error and draws nothing when two points are the same or the three lie on
+one line (twice the triangle's area at most 10⁻¹⁰ of its longest side squared), when the circle would reach past the
+canvas (4,000,000 pt from the origin), when `points` is not two or three pairs of numbers, and when `points` is left
+out and the selection does not hold two or three anchor points of paths.
+
+The Circle tool, after the Ellipse tool in its toolbar group, draws with this command. A drag from one point to
+another, or a click on each, draws the circle with the two points as the ends of a diameter. A click on a first point,
+then a press on a second point dragged to a third, draws the circle through the three. Shift keeps the second point at
+45° steps from the first, measured from General › Constrain Angle. For a circle on two points, Alt rounds the diameter
+to the nearest tick of the rulers at the current zoom, in the General unit (every 5 pt at 100% in points); the three
+points of a circle through three are not rounded. Each point snaps to Smart Guides. Until
+the release, the tool shows the circle as a dashed outline (solid once it is more than 50,000 screen points around)
+with its points, a small cross at its center, a line from
+the center to each point and, with Measurement Labels on, the diameter by the pointer. Three different points on one
+line, or a circle past the canvas, show "Circle too large" by the pointer instead, and the release draws nothing.
+Escape, a dropped press, and an edit, Undo or Redo made outside the tool drop the first point. A second press within 3
+screen points of the first point, or one that snaps to it, is a press on it: let go there (a double-click), it places no second point, and
+dragged out, it draws the circle on the diameter it drags out.
 
 With the Ellipse tool, the first two Shift-clicks place points, and the third draws the circle through the three with
 this command. After two points the tool previews the circle through them and the pointer as a dashed outline. Once a

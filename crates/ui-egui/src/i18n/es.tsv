@@ -496,6 +496,8 @@ font-technology	Variable	Variables
 	Choose a folder	Elige una carpeta
 	Choose…	Elegir…
 	Circle	Círculo
+	Circle Tool	Herramienta Círculo
+	Circle too large	Círculo demasiado grande
 	Classic Defaults	Valores predeterminados clásicos
 	Clean Up…	Limpiar…
 	Clear	Borrar
@@ -5131,8 +5133,8 @@ liquify-list-end	{0}, {1}	{0}, {1}
 @msg	no active document	no hay ningún documento activo
 @msg	no active perspective plane	no hay ningún plano de perspectiva activo
 @msg	no anchor points selected	no hay puntos de ancla seleccionados
-@msg	`points` must be three [x, y] pairs of numbers	`points` debe ser tres pares de números [x, y]
-@msg	direct-select three anchor points, or give `points`	seleccione directamente tres puntos de ancla o indique `points`
+@msg	`points` must be two or three [x, y] pairs of numbers	`points` debe ser dos o tres pares de números [x, y]
+@msg	direct-select two or three anchor points, or give `points`	seleccione directamente dos o tres puntos de ancla o indique `points`
 @msg	no circle passes through these points: two are the same or all three lie on one line	ningún círculo pasa por estos puntos: dos son iguales o los tres están en una misma línea
 @msg	no app to open files here	aquí no hay ninguna aplicación para abrir archivos
 @msg	no artboard	no hay mesa de trabajo

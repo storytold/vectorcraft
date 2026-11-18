@@ -463,6 +463,8 @@ antiAlias	Sharp	Nítido
 	Choose a folder	Escolher uma pasta
 	Choose…	Escolher…
 	Circle	Círculo
+	Circle Tool	Ferramenta Círculo
+	Circle too large	Círculo grande demais
 	Clean Up…	Limpar…
 	Clear	Limpar
 	Clear All Tabs	Limpar Todas as Paradas de Tabulação
@@ -4397,8 +4399,8 @@ axis	Both	Ambos
 @msg	no active document	nenhum documento ativo
 @msg	no active perspective plane	nenhum plano de perspectiva ativo
 @msg	no anchor points selected	nenhum ponto de ancoragem selecionado
-@msg	`points` must be three [x, y] pairs of numbers	`points` deve ter três pares de números [x, y]
-@msg	direct-select three anchor points, or give `points`	selecione diretamente três pontos de ancoragem ou informe `points`
+@msg	`points` must be two or three [x, y] pairs of numbers	`points` deve ter dois ou três pares de números [x, y]
+@msg	direct-select two or three anchor points, or give `points`	selecione diretamente dois ou três pontos de ancoragem ou informe `points`
 @msg	no circle passes through these points: two are the same or all three lie on one line	nenhum círculo passa por esses pontos: dois são iguais ou os três estão na mesma reta
 @msg	no app to open files here	nenhum aplicativo para abrir arquivos aqui
 @msg	no artboard	nenhuma prancheta

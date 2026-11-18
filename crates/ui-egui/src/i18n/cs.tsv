@@ -4707,6 +4707,8 @@ font-technology	Variable	Variabilní
 	Couldn't paste from the clipboard: {e}	Nelze vložit ze schránky: {e}
 	Channel	Kanál
 	Circle	Kruh
+	Circle Tool	Nástroj Kruh
+	Circle too large	Kruh je příliš velký
 	Clip to Art	Oříznout podle kresby
 	Colorize	Obarvit
 	Gamma	Gama
@@ -5424,8 +5426,8 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	no active document	žádný aktivní dokument
 @msg	no active perspective plane	žádná aktivní perspektivní rovina
 @msg	no anchor points selected	nejsou vybrány žádné kotevní body
-@msg	`points` must be three [x, y] pairs of numbers	`points` musí být tři dvojice čísel [x, y]
-@msg	direct-select three anchor points, or give `points`	vyberte přímým výběrem tři kotevní body, nebo zadejte `points`
+@msg	`points` must be two or three [x, y] pairs of numbers	`points` musí být dvě nebo tři dvojice čísel [x, y]
+@msg	direct-select two or three anchor points, or give `points`	vyberte přímým výběrem dva nebo tři kotevní body, nebo zadejte `points`
 @msg	no circle passes through these points: two are the same or all three lie on one line	těmito body neprochází žádná kružnice: dva jsou stejné nebo všechny tři leží na jedné přímce
 @msg	no app to open files here	zde chybí aplikace pro otevírání souborů
 @msg	no artboard	žádná pracovní plocha
