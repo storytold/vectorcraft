@@ -32,7 +32,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Save for Web",
             [],
             None,
-            "{path?, preset?: a webExport.presets name (its settings, then these keys), format?: gif (default)|jpg|png8|png24, reduction?: perceptual|selective (default)|adaptive|web|blackWhite|gray (gif/png8, as the next five), colors?: 128 (2–256), dither?: none|diffusion (default)|pattern|noise, ditherAmount?: 100, webSnap?: 0 (0–100 %: colours that close to a web-safe one become it), lossy?: 0 (0–100, gif), colorTable?: {locked?: [\"#rrggbb\"…] (kept when reducing), transparent?: [\"#rrggbb\"…] (become transparent), webShift?: [\"#rrggbb\"…] (become web-safe), sort?: none|hue|luminance|popularity, deleted?: [\"#rrggbb\"…] (taken out of the table: their pixels take the nearest color left, and at least one color stays), customPalette?: [\"#rrggbb\"…] (a fixed palette used instead of the reduction's, at most `colors` entries; a new reduction without colorTable clears it and deleted), shifted?: {\"#source\": \"#rrggbb\"…} (each source color is written as the color given, wherever it is in the image; kept when reducing as a locked color is, before the locked ones, while one palette slot is left for the reduction; at most 256; a source the table does not hold shifts nothing; a color shifted to itself is removed; a shifted color is not web-shifted, and a transparent one stays transparent; GIF lossy moves no pixel into or out of a shifted color)} (colours as the preview's colors[].source; #rrggbbaa and #rgba are refused here and in matte), transparency?: true (gif/png8/png24), matte?: white (default)|black|none|\"#rrggbb\" (what edges blend into; jpg and opaque png24: the background), interlaced?: false (gif/png8/png24), quality?: 60 (jpg: 0–100), progressive?: false (jpg), optimized?: true (jpg), embedProfile?: false (jpg: sRGB profile), width?: px | height?: px | percent?: 100 (the image size, proportional; width wins over height, height over percent), antiAlias?: none|art (default)|type, clipToArtboard?: true (the artboard; false: the art and the slices), artboard?: 0 (0-based), convertToSrgb?: true (PNG files say they are sRGB), metadata?: none|copyright (default)|contact|all (File Info written as PNG text, a GIF or JPEG comment), slices?: all (default)|selected|none (one image per slice: images/<slice name>.<ext>), output?: images (default)|html (an HTML page placing the image or slices, <stem>.html)} → {path, files: [path…], bytes (total), width, height, warnings: [] or [a note that an image couldn't be decoded and is missing from the image]}; no path → {files: [{name, dataBase64}], bytes, width, height, warnings} (names such as page.html, images/page_01.gif). A single image without HTML is written at path itself",
+            "{path?, preset?: a webExport.presets name (its settings, then these keys), format?: gif (default)|jpg|png8|png24, reduction?: perceptual|selective (default)|adaptive|web|blackWhite|gray (gif/png8, as the next five), colors?: 128 (2–256), dither?: none|diffusion (default)|pattern|noise, ditherAmount?: 100, webSnap?: 0 (0–100 %: colours that close to a web-safe one become it), lossy?: 0 (0–100, gif), colorTable?: {locked?: [\"#rrggbb\"…] (kept when reducing), transparent?: [\"#rrggbb\"…] (become transparent), webShift?: [\"#rrggbb\"…] (become web-safe), sort?: none|hue|luminance|popularity, deleted?: [\"#rrggbb\"…] (taken out of the table: their pixels take the nearest color left, and at least one color stays), customPalette?: [\"#rrggbb\"…] (a fixed palette used instead of the reduction's, at most `colors` entries, its transparent colors taking one slot together; a new reduction without colorTable clears it and deleted), shifted?: {\"#source\": \"#rrggbb\"…} (each source color is written as the color given, wherever it is in the image; kept when reducing as a locked color is, before the locked ones, while one palette slot is left for the reduction; at most 256; a source the table does not hold shifts nothing; a color shifted to itself is removed; a shifted color is not web-shifted, and a transparent one stays transparent; GIF lossy moves no pixel into or out of a shifted color)} (colours as the preview's colors[].source; #rrggbbaa and #rgba are refused here and in matte), transparency?: true (gif/png8/png24), matte?: white (default)|black|none|\"#rrggbb\" (what edges blend into; jpg and opaque png24: the background), interlaced?: false (gif/png8/png24), quality?: 60 (jpg: 0–100), progressive?: false (jpg), optimized?: true (jpg), embedProfile?: false (jpg: sRGB profile), width?: px | height?: px | percent?: 100 (the image size, proportional; width wins over height, height over percent), antiAlias?: none|art (default)|type, clipToArtboard?: true (the artboard; false: the art and the slices), artboard?: 0 (0-based), convertToSrgb?: true (PNG files say they are sRGB), metadata?: none|copyright (default)|contact|all (File Info written as PNG text, a GIF or JPEG comment), slices?: all (default)|selected|none (one image per slice: images/<slice name>.<ext>), output?: images (default)|html (an HTML page placing the image or slices, <stem>.html)} → {path, files: [path…], bytes (total), width, height, warnings: [] or [a note that an image couldn't be decoded and is missing from the image]}; no path → {files: [{name, dataBase64}], bytes, width, height, warnings} (names such as page.html, images/page_01.gif). A single image without HTML is written at path itself",
             has_doc,
             export
         ),
@@ -866,7 +866,8 @@ fn palette_image(rgba: &[u8], w: u32, h: u32, s: &WebSettings, matte: Option<[u8
 /// The pixels reduced to the palette `s` gives: the reduction's own (`locked` kept), or the
 /// color table's fixed one, without the deleted colors. The pixels of a deleted color take the
 /// nearest color left, with `o`'s dither. A deletion has to leave a color that is not mapped to
-/// transparent.
+/// transparent. A fixed palette keeps its colors mapped to transparent, which take one slot of
+/// `colors` together, and its first opaque colors that fit in the rest.
 fn reduced(rgba: &[u8], w: u32, h: u32, s: &WebSettings, o: &PaletteOptions, locked: &[[u8; 3]]) -> std::result::Result<Indexed, String> {
     let table = &s.color_table;
     let deleted = ColorTable::colors(&table.deleted, "deleted")?;
@@ -895,11 +896,37 @@ fn reduced(rgba: &[u8], w: u32, h: u32, s: &WebSettings, o: &PaletteOptions, loc
             left.push(c);
         }
     }
-    left.truncate(usize::from(s.colors.clamp(2, 256)) - usize::from(has_clear));
     if left.is_empty() || (removed && !opaque_left(&left)) {
         return Err(KEEP_ONE.into());
     }
-    Ok(quantize::quantize_to(rgba, w, h, o, &left))
+    // The colors mapped to transparent all become the one transparent entry, so together they take
+    // one slot, and the opaque colors fill the rest in palette order. When no pixel takes one of
+    // them and no pixel is transparent, that slot goes to the next opaque color instead.
+    let ix = quantize::quantize_to(rgba, w, h, o, &fixed_palette(&left, &to_clear, s.colors, has_clear, true));
+    if !has_clear && !ix.palette.iter().any(|c| to_clear.contains(c)) && left.iter().any(|c| to_clear.contains(c)) {
+        return Ok(quantize::quantize_to(rgba, w, h, o, &fixed_palette(&left, &to_clear, s.colors, has_clear, false)));
+    }
+    Ok(ix)
+}
+
+/// The entries of the fixed palette `left` that fit in `colors`. With `clear`, the colors in
+/// `to_clear` are kept and take one slot together; without it they are left out. The list holds
+/// at most 256 entries, less one when `has_clear` (the transparent pixels' entry).
+fn fixed_palette(left: &[[u8; 3]], to_clear: &[[u8; 3]], colors: u16, has_clear: bool, clear: bool) -> Vec<[u8; 3]> {
+    let any_clear = clear && left.iter().any(|c| to_clear.contains(c));
+    let total = 256 - usize::from(has_clear);
+    let mut room = (usize::from(colors.clamp(2, 256)) - usize::from(has_clear || any_clear)).min(total - usize::from(any_clear));
+    let opaque = left.iter().filter(|c| !to_clear.contains(c)).count().min(room);
+    let mut clear_room = if clear { total - opaque } else { 0 };
+    left.iter()
+        .copied()
+        .filter(|c| {
+            let slots = if to_clear.contains(c) { &mut clear_room } else { &mut room };
+            let keep = *slots > 0;
+            *slots = slots.saturating_sub(1);
+            keep
+        })
+        .collect()
 }
 
 /// An optimised image as straight RGBA → `(pixels, width, height)` (the dialog's preview).

@@ -539,6 +539,55 @@ fn colour_table_delete_maps_pixels_to_the_nearest_color_left() {
     assert_eq!(sources(&preview(&mut s, json!({"preset": "No near red"}))), ["#0000ff", "#ff0000"]);
 }
 
+/// The colors of a fixed palette mapped to transparent take one slot of Colors together with the
+/// transparent pixels, so the opaque colors after them still fit: their pixels stay opaque, and the
+/// pixels of the colors mapped to transparent become transparent.
+#[test]
+fn colour_table_fixed_palette_keeps_an_opaque_color() {
+    // 40×10: red, a near red and blue, and 10 px with nothing (transparent).
+    let mut s = session(40.0, 10.0);
+    rect(&mut s, [0.0, 0.0, 10.0, 10.0], "#ff0000");
+    rect(&mut s, [10.0, 0.0, 10.0, 10.0], "#ee1100");
+    rect(&mut s, [20.0, 0.0, 10.0, 10.0], "#0000ff");
+    for table in [
+        json!({"customPalette": ["#ff0000", "#ee1100", "#0000ff"], "deleted": ["#ee1100"], "transparent": ["#ff0000"]}),
+        json!({"customPalette": ["#ff0000", "#0000ff"], "transparent": ["#ff0000"]}),
+    ] {
+        let p = json!({"format": "png8", "dither": "none", "colors": 2, "colorTable": table});
+        let v = run(&mut s, "document.exportForWeb.preview", p.clone());
+        let opaque: Vec<&Value> = v["colors"].as_array().unwrap().iter().filter(|c| c["transparent"] == false).map(|c| &c["source"]).collect();
+        assert_eq!((opaque, v["colors"].as_array().unwrap().len()), (vec![&json!("#0000ff")], 2), "{p}");
+        let img = pixels(&one(&mut s, p.clone()));
+        let alpha = |x: u32| img.get_pixel(x, 5).0[3];
+        assert_eq!((alpha(5), alpha(15), img.get_pixel(25, 5).0, alpha(35)), (0, 0, [0, 0, 255, 255], 0), "{p}");
+    }
+    // A color mapped to transparent that no pixel takes leaves its slot to an opaque color.
+    let mut u = session(20.0, 10.0);
+    rect(&mut u, [0.0, 0.0, 10.0, 10.0], "#0000ff");
+    rect(&mut u, [10.0, 0.0, 10.0, 10.0], "#00ff00");
+    let p = json!({"format": "png8", "dither": "none", "colors": 2, "colorTable": {"customPalette": ["#0000ff", "#00ff00", "#ff0000"], "transparent": ["#ff0000"]}});
+    let img = pixels(&one(&mut u, p));
+    assert_eq!((img.get_pixel(5, 5).0, img.get_pixel(15, 5).0), ([0, 0, 255, 255], [0, 255, 0, 255]));
+    // At 256 colors a color mapped to transparent after 255 opaque ones still keeps an entry.
+    let full: Vec<String> =
+        std::iter::once("#0000ff".to_string()).chain((1..255).map(|i| format!("#00{i:02x}00"))).chain(["#ff0000".to_string()]).collect();
+    let p = json!({"format": "png8", "dither": "none", "colors": 256, "colorTable": {"customPalette": full, "transparent": ["#ff0000"]}});
+    let img = pixels(&one(&mut s, p));
+    assert_eq!((img.get_pixel(5, 5).0[3], img.get_pixel(25, 5).0, img.get_pixel(35, 5).0[3]), (0, [0, 0, 255, 255], 0));
+    // Without transparent pixels the colors mapped to transparent still take one slot together.
+    let mut t = session(30.0, 10.0);
+    rect(&mut t, [0.0, 0.0, 10.0, 10.0], "#ff0000");
+    rect(&mut t, [10.0, 0.0, 10.0, 10.0], "#ee1100");
+    rect(&mut t, [20.0, 0.0, 10.0, 10.0], "#0000ff");
+    let p = json!({"format": "png8", "dither": "none", "colors": 2, "colorTable": {
+        "customPalette": ["#ff0000", "#ee1100", "#0000ff", "#00ff00"], "transparent": ["#ff0000", "#ee1100"],
+    }});
+    let v = run(&mut t, "document.exportForWeb.preview", p.clone());
+    assert_eq!(v["colors"].as_array().unwrap().len(), 2, "{v}");
+    let img = pixels(&one(&mut t, p));
+    assert_eq!((img.get_pixel(5, 5).0[3], img.get_pixel(15, 5).0[3], img.get_pixel(25, 5).0), (0, 0, [0, 0, 255, 255]));
+}
+
 /// A color shifted by hand (`colorTable.shifted`) is written as the color picked wherever it is in
 /// the image, the other colors stay, the table shows it as shifted and locked, and the preview is
 /// the file.
