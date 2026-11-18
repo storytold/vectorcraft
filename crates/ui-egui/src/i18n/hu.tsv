@@ -183,6 +183,7 @@
 	Add Anchor Point	Horgonypont hozzáadása
 	Add Anchor Point Tool	Horgonypont hozzáadása
 	Add Anchor Points	Horgonypontok hozzáadása
+	Add Around	Hozzáadás az objektum körül
 	Add Content	Tartalom hozzáadása
 	Add Effect	Effektus hozzáadása
 	Add Font Files	Betűtípusfájlok hozzáadása
@@ -277,6 +278,7 @@
 	Angled Strokes…	Ferde vonások…
 	Angles	Szögek
 	Animated Zoom	Animált nagyítás
+	Anti Alias	Élsimítás
 	Anti-alias	Élsimítás
 	Anti-Alias	Élsimítás
 	Anti-alias Rasters	Raszterek élsimítása
@@ -496,6 +498,12 @@ font-technology	Variable	Változó
 	Brush Definition	Ecsetdefiníció
 	Brush Libraries	Ecsetkönyvtárak
 	Brush Options…	Ecset beállításai…
+	Options of Selected Object…	Kijelölt objektum beállításai…
+	Options of Selected Object	Kijelölt objektum beállításai
+@msg	no path painted with a brush is selected	nincs kijelölt ecsettel festett útvonal
+@msg	the selected paths are painted with brushes of different types	a kijelölt útvonalak különböző típusú ecsetekkel vannak festve
+@msg	give `params` or `reset`, not both	`params` vagy `reset` adható meg, a kettő együtt nem
+@msg	a bristle brush has no options of its own on a path	a sörteecsetnek nincsenek saját beállításai egy útvonalon
 	Brush Scale Options	Ecsetméretezési beállítások
 	Brush Strokes	Ecsetvonások
 	Brushes	Ecsetek
@@ -576,6 +584,12 @@ font-technology	Variable	Változó
 	Character options	Karakterbeállítások
 	Paragraph options	Bekezdésbeállítások
 	Character Rotation	Karakterforgatás
+	Chinese Big 5	Kínai Big 5
+	Cyrillic	Cirill
+	Greek	Görög
+	Turkish	Török
+	Baltic	Balti
+	Central European	Közép-európai
 	Character Set:	Karakterkészlet:
 	Character Style	Karakterstílus
 	Character Style Options	Karakterstílus beállításai
@@ -734,6 +748,7 @@ font-technology	Variable	Változó
 	Color Mixer (Shift-click the chip)	Színkeverő (Shift+kattintás a színmezőre)
 	Color Mode	Színmód
 	Color Mode:	Színmód:
+	Color Model	Színmodell
 	Color Model:	Színmodell:
 	Color Models	Színmodellek
 	Color Picker	Színválasztó
@@ -755,6 +770,11 @@ font-technology	Variable	Változó
 	Saturation and brightness	Telítettség és fényesség
 	Color field	Színmező
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
+	Wheel View	Körnézet
+	Box View	Négyzetnézet
+	Box Channel	Négyzet csatornája
+	Color box	Színnégyzet
+	Color Wheel Options	Színkör beállításai
 	Color Type:	Színtípus:
 	Color:	Szín:
 	Colorization	Színezés
@@ -762,6 +782,7 @@ font-technology	Variable	Változó
 	Colors	Színek
 	Colors:	Színek:
 	Column Graph Tool	Oszlopdiagram
+	Columns	Oszlopok
 	Columns:	Oszlopok:
 	Column…	Oszlop…
 	Combine Slices	Szeletek egyesítése
@@ -1357,6 +1378,7 @@ font-technology	Variable	Változó
 	Enable text access for screen readers	Szöveghozzáférés engedélyezése képernyőolvasóknak
 	Enable Touch Gestures	Érintési kézmozdulatok
 	Switch Selection and Drawing Modes	Váltás a kijelölési és a rajzolási mód között
+	Select Last Selection Tool	Az utoljára használt kijelölőeszköz kiválasztása
 	Enable Touch Workspace	Érintőképernyős munkaterület
 	Encoding	Kódolás
 	Encoding:	Kódolás:
@@ -2498,6 +2520,7 @@ file-filter	Templates	Sablonok
 	Linked File Not Found	A csatolt fájl nem található
 	Links	Csatolások
 	Linux Display Server	Linuxos megjelenítőszerver
+	Low-Latency Drawing	Alacsony késleltetésű rajzolás
 	Liquify	Folyékony torzítás
 	List Data Sets	Adatkészletek listázása
 	List Folder	Mappa listázása
@@ -3056,6 +3079,9 @@ file-filter	Templates	Sablonok
 	Overprint	Felülnyomás
 	Overprint and Transparency Flattener	Felülnyomás és átlátszóság-lapítás
 	Overprint and Transparency Flattener Options	Felülnyomás és átlátszóság-lapítás beállításai
+	Custom…	Egyéni…
+	Custom Transparency Flattener Options	Egyéni átlátszóság-lapítási beállítások
+	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	Az EPS-ben nincs alfa-átlátszóság, és a Felülnyomások beállítás dönti el, hogy megmaradnak-e a felülnyomások.
 	Overprint Black…	Fekete felülnyomása…
 	Overprint Fill	Kitöltés felülnyomása
 	Overprint Preview	Felülnyomás-előnézet
@@ -3112,6 +3138,11 @@ file-filter	Templates	Sablonok
 	Pathfinders:	Útvonalkezelők:
 	Paths	Útvonalak
 	Path Length	Útvonalak hossza
+	Grid Size	Rácsméret
+	Grid Colors	Rács színei
+	Flattener Preset	Lapítási előbeállítás
+	X	X
+	Y	Y
 	Paths: {paths}    Anchors: {anchors}    Colors: {colors}	Útvonalak: {paths}    Horgonypontok: {anchors}    Színek: {colors}
 	Pattern	Mintázat
 	Pattern Brush	Mintázatecset
@@ -3220,6 +3251,7 @@ diagnostics	ui	felület
 	Play Current Selection	Kijelölt művelet lejátszása
 	Save Actions…	Műveletek mentése…
 	Load Actions…	Műveletek betöltése…
+	Replace Actions…	Műveletek cseréje…
 	Reset Actions	Műveletek visszaállítása
 	Replace the current actions with the default set?	Lecseréled az aktuális műveleteket az alapértelmezett készletre?
 	Append adds the default set after the current sets instead.	A Hozzáfűzés ehelyett az aktuális készletek után adja hozzá az alapértelmezett készletet.
@@ -3601,6 +3633,8 @@ mark-style	Japanese	Japán
 	Reset Automation	Automation visszaállítása
 	Reset Bar Position	Sáv helyének visszaállítása
 	Reset Bounding Box	Befoglaló keret visszaállítása
+	Rotate Bounding Box	Befoglaló keret elforgatása
+	Rotate Bounding Box…	Befoglaló keret elforgatása…
 	Reset Envelope Mesh	Burkolóháló visszaállítása
 	Reset Envelope Shape	Burkoló alakjának visszaállítása
 	Reset Essentials	Essentials visszaállítása
@@ -3641,6 +3675,8 @@ mark-style	Japanese	Japán
 	Reset Tracing	Tracing visszaállítása
 	Reset Tracking and Kerning	Betűköz és alávágás visszaállítása
 	Highlight Font Name	Betűtípusnév kiemelése
+	Highlight Font Size	Betűméret kiemelése
+	Other…	Egyéb…
 	Highlight Kerning	Alávágás kiemelése
 	Highlight Tracking	Betűköz kiemelése
 	Reset Typography	Typography visszaállítása
@@ -3660,6 +3696,7 @@ mark-style	Japanese	Japán
 	Resize	Átméretezés
 	Resize panel window	Panelablak átméretezése
 	Resize panels	Panelek átméretezése
+	Resolution	Felbontás
 	Resolution:	Felbontás:
 	Responsive	Reszponzív
 	Restore	Visszaállít
@@ -3718,6 +3755,29 @@ mark-style	Japanese	Japán
 	The unit for East Asian type measurements, which no field uses yet.	A kelet-ázsiai szöveg méreteinek mértékegysége, amelyet egyelőre egyetlen mező sem használ.
 	When on, a number typed without a unit into a field in picas is read in points.	Bekapcsolva egy pica mértékegységű mezőbe mértékegység nélkül beírt számot pontként értelmez a program.
 	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	XML-azonosító esetén az objektumnevek XML-azonosítóként jelennek meg a Rétegek, a Változók és a Rétegbeállítások ablakban.
+	The step for type size and leading: Cmd/Ctrl+Shift+. and Cmd/Ctrl+Shift+, change the size by one step, or five with Alt too; in horizontal type, Alt with the Up or Down Arrow changes the leading by one step, or five with Cmd/Ctrl.	A betűméret és a sortávolság lépésköze: a Cmd/Ctrl+Shift+. és a Cmd/Ctrl+Shift+, egy lépéssel, Alt billentyűvel is öttel változtatja a méretet; vízszintes szövegben az Alt és a fel vagy le nyíl egy lépéssel, Cmd/Ctrl billentyűvel öttel változtatja a sortávolságot.
+	The step for tracking and kerning, in thousandths of an em: in horizontal type, Alt with the Left or Right Arrow changes the kerning at the caret or the tracking of the selected text by one step, or five with Cmd/Ctrl.	A betűköz és az alávágás lépésköze em ezredrészében: vízszintes szövegben az Alt és a bal vagy jobb nyíl egy lépéssel, Cmd/Ctrl billentyűvel öttel változtatja a szövegkurzornál az alávágást vagy a kijelölt szöveg betűközét.
+	The step for baseline shift: in horizontal type, Alt and Shift with the Up or Down Arrow move the baseline by one step, or five with Cmd/Ctrl.	Az alapvonal-eltolás lépésköze: vízszintes szövegben az Alt, a Shift és a fel vagy le nyíl egy lépéssel, Cmd/Ctrl billentyűvel öttel tolja el az alapvonalat.
+	Shows the options for Japanese and other East Asian type in the Character, Paragraph, OpenType and Glyphs panels, and Type › Composite Fonts.	Megjeleníti a japán és más kelet-ázsiai szöveg beállításait a Karakter, a Bekezdés, az OpenType és a Glifák panelen, valamint az Összetett betűtípusok parancsot.
+	Shows the options for Arabic, Hebrew and Indic type in the Character and Paragraph panels, such as paragraph direction, kashidas and digits.	Megjeleníti az arab, héber és indiai szöveg beállításait a Karakter és a Bekezdés panelen, például a bekezdés irányát, a kasidákat és a számjegyeket.
+	The selection tools select type only on its baseline, its area's frame or its path, not anywhere inside its box.	A kijelölőeszközök a szöveget csak az alapvonalán, a területi szöveg keretén vagy az útvonalán jelölik ki, nem bárhol a dobozán belül.
+	Font menus list each font by its English name; off, a font that also has a name in its own language shows that name.	A betűtípusmenük minden betűtípust angol nevén mutatnak; kikapcsolva a saját nyelvén is elnevezett betűtípus azt a nevet mutatja.
+	New area type starts with Auto Size on, so a rectangular frame of horizontal type grows or shrinks in height to fit its text.	Az új területi szöveg bekapcsolt automatikus mérettel indul, így a vízszintes szöveg téglalap alakú kerete a szöveghez igazodva nő vagy csökken magasságban.
+	Font lists and the Type › Font menu show a sample of each font beside its name.	A betűtípuslisták és a Betűtípus menü minden betűtípus neve mellett mintát mutatnak.
+	Font samples are drawn in dark type on white, whatever the interface's brightness; it applies only while in-menu font previews are on.	A betűtípusminták sötét szöveggel fehérre rajzolódnak a felület fényerejétől függetlenül; ez csak a menükben bekapcsolt betűtípus-előnézetek mellett érvényes.
+	How tall each row is in the font lists of font fields, such as the Character panel's, and so how large each sample is.	Milyen magas egy sor a betűtípusmezők listáiban, például a Karakter panelén, és így mekkora egy minta.
+	How many of the fonts used last, from 1 to 15, Type › Recent Fonts and the font lists show, newest first.	A legutóbb használt betűtípusok közül hányat mutat 1 és 15 között a Legutóbbi betűtípusok és a betűtípuslisták, a legújabbal kezdve.
+	When you change the font or font style of text, characters the new font has no glyph for keep the font they had.	Ha megváltoztatja egy szöveg betűtípusát vagy betűstílusát, azok a karakterek, amelyekhez az új betűtípusban nincs glifa, megtartják korábbi betűtípusukat.
+	A pink highlight on the canvas marks glyphs that OpenType features replaced, such as ligatures; it does not print or export.	A vásznon rózsaszín kiemelés jelöli az OpenType-funkciók által cserélt glifákat, például a ligatúrákat; nyomtatásban és exportban nem jelenik meg.
+	With the Type tool, selecting one character shows a row of its alternate glyphs beside it on the canvas to choose from.	A Szöveg eszközzel egyetlen karaktert kijelölve mellette a vásznon megjelenik alternatív glifáinak sora, amelyből választhat.
+	A pink highlight on the canvas marks text drawn in a substitute font because its font is missing; it does not print or export.	A vásznon rózsaszín kiemelés jelöli a helyettesítő betűtípussal rajzolt szöveget, mert a saját betűtípusa hiányzik; nyomtatásban és exportban nem jelenik meg.
+	New type made with a Type tool starts with placeholder text, selected, so typing replaces it.	A szövegeszközzel készített új szöveg kijelölt helyőrző szöveggel indul, amelyet a gépelés lecserél.
+	Typing a list marker such as 1. or * and then a space at the start of a paragraph makes the paragraph a list.	Ha egy bekezdés elejére listajelet, például 1. vagy * jelet, majd szóközt gépel, a bekezdés lista lesz.
+	Fonts in this folder show in the font menus and can be used without being installed.	A mappában lévő betűtípusok megjelennek a betűtípusmenükben, és telepítés nélkül használhatók.
+	Applying a graphic style to type removes the characters' own fill or stroke where the style has one, so the style's paint shows.	Ha grafikai stílust alkalmaz szövegre, a karakterek saját kitöltése vagy körvonala eltűnik ott, ahol a stílusnak van ilyen, így a stílus festéke látszik.
+	Align and Distribute measure point type by the ink of its glyphs instead of its em box.	Az Igazítás és az Elosztás a pontszöveget glifáinak tintája szerint méri az em-doboza helyett.
+	Align and Distribute measure area type by the ink of its glyphs instead of its frame.	Az Igazítás és az Elosztás a területi szöveget glifáinak tintája szerint méri a kerete helyett.
+	The bounding box and the Transform panel measure point type by the ink of its glyphs instead of its em box.	A határolókeret és az Átalakítás panel a pontszöveget glifáinak tintája szerint méri az em-doboza helyett.
 	Snaps drawing, moving and scaling to the grid's subdivisions, even while the grid is hidden; while it is on, Snap to Pixel does not apply.	A rajzolást, mozgatást és méretezést a rács osztásaihoz illeszti, akkor is, ha a rács rejtve van; amíg be van kapcsolva, az Illesztés pixelhez nem érvényes.
 	The color of guides that are not selected; an artboard with a Guide Label draws its own guides in the label's color instead.	A nem kijelölt segédvonalak színe; a Segédvonalak címkéjével rendelkező rajztábla a saját segédvonalait a címke színével rajzolja.
 	Draws guides as solid lines or as dots, including the guides already in the document.	A segédvonalakat folytonos vonalként vagy pontokként rajzolja, a dokumentumban már meglévőket is.
@@ -3823,6 +3883,7 @@ mark-style	Japanese	Japán
 	Rounded Rectangle…	Lekerekített téglalap…
 	Roundness:	Kerekség:
 	Row Size:	Sorméret:
+	Rows	Sorok
 	Rows:	Sorok:
 	Rule:	Szabály:
 	Ruler Origin	Vonalzók origója
@@ -4579,7 +4640,7 @@ mark-style	Japanese	Japán
 	Composite Fonts	Összetett betűtípusok
 	Export Composite Fonts	Összetett betűtípusok exportálása
 	Import Composite Fonts	Összetett betűtípusok importálása
-@msg	each font must be {name, parts}	minden betűtípusnak {name, parts} alakúnak kell lennie
+@msg	each font must be {{name, parts}}	minden betűtípusnak {{name, parts}} alakúnak kell lennie
 @msg	unknown key `{k}`; a font takes name and parts	ismeretlen kulcs: `{k}`; egy betűtípus name és parts kulcsot fogad
 @msg	each font needs a name	minden betűtípusnak kell egy név
 @msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` nem lehet összetett betűtípus neve (1–{COMPOSITE_NAME_MAX} karakter, vezérlőkarakterek nélkül)
@@ -4592,7 +4653,7 @@ mark-style	Japanese	Japán
 @msg	two composite fonts are named `{_1}`	két összetett betűtípus neve is `{_1}`
 @msg	`{_1}` is the name of an installed font	`{_1}` egy telepített betűtípus neve
 @msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: a(z) {_2} a(z) `{font}` összetett betűtípust használja
-@msg	give fonts: [{name, parts}…]	adja meg: fonts: [{name, parts}…]
+@msg	give fonts: [{{name, parts}}…]	adja meg: fonts: [{{name, parts}}…]
 @msg	path is empty	a path üres
 @msg	fonts must be a list of composite fonts	a fonts értékének összetett betűtípusok listájának kell lennie
 @msg	names must be strings	a names elemeinek karakterláncoknak kell lenniük
@@ -4693,6 +4754,13 @@ mark-style	Japanese	Japán
 	TIFF (8-bit Color)	TIFF (8 bites színes)
 	TIFF (Black & White)	TIFF (fekete-fehér)
 	Tile	Mozaikelrendezés
+	Tile All Vertically	Összes mozaikelrendezése függőlegesen
+	Tile All Horizontally	Összes mozaikelrendezése vízszintesen
+	2-Up Layout	2-es elrendezés
+	3-Up Layout	3-as elrendezés
+	4-Up Layout	4-es elrendezés
+	6-Up Layout	6-os elrendezés
+	Arrange Documents	Dokumentumok elrendezése
 	Tile Edge Color	Csempeszél színe
 	Tile Edge Color…	Csempeszél színe…
 	Tile Full Pages	Teljes oldalak csempézése
@@ -4990,7 +5058,7 @@ mark-style	Japanese	Japán
 	Video Banner 2560×1440	Videós szalagcím 2560×1440
 	Video Thumbnail 1280×720	Videó-bélyegkép 1280×720
 	View	Nézet
-	View Artboard Only	Csak a rajztábla látszik
+	View Artboard Contents Only	Csak a rajztábla tartalma látszik
 	View Opacity Mask	Átlátszósági maszk megtekintése
 	View PDF after saving	PDF megtekintése mentés után
 	View {n}	Nézet {n}
@@ -5053,6 +5121,7 @@ mark-style	Japanese	Japán
 	Wrinkle Tool	Gyűrés
 	Write Layers	Rétegek írása
 	x Height	x-magasság
+	Em Box Height	Kvirtmező magassága
 	X11 (XWayland) When a Pen Is Attached	X11 (XWayland), ha toll csatlakozik
 	If a drawing tablet's pen doesn't draw, choose an X11 (XWayland) option.	Ha a grafikus tábla tolla nem rajzol, válassz egy X11 (XWayland) beállítást.
 	X11 (XWayland)	X11 (XWayland)
@@ -5202,6 +5271,8 @@ imageTrace	Outline	Körvonal
 @msg	`{min_key}` is greater than `{max_key}`	`{min_key}` nagyobb, mint `{max_key}`
 @msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	adj meg legalább egyet ezek közül: `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode`: grayscale, rgb, hsb, cmyk vagy websafe kell
+@msg	`view` must be wheel or box	`view`: wheel vagy box kell
+@msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel`: hue, saturation, brightness, red, green vagy blue kell
 @msg	`{k}` must be [x, y]	`{k}`: [x, y] kell
 @msg	`{name}` has no options	ennek nincsenek beállításai: `{name}`
 @msg	`{name}` is a built-in workspace; choose another name	beépített munkaterület: `{name}`; válassz másik nevet
@@ -5303,6 +5374,8 @@ imageTrace	Outline	Körvonal
 @msg	automation path rejected: outside the read root {root}: {path}	az automatizálás útvonala elutasítva: kívül esik az olvasási gyökéren ({root}): {path}
 @msg	automation path rejected: outside the read roots {roots}: {path}	az automatizálás útvonala elutasítva: kívül esik az olvasási gyökereken ({roots}): {path}
 @msg	a linked JavaScript file is outside the read roots	egy csatolt JavaScript-fájl kívül esik az olvasási gyökereken
+@msg	a linked image file is outside the read roots	egy csatolt képfájl kívül esik az olvasási gyökereken
+@msg	a linked file's export folder is outside the read roots	egy csatolt fájl exportálási mappája kívül esik az olvasási gyökereken
 @msg	automation path rejected: outside the write root {root}: {path}	az automatizálás útvonala elutasítva: kívül esik az írási gyökéren ({root}): {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	az automatizálás útvonala elutasítva: kívül esik az írási gyökereken ({roots}): {path}
 @msg	automation path rejected: parent traversal below a folder that doesn't exist: {path}	az automatizálás útvonala elutasítva: szülőmappára lépés egy nem létező mappa alatt: {path}
@@ -5327,6 +5400,7 @@ imageTrace	Outline	Körvonal
 @msg	bad trailer	hibás záró rész (trailer)
 @msg	balance must be between 0 and 100	a balance értéke 0 és 100 között lehet
 @msg	batch step {_1} (`{id}`) failed: {e}	a kötegelt lépés sikertelen: {_1} (`{id}`): {e}
+@msg	action step {_1} (`{id}`) failed: {reason}	a művelet lépése sikertelen: {_1} (`{id}`): {reason}
 @msg	before must name a panel	a before egy panelt kell megnevezzen
 @msg	below and above must name a panel floating in another group	a below és az above egy másik csoportban lebegő panelt kell megnevezzen
 @msg	Blend colors: select at least three objects with filled colours	Színek összemosása: jelölj ki legalább három kitöltött objektumot
@@ -5367,6 +5441,13 @@ imageTrace	Outline	Körvonal
 	Show External Script Warning	Figyelmeztetés külső parancsfájlok előtt
 	A Script Is Running	Egy parancsfájl fut
 	Script Alert	Parancsfájl-értesítés
+	Script File Access	Parancsfájl fájlhozzáférése
+	The script asks to read a file you choose.	A parancsfájl egy Ön által választott fájl olvasását kéri.
+	The script asks to read and write a file you choose.	A parancsfájl egy Ön által választott fájl olvasását és írását kéri.
+	The script asks to read and write a folder you choose, with everything in it.	A parancsfájl egy Ön által választott mappa és teljes tartalma olvasását és írását kéri.
+	Allow Once	Engedélyezés egyszer
+	Always Allow This Script	A parancsfájl engedélyezése mindig
+	Deny	Elutasítás
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	A parancsfájl módosíthatja a megnyitott dokumentumokat, és a futtatott parancsokkal fájlokat írhat. Csak megbízható parancsfájlokat futtasson.
 	Do not show this warning again	Ne jelenjen meg többé ez a figyelmeztetés
 	Stop the script and undo what it did? Then quit again.	Leállítja a parancsfájlt, és visszavonja a módosításait? Ezután lépjen ki újra.
@@ -5383,6 +5464,8 @@ imageTrace	Outline	Körvonal
 @msg	the script is no longer in the Scripts folder	a parancsfájl már nincs a Scripts mappában
 	Some scripts were not listed	Néhány szkript nem szerepel a listában
 	The Scripts folder cannot be read	A Scripts mappa nem olvasható
+	Loading scripts…	Szkriptek betöltése…
+	The Scripts folder is still being read	A Scripts mappa olvasása még tart
 @msg	the script's run is no longer available	a parancsfájl futása már nem érhető el
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	egy sikertelen parancs olyan visszavonási lépéseket módosított, amelyeket nem lehetett visszaállítani, ezért a parancsfájl leállt
 @msg	a recovery copy could not be written, so the script was not run	a helyreállítási másolatot nem sikerült kiírni, ezért a parancsfájl nem futott le
@@ -5395,8 +5478,6 @@ imageTrace	Outline	Körvonal
 @msg	Script file could not be read	A parancsfájlt nem sikerült beolvasni
 @msg	Script folder has more than 2,048 entries	A parancsfájlmappában 2048-nál több bejegyzés van
 @msg	Script file open mode must be r, w, e or a	A parancsfájl megnyitási módja r, w, e vagy a lehet
-@msg	Script file writing is not available	A parancsfájlok írása nem érhető el
-@msg	Script file dialogs are not available	A parancsfájlok fájlpárbeszédpanelei nem érhetők el
 @msg	Script files cannot be opened in another application	A parancsfájlok nem nyithatók meg másik alkalmazásban
 @msg	Script file access is unavailable on the web	A parancsfájlok elérése a weben nem érhető el
 @msg	Script has 256 files open	A parancsfájlnak 256 megnyitott fájlja van
@@ -5515,6 +5596,27 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	az `answers` csak olyan futtatáshoz való, ahol nincs kit megkérdezni: az alkalmazásban minden párbeszédpanelre a felhasználó válaszol
 @msg	Running a script	Parancsfájl futtatása
 @msg	Copied the script report	Szkriptjelentés másolva
+@msg	Script file access denied: {path}	A parancsfájl fájlhozzáférése megtagadva: {path}
+@msg	Script file access to the app's own folders is not allowed	A parancsfájlok nem férhetnek hozzá az alkalmazás saját mappáihoz
+@msg	Script file cannot encode the text	A parancsfájl fájlja nem tudja kódolni a szöveget
+@msg	Script file could not be written	A parancsfájl fájlját nem sikerült írni
+@msg	Script file dialogs need a person to answer them	A parancsfájl fájlpárbeszédpaneleire egy személynek kell válaszolnia
+@msg	Script file is not open for writing	A parancsfájl fájlja nincs írásra megnyitva
+@msg	Script file name is already in use	A parancsfájl fájljának neve már használatban van
+@msg	Script file name must be a name without a folder	A parancsfájl fájljának neve mappa nélküli név kell legyen
+@msg	Script file permission can be kept only for a script run from a file	A fájlengedély csak fájlból futtatott parancsfájlnál tartható meg
+@msg	Script file permission could not be saved	A parancsfájl fájlengedélyét nem sikerült menteni
+@msg	Script folder is not empty	A parancsfájl mappája nem üres
+@msg	Script files cannot make aliases	A parancsfájl fájljai nem hozhatnak létre álneveket
+@msg	Script file hidden setting cannot be changed	A parancsfájl fájljának rejtett beállítása nem módosítható
+@msg	{name}: a file dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: fájlpárbeszédpanel nem nyílhat meg beépített függvény, getter, átalakítás vagy a $.evalFile által futtatott fájl visszahívásán belül; hívja meg a parancsfájl saját kódjából
+@msg	the script wrote more file data than one run may write (32 MiB)	a parancsfájl több fájladatot írt, mint amennyit egy futás írhat (32 MiB)
+@msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	a parancsfájl fájlpárbeszédpaneléhez tartozó `answer` értéke a következők egyike kell legyen: once, always, deny, stop
+@msg	choose a file or folder first, or deny	először válasszon fájlt vagy mappát, vagy utasítsa el
+@msg	the script file permissions could not be saved: {e}	a parancsfájlok fájlengedélyeit nem sikerült menteni: {e}
+@msg	this script's file access can be allowed only once	ennek a parancsfájlnak a fájlhozzáférése csak egyszer engedélyezhető
+@msg	Only the person at the keyboard can allow a script's file access	Parancsfájl fájlhozzáférését csak a billentyűzetnél ülő személy engedélyezheti
+@msg	A script is given at most 2,048 files: the files picked after them were left out	Egy parancsfájl legfeljebb 2 048 fájlt kap: az ezek után kiválasztott fájlok kimaradtak
 @msg	Copied the link info	Csatolás adatai másolva
 @msg	Corners edits the corners of a path	a Sarkok parancs egy útvonal sarkait szerkeszti
 @msg	could not decode image: {0}	a kép nem dekódolható: {0}
@@ -5944,6 +6046,9 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	Saved to User Defined: {_1}	Mentve a felhasználóiak közé: {_1}
 @msg	Saved {n} files beside {path}	Mentett fájlok: {n}, a következő mellett: {path}
 @msg	Saved {path}	Mentve: {path}
+@msgplural	Copied with {n} note: {first}|Copied with {n} notes: {first}	Másolva; megjegyzések: {n}, az első: {first}
+@msgplural	Cut with {n} note: {first}|Cut with {n} notes: {first}	Kivágva; megjegyzések: {n}, az első: {first}
+@msgplural	Traced with {n} note: {first}|Traced with {n} notes: {first}	Kép vektorizálva; megjegyzések: {n}, az első: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Mentve: {path}; megjegyzések: {n}, az első: {first}
 @msg	Saving	Mentés
 @msg	Saving recovery data for {_1}	Helyreállítási adatok mentése: {_1}
@@ -6022,6 +6127,7 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	shadings of more than 4096 patches or triangles were left out	kimaradtak a 4096-nál több foltból vagy háromszögből álló árnyalások
 @msg	shadings whose functions are of an unknown type are filled with their middle colour	az ismeretlen típusú függvényt használó árnyalások a középső színükkel kitöltve jelennek meg
 @msg	Shape Builder: no region under the pointer	Alakzatépítő: a mutató alatt nincs terület
+@msg	Shape Builder: select all paths you want to merge	Alakzatépítő: jelöld ki az összes egyesítendő útvonalat
 @msg	Shape Builder: select paths or compound paths	Alakzatépítő: jelölj ki útvonalakat vagy összetett útvonalakat
 @msg	shortcut for `{k}` must be a string	`{k}` billentyűparancsa csak szöveg lehet
 @msg	Show All Hidden Attributes: nothing is hidden	Összes rejtett attribútum megjelenítése: nincs rejtett elem
@@ -6147,6 +6253,8 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	tool shortcuts must be a single key (optionally with Shift)	eszköz billentyűparancsa egyetlen billentyű lehet (Shifttel vagy anélkül)
 @msg	truncated	csonka
 @msg	Unembedded to {_1}	Beágyazás megszüntetve, ide: {_1}
+@msgplural	Unembedded {n} image to {folder}|Unembedded {n} images to {folder}	Beágyazás megszüntetve, képek: {n}, ide: {folder}
+@msg	every numbered name for {name} is taken in that folder	abban a mappában minden sorszámozott név foglalt: {name}
 @msg	unknown command `{0}`	ismeretlen parancs: `{0}`
 @msg	step {step} of “{action}” runs the unknown command `{command}`	„{action}”, lépés: {step}: ismeretlen parancsot futtat: `{command}`
 @msg	unknown command `{0}`; did you mean `{1}`?	ismeretlen parancs: `{0}`; erre gondolt: `{1}`?
@@ -6193,6 +6301,13 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	more than {MAX_CSV_ROWS} data sets: Import Data Sets reads at most {MAX_CSV_ROWS}	több mint {MAX_CSV_ROWS} adatkészlet: az Adatkészletek importálása legfeljebb {MAX_CSV_ROWS} adatkészletet olvas be
 @msg	more than {MAX_CSV_COLS} variables: Import Data Sets reads at most {MAX_CSV_COLS}	több mint {MAX_CSV_COLS} változó: az Adatkészletek importálása legfeljebb {MAX_CSV_COLS} változót olvas be
 @msg	variables that aren't text were left out: {kinds}	a nem szöveges változók kimaradtak: {kinds}
+variable-kind	Visibility	Láthatóság
+variable-kind	Linked File	Csatolt fájl
+variable-kind	Graph Data	Diagramadatok
+variable-kind	Unknown	Ismeretlen
+variable-list-two	{0}, {1}	{0} és {1}
+variable-list-middle	{0}, {1}	{0}, {1}
+variable-list-end	{0}, {1}	{0} és {1}
 @msg	a new document won't read these variables back with their kind: {names}	egy új dokumentum nem a fajtájukkal olvassa vissza ezeket a változókat: {names}
 @msg	a new document refuses this file because of these variables: {names}	egy új dokumentum ezen változók miatt elutasítja ezt a fájlt: {names}
 @msg	the header `{header}` for `{name}` would read back as the variable `{other}`: rename one of them	a(z) `{name}` változó `{header}` fejléce a(z) `{other}` változóként olvasódna vissza: nevezze át az egyiket
@@ -6238,6 +6353,8 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	{label}: lost track of a shape's style	{label}: egy alakzat stílusa elveszett
 @msg	{label}: select paths	{label}: jelölj ki útvonalakat
 @msg	{label}: select paths, compound paths, groups or text	{label}: jelölj ki útvonalakat, összetett útvonalakat, csoportokat vagy szöveget
+@msg	a line or other open path that encloses no area does not change the result's shape; to include it, apply Object › Path › Outline Stroke to it first	egy vonal vagy más nyitott útvonal, amely nem zár közre területet, nem változtatja meg az eredmény alakját; a felvételéhez előbb alkalmazza rá az Objektum › Útvonal › Körvonal útvonallá alakítása parancsot
+@msg	{label} produced an empty result: a line or other open path encloses no area; to include it, apply Object › Path › Outline Stroke to it first	üres eredmény: {label}: egy vonal vagy más nyitott útvonal nem zár közre területet; a felvételéhez előbb alkalmazza rá az Objektum › Útvonal › Körvonal útvonallá alakítása parancsot
 @msg	{label}…	{label}…
 @msg	{name}: CRC mismatch	{name}: CRC-eltérés
 @msg	{name}: no local header	{name}: nincs helyi fejléc
@@ -7367,6 +7484,12 @@ anchor	Points:	Pontok:
 @msg	`mode` must be "free", "keepAngles" or "symmetric"	`mode`: "free", "keepAngles" vagy "symmetric" kell
 @msg	`{key}` must be [x, y]	`{key}`: [x, y] kell
 
+# Unit Converter add-on (Object › Plug-ins › Unit Converter): its panel.
+	Unit Converter	Mértékegység-átváltó
+	Unit Converter Panel	Mértékegység-átváltó panel
+	Copy with Units	Másolás mértékegységgel
+	From Selection	A kijelölésből
+
 # Color Effects add-on: Select by Color Kind.
 	Select by Color Kind	Kijelölés színtípus szerint
 	Objects with Spot Colors	Direkt színeket használó objektumok
@@ -8180,7 +8303,7 @@ breakText	Glyphs	Glifák
 @msg	`scale` must be a number from 0.001 to 1000	`scale`: 0.001 és 1000 közötti szám kell
 @msg	`scale` must be a number in (0, 100]	`scale`: a (0, 100] tartományba eső szám kell
 @msg	`scope.{key}` must be a non-empty array	`scope.{key}`: nem üres tömb kell
-@msg	`scope` must be "document", {artboards} or {layers}	`scope`: "document", {artboards} vagy {layers} kell
+@msg	`scope` must be "document", {{artboards: [index, …]}} or {{layers: [id, …]}}	`scope`: "document", {{artboards: [index, …]}} vagy {{layers: [id, …]}} kell
 @msg	`scope` must be "selection" or "document", not {other}	`scope`: "selection" vagy "document" kell, ez nem az: {other}
 @msg	`script` must be a string	`script`: karakterlánc kell
 @msg	`seriesIndexes` is a non-empty list of series indexes	`seriesIndexes`: adatsorindexek nem üres listája
@@ -8259,6 +8382,8 @@ breakText	Glyphs	Glifák
 @msg	`{f}` is the copy of a document open now	egy most megnyitott dokumentum másolata: `{f}`
 @msg	`{id}` is no writable format (see document.formats)	nem írható formátum: `{id}` (lásd: document.formats)
 @msg	`{id}` isn't a loaded library	nem betöltött könyvtár: `{id}`
+@msg	`{file}` has no swatches of its own	nincsenek saját színminták: `{file}`
+@msg	`{_1}` has pattern swatches, which a .vcswatches file can't hold	mintázatszínmintákat tartalmaz, amelyeket egy .vcswatches fájl nem tud tárolni: `{_1}`
 @msg	`{key}` has no colours	`{key}`: nincsenek benne színek
 @msg	`{key}` holds more than {MAX_EDIT_WORDS} words	`{key}`: több mint {MAX_EDIT_WORDS} szót tartalmaz
 @msg	`{key}` is a design name	`{key}`: diagramminta neve
@@ -8550,7 +8675,13 @@ breakText	Glyphs	Glifák
 @msg	colorModel must be {own} (the document's mode), grayscale or bitmap	colorModel: {own} (a dokumentum módja), grayscale vagy bitmap kell
 @msg	colour groups can't go into colour groups	színcsoport nem kerülhet színcsoportba
 @msg	colour, mode and spot apply to solid-colour swatches only	colour, mode és spot: csak egyszínű színmintákra vonatkozik
-@msg	column {column}: `{cell}` is a `%` column of graph data files, which are not read	{column}. oszlop: `{cell}` a diagramadat-fájlok `%` oszlopa, ezek beolvasása nem történik meg
+@msg	line {line}, column {column}: the graph data file `{path}` for `{var}` is a relative path: give `base`, or an absolute path	{line}. sor, {column}. oszlop: a(z) `{var}` `{path}` diagramadat-fájlja relatív elérési út: adja meg a `base` értéket vagy egy abszolút elérési utat
+@msg	line {line}, column {column}: the graph data file for `{var}` can't be read: {e}	{line}. sor, {column}. oszlop: a(z) `{var}` diagramadat-fájlja nem olvasható: {e}
+@msg	line {line}, column {column}: the graph data file `{path}` for `{var}` isn't followed: {r}	{line}. sor, {column}. oszlop: a(z) `{var}` diagramadat-fájlja nem lesz követve: `{path}`: {r}
+@msg	line {line}, column {column}: the graph data file `{path}` for `{var}` is larger than {MAX_GRAPH_DATA_FILE} bytes	{line}. sor, {column}. oszlop: a(z) `{var}` `{path}` diagramadat-fájlja nagyobb {MAX_GRAPH_DATA_FILE} bájtnál
+@msg	line {line}, column {column}: the graph data file `{path}` for `{var}` gives a graph value longer than {MAX_GRAPH_CSV} bytes	{line}. sor, {column}. oszlop: a(z) `{var}` `{path}` diagramadat-fájlja {MAX_GRAPH_CSV} bájtnál hosszabb diagramértéket ad
+@msg	line {line}, column {column}: the graph data files hold more than {MAX_GRAPH_FILES_TOTAL} bytes in all	{line}. sor, {column}. oszlop: a diagramadat-fájlok összesen több mint {MAX_GRAPH_FILES_TOTAL} bájtot tartalmaznak
+@msg	`base` is empty	a `base` üres
 @msg	column {column}: `{cell}` names `{name}`, which is a {_1} variable	{column}. oszlop: `{cell}` ezt nevezi meg: `{name}`, amely {_1} típusú változó
 @msg	column {column}: `{cell}` names no variable	{column}. oszlop: `{cell}` nem nevez meg változót
 @msg	column {column}: the variable name is longer than {MAX_NAME} characters	{column}. oszlop: a változó neve hosszabb {MAX_NAME} karakternél
@@ -9073,7 +9204,7 @@ breakText	Glyphs	Glifák
 @msg	nothing to print: every artboard picked is blank	nincs mit nyomtatni: minden kiválasztott rajztábla üres
 @msg	nothing to print: the document has no art that prints	nincs mit nyomtatni: a dokumentumban nincs nyomtatásra kerülő grafika
 @msg	nothing to repeat	nincs mit ismételni
-@msg	numbers out of order in {_1} quantifier	a számok rossz sorrendben vannak ebben a kvantorban: {_1}
+@msg	numbers out of order in {{}} quantifier	a számok rossz sorrendben vannak ebben a kvantorban: {{}}
 @msg	object is not a path	az objektum nem útvonal
 @msg	object transparency cannot be sampled onto highlighted characters; disable Transparency in Eyedropper Options or select the whole object	az objektum átlátszósága nem vehető át kiemelt karakterekre; kapcsold ki az Átlátszóság beállítást a Pipetta beállításaiban, vagy jelöld ki a teljes objektumot
 @msg	object {_1} can't be set as point type	ez az objektum nem állítható be pontszövegként: {_1}
@@ -9433,7 +9564,7 @@ breakText	Glyphs	Glifák
 @msg	the page has no area	az oldalnak nincs területe
 @msg	the page's type in an unread object's box isn't in its page art	az oldal egy be nem olvasott objektum keretében lévő szövege nincs benne az oldal grafikájában
 @msg	the paint behind the proxy is not a gradient	a mintadoboz mögötti festés nem színátmenet
-@msg	the paint is not a freeform gradient (apply one with paint.editGradient {kind})	a festés nem szabad formájú színátmenet (alkalmazz egyet a paint.editGradient {kind} paranccsal)
+@msg	the paint is not a freeform gradient (apply one with paint.editGradient {{kind: "freeform"}})	a festés nem szabad formájú színátmenet (alkalmazz egyet a paint.editGradient {{kind: "freeform"}} paranccsal)
 @msg	the parameters or body do not form one function	a paraméterek vagy a törzs nem alkotnak egyetlen függvényt
 @msg	the parent must be a layer or sublayer	a szülő réteg vagy alréteg kell legyen
 @msg	the pasted SVG filter {name} draws differently from the document's filter of that name, and no free name fits it	a beillesztett SVG-szűrő ({name}) másképp rajzol, mint a dokumentum azonos nevű szűrője, és nem jut neki szabad név
@@ -9917,3 +10048,13 @@ breakText	Glyphs	Glifák
 @msg	A panel is not joined to the rest by a crease.	Egy panelt egyetlen bigvonal sem köt a többihez.
 @msg	A fold line is on a non-printing layer.	Egy hajtásvonal nem nyomtatható rétegen van.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panelek: {panels}, zsanérok: {hinges}, hibák: {errors}, figyelmeztetések: {warnings}
+	Fold Preview	Hajtás előnézete
+	Fold	Hajtás
+	Show Fold Lines	Hajtásvonalak megjelenítése
+	Three-Quarter	Háromnegyed
+	Open a document to preview its folded shape.	Nyiss meg egy dokumentumot a hajtogatott alakja előnézetéhez.
+@msg	Check the fold lines first.	Előbb ellenőrizd a hajtásvonalakat.
+@msg	Panels: {panels}, hinges: {hinges}	Panelek: {panels}, zsanérok: {hinges}
+@msg	Other blanks not shown: {count}	További kiterítékek nincsenek megjelenítve: {count}
+@msg	A joint does not close by {gap} pt.	Egy illesztés {gap} pt-tal nem záródik.
+@msg	Two panels pass through each other.	Két panel áthatol egymáson.

@@ -10,19 +10,26 @@ use crate::menus;
 /// and the exact tiers read the whole query.
 const INDEX_CHARS: usize = 200;
 
-/// The field of a result a word comes from, best first.
+/// The field of a result a word comes from, best first, and the fields of the English stem forms
+/// ([`stems`]) of the words of the label and the menu path.
 const LABEL: u8 = 0;
 const PATH: u8 = 1;
 const ID: u8 = 2;
+const LABEL_STEMMED: u8 = 3;
+const PATH_STEMMED: u8 = 4;
 
 /// A word's grade in a result, best first: a whole word of the label, a word of the label it
-/// starts, a word of the menu path it is or starts, a word of the id it is or starts, or text
-/// inside a word of any field ([`super::matching`]'s substring rule).
-const LABEL_WORD: u8 = 1;
-const LABEL_PREFIX: u8 = 2;
-const PATH_WORD: u8 = 3;
-const ID_WORD: u8 = 4;
-const SUBSTRING: u8 = 5;
+/// shares an English stem form with ("outlines" and Outline), a word of the label it starts, a
+/// word of the menu path it is, shares a stem form with or starts, a word of the id it is or
+/// starts, or text inside a word of any field ([`super::matching`]'s substring rule). The grades
+/// without a stem are twice the values they had before stems were added, so results matched
+/// without a stem keep their order by the sum of the grades.
+const LABEL_WORD: u8 = 2;
+const LABEL_STEM: u8 = 3;
+const LABEL_PREFIX: u8 = 4;
+const PATH_WORD: u8 = 6;
+const ID_WORD: u8 = 8;
+const SUBSTRING: u8 = 10;
 const NONE: u8 = u8::MAX;
 
 /// How a whole query matches a result, best first: it is the result's id, it is a label, a label
@@ -34,7 +41,7 @@ const INITIALS: u8 = 3;
 const NO_PHRASE: u8 = 4;
 
 /// One result in the list of a term: the result's place in the catalog and the field the term is
-/// a word of.
+/// a word or a word's stem form of.
 #[derive(Clone, Copy)]
 struct Posting {
     entry: u16,
@@ -73,6 +80,70 @@ fn initials_of(label: &str) -> String {
         .collect()
 }
 
+/// The English stem forms of the lowercased `word`, at most two, and none for a word that is not
+/// plain English letters. `'s` is dropped; `sses` becomes `ss`; `es` after `s`, `x`, `z`, `ch` or
+/// `sh` is dropped, and with only its `s` dropped the word is a second form (`boxes`, `box` and
+/// `boxe`; `rasterizes`, `rasteriz` and `rasterize`); in a word of more than 5 letters, `ies`
+/// becomes `y` or `ie` (`copies`, `copy` and `copie`; `movies`, `movy` and `movie`); `ing` (more
+/// than 5 letters) and `ed` (more than 4) are dropped, and when a doubled `b`, `d`, `g`, `m`, `n`,
+/// `p`, `r` or `t` is left before them, the rest with that letter made single and the rest as it
+/// is are the forms (`cutting`, `cut` and `cutt`), the single one only when it keeps at least 3
+/// letters (`added`, `add` alone); otherwise the rest and the rest followed by `e` are the forms
+/// (`scaling`, `scal` and `scale`); a final `s` is dropped from a word of more than 3 letters that
+/// does not end in `ss`, `us` or `is`. `series` and `species` have none.
+fn stems(word: &str) -> Vec<String> {
+    let one = |rest: &str| if rest.is_empty() { vec![] } else { vec![rest.to_string()] };
+    if !word.bytes().all(|b| b.is_ascii_lowercase() || b == b'\'') || matches!(word, "series" | "species") {
+        return vec![];
+    }
+    let n = word.len();
+    if let Some(rest) = word.strip_suffix("'s") {
+        return one(rest);
+    }
+    if let Some(rest) = word.strip_suffix("sses") {
+        return vec![format!("{rest}ss")];
+    }
+    if let Some(rest) = word.strip_suffix("es")
+        && ["s", "x", "z", "ch", "sh"].iter().any(|end| rest.ends_with(end))
+    {
+        return vec![rest.to_string(), format!("{rest}e")];
+    }
+    if n > 5
+        && let Some(rest) = word.strip_suffix("ies")
+    {
+        return vec![format!("{rest}y"), format!("{rest}ie")];
+    }
+    let verb = if n > 5 { word.strip_suffix("ing") } else { None }.or_else(|| if n > 4 { word.strip_suffix("ed") } else { None });
+    if let Some(rest) = verb {
+        if let [.., a, b] = rest.as_bytes()
+            && a == b
+            && b"bdgmnprt".contains(a)
+        {
+            let single = rest.get(..rest.len() - 1).unwrap_or_default();
+            if single.len() < 3 {
+                return vec![rest.to_string()];
+            }
+            return vec![single.to_string(), rest.to_string()];
+        }
+        return vec![rest.to_string(), format!("{rest}e")];
+    }
+    if n > 3 && word.ends_with('s') && !["ss", "us", "is"].iter().any(|end| word.ends_with(end)) {
+        return one(word.get(..n - 1).unwrap_or_default());
+    }
+    vec![]
+}
+
+/// Adds each word of `text` to `found` for result `entry` in `field`, and with `stemmed`, each
+/// word's English stem forms in that field.
+fn add_words(found: &mut Vec<(String, u16, u8)>, text: &str, entry: u16, field: u8, stemmed: Option<u8>) {
+    for w in words(text) {
+        found.push((w.to_string(), entry, field));
+        if let Some(stemmed) = stemmed {
+            found.extend(stems(w).into_iter().map(|s| (s, entry, stemmed)));
+        }
+    }
+}
+
 /// A name's last `›`-separated part (the label) and the parts before it (the menu path).
 fn split_name(name: &str) -> (&str, &str) {
     match name.rsplit_once(" › ") {
@@ -99,9 +170,10 @@ fn ids(e: &Entry) -> impl Iterator<Item = &str> {
 
 impl Index {
     /// The index of `entries`, whose menu homes and menu items read `homes` in the UI language. The
-    /// words of a result's menu home and of its menu item's label count as menu path words. A
-    /// catalog with more results than a posting can name gets an empty index, and queries match by
-    /// the substring rule alone.
+    /// words of a result's menu home and of its menu item's label count as menu path words. The
+    /// words of the English names, menu home and menu item label also add their English stem forms
+    /// ([`stems`]); words in the UI language do not. A catalog with more results than a posting can
+    /// name gets an empty index, and queries match by the substring rule alone.
     pub(crate) fn build(entries: &[Entry], homes: &[Option<String>]) -> Index {
         if entries.len() > usize::from(u16::MAX) {
             return Index::default();
@@ -114,10 +186,13 @@ impl Index {
             let id = ids(e).next().unwrap_or_default();
             let start = initials_text.len();
             let mut seen_initials: Vec<String> = vec![];
-            for name in names(e) {
+            // The first two names are English, so their words also give stem forms; the shown name
+            // may be in another language, and its words are indexed as they are.
+            for (n, name) in names(e).enumerate() {
+                let english = n < 2;
                 let (label, path) = split_name(without_id(name, id));
-                found.extend(words(label).map(|w| (w.to_string(), entry, LABEL)));
-                found.extend(words(path).map(|w| (w.to_string(), entry, PATH)));
+                add_words(&mut found, label, entry, LABEL, english.then_some(LABEL_STEMMED));
+                add_words(&mut found, path, entry, PATH, english.then_some(PATH_STEMMED));
                 let ini = initials_of(label);
                 if ini.chars().count() >= 2 && !seen_initials.contains(&ini) {
                     if !seen_initials.is_empty() {
@@ -127,8 +202,11 @@ impl Index {
                     seen_initials.push(ini);
                 }
             }
-            for home in [e.home.as_deref(), Some(e.menu_item), homes.get(i).and_then(Option::as_deref)].into_iter().flatten() {
-                found.extend(words(&home.to_lowercase()).map(|w| (w.to_string(), entry, PATH)));
+            for home in [e.home.as_deref(), Some(e.menu_item)].into_iter().flatten() {
+                add_words(&mut found, &home.to_lowercase(), entry, PATH, Some(PATH_STEMMED));
+            }
+            if let Some(home) = homes.get(i).and_then(Option::as_deref) {
+                add_words(&mut found, &home.to_lowercase(), entry, PATH, None);
             }
             for id in ids(e) {
                 found.extend(words(id).map(|w| (w.to_string(), entry, ID)));
@@ -183,10 +261,33 @@ impl Index {
         self.term_text.get(offset..offset + len as usize).unwrap_or_default()
     }
 
-    /// The best grade (1 to 4) `word` gets in each result, [`NONE`] where it is no word and starts
-    /// no word of the result. The words it starts are found by a binary search of the sorted words.
+    /// The postings of the word at place `t` in `terms`.
+    fn postings_of(&self, t: usize) -> &[Posting] {
+        let Some(&(begin, len)) = self.spans.get(t) else { return &[] };
+        let (begin, len) = (begin as usize, len as usize);
+        self.postings.get(begin..begin + len).unwrap_or_default()
+    }
+
+    /// The place of the word `text` in `terms`, found by a binary search.
+    fn find(&self, text: &str) -> Option<usize> {
+        self.terms.binary_search_by(|t| self.text(t).cmp(text)).ok()
+    }
+
+    /// The best grade ([`LABEL_WORD`] to [`ID_WORD`]) `word` gets in each result, [`NONE`] where it
+    /// is no word, shares no English stem form with a word of the label or menu path, and starts no
+    /// word of the result. The words it starts are found by a binary search of the sorted words; a
+    /// stem form matches only a word or stem form equal to it.
     fn grades(&self, word: &str, n: usize) -> Vec<u8> {
         let mut out = vec![NONE; n];
+        let mut mark = |postings: &[Posting], grade: &dyn Fn(u8) -> Option<u8>| {
+            for p in postings {
+                if let Some(grade) = grade(p.field)
+                    && let Some(g) = out.get_mut(usize::from(p.entry))
+                {
+                    *g = (*g).min(grade);
+                }
+            }
+        };
         let start = self.terms.partition_point(|t| self.text(t) < word);
         for (t, at) in self.terms.iter().enumerate().skip(start) {
             let term = self.text(at);
@@ -194,19 +295,37 @@ impl Index {
                 break;
             }
             let whole = term == word;
-            let Some(&(begin, len)) = self.spans.get(t) else { continue };
-            let (begin, len) = (begin as usize, len as usize);
-            for p in self.postings.get(begin..begin + len).unwrap_or_default() {
-                let grade = match p.field {
-                    LABEL if whole => LABEL_WORD,
-                    LABEL => LABEL_PREFIX,
-                    PATH => PATH_WORD,
-                    _ => ID_WORD,
-                };
-                if let Some(g) = out.get_mut(usize::from(p.entry)) {
-                    *g = (*g).min(grade);
-                }
-            }
+            // A stem form is not a word of the result, so a query word that only starts it does
+            // not match.
+            mark(self.postings_of(t), &|field| match field {
+                LABEL if whole => Some(LABEL_WORD),
+                LABEL => Some(LABEL_PREFIX),
+                PATH => Some(PATH_WORD),
+                ID => Some(ID_WORD),
+                _ => None,
+            });
+        }
+        // The word meets a stem form of a word of the result ("scale" and Scaling) when it is itself
+        // a word of some result, so a partly typed word ("scal") that only equals a stem form does
+        // not lift Scaling above Scale.
+        if let Some(t) = self.find(word)
+            && self.postings_of(t).iter().any(|p| matches!(p.field, LABEL | PATH | ID))
+        {
+            mark(self.postings_of(t), &|field| match field {
+                LABEL_STEMMED => Some(LABEL_STEM),
+                PATH_STEMMED => Some(PATH_WORD),
+                _ => None,
+            });
+        }
+        // A stem form of the word meets a word of the result or a stem form of one ("outlines"
+        // and Outline, "rotated" and Rotating). Ids are not stemmed.
+        for form in stems(word) {
+            let Some(t) = self.find(&form) else { continue };
+            mark(self.postings_of(t), &|field| match field {
+                LABEL | LABEL_STEMMED => Some(LABEL_STEM),
+                PATH | PATH_STEMMED => Some(PATH_WORD),
+                _ => None,
+            });
         }
         out
     }
@@ -267,10 +386,11 @@ type RankKey = (u8, u8, u32, u8, usize);
 /// The results of `entries` that the lowercased `query` matches, best first, as places in
 /// `entries`. A result matches when every word of the query is text in one of its names or ids
 /// (the rule the palette always had, so nothing it found is lost), when every word of the query is
-/// or starts a word of its label, menu path or id, or when the query is the initials of a label
-/// ("ea" for Export As…). Results are ordered by how the whole query matches ([`phrase`]), then by
-/// the worst grade a word gets, the sum of the grades, the kind of result ([`kind`]), the label's
-/// length and the catalog order. An empty query lists every result in catalog order.
+/// or starts a word of its label, menu path or id or shares an English stem form with a word of its
+/// label or menu path ("rounded corners" for Round Corners…), or when the query is the initials of
+/// a label ("ea" for Export As…). Results are ordered by how the whole query matches ([`phrase`]),
+/// then by the worst grade a word gets, the sum of the grades, the kind of result ([`kind`]), the
+/// label's length and the catalog order. An empty query lists every result in catalog order.
 pub(crate) fn rank(entries: &[Entry], index: &Index, query: &str) -> Vec<u32> {
     let query = normalize(query);
     if query.is_empty() {
@@ -412,8 +532,13 @@ mod tests {
         for (query, better, worse) in [
             // A whole word of the label, then a word of the label it starts.
             ("cut zz", entry("Zz Cut", "a.one"), entry("Zz Cutter", "b.two")),
+            // A whole word of the label, then a word of the label it shares a stem form with.
+            ("scale zz", entry("Zz Scale", "a.one"), entry("Zz Scaling", "b.two")),
+            // A word of the label it shares a stem form with, then a word of the label it starts.
+            // The id makes "scale" a word of the catalog.
+            ("scale zz", entry("Zz Scaling", "a.one"), entry("Zz Scalers", "scale.two")),
             // A word of the label it starts, then a word of the menu path.
-            ("fill zz", entry("Zz Filling", "a.one"), entry("Fill › Zz Other", "b.two")),
+            ("fill zz", entry("Zz Fillet", "a.one"), entry("Fill › Zz Other", "b.two")),
             // A word of the menu path, then a word of the id.
             ("zap zz", entry("Zap › Zz One", "a.one"), entry("Zz Two", "zap.two")),
             // A word of the id, then text inside a word.
@@ -424,6 +549,38 @@ mod tests {
             let c = synthetic(vec![worse, better]);
             assert_eq!(ranked(&c, query), [b, w], "{query}");
         }
+    }
+
+    /// A partly typed word that equals only a stem form ("scal" of Scaling, "spac" of Spacing) is a
+    /// word the query starts in both results, so the shorter label stays first.
+    #[test]
+    fn a_partly_typed_word_does_not_lift_a_verb_form() {
+        for (query, base, form) in [("scal zz", "Zz Scale", "Zz Scaling"), ("spac zz", "Zz Space", "Zz Spacing"), ("ad zz", "Zz Add", "Zz Added")] {
+            let c = synthetic(vec![entry(form, "a.one"), entry(base, "b.two")]);
+            assert_eq!(ranked(&c, query), ["b.two", "a.one"], "{query}");
+        }
+    }
+
+    /// How the whole query matches comes before the word grades, so a stem form ranks above a word
+    /// the query starts only among results in the same whole-query tier: "scale" lists Scale, then
+    /// Scalers, which starts with the query, then Scaling, and "scale zz" lists Zz Scaling above Zz
+    /// Scalers.
+    #[test]
+    fn a_whole_query_tier_comes_before_a_stem_form() {
+        let c = synthetic(vec![entry("Scaling", "c.three"), entry("Scalers", "b.two"), entry("Scale", "a.one")]);
+        assert_eq!(ranked(&c, "scale"), ["a.one", "b.two", "c.three"]);
+        let c = synthetic(vec![entry("Zz Scalers", "b.two"), entry("Zz Scaling", "a.one"), entry("Zz Scale", "c.three")]);
+        assert_eq!(ranked(&c, "scale zz"), ["c.three", "a.one", "b.two"]);
+    }
+
+    /// Results that no stem form matches keep the order they had before stems were added: two
+    /// results whose grades summed the same still tie on the sum, and the shorter label comes
+    /// first.
+    #[test]
+    fn results_matched_without_a_stem_keep_their_order() {
+        // Two label prefixes and a menu path word, against a label word and two menu path words.
+        let c = synthetic(vec![entry("Bet › Gam › Alp Zzzzzzzzzz", "b.two"), entry("Gam › Alpx Betx", "a.one")]);
+        assert_eq!(ranked(&c, "alp bet gam"), ["a.one", "b.two"]);
     }
 
     /// For each pair of adjacent whole-query tiers, a result in the better tier ranks above one in
@@ -473,6 +630,77 @@ mod tests {
             let first = rank(&en.list, &en.index, q).first().and_then(|&i| en.list.get(i as usize)).map(|e| e.shown.to_lowercase());
             let label = first.as_deref().map(|n| split_name(n).0.to_string()).unwrap_or_default();
             assert!(words(&label).any(|w| w.starts_with(q)), "{q}: {first:?}");
+        }
+    }
+
+    /// Do `a` and `b` share a form, each taken as it is or as one of its stem forms?
+    fn meet(a: &str, b: &str) -> bool {
+        let forms = |w: &str| std::iter::once(w.to_string()).chain(stems(w)).collect::<Vec<_>>();
+        let b = forms(b);
+        forms(a).iter().any(|f| b.contains(f))
+    }
+
+    /// English plurals and verb forms meet their base word, and words that only look alike do not.
+    #[test]
+    fn plurals_and_verb_forms_meet_their_base_word() {
+        for (a, b) in [
+            ("outlines", "outline"),
+            ("rounded", "round"),
+            ("paths", "path"),
+            ("cutting", "cut"),
+            ("scaling", "scale"),
+            ("rotated", "rotate"),
+            ("spacing", "space"),
+            ("tracing", "trace"),
+            ("curved", "curve"),
+            ("filled", "fill"),
+            ("missing", "missing"),
+            ("boxes", "box"),
+            ("brushes", "brush"),
+            ("glasses", "glass"),
+            ("copies", "copy"),
+            ("movies", "movie"),
+            ("artist's", "artist"),
+            ("rotated", "rotating"),
+            ("added", "add"),
+            ("rasterizes", "rasterize"),
+            ("sizes", "size"),
+        ] {
+            assert!(meet(a, b), "{a} meets {b}");
+        }
+        for (a, b) in [("series", "sery"), ("missing", "mis"), ("press", "pres"), ("bus", "bu"), ("axis", "axi"), ("cutting", "cu"), ("added", "ad")]
+        {
+            assert!(!meet(a, b), "{a} does not meet {b}");
+        }
+        for w in ["outlines", "scaling", "cutting", "copies", "s", "'s", "ed", "ing", "übers", "群組", "series"] {
+            assert!(stems(w).len() <= 2, "{w}");
+            assert!(stems(w).iter().all(|s| !s.is_empty() && s != w), "{w}: {:?}", stems(w));
+        }
+        assert!(stems("übers").is_empty() && stems("series").is_empty() && stems("species").is_empty());
+    }
+
+    /// A query word in a plural or verb form finds a result whose label or menu path holds the base
+    /// word, below one that holds the word itself, and the words of a name shown in another language
+    /// are not stemmed.
+    #[test]
+    fn a_plural_or_verb_form_finds_the_result() {
+        let c = synthetic(vec![entry("Zz Rotate", "a.one"), entry("Spacing › Zz Other", "b.two"), entry("Zz Rotated", "c.three")]);
+        assert_eq!(ranked(&c, "rotating"), ["a.one", "c.three"]);
+        assert_eq!(ranked(&c, "rotated"), ["c.three", "a.one"]);
+        assert_eq!(ranked(&c, "spaces other"), ["b.two"], "through the menu path");
+        let shown = Entry { shown: "Zz Trees".into(), haystack: "zz one\nzz one\nzz trees\na.one".into(), ..entry("Zz One", "a.one") };
+        let c = synthetic(vec![shown, entry("Zz Trees", "b.two")]);
+        assert_eq!(ranked(&c, "treed zz"), ["b.two"], "only the English name is stemmed");
+        let en = catalog(Lang::EN, false);
+        assert!(place(&en, "outlines", "type.createOutlines").is_some_and(|p| p < 3));
+        assert_eq!(ranked(&en, "rounded corners").first().map(String::as_str), Some("effect:stylize.roundCorners"));
+        for (q, id) in [
+            ("scaling", "object.scale"),
+            ("rotated", "object.rotate"),
+            ("rasterizes", "object.rasterize"),
+            ("added anchor points", "object.path.addAnchorPoints"),
+        ] {
+            assert!(place(&en, q, id).is_some(), "{q} finds {id}");
         }
     }
 
