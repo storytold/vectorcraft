@@ -268,6 +268,8 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	no such spine point	intet sådant rygradpunkt
 @msg	`with` must be a list of at most 10000 spine point indexes	`with` skal være en liste med højst 10000 rygradpunktindekser
 @msg	`with` moves points, not a handle	`with` flytter punkter, ikke et håndtag
+@msg	`link` and `independent` cannot both be true	`link` og `independent` kan ikke begge være true
+@msg	`link` places a handle: give `handle`	`link` placerer et håndtag: angiv `handle`
 @msg	no such spine segment	intet sådant rygradsegment
 @msg	node {_1} is on a locked artboard	node {_1} ligger på en låst tegneflade
 @msg	not a blend	ikke en blanding

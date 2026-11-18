@@ -4,7 +4,8 @@
 //! Delete: click an anchor to remove it, re-fitting the neighbouring curve (Alt = add).
 //! Anchor Point: click a smooth anchor → corner; drag an anchor → pull out smooth handles; click a
 //! handle end → retract that handle only (#2267); drag a handle → move it independently (Shift: at
-//! 45° steps round its anchor); drag a segment → reshape the curve, a selected blend's spine's too,
+//! 45° steps round its anchor; Alt: link it with the opposite handle, the anchor made smooth, except
+//! when the Pen lends the tool); drag a segment → reshape the curve, a selected blend's spine's too,
 //! straight or curved (#1111; Shift: its handles at right angles to the line between its anchors,
 //! at one length). Shift held at the press on an anchor moves it instead, handles and all (Shift
 //! still held: at 45° steps from where it was). Space held during a convert- or handle-drag moves
@@ -103,6 +104,9 @@ pub struct AnchorTool {
     measure: Option<(Point, f64, f64)>,
     /// While Space is held during a convert/handle drag, the shape gesture to return to.
     space_resume: Option<SpaceResume>,
+    /// Lent by the Pen for its Alt gestures: Alt-dragging a handle moves it independently, as
+    /// without Alt, instead of linking it with the opposite handle.
+    lent: bool,
 }
 
 impl AnchorTool {
@@ -113,7 +117,20 @@ impl AnchorTool {
             "scissors" => "scissors",
             _ => "addAnchor",
         };
-        Self { id, state: State::Idle, guides: vec![], snap: HandleSnap::default(), measure: None, space_resume: None }
+        Self { id, state: State::Idle, guides: vec![], snap: HandleSnap::default(), measure: None, space_resume: None, lent: false }
+    }
+
+    /// The Anchor Point tool as the Pen lends it with Alt held: an Alt-drag on a handle moves only
+    /// that handle.
+    pub(crate) fn lent_by_pen() -> Self {
+        Self { lent: true, ..Self::new("anchorPoint") }
+    }
+
+    /// The handle-drag params: Alt held on the chosen Anchor Point tool links the handle with the
+    /// opposite one, making the anchor smooth; otherwise the handle moves independently.
+    fn handle_mode(&self, mut params: serde_json::Value, alt: bool) -> serde_json::Value {
+        params[if alt && !self.lent { "link" } else { "independent" }] = json!(true);
+        params
     }
 
     fn anchor_pos(cx: &ToolContext, id: NodeId, si: usize, ai: usize) -> Option<Point> {
@@ -458,7 +475,10 @@ impl Tool for AnchorTool {
                         };
                         Action::Preview(
                             "object.blend.spine.moveAnchor".into(),
-                            json!({"id": id.0, "anchor": ai, "handle": if out { "out" } else { "in" }, "x": q.x, "y": q.y, "independent": true}),
+                            self.handle_mode(
+                                json!({"id": id.0, "anchor": ai, "handle": if out { "out" } else { "in" }, "x": q.x, "y": q.y}),
+                                ev.mods.alt,
+                            ),
                         )
                     }
                     State::Handle { id, si, ai, out, .. } => {
@@ -466,7 +486,10 @@ impl Tool for AnchorTool {
                         self.guides = guides;
                         Action::Preview(
                             "path.setHandle".into(),
-                            json!({"id": id.0, "subpath": si, "anchor": ai, "which": if out { "out" } else { "in" }, "x": q.x, "y": q.y, "independent": true}),
+                            self.handle_mode(
+                                json!({"id": id.0, "subpath": si, "anchor": ai, "which": if out { "out" } else { "in" }, "x": q.x, "y": q.y}),
+                                ev.mods.alt,
+                            ),
                         )
                     }
                     State::Reshape { id, seg, t, start, spine: true, .. } => Action::Preview(
