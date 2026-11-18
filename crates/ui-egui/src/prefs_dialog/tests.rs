@@ -2230,8 +2230,8 @@ fn hovering_a_hyphenation_row_shows_its_description() {
 }
 
 /// Tab from the search field reaches Hyphenation's Default Language menu and then its Exceptions
-/// field: the line shows each one's sentence in turn, and a screen reader gets it as the focused
-/// control's description.
+/// field, in that order and before the focus comes back to the search field: the line shows each
+/// one's sentence in turn, and a screen reader gets it as the focused control's description.
 #[test]
 fn keyboard_focus_on_a_hyphenation_row_shows_its_description() {
     let mut a = app();
@@ -2241,21 +2241,27 @@ fn keyboard_focus_on_a_hyphenation_row_shows_its_description() {
     crate::theme::install_fonts(&ctx);
     description_frame(&mut a, &ctx, vec![]);
     description_frame(&mut a, &ctx, vec![]);
+    assert!(ctx.memory(|m| m.has_focus(search_edit_id())), "the search field has the focus on open");
     let language = descriptions::description("hyphenationLanguage").expect("Default Language has a sentence");
     let exceptions = descriptions::description("hyphenationExceptions").expect("Exceptions has a sentence");
-    let mut tab_to = |sentence: &str| {
-        for _ in 0..40 {
-            let (texts, described) = description_frame(&mut a, &ctx, key_press(egui::Key::Tab, egui::Modifiers::NONE));
-            if painted(&texts, sentence) {
-                return Some(described);
-            }
+    let mut language_seen = false;
+    let mut exceptions_seen = false;
+    for _ in 0..40 {
+        let (texts, described) = description_frame(&mut a, &ctx, key_press(egui::Key::Tab, egui::Modifiers::NONE));
+        assert!(!ctx.memory(|m| m.has_focus(search_edit_id())), "Tab came back to the search field before both rows were reached");
+        if painted(&texts, language) {
+            assert!(!exceptions_seen, "Tab reached the Exceptions row before the Default Language row");
+            assert!(described.iter().any(|d| d == language), "the focused menu carries the sentence: {described:?}");
+            language_seen = true;
+        } else if painted(&texts, exceptions) {
+            assert!(language_seen, "Tab reached the Exceptions row before the Default Language row");
+            assert!(described.iter().any(|d| d == exceptions), "the focused field carries the sentence: {described:?}");
+            exceptions_seen = true;
+            break;
         }
-        None
-    };
-    let described = tab_to(language).expect("Tab reaches the Default Language row and its sentence shows");
-    assert!(described.iter().any(|d| d == language), "the focused menu carries the sentence: {described:?}");
-    let described = tab_to(exceptions).expect("Tab goes on to the Exceptions row and its sentence shows");
-    assert!(described.iter().any(|d| d == exceptions), "the focused field carries the sentence: {described:?}");
+    }
+    assert!(language_seen, "Tab reaches the Default Language row and its sentence shows");
+    assert!(exceptions_seen, "Tab goes on to the Exceptions row and its sentence shows");
 }
 
 /// A sentence shown when the dialog closed does not come back when it opens again with the
