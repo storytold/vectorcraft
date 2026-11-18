@@ -185,6 +185,27 @@ fn a_marquee_over_a_locked_guide_in_a_group_selects_nothing() {
     assert_eq!(marquee(true, 90.0, 130.0), Some(json!([gid.0])), "unlocked: the guide");
 }
 
+/// #8538: an enclosing marquee measures a group without the locked or hidden guides in it, as the
+/// marquee leaves them out: a group whose art lies inside is taken though a guide in it reaches
+/// past the marquee. While guides can be picked, the guide counts.
+#[test]
+fn an_enclosing_marquee_measures_a_group_without_its_locked_guides() {
+    let mut d = Document::new(800.0, 600.0);
+    let l = d.layers[0].id;
+    let (gid, guide_id, art_id) = (d.alloc_id(), d.alloc_id(), d.alloc_id());
+    let square = |id, r| vectorcraft_doc::Node::path(id, vectorcraft_geom::shapes::rectangle(r), vectorcraft_doc::Appearance::default_art());
+    let mut guide = square(guide_id, Rect::new(500.0, 100.0, 520.0, 120.0));
+    if let NodeKind::Path { guide, .. } = &mut guide.kind {
+        *guide = true;
+    }
+    let art = square(art_id, Rect::new(100.0, 100.0, 120.0, 120.0));
+    d.insert(Some(l), 0, vectorcraft_doc::Node::group(gid, vec![std::sync::Arc::new(guide), std::sync::Arc::new(art)])).unwrap();
+    let (none, p) = (Selection::default(), paint());
+    let r = Rect::new(50.0, 50.0, 200.0, 200.0);
+    assert_eq!(crate::select::inside(&ToolContext { guides: false, ..cx(&d, &none, &p) }, r, vec![gid]), [gid], "locked or hidden");
+    assert!(crate::select::inside(&ToolContext { guides: true, ..cx(&d, &none, &p) }, r, vec![gid]).is_empty(), "shown and unlocked");
+}
+
 /// #955: grabbed by an anchor and dropped near another object's anchor, the anchor lands
 /// exactly on it with Smart Guides, even where lining the bounds up would leave it beside it.
 #[test]

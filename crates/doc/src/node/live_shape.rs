@@ -375,10 +375,6 @@ pub struct Scaling {
     /// a point (no area left), as a Transform effect leaves them, instead of being fixed to their
     /// fit and flattened to one color with the object.
     pub keep_fit_when_flat: bool,
-    /// The paths made into guides inside a transformed group, layer or Intertwine group stay
-    /// where they are, as a ruler guide in a transformed layer does: View › Guides › Lock Guides
-    /// is on (#8538). A guide transformed by itself still moves.
-    pub keep_guides: bool,
 }
 
 impl Scaling {

@@ -65,13 +65,6 @@ pub(crate) fn transforms_objects(p: &Value) -> bool {
     bool_or(p, "objects", true)
 }
 
-/// Do the locked guides inside the groups a transform moves stay where they are
-/// ([`Scaling::keep_guides`])? While View › Guides › Lock Guides is on, unless the transform makes
-/// copies: the original guides stay then, and the copies go with the copied art (#8538).
-pub(crate) fn keeps_guides(s: &Session, copy: bool) -> bool {
-    s.menu.guides_locked && !copy
-}
-
 /// The on/off params of the transform commands that [`apply_transform`], [`scaling`],
 /// [`transform_patterns`] and [`transforms_objects`] read. The transform commands in this file
 /// check them with [`check_switches`] before they change anything.
@@ -118,7 +111,6 @@ fn apply_transform_moving_guides(
     let objects = transforms_objects(p);
     let mut sc = if Scaling::factor(xf).is_some() { scaling(s, p) } else { Scaling::default() };
     sc.patterns = transform_patterns(s, p, &ids)?;
-    sc.keep_guides = keeps_guides(s, copy);
     let c = xf.as_coeffs();
     let is_translation = (c[0] - 1.0).abs() < 1e-9 && c[1].abs() < 1e-9 && c[2].abs() < 1e-9 && (c[3] - 1.0).abs() < 1e-9;
     let delta = guides.unwrap_or(Vec2::new(c[4], c[5]));

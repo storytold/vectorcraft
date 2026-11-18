@@ -1684,8 +1684,11 @@ impl DirectSelectionTool {
         }
         // Anchors inside the rect, on editable paths inside isolation mode.
         let mut sel: Vec<(NodeId, Vec<AnchorRef>)> = vec![];
+        // Guide paths only while guides can be picked: not while they are locked or hidden (#8538).
         walk_pickable(cx.doc, cx.isolation, |n| {
-            if let NodeKind::Path { path, .. } = &n.kind {
+            if let NodeKind::Path { path, guide, .. } = &n.kind
+                && (cx.guides || !*guide)
+            {
                 let v: Vec<AnchorRef> = path.anchors().filter(|(_, _, a)| r.contains(a.p)).map(|(s, i, _)| (s, i)).collect();
                 if !v.is_empty() {
                     sel.push((n.id, v));
@@ -1785,7 +1788,8 @@ impl DirectSelectionTool {
         let mut crossed: Vec<(NodeId, Vec<AnchorRef>)> = vec![];
         if !self.group {
             walk_pickable(cx.doc, cx.isolation, |n| {
-                if let NodeKind::Path { path, .. } = &n.kind
+                if let NodeKind::Path { path, guide, .. } = &n.kind
+                    && (cx.guides || !*guide)
                     && editable(n.id)
                 {
                     let segs = crossed_segments(path, r);

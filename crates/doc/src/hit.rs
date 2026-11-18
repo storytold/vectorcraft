@@ -2124,31 +2124,20 @@ pub fn enclosure_candidates(doc: &Document, r: Rect, scope: Option<NodeId>, outl
     marquee_with(doc, r, scope, true, true, outline, skip_guides)
 }
 
-thread_local! {
-    /// Whether the marquee under way leaves out the paths made into guides ([`GuidesOff`]).
-    static GUIDES_OFF: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+/// What a marquee ([`marquee_with`]) takes, besides where it is: whether a compound path is
+/// touched by every path it paints (`whole_compounds`, for an enclosing loop's candidates), and
+/// whether the paths made into guides are left out (`skip_guides`: Lock Guides is on or the
+/// guides are hidden, [`HitOptions::skip_guides`] for the marquee).
+#[derive(Clone, Copy)]
+struct Rules {
+    whole_compounds: bool,
+    skip_guides: bool,
 }
 
-/// While a guard lives, a marquee ([`marquee_with`]) touches no path made into a guide, at any
-/// level: [`HitOptions::skip_guides`] for the marquee.
-struct GuidesOff {
-    was: bool,
-}
-
-impl GuidesOff {
-    fn set() -> Self {
-        Self { was: GUIDES_OFF.replace(true) }
-    }
-
-    /// Is `n` a path made into a guide that the marquee under way leaves out?
-    fn skips(n: &Node) -> bool {
-        GUIDES_OFF.get() && matches!(n.kind, NodeKind::Path { guide: true, .. })
-    }
-}
-
-impl Drop for GuidesOff {
-    fn drop(&mut self) {
-        GUIDES_OFF.set(self.was);
+impl Rules {
+    /// Is `n` a path made into a guide that the marquee leaves out?
+    fn skips(self, n: &Node) -> bool {
+        self.skip_guides && matches!(n.kind, NodeKind::Path { guide: true, .. })
     }
 }
 
@@ -2167,7 +2156,7 @@ fn marquee_with(
     skip_guides: bool,
 ) -> Vec<NodeId> {
     let _walk = ArtWalk::open();
-    let _guides = skip_guides.then(GuidesOff::set);
+    let rules = Rules { whole_compounds, skip_guides };
     let mut out = Vec::new();
     // The locks first: they copy the kept art boxes that `symbols` takes, and `symbols` keeps theirs.
     let locks = doc.locked_artboards_kept();
@@ -2181,7 +2170,7 @@ fn marquee_with(
             Some(c) => {
                 // In an isolated clip group, its members by their own geometry, as clicks take
                 // them ([`edits_inside`]).
-                let drawn = if s.clips() { None } else { touched_in_art(s, &symbols, r, whole_compounds, outline || previews_off(s)) };
+                let drawn = if s.clips() { None } else { touched_in_art(s, &symbols, r, rules, outline || previews_off(s)) };
                 c.iter()
                     .enumerate()
                     .filter(|(i, c)| !c.is_ruler_guide() && !shaper_hides(s, *i, scope))
@@ -2203,7 +2192,7 @@ fn marquee_with(
             .layers
             .iter()
             .filter(|l| l.visible && !l.locked && !l.is_template() && doc.pattern_edit.as_ref().is_none_or(|e| e.layer == l.id))
-            .flat_map(|l| layer_objects(l, &symbols, r, outline, whole_compounds, None))
+            .flat_map(|l| layer_objects(l, &symbols, r, outline, rules, None))
             .collect(),
     };
     /// The objects of layer `l`, each with the part of `r` that the clipping masks of `l` and of
@@ -2212,17 +2201,10 @@ fn marquee_with(
     /// shapes ([`mask_marquee`]). In a layer whose own geometry effects reshape its art, each object
     /// comes with the objects that art touches ([`touched_in_art`]), `drawn` when a layer around
     /// `l` has such effects.
-    fn layer_objects<'a>(
-        l: &'a Node,
-        s: &SymbolBoxes,
-        r: Rect,
-        outline: bool,
-        whole_compounds: bool,
-        drawn: Option<Rc<HashSet<NodeId>>>,
-    ) -> Vec<Top<'a>> {
+    fn layer_objects<'a>(l: &'a Node, s: &SymbolBoxes, r: Rect, outline: bool, rules: Rules, drawn: Option<Rc<HashSet<NodeId>>>) -> Vec<Top<'a>> {
         let mut out = vec![];
         let outline = outline || previews_off(l);
-        let drawn = drawn.or_else(|| touched_in_art(l, s, r, whole_compounds, outline));
+        let drawn = drawn.or_else(|| touched_in_art(l, s, r, rules, outline));
         let inner = marquee_in_parent(l, r, outline);
         for (i, c) in l.children().into_iter().flatten().enumerate() {
             if c.is_layer() {
@@ -2231,7 +2213,7 @@ fn marquee_with(
                     && !c.locked
                     && !c.is_template()
                 {
-                    out.extend(layer_objects(c, s, inner, outline, whole_compounds, drawn.clone()));
+                    out.extend(layer_objects(c, s, inner, outline, rules, drawn.clone()));
                 }
             } else if !c.is_ruler_guide() {
                 if drawn.is_some() {
@@ -2248,12 +2230,12 @@ fn marquee_with(
     /// The ids of the objects of the art that group or layer `n` draws with its own geometry
     /// effects ([`drawn_art`]) that the marquee `r` touches, as [`collect_leaves`] collects them.
     /// `None` in outline and when it has no such effects.
-    fn touched_in_art(n: &Node, s: &SymbolBoxes, r: Rect, whole_compounds: bool, outline: bool) -> Option<Rc<HashSet<NodeId>>> {
+    fn touched_in_art(n: &Node, s: &SymbolBoxes, r: Rect, rules: Rules, outline: bool) -> Option<Rc<HashSet<NodeId>>> {
         let art = drawn_art(s, n, outline)?;
         let _off = DrawnOff::set();
         let mut ids = vec![];
         for a in art.iter().filter(|a| a.visible) {
-            collect_leaves(a, s, r, None, whole_compounds, false, &mut ids);
+            collect_leaves(a, s, r, None, rules, false, &mut ids);
         }
         Some(Rc::new(ids.into_iter().collect()))
     }
@@ -2310,16 +2292,16 @@ fn marquee_with(
     /// instance also where its fills and strokes paint outside it ([`painted_touches`]). A clipping
     /// path is touched by its own geometry ([`mask_marquee`]) and on the edge of its region
     /// ([`clip_edge_touches`]).
-    fn touches(n: &Node, s: &SymbolBoxes, r: Rect, scope: Option<NodeId>, whole_compounds: bool, outline: bool) -> bool {
-        // Locked or hidden guides are not touched ([`GuidesOff`]).
-        if GuidesOff::skips(n) {
+    fn touches(n: &Node, s: &SymbolBoxes, r: Rect, scope: Option<NodeId>, rules: Rules, outline: bool) -> bool {
+        // Locked or hidden guides are not touched ([`Rules::skips`]).
+        if rules.skips(n) {
             return false;
         }
         // A path or compound path whose geometry effects reshape it, or a group or layer whose own
         // geometry effects reshape its members, is touched where that art is drawn ([`drawn_art`]).
         if let Some(art) = drawn_art(s, n, outline || previews_off(n)) {
             let _off = DrawnOff::set();
-            return art.iter().any(|a| a.visible && touches(a, s, r, None, whole_compounds, false));
+            return art.iter().any(|a| a.visible && touches(a, s, r, None, rules, false));
         }
         match &n.kind {
             NodeKind::Path { path, .. } => vectorcraft_geom::hit::intersects_rect(path, r),
@@ -2330,25 +2312,26 @@ fn marquee_with(
                     c.visible
                         && !shaper_hides(n, i, scope)
                         && if i == 0 && n.clips() {
-                            plain(true, || mask_marquee(n, r).is_some_and(|r| touches(c, s, r, scope, whole_compounds, outline)))
+                            plain(true, || mask_marquee(n, r).is_some_and(|r| touches(c, s, r, scope, rules, outline)))
                                 || clip_edge_touches(c, r, outline)
                         } else {
-                            inner.is_some_and(|r| touches(c, s, r, scope, whole_compounds, outline))
+                            inner.is_some_and(|r| touches(c, s, r, scope, rules, outline))
                         }
                 })
             }
-            NodeKind::Compound { children, .. } if whole_compounds => {
-                children.iter().filter_map(|c| c.path_data()).any(|path| vectorcraft_geom::hit::intersects_rect(path, r))
+            NodeKind::Compound { children, .. } if rules.whole_compounds => {
+                // Guide contours left out ([`Rules::skips`]) don't make the compound a candidate.
+                children.iter().filter(|c| !rules.skips(c)).filter_map(|c| c.path_data()).any(|path| vectorcraft_geom::hit::intersects_rect(path, r))
             }
-            NodeKind::Compound { children, .. } => children.iter().any(|c| c.visible && touches(c, s, r, scope, whole_compounds, outline)),
-            NodeKind::Repeat(spec) => spec.expand(Some(s.document())).iter().any(|copy| touches(copy, s, r, scope, whole_compounds, outline)),
+            NodeKind::Compound { children, .. } => children.iter().any(|c| c.visible && touches(c, s, r, scope, rules, outline)),
+            NodeKind::Repeat(spec) => spec.expand(Some(s.document())).iter().any(|copy| touches(copy, s, r, scope, rules, outline)),
             // A symbol instance is touched by its box, and outside it where the live geometry
             // effects of a clipping path in its art show the art, or where the geometry effects of
             // its active fill or stroke reshape the art ([`painted_touches`]). In the art of another
             // instance walked outside that instance's box, it is touched only by its own art
             // ([`ArtOnly`]) and those shapes.
             NodeKind::SymbolInstance { .. } => {
-                !ArtOnly::on() && box_touches(n, s, r) || !outline && (instance_art_touches(n, s, r, whole_compounds) || painted_touches(n, s, r))
+                !ArtOnly::on() && box_touches(n, s, r) || !outline && (instance_art_touches(n, s, r, rules) || painted_touches(n, s, r))
             }
             // An image is touched by its box, and outside it where its own fills and strokes paint.
             NodeKind::Image(_) => box_touches(n, s, r) || !outline && painted_touches(n, s, r),
@@ -2377,7 +2360,7 @@ fn marquee_with(
     /// ([`SymbolBoxes::art`]), or for any art while [`ArtOnly`] is on, and only when `r` meets the
     /// instance's reach ([`Node::reach_bounds_with`]): elsewhere the art lies within the instance's
     /// box. Not once the marquee has placed as many objects of symbol art as [`ArtWalk`] allows.
-    fn instance_art_touches(n: &Node, s: &SymbolBoxes, r: Rect, whole_compounds: bool) -> bool {
+    fn instance_art_touches(n: &Node, s: &SymbolBoxes, r: Rect, rules: Rules) -> bool {
         let NodeKind::SymbolInstance { symbol, .. } = &n.kind else { return false };
         let meets = |b: Rect| b.x0 <= r.x1 && r.x0 <= b.x1 && b.y0 <= r.y1 && r.y0 <= b.y1;
         if s.art(symbol).is_none_or(|a| a.reshaped.is_none() && !ArtOnly::on()) || !n.reach_bounds_with(s).is_some_and(meets) {
@@ -2394,15 +2377,15 @@ fn marquee_with(
         #[cfg(test)]
         ARTS_WALKED.with(|c| c.set(c.get() + 1));
         let _art_only = ArtOnly::set();
-        art.place(&art.art, None).is_some_and(|placed| placed.visible && touches(&placed, s, r, None, whole_compounds, false))
+        art.place(&art.art, None).is_some_and(|placed| placed.visible && touches(&placed, s, r, None, rules, false))
     }
-    fn collect_leaves(n: &Node, s: &SymbolBoxes, r: Rect, scope: Option<NodeId>, whole_compounds: bool, outline: bool, out: &mut Vec<NodeId>) {
+    fn collect_leaves(n: &Node, s: &SymbolBoxes, r: Rect, scope: Option<NodeId>, rules: Rules, outline: bool, out: &mut Vec<NodeId>) {
         match &n.kind {
             NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } | NodeKind::Intertwine { children } => {
                 let outline = outline || previews_off(n);
                 // The members that the art its own geometry effects draw touches, and a group whose
                 // own fills and strokes that art paints, as clicks hit it ([`member_chain`]).
-                if let Some(drawn) = touched_in_art(n, s, r, whole_compounds, outline) {
+                if let Some(drawn) = touched_in_art(n, s, r, rules, outline) {
                     if drawn.contains(&n.id) && !n.is_layer() {
                         out.push(n.id);
                     }
@@ -2417,18 +2400,18 @@ fn marquee_with(
                     if i == 0 && n.clips() {
                         let before = out.len();
                         if let Some(r) = mask_marquee(n, r) {
-                            plain(true, || collect_leaves(c, s, r, scope, whole_compounds, outline, out));
+                            plain(true, || collect_leaves(c, s, r, scope, rules, outline, out));
                         }
                         if out.len() == before && is_leaf(c) && clip_edge_touches(c, r, outline) {
                             out.push(c.id);
                         }
                     } else if let Some(r) = inner {
-                        collect_leaves(c, s, r, scope, whole_compounds, outline, out);
+                        collect_leaves(c, s, r, scope, rules, outline, out);
                     }
                 }
             }
             _ => {
-                if touches(n, s, r, scope, whole_compounds, outline) {
+                if touches(n, s, r, scope, rules, outline) {
                     out.push(n.id);
                 }
             }
@@ -2463,14 +2446,12 @@ fn marquee_with(
         if leaves {
             let before = out.len();
             if let Some(r) = r {
-                collect_leaves(t, &symbols, r, scope, whole_compounds, outline, &mut out);
+                collect_leaves(t, &symbols, r, scope, rules, outline, &mut out);
             }
             if edge.is_some_and(|e| out.len() == before && is_leaf(t) && clip_edge_touches(t, e, outline)) {
                 out.push(t.id);
             }
-        } else if r.is_some_and(|r| touches(t, &symbols, r, scope, whole_compounds, outline))
-            || edge.is_some_and(|e| clip_edge_touches(t, e, outline))
-        {
+        } else if r.is_some_and(|r| touches(t, &symbols, r, scope, rules, outline)) || edge.is_some_and(|e| clip_edge_touches(t, e, outline)) {
             out.push(t.id);
         }
     }

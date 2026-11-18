@@ -909,6 +909,29 @@ fn a_marquee_skips_guide_paths_in_groups_while_guides_are_locked() {
     assert_eq!(enclosure_candidates(&d, on_inner, None, false, false), [inner_id]);
 }
 
+/// #8538: an enclosing loop's candidates leave out a compound path whose touched contours are all
+/// locked or hidden guides, as the marquee does.
+#[test]
+fn guide_contours_do_not_make_a_compound_an_enclosure_candidate() {
+    let mut d = Document::new(300.0, 200.0);
+    let l = d.layers[0].id;
+    let part = |d: &mut Document, r: Rect| {
+        let mut n = Node::path(d.alloc_id(), shapes::rectangle(r), Appearance::default_art());
+        if let NodeKind::Path { guide, .. } = &mut n.kind {
+            *guide = true;
+        }
+        Arc::new(n)
+    };
+    let (a, b) = (part(&mut d, Rect::new(10.0, 10.0, 50.0, 50.0)), part(&mut d, Rect::new(20.0, 20.0, 40.0, 40.0)));
+    let id = d.alloc_id();
+    let mut compound = Node::group(id, vec![]);
+    compound.kind = NodeKind::Compound { children: vec![a, b], rule: Default::default() };
+    d.insert(Some(l), 0, compound).unwrap();
+    let r = Rect::new(0.0, 0.0, 60.0, 60.0);
+    assert!(enclosure_candidates(&d, r, None, false, true).is_empty(), "locked or hidden");
+    assert_eq!(enclosure_candidates(&d, r, None, false, false), [id], "shown and unlocked");
+}
+
 /// A selected path in a Shaper group's original shapes, where an outer mask hides it, counts only
 /// while those shapes can be clicked (Construction mode, with them isolated), however deep it
 /// lies in them.
