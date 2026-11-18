@@ -37,7 +37,8 @@ use axis::{nice_axis, tick_values};
 #[cfg(test)]
 use columns::{fill_totals, total_text};
 pub use commands::specs;
-pub(crate) use data::{apply_csv, parse_csv};
+pub use data::{MAX_GRAPH_DATA_FILE, graph_cell_text, graph_data_from_grid, graph_data_text, graph_grid_from_text};
+pub(crate) use data::{apply_csv, graph_csv_from_file, parse_csv};
 #[cfg(test)]
 use data::{fmt_value, to_csv};
 pub use edit::{GraphTypeSubject, graph_type_subject};
