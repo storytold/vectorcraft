@@ -6,7 +6,6 @@ use std::cell::Cell;
 struct Fake {
     window: Option<u8>,
     suspended: Vec<u8>,
-    current: Option<Key>,
     sets: usize,
     builds: usize,
     restores: Vec<u8>,
@@ -27,17 +26,12 @@ impl Backend for Fake {
     fn restore(&mut self, w: &u8) {
         self.suspended.retain(|v| v != w);
         self.restores.push(*w);
-        self.current = None;
     }
     fn build(&mut self, r: &Request) -> Option<Key> {
         self.builds += 1;
         (!self.fail).then_some(r.key)
     }
-    fn current(&self) -> Option<Key> {
-        self.current
-    }
-    fn set(&mut self, cursor: &Key) {
-        self.current = Some(*cursor);
+    fn set(&mut self, _: &Key) {
         self.sets += 1;
     }
 }
@@ -66,19 +60,16 @@ fn deliver(state: &mut State<Fake>, request: Option<Request>) {
 }
 
 #[test]
-fn mac_cursor_ownership_deduplicates_reasserts_and_restores() {
+fn mac_cursor_ownership_reasserts_every_pass_and_restores() {
     let req = request(1.0);
     let mut state = fake_state();
     deliver(&mut state, Some(req.clone()));
     assert_eq!(state.backend.suspended, [1]);
     assert_eq!((state.backend.builds, state.backend.sets), (1, 1));
+    // The pointer moves and AppKit shows the system arrow, but the app's current cursor
+    // still reads as ours. The next pass sets it again without rebuilding or re-suspending.
     deliver(&mut state, Some(req.clone()));
-    assert_eq!(state.backend.sets, 1);
-    // Simulate a platform fallback replacing the cursor after finalization. The next pass
-    // reasserts; this proves the protocol, not AppKit timing or absence of transient flicker.
-    state.backend.current = None;
-    deliver(&mut state, Some(req.clone()));
-    assert_eq!(state.backend.sets, 2);
+    assert_eq!((state.backend.builds, state.backend.sets, state.backend.suspended.len()), (1, 2, 1));
     deliver(&mut state, None);
     assert_eq!(state.backend.restores, [1]);
     deliver(&mut state, Some(req.clone()));

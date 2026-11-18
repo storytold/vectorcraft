@@ -1,13 +1,19 @@
 //! File → Document Setup: General (units, bleed, Edit Artboards, outline images, the substituted
 //! glyphs highlight), Transparency (grid size and colours, simulated paper, flattener preset, white
-//! overprint) and Type (language, quotes, superscript/subscript/small caps, text export) tabs.
+//! overprint), Type (language, quotes, superscript/subscript/small caps, text export) and Color
+//! (document color mode and assigned profiles) tabs.
 //!
-//! Fields: what `document.setup` reports (and takes back), plus `tab` and `bleedLinked`. OK runs
-//! `document.setup` with them: one undo step. On an error the dialog stays open.
+//! Fields: what `document.setup` reports (and takes back), plus `tab`, `bleedLinked` and the Color
+//! tab's `colorMode`, `convertColors`, `rgbProfile` and `cmykProfile` (null: the working space).
+//! OK runs `document.setup` with them: one undo step. When the Color tab changed something, OK runs
+//! `document.setup`, `edit.assignProfile` and `file.documentColorMode` in one `command.batch`,
+//! and the document's changes are still one undo step. On an error the dialog stays open.
 
-use serde_json::{Value, json};
+use serde_json::{Map, Value, json};
+use vectorcraft_color::cms::ProfileKind;
 use vectorcraft_doc::setup::{GRID_COLOR_PRESETS, LANGUAGES};
-use vectorcraft_doc::{GridSize, Quotes, Unit};
+use vectorcraft_doc::{ColorMode, GridSize, Quotes, Unit};
+use vectorcraft_engine::cmd::colormgmt::doc_profiles;
 
 use super::{DialogSpec, form};
 use crate::state::Dialog;
@@ -15,10 +21,13 @@ use crate::theme::Tokens;
 use crate::{VectorcraftApp, widgets};
 
 pub(super) const KIND: &str = "documentSetup";
-const TABS: [&str; 3] = ["General", "Transparency", "Type"];
+const TABS: [&str; 4] = ["General", "Transparency", "Type", "Color"];
 /// Dialog-only fields `document.setup` doesn't take.
-const UI_ONLY: [&str; 2] = ["tab", "bleedLinked"];
+const UI_ONLY: [&str; 6] = ["tab", "bleedLinked", "colorMode", "convertColors", "rgbProfile", "cmykProfile"];
 pub(super) const LABEL: f32 = 130.0;
+/// The profile rows' entry for no assigned profile: the document uses the working space.
+const WORKING_RGB: &str = "Working RGB (don't tag)";
+const WORKING_CMYK: &str = "Working CMYK (don't tag)";
 
 pub(super) const SPEC: DialogSpec =
     DialogSpec { heading: |_| tl!("Document Setup").into(), body, confirm, min_width: 540.0, max_width: Some(540.0), ..DialogSpec::FORM };
@@ -29,13 +38,76 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let linked = fields["bleed"].as_array().is_some_and(|b| b.windows(2).all(|w| w[0] == w[1]));
     fields["bleedLinked"] = json!(linked);
     fields["tab"] = json!(TABS[0]);
+    if let Some(st) = app.session.active() {
+        let (rgb, cmyk) = doc_profiles(&st.doc);
+        fields["colorMode"] = json!(mode_id(st.doc.color_mode));
+        fields["rgbProfile"] = json!(rgb);
+        fields["cmykProfile"] = json!(cmyk);
+    }
+    fields["convertColors"] = json!(true);
     app.ui.dialog = Some(Dialog::new(KIND, fields));
     Ok(Value::Null)
 }
 
+/// The `mode` param of `file.documentColorMode` for `m`.
+fn mode_id(m: ColorMode) -> &'static str {
+    match m {
+        ColorMode::Rgb => "rgb",
+        ColorMode::Cmyk => "cmyk",
+    }
+}
+
+/// The commands the Color tab's changes run, as `command.batch` steps, in the order OK runs them:
+/// Edit › Assign Profile first, so that a mode change converts through the profiles it assigns,
+/// then File › Document Color Mode. Empty when the tab matches the active document. A field the
+/// dialog holds with a value of the wrong kind is an error, and then nothing runs; an omitted
+/// field leaves its setting as it is (`convertColors`: converts).
+fn color_commands(app: &VectorcraftApp, d: &Dialog) -> Result<Vec<Value>, String> {
+    let Some(st) = app.session.active() else { return Ok(vec![]) };
+    let mut out = vec![];
+    let (rgb, cmyk) = doc_profiles(&st.doc);
+    let mut assign = Map::new();
+    for (key, param, current) in [("rgbProfile", "rgb", rgb), ("cmykProfile", "cmyk", cmyk)] {
+        let chosen = match d.fields.get(key) {
+            None => continue,
+            Some(Value::Null) => None,
+            Some(Value::String(n)) => Some(n.clone()),
+            Some(_) => return Err(format!("`{key}` must be a profile name or null")),
+        };
+        if chosen != current {
+            assign.insert(param.into(), json!(chosen));
+        }
+    }
+    let mode = match d.fields.get("colorMode") {
+        None => None,
+        Some(Value::String(m)) if m.eq_ignore_ascii_case("rgb") => Some(ColorMode::Rgb),
+        Some(Value::String(m)) if m.eq_ignore_ascii_case("cmyk") => Some(ColorMode::Cmyk),
+        Some(_) => return Err("`colorMode` must be one of rgb, cmyk".into()),
+    };
+    let key = "convertColors";
+    let convert = match d.fields.get(key) {
+        None => true,
+        Some(Value::Bool(b)) => *b,
+        Some(_) => return Err(format!("`{key}` must be true or false")),
+    };
+    if !assign.is_empty() {
+        out.push(json!({"command": "edit.assignProfile", "params": assign}));
+    }
+    if let Some(mode) = mode.filter(|m| *m != st.doc.color_mode) {
+        out.push(json!({"command": "file.documentColorMode", "params": {"mode": mode_id(mode), "convert": convert}}));
+    }
+    Ok(out)
+}
+
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    let params = d.fields.iter().filter(|(k, _)| !UI_ONLY.contains(&k.as_str())).map(|(k, v)| (k.clone(), v.clone())).collect();
-    let r = app.run("document.setup", Value::Object(params));
+    let params: Map<String, Value> = d.fields.iter().filter(|(k, _)| !UI_ONLY.contains(&k.as_str())).map(|(k, v)| (k.clone(), v.clone())).collect();
+    let color = color_commands(app, d)?;
+    let r = if color.is_empty() {
+        app.run("document.setup", Value::Object(params))
+    } else {
+        let commands: Vec<Value> = std::iter::once(json!({"command": "document.setup", "params": params})).chain(color).collect();
+        app.run("command.batch", json!({"label": "Document Setup", "commands": commands}))
+    };
     if r.is_ok() {
         app.ui.dialog = None;
     }
@@ -54,7 +126,8 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         match tab {
             0 => close = general(app, ui, d),
             1 => transparency(app, ui, d),
-            _ => typography(ui, d),
+            2 => typography(ui, d),
+            _ => color(app, ui, d),
         }
     });
     close
@@ -102,17 +175,30 @@ fn general(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool 
     close
 }
 
+/// The id of the Transparency tab's box that shows grid color `index` (0 or 1).
+fn grid_color_box_id(index: usize) -> egui::Id {
+    egui::Id::unique(("grid-color-box", index))
+}
+
+/// The grid colors' hex codes that Document Setup `d` holds now (empty strings for entries that are
+/// not strings).
+fn grid_colors(d: &Dialog) -> Vec<String> {
+    d.fields.get("gridColors").and_then(Value::as_array).map(|a| a.iter().map(|c| c.as_str().unwrap_or("").to_string()).collect()).unwrap_or_default()
+}
+
 fn transparency(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     let t = Tokens::get(ui.ctx());
     widgets::subheader(ui, tl!("Transparency Grid"));
     let sizes: Vec<(&str, &str)> = GridSize::ALL.iter().map(|g| (g.id(), g.label())).collect();
     choice(ui, d, "gridSize", tl!("Grid Size:"), &sizes);
-    let colors: Vec<String> = d
-        .fields
-        .get("gridColors")
-        .and_then(Value::as_array)
-        .map(|a| a.iter().map(|c| c.as_str().unwrap_or("").to_string()).collect())
-        .unwrap_or_default();
+    // A preset name in the fields (any case, as `document.setup` takes it) becomes the preset's two
+    // colors, which the hex fields and the Color Picker edit one at a time.
+    if let Some((_, pair)) =
+        d.fields.get("gridColors").and_then(Value::as_str).and_then(|n| GRID_COLOR_PRESETS.iter().find(|(p, _)| p.eq_ignore_ascii_case(n)))
+    {
+        d.fields.insert("gridColors".into(), json!(pair.map(|c| c.to_hex())));
+    }
+    let colors = grid_colors(d);
     let preset = GRID_COLOR_PRESETS
         .iter()
         .find(|(_, pair)| colors.len() == 2 && colors.iter().zip(pair).all(|(h, c)| h.eq_ignore_ascii_case(&c.to_hex())))
@@ -123,18 +209,40 @@ fn transparency(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
             d.fields.insert("gridColors".into(), json!(pair.map(|c| c.to_hex())));
         }
     });
-    // The two colours (the first is also the paper colour): editing either makes them Custom.
+    // The two colours (the first is also the paper colour): editing either makes them Custom. A
+    // click on a color's box, or Space or Enter with the keyboard on it, opens the Color Picker on
+    // that color (white when its hex is not a color), and the picker's OK sets that color. The
+    // picker opens after the row, on the color Document Setup holds then: a press on a box ends a
+    // hex field's editing in the same frame, and that field's edit is the color the picker opens on.
+    // A hex field's edit replaces its own color in the pair Document Setup holds when it commits.
+    let mut pick = None;
     widgets::label_row(ui, "", LABEL, |ui| {
         for i in 0..2 {
             let hex = colors.get(i).map_or("", |h| h.trim_start_matches('#'));
+            let colour = vectorcraft_color::Color::from_hex(hex);
+            let name = format!("{} {}", tl!("Grid Colors:"), i + 1);
             let (chip, _) = ui.allocate_exact_size(egui::vec2(18.0, 18.0), egui::Sense::hover());
-            if let Some(c) = vectorcraft_color::Color::from_hex(hex) {
+            let resp = ui.interact(chip, grid_color_box_id(i), egui::Sense::click());
+            resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &name));
+            let keyed = resp.has_focus()
+                && ui.input_mut(|inp| {
+                    inp.consume_key(egui::Modifiers::NONE, egui::Key::Space) | inp.consume_key(egui::Modifiers::NONE, egui::Key::Enter)
+                });
+            if resp.clicked() || keyed {
+                pick = Some(i);
+            }
+            if resp.hovered() {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+            }
+            if let Some(c) = colour {
                 ui.painter().rect_filled(chip, 2.0, crate::panels::c32(&c));
             }
             ui.painter().rect_stroke(chip, 2.0, egui::Stroke::new(1.0, t.input_border), egui::StrokeKind::Inside);
-            let name = format!("{} {}", tl!("Grid Colors:"), i + 1);
+            if resp.has_focus() {
+                ui.painter().rect_stroke(chip.expand(2.0), 3.0, ui.visuals().selection.stroke, egui::StrokeKind::Outside);
+            }
             if let Some(c) = widgets::hex_field_named(ui, ("grid-color", i), Some(&name), hex).and_then(|h| vectorcraft_color::Color::from_hex(&h)) {
-                let mut v = colors.clone();
+                let mut v = grid_colors(d);
                 v.resize(2, "#ffffff".into());
                 v[i] = c.to_hex();
                 d.fields.insert("gridColors".into(), json!(v));
@@ -142,6 +250,10 @@ fn transparency(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
             ui.add_space(10.0);
         }
     });
+    if let Some(i) = pick {
+        let c = grid_colors(d).get(i).and_then(|h| vectorcraft_color::Color::from_hex(h.trim_start_matches('#')));
+        *d = super::color_picker::over_list_entry(d, "gridColors", i, c.unwrap_or(vectorcraft_color::Color::WHITE));
+    }
     ui.add_space(4.0);
     check(ui, d, "simulatePaper", tl!("Simulate Colored Paper"));
     ui.add_space(14.0);
@@ -208,10 +320,40 @@ fn typography(ui: &mut egui::Ui, d: &mut Dialog) {
     choice(ui, d, "exportText", tl!("Export:"), &[("editable", tl!("Preserve Text Editability")), ("appearance", tl!("Preserve Text Appearance"))]);
 }
 
+/// The Color tab: the document color mode, whether a mode change converts the colors (unchecked:
+/// they keep their numbers), and the RGB and CMYK profiles assigned to the document.
+fn color(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
+    widgets::subheader(ui, tl!("Document Color Mode"));
+    choice(ui, d, "colorMode", tl!("Color Mode:"), &[("rgb", "RGB Color"), ("cmyk", "CMYK Color")]);
+    let mode = d.str("colorMode");
+    let changes = app.session.active().is_some_and(|st| mode_id(st.doc.color_mode) != mode);
+    let label = if mode == "cmyk" { tl!("Convert to CMYK") } else { tl!("Convert to RGB") };
+    widgets::label_row(ui, "", LABEL, |ui| {
+        let on = d.bool("convertColors");
+        if widgets::check(ui, label, on, changes) {
+            d.fields.insert("convertColors".into(), json!(!on));
+        }
+    });
+    ui.add_space(14.0);
+    widgets::subheader(ui, tl!("Assign Profile"));
+    for (key, label, kind, working) in
+        [("rgbProfile", tl!("RGB:"), ProfileKind::Rgb, WORKING_RGB), ("cmykProfile", tl!("CMYK:"), ProfileKind::Cmyk, WORKING_CMYK)]
+    {
+        let current = d.fields.get(key).and_then(Value::as_str).unwrap_or(working).to_string();
+        widgets::label_row(ui, label, LABEL, |ui| {
+            if let Some(n) = crate::panels::separations::profile_dropdown(ui, key, &current, kind, Some(working)) {
+                d.fields.insert(key.into(), if n == working { Value::Null } else { json!(n) });
+            }
+        });
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use egui::{Event, PointerButton, Pos2, Rect, vec2};
     use serde_json::json;
+    use vectorcraft_color::{Color, Paint, cms};
+    use vectorcraft_doc::{ColorMode, NodeId};
     use vectorcraft_engine::Session;
 
     use crate::VectorcraftApp;
@@ -302,7 +444,7 @@ mod tests {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
         app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
         app.run("file.documentSetup", json!({})).unwrap();
-        for tab in ["General", "Transparency", "Type"] {
+        for tab in ["General", "Transparency", "Type", "Color"] {
             app.ui.dialog.as_mut().unwrap().fields.insert("tab".into(), json!(tab));
             frame(&mut app);
         }
@@ -342,5 +484,432 @@ mod tests {
         assert!(!texts.iter().any(|t| t == "Highlight Substituted Fonts"), "{texts:?}");
         crate::dialogs::confirm(&mut app).unwrap();
         assert!(app.ui.dialog.is_none());
+    }
+
+    /// A new document with a red square → the app and the square.
+    fn red_square() -> (VectorcraftApp, NodeId) {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+        app.run("paint.setFill", json!({"ids": [id], "color": "#ff0000"})).unwrap();
+        (app, NodeId(id))
+    }
+
+    fn fill(app: &VectorcraftApp, id: NodeId) -> Paint {
+        app.session.active().unwrap().doc.node(id).unwrap().appearance.fill().unwrap().paint.clone()
+    }
+
+    fn undo_steps(app: &VectorcraftApp) -> usize {
+        app.session.active().unwrap().history.undo.len()
+    }
+
+    /// Opens Document Setup on the Color tab and sets `fields` in it.
+    fn color_tab(app: &mut VectorcraftApp, fields: serde_json::Value) {
+        app.run("file.documentSetup", json!({})).unwrap();
+        let d = app.ui.dialog.as_mut().unwrap();
+        d.fields.insert("tab".into(), json!("Color"));
+        for (k, v) in fields.as_object().unwrap() {
+            d.fields.insert(k.clone(), v.clone());
+        }
+    }
+
+    /// The Color tab opens on the document's color mode and assigned profiles, and shows them.
+    /// The CMYK profile assigned is the working one, so the process-wide color settings stay as
+    /// they are for the other tests.
+    #[test]
+    fn color_tab_shows_the_color_mode_and_profiles() {
+        let (mut app, _) = red_square();
+        let working = cms::active_settings().cmyk;
+        app.run("file.documentColorMode", json!({"mode": "cmyk"})).unwrap();
+        app.run("edit.assignProfile", json!({"cmyk": working})).unwrap();
+        let steps = undo_steps(&app);
+        color_tab(&mut app, json!({}));
+        let d = app.ui.dialog.as_ref().unwrap();
+        assert_eq!((d.str("colorMode"), d.str("cmykProfile"), d.fields["rgbProfile"].clone()), ("cmyk".into(), working.clone(), json!(null)));
+        assert!(d.bool("convertColors"));
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        crate::theme::apply(&ctx, Default::default());
+        dialog_frame(&mut app, &ctx, vec![]);
+        let texts: Vec<String> = dialog_frame(&mut app, &ctx, vec![]).into_iter().map(|(t, _)| t).collect();
+        for shown in ["CMYK Color", "Convert to CMYK", "Working RGB (don't tag)", working.as_str()] {
+            assert!(texts.iter().any(|t| t == shown), "no {shown} in {texts:?}");
+        }
+        // Picking the other mode names the conversion OK makes.
+        app.ui.dialog.as_mut().unwrap().fields.insert("colorMode".into(), json!("rgb"));
+        let texts: Vec<String> = dialog_frame(&mut app, &ctx, vec![]).into_iter().map(|(t, _)| t).collect();
+        assert!(texts.iter().any(|t| t == "Convert to RGB"), "{texts:?}");
+        app.ui.dialog.as_mut().unwrap().fields.insert("colorMode".into(), json!("cmyk"));
+        // OK with nothing changed records nothing.
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert!(app.ui.dialog.is_none());
+        assert_eq!(undo_steps(&app), steps);
+    }
+
+    /// OK with a new mode converts the colors as File › Document Color Mode does, together with the
+    /// dialog's other changes, in one undo step.
+    #[test]
+    fn ok_converts_the_color_mode_with_the_other_changes_in_one_undo_step() {
+        let (mut app, id) = red_square();
+        let (mut menu, menu_id) = red_square();
+        menu.run("file.documentColorMode", json!({"mode": "cmyk"})).unwrap();
+        let steps = undo_steps(&app);
+        color_tab(&mut app, json!({"colorMode": "cmyk", "bleed": [9, 9, 9, 9]}));
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert!(app.ui.dialog.is_none());
+        let st = app.session.active().unwrap();
+        assert_eq!((st.doc.color_mode, st.doc.setup.bleed), (ColorMode::Cmyk, [9.0; 4]));
+        assert_eq!(fill(&app, id), fill(&menu, menu_id));
+        assert!(matches!(fill(&app, id), Paint::Solid { color: Color::Cmyk { .. }, .. }), "{:?}", fill(&app, id));
+        assert_eq!(undo_steps(&app), steps + 1);
+        app.run("edit.undo", json!({})).unwrap();
+        let st = app.session.active().unwrap();
+        assert_eq!((st.doc.color_mode, st.doc.setup.bleed), (ColorMode::Rgb, [0.0; 4]));
+        assert_eq!(fill(&app, id), Paint::solid(Color::from_hex("ff0000").unwrap()));
+    }
+
+    /// With Convert unchecked the mode changes and the colors keep their numbers.
+    #[test]
+    fn ok_without_convert_keeps_the_color_numbers() {
+        let (mut app, id) = red_square();
+        let before = fill(&app, id);
+        let steps = undo_steps(&app);
+        color_tab(&mut app, json!({"colorMode": "cmyk", "convertColors": false}));
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(app.session.active().unwrap().doc.color_mode, ColorMode::Cmyk);
+        assert_eq!(fill(&app, id), before);
+        assert_eq!(undo_steps(&app), steps + 1);
+    }
+
+    /// OK assigns the profiles picked, with the dialog's other changes, in one undo step; the
+    /// working-space entry assigns none.
+    #[test]
+    fn ok_assigns_the_profiles_with_the_other_changes_in_one_undo_step() {
+        let (mut app, _) = red_square();
+        let working = cms::active_settings().cmyk;
+        let steps = undo_steps(&app);
+        color_tab(&mut app, json!({"cmykProfile": working, "bleed": [9, 9, 9, 9]}));
+        crate::dialogs::confirm(&mut app).unwrap();
+        let st = app.session.active().unwrap();
+        assert_eq!((st.doc.color_profiles.cmyk.clone(), st.doc.color_profiles.rgb.clone()), (Some(working.clone()), None));
+        assert_eq!((st.doc.setup.bleed, st.doc.color_mode), ([9.0; 4], ColorMode::Rgb));
+        assert_eq!(undo_steps(&app), steps + 1);
+        // Back to the working space: no profile assigned.
+        color_tab(&mut app, json!({"cmykProfile": null}));
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(app.session.active().unwrap().doc.color_profiles.cmyk, None);
+        app.run("edit.undo", json!({})).unwrap();
+        app.run("edit.undo", json!({})).unwrap();
+        let st = app.session.active().unwrap();
+        assert_eq!((st.doc.color_profiles.cmyk.clone(), st.doc.setup.bleed), (None, [0.0; 4]));
+    }
+
+    /// OK assigns the RGB profile picked, in one undo step.
+    #[test]
+    fn ok_assigns_the_rgb_profile() {
+        let (mut app, _) = red_square();
+        let working = cms::active_settings().rgb;
+        let steps = undo_steps(&app);
+        color_tab(&mut app, json!({"rgbProfile": working}));
+        crate::dialogs::confirm(&mut app).unwrap();
+        let st = app.session.active().unwrap();
+        assert_eq!((st.doc.color_profiles.rgb.clone(), st.doc.color_profiles.cmyk.clone()), (Some(working), None));
+        assert_eq!(undo_steps(&app), steps + 1);
+    }
+
+    /// A profile and a mode changed in one OK: Assign Profile runs before Document Color Mode, so
+    /// the conversion goes through the profile picked.
+    #[test]
+    fn a_profile_and_a_mode_change_assign_the_profile_first() {
+        let (mut app, _) = red_square();
+        color_tab(&mut app, json!({"colorMode": "cmyk", "cmykProfile": cms::DEVICE_CMYK}));
+        let commands = super::color_commands(&app, app.ui.dialog.as_ref().unwrap()).unwrap();
+        assert_eq!(
+            commands,
+            vec![
+                json!({"command": "edit.assignProfile", "params": {"cmyk": cms::DEVICE_CMYK}}),
+                json!({"command": "file.documentColorMode", "params": {"mode": "cmyk", "convert": true}}),
+            ]
+        );
+    }
+
+    /// A Color tab field with a value of the wrong kind is an error: the dialog stays open and
+    /// nothing changes, the profile picked with it included.
+    #[test]
+    fn a_bad_color_field_is_an_error_and_changes_nothing() {
+        let bad = [
+            ("colorMode", json!("lab")),
+            ("colorMode", json!(null)),
+            ("rgbProfile", json!(5)),
+            ("cmykProfile", json!(true)),
+            ("convertColors", json!("no")),
+        ];
+        for (key, value) in bad {
+            let (mut app, id) = red_square();
+            let before = fill(&app, id);
+            let steps = undo_steps(&app);
+            color_tab(&mut app, json!({"colorMode": "cmyk", "cmykProfile": cms::active_settings().cmyk}));
+            app.ui.dialog.as_mut().unwrap().fields.insert(key.into(), value.clone());
+            assert!(super::color_commands(&app, app.ui.dialog.as_ref().unwrap()).is_err(), "{key}: {value}");
+            assert!(crate::dialogs::confirm(&mut app).is_err(), "{key}: {value}");
+            assert!(app.ui.dialog.is_some());
+            let st = app.session.active().unwrap();
+            assert_eq!((st.doc.color_mode, st.doc.color_profiles.cmyk.clone()), (ColorMode::Rgb, None), "{key}: {value}");
+            assert_eq!(fill(&app, id), before);
+            assert_eq!(undo_steps(&app), steps);
+        }
+    }
+
+    /// Cancel leaves the color mode, the colors and the history as they were.
+    #[test]
+    fn cancel_changes_no_color_setting() {
+        let (mut app, id) = red_square();
+        let before = fill(&app, id);
+        let steps = undo_steps(&app);
+        color_tab(&mut app, json!({"colorMode": "cmyk", "cmykProfile": cms::active_settings().cmyk}));
+        click_dialog_button(&mut app, "Cancel");
+        assert!(app.ui.dialog.is_none());
+        let st = app.session.active().unwrap();
+        assert_eq!((st.doc.color_mode, st.doc.color_profiles.cmyk.clone()), (ColorMode::Rgb, None));
+        assert_eq!(fill(&app, id), before);
+        assert_eq!(undo_steps(&app), steps);
+    }
+
+    /// The Light pair a new document's transparency grid starts with.
+    const LIGHT: [&str; 2] = ["#ffffff", "#cccccc"];
+
+    fn hex(h: &str) -> Color {
+        Color::from_hex(h).unwrap_or_else(|| panic!("bad hex {h}"))
+    }
+
+    /// The grid colors Document Setup `d` holds.
+    fn dialog_grid(d: &crate::state::Dialog) -> Vec<Color> {
+        d.fields["gridColors"].as_array().unwrap().iter().map(|c| hex(c.as_str().unwrap())).collect()
+    }
+
+    /// A new document with Document Setup open on its Transparency tab, drawn in the context returned.
+    fn transparency_tab() -> (VectorcraftApp, egui::Context) {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        app.run("file.documentSetup", json!({})).unwrap();
+        app.ui.dialog.as_mut().unwrap().fields.insert("tab".into(), json!("Transparency"));
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        crate::theme::apply(&ctx, Default::default());
+        for _ in 0..4 {
+            dialog_frame(&mut app, &ctx, vec![]);
+        }
+        (app, ctx)
+    }
+
+    /// Clicks the box of grid color `index`.
+    fn click_grid_box(app: &mut VectorcraftApp, ctx: &egui::Context, index: usize) {
+        let at = ctx.read_response(super::grid_color_box_id(index)).unwrap_or_else(|| panic!("no box {index}")).rect.center();
+        let button = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+        dialog_frame(app, ctx, vec![Event::PointerMoved(at), button(true)]);
+        dialog_frame(app, ctx, vec![button(false)]);
+    }
+
+    /// The Color Picker is open over Document Setup, on `color`, and Document Setup's OK has not run.
+    fn assert_picker_over_setup(app: &VectorcraftApp, color: &str, case: &str) {
+        let d = app.ui.dialog.as_ref().unwrap_or_else(|| panic!("{case}: no dialog"));
+        assert_eq!(d.kind, "colorPicker", "{case}");
+        assert_eq!(d.fields.get("color").and_then(vectorcraft_engine::cmd::color_value), Some(hex(color)), "{case}");
+        assert_eq!(crate::dialogs::parent(d).map(|p| p.kind), Some(super::KIND.to_string()), "{case}");
+        assert_eq!(undo_steps(app), 0, "{case}: Document Setup's OK has not run");
+    }
+
+    /// A click on either grid color's box opens the Color Picker over Document Setup on that
+    /// color. Its OK sets only that color, the Grid Colors menu names the pair (Custom, or the
+    /// preset it matches), and Document Setup's OK applies the pair in one undo step.
+    #[test]
+    fn a_grid_color_box_opens_the_color_picker_and_its_ok_sets_that_color() {
+        for (index, picked, pair, name) in [(0, "#00ff00", ["#00ff00", "#cccccc"], "Custom"), (1, "#c4dcff", ["#ffffff", "#c4dcff"], "Blue")] {
+            let (mut app, ctx) = transparency_tab();
+            click_grid_box(&mut app, &ctx, index);
+            assert_picker_over_setup(&app, LIGHT[index], name);
+            app.ui.dialog.as_mut().unwrap().fields.insert("color".into(), json!(picked));
+            crate::dialogs::confirm(&mut app).unwrap();
+            let d = app.ui.dialog.as_ref().unwrap();
+            assert_eq!((d.kind.as_str(), dialog_grid(d)), (super::KIND, pair.map(hex).to_vec()), "{name}");
+            assert_eq!(undo_steps(&app), 0, "{name}: the picker's OK leaves the document as it is");
+            dialog_frame(&mut app, &ctx, vec![]);
+            let texts: Vec<String> = dialog_frame(&mut app, &ctx, vec![]).into_iter().map(|(t, _)| t).collect();
+            assert!(texts.iter().any(|t| t == name), "{name}: {texts:?}");
+            crate::dialogs::confirm(&mut app).unwrap();
+            assert!(app.ui.dialog.is_none());
+            let st = app.session.active().unwrap();
+            assert_eq!((st.doc.setup.grid_colors, st.doc.setup.grid_colors_name()), (pair.map(hex), name));
+            assert_eq!(undo_steps(&app), 1, "{name}");
+            app.run("edit.undo", json!({})).unwrap();
+            assert_eq!(app.session.active().unwrap().doc.setup.grid_colors, LIGHT.map(hex), "{name}");
+        }
+    }
+
+    /// With the keyboard on a grid color's box, Enter or Space opens the Color Picker on that
+    /// color instead of pressing Document Setup's OK.
+    #[test]
+    fn enter_or_space_on_a_grid_color_box_opens_the_color_picker() {
+        for (index, key) in [(0, egui::Key::Enter), (1, egui::Key::Space)] {
+            let (mut app, ctx) = transparency_tab();
+            ctx.memory_mut(|m| m.request_focus(super::grid_color_box_id(index)));
+            dialog_frame(&mut app, &ctx, vec![]);
+            let press = Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+            dialog_frame(&mut app, &ctx, vec![press]);
+            assert_picker_over_setup(&app, LIGHT[index], &format!("{key:?}"));
+        }
+    }
+
+    /// Cancel in the Color Picker goes back to Document Setup with the grid colors as they were,
+    /// and so does its OK on the color it opened on; Document Setup's OK then records no undo step.
+    #[test]
+    fn grid_color_picker_cancel_or_an_unchanged_ok_changes_nothing() {
+        for cancel in [true, false] {
+            let (mut app, ctx) = transparency_tab();
+            click_grid_box(&mut app, &ctx, 1);
+            assert_picker_over_setup(&app, LIGHT[1], &format!("cancel {cancel}"));
+            if cancel {
+                app.ui.dialog.as_mut().unwrap().fields.insert("color".into(), json!("#ff0000"));
+                crate::dialogs::cancel(&mut app);
+            } else {
+                crate::dialogs::confirm(&mut app).unwrap();
+            }
+            let d = app.ui.dialog.as_ref().unwrap();
+            assert_eq!((d.kind.as_str(), dialog_grid(d)), (super::KIND, LIGHT.map(hex).to_vec()), "cancel {cancel}");
+            crate::dialogs::confirm(&mut app).unwrap();
+            assert!(app.ui.dialog.is_none());
+            assert_eq!(app.session.active().unwrap().doc.setup.grid_colors_name(), "Light");
+            assert_eq!(undo_steps(&app), 0, "cancel {cancel}");
+        }
+    }
+
+    /// With a preset name in Document Setup's `gridColors` field, the grid color boxes show the
+    /// preset's colors, and the Color Picker opens on the clicked one; its OK sets that color and
+    /// keeps the preset's other one.
+    #[test]
+    fn a_grid_color_box_opens_the_picker_when_the_field_names_a_preset() {
+        let (mut app, ctx) = transparency_tab();
+        app.ui.dialog.as_mut().unwrap().fields.insert("gridColors".into(), json!("blue"));
+        dialog_frame(&mut app, &ctx, vec![]);
+        click_grid_box(&mut app, &ctx, 1);
+        assert_picker_over_setup(&app, "#c4dcff", "blue");
+        app.ui.dialog.as_mut().unwrap().fields.insert("color".into(), json!("#00ff00"));
+        crate::dialogs::confirm(&mut app).unwrap();
+        let d = app.ui.dialog.as_ref().unwrap();
+        assert_eq!((d.kind.as_str(), dialog_grid(d)), (super::KIND, ["#ffffff", "#00ff00"].map(hex).to_vec()));
+    }
+
+    /// The screen color sampler works in the Color Picker of a grid color: the color sampled goes
+    /// to that picker, and its OK sets the grid color.
+    #[test]
+    fn the_grid_color_picker_takes_a_screen_sampled_color() {
+        let (mut app, ctx) = transparency_tab();
+        let (tx, rx) = std::sync::mpsc::channel::<crate::screen_color::Answer>();
+        let mut rx = Some(rx);
+        app.services.screen_color = Some(Box::new(move || rx.take().ok_or_else(|| "shown twice".to_string())));
+        click_grid_box(&mut app, &ctx, 0);
+        assert_picker_over_setup(&app, LIGHT[0], "before sampling");
+        app.run("ui.sampleScreenColor", json!({"picker": true})).unwrap();
+        tx.send(Ok(Some([0.0, 0.5, 1.0]))).unwrap();
+        crate::screen_color::poll(&mut app, &ctx);
+        let sampled = app.ui.dialog.as_ref().unwrap().fields.get("color").and_then(vectorcraft_engine::cmd::color_value).unwrap();
+        assert_ne!(sampled.to_hex(), LIGHT[0]);
+        crate::dialogs::confirm(&mut app).unwrap();
+        let d = app.ui.dialog.as_ref().unwrap();
+        let grid: Vec<String> = dialog_grid(d).iter().map(Color::to_hex).collect();
+        assert_eq!((d.kind.as_str(), grid), (super::KIND, vec![sampled.to_hex(), LIGHT[1].to_string()]));
+    }
+
+    /// Clicks the hex field that shows `digits` and types `typed` over its text, leaving the edit
+    /// pending; returns the field's id.
+    fn type_into_hex_field(app: &mut VectorcraftApp, ctx: &egui::Context, digits: &str, typed: &str) -> egui::Id {
+        let texts = dialog_frame(app, ctx, vec![]);
+        let at = texts.iter().find(|(t, _)| t == digits).unwrap_or_else(|| panic!("no field {digits}: {texts:?}")).1.center();
+        let button = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+        dialog_frame(app, ctx, vec![Event::PointerMoved(at), button(true)]);
+        dialog_frame(app, ctx, vec![button(false)]);
+        let field = ctx.memory(|m| m.focused()).unwrap_or_else(|| panic!("field {digits} has no focus"));
+        dialog_frame(app, ctx, vec![Event::Text(typed.into())]);
+        assert_eq!(ctx.memory(|m| m.focused()), Some(field), "the edit in {digits} is pending");
+        field
+    }
+
+    /// A click on a grid color's box whose press and release come in one frame, while that
+    /// color's hex field holds an edit, opens the Color Picker on the edited color: the press
+    /// commits the edit before the picker opens. The picker's unchanged OK keeps the edit, and the
+    /// other color stays as it was.
+    #[test]
+    fn a_grid_color_box_clicked_during_a_hex_edit_opens_the_picker_on_the_edit() {
+        for index in [0, 1] {
+            let (mut app, ctx) = transparency_tab();
+            type_into_hex_field(&mut app, &ctx, LIGHT[index].trim_start_matches('#'), "123456");
+            let at = ctx.read_response(super::grid_color_box_id(index)).unwrap_or_else(|| panic!("no box {index}")).rect.center();
+            let button = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+            dialog_frame(&mut app, &ctx, vec![Event::PointerMoved(at), button(true), button(false)]);
+            let case = format!("box {index}");
+            assert_picker_over_setup(&app, "#123456", &case);
+            let mut pair = LIGHT;
+            pair[index] = "#123456";
+            assert_eq!(dialog_grid(&crate::dialogs::parent(app.ui.dialog.as_ref().unwrap()).unwrap()), pair.map(hex).to_vec(), "{case}");
+            crate::dialogs::confirm(&mut app).unwrap();
+            let d = app.ui.dialog.as_ref().unwrap();
+            assert_eq!((d.kind.as_str(), dialog_grid(d)), (super::KIND, pair.map(hex).to_vec()), "{case}");
+        }
+    }
+
+    /// A hex field's edit that commits in the frame a Grid Colors preset is chosen replaces only
+    /// its own color in the preset's pair: the other color is the preset's. The test gives the
+    /// field the focus while the Grid Colors menu is open, then chooses a preset with a click whose
+    /// press and release come in one frame.
+    #[test]
+    fn a_hex_edit_committed_with_a_preset_choice_keeps_the_presets_other_color() {
+        let field = {
+            let (mut app, ctx) = transparency_tab();
+            type_into_hex_field(&mut app, &ctx, "ffffff", "123456")
+        };
+        let (mut app, ctx) = transparency_tab();
+        let click = |app: &mut VectorcraftApp, label: &str, frames: usize| {
+            let texts = dialog_frame(app, &ctx, vec![]);
+            let at = texts.iter().find(|(t, _)| t == label).unwrap_or_else(|| panic!("no {label}: {texts:?}")).1.center();
+            let button = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+            if frames == 1 {
+                dialog_frame(app, &ctx, vec![Event::PointerMoved(at), button(true), button(false)]);
+            } else {
+                dialog_frame(app, &ctx, vec![Event::PointerMoved(at), button(true)]);
+                dialog_frame(app, &ctx, vec![button(false)]);
+            }
+        };
+        click(&mut app, "Light", 2);
+        ctx.memory_mut(|m| m.request_focus(field));
+        dialog_frame(&mut app, &ctx, vec![]);
+        let select_all = Event::Key { key: egui::Key::A, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::COMMAND };
+        dialog_frame(&mut app, &ctx, vec![select_all, Event::Text("123456".into())]);
+        assert_eq!(ctx.memory(|m| m.focused()), Some(field), "the edit is pending");
+        let texts: Vec<String> = dialog_frame(&mut app, &ctx, vec![]).into_iter().map(|(t, _)| t).collect();
+        assert!(texts.iter().any(|t| t == "123456") && texts.iter().any(|t| t == "Blue"), "{texts:?}");
+        click(&mut app, "Blue", 1);
+        assert_eq!(dialog_grid(app.ui.dialog.as_ref().unwrap()), ["#123456", "#c4dcff"].map(hex).to_vec());
+    }
+
+    /// The picker's OK sets nothing when the dialog under it has no such color or is gone: it is
+    /// an error, and the picker stays open.
+    #[test]
+    fn grid_color_picker_without_its_color_or_its_dialog_is_an_error() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        app.run("file.documentSetup", json!({})).unwrap();
+        let setup = app.ui.dialog.clone().unwrap();
+        let mut short = setup.clone();
+        short.fields.insert("gridColors".into(), json!(["#ffffff"]));
+        let mut orphan = crate::dialogs::color_picker::over_list_entry(&setup, "gridColors", 0, Color::WHITE);
+        orphan.fields.remove(crate::dialogs::PARENT);
+        for picker in [crate::dialogs::color_picker::over_list_entry(&short, "gridColors", 1, Color::WHITE), orphan] {
+            app.ui.dialog = Some(picker);
+            app.ui.dialog.as_mut().unwrap().fields.insert("color".into(), json!("#ff0000"));
+            assert!(crate::dialogs::confirm(&mut app).is_err());
+            assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some("colorPicker"));
+        }
+        assert_eq!(app.session.active().unwrap().doc.setup.grid_colors, LIGHT.map(hex));
+        assert_eq!(undo_steps(&app), 0);
     }
 }

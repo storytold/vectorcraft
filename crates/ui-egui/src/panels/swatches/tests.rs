@@ -4,6 +4,8 @@ use egui::{Event, Modifiers, PointerButton, Pos2};
 use vectorcraft_color::Color;
 use vectorcraft_engine::Session;
 
+mod context_menu;
+
 fn app() -> VectorcraftApp {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
@@ -176,6 +178,23 @@ fn a_clicked_color_swatch_becomes_the_color_guides_base() {
     assert_eq!(base(&app), "#2050a0");
 }
 
+/// A clicked spot color swatch, or a tint swatch of one, becomes the Color Guide's base linked to
+/// that spot color at the swatch's tint; a process color swatch clears the link.
+#[test]
+fn a_clicked_spot_color_swatch_becomes_a_linked_color_guide_base() {
+    let mut app = app();
+    let ctx = context();
+    app.run("swatch.new", json!({"name": "Ink", "color": "#0066cc", "spot": true})).unwrap();
+    app.run("swatch.new", json!({"swatch": "Ink", "tint": 40})).unwrap();
+    let spot = |app: &VectorcraftApp| app.ui.color_guide_spot.as_ref().map(|s| (s.swatch.clone(), (s.tint * 100.0).round()));
+    click_tile(&mut app, &ctx, "Ink", Modifiers::NONE, 0.0);
+    assert_eq!(spot(&app), Some(("Ink".to_string(), 100.0)));
+    click_tile(&mut app, &ctx, "Ink 40%", Modifiers::NONE, 2.0);
+    assert_eq!(spot(&app), Some(("Ink".to_string(), 40.0)), "a tint swatch: its tint of the spot color");
+    click_tile(&mut app, &ctx, "Red", Modifiers::NONE, 4.0);
+    assert_eq!(spot(&app), None, "a process color");
+}
+
 /// The hex colors of the stops of the selection's gradient fill, and its stroke's color.
 fn stops_and_stroke(app: &VectorcraftApp) -> (Vec<String>, String) {
     let (fill, stroke) = crate::panels::current_paints(app);
@@ -262,7 +281,27 @@ fn delete_asks_then_removes_the_selection_and_unlinks_art() {
     assert!(app.session.doc().unwrap().doc.swatch("Orange").is_some());
     delete(&mut app, vec!["Orange".into()], true);
     assert!(app.ui.dialog.is_none() && app.session.doc().unwrap().doc.swatch("Orange").is_none());
-    assert_eq!(deletable(&["[None]".into(), REGISTRATION.into(), "Grays".into()]), ["Grays"]);
+    assert_eq!(deletable(&app, &["[None]".into(), REGISTRATION.into(), "Grays".into()]), ["Grays"]);
+}
+
+/// Only None and Registration are reserved: a user swatch or color group whose name starts with
+/// `[` can be deleted, the swatch can be edited, and names the document does not hold are left out.
+#[test]
+fn bracketed_user_swatches_and_groups_can_be_deleted_and_edited() {
+    let mut app = app();
+    app.run("swatch.new", json!({"name": "[Mine]", "color": "#336699"})).unwrap();
+    app.run("swatch.newGroup", json!({"name": "[Team]", "colors": ["#ff0000"]})).unwrap();
+    let names = |v: &[&str]| v.iter().map(|n| n.to_string()).collect::<Vec<String>>();
+    assert_eq!(deletable(&app, &names(&["[None]", REGISTRATION, "[Mine]", "[Team]", "Gone"])), ["[Mine]", "[Team]"]);
+    assert_eq!(actions::editable(&app, &names(&["[Mine]"])).as_deref(), Some("[Mine]"));
+    for name in ["[None]", REGISTRATION, "[Team]", "Gone"] {
+        assert_eq!(actions::editable(&app, &names(&[name])), None, "{name}");
+    }
+    let doomed = deletable(&app, &names(&["[Mine]"]));
+    delete(&mut app, doomed, false);
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.str("message")).as_deref(), Some("Delete “[Mine]”?"));
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert!(app.session.doc().unwrap().doc.swatch("[Mine]").is_none());
 }
 
 /// The prompt for several swatches and groups gives the form the language's plural rule picks for the count.
@@ -437,11 +476,24 @@ fn drag(app: &mut VectorcraftApp, ctx: &egui::Context, from: Pos2, to: Pos2, tim
 
 /// [`drag`] with `modifiers` held.
 fn drag_with(app: &mut VectorcraftApp, ctx: &egui::Context, from: Pos2, to: Pos2, modifiers: Modifiers, time: f64) {
+    drag_drawn(app, ctx, from, to, modifiers, time, show);
+}
+
+/// [`drag_with`] over the panels `draw` draws.
+fn drag_drawn(
+    app: &mut VectorcraftApp,
+    ctx: &egui::Context,
+    from: Pos2,
+    to: Pos2,
+    modifiers: Modifiers,
+    time: f64,
+    draw: fn(&mut VectorcraftApp, &mut Ui),
+) {
     let button = |pos, pressed| Event::PointerButton { pos, button: PointerButton::Primary, pressed, modifiers };
-    frame_with(app, ctx, vec![Event::PointerMoved(from), button(from, true)], modifiers, time, show);
-    frame_with(app, ctx, vec![Event::PointerMoved(from + vec2(6.0, 4.0))], modifiers, time + 0.1, show);
-    frame_with(app, ctx, vec![Event::PointerMoved(to)], modifiers, time + 0.2, show);
-    frame_with(app, ctx, vec![Event::PointerMoved(to), button(to, false)], modifiers, time + 0.3, show);
+    frame_with(app, ctx, vec![Event::PointerMoved(from), button(from, true)], modifiers, time, draw);
+    frame_with(app, ctx, vec![Event::PointerMoved(from + vec2(6.0, 4.0))], modifiers, time + 0.1, draw);
+    frame_with(app, ctx, vec![Event::PointerMoved(to)], modifiers, time + 0.2, draw);
+    frame_with(app, ctx, vec![Event::PointerMoved(to), button(to, false)], modifiers, time + 0.3, draw);
 }
 
 fn names_of(app: &VectorcraftApp, group: Option<&str>) -> Vec<String> {
@@ -476,7 +528,7 @@ fn find_field_filters_and_shift_extends_over_what_is_shown() {
 fn list_view_rows_take_double_clicks_and_folder_clicks_select_the_group() {
     let mut app = app();
     let ctx = context();
-    set_pstate(&ctx, "swatch-view", View::SmallList);
+    app.ui.swatches_view = View::SmallList;
     double_click_tile(&mut app, &ctx, "Red");
     assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(KIND), "double-click in a list opens Swatch Options");
     let d = &app.session.active().unwrap().doc;
@@ -484,6 +536,49 @@ fn list_view_rows_take_double_clicks_and_folder_clicks_select_the_group() {
     assert!(highlighted(d, &sel).contains(&"Bright Violet"), "a selected folder highlights its swatches");
     assert_eq!(describe(&Paint::solid(Color::cmyk(0.0, 1.0, 1.0, 0.0)), true, false), "Global Process Color, CMYK");
     assert_eq!(describe(&Paint::solid(Color::gray(0.5)), true, true), "Spot Color, Grayscale");
+}
+
+/// The test sends each click on its own frame, as a real pointer does. The first click paints the
+/// selected art with the pattern. The second click opens pattern editing on that pattern, which
+/// selects the tile art. Neither the second click nor quick clicks after it paint the tile art
+/// with the pattern itself (#7095).
+#[test]
+fn double_clicking_a_pattern_edits_it_without_painting_its_tile() {
+    let mut app = app();
+    let tile = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+    app.run("object.pattern.make", json!({"ids": [tile], "name": "Dots", "width": 20, "height": 20})).unwrap();
+    app.run("object.pattern.done", json!({})).unwrap();
+    let art = app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+    for view in [View::SmallThumb, View::SmallList] {
+        // A solid fill each time, so the first click must paint the art in this view too.
+        app.run("paint.setFill", json!({"ids": [art], "color": "#2050a0"})).unwrap();
+        app.run("select.set", json!({"ids": [art]})).unwrap();
+        app.ui.swatches_view = view;
+        let ctx = context();
+        // Only the pattern shows, so its row is on screen in the list view too.
+        set_pstate(&ctx, "swatch-show-find", true);
+        ctx.data_mut(|d| d.insert_temp(find_id(), "Dots".to_string()));
+        frame(&mut app, &ctx, vec![], 0.0, show);
+        let at = tile_center(&ctx, "Dots");
+        let button = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE };
+        // Four quick clicks: a double-click, then two more that count as triple clicks.
+        let mut events = vec![Event::PointerMoved(at)];
+        for _ in 0..4 {
+            events.extend([button(true), button(false)]);
+        }
+        for (i, e) in events.into_iter().enumerate() {
+            frame(&mut app, &ctx, vec![e], 1.0 + i as f64 * 0.05, show);
+        }
+        let d = &app.session.doc().unwrap().doc;
+        let pe = d.pattern_edit.as_ref().unwrap_or_else(|| panic!("{view:?}: the double-click opens pattern editing"));
+        assert_eq!(pe.pattern, "Dots");
+        let fill = d.node(vectorcraft_doc::NodeId(art)).unwrap().appearance.fill_paint();
+        assert!(matches!(fill, Paint::Pattern { pattern, .. } if pattern == "Dots"), "{view:?}: the first click paints the art");
+        for n in d.node(pe.layer).unwrap().children().unwrap() {
+            assert!(!matches!(n.appearance.fill_paint(), Paint::Pattern { .. }), "{view:?}: the tile keeps its own fill: {}", app.ui.status);
+        }
+        app.run("object.pattern.done", json!({})).unwrap();
+    }
 }
 
 #[test]
@@ -520,6 +615,221 @@ fn dragging_tiles_reorders_and_moves_into_groups_as_one_undo_step_each() {
     assert_eq!((names_of(&app, None), app.session.doc().unwrap().history.undo.len()), (before, undo));
 }
 
+/// Press `pointer` at `from`, drag to `to` and release there, a frame per step from `time`. Returns
+/// whether a drag-and-drop payload was held over `to` before the release.
+fn drag_by(app: &mut VectorcraftApp, ctx: &egui::Context, from: Pos2, to: Pos2, pointer: PointerButton, time: f64) -> bool {
+    let button = |pos, pressed| Event::PointerButton { pos, button: pointer, pressed, modifiers: Modifiers::NONE };
+    frame(app, ctx, vec![Event::PointerMoved(from), button(from, true)], time, show);
+    frame(app, ctx, vec![Event::PointerMoved(from + vec2(6.0, 4.0))], time + 0.1, show);
+    frame(app, ctx, vec![Event::PointerMoved(to)], time + 0.2, show);
+    let held = egui::DragAndDrop::has_any_payload(ctx);
+    frame(app, ctx, vec![Event::PointerMoved(to), button(to, false)], time + 0.3, show);
+    frame(app, ctx, vec![], time + 0.4, show);
+    held
+}
+
+#[test]
+fn only_a_primary_drag_moves_swatches_and_groups() {
+    let mut app = app();
+    let ctx = context();
+    frame(&mut app, &ctx, vec![], 0.0, show);
+    frame(&mut app, &ctx, vec![], 0.5, show);
+    let undo = app.session.doc().unwrap().history.undo.len();
+    let (before, grays) = (names_of(&app, None), names_of(&app, Some("Grays")));
+    let groups = |app: &VectorcraftApp| app.session.active().unwrap().doc.swatch_groups.iter().map(|g| g.name.clone()).collect::<Vec<_>>();
+    let group_order = groups(&app);
+    let mut time = 1.0;
+    for pointer in [PointerButton::Secondary, PointerButton::Middle] {
+        // A swatch onto the left half of Red, and onto a folder.
+        let held = drag_by(&mut app, &ctx, tile_center(&ctx, "Amber"), tile_center(&ctx, "Red") - vec2(4.0, 0.0), pointer, time);
+        assert!(!held, "a {pointer:?} drag carries no swatch");
+        let held = drag_by(&mut app, &ctx, tile_center(&ctx, "Amber"), tile_center(&ctx, "Grays"), pointer, time + 1.0);
+        assert!(!held, "a {pointer:?} drag carries no swatch into a group");
+        // A group onto another group.
+        let held = drag_by(&mut app, &ctx, tile_center(&ctx, "Grays"), tile_center(&ctx, "Brights") - vec2(4.0, 0.0), pointer, time + 2.0);
+        assert!(!held, "a {pointer:?} drag carries no group");
+        assert_eq!((names_of(&app, None), names_of(&app, Some("Grays")), groups(&app)), (before.clone(), grays.clone(), group_order.clone()));
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo, "a {pointer:?} drag records no undo step");
+        time += 3.0;
+    }
+    // The primary button still moves the swatch.
+    assert!(drag_by(&mut app, &ctx, tile_center(&ctx, "Amber"), tile_center(&ctx, "Red") - vec2(4.0, 0.0), PointerButton::Primary, time));
+    let n = names_of(&app, None);
+    assert_eq!(n[n.iter().position(|x| x == "Red").unwrap() - 1], "Amber");
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1);
+}
+
+/// One frame of the panel at `time` with `modifiers` held and the accessibility tree on; returns
+/// the frame's output.
+fn frame_out(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<Event>, modifiers: Modifiers, time: f64) -> egui::FullOutput {
+    ctx.enable_accesskit();
+    let screen_rect = Some(Rect::from_min_size(Pos2::ZERO, vec2(280.0, 700.0)));
+    let events = std::iter::once(Event::ModifiersChanged(modifiers)).chain(events).collect();
+    let input = egui::RawInput { events, time: Some(time), screen_rect, ..Default::default() };
+    let mut out = ctx.run_ui(input, |ui| show(app, ui));
+    out.textures_delta.clear();
+    out
+}
+
+/// The Delete Swatch button in `out`: its rectangle and whether it is enabled.
+fn trash_button(out: &egui::FullOutput) -> (Rect, bool) {
+    let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
+    let node = nodes.iter().map(|(_, n)| n).find(|n| n.label().is_some_and(|l| l.trim() == "Delete Swatch")).expect("a Delete Swatch button");
+    let b = node.bounds().expect("the button's bounds");
+    (Rect::from_min_max(pos2(b.x0 as f32, b.y0 as f32), pos2(b.x1 as f32, b.y1 as f32)), !node.is_disabled())
+}
+
+/// Whether `out` draws the drop outline around `rect`.
+fn outlined(out: &egui::FullOutput, rect: Rect) -> bool {
+    out.shapes.iter().any(|c| match &c.shape {
+        Shape::Rect(r) => r.rect.center().distance(rect.center()) < 0.5 && (r.stroke.width - 1.5).abs() < 0.01,
+        _ => false,
+    })
+}
+
+/// Drag the tile of `name` with `modifiers` held onto Delete Swatch and release the primary button
+/// there, a frame per step from `time`. Returns whether the button was outlined and enabled while
+/// the drag was held over it.
+fn drag_to_trash(app: &mut VectorcraftApp, ctx: &egui::Context, name: &str, modifiers: Modifiers, time: f64) -> (bool, bool) {
+    frame_out(app, ctx, vec![], modifiers, time);
+    let (trash, _) = trash_button(&frame_out(app, ctx, vec![], modifiers, time + 0.05));
+    let from = tile_center(ctx, name);
+    let button = |pos, pressed| Event::PointerButton { pos, button: PointerButton::Primary, pressed, modifiers };
+    frame_out(app, ctx, vec![Event::PointerMoved(from), button(from, true)], modifiers, time + 0.1);
+    frame_out(app, ctx, vec![Event::PointerMoved(from + vec2(6.0, 4.0))], modifiers, time + 0.2);
+    frame_out(app, ctx, vec![Event::PointerMoved(trash.center())], modifiers, time + 0.3);
+    let held = frame_out(app, ctx, vec![Event::PointerMoved(trash.center())], modifiers, time + 0.4);
+    let seen = (outlined(&held, trash), trash_button(&held).1);
+    frame_out(app, ctx, vec![Event::PointerMoved(trash.center()), button(trash.center(), false)], modifiers, time + 0.5);
+    seen
+}
+
+fn undo_steps(app: &VectorcraftApp) -> usize {
+    app.session.doc().unwrap().history.undo.len()
+}
+
+fn dialog_message(app: &VectorcraftApp) -> Option<String> {
+    app.ui.dialog.as_ref().map(|d| d.str("message"))
+}
+
+/// Swatches and color groups dragged from the list onto Delete Swatch are deleted as a plain click
+/// on the button deletes the selection: the drop asks first, Cancel keeps them, and OK deletes them
+/// in one undo step. The button is outlined and enabled while they are held over it, also with
+/// nothing selected. A selected swatch carries the other selected swatches with it, but not the
+/// selected groups, None or Registration, and Alt does not skip the question.
+#[test]
+fn swatches_dropped_on_delete_swatch_are_deleted_after_asking() {
+    let mut app = app();
+    let ctx = context();
+    let doc = |app: &VectorcraftApp| app.session.doc().unwrap().doc.clone();
+    let has_group = |app: &VectorcraftApp, g: &str| doc(app).swatch_groups.iter().any(|x| x.name == g);
+    assert!(!trash_button(&frame_out(&mut app, &ctx, vec![], Modifiers::NONE, 0.0)).1, "disabled with nothing selected");
+    let undo = undo_steps(&app);
+    // An unselected swatch, nothing selected.
+    assert_eq!(drag_to_trash(&mut app, &ctx, "Orange", Modifiers::NONE, 1.0), (true, true), "outlined and enabled while held");
+    assert_eq!(dialog_message(&app).as_deref(), Some("Delete “Orange”?"));
+    crate::dialogs::cancel(&mut app);
+    assert!(doc(&app).swatch("Orange").is_some(), "Cancel keeps it");
+    assert_eq!(undo_steps(&app), undo, "Cancel adds no undo step");
+    drag_to_trash(&mut app, &ctx, "Orange", Modifiers::NONE, 2.0);
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none() && doc(&app).swatch("Orange").is_none(), "OK deletes it");
+    assert_eq!(undo_steps(&app), undo + 1, "one undo step");
+    app.run("edit.undo", json!({})).unwrap();
+    assert!(doc(&app).swatch("Orange").is_some(), "Undo brings it back");
+    // A selected swatch carries the selected swatches; Alt still asks.
+    let sel = ["[None]", "Red", "Grays", "Lime"].map(String::from).to_vec();
+    set_pstate(&ctx, "swatch-selected", sel);
+    let undo = undo_steps(&app);
+    assert_eq!(drag_to_trash(&mut app, &ctx, "Lime", Modifiers::ALT, 3.0), (true, true));
+    assert_eq!(dialog_message(&app).as_deref(), Some("Delete these 2 swatches and groups?"));
+    crate::dialogs::confirm(&mut app).unwrap();
+    let d = doc(&app);
+    assert!(d.swatch("Red").is_none() && d.swatch("Lime").is_none(), "the dragged selection is deleted");
+    assert!(has_group(&app, "Grays") && d.swatch("[None]").is_some() && d.swatch("Orange").is_some(), "the rest stays");
+    assert_eq!(undo_steps(&app), undo + 1, "one undo step for both");
+    // A color group is deleted with its swatches.
+    drag_to_trash(&mut app, &ctx, "Grays", Modifiers::NONE, 4.0);
+    assert_eq!(dialog_message(&app).as_deref(), Some("Delete “Grays”?"));
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert!(!has_group(&app, "Grays") && doc(&app).swatch("K=50").is_none());
+    assert_eq!(undo_steps(&app), undo + 2);
+    // None and Registration are never deleted, and the button does not take them.
+    set_pstate(&ctx, "swatch-selected", Vec::<String>::new());
+    let kept = doc(&app);
+    for (i, name) in ["[None]", REGISTRATION].into_iter().enumerate() {
+        assert_eq!(drag_to_trash(&mut app, &ctx, name, Modifiers::NONE, 5.0 + i as f64), (false, false), "{name}");
+        assert_eq!(dialog_message(&app), None, "{name}");
+        assert_eq!(doc(&app), kept, "{name}");
+    }
+    assert_eq!(undo_steps(&app), undo + 2);
+}
+
+/// Delete Swatch takes only swatches dragged from the active document's list: a paint dragged from
+/// elsewhere, art, and a swatch dragged from another document whose name the active document also
+/// has delete nothing, ask nothing and are not outlined. A secondary button released while a swatch
+/// is held over the button ends the drag without asking.
+#[test]
+fn delete_swatch_ignores_other_drags() {
+    let mut app = app();
+    let id = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+    let ctx = context();
+    let (trash, _) = trash_button(&frame_out(&mut app, &ctx, vec![], Modifiers::NONE, 0.0));
+    let (before, undo) = (app.session.doc().unwrap().doc.clone(), undo_steps(&app));
+    let unchanged = |app: &VectorcraftApp, case: &str| {
+        assert_eq!(dialog_message(app), None, "{case}: asks nothing");
+        assert_eq!(app.session.doc().unwrap().doc, before, "{case}: deletes nothing");
+        assert_eq!(undo_steps(app), undo, "{case}: no undo step");
+    };
+    // The payloads are set directly, as if dragged from this document's list.
+    set_pstate(&ctx, super::actions::DRAG_DOC, app.session.active().map(|st| st.uid));
+    let release = |at| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed: false, modifiers: Modifiers::NONE };
+    let cases = [
+        ("a paint", PanelDrag::paint(Paint::solid(Color::from_hex("#ed1c24").unwrap()))),
+        ("art", PanelDrag::Art(vec![vectorcraft_doc::NodeId(id)])),
+    ];
+    for (i, (case, drag)) in cases.into_iter().enumerate() {
+        egui::DragAndDrop::set_payload(&ctx, drag);
+        let held = frame_out(&mut app, &ctx, vec![Event::PointerMoved(trash.center())], Modifiers::NONE, 1.0 + i as f64);
+        assert!(!outlined(&held, trash), "{case}: not outlined");
+        frame_out(&mut app, &ctx, vec![release(trash.center())], Modifiers::NONE, 1.5 + i as f64);
+        unchanged(&app, case);
+        egui::DragAndDrop::clear_payload(&ctx);
+    }
+    // A secondary release over the button, then the primary release.
+    frame_out(&mut app, &ctx, vec![], Modifiers::NONE, 3.0);
+    let from = tile_center(&ctx, "Orange");
+    let press = |at, button, pressed| Event::PointerButton { pos: at, button, pressed, modifiers: Modifiers::NONE };
+    frame_out(&mut app, &ctx, vec![Event::PointerMoved(from), press(from, PointerButton::Primary, true)], Modifiers::NONE, 3.1);
+    frame_out(&mut app, &ctx, vec![Event::PointerMoved(from + vec2(6.0, 4.0))], Modifiers::NONE, 3.2);
+    frame_out(&mut app, &ctx, vec![Event::PointerMoved(trash.center())], Modifiers::NONE, 3.3);
+    let held = frame_out(&mut app, &ctx, vec![Event::PointerMoved(trash.center())], Modifiers::NONE, 3.4);
+    assert!(outlined(&held, trash), "Orange is held over the button");
+    frame_out(&mut app, &ctx, vec![press(trash.center(), PointerButton::Secondary, true)], Modifiers::NONE, 3.5);
+    frame_out(&mut app, &ctx, vec![press(trash.center(), PointerButton::Secondary, false)], Modifiers::NONE, 3.6);
+    unchanged(&app, "a secondary release");
+    frame_out(&mut app, &ctx, vec![release(trash.center())], Modifiers::NONE, 3.7);
+    unchanged(&app, "the primary release after it");
+    // A swatch dragged from this document while another document with the same swatches becomes
+    // active.
+    frame_out(&mut app, &ctx, vec![], Modifiers::NONE, 4.0);
+    let from = tile_center(&ctx, "Orange");
+    frame_out(&mut app, &ctx, vec![Event::PointerMoved(from), press(from, PointerButton::Primary, true)], Modifiers::NONE, 4.1);
+    frame_out(&mut app, &ctx, vec![Event::PointerMoved(from + vec2(6.0, 4.0))], Modifiers::NONE, 4.2);
+    assert!(egui::DragAndDrop::payload::<PanelDrag>(&ctx).is_some(), "Orange is dragged");
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    let undo_new = undo_steps(&app);
+    frame_out(&mut app, &ctx, vec![Event::PointerMoved(trash.center())], Modifiers::NONE, 4.3);
+    let held = frame_out(&mut app, &ctx, vec![Event::PointerMoved(trash.center())], Modifiers::NONE, 4.4);
+    let (trash_new, enabled) = trash_button(&held);
+    assert!(!outlined(&held, trash_new) && !enabled, "not outlined or enabled in the other document");
+    frame_out(&mut app, &ctx, vec![release(trash_new.center())], Modifiers::NONE, 4.5);
+    assert_eq!(dialog_message(&app), None, "the other document asks nothing");
+    assert!(app.session.doc().unwrap().doc.swatch("Orange").is_some() && undo_steps(&app) == undo_new, "the other document keeps Orange");
+    assert!(app.session.set_active(0));
+    unchanged(&app, "the first document");
+}
+
 #[test]
 fn art_dropped_on_the_panel_becomes_a_pattern_swatch() {
     let mut app = app();
@@ -551,6 +861,124 @@ fn a_proxy_dropped_on_the_panel_becomes_a_swatch() {
     frame(&mut app, &ctx, vec![Event::PointerMoved(at), release], 1.0, show);
     assert_eq!(names_of(&app, Some("Brights")).last().map(String::as_str), Some("R=18 G=52 B=86"), "dropped on a group's colour: into that group");
     assert!(egui::DragAndDrop::payload::<PanelDrag>(&ctx).is_none());
+}
+
+/// The center of the Recent Colors chip `i` drawn by `draw` in a frame at `time`: the chip of the
+/// panel's row, or (`color`) of the Color panel's row, drawn in a child whose scope id `draw` keeps
+/// in the panel state `"test-color-scope"`.
+fn recent_chip(app: &mut VectorcraftApp, ctx: &egui::Context, i: usize, time: f64, draw: fn(&mut VectorcraftApp, &mut Ui), color: bool) -> Pos2 {
+    let mut chip = None;
+    let screen_rect = Some(Rect::from_min_size(Pos2::ZERO, vec2(280.0, 700.0)));
+    let mut out = ctx.run_ui(egui::RawInput { time: Some(time), screen_rect, ..Default::default() }, |ui| {
+        draw(app, ui);
+        let scope = if color { pstate::<Option<egui::Id>>(ctx, "test-color-scope").expect("the Color panel is drawn") } else { ui.scope_id() };
+        chip = ctx.read_response(scope.with(("recent", i))).map(|r| r.rect.center());
+    });
+    out.textures_delta.clear();
+    chip.unwrap_or_else(|| panic!("recent chip {i} is drawn"))
+}
+
+/// A rectangle filled with a CMYK color and then an RGB one, so Recent Colors holds the RGB color
+/// first and the CMYK one second; → its id and the CMYK color.
+fn art_with_two_recent_colors(app: &mut VectorcraftApp) -> (vectorcraft_doc::NodeId, Color) {
+    let id = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+    app.run("paint.setFill", json!({"ids": [id], "color": {"c": 10, "m": 60, "y": 20, "k": 5}, "keepModel": true})).unwrap();
+    app.run("paint.setFill", json!({"ids": [id], "color": "#2050a0"})).unwrap();
+    let cmyk = app.session.recent_colors[1];
+    assert!(matches!(cmyk, Color::Cmyk { .. }), "the second recent color is CMYK: {cmyk:?}");
+    (vectorcraft_doc::NodeId(id), cmyk)
+}
+
+/// The fill of art `id`.
+fn fill_of(app: &VectorcraftApp, id: vectorcraft_doc::NodeId) -> Option<Paint> {
+    app.session.doc().unwrap().doc.node(id).map(|n| n.appearance.fill_paint())
+}
+
+/// A Recent Colors chip dragged onto the swatch list becomes a swatch of its color, in its color
+/// model, as one undo step; the drag paints no art, and a color that is already a swatch is added
+/// again under another name.
+#[test]
+fn a_recent_color_dragged_onto_the_list_becomes_a_swatch() {
+    let mut app = app();
+    let ctx = context();
+    let (id, cmyk) = art_with_two_recent_colors(&mut app);
+    frame(&mut app, &ctx, vec![], 0.0, show);
+    let art = fill_of(&app, id);
+    let undo = app.session.doc().unwrap().history.undo.len();
+    let (count, brights) = (app.session.doc().unwrap().doc.swatches_iter().count(), names_of(&app, Some("Brights")).len());
+    // Onto a grouped swatch: into that group, at its end.
+    let chip = recent_chip(&mut app, &ctx, 1, 0.5, show, false);
+    drag(&mut app, &ctx, chip, tile_center(&ctx, "Bright Red"), 1.0);
+    let d = app.session.doc().unwrap();
+    let group = &d.doc.swatch_groups.iter().find(|g| g.name == "Brights").unwrap().swatches;
+    assert_eq!(group.len(), brights + 1, "{}", app.ui.status);
+    let first = group.last().cloned().expect("a swatch");
+    assert_eq!(first.paint, Paint::solid(cmyk), "the chip's color, still CMYK");
+    assert_eq!(d.history.undo.len(), undo + 1, "one undo step");
+    assert_eq!(fill_of(&app, id), art, "the drag paints no art");
+    assert!(egui::DragAndDrop::payload::<PanelDrag>(&ctx).is_none());
+    // The same color again, onto an ungrouped swatch: a second swatch under another name.
+    frame(&mut app, &ctx, vec![], 2.0, show);
+    let chip = recent_chip(&mut app, &ctx, 1, 2.5, show, false);
+    drag(&mut app, &ctx, chip, tile_center(&ctx, "Red"), 3.0);
+    let newest = app.session.doc().unwrap().doc.swatches.last().cloned().expect("a swatch");
+    assert_eq!(newest.paint, Paint::solid(cmyk));
+    assert_ne!(newest.name, first.name, "another name");
+    assert_eq!(app.session.doc().unwrap().doc.swatches_iter().count(), count + 2);
+    // Undo takes the last one off.
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(app.session.doc().unwrap().doc.swatches_iter().count(), count + 1);
+}
+
+/// A color Alt-dropped on Registration, which can't be edited, becomes a new swatch and leaves
+/// Registration as it is.
+#[test]
+fn a_color_alt_dropped_on_registration_becomes_a_new_swatch() {
+    let mut app = app();
+    let ctx = context();
+    let (_, cmyk) = art_with_two_recent_colors(&mut app);
+    frame(&mut app, &ctx, vec![], 0.0, show);
+    let registration = app.session.doc().unwrap().doc.swatch(REGISTRATION).map(|w| w.paint.clone());
+    let count = app.session.doc().unwrap().doc.swatches_iter().count();
+    let chip = recent_chip(&mut app, &ctx, 1, 0.5, show, false);
+    drag_with(&mut app, &ctx, chip, tile_center(&ctx, REGISTRATION), Modifiers::ALT, 1.0);
+    let d = &app.session.doc().unwrap().doc;
+    assert_eq!(d.swatches_iter().count(), count + 1, "{}", app.ui.status);
+    assert_eq!(d.swatches.last().map(|w| w.paint.clone()), Some(Paint::solid(cmyk)));
+    assert_eq!(d.swatch(REGISTRATION).map(|w| w.paint.clone()), registration, "Registration is unchanged");
+}
+
+/// A Recent Colors chip of the Color panel dragged onto the Swatches panel becomes a swatch; a click
+/// on it still paints the selected art.
+#[test]
+fn a_recent_color_dragged_from_the_color_panel_becomes_a_swatch() {
+    fn both(app: &mut VectorcraftApp, ui: &mut Ui) {
+        show(app, ui);
+        ui.push_id("color", |ui| {
+            crate::panels::color::show(app, ui);
+            set_pstate(ui.ctx(), "test-color-scope", Some(ui.scope_id()));
+        });
+    }
+    let mut app = app();
+    let ctx = context();
+    app.ui.color_show_recent_colors = true;
+    let (id, cmyk) = art_with_two_recent_colors(&mut app);
+    frame(&mut app, &ctx, vec![], 0.0, both);
+    let count = app.session.doc().unwrap().doc.swatches_iter().count();
+    let art = fill_of(&app, id);
+    let chip = recent_chip(&mut app, &ctx, 1, 0.5, both, true);
+    drag_drawn(&mut app, &ctx, chip, tile_center(&ctx, "Red"), Modifiers::NONE, 1.0, both);
+    let d = &app.session.doc().unwrap().doc;
+    assert_eq!(d.swatches_iter().count(), count + 1, "{}", app.ui.status);
+    assert_eq!(d.swatches.last().map(|w| w.paint.clone()), Some(Paint::solid(cmyk)));
+    assert_eq!(fill_of(&app, id), art, "the drag paints no art");
+    // A click on the chip paints the selected art.
+    app.run("select.set", json!({"ids": [id.0]})).unwrap();
+    frame(&mut app, &ctx, vec![], 2.0, both);
+    let chip = recent_chip(&mut app, &ctx, 1, 2.5, both, true);
+    let button = |pressed| Event::PointerButton { pos: chip, button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE };
+    frame(&mut app, &ctx, vec![Event::PointerMoved(chip), button(true), button(false)], 3.0, both);
+    assert_eq!(fill_of(&app, id).and_then(|f| f.color()), Some(cmyk), "a click paints the art");
 }
 
 #[test]
@@ -737,7 +1165,41 @@ fn deselecting_keeps_the_arts_swatch_highlighted() {
 fn images_and_unswatched_text_highlight_no_swatch() {
     let mut app = app();
     let mut png = vec![];
-    image::RgbaImage::from_pixel(4, 4, image::Rgba([255, 0, 0, 255])).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::RgbaImage::from_pixel(4, 4, image::Rgba([255, 0, 0, 255]))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     let data = vectorcraft_format::base64_encode(&png);
     app.run("file.place", json!({"name": "a.png", "dataBase64": data, "link": false})).unwrap();
     assert_eq!(active_swatch(&app), None, "an image: no swatch");
@@ -769,4 +1231,166 @@ fn lab_spot_tiles_show_the_colour_the_spot_colors_options_pick() {
     app.run("swatch.spotOptions", json!({"useLab": false})).unwrap();
     assert_eq!(tile(&app), app.session.active().unwrap().doc.global_color("Ink").unwrap());
     assert!(matches!(tile(&app), Color::Cmyk { .. }));
+}
+
+/// One headless frame of the panel menu; returns its painted labels.
+fn menu_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<Event>) -> Vec<(String, Rect)> {
+    let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(236.0, 700.0))), events, ..Default::default() };
+    let mut out = ctx.run_ui(raw, |ui| menu(app, ui));
+    out.textures_delta.clear();
+    crate::tests_removeanchors::shapes_text(&out.shapes.iter().map(|c| c.shape.clone()).collect::<Vec<_>>())
+}
+
+/// Click the panel menu's item `label`.
+fn click_menu_item(app: &mut VectorcraftApp, ctx: &egui::Context, label: &str) {
+    let labels = menu_frame(app, ctx, vec![]);
+    let at = labels.iter().find(|(t, _)| t.trim() == label).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no {label} in the menu"));
+    let button = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE };
+    menu_frame(app, ctx, vec![Event::PointerMoved(at), button(true)]);
+    menu_frame(app, ctx, vec![button(false)]);
+}
+
+/// The panel menu's Show Recent Colors hides and shows the panel's Recent Colors row (#6617):
+/// checked by default, applied colors still join the list while the row is hidden, and the Color
+/// panel keeps its own row and setting.
+#[test]
+fn show_recent_colors_hides_and_shows_the_swatches_row() {
+    let mut app = app();
+    app.run("paint.setFill", json!({"color": "#ff0000"})).unwrap();
+    let ctx = context();
+    let menu_ctx = context();
+    // The first recent chip, if the panel draws one (the second frame's answer counts, since egui
+    // also answers for a widget the frame before drew).
+    let chip = |app: &mut VectorcraftApp| {
+        let mut chip = None;
+        for _ in 0..2 {
+            let screen_rect = Some(Rect::from_min_size(Pos2::ZERO, vec2(280.0, 700.0)));
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect, ..Default::default() }, |ui| {
+                show(app, ui);
+                chip = ctx.read_response(ui.scope_id().with(("recent", 0usize))).map(|r| r.rect);
+            });
+            out.textures_delta.clear();
+        }
+        chip
+    };
+    assert!(chip(&mut app).is_some(), "the row shows by default");
+    click_menu_item(&mut app, &menu_ctx, "✓ Show Recent Colors");
+    assert!(!app.ui.swatches_show_recent_colors);
+    assert!(chip(&mut app).is_none(), "unchecked, the row is hidden");
+    app.run("paint.setFill", json!({"color": "#00ff00"})).unwrap();
+    assert_eq!(app.session.recent_colors.first().map(|c| c.to_hex()).as_deref(), Some("#00ff00"), "colors still join the list");
+    assert_eq!(app.run("ui.colorPanel", json!({})).unwrap()["recentColors"], true, "the Color panel keeps its setting");
+    click_menu_item(&mut app, &menu_ctx, "Show Recent Colors");
+    assert!(chip(&mut app).is_some(), "checking the item shows the row again");
+    // The app keeps it with the preferences; a saved value that isn't true or false reads as on.
+    let saved = |v: Value| {
+        let mut prefs = serde_json::to_value(crate::UiState::default()).unwrap();
+        prefs["swatches_show_recent_colors"] = v;
+        serde_json::from_value::<crate::UiState>(prefs).unwrap().swatches_show_recent_colors
+    };
+    assert_eq!((saved(json!(false)), saved(json!(true)), saved(json!("no"))), (false, true, true));
+}
+
+/// The panel, and the Fill/Stroke chip popover that shows the same body, draw no "Recent Colors"
+/// or "Swatch Tiles" heading (#8041): the Recent Colors row sits under the proxy row, empty or not,
+/// the swatch list just under it, and the list moves up under the proxy row when Show Recent
+/// Colors hides the row. Screen readers find both parts by those names, with the chips in the
+/// Recent Colors group and the tiles in the Swatch Tiles list.
+#[test]
+fn the_list_sits_under_the_recent_colors_row_without_headings() {
+    fn texts(shapes: &[egui::Shape], out: &mut Vec<String>) {
+        for s in shapes {
+            match s {
+                egui::Shape::Text(t) => out.push(t.galley.text().to_string()),
+                egui::Shape::Vec(v) => texts(v, out),
+                _ => {}
+            }
+        }
+    }
+    // The visible texts, and the bounds of the parts screen readers name "Recent Colors" and
+    // "Swatch Tiles", of the second of two frames.
+    let look = |app: &mut VectorcraftApp, draw: fn(&mut VectorcraftApp, &mut Ui), salt: &'static str| {
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        let ctx = context();
+        ctx.enable_accesskit();
+        let mut last = None;
+        for time in [0.0, 0.5] {
+            let screen_rect = Some(Rect::from_min_size(Pos2::ZERO, vec2(280.0, 700.0)));
+            let mut out = ctx.run_ui(egui::RawInput { time: Some(time), screen_rect, ..Default::default() }, |ui| draw(app, ui));
+            out.textures_delta.clear();
+            last = Some(out);
+        }
+        let out = last.expect("a frame");
+        let mut shown = vec![];
+        texts(&out.shapes.iter().map(|c| c.shape.clone()).collect::<Vec<_>>(), &mut shown);
+        let nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
+        let named =
+            |label: &str| nodes.iter().find(|(_, n)| n.label() == Some(label)).and_then(|(_, n)| n.bounds()).map(|b| (b.y0 as f32, b.y1 as f32));
+        // The list is the node that holds the tiles, not an empty node beside them: the first
+        // tile's node is inside it.
+        let (list, node) = nodes.iter().find(|(_, n)| n.label() == Some("Swatch Tiles")).expect("screen readers find the swatch list");
+        assert_eq!(node.role(), egui::accesskit::Role::List);
+        let first = entries(app, Kind::All, "").first().map(|e| tiles::tile_id(salt, e).accesskit_id()).expect("the document has swatches");
+        let (mut inside, mut stack) = (false, vec![*list]);
+        while let Some(id) = stack.pop() {
+            inside |= id == first;
+            stack.extend(nodes.iter().filter(|(n, _)| *n == id).flat_map(|(_, n)| n.children().iter().copied()));
+        }
+        assert!(inside, "the list holds the tiles");
+        // Likewise the Recent Colors group holds its chips, one child per recent color.
+        let chips = nodes.iter().find(|(_, n)| n.label() == Some("Recent Colors")).map(|(_, n)| n.children().len());
+        if let Some(chips) = chips {
+            assert_eq!(chips, app.session.recent_colors.len(), "the group holds the chips");
+        }
+        (shown, named("Recent Colors"), named("Swatch Tiles"))
+    };
+    for (draw, salt) in [(show as fn(&mut VectorcraftApp, &mut Ui), TILE), (popover, POPOVER_TILE)] {
+        let mut app = app();
+        for applied in [false, true] {
+            if applied {
+                app.run("paint.setFill", json!({"color": "#ff0000"})).unwrap();
+            }
+            let (shown, recent, list) = look(&mut app, draw, salt);
+            assert!(!shown.iter().any(|t| t == "Recent Colors" || t == "Swatch Tiles"), "{salt}: no headings: {shown:?}");
+            let (row_top, row_bottom) = recent.expect("screen readers find the Recent Colors row");
+            let (top, _) = list.expect("screen readers find the swatch list");
+            assert!(row_top < 50.0, "{salt}: the row sits under the proxy row: {row_top}");
+            assert!(top > row_bottom && top - row_bottom < 12.0, "{salt}: the list sits under the row: {row_bottom} {top}");
+        }
+        app.ui.swatches_show_recent_colors = false;
+        let (_, recent, list) = look(&mut app, draw, salt);
+        assert_eq!(recent, None, "{salt}: Show Recent Colors unchecked hides the row");
+        let (top, _) = list.expect("screen readers find the swatch list");
+        assert!(top < 50.0, "{salt}: the list starts under the proxy row: {top}");
+    }
+}
+
+/// In a panel made taller the swatch list fills the space above the panel's footer instead of
+/// scrolling inside 150 or 200 pt (#1638); outside a sized panel it keeps those heights.
+#[test]
+fn the_list_fills_a_tall_panel_above_its_footer() {
+    let mut app = app();
+    for i in 0..60 {
+        app.run("swatch.new", json!({"name": format!("Tone {i:02}"), "color": format!("#{:02x}3060", i * 4)})).unwrap();
+    }
+    let ctx = context();
+    app.ui.swatches_view = View::SmallList;
+    // The clip rect of the first swatch row's name: the list's visible area.
+    let mut list = |bottom: Option<f32>| {
+        let mut clip = None;
+        for _ in 0..3 {
+            let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(280.0, 760.0))), ..Default::default() };
+            let mut out = ctx.run_ui(raw, |ui| {
+                let info = egui::UiStackInfo::default().with_tag_value(widgets::PANEL_FOOTER, bottom);
+                ui.scope_builder(egui::UiBuilder::new().ui_stack_info(info), |ui| show(&mut app, ui));
+            });
+            out.textures_delta.clear();
+            clip = out.shapes.iter().find(|c| matches!(&c.shape, egui::Shape::Text(t) if t.galley.text() == "Tone 00")).map(|c| c.clip_rect);
+        }
+        clip.expect("the first new swatch's row is drawn")
+    };
+    let tall = list(Some(700.0));
+    assert!(tall.height() > 400.0 && tall.bottom() <= 700.0 - 31.0, "the list fills the panel above its footer: {tall:?}");
+    let loose = list(None);
+    assert!(loose.height() <= 150.5, "unsized, the list keeps its height: {loose:?}");
 }

@@ -736,9 +736,40 @@ fn input_names<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<Ve
 /// Reads the `commands` list one entry at a time from the manifest itself, so each command's
 /// `params` keep their declaration order and a repeated parameter is refused. A malformed entry
 /// is an error that names it (its id when the id comes before the fault, otherwise its place in
-/// the list), and a list is refused at its first entry past [`MAX_COMMANDS`].
+/// the list), and a list is refused at its first entry past [`MAX_COMMANDS`]. A `commands` value,
+/// an entry, an `id` or a `label` of the wrong type gets a fixed message of this function's own.
 fn ordered_commands<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<Vec<Command>, D::Error> {
     use serde::de::{Error as _, IgnoredAny, MapAccess, SeqAccess, Visitor};
+
+    /// A visitor's methods for a boolean, a number and a string: each is the error its type's
+    /// `wrong()` gives.
+    macro_rules! refuse_scalars {
+        () => {
+            fn visit_bool<E: serde::de::Error>(self, _: bool) -> std::result::Result<Self::Value, E> {
+                Err(E::custom(self.wrong()))
+            }
+            fn visit_i64<E: serde::de::Error>(self, _: i64) -> std::result::Result<Self::Value, E> {
+                Err(E::custom(self.wrong()))
+            }
+            fn visit_u64<E: serde::de::Error>(self, _: u64) -> std::result::Result<Self::Value, E> {
+                Err(E::custom(self.wrong()))
+            }
+            fn visit_f64<E: serde::de::Error>(self, _: f64) -> std::result::Result<Self::Value, E> {
+                Err(E::custom(self.wrong()))
+            }
+            fn visit_str<E: serde::de::Error>(self, _: &str) -> std::result::Result<Self::Value, E> {
+                Err(E::custom(self.wrong()))
+            }
+        };
+    }
+
+    /// A string field of an entry: anything else is the error "`{key}` must be a string".
+    fn string_field<'de, A: MapAccess<'de>>(map: &mut A, key: &str) -> std::result::Result<std::result::Result<String, String>, A::Error> {
+        Ok(match map.next_value::<Value>()? {
+            Value::String(s) => Ok(s),
+            _ => Err(format!("`{key}` must be a string")),
+        })
+    }
 
     /// A command's `params`, read in declaration order.
     struct Params(Vec<(String, Param)>);
@@ -750,6 +781,11 @@ fn ordered_commands<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Resu
 
     /// The entry at place `.0` in the list.
     struct Entry(usize);
+    impl Entry {
+        fn wrong(&self) -> String {
+            format!("command {} must be an object with an `id` and a `label`", command_name(self.0, ""))
+        }
+    }
     impl<'de> serde::de::DeserializeSeed<'de> for Entry {
         type Value = Command;
         fn deserialize<D: serde::Deserializer<'de>>(self, d: D) -> std::result::Result<Command, D::Error> {
@@ -759,21 +795,29 @@ fn ordered_commands<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Resu
     impl<'de> Visitor<'de> for Entry {
         type Value = Command;
         fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-            write!(f, "command [{}] as {{id, label, params?}}", self.0)
+            f.write_str(&self.wrong())
+        }
+        refuse_scalars!();
+        fn visit_unit<E: serde::de::Error>(self) -> std::result::Result<Command, E> {
+            Err(E::custom(self.wrong()))
+        }
+        fn visit_seq<A: SeqAccess<'de>>(self, _: A) -> std::result::Result<Command, A::Error> {
+            Err(A::Error::custom(self.wrong()))
         }
         fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> std::result::Result<Command, A::Error> {
             let (mut id, mut label, mut params) = (None::<String>, None::<String>, None::<Params>);
             let named = |id: &Option<String>, e: &dyn std::fmt::Display| {
                 A::Error::custom(format!("command {}: {e}", command_name(self.0, id.as_deref().unwrap_or_default())))
             };
-            while let Some(key) = map.next_key::<String>().map_err(|e| named(&id, &e))? {
+            // A key and an ignored value can only fail as JSON syntax, which keeps serde's own error.
+            while let Some(key) = map.next_key::<String>()? {
                 let repeated = match key.as_str() {
                     "id" if id.is_none() => {
-                        id = Some(map.next_value().map_err(|e| named(&id, &e))?);
+                        id = Some(string_field(&mut map, "id")?.map_err(|e| named(&id, &e))?);
                         false
                     }
                     "label" if label.is_none() => {
-                        label = Some(map.next_value().map_err(|e| named(&id, &e))?);
+                        label = Some(string_field(&mut map, "label")?.map_err(|e| named(&id, &e))?);
                         false
                     }
                     "params" if params.is_none() => {
@@ -782,7 +826,7 @@ fn ordered_commands<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Resu
                     }
                     "id" | "label" | "params" => true,
                     _ => {
-                        map.next_value::<IgnoredAny>().map_err(|e| named(&id, &e))?;
+                        map.next_value::<IgnoredAny>()?;
                         false
                     }
                 };
@@ -801,16 +845,22 @@ fn ordered_commands<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Resu
     }
 
     struct List;
+    impl List {
+        fn wrong(&self) -> &'static str {
+            "`commands` must be a list of commands, each with an `id` and a `label`"
+        }
+    }
     impl<'de> Visitor<'de> for List {
         type Value = Vec<Command>;
         fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-            f.write_str("`commands` as a list of {id, label, params?}")
+            f.write_str(self.wrong())
         }
+        refuse_scalars!();
         fn visit_unit<E: serde::de::Error>(self) -> std::result::Result<Self::Value, E> {
             Ok(Vec::new())
         }
         fn visit_map<A: MapAccess<'de>>(self, _: A) -> std::result::Result<Self::Value, A::Error> {
-            Err(A::Error::custom("`commands` must be a list of {id, label, params?}"))
+            Err(A::Error::custom(self.wrong()))
         }
         fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> std::result::Result<Self::Value, A::Error> {
             let mut out = Vec::new();
@@ -1215,14 +1265,27 @@ mod tests {
                 r#"{"id":"a","name":"x","kind":"filter","commands":[{"id":"x","label":"A","params":{"r":{"type":"bool"},"r":{"type":"int"}}}]}"#,
                 "command `x`: parameter `r` is declared twice",
             ),
-            (r#"{"id":"a","name":"x","kind":"filter","commands":[1]}"#, "command [0]"),
-            (r#"{"id":"a","name":"x","kind":"filter","commands":{"id":"x"}}"#, "must be a list"),
+            (r#"{"id":"a","name":"x","kind":"filter","commands":[1]}"#, "command [0] must be an object with an `id` and a `label`"),
+            (r#"{"id":"a","name":"x","kind":"filter","commands":[{"id":"x","label":"A"},null]}"#, "command [1] must be an object"),
+            (r#"{"id":"a","name":"x","kind":"filter","commands":[["x"]]}"#, "command [0] must be an object"),
+            (r#"{"id":"a","name":"x","kind":"filter","commands":[{"id":1,"label":"A"}]}"#, "command [0]: `id` must be a string"),
+            (r#"{"id":"a","name":"x","kind":"filter","commands":[{"id":"x","label":true}]}"#, "command `x`: `label` must be a string"),
+            (r#"{"id":"a","name":"x","kind":"filter","commands":[{"id":"x","id":"y","label":"A"}]}"#, "command `x`: duplicate field `id`"),
+            (
+                r#"{"id":"a","name":"x","kind":"filter","commands":{"id":"x"}}"#,
+                "`commands` must be a list of commands, each with an `id` and a `label`",
+            ),
+            (r#"{"id":"a","name":"x","kind":"filter","commands":"x"}"#, "`commands` must be a list of commands"),
+            (r#"{"id":"a","name":"x","kind":"filter","commands":7}"#, "`commands` must be a list of commands"),
+            (r#"{"id":"a","name":"x","kind":"filter","commands":true}"#, "`commands` must be a list of commands"),
             (r#"{"id":"a","name":"x","kind":"exporter","extensions":["plt"],"commands":[{"id":"x","label":"A"}]}"#, "only a filter or a live effect"),
             (r#"{"id":"a","name":"x","kind":"filter","budget":"heavy","commands":[{"id":"x","label":"A"}]}"#, "heavy filter"),
             (too_many.as_str(), "at most 32 `commands`"),
         ] {
             let e = Manifest::parse(bad.as_bytes()).unwrap_err().to_string();
             assert!(e.contains(says), "{bad}: {e}");
+            // The message is the manifest reader's own, with serde's place in the manifest once.
+            assert!(!e.contains("invalid type") && !e.contains("expected") && e.matches(" at line ").count() <= 1, "{bad}: {e}");
         }
         let long_id = format!(r#"{{"id":"a","name":"x","kind":"filter","commands":[{{"id":"{}","label":"A"}}]}}"#, "c".repeat(MAX_COMMAND_ID + 1));
         assert!(Manifest::parse(long_id.as_bytes()).is_err());

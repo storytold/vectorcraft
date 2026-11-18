@@ -17,13 +17,25 @@ use vectorcraft_ui_egui::i18n;
 use vectorcraft_ui_egui::place::{DropTarget, PlaceArrival, PlaceInbox};
 use vectorcraft_ui_egui::print::{PrintJob, PrintService, Printer};
 use vectorcraft_ui_egui::stylus::StylusFeed;
-use vectorcraft_ui_egui::{Services, VectorcraftApp};
+use vectorcraft_ui_egui::{PickedInbox, Services, VectorcraftApp};
 use wasm_bindgen::JsCast as _;
 
 use crate::locks::WebLocks;
 use crate::pencil::SharedPointers;
 
 pub(crate) type Inbox = Arc<Mutex<Vec<(String, Vec<u8>)>>>;
+
+/// The files waiting to open, by where they came from (`Services::inbox`, `picked_inbox` and
+/// `page_inbox`).
+#[derive(Clone, Default)]
+struct OpenInboxes {
+    /// Dropped on the page.
+    dropped: Inbox,
+    /// The open picker's answers.
+    picked: PickedInbox,
+    /// Handed over by the page's script (`window.vectorcraft.openFile`).
+    page: Inbox,
+}
 
 /// Where the pointer was over the canvas during the last file drag (CSS px from its top-left) and
 /// whether Shift was held: where dropped files land.
@@ -48,7 +60,7 @@ const MAX_RESTARTS: u32 = 3;
 #[derive(Clone)]
 struct Host {
     runner: eframe::WebRunner,
-    inbox: Inbox,
+    inbox: OpenInboxes,
     place_inbox: PlaceInbox,
     script_inbox: ScriptInbox,
     drag: DragPos,
@@ -69,6 +81,11 @@ pub fn start() {
         return;
     };
     detect_language();
+    // The face for a Korean or Hindi browser language (or `?lang=`) starts loading now, beside the
+    // startup fonts, without holding up the start. Text in those scripts painted later (a saved
+    // interface language, another one chosen, a layer or file name) has its face fetched then.
+    vectorcraft_ui_egui::on_missing_glyphs(crate::fonts::want_chars);
+    crate::fonts::want_chars(&i18n::system_lang().name().chars().collect::<Vec<_>>());
     wasm_bindgen_futures::spawn_local(async move {
         // Before the first frame, which looks for copies a crash left behind.
         let locks = WebLocks::start(RECOVERY_PREFIX).await;
@@ -77,7 +94,7 @@ pub fn start() {
         crate::fonts::load_startup_fonts().await;
         let host = Host {
             runner: eframe::WebRunner::new(),
-            inbox: Arc::default(),
+            inbox: OpenInboxes::default(),
             place_inbox: Arc::default(),
             script_inbox: Arc::default(),
             drag: DragPos::default(),
@@ -132,13 +149,13 @@ async fn run(host: Host, canvas: web_sys::HtmlCanvasElement, moving: Option<Movi
                         // The old services asked the old context for frames.
                         app.services = services;
                         app.status("The graphics were lost and have been restarted");
-                        crate::api::connect(None, host.inbox.clone(), ctx.clone());
+                        crate::api::connect(None, host.inbox.page.clone(), ctx.clone());
                         app
                     }
                     None => {
                         // `window.vectorcraft`: the page's control channel (crate::api).
                         let (control_tx, control_rx) = std::sync::mpsc::channel();
-                        crate::api::connect(Some(control_tx), host.inbox.clone(), ctx.clone());
+                        crate::api::connect(Some(control_tx), host.inbox.page.clone(), ctx.clone());
                         if let Err(e) = crate::api::install() {
                             log::error!("vectorcraft-web: couldn't install window.vectorcraft: {}", js_err(e));
                         }
@@ -409,7 +426,7 @@ impl eframe::App for WebShell {
                 for f in dropped {
                     let name = f.path().file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| "dropped".into());
                     let target = app.drop_target(&name, pos, shift);
-                    let (inbox, place_inbox, repaint) = (self.host.inbox.clone(), self.host.place_inbox.clone(), ctx.clone());
+                    let (inbox, place_inbox, repaint) = (self.host.inbox.dropped.clone(), self.host.place_inbox.clone(), ctx.clone());
                     wasm_bindgen_futures::spawn_local(async move {
                         match f.bytes_async().await {
                             Ok(bytes) => {
@@ -432,14 +449,14 @@ impl eframe::App for WebShell {
 }
 
 fn services(
-    inbox: Inbox,
+    inbox: OpenInboxes,
     place_inbox: PlaceInbox,
     script_inbox: ScriptInbox,
     ctx: egui::Context,
     locks: Option<WebLocks>,
     stylus: StylusFeed,
 ) -> Services {
-    let open_inbox = inbox.clone();
+    let open_inbox = inbox.picked.clone();
     let picked = place_inbox.clone();
     let place_ctx = ctx.clone();
     let screen_color = eye_dropper(ctx.clone());
@@ -488,11 +505,12 @@ fn services(
                 let dialog = fileio::open_filters().fold(rfd::AsyncFileDialog::new(), |d, (name, exts)| {
                     d.add_filter(vectorcraft_ui_egui::i18n::tr_ctx(vectorcraft_ui_egui::i18n::current(), "file-filter", name), exts)
                 });
-                let Some(file) = dialog.pick_file().await else {
-                    return;
+                // A canceled pick answers `None`.
+                let answer = match dialog.pick_file().await {
+                    Some(file) => Some((file.file_name(), file.read().await)),
+                    None => None,
                 };
-                let bytes = file.read().await;
-                inbox.lock().unwrap_or_else(|e| e.into_inner()).push((file.file_name(), bytes));
+                inbox.lock().unwrap_or_else(|e| e.into_inner()).push(answer);
                 ctx.request_repaint();
             });
         })),
@@ -500,7 +518,9 @@ fn services(
         screen_color,
         // A download that couldn't be started fails the save or export it is for (#1693).
         download: Some(Box::new(|name: &str, bytes: &[u8]| download(name, bytes).inspect_err(|e| log::error!("download of {name} failed: {e}")))),
-        inbox: Some(inbox),
+        inbox: Some(inbox.dropped),
+        picked_inbox: Some(inbox.picked),
+        page_inbox: Some(inbox.page),
         recovery_store: Some(Arc::new(BrowserStore { locks })),
         // File → Print: the browser's print dialog.
         print: Some(Box::new(BrowserPrint)),

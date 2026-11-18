@@ -15,7 +15,8 @@ use crate::{AppearanceItem, Document, Node, NodeKind};
 pub struct Inks {
     /// Process inks C, M, Y, K (0..1).
     pub cmyk: [f32; 4],
-    /// Spot ink (swatch name, tint 0..1).
+    /// Spot ink (swatch name, tint 0..1). A spot ink named like a process plate ("Cyan",
+    /// "Magenta", "Yellow", "Black") prints on that plate: its tint is in `cmyk` too.
     pub spot: Option<(String, f32)>,
     /// Registration: the tint (every process ink's) prints on every spot plate too.
     pub registration: bool,
@@ -49,7 +50,20 @@ pub struct Plate {
     pub rgb: [f32; 3],
 }
 
-/// The plates of `doc`: the four process plates plus one per spot swatch.
+/// Spot swatch `name` as art links to it: [`Document::swatch`] `name` when that is a spot swatch of
+/// a solid colour.
+fn spot_swatch<'a>(doc: &'a Document, name: &str) -> Option<&'a vectorcraft_color::Swatch> {
+    doc.swatch(name).filter(|s| s.spot && s.paint.color().is_some())
+}
+
+/// The index in [`PROCESS_PLATES`] of the process plate named `name`.
+fn process_plate(name: &str) -> Option<usize> {
+    PROCESS_PLATES.iter().position(|p| *p == name)
+}
+
+/// The plates of `doc`: the four process plates plus one per spot swatch that art can link to. A
+/// link names a swatch, which is the first swatch of that name ([`Document::swatch`]), so a spot
+/// swatch after another of its name, or named like a process plate, gets no plate.
 pub fn plates(doc: &Document) -> Vec<Plate> {
     let c = vectorcraft_color::cms::active();
     let mut v: Vec<Plate> = PROCESS_PLATES
@@ -61,58 +75,106 @@ pub fn plates(doc: &Document) -> Vec<Plate> {
             Plate { name: (*n).into(), spot: false, rgb: c.cmyk_to_srgb(ink, false) }
         })
         .collect();
+    let mut seen = std::collections::HashSet::new();
     for sw in doc.swatches_iter() {
-        if let (true, Paint::Solid { color, .. }) = (sw.spot, &sw.paint)
-            && !v.iter().any(|p| p.name == sw.name)
+        // Only the first swatch of a name is the one [`spot_swatch`] finds.
+        if !seen.insert(sw.name.as_str()) {
+            continue;
+        }
+        if let (true, Some(color)) = (sw.spot, sw.paint.color())
+            && !PROCESS_PLATES.contains(&sw.name.as_str())
         {
-            v.push(Plate { name: sw.name.clone(), spot: true, rgb: c.display_rgb(&doc.linked_color(*color, true)) });
+            v.push(Plate { name: sw.name.clone(), spot: true, rgb: c.display_rgb(&doc.linked_color(color, true)) });
         }
     }
     v
 }
 
-/// The ink colour of spot swatch `name` as it shows ([`Document::linked_color`]).
+/// The ink colour of spot swatch `name` as it shows ([`Document::linked_color`]); `None` when
+/// [`Document::swatch`] `name` is not a spot swatch, or `name` is a process plate's, whose ink
+/// prints on that plate.
 pub fn spot_color(doc: &Document, name: &str) -> Option<Color> {
-    let s = doc.swatch(name).filter(|s| s.spot)?;
-    s.paint.color().map(|c| doc.linked_color(c, true))
+    if process_plate(name).is_some() {
+        return None;
+    }
+    spot_swatch(doc, name)?.paint.color().map(|c| doc.linked_color(c, true))
 }
 
 /// A colour's swatch link and tint (`(swatch name, tint 0..1)`), as the colour visitors pass it.
 pub type Link<'a> = Option<(&'a str, f32)>;
 
+/// An ink amount clamped to 0..1; an amount that is not a finite number prints no ink.
+fn ink_amount(v: f32) -> f32 {
+    if v.is_finite() { v.clamp(0.0, 1.0) } else { 0.0 }
+}
+
 /// Separate one colour into inks. A colour linked to a spot swatch prints on that plate only, at
-/// its tint; one linked to the Registration swatch prints its tint on every plate.
+/// its tint, and one linked to a spot swatch named like a process plate prints its tint on that
+/// process plate, as PDF and EPS export write it; one linked to the Registration swatch prints its
+/// tint on every plate. A tint that is not a finite number prints no ink.
 pub fn inks(doc: &Document, c: &Cms, color: &Color, link: Link, intent: Intent) -> Inks {
     if let Some((REGISTRATION, tint)) = link {
-        return Inks { cmyk: [tint.clamp(0.0, 1.0); 4], spot: None, registration: true };
+        return Inks { cmyk: [ink_amount(tint); 4], spot: None, registration: true };
     }
     if let Some((name, tint)) = link
-        && doc.swatch(name).is_some_and(|s| s.spot && s.paint.color().is_some())
+        && spot_swatch(doc, name).is_some()
     {
-        return Inks { cmyk: [0.0; 4], spot: Some((name.to_string(), tint.clamp(0.0, 1.0))), registration: false };
+        let tint = ink_amount(tint);
+        let mut cmyk = [0.0; 4];
+        if let Some(i) = process_plate(name) {
+            cmyk[i] = tint;
+        }
+        return Inks { cmyk, spot: Some((name.to_string(), tint)), registration: false };
     }
     Inks { cmyk: c.to_cmyk(color, intent), spot: None, registration: false }
 }
 
-/// Visits one colour: the colour, its swatch link and its tint, all of which it may change.
-pub type ColorVisitor<'a> = dyn FnMut(&mut Color, &mut Option<String>, &mut f32) + 'a;
+/// Process plates a colour prints together with its spot tint (C, M, Y, K, 0..1): a gradient
+/// stop's [`vectorcraft_color::GradientStop::plates`]; `None` for every other colour.
+pub type StopPlates = Option<[f32; 4]>;
+
+/// [`inks`] of a colour that may print process plates `plates` with its spot tint. The plates
+/// print only beside a spot ink: a colour without a valid spot link, or linked to Registration,
+/// prints as [`inks`] separates it. A spot ink named like a process plate prints its tint layered
+/// over that plate's amount; EPS export can't write that ink beside process plates in one DeviceN
+/// space, so it writes such a gradient in process colors with a warning. A plate amount that is
+/// not a finite number prints no ink.
+pub fn stop_inks(doc: &Document, c: &Cms, color: &Color, link: Link, plates: StopPlates, intent: Intent) -> Inks {
+    let mut ink = inks(doc, c, color, link, intent);
+    if let (Some(p), Some((name, tint))) = (plates, &ink.spot) {
+        let mut cmyk = p.map(ink_amount);
+        if let Some(i) = process_plate(name) {
+            cmyk[i] = 1.0 - (1.0 - cmyk[i]) * (1.0 - tint);
+        }
+        ink.cmyk = cmyk;
+    }
+    ink
+}
+
+/// Visits one colour: the colour, its swatch link, its tint and its process plates
+/// ([`StopPlates`]), all of which it may change.
+pub type ColorVisitor<'a> = dyn FnMut(&mut Color, &mut Option<String>, &mut f32, &mut StopPlates) + 'a;
 
 fn visit_paint(p: &mut Paint, f: &mut ColorVisitor) {
     match p {
-        Paint::Solid { color, swatch, tint } => f(color, swatch, tint),
+        Paint::Solid { color, swatch, tint } => f(color, swatch, tint, &mut None),
         Paint::Gradient(g) => {
             for s in &mut g.gradient.stops {
-                f(&mut s.color, &mut s.swatch, &mut s.tint);
+                f(&mut s.color, &mut s.swatch, &mut s.tint, &mut s.plates);
+            }
+            for p in g.freeform.iter_mut().flat_map(|ff| ff.points.iter_mut()) {
+                f(&mut p.color, &mut None, &mut 1.0, &mut None);
             }
         }
         _ => {}
     }
 }
 
-/// Visit every colour of a node tree (fills, strokes, gradient stops, text runs, mesh points, an
-/// image's colorize color, the fills and strokes a dynamic symbol instance keeps for objects of its
-/// art, not opacity masks) with its swatch link and tint. Mesh points have no link: changes to it
-/// are dropped.
+/// Visit every colour of a node tree (fills, strokes, gradient stops, a freeform gradient's
+/// points, text runs, mesh points, an image's colorize color, the fills and strokes a dynamic
+/// symbol instance keeps for objects of its art, not opacity masks) with its swatch link, tint and
+/// process plates. Freeform and mesh points have no link or plates: a link or plates `f` gives
+/// them are dropped.
 pub fn visit_node_colors(n: &mut Node, f: &mut ColorVisitor) {
     for it in &mut n.appearance.items {
         match it {
@@ -137,7 +199,7 @@ pub fn visit_node_colors(n: &mut Node, f: &mut ColorVisitor) {
         }
         NodeKind::Mesh(m) => {
             for p in &mut m.points {
-                f(&mut p.color, &mut None, &mut 1.0);
+                f(&mut p.color, &mut None, &mut 1.0, &mut None);
             }
         }
         _ => {}
@@ -149,11 +211,16 @@ pub fn visit_node_colors(n: &mut Node, f: &mut ColorVisitor) {
     }
 }
 
-/// Apply `f` to every colour of a node tree (fills, strokes, gradient stops, text runs, mesh
-/// points, a dynamic symbol instance's own fills and strokes) given its swatch link and tint,
-/// keeping the links.
+/// Apply `f` to every colour of a node tree (fills, strokes, gradient stops, a freeform
+/// gradient's points, text runs, mesh points, a dynamic symbol instance's own fills and strokes)
+/// given its swatch link and tint, keeping the links and process plates.
 pub fn map_node_colors(n: &mut Node, f: &mut dyn FnMut(&Color, Link) -> Color) {
-    visit_node_colors(n, &mut |c, swatch, tint| *c = f(c, swatch.as_deref().map(|s| (s, *tint))));
+    map_node_inks(n, &mut |c, link, _| f(c, link));
+}
+
+/// [`map_node_colors`], with each colour's process plates ([`StopPlates`]) passed to `f` too.
+pub fn map_node_inks(n: &mut Node, f: &mut dyn FnMut(&Color, Link, StopPlates) -> Color) {
+    visit_node_colors(n, &mut |c, swatch, tint, plates| *c = f(c, swatch.as_deref().map(|s| (s, *tint)), *plates));
 }
 
 /// Apply `f` to every colour in the document's art and symbol definitions.
@@ -170,7 +237,148 @@ pub fn map_document_colors(doc: &mut Document, f: &mut dyn FnMut(&Color, Link) -
 mod tests {
     use super::*;
     use crate::{NodeId, SymbolOverride};
+    use vectorcraft_color::{Freeform, FreeformPoint, Gradient, GradientKind, GradientPaint, GradientStop, Swatch, SwatchGroup};
     use vectorcraft_geom::Affine;
+
+    /// A document with spot swatch `Gold` and process swatch `Teal`.
+    fn gold_doc() -> Document {
+        let mut d = Document::new(100.0, 100.0);
+        d.swatches.push(Swatch { name: "Gold".into(), paint: Paint::solid(Color::cmyk(0.0, 0.2, 0.8, 0.1)), global: true, spot: true });
+        d.swatches.push(Swatch { name: "Teal".into(), paint: Paint::solid(Color::cmyk(0.8, 0.0, 0.3, 0.0)), global: true, spot: false });
+        d
+    }
+
+    #[test]
+    fn a_spot_stops_process_plates_print_with_its_tint() {
+        let d = gold_doc();
+        let c = vectorcraft_color::cms::active();
+        let look = Color::cmyk(0.25, 0.1, 0.8, 0.05);
+        let ink = |link: Link, plates: StopPlates| stop_inks(&d, &c, &look, link, plates, Intent::RelativeColorimetric);
+        let mixed = ink(Some(("Gold", 0.5)), Some([0.25, 0.0, 0.4, 0.0]));
+        assert_eq!(mixed, Inks { cmyk: [0.25, 0.0, 0.4, 0.0], spot: Some(("Gold".into(), 0.5)), registration: false });
+        assert_eq!((mixed.on_plate("Cyan"), mixed.on_plate("Gold")), (0.25, 0.5));
+        // Amounts outside 0..1 are clamped; one that is not a number prints no ink.
+        let odd = ink(Some(("Gold", 1.0)), Some([f32::NAN, 2.0, -1.0, f32::INFINITY]));
+        assert_eq!(odd.cmyk, [0.0, 1.0, 0.0, 0.0]);
+        // Without plates the spot ink prints alone, as `inks` separates it.
+        assert_eq!(ink(Some(("Gold", 0.5)), None), inks(&d, &c, &look, Some(("Gold", 0.5)), Intent::RelativeColorimetric));
+        // Plates beside no spot ink print nothing of their own: a process swatch, an unknown
+        // swatch, no link and Registration separate as `inks` does.
+        for link in [Some(("Teal", 1.0)), Some(("Missing", 1.0)), None, Some((REGISTRATION, 0.5))] {
+            assert_eq!(ink(link, Some([0.25, 0.0, 0.4, 0.0])), inks(&d, &c, &look, link, Intent::RelativeColorimetric), "{link:?}");
+        }
+    }
+
+    /// The names of `doc`'s spot plates, in order.
+    fn spot_plates(doc: &Document) -> Vec<String> {
+        plates(doc).into_iter().filter(|p| p.spot).map(|p| p.name).collect()
+    }
+
+    #[test]
+    fn a_spot_swatch_named_like_an_earlier_process_swatch_gets_no_plate() {
+        // Art links to a swatch by name, which finds the earlier process `Teal`: the later spot
+        // `Teal` in a colour group prints nothing, so it gets no plate.
+        let mut d = gold_doc();
+        let spot_teal = Swatch { name: "Teal".into(), paint: Paint::solid(Color::cmyk(0.9, 0.0, 0.4, 0.0)), global: true, spot: true };
+        d.swatch_groups.push(SwatchGroup { name: "Inks".into(), swatches: vec![spot_teal.clone()] });
+        let c = vectorcraft_color::cms::active();
+        let look = Color::cmyk(0.8, 0.0, 0.3, 0.0);
+        let teal = inks(&d, &c, &look, Some(("Teal", 1.0)), Intent::RelativeColorimetric);
+        assert_eq!(teal, Inks { cmyk: c.to_cmyk(&look, Intent::RelativeColorimetric), spot: None, registration: false });
+        let stop = stop_inks(&d, &c, &look, Some(("Teal", 1.0)), Some([0.25, 0.0, 0.4, 0.0]), Intent::RelativeColorimetric);
+        assert_eq!(stop, teal, "a gradient stop linked to it separates as process too");
+        assert_eq!(spot_color(&d, "Teal"), None);
+        assert_eq!(spot_plates(&d), ["Gold"], "no plate for the spot swatch that no art reaches");
+        // The first swatch of a name decides either way: a spot swatch first gets its plate, and a
+        // later process swatch of the same name does not take it away.
+        let mut d = gold_doc();
+        d.swatches.retain(|s| s.name != "Teal");
+        d.swatches.insert(0, spot_teal);
+        let process_teal = Swatch { name: "Teal".into(), paint: Paint::solid(look), global: true, spot: false };
+        d.swatch_groups.push(SwatchGroup { name: "Inks".into(), swatches: vec![process_teal] });
+        assert_eq!(spot_plates(&d), ["Teal", "Gold"]);
+        let teal = inks(&d, &c, &look, Some(("Teal", 0.5)), Intent::RelativeColorimetric);
+        assert_eq!(teal, Inks { cmyk: [0.0; 4], spot: Some(("Teal".into(), 0.5)), registration: false });
+        assert_eq!(spot_color(&d, "Teal"), Some(Color::cmyk(0.9, 0.0, 0.4, 0.0)));
+    }
+
+    #[test]
+    fn a_spot_swatch_named_like_a_process_plate_prints_on_that_plate() {
+        // A spot `Cyan` has the process Cyan plate's name, so art linked to it prints its tint on
+        // that plate, as a Separation ink named `Cyan` in PDF and EPS export does, instead of a
+        // spot amount that no plate prints.
+        let mut d = gold_doc();
+        let blue = Color::cmyk(1.0, 0.3, 0.0, 0.1);
+        d.swatches.insert(0, Swatch { name: "Cyan".into(), paint: Paint::solid(blue), global: true, spot: true });
+        let c = vectorcraft_color::cms::active();
+        let ink = inks(&d, &c, &blue, Some(("Cyan", 0.5)), Intent::RelativeColorimetric);
+        assert_eq!(ink, Inks { cmyk: [0.5, 0.0, 0.0, 0.0], spot: Some(("Cyan".into(), 0.5)), registration: false });
+        assert_eq!((ink.on_plate("Cyan"), ink.on_plate("Magenta"), ink.on_plate("Gold")), (0.5, 0.0, 0.0));
+        let nan = inks(&d, &c, &blue, Some(("Cyan", f32::NAN)), Intent::RelativeColorimetric);
+        assert_eq!(nan.cmyk, [0.0; 4], "a tint that is not a number prints no ink");
+        // A gradient stop's own process plates still print, with the tint layered over its Cyan.
+        let stop = stop_inks(&d, &c, &blue, Some(("Cyan", 0.5)), Some([0.2, 0.4, 0.0, 0.0]), Intent::RelativeColorimetric);
+        assert!((stop.on_plate("Cyan") - 0.6).abs() < 1e-6, "{stop:?}");
+        assert_eq!((stop.on_plate("Magenta"), stop.on_plate("Yellow"), stop.on_plate("Black")), (0.4, 0.0, 0.0));
+        assert_eq!(spot_color(&d, "Cyan"), None);
+        assert_eq!(spot_plates(&d), ["Gold"]);
+    }
+
+    #[test]
+    fn a_spot_or_registration_tint_that_is_not_a_finite_number_prints_no_ink() {
+        let d = gold_doc();
+        let c = vectorcraft_color::cms::active();
+        let look = Color::cmyk(0.25, 0.1, 0.8, 0.05);
+        let ink = |link: Link| inks(&d, &c, &look, link, Intent::RelativeColorimetric);
+        for t in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+            let spot = ink(Some(("Gold", t)));
+            assert_eq!(spot, Inks { cmyk: [0.0; 4], spot: Some(("Gold".into(), 0.0)), registration: false }, "{t}");
+            assert_eq!((spot.on_plate("Gold"), spot.on_plate("Cyan")), (0.0, 0.0), "{t}");
+            let reg = ink(Some((REGISTRATION, t)));
+            assert_eq!(reg, Inks { cmyk: [0.0; 4], spot: None, registration: true }, "{t}");
+            assert_eq!((reg.on_plate("Gold"), reg.on_plate("Black")), (0.0, 0.0), "{t}");
+            // A stop's process plates still print beside a spot tint that prints nothing.
+            let stop = stop_inks(&d, &c, &look, Some(("Gold", t)), Some([0.25, 0.0, 0.4, 0.0]), Intent::RelativeColorimetric);
+            assert_eq!((stop.cmyk, stop.on_plate("Gold")), ([0.25, 0.0, 0.4, 0.0], 0.0), "{t}");
+        }
+        // Finite tints outside 0..1 are clamped.
+        assert_eq!(ink(Some(("Gold", 2.0))).on_plate("Gold"), 1.0);
+        assert_eq!(ink(Some(("Gold", -1.0))).on_plate("Gold"), 0.0);
+        assert_eq!(ink(Some((REGISTRATION, 2.0))).cmyk, [1.0; 4]);
+        assert_eq!(ink(Some((REGISTRATION, -1.0))).cmyk, [0.0; 4]);
+    }
+
+    #[test]
+    fn gradient_stops_pass_their_plates_and_freeform_points_are_visited() {
+        let mut stop = GradientStop::new(0.0, Color::cmyk(0.25, 0.1, 0.8, 0.05));
+        (stop.swatch, stop.tint, stop.plates) = (Some("Gold".into()), 0.5, Some([0.25, 0.0, 0.4, 0.0]));
+        let mut g = GradientPaint::new(Gradient::new(GradientKind::Linear, vec![stop, GradientStop::new(1.0, Color::rgb(1.0, 1.0, 1.0))]));
+        let point = FreeformPoint::new(kurbo::Point::new(10.0, 10.0), Color::rgb(0.0, 1.0, 0.0));
+        g.freeform = Some(Freeform { points: vec![point], ..Default::default() });
+        let mut n = Node::path(
+            NodeId(1),
+            vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(0.0, 0.0, 10.0, 10.0)),
+            crate::Appearance::basic(Paint::Gradient(Box::new(g)), Paint::None, 0.0),
+        );
+        let mut seen = vec![];
+        let gray = Color::Gray { k: 0.5 };
+        map_node_inks(&mut n, &mut |c, link, plates| {
+            seen.push((*c, link.map(|(s, t)| (s.to_string(), t)), plates));
+            gray
+        });
+        assert_eq!(
+            seen,
+            vec![
+                (Color::cmyk(0.25, 0.1, 0.8, 0.05), Some(("Gold".to_string(), 0.5)), Some([0.25, 0.0, 0.4, 0.0])),
+                (Color::rgb(1.0, 1.0, 1.0), None, None),
+                (Color::rgb(0.0, 1.0, 0.0), None, None),
+            ]
+        );
+        let Some(Paint::Gradient(g)) = n.appearance.fill().map(|f| f.paint.clone()) else { panic!("no gradient fill") };
+        assert_eq!(g.gradient.stops[0].plates, Some([0.25, 0.0, 0.4, 0.0]), "mapping a colour keeps its plates");
+        assert!(g.gradient.stops.iter().all(|s| s.color == gray));
+        assert_eq!(g.freeform.map(|f| f.points[0].color), Some(gray), "the freeform point is mapped too");
+    }
 
     #[test]
     fn a_dynamic_instances_own_fills_and_strokes_are_visited() {

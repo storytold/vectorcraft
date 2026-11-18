@@ -59,9 +59,10 @@ pub(super) enum Drop {
     /// `target` of its kind (neither None, Registration nor a tint swatch; see [`replaces`]), it
     /// gives that swatch its paint instead of moving.
     Move { names: Vec<String>, target: Option<String>, after: bool, with: Option<String> },
-    /// A paint from elsewhere (a Fill/Stroke proxy, the Gradient panel's thumbnail) dropped on row
-    /// `target` (or between rows) becomes a swatch; with Alt held (`replace`) it replaces swatch
-    /// `target` when that is of its kind and not a tint swatch.
+    /// A paint from elsewhere (a Fill/Stroke proxy, a Recent Colors chip, a Color Guide color, the
+    /// Gradient panel's thumbnail) dropped on row `target` (or between rows) becomes a swatch; with Alt held
+    /// (`replace`) it replaces swatch `target` when that is of its kind and neither Registration
+    /// nor a tint swatch.
     New { paint: Paint, target: Option<String>, replace: bool },
     /// Art dragged off the canvas becomes a pattern swatch made of a copy of it (the art stays).
     Pattern { ids: Vec<u64> },
@@ -113,17 +114,20 @@ pub(super) struct TileEvents {
     pub(super) drop: Option<Drop>,
     /// A drag is held over a tile or row.
     over: bool,
+    /// A drag of swatches or color groups started on a tile or row.
+    pub(super) started: bool,
 }
 
 /// Clicks, double-clicks, tooltips and drag and drop of the tile or row `resp` of entry `e`
-/// (`items`: the panel's rows, `sel`: its selection, `list`: rows stack downwards). A drag from it
-/// starts a [`PanelDrag`] carrying the rows it moves; see [`tile_drop`] for drags held over it.
+/// (`items`: the panel's rows, `sel`: its selection, `list`: rows stack downwards). A primary-button
+/// drag from it starts a [`PanelDrag`] carrying the rows it moves; see [`tile_drop`] for drags held
+/// over it.
 pub(super) fn tile_input(ui: &Ui, resp: Response, e: &Entry, items: &[Entry], sel: &[String], list: bool, ev: &mut TileEvents) {
     let name = e.name();
     if matches!(e, Entry::Swatch { .. } | Entry::Folder(_)) && resp.double_clicked() {
         ev.edit = Some(e.clone());
     }
-    if resp.drag_started() {
+    if resp.drag_started_by(egui::PointerButton::Primary) {
         let with_sel = sel.iter().any(|s| s == name);
         let names = items
             .iter()
@@ -131,6 +135,7 @@ pub(super) fn tile_input(ui: &Ui, resp: Response, e: &Entry, items: &[Entry], se
             .map(|x| x.name().to_string())
             .collect();
         egui::DragAndDrop::set_payload(ui.ctx(), drag_of(e, names));
+        ev.started = true;
     }
     tile_drop(ui, &resp, e, list, ev);
     // The default swatches' names show in the UI's language; the document keeps them as they are.
@@ -142,7 +147,10 @@ pub(super) fn tile_input(ui: &Ui, resp: Response, e: &Entry, items: &[Entry], se
         }),
         _ => resp.on_hover_text(shown),
     };
-    if resp.clicked() {
+    // Only the first click of a run of quick clicks applies and selects the swatch. The second
+    // opens the editor, and the later ones (counted as triple clicks) do nothing. Pattern editing
+    // selects the tile art, and a later click would paint it with the pattern itself.
+    if resp.clicked() && !resp.double_clicked() && !resp.triple_clicked() {
         ev.clicked = Some((e.clone(), ui.input(|i| i.modifiers)));
     }
 }
@@ -259,7 +267,9 @@ pub(super) fn apply_drop(app: &mut VectorcraftApp, drop: Drop) {
             None => return,
         },
         // Alt: an edited gradient (or colour) replaces the swatch it is dropped on.
-        Drop::New { paint, target: Some(t), replace: true } if d.swatch(&t).is_some_and(|w| w.tint_of().is_none() && same_kind(&w.paint, &paint)) => {
+        Drop::New { paint, target: Some(t), replace: true }
+            if d.swatch(&t).is_some_and(|w| !w.is_reserved() && w.tint_of().is_none() && same_kind(&w.paint, &paint)) =>
+        {
             ("swatch.edit", json!({"name": t, "paint": crate::panels::swatch_paint_params(&paint)}))
         }
         Drop::New { paint, target, .. } => {
@@ -279,9 +289,9 @@ pub(super) fn apply_drop(app: &mut VectorcraftApp, drop: Drop) {
 }
 
 /// While a panel drags something onto art, a chip follows the pointer: the dragged paint (swatches,
-/// a Fill/Stroke proxy, the Gradient panel's thumbnail), the fill of the object whose appearance
-/// the Appearance panel's thumbnail carries (or of the first art dragged off the canvas), or the
-/// thumbnail of a dragged graphic style.
+/// a Fill/Stroke proxy, a Recent Colors chip, the Gradient panel's thumbnail), the fill of the
+/// object whose appearance the Appearance panel's thumbnail carries (or of the first art dragged
+/// off the canvas), or the thumbnail of a dragged graphic style.
 pub(crate) fn drag_preview(app: &VectorcraftApp, ctx: &egui::Context) {
     let Some(d) = egui::DragAndDrop::payload::<PanelDrag>(ctx) else { return };
     let fill_of = |id: &vectorcraft_doc::NodeId| app.session.active().and_then(|st| st.doc.node(*id)).map(|n| n.appearance.fill_paint());
@@ -298,7 +308,8 @@ pub(crate) fn drag_preview(app: &VectorcraftApp, ctx: &egui::Context) {
             None => return,
         },
         PanelDrag::GraphicStyle(name) => return pointer_chip(ctx, |ui, r| crate::panels::graphic_styles::paint_style(app, ui, r, name)),
-        PanelDrag::Symbol(name) => match app.session.active() {
+        // Drawn from the document it was dragged from, whichever document is active now.
+        PanelDrag::Symbol { document, name } => match app.session.documents().iter().find(|st| st.uid == *document) {
             Some(st) => {
                 return pointer_chip(ctx, |ui, r| crate::panels::symbols::chip(ui, &st.doc, &crate::panels::symbols::document_symbols(st), r, name));
             }

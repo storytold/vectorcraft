@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use serde_json::{Value, json};
 
+use crate::cancel::{self, CancelToken};
 use crate::script::{TEST_ELAPSED, TEST_NO_CLOCK};
 use crate::*;
 
@@ -62,7 +63,7 @@ fn each_member_has_its_value() {
         ("$.memCache", json!(0)),
         ("$.os", json!(os)),
         ("$.screens.length", json!(0)),
-        ("$.stack", json!("[global]:1\n")),
+        ("$.stack", json!("[global]@t.js:1\n")),
         ("$.strict", json!(false)),
         ("$.version", json!(version)),
         ("typeof $.getenv + typeof $.setenv + typeof $.sleep", json!("functionfunctionfunction")),
@@ -164,7 +165,7 @@ fn getenv_reads_only_its_names_and_setenv_changes_only_the_run() {
 fn error_line_and_stack_follow_the_running_code() {
     let mut s = Session::new();
     let source = "try { null.x; } catch (e) {}\nfunction where() {\n  return [$.line, $.stack, $.error instanceof TypeError];\n}\nvc.log(where());";
-    assert_eq!(logged(&mut s, source)[0], json!([3, "[global]:5\nwhere:3\n", true]));
+    assert_eq!(logged(&mut s, source)[0], json!([3, "[global]@t.js:5\nwhere@t.js:3\n", true]));
     assert_eq!(value(&mut s, "$.error"), json!(null), "each run starts without one");
 }
 
@@ -202,6 +203,36 @@ fn a_sleeping_run_stops_when_asked() {
     assert!(s.script_pump().unwrap().is_err());
     assert_eq!(s.script_report().unwrap()["kind"], "stopped");
     TEST_ELAPSED.set(None);
+}
+
+#[test]
+fn a_sleeping_run_stops_at_the_next_slice_once_its_work_is_canceled() {
+    for (asleep_until, when) in
+        [(None, "before its first slice"), (Some(Duration::ZERO), "while it sleeps"), (Some(Duration::from_secs(1)), "at its wake time")]
+    {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({})).unwrap();
+        let before = (format!("{:?}", s.documents()[0].doc.layers), s.documents()[0].history.undo.len());
+        s.script_frames = true;
+        TEST_ELAPSED.set(Some(Duration::ZERO));
+        let source = "vc.run('shape.rectangle', {x: 0, y: 0, width: 5, height: 5}); $.sleep(1000); vc.log('woke'); \
+                      vc.run('shape.rectangle', {x: 9, y: 0, width: 5, height: 5});";
+        s.execute("script.run", &json!({"source": source, "name": "t.js"})).unwrap();
+        let token = CancelToken::new();
+        if let Some(at) = asleep_until {
+            assert!(cancel::scope(&token, None, || s.script_pump()).is_none(), "{when}");
+            assert_eq!(s.script_sleep_left(), Some(Duration::from_secs(1)), "{when}");
+            TEST_ELAPSED.set(Some(at));
+        }
+        token.cancel();
+        let ended = cancel::scope(&token, None, || s.script_pump());
+        TEST_ELAPSED.set(None);
+        assert!(ended.unwrap_or_else(|| panic!("{when}: the run goes on waiting")).is_err(), "{when}");
+        let report = s.script_report().unwrap();
+        assert_eq!((report["kind"].as_str(), &report["log"]), (Some("stopped"), &json!([])), "{when}: {report}");
+        assert!(!s.script_running(), "{when}");
+        assert_eq!((format!("{:?}", s.documents()[0].doc.layers), s.documents()[0].history.undo.len()), before, "{when}");
+    }
 }
 
 #[test]

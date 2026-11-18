@@ -204,6 +204,12 @@ pub enum Punct {
     CaretEq,
     Slash,
     SlashEq,
+    /// `..`, read only with [`crate::Options::e4x`].
+    DotDot,
+    /// `::`, read only with [`crate::Options::e4x`].
+    ColonColon,
+    /// `@`, read only with [`crate::Options::e4x`].
+    At,
 }
 
 impl Punct {
@@ -233,6 +239,9 @@ impl Punct {
         ("|=", Punct::PipeEq),
         ("^=", Punct::CaretEq),
         ("/=", Punct::SlashEq),
+        ("..", Punct::DotDot),
+        ("::", Punct::ColonColon),
+        ("@", Punct::At),
         ("{", Punct::LBrace),
         ("}", Punct::RBrace),
         ("(", Punct::LParen),
@@ -341,6 +350,8 @@ pub enum TokenKind {
     },
     /// A preprocessor line.
     Directive(Directive),
+    /// An XML or XMLList literal; the tokens of its embedded expressions follow it.
+    XmlLiteral,
 }
 
 /// A token, with where it is and the facts the grammar's rules need about it.

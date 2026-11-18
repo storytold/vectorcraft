@@ -181,7 +181,7 @@ pub fn print(pages: &[PrintPage], order: &[usize], job: &PrintJob) -> Result<Eps
         s.push_str(page);
     }
     s.push_str("%%Trailer\n%%EOF\n");
-    Ok(EpsOutput { bytes: s.into_bytes(), warnings })
+    Ok(EpsOutput { bytes: s.into_bytes(), warnings, setting_notes: vec![] })
 }
 
 #[cfg(test)]

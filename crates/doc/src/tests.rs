@@ -91,6 +91,268 @@ fn an_inch_ruler_steps_in_binary_fractions() {
     assert!([0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 25.0].contains(&step(Unit::Millimeters, 5.0)), "{}", step(Unit::Millimeters, 5.0));
 }
 
+/// Ruler guide nodes on a layer and a sublayer are not art: Select All, a layer's target circle,
+/// the object count, the art's bounds, clicks, the marquee and a knockout layer's elements are
+/// the same as without them, and transforming the layer leaves them where they are.
+#[test]
+fn ruler_guide_nodes_are_not_art() {
+    use crate::hit::{HitOptions, hit_test, marquee, objects_at};
+    let (mut d, a, b) = doc_with_rects();
+    let layer = d.layers[0].id;
+    let sub = d.alloc_id();
+    d.insert(Some(layer), usize::MAX, Node::layer(sub, "Sub", LayerColor::Preset(2))).unwrap();
+    let s1 = d.alloc_id();
+    d.insert(Some(sub), usize::MAX, Node::path(s1, shapes::rectangle(Rect::new(40.0, 0.0, 50.0, 10.0)), Appearance::default_art())).unwrap();
+    let opt = HitOptions::default();
+    let all = Rect::new(-100.0, -100.0, 700.0, 900.0);
+    let before = (
+        d.selectable_art(),
+        d.layers[0].layer_art(false),
+        d.node_count(),
+        d.art_bounds(),
+        marquee(&d, all, None, false),
+        hit_test(&d, Point::new(5.0, 5.0), opt).map(|h| h.top_object(None)),
+    );
+    let guide = |id, vertical, pos| Node::new(id, NodeKind::RulerGuide { vertical, pos, artboard: None });
+    let (g1, g2, g3) = (d.alloc_id(), d.alloc_id(), d.alloc_id());
+    d.insert(Some(layer), usize::MAX, guide(g1, true, 5.0)).unwrap();
+    d.insert(Some(layer), usize::MAX, guide(g2, false, 5.0)).unwrap();
+    d.insert(Some(sub), usize::MAX, guide(g3, true, 45.0)).unwrap();
+    let after = (
+        d.selectable_art(),
+        d.layers[0].layer_art(false),
+        d.node_count(),
+        d.art_bounds(),
+        marquee(&d, all, None, false),
+        hit_test(&d, Point::new(5.0, 5.0), opt).map(|h| h.top_object(None)),
+    );
+    assert_eq!(after, before);
+    assert_eq!(after.0, [a, b, s1]);
+    for p in [Point::new(5.0, 300.0), Point::new(300.0, 5.0), Point::new(45.0, 300.0)] {
+        assert!(hit_test(&d, p, opt).is_none(), "nothing to click on the guide at {p:?}");
+        assert!(objects_at(&d, p, opt, None).is_empty());
+    }
+    let mut sel = Selection::default();
+    sel.set_target(&d, layer);
+    assert_eq!(sel.objects, [a, b, s1]);
+    let children = d.layers[0].children().unwrap().clone();
+    assert_eq!(Node::knockout_elements(&children).iter().map(|c| c.id).collect::<Vec<_>>(), [a, b, s1]);
+    assert!(d.node(g1).is_some_and(Node::is_ruler_guide) && d.node(g1).is_some_and(Node::is_guide));
+    assert_eq!(d.node(g1).map(Node::geometric_bounds), Some(None));
+    let mut moved = (*d.layers[0]).clone();
+    moved.transform(Affine::translate((10.0, 10.0)), true);
+    let g = moved.children().unwrap().iter().find(|c| c.id == g1).unwrap();
+    assert!(matches!(g.kind, NodeKind::RulerGuide { pos, .. } if pos == 5.0));
+}
+
+/// Art inserted or moved onto a layer goes below the layer's ruler guides, a ruler guide goes
+/// among them, and a clipped layer whose art is gone does not clip by a guide.
+#[test]
+fn layer_art_stays_below_its_ruler_guides() {
+    let (mut d, a, b) = doc_with_rects();
+    let layer = d.layers[0].id;
+    let guide = |id, pos| Node::new(id, NodeKind::RulerGuide { vertical: true, pos, artboard: None });
+    let (g1, g2) = (d.alloc_id(), d.alloc_id());
+    d.insert(Some(layer), usize::MAX, guide(g1, 5.0)).unwrap();
+    // Asked for the bottom, a guide still goes above the art.
+    d.insert(Some(layer), 0, guide(g2, 7.0)).unwrap();
+    let ids = |d: &Document| d.layers[0].children().unwrap().iter().map(|c| c.id).collect::<Vec<_>>();
+    assert_eq!(ids(&d), [a, b, g2, g1]);
+    let c = d.alloc_id();
+    d.insert(Some(layer), usize::MAX, Node::path(c, shapes::rectangle(Rect::new(0.0, 0.0, 5.0, 5.0)), Appearance::default_art())).unwrap();
+    assert_eq!(ids(&d), [a, b, c, g2, g1]);
+    d.move_node(a, Some(layer), usize::MAX).unwrap();
+    assert_eq!(ids(&d), [b, c, a, g2, g1]);
+    d.move_node(g1, Some(layer), 0).unwrap();
+    assert_eq!(ids(&d), [b, c, a, g1, g2]);
+    assert!(d.layer_object(g1).is_none());
+    assert_eq!(d.layer_object(a).map(|n| n.id), Some(a));
+
+    // A clipped layer clips by its first art object; with only guides left it clips nothing.
+    if let Some(NodeKind::Layer { clip, .. }) = d.node_mut(layer).map(|n| &mut n.kind) {
+        *clip = true;
+    }
+    assert!(d.node(layer).is_some_and(Node::clips));
+    for id in [a, b, c] {
+        d.remove(id).unwrap();
+    }
+    assert!(!d.node(layer).is_some_and(Node::clips));
+
+    // Reading a file that clips a layer by a path beyond the canvas empties the layer of its art
+    // only: its guides stay.
+    let far = d.alloc_id();
+    d.insert(Some(layer), 0, Node::path(far, shapes::rectangle(Rect::new(0.0, 0.0, 1e9, 10.0)), Appearance::default_art())).unwrap();
+    assert!(d.node(layer).is_some_and(Node::clips));
+    let gone = d.drop_beyond_canvas();
+    assert_eq!(gone.objects, 1);
+    assert_eq!(ids(&d), [g1, g2]);
+}
+
+/// `ruler_guides` keeps its list while the layers are unchanged, and lists again after any change
+/// inside a layer, made in place or on a shared copy, and after layers are added, removed or
+/// reordered.
+#[test]
+fn ruler_guides_follow_every_edit() {
+    let (mut d, _, _) = doc_with_rects();
+    let layer = d.layers[0].id;
+    let sub = d.alloc_id();
+    d.insert(Some(layer), usize::MAX, Node::layer(sub, "Sub", LayerColor::Preset(1))).unwrap();
+    let g1 = d.add_ruler_guide(&Guide { layer: Some(layer), ..Guide::new(true, 5.0) });
+    let g2 = d.add_ruler_guide(&Guide { layer: Some(sub), ..Guide::new(false, 6.0) });
+    let line = |d: &Document| d.ruler_guides().iter().map(|g| (g.id, g.pos, g.hidden, g.layer)).collect::<Vec<_>>();
+    assert_eq!(line(&d), [(Some(g1), 5.0, false, Some(layer)), (Some(g2), 6.0, false, Some(sub))]);
+    // Changed in place: the document is the only holder of its layers.
+    assert!(d.edit_ruler_guide(g2, |g| g.pos = 9.0));
+    assert_eq!(line(&d)[1], (Some(g2), 9.0, false, Some(sub)));
+    d.node_mut(g1).unwrap().visible = false;
+    assert_eq!(line(&d)[0], (Some(g1), 5.0, true, Some(layer)));
+    // A copy shares the list until one of them changes.
+    let copy = d.clone();
+    assert_eq!(line(&copy), line(&d));
+    d.remove(g1).unwrap();
+    assert_eq!(line(&d), [(Some(g2), 9.0, false, Some(sub))]);
+    assert_eq!(line(&copy).len(), 2);
+    // A new layer with a guide, then the layers reordered and one removed.
+    let top = d.add_layer(None);
+    let g3 = d.add_ruler_guide(&Guide { layer: Some(top), ..Guide::new(true, 1.0) });
+    assert_eq!(line(&d).len(), 2);
+    d.layers.reverse();
+    assert_eq!(line(&d), [(Some(g2), 9.0, false, Some(sub)), (Some(g3), 1.0, false, Some(top))]);
+    d.layers.retain(|l| l.id != layer);
+    assert_eq!(line(&d), [(Some(g3), 1.0, false, Some(top))]);
+}
+
+#[test]
+fn strip_ruler_guides_leaves_a_layers_art() {
+    let (mut d, a, b) = doc_with_rects();
+    let layer = d.layers[0].id;
+    let guide = |id| Node::new(id, NodeKind::RulerGuide { vertical: false, pos: 3.0, artboard: None });
+    let sub = d.alloc_id();
+    d.insert(Some(layer), usize::MAX, Node::layer(sub, "Sub", LayerColor::Preset(1))).unwrap();
+    let (g1, g2) = (d.alloc_id(), d.alloc_id());
+    d.insert(Some(layer), usize::MAX, guide(g1)).unwrap();
+    d.insert(Some(sub), usize::MAX, guide(g2)).unwrap();
+    let mut n = (*d.layers[0]).clone();
+    assert!(n.holds_ruler_guides());
+    n.strip_ruler_guides();
+    assert!(!n.holds_ruler_guides());
+    let mut left = vec![];
+    n.walk(&mut |c| left.push(c.id));
+    assert_eq!(left, [layer, a, b, sub]);
+    // Other nodes hold none and are left as they are.
+    let mut p = d.node(a).unwrap().clone();
+    p.strip_ruler_guides();
+    assert_eq!(&p, d.node(a).unwrap());
+}
+
+/// The saved `guides` list becomes ruler guide nodes and is written back from them unchanged:
+/// guides on a layer, a sublayer, no layer and a deleted layer, with an artboard guide, keep their
+/// order, ids, names and their own lock and visibility; a saved id that another node has is
+/// replaced; and the saved form of an older entry still reads.
+#[test]
+fn saved_guides_become_nodes_and_are_saved_back_the_same() {
+    let (mut d, a, _) = doc_with_rects();
+    let layer = d.layers[0].id;
+    let top = d.add_layer(Some("Top"));
+    let sub = d.alloc_id();
+    d.insert(Some(layer), usize::MAX, Node::layer(sub, "Sub", LayerColor::Preset(1))).unwrap();
+    let json = serde_json::json!([
+        {"vertical": true, "pos": 10.0, "layer": layer},
+        {"vertical": false, "pos": 20.0, "layer": sub, "artboard": 1},
+        {"vertical": true, "pos": 30.0},
+        {"vertical": false, "pos": 40.0, "layer": 9999},
+        {"vertical": true, "pos": 50.0, "layer": layer, "id": 500, "name": "Edge", "locked": true, "hidden": true},
+        {"vertical": true, "pos": 60.0, "layer": layer, "id": a},
+    ]);
+    d.saved_guides = serde_json::from_value(json).unwrap();
+    let before = d.peek_next_id();
+    assert_eq!(d.guides_into_nodes(), 6);
+    assert!(d.saved_guides.is_empty());
+    let guides = d.ruler_guides();
+    let lines: Vec<(f64, Option<NodeId>)> = guides.iter().map(|g| (g.pos, g.layer)).collect();
+    // A guide on no layer, or on a deleted one, goes on the top visible, unlocked layer.
+    assert_eq!(lines[..4], [(50.0, Some(layer)), (10.0, Some(layer)), (20.0, Some(sub)), (30.0, Some(top))], "by id: the kept id first");
+    assert_eq!(lines[4..], [(40.0, Some(top)), (60.0, Some(layer))]);
+    assert_eq!(guides[0].id, Some(NodeId(500)));
+    assert!(guides[1..].iter().all(|g| g.id.unwrap().0 > 500), "new ids start above a kept one");
+    assert_ne!(guides[5].id, Some(a), "an id another object has is not reused");
+    assert!(d.peek_next_id() > 500 && before <= 500);
+    let edge = d.node(NodeId(500)).unwrap();
+    assert!(edge.locked && !edge.visible && edge.name.as_deref() == Some("Edge"));
+    assert_eq!(guides[2].artboard, Some(1));
+    // Each layer's guides sit at its top, above its art and its sublayer.
+    let kids: Vec<bool> = d.node(layer).unwrap().children().unwrap().iter().map(|c| c.is_ruler_guide()).collect();
+    assert_eq!(kids, [false, false, false, true, true, true]);
+    assert_eq!(d.guides_into_nodes(), 0, "a second run does nothing");
+
+    // Saved back: the guides leave the layers and the list names each one's layer and id.
+    let mut saved = d.clone();
+    saved.guides_to_saved();
+    assert!(saved.ruler_guides().is_empty());
+    assert_eq!(saved.node_count(), d.node_count());
+    assert_eq!(saved.saved_guides, guides);
+    let json = serde_json::to_value(&saved).unwrap();
+    assert_eq!(json["guides"].as_array().map(Vec::len), Some(6));
+    assert_eq!(
+        json["guides"][0],
+        serde_json::json!({"vertical": true, "pos": 50.0, "layer": layer, "id": 500, "name": "Edge", "locked": true, "hidden": true})
+    );
+    // Read again, the same guides come back with the same ids.
+    let mut back: Document = serde_json::from_value(json).unwrap();
+    back.fix_next_id();
+    back.guides_into_nodes();
+    assert_eq!(back.ruler_guides(), guides);
+    // An older reader of the list ignores the new fields.
+    #[derive(serde::Deserialize, PartialEq, Debug)]
+    struct Old {
+        vertical: bool,
+        pos: f64,
+        #[serde(default)]
+        artboard: Option<u32>,
+        #[serde(default)]
+        layer: Option<NodeId>,
+    }
+    let old: Vec<Old> = serde_json::from_value(serde_json::to_value(&saved.saved_guides).unwrap()).unwrap();
+    assert_eq!(old[0], Old { vertical: true, pos: 50.0, artboard: None, layer: Some(layer) });
+
+    // A document with no layer gets a "Layer 1" for its guides.
+    let mut empty = Document::new(10.0, 10.0);
+    empty.layers.clear();
+    empty.saved_guides = vec![Guide::new(true, 1.0)];
+    assert_eq!(empty.guides_into_nodes(), 1);
+    assert_eq!(empty.layers.len(), 1);
+    assert_eq!(empty.layers[0].name.as_deref(), Some("Layer 1"));
+    assert_eq!(empty.ruler_guides().len(), 1);
+}
+
+/// Editing, deleting and the artboard moves of ruler guide nodes, and the selection keeping step.
+#[test]
+fn ruler_guide_nodes_are_edited_by_id() {
+    let (mut d, a, _) = doc_with_rects();
+    let layer = d.layers[0].id;
+    let g1 = d.add_ruler_guide(&Guide { layer: Some(layer), ..Guide::new(true, 10.0) });
+    let g2 = d.add_ruler_guide(&Guide { artboard: Some(1), ..Guide::new(false, 20.0) });
+    assert!(d.edit_ruler_guide(g1, |g| g.pos = 15.0));
+    assert!(!d.edit_ruler_guide(a, |g| g.pos = 15.0), "not a guide");
+    assert_eq!(d.ruler_guide(g1).map(|g| g.pos), Some(15.0));
+    d.move_artboard_guides(1, Vec2::new(5.0, 7.0));
+    assert_eq!(d.ruler_guide(g2).map(|g| g.pos), Some(27.0));
+    d.map_artboard_guides(1, Affine::scale(2.0));
+    assert_eq!(d.ruler_guide(g2).map(|g| g.pos), Some(54.0));
+    assert_eq!(d.ruler_guide(g1).map(|g| g.pos), Some(15.0), "a canvas guide stays");
+    d.copy_artboard_guides(1, 2, Vec2::new(0.0, 100.0));
+    let copies: Vec<(f64, Option<u32>)> = d.ruler_guides().iter().filter(|g| g.artboard == Some(2)).map(|g| (g.pos, g.artboard)).collect();
+    assert_eq!(copies, [(154.0, Some(2))]);
+    let mut sel = Selection::default();
+    sel.set_guides([g1, g2]);
+    sel.key_guide = Some(g2);
+    assert_eq!(d.retain_guides(&mut sel, |g| g.artboard.is_none()), 2);
+    assert_eq!(sel.guides, [g1]);
+    assert_eq!(sel.key_guide, None);
+    assert_eq!(d.ruler_guides().iter().map(|g| g.id).collect::<Vec<_>>(), [Some(g1)]);
+    assert_eq!(d.retain_guides(&mut sel, |_| true), 0);
+}
+
 fn doc_with_rects() -> (Document, NodeId, NodeId) {
     let mut d = Document::new(612.0, 792.0);
     let layer = d.layers[0].id;

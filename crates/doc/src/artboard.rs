@@ -1,4 +1,4 @@
-use super::{Arc, Deserialize, LayerColor, Node, NodeId, NodeKind, Rect, Serialize, SymbolBoxes, skip};
+use super::{Arc, Deserialize, LayerColor, Node, NodeId, Rect, Serialize, SymbolBoxes, skip};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Artboard {
@@ -204,12 +204,7 @@ impl LockedArtboards<'_> {
     /// [`LockedArtboards::holds`] for new art too: is `n` on a locked artboard, whether or not it
     /// is new art?
     pub fn overlaps(&self, n: &Node) -> bool {
-        if self.rects.is_empty()
-            || !n.visible
-            || n.is_layer()
-            || matches!(n.kind, NodeKind::Path { guide: true, .. })
-            || self.pattern_art.contains(&n.id)
-        {
+        if self.rects.is_empty() || !n.visible || n.is_layer() || n.is_guide() || self.pattern_art.contains(&n.id) {
             return false;
         }
         if let Some(held) = self.held.borrow().get(&n.id) {

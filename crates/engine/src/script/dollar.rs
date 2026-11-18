@@ -4,14 +4,15 @@
 //! the locale the global `localize` reads
 //! (<https://extendscript.docsforadobe.dev/extendscript-tools-features/localizing-extendscript-strings/>).
 //!
-//! Every value here belongs to one run: a run starts with the locale of the interface, the
-//! environment values of [`ENV_NAMES`] read from the process, localization off and a timer at zero,
-//! and what a script changes ends with its run. `$.setenv` never changes the process's environment.
+//! Every value here belongs to one run, in a named engine too ([`RunState`]): a run starts with the
+//! locale of the interface, the environment values of [`ENV_NAMES`] read from the process,
+//! localization off and a timer at zero, and what a script changes ends with its run. `$.setenv`
+//! never changes the process's environment.
 //!
 //! These are VectorCraft's own values and rules: `$.appEncoding` is always UTF-8; `$.build` and
-//! `$.version` give VectorCraft's version, `$.engineName` is `VectorCraft` and `$.buildDate` is
-//! `null`; `$.flags` takes only 512, which turns localization on; `$.level` and `$.memCache` are 0
-//! and `$.screens` is empty; `$.os` names the system without its version; `$.strict` is whether the
+//! `$.version` give VectorCraft's version, `$.engineName` is the name `#targetengine` gave, or
+//! `VectorCraft` without one, and `$.buildDate` is `null`; `$.flags` takes only 512, which turns
+//! localization on; `$.level` and `$.memCache` are 0 and `$.screens` is empty; `$.os` names the system without its version; `$.strict` is whether the
 //! realm reads scripts as strict mode code; `$.bp` and `$.colorPicker` throw, since scripts have no
 //! debugger and cannot show a dialog; `$.gc` does nothing, since the interpreter collects its own
 //! garbage; `$.getenv` and `$.setenv` know only [`ENV_NAMES`], with values of at most
@@ -25,7 +26,7 @@ use std::time::Duration;
 
 use vectorcraft_js::{Data, HostError, HostItem, Localization, ScriptItem};
 
-use super::{Host, function};
+use super::{Link, current, function};
 
 /// The longest `$.sleep`, in milliseconds.
 pub const MAX_SLEEP_MS: f64 = 1_000.0;
@@ -36,12 +37,34 @@ pub const MAX_ENV_BYTES: usize = 64;
 /// The value of `$.flags` that turns localization on, the only one a script may set.
 pub const LOCALIZE_FLAG: f64 = 512.0;
 
-/// What `$` knows of a run.
+/// What `$` knows of its realm.
 pub(crate) struct RunInfo {
-    /// The locale the run starts with, such as `de_DE`.
-    pub locale: String,
     /// The realm reads scripts as strict mode code.
     pub strict: bool,
+    /// The name `#targetengine` gave the realm's engine.
+    pub engine: Option<String>,
+}
+
+/// The values of `$` that belong to one run, which the run's host holds.
+pub(crate) struct RunState {
+    /// The locale the run starts with, such as `de_DE`.
+    locale: String,
+    env: RefCell<Vec<(&'static str, Option<String>)>>,
+    /// The time since the run started at which `$.hiresTimer` was last read.
+    timer: Cell<Duration>,
+}
+
+impl RunState {
+    pub(crate) fn new(locale: &str) -> RunState {
+        RunState { locale: locale.to_string(), env: RefCell::new(process_env()), timer: Cell::new(Duration::ZERO) }
+    }
+}
+
+/// Sets `localization` as a run starts: `locale`, this system's platform and localization off.
+pub(super) fn start_run(localization: &Localization, locale: &str) {
+    localization.set_enabled(false);
+    localization.set_locale(locale);
+    localization.set_platform(platform());
 }
 
 /// The locale for an interface language code such as `de`, `pt-br` or `zh-hant`: the language,
@@ -148,14 +171,10 @@ fn text(s: impl Into<String>) -> Data {
     Data::String(s.into())
 }
 
-/// The members `$` has besides `write`, `writeln`, `evalFile`, `fileName` and `includePath`.
-pub(super) fn members(host: &Rc<Host>, info: RunInfo, localization: &Rc<Localization>) -> Vec<(String, HostItem)> {
+/// The members `$` has besides `write`, `writeln`, `evalFile`, `fileName` and `includePath`. They
+/// act for the run that `link` holds when they are called.
+pub(super) fn members(link: &Link, info: RunInfo, localization: &Rc<Localization>) -> Vec<(String, HostItem)> {
     let version = env!("CARGO_PKG_VERSION");
-    let host_locale = info.locale.clone();
-    localization.set_locale(&info.locale);
-    localization.set_platform(platform());
-    let env = Rc::new(RefCell::new(process_env()));
-    let timer = Rc::new(Cell::new(Duration::ZERO));
     let getter = |f: Rc<dyn Fn() -> Data>| HostItem::Getter(function(move |_| Ok(f())));
     let property = |get: Rc<dyn Fn() -> Data>, set: Rc<dyn Fn(Data) -> Result<(), HostError>>| HostItem::Property {
         get: function(move |_| Ok(get())),
@@ -167,13 +186,13 @@ pub(super) fn members(host: &Rc<Host>, info: RunInfo, localization: &Rc<Localiza
     let fail = |message: &'static str| HostItem::Function(function(move |_| Err(HostError::Error(message.to_string()))));
 
     let locale = {
-        let (l, s) = (localization.clone(), localization.clone());
+        let (l, s, run) = (localization.clone(), localization.clone(), link.clone());
         property(
             Rc::new(move || text(l.locale())),
             Rc::new(move |v| {
                 let locale = match v {
-                    Data::Null | Data::Undefined => host_locale.clone(),
-                    Data::String(t) if t.is_empty() => host_locale.clone(),
+                    Data::Null | Data::Undefined => current(&run)?.dollar.locale.clone(),
+                    Data::String(t) if t.is_empty() => current(&run)?.dollar.locale.clone(),
                     Data::String(t) => script_locale(&t).ok_or_else(|| HostError::Range(BAD_LOCALE.to_string()))?,
                     _ => return Err(HostError::Type(BAD_LOCALE.to_string())),
                 };
@@ -224,31 +243,34 @@ pub(super) fn members(host: &Rc<Host>, info: RunInfo, localization: &Rc<Localiza
     let mem_cache =
         property(Rc::new(|| Data::Number(0.0)), Rc::new(|_| Err(HostError::Error("$.memCache: the memory cache size cannot be set".into()))));
     let hires_timer = {
-        let (h, last) = (host.clone(), timer.clone());
+        let l = link.clone();
         getter(Rc::new(move || {
+            let Ok(h) = current(&l) else { return Data::Number(0.0) };
             let Some(now) = h.elapsed() else { return Data::Number(0.0) };
-            let since = now.saturating_sub(last.replace(now));
+            let since = now.saturating_sub(h.dollar.timer.replace(now));
             #[allow(clippy::cast_precision_loss)]
             Data::Number(since.as_micros() as f64)
         }))
     };
     let getenv = {
-        let (h, env) = (host.clone(), env.clone());
+        let l = link.clone();
         function(move |a| {
             let name = one_string(&a, "getenv")?;
+            let h = current(&l)?;
             h.charge_call(name.len() as u64 + 2)?;
-            let env = env.borrow();
+            let env = h.dollar.env.borrow();
             let found = env.iter().find(|(n, _)| *n == name).and_then(|(_, v)| v.clone());
             Ok(found.map_or(Data::Null, Data::String))
         })
     };
     let setenv = {
-        let (h, env) = (host.clone(), env.clone());
+        let l = link.clone();
         function(move |a| {
             let name = one_string(&a, "setenv")?;
             let Some(Data::String(v)) = a.get(1) else { return Err(HostError::Type("$.setenv: give a value, as a string".into())) };
+            let h = current(&l)?;
             h.charge_call((name.len() + v.len()) as u64 + 4)?;
-            let mut env = env.borrow_mut();
+            let mut env = h.dollar.env.borrow_mut();
             let Some(slot) = env.iter_mut().find(|(n, _)| *n == name) else {
                 return Err(HostError::Error(format!("$.setenv: only {} can be set", ENV_NAMES.join(", "))));
             };
@@ -260,8 +282,9 @@ pub(super) fn members(host: &Rc<Host>, info: RunInfo, localization: &Rc<Localiza
         })
     };
     let sleep = {
-        let h = host.clone();
+        let l = link.clone();
         function(move |a| {
+            let h = current(&l)?;
             let ms = match a.first() {
                 Some(Data::Number(n)) if (0.0..=MAX_SLEEP_MS).contains(n) => *n,
                 Some(Data::Number(_)) => return Err(HostError::Range(format!("$.sleep: give a number of milliseconds from 0 to {MAX_SLEEP_MS}"))),
@@ -282,7 +305,7 @@ pub(super) fn members(host: &Rc<Host>, info: RunInfo, localization: &Rc<Localiza
         ("buildDate".into(), value(Data::Null)),
         ("colorPicker".into(), fail("$.colorPicker: scripts cannot show a dialog yet")),
         ("decimalPoint".into(), decimal),
-        ("engineName".into(), value(text("VectorCraft"))),
+        ("engineName".into(), value(text(info.engine.unwrap_or_else(|| "VectorCraft".into())))),
         ("error".into(), HostItem::Script(ScriptItem::LastError)),
         ("flags".into(), flags),
         ("gc".into(), HostItem::Function(function(|_| Ok(Data::Undefined)))),

@@ -20,6 +20,10 @@ fn shape(id: u32, class: &[u8; 4], parameters: Vec<(vectorcraft_affinity::stream
 }
 
 fn read(definitions: Vec<F>, top: u32) -> Document {
+    try_read(definitions, top).unwrap()
+}
+
+fn try_read(definitions: Vec<F>, top: u32) -> Result<Document, vectorcraft_affinity::Error> {
     let data = synth::stream(&[
         (tag(b"Defs"), F::Shared(definitions)),
         (
@@ -39,7 +43,7 @@ fn read(definitions: Vec<F>, top: u32) -> Document {
         ),
     ]);
     let bytes = synth::container(&[("doc.dat", &data, Method::Zlib)], None);
-    vectorcraft_affinity::read(&bytes, Limits::default()).unwrap()
+    vectorcraft_affinity::read(&bytes, Limits::default())
 }
 
 fn path(document: &Document) -> &Path {
@@ -199,4 +203,80 @@ fn unlocked_rectangle_corners_keep_their_own_radius_and_type() {
     let sub = &path(&locked).subpaths[0];
     assert_eq!(sub.segments.len(), 8);
     assert_eq!(sub.segments[3][2], p(5.0, 20.0));
+}
+
+/// The special shapes come in as their own outlines: one closed contour of finite points inside
+/// (or, for a callout's tail, just below) the node's box, and none as the bounding ellipse.
+#[test]
+fn special_shapes_have_their_own_closed_outlines() {
+    for class in [b"ShCl", b"ShHt", b"ShCg", b"ShCR", b"ShCE", b"ShDA", b"ShDS", b"ShTr", b"ShCr", b"ShpD", b"ShSg"] {
+        let name = String::from_utf8_lossy(class).into_owned();
+        let document = read(vec![shape(100, class, vec![])], 100);
+        assert!(!document.warnings.iter().any(|w| w.contains("bounding ellipse")), "{name}: {:?}", document.warnings);
+        let (Kind::Shape { path, even_odd, .. }, cog) = (&document.spreads[0].nodes[0].kind, class == b"ShCg") else { panic!("{name}: no shape") };
+        // A cog is its teeth and its hole, filled even-odd.
+        assert_eq!((path.subpaths.len(), *even_odd), if cog { (2, true) } else { (1, false) }, "{name}");
+        for sub in &path.subpaths {
+            assert!(sub.closed && sub.segments.len() >= 2, "{name}");
+            for p in std::iter::once(sub.start).chain(sub.segments.iter().flatten().copied()) {
+                assert!(p.x.is_finite() && p.y.is_finite(), "{name}: {p:?}");
+                assert!((-5.0..=15.0).contains(&p.x) && (-10.0..=30.0).contains(&p.y), "{name}: {p:?}");
+            }
+        }
+    }
+    // A class the reader does not know is still its bounding ellipse, and said.
+    let document = read(vec![shape(100, b"ShZZ", vec![])], 100);
+    assert!(document.warnings.iter().any(|w| w.contains("unrecognized parametric shape")), "{:?}", document.warnings);
+}
+
+fn group(id: u32, children: Vec<F>) -> F {
+    F::Def(id, vec![tag(b"Grup")], vec![(tag(b"Chld"), F::Shared(children))])
+}
+
+/// A list's null slots yield no node, operand or segment, but each visit of a shared object scans
+/// them all: they are charged to the document's work before the scan.
+#[test]
+fn null_slots_of_shared_lists_are_charged_for_every_visit() {
+    // A compound of a million null operands, placed 20 times: 20 million slots, over the 2^24.
+    let document = read(vec![compound(100, vec![F::Null; 1_000_000]), group(200, vec![F::Ref(100); 20])], 200);
+    assert!(document.warnings.iter().any(|w| w.contains("geometry work limit")), "{:?}", document.warnings);
+    let shapes = document.spreads[0].nodes[0].children.iter().filter(|n| matches!(n.kind, Kind::Shape { .. })).count();
+    assert_eq!(shapes, 16, "each placement costs a million slots of the 2^24");
+    // A group of a million null children, placed 20 times, fails the read like too many layers.
+    let result = try_read(vec![group(100, vec![F::Null; 1_000_000]), group(200, vec![F::Ref(100); 20])], 200);
+    assert!(matches!(result, Err(vectorcraft_affinity::Error::Limit(_))), "{:?}", result.map(|d| d.warnings));
+    // Within the work of one document the same lists are read, nulls skipped.
+    let document = read(vec![group(100, vec![F::Null; 1_000]), group(200, vec![F::Ref(100); 20])], 200);
+    assert_eq!((document.spreads[0].nodes[0].children.len(), document.warnings.len()), (20, 0));
+}
+
+fn boxed(class: &[u8; 4], b: Vec<f64>) -> F {
+    F::Def(100, vec![tag(b"ShpN")], vec![(tag(b"ShpB"), F::F64s(b)), (tag(b"Shpe"), F::Def(10_100, vec![tag(class)], vec![]))])
+}
+
+/// A callout rectangle (`ShCR`) whose box runs right to left (x0 > x1) panicked in `f64::clamp`
+/// (min > max), found by the `stream` fuzz target. It reads, inside its box.
+#[test]
+fn callout_rectangle_with_a_reversed_box_reads_inside_it() {
+    for b in [vec![10.0_f64, 0.0, 0.0, 20.0], vec![6.8e38, 0.0, 10.0, 20.0]] {
+        let (lo, hi) = (b[0].min(b[2]), b[0].max(b[2]));
+        let document = read(vec![boxed(b"ShCR", b)], 100);
+        let sub = &path(&document).subpaths[0];
+        let points = std::iter::once(&sub.start).chain(sub.segments.iter().flatten());
+        assert!(points.into_iter().all(|q| q.x.is_finite() && q.y.is_finite() && (lo..=hi).contains(&q.x)), "{sub:?}");
+    }
+}
+
+/// A box with finite corners whose width overflows gave infinite and NaN outline points. Such a
+/// shape imports as its box, with a warning.
+#[test]
+fn a_shape_too_large_to_compute_imports_as_its_box() {
+    for class in [b"ShCR", b"ShpE", b"ShCg"] {
+        let document = read(vec![boxed(class, vec![f64::MAX, 0.0, -f64::MAX, 20.0])], 100);
+        let sub = &path(&document).subpaths;
+        assert_eq!(sub.len(), 1, "{class:?}");
+        let corners: Vec<Point> = std::iter::once(sub[0].start).chain(sub[0].segments.iter().map(|s| s[2])).collect();
+        assert!(corners.iter().all(|p| p.x.abs() == f64::MAX && (p.y == 0.0 || p.y == 20.0)), "{class:?}: {corners:?}");
+        assert!(document.warnings.iter().any(|w| w.contains("too large to compute")), "{:?}", document.warnings);
+    }
 }

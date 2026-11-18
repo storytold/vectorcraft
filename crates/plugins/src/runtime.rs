@@ -14,7 +14,7 @@ use crate::{Error, Kind, Result};
 pub const ABI_VERSION: i32 = 1;
 
 /// Fuel handed out per slice; between slices the host checks the deadline.
-const FUEL_SLICE: u64 = 20_000_000;
+pub const FUEL_SLICE: u64 = 20_000_000;
 
 /// wasmi's fuel costs, but compiling costs nothing. wasmi compiles a function when it is first
 /// called, and charges the run that calls it by the function's size. When the slice a run was in
@@ -24,6 +24,9 @@ const FUEL_SLICE: u64 = 20_000_000;
 /// the next. Copying keeps wasmi's default cost, a unit for every 64 bytes.
 const FUEL_COSTS: CustomFuelCosts = CustomFuelCosts { bytes_copied_per_fuel: 64, fuel_per_bytes_translated: 0, fuel_per_bytes_validated: 0 };
 
+/// Bytes a bulk memory instruction copies or fills for each unit of fuel.
+pub const BYTES_COPIED_PER_FUEL: u32 = FUEL_COSTS.bytes_copied_per_fuel;
+
 /// Instructions a heavy filter's run may use besides [`Limits::fuel_per_byte`] for each byte of
 /// input ([`crate::Budget::Heavy`]): 20 times a light one's. Its output's size can't add to it:
 /// the host learns that only once the run has ended.
@@ -31,6 +34,11 @@ pub const HEAVY_FUEL: u64 = 1_000_000_000;
 
 /// Wall-clock budget of a heavy filter's run, in milliseconds.
 pub const HEAVY_WALL_TIME_MS: u64 = 300_000;
+
+/// Instructions a filter's run may use besides [`Limits::fuel_per_byte`] for each byte of input
+/// when Preferences › Plug-ins & Scratch Disks › Plug-in Instruction Budget is Large
+/// ([`Plugin::large_limits`]): 5 times the default.
+pub const LARGE_FUEL: u64 = 250_000_000;
 
 /// The limit a run reports when its input and parameters together are past half its memory.
 pub(crate) const SELECTION_TOO_LARGE: &str = "memory budget (the selection is too large to hand over)";
@@ -211,6 +219,12 @@ impl Plugin {
     }
     pub fn limits(&self) -> &Limits {
         &self.limits
+    }
+    /// Its limits with the Large instruction budget: at least [`LARGE_FUEL`] instructions besides
+    /// those for each byte of input, and every other limit, the time budget included, as it is. A
+    /// heavy filter keeps its larger budget.
+    pub fn large_limits(&self) -> Limits {
+        Limits { fuel_base: self.limits.fuel_base.max(LARGE_FUEL), ..self.limits.clone() }
     }
     /// Module size in bytes.
     pub fn size(&self) -> usize {

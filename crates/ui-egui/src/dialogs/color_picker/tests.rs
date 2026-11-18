@@ -106,6 +106,94 @@ fn gamut_correction_gives_a_printable_colour() {
     assert_eq!(gamut_fix(&mut app, &ctx, "picker-gamut", &Color::rgb8(128, 128, 128)), None);
 }
 
+/// The cached warning follows the CMYK space it is checked in: assigning the document a CMYK
+/// profile, removing it, or changing the working CMYK space updates it for the same color.
+#[test]
+fn gamut_warning_follows_a_profile_change() {
+    const CHILD: &str = "VECTORCRAFT_TEST_GAMUT_PROFILE_CHANGE";
+    if std::env::var_os(CHILD).is_none() {
+        // Color settings are process-wide: change them in a separate test process.
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "dialogs::color_picker::tests::gamut_warning_follows_a_profile_change", "--nocapture"])
+            .env(CHILD, "1")
+            .output()
+            .unwrap();
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            output.status.success() && stdout.contains("test result: ok. 1 passed; 0 failed;"),
+            "isolated gamut test failed:\n{stdout}\n{}",
+            String::from_utf8_lossy(&output.stderr),
+        );
+        return;
+    }
+    use vectorcraft_color::cms;
+    let mut app = app();
+    let ctx = egui::Context::default();
+    let blue = Color::rgb(0.0, 0.0, 1.0);
+    let fix = gamut_fix(&mut app, &ctx, "picker-gamut", &blue);
+    assert!(fix.is_some(), "pure blue is out of the default CMYK gamut");
+    // Device CMYK has no gamut to fall outside of.
+    app.run("edit.assignProfile", json!({"cmyk": cms::DEVICE_CMYK})).unwrap();
+    assert_eq!(gamut_fix(&mut app, &ctx, "picker-gamut", &blue), None);
+    app.run("edit.assignProfile", json!({"cmyk": null})).unwrap();
+    assert_eq!(gamut_fix(&mut app, &ctx, "picker-gamut", &blue), fix);
+    app.run("edit.colorSettings", json!({"cmyk": cms::DEVICE_CMYK})).unwrap();
+    assert_eq!(gamut_fix(&mut app, &ctx, "picker-gamut", &blue), None);
+    app.run("edit.colorSettings", json!({"cmyk": cms::GENERIC_CMYK})).unwrap();
+    assert_eq!(gamut_fix(&mut app, &ctx, "picker-gamut", &blue), fix);
+}
+
+/// Loading a new file of the document's assigned CMYK profile, under the same name, updates the
+/// cached warning for the same color.
+#[test]
+fn gamut_warning_follows_a_profile_loaded_again() {
+    const CHILD: &str = "VECTORCRAFT_TEST_GAMUT_PROFILE_RELOAD";
+    if std::env::var_os(CHILD).is_none() {
+        // Color settings and loaded profiles are process-wide: change them in a separate test process.
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "dialogs::color_picker::tests::gamut_warning_follows_a_profile_loaded_again", "--nocapture"])
+            .env(CHILD, "1")
+            .output()
+            .unwrap();
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            output.status.success() && stdout.contains("test result: ok. 1 passed; 0 failed;"),
+            "isolated gamut test failed:\n{stdout}\n{}",
+            String::from_utf8_lossy(&output.stderr),
+        );
+        return;
+    }
+    use vectorcraft_color::cms;
+    // A built-in CMYK profile's file renamed `name`: padded with spaces, which names drop.
+    let renamed = |builtin: &str, name: &str| {
+        let utf16 = |s: &str| s.encode_utf16().flat_map(u16::to_be_bytes).collect::<Vec<u8>>();
+        let mut bytes = cms::icc_bytes(builtin).unwrap().to_vec();
+        let (from, to) = (utf16(builtin), utf16(&format!("{name:<width$}", width = builtin.len())));
+        let at = bytes.windows(from.len()).position(|w| w == from).unwrap();
+        bytes[at..at + to.len()].copy_from_slice(&to);
+        bytes
+    };
+    let name = "Gamut Reload CMYK";
+    let dir = vectorcraft_testkit::temp_dir("gamut-reload-cmyk");
+    let mut app = app();
+    let load = |app: &mut VectorcraftApp, builtin: &str| {
+        let path = dir.join(format!("{}.icc", builtin.len()));
+        std::fs::write(&path, renamed(builtin, name)).unwrap();
+        let r = app.run("color.loadProfile", json!({"path": path.to_str().unwrap()})).unwrap();
+        assert_eq!(r["name"], name);
+    };
+    let ctx = egui::Context::default();
+    let blue = Color::rgb(0.0, 0.0, 1.0);
+    load(&mut app, cms::GENERIC_CMYK);
+    app.run("edit.assignProfile", json!({"cmyk": name})).unwrap();
+    let before = gamut_fix(&mut app, &ctx, "picker-gamut", &blue);
+    assert!(before.is_some(), "pure blue is out of the loaded profile's gamut");
+    load(&mut app, cms::DEVICE_CMYK);
+    let fresh = in_gamut(&mut app, &blue);
+    assert_ne!(fresh, before, "the new file gives another answer");
+    assert_eq!(gamut_fix(&mut app, &ctx, "picker-gamut", &blue), fresh);
+}
+
 /// The selected art takes each colour as it is picked; OK keeps the last as one undo step and
 /// Cancel puts the art back.
 #[test]
@@ -582,7 +670,8 @@ fn warnings_fit_below_the_preview_without_widening_the_dialog() {
     }
     let after = ctx.memory(|m| m.area_rect(id)).unwrap();
     assert!((before.size() - after.size()).length() < 1.0, "{before:?} vs {after:?}");
-    click_at(&ctx, &mut app, warnings[1].center());
+    // The cube icon left of the web correction corrects the color too.
+    click_at(&ctx, &mut app, warnings[1].center() - vec2(19.0, 0.0));
     assert!(is_web_safe(&picked(app.ui.dialog.as_ref().unwrap()).color), "web correction remains clickable");
 }
 
@@ -685,4 +774,48 @@ fn compact_picker_shrinks_then_scrolls_without_enlarging_the_window() {
         draw(&ctx, &mut app, size, vec![key(egui::Key::Enter)]);
         assert!(app.ui.dialog.is_none());
     }
+}
+
+/// Type all three Lab components through the numeric fields, then apply the picked color.
+#[test]
+fn native_lab_entry_in_color_picker() {
+    use egui::accesskit::Role;
+    use egui_kittest::kittest::Queryable;
+
+    let mut app = app();
+    app.run("ui.colorPicker", json!({"color": {"l": 50, "a": 0, "b": 0}})).unwrap();
+    let mut first = true;
+    let builder = egui_kittest::Harness::builder().with_size(screen());
+    let builder = if std::env::var_os("VECTORCRAFT_RECOLOR_CAPTURE_DIR").is_some() { builder.wgpu() } else { builder };
+    let mut h = builder.build_ui_state(
+        move |ui, app: &mut VectorcraftApp| {
+            if std::mem::replace(&mut first, false) {
+                crate::theme::install_fonts(ui.ctx());
+                return;
+            }
+            super::super::show(app, ui.ctx());
+        },
+        app,
+    );
+    h.run_steps(4);
+    for (label, text) in [("L", "70"), ("a", "-25"), ("b", "40")] {
+        h.get_by_role_and_label(Role::TextInput, label).focus();
+        h.run_steps(2);
+        h.key_press_modifiers(egui::Modifiers { ctrl: true, command: true, ..Default::default() }, egui::Key::A);
+        h.get_by_role_and_label(Role::TextInput, label).type_text(text);
+        h.key_press(egui::Key::Tab);
+        h.run_steps(2);
+        assert!(matches!(picked(h.state().ui.dialog.as_ref().unwrap()).color, Color::Lab { .. }), "{label} keeps Lab");
+    }
+    let expected = Color::lab(70.0, -25.0, 40.0);
+    assert_eq!(picked(h.state().ui.dialog.as_ref().unwrap()).color, expected);
+    if let Some(dir) = std::env::var_os("VECTORCRAFT_RECOLOR_CAPTURE_DIR") {
+        let dir = std::path::PathBuf::from(dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        h.render().unwrap().save(dir.join("picker-lab.png")).unwrap();
+    }
+    h.get_by_role_and_label(Role::Button, "OK").click();
+    h.run_steps(2);
+    assert!(h.state().ui.dialog.is_none());
+    assert_eq!(crate::panels::current_paints(h.state()).0.color(), Some(expected));
 }

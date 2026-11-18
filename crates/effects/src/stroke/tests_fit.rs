@@ -37,6 +37,20 @@ fn near(a: f64, b: f64, tol: f64) -> bool {
 
 // ---------------------------------------------------------------- dashes fitted to corners
 
+/// A subpath with no segments (a lone moveto, as an HP-GL wedge of almost no radius gives) is
+/// dashed fitted to corners without a panic, and the other subpaths keep their dashes.
+#[test]
+fn fitted_dashes_take_a_subpath_with_no_segments() {
+    let mut b = BezPath::new();
+    b.move_to((5.0, 5.0));
+    b.extend(line(100.0));
+    let d = dash(&b, &fitted(&[10.0, 5.0], 0.0)).expect("dashed");
+    assert!(moves(&d.path) > 1 && length(&d.path) > 0.0, "{:?}", d.path);
+    let mut lone = BezPath::new();
+    lone.move_to((0.0, 0.0));
+    assert!(dash(&lone, &fitted(&[10.0, 5.0], 0.0)).is_some_and(|d| d.path.elements().is_empty()));
+}
+
 #[test]
 fn every_corner_of_a_rectangle_falls_mid_dash() {
     // 100 × 50 with 12/6: the long sides hold 6 periods (scaled by 100/108), the short ones 3
@@ -155,9 +169,10 @@ fn each_dash_takes_its_width_from_the_profile_along_the_whole_path() {
         s.dash = Some(Dash { pattern: vec![10.0, 10.0], offset: 0.0, align_corners: false });
     });
     let o = line_outline(&line(100.0), &st, 10.0, 1e-3);
-    // The dash over 40..50 is near the lens's widest point; the one over 0..10 near its tip.
+    // The dash over 40..50 is near the lens's widest point; the one over 0..10 near its tip,
+    // where the smooth profile is thinner than a straight ramp (a parabola's first tenth).
     assert!(o.contains(Point::new(45.0, 4.0)) && o.contains(Point::new(45.0, -4.0)), "middle dash is wide");
-    assert!(!o.contains(Point::new(5.0, 2.0)) && o.contains(Point::new(5.0, 0.3)), "first dash is thin");
+    assert!(o.contains(Point::new(5.0, 0.8)) && !o.contains(Point::new(5.0, 1.2)), "first dash is thin");
     assert!(!o.contains(Point::new(15.0, 0.0)), "gaps stay empty");
     // Dots too: a round dot near the middle is bigger than one near an end.
     let st = stroke(10.0, |s| {
@@ -166,7 +181,7 @@ fn each_dash_takes_its_width_from_the_profile_along_the_whole_path() {
         s.dash = Some(Dash { pattern: vec![0.0, 10.0], offset: 0.0, align_corners: false });
     });
     let o = line_outline(&line(100.0), &st, 10.0, 1e-3);
-    assert!(o.contains(Point::new(50.0, 4.5)) && !o.contains(Point::new(10.0, 1.5)) && o.contains(Point::new(10.0, 0.5)));
+    assert!(o.contains(Point::new(50.0, 4.5)) && o.contains(Point::new(10.0, 1.4)) && !o.contains(Point::new(10.0, 2.0)));
 }
 
 /// An L whose corner turns 90° at (100, 0), or a sharp V turning back at (100, 0).

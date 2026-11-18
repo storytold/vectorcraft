@@ -33,6 +33,9 @@ pub struct Job {
     /// The worker may keep the frame for its next frame to copy from
     /// ([`crate::canvas::render_job`]). Off: the worker holds no frame after this one.
     pub may_keep: bool,
+    /// The display profile the finished frame is converted into ([`crate::display_profile`]).
+    /// The frame the worker keeps stays sRGB.
+    pub display: Option<Arc<vectorcraft_color::cms::display::DisplayTransform>>,
 }
 
 pub struct Done {
@@ -47,6 +50,15 @@ pub struct Done {
     /// The frame holds pixels copied from the worker's last frame ([`crate::canvas::render_job`]),
     /// and `ms` is the time of the copy and of the parts rendered.
     pub reused: bool,
+}
+
+/// Render `job` as the worker thread does: inside the job's automation roots and deferred
+/// effects, with the worker's renderer `r` and its last frame `kept`.
+pub(crate) fn render(r: &mut Renderer, kept: &mut Option<crate::canvas::KeptFrame>, job: Job) -> Done {
+    let t0 = crate::now_ms();
+    let frame = job.scope.clone().run(|| job.effects.view(|| crate::canvas::render_job(r, kept, &job)));
+    let ms = crate::now_ms() - t0;
+    Done { key: job.key, doc: job.doc, opts: job.opts, img: frame.img, ms, moved: frame.moved, reused: frame.reused }
 }
 
 pub struct Worker {
@@ -73,11 +85,7 @@ impl Worker {
                     while let Ok(newer) = jobs.try_recv() {
                         job = newer;
                     }
-                    let t0 = crate::now_ms();
-                    let frame = job.scope.clone().run(|| job.effects.view(|| crate::canvas::render_job(&mut r, &mut kept, &job)));
-                    let ms = crate::now_ms() - t0;
-                    let done = Done { key: job.key, doc: job.doc, opts: job.opts, img: frame.img, ms, moved: frame.moved, reused: frame.reused };
-                    if done_tx.send(done).is_err() {
+                    if done_tx.send(render(&mut r, &mut kept, job)).is_err() {
                         break;
                     }
                     ctx.request_repaint();

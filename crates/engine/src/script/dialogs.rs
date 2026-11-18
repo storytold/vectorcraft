@@ -290,12 +290,12 @@ impl Dialogs {
     }
 }
 
-/// Adds `alert`, `confirm` and `prompt` to the realm.
-pub(super) fn install(realm: &mut Realm, host: &Rc<Host>) -> Result<(), RunError> {
+/// Adds `alert`, `confirm` and `prompt` to the realm, for the run `link` holds.
+pub(super) fn install(realm: &mut Realm, link: &super::Link) -> Result<(), RunError> {
     use Arg::{Bool, Text, TextOrUndefined};
     let call = |kind: DialogKind| -> HostFunction {
-        let h = host.clone();
-        Rc::new(move |args| open(&h, kind, &args))
+        let l = link.clone();
+        Rc::new(move |args| open(&*super::current(&l)?, kind, &args))
     };
     realm.define_host_function("alert", vec![Text, TextOrUndefined, Bool], call(DialogKind::Alert))?;
     realm.define_host_function("confirm", vec![Text, Bool, TextOrUndefined], call(DialogKind::Confirm))?;

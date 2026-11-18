@@ -9,7 +9,9 @@ use crate::theme::Brightness;
 /// Per-document view (camera).
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct View {
-    /// Screen points per document point (1.0 = 100%).
+    /// The zoom (1.0 = 100%): points of the screen per document point, counted before
+    /// Preferences › User Interface › UI Scaling, which scales the interface and not the art.
+    /// [`Self::screen_zoom`] is the zoom in the interface's points.
     pub zoom: f64,
     /// Document point at the centre of the canvas.
     pub center: Point,
@@ -55,6 +57,19 @@ impl View {
             outline: false,
         })
     }
+
+    /// The interface's points per document point when the interface is zoomed by `ui_zoom` (egui's
+    /// zoom factor, which Preferences › User Interface › UI Scaling sets). A document point then
+    /// covers the same device pixels at every UI Scaling.
+    pub fn screen_zoom(&self, ui_zoom: f32) -> f64 {
+        self.zoom / f64::from(ui_zoom)
+    }
+
+    /// This view with its zoom in the interface's points ([`Self::screen_zoom`]), as the canvas
+    /// renders it.
+    pub(crate) fn on_screen(&self, ui_zoom: f32) -> Self {
+        Self { zoom: self.screen_zoom(ui_zoom), ..*self }
+    }
 }
 
 /// The status bar's angle menu and View › Rotate View list these preset view angles, each as
@@ -86,7 +101,7 @@ pub fn sync_zoom_stops_display_print_size(v: bool) {
     ZOOM_STOPS_PRINT_SIZE.store(v, Ordering::Relaxed);
 }
 
-/// Illustrator's preset zoom stops, in percent.
+/// The preset zoom stops, in percent.
 pub const ZOOM_STOPS: [f64; 26] = [
     3.13, 4.17, 6.25, 8.33, 12.5, 16.67, 25.0, 33.33, 50.0, 66.67, 100.0, 150.0, 200.0, 300.0, 400.0, 600.0, 800.0, 1200.0, 1600.0, 2400.0, 3200.0,
     4800.0, 6400.0, 12800.0, 25600.0, 64000.0,
@@ -120,7 +135,7 @@ pub fn next_zoom_with_display(z: f64, up: bool, display_print_size: bool) -> f64
     zoom_from_display_percent(stop, display_print_size)
 }
 
-/// Format like Illustrator's tab/zoom field: up to 2 decimals, no trailing zeros.
+/// Format for the tab/zoom field: up to 2 decimals, no trailing zeros.
 pub fn zoom_label(z: f64, display_print_size: bool) -> String {
     let s = format!("{:.2}", zoom_display_percent(z, display_print_size));
     let s = s.trim_end_matches('0').trim_end_matches('.');
@@ -209,11 +224,16 @@ pub const ICON_PANELS: &[(&str, &str, &str)] = &[
     (crate::panels::three_d::ID, "3D and Materials", "dc-cube"),
     (crate::panels::variables::ID, "Variables", "chart-column"),
     (crate::panels::script_console::ID, "Script Console", "message-circle"),
+    (crate::panels::learn::ID, "Learn", "graduation-cap"),
+    (crate::panels::discover::ID, "VectorCraft Help…", "search"),
     (crate::addons::cleanup::ID, "Artwork Cleanup", "sparkles"),
     (crate::addons::color::ID, "Color Effects", "sun"),
+    (crate::addons::packaging::ID, "Fold Lines", "scissors"),
+    (crate::addons::packaging::preview::ID, "Fold Preview", "box"),
     (crate::addons::pathtools::ID, "Anchor Inspector", "dc-anchor-smooth"),
     (crate::addons::pathtools::shape::ID, "Parametric Shape", "hexagon"),
     (crate::addons::pen::ID, "Smart Pen", "spline-pointer"),
+    (crate::addons::units::ID, "Unit Converter", "ruler"),
 ];
 
 /// Groups of icon panels separated by dividers in the collapsed column.
@@ -401,10 +421,42 @@ pub struct UiState {
     /// Type › Find Font…'s last Find In choice (`find_font::FIND_IN`), kept while the app runs.
     #[serde(skip)]
     pub find_font_in: String,
+    /// Ellipse Properties' Constrain Pie Angle link (Transform and Properties panels): a Pie Start
+    /// or End Angle typed while it is on keeps each selected ellipse's pie span. Kept while the app
+    /// runs; off at every launch.
+    #[serde(skip)]
+    pub constrain_pie_angle: bool,
+    /// The Learn panel's tab, skill and tutorial, kept while the app runs.
+    #[serde(skip)]
+    pub learn: crate::panels::learn::View,
+    #[serde(skip)]
+    pub discover: crate::panels::discover::View,
+    /// The tool whose place a Learn tutorial step's link shows (`learn.locateTool`), while its mark
+    /// is on screen. Not saved.
+    #[serde(skip)]
+    pub learn_locate: Option<crate::panels::learn::locate::Locate>,
+    /// The tutorials whose practice samples were opened, kept while the app runs.
+    #[serde(skip)]
+    pub learn_practice: crate::panels::learn::Practice,
+    /// The Learn panel's tutorials finished and steps marked done, saved with the preferences.
+    pub learn_progress: crate::panels::learn::progress::Progress,
     pub control_bar: bool,
     /// The Control bar is docked to the bottom of the window instead of the top
     /// (`window.control.dock`).
     pub control_bar_bottom: bool,
+    /// The Control bar floats over the window at `control_bar_float_pos` instead of docking to an
+    /// edge (`window.control.dock {edge: "float"}`); `control_bar_bottom` keeps the edge it last
+    /// docked to.
+    #[serde(default)]
+    pub control_bar_floating: bool,
+    /// The top-left corner of the floating Control bar in window points, kept while the bar is
+    /// docked; none: `chrome::CONTROL_BAR_FLOAT_AT`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub control_bar_float_pos: Option<[f32; 2]>,
+    /// The groups of the Control bar's options (`chrome::CONTROL_BAR_GROUPS`) that its panel menu
+    /// has off (`window.control.options`); none: every group shows.
+    #[serde(deserialize_with = "crate::chrome::read_hidden_groups")]
+    pub control_bar_hidden_groups: std::collections::BTreeSet<String>,
     pub toolbar: bool,
     pub toolbar_double: bool,
     /// Advanced toolbar (every tool group) instead of the categorized Basic toolbar.
@@ -412,7 +464,7 @@ pub struct UiState {
     pub toolbar_advanced: bool,
     #[serde(default = "yes")]
     pub task_bar: bool,
-    /// Where the Contextual Task Bar was dragged or pinned. Not saved, as in Illustrator: the bar
+    /// Where the Contextual Task Bar was dragged or pinned. Not saved: the bar
     /// starts under the selection at every launch.
     #[serde(skip)]
     pub task_bar_place: TaskBarPlace,
@@ -500,7 +552,9 @@ pub struct UiState {
     pub toolbar_pos: Option<[f32; 2]>,
     /// The docked Tools panel sits between the left-side panels and the canvas instead of at the
     /// window's left edge (Window › Toolbars › Keep Tools Beside the Canvas,
-    /// `window.toolsBesideCanvas`). Off by default, and off in state saved without it.
+    /// `window.toolsBesideCanvas`). Dropping Tools on the canvas's left edge, right of panels docked
+    /// on the left, turns it on, and on the window's left edge turns it off; with no panels docked on
+    /// the left, a drop leaves it as it is. Off by default, and off in state saved without it.
     #[serde(default)]
     pub tools_beside_canvas: bool,
     /// The docked Tools panel stands on the right, between the canvas and the panels, instead of on
@@ -509,6 +563,10 @@ pub struct UiState {
     #[serde(default)]
     pub toolbar_right: bool,
     pub status_bar: bool,
+    /// What the status bar's info field shows (its Show menu, `view.statusBarShow`): Current Tool by
+    /// default and in state saved without it ([`crate::chrome::deserialize_status_bar_show`]).
+    #[serde(default, deserialize_with = "crate::chrome::deserialize_status_bar_show")]
+    pub status_bar_show: crate::chrome::StatusBarShow,
     pub help_bar: bool,
     pub dock: bool,
     /// The bars that Tab (`window.dock`) hid, which the next Tab shows again; none when Tab has not
@@ -529,10 +587,23 @@ pub struct UiState {
     pub flyout: Option<usize>,
     /// Last tool shown for each toolbar group (flyout selection sticks).
     pub group_tool: Vec<String>,
+    /// The drawing tool last chosen in this window, which a two-finger tap in the Touch workspace
+    /// returns to from the Selection tool ([`crate::touch::toggle_mode`]). Not saved.
+    #[serde(skip)]
+    pub touch_drawing_tool: Option<String>,
     pub status: String,
+    /// How many times [`crate::VectorcraftApp::status`] has set `status`, so that work finishing
+    /// later can tell whether the line it started with is still the latest one. Not saved.
+    #[serde(skip)]
+    pub status_sets: u64,
     /// The Replace Font request behind the status bar's warning ([`ReplaceFontWarning`]). Not saved.
     #[serde(skip)]
     pub replace_font_warning: Option<ReplaceFontWarning>,
+    /// The notes of the last open that gave any, or of the last save or export, with the status
+    /// text that names the first of them: hovering that text lists them when there are several.
+    /// Not saved.
+    #[serde(skip)]
+    pub status_notes: Option<(String, Vec<String>)>,
     pub palette_open: bool,
     pub palette_query: String,
     /// Screen mode: 0 normal, 1 full screen with menu, 2 full screen, 3 presentation. Not saved:
@@ -544,6 +615,10 @@ pub struct UiState {
     /// Consolidate All Windows. Not saved: the reference app does not save windows with a document.
     #[serde(skip)]
     pub tiled: bool,
+    /// How Tile lays the panes out: in a grid, side by side, stacked, or 2-up to 6-up. Not saved,
+    /// as `tiled` is not.
+    #[serde(skip)]
+    pub tile_layout: crate::canvas::TileLayout,
     /// Window › Arrange › Float in Window, Float All in Windows and Cascade: the documents in
     /// floating windows of their own, out of the tab strip, until Consolidate All Windows. Not
     /// saved, as `tiled` is not.
@@ -569,14 +644,38 @@ pub struct UiState {
     /// Shift-click on a set's name added. Delete Selection deletes them. Not saved.
     #[serde(skip)]
     pub action_sets_selected: Vec<usize>,
+    /// The Actions panel shows its actions as buttons (panel menu › Button Mode,
+    /// [`crate::panels::actions::button_mode`]) instead of its list; kept with the UI preferences,
+    /// and off in preferences saved without it.
+    #[serde(default)]
+    pub action_button_mode: bool,
     /// Recording in progress: (set index, action name, journal length when recording started).
     #[serde(skip)]
     pub recording: Option<(usize, String, usize)>,
-    /// The id of the action New Action made for the recording in progress
-    /// ([`crate::panels::actions::Action::id`]): Stop gives it the recorded steps. None when Stop
-    /// adds a new action, as after Begin Recording.
+    /// The id of the action the recording in progress records into, the one New Action made or the
+    /// one selected when Begin Recording started it ([`crate::panels::actions::Action::id`]): Stop
+    /// gives it the recorded steps. None when Stop adds a new action, as after Begin Recording with
+    /// no action selected.
     #[serde(skip)]
     pub recording_into: Option<u64>,
+    /// Where in the action [`UiState::recording_into`] names Stop puts the recorded steps: before
+    /// the step at this index, or None after its last step.
+    #[serde(skip)]
+    pub recording_at: Option<usize>,
+    /// The length of the action set file that Stop Playing/Recording would leave without the steps
+    /// recorded so far, once measured; None until then, and again after an app command, which may
+    /// change the sets.
+    #[serde(skip)]
+    pub recording_base: Option<usize>,
+    /// The bytes that the steps recorded so far add to that file, at most, as last counted: (the
+    /// journal's rewrites, the recording's first entry, the journal's length, the bytes)
+    /// ([`vectorcraft_engine::Journal::rewrites`]).
+    #[serde(skip)]
+    pub recording_tail: Option<(u64, usize, usize, usize)>,
+    /// The journal as the recording in progress last checked it against the limits of an action
+    /// set file: (its rewrites, its length) ([`crate::panels::actions::after_journaled_edit`]).
+    #[serde(skip)]
+    pub recording_checked: Option<(u64, usize)>,
     /// How actions play (Actions panel menu › Playback Options…), kept with the UI preferences.
     #[serde(default, deserialize_with = "crate::panels::actions::deserialize_playback")]
     pub action_playback: crate::panels::actions::PlaybackOptions,
@@ -609,6 +708,9 @@ pub struct UiState {
     /// Type → Recent Fonts, most recent first.
     #[serde(default)]
     pub recent_fonts: Vec<String>,
+    /// Help › Search Commands' Recent Commands list: the ids of the last picks, most recent first.
+    #[serde(default)]
+    pub recent_commands: Vec<String>,
     /// Families starred in the font menus (the ★ filter shows only these).
     #[serde(default)]
     pub favorite_fonts: Vec<String>,
@@ -626,6 +728,10 @@ pub struct UiState {
     /// Flattener Preview panel: highlight, overprints, preset and options (`ui.flattenerPreview`).
     #[serde(default)]
     pub flattener_preview: crate::panels::flattener_preview::Settings,
+    /// Fold Preview window: fold amount, view, zoom, perspective, inside color, fold lines and
+    /// base panel (`ui.foldPreview`).
+    #[serde(default)]
+    pub fold_preview: crate::addons::packaging::preview::Settings,
     /// Color Guide panel: Limit to Library, a swatch library id, "document" (the document's
     /// swatches) or "" (none) (`ui.colorGuideLimit`).
     #[serde(default)]
@@ -635,6 +741,10 @@ pub struct UiState {
     /// saved.
     #[serde(skip)]
     pub color_guide_base: Option<vectorcraft_color::Color>,
+    /// Color Guide panel: the spot color swatch the base is a tint of, when it was chosen from one
+    /// ([`crate::panels::color_guide::SpotBase`]). Not saved.
+    #[serde(skip)]
+    pub color_guide_spot: Option<crate::panels::color_guide::SpotBase>,
     /// Align panel: the Align To choice, Selection or Artboard, which Object → Align and the align
     /// buttons follow ([`crate::panels::align::with_align_to`]).
     #[serde(default, deserialize_with = "crate::panels::align::deserialize_align_to")]
@@ -652,12 +762,37 @@ pub struct UiState {
     /// [`crate::panels::color::deserialize_hide_options`]).
     #[serde(default, deserialize_with = "crate::panels::color::deserialize_hide_options")]
     pub color_hide_options: bool,
+    /// Color panel: Show Recent Colors, which draws its Recent Colors row while the options show
+    /// (`ui.colorPanel`, [`crate::panels::color::deserialize_show_recent_colors`]). The list of
+    /// recent colors keeps filling while the row is hidden.
+    #[serde(default = "yes", deserialize_with = "crate::panels::color::deserialize_show_recent_colors")]
+    pub color_show_recent_colors: bool,
+    /// Color panel: RGB mode shows R, G and B in percent instead of 0 to 255 (a double-click right
+    /// of an RGB field, `ui.colorPanel`, [`crate::panels::color::deserialize_rgb_percent`]).
+    #[serde(default, deserialize_with = "crate::panels::color::deserialize_rgb_percent")]
+    pub color_rgb_percent: bool,
+    /// Color Wheel panel: the wheel or the box, and the box's channel (`ui.colorWheel`,
+    /// [`crate::panels::color_wheel::deserialize_settings`]).
+    #[serde(default, deserialize_with = "crate::panels::color_wheel::deserialize_settings")]
+    pub color_wheel: crate::panels::color_wheel::Settings,
+    /// Swatches panel: Show Recent Colors in its panel menu, which draws the panel's Recent Colors
+    /// row (#6617; read as [`Self::color_show_recent_colors`] is). Separate from the Color panel's.
+    #[serde(default = "yes", deserialize_with = "crate::panels::color::deserialize_show_recent_colors")]
+    pub swatches_show_recent_colors: bool,
     /// The SVG Options chosen last (`svg` object of the export/save commands; null: never used).
     #[serde(default)]
     pub svg_options: Value,
     /// File → Place: Link is on (the Place dialog remembers it).
     #[serde(default = "yes")]
     pub place_link: bool,
+    /// File → Place: Show Import Options is on (the Place dialog remembers it). Each placed file
+    /// with import options (a PDF's page and box, a DXF drawing, a text file) asks for them first;
+    /// off, it is placed with the options last confirmed for its format.
+    #[serde(default = "yes")]
+    pub place_import_options: bool,
+    /// The Text Import Options confirmed last (`file.place`'s `text` options; null: never used).
+    #[serde(default)]
+    pub text_import: Value,
     /// The file the open dialog reads, kept out of its JSON fields (Import PDF); dropped when no
     /// dialog is open.
     #[serde(skip)]
@@ -697,6 +832,9 @@ pub struct UiState {
     /// dialog opens on them (#1152).
     #[serde(default)]
     pub offset_path: Value,
+    /// The Smart Punctuation fields confirmed last (null: never used): its dialog opens on them.
+    #[serde(default)]
+    pub smart_punctuation: Value,
     /// The Average & Join fields confirmed last (`to`; null: never used): its dialog opens on them.
     #[serde(default)]
     pub average_join: Value,
@@ -718,6 +856,11 @@ pub struct UiState {
     /// them (#1732).
     #[serde(default)]
     pub transform_each: Value,
+    /// The Expand choices OK last expanded with in this run of the app (object, fill, stroke,
+    /// gradient, steps; null: none yet): the Expand dialog opens on them, and Object › Expand…
+    /// chosen with Alt (Option) expands with them at once. They are not kept across launches.
+    #[serde(skip)]
+    pub expand_options: Value,
     /// The spacing used the last time Rearrange All Artboards was confirmed.
     #[serde(default)]
     pub rearrange_artboards_spacing: Value,
@@ -725,6 +868,9 @@ pub struct UiState {
     /// never used).
     #[serde(default)]
     pub dxf_import: Value,
+    /// The PSD Import Options chosen last (layers, hiddenLayers, importSlices; null: never used).
+    #[serde(default)]
+    pub psd_import: Value,
     /// The Home screen is shown over the open documents (`app.home`): the active document's uid
     /// and the document count when it opened. Choosing a tab, or a document opening, closing or
     /// becoming active, leaves it.
@@ -737,13 +883,22 @@ pub struct UiState {
     /// Layers panel › Panel Options… (row size, thumbnails, Show Layers Only, Locate Selected Objects).
     #[serde(default)]
     pub layers_panel: crate::panels::layers::PanelOptions,
-    /// Navigator panel › Panel Options… (the view box color, Draw Dashed Lines as Solid Lines).
+    /// Navigator panel › Panel Options… (the view box color, Draw Dashed Lines as Solid Lines) and
+    /// the panel menu's View Artboard Contents Only.
     #[serde(default)]
     pub navigator_panel: crate::panels::navigator::PanelOptions,
     /// The Layers panel's Filter (`ui.layersFilter`). It is not saved and lasts the session, as the
     /// Search All text does.
     #[serde(skip)]
     pub layers_filter: crate::panels::layers::Filter,
+    /// The Swatches, Graphic Styles and Symbols panels' views, chosen in their panel menus
+    /// (`ui.panelView`). They are not saved and last the session.
+    #[serde(skip)]
+    pub swatches_view: crate::panels::swatches::View,
+    #[serde(skip)]
+    pub graphic_styles_view: crate::panels::graphic_styles::View,
+    #[serde(skip)]
+    pub symbols_view: crate::panels::symbols::View,
     /// The Image Trace panel's Advanced section is open (as it was last left).
     #[serde(default = "yes")]
     pub image_trace_advanced: bool,
@@ -796,7 +951,8 @@ impl FloatingFlyout {
 }
 
 /// A toolbar made with Window › Toolbars › New Toolbar (`window.toolbar.new`): it floats on its
-/// own, filled with tools from the All Tools drawer, and is kept with the workspace it was made in.
+/// own or docks along the window's left or right edge, filled with tools from the All Tools drawer,
+/// and is kept with the workspace it was made in.
 /// The groups torn off it are kept with it (`floating`), so the Tools panel's strips
 /// (`UiState::floating_flyouts`) hold none of them.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -809,8 +965,16 @@ pub struct CustomToolbar {
     /// It shows (Window › Toolbars › its name toggles it).
     #[serde(default = "yes")]
     pub shown: bool,
-    /// Top-left corner in screen points.
+    /// Top-left corner in screen points while it floats; while it is docked, where it floated last.
     pub pos: [f32; 2],
+    /// Its place in the stack of toolbars docked along one of the window's edges (0 at the top),
+    /// while it is docked there; none while it floats at `pos`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dock: Option<u32>,
+    /// It docks along the window's right edge, not the left: the edge it is docked at, or while it
+    /// floats the edge it docked at last.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub dock_right: bool,
     /// The tool each slot of several tools shows, chosen last (keyed by the slot's first tool).
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub slot_tool: std::collections::BTreeMap<String, String>,
@@ -948,7 +1112,8 @@ pub struct FloatingPanels {
     pub docked: Option<u32>,
 }
 
-/// Drop a Tools panel position that isn't a number (a hand-edited preferences file or workspace).
+/// Drop a floating position of the Tools panel or the Control bar that isn't a number (a
+/// hand-edited preferences file or workspace).
 pub fn sanitize_toolbar_pos(toolbar_pos: &mut Option<[f32; 2]>) {
     if toolbar_pos.is_some_and(|p| !p.iter().all(|v| v.is_finite())) {
         *toolbar_pos = None;
@@ -972,6 +1137,7 @@ impl UiState {
         }
         FloatingFlyout::sanitize(&mut self.floating_flyouts);
         sanitize_toolbar_pos(&mut self.toolbar_pos);
+        sanitize_toolbar_pos(&mut self.control_bar_float_pos);
         crate::edit_toolbar::sanitize(&mut self.toolbar_edits);
         // `read_preferences` converted the file's older layouts already; this covers a state read
         // any other way. What it reports lost was dropped there.
@@ -1017,8 +1183,17 @@ impl Default for UiState {
             transient_focus: false,
             color_settings_scroll: false,
             find_font_in: String::new(),
+            constrain_pie_angle: false,
+            learn: Default::default(),
+            discover: Default::default(),
+            learn_locate: None,
+            learn_practice: Default::default(),
+            learn_progress: Default::default(),
             control_bar: false,
             control_bar_bottom: false,
+            control_bar_floating: false,
+            control_bar_float_pos: None,
+            control_bar_hidden_groups: Default::default(),
             toolbar: true,
             toolbar_double: false,
             toolbar_advanced: false,
@@ -1049,6 +1224,7 @@ impl Default for UiState {
             tools_beside_canvas: false,
             toolbar_right: false,
             status_bar: true,
+            status_bar_show: crate::chrome::StatusBarShow::CurrentTool,
             help_bar: true,
             dock: true,
             tab_hid: None,
@@ -1058,12 +1234,16 @@ impl Default for UiState {
             answering_control: false,
             flyout: None,
             group_tool: vectorcraft_tools::TOOL_GROUPS.iter().map(|g| g[0].id.to_string()).collect(),
+            touch_drawing_tool: None,
             status: String::new(),
+            status_sets: 0,
             replace_font_warning: None,
+            status_notes: None,
             palette_open: false,
             palette_query: String::new(),
             screen_mode: 0,
             tiled: false,
+            tile_layout: crate::canvas::TileLayout::Grid,
             floating: Vec::new(),
             tab_document: None,
             draw_mode: 0,
@@ -1071,8 +1251,13 @@ impl Default for UiState {
             action_sets: crate::panels::actions::default_sets(),
             action_set: None,
             action_sets_selected: vec![],
+            action_button_mode: false,
             recording: None,
             recording_into: None,
+            recording_at: None,
+            recording_base: None,
+            recording_tail: None,
+            recording_checked: None,
             action_playback: Default::default(),
             action_playing: None,
             shortcut_overrides: Default::default(),
@@ -1083,19 +1268,28 @@ impl Default for UiState {
             workspace_changes: vec![],
             recent_files: vec![],
             recent_fonts: vec![],
+            recent_commands: vec![],
             favorite_fonts: vec![],
             engine_prefs: Value::Null,
             color_guide: Default::default(),
             library_panels: vec![],
             flattener_preview: Default::default(),
+            fold_preview: Default::default(),
             color_guide_limit: String::new(),
             color_guide_base: None,
+            color_guide_spot: None,
             align_to: Default::default(),
             align_spacing: 0.0,
             color_mode: None,
             color_hide_options: false,
+            color_show_recent_colors: true,
+            color_rgb_percent: false,
+            color_wheel: Default::default(),
+            swatches_show_recent_colors: true,
             svg_options: Value::Null,
             place_link: true,
+            place_import_options: true,
+            text_import: Value::Null,
             dialog_file: None,
             made_text_style: vec![],
             pending_fonts: vec![],
@@ -1106,18 +1300,24 @@ impl Default for UiState {
             dxf_options: Value::Null,
             eps_options: Value::Null,
             offset_path: Value::Null,
+            smart_punctuation: Value::Null,
             average_join: Value::Null,
             recolor_preserve: Value::Null,
             simplify: Value::Null,
             move_options: Value::Null,
             transform_each: Value::Null,
+            expand_options: Value::Null,
             rearrange_artboards_spacing: Value::Null,
             dxf_import: Value::Null,
+            psd_import: Value::Null,
             home: None,
             trace_hold_source: None,
             layers_panel: Default::default(),
             navigator_panel: Default::default(),
             layers_filter: Default::default(),
+            swatches_view: Default::default(),
+            graphic_styles_view: Default::default(),
+            symbols_view: Default::default(),
             image_trace_advanced: true,
             image_trace_preview: true,
             glyphs_preview: 0,

@@ -1,4 +1,4 @@
-use super::status_bar::ANIMATED_ZOOM_HINT;
+use super::status_bar::{ANIMATED_ZOOM_HINT, clipped_label};
 use super::{Cow, Sense, Stroke, Tokens, Ui, VectorcraftApp, menus, theme, vec2, widgets};
 
 fn hint_for(tool: &str) -> Option<&'static [(&'static str, bool)]> {
@@ -249,7 +249,7 @@ pub fn hint_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                     let font = if bold { theme::semibold(12.5) } else { egui::FontId::proportional(12.5) };
                     job.append(&txt, 0.0, egui::TextFormat { font_id: font, color: if bold { t.text_strong } else { t.text }, ..Default::default() });
                 }
-                ui.label(job);
+                clipped_label(ui, job);
             });
         });
     widgets::set_menu_floor(ui.ctx(), panel.response.rect.top());

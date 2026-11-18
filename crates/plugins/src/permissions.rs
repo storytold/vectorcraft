@@ -275,6 +275,32 @@ impl Grant {
     }
 }
 
+/// A [`Grant`] that [`crate::registry::grant`] records. The engine makes one where it records what
+/// a person approved and where it loads the grants kept in its plug-in folder; tests that set up a
+/// grant use the same constructors. `tests/grant_sites.rs` fails when other shipped code makes one.
+/// Native code linked into the app can still call these constructors, so the token does not
+/// protect against such code.
+#[derive(Debug)]
+pub struct GrantToken(Grant);
+
+impl GrantToken {
+    /// The grant the engine records after a person approved the module it covers, or in a session
+    /// whose starter allowed requests to grant permissions (`--allow-plugin-grants`).
+    pub fn after_engine_approval(grant: Grant) -> Self {
+        Self(grant)
+    }
+
+    /// A grant the engine read from the grants file of its plug-in folder, for a module it loads.
+    pub fn from_engine_grants_file(grant: Grant) -> Self {
+        Self(grant)
+    }
+
+    /// The grant it holds.
+    pub fn grant(&self) -> &Grant {
+        &self.0
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
