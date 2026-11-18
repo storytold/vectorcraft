@@ -299,6 +299,40 @@ fn insert(app: &mut VectorcraftApp, ctx: &egui::Context, ch: char) -> bool {
     }
 }
 
+/// The grid's cells for `face`: the characters listed, with their glyphs, then the glyphs listed by
+/// glyph id. `category` gives the glyphs of one of the face's categories; without it, the cells are
+/// the characters of `lo..=hi`, and in Entire Font (`subset` 0) also the glyphs no character maps.
+fn grid_glyphs(
+    face: &vectorcraft_text::FontFace,
+    category: Option<&vectorcraft_text::GlyphCategory>,
+    subset: usize,
+    (lo, hi): (u32, u32),
+) -> (Vec<(char, u32)>, std::sync::Arc<[u32]>) {
+    let all = face.mapped_chars();
+    match category {
+        // A category lists its glyphs that a character maps by that character, and the others by
+        // glyph id after them.
+        Some(c) => {
+            let wanted: HashSet<u32> = c.glyphs.iter().copied().collect();
+            // A glyph several characters map is listed once, by the first of them; a glyph only a
+            // space or control character maps is listed by glyph id, as no character it can insert.
+            let mut mapped: HashSet<u32> = HashSet::new();
+            let chars: Vec<(char, u32)> =
+                all.iter().copied().filter(|(c, g)| !c.is_control() && !c.is_whitespace() && wanted.contains(g) && mapped.insert(*g)).collect();
+            (chars, c.glyphs.iter().copied().filter(|g| !mapped.contains(g)).collect())
+        }
+        None => {
+            // The list is sorted by code point, so the range's characters lie between two bounds.
+            let start = all.partition_point(|(c, _)| (*c as u32) < lo);
+            let end = all.partition_point(|(c, _)| (*c as u32) <= hi);
+            let chars = all.get(start..end).unwrap_or_default().iter().copied().filter(|(c, _)| !c.is_control() && !c.is_whitespace()).collect();
+            // Entire Font also lists the glyphs no character maps (positional forms, alternates,
+            // ligatures) by glyph id, after the characters.
+            (chars, if subset == 0 { face.unencoded_glyphs() } else { std::sync::Arc::from([]) })
+        }
+    }
+}
+
 /// Browse and insert glyphs from the chosen font, with font controls below the glyph grid.
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
@@ -335,25 +369,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         ui.label(egui::RichText::new(tl!("No fonts are available.")).color(t.text_dim));
         return;
     };
-    let (chars, unencoded): (Vec<(char, u32)>, Vec<u32>) = match category.and_then(|i| face.glyph_categories().get(i)) {
-        // A category lists its glyphs that a character maps by that character, and the others by
-        // glyph id after them.
-        Some(c) => {
-            let wanted: HashSet<u32> = c.glyphs.iter().copied().collect();
-            // A glyph several characters map is listed once, by the first of them; a glyph only a
-            // space or control character maps is listed by glyph id, as no character it can insert.
-            let mut mapped: HashSet<u32> = HashSet::new();
-            let chars: Vec<(char, u32)> =
-                face.chars().into_iter().filter(|(c, g)| !c.is_control() && !c.is_whitespace() && wanted.contains(g) && mapped.insert(*g)).collect();
-            (chars, c.glyphs.iter().copied().filter(|g| !mapped.contains(g)).collect())
-        }
-        None => {
-            let chars = face.chars().into_iter().filter(|(c, _)| (lo..=hi).contains(&(*c as u32)) && !c.is_control() && !c.is_whitespace()).collect();
-            // Entire Font also lists the glyphs no character maps (positional forms, alternates,
-            // ligatures) by glyph id, after the characters.
-            (chars, if subset == 0 { face.unencoded_glyphs().to_vec() } else { vec![] })
-        }
-    };
+    let (chars, unencoded) = grid_glyphs(&face, category.and_then(|i| face.glyph_categories().get(i)), subset, (lo, hi));
     let total = chars.len() + unencoded.len();
     let cell = CELL_STEPS[cell_index(app)];
     let cols = ((w / cell).floor() as usize).max(1);
@@ -2921,5 +2937,73 @@ mod tests {
         let mut texts = 0;
         state.doc.walk(|n| texts += usize::from(matches!(n.kind, NodeKind::Text(_))));
         assert_eq!(texts, 0, "neither glyph created or changed text");
+    }
+
+    /// The grid's cells built from the face's character list read once are the cells built from a
+    /// fresh read of the font on every frame, for every Show choice, every category, a change of
+    /// face back and forth, and a font with no `cmap`.
+    #[test]
+    fn the_grid_lists_the_same_cells_from_the_character_list_read_once() {
+        use vectorcraft_text::test_fonts::{CATEGORIES_FAMILY, CMAPLESS_FAMILY, categories_font, cmapless_font};
+
+        /// The cells as the grid listed them on each frame from its own copy of the face's characters
+        /// (`vectorcraft-text`'s tests check that list against a fresh read of the font).
+        fn read_cells(
+            face: &vectorcraft_text::FontFace,
+            category: Option<usize>,
+            subset: usize,
+            (lo, hi): (u32, u32),
+        ) -> (Vec<(char, u32)>, Vec<u32>) {
+            match category.and_then(|i| face.glyph_categories().get(i)) {
+                Some(c) => {
+                    let wanted: HashSet<u32> = c.glyphs.iter().copied().collect();
+                    let mut mapped: HashSet<u32> = HashSet::new();
+                    let chars: Vec<(char, u32)> = face
+                        .chars()
+                        .into_iter()
+                        .filter(|(c, g)| !c.is_control() && !c.is_whitespace() && wanted.contains(g) && mapped.insert(*g))
+                        .collect();
+                    (chars, c.glyphs.iter().copied().filter(|g| !mapped.contains(g)).collect())
+                }
+                None => {
+                    let chars =
+                        face.chars().into_iter().filter(|(c, _)| (lo..=hi).contains(&(*c as u32)) && !c.is_control() && !c.is_whitespace()).collect();
+                    (chars, if subset == 0 { face.unencoded_glyphs().to_vec() } else { vec![] })
+                }
+            }
+        }
+
+        let db = FontDb::with_font_dirs(vec![]);
+        assert_eq!(db.add_font(categories_font().expect("the categories test font builds")), 1);
+        assert_eq!(db.add_font(cmapless_font().expect("the cmapless test font builds")), 1);
+        let faces: Vec<_> = [
+            (vectorcraft_text::FALLBACK_FAMILY, "Regular"),
+            ("Inter", "Regular"),
+            (CATEGORIES_FAMILY, "Regular"),
+            (vectorcraft_text::FALLBACK_FAMILY, "Regular"),
+            (CMAPLESS_FAMILY, "Regular"),
+            ("JetBrains Mono", "Regular"),
+        ]
+        .into_iter()
+        .map(|(family, style)| db.face(family, style).unwrap_or_else(|| panic!("{family} {style} is loaded")))
+        .collect();
+        let categories = db.face(CATEGORIES_FAMILY, "Regular").expect("the categories face");
+        assert!(!categories.glyph_categories().is_empty(), "the test font has categories");
+        let none = db.face(CMAPLESS_FAMILY, "Regular").expect("the cmapless face");
+        assert!(none.mapped_chars().is_empty(), "no character is mapped");
+        for face in &faces {
+            for (subset, &(name, lo, hi)) in SUBSETS.iter().enumerate() {
+                let (chars, unencoded) = grid_glyphs(face, None, subset, (lo, hi));
+                assert_eq!((chars, unencoded.to_vec()), read_cells(face, None, subset, (lo, hi)), "{face:?} {name}");
+            }
+            for (i, c) in face.glyph_categories().iter().enumerate() {
+                let (chars, unencoded) = grid_glyphs(face, Some(c), CATEGORY, (0, 0x10FFFF));
+                assert_eq!((chars, unencoded.to_vec()), read_cells(face, Some(i), CATEGORY, (0, 0x10FFFF)), "{face:?} {:?}", c.kind);
+            }
+        }
+        // Entire Font lists every glyph of a font with no `cmap` by glyph id.
+        let (chars, unencoded) = grid_glyphs(&none, None, 0, (0, 0x10FFFF));
+        assert!(chars.is_empty());
+        assert!(!unencoded.is_empty(), "the glyphs are listed by glyph id");
     }
 }

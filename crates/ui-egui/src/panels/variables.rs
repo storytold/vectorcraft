@@ -8,9 +8,14 @@
 //! the document then no longer matches the active dataset, and "Update Data Set" writes the
 //! art back into it.
 
+use std::cell::RefCell;
+use std::collections::HashSet;
+use std::rc::Rc;
+use std::sync::{Arc, Weak};
+
 use egui::{Rect, Response, Sense, Ui, pos2, vec2};
 use serde_json::json;
-use vectorcraft_doc::{NodeId, NodeKind, VariableKind};
+use vectorcraft_doc::{Document, NodeId, NodeKind, VariableKind};
 use vectorcraft_engine::DocState;
 use vectorcraft_engine::cmd::{VariableSort, VariableSortKey, variable_order};
 
@@ -114,12 +119,13 @@ fn variable_row(ui: &mut Ui, row: &VarRow, selected: bool) -> Response {
     let object_cell = Rect::from_min_max(pos2(name_right, rect.top()), rect.max);
     ui.painter().with_clip_rect(object_cell).text(object_cell.left_center() + pad, left, &row.object, font, t.text_dim);
     let full = if row.object.is_empty() { row.name.clone() } else { format!("{} · {}", row.name, row.object) };
-    r.widget_info(|| egui::WidgetInfo::selected(egui::Role::ListItem, true, selected, &full));
+    widgets::list_item_info(&r, selected, || full.clone());
     // A column clips a long name, so the whole of it shows on hover.
     r.on_hover_text(full)
 }
 
 /// One variable row: its kind's icon, its name, and the object it drives.
+#[derive(Debug, PartialEq)]
 struct VarRow {
     name: String,
     kind: VariableKind,
@@ -129,12 +135,114 @@ struct VarRow {
 }
 
 /// One dataset row: its name and how many values it carries.
+#[derive(Debug, PartialEq)]
 struct SetRow {
     name: String,
     values: usize,
     active: bool,
     /// False once an edit has moved the art away from what this row says.
     matches: bool,
+}
+
+/// The panel's two lists: the variables in the order `variable.sort` set, and the data sets.
+#[derive(Debug, PartialEq)]
+struct Rows {
+    vars: Vec<VarRow>,
+    sets: Vec<SetRow>,
+}
+
+/// Build the panel's rows. `xml_id` names a variable's one object by its XML id, as Identify
+/// Objects By › XML ID does.
+fn build_rows(st: &DocState, xml_id: bool) -> Rows {
+    #[cfg(test)]
+    BUILT.with(|n| n.set(n.get() + 1));
+    // In the order `variable.sort` set, which `variable.list` reports too.
+    let all = &st.doc.variables.variables;
+    let vars: Vec<VarRow> = variable_order(st, xml_id)
+        .into_iter()
+        .filter_map(|i| all.get(i))
+        .map(|v| {
+            let bound: Vec<u64> = st.doc.variables.objects_of(&v.name).iter().map(|i| i.0).collect();
+            let object = match bound.as_slice() {
+                [] => String::new(),
+                [one] => st.doc.node(NodeId(*one)).map(|n| n.identify_label(xml_id)).unwrap_or_default(),
+                _ => tl!("Multiple objects").to_string(),
+            };
+            VarRow { name: v.name.clone(), kind: v.kind, bound, object }
+        })
+        .collect();
+    // What the art holds now, read once for every row's drift check.
+    let current = st.doc.captured_values();
+    let sets: Vec<SetRow> = st
+        .doc
+        .variables
+        .datasets
+        .iter()
+        .map(|d| SetRow {
+            name: d.name.clone(),
+            values: d.values.len(),
+            active: st.doc.variables.active_dataset.as_deref() == Some(d.name.as_str()),
+            matches: d.matches(&current),
+        })
+        .collect();
+    Rows { vars, sets }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// How many times [`build_rows`] has run on this thread.
+    static BUILT: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// Everything the rows are built from: the document version (its address, which the held
+/// [`Weak`] keeps from being reused, and its revision), the list's order, Identify Objects By, the
+/// interface language that "Multiple objects" is written in, and the document's new art. New art
+/// on a locked artboard is read by a data set's drift check, and selecting or deselecting it
+/// changes the set in place without a new revision.
+struct RowsKey {
+    doc: Weak<Document>,
+    revision: u64,
+    sort: VariableSort,
+    xml_id: bool,
+    lang: crate::i18n::Lang,
+    new_art: Arc<HashSet<NodeId>>,
+}
+
+impl RowsKey {
+    fn of(st: &DocState, xml_id: bool) -> Self {
+        RowsKey {
+            doc: Arc::downgrade(&st.doc),
+            revision: st.revision,
+            sort: st.variables_sort,
+            xml_id,
+            lang: crate::i18n::current(),
+            new_art: st.doc.new_art.get(),
+        }
+    }
+
+    fn same(&self, other: &RowsKey) -> bool {
+        self.doc.ptr_eq(&other.doc)
+            && self.revision == other.revision
+            && self.sort == other.sort
+            && self.xml_id == other.xml_id
+            && self.lang == other.lang
+            && Arc::ptr_eq(&self.new_art, &other.new_art)
+    }
+}
+
+/// The panel's rows for `st`, built again only when one of the inputs in [`RowsKey`] changes.
+/// The selection and the highlighted row are not among them: the panel reads those every frame.
+fn cached_rows(st: &DocState, xml_id: bool) -> Rc<Rows> {
+    thread_local! {
+        static ROWS: RefCell<Option<(RowsKey, Rc<Rows>)>> = const { RefCell::new(None) };
+    }
+    let key = RowsKey::of(st, xml_id);
+    if let Some(rows) = ROWS.with(|c| c.borrow().as_ref().filter(|(k, _)| k.same(&key)).map(|(_, rows)| rows.clone())) {
+        return rows;
+    }
+    let rows = Rc::new(build_rows(st, xml_id));
+    ROWS.with(|c| *c.borrow_mut() = Some((key, rows.clone())));
+    rows
 }
 
 /// The row the panel acts on: Delete, Options… and Select Bound Object all mean it. A name
@@ -217,35 +325,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     };
     // Owned snapshots: the rows below run commands, which borrow the app mutably.
     let xml_id = app.session.prefs.identify_objects_by == "xmlId";
-    // In the order `variable.sort` set, which `variable.list` reports too.
-    let all = &st.doc.variables.variables;
-    let vars: Vec<VarRow> = variable_order(st, xml_id)
-        .into_iter()
-        .filter_map(|i| all.get(i))
-        .map(|v| {
-            let bound: Vec<u64> = st.doc.variables.objects_of(&v.name).iter().map(|i| i.0).collect();
-            let object = match bound.as_slice() {
-                [] => String::new(),
-                [one] => st.doc.node(NodeId(*one)).map(|n| n.identify_label(xml_id)).unwrap_or_default(),
-                _ => tl!("Multiple objects").to_string(),
-            };
-            VarRow { name: v.name.clone(), kind: v.kind, bound, object }
-        })
-        .collect();
-    // What the art holds now, read once for every row's drift check.
-    let current = st.doc.captured_values();
-    let sets: Vec<SetRow> = st
-        .doc
-        .variables
-        .datasets
-        .iter()
-        .map(|d| SetRow {
-            name: d.name.clone(),
-            values: d.values.len(),
-            active: st.doc.variables.active_dataset.as_deref() == Some(d.name.as_str()),
-            matches: d.matches(&current),
-        })
-        .collect();
+    let rows = cached_rows(st, xml_id);
+    let (vars, sets) = (&rows.vars, &rows.sets);
     let active = sets.iter().find(|s| s.active);
     let Picked { selected, has_selection, selection_bound, single_type, single_image, selection_graph } = picked(st);
     let highlighted = highlighted_row(st);
@@ -298,7 +379,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if vars.is_empty() {
         widgets::dim_label(ui, tl!("None"));
     }
-    for row in &vars {
+    for row in vars {
         let r = variable_row(ui, row, highlighted.as_deref() == Some(row.name.as_str()));
         // A click highlights the row and selects what it drives; a double click opens
         // Variable Options for it.
@@ -314,7 +395,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if sets.is_empty() {
         widgets::dim_label(ui, tl!("None"));
     }
-    for row in &sets {
+    for row in sets {
         // The active row is ticked and selected; a row the art has drifted from is in
         // italics, so an edit that left the document not matching it is visible.
         let label = format!("{}{} · {}", if row.active { "● " } else { "" }, row.name, row.values);
@@ -707,6 +788,23 @@ mod tests {
         assert_eq!(app.ui.status, "");
     }
 
+    /// Each variable row is a list item, and only the highlighted one is selected.
+    #[test]
+    fn the_rows_report_the_highlight_as_the_selected_state() {
+        use egui::accesskit::Role;
+        let mut app = app_with_data();
+        app.session.execute("variable.define", &json!({"name": "age", "kind": "visibility"})).unwrap();
+        app.session.execute("variable.highlight", &json!({"variable": "Name"})).unwrap();
+        let nodes = Driver::new().nodes(&mut app);
+        let mut rows: Vec<_> = nodes
+            .iter()
+            .filter(|(_, n)| n.role() == Role::ListItem)
+            .map(|(_, n)| (n.label().map(str::to_string), n.is_selected(), n.toggled()))
+            .collect();
+        rows.sort_by(|a, b| a.0.cmp(&b.0));
+        assert_eq!(rows, [(Some("Name · Alice".to_string()), Some(true), None), (Some("age".to_string()), Some(false), None)]);
+    }
+
     /// A click on a column header sorts the list by that column, and a second click on it
     /// reverses the order; the rows are drawn in the order `variable.list` reports.
     #[test]
@@ -869,12 +967,12 @@ mod tests {
         let xml = r#"<variableSets><variableSet><variables><variable varName="Logo" trait="other"/></variables></variableSet></variableSets>"#;
         app.run("variable.loadLibrary", json!({"xml": xml})).unwrap();
         assert_eq!(app.ui.status, status, "the load gives no warning");
-        let warning = "variables that aren't text were left out: other (1)";
+        let warning = "variables that aren't text were left out: `other` (1)";
         let langs: Vec<Lang> = Lang::all().filter(|l| l.code() != "en").collect();
         assert!(langs.len() >= 23, "{} languages", langs.len());
         for l in langs {
             let shown = message(l, warning);
-            assert!(!shown.contains("left out") && shown.contains("other") && shown.contains('1'), "{}: {shown}", l.code());
+            assert!(!shown.contains("left out") && shown.contains("`other` (1)"), "{}: {shown}", l.code());
         }
     }
 
@@ -894,6 +992,8 @@ mod tests {
         assert_eq!(app.ui.status, "a new document won't read these variables back with their kind: `#Tag`");
         let warning = app.ui.status.clone();
         app.run("variable.define", json!({"name": "%Rate", "kind": "text"})).unwrap();
+        // A new document reads a `%` header's values as paths of graph data files.
+        app.run("dataset.new", json!({"name": "Rates", "values": {"%Rate": "5"}})).unwrap();
         app.run("dataset.export", json!({"path": path})).unwrap();
         assert_eq!(app.ui.status, "a new document refuses this file because of these variables: `%Rate`");
         let refuses = app.ui.status.clone();
@@ -1023,6 +1123,231 @@ mod tests {
             .expect("the Variables panel is listed");
         assert_eq!((panel.path.clone(), panel.label.as_str()), (vec!["Window".to_string()], "Variables"));
         assert!(!entries.iter().any(|e| e.path == ["Window", "Variables"]), "no Variables submenu");
+    }
+
+    /// The rows as the panel built them on every frame before [`cached_rows`] kept them: the
+    /// identity checks and the timing compare against it.
+    fn old_rows(st: &DocState, xml_id: bool) -> Rows {
+        let all = &st.doc.variables.variables;
+        let vars: Vec<VarRow> = variable_order(st, xml_id)
+            .into_iter()
+            .filter_map(|i| all.get(i))
+            .map(|v| {
+                let bound: Vec<u64> = st.doc.variables.objects_of(&v.name).iter().map(|i| i.0).collect();
+                let object = match bound.as_slice() {
+                    [] => String::new(),
+                    [one] => st.doc.node(NodeId(*one)).map(|n| n.identify_label(xml_id)).unwrap_or_default(),
+                    _ => tl!("Multiple objects").to_string(),
+                };
+                VarRow { name: v.name.clone(), kind: v.kind, bound, object }
+            })
+            .collect();
+        let current = st.doc.captured_values();
+        let sets: Vec<SetRow> = st
+            .doc
+            .variables
+            .datasets
+            .iter()
+            .map(|d| SetRow {
+                name: d.name.clone(),
+                values: d.values.len(),
+                active: st.doc.variables.active_dataset.as_deref() == Some(d.name.as_str()),
+                matches: d.matches(&current),
+            })
+            .collect();
+        Rows { vars, sets }
+    }
+
+    fn built() -> u64 {
+        BUILT.with(|n| n.get())
+    }
+
+    /// Frames drawn while nothing changes build the rows once and draw the same rows after that.
+    #[test]
+    fn frames_without_a_change_build_the_rows_once() {
+        let mut app = app_with_data();
+        let mut d = Driver::new();
+        d.frame(&mut app, vec![]);
+        let before = built();
+        for _ in 0..5 {
+            d.frame(&mut app, vec![]);
+        }
+        assert_eq!(built(), before, "frames of an unchanged document built the rows again");
+        let st = app.session.active().unwrap();
+        assert!(Rc::ptr_eq(&cached_rows(st, false), &cached_rows(st, false)));
+        assert_eq!(*cached_rows(st, false), old_rows(st, false));
+    }
+
+    /// Draws a frame after `what` changed one of the rows' inputs, checks that the frame built the
+    /// rows again and that they equal the rows the old per-frame build gives, and returns them.
+    fn rebuilt(d: &mut Driver, app: &mut VectorcraftApp, what: &str) -> Rc<Rows> {
+        let before = built();
+        d.frame(app, vec![]);
+        assert!(built() > before, "{what}: the frame drew the rows it kept");
+        let xml_id = app.session.prefs.identify_objects_by == "xmlId";
+        let st = app.session.active().unwrap();
+        let rows = cached_rows(st, xml_id);
+        assert_eq!(*rows, old_rows(st, xml_id), "{what}");
+        rows
+    }
+
+    fn matches(rows: &Rows, set: &str) -> bool {
+        rows.sets.iter().find(|s| s.name == set).unwrap_or_else(|| panic!("no data set {set}")).matches
+    }
+
+    /// Each input of the rows builds them again: an edit, the list's order, Identify Objects By,
+    /// the interface language, new art on a locked artboard selected or deselected without a new
+    /// revision, Undo, Redo and another document.
+    #[test]
+    fn each_input_of_the_rows_builds_them_again() {
+        let mut app = app_with_data();
+        let mut d = Driver::new();
+        d.frame(&mut app, vec![]);
+        let t = app.session.active().unwrap().doc.variables.objects_of("Name")[0].0;
+
+        app.session.execute("variable.define", &json!({"name": "Shown", "kind": "visibility"})).unwrap();
+        assert_eq!(rebuilt(&mut d, &mut app, "variable.define").vars.len(), 2);
+        let r = app.session.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        app.session.execute("variable.bind", &json!({"variable": "Shown", "ids": [r]})).unwrap();
+        let rows = rebuilt(&mut d, &mut app, "variable.bind");
+        assert_eq!(rows.vars.iter().find(|v| v.name == "Shown").map(|v| v.bound.clone()), Some(vec![r]));
+        app.session.execute("dataset.capture", &json!({})).unwrap();
+        assert_eq!(rebuilt(&mut d, &mut app, "dataset.capture").sets.len(), 2);
+        app.session.execute("text.editRange", &json!({"id": t, "insert": "Bob"})).unwrap();
+        assert!(!matches(&rebuilt(&mut d, &mut app, "an edit of bound text"), "Data Set 1"));
+
+        // On a locked artboard the text is not read, so the data set no longer differs from it.
+        app.session.execute("artboard.setProps", &json!({"index": 0, "locked": true})).unwrap();
+        assert!(matches(&rebuilt(&mut d, &mut app, "artboard lock"), "Data Set 1"));
+        // New art there is read again; selecting or deselecting it keeps the revision.
+        let revision = app.session.active().unwrap().revision;
+        app.session.active().unwrap().doc.new_art.set(Arc::new(HashSet::from([NodeId(t)])));
+        assert!(!matches(&rebuilt(&mut d, &mut app, "new art selected"), "Data Set 1"));
+        app.session.active().unwrap().doc.new_art.set(Arc::default());
+        assert!(matches(&rebuilt(&mut d, &mut app, "new art deselected"), "Data Set 1"));
+        assert_eq!(app.session.active().unwrap().revision, revision, "new art moved the revision");
+        app.session.execute("artboard.setProps", &json!({"index": 0, "locked": false})).unwrap();
+        assert!(!matches(&rebuilt(&mut d, &mut app, "artboard unlock"), "Data Set 1"));
+
+        app.session.execute("variable.sort", &json!({"by": "name", "descending": true})).unwrap();
+        let names: Vec<String> = rebuilt(&mut d, &mut app, "variable.sort").vars.iter().map(|v| v.name.clone()).collect();
+        assert_eq!(names, ["Shown", "Name"]);
+
+        // Identify Objects By names the one object by its XML id; the preference is not an edit.
+        app.session.execute("layer.setProps", &json!({"id": r, "name": "My Rect #2"})).unwrap();
+        rebuilt(&mut d, &mut app, "layer.setProps");
+        app.session.prefs.identify_objects_by = "xmlId".into();
+        let rows = rebuilt(&mut d, &mut app, "Identify Objects By");
+        assert_eq!(rows.vars.iter().find(|v| v.name == "Shown").map(|v| v.object.as_str()), Some("My_Rect__x23_2"));
+        app.session.prefs.identify_objects_by = "objectName".into();
+        rebuilt(&mut d, &mut app, "Identify Objects By back");
+
+        // A variable bound to more than one object says so in the interface language.
+        app.session.execute("variable.bind", &json!({"variable": "Shown", "ids": [t]})).unwrap();
+        rebuilt(&mut d, &mut app, "a second binding");
+        crate::i18n::set_current(crate::i18n::Lang::from_code("de").expect("de registered"));
+        let rows = rebuilt(&mut d, &mut app, "the language");
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        assert_eq!(rows.vars.iter().find(|v| v.name == "Shown").map(|v| v.object.as_str()), Some("Mehrere Objekte"));
+        let rows = rebuilt(&mut d, &mut app, "the language back");
+        assert_eq!(rows.vars.iter().find(|v| v.name == "Shown").map(|v| v.object.as_str()), Some("Multiple objects"));
+
+        app.session.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(rebuilt(&mut d, &mut app, "edit.undo").vars.iter().find(|v| v.name == "Shown").map(|v| v.bound.len()), Some(1));
+        app.session.execute("edit.redo", &json!({})).unwrap();
+        assert_eq!(rebuilt(&mut d, &mut app, "edit.redo").vars.iter().find(|v| v.name == "Shown").map(|v| v.bound.len()), Some(2));
+
+        // Another document, and back.
+        app.session.execute("file.new", &json!({"width": 300, "height": 200})).unwrap();
+        assert!(rebuilt(&mut d, &mut app, "another document").vars.is_empty());
+        assert!(app.session.set_active(0));
+        assert_eq!(rebuilt(&mut d, &mut app, "the first document again").vars.len(), 2);
+    }
+
+    /// A document for the timing: `threads` stories of four threaded frames with a text variable
+    /// on each frame, `rects` rectangles with a visibility variable on each but the last tenth
+    /// (those go to the first visibility variable as well), `graphs` graphs with a graph variable
+    /// each, and `sets` captured data sets, listed by object.
+    fn timing_document(threads: usize, rects: usize, graphs: usize, sets: usize) -> VectorcraftApp {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let s = &mut app.session;
+        s.execute("file.new", &json!({"width": 2000, "height": 2000})).unwrap();
+        let id = |v: serde_json::Value| v["id"].as_u64().unwrap();
+        let bind = |s: &mut vectorcraft_engine::Session, name: String, kind: &str, ids: &[u64]| {
+            s.execute("variable.define", &json!({"name": name, "kind": kind})).unwrap();
+            s.execute("variable.bind", &json!({"variable": name, "ids": ids})).unwrap();
+        };
+        for i in 0..threads {
+            let (x, y) = ((i % 10) as f64 * 150.0, (i / 10) as f64 * 300.0);
+            let text = format!("Story {i} with a few words in it that flow from frame to frame");
+            let mut frame = id(s.execute("text.create", &json!({"x": x, "y": y, "text": text, "area": {"width": 120, "height": 40}})).unwrap());
+            bind(s, format!("t{i}a"), "text", &[frame]);
+            for f in ["b", "c", "d"] {
+                frame = id(s.execute("text.thread.add", &json!({"from": frame, "rect": [x, y + 60.0, 120, 40]})).unwrap());
+                bind(s, format!("t{i}{f}"), "text", &[frame]);
+            }
+        }
+        let rects: Vec<u64> = (0..rects)
+            .map(|i| id(s.execute("shape.rectangle", &json!({"x": (i % 20) * 90, "y": 1500 + (i / 20) * 40, "width": 30, "height": 30})).unwrap()))
+            .collect();
+        let own = rects.len() - rects.len() / 10;
+        for (i, r) in rects[..own].iter().enumerate() {
+            bind(s, format!("v{i}"), "visibility", &[*r]);
+        }
+        if own > 0 && own < rects.len() {
+            s.execute("variable.bind", &json!({"variable": "v0", "ids": &rects[own..]})).unwrap();
+        }
+        let csv: String =
+            std::iter::once(",2024,2025".to_string()).chain((0..20).map(|r| format!("Row {r},{r},{}", r * 2))).collect::<Vec<_>>().join("\n");
+        for i in 0..graphs {
+            let g =
+                id(s.execute("graph.create", &json!({"type": "column", "x": i * 150, "y": 1800, "width": 120, "height": 80, "csv": csv})).unwrap());
+            bind(s, format!("g{i}"), "graph", &[g]);
+        }
+        for _ in 0..sets {
+            s.execute("dataset.capture", &json!({})).unwrap();
+        }
+        s.execute("variable.sort", &json!({"by": "object"})).unwrap();
+        app
+    }
+
+    /// Per-frame time of the old row build against the kept rows on an unchanged document: seven
+    /// runs of 600 frames each, the two alternating, on a 30-variable and a 300-variable document.
+    #[test]
+    #[ignore = "timing: cargo test --release -p vectorcraft-ui-egui --lib variables::tests::rows_timing -- --ignored --nocapture"]
+    fn rows_timing() {
+        fn median(mut v: Vec<f64>) -> f64 {
+            v.sort_by(f64::total_cmp);
+            v[v.len() / 2]
+        }
+        for app in [timing_document(5, 10, 1, 5), timing_document(50, 100, 10, 50)] {
+            let st = app.session.active().unwrap();
+            let rows = cached_rows(st, false);
+            assert_eq!(*rows, old_rows(st, false));
+            let (mut old, mut kept) = (vec![], vec![]);
+            for _ in 0..7 {
+                let t = std::time::Instant::now();
+                for _ in 0..600 {
+                    std::hint::black_box(old_rows(std::hint::black_box(st), false));
+                }
+                old.push(t.elapsed().as_secs_f64() * 1e6 / 600.0);
+                let t = std::time::Instant::now();
+                for _ in 0..600 {
+                    std::hint::black_box(cached_rows(std::hint::black_box(st), false));
+                }
+                kept.push(t.elapsed().as_secs_f64() * 1e6 / 600.0);
+            }
+            let runs = |v: &[f64]| v.iter().map(|x| format!("{x:.3}")).collect::<Vec<_>>().join(" ");
+            println!(
+                "{} variables, {} data sets: old {:.3} us/frame (runs {}), kept {:.3} us/frame (runs {})",
+                rows.vars.len(),
+                rows.sets.len(),
+                median(old.clone()),
+                runs(&old),
+                median(kept.clone()),
+                runs(&kept)
+            );
+        }
     }
 
     /// A menu item that needs a name opens the dialog rather than running the command with
