@@ -310,6 +310,19 @@ fn loaded_text(p: &mut Ink, o: Pos2) {
     }
 }
 
+/// Loaded text over an object a click threads it into: the loaded text's block with a link
+/// badge (two chain rings) below right.
+fn loaded_text_link(p: &mut Ink, o: Pos2) {
+    loaded_text(p, o);
+    let rings = [o + vec2(13.0, 17.0), o + vec2(18.0, 17.0)];
+    for c in rings {
+        p.circle_stroke(c, 3.2, Stroke::new(3.2, HALO));
+    }
+    for c in rings {
+        p.circle_stroke(c, 3.2, Stroke::new(1.3, INK));
+    }
+}
+
 /// The gradient annotator's stop cursors: the arrow with a plus (add a stop) or minus (delete it)
 /// badge.
 fn stop_badge(p: &mut Ink, o: Pos2, add: bool) {
@@ -554,7 +567,7 @@ fn magnifier(p: &mut Ink, o: Pos2, out: bool) {
 
 /// Every cursor with a glyph: its own, drawn here, or the one it borrows.
 #[cfg(test)]
-const GLYPHS: [Cursor; 98] = [
+const GLYPHS: [Cursor; 99] = [
     Cursor::Hand,
     Cursor::HandGrab,
     Cursor::ZoomIn,
@@ -603,6 +616,7 @@ const GLYPHS: [Cursor; 98] = [
     Cursor::PathBracket,
     Cursor::TypeWidget,
     Cursor::LoadedText,
+    Cursor::LoadedTextLink,
     Cursor::ShapeBuilder,
     Cursor::ShapeBuilderErase,
     Cursor::Lasso,
@@ -744,6 +758,7 @@ fn glyph(c: Cursor, p: Pos2) -> Option<Vec<Shape>> {
         Cursor::PathBracket => path_bracket(ink, p),
         Cursor::TypeWidget => type_widget(ink, p),
         Cursor::LoadedText => loaded_text(ink, p),
+        Cursor::LoadedTextLink => loaded_text_link(ink, p),
         Cursor::ShapeBuilder => shape_builder(ink, p, false),
         Cursor::ShapeBuilderErase => shape_builder(ink, p, true),
         Cursor::LivePaintBucket => paint_bucket(ink, p, false),
@@ -787,6 +802,27 @@ pub const OS_CURSORS: bool = !cfg!(any(target_os = "macos", target_arch = "wasm3
 /// and PdfCraft do.
 pub fn os_cursors(build: bool, wayland: bool) -> bool {
     build && !wayland
+}
+
+/// The cursor a panel shows where a click or a drop adds something, such as a stop under the
+/// Gradient panel's ramp or a copy of rows Alt-dragged in the Layers panel (#8217): the white arrow
+/// with a plus that Group Selection shows for a click that adds the next group. Windows has no system copy cursor (winit shows the plain arrow for
+/// `CursorIcon::Copy`), so where the window shows glyphs as OS cursors ([`os_cursors`]) the panel
+/// hands it this glyph; elsewhere (macOS, Wayland, the web, `VECTORCRAFT_SYSTEM_CURSORS`) the
+/// system's copy cursor shows (#8241). Set every frame it shows: the canvas and egui reset it.
+pub(crate) fn set_add_cursor(app: &mut crate::VectorcraftApp, ctx: &egui::Context) {
+    ctx.set_cursor_icon(egui::CursorIcon::Copy);
+    if add_cursor_is_a_glyph(app) {
+        // As the canvas sizes its glyphs (User Interface › Scale Cursor Proportional to UI).
+        let ui_scale = if app.session.prefs.scale_cursor_with_ui { 1.0 } else { ctx.zoom_factor() };
+        ctx.set_cursor_image(app.canvas.cursors.get(Cursor::GroupSelection, ctx.pixels_per_point() / ui_scale));
+    }
+}
+
+/// Does [`set_add_cursor`] hand the OS its glyph (rather than ask for the system copy cursor)?
+/// Where the window shows glyphs as OS cursors, unless `VECTORCRAFT_SYSTEM_CURSORS` opts out.
+pub(crate) fn add_cursor_is_a_glyph(app: &crate::VectorcraftApp) -> bool {
+    std::env::var_os("VECTORCRAFT_SYSTEM_CURSORS").is_none() && os_cursors(OS_CURSORS, app.services.wayland)
 }
 
 /// Does the window hide the pointer only while it is the key window? macOS does: winit hides it with

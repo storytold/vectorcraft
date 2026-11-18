@@ -1276,7 +1276,7 @@ fn aligned_between(tab: &vectorcraft_doc::TabStop, from: f64, x: f64) -> bool {
 
 /// The frames of the story that type object `id` belongs to (its thread in thread order, else `id`
 /// alone), each with the length of its text in bytes.
-fn story_frames(s: &Session, id: NodeId) -> Vec<(NodeId, usize)> {
+pub(crate) fn story_frames(s: &Session, id: NodeId) -> Vec<(NodeId, usize)> {
     let Some(st) = s.active() else { return vec![] };
     let d = &st.doc;
     let frames = d.text_threads.iter().find(|thread| thread.contains(&id)).cloned().unwrap_or_else(|| vec![id]);
@@ -1314,6 +1314,16 @@ fn move_editing_selection(
         at + inserted.iter().filter(|(b, _)| *b <= at).map(|(_, n)| n).sum::<usize>()
     };
     let (anchor, caret) = (story(anchor), story(caret));
+    select_story_range(s, id, anchor, caret)
+}
+
+/// The Type tool's anchor and caret become story positions `anchor` and `caret` of the story that
+/// frame `id` belongs to, as its frames are now. The caret stays in `id` while its place is there,
+/// and else goes to the frame that holds it, with the anchor in that frame; that frame becomes the
+/// selection when it was not selected.
+pub(crate) fn select_story_range(s: &mut Session, id: NodeId, anchor: usize, caret: usize) -> Result<()> {
+    let start_of = |frames: &[(NodeId, usize)], f: NodeId| frames.iter().take_while(|(g, _)| *g != f).map(|(_, n)| n).sum::<usize>();
+    let len_of = |frames: &[(NodeId, usize)], f: NodeId| frames.iter().find(|(g, _)| *g == f).map_or(0, |(_, n)| *n);
     let after = story_frames(s, id);
     let fits = |f: NodeId| (start_of(&after, f)..=start_of(&after, f) + len_of(&after, f)).contains(&caret);
     let frame = if fits(id) { Some(id) } else { after.iter().map(|(f, _)| *f).find(|f| fits(*f)) };
