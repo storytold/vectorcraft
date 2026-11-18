@@ -4612,6 +4612,7 @@ imageTrace	Outline	Contorno
 	Bevel	Smussato
 	Offset	Spostamento
 	Axis	Asse
+	Axis Angle	Angolo dell'asse
 axis	Horizontal	Orizzontale
 axis	Vertical	Verticale
 axis	Both	Entrambi

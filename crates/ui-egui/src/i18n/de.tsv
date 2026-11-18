@@ -4474,6 +4474,7 @@ imageTrace	Outline	Kontur
 	Bevel	Abgeflacht
 	Offset	Versatz
 	Axis	Achse
+	Axis Angle	Achsenwinkel
 axis	Horizontal	Horizontal
 axis	Vertical	Vertikal
 axis	Both	Beide

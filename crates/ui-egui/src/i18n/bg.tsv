@@ -4399,6 +4399,7 @@ imageTrace	Outline	Контур
 	Bevel	Фаска
 	Offset	Отстъп
 	Axis	Ос
+	Axis Angle	Ъгъл на оста
 axis	Horizontal	Хоризонтално
 axis	Vertical	Вертикално
 axis	Both	И двете

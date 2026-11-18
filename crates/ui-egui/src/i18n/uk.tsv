@@ -4601,6 +4601,7 @@ imageTrace	Outline	Контур
 	Bevel	Скіс
 	Offset	Зміщення
 	Axis	Вісь
+	Axis Angle	Кут осі
 axis	Horizontal	Горизонтальна
 axis	Vertical	Вертикальна
 axis	Both	Обидві
