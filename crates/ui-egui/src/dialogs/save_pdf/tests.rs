@@ -1151,6 +1151,20 @@ fn custom_keeps_the_overprint_option_of_a_saved_preset_deleted_meanwhile() {
     }
 }
 
+/// Flattener preset shows a preset named in another case by its name, not as [Custom].
+#[test]
+fn flattener_preset_shows_a_name_given_in_any_case() {
+    let (mut app, _, _) = app();
+    app.run("flattener.presets.save", json!({"name": "Mine", "balance": 20})).unwrap();
+    let r = Reader::new();
+    for (given, shown) in [("MINE", "Mine"), ("HIGH RESOLUTION", "High Resolution")] {
+        open_advanced(&mut app, json!({"compatibility": "1.3", "flattenerPreset": given}));
+        let texts = r.texts(&mut app);
+        assert!(texts.iter().any(|t| t == shown), "{given}: {texts:?}");
+        assert!(!texts.iter().any(|t| t == "[Custom]"), "{given}: {texts:?}");
+    }
+}
+
 #[test]
 fn save_preset_says_it_leaves_the_custom_flattener_options_out() {
     let (mut app, _, _) = app();

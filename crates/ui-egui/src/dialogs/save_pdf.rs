@@ -1011,9 +1011,12 @@ fn advanced(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
         let saved = &app.session.prefs.flattener_presets;
         // [Custom] while Custom… options differ from the preset's.
         let current = flattener(d, saved).ok();
+        // The preset as the list names it: the export finds a name in any case.
+        let name = flattener_name(d);
+        let name = presets.iter().find(|p| p.name.eq_ignore_ascii_case(name.trim())).map_or(name.as_str(), |p| p.name.as_str());
         let mut custom = false;
         ui.add_enabled_ui(flat, |ui| {
-            if let Some(p) = super::flatten::preset_dropdown(ui, "flattenerPreset", &presets, &flattener_name(d), current.as_ref(), 200.0) {
+            if let Some(p) = super::flatten::preset_dropdown(ui, "flattenerPreset", &presets, name, current.as_ref(), 200.0) {
                 set(d, "flattenerPreset", json!(p.name));
                 d.fields.remove("flattener");
             }
