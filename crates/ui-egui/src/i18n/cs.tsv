@@ -7898,6 +7898,7 @@ breakText	Glyphs	Glyfy
 @msg	a provider with the id `{id}` is registered already	Poskytovatel s ID `{id}` je již zaregistrován
 @msg	job {job} has no results to insert: it was canceled	Úloha {job} nemá žádné výsledky k vložení: byla zrušena
 @msg	job {job} no longer applies: its document, image or image placement changed, so generate again	Úloha {job} již neplatí: změnil se její dokument, obraz nebo umístění obrazu; vytvořte ji znovu
+@msg	Concept to Vector results are not saved, so a recorded insert does not play again: generate again	Výsledky nástroje Koncept na vektor se neukládají, takže se zaznamenané vložení znovu nepřehraje: vytvořte je znovu
 @msg	missing `provider` (see conceptVector.providers)	Chybí `provider` (viz conceptVector.providers)
 @msg	no Concept to Vector job {job}: it was never made, or was dropped (see conceptVector.results)	Úloha Koncept na vektor {job} neexistuje: nikdy nevznikla nebo byla zahozena (viz conceptVector.results)
 @msg	no Concept to Vector provider `{name}` (see conceptVector.providers)	Poskytovatel Koncept na vektor `{name}` neexistuje (viz conceptVector.providers)

@@ -7620,6 +7620,7 @@ breakText	Glyphs	字形
 @msg	a provider with the id `{id}` is registered already	ID 为 `{id}` 的提供程序已注册
 @msg	job {job} has no results to insert: it was canceled	任务 {job} 没有可插入的结果：它已被取消
 @msg	job {job} no longer applies: its document, image or image placement changed, so generate again	任务 {job} 已失效：其文档、图像或图像位置已更改，请重新生成
+@msg	Concept to Vector results are not saved, so a recorded insert does not play again: generate again	概念转矢量的结果不会保存，因此录制的插入不会再次播放：请重新生成
 @msg	missing `provider` (see conceptVector.providers)	缺少 `provider`（参见 conceptVector.providers）
 @msg	no Concept to Vector job {job}: it was never made, or was dropped (see conceptVector.results)	没有概念转矢量任务 {job}：它从未生成或已被丢弃（参见 conceptVector.results）
 @msg	no Concept to Vector provider `{name}` (see conceptVector.providers)	没有概念转矢量提供程序 `{name}`（参见 conceptVector.providers）

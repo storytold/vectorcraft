@@ -9288,6 +9288,7 @@ breakText	Glyphs	字形
 @msg	a provider with the id `{id}` is registered already	ID `{id}` のプロバイダーはすでに登録されています
 @msg	job {job} has no results to insert: it was canceled	ジョブ {job} には挿入する結果がありません: キャンセルされました
 @msg	job {job} no longer applies: its document, image or image placement changed, so generate again	ジョブ {job} は無効になりました: ドキュメント、画像、または画像の配置が変更されたため、もう一度生成してください
+@msg	Concept to Vector results are not saved, so a recorded insert does not play again: generate again	コンセプトからベクターの結果は保存されないため、記録された挿入は再生されません: もう一度生成してください
 @msg	missing `provider` (see conceptVector.providers)	`provider` がありません (conceptVector.providers を参照)
 @msg	no Concept to Vector job {job}: it was never made, or was dropped (see conceptVector.results)	コンセプトからベクターのジョブ {job} はありません: 作成されていないか、破棄されました (conceptVector.results を参照)
 @msg	no Concept to Vector provider `{name}` (see conceptVector.providers)	コンセプトからベクターのプロバイダー `{name}` はありません (conceptVector.providers を参照)

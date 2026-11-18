@@ -7777,6 +7777,7 @@ breakText	Glyphs	Γλύφοι
 @msg	a provider with the id `{id}` is registered already	Ένας πάροχος με αναγνωριστικό `{id}` είναι ήδη καταχωρισμένος
 @msg	job {job} has no results to insert: it was canceled	Η εργασία {job} δεν έχει αποτελέσματα για εισαγωγή: ακυρώθηκε
 @msg	job {job} no longer applies: its document, image or image placement changed, so generate again	Η εργασία {job} δεν ισχύει πια: άλλαξε το έγγραφο, η εικόνα ή η θέση της εικόνας· δημιουργήστε την ξανά
+@msg	Concept to Vector results are not saved, so a recorded insert does not play again: generate again	Τα αποτελέσματα του Από ιδέα σε διάνυσμα δεν αποθηκεύονται, οπότε μια καταγεγραμμένη εισαγωγή δεν αναπαράγεται ξανά· δημιουργήστε τα ξανά
 @msg	missing `provider` (see conceptVector.providers)	Λείπει το `provider` (δείτε το conceptVector.providers)
 @msg	no Concept to Vector job {job}: it was never made, or was dropped (see conceptVector.results)	Δεν υπάρχει εργασία «Από ιδέα σε διάνυσμα» {job}: δεν δημιουργήθηκε ποτέ ή απορρίφθηκε (δείτε το conceptVector.results)
 @msg	no Concept to Vector provider `{name}` (see conceptVector.providers)	Δεν υπάρχει πάροχος «Από ιδέα σε διάνυσμα» `{name}` (δείτε το conceptVector.providers)

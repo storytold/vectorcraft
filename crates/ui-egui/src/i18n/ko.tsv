@@ -7373,6 +7373,7 @@ breakText	Glyphs	글리프
 @msg	a provider with the id `{id}` is registered already	ID가 `{id}`인 공급자가 이미 등록되어 있습니다
 @msg	job {job} has no results to insert: it was canceled	작업 {job}에는 삽입할 결과가 없습니다: 취소되었습니다
 @msg	job {job} no longer applies: its document, image or image placement changed, so generate again	작업 {job}은 더 이상 유효하지 않습니다: 문서, 이미지 또는 이미지 배치가 바뀌었으니 다시 생성하세요
+@msg	Concept to Vector results are not saved, so a recorded insert does not play again: generate again	콘셉트를 벡터로 결과는 저장되지 않으므로 기록된 삽입은 다시 재생되지 않습니다: 다시 생성하세요
 @msg	missing `provider` (see conceptVector.providers)	`provider`가 없습니다(conceptVector.providers 참조)
 @msg	no Concept to Vector job {job}: it was never made, or was dropped (see conceptVector.results)	콘셉트를 벡터로 작업 {job}이 없습니다: 만들어진 적이 없거나 삭제되었습니다(conceptVector.results 참조)
 @msg	no Concept to Vector provider `{name}` (see conceptVector.providers)	콘셉트를 벡터로 공급자 `{name}`이 없습니다(conceptVector.providers 참조)

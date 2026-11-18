@@ -7434,6 +7434,7 @@ breakText	Glyphs	Glyph
 @msg	a provider with the id `{id}` is registered already	Đã đăng ký một nhà cung cấp có ID `{id}`
 @msg	job {job} has no results to insert: it was canceled	Tác vụ {job} không có kết quả để chèn: tác vụ đã bị hủy
 @msg	job {job} no longer applies: its document, image or image placement changed, so generate again	Tác vụ {job} không còn hiệu lực: tài liệu, ảnh hoặc vị trí ảnh của nó đã thay đổi, hãy tạo lại
+@msg	Concept to Vector results are not saved, so a recorded insert does not play again: generate again	Kết quả Ý tưởng thành vector không được lưu, nên thao tác chèn đã ghi sẽ không phát lại, hãy tạo lại
 @msg	missing `provider` (see conceptVector.providers)	Thiếu `provider` (xem conceptVector.providers)
 @msg	no Concept to Vector job {job}: it was never made, or was dropped (see conceptVector.results)	Không có tác vụ Ý tưởng thành vector {job}: tác vụ chưa từng được tạo hoặc đã bị loại bỏ (xem conceptVector.results)
 @msg	no Concept to Vector provider `{name}` (see conceptVector.providers)	Không có nhà cung cấp Ý tưởng thành vector `{name}` (xem conceptVector.providers)

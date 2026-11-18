@@ -7409,6 +7409,7 @@ breakText	Glyphs	Glifi
 @msg	a provider with the id `{id}` is registered already	Un fornitore con l’ID `{id}` è già registrato
 @msg	job {job} has no results to insert: it was canceled	L’attività {job} non ha risultati da inserire: è stata annullata
 @msg	job {job} no longer applies: its document, image or image placement changed, so generate again	L’attività {job} non è più valida: il suo documento, l’immagine o la posizione dell’immagine sono cambiati; generala di nuovo
+@msg	Concept to Vector results are not saved, so a recorded insert does not play again: generate again	I risultati di Da concetto a vettore non vengono salvati, quindi un inserimento registrato non viene riprodotto di nuovo; generali di nuovo
 @msg	missing `provider` (see conceptVector.providers)	Manca `provider` (vedi conceptVector.providers)
 @msg	no Concept to Vector job {job}: it was never made, or was dropped (see conceptVector.results)	Nessuna attività Da concetto a vettore {job}: non è mai stata creata o è stata scartata (vedi conceptVector.results)
 @msg	no Concept to Vector provider `{name}` (see conceptVector.providers)	Nessun fornitore Da concetto a vettore `{name}` (vedi conceptVector.providers)

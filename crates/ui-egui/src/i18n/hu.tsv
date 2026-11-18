@@ -7767,6 +7767,7 @@ breakText	Glyphs	Glifák
 @msg	a provider with the id `{id}` is registered already	Már regisztrálva van egy `{id}` azonosítójú szolgáltató
 @msg	job {job} has no results to insert: it was canceled	A(z) {job} feladatnak nincs beszúrható eredménye: megszakították
 @msg	job {job} no longer applies: its document, image or image placement changed, so generate again	A(z) {job} feladat már nem érvényes: megváltozott a dokumentuma, a képe vagy a kép elhelyezése; hozza létre újra
+@msg	Concept to Vector results are not saved, so a recorded insert does not play again: generate again	A Koncepcióból vektor eredményei nem mentődnek, ezért egy rögzített beszúrás nem játszható le újra; hozza létre újra őket
 @msg	missing `provider` (see conceptVector.providers)	Hiányzik a `provider` (lásd conceptVector.providers)
 @msg	no Concept to Vector job {job}: it was never made, or was dropped (see conceptVector.results)	Nincs {job} Koncepcióból vektor feladat: soha nem készült el, vagy elvetették (lásd conceptVector.results)
 @msg	no Concept to Vector provider `{name}` (see conceptVector.providers)	Nincs `{name}` Koncepcióból vektor szolgáltató (lásd conceptVector.providers)

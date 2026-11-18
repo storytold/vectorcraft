@@ -7968,6 +7968,7 @@ swatch	Yellow Green	Verde-amarelado
 @msg	a provider with the id `{id}` is registered already	Já existe um provedor registrado com o ID `{id}`
 @msg	job {job} has no results to insert: it was canceled	A tarefa {job} não tem resultados para inserir: ela foi cancelada
 @msg	job {job} no longer applies: its document, image or image placement changed, so generate again	A tarefa {job} não se aplica mais: o documento, a imagem ou o posicionamento da imagem mudou; gere novamente
+@msg	Concept to Vector results are not saved, so a recorded insert does not play again: generate again	Os resultados de Conceito para vetor não são salvos, então uma inserção gravada não é reproduzida de novo; gere novamente
 @msg	missing `provider` (see conceptVector.providers)	`provider` ausente (consulte conceptVector.providers)
 @msg	no Concept to Vector job {job}: it was never made, or was dropped (see conceptVector.results)	Nenhuma tarefa de Conceito para vetor {job}: ela nunca foi criada ou foi descartada (consulte conceptVector.results)
 @msg	no Concept to Vector provider `{name}` (see conceptVector.providers)	Nenhum provedor de Conceito para vetor `{name}` (consulte conceptVector.providers)

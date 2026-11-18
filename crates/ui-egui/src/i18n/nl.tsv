@@ -9610,6 +9610,7 @@ breakText	Glyphs	Glyphs
 	Concept to Vector	Concept naar vector
 	Concept to Vector…	Concept naar vector…
 	Cancel Concept to Vector Job	Taak Concept naar vector annuleren
+@msg	Concept to Vector results are not saved, so a recorded insert does not play again: generate again	Resultaten van Concept naar vector worden niet bewaard, dus een opgenomen invoeging wordt niet opnieuw afgespeeld: genereer ze opnieuw
 	Cancel Concept to Vector	Concept naar vector annuleren
 	Concept to Vector Providers	Aanbieders voor Concept naar vector
 	Concept to Vector Results	Resultaten van Concept naar vector

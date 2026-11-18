@@ -7804,6 +7804,7 @@ breakText	Glyphs	Glifs
 @msg	a provider with the id `{id}` is registered already	Ja hi ha registrat un proveïdor amb l’identificador `{id}`
 @msg	job {job} has no results to insert: it was canceled	La tasca {job} no té resultats per inserir: s’ha cancel·lat
 @msg	job {job} no longer applies: its document, image or image placement changed, so generate again	La tasca {job} ja no és vàlida: ha canviat el document, la imatge o la col·locació de la imatge; torneu-la a generar
+@msg	Concept to Vector results are not saved, so a recorded insert does not play again: generate again	Els resultats de Concepte a vector no es desen, de manera que una inserció enregistrada no es torna a reproduir; torneu-los a generar
 @msg	missing `provider` (see conceptVector.providers)	Falta `provider` (vegeu conceptVector.providers)
 @msg	no Concept to Vector job {job}: it was never made, or was dropped (see conceptVector.results)	No hi ha cap tasca de Concepte a vector {job}: no s’ha creat mai o s’ha descartat (vegeu conceptVector.results)
 @msg	no Concept to Vector provider `{name}` (see conceptVector.providers)	No hi ha cap proveïdor de Concepte a vector `{name}` (vegeu conceptVector.providers)

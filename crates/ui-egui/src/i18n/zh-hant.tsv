@@ -7429,6 +7429,7 @@ breakText	Glyphs	字符
 @msg	a provider with the id `{id}` is registered already	ID 為 `{id}` 的提供者已經註冊
 @msg	job {job} has no results to insert: it was canceled	工作 {job} 沒有可插入的結果：它已取消
 @msg	job {job} no longer applies: its document, image or image placement changed, so generate again	工作 {job} 已失效：其文件、影像或影像位置已變更，請重新產生
+@msg	Concept to Vector results are not saved, so a recorded insert does not play again: generate again	概念轉向量的結果不會儲存，因此錄製的插入不會再次播放：請重新產生
 @msg	missing `provider` (see conceptVector.providers)	未提供 `provider`（請參閱 conceptVector.providers）
 @msg	no Concept to Vector job {job}: it was never made, or was dropped (see conceptVector.results)	沒有概念轉向量工作 {job}：它從未產生或已被捨棄（請參閱 conceptVector.results）
 @msg	no Concept to Vector provider `{name}` (see conceptVector.providers)	沒有概念轉向量提供者 `{name}`（請參閱 conceptVector.providers）

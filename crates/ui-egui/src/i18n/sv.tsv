@@ -9248,6 +9248,7 @@ digits	Hindi	Hindi
 @msg	a provider with the id `{id}` is registered already	En leverantör med id `{id}` är redan registrerad
 @msg	job {job} has no results to insert: it was canceled	Jobb {job} har inga resultat att infoga: det avbröts
 @msg	job {job} no longer applies: its document, image or image placement changed, so generate again	Jobb {job} gäller inte längre: dess dokument, bild eller bildens placering har ändrats; skapa det igen
+@msg	Concept to Vector results are not saved, so a recorded insert does not play again: generate again	Resultat från Koncept till vektor sparas inte, så en inspelad infogning spelas inte upp igen; skapa dem igen
 @msg	missing `provider` (see conceptVector.providers)	`provider` saknas (se conceptVector.providers)
 @msg	no Concept to Vector job {job}: it was never made, or was dropped (see conceptVector.results)	Det finns inget jobb {job} för Koncept till vektor: det skapades aldrig eller har tagits bort (se conceptVector.results)
 @msg	no Concept to Vector provider `{name}` (see conceptVector.providers)	Det finns ingen leverantör `{name}` för Koncept till vektor (se conceptVector.providers)

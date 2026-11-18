@@ -9662,6 +9662,7 @@ breakText	Glyphs	Glifler
 @msg	a provider with the id `{id}` is registered already	`{id}` kimlikli bir sağlayıcı zaten kayıtlı
 @msg	job {job} has no results to insert: it was canceled	{job} işinin eklenecek sonucu yok: iptal edildi
 @msg	job {job} no longer applies: its document, image or image placement changed, so generate again	{job} işi artık geçerli değil: belgesi, görüntüsü veya görüntünün yerleşimi değişti; yeniden oluşturun
+@msg	Concept to Vector results are not saved, so a recorded insert does not play again: generate again	Konseptten Vektöre sonuçları kaydedilmez, bu yüzden kaydedilmiş bir ekleme yeniden oynatılmaz; yeniden oluşturun
 @msg	missing `provider` (see conceptVector.providers)	`provider` eksik (bkz. conceptVector.providers)
 @msg	no Concept to Vector job {job}: it was never made, or was dropped (see conceptVector.results)	{job} numaralı Konseptten Vektöre işi yok: hiç yapılmadı veya atıldı (bkz. conceptVector.results)
 @msg	no Concept to Vector provider `{name}` (see conceptVector.providers)	`{name}` adlı Konseptten Vektöre sağlayıcısı yok (bkz. conceptVector.providers)

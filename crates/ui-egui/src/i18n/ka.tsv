@@ -9985,6 +9985,7 @@ font-script	Japanese	იაპონური
 @msg	a provider with the id `{id}` is registered already	მომწოდებელი ID-ით `{id}` უკვე რეგისტრირებულია
 @msg	job {job} has no results to insert: it was canceled	{job} დავალებას ჩასასმელი შედეგები არ აქვს: ის გაუქმდა
 @msg	job {job} no longer applies: its document, image or image placement changed, so generate again	{job} დავალება აღარ მოქმედებს: შეიცვალა მისი დოკუმენტი, გამოსახულება ან გამოსახულების განთავსება; შექმენით ხელახლა
+@msg	Concept to Vector results are not saved, so a recorded insert does not play again: generate again	კონცეფციიდან ვექტორამდე შედეგები არ ინახება, ამიტომ ჩაწერილი ჩასმა ხელახლა არ შესრულდება; შექმენით ხელახლა
 @msg	missing `provider` (see conceptVector.providers)	`provider` აკლია (იხ. conceptVector.providers)
 @msg	no Concept to Vector job {job}: it was never made, or was dropped (see conceptVector.results)	„კონცეფციიდან ვექტორამდე“ დავალება {job} არ არსებობს: არასდროს შექმნილა ან გაუქმდა (იხ. conceptVector.results)
 @msg	no Concept to Vector provider `{name}` (see conceptVector.providers)	„კონცეფციიდან ვექტორამდე“ მომწოდებელი `{name}` არ არსებობს (იხ. conceptVector.providers)

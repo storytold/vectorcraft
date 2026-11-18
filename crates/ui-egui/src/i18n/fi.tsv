@@ -7858,6 +7858,7 @@ breakText	Glyphs	Merkit
 @msg	a provider with the id `{id}` is registered already	Palveluntarjoaja, jonka tunnus on `{id}`, on jo rekisteröity
 @msg	job {job} has no results to insert: it was canceled	Työllä {job} ei ole lisättäviä tuloksia: se peruutettiin
 @msg	job {job} no longer applies: its document, image or image placement changed, so generate again	Työ {job} ei ole enää voimassa: sen asiakirja, kuva tai kuvan sijoitus muuttui; luo se uudelleen
+@msg	Concept to Vector results are not saved, so a recorded insert does not play again: generate again	Konseptista vektoriksi -tuloksia ei tallenneta, joten tallennettua lisäystä ei toisteta uudelleen; luo ne uudelleen
 @msg	missing `provider` (see conceptVector.providers)	`provider` puuttuu (katso conceptVector.providers)
 @msg	no Concept to Vector job {job}: it was never made, or was dropped (see conceptVector.results)	Konseptista vektoriksi -työtä {job} ei ole: sitä ei koskaan tehty tai se hylättiin (katso conceptVector.results)
 @msg	no Concept to Vector provider `{name}` (see conceptVector.providers)	Konseptista vektoriksi -palveluntarjoajaa `{name}` ei ole (katso conceptVector.providers)

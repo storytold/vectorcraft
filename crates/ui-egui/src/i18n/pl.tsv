@@ -7638,6 +7638,7 @@ breakText	Glyphs	Glify
 @msg	a provider with the id `{id}` is registered already	Dostawca o identyfikatorze `{id}` jest już zarejestrowany
 @msg	job {job} has no results to insert: it was canceled	Zadanie {job} nie ma wyników do wstawienia: zostało anulowane
 @msg	job {job} no longer applies: its document, image or image placement changed, so generate again	Zadanie {job} jest już nieaktualne: zmienił się jego dokument, obraz lub położenie obrazu; wygeneruj je ponownie
+@msg	Concept to Vector results are not saved, so a recorded insert does not play again: generate again	Wyniki funkcji Koncepcja na wektor nie są zapisywane, więc zarejestrowane wstawienie nie zostanie odtworzone; wygeneruj je ponownie
 @msg	missing `provider` (see conceptVector.providers)	Brak `provider` (zobacz conceptVector.providers)
 @msg	no Concept to Vector job {job}: it was never made, or was dropped (see conceptVector.results)	Brak zadania Koncepcja na wektor {job}: nigdy nie powstało albo zostało odrzucone (zobacz conceptVector.results)
 @msg	no Concept to Vector provider `{name}` (see conceptVector.providers)	Brak dostawcy Koncepcja na wektor `{name}` (zobacz conceptVector.providers)

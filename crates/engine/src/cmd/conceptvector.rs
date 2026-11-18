@@ -432,6 +432,10 @@ fn appearance_of(p: &cv::VectorPath, unit: f64) -> Appearance {
 
 fn insert(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "conceptVector.insert";
+    // A job lives only in this session, and a job number from another one may name other results.
+    if s.replaying() {
+        return Err(bad(C, "Concept to Vector results are not saved, so a recorded insert does not play again: generate again"));
+    }
     let job = job_param(C, p)?;
     let at = job_index(s, C, job)?;
     let list_error = || bad(C, format!("`variations` must list different style ids of job {job}"));
@@ -686,7 +690,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Insert Concept to Vector Styles",
             [],
             None,
-            "{job, variations: [style id…] (different styles of the job)} put a group of each chosen variation, named after its style and in the provider's order, in a row to the right of the job's image, each the image's size with 24 pt between them, moved further right past other visible art in their way, where a variation reaches past its box too (the next one then starts 24 pt past what it paints); the groups go above the outermost clip group or opacity-masked group around the image, and above the outermost envelope, blend, repeat or other live object and the outermost group with effects or fills and strokes of its own around it; the image and other art stay as they are; one undo step; an error when the job's document is not the active one, the object, its image or its placement changed, the object is now locked or hidden, or it is on a layer with a clipping mask, an opacity mask or effects of its own →{ids: the groups, selected}",
+            "{job, variations: [style id…] (different styles of the job)} put a group of each chosen variation, named after its style and in the provider's order, in a row to the right of the job's image, each the image's size with 24 pt between them, moved further right past other visible art in their way, where a variation reaches past its box too (the next one then starts 24 pt past what it paints); the groups go above the outermost clip group or opacity-masked group around the image, and above the outermost envelope, blend, repeat or other live object and the outermost group with effects or fills and strokes of its own around it; the image and other art stay as they are; one undo step; an error when the job's document is not the active one, the object, its image or its placement changed, the object is now locked or hidden, or it is on a layer with a clipping mask, an opacity mask or effects of its own, and when it plays from recorded steps (an action or a replayed journal), since jobs are not saved →{ids: the groups, selected}",
             has_doc,
             insert
         ),

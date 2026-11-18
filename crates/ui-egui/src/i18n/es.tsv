@@ -7881,6 +7881,7 @@ breakText	Glyphs	Glifos
 @msg	a provider with the id `{id}` is registered already	Ya hay registrado un proveedor con el identificador `{id}`
 @msg	job {job} has no results to insert: it was canceled	La tarea {job} no tiene resultados que insertar: se canceló
 @msg	job {job} no longer applies: its document, image or image placement changed, so generate again	La tarea {job} ya no es válida: cambió su documento, su imagen o la colocación de la imagen; vuelva a generarla
+@msg	Concept to Vector results are not saved, so a recorded insert does not play again: generate again	Los resultados de Concepto a vector no se guardan, así que una inserción grabada no se vuelve a reproducir; vuelva a generarlos
 @msg	missing `provider` (see conceptVector.providers)	Falta `provider` (consulte conceptVector.providers)
 @msg	no Concept to Vector job {job}: it was never made, or was dropped (see conceptVector.results)	No hay ninguna tarea de Concepto a vector {job}: nunca se creó o se descartó (consulte conceptVector.results)
 @msg	no Concept to Vector provider `{name}` (see conceptVector.providers)	No hay ningún proveedor de Concepto a vector `{name}` (consulte conceptVector.providers)

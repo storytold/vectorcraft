@@ -7884,6 +7884,7 @@ shape	Open	Открытый
 @msg	a provider with the id `{id}` is registered already	Поставщик с идентификатором `{id}` уже зарегистрирован
 @msg	job {job} has no results to insert: it was canceled	У задания {job} нет результатов для вставки: оно отменено
 @msg	job {job} no longer applies: its document, image or image placement changed, so generate again	Задание {job} больше не действует: изменились его документ, изображение или положение изображения; создайте его заново
+@msg	Concept to Vector results are not saved, so a recorded insert does not play again: generate again	Результаты «Концепт в вектор» не сохраняются, поэтому записанная вставка не воспроизводится повторно; создайте их заново
 @msg	missing `provider` (see conceptVector.providers)	Не указан `provider` (см. conceptVector.providers)
 @msg	no Concept to Vector job {job}: it was never made, or was dropped (see conceptVector.results)	Нет задания «Концепт в вектор» {job}: оно не создавалось или было удалено (см. conceptVector.results)
 @msg	no Concept to Vector provider `{name}` (see conceptVector.providers)	Нет поставщика «Концепт в вектор» `{name}` (см. conceptVector.providers)

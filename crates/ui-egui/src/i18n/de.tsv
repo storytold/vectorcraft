@@ -7373,6 +7373,7 @@ breakText	Glyphs	Glyphen
 @msg	a provider with the id `{id}` is registered already	Ein Anbieter mit der ID `{id}` ist bereits registriert
 @msg	job {job} has no results to insert: it was canceled	Auftrag {job} hat keine Ergebnisse zum Einfügen: Er wurde abgebrochen
 @msg	job {job} no longer applies: its document, image or image placement changed, so generate again	Auftrag {job} gilt nicht mehr: Sein Dokument, Bild oder die Platzierung des Bildes hat sich geändert; erzeugen Sie ihn erneut
+@msg	Concept to Vector results are not saved, so a recorded insert does not play again: generate again	Ergebnisse von Konzept zu Vektor werden nicht gespeichert, daher wird ein aufgezeichnetes Einfügen nicht erneut abgespielt: Erzeugen Sie sie erneut
 @msg	missing `provider` (see conceptVector.providers)	`provider` fehlt (siehe conceptVector.providers)
 @msg	no Concept to Vector job {job}: it was never made, or was dropped (see conceptVector.results)	Kein Konzept-zu-Vektor-Auftrag {job}: Er wurde nie erstellt oder wurde verworfen (siehe conceptVector.results)
 @msg	no Concept to Vector provider `{name}` (see conceptVector.providers)	Kein Konzept-zu-Vektor-Anbieter `{name}` (siehe conceptVector.providers)

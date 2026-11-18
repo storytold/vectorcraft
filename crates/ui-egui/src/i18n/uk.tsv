@@ -7507,6 +7507,7 @@ breakText	Glyphs	Гліфи
 @msg	a provider with the id `{id}` is registered already	Постачальника з ідентифікатором `{id}` уже зареєстровано
 @msg	job {job} has no results to insert: it was canceled	Завдання {job} не має результатів для вставлення: його скасовано
 @msg	job {job} no longer applies: its document, image or image placement changed, so generate again	Завдання {job} більше не чинне: змінилися його документ, зображення або розташування зображення; створіть його знову
+@msg	Concept to Vector results are not saved, so a recorded insert does not play again: generate again	Результати «Концепт у вектор» не зберігаються, тому записане вставлення не відтворюється повторно; створіть їх знову
 @msg	missing `provider` (see conceptVector.providers)	Не вказано `provider` (див. conceptVector.providers)
 @msg	no Concept to Vector job {job}: it was never made, or was dropped (see conceptVector.results)	Немає завдання «Концепт у вектор» {job}: його не створювали або відкинули (див. conceptVector.results)
 @msg	no Concept to Vector provider `{name}` (see conceptVector.providers)	Немає постачальника «Концепт у вектор» `{name}` (див. conceptVector.providers)

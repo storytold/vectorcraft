@@ -598,6 +598,20 @@ fn generate_and_results_change_nothing_in_the_document() {
     assert_eq!(s.concept_variations(job).unwrap().1, (120, 90));
 }
 
+#[test]
+fn a_recorded_insert_does_not_play_again() {
+    let (mut s, _) = doc_with(&art());
+    let job = generate(&mut s, json!({"provider": ID, "styles": ["outline"]})).unwrap()["job"].clone();
+    let (before, depth) = (s.doc().unwrap().doc.clone(), undo_len(&s));
+    let insert = json!({"job": job, "variations": ["outline"]});
+    let e = s.replay("conceptVector.insert", &insert).unwrap_err().to_string();
+    assert!(e.contains("a recorded insert does not play again"), "{e}");
+    assert!(s.doc().unwrap().doc == before && undo_len(&s) == depth);
+    assert!(!s.replaying());
+    s.execute("conceptVector.insert", &insert).unwrap();
+    assert_eq!(undo_len(&s), depth + 1);
+}
+
 /// The bounds of object `id` in the document.
 fn bounds(s: &Session, id: u64) -> vectorcraft_geom::Rect {
     let d = &s.doc().unwrap().doc;

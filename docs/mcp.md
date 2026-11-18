@@ -4013,7 +4013,8 @@ already walks Image Trace. Short agent entry points:
   repeat or other live object, and the outermost group with effects or fills and strokes of its own, around it, whose
   content stays as it is. It is an error when the job was canceled or dropped, when its document is not the active
   one, when the object, its pixels or its placement changed, when the object is now locked or hidden, or when it is
-  on a layer with a clipping mask, an opacity mask or effects of its own. Example:
+  on a layer with a clipping mask, an opacity mask or effects of its own. Jobs are not saved, so an insert played
+  from recorded steps (an action, or a journal played again) is an error too. Example:
 
   ```json
   {"command": "conceptVector.generate", "params": {"provider": "offline.traceStyles", "styles": ["outline", "flatColor"], "detail": 60}}
