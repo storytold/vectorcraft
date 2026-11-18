@@ -20,7 +20,8 @@ The **Dimension Tool** is in the Modify section of the toolbar. Its strip offers
   first point was picked on an anchor, the second also snaps onto the construction guides through
   it; any other first point has no construction guides through it. The guides
   show while hovering, before each click. VectorCraft's own rules decide where a point lands: an
-  anchor within 8 pixels takes it first; with Smart Guides or Snap to Point on, the end of a line
+  anchor within 8 pixels takes it first (with Use Preview Bounds on, after a corner of a path's
+  preview bounds, as below); with Smart Guides or Snap to Point on, the end of a line
   of a visible, unlocked dimension already drawn (its dimension line, or the far end of an
   extension line) within 8 pixels takes it next, without a link to that dimension; a point on a
   guide stays on the guide where the pointer
@@ -31,6 +32,18 @@ The **Dimension Tool** is in the Modify section of the toolbar. Its strip offers
   line of a dimension already drawn, within 8 pixels. With Smart Guides and Anchor/Path Labels
   on, a point on an anchor or a line end shows the "anchor" label, and a point on a segment or
   line shows the "path" label. These rules apply to the Linear points.
+  With Use Preview Bounds on (Preferences › General), a click within 8 pixels of a corner of the
+  preview bounds of a path or compound path, its strokes and effects included, lands on that
+  corner instead of on that object's anchors, as the
+  [linear dimensions help](https://helpx.adobe.com/illustrator/desktop/measure-and-align/plot-and-measure/plot-linear-dimensions-of-objects.html)
+  describes for measuring a stroked segment. An anchor of other art that is nearer the pointer
+  than the corner takes the point instead. The point is linked to the path (in a compound path,
+  to the member whose own bounds reach nearest to the corner), held against its anchors, and
+  shows the "anchor" label. It moves with the path, and a later change to the stroke weight does
+  not move it. For an object that is not rotated, a horizontal or vertical dimension between two
+  such corners measures the outside of the stroke, the width or height that W and H show in the
+  Transform and Properties panels. A corner that is also an anchor, as on a path without a
+  stroke, takes the anchor.
   A linear dimension is aligned, horizontal or vertical, as the
   [linear dimensions help](https://helpx.adobe.com/illustrator/desktop/measure-and-align/plot-and-measure/plot-linear-dimensions-of-objects.html)
   describes: after the second click, clicking again places an aligned dimension, and moving the
