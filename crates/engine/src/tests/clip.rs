@@ -757,3 +757,38 @@ fn marks_a_file_kept_off_a_clips_first_member_come_off() {
     let made = id_of(&o.execute("object.clippingMask.make", &json!({})).unwrap());
     assert_eq!(clips_by(&o, made), Some(top));
 }
+
+/// Make Clipping Mask with a clip group's clipping path, dragged below the art at the top of the
+/// clip, and that art selected: the topmost selected object clips the new clip, and the old
+/// clipping path is art in it.
+#[test]
+fn make_takes_the_topmost_object_and_not_a_clipping_path_selected_below_it() {
+    let mut s = session();
+    let art = id_of(&s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 100, "height": 100})).unwrap());
+    let small = id_of(&s.execute("shape.rectangle", &json!({"x": 40, "y": 40, "width": 20, "height": 20})).unwrap());
+    let circle = ellipse(&mut s, 10.0, 80.0);
+    select(&mut s, &[art, small, circle]);
+    let g = id_of(&s.execute("object.clippingMask.make", &json!({})).unwrap());
+    s.execute("layer.move", &json!({"ids": [circle.0], "target": small.0, "place": "below"})).unwrap();
+    assert_eq!((child_ids(&s, g), clips_by(&s, g)), (vec![art, circle, small], Some(circle)), "it still clips");
+    select(&mut s, &[circle, small]);
+    let made = id_of(&s.execute("object.clippingMask.make", &json!({})).unwrap());
+    assert_eq!(child_ids(&s, made), [circle, small]);
+    assert_eq!(clips_by(&s, made), Some(small), "the topmost object clips");
+    assert!(!s.doc().unwrap().doc.node(circle).unwrap().is_clipping_path());
+}
+
+/// The Layers panel's clipping button on a group with a member that carries a clipping path mark
+/// (one the edit before the button left there): the topmost member alone clips.
+#[test]
+fn the_layers_panels_clipping_button_clips_by_the_topmost_member_alone() {
+    let mut s = session();
+    let rect = |s: &mut Session, x: u32| id_of(&s.execute("shape.rectangle", &json!({"x": x, "y": x, "width": 50, "height": 50})).unwrap());
+    let (a, b, c) = (rect(&mut s, 0), rect(&mut s, 20), rect(&mut s, 40));
+    select(&mut s, &[a, b, c]);
+    let g = id_of(&s.execute("object.group", &json!({})).unwrap());
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(a).unwrap().set_clipping_path(true);
+    s.execute("layer.clippingMask.toggle", &json!({"id": g.0})).unwrap();
+    assert_eq!(clips_by(&s, g), Some(c), "the topmost member clips");
+    assert!(!s.doc().unwrap().doc.node(a).unwrap().is_clipping_path());
+}

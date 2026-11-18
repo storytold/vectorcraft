@@ -145,6 +145,18 @@ pub(in super::super) fn make_clipping_path(d: &mut Document, top: NodeId) -> Res
     as_clipping_path(d.node_mut(top).ok_or(EngineError::NoNode(top))?)
 }
 
+/// Take the clipping path mark ([`Node::is_clipping_path`]) off the objects `ids` but `keep`, which
+/// becomes their clip's clipping path.
+pub(in super::super) fn unmark_but(d: &mut Document, ids: &[NodeId], keep: NodeId) {
+    for id in ids.iter().filter(|id| **id != keep) {
+        if let Some(n) = d.node_mut(*id)
+            && n.is_clipping_path()
+        {
+            n.set_clipping_path(false);
+        }
+    }
+}
+
 /// Turn path, compound path or text `c` into a clipping path (its paint goes).
 pub(in super::super) fn as_clipping_path(c: &mut Node) -> Result<()> {
     if !matches!(c.kind, NodeKind::Path { guide: false, .. } | NodeKind::Compound { .. } | NodeKind::Text(_)) {
@@ -178,6 +190,9 @@ pub(super) fn clip_make(s: &mut Session, _: &Value) -> Result<Value> {
     let Some(&top) = ids.last() else { return Err(EngineError::Other("nothing selected".into())) };
     let gid = s.edit("Make Clipping Mask", |d, sel| {
         make_clipping_path(d, top)?;
+        // The topmost object alone clips: another selected object marked as a clipping path (one
+        // moved below the art of its clip and selected with that art) is art in the new clip.
+        unmark_but(d, &ids, top);
         let gid = d.alloc_id();
         // The objects keep their paint order: the clipping path stays on top.
         d.wrap(&ids, |children| Node::new(gid, NodeKind::Group { children, clip: true }))?;

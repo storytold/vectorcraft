@@ -491,8 +491,11 @@ fn clip_toggle(s: &mut Session, p: &Value) -> Result<Value> {
             .and_then(|c| c.iter().rev().find(|c| !c.is_ruler_guide()))
             .map(|c| c.id)
             .ok_or_else(|| EngineError::Other("the layer has no objects to clip by".into()))?;
-        // It stays on top; art added later goes over it and is clipped too.
+        // It stays on top; art added later goes over it and is clipped too. It alone clips: a mark
+        // another member carries comes off.
         super::object::make_clipping_path(d, top)?;
+        let members: Vec<NodeId> = d.node(id).and_then(Node::children).into_iter().flatten().map(|c| c.id).collect();
+        super::object::unmark_but(d, &members, top);
         if let Some(n) = d.node_mut(id) {
             n.set_clips(true);
         }

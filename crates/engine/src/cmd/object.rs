@@ -37,7 +37,7 @@ pub(crate) use arrange::group_nodes;
 pub(crate) use bounds::{bounds_rewrite, object_bounds_transform};
 pub(crate) use clipping::refresh as refresh_clips;
 pub use commands::specs;
-pub(super) use compound::{as_clipping_path, make_clipping_path, release_clip};
+pub(super) use compound::{as_clipping_path, make_clipping_path, release_clip, unmark_but};
 pub(crate) use pixelgrid::{
     align_new_object, can_align, keep_aligned_in, keep_compound_aligned, keep_pixel_aligned, refresh as refresh_pixel_aligned, resnap,
     snap_if_aligned, snap_symbol_art,
