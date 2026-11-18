@@ -4763,6 +4763,10 @@ digits	Malayalam	Malaiàlam
 	Create New Action	Crea una acció nova
 	Play Action	Reprodueix l’acció
 	Action Set:	Conjunt d’accions:
+	Choose Align To at playback	Tria «Alinea a» en la reproducció
+	Align steps use the key object, key anchor or key guide when one is set.	Els passos d’alineació fan servir l’objecte clau, el punt d’ancoratge clau o la guia clau quan n’hi ha.
+	With one whole object selected and no key, they use the artboard.	Amb un sol objecte sencer seleccionat i sense clau, fan servir el tauler.
+	Otherwise they use the selection.	Altrament fan servir la selecció.
 	Function Key:	Tecla de funció:
 	Record	Enregistra
 	Set Options…	Defineix les opcions…

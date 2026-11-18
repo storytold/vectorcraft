@@ -7328,6 +7328,10 @@ axis	Y Axis	Y-akseli
 	Create New Action	Luo uusi toiminto
 	Play Action	Toista toiminto
 	Action Set:	Toimintosarja:
+	Choose Align To at playback	Valitse tasauskohde toistettaessa
+	Align steps use the key object, key anchor or key guide when one is set.	Tasausvaiheet käyttävät avainobjektia, avainankkuripistettä tai avainapuviivaa, kun sellainen on asetettu.
+	With one whole object selected and no key, they use the artboard.	Kun valittuna on yksi kokonainen objekti eikä avainta, ne käyttävät piirtoalustaa.
+	Otherwise they use the selection.	Muuten ne käyttävät valintaa.
 	Function Key:	Toimintonäppäin:
 	Record	Nauhoita
 	Create New Set	Luo uusi sarja

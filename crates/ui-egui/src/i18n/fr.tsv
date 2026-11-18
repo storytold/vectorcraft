@@ -7260,6 +7260,10 @@ axis	Y Axis	Axe Y
 	Create New Action	Créer un script
 	Play Action	Exécuter le script
 	Action Set:	Jeu de scripts :
+	Choose Align To at playback	Choisir l’alignement à l’exécution
+	Align steps use the key object, key anchor or key guide when one is set.	Les étapes d’alignement utilisent l’objet clé, le point d’ancrage clé ou le repère clé s’il y en a un.
+	With one whole object selected and no key, they use the artboard.	Avec un seul objet entier sélectionné et sans clé, elles utilisent le plan de travail.
+	Otherwise they use the selection.	Sinon, elles utilisent la sélection.
 	Function Key:	Touche de fonction :
 	Record	Enregistrer
 	Create New Set	Créer un jeu

@@ -6859,6 +6859,10 @@ axis	Y Axis	Y축
 	Create New Action	새 액션 만들기
 	Play Action	액션 재생
 	Action Set:	액션 세트:
+	Choose Align To at playback	재생 시 정렬 대상 선택
+	Align steps use the key object, key anchor or key guide when one is set.	키 개체, 키 앵커 포인트 또는 키 안내선이 설정되어 있으면 정렬 단계는 그것을 사용합니다.
+	With one whole object selected and no key, they use the artboard.	개체 하나 전체만 선택되어 있고 키가 없으면 아트보드를 사용합니다.
+	Otherwise they use the selection.	그 밖에는 선택 영역을 사용합니다.
 	Function Key:	기능 키:
 	Record	기록
 	Create New Set	새 세트 만들기

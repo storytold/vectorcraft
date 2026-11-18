@@ -6887,6 +6887,10 @@ axis	Y Axis	Asse Y
 	Create New Action	Crea nuova azione
 	Play Action	Esegui azione
 	Action Set:	Set di azioni:
+	Choose Align To at playback	Scegli Allinea a durante la riproduzione
+	Align steps use the key object, key anchor or key guide when one is set.	I passaggi di allineamento usano l'oggetto chiave, il punto di ancoraggio chiave o la guida chiave, se impostati.
+	With one whole object selected and no key, they use the artboard.	Con un solo oggetto intero selezionato e senza chiave, usano la tavola da disegno.
+	Otherwise they use the selection.	Altrimenti usano la selezione.
 	Function Key:	Tasto funzione:
 	Record	Registra
 	Create New Set	Crea nuovo set

@@ -6543,6 +6543,10 @@ axis	Y Axis	Sumbu Y
 	Create New Action	Buat tindakan baru
 	Play Action	Putar tindakan
 	Action Set:	Set tindakan:
+	Choose Align To at playback	Pilih Ratakan ke saat pemutaran
+	Align steps use the key object, key anchor or key guide when one is set.	Langkah perataan memakai objek kunci, titik jangkar kunci, atau panduan kunci jika ada.
+	With one whole object selected and no key, they use the artboard.	Dengan satu objek utuh terpilih dan tanpa kunci, langkah memakai artboard.
+	Otherwise they use the selection.	Jika tidak, langkah memakai seleksi.
 	Function Key:	Tombol fungsi:
 	Record	Rekam
 	Create New Set	Buat set baru

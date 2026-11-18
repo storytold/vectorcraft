@@ -859,12 +859,13 @@ fn align_and_distribute_reject_bad_params_without_changing_state() {
     let h = "`horizontal` must be one of left, center, right";
     let v = "`vertical` must be one of top, center, bottom";
     let to = "`to` must be one of selection, artboard, key";
+    let align_to = "`to` must be one of selection, artboard, key, auto";
     for (cmd, p, msg) in [
         ("object.align", json!({"horizontal": "middle"}), h),
         ("object.align", json!({"vertical": "centre"}), v),
         ("object.align", json!({"horizontal": true}), h),
-        ("object.align", json!({"horizontal": "left", "to": "page"}), to),
-        ("object.align", json!({"horizontal": "left", "to": 0}), to),
+        ("object.align", json!({"horizontal": "left", "to": "page"}), align_to),
+        ("object.align", json!({"horizontal": "left", "to": 0}), align_to),
         ("object.align", json!({"horizontal": "left", "bounds": false}), "`bounds` must be one of preview, geometric"),
         ("object.align", json!({"horizontal": "left", "vertical": "middle"}), v),
         ("object.distribute", json!({"horizontal": "middle"}), h),

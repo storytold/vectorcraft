@@ -8777,6 +8777,10 @@ axis	Y Axis	Y 軸
 	Create New Action	新規アクションを作成
 	Play Action	アクションを再生
 	Action Set:	アクションセット:
+	Choose Align To at playback	再生時に整列の基準を選択
+	Align steps use the key object, key anchor or key guide when one is set.	キーオブジェクト、キーアンカーポイントまたはキーガイドがある場合、整列ステップはそれを使います。
+	With one whole object selected and no key, they use the artboard.	オブジェクト全体を 1 つだけ選択し、キーがない場合はアートボードを使います。
+	Otherwise they use the selection.	それ以外の場合は選択範囲を使います。
 	Function Key:	ファンクションキー:
 	Record	記録
 	Create New Set	新規セットを作成

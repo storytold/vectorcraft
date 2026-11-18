@@ -2799,6 +2799,10 @@
 	Plates	પ્લેટ્સ
 	Platform:	પ્લેટફોર્મ:
 	Play Action	ક્રિયા ચલાવો
+	Choose Align To at playback	પ્લેબેક વખતે સંરેખણ લક્ષ્ય પસંદ કરો
+	Align steps use the key object, key anchor or key guide when one is set.	કી ઑબ્જેક્ટ, કી એન્કર બિંદુ અથવા કી માર્ગદર્શિકા સેટ હોય ત્યારે સંરેખણ પગલાં તેનો ઉપયોગ કરે છે.
+	With one whole object selected and no key, they use the artboard.	એક આખો ઑબ્જેક્ટ પસંદ હોય અને કી ન હોય ત્યારે તે આર્ટબોર્ડનો ઉપયોગ કરે છે.
+	Otherwise they use the selection.	અન્યથા તે પસંદગીનો ઉપયોગ કરે છે.
 	Playback Options	પ્લેબેક વિકલ્પો
 	Plug-in Info	પ્લગ-ઇન માહિતી
 	Plug-ins	પ્લગ-ઇન્સ

@@ -6887,6 +6887,10 @@ axis	Y Axis	Ось Y
 	Create New Action	Создать новое действие
 	Play Action	Воспроизвести действие
 	Action Set:	Набор действий:
+	Choose Align To at playback	Выбирать «Выравнивать по» при воспроизведении
+	Align steps use the key object, key anchor or key guide when one is set.	Шаги выравнивания используют ключевой объект, ключевую опорную точку или ключевую направляющую, если они заданы.
+	With one whole object selected and no key, they use the artboard.	Если выделен один объект целиком и ключа нет, используется монтажная область.
+	Otherwise they use the selection.	Иначе используется выделение.
 	Function Key:	Функциональная клавиша:
 	Record	Записать
 	Create New Set	Создать новый набор

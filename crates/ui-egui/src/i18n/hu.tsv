@@ -7248,6 +7248,10 @@ axis	Y Axis	Y tengely
 	Create New Action	Új művelet létrehozása
 	Play Action	Művelet lejátszása
 	Action Set:	Műveletkészlet:
+	Choose Align To at playback	Igazítási cél választása lejátszáskor
+	Align steps use the key object, key anchor or key guide when one is set.	Az igazítási lépések a kulcsobjektumot, a kulcs-horgonypontot vagy a kulcssegédvonalat használják, ha van ilyen.
+	With one whole object selected and no key, they use the artboard.	Egy teljes egészében kijelölt objektummal és kulcs nélkül a rajztáblát használják.
+	Otherwise they use the selection.	Egyébként a kijelölést használják.
 	Function Key:	Funkcióbillentyű:
 	Record	Felvétel
 	Create New Set	Új készlet létrehozása

@@ -9360,6 +9360,10 @@ axis	Y Axis	Y-akse
 	Create New Action	Opret ny handling
 	Play Action	Afspil handling
 	Action Set:	Handlingssæt:
+	Choose Align To at playback	Vælg Juster til ved afspilning
+	Align steps use the key object, key anchor or key guide when one is set.	Justeringstrin bruger nøgleobjektet, nøgleankerpunktet eller nøglehjælpelinjen, når en er angivet.
+	With one whole object selected and no key, they use the artboard.	Med ét helt markeret objekt og ingen nøgle bruger de tegnebrættet.
+	Otherwise they use the selection.	Ellers bruger de markeringen.
 	Function Key:	Funktionstast:
 	Record	Optag
 	Create New Set	Opret nyt sæt

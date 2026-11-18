@@ -6913,6 +6913,10 @@ axis	Y Axis	Trục Y
 	Create New Action	Tạo hành động mới
 	Play Action	Phát hành động
 	Action Set:	Bộ hành động:
+	Choose Align To at playback	Chọn Căn theo khi phát lại
+	Align steps use the key object, key anchor or key guide when one is set.	Các bước căn dùng đối tượng chính, điểm neo chính hoặc đường gióng chính khi có.
+	With one whole object selected and no key, they use the artboard.	Khi chỉ chọn trọn một đối tượng và không có khóa, các bước dùng bảng vẽ.
+	Otherwise they use the selection.	Nếu không, các bước dùng vùng chọn.
 	Function Key:	Phím chức năng:
 	Record	Ghi
 	Create New Set	Tạo bộ mới

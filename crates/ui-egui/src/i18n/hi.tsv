@@ -2390,6 +2390,10 @@ antiAlias	Sharp	शार्प
 	Full Width	पूर्ण चौड़ाई
 	Fully Inside	पूरी तरह से अंदर
 	Fully Outside	पूरी तरह बाहर
+	Choose Align To at playback	प्लेबैक के समय संरेखण लक्ष्य चुनें
+	Align steps use the key object, key anchor or key guide when one is set.	मुख्य ऑब्जेक्ट, मुख्य एंकर पॉइंट या मुख्य गाइड सेट होने पर संरेखण चरण उसका उपयोग करते हैं।
+	With one whole object selected and no key, they use the artboard.	एक पूरा ऑब्जेक्ट चुना हो और कोई मुख्य न हो, तो वे आर्टबोर्ड का उपयोग करते हैं।
+	Otherwise they use the selection.	अन्यथा वे सिलेक्शन का उपयोग करते हैं।
 	Function Key:	फ़ंक्शन की:
 	Fuzziness:	फ़ज़ीनेस:
 	Gamma	गामा

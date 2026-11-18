@@ -6527,6 +6527,10 @@ axis	Y Axis	Y ос
 	Create New Action	Създаване на ново действие
 	Play Action	Изпълнение на действие
 	Action Set:	Набор от действия:
+	Choose Align To at playback	Избор на „Подравняване спрямо“ при възпроизвеждане
+	Align steps use the key object, key anchor or key guide when one is set.	Стъпките за подравняване използват ключовия обект, ключовата опорна точка или ключовата направляваща, когато има такива.
+	With one whole object selected and no key, they use the artboard.	При един изцяло избран обект и без ключ те използват работната област.
+	Otherwise they use the selection.	Иначе те използват селекцията.
 	Function Key:	Функционален клавиш:
 	Record	Запис
 	Create New Set	Създаване на нов набор

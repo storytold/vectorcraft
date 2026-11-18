@@ -6848,6 +6848,10 @@ axis	Y Axis	Y-Achse
 	Create New Action	Neue Aktion erstellen
 	Play Action	Aktion abspielen
 	Action Set:	Aktionssatz:
+	Choose Align To at playback	„Ausrichten an“ bei der Wiedergabe wählen
+	Align steps use the key object, key anchor or key guide when one is set.	Ausrichtungsschritte verwenden das Basisobjekt, den Basisankerpunkt oder die Basishilfslinie, wenn eines festgelegt ist.
+	With one whole object selected and no key, they use the artboard.	Bei einem vollständig ausgewählten Objekt ohne Basis verwenden sie die Zeichenfläche.
+	Otherwise they use the selection.	Sonst verwenden sie die Auswahl.
 	Function Key:	Funktionstaste:
 	Record	Aufzeichnen
 	Create New Set	Neuen Satz erstellen

@@ -9388,6 +9388,10 @@ axis	Y Axis	Y ღერძი
 	Create New Action	ახალი მოქმედების შექმნა
 	Play Action	მოქმედების შესრულება
 	Action Set:	მოქმედებების ნაკრები:
+	Choose Align To at playback	შესრულებისას სწორების სამიზნის არჩევა
+	Align steps use the key object, key anchor or key guide when one is set.	სწორების ნაბიჯები იყენებს საკვანძო ობიექტს, საკვანძო საყრდენ წერტილს ან საკვანძო დამხმარე ხაზს, თუ ის მითითებულია.
+	With one whole object selected and no key, they use the artboard.	ერთი მთლიანი მონიშნული ობიექტისას და გასაღების გარეშე ისინი იყენებს სამუშაო დაფას.
+	Otherwise they use the selection.	სხვა შემთხვევაში ისინი იყენებს მონიშნულს.
 	Function Key:	ფუნქციური კლავიში:
 	Record	ჩაწერა
 	Create New Set	ახალი ნაკრების შექმნა
