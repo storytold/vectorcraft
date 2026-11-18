@@ -585,8 +585,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     show_results(app, ui);
 }
 
-/// The comparison strip of the job shown, with a tick on each and Insert Selected.
+/// The comparison strip of the job shown, with a tick on each and Insert Selected. Nothing, and
+/// the job is no longer shown, once the session has dropped it (its document closed).
 fn show_results(app: &mut VectorcraftApp, ui: &mut Ui) {
+    if app.concept_runs.job().is_some_and(|job| app.session.concept_variations(job).is_none()) {
+        app.concept_runs.shown = None;
+    }
     let Some(Shown { previews, picked, .. }) = &mut app.concept_runs.shown else { return };
     ui.separator();
     egui::ScrollArea::horizontal().id_salt("concept-vector-strip").show(ui, |ui| {

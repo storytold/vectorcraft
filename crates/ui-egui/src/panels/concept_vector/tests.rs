@@ -169,6 +169,20 @@ fn generate_previews_every_style_and_insert_adds_the_ticked_ones_as_one_step() {
     assert_eq!(root_count(&app), roots);
 }
 
+/// Closing the document drops its jobs, and the panel then stops showing the job's results and
+/// Insert Selected.
+#[test]
+fn results_of_a_closed_document_are_no_longer_shown() {
+    let mut app = app();
+    generate(&mut app).unwrap();
+    let text = painted_text(&mut app, show);
+    assert!(text.contains("Insert Selected"), "{text}");
+    assert!(app.session.close_document(0));
+    let text = painted_text(&mut app, show);
+    assert!(!text.contains("Insert Selected"), "{text}");
+    assert!(app.concept_runs.shown.is_none());
+}
+
 /// At most eight styles: a ninth tick is refused by the command, and none is refused too.
 #[test]
 fn no_style_or_too_many_are_refused() {
