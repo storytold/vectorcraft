@@ -2066,6 +2066,7 @@
 @msg	{var_key} must be at most {most}	{var_key} უნდა იყოს მაქსიმუმ {most}
 @msg	a linked image file is outside the read roots	დაკავშირებული გამოსახულების ფაილი წაკითხვის ძირეული საქაღალდეების გარეთაა
 @msg	a linked file's export folder is outside the read roots	დაკავშირებული ფაილის ექსპორტის საქაღალდე წაკითხვის ძირეული საქაღალდეების გარეთაა
+@msg	a linked file's editing data can't be read to check it against the read roots	დაკავშირებული ფაილის რედაქტირების მონაცემების წაკითხვა ვერ ხერხდება წაკითხვის ძირეულ საქაღალდეებთან შესამოწმებლად
 	Neon & Glow	ნეონი და ნათება
 	Show Hidden Panels at Edge	დამალული პანელების ჩვენება კიდესთან
 @msg	`anchor` must be a [subpath, anchor] pair	`anchor` უნდა იყოს წყვილი [subpath, anchor]
@@ -5809,6 +5810,7 @@ theme	Appearance	იერსახე
 	90° & 45° Angles	90° და 45° კუთხეები
 	90° Angles	90° კუთხეები
 	Additional Plug-ins Folder	დამატებითი პლაგინები
+	Plug-in Instruction Budget	პლაგინების ინსტრუქციების ბიუჯეტი
 	Additional Fonts Folder	შრიფტების დამატებითი საქაღალდე
 	Alignment Guides	გასწორების დამხმარე ხაზები
 	Anchor Points, Handle, and Bounding Box Display	საყრდენი წერტილების, სახელურებისა და შემომსაზღვრელი ჩარჩოს ჩვენება

@@ -82,6 +82,7 @@ impl VectorcraftApp {
                 slices: None,
                 print_tiling: None,
                 live_paint_gaps: None,
+                find_font: None,
                 hidden_chars: Default::default(),
                 spelling: Default::default(),
                 selection_marks: Default::default(),
