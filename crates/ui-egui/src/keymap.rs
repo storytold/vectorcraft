@@ -216,7 +216,7 @@ fn catalogue(snapshot: &Snapshot, p: Platform) -> Vec<Bindable> {
             if TOGGLES.contains(&e.key.as_str()) {
                 b = b.toggle();
             }
-            if let Some(d) = shortcut_editor::default_of(&e.key).and_then(vc_binding) {
+            if let Some(d) = shortcut_editor::default_on(&e.key, p).and_then(vc_binding) {
                 b = b.with_default(d);
             }
             for alias in default_aliases(&e.key, p) {
@@ -637,6 +637,26 @@ mod tests {
             let km = keymap_for(p, &snapshot).with_overrides(ov);
             assert_eq!(km.bindings(&command_of("edit.undo")), km.default_bindings(&command_of("edit.undo")), "{p:?}");
         }
+    }
+
+    /// Select Last Selection Tool is Ctrl+` on Windows and Linux. macOS takes Cmd+` to switch
+    /// between an app's windows, so there the command has no default and takes a chord the user
+    /// assigns.
+    #[test]
+    fn last_selection_tool_default_follows_the_platform() {
+        let snapshot = shortcut_editor::snapshot();
+        let command = command_of("tool.selectLastSelection");
+        let chord = vc_chord("Cmd+~").unwrap();
+        for p in [Platform::Windows, Platform::Linux] {
+            let km = keymap_for(p, &snapshot);
+            assert_eq!(lookup(&km, &chord), Some(command.clone()), "{p:?}");
+            assert_eq!(shortcut_editor::default_on("tool.selectLastSelection", p), Some("Cmd+~"), "{p:?}");
+        }
+        let mut mac = keymap_for(Platform::Mac, &snapshot);
+        assert_eq!(mac.bindings(&command), vec![], "no default on macOS");
+        assert_eq!(shortcut_editor::default_on("tool.selectLastSelection", Platform::Mac), None);
+        shortcut_editor::assign_in(&mut mac, "tool.selectLastSelection", Some("Alt+~"), true).unwrap();
+        assert_eq!(lookup(&mac, &vc_chord("Alt+~").unwrap()), Some(command));
     }
 
     #[test]
