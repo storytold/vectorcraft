@@ -846,7 +846,11 @@ fn review_gesture_original_pixels(app: &VectorcraftApp) {
     let state = app.session.active().unwrap();
     let blob = &state.doc.images[&image.key];
     assert!(blob.sample_object(19.5, 10.0, (image.width, image.height), 1).is_none(), "the first point is really transparent");
-    assert_eq!(blob.sample_object(5.0, 10.0, (image.width, image.height), 1), Some([37, 83, 149, 255]), "the second point has a distinct nonwhite source color");
+    assert_eq!(
+        blob.sample_object(5.0, 10.0, (image.width, image.height), 1),
+        Some([37, 83, 149, 255]),
+        "the second point has a distinct nonwhite source color"
+    );
 }
 
 fn review_gesture_close_pair(app: &VectorcraftApp, ctx: &egui::Context, miss: Point, hit: Point) -> (Pos2, Pos2) {
@@ -907,13 +911,13 @@ fn review_preset_checkbox(app: &mut VectorcraftApp, ctx: &egui::Context, label: 
     for _ in 0..3 {
         let mut output = frame(app, ctx, vec![]);
         let checked = output.platform_output.accesskit_update.as_ref().and_then(|update| {
-            update.nodes.iter().find(|(_, node)| node.label() == Some(label) && node.role() == egui::accesskit::Role::CheckBox).and_then(|(_, node)| {
-                match node.toggled() {
+            update.nodes.iter().find(|(_, node)| node.label() == Some(label) && node.role() == egui::accesskit::Role::CheckBox).and_then(
+                |(_, node)| match node.toggled() {
                     Some(egui::accesskit::Toggled::True) => Some(true),
                     Some(egui::accesskit::Toggled::False) => Some(false),
                     _ => None,
-                }
-            })
+                },
+            )
         });
         output.textures_delta.clear();
         if let Some(checked) = checked {
@@ -982,7 +986,6 @@ fn review_preset_enhanced_on_control() {
     click_control(&mut control, &control_ctx, "Trace");
     assert_eq!(settings(&control)["params"]["ignoreWhite"], true);
     assert_eq!(settings(&control)["params"]["ignoreColor"], "#255395", "the on-to-on control really accepted the source color");
-
 }
 
 #[test]
