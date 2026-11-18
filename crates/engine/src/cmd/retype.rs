@@ -215,13 +215,18 @@ fn retype(s: &mut Session, p: &Value) -> Result<Value> {
         let d = &s.doc()?.doc;
         let mut pieces = vec![];
         let mut last: Option<(Option<NodeId>, usize)> = None;
+        // Carried across roots: a selected root that yields no shape (live type, an open path) still
+        // ends the line.
+        let mut barrier = true;
         for r in &roots {
             let Some(n) = d.node(*r) else { continue };
             let parent = d.parent_of(*r);
             let idx = d.position(*r).map(|(_, i, _)| i);
             // A root right after the last one, in the same parent, continues its lines; unselected
             // art between two roots is a barrier.
-            let mut barrier = !matches!((last, idx), (Some((p, i)), Some(j)) if p == parent && i + 1 == j);
+            if !matches!((last, idx), (Some((p, i)), Some(j)) if p == parent && i + 1 == j) {
+                barrier = true;
+            }
             last = idx.map(|i| (parent, i));
             collect(n, parent, 0, &mut barrier, &mut pieces);
         }

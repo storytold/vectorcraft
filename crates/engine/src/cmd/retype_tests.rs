@@ -203,3 +203,40 @@ fn an_open_path_along_a_glyph_is_not_a_glyph() {
     s.execute("select.set", &json!({"ids": [g]})).unwrap();
     assert!(s.execute("type.retype", &json!({})).is_err(), "nothing matches");
 }
+
+#[test]
+fn live_type_selected_between_loose_glyphs_still_ends_the_line() {
+    let mut s = session();
+    let g = outlined(&mut s, json!({"x": 40, "y": 100, "text": "AB", "size": 40}));
+    let live = s.execute("text.create", &json!({"x": 30, "y": 90, "text": "x", "size": 60})).unwrap()["id"].as_u64().unwrap();
+    let (a, b) = (children_of(&s, g)[0], children_of(&s, g)[1]);
+    // A, the live type and B as siblings in the layer, as Ungroup leaves them.
+    s.edit("test", |d, _| {
+        let (par, idx, _) = d.position(NodeId(g)).unwrap();
+        let live_n = d.node(NodeId(live)).unwrap().clone();
+        let (an, bn) = (d.node(NodeId(a)).unwrap().clone(), d.node(NodeId(b)).unwrap().clone());
+        d.remove(NodeId(live))?;
+        d.remove(NodeId(g))?;
+        d.insert(par, idx, an)?;
+        d.insert(par, idx + 1, live_n)?;
+        d.insert(par, idx + 2, bn)?;
+        Ok(())
+    })
+    .unwrap();
+    s.execute("select.set", &json!({"ids": [a, live, b]})).unwrap();
+    let r = s.execute("type.retype", &json!({})).unwrap();
+    assert_eq!(r["texts"], json!(["A", "B"]), "the selected live type between them ends the line: {r}");
+}
+
+#[test]
+fn glyphs_selected_inside_groups_join_only_their_siblings() {
+    let mut s = session();
+    let g1 = outlined(&mut s, json!({"x": 40, "y": 100, "text": "ab", "size": 20}));
+    let g2 = outlined(&mut s, json!({"x": 70, "y": 100, "text": "cd", "size": 20}));
+    let (a, b, c) = (children_of(&s, g1)[0], children_of(&s, g1)[1], children_of(&s, g2)[0]);
+    s.execute("select.set", &json!({"ids": [a, b, c]})).unwrap();
+    let r = s.execute("type.retype", &json!({})).unwrap();
+    assert_eq!(r["texts"], json!(["ab", "c"]), "a and b are siblings; c is in another group: {r}");
+    let d = &s.doc().unwrap().doc;
+    assert!(d.node(NodeId(g2)).is_some(), "d's group stays with c's type and d in it");
+}
