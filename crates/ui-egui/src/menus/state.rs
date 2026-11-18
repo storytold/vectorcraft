@@ -226,8 +226,9 @@ pub(crate) fn why_off(app: &VectorcraftApp, id: &str) -> Option<Option<String>> 
     if let Some(c) = vectorcraft_engine::find_command(id) {
         return match (c.enabled)(&app.session) {
             Ok(()) => None,
-            // The system clipboard's contents can be pasted with an empty internal clipboard.
-            Err(_) if app.system_paste && id.starts_with("edit.paste") => None,
+            // The system clipboard's contents can be pasted into an open document with an empty
+            // internal clipboard.
+            Err(_) if app.system_paste && app.session.active().is_some() && id.starts_with("edit.paste") => None,
             Err(why) => Some(Some(why)),
         };
     }

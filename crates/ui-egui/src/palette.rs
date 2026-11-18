@@ -1566,12 +1566,20 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                     }
                 });
             });
-            if !list_open
-                && !history_focused
-                && ui.input(|i| i.key_pressed(egui::Key::Enter))
-                && let Some(e) = matches.get(sel)
-            {
-                run = Some(e.id.clone());
+            if !list_open && !history_focused && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                // Text typed in the frame that pressed Enter changed the query after the results
+                // were listed: Enter runs the first result of the new query.
+                let typed = app.ui.palette_query.to_lowercase();
+                let picked = if typed == q {
+                    matches.get(sel).copied()
+                } else if typed.trim().is_empty() {
+                    recent.first().copied()
+                } else {
+                    matching(&entries, &typed, &app.ui.recent_commands, &app.ui.command_uses).first().copied()
+                };
+                if let Some(e) = picked {
+                    run = Some(e.id.clone());
+                }
             }
         });
     });
@@ -2456,6 +2464,25 @@ mod tests {
         assert!(!open.app.ui.palette_open, "the palette closes");
         assert_eq!(open.app.session.active().unwrap().history.undo.len(), before + 1, "{}", open.app.ui.status);
         assert_eq!(open.app.ui.recent_commands, ["paint.swap", "object.group"]);
+    }
+
+    /// Text typed into an empty search in the frame that presses Enter runs the first result of the
+    /// new query, not the last pick the empty search listed.
+    #[test]
+    fn enter_with_text_typed_in_its_frame_runs_the_new_querys_first_result() {
+        let mut open = Open::new("", WINDOW);
+        open.app = VectorcraftApp::new(vectorcraft_testkit::fixtures::Fixture::Multi.session(), crate::Services::default());
+        open.app.ui.recent_commands = vec!["paint.swap".into()];
+        open.app.ui.palette_open = true;
+        open.frame(vec![]);
+        open.frame(vec![]);
+        let entries = entries(&open.ctx, Lang::EN);
+        let first = super::matching(&entries, "select all", &open.app.ui.recent_commands, &open.app.ui.command_uses)[0].id.clone();
+        assert_ne!(first, "paint.swap");
+        let enter = egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
+        open.frame(vec![egui::Event::Text("select all".into()), enter]);
+        assert!(!open.app.ui.palette_open, "the palette closes");
+        assert_eq!(open.app.ui.recent_commands.first(), Some(&first), "{}", open.app.ui.status);
     }
 
     /// The palette opens again with its first row highlighted, even when it shows the same rows.
@@ -3558,7 +3585,8 @@ mod tests {
         assert_eq!(said, "Effect, Round Corners…, Effect › Stylize");
         let row = rows(&nodes).into_iter().find(|r| r.0 == said).expect("its row is drawn");
         assert!((row.3 - row.2 - f64::from(ROW_HEIGHT)).abs() < 0.01, "{row:?}");
-        assert!(field_description(&nodes).ends_with(&said), "{}", field_description(&nodes));
+        // With no document, Round Corners can't run now, and the reason goes on a second line.
+        assert!(field_place(&nodes).ends_with(&said), "{}", field_description(&nodes));
         let open = Open::new("group selection", WINDOW);
         assert_eq!(open.said("tool:groupSelection"), "Tool, Group Selection Tool, Toolbar, in the Direct Selection Tool group");
         let mut open = Open::new("layers", WINDOW);
@@ -3657,7 +3685,8 @@ mod tests {
         assert!(ungroup.is_disabled(), "{ungroup:?}");
         assert_eq!(ungroup.description(), Some(why.as_str()));
         let t = Tokens::get(&open.ctx);
-        assert_eq!(open.color_of(&entry.shown), Some(t.text_disabled), "the name is drawn dimmed");
+        // The row draws the name without the menu path its home shows.
+        assert_eq!(open.color_of(label_of(entry)), Some(t.text_disabled), "the name is drawn dimmed");
         let footer_says = |nodes: &[egui::accesskit::Node]| labels(nodes).contains(&why);
         assert!(footer_says(&nodes), "{:?}", labels(&nodes));
         // The arrow keys leave screen readers on the search field, so its description says why too.
@@ -3669,7 +3698,7 @@ mod tests {
         let nodes = open.frame(vec![]);
         let ungroup = row_named(&nodes, &name);
         assert!(!ungroup.is_disabled() && ungroup.description().is_none(), "{ungroup:?}");
-        assert_eq!(open.color_of(&entry.shown), Some(t.text));
+        assert_eq!(open.color_of(label_of(entry)), Some(t.text));
         assert!(!footer_says(&nodes), "{:?}", labels(&nodes));
         assert_eq!(field_description(&nodes), place);
         // Whether a result can run never moves it.
@@ -3859,13 +3888,30 @@ mod tests {
     fn paste_is_dimmed_only_while_nothing_can_be_pasted() {
         let mut open = open_on("paste", vectorcraft_testkit::fixtures::Fixture::Multi.session());
         open.app.system_paste = false;
+        let name = open.said("edit.paste");
         let nodes = open.frame(vec![]);
-        let paste = row_named(&nodes, "Edit › Paste");
+        let paste = row_named(&nodes, &name);
         assert!(paste.is_disabled(), "{paste:?}");
         assert_eq!(paste.description(), Some("command `Edit › Paste` is not available right now: clipboard is empty"));
         open.app.system_paste = true;
         let nodes = open.frame(vec![]);
-        assert!(!row_named(&nodes, "Edit › Paste").is_disabled());
+        assert!(!row_named(&nodes, &name).is_disabled());
+    }
+
+    /// With no document open, Paste is dimmed with the engine's reason, though the system
+    /// clipboard still reads as pasteable until its next check.
+    #[test]
+    fn paste_is_dimmed_with_no_document_open() {
+        let mut open = open_on("paste", vectorcraft_engine::Session::new());
+        open.app.system_paste = true;
+        let name = open.said("edit.paste");
+        let nodes = open.frame(vec![]);
+        let paste = row_named(&nodes, &name);
+        assert!(paste.is_disabled(), "{paste:?}");
+        let reason = (vectorcraft_engine::find_command("edit.paste").unwrap().enabled)(&open.app.session).unwrap_err();
+        let why = format!("command `Edit › Paste` is not available right now: {reason}");
+        assert_eq!(paste.description(), Some(why.as_str()));
+        assert!(!menus::enabled(&open.app, "edit.paste"));
     }
 
     /// A tool can always be chosen; a panel can't be shown in Presentation Mode, and says so.
