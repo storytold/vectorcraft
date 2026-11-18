@@ -119,31 +119,55 @@ fn dragged_deletable(app: &VectorcraftApp, ctx: &egui::Context) -> Vec<String> {
 }
 
 /// The names of the swatches or color groups of the active document being dragged from the list,
-/// in panel order. Empty for any other drag, and for a drag started in another document.
+/// in panel order. A row that is part of the panel's selection carries every selected row of its
+/// kind (swatches or color groups), also those that the find field or the kind filter hides, as a
+/// click on the button takes the whole selection. Empty for any other drag, and for a drag started
+/// in another document.
 fn dragged_rows(app: &VectorcraftApp, ctx: &egui::Context) -> Vec<String> {
     let Some(st) = app.session.active() else { return vec![] };
     if pstate::<Option<u64>>(ctx, DRAG_DOC) != Some(st.uid) {
         return vec![];
     }
-    match egui::DragAndDrop::payload::<PanelDrag>(ctx).as_deref() {
-        Some(PanelDrag::Paint { rows: Some(r), .. }) => r.names.clone(),
-        _ => vec![],
+    let Some(drag) = egui::DragAndDrop::payload::<PanelDrag>(ctx) else { return vec![] };
+    let PanelDrag::Paint { rows: Some(r), .. } = &*drag else { return vec![] };
+    let sel: Vec<String> = pstate(ctx, "swatch-selected");
+    if !sel.contains(&r.grabbed) {
+        return r.names.clone();
     }
+    super::entries(app, Kind::All, "")
+        .iter()
+        .filter(|e| e.is_folder() == r.groups && sel.iter().any(|s| s == e.name()))
+        .map(|e| e.name().to_string())
+        .collect()
+}
+
+/// Whether the first pointer button released this frame is the primary one, released over
+/// `button` while no other panel or window covers it there. The position of that release counts,
+/// not where the pointer is at the end of the frame.
+fn primary_released_on(ui: &Ui, button: &Response) -> bool {
+    let first = ui.input(|i| {
+        i.events.iter().find_map(|e| match e {
+            egui::Event::PointerButton { pos, button: b, pressed: false, .. } => Some((*b, *pos)),
+            _ => None,
+        })
+    });
+    first.is_some_and(|(b, pos)| {
+        b == egui::PointerButton::Primary && button.interact_rect.contains(pos) && ui.ctx().layer_id_at(pos).is_none_or(|l| l == button.layer_id)
+    })
 }
 
 /// Swatches or color groups (`names`) dragged onto Delete Swatch (`button`): the button is
-/// outlined while they are held over it, and the release of the primary button asks to delete them
-/// as a plain click does ([`delete`]); Alt does not skip the question. The release of another
-/// button ends the drag, and other drags are left to their own targets.
+/// outlined while they are held over it, and the release of the primary button on it asks to
+/// delete them as a plain click does ([`delete`]); Alt does not skip the question. The release of
+/// another button first ends the drag, and other drags are left to their own targets.
 fn drop_on_delete(app: &mut VectorcraftApp, ui: &Ui, button: &Response, names: Vec<String>) {
-    if names.is_empty() || button.dnd_hover_payload::<PanelDrag>().is_none() {
+    if names.is_empty() {
         return;
     }
-    widgets::drop_target_outline(ui, button.rect);
-    if !ui.input(|i| i.pointer.button_released(egui::PointerButton::Primary)) {
-        return;
+    if button.dnd_hover_payload::<PanelDrag>().is_some() {
+        widgets::drop_target_outline(ui, button.rect);
     }
-    if button.dnd_release_payload::<PanelDrag>().is_some() {
+    if primary_released_on(ui, button) && egui::DragAndDrop::take_payload::<PanelDrag>(ui.ctx()).is_some() {
         delete(app, names, false);
     }
 }
@@ -157,18 +181,17 @@ fn dragged_swatches(app: &VectorcraftApp, ctx: &egui::Context) -> Vec<String> {
 }
 
 /// Swatches (`names`) dragged onto New Swatch (`button`): the button is outlined while they are
-/// held over it, and the release of the primary button duplicates them ([`duplicate`]), whatever
-/// modifiers are held. The release of another button ends the drag, and other drags are left to
-/// their own targets.
+/// held over it, and the release of the primary button on it duplicates them ([`duplicate`]),
+/// whatever modifiers are held. The release of another button first ends the drag, and other drags
+/// are left to their own targets.
 fn drop_on_new(app: &mut VectorcraftApp, ui: &Ui, button: &Response, names: Vec<String>) {
-    if names.is_empty() || button.dnd_hover_payload::<PanelDrag>().is_none() {
+    if names.is_empty() {
         return;
     }
-    widgets::drop_target_outline(ui, button.rect);
-    if !ui.input(|i| i.pointer.button_released(egui::PointerButton::Primary)) {
-        return;
+    if button.dnd_hover_payload::<PanelDrag>().is_some() {
+        widgets::drop_target_outline(ui, button.rect);
     }
-    if button.dnd_release_payload::<PanelDrag>().is_some() {
+    if primary_released_on(ui, button) && egui::DragAndDrop::take_payload::<PanelDrag>(ui.ctx()).is_some() {
         duplicate(app, ui.ctx(), &names);
     }
 }

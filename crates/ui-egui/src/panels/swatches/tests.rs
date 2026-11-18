@@ -1001,6 +1001,125 @@ fn new_swatch_ignores_other_drags() {
     assert!(app.ui.dialog.is_some(), "a click opens the New Swatch dialog");
 }
 
+/// A selected swatch dragged onto New Swatch or Delete Swatch carries the selected swatches that
+/// the find field hides, as a click on Delete Swatch takes them too. The copies are selected in
+/// panel order.
+#[test]
+fn footer_drops_carry_selected_swatches_that_find_hides() {
+    let mut app = app();
+    let ctx = context();
+    set_pstate(&ctx, "swatch-show-find", true);
+    ctx.data_mut(|d| d.insert_temp(find_id(), "Orange".to_string()));
+    let sel = || ["Lime", "Orange"].map(String::from).to_vec();
+    let order = names_of(&app, None);
+    let at = |n: &str| order.iter().position(|x| x == n).unwrap_or_else(|| panic!("no swatch {n}"));
+    let mut copies = vec![("Lime", "Lime copy"), ("Orange", "Orange copy")];
+    copies.sort_by_key(|(n, _)| at(n));
+    let copies: Vec<&str> = copies.into_iter().map(|(_, c)| c).collect();
+    set_pstate(&ctx, "swatch-selected", sel());
+    let undo = undo_steps(&app);
+    assert_eq!(drag_to_button(&mut app, &ctx, "Orange", "New Swatch", Modifiers::NONE, 1.0), (true, true));
+    let d = app.session.doc().unwrap().doc.clone();
+    assert!(d.swatch("Orange copy").is_some() && d.swatch("Lime copy").is_some(), "the hidden selected swatch is duplicated too");
+    assert_eq!(selected(&ctx), copies, "both copies are selected, in panel order");
+    assert_eq!(undo_steps(&app), undo + 1, "one undo step for both");
+    set_pstate(&ctx, "swatch-selected", sel());
+    assert_eq!(drag_to_trash(&mut app, &ctx, "Orange", Modifiers::NONE, 2.0), (true, true));
+    assert_eq!(dialog_message(&app).as_deref(), Some("Delete these 2 swatches and groups?"), "the hidden selected swatch is deleted too");
+    crate::dialogs::confirm(&mut app).unwrap();
+    let d = app.session.doc().unwrap().doc.clone();
+    assert!(d.swatch("Orange").is_none() && d.swatch("Lime").is_none(), "both are deleted");
+}
+
+/// Drag the tile of `name` until it is held over the footer button labeled `label`, a frame per
+/// step from `time`, and return the button.
+fn hold_over_button(app: &mut VectorcraftApp, ctx: &egui::Context, name: &str, label: &str, time: f64) -> Rect {
+    frame_out(app, ctx, vec![], Modifiers::NONE, time);
+    let (target, _) = footer_button(&frame_out(app, ctx, vec![], Modifiers::NONE, time + 0.05), label);
+    let from = tile_center(ctx, name);
+    let press = Event::PointerButton { pos: from, button: PointerButton::Primary, pressed: true, modifiers: Modifiers::NONE };
+    frame_out(app, ctx, vec![Event::PointerMoved(from), press], Modifiers::NONE, time + 0.1);
+    frame_out(app, ctx, vec![Event::PointerMoved(from + vec2(6.0, 4.0))], Modifiers::NONE, time + 0.2);
+    frame_out(app, ctx, vec![Event::PointerMoved(target.center())], Modifiers::NONE, time + 0.3);
+    let held = frame_out(app, ctx, vec![Event::PointerMoved(target.center())], Modifiers::NONE, time + 0.4);
+    assert!(outlined(&held, target), "{name} is held over {label}");
+    target
+}
+
+/// One frame of the panel with a window drawn over `cover`.
+fn frame_covered(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<Event>, time: f64, cover: Rect) {
+    let screen_rect = Some(Rect::from_min_size(Pos2::ZERO, vec2(280.0, 700.0)));
+    let events = std::iter::once(Event::ModifiersChanged(Modifiers::NONE)).chain(events).collect();
+    let input = egui::RawInput { events, time: Some(time), screen_rect, ..Default::default() };
+    let mut out = ctx.run_ui(input, |ui| {
+        show(app, ui);
+        egui::Area::new(egui::Id::unique("swatch-test-cover")).order(egui::Order::Foreground).fixed_pos(cover.min).show(ui.ctx(), |ui| {
+            ui.allocate_exact_size(cover.size(), Sense::hover());
+        });
+    });
+    out.textures_delta.clear();
+}
+
+/// New Swatch and Delete Swatch go by the first button released in a frame and by where it was
+/// released: a secondary release followed by the primary release in one frame ends the drag
+/// without a drop, a primary release on the button drops even when the pointer leaves the button
+/// later in that frame, and a primary release beside the button, or on the button while a window
+/// covers it, does not drop.
+#[test]
+fn footer_drops_go_by_the_first_release_and_where_it_happened() {
+    let mut app = app();
+    let ctx = context();
+    let out = frame_out(&mut app, &ctx, vec![], Modifiers::NONE, 0.0);
+    let (options, group) = (footer_button(&out, "Swatch Options").0, footer_button(&out, "New Color Group").0);
+    let beside = pos2((options.right() + group.left()) / 2.0, group.center().y);
+    let press = |at, button, pressed| Event::PointerButton { pos: at, button, pressed, modifiers: Modifiers::NONE };
+    for (i, label) in ["New Swatch", "Delete Swatch"].into_iter().enumerate() {
+        let t = 10.0 * i as f64;
+        let (before, undo) = (app.session.doc().unwrap().doc.clone(), undo_steps(&app));
+        let unchanged = |app: &VectorcraftApp, case: &str| {
+            assert!(app.ui.dialog.is_none(), "{label}, {case}: no dialog");
+            assert_eq!(app.session.doc().unwrap().doc, before, "{label}, {case}: unchanged");
+            assert_eq!(undo_steps(app), undo, "{label}, {case}: no undo step");
+        };
+        // A secondary release, then the primary release, in one frame.
+        let button = hold_over_button(&mut app, &ctx, "Orange", label, t + 1.0);
+        frame_out(&mut app, &ctx, vec![press(button.center(), PointerButton::Secondary, true)], Modifiers::NONE, t + 1.5);
+        let both = vec![press(button.center(), PointerButton::Secondary, false), press(button.center(), PointerButton::Primary, false)];
+        frame_out(&mut app, &ctx, both, Modifiers::NONE, t + 1.6);
+        // egui counts the secondary press on the button and the primary release as a click on the
+        // button, so New Swatch opens its dialog; the drop itself asks nothing and duplicates nothing.
+        let kind = app.ui.dialog.take().map(|d| d.kind);
+        assert_ne!(kind.as_deref(), Some(crate::dialogs::confirm::KIND), "{label}: a secondary release first does not ask");
+        unchanged(&app, "a secondary release first");
+        // A primary release beside the button, then the pointer on the button, in one frame.
+        let button = hold_over_button(&mut app, &ctx, "Orange", label, t + 2.0);
+        let late = vec![Event::PointerMoved(beside), press(beside, PointerButton::Primary, false), Event::PointerMoved(button.center())];
+        frame_out(&mut app, &ctx, late, Modifiers::NONE, t + 2.5);
+        unchanged(&app, "a release beside the button");
+        // A primary release on the button while a window covers it.
+        let button = hold_over_button(&mut app, &ctx, "Orange", label, t + 2.6);
+        // A new window shows from its second frame.
+        for dt in [3.02, 3.05] {
+            frame_covered(&mut app, &ctx, vec![Event::PointerMoved(button.center())], t + dt, button);
+        }
+        frame_covered(&mut app, &ctx, vec![press(button.center(), PointerButton::Primary, false)], t + 3.1, button);
+        unchanged(&app, "a release on a covered button");
+        // A primary release on the button, then the pointer beside it, in one frame.
+        let button = hold_over_button(&mut app, &ctx, "Orange", label, t + 4.0);
+        let early = vec![press(button.center(), PointerButton::Primary, false), Event::PointerMoved(beside)];
+        frame_out(&mut app, &ctx, early, Modifiers::NONE, t + 4.5);
+        if label == "New Swatch" {
+            assert!(app.session.doc().unwrap().doc.swatch("Orange copy").is_some(), "{label}: a release on the button duplicates");
+            assert_eq!(undo_steps(&app), undo + 1, "{label}: one undo step");
+            app.run("edit.undo", json!({})).unwrap();
+        } else {
+            assert_eq!(dialog_message(&app).as_deref(), Some("Delete “Orange”?"), "{label}: a release on the button asks");
+            crate::dialogs::cancel(&mut app);
+        }
+        unchanged(&app, "after the drop is undone or canceled");
+    }
+}
+
 #[test]
 fn art_dropped_on_the_panel_becomes_a_pattern_swatch() {
     let mut app = app();
