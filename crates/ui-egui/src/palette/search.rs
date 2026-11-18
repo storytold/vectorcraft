@@ -774,14 +774,16 @@ pub(crate) fn rank(entries: &[Entry], index: &Index, query: &str) -> Vec<u32> {
                     splice(&mut meant, &mut meant_copied, k, token, near);
                 }
             }
-            let fields: &[u8] = match g {
-                LABEL_SYNONYM => &[LABEL, LABEL_STEMMED],
-                PATH_SYNONYM => &[PATH, PATH_STEMMED],
+            // A word of the group the label or menu path holds comes before a stem form of one, so
+            // "prefs" reads Preferences as preferences and not as its stem form preference.
+            let fields: &[&[u8]] = match g {
+                LABEL_SYNONYM => &[&[LABEL], &[LABEL_STEMMED]],
+                PATH_SYNONYM => &[&[PATH], &[PATH_STEMMED]],
                 _ => &[],
             };
             if !fields.is_empty() {
                 synonym = true;
-                if let Some(same) = meanings.get(k).and_then(|same| index.nearest_of(same, i, fields)) {
+                if let Some(same) = meanings.get(k).and_then(|same| fields.iter().find_map(|f| index.nearest_of(same, i, f))) {
                     splice(&mut meant, &mut meant_copied, k, token, same);
                 }
             }
@@ -1230,9 +1232,12 @@ mod tests {
     /// A query word that is an English stem form of a word of a group ("setting" of settings,
     /// "preference" of preferences) finds the group, and a stem form of a word of the group meets a
     /// result's word ("prefs" and Zz Setting). A result whose label holds the query word itself
-    /// still ranks first.
+    /// still ranks first. The whole query is read with the group word a label holds before a stem
+    /// form of it, so "prefs" reads Preferences as its exact label.
     #[test]
     fn a_stem_form_of_a_group_word_meets_the_group() {
+        let c = synthetic(vec![entry("Preferences Tool", "tool:zz"), entry("Preferences", "a.one")]);
+        assert_eq!(ranked(&c, "prefs"), ["a.one", "tool:zz"]);
         let c = synthetic(vec![entry("Zz Preferences", "a.one"), entry("Zz Setting", "b.two"), entry("Zz Settings", "c.three")]);
         let setting = ranked(&c, "setting");
         assert_eq!(setting.first().map(String::as_str), Some("b.two"), "{setting:?}");
