@@ -733,6 +733,7 @@
 @msg	compound {_1} must contain exactly one open path to join	შედგენილი {_1} შესაერთებლად ზუსტად ერთ ღია ტრაექტორიას უნდა შეიცავდეს
 @msg	connect end must be "start" or "end"	connect-ის end უნდა იყოს "start" ან "end"
 @msg	connect needs a path other than the one extended	connect-ს სჭირდება ტრაექტორია, რომელიც გაგრძელებულისგან განსხვავდება
+@msg	connect needs extend	connect-ს სჭირდება extend
 @msg	connect needs id	connect-ს სჭირდება id
 @msg	connect path has no open end	connect-ის ტრაექტორიას ღია ბოლო არ აქვს
 @msg	continuation must be an array of path chunks	continuation უნდა იყოს ტრაექტორიის ნაწილების მასივი
@@ -2842,6 +2843,13 @@
 	Previous Document	წინა დოკუმენტი
 	Cascade	კასკადად
 	Tile	ფილებად
+	Tile All Vertically	ყველა ფილებად ვერტიკალურად
+	Tile All Horizontally	ყველა ფილებად ჰორიზონტალურად
+	2-Up Layout	2-იანი განლაგება
+	3-Up Layout	3-იანი განლაგება
+	4-Up Layout	4-იანი განლაგება
+	6-Up Layout	6-იანი განლაგება
+	Arrange Documents	დოკუმენტების დალაგება
 	Float in Window	ცალკე ფანჯარაში გამოტანა
 	Float All in Windows	ყველას ცალკე ფანჯრებში გამოტანა
 	Consolidate All Windows	ყველა ფანჯრის გაერთიანება
@@ -3807,6 +3815,7 @@ digits	Malayalam	მალაიალამური
 	Underline	ხაზგასმული
 	Vertical Scale %	ვერტიკალური მასშტაბი %
 	Axis	ღერძი
+	Axis Angle	ღერძის კუთხე
 	ICF Top/Right	ICF ზედა/მარჯვენა
 	ICF Bottom/Left	ICF ქვედა/მარცხენა
 	Show Font Height Options	შრიფტის სიმაღლის პარამეტრების ჩვენება
@@ -3849,6 +3858,7 @@ digits	Malayalam	მალაიალამური
 	Rule:	წესი:
 	Save changes to {name}	ცვლილებების შენახვა: {name}
 	Save theme to My Themes	თემის შენახვა „ჩემ თემებში“
+	Set the current fill or stroke to the selected color	მიმდინარე შევსების ან კონტურის მონიშნულ ფერად დაყენება
 	Set the selected color to the current color	მონიშნული ფერის მიმდინარე ფერად დაყენება
 	Copy All Styles	ყველა სტილის კოპირება
 	Exported {path}	ექსპორტირებულია: {path}
@@ -4057,7 +4067,7 @@ digits	Malayalam	მალაიალამური
 	Stroke: click for swatches, Shift-click for the color mixer	კონტური: დაწკაპეთ ფერის ნიმუშებისთვის, Shift-დაწკაპუნებით — ფერის შემრევისთვის
 	This panel is on the roadmap (see the parity plan).	ეს პანელი სამომავლო გეგმაშია (იხ. პარიტეტის გეგმა).
 	Open a document to navigate it.	გახსენით დოკუმენტი მასში სანავიგაციოდ.
-	View Artboard Only	მხოლოდ სამუშაო დაფის ჩვენება
+	View Artboard Contents Only	მხოლოდ სამუშაო დაფის შიგთავსის ჩვენება
 	Contextual Alternates	კონტექსტური ალტერნატივები
 	Default Figure	ნაგულისხმევი ციფრები
 	Discretionary Ligatures	დამატებითი ლიგატურები
@@ -4198,7 +4208,7 @@ digits	Malayalam	მალაიალამური
 	Overprint Preview (separations)	ზედდაბეჭდვის წინასწარი ნახვა (სეპარაციები)
 	Show All Plates	ყველა ფირფიტის ჩვენება
 	Show all plates	ყველა ფირფიტის ჩვენება
-	Show/hide plate (Alt-click: only this plate)	ფირფიტის ჩვენება/დამალვა (Alt-დაწკაპუნებით: მხოლოდ ეს ფირფიტა)
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	ფირფიტის ჩვენება/დამალვა (Alt-დაწკაპუნებით: მხოლოდ ეს ფირფიტა; ხელახლა Alt-დაწკაპუნებით: ყველა ფირფიტა)
 	Simulate Paper	ქაღალდის იმიტაცია
 	Use Black Point Compensation	შავი წერტილის კომპენსაციის გამოყენება
 	Working CMYK (don't tag)	სამუშაო CMYK (ტეგის გარეშე)
@@ -4238,6 +4248,8 @@ digits	Malayalam	მალაიალამური
 	Tip extends past the end point	წვერი ბოლო წერტილს სცდება
 	Tip on the end point	წვერი ბოლო წერტილზე
 	Variable Width Profile	ცვლადი სიგანის პროფილი
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	კონტურის ფუნჯი საკუთარ ზომას ინარჩუნებს, ამიტომ სიგანის პროფილი მას არ ცვლის. პროფილის გამოსაყენებლად მოხსენით ფუნჯი.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	კონტურის ფუნჯი საკუთარ ზომას ინარჩუნებს, ამიტომ სიგანის პროფილი მას არ ცვლის. პროფილის გამოსაყენებლად მოხსენით ფუნჯი.
 	Weight:	სისქე:
 	Art using a deleted global swatch keeps its colour.	წაშლილი გლობალური ფერის ნიმუშის მქონე ნახატი თავის ფერს ინარჩუნებს.
 	Color Group: {name}	ფერთა ჯგუფი: {name}
@@ -4346,6 +4358,10 @@ digits	Malayalam	მალაიალამური
 	Flip Horizontal	ჰორიზონტალურად არეკვლა
 	Flip Vertical	ვერტიკალურად არეკვლა
 	Polygon Properties:	მრავალკუთხედის თვისებები:
+	Line Properties:	ხაზის თვისებები:
+	Line Length:	ხაზის სიგრძე:
+	Line Angle:	ხაზის კუთხე:
+	Constrain Pie Angle	სექტორის კუთხის შენარჩუნება
 	Rectangle Properties:	მართკუთხედის თვისებები:
 	Shape Properties:	ფიგურის თვისებები:
 	Shape Properties	ფიგურის თვისებები
@@ -4386,6 +4402,7 @@ digits	Malayalam	მალაიალამური
 	Scatter:	გაფანტვა:
 	Rotation:	შემობრუნება:
 	Rotation relative to:	შემობრუნების ათვლა:
+	Hue Jitter:	ელფერის ვარიაცია:
 	Brush Scale Options	ფუნჯის მასშტაბირების პარამეტრები
 	Scale Proportionately	პროპორციული მასშტაბირება
 	Stretch to Fit Stroke Length	კონტურის სიგრძეზე გაწელვა
@@ -4424,6 +4441,7 @@ digits	Malayalam	მალაიალამური
 	Size:	ზომა:
 	Calligraphic Brush Options	კალიგრაფიული ფუნჯის პარამეტრები
 	Bristle Brush Options	ჯაგრის ფუნჯის პარამეტრები
+	Roundness	სიმრგვალე
 	Roundness:	სიმრგვალე:
 	Shape:	ფორმა:
 	Bristle Length:	ჯაგრის სიგრძე:
@@ -5058,6 +5076,8 @@ antiAlias	Sharp	მკვეთრი
 	Every option matches {base}.	ყველა პარამეტრი ემთხვევა {base}-ს.
 	Files of a PDF standard can't be password-protected.	PDF სტანდარტის ფაილების პაროლით დაცვა შეუძლებელია.
 	Files of this standard tag their colours with ICC profiles.	ამ სტანდარტის ფაილები ფერებს ICC პროფილებით აღნიშნავს.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	ამ სტანდარტის ფაილები ფერებს ICC პროფილებით აღნიშნავს, გარდა გამოტანის მიზნის პროფილის CMYK ფერებისა, რომლებიც DeviceCMYK-ად იწერება.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	„პროფილების გარეშე“ და CMYK გამოტანის მიზნით ყველა CMYK ფერი DeviceCMYK-ად იწერება, თუ ის სხვა პროფილის CMYK დანიშნულებაში არ გარდაიქმნება.
 	Flattener preset:	გაბრტყელების პრესეტი:
 	General › Thumbnails	ზოგადი › ესკიზები
 	Grayscale images	ნაცრისფერი გამოსახულებები
@@ -5182,6 +5202,11 @@ antiAlias	Sharp	მკვეთრი
 	Encoding:	კოდირება:
 	Line Endings:	სტრიქონის დაბოლოებები:
 	Text Export Options	ტექსტის ექსპორტის პარამეტრები
+	Chinese Big 5	ჩინური Big 5
+	Cyrillic	კირილიცა
+	Greek	ბერძნული
+	Baltic	ბალტიური
+	Central European	ცენტრალურევროპული
 	Character Set:	სიმბოლოთა ნაკრები:
 	Join the lines of each paragraph	თითოეული აბზაცის სტრიქონების შეერთება
 	Line Breaks	სტრიქონის წყვეტები
@@ -5211,6 +5236,9 @@ antiAlias	Sharp	მკვეთრი
 	Variable Options	ცვლადის პარამეტრები
 	Define a variable first	ჯერ განსაზღვრეთ ცვლადი
 	Adjust Adjoining Width Points	მეზობელი სიგანის წერტილების მორგება
+	Incoming	შემავალი
+	Outgoing	გამავალი
+	Single Width Only	მხოლოდ ერთი სიგანე
 	Keep both sides the same width	ორივე მხარის ერთნაირი სიგანე
 	Side 1:	მხარე 1:
 	Side 2:	მხარე 2:
@@ -5325,6 +5353,8 @@ theme	Appearance	იერსახე
 	Current Brush	მიმდინარე ფუნჯი
 	Current Symbol	მიმდინარე სიმბოლო
 	Delete Brush	ფუნჯის წაშლა
+	Delete Color	ფერის წაშლა
+	Restore Generated Table	გენერირებული ცხრილის აღდგენა
 	Delete Symbol	სიმბოლოს წაშლა
 	Delete the selected symbol?	წაიშალოს მონიშნული სიმბოლო?
 	Delete the selected symbols?	წაიშალოს მონიშნული სიმბოლოები?
@@ -5604,6 +5634,7 @@ theme	Appearance	იერსახე
 	Select Art	ნახატის მონიშვნა
 	Set Current Layer	მიმდინარე შრედ დაყენება
 	Flatten Artwork	ნახატის გაბრტყელება
+	Locate Layer	შრის მოძებნა
 	Locate Object	ობიექტის მოძებნა
 	Lock Others	დანარჩენების ჩაკეტვა
 	Merge Selected	მონიშნულების შერწყმა
@@ -5804,6 +5835,7 @@ theme	Appearance	იერსახე
 	Data Recovery	მონაცემების აღდგენა
 	Default Language	ნაგულისხმევი ენა
 	Disable Auto Add/Delete	ავტომატური დამატება/წაშლის გამორთვა
+	Interpolate Control Points When Moving Anchors	სახელურების ინტერპოლაცია საყრდენი წერტილების გადაადგილებისას
 	Display All Blacks Accurately	ყველა შავის ზუსტად ჩვენება
 	Display All Blacks as Rich Black	ყველა შავის მდიდარ შავად ჩვენება
 	Display Bitmaps as Anti-aliased Images in Pixel Preview	პიქსელურ ნახვაში ბიტმაპების ანტიალიასინგიან გამოსახულებებად ჩვენება
@@ -5892,6 +5924,9 @@ theme	Appearance	იერსახე
 	Printing / Exporting	ბეჭდვა / ექსპორტირება
 	Real-time Drawing and Editing	რეალურ დროში ხატვა და რედაქტირება
 	Use Monitor Profile for Canvas	მონიტორის პროფილის გამოყენება ტილოსთვის
+	Refresh Monitor Profile	მონიტორის პროფილის განახლება
+@msg	turn on Use Monitor Profile for Canvas first	ჯერ ჩართეთ „მონიტორის პროფილის გამოყენება ტილოსთვის“
+@msg	this build doesn't read display profiles	ეს ვერსია ეკრანის პროფილებს არ კითხულობს
 	The canvas is drawn in sRGB.	ტილო sRGB-ში იხატება.
 	Canvas display profile:	ტილოს ეკრანის პროფილი:
 	The system matches the window to the display's colors.	სისტემა ფანჯარას ეკრანის ფერებს უსადაგებს.
@@ -6299,6 +6334,7 @@ font-technology	Variable	ცვლადი
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	დაჭერილი Cmd/Ctrl-ით მაუსის ბორბალი ტილოს გვერდულად გადაახვევს.
 	Dragging sideways on a numeric field's label changes the field's value.	რიცხვითი ველის წარწერაზე გვერდულად გადათრევა ველის მნიშვნელობას ცვლის.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	ტრეკპადზე ორი თითით მობრუნების ჟესტი ტილოს ხედს აბრუნებს.
+	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	როცა ღუზის წერტილებს გადაადგილებთ, ყოველი მრუდი, რომლის ერთი ბოლოც გადაადგილდა, ინარჩუნებს ფორმას თავის ბოლოებთან მიმართებით.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	ხელსაწყოს მალსახმობი კლავიშის დაჭერით ხელსაწყო არჩეულია მის აშვებამდე, შემდეგ კი ისევ წინა ხელსაწყო აირჩევა.
 	Shows the bounding box while you move the selection or draw a shape.	აჩვენებს შემომსაზღვრელ ჩარჩოს, სანამ მონიშნულს გადაადგილებთ ან ფიგურას ხატავთ.
 	Create Trim Marks draws Japanese-style marks instead of Roman ones.	ჭრის ნიშნების შექმნა რომაულის ნაცვლად იაპონური სტილის ნიშნებს ხატავს.
@@ -6395,6 +6431,8 @@ font-technology	Variable	ცვლადი
 	Couldn't paste from the clipboard: {e}	გაცვლის ბუფერიდან ჩასმა ვერ მოხერხდა: {e}
 	Channel	არხი
 	Circle	წრე
+	Circle Tool	წრის ხელსაწყო
+	Circle too large	წრე ზედმეტად დიდია
 	Clip to Art	ნახატზე მოჭრა
 	Colorize	გაფერადება
 	Gamma	გამა
@@ -6668,6 +6706,7 @@ font-technology	Variable	ცვლადი
 @msg	Saved {path}	შენახულია: {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	გლიფების ჩასასმელად მონიშნეთ ტექსტი ან ტექსტის ხელსაწყოთი დაწკაპეთ ტექსტში
 @msg	Shape Builder: no region under the pointer	ფიგურების კონსტრუქტორი: მაჩვენებლის ქვეშ არე არ არის
+@msg	Shape Builder: select all paths you want to merge	ფიგურების კონსტრუქტორი: მონიშნეთ ყველა ტრაექტორია, რომლის გაერთიანებაც გსურთ
 @msg	Shape Builder: select paths or compound paths	ფიგურების კონსტრუქტორი: მონიშნეთ ტრაექტორიები ან შედგენილი ტრაექტორიები
 @msg	Show All Hidden Attributes: nothing is hidden	ყველა დამალული ატრიბუტის ჩვენება: დამალული არაფერია
 @msg	Split Into Grid: select paths large enough for the grid	ბადედ გაყოფა: მონიშნეთ ბადისთვის საკმარისად დიდი ტრაექტორიები
@@ -6813,6 +6852,7 @@ font-technology	Variable	ცვლადი
 @msg	choose a folder to export to	აირჩიეთ ექსპორტის საქაღალდე
 @msg	choose a location for the package	აირჩიეთ შეფუთვის მდებარეობა
 @msg	clipboard is empty	გაცვლის ბუფერი ცარიელია
+@msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: ფერების ცხრილში ერთი ფერი მაინც უნდა დარჩეს
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` ფერი არ არის, მაგალითად "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: არაუმეტეს {MAX_TABLE} ფერი
 @msg	command `{0}` is not available right now: {1}	ბრძანება `{0}` ახლა ხელმისაწვდომი არ არის: {1}
@@ -6877,8 +6917,8 @@ font-technology	Variable	ცვლადი
 @msg	no active document	აქტიური დოკუმენტი არ არის
 @msg	no active perspective plane	აქტიური პერსპექტივის სიბრტყე არ არის
 @msg	no anchor points selected	საყრდენი წერტილები მონიშნული არ არის
-@msg	`points` must be three [x, y] pairs of numbers	`points` უნდა იყოს რიცხვების სამი [x, y] წყვილი
-@msg	direct-select three anchor points, or give `points`	პირდაპირი მონიშვნით მონიშნეთ სამი საყრდენი წერტილი ან მიუთითეთ `points`
+@msg	`points` must be two or three [x, y] pairs of numbers	`points` უნდა იყოს რიცხვების ორი ან სამი [x, y] წყვილი
+@msg	direct-select two or three anchor points, or give `points`	პირდაპირი მონიშვნით მონიშნეთ ორი ან სამი საყრდენი წერტილი ან მიუთითეთ `points`
 @msg	no circle passes through these points: two are the same or all three lie on one line	ამ წერტილებზე წრეწირი არ გადის: ორი ერთნაირია ან სამივე ერთ წრფეზე მდებარეობს
 @msg	no app to open files here	აქ ფაილების გასახსნელი აპი არ არის
 @msg	no artboard	სამუშაო დაფა არ არის
@@ -6975,6 +7015,9 @@ font-technology	Variable	ცვლადი
 @msg	no such user library	მომხმარებლის ასეთი ბიბლიოთეკა არ არის
 @msg	no such view	ასეთი ხედი არ არის
 @msg	no such width point	ასეთი სიგანის წერტილი არ არის
+@msg	`single` must be `incoming` or `outgoing`	`single` უნდა იყოს `incoming` ან `outgoing`
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` და `outIndex` უნდა იყოს ერთი წყვეტილი სიგანის წერტილის ორი ნახევარი
+@msg	a discontinuous width point keeps its place	წყვეტილი სიგანის წერტილი თავის ადგილს ინარჩუნებს
 @msg	no swatch `{name}`	ფერის ნიმუში `{name}` არ არის
 @msg	no swatch library `{l}` (see swatch.library.list)	ფერის ნიმუშების ბიბლიოთეკა `{l}` არ არის (იხ. swatch.library.list)
 @msg	no symbol instances selected	სიმბოლოს ეგზემპლარები მონიშნული არ არის
@@ -7304,6 +7347,8 @@ font-technology	Variable	ცვლადი
 @msg	Reload the page to go on (changes not saved yet may be lost).	გასაგრძელებლად გადატვირთეთ გვერდი (ჯერ შეუნახავი ცვლილებები შეიძლება დაიკარგოს).
 @msg	tool (a tool id) is required	tool (ხელსაწყოს id) აუცილებელია
 @msg	{tool} isn't in a toolbar group of several tools	{tool} რამდენიმე ხელსაწყოს მქონე ხელსაწყოთა ჯგუფში არ არის
+@msg	Presentation Mode hides the toolbars: change the screen mode to show them	პრეზენტაციის რეჟიმი მალავს ხელსაწყოთა ზოლებს: მათ საჩვენებლად შეცვალეთ ეკრანის რეჟიმი
+@msg	Tab has hidden the toolbars: press Tab to show them	Tab-მა დამალა ხელსაწყოთა ზოლები: მათ საჩვენებლად დააჭირეთ Tab-ს
 @msg	onto must name a panel floating in another group	onto უნდა ასახელებდეს სხვა ჯგუფში მცურავ პანელს
 @msg	below and above must name a panel floating in another group	below და above უნდა ასახელებდეს სხვა ჯგუფში მცურავ პანელს
 @msg	give only one of onto, below and above	მიუთითეთ მხოლოდ ერთი: onto, below ან above
@@ -7646,6 +7691,7 @@ font-technology	Variable	ცვლადი
 	Ascent	ზედა გამონაშვერი
 	Cap Height	მთავრული ასოს სიმაღლე
 	x Height	x-სიმაღლე
+	Em Box Height	Em-ბლოკის სიმაღლე
 	Justify	ორმხრივი სწორება
 	First Baseline	პირველი საბაზისო ხაზი
 	Vertical Align	ვერტიკალური სწორება
@@ -7767,6 +7813,7 @@ font-technology	Variable	ცვლადი
 	Cove	ღარი
 	Depth	სიღრმე
 	Front	წინიდან
+	Side	გვერდიდან
 	Isometric Bottom	იზომეტრია ქვემოდან
 	Isometric Left	იზომეტრია მარცხნიდან
 	Isometric Right	იზომეტრია მარჯვნიდან
@@ -7846,7 +7893,7 @@ font-technology	Variable	ცვლადი
 @msg	each of `{GRAPHICS}` must be an object	`{GRAPHICS}`-ის თითოეული ჩანაწერი უნდა იყოს ობიექტი
 @msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	`{GRAPHICS}`-ის ჩანაწერები იღებს symbol, face, x, y, scale და rotation მნიშვნელობებს და არა `{k}`-ს
 @msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	`{GRAPHICS}`-ის თითოეულ ჩანაწერს სჭირდება `symbol`, სიმბოლოს სახელი
-@msg	`{GRAPHICS}` face must be front or back	`{GRAPHICS}`-ის face უნდა იყოს front ან back
+@msg	`{GRAPHICS}` face must be front, back or side	`{GRAPHICS}`-ის face უნდა იყოს front, back ან side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}`-ის {key} უნდა იყოს რიცხვი {lo}-დან {hi}-მდე
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` უნდა იყოს მასივი
 @msg	Graphics map onto the Plane, Extrude and Revolve object types	გრაფიკა თავსდება ობიექტის ტიპებზე „სიბრტყე“, „ამოწევა“ და „ბრუნვა“
@@ -8056,6 +8103,13 @@ imageTrace	Outline	კონტური
 	Show External Script Warning	გარე სკრიპტის გაფრთხილების ჩვენება
 	A Script Is Running	სკრიპტი მუშაობს
 	Script Alert	სკრიპტის შეტყობინება
+	Script File Access	სკრიპტის წვდომა ფაილებზე
+	The script asks to read a file you choose.	სკრიპტი ითხოვს თქვენ მიერ არჩეული ფაილის წაკითხვას.
+	The script asks to read and write a file you choose.	სკრიპტი ითხოვს თქვენ მიერ არჩეული ფაილის წაკითხვასა და ჩაწერას.
+	The script asks to read and write a folder you choose, with everything in it.	სკრიპტი ითხოვს თქვენ მიერ არჩეული საქაღალდისა და მთელი მისი შიგთავსის წაკითხვასა და ჩაწერას.
+	Allow Once	ერთხელ დაშვება
+	Always Allow This Script	ამ სკრიპტის ყოველთვის დაშვება
+	Deny	უარყოფა
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	სკრიპტს შეუძლია ღია დოკუმენტების შეცვლა და მის მიერ გაშვებული ბრძანებებით ფაილების ჩაწერა. გაუშვით მხოლოდ სანდო სკრიპტები.
 	Do not show this warning again	აღარ აჩვენო ეს გაფრთხილება
 	Stop the script and undo what it did? Then quit again.	შეჩერდეს სკრიპტი და გაუქმდეს მისი ცვლილებები? შემდეგ ხელახლა გამოდით.
@@ -8086,8 +8140,6 @@ imageTrace	Outline	კონტური
 @msg	Script file could not be read	სკრიპტის ფაილის წაკითხვა ვერ მოხერხდა
 @msg	Script folder has more than 2,048 entries	სკრიპტის საქაღალდეში 2048-ზე მეტი ჩანაწერია
 @msg	Script file open mode must be r, w, e or a	სკრიპტის ფაილის გახსნის რეჟიმი უნდა იყოს r, w, e ან a
-@msg	Script file writing is not available	სკრიპტის ფაილების ჩაწერა მიუწვდომელია
-@msg	Script file dialogs are not available	სკრიპტის ფაილის დიალოგები მიუწვდომელია
 @msg	Script files cannot be opened in another application	სკრიპტის ფაილების სხვა აპლიკაციაში გახსნა შეუძლებელია
 @msg	Script file access is unavailable on the web	ვებში სკრიპტის ფაილებზე წვდომა მიუწვდომელია
 @msg	Script has 256 files open	სკრიპტს 256 ფაილი აქვს გახსნილი
@@ -8205,6 +8257,27 @@ liquify-list-end	{0}, {1}	{0} და {1}
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` მხოლოდ ისეთი გაშვებისთვისაა, სადაც შესაკითხი არავინაა: აპში თითოეულ დიალოგს ადამიანი პასუხობს
 @msg	Running a script	სკრიპტი მუშაობს
 @msg	Copied the script report	კოპირებულია სკრიპტის ანგარიში
+@msg	Script file access denied: {path}	სკრიპტის წვდომა ფაილებზე უარყოფილია: {path}
+@msg	Script file access to the app's own folders is not allowed	სკრიპტს არ აქვს აპის საკუთარ საქაღალდეებზე წვდომის უფლება
+@msg	Script file cannot encode the text	სკრიპტის ფაილი ვერ აკოდირებს ტექსტს
+@msg	Script file could not be written	სკრიპტის ფაილის ჩაწერა ვერ მოხერხდა
+@msg	Script file dialogs need a person to answer them	სკრიპტის ფაილის დიალოგებს სჭირდება ადამიანი, რომელიც უპასუხებს
+@msg	Script file is not open for writing	სკრიპტის ფაილი ჩასაწერად გახსნილი არ არის
+@msg	Script file name is already in use	სკრიპტის ფაილის სახელი უკვე გამოიყენება
+@msg	Script file name must be a name without a folder	სკრიპტის ფაილის სახელი უნდა იყოს სახელი საქაღალდის გარეშე
+@msg	Script file permission can be kept only for a script run from a file	ფაილების ნებართვის შენახვა შესაძლებელია მხოლოდ ფაილიდან გაშვებული სკრიპტისთვის
+@msg	Script file permission could not be saved	სკრიპტის ფაილების ნებართვის შენახვა ვერ მოხერხდა
+@msg	Script folder is not empty	სკრიპტის საქაღალდე ცარიელი არ არის
+@msg	Script files cannot make aliases	სკრიპტის ფაილებს არ შეუძლიათ ფსევდონიმების შექმნა
+@msg	Script file hidden setting cannot be changed	სკრიპტის ფაილის დამალვის პარამეტრის შეცვლა შეუძლებელია
+@msg	{name}: a file dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: ფაილის დიალოგი ვერ გაიხსნება ჩაშენებული ფუნქციის, getter-ის, გარდაქმნის ან $.evalFile-ის მიერ გაშვებული ფაილის callback-ში; გამოიძახეთ ის სკრიპტის საკუთარი კოდიდან
+@msg	the script wrote more file data than one run may write (32 MiB)	სკრიპტმა ჩაწერა იმაზე მეტი ფაილის მონაცემი, ვიდრე ერთ გაშვებას შეუძლია ჩაწეროს (32 MiB)
+@msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	სკრიპტის ფაილის დიალოგისთვის `answer` უნდა იყოს ერთ-ერთი: once, always, deny, stop
+@msg	choose a file or folder first, or deny	ჯერ აირჩიეთ ფაილი ან საქაღალდე, ან უარყავით
+@msg	the script file permissions could not be saved: {e}	სკრიპტების ფაილების ნებართვების შენახვა ვერ მოხერხდა: {e}
+@msg	this script's file access can be allowed only once	ამ სკრიპტის წვდომა ფაილებზე მხოლოდ ერთხელ შეიძლება დაიშვას
+@msg	Only the person at the keyboard can allow a script's file access	სკრიპტის წვდომას ფაილებზე მხოლოდ კლავიატურასთან მყოფი ადამიანი უშვებს
+@msg	A script is given at most 2,048 files: the files picked after them were left out	სკრიპტი იღებს მაქსიმუმ 2 048 ფაილს: მათ შემდეგ არჩეული ფაილები გამოტოვებულია
 @msg	Copied the link info	კოპირებულია ბმულის ინფორმაცია
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	ტრაექტორიის წანაცვლება: წანაცვლების შემდეგ მონიშნული ტრაექტორიებიდან არაფერი რჩება (შიგნით წანაცვლება ფიგურებზე დიდია)
 @msg	{path}: not a file	{path}: ფაილი არ არის
@@ -9899,6 +9972,14 @@ breakText	Glyphs	გლიფები
 	Remove Gaps	ღრეჩოების მოცილება
 @msg	that makes too many pieces (at most 100000): make the dashes longer	ეს ძალიან ბევრ ნაწილს იძლევა (მაქსიმუმ 100000): გაზარდეთ ტირეების სიგრძე
 @msg	select paths, or segments, to divide	აირჩიეთ დასაყოფი ტრაექტორიები ან სეგმენტები
+# Path Precision Tools add-on: Smooth Bridge.
+	Smooth Bridge…	გლუვი ხიდი…
+	Smooth Bridge	გლუვი ხიდი
+	Keep Originals	ორიგინალების შენარჩუნება
+@msg	select two circles to bridge	აირჩიეთ ორი წრე დასაკავშირებლად
+@msg	one circle is inside the other	ერთი წრე მეორის შიგნითაა
+@msg	the circles are too far apart for this radius: raise the radius	ამ რადიუსისთვის წრეები ერთმანეთისგან ძალიან შორსაა: გაზარდეთ რადიუსი
+@msg	the circles are too far apart for this radius	ამ რადიუსისთვის წრეები ერთმანეთისგან ძალიან შორსაა
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	საერთო მხებები…
 	Common Tangents	საერთო მხებები
@@ -10365,4 +10446,14 @@ font-script	Japanese	იაპონური
 @msg	A panel is not joined to the rest by a crease.	პანელი დანარჩენს არცერთი ბიგის ხაზით არ უერთდება.
 @msg	A fold line is on a non-printing layer.	მოკეცვის ხაზი არაბეჭდვად შრეზეა.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	პანელები: {panels}, ანჯამები: {hinges}, შეცდომები: {errors}, გაფრთხილებები: {warnings}
+	Fold Preview	მოკეცვის გადახედვა
+	Fold	მოკეცვა
+	Show Fold Lines	მოკეცვის ხაზების ჩვენება
+	Three-Quarter	სამი მეოთხედი
+	Open a document to preview its folded shape.	გახსენით დოკუმენტი მისი მოკეცილი ფორმის სანახავად.
+@msg	Check the fold lines first.	ჯერ შეამოწმეთ მოკეცვის ხაზები.
+@msg	Panels: {panels}, hinges: {hinges}	პანელები: {panels}, ანჯამები: {hinges}
+@msg	Other blanks not shown: {count}	სხვა ნამზადები არ ჩანს: {count}
+@msg	A joint does not close by {gap} pt.	შეერთება არ იხურება {gap} pt-ით.
+@msg	Two panels pass through each other.	ორი პანელი ერთმანეთში გადის.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer უნდა იყოს "singleLine", "everyLine", "standardSingleLine" ან "standardEveryLine"
