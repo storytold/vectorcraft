@@ -8796,6 +8796,7 @@ breakText	Glyphs	字形
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	复合形状接受路径、复合路径、编组、复合形状、文字、混合和封套
 @msg	compound {_1} must contain exactly one open path to join	复合对象 {_1} 必须恰好包含一条要连接的开放路径
 @msg	connect needs a path other than the one extended	connect 需要一条不同于被延伸路径的路径
+@msg	connect needs extend	connect 需要 extend
 @msg	connect needs id	connect 需要 id
 @msg	connect path has no open end	connect 的路径没有开放的端点
 @msg	copy needs path: the file to copy into the document's folder	copy 需要 path：即要复制到文档所在文件夹的文件

@@ -8485,6 +8485,7 @@ digits	Hindi	Hindi
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	sammansatta former tar banor, sammansatta banor, grupper, sammansatta former, text, övergångar och kuvert
 @msg	connect end must be "start" or "end"	connect end måste vara "start" eller "end"
 @msg	connect needs a path other than the one extended	connect behöver en annan bana än den som förlängs
+@msg	connect needs extend	connect behöver extend
 @msg	connect needs id	connect behöver id
 @msg	connect path has no open end	connect-banan har ingen öppen ände
 @msg	Contour: select paths or shapes	Kontur: markera banor eller former
