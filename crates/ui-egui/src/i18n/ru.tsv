@@ -7610,6 +7610,7 @@ breakText	Glyphs	Глифы
 @msg	One path lies inside the other, so they have no common tangents	Один контур лежит внутри другого, поэтому у них нет общих касательных
 @msg	The paths overlap, so they have no internal tangents	Контуры перекрываются, поэтому у них нет внутренних касательных
 @msg	One path lies inside the other, so they have no internal tangents	Один контур лежит внутри другого, поэтому у них нет внутренних касательных
+@msg	The point lies inside the path, so it has no tangents	Точка лежит внутри контура, поэтому у неё нет касательных
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Разобрать штрихи на контуры
 @msg	select paths with dashed strokes to expand	выделите контуры со штриховой обводкой для разбора
