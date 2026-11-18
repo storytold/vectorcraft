@@ -7830,6 +7830,15 @@ starts with one empty layer. The grid comes from Preferences › Guides & Grid, 
 preset's color mode differs from the profile's, the profile's colors are converted as `file.documentColorMode`
 converts them.
 
+A profile also sets the default fill and stroke of its documents (VectorCraft's own rule). When the profile's Default
+Graphic Style differs from the shipped one (white fill, 1 pt black stroke, with the shipped colors converted to the
+document's color mode), `file.new` resets new art to that style's fills, strokes and effects, at full opacity and not
+linked to the style, and `paint.default` (Default Fill and Stroke) gives the defaults and the selected art the same
+look; type still gets a black fill and no stroke. With the shipped style, `file.new` leaves the fill and stroke as they
+were. For example, to start with no fill and a 0.25 pt red stroke: edit the profile with `file.newProfiles.edit`, draw a
+path with that fill and stroke, select it, run `graphicStyle.redefine {name: "Default Graphic Style"}`, delete the
+path and save.
+
 A built-in preset names its category's profile in `file.newPresets` (`profile`). Saved and Recent presets keep the
 profile of the preset they were made from. `file.new {profile: "Print"}` picks a profile for any settings, and
 `profile: null` starts with the defaults. A document made without a preset starts with the defaults.
