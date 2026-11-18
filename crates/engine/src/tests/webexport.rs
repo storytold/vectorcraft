@@ -453,6 +453,92 @@ fn colour_table_lock_web_shift_snap_and_sort() {
     assert!(lossy < plain, "{lossy} vs {plain}");
 }
 
+/// Delete Color: the deleted colors leave the table and the file, their pixels take the nearest
+/// color left, and the edit stays with the settings until another reduction is chosen.
+#[test]
+fn colour_table_delete_maps_pixels_to_the_nearest_color_left() {
+    // 40×10: red, a near red and blue, and 10 px with nothing (transparent).
+    let mut s = session(40.0, 10.0);
+    rect(&mut s, [0.0, 0.0, 10.0, 10.0], "#ff0000");
+    rect(&mut s, [10.0, 0.0, 10.0, 10.0], "#ee1100");
+    rect(&mut s, [20.0, 0.0, 10.0, 10.0], "#0000ff");
+    let preview = |s: &mut Session, p: Value| run(s, "document.exportForWeb.preview", p);
+    let sources = |v: &Value| -> Vec<String> {
+        let mut out: Vec<String> =
+            v["colors"].as_array().unwrap().iter().filter(|c| c["transparent"] == false).map(|c| c["source"].as_str().unwrap().to_string()).collect();
+        out.sort();
+        out
+    };
+    let base = preview(&mut s, json!({"dither": "none"}));
+    assert_eq!(base["colors"].as_array().unwrap().len(), 4, "{base}");
+    for format in ["gif", "png8"] {
+        let p = json!({"format": format, "dither": "none", "colorTable": {"deleted": ["#EE1100"]}});
+        let v = preview(&mut s, p.clone());
+        assert_eq!(v["colors"].as_array().unwrap().len(), 3, "{format}: {v}");
+        assert!(v["colors"].as_array().unwrap().iter().any(|c| c["transparent"] == true), "{format}: the transparent entry stays");
+        assert_eq!(sources(&v), ["#0000ff", "#ff0000"], "{format}");
+        let file = one(&mut s, p);
+        assert_eq!(v["bytes"].as_u64(), Some(file.len() as u64), "{format}: the preview is the file");
+        let img = pixels(&file);
+        assert_eq!(img.get_pixel(15, 5).0, [255, 0, 0, 255], "{format}: the nearest color left");
+        assert_eq!((img.get_pixel(5, 5).0, img.get_pixel(25, 5).0, img.get_pixel(35, 5).0[3]), ([255, 0, 0, 255], [0, 0, 255, 255], 0));
+        assert_eq!(distinct(&img), 3, "{format}");
+    }
+    // A color the table does not hold is no edit; sorting does not bring a deleted one back.
+    assert_eq!(sources(&preview(&mut s, json!({"dither": "none", "colorTable": {"deleted": ["#123456"]}}))).len(), 3);
+    let sorted = preview(&mut s, json!({"dither": "none", "colorTable": {"deleted": ["#ee1100"], "sort": "luminance"}}));
+    assert_eq!(sources(&sorted), ["#0000ff", "#ff0000"]);
+    // A fixed palette: colors it lacks are not made again, and deletions come out of it.
+    let fixed = preview(&mut s, json!({"dither": "none", "colorTable": {"customPalette": ["#0000ff", "#ff0000"]}}));
+    assert_eq!(sources(&fixed), ["#0000ff", "#ff0000"]);
+    let fixed = preview(&mut s, json!({"dither": "none", "colorTable": {"customPalette": ["#0000ff", "#ff0000"], "deleted": ["#ff0000"]}}));
+    assert_eq!(sources(&fixed), ["#0000ff"]);
+    // At most `colors` entries of a fixed palette, the transparent one included.
+    let two = preview(&mut s, json!({"dither": "none", "colors": 2, "colorTable": {"customPalette": ["#0000ff", "#ff0000"]}}));
+    assert_eq!(sources(&two), ["#0000ff"]);
+    // Deleting every opaque color is refused: the pixels need a color.
+    // Colors mapped to transparent do not count as left.
+    for table in [
+        json!({"deleted": ["#ff0000", "#ee1100", "#0000ff"]}),
+        json!({"customPalette": ["#ff0000"], "deleted": ["#ff0000"]}),
+        json!({"deleted": ["#0000ff", "#ee1100"], "transparent": ["#ff0000"]}),
+        json!({"customPalette": ["#ff0000", "#0000ff"], "deleted": ["#0000ff"], "transparent": ["#ff0000"]}),
+    ] {
+        let p = json!({"colorTable": table});
+        let e = s.execute("document.exportForWeb.preview", &p).err().map(|e| e.to_string()).unwrap_or_default();
+        assert!(e.contains(cmd::webexport::KEEP_ONE), "{p}: {e}");
+        assert!(s.execute("document.exportForWeb", &p).is_err(), "{p}");
+    }
+    for bad in [
+        json!({"colorTable": {"deleted": ["nope"]}}),
+        json!({"colorTable": {"customPalette": ["#ff000080"]}}),
+        json!({"colorTable": {"deleted": vec!["#ff0000"; 257]}}),
+    ] {
+        assert!(s.execute("document.exportForWeb", &bad).is_err(), "{bad}");
+        assert!(s.execute("webExport.settings", &bad).is_err(), "{bad}");
+    }
+    // A deleted color leaves the other lists; JPEG and PNG-24 have no table to edit.
+    let table = json!({
+        "deleted": ["#ee1100"], "customPalette": ["#ff0000", "#ee1100", "#0000ff"], "locked": ["#EE1100", "#0000ff"],
+        "transparent": ["#ee1100"], "webShift": ["#ee1100"],
+    });
+    let r = run(&mut s, "webExport.settings", json!({ "colorTable": table }));
+    let t = r["settings"]["colorTable"].clone();
+    assert_eq!((&t["locked"], &t["transparent"], &t["webShift"]), (&json!(["#0000ff"]), &json!([]), &json!([])));
+    assert_eq!(t["deleted"], json!(["#ee1100"]));
+    for format in ["jpg", "png24"] {
+        assert!(preview(&mut s, json!({"format": format, "colorTable": t.clone()})).get("colors").is_none(), "{format}");
+    }
+    // The remembered edit survives other keys and a format change, and goes with another reduction.
+    let r = run(&mut s, "webExport.settings", json!({"colors": 64, "format": "png8"}));
+    assert_eq!(r["settings"]["colorTable"]["deleted"], json!(["#ee1100"]));
+    let r = run(&mut s, "webExport.settings", json!({"reduction": "adaptive"}));
+    assert_eq!((&r["settings"]["colorTable"]["deleted"], &r["settings"]["colorTable"]["customPalette"]), (&json!([]), &json!([])));
+    // A saved preset keeps the edit.
+    run(&mut s, "webExport.presets.save", json!({"name": "No near red", "dither": "none", "colorTable": {"deleted": ["#ee1100"]}}));
+    assert_eq!(sources(&preview(&mut s, json!({"preset": "No near red"}))), ["#0000ff", "#ff0000"]);
+}
+
 #[test]
 fn presets_and_remembered_settings() {
     let mut s = two_colours();
