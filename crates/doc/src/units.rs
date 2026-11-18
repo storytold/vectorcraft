@@ -81,6 +81,21 @@ impl Unit {
             Unit::Ha => "H",
         }
     }
+    /// Whether this unit is a physical measurement unit (not points or pixels).
+    pub fn is_physical(self) -> bool {
+        self.svg_suffix().is_some() || matches!(self, Unit::FeetInches | Unit::Meters | Unit::Yards | Unit::Feet | Unit::Q | Unit::Ha)
+    }
+    /// The standard SVG length unit suffix, if this unit is a physical unit supported in SVG
+    /// (`mm`, `cm`, `in`, `pc`).
+    pub fn svg_suffix(self) -> Option<&'static str> {
+        match self {
+            Unit::Millimeters => Some("mm"),
+            Unit::Centimeters => Some("cm"),
+            Unit::Inches => Some("in"),
+            Unit::Picas => Some("pc"),
+            _ => None,
+        }
+    }
     pub const fn label(self) -> &'static str {
         match self {
             Unit::Points => "Points",

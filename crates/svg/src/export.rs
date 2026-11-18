@@ -78,6 +78,17 @@ fn update_editing_hash(svg: &mut String) {
     }
 }
 
+/// Format physical dimensions (inches, mm, cm) with enough precision and significant digits
+/// that small nonzero sizes do not round to zero or distort relative aspect ratio.
+fn physical_num(v: f64) -> String {
+    if !v.is_finite() || v <= 0.0 {
+        return "0".into();
+    }
+    let leading_zeros = (-v.log10().floor() as i32).max(0);
+    let decimals = (leading_zeros + 3).clamp(3, 8) as u8;
+    fmt_num(v, decimals)
+}
+
 /// `doc` as SVG with `opts`, the native file `native` embedded for Preserve Editing, its generated
 /// ids starting with `id_prefix`.
 fn write(doc: &Document, opts: &ExportOptions, native: Option<&[u8]>, id_prefix: &str) -> Output {
@@ -183,8 +194,13 @@ fn write(doc: &Document, opts: &ExportOptions, native: Option<&[u8]>, id_prefix:
         root = root.attr("version", "1.2").attr("baseProfile", "tiny");
     }
     if !opts.responsive {
-        // Unitless width/height stay in this one branch so #7105 (physical unit suffixes) can rebase here.
-        root = root.attr("width", &ww).attr("height", &hh);
+        if let Some(suffix) = doc.units.svg_suffix() {
+            let w_val = physical_num(doc.units.from_pt(rect.width()));
+            let h_val = physical_num(doc.units.from_pt(rect.height()));
+            root = root.attr("width", format_args!("{w_val}{suffix}")).attr("height", format_args!("{h_val}{suffix}"));
+        } else {
+            root = root.attr("width", &ww).attr("height", &hh);
+        }
     }
     root.attr("viewBox", format_args!("0 0 {ww} {hh}")).open();
     let mut out = svg.as_str().to_string();
