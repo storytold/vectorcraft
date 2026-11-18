@@ -705,7 +705,7 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
   Fine Grain, Canvas Weave, Burlap Sack, Cracked Glaze, Mosaic Floor, Quilted Squares, Leaded Glass and Damp Paper,
   painted with the texture effects; User Defined; Other Library…; `graphicStyle.libraries`,
   `graphicStyle.addFromLibrary`).
-- **Missing:** more built-in brush libraries beyond the eleven shipped (and further graphic-style libraries beyond the eleven shipped, and further symbol libraries beyond Basic
+- **Missing:** more built-in brush libraries beyond the twelve shipped (and further graphic-style libraries beyond the eleven shipped, and further symbol libraries beyond Basic
   Shapes, UI Frames, Map Markers, Inventory Icons, Skill Icons and Weather Icons; original, generated in code, never Adobe's); dynamic symbols' `.ai` read and write.
 - **Estimate:** 3–13 h (estimated).
 
