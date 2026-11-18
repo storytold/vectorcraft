@@ -234,12 +234,13 @@ fn art(name: &str, art: Node, colorization: Colorization) -> Brush {
     Brush { name: name.into(), kind: BrushKind::Art(ArtBrush { art, colorization, ..Default::default() }) }
 }
 
-fn arrow_art(name: &str, art: Node, start: f64) -> Brush {
+/// An Arrows brush whose art stretches only between `start` and `end` (fractions of its length).
+fn arrow_art(name: &str, art: Node, start: f64, end: f64) -> Brush {
     Brush {
         name: name.into(),
         kind: BrushKind::Art(ArtBrush {
             art,
-            scale: ArtScale::BetweenGuides { start, end: 0.76 },
+            scale: ArtScale::BetweenGuides { start, end },
             colorization: Colorization::Tints,
             ..Default::default()
         }),
@@ -271,11 +272,12 @@ fn arrows() -> BrushLibrary {
         "Arrows",
         Document::new(100.0, 100.0),
         vec![
-            arrow_art("Solid Arrow", solid, 0.0),
-            arrow_art("Open Arrow", outline, 0.0),
-            arrow_art("Double Arrow", double, 0.24),
-            arrow_art("Chevron Arrow", chevrons, 0.0),
-            arrow_art("Dashed Arrow", dashed, 0.0),
+            arrow_art("Solid Arrow", solid, 0.0, 0.76),
+            arrow_art("Open Arrow", outline, 0.0, 0.76),
+            arrow_art("Double Arrow", double, 0.24, 0.76),
+            // The second chevron starts at 53 pt, so only the shaft before it stretches.
+            arrow_art("Chevron Arrow", chevrons, 0.0, 0.53),
+            arrow_art("Dashed Arrow", dashed, 0.0, 0.76),
         ],
     )
 }

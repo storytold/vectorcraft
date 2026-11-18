@@ -258,6 +258,23 @@ fn arrows_library_lists_renders_and_applies_original_brushes() {
 }
 
 #[test]
+fn the_chevron_arrows_second_chevron_keeps_its_length_on_a_long_path() {
+    let s = session();
+    let (_, lib) = cmd::brushlib::library(&s, "Arrows").unwrap();
+    let b = lib.brush("Chevron Arrow").unwrap();
+    let widths = |length: f64| {
+        let pieces = vectorcraft_brush::stroke_pieces(&lib.doc, b, &line_to(length), &black_stroke());
+        let children = pieces[0].children().unwrap();
+        assert_eq!(children.len(), 3, "shaft, head and second chevron");
+        children[1..].iter().map(|n| n.geometric_bounds().unwrap().width()).collect::<Vec<_>>()
+    };
+    let short = widths(100.0);
+    for (long, short) in widths(400.0).into_iter().zip(short) {
+        assert!((long - short).abs() < 1e-6, "the heads keep their length: {long} on 400 pt, {short} on 100 pt");
+    }
+}
+
+#[test]
 fn dashed_arrow_keeps_separate_dashes_and_survives_library_save() {
     let mut s = session();
     let (_, lib) = cmd::brushlib::library(&s, "Arrows").unwrap();
