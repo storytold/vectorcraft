@@ -525,10 +525,12 @@ impl Tool for PenTool {
             && let (Some((id, _, _, last, out)), Some(h)) = (self.active(cx), self.hover)
         {
             if cx.pen_rubber_band {
+                // The segment a click at `h` adds: it leaves the last anchor along its outgoing
+                // handle and arrives at the new corner anchor without a handle.
                 let mut bp = BezPath::new();
                 bp.move_to(last);
                 if out.distance(last) > 1e-9 {
-                    bp.quad_to(out, h);
+                    bp.curve_to(out, h, h);
                 } else {
                     bp.line_to(h);
                 }
@@ -629,7 +631,7 @@ impl PenTool {
         if !alt_converts(cx, ev.pos, ev.mods) {
             return None;
         }
-        let mut t = AnchorTool::new("anchorPoint");
+        let mut t = AnchorTool::lent_by_pen();
         let acts = t.pointer(cx, ev);
         if !t.busy() {
             return None;
