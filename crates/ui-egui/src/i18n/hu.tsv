@@ -1699,6 +1699,7 @@ digits	Malayalam	Malajálam
 	Fixed	Rögzített
 	Flag…	Zászló…
 	Flare	Fényvillanás
+	Edit Flare	Fényvillanás szerkesztése
 	Flare Tool	Fényvillanás
 	Flare Tool Options	Fényvillanás beállításai
 	Flat Angle	Lapos, ferde
@@ -6146,6 +6147,7 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	select a blend	jelölj ki egy összemosást
 @msg	select a blend or give `id`	jelölj ki egy összemosást, vagy add meg az `id` értékét
 @msg	select a clip group	jelölj ki egy vágócsoportot
+@msg	select a flare	jelölj ki egy fényvillanást
 @msg	select a gradient mesh	jelölj ki egy színátmenetes hálót
 @msg	select a linked image: an embedded one has no file	jelölj ki egy csatolt képet: a beágyazottnak nincs fájlja
 @msg	select a Live Paint group	jelölj ki egy élőfestés-csoportot

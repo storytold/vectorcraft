@@ -6108,6 +6108,7 @@ theme	Appearance	იერსახე
 	Set Tab Stops	ტაბულაციის გაჩერებების დაყენება
 	Tab Stops	ტაბულაციის გაჩერებები
 	Flare	ბლიკი
+	Edit Flare	ბლიკის რედაქტირება
 	Rays	სხივები
 	Rectangle	მართკუთხედი
 	Paintbrush	ფუნჯი
@@ -7132,6 +7133,7 @@ font-technology	Variable	ცვლადი
 @msg	select a Live Paint group	მონიშნეთ ცოცხალი შეღებვის ჯგუფი
 @msg	select a blend	მონიშნეთ გადასვლა
 @msg	select a clip group	მონიშნეთ მომჭრელი ჯგუფი
+@msg	select a flare	მონიშნეთ ბლიკი
 @msg	select a gradient mesh	მონიშნეთ გრადიენტული ბადე
 @msg	select a linked image: an embedded one has no file	მონიშნეთ დაკავშირებული გამოსახულება: ჩაშენებულს ფაილი არ აქვს
 @msg	select a repeat	მონიშნეთ გამეორება
