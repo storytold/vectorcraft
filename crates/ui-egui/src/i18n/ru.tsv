@@ -7742,6 +7742,14 @@ breakText	Glyphs	Глифы
 	Remove Gaps	Убрать зазоры
 @msg	that makes too many pieces (at most 100000): make the dashes longer	так получится слишком много частей (не более 100000): удлините штрихи
 @msg	select paths, or segments, to divide	выделите контуры или сегменты для разделения
+# Path Precision Tools add-on: Smooth Bridge.
+	Smooth Bridge…	Плавный мост…
+	Smooth Bridge	Плавный мост
+	Keep Originals	Сохранить оригиналы
+@msg	select two circles to bridge	выделите две окружности для соединения
+@msg	one circle is inside the other	одна окружность находится внутри другой
+@msg	the circles are too far apart for this radius: raise the radius	окружности слишком далеко друг от друга для этого радиуса: увеличьте радиус
+@msg	the circles are too far apart for this radius	окружности слишком далеко друг от друга для этого радиуса
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	Общие касательные…
 	Common Tangents	Общие касательные
