@@ -118,6 +118,20 @@ fn instances_of(d: &Document, name: Option<&str>) -> Vec<NodeId> {
     v
 }
 
+/// The symbol instances in `nodes` and inside them, each once, in the order a walk of each node in
+/// turn first reaches them.
+fn instances_in<'a>(nodes: impl IntoIterator<Item = &'a Node>) -> Vec<NodeId> {
+    let (mut v, mut seen) = (vec![], std::collections::HashSet::new());
+    for n in nodes {
+        n.walk(&mut |c| {
+            if matches!(c.kind, NodeKind::SymbolInstance { .. }) && seen.insert(c.id) {
+                v.push(c.id);
+            }
+        });
+    }
+    v
+}
+
 /// The symbols an instance in `n` (its opacity masks included) places, pushed onto `out`.
 fn art_symbols(n: &Node, out: &mut Vec<String>) {
     vectorcraft_doc::swatches::walk_with_masks(n, &mut |m| {
@@ -1091,20 +1105,8 @@ pub(super) fn symbol_adjust(s: &mut Session, p: &Value) -> Result<Value> {
     let style_paint = style_paint(&st.doc, p);
     let candidates: Vec<NodeId> = {
         let d = &st.doc;
-        let mut v = vec![];
-        if st.selection.is_empty() {
-            v = instances_of(d, None);
-        } else {
-            for id in &st.selection.objects {
-                if let Some(n) = d.node(*id) {
-                    n.walk(&mut |c| {
-                        if matches!(c.kind, NodeKind::SymbolInstance { .. }) && !v.contains(&c.id) {
-                            v.push(c.id);
-                        }
-                    });
-                }
-            }
-        }
+        let mut v =
+            if st.selection.is_empty() { instances_of(d, None) } else { instances_in(st.selection.objects.iter().filter_map(|id| d.node(*id))) };
         let editable = d.editable();
         v.retain(|id| editable(*id));
         v
@@ -1362,4 +1364,45 @@ fn restack(d: &mut Document, ids: &std::collections::HashSet<NodeId>, back: bool
         }
     }
     Ok(moved)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn instance(id: u64) -> Arc<Node> {
+        Arc::new(Node::new(NodeId(id), NodeKind::SymbolInstance { symbol: "Dot".into(), xf: Affine::IDENTITY }))
+    }
+
+    /// The instances come out in the order a search of the list built so far gives: nested
+    /// groups, a group listed twice, a member listed after its group and one listed before it.
+    #[test]
+    fn instances_in_matches_searching_the_list_so_far() {
+        let groups: Vec<Node> = (0..40u64)
+            .map(|g| {
+                let base = g * 100;
+                let mut children: Vec<Arc<Node>> = (0..40).map(|i| instance(base + i)).collect();
+                let inner = (40..50).map(|i| instance(base + i)).collect();
+                children.insert(20, Arc::new(Node::group(NodeId(base + 90), inner)));
+                children.push(Arc::new(Node::group(NodeId(base + 91), vec![])));
+                Node::group(NodeId(base + 99), children)
+            })
+            .collect();
+        let early = Node::new(NodeId(1_245), NodeKind::SymbolInstance { symbol: "Dot".into(), xf: Affine::IDENTITY });
+        let late = Node::new(NodeId(305), NodeKind::SymbolInstance { symbol: "Dot".into(), xf: Affine::IDENTITY });
+        let nodes: Vec<&Node> = std::iter::once(&early).chain(&groups).chain([&groups[0], &late, &groups[7]]).collect();
+        let mut searched = vec![];
+        for n in &nodes {
+            n.walk(&mut |c| {
+                if matches!(c.kind, NodeKind::SymbolInstance { .. }) && !searched.contains(&c.id) {
+                    searched.push(c.id);
+                }
+            });
+        }
+        let found = instances_in(nodes.iter().copied());
+        assert_eq!(found, searched);
+        assert_eq!(found.len(), 2_000);
+        assert_eq!(found[0], NodeId(1_245));
+        assert!(instances_in([]).is_empty());
+    }
 }
