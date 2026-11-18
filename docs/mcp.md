@@ -3647,9 +3647,11 @@ already walks Image Trace. Short agent entry points:
   when that document is no longer open; plug-ins cannot call it), `symbol.breakLink {ids?}` (the art keeps the instance's opacity mask and its bounding box, square after
   `object.resetBoundingBox`; a hidden or locked instance's
   art stays hidden or locked and is not selected), `symbol.replace`,
-  `symbol.update {name, ids?|id?}` (Redefine Symbol: the selection, or `ids`, becomes the symbol's art and an instance
-  of it in one undo step; art that holds an instance of the symbol (opacity masks included), directly or through the art
-  of the symbols it holds instances of, is refused and nothing changes; the Symbols panel sends it with the dragged art's `ids` when art dragged
+  `symbol.update {name, ids?|id?, keepArt?: false}` (Redefine Symbol: the selection, or `ids`, becomes the symbol's art and an instance
+  of it in one undo step; with `keepArt: true` the art stays ordinary art in its place, with its ids, and stays selected
+  unless it is hidden or locked, and the result's `id` is null; a `keepArt` other than true or false is an error; art that holds an instance of the symbol (opacity masks included), directly or through the art
+  of the symbols it holds instances of, is refused and nothing changes; the Symbols panel menu's Redefine Symbol sends `keepArt: true` when it
+  is chosen with Shift held, and the panel sends it with the dragged art's `ids` when art dragged
   off the canvas is released on a symbol's tile or row with Alt (Option on macOS) held),
   `symbol.edit {id?, ids?, name?, x?, y?, artboard?, viewCenter?}` (symbol editing mode: the symbol's art on a temporary
   isolated layer, where the instance `id` shows it or centered on (x, y), by default on the center of artboard
@@ -10269,7 +10271,7 @@ thread. When `effect.expandAppearance` keeps a frame as type in a group (type wi
 effects are shadows, outer glows or Crop Marks), the type stays in the thread in the frame's place. Object › Expand
 (`object.expand`) outlines type with these two commands. `object.flattenTransparency` takes each frame of threaded text
 that it outlines (`textToOutlines`) or turns into flat regions or an image out of its thread in the same way.
-`symbol.new` (New Symbol) and `symbol.update` (Redefine Symbol) take each frame of threaded text in the selection out
+`symbol.new` (New Symbol) and `symbol.update` (Redefine Symbol, without `keepArt: true`) take each frame of threaded text in the selection out
 of its thread in the same way, and the symbol's art holds a copy of the frame with the text it shows. When every frame
 of a thread goes into the symbol, the copy of the last frame keeps the text it has no room for.
 

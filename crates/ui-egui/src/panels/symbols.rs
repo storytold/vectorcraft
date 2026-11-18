@@ -472,9 +472,11 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let has_sel = app.session.active().is_some_and(|d| !d.selection.is_empty());
     let inst = has_instances_selected(app);
     let name = json!({"name": sel});
+    // Shift keeps the selected art as ordinary art instead of making it an instance.
+    let redefine = if ui.input(|i| i.modifiers.shift) { json!({"name": sel, "keepArt": true}) } else { name.clone() };
     let items: [(&str, bool, &str, Value); 3] = [
         (tl!("New Symbol…"), has_sel, "ui.symbolOptions", json!({})),
-        (tl!("Redefine Symbol"), has_sel && sel.is_some(), "symbol.update", name.clone()),
+        (tl!("Redefine Symbol"), has_sel && sel.is_some(), "symbol.update", redefine),
         (tl!("Duplicate Symbol"), sel.is_some(), "symbol.duplicate", name.clone()),
     ];
     for (label, enabled, cmd, params) in items {
@@ -905,6 +907,35 @@ mod tests {
         let item = labels.iter().find(|(t, _)| t.trim() == label).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("{label} in the menu"));
         menu_frame(ctx, app, vec![egui::Event::PointerMoved(item), button(item, true)]);
         menu_frame(ctx, app, vec![button(item, false)]);
+    }
+
+    /// Clicks the menu item labeled `label` with `modifiers` held.
+    fn click_menu_held(ctx: &egui::Context, app: &mut VectorcraftApp, label: &str, modifiers: egui::Modifiers) {
+        let held = egui::Event::ModifiersChanged(modifiers);
+        let labels = menu_frame(ctx, app, vec![held.clone()]);
+        let item = labels.iter().find(|(t, _)| t.trim() == label).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("{label} in the menu"));
+        let press = |pressed| egui::Event::PointerButton { pos: item, button: egui::PointerButton::Primary, pressed, modifiers };
+        menu_frame(ctx, app, vec![held.clone(), egui::Event::PointerMoved(item), press(true)]);
+        menu_frame(ctx, app, vec![held, press(false)]);
+    }
+
+    /// Redefine Symbol in the panel menu with Shift held updates the symbol and leaves the
+    /// selected art as ordinary art, still selected; without Shift the art becomes an instance.
+    #[test]
+    fn shift_redefine_symbol_in_the_menu_keeps_the_art_as_ordinary_art() {
+        let mut app = leaf_and_dot();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let rect = NodeId(app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 60, "height": 20})).unwrap()["id"].as_u64().unwrap());
+        app.run("select.set", json!({"ids": [rect.0]})).unwrap();
+        let dot_art = |app: &VectorcraftApp| app.session.active().unwrap().doc.symbols.iter().find(|s| s.name == "Dot").map(|s| s.art.clone());
+        let before = dot_art(&app);
+        click_menu_held(&ctx, &mut app, "Redefine Symbol", egui::Modifiers::SHIFT);
+        assert_ne!(dot_art(&app), before, "Dot is redefined");
+        assert_eq!(art(&app, "Dot"), (0, 1), "the rectangle stays ordinary art");
+        assert_eq!(app.session.active().unwrap().selection.objects, vec![rect], "and stays selected");
+        click_menu_held(&ctx, &mut app, "Redefine Symbol", egui::Modifiers::NONE);
+        assert_eq!(art(&app, "Dot"), (1, 0), "without Shift the rectangle becomes an instance");
     }
 
     /// #4918: Select All Unused picks the symbols nothing places, Delete Symbol asks once and
