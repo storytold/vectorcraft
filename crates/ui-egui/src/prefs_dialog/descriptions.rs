@@ -235,6 +235,10 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
         "pluginsFolder",
         "On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.",
     ),
+    (
+        "pluginInstructionBudget",
+        "Normal keeps each plug-in's own limits; with Large, a plug-in filter or command may run at least 250 million instructions besides those for its input. The time limit stays the same.",
+    ),
     ("scratchPrimary", "The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet."),
     ("scratchSecondary", "The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet."),
     // User Interface
@@ -272,6 +276,10 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
     (
         "gpuPreference",
         "From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.",
+    ),
+    (
+        "lowLatencyDrawing",
+        "From the next start, the window shows each frame without waiting for the display's refresh where the graphics driver allows, at most 240 frames a second.",
     ),
     (
         "historyStates",
