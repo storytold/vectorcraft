@@ -296,7 +296,7 @@ pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui, reserve: f32) {
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
-    let Some((doc, keys)) = app.session.active().map(|d| (d.doc.clone(), document_symbols(d))) else { return };
+    let Some((doc, keys, document)) = app.session.active().map(|d| (d.doc.clone(), document_symbols(d), d.uid)) else { return };
     let names: Vec<String> = doc.symbols.iter().map(|s| s.name.clone()).collect();
     let view = app.ui.symbols_view;
     let sel = current(app);
@@ -316,7 +316,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             for n in &names {
                 let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), h), Sense::click_and_drag());
                 // Dragged onto the canvas, the symbol is placed there.
-                drag_symbol(ui, &resp, n, uid);
+                widgets::drag_source(ui, &resp, || PanelDrag::Symbol { document, name: n.clone() });
                 if on(n) {
                     ui.painter().rect_filled(r, 0.0, t.row_selected);
                 } else if resp.hovered() {
@@ -342,7 +342,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             ui.horizontal_wrapped(|ui| {
                 for n in &names {
                     let (r, resp) = ui.allocate_exact_size(vec2(44.0, 44.0), Sense::click_and_drag());
-                    drag_symbol(ui, &resp, n, uid);
+                    widgets::drag_source(ui, &resp, || PanelDrag::Symbol { document, name: n.clone() });
                     chip(ui, &doc, &keys, r.shrink(2.0), n);
                     let on = on(n);
                     ui.painter().rect_stroke(
@@ -499,26 +499,14 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
 }
 
-/// The panel state key of the document (`uid`) the symbol being dragged from the panel belongs to.
-const DRAG_DOC: &str = "sym-drag-doc";
-
-/// Make `resp` a drag source of the symbol `name` of the document `uid`, and keep `uid` while it
-/// is dragged.
-fn drag_symbol(ui: &Ui, resp: &egui::Response, name: &str, uid: Option<u64>) {
-    if resp.drag_started_by(egui::PointerButton::Primary) {
-        set_pstate(ui.ctx(), DRAG_DOC, uid);
-    }
-    widgets::drag_source(ui, resp, || PanelDrag::Symbol(name.to_string()));
-}
-
 /// The symbol of the active document (`uid`, whose symbols are `names`) dragged from the panel and
 /// released on `button` this frame, if any; `button` is outlined while one is held over it, also
 /// when it is disabled for clicks. A symbol dragged from another document is ignored. Only the
 /// release of the primary button drops the symbol; the release of another button ends the drag.
 fn symbol_dropped(ui: &Ui, button: &egui::Response, names: &[String], uid: Option<u64>) -> Option<String> {
     let held = button.dnd_hover_payload::<PanelDrag>()?;
-    let PanelDrag::Symbol(name) = &*held else { return None };
-    if !names.contains(name) || pstate::<Option<u64>>(ui.ctx(), DRAG_DOC) != uid {
+    let PanelDrag::Symbol { document, name } = &*held else { return None };
+    if !names.contains(name) || Some(*document) != uid {
         return None;
     }
     widgets::drop_target_outline(ui, button.rect);
@@ -813,13 +801,14 @@ mod tests {
         let doc = &app.session.active().unwrap().doc;
         let first = doc.layers[0].children().unwrap().first().unwrap();
         assert!(matches!(first.kind, NodeKind::SymbolInstance { .. }), "the art became an instance");
-        // Dragging the symbol's tile out of the panel carries the symbol.
+        // Dragging the symbol's tile out of the panel carries the symbol and its document.
         frame(&ctx, &mut app, vec![]);
         let tile = pos2(26.0, 26.0);
         frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile), button(tile, true)]);
         frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile + vec2(40.0, 40.0))]);
         frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile + vec2(80.0, 80.0))]);
-        assert_eq!(egui::DragAndDrop::payload::<PanelDrag>(&ctx).as_deref(), Some(&PanelDrag::Symbol(names[0].clone())));
+        let document = app.session.active().unwrap().uid;
+        assert_eq!(egui::DragAndDrop::payload::<PanelDrag>(&ctx).as_deref(), Some(&PanelDrag::Symbol { document, name: names[0].clone() }));
     }
 
     /// One headless frame of the panel menu; returns its painted labels.
@@ -1979,7 +1968,12 @@ mod tests {
             frame(&ctx, &mut app, vec![egui::Event::PointerMoved(from), button(from, true)]);
             frame(&ctx, &mut app, vec![egui::Event::PointerMoved(from + vec2(40.0, 40.0))]);
             frame(&ctx, &mut app, vec![egui::Event::PointerMoved(from + vec2(80.0, 80.0))]);
-            assert_eq!(egui::DragAndDrop::payload::<PanelDrag>(&ctx).as_deref(), Some(&PanelDrag::Symbol("Leaf".into())), "{view}");
+            let document = uid(&app).expect("an active document");
+            assert_eq!(
+                egui::DragAndDrop::payload::<PanelDrag>(&ctx).as_deref(),
+                Some(&PanelDrag::Symbol { document, name: "Leaf".into() }),
+                "{view}"
+            );
             let out = frame_held(&ctx, &mut app, vec![egui::Event::PointerMoved(new.center())], egui::Modifiers::NONE);
             assert!(outlined(&out, new), "{view}: outlined while Leaf is held over it");
             frame(&ctx, &mut app, vec![button(new.center(), false)]);
@@ -2008,14 +2002,14 @@ mod tests {
         let undo = app.session.active().unwrap().history.undo.len();
         let ctx = egui::Context::default();
         // The payloads are set directly, as if dragged from this document's panel.
-        set_pstate(&ctx, DRAG_DOC, uid(&app));
+        let document = uid(&app).expect("an active document");
         let new = button_rect(&ctx, &mut app, "New Symbol");
         let elsewhere = new.center() - vec2(0.0, 60.0);
         let cases = [
             ("a library symbol", PanelDrag::LibrarySymbol { library: "basic-shapes".into(), name: "Leaf".into() }, new.center()),
             ("art", PanelDrag::Art(vec![leaf]), new.center()),
-            ("a stale name", PanelDrag::Symbol("Gone".into()), new.center()),
-            ("a symbol released elsewhere", PanelDrag::Symbol("Leaf".into()), elsewhere),
+            ("a stale name", PanelDrag::Symbol { document, name: "Gone".into() }, new.center()),
+            ("a symbol released elsewhere", PanelDrag::Symbol { document, name: "Leaf".into() }, elsewhere),
         ];
         for (case, drag, at) in cases {
             egui::DragAndDrop::set_payload(&ctx, drag);
@@ -2042,7 +2036,8 @@ mod tests {
         frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile), button(tile, true)]);
         frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile + vec2(40.0, 40.0))]);
         frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile + vec2(80.0, 80.0))]);
-        assert_eq!(egui::DragAndDrop::payload::<PanelDrag>(&ctx).as_deref(), Some(&PanelDrag::Symbol("Leaf".into())));
+        let document = uid(&app).expect("an active document");
+        assert_eq!(egui::DragAndDrop::payload::<PanelDrag>(&ctx).as_deref(), Some(&PanelDrag::Symbol { document, name: "Leaf".into() }));
         // While Leaf is held, a new document with a Leaf of its own becomes active.
         app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
         app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 30})).unwrap();
@@ -2222,14 +2217,14 @@ mod tests {
         let ctx = egui::Context::default();
         crate::theme::install_fonts(&ctx);
         // The payloads are set directly, as if dragged from this document's panel.
-        set_pstate(&ctx, DRAG_DOC, uid(&app));
+        let document = uid(&app).expect("an active document");
         let trash = button_rect(&ctx, &mut app, "Delete Symbol");
         let elsewhere = trash.center() - vec2(0.0, 60.0);
         let cases = [
             ("a library symbol", PanelDrag::LibrarySymbol { library: "basic-shapes".into(), name: "Leaf".into() }, trash.center()),
             ("art", PanelDrag::Art(vec![leaf]), trash.center()),
-            ("a stale name", PanelDrag::Symbol("Gone".into()), trash.center()),
-            ("a symbol released elsewhere", PanelDrag::Symbol("Dot".into()), elsewhere),
+            ("a stale name", PanelDrag::Symbol { document, name: "Gone".into() }, trash.center()),
+            ("a symbol released elsewhere", PanelDrag::Symbol { document, name: "Dot".into() }, elsewhere),
         ];
         for (case, drag, at) in cases {
             egui::DragAndDrop::set_payload(&ctx, drag);
@@ -2246,7 +2241,7 @@ mod tests {
         frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile), button(tile, true)]);
         frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile + vec2(40.0, 40.0))]);
         frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile + vec2(80.0, 80.0))]);
-        assert_eq!(egui::DragAndDrop::payload::<PanelDrag>(&ctx).as_deref(), Some(&PanelDrag::Symbol("Leaf".into())));
+        assert_eq!(egui::DragAndDrop::payload::<PanelDrag>(&ctx).as_deref(), Some(&PanelDrag::Symbol { document, name: "Leaf".into() }));
         app.run("symbol.delete", json!({"name": "Leaf"})).unwrap();
         let undo = app.session.active().unwrap().history.undo.len();
         let out = frame_held(&ctx, &mut app, vec![egui::Event::PointerMoved(trash.center())], egui::Modifiers::NONE);
@@ -2258,7 +2253,7 @@ mod tests {
         frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile), button(tile, true)]);
         frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile + vec2(40.0, 40.0))]);
         frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile + vec2(80.0, 80.0))]);
-        assert_eq!(egui::DragAndDrop::payload::<PanelDrag>(&ctx).as_deref(), Some(&PanelDrag::Symbol("Dot".into())));
+        assert_eq!(egui::DragAndDrop::payload::<PanelDrag>(&ctx).as_deref(), Some(&PanelDrag::Symbol { document, name: "Dot".into() }));
         app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
         app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 30})).unwrap();
         app.run("symbol.new", json!({"name": "Dot"})).unwrap();
