@@ -9783,3 +9783,8 @@ breakText	Glyphs	字符
 @msg	A joint does not close by {gap} pt.	有一處接縫相差 {gap} pt 未閉合。
 @msg	Two panels pass through each other.	兩個面板相互穿插。
 @msg	{what} would print on more than {MAX_TILES} tiles: scale it down	{what} 會列印在超過 {MAX_TILES} 個拼貼上：請縮小
+	Pressure Sensitive	壓感筆刷
+	Flex Ribbon	柔韌色帶
+	Pulse Stroke	脈動筆觸
+	Round Flow	圓頭流線
+	Chisel Flow	斜頭流線

@@ -9969,3 +9969,8 @@ breakText	Glyphs	字形
 @msg	A joint does not close by {gap} pt.	有一处接缝相差 {gap} pt 未闭合。
 @msg	Two panels pass through each other.	两个面板相互穿插。
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} 像素对 PSD 而言过大 (每边最多 {MAX_SIDE} 像素)：请降低分辨率
+	Pressure Sensitive	压感画笔
+	Flex Ribbon	柔韧色带
+	Pulse Stroke	脉动笔触
+	Round Flow	圆头流线
+	Chisel Flow	斜头流线

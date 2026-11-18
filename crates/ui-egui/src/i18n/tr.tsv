@@ -10074,6 +10074,11 @@ breakText	Glyphs	Glifler
 @msg	A panel is not joined to the rest by a crease.	Bir panel geri kalanlara hiçbir pilyaj çizgisiyle bağlı değil.
 @msg	A fold line is on a non-printing layer.	Bir katlama çizgisi yazdırılmayan bir katmanda.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Paneller: {panels}, menteşeler: {hinges}, hatalar: {errors}, uyarılar: {warnings}
+	Pressure Sensitive	Basınca Duyarlı
+	Flex Ribbon	Esnek Şerit
+	Pulse Stroke	Atımlı Çizgi
+	Round Flow	Yuvarlak Akış
+	Chisel Flow	Eğimli Akış
 	Fold Preview	Katlama Önizlemesi
 	Fold	Katlama
 	Show Fold Lines	Katlama Çizgilerini Göster

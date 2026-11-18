@@ -9755,6 +9755,11 @@ breakText	Glyphs	Glifi
 @msg	A panel is not joined to the rest by a crease.	Un pannello non è unito al resto da alcuna linea di cordonatura.
 @msg	A fold line is on a non-printing layer.	Una linea di piega si trova su un livello non stampabile.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Pannelli: {panels}, cerniere: {hinges}, errori: {errors}, avvisi: {warnings}
+	Pressure Sensitive	Sensibile alla pressione
+	Flex Ribbon	Nastro flessibile
+	Pulse Stroke	Tratto pulsante
+	Round Flow	Flusso tondo
+	Chisel Flow	Flusso obliquo
 	Fold Preview	Anteprima piegatura
 	Fold	Piegatura
 	Show Fold Lines	Mostra linee di piega
