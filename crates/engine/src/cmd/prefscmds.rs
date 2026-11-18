@@ -139,6 +139,7 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("cornerRadius", "General", "", "Corner Radius", len(0.0, 1296.0, General)),
     p!("pasteOffset", "General", "", "Paste Offset", len(0.0, 1296.0, General)),
     p!("disableAutoAddDelete", "General", "Options", "Disable Auto Add/Delete", bool),
+    p!("interpolateControlPoints", "General", "Options", "Interpolate Control Points When Moving Anchors", bool),
     p!("usePreciseCursors", "General", "Options", "Use Precise Cursors", bool),
     p!("showToolTips", "General", "Options", "Show Tool Tips", bool),
     p!("showExternalScriptWarning", "General", "Options", "Show External Script Warning", bool),
@@ -217,6 +218,7 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("recentFontsCount", "Type", "Options", "Number of Recent Fonts", int(1, 15)),
     p!("missingGlyphProtection", "Type", "Options", "Enable Missing Glyph Protection", bool),
     p!("highlightAlternateGlyphs", "Type", "Options", "Highlight Alternate Glyphs", bool),
+    p!("showCharacterAlternates", "Type", "Options", "Show Character Alternates", bool),
     p!("highlightSubstitutedFonts", "Type", "Options", "Highlight Substituted Fonts", bool),
     p!("placeholderText", "Type", "Options", "Fill New Type Objects With Placeholder Text", bool),
     p!("typedLists", "Type", "Options", "Start Lists From Typed Markers", bool),
@@ -313,12 +315,23 @@ pub const PREF_SPECS: &[PrefSpec] = &[
             ("or", "Odia"),
             ("as", "Assamese"),
             ("sa", "Sanskrit"),
-            ("ur", "Urdu")
+            ("ur", "Urdu"),
+            ("ne", "Nepali"),
+            ("kok", "Konkani"),
+            ("sd", "Sindhi")
         ])
     ),
     p!("hyphenationExceptions", "Hyphenation", "", "Exceptions (comma separated)", text),
     // Plug-ins & Scratch Disks
     p!("pluginsFolder", "Plug-ins & Scratch Disks", "Plug-ins", "Additional Plug-ins Folder", text),
+    // The instructions each object filter run gets: Large gives at least 250 M besides those for each byte of input.
+    p!(
+        "pluginInstructionBudget",
+        "Plug-ins & Scratch Disks",
+        "Plug-ins",
+        "Plug-in Instruction Budget",
+        choice(&[("normal", "Normal"), ("large", "Large")])
+    ),
     p!("scratchPrimary", "Plug-ins & Scratch Disks", "Scratch Disks", "Primary", text),
     p!("scratchSecondary", "Plug-ins & Scratch Disks", "Scratch Disks", "Secondary", text),
     // User Interface
@@ -364,6 +377,8 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("gpuPerformance", "Performance", "GPU Performance", "GPU Performance", bool),
     p!("animatedZoom", "Performance", "GPU Performance", "Animated Zoom", bool),
     p!("gpuPreference", "Performance", "GPU Performance", "Graphics Processor", choice(GPU_PREFERENCES)),
+    // Read by the desktop app at startup: the window presents without vsync, capped at 240 fps (#6013).
+    p!("lowLatencyDrawing", "Performance", "GPU Performance", "Low-Latency Drawing", bool),
     p!("historyStates", "Performance", "", "History States", int(5, 1000)),
     p!("realTimeDrawing", "Performance", "", "Real-time Drawing and Editing", bool),
     p!("renderThreads", "Performance", "", "Render Threads (-1 = Automatic)", int(-1, 64)),

@@ -8,6 +8,60 @@ fn app() -> VectorcraftApp {
     app
 }
 
+fn painted_spectrum(shape: &egui::Shape) -> Option<Rect> {
+    match shape {
+        egui::Shape::Mesh(mesh) if mesh.vertices.len() > 500 => Some(mesh.calc_bounds()),
+        egui::Shape::Vec(shapes) => shapes.iter().find_map(painted_spectrum),
+        _ => None,
+    }
+}
+
+/// #8005: enlarging the Color panel gives the spectrum the added vertical space.
+#[test]
+fn the_spectrum_grows_with_the_color_panel() {
+    for hidden in [false, true] {
+        let mut app = app();
+        app.ui.color_hide_options = hidden;
+        let ctx = egui::Context::default();
+        let mut rects = Vec::new();
+        for height in [300.0, 480.0] {
+            let input = egui::RawInput { screen_rect: Some(Rect::from_min_size(egui::Pos2::ZERO, vec2(300.0, height))), ..Default::default() };
+            let mut out = ctx.run_ui(input, |ui| {
+                let info = egui::UiStackInfo::default().with_tag_value(crate::widgets::PANEL_FOOTER, Some(ui.max_rect().bottom()));
+                ui.scope_builder(egui::UiBuilder::new().ui_stack_info(info), |ui| {
+                    crate::dock::panel_body(&mut app, ui, "color", 300.0, height - 20.0);
+                });
+            });
+            rects.push(out.shapes.iter().find_map(|shape| painted_spectrum(&shape.shape)).expect("the spectrum is painted"));
+            out.textures_delta.clear();
+        }
+        assert!((rects[1].top() - rects[0].top()).abs() < 1.0, "resizing keeps the ramp's top stable");
+        assert!((rects[1].height() - rects[0].height() - 180.0).abs() < 1.0, "options hidden={hidden}: {rects:?}");
+    }
+}
+
+#[test]
+fn a_short_color_panel_scrolls_without_stretching_the_spectrum() {
+    let mut app = app();
+    let ctx = egui::Context::default();
+    for offset in [0.0, 100.0] {
+        for _ in 0..3 {
+            let input = egui::RawInput { screen_rect: Some(Rect::from_min_size(egui::Pos2::ZERO, vec2(300.0, 120.0))), ..Default::default() };
+            let mut out = ctx.run_ui(input, |ui| {
+                let info = egui::UiStackInfo::default().with_tag_value(crate::widgets::PANEL_FOOTER, Some(ui.max_rect().bottom()));
+                ui.scope_builder(egui::UiBuilder::new().ui_stack_info(info), |ui| {
+                    widgets::panel_scroll(ui, egui::ScrollArea::vertical().vertical_scroll_offset(offset), |ui| {
+                        crate::dock::panel_body(&mut app, ui, "color", 300.0, 100.0);
+                    });
+                });
+            });
+            let r = out.shapes.iter().find_map(|shape| painted_spectrum(&shape.shape)).expect("the spectrum is painted");
+            assert!((r.height() - 46.0).abs() < 1.0, "offset={offset}: {r:?}");
+            out.textures_delta.clear();
+        }
+    }
+}
+
 /// Run the panel for one frame with `events` and `modifiers`; returns the spectrum's rect (when
 /// the options are shown) and the panel's height.
 fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>, modifiers: egui::Modifiers) -> (Option<Rect>, f32) {
@@ -947,6 +1001,60 @@ fn a_mixed_selection_has_no_colour_to_edit() {
     let _ = ctx.run_ui(Default::default(), |ui| assert_eq!(target(&app, ui).color(), None));
     app.run("paint.setFill", json!({"color": "#0000ff"})).unwrap();
     assert_eq!(crate::panels::mixed_paints(&app, &ctx), (false, false), "a new revision recomputes it");
+}
+
+/// With gradient mesh points picked, the panel edits and shows their color (a solid fill
+/// recolors just them), not the mesh object's fill, so the sliders keep the value they set,
+/// through a drag too; "?" when the picked points differ, which picking alone (no new revision)
+/// updates. The Control bar's opacity is the picked point's.
+#[test]
+fn picked_mesh_points_are_the_color_the_panel_shows_and_edits() {
+    use vectorcraft_doc::NodeKind;
+    use vectorcraft_engine::ViewInfo;
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    let mut app = app();
+    let ctx = egui::Context::default();
+    let id = app.session.active().unwrap().selection.objects[0];
+    app.run("paint.setFill", json!({"color": "#ff8500"})).unwrap();
+    app.run("object.mesh.create", json!({"rows": 2, "cols": 2})).unwrap();
+    app.run("object.mesh.setPointColor", json!({"id": id.0, "index": 0, "color": "#0000ff", "opacity": 0.5})).unwrap();
+    let v = ViewInfo::default();
+    app.session.select_tool("mesh", v).unwrap();
+    let click = |app: &mut VectorcraftApp, x: f64, y: f64, shift: bool| {
+        for k in [PointerKind::Down, PointerKind::Up] {
+            let mut ev = PointerEvent::new(k, x, y);
+            ev.mods.shift = shift;
+            app.session.pointer(&ev, v).unwrap();
+        }
+    };
+    let picked = |app: &VectorcraftApp| app.session.fill_mesh_points().into_iter().flat_map(|(_, v)| v).collect::<Vec<_>>();
+    // The top-left corner point (index 0).
+    click(&mut app, 10.0, 10.0, false);
+    assert_eq!(picked(&app), vec![0], "the click picks the top-left point");
+    frame(&mut app, &ctx, vec![], egui::Modifiers::NONE);
+    assert_eq!(crate::panels::mixed_paints(&app, &ctx), (false, false));
+    let tgt = target_with(&app, false);
+    assert_eq!(tgt.color().map(|c| c.to_hex()), Some("#0000ff".into()), "the picked point's color, not the object's fill");
+    assert_eq!(crate::panels::current_transparency(&app).map(|t| t.0), Some(0.5), "the picked point's opacity");
+    // A slider drag: each step shows the color it set, and the release keeps it.
+    for c in [Color::rgb8(250, 0, 120), Color::rgb8(240, 10, 140)] {
+        let tgt = target_with(&app, false);
+        apply(&mut app, &tgt, c, Live::Dragging, false);
+        assert_eq!(target_with(&app, false).color(), Some(c), "the drag shows the color it set");
+    }
+    let orange = Color::rgb8(255, 128, 0);
+    let tgt = target_with(&app, false);
+    apply(&mut app, &tgt, orange, Live::Released, false);
+    assert_eq!(target_with(&app, false).color(), Some(orange), "the panel keeps the color it set");
+    let NodeKind::Mesh(m) = &app.session.active().unwrap().doc.node(id).unwrap().kind else { panic!("still a gradient mesh") };
+    assert_eq!(m.points[0].color, orange);
+    let middle = m.idx(0, 1);
+    assert_ne!(m.points[middle].color, orange, "only the picked point");
+    assert_eq!(crate::panels::mixed_paints(&app, &ctx), (false, false));
+    // Shift-click the top middle point (still the object's color): the two differ.
+    click(&mut app, 35.0, 10.0, true);
+    assert_eq!(picked(&app), vec![0, middle], "the Shift-click adds the top middle point");
+    assert_eq!(crate::panels::mixed_paints(&app, &ctx), (true, false), "picking recomputes it");
 }
 
 #[test]

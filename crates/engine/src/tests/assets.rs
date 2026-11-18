@@ -140,7 +140,24 @@ fn an_asset_exports_its_art_alone() {
     run(&mut s, "assets.add", json!({"ids": [red]}));
     let out = files(&run(&mut s, "assets.export", json!({"formats": [{"format": "png", "scale": "2x"}]})));
     assert_eq!(out[0].0, "Asset-1@2x.png");
-    let img = image::load_from_memory(&out[0].1).unwrap().to_rgba8();
+    let img = craft_image_codecs::decode(&out[0].1)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8();
     assert_eq!(img.dimensions(), (40, 40));
     assert!(img.pixels().all(|p| p.0 == [255, 0, 0, 255]), "only the red square");
     // Vector formats crop to it too.
@@ -163,7 +180,24 @@ fn an_assets_crop_takes_in_its_drop_shadow() {
     // The shadow's reach (10 pt) on every side.
     assert_eq!(assets(&mut s)[0]["bounds"], json!([40.0, 40.0, 40.0, 40.0]));
     let out = files(&run(&mut s, "assets.export", json!({"formats": [{"format": "png", "scale": "1x"}]})));
-    let img = image::load_from_memory(&out[0].1).unwrap().to_rgba8();
+    let img = craft_image_codecs::decode(&out[0].1)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8();
     assert_eq!(img.dimensions(), (40, 40));
     // The shadow's right half, x 70 to 80.
     assert!(img.get_pixel(35, 20)[3] > 0, "the shadow is in the image");
@@ -268,6 +302,23 @@ fn the_shared_settings_drive_the_export_and_arent_an_undo_step() {
     assert_eq!(run(&mut s, "document.exportSettings", json!({}))["settings"]["formats"][0]["format"], "jpg");
 }
 
+/// The shared settings are not an undo step, so undo and redo of the steps before them leave them
+/// as they are.
+#[test]
+fn undo_and_redo_keep_the_shared_settings() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 10.0, 20.0, 20.0);
+    run(&mut s, "assets.add", json!({"ids": [a]}));
+    run(&mut s, "assets.settings.set", json!({"formats": [{"format": "svg"}], "prefix": "ic_"}));
+    let settings = run(&mut s, "document.exportSettings", json!({}))["settings"].clone();
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(run(&mut s, "document.exportSettings", json!({}))["settings"], settings);
+    run(&mut s, "assets.settings.set", json!({"formats": [{"format": "jpg"}], "prefix": ""}));
+    let settings = run(&mut s, "document.exportSettings", json!({}))["settings"].clone();
+    run(&mut s, "edit.redo", json!({}));
+    assert_eq!(run(&mut s, "document.exportSettings", json!({}))["settings"], settings);
+}
+
 /// An export preset sets the shared settings as the Asset Export panel applies one: its rows (or
 /// mobile/density), its format settings over the saved ones, its prefix and its sub-folders.
 #[test]
@@ -299,6 +350,42 @@ fn an_export_preset_sets_the_shared_settings() {
         assert!(s.execute("assets.settings.set", &bad).is_err(), "{bad}");
     }
     assert_eq!(run(&mut s, "document.exportSettings", json!({}))["settings"]["prefix"], "p_");
+}
+
+/// `openLocation` (Open Location after Export) is remembered in the document's export settings,
+/// outside presets; null removes it, and only true or false is taken.
+#[test]
+fn open_location_is_remembered_in_the_export_settings() {
+    let mut s = session();
+    let open = |s: &mut Session| run(s, "document.exportSettings", json!({}))["settings"]["openLocation"].clone();
+    let r = run(&mut s, "assets.settings.set", json!({"openLocation": false}));
+    assert_eq!(open(&mut s), false);
+    assert!(r["settings"].get("openLocation").is_none(), "{r}");
+    // Create Sub-folders, on for a document without settings, stays on.
+    assert_eq!(r["settings"]["subfolders"], true, "{r}");
+    run(&mut s, "document.exportPresets.save", json!({"name": "Kept", "settings": {"formats": [{"format": "svg"}]}}));
+    run(&mut s, "assets.settings.set", json!({"exportPreset": "Kept"}));
+    assert_eq!(open(&mut s), false, "a preset leaves it as it is");
+    run(&mut s, "assets.settings.set", json!({"openLocation": null}));
+    assert_eq!(open(&mut s), Value::Null);
+    for bad in [json!({"openLocation": "yes"}), json!({"openLocation": 1}), json!({"subfolders": "no"})] {
+        assert!(s.execute("assets.settings.set", &bad).is_err(), "{bad}");
+    }
+}
+
+/// Create Sub-folders turned off on its own ends a remembered folder per format or item, so Export
+/// for Screens opens with it off too; given with an export preset, the preset's folders stay.
+#[test]
+fn create_sub_folders_off_alone_ends_a_folder_per_format_or_item() {
+    let mut s = session();
+    let folders = |s: &mut Session| run(s, "document.exportSettings", json!({}))["settings"]["folders"].clone();
+    run(&mut s, "document.exportPresets.save", json!({"name": "Items", "settings": {"formats": [{"format": "svg"}], "folders": "item"}}));
+    for preset in ["Logo Package", "Items"] {
+        run(&mut s, "assets.settings.set", json!({"exportPreset": preset, "subfolders": false}));
+        assert_ne!(folders(&mut s), "none", "{preset}");
+        run(&mut s, "assets.settings.set", json!({"subfolders": false}));
+        assert_eq!(folders(&mut s), "none", "{preset}");
+    }
 }
 
 /// An export preset applied to the shared settings keeps its folders, with Create Sub-folders on
@@ -381,7 +468,29 @@ fn export_for_screens_writes_chosen_assets_and_keeps_its_rules() {
     let out = files(&r);
     assert_eq!(out.len(), 1);
     assert_eq!(out[0].0, "Asset-2@60w.png");
-    assert_eq!(image::load_from_memory(&out[0].1).unwrap().to_rgba8().dimensions(), (60, 40), "the width of the asset, not the artboard");
+    assert_eq!(
+        craft_image_codecs::decode(&out[0].1)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .to_rgba8()
+            .dimensions(),
+        (60, 40),
+        "the width of the asset, not the artboard"
+    );
     // The choice of art isn't remembered; the formats are.
     let settings = run(&mut s, "document.exportSettings", json!({}))["settings"].clone();
     assert!(settings.get("assets").is_none() && settings["formats"][0]["scale"] == "60w");
@@ -430,7 +539,24 @@ fn assets_export_leaves_no_seam_between_abutting_shapes() {
         }),
     ));
     assert_eq!(out[0].0, "Asset-1.png");
-    let img = image::load_from_memory(&out[0].1).unwrap().to_rgba8();
+    let img = craft_image_codecs::decode(&out[0].1)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8();
     assert_eq!(img.dimensions(), (40, 20));
     // Column 20 is the shared edge in crop space; green must stay red (no white bleed).
     let palest_g = (2..18).map(|y| img.get_pixel(20, y).0[1].max(img.get_pixel(19, y).0[1])).max().unwrap();

@@ -6,6 +6,11 @@ pub(crate) fn text_width(ui: &Ui, text: egui::RichText) -> f32 {
     egui::WidgetText::from(text).into_galley(ui, Some(egui::TextWrapMode::Extend), f32::INFINITY, egui::TextStyle::Body).size().x
 }
 
+/// The width [`dim_label`] gives `text`, translated.
+pub(crate) fn dim_label_width(ui: &Ui, text: &str) -> f32 {
+    text_width(ui, egui::RichText::new(tl!(text)).size(12.5))
+}
+
 /// Bold section header (Properties panel).
 pub fn section_header(ui: &mut Ui, text: &str) {
     let t = Tokens::get(ui.ctx());
@@ -31,7 +36,8 @@ pub fn section_toggle_name(ui: &mut Ui, text: &str, open: bool) -> Response {
     let chevron = Rect::from_center_size(pos2(rect.left() + 8.0, rect.center().y), vec2(12.0, 12.0));
     icons::paint(ui, if open { "chevron-down" } else { "chevron-right" }, chevron, if resp.hovered() { t.text_strong } else { t.icon });
     ui.painter().text(pos2(rect.left() + 18.0, rect.center().y), egui::Align2::LEFT_CENTER, text, theme::semibold(12.5), t.text);
-    resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::DisclosureTriangle, true, open, text));
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::DisclosureTriangle, true, text));
+    ui.ctx().accesskit_node_builder(resp.id, |node| node.set_expanded(open));
     resp.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
@@ -138,6 +144,14 @@ pub fn field_label(ui: &mut Ui, text: impl Into<egui::WidgetText>) -> Response {
     resp
 }
 
+/// A field's label (`text` as given) that a click follows to a panel ([`scrub::panel_label`]):
+/// before a numeric field it scrubs the field and names it.
+pub fn field_panel_label(ui: &mut Ui, text: egui::RichText) -> Response {
+    let resp = scrub::panel_label(ui, text);
+    remember_next_label(ui, resp.id);
+    resp
+}
+
 /// [`dim_label`] for a name that is user or file data (a swatch, style, artboard or font name):
 /// shown as it is, never translated.
 pub fn dim_name(ui: &mut Ui, text: &str) -> Response {
@@ -170,7 +184,7 @@ pub fn subheader(ui: &mut Ui, text: &str) {
     ui.label(egui::RichText::new(tl!(text)).size(12.5).color(t.text));
 }
 
-/// A label drawn with a dotted underline (Illustrator's link labels: "Stroke:", "Opacity:").
+/// A label drawn with a dotted underline (the panels' link labels: "Stroke:", "Opacity:").
 pub fn link_label(ui: &mut Ui, text: &str) -> Response {
     let t = Tokens::get(ui.ctx());
     let galley = ui.painter().layout_no_wrap(tl!(text).to_string(), egui::FontId::proportional(12.5), t.text_strong);

@@ -8,8 +8,8 @@
 //! [`vectorcraft_engine::link_watch`]).
 //!
 //! Fields: `missing` (`[{name, path, ids}]`, the one asked about first), `modified` (the ids of
-//! images whose file was modified), `notes` (the open's notes, shown with the line about the
-//! modified files), `applyToAll`, `path` (the replacement file; picked when empty), `discard`
+//! images whose file was modified), `notes` (the open's notes, shown again after the last question
+//! or Cancel), `applyToAll`, `path` (the replacement file; picked when empty), `discard`
 //! (Ignore) and `searchFolder` (set it and confirm for Find in Folder… on that folder).
 
 use serde_json::{Value, json};
@@ -43,19 +43,27 @@ fn ids(rows: &[Value]) -> Vec<Value> {
 /// then about its modified ones, then about the fonts it opened without
 /// ([`super::missing_fonts`]). The web reads no linked files, so missing ones just show their
 /// previews there. The status bar shows what it says about the linked files followed by the open's
-/// `notes` ([`crate::io::show_opened`]).
+/// `notes` ([`crate::io::show_opened`]). On the web, with both missing and modified files and
+/// Update Links not asking, the line about the missing files comes first and the line about the
+/// modified ones is the first of the notes.
 pub fn after_open(app: &mut VectorcraftApp, r: &Value, notes: Vec<String>) {
     after_open_for(app, r, notes, cfg!(target_arch = "wasm32"));
 }
 
-fn after_open_for(app: &mut VectorcraftApp, r: &Value, notes: Vec<String>, web: bool) {
+fn after_open_for(app: &mut VectorcraftApp, r: &Value, mut notes: Vec<String>, web: bool) {
     // The fonts' dialog waits for these questions (one dialog at a time).
     super::missing_fonts::after_open(app, r);
     let rows = |k: &str| r[k].as_array().cloned().unwrap_or_default();
     let (missing, modified) = (rows("missingLinks"), ids(&rows("modifiedLinks")));
     let notice = if missing.is_empty() || web {
         let unreadable = (!missing.is_empty()).then(|| unreadable_status(missing.len()));
-        ask_update(app, modified).or(unreadable)
+        match (ask_update(app, modified), unreadable) {
+            (Some(changed), Some(unreadable)) => {
+                notes.insert(0, changed);
+                Some(unreadable)
+            }
+            (changed, unreadable) => changed.or(unreadable),
+        }
     } else {
         open(app, missing, modified, &notes);
         None
@@ -109,15 +117,27 @@ pub(super) fn notes(d: &Dialog) -> Vec<String> {
     notes.filter_map(Value::as_str).map(str::to_string).collect()
 }
 
+/// Cancel of the dialog `d`: when it is this dialog, or the Find Linked Files dialog its Find in
+/// Folder… opened, the rest of the questions are not asked and the status bar shows the open's
+/// notes again ([`crate::io::show_opened`]), after the line about the modified files when Update
+/// Links doesn't ask about them.
+pub(super) fn cancelled(app: &mut VectorcraftApp, d: &Dialog) {
+    if d.kind == KIND || (d.kind == super::find_links::KIND && d.bool("back")) {
+        let modified = d.fields.get("modified").and_then(Value::as_array).map_or(0, Vec::len);
+        let notice = (modified > 0 && app.session.prefs.update_links != "askWhenModified").then(|| changed_on_disk_status(modified));
+        crate::io::show_opened(app, notice, notes(d));
+    }
+}
+
 /// Ask about the missing files `rest`, one at a time, then offer the modified ones `modified` for
-/// update. A line about the modified files is followed by the open's `notes`
-/// ([`crate::io::show_opened`]).
+/// update. After the last question the status bar shows the open's `notes` again, after the line
+/// about the modified files when there is one ([`crate::io::show_opened`]), so their hover lists
+/// them whatever message the answers showed.
 pub(crate) fn ask_next(app: &mut VectorcraftApp, rest: Vec<Value>, modified: Vec<Value>, notes: Vec<String>) {
     if rest.is_empty() {
         app.ui.dialog = None;
-        if let Some(notice) = ask_update(app, modified) {
-            crate::io::show_opened(app, Some(notice), notes);
-        }
+        let notice = ask_update(app, modified);
+        crate::io::show_opened(app, notice, notes);
     } else {
         open(app, rest, modified, &notes);
     }
@@ -273,12 +293,16 @@ mod tests {
     }
 
     fn png(rgb: [u8; 3]) -> Vec<u8> {
-        let mut out = vec![];
         let [r, g, b] = rgb;
-        image::RgbaImage::from_pixel(400, 300, image::Rgba([r, g, b, 255]))
-            .write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png)
-            .unwrap();
-        out
+        let img = craft_image_codecs::Image::from_raw(
+            400,
+            300,
+            craft_image_codecs::ChannelLayout::Rgba,
+            craft_image_codecs::SampleType::U8,
+            [r, g, b, 255].repeat(400 * 300),
+        )
+        .unwrap();
+        craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap()
     }
 
     /// A document with two placed linked files, saved to a fresh folder; the files are then
@@ -390,6 +414,43 @@ mod tests {
         assert_eq!((app.ui.status.as_str(), &app.ui.status_notes), (notice, &None));
     }
 
+    /// On the web, an open with linked files it can't read and modified ones, with Update Links
+    /// not asking: the status bar shows the line about the unreadable files and counts the line
+    /// about the modified ones as the first note, ahead of the open's notes, and keeps them all
+    /// for its hover. With Ask When Modified the update question opens and the line about the
+    /// unreadable files stays.
+    #[test]
+    fn a_web_open_with_unreadable_and_modified_links_keeps_both_lines() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        app.session.prefs.update_links = "manually".into();
+        let missing = json!([{ "name": "a.png", "path": "/gone/a.png", "ids": [1] }, { "name": "b.png", "path": "/gone/b.png", "ids": [2] }]);
+        let r = json!({ "missingLinks": missing, "modifiedLinks": [{ "ids": [3] }] });
+        let unreadable = "2 linked files can't be read here: their previews show";
+        let changed = changed_on_disk_status(1);
+
+        let notes = vec!["a note".to_string(), "another note".to_string()];
+        after_open_for(&mut app, &r, notes.clone(), true);
+        let kept = [vec![changed.clone()], notes].concat();
+        assert_eq!(app.ui.status, crate::io::opened_after_notice(unreadable, 3, &changed));
+        assert_eq!(app.ui.status_notes, Some((app.ui.status.clone(), kept)));
+        assert!(app.ui.dialog.is_none());
+
+        after_open_for(&mut app, &r, vec![], true);
+        assert_eq!(app.ui.status, crate::io::opened_after_notice(unreadable, 1, &changed));
+        assert_eq!(app.ui.status_notes, Some((app.ui.status.clone(), vec![changed.clone()])));
+
+        // One kind of line alone shows as before.
+        after_open_for(&mut app, &json!({ "modifiedLinks": [{ "ids": [3] }] }), vec![], true);
+        assert_eq!((app.ui.status.clone(), &app.ui.status_notes), (changed, &None));
+
+        app.session.prefs.update_links = "askWhenModified".into();
+        after_open_for(&mut app, &r, vec![], true);
+        let d = app.ui.dialog.as_ref().expect("asks");
+        assert_eq!((d.kind.as_str(), d.str("__command")), (super::super::confirm::KIND, "links.update".to_string()));
+        assert_eq!((app.ui.status.as_str(), &app.ui.status_notes), (unreadable, &None));
+    }
+
     /// The line about modified linked files that follows the Linked File Not Found dialog keeps the
     /// notes of that open, also when another message was shown meanwhile. An open without notes
     /// shows the line alone, even while the status bar shows an earlier open's notes, and a later
@@ -429,6 +490,116 @@ mod tests {
             assert_eq!(app.ui.status, changed_on_disk_status(1));
             assert_ne!(app.ui.status_notes.as_ref().map(|(status, _)| status), Some(&app.ui.status));
         }
+    }
+
+    /// After the last question of the Linked File Not Found dialog the status bar shows the open's
+    /// notes again and keeps them for its hover, also when another message was shown meanwhile:
+    /// after Ignore, Ignore with Apply to All and Cancel, with either Update Links choice, and with
+    /// Ask When Modified while the update question opens. An open without notes leaves the message
+    /// as it is.
+    #[test]
+    fn the_last_missing_link_answer_keeps_the_open_notes() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        let notes = vec!["a note".to_string(), "another note".to_string()];
+        let opened = crate::io::opened_with_notes(2, "a note");
+        let row = |n: u64| json!({ "name": format!("{n}.png"), "path": format!("/gone/{n}.png"), "ids": [n] });
+        let answer = |app: &mut VectorcraftApp, fields: &[(&str, bool)]| {
+            app.status("Something else");
+            let d = app.ui.dialog.as_mut().unwrap();
+            for (k, v) in fields {
+                d.fields.insert(k.to_string(), json!(v));
+            }
+            super::super::confirm(app).unwrap();
+        };
+        for prefs in ["manually", "askWhenModified"] {
+            app.session.prefs.update_links = prefs.into();
+            after_open_for(&mut app, &json!({ "missingLinks": [row(1)] }), notes.clone(), false);
+            answer(&mut app, &[("discard", true)]);
+            assert!(app.ui.dialog.is_none());
+            assert_eq!((&app.ui.status, &app.ui.status_notes), (&opened, &Some((opened.clone(), notes.clone()))), "Ignore, {prefs}");
+
+            after_open_for(&mut app, &json!({ "missingLinks": [row(1), row(2)] }), notes.clone(), false);
+            answer(&mut app, &[("discard", true), ("applyToAll", true)]);
+            assert!(app.ui.dialog.is_none());
+            assert_eq!((&app.ui.status, &app.ui.status_notes), (&opened, &Some((opened.clone(), notes.clone()))), "Apply to All, {prefs}");
+
+            after_open_for(&mut app, &json!({ "missingLinks": [row(1), row(2)], "modifiedLinks": [{ "ids": [3] }] }), notes.clone(), false);
+            app.status("Something else");
+            super::super::cancel(&mut app);
+            assert!(app.ui.dialog.is_none(), "Cancel asks nothing more");
+            let cancelled =
+                if prefs == "manually" { crate::io::opened_after_notice(&changed_on_disk_status(1), 2, "a note") } else { opened.clone() };
+            assert_eq!((&app.ui.status, &app.ui.status_notes), (&cancelled, &Some((cancelled.clone(), notes.clone()))), "Cancel, {prefs}");
+        }
+
+        after_open_for(&mut app, &json!({ "missingLinks": [row(1)], "modifiedLinks": [{ "ids": [3] }] }), notes.clone(), false);
+        answer(&mut app, &[("discard", true)]);
+        let d = app.ui.dialog.as_ref().expect("asks");
+        assert_eq!((d.kind.as_str(), d.str("__command")), (super::super::confirm::KIND, "links.update".to_string()));
+        assert_eq!((&app.ui.status, &app.ui.status_notes), (&opened, &Some((opened.clone(), notes.clone()))));
+        app.ui.dialog = None;
+
+        after_open_for(&mut app, &json!({ "missingLinks": [row(1)] }), vec![], false);
+        answer(&mut app, &[("discard", true)]);
+        assert_eq!(app.ui.status, "Something else");
+        after_open_for(&mut app, &json!({ "missingLinks": [row(1)] }), vec![], false);
+        app.status("Something else");
+        super::super::cancel(&mut app);
+        assert_eq!(app.ui.status, "Something else");
+        app.session.prefs.update_links = "manually".into();
+        after_open_for(&mut app, &json!({ "missingLinks": [row(1)], "modifiedLinks": [{ "ids": [3] }] }), vec![], false);
+        app.status("Something else");
+        super::super::cancel(&mut app);
+        assert_eq!(app.ui.status, changed_on_disk_status(1), "Cancel keeps the line about the modified files");
+    }
+
+    /// Replace with a file given by path, with a picked file and with Apply to All: after the last
+    /// one the status bar shows the open's notes again. A canceled file picker leaves the question
+    /// open and the message as it is.
+    #[test]
+    fn the_last_replace_keeps_the_open_notes() {
+        let notes = vec!["a note".to_string(), "another note".to_string()];
+        let opened = crate::io::opened_with_notes(2, "a note");
+        let (mut app, dir, _) = opened_without_links("notes");
+        let found = dir.join("found");
+        std::fs::create_dir_all(&found).unwrap();
+        for n in ["a.png", "b.png"] {
+            std::fs::write(found.join(n), png([0, 0, 200])).unwrap();
+        }
+        app.ui.dialog.as_mut().unwrap().fields.insert("notes".into(), json!(notes));
+        app.ui.dialog.as_mut().unwrap().fields.insert("path".into(), json!(found.join("a.png").to_string_lossy()));
+        super::super::confirm(&mut app).unwrap();
+        assert_eq!(app.ui.dialog.as_ref().expect("asks about the next").fields["missing"][0]["name"], "b.png");
+
+        app.services.pick_open = Some(Box::new(|_: &crate::FilePick| None));
+        app.status("Something else");
+        assert_eq!(super::super::confirm(&mut app), Err("cancelled".to_string()));
+        assert_eq!(app.ui.dialog.as_ref().expect("still asks").fields["missing"][0]["name"], "b.png");
+        assert_eq!(app.ui.status, "Something else");
+
+        let b = found.join("b.png").to_string_lossy().into_owned();
+        app.services.pick_open = Some(Box::new(move |_: &crate::FilePick| Some(b.clone())));
+        super::super::confirm(&mut app).unwrap();
+        assert!(app.ui.dialog.is_none());
+        assert_eq!((&app.ui.status, &app.ui.status_notes), (&opened, &Some((opened.clone(), notes.clone()))), "picked");
+        let _ = std::fs::remove_dir_all(dir);
+
+        let (mut app, dir, _) = opened_without_links("notes-all");
+        let found = dir.join("found");
+        std::fs::create_dir_all(&found).unwrap();
+        for n in ["a.png", "b.png"] {
+            std::fs::write(found.join(n), png([0, 0, 200])).unwrap();
+        }
+        let d = app.ui.dialog.as_mut().unwrap();
+        d.fields.insert("notes".into(), json!(notes));
+        d.fields.insert("applyToAll".into(), json!(true));
+        d.fields.insert("path".into(), json!(found.join("a.png").to_string_lossy()));
+        app.status("Something else");
+        super::super::confirm(&mut app).unwrap();
+        assert!(app.ui.dialog.is_none(), "both relinked");
+        assert_eq!((&app.ui.status, &app.ui.status_notes), (&opened, &Some((opened.clone(), notes.clone()))), "Apply to All");
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]

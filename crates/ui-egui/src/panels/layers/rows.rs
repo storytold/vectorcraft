@@ -5,6 +5,7 @@ use super::{
     Arc, COLUMN, Color32, ColumnDrag, Document, INDENT, LayersDrag, Node, NodeId, NodeKind, Out, PanelDrag, ROW_KEYS, SQUARE_X, Sense, Stroke,
     StrokeKind, TARGET_X, Tokens, Ui, Value, View, icons, json, vec2, widgets,
 };
+use vectorcraft_tools::intertwine::{in_intertwine, refused_member};
 
 /// Stable id for the layers panel's per-name UI state.
 pub(super) fn key(name: &str) -> egui::Id {
@@ -81,7 +82,9 @@ pub(super) fn drag_ghost(ui: &Ui, view: &View, src: NodeId, pos: egui::Pos2) {
 }
 
 /// Resolve the row clicked this frame: plain (highlight it), Ctrl/Cmd (toggle it) or Shift
-/// (highlight the rows from the last one clicked down to it).
+/// (highlight the rows from the last one clicked down to it). A plain click also lets go of the
+/// selected ruler guides, keeping the selected art (#7340): a guide's row picks it the way a
+/// highlight picks a row, so picking another row alone drops it.
 pub(super) fn resolve_click(ui: &Ui, view: &View, list: &[Row], out: &mut Out) {
     let Some((id, m)) = out.click.take() else { return };
     let anchor: Option<NodeId> = ui.data(|d| d.get_temp(key("anchor")));
@@ -95,6 +98,10 @@ pub(super) fn resolve_click(ui: &Ui, view: &View, list: &[Row], out: &mut Out) {
     widgets::apply_row_click(&mut rows, &click);
     out.rows_after_click = Some(rows);
     let ids = |rows: &[NodeId]| rows.iter().map(|r| r.0).collect::<Vec<_>>();
+    if matches!(click, widgets::RowClick::Only(_)) && !view.guides.is_empty() {
+        // Toggled out of the selection, so the selected art stays.
+        out.actions.push(("guide.select".into(), json!({"indexes": view.guides, "toggle": true})));
+    }
     out.actions.push(match click {
         widgets::RowClick::Only(id) => ("layer.setCurrent".into(), json!({"id": id.0})),
         widgets::RowClick::Toggle(id) => ("layer.highlight".into(), json!({"ids": [id.0], "mode": "toggle"})),
@@ -103,15 +110,20 @@ pub(super) fn resolve_click(ui: &Ui, view: &View, list: &[Row], out: &mut Out) {
     });
 }
 
-/// Whether row `n` can take `drag` inside it.
-fn takes(n: &Node, drag: &LayersDrag, doc: &Document) -> bool {
+/// Whether row `n` can take `drag` (the rows or objects `moving`) inside it. A group or an
+/// Intertwine group takes objects; an Intertwine group, or a group in one, only objects that can
+/// be intertwined.
+fn takes(n: &Node, drag: &LayersDrag, moving: &[NodeId], doc: &Document) -> bool {
     match n.kind {
         NodeKind::Layer { .. } => true,
-        NodeKind::Group { .. } => match drag {
-            LayersDrag::Rows(ids) => !ids.iter().any(|i| doc.node(*i).is_some_and(Node::is_layer)),
-            LayersDrag::Art => true,
-            LayersDrag::Guides(_) => false,
-        },
+        NodeKind::Group { .. } | NodeKind::Intertwine { .. } => {
+            let objects = match drag {
+                LayersDrag::Rows(ids) => !ids.iter().any(|i| doc.node(*i).is_some_and(Node::is_layer)),
+                LayersDrag::Art => true,
+                LayersDrag::Guides(_) => false,
+            };
+            objects && (!in_intertwine(doc, n.id) || moving.iter().filter_map(|i| doc.node(*i)).all(|m| refused_member(m).is_none()))
+        }
         _ => false,
     }
 }
@@ -268,6 +280,66 @@ fn disclosure(ui: &Ui, view: &View, n: &Node, (r, x): (egui::Rect, f32), open: b
     }
 }
 
+/// The row's name label or inline rename field. Returns (name_end, name_rect).
+fn row_name(ui: &mut Ui, view: &View, item: &Row, r: egui::Rect, x: f32, out: &mut Out) -> (f32, egui::Rect) {
+    let n = &*item.node;
+    let doc = view.doc;
+    let t = &view.t;
+    let xml_id = view.identify_xml_id;
+    let name = if doc.mask_edit.is_some_and(|m| m.layer == n.id) { "<Opacity Mask>".to_string() } else { n.identify_label(xml_id) };
+    let font = egui::FontId::proportional(13.0);
+    let renaming: Option<(u64, String)> = ui.data(|d| d.get_temp(rename_id()));
+    let name_rect = egui::Rect::from_min_max(egui::pos2(x - 2.0, r.center().y - 10.0), egui::pos2(r.right() - 44.0, r.center().y + 10.0));
+    let name_end = match renaming {
+        Some((rid, mut buf)) if rid == n.id.0 => {
+            let field = rename_id().with("field");
+            let kept = crate::widgets::own_field_shift_enter(ui, field, &mut buf, &name);
+            let mut child = ui.new_child(egui::UiBuilder::new().max_rect(name_rect));
+            let te = child
+                .add(egui::TextEdit::singleline(&mut buf).id(field).align(egui::Align2::LEFT_CENTER).desired_width(name_rect.width()).font(font));
+            // Focus the field as it opens. Asking every frame took the focus back from Enter,
+            // Escape or a click elsewhere, so the rename never ended.
+            if !te.has_focus() && !te.lost_focus() {
+                te.request_focus();
+            }
+            if te.lost_focus() {
+                ui.data_mut(|d| d.remove::<(u64, String)>(rename_id()));
+                if child.input(|i| !i.key_pressed(egui::Key::Escape)) && buf != name {
+                    out.actions.push(("layer.setProps".into(), json!({"ids": [n.id.0], "name": buf})));
+                }
+            } else {
+                // Shift+Enter renames it and keeps the field open.
+                if kept && buf != name {
+                    out.actions.push(("layer.setProps".into(), json!({"ids": [n.id.0], "name": buf.clone()})));
+                }
+                ui.data_mut(|d| d.insert_temp(rename_id(), (n.id.0, buf)));
+            }
+            name_rect.right()
+        }
+        _ => {
+            let painter = ui.painter().with_clip_rect(name_rect);
+            // Generated names ("<Path>", "<Opacity Mask>") are translated where painted; the stored name stays English.
+            // XML IDs stay as ids (not translated).
+            let shown = if doc.mask_edit.is_some_and(|m| m.layer == n.id) {
+                tl!("<Opacity Mask>").to_string()
+            } else if xml_id {
+                name
+            } else {
+                painted_name(n, &n.display_name(), crate::i18n::current())
+            };
+            let text = paint_name(&painter, egui::pos2(x, r.center().y), &shown, font, if item.dim { t.text_dim } else { t.text }, prints_italic(n));
+            // A clipping path's name is underlined, a masked object's with a dashed line.
+            if item.clip_path {
+                painter.line_segment([text.left_bottom(), text.right_bottom()], Stroke::new(1.0, t.text));
+            } else if n.extras().mask.is_some() {
+                painter.extend(egui::Shape::dashed_line(&[text.left_bottom(), text.right_bottom()], Stroke::new(1.0, t.text), 3.0, 2.0));
+            }
+            text.right()
+        }
+    };
+    (name_end, name_rect)
+}
+
 /// The widgets of row `item`.
 pub(super) fn row(ui: &mut Ui, view: &View, item: &Row, out: &mut Out) {
     if let Some(i) = item.guide {
@@ -277,8 +349,7 @@ pub(super) fn row(ui: &mut Ui, view: &View, item: &Row, out: &mut Out) {
         return spine_row(ui, view, item, out);
     }
     let n = &*item.node;
-    let (depth, clip_path, has_children, open, color) = (item.depth, item.clip_path, item.opens, item.open, item.colour);
-    let doc = view.doc;
+    let (depth, has_children, open, color) = (item.depth, item.opens, item.open, item.colour);
     let t = &view.t;
     let h = view.h;
     let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), h), Sense::click_and_drag());
@@ -309,60 +380,7 @@ pub(super) fn row(ui: &mut Ui, view: &View, item: &Row, out: &mut Out) {
         th
     });
     // Name (Preferences › Units › Identify Objects By: Object Name or XML ID).
-    let xml_id = view.identify_xml_id;
-    let name = if doc.mask_edit.is_some_and(|m| m.layer == n.id) { "<Opacity Mask>".to_string() } else { n.identify_label(xml_id) };
-    let font = egui::FontId::proportional(13.0);
-    let renaming: Option<(u64, String)> = ui.data(|d| d.get_temp(rename_id()));
-    let name_rect = egui::Rect::from_min_max(egui::pos2(x - 2.0, r.center().y - 10.0), egui::pos2(r.right() - 44.0, r.center().y + 10.0));
-    let name_end;
-    match renaming {
-        Some((rid, mut buf)) if rid == n.id.0 => {
-            let field = rename_id().with("field");
-            let kept = crate::widgets::own_field_shift_enter(ui, field, &mut buf, &name);
-            let mut child = ui.new_child(egui::UiBuilder::new().max_rect(name_rect));
-            let te = child.add(
-                egui::TextEdit::singleline(&mut buf).id(field).align(egui::Align2::LEFT_CENTER).desired_width(name_rect.width()).font(font.clone()),
-            );
-            // Focus the field as it opens. Asking every frame took the focus back from Enter,
-            // Escape or a click elsewhere, so the rename never ended.
-            if !te.has_focus() && !te.lost_focus() {
-                te.request_focus();
-            }
-            if te.lost_focus() {
-                ui.data_mut(|d| d.remove::<(u64, String)>(rename_id()));
-                if child.input(|i| !i.key_pressed(egui::Key::Escape)) && buf != name {
-                    out.actions.push(("layer.setProps".into(), json!({"ids": [n.id.0], "name": buf})));
-                }
-            } else {
-                // Shift+Enter renames it and keeps the field open.
-                if kept && buf != name {
-                    out.actions.push(("layer.setProps".into(), json!({"ids": [n.id.0], "name": buf.clone()})));
-                }
-                ui.data_mut(|d| d.insert_temp(rename_id(), (n.id.0, buf)));
-            }
-            name_end = name_rect.right();
-        }
-        _ => {
-            let painter = ui.painter().with_clip_rect(name_rect);
-            // Generated names ("<Path>", "<Opacity Mask>") are translated where painted; the stored name stays English.
-            // XML IDs stay as ids (not translated).
-            let shown = if doc.mask_edit.is_some_and(|m| m.layer == n.id) {
-                tl!("<Opacity Mask>").to_string()
-            } else if xml_id {
-                name.clone()
-            } else {
-                painted_name(n, &n.display_name(), crate::i18n::current())
-            };
-            let text = paint_name(&painter, egui::pos2(x, r.center().y), &shown, font, if item.dim { t.text_dim } else { t.text }, prints_italic(n));
-            name_end = text.right();
-            // A clipping path's name is underlined, a masked object's with a dashed line.
-            if clip_path {
-                painter.line_segment([text.left_bottom(), text.right_bottom()], Stroke::new(1.0, t.text));
-            } else if n.extras().mask.is_some() {
-                painter.extend(egui::Shape::dashed_line(&[text.left_bottom(), text.right_bottom()], Stroke::new(1.0, t.text), 3.0, 2.0));
-            }
-        }
-    }
+    let (name_end, name_rect) = row_name(ui, view, item, r, x, out);
     // Target circle and selection square.
     let col_x = r.right() - 43.5;
     ui.painter().line_segment([egui::pos2(col_x, r.top()), egui::pos2(col_x, r.bottom())], Stroke::new(1.0, t.input_border));
@@ -404,12 +422,18 @@ pub(super) fn row(ui: &mut Ui, view: &View, item: &Row, out: &mut Out) {
             out.actions.push(("ui.layerOptions".into(), json!({"ids": [n.id.0]})));
         }
     }
-    // Row menu: Collect for Export on this row (or every highlighted row when this is one of them).
+    // Row menu: context actions on this row (or every highlighted row when this is one of them).
     let collect_ids: Vec<u64> = if view.rows.contains(&n.id) { view.rows.iter().map(|id| id.0).collect() } else { vec![n.id.0] };
+    // Right-clicking an unselected row selects it; a highlighted row keeps multiselection.
+    if resp.secondary_clicked() && !view.rows.contains(&n.id) {
+        out.actions.push(("layer.setCurrent".into(), json!({"id": n.id.0})));
+        out.rows_after_click = Some(vec![n.id]);
+    }
+    if resp.secondary_clicked() {
+        crate::panels::set_row_keys(ui.ctx(), ROW_KEYS, true);
+    }
     resp.context_menu(|ui| {
-        collect_for_export_menu(ui, true, |multiple| {
-            out.actions.push(("assets.add".into(), json!({ "ids": collect_ids.clone(), "multiple": multiple })));
-        });
+        row_context_menu(ui, view, n, &collect_ids, out);
     });
     // Dragging rows: the highlighted rows when this is one of them, else this row. Only the primary
     // button drags; the secondary button opens the row menu, and a drag with it moves nothing.
@@ -422,10 +446,117 @@ pub(super) fn row(ui: &mut Ui, view: &View, item: &Row, out: &mut Out) {
             d.insert_temp(key("grabbed"), n.id);
         });
     }
-    if resp.dragged_by(egui::PointerButton::Primary) {
-        ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
-    }
+    // The cursor of a row drag is the panel's ([`super::drag_cursor`]): Alt can change it on any frame.
     drop_target(ui, view, n, r, x - 16.0, open, &resp, out);
+}
+
+/// The right-click context menu of row `n`.
+fn row_context_menu(ui: &mut Ui, view: &View, n: &Node, collect_ids: &[u64], out: &mut Out) {
+    let is_multi = collect_ids.len() > 1;
+    // "Layer Options…" / "Options for Selection…" / "Options…"
+    let options_label = if is_multi {
+        "Options for Selection…"
+    } else if n.is_layer() {
+        "Layer Options…"
+    } else {
+        "Options…"
+    };
+    if widgets::menu_item(ui, options_label, true, false) {
+        out.actions.push(("ui.layerOptions".into(), json!({ "ids": collect_ids })));
+        ui.close();
+    }
+    // "Duplicate "<name>"" or "Duplicate Selection"
+    let display = {
+        let raw = painted_name(n, &n.display_name(), crate::i18n::current());
+        if raw.chars().count() > 20 {
+            let truncated: String = raw.chars().take(20).collect();
+            format!("{truncated}…")
+        } else {
+            raw
+        }
+    };
+    let dup_label = if is_multi { tl!("Duplicate Selection").to_string() } else { format!("{} \"{display}\"", tl!("Duplicate")) };
+    if widgets::menu_item_name(ui, &dup_label, true, false) {
+        out.actions.push(("layer.duplicate".into(), json!({ "ids": collect_ids })));
+        ui.close();
+    }
+    // "Delete "<name>"" or "Delete Selection"
+    let del_label = if is_multi { tl!("Delete Selection").to_string() } else { format!("{} \"{display}\"", tl!("Delete")) };
+    let del_enabled = {
+        let listed: std::collections::HashSet<NodeId> = collect_ids.iter().map(|&id| NodeId(id)).collect();
+        !view.doc.layers.iter().all(|l| listed.contains(&l.id))
+    };
+    if widgets::menu_item_name(ui, &del_label, del_enabled, false) {
+        out.actions.push(("layer.delete".into(), json!({ "ids": collect_ids })));
+        ui.close();
+    }
+    ui.separator();
+    // Lock Others / Unlock All Layers
+    {
+        let (lock_cmd, lock_params, lock_enabled) = multi_others_action(view.doc, collect_ids, false);
+        let lock_label = if lock_cmd == "layer.lockOthers" { "Lock Others" } else { "Unlock All Layers" };
+        if widgets::menu_item(ui, lock_label, lock_enabled, false) {
+            out.actions.push((lock_cmd, lock_params));
+            ui.close();
+        }
+    }
+    // Hide Others / Show All Layers
+    {
+        let (hide_cmd, hide_params, hide_enabled) = multi_others_action(view.doc, collect_ids, true);
+        let hide_label = if hide_cmd == "layer.hideOthers" { "Hide Others" } else { "Show All Layers" };
+        if widgets::menu_item(ui, hide_label, hide_enabled, false) {
+            out.actions.push((hide_cmd, hide_params));
+            ui.close();
+        }
+    }
+    ui.separator();
+    // Locate Object, or Locate Layer with Show Layers Only on
+    let layers_only = view.opts.layers_only;
+    if widgets::menu_item(ui, if layers_only { "Locate Layer" } else { "Locate Object" }, true, false) {
+        out.actions.push(("layer.locate".into(), json!({ "id": n.id.0, "layersOnly": layers_only })));
+        ui.close();
+    }
+    ui.separator();
+    // Collect for Export
+    let ids: Vec<u64> = collect_ids.to_vec();
+    collect_for_export_menu(ui, true, move |multiple| {
+        out.actions.push(("assets.add".into(), json!({ "ids": ids.clone(), "multiple": multiple })));
+    });
+}
+
+/// Context menu Others action for `ids`: Lock Others / Unlock All Layers or Hide Others / Show All Layers.
+/// When any other layer is unlocked (visible), returns `lockOthers` (`hideOthers`) preserving all layers holding
+/// `ids`. When all other layers are locked (hidden) already, returns `unlockAll` (`showAll`).
+pub(crate) fn multi_others_action(doc: &Document, ids: &[u64], eye: bool) -> (String, Value, bool) {
+    let own_layers: std::collections::HashSet<NodeId> = ids.iter().filter_map(|&id| doc.layer_of(NodeId(id))).collect();
+    let has_other_active = if eye {
+        doc.layers.iter().any(|l| !own_layers.contains(&l.id) && l.visible)
+    } else {
+        doc.layers.iter().any(|l| !own_layers.contains(&l.id) && !l.locked)
+    };
+    let cmd = match (eye, has_other_active) {
+        (true, true) => "layer.hideOthers",
+        (true, false) => "layer.showAll",
+        (false, true) => "layer.lockOthers",
+        (false, false) => "layer.unlockAll",
+    };
+    let enabled = match (eye, has_other_active) {
+        (true, true) | (false, true) => true,
+        (true, false) => any_layer_state(doc, |n| !n.visible),
+        (false, false) => any_layer_state(doc, |n| n.locked),
+    };
+    let params = if cmd.ends_with("Others") { json!({ "ids": ids }) } else { json!({}) };
+    (cmd.into(), params, enabled)
+}
+
+fn any_layer_state(doc: &Document, pred: impl Fn(&Node) -> bool) -> bool {
+    let mut found = false;
+    doc.walk(|n| {
+        if !found && n.is_layer() && pred(n) {
+            found = true;
+        }
+    });
+    found
 }
 
 /// Alt-clicking row `n`'s eye (`eye`) or lock: Hide Others or Lock Others, every top-level layer
@@ -544,21 +675,33 @@ fn drop_target(ui: &Ui, view: &View, n: &Node, r: egui::Rect, indent: f32, open:
             return;
         }
     };
-    // Never into itself or a row inside it.
+    // Never into itself or a row inside it. With Alt, rows held over one of their own rows copy
+    // beside it, above or below, as `layer.move` places a copy there (#8237).
+    let alt = ui.input(|i| i.modifiers.alt);
+    let beside_itself = alt && matches!(&*drag, LayersDrag::Rows(_)) && moving.contains(&n.id);
     let around = doc.ancestry(n.id).unwrap_or_default();
-    if moving.is_empty() || moving.iter().any(|m| around.contains(m)) {
+    if moving.is_empty() || moving.iter().any(|m| around.contains(m) && !(beside_itself && *m == n.id)) {
         return;
     }
     let Some(p) = ui.input(|i| i.pointer.hover_pos()) else { return };
     let rel = (p.y - r.top()) / r.height().max(1.0);
-    let inside = takes(n, &drag, doc);
+    let inside = takes(n, &drag, &moving, doc);
     let place = match &*drag {
+        LayersDrag::Rows(_) if beside_itself && rel < 0.5 => Place::Above,
+        LayersDrag::Rows(_) if beside_itself => Place::Below,
         LayersDrag::Art if inside => Place::Inside,
         LayersDrag::Art => Place::Above,
         LayersDrag::Rows(_) if inside && rel >= 0.25 && (rel <= 0.75 || open) => Place::Inside,
         LayersDrag::Rows(_) if rel < 0.5 => Place::Above,
         LayersDrag::Rows(_) | LayersDrag::Guides(_) => Place::Below,
     };
+    // Beside a member of an Intertwine group (or a row in one) only what can be intertwined goes.
+    if place != Place::Inside
+        && doc.parent_of(n.id).is_some_and(|p| in_intertwine(doc, p))
+        && moving.iter().filter_map(|i| doc.node(*i)).any(|m| refused_member(m).is_some())
+    {
+        return;
+    }
     let stroke = Stroke::new(2.0, view.t.accent);
     match place {
         Place::Above => {

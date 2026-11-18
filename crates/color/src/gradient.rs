@@ -547,6 +547,49 @@ impl Gradient {
             None => (Color::BLACK, 1.0),
         }
     }
+    /// Which of its stops color some part of it that draws, by the stretches [`Self::sample`]
+    /// mixes in, for stops in any order: the pair of stop `k` and stop `k + 1` covers the offsets
+    /// above every offset of stops `0..=k` up to stop `k + 1`'s, and both its stops count when that
+    /// stretch has positive width and either stop is above opacity 0. The first stop also counts
+    /// when it is above opacity 0, since it colors the offsets up to its own, and so does the last
+    /// stop, since it colors the offsets above every stop's. Any other stop, opaque or not, counts
+    /// only through a pair: a stop out of order whose pairs have no width (another stop before it
+    /// reaches past both ends) colors nothing. A freeform gradient draws from its points, so each of
+    /// its stops counts while any stop is above opacity 0.
+    pub fn drawn_stops(&self) -> Vec<bool> {
+        self.stops_with_color(|s| s.opacity > 0.0)
+    }
+    /// [`Self::drawn_stops`] with every stop taken as opaque, for output that leaves stop opacity
+    /// out: the stops that color a stretch of positive width, and the first and last stops.
+    pub fn reached_stops(&self) -> Vec<bool> {
+        self.stops_with_color(|_| true)
+    }
+    /// [`Self::drawn_stops`] with `shows` telling whether a stop's opacity shows its color.
+    fn stops_with_color(&self, shows: impl Fn(&GradientStop) -> bool) -> Vec<bool> {
+        let stops = &self.stops;
+        if self.kind == GradientKind::Freeform {
+            let any = stops.iter().any(&shows);
+            return vec![any; stops.len()];
+        }
+        let mut drawn = vec![false; stops.len()];
+        if let (Some(first), Some(d)) = (stops.first(), drawn.first_mut()) {
+            *d = shows(first);
+        }
+        if let (Some(last), Some(d)) = (stops.last(), drawn.last_mut()) {
+            *d |= shows(last);
+        }
+        // `f32::max` skips a NaN offset, which the sampler never picks either.
+        let mut reach = f32::NEG_INFINITY;
+        for k in 0..stops.len().saturating_sub(1) {
+            reach = reach.max(stops[k].offset);
+            let (a, b) = (&stops[k], &stops[k + 1]);
+            if b.offset > reach && (shows(a) || shows(b)) {
+                drawn[k] = true;
+                drawn[k + 1] = true;
+            }
+        }
+        drawn
+    }
     /// [`Self::sample_with`] at each of `ts`, which must not decrease. Each search starts where
     /// the one before it stopped, so the work is the samples plus the stops, not their product.
     pub fn sample_increasing_with(&self, ts: impl IntoIterator<Item = f32>, mix: impl Fn(&Color, &Color, f32) -> Color) -> Vec<(Color, f32)> {

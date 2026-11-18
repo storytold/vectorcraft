@@ -300,6 +300,191 @@ fn another_documents_swatches_load_as_a_library() {
     assert!(s.execute("swatch.library.load", &json!({"data": "hello", "name": "x.txt"})).is_err());
 }
 
+/// Three pattern swatches of another document that paint one pattern, one of them turned, load as
+/// three library swatches and come into a document as three swatches of one pattern, each with its
+/// own name and placement.
+#[test]
+fn another_documents_pattern_swatches_of_one_pattern_add_as_separate_swatches() {
+    use std::sync::Arc;
+    let turned = vectorcraft_geom::Affine::rotate(0.5);
+    let mut s = session();
+    s.edit("Pattern", |d, _| {
+        let path = vectorcraft_geom::shapes::ellipse(vectorcraft_geom::Rect::new(0.0, 0.0, 4.0, 4.0));
+        let dot = vectorcraft_doc::Node::path(d.alloc_id(), path, vectorcraft_doc::Appearance::default_art());
+        let tile = vectorcraft_geom::Rect::new(0.0, 0.0, 8.0, 8.0);
+        d.patterns.push(vectorcraft_doc::PatternDef { tile, ..vectorcraft_doc::PatternDef::new("Dots", vec![Arc::new(dot)]) });
+        let swatch = |name: &str, xf| vectorcraft_color::Swatch {
+            name: name.into(),
+            paint: Paint::Pattern { pattern: "Dots".into(), xf },
+            global: false,
+            spot: false,
+        };
+        d.swatches.push(swatch("Tiles", vectorcraft_geom::Affine::IDENTITY));
+        d.swatches.push(swatch("More tiles", vectorcraft_geom::Affine::IDENTITY));
+        d.swatches.push(swatch("Turned tiles", turned));
+        Ok(())
+    })
+    .unwrap();
+    let b64 = run(&mut s, "document.serialize", json!({}))["dataBase64"].as_str().unwrap().to_string();
+    let id = run(&mut s, "swatch.library.load", json!({"dataBase64": b64, "name": "Dots.vectorcraft"}))["library"].clone();
+    run(&mut s, "file.new", json!({"width": 100, "height": 100}));
+    let r = run(&mut s, "swatch.library.add", json!({"library": id, "names": ["Tiles", "More tiles", "Turned tiles"]}));
+    assert_eq!(r["added"], json!(["Tiles", "More tiles", "Turned tiles"]), "{r}");
+    let d = doc(&s);
+    assert_eq!(d.patterns.iter().filter(|p| p.name.starts_with("Dots")).count(), 1, "one pattern");
+    let xf = |name: &str| match d.swatch(name).map(|w| &w.paint) {
+        Some(Paint::Pattern { pattern, xf }) if pattern == "Dots" => Some(*xf),
+        _ => None,
+    };
+    assert_eq!((xf("Tiles"), xf("Turned tiles")), (Some(vectorcraft_geom::Affine::IDENTITY), Some(turned)));
+    let again = run(&mut s, "swatch.library.add", json!({"library": id}));
+    assert_eq!(again["added"], json!([]), "{again}");
+}
+
+/// A library swatch named after its pattern, added in one call after another swatch of that pattern
+/// with the same placement, stands for the swatch just added: it is listed as existing, not added
+/// again.
+#[test]
+fn a_pattern_swatch_named_after_its_pattern_reuses_one_added_in_the_same_call() {
+    use std::sync::Arc;
+    let mut s = session();
+    s.edit("Pattern", |d, _| {
+        let path = vectorcraft_geom::shapes::ellipse(vectorcraft_geom::Rect::new(0.0, 0.0, 4.0, 4.0));
+        let dot = vectorcraft_doc::Node::path(d.alloc_id(), path, vectorcraft_doc::Appearance::default_art());
+        let tile = vectorcraft_geom::Rect::new(0.0, 0.0, 8.0, 8.0);
+        d.patterns.push(vectorcraft_doc::PatternDef { tile, ..vectorcraft_doc::PatternDef::new("Dots", vec![Arc::new(dot)]) });
+        for name in ["Tiles", "Dots"] {
+            let paint = Paint::Pattern { pattern: "Dots".into(), xf: vectorcraft_geom::Affine::IDENTITY };
+            d.swatches.push(vectorcraft_color::Swatch { name: name.into(), paint, global: false, spot: false });
+        }
+        Ok(())
+    })
+    .unwrap();
+    let b64 = run(&mut s, "document.serialize", json!({}))["dataBase64"].as_str().unwrap().to_string();
+    let id = run(&mut s, "swatch.library.load", json!({"dataBase64": b64, "name": "Dots.vectorcraft"}))["library"].clone();
+    run(&mut s, "file.new", json!({"width": 100, "height": 100}));
+    let r = run(&mut s, "swatch.library.add", json!({"library": id, "names": ["Tiles", "Dots"]}));
+    assert_eq!((&r["added"], &r["existing"]), (&json!(["Tiles"]), &json!(["Tiles"])), "{r}");
+    let d = doc(&s);
+    assert_eq!(d.swatches_iter().filter(|w| matches!(&w.paint, Paint::Pattern { pattern, .. } if pattern == "Dots")).count(), 1, "{r}");
+}
+
+/// A library pattern painted with another pattern is not taken for a document pattern with the
+/// same art when the pattern its art paints with differs: it comes in as a numbered copy with its
+/// own inner pattern, and adding it again reuses that copy.
+#[test]
+fn a_pattern_painted_with_another_pattern_is_not_matched_by_the_inner_patterns_name() {
+    use std::sync::Arc;
+    use vectorcraft_doc::pattern::pattern_paint;
+    // `Inner` with a tile of `inner` points, `Dots` painted with it, and swatch `Tiles` painting `Dots`.
+    let make = |d: &mut vectorcraft_doc::Document, inner: f64| {
+        let dot = vectorcraft_geom::shapes::ellipse(vectorcraft_geom::Rect::new(0.0, 0.0, 2.0, 2.0));
+        let dot = vectorcraft_doc::Node::path(d.alloc_id(), dot, vectorcraft_doc::Appearance::default_art());
+        let tile = vectorcraft_geom::Rect::new(0.0, 0.0, inner, inner);
+        d.patterns.push(vectorcraft_doc::PatternDef { tile, ..vectorcraft_doc::PatternDef::new("Inner", vec![Arc::new(dot)]) });
+        let square = vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(0.0, 0.0, 6.0, 6.0));
+        let square = vectorcraft_doc::Node::path(d.alloc_id(), square, vectorcraft_doc::Appearance::basic(pattern_paint("Inner"), Paint::None, 0.0));
+        let tile = vectorcraft_geom::Rect::new(0.0, 0.0, 8.0, 8.0);
+        d.patterns.push(vectorcraft_doc::PatternDef { tile, ..vectorcraft_doc::PatternDef::new("Dots", vec![Arc::new(square)]) });
+        d.swatches.push(vectorcraft_color::Swatch { name: "Tiles".into(), paint: pattern_paint("Dots"), global: false, spot: false });
+    };
+    let mut s = session();
+    s.edit("Pattern", |d, _| {
+        make(d, 4.0);
+        Ok(())
+    })
+    .unwrap();
+    let b64 = run(&mut s, "document.serialize", json!({}))["dataBase64"].as_str().unwrap().to_string();
+    let id = run(&mut s, "swatch.library.load", json!({"dataBase64": b64, "name": "Dots.vectorcraft"}))["library"].clone();
+    run(&mut s, "file.new", json!({"width": 100, "height": 100}));
+    s.edit("Pattern", |d, _| {
+        make(d, 5.0);
+        Ok(())
+    })
+    .unwrap();
+    let r = run(&mut s, "swatch.library.add", json!({"library": id, "names": ["Tiles"]}));
+    assert_eq!((&r["added"], &r["existing"]), (&json!(["Tiles 2"]), &json!([])), "{r}");
+    let d = doc(&s);
+    let Some(Paint::Pattern { pattern, .. }) = d.swatch("Tiles 2").map(|w| &w.paint) else { panic!("no pattern swatch Tiles 2: {r}") };
+    let inner = d.pattern(pattern).and_then(|p| p.art.first()).map(|n| n.appearance.fill_paint());
+    let Some(Paint::Pattern { pattern: inner, .. }) = inner else { panic!("the added pattern is not painted with a pattern: {r}") };
+    assert_eq!(d.pattern(&inner).map(|p| p.tile), Some(vectorcraft_geom::Rect::new(0.0, 0.0, 4.0, 4.0)), "the library's inner pattern");
+    let again = run(&mut s, "swatch.library.add", json!({"library": id, "names": ["Tiles"]}));
+    assert_eq!((&again["added"], &again["existing"]), (&json!([]), &json!(["Tiles 2"])), "{again}");
+}
+
+/// A global color that a library pattern's art links to, added in the same call after the pattern
+/// swatch, is the swatch the pattern brought with it: it is added once, not again as a numbered
+/// copy, and goes into the library swatch's color group.
+#[test]
+fn a_color_a_pattern_brings_is_not_added_twice_in_one_call() {
+    use std::sync::Arc;
+    use vectorcraft_doc::pattern::pattern_paint;
+    let mut s = session();
+    run(&mut s, "swatch.new", json!({"name": "Ink", "color": "#123456", "global": true}));
+    s.edit("Pattern", |d, _| {
+        let ink = Paint::Solid { color: Color::rgb8(0x12, 0x34, 0x56), swatch: Some("Ink".into()), tint: 1.0 };
+        let square = vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(0.0, 0.0, 6.0, 6.0));
+        let square = vectorcraft_doc::Node::path(d.alloc_id(), square, vectorcraft_doc::Appearance::basic(ink, Paint::None, 0.0));
+        let tile = vectorcraft_geom::Rect::new(0.0, 0.0, 8.0, 8.0);
+        d.patterns.push(vectorcraft_doc::PatternDef { tile, ..vectorcraft_doc::PatternDef::new("Squares", vec![Arc::new(square)]) });
+        d.swatches.push(vectorcraft_color::Swatch { name: "Tiles".into(), paint: pattern_paint("Squares"), global: false, spot: false });
+        // `Ink` goes into a color group of its own.
+        let i = d.swatches.iter().position(|w| w.name == "Ink").unwrap();
+        let ink = d.swatches.remove(i);
+        d.swatch_groups.push(vectorcraft_color::SwatchGroup { name: "Inks".into(), swatches: vec![ink] });
+        Ok(())
+    })
+    .unwrap();
+    let b64 = run(&mut s, "document.serialize", json!({}))["dataBase64"].as_str().unwrap().to_string();
+    let id = run(&mut s, "swatch.library.load", json!({"dataBase64": b64, "name": "Squares.vectorcraft"}))["library"].clone();
+    run(&mut s, "file.new", json!({"width": 100, "height": 100}));
+    let r = run(&mut s, "swatch.library.add", json!({"library": id, "names": ["Tiles", "Inks"]}));
+    let d = doc(&s);
+    let inks: Vec<&str> = d.swatches_iter().filter(|w| w.name.starts_with("Ink")).map(|w| w.name.as_str()).collect();
+    assert_eq!(inks, ["Ink"], "{r}");
+    assert_eq!((&r["added"], &r["existing"]), (&json!(["Tiles", "Ink"]), &json!([])), "{r}");
+    let group = d.swatch_groups.iter().find(|g| g.name == "Inks").map(|g| g.swatches.iter().map(|w| w.name.as_str()).collect::<Vec<_>>());
+    assert_eq!(group, Some(vec!["Ink"]), "{r}");
+    assert!(d.swatches.iter().all(|w| w.name != "Ink"), "{r}");
+}
+
+/// A library pattern whose art links to a global color that the document has under the same name
+/// in another color keeps the library's color: the color comes in under a free name ("Ink 2") and
+/// the pattern links to it, as the color added in the same call does, and the document's own color
+/// is left as it was. Adding the pattern again finds it.
+#[test]
+fn a_library_pattern_keeps_its_global_color_when_the_document_has_that_name_in_another_color() {
+    use std::sync::Arc;
+    use vectorcraft_doc::pattern::pattern_paint;
+    let mut s = session();
+    run(&mut s, "swatch.new", json!({"name": "Ink", "color": "#0000ff", "global": true}));
+    s.edit("Pattern", |d, _| {
+        let ink = Paint::Solid { color: Color::rgb8(0, 0, 0xff), swatch: Some("Ink".into()), tint: 1.0 };
+        let square = vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(0.0, 0.0, 6.0, 6.0));
+        let square = vectorcraft_doc::Node::path(d.alloc_id(), square, vectorcraft_doc::Appearance::basic(ink, Paint::None, 0.0));
+        let tile = vectorcraft_geom::Rect::new(0.0, 0.0, 8.0, 8.0);
+        d.patterns.push(vectorcraft_doc::PatternDef { tile, ..vectorcraft_doc::PatternDef::new("Squares", vec![Arc::new(square)]) });
+        d.swatches.push(vectorcraft_color::Swatch { name: "Tiles".into(), paint: pattern_paint("Squares"), global: false, spot: false });
+        Ok(())
+    })
+    .unwrap();
+    let b64 = run(&mut s, "document.serialize", json!({}))["dataBase64"].as_str().unwrap().to_string();
+    let id = run(&mut s, "swatch.library.load", json!({"dataBase64": b64, "name": "Squares.vectorcraft"}))["library"].clone();
+    run(&mut s, "file.new", json!({"width": 100, "height": 100}));
+    run(&mut s, "swatch.new", json!({"name": "Ink", "color": "#ff0000", "global": true}));
+    let r = run(&mut s, "swatch.library.add", json!({"library": id, "names": ["Tiles", "Ink"]}));
+    assert_eq!((&r["added"], &r["existing"]), (&json!(["Tiles", "Ink 2"]), &json!([])), "{r}");
+    let d = doc(&s);
+    let hex = |n: &str| d.swatch(n).and_then(|w| w.paint.color()).map(|c| c.to_hex());
+    assert_eq!((hex("Ink"), hex("Ink 2")), (Some("#ff0000".to_string()), Some("#0000ff".to_string())), "{r}");
+    let fill = d.pattern("Squares").unwrap().art[0].appearance.fill_paint();
+    let Paint::Solid { color, swatch, .. } = &fill else { panic!("the tile is filled with a color: {fill:?}") };
+    assert_eq!((swatch.as_deref(), color.to_hex()), (Some("Ink 2"), "#0000ff".to_string()), "{r}");
+    let again = run(&mut s, "swatch.library.add", json!({"library": id, "names": ["Tiles"]}));
+    assert_eq!((&again["added"], &again["existing"]), (&json!([]), &json!(["Tiles"])), "{again}");
+}
+
 #[test]
 fn swatch_exchange_files_load_add_and_list_as_user_libraries() {
     let bytes = vectorcraft_testkit::ase::sample();
@@ -634,6 +819,114 @@ fn gradient_libraries_are_listed_and_gradient_swatches_rename_and_take_new_gradi
     assert!(s.execute("swatch.edit", &json!({"name": "Early", "paint": {"color": "#00ff00"}})).is_err());
     run(&mut s, "swatch.edit", json!({"name": "Red", "paint": {"color": "#00ff00"}}));
     assert_eq!(doc(&s).swatch("Red").unwrap().paint.color().map(|c| c.to_hex()), Some("#00ff00".into()));
+}
+
+/// A radial gradient from red to blue, with `extra` keys.
+fn radial_gradient(extra: Value) -> Value {
+    let mut g = json!({"kind": "radial", "stops": [{"offset": 0, "color": "#ff0000"}, {"offset": 1, "color": "#0000ff"}]});
+    if let (Some(g), Some(extra)) = (g.as_object_mut(), extra.as_object()) {
+        g.extend(extra.clone());
+    }
+    g
+}
+
+/// The gradient swatch `name` keeps an aspect of 50%, holds no swatch link, and applies with that
+/// aspect, fitted to the object it is applied to.
+fn assert_swatch_applies_with_half_aspect(s: &mut Session, name: &str) {
+    let Paint::Gradient(sw) = &doc(s).swatch(name).unwrap().paint else { panic!("{name}: a gradient swatch") };
+    assert!(sw.geom.is_some_and(|g| (g.aspect - 0.5).abs() < 1e-9), "{name} keeps the aspect: {:?}", sw.geom);
+    assert_eq!(sw.swatch, None, "{name} holds no link to the swatch its gradient came from");
+    let r = run(s, "shape.rectangle", json!({"x": 100, "y": 0, "width": 100, "height": 60}));
+    let id = r["id"].as_u64().unwrap();
+    run(s, "paint.setFill", json!({"ids": [id], "swatch": name}));
+    let fill = doc(s).node(vectorcraft_doc::NodeId(id)).unwrap().appearance.fill_paint();
+    let Paint::Gradient(g) = fill else { panic!("{name}: a gradient fill") };
+    let geom = g.geom.unwrap();
+    assert!(
+        geom.start.distance(vectorcraft_geom::Point::new(150.0, 30.0)) < 1e-9 && (geom.aspect - 0.5).abs() < 1e-9,
+        "{name} fits the object with its aspect: {geom:?}"
+    );
+}
+
+/// An edited gradient with a vector and an aspect that replaces a gradient swatch keeps its aspect,
+/// as a new swatch made from it does.
+#[test]
+fn a_gradient_swatch_takes_an_edited_gradient_with_its_aspect() {
+    let mut s = session();
+    run(&mut s, "swatch.new", json!({"name": "Edited", "gradient": radial_gradient(json!({}))}));
+    let placed = radial_gradient(json!({"start": [25, 25], "end": [50, 25], "aspect": 50}));
+    run(&mut s, "swatch.edit", json!({"name": "Edited", "paint": {"gradient": placed}}));
+    assert_swatch_applies_with_half_aspect(&mut s, "Edited");
+}
+
+/// A gradient swatch Alt-dropped on another gradient swatch gives it its gradient with its aspect.
+#[test]
+fn a_gradient_swatch_takes_a_dropped_swatch_with_its_aspect() {
+    let mut s = session();
+    run(&mut s, "swatch.new", json!({"name": "Dropped", "gradient": radial_gradient(json!({}))}));
+    let placed = radial_gradient(json!({"start": [25, 25], "end": [50, 25], "aspect": 50}));
+    run(&mut s, "swatch.new", json!({"name": "Oval", "gradient": placed}));
+    run(&mut s, "swatch.edit", json!({"name": "Dropped", "paint": {"swatch": "Oval"}}));
+    assert_swatch_applies_with_half_aspect(&mut s, "Dropped");
+}
+
+/// A gradient given an aspect but no vector keeps the aspect in a new swatch and in a replacement,
+/// as `paint.setFill` keeps it on the object.
+#[test]
+fn a_gradient_without_a_vector_keeps_its_aspect_in_a_swatch() {
+    let mut s = session();
+    let oval = radial_gradient(json!({"aspect": 50}));
+    run(&mut s, "swatch.new", json!({"name": "New", "gradient": oval}));
+    assert_swatch_applies_with_half_aspect(&mut s, "New");
+    run(&mut s, "swatch.new", json!({"name": "Edited", "gradient": radial_gradient(json!({}))}));
+    run(&mut s, "swatch.edit", json!({"name": "Edited", "paint": {"gradient": oval}}));
+    assert_swatch_applies_with_half_aspect(&mut s, "Edited");
+    // Without an aspect the swatch stays unplaced.
+    run(&mut s, "swatch.new", json!({"name": "Round", "gradient": radial_gradient(json!({}))}));
+    let Paint::Gradient(round) = &doc(&s).swatch("Round").unwrap().paint else { panic!("a gradient swatch") };
+    assert_eq!(round.geom, None);
+}
+
+/// A pattern that replaces a pattern swatch is stored untransformed, as a new swatch stores it, so
+/// art the swatch is applied to keeps its own tile placement.
+#[test]
+fn a_pattern_swatch_takes_a_new_pattern_untransformed() {
+    let mut s = session();
+    for (name, color) in [("Dots", "#ff0000"), ("Bars", "#0000ff")] {
+        let r = run(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10}));
+        run(&mut s, "paint.setFill", json!({"ids": [r["id"]], "color": color}));
+        run(&mut s, "select.set", json!({"ids": [r["id"]]}));
+        run(&mut s, "object.pattern.make", json!({"name": name, "width": 20, "height": 20}));
+        run(&mut s, "object.pattern.done", json!({}));
+    }
+    // A pattern swatch holding a tile transform, as documents saved by older versions can.
+    let moved = vectorcraft_geom::Affine::new([2.0, 0.0, 0.0, 2.0, 15.0, 10.0]);
+    let st = s.doc_mut().unwrap();
+    let Some(Paint::Pattern { xf, .. }) = std::sync::Arc::make_mut(&mut st.doc).swatch_mut("Bars").map(|w| &mut w.paint) else {
+        panic!("the Bars pattern swatch")
+    };
+    *xf = moved;
+    run(&mut s, "swatch.edit", json!({"name": "Dots", "paint": {"swatch": "Bars"}}));
+    assert_eq!(doc(&s).swatch("Dots").unwrap().paint, vectorcraft_doc::pattern::pattern_paint("Bars"));
+}
+
+/// A pattern swatch takes a pattern given by name, as an Alt-drop of a pattern fill sends it, and
+/// an unknown pattern is an error that leaves the swatch as it was.
+#[test]
+fn a_pattern_swatch_takes_a_pattern_by_name() {
+    let mut s = session();
+    for (name, color) in [("Dots", "#ff0000"), ("Bars", "#0000ff")] {
+        let r = run(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10}));
+        run(&mut s, "paint.setFill", json!({"ids": [r["id"]], "color": color}));
+        run(&mut s, "select.set", json!({"ids": [r["id"]]}));
+        run(&mut s, "object.pattern.make", json!({"name": name, "width": 20, "height": 20}));
+        run(&mut s, "object.pattern.done", json!({}));
+    }
+    run(&mut s, "swatch.edit", json!({"name": "Dots", "paint": {"pattern": "Bars"}}));
+    assert_eq!(doc(&s).swatch("Dots").unwrap().paint, vectorcraft_doc::pattern::pattern_paint("Bars"));
+    let before = doc(&s).swatch("Dots").unwrap().paint.clone();
+    assert!(s.execute("swatch.edit", &json!({"name": "Dots", "paint": {"pattern": "Nope"}})).is_err());
+    assert_eq!(doc(&s).swatch("Dots").unwrap().paint, before);
 }
 
 #[test]

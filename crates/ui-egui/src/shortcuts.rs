@@ -223,11 +223,22 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
         if crate::shortcut_editor::is_recording(app) {
             return;
         }
-        // Escape closes a dropdown list or popover open in the dialog (each closes itself on it) and
-        // leaves the dialog open.
-        let popup = app.ui.dialog.as_ref().is_some_and(|d| {
-            egui::Popup::is_any_open(ctx) || crate::dialogs::brush_options::tips_open(d) || crate::dialogs::new_document_popup_open(d)
+        // Escape closes a dropdown list or popover open in the dialog, or the palette's Recent
+        // Commands list (each closes itself on it), and leaves the dialog or the palette open.
+        let popup = app.ui.dialog.as_ref().map_or(crate::palette::recent_list_open(ctx), |d| {
+            egui::Popup::is_any_open(ctx)
+                || crate::dialogs::brush_options::tips_open(d)
+                || crate::dialogs::new_document_popup_open(d)
+                || crate::dialogs::export_artboard_name_editing(app, d)
         });
+        // Escape ends Brush Options' Key Color pick and leaves the dialog open: the Eyedropper
+        // switches back to the tool that armed it.
+        if !popup && pressed_anew(ctx, Key::Escape) && key_color_pick_armed(app) {
+            let view = app.view_info();
+            let r = app.session.tool_key(ToolKey::Escape, Mods::default(), view);
+            crate::canvas::apply_requests(app, r);
+            return;
+        }
         // Escape in Preferences' search field with text clears the field first.
         if !popup && pressed_anew(ctx, Key::Escape) && !crate::prefs_dialog::clear_search_on_escape(app, ctx) {
             crate::dialogs::cancel(app);
@@ -384,6 +395,12 @@ pub(crate) fn pressed_anew(ctx: &egui::Context, key: Key) -> bool {
     ctx.input(|i| i.events.iter().any(|e| matches!(e, egui::Event::Key { key: k, pressed: true, repeat: false, .. } if *k == key)))
 }
 
+/// Is Brush Options open with its Key Color eyedropper armed, waiting for a click on the art?
+fn key_color_pick_armed(app: &VectorcraftApp) -> bool {
+    let open = app.ui.dialog.as_ref().is_some_and(|d| d.kind == crate::dialogs::brush_options::KIND);
+    open && app.session.tool_id() == "eyedropper" && app.session.tool_options()["brushKeyColor"] == true
+}
+
 /// Takes this frame's repeats of `key` when the tool claims it: a press acts once, and they stay out
 /// of the shortcuts. A chord a command is bound to keeps its repeats.
 fn take_claimed_repeat(app: &mut VectorcraftApp, ctx: &egui::Context, key: Key, tool_key: ToolKey, view: ViewInfo) -> bool {
@@ -522,7 +539,8 @@ fn escape_ends_one_thing(app: &mut VectorcraftApp, ctx: &egui::Context) {
     if app.session.active().is_some_and(|d| d.doc.pattern_edit.is_some()) {
         let _ = app.run("object.pattern.done", json!({}));
     } else if app.session.active().is_some_and(|d| d.isolation.is_some()) {
-        let _ = app.run("object.exitIsolation", json!({}));
+        // From an isolated sublayer, Escape leaves isolation mode rather than going up one layer.
+        let _ = app.run("object.exitIsolation", json!({ "all": true }));
     } else if app.session.active().is_some_and(|d| d.global_edit.is_some()) {
         let _ = app.run("select.globalEdit", json!({}));
     } else if app.ui.flyout.is_some() {

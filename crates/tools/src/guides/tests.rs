@@ -535,6 +535,60 @@ fn drawn_lines_land_perpendicular_to_segments_and_tangent_to_curves() {
     }
 }
 
+/// A touch point that falls exactly on one of the samples `touch_params` takes (t = k / 24) is
+/// found, once: the foot of the perpendicular from above a segment's middle, and the tangent
+/// point of a line drawn from a free point to a circle (#7846). A line to an oval lands tangent
+/// between samples, as before.
+#[test]
+fn touch_points_exactly_on_a_sample_are_found() {
+    use super::snap::touch_params;
+    use vectorcraft_doc::{Appearance, Node};
+    use vectorcraft_geom::kurbo::{CubicBez, Line, ParamCurve};
+    use vectorcraft_geom::shapes;
+    // (50, 40) above the segment (0, 0) to (100, 0): the foot is (50, 0), at t = 0.5 = 12 / 24.
+    let flat = PathSeg::Line(Line::new((0.0, 0.0), (100.0, 0.0)));
+    assert_eq!(touch_params(&flat, Point::new(50.0, 40.0), true), [0.5]);
+    assert_eq!(touch_params(&flat, Point::new(30.0, 40.0), true).len(), 1, "between samples, as before");
+    assert!(touch_params(&flat, Point::new(0.0, 40.0), true).is_empty(), "the ends stay out");
+    assert!(touch_params(&flat, Point::new(100.0, 40.0), true).is_empty(), "the ends stay out");
+    // From a point on the segment itself there is no line to be square.
+    assert!(touch_params(&flat, Point::new(50.0, 0.0), true).is_empty());
+    // A straight cubic seen from its own line runs along that line everywhere: no touch point.
+    let straight = PathSeg::Cubic(CubicBez::new((0.0, 0.0), (30.0, 0.0), (70.0, 0.0), (100.0, 0.0)));
+    assert!(touch_params(&straight, Point::new(-50.0, 0.0), false).is_empty());
+    // y = 400 (t - 0.5)^3 has its inflection at t = 0.5, and the tangent there (the x axis)
+    // touches zero without a change of sign; seen from (-100, 0) it is still found.
+    let wave = PathSeg::Cubic(CubicBez::new((0.0, -50.0), (100.0 / 3.0, 50.0), (200.0 / 3.0, -50.0), (100.0, 50.0)));
+    assert_eq!(touch_params(&wave, Point::new(-100.0, 0.0), false), [0.5]);
+    let (mut d, _) = doc_with_rect();
+    let l = d.layers[0].id;
+    let id = d.alloc_id();
+    let circle = shapes::ellipse(Rect::new(450.0, 450.0, 550.0, 550.0));
+    // The middle of the lower right quarter, and a point on the circle's tangent there.
+    let quarter = PathSeg::Cubic(circle.subpaths[0].segment(2));
+    let mid = quarter.eval(0.5);
+    let from = mid + Vec2::new(-64.0, 64.0);
+    assert!(((mid - Point::new(500.0, 500.0)).hypot() - 50.0).abs() < 0.1, "{mid:?}");
+    assert_eq!(touch_params(&quarter, from, false), [0.5]);
+    d.insert(Some(l), 1, Node::path(id, circle, Appearance::default_art())).unwrap();
+    // An oval (centre (500, 300), 100 by 50) seen from (300, 300): the tangent points are at
+    // x = 450, y = 300 -/+ 25 * sqrt(3), between samples.
+    let oval = d.alloc_id();
+    d.insert(Some(l), 2, Node::path(oval, shapes::ellipse(Rect::new(400.0, 250.0, 600.0, 350.0)), Appearance::default_art())).unwrap();
+    let (s, p) = (Selection::default(), paint());
+    let c = cx(&d, &s, &p);
+    let leave = Leave::segment(&c, from, false);
+    let (q, ov) = PointSnap::new(&c, || Targets::for_drawing(&d, &[], None, None)).snap_from(&c, mid + Vec2::new(1.5, 1.0), Some(&leave));
+    assert_eq!(labels(&ov), ["tangent"]);
+    assert!((q - mid).hypot() < 1e-9, "{q:?} {mid:?}");
+    assert_eq!(lines(&ov), vec![(from, q)]);
+    let start = Point::new(300.0, 300.0);
+    let leave = Leave::segment(&c, start, false);
+    let (q, ov) = PointSnap::new(&c, || Targets::for_drawing(&d, &[], None, None)).snap_from(&c, Point::new(452.0, 259.0), Some(&leave));
+    assert_eq!(labels(&ov), ["tangent"]);
+    assert!((q - Point::new(450.0, 300.0 - 25.0 * 3f64.sqrt())).hypot() < 0.2, "{q:?}");
+}
+
 /// A box dragged from a corner (Rectangle, Ellipse, ...) never snaps square to a segment, and
 /// a busy spot does not hide the contact: every segment in reach is tried.
 #[test]
@@ -1025,6 +1079,125 @@ fn a_drawn_point_lands_on_a_corner_of_a_glyphs_bounds() {
         let (q, _) =
             Targets::for_drawing(&d, &[], None, Some(GlyphSnap { anchors: false, proximity: false, ..GlyphSnap::default() })).snap_point(p, 4.0);
         assert!((q - tr).cross(dir).abs() < 1e-6, "angle {angle}: {q:?} is off the right edge");
+    }
+}
+
+/// Snap to Glyph: both ends of a gradient vector drawn on the art with the Gradient tool, a click
+/// that applies one, and its dragged start and end handles, land on a glyph's anchor point as a
+/// Pen click does, with the guides shown while hovering, and not with Snap to Glyph off. A drawn
+/// end also lands on a slanted path's segment, which no bounds line passes along, and on a
+/// construction guide through its start, and with Shift on an anchor along its 45° step. With nothing
+/// selected, hovering off the art shows no guides. A press that snaps still starts a drag only
+/// after the pointer moves 3 px from where it was pressed.
+#[test]
+fn gradient_vector_ends_land_on_a_glyph_anchor() {
+    use crate::xform::GradientTool;
+    use crate::{Action, PointerEvent, PointerKind, Tool};
+    use vectorcraft_color::{Gradient, GradientGeom, GradientPaint, Paint};
+    use vectorcraft_doc::Appearance;
+    use vectorcraft_geom::shapes;
+    let (mut d, t) = glyph_doc("H", 0.0);
+    let lay = layout_text(FontDb::global(), &t);
+    let g = lay.glyphs.iter().find(|g| !g.outline.elements().is_empty()).expect("a glyph with an outline");
+    // An anchor inside the glyph's bounds, which no glyph bounds line passes through.
+    let bb = g.outline.bounding_box();
+    let inside = |p: Point| p.x > bb.x0 + 1.0 && p.x < bb.x1 - 1.0 && p.y > bb.y0 + 1.0 && p.y < bb.y1 - 1.0;
+    let anchor = t.xf * g.outline.segments().map(|s| s.start()).find(|p| inside(*p)).expect("an anchor inside the glyph");
+    let type_id = d.children(Some(d.layers[0].id)).unwrap()[0].id;
+    // A rectangle away from the type, with a gradient from (300, 100) to (400, 100).
+    let (l, rect) = (d.layers[0].id, d.alloc_id());
+    d.insert(Some(l), 0, Node::path(rect, shapes::rectangle(Rect::new(300.0, 50.0, 400.0, 150.0)), Appearance::default_art())).unwrap();
+    let mut gp = GradientPaint::new(Gradient::default());
+    gp.geom = Some(GradientGeom { start: Point::new(300.0, 100.0), end: Point::new(400.0, 100.0), aspect: 1.0, focal: None });
+    d.node_mut(rect).unwrap().appearance.set_fill(Paint::Gradient(Box::new(gp)));
+    // A slanted line, its middle far from its bounds' edges.
+    let (a0, a1) = (Point::new(200.0, 420.0), Point::new(280.0, 480.0));
+    let line = d.alloc_id();
+    d.insert(Some(l), 0, Node::path(line, shapes::line(a0, a1), Appearance::default_art())).unwrap();
+    let mut on_type = Selection::default();
+    on_type.add(type_id);
+    let mut on_rect = Selection::default();
+    on_rect.add(rect);
+    let p = paint();
+    let click = anchor + Vec2::new(1.5, -1.0);
+    let away = anchor + Vec2::new(-83.3, -61.7);
+    let ev = |kind, q: Point| PointerEvent::new(kind, q.x, q.y);
+    let preview = |acts: &[Action]| {
+        acts.iter().find_map(|a| if let Action::Preview(_, v) = a { Some(v.clone()) } else { None }).unwrap_or_else(|| panic!("{acts:?}"))
+    };
+    let at = |v: &serde_json::Value| Point::new(v[0].as_f64().unwrap(), v[1].as_f64().unwrap());
+    for glyphs in [true, false] {
+        let c = ToolContext { snap_to_glyph: glyphs, ..cx(&d, &on_type, &p) };
+        let lands = |q: Point| q.distance(anchor) < 1e-9;
+        // The pointer hovering at the click shows the guides of the anchor a vector would start on.
+        let mut tool = GradientTool::default();
+        tool.pointer(&c, &ev(PointerKind::Move, click));
+        assert_eq!(!tool.overlays(&c).is_empty(), glyphs, "hover, Snap to Glyph {glyphs}");
+        // A vector drawn from the click starts on the anchor.
+        tool.pointer(&c, &ev(PointerKind::Down, click));
+        let v = preview(&tool.pointer(&c, &ev(PointerKind::Drag, click + Vec2::new(80.0, 60.0))));
+        assert_eq!(lands(at(&v["start"])), glyphs, "start, Snap to Glyph {glyphs}: {v}");
+        tool.pointer(&c, &ev(PointerKind::Up, click + Vec2::new(80.0, 60.0)));
+        // One drawn to beside the slanted line, a quarter of the way along (15 pt or more from its
+        // bounds' edges, centre and anchors), ends on the line.
+        let dir = (a1 - a0) / (a1 - a0).hypot();
+        let quarter = a0 + (a1 - a0) * 0.25;
+        tool.pointer(&c, &ev(PointerKind::Down, away));
+        let v = preview(&tool.pointer(&c, &ev(PointerKind::Drag, quarter + Vec2::new(-dir.y, dir.x) * 2.0)));
+        assert!((at(&v["end"]) - a0).cross(dir).abs() < 1e-6, "end on the line: {v}");
+        tool.pointer(&c, &ev(PointerKind::Up, quarter));
+        // One drawn to the click ends on it.
+        tool.pointer(&c, &ev(PointerKind::Down, away));
+        let v = preview(&tool.pointer(&c, &ev(PointerKind::Drag, click)));
+        assert_eq!(lands(at(&v["end"])), glyphs, "end, Snap to Glyph {glyphs}: {v}");
+        tool.pointer(&c, &ev(PointerKind::Up, click));
+        // A click at the click applies a gradient that starts on the anchor.
+        tool.pointer(&c, &ev(PointerKind::Down, click));
+        let acts = tool.pointer(&c, &ev(PointerKind::Up, click));
+        let v = acts.iter().find_map(|a| if let Action::Exec(_, v) = a { Some(v.clone()) } else { None }).unwrap_or_else(|| panic!("{acts:?}"));
+        assert_eq!(lands(at(&v["start"])), glyphs, "click, Snap to Glyph {glyphs}: {v}");
+        // One drawn to 2 px below the horizontal through its start, far from any target, ends on
+        // that construction guide, as a Line Segment's end does.
+        tool.pointer(&c, &ev(PointerKind::Down, away));
+        let v = preview(&tool.pointer(&c, &ev(PointerKind::Drag, away + Vec2::new(150.0, 2.0))));
+        assert!((at(&v["end"]).y - away.y).abs() < 1e-9, "end on the construction guide: {v}");
+        tool.pointer(&c, &ev(PointerKind::Up, away + Vec2::new(150.0, 2.0)));
+        // With Shift, one drawn at 45° toward the line's first anchor slides along that step onto it.
+        let shift = |kind, q: Point| PointerEvent { mods: crate::Mods { shift: true, ..Default::default() }, ..ev(kind, q) };
+        tool.pointer(&c, &shift(PointerKind::Down, a0 + Vec2::new(60.0, -60.0)));
+        let v = preview(&tool.pointer(&c, &shift(PointerKind::Drag, a0 + Vec2::new(-1.5, 0.5))));
+        assert!(at(&v["end"]).distance(a0) < 1e-9, "Shift end on the anchor: {v}");
+        tool.pointer(&c, &shift(PointerKind::Up, a0));
+        // A press 3 px from the anchor, then a move of 2 px away from it: no drag yet.
+        let near = anchor + Vec2::new(2.5, -1.5);
+        tool.pointer(&c, &ev(PointerKind::Down, near));
+        let acts = tool.pointer(&c, &ev(PointerKind::Drag, near + Vec2::new(1.5, -1.0)));
+        assert!(acts.is_empty(), "drag start, Snap to Glyph {glyphs}: {acts:?}");
+        tool.pointer(&c, &ev(PointerKind::Up, near + Vec2::new(1.5, -1.0)));
+        // The end handle of the rectangle's gradient Alt-dragged to the click lands on the anchor.
+        let c = ToolContext { snap_to_glyph: glyphs, ..cx(&d, &on_rect, &p) };
+        let mut tool = GradientTool::default();
+        // Hovering over the handle (on the rectangle's edge) shows no guides.
+        tool.pointer(&c, &ev(PointerKind::Move, Point::new(400.0, 100.0)));
+        assert!(!tool.overlays(&c).iter().any(|o| matches!(o, Overlay::Label { .. })), "hover over the handle");
+        let alt = |kind, q: Point| PointerEvent { mods: crate::Mods { alt: true, ..Default::default() }, ..ev(kind, q) };
+        tool.pointer(&c, &alt(PointerKind::Down, Point::new(400.0, 100.0)));
+        let v = preview(&tool.pointer(&c, &alt(PointerKind::Drag, click)));
+        assert_eq!(lands(at(&v["end"])), glyphs, "end handle, Snap to Glyph {glyphs}: {v}");
+        tool.pointer(&c, &ev(PointerKind::Up, click));
+        // The start handle dragged to the click lands on the anchor.
+        tool.pointer(&c, &ev(PointerKind::Down, Point::new(300.0, 100.0)));
+        let v = preview(&tool.pointer(&c, &ev(PointerKind::Drag, click)));
+        assert_eq!(lands(at(&v["start"])), glyphs, "start handle, Snap to Glyph {glyphs}: {v}");
+        tool.pointer(&c, &ev(PointerKind::Up, click));
+        // With nothing selected, hovering beside the rectangle (off the art and its 1 pt stroke,
+        // where a press draws nothing, but within the snapping tolerance of its edge) shows no
+        // guides.
+        let none = Selection::default();
+        let c = ToolContext { snap_to_glyph: glyphs, ..cx(&d, &none, &p) };
+        let mut tool = GradientTool::default();
+        tool.pointer(&c, &ev(PointerKind::Move, Point::new(296.2, 75.0)));
+        assert!(tool.overlays(&c).is_empty(), "hover off the art: {:?}", tool.overlays(&c));
     }
 }
 

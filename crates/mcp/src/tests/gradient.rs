@@ -44,8 +44,13 @@ fn gradient_annotator_end_to_end() {
     let r = ok(&mut h, "press_key", json!({"key": "Delete"}));
     assert_eq!(r["handledBy"], "tool", "{r}");
     assert_eq!(offsets(&gradient(&h)), vec![0.0, 100.0]);
-    // The end handle changes only the end.
+    // The end handle changes only the length: the end stays on the bar's line.
     let end = json!({"events": [{"kind": "down", "x": 200, "y": 150}, {"kind": "drag", "x": 230, "y": 120}, {"kind": "up", "x": 230, "y": 120}]});
+    ok(&mut h, "pointer_gesture", end);
+    let g = gradient(&h).geom.unwrap();
+    assert_eq!((g.start, g.end), (Point::new(100.0, 150.0), Point::new(230.0, 150.0)));
+    // Alt-dragged, it changes the length and the angle together.
+    let end = json!({"mods": {"alt": true}, "events": [{"kind": "down", "x": 230, "y": 150}, {"kind": "drag", "x": 230, "y": 120}, {"kind": "up", "x": 230, "y": 120}]});
     ok(&mut h, "pointer_gesture", end);
     let g = gradient(&h).geom.unwrap();
     assert_eq!((g.start, g.end), (Point::new(100.0, 150.0), Point::new(230.0, 120.0)));
