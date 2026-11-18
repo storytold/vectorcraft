@@ -4,6 +4,8 @@
 >
 > Tech Circuit update (2026-11-14): three original procedural brushes; ten built-in brush libraries (G5).
 >
+> Selection update (2026-11-11): path and compound-path interiors follow enabled non-None fill rows, including lower fills beneath a top None row (#6625). Hidden-only interiors miss; zero-opacity fills remain selectable. Cap/join follow-up (2026-11-12): hidden-fill and no-fill stroke hits must respect cap and join geometry; focused cap/join CPU regressions passed. Scores and estimates unchanged.
+>
 > Vector Halftone preview update (2026-11-10): temporary dot selection marks are hidden, and the bounding box stays available (#6369).
 >
 > Numeric spinner update (2026-11-10): held mouse arrows repeat past the click timeout; scores and estimates unchanged (#6307).
@@ -213,6 +215,7 @@ tools, never checked side by side) isn't captured row by row.
 
 | Behaviour | Status | Notes |
 |---|---|---|
+| Path and compound-path interior selection follows enabled non-None fill rows | done | #6625; lower visible fill beneath a top None row stays selectable; hidden-only/None interiors miss; zero-opacity, edge, Outline/path-only and hole controls in `crates/engine/tests/path_fill_hits.rs`; hidden-fill and no-fill stroke cap/join CPU regressions passed |
 | Deleting segments or anchors that disconnect an ordinary path creates independent selected objects | done | #3380, deletion only: first piece retains its ID, styles and transforms carry over in sibling order, bounds-fitted gradients keep their original placement, and one Undo restores the original. Existing multi-subpath paths and compound members stay intact. `delete_path_pieces` covers transformed/styled rectangles, cubic handles and Undo/Redo. Endpoint highlighting remains open. |
 | Click/Shift-click anchors; marquee toggles with Shift | done | #483 |
 | Align selected anchors to their bounds or the artboard; repeating an alignment that moves nothing keeps Undo, Redo and saved state | done | #1180 follow-up; engine regressions include rounding-only moves and unchanged handles; #1641 (fixes #1636): Align and Distribute act on the anchors selected with Direct Selection, the points of one path aligning to each other and Distribute spacing them |
@@ -583,6 +586,7 @@ before release (#6373). [Paint faces and edges](https://helpx.adobe.com/illustra
 | 2026-11-12 | minor | Remove Background for a selected image in the Contextual Task Bar, Properties › Quick Actions and the Control bar, which runs at once with its defaults. Scores and estimates unchanged. |
 | 2026-11-12 | minor | Live Paint Bucket fills faces crossed in one drag (#6373). Scores and estimates unchanged. |
 | 2026-11-12 | minor | Save refusal follow-up (#6146): changed format opens its Save options; unchanged format retains original options. Focused UI regressions passed, including the format-change case that failed before the fix; native panel acceptance pending. Scores and estimates unchanged. |
+| 2026-11-12 | minor | #6625 cap/join follow-up: hidden-fill and no-fill stroke hits must respect their cap/join geometry; focused CPU regressions passed. Existing fill-stack evidence, scores and estimates unchanged. |
 | 2026-11-11 | minor | Ruler origin: the corner drag snaps as a drawn point does, onto the art's and the artboards' anchors, centres, edges and paths, and with Snap to Point along the ruler guides; scores and estimates unchanged |
 | 2026-11-11 | minor | macOS canvas cursor delivery (#2292): while the host owns the cursor it sets it again on every pass, so the tool's cursor stays after the pointer moves (#6362); `mac_cursor` ownership test updated; scores and estimates unchanged. |
 | 2026-11-11 | minor | Eyedropper copies effective character dimensions between transformed text objects (#6404); scores and estimates unchanged. |
@@ -591,6 +595,7 @@ before release (#6373). [Paint faces and edges](https://helpx.adobe.com/illustra
 | 2026-11-11 | minor | A middle-click on a document tab (or its ×) closes it as the × does; closing a document's last view with unsaved changes asks to save first (#6506). VectorCraft addition; scores and estimates unchanged. |
 | 2026-11-11 | minor | Files that record no units (PDF, EPS or `.ai` without ruler units, raster images, metafiles, Affinity files, importer plug-ins) open and revert in Preferences › Units › General instead of points; native, SVG and DXF files and `.ai`/EPS ruler units are kept (#5820). Scores and estimates unchanged. |
 | 2026-11-11 | minor | Blob Brush: while painting, the preview of a round tip is the outline of the area the stroke adds, round at both ends, as the stroke it commits (#4343). Scores unchanged (estimated). |
+| 2026-11-11 | minor | #6625: path and compound-path interior hits follow enabled non-None fill rows, including lower fills beneath a top None row; hidden-only interiors miss; zero-opacity fills remain selectable. Scores and estimates unchanged. |
 | 2026-11-10 | minor | Symbol libraries: Inventory Icons joins Basic Shapes, UI Frames and Map Markers as a fourth built-in library (Sword, Shield, Potion, Key, Gem; no default 9-slice). |
 | 2026-11-10 | minor | Held numeric spinner arrows keep stepping past the click timeout and stop on release (#6307). Scores and estimates unchanged. |
 | 2026-11-10 | minor | Vector Halftone Preview leaves the dots unobscured and keeps the selection box (#6369). Scores and estimates unchanged. |
