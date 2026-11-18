@@ -1128,6 +1128,7 @@ fn known(action: &Action<String>) -> bool {
 pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     let area = area_id();
     let ctx = ui.ctx().clone();
+    crate::tools_float::set_dock_area_left(&ctx, ui.available_rect_before_wrap().left());
     let changed_workspace = ctx.data_mut(|data| {
         let previous = data.get_temp::<u64>(area.with("generation"));
         data.insert_temp(area.with("generation"), app.ui.docking_generation);
