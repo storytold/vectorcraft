@@ -5,8 +5,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
 use craft_cms::{
-    Builtin, Clut, ColorSpace, Curve, Intent as CmsIntent, Pcs, Profile, ProfileClass, Transform,
-    builtin,
+    Builtin, Clut, ColorSpace, Curve, Intent as CmsIntent, Pcs, Profile, ProfileClass, Transform, builtin,
     pipeline::Stage,
     profile::{Lut, LutKind},
 };
