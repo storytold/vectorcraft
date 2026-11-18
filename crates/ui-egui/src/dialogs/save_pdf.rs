@@ -152,10 +152,31 @@ fn params(d: &Dialog) -> Value {
     p
 }
 
-/// Save PDF: write the file (a PDF copy, or the PDF a Save As / Save a Copy asked for, `__save`);
-/// the dialog stays open when that fails (bad range, cancelled save…). While Save Preset… asks for
-/// a name, OK (and Enter) saves the preset instead.
+/// The field that holds why the last Save PDF failed, shown in the dialog (the status bar sits
+/// behind it, #6861).
+const ERROR: &str = "__error";
+
+/// Save PDF: write the file (see [`write`]). When that fails the dialog stays open and says why,
+/// under its sections, as well as in the status bar the dialog covers.
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
+    let r = write(app, d);
+    if let Some(open) = app.ui.dialog.as_mut().filter(|o| o.kind == d.kind) {
+        match &r {
+            Err(e) => {
+                open.fields.insert(ERROR.into(), json!(e));
+            }
+            Ok(_) => {
+                open.fields.remove(ERROR);
+            }
+        }
+    }
+    r
+}
+
+/// Write the file (a PDF copy, or the PDF a Save As / Save a Copy asked for, `__save`); the
+/// dialog stays open when that fails (bad range, cancelled save…). While Save Preset… asks for a
+/// name, OK (and Enter) saves the preset instead.
+fn write(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     if d.fields.contains_key(SAVE_AS) {
         let mut d = d.clone();
         let r = save_preset(app, &mut d);
@@ -408,7 +429,8 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         ui.vertical(|ui| {
             ui.set_width(500.0);
             ui.label(egui::RichText::new(tl!(section)).font(theme::semibold(14.0)).color(t.text_strong));
-            egui::ScrollArea::vertical().id_salt(("save-pdf", section)).max_height(360.0).auto_shrink([false, false]).show(ui, |ui| match section {
+            let list_h = super::modal::list_height(ui, 360.0);
+            egui::ScrollArea::vertical().id_salt(("save-pdf", section)).max_height(list_h).auto_shrink([false, false]).show(ui, |ui| match section {
                 "Compression" => compression(ui, d),
                 "Marks and Bleeds" => marks_and_bleeds(app, ui, d),
                 "Output" => output(ui, d),
@@ -417,6 +439,10 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
                 "Summary" => summary(app, ui, d),
                 _ => general(ui, d, editor),
             });
+            if let Some(e) = d.fields.get(ERROR).and_then(Value::as_str) {
+                ui.add_space(6.0);
+                ui.label(egui::RichText::new(crate::i18n::message(crate::i18n::current(), e)).color(t.error));
+            }
         });
     });
     false
@@ -452,7 +478,8 @@ pub(super) fn section_list(ui: &mut egui::Ui, d: &mut Dialog, sections: &[&str],
 
 /// What choosing `standard` changes: the compatibility, to its version unless it allows the one
 /// chosen, and off what files of a standard can't have (editing data, passwords; layers in PDF/X-1a
-/// and PDF/X-3).
+/// and PDF/X-3). In PDF/X-3 and PDF/X-4, Profile inclusion goes back to unset: the picker is
+/// disabled there, and `none` would write every CMYK color as DeviceCMYK.
 fn standard_chosen(d: &mut Dialog, standard: Standard) {
     if choice::<Compatibility>(d, "compatibility").is_some_and(|c| !standard.allows(c)) {
         set(d, "compatibility", json!(standard.version().id()));
@@ -465,6 +492,9 @@ fn standard_chosen(d: &mut Dialog, standard: Standard) {
     }
     if !standard.allows_layers() {
         set(d, "createLayers", json!(false));
+    }
+    if standard.is_pdfx() && !standard.cmyk_only() {
+        set(d, "output.profiles", json!(vectorcraft_pdf::UNSET_CHOICE));
     }
 }
 
@@ -590,9 +620,10 @@ fn image_rows(ui: &mut egui::Ui, d: &mut Dialog, key: &str, title: &str) {
     ui.horizontal(|ui| {
         pick::<Downsample>(ui, d, &format!("{base}.downsample"), 150.0, |_| true);
         ui.label(tl!("to"));
-        number(ui, d, &format!("{base}.ppi"), " ppi", on);
+        let ppi = super::ppi_suffix();
+        number(ui, d, &format!("{base}.ppi"), &ppi, on);
         ui.label(tl!("above"));
-        number(ui, d, &format!("{base}.abovePpi"), " ppi", on);
+        number(ui, d, &format!("{base}.abovePpi"), &ppi, on);
     });
     ui.horizontal(|ui| {
         ui.label(tl!("Compression:"));
@@ -711,6 +742,22 @@ fn output(ui: &mut egui::Ui, d: &mut Dialog) {
     });
     if standard.cmyk_only() {
         note(ui, tl!("PDF/X-1a files are CMYK: every colour is converted to the destination (blank: the output intent's CMYK profile), untagged."));
+    } else if standard.is_pdfx() {
+        note(
+            ui,
+            tl!(
+                "Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK."
+            ),
+        );
+        // A preset or the dialog's params can bring `none` with the standard; the picker can't change it.
+        if choice::<ProfileInclusion>(d, "output.profiles") == Some(ProfileInclusion::None) {
+            note(
+                ui,
+                tl!(
+                    "With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile."
+                ),
+            );
+        }
     } else if standard != Standard::None {
         note(ui, tl!("Files of this standard tag their colours with ICC profiles."));
     }
@@ -911,7 +958,7 @@ pub(super) fn option_rows<'a>(ui: &mut egui::Ui, changed: impl IntoIterator<Item
             Value::String(s) => s.clone(),
             other => other.to_string(),
         };
-        ui.label(egui::RichText::new(format!("{}: {value}", label(c["option"].as_str().unwrap_or_default()))).color(t.text));
+        ui.label(egui::RichText::new(format!("{} {value}", crate::i18n::colon(&label(c["option"].as_str().unwrap_or_default())))).color(t.text));
     }
 }
 
