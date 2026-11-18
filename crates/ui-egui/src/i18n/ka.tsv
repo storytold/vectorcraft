@@ -733,6 +733,7 @@
 @msg	compound {_1} must contain exactly one open path to join	შედგენილი {_1} შესაერთებლად ზუსტად ერთ ღია ტრაექტორიას უნდა შეიცავდეს
 @msg	connect end must be "start" or "end"	connect-ის end უნდა იყოს "start" ან "end"
 @msg	connect needs a path other than the one extended	connect-ს სჭირდება ტრაექტორია, რომელიც გაგრძელებულისგან განსხვავდება
+@msg	connect needs extend	connect-ს სჭირდება extend
 @msg	connect needs id	connect-ს სჭირდება id
 @msg	connect path has no open end	connect-ის ტრაექტორიას ღია ბოლო არ აქვს
 @msg	continuation must be an array of path chunks	continuation უნდა იყოს ტრაექტორიის ნაწილების მასივი
@@ -2065,6 +2066,7 @@
 @msg	{var_key} must be at most {most}	{var_key} უნდა იყოს მაქსიმუმ {most}
 @msg	a linked image file is outside the read roots	დაკავშირებული გამოსახულების ფაილი წაკითხვის ძირეული საქაღალდეების გარეთაა
 @msg	a linked file's export folder is outside the read roots	დაკავშირებული ფაილის ექსპორტის საქაღალდე წაკითხვის ძირეული საქაღალდეების გარეთაა
+@msg	a linked file's editing data can't be read to check it against the read roots	დაკავშირებული ფაილის რედაქტირების მონაცემების წაკითხვა ვერ ხერხდება წაკითხვის ძირეულ საქაღალდეებთან შესამოწმებლად
 	Neon & Glow	ნეონი და ნათება
 	Show Hidden Panels at Edge	დამალული პანელების ჩვენება კიდესთან
 @msg	`anchor` must be a [subpath, anchor] pair	`anchor` უნდა იყოს წყვილი [subpath, anchor]
@@ -3814,6 +3816,7 @@ digits	Malayalam	მალაიალამური
 	Underline	ხაზგასმული
 	Vertical Scale %	ვერტიკალური მასშტაბი %
 	Axis	ღერძი
+	Axis Angle	ღერძის კუთხე
 	ICF Top/Right	ICF ზედა/მარჯვენა
 	ICF Bottom/Left	ICF ქვედა/მარცხენა
 	Show Font Height Options	შრიფტის სიმაღლის პარამეტრების ჩვენება
@@ -3856,6 +3859,7 @@ digits	Malayalam	მალაიალამური
 	Rule:	წესი:
 	Save changes to {name}	ცვლილებების შენახვა: {name}
 	Save theme to My Themes	თემის შენახვა „ჩემ თემებში“
+	Set the current fill or stroke to the selected color	მიმდინარე შევსების ან კონტურის მონიშნულ ფერად დაყენება
 	Set the selected color to the current color	მონიშნული ფერის მიმდინარე ფერად დაყენება
 	Copy All Styles	ყველა სტილის კოპირება
 	Exported {path}	ექსპორტირებულია: {path}
@@ -4205,7 +4209,7 @@ digits	Malayalam	მალაიალამური
 	Overprint Preview (separations)	ზედდაბეჭდვის წინასწარი ნახვა (სეპარაციები)
 	Show All Plates	ყველა ფირფიტის ჩვენება
 	Show all plates	ყველა ფირფიტის ჩვენება
-	Show/hide plate (Alt-click: only this plate)	ფირფიტის ჩვენება/დამალვა (Alt-დაწკაპუნებით: მხოლოდ ეს ფირფიტა)
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	ფირფიტის ჩვენება/დამალვა (Alt-დაწკაპუნებით: მხოლოდ ეს ფირფიტა; ხელახლა Alt-დაწკაპუნებით: ყველა ფირფიტა)
 	Simulate Paper	ქაღალდის იმიტაცია
 	Use Black Point Compensation	შავი წერტილის კომპენსაციის გამოყენება
 	Working CMYK (don't tag)	სამუშაო CMYK (ტეგის გარეშე)
@@ -4245,6 +4249,8 @@ digits	Malayalam	მალაიალამური
 	Tip extends past the end point	წვერი ბოლო წერტილს სცდება
 	Tip on the end point	წვერი ბოლო წერტილზე
 	Variable Width Profile	ცვლადი სიგანის პროფილი
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	კონტურის ფუნჯი საკუთარ ზომას ინარჩუნებს, ამიტომ სიგანის პროფილი მას არ ცვლის. პროფილის გამოსაყენებლად მოხსენით ფუნჯი.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	კონტურის ფუნჯი საკუთარ ზომას ინარჩუნებს, ამიტომ სიგანის პროფილი მას არ ცვლის. პროფილის გამოსაყენებლად მოხსენით ფუნჯი.
 	Weight:	სისქე:
 	Art using a deleted global swatch keeps its colour.	წაშლილი გლობალური ფერის ნიმუშის მქონე ნახატი თავის ფერს ინარჩუნებს.
 	Color Group: {name}	ფერთა ჯგუფი: {name}
@@ -4353,6 +4359,10 @@ digits	Malayalam	მალაიალამური
 	Flip Horizontal	ჰორიზონტალურად არეკვლა
 	Flip Vertical	ვერტიკალურად არეკვლა
 	Polygon Properties:	მრავალკუთხედის თვისებები:
+	Line Properties:	ხაზის თვისებები:
+	Line Length:	ხაზის სიგრძე:
+	Line Angle:	ხაზის კუთხე:
+	Constrain Pie Angle	სექტორის კუთხის შენარჩუნება
 	Rectangle Properties:	მართკუთხედის თვისებები:
 	Shape Properties:	ფიგურის თვისებები:
 	Shape Properties	ფიგურის თვისებები
@@ -4393,6 +4403,7 @@ digits	Malayalam	მალაიალამური
 	Scatter:	გაფანტვა:
 	Rotation:	შემობრუნება:
 	Rotation relative to:	შემობრუნების ათვლა:
+	Hue Jitter:	ელფერის ვარიაცია:
 	Brush Scale Options	ფუნჯის მასშტაბირების პარამეტრები
 	Scale Proportionately	პროპორციული მასშტაბირება
 	Stretch to Fit Stroke Length	კონტურის სიგრძეზე გაწელვა
@@ -4431,6 +4442,7 @@ digits	Malayalam	მალაიალამური
 	Size:	ზომა:
 	Calligraphic Brush Options	კალიგრაფიული ფუნჯის პარამეტრები
 	Bristle Brush Options	ჯაგრის ფუნჯის პარამეტრები
+	Roundness	სიმრგვალე
 	Roundness:	სიმრგვალე:
 	Shape:	ფორმა:
 	Bristle Length:	ჯაგრის სიგრძე:
@@ -5065,6 +5077,8 @@ antiAlias	Sharp	მკვეთრი
 	Every option matches {base}.	ყველა პარამეტრი ემთხვევა {base}-ს.
 	Files of a PDF standard can't be password-protected.	PDF სტანდარტის ფაილების პაროლით დაცვა შეუძლებელია.
 	Files of this standard tag their colours with ICC profiles.	ამ სტანდარტის ფაილები ფერებს ICC პროფილებით აღნიშნავს.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	ამ სტანდარტის ფაილები ფერებს ICC პროფილებით აღნიშნავს, გარდა გამოტანის მიზნის პროფილის CMYK ფერებისა, რომლებიც DeviceCMYK-ად იწერება.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	„პროფილების გარეშე“ და CMYK გამოტანის მიზნით ყველა CMYK ფერი DeviceCMYK-ად იწერება, თუ ის სხვა პროფილის CMYK დანიშნულებაში არ გარდაიქმნება.
 	Flattener preset:	გაბრტყელების პრესეტი:
 	General › Thumbnails	ზოგადი › ესკიზები
 	Grayscale images	ნაცრისფერი გამოსახულებები
@@ -5223,6 +5237,9 @@ antiAlias	Sharp	მკვეთრი
 	Variable Options	ცვლადის პარამეტრები
 	Define a variable first	ჯერ განსაზღვრეთ ცვლადი
 	Adjust Adjoining Width Points	მეზობელი სიგანის წერტილების მორგება
+	Incoming	შემავალი
+	Outgoing	გამავალი
+	Single Width Only	მხოლოდ ერთი სიგანე
 	Keep both sides the same width	ორივე მხარის ერთნაირი სიგანე
 	Side 1:	მხარე 1:
 	Side 2:	მხარე 2:
@@ -5337,6 +5354,8 @@ theme	Appearance	იერსახე
 	Current Brush	მიმდინარე ფუნჯი
 	Current Symbol	მიმდინარე სიმბოლო
 	Delete Brush	ფუნჯის წაშლა
+	Delete Color	ფერის წაშლა
+	Restore Generated Table	გენერირებული ცხრილის აღდგენა
 	Delete Symbol	სიმბოლოს წაშლა
 	Delete the selected symbol?	წაიშალოს მონიშნული სიმბოლო?
 	Delete the selected symbols?	წაიშალოს მონიშნული სიმბოლოები?
@@ -5616,6 +5635,7 @@ theme	Appearance	იერსახე
 	Select Art	ნახატის მონიშვნა
 	Set Current Layer	მიმდინარე შრედ დაყენება
 	Flatten Artwork	ნახატის გაბრტყელება
+	Locate Layer	შრის მოძებნა
 	Locate Object	ობიექტის მოძებნა
 	Lock Others	დანარჩენების ჩაკეტვა
 	Merge Selected	მონიშნულების შერწყმა
@@ -5790,6 +5810,7 @@ theme	Appearance	იერსახე
 	90° & 45° Angles	90° და 45° კუთხეები
 	90° Angles	90° კუთხეები
 	Additional Plug-ins Folder	დამატებითი პლაგინები
+	Plug-in Instruction Budget	პლაგინების ინსტრუქციების ბიუჯეტი
 	Additional Fonts Folder	შრიფტების დამატებითი საქაღალდე
 	Alignment Guides	გასწორების დამხმარე ხაზები
 	Anchor Points, Handle, and Bounding Box Display	საყრდენი წერტილების, სახელურებისა და შემომსაზღვრელი ჩარჩოს ჩვენება
@@ -5816,6 +5837,7 @@ theme	Appearance	იერსახე
 	Data Recovery	მონაცემების აღდგენა
 	Default Language	ნაგულისხმევი ენა
 	Disable Auto Add/Delete	ავტომატური დამატება/წაშლის გამორთვა
+	Interpolate Control Points When Moving Anchors	სახელურების ინტერპოლაცია საყრდენი წერტილების გადაადგილებისას
 	Display All Blacks Accurately	ყველა შავის ზუსტად ჩვენება
 	Display All Blacks as Rich Black	ყველა შავის მდიდარ შავად ჩვენება
 	Display Bitmaps as Anti-aliased Images in Pixel Preview	პიქსელურ ნახვაში ბიტმაპების ანტიალიასინგიან გამოსახულებებად ჩვენება
@@ -5904,6 +5926,9 @@ theme	Appearance	იერსახე
 	Printing / Exporting	ბეჭდვა / ექსპორტირება
 	Real-time Drawing and Editing	რეალურ დროში ხატვა და რედაქტირება
 	Use Monitor Profile for Canvas	მონიტორის პროფილის გამოყენება ტილოსთვის
+	Refresh Monitor Profile	მონიტორის პროფილის განახლება
+@msg	turn on Use Monitor Profile for Canvas first	ჯერ ჩართეთ „მონიტორის პროფილის გამოყენება ტილოსთვის“
+@msg	this build doesn't read display profiles	ეს ვერსია ეკრანის პროფილებს არ კითხულობს
 	The canvas is drawn in sRGB.	ტილო sRGB-ში იხატება.
 	Canvas display profile:	ტილოს ეკრანის პროფილი:
 	The system matches the window to the display's colors.	სისტემა ფანჯარას ეკრანის ფერებს უსადაგებს.
@@ -6274,6 +6299,9 @@ font-technology	Variable	ცვლადი
 	Search commands, tools, panels and effects…	ბრძანებების, ხელსაწყოების, პანელებისა და ეფექტების ძიება…
 	No commands match	შესაბამისი ბრძანება არ არის
 	{pos} of {total}: {name}	{pos} / {total}: {name}
+	No menu item	მენიუს ელემენტი არ არის
+	Toolbar	ხელსაწყოთა ზოლი
+	{toolbar}, in the {tool} group	{toolbar}, ჯგუფში {tool}
 @plural	{n} result|{n} results	{n} შედეგი
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} შედეგიდან {shown}. გააგრძელეთ აკრეფა მათ შესამცირებლად.
 	Recent Commands	ბოლოდროინდელი ბრძანებები
@@ -6311,6 +6339,7 @@ font-technology	Variable	ცვლადი
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	დაჭერილი Cmd/Ctrl-ით მაუსის ბორბალი ტილოს გვერდულად გადაახვევს.
 	Dragging sideways on a numeric field's label changes the field's value.	რიცხვითი ველის წარწერაზე გვერდულად გადათრევა ველის მნიშვნელობას ცვლის.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	ტრეკპადზე ორი თითით მობრუნების ჟესტი ტილოს ხედს აბრუნებს.
+	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	როცა ღუზის წერტილებს გადაადგილებთ, ყოველი მრუდი, რომლის ერთი ბოლოც გადაადგილდა, ინარჩუნებს ფორმას თავის ბოლოებთან მიმართებით.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	ხელსაწყოს მალსახმობი კლავიშის დაჭერით ხელსაწყო არჩეულია მის აშვებამდე, შემდეგ კი ისევ წინა ხელსაწყო აირჩევა.
 	Shows the bounding box while you move the selection or draw a shape.	აჩვენებს შემომსაზღვრელ ჩარჩოს, სანამ მონიშნულს გადაადგილებთ ან ფიგურას ხატავთ.
 	Create Trim Marks draws Japanese-style marks instead of Roman ones.	ჭრის ნიშნების შექმნა რომაულის ნაცვლად იაპონური სტილის ნიშნებს ხატავს.
@@ -6829,6 +6858,7 @@ font-technology	Variable	ცვლადი
 @msg	choose a folder to export to	აირჩიეთ ექსპორტის საქაღალდე
 @msg	choose a location for the package	აირჩიეთ შეფუთვის მდებარეობა
 @msg	clipboard is empty	გაცვლის ბუფერი ცარიელია
+@msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: ფერების ცხრილში ერთი ფერი მაინც უნდა დარჩეს
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` ფერი არ არის, მაგალითად "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: არაუმეტეს {MAX_TABLE} ფერი
 @msg	command `{0}` is not available right now: {1}	ბრძანება `{0}` ახლა ხელმისაწვდომი არ არის: {1}
@@ -6993,6 +7023,9 @@ font-technology	Variable	ცვლადი
 @msg	no such user library	მომხმარებლის ასეთი ბიბლიოთეკა არ არის
 @msg	no such view	ასეთი ხედი არ არის
 @msg	no such width point	ასეთი სიგანის წერტილი არ არის
+@msg	`single` must be `incoming` or `outgoing`	`single` უნდა იყოს `incoming` ან `outgoing`
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` და `outIndex` უნდა იყოს ერთი წყვეტილი სიგანის წერტილის ორი ნახევარი
+@msg	a discontinuous width point keeps its place	წყვეტილი სიგანის წერტილი თავის ადგილს ინარჩუნებს
 @msg	no swatch `{name}`	ფერის ნიმუში `{name}` არ არის
 @msg	no swatch library `{l}` (see swatch.library.list)	ფერის ნიმუშების ბიბლიოთეკა `{l}` არ არის (იხ. swatch.library.list)
 @msg	no symbol instances selected	სიმბოლოს ეგზემპლარები მონიშნული არ არის
@@ -7321,6 +7354,8 @@ font-technology	Variable	ცვლადი
 @msg	Reload the page to go on (changes not saved yet may be lost).	გასაგრძელებლად გადატვირთეთ გვერდი (ჯერ შეუნახავი ცვლილებები შეიძლება დაიკარგოს).
 @msg	tool (a tool id) is required	tool (ხელსაწყოს id) აუცილებელია
 @msg	{tool} isn't in a toolbar group of several tools	{tool} რამდენიმე ხელსაწყოს მქონე ხელსაწყოთა ჯგუფში არ არის
+@msg	Presentation Mode hides the toolbars: change the screen mode to show them	პრეზენტაციის რეჟიმი მალავს ხელსაწყოთა ზოლებს: მათ საჩვენებლად შეცვალეთ ეკრანის რეჟიმი
+@msg	Tab has hidden the toolbars: press Tab to show them	Tab-მა დამალა ხელსაწყოთა ზოლები: მათ საჩვენებლად დააჭირეთ Tab-ს
 @msg	onto must name a panel floating in another group	onto უნდა ასახელებდეს სხვა ჯგუფში მცურავ პანელს
 @msg	below and above must name a panel floating in another group	below და above უნდა ასახელებდეს სხვა ჯგუფში მცურავ პანელს
 @msg	give only one of onto, below and above	მიუთითეთ მხოლოდ ერთი: onto, below ან above
@@ -7785,6 +7820,7 @@ font-technology	Variable	ცვლადი
 	Cove	ღარი
 	Depth	სიღრმე
 	Front	წინიდან
+	Side	გვერდიდან
 	Isometric Bottom	იზომეტრია ქვემოდან
 	Isometric Left	იზომეტრია მარცხნიდან
 	Isometric Right	იზომეტრია მარჯვნიდან
@@ -7864,7 +7900,7 @@ font-technology	Variable	ცვლადი
 @msg	each of `{GRAPHICS}` must be an object	`{GRAPHICS}`-ის თითოეული ჩანაწერი უნდა იყოს ობიექტი
 @msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	`{GRAPHICS}`-ის ჩანაწერები იღებს symbol, face, x, y, scale და rotation მნიშვნელობებს და არა `{k}`-ს
 @msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	`{GRAPHICS}`-ის თითოეულ ჩანაწერს სჭირდება `symbol`, სიმბოლოს სახელი
-@msg	`{GRAPHICS}` face must be front or back	`{GRAPHICS}`-ის face უნდა იყოს front ან back
+@msg	`{GRAPHICS}` face must be front, back or side	`{GRAPHICS}`-ის face უნდა იყოს front, back ან side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}`-ის {key} უნდა იყოს რიცხვი {lo}-დან {hi}-მდე
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` უნდა იყოს მასივი
 @msg	Graphics map onto the Plane, Extrude and Revolve object types	გრაფიკა თავსდება ობიექტის ტიპებზე „სიბრტყე“, „ამოწევა“ და „ბრუნვა“
@@ -9944,6 +9980,14 @@ breakText	Glyphs	გლიფები
 	Remove Gaps	ღრეჩოების მოცილება
 @msg	that makes too many pieces (at most 100000): make the dashes longer	ეს ძალიან ბევრ ნაწილს იძლევა (მაქსიმუმ 100000): გაზარდეთ ტირეების სიგრძე
 @msg	select paths, or segments, to divide	აირჩიეთ დასაყოფი ტრაექტორიები ან სეგმენტები
+# Path Precision Tools add-on: Smooth Bridge.
+	Smooth Bridge…	გლუვი ხიდი…
+	Smooth Bridge	გლუვი ხიდი
+	Keep Originals	ორიგინალების შენარჩუნება
+@msg	select two circles to bridge	აირჩიეთ ორი წრე დასაკავშირებლად
+@msg	one circle is inside the other	ერთი წრე მეორის შიგნითაა
+@msg	the circles are too far apart for this radius: raise the radius	ამ რადიუსისთვის წრეები ერთმანეთისგან ძალიან შორსაა: გაზარდეთ რადიუსი
+@msg	the circles are too far apart for this radius	ამ რადიუსისთვის წრეები ერთმანეთისგან ძალიან შორსაა
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	საერთო მხებები…
 	Common Tangents	საერთო მხებები

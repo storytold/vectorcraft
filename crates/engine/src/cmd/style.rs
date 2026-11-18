@@ -76,7 +76,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Redefine Graphic Style",
             ["Window", "Appearance"],
             None,
-            "{name?, id?} replace the style (default: the one the object was last linked to) with the look of object `id` or the first selected object (a graph series group with no fill, stroke, effect, opacity, blend mode, isolation, knockout or style link of its own: the topmost path directly in it; a graph's Axes or Legend group: its topmost line or label); the objects still linked to it update, and that object becomes linked. The art of a graph design in a series keeps its look and is unlinked, as the source or as a linked object. A linked graph series group passes the style to the paths directly in it, a linked Axes group to its lines and labels and a linked Legend group to its labels, other than the source and paths linked to the style whose look was edited, and is left cleared (as appearance.clear) and unlinked. On a linked path directly in a graph series, the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke and the object's opacity and blend mode (exceptions: docs/mcp.md); on a graph label, or a graph's axis line, tick mark or radar ring (a graph's Axes group stands for the lines and labels directly in it, its Legend group for the labels), the graph stores that object's topmost visible fill and stroke rows and object opacity and blend mode for every label or line of its kind → {name}",
+            "{name?, id?} | {name, from} replace the style (default: the one the object was last linked to) with the look of object `id` or the first selected object (a graph series group with no fill, stroke, effect, opacity, blend mode, isolation, knockout or style link of its own: the topmost path directly in it; a graph's Axes or Legend group: its topmost line or label); the objects still linked to it update, and that object becomes linked. With `from`, the style takes the look of the style named `from` (its fills, strokes, effects, opacity, blend mode, isolate and knockout) and keeps its own name and place; `from` and the objects linked to it stay as they are, `from` naming the style itself or a style with the same look changes nothing, and `from` with `id` is an error. The art of a graph design in a series keeps its look and is unlinked, as the source or as a linked object. A linked graph series group passes the style to the paths directly in it, a linked Axes group to its lines and labels and a linked Legend group to its labels, other than the source and paths linked to the style whose look was edited, and is left cleared (as appearance.clear) and unlinked. On a linked path directly in a graph series, the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke and the object's opacity and blend mode (exceptions: docs/mcp.md); on a graph label, or a graph's axis line, tick mark or radar ring (a graph's Axes group stands for the lines and labels directly in it, its Legend group for the labels), the graph stores that object's topmost visible fill and stroke rows and object opacity and blend mode for every label or line of its kind → {name}",
             has_doc,
             style_redefine
         ),
@@ -318,8 +318,14 @@ impl Session {
     /// it is still linked (still has that style's look). A graph series group that holds nothing of its own stands
     /// for the topmost path directly inside it, which a style applied to the group links.
     pub fn selection_graphic_style(&self) -> Option<(&GraphicStyle, bool)> {
+        self.graphic_style_of(*self.active()?.selection.subjects().first()?)
+    }
+
+    /// The graphic style of object `id` of the active document, as [`Self::selection_graphic_style`]
+    /// gives it for the first selected object.
+    pub fn graphic_style_of(&self, id: NodeId) -> Option<(&GraphicStyle, bool)> {
         let st = self.active()?;
-        let n = super::appearance::look_holder(&st.doc, st.doc.node(*st.selection.subjects().first()?)?);
+        let n = super::appearance::look_holder(&st.doc, st.doc.node(id)?);
         let g = st.doc.graphic_style_by_id(n.extras().graphic_style?)?;
         Some((g, in_sync(n, g)))
     }
@@ -483,22 +489,43 @@ pub(crate) fn style_json(g: &GraphicStyle) -> Value {
 
 fn style_redefine(s: &mut Session, p: &Value) -> Result<Value> {
     let cmd = "graphicStyle.redefine";
-    let (src, n) = source(s, p, cmd)?;
-    let d = &s.doc()?.doc;
-    // A series group that holds nothing of its own is redefined from the topmost of its paths, which a style links.
-    let n = super::appearance::look_holder(d, n);
-    let src = if n.id == src { src } else { n.id };
-    let i = match str_param(p, "name") {
-        Some(name) => style_index(d, name)?,
-        None => n
-            .extras()
-            .graphic_style
-            .and_then(|id| d.graphic_style_by_id(id))
-            .and_then(|g| d.graphic_style_index(&g.name))
-            .ok_or_else(|| bad(cmd, "the object has no graphic style (pass `name`)"))?,
+    // The style to replace, its new look, and the object that look comes from (none for another style's look).
+    let (i, look, src) = match p.get("from") {
+        Some(from) => {
+            let from = from.as_str().ok_or_else(|| bad(cmd, "`from` must be a graphic style name"))?;
+            if p.get("id").is_some() {
+                return Err(bad(cmd, "pass `id` or `from`, not both"));
+            }
+            let name = str_param(p, "name").ok_or_else(|| bad(cmd, "missing name (the style `from` replaces)"))?;
+            let d = &s.doc()?.doc;
+            let (i, j) = (style_index(d, name)?, style_index(d, from)?);
+            // A style dropped on itself, or on a style with the same look, stays as it is.
+            let target = &d.graphic_styles[i];
+            let look = GraphicStyle { name: target.name.clone(), id: target.id, ..d.graphic_styles[j].clone() };
+            if i == j || look == *target {
+                return Ok(json!({ "name": name }));
+            }
+            (i, look, None)
+        }
+        None => {
+            let (src, n) = source(s, p, cmd)?;
+            let d = &s.doc()?.doc;
+            // A series group that holds nothing of its own is redefined from the topmost of its paths, which a style links.
+            let n = super::appearance::look_holder(d, n);
+            let src = if n.id == src { src } else { n.id };
+            let i = match str_param(p, "name") {
+                Some(name) => style_index(d, name)?,
+                None => n
+                    .extras()
+                    .graphic_style
+                    .and_then(|id| d.graphic_style_by_id(id))
+                    .and_then(|g| d.graphic_style_index(&g.name))
+                    .ok_or_else(|| bad(cmd, "the object has no graphic style (pass `name`)"))?,
+            };
+            (i, GraphicStyle::of(String::new(), captured(n), n), Some(src))
+        }
     };
-    let look = GraphicStyle::of(String::new(), captured(n), n);
-    let name = d.graphic_styles[i].name.clone();
+    let name = s.doc()?.doc.graphic_styles[i].name.clone();
     let chars = s.prefs.override_char_color;
     let before = s.doc()?.doc.clone();
     s.edit_named("Redefine Graphic Style “{name}”", &name, false, |d, _| {
@@ -507,7 +534,7 @@ fn style_redefine(s: &mut Session, p: &Value) -> Result<Value> {
         // Objects still linked follow the new definition; edited ones are unlinked (they keep their look), and the
         // source keeps its own. The art of a graph design in a series is unlinked and keeps its look too, as the
         // source or as a linked object: the graph draws it again from the design.
-        let linked = objects_where(d, |n| n.extras().graphic_style == Some(id) && n.id != src);
+        let linked = objects_where(d, |n| n.extras().graphic_style == Some(id) && Some(n.id) != src);
         let (follow, edited): (Vec<NodeId>, Vec<NodeId>) =
             linked.into_iter().partition(|nid| !super::graph::is_design_art(d, *nid) && d.node(*nid).is_some_and(|n| in_sync(n, &old)));
         set_link(d, &edited, None);
@@ -515,7 +542,7 @@ fn style_redefine(s: &mut Session, p: &Value) -> Result<Value> {
         // goes back to the empty appearance the graph draws it with. The source and the edited paths keep their look.
         let mut follow_marks = super::graph::series_group_marks(d, &follow);
         let edited: HashSet<NodeId> = edited.into_iter().collect();
-        follow_marks.retain(|nid| *nid != src && !edited.contains(nid));
+        follow_marks.retain(|nid| Some(*nid) != src && !edited.contains(nid));
         super::appearance::clear_stood_for(d, &super::appearance::stood_for(&follow, &follow_marks));
         let g = d.graphic_styles[i].clone();
         let mut shared = None;
@@ -524,8 +551,10 @@ fn style_redefine(s: &mut Session, p: &Value) -> Result<Value> {
         }
         super::appearance::capture_series_writes(&before, d, &follow_marks, (true, true), (true, true), false, true);
         super::graph::capture_label_rows(d, &follow_marks);
-        let link = (!super::graph::is_design_art(d, src)).then_some(id);
-        set_link(d, &[src], link);
+        if let Some(src) = src {
+            let link = (!super::graph::is_design_art(d, src)).then_some(id);
+            set_link(d, &[src], link);
+        }
         Ok(())
     })?;
     Ok(json!({ "name": name }))
