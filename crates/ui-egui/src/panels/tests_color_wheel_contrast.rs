@@ -148,15 +148,27 @@ fn the_row_follows_the_default_fill_with_nothing_selected() {
     assert!(shows(&h, "1.00:1"), "white on the pinned white");
 }
 
-/// While a drag on the wheel is in progress the color behind the selection is not read again,
-/// although every preview raises the document's revision.
+type Under = (vectorcraft_color::cms::ColorSettings, u64);
+/// The background read on its own, with what it was read for.
+type Behind = Option<((u64, u64, Vec<vectorcraft_doc::NodeId>, Option<Vec<u32>>, String, Under), Option<String>)>;
+type Ratio = Option<(super::color_wheel::RatioKey, Option<Value>)>;
+
+fn behind(h: &Harness<'static, VectorcraftApp>) -> Behind {
+    pstate::<Behind>(&h.ctx, "color-wheel-behind")
+}
+
+/// The background in the row's kept answer.
+fn measured(h: &Harness<'static, VectorcraftApp>) -> Option<String> {
+    pstate::<Ratio>(&h.ctx, "color-wheel-ratio").and_then(|(_, r)| r).and_then(|r| r["against"].as_str().map(str::to_string))
+}
+
+/// During a drag on the wheel every preview raises the document's revision, and the row asks again
+/// for the ratio, whose answer gives the chip: the background is not read on its own as well.
 #[test]
-fn a_drag_on_the_wheel_keeps_the_background() {
-    type Under = (vectorcraft_color::cms::ColorSettings, u64);
-    type Kept = Option<((u64, u64, Vec<vectorcraft_doc::NodeId>, Option<Vec<u32>>, String, Under), Option<String>)>;
+fn a_drag_on_the_wheel_reads_the_background_only_with_the_ratio() {
     let mut h = harness(app("#336699"));
-    let read = |h: &Harness<'static, VectorcraftApp>| pstate::<Kept>(&h.ctx, "color-wheel-behind").map(|(k, _)| k.1);
-    let before = read(&h).expect("the background was read");
+    assert_eq!(measured(&h).as_deref(), Some("#ffffff"));
+    assert!(behind(&h).is_none(), "the answer gave the background");
     let sq = h.get_by_label("Saturation and brightness").rect();
     press(&mut h, sq.center(), true);
     for i in 1..4 {
@@ -164,19 +176,41 @@ fn a_drag_on_the_wheel_keeps_the_background() {
         h.run_steps(1);
     }
     assert!(h.state().session.in_interaction(), "the drag previews on an interaction");
-    assert!(h.state().session.active().unwrap().revision > before, "the previews raised the revision");
-    assert_eq!(read(&h), Some(before), "the background was not read again during the drag");
     press(&mut h, sq.center() + vec2(24.0, 0.0), false);
     h.run_steps(2);
-    assert!(read(&h).unwrap() > before, "after the drag it is read for the new revision");
+    assert!(behind(&h).is_none(), "the background was not read on its own during or after the drag");
+    assert_eq!(measured(&h).as_deref(), Some("#ffffff"));
 }
 
-/// An interaction keeps the background only for the same document and selection: another
-/// selection is read again.
+/// With no color to measure the row has no ratio, and the chip still shows the background, read on
+/// its own; during an interaction that is kept only for the same document and selection.
+#[test]
+fn a_paint_with_no_color_still_shows_the_background() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 100, "height": 200})).unwrap();
+    app.run("paint.setFill", json!({"color": "#ffff00"})).unwrap();
+    app.run("object.lock", json!({})).unwrap();
+    let id = |v: Value| v["id"].as_u64().unwrap();
+    let b = id(app.run("shape.rectangle", json!({"x": 130, "y": 20, "width": 40, "height": 40})).unwrap());
+    app.run("paint.setFill", json!({"none": true})).unwrap();
+    app.run("shape.rectangle", json!({"x": 20, "y": 20, "width": 40, "height": 40})).unwrap();
+    app.run("paint.setFill", json!({"none": true})).unwrap();
+    app.run("ui.colorWheel", json!({"contrast": true})).unwrap();
+    let mut h = harness(app);
+    assert!(shows(&h, "—"), "a fill of None has no ratio");
+    let hex = |h: &Harness<'static, VectorcraftApp>| behind(h).and_then(|(_, hex)| hex);
+    assert_eq!(hex(&h).as_deref(), Some("#ffff00"));
+    h.state_mut().run("select.set", json!({"ids": [b]})).unwrap();
+    h.state_mut().session.begin_interaction("test").unwrap();
+    h.run_steps(2);
+    assert_eq!(hex(&h).as_deref(), Some("#ffffff"), "the other selection's background is read during the interaction");
+}
+
+/// An interaction keeps no answer for another selection: the row asks again, and the chip shows
+/// the other selection's background.
 #[test]
 fn an_interaction_reads_the_background_again_for_another_selection() {
-    type Under = (vectorcraft_color::cms::ColorSettings, u64);
-    type Kept = Option<((u64, u64, Vec<vectorcraft_doc::NodeId>, Option<Vec<u32>>, String, Under), Option<String>)>;
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
     app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 100, "height": 200})).unwrap();
@@ -188,12 +222,11 @@ fn an_interaction_reads_the_background_again_for_another_selection() {
     app.run("paint.setFill", json!({"color": "#000000"})).unwrap();
     app.run("ui.colorWheel", json!({"contrast": true})).unwrap();
     let mut h = harness(app);
-    let hex = |h: &Harness<'static, VectorcraftApp>| pstate::<Kept>(&h.ctx, "color-wheel-behind").and_then(|(_, hex)| hex);
-    assert_eq!(hex(&h).as_deref(), Some("#ffff00"));
+    assert_eq!(measured(&h).as_deref(), Some("#ffff00"));
     h.state_mut().run("select.set", json!({"ids": [b]})).unwrap();
     h.state_mut().session.begin_interaction("test").unwrap();
     h.run_steps(2);
-    assert_eq!(hex(&h).as_deref(), Some("#ffffff"), "the other selection's background is read during the interaction");
+    assert_eq!(measured(&h).as_deref(), Some("#ffffff"), "the other selection's background is read during the interaction");
 }
 
 /// Without a pin the row asks for the color behind the selection, so a translucent group holding

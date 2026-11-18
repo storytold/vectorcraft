@@ -370,49 +370,55 @@ fn background(app: &mut VectorcraftApp, ui: &Ui) -> Option<Color> {
     Color::from_hex(&hex?)
 }
 
+/// The `color.contrast` answer against `pinned`, else against the color behind the selection
+/// (`against: "below"`), kept per [`RatioKey`].
+fn ratio_answer(app: &mut VectorcraftApp, ui: &Ui, pinned: Option<Color>) -> Option<Value> {
+    let st = app.session.active();
+    let key: RatioKey = (
+        pinned.map_or_else(|| "below".to_string(), |bg| format!("{bg:?}")),
+        format!("{:?}", super::active_paint(app)),
+        st.map(|d| (d.uid, d.revision)),
+        st.map(|d| d.selection.objects.clone()).unwrap_or_default(),
+        st.and_then(picked_part),
+        app.session.fill_active,
+        app.session.appearance_item(),
+        app.session.selected_stop(),
+        app.session.selected_freeform_point(),
+        app.session.prefs.black_on_screen.clone(),
+        under(),
+        app.session.fill_mesh_points(),
+    );
+    match pstate::<Option<(RatioKey, Option<Value>)>>(ui.ctx(), RATIO) {
+        Some((k, r)) if k == key => r,
+        _ => {
+            let against = pinned.as_ref().map_or_else(|| json!("below"), color_json);
+            let r = app.session.execute("color.contrast", &json!({ "against": against })).ok();
+            set_pstate(ui.ctx(), RATIO, Some((key, r.clone())));
+            r
+        }
+    }
+}
+
 /// The contrast row: the background's chip, the ratio cut off at two decimals and the AA and AAA
 /// results for the chosen category; a dash when there is no background or no color to measure.
 /// Without a pinned background the row asks `color.contrast` for the color behind the selection
 /// (`against: "below"`), also during an interaction, so translucent groups and layers count as the
-/// command counts them; the chip then shows the background in the answer, else the pinned color or
-/// the one kept by [`background`].
+/// command counts them; the chip then shows the background in the answer. Only when there is no
+/// answer is the background read on its own ([`background`]), so the chip still shows it.
 fn contrast_row(app: &mut VectorcraftApp, ui: &mut Ui) {
     let category = app.ui.color_wheel.contrast_for;
-    let pinned = app.ui.color_wheel.contrast_background.is_some();
-    let against = background(app, ui);
-    let sampled = !pinned;
-    let answer = against.as_ref().and_then(|bg| {
-        let st = app.session.active();
-        let key: RatioKey = (
-            if sampled { "below".to_string() } else { format!("{bg:?}") },
-            format!("{:?}", super::active_paint(app)),
-            st.map(|d| (d.uid, d.revision)),
-            st.map(|d| d.selection.objects.clone()).unwrap_or_default(),
-            st.and_then(picked_part),
-            app.session.fill_active,
-            app.session.appearance_item(),
-            app.session.selected_stop(),
-            app.session.selected_freeform_point(),
-            app.session.prefs.black_on_screen.clone(),
-            under(),
-            app.session.fill_mesh_points(),
-        );
-        match pstate::<Option<(RatioKey, Option<Value>)>>(ui.ctx(), RATIO) {
-            Some((k, r)) if k == key => r,
-            _ => {
-                let against = if sampled { json!("below") } else { color_json(bg) };
-                let r = app.session.execute("color.contrast", &json!({ "against": against })).ok();
-                set_pstate(ui.ctx(), RATIO, Some((key, r.clone())));
-                r
-            }
-        }
-    });
+    let pinned = app.ui.color_wheel.contrast_background;
+    let answer = ratio_answer(app, ui, pinned);
+    // The background the ratio was measured against.
+    let measured = answer.as_ref().filter(|_| pinned.is_none()).and_then(|r| r["against"].as_str()).and_then(Color::from_hex);
+    let chip = match pinned.or(measured) {
+        Some(c) => Some(c),
+        None => background(app, ui),
+    };
     let resp = ui
         .horizontal(|ui| {
             let (rect, _) = ui.allocate_exact_size(vec2(CHIP, CHIP), egui::Sense::hover());
-            // The chip shows the background the ratio was measured against.
-            let measured = answer.as_ref().filter(|_| sampled).and_then(|r| r["against"].as_str()).and_then(Color::from_hex);
-            match measured.or(against) {
+            match chip {
                 Some(c) => widgets::swatch_tile(ui, rect, &Paint::solid(c), false, false),
                 None => widgets::swatch_tile(ui, rect, &Paint::None, false, false),
             }
@@ -433,7 +439,7 @@ fn contrast_row(app: &mut VectorcraftApp, ui: &mut Ui) {
         "WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11)."
     )
     .to_string();
-    if !pinned {
+    if pinned.is_none() {
         tip.push(' ');
         tip.push_str(tl!("The background is read at the center of the selection."));
     }
