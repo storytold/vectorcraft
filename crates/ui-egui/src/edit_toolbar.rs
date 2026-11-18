@@ -587,7 +587,7 @@ pub(crate) fn drawer(app: &mut VectorcraftApp, ctx: &egui::Context) {
                     }
                     any = true;
                     ui.add_space(6.0);
-                    ui.label(egui::RichText::new(format!("{}:", tl!(cat))).size(12.0).color(t.text_strong));
+                    ui.label(egui::RichText::new(crate::i18n::colon(tl!(cat))).size(12.0).color(t.text_strong));
                     ui.add_space(4.0);
                     for g in gs {
                         if !g.iter().any(matches) {

@@ -1129,6 +1129,28 @@ fn names_scripts(item: &Item, r: &Row, single: Option<&[usize]>) -> bool {
     super::access::names_linked_scripts(C, "pdf", &options, doc.artboards.len())
 }
 
+/// The document the file of `item` that row `r` writes carries when it carries one
+/// ([`names_scripts`]): Full Document's PDF of every artboard, the item's artboard alone for a
+/// native, `.ai` or EPS row ([`board_document`]), else the item's document.
+fn carried_document<'a>(item: &'a Item, r: &Row, single: Option<&[usize]>) -> std::borrow::Cow<'a, Document> {
+    match (&item.every_artboard, r.format.id, single) {
+        (Some(all), "pdf", None) => std::borrow::Cow::Borrowed(&**all),
+        _ if r.whole_document() && item.artboard.is_some() => std::borrow::Cow::Owned(board_document(item)),
+        _ => std::borrow::Cow::Borrowed(&*item.doc),
+    }
+}
+
+/// The document a native, `.ai` or EPS row writes for `item`'s artboard: that artboard alone, with
+/// its background color and the art on it, as Save's separateArtboards writes it (#3868).
+fn board_document(item: &Item) -> Document {
+    let mut d = single_artboard(&item.doc, item.region, &item.name);
+    if let (Some(a), Some(from)) = (d.artboards.first_mut(), item.doc.artboards.get(item.artboard.unwrap_or(0))) {
+        a.color = from.color;
+    }
+    super::save::keep_art_on(&mut d, item.region);
+    d
+}
+
 /// Every chosen artboard (asset, layer, selected object) in every format row, one file each (a PDF
 /// holds its artboard alone), or with `fullDocument` one file per row (a PDF of every artboard,
 /// else the bounds of all art). Items that share a name get `-2`, `-3`… instead of overwriting, and
@@ -1175,6 +1197,23 @@ pub(crate) fn export(s: &mut Session, p: &Value, asked: &Value) -> Result<Value>
     for r in rows.iter().filter(|r| matches!(r.format.id, "svg" | "svgz")) {
         for item in &items {
             super::check_images_in(C, r.format.id, &item.doc, base, &r.options_for(item.region, item.artboard)?)?;
+        }
+    }
+    // The native document the files of the other rows carry, each document looked through once.
+    if crate::file_access::current().is_some() {
+        let mut looked: HashSet<(usize, bool, Option<usize>)> = HashSet::new();
+        for r in rows.iter().filter(|r| !matches!(r.format.id, "svg" | "svgz")) {
+            // A single-file PDF carries the first item's document alone, as the writer writes it.
+            let carried = items.iter().enumerate().filter(|(index, _)| !(single.is_some() && r.format.id == "pdf" && *index > 0));
+            for (_, item) in carried.filter(|(_, i)| names_scripts(i, r, single.as_deref())) {
+                let all = item.every_artboard.is_some() && r.format.id == "pdf" && single.is_none();
+                let board = item.artboard.filter(|_| !all && r.whole_document());
+                if looked.insert((Arc::as_ptr(&item.doc) as usize, all, board))
+                    && crate::cmd::links::names_hidden_file(&carried_document(item, r, single.as_deref()), base)
+                {
+                    return Err(bad(C, super::access::IMAGE_OUTSIDE));
+                }
+            }
         }
     }
     // Appearance of Black › Printing / Exporting for RGB raster rows.
@@ -1310,16 +1349,21 @@ fn encode_and_write(export: ScreenExport, writer: &mut dyn FnMut(&str, &[u8]) ->
     }
     // The document a PDF row writes: with Include Bleed, the artboards as they are.
     let pdf_doc = ungrown.as_deref();
+    // A PDF page of an artboard has the artboard as its trim, with or without Include Bleed. A
+    // page of its art's bounds has every object at its edge: it doesn't say whether art stops
+    // short of the bleed.
+    let artboard_page = o.assets.is_none() && o.layers.is_none() && o.selection.is_none();
     let mut write = |doc: &Document, format: &str, options: &Value| -> Result<Vec<u8>> {
         // The steps are the files: an encoder's own steps (artboards, pages) are not reported.
         let (bytes, given) = vectorcraft_doc::cancel::quiet(|| encode_with_notes(doc, format, options))?;
-        for n in given {
+        for n in given.into_iter().filter(|n| artboard_page || !super::pdf::is_short_of_bleed(&n.text)) {
             add_note(&mut notes, n);
         }
         Ok(bytes)
     };
-    // A whole-document copy of an artboard, for the formats that write documents to edit.
-    let mut board_docs: std::collections::HashMap<usize, Arc<Document>> = std::collections::HashMap::new();
+    // A whole-document copy of an artboard of an item's document, for the formats that write
+    // documents to edit.
+    let mut board_docs: std::collections::HashMap<(usize, usize), Arc<Document>> = std::collections::HashMap::new();
     let mut files = 0u64;
     // One step per item and row, the files a name collision skips included.
     let steps = (items.len() * rows.len()) as u64;
@@ -1358,19 +1402,7 @@ fn encode_and_write(export: ScreenExport, writer: &mut dyn FnMut(&str, &[u8]) ->
                 write(pdf_doc.unwrap_or(all), "pdf", &options)?
             } else if r.whole_document() && item.artboard.is_some() {
                 let b = item.artboard.unwrap_or(0);
-                // That artboard alone, as Save's separateArtboards writes it: its art, not the others' (#3868).
-                let d = board_docs
-                    .entry(b)
-                    .or_insert_with(|| {
-                        let mut d = single_artboard(&item.doc, item.region, &item.name);
-                        // It keeps its background color.
-                        if let (Some(a), Some(from)) = (d.artboards.first_mut(), item.doc.artboards.get(b)) {
-                            a.color = from.color;
-                        }
-                        super::save::keep_art_on(&mut d, item.region);
-                        Arc::new(d)
-                    })
-                    .clone();
+                let d = board_docs.entry((Arc::as_ptr(&item.doc) as usize, b)).or_insert_with(|| Arc::new(board_document(item))).clone();
                 let mut options = r.options_for(item.region, None)?;
                 // An EPS page is the artboard, not its art's bounds: an artboard without art still writes.
                 if r.format.id == "eps" {

@@ -172,11 +172,11 @@ fn right_stage(g: &super::RightGroup) -> String {
         w if w > super::MIN_SWITCHER => "narrower switcher",
         _ => "minimal switcher",
     };
-    format!("community {}, learn {}, {:?}, {switcher}", g.community, g.learn, g.search)
+    format!("community {}, learn {}, arrange {}, {:?}, {switcher}", g.community, g.learn, g.arrange, g.search)
 }
 
-/// As the app bar's room runs short, the community button goes first, then Explore tutorials, then the search
-/// field becomes the icon, then the workspace switcher narrows to its minimum, then the icon goes.
+/// As the app bar's room runs short, the community button goes first, then Explore tutorials, then Arrange
+/// Documents, then the search field becomes the icon, then the workspace switcher narrows to its minimum, then the icon goes.
 /// Whatever shows fits in the room, down to the minimal switcher alone.
 #[test]
 fn the_app_bar_gives_up_its_right_hand_controls_in_order() {
@@ -193,31 +193,33 @@ fn the_app_bar_gives_up_its_right_hand_controls_in_order() {
             super::Search::Icon => w.gap + w.icon,
             super::Search::Hidden => 0.0,
         };
+        let arrange = if g.arrange { w.gap + w.icon } else { 0.0 };
         let learn = if g.learn { w.gap + w.icon } else { 0.0 };
         let community = if g.community { 10.0 + w.gap + w.community } else { 0.0 };
-        let used = g.switcher_w + 8.0 + search + learn + community;
+        let used = g.switcher_w + 8.0 + search + arrange + learn + community;
         assert!(used <= room || g.switcher_w == super::MIN_SWITCHER && g.search == super::Search::Hidden, "{room}: {g:?} needs {used}");
     }
     assert_eq!(
         stages,
         [
-            "community true, learn true, Field, full switcher",
-            "community false, learn true, Field, full switcher",
-            "community false, learn false, Field, full switcher",
-            "community false, learn false, Icon, full switcher",
-            "community false, learn false, Icon, narrower switcher",
-            "community false, learn false, Icon, minimal switcher",
+            "community true, learn true, arrange true, Field, full switcher",
+            "community false, learn true, arrange true, Field, full switcher",
+            "community false, learn false, arrange true, Field, full switcher",
+            "community false, learn false, arrange false, Field, full switcher",
+            "community false, learn false, arrange false, Icon, full switcher",
+            "community false, learn false, arrange false, Icon, narrower switcher",
+            "community false, learn false, arrange false, Icon, minimal switcher",
             // Once the icon has gone, the switcher takes the room it leaves.
-            "community false, learn false, Hidden, narrower switcher",
-            "community false, learn false, Hidden, minimal switcher",
+            "community false, learn false, arrange false, Hidden, narrower switcher",
+            "community false, learn false, arrange false, Hidden, minimal switcher",
         ]
     );
     // In Safe Mode the label's width is taken first (not counted in `room`), and the switcher goes
     // when a minimal one does not fit.
     let safe = |room| right_stage(&super::fit_right_group(&right_widths(room, true)));
-    assert_eq!(safe(700.0), "community true, learn true, Field, full switcher");
-    assert_eq!(safe(72.0), "community false, learn false, Hidden, minimal switcher");
-    assert_eq!(safe(71.0), "community false, learn false, Hidden, no switcher");
+    assert_eq!(safe(700.0), "community true, learn true, arrange true, Field, full switcher");
+    assert_eq!(safe(72.0), "community false, learn false, arrange false, Hidden, minimal switcher");
+    assert_eq!(safe(71.0), "community false, learn false, arrange false, Hidden, no switcher");
 }
 
 /// What screen readers call the app bar's search field, and the icon it becomes, before the shortcut.
@@ -895,6 +897,59 @@ fn the_message_of_an_open_with_several_notes_lists_them_on_hover() {
     let (_, nodes, hovered) = bar_hover(&mut app, &ctx, 1400.0, "Opened", super::status_bar);
     assert!(!nodes.iter().any(|n| n.value().is_some_and(|v| v.contains("• "))), "{nodes:?}");
     assert_eq!(hovered.iter().filter(|t| t.text.starts_with("Opened")).count(), 1, "no tooltip: {hovered:?}");
+}
+
+/// The status message of a failed script run shows text the script threw as it is, even when it
+/// reads like one of the app's own errors, and translates the words around it; the app's own error
+/// is translated. Both a run that ends in one call and a run the frames take to its end show it.
+#[test]
+fn german_script_status_preserves_authored_error_and_translates_native_error() {
+    crate::i18n::set_current(crate::i18n::Lang::from_code("de").expect("de registered"));
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    let failed = |app: &mut crate::VectorcraftApp, source: &str, frames: bool| {
+        app.session.script_frames = frames;
+        let r = app.run("script.run", json!({"source": source, "name": "t.js"}));
+        if frames {
+            assert_eq!(r.map(|v| v["running"].clone()), Ok(json!(true)), "{source}");
+            for _ in 0..1_000 {
+                if !app.session.script_running() {
+                    break;
+                }
+                crate::script_runs::poll(app);
+            }
+        } else {
+            assert!(r.is_err(), "{source}");
+        }
+        assert!(!app.session.script_running());
+        super::status_bar::status_message(app)
+    };
+    let long = "invalid array length ".repeat(120);
+    for frames in [false, true] {
+        let shown = failed(&mut app, "throw new Error('invalid array length')", frames);
+        assert_eq!(shown, "t.js: Zeile 1, Spalte 1: Error: invalid array length (ausgelöst)");
+        let shown = failed(&mut app, "throw 'invalid array length'", frames);
+        assert_eq!(shown, "t.js: Zeile 1, Spalte 1: invalid array length (ausgelöst)");
+        let shown = failed(&mut app, "new Array(-1)", frames);
+        assert!(shown.starts_with("t.js: Zeile 1, Spalte 1: ") && shown.contains("ungültige Array-Länge"), "{shown}");
+        for text in ["", "invalid array length\nsecond line", "{name}: {e}", "t.js: line 1, column 1: invalid array length (thrown)", long.as_str()] {
+            let source = format!("throw {}", serde_json::to_string(text).unwrap());
+            assert_eq!(failed(&mut app, &source, frames), format!("t.js: Zeile 1, Spalte 1: {text} (ausgelöst)"), "{text}");
+        }
+    }
+    // Another message, even one spelled like the script's text, is translated as before.
+    failed(&mut app, "throw 'invalid array length'", false);
+    app.ui.status = "invalid array length".to_string();
+    assert_eq!(super::status_bar::status_message(&app), "ungültige Array-Länge");
+    // A change of language while the message stays keeps the script's text.
+    failed(&mut app, "throw new Error('invalid array length')", false);
+    crate::i18n::set_current(crate::i18n::Lang::from_code("fr").expect("fr registered"));
+    assert_eq!(super::status_bar::status_message(&app), "t.js : ligne 1, colonne 1 : Error: invalid array length (levée)");
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    assert_eq!(super::status_bar::status_message(&app), app.ui.status);
+    // After a run that completes, the message is an ordinary one.
+    app.session.script_frames = false;
+    app.run("script.run", json!({"source": "1", "name": "t.js"})).unwrap();
+    assert_eq!(app.session.script_authored_failure(), None);
 }
 
 /// The message of an open that starts with a line about its linked files lists the open's notes on
@@ -1912,6 +1967,45 @@ fn isolation_bar_navigation_and_back_button_steps_up() {
     // Clicking g2 isolates g2 directly.
     click_at(&mut app, egui::pos2(115.0, 12.0));
     assert_eq!(app.session.active().unwrap().isolation, Some(NodeId(g2)));
+}
+
+/// With a sublayer isolated, the back arrow goes up one layer at a time and then leaves isolation
+/// mode. The top-level layer's crumb leaves isolation mode from any depth, and a parent sublayer's
+/// crumb isolates that sublayer.
+#[test]
+fn isolation_bar_back_button_steps_up_through_sublayers() {
+    use vectorcraft_doc::NodeId;
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    let top = app.session.active().unwrap().doc.layers[0].id;
+    let mid = NodeId(app.run("layer.newSublayer", json!({"parent": top.0, "name": "Sublayer B"})).unwrap()["id"].as_u64().unwrap());
+    let deep = NodeId(app.run("layer.newSublayer", json!({"parent": mid.0, "name": "Sublayer C"})).unwrap()["id"].as_u64().unwrap());
+    app.run("layer.setCurrent", json!({"id": deep.0})).unwrap();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap();
+    let ctx = isolation_bar_context();
+    let click = |app: &mut crate::VectorcraftApp, pos: egui::Pos2| isolation_bar_gesture(app, &ctx, pos, pos);
+    let back = egui::pos2(15.0, 12.0);
+    let isolation = |app: &crate::VectorcraftApp| app.session.active().unwrap().isolation;
+
+    app.run("object.isolate", json!({"id": deep.0})).unwrap();
+    let steps = app.session.doc().unwrap().history.undo.len();
+    click(&mut app, back);
+    assert_eq!(isolation(&app), Some(mid), "back from the deepest sublayer");
+    click(&mut app, back);
+    assert_eq!(isolation(&app), Some(top), "back from the middle sublayer");
+    click(&mut app, back);
+    assert_eq!(isolation(&app), None, "back from the top-level layer");
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), steps, "no undo step");
+
+    // "Layer 1" is the first crumb, at x 30 to about 75.
+    app.run("object.isolate", json!({"id": deep.0})).unwrap();
+    click(&mut app, egui::pos2(40.0, 12.0));
+    assert_eq!(isolation(&app), None, "the top-level layer's crumb");
+
+    // "Sublayer B" is the second crumb, from about x 95.
+    app.run("object.isolate", json!({"id": deep.0})).unwrap();
+    click(&mut app, egui::pos2(115.0, 12.0));
+    assert_eq!(isolation(&app), Some(mid), "the parent sublayer's crumb");
 }
 
 /// Headless frames of the isolation bar over a 1200 × 700 canvas for one pointer gesture: a press
@@ -4650,4 +4744,60 @@ fn the_control_bar_shows_the_inline_transform_fields_only_when_they_fit() {
         assert!(menu_seen, "{count} objects: a wide bar has room for the panel menu button");
         assert!(groups_seen.iter().all(|s| *s), "{count} objects: a wide bar shows every group: {groups_seen:?}");
     }
+}
+
+/// A click on the Control bar's X:, Y:, W: or H: label opens the Transform panel in a popover under
+/// it, as the Transform link does, and a second click closes it. The click leaves the selection and
+/// its bounds as they were, and no field takes the keyboard. A drag on W: still scrubs the width and
+/// opens nothing.
+#[test]
+fn the_control_bars_x_y_w_and_h_labels_open_the_transform_panel() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let id = app.run("shape.rectangle", json!({"x": 20, "y": 20, "width": 40, "height": 30})).unwrap()["id"].clone();
+    app.run("select.set", json!({ "ids": [id] })).unwrap();
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(2000.0, 600.0));
+    let frame = |app: &mut crate::VectorcraftApp, events| control_bar_frame_in(app, &ctx, screen, events);
+    let state = |app: &crate::VectorcraftApp| {
+        let st = app.session.active().unwrap();
+        let b = st.doc.bounds_of(&st.selection.objects, false).unwrap();
+        (st.selection.objects.len(), [b.x0, b.y0, b.x1, b.y1])
+    };
+    // The label's own node: a label whose text is `name` (the field it names is named the same).
+    let label = |nodes: &[egui::accesskit::Node], name: &str| {
+        let n = nodes.iter().find(|n| n.role() == egui::accesskit::Role::Label && n.value() == Some(name));
+        let b = n.and_then(|n| n.bounds()).unwrap_or_else(|| panic!("no {name} label"));
+        egui::pos2(((b.x0 + b.x1) / 2.0) as f32, ((b.y0 + b.y1) / 2.0) as f32)
+    };
+    // The Transform panel's Rotate field is not on the bar itself.
+    let open = |nodes: &[egui::accesskit::Node]| nodes.iter().any(|n| n.label() == Some("Rotate"));
+    let before = state(&app);
+    frame(&mut app, vec![]);
+    for name in ["X:", "Y:", "W:", "H:"] {
+        let nodes = frame(&mut app, vec![]);
+        assert!(!open(&nodes), "{name}: the Transform panel is closed at first");
+        let at = label(&nodes, name);
+        frame(&mut app, vec![egui::Event::PointerMoved(at), press_at(at, true)]);
+        frame(&mut app, vec![press_at(at, false)]);
+        assert!(open(&frame(&mut app, vec![])), "{name}: a click on the label opens the Transform panel");
+        assert_eq!(ctx.memory(|m| m.focused()), None, "{name}: no field took the keyboard");
+        assert_eq!(state(&app), before, "{name}: the selection and its bounds stay");
+        frame(&mut app, vec![egui::Event::PointerMoved(at), press_at(at, true)]);
+        frame(&mut app, vec![press_at(at, false)]);
+        assert!(!open(&frame(&mut app, vec![])), "{name}: a second click closes it");
+    }
+    let at = label(&frame(&mut app, vec![]), "W:");
+    frame(&mut app, vec![egui::Event::PointerMoved(at), press_at(at, true)]);
+    for i in 1..=4 {
+        frame(&mut app, vec![egui::Event::PointerMoved(at + egui::vec2(5.0 * i as f32, 0.0))]);
+    }
+    frame(&mut app, vec![press_at(at + egui::vec2(20.0, 0.0), false)]);
+    let nodes = frame(&mut app, vec![]);
+    assert!(!open(&nodes), "a drag on W: opens nothing");
+    let (_, [x0, _, x1, _]) = state(&app);
+    assert!(x1 - x0 > before.1[2] - before.1[0], "a drag on W: scrubs the width: {:?} to {:?}", before.1, [x0, x1]);
 }
