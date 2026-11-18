@@ -214,6 +214,10 @@ pub struct Prefs {
     /// runs on: a Wayland compositor may not show frames from another GPU (#502). Single-GPU
     /// machines are unaffected.
     pub gpu_preference: String,
+    /// The desktop app's window presents without vsync, with frames capped at 240 a second (#6013).
+    /// Read at startup (it takes effect after a restart); `--present-mode` and
+    /// `VECTORCRAFT_PRESENT_MODE` take precedence over it.
+    pub low_latency_drawing: bool,
     pub history_states: u32,
     pub real_time_drawing: bool,
     /// Rasterizer worker threads; -1 = automatic.
@@ -503,6 +507,7 @@ impl Default for Prefs {
             gpu_performance: true,
             animated_zoom: true,
             gpu_preference: s("automatic"),
+            low_latency_drawing: false,
             history_states: 500,
             real_time_drawing: true,
             render_threads: -1,
