@@ -87,6 +87,40 @@ fn the_shadow_moves_with_its_settings() {
     }
 }
 
+/// The radius of the Gaussian Blur on shadow `n`; `None` without one.
+fn shadow_blur(n: &Node) -> Option<f64> {
+    match n.appearance.effects.as_slice() {
+        [] => None,
+        [e] if e.id == "blur.gaussian" && e.visible => e.params["radius"].as_f64(),
+        other => panic!("unexpected effects on the shadow: {other:?}"),
+    }
+}
+
+/// The first light's Softness blurs the shadow, more with Softness and with Distance from Object;
+/// at 0 % it stays the hard-edged path. A list of lights takes the first light's Softness.
+#[test]
+fn the_first_lights_softness_blurs_the_shadow() {
+    for id in CASTING {
+        let blur = |params: Value| {
+            let mut n = square_node(1, 0.0);
+            n.appearance.effects.push(crate::new_effect(id, &params).unwrap());
+            let lit = art(&n, id).unwrap();
+            let shadow = &lit.children().unwrap()[0];
+            assert!(is_shadow(shadow), "{id} {params}");
+            shadow_blur(shadow)
+        };
+        assert_eq!(blur(json!({"shadow": true})), None, "{id}: hard at 0 %");
+        let soft = blur(json!({"shadow": true, "lightSoftness": 50})).unwrap_or_else(|| panic!("{id}"));
+        let softer = blur(json!({"shadow": true, "lightSoftness": 100})).unwrap();
+        let far = blur(json!({"shadow": true, "lightSoftness": 100, "shadowDistance": 100})).unwrap();
+        assert!(soft > 0.0 && softer > soft && far > softer, "{id}: {soft} {softer} {far}");
+        let first = json!({"shadow": true, "lightSoftness": 0, "lights": [{"softness": 100}, {"softness": 0}]});
+        assert_eq!(blur(first), Some(softer), "{id}: the first light's");
+        let second = json!({"shadow": true, "lightSoftness": 100, "lights": [{"softness": 0}, {"softness": 100}]});
+        assert_eq!(blur(second), None, "{id}: only the first light casts");
+    }
+}
+
 #[test]
 fn shadow_settings_out_of_range_or_of_the_wrong_kind_are_refused() {
     for id in CASTING {
@@ -200,6 +234,26 @@ fn the_shadows_of_every_fill_go_behind_every_fill_s_solid() {
         assert!(children.len() >= 4, "{id}");
         assert!(is_shadow(&children[0]) && is_shadow(&children[1]), "{id}: both shadows first");
         assert!(children[2..].iter().all(|c| !is_shadow(c)), "{id}");
+    }
+}
+
+/// A fill's own 3D effect blurs its shadow by the light's Softness too, and the effects after it
+/// in the fill's list follow the blur.
+#[test]
+fn a_fills_own_3d_effect_keeps_the_blur_below_its_later_effects() {
+    for id in CASTING {
+        for later in [None, Some(crate::new_effect("distort.roughen", &json!({})).unwrap())] {
+            let mut n = square_node(1, 0.0);
+            let fill = n.appearance.items.iter_mut().find(|i| matches!(i, AppearanceItem::Fill(_))).unwrap();
+            fill.effects_mut().push(crate::new_effect(id, &json!({"shadow": true, "lightSoftness": 100})).unwrap());
+            fill.effects_mut().extend(later.clone());
+            let lit = art(&n, id).unwrap_or_else(|| panic!("{id}"));
+            let shadow = &lit.children().unwrap()[0];
+            assert!(is_shadow(shadow), "{id}");
+            let ids: Vec<&str> = shadow.appearance.effects.iter().map(|e| e.id.as_str()).collect();
+            let want: Vec<&str> = std::iter::once("blur.gaussian").chain(later.as_ref().map(|e| e.id.as_str())).collect();
+            assert_eq!(ids, want, "{id}");
+        }
     }
 }
 

@@ -300,7 +300,7 @@ fn code_view(app: &VectorcraftApp, ui: &mut egui::Ui, d: &Dialog) {
         None => {
             const MAX: usize = 200_000;
             let params = json!({ "svg": opts });
-            let encoded = vectorcraft_engine::cmd::fileio::check_linked_scripts("document.export", "svg", st).and_then(|()| {
+            let encoded = vectorcraft_engine::cmd::fileio::check_linked_scripts("document.export", "svg", st, &params).and_then(|()| {
                 let selected;
                 let doc = if selection {
                     selected = vectorcraft_engine::cmd::fileio::selection_doc(st, "document.exportSelection", false)?.0;
