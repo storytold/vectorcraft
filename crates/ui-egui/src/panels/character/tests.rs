@@ -343,6 +343,57 @@ fn highlight_commands_focus_the_font_kerning_and_tracking_fields() {
     assert_eq!(app.character_focus, None);
 }
 
+/// Type › Size › Other… (Highlight Font Size) shows the Character panel and gives its Font Size
+/// field the keyboard focus with the value selected: what is typed replaces it, Enter applies it
+/// as one undo step, and a selection of different sizes takes the one size typed into the blank
+/// field. Without selected type the panel shows, the command fails and nothing takes the focus.
+#[test]
+fn highlight_font_size_focuses_the_font_size_field() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let a = app.run("text.create", json!({"x": 20, "y": 50, "text": "AVAX", "size": 12})).unwrap()["id"].clone();
+    let b = app.run("text.create", json!({"x": 20, "y": 120, "text": "Wave", "size": 20})).unwrap()["id"].clone();
+    let ctx = egui::Context::default();
+    let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+        let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| show(app, ui));
+        out.textures_delta.clear();
+    };
+    let typed = |text: &str| {
+        let enter = egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+        vec![egui::Event::Text(text.into()), enter]
+    };
+    let size = |app: &VectorcraftApp| shared(app, |s| s.size);
+    app.run("select.set", json!({"ids": [a.clone()]})).unwrap();
+    assert_eq!(app.run("type.highlightFontSize", json!({})).unwrap(), json!({"field": "fontSize"}));
+    assert!(crate::panel_docking::showing(&app.ui, "character"), "the panel shows");
+    frame(&mut app, vec![]);
+    assert_eq!(app.character_focus, None, "the Font Size field took the focus");
+    frame(&mut app, typed("33"));
+    assert_eq!(size(&app), Some(33.0), "typing replaced the size");
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(size(&app), Some(12.0), "one undo step restores the size");
+    // Choosing Other again while the field holds typed text that is not applied selects all of it.
+    app.run("type.highlightFontSize", json!({})).unwrap();
+    frame(&mut app, vec![]);
+    frame(&mut app, vec![egui::Event::Text("999".into())]);
+    app.run("type.highlightFontSize", json!({})).unwrap();
+    frame(&mut app, vec![]);
+    frame(&mut app, typed("18"));
+    assert_eq!(size(&app), Some(18.0), "typing replaced the text typed before");
+    ctx.memory_mut(|m| m.stop_text_input());
+    // Different sizes: the field is blank, and the size typed applies to every selected object.
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    assert_eq!(size(&app), None);
+    app.run("type.highlightFontSize", json!({})).unwrap();
+    frame(&mut app, vec![]);
+    frame(&mut app, typed("16"));
+    assert_eq!(size(&app), Some(16.0), "both objects take the size typed");
+    // No type selected: the panel shows, the command fails and nothing is armed.
+    app.run("select.none", json!({})).unwrap();
+    assert!(app.run("type.highlightFontSize", json!({})).is_err());
+    assert_eq!(app.character_focus, None);
+}
+
 /// A variable font gets the Variable Font button, which opens one slider per axis named as the
 /// font names it; a drag along one sets that axis of the selected type in one undo step.
 #[test]
@@ -1685,7 +1736,7 @@ fn copy_and_cut_take_a_story_that_left_the_edited_frame() {
             // A story that holds no text has nothing to copy, so Cut does not run its delete.
             app.run("select.all", json!({})).unwrap();
             assert_eq!(text_story(&app).map(|frames| frames.len()), Some(3));
-            assert!(!text_copy(&mut app));
+            assert!(!text_copy(&mut app, false));
         }
     }
 }

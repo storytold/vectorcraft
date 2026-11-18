@@ -57,6 +57,8 @@
 	Check Script	Periksa skrip
 	Some scripts were not listed	Beberapa skrip tidak dicantumkan
 	The Scripts folder cannot be read	Folder Scripts tidak dapat dibaca
+	Loading scripts…	Memuat skrip…
+	The Scripts folder is still being read	Folder Scripts masih dibaca
 	Other Script…	Skrip lain…
 	Document Setup…	Pengaturan dokumen…
 	Switch Units	Ganti satuan
@@ -160,6 +162,8 @@
 	Shear…	Miringkan…
 	Transform Each…	Transformasi masing-masing…
 	Reset Bounding Box	Atur ulang kotak pembatas
+	Rotate Bounding Box	Putar kotak pembatas
+	Rotate Bounding Box…	Putar kotak pembatas…
 	Arrange	Susun
 	Bring to Front	Bawa ke depan
 	Bring Forward	Majukan
@@ -710,6 +714,11 @@
 	Saturation and brightness	Saturasi dan kecerahan
 	Color field	Kolom warna
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
+	Wheel View	Tampilan roda
+	Box View	Tampilan kotak
+	Box Channel	Saluran kotak
+	Color box	Kotak warna
+	Color Wheel Options	Opsi roda warna
 	CSS Properties	Properti CSS
 	Document Info	Info dokumen
 	Flattener Preview	Pratinjau perata
@@ -1446,6 +1455,7 @@ lighting	Light	Cahaya
 	Play Current Selection	Putar seleksi saat ini
 	Save Actions…	Simpan tindakan…
 	Load Actions…	Muat tindakan…
+	Replace Actions…	Ganti tindakan…
 	Reset Actions	Atur ulang tindakan
 	Replace the current actions with the default set?	Ganti tindakan saat ini dengan set default?
 	Append adds the default set after the current sets instead.	Tambahkan justru menambahkan set default setelah set saat ini.
@@ -2558,6 +2568,7 @@ digits	Malayalam	Malayalam
 	BLANK DOCUMENT PRESETS	PRESET DOKUMEN KOSONG
 	Bleed	Bleed
 	Change to Right-to-Left Layout	Ubah ke tata letak kanan ke kiri
+	Columns	Kolom
 	Columns:	Kolom:
 	Documents you create appear here.	Dokumen yang Anda buat muncul di sini.
 	More Settings	Pengaturan lainnya
@@ -2691,6 +2702,9 @@ digits	Malayalam	Malayalam
 	Open a document to preview its pages	Buka dokumen untuk melihat pratinjau halamannya
 	Output › Mode	Keluaran › Mode
 	Overprint and Transparency Flattener Options	Opsi overprint dan perataan transparansi
+	Custom…	Kustom…
+	Custom Transparency Flattener Options	Opsi perataan transparansi kustom
+	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	EPS tidak memiliki transparansi alfa, dan Overprint menentukan apakah overprint dipertahankan.
 	Place the pages with the placement again	Tempatkan halaman lagi dengan penempatan tersebut
 	Placement:	Penempatan:
 	Preserve CMYK Numbers	Pertahankan angka CMYK
@@ -2740,14 +2754,19 @@ digits	Malayalam	Malayalam
 	Around Object	Di sekeliling objek
 	Background:	Latar belakang:
 	Changing these settings changes how raster effects look when exported, flattened or expanded.	Mengubah pengaturan ini mengubah tampilan efek raster saat diekspor, diratakan, atau diperluas.
+	Add Around	Tambah di sekeliling objek
+	Anti Alias	Anti-aliasing
+	Color Model	Model warna
 	Color Model:	Model warna:
 	Create Clipping Mask	Buat clipping mask
 	Preserve Spot Colors	Pertahankan warna spot
+	Resolution	Resolusi
 	Resolution:	Resolusi:
 	Transparent	Transparan
 	Layout Order:	Urutan tata letak:
 	Change to Left-to-Right Layout	Ubah ke tata letak kiri ke kanan
 	Artboards: {n}	Artboard: {n}
+	Rows	Baris
 	Rows:	Baris:
 	Assign	Tetapkan
 	Color Group:	Grup warna:
@@ -3208,6 +3227,8 @@ theme	Appearance	Tampilan
 	Break Link to Symbol	Putuskan tautan ke simbol
 	Brush Definition	Definisi kuas
 	Brush Options…	Opsi kuas…
+	Options of Selected Object…	Opsi objek yang dipilih…
+	Options of Selected Object	Opsi objek yang dipilih
 	Current Brush	Kuas saat ini
 	Current Symbol	Simbol saat ini
 	Delete Brush	Hapus kuas
@@ -3708,6 +3729,7 @@ theme	Appearance	Tampilan
 	Enable Rubber Band for	Aktifkan rubber band untuk
 	Enable Touch Gestures	Aktifkan gestur sentuh
 	Switch Selection and Drawing Modes	Beralih antara mode seleksi dan menggambar
+	Select Last Selection Tool	Pilih alat seleksi terakhir
 	Enable Touch Workspace	Aktifkan ruang kerja sentuh
 	English: UK	Inggris: UK
 	Every (minutes)	Setiap (menit)
@@ -3840,6 +3862,7 @@ theme	Appearance	Tampilan
 	Scroll Sideways with Cmd/Ctrl + Wheel	Gulir horizontal dengan Cmd/Ctrl + roda mouse
 	Scrub Numeric Fields by Dragging	Atur nilai kolom numerik dengan menyeret
 	Linux Display Server	Server tampilan Linux
+	Low-Latency Drawing	Penggambaran latensi rendah
 	Print Preview	Pratinjau cetak
 	Print Setup	Pengaturan cetak
 	Bitmap	Bitmap
@@ -4240,6 +4263,29 @@ font-technology	Variable	Variabel
 	The unit for East Asian type measurements, which no field uses yet.	Satuan untuk ukuran teks Asia Timur, yang belum digunakan bidang mana pun.
 	When on, a number typed without a unit into a field in picas is read in points.	Jika aktif, angka yang diketik tanpa satuan di bidang dalam pica dibaca dalam titik.
 	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	Dengan ID XML, nama objek ditampilkan sebagai ID XML di Lapisan, Variabel, dan Opsi lapisan.
+	The step for type size and leading: Cmd/Ctrl+Shift+. and Cmd/Ctrl+Shift+, change the size by one step, or five with Alt too; in horizontal type, Alt with the Up or Down Arrow changes the leading by one step, or five with Cmd/Ctrl.	Langkah untuk ukuran teks dan spasi baris: Cmd/Ctrl+Shift+. dan Cmd/Ctrl+Shift+, mengubah ukuran satu langkah, atau lima dengan Alt juga; pada teks horizontal, Alt dengan panah atas atau bawah mengubah spasi baris satu langkah, atau lima dengan Cmd/Ctrl.
+	The step for tracking and kerning, in thousandths of an em: in horizontal type, Alt with the Left or Right Arrow changes the kerning at the caret or the tracking of the selected text by one step, or five with Cmd/Ctrl.	Langkah untuk tracking dan kerning, dalam perseribu em: pada teks horizontal, Alt dengan panah kiri atau kanan mengubah kerning di kursor atau tracking teks yang dipilih satu langkah, atau lima dengan Cmd/Ctrl.
+	The step for baseline shift: in horizontal type, Alt and Shift with the Up or Down Arrow move the baseline by one step, or five with Cmd/Ctrl.	Langkah untuk pergeseran garis dasar: pada teks horizontal, Alt dan Shift dengan panah atas atau bawah menggeser garis dasar satu langkah, atau lima dengan Cmd/Ctrl.
+	Shows the options for Japanese and other East Asian type in the Character, Paragraph, OpenType and Glyphs panels, and Type › Composite Fonts.	Menampilkan opsi untuk teks Jepang dan teks Asia Timur lainnya di panel Karakter, Paragraf, OpenType, dan Glif, serta perintah Font komposit.
+	Shows the options for Arabic, Hebrew and Indic type in the Character and Paragraph panels, such as paragraph direction, kashidas and digits.	Menampilkan opsi untuk teks Arab, Ibrani, dan India di panel Karakter dan Paragraf, seperti arah paragraf, kashida, dan digit.
+	The selection tools select type only on its baseline, its area's frame or its path, not anywhere inside its box.	Alat seleksi memilih teks hanya pada garis dasarnya, bingkai teks area, atau jalurnya, bukan di sembarang tempat di dalam kotaknya.
+	Font menus list each font by its English name; off, a font that also has a name in its own language shows that name.	Menu font mencantumkan setiap font dengan nama bahasa Inggrisnya; jika nonaktif, font yang juga punya nama dalam bahasanya sendiri menampilkan nama itu.
+	New area type starts with Auto Size on, so a rectangular frame of horizontal type grows or shrinks in height to fit its text.	Teks area baru dimulai dengan Ukuran otomatis aktif, sehingga bingkai persegi panjang berisi teks horizontal bertambah atau berkurang tingginya agar teksnya muat.
+	Font lists and the Type › Font menu show a sample of each font beside its name.	Daftar font dan menu Font menampilkan contoh setiap font di samping namanya.
+	Font samples are drawn in dark type on white, whatever the interface's brightness; it applies only while in-menu font previews are on.	Contoh font digambar dengan teks gelap di atas putih, apa pun kecerahan antarmuka; ini hanya berlaku selama pratinjau font di menu aktif.
+	How tall each row is in the font lists of font fields, such as the Character panel's, and so how large each sample is.	Tinggi setiap baris dalam daftar bidang font, seperti di panel Karakter, dan karenanya besar setiap contoh.
+	How many of the fonts used last, from 1 to 15, Type › Recent Fonts and the font lists show, newest first.	Berapa banyak font yang terakhir dipakai, dari 1 sampai 15, yang ditampilkan Font terbaru dan daftar font, yang terbaru lebih dulu.
+	When you change the font or font style of text, characters the new font has no glyph for keep the font they had.	Saat Anda mengganti font atau gaya font teks, karakter yang tidak memiliki glif di font baru tetap memakai font sebelumnya.
+	A pink highlight on the canvas marks glyphs that OpenType features replaced, such as ligatures; it does not print or export.	Sorotan merah muda di kanvas menandai glif yang diganti oleh fitur OpenType, seperti ligatur; sorotan ini tidak dicetak atau diekspor.
+	With the Type tool, selecting one character shows a row of its alternate glyphs beside it on the canvas to choose from.	Dengan alat teks, memilih satu karakter menampilkan deretan glif alternatifnya di sampingnya di kanvas untuk dipilih.
+	A pink highlight on the canvas marks text drawn in a substitute font because its font is missing; it does not print or export.	Sorotan merah muda di kanvas menandai teks yang digambar dengan font pengganti karena fontnya tidak ada; sorotan ini tidak dicetak atau diekspor.
+	New type made with a Type tool starts with placeholder text, selected, so typing replaces it.	Teks baru yang dibuat dengan alat teks dimulai dengan teks pengganti yang terpilih, sehingga ketikan Anda menggantikannya.
+	Typing a list marker such as 1. or * and then a space at the start of a paragraph makes the paragraph a list.	Mengetik penanda daftar seperti 1. atau * lalu spasi di awal paragraf mengubah paragraf itu menjadi daftar.
+	Fonts in this folder show in the font menus and can be used without being installed.	Font di folder ini muncul di menu font dan dapat dipakai tanpa diinstal.
+	Applying a graphic style to type removes the characters' own fill or stroke where the style has one, so the style's paint shows.	Menerapkan gaya grafis pada teks menghapus isian atau garis milik karakter jika gaya memilikinya, sehingga cat gaya itu terlihat.
+	Align and Distribute measure point type by the ink of its glyphs instead of its em box.	Sejajarkan dan Distribusikan mengukur teks titik menurut tinta glifnya, bukan kotak em-nya.
+	Align and Distribute measure area type by the ink of its glyphs instead of its frame.	Sejajarkan dan Distribusikan mengukur teks area menurut tinta glifnya, bukan bingkainya.
+	The bounding box and the Transform panel measure point type by the ink of its glyphs instead of its em box.	Kotak pembatas dan panel Transformasi mengukur teks titik menurut tinta glifnya, bukan kotak em-nya.
 	Snaps drawing, moving and scaling to the grid's subdivisions, even while the grid is hidden; while it is on, Snap to Pixel does not apply.	Menempelkan penggambaran, pemindahan, dan penskalaan ke subdivisi kisi, bahkan saat kisi disembunyikan; selama opsi ini aktif, Snap ke piksel tidak berlaku.
 	The color of guides that are not selected; an artboard with a Guide Label draws its own guides in the label's color instead.	Warna panduan yang tidak dipilih; artboard yang memiliki Label panduan menggambar panduannya sendiri dengan warna label tersebut.
 	Draws guides as solid lines or as dots, including the guides already in the document.	Menggambar panduan sebagai garis utuh atau sebagai titik, termasuk panduan yang sudah ada di dokumen.
@@ -5106,6 +5152,9 @@ imageTrace	Outline	Kontur
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	{n} dokumen hasil pemulihan dibuang
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	{n} dokumen hasil pemulihan dipulihkan: simpan agar tidak hilang
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Dibuka dengan {n} catatan: {first}
+@msgplural	Copied with {n} note: {first}|Copied with {n} notes: {first}	Disalin dengan {n} catatan: {first}
+@msgplural	Cut with {n} note: {first}|Cut with {n} notes: {first}	Dipotong dengan {n} catatan: {first}
+@msgplural	Traced with {n} note: {first}|Traced with {n} notes: {first}	Gambar dilacak dengan {n} catatan: {first}
 @msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Dibuka dengan {n} catatan: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	{path} disimpan dengan {n} catatan: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	{n} gambar tersemat; {missing} hilang: tautkan ulang dulu
@@ -5487,6 +5536,7 @@ imageTrace	Outline	Kontur
 	Ascent	Ascent
 	Cap Height	Tinggi kapital
 	x Height	Tinggi x
+	Em Box Height	Tinggi Em Box
 	Justify	Ratakan
 	First Baseline	Baseline pertama
 	Vertical Align	Perataan vertikal
@@ -5812,6 +5862,8 @@ mark-style	Japanese	Jepang
 	Reset Tracking and Kerning	Atur ulang tracking dan kerning
 	Reset Horizontal Scale	Atur ulang skala horizontal
 	Highlight Font Name	Sorot nama font
+	Highlight Font Size	Sorot ukuran font
+	Other…	Lainnya…
 	Highlight Kerning	Sorot kerning
 	Highlight Tracking	Sorot tracking
 @msg	span must be "object" or "selection", got {v}	span harus "object" atau "selection", diterima {v}
@@ -5874,6 +5926,11 @@ mark-style	Japanese	Jepang
 	Edge Only	Hanya tepi
 	Overlay Edge	Hamparkan tepi
 	Path Length	Panjang jalur
+	Grid Size	Ukuran kisi
+	Grid Colors	Warna kisi
+	Flattener Preset	Preset flattener
+	X	X
+	Y	Y
 @msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	lapisan file tidak terbaca ({_1}): file masuk sebagai halamannya, dalam satu lapisan
 @msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	lapisan file tidak terbaca dari data pengeditannya ({_1}): lapisannya berasal dari bagian PDF file
 @msg	the file's variable bindings weren't all read (bindings skipped: {_1}): those objects aren't bound to their variables	tidak semua ikatan variabel file terbaca (ikatan yang dilewati: {_1}): objek-objek itu tidak terikat ke variabelnya
@@ -5881,6 +5938,8 @@ mark-style	Japanese	Jepang
 @msg	the file's variable library couldn't be read: the Variables panel doesn't list it	pustaka variabel file tidak dapat dibaca: panel Variabel tidak menampilkannya
 @msg	a variable of unknown kind can't be bound to objects	variabel bertipe tidak dikenal tidak dapat diikat ke objek
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` harus grayscale, rgb, hsb, cmyk atau websafe
+@msg	`view` must be wheel or box	`view` harus wheel atau box
+@msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` harus hue, saturation, brightness, red, green atau blue
 @msg	the Color Picker is not open	Pemilih Warna tidak terbuka
 @msg	the screen color sampler is already open	pengambil warna layar sudah terbuka
 @msg	this system has no screen color sampler	sistem ini tidak memiliki pengambil warna layar
@@ -6707,6 +6766,12 @@ anchor	Points:	Titik:
 @msg	`segment` must be "straight" or "curved"	`segment` harus "straight" atau "curved"
 @msg	`mode` must be "free", "keepAngles" or "symmetric"	`mode` harus "free", "keepAngles" atau "symmetric"
 @msg	`{key}` must be [x, y]	`{key}` harus [x, y]
+
+# Unit Converter add-on (Object › Plug-ins › Unit Converter): its panel.
+	Unit Converter	Pengonversi Satuan
+	Unit Converter Panel	Panel Pengonversi Satuan
+	Copy with Units	Salin dengan Satuan
+	From Selection	Dari Seleksi
 
 # Color Effects add-on: Select by Color Kind.
 	Select by Color Kind	Pilih menurut Jenis Warna
