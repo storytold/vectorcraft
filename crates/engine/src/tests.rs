@@ -122,6 +122,7 @@ mod paintproxy;
 mod panelcmds;
 mod paragraphs;
 mod params;
+mod params_cache;
 mod path_menu_enabled;
 mod pathfinder_clip;
 mod pathops;
