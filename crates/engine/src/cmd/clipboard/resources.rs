@@ -1121,8 +1121,11 @@ impl Clipboard {
     /// uses, as [`import_text_styles`] places them, so that a style that paints with a pattern added
     /// under a free name ("Dots 2") is compared and added with that name. An error, with `d`
     /// unchanged, when a pasted SVG filter finds no free name ([`Self::filter_links`]).
+    /// `same_doc`: `d` is the document the objects were copied from. With colors converted for the
+    /// paste ([`Self::colors_converted`]), its color-bearing resources are compared as another
+    /// document's are, while its image blobs are still the document's own under their keys.
     pub(crate) fn import_into(&self, d: &mut Document, choices: &SwatchChoices, same_doc: bool) -> Result<Imported> {
-        self.import_used(d, &self.used(), choices, same_doc)
+        self.import_used_with_images(d, &self.used(), choices, same_doc && !self.colors_converted, same_doc)
     }
 
     /// Give the objects' colors linked to a global or spot swatch whose conflict with `d`
@@ -1155,9 +1158,22 @@ impl Clipboard {
     /// other is matched on its own ([`loop_groups`]). Pasted back into its own document
     /// (`same_doc`), each definition of a loop is the document's of its name.
     fn import_used(&self, d: &mut Document, used: &Used, choices: &SwatchChoices, same_doc: bool) -> Result<Imported> {
+        self.import_used_with_images(d, used, choices, same_doc, same_doc)
+    }
+
+    /// [`Self::import_used`], with the image blobs matched as those of the document they came
+    /// from when `same_doc_images`.
+    fn import_used_with_images(
+        &self,
+        d: &mut Document,
+        used: &Used,
+        choices: &SwatchChoices,
+        same_doc: bool,
+        same_doc_images: bool,
+    ) -> Result<Imported> {
         let mut out = Imported::default();
         out.relink.filters = self.filter_links(d, same_doc)?;
-        self.import_images(d, used, same_doc, &mut out);
+        self.import_images(d, used, same_doc_images, &mut out);
         self.import_swatches(d, used, choices, same_doc, &mut out);
         let mut defs: Vec<Def<'_>> = vec![];
         for (r, list) in [(Res::CharStyle, &self.char_styles), (Res::ParaStyle, &self.para_styles)] {

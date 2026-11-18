@@ -668,14 +668,41 @@ fn pastes_inside(id: &str) -> bool {
     !matches!(id, "edit.pasteInFront" | "edit.pasteInBack")
 }
 
+/// The answer a paste question gave, checked again where the paste runs (in the document and with
+/// the clipboard it was given with): `key` is the param that holds the answer, and `changed` tells
+/// whether the question the paste command `id` with those params would ask now differs from the one
+/// answered. The paste then runs without the answer, and so asks again.
+pub(crate) struct Recheck<'a> {
+    pub key: &'static str,
+    pub changed: &'a dyn Fn(&mut VectorcraftApp, &str, &Value) -> bool,
+}
+
+/// `params` without the answer `recheck` names when the question it answered has changed.
+fn rechecked(app: &mut VectorcraftApp, id: &str, mut params: Value, recheck: Option<&Recheck<'_>>) -> Value {
+    if let Some(r) = recheck
+        && (r.changed)(app, id, &params)
+        && let Some(o) = params.as_object_mut()
+    {
+        o.remove(r.key);
+    }
+    params
+}
+
 /// Run the command confirmed by the deferred paste's Swatch Conflict or Paste Profile Mismatch
-/// dialog.
-pub(crate) fn confirm_swatch_paste(app: &mut VectorcraftApp, id: &str, params: Value, token: Option<u64>) -> Result<Value, String> {
+/// dialog, asking again first when `recheck` finds that the question has changed.
+pub(crate) fn confirm_swatch_paste(
+    app: &mut VectorcraftApp,
+    id: &str,
+    params: Value,
+    token: Option<u64>,
+    recheck: Option<&Recheck<'_>>,
+) -> Result<Value, String> {
     if !app.placing.swatch_paste.as_ref().is_some_and(|waiting| Some(waiting.chain) == token) {
         if token.is_some() || app.placing.swatch_paste.is_some() {
             cancel_swatch_paste(app);
             return Err("the deferred paste is no longer available".into());
         }
+        let params = rechecked(app, id, params, recheck);
         return app.run(id, params);
     }
     let Some(waiting) = app.placing.swatch_paste.take() else { return app.run(id, params) };
@@ -701,11 +728,13 @@ pub(crate) fn confirm_swatch_paste(app: &mut VectorcraftApp, id: &str, params: V
     }
     let insertion = waiting.insertion.clone().or_now(changed.as_ref(), app, pastes_inside(id));
     insertion.clone().set(app);
+    // The question checked again with the clipboard and document the paste runs with.
+    let params = rechecked(app, id, params, recheck);
     app.placing.adopted = true;
     let result = app.run(id, params);
     app.placing.adopted = false;
-    // The paste asked again (Swatch Conflict after Paste Profile Mismatch): it stays deferred, in
-    // the context it was given in.
+    // The paste asked again (Swatch Conflict after Paste Profile Mismatch, or the same question
+    // about what changed): it stays deferred, in the context it was given in.
     let asked_again = app.ui.dialog.as_mut().filter(|d| asks_before_paste(&d.kind) && !d.fields.contains_key("__deferredPaste"));
     if let Some(d) = asked_again
         && let Ok(st) = app.session.doc()

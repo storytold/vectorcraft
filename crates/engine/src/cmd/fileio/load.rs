@@ -695,6 +695,9 @@ pub struct ReadFile {
     /// The answer that was used and the question it answered (`document.open`'s `profileChoice`
     /// reply).
     answered: Option<Value>,
+    /// The profile question as it was last asked ([`ReadFile::ask`]): an answer is taken only while
+    /// the question is still the same.
+    asked: Option<crate::cmd::colormgmt::ProfileQuestion>,
 }
 
 /// The part of [`read_for_open`] a file waiting for a profile answer has left to do.
@@ -768,8 +771,9 @@ pub fn read_for_open_asking(
         choice,
         rest: Some(Rest { update_links, low_res_proxy_eps, color_mode }),
         answered: None,
+        asked: None,
     };
-    if ask && file.choice.is_none() && file.question().is_some() {
+    if ask && file.choice.is_none() && file.ask().is_some() {
         return Ok(file);
     }
     file.finish_read()?;
@@ -791,11 +795,28 @@ impl ReadFile {
         crate::cmd::colormgmt::ProfileQuestion::of(&self.loaded.doc, &st).filter(|q| q.asked(&st))
     }
 
+    /// [`Self::question`], kept as the question asked: [`Self::answer`] takes an answer only while
+    /// the question is still the same. The app calls it when it shows the question.
+    pub fn ask(&mut self) -> Option<crate::cmd::colormgmt::ProfileQuestion> {
+        self.asked = self.question();
+        self.asked.clone()
+    }
+
     /// Answer the profile question with `choice` and do the rest of the read: the policies (the
     /// answer in place of the one of the document's color mode), the color mode, the linked files
-    /// and the type. An error (a profile to assign that is not one of that model) leaves the file
-    /// waiting.
+    /// and the type. An error leaves the file waiting: a profile to assign that is not one of that
+    /// model, or Color Settings changed since the question was asked ([`Self::ask`]) so that the
+    /// question, its model, the profile it is about or the working space differ.
     pub fn answer(&mut self, choice: crate::cmd::colormgmt::ProfileChoice) -> Result<()> {
+        if let Some(asked) = &self.asked
+            && self.rest.is_some()
+        {
+            let now = crate::cmd::colormgmt::ProfileQuestion::of(&self.loaded.doc, &vectorcraft_color::cms::working_settings());
+            let key = |q: &crate::cmd::colormgmt::ProfileQuestion| (q.issue, q.model, q.profile.clone(), q.working.clone());
+            if now.as_ref().map(key) != Some(key(asked)) {
+                return Err(bad("document.open", "the profile question changed since it was asked: answer the question it asks now"));
+            }
+        }
         let before = self.choice.replace(choice);
         let r = self.finish_read();
         if r.is_err() {

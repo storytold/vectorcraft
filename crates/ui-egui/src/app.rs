@@ -187,6 +187,7 @@ impl VectorcraftApp {
             synthetic_frame: false,
             pending_plugin_install: None,
             pending_profile_open: None,
+            queued_profile_opens: Default::default(),
             script_picked: Vec::new(),
             script_picked_left_out: false,
             pen_end: Default::default(),

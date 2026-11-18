@@ -517,3 +517,26 @@ fn convert_into_keeps_compensated_dark_inks() {
         }
     }
 }
+
+/// Absolute Colorimetric converts CMYK out of Generic CMYK from the inks' absolute Lab (paper color
+/// included, no black-point compensation): into another document whose CMYK space is also Generic
+/// CMYK, the paper, dark inks and mid tones keep their absolute appearance.
+#[test]
+fn absolute_cmyk_conversion_keeps_the_absolute_appearance() {
+    let generic = cms();
+    let other_generic = Cms::new(&ColorSettings { rgb: WIDE_GAMUT_RGB.into(), ..Default::default() }).unwrap();
+    let absolute = |c: &Cms, ink: &Color| match (&c.cmyk, ink) {
+        (CmykSpace::Generic(g), Color::Cmyk { c, m, y, k }) => g.to_lab_abs([*c, *m, *y, *k]),
+        _ => panic!("Generic CMYK inks expected, not {ink:?}"),
+    };
+    for ink in [
+        Color::Cmyk { c: 0.0, m: 0.0, y: 0.0, k: 0.0 },
+        Color::Cmyk { c: 0.6, m: 0.5, y: 0.5, k: 0.9 },
+        Color::Cmyk { c: 0.3, m: 0.2, y: 0.2, k: 0.75 },
+        Color::Cmyk { c: 0.4, m: 0.1, y: 0.6, k: 0.1 },
+    ] {
+        let moved = generic.convert_into(&other_generic, &ink, Intent::AbsoluteColorimetric);
+        let d = delta_e2000(absolute(&generic, &ink), absolute(&other_generic, &moved));
+        assert!(d < 2.0, "{ink:?} → {moved:?}: ΔE {d}");
+    }
+}

@@ -950,11 +950,16 @@ pub(crate) fn convert_art_and_style_colors(d: &mut vectorcraft_doc::Document, co
 }
 
 /// The RGB and CMYK profiles the colors of `d` show through, by name: those it is assigned, else
-/// the working spaces.
+/// the working spaces. An assigned profile that is not available (removed since) is the working
+/// space, as the document draws through it ([`cms::for_document`]).
 pub(crate) fn effective_profiles(d: &vectorcraft_doc::Document) -> [String; 2] {
     let working = cms::working_settings();
     let (rgb, cmyk) = doc_profiles(d);
-    [rgb.unwrap_or_else(|| cms::canonical_name(&working.rgb).to_string()), cmyk.unwrap_or_else(|| cms::canonical_name(&working.cmyk).to_string())]
+    let available = |name: Option<String>, kind: cms::ProfileKind| name.filter(|n| cms::profile(n).is_some_and(|p| p.kind == kind));
+    [
+        available(rgb, cms::ProfileKind::Rgb).unwrap_or_else(|| cms::canonical_name(&working.rgb).to_string()),
+        available(cmyk, cms::ProfileKind::Cmyk).unwrap_or_else(|| cms::canonical_name(&working.cmyk).to_string()),
+    ]
 }
 
 /// What Paste does with the colors of a model when the document they were copied from showed them
@@ -1035,20 +1040,25 @@ pub struct PasteMismatch {
     pub from: String,
     /// The profile they show through in the document they go into.
     pub to: String,
-    /// What the model's policy does with them.
+    /// What the model's policy does with them; Preserve Numbers when they can't convert.
     pub default: PasteProfile,
+    /// Both profiles are available, so the colors can convert; otherwise they keep their numbers
+    /// whatever the choice.
+    pub convertible: bool,
 }
 
 impl PasteMismatch {
     pub fn to_json(&self) -> Value {
         let model = if self.model == ColorMode::Rgb { "rgb" } else { "cmyk" };
-        json!({ "model": model, "clipboard": self.from, "document": self.to, "default": self.default.id() })
+        json!({ "model": model, "clipboard": self.from, "document": self.to, "default": self.default.id(), "convertible": self.convertible })
     }
 }
 
 /// The models whose colors pasting `clip` into `d` brings from another profile: RGB, CMYK or both,
-/// each only when the copied objects or the resources they carry hold a color of that model.
-pub(crate) fn paste_mismatches(clip: &super::clipboard::Clipboard, d: &vectorcraft_doc::Document) -> Vec<PasteMismatch> {
+/// each only when the copied objects or the resources they carry hold a color of that model. The
+/// background colors of copied artboards count only with `boards` (Paste on All Artboards doesn't
+/// paste the artboards).
+pub(crate) fn paste_mismatches(clip: &super::clipboard::Clipboard, d: &vectorcraft_doc::Document, boards: bool) -> Vec<PasteMismatch> {
     let Some([from_rgb, from_cmyk]) = &clip.source_profiles else { return vec![] };
     let [to_rgb, to_cmyk] = effective_profiles(d);
     let working = cms::working_settings();
@@ -1056,11 +1066,26 @@ pub(crate) fn paste_mismatches(clip: &super::clipboard::Clipboard, d: &vectorcra
         [(ColorMode::Rgb, from_rgb, to_rgb, working.rgb_policy), (ColorMode::Cmyk, from_cmyk, to_cmyk, working.cmyk_policy)]
             .into_iter()
             .filter(|(_, from, to, _)| cms::canonical_name(from) != cms::canonical_name(to))
-            .map(|(model, from, to, policy)| PasteMismatch { model, from: from.clone(), to, default: PasteProfile::of(policy) })
+            .map(|(model, from, to, policy)| {
+                let kind = if model == ColorMode::Rgb { cms::ProfileKind::Rgb } else { cms::ProfileKind::Cmyk };
+                // Both profiles must be here to convert between them.
+                let here = |name: &str| cms::profile(name).is_some_and(|p| p.kind == kind);
+                let convertible = here(from) && here(&to);
+                let default = if convertible { PasteProfile::of(policy) } else { PasteProfile::PreserveNumbers };
+                PasteMismatch { model, from: from.clone(), to, default, convertible }
+            })
             .collect();
     if out.is_empty() {
         return out;
     }
+    // Without the artboards when their backgrounds don't paste.
+    let without_boards;
+    let clip = if !boards && !clip.artboards.is_empty() {
+        without_boards = super::clipboard::Clipboard { artboards: vec![], ..clip.clone() };
+        &without_boards
+    } else {
+        clip
+    };
     // Which models the pasted colors use.
     let seen = std::cell::Cell::new((false, false));
     let _ = clip.with_colors(&|c: &Color| {
@@ -1077,23 +1102,20 @@ pub(crate) fn paste_mismatches(clip: &super::clipboard::Clipboard, d: &vectorcra
 /// ([`paste_mismatches`]), its colors keep their numbers or convert from the source profile into
 /// the destination's with the working intent, as `choice` says for that model (default: the
 /// model's policy, [`PasteProfile::of`]). A source or destination profile that is not available
-/// keeps the numbers.
+/// keeps the numbers. `boards`: as [`paste_mismatches`].
 /// → the converted clipboard (`None` when nothing converts; its resources paste as another
 /// document's) and a line for each mismatched model (`{model, clipboard, document, choice}`).
 pub(crate) fn paste_profiles(
     clip: &super::clipboard::Clipboard,
     d: &vectorcraft_doc::Document,
     choice: Option<PasteChoice>,
+    boards: bool,
 ) -> (Option<super::clipboard::Clipboard>, Vec<Value>) {
-    let mismatches = paste_mismatches(clip, d);
+    let mismatches = paste_mismatches(clip, d, boards);
     let mut report = Vec::new();
     let (mut rgb_on, mut cmyk_on) = (false, false);
     for m in &mismatches {
-        let kind = if m.model == ColorMode::Rgb { cms::ProfileKind::Rgb } else { cms::ProfileKind::Cmyk };
-        // Both profiles must be here to convert between them.
-        let here = |name: &str| cms::profile(name).is_some_and(|p| p.kind == kind);
-        let available = here(&m.from) && here(&m.to);
-        let picked = if available { choice.and_then(|c| c.of(m.model)).unwrap_or(m.default) } else { PasteProfile::PreserveNumbers };
+        let picked = if m.convertible { choice.and_then(|c| c.of(m.model)).unwrap_or(m.default) } else { PasteProfile::PreserveNumbers };
         if picked == PasteProfile::Convert {
             match m.model {
                 ColorMode::Rgb => rgb_on = true,
@@ -1103,6 +1125,7 @@ pub(crate) fn paste_profiles(
         let mut line = m.to_json();
         if let Some(o) = line.as_object_mut() {
             o.remove("default");
+            o.remove("convertible");
             o.insert("choice".into(), json!(picked.id()));
         }
         report.push(line);

@@ -352,6 +352,9 @@ pub struct VectorcraftApp {
     /// The file File › Open read that waits for the answer to its profile question
     /// ([`dialogs::profile_mismatch`]), kept out of the dialog's fields.
     pub(crate) pending_profile_open: Option<dialogs::profile_mismatch::PendingOpen>,
+    /// Files File › Open read while another one's profile question was open, each asking its own
+    /// question in turn.
+    pub(crate) queued_profile_opens: std::collections::VecDeque<dialogs::profile_mismatch::PendingOpen>,
     /// The paths Choose… picked in a script's file dialog, kept out of the dialog's fields, which
     /// `ui.dialog.set` writes.
     pub(crate) script_picked: Vec<String>,

@@ -56,7 +56,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Paste Profile Mismatch",
             [],
             None,
-            "{sourceDocument?, ids?: as edit.dropSelection} → {mismatches: [{model: \"rgb\"|\"cmyk\", clipboard, document, default: \"preserveNumbers\"|\"convert\"}]} the color models whose colors the copied objects (with sourceDocument and ids: the objects edit.dropSelection drops) use and whose profile in the document they were copied from (its assigned profile, else the working space then) is not the active document's: Paste keeps their numbers or converts them into the document's profile as edit.paste* and edit.dropSelection {profileMismatch} say, else as the model's policy of edit.colorSettings does (convert: converts; the others: keeps the numbers). With askMismatchPaste on, the desktop app asks first. Objects from outside an open document have none",
+            "{sourceDocument?, ids?: as edit.dropSelection, allArtboards?: false (true: for edit.pasteOnAllArtboards, which leaves the background colors of copied artboards behind)} → {mismatches: [{model: \"rgb\"|\"cmyk\", clipboard, document, default: \"preserveNumbers\"|\"convert\", convertible}]} the color models whose colors the copied objects (with sourceDocument and ids: the objects edit.dropSelection drops) use and whose profile in the document they were copied from (its assigned profile, else the working space then; an assigned profile removed since: the working space) is not the active document's: Paste keeps their numbers or converts them into the document's profile as edit.paste* and edit.dropSelection {profileMismatch} say, else as the model's policy of edit.colorSettings does (convert: converts; the others: keeps the numbers). convertible: false when either profile is not available (removed with color.removeProfile): the colors then keep their numbers whatever the choice, and default is preserveNumbers. With askMismatchPaste on, the desktop app asks first. Objects from outside an open document have none",
             has_doc,
             profile_mismatch
         ),
@@ -561,7 +561,7 @@ fn conflicts(s: &mut Session, p: &Value) -> Result<Value> {
     // The swatches as the paste brings them: converted from another profile when it converts.
     let profile = super::colormgmt::PasteProfile::param(p, "clipboard.conflicts")?;
     let st = s.doc()?;
-    let (converted, _) = super::colormgmt::paste_profiles(&s.clipboard, &st.doc, profile);
+    let (converted, _) = super::colormgmt::paste_profiles(&s.clipboard, &st.doc, profile, true);
     let list: Vec<Value> = converted
         .as_ref()
         .unwrap_or(&s.clipboard)
@@ -577,7 +577,9 @@ fn profile_mismatch(s: &mut Session, p: &Value) -> Result<Value> {
     // With `sourceDocument` and `ids`, the objects a drop brings, else the clipboard's.
     let dropped = if p.get("sourceDocument").is_some() || p.get("ids").is_some() { Some(super::edit::drop_clip(s, p, CMD)?) } else { None };
     let clip = dropped.as_ref().unwrap_or(&s.clipboard);
-    let list: Vec<Value> = super::colormgmt::paste_mismatches(clip, &s.doc()?.doc).iter().map(|m| m.to_json()).collect();
+    // Paste on All Artboards leaves the copied artboards, and so their backgrounds, behind.
+    let all_artboards = super::switch_or(p, "allArtboards", false, CMD)?;
+    let list: Vec<Value> = super::colormgmt::paste_mismatches(clip, &s.doc()?.doc, !all_artboards).iter().map(|m| m.to_json()).collect();
     Ok(json!({ "mismatches": list }))
 }
 
