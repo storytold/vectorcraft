@@ -1821,6 +1821,7 @@ digits	Malayalam	Malajálamské
 	Rule:	Pravidlo:
 	Save changes to {name}	Uložit změny do {name}
 	Save theme to My Themes	Uložit motiv do Mých motivů
+	Set the current fill or stroke to the selected color	Nastavit vybranou barvu jako aktuální výplň nebo tah
 	Set the selected color to the current color	Nastavit vybranou barvu jako aktuální barvu
 	Copy All Styles	Kopírovat všechny styly
 	Exported {path}	Exportováno: {path}
@@ -2285,7 +2286,7 @@ digits	Malayalam	Malajálamské
 	Overprint Preview (separations)	Náhled přetisků (separace)
 	Show All Plates	Zobrazit všechny desky
 	Show all plates	Zobrazit všechny desky
-	Show/hide plate (Alt-click: only this plate)	Zobrazit/skrýt desku (Alt+kliknutí: jen tato deska)
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	Zobrazit/skrýt desku (Alt+kliknutí: jen tato deska; další Alt+kliknutí: všechny desky)
 	Simulate Paper	Simulovat papír
 	Use Black Point Compensation	Použít kompenzaci černého bodu
 	Working CMYK (don't tag)	Pracovní CMYK (neoznačovat)
@@ -2325,6 +2326,8 @@ digits	Malayalam	Malajálamské
 	Tip extends past the end point	Hrot přesahuje koncový bod
 	Tip on the end point	Hrot na koncovém bodu
 	Variable Width Profile	Profil proměnné šířky
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Štětec tahu si zachovává vlastní velikost, takže ho profil šířky nemění. Chcete-li použít profil, odeberte štětec.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Štětec tahu si zachovává vlastní velikost, takže ho profil šířky nemění. Chcete-li použít profil, odeberte štětec.
 	Weight:	Tloušťka:
 	Art using a deleted global swatch keeps its colour.	Kresba, která používá odstraněnou globální položku vzorníku, si barvu ponechá.
 	Color Group: {name}	Skupina barev: {name}
@@ -2434,6 +2437,9 @@ digits	Malayalam	Malajálamské
 	Flip Horizontal	Překlopit vodorovně
 	Flip Vertical	Překlopit svisle
 	Polygon Properties:	Vlastnosti mnohoúhelníku:
+	Line Properties:	Vlastnosti čáry:
+	Line Length:	Délka čáry:
+	Line Angle:	Úhel čáry:
 	Rectangle Properties:	Vlastnosti obdélníku:
 	Shape Properties:	Vlastnosti tvaru:
 	Shape Properties	Vlastnosti tvaru
@@ -3195,6 +3201,8 @@ antiAlias	Sharp	Ostré
 	Every option matches {base}.	Všechny možnosti odpovídají: {base}.
 	Files of a PDF standard can't be password-protected.	Soubory podle standardu PDF nelze chránit heslem.
 	Files of this standard tag their colours with ICC profiles.	Soubory tohoto standardu označují své barvy profily ICC.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	Soubory tohoto standardu označují své barvy profily ICC, kromě barev CMYK v profilu výstupního záměru, které se zapisují jako DeviceCMYK.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	S volbou „Nezahrnovat profily“ a výstupním záměrem CMYK se každá barva CMYK zapíše jako DeviceCMYK, pokud se nepřevede do cíle CMYK s jiným profilem.
 	Flattener preset:	Přednastavení sloučení:
 	General › Thumbnails	Obecné › Miniatury
 	Grayscale images	Obrazy ve stupních šedi
@@ -3414,6 +3422,12 @@ antiAlias	Sharp	Ostré
 	LF (macOS, Linux)	LF (macOS, Linux)
 	CRLF (Windows)	CRLF (Windows)
 	Text Export Options	Možnosti exportu textu
+	Chinese Big 5	Čínština Big 5
+	Cyrillic	Cyrilice
+	Greek	Řečtina
+	Turkish	Turečtina
+	Baltic	Baltské jazyky
+	Central European	Středoevropské jazyky
 	Character Set:	Znaková sada:
 	Join the lines of each paragraph	Spojit řádky každého odstavce
 	Line Breaks	Zalomení řádků
@@ -3443,6 +3457,9 @@ antiAlias	Sharp	Ostré
 	Variable Options	Možnosti proměnné
 	Define a variable first	Nejprve definujte proměnnou
 	Adjust Adjoining Width Points	Upravit sousední body šířky
+	Incoming	Příchozí
+	Outgoing	Odchozí
+	Single Width Only	Pouze jedna šířka
 	Keep both sides the same width	Zachovat stejnou šířku obou stran
 	Side 1:	Strana 1:
 	Side 2:	Strana 2:
@@ -3848,6 +3865,7 @@ theme	Appearance	Motiv
 	Select Art	Vybrat kresbu
 	Set Current Layer	Nastavit aktuální vrstvu
 	Flatten Artwork	Sloučit kresbu
+	Locate Layer	Najít vrstvu
 	Locate Object	Najít objekt
 	Lock Others	Zamknout ostatní
 	Merge Selected	Sloučit vybrané
@@ -4691,6 +4709,8 @@ font-technology	Variable	Variabilní
 	Couldn't paste from the clipboard: {e}	Nelze vložit ze schránky: {e}
 	Channel	Kanál
 	Circle	Kruh
+	Circle Tool	Nástroj Kruh
+	Circle too large	Kruh je příliš velký
 	Clip to Art	Oříznout podle kresby
 	Colorize	Obarvit
 	Gamma	Gama
@@ -5408,8 +5428,8 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	no active document	žádný aktivní dokument
 @msg	no active perspective plane	žádná aktivní perspektivní rovina
 @msg	no anchor points selected	nejsou vybrány žádné kotevní body
-@msg	`points` must be three [x, y] pairs of numbers	`points` musí být tři dvojice čísel [x, y]
-@msg	direct-select three anchor points, or give `points`	vyberte přímým výběrem tři kotevní body, nebo zadejte `points`
+@msg	`points` must be two or three [x, y] pairs of numbers	`points` musí být dvě nebo tři dvojice čísel [x, y]
+@msg	direct-select two or three anchor points, or give `points`	vyberte přímým výběrem dva nebo tři kotevní body, nebo zadejte `points`
 @msg	no circle passes through these points: two are the same or all three lie on one line	těmito body neprochází žádná kružnice: dva jsou stejné nebo všechny tři leží na jedné přímce
 @msg	no app to open files here	zde chybí aplikace pro otevírání souborů
 @msg	no artboard	žádná pracovní plocha
@@ -5511,6 +5531,9 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	no such user library	taková uživatelská knihovna neexistuje
 @msg	no such view	takové zobrazení neexistuje
 @msg	no such width point	takový bod šířky neexistuje
+@msg	`single` must be `incoming` or `outgoing`	`single` musí být `incoming` nebo `outgoing`
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` a `outIndex` musí být dvě poloviny jednoho nespojitého bodu šířky
+@msg	a discontinuous width point keeps its place	nespojitý bod šířky si zachovává své místo
 @msg	no swatch `{name}`	položka vzorníku `{name}` neexistuje
 @msg	no swatch library `{l}` (see swatch.library.list)	knihovna vzorníku `{l}` neexistuje (viz swatch.library.list)
 @msg	no symbol instances selected	nejsou vybrány žádné instance symbolů
@@ -9061,6 +9084,7 @@ breakText	Glyphs	Glyfy
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	složené tvary přijímají cesty, složené cesty, skupiny, složené tvary, text, prolnutí a obálky
 @msg	compound {_1} must contain exactly one open path to join	složený objekt {_1} musí ke spojení obsahovat právě jednu otevřenou cestu
 @msg	connect needs a path other than the one extended	connect vyžaduje jinou cestu než tu prodlužovanou
+@msg	connect needs extend	connect vyžaduje extend
 @msg	connect needs id	connect vyžaduje id
 @msg	connect path has no open end	cesta v connect nemá žádný otevřený konec
 @msg	continuation must be an array of path chunks	continuation musí být pole úseků cesty
@@ -10289,3 +10313,13 @@ breakText	Glyphs	Glyfy
 @msg	A panel is not joined to the rest by a crease.	Panel není se zbytkem spojen žádnou linií bigu.
 @msg	A fold line is on a non-printing layer.	Linie skladu je na netisknutelné vrstvě.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panely: {panels}, panty: {hinges}, chyby: {errors}, upozornění: {warnings}
+	Fold Preview	Náhled skládání
+	Fold	Složení
+	Show Fold Lines	Zobrazit linie skladu
+	Three-Quarter	Tři čtvrtě
+	Open a document to preview its folded shape.	Otevřete dokument, abyste zobrazili náhled jeho složeného tvaru.
+@msg	Check the fold lines first.	Nejprve zkontrolujte linie skladu.
+@msg	Panels: {panels}, hinges: {hinges}	Panely: {panels}, panty: {hinges}
+@msg	Other blanks not shown: {count}	Další přířezy nejsou zobrazeny: {count}
+@msg	A joint does not close by {gap} pt.	Spoj se nezavírá o {gap} pt.
+@msg	Two panels pass through each other.	Dva panely procházejí jeden druhým.

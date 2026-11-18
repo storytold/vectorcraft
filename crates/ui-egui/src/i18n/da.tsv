@@ -1636,6 +1636,7 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	sammensatte figurer tager kurver, sammensatte kurver, grupper, sammensatte figurer, tekst, blandinger og konvolutter
 @msg	compound {_1} must contain exactly one open path to join	sammensat {_1} skal indeholde præcis én åben kurve at sammenføje
 @msg	connect needs a path other than the one extended	connect kræver en anden kurve end den, der forlænges
+@msg	connect needs extend	connect kræver extend
 @msg	connect needs id	connect kræver id
 @msg	connect path has no open end	connect-kurven har ingen åben ende
 @msg	continuation must be an array of path chunks	continuation skal være et array af kurvestykker
@@ -4440,6 +4441,7 @@ digits	Malayalam	Malayalam
 	Rule:	Regel:
 	Save changes to {name}	Gem ændringer i {name}
 	Save theme to My Themes	Gem tema i Mine temaer
+	Set the current fill or stroke to the selected color	Sæt den aktuelle udfyldning eller streg til den markerede farve
 	Set the selected color to the current color	Sæt den markerede farve til den aktuelle farve
 	Copy All Styles	Kopiér alle typografier
 	Exported {path}	Eksporterede {path}
@@ -4798,7 +4800,7 @@ digits	Malayalam	Malayalam
 	Overprint Preview (separations)	Forhåndsvisning af overtryk (separationer)
 	Show All Plates	Vis alle plader
 	Show all plates	Vis alle plader
-	Show/hide plate (Alt-click: only this plate)	Vis/skjul plade (Alt-klik: kun denne plade)
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	Vis/skjul plade (Alt-klik: kun denne plade; Alt-klik igen: alle plader)
 	Simulate Paper	Simulér papir
 	Use Black Point Compensation	Brug sortpunktskompensation
 	Working CMYK (don't tag)	Arbejds-CMYK (mærk ikke)
@@ -4838,6 +4840,8 @@ digits	Malayalam	Malayalam
 	Tip extends past the end point	Spidsen rager ud over endepunktet
 	Tip on the end point	Spidsen på endepunktet
 	Variable Width Profile	Variabel breddeprofil
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Stregens pensel beholder sin egen størrelse, så et breddeprofil ændrer den ikke. Fjern penslen for at bruge et profil.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Stregens pensel beholder sin egen størrelse, så et breddeprofil ændrer den ikke. Fjern penslen for at bruge et profil.
 	Weight:	Vægt:
 	Art using a deleted global swatch keeps its colour.	Grafik, der bruger en slettet global farveprøve, bevarer sin farve.
 	Color Group: {name}	Farvegruppe: {name}
@@ -4947,6 +4951,9 @@ digits	Malayalam	Malayalam
 	Flip Horizontal	Spejl vandret
 	Flip Vertical	Spejl lodret
 	Polygon Properties:	Polygonegenskaber:
+	Line Properties:	Linjeegenskaber:
+	Line Length:	Linjelængde:
+	Line Angle:	Linjevinkel:
 	Rectangle Properties:	Rektangelegenskaber:
 	Shape Properties:	Figuregenskaber:
 	Shape Properties	Figuregenskaber
@@ -5690,6 +5697,8 @@ antiAlias	Sharp	Skarp
 	Every option matches {base}.	Alle indstillinger matcher {base}.
 	Files of a PDF standard can't be password-protected.	Filer med en PDF-standard kan ikke beskyttes med adgangskode.
 	Files of this standard tag their colours with ICC profiles.	Filer med denne standard mærker deres farver med ICC-profiler.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	Filer med denne standard mærker deres farver med ICC-profiler, undtagen CMYK-farver i outputintentens profil, som skrives som DeviceCMYK.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	Med »Medtag ikke profiler« og en CMYK-outputintent skrives alle CMYK-farver som DeviceCMYK, medmindre de konverteres til en CMYK-destination med en anden profil.
 	Flattener preset:	Forudindstilling til fladgøring:
 	General › Thumbnails	Generelt › Miniaturer
 	Grayscale images	Gråtonebilleder
@@ -5873,6 +5882,12 @@ antiAlias	Sharp	Skarp
 	LF (macOS, Linux)	LF (macOS, Linux)
 	CRLF (Windows)	CRLF (Windows)
 	Text Export Options	Indstillinger for teksteksport
+	Chinese Big 5	Kinesisk Big 5
+	Cyrillic	Kyrillisk
+	Greek	Græsk
+	Turkish	Tyrkisk
+	Baltic	Baltisk
+	Central European	Centraleuropæisk
 	Character Set:	Tegnsæt:
 	Join the lines of each paragraph	Forbind linjerne i hvert afsnit
 	Line Breaks	Linjeskift
@@ -5902,6 +5917,9 @@ antiAlias	Sharp	Skarp
 	Variable Options	Indstillinger for variabel
 	Define a variable first	Definér først en variabel
 	Adjust Adjoining Width Points	Justér tilstødende breddepunkter
+	Incoming	Indgående
+	Outgoing	Udgående
+	Single Width Only	Kun én bredde
 	Keep both sides the same width	Bevar samme bredde på begge sider
 	Side 1:	Side 1:
 	Side 2:	Side 2:
@@ -6287,6 +6305,7 @@ theme	Appearance	Udseende
 	Select Art	Markér grafik
 	Set Current Layer	Angiv aktuelt lag
 	Flatten Artwork	Fladgør grafik
+	Locate Layer	Lokalisér lag
 	Locate Object	Lokalisér objekt
 	Lock Others	Lås andre
 	Merge Selected	Flet valgte
@@ -7105,6 +7124,8 @@ font-technology	Variable	Variable
 	Couldn't paste from the clipboard: {e}	Kunne ikke indsætte fra udklipsholderen: {e}
 	Channel	Kanal
 	Circle	Cirkel
+	Circle Tool	Cirkelværktøj
+	Circle too large	Cirklen er for stor
 	Clip to Art	Beskær til grafik
 	Colorize	Farvelæg
 	Gamma	Gamma
@@ -7589,8 +7610,8 @@ imageTrace	Outline	Kontur
 @msg	no active document	intet aktivt dokument
 @msg	no active perspective plane	intet aktivt perspektivplan
 @msg	no anchor points selected	ingen ankerpunkter er markeret
-@msg	`points` must be three [x, y] pairs of numbers	`points` skal være tre talpar [x, y]
-@msg	direct-select three anchor points, or give `points`	direkte markér tre ankerpunkter, eller angiv `points`
+@msg	`points` must be two or three [x, y] pairs of numbers	`points` skal være to eller tre talpar [x, y]
+@msg	direct-select two or three anchor points, or give `points`	direkte markér to eller tre ankerpunkter, eller angiv `points`
 @msg	no circle passes through these points: two are the same or all three lie on one line	ingen cirkel går gennem disse punkter: to er ens, eller alle tre ligger på én linje
 @msg	no app to open files here	ingen app til at åbne filer her
 @msg	no artboard	ingen tegneflade
@@ -7681,6 +7702,9 @@ imageTrace	Outline	Kontur
 @msg	no such user library	intet sådant brugerbibliotek
 @msg	no such view	ingen sådan visning
 @msg	no such width point	intet sådant breddepunkt
+@msg	`single` must be `incoming` or `outgoing`	`single` skal være `incoming` eller `outgoing`
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` og `outIndex` skal være de to halvdele af ét diskontinuert breddepunkt
+@msg	a discontinuous width point keeps its place	et diskontinuert breddepunkt bevarer sin placering
 @msg	no swatch `{name}`	ingen farveprøve `{name}`
 @msg	no swatch library `{l}` (see swatch.library.list)	intet farveprøvebibliotek `{l}` (se swatch.library.list)
 @msg	no symbol instances selected	ingen symbolforekomster markeret
@@ -10387,4 +10411,14 @@ breakText	Glyphs	Glyffer
 @msg	A panel is not joined to the rest by a crease.	Et panel er ikke forbundet med resten af en rillelinje.
 @msg	A fold line is on a non-printing layer.	En foldelinje ligger på et lag, der ikke udskrives.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Paneler: {panels}, hængsler: {hinges}, fejl: {errors}, advarsler: {warnings}
+	Fold Preview	Forhåndsvisning af foldning
+	Fold	Foldning
+	Show Fold Lines	Vis foldelinjer
+	Three-Quarter	Trekvart
+	Open a document to preview its folded shape.	Åbn et dokument for at se dets foldede form.
+@msg	Check the fold lines first.	Kontrollér foldelinjerne først.
+@msg	Panels: {panels}, hinges: {hinges}	Paneler: {panels}, hængsler: {hinges}
+@msg	Other blanks not shown: {count}	Andre emner vises ikke: {count}
+@msg	A joint does not close by {gap} pt.	En samling lukker ikke med {gap} pt.
+@msg	Two panels pass through each other.	To paneler går gennem hinanden.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer skal være "singleLine", "everyLine", "standardSingleLine" eller "standardEveryLine"

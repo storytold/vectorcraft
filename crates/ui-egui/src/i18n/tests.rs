@@ -708,6 +708,22 @@ fn monitor_profile_labels_are_in_complete_catalogs() {
     }
 }
 
+/// Text Import Options' Character Set choices that name a script or a region (Shift JIS, GB2312
+/// and GB18030 are names of their own), and the error for an unknown character set.
+#[test]
+fn text_import_character_sets_are_in_complete_catalogs() {
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        for label in ["Chinese Big 5", "Cyrillic", "Greek", "Turkish", "Baltic", "Central European"] {
+            assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
+        }
+    }
+    let unknown = r#"text.characterSet `x`: use "unicode", "ansi", "shiftJis", "gb2312", "chineseBig5", "cyrillic", "gb18030", "greek", "turkish", "baltic" or "centralEuropean""#;
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        assert_ne!(message(lang, unknown), unknown, "{code}");
+    }
+}
+
 /// The Control bar panel menu's items, its groups of options and the edges, and the label of the
 /// command that turns a group on or off.
 #[test]
@@ -1213,6 +1229,36 @@ fn bundled_fonts_cover_the_catalogs() {
         }
     });
     assert!(missing.is_empty(), "characters without a glyph: {missing:#?}");
+}
+
+/// The faces the web build fetches on demand (`web-fonts.txt`: NanumGothic for Korean, Noto Sans
+/// Devanagari for Hindi) cover every character of their scripts that a catalog or a language name
+/// uses. Checked where the craft-fonts checkout has them (the desktop build embeds every face).
+#[test]
+fn web_demand_fonts_cover_the_catalogs() {
+    use vectorcraft_text::craft_fonts::demand_script;
+    let demand: Vec<_> = vectorcraft_text::WEB_FONTS.iter().filter(|w| w.demand).collect();
+    if demand.is_empty() {
+        eprintln!("skipped: built without craft-fonts, or one without NanumGothic and Noto Sans Devanagari");
+        return;
+    }
+    let mut chars: std::collections::BTreeSet<char> = LANGUAGES.iter().flat_map(|l| l.name.chars()).collect();
+    for l in LANGUAGES.iter().filter(|l| !l.source.is_empty()) {
+        let (entries, _) = parse_entries(l.source);
+        chars.extend(entries.iter().flat_map(|(_, _, tr)| tr.chars()));
+    }
+    let mut missing = std::collections::BTreeMap::new();
+    for w in demand {
+        let Some(f) = vectorcraft_text::CRAFT_FONTS.iter().find(|f| f.family == w.family && f.style == w.style) else { continue };
+        let db = vectorcraft_text::FontDb::with_font_dirs(vec![]);
+        db.add_font(f.bytes.to_vec());
+        let face = db.face(f.family, f.style).expect("the craft-fonts face loads");
+        let gone: String = chars.iter().filter(|c| demand_script(**c).is_some_and(|s| w.scripts.contains(&s)) && !face.covers(**c)).collect();
+        if !gone.is_empty() {
+            missing.insert(w.family, gone);
+        }
+    }
+    assert!(missing.is_empty(), "characters the web's demand faces lack: {missing:#?}");
 }
 
 /// The Traditional Chinese catalog holds no Simplified-only characters (a translation written
@@ -2275,6 +2321,17 @@ fn georgian_rows_have_no_mtavruli() {
     let (entries, _) = parse_entries(ka().0.source);
     let caps: Vec<_> = entries.iter().filter(|(_, _, tr)| tr.chars().any(|c| matches!(c, '\u{1C90}'..='\u{1CBF}'))).collect();
     assert!(caps.is_empty(), "Mtavruli in ka.tsv: {caps:?}");
+}
+
+/// A field label's colon follows the catalog's ":" row: French puts a no-break space before it,
+/// Chinese and Japanese write a full-width colon, and English and German write a plain colon.
+#[test]
+fn label_colons_follow_the_language() {
+    for (code, want) in [("fr", "X\u{a0}:"), ("zh-hans", "X："), ("zh-hant", "X："), ("ja", "X："), ("de", "X:"), ("en", "X:")] {
+        set_current(Lang::from_code(code).expect("registered"));
+        assert_eq!(colon("X"), want, "{code}");
+    }
+    set_current(Lang::EN);
 }
 
 /// French rows follow the typography fr.tsv's header sets: a no-break space before : ; ? ! and inside

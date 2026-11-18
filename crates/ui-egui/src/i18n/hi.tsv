@@ -258,6 +258,9 @@
 	Additional Fonts Folder	अतिरिक्त फ़ॉन्ट फ़ोल्डर
 	Additional Plug-ins Folder	अतिरिक्त प्लग-इन फ़ोल्डर
 	Adjust Adjoining Width Points	सटे हुए चौड़ाई पॉइंट समायोजित करें
+	Incoming	आने वाली ओर
+	Outgoing	जाने वाली ओर
+	Single Width Only	केवल एक चौड़ाई
 	Adjust Color Balance…	कलर बैलेंस समायोजित करें…
 	Adjust Colors	रंग समायोजित करें
 	Adjust Options:	समायोजन ऑप्शन्स:
@@ -1048,6 +1051,11 @@ antiAlias	Sharp	शार्प
 	Character Direction	कैरेक्टर दिशा
 	Character options	कैरेक्टर ऑप्शन्स
 	Character Rotation	कैरेक्टर रोटेशन
+	Chinese Big 5	चीनी Big 5
+	Cyrillic	सिरिलिक
+	Greek	ग्रीक
+	Baltic	बाल्टिक
+	Central European	मध्य यूरोपीय
 	Character Set:	कैरेक्टर सेट:
 	Character Style	कैरेक्टर स्टाइल
 	Character Style Options	कैरेक्टर स्टाइल ऑप्शन्स
@@ -1075,6 +1083,8 @@ antiAlias	Sharp	शार्प
 	Chrome	क्रोम
 	Chrome…	क्रोम…
 	Circle	वृत्त
+	Circle Tool	वृत्त टूल
+	Circle too large	वृत्त बहुत बड़ा है
 	Circle (open)	सर्किल (ओपन)
 	Circle:	वृत्त:
 	Classic	क्लासिक
@@ -2162,6 +2172,8 @@ antiAlias	Sharp	शार्प
 	Files	फ़ाइलें
 	Files of a PDF standard can't be password-protected.	एक PDF मानक की फ़ाइलें पासवर्ड की रक्षा नहीं की जा सकती है।
 	Files of this standard tag their colours with ICC profiles.	इस मानक की फ़ाइलें ICC प्रोफ़ाइल के साथ उनके रंगों को टैग करती हैं।
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	इस मानक की फ़ाइलें ICC प्रोफ़ाइल के साथ उनके रंगों को टैग करती हैं, आउटपुट इंटेंट प्रोफ़ाइल के CMYK रंगों को छोड़कर, जो DeviceCMYK के रूप में लिखे जाते हैं।
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	“प्रोफ़ाइल शामिल नहीं है” और CMYK आउटपुट इंटेंट के साथ, हर CMYK रंग DeviceCMYK के रूप में लिखा जाता है, जब तक कि उसे किसी अन्य प्रोफ़ाइल के CMYK गंतव्य में रूपांतरित न किया जाए।
 	Fill	फ़िल
 	Fill (X), double-click for the Color Picker	फ़िल (X), कलर पिकर के लिए डबल-क्लिक करें
 	Fill & Stroke	भरें और स्ट्रोक करें
@@ -3056,6 +3068,7 @@ antiAlias	Sharp	शार्प
 	Loads native code	मूल कोड लोड करता है
 	Local Libraries	स्थानीय लाइब्रेरी
 	Locate Library…	लाइब्रेरी…
+	Locate Layer	लेयर का पता लगाएं
 	Locate Object	ऑब्जेक्ट का पता लगाएं
 	Locate Selected Objects	सिलेक्टेड ऑब्जेक्ट्स का पता लगाएँ
 	Location	स्थान
@@ -3974,6 +3987,9 @@ antiAlias	Sharp	शार्प
 	Polish	पोलिश
 	Polygon	बहुभुज
 	Polygon Properties:	बहुभुज प्रॉपर्टीज़:
+	Line Properties:	रेखा प्रॉपर्टीज़:
+	Line Length:	रेखा की लंबाई:
+	Line Angle:	रेखा का कोण:
 	Polygon Tool	पॉलीगोन टूल
 	Polygonal Lasso	बहुभुज लैस्सो
 	Polygonal Lasso Tool	बहुभुज लैस्सो टूल
@@ -5003,6 +5019,7 @@ antiAlias	Sharp	शार्प
 	Set Slice Rectangle	सेट स्लाइस आयत
 	Set Tab Stops	टैब स्टॉप्स सेट करें
 	Set Text	टेक्स्ट सेट करें
+	Set the current fill or stroke to the selected color	वर्तमान फ़िल या स्ट्रोक को सिलेक्टेड रंग में सेट करें
 	Set the selected color to the current color	सिलेक्टेड रंग को वर्तमान रंग में सेट करें
 	Set Zoom	ज़ूम सेट करें
 	Set:	सेट:
@@ -5177,7 +5194,7 @@ antiAlias	Sharp	शार्प
 	Show Vivid/Muted	चमकीले/मंद दिखाएँ
 	Show Warm/Cool	शो वार्म / कूल
 	Show:	दिखाएँ:
-	Show/hide plate (Alt-click: only this plate)	प्लेट दिखाएँ/छिपाएँ (Alt-क्लिक: केवल यही प्लेट)
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	प्लेट दिखाएँ/छिपाएँ (Alt-क्लिक: केवल यही प्लेट; फिर से Alt-क्लिक: सभी प्लेटें)
 	Shown with the optimised preview.	आशावादी प्रीव्यू के साथ दिखाया गया है।
 	Shrink Text to Fit	टेक्स्ट को फिट करने के लिए सिकोड़ें
 	Side 1:	साइड 1:
@@ -6038,6 +6055,8 @@ antiAlias	Sharp	शार्प
 	Variable Options	वेरिएबल ऑप्शन्स
 	Variable Options…	वेरिएबल ऑप्शन्स…
 	Variable Width Profile	वेरिएबल चौड़ाई प्रोफ़ाइल
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	स्ट्रोक का ब्रश अपना आकार बनाए रखता है, इसलिए चौड़ाई प्रोफ़ाइल उसे नहीं बदलती। प्रोफ़ाइल का उपयोग करने के लिए ब्रश निकालें।
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	स्ट्रोक का ब्रश अपना आकार बनाए रखता है, इसलिए चौड़ाई प्रोफ़ाइल उसे नहीं बदलती। प्रोफ़ाइल का उपयोग करने के लिए ब्रश निकालें।
 	Variables	वेरिएबल्स
 	Variation	वैरिएशन
 	Variation:	भिन्नता:
@@ -7215,6 +7234,7 @@ antiAlias	Sharp	शार्प
 @msg	compressed (RLE) bitmaps can't be read yet	संकुचित (RLE) bitmaps अभी तक पढ़ा नहीं जा सकता है
 @msg	connect end must be "start" or "end"	कनेक्ट अंत "start" या "end" होना चाहिए
 @msg	connect needs a path other than the one extended	connect के लिए बढ़ाए गए पाथ के अलावा कोई दूसरा पाथ चाहिए
+@msg	connect needs extend	connect के लिए extend चाहिए
 @msg	connect needs id	connect के लिए id चाहिए
 @msg	connect path has no open end	कनेक्ट पाथ का कोई खुला अंत नहीं है
 @msg	Contour: select paths or shapes	कंटूर: पाथ या आकृतियों सिलेक्ट करें
@@ -7991,8 +8011,8 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	no active document	कोई सक्रिय डॉक्यूमेंट
 @msg	no active perspective plane	कोई सक्रिय पर्सपेक्टिव विमान नहीं
 @msg	no anchor points selected	कोई एंकर पॉइंट सिलेक्ट नहीं है
-@msg	`points` must be three [x, y] pairs of numbers	`points` में संख्याओं के तीन [x, y] जोड़े होने चाहिए
-@msg	direct-select three anchor points, or give `points`	तीन एंकर पॉइंट्स डायरेक्ट-सिलेक्ट करें, या `points` दें
+@msg	`points` must be two or three [x, y] pairs of numbers	`points` में संख्याओं के दो या तीन [x, y] जोड़े होने चाहिए
+@msg	direct-select two or three anchor points, or give `points`	दो या तीन एंकर पॉइंट्स डायरेक्ट-सिलेक्ट करें, या `points` दें
 @msg	no circle passes through these points: two are the same or all three lie on one line	इन पॉइंट्स से होकर कोई वृत्त नहीं गुज़रता: दो एक जैसे हैं या तीनों एक ही रेखा पर हैं
 @msg	no app to open files here	यहां फ़ाइलों को ओपन करने के लिए कोई ऐप नहीं है
 @msg	no appearance item {index}	कोई उपस्थिति आइटम {index}
@@ -8191,6 +8211,9 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	no such user library	ऐसी कोई उपयोगकर्ता लाइब्रेरी नहीं
 @msg	no such view	कोई ऐसा दृश्य नहीं
 @msg	no such width point	ऐसी कोई चौड़ाई बिंदु नहीं
+@msg	`single` must be `incoming` or `outgoing`	`single` का मान `incoming` या `outgoing` होना चाहिए
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` और `outIndex` एक ही असतत चौड़ाई बिंदु के दो हिस्से होने चाहिए
+@msg	a discontinuous width point keeps its place	असतत चौड़ाई बिंदु अपनी जगह पर रहता है
 @msg	no swatch `{keep}`	कोई स्वॉच `{keep}` नहीं
 @msg	no swatch `{n}`	कोई स्वॉच `{n}` नहीं
 @msg	no swatch `{n}` (swatches and colour groups move separately)	कोई स्वॉच `{n}` नहीं (स्वॉच और रंग समूह अलग-अलग मूव होते हैं)
@@ -9897,3 +9920,13 @@ theme	Appearance	अपीयरेंस
 @msg	A panel is not joined to the rest by a crease.	कोई पैनल किसी क्रीज़ लाइन से बाकी से जुड़ा नहीं है।
 @msg	A fold line is on a non-printing layer.	एक फ़ोल्ड लाइन नॉन-प्रिंटिंग लेयर पर है।
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	पैनल: {panels}, हिंज: {hinges}, एरर: {errors}, वॉर्निंग: {warnings}
+	Fold Preview	फ़ोल्ड प्रीव्यू
+	Fold	फ़ोल्ड
+	Show Fold Lines	फ़ोल्ड लाइनें दिखाएँ
+	Three-Quarter	तीन-चौथाई
+	Open a document to preview its folded shape.	इसका फ़ोल्ड किया हुआ आकार देखने के लिए कोई डॉक्यूमेंट ओपन करें।
+@msg	Check the fold lines first.	पहले फ़ोल्ड लाइनें चेक करें।
+@msg	Panels: {panels}, hinges: {hinges}	पैनल: {panels}, हिंज: {hinges}
+@msg	Other blanks not shown: {count}	दूसरे ब्लैंक नहीं दिखाए गए: {count}
+@msg	A joint does not close by {gap} pt.	एक जोड़ {gap} pt से बंद नहीं होता।
+@msg	Two panels pass through each other.	दो पैनल एक-दूसरे के आर-पार जाते हैं।

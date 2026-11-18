@@ -62,7 +62,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Circle Through Points",
             [],
             None,
-            "{points?: [[x, y], [x, y], [x, y]] (left out: the three selected anchor points, where a path selected whole counts all its anchors and selected segments' ends do not count)} → {id, cx, cy, radius}: a circle with the current paint whose edge passes through the three points, not pixel-aligned even while Align New Objects to Pixel Grid is on; two points that are the same or three on one line are an error, and nothing is drawn",
+            "{points?: [[x, y], [x, y]] or [[x, y], [x, y], [x, y]] (two: the ends of a diameter; left out: the two or three selected anchor points, where a path selected whole counts all its anchors and selected segments' ends do not count)} → {id, cx, cy, radius}: a circle with the current paint whose edge passes through the points, not pixel-aligned even while Align New Objects to Pixel Grid is on; two points that are the same, three on one line, or a circle reaching past the canvas are an error, and nothing is drawn",
             has_doc,
             circle_through_points
         ),
@@ -413,16 +413,16 @@ fn ellipse(s: &mut Session, p: &Value) -> Result<Value> {
     add_art_turned(s, "Ellipse", path_kind(live.to_path(), Some(live)), rotation)
 }
 
-/// A live ellipse whose edge passes through three points: `points`, or the three selected anchor
-/// points ([`selected_anchor_points`]). One undo step, named as an Ellipse tool drag is.
+/// A live ellipse whose edge passes through two or three points: `points`, or the two or three
+/// selected anchor points ([`selected_anchor_points`]). Two points are the ends of a diameter. One
+/// undo step, named as an Ellipse tool drag is.
 fn circle_through_points(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "shape.circleThroughPoints";
     let points = match p.get("points").filter(|v| !v.is_null()) {
-        Some(v) => three_points(v).ok_or_else(|| bad(C, "`points` must be three [x, y] pairs of numbers"))?,
-        None => selected_anchor_points(s)?.ok_or_else(|| bad(C, "direct-select three anchor points, or give `points`"))?,
+        Some(v) => two_or_three_points(v).ok_or_else(|| bad(C, "`points` must be two or three [x, y] pairs of numbers"))?,
+        None => selected_anchor_points(s)?.ok_or_else(|| bad(C, "direct-select two or three anchor points, or give `points`"))?,
     };
-    let [a, b, c] = points;
-    let (center, radius) = shapes::circle_through(a, b, c)
+    let (center, radius) = shapes::circle_through_points(&points)
         .ok_or_else(|| bad(C, "no circle passes through these points: two are the same or all three lie on one line"))?;
     let r = Rect::new(center.x - radius, center.y - radius, center.x + radius, center.y + radius);
     let live = LiveShape::Ellipse { w: r.width(), h: r.height(), pie: (0.0, 360.0), xf: Affine::translate(r.origin().to_vec2()) };
@@ -434,24 +434,25 @@ fn circle_through_points(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(out)
 }
 
-/// The three points `[[x, y], [x, y], [x, y]]` holds, each pair two finite numbers.
-fn three_points(v: &Value) -> Option<[Point; 3]> {
+/// The two or three points `[[x, y], [x, y]]` or `[[x, y], [x, y], [x, y]]` holds, each pair two
+/// finite numbers.
+fn two_or_three_points(v: &Value) -> Option<Vec<Point>> {
     let pair = |v: &Value| match v.as_array().map(Vec::as_slice) {
         Some([x, y]) => x.as_f64().zip(y.as_f64()).filter(|(x, y)| x.is_finite() && y.is_finite()).map(|(x, y)| Point::new(x, y)),
         _ => None,
     };
-    match v.as_array().map(Vec::as_slice) {
-        Some([a, b, c]) => Some([pair(a)?, pair(b)?, pair(c)?]),
+    match v.as_array() {
+        Some(pairs) if matches!(pairs.len(), 2 | 3) => pairs.iter().map(pair).collect(),
         _ => None,
     }
 }
 
-/// The positions of the selected anchor points, when there are exactly three. They are counted as
+/// The positions of the selected anchor points, when there are two or three. They are counted as
 /// the other anchor commands count them ([`super::path::anchor_targets`]): a selected path with
 /// anchors picked by Direct Selection gives those, and a path selected whole gives all of its own.
 /// A selected segment's ends are not selected anchor points, so a selection with segments gives
 /// none; so does a selection holding an object that is not a path, or an anchor that is gone.
-fn selected_anchor_points(s: &Session) -> Result<Option<[Point; 3]>> {
+fn selected_anchor_points(s: &Session) -> Result<Option<Vec<Point>>> {
     let st = s.doc()?;
     if st.selection.segments.values().any(|set| !set.is_empty()) {
         return Ok(None);
@@ -472,10 +473,7 @@ fn selected_anchor_points(s: &Session) -> Result<Option<[Point; 3]>> {
             return Ok(None);
         }
     }
-    Ok(match points.as_slice() {
-        &[a, b, c] => Some([a, b, c]),
-        _ => None,
-    })
+    Ok(matches!(points.len(), 2 | 3).then_some(points))
 }
 
 /// The whole-number count `p` gives for `key` (`5` or `5.0`), or `default` when it is left out or
