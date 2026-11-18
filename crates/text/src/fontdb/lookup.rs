@@ -660,13 +660,7 @@ impl FontDb {
         if let Some(p) = self.outlines.lock().unwrap_or_else(|e| e.into_inner()).get(&key) {
             return p.clone();
         }
-        let mut pen = FlipPen(BezPath::new());
-        if let Some(f) = face.skrifa()
-            && let Some(g) = f.outline_glyphs().get(GlyphId::new(gid))
-        {
-            let _ = g.draw(DrawSettings::unhinted(Size::unscaled(), face.location()), &mut pen);
-        }
-        let p = Arc::new(pen.0);
+        let p = Arc::new(self.outline_uncached(face, gid));
         let mut cache = self.outlines.lock().unwrap_or_else(|e| e.into_inner());
         if cache.len() >= OUTLINE_CACHE_MAX {
             cache.clear();

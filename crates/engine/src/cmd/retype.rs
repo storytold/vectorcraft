@@ -164,6 +164,9 @@ struct Line {
     pieces: Vec<NodeId>,
     /// What each piece matched, as `pieces`.
     matches: Vec<GlyphMatch>,
+    /// Every glyph the first piece fits, while the line holds only it: the next glyph may tell
+    /// which one it is (see [`join`]).
+    first_cands: Vec<GlyphMatch>,
     text: String,
     face: Arc<vectorcraft_text::FontFace>,
     scale: f64,
@@ -224,6 +227,7 @@ impl Line {
         let mut l = Line {
             pieces: vec![*first],
             matches: vec![m.clone()],
+            first_cands: vec![],
             text: m.ch.to_string(),
             face: m.face.clone(),
             scale: m.scale,
@@ -331,11 +335,64 @@ fn space_advance(face: &vectorcraft_text::FontFace) -> f64 {
     face.mapped_chars().iter().find(|(c, _)| *c == ' ').map(|(_, g)| face.advance(*g)).unwrap_or(0.0)
 }
 
-fn new_line(pc: &Piece, m: &GlyphMatch) -> Line {
+/// Add shape `pc` to line `l` when one of its candidate glyphs `cands`, in one of its poses,
+/// continues it (one shape can be several glyphs, and a glyph that looks the same turned fits in
+/// more than one pose). A line of one shape may turn to another of that shape's candidates to take
+/// the next one: an L or a turned L half round, an I upright or upside down, and the glyph after it
+/// tells which. Whether it was added.
+fn join(l: &mut Line, pc: &Piece, cands: &[GlyphMatch]) -> bool {
+    let fits = |l: &Line| cands.iter().flat_map(|c| c.poses()).find(|mp| l.continues(pc, mp));
+    if let Some(mp) = fits(l) {
+        l.push(pc.id, &mp);
+        return true;
+    }
+    let (Some(id), [current]) = (l.pieces.first().copied(), l.matches.as_slice()) else { return false };
+    let current = current.clone();
+    let others: Vec<GlyphMatch> = l
+        .first_cands
+        .iter()
+        .flat_map(|c| c.poses())
+        .filter(|fp| !(fp.gid == current.gid && fp.face.id() == current.face.id() && fp.angle == current.angle))
+        .collect();
+    for fp in others {
+        let mut turned = reposed(l, id, &fp);
+        if let Some(mp) = fits(&turned) {
+            turned.push(pc.id, &mp);
+            *l = turned;
+            return true;
+        }
+    }
+    false
+}
+
+/// Line `l`'s group, paint and transparency with glyph `m` (shape `id`) alone on it.
+fn reposed(l: &Line, id: NodeId, m: &GlyphMatch) -> Line {
     let dir = Vec2::new(m.angle.cos(), m.angle.sin());
     Line {
+        pieces: vec![id],
+        matches: vec![m.clone()],
+        first_cands: l.first_cands.clone(),
+        text: m.ch.to_string(),
+        face: m.face.clone(),
+        scale: m.scale,
+        angle: m.angle,
+        origin: m.origin,
+        end: m.origin + dir * (m.face.advance(m.gid) * m.scale),
+        appearance: l.appearance.clone(),
+        parent: l.parent,
+        opacity: l.opacity,
+        blend: l.blend,
+    }
+}
+
+/// A new line of shape `pc` alone, as the first of its candidate glyphs `cands` (none: `None`).
+fn new_line(pc: &Piece, cands: &[GlyphMatch]) -> Option<Line> {
+    let m = cands.first()?;
+    let dir = Vec2::new(m.angle.cos(), m.angle.sin());
+    Some(Line {
         pieces: vec![pc.id],
         matches: vec![m.clone()],
+        first_cands: cands.to_vec(),
         text: m.ch.to_string(),
         face: m.face.clone(),
         scale: m.scale,
@@ -346,7 +403,7 @@ fn new_line(pc: &Piece, m: &GlyphMatch) -> Line {
         parent: pc.parent,
         opacity: pc.opacity,
         blend: pc.blend,
-    }
+    })
 }
 
 fn retype(s: &mut Session, p: &Value) -> Result<Value> {
@@ -394,10 +451,16 @@ fn retype(s: &mut Session, p: &Value) -> Result<Value> {
         // The face most shapes match, so a glyph several fonts share is set in the same font as
         // the glyphs around it.
         let mut votes: Vec<(u32, usize)> = vec![];
-        for m in found.iter().flatten() {
-            match votes.iter_mut().find(|(f, _)| *f == m.face.id()) {
-                Some(v) => v.1 += 1,
-                None => votes.push((m.face.id(), 1)),
+        for ms in &found {
+            // Each shape votes once for each face it fits.
+            let mut faces: Vec<u32> = ms.iter().map(|m| m.face.id()).collect();
+            faces.sort_unstable();
+            faces.dedup();
+            for f in faces {
+                match votes.iter_mut().find(|(v, _)| *v == f) {
+                    Some(v) => v.1 += 1,
+                    None => votes.push((f, 1)),
+                }
             }
         }
         let rank = |face: u32| votes.iter().find(|(f, _)| *f == face).map_or(0, |v| v.1);
@@ -409,26 +472,34 @@ fn retype(s: &mut Session, p: &Value) -> Result<Value> {
             if pc.after_barrier {
                 open = false;
             }
-            // Earlier matches win ties: they are the closer fits.
-            let best = ms.iter().enumerate().max_by_key(|(i, m)| (rank(m.face.id()), std::cmp::Reverse(*i))).map(|(_, m)| m);
-            let Some(m) = best else {
+            // The shape's candidates in the face most shapes fit (the first such face, as the
+            // matches come upright and closest first).
+            let face = ms.iter().enumerate().max_by_key(|(i, m)| (rank(m.face.id()), std::cmp::Reverse(*i))).map(|(_, m)| m.face.id());
+            let cands: Vec<GlyphMatch> = ms.iter().filter(|m| Some(m.face.id()) == face).cloned().collect();
+            if cands.is_empty() {
                 unmatched.push(pc.id);
                 open = false;
                 continue;
+            }
+            let joined = match lines.last_mut() {
+                Some(l) if open => join(l, pc, &cands),
+                _ => false,
             };
-            match lines.last_mut() {
-                Some(l) if open && l.continues(pc, m) => l.push(pc.id, m),
-                _ => lines.push(new_line(pc, m)),
+            if !joined {
+                lines.extend(new_line(pc, &cands));
             }
             open = true;
         }
-        let mut lines = verified(lines, system_layout, &mut unmatched);
         // A lone one-contour glyph (a period, a hyphen, a bullet) is too plain to tell from drawn
         // art (a dot, a bar): beside other shapes it stays an outline. Selected on its own, it is
-        // what was asked for.
+        // what was asked for. Lone means alone on its baseline as the outlines lie, before the
+        // layout check splits lines (tracking and manual kerning split them glyph by glyph).
+        let lone_pieces: std::collections::HashSet<NodeId> =
+            lines.iter().filter(|l| matches!(l.matches.as_slice(), [m] if m.contours == 1)).flat_map(|l| l.pieces.iter().copied()).collect();
+        let mut lines = verified(lines, system_layout, &mut unmatched);
         if pieces.len() > 1 {
             lines.retain(|l| {
-                let lone = matches!(l.matches.as_slice(), [m] if m.contours == 1);
+                let lone = matches!(l.pieces.as_slice(), [id] if lone_pieces.contains(id));
                 if lone {
                     unmatched.extend(l.pieces.iter().copied());
                 }

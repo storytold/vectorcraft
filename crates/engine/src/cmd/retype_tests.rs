@@ -349,15 +349,15 @@ fn a_hidden_or_locked_glyph_stays_an_outline() {
 
 #[test]
 fn an_isolated_or_knockout_group_keeps_its_type_inside() {
-    for knock in [false, true] {
+    for case in ["isolate", "knockout", "knockout_shape"] {
         let mut s = session();
         let g = outlined(&mut s, json!({"x": 40, "y": 100, "text": "AB", "size": 40}));
         s.edit("test", |d, _| {
             let n = d.node_mut(NodeId(g)).unwrap();
-            if knock {
-                n.knockout = vectorcraft_doc::Knockout::On;
-            } else {
-                n.isolate = true;
+            match case {
+                "isolate" => n.isolate = true,
+                "knockout" => n.knockout = vectorcraft_doc::Knockout::On,
+                _ => n.knockout_shape = true,
             }
             Ok(())
         })
@@ -365,7 +365,7 @@ fn an_isolated_or_knockout_group_keeps_its_type_inside() {
         s.execute("select.set", &json!({"ids": [g]})).unwrap();
         let r = s.execute("type.retype", &json!({})).unwrap();
         let id = r["ids"][0].as_u64().unwrap();
-        assert_eq!(children_of(&s, g), vec![id], "knockout {knock}: the group stays, holding the type");
+        assert_eq!(children_of(&s, g), vec![id], "{case}: the group stays, holding the type");
     }
 }
 
@@ -464,4 +464,57 @@ fn nothing_retypable_reads_no_font() {
     s.execute("select.set", &json!({"ids": [g]})).unwrap();
     let e = s.execute("type.retype", &json!({})).unwrap_err().to_string();
     assert!(e.contains("(1 checked)"), "the masked shape is reported, and no font was indexed: {e}");
+}
+
+#[test]
+fn tracked_one_contour_letters_still_become_type() {
+    for text in ["LIT", "HELLO", "LIST"] {
+        let mut s = session();
+        let id = s.execute("text.create", &json!({"x": 40, "y": 100, "text": text, "size": 30})).unwrap()["id"].as_u64().unwrap();
+        let n = text.len() as u64;
+        s.execute("text.setRangeStyle", &json!({"id": id, "start": 0, "end": n, "tracking": 50})).unwrap();
+        s.execute("select.set", &json!({"ids": [id]})).unwrap();
+        let g = s.execute("type.createOutlines", &json!({})).unwrap()["ids"][0].as_u64().unwrap();
+        s.execute("select.set", &json!({"ids": [g]})).unwrap();
+        let r = s.execute("type.retype", &json!({})).unwrap();
+        let texts: Vec<String> = r["texts"].as_array().unwrap().iter().map(|t| t.as_str().unwrap().to_owned()).collect();
+        assert_eq!(texts.concat(), text, "split by the tracking, every letter still becomes type: {r}");
+        assert!(texts.len() > 1, "the tracking splits the line: {r}");
+        assert_eq!(r["unmatched"], json!([]), "{r}");
+    }
+}
+
+/// How long Retype takes on a few hundred CJK outlines at once (run with `--ignored --nocapture`;
+/// skips when no large CJK font is installed). Not a pass/fail budget: it prints.
+#[test]
+#[ignore = "timing: needs an installed CJK font"]
+fn timing_with_hundreds_of_cjk_outlines() {
+    let db = vectorcraft_text::FontDb::global();
+    let Some(family) = ["Microsoft YaHei", "Yu Gothic", "MS Gothic", "Noto Sans CJK JP", "Hiragino Sans"].into_iter().find(|f| db.has_family(f))
+    else {
+        eprintln!("skipped: no large CJK font installed");
+        return;
+    };
+    let face = db.resolve(family, "Regular").map(|(f, _)| f).unwrap();
+    // 300 common ideographs, ten lines of thirty.
+    let chars: Vec<char> = (0x4E00u32..).filter_map(char::from_u32).filter(|c| face.covers(*c)).take(300).collect();
+    let mut s = session();
+    let mut groups = vec![];
+    for (i, line) in chars.chunks(30).enumerate() {
+        let text: String = line.iter().collect();
+        groups.push(outlined(&mut s, json!({"x": 20, "y": 40 + 30 * i, "text": text, "size": 20, "font": family, "style": face.style})));
+    }
+    for run in ["cold", "warm"] {
+        s.execute("select.set", &json!({"ids": groups})).unwrap();
+        let t0 = std::time::Instant::now();
+        let r = s.execute("type.retype", &json!({"fonts": [family]})).unwrap();
+        let ms = t0.elapsed().as_secs_f64() * 1000.0;
+        let typed: usize = r["texts"].as_array().unwrap().iter().map(|t| t.as_str().unwrap().chars().count()).sum();
+        eprintln!(
+            "{run}: Retype of {} {family} outlines: {ms:.0} ms → {typed} characters typed, {} unmatched",
+            chars.len(),
+            r["unmatched"].as_array().unwrap().len()
+        );
+        s.execute("edit.undo", &json!({})).unwrap();
+    }
 }

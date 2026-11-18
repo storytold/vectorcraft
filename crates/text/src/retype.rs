@@ -42,6 +42,8 @@ const OUTLINE_TOLERANCE: f64 = 5e-3;
 const MAX_OUTLINE_POINTS: usize = 8192;
 /// Points along an outline past which the whole-outline check gives up (and so rejects).
 const MAX_CHECKED_POINTS: usize = 65_536;
+/// The most glyphs one shape is reported to be ([`RetypeIndex::matches`]).
+pub const MAX_CANDIDATES: usize = 16;
 /// How far apart two shapes' spread-to-length ratios may be and still be compared.
 const INVARIANT_SLACK: f64 = 0.02;
 
@@ -62,6 +64,32 @@ pub struct GlyphMatch {
     pub residual: f64,
     /// How many contours the glyph has.
     pub contours: usize,
+    /// Other poses the glyph fits the shape in equally (a glyph that looks the same turned).
+    pub alts: Vec<Pose>,
+}
+
+/// Where and how a glyph lies: its size, turn and origin.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Pose {
+    /// Document units per font unit.
+    pub scale: f64,
+    /// Radians, as [`kurbo::Affine::rotate`] turns.
+    pub angle: f64,
+    /// Where the glyph's origin lies.
+    pub origin: Point,
+}
+
+impl GlyphMatch {
+    /// This match in each pose it fits: its own first, then [`Self::alts`].
+    pub fn poses(&self) -> impl Iterator<Item = GlyphMatch> + '_ {
+        let own = Pose { scale: self.scale, angle: self.angle, origin: self.origin };
+        std::iter::once(own).chain(self.alts.iter().copied()).map(move |p| GlyphMatch {
+            scale: p.scale,
+            angle: p.angle,
+            origin: p.origin,
+            ..self.clone()
+        })
+    }
 }
 
 /// A shape reduced for matching: points along each contour, centred.
@@ -152,8 +180,12 @@ impl RetypeIndex {
         self.entries.is_empty()
     }
 
-    /// The glyphs `shape` (in document space) is, the closest one per face, closest first; empty
-    /// when it is no glyph of the indexed faces.
+    /// The glyphs `shape` (in document space) is: every glyph that fits it exactly, upright ones
+    /// first, then the closest; empty when it is no glyph of the indexed faces. One shape can be
+    /// several glyphs: an L, and a turned L (U+A780) turned half round; a u, and an n upside down.
+    /// A glyph that looks the same turned (an I, an O, a hyphen) also fits in more than one pose:
+    /// the upright-most comes first and the others are kept in [`GlyphMatch::alts`]. The line
+    /// around the shape chooses among them. At most [`MAX_CANDIDATES`].
     pub fn matches(&self, shape: &BezPath) -> Vec<GlyphMatch> {
         let variants = signatures(shape, true);
         let Some(first) = variants.first() else { return vec![] };
@@ -161,51 +193,68 @@ impl RetypeIndex {
         let lo = first.invariant * (1.0 - INVARIANT_SLACK);
         let hi = first.invariant * (1.0 + INVARIANT_SLACK);
         let start = list.partition_point(|i| self.entries.get(*i).is_some_and(|e| e.sig.invariant < lo));
-        let mut best: HashMap<usize, GlyphMatch> = HashMap::new();
+        let tol = first.spread * OUTLINE_TOLERANCE;
+        // The shape flattened for the whole-outline check, once, when a glyph first gets that far.
+        let mut shape_flat: Option<Option<Flat>> = None;
+        let mut out: Vec<(usize, GlyphMatch)> = vec![];
         for i in list.iter().skip(start) {
             let Some(e) = self.entries.get(*i) else { continue };
             if e.sig.invariant > hi {
                 break;
             }
-            // The reading of the shape (its tied starting corners) that fits the glyph best.
-            let Some((sig, z, residual)) = variants.iter().filter_map(|s| fit(&e.sig, s).map(|(z, r)| (s, z, r))).min_by(|a, b| a.2.total_cmp(&b.2))
-            else {
-                continue;
-            };
-            if residual > TOLERANCE {
-                continue;
-            }
             let Some(face) = self.faces.get(e.face) else { continue };
-            // The glyph's origin is (0, 0) in font units: it lands at centre − z·glyph centre.
-            let gc = mul(z, e.sig.centre);
-            let origin = Point::new(sig.centre.x - gc.x, sig.centre.y - gc.y);
-            // The samples can step over a detail (a notch between two of them): the whole outline,
-            // turned onto the shape, must lie on it.
-            let onto = Affine::new([z.0, z.1, -z.1, z.0, origin.x, origin.y]);
-            if !outlines_agree(&(onto * e.outline.clone()), shape, sig.spread * OUTLINE_TOLERANCE) {
-                continue;
+            // Each reading of the shape (its tied starting corners) that fits the glyph is a pose.
+            let mut poses: Vec<(Pose, f64)> = vec![];
+            for sig in &variants {
+                let Some((z, residual)) = fit(&e.sig, sig) else { continue };
+                if residual > TOLERANCE {
+                    continue;
+                }
+                // The glyph's origin is (0, 0) in font units: it lands at centre − z·glyph centre.
+                let gc = mul(z, e.sig.centre);
+                let pose = Pose { scale: z.0.hypot(z.1), angle: z.1.atan2(z.0), origin: Point::new(sig.centre.x - gc.x, sig.centre.y - gc.y) };
+                if poses.iter().any(|(p, _)| wrapped(p.angle - pose.angle).abs() < 1e-6) {
+                    continue;
+                }
+                // The samples can step over a detail (a notch between two of them): the whole
+                // outline, turned onto the shape, must lie on it.
+                let flat = shape_flat.get_or_insert_with(|| Flat::new(shape, tol));
+                let Some(flat) = flat.as_ref() else { break };
+                let onto = Affine::new([z.0, z.1, -z.1, z.0, pose.origin.x, pose.origin.y]);
+                if !Flat::new(&(onto * e.outline.clone()), tol).is_some_and(|g| g.agrees(flat)) {
+                    continue;
+                }
+                poses.push((pose, residual));
             }
+            // The upright-most pose first.
+            poses.sort_by(|a, b| wrapped(a.0.angle).abs().total_cmp(&wrapped(b.0.angle).abs()));
+            let Some(((pose, _), rest)) = poses.split_first() else { continue };
+            let residual = poses.iter().map(|(_, r)| *r).fold(f64::INFINITY, f64::min);
             let m = GlyphMatch {
                 face: face.clone(),
                 gid: e.gid,
                 ch: e.ch,
-                scale: z.0.hypot(z.1),
-                angle: z.1.atan2(z.0),
-                origin,
+                scale: pose.scale,
+                angle: pose.angle,
+                origin: pose.origin,
                 residual,
                 contours: e.sig.contours,
+                alts: rest.iter().map(|(p, _)| *p).collect(),
             };
-            match best.get(&e.face) {
-                Some(b) if b.residual < m.residual || (b.residual == m.residual && b.ch <= m.ch) => {}
-                _ => {
-                    best.insert(e.face, m);
-                }
-            }
+            out.push((e.face, m));
         }
-        let mut out: Vec<(usize, GlyphMatch)> = best.into_iter().collect();
-        out.sort_by(|a, b| a.1.residual.total_cmp(&b.1.residual).then(a.0.cmp(&b.0)));
+        let upright = |m: &GlyphMatch| wrapped(m.angle).abs() >= 1e-3;
+        out.sort_by(|a, b| {
+            upright(&a.1).cmp(&upright(&b.1)).then(a.1.residual.total_cmp(&b.1.residual)).then(a.0.cmp(&b.0)).then(a.1.ch.cmp(&b.1.ch))
+        });
+        out.truncate(MAX_CANDIDATES);
         out.into_iter().map(|(_, m)| m).collect()
     }
+}
+
+/// `a` wrapped into −π..π.
+fn wrapped(a: f64) -> f64 {
+    (a + std::f64::consts::PI).rem_euclid(std::f64::consts::TAU) - std::f64::consts::PI
 }
 
 /// A face's glyphs as the index looks them up: (glyph, character, [`shape_key`]), one per glyph
@@ -308,17 +357,38 @@ fn fit(g: &Signature, s: &Signature) -> Option<((f64, f64), f64)> {
     rel.is_finite().then_some((z, rel))
 }
 
-/// Do outlines `a` and `b` (in one space) lie on each other: every point of each, flattened, within
-/// `tol` of the other? `false` when either is too large to check.
-fn outlines_agree(a: &BezPath, b: &BezPath, tol: f64) -> bool {
-    if !tol.is_finite() || tol <= 0.0 {
-        return false;
-    }
-    let flat = |p: &BezPath| -> Option<Vec<(Point, Point)>> {
+/// An outline flattened for the whole-outline check: its segments, points along them (every
+/// corner, and points twice `tol` apart between corners: a detail narrower than that has corners
+/// of its own), and a uniform grid listing each segment under every cell its box, grown by `tol`,
+/// touches, so whether a point lies within `tol` of the outline is asked of the few segments
+/// around it.
+struct Flat {
+    segs: Vec<(Point, Point)>,
+    pts: Vec<Point>,
+    origin: Point,
+    cell: f64,
+    cols: usize,
+    rows: usize,
+    /// Segment indices per cell, row by row.
+    cells: Vec<Vec<u32>>,
+    tol: f64,
+}
+
+impl Flat {
+    /// Cells along the longer side, at most.
+    const MAX_SIDE: f64 = 48.0;
+    /// Segment listings in all, at most: past it (or past [`MAX_OUTLINE_POINTS`] segments or
+    /// [`MAX_CHECKED_POINTS`] points), `None`, and so no match.
+    const MAX_LISTINGS: usize = 1 << 18;
+
+    fn new(path: &BezPath, tol: f64) -> Option<Flat> {
+        if !tol.is_finite() || tol <= 0.0 {
+            return None;
+        }
         let mut segs = vec![];
         let (mut start, mut last) = (Point::ZERO, Point::ZERO);
         let mut too_many = false;
-        kurbo::flatten(p.iter(), tol / 4.0, |el| {
+        kurbo::flatten(path.iter(), tol / 2.0, |el| {
             if segs.len() > MAX_OUTLINE_POINTS {
                 too_many = true;
                 return;
@@ -336,26 +406,73 @@ fn outlines_agree(a: &BezPath, b: &BezPath, tol: f64) -> bool {
                 _ => {}
             }
         });
-        (!too_many).then_some(segs)
-    };
-    let (Some(sa), Some(sb)) = (flat(a), flat(b)) else { return false };
-    let near = |p: Point, segs: &[(Point, Point)]| segs.iter().any(|(s, e)| Line::new(*s, *e).nearest(p, 1e-9).distance_sq <= tol * tol);
-    // Points along every edge, not only its ends: two outlines with the same corners joined in
-    // another order differ between them. Spaced `tol` apart; past the work limit, not a match.
-    let along = |segs: &[(Point, Point)]| -> Option<Vec<Point>> {
+        if too_many {
+            return None;
+        }
         let mut pts = vec![];
-        for (s, e) in segs {
-            let steps = (s.distance(*e) / tol).ceil();
+        for (s, e) in &segs {
+            let steps = (s.distance(*e) / (2.0 * tol)).ceil();
             if !steps.is_finite() || pts.len() as f64 + steps > MAX_CHECKED_POINTS as f64 {
                 return None;
             }
             let steps = (steps as usize).max(1);
             pts.extend((0..steps).map(|i| s.lerp(*e, i as f64 / steps as f64)));
         }
-        Some(pts)
-    };
-    let (Some(pa), Some(pb)) = (along(&sa), along(&sb)) else { return false };
-    pa.iter().all(|p| near(*p, &sb)) && pb.iter().all(|p| near(*p, &sa))
+        let (first, _) = segs.first()?;
+        let mut bb = kurbo::Rect::from_points(*first, *first);
+        for (s, e) in &segs {
+            bb = bb.union_pt(*s).union_pt(*e);
+        }
+        let bb = bb.inflate(tol, tol);
+        let cell = (bb.width().max(bb.height()) / Self::MAX_SIDE).max(2.0 * tol);
+        if !cell.is_finite() || cell <= 0.0 {
+            return None;
+        }
+        let at = |v: f64, o: f64| (((v - o) / cell).floor().max(0.0) as usize).min(Self::MAX_SIDE as usize);
+        let (cols, rows) = (at(bb.x1, bb.x0) + 1, at(bb.y1, bb.y0) + 1);
+        let mut cells: Vec<Vec<u32>> = vec![vec![]; cols * rows];
+        let mut listings = 0usize;
+        for (i, (s, e)) in segs.iter().enumerate() {
+            let r = kurbo::Rect::from_points(*s, *e).inflate(tol, tol);
+            for cy in at(r.y0, bb.y0)..=at(r.y1, bb.y0).min(rows - 1) {
+                for cx in at(r.x0, bb.x0)..=at(r.x1, bb.x0).min(cols - 1) {
+                    listings += 1;
+                    if listings > Self::MAX_LISTINGS {
+                        return None;
+                    }
+                    if let Some(c) = cells.get_mut(cy * cols + cx) {
+                        c.push(u32::try_from(i).ok()?);
+                    }
+                }
+            }
+        }
+        Some(Flat { segs, pts, origin: Point::new(bb.x0, bb.y0), cell, cols, rows, cells, tol })
+    }
+
+    /// Does `p` lie within `tol` of a segment?
+    fn near(&self, p: Point) -> bool {
+        let (fx, fy) = ((p.x - self.origin.x) / self.cell, (p.y - self.origin.y) / self.cell);
+        if !(fx >= 0.0 && fy >= 0.0) || fx >= self.cols as f64 || fy >= self.rows as f64 {
+            return false;
+        }
+        let (cx, cy) = (fx as usize, fy as usize);
+        let tol2 = self.tol * self.tol;
+        self.cells.get(cy * self.cols + cx).is_some_and(|list| {
+            list.iter().filter_map(|i| self.segs.get(*i as usize)).any(|(s, e)| Line::new(*s, *e).nearest(p, 1e-9).distance_sq <= tol2)
+        })
+    }
+
+    /// Do the two outlines lie on each other: every point of each within `tol` of the other?
+    fn agrees(&self, other: &Flat) -> bool {
+        self.pts.iter().all(|p| other.near(*p)) && other.pts.iter().all(|p| self.near(*p))
+    }
+}
+
+/// Do outlines `a` and `b` (in one space) lie on each other: every point of each, flattened, within
+/// `tol` of the other? `false` when either is too large to check.
+#[cfg(test)]
+fn outlines_agree(a: &BezPath, b: &BezPath, tol: f64) -> bool {
+    matches!((Flat::new(a, tol), Flat::new(b, tol)), (Some(fa), Some(fb)) if fa.agrees(&fb))
 }
 
 /// `seg` as a line when it is one (a curve with its handles on its ends or on its line), else as it is.
