@@ -1474,9 +1474,11 @@ a layer named after the page (`Page 2`). A PDF-compatible `.ai` with `cropTo: "c
 when it opens as art. A page on its trim box shows its bleed box round the artboard, and the pages give the document
 their bleed; the artboards are then 36 pt apart plus the bleed on both sides. The document opens in CMYK when most of those pages are painted mostly in
 CMYK, unless `colorMode` names a mode. All the pages' objects share one copy of the file. The Links panel lists each
-page, and `links.embed` makes a page editable art.
+page, and `links.embed` makes a page editable art. The command's `linkPages` defaults to false; the dialog checks the
+box when All is picked and clears it when Range is picked, for a file it can link, and `ui.dialog.set` of `allPages`
+does the same. A box checked or cleared by hand keeps that state until the other of All and Range is picked.
 `document.open` refuses `linkPages` for a file that is not a PDF or a PDF-compatible `.ai`, for a file given as
-`dataBase64` without a path, with a `password`, and with `textAs: "outlines"`, and rejects a `linkPages` that is not
+`dataBase64` without a path, with a `password`, with `textAs: "outlines"` and for a file over 256 MB, and rejects a `linkPages` that is not
 true or false. Save then asks for a name.
 `document.open`, `file.place` and `document.pdfInfo` reject a `cropTo`, `crop`, `password`, `colorMode` or `textAs`
 that is not a string, and `document.pdfInfo` rejects a `thumbnailSize` that is not a number. The error names the param,
