@@ -3,10 +3,8 @@ use super::{CommandSpec, EngineError, Result, Session, cmd, has_doc};
 use serde_json::{Value, json};
 use std::sync::Arc;
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::dimension::{
-    ArrowStyle, Dimension, DimensionMode, DimensionOptions, DimensionSource, LineType, Orientation, TextAlignment, TextPosition,
-};
-use vectorcraft_doc::{Appearance, Arrowhead, CharStyle, ColorMode, Dash, Document, Node, NodeId, NodeKind, TextObject};
+use vectorcraft_doc::dimension::{Dimension, DimensionMode, DimensionOptions, DimensionSource, LineType, Orientation, TextAlignment, TextPosition};
+use vectorcraft_doc::{Appearance, CharStyle, ColorMode, Dash, Document, Node, NodeId, NodeKind, TextObject};
 use vectorcraft_geom::{Affine, BezPath, PathData, Point, Vec2};
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -567,12 +565,7 @@ fn appearance(o: &DimensionOptions, mode: ColorMode, ext: bool, arrows: bool) ->
             LineType::Solid => None,
         };
         if arrows {
-            let head = match o.arrow_style {
-                ArrowStyle::Filled => Some(Arrowhead::Triangle),
-                ArrowStyle::Open => Some(Arrowhead::TriangleOpen),
-                ArrowStyle::Tick => Some(Arrowhead::Slash),
-                ArrowStyle::None => None,
-            };
+            let head = o.arrow_style.arrowhead();
             st.start_arrow = head.clone();
             st.end_arrow = head;
             st.arrow_scale = (o.arrow_scale, o.arrow_scale);

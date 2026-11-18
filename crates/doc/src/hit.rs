@@ -2096,7 +2096,9 @@ pub fn compound_part_at(n: &Node, p: Point, tol: f64) -> Option<NodeId> {
 /// Objects (children of layers, or of `scope` in isolation mode) touched by a marquee rect, leaving
 /// out those on a locked artboard ([`crate::LockedArtboards::holds_id`]). Symbol instances are measured
 /// by their art ([`Node::geometric_bounds_with`]), and outside that box, except in outline, they are
-/// touched where the live geometry effects of a clipping path in their art show it. The art of a clip group or of a layer with a
+/// touched where the live geometry effects of a clipping path in their art show it, or where the
+/// geometry effects of their active fill or stroke reshape the art. Images are also touched, except
+/// in outline, where their own fills and strokes paint outside their box. The art of a clip group or of a layer with a
 /// clipping mask counts only when the marquee meets the region its clipping path clips to, and then
 /// only within that region's bounds. In isolation mode the clipping mask of the isolated container,
 /// or of the parent of the single object isolated, does not limit the marquee, as it does not limit
@@ -2265,8 +2267,10 @@ fn marquee_with(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool, wh
     /// Does the marquee `r` touch `n`? It skips the children of a Shaper Group that clicks skip
     /// ([`shaper_hides`]). An Intertwine group is touched by its members, and a repeat is touched
     /// by the copies it draws, as clicks hit them. Objects of every other kind except paths,
-    /// compound paths, layers and groups are touched by their box. A clipping path is touched by
-    /// its own geometry ([`mask_marquee`]) and on the edge of its region ([`clip_edge_touches`]).
+    /// compound paths, layers and groups are touched by their box, and an image or a symbol
+    /// instance also where its fills and strokes paint outside it ([`painted_touches`]). A clipping
+    /// path is touched by its own geometry ([`mask_marquee`]) and on the edge of its region
+    /// ([`clip_edge_touches`]).
     fn touches(n: &Node, s: &SymbolBoxes, r: Rect, scope: Option<NodeId>, whole_compounds: bool, outline: bool) -> bool {
         // A path or compound path whose geometry effects reshape it, or a group or layer whose own
         // geometry effects reshape its members, is touched where that art is drawn ([`drawn_art`]).
@@ -2296,11 +2300,26 @@ fn marquee_with(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool, wh
             NodeKind::Compound { children, .. } => children.iter().any(|c| c.visible && touches(c, s, r, scope, whole_compounds, outline)),
             NodeKind::Repeat(spec) => spec.expand(Some(s.document())).iter().any(|copy| touches(copy, s, r, scope, whole_compounds, outline)),
             // A symbol instance is touched by its box, and outside it where the live geometry
-            // effects of a clipping path in its art show the art. In the art of another instance
-            // walked outside that instance's box, it is touched only by its own art ([`ArtOnly`]).
-            NodeKind::SymbolInstance { .. } => !ArtOnly::on() && box_touches(n, s, r) || !outline && instance_art_touches(n, s, r, whole_compounds),
+            // effects of a clipping path in its art show the art, or where the geometry effects of
+            // its active fill or stroke reshape the art ([`painted_touches`]). In the art of another
+            // instance walked outside that instance's box, it is touched only by its own art
+            // ([`ArtOnly`]) and those shapes.
+            NodeKind::SymbolInstance { .. } => {
+                !ArtOnly::on() && box_touches(n, s, r) || !outline && (instance_art_touches(n, s, r, whole_compounds) || painted_touches(n, s, r))
+            }
+            // An image is touched by its box, and outside it where its own fills and strokes paint.
+            NodeKind::Image(_) => box_touches(n, s, r) || !outline && painted_touches(n, s, r),
             _ => box_touches(n, s, r),
         }
+    }
+    /// Does the marquee `r` touch the shapes that the fills and strokes of image or symbol
+    /// instance `n` paint ([`image_paint`]), where clicks hit them ([`hit_painted`])? Each shape is
+    /// touched by its path, as a path is ([`vectorcraft_geom::hit::intersects_rect`]). Only when
+    /// `r` meets the reach of `n` ([`Node::reach_bounds_with`]).
+    fn painted_touches(n: &Node, s: &SymbolBoxes, r: Rect) -> bool {
+        let meets = |b: Rect| b.x0 <= r.x1 && r.x0 <= b.x1 && b.y0 <= r.y1 && r.y0 <= b.y1;
+        n.reach_bounds_with(s).is_some_and(meets)
+            && image_paint(Some(s.document()), n).iter().any(|(bp, _, _)| vectorcraft_geom::hit::intersects_rect(&PathData::from_bezpath(bp), r))
     }
     /// Does the marquee `r` touch the box of `n`? A box with no width or no height (an instance of
     /// a symbol that draws a straight line) is touched where the marquee crosses it.
