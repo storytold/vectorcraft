@@ -706,8 +706,7 @@ fn run_ui_part6(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         }
         "tool.switchSelectionTools" => {
             let tool = if app.session.tool_id() == "selection" { "directSelection" } else { "selection" };
-            app.select_tool(tool);
-            Ok(json!({"tool": app.session.tool_id()}))
+            app.try_select_tool(tool).map(|()| json!({"tool": app.session.tool_id()}))
         }
         crate::touch::TOGGLE_MODE => crate::touch::toggle_mode(app),
         crate::addons::pathtools::corner::COMMAND => crate::addons::pathtools::corner::open(app),
