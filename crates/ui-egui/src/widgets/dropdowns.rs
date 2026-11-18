@@ -369,6 +369,8 @@ pub(crate) fn menu_room_either(below: f32, above: f32, tallest: f32) -> f32 {
 
 /// The scroll bar of a menu's list: slim, in a column of its own beside the items, so it never
 /// covers what sits at their right end (shortcuts, submenu arrows, a font's favourite star).
+/// `theme::apply` makes it the style of every scroll area that does not set its own, so the bar
+/// shows whenever there is more to scroll to (#5941).
 pub fn list_scroll_style() -> egui::style::ScrollStyle {
     egui::style::ScrollStyle { bar_width: 6.0, bar_inner_margin: 2.0, ..egui::style::ScrollStyle::solid() }
 }
@@ -561,18 +563,19 @@ fn show_shortened_rows(ui: &Ui, painted: usize) {
 }
 
 /// A column of tool or panel buttons (the toolbar, the dock's icon column) that scrolls when the
-/// window is too short for it: with the mouse wheel, or the scroll bar shown while the pointer is
-/// over it.
+/// window is too short for it: with the mouse wheel, or with its scroll bar.
 /// Its scroll bar stays a slim line at the edge, even while scrolled or dragged, so it never covers
-/// the buttons (#808).
+/// the buttons (#808). The line shows while the pointer is elsewhere too (#5941).
 pub fn strip_scroll<R>(ui: &mut Ui, id: &str, add_contents: impl FnOnce(&mut Ui) -> R) -> R {
     ui.scope(|ui| {
+        let floating = egui::style::ScrollStyle::floating();
         ui.spacing_mut().scroll = egui::style::ScrollStyle {
             bar_width: 4.0,
             floating_width: 2.0,
             bar_inner_margin: 0.0,
             bar_outer_margin: 1.0,
-            ..egui::style::ScrollStyle::floating()
+            dormant_handle_opacity: floating.active_handle_opacity,
+            ..floating
         };
         egui::ScrollArea::vertical().id_salt(id).auto_shrink([false, true]).show(ui, add_contents).inner
     })
