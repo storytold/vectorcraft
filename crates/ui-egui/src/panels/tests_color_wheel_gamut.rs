@@ -165,7 +165,8 @@ fn ui_color_wheel_sets_gamut() {
     app.run("ui.colorWheel", json!({"channel": "red"})).unwrap();
     let got = app.run("ui.colorWheel", json!({"view": "wheel", "channel": null, "gamut": null})).unwrap();
     assert_eq!(got, json!({"view": "wheel", "channel": "red", "gamut": true}), "null keeps a value while the other keys apply");
-    assert_eq!(app.run("ui.colorWheel", json!({"gamut": false})).unwrap()["gamut"], json!(false));
+    let got = app.run("ui.colorWheel", json!({"view": null, "gamut": false})).unwrap();
+    assert_eq!(got, json!({"view": "wheel", "channel": "red", "gamut": false}), "a null view keeps the view while gamut applies");
     for code in ["de", "fr", "ja", "zh-hans"] {
         let lang = crate::i18n::Lang::from_code(code).expect("registered");
         let shown = crate::i18n::message(lang, &e);
