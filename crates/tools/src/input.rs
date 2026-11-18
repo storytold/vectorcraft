@@ -214,8 +214,15 @@ pub enum Action {
     Exec(String, Value),
     /// Ask the UI to open a dialog (e.g. click with the Rectangle tool → size dialog).
     Dialog(String, Value),
+    /// Ask the UI to show and select a panel (e.g. a double-click on a corner widget with a shape
+    /// tool → Transform).
+    Panel(String),
     /// Switch to another tool (e.g. after placing a text frame).
     SwitchTool(String),
     /// Call the tool's `notify` after the preceding actions ran (e.g. to pick up a created object).
     Notify(String),
+    /// Show this English message in the status bar (e.g. why a Shape Builder gesture built
+    /// nothing); an empty message clears the status bar. It changes nothing in the document and
+    /// records no undo step.
+    Status(String),
 }
