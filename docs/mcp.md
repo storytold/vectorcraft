@@ -4772,9 +4772,13 @@ linked moves and the Color Theme Picker leave its new color as it is, and Save A
 from colors alone leave its new color out. With `limitTo`, a row's `tint` (a percentage, default 100) gives the art
 linked to the global or spot swatch its new color is that share of its tint; `tint` must be a number. `recolor.randomize`
 moves a row's `tint` with its new color and removes it from a color it changes, and moves a row's `model` with its new color. `swatch.editGroup {group, colors, rename?}` rewrites a colour group in one undo
-step (art linked to its global swatches follows), and `recolor.apply` with `group` recolours the art and rewrites the
+step (art linked to its global swatches follows); a `null` in `colors` removes the group's swatch at that place, and
+given the group's own colors in order and no new name, it records no undo step. A color key (`recolor.colors`) that
+names a swatch's color, rounded to the key's steps, counts as that color, and the swatch keeps its color unrounded. And `recolor.apply` with `group` recolours the art and rewrites the
 group together. A `null` in `groupColors` removes the group's swatch at that place, and the swatches after it keep
-their colors and names; art linked to a removed global swatch keeps its color and is no longer linked to it. Art linked to one of the group's global swatches stays linked when the swatch is rewritten with its
+their colors and names; art linked to a removed global swatch keeps its color and is no longer linked to it. `"keep"` in
+`groupColors` leaves the swatch at that place its color, without the Global Adjust; past the group's swatches it adds
+nothing, and it is refused for a swatch that is not a color. Art linked to one of the group's global swatches stays linked when the swatch is rewritten with its
 row's new color (the default without `groupColors` when the rows follow the group's order), so a later `swatch.edit` still
 reaches it; the reply's `relinked` counts the other linked paints that took the group's new colors. Art in a row that
 is linked to a swatch rewritten with another color keeps its row's new color, even an unchanged one, and is no longer
@@ -4839,6 +4843,35 @@ the largest first. Dragging the edge between two parts moves width between them,
 become the `weights` field, which moves the rows' current colors and previews the result. The New Color Group menu
 beside the link button runs `swatch.newGroup` right away, as its own undo step: Save All Colors saves the new colors
 of the rows that are not excluded and hold current colors, in row order, and Save Prominent Colors saves the bar's colors in the bar's order.
+
+The Recolor Artwork dialog lists the document's color groups on its right, or under the tabs in a window too narrow
+for both ([Advanced recolor options overview](https://helpx.adobe.com/illustrator/desktop/manage-colors/learn-color-basics/edit-colors-dialog-overview.html)).
+The Show Color Groups button beside the tabs shows or hides the list (the `groupStorage` field, true when the dialog
+opens). A click on a group, or `ui.dialog.set` of the `group` field to a group's name, makes it the group being
+edited: with art the art is reduced again to a row per color of the group, which become the rows' new colors, and
+without art the rows are the group's colors. A name that no group has is refused with `` no colour group `<name>` ``,
+and a `group` of null selects none. The buttons under the list are the `groupAction` field. Setting it checks the value, and the next frame of the
+dialog runs it (OK with it set in the same request runs it first):
+`save` (Save Changes) runs `swatch.editGroup` on the selected group with the colors OK would give it and the name in
+`groupName`, `new` (New Color Group) saves the new colors of the rows that are not excluded as `swatch.newGroup` does,
+and `delete` (Delete) runs `swatch.delete` on the selected group. Each is its own undo step, and the art keeps its
+preview. An excluded row leaves its swatch its own color, with or without art, and an excluded row past the group's
+swatches adds none. When several rows list a swatch's color, the swatch follows a row that gives the color a new color
+before an excluded row or one that removes the color, as `recolor.apply` maps the art. When the art has colors of the group,
+`save` and OK keep the group's swatches in order: a swatch whose color a row lists, or to which an earlier `save` gave
+a row's new color, takes that row's new color (its own color when the row is
+excluded), so art linked to the swatch takes the color its row shows, and every other swatch keeps its color. A row whose color was removed (`to: null`) and is not excluded
+removes its swatch, and the colors added on the Edit tab follow the group's other colors, as at OK. After a `save` with art, the rows' new colors take the Global
+Adjust and it goes back to 0%; when the save recolored linked art, the rows are read from the art again and a row with a
+color the save gave the art is excluded, also when other art has that color, since a row recolors every use of its
+colors alike. Until the rows or the Global Adjust change, OK changes the saved group only by the name
+in `groupName`. `save` and `delete` with no group selected answer `` missing `group` ``. `save` on a group with a
+swatch that is not a color (a gradient, pattern or None swatch) is refused, because the rows hold only the group's
+colors. Any other value is refused. After a Delete without art, OK saves the rows as a new color group.
+
+```json
+{"name":"answer_dialog","arguments":{"set":[{"field":"group","value":"Brights"},{"field":"groupAction","value":"save"}]}}
+```
 
 ```json
 {"name":"run_command","arguments":{"command":"recolor.weigh","params":{"map":[{"from":["rgb 255 0 0","rgb 128 0 204"],"to":"#00ff00"},{"from":["rgb 0 0 255"],"to":"#ffff00"}],"weights":[1,1]}}}
