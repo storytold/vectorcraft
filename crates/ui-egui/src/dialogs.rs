@@ -549,8 +549,9 @@ fn hidden_controls(d: &Dialog) -> &'static [&'static str] {
         }
         // The selected rows and Randomize's seed.
         Some(DialogKind::Recolor) => &["__seed", "__sel"],
-        // The view, zoom, download speed, selected color table entries and the preset name being typed.
-        Some(DialogKind::SaveForWeb) => &["__color", "__colors", "__kbps", "__presetName", "__view", "__zoom"],
+        // The view, zoom, download speed, selected color table entries, the color table entry whose
+        // Color Picker opens and the preset name being typed.
+        Some(DialogKind::SaveForWeb) => &["__color", "__colors", "__editColor", "__kbps", "__presetName", "__view", "__zoom"],
         // The link that keeps width and height in proportion.
         Some(DialogKind::Shape | DialogKind::TransformEach) => &["__constrain"],
         // The attention filter, the Keys section, the search text and the key being recorded.

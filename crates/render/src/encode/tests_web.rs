@@ -80,14 +80,19 @@ fn lossy_makes_runs_and_smaller_gifs() {
     let px = image(96, 64, |x, y| [(x * 2 + y) as u8, (y * 3) as u8, ((x * y) % 255) as u8]);
     let ix = quantize(&px, 96, 64, &PaletteOptions { colors: 64, dither: Dither::Diffusion, ..Default::default() });
     let mut lossy_ix = ix.clone();
-    lossy(&mut lossy_ix, &px, 80);
+    lossy(&mut lossy_ix, &px, 80, &[]);
     let runs = |ix: &Indexed| ix.indices.windows(2).filter(|w| w[0] != w[1]).count();
     assert!(runs(&lossy_ix) < runs(&ix));
     let size = |ix: &Indexed| gif::encode(ix, false).unwrap().len();
     assert!(size(&lossy_ix) < size(&ix), "{} vs {}", size(&lossy_ix), size(&ix));
     let mut none = ix.clone();
-    lossy(&mut none, &px, 0);
+    lossy(&mut none, &px, 0, &[]);
     assert_eq!(none, ix);
+    // A fixed entry keeps its pixels and takes no others.
+    let fixed: Vec<u8> = (0..ix.palette.len()).filter_map(|i| u8::try_from(i).ok()).collect();
+    let mut kept = ix.clone();
+    lossy(&mut kept, &px, 100, &fixed);
+    assert_eq!(kept, ix);
 }
 
 #[test]
