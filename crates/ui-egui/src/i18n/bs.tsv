@@ -7043,6 +7043,8 @@ shape	Open	Otvoren
 # Path Precision Tools add-on: Tangent Circle.
 	Tangent Circle…	Tangentna kružnica…
 	Tangent Circle	Tangentna kružnica
+	Tangent Circle Tool	Alat tangentna kružnica
+	No tangent circle here	Ovdje nema tangentne kružnice
 	Circle:	Kružnica:
 @msg	`ids` names an object twice	`ids` navodi objekat dvaput
 @msg	select two or three paths or compound paths	odaberite dvije ili tri putanje ili složene putanje

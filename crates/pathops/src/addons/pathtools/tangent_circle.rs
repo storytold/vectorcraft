@@ -14,8 +14,11 @@
 use kurbo::{CubicBez, ParamCurve, Point, Vec2};
 use vectorcraft_geom::PathData;
 
+mod on_segments;
 #[cfg(test)]
 mod tests;
+
+pub use on_segments::{SegmentCircle, circles_of_radius, circles_through};
 
 /// Most segments the shapes may hold together, counted by [`tangent_circle_segments`].
 pub const MAX_TANGENT_CIRCLE_SEGMENTS: usize = 2_000;

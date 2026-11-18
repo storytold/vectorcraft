@@ -12866,10 +12866,10 @@ type and evening out horizontal scales are not there yet.
 Path Precision Tools is a built-in add-on for exact anchor and path work: its commands are `addon.pathtools.*`, and in
 the desktop app it lives in Object › Plug-ins › Path Precision Tools, in its Anchor Inspector panel
 (`window.panel {panel: "anchorInspector"}`), in its Parametric Shape panel (`window.panel {panel: "parametricShape"}`)
-and in eight tools: `anchorEraserBrush`, `extendPath`, `measureInspect`, `parametricShape`, `cornerTool`, `slideAnchor`,
-`sharedEdge` and `trimAtCrossings`. The toolbars don't show the first seven until they are added from the All Tools
-drawer (or chosen with `tool.select`); `trimAtCrossings` is in the Scissors tool's group in both shipped toolbars,
-after the Knife, and `ui.tool.list` lists it there. A toolbar edited before it joined keeps its saved layout until
+and in nine tools: `anchorEraserBrush`, `extendPath`, `measureInspect`, `parametricShape`, `cornerTool`, `slideAnchor`,
+`sharedEdge`, `tangentCircle` and `trimAtCrossings`. The toolbars don't show the first eight until they are added from
+the All Tools drawer (or chosen with `tool.select`); `trimAtCrossings` is in the Scissors tool's group in both shipped
+toolbars, after the Knife, and `ui.tool.list` lists it there. A toolbar edited before it joined keeps its saved layout until
 Reset Toolbar. None has a shortcut; one can be set in Edit › Keyboard Shortcuts › Tools. Each edit is one undo step,
 and an edit that changes nothing makes no step.
 
@@ -12920,6 +12920,23 @@ Tools:
   different in length, or at over 120° at an end, are left alone. Options (`tool.setOption`, or the panel, kept with the
   preferences): `diameter` (0.25 to 200 pt, 20), `tolerance` (how near two anchors count as coincident, 0 to 3 pt,
   0.002) and `together` (Keep Shared Points Together).
+- **Tangent Circle Tool** (`tangentCircle`): draws a circle on two path segments of any unlocked paths, selected or
+  not. A click picks the first segment; over a second segment the circle that would be drawn shows (red) with its
+  center, its radii to the two touch points and its radius, or a note that there is none. A click there draws the
+  circle that is tangent to the first segment at the point clicked and touches the second (its center on the first
+  segment's normal there). With Shift the circle instead has the tool's `radius` and may touch the first segment
+  anywhere along it. A drag from the second segment sets the radius to the drag's length; Shift steps it by 1, 2 or 5
+  times a power of 10 pt, at least 4 screen pixels long (2 pt at 200%), and Cmd/Ctrl pressed during the drag moves
+  it by a tenth of the pointer's movement (held at the press, Cmd/Ctrl lends the selection tool, as for every tool).
+  The segments on either side of the second one, on its subpath, count with it (the first segment excepted; the two
+  may be on the same path, and the first segment picked again gives no circle), and of the circles found the one
+  touching them nearest the pointer is drawn. A circle touches them when they lie outside it with a point on it, and
+  it never crosses the first segment. The circle is a new ellipse with the current paint, drawn through three of its
+  points with `shape.circleThroughPoints` so that Align New Objects to Pixel Grid leaves it in place, one undo step.
+  With no circle, or one too small or too large for its three points to give it back in floating point, nothing is
+  drawn and the first segment stays picked. Escape, an edit, Undo or Redo outside the tool, or another document
+  forgets the first segment. Option (`tool.setOption`, or a double-click on the tool): `radius` (pt, 0.01 to 1000000,
+  36).
 - **Trim at Crossings Tool** (`trimAtCrossings`): removes stretches of paths between the places where they are crossed,
   on any path that can be edited, selected or not. A click runs `addon.pathtools.trim` with `at`, for the path within 4
   screen pixels of the pointer. A drag draws a rectangle and runs it with `rect` on release; once the pointer has
