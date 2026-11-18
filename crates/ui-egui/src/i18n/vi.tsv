@@ -5503,6 +5503,12 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	name the file	hãy đặt tên tệp
 @msg	no active document	không có tài liệu đang hoạt động
 @msg	no active perspective plane	không có mặt phẳng phối cảnh đang hoạt động
+@msg	the perspective grid is hidden	lưới phối cảnh đang ẩn
+@msg	Automatic Plane Positioning is off: turn on anchorPoint or gridlineIntersection (perspective.widget.options)	Tự động định vị mặt phẳng đang tắt: hãy bật anchorPoint hoặc gridlineIntersection (perspective.widget.options)
+@msg	anchorPoint must be true or false	anchorPoint phải là true hoặc false
+@msg	gridlineIntersection must be true or false	gridlineIntersection phải là true hoặc false
+@msg	tolerance must be 0 or more	tolerance phải từ 0 trở lên
+@msg	give `at` or `clear`, not both	hãy cung cấp `at` hoặc `clear`, không phải cả hai
 @msg	no anchor points selected	chưa chọn điểm neo
 @msg	`points` must be two or three [x, y] pairs of numbers	`points` phải là hai hoặc ba cặp số [x, y]
 @msg	direct-select two or three anchor points, or give `points`	hãy chọn trực tiếp hai hoặc ba điểm neo hoặc cung cấp `points`

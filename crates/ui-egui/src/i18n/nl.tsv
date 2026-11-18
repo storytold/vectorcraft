@@ -5498,6 +5498,12 @@ imageTrace	Outline	Contour
 @msg	no PNG encoder	geen PNG-encoder
 @msg	no active document	geen actief document
 @msg	no active perspective plane	geen actief perspectiefvlak
+@msg	the perspective grid is hidden	het perspectiefraster is verborgen
+@msg	Automatic Plane Positioning is off: turn on anchorPoint or gridlineIntersection (perspective.widget.options)	Automatische vlakpositionering staat uit: zet anchorPoint of gridlineIntersection aan (perspective.widget.options)
+@msg	anchorPoint must be true or false	anchorPoint moet true of false zijn
+@msg	gridlineIntersection must be true or false	gridlineIntersection moet true of false zijn
+@msg	tolerance must be 0 or more	tolerance moet 0 of meer zijn
+@msg	give `at` or `clear`, not both	geef `at` of `clear`, niet beide
 @msg	no anchor points selected	geen ankerpunten geselecteerd
 @msg	`points` must be two or three [x, y] pairs of numbers	`points` moet uit twee of drie getallenparen [x, y] bestaan
 @msg	direct-select two or three anchor points, or give `points`	selecteer met directe selectie twee of drie ankerpunten of geef `points` op

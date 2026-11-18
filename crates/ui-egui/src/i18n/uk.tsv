@@ -5158,6 +5158,12 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	no PNG encoder	немає кодера PNG
 @msg	no active document	немає активного документа
 @msg	no active perspective plane	немає активної площини перспективи
+@msg	the perspective grid is hidden	сітку перспективи приховано
+@msg	Automatic Plane Positioning is off: turn on anchorPoint or gridlineIntersection (perspective.widget.options)	Автоматичне розміщення площини вимкнено: увімкніть anchorPoint або gridlineIntersection (perspective.widget.options)
+@msg	anchorPoint must be true or false	anchorPoint має бути true або false
+@msg	gridlineIntersection must be true or false	gridlineIntersection має бути true або false
+@msg	tolerance must be 0 or more	tolerance має бути 0 або більше
+@msg	give `at` or `clear`, not both	укажіть `at` або `clear`, але не обидва
 @msg	no anchor points selected	опорні точки не виділені
 @msg	`points` must be two or three [x, y] pairs of numbers	`points` має містити дві або три пари чисел [x, y]
 @msg	direct-select two or three anchor points, or give `points`	виділіть дві або три опорні точки прямим виділенням або задайте `points`
