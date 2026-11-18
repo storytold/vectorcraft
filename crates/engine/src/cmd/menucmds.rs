@@ -133,7 +133,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Create Object Mosaic…",
             ["Object"],
             None,
-            "{columns=10, rows=10 (whole numbers, kept within 1..1000), width?, height? (new size in pt; default the image's), spacingX=0, spacingY=0 (pt between tiles), gray?: bool, deleteRaster?: bool} a group of rectangles coloured by the selected image's average tile colours → {id, tiles}",
+            "{columns=10, rows=10 (whole numbers, kept within 1..1000), width?, height? (new size in pt, 0.1..1000000; default the image's), percentages?: bool (width and height are percentages of the image's size, default 100), constrain?: \"width\"|\"height\"|null (Constrain Ratio: the mosaic keeps the image's proportions, the named side's size leads and the other side's is worked out from it, both growing or shrinking in proportion to keep the sizes within 0.1..1000000), useRatio?: bool|\"width\"|\"height\" (square tiles as drawn, spacing taken off: the count on the side named, or with true on the constrained side, columns by default, stays and the other is the count, 1..1000, whose tiles come closest to square), spacingX=0, spacingY=0 (pt between tiles), gray?: bool, deleteRaster?: bool} a group of rectangles colored by the selected image's average tile colors → {id, tiles, columns, rows}",
             has_image,
             object_mosaic
         ),
@@ -970,7 +970,23 @@ pub(crate) fn has_image(s: &Session) -> std::result::Result<(), String> {
     }
 }
 
-fn object_mosaic(s: &mut Session, p: &Value) -> Result<Value> {
+/// What `object.createObjectMosaic` makes from its params: the image, the tile counts, the tiles'
+/// placement, their size and spacing in image pixels, and the options.
+struct MosaicPlan {
+    id: NodeId,
+    im: ImageObject,
+    cols: u32,
+    rows: u32,
+    xf: Affine,
+    tile: (f64, f64),
+    gap: (f64, f64),
+    gray: bool,
+    delete: bool,
+}
+
+/// The mosaic `object.createObjectMosaic` would make from `p`, worked out without decoding the
+/// image or changing the document.
+fn mosaic_plan(s: &Session, p: &Value) -> Result<MosaicPlan> {
     const C: &str = "object.createObjectMosaic";
     let st = s.doc()?;
     let id = st
@@ -980,28 +996,97 @@ fn object_mosaic(s: &mut Session, p: &Value) -> Result<Value> {
         .copied()
         .find(|id| matches!(st.doc.node(*id).map(|n| &n.kind), Some(NodeKind::Image(_))))
         .ok_or_else(|| bad(C, "select an image"))?;
-    let node = st.doc.node(id).cloned().ok_or(EngineError::NoNode(id))?;
+    let node = st.doc.node(id).ok_or(EngineError::NoNode(id))?;
     let NodeKind::Image(im) = &node.kind else { return Err(bad(C, "select an image")) };
-    let blob = st.doc.images.get(&im.key).filter(|b| !b.bytes.is_empty()).ok_or_else(|| bad(C, "the image has no embedded pixels"))?;
-    let raster = vectorcraft_trace::Raster::decode(&blob.bytes).map_err(|e| bad(C, e.to_string()))?;
-    let cols = whole_or(p, "columns", 10, C)?.clamp(1, 1000) as u32;
-    let rows = whole_or(p, "rows", 10, C)?.clamp(1, 1000) as u32;
+    if !st.doc.images.get(&im.key).is_some_and(|b| !b.bytes.is_empty()) {
+        return Err(bad(C, "the image has no embedded pixels"));
+    }
+    let mut cols = whole_or(p, "columns", 10, C)?.clamp(1, 1000) as u32;
+    let mut rows = whole_or(p, "rows", 10, C)?.clamp(1, 1000) as u32;
     let gray = switch_or(p, "gray", false, C)?;
-    let colors = vectorcraft_trace::mosaic(&raster, cols, rows);
+    let percentages = switch_or(p, "percentages", false, C)?;
+    // A side named "width" (true) or "height" (false), as `constrain` and `useRatio` take it.
+    let side = |key: &str, v: &Value, also: &str| match v.as_str() {
+        Some("width") => Ok(true),
+        Some("height") => Ok(false),
+        _ => Err(bad(C, format!("`{key}` must be one of {}", format_args!("\"width\", \"height\"{also} or null")))),
+    };
+    let constrain = match p.get("constrain") {
+        None | Some(Value::Null) => None,
+        Some(v) => Some(side("constrain", v, "")?),
+    };
+    // Use Ratio's kept side: true keeps Constrain Ratio's side (the width when it is left out).
+    let use_ratio = match p.get("useRatio") {
+        None | Some(Value::Null | Value::Bool(false)) => None,
+        Some(Value::Bool(true)) => Some(constrain.unwrap_or(true)),
+        Some(v) => Some(side("useRatio", v, ", true, false")?),
+    };
     // Tiles in image space, placed by the image transform (scaled to a new size if asked).
     let b = node.geometric_bounds().ok_or_else(|| bad(C, "image has no bounds"))?;
     check_numbers(p, &["width", "height", "spacingX", "spacingY"], C)?;
-    let (nw, nh) = (f64_or(p, "width", b.width()).max(0.1), f64_or(p, "height", b.height()).max(0.1));
-    let resize = Affine::translate(b.origin().to_vec2())
-        * Affine::scale_non_uniform(nw / b.width().max(1e-9), nh / b.height().max(1e-9))
-        * Affine::translate(-b.origin().to_vec2());
+    let (bw, bh) = (b.width().max(1e-9), b.height().max(1e-9));
+    // A size given (pt, or % of the image's) is from 0.1 to 1,000,000; one left out is the image's.
+    let size = |key: &str, base: f64| -> Result<f64> {
+        let Some(x) = p.get(key).and_then(Value::as_f64) else { return Ok(base) };
+        let (min, max) = (0.1, 1_000_000.0);
+        if !(min..=max).contains(&x) {
+            return Err(bad(C, format!("`{key}` must be between {min} and {max} (got {x})")));
+        }
+        Ok(if percentages { base * x / 100.0 } else { x })
+    };
+    let (mut nw, mut nh) = (size("width", bw)?, size("height", bh)?);
+    // Constrain Ratio keeps the image's proportions: the named side leads and the other follows.
+    match constrain {
+        Some(true) => nh = nw * bh / bw,
+        Some(false) => nw = nh * bw / bh,
+        None => {}
+    }
+    // A size under 0.1 pt grows to 0.1 pt, in proportion while Constrain Ratio keeps it. A side
+    // Constrain Ratio works out above 1,000,000 pt shrinks to 1,000,000 pt, the other with it.
+    let (nw, nh) = match constrain {
+        Some(_) => {
+            let k = (0.1 / nw.min(nh)).max(1.0).min(1_000_000.0 / nw.max(nh));
+            // Proportions over 10,000,000 to 1 leave no size with both sides within the range.
+            if nw.min(nh) * k < 0.1 * (1.0 - 1e-9) {
+                return Err(bad(C, "the image's proportions leave no size with both sides between 0.1 and 1000000 pt"));
+            }
+            (nw * k, nh * k)
+        }
+        None => (nw.max(0.1), nh.max(0.1)),
+    };
+    let resize = Affine::translate(b.origin().to_vec2()) * Affine::scale_non_uniform(nw / bw, nh / bh) * Affine::translate(-b.origin().to_vec2());
     let xf = resize * im.xf;
-    let (tw, th) = (im.width as f64 / cols as f64, im.height as f64 / rows as f64);
-    // Spacing is in points; convert to image pixels along each axis.
+    // Points per image pixel along each of the image's axes (the image may be turned).
     let ppx = (xf * Point::new(1.0, 0.0) - xf * Point::ZERO).hypot().max(1e-9);
     let ppy = (xf * Point::new(0.0, 1.0) - xf * Point::ZERO).hypot().max(1e-9);
-    let (gx, gy) = ((f64_or(p, "spacingX", 0.0).max(0.0) / ppx).min(tw * 0.9), (f64_or(p, "spacingY", 0.0).max(0.0) / ppy).min(th * 0.9));
+    let (sx, sy) = (f64_or(p, "spacingX", 0.0).max(0.0), f64_or(p, "spacingY", 0.0).max(0.0));
+    let (iw, ih) = (im.width as f64, im.height as f64);
+    // Use Ratio: square tiles as drawn, spacing taken off, from the count on the kept side,
+    // measured along the image's axes.
+    match use_ratio {
+        Some(true) => rows = mosaic_square_count(cols, iw * ppx, ih * ppy, sx, sy),
+        Some(false) => cols = mosaic_square_count(rows, ih * ppy, iw * ppx, sy, sx),
+        None => {}
+    }
+    let (tw, th) = (iw / cols as f64, ih / rows as f64);
+    // Spacing is in points; convert to image pixels along each axis.
+    let gap = ((sx / ppx).min(tw * 0.9), (sy / ppy).min(th * 0.9));
     let delete = switch_or(p, "deleteRaster", false, C)?;
+    Ok(MosaicPlan { id, im: im.as_ref().clone(), cols, rows, xf, tile: (tw, th), gap, gray, delete })
+}
+
+/// The tile counts (columns, rows) `object.createObjectMosaic` would use with `p`, Use Ratio
+/// included, without making the mosaic (the dialog's Use Ratio button shows them).
+pub fn mosaic_counts(s: &Session, p: &Value) -> Result<(u32, u32)> {
+    mosaic_plan(s, p).map(|m| (m.cols, m.rows))
+}
+
+fn object_mosaic(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "object.createObjectMosaic";
+    let MosaicPlan { id, im, cols, rows, xf, tile: (tw, th), gap: (gx, gy), gray, delete } = mosaic_plan(s, p)?;
+    let blob = s.doc()?.doc.images.get(&im.key).ok_or_else(|| bad(C, "the image has no embedded pixels"))?;
+    let raster = vectorcraft_trace::Raster::decode(&blob.bytes).map_err(|e| bad(C, e.to_string()))?;
+    let colors = vectorcraft_trace::mosaic(&raster, cols, rows);
     let (gid, n) = s.edit("Create Object Mosaic", |d, sel| {
         let mut tiles = vec![];
         for r in 0..rows {
@@ -1039,7 +1124,32 @@ fn object_mosaic(s: &mut Session, p: &Value) -> Result<Value> {
         sel.set([gid]);
         Ok((gid, n))
     })?;
-    Ok(json!({ "id": gid.0, "tiles": n }))
+    Ok(json!({ "id": gid.0, "tiles": n, "columns": cols, "rows": rows }))
+}
+
+/// The tile count along one side of an Object Mosaic whose tiles, as drawn, come closest to square
+/// (Use Ratio): `kept` tiles span `kept_len` on the other side, and this side is `other_len` long.
+/// Each tile is its cell less the gap on its side (`kept_gap`, `other_gap`), and a gap takes at
+/// most 90% of a cell, as the tiles are drawn. Within 1..1000, the smaller count on a tie; all
+/// lengths in points.
+pub(crate) fn mosaic_square_count(kept: u32, kept_len: f64, other_len: f64, kept_gap: f64, other_gap: f64) -> u32 {
+    let drawn = |len: f64, n: u32, gap: f64| {
+        let cell = len / n.max(1) as f64;
+        cell - gap.max(0.0).min(cell * 0.9)
+    };
+    let side = drawn(kept_len, kept, kept_gap);
+    if !(side.is_finite() && side > 0.0 && other_len.is_finite() && other_len > 0.0) {
+        return 1;
+    }
+    // A tile on this side shrinks as the count grows: find the first count whose tile is no wider
+    // than `side`, then take it or the count before it, whichever is closer.
+    let (mut lo, mut hi) = (1u32, 1000u32);
+    while lo < hi {
+        let mid = (lo + hi) / 2;
+        if drawn(other_len, mid, other_gap) > side { lo = mid + 1 } else { hi = mid }
+    }
+    let off = |n: u32| (drawn(other_len, n, other_gap) - side).abs();
+    if lo > 1 && off(lo - 1) <= off(lo) { lo - 1 } else { lo }
 }
 
 fn polygon_path(pts: &[Point]) -> PathData {
