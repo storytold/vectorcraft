@@ -93,6 +93,19 @@
 	Paste without Formatting	Wklej bez formatowania
 	Clear	Wyczyść
 	Find and Replace…	Znajdź i zamień…
+	Find and Replace	Znajdź i zamień
+	Find:	Znajdź:
+	Replace With:	Zastąp przez:
+	Replace & Find	Zastąp i znajdź
+	Replace All	Zastąp wszystko
+	Match Case	Uwzględnij wielkość liter
+	Find Whole Word	Znajdź całe słowo
+	Search Backwards	Szukaj wstecz
+	Check Hidden Layers	Sprawdź ukryte warstwy
+	Check Locked Layers	Sprawdź zablokowane warstwy
+@msg	No matches found	Nie znaleziono dopasowań
+@msg	Matches replaced: {n}	Zastąpione dopasowania: {n}
+@msg	no match of `find` at bytes {_1}..{_2} of object {_3}	brak dopasowania `find` w bajtach {_1}..{_2} obiektu {_3}
 	Find Next	Znajdź następny
 	Spelling	Pisownia
 	Auto Spell Check	Automatyczne sprawdzanie pisowni
