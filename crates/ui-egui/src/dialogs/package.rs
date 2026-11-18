@@ -173,10 +173,10 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     Ok(r)
 }
 
-/// Did a save whose applied result is `r` write the document (no error, and no question asked
-/// before writing)?
+/// Did a save whose applied result is `r` write the document (no error, no question asked before
+/// writing, and not canceled by Cancel Save)?
 fn saved(r: &Result<Value, String>) -> bool {
-    r.as_ref().is_ok_and(|r| r.get("pending").is_none())
+    r.as_ref().is_ok_and(|r| r.get("pending").is_none() && r.get("cancelled").and_then(Value::as_bool) != Some(true))
 }
 
 /// Report the package `r` (`file.package`'s reply): the status bar, the web's download, and the

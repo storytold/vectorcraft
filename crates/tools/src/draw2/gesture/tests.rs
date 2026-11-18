@@ -3043,6 +3043,103 @@ fn the_blob_brush_and_the_eraser_show_their_tip_at_the_pointer() {
     }
 }
 
+/// A rotation-capable pen shows the current Bristle brush's tip before and during a Paintbrush
+/// stroke. A mouse, a pen without rotation, precise cursors and a borrowed selection tool do not.
+#[test]
+fn bristle_tip_annotator_follows_a_rotation_capable_pen() {
+    let (mut d, id) = doc_with_rect();
+    d.unknown.insert(vectorcraft_brush::CURRENT_KEY.into(), json!("Bristle Flat Fan"));
+    let s = Selection::default();
+    let p = paint();
+    let view = cx(&d, &s, &p);
+    let bounds = |t: &GestureTool, cx: &ToolContext| {
+        let overlays = t.overlays(cx);
+        let Some(Overlay::Path { path, color: [0, 0, 0], width: 1.0, .. }) = overlays.last() else { return None };
+        assert!(matches!(overlays.get(overlays.len() - 2), Some(Overlay::Path { color: [0xff, 0xff, 0xff], width: 3.0, .. })));
+        Some(vectorcraft_geom::Shape::bounding_box(path))
+    };
+    let mut tool = GestureTool::new("paintbrush");
+    let at =
+        |rotation| PointerEvent { pen: Some(PenPose { tilt: Some([30.0, 0.0]), rotation }), ..PointerEvent::new(PointerKind::Move, 100.0, 50.0) };
+    assert!(bounds(&tool, &view).is_none());
+    tool.pointer(&view, &PointerEvent::new(PointerKind::Move, 100.0, 50.0));
+    assert!(bounds(&tool, &view).is_none(), "mouse");
+    tool.pointer(&view, &at(None));
+    assert!(bounds(&tool, &view).is_none(), "pen without rotation");
+    tool.pointer(&view, &at(Some(0.0)));
+    let horizontal = bounds(&tool, &view).expect("rotating pen shows a tip");
+    let mut selected = Selection::default();
+    selected.set([id]);
+    let selected_view = cx(&d, &selected, &p);
+    tool.pointer(&selected_view, &at(Some(0.0)).with_mods(Mods { alt: true, ..Default::default() }));
+    assert!(bounds(&tool, &selected_view).is_none(), "Alt borrows Smooth for a selected path");
+    tool.pointer(&view, &at(Some(0.0)));
+    let mut wider_paint = p.clone();
+    wider_paint.stroke_width = 10.0;
+    let wider_view = cx(&d, &s, &wider_paint);
+    let wider = bounds(&tool, &wider_view).expect("stroke width scales the tip");
+    assert!((wider.width() - horizontal.width() * 10.0).abs() < 1e-6, "{horizontal:?}, {wider:?}");
+    wider_paint.stroke_width = 0.0;
+    assert!(bounds(&tool, &cx(&d, &s, &wider_paint)).is_none(), "a zero-width stroke has no tip");
+    tool.pointer(&view, &at(Some(90.0)));
+    let vertical = bounds(&tool, &view).expect("tip turns with the barrel");
+    assert!(horizontal.width() > horizontal.height() * 2.0, "{horizontal:?}");
+    assert!(vertical.height() > vertical.width() * 2.0, "{vertical:?}");
+    let mut light = at(Some(0.0));
+    light.kind = PointerKind::Down;
+    light.pressure = 0.1;
+    tool.pointer(&view, &light);
+    let light_tip = bounds(&tool, &view).expect("light pressure shows a smaller tip");
+    let mut heavy = light;
+    heavy.kind = PointerKind::Drag;
+    heavy.pressure = 0.9;
+    tool.pointer(&view, &heavy);
+    let heavy_tip = bounds(&tool, &view).expect("heavy pressure shows a larger tip");
+    assert!(heavy_tip.width() > light_tip.width() * 1.5, "{light_tip:?}, {heavy_tip:?}");
+    let mut release = heavy;
+    release.kind = PointerKind::Up;
+    tool.pointer(&view, &release);
+    let mut alt_stroke = light;
+    alt_stroke.pressure = 0.5;
+    tool.pointer(&selected_view, &alt_stroke);
+    alt_stroke.kind = PointerKind::Drag;
+    alt_stroke.mods.alt = true;
+    tool.pointer(&selected_view, &alt_stroke);
+    assert!(bounds(&tool, &selected_view).is_some(), "Alt during a drawing stroke keeps the tip");
+    alt_stroke.kind = PointerKind::Up;
+    tool.pointer(&selected_view, &alt_stroke);
+    assert_eq!(tool.cursor(&selected_view, alt_stroke.pos, alt_stroke.mods), Cursor::Smooth);
+    assert!(bounds(&tool, &selected_view).is_none(), "Alt release borrows Smooth without a stale tip");
+    // A completed stroke can select its new path after `pointer` returns its actions. The overlay
+    // must use that current selection even without a further pointer move.
+    let mut newly_selected = GestureTool::new("paintbrush");
+    let mut new_stroke = light;
+    newly_selected.pointer(&view, &new_stroke);
+    new_stroke.kind = PointerKind::Drag;
+    new_stroke.mods.alt = true;
+    newly_selected.pointer(&view, &new_stroke);
+    new_stroke.kind = PointerKind::Up;
+    newly_selected.pointer(&view, &new_stroke);
+    assert!(bounds(&newly_selected, &view).is_some(), "no selected path borrows Smooth yet");
+    assert_eq!(newly_selected.cursor(&selected_view, new_stroke.pos, new_stroke.mods), Cursor::Smooth);
+    assert!(bounds(&newly_selected, &selected_view).is_none(), "post-commit selection also hides the tip");
+    tool.pointer(&view, &at(Some(0.0)));
+    assert!(bounds(&tool, &view).is_some(), "a normal pen hover shows the tip before Precise Cursors hides it");
+    let precise = ToolContext { precise_cursors: true, ..cx(&d, &s, &p) };
+    assert!(bounds(&tool, &precise).is_none());
+    tool.pointer(&view, &at(Some(0.0)).with_mods(Mods { cmd: true, ..Default::default() }));
+    assert!(bounds(&tool, &view).is_none(), "selection tool borrowed by Cmd");
+    tool.pointer(&view, &at(Some(0.0)));
+    tool.hover_ended(&view);
+    assert!(bounds(&tool, &view).is_none(), "leaving the canvas");
+
+    let (mut d, _) = doc_with_rect();
+    d.unknown.insert(vectorcraft_brush::CURRENT_KEY.into(), json!("3 pt. Round"));
+    let calligraphic = cx(&d, &s, &p);
+    tool.pointer(&calligraphic, &at(Some(0.0)));
+    assert!(bounds(&tool, &calligraphic).is_none(), "other brush types keep their cursor");
+}
+
 /// Eraser Tool Options' Angle, Roundness and Size variation menus: the Eraser keeps each mode and
 /// Variation, the release sends them with the pen's readings along the drag, and while it erases
 /// its tip outline at the pointer takes the angle, roundness and size the pen gives there. The Blob
