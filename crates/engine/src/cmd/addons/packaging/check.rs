@@ -4,7 +4,7 @@
 use serde_json::{Value, json};
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
 use vectorcraft_geom::PathData;
-use vectorcraft_three_d::fold::{FoldLine, IssueCode, LineKind, MAX_SEGMENTS, blanks};
+use vectorcraft_three_d::fold::{Blank, FoldLine, Issue, IssueCode, LineKind, MAX_SEGMENTS, blanks};
 
 use super::super::super::pathops::length_given;
 use super::super::super::{CommandSpec, bad, checked_ids_or_selection, cmd, has_doc, switch_or};
@@ -14,7 +14,7 @@ use crate::{Result, Session};
 const CHECK: &str = "addon.packaging.check";
 
 /// How far apart the ends of two lines may be and still be joined, in points.
-const TOLERANCE: (f64, f64, f64) = (0.01, 0.1, 10.0);
+pub(super) const TOLERANCE: (f64, f64, f64) = (0.01, 0.1, 10.0);
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![cmd!(
@@ -101,23 +101,44 @@ fn kind(role: Role) -> LineKind {
     }
 }
 
-fn check(s: &mut Session, p: &Value) -> Result<Value> {
-    let select = switch_or(p, "select", false, CHECK)?;
-    let tolerance = match length_given(p, "tolerance", CHECK)? {
-        None => TOLERANCE.1,
-        Some(t) if (TOLERANCE.0..=TOLERANCE.2).contains(&t) => t,
-        Some(_) => return Err(bad(CHECK, format!("`tolerance` must be from {} to {} pt", TOLERANCE.0, TOLERANCE.2))),
-    };
+/// The fold lines a check or a fold reads: where they came from (`ids`, `selection` or
+/// `document`), the lines, and the ids of those on a non-printing layer.
+pub(super) struct Lines {
+    pub scope: &'static str,
+    pub lines: Vec<FoldLine>,
+    pub non_printing: Vec<u64>,
+}
+
+/// The tolerance `p` gives for `cmd`, or the default.
+pub(super) fn tolerance(p: &Value, cmd: &str) -> Result<f64> {
+    match length_given(p, "tolerance", cmd)? {
+        None => Ok(TOLERANCE.1),
+        Some(t) if (TOLERANCE.0..=TOLERANCE.2).contains(&t) => Ok(t),
+        Some(_) => Err(bad(cmd, format!("`tolerance` must be from {} to {} pt", TOLERANCE.0, TOLERANCE.2))),
+    }
+}
+
+/// The fold lines among the objects `p` names for `cmd` (`ids`, else the selection), or, while
+/// nothing is selected and `ids` is left out, every shown fold line of the document. Hidden lines
+/// are left out in every scope, members of a selected group included.
+pub(super) fn lines(s: &Session, p: &Value, cmd: &str) -> Result<Lines> {
     let given = p.get("ids").is_some_and(|v| !v.is_null());
-    let roots = checked_ids_or_selection(s, p, CHECK)?;
+    let roots = checked_ids_or_selection(s, p, cmd)?;
     let d = &s.doc()?.doc;
-    // Hidden lines are left out in every scope, members of a selected group included.
     let shown = |ids: Vec<NodeId>| ids.into_iter().filter(|id| d.is_visible(*id)).collect::<Vec<_>>();
-    let (scope, targets) = match (given, roots.is_empty()) {
-        (true, _) => ("ids", shown(role_targets(d, &roots, false).0)),
-        (false, false) => ("selection", shown(role_targets(d, &roots, false).0)),
-        (false, true) => ("document", shown_targets(d)),
-    };
+    Ok(match (given, roots.is_empty()) {
+        (true, _) => lines_of(d, "ids", shown(role_targets(d, &roots, false).0)),
+        (false, false) => lines_of(d, "selection", shown(role_targets(d, &roots, false).0)),
+        (false, true) => document_lines(d),
+    })
+}
+
+/// Every shown fold line of `d`.
+pub(super) fn document_lines(d: &Document) -> Lines {
+    lines_of(d, "document", shown_targets(d))
+}
+
+fn lines_of(d: &Document, scope: &'static str, targets: Vec<NodeId>) -> Lines {
     let table = RoleTable::of(d);
     let mut lines = vec![];
     let mut non_printing = vec![];
@@ -136,12 +157,21 @@ fn check(s: &mut Session, p: &Value) -> Result<Value> {
         segments = segments.saturating_add(path.subpaths.iter().map(|sp| sp.segment_count()).sum());
         lines.push(FoldLine { path, kind: kind(role), key: id.0 });
     }
-    let (found, mut issues) = blanks(&lines, tolerance);
-    if !non_printing.is_empty() {
-        issues.push(vectorcraft_three_d::fold::Issue { code: IssueCode::NonPrinting, keys: non_printing, at: None });
+    Lines { scope, lines, non_printing }
+}
+
+/// The blanks `lines` make and their issues, the non-printing one last.
+pub(super) fn found(lines: &Lines, tolerance: f64) -> (Vec<Blank>, Vec<Issue>) {
+    let (found, mut issues) = blanks(&lines.lines, tolerance);
+    if !lines.non_printing.is_empty() {
+        issues.push(Issue { code: IssueCode::NonPrinting, keys: lines.non_printing.clone(), at: None });
     }
-    let ok = !issues.iter().any(|i| i.code.is_error());
-    let rows: Vec<Value> = issues
+    (found, issues)
+}
+
+/// `issues` as the rows `addon.packaging.check` and `addon.packaging.fold` answer with.
+pub(super) fn issue_rows(issues: &[Issue], scope: &str) -> Vec<Value> {
+    issues
         .iter()
         .map(|i| {
             let mut row = json!({
@@ -155,7 +185,18 @@ fn check(s: &mut Session, p: &Value) -> Result<Value> {
             }
             row
         })
-        .collect();
+        .collect()
+}
+
+fn check(s: &mut Session, p: &Value) -> Result<Value> {
+    let select = switch_or(p, "select", false, CHECK)?;
+    let tolerance = tolerance(p, CHECK)?;
+    let lines = lines(s, p, CHECK)?;
+    let scope = lines.scope;
+    let (found, issues) = found(&lines, tolerance);
+    let d = &s.doc()?.doc;
+    let ok = !issues.iter().any(|i| i.code.is_error());
+    let rows = issue_rows(&issues, scope);
     if select {
         let mut ids: Vec<NodeId> = issues.iter().flat_map(|i| i.keys.iter().map(|k| NodeId(*k))).filter(|id| d.node(*id).is_some()).collect();
         ids.sort_unstable_by_key(|id| id.0);
