@@ -3144,6 +3144,29 @@ mark-style	Japanese	일본식
 	The unit for East Asian type measurements, which no field uses yet.	동아시아 문자 측정에 쓰는 단위로, 아직 이 단위를 쓰는 필드는 없습니다.
 	When on, a number typed without a unit into a field in picas is read in points.	켜면 파이카 필드에 단위 없이 입력한 숫자를 포인트로 읽습니다.
 	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	XML ID를 고르면 레이어, 변수, 레이어 옵션에서 개체 이름이 XML ID로 표시됩니다.
+	The step for type size and leading: Cmd/Ctrl+Shift+. and Cmd/Ctrl+Shift+, change the size by one step, or five with Alt too; in horizontal type, Alt with the Up or Down Arrow changes the leading by one step, or five with Cmd/Ctrl.	문자 크기와 행간의 단계입니다. Cmd/Ctrl+Shift+. 와 Cmd/Ctrl+Shift+, 는 크기를 한 단계, Alt도 누르면 다섯 단계 바꿉니다. 가로 문자에서 Alt와 위쪽 또는 아래쪽 화살표는 행간을 한 단계, Cmd/Ctrl도 누르면 다섯 단계 바꿉니다.
+	The step for tracking and kerning, in thousandths of an em: in horizontal type, Alt with the Left or Right Arrow changes the kerning at the caret or the tracking of the selected text by one step, or five with Cmd/Ctrl.	자간과 커닝의 단계로, 단위는 1/1000 em입니다. 가로 문자에서 Alt와 왼쪽 또는 오른쪽 화살표는 캐럿 위치의 커닝이나 선택한 텍스트의 자간을 한 단계, Cmd/Ctrl도 누르면 다섯 단계 바꿉니다.
+	The step for baseline shift: in horizontal type, Alt and Shift with the Up or Down Arrow move the baseline by one step, or five with Cmd/Ctrl.	기준선 이동의 단계입니다. 가로 문자에서 Alt, Shift와 위쪽 또는 아래쪽 화살표는 기준선을 한 단계, Cmd/Ctrl도 누르면 다섯 단계 옮깁니다.
+	Shows the options for Japanese and other East Asian type in the Character, Paragraph, OpenType and Glyphs panels, and Type › Composite Fonts.	문자, 단락, OpenType, 글리프 패널에 일본어 등 동아시아 문자의 옵션을 표시하고 합성 글꼴 명령도 표시합니다.
+	Shows the options for Arabic, Hebrew and Indic type in the Character and Paragraph panels, such as paragraph direction, kashidas and digits.	문자 패널과 단락 패널에 단락 방향, 카시다, 숫자 등 아랍어, 히브리어, 인도계 문자의 옵션을 표시합니다.
+	The selection tools select type only on its baseline, its area's frame or its path, not anywhere inside its box.	선택 도구는 문자를 기준선, 영역 문자의 프레임 또는 패스에서만 선택하며 상자 안의 아무 곳에서나 선택하지 않습니다.
+	Font menus list each font by its English name; off, a font that also has a name in its own language shows that name.	글꼴 메뉴에 각 글꼴을 영어 이름으로 표시합니다. 끄면 자국어 이름도 있는 글꼴은 그 이름으로 표시됩니다.
+	New area type starts with Auto Size on, so a rectangular frame of horizontal type grows or shrinks in height to fit its text.	새 영역 문자는 자동 크기가 켜진 상태로 시작하므로 가로 문자의 직사각형 프레임이 텍스트에 맞게 높이가 늘거나 줄어듭니다.
+	Font lists and the Type › Font menu show a sample of each font beside its name.	글꼴 목록과 글꼴 메뉴에 각 글꼴 이름 옆에 그 글꼴의 견본을 표시합니다.
+	Font samples are drawn in dark type on white, whatever the interface's brightness; it applies only while in-menu font previews are on.	글꼴 견본을 인터페이스 밝기와 관계없이 흰 바탕에 어두운 글자로 그립니다. 메뉴의 글꼴 미리 보기가 켜져 있을 때만 적용됩니다.
+	How tall each row is in the font lists of font fields, such as the Character panel's, and so how large each sample is.	문자 패널 같은 글꼴 필드의 목록에서 각 행의 높이이며, 따라서 각 견본의 크기입니다.
+	How many of the fonts used last, from 1 to 15, Type › Recent Fonts and the font lists show, newest first.	최근 글꼴과 글꼴 목록에 마지막으로 사용한 글꼴을 최신순으로 몇 개 표시할지입니다(1~15).
+	When you change the font or font style of text, characters the new font has no glyph for keep the font they had.	텍스트의 글꼴이나 글꼴 스타일을 바꿀 때 새 글꼴에 글리프가 없는 문자는 원래 글꼴을 유지합니다.
+	A pink highlight on the canvas marks glyphs that OpenType features replaced, such as ligatures; it does not print or export.	OpenType 기능이 대체한 합자 등의 글리프를 캔버스에서 분홍색 강조로 표시합니다. 인쇄나 내보내기에는 포함되지 않습니다.
+	With the Type tool, selecting one character shows a row of its alternate glyphs beside it on the canvas to choose from.	문자 도구로 한 글자를 선택하면 캔버스에서 그 옆에 고를 수 있는 대체 글리프 줄이 표시됩니다.
+	A pink highlight on the canvas marks text drawn in a substitute font because its font is missing; it does not print or export.	글꼴이 없어 대체 글꼴로 그려진 텍스트를 캔버스에서 분홍색 강조로 표시합니다. 인쇄나 내보내기에는 포함되지 않습니다.
+	New type made with a Type tool starts with placeholder text, selected, so typing replaces it.	문자 도구로 만든 새 문자는 선택된 자리 표시자 텍스트로 시작하며, 입력하면 그 텍스트가 바뀝니다.
+	Typing a list marker such as 1. or * and then a space at the start of a paragraph makes the paragraph a list.	단락 시작에서 1. 또는 * 같은 목록 기호와 공백을 입력하면 그 단락이 목록이 됩니다.
+	Fonts in this folder show in the font menus and can be used without being installed.	이 폴더의 글꼴은 글꼴 메뉴에 표시되며 설치하지 않고 사용할 수 있습니다.
+	Applying a graphic style to type removes the characters' own fill or stroke where the style has one, so the style's paint shows.	문자에 그래픽 스타일을 적용하면 스타일에 칠이나 선이 있는 곳에서 문자 자체의 칠이나 선이 제거되어 스타일의 페인트가 보입니다.
+	Align and Distribute measure point type by the ink of its glyphs instead of its em box.	정렬과 분포는 포인트 문자를 em 상자 대신 글리프의 잉크로 측정합니다.
+	Align and Distribute measure area type by the ink of its glyphs instead of its frame.	정렬과 분포는 영역 문자를 프레임 대신 글리프의 잉크로 측정합니다.
+	The bounding box and the Transform panel measure point type by the ink of its glyphs instead of its em box.	테두리 상자와 변형 패널은 포인트 문자를 em 상자 대신 글리프의 잉크로 측정합니다.
 	Snaps drawing, moving and scaling to the grid's subdivisions, even while the grid is hidden; while it is on, Snap to Pixel does not apply.	격자가 숨겨져 있어도 그리기, 이동, 크기 조절을 격자의 세분 위치에 스냅합니다. 켜져 있는 동안에는 픽셀에 스냅이 적용되지 않습니다.
 	The color of guides that are not selected; an artboard with a Guide Label draws its own guides in the label's color instead.	선택되지 않은 안내선의 색상입니다. 안내선 레이블이 있는 아트보드는 자신의 안내선을 레이블 색상으로 그립니다.
 	Draws guides as solid lines or as dots, including the guides already in the document.	문서에 이미 있는 안내선을 포함해 안내선을 실선 또는 점으로 그립니다.

@@ -3029,6 +3029,29 @@ digits	Malayalam	马拉雅拉姆数字
 	The unit for East Asian type measurements, which no field uses yet.	用于东亚文字度量的单位，目前还没有字段使用。
 	When on, a number typed without a unit into a field in picas is read in points.	开启后，在以派卡为单位的字段中输入的不带单位的数字按点读取。
 	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	选择 XML ID 时，图层、变量和图层选项中的对象名称显示为 XML ID。
+	The step for type size and leading: Cmd/Ctrl+Shift+. and Cmd/Ctrl+Shift+, change the size by one step, or five with Alt too; in horizontal type, Alt with the Up or Down Arrow changes the leading by one step, or five with Cmd/Ctrl.	文字大小和行距的步长：Cmd/Ctrl+Shift+. 和 Cmd/Ctrl+Shift+, 将字号改变一步，同时按 Alt 则改变五步；在横排文字中，Alt 加上下箭头将行距改变一步，同时按 Cmd/Ctrl 则改变五步。
+	The step for tracking and kerning, in thousandths of an em: in horizontal type, Alt with the Left or Right Arrow changes the kerning at the caret or the tracking of the selected text by one step, or five with Cmd/Ctrl.	字距调整和字偶间距的步长，单位为千分之一 em：在横排文字中，Alt 加左右箭头将插入点处的字偶间距或所选文字的字距调整改变一步，同时按 Cmd/Ctrl 则改变五步。
+	The step for baseline shift: in horizontal type, Alt and Shift with the Up or Down Arrow move the baseline by one step, or five with Cmd/Ctrl.	基线偏移的步长：在横排文字中，Alt、Shift 加上下箭头将基线移动一步，同时按 Cmd/Ctrl 则移动五步。
+	Shows the options for Japanese and other East Asian type in the Character, Paragraph, OpenType and Glyphs panels, and Type › Composite Fonts.	在字符、段落、OpenType 和字形面板中显示日文及其他东亚文字的选项，并显示复合字体命令。
+	Shows the options for Arabic, Hebrew and Indic type in the Character and Paragraph panels, such as paragraph direction, kashidas and digits.	在字符和段落面板中显示阿拉伯文、希伯来文和印度系文字的选项，例如段落方向、卡希达和数字。
+	The selection tools select type only on its baseline, its area's frame or its path, not anywhere inside its box.	选择工具只在文字的基线、区域文字的框架或其路径上选择文字，而不是在其框内任意位置。
+	Font menus list each font by its English name; off, a font that also has a name in its own language shows that name.	字体菜单以英文名称列出每种字体；关闭时，也有本国语言名称的字体会显示该名称。
+	New area type starts with Auto Size on, so a rectangular frame of horizontal type grows or shrinks in height to fit its text.	新的区域文字开启自动调整大小，因此横排文字的矩形框架会随文字增高或缩短。
+	Font lists and the Type › Font menu show a sample of each font beside its name.	字体列表和字体菜单在每种字体的名称旁显示该字体的样本。
+	Font samples are drawn in dark type on white, whatever the interface's brightness; it applies only while in-menu font previews are on.	无论界面亮度如何，字体样本都以深色文字绘制在白色上；仅在菜单内字体预览开启时生效。
+	How tall each row is in the font lists of font fields, such as the Character panel's, and so how large each sample is.	字体字段（例如字符面板中的字段）列表中每行的高度，也就是每个样本的大小。
+	How many of the fonts used last, from 1 to 15, Type › Recent Fonts and the font lists show, newest first.	最近字体和字体列表显示多少个最近使用的字体（1 到 15），最新的在前。
+	When you change the font or font style of text, characters the new font has no glyph for keep the font they had.	更改文字的字体或字体样式时，新字体中没有字形的字符会保留原来的字体。
+	A pink highlight on the canvas marks glyphs that OpenType features replaced, such as ligatures; it does not print or export.	画布上的粉色高亮标出被 OpenType 功能替换的字形，例如连字；高亮不会打印或导出。
+	With the Type tool, selecting one character shows a row of its alternate glyphs beside it on the canvas to choose from.	使用文字工具选中一个字符时，画布上会在其旁边显示一排可供选择的替代字形。
+	A pink highlight on the canvas marks text drawn in a substitute font because its font is missing; it does not print or export.	画布上的粉色高亮标出因缺少字体而用替代字体绘制的文字；高亮不会打印或导出。
+	New type made with a Type tool starts with placeholder text, selected, so typing replaces it.	用文字工具新建的文字以选中的占位符文字开始，输入的内容会替换它。
+	Typing a list marker such as 1. or * and then a space at the start of a paragraph makes the paragraph a list.	在段落开头输入 1. 或 * 等列表标记再输入空格，该段落会变成列表。
+	Fonts in this folder show in the font menus and can be used without being installed.	此文件夹中的字体会显示在字体菜单中，无需安装即可使用。
+	Applying a graphic style to type removes the characters' own fill or stroke where the style has one, so the style's paint shows.	对文字应用图形样式时，样式有填色或描边的地方会移除字符自身的填色或描边，从而显示样式的颜色。
+	Align and Distribute measure point type by the ink of its glyphs instead of its em box.	对齐和分布按字形的墨迹而不是全角框测量点文字。
+	Align and Distribute measure area type by the ink of its glyphs instead of its frame.	对齐和分布按字形的墨迹而不是框架测量区域文字。
+	The bounding box and the Transform panel measure point type by the ink of its glyphs instead of its em box.	定界框和变换面板按字形的墨迹而不是全角框测量点文字。
 	Snaps drawing, moving and scaling to the grid's subdivisions, even while the grid is hidden; while it is on, Snap to Pixel does not apply.	即使网格已隐藏，绘制、移动和缩放也会对齐到网格的细分；开启期间，“对齐像素”不起作用。
 	The color of guides that are not selected; an artboard with a Guide Label draws its own guides in the label's color instead.	未选中参考线的颜色；设置了参考线标签的画板会用标签颜色绘制自己的参考线。
 	Draws guides as solid lines or as dots, including the guides already in the document.	将参考线绘制为实线或点，包括文档中已有的参考线。
