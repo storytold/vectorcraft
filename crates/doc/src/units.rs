@@ -151,18 +151,31 @@ impl Unit {
     /// Parse `12`, `12pt`, `1in`, `3 mm`, `2p6` (picas+points), `6q` (Q) and `6h` (Ha), simple
     /// `+ - * /` arithmetic.
     ///
+    /// `x`, `X` and `×` multiply as `*` does (`10x2` is 20, `2x3 mm` is 6 mm), except a lowercase
+    /// `x` right after a `p`, which is the `px` suffix (`2px x 3` is 6 px, and `2px3` reads as
+    /// nothing; write `2p x 3` for picas).
+    ///
     /// A unit after a `*` or `/` operand measures the whole expression (`1080/2 px` is 540 px), so
     /// math typed before a field's unit suffix works. After `*` or `/`, a percentage scales the term
     /// before it (`3cm*50%` is 1.5 cm, `3cm/50%` is 6 cm). After `+` or `-`, it adds or takes away
     /// that share of everything before it (`50pt+25%` is 62.5 pt, `100pt+20pt-50%` is 60 pt). A
     /// percentage on its own (`50%`) reads as nothing.
     ///
-    /// Text with more than 128 `+ - * /` signs reads as nothing.
+    /// Text with more than 128 `+ - * /` signs (a multiplication sign counts as `*`) reads as nothing.
     pub fn parse(self, s: &str) -> Option<f64> {
-        if s.chars().filter(|c| matches!(c, '+' | '-' | '*' | '/')).count() > MAX_MEASURE_OPERATORS {
+        let mut prev = None;
+        let operators = s
+            .chars()
+            .filter(|&c| {
+                let operator = matches!(c, '+' | '-' | '*' | '/') || is_times(c, prev);
+                prev = Some(c);
+                operator
+            })
+            .count();
+        if operators > MAX_MEASURE_OPERATORS {
             return None;
         }
-        parse_measure(s, self).filter(|v| v.is_finite())
+        parse_measure(&times_as_asterisks(s), self).filter(|v| v.is_finite())
     }
     /// The value naming this unit in the Units preferences (`points`, `millimeters`,
     /// `feetInches`).
@@ -214,6 +227,33 @@ impl Unit {
 
 /// The most `+ - * /` signs [`Unit::parse`] reads in one text.
 const MAX_MEASURE_OPERATORS: usize = 128;
+
+/// Is `c`, after `prev`, a multiplication sign typed as `x`, `X` or `×`? A lowercase `x` right
+/// after a `p` is the `px` suffix (`2px x 3`), also where a number follows it (`2px3`).
+fn is_times(c: char, prev: Option<char>) -> bool {
+    matches!(c, 'X' | '×') || (c == 'x' && prev != Some('p'))
+}
+
+/// `s` with each multiplication sign ([`is_times`]) written as `*` (`10 x 2` is `10 * 2`); text
+/// without one is not copied.
+fn times_as_asterisks(s: &str) -> std::borrow::Cow<'_, str> {
+    let mut prev = None;
+    let any = s.chars().any(|c| {
+        let times = is_times(c, prev);
+        prev = Some(c);
+        times
+    });
+    if !any {
+        return s.into();
+    }
+    let mut out = String::with_capacity(s.len());
+    let mut prev = None;
+    for c in s.chars() {
+        out.push(if is_times(c, prev) { '*' } else { c });
+        prev = Some(c);
+    }
+    out.into()
+}
 
 fn parse_measure(s: &str, default: Unit) -> Option<f64> {
     let s = s.trim();
@@ -317,9 +357,10 @@ fn percent(s: &str) -> Option<f64> {
 }
 
 /// A unitless field value (percent, degrees, counts) with the same `+ - * /` arithmetic as
-/// [`Unit::parse`] (`45*2`, `100/3`); text other than digits, `.` and operators reads as nothing.
+/// [`Unit::parse`] (`45*2`, `45x2`, `100/3`); text other than digits, `.` and operators reads as
+/// nothing.
 pub fn parse_number(s: &str) -> Option<f64> {
-    if !s.chars().all(|c| c.is_ascii_digit() || " .+-*/".contains(c)) {
+    if !s.chars().all(|c| c.is_ascii_digit() || " .+-*/xX×".contains(c)) {
         return None;
     }
     // A leading `+` is a sign (`+5`), as a plain number read it.
