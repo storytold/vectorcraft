@@ -40,7 +40,8 @@ struct Changes {
 ///   ([`release_clip`]), so no other member becomes its clipping path. The clipping path the edit
 ///   moved loses the mark, unless it is the clipping path of the clip it went into.
 /// - When the edit put new art in the clipping path's place (an object it made of the clipping
-///   path), that art is the clipping path.
+///   path, such as type's outlines), that art is the clipping path. When it made members of the
+///   clipping path's parts (a compound path released), the bottom one is, wherever it is.
 /// - A layer or group that starts clipping in the edit (Make Clipping Mask) keeps the clipping path
 ///   it was made with, and its other members lose the mark.
 /// - In a layer or group that doesn't clip, an object the edit put there loses the mark: a copy of
@@ -126,6 +127,18 @@ fn outcome(was: Option<&Node>, now: &Node, doc: &Document) -> Option<Outcome> {
     }
     // Deleted, unless new art took its place.
     let had = |id: NodeId| was.children().is_some_and(|w| w.iter().any(|o| o.id == id));
+    // Its parts, members of their own now (a compound path released): the bottom one, wherever
+    // the edit put it among the others, which other objects released with it may have moved.
+    let mut parts = std::collections::HashSet::new();
+    if let Some(old) = was.children().and_then(|w| w.get(k)) {
+        old.walk(&mut |n| {
+            parts.insert(n.id);
+        });
+        parts.remove(&old.id);
+    }
+    if let Some(i) = children.iter().position(|c| !had(c.id) && parts.contains(&c.id)) {
+        return Some(Outcome::Keep(i));
+    }
     Some(match children.get(k) {
         Some(c) if !had(c.id) => Outcome::Keep(k),
         _ => Outcome::Release(None),

@@ -854,3 +854,82 @@ fn drawing_inside_a_clipping_path_leaves_its_copy_the_one_clipping_path() {
     assert_eq!(marked, [members[1]], "its copy over it, alone");
     assert_eq!(clips_by(&s, inner), Some(members[1]));
 }
+
+/// A compound clipping path released with another compound path of its clip in one command: the
+/// bottom path of the clipping path clips, as it does released alone, wherever the other release
+/// put it.
+#[test]
+fn a_compound_clipping_path_released_with_another_keeps_its_bottom_path_clipping() {
+    let mut s = session();
+    let art = id_of(&s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 100, "height": 100})).unwrap());
+    let (b1, b2) = (ellipse(&mut s, 2.0, 10.0), ellipse(&mut s, 14.0, 10.0));
+    select(&mut s, &[b1, b2]);
+    let b = id_of(&s.execute("object.compoundPath.make", &json!({})).unwrap());
+    let m1 = id_of(&s.execute("shape.ellipse", &json!({"x": 30, "y": 30, "width": 30, "height": 30})).unwrap());
+    let m2 = id_of(&s.execute("shape.ellipse", &json!({"x": 65, "y": 30, "width": 30, "height": 30})).unwrap());
+    select(&mut s, &[m1, m2]);
+    let m = id_of(&s.execute("object.compoundPath.make", &json!({})).unwrap());
+    select(&mut s, &[art, b, m]);
+    let g = id_of(&s.execute("object.clippingMask.make", &json!({})).unwrap());
+    assert_eq!(clips_by(&s, g), Some(m));
+    select(&mut s, &[b, m]);
+    s.execute("object.compoundPath.release", &json!({})).unwrap();
+    assert_eq!(child_ids(&s, g), [art, b1, b2, m1, m2]);
+    assert_eq!(clips_by(&s, g), Some(m1), "the clipping path's bottom path");
+    assert!(s.doc().unwrap().doc.node(m1).unwrap().is_clipping_path());
+}
+
+/// Type on top as the clipping path, made into outlines: the outlines take its place and clip.
+#[test]
+fn type_outlines_take_the_types_place_as_the_clipping_path() {
+    let mut s = session();
+    let art = id_of(&s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 100, "height": 100})).unwrap());
+    let t = id_of(&s.execute("text.create", &json!({"x": 5, "y": 80, "text": "O", "size": 90})).unwrap());
+    let b = s.doc().unwrap().doc.node(t).unwrap().geometric_bounds().unwrap();
+    select(&mut s, &[art, t]);
+    let g = id_of(&s.execute("object.clippingMask.make", &json!({})).unwrap());
+    select(&mut s, &[t]);
+    let outlines = NodeId(s.execute("type.createOutlines", &json!({})).unwrap()["ids"][0].as_u64().unwrap());
+    assert_eq!(clips_by(&s, g), Some(outlines));
+    let cy = ((b.y0 + b.y1) / 2.0) as u32;
+    let r = render(&s);
+    assert!((b.x0 as u32..b.x1 as u32).any(|x| opaque(&r, x, cy)), "the ring shows the art");
+    assert!(!opaque(&r, (b.x1 + 4.0) as u32, cy), "beside the type, the art is clipped away");
+}
+
+/// A blend of two clip groups, each a square clipped by a circle on top (one with its circle moved
+/// to the bottom): the step between clips its square by its circle, on the canvas and expanded,
+/// where the circle is on top, marked.
+#[test]
+fn a_blend_of_two_clip_groups_clips_each_step_by_its_clipping_path() {
+    for moved in [false, true] {
+        let mut s = session();
+        let clip = |s: &mut Session, x: f64| {
+            let sq = id_of(&s.execute("shape.rectangle", &json!({"x": x, "y": 0, "width": 30, "height": 30})).unwrap());
+            let c = id_of(&s.execute("shape.ellipse", &json!({"x": x + 5.0, "y": 5, "width": 20, "height": 20})).unwrap());
+            select(s, &[sq, c]);
+            (id_of(&s.execute("object.clippingMask.make", &json!({})).unwrap()), c)
+        };
+        let (a, circle) = clip(&mut s, 0.0);
+        let (b, _) = clip(&mut s, 70.0);
+        if moved {
+            s.execute("node.move", &json!({"id": circle.0, "parent": a.0, "index": 0})).unwrap();
+            assert_eq!(clips_by(&s, a), Some(circle));
+        }
+        select(&mut s, &[a, b]);
+        let blend = id_of(&s.execute("object.blend.make", &json!({"steps": 1})).unwrap());
+        let r = render(&s);
+        assert!(opaque(&r, 50, 15), "moved {moved}: inside the step's circle");
+        assert!(!opaque(&r, 37, 2), "moved {moved}: the step's square is clipped by its circle");
+        select(&mut s, &[blend]);
+        let expanded = NodeId(s.execute("object.blend.expand", &json!({})).unwrap()["ids"][0].as_u64().unwrap());
+        let d = &s.doc().unwrap().doc;
+        let steps: Vec<_> = d.node(expanded).unwrap().children().unwrap().to_vec();
+        assert_eq!(steps.len(), 3, "moved {moved}");
+        let step = &steps[1];
+        let last = step.children().unwrap().len() - 1;
+        assert_eq!(step.clipping_path_index(), Some(last), "moved {moved}: on top");
+        let path = step.clipping_path().unwrap();
+        assert!(path.is_clipping_path() && path.geometric_bounds().unwrap().width() < 25.0, "moved {moved}: the circle, marked");
+    }
+}
