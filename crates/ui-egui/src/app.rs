@@ -89,6 +89,7 @@ impl VectorcraftApp {
                 selection_box: None,
                 selection_bounds: None,
                 content_bounds: None,
+                pixel_aligned: None,
                 plugin_keys: Default::default(),
                 placed_keys: Default::default(),
                 cursors: Default::default(),
@@ -181,6 +182,8 @@ impl VectorcraftApp {
             automation_roots: None,
             synthetic_frame: false,
             pending_plugin_install: None,
+            script_picked: Vec::new(),
+            script_picked_left_out: false,
             pen_end: Default::default(),
             host_iteration: 0,
             #[cfg(test)]
@@ -353,8 +356,13 @@ impl VectorcraftApp {
         // A panel's, a dialog's or the text input's commit journaled in the frame before.
         crate::panels::actions::after_journaled_edit(self);
         crate::scripts_menu::poll(self, ctx);
-        if self.session.script_running() && !self.session.script_waiting() && self.session.script_dialog().is_none() {
-            // A script in `$.sleep` goes on when its time is up; until then the app can idle.
+        if self.session.script_running()
+            && !self.session.script_waiting()
+            && self.session.script_dialog().is_none()
+            && self.session.script_picker().is_none()
+        {
+            // A script in `$.sleep` goes on when its time is up; until then the app can idle. A
+            // script at a file dialog goes on when the dialog answers, and `picks::poll` looks for that.
             match self.session.script_sleep_left() {
                 Some(left) => ctx.request_repaint_after(left),
                 None => ctx.request_repaint(),
@@ -600,10 +608,6 @@ impl VectorcraftApp {
         }
         if self.ui.toolbar && self.ui.screen_mode < 3 {
             tools_float::set_window_dock_zone(&ctx, ui.available_rect_before_wrap());
-        }
-        if !self.ui.tools_beside_canvas {
-            // A canvas-edge target left from before the setting was turned off docks nothing.
-            tools_float::clear_canvas_dock_zone(&ctx);
         }
         // Beside the canvas, docked Tools draws inside the canvas panel (`toolbar::show_beside_canvas`).
         // So does Tools docked on the right, left of the panels.

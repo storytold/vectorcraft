@@ -2524,6 +2524,59 @@ fn flare_options_alt_turns_cancel_into_reset() {
     );
 }
 
+/// While Alt is held, Save PDF's Cancel button reads Reset; Reset puts the chosen preset's settings
+/// back and leaves the dialog open with its path, letting Alt go shows Cancel again, and Cancel
+/// closes the dialog.
+#[test]
+fn save_pdf_alt_turns_cancel_into_reset() {
+    let mut app = app();
+    app.run("ui.savePdfDialog", json!({"path": "/tmp/alt.pdf"})).unwrap();
+    app.ui.dialog.as_mut().unwrap().fields.insert("compatibility".into(), json!("1.4"));
+    let mut f = Frames::new();
+    f.button(&mut app, "Cancel");
+    f.run(&mut app, vec![egui::Event::ModifiersChanged(egui::Modifiers::ALT)]);
+    let reset = f.button(&mut app, "Reset");
+    let texts = f.texts(&mut app);
+    assert!(!texts.iter().any(|(t, _)| t == "Cancel"), "Reset takes Cancel's place: {texts:?}");
+    f.press(&mut app, reset, true);
+    f.press(&mut app, reset, false);
+    let d = app.ui.dialog.as_ref().expect("Reset leaves the dialog open");
+    assert_eq!((d.str("compatibility"), d.str("path")), ("1.7".to_string(), "/tmp/alt.pdf".to_string()));
+    f.run(&mut app, vec![egui::Event::ModifiersChanged(egui::Modifiers::NONE)]);
+    let cancel = f.button(&mut app, "Cancel");
+    f.press(&mut app, cancel, true);
+    f.press(&mut app, cancel, false);
+    assert!(app.ui.dialog.is_none(), "Cancel closes the dialog");
+}
+
+/// While Alt is held, Save for Web's Cancel button reads Reset; Reset puts the remembered settings
+/// back without remembering anything and leaves the dialog open, and letting Alt go shows Cancel again.
+#[test]
+fn save_for_web_alt_turns_cancel_into_reset() {
+    let mut app = app();
+    app.run("webExport.settings", json!({"format": "jpg", "quality": 70})).unwrap();
+    let remembered = app.session.last_web_settings().to_json();
+    app.run("file.saveForWeb", json!({})).unwrap();
+    let d = app.ui.dialog.as_mut().unwrap();
+    for (k, v) in [("format", json!("png8")), ("quality", json!(20)), ("colors", json!(16)), ("__view", json!("optimized"))] {
+        d.fields.insert(k.into(), v);
+    }
+    let mut f = Frames::new();
+    f.button(&mut app, "Cancel");
+    f.run(&mut app, vec![egui::Event::ModifiersChanged(egui::Modifiers::ALT)]);
+    let reset = f.button(&mut app, "Reset");
+    let texts = f.texts(&mut app);
+    assert!(!texts.iter().any(|(t, _)| t == "Cancel"), "Reset takes Cancel's place: {texts:?}");
+    f.press(&mut app, reset, true);
+    f.press(&mut app, reset, false);
+    let d = app.ui.dialog.as_ref().expect("Reset leaves the dialog open");
+    assert_eq!((d.str("format"), d.f64("quality", 0.0), d.f64("colors", 0.0)), ("jpg".into(), 70.0, 128.0));
+    assert_eq!(d.str("__view"), "optimized", "the view stays");
+    assert_eq!(app.session.last_web_settings().to_json(), remembered, "Reset remembers nothing");
+    f.run(&mut app, vec![egui::Event::ModifiersChanged(egui::Modifiers::NONE)]);
+    f.button(&mut app, "Cancel");
+}
+
 /// Reset Actions' question: OK replaces the action sets with the built-in set, Append adds the
 /// built-in set after them, and Cancel or Escape (`cancel`) leaves them as they are.
 #[test]
@@ -3600,4 +3653,95 @@ fn color_halftones_max_radius_stays_in_pixels_whatever_the_units() {
         let shows = out.shapes.iter().any(|s| matches!(&s.shape, egui::Shape::Text(t) if t.galley.text().trim() == shown));
         assert!(shows, "{typed} shows as {shown}, not in centimetres");
     }
+}
+
+/// The resolution fields of Flatten Transparency, Document Raster Effects Settings, Effect ›
+/// Rasterize, the PNG options and the PDF save dialog's Compression section show their unit in the interface
+/// language (French "ppp"), as the `{n} ppi` row writes it.
+#[test]
+fn resolution_fields_show_the_ppi_unit_in_the_interface_language() {
+    fn texts(s: &egui::Shape, out: &mut Vec<String>) {
+        match s {
+            egui::Shape::Text(t) => out.push(t.galley.text().to_string()),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| texts(s, out)),
+            _ => {}
+        }
+    }
+    fn shown(app: &mut VectorcraftApp) -> Vec<String> {
+        let ctx = egui::Context::default();
+        theme::install_fonts(&ctx);
+        theme::apply(&ctx, Default::default());
+        let raw =
+            || egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400.0, 1000.0))), ..Default::default() };
+        // A window is measured in its first frame and drawn from the second.
+        ctx.run_ui(raw(), |ui| show(app, ui.ctx())).textures_delta.clear();
+        let mut out = ctx.run_ui(raw(), |ui| show(app, ui.ctx()));
+        out.textures_delta.clear();
+        let mut all = vec![];
+        out.shapes.iter().for_each(|s| texts(&s.shape, &mut all));
+        all
+    }
+    type Open = fn(&mut VectorcraftApp);
+    let dialogs: [(&str, Open, &str); 5] = [
+        (
+            "Flatten Transparency",
+            |app| {
+                app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
+                app.run("transparency.set", json!({"opacity": 50})).unwrap();
+                app.run("ui.flattenTransparencyDialog", json!({})).unwrap();
+            },
+            "ppp",
+        ),
+        (
+            "Document Raster Effects Settings",
+            |app| {
+                crate::menus::invoke(app, "document.rasterEffectsSettings", json!({}));
+                app.ui.dialog.as_mut().unwrap().fields.insert("resolution".into(), json!(200));
+            },
+            "200 ppp",
+        ),
+        (
+            "Rasterize",
+            |app| {
+                app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
+                crate::menus::invoke(app, "effect.dialog", json!({"effect": "rasterize"}));
+                let d = app.ui.dialog.as_mut().unwrap();
+                d.fields.insert("useDocumentResolution".into(), json!(false));
+                d.fields.insert("resolution".into(), json!(200));
+            },
+            "200 ppp",
+        ),
+        (
+            "PNG Options",
+            |app| {
+                png_options::open(app, vectorcraft_engine::cmd::fileio::format("png").unwrap(), json!({"format": "png", "path": "/out/a.png"}));
+                let d = app.ui.dialog.as_mut().unwrap();
+                d.fields.insert("ppi".into(), json!(200));
+                d.fields.insert("__otherPpi".into(), json!(true));
+            },
+            "200 ppp",
+        ),
+        (
+            "Save PDF",
+            |app| {
+                app.run("ui.savePdfDialog", json!({"path": "/tmp/ppi.pdf"})).unwrap();
+                app.ui.dialog.as_mut().unwrap().fields.insert("__section".into(), json!("Compression"));
+            },
+            " ppp",
+        ),
+    ];
+    let mut bad = vec![];
+    for (name, open, want) in dialogs {
+        let mut app = app();
+        open(&mut app);
+        crate::i18n::set_current(crate::i18n::Lang::from_code("fr").unwrap());
+        let texts = shown(&mut app);
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        let translated = texts.iter().any(|t| t.trim() == want.trim() || (want.starts_with(' ') && t.ends_with(want)));
+        let english = texts.iter().any(|t| t.trim() == "ppi" || t.ends_with(" ppi"));
+        if !translated || english {
+            bad.push(format!("{name}: {texts:?}"));
+        }
+    }
+    assert!(bad.is_empty(), "{}", bad.join("\n"));
 }

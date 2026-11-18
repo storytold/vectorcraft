@@ -21,6 +21,7 @@ mod pen;
 mod persp;
 mod place;
 mod protocol;
+mod shapewidgets;
 mod svg;
 
 fn server() -> Server {
@@ -1555,6 +1556,30 @@ fn headless_backend_methods() {
         let selected = h.call("ui.tool.select", json!({"tool": tool.id})).unwrap();
         assert_eq!(selected["tool"], tool.id);
     }
+    // The Trim at Crossings Tool is listed once, in the Scissors tool's group after the Knife.
+    let trim = vectorcraft_tools::addons::trim::ID;
+    let with_trim: Vec<_> =
+        groups.iter().map(|group| group.as_array().unwrap()).filter(|group| group.iter().any(|entry| entry["id"] == trim)).collect();
+    assert_eq!(with_trim.len(), 1, "{trim} is in one group");
+    let ids: Vec<_> = with_trim[0].iter().map(|entry| entry["id"].clone()).collect();
+    let knife = ids.iter().position(|id| *id == "knife").expect("the Knife in the same group");
+    assert!(ids.contains(&json!("scissors")), "the Scissors tool's group: {ids:?}");
+    assert_eq!(ids.get(knife + 1), Some(&json!(trim)));
+    assert_eq!(ids.iter().filter(|id| **id == trim).count(), 1);
+    let entry = with_trim[0].iter().find(|entry| entry["id"] == trim).unwrap();
+    assert_eq!(entry["label"], "Trim at Crossings Tool");
+    assert!(entry["shortcut"].is_null());
+    assert_eq!(h.call("ui.tool.select", json!({"tool": trim})).unwrap()["tool"], trim);
+    // The Enclosing Lasso Tool is listed once, in the Lasso tool's group after the Lasso.
+    let enclosing = vectorcraft_tools::addons::enclosing_lasso::ID;
+    let with_enclosing: Vec<_> =
+        groups.iter().map(|group| group.as_array().unwrap()).filter(|group| group.iter().any(|entry| entry["id"] == enclosing)).collect();
+    assert_eq!(with_enclosing.len(), 1, "{enclosing} is in one group");
+    let ids: Vec<_> = with_enclosing[0].iter().map(|entry| entry["id"].clone()).collect();
+    assert_eq!(ids, [json!("lasso"), json!(enclosing)]);
+    assert_eq!(with_enclosing[0][1]["label"], "Enclosing Lasso Tool");
+    assert!(with_enclosing[0][1]["shortcut"].is_null());
+    assert_eq!(h.call("ui.tool.select", json!({"tool": enclosing})).unwrap()["tool"], enclosing);
     let polygonal = groups.iter().flat_map(|group| group.as_array().unwrap()).find(|entry| entry["id"] == "polygonalLasso");
     assert_eq!(polygonal.map(|entry| entry["label"].clone()), Some(json!("Polygonal Lasso Tool")));
     assert!(h.call("ui.resize", json!({})).is_err());
@@ -1867,6 +1892,30 @@ fn e_during_a_marquee_gesture_selects_only_the_objects_inside() {
     assert_eq!(serde_json::from_str::<Value>(&text_of(&r)).unwrap()["selection"], json!([a]), "{r}");
     let r = call(&mut s, 6, "press_key", json!({"key": "e"}));
     assert_eq!(serde_json::from_str::<Value>(&text_of(&r)).unwrap()["handledBy"], "tool.select", "{r}");
+}
+
+/// `run_command tool.selectLastSelection` headless: the Selection tool before any selection tool
+/// is chosen, then the selection tool chosen last; Magic Wand doesn't count. `list_commands`
+/// lists it as a command the headless backend runs.
+#[test]
+fn select_last_selection_tool_runs_headless() {
+    let mut s = server();
+    let mut id = 0;
+    let mut run = |s: &mut Server, command: &str, params: Value| {
+        id += 1;
+        let r = call(s, id, "run_command", json!({"command": command, "params": params}));
+        assert_eq!(r["isError"], false, "{command}: {r}");
+        serde_json::from_str::<Value>(&text_of(&r)).unwrap()
+    };
+    run(&mut s, "tool.select", json!({"tool": "pen"}));
+    assert_eq!(run(&mut s, "tool.selectLastSelection", json!({})), json!({"tool": "selection"}));
+    run(&mut s, "tool.select", json!({"tool": "groupSelection"}));
+    run(&mut s, "tool.select", json!({"tool": "magicWand"}));
+    assert_eq!(run(&mut s, "tool.selectLastSelection", json!({})), json!({"tool": "groupSelection"}));
+    let r = call(&mut s, 99, "list_commands", json!({"filter": "selectLastSelection"}));
+    let v: Value = serde_json::from_str(&text_of(&r)).unwrap();
+    let listed = v["commands"].as_array().unwrap().iter().find(|c| c["id"] == "tool.selectLastSelection").cloned().unwrap_or_default();
+    assert_eq!((listed["host"].clone(), listed["label"].clone()), (json!(true), json!("Select Last Selection Tool")), "{v}");
 }
 
 /// `press_key {key: "c"}` and `{key: "f"}` while an arc is being dragged go to the Arc tool, and
