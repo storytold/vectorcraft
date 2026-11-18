@@ -7905,6 +7905,7 @@ imageTrace	Outline	Kontur
 @msg	onto must name a panel floating in another group	onto skal angive et panel, der flyder i en anden gruppe
 @msg	below and above must name a panel floating in another group	below og above skal angive et panel, der flyder i en anden gruppe
 @msg	give only one of onto, below and above	angiv kun én af onto, below og above
+@msg	give only one of `index`, `indices` and `t`	angiv kun én af `index`, `indices` og `t`
 @msg	column must be true or a number from 1	column skal være true eller et tal fra 1
 @msg	x and y must both be numbers	x og y skal begge være tal
 @msg	"{0}" is not a colour: write it as #rrggbb	"{0}" er ikke en farve: skriv den som #rrggbb

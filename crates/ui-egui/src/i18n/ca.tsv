@@ -6015,6 +6015,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	give corners of the path: anchors where its sides meet at an angle	doneu les cantonades del traçat: punts d’ancoratge on els seus costats es troben en angle
 @msg	give horizontal or vertical	doneu horitzontal o vertical
 @msg	give only one of onto, below and above	doneu només un de onto, below i above
+@msg	give only one of `index`, `indices` and `t`	doneu només un de `index`, `indices` i `t`
 @msg	give the path `id`	doneu l’`id` del traçat
 @msg	give the path `id` and the width point `index`	doneu el `id` del traçat i l’`index` del punt d’amplada
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	L’edició global funciona amb traçats, traçats compostos, instàncies de símbol i grups d’aquests objectes

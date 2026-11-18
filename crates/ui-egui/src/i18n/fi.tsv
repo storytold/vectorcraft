@@ -5700,6 +5700,7 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	onto must name a panel floating in another group	onto-arvon on nimettävä toisessa ryhmässä kelluva paneeli
 @msg	below and above must name a panel floating in another group	below- ja above-arvojen on nimettävä toisessa ryhmässä kelluva paneeli
 @msg	give only one of onto, below and above	anna vain yksi arvoista onto, below ja above
+@msg	give only one of `index`, `indices` and `t`	anna vain yksi arvoista `index`, `indices` ja `t`
 @msg	column must be true or a number from 1	column-arvon on oltava true tai luku 1:stä alkaen
 @msg	x and y must both be numbers	x:n ja y:n on molempien oltava lukuja
 @msg	"{0}" is not a colour: write it as #rrggbb	"{0}" ei ole väri: kirjoita se muodossa #rrggbb

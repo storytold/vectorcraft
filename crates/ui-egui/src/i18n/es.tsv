@@ -5484,6 +5484,7 @@ liquify-list-end	{0}, {1}	{0}, {1}
 @msg	onto must name a panel floating in another group	onto debe nombrar un panel que flote en otro grupo
 @msg	below and above must name a panel floating in another group	below y above deben nombrar un panel que flote en otro grupo
 @msg	give only one of onto, below and above	indica solo uno de onto, below y above
+@msg	give only one of `index`, `indices` and `t`	indica solo uno de `index`, `indices` y `t`
 @msg	column must be true or a number from 1	column debe ser true o un número desde 1
 @msg	x and y must both be numbers	x e y deben ser números
 @msg	"{0}" is not a colour: write it as #rrggbb	"{0}" no es un color: escríbelo como #rrggbb

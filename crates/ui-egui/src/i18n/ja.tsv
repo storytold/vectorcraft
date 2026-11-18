@@ -5273,6 +5273,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	onto must name a panel floating in another group	onto には、別のグループでフローティングしているパネルを指定してください
 @msg	below and above must name a panel floating in another group	below と above には別のグループでフローティングしているパネルを指定してください
 @msg	give only one of onto, below and above	onto、below、above のうち 1 つだけを指定してください
+@msg	give only one of `index`, `indices` and `t`	`index`、`indices`、`t` のうち 1 つだけを指定してください
 @msg	column must be true or a number from 1	column には true または 1 以上の数値を指定してください
 @msg	unknown panel `{raw}`	`{raw}` は不明なパネルです
 @msg	`{panel}` has no display sizes to cycle	`{panel}` には切り替える表示サイズがありません

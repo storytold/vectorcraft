@@ -4783,6 +4783,7 @@ axis	Both	Ambos
 @msg	onto must name a panel floating in another group	onto deve nomear um painel flutuante em outro grupo
 @msg	below and above must name a panel floating in another group	below e above devem nomear um painel flutuante em outro grupo
 @msg	give only one of onto, below and above	informe apenas um entre onto, below e above
+@msg	give only one of `index`, `indices` and `t`	informe apenas um entre `index`, `indices` e `t`
 @msg	column must be true or a number from 1	column deve ser true ou um número a partir de 1
 @msg	x and y must both be numbers	x e y devem ser números
 @msg	"{0}" is not a colour: write it as #rrggbb	"{0}" não é uma cor: escreva-a como #rrggbb

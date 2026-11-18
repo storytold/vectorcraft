@@ -7305,6 +7305,7 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	give one of assets, layers, selection or fullDocument	assets, layers, selection या fullDocument में से एक दें
 @msg	give only one of onto, above, below, icon and a column place	केवल ऊपर, नीचे, आइकन और एक स्तंभ स्थान देने के लिए
 @msg	give only one of onto, below and above	नीचे और ऊपर केवल एक देना
+@msg	give only one of `index`, `indices` and `t`	`index`, `indices` और `t` में से केवल एक दें
 @msg	give origin: [x, y], or reset: true	origin: [x, y] दें, या reset: true
 @msg	give overprintFill, overprintStroke, showCenter, imageMap, url or note	overprintFill, overprintStroke, showCenter, imageMap, url या नोट
 @msg	give path (a file) or folder	पाथ (एक फ़ाइल) या फ़ोल्डर देना

@@ -7256,6 +7256,7 @@ font-technology	Variable	ცვლადი
 @msg	onto must name a panel floating in another group	onto უნდა ასახელებდეს სხვა ჯგუფში მცურავ პანელს
 @msg	below and above must name a panel floating in another group	below და above უნდა ასახელებდეს სხვა ჯგუფში მცურავ პანელს
 @msg	give only one of onto, below and above	მიუთითეთ მხოლოდ ერთი: onto, below ან above
+@msg	give only one of `index`, `indices` and `t`	მიუთითეთ მხოლოდ ერთი: `index`, `indices` ან `t`
 @msg	column must be true or a number from 1	column უნდა იყოს true ან რიცხვი 1-დან
 @msg	x and y must both be numbers	x და y ორივე რიცხვი უნდა იყოს
 @msg	"{0}" is not a colour: write it as #rrggbb	"{0}" ფერი არ არის: ჩაწერეთ #rrggbb სახით

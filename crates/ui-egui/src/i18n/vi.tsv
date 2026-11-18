@@ -5259,6 +5259,7 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	give corners of the path: anchors where its sides meet at an angle	hãy cung cấp các góc của đường dẫn: điểm neo nơi các cạnh gặp nhau tạo góc
 @msg	give horizontal or vertical	hãy chọn ngang hoặc dọc
 @msg	give only one of onto, below and above	chỉ cung cấp một trong onto, below và above
+@msg	give only one of `index`, `indices` and `t`	chỉ cung cấp một trong `index`, `indices` và `t`
 @msg	give the path `id` and the width point `index`	hãy cung cấp `id` đường dẫn và `index` điểm chiều rộng
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	chuyển sắc “{name}” không được định nghĩa trong tệp: một màu đơn thay thế
 @msg	group must be true or false	group phải là true hoặc false

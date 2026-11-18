@@ -5059,6 +5059,7 @@ axis	Both	И двете
 @msg	onto must name a panel floating in another group	onto трябва да указва панел, плаващ в друга група
 @msg	below and above must name a panel floating in another group	below и above трябва да указват панел, плаващ в друга група
 @msg	give only one of onto, below and above	задайте само едно от onto, below и above
+@msg	give only one of `index`, `indices` and `t`	задайте само едно от `index`, `indices` и `t`
 @msg	column must be true or a number from 1	column трябва да е true или число от 1 нататък
 @msg	x and y must both be numbers	x и y трябва да са числа
 @msg	"{0}" is not a colour: write it as #rrggbb	"{0}" не е цвят: запишете го като #rrggbb

@@ -4954,6 +4954,7 @@ imageTrace	Outline	轮廓
 @msg	onto must name a panel floating in another group	onto 必须指定浮动在另一个组中的面板
 @msg	below and above must name a panel floating in another group	below 和 above 必须指定浮动在另一个组中的面板
 @msg	give only one of onto, below and above	onto、below 和 above 只能给出一个
+@msg	give only one of `index`, `indices` and `t`	`index`、`indices` 和 `t` 只能给出一个
 @msg	column must be true or a number from 1	column 必须是 true 或从 1 开始的数字
 @msg	unknown panel `{raw}`	未知面板 `{raw}`
 @msg	`{panel}` has no display sizes to cycle	`{panel}` 没有可切换的显示大小

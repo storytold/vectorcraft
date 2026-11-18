@@ -5508,6 +5508,7 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	onto must name a panel floating in another group	onto должен называть панель, плавающую в другой группе
 @msg	below and above must name a panel floating in another group	below и above должны называть панель, плавающую в другой группе
 @msg	give only one of onto, below and above	укажите только один из onto, below и above
+@msg	give only one of `index`, `indices` and `t`	укажите только один из `index`, `indices` и `t`
 @msg	column must be true or a number from 1	column должен быть true или числом от 1
 @msg	x and y must both be numbers	x и y должны быть числами
 @msg	"{0}" is not a colour: write it as #rrggbb	«{0}» не является цветом: запишите его как #rrggbb

@@ -2490,6 +2490,7 @@ file-filter	Templates	範本
 @msg	onto must name a panel floating in another group	onto 必須指定浮動在另一個群組中的面板
 @msg	below and above must name a panel floating in another group	below 和 above 必須指定浮動在另一個群組中的面板
 @msg	give only one of onto, below and above	onto、below 和 above 只能提供其中一個
+@msg	give only one of `index`, `indices` and `t`	`index`、`indices` 和 `t` 只能提供其中一個
 @msg	column must be true or a number from 1	column 必須是 true 或從 1 起算的數字
 @msg	unknown panel `{raw}`	未知的面板 `{raw}`
 @msg	`{panel}` has no display sizes to cycle	`{panel}` 沒有可切換的顯示大小

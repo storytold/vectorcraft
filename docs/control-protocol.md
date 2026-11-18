@@ -595,6 +595,19 @@ value: true}` then confirm (the Delete button) removes the point with `stroke.wi
 Either half of a discontinuous point opens both: `index` is the incoming half, and `outIndex`, `outSide1`, `outSide2`
 and `outLinked` hold the outgoing half; `single` (`""`, `"incoming"` or `"outgoing"`) is Single Width Only. Confirm
 sets both halves in one `stroke.widthPoint.set` (one undo step), and Delete removes both.
+`ui.widthPointEdit {id, indices: [i…]}` opens it on several existing width points, as double-clicking one of several
+Shift-selected width points does. `indices` must be a nonempty array of profile indices; repeated indices count once,
+either half of a discontinuous point brings the other, and an index that is not a nonnegative whole number or not a
+width point of the stroke is an error, as is giving `indices` with `index` or `t`. When the indices name one width point
+(both halves of a discontinuous point count as one) it opens as `index` would. The fields are `indices` (every profile entry edited, in order), `side1`, `side2` and
+`totalWidth` (null where the points differ), `linked` and `adjustAdjoining`, and with a discontinuous point among them
+`outSide1`, `outSide2`, `outTotalWidth` and `outLinked` for the outgoing halves; the continuous points take both sets.
+A side width set there replaces that side of every point (both sides with `linked`), and leaves each point's other side
+as it was; `totalWidth` scales each point's own two sides to that total; a null field changes nothing. Confirm runs one
+`stroke.widthProfile.set` (one undo step), or nothing when no width changed, and Delete removes every point with
+`stroke.widthPoint.remove {id, indices}`. With `adjustAdjoining`, each changed point changes the nearest unselected
+point at another place before and after it in proportion to its change since the dialog opened; a point next to two
+changed points takes both changes. These rules for several points are VectorCraft's own.
 
 Corners: double-clicking a Live Corners widget with the Selection or Direct Selection tool, or `ui.corners {id?,
 corners?}`, opens the `corners` dialog for a path's corners (the Direct-Selected ones, else every corner; fields `id`,
