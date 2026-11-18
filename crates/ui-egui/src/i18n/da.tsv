@@ -2950,6 +2950,16 @@ liquify-list-end	{0}, {1}	{0} og {1}
 	To Center	Mod midten
 	To Edge	Mod kanten
 	Create Object Mosaic…	Opret objektmosaik…
+	Create Object Mosaic	Opret objektmosaik
+	Current Size:	Aktuel størrelse:
+	New Size:	Ny størrelse:
+	Tile Spacing:	Mellemrum mellem fliser:
+	Number of Tiles:	Antal fliser:
+	Constrain Ratio:	Begræns forhold:
+	Result:	Resultat:
+	Resize Using Percentages	Tilpas størrelse med procenter
+	Delete Raster	Slet rasterbillede
+	Use Ratio	Brug forhold
 	Vector Halftone…	Vektorhalvtone…
 	Create Trim Marks	Opret beskæringsmærker
 	Flatten Transparency…	Udjævn gennemsigtighed…
