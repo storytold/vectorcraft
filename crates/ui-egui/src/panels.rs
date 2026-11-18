@@ -51,6 +51,8 @@ pub mod transform;
 pub mod transparency;
 pub mod variables;
 
+use std::sync::Arc;
+
 use egui::{Rect, Sense, Ui, vec2};
 use serde_json::{Value, json};
 use vectorcraft_color::{BlendMode, Color, Paint};
@@ -62,9 +64,11 @@ use crate::theme::Tokens;
 use crate::widgets::{Live, dim_label};
 use crate::{VectorcraftApp, icons};
 
-/// The first selected node (cloned), if any.
-pub fn first_selected(app: &VectorcraftApp) -> Option<Node> {
-    first_node(app).cloned()
+/// The first selected node, as the `Arc` the document holds, if any. It does not change with later
+/// edits: read it again after one.
+pub fn first_selected(app: &VectorcraftApp) -> Option<Arc<Node>> {
+    let st = app.session.active()?;
+    st.selection.objects.first().and_then(|id| layers::node_arc(&st.doc, *id))
 }
 
 /// The radius the Live Corners of path `n` show in the panels: that of the corners the panels set
