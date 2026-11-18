@@ -2754,6 +2754,7 @@ liquify-list-end	{0}, {1}	{0} και {1}
 @msg	Installed plug-in {_1}	Εγκαταστάθηκε η επέκταση {_1}
 @msg	Internal error: {msg} (please report this bug)	Εσωτερικό σφάλμα: {msg} (παρακαλούμε αναφέρετε αυτό το σφάλμα)
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	Συγχώνευση δυναμικής βαφής: επιλέξτε ομάδα δυναμικής βαφής και τις διαδρομές προς προσθήκη
+@msg	`Face` and `Edge` name the faces and edges of a Live Paint group: give the path another name	Τα `Face` και `Edge` ονομάζουν τις επιφάνειες και τις ακμές μιας ομάδας δυναμικής βαφής: δώστε άλλο όνομα στη διαδρομή
 @msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	Η δυναμική βαφή δέχεται διαδρομές και σύνθετες διαδρομές: μετατρέψτε πρώτα κείμενο, εικόνες και άλλα αντικείμενα σε διαδρομές
 @msg	Live Paint: select paths or compound paths	Δυναμική βαφή: επιλέξτε διαδρομές ή σύνθετες διαδρομές
 @msg	Live Paint: these paths are too degenerate to paint	Δυναμική βαφή: αυτές οι διαδρομές είναι πολύ εκφυλισμένες για να χρωματιστούν

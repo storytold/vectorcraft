@@ -5844,7 +5844,13 @@ and `layerRows`, the rows highlighted in the panel.
   bottom layer's into the empty space under the list) places them, unless objects are copied with a top-level layer
   that is the target, which would put them inside it (#8237). Dragging the
   selected-art square is `layer.move` with the selected objects. `node.move {id, parent?, index}` is the low-level
-  form with the same nesting rules; unlike `layer.move`, it also moves a row into a locked layer or group.
+  form with the same nesting rules; unlike `layer.move`, it also moves a row into a locked layer or group. A row that
+  either command puts into a Live Paint group from elsewhere (inside it, or above or below one of its rows) joins the
+  group's paths as `livePaint.merge` adds them, in one "Merge Live Paint" undo step, and the group is selected and
+  listed in `layer.move`'s `ids` in its place; paths, compound paths, groups of them and Live Paint groups can join,
+  and with anything else among the rows nothing moves. A row that goes into or leaves a Live Paint group's paths (its
+  hidden sources group) makes the group's faces and edges again, keeping the paint of those that stay; when no path is
+  left, the group has no faces or edges until a path joins it again.
 - **Buttons**: `layer.new {name?, top?, below?, …options}` (above the current layer at its level, or directly
   below it in Draw Behind; `top` with Ctrl/Cmd; `below`, directly below the current layer at its level, with
   Ctrl/Cmd+Alt; `top` and `below` apply in every drawing mode),
@@ -5886,7 +5892,10 @@ and `layerRows`, the rows highlighted in the panel.
   Paint group (`object.exitIsolation`, or `object.isolate` on a level outside it) adds the paths, compound paths and
   groups of them drawn in it, shown and unlocked with everything in them, to the group as `livePaint.merge` does, in
   one undo step; type, images and other objects stay in it as they are, and with nothing drawn no undo step is
-  recorded.
+  recorded. When the isolated Live Paint group was drawn in another isolated Live Paint group, leaving both does this
+  for each group, innermost first, one undo step each, so the inner group joins the outer one. Face and Edge are the names of a Live Paint group's faces and edges: `layer.setProps` and
+  `object.setProps` return an error when they would give either name to another path directly in the group, and a
+  path pasted directly into the group under either name loses its name.
 - **Dialogs and panel state** (control channel and the app's MCP): `ui.layerOptions {ids?}` and `ui.newLayer
   {sublayer?}` open Layer Options (dialog `layerOptions`: name, color, template, locked, visible, printable, preview,
   dimImages, dimPercent; OK is one undo step; `ui.dialog.set` of `template` also sets `locked` and `dimImages`, as the

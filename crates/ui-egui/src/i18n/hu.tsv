@@ -5838,6 +5838,7 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	line {line}: value for `{var}` must be true or false	{line}. sor: a(z) `{var}` értéke csak true vagy false lehet
 @msg	line {line}: value for `{var}` is longer than {MAX_GRAPH_CSV} bytes	{line}. sor: a(z) `{var}` értéke hosszabb {MAX_GRAPH_CSV} bájtnál
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	Élő festés egyesítése: jelölj ki egy élőfestés-csoportot és a hozzáadandó útvonalakat
+@msg	`Face` and `Edge` name the faces and edges of a Live Paint group: give the path another name	A `Face` és az `Edge` az élőfestés-csoport felületeinek és éleinek neve: adj más nevet az útvonalnak
 @msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	Az élő festés útvonalakat és összetett útvonalakat fogad: előbb alakítsd útvonallá a szöveget, a képeket és a többi objektumot
 @msg	Live Paint: select paths or compound paths	Élő festés: jelölj ki útvonalakat vagy összetett útvonalakat
 @msg	Live Paint: these paths are too degenerate to paint	Élő festés: ezek az útvonalak túlságosan elfajultak a festéshez

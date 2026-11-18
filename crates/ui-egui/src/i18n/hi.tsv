@@ -7934,6 +7934,7 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	फ़ाइल में कोई प्रीव्यू के साथ जुड़े चित्र एक प्लेसहोल्डर दिखाते हैं जब तक कि उनकी फ़ाइलें नहीं मिलती: उन्हें लिंक पैनल में फिर से लिंक करें
 @msg	linked type areas past VectorCraft's limits were left out	VectorCraft की सीमाओं से आगे के लिंक्ड टाइप एरिया छोड़ दिए गए
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	लाइव पेंट मर्ज: जोड़ने के लिए एक लाइव पेंट समूह और पाथ सिलेक्ट करें
+@msg	`Face` and `Edge` name the faces and edges of a Live Paint group: give the path another name	`Face` और `Edge` लाइव पेंट समूह के फेस और एज के नाम हैं: पाथ को कोई दूसरा नाम दें
 @msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	लाइव पेंट पाथ और कंपाउंड पाथ लेता है: पहले टाइप, इमेज और अन्य ऑब्जेक्ट्स को पाथ में बदलें
 @msg	Live Paint: select paths or compound paths	लाइव पेंट: पाथ या यौगिक पाथ सिलेक्ट करें
 @msg	Live Paint: these paths are too degenerate to paint	लाइव पेंट: इन पाथ को पेंट करने के लिए बहुत अलग किया जाता है

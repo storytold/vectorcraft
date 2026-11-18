@@ -5320,6 +5320,7 @@ imageTrace	Outline	Contour
 @msg	Installed plug-in {_1}	Plug-in {_1} geïnstalleerd
 @msg	Internal error: {msg} (please report this bug)	Interne fout: {msg} (meld deze bug alsjeblieft)
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	Live Paint samenvoegen: selecteer een Live Paint-groep en de paden om toe te voegen
+@msg	`Face` and `Edge` name the faces and edges of a Live Paint group: give the path another name	`Face` en `Edge` zijn de namen van de vlakken en randen van een Live Paint-groep: geef het pad een andere naam
 @msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	Live Paint neemt paden en samengestelde paden: zet tekst, afbeeldingen en andere objecten eerst om in paden
 @msg	Live Paint: select paths or compound paths	Live Paint: selecteer paden of samengestelde paden
 @msg	Live Paint: these paths are too degenerate to paint	Live Paint: deze paden zijn te gedegenereerd om te verven

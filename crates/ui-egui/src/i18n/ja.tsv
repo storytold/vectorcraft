@@ -4813,6 +4813,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	the art has no bounds	アートに境界がありません
 @msg	Image Trace: the traced image is missing	画像トレース: トレース元の画像が見つかりません
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	ライブペイントの結合: ライブペイントグループと、追加するパスを選択してください
+@msg	`Face` and `Edge` name the faces and edges of a Live Paint group: give the path another name	`Face` と `Edge` はライブペイントグループの面とエッジの名前です: パスには別の名前を付けてください
 @msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	ライブペイントで扱えるのはパスと複合パスです: テキスト、画像、その他のオブジェクトは先にパスに変換してください
 @msg	Live Paint: select paths or compound paths	ライブペイント: パスまたは複合パスを選択してください
 @msg	Live Paint: these paths are too degenerate to paint	ライブペイント: これらのパスは形状がつぶれすぎていてペイントできません

@@ -5036,6 +5036,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	Installed plug-in {_1}	Zainstalowano wtyczkę {_1}
 @msg	Internal error: {msg} (please report this bug)	Błąd wewnętrzny: {msg} (zgłoś ten błąd)
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	Scal aktywne malowanie: zaznacz grupę aktywnego malowania i ścieżki do dodania
+@msg	`Face` and `Edge` name the faces and edges of a Live Paint group: give the path another name	`Face` i `Edge` to nazwy ścian i krawędzi grupy aktywnego malowania: nadaj ścieżce inną nazwę
 @msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	Aktywne malowanie przyjmuje ścieżki i ścieżki złożone: najpierw przekształć tekst, obrazy i inne obiekty w ścieżki
 @msg	Live Paint: select paths or compound paths	Aktywne malowanie: zaznacz ścieżki lub ścieżki złożone
 @msg	Live Paint: these paths are too degenerate to paint	Aktywne malowanie: te ścieżki są zbyt zdegenerowane, aby je malować

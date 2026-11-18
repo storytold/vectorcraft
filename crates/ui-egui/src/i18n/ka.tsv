@@ -6710,6 +6710,7 @@ font-technology	Variable	ცვლადი
 @msg	Installed plug-in {_1}	დაინსტალირდა პლაგინი {_1}
 @msg	Internal error: {msg} (please report this bug)	შიდა შეცდომა: {msg} (გთხოვთ, შეგვატყობინოთ ამ ხარვეზის შესახებ)
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	ცოცხალი შეღებვის შერწყმა: მონიშნეთ ცოცხალი შეღებვის ჯგუფი და დასამატებელი ტრაექტორიები
+@msg	`Face` and `Edge` name the faces and edges of a Live Paint group: give the path another name	`Face` და `Edge` ცოცხალი შეღებვის ჯგუფის წახნაგებისა და კიდეების სახელებია: ტრაექტორიას სხვა სახელი დაარქვით
 @msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	ცოცხალი შეღებვა იღებს ტრაექტორიებს და შედგენილ ტრაექტორიებს: ჯერ გადააქციეთ ტექსტი, გამოსახულებები და სხვა ობიექტები ტრაექტორიებად
 @msg	Live Paint: select paths or compound paths	ცოცხალი შეღებვა: მონიშნეთ ტრაექტორიები ან შედგენილი ტრაექტორიები
 @msg	Live Paint: these paths are too degenerate to paint	ცოცხალი შეღებვა: ეს ტრაექტორიები ზედმეტად გადაგვარებულია შესაღებად
