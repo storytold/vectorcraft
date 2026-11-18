@@ -607,9 +607,11 @@ fn objects_at_repeated(doc: &Document, p: Point, opt: HitOptions, scope: Option<
 
 /// [`objects_at_repeated`] after `tops`, the topmost objects under `p` already found.
 fn objects_at_repeated_after(doc: &Document, p: Point, opt: HitOptions, scope: Option<NodeId>, mut tops: Vec<NodeId>) -> Vec<NodeId> {
-    // Each round leaves out the objects found so far (and everything inside them).
-    while let Some(top) = hit_test_skipping(doc, p, opt, &|id| tops.contains(&id), true).map(|h| h.top_object(scope)) {
-        if tops.contains(&top) {
+    // Each round leaves out the objects found so far (and everything inside them). `found` holds
+    // the same ids as `tops`, which keeps their order.
+    let mut found: HashSet<NodeId> = tops.iter().copied().collect();
+    while let Some(top) = hit_test_skipping(doc, p, opt, &|id| found.contains(&id), true).map(|h| h.top_object(scope)) {
+        if !found.insert(top) {
             break;
         }
         tops.push(top);
