@@ -39,6 +39,11 @@ impl Scratch {
             Some(m) => m,
             None => n.clone(),
         };
+        // What a clipping path becomes (type's outlines, outlined strokes, expanded art) stays its
+        // clip's clipping path, wherever it lies among the members.
+        if n.is_clipping_path() && !m.is_clipping_path() {
+            m.set_clipping_path(true);
+        }
         if !matches!(m.kind, NodeKind::Compound { .. })
             && let Some(ch) = m.children_mut()
         {

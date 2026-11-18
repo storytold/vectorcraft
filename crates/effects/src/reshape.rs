@@ -945,13 +945,17 @@ fn instances_as_art(doc: Option<&Document>, n: &mut Node, outline: OutlineHook, 
 
 /// Type `t` in a clip group's clipping path as its outlines ([`outline_text`]) with its
 /// visibility, or with geometry effects as a path of the region they give it, which is what
-/// [`crate::clip_outline`] clips by.
+/// [`crate::clip_outline`] clips by. When `t` is the clipping path itself, what takes its place
+/// stays its clip's clipping path ([`Node::is_clipping_path`]), wherever it lies among the members.
 pub(crate) fn clipping_text_outline(t: &Node) -> Option<Node> {
-    if let Some(p) = crate::clip::with_clip_effects_applied(t) {
-        return Some(p);
+    let mut o = match crate::clip::with_clip_effects_applied(t) {
+        Some(p) => p,
+        None => Node { visible: t.visible, ..outline_text(t)? },
+    };
+    if t.is_clipping_path() {
+        o.set_clipping_path(true);
     }
-    let o = outline_text(t)?;
-    Some(Node { visible: t.visible, ..o })
+    Some(o)
 }
 
 /// Replace type anywhere inside `n` by its outlines, as art that keeps the type's look
@@ -3748,8 +3752,10 @@ pub(crate) fn leaf_geometry(n: &Node) -> Option<(PathData, FillRule)> {
     }
 }
 
-/// Replace the geometry of path or compound `n` (a compound when `path` has several subpaths).
+/// Replace the geometry of path or compound `n` (a compound when `path` has several subpaths). A
+/// clipping path stays its clip's clipping path ([`Node::is_clipping_path`]) as either.
 fn set_geometry(n: &mut Node, path: PathData, rule: FillRule) {
+    let marked = n.is_clipping_path();
     let clipping = matches!(n.kind, NodeKind::Path { clipping: true, .. });
     n.kind = if path.subpaths.len() > 1 {
         let id = n.id;
@@ -3758,4 +3764,7 @@ fn set_geometry(n: &mut Node, path: PathData, rule: FillRule) {
     } else {
         NodeKind::Path { path, rule, live: None, clipping, guide: false }
     };
+    if marked && !n.is_clipping_path() {
+        n.set_clipping_path(true);
+    }
 }

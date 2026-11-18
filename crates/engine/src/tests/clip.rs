@@ -658,3 +658,60 @@ fn mesh_warp_pieces_saved_and_opened_again_are_still_pieces_of_one_image() {
     assert_eq!(after.matches("<mask").count(), masks, "still masked");
     assert_eq!(after.matches("data:image/png;base64,").count(), 1, "still one copy");
 }
+
+/// Type on top of its art as the clipping path, in a clip group with a geometry effect of its own:
+/// the type's outlines take its place and still clip, on the canvas and in the SVG and PDF output.
+#[test]
+fn type_on_top_still_clips_when_its_clip_groups_effect_outlines_it() {
+    let mut s = session();
+    let art = id_of(&s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 100, "height": 100})).unwrap());
+    let t = id_of(&s.execute("text.create", &json!({"x": 5, "y": 80, "text": "O", "size": 90})).unwrap());
+    let b = s.doc().unwrap().doc.node(t).unwrap().geometric_bounds().unwrap();
+    select(&mut s, &[art, t]);
+    let g = id_of(&s.execute("object.clippingMask.make", &json!({})).unwrap());
+    s.execute("effect.apply", &json!({"effect": "distort.transform", "params": {"moveH": 1}, "ids": [g.0], "item": null})).unwrap();
+    let cy = ((b.y0 + b.y1) / 2.0) as u32;
+    let r = render(&s);
+    assert!(b.x1 < 94.0, "{b:?}");
+    assert!(!opaque(&r, (b.x1 + 4.0) as u32, cy), "beside the type, the art is clipped away");
+    assert!(!opaque(&r, ((b.x0 + b.x1) / 2.0 + 1.0) as u32, cy), "in the counter too");
+    let probes: Vec<(u32, u32)> = (0..100).step_by(3).map(|x| (x, cy)).collect();
+    assert_outputs_agree(&mut s, &probes);
+}
+
+/// A clip group whose Transform effect makes a copy of its clipping path, on top of the art: the
+/// copies, a compound path, still clip, and the art shows only inside the circle and its copy.
+#[test]
+fn a_clipping_path_on_top_still_clips_when_a_transform_effect_copies_it() {
+    let mut s = session();
+    let art = id_of(&s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 100, "height": 100})).unwrap());
+    let circle = ellipse(&mut s, 10.0, 30.0);
+    select(&mut s, &[art, circle]);
+    let g = id_of(&s.execute("object.clippingMask.make", &json!({})).unwrap());
+    s.execute("effect.apply", &json!({"effect": "distort.transform", "params": {"moveH": 50, "copies": 1}, "ids": [g.0], "item": null})).unwrap();
+    let r = render(&s);
+    assert!(opaque(&r, 25, 25) && opaque(&r, 75, 25), "inside the circle and its copy");
+    assert!(!opaque(&r, 25, 75) && !opaque(&r, 50, 25), "elsewhere the art is clipped away");
+}
+
+/// Flattening transparency in a clip group whose clipping path is type on top of the art: the
+/// type's outlines still clip the flattened art.
+#[test]
+fn type_on_top_still_clips_when_its_clip_group_is_flattened() {
+    let mut s = session();
+    let art = id_of(&s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 100, "height": 100})).unwrap());
+    s.execute("transparency.set", &json!({"ids": [art.0], "opacity": 70})).unwrap();
+    let t = id_of(&s.execute("text.create", &json!({"x": 5, "y": 80, "text": "O", "size": 90})).unwrap());
+    let b = s.doc().unwrap().doc.node(t).unwrap().geometric_bounds().unwrap();
+    select(&mut s, &[art, t]);
+    let g = id_of(&s.execute("object.clippingMask.make", &json!({})).unwrap());
+    let cy = ((b.y0 + b.y1) / 2.0) as u32;
+    let ring = |r: &Rendered| (b.x0 as u32..b.x1 as u32).any(|x| opaque(r, x, cy));
+    let before = render(&s);
+    assert!(ring(&before) && !opaque(&before, (b.x1 + 4.0) as u32, cy));
+    s.execute("object.flattenTransparency", &json!({"ids": [g.0]})).unwrap();
+    let after = render(&s);
+    assert!(ring(&after), "the ring shows the art");
+    assert!(!opaque(&after, (b.x1 + 4.0) as u32, cy), "beside the type, the art is clipped away");
+    assert!(!opaque(&after, ((b.x0 + b.x1) / 2.0) as u32, cy), "in the counter too");
+}

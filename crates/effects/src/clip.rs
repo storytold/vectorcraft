@@ -54,10 +54,21 @@ pub(crate) fn with_clip_effects_applied_while(n: &Node, take: fn() -> bool) -> O
     Some(m)
 }
 
+/// [`effects_applied`], where what takes the place of `n`, a clipping path, stays its clip's
+/// clipping path ([`Node::is_clipping_path`]): the group of the pieces its fills and strokes draw,
+/// or the path its effects make of it, clips as `n` did wherever it lies among the clip's members.
+fn clip_effects_applied(n: &Node, items: bool, take: fn() -> bool) -> Option<Node> {
+    let mut m = effects_applied(n, items, take)?;
+    if n.is_clipping_path() && !m.is_clipping_path() {
+        m.set_clipping_path(true);
+    }
+    Some(m)
+}
+
 /// [`with_clip_effects_applied_while`]; with `items` unset (the paths of a compound path, which
 /// draw with the compound path's fills and strokes), the geometry effects of `n`'s own fills and
 /// strokes are left out.
-fn clip_effects_applied(n: &Node, items: bool, take: fn() -> bool) -> Option<Node> {
+fn effects_applied(n: &Node, items: bool, take: fn() -> bool) -> Option<Node> {
     let mut m: Option<Node> = None;
     // The members to visit, from index `base` among `n`'s children (a nested clip group's: its
     // clipping path alone, wherever it lies).

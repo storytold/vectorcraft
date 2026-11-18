@@ -543,3 +543,37 @@ fn raster_and_hidden_effects_leave_the_clip_as_it_is() {
         assert_eq!(bounds(&clipping_path(1, effects)), Rect::new(50.0, 50.0, 150.0, 150.0));
     }
 }
+
+/// A clipping path on top of its art, as in a document, whose fill has a geometry effect: an export
+/// bakes it into the group of its pieces, which stays the clip's clipping path, so the art is still
+/// clipped by the region the canvas clips by and not by the art.
+#[test]
+fn a_clipping_path_on_top_stays_the_clipping_path_when_an_export_bakes_its_fill_effect() {
+    let mut d = Document::new(400.0, 400.0);
+    let layer = d.layers[0].id;
+    let mut clip = clipping_path(2, vec![]);
+    clip.appearance = Appearance::basic(Paint::solid(Color::rgb(0.0, 0.0, 0.0)), Paint::None, 0.0).into();
+    for item in &mut clip.appearance.items {
+        if let vectorcraft_doc::AppearanceItem::Fill(f) = item {
+            f.effects.push(fx("distort.transform", json!({"moveH": 60})));
+        }
+    }
+    let live = bounds(&clip);
+    assert_eq!(live.x1, 210.0, "the moved fill reaches 210");
+    let mut group = clip_group(1, clip);
+    if let NodeKind::Group { children, .. } = &mut group.kind {
+        children.reverse();
+    }
+    assert_eq!(group.clipping_path_index(), Some(1), "on top");
+    d.insert(Some(layer), 0, group).unwrap();
+    let baked = bake_document(&d).unwrap();
+    fn clip_of(n: &Arc<Node>) -> Option<Arc<Node>> {
+        if n.clips() && matches!(n.kind, NodeKind::Group { .. }) {
+            return Some(n.clone());
+        }
+        n.children()?.iter().find_map(clip_of)
+    }
+    let g = baked.layers.iter().find_map(clip_of).unwrap();
+    assert_eq!(g.clipping_path_index(), Some(1), "the baked pieces clip, on top");
+    assert_eq!(bounds(g.clipping_path().unwrap()), live, "the region the canvas clips by, not the art's");
+}
