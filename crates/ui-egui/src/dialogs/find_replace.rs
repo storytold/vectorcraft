@@ -204,9 +204,8 @@ fn remember(app: &mut VectorcraftApp, d: &Dialog) {
 fn find(app: &mut VectorcraftApp, d: &mut Dialog) -> Result<Value, String> {
     let mut p = query(d);
     p["backwards"] = json!(d.bool("backwards"));
-    if let Some(at) = place(app, d) {
-        p["from"] = at.clone();
-    }
+    // With no place, the search starts at the first match, not after the selected type object.
+    p["from"] = place(app, d).cloned().unwrap_or(Value::Null);
     d.fields.remove(FOUND);
     d.fields.remove(NOTE);
     let r = app.run(NEXT, p)?;

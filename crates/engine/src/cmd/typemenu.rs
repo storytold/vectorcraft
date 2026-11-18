@@ -129,7 +129,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Find Next",
             ["Edit"],
             None,
-            "{find, matchCase?: false, wholeWord?: false, backwards?: false, hiddenLayers?: false, lockedLayers?: false, from?: {id, start, end} (a match this command returned, or the range edit.replaceMatch returned)} find the next match of `find` in the type edit.findReplace reaches and select its type object → {id, start, end (the match's bytes in the object's plain text), index (its place among all the matches, from 1), count, selected} or {id: null, count: 0}. The search visits type objects from the top of the stacking order down and each object's matches in reading order; backwards visits the objects from the bottom up and each object's matches from the last. It goes on after `from` and, past the last match, starts again at the first. Without `from` it goes on after the first selected type object, and with no type selected it starts at the first match. A match on a hidden or locked layer is returned with selected false and the selection stays as it is. Nothing is recorded for undo.",
+            "{find, matchCase?: false, wholeWord?: false, backwards?: false, hiddenLayers?: false, lockedLayers?: false, from?: {id, start, end} (a match this command returned, or the range edit.replaceMatch returned)} find the next match of `find` in the type edit.findReplace reaches and select its type object → {id, start, end (the match's bytes in the object's plain text), index (its place among all the matches, from 1), count, selected} or {id: null, count: 0}. The search visits type objects from the top of the stacking order down and each object's matches in reading order; backwards visits the objects from the bottom up and each object's matches from the last. It goes on after `from` and, past the last match, starts again at the first. Without `from` it goes on after the first selected type object, and with no type selected, or with a null `from`, it starts at the first match. A match on a hidden or locked layer is returned with selected false and the selection stays as it is. Nothing is recorded for undo.",
             has_doc,
             find_next
         ),
@@ -1856,10 +1856,12 @@ fn find_next(s: &mut Session, p: &Value) -> Result<Value> {
     let q = Query::of(p, C)?;
     let backwards = switch_or(p, "backwards", false, C)?;
     let (hidden, locked) = (switch_or(p, "hiddenLayers", false, C)?, switch_or(p, "lockedLayers", false, C)?);
-    // A `from` that is no object gives no `id`, and is refused as one without it.
+    // A `from` that is no object gives no `id`, and is refused as one without it. A null `from`
+    // starts at the first match, whatever is selected.
     let from = match p.get("from") {
-        None | Some(Value::Null) => None,
-        Some(v) => Some(Match::of(v, C)?),
+        None => None,
+        Some(Value::Null) => Some(None),
+        Some(v) => Some(Some(Match::of(v, C)?)),
     };
     let st = s.doc()?;
     // The objects in the order the search visits them: from the top of the stacking order down,
@@ -1885,7 +1887,7 @@ fn find_next(s: &mut Session, p: &Value) -> Result<Value> {
     // The search goes on from `from`, or from the whole of the first selected type object it
     // visits, so that the same call again reaches the next object. From anywhere else it starts
     // at the first match.
-    let from = from.or_else(|| {
+    let from = from.unwrap_or_else(|| {
         st.selection.objects.iter().filter(|id| order.contains(id)).find_map(|id| match &st.doc.node(*id)?.kind {
             NodeKind::Text(t) => Some(Match { id: *id, start: 0, end: t.runs.iter().map(|r| r.text.len()).sum() }),
             _ => None,

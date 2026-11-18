@@ -195,6 +195,23 @@ fn an_action_of_the_wrong_type_runs_no_action() {
     assert_ne!(matched(&app), at, "a string action still runs");
 }
 
+/// Find with other Find text starts again at the first match, the matches in the type object the
+/// last Find selected included.
+#[test]
+fn find_with_other_text_starts_at_the_first_match() {
+    let (mut app, ids) = app_with(&["dog", "cat dog"]);
+    let (bottom, top) = (ids[0], ids[1]);
+    choose(&mut app);
+    set(&mut app, "find", json!("cat"));
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert_eq!((matched(&app), selected(&app)), (Some((top, 0, 3)), vec![top]));
+    set(&mut app, "find", json!("dog"));
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert_eq!((matched(&app), selected(&app)), (Some((top, 4, 7)), vec![top]));
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert_eq!(matched(&app), Some((bottom, 0, 3)));
+}
+
 /// The dialog stays open from match to match: Find goes to the next match and selects its
 /// object, Replace changes that match, Replace & Find changes it and goes on, Replace All changes
 /// the rest, and Done closes. Each Replace is one undo step, and so is Replace All; finding and a

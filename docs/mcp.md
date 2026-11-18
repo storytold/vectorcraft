@@ -9969,8 +9969,10 @@ recorded for undo.
 - These rules are VectorCraft's own. Inside a type object the matches come in reading order, or from the last with
   `backwards`. `from: {id, start, end}`, a match the command returned or the range `edit.replaceMatch` returned, is
   where the search goes on from; past the last match it starts again at the first. Without `from` it goes on after the
-  first selected type object, and with no type selected it starts at the first match. A match on a hidden or locked
-  layer comes back with `selected: false` and the selection stays as it is. A match stays inside one style run.
+  first selected type object, and with no type selected, or with `from: null`, it starts at the first match. The Find
+  and Replace dialog sends `from: null` when it has no place to go on from, as when its Find text or a switch changed
+  since its last match. A match on a hidden or locked layer comes back with `selected: false` and the selection stays
+  as it is. A match stays inside one style run.
 
 `edit.replaceMatch {find, replace?, matchCase?, wholeWord?, id, start, end}` replaces that one match with `replace`
 as one undo step and returns `{id, start, end, replaced}`, with `start` and `end` the replacement's bytes. Bytes that

@@ -2476,6 +2476,10 @@ fn find_next_steps_through_the_matches_in_both_directions() {
     // A `from` in an object the search does not visit starts at the first match.
     let r = s.execute("edit.findNext", &json!({"find": "cat", "from": {"id": 999_999, "start": 0, "end": 0}})).unwrap();
     assert_eq!(found(&r), (top.0, 2, 5, 1, 3));
+    // So does a null `from`, with a type object selected.
+    sel(&mut s, &[top]);
+    let r = s.execute("edit.findNext", &json!({"find": "cat", "from": null})).unwrap();
+    assert_eq!(found(&r), (top.0, 2, 5, 1, 3));
     // Nothing found: no match, and the selection stays.
     let r = s.execute("edit.findNext", &json!({"find": "zebra"})).unwrap();
     assert_eq!((r, selected(&s)), (json!({"id": null, "count": 0}), vec![top]));
