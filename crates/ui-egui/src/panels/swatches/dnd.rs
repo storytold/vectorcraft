@@ -183,7 +183,8 @@ fn tile_drop(ui: &Ui, resp: &Response, e: &Entry, list: bool, ev: &mut TileEvent
         ui.painter().line_segment([pos2(x, r.top() - 1.0), pos2(x, r.bottom() + 1.0)], Stroke::new(2.0, t.accent));
     }
     if resp.dnd_release_payload::<PanelDrag>().is_some() {
-        ev.drop = Drop::of(&d, Some(name.to_string()), after, crate::panels::alt_held(ui), command_held(ui));
+        let m = release_modifiers(ui);
+        ev.drop = Drop::of(&d, Some(name.to_string()), after, m.alt, m.command);
     }
 }
 
@@ -195,13 +196,23 @@ pub(super) fn zone_input(ui: &Ui, zone: &Response, ev: &mut TileEvents) {
         ui.painter().rect_stroke(zone.rect, 0.0, Stroke::new(1.5, Tokens::get(ui.ctx()).accent), StrokeKind::Inside);
     }
     if zone.dnd_release_payload::<PanelDrag>().is_some() {
-        ev.drop = Drop::of(&d, None, false, false, command_held(ui));
+        ev.drop = Drop::of(&d, None, false, false, release_modifiers(ui).command);
     }
 }
 
-/// Is Cmd (macOS) or Ctrl (Windows, Linux) held?
-fn command_held(ui: &Ui) -> bool {
-    ui.input(|i| i.modifiers.command)
+/// The modifiers (Alt; Cmd on macOS, Ctrl on Windows and Linux) held when the primary button was
+/// released this frame, as the release event carries them, so a key let go later in the same frame
+/// does not change the drop. Without such an event, the modifiers held at the end of the frame.
+fn release_modifiers(ui: &Ui) -> egui::Modifiers {
+    ui.input(|i| {
+        i.events
+            .iter()
+            .find_map(|e| match e {
+                egui::Event::PointerButton { button: egui::PointerButton::Primary, pressed: false, modifiers, .. } => Some(*modifiers),
+                _ => None,
+            })
+            .unwrap_or(i.modifiers)
+    })
 }
 
 /// The colour group `name` is, or the one swatch `name` belongs to.
@@ -271,7 +282,8 @@ fn shown_color_params(paint: &Paint) -> Value {
 /// Run a drop on the panel: move the swatches, give the paint of a swatch Alt-dropped on another of
 /// its kind to that one, or make a swatch of the proxy's paint (a color dropped on a folder or a
 /// grouped swatch joins that group; a color Cmd/Ctrl-dropped becomes a new spot color of the color
-/// the drag shows, tints included).
+/// the drag shows, tints included). With Alt also held, a color dropped on a swatch it can replace
+/// replaces that swatch's color with the color the drag shows and makes no spot color.
 pub(super) fn apply_drop(app: &mut VectorcraftApp, drop: Drop) {
     let Some(d) = app.session.active().map(|st| &st.doc) else { return };
     let (cmd, params) = match drop {
@@ -282,11 +294,13 @@ pub(super) fn apply_drop(app: &mut VectorcraftApp, drop: Drop) {
             Some(p) => ("swatch.move", p),
             None => return,
         },
-        // Alt: an edited gradient (or colour) replaces the swatch it is dropped on.
-        Drop::New { paint, target: Some(t), replace: true, .. }
+        // Alt: an edited gradient (or colour) replaces the swatch it is dropped on. With Cmd/Ctrl also
+        // held, a tint gives the color the drag shows; Alt alone sends the paint as it is.
+        Drop::New { paint, target: Some(t), replace: true, spot }
             if d.swatch(&t).is_some_and(|w| !w.is_reserved() && w.tint_of().is_none() && same_kind(&w.paint, &paint)) =>
         {
-            ("swatch.edit", json!({"name": t, "paint": shown_color_params(&paint)}))
+            let p = if spot { shown_color_params(&paint) } else { crate::panels::swatch_paint_params(&paint) };
+            ("swatch.edit", json!({"name": t, "paint": p}))
         }
         Drop::New { paint, target, spot, .. } => {
             // Only a spot color needs a color of its own; other drops keep a tint's link to its base.

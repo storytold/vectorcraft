@@ -1305,6 +1305,51 @@ fn a_tint_alt_dropped_on_a_swatch_replaces_it_with_the_captured_color() {
     assert_eq!(red.paint.color(), Some(shown), "{}", app.ui.status);
 }
 
+/// A tint Alt-dropped on a solid swatch without Cmd/Ctrl sends the tint as it is, so the swatch takes
+/// the tint of its base swatch as the base is at the drop.
+#[test]
+fn a_tint_alt_dropped_without_cmd_keeps_the_tint_paint() {
+    let mut app = app();
+    let ctx = context();
+    app.run("swatch.edit", json!({"name": "Orange", "global": true})).unwrap();
+    app.run("swatch.new", json!({"swatch": "Orange", "tint": 40})).unwrap();
+    let tint = app.session.doc().unwrap().doc.tint_paint("Orange", 0.4).expect("a tint of Orange");
+    let shown = tint.color().expect("a color");
+    app.run("swatch.edit", json!({"name": "Orange", "paint": {"color": "#2040c0"}})).unwrap();
+    let now = app.session.doc().unwrap().doc.tint_paint("Orange", 0.4).and_then(|p| p.color()).expect("a tint of Orange");
+    assert_ne!(now, shown);
+    drop_paint_on(&mut app, &ctx, "Red", tint, Modifiers::ALT, 1.0);
+    let red = app.session.doc().unwrap().doc.swatch("Red").cloned().expect("Red");
+    assert_eq!(red.paint.color(), Some(now), "{}", app.ui.status);
+}
+
+/// A drop on the list follows the modifiers the release carries, not the ones held at the end of the
+/// frame: Cmd/Ctrl let go after the release still makes a spot color, Cmd/Ctrl pressed after it does
+/// not, and Alt let go after the release still replaces the swatch.
+#[test]
+fn a_drop_follows_the_modifiers_of_its_release() {
+    let mut app = app();
+    let ctx = context();
+    frame(&mut app, &ctx, vec![], 0.0, show);
+    let at = tile_center(&ctx, "Red");
+    let drop = |app: &mut VectorcraftApp, color: &str, held: Modifiers, after: Modifiers, time: f64| {
+        egui::DragAndDrop::set_payload(&ctx, PanelDrag::paint(Paint::solid(Color::from_hex(color).unwrap())));
+        let release = Event::PointerButton { pos: at, button: PointerButton::Primary, pressed: false, modifiers: held };
+        frame_with(app, &ctx, vec![Event::PointerMoved(at), release, Event::ModifiersChanged(after)], held, time, show);
+    };
+    let spots = spot_count(&app);
+    drop(&mut app, "#30a050", Modifiers::COMMAND, Modifiers::NONE, 1.0);
+    assert_eq!(spot_count(&app), spots + 1, "Cmd/Ctrl held at the release: {}", app.ui.status);
+    let count = app.session.doc().unwrap().doc.swatches_iter().count();
+    drop(&mut app, "#50a030", Modifiers::NONE, Modifiers::COMMAND, 2.0);
+    let d = &app.session.doc().unwrap().doc;
+    assert_eq!((d.swatches_iter().count(), spot_count(&app)), (count + 1, spots + 1), "{}", app.ui.status);
+    drop(&mut app, "#2040c0", Modifiers::ALT, Modifiers::NONE, 3.0);
+    let d = &app.session.doc().unwrap().doc;
+    assert_eq!(d.swatches_iter().count(), count + 1, "Alt held at the release adds no swatch: {}", app.ui.status);
+    assert_eq!(d.swatch("Red").and_then(|w| w.paint.color()), Color::from_hex("#2040c0"));
+}
+
 /// A Recent Colors chip of the Color panel dragged onto the Swatches panel becomes a swatch; a click
 /// on it still paints the selected art.
 #[test]
