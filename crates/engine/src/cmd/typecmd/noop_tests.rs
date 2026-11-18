@@ -102,6 +102,34 @@ fn a_kept_graph_label_style_change_alone_records_one_undo_step() {
     records_nothing(&mut s, "text.setStyle", p);
 }
 
+/// `text.setStyle` on a graph label with only `justify`, which the label already has, records no undo step and keeps no
+/// character style for its kind of label.
+#[test]
+fn a_justify_only_style_change_on_a_graph_label_records_nothing() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let csv = ",2024,2025\nQ1,3,2\nQ2,5,4";
+    let graph = NodeId(
+        s.execute("graph.create", &json!({"type": "column", "x": 100, "y": 100, "width": 300, "height": 200, "csv": csv})).unwrap()["id"]
+            .as_u64()
+            .unwrap(),
+    );
+    let doc = s.doc().unwrap().doc.clone();
+    let legend = doc.node(graph).unwrap().children().unwrap().iter().find(|c| c.name.as_deref() == Some("Legend")).unwrap();
+    let label = legend
+        .children()
+        .unwrap()
+        .iter()
+        .find_map(|c| match &c.kind {
+            NodeKind::Text(t) if t.plain_text() == "2025" => Some(c.id),
+            _ => None,
+        })
+        .unwrap();
+    records_nothing(&mut s, "text.setStyle", json!({"ids": [label.0], "justify": "left"}));
+    let kept = s.doc().unwrap().doc.node(graph).unwrap().extras().graph.as_deref().unwrap().label_styles.legend.clone();
+    assert!(kept.is_none(), "the legend keeps a style");
+}
+
 /// `text.setText` with the text the type already has records no undo step; new text records one.
 #[test]
 fn the_same_text_records_no_undo_step() {

@@ -92,6 +92,27 @@ fn confirm_runs_export_pdf_with_the_dialog_options() {
     assert!(app.ui.status.starts_with("Saved /tmp/out.pdf"), "{}", app.ui.status);
 }
 
+/// A Save PDF that fails keeps the dialog open and says why inside it (#6861): the status bar is
+/// behind the dialog. Saving again, once it works, clears the message.
+#[test]
+fn a_failed_save_says_why_in_the_dialog() {
+    let (mut app, written, _) = app();
+    app.run("ui.savePdfDialog", json!({"path": "/tmp/out.pdf"})).unwrap();
+    set_field(&mut app, "__allArtboards", json!(false));
+    set_field(&mut app, "range", json!("9"));
+    let e = super::super::confirm(&mut app).unwrap_err();
+    assert!(written.borrow().is_empty(), "nothing was written");
+    let d = app.ui.dialog.as_ref().expect("the dialog stays open");
+    assert_eq!(d.str(ERROR), e, "the dialog holds the reason");
+    assert!(!e.is_empty());
+    assert!(params(d).get(ERROR).is_none(), "the message is not an option of the export");
+    frame(&mut app);
+    set_field(&mut app, "range", json!("1"));
+    super::super::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(written.borrow().len(), 1);
+}
+
 /// Opened for a page of the art's bounds (Export As with Use Artboards off), the dialog has no
 /// Artboards section, and OK writes one page of the art's bounds with its options, a saved preset
 /// and View PDF after Saving included.
@@ -287,9 +308,41 @@ fn an_image_that_couldnt_be_decoded_is_named_in_the_status() {
     let (mut app, written, _) = app();
     // A PNG whose header reads but whose pixel data is cut short.
     let mut png = vec![];
-    image::RgbaImage::from_pixel(64, 32, image::Rgba([200, 30, 30, 255]))
-        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
-        .unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::RgbaImage::from_pixel(64, 32, image::Rgba([200, 30, 30, 255]))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     // The image is placed on the first artboard.
     vectorcraft_testkit::fixtures::place_cut_png(&mut app.session, &png, json!({"at": [60, 50]}));
     app.run("ui.savePdfDialog", json!({"path": "/tmp/cut.pdf"})).unwrap();
@@ -312,6 +365,74 @@ fn presets_reset_the_settings_and_fields_fall_back_to_defaults() {
     assert_eq!(get(&d, "compatibility"), "1.7");
     assert_eq!(get(&d, "marks.trim"), false);
     assert!(app.run("ui.savePdfDialog", json!({"compatibility": "1.0"})).is_err(), "bad options are refused");
+}
+
+/// Reset (`ui.dialogReset`, or Cancel with Alt or Option held) puts every option back to the
+/// chosen preset's settings, passwords and their checkboxes included, and keeps the preset, the
+/// path, the artboard range, the section and the dialog. After another preset is chosen, Reset
+/// goes back to that one, and choosing it also clears the password checkboxes.
+#[test]
+fn reset_puts_the_chosen_presets_settings_back_and_keeps_the_path_and_artboards() {
+    let (mut app, written, _) = app();
+    app.run("pdf.preset.save", json!({"name": "Mine", "compatibility": "1.5", "marks": {"trim": true}})).unwrap();
+    app.run("ui.savePdfDialog", json!({"path": "/tmp/reset.pdf", "preset": "Mine"})).unwrap();
+    set_field(&mut app, "__allArtboards", json!(false));
+    set_field(&mut app, "range", json!("2"));
+    set_field(&mut app, "__section", json!("Security"));
+    set_field(&mut app, "compatibility", json!("1.7"));
+    set_field(&mut app, "marks.trim", json!(false));
+    set_field(&mut app, "compression.color.ppi", json!(72));
+    set_field(&mut app, OPEN_PASSWORD, json!("secret"));
+    set_field(&mut app, "__restrictPermissions", json!(true));
+    let r = app.run("ui.dialogReset", json!({})).unwrap();
+    assert_eq!(r["kind"], KIND);
+    let d = app.ui.dialog.as_ref().expect("Reset leaves the dialog open");
+    assert_eq!(get(d, "compatibility"), "1.5");
+    assert_eq!(get(d, "marks.trim"), true);
+    assert_eq!(get(d, "compression.color.ppi"), 300.0, "a nested option goes back too");
+    assert_eq!(get(d, OPEN_PASSWORD).as_str().unwrap_or_default(), "", "the password is cleared");
+    assert!(!d.fields.contains_key("__restrictPermissions"), "the checkbox is cleared");
+    assert_eq!(
+        (d.str("preset"), d.str("path"), d.str("range"), d.str("__section")),
+        ("Mine".to_string(), "/tmp/reset.pdf".to_string(), "2".to_string(), "Security".to_string())
+    );
+    assert!(!d.bool("__allArtboards"));
+
+    let mut d = d.clone();
+    d.fields.insert("__requireOpenPassword".into(), json!(true));
+    apply_preset(&mut app, &mut d, pdf::DEFAULT_PRESET);
+    assert!(!d.fields.contains_key("__requireOpenPassword"), "choosing a preset clears the checkbox");
+    app.ui.dialog = Some(d);
+    set_field(&mut app, "compatibility", json!("1.4"));
+    app.run("ui.dialogReset", json!({})).unwrap();
+    let d = app.ui.dialog.as_ref().expect("the dialog stays open");
+    assert_eq!(d.str("preset"), pdf::DEFAULT_PRESET);
+    assert_eq!(get(d, "compatibility"), "1.7");
+    assert_eq!(get(d, "marks.trim"), false);
+    // OK writes the reset options to the kept path and range.
+    super::super::confirm(&mut app).unwrap();
+    let w = written.borrow();
+    assert_eq!((w.len(), w[0].0.as_str()), (1, "/tmp/reset.pdf"));
+    assert!(w[0].1.starts_with(b"%PDF-1.7"));
+    assert_eq!(vectorcraft_pdf::import(&w[0].1).unwrap().artboards.len(), 1, "range 2");
+}
+
+/// Reset with a saved preset deleted while the dialog is open is an error naming the preset, and
+/// it leaves the options and the password as they are rather than switching to another preset's.
+#[test]
+fn reset_with_a_deleted_preset_is_an_error_and_keeps_the_options() {
+    let (mut app, _, _) = app();
+    app.run("pdf.preset.save", json!({"name": "Gone", "compatibility": "1.5"})).unwrap();
+    app.run("ui.savePdfDialog", json!({"preset": "Gone"})).unwrap();
+    set_field(&mut app, "compatibility", json!("1.6"));
+    set_field(&mut app, OPEN_PASSWORD, json!("secret"));
+    app.run("pdf.preset.delete", json!({"name": "Gone"})).unwrap();
+    let e = app.run("ui.dialogReset", json!({})).unwrap_err();
+    assert!(e.contains("unknown PDF preset `Gone`"), "{e}");
+    let d = app.ui.dialog.as_ref().expect("the dialog stays open");
+    assert_eq!(d.str("preset"), "Gone");
+    assert_eq!(get(d, "compatibility"), "1.6");
+    assert_eq!(get(d, OPEN_PASSWORD), "secret");
 }
 
 #[test]
@@ -437,6 +558,39 @@ fn choosing_a_pdfx_standard_sets_its_version_and_writes_the_standard() {
     assert_eq!((get(d, "compatibility"), get(d, "createLayers")), (&json!("1.6"), &json!(true)));
 }
 
+/// Profile inclusion is disabled with a standard, so choosing PDF/X-3 or PDF/X-4 sets it back to
+/// unset: a `none` chosen before would write every CMYK color as DeviceCMYK.
+#[test]
+fn choosing_pdfx3_or_pdfx4_unsets_profile_inclusion() {
+    let (mut app, _, _) = app();
+    for standard in [Standard::PdfX3, Standard::PdfX4] {
+        app.run("ui.savePdfDialog", json!({"path": "/tmp/x.pdf", "output": {"profiles": "none"}})).unwrap();
+        let d = app.ui.dialog.as_mut().unwrap();
+        assert_eq!(get(d, "output.profiles"), &json!("none"));
+        set(d, "standard", json!(standard.id()));
+        standard_chosen(d, standard);
+        assert_eq!(get(d, "output.profiles"), &json!(vectorcraft_pdf::UNSET_CHOICE), "{}", standard.id());
+    }
+}
+
+/// Opened with PDF/X-3 or PDF/X-4 and `none` (params or a preset, without choosing the standard),
+/// the dialog keeps `none` and its Output note says every CMYK color is written as DeviceCMYK.
+#[test]
+fn a_loaded_pdfx_standard_with_no_profiles_says_cmyk_is_device_cmyk() {
+    const NOTE: &str = "every CMYK color is written as DeviceCMYK";
+    let (mut app, _, _) = app();
+    for (standard, profiles, shown) in
+        [(Standard::PdfX4, "none", true), (Standard::PdfX3, "none", true), (Standard::PdfX4, "all", false), (Standard::PdfX1a, "none", false)]
+    {
+        let params = json!({"path": "/tmp/x.pdf", "standard": standard.id(), "output": {"profiles": profiles}});
+        app.run("ui.savePdfDialog", params).unwrap();
+        set_field(&mut app, "__section", json!("Output"));
+        assert_eq!(get(app.ui.dialog.as_ref().unwrap(), "output.profiles"), &json!(profiles));
+        let text = crate::tests_labels::painted_text(&mut app, |app, ui| super::super::show(app, ui.ctx()));
+        assert_eq!(text.contains(NOTE), shown, "{} {profiles}: {text}", standard.id());
+    }
+}
+
 /// "Write pages longer than 200 in at full size in points" is enabled only without a standard, at
 /// PDF 1.5 and later: PDF/X files and PDF 1.3 and 1.4 files write long pages in points anyway, and
 /// PDF/A files keep the `UserUnit`.
@@ -506,4 +660,64 @@ fn pdf_1_3_takes_a_flattener_preset_in_advanced() {
     app.run("pdf.preset.save", json!({"name": "Old", "compatibility": "1.3", "flattenerPreset": "Low Resolution"})).unwrap();
     let saved = app.session.prefs.pdf_presets.iter().find(|p| p.name == "Old").unwrap();
     assert_eq!((saved.settings.compatibility, saved.settings.flattener_preset.as_str()), (Compatibility::Pdf13, "Low Resolution"));
+}
+
+#[test]
+fn save_pdf_flattens_transparent_document_without_modal_prompt() {
+    let (mut app, written, _) = app();
+    // Add transparent artwork to the document
+    app.run("transparency.set", json!({"opacity": 50})).unwrap();
+
+    app.run("ui.savePdfDialog", json!({"path": "/tmp/transparent.pdf", "compatibility": "1.3"})).unwrap();
+    assert_eq!(app.ui.dialog.as_ref().unwrap().kind, KIND);
+
+    // Clicking Save PDF goes ahead without stopping at a confirmation prompt
+    super::super::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none(), "Save PDF closes without a modal prompt");
+    assert_eq!(written.borrow().len(), 1);
+    assert!(written.borrow()[0].1.starts_with(b"%PDF-1.3"));
+}
+
+#[test]
+fn summary_warnings_include_flattener_resolutions_when_flattening_transparency() {
+    let (mut app, _, _) = app();
+    app.run("transparency.set", json!({"opacity": 50})).unwrap();
+
+    app.run("ui.savePdfDialog", json!({"path": "/tmp/out.pdf", "compatibility": "1.3"})).unwrap();
+    let p = params(app.ui.dialog.as_ref().unwrap());
+    let v = summary_of(&mut app, &egui::Context::default(), &p).unwrap();
+    let warnings = v["warnings"].as_array().unwrap();
+    assert!(
+        warnings.iter().any(|w| {
+            let s = w.as_str().unwrap();
+            s.contains("transparency is flattened into opaque art and images")
+                && s.contains("at 1200 ppi line art and text, 300 ppi gradients and meshes")
+        }),
+        "{warnings:?}"
+    );
+
+    // With a custom flattener override, the resolution in the warning reflects the options
+    set_field(&mut app, "flattener.lineArtPpi", json!(600));
+    set_field(&mut app, "flattener.gradientPpi", json!(200));
+    let p2 = params(app.ui.dialog.as_ref().unwrap());
+    let v2 = summary_of(&mut app, &egui::Context::default(), &p2).unwrap();
+    let warnings2 = v2["warnings"].as_array().unwrap();
+    assert!(
+        warnings2.iter().any(|w| {
+            let s = w.as_str().unwrap();
+            s.contains("at 600 ppi line art and text, 200 ppi gradients and meshes")
+        }),
+        "{warnings2:?}"
+    );
+}
+
+#[test]
+fn advanced_section_shows_raster_resolution_note() {
+    let (mut app, _, _) = app();
+    app.run("ui.savePdfDialog", json!({"path": "/tmp/out.pdf", "compatibility": "1.3"})).unwrap();
+    set_field(&mut app, "__section", json!("Advanced"));
+    set_field(&mut app, "flattener.lineArtPpi", json!(600));
+    set_field(&mut app, "flattener.gradientPpi", json!(200));
+    frame(&mut app);
+    assert!(app.ui.dialog.is_some());
 }

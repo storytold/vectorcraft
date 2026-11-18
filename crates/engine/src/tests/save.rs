@@ -760,7 +760,23 @@ fn eps_save_bounds_large_page_preview_without_cropping_vector_or_editing_data() 
     let (ps, tiff) = vectorcraft_eps::sections(&bytes).unwrap();
     let tiff = tiff.unwrap();
     assert!(tiff.len() < 4 * 1024 * 1024 + 64 * 1024, "compatibility preview grew to {} bytes", tiff.len());
-    let preview = image::load_from_memory_with_format(tiff, image::ImageFormat::Tiff).unwrap();
+    let preview = craft_image_codecs::decode_as(craft_image_codecs::Format::Tiff, tiff)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap();
     assert_eq!((preview.width(), preview.height()), (1024, 1024));
     assert!(std::str::from_utf8(ps).unwrap().contains("%%BoundingBox: 0 0 4000 4000"));
     let native = vectorcraft_format::load(&vectorcraft_eps::native(&bytes).unwrap()).unwrap();

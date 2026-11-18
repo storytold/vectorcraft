@@ -395,20 +395,76 @@ struct SharedKey {
     /// The painter's clip: the lines of the path outside it have no triangles in the mesh.
     clip: egui::Rect,
     stroke: Stroke,
+    /// Where the dash pattern starts along the path, in document units, when it is dashed.
+    dash: Option<f64>,
     pixels_per_point: f32,
     tessellation: TessellationOptions,
 }
 
+/// The length of a dash of a dashed overlay, in screen pixels.
+const DASH: f32 = 4.0;
+/// The length of the gap after each dash of a dashed overlay, in screen pixels.
+const GAP: f32 = 3.0;
+
+/// Add to `out` the dashes of `line` drawn with `s`, [`DASH`] pixels drawn and [`GAP`] left out,
+/// with the pattern started `from` pixels along it: from 0, the dashes [`Shape::dashed_line`] gives.
+pub(super) fn dashes_from(line: &[Pos2], s: Stroke, from: f64, out: &mut Vec<Shape>) {
+    let period = f64::from(DASH + GAP);
+    let phase = from.rem_euclid(period);
+    let phase = if phase.is_finite() { phase as f32 } else { 0.0 };
+    if line.len() < 2 {
+        return;
+    }
+    if phase >= DASH {
+        Shape::dashed_line_many_with_offset(line, s, &[DASH], &[GAP], DASH + GAP - phase, out);
+        return;
+    }
+    // The pattern starts within a dash: the rest of that dash is drawn, then the pattern goes on
+    // after its gap.
+    let mut left = DASH - phase;
+    for (i, w) in line.windows(2).enumerate() {
+        let len = (w[1] - w[0]).length();
+        if len >= left {
+            let cut = w[0] + (w[1] - w[0]) * (left / len);
+            let mut dash = line[..=i].to_vec();
+            dash.push(cut);
+            segments(&dash, s, out);
+            let mut rest = vec![cut];
+            rest.extend_from_slice(&line[i + 1..]);
+            Shape::dashed_line_many_with_offset(&rest, s, &[DASH], &[GAP], GAP, out);
+            return;
+        }
+        left -= len;
+    }
+    segments(line, s, out);
+}
+
+/// Add to `out` each line of `line` that has a length as its own [`Shape::LineSegment`], as
+/// [`Shape::dashed_line`] draws a dash.
+fn segments(line: &[Pos2], s: Stroke, out: &mut Vec<Shape>) {
+    out.extend(line.windows(2).filter(|w| w[0] != w[1]).map(|w| Shape::line_segment([w[0], w[1]], s)));
+}
+
 impl SharedPaths {
-    /// The mesh that draws `path` with `s` at the view `xf` with the painter `p`: the one kept in
-    /// this frame or in `last` (the last frame's) when it was built for the same, else a new one.
-    /// It is kept for the next frame.
-    fn mesh(&mut self, last: &mut HashMap<usize, SharedMesh>, path: &Arc<BezPath>, xf: &Xf, s: Stroke, p: &egui::Painter) -> Arc<Mesh> {
+    /// The mesh that draws `path` with `s`, dashed from `dash` document units along the pattern
+    /// when that is set, at the view `xf` with the painter `p`: the one kept in this frame or in
+    /// `last` (the last frame's) when it was built for the same, else a new one. It is kept for
+    /// the next frame.
+    fn mesh(
+        &mut self,
+        last: &mut HashMap<usize, SharedMesh>,
+        path: &Arc<BezPath>,
+        xf: &Xf,
+        s: Stroke,
+        dash: Option<f64>,
+        p: &egui::Painter,
+    ) -> Arc<Mesh> {
         let ctx = p.ctx();
         let key = SharedKey {
             view: xf.affine().as_coeffs(),
             clip: p.clip_rect(),
             stroke: s,
+            dash,
             pixels_per_point: ctx.pixels_per_point(),
             tessellation: ctx.tessellation_options(|o| *o),
         };
@@ -425,7 +481,16 @@ impl SharedPaths {
                 tessellator.set_clip_rect(key.clip);
                 let mut mesh = Mesh::default();
                 for line in to_screen_path(path, xf) {
-                    tessellator.tessellate_shape(Shape::line(line, s), &mut mesh);
+                    match dash {
+                        Some(from) => {
+                            let mut dashes = vec![];
+                            dashes_from(&line, s, from * xf.zoom, &mut dashes);
+                            for d in dashes {
+                                tessellator.tessellate_shape(d, &mut mesh);
+                            }
+                        }
+                        None => tessellator.tessellate_shape(Shape::line(line, s), &mut mesh),
+                    }
                 }
                 SharedMesh { path: Arc::clone(path), key, mesh: Arc::new(mesh) }
             }
@@ -476,8 +541,8 @@ pub(super) fn draw_overlays(p: &egui::Painter, xf: &Xf, overlays: &[Overlay], t:
                     stroke_path(p, path, xf, s);
                 }
             }
-            Overlay::SharedPath { path, color, width } => {
-                let mesh = shared.mesh(&mut last, path, xf, Stroke::new(*width, c32(*color)), p);
+            Overlay::SharedPath { path, color, width, dash } => {
+                let mesh = shared.mesh(&mut last, path, xf, Stroke::new(*width, c32(*color)), *dash, p);
                 if !mesh.is_empty() {
                     p.add(Shape::mesh(mesh));
                 }

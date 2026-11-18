@@ -726,6 +726,18 @@ impl Tool for ArtboardTool {
         }
     }
 
+    fn check_option(&self, key: &str, value: &Value) -> Result<(), String> {
+        use crate::option_check as c;
+        match key {
+            "active" if value.as_u64().is_some() => Ok(()),
+            "active" => Err("`active` must be an artboard index: a whole number from 0".into()),
+            "selected" if value.as_array().is_some_and(|a| !a.is_empty() && a.iter().all(|i| i.as_u64().is_some())) => Ok(()),
+            "selected" => Err("`selected` must be a list of artboard indexes, the active one first".into()),
+            "moveArt" | "scaleArt" | "suppressFitClick" => c::boolean(key, value),
+            _ => Err(c::unknown(key)),
+        }
+    }
+
     /// A drag is moving or resizing artboards (Artboard Options › Update While Dragging reads it).
     fn transforming(&self) -> bool {
         matches!(self.drag, Some(Drag::Move { began: true, .. } | Drag::Resize { began: true, .. }))
