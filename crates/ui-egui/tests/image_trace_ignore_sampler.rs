@@ -405,6 +405,92 @@ fn a_stale_sampler_and_canvas_press_in_one_frame_do_not_reselect_the_source() {
     assert_eq!(app.session.active().unwrap().selection.objects, vec![target]);
 }
 
+/// A stale sampler consumes its second press, including the release's double-click action.
+#[test]
+fn a_consumed_stale_sampler_press_does_not_complete_a_double_click() {
+    fn frame_at(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, events: Vec<Event>) {
+        let mut raw = RawInput {
+            time: Some(time),
+            events,
+            focused: true,
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1600.0, 1400.0))),
+            ..Default::default()
+        };
+        app.raw_input_hook(ctx, &mut raw);
+        let mut out = ctx.run_ui(raw, |ui| {
+            app.tick(ui.ctx());
+            app.ui(ui);
+        });
+        out.textures_delta.clear();
+        assert_eq!(ctx.time(), time, "the real UI frame uses the supplied gesture time");
+    }
+
+    // Run the legitimate control first: this geometry and these real UI frames must isolate.
+    for sampler in [false, true] {
+        let (mut app, ctx) = fixture(true, [37, 83, 149], false);
+        let source = selected(&app).id;
+        app.session.prefs.double_click_to_isolate = true;
+        let first = app.run("shape.rectangle", json!({"x": 100, "y": 140, "width": 20, "height": 20})).unwrap()["id"].clone();
+        let second = app.run("shape.rectangle", json!({"x": 120, "y": 140, "width": 20, "height": 20})).unwrap()["id"].clone();
+        app.run("paint.setFill", json!({"ids": [first.clone(), second.clone()], "color": "#cc3322"})).unwrap();
+        app.run("select.set", json!({"ids": [first, second]})).unwrap();
+        let group = NodeId(app.run("object.group", json!({})).unwrap()["id"].as_u64().unwrap());
+        app.run("select.set", json!({"ids": [source.0]})).unwrap();
+        settle(&mut app, &ctx);
+        let point = Point::new(110.0, 150.0);
+        assert!(point.x < source_point(&app, 0.0).x - 40.0, "the group is outside the source image");
+        if sampler {
+            click_control(&mut app, &ctx, SAMPLE_TIP);
+            assert_eq!(app.session.tool_id(), "eyedropper");
+            assert!(app.ui.trace_ignore_sampler.is_some());
+        }
+        let at = canvas::Xf::at(app.canvas_rect.unwrap(), app.view().unwrap(), ctx.zoom_factor()).to_screen(point);
+        assert!(app.canvas_rect.unwrap().contains(at));
+        let (delay, hold) = ctx.options(|o| (o.input_options.max_double_click_delay, o.input_options.max_click_duration));
+        assert!(delay.is_finite() && delay > 0.0 && hold.is_finite() && hold > 0.0);
+        let step = delay.min(hold) / 8.0;
+        // Leave the panel-button click outside the interval; only these two canvas clicks count.
+        let start = ctx.time() + delay + 1.0;
+        let press = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame_at(&mut app, &ctx, start, vec![Event::PointerMoved(at), press(true)]);
+        frame_at(&mut app, &ctx, start + step, vec![press(false)]);
+        assert!(!ctx.input(|i| i.pointer.button_double_clicked(PointerButton::Primary)), "the first canvas click is single");
+        assert_eq!(app.session.active().unwrap().isolation, None);
+
+        if sampler {
+            assert_eq!(app.session.tool_id(), "eyedropper", "the first click is a source-image miss");
+            assert!(app.ui.trace_ignore_sampler.is_some(), "the miss keeps sampling armed");
+            assert_eq!(app.session.active().unwrap().selection.objects, vec![source], "the miss does not select the group");
+            // No intervening UI frame: canvas refresh must consume the stale second press.
+            app.run("select.none", json!({})).unwrap();
+            let state = app.session.active().unwrap();
+            let (document, selection, revision) = (state.doc.clone(), state.selection.clone(), state.revision);
+            let history = (state.history.undo.len(), state.history.redo.len());
+            let paint = app.session.paint.clone();
+            frame_at(&mut app, &ctx, start + 3.0 * step, vec![press(true)]);
+            assert_eq!(app.session.tool_id(), "selection");
+            assert!(app.ui.trace_ignore_sampler.is_none());
+            assert_eq!(app.session.active().unwrap().selection, selection, "the second press was consumed");
+            frame_at(&mut app, &ctx, start + 4.0 * step, vec![press(false)]);
+            assert!(ctx.input(|i| i.pointer.button_double_clicked(PointerButton::Primary)), "egui recognizes the timed release as a double-click");
+            let state = app.session.active().unwrap();
+            assert_eq!(state.isolation, None, "the release of the consumed press must not isolate the group");
+            assert_eq!(state.doc, document);
+            assert_eq!(state.selection, selection);
+            assert_eq!(state.revision, revision);
+            assert_eq!((state.history.undo.len(), state.history.redo.len()), history);
+            assert_eq!(app.session.paint, paint);
+            assert_eq!(app.session.tool_id(), "selection");
+        } else {
+            assert_eq!(app.session.active().unwrap().selection.objects, vec![group], "the ordinary first click really selects the group");
+            frame_at(&mut app, &ctx, start + 3.0 * step, vec![press(true)]);
+            frame_at(&mut app, &ctx, start + 4.0 * step, vec![press(false)]);
+            assert!(ctx.input(|i| i.pointer.button_double_clicked(PointerButton::Primary)));
+            assert_eq!(app.session.active().unwrap().isolation, Some(group), "the legitimate unarmed double-click isolates the same group");
+        }
+    }
+}
+
 fn capture_canvas(app: &mut VectorcraftApp, ctx: &egui::Context) -> (vectorcraft_render::Rendered, CacheKey) {
     app.canvas.key = None; // force a complete upload, not a partial delta requiring reconstruction
     let mut out = frame(app, ctx, vec![]);
