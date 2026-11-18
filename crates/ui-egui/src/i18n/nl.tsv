@@ -1368,6 +1368,9 @@ liquify-list-end	{0}, {1}	{0} en {1}
 	Magic Wand	Magische toverstaf
 	Navigator	Navigator
 	Navigator Panel Options	Opties voor het paneel Navigator
+	Attributes Panel Options	Opties voor het paneel Kenmerken
+	Number of Recent URLs:	Aantal recente URL's:
+@msg	`count` must be a whole number from 1 to 30	`count` moet een geheel getal van 1 tot 30 zijn
 	Draw Dashed Lines as Solid Lines	Streepjeslijnen als doorgetrokken lijnen tekenen
 	Pattern Options	Patroonopties
 	Properties	Eigenschappen
@@ -2088,6 +2091,7 @@ lighting	Light	Licht
 	Save Actions…	Acties opslaan…
 	Load Actions…	Acties laden…
 	Replace Actions…	Acties vervangen…
+	Clear Actions	Acties wissen
 	Reset Actions	Acties opnieuw instellen
 	Replace the current actions with the default set?	De huidige acties vervangen door de standaardset?
 	Append adds the default set after the current sets instead.	Toevoegen voegt in plaats daarvan de standaardset toe na de huidige sets.
@@ -2434,6 +2438,7 @@ digits	Malayalam	Malayalam
 	Duplicate Action or Action Set	Actie of actieset dupliceren
 	Delete the action set “{name}” and its actions?	De actieset „{name}” en de acties erin verwijderen?
 	Delete the selected action sets and their actions?	De geselecteerde actiesets en de acties erin verwijderen?
+	Delete all action sets and their actions?	Alle actiesets en de acties erin verwijderen?
 	Delete these {n} graphic styles?	Deze {n} grafische stijlen verwijderen?
 	Delete this {n} graphic style?	Deze {n} grafische stijl verwijderen?
 	Graphic Style Libraries Menu	Menu grafische stijlbibliotheken
@@ -4683,6 +4688,7 @@ theme	Appearance	Vormgeving
 	Set Tab Stops	Tabstops instellen
 	Tab Stops	Tabstops
 	Flare	Flare
+	Edit Flare	Flare bewerken
 	Rays	Stralen
 	Rectangle	Rechthoek
 	Paintbrush	Penseel
@@ -4963,6 +4969,8 @@ font-technology	Variable	Variabel
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Het muiswiel met Cmd/Ctrl ingedrukt schuift het canvas zijwaarts.
 	Dragging sideways on a numeric field's label changes the field's value.	Zijwaarts slepen over het label van een numeriek veld wijzigt de waarde van het veld.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Een draaigebaar met twee vingers op een trackpad draait de weergave van het canvas.
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Als u een toets vasthoudt, wordt het gereedschap of de opdracht uit de kolom Houd in Sneltoetsen uitgevoerd; kort drukken voert de gewone sneltoets uit.
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Hoeveel seconden u een toets moet vasthouden voordat de vasthoudsneltoets wordt uitgevoerd in plaats van de gewone sneltoets.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Als u ankerpunten verplaatst, behoudt elke curve met één verplaatst uiteinde zijn vorm ten opzichte van zijn uiteinden.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Als u de sneltoets van een gereedschap ingedrukt houdt, is dat gereedschap gekozen tot u loslaat, en daarna wordt het vorige gereedschap weer gekozen.
 	Shows the bounding box while you move the selection or draw a shape.	Toont het begrenzingskader terwijl u de selectie verplaatst of een vorm tekent.
@@ -5598,6 +5606,7 @@ imageTrace	Outline	Contour
 @msg	no graphic style `{n}`	geen grafische stijl `{n}`
 @msg	no interaction in progress	geen interactie gaande
 @msg	no key object	geen sleutelobject
+@msg	Align to Key Object isn't available with the Artboard tool	Uitlijnen op sleutelobject is niet beschikbaar met het tekengebied-gereedschap
 @msg	no library `{key}` (see {list})	geen bibliotheek `{key}` (zie {list})
 @msg	no native format	geen eigen indeling
 @msg	no pages	geen pagina's
@@ -5728,6 +5737,7 @@ imageTrace	Outline	Contour
 @msg	select a Live Paint group	selecteer een Live Paint-groep
 @msg	select a blend	selecteer een vermenging
 @msg	select a clip group	selecteer een knipgroep
+@msg	select a flare	selecteer een flare
 @msg	select a gradient mesh	selecteer een verloopnet
 @msg	select a linked image: an embedded one has no file	selecteer een gekoppelde afbeelding: een ingesloten afbeelding heeft geen bestand
 @msg	select a repeat	selecteer een herhaling
@@ -5936,6 +5946,7 @@ imageTrace	Outline	Contour
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} gekoppelde afbeelding is gewijzigd op de schijf: Koppelingen bijwerken toont de nieuwe versie|{n} gekoppelde afbeeldingen zijn gewijzigd op de schijf: Koppelingen bijwerken toont de nieuwe versies
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Bijgewerkt: {n} gekoppeld bestand gewijzigd op de schijf|Bijgewerkt: {n} gekoppelde bestanden gewijzigd op de schijf
 @msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	het document stelt een afloop in die dit PDF/X-bestand weglaat: schakel 'Afloopinstellingen van document gebruiken' in
+@msgplural	{n} object reaches the trim edge but stops short of the bleed|{n} objects reach the trim edge but stop short of the bleed	{n} object reikt tot de snijrand maar stopt voor de afloop|{n} objecten reiken tot de snijrand maar stoppen voor de afloop
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	{what} geëxporteerd met {n} opmerking: {first}|{what} geëxporteerd met {n} opmerkingen: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	er staat nu {n} lettertypebestand in {folder}|er staan nu {n} lettertypebestanden in {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	er staat nu {n} lettertypebestand in {folder}; {failed} konden niet worden toegevoegd: {reason}|er staan nu {n} lettertypebestanden in {folder}; {failed} konden niet worden toegevoegd: {reason}
@@ -8955,6 +8966,8 @@ swatch	Bright Violet	Felviolet
 @msg	no such spine point	dat aspunt bestaat niet
 @msg	`with` must be a list of at most 10000 spine point indexes	`with` moet een lijst van hoogstens 10000 aspuntindexen zijn
 @msg	`with` moves points, not a handle	`with` verplaatst punten, geen handgreep
+@msg	`link` and `independent` cannot both be true	`link` en `independent` kunnen niet allebei true zijn
+@msg	`link` places a handle: give `handle`	`link` plaatst een handgreep: geef `handle` op
 @msg	no such spine segment	dat assegment bestaat niet
 @msg	not a blend	geen vermenging
 @msg	select a blend or give `id`	selecteer een vermenging of geef `id` op
@@ -8996,6 +9009,9 @@ variable-list-end	{0}, {1}	{0} en {1}
 	Continue in Background	Doorgaan op achtergrond
 	Cancel Export	Export annuleren
 @msg	Export cancelled	Export geannuleerd
+	Cancel Save	Opslaan annuleren
+@plural	{n} more save waiting|{n} more saves waiting	Nog {n} opslagactie in de wachtrij|Nog {n} opslagacties in de wachtrij
+@msg	Save canceled	Opslaan geannuleerd
 # Paragraph panel menu › Justification…
 	Desired	Gewenst
 	Word Spacing:	Woordafstand:
@@ -9316,6 +9332,12 @@ axis	Y Axis	Y-as
 	Circuit Trace	Printspoor
 	Bus Lines	Buslijnen
 	Terminal Nodes	Aansluitpunten
+
+# Original arrow art brushes.
+	Arrows	Pijlen
+	Solid Arrow	Massieve pijl
+	Open Arrow	Open pijl
+	Chevron Arrow	Chevronpijl
 
 	Notched Ribbon	Gekerfd lint
 	Double Line	Dubbele lijn
@@ -9970,10 +9992,18 @@ breakText	Glyphs	Glyphs
 	Smooth Bridge…	Vloeiende brug…
 	Smooth Bridge	Vloeiende brug
 	Keep Originals	Originelen behouden
-@msg	select two circles to bridge	selecteer twee cirkels om te verbinden
+@msg	select two or more circles to bridge	selecteer twee of meer cirkels om te verbinden
 @msg	one circle is inside the other	de ene cirkel ligt binnen de andere
 @msg	the circles are too far apart for this radius: raise the radius	de cirkels liggen te ver uit elkaar voor deze straal: vergroot de straal
 @msg	the circles are too far apart for this radius	de cirkels liggen te ver uit elkaar voor deze straal
+	Constant Gap	Constante tussenruimte
+	Reach:	Bereik:
+@msg	the circles are too far apart for this gap: raise the gap	de cirkels liggen te ver uit elkaar voor deze tussenruimte: vergroot de tussenruimte
+@msg	the circles are too far apart for this gap	de cirkels liggen te ver uit elkaar voor deze tussenruimte
+@msg	no two circles are within reach: raise the reach	geen twee cirkels liggen binnen bereik: vergroot het bereik
+@msg	select at most 2000 circles to bridge	selecteer hoogstens 2000 cirkels om te verbinden
+@msg	that makes too many bridges (at most 8000): lower the reach	dat geeft te veel bruggen (hoogstens 8000): verklein het bereik
+@msg	the bridged circles are too complex to unite	de verbonden cirkels zijn te complex om samen te voegen
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	Gemeenschappelijke raaklijnen…
 	Common Tangents	Gemeenschappelijke raaklijnen
@@ -10422,6 +10452,16 @@ breakText	Glyphs	Glyphs
 	No objects are selected.	Er zijn geen objecten geselecteerd.
 	Open a document to mark its fold lines.	Open een document om de vouwlijnen te markeren.
 	Remove Fold Line Role	Lijnsoort verwijderen
+	Tap	Kort drukken
+	Clear Hold	Vasthouden wissen
+	Hold Shortcuts	Vasthoudsneltoetsen
+	Hold Shortcut Delay	Vertraging vasthoudsneltoetsen
+	How hold shortcuts work	Zo werken vasthoudsneltoetsen
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	Klik en druk vervolgens een toets in die hiervoor wordt vastgehouden (Esc annuleert). De toets vasthouden voert dit uit; kort drukken voert de eigen sneltoets van de toets uit.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	Kort drukken op een toets voert de sneltoets ervan uit. De toets vasthouden gedurende de vertraging voert in plaats daarvan het gereedschap of de opdracht in de kolom Houd uit. Een vasthoudsneltoets is een letter-, cijfer- of leestekentoets, alleen of met Shift.
+@msg	Hold {_1} is already used by {_2}	Vasthouden {_1} wordt al gebruikt door {_2}
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	een vasthoudsneltoets is een toets die een teken typt, alleen of met Shift ({shown} bevat Cmd, Ctrl of Alt)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} kan geen vasthoudsneltoets zijn: gebruik een letter, een cijfer of een leestekentoets
 	Check	Controleren
 	Check Fold Lines	Vouwlijnen controleren
 @msg	No cut lines are in the selection.	De selectie bevat geen snijlijnen.
@@ -10442,6 +10482,7 @@ breakText	Glyphs	Glyphs
 @msg	A panel is not joined to the rest by a crease.	Een paneel is door geen rillijn met de rest verbonden.
 @msg	A fold line is on a non-printing layer.	Een vouwlijn staat op een laag die niet wordt afgedrukt.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panelen: {panels}, scharnieren: {hinges}, fouten: {errors}, waarschuwingen: {warnings}
+	Dashed Arrow	Gestreepte pijl
 	Pressure Sensitive	Drukgevoelig
 	Flex Ribbon	Flexibel lint
 	Pulse Stroke	Pulserende streek

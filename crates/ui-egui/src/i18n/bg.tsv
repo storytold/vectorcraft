@@ -842,6 +842,7 @@ font-technology	Variable	Променливи
 	Duplicate Action or Action Set	Дублиране на действие или набор от действия
 	Delete the action set “{name}” and its actions?	Изтриване на набора от действия „{name}“ и неговите действия?
 	Delete the selected action sets and their actions?	Изтриване на избраните набори от действия и техните действия?
+	Delete all action sets and their actions?	Изтриване на всички набори от действия и техните действия?
 	Delete Theme	Изтриване на тема
 	Delete theme	Изтриване на тема
 	Delete these {n} graphic styles?	Изтриване на тези {n} графични стила?
@@ -1303,6 +1304,7 @@ font-technology	Variable	Променливи
 	Fit to Selected Art	Побиране спрямо избраната графика
 	Flag…	Знаме…
 	Flare	Взрив
+	Edit Flare	Редактиране на взрива
 	Flare Tool	Инструмент „Взрив“
 	Flare Tool Options	Опции на инструмента „Взрив“
 	Halo	Ореол
@@ -2188,6 +2190,9 @@ font-technology	Variable	Променливи
 	Navigate	Навигация
 	Navigator	Навигатор
 	Navigator Panel Options	Опции за панела „Навигатор“
+	Attributes Panel Options	Опции за панела „Атрибути“
+	Number of Recent URLs:	Брой скорошни URL адреси:
+@msg	`count` must be a whole number from 1 to 30	`count` трябва да е цяло число от 1 до 30
 	Draw Dashed Lines as Solid Lines	Изчертаване на прекъснатите линии като плътни
 	Needs the desktop app	Изисква десктоп приложение
 	Neutral Gradients	Неутрални градиенти
@@ -2654,6 +2659,7 @@ font-technology	Variable	Променливи
 	Save Actions…	Запазване на действия…
 	Load Actions…	Зареждане на действия…
 	Replace Actions…	Замяна на действия…
+	Clear Actions	Изчистване на действия
 	Reset Actions	Нулиране на действия
 	Replace the current actions with the default set?	Да се заменят ли текущите действия с набора по подразбиране?
 	Append adds the default set after the current sets instead.	С „Добавяне“ наборът по подразбиране се добавя след текущите набори.
@@ -3093,6 +3099,8 @@ digits	Malayalam	Малаялам
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Колелцето на мишката с натиснат Cmd/Ctrl превърта платното настрани.
 	Dragging sideways on a numeric field's label changes the field's value.	Влаченето настрани върху етикета на числово поле променя стойността на полето.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Жест за завъртане с два пръста върху тъчпад завърта изгледа на платното.
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Задържането на клавиш изпълнява инструмента или командата от колоната „Задръжте“ в „Клавишни комбинации“; краткото натискане изпълнява обичайната му комбинация.
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Колко секунди трябва да се задържи клавиш, преди вместо обичайната му комбинация да се изпълни комбинацията му със задържане.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Когато премествате котвени точки, всяка крива с една преместена крайна точка запазва формата си спрямо краищата си.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Задържането на клавишната комбинация на инструмент го избира, докато я пуснете, а след това отново се избира предишният инструмент.
 	Shows the bounding box while you move the selection or draw a shape.	Показва ограничителната рамка, докато премествате селекцията или рисувате форма.
@@ -4819,6 +4827,7 @@ axis	Both	И двете
 @msg	no graphic style `{n}`	няма графичен стил `{n}`
 @msg	no interaction in progress	няма текущо взаимодействие
 @msg	no key object	няма основен обект
+@msg	Align to Key Object isn't available with the Artboard tool	„Подравняване спрямо ключов обект“ не е налично с инструмента „Работна област“
 @msg	no library `{key}` (see {list})	няма библиотека `{key}` (вижте {list})
 @msg	no native format	няма нативен формат
 @msg	no pages	няма страници
@@ -4870,6 +4879,8 @@ axis	Both	И двете
 @msg	no such spine point	няма такава точка от оста
 @msg	`with` must be a list of at most 10000 spine point indexes	`with` трябва да е списък с най-много 10000 индекса на точки от оста
 @msg	`with` moves points, not a handle	`with` мести точки, не дръжка
+@msg	`link` and `independent` cannot both be true	`link` и `independent` не могат и двата да са true
+@msg	`link` places a handle: give `handle`	`link` поставя дръжка: задайте `handle`
 @msg	no such spine segment	няма такъв сегмент от оста
 @msg	no such subpath	няма такъв подпът
 @msg	no such user library	няма такава потребителска библиотека
@@ -4956,6 +4967,7 @@ axis	Both	И двете
 @msg	select a blend	изберете преход (blend)
 @msg	select a blend or give `id`	изберете преливане или задайте неговия `id`
 @msg	select a clip group	изберете група за изрязване
+@msg	select a flare	изберете взрив
 @msg	select a gradient mesh	изберете мрежа на градиент (gradient mesh)
 @msg	select a linked image: an embedded one has no file	изберете свързано изображение: вграденото няма файл
 @msg	select a repeat	изберете повторение (repeat)
@@ -5169,6 +5181,7 @@ axis	Both	И двете
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} свързано изображение е променено на диска: „Обновяване на връзките“ показва новата версия|{n} свързани изображения са променени на диска: „Обновяване на връзките“ показва новите версии
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Обновен е {n} свързан файл, променен на диска|Обновени са {n} свързани файла, променени на диска
 @msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	документът задава изтичане, което този PDF/X файл пропуска: включете „Използване на настройките за изтичане на документа“
+@msgplural	{n} object reaches the trim edge but stops short of the bleed|{n} objects reach the trim edge but stop short of the bleed	{n} обект достига ръба на обрязване, но не стига до изтичането|{n} обекта достигат ръба на обрязване, но не стигат до изтичането
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	{what} е експортиран с {n} бележка: {first}|{what} е експортиран с {n} бележки: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} шрифтов файл вече е в {folder}|{n} шрифтови файла вече са в {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} шрифтов файл вече е в {folder}; {failed} не можаха да бъдат добавени: {reason}|{n} шрифтови файла вече са в {folder}; {failed} не можаха да бъдат добавени: {reason}
@@ -6343,6 +6356,9 @@ theme	Appearance	Външен вид
 	Continue in Background	Продължаване във фонов режим
 	Cancel Export	Отказ от експортирането
 @msg	Export cancelled	Експортирането е отказано
+	Cancel Save	Отказ от записването
+@plural	{n} more save waiting|{n} more saves waiting	Още {n} записване в изчакване|Още {n} записвания в изчакване
+@msg	Save canceled	Записването е отказано
 # Paragraph panel menu › Justification…
 	Desired	Желано
 	Word Spacing:	Разстояние между думите:
@@ -6645,6 +6661,12 @@ axis	Y Axis	Y ос
 	Circuit Trace	Проводяща писта
 	Bus Lines	Шинни линии
 	Terminal Nodes	Крайни възли
+
+# Original arrow art brushes.
+	Arrows	Стрелки
+	Solid Arrow	Плътна стрелка
+	Open Arrow	Отворена стрелка
+	Chevron Arrow	Стрелка с шеврон
 
 	Notched Ribbon	Назъбена лента
 	Double Line	Двойна линия
@@ -7300,10 +7322,18 @@ breakText	Glyphs	Глифи
 	Smooth Bridge…	Плавен мост…
 	Smooth Bridge	Плавен мост
 	Keep Originals	Запазване на оригиналите
-@msg	select two circles to bridge	изберете два кръга за свързване
+@msg	select two or more circles to bridge	изберете два или повече кръга за свързване
 @msg	one circle is inside the other	единият кръг е вътре в другия
 @msg	the circles are too far apart for this radius: raise the radius	кръговете са твърде далеч един от друг за този радиус: увеличете радиуса
 @msg	the circles are too far apart for this radius	кръговете са твърде далеч един от друг за този радиус
+	Constant Gap	Постоянно разстояние
+	Reach:	Обхват:
+@msg	the circles are too far apart for this gap: raise the gap	кръговете са твърде далеч един от друг за това разстояние: увеличете разстоянието
+@msg	the circles are too far apart for this gap	кръговете са твърде далеч един от друг за това разстояние
+@msg	no two circles are within reach: raise the reach	няма два кръга в обхват: увеличете обхвата
+@msg	select at most 2000 circles to bridge	изберете най-много 2000 кръга за свързване
+@msg	that makes too many bridges (at most 8000): lower the reach	това дава твърде много мостове (най-много 8000): намалете обхвата
+@msg	the bridged circles are too complex to unite	свързаните кръгове са твърде сложни за обединяване
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	Общи допирателни…
 	Common Tangents	Общи допирателни
@@ -7663,6 +7693,17 @@ breakText	Glyphs	Глифи
 @msg	A joint does not close by {gap} pt.	Една връзка не се затваря с {gap} pt.
 @msg	Two panels pass through each other.	Два панела минават един през друг.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer трябва да е "singleLine", "everyLine", "standardSingleLine" или "standardEveryLine"
+	Tap	Кратко натискане
+	Clear Hold	Изчистване на задържането
+	Hold Shortcuts	Комбинации със задържане
+	Hold Shortcut Delay	Забавяне на комбинациите със задържане
+	How hold shortcuts work	Как работят комбинациите със задържане
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	Щракнете и натиснете клавиш, който да се задържа за това (Esc отменя). Задържането на клавиша изпълнява това; краткото натискане изпълнява собствената комбинация на клавиша.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	Краткото натискане на клавиш изпълнява неговата комбинация. Задържането на клавиша за времето на забавяне изпълнява вместо това инструмента или командата от колоната му „Задръжте“. Комбинация със задържане е клавиш с буква, цифра или препинателен знак, самостоятелно или с Shift.
+@msg	Hold {_1} is already used by {_2}	Задържането на {_1} вече се използва от {_2}
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	комбинация със задържане е клавиш, който въвежда знак, самостоятелно или с Shift ({shown} съдържа Cmd, Ctrl или Alt)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} не може да бъде комбинация със задържане: използвайте буква, цифра или препинателен знак
+	Dashed Arrow	Пунктирана стрелка
 	Pressure Sensitive	Чувствителни на натиск
 	Flex Ribbon	Гъвкава лента
 	Pulse Stroke	Пулсиращ щрих

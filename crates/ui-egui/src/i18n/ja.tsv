@@ -857,6 +857,9 @@ digits	Malayalam	マラヤーラム数字
 	Magic Wand	自動選択
 	Navigator	ナビゲーター
 	Navigator Panel Options	ナビゲーターパネルオプション
+	Attributes Panel Options	属性パネルオプション
+	Number of Recent URLs:	最近使った URL の数:
+@msg	`count` must be a whole number from 1 to 30	`count` には 1 から 30 までの整数を指定してください
 	Draw Dashed Lines as Solid Lines	破線を実線で表示
 	Pattern Options	パターンオプション
 	Properties	プロパティ
@@ -1602,6 +1605,7 @@ antiAlias	Sharp	シャープ
 	Duplicate Action or Action Set	アクションまたはアクションセットを複製
 	Delete the action set “{name}” and its actions?	アクションセット「{name}」とそのアクションを削除しますか？
 	Delete the selected action sets and their actions?	選択したアクションセットとそのアクションを削除しますか？
+	Delete all action sets and their actions?	すべてのアクションセットとそのアクションを削除しますか？
 	Delete theme	テーマを削除
 	Delete this saved preset	この保存済みプリセットを削除
 	Delete {kind} Style	{kind}スタイルを削除
@@ -1946,6 +1950,7 @@ antiAlias	Sharp	シャープ
 	Fit in Window	ウィンドウに合わせる
 	Fit on Screen	画面にフィット
 	Flare	フレア
+	Edit Flare	フレアを編集
 	Flare Tool	フレアツール
 	Flat Image	統合イメージ
 	Flatness:	フラットネス:
@@ -2901,6 +2906,7 @@ diagnostics	ui	UI
 	Save Actions…	アクションを保存…
 	Load Actions…	アクションを読み込み…
 	Replace Actions…	アクションを置き換え…
+	Clear Actions	アクションを消去
 	Reset Actions	アクションをリセット
 	Replace the current actions with the default set?	現在のアクションを初期設定のセットで置き換えますか？
 	Append adds the default set after the current sets instead.	「追加」を選ぶと、初期設定のセットを現在のセットの後に追加します。
@@ -3234,6 +3240,8 @@ mark-style	Japanese	日本式
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Cmd/Ctrl キーを押しながらマウスホイールを回すとカンバスを横にスクロールします。
 	Dragging sideways on a numeric field's label changes the field's value.	数値フィールドのラベルを横にドラッグすると、フィールドの値が変わります。
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	トラックパッドで 2 本指の回転ジェスチャーをすると、カンバスの表示が回転します。
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	キーを長押しすると、キーボードショートカットの長押し列にあるツールまたはコマンドを実行します。短く押すと通常のショートカットを実行します。
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	通常のショートカットの代わりに長押しショートカットを実行するまで、キーを押し続ける秒数です。
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	アンカーポイントを移動すると、一方の端が移動した各曲線は、両端に対する形状を保ちます。
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	ツールのショートカットキーを押している間はそのツールを選び、離すと前のツールに戻ります。
 	Shows the bounding box while you move the selection or draw a shape.	選択範囲の移動中や図形の描画中にバウンディングボックスを表示します。
@@ -4889,6 +4897,8 @@ variable-list-end	{0}, {1}	{0}、{1}
 @msg	no such spine point	指定されたスパインポイントが見つかりません
 @msg	`with` must be a list of at most 10000 spine point indexes	`with` には最大 10000 個のスパインポイントのインデックスのリストを指定してください
 @msg	`with` moves points, not a handle	`with` はポイントを移動します。ハンドルには使えません
+@msg	`link` and `independent` cannot both be true	`link` と `independent` を同時に true にすることはできません
+@msg	`link` places a handle: give `handle`	`link` はハンドルを配置します：`handle` を指定してください
 @msg	no such spine segment	指定されたスパインセグメントが見つかりません
 @msg	no such subpath	指定されたサブパスが見つかりません
 @msg	object {id} is not a path	オブジェクト {id} はパスではありません
@@ -5011,9 +5021,11 @@ variable-list-end	{0}, {1}	{0}、{1}
 @msg	no bounds	境界がありません
 @msg	no current layer	現在のレイヤーがありません
 @msg	no key object	キーオブジェクトが設定されていません
+@msg	Align to Key Object isn't available with the Artboard tool	アートボードツールでは「キーオブジェクトに整列」を使用できません
 @msg	no previous transform	前回の変形がありません
 @msg	nothing to align	整列するものがありません
 @msg	select a clip group	クリップグループを選択してください
+@msg	select a flare	フレアを選択してください
 @msg	select two or more objects to distribute	分布させるオブジェクトを 2 つ以上選択してください
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis には "vertical"、"horizontal"、度単位の角度のいずれかを指定してください (`{v}` は指定できません)
 @msg	give horizontal or vertical	horizontal または vertical を指定してください
@@ -5756,6 +5768,7 @@ liquify-list-end	{0}, {1}	{0}、{1}
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} 個のリンク画像がディスク上で変更されました: 「リンクを更新」で新しいバージョンを表示できます
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	ディスク上で変更された {n} 個のリンクファイルを更新しました
 @msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	ドキュメントに設定された裁ち落としがこの PDF/X ファイルには含まれません: 「ドキュメントの裁ち落とし設定を使用」をオンにしてください
+@msgplural	{n} object reaches the trim edge but stops short of the bleed|{n} objects reach the trim edge but stop short of the bleed	{n} 個のオブジェクトが仕上がり線に達していますが、裁ち落としまで届いていません
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	{what} を書き出しましたが、注意事項が {n} 件あります: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} 個のフォントファイルが {folder} に入りました
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} 個のフォントファイルが {folder} に入りましたが、{failed} 個は追加できませんでした: {reason}
@@ -6547,6 +6560,9 @@ lighting	Light	ライト
 	Continue in Background	バックグラウンドで続行
 	Cancel Export	書き出しをキャンセル
 @msg	Export cancelled	書き出しをキャンセルしました
+	Cancel Save	保存をキャンセル
+@plural	{n} more save waiting|{n} more saves waiting	待機中の保存: あと {n} 件
+@msg	Save canceled	保存をキャンセルしました
 # Paragraph panel menu › Justification…
 	Desired	最適
 	Word Spacing:	単語間隔:
@@ -8907,6 +8923,13 @@ axis	Y Axis	Y 軸
 	Bus Lines	バス配線
 	Terminal Nodes	端子ノード
 
+# Original arrow art brushes.
+	Arrows	矢印ブラシ
+	Solid Arrow	塗りつぶし矢印
+	Open Arrow	中抜き矢印
+	Double Arrow	両矢印
+	Chevron Arrow	山形付き矢印
+
 	Notched Ribbon	ノッチリボン
 	Double Line	二重線
 	Wave	波
@@ -9600,10 +9623,18 @@ breakText	Glyphs	字形
 	Smooth Bridge…	スムーズブリッジ…
 	Smooth Bridge	スムーズブリッジ
 	Keep Originals	オリジナルを保持
-@msg	select two circles to bridge	ブリッジでつなぐ円を 2 つ選択してください
+@msg	select two or more circles to bridge	ブリッジでつなぐ円を 2 つ以上選択してください
 @msg	one circle is inside the other	一方の円がもう一方の円の内側にあります
 @msg	the circles are too far apart for this radius: raise the radius	この半径では円が離れすぎています：半径を大きくしてください
 @msg	the circles are too far apart for this radius	この半径では円が離れすぎています
+	Constant Gap	一定の間隔
+	Reach:	到達距離:
+@msg	the circles are too far apart for this gap: raise the gap	この間隔では円が離れすぎています：間隔を大きくしてください
+@msg	the circles are too far apart for this gap	この間隔では円が離れすぎています
+@msg	no two circles are within reach: raise the reach	到達距離内にある円の組がありません：到達距離を大きくしてください
+@msg	select at most 2000 circles to bridge	ブリッジでつなぐ円は 2000 個以下で選択してください
+@msg	that makes too many bridges (at most 8000): lower the reach	ブリッジが多すぎます（最大 8000）：到達距離を小さくしてください
+@msg	the bridged circles are too complex to unite	ブリッジでつないだ円が複雑すぎて合体できません
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	共通接線…
 	Common Tangents	共通接線
@@ -10094,6 +10125,16 @@ breakText	Glyphs	字形
 	No objects are selected.	オブジェクトが選択されていません。
 	Open a document to mark its fold lines.	ドキュメントを開くと折り線を設定できます。
 	Remove Fold Line Role	線種を解除
+	Tap	短押し
+	Clear Hold	長押しを消去
+	Hold Shortcuts	長押しショートカット
+	Hold Shortcut Delay	長押しショートカットの遅延
+	How hold shortcuts work	長押しショートカットのしくみ
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	クリックしてから、これに使う長押しのキーを押します (Esc でキャンセル)。キーを長押しするとこれを実行し、短く押すとキー自体のショートカットを実行します。
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	キーを短く押すと、そのショートカットを実行します。遅延の時間だけキーを押し続けると、代わりに長押し列のツールまたはコマンドを実行します。長押しショートカットには、文字、数字、句読点のキーを単独で、または Shift と組み合わせて使用できます。
+@msg	Hold {_1} is already used by {_2}	長押し {_1} はすでに {_2} で使用されています
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	長押しショートカットは、文字を入力するキーを単独で、または Shift と組み合わせたものです ({shown} には Cmd、Ctrl、Alt のいずれかが含まれています)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} は長押しショートカットにできません: 文字、数字、句読点のいずれかのキーを使用してください
 	Check	チェック
 	Check Fold Lines	折り線をチェック
 @msg	No cut lines are in the selection.	選択範囲にカット線がありません。
@@ -10114,6 +10155,7 @@ breakText	Glyphs	字形
 @msg	A panel is not joined to the rest by a crease.	パネルがどの筋入れ線でも他とつながっていません。
 @msg	A fold line is on a non-printing layer.	折り線が印刷しないレイヤーにあります。
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	パネル: {panels}、ヒンジ: {hinges}、エラー: {errors}、警告: {warnings}
+	Dashed Arrow	破線矢印
 	Pressure Sensitive	筆圧対応
 	Flex Ribbon	しなやかなリボン
 	Pulse Stroke	脈打つ線

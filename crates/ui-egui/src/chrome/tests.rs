@@ -943,7 +943,7 @@ fn german_script_status_preserves_authored_error_and_translates_native_error() {
     // A change of language while the message stays keeps the script's text.
     failed(&mut app, "throw new Error('invalid array length')", false);
     crate::i18n::set_current(crate::i18n::Lang::from_code("fr").expect("fr registered"));
-    assert_eq!(super::status_bar::status_message(&app), "t.js : ligne 1, colonne 1 : Error: invalid array length (levée)");
+    assert_eq!(super::status_bar::status_message(&app), "t.js\u{a0}: ligne 1, colonne 1\u{a0}: Error: invalid array length (levée)");
     crate::i18n::set_current(crate::i18n::Lang::EN);
     assert_eq!(super::status_bar::status_message(&app), app.ui.status);
     // After a run that completes, the message is an ordinary one.

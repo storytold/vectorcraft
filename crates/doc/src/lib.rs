@@ -17,6 +17,7 @@ pub mod corners;
 pub mod decode;
 pub mod depth;
 pub mod dimension;
+pub mod flare;
 pub mod graph;
 mod halftone_radii;
 pub mod hit;
@@ -170,7 +171,7 @@ use limits::MAX_NEXT_ID;
 pub use limits::{DocError, FORMAT_VERSION, MAX_COORD};
 pub use records::{ImageBlob, MaskEdit, NewArtIds, SavedSelection, SavedView, SvgFilter, Symbol, SymbolEdit};
 pub use stored_art::{StoredPlace, StoredRoot};
-pub use units::{ColorMode, Unit, decimal_point, finite_in_every_unit, parse_number};
+pub use units::{ColorMode, Unit, arithmetic_signs, decimal_point, finite_in_every_unit, parse_number};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Document {

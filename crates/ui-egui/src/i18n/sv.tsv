@@ -856,6 +856,7 @@ font-technology	Variable	Variabla
 	Duplicate Action or Action Set	Duplicera åtgärd eller åtgärdsuppsättning
 	Delete the action set “{name}” and its actions?	Radera åtgärdsuppsättningen ”{name}” och dess åtgärder?
 	Delete the selected action sets and their actions?	Radera de markerade åtgärdsuppsättningarna och deras åtgärder?
+	Delete all action sets and their actions?	Radera alla åtgärdsuppsättningar och deras åtgärder?
 	Delete Theme	Radera tema
 	Delete theme	Radera tema
 	Delete these {n} graphic styles?	Radera dessa {n} grafikstilar?
@@ -1329,6 +1330,7 @@ font-technology	Variable	Variabla
 	Fit to Selected Art	Anpassa till markerad grafik
 	Flag…	Flagga…
 	Flare	Ljusreflex
+	Edit Flare	Redigera ljusreflex
 	Flare Tool	Ljusreflexverktyg
 	Flare Tool Options	Alternativ för ljusreflexverktyget
 	Halo	Halo
@@ -2212,6 +2214,9 @@ font-technology	Variable	Variabla
 	Navigate	Navigera
 	Navigator	Navigator
 	Navigator Panel Options	Alternativ för panelen Navigator
+	Attributes Panel Options	Alternativ för panelen Attribut
+	Number of Recent URLs:	Antal senaste URL:er:
+@msg	`count` must be a whole number from 1 to 30	`count` måste vara ett heltal från 1 till 30
 	Draw Dashed Lines as Solid Lines	Rita streckade linjer som heldragna linjer
 	Needs the desktop app	Kräver skrivbordsappen
 	Neutral Gradients	Neutrala gradienter
@@ -2680,6 +2685,7 @@ font-technology	Variable	Variabla
 	Save Actions…	Spara åtgärder…
 	Load Actions…	Läs in åtgärder…
 	Replace Actions…	Ersätt åtgärder…
+	Clear Actions	Rensa åtgärder
 	Reset Actions	Återställ åtgärder
 	Replace the current actions with the default set?	Vill du ersätta de aktuella åtgärderna med standarduppsättningen?
 	Append adds the default set after the current sets instead.	Lägg till lägger i stället till standarduppsättningen efter de aktuella uppsättningarna.
@@ -3121,6 +3127,8 @@ digits	Malayalam	Malayalam
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Mushjulet med Cmd/Ctrl nedtryckt rullar arbetsytan i sidled.
 	Dragging sideways on a numeric field's label changes the field's value.	Att dra i sidled på ett sifferfälts etikett ändrar fältets värde.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	En rotationsgest med två fingrar på en styrplatta roterar arbetsytans vy.
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Om du håller ned en tangent körs verktyget eller kommandot i dess Håll-kolumn i Kortkommandon; ett kort tryck kör dess vanliga kortkommando.
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Hur många sekunder en tangent måste hållas ned innan dess hållkortkommando körs i stället för dess vanliga kortkommando.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	När du flyttar ankarpunkter behåller varje kurva med en flyttad ände sin form i förhållande till sina ändar.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	När du håller ned ett verktygs kortkommando är verktyget valt tills du släpper, och sedan väljs det föregående verktyget igen.
 	Shows the bounding box while you move the selection or draw a shape.	Visar avgränsningsramen medan du flyttar markeringen eller ritar en form.
@@ -5142,6 +5150,7 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	no graphic style `{n}`	ingen grafisk stil `{n}`
 @msg	no interaction in progress	ingen interaktion pågår
 @msg	no key object	inget nyckelobjekt
+@msg	Align to Key Object isn't available with the Artboard tool	Justera mot nyckelobjekt är inte tillgängligt med ritytsverktyget
 @msg	no library `{key}` (see {list})	inget bibliotek `{key}` (se {list})
 @msg	no native format	inget eget format
 @msg	no pages	inga sidor
@@ -5197,6 +5206,8 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	no such spine point	ryggradspunkten finns inte
 @msg	`with` must be a list of at most 10000 spine point indexes	`with` måste vara en lista med högst 10000 ryggradspunktsindex
 @msg	`with` moves points, not a handle	`with` flyttar punkter, inte ett handtag
+@msg	`link` and `independent` cannot both be true	`link` och `independent` kan inte båda vara true
+@msg	`link` places a handle: give `handle`	`link` placerar ett handtag: ange `handle`
 @msg	no such spine segment	ryggradssegmentet finns inte
 @msg	no such subpath	delbanan finns inte
 @msg	no such user library	användarbiblioteket finns inte
@@ -5286,6 +5297,7 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	select a blend	markera en blandning
 @msg	select a blend or give `id`	markera en blandning eller ange dess `id`
 @msg	select a clip group	markera en urklippsgrupp
+@msg	select a flare	markera en ljusreflex
 @msg	select a gradient mesh	markera ett gradientnät
 @msg	select a linked image: an embedded one has no file	markera en länkad bild: en inbäddad bild har ingen fil
 @msg	select a repeat	markera en upprepning
@@ -5536,6 +5548,7 @@ variable-list-end	{0}, {1}	{0} och {1}
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} länkad bild har ändrats på disken: Uppdatera länkar visar den nya versionen|{n} länkade bilder har ändrats på disken: Uppdatera länkar visar de nya versionerna
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Uppdaterade {n} länkad fil som ändrats på disken|Uppdaterade {n} länkade filer som ändrats på disken
 @msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	dokumentet anger ett utfall som den här PDF/X-filen utelämnar: slå på ”Använd dokumentets inställningar för utfall”
+@msgplural	{n} object reaches the trim edge but stops short of the bleed|{n} objects reach the trim edge but stop short of the bleed	{n} objekt når skärkanten men slutar före utfallet|{n} objekt når skärkanten men slutar före utfallet
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	Exporterade {what} med {n} anteckning: {first}|Exporterade {what} med {n} anteckningar: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} typsnittsfil finns nu i {folder}|{n} typsnittsfiler finns nu i {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} typsnittsfil finns nu i {folder}; {failed} kunde inte läggas till: {reason}|{n} typsnittsfiler finns nu i {folder}; {failed} kunde inte läggas till: {reason}
@@ -6922,6 +6935,9 @@ swatch	Yellow Green	Gulgrön
 	Continue in Background	Fortsätt i bakgrunden
 	Cancel Export	Avbryt export
 @msg	Export cancelled	Exporten avbröts
+	Cancel Save	Avbryt sparande
+@plural	{n} more save waiting|{n} more saves waiting	{n} sparande till väntar|{n} sparanden till väntar
+@msg	Save canceled	Sparandet avbröts
 # Paragraph panel menu › Justification…
 	Desired	Önskat
 	Word Spacing:	Ordavstånd:
@@ -7399,6 +7415,12 @@ axis	Y Axis	Y-axel
 	Circuit Trace	Kretsbana
 	Bus Lines	Bussledningar
 	Terminal Nodes	Anslutningspunkter
+
+# Original arrow art brushes.
+	Arrows	Pilar
+	Solid Arrow	Massiv pil
+	Open Arrow	Öppen pil
+	Chevron Arrow	Chevronpil
 
 	Notched Ribbon	Hackat band
 	Double Line	Dubbellinje
@@ -8112,10 +8134,18 @@ breakText	Glyphs	Glyfer
 	Smooth Bridge…	Mjuk brygga…
 	Smooth Bridge	Mjuk brygga
 	Keep Originals	Behåll original
-@msg	select two circles to bridge	markera två cirklar att förbinda
+@msg	select two or more circles to bridge	markera två eller fler cirklar att förbinda
 @msg	one circle is inside the other	den ena cirkeln ligger inuti den andra
 @msg	the circles are too far apart for this radius: raise the radius	cirklarna ligger för långt ifrån varandra för den här radien: öka radien
 @msg	the circles are too far apart for this radius	cirklarna ligger för långt ifrån varandra för den här radien
+	Constant Gap	Konstant mellanrum
+	Reach:	Räckvidd:
+@msg	the circles are too far apart for this gap: raise the gap	cirklarna ligger för långt ifrån varandra för det här mellanrummet: öka mellanrummet
+@msg	the circles are too far apart for this gap	cirklarna ligger för långt ifrån varandra för det här mellanrummet
+@msg	no two circles are within reach: raise the reach	inga två cirklar ligger inom räckvidd: öka räckvidden
+@msg	select at most 2000 circles to bridge	markera högst 2000 cirklar att förbinda
+@msg	that makes too many bridges (at most 8000): lower the reach	det ger för många bryggor (högst 8000): minska räckvidden
+@msg	the bridged circles are too complex to unite	de förbundna cirklarna är för komplexa för att slås ihop
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	Gemensamma tangenter…
 	Common Tangents	Gemensamma tangenter
@@ -10106,6 +10136,17 @@ digits	Hindi	Hindi
 @msg	A joint does not close by {gap} pt.	En fog sluter inte med {gap} pt.
 @msg	Two panels pass through each other.	Två paneler går igenom varandra.
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} pixlar är för stort för PSD (högst {MAX_SIDE} pixlar per sida): sänk upplösningen
+	Tap	Kort tryck
+	Clear Hold	Rensa håll
+	Hold Shortcuts	Hållkortkommandon
+	Hold Shortcut Delay	Fördröjning för hållkortkommandon
+	How hold shortcuts work	Så fungerar hållkortkommandon
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	Klicka och tryck sedan på en tangent som ska hållas ned för detta (Esc avbryter). Att hålla ned tangenten kör detta; ett kort tryck kör tangentens eget kortkommando.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	Ett kort tryck på en tangent kör dess kortkommando. Att hålla ned tangenten under fördröjningen kör i stället verktyget eller kommandot i dess Håll-kolumn. Ett hållkortkommando är en bokstavs-, siffer- eller skiljeteckentangent, ensam eller med Shift.
+@msg	Hold {_1} is already used by {_2}	Håll {_1} används redan av {_2}
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	ett hållkortkommando är en tangent som skriver ett tecken, ensam eller med Shift ({shown} har Cmd, Ctrl eller Alt)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} kan inte vara ett hållkortkommando: använd en bokstav, en siffra eller en skiljeteckentangent
+	Dashed Arrow	Streckad pil
 	Pressure Sensitive	Tryckkänslig
 	Flex Ribbon	Flexibelt band
 	Pulse Stroke	Pulserande drag
