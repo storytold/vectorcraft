@@ -2928,9 +2928,13 @@ digits	Malayalam	Malajalam
 	Around Object	Wokół obiektu
 	Background:	Tło:
 	Changing these settings changes how raster effects look when exported, flattened or expanded.	Zmiana tych ustawień zmienia wygląd efektów rastrowych po eksporcie, spłaszczeniu lub rozszerzeniu.
+	Add Around	Dodaj wokół obiektu
+	Anti Alias	Wygładzanie
+	Color Model	Model kolorów
 	Color Model:	Model kolorów:
 	Create Clipping Mask	Utwórz maskę przycinającą
 	Preserve Spot Colors	Zachowaj kolory dodatkowe
+	Resolution	Rozdzielczość
 	Resolution:	Rozdzielczość:
 	Transparent	Przezroczyste
 	Layout Order:	Kolejność układu:

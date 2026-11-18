@@ -4907,9 +4907,13 @@ digits	Malayalam	მალაიალამური
 	Around Object	ობიექტის ირგვლივ
 	Background:	ფონი:
 	Changing these settings changes how raster effects look when exported, flattened or expanded.	ამ პარამეტრების შეცვლა ცვლის, თუ როგორ გამოიყურება რასტრული ეფექტები ექსპორტის, გაბრტყელების ან გაშლის შემდეგ.
+	Add Around	ობიექტის ირგვლივ დამატება
+	Anti Alias	ანტიალიასინგი
+	Color Model	ფერის მოდელი
 	Color Model:	ფერის მოდელი:
 	Create Clipping Mask	მომჭრელი ნიღბის შექმნა
 	Preserve Spot Colors	სპოტ-ფერების შენარჩუნება
+	Resolution	გარჩევადობა
 	Resolution:	გარჩევადობა:
 	Transparent	გამჭვირვალე
 	Layout Order:	განლაგების რიგი:

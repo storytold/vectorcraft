@@ -68,6 +68,7 @@
 	Add Anchor Point	添加锚点
 	Add Anchor Point Tool	添加锚点工具
 	Add Anchor Points	添加锚点
+	Add Around	围绕对象添加
 	Add Effect	添加效果
 	Add Freeform Line	添加自由曲线
 	Add Freeform Point	添加自由点
@@ -144,6 +145,7 @@
 	Angle:	角度：
 	Angles	角度
 	Animated Zoom	动画缩放
+	Anti Alias	消除锯齿
 	Anti-alias	消除锯齿
 	Anti-Alias	消除锯齿
 	Anti-alias Rasters	栅格消除锯齿
@@ -501,6 +503,7 @@ antiAlias	Sharp	锐利
 	Color Mixer (Shift-click the chip)	颜色混合器 (Shift+单击色块)
 	Color Mode	颜色模式
 	Color Mode:	颜色模式：
+	Color Model	颜色模型
 	Color Model:	颜色模型：
 	Color Models	颜色模型
 	Color Picker	拾色器
@@ -2974,6 +2977,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Reshape Segment	整形线段
 	Reshape Tool	整形工具
 	Reshape Type Area	调整区域文字轮廓
+	Resolution	分辨率
 	Resolution:	分辨率：
 	Responsive	响应式
 	Restore	恢复

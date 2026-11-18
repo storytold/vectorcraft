@@ -107,6 +107,7 @@
 	Add Anchor Point	Lägg till ankarpunkt
 	Add Anchor Point Tool	Verktyget Lägg till ankarpunkt
 	Add Anchor Points	Lägg till ankarpunkter
+	Add Around	Lägg till runt objektet
 	Add Effect	Lägg till effekt
 	Add Freeform Line	Lägg till fri linje
 	Add Freeform Point	Lägg till fri punkt
@@ -184,6 +185,7 @@
 	Angle:	Vinkel:
 	Angles	Vinklar
 	Animated Zoom	Animerad zoom
+	Anti Alias	Kantutjämning
 	Anti-alias	Kantutjämning
 	Anti-Alias	Kantutjämning
 	Anti-alias Rasters	Kantutjämna rasterbilder
@@ -541,6 +543,7 @@ font-technology	Variable	Variabla
 	Color Mixer (Shift-click the chip)	Färgmixer (Shift-klicka på färgrutan)
 	Color Mode	Färgläge
 	Color Mode:	Färgläge:
+	Color Model	Färgmodell
 	Color Model:	Färgmodell:
 	Color Models	Färgmodeller
 	Color Picker	Färgväljare
@@ -3010,6 +3013,7 @@ digits	Malayalam	Malayalam
 	Reshape Segment	Omforma segment
 	Reshape Tool	Omformningsverktyg
 	Reshape Type Area	Omforma textområde
+	Resolution	Upplösning
 	Resolution:	Upplösning:
 	Responsive	Responsiv
 	Restore	Återställ

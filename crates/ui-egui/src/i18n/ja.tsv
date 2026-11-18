@@ -1053,6 +1053,7 @@ digits	Malayalam	マラヤーラム数字
 	Add Anchor (Pen)	アンカーポイントを追加 (ペン)
 	Add Anchor Point	アンカーポイントを追加
 	Add Anchor Point Tool	アンカーポイントの追加ツール
+	Add Around	オブジェクトの周囲に追加
 	Add Effect	効果を追加
 	Add Freeform Line	フリーフォームラインを追加
 	Add Freeform Point	フリーフォームポイントを追加
@@ -1114,6 +1115,7 @@ digits	Malayalam	マラヤーラム数字
 	Angle:	角度:
 	Angles	角度
 	Animated Zoom	アニメーションズーム
+	Anti Alias	アンチエイリアス
 	Anti-Alias	アンチエイリアス
 	Anti-alias	アンチエイリアス
 	Anti-alias Rasters	ラスターをアンチエイリアス
@@ -1338,6 +1340,7 @@ antiAlias	Sharp	シャープ
 	Color Guide Options…	カラーガイドオプション…
 	Color Mode	カラーモード
 	Color Mode:	カラーモード:
+	Color Model	カラーモデル
 	Color Model:	カラーモデル:
 	Color Models	カラーモデル
 	Color Picker	カラーピッカー
@@ -3099,6 +3102,7 @@ mark-style	Japanese	日本式
 	Reshape Segment	セグメントをシェイプ変形
 	Reshape Tool	リシェイプツール
 	Reshape Type Area	テキストエリアの形を変更
+	Resolution	解像度
 	Resolution:	解像度:
 	Responsive	レスポンシブ
 	Restore	復元

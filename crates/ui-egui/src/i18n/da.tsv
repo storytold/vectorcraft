@@ -5491,9 +5491,13 @@ digits	Malayalam	Malayalam
 	Around Object	Omkring objektet
 	Background:	Baggrund:
 	Changing these settings changes how raster effects look when exported, flattened or expanded.	Ændring af disse indstillinger ændrer, hvordan rastereffekter ser ud, når de eksporteres, udflades eller udvides.
+	Add Around	Tilføj omkring objektet
+	Anti Alias	Antialiasering
+	Color Model	Farvemodel
 	Color Model:	Farvemodel:
 	Create Clipping Mask	Opret klipemaske
 	Preserve Spot Colors	Bevar spotfarver
+	Resolution	Opløsning
 	Resolution:	Opløsning:
 	Transparent	Gennemsigtig
 	Layout Order:	Layoutrækkefølge:

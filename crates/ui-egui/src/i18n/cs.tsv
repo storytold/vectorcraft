@@ -3016,9 +3016,13 @@ digits	Malayalam	Malajálamské
 	Around Object	Kolem objektu
 	Background:	Pozadí:
 	Changing these settings changes how raster effects look when exported, flattened or expanded.	Změna těchto nastavení mění vzhled rastrových efektů při exportu, sloučení nebo rozložení.
+	Add Around	Přidat kolem objektu
+	Anti Alias	Vyhlazování
+	Color Model	Barevný model
 	Color Model:	Barevný model:
 	Create Clipping Mask	Vytvořit ořezovou masku
 	Preserve Spot Colors	Zachovat přímé barvy
+	Resolution	Rozlišení
 	Resolution:	Rozlišení:
 	Transparent	Průhledné
 	Layout Order:	Pořadí rozvržení:

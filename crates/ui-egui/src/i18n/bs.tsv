@@ -2934,9 +2934,13 @@ digits	Malayalam	Malajalam
 	Around Object	Oko objekta
 	Background:	Pozadina:
 	Changing these settings changes how raster effects look when exported, flattened or expanded.	Promjena ovih postavki mijenja izgled rasterskih efekata pri izvozu, spljoštavanju ili proširivanju.
+	Add Around	Dodaj oko objekta
+	Anti Alias	Zaglađivanje ivica
+	Color Model	Model boja
 	Color Model:	Model boja:
 	Create Clipping Mask	Kreiraj masku isijecanja
 	Preserve Spot Colors	Očuvaj spot boje
+	Resolution	Rezolucija
 	Resolution:	Rezolucija:
 	Transparent	Prozirno
 	Layout Order:	Redoslijed rasporeda:
