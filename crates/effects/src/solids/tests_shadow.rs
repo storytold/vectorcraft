@@ -87,6 +87,40 @@ fn the_shadow_moves_with_its_settings() {
     }
 }
 
+/// The radius of the Gaussian Blur on shadow `n`; `None` without one.
+fn shadow_blur(n: &Node) -> Option<f64> {
+    match n.appearance.effects.as_slice() {
+        [] => None,
+        [e] if e.id == "blur.gaussian" && e.visible => e.params["radius"].as_f64(),
+        other => panic!("unexpected effects on the shadow: {other:?}"),
+    }
+}
+
+/// The first light's Softness blurs the shadow, more with Softness and with Distance from Object;
+/// at 0 % it stays the hard-edged path. A list of lights takes the first light's Softness.
+#[test]
+fn the_first_lights_softness_blurs_the_shadow() {
+    for id in CASTING {
+        let blur = |params: Value| {
+            let mut n = square_node(1, 0.0);
+            n.appearance.effects.push(crate::new_effect(id, &params).unwrap());
+            let lit = art(&n, id).unwrap();
+            let shadow = &lit.children().unwrap()[0];
+            assert!(is_shadow(shadow), "{id} {params}");
+            shadow_blur(shadow)
+        };
+        assert_eq!(blur(json!({"shadow": true})), None, "{id}: hard at 0 %");
+        let soft = blur(json!({"shadow": true, "lightSoftness": 50})).unwrap_or_else(|| panic!("{id}"));
+        let softer = blur(json!({"shadow": true, "lightSoftness": 100})).unwrap();
+        let far = blur(json!({"shadow": true, "lightSoftness": 100, "shadowDistance": 100})).unwrap();
+        assert!(soft > 0.0 && softer > soft && far > softer, "{id}: {soft} {softer} {far}");
+        let first = json!({"shadow": true, "lightSoftness": 0, "lights": [{"softness": 100}, {"softness": 0}]});
+        assert_eq!(blur(first), Some(softer), "{id}: the first light's");
+        let second = json!({"shadow": true, "lightSoftness": 100, "lights": [{"softness": 0}, {"softness": 100}]});
+        assert_eq!(blur(second), None, "{id}: only the first light casts");
+    }
+}
+
 #[test]
 fn shadow_settings_out_of_range_or_of_the_wrong_kind_are_refused() {
     for id in CASTING {
@@ -203,6 +237,26 @@ fn the_shadows_of_every_fill_go_behind_every_fill_s_solid() {
     }
 }
 
+/// A fill's own 3D effect blurs its shadow by the light's Softness too, and the effects after it
+/// in the fill's list follow the blur.
+#[test]
+fn a_fills_own_3d_effect_keeps_the_blur_below_its_later_effects() {
+    for id in CASTING {
+        for later in [None, Some(crate::new_effect("distort.roughen", &json!({})).unwrap())] {
+            let mut n = square_node(1, 0.0);
+            let fill = n.appearance.items.iter_mut().find(|i| matches!(i, AppearanceItem::Fill(_))).unwrap();
+            fill.effects_mut().push(crate::new_effect(id, &json!({"shadow": true, "lightSoftness": 100})).unwrap());
+            fill.effects_mut().extend(later.clone());
+            let lit = art(&n, id).unwrap_or_else(|| panic!("{id}"));
+            let shadow = &lit.children().unwrap()[0];
+            assert!(is_shadow(shadow), "{id}");
+            let ids: Vec<&str> = shadow.appearance.effects.iter().map(|e| e.id.as_str()).collect();
+            let want: Vec<&str> = std::iter::once("blur.gaussian").chain(later.as_ref().map(|e| e.id.as_str())).collect();
+            assert_eq!(ids, want, "{id}");
+        }
+    }
+}
+
 #[test]
 fn expand_appearance_keeps_the_shadow_as_a_path() {
     for id in CASTING {
@@ -310,6 +364,68 @@ fn the_shadow_cast_from_the_solids_drawn_is_the_shadow_of_solids_built_for_it() 
                 assert_eq!(format!("{drawn:?}"), format!("{alone:?}"), "{id} {params}");
             }
         }
+    }
+}
+
+/// A stroke's solid left out of the art (past its own limits) keeps no faces, and the shadow cast
+/// from the faces the solids kept leaves it out without building it: it casts nothing, as it draws
+/// nothing, and the fill's solid still casts.
+#[test]
+fn a_stroke_left_out_of_the_art_casts_no_shadow() {
+    for id in [EXTRUDE, INFLATE] {
+        let n = stroked_square(1, 0.0, 1.0);
+        let (path, rule) = profile(&n).unwrap();
+        let shapes = [Profile { path, rule, items: solid_paints(&n), opacity: 1.0, scopes: vec![] }];
+        let p = crate::merged_params(id, &json!({"shadow": true}));
+        let (parts, bounds) = solid_parts(&shapes, union_bounds(&shapes).unwrap());
+        let mut built: Vec<Option<SolidFaces>> =
+            built_solids_cast(id, &p, &parts, bounds, MAX_OBJECT_FACES, true).map(|r| r.unwrap().and_then(|(_, faces)| faces)).collect();
+        let stroke = parts.iter().position(|(item, ..)| matches!(item, AppearanceItem::Stroke(_))).unwrap();
+        assert!(built.len() == 2 && built.iter().all(Option::is_some), "{id}");
+        let (both, _, cast) = cast_built(id, &p, &shapes, built.clone()).unwrap().unwrap();
+        assert_eq!(cast.len(), 2, "{id}: the fill and the stroke cast");
+        built[stroke] = None;
+        let start = SOLIDS_BUILT.with(std::cell::Cell::get);
+        let (fill, _, cast) = cast_built(id, &p, &shapes, built).unwrap().unwrap();
+        assert_eq!(SOLIDS_BUILT.with(std::cell::Cell::get), start, "{id}: no solid is built for the shadow");
+        assert_eq!(cast.len(), 1, "{id}: the stroke left out casts nothing");
+        assert!(!fill.is_empty() && fill.len() < both.len(), "{id}: only the fill's faces are cast");
+    }
+}
+
+/// A command accepts each shadowed object that draws with its shadow, and with Rotate builds the
+/// plane of each visible fill and stroke once for the shadow: a fully transparent one casts nothing.
+#[test]
+fn the_check_accepts_the_shadowed_objects_that_draw() {
+    for id in [EXTRUDE, INFLATE, ROTATE] {
+        for params in shadow_settings(id) {
+            for n in shadowed(id, &params) {
+                let mut drawn = 0;
+                art(&n, id).unwrap().walk(&mut |c| drawn += usize::from(shadow_opacity(c).is_some()));
+                assert!(drawn > 0, "{id} {params}");
+                assert_eq!(validate_solid(&n, id, &params), Ok(()), "{id} {params}");
+            }
+        }
+    }
+    let shadow = json!({"shadow": true});
+    for (stroke, planes) in [(1.0, 2), (0.5, 2), (0.0, 1)] {
+        let n = stroked_square(1, 0.0, stroke);
+        let start = SOLIDS_BUILT.with(std::cell::Cell::get);
+        assert_eq!(validate_solid(&n, ROTATE, &shadow), Ok(()), "{stroke}");
+        assert_eq!(SOLIDS_BUILT.with(std::cell::Cell::get) - start, planes, "Rotate, a stroke at {stroke}");
+    }
+}
+
+/// In wireframe mode no shadow is drawn, so the check casts none: with Shadows on, Rotate builds no
+/// plane for a shadow, and Extrude & Bevel and Inflate build each solid once, as with the shadow off.
+#[test]
+fn the_check_casts_no_shadow_in_wireframe_mode() {
+    let n = stroked_square(1, 0.0, 1.0);
+    let wire = json!({"shadow": true, "render": {"mode": "wireframe"}});
+    for (id, solids) in [(ROTATE, 0), (EXTRUDE, 2), (INFLATE, 2)] {
+        let start = SOLIDS_BUILT.with(std::cell::Cell::get);
+        assert_eq!(validate_solid(&n, id, &wire), Ok(()), "{id}");
+        assert_eq!(SOLIDS_BUILT.with(std::cell::Cell::get) - start, solids, "{id}");
     }
 }
 

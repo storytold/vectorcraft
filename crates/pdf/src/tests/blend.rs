@@ -195,7 +195,8 @@ fn a_knockout_group_without_blending_inside_is_isolated_only_when_it_isolates() 
 
 /// An overprinting element of a knockout group that does not isolate is drawn in a `/K` group
 /// without `/I true`, so it overprints the art below the group, and its graphics state still
-/// overprints (`/OP`, `/op`, `/OPM 1`). An isolated group keeps `/I true`.
+/// overprints (`/OP`, `/op`, `/OPM 1`). An isolated group keeps `/I true`, reads back isolated
+/// and is written with `/I true` again.
 #[test]
 fn an_overprinting_element_of_a_knockout_group_that_does_not_isolate_overprints_the_art_below() {
     for isolate in [false, true] {
@@ -219,6 +220,42 @@ fn an_overprinting_element_of_a_knockout_group_that_does_not_isolate_overprints_
         });
         assert_eq!(overprints, [false, false, false, true], "isolate {isolate}");
         assert_eq!(knockout_groups(&back), [3], "isolate {isolate}");
+        let mut found = vec![];
+        back.walk(|n| {
+            if n.knockout == vectorcraft_doc::Knockout::On {
+                found.push(n.isolate);
+            }
+        });
+        assert_eq!(found, [isolate], "isolate {isolate}");
+        assert_eq!(text(&back).matches("/Itrue").count(), usize::from(isolate), "isolate {isolate}");
+    }
+}
+
+/// An isolated group with nothing blending inside but an overprinting fill reads back as an
+/// isolated group and is written with `/I true` again; a group that does not isolate reads back
+/// as its objects.
+#[test]
+fn an_isolated_group_with_an_overprinting_object_reads_back_isolated() {
+    for isolate in [false, true] {
+        let mut d = Document::new(200.0, 200.0);
+        add(&mut d, rect(Rect::new(0.0, 0.0, 200.0, 200.0), (0.9, 0.8, 0.2)));
+        let mut top = rect(Rect::new(60.0, 60.0, 160.0, 160.0), (0.0, 0.0, 1.0));
+        top.appearance.fill_mut().unwrap().overprint = true;
+        let mut below = rect(Rect::new(20.0, 20.0, 120.0, 120.0), (1.0, 0.0, 0.0));
+        (below.id, top.id) = (d.alloc_id(), d.alloc_id());
+        let mut g = Node::group(NodeId(0), vec![std::sync::Arc::new(below), std::sync::Arc::new(top)]);
+        g.isolate = isolate;
+        add(&mut d, g);
+        assert_eq!(text(&d).matches("/Itrue").count(), usize::from(isolate), "isolate {isolate}");
+        let back = import(&export(&d, &PdfOptions::default()).unwrap()).unwrap_or_else(|e| panic!("isolate {isolate}: {e}"));
+        let mut groups = vec![];
+        back.walk(|n| {
+            if matches!(n.kind, vectorcraft_doc::NodeKind::Group { .. }) {
+                groups.push(n.isolate);
+            }
+        });
+        assert_eq!(groups, if isolate { vec![true] } else { vec![] }, "isolate {isolate}");
+        assert_eq!(text(&back).matches("/Itrue").count(), usize::from(isolate), "isolate {isolate}");
     }
 }
 

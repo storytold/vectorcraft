@@ -104,6 +104,23 @@ fn fidelity_step(v: f64, n: f64) -> f64 {
     v
 }
 
+/// The unit of tool `tool`'s Fidelity. The Pencil's, the Paintbrush's and the Smooth tool's
+/// Fidelity is on screen, the same at any zoom (#5729); the Blob Brush's is in points.
+fn fidelity_unit(tool: &str) -> &'static str {
+    if matches!(tool, "pencil" | "paintbrush" | "smooth") { "px" } else { "pt" }
+}
+
+/// Width of the Fidelity field.
+pub(crate) const FIDELITY_FIELD_W: f32 = FIELD_W;
+
+/// The Fidelity field of tool `tool`, showing `v` to two decimals from the tool's lowest Fidelity to
+/// 100 and stepping by [`fidelity_step`], named by the label drawn just before it. Returns the value
+/// typed or stepped to. The Contextual Task Bar shows the Smooth tool's.
+pub(crate) fn fidelity_field(ui: &mut egui::Ui, id: &str, v: f64, tool: &str) -> Option<f64> {
+    let min = vectorcraft_tools::draw2::min_fidelity(tool);
+    widgets::range_field_stepped(ui, id, v, min..=100.0, fidelity_unit(tool), 2, FIELD_W, fidelity_step)
+}
+
 /// Where Fidelity `v` sits on a slider over `(min, max)`, from 0 to 1. The rail is logarithmic, so
 /// the low values, where the stroke is followed closely, get as much of it as the high ones
 /// (0.01–1 takes most of a 0.01–20 rail, in the tool's unit).
@@ -211,9 +228,7 @@ fn fidelity(ui: &mut egui::Ui, d: &mut Dialog) {
     let v = d.f64("fidelity", 1.5);
     let tool = d.str("tool");
     let rail = (vectorcraft_tools::draw2::min_fidelity(&tool), FIDELITY_MAX);
-    // The Pencil's, the Paintbrush's and the Smooth tool's Fidelity is on screen, the same at any
-    // zoom (#5729).
-    let unit = if matches!(tool.as_str(), "pencil" | "paintbrush" | "smooth") { "px" } else { "pt" };
+    let unit = fidelity_unit(&tool);
     let rail_w = label_w(ui);
     let mut new = None;
     ui.label(egui::RichText::new(tl!("Fidelity:")).size(12.5).color(t.text));
@@ -222,7 +237,7 @@ fn fidelity(ui: &mut egui::Ui, d: &mut Dialog) {
         let (x, _, keyed) =
             widgets::color_slider_stepped(ui, "freehand-fidelity", tl!("Fidelity:"), Some(shown), fidelity_at(v, rail), rail_w, &|_| t.input_border);
         new = x.map(|x| fidelity_from(x, rail)).or(keyed);
-        if let Some(x) = widgets::range_field_stepped(ui, "freehand-fidelity-field", v, rail.0..=100.0, unit, 2, FIELD_W, fidelity_step) {
+        if let Some(x) = fidelity_field(ui, "freehand-fidelity-field", v, &tool) {
             new = Some(x);
         }
     });

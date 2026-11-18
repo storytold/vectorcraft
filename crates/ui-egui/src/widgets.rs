@@ -30,14 +30,17 @@ pub use buttons::{
     SPLIT_ARROW, flat_button, flat_button_fit, icon_button, icon_button_enabled, menu_item, menu_item_name, paint_icon_button, primary_button,
     primary_button_enabled, secondary_button, split_button, split_button_named, toggle_icon,
 };
-pub(crate) use buttons::{button_width, flat_button_fit_width, icon_button_info, primary_button_width, secondary_button_width};
+pub(crate) use buttons::{
+    button_width, flat_button_fit_width, icon_button_info, paint_icon_button_named, primary_button_width, secondary_button_width,
+};
 #[cfg(test)]
 use chips::gradient_chip_colors;
 pub use chips::{ProxyClicks, chip_button, chip_button_named, fill_stroke_proxy, gradient_chip, paint_chip, proxy_chip, swatch_tile};
 pub use color::{
-    FieldAxis, Live, RingResponse, SliderValue, WheelResponse, channel_slider, channel_slider_named, channel_slider_valued, color_field, color_mesh,
-    color_slider, color_slider_named, color_slider_stepped, color_slider_valued, harmony_wheel, hex_field, hex_field_named, hsb32, hue_ring,
-    region_texture, ring_square, segment_color, segmented_wheel, stepped_area,
+    FieldAxis, Live, RingResponse, SliderValue, WheelAxes, WheelResponse, channel_slider, channel_slider_named, channel_slider_stepped,
+    channel_slider_valued, color_field, color_mesh, color_slider, color_slider_named, color_slider_stepped, color_slider_valued, harmony_wheel,
+    hex_field, hex_field_named, hsb32, hue_ring, region_texture, ring_square, segment_color, segment_color_on, segmented_wheel, stepped_area,
+    wheel_of,
 };
 pub(crate) use color::{HEX_FIELD_CHARS, hex_text, pointer_phase};
 pub use drag::{
@@ -103,6 +106,13 @@ impl<T> std::fmt::Debug for HashOnly<T> {
 /// `parent.with(salt)` for a salt that needs only `Hash`.
 pub(crate) fn id_with(parent: egui::Id, salt: impl std::hash::Hash) -> egui::Id {
     parent.with(HashOnly(salt))
+}
+
+/// Gives `resp` the screen-reader role of a list item named `label`, with `selected` as its
+/// selected state. [`egui::WidgetInfo::selected`] would set the toggled state instead.
+pub(crate) fn list_item_info(resp: &Response, selected: bool, label: impl Fn() -> String) {
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::ListItem, true, label()));
+    resp.ctx.accesskit_node_builder(resp.id, |node| node.set_selected(selected));
 }
 
 #[cfg(test)]
@@ -217,6 +227,26 @@ pub(crate) mod accessibility_tests {
         on("Grid by Row");
         off("Recent");
         on("Saved");
+    }
+
+    #[test]
+    fn list_items_report_selection_and_section_headers_report_expansion() {
+        let tree = tree(|ui| {
+            for (name, on) in [("Artboard 1", true), ("Artboard 2", false)] {
+                let resp = ui.allocate_response(vec2(120.0, 20.0), Sense::click());
+                list_item_info(&resp, on, || name.to_string());
+            }
+            section_toggle(ui, "Open Section", true);
+            section_toggle(ui, "Closed Section", false);
+        });
+        let state = |label| {
+            let n = named(&tree, label);
+            (n.role(), n.toggled(), n.is_selected(), n.is_expanded())
+        };
+        assert_eq!(state("Artboard 1"), (Role::ListItem, None, Some(true), None));
+        assert_eq!(state("Artboard 2"), (Role::ListItem, None, Some(false), None));
+        assert_eq!(state("Open Section"), (Role::DisclosureTriangle, None, None, Some(true)));
+        assert_eq!(state("Closed Section"), (Role::DisclosureTriangle, None, None, Some(false)));
     }
 
     #[test]
@@ -578,7 +608,7 @@ mod decimal_point_tests {
         }
         assert_eq!(mm("1,000.5"), None, "a point and a comma");
         assert_eq!(mm("1,2,3"), None, "two commas");
-        for thousand in ["1,000", "12,500 mm", "-1,000", "999,999mm"] {
+        for thousand in ["1,000", "12,500 mm", "-1,000", "+1,000", "999,999mm", "1,000\"", "1,000'"] {
             assert_eq!(mm(thousand), None, "{thousand} reads as thousands: refused, not a thousand times too small");
         }
         for (text, want) in [("0,125", 0.125), ("1,25", 1.25), ("1,0000", 1.0), ("1,500+2", 3.5)] {
@@ -620,6 +650,15 @@ mod field_number_tests {
         }
         assert_eq!(field_number("45*2°", "°", false), Some(90.0));
         assert_eq!(field_number("50% / 2", "%", false), Some(25.0));
+    }
+
+    /// A resolution field reads the unit it shows: "200 ppp" in a French interface.
+    #[test]
+    fn a_resolution_field_reads_its_translated_unit() {
+        crate::i18n::set_current(crate::i18n::Lang::from_code("fr").unwrap());
+        let read = [field_number("200 ppp", &crate::dialogs::ppi_suffix(), false), field_number("200", &crate::dialogs::ppi_suffix(), false)];
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        assert_eq!(read, [Some(200.0), Some(200.0)]);
     }
 
     /// A thousands comma is refused inside Kerning's pair of parentheses and before `%` or the

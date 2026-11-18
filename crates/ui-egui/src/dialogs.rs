@@ -22,9 +22,10 @@ pub mod brush_options;
 pub mod brush_replace_art;
 pub mod bullets_numbering;
 pub mod char_style_options;
+pub mod check_spelling;
 pub mod color_balance;
 pub mod color_guide_options;
-mod color_picker;
+pub(crate) mod color_picker;
 mod command;
 pub mod composite_fonts;
 pub mod confirm;
@@ -167,7 +168,7 @@ pub(crate) use export_for_screens::{
     open_assets as open_export_for_screens_assets, preset_list as screen_preset_list, saved_options as screen_saved_options,
     saved_rows as screen_saved_rows, settings_format as screen_settings_format,
 };
-pub(crate) use form::{humanize, number_list_text, plugin_color_button, read_number_list, unit_suffix};
+pub(crate) use form::{humanize, number_list_text, plugin_color_button, ppi_suffix, read_number_list, unit_suffix};
 pub use new_document::{create_without_dialog as new_document_without_dialog, open as open_new_document, preset_card};
 pub(crate) use new_document::{popup_open as new_document_popup_open, preset_name};
 pub use png_options::open as open_raster_options;
@@ -178,6 +179,9 @@ use crate::state::Dialog;
 use crate::{VectorcraftApp, widgets};
 
 type DialogResult = Result<Value, String>;
+
+/// A dialog's Reset ([`DialogSpec::reset`]).
+type ResetFn = fn(&VectorcraftApp, &mut Dialog) -> Result<(), String>;
 
 /// The shared dialog frame's inner margin, and the least room it leaves at the window's edges.
 const MARGIN: i8 = 22;
@@ -219,8 +223,8 @@ pub(crate) struct DialogSpec {
     pub alternate: Option<(&'static str, &'static str)>,
     /// Puts the fields back to their defaults. While Alt (Option on macOS) is held, the Cancel
     /// button of a dialog with an `ok` reads Reset; Reset (or `ui.dialogReset`) runs this and the
-    /// dialog stays open.
-    pub reset: Option<fn(&VectorcraftApp, &mut Dialog)>,
+    /// dialog stays open. An error leaves the dialog as it was.
+    pub reset: Option<ResetFn>,
     pub min_width: f32,
     pub max_width: Option<f32>,
     /// The body runs a live preview interaction that Cancel rolls back.
@@ -339,6 +343,7 @@ registry! {
     Replace: [confirm::REPLACE] => confirm::REPLACE_SPEC,
     ReplaceFiles: [confirm::REPLACE_FILES] => confirm::REPLACE_FILES_SPEC,
     ResetPreferences: [confirm::RESET_PREFS] => confirm::RESET_PREFS_SPEC,
+    ResetActions: [confirm::RESET_ACTIONS] => confirm::RESET_ACTIONS_SPEC,
     NewSwatch: [new_swatch::KIND] => new_swatch::SPEC,
     NewColorGroup: [new_color_group::KIND] => new_color_group::SPEC,
     GraphData: [graph_data::KIND] => graph_data::SPEC,
@@ -416,6 +421,7 @@ registry! {
     SliceOptions: [slices::OPTIONS] => slices::OPTIONS_SPEC,
     DivideSlices: [slices::DIVIDE] => slices::DIVIDE_SPEC,
     EpsOptions: [eps_options::KIND] => eps_options::SPEC,
+    EpsFlattenerOptions: [eps_options::CUSTOM_KIND] => eps_options::CUSTOM_SPEC,
     Recovery: [crate::recovery::KIND] => recovery::SPEC,
     PluginStopped: [safe_mode::STOPPED] => safe_mode::STOPPED_SPEC,
     SafeMode: [safe_mode::KIND] => safe_mode::SPEC,
@@ -436,6 +442,7 @@ registry! {
     ScriptGrowth: [script_run::GROWTH_KIND] => script_run::GROWTH_SPEC,
     ScriptClose: [script_run::CLOSE_KIND] => script_run::CLOSE_SPEC,
     ScriptNotice: [script_run::NOTICE_KIND] => script_run::NOTICE_SPEC,
+    ScriptFiles: [script_run::PICKER_KIND] => script_run::PICKER_SPEC,
     VectorHalftone: [halftone::KIND] => halftone::SPEC,
     SimplifySlider: [simplify_slider::KIND] => simplify_slider::SPEC,
     SmoothSlider: [smooth_slider::KIND] => smooth_slider::SPEC,
@@ -462,6 +469,7 @@ registry! {
     EditSelection: [edit_selection::KIND] => edit_selection::SPEC,
     EditViews: [edit_views::KIND] => edit_views::SPEC,
     EditCustomDictionary: [custom_dictionary::KIND] => custom_dictionary::SPEC,
+    CheckSpelling: [check_spelling::KIND] => check_spelling::SPEC,
     PerspectivePlane: [perspective_plane::KIND] => perspective_plane::SPEC,
     LayerOptions: [layer_options::KIND] => layer_options::SPEC,
     LayersPanelOptions: [layers_panel_options::KIND] => layers_panel_options::SPEC,
@@ -472,6 +480,7 @@ registry! {
     RenameArtboards: [rename_artboards::KIND] => rename_artboards::SPEC,
     PathToolOptions: [crate::addons::pathtools::KIND] => crate::addons::pathtools::OPTIONS_SPEC,
     DivideDashes: [crate::addons::pathtools::dashes::KIND] => crate::addons::pathtools::dashes::SPEC,
+    TangentCircle: [crate::addons::pathtools::tangent_circle::KIND] => crate::addons::pathtools::tangent_circle::SPEC,
     SetCorners: [crate::addons::pathtools::set_corners::KIND] => crate::addons::pathtools::set_corners::SPEC,
     NearestSwatch: [crate::addons::color::nearest::KIND] => crate::addons::color::nearest::SPEC,
     SwatchLegend: [crate::addons::color::legend::KIND] => crate::addons::color::legend::SPEC,
@@ -592,6 +601,7 @@ pub fn accepts_field(d: &Dialog, field: &str) -> bool {
 /// Options setting set this way for several rows is sent to every row (Template also sets Lock
 /// and Dim Images, as its checkbox does). A DXF Options preset set this way sets its fields, as
 /// one picked from its menu does, and the preset it shows follows the DXF options set this way.
+/// A Graph Data Column Width set this way sets every column, as Cell Style's does.
 pub fn set_field(d: &mut Dialog, field: String, value: Value) {
     if d.kind == brush_options::KIND {
         brush_art_options::note_set(d, &field);
@@ -605,10 +615,17 @@ pub fn set_field(d: &mut Dialog, field: String, value: Value) {
     if d.kind == "preferences" {
         crate::prefs_dialog::note_set(d, &field, &value);
     }
+    if d.kind == new_document::KIND || new_document::popup_open(d) {
+        new_document::note_set(d, &field);
+    }
     let dxf = (d.kind == dxf_options::KIND).then(|| field.clone());
+    let graph = (d.kind == graph_data::KIND).then(|| field.clone());
     d.fields.insert(field, value);
     if let Some(field) = dxf {
         dxf_options::note_set(d, &field);
+    }
+    if let Some(field) = graph {
+        graph_data::note_set(d, &field);
     }
 }
 
@@ -643,12 +660,25 @@ pub(crate) fn parent(d: &Dialog) -> Option<Dialog> {
 }
 
 /// `ui.dialog.set` changed `field` of the open dialog from `old`: a choice that sets other fields
-/// sets them as choosing it in the dialog does (Export for Screens' `exportPreset`), a change
+/// sets them as choosing it in the dialog does (Export for Screens' `exportPreset`, EPS Options'
+/// `flattenerPreset`, which drops the Custom… options), a change
 /// to Export for Screens' sub-folder controls ends an applied preset's item folders, as it does in
-/// the dialog, and Transform Each's Relative / Absolute keeps the Scale fields' size.
+/// the dialog, Transform Each's Relative / Absolute keeps the Scale fields' size, and Recolor
+/// Artwork's `group` selects that color group and its `groupAction` runs the button at once. A value
+/// Composite Fonts' Show Sample can't take is refused.
 pub(crate) fn field_set(app: &mut VectorcraftApp, field: &str, old: Option<&Value>) -> Result<(), String> {
     if app.ui.dialog.as_ref().is_some_and(|d| d.kind == transform_each::KIND) {
         transform_each::field_set(app, field, old);
+        return Ok(());
+    }
+    if app.ui.dialog.as_ref().is_some_and(|d| d.kind == recolor::KIND) {
+        return recolor::field_set(app, field);
+    }
+    if let Some(d) = app.ui.dialog.as_ref().filter(|d| d.kind == composite_fonts::KIND) {
+        return composite_fonts::field_set(d, field);
+    }
+    if let Some(d) = app.ui.dialog.as_mut().filter(|d| d.kind == eps_options::KIND) {
+        eps_options::field_set(d, field);
         return Ok(());
     }
     let Some(d) = app.ui.dialog.as_mut().filter(|d| d.kind == export_for_screens::KIND) else { return Ok(()) };
@@ -692,7 +722,16 @@ pub fn cancel(app: &mut VectorcraftApp) {
         if d.kind == proof_setup::KIND {
             proof_setup::cancel(app, &d);
         }
+        if d.kind == script_run::PICKER_KIND {
+            script_run::picker_cancel(app, &d);
+        }
         missing_links::cancelled(app, &d);
+        // Find Font's next open starts with an empty replacement search.
+        if d.kind == "findFont"
+            && let Some(ctx) = app.ui_ctx.clone()
+        {
+            crate::find_font::clear_search(&ctx);
+        }
         // Toolbar-only Flare options start no preview and must not cancel a gesture
         // that was already active before opening them. The generic parameter dialog has a spec
         // without a preview, yet previews some commands (Grid Repeat Options) when asked to.
@@ -711,12 +750,12 @@ pub(crate) fn can_reset(app: &VectorcraftApp) -> bool {
 }
 
 /// Reset (`ui.dialogReset`, or Cancel while Alt or Option is held): the open dialog's fields go
-/// back to their defaults and it stays open → the dialog; an error when no dialog is open or the
-/// open one has no Reset.
+/// back to their defaults and it stays open → the dialog; an error when no dialog is open, the
+/// open one has no Reset, or its Reset fails (the dialog is then left as it was).
 pub(crate) fn reset(app: &mut VectorcraftApp) -> DialogResult {
     let Some(mut d) = app.ui.dialog.clone() else { return Err("no dialog open".into()) };
     let Some(reset) = spec(&d.kind).reset else { return Err("the open dialog has no Reset".into()) };
-    reset(app, &mut d);
+    reset(app, &mut d)?;
     let out = serde_json::to_value(&d).unwrap_or_default();
     app.ui.dialog = Some(d);
     Ok(out)
@@ -812,6 +851,9 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     if after_panel && !ctx.input(|i| i.key_down(egui::Key::Enter) || i.key_pressed(egui::Key::Enter)) {
         d.fields.remove(AFTER_PANEL);
     }
+    // A body can open another dialog in its place (EPS Options' Custom…): this frame's Enter
+    // doesn't confirm that one.
+    let opened = d.kind.clone();
     let heading = (spec.heading)(&d);
     let revolves = revolve_gizmo::active(&d);
     if revolves {
@@ -911,7 +953,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     if ok_clicked && !rejected && !refused_during_click {
         ok = true;
     }
-    if spec.ok.is_some() && ok_enabled && !after_panel && !rejected && crate::shortcuts::pressed_anew(ctx, egui::Key::Enter) {
+    if spec.ok.is_some() && ok_enabled && !after_panel && !rejected && d.kind == opened && crate::shortcuts::pressed_anew(ctx, egui::Key::Enter) {
         ok = true;
     }
     if discard {

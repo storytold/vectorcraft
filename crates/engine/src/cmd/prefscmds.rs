@@ -314,7 +314,10 @@ pub const PREF_SPECS: &[PrefSpec] = &[
             ("or", "Odia"),
             ("as", "Assamese"),
             ("sa", "Sanskrit"),
-            ("ur", "Urdu")
+            ("ur", "Urdu"),
+            ("ne", "Nepali"),
+            ("kok", "Konkani"),
+            ("sd", "Sindhi")
         ])
     ),
     p!("hyphenationExceptions", "Hyphenation", "", "Exceptions (comma separated)", text),
@@ -365,6 +368,8 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("gpuPerformance", "Performance", "GPU Performance", "GPU Performance", bool),
     p!("animatedZoom", "Performance", "GPU Performance", "Animated Zoom", bool),
     p!("gpuPreference", "Performance", "GPU Performance", "Graphics Processor", choice(GPU_PREFERENCES)),
+    // Read by the desktop app at startup: the window presents without vsync, capped at 240 fps (#6013).
+    p!("lowLatencyDrawing", "Performance", "GPU Performance", "Low-Latency Drawing", bool),
     p!("historyStates", "Performance", "", "History States", int(5, 1000)),
     p!("realTimeDrawing", "Performance", "", "Real-time Drawing and Editing", bool),
     p!("renderThreads", "Performance", "", "Render Threads (-1 = Automatic)", int(-1, 64)),

@@ -322,6 +322,7 @@ fn run_ui_part3(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         "type.bold" => crate::panels::character::toggle_face(app, Face::Bold),
         "type.italic" => crate::panels::character::toggle_face(app, Face::Italic),
         "type.highlightFontName" => crate::panels::character::highlight(app, crate::panels::character::Field::FontName),
+        "type.highlightFontSize" => crate::panels::character::highlight(app, crate::panels::character::Field::FontSize),
         "type.highlightKerning" => crate::panels::character::highlight(app, crate::panels::character::Field::Kerning),
         "type.highlightTracking" => crate::panels::character::highlight(app, crate::panels::character::Field::Tracking),
         "type.underline" => crate::panels::character::toggle_underline(app),
@@ -672,7 +673,7 @@ fn run_ui_part6(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         },
         "window.newWindow" => crate::doc_windows::new_window(app),
         "window.arrange.cascade" => crate::doc_windows::cascade(app),
-        "window.arrange.tile" => crate::canvas::tile(app),
+        "window.arrange.tile" => crate::canvas::tile(app, p),
         "window.arrange.floatInWindow" => crate::doc_windows::float_in_window(app, p),
         "window.arrange.floatAllInWindows" => crate::doc_windows::float_all(app),
         "window.arrange.consolidateAllWindows" if p.get("index").is_some_and(|i| !i.is_null()) => crate::doc_windows::dock(app, p),
@@ -684,6 +685,11 @@ fn run_ui_part6(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             Some(t) => Err(format!("unknown tool `{t}`")),
             None => Err("missing `tool`".into()),
         },
+        "tool.selectLastSelection" => {
+            let id = app.session.last_selection_tool();
+            let switched = if app.session.tool_id() == id { Ok(()) } else { app.try_select_tool(id) };
+            switched.map(|()| json!({"tool": app.session.tool_id()}))
+        }
         crate::touch::TOGGLE_MODE => crate::touch::toggle_mode(app),
         crate::addons::pathtools::corner::COMMAND => crate::addons::pathtools::corner::open(app),
         crate::addons::pathtools::shared_edge::COMMAND => crate::addons::pathtools::shared_edge::open(app),
@@ -789,6 +795,7 @@ fn run_ui_part7(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         }
         "ui.newBrush" => crate::dialogs::new_brush::open(app, p.get("ids").cloned()),
         "ui.brushOptions" => crate::dialogs::brush_options::open(app, s("name").as_deref()),
+        "ui.brushObjectOptions" => crate::dialogs::brush_options::open_object(app),
         "tool.options" => crate::toolbar::open_options(app, &s("tool").unwrap_or_default()),
         _ => return None,
     };
@@ -864,6 +871,7 @@ fn run_ui_part9(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         }
         "ui.imageTracePresetDialog" => crate::dialogs::trace_presets::open(app, p),
         "ui.flattenerPreview" => crate::panels::flattener_preview::command(app, p),
+        "ui.foldPreview" => crate::addons::packaging::preview::command(app, p),
         "ui.copyScriptConsole" => crate::panels::script_console::copy(app, p),
         "window.graphicStyleLibrary" => crate::panels::graphic_styles::open_library(app, p),
         "ui.libraryPanel" => crate::panels::library_panel::command(app, p),
@@ -909,7 +917,11 @@ fn run_ui_part9(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
 fn run_ui_part10(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<Value, String>> {
     let s = |k: &str| p.get(k).and_then(Value::as_str).map(str::to_string);
     let r = match id {
-        "ui.expandDialog" => crate::dialogs::expand::open(app),
+        "ui.expandDialog" => match opt_bool(p, "immediate") {
+            Ok(Some(true)) => crate::dialogs::expand::expand_now(app),
+            Ok(_) => crate::dialogs::expand::open(app),
+            Err(e) => Err(e),
+        },
         "ui.simplifyAuto" => crate::dialogs::simplify_slider::auto(app),
         "ui.simplifyMoreOptions" => crate::dialogs::simplify_slider::more_options(app),
         "ui.smoothAuto" => crate::dialogs::smooth_slider::auto(app),
@@ -943,6 +955,7 @@ fn run_ui_part10(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
         "ui.colorGuideLimit" => crate::panels::color_guide::set_limit(app, p),
         "ui.colorPanel" => crate::panels::color::command(app, p),
         "ui.colorRgbPercent" => crate::panels::color::rgb_percent_command(app, p),
+        "ui.colorWheel" => crate::panels::color_wheel::command(app, p),
         "ui.savePdfDialog" => crate::dialogs::open_save_pdf(app, p),
         "file.exportAs" if s("path").is_none() => {
             crate::dialogs::open_export_as(app, s("format").as_deref(), p);
@@ -1006,8 +1019,10 @@ fn run_ui_part11(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
         }
         crate::panels::actions::SAVE_SET => crate::panels::actions::save_set(app, p),
         crate::panels::actions::LOAD_SET => crate::panels::actions::load_set(app, p),
+        crate::panels::actions::REPLACE_SET => crate::panels::actions::replace_set(app, p),
         crate::panels::actions::DELETE_SETS => crate::panels::actions::delete_sets(app, p),
         crate::panels::actions::DUPLICATE => crate::panels::actions::duplicate(app, p),
+        crate::panels::actions::RESET => crate::panels::actions::reset(app, p),
         "ui.shortcutImportDialog" => crate::dialogs::shortcut_import::command(app, p),
         _ => return None,
     };
@@ -1094,6 +1109,7 @@ fn run_ui_part13(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
         "ui.blendOptions" => crate::dialogs::blend_options::open(app),
         "ui.livePaintGapOptions" => crate::dialogs::live_paint_gaps::open(app),
         "ui.perspectivePlane" => crate::dialogs::perspective_plane::open(app, p),
+        crate::dialogs::check_spelling::COMMAND => crate::dialogs::check_spelling::open(app),
 
         _ => return None,
     };

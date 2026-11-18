@@ -17,9 +17,41 @@ fn session() -> Session {
     s.execute("paint.setFill", &json!({"color": {"model": "rgb", "r": 1.0, "g": 0.2, "b": 0.0}})).unwrap();
     s.execute("transparency.set", &json!({"opacity": 50})).unwrap();
     let mut png = vec![];
-    image::RgbaImage::from_fn(8, 8, |x, _| image::Rgba([0, 120, 255, if x < 4 { 0 } else { 255 }]))
-        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
-        .unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::RgbaImage::from_fn(8, 8, |x, _| image::Rgba([0, 120, 255, if x < 4 { 0 } else { 255 }]))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     s.execute("file.place", &json!({"name": "dots.png", "dataBase64": vectorcraft_format::base64_encode(&png), "at": [150, 50]})).unwrap();
     s
 }
@@ -175,9 +207,41 @@ fn pdfx_1a_flattening_keeps_the_inks_behind_an_image_in_a_cmyk_document() {
     s.execute("paint.setFill", &json!({"color": {"c": teal[0], "m": teal[1], "y": teal[2], "k": teal[3]}})).unwrap();
     s.execute("paint.setStroke", &json!({"none": true})).unwrap();
     let mut png = vec![];
-    image::RgbaImage::from_fn(40, 40, |x, _| image::Rgba([0, 120, 255, if x < 20 { 0 } else { 255 }]))
-        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
-        .unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::RgbaImage::from_fn(40, 40, |x, _| image::Rgba([0, 120, 255, if x < 20 { 0 } else { 255 }]))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     s.execute("file.place", &json!({"name": "logos.png", "dataBase64": vectorcraft_format::base64_encode(&png), "at": [100, 50]})).unwrap();
     let v = s.execute("document.exportPdf", &json!({"standard": "pdfX1a"})).unwrap();
     let bytes = vectorcraft_format::base64_decode(v["dataBase64"].as_str().unwrap()).unwrap();
@@ -228,10 +292,45 @@ fn cropped_by(mode: &str, width: f64, art: Art, layer: bool) -> (Session, u64) {
     let art = match art {
         Art::Image { see_through } => {
             let mut png = vec![];
-            image::RgbaImage::from_fn(240, 160, |x, y| {
-                image::Rgba([200, (x % 256) as u8, (y % 256) as u8, if see_through && x < 60 { 128 } else { 255 }])
-            })
-            .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+            {
+                let __dyn: image::DynamicImage = (image::RgbaImage::from_fn(240, 160, |x, y| {
+                    image::Rgba([200, (x % 256) as u8, (y % 256) as u8, if see_through && x < 60 { 128 } else { 255 }])
+                }))
+                .into();
+                let (__w, __h) = (__dyn.width(), __dyn.height());
+                let (__layout, __sample, __raw) = match __dyn {
+                    image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+                    image::DynamicImage::ImageLumaA8(b) => {
+                        (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw())
+                    }
+                    image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+                    image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+                    image::DynamicImage::ImageLuma16(b) => (
+                        craft_image_codecs::ChannelLayout::Gray,
+                        craft_image_codecs::SampleType::U16,
+                        b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                    ),
+                    image::DynamicImage::ImageLumaA16(b) => (
+                        craft_image_codecs::ChannelLayout::GrayA,
+                        craft_image_codecs::SampleType::U16,
+                        b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                    ),
+                    image::DynamicImage::ImageRgb16(b) => (
+                        craft_image_codecs::ChannelLayout::Rgb,
+                        craft_image_codecs::SampleType::U16,
+                        b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                    ),
+                    image::DynamicImage::ImageRgba16(b) => (
+                        craft_image_codecs::ChannelLayout::Rgba,
+                        craft_image_codecs::SampleType::U16,
+                        b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                    ),
+                    other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+                };
+                let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+                craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+                    .map(|__b| png.extend_from_slice(&__b))
+            }
             .unwrap();
             let placed =
                 run(&mut s, "file.place", json!({"name": "photo.png", "dataBase64": vectorcraft_format::base64_encode(&png), "rect": FRAME}));
@@ -486,9 +585,41 @@ fn flat_pdf_files_of_art_that_no_clip_group_hides_are_unchanged() {
     run(&mut fitted, "shape.rectangle", json!({"x": 180, "y": 90, "width": 160, "height": 160}));
     run(&mut fitted, "paint.setFill", json!({"color": "#203040"}));
     let mut png = vec![];
-    image::RgbaImage::from_fn(240, 160, |x, y| image::Rgba([200, x as u8, y as u8, 255]))
-        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
-        .unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::RgbaImage::from_fn(240, 160, |x, y| image::Rgba([200, x as u8, y as u8, 255]))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     let photo =
         run(&mut fitted, "file.place", json!({"name": "photo.png", "dataBase64": vectorcraft_format::base64_encode(&png), "rect": FRAME}))["ids"][0]
             .clone();
@@ -698,4 +829,79 @@ fn flattening_keeps_the_group_in_the_clipping_layer_when_the_layer_below_differs
         }
     }
     assert!(wrong.is_empty(), "{wrong:#?}");
+}
+
+/// #6861: Layer opacity, blend modes, sublayers with transparency, and empty transparent layers:
+/// PDF/X-1a, PDF/X-3, and PDF 1.3 automatically flatten and reduce transparency without failing,
+/// and the output contains no transparency dictionary or soft mask.
+#[test]
+fn pdfx_flattens_layer_and_sublayer_transparency() {
+    let _g = crate::tests_colormgmt::GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let mut s = Session::new();
+    run(&mut s, "file.new", json!({"width": 200, "height": 200, "colorMode": "cmyk"}));
+
+    // Bottom layer: base artwork
+    let _layer1 = s.doc().unwrap().doc.layers[0].id.0;
+    run(&mut s, "shape.rectangle", json!({"x": 10, "y": 10, "width": 80, "height": 80}));
+    run(&mut s, "paint.setFill", json!({"color": {"c": 1.0, "m": 0.0, "y": 0.0, "k": 0.0}}));
+
+    // Middle layer with 50% opacity and Multiply blend mode
+    let layer2 = run(&mut s, "layer.new", json!({}))["id"].as_u64().unwrap();
+    run(&mut s, "shape.rectangle", json!({"x": 40, "y": 40, "width": 80, "height": 80}));
+    run(&mut s, "paint.setFill", json!({"color": {"c": 0.0, "m": 1.0, "y": 0.0, "k": 0.0}}));
+    run(&mut s, "transparency.set", json!({"ids": [layer2], "opacity": 50, "blendMode": "multiply"}));
+
+    // Sublayer inside layer2 with 70% opacity
+    let sublayer = run(&mut s, "layer.newSublayer", json!({"parent": layer2}))["id"].as_u64().unwrap();
+    run(&mut s, "shape.rectangle", json!({"x": 60, "y": 60, "width": 80, "height": 80}));
+    run(&mut s, "paint.setFill", json!({"color": {"c": 0.0, "m": 0.0, "y": 1.0, "k": 0.0}}));
+    run(&mut s, "transparency.set", json!({"ids": [sublayer], "opacity": 70}));
+
+    // Empty layer with opacity (must not leave /CA or /ca in output)
+    let empty_layer = run(&mut s, "layer.new", json!({}))["id"].as_u64().unwrap();
+    run(&mut s, "transparency.set", json!({"ids": [empty_layer], "opacity": 40}));
+
+    for standard in ["pdfX1a", "pdfX3"] {
+        let (text, warnings) = pdf(&mut s, json!({"standard": standard}));
+        assert!(text.starts_with("%PDF-1.3"), "{standard}");
+        assert!(warnings.iter().any(|w| w.contains("flattened")), "{standard}: expected flattening warning");
+        for no in ["/SMask", "/S/Transparency", "/ca ", "/CA "] {
+            assert!(!text.contains(no), "{standard}: forbidden token '{no}' found in text:\n{text}");
+        }
+        // Verify it can be imported back and renders artwork
+        let v = s.execute("document.exportPdf", &json!({"standard": standard})).unwrap();
+        let bytes = vectorcraft_format::base64_decode(v["dataBase64"].as_str().unwrap()).unwrap();
+        let imported = vectorcraft_pdf::import(&bytes).unwrap();
+        assert!(!imported.layers.is_empty());
+        let rendered = drawn(&imported);
+        let non_white = rendered.pixels.as_chunks::<4>().0.iter().filter(|p| p[..3].iter().any(|c| *c < 240)).count();
+        assert!(non_white > 1000, "{standard}: flattened artwork failed to render, only {non_white} pixels");
+    }
+
+    // PDF 1.3 export with compatibility: 1.3
+    let (text, warnings) = pdf(&mut s, json!({"compatibility": "1.3", "preserveEditing": false}));
+    assert!(text.starts_with("%PDF-1.3"));
+    assert!(warnings.iter().any(|w| w.contains("flattened")));
+    for no in ["/SMask", "/S/Transparency", "/ca ", "/CA "] {
+        assert!(!text.contains(no), "PDF 1.3: forbidden token '{no}' found in text");
+    }
+}
+
+#[test]
+fn pdf_outlining_does_not_wrap_layer_transparency_into_groups() {
+    let _g = crate::tests_colormgmt::GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let mut s = Session::new();
+    run(&mut s, "file.new", json!({"width": 200, "height": 200}));
+    let layer1 = s.doc().unwrap().doc.layers[0].id.0;
+    run(&mut s, "shape.rectangle", json!({"x": 10, "y": 10, "width": 80, "height": 80}));
+    run(&mut s, "transparency.set", json!({"ids": [layer1], "opacity": 60}));
+
+    let o = crate::cmd::FlattenOptions { text_to_outlines: true, ..Default::default() };
+    let doc = s.doc().unwrap().doc.clone();
+    let flattened = crate::cmd::flatten::flatten_expanded(&doc, &o).unwrap();
+    let resulting_doc = flattened.as_ref().unwrap_or(&doc);
+    assert_eq!(resulting_doc.layers.len(), 1);
+    let l = &resulting_doc.layers[0];
+    assert_eq!(l.opacity, 0.6);
+    assert!(!matches!(l.children().unwrap()[0].kind, vectorcraft_doc::NodeKind::Group { .. }));
 }

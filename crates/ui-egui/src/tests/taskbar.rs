@@ -2,7 +2,8 @@
 //! Path, compound paths and clipping masks their Release, images selected with vector art Make
 //! Clipping Mask, type converts between point and area type, type on a path opens its options, and
 //! a basic shape shows its properties in place of Lock. The basic shape tools show Edit Path, Fill,
-//! Stroke and Shape Properties for the shape they draw. Type, and the Type tools while they edit it,
+//! Stroke and Shape Properties for the shape they draw, and the Smooth tool its Fidelity and Tool
+//! Options… for a path it can smooth. Type, and the Type tools while they edit it,
 //! show the font family, font style and Font Size controls.
 
 use egui::{Event, PointerButton, Pos2, Rect, vec2};
@@ -156,9 +157,41 @@ fn a_clipping_mask_offers_edit_clipping_path_and_release() {
 fn an_image_with_vector_art_offers_make_clipping_mask() {
     let mut app = app();
     let mut png = vec![];
-    image::RgbaImage::from_pixel(20, 20, image::Rgba([0, 128, 255, 255]))
-        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
-        .unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::RgbaImage::from_pixel(20, 20, image::Rgba([0, 128, 255, 255]))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     let dir = crate::tests_folder::Folder::new("ui-taskbar");
     let path = dir.file("blue.png", &png);
     app.services.read = Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string())));
@@ -719,6 +752,86 @@ fn shape_tool_bar_retargets_after_another_shape_and_undo() {
     assert_eq!(app.session.tool_id(), "ellipse");
     click_button(&mut app, "Edit Path");
     assert_eq!(app.session.tool_id(), "directSelection");
+}
+
+/// Where the text the bar draws just right of `label`, on the same row, centers: the field after
+/// the label.
+fn field_after(texts: &[(String, Rect)], label: &str) -> Pos2 {
+    let l = texts.iter().find(|(t, _)| t == label).unwrap_or_else(|| panic!("no `{label}` in {texts:?}")).1;
+    texts
+        .iter()
+        .filter(|(_, r)| r.left() > l.right() && (r.center().y - l.center().y).abs() < 8.0)
+        .min_by(|a, b| a.1.left().total_cmp(&b.1.left()))
+        .unwrap_or_else(|| panic!("no field after `{label}` in {texts:?}"))
+        .1
+        .center()
+}
+
+/// The Smooth tool, with a path it can smooth selected, shows its Fidelity field and Tool Options…,
+/// and none of the selection tools' actions or chips. A value typed in the field sets the tool's
+/// Fidelity, and Tool Options… opens the tool's options with that value.
+#[test]
+fn the_smooth_tool_shows_fidelity_and_tool_options_for_a_path() {
+    let mut app = app();
+    let path = id(app.run("shape.ellipse", json!({"x": 60, "y": 60, "width": 120, "height": 80})).unwrap());
+    select(&mut app, &[path]);
+    app.run("tool.select", json!({"tool": "smooth"})).unwrap();
+    let (_, named) = buttons(&mut app);
+    let names = names(&named);
+    for name in ["Tool Options…", "More Options"] {
+        assert!(names.contains(&name), "{name} in {names:?}");
+    }
+    for name in ["Fill", "Stroke", "Recolor Artwork", "Lock (⌘2)", "Duplicate", "Edit Path", "Offset Path", "Simplify", "Smooth"] {
+        assert!(!names.contains(&name), "{name} is left out of {names:?}");
+    }
+    let (ctx, texts) = bar(&mut app);
+    let p = field_after(&texts, "Fidelity:");
+    let press = |pressed| Event::PointerButton { pos: p, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+    frame(&mut app, &ctx, vec![Event::PointerMoved(p), press(true), press(false)]);
+    frame(&mut app, &ctx, vec![]);
+    frame(&mut app, &ctx, vec![Event::Text("7".into())]);
+    let enter = Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+    frame(&mut app, &ctx, vec![enter]);
+    frame(&mut app, &ctx, vec![]);
+    assert_eq!(app.session.tool_options()["fidelity"].as_f64(), Some(7.0));
+    assert_eq!(app.session.tool_id(), "smooth");
+    assert_eq!(app.session.active().unwrap().selection.objects, [NodeId(path)], "the selection is kept");
+    click_button(&mut app, "Tool Options…");
+    let d = app.ui.dialog.as_ref().expect("the Smooth tool's options");
+    assert_eq!((d.kind.as_str(), d.str("tool").as_str()), (crate::dialogs::freehand::KIND, "smooth"));
+    assert_eq!(d.f64("fidelity", 0.0), 7.0);
+}
+
+/// The Smooth tool shows no bar without a selected path it can smooth: with nothing selected, a
+/// straight line or type. With a selection tool the bar has the selection's actions again, without
+/// Fidelity.
+#[test]
+fn the_smooth_tool_shows_no_bar_without_a_path_to_smooth() {
+    let mut app = app();
+    let path = id(app.run("shape.ellipse", json!({"x": 60, "y": 60, "width": 120, "height": 80})).unwrap());
+    let line = id(app.run("shape.line", json!({"x1": 150, "y1": 200, "x2": 300, "y2": 240})).unwrap());
+    let text = id(app.run("text.create", json!({"x": 220, "y": 60, "text": "Type"})).unwrap());
+    app.run("tool.select", json!({"tool": "smooth"})).unwrap();
+    for (what, ids) in [("nothing", vec![]), ("a straight line", vec![line]), ("type", vec![text])] {
+        select(&mut app, &ids);
+        let (ctx, _) = bar(&mut app);
+        assert!(canvas::task_bar_rect(&ctx).is_none(), "{what}: no bar");
+    }
+    select(&mut app, &[path, line]);
+    let (ctx, texts) = bar(&mut app);
+    assert!(canvas::task_bar_rect(&ctx).is_some() && has(&texts, "Fidelity:"), "a path with a line: the bar, {texts:?}");
+    // On one canvas the bar follows each change of the selection.
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    for (ids, shown) in [(vec![path], true), (vec![line], false), (vec![], false), (vec![path], true)] {
+        select(&mut app, &ids);
+        frame(&mut app, &ctx, vec![]);
+        frame(&mut app, &ctx, vec![]);
+        assert_eq!(canvas::task_bar_rect(&ctx).is_some(), shown, "{ids:?}");
+    }
+    app.run("tool.select", json!({"tool": "selection"})).unwrap();
+    let (_, texts) = bar(&mut app);
+    assert!(has(&texts, "Duplicate") && !has(&texts, "Fidelity:"), "{texts:?}");
 }
 
 /// A compound path under the Direct Selection tool isn't offered Edit Path, which would only switch

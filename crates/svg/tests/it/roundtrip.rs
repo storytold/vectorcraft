@@ -331,9 +331,15 @@ fn hidden_and_guides_omitted() {
 
 #[test]
 fn image_roundtrip() {
-    let mut png = Vec::new();
-    let img = image::RgbaImage::from_pixel(4, 2, image::Rgba([255, 0, 0, 255]));
-    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let img = craft_image_codecs::Image::from_raw(
+        4,
+        2,
+        craft_image_codecs::ChannelLayout::Rgba,
+        craft_image_codecs::SampleType::U8,
+        [255u8, 0, 0, 255].repeat(8),
+    )
+    .unwrap();
+    let png = craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap();
     let mut d = Document::new(200.0, 200.0);
     let id = d.alloc_id();
     let n = Node::new(

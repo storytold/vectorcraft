@@ -5,7 +5,8 @@
 //! start point and the dragged corner snap to Smart Guides ([`DrawSnap`]), hovering too.
 //! While dragging, ↑/↓ change the arc's slope, the spiral's segments, the grid rows or the
 //! concentric dividers; ←/→ change grid columns / radial dividers. C switches the arc between open
-//! and closed, and F switches its base between the X and Y axes. While a spiral is dragged out, Alt
+//! and closed, and F switches its base between the X and Y axes. A spiral's outer end follows the
+//! pointer, so dragging around the center turns the spiral. While a spiral is dragged out, Alt
 //! and Ctrl/Cmd keep its inner end at the distance from the center on the first modified drag as
 //! the outer end follows the pointer: Alt adds or removes whole winds of four segments, and
 //! Ctrl/Cmd changes the decay.
@@ -18,7 +19,7 @@ use serde_json::{Value, json};
 use vectorcraft_geom::Point;
 
 use crate::guides::{DrawSnap, Leave};
-use crate::shape::{box_params, drag_rect, turned_box};
+use crate::shape::{box_params, turned_box};
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 
 /// How much ↑ or ↓ changes the arc's slope while it is dragged out.
@@ -48,6 +49,9 @@ pub struct FamilyTool {
     spiral_end: Option<f64>,
     /// The segment count when Alt alone starts adjusting winds.
     spiral_alt_base: Option<u32>,
+    /// The direction (degrees clockwise on the page from the x axis) of the drag's last pointer at
+    /// least 0.01 pt from the center, 0 before there is one: the spiral's outer end turns to it.
+    spiral_bearing: f64,
     /// Rows / concentric dividers.
     pub rows: u32,
     /// Columns / radial dividers.
@@ -108,6 +112,7 @@ impl FamilyTool {
             clockwise: true,
             spiral_end: None,
             spiral_alt_base: None,
+            spiral_bearing: 0.0,
             rows: 5,
             columns: 5,
             skew: [0.0; 2],
@@ -155,15 +160,11 @@ impl FamilyTool {
     }
 
     /// How the dragged point keeps to the start: a spiral's radius goes anywhere, the arc's and
-    /// the grids' corner keeps to a diagonal with Shift (a grid's square is taken along the
-    /// Constrain Angle's axes instead when it turns them, [`Self::command_at`]).
+    /// the grids' corner keeps to a diagonal with Shift (an arc's or a grid's square is taken along
+    /// the Constrain Angle's axes instead when it turns them, [`Self::command_at`]).
     fn leave(&self, cx: &ToolContext, start: Point, m: Mods) -> Option<Leave> {
-        let turned = self.is_grid() && vectorcraft_geom::constrain_axes(cx.constrain_angle).is_some();
+        let turned = vectorcraft_geom::constrain_axes(cx.constrain_angle).is_some();
         (self.id != "spiral").then(|| Leave::diagonal(start, m.shift && !turned))
-    }
-
-    fn is_grid(&self) -> bool {
-        matches!(self.id, "rectangularGrid" | "polarGrid")
     }
 
     /// The natural logarithm of the radius of the inner end of a spiral of outer radius `r` drawn
@@ -206,6 +207,13 @@ impl FamilyTool {
         }
     }
 
+    /// The direction (degrees clockwise on the page from the x axis) from a spiral's center `start`
+    /// to the pointer `p`, or the last one when `p` is less than 0.01 pt from the center.
+    fn spiral_bearing_to(&self, start: Point, p: Point) -> f64 {
+        let d = p - start;
+        if d.hypot() >= 0.01 { d.y.atan2(d.x).to_degrees() } else { self.spiral_bearing }
+    }
+
     /// The skew a letter changes while a grid is dragged out, as an index into `skew`, and the
     /// direction: F lowers and V raises the skew of the horizontal dividers (a rectangular grid's
     /// rows) or the radial dividers (a polar grid's), X lowers and C raises that of the vertical
@@ -245,15 +253,19 @@ impl FamilyTool {
     }
 
     /// [`Self::command`] with General › Constrain Angle `base` (degrees, counter-clockwise): the
-    /// grids are drawn along the x and y axes turned by it, as the rectangle is.
+    /// arc and the grids are drawn along the x and y axes turned by it, as the rectangle is.
     pub fn command_at(&self, start: Point, p: Point, m: Mods, base: f64) -> (String, Value) {
         match self.id {
+            // The spiral: its outer end at the pointer, turned about the center.
             "spiral" => {
                 let r = p.distance(start).max(0.01);
-                (
-                    "shape.spiral".into(),
-                    json!({"cx": start.x, "cy": start.y, "radius": r, "decay": self.decay, "segments": self.segments, "clockwise": self.clockwise}),
-                )
+                let mut params =
+                    json!({"cx": start.x, "cy": start.y, "radius": r, "decay": self.decay, "segments": self.segments, "clockwise": self.clockwise});
+                let rotation = self.spiral_bearing_to(start, p);
+                if rotation != 0.0 {
+                    params["rotation"] = json!(rotation);
+                }
+                ("shape.spiral".into(), params)
             }
             // The grids: the dragged box (along the Constrain Angle's axes) with the tool's options.
             "rectangularGrid" | "polarGrid" => {
@@ -263,25 +275,30 @@ impl FamilyTool {
                 }
                 (format!("shape.{}", self.id), params)
             }
+            // The arc: its box along the Constrain Angle's axes, with the reference point taken in
+            // that box and turned out onto the page; the arc turns about it.
             _ => {
-                let r = drag_rect(start, p, m).abs();
+                let (r, axes) = turned_box(start, p, m, base);
+                let r = r.abs();
                 let (w, h) = (r.width().max(1e-9), r.height().max(1e-9));
                 let rp = vectorcraft_geom::reference_point(vectorcraft_geom::Rect::new(0.0, 0.0, w, h), self.reference.min(8));
-                let anchor = Point::new(r.x0 + rp.x, r.y0 + rp.y);
-                (
-                    "shape.arc".into(),
-                    json!({
-                        "x": anchor.x,
-                        "y": anchor.y,
-                        "lengthX": w,
-                        "lengthY": h,
-                        "reference": self.reference,
-                        "baseAlong": self.base_along,
-                        "slope": self.slope,
-                        "closed": self.closed,
-                        "fillArc": self.fill_arc,
-                    }),
-                )
+                let local = Point::new(r.x0 + rp.x, r.y0 + rp.y);
+                let anchor = axes.map_or(local, |a| a * local);
+                let mut params = json!({
+                    "x": anchor.x,
+                    "y": anchor.y,
+                    "lengthX": w,
+                    "lengthY": h,
+                    "reference": self.reference,
+                    "baseAlong": self.base_along,
+                    "slope": self.slope,
+                    "closed": self.closed,
+                    "fillArc": self.fill_arc,
+                });
+                if let Some(rotation) = axes.and_then(|_| vectorcraft_geom::constrain_rotation(base)) {
+                    params["rotation"] = json!(rotation);
+                }
+                ("shape.arc".into(), params)
             }
         }
     }
@@ -307,6 +324,7 @@ impl Tool for FamilyTool {
                 self.began = false;
                 self.spiral_end = None;
                 self.spiral_alt_base = None;
+                self.spiral_bearing = 0.0;
                 self.before_drag = None;
                 vec![]
             }
@@ -328,6 +346,7 @@ impl Tool for FamilyTool {
                 }
                 if self.id == "spiral" {
                     self.hold_spiral_end(s, ev.pos, ev.mods);
+                    self.spiral_bearing = self.spiral_bearing_to(s, ev.pos);
                 }
                 let (c, v) = self.command_at(s, ev.pos, ev.mods, cx.constrain_angle);
                 out.push(Action::Preview(c, v));
@@ -433,8 +452,8 @@ impl Tool for FamilyTool {
         let mut o = self.snap.guides().to_vec();
         if let Some(s) = self.start.filter(|_| self.began && cx.measurement_labels) {
             // The size as drawn (from the centre with Alt, square with Shift).
-            // A grid's along the Constrain Angle's axes, as it is drawn.
-            let r = if self.is_grid() { turned_box(s, self.last, self.mods, cx.constrain_angle).0 } else { drag_rect(s, self.last, self.mods) };
+            // An arc's or a grid's along the Constrain Angle's axes, as it is drawn.
+            let r = turned_box(s, self.last, self.mods, cx.constrain_angle).0;
             let (w, h) = if self.id == "spiral" { ((self.last - s).x.abs(), (self.last - s).y.abs()) } else { (r.width(), r.height()) };
             o.push(Overlay::Measure { p: self.last, text: cx.size_label(w, h) });
         }
@@ -981,6 +1000,43 @@ mod tests {
         assert_eq!(t.spiral_alt_base, None, "Up after Down clears the Alt base");
     }
 
+    /// A spiral dragged out turns to the pointer (`rotation` clockwise from the x axis), none to
+    /// the right as before; a pointer back on the center keeps the last direction, ↑ keeps it,
+    /// Shift and Constrain Angle leave it to the pointer, and the next drag starts from none.
+    #[test]
+    fn spiral_drag_turns_the_spiral_to_the_pointer() {
+        let (d, _) = doc_with_rect();
+        let s = Selection::default();
+        let p = paint();
+        let mut cx = cx(&d, &s, &p);
+        cx.smart_guides = false;
+        cx.constrain_angle = 30.0;
+        let preview = |a: Vec<Action>| match &a[..] {
+            [.., Action::Preview(c, v)] if c == "shape.spiral" => v.clone(),
+            _ => panic!("{a:?}"),
+        };
+        let shift = Mods { shift: true, ..Mods::default() };
+        let mut t = FamilyTool::new("spiral");
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 100.0));
+        let v = preview(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 150.0, 100.0)));
+        assert!(v.get("rotation").is_none(), "to the right: {v}");
+        assert_eq!(v["radius"], json!(50.0));
+        for ((x, y), rotation) in [((100.0, 150.0), 90.0), ((50.0, 100.0), 180.0), ((100.0, 50.0), -90.0), ((130.0, 130.0), 45.0)] {
+            let v = preview(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, x, y).with_mods(shift)));
+            assert!((v["rotation"].as_f64().unwrap() - rotation).abs() < 1e-9, "to ({x}, {y}): {v}");
+        }
+        let v = preview(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 100.0, 100.0)));
+        assert!((v["rotation"].as_f64().unwrap() - 45.0).abs() < 1e-9, "on the center: {v}");
+        assert_eq!(v["radius"], json!(0.01));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 100.0, 140.0));
+        let v = preview(t.key(&cx, ToolKey::Up, Mods::default()));
+        assert!((v["rotation"].as_f64().unwrap() - 90.0).abs() < 1e-9, "after ↑: {v}");
+        assert_eq!(v["segments"], json!(11));
+        assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 100.0, 140.0)), vec![Action::Commit]);
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 100.0));
+        assert_eq!(t.spiral_bearing, 0.0, "a new drag starts from none");
+    }
+
     #[test]
     fn arc_drag_uses_stored_segment_options() {
         let mut t = FamilyTool::new("arc");
@@ -1078,6 +1134,58 @@ mod tests {
         let (_, v) = FamilyTool::new("rectangularGrid").command_at(a, b, shift, 30.0);
         assert!((v["width"].as_f64().unwrap() - v["height"].as_f64().unwrap()).abs() < 1e-9, "a square along the turned axes: {v}");
         assert_eq!(v["rotation"], json!(-30.0));
+    }
+
+    /// General › Constrain Angle: an arc is drawn along the turned axes, its reference point taken
+    /// in the turned box and the arc turned about it; Shift's equal lengths are taken along the
+    /// turned axes, and F, C and ↑ keep the turn and the reference point; at 0° and whole turns
+    /// the arc is as before.
+    #[test]
+    fn arcs_follow_the_constrain_angle() {
+        let t = FamilyTool::new("arc");
+        let (a, b) = (Point::new(100.0, 100.0), Point::new(160.0, 120.0));
+        let flat = t.command(a, b, Mods::default());
+        assert!(flat.1.get("rotation").is_none(), "{flat:?}");
+        assert_eq!(t.command_at(a, b, Mods::default(), 0.0), flat);
+        assert_eq!(t.command_at(a, b, Mods::default(), 360.0), flat);
+        // At 90° the drag runs 20 along the turned x axis and 60 along the turned y axis; the
+        // top-left reference point of that box is at (100, 120) on the page.
+        let (c, v) = t.command_at(a, b, Mods::default(), 90.0);
+        assert_eq!(c, "shape.arc");
+        assert_eq!(
+            v,
+            json!({"x": 100.0, "y": 120.0, "lengthX": 20.0, "lengthY": 60.0, "reference": 0, "baseAlong": "x", "slope": 50.0, "closed": false, "fillArc": false, "rotation": -90.0})
+        );
+        let shift = Mods { shift: true, ..Mods::default() };
+        let (_, v) = t.command_at(a, b, shift, 30.0);
+        assert!((v["lengthX"].as_f64().unwrap() - v["lengthY"].as_f64().unwrap()).abs() < 1e-9, "equal along the turned axes: {v}");
+        assert_eq!(v["rotation"], json!(-30.0));
+
+        // A Shift drag at 30°: the pointer is not held to the page's diagonal.
+        let (d, _) = doc_with_rect();
+        let s = Selection::default();
+        let p = paint();
+        let mut cx = cx(&d, &s, &p);
+        cx.smart_guides = false;
+        cx.constrain_angle = 30.0;
+        let mut t = FamilyTool::new("arc");
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 10.0, 10.0));
+        let out = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 70.0, 30.0).with_mods(shift));
+        let expected = t.command_at(Point::new(10.0, 10.0), Point::new(70.0, 30.0), shift, 30.0);
+        assert_eq!(out, vec![Action::Begin("Arc".into()), Action::Preview(expected.0, expected.1.clone())]);
+        let preview = |a: Vec<Action>| match &a[..] {
+            [Action::Preview(c, v)] if c == "shape.arc" => v.clone(),
+            _ => panic!("{a:?}"),
+        };
+        let v = preview(t.key(&cx, ToolKey::Letter('f'), Mods::default()));
+        assert_eq!(v["baseAlong"], json!("y"));
+        let v = preview(t.key(&cx, ToolKey::Letter('c'), Mods::default()));
+        assert_eq!(v["closed"], json!(true));
+        let v = preview(t.key(&cx, ToolKey::Up, Mods::default()));
+        assert_eq!(v["slope"], json!(60.0));
+        for k in ["x", "y", "lengthX", "lengthY", "rotation"] {
+            assert_eq!(v[k], expected.1[k], "{k} stays");
+        }
     }
 
     /// The start and the dragged corner snap to Smart Guides (#506), Shift sliding the corner of

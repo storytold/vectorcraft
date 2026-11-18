@@ -12,7 +12,27 @@ const COLORS: [[u8; 4]; 4] = [[255, 0, 0, 255], [0, 255, 0, 255], [0, 0, 255, 25
 
 fn pixels(bytes: &[u8]) -> Vec<[u8; 4]> {
     let raster = load::raster_image(bytes).unwrap();
-    image::load_from_memory(&raster.blob.bytes).unwrap().to_rgba8().pixels().map(|p| p.0).collect()
+    craft_image_codecs::decode(&raster.blob.bytes)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8()
+        .pixels()
+        .map(|p| p.0)
+        .collect()
 }
 
 fn boxed(ty: &[u8; 4], data: &[u8]) -> Vec<u8> {
@@ -54,12 +74,58 @@ fn checker_opens_and_places_with_exact_pixels() {
         assert_eq!(opened["format"], "jpeg2000");
         assert_eq!(s.doc().unwrap().doc.artboards[0].rect.size(), vectorcraft_geom::Size::new(2.0, 2.0));
         let blob = s.doc().unwrap().doc.images.values().next().unwrap();
-        assert_eq!(image::load_from_memory(&blob.bytes).unwrap().to_rgba8().pixels().map(|p| p.0).collect::<Vec<_>>(), COLORS);
+        assert_eq!(
+            craft_image_codecs::decode(&blob.bytes)
+                .map(|__cimg| {
+                    let (__w, __h) = __cimg.dimensions();
+                    match (__cimg.layout(), __cimg.sample_type()) {
+                        (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                            image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                        }
+                        (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                            image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                        }
+                        (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                            image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                        }
+                        _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                    }
+                })
+                .unwrap()
+                .to_rgba8()
+                .pixels()
+                .map(|p| p.0)
+                .collect::<Vec<_>>(),
+            COLORS
+        );
         s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
         let placed = s.execute("file.place", &json!({"name": name, "dataBase64": encoded})).unwrap();
         assert_eq!(placed["format"], "jpeg2000");
         let blob = s.doc().unwrap().doc.images.values().next().unwrap();
-        assert_eq!(image::load_from_memory(&blob.bytes).unwrap().to_rgba8().pixels().map(|p| p.0).collect::<Vec<_>>(), COLORS);
+        assert_eq!(
+            craft_image_codecs::decode(&blob.bytes)
+                .map(|__cimg| {
+                    let (__w, __h) = __cimg.dimensions();
+                    match (__cimg.layout(), __cimg.sample_type()) {
+                        (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                            image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                        }
+                        (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                            image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                        }
+                        (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                            image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                        }
+                        _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                    }
+                })
+                .unwrap()
+                .to_rgba8()
+                .pixels()
+                .map(|p| p.0)
+                .collect::<Vec<_>>(),
+            COLORS
+        );
         assert!(load::texture_image(bytes).is_ok());
     }
 }

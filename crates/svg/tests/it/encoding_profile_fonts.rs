@@ -2,6 +2,7 @@
 //! back, entity styling parses in usvg, SVG Tiny 1.2 has no filters, masks, symbols or style
 //! sheets, and embedded fonts hold only the glyphs used where their licence allows it.
 
+use craft_svg::tree::usvg;
 use std::sync::Arc;
 
 use serde_json::json;

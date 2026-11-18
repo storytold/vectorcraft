@@ -5,13 +5,13 @@ use super::params::{Method, Mode, TraceParams};
 use super::pipeline::TracedPath;
 #[cfg(test)]
 use super::pipeline::{bw_tones, left_out};
+#[cfg(test)]
+use super::quantize;
 use super::raster::{Raster, TraceError};
 use super::{
     AtomicUsize, Crack, Loop, Ordering, PathData, Quantized, TRANSPARENT, TracedGradient, TracedShape, centerline, contour, fit, logo, shapes,
     trace_mask,
 };
-#[cfg(test)]
-use super::{denoise, quantize};
 
 /// What tracing one colour layer needs.
 pub(crate) struct Layers<'a> {
@@ -1005,7 +1005,10 @@ impl Layers<'_> {
 pub(crate) fn shift_probe(img: &Raster, params: &TraceParams) -> Vec<[f64; 4]> {
     let (w, h) = (img.width as usize, img.height as usize);
     let mut q = quantize(img, params);
-    denoise(&mut q.labels, w, h, params.noise as usize);
+    let labs = super::quantize::palette_labs(&q.palette);
+    let source =
+        super::quantize::Source { labs: &labs, rgba: &img.rgba, blended: &[], gray: matches!(params.mode, Mode::Grayscale | Mode::BlackAndWhite) };
+    super::quantize::denoise_nearest(&mut q.labels, w, h, params.noise as usize, &[], Some(&source));
     let n = q.palette.len();
     let rank: Vec<usize> = (0..n).collect();
     let gradients = vec![None; n];
