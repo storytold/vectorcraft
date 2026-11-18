@@ -173,8 +173,8 @@ fn derived(d: &Dialog) -> Option<(&'static str, f64)> {
 
 /// Resize Using Percentages turned on or off: the new size shown the other way, so it stays the
 /// same size. When a size field does not hold a number, or a size the command takes (all but the
-/// side Constrain Ratio sets) falls outside what the command accepts the other way, the fields and
-/// the mode stay as they are and the dialog shows why. With no image selected, nothing changes and
+/// side Constrain Ratio sets) falls outside what the command accepts either as it is or the other
+/// way, the fields and the mode stay as they are and the dialog shows why. With no image selected, nothing changes and
 /// the dialog asks for one.
 fn switch_percentages(d: &mut Dialog, on: bool) {
     if d.bool(NO_IMAGE) {
@@ -190,13 +190,19 @@ fn switch_percentages(d: &mut Dialog, on: bool) {
             return;
         }
     };
-    let (w, h) = if on { (w / iw * 100.0, h / ih * 100.0) } else { (iw * w / 100.0, ih * h / 100.0) };
     let skip = follower(d);
-    if let Some((key, v)) = [("width", w), ("height", h)].into_iter().find(|(k, v)| skip != Some(*k) && !SIZE_RANGE.contains(v)) {
-        let why = format!("`{key}` must be between {} and {} (got {v})", SIZE_RANGE.start(), SIZE_RANGE.end());
+    let checked = |key: &str| skip != Some(key) || d.bool(&kept(key));
+    let refused = |w: f64, h: f64| {
+        let (key, v) = [("width", w), ("height", h)].into_iter().find(|(k, v)| checked(k) && !SIZE_RANGE.contains(v))?;
+        Some(format!("`{key}` must be between {} and {} (got {v})", SIZE_RANGE.start(), SIZE_RANGE.end()))
+    };
+    // A size the command refuses as it is stays refused, even when it falls in range the other way.
+    let converted = if on { (w / iw * 100.0, h / ih * 100.0) } else { (iw * w / 100.0, ih * h / 100.0) };
+    if let Some(why) = refused(w, h).or_else(|| refused(converted.0, converted.1)) {
         d.fields.insert(form::REFUSED.into(), json!(why));
         return;
     }
+    let (w, h) = converted;
     d.fields.remove(form::REFUSED);
     d.fields.remove(&kept("percentages"));
     d.fields.insert("width".into(), json!(w));
@@ -681,6 +687,27 @@ mod tests {
         let e = crate::dialogs::confirm(&mut app).unwrap_err();
         assert!(e.contains("width"), "{e}");
         assert_eq!(mosaic(&app), None);
+    }
+
+    /// A size `ui.dialog.set` gave that the command refuses stays when Resize Using Percentages
+    /// switches, even when it is in range the other way (0.05 pt of a 10 pt wide image is 0.5%, and
+    /// 0.05% of a 1,000 pt wide image is 0.5 pt), with the mode unchanged and the reason shown, and
+    /// OK refuses it.
+    #[test]
+    fn a_size_out_of_range_stays_when_percentages_switch() {
+        for (scale, given, on) in [(10, json!({}), true), (1000, json!({"percentages": true}), false)] {
+            let mut app = app_with_image();
+            app.run("object.scale", json!({"sx": scale, "sy": scale})).unwrap();
+            open(&mut app, &given).unwrap();
+            let d = app.ui.dialog.as_mut().unwrap();
+            crate::dialogs::set_field(d, "width".into(), json!(0.05));
+            crate::dialogs::set_field(d, "percentages".into(), json!(on));
+            assert_eq!((d.f64("width", 0.0), d.bool("percentages")), (0.05, !on), "{given}");
+            assert!(d.str(form::REFUSED).contains("`width` must be between 0.1"), "{given}: {}", d.str(form::REFUSED));
+            let e = crate::dialogs::confirm(&mut app).unwrap_err();
+            assert!(e.contains("width"), "{given}: {e}");
+            assert_eq!(mosaic(&app), None, "{given}");
+        }
     }
 
     /// The image scaled from 100 × 50 pt to 200 × 100 pt while the dialog is open: Current Size shows
