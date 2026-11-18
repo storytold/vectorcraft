@@ -9,7 +9,7 @@
 # Coverage: the whole interface — every menu string and every `tl!` literal (`complete_menus`,
 # `untranslated_report` lists gaps). Left in English on purpose (`MENU_KEEP_AS_IS` in the tests): the product name, language
 # names, OpenType, the built-in workspace names and the bracketed perspective grid preset names.
-# Photoshop-style raster effects (Effect menu, their dialogs).
+# Raster effects (Effect menu, their dialogs).
 	Glowing Edges…	Светящиеся края…
 	Glowing Edges	Светящиеся края
 	Edge Width	Ширина края

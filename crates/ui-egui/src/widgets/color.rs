@@ -12,7 +12,7 @@ pub enum Live {
 }
 
 /// A colour slider with a gradient track (`track(t)` gives the colour at 0..1) and a triangular
-/// thumb below it, like Illustrator's Color panel. Returns the new normalized value and the phase.
+/// thumb below it, as in the Color panel. Returns the new normalized value and the phase.
 pub fn color_slider(ui: &mut Ui, id: impl std::hash::Hash, value: f32, width: f32, track: &dyn Fn(f32) -> Color32) -> (Option<f32>, Live) {
     color_slider_named(ui, id, "", value, width, track)
 }
