@@ -120,6 +120,73 @@ fn a_scroll_bar_shows_while_the_pointer_is_elsewhere() {
     }
 }
 
+// Regression test for #5941: a drop-down list opens with its current option in view. With its field
+// in the middle of a short window, neither side has room for the list's 200 pt, and the menu is cut
+// to the room beside the field; the current option still shows whole, at the end of the list and in
+// its middle, also when the room beside the field is less than half the list.
+#[test]
+fn a_dropdown_in_a_short_window_opens_with_its_current_option_in_view() {
+    let items: Vec<String> = (0..20).map(|i| format!("Option {i:02}")).collect();
+    let labels: Vec<&str> = items.iter().map(String::as_str).collect();
+    // (window height, space above the field, current option): about 105 pt and 65 pt on either side
+    // of the field.
+    for (height, above, current) in [(260.0, 117.0, 19), (260.0, 117.0, 10), (180.0, 77.0, 10), (180.0, 77.0, 3)] {
+        let ctx = themed(Default::default());
+        let field = std::cell::Cell::new(Rect::NOTHING);
+        let mut add = |ui: &mut Ui| {
+            ui.add_space(above);
+            field.set(ui.horizontal(|ui| dropdown_names(ui, "short-list", labels[current], &labels, 160.0)).response.rect);
+        };
+        let mut run = |time: f64, events: Vec<egui::Event>| {
+            let raw = egui::RawInput {
+                time: Some(time),
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(600.0, height))),
+                events,
+                ..Default::default()
+            };
+            let mut out = ctx.run_ui(raw, &mut add);
+            out.textures_delta.clear();
+            out.shapes
+        };
+        run(0.0, vec![]);
+        let at = field.get().center();
+        let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        run(0.1, vec![egui::Event::PointerMoved(at), press(true)]);
+        run(0.2, vec![press(false)]);
+        let mut clipped = vec![];
+        for i in 3..10 {
+            clipped = run(f64::from(i) * 0.1, vec![]);
+        }
+        // Each shape with the clip rect it is painted in.
+        let mut shapes = vec![];
+        fn flat(s: egui::Shape, clip: Rect, out: &mut Vec<(egui::Shape, Rect)>) {
+            match s {
+                egui::Shape::Vec(v) => v.into_iter().for_each(|s| flat(s, clip, out)),
+                s => out.push((s, clip)),
+            }
+        }
+        clipped.into_iter().for_each(|c| flat(c.shape, c.clip_rect, &mut shapes));
+        let list = ctx
+            .memory(|m| {
+                m.layer_ids().filter(|l| l.order == egui::Order::Foreground && m.areas().is_visible(l)).last().and_then(|l| m.area_rect(l.id))
+            })
+            .expect("the list is open");
+        // The options that show whole: inside the list and inside the clip they are painted in.
+        let rows: Vec<(String, Rect)> = shapes
+            .iter()
+            .filter_map(|(s, clip)| match s {
+                egui::Shape::Text(t) if list.contains_rect(t.visual_bounding_rect()) && clip.contains_rect(t.visual_bounding_rect()) => {
+                    Some((t.galley.text().to_owned(), t.visual_bounding_rect()))
+                }
+                _ => None,
+            })
+            .collect();
+        let case = format!("{height} pt window, {} current", labels[current]);
+        assert!(rows.len() < labels.len(), "{case}: the list does not show every option in {list:?}: {rows:?}");
+        assert!(rows.iter().any(|(s, _)| s == labels[current]), "{case}: the current option shows whole in {list:?}: {rows:?}");
+    }
+}
+
 // Regression test for #5941: the toolbar's and the dock icon column's scroll bar showed nothing
 // until the pointer came over the column. Its slim line shows at rest, still at most 4 points
 // wide (#808).

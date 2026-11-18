@@ -117,13 +117,14 @@ pub fn dropdown_with_named(
     })
 }
 
-/// The flag that [`combo_atoms_named`] sets while it draws a list on the pass the list opens.
+/// The flag that [`combo_atoms_named`] sets while it draws a list on the pass the list opens and
+/// the pass after it.
 fn opening_list_id() -> egui::Id {
     egui::Id::unique("dropdown-list-opening")
 }
 
-/// One option of a dropdown list, `selected` for the current one. On the pass the list opens, the
-/// current option scrolls to the middle of the list, or as near to it as the list's ends allow, so
+/// One option of a dropdown list, `selected` for the current one. On the pass the list opens and
+/// the next one, the current option scrolls to the middle of the list, or as near to it as the list's ends allow, so
 /// that it shows whole (#5941).
 fn option_row<'a>(ui: &mut Ui, enabled: bool, selected: bool, atoms: impl egui::IntoAtoms<'a>) -> Response {
     let response = ui.add_enabled(enabled, egui::Button::selectable(selected, atoms));
@@ -178,6 +179,7 @@ fn combo_atoms_named<'a, R>(
             // A list opens at its first option, or with its current option in view (`option_row`),
             // not where it was scrolled when it last closed (#5941).
             let shown_key = button_id.with("list-shown-pass");
+            let opened_key = button_id.with("list-opened-pass");
             let list = move |ui: &mut Ui| {
                 let pass = ui.ctx().cumulative_pass_nr();
                 let last = ui.data_mut(|d| d.get_temp::<u64>(shown_key));
@@ -185,10 +187,17 @@ fn combo_atoms_named<'a, R>(
                 let opening = last.is_none_or(|p| p + 1 < pass);
                 if opening {
                     ui.scroll_to_cursor_animation(Some(egui::Align::TOP), egui::style::ScrollAnimation::none());
+                    ui.data_mut(|d| d.insert_temp(opened_key, pass));
+                }
+                // The menu measures itself against the whole screen on the pass it opens and takes
+                // the room beside its field on the next one, so the current option is scrolled into
+                // view on both.
+                let settling = ui.data(|d| d.get_temp::<u64>(opened_key)).is_some_and(|p| pass <= p + 1);
+                if settling {
                     ui.data_mut(|d| d.insert_temp(opening_list_id(), true));
                 }
                 let chosen = list(ui);
-                if opening {
+                if settling {
                     ui.data_mut(|d| d.remove::<bool>(opening_list_id()));
                 }
                 chosen
