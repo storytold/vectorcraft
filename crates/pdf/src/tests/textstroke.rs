@@ -438,3 +438,66 @@ fn a_tj_that_draws_a_glyph_again_where_it_drew_one_strokes_each_copy() {
     let want = [vec![("A".to_string(), true, false)], vec![("B".to_string(), true, false)], both("A")];
     assert_eq!(type_runs(content), want, "{content}");
 }
+
+/// A stroke pass longer than the importer holds at once ([`MAX_HELD`] strokes) is matched to its
+/// own operator's glyphs, in the order filled: an `A` filled by an operator of its own, then `A`
+/// and 4,096 `B`s filled and stroked from the same place, strokes the second `A`, not the first
+/// (#8543).
+#[test]
+fn a_long_stroke_pass_strokes_its_own_glyphs_not_one_filled_before() {
+    let bs = "B".repeat(4096);
+    let content = format!("BT /F1 2 Tf 1 0 0 1 20 80 Tm 0 Tr (A) Tj 1 0 0 1 20 80 Tm 2 Tr (A{bs}) Tj 0 Tr ET");
+    let looks: Vec<Vec<(String, bool, bool)>> = type_runs(&content);
+    let want = [vec![("A".to_string(), true, false)], vec![(format!("A{bs}"), true, true)]];
+    assert!(looks == want, "{:?}", looks.iter().map(|t| t.iter().map(|r| (r.0.len(), r.1, r.2)).collect::<Vec<_>>()).collect::<Vec<_>>());
+}
+
+/// Stroked type of its own (a stroke over no glyph filled) ends the stroke pass of the glyphs
+/// filled before it: an `A` filled, a `B` filled on a line of its own, a `C` stroked after the
+/// `B`, then a stroke over the `A` is type of its own, drawn last, not a stroke joined to the
+/// `A` drawn under the `B` and `C` (#8543).
+#[test]
+fn a_stroke_after_stroked_type_of_its_own_does_not_join_a_glyph_filled_before() {
+    let content = "BT /F1 48 Tf 1 0 0 1 20 80 Tm 0 Tr (A) Tj 1 0 0 1 20 140 Tm (B) Tj 1 Tr (C) Tj 1 0 0 1 20 80 Tm (A) Tj 0 Tr ET";
+    let run = |text: &str, fill: bool, stroke: bool| (text.to_string(), fill, stroke);
+    let want = [vec![run("A", true, false)], vec![run("B", true, false), run("C", false, true)], vec![run("A", false, true)]];
+    assert_eq!(type_runs(content), want, "{content}");
+}
+
+/// A stroke in an ActualText span goes over a glyph that span filled, not one an earlier span
+/// filled at the same place: each span's replacement text comes in (#8543).
+#[test]
+fn a_stroke_in_an_actual_text_span_does_not_take_an_earlier_spans_glyph() {
+    let content = "BT /F1 48 Tf 0 Tr /Span << /ActualText (First) >> BDC 1 0 0 1 20 80 Tm (A) Tj EMC 1 0 0 1 20 140 Tm (B) Tj \
+                   /Span << /ActualText (Second) >> BDC 1 Tr 1 0 0 1 20 80 Tm (A) Tj EMC 0 Tr ET";
+    let run = |text: &str, fill: bool, stroke: bool| vec![(text.to_string(), fill, stroke)];
+    assert_eq!(type_runs(content), [run("First", true, false), run("B", true, false), run("Second", false, true)], "{content}");
+}
+
+/// Fill and stroke rendering of a `TJ` that draws a glyph again where it drew one, in an
+/// ActualText span: the strokes go over the glyphs in the order filled, so the replacement text,
+/// on the first glyph's line and in its style, is filled and stroked, not left to the copy drawn
+/// last, which shows no text (#8543).
+#[test]
+fn a_tj_that_draws_a_glyph_again_in_an_actual_text_span_strokes_the_replacement() {
+    for mode in ["2", "6"] {
+        for show in ["[(A) 667 (A)] TJ", "[(A) -500 (B) 1834 (A)] TJ", "[(A) -3500 (B) 4834 (A)] TJ"] {
+            let content = format!("BT {mode} Tr /F1 48 Tf 20 80 Td /Span << /ActualText (ABA) >> BDC {show} EMC 0 Tr ET");
+            assert_eq!(type_runs(&content), [vec![("ABA".to_string(), true, true)]], "{content}");
+        }
+    }
+}
+
+/// The lines of type one operator's fill pass finishes are kept for its stroke pass up to 64 at
+/// a time: a `TJ` whose kerning starts 65 lines comes in as 65 type objects filled and stroked,
+/// and one that starts 66 as a filled object and a stroked one for each part, the fills first,
+/// as the file draws them (#8543).
+#[test]
+fn a_tj_over_more_lines_than_are_kept_comes_in_as_fill_and_stroke_apart() {
+    let content = |n: usize| format!("BT 2 Tr /F1 4 Tf 20 80 Td [{}] TJ 0 Tr ET", vec!["(A)"; n].join(" -3500 "));
+    let both = vec![("A".to_string(), true, true)];
+    assert_eq!(type_runs(&content(65)), vec![both; 65]);
+    let (fill, stroke) = (vec![("A".to_string(), true, false)], vec![("A".to_string(), false, true)]);
+    let want: Vec<_> = std::iter::repeat_n(fill, 66).chain(std::iter::repeat_n(stroke, 66)).collect();
+    assert_eq!(type_runs(&content(66)), want);
+}

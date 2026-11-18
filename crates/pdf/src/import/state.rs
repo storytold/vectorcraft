@@ -61,9 +61,9 @@ pub(super) struct GlyphRun {
 /// A stroke over a glyph filled before it (fill and stroke rendering), held with the stroke pass
 /// it is part of ([`Builder::hold_stroke`]): the glyph's font, placement, opacity and text, the
 /// stroke, whether it overprints, the glyph's outline as drawn (kept as for a line of type kept
-/// as outlines; none for a glyph set upright), and the first glyph filled so it may go over, as
-/// its line's place among the parked lines and the open one and its index in the line's filled
-/// glyphs.
+/// as outlines; none for a glyph set upright or one of an ActualText span), whether it is one of
+/// an ActualText span, and the first glyph filled so it may go over, as its line's place among
+/// the parked lines and the open one and its index in the line's filled glyphs.
 pub(super) struct HeldStroke {
     pub(super) font: u128,
     pub(super) at: super::Placement,
@@ -72,6 +72,7 @@ pub(super) struct HeldStroke {
     pub(super) stroke: TypeStroke,
     pub(super) overprint: bool,
     pub(super) glyph: Option<GlyphRun>,
+    pub(super) actual: bool,
     pub(super) first: (usize, usize),
 }
 
