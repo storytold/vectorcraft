@@ -133,19 +133,19 @@ fn the_builtin_libraries_are_original_brushes_generated_in_code() {
         trails["brushes"].as_array().unwrap().iter().map(|b| b["name"].as_str().unwrap()).collect::<Vec<_>>(),
         ["Speed Line", "Dash Trail", "Burst Ray", "Zigzag"]
     );
-    assert_eq!(libs[7]["count"].as_u64(), Some(4));
+    assert_eq!(libs[8]["count"].as_u64(), Some(4));
     let beams = run(&mut s, "brush.library", json!({"library": "energy-beams"}));
     assert_eq!(
         beams["brushes"].as_array().unwrap().iter().map(|b| b["name"].as_str().unwrap()).collect::<Vec<_>>(),
         ["Laser Bolt", "Plasma Arc", "Charge Wave", "Spark Trail"]
     );
-    assert_eq!(libs[8]["count"].as_u64(), Some(4));
+    assert_eq!(libs[9]["count"].as_u64(), Some(4));
     let dry = run(&mut s, "brush.library", json!({"library": "Dry Media"}));
     assert_eq!(
         dry["brushes"].as_array().unwrap().iter().map(|b| (b["name"].as_str().unwrap(), b["type"].as_str().unwrap())).collect::<Vec<_>>(),
         [("Chalk Grain", "art"), ("Graphite Pencil", "art"), ("Wax Crayon", "art"), ("Charcoal Dust", "art")]
     );
-    assert_eq!((libs[9]["name"].as_str(), libs[9]["count"].as_u64()), (Some("Dry Media"), Some(4)));
+    assert_eq!((libs[10]["name"].as_str(), libs[10]["count"].as_u64()), (Some("Dry Media"), Some(4)));
     run(&mut s, "file.new", json!({"width": 200, "height": 200}));
     let id = run(&mut s, "shape.rectangle", json!({"x": 10, "y": 20, "width": 40, "height": 8}))["id"].as_u64().unwrap();
     let added = run(&mut s, "brush.addFromLibrary", json!({"library": "energy-beams", "name": "Laser Bolt", "apply": true, "ids": [id]}));
