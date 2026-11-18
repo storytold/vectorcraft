@@ -5471,7 +5471,10 @@ and several can be open at once. `window.swatchLibrary {library}`, `window.graph
 `{open, panel, name, count}`; `library: null` closes every panel of that kind. The panel id is
 `library:<kind>:<library id>` (`library:swatches:pastels`, `library:graphicStyles:hand-drawn`,
 `library:swatches:loaded/C:/Palettes/Brand.ase`), and the panel commands take it like any other panel's:
-`window.panel.float {panel, onto?, x?, y?}` groups or moves it, `window.panel.dock {panel}` docks it,
+`window.panel.float {panel, onto?, x?, y?, width?, height?}` groups, moves or resizes it. Supplied
+geometry also updates an existing native panel window. Positions are relative to the main window's
+content origin; omitted coordinates and dimensions keep the native window's current values.
+`window.panel.dock {panel}` docks it,
 `window.panel.close {panel}` closes it. `window.swatchLibrary.other {path}`, `window.graphicStyleLibrary.other
 {path}`, `window.symbolLibrary.other {path}` and `window.brushLibrary.other {path}` load a file and open it the same
 way.
