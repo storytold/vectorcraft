@@ -2,6 +2,8 @@
 //! closed path of that area with the current fill and stroke (`shapeBuilder.copyRegion`). The
 //! paths around the area stay as they are, and nothing needs to be selected.
 
+use vectorcraft_geom::path::segment_bounds;
+
 use super::lookup::path_contains;
 use super::*;
 
@@ -61,6 +63,13 @@ fn holds(r: &Rect, p: Point) -> bool {
 /// Do `a` and `b` overlap or touch?
 fn meet(a: &Rect, b: &Rect) -> bool {
     a.x0 <= b.x1 && b.x0 <= a.x1 && a.y0 <= b.y1 && b.y0 <= a.y1
+}
+
+/// Does a segment of `path` (closing segments included) meet `zone`? A path whose box meets the zone
+/// may still lie wholly outside it, as a path of subpaths far apart does.
+fn reaches(path: &PathData, zone: &Rect) -> bool {
+    let bez = path.to_bezpath();
+    vectorcraft_geom::kurbo::segments(bez.elements().iter().copied()).any(|seg| meet(&segment_bounds(seg), zone))
 }
 
 /// Does `outer` hold all of `inner`?
@@ -159,7 +168,8 @@ impl AreaFinder {
                 // path holds both.
                 Some(rb) if within(&rb, &window) => {
                     let reached = rb.inflate(reach, reach);
-                    let cut = any_left_out && self.inputs.iter().zip(&left_out).any(|((_, b, _), out)| *out && meet(b, &reached));
+                    let cut = any_left_out
+                        && self.inputs.iter().zip(&left_out).any(|((s, b, _), out)| *out && meet(b, &reached) && reaches(&s.path, &reached));
                     if !cut {
                         return self.area_in(&map, &picked, p);
                     }

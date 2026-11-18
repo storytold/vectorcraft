@@ -316,6 +316,32 @@ fn fill_area_does_not_fill_across_a_huge_path_it_left_out() {
     }
 }
 
+/// A path with too many segments whose subpaths lie far apart on either side of the square has a box
+/// that holds the square, but no segment of it comes near: it is left out and the square is filled.
+#[test]
+fn fill_area_fills_an_area_that_a_left_out_paths_box_holds_but_its_segments_miss() {
+    let mut s = session();
+    line(&mut s, (-20.0, 0.0), (420.0, 0.0));
+    line(&mut s, (-20.0, 400.0), (420.0, 400.0));
+    line(&mut s, (0.0, -20.0), (0.0, 420.0));
+    line(&mut s, (400.0, -20.0), (400.0, 420.0));
+    let n = vectorcraft_pathops::SHAPE_BUILDER_MAX_SEGMENTS;
+    let pts: Vec<Point> = (0..=n).map(|k| Point::new(-2000.0 + 400.0 * k as f64 / n as f64, -1000.0 + (k % 2) as f64)).collect();
+    let far = [Point::new(2000.0, 1500.0), Point::new(2100.0, 1500.0)];
+    let path = PathData::new(vec![vectorcraft_geom::SubPath::polyline(&pts, false), vectorcraft_geom::SubPath::polyline(&far, false)]);
+    let look = vectorcraft_doc::Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0);
+    s.edit("t", |d, _| {
+        let id = d.alloc_id();
+        let top = d.children(d.default_layer()).map_or(0, |c| c.len());
+        d.insert(d.default_layer(), top, Node::path(id, path, look))?;
+        Ok(id)
+    })
+    .unwrap();
+    deselect(&mut s);
+    let r = s.execute("shapeBuilder.copyRegion", &json!({"point": [200, 200]})).unwrap();
+    assert!((area(&s, id_of(&r)) - 160_000.0).abs() < 1.0, "{}", area(&s, id_of(&r)));
+}
+
 /// With Gap Detection on, a square on a higher layer within the gap of the area's corners does not
 /// bound the area, so the new path stays above the square that does.
 #[test]
