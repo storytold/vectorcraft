@@ -220,45 +220,59 @@ fn typo_bound(word: &str) -> Option<usize> {
 }
 
 /// The number of edits between `a` and `b` when it is at most `bound`: a character inserted,
-/// removed or changed, or two adjacent characters swapped (`gruop` and `group`), each count as one.
-/// The count stops as soon as every way of lining the two up needs more than `bound`.
+/// removed or changed, or two adjacent characters swapped (`gruop` and `group`), each count as one,
+/// and each character inserted between two swapped characters or removed from between them counts
+/// as one more (`rectgale` and `rectangle` are two edits apart). The count stops as soon as every
+/// way of lining the two up needs more than `bound`.
 fn edits_within(a: &[char], b: &[char], bound: usize) -> Option<usize> {
     if a.len().abs_diff(b.len()) > bound {
         return None;
     }
-    let at = |row: &[usize], j: usize| row.get(j).copied().unwrap_or(usize::MAX);
-    // The edits between the first i characters of `a` and the first j of `b`, for the rows i - 2,
-    // i - 1 and i.
-    let mut before: Vec<usize> = vec![0; b.len() + 1];
-    let mut last: Vec<usize> = (0..=b.len()).collect();
-    let mut row: Vec<usize> = vec![0; b.len() + 1];
-    for (i, &ca) in a.iter().enumerate() {
-        if let Some(first) = row.first_mut() {
-            *first = i + 1;
+    let width = b.len() + 1;
+    // The edits between the first i characters of `a` and the first j of `b`, at
+    // (i % kept) * width + j, for the last `kept` rows: a swap within the bound reaches back at most
+    // `bound` + 1 rows.
+    let kept = bound.saturating_add(2);
+    let mut table: Vec<usize> = (0..width).collect();
+    table.resize(kept.min(a.len() + 1) * width, 0);
+    let place = |i: usize, j: usize| (i % kept) * width + j;
+    let at = |table: &[usize], i: usize, j: usize| table.get(place(i, j)).copied().unwrap_or(usize::MAX);
+    // Each character of `a` in the rows so far, with the last row it is in.
+    let mut rows: Vec<(char, usize)> = vec![];
+    for (i, &ca) in (1usize..).zip(a) {
+        if let Some(first) = table.get_mut(place(i, 0)) {
+            *first = i;
         }
-        for (j, &cb) in b.iter().enumerate() {
-            let changed = at(&last, j).saturating_add(usize::from(ca != cb));
-            let removed = at(&last, j + 1).saturating_add(1);
-            let inserted = at(&row, j).saturating_add(1);
+        // The last column so far in this row whose character of `b` is `ca`.
+        let mut column = 0;
+        for (j, &cb) in (1usize..).zip(b) {
+            let changed = at(&table, i - 1, j - 1).saturating_add(usize::from(ca != cb));
+            let removed = at(&table, i - 1, j).saturating_add(1);
+            let inserted = at(&table, i, j - 1).saturating_add(1);
             let mut edits = changed.min(removed).min(inserted);
-            let swapped = i.checked_sub(1).and_then(|k| a.get(k)).zip(j.checked_sub(1).and_then(|k| b.get(k)));
-            if let Some((&pa, &pb)) = swapped
-                && pa == cb
-                && pb == ca
-            {
-                edits = edits.min(at(&before, j - 1).saturating_add(1));
+            // `cb` is in row k of `a` and `ca` in column `column` of `b`: swap the two, remove the
+            // characters of `a` between them and insert the characters of `b` between them. Removing
+            // more than `bound` characters goes past the bound.
+            let k = rows.iter().find(|&&(c, _)| c == cb).map_or(0, |&(_, k)| k);
+            if k > 0 && column > 0 && i - k <= bound {
+                edits = edits.min(at(&table, k - 1, column - 1).saturating_add(i - k + (j - column - 1)));
             }
-            if let Some(cell) = row.get_mut(j + 1) {
+            if ca == cb {
+                column = j;
+            }
+            if let Some(cell) = table.get_mut(place(i, j)) {
                 *cell = edits;
             }
         }
-        if row.iter().all(|&e| e > bound) {
+        if (0..width).all(|j| at(&table, i, j) > bound) {
             return None;
         }
-        std::mem::swap(&mut before, &mut last);
-        std::mem::swap(&mut last, &mut row);
+        match rows.iter_mut().find(|(c, _)| *c == ca) {
+            Some((_, row)) => *row = i,
+            None => rows.push((ca, i)),
+        }
     }
-    last.last().copied().filter(|&e| e <= bound)
+    Some(at(&table, a.len(), b.len())).filter(|&e| e <= bound)
 }
 
 /// Adds each word of `text` to `found` for result `entry` in `field`, and with `stemmed`, each
@@ -1077,7 +1091,8 @@ mod tests {
     }
 
     /// Edits are counted up to a bound: a changed, inserted or removed character, or two adjacent
-    /// characters swapped, is one edit, and words further apart than the bound give none.
+    /// characters swapped, is one edit, a character inserted between two swapped characters is one
+    /// more, and words further apart than the bound give none.
     #[test]
     fn edits_are_counted_up_to_a_bound() {
         let edits = |a: &str, b: &str, bound: usize| edits_within(&a.chars().collect::<Vec<_>>(), &b.chars().collect::<Vec<_>>(), bound);
@@ -1091,7 +1106,13 @@ mod tests {
             ("grop", "group", 1, Some(1)),
             ("grap", "group", 1, None),
             ("ab", "abcd", 1, None),
-            ("ca", "abc", 2, None),
+            ("ca", "abc", 2, Some(2)),
+            ("ca", "abc", 1, None),
+            ("rectgale", "rectangle", 2, Some(2)),
+            ("rectgalle", "rectangle", 2, None),
+            ("bacdefghijkl", "abcdefghijkl", 2, Some(1)),
+            ("abcdefghijlk", "abcdefghijkxl", 2, Some(2)),
+            ("abcdefghijlk", "abcdefghijkxyl", 2, None),
             ("abcd", "wxyz", 2, None),
             ("über", "uber", 1, Some(1)),
             ("", "ab", 2, Some(2)),
@@ -1120,6 +1141,7 @@ mod tests {
         assert_eq!(ranked(&c, "cutx"), ["b.two"]);
         assert!(ranked(&c, "cux").is_empty(), "3 letters");
         assert_eq!(ranked(&c, "recktanglee"), ["c.three"], "two edits in a longer word");
+        assert_eq!(ranked(&c, "rectgale"), ["c.three"], "two letters swapped and one inserted between them");
         assert!(ranked(&c, "rectanglexxx").is_empty());
         // Below a result whose name holds the word as text, and below one that holds it whole.
         let c = synthetic(vec![entry("Zz Color", "a.one"), entry("Zz Bcolrb", "b.two")]);
