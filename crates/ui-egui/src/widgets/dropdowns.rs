@@ -147,6 +147,17 @@ fn combo_atoms_named<'a, R>(
         .corner_radius(CornerRadius::same(3))
         .show(ui, |ui| {
             let button_id = combo_button_id(ui, &id);
+            // A list opens at its first option, not where it was scrolled when it last closed (#5941).
+            let shown_key = button_id.with("list-shown-pass");
+            let list = move |ui: &mut Ui| {
+                let pass = ui.ctx().cumulative_pass_nr();
+                let last = ui.data_mut(|d| d.get_temp::<u64>(shown_key));
+                ui.data_mut(|d| d.insert_temp(shown_key, pass));
+                if last.is_none_or(|p| p + 1 < pass) {
+                    ui.scroll_to_cursor_animation(Some(egui::Align::TOP), egui::style::ScrollAnimation::none());
+                }
+                list(ui)
+            };
             let enter_for_combo = ui.memory(|m| m.has_focus(button_id)) || craft_ui::ComboBox::is_open(ui.ctx(), button_id);
             let response = craft_ui::ComboBox::from_id_salt(HashOnly(&id))
                 .selected_text(current)
