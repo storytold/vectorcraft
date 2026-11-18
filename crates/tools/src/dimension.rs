@@ -270,6 +270,9 @@ fn on_dimensions(cx: &ToolContext, p: Point) -> Option<(Point, bool)> {
             }
         }
         for c in n.children().into_iter().flatten().rev() {
+            if *budget == 0 {
+                return;
+            }
             lines(c, measured, p, reach, budget, best);
         }
     }
@@ -284,6 +287,9 @@ fn on_dimensions(cx: &ToolContext, p: Point) -> Option<(Point, bool)> {
             return;
         }
         for c in n.children().into_iter().flatten().rev() {
+            if *budget == 0 {
+                return;
+            }
             visit(c, p, reach, budget, best);
         }
     }
@@ -292,6 +298,9 @@ fn on_dimensions(cx: &ToolContext, p: Point) -> Option<(Point, bool)> {
     }
     let (reach, mut budget, mut best) = ([cx.tol(ANCHOR_REACH), cx.tol(8.0)], 20_000usize, Best::default());
     for n in cx.doc.layers.iter().rev() {
+        if budget == 0 {
+            break;
+        }
         visit(n, p, reach, &mut budget, &mut best);
     }
     best.end.map(|(_, q)| (q, true)).or_else(|| best.line.map(|(_, q)| (q, false)))
@@ -318,11 +327,17 @@ fn dimension_lines(cx: &ToolContext, preview: (u64, [Point; 2])) -> Vec<Dimensio
             return;
         }
         for c in n.children().into_iter().flatten().rev() {
+            if *budget == 0 {
+                return;
+            }
             visit(c, preview, budget, out);
         }
     }
     let (mut budget, mut out) = (20_000usize, vec![]);
     for n in cx.doc.layers.iter().rev() {
+        if budget == 0 {
+            break;
+        }
         visit(n, preview, &mut budget, &mut out);
     }
     out
