@@ -29,7 +29,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "New Layer…",
             ["Window", "Layers"],
             Some("Cmd+L"),
-            "{name?, top?: bool, below?: bool, color?, template?, locked?, visible?, printable?, preview?, dimImages?} a layer directly above the current layer, at its level (a sublayer beside a current sublayer); `top`: above all layers (Ctrl/Cmd-click the button); `below`: directly below the current layer, at its level (Ctrl/Cmd+Alt-click the button), not with `top`. Options as layer.setProps; refused while an opacity mask is edited (the Layers panel lists only the mask) → {id}",
+            "{name?, top?: bool, below?: bool, color?, template?, locked?, visible?, printable?, preview?, dimImages?} a layer directly above the current layer, at its level (a sublayer beside a current sublayer), or directly below it in Draw Behind; `top`: above all layers (Ctrl/Cmd-click the button); `below`: directly below the current layer, at its level (Ctrl/Cmd+Alt-click the button), not with `top`. Options as layer.setProps; refused while an opacity mask is edited (the Layers panel lists only the mask) → {id}",
             super::maskedit::outside_mask_editing,
             new_layer
         ),
@@ -526,12 +526,15 @@ fn add_layer(s: &mut Session, p: &Value, cmd: &str, label: &str, place: impl FnO
 fn new_layer(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "layer.new";
     let below = switch_or(p, "below", false, C)?;
-    if below && bool_or(p, "top", false) {
+    let top = bool_or(p, "top", false);
+    if below && top {
         return Err(bad(C, "`top` and `below` can't both be true"));
     }
+    // In Draw Behind a layer given neither `top` nor `below` goes below the current layer.
+    let below = below || (!top && s.draw_mode == crate::DrawMode::Behind);
     let st = s.doc()?;
     // Above the current layer, at its level; below it with `below`; on top of everything with `top`.
-    let cur = st.current_layer().filter(|_| !bool_or(p, "top", false));
+    let cur = st.current_layer().filter(|_| !top);
     add_layer(s, p, C, "New Layer", |d| match cur.and_then(|c| d.position(c)) {
         Some((parent, i, _)) => Ok((parent, if below { i } else { i + 1 })),
         None => Ok((None, if below { 0 } else { usize::MAX })),
