@@ -104,6 +104,7 @@ pub use textedit::effective_kerning;
 pub mod textstyles;
 pub(crate) mod textwrap;
 pub(crate) mod threads;
+pub mod toast;
 pub(crate) mod typecmd;
 mod typemenu;
 mod variablecmds;
@@ -333,6 +334,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(compositefonts::specs());
         v.extend(fontfiles::specs());
         v.extend(help::specs());
+        v.extend(toast::specs());
         v.extend(threads::specs());
         v.extend(textwrap::specs());
         v.extend(graph::specs());
