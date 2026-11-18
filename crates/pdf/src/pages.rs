@@ -261,6 +261,18 @@ impl Opened {
         crate::editing::editing_in(&self.pdf)
     }
 
+    /// Does the PDF list the editing file among its attachments, also when
+    /// [`editing`](Self::editing) can't read it?
+    pub fn has_editing_file(&self) -> bool {
+        crate::editing::has_editing_file_in(&self.pdf)
+    }
+
+    /// Is the PDF's attachment name tree too large to search to its end? It may then list an
+    /// editing file that [`editing`](Self::editing) doesn't find, besides the one it reads.
+    pub fn editing_search_cut(&self) -> bool {
+        crate::editing::editing_search_cut_in(&self.pdf)
+    }
+
     /// The private data of an Illustrator `.ai`, as [`illustrator_data`] reads it.
     pub fn illustrator_data(&self) -> Option<Vec<u8>> {
         private_data(&self.pdf)
