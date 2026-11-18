@@ -429,6 +429,75 @@ fn transform_panel_sizes_follow_the_turned_box() {
 }
 
 #[test]
+fn set_bounds_whole_number_references_match_integer_references() {
+    for direct in [false, true] {
+        for index in 0..=9 {
+            let run = |reference: Value| {
+                let mut s = session();
+                let a = rect(&mut s, 10.0, 20.0, 100.0, 50.0);
+                sel(&mut s, &[a]);
+                if direct {
+                    s.execute("select.anchors", &json!({"id": a.0, "anchors": [[0, 0], [0, 2]], "mode": "set"})).unwrap();
+                }
+                let before = anchors(&s, a);
+                let selection = s.doc().unwrap().selection.clone();
+                let n = undo_len(&s);
+                s.execute("object.setBounds", &json!({"x": 200, "y": 300, "reference": reference})).unwrap();
+                assert_eq!(undo_len(&s), n + 1);
+                assert_eq!(s.doc().unwrap().selection, selection);
+                if !direct {
+                    let b = selection_box(&s);
+                    assert!(b.reference_point(index.min(8)).distance(Point::new(200.0, 300.0)) < 1e-6, "{b:?}");
+                }
+                let after = anchors(&s, a);
+                s.execute("edit.undo", &json!({})).unwrap();
+                assert_eq!(anchors(&s, a), before);
+                s.execute("edit.redo", &json!({})).unwrap();
+                assert_eq!(anchors(&s, a), after);
+                after
+            };
+            assert_eq!(run(json!(index as f64)), run(json!(index)), "reference {index}, direct {direct}");
+            if index == 8 {
+                assert_eq!(run(json!(u64::MAX)), run(json!(8)), "large reference, direct {direct}");
+                assert_eq!(run(json!(1e100)), run(json!(8)), "large float reference, direct {direct}");
+            }
+        }
+    }
+    for reference in [None, Some(Value::Null)] {
+        let mut s = session();
+        let a = rect(&mut s, 10.0, 20.0, 100.0, 50.0);
+        sel(&mut s, &[a]);
+        let mut p = json!({"x": 200, "y": 300});
+        if let Some(reference) = reference {
+            p["reference"] = reference;
+        }
+        s.execute("object.setBounds", &p).unwrap();
+        assert!(selection_box(&s).center().distance(Point::new(200.0, 300.0)) < 1e-6);
+    }
+}
+
+#[test]
+fn set_bounds_rejects_invalid_references_without_changes() {
+    for direct in [false, true] {
+        for reference in [json!(-1), json!(-1.0), json!(0.5), json!(8.5), json!("0"), json!(true), json!([]), json!({})] {
+            let mut s = session();
+            let a = rect(&mut s, 10.0, 20.0, 100.0, 50.0);
+            sel(&mut s, &[a]);
+            if direct {
+                s.execute("select.anchors", &json!({"id": a.0, "anchors": [[0, 0], [0, 2]], "mode": "set"})).unwrap();
+            }
+            let before = anchors(&s, a);
+            let selection = s.doc().unwrap().selection.clone();
+            let n = undo_len(&s);
+            assert!(s.execute("object.setBounds", &json!({"x": 200, "y": 300, "reference": reference})).is_err(), "{reference}, direct {direct}");
+            assert_eq!(anchors(&s, a), before);
+            assert_eq!(s.doc().unwrap().selection, selection);
+            assert_eq!(undo_len(&s), n);
+        }
+    }
+}
+
+#[test]
 fn reset_bounding_box_squares_the_box_in_one_step() {
     let mut s = session();
     let a = turned_rect(&mut s);
@@ -508,6 +577,157 @@ fn reset_bounding_box_squares_the_turned_members_of_a_square_group() {
     assert_eq!(undo_len(&s), n + 1);
     s.execute("object.ungroup", &json!({})).unwrap();
     assert_eq!(selection_box(&s).angle, 0.0);
+}
+
+#[test]
+fn rotate_bounding_box_turns_the_box_and_leaves_the_art() {
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 100.0, 50.0);
+    sel(&mut s, &[a]);
+    let art = anchors(&s, a);
+    let n = undo_len(&s);
+    let r = s.execute("object.rotateBoundingBox", &json!({"angle": 90})).unwrap();
+    assert_eq!((r["changed"].as_u64(), r["angle"].as_f64()), (Some(1), Some(90.0)));
+    assert_eq!(undo_len(&s), n + 1);
+    assert_eq!(anchors(&s, a), art, "the art stays where it is");
+    // The box is at 90°, so its width runs along the rectangle's 50 pt side.
+    let b = selection_box(&s);
+    assert!(near(b.angle, 90.0));
+    assert!(near(b.rect.width(), 50.0) && near(b.rect.height(), 100.0), "{b:?}");
+    // By an angle from the box's angle; absolute sets it; the result wraps to (-180, 180].
+    s.execute("object.rotateBoundingBox", &json!({"angle": 20})).unwrap();
+    assert!(near(angle(&s, a), 110.0));
+    let r = s.execute("object.rotateBoundingBox", &json!({"angle": 200, "absolute": true})).unwrap();
+    assert!(near(r["angle"].as_f64().unwrap(), -160.0) && near(angle(&s, a), -160.0));
+    // A box already at the angle changes nothing and adds no step.
+    let n = undo_len(&s);
+    let r = s.execute("object.rotateBoundingBox", &json!({"angle": -160, "absolute": true})).unwrap();
+    assert_eq!(r["changed"], 0);
+    let r = s.execute("object.rotateBoundingBox", &json!({"angle": 360})).unwrap();
+    assert_eq!(r["changed"], 0);
+    assert_eq!(undo_len(&s), n);
+    // Undo turns the box back; Reset Bounding Box squares it.
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(near(angle(&s, a), 110.0));
+    assert_eq!(s.execute("object.resetBoundingBox", &json!({})).unwrap()["changed"], 1);
+    assert_eq!(anchors(&s, a), art);
+}
+
+/// Turns that add up to 0 within the tolerance leave the box at exactly 0, so the box measures
+/// square to the page and Reset Bounding Box has nothing to square.
+#[test]
+fn rotate_bounding_box_back_to_zero_stores_zero() {
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 100.0, 50.0);
+    sel(&mut s, &[a]);
+    for by in [0.3, -0.1] {
+        s.execute("object.rotateBoundingBox", &json!({"angle": by})).unwrap();
+    }
+    let r = s.execute("object.rotateBoundingBox", &json!({"angle": -0.2})).unwrap();
+    assert_eq!((r["angle"].as_f64(), angle(&s, a)), (Some(0.0), 0.0), "{r}");
+    assert_eq!(selection_box(&s).angle, 0.0);
+    let n = undo_len(&s);
+    assert_eq!(s.execute("object.resetBoundingBox", &json!({})).unwrap()["changed"], 0);
+    assert_eq!(undo_len(&s), n);
+    // A negative zero is reported and stored as 0.
+    let r = s.execute("object.rotateBoundingBox", &json!({"angle": -0.0, "absolute": true})).unwrap();
+    let got = r["angle"].as_f64().unwrap();
+    assert!(got == 0.0 && got.is_sign_positive(), "{r}");
+    assert_eq!(r["changed"], 0);
+}
+
+#[test]
+fn rotate_bounding_box_gives_a_mixed_selection_one_angle() {
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 100.0, 50.0);
+    let b = turned_rect(&mut s);
+    sel(&mut s, &[a, b]);
+    // The objects share no angle, so the box is square to the page and turns from 0.
+    assert_eq!(selection_box(&s).angle, 0.0);
+    let n = undo_len(&s);
+    assert_eq!(s.execute("object.rotateBoundingBox", &json!({"angle": 10})).unwrap()["changed"], 2);
+    assert_eq!(undo_len(&s), n + 1, "one step for both");
+    assert!(near(angle(&s, a), 10.0) && near(angle(&s, b), 10.0));
+    assert!(near(selection_box(&s).angle, 10.0));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(near(angle(&s, a), 0.0) && near(angle(&s, b), 45.0));
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert!(near(angle(&s, a), 10.0) && near(angle(&s, b), 10.0));
+}
+
+#[test]
+fn rotate_bounding_box_turns_the_objects_inside_a_group_with_it() {
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 100.0, 50.0);
+    let b = rect(&mut s, 300.0, 100.0, 100.0, 50.0);
+    sel(&mut s, &[a, b]);
+    s.execute("object.rotate", &json!({"angle": 20})).unwrap();
+    let g = id_of(&s.execute("object.group", &json!({})).unwrap());
+    let art = (anchors(&s, a), anchors(&s, b));
+    // The group and both members, as Reset Bounding Box counts them.
+    assert_eq!(s.execute("object.rotateBoundingBox", &json!({"angle": 30})).unwrap()["changed"], 3);
+    // The members keep their 20° relative to the group's box.
+    assert!(near(angle(&s, g), 30.0) && near(angle(&s, a), 50.0) && near(angle(&s, b), 50.0));
+    assert_eq!((anchors(&s, a), anchors(&s, b)), art);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(near(angle(&s, g), 0.0) && near(angle(&s, a), 20.0) && near(angle(&s, b), 20.0));
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert!(near(angle(&s, g), 30.0) && near(angle(&s, a), 50.0) && near(angle(&s, b), 50.0));
+    // After Ungroup the members still share a turned box.
+    s.execute("object.ungroup", &json!({})).unwrap();
+    assert!(near(selection_box(&s).angle, 50.0));
+}
+
+/// The art of a linked opacity mask turns with its object; an unlinked mask's art keeps its angle.
+#[test]
+fn rotate_bounding_box_turns_a_linked_masks_art_only() {
+    let mask_angle = |s: &Session, a: NodeId| s.doc().unwrap().doc.node(a).unwrap().extras().mask.as_ref().unwrap().art.bbox_angle;
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 100.0, 50.0);
+    let b = rect(&mut s, 150.0, 120.0, 100.0, 50.0);
+    sel(&mut s, &[a, b]);
+    s.execute("transparency.makeOpacityMask", &json!({})).unwrap();
+    assert_eq!(s.execute("object.rotateBoundingBox", &json!({"angle": 30})).unwrap()["changed"], 2);
+    assert!(near(angle(&s, a), 30.0) && near(mask_angle(&s, a), 30.0));
+    s.execute("transparency.unlinkOpacityMask", &json!({})).unwrap();
+    assert_eq!(s.execute("object.rotateBoundingBox", &json!({"angle": 10})).unwrap()["changed"], 1);
+    assert!(near(angle(&s, a), 40.0) && near(mask_angle(&s, a), 30.0));
+}
+
+/// Rotate Bounding Box and Reset Bounding Box act on the same boxes: after a turn of a group that
+/// holds an object with a linked opacity mask, Reset squares every box it turned.
+#[test]
+fn reset_bounding_box_squares_every_box_rotate_bounding_box_turned() {
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 100.0, 50.0);
+    let b = rect(&mut s, 150.0, 120.0, 100.0, 50.0);
+    sel(&mut s, &[a, b]);
+    s.execute("transparency.makeOpacityMask", &json!({})).unwrap();
+    let c = rect(&mut s, 300.0, 100.0, 100.0, 50.0);
+    sel(&mut s, &[a, c]);
+    s.execute("object.group", &json!({})).unwrap();
+    let art = (anchors(&s, a), anchors(&s, c));
+    // The group, the masked object, its mask's art and the other rectangle.
+    assert_eq!(s.execute("object.rotateBoundingBox", &json!({"angle": 25})).unwrap()["changed"], 4);
+    assert!(object_angles(&s).iter().all(|x| near(*x, 25.0)), "{:?}", object_angles(&s));
+    assert_eq!(s.execute("object.resetBoundingBox", &json!({})).unwrap()["changed"], 4);
+    assert!(object_angles(&s).iter().all(|x| *x == 0.0), "{:?}", object_angles(&s));
+    assert_eq!((anchors(&s, a), anchors(&s, c)), art);
+}
+
+#[test]
+fn rotate_bounding_box_refuses_bad_params() {
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 100.0, 50.0);
+    sel(&mut s, &[a]);
+    let n = undo_len(&s);
+    for p in [json!({}), json!({"angle": null}), json!({"angle": "30"}), json!({"angle": 30, "absolute": "yes"})] {
+        assert!(s.execute("object.rotateBoundingBox", &p).is_err(), "{p}");
+    }
+    assert_eq!((angle(&s, a), undo_len(&s)), (0.0, n));
+    // Nothing selected: the command is not enabled.
+    s.execute("select.none", &json!({})).unwrap();
+    assert!(s.execute("object.rotateBoundingBox", &json!({"angle": 30})).is_err());
 }
 
 /// Two rectangles turned 20°, put in a container by `make`, turned 10° with it and reset, then

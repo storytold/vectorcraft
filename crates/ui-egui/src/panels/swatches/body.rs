@@ -1,4 +1,4 @@
-use super::actions::{bottom, edit_group};
+use super::actions::{DRAG_DOC, bottom, edit_group};
 use super::dnd::{TileEvents, apply_drop, click_selection, highlighted, selection, tile_input, zone_input};
 use super::tiles::{
     draw_folder, draw_registration, folder_tile, global_mark, list_icons, list_row, list_row_name, pattern_thumb, tile_grid, tile_id,
@@ -116,7 +116,9 @@ pub(super) fn body(app: &mut VectorcraftApp, ui: &mut Ui, salt: &'static str) {
                 }
             }
         });
-        let zone = ui.interact(out.inner_rect, ui.scope_id().with("swatch-drop"), Sense::hover());
+        // The drop zone ends where the list does, so it does not reach over the buttons below a list
+        // shrunk to its rows.
+        let zone = ui.interact(out.inner_rect.intersect(ui.min_rect()), ui.scope_id().with("swatch-drop"), Sense::hover());
         zone_input(ui, &zone, &mut ev);
         let r = ui.min_rect();
         ui.ctx().accesskit_node_builder(ui.unique_id(), |node| {
@@ -129,6 +131,9 @@ pub(super) fn body(app: &mut VectorcraftApp, ui: &mut Ui, salt: &'static str) {
             app.run("ui.swatchOptions", json!({"name": e.name()})).ok();
         }
         None => {}
+    }
+    if ev.started {
+        set_pstate(ui.ctx(), DRAG_DOC, app.session.active().map(|st| st.uid));
     }
     if let Some(drop) = ev.drop {
         apply_drop(app, drop);
