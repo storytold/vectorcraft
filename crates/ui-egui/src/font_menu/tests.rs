@@ -1258,8 +1258,11 @@ fn the_document_filter_follows_a_scatter_brushs_edits_and_undo() {
     let name = app.run("brush.new", serde_json::json!({"type": "scatter", "name": "Type Dots"})).unwrap()["name"].clone();
     app.run("edit.clear", serde_json::json!({"ids": [id]})).unwrap();
     let db = vectorcraft_text::FontDb::global();
-    let families = |app: &crate::VectorcraftApp| {
-        let mut names: Vec<_> = super::document_families(db, &app.session.active().unwrap().doc).into_iter().collect();
+    // One menu state throughout, so each edit has to get past the families it keeps.
+    let mut st = super::MenuState { document_only: true, ..Default::default() };
+    let mut families = |app: &crate::VectorcraftApp| {
+        let used = super::used_families(db, &mut st, super::MenuLook::of(app)).expect("a document is open");
+        let mut names: Vec<_> = used.iter().cloned().collect();
         names.sort();
         names
     };
