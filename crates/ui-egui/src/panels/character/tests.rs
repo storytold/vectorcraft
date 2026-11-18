@@ -343,6 +343,57 @@ fn highlight_commands_focus_the_font_kerning_and_tracking_fields() {
     assert_eq!(app.character_focus, None);
 }
 
+/// Type › Size › Other… (Highlight Font Size) shows the Character panel and gives its Font Size
+/// field the keyboard focus with the value selected: what is typed replaces it, Enter applies it
+/// as one undo step, and a selection of different sizes takes the one size typed into the blank
+/// field. Without selected type the panel shows, the command fails and nothing takes the focus.
+#[test]
+fn highlight_font_size_focuses_the_font_size_field() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let a = app.run("text.create", json!({"x": 20, "y": 50, "text": "AVAX", "size": 12})).unwrap()["id"].clone();
+    let b = app.run("text.create", json!({"x": 20, "y": 120, "text": "Wave", "size": 20})).unwrap()["id"].clone();
+    let ctx = egui::Context::default();
+    let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+        let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| show(app, ui));
+        out.textures_delta.clear();
+    };
+    let typed = |text: &str| {
+        let enter = egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+        vec![egui::Event::Text(text.into()), enter]
+    };
+    let size = |app: &VectorcraftApp| shared(app, |s| s.size);
+    app.run("select.set", json!({"ids": [a.clone()]})).unwrap();
+    assert_eq!(app.run("type.highlightFontSize", json!({})).unwrap(), json!({"field": "fontSize"}));
+    assert!(crate::panel_docking::showing(&app.ui, "character"), "the panel shows");
+    frame(&mut app, vec![]);
+    assert_eq!(app.character_focus, None, "the Font Size field took the focus");
+    frame(&mut app, typed("33"));
+    assert_eq!(size(&app), Some(33.0), "typing replaced the size");
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(size(&app), Some(12.0), "one undo step restores the size");
+    // Choosing Other again while the field holds typed text that is not applied selects all of it.
+    app.run("type.highlightFontSize", json!({})).unwrap();
+    frame(&mut app, vec![]);
+    frame(&mut app, vec![egui::Event::Text("999".into())]);
+    app.run("type.highlightFontSize", json!({})).unwrap();
+    frame(&mut app, vec![]);
+    frame(&mut app, typed("18"));
+    assert_eq!(size(&app), Some(18.0), "typing replaced the text typed before");
+    ctx.memory_mut(|m| m.stop_text_input());
+    // Different sizes: the field is blank, and the size typed applies to every selected object.
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    assert_eq!(size(&app), None);
+    app.run("type.highlightFontSize", json!({})).unwrap();
+    frame(&mut app, vec![]);
+    frame(&mut app, typed("16"));
+    assert_eq!(size(&app), Some(16.0), "both objects take the size typed");
+    // No type selected: the panel shows, the command fails and nothing is armed.
+    app.run("select.none", json!({})).unwrap();
+    assert!(app.run("type.highlightFontSize", json!({})).is_err());
+    assert_eq!(app.character_focus, None);
+}
+
 /// A variable font gets the Variable Font button, which opens one slider per axis named as the
 /// font names it; a drag along one sets that axis of the selected type in one undo step.
 #[test]
@@ -561,6 +612,116 @@ fn small_caps_superscript_and_subscript_menu_items_set_and_check_the_text() {
     }
 }
 
+/// The Anti-aliasing Method dropdown under Character Rotation shows the method of the selected
+/// type, blank where the selected objects differ, and a pick sets it for the whole object, also
+/// while the Type tool has part of its text selected. Reset Panel sets Sharp.
+#[test]
+fn the_anti_aliasing_method_dropdown_shows_and_sets_the_types_method() {
+    use super::super::tests_appearance::{click, frame_events, text_rect};
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let a = app.run("text.create", json!({"x": 20, "y": 50, "text": "Hamburg", "size": 12})).unwrap()["id"].as_u64().unwrap();
+    let method = |app: &VectorcraftApp, id: u64| match &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.anti_alias,
+        _ => panic!("text"),
+    };
+    let ctx = egui::Context::default();
+    let texts = |app: &mut VectorcraftApp| frame_events(&ctx, app, vec![], show);
+    let shown = |app: &mut VectorcraftApp| {
+        texts(app).into_iter().map(|(t, _)| t).filter(|t| ["None", "Sharp", "Crisp", "Strong"].contains(&t.as_str())).collect::<Vec<_>>()
+    };
+    assert_eq!(shown(&mut app), ["Sharp"]);
+    // Open the dropdown and pick Crisp.
+    let at = text_rect(&texts(&mut app), "Sharp").center();
+    click(&ctx, &mut app, at, show);
+    let listed = texts(&mut app);
+    let crisp = text_rect(&listed, "Crisp").center();
+    click(&ctx, &mut app, crisp, show);
+    assert_eq!(method(&app, a), TypeAntiAlias::Crisp);
+    assert_eq!(shown(&mut app), ["Crisp"]);
+    // Another object with Sharp selected as well: blank.
+    let b = app.run("text.create", json!({"x": 20, "y": 120, "text": "Bremen", "size": 12})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    assert!(shown(&mut app).is_empty(), "the methods differ");
+    // The Type tool with two letters selected: the whole object takes the method.
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    app.session.select_tool("type", Default::default()).unwrap();
+    app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+    app.session.set_tool_option("select", &json!({"start": 1, "end": 3}));
+    assert!(text_editing(&app).is_some());
+    set_anti_alias(&mut app, TypeAntiAlias::Strong);
+    assert_eq!(method(&app, a), TypeAntiAlias::Strong);
+    assert_eq!(method(&app, b), TypeAntiAlias::Sharp, "the other selected type is unchanged while editing");
+    assert_eq!(shared_anti_alias(&app), Some(TypeAntiAlias::Strong));
+    // Reset Panel sets Sharp, with the characters' attributes, in one undo step.
+    range_style(&mut app, json!({"tracking": 50}));
+    let tracking = |app: &VectorcraftApp| shared(app, |s| s.tracking);
+    assert_eq!(tracking(&app), Some(50.0));
+    reset_panel(&mut app);
+    assert_eq!((method(&app, a), tracking(&app)), (TypeAntiAlias::Sharp, Some(0.0)));
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!((method(&app, a), tracking(&app)), (TypeAntiAlias::Strong, Some(50.0)), "one undo step");
+}
+
+/// The Sharp method is named by its own `antiAlias` catalog row, not by the plain "Sharp" row
+/// that names the Contour tool's corner.
+#[test]
+fn the_sharp_method_takes_its_own_translation() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    app.run("text.create", json!({"x": 20, "y": 50, "text": "Hamburg", "size": 12})).unwrap();
+    let de = crate::i18n::Lang::from_code("de").unwrap();
+    let (method, corner) = (crate::i18n::tr_ctx(de, "antiAlias", "Sharp"), crate::i18n::tr(de, "Sharp"));
+    assert_ne!(method, corner, "the catalog names the two differently");
+    crate::i18n::set_current(de);
+    let text = crate::tests_labels::painted_text(&mut app, show);
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    assert!(text.contains(method) && !text.contains(corner), "{text}");
+}
+
+/// Reset Panel closes only the undo group it opens: in an undo group that is already open,
+/// the reset is part of that group's step, and an undo group open in another document stays
+/// open, with that document's later edits part of its step.
+#[test]
+fn reset_panel_closes_only_its_own_undo_group() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let a = app.run("text.create", json!({"x": 20, "y": 50, "text": "A"})).unwrap()["id"].clone();
+    let steps = |st: &vectorcraft_engine::DocState| (st.history.undo.len(), st.history.undo.last().map(|e| e.label.clone()));
+    // An undo group open in the same document (MCP `command_batch` with `atomic`).
+    app.run("edit.undoGroup.begin", json!({"label": "Batch"})).unwrap();
+    app.run("text.setFormat", json!({"id": a, "antiAlias": "crisp"})).unwrap();
+    reset_panel(&mut app);
+    assert!(app.session.active().unwrap().undo_group.is_some(), "the batch's undo group stays open");
+    app.run("text.setFormat", json!({"id": a, "antiAlias": "strong"})).unwrap();
+    app.run("edit.undoGroup.end", json!({})).unwrap();
+    let a_steps = steps(app.session.active().unwrap());
+    assert_eq!(a_steps.1, Some("Batch".to_string()), "the reset is part of the Batch step");
+    // An undo group open in another document. The second document is open before the group
+    // begins, so switching to it opens no group there.
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    assert_eq!(app.session.active_index(), Some(1));
+    let b = app.run("text.create", json!({"x": 20, "y": 50, "text": "B"})).unwrap()["id"].clone();
+    // A reset that changes nothing records no step, so B starts away from the panel's defaults.
+    app.run("text.setFormat", json!({"id": b, "antiAlias": "crisp"})).unwrap();
+    app.session.set_active(0);
+    app.run("edit.undoGroup.begin", json!({"label": "Batch"})).unwrap();
+    app.run("text.setFormat", json!({"id": a, "antiAlias": "none"})).unwrap();
+    let a_steps = steps(app.session.active().unwrap());
+    app.session.set_active(1);
+    assert!(app.session.active().unwrap().undo_group.is_none());
+    app.run("select.set", json!({"ids": [b]})).unwrap();
+    let b_steps = steps(app.session.active().unwrap()).0;
+    reset_panel(&mut app);
+    assert_eq!(steps(app.session.active().unwrap()), (b_steps + 1, Some("Reset Panel".to_string())));
+    assert!(app.session.active().unwrap().undo_group.is_none());
+    assert!(app.session.documents()[0].undo_group.is_some(), "the other document's undo group stays open");
+    app.session.set_active(0);
+    app.run("text.setFormat", json!({"id": a, "antiAlias": "crisp"})).unwrap();
+    app.run("edit.undoGroup.end", json!({})).unwrap();
+    assert_eq!(steps(app.session.active().unwrap()), a_steps, "the later edit is part of the Batch step");
+}
+
 /// Character panel menu › System Layout is off for a new document, and a click turns whole-point
 /// spacing on and back off for every text object.
 #[test]
@@ -638,6 +799,126 @@ fn character_alignment_shows_with_the_east_asian_options() {
     assert_eq!(shown(&mut app), (true, true));
 }
 
+/// Insert Aki Left and Right are fields of the panel with the East Asian options only, and show
+/// the selected characters' values, blank where they differ. A value typed past 1000 sets 1000.
+#[test]
+fn insert_aki_fields_show_with_the_east_asian_options() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let id = app.run("text.create", json!({"x": 20, "y": 50, "text": "（日本）"})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    app.run("text.setFormat", json!({"akiLeft": 250, "akiRight": 750})).unwrap();
+    let text = crate::tests_labels::painted_text(&mut app, show);
+    assert!(!text.contains("↔A") && !text.contains("750"), "{text}");
+    app.session.prefs.show_east_asian_options = true;
+    let text = crate::tests_labels::painted_text(&mut app, show);
+    assert!(text.contains("↔A") && text.contains("A↔") && text.contains("250") && text.contains("750"), "{text}");
+    // Only the first character has 750 after it: the Right field is blank.
+    app.run("text.setRangeStyle", json!({"id": id, "start": 3, "end": 12, "akiRight": 0})).unwrap();
+    let text = crate::tests_labels::painted_text(&mut app, show);
+    assert!(text.contains("250") && !text.contains("750"), "{text}");
+    use super::super::tests_appearance::{click, frame_events, text_rect};
+    let ctx = egui::Context::default();
+    let texts = frame_events(&ctx, &mut app, vec![], show);
+    click(&ctx, &mut app, text_rect(&texts, "250").center(), show);
+    let key = |key, modifiers| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers };
+    frame_events(&ctx, &mut app, vec![key(egui::Key::A, egui::Modifiers::COMMAND)], show);
+    frame_events(&ctx, &mut app, vec![egui::Event::Text("1500".into())], show);
+    frame_events(&ctx, &mut app, vec![key(egui::Key::Enter, egui::Modifiers::NONE)], show);
+    frame_events(&ctx, &mut app, vec![], show);
+    let left = |app: &VectorcraftApp| match &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.iter().map(|r| r.style.aki_left).collect::<Vec<_>>(),
+        _ => panic!("text"),
+    };
+    assert!(left(&app).iter().all(|v| *v == 1000.0), "{:?}", left(&app));
+}
+
+/// Adjust Horizontal and Vertical Diacritic Position are fields of the panel with the Middle
+/// Eastern options only, and show the selected characters' values, blank where they differ. A value
+/// typed past -1000 sets -1000. Bad values sent to the commands are errors that change nothing.
+#[test]
+fn diacritic_position_fields_show_with_the_middle_eastern_options() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let id = app.run("text.create", json!({"x": 20, "y": 50, "text": "بَبَ"})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    app.run("text.setFormat", json!({"diacriticHorizontal": 125, "diacriticVertical": -375})).unwrap();
+    let text = crate::tests_labels::painted_text(&mut app, show);
+    assert!(!text.contains("´↔") && !text.contains("-375"), "{text}");
+    app.session.prefs.show_indic_options = true;
+    let text = crate::tests_labels::painted_text(&mut app, show);
+    assert!(text.contains("´↔") && text.contains("´↕") && text.contains("125") && text.contains("-375"), "{text}");
+    let undo = app.session.active().unwrap().history.undo.len();
+    let doc = app.session.active().unwrap().doc.clone();
+    for (cmd, params) in [
+        ("text.setFormat", json!({"diacriticHorizontal": 1000.5})),
+        ("text.setFormat", json!({"diacriticVertical": "up"})),
+        ("text.setRangeStyle", json!({"id": id, "start": 0, "end": 2, "diacriticVertical": -1001})),
+        ("text.setRangeStyle", json!({"id": id, "start": 0, "end": 2, "diacriticHorizontal": true})),
+    ] {
+        let error = app.run(cmd, params.clone()).unwrap_err().to_string();
+        assert!(error.contains("`diacritic"), "{cmd} {params}: {error}");
+    }
+    assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+    assert!(app.session.active().unwrap().doc == doc);
+    // Setting the value the characters already have records no undo step.
+    app.run("text.setFormat", json!({"diacriticVertical": -375})).unwrap();
+    assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+    // Only the first letter and its fatha have -375: the Vertical field is blank.
+    app.run("text.setRangeStyle", json!({"id": id, "start": 4, "end": 8, "diacriticVertical": 0})).unwrap();
+    let text = crate::tests_labels::painted_text(&mut app, show);
+    assert!(text.contains("125") && !text.contains("-375"), "{text}");
+    use super::super::tests_appearance::{click, frame_events, text_rect};
+    let ctx = egui::Context::default();
+    let texts = frame_events(&ctx, &mut app, vec![], show);
+    click(&ctx, &mut app, text_rect(&texts, "125").center(), show);
+    let key = |key, modifiers| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers };
+    frame_events(&ctx, &mut app, vec![key(egui::Key::A, egui::Modifiers::COMMAND)], show);
+    frame_events(&ctx, &mut app, vec![egui::Event::Text("-1500".into())], show);
+    frame_events(&ctx, &mut app, vec![key(egui::Key::Enter, egui::Modifiers::NONE)], show);
+    frame_events(&ctx, &mut app, vec![], show);
+    let horizontal = |app: &VectorcraftApp| match &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.iter().map(|r| r.style.diacritic_horizontal).collect::<Vec<_>>(),
+        _ => panic!("text"),
+    };
+    assert!(horizontal(&app).iter().all(|v| *v == -1000.0), "{:?}", horizontal(&app));
+}
+
+/// Tsume is a field of the panel with the East Asian options only, and shows the selected
+/// characters' value, blank where they differ. A value typed past 100 sets 100.
+#[test]
+fn tsume_field_shows_with_the_east_asian_options() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let id = app.run("text.create", json!({"x": 20, "y": 50, "text": "（日本）"})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    app.run("text.setFormat", json!({"tsume": 37.5})).unwrap();
+    let text = crate::tests_labels::painted_text(&mut app, show);
+    assert!(!text.contains("→A←") && !text.contains("37.5"), "{text}");
+    app.session.prefs.show_east_asian_options = true;
+    let text = crate::tests_labels::painted_text(&mut app, show);
+    assert!(text.contains("→A←") && text.contains("37.5"), "{text}");
+    // The characters differ: the field is blank.
+    app.run("text.setRangeStyle", json!({"id": id, "start": 3, "end": 12, "tsume": 62.5})).unwrap();
+    let text = crate::tests_labels::painted_text(&mut app, show);
+    assert!(!text.contains("37.5") && !text.contains("62.5"), "{text}");
+    app.run("text.setFormat", json!({"tsume": 62.5})).unwrap();
+    use super::super::tests_appearance::{click, frame_events, text_rect};
+    let ctx = egui::Context::default();
+    let texts = frame_events(&ctx, &mut app, vec![], show);
+    click(&ctx, &mut app, text_rect(&texts, "62.5%").center(), show);
+    let key = |key, modifiers| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers };
+    frame_events(&ctx, &mut app, vec![key(egui::Key::A, egui::Modifiers::COMMAND)], show);
+    frame_events(&ctx, &mut app, vec![egui::Event::Text("150".into())], show);
+    frame_events(&ctx, &mut app, vec![key(egui::Key::Enter, egui::Modifiers::NONE)], show);
+    frame_events(&ctx, &mut app, vec![], show);
+    let tsume = |app: &VectorcraftApp| match &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.iter().map(|r| r.style.tsume).collect::<Vec<_>>(),
+        _ => panic!("text"),
+    };
+    assert!(tsume(&app).iter().all(|v| *v == 100.0), "{:?}", tsume(&app));
+}
+
 /// The panel menu's Show Font Height Options shows the Set Font Height Reference dropdown,
 /// which shows the selected type's reference and sets the one picked (one undo step); Hide
 /// Font Height Options hides it again.
@@ -678,6 +959,135 @@ fn show_font_height_options_shows_the_font_height_reference() {
     let at = item(&texts(&ctx, &mut app, menu), "Hide Font Height Options").unwrap();
     click(&ctx, &mut app, at, menu);
     assert!(item(&texts(&ctx, &mut app, show), "Cap Height").is_none());
+}
+
+/// The Set Font Height Reference dropdown shows an icon before each reference's name, in the
+/// closed field and in the open list, and each reference's icon is its own (#6304).
+#[test]
+fn font_height_references_show_their_icons() {
+    use super::super::tests_appearance::click;
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let id = app.run("text.create", json!({"x": 20, "y": 50, "text": "Hx", "size": 12})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    set_pstate(&ctx, FONT_HEIGHT_OPTIONS, true);
+    // Every text drawn with its rect, and the rects of every other shape drawn.
+    let frame = |ctx: &egui::Context, app: &mut VectorcraftApp| {
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui));
+        out.textures_delta.clear();
+        fn collect(s: &egui::Shape, texts: &mut Vec<(String, egui::Rect)>, marks: &mut Vec<egui::Rect>) {
+            match s {
+                egui::Shape::Text(t) => texts.push((t.galley.text().to_string(), t.visual_bounding_rect())),
+                egui::Shape::Vec(v) => v.iter().for_each(|s| collect(s, texts, marks)),
+                egui::Shape::Noop => {}
+                s => marks.push(s.visual_bounding_rect()),
+            }
+        }
+        let (mut texts, mut marks) = (vec![], vec![]);
+        for c in &out.shapes {
+            collect(&c.shape, &mut texts, &mut marks);
+        }
+        (texts, marks)
+    };
+    // The shapes in the icon's place before the text `rect`, relative to that place and rounded.
+    let icon = |marks: &[egui::Rect], rect: egui::Rect| {
+        let place = egui::Rect::from_min_max(
+            egui::pos2(rect.min.x - FONT_HEIGHT_ICON - 8.0, rect.center().y - 10.0),
+            egui::pos2(rect.min.x, rect.center().y + 10.0),
+        );
+        let mut found: Vec<[i32; 4]> = marks
+            .iter()
+            .filter(|m| m.is_finite() && place.contains_rect(**m))
+            .map(|m| [m.min.x - place.min.x, m.min.y - place.min.y, m.max.x - place.min.x, m.max.y - place.min.y].map(|v| v.round() as i32))
+            .collect();
+        found.sort_unstable();
+        found
+    };
+    frame(&ctx, &mut app);
+    let (texts, marks) = frame(&ctx, &mut app);
+    let field = texts.iter().find(|(t, _)| t == "Em Box").map(|(_, r)| *r).expect("the closed field shows Em Box");
+    assert!(icon(&marks, field).len() >= 2, "no icon before Em Box in the closed field: {:?}", icon(&marks, field));
+    click(&ctx, &mut app, field.center(), show);
+    frame(&ctx, &mut app);
+    let (texts, marks) = frame(&ctx, &mut app);
+    let mut icons = vec![];
+    for name in ["Em Box", "Cap Height", "x-Height", "ICF Box"] {
+        // The list's row is the last text of that name drawn (the closed field is drawn first).
+        let row = texts.iter().rev().find(|(t, _)| t == name).map(|(_, r)| *r).unwrap_or_else(|| panic!("the open list shows {name}: {texts:?}"));
+        let found = icon(&marks, row);
+        assert!(found.len() >= 2, "no icon before {name} in the open list: {found:?}");
+        icons.push(found);
+    }
+    for (i, a) in icons.iter().enumerate() {
+        assert!(icons.iter().skip(i + 1).all(|b| a != b), "two references share an icon: {icons:?}");
+    }
+}
+
+/// In the open Set Font Height Reference list, the current reference's row is drawn on the
+/// accent-tinted selection fill, so its icon draws the measure in the name's colour rather than
+/// the accent, which would lose its contrast there; the other rows keep the accent (#6304).
+#[test]
+fn the_highlighted_font_height_icon_keeps_its_contrast() {
+    use super::super::tests_appearance::click;
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let id = app.run("text.create", json!({"x": 20, "y": 50, "text": "Hx", "size": 12})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    set_pstate(&ctx, FONT_HEIGHT_OPTIONS, true);
+    let accent = Tokens::get(&ctx).accent;
+    // Every text drawn with its rect, and every stroke drawn with its rect and colour.
+    let frame = |ctx: &egui::Context, app: &mut VectorcraftApp| {
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui));
+        out.textures_delta.clear();
+        fn collect(s: &egui::Shape, texts: &mut Vec<(String, egui::Rect)>, strokes: &mut Vec<(egui::Rect, egui::Color32)>) {
+            match s {
+                egui::Shape::Text(t) => texts.push((t.galley.text().to_string(), t.visual_bounding_rect())),
+                egui::Shape::Vec(v) => v.iter().for_each(|s| collect(s, texts, strokes)),
+                egui::Shape::LineSegment { stroke, .. } => strokes.push((s.visual_bounding_rect(), stroke.color)),
+                egui::Shape::Path(p) => {
+                    if let egui::epaint::ColorMode::Solid(c) = p.stroke.color {
+                        strokes.push((s.visual_bounding_rect(), c));
+                    }
+                }
+                egui::Shape::Rect(r) => strokes.push((s.visual_bounding_rect(), r.stroke.color)),
+                _ => {}
+            }
+        }
+        let (mut texts, mut strokes) = (vec![], vec![]);
+        for c in &out.shapes {
+            collect(&c.shape, &mut texts, &mut strokes);
+        }
+        (texts, strokes)
+    };
+    // The stroke colours in the icon's place before the text `rect`.
+    let colours = |strokes: &[(egui::Rect, egui::Color32)], rect: egui::Rect| -> Vec<egui::Color32> {
+        let place = egui::Rect::from_min_max(
+            egui::pos2(rect.min.x - FONT_HEIGHT_ICON - 8.0, rect.center().y - 10.0),
+            egui::pos2(rect.min.x, rect.center().y + 10.0),
+        );
+        strokes.iter().filter(|(r, _)| r.is_finite() && place.contains_rect(*r)).map(|(_, c)| *c).collect()
+    };
+    frame(&ctx, &mut app);
+    let (texts, _) = frame(&ctx, &mut app);
+    let field = texts.iter().find(|(t, _)| t == "Em Box").map(|(_, r)| *r).expect("the closed field shows Em Box");
+    click(&ctx, &mut app, field.center(), show);
+    frame(&ctx, &mut app);
+    let (texts, strokes) = frame(&ctx, &mut app);
+    let row = |name: &str| texts.iter().rev().find(|(t, _)| t == name).map(|(_, r)| *r).unwrap_or_else(|| panic!("the open list shows {name}"));
+    // The list fades in, so colours are compared without their alpha.
+    let rgb = |c: egui::Color32| {
+        let [r, g, b, _] = c.to_srgba_unmultiplied();
+        [r, g, b]
+    };
+    let is_accent = |c: &egui::Color32| rgb(*c).iter().zip(rgb(accent)).all(|(a, b)| a.abs_diff(b) <= 4);
+    let current = colours(&strokes, row("Em Box"));
+    assert!(!current.is_empty() && !current.iter().any(is_accent), "the highlighted Em Box icon draws in the accent: {current:?}");
+    let other = colours(&strokes, row("Cap Height"));
+    assert!(other.iter().any(is_accent), "the other rows keep the accent measure: {other:?}");
 }
 
 /// Tate-chu-yoko is in the panel menu with the East Asian options, and choosing it marks the
@@ -723,6 +1133,43 @@ fn tate_chu_yoko_settings_menu_item_shows_with_east_asian_options_and_opens_the_
     let at = texts.iter().find(|(t, _)| t.trim() == "Tate-chu-yoko Settings…").unwrap_or_else(|| panic!("{texts:?}")).1;
     super::super::tests_appearance::click(&ctx, &mut app, at.center(), menu);
     assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(crate::dialogs::tate_chu_yoko::KIND));
+}
+
+/// Warichu and Warichu Settings… are in the panel menu with the East Asian options: Warichu marks
+/// the selected characters and takes the mark off again, one undo step each way, and Warichu
+/// Settings… opens the dialog on them.
+#[test]
+fn warichu_menu_items_show_with_east_asian_options_toggle_and_open_the_settings() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let id = app.session.execute("text.create", &json!({"x": 20, "y": 50, "text": "abcd"})).unwrap()["id"].as_u64().unwrap();
+    app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let ctx = egui::Context::default();
+    let painted = |app: &mut VectorcraftApp| crate::tests_labels::painted_text(app, menu);
+    assert!(!painted(&mut app).contains("Warichu"));
+    app.session.prefs.show_east_asian_options = true;
+    let on = |app: &VectorcraftApp| match &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.iter().all(|r| r.style.warichu),
+        _ => panic!("text"),
+    };
+    let undo = |app: &VectorcraftApp| app.session.doc().unwrap().history.undo.len();
+    let before = undo(&app);
+    let find = |ctx: &egui::Context, app: &mut VectorcraftApp, label: &str| {
+        let texts = super::super::tests_appearance::frame_events(ctx, app, vec![], menu);
+        texts.iter().find(|(t, _)| t.trim_start_matches(['✓', ' ']) == label).unwrap_or_else(|| panic!("{texts:?}")).1
+    };
+    let at = find(&ctx, &mut app, "Warichu");
+    super::super::tests_appearance::click(&ctx, &mut app, at.center(), menu);
+    assert!(on(&app));
+    assert_eq!(undo(&app), before + 1);
+    assert!(painted(&mut app).contains("✓ Warichu"));
+    let at = find(&ctx, &mut app, "Warichu");
+    super::super::tests_appearance::click(&ctx, &mut app, at.center(), menu);
+    assert!(!on(&app));
+    assert_eq!(undo(&app), before + 2);
+    let at = find(&ctx, &mut app, "Warichu Settings…");
+    super::super::tests_appearance::click(&ctx, &mut app, at.center(), menu);
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(crate::dialogs::warichu::KIND));
 }
 
 /// Standard Vertical Roman Alignment is in the panel menu with the East Asian options. Choosing it
@@ -1134,11 +1581,16 @@ fn reset_panel_resets_every_attribute_but_the_font() {
             s.tate_chu_yoko != d.tate_chu_yoko,
             s.tcy_up_down != d.tcy_up_down,
             s.tcy_left_right != d.tcy_left_right,
+            s.aki_left != d.aki_left,
+            s.aki_right != d.aki_right,
+            s.tsume != d.tsume,
             s.standard_vertical_roman != d.standard_vertical_roman,
             s.no_break != d.no_break,
             s.char_direction != d.char_direction,
             s.digits != d.digits,
             s.font_height_reference != d.font_height_reference,
+            s.diacritic_horizontal != d.diacritic_horizontal,
+            s.diacritic_vertical != d.diacritic_vertical,
         ]
     };
     let custom = |app: &mut VectorcraftApp| {
@@ -1148,16 +1600,17 @@ fn reset_panel_resets_every_attribute_but_the_font() {
                 "id": id, "tracking": 50, "leading": 30, "kerning": 20, "baselineShift": 3, "hScale": 120, "vScale": 90, "rotation": 15,
                 "underline": true, "strikethrough": true, "allCaps": true, "smallCaps": true, "position": "superscript",
                 "charAlign": "emBoxCenter", "proportionalMetrics": true, "tateChuYoko": true, "tcyUpDown": 2, "tcyLeftRight": -3,
-                "standardVerticalRoman": true, "noBreak": true, "charDirection": "rightToLeft", "digits": "hindi", "fontHeightReference": "capHeight"
+                "akiLeft": 250, "akiRight": 500, "tsume": 50, "standardVerticalRoman": true, "noBreak": true, "charDirection": "rightToLeft", "digits": "hindi", "fontHeightReference": "capHeight",
+                "diacriticHorizontal": 120, "diacriticVertical": -80
             }),
         )
         .unwrap();
     };
     let plain = runs(&app)[0].1.clone();
-    assert_eq!(differs(&plain, &CharStyle::default()), [false; 22]);
+    assert_eq!(differs(&plain, &CharStyle::default()), [false; 27]);
     custom(&mut app);
     let styled = runs(&app)[0].1.clone();
-    assert_eq!(differs(&styled, &CharStyle::default()), [true; 22]);
+    assert_eq!(differs(&styled, &CharStyle::default()), [true; 27]);
     app.run("select.set", json!({"ids": [id]})).unwrap();
     reset_panel(&mut app);
     assert_eq!(runs(&app), [("One 12".to_string(), plain.clone())]);
@@ -1407,6 +1860,50 @@ fn snap_to_glyph_options_scroll_into_view_and_turn_snapping_on() {
     assert!(!app.session.prefs.glyph_snap.anchors, "the options take clicks once it is on");
 }
 
+/// Copy and Cut take a selected story after a frame threaded in before the edited one took its whole
+/// text.
+#[test]
+fn copy_and_cut_take_a_story_that_left_the_edited_frame() {
+    for cut in [false, true] {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 600, "height": 300})).unwrap();
+        let story = "The quick brown fox jumps over the lazy dog and keeps running far beyond the first frame. ".repeat(4);
+        let area = json!({"x": 10, "y": 10, "text": story, "size": 12, "area": {"width": 150, "height": 60}});
+        let a = app.run("text.create", area).unwrap()["id"].as_u64().unwrap();
+        let b = app.run("shape.rectangle", json!({"x": 200, "y": 10, "width": 150, "height": 200})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.set", json!({"ids": [a, b]})).unwrap();
+        app.run("text.thread.create", json!({})).unwrap();
+        app.session.select_tool("type", Default::default()).unwrap();
+        app.session.set_tool_option("textSelection", &json!({"editing": a, "anchor": 0, "caret": 0}));
+        app.run("select.all", json!({})).unwrap();
+        let c = app.run("text.thread.add", json!({"from": a, "before": true, "rect": [700, 10, 400, 600]})).unwrap()["id"].as_u64().unwrap();
+        let text = |app: &VectorcraftApp, id: u64| match &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind {
+            NodeKind::Text(t) => t.plain_text(),
+            _ => panic!("not text"),
+        };
+        assert_eq!((text(&app, a), text(&app, b), text(&app, c)), (String::new(), String::new(), story.clone()));
+        assert!(intercept_text_command(&mut app, if cut { "edit.cut" } else { "edit.copy" }).is_some());
+        let copied: Vec<String> = app
+            .session
+            .clipboard
+            .nodes
+            .iter()
+            .filter_map(|n| match &n.kind {
+                NodeKind::Text(t) => Some(t.plain_text()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(copied, std::slice::from_ref(&story), "cut: {cut}");
+        assert_eq!(text(&app, c).is_empty(), cut);
+        if cut {
+            // A story that holds no text has nothing to copy, so Cut does not run its delete.
+            app.run("select.all", json!({})).unwrap();
+            assert_eq!(text_story(&app).map(|frames| frames.len()), Some(3));
+            assert!(!text_copy(&mut app, false));
+        }
+    }
+}
+
 /// After Select All in a frame of threaded text, the Character and Paragraph panels and Copy act on
 /// the text of every frame of the story.
 #[test]
@@ -1447,4 +1944,401 @@ fn select_all_in_threaded_text_formats_and_copies_the_whole_story() {
         })
         .collect();
     assert_eq!(copied, [story]);
+}
+
+/// A story threaded through three frames in order, the first `height` tall.
+fn three_frame_story(height: u32) -> (VectorcraftApp, u64, u64, u64) {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 900, "height": 300})).unwrap();
+    let story = "The quick brown fox jumps over the lazy dog and keeps running far beyond the first frame. ".repeat(6);
+    let area = json!({"x": 10, "y": 10, "text": story, "size": 12, "area": {"width": 150, "height": height}});
+    let a = app.run("text.create", area).unwrap()["id"].as_u64().unwrap();
+    let b = app.run("text.thread.add", json!({"from": a, "rect": [200, 10, 150, 60]})).unwrap()["id"].as_u64().unwrap();
+    let c = app.run("text.thread.add", json!({"from": b, "rect": [400, 10, 150, 200]})).unwrap()["id"].as_u64().unwrap();
+    (app, a, b, c)
+}
+
+/// Select All with the Type tool in frame `id` of a story.
+fn select_all_from(app: &mut VectorcraftApp, id: u64) {
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    app.session.select_tool("type", Default::default()).unwrap();
+    app.session.set_tool_option("textSelection", &json!({"editing": id, "anchor": 0, "caret": 0}));
+    app.run("select.all", json!({})).unwrap();
+}
+
+fn story_frame(app: &VectorcraftApp, id: u64) -> vectorcraft_doc::TextObject {
+    match &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => (**t).clone(),
+        _ => panic!("not text"),
+    }
+}
+
+fn story_sizes(app: &VectorcraftApp, id: u64) -> Vec<f64> {
+    story_frame(app, id).runs.iter().map(|r| r.style.size).collect()
+}
+
+/// The frames that Select All saved are not the frames of the story once the first of them has
+/// left the thread: the edited frame's story takes the change.
+#[test]
+fn story_changes_follow_the_edited_frames_thread_after_the_first_saved_frame_leaves() {
+    // The first frame is too short for a line, so Select All edits the second.
+    let (mut app, a, b, c) = three_frame_story(1);
+    select_all_from(&mut app, c);
+    assert_eq!(app.session.tool_options()["story"], json!([a, b, c]));
+    assert_eq!(text_editing(&app).unwrap().0, NodeId(b));
+    app.run("text.thread.break", json!({"id": a, "port": "out"})).unwrap();
+    assert_eq!(text_editing(&app).unwrap().0, NodeId(b));
+
+    assert_eq!(text_story(&app), Some(vec![NodeId(b), NodeId(c)]));
+    format(&mut app, json!({"size": 9}));
+    assert!(story_sizes(&app, a).iter().all(|s| (*s - 12.0).abs() < 1e-9), "the frame that left keeps its size");
+    for id in [b, c] {
+        assert!(story_sizes(&app, id).iter().all(|s| (*s - 9.0).abs() < 1e-9), "frame {id} takes the size");
+    }
+}
+
+/// A frame that left the thread after Select All takes no change, and a frame added to it does.
+#[test]
+fn story_changes_leave_out_a_frame_that_left_and_take_in_a_frame_that_joined() {
+    let (mut app, a, b, c) = three_frame_story(60);
+    select_all_from(&mut app, c);
+    assert_eq!(text_editing(&app).unwrap().0, NodeId(a));
+    app.run("text.thread.break", json!({"id": b, "port": "out"})).unwrap();
+    assert_eq!(text_story(&app), Some(vec![NodeId(a), NodeId(b)]));
+    let d = app.run("text.thread.add", json!({"from": a, "rect": [600, 10, 150, 60]})).unwrap()["id"].as_u64().unwrap();
+    assert_eq!(text_story(&app), Some(vec![NodeId(a), NodeId(d), NodeId(b)]));
+
+    crate::panels::paragraph::run_on_paragraphs(&mut app, "text.setFormat", json!({"spaceBefore": 4})).unwrap();
+    for id in [a, d, b] {
+        assert!((story_frame(&app, id).para_at(0).space_before - 4.0).abs() < 1e-9, "frame {id} takes the space");
+    }
+    assert!(story_frame(&app, c).para_at(0).space_before.abs() < 1e-9, "the frame that left keeps its paragraphs");
+}
+
+/// With the thread gone, the selection is in the one edited frame.
+#[test]
+fn story_changes_stay_in_the_edited_frame_once_its_thread_is_removed() {
+    let (mut app, a, b, c) = three_frame_story(60);
+    select_all_from(&mut app, c);
+    assert_eq!(text_editing(&app).unwrap().0, NodeId(a));
+    app.run("text.thread.remove", json!({})).unwrap();
+    assert_eq!(text_story(&app), None);
+
+    crate::panels::paragraph::run_on_paragraphs(&mut app, "text.setFormat", json!({"spaceBefore": 4})).unwrap();
+    assert!((story_frame(&app, a).para_at(0).space_before - 4.0).abs() < 1e-9);
+    for id in [b, c] {
+        assert!(story_frame(&app, id).para_at(0).space_before.abs() < 1e-9, "frame {id} keeps its paragraphs");
+    }
+}
+
+/// A selected story is one text: its locked and hidden frames take the change too.
+#[test]
+fn story_changes_take_in_locked_and_hidden_frames() {
+    let (mut app, a, b, c) = three_frame_story(60);
+    app.run("select.set", json!({"ids": [b]})).unwrap();
+    app.run("object.lock", json!({})).unwrap();
+    app.run("select.set", json!({"ids": [c]})).unwrap();
+    app.run("object.hide", json!({})).unwrap();
+    select_all_from(&mut app, a);
+    assert_eq!(text_story(&app), Some(vec![NodeId(a), NodeId(b), NodeId(c)]));
+
+    format(&mut app, json!({"size": 9}));
+    for id in [a, b, c] {
+        assert_eq!(story_sizes(&app, id).iter().filter(|s| (**s - 9.0).abs() > 1e-9).count(), 0, "frame {id} takes the size");
+    }
+}
+
+/// [`three_frame_story`] with its second frame locked and its third hidden, a type object of its own
+/// below it, and the first frame selected with the Selection tool → the app, the frames and the
+/// other type object.
+fn story_selected_in_its_first_frame() -> (VectorcraftApp, [u64; 3], u64) {
+    let (mut app, a, b, c) = three_frame_story(60);
+    let other = app.run("text.create", json!({"x": 10, "y": 250, "text": "Other", "size": 12})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [b]})).unwrap();
+    app.run("object.lock", json!({})).unwrap();
+    app.run("select.set", json!({"ids": [c]})).unwrap();
+    app.run("object.hide", json!({})).unwrap();
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    assert_eq!(text_editing(&app), None);
+    (app, [a, b, c], other)
+}
+
+fn undo_steps(app: &VectorcraftApp) -> usize {
+    app.session.active().unwrap().history.undo.len()
+}
+
+/// With the Selection tool, a selected frame of a threaded story stands for the whole story: the
+/// panel's changes reach its locked and hidden frames, each in one undo step, and leave other type
+/// alone.
+#[test]
+fn selection_tool_changes_reach_every_frame_of_the_story() {
+    let (mut app, frames, other) = story_selected_in_its_first_frame();
+    assert_eq!(selected_stories(&app), frames.map(NodeId).to_vec());
+
+    let steps = undo_steps(&app);
+    style(&mut app, json!({"size": 9}));
+    assert_eq!(undo_steps(&app), steps + 1, "one undo step");
+    for id in frames {
+        assert!(story_sizes(&app, id).iter().all(|s| (*s - 9.0).abs() < 1e-9), "frame {id} takes the size");
+    }
+    assert!(story_sizes(&app, other).iter().all(|s| (*s - 12.0).abs() < 1e-9), "other type keeps its size");
+    app.run("edit.undo", json!({})).unwrap();
+    for id in frames {
+        assert!(story_sizes(&app, id).iter().all(|s| (*s - 12.0).abs() < 1e-9), "undo gives frame {id} its size back");
+    }
+
+    format(&mut app, json!({"underline": true}));
+    for id in frames {
+        assert!(story_frame(&app, id).runs.iter().all(|r| r.style.underline), "frame {id} is underlined");
+    }
+    assert!(story_frame(&app, other).runs.iter().all(|r| !r.style.underline));
+
+    // Tate-chu-yoko Settings and Warichu Settings set their values through `run_format`.
+    run_format(&mut app, json!({"tcyUpDown": 2})).unwrap();
+    for id in frames {
+        assert!(story_frame(&app, id).runs.iter().all(|r| (r.style.tcy_up_down - 2.0).abs() < 1e-9), "frame {id} takes Up/Down");
+    }
+    assert!(story_frame(&app, other).runs.iter().all(|r| r.style.tcy_up_down.abs() < 1e-9));
+}
+
+/// With the Selection tool the anti-aliasing method goes to every frame of the selected story.
+#[test]
+fn selection_tool_anti_aliasing_reaches_every_frame_of_the_story() {
+    let (mut app, frames, other) = story_selected_in_its_first_frame();
+    set_anti_alias(&mut app, TypeAntiAlias::Strong);
+    for id in frames {
+        assert_eq!(story_frame(&app, id).anti_alias, TypeAntiAlias::Strong, "frame {id}");
+    }
+    assert_eq!(story_frame(&app, other).anti_alias, TypeAntiAlias::Sharp);
+    assert_eq!(shared_anti_alias(&app), Some(TypeAntiAlias::Strong));
+}
+
+/// With the Selection tool a Variable Font slider sets the axis on every frame of the selected
+/// story, in one undo step.
+#[test]
+fn selection_tool_font_axes_reach_every_frame_of_the_story() {
+    use vectorcraft_text::test_fonts::{TWO_AXIS_FAMILY, two_axis_font};
+    vectorcraft_text::FontDb::global().add_font(two_axis_font().unwrap());
+    let (mut app, frames, _) = story_selected_in_its_first_frame();
+    app.run("text.setStyle", json!({"ids": frames, "font": TWO_AXIS_FAMILY})).unwrap();
+    app.run("select.set", json!({"ids": [frames[0]]})).unwrap();
+    let steps = undo_steps(&app);
+    axes_cmd(&mut app, json!({"wght": 700}), widgets::Live::Released);
+    assert_eq!(undo_steps(&app), steps + 1, "one undo step");
+    for id in frames {
+        let t = story_frame(&app, id);
+        assert!(t.runs.iter().all(|r| r.style.font_axes.get("wght") == Some(&700.0)), "frame {id}: {:?}", t.runs[0].style.font_axes);
+    }
+}
+
+/// With the Selection tool a font family picked in the font menu, and its preview, go to every
+/// frame of the selected story, in one undo step.
+#[test]
+fn selection_tool_font_family_reaches_every_frame_of_the_story() {
+    let (mut app, frames, other) = story_selected_in_its_first_frame();
+    let family = |app: &VectorcraftApp, id: u64| story_frame(app, id).runs.iter().map(|r| r.style.font_family.clone()).collect::<Vec<_>>();
+    let before = family(&app, other);
+    let ctx = egui::Context::default();
+    crate::font_menu::apply(&mut app, &ctx, crate::font_menu::FontPick::Preview("Source Serif 4".into(), None));
+    for id in frames {
+        assert!(family(&app, id).iter().all(|f| f == "Source Serif 4"), "the preview shows on frame {id}");
+    }
+    let steps = undo_steps(&app);
+    crate::font_menu::apply(&mut app, &ctx, crate::font_menu::FontPick::Chosen("Source Serif 4".into(), None));
+    assert_eq!(undo_steps(&app), steps + 1, "one undo step");
+    for id in frames {
+        assert!(family(&app, id).iter().all(|f| f == "Source Serif 4"), "frame {id} takes the family");
+    }
+    assert_eq!(family(&app, other), before, "other type keeps its family");
+}
+
+/// The fields show a value only when every frame of the selected story has it: a hidden frame that
+/// differs leaves them blank.
+#[test]
+fn selection_tool_fields_read_every_frame_of_the_story() {
+    let (mut app, [a, b, c], _) = story_selected_in_its_first_frame();
+    assert_eq!(shared(&app, |s| s.size), Some(12.0));
+    assert_eq!(shared_anti_alias(&app), Some(TypeAntiAlias::Sharp));
+    app.run("text.setStyle", json!({"ids": [c], "size": 20})).unwrap();
+    app.run("text.setFormat", json!({"ids": [b], "antiAlias": TypeAntiAlias::Crisp.id()})).unwrap();
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    assert_eq!(shared(&app, |s| s.size), None, "the hidden frame's size differs");
+    assert_eq!(shared_anti_alias(&app), None, "the locked frame's anti-aliasing differs");
+}
+
+/// Two frames of one story, or a frame in a selected group, count once; an unthreaded type
+/// object is a story of its own.
+#[test]
+fn selected_stories_list_each_frame_once() {
+    let (mut app, [a, b, c], other) = story_selected_in_its_first_frame();
+    app.run("object.unlockAll", json!({})).unwrap();
+    app.run("select.set", json!({"ids": [b, a]})).unwrap();
+    assert_eq!(selected_stories(&app), [a, b, c].map(NodeId).to_vec(), "thread order, each once");
+    app.run("select.set", json!({"ids": [other, a]})).unwrap();
+    let group = app.run("object.group", json!({})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [group]})).unwrap();
+    let mut listed = selected_stories(&app);
+    listed.sort_by_key(|id| id.0);
+    let mut expected = [a, b, c, other].map(NodeId).to_vec();
+    expected.sort_by_key(|id| id.0);
+    assert_eq!(listed, expected);
+    app.run("select.set", json!({"ids": []})).unwrap();
+    assert!(selected_stories(&app).is_empty());
+}
+
+/// Check that the kept list of the selected stories, and the type objects it resolves to, are the
+/// ones a fresh build works out.
+fn assert_stories_are_fresh(app: &VectorcraftApp, what: &str) {
+    let st = app.session.active().unwrap();
+    let fresh = build_selected_stories(st);
+    assert_eq!(selected_stories(app), fresh, "{what}");
+    let texts = selected_story_texts(app);
+    let expected: Vec<_> = fresh
+        .iter()
+        .filter_map(|id| match &st.doc.node(*id)?.kind {
+            NodeKind::Text(t) => Some(t.as_ref()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(texts.len(), expected.len(), "{what}: type objects");
+    assert!(texts.iter().zip(&expected).all(|(t, e)| std::ptr::eq(*t, *e)), "{what}: the current document's type objects, in order");
+}
+
+/// The kept list of the selected stories follows every change it is worked out from: an edit, a
+/// new selection (in another order, or as long with other objects, also without a new revision),
+/// a selected group and a switch to another document at the same revision.
+#[test]
+fn kept_selected_stories_follow_the_document_and_the_selection() {
+    let (mut app, [a, b, c], other) = story_selected_in_its_first_frame();
+    assert_stories_are_fresh(&app, "a frame of a story");
+    let builds = STORY_BUILDS.get();
+    assert_eq!(selected_stories(&app), [a, b, c].map(NodeId).to_vec());
+    assert_eq!(STORY_BUILDS.get(), builds, "a second read keeps the list");
+
+    app.run("text.setStyle", json!({"size": 9})).unwrap();
+    assert_stories_are_fresh(&app, "after an edit");
+    app.run("select.set", json!({"ids": [other, a]})).unwrap();
+    assert_stories_are_fresh(&app, "two stories");
+    app.run("select.set", json!({"ids": [a, other]})).unwrap();
+    assert_stories_are_fresh(&app, "the same objects in another order");
+    app.run("select.set", json!({"ids": [other, b]})).unwrap();
+    assert_stories_are_fresh(&app, "as many other objects");
+    app.session.doc_mut().unwrap().selection.objects = vec![NodeId(other)];
+    assert_stories_are_fresh(&app, "a new selection at the same revision");
+    assert_eq!(selected_stories(&app), vec![NodeId(other)]);
+
+    app.run("select.set", json!({"ids": [other, a]})).unwrap();
+    let group = app.run("object.group", json!({})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [group]})).unwrap();
+    assert_stories_are_fresh(&app, "a selected group");
+
+    let revision = app.session.active().unwrap().revision;
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let only = app.run("text.create", json!({"x": 20, "y": 50, "text": "Only", "size": 12})).unwrap()["id"].as_u64().unwrap();
+    let st = app.session.doc_mut().unwrap();
+    st.selection.objects = vec![NodeId(group)];
+    st.revision = revision;
+    assert_stories_are_fresh(&app, "another document with the first one's selection and revision");
+    assert_ne!(selected_stories(&app), [a, b, c, other].map(NodeId).to_vec());
+    app.run("select.set", json!({"ids": [only]})).unwrap();
+    assert_stories_are_fresh(&app, "the other document's own type");
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    assert_stories_are_fresh(&app, "back in the first document");
+
+    app.run("select.set", json!({"ids": []})).unwrap();
+    assert!(selected_stories(&app).is_empty());
+    assert!(selected_story_texts(&app).is_empty());
+}
+
+/// What the Character and Paragraph panels draw, and the values of their fields, with the list of
+/// the selected stories kept and with it built for every read.
+fn panels_kept_and_unkept(app: &mut VectorcraftApp) -> [(Vec<String>, String); 2] {
+    let read = |app: &mut VectorcraftApp, unkept: bool| {
+        STORIES_UNKEPT.set(unkept);
+        let ctx = egui::Context::default();
+        let mut texts = vec![];
+        for _ in 0..3 {
+            texts = super::super::tests_appearance::frame_events(&ctx, app, vec![], |app, ui| {
+                show(app, ui);
+                crate::panels::paragraph::show(app, ui);
+            });
+        }
+        // A rect's position can be NaN, which `Rect`'s `==` refuses to compare.
+        let texts: Vec<String> = texts.iter().map(|(text, rect)| format!("{text} {rect:?}")).collect();
+        let fields = format!(
+            "{:?} {:?}",
+            [
+                shared_effective(app, |s| s.size),
+                shared_effective(app, |s| s.h_scale),
+                shared_effective(app, |s| s.v_scale),
+                shared_effective(app, |s| s.baseline_shift),
+                shared_leading(app),
+                shared(app, |s| s.tracking),
+            ],
+            (
+                shared(app, |s| (s.font_family.clone(), s.font_style.clone())),
+                shared(app, |s| (s.all_caps, s.underline, s.strikethrough, s.position)),
+                selected_fonts(app),
+                any_style(app, |s| s.underline),
+                selected_stories(app),
+                selected_story_texts(app).len(),
+                text_style(app).map(|(c, p)| (c.size, p.left_indent)),
+            )
+        );
+        STORIES_UNKEPT.set(false);
+        (texts, fields)
+    };
+    [read(app, true), read(app, false)]
+}
+
+/// The panels show the same thing whether the list of the selected stories is kept or worked out
+/// for each field: with nothing selected, one story, several stories with mixed values and a
+/// Type tool selection inside one story.
+#[test]
+fn panels_show_the_same_with_the_kept_selected_stories() {
+    let (mut app, [a, b, c], other) = story_selected_in_its_first_frame();
+    let same = |app: &mut VectorcraftApp, what: &str| {
+        let [unkept, kept] = panels_kept_and_unkept(app);
+        assert_eq!(unkept.1, kept.1, "{what}: field values");
+        assert_eq!(unkept.0, kept.0, "{what}: what the panels draw");
+        unkept.1
+    };
+    app.run("select.set", json!({"ids": []})).unwrap();
+    same(&mut app, "nothing selected");
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    let one = same(&mut app, "one story");
+    app.run("text.setStyle", json!({"ids": [c], "size": 20, "tracking": 50})).unwrap();
+    app.run("text.setFormat", json!({"ids": [b], "underline": true, "hScale": 120})).unwrap();
+    app.run("select.set", json!({"ids": [other, a]})).unwrap();
+    let mixed = same(&mut app, "several stories with mixed values");
+    assert_ne!(one, mixed);
+    app.session.select_tool("type", Default::default()).unwrap();
+    app.session.set_tool_option("textSelection", &json!({"editing": a, "anchor": 4, "caret": 15}));
+    assert_eq!(text_editing(&app), Some((NodeId(a), 4, 15)));
+    same(&mut app, "a Type tool selection inside one story");
+}
+
+/// One frame of the Character and Paragraph panels works out the selected stories once, though
+/// many of their fields read them; a change to the document works them out again.
+#[test]
+fn panels_work_out_the_selected_stories_once_per_frame() {
+    let (mut app, [a, ..], other) = story_selected_in_its_first_frame();
+    app.run("select.set", json!({"ids": [other, a]})).unwrap();
+    let ctx = egui::Context::default();
+    let frame = |app: &mut VectorcraftApp| {
+        let builds = STORY_BUILDS.get();
+        super::super::tests_appearance::frame_events(&ctx, app, vec![], |app, ui| {
+            show(app, ui);
+            crate::panels::paragraph::show(app, ui);
+        });
+        STORY_BUILDS.get() - builds
+    };
+    frame(&mut app);
+    app.run("text.setStyle", json!({"size": 9})).unwrap();
+    assert_eq!(frame(&mut app), 1, "one build after an edit");
+    assert_eq!(frame(&mut app), 0, "nothing changed");
+    STORIES_UNKEPT.set(true);
+    let reads = frame(&mut app);
+    STORIES_UNKEPT.set(false);
+    assert!(reads > 1, "the fields read the list {reads} times");
 }

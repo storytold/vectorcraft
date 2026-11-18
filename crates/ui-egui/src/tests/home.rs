@@ -299,6 +299,91 @@ fn home_scrolls_in_a_short_window() {
     assert_eq!(app.session.documents().len(), 1, "the card opened its preset");
 }
 
+/// The visible text `text` on a tall Home screen frame drawn at `time` → its center.
+fn learn_text_at(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, text: &str) -> egui::Pos2 {
+    let texts = visible_home_texts(app, ctx, (1000.0, 2400.0), time, vec![]);
+    texts.iter().find(|(t, _)| t == text).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("{text} is shown: {texts:?}"))
+}
+
+/// A click at `at` on a tall Home screen frame, pressed at `time` and released a frame later.
+fn click_home_at(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, at: egui::Pos2) {
+    let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    visible_home_texts(app, ctx, (1000.0, 2400.0), time, vec![egui::Event::PointerMoved(at), press(true)]);
+    visible_home_texts(app, ctx, (1000.0, 2400.0), time + 0.05, vec![press(false)]);
+}
+
+/// The Home screen has a Learn section: the Quick skill guide card and every tutorial of the Learn
+/// panel under its skill. A tutorial shows the Learn panel at its steps and the card shows the list
+/// of skills; a second choice keeps the panel shown, and no document is opened.
+#[test]
+fn home_has_a_learn_section_that_opens_the_learn_panel() {
+    use crate::panels::learn::{self, Tab, View, catalog};
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let texts = visible_home_texts(&mut app, &ctx, (1000.0, 2400.0), 0.0, vec![]);
+    let has = |s: &str| texts.iter().any(|(t, _)| t == s);
+    assert!(has("Learn") && has("Quick skill guide"), "{texts:?}");
+    for skill in catalog::SKILLS {
+        assert!(has(skill.title), "{} is shown", skill.title);
+        for tutorial in skill.tutorials {
+            assert!(has(tutorial.title), "{} is shown", tutorial.title);
+        }
+    }
+    assert!(!learn::visible(&app.ui), "the panel is not shown before a choice");
+    let at = learn_text_at(&mut app, &ctx, 0.5, "Draw paths with the Pen");
+    click_home_at(&mut app, &ctx, 1.0, at);
+    assert!(learn::visible(&app.ui), "a tutorial shows the Learn panel");
+    assert_eq!(app.ui.learn, View { tab: Tab::Skills, skill: Some("draw"), tutorial: Some("pen-paths") });
+    assert!(app.session.documents().is_empty(), "no document is opened");
+    assert!(crate::menus::home_showing(&app), "Home stays");
+    let at = learn_text_at(&mut app, &ctx, 1.5, "Quick skill guide");
+    click_home_at(&mut app, &ctx, 2.0, at);
+    assert!(learn::visible(&app.ui), "a second choice keeps the panel shown");
+    assert_eq!(app.ui.learn, View { tab: Tab::Skills, skill: None, tutorial: None }, "the card shows the list of skills");
+    assert!(app.session.documents().is_empty());
+}
+
+/// Home shown over open documents has the Learn section too; a tutorial chosen there leaves the
+/// documents and the active one as they are.
+#[test]
+fn home_learn_section_over_open_documents_leaves_them_as_they_are() {
+    use crate::panels::learn::{self, Tab, View};
+    let mut app = app_with_doc();
+    app.run("file.new", json!({})).unwrap();
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    app.run("app.home", json!({})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let at = learn_text_at(&mut app, &ctx, 0.0, "Add a gradient");
+    click_home_at(&mut app, &ctx, 0.5, at);
+    assert!(learn::visible(&app.ui));
+    assert_eq!(app.ui.learn, View { tab: Tab::Skills, skill: Some("color"), tutorial: Some("gradient") });
+    assert_eq!((app.session.documents().len(), app.session.active_index()), (2, Some(0)), "the documents stay as they are");
+    assert!(crate::menus::home_showing(&app), "Home stays over the documents");
+}
+
+/// The Home screen's Quick skill guide card works from the keyboard: with the keyboard focus, Enter
+/// shows the Learn panel's list of skills.
+#[test]
+fn home_quick_skill_guide_card_works_from_the_keyboard() {
+    use crate::panels::learn::{self, Tab, View};
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    visible_home_texts(&mut app, &ctx, (1000.0, 2400.0), 0.0, vec![]);
+    let card = egui::Id::unique("home-quick-skill-guide");
+    ctx.memory_mut(|m| m.request_focus(card));
+    visible_home_texts(&mut app, &ctx, (1000.0, 2400.0), 0.1, vec![]);
+    assert!(ctx.memory(|m| m.has_focus(card)), "the card takes the keyboard focus");
+    let key = |pressed| egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
+    visible_home_texts(&mut app, &ctx, (1000.0, 2400.0), 0.2, vec![key(true)]);
+    visible_home_texts(&mut app, &ctx, (1000.0, 2400.0), 0.3, vec![key(false)]);
+    assert!(learn::visible(&app.ui));
+    assert_eq!(app.ui.learn, View { tab: Tab::Skills, skill: None, tutorial: None });
+    assert!(app.session.documents().is_empty());
+}
+
 /// A file that is already open is not opened again, however it is asked for: Home › Recent Files,
 /// File › Open Recent, File › Open, the Finder and a drop all focus its tab, unsaved edits and all
 /// (#3455).
@@ -437,4 +522,56 @@ fn a_queued_reopen_keeps_the_roots_it_was_asked_in() {
     crate::opening::poll(&mut app);
     assert_eq!(app.session.documents().len(), 1, "the file outside the roots is not opened");
     let _ = std::fs::remove_dir_all(d);
+}
+
+/// The x-centre of the first text shape whose text is `text` on a drawn Home screen, and the
+/// window's centre (#4684). A centred galley's `pos` is its anchor, so its rect says where it lies.
+fn text_centre_x(app: &mut VectorcraftApp, text: &str) -> Option<(f32, f32)> {
+    fn find(s: &egui::Shape, text: &str) -> Option<f32> {
+        match s {
+            egui::Shape::Text(t) if t.galley.text() == text => Some(t.pos.x + t.galley.rect.center().x),
+            egui::Shape::Vec(v) => v.iter().find_map(|s| find(s, text)),
+            _ => None,
+        }
+    }
+    app.canvas_rect = None;
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    // Tall enough to draw the whole screen, Learn section included.
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1000.0, 1600.0));
+    let raw = egui::RawInput { screen_rect: Some(screen), ..Default::default() };
+    let mut out = ctx.run_ui(raw, |ui| canvas::show(app, ui));
+    out.textures_delta.clear();
+    let x = out.shapes.iter().find_map(|c| find(&c.shape, text))?;
+    Some((x, screen.center().x))
+}
+
+/// The Home screen centres its welcome, its New / Open buttons and its community block, as
+/// PhotoCraft's does (#4684).
+#[test]
+fn home_welcome_and_community_are_centred() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    for text in ["Welcome to VectorCraft", "Community", "ArtCraft website", "VectorCraft on getartcraft.com", "Source code on GitHub"] {
+        let (x, centre) = text_centre_x(&mut app, text).unwrap_or_else(|| panic!("{text} is drawn"));
+        assert!((x - centre).abs() < 6.0, "{text} is centred: {x} vs {centre}");
+    }
+    // The Discord button is centred; its label lies right of its icon, 0.375 of the button's 36 pt
+    // height right of the middle.
+    let (x, centre) = text_centre_x(&mut app, "Join our Discord").unwrap();
+    assert!((x - centre - 0.375 * 36.0).abs() < 2.0, "the Discord button is centred: label at {x} about {centre}");
+    // The two buttons (a label's width plus 32, at least 72, each) lie symmetrically about the
+    // centre: the first one's left edge and the second one's right edge are equally far from it.
+    let width = |label: &str| {
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let mut w = 0.0;
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| w = crate::widgets::button_width(ui, label));
+        out.textures_delta.clear();
+        w
+    };
+    let (new_x, centre) = text_centre_x(&mut app, "New file").unwrap();
+    let (open_x, _) = text_centre_x(&mut app, "Open").unwrap();
+    let left = new_x - width("New file") / 2.0;
+    let right = open_x + width("Open") / 2.0;
+    assert!((centre - left - (right - centre)).abs() < 6.0, "New / Open row is centred: {left}..{right} about {centre}");
 }

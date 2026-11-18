@@ -7,6 +7,9 @@ use super::{
 
 /// Most bytes one filter or image reads.
 pub(super) const MAX_DATA: usize = 1 << 28;
+
+/// Most data sources one image may name (a DeviceN space has up to 32 components).
+const MAX_SOURCES: usize = 32;
 /// The longest chain of filters over one pending file (real programs stack two or three).
 const MAX_FILTER_CHAIN: usize = 64;
 
@@ -28,6 +31,7 @@ pub(super) enum Source {
 }
 
 impl Interp<'_> {
+    #[allow(clippy::cognitive_complexity)] // One arm for each file operator, most of them a few lines.
     pub fn data_op(&mut self, op: Op) -> Res {
         use Op::*;
         match op {
@@ -47,23 +51,7 @@ impl Interp<'_> {
             ReadLine => {
                 let s = self.pop_str()?;
                 let Obj::File { stream: f, .. } = self.pop()? else { return ps_err("typecheck", "") };
-                let n = s.len();
-                let mut line = vec![];
-                let mut ended = false;
-                while line.len() < n {
-                    match self.read(&f, 1)?.first() {
-                        Some(b'\n') | None => {
-                            ended = true;
-                            break;
-                        }
-                        Some(b'\r') => {
-                            self.skip_lf(&f);
-                            ended = true;
-                            break;
-                        }
-                        Some(b) => line.push(*b),
-                    }
-                }
+                let (line, ended) = self.read_line(&f, s.len())?;
                 self.fill(s, &line)?;
                 self.push(Obj::Bool(ended))?;
             }
@@ -158,13 +146,21 @@ impl Interp<'_> {
     fn token(&mut self) -> Res {
         match self.pop()? {
             Obj::Str(s) => {
-                let bytes = s.to_vec();
-                let mut lex = Lexer::new(&bytes);
-                let Some(o) = lex.next()? else { return self.push(Obj::Bool(false)) };
-                let o = self.scanned(o, lex.immediate)?;
-                // The whitespace after the token is read with it.
-                let used = bytes.len() - lex.data().len();
-                self.push_interval(Obj::Str(s), used, bytes.len() - used)?;
+                // The scanner reads the string in place. The borrow ends before `scanned`, which
+                // can fail or charge the budget, and before the results are pushed.
+                let read = {
+                    let bytes = s.borrow();
+                    let mut lex = Lexer::new(&bytes);
+                    // The whitespace after the token is read with it.
+                    lex.next()?.map(|o| {
+                        let immediate = lex.immediate;
+                        let rest = lex.data().len();
+                        (o, immediate, bytes.len() - rest, rest)
+                    })
+                };
+                let Some((o, immediate, used, rest)) = read else { return self.push(Obj::Bool(false)) };
+                let o = self.scanned(o, immediate)?;
+                self.push_interval(Obj::Str(s), used, rest)?;
                 self.push(o)?;
             }
             Obj::File { stream: f, .. } => {
@@ -196,7 +192,7 @@ impl Interp<'_> {
     }
 
     /// Up to `n` bytes of file `f`.
-    fn read(&mut self, f: &Rc<RefCell<Stream>>, n: usize) -> Res<Vec<u8>> {
+    pub(in super::super) fn read(&mut self, f: &Rc<RefCell<Stream>>, n: usize) -> Res<Vec<u8>> {
         self.materialize(f)?;
         Ok(match &mut *f.borrow_mut() {
             Stream::Current => {
@@ -216,38 +212,96 @@ impl Interp<'_> {
         })
     }
 
-    /// After `readline` consumes CR, consume only an immediately following LF. PostScript
-    /// treats CR/LF as one line ending (PLRM §3.8); raw reads must keep every other byte.
-    /// The preceding `read` has already materialized any pending filter.
-    fn skip_lf(&mut self, f: &Rc<RefCell<Stream>>) {
+    /// Run `scan` over the bytes left in file `f`, in one slice, and consume as many of them as
+    /// it says it used. A file still pending after `materialize` has no bytes left.
+    fn scan<T>(&mut self, f: &Rc<RefCell<Stream>>, scan: impl FnOnce(&[u8]) -> (T, usize)) -> Res<T> {
+        self.materialize(f)?;
+        Ok(match &mut *f.borrow_mut() {
+            Stream::Current => {
+                let (found, used) = scan(self.lex.data());
+                self.lex.advance(used);
+                found
+            }
+            Stream::Buf { data, pos, .. } => {
+                let start = (*pos).min(data.len());
+                let (found, used) = scan(data.get(start..).unwrap_or_default());
+                *pos = start.saturating_add(used).min(data.len());
+                found
+            }
+            Stream::Pending { .. } => scan(&[]).0,
+        })
+    }
+
+    /// `readline` from `f` into a string of `n` bytes: the line, and whether it ended at a line
+    /// ending or at the end of the data. The line ending is consumed and left out of the line.
+    /// CR LF is one line ending (PLRM §3.8), and a lone CR leaves the byte after it unread. A
+    /// line that fills the string leaves the bytes after it unread, a line ending included.
+    pub(in super::super) fn read_line(&mut self, f: &Rc<RefCell<Stream>>, n: usize) -> Res<(Vec<u8>, bool)> {
+        if n == 0 {
+            return Ok((vec![], false));
+        }
+        self.scan(f, |data| {
+            let room = data.get(..n).unwrap_or(data);
+            match room.iter().position(|b| matches!(b, b'\n' | b'\r')) {
+                Some(i) => {
+                    let crlf = room.get(i) == Some(&b'\r') && data.get(i + 1) == Some(&b'\n');
+                    ((room.get(..i).unwrap_or_default().to_vec(), true), i + 1 + usize::from(crlf))
+                }
+                None if room.len() == n => ((room.to_vec(), false), n),
+                None => ((room.to_vec(), true), room.len()),
+            }
+        })
+    }
+
+    /// Up to `n` bytes read as hexadecimal digits from `f` (other characters skipped). The read
+    /// stops at the digit that completes the `n`th byte and leaves what follows unread. A lone
+    /// digit at the end of the data gives no byte.
+    pub(in super::super) fn read_hex(&mut self, f: &Rc<RefCell<Stream>>, n: usize) -> Res<Vec<u8>> {
+        if n == 0 {
+            return Ok(vec![]);
+        }
+        self.scan(f, |data| {
+            let mut out = Vec::with_capacity(n.min(data.len() / 2));
+            let mut high: Option<u8> = None;
+            let mut used = 0;
+            for &b in data {
+                if out.len() == n {
+                    break;
+                }
+                used += 1;
+                let Some(v) = char::from(b).to_digit(16) else { continue };
+                match high.take() {
+                    Some(h) => out.push(h << 4 | v as u8),
+                    None => high = Some(v as u8),
+                }
+            }
+            (out, used)
+        })
+    }
+
+    /// Skip the whitespace and the `>` that end hexadecimal data in `f`, if a `>` is next: the
+    /// rest is left unread.
+    pub(in super::super) fn skip_hex_end(&mut self, f: &Rc<RefCell<Stream>>) -> Res {
+        self.materialize(f)?;
+        let blank = |b: &u8| b.is_ascii_whitespace() || *b == 0;
         match &mut *f.borrow_mut() {
             Stream::Current => {
-                if self.lex.rest().first() == Some(&b'\n') {
-                    self.lex.advance(1);
+                let rest = self.lex.data();
+                let n = rest.iter().take_while(|b| blank(b)).count();
+                if rest.get(n) == Some(&b'>') {
+                    self.lex.advance(n + 1);
                 }
             }
             Stream::Buf { data, pos, .. } => {
-                if data.get(*pos) == Some(&b'\n') {
-                    *pos += 1;
+                let rest = data.get(*pos..).unwrap_or_default();
+                let n = rest.iter().take_while(|b| blank(b)).count();
+                if rest.get(n) == Some(&b'>') {
+                    *pos += n + 1;
                 }
             }
             Stream::Pending { .. } => {}
         }
-    }
-
-    /// Up to `n` bytes read as hexadecimal digits from `f` (other characters skipped).
-    fn read_hex(&mut self, f: &Rc<RefCell<Stream>>, n: usize) -> Res<Vec<u8>> {
-        let mut out = Vec::with_capacity(n);
-        let mut high: Option<u8> = None;
-        while out.len() < n {
-            let Some(&b) = self.read(f, 1)?.first() else { break };
-            let Some(v) = char::from(b).to_digit(16) else { continue };
-            match high.take() {
-                Some(h) => out.push(h << 4 | v as u8),
-                None => high = Some(v as u8),
-            }
-        }
-        Ok(out)
+        Ok(())
     }
 
     /// Read bytes `got` into string `s` and push the part of `s` they fill.
@@ -270,7 +324,9 @@ impl Interp<'_> {
         let name = self.pop()?.text().ok_or(PsError::Ps("typecheck", "filter".into()))?;
         let sub = if &*name == "SubFileDecode" {
             let eod = self.pop_str()?.to_vec();
-            let count = self.pop_count()?;
+            // The count bounds what the filter reads, not what it allocates: a stream of several
+            // megabytes read through `currentfile N () /SubFileDecode filter` gives its length.
+            let count = usize::try_from(self.pop_int()?).map_err(|_| PsError::Ps("rangecheck", "a count".into()))?;
             (count, eod)
         } else {
             (0, vec![])
@@ -362,6 +418,25 @@ impl Interp<'_> {
     /// Decode the filters a file waits to run over the data the program reads, from where it is
     /// now in the file they were made over: a file being run, or the program's own file.
     pub(in super::super) fn materialize(&mut self, f: &Rc<RefCell<Stream>>) -> Res {
+        let input = match &*f.borrow() {
+            Stream::Pending { from: Some(r), .. } => match &*r.borrow() {
+                Stream::Buf { data, pos, .. } => data.len().saturating_sub(*pos),
+                _ => 0,
+            },
+            Stream::Pending { from: None, .. } => self.lex.data().len(),
+            _ => return Ok(()),
+        };
+        let r = self.decode_pending(f);
+        // A decode that failed is over: the stream is empty from now on, and the work it did is
+        // charged, so a program that catches the error can't have it run again and again.
+        if r.is_err() && matches!(&*f.borrow(), Stream::Pending { .. }) {
+            *f.borrow_mut() = Stream::Buf { data: vec![], pos: 0, rgb: None };
+            self.spend_bytes(input)?;
+        }
+        r
+    }
+
+    fn decode_pending(&mut self, f: &Rc<RefCell<Stream>>) -> Res {
         let (chain, from) = match &*f.borrow() {
             Stream::Pending { chain, from } => (chain.clone(), from.clone()),
             _ => return Ok(()),
@@ -399,6 +474,30 @@ impl Interp<'_> {
         Ok(())
     }
 
+    /// Skip the data an image left out (too large to read) would read from the program's own
+    /// file, so the program doesn't go on to read that data as PostScript. The filters that find
+    /// their own end without decompressing (`ASCIIHexDecode`, `ASCII85Decode`, `SubFileDecode`)
+    /// read the file up to it, the way the image reading all its data would leave it; the
+    /// filters over them, which would only decode what those pass, aren't run. When the first
+    /// filter decompresses, it is run alone, and a failure (data too large to hold) leaves the
+    /// data where it was, as before.
+    fn skip_data(&mut self, src: &Source) {
+        let Source::File(f) = src else { return };
+        let (chain, from) = match &*f.borrow() {
+            Stream::Pending { chain, from } => (chain.clone(), from.clone()),
+            _ => return,
+        };
+        let delimited = chain.iter().take_while(|c| matches!(&*c.name, "ASCIIHexDecode" | "ASCII85Decode" | "SubFileDecode")).count();
+        let head = chain.get(..delimited.max(1)).unwrap_or_default().to_vec();
+        *f.borrow_mut() = Stream::Pending { chain: head, from: from.clone() };
+        // A failure leaves the file as it was; the import goes on without the image either way.
+        if self.materialize(f).is_err() {
+            *f.borrow_mut() = Stream::Pending { chain, from };
+            return;
+        }
+        *f.borrow_mut() = Stream::Buf { data: vec![], pos: 0, rgb: None };
+    }
+
     /// The bytes a data procedure gives, called until it gives an empty string or `n` bytes.
     fn gather(&mut self, p: &Obj, n: usize) -> Res<Vec<u8>> {
         Ok(self.read_sources(&[Source::Proc(p.clone())], n, n)?.pop().unwrap_or_default())
@@ -425,6 +524,10 @@ impl Interp<'_> {
                     continue;
                 }
                 let want = step.min(n - o.len());
+                // The bytes of this read's own copy of a procedure's string: counted while it
+                // lives, released once it is appended (the string itself is the program's, and
+                // stays counted as long as the program can hold it).
+                let mut copied = 0;
                 let chunk = match src {
                     Source::File(f) => self.read(f, want)?,
                     // A string gives its bytes over and over.
@@ -436,26 +539,31 @@ impl Interp<'_> {
                         self.call(p.clone())?;
                         let s = self.pop_str()?.to_vec();
                         self.alloc(s.len())?;
+                        copied = s.len();
                         s
                     }
                 };
                 *e = chunk.is_empty();
                 o.extend_from_slice(chunk.get(..chunk.len().min(n - o.len())).unwrap_or_default());
+                drop(chunk);
+                self.unalloc(copied);
             }
         }
         Ok(out)
     }
 
-    /// `file eexec`: an encrypted font program follows in `file`. It is skipped there, up to the
-    /// `cleartomark` that ends it (type is drawn in the app's fonts, by name): the font
-    /// dictionary it would complete is defined as it is.
+    /// `file eexec`: an encrypted font program follows in `file`. It isn't run: it is skipped
+    /// there, up to the `cleartomark` that ends it, and the font dictionary it would complete is
+    /// defined as it is, with the glyphs the Type 1 font parser reads from it (see `type1`).
     fn eexec(&mut self) -> Res {
         let src = self.pop()?;
+        let mut font = None;
         if let Some(Obj::Dict(d)) = self.stack.last().cloned() {
             let name = d.borrow().get(&Key::name("FontName")).cloned();
             if let Some(k) = name.and_then(|n| n.key()) {
                 self.pop()?;
-                self.fonts.borrow_mut().insert(k, Obj::Dict(d));
+                self.fonts.borrow_mut().insert(k, Obj::Dict(d.clone()));
+                font = Some(d);
             }
         }
         // `currentfile eexec`: the program's own file or the file being run. A string operand
@@ -466,15 +574,31 @@ impl Interp<'_> {
         };
         self.materialize(&f)?;
         let missing = || PsError::Ps("ioerror", "eexec".into());
-        match &mut *f.borrow_mut() {
+        // The encrypted part, for the font's glyphs (a font's, of a size that can be read).
+        // Copied only when the font can still be kept (it is dropped otherwise).
+        let room = font.is_some() && self.type1_room();
+        let keep = |part: &[u8]| (room && part.len() <= super::super::type1::MAX_PROGRAM).then(|| part.to_vec());
+        let (encrypted, scanned) = match &mut *f.borrow_mut() {
             Stream::Buf { data, pos, .. } => {
-                let at = find(data.get(*pos..).unwrap_or_default(), b"cleartomark").ok_or_else(missing)?;
+                let rest = data.get(*pos..).unwrap_or_default();
+                let at = find(rest, b"cleartomark").ok_or_else(missing)?;
+                let part = keep(rest.get(..at).unwrap_or_default());
                 *pos += at;
+                (part, at)
             }
             _ => {
-                let at = find(self.lex.data(), b"cleartomark").ok_or_else(missing)?;
+                let rest = self.lex.data();
+                let at = find(rest, b"cleartomark").ok_or_else(missing)?;
+                let part = keep(rest.get(..at).unwrap_or_default());
                 self.lex.advance(at);
+                (part, at)
             }
+        };
+        // The search for `cleartomark` read the part: charged by its length (as `search` is), so `eexec` on a
+        // large reusable file in a loop runs out of the budget.
+        self.spend((scanned / 64) as u64)?;
+        if let (Some(d), Some(part)) = (font, encrypted) {
+            self.attach_type1(&d, &part)?;
         }
         self.push(Obj::Mark)
     }
@@ -518,14 +642,21 @@ impl Interp<'_> {
         let n = image.space.n();
         if image.w.saturating_mul(image.h) > MAX_PIXELS || stencil.w.saturating_mul(stencil.h) > MAX_PIXELS {
             self.out.warn(TOO_LARGE);
+            for src in image.sources.iter().chain(&stencil.sources) {
+                self.skip_data(src);
+            }
             return Ok(None);
         }
+        // Interleaved data is read into this decoder's own buffers, split into the two images'
+        // samples: those stop counting once both are decoded (their pixels still count).
+        let mut charged = 0;
         if interleave != 3.0 {
             let src = image.sources.first().cloned().ok_or(PsError::Ps("undefined", "DataSource".into()))?;
             let (pixels, samples) = if interleave == 2.0 {
                 let (mrow, drow) = (stencil.row_bytes(1), image.row_bytes(n));
                 let total = mrow.saturating_mul(stencil.h).saturating_add(drow.saturating_mul(image.h));
                 self.alloc(total)?;
+                charged = total;
                 let raw = self.source_bytes(&src, total.min(MAX_DATA))?;
                 by_rows(&raw, (mrow, stencil.h), (drow, image.h))
             } else {
@@ -533,15 +664,21 @@ impl Interp<'_> {
                 stencil.bpc = image.bpc;
                 (stencil.w, stencil.h) = (image.w, image.h);
                 let row = (image.w * (n + 1) * usize::from(image.bpc)).div_ceil(8);
-                self.alloc(row.saturating_mul(image.h))?;
-                let raw = self.source_bytes(&src, row.saturating_mul(image.h).min(MAX_DATA))?;
+                charged = row.saturating_mul(image.h);
+                self.alloc(charged)?;
+                let raw = self.source_bytes(&src, charged.min(MAX_DATA))?;
                 by_samples(&raw, image.w, image.h, n, image.bpc)
             };
             stencil.sources = vec![Source::Str(pixels)];
             image.sources = vec![Source::Str(samples)];
         }
-        let Some(mut img) = self.decode_image(image)? else { return Ok(None) };
-        let Some(m) = self.decode_image(stencil)? else { return Ok(Some(img)) };
+        let decoded = match self.decode_image(image) {
+            Ok(Some(img)) => self.decode_image(stencil).map(|m| Some((img, m))),
+            other => other.map(|_| None),
+        };
+        self.unalloc(charged);
+        let Some((mut img, m)) = decoded? else { return Ok(None) };
+        let Some(m) = m else { return Ok(Some(img)) };
         let (w, h, mw, mh) = (img.w as usize, img.h as usize, m.w as usize, m.h as usize);
         for (i, px) in img.rgba.as_chunks_mut::<4>().0.iter_mut().enumerate() {
             let (x, y) = (i % w, i / w);
@@ -574,6 +711,8 @@ impl Interp<'_> {
         let multi = get("MultipleDataSources").is_some_and(|o| matches!(o, Obj::Bool(true)));
         let sources = match (get("DataSource"), multi) {
             (None, _) => vec![],
+            // An image has a data source for each of its components, so many more is no image: refused before any copy.
+            (Some(Obj::Array { items, exec: false }), true) if items.len() > MAX_SOURCES => return ps_err("rangecheck", "DataSource"),
             (Some(Obj::Array { items, exec: false }), true) => items.borrow().iter().map(source).collect::<Res<Vec<_>>>()?,
             (Some(src), _) => vec![source(&src)?],
         };
@@ -624,6 +763,9 @@ impl Interp<'_> {
         }
         if s.w.saturating_mul(s.h) > MAX_PIXELS {
             self.out.warn(TOO_LARGE);
+            for src in &s.sources {
+                self.skip_data(src);
+            }
             return Ok(None);
         }
         self.alloc(s.w * s.h * 4)?;
@@ -657,7 +799,11 @@ impl Interp<'_> {
             return ps_err("rangecheck", "DataSource");
         }
         let plane = row.checked_mul(s.h).filter(|p| *p <= MAX_DATA).ok_or(PsError::Limit("decoded data is too large"))?;
-        self.alloc(plane.saturating_mul(sources.len()))?;
+        // The sample planes are this decoder's own and live only while the image is decoded: they
+        // stop counting once it is (the pixels made from them still count). What the data source
+        // procedures allocate is the program's and stays counted.
+        let plane_bytes = plane.saturating_mul(sources.len());
+        self.alloc(plane_bytes)?;
         let mut planes = self.read_sources(sources, row * s.h, if multi { row } else { row * s.h })?;
         for p in &mut planes {
             p.resize(row * s.h, 0);
@@ -734,6 +880,8 @@ impl Interp<'_> {
                 rgba.extend([rgb[0], rgb[1], rgb[2], if masked { 0 } else { 255 }]);
             }
         }
+        drop(planes);
+        self.unalloc(plane_bytes);
         Ok(Some(Pixels { w: s.w as u32, h: s.h as u32, rgba, inks, matrix: s.matrix }))
     }
 
@@ -771,12 +919,15 @@ impl Interp<'_> {
             let mask = self.alpha_mask(&alpha, img.w, img.h, xf);
             return self.add_image(blob, img.w, img.h, xf, mask);
         }
-        let Some(rgba) = image::RgbaImage::from_raw(img.w, img.h, img.rgba) else { return Ok(()) };
-        let mut png = vec![];
-        if rgba.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).is_err() {
+        let Ok(rgba) =
+            craft_image_codecs::Image::from_raw(img.w, img.h, craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, img.rgba)
+        else {
+            return Ok(());
+        };
+        let Ok(png) = craft_image_codecs::encode(&rgba, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()) else {
             self.out.warn("an image that couldn't be read was left out");
             return Ok(());
-        }
+        };
         self.add_image(ImageBlob::new("image/png", png), img.w, img.h, xf, None)
     }
 
@@ -797,8 +948,10 @@ impl Interp<'_> {
         if alpha.iter().all(|v| *v == 255) {
             return None;
         }
-        let mut png = Vec::new();
-        image::GrayImage::from_raw(w, h, alpha.to_vec())?.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).ok()?;
+        let raw =
+            craft_image_codecs::Image::from_raw(w, h, craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, alpha.to_vec())
+                .ok()?;
+        let png = craft_image_codecs::encode(&raw, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).ok()?;
         let blob = ImageBlob::new("image/png", png);
         let key = blob.content_key();
         self.out.doc.images.entry(key.clone()).or_insert(blob);

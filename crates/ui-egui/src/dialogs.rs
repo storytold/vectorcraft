@@ -8,21 +8,29 @@
 
 mod about;
 pub mod action_batch;
+pub mod action_insert_menu_item;
 pub mod action_new;
 pub mod action_playback;
+pub mod action_select_object;
 pub mod action_set_options;
+pub mod action_stop;
 pub mod artboard_options;
 pub mod blend_options;
 mod brush_art_options;
 pub mod brush_delete;
 pub mod brush_options;
+pub mod brush_replace_art;
+pub mod bullets_numbering;
 pub mod char_style_options;
+pub mod check_spelling;
 pub mod color_balance;
 pub mod color_guide_options;
-mod color_picker;
+pub(crate) mod color_picker;
 mod command;
+pub mod composite_fonts;
 pub mod confirm;
 pub mod corners;
+pub mod custom_dictionary;
 pub mod dimension;
 mod document_setup;
 mod duotone;
@@ -49,10 +57,12 @@ pub mod freehand;
 mod gradient_stop;
 pub mod graph_data;
 pub mod graph_design;
+pub mod graph_type;
 pub mod graphic_style_options;
 pub mod halftone;
 pub mod hyphenation;
 pub mod import_pdf;
+pub mod indexed_color;
 pub mod javascript_files;
 pub mod justification;
 pub mod layer_options;
@@ -73,6 +83,7 @@ pub mod new_text_style;
 pub mod objects_on_path_options;
 pub mod office_export;
 pub mod package;
+pub mod para_style_options;
 pub(crate) mod path_ops;
 pub mod pathfinder_options;
 pub mod pdf_presets;
@@ -80,19 +91,25 @@ pub mod perspective_grid;
 pub mod perspective_options;
 pub mod perspective_plane;
 pub mod perspective_presets;
+pub mod pixel_snap_options;
 pub mod place;
 pub mod placement_options;
 pub mod plugin;
 mod png_options;
 pub mod print;
 pub mod print_presets;
+pub mod psd_import;
 mod psd_options;
 pub mod raster_effects;
 pub mod rearrange_artboards;
 pub mod recolor;
 mod recovery;
-mod revolve;
+pub mod relink;
+pub mod rename_artboards;
+pub(crate) mod revolve;
 pub(crate) mod revolve_gizmo;
+pub(crate) mod revolve_lights;
+pub mod safe_mode;
 pub mod saturate;
 pub mod save_brush_library;
 mod save_changes;
@@ -103,13 +120,16 @@ pub mod save_style_library;
 pub mod save_swatch_library;
 pub mod save_symbol_library;
 pub mod script_check;
+pub mod script_run;
 pub mod shape_builder_options;
 pub(crate) mod shapes;
 pub mod shortcut_import;
 pub(crate) mod simplify_slider;
 pub mod slices;
+pub mod smart_punctuation;
 pub(crate) mod smooth_slider;
 pub mod spot_colors;
+pub mod svg_filter;
 pub(crate) mod svg_options;
 pub mod swatch_conflict;
 pub mod swatch_options;
@@ -119,6 +139,8 @@ pub mod symbolism_options;
 pub mod tate_chu_yoko;
 mod text_export;
 pub mod text_import;
+mod three_d_classic;
+pub(crate) mod three_d_materials;
 mod tiff_bmp_tga;
 pub mod tile_edge_color;
 mod tools;
@@ -126,6 +148,7 @@ pub mod trace_presets;
 pub(crate) mod transform;
 pub mod transform_each;
 pub mod variables;
+pub mod warichu;
 mod warp_effect;
 pub mod width_point;
 
@@ -135,16 +158,18 @@ pub use color_picker::open as open_color_picker;
 pub use document_setup::open as open_document_setup;
 pub use effect::open as open_effect_dialog;
 pub(crate) use effect::{FILM_GRAIN_FIELDS, PAINT_DAUB_BRUSH_TYPE_LABELS, SHADES, shown_choices};
-pub use export_as::open as open_export_as;
+pub use export_as::{export_selection, open as open_export_as};
+pub(crate) use export_for_screens::drop_unread_screen_settings;
 pub use export_for_screens::open as open_export_for_screens;
 pub(crate) use export_for_screens::{
-    KIND as EXPORT_FOR_SCREENS, PresetPick as ScreenPresetPick, export_preset as screen_export_preset, formats as screen_formats,
-    import_presets as screen_import_presets, open_assets as open_export_for_screens_assets, preset_list as screen_preset_list,
-    saved_options as screen_saved_options, saved_rows as screen_saved_rows,
+    KIND as EXPORT_FOR_SCREENS, PresetPick as ScreenPresetPick, artboard_name_editing as export_artboard_name_editing,
+    export_preset as screen_export_preset, formats as screen_formats, import_presets as screen_import_presets,
+    open_assets as open_export_for_screens_assets, preset_list as screen_preset_list, saved_options as screen_saved_options,
+    saved_rows as screen_saved_rows, settings_format as screen_settings_format,
 };
-pub(crate) use form::{humanize, number_list_text, plugin_color_button, read_number_list, unit_suffix};
-pub(crate) use new_document::preset_name;
+pub(crate) use form::{humanize, number_list_text, plugin_color_button, ppi_suffix, read_number_list, unit_suffix};
 pub use new_document::{create_without_dialog as new_document_without_dialog, open as open_new_document, preset_card};
+pub(crate) use new_document::{popup_open as new_document_popup_open, preset_name};
 pub use png_options::open as open_raster_options;
 pub use save_pdf::{open as open_save_pdf, open_preset as open_pdf_preset};
 pub use tools::open_tool_dialog;
@@ -153,6 +178,9 @@ use crate::state::Dialog;
 use crate::{VectorcraftApp, widgets};
 
 type DialogResult = Result<Value, String>;
+
+/// A dialog's Reset ([`DialogSpec::reset`]).
+type ResetFn = fn(&VectorcraftApp, &mut Dialog) -> Result<(), String>;
 
 /// The shared dialog frame's inner margin, and the least room it leaves at the window's edges.
 const MARGIN: i8 = 22;
@@ -194,8 +222,8 @@ pub(crate) struct DialogSpec {
     pub alternate: Option<(&'static str, &'static str)>,
     /// Puts the fields back to their defaults. While Alt (Option on macOS) is held, the Cancel
     /// button of a dialog with an `ok` reads Reset; Reset (or `ui.dialogReset`) runs this and the
-    /// dialog stays open.
-    pub reset: Option<fn(&VectorcraftApp, &mut Dialog)>,
+    /// dialog stays open. An error leaves the dialog as it was.
+    pub reset: Option<ResetFn>,
     pub min_width: f32,
     pub max_width: Option<f32>,
     /// The body runs a live preview interaction that Cancel rolls back.
@@ -309,23 +337,30 @@ registry! {
     SwatchOptions: [swatch_options::KIND] => swatch_options::SPEC,
     Confirm: [confirm::KIND] => confirm::SPEC,
     BrushDelete: [brush_delete::KIND] => brush_delete::SPEC,
+    BrushReplaceArt: [brush_replace_art::KIND] => brush_replace_art::SPEC,
     Message: [confirm::MESSAGE] => confirm::MESSAGE_SPEC,
     Replace: [confirm::REPLACE] => confirm::REPLACE_SPEC,
+    ReplaceFiles: [confirm::REPLACE_FILES] => confirm::REPLACE_FILES_SPEC,
+    ResetPreferences: [confirm::RESET_PREFS] => confirm::RESET_PREFS_SPEC,
+    ResetActions: [confirm::RESET_ACTIONS] => confirm::RESET_ACTIONS_SPEC,
     NewSwatch: [new_swatch::KIND] => new_swatch::SPEC,
     NewColorGroup: [new_color_group::KIND] => new_color_group::SPEC,
     GraphData: [graph_data::KIND] => graph_data::SPEC,
     GraphDesign: [graph_design::DESIGN] => graph_design::DESIGN_SPEC,
     GraphColumn: [graph_design::COLUMN] => graph_design::COLUMN_SPEC,
     GraphMarker: [graph_design::MARKER] => graph_design::MARKER_SPEC,
+    GraphType: [graph_type::KIND] => graph_type::SPEC,
     GradientStop: ["gradientStop"] => gradient_stop::SPEC,
     ColorPicker: [color_picker::KIND] => color_picker::SPEC,
     GraphicStyleOptions: [graphic_style_options::KIND] => graphic_style_options::SPEC,
     CharStyleOptions: [char_style_options::KIND] => char_style_options::SPEC,
+    ParaStyleOptions: [para_style_options::KIND] => para_style_options::SPEC,
     NewTextStyle: [new_text_style::KIND] => new_text_style::SPEC,
     EffectExists: [effect::EXISTS] => effect::EXISTS_SPEC,
     ColorGuideOptions: [color_guide_options::KIND] => color_guide_options::SPEC,
     ColorBalance: [color_balance::KIND] => color_balance::SPEC,
     Saturate: [saturate::KIND] => saturate::SPEC,
+    IndexedColor: [indexed_color::KIND] => indexed_color::SPEC,
     SaveSwatchLibrary: [save_swatch_library::KIND] => save_swatch_library::SPEC,
     TileEdgeColor: [tile_edge_color::KIND] => tile_edge_color::SPEC,
     EyedropperOptions: [eyedropper::KIND] => eyedropper::SPEC,
@@ -342,11 +377,16 @@ registry! {
     Corners: [corners::KIND] => corners::SPEC,
     Hyphenation: [hyphenation::KIND] => hyphenation::SPEC,
     Justification: [justification::KIND] => justification::SPEC,
+    BulletsAndNumbering: [bullets_numbering::KIND] => bullets_numbering::SPEC,
     TateChuYokoSettings: [tate_chu_yoko::KIND] => tate_chu_yoko::SPEC,
+    WarichuSettings: [warichu::KIND] => warichu::SPEC,
+    CompositeFonts: [composite_fonts::KIND] => composite_fonts::SPEC,
     SavePdf: [save_pdf::KIND] => save_pdf::SPEC,
     SvgOptions: [svg_options::KIND] => svg_options::SPEC,
     JavaScriptFiles: [javascript_files::KIND] => javascript_files::SPEC,
+    SvgFilter: [svg_filter::KIND] => svg_filter::SPEC,
     NewDocumentMore: [new_document::MORE] => new_document::MORE_SPEC,
+    NewDocumentProfiles: [new_document::PROFILES] => new_document::MORE_SPEC,
     Place: [place::KIND] => place::SPEC,
     RasterOptions: ["pngOptions", "jpgOptions", "webpOptions", "gifOptions", "png8Options"] => png_options::SPEC,
     ExportAs: ["exportAs"] => export_as::SPEC,
@@ -366,16 +406,25 @@ registry! {
     OfficeExport: [office_export::KIND] => office_export::SPEC,
     DxfOptions: [dxf_options::KIND] => dxf_options::SPEC,
     PlacementOptions: [placement_options::KIND] => placement_options::SPEC,
+    Relink: [relink::KIND] => relink::SPEC,
     Package: [package::KIND] => package::SPEC,
     ActionBatch: [action_batch::KIND] => action_batch::SPEC,
     ActionSetOptions: [action_set_options::KIND] => action_set_options::SPEC,
     ActionNew: [action_new::KIND] => action_new::SPEC,
     ActionPlayback: [action_playback::KIND] => action_playback::SPEC,
+    ActionStopRecord: [action_stop::RECORD_KIND] => action_stop::RECORD_SPEC,
+    ActionStopMessage: [action_stop::MESSAGE_KIND] => action_stop::MESSAGE_SPEC,
+    ActionInsertMenuItem: [action_insert_menu_item::KIND] => action_insert_menu_item::SPEC,
+    ActionSelectObject: [action_select_object::KIND] => action_select_object::SPEC,
     SliceOptions: [slices::OPTIONS] => slices::OPTIONS_SPEC,
     DivideSlices: [slices::DIVIDE] => slices::DIVIDE_SPEC,
     EpsOptions: [eps_options::KIND] => eps_options::SPEC,
+    EpsFlattenerOptions: [eps_options::CUSTOM_KIND] => eps_options::CUSTOM_SPEC,
     Recovery: [crate::recovery::KIND] => recovery::SPEC,
+    PluginStopped: [safe_mode::STOPPED] => safe_mode::STOPPED_SPEC,
+    SafeMode: [safe_mode::KIND] => safe_mode::SPEC,
     DxfImport: [dxf_import::KIND] => dxf_import::SPEC,
+    PsdImport: [psd_import::KIND] => psd_import::SPEC,
     RasterFormatOptions: ["tiffOptions", "bmpOptions", "tgaOptions"] => png_options::SPEC,
     SaveForWeb: [save_for_web::KIND] => save_for_web::SPEC,
     PsdOptions: ["psdOptions"] => png_options::SPEC,
@@ -384,10 +433,18 @@ registry! {
     PrintPresets: [print_presets::KIND] => print_presets::SPEC,
     Plugin: [plugin::KIND] => plugin::SPEC,
     PluginExport: [plugin::EXPORT_KIND] => plugin::EXPORT_SPEC,
+    PluginImport: [plugin::IMPORT_KIND] => plugin::IMPORT_SPEC,
+    PluginInstall: [plugin::INSTALL_KIND] => plugin::INSTALL_SPEC,
     ScriptCheck: [script_check::KIND] => script_check::SPEC,
+    ScriptRun: [script_run::KIND] => script_run::SPEC,
+    ScriptGrowth: [script_run::GROWTH_KIND] => script_run::GROWTH_SPEC,
+    ScriptClose: [script_run::CLOSE_KIND] => script_run::CLOSE_SPEC,
+    ScriptNotice: [script_run::NOTICE_KIND] => script_run::NOTICE_SPEC,
+    ScriptFiles: [script_run::PICKER_KIND] => script_run::PICKER_SPEC,
     VectorHalftone: [halftone::KIND] => halftone::SPEC,
     SimplifySlider: [simplify_slider::KIND] => simplify_slider::SPEC,
     SmoothSlider: [smooth_slider::KIND] => smooth_slider::SPEC,
+    SmartPunctuation: [smart_punctuation::KIND] => smart_punctuation::SPEC,
     PerspectiveGrid: [perspective_grid::KIND] => perspective_grid::SPEC,
     Envelope: [envelope::WARP, envelope::MESH, envelope::OPTIONS] => envelope::SPEC,
     LiquifyOptions: [liquify::KIND] => liquify::SPEC,
@@ -409,14 +466,20 @@ registry! {
     NewBrush: [new_brush::KIND] => new_brush::SPEC,
     EditSelection: [edit_selection::KIND] => edit_selection::SPEC,
     EditViews: [edit_views::KIND] => edit_views::SPEC,
+    EditCustomDictionary: [custom_dictionary::KIND] => custom_dictionary::SPEC,
+    CheckSpelling: [check_spelling::KIND] => check_spelling::SPEC,
     PerspectivePlane: [perspective_plane::KIND] => perspective_plane::SPEC,
     LayerOptions: [layer_options::KIND] => layer_options::SPEC,
     LayersPanelOptions: [layers_panel_options::KIND] => layers_panel_options::SPEC,
     NavigatorPanelOptions: [navigator_panel_options::KIND] => navigator_panel_options::SPEC,
     PathfinderOptions: [pathfinder_options::KIND] => pathfinder_options::SPEC,
+    PixelSnapOptions: [pixel_snap_options::KIND] => pixel_snap_options::SPEC,
     RearrangeArtboards: [rearrange_artboards::KIND] => rearrange_artboards::SPEC,
+    RenameArtboards: [rename_artboards::KIND] => rename_artboards::SPEC,
     PathToolOptions: [crate::addons::pathtools::KIND] => crate::addons::pathtools::OPTIONS_SPEC,
     DivideDashes: [crate::addons::pathtools::dashes::KIND] => crate::addons::pathtools::dashes::SPEC,
+    SmoothBridge: [crate::addons::pathtools::bridge::KIND] => crate::addons::pathtools::bridge::SPEC,
+    TangentCircle: [crate::addons::pathtools::tangent_circle::KIND] => crate::addons::pathtools::tangent_circle::SPEC,
     SetCorners: [crate::addons::pathtools::set_corners::KIND] => crate::addons::pathtools::set_corners::SPEC,
     NearestSwatch: [crate::addons::color::nearest::KIND] => crate::addons::color::nearest::SPEC,
     SwatchLegend: [crate::addons::color::legend::KIND] => crate::addons::color::legend::SPEC,
@@ -449,13 +512,83 @@ fn spec(kind: &str) -> &'static DialogSpec {
     DialogKind::of(kind).map_or(&FALLBACK, DialogKind::spec)
 }
 
-/// Whether `ui.dialog.set` can set `field` on `d`: a field it holds, a `__` field (the dialog's
-/// own state), `discard` on a dialog with a discard button, `preview` on one with a live preview,
-/// one of its spec's `inputs` for its kind, or one it `passes` on.
+/// The `__` fields that `ui.dialog.set` can set on `d`: controls of its kind that the dialog holds
+/// under a `__` name, each set as the control sets it. Every other `__` field of a dialog holds
+/// what its OK acts on (the command and its fixed params, the targets, a file, the preset being
+/// edited) or state the dialog keeps for itself, and `ui.dialog.set` refuses it
+/// ([`protected_field`]), so a request cannot change what OK does after a person opened the dialog.
+/// Flags that a button sets together with other fields are refused too: the style dialogs'
+/// `__reset*` (Reset Panel also clears the section's fields, so scripts run
+/// `ui.charStyleOptions.resetPanel` or `ui.paraStyleOptions.resetPanel`) and Artboard Options'
+/// `__fit`, `__sizeChoice`, `__refx` and `__refy` (set with the size and position they record), and
+/// Scribble's `__scribbleSetting` (the menu sets the preset's parameters with it).
+fn hidden_controls(d: &Dialog) -> &'static [&'static str] {
+    match DialogKind::of(&d.kind) {
+        // Duotone's tone row, and the 3D effects' tab, gizmo, light and Show axis.
+        Some(DialogKind::Effect) => &["__gizmo", "__light", "__showAxis", "__tab", "__tone"],
+        // The preset name being typed and the format whose settings the gear shows.
+        Some(DialogKind::ExportForScreens) => &["__savePreset", "__settings"],
+        // Keywords typed but not added yet.
+        Some(DialogKind::FileInfo) => &["__keyword"],
+        // The preset name being typed.
+        Some(DialogKind::FlattenTransparency) => &["__presetName"],
+        // The page shown.
+        Some(DialogKind::GraphType) => &[graph_type::PAGE],
+        // The Resolution menu's Other.
+        Some(DialogKind::RasterOptions | DialogKind::RasterFormatOptions | DialogKind::PsdOptions) => &["__otherPpi"],
+        // The category shown, the search text and the three settings kept outside the preferences.
+        Some(DialogKind::Preferences) => &["__category", "__search", "__smartGuides", "__snapToGrid", "__taskBar"],
+        // The section shown, the sheet the preview shows and the preset name being typed.
+        Some(DialogKind::Print | DialogKind::PrintPreset) => &["__savePresetAs", "__section", "__sheet"],
+        // The section shown, All or a range of artboards, the two password checkboxes and the
+        // preset name being typed.
+        Some(DialogKind::SavePdf | DialogKind::PdfPreset) => {
+            &["__allArtboards", "__requireOpenPassword", "__restrictPermissions", "__savePresetAs", "__section"]
+        }
+        // The selected rows and Randomize's seed.
+        Some(DialogKind::Recolor) => &["__seed", "__sel"],
+        // The view, zoom, download speed, selected color table entries, the color table entry whose
+        // Color Picker opens and the preset name being typed.
+        Some(DialogKind::SaveForWeb) => &["__color", "__colors", "__editColor", "__kbps", "__presetName", "__view", "__zoom"],
+        // The link that keeps width and height in proportion.
+        Some(DialogKind::Shape | DialogKind::TransformEach) => &["__constrain"],
+        // The attention filter, the Keys section, the search text and the key being recorded.
+        Some(DialogKind::ShortcutImport) => &["__attention", "__keysOpen", "__query", "__recording"],
+        // Set Size of Each's Width and Height checkboxes.
+        Some(DialogKind::ArrangeTools) if d.kind == crate::addons::arrange::SIZE => &["__height", "__width"],
+        // The search field.
+        Some(DialogKind::SelectByArtboards | DialogKind::SelectByLinkStatus) => &["__search"],
+        _ => &[],
+    }
+}
+
+/// The controls of [`hidden_controls`] that a button adds to the dialog, which `ui.dialog.set` can
+/// set only while the dialog holds them: Save PDF's and Print's `__savePresetAs`, whose presence
+/// makes OK save a preset instead of writing the PDF or printing.
+const ADDED_CONTROLS: &[&str] = &["__savePresetAs"];
+
+/// Whether `field` is a control of `d` that `ui.dialog.set` can set: one of the controls of `d`'s
+/// kind ([`hidden_controls`]), and for one that a button adds ([`ADDED_CONTROLS`]), one `d` holds.
+fn settable_control(d: &Dialog, field: &str) -> bool {
+    hidden_controls(d).contains(&field) && (!ADDED_CONTROLS.contains(&field) || d.fields.contains_key(field))
+}
+
+/// Whether `field` is a `__` field of `d` that `ui.dialog.set` refuses: any `__` field, held or
+/// not, except the controls of `d`'s kind ([`settable_control`]).
+pub fn protected_field(d: &Dialog, field: &str) -> bool {
+    field.starts_with("__") && !settable_control(d, field)
+}
+
+/// Whether `ui.dialog.set` can set `field` on `d`: a `__` field only when it is one of the controls
+/// of `d`'s kind ([`protected_field`]); otherwise a field it holds, `discard` on a dialog with a
+/// discard button, `preview` on one with a live preview, one of its spec's `inputs` for its kind,
+/// or one it `passes` on.
 pub fn accepts_field(d: &Dialog, field: &str) -> bool {
+    if field.starts_with("__") {
+        return !protected_field(d, field);
+    }
     let spec = spec(&d.kind);
     d.fields.contains_key(field)
-        || field.starts_with("__")
         || (field == "discard" && spec.discard.is_some())
         || (field == "preview" && spec.preview)
         || (spec.inputs)(&d.kind).contains(&field)
@@ -466,7 +599,10 @@ pub fn accepts_field(d: &Dialog, field: &str) -> bool {
 /// Pattern Brush Options corner tile set this way is saved by OK, as one chosen from its menu is,
 /// an Edit Data Set field set this way is no longer the row's empty text value, and a Layer
 /// Options setting set this way for several rows is sent to every row (Template also sets Lock
-/// and Dim Images, as its checkbox does).
+/// and Dim Images, as its checkbox does). A DXF Options preset set this way sets its fields, as
+/// one picked from its menu does, and the preset it shows follows the DXF options set this way.
+/// A Graph Data Column Width set this way sets every column, as Cell Style's does. An Import PDF
+/// `allPages` set this way to the other pick sets Import PDF pages as links back to its default.
 pub fn set_field(d: &mut Dialog, field: String, value: Value) {
     if d.kind == brush_options::KIND {
         brush_art_options::note_set(d, &field);
@@ -477,14 +613,32 @@ pub fn set_field(d: &mut Dialog, field: String, value: Value) {
     if d.kind == layer_options::KIND {
         layer_options::note_set(d, &field, &value);
     }
+    if d.kind == import_pdf::KIND {
+        import_pdf::note_set(d, &field, &value);
+    }
+    if d.kind == "preferences" {
+        crate::prefs_dialog::note_set(d, &field, &value);
+    }
+    if d.kind == new_document::KIND || new_document::popup_open(d) {
+        new_document::note_set(d, &field);
+    }
+    let dxf = (d.kind == dxf_options::KIND).then(|| field.clone());
+    let graph = (d.kind == graph_data::KIND).then(|| field.clone());
     d.fields.insert(field, value);
+    if let Some(field) = dxf {
+        dxf_options::note_set(d, &field);
+    }
+    if let Some(field) = graph {
+        graph_data::note_set(d, &field);
+    }
 }
 
-/// The fields `ui.dialog.set` can set on `d`, sorted, without the `__` ones: those it holds,
-/// `discard`, `preview` and the spec's `inputs` for its kind.
+/// The fields `ui.dialog.set` can set on `d`, sorted: those it holds other than its `__` ones, the
+/// `__` controls of its kind, `discard`, `preview` and the spec's `inputs` for its kind.
 pub fn field_names(d: &Dialog) -> Vec<String> {
     let spec = spec(&d.kind);
     let mut names: Vec<String> = d.fields.keys().filter(|k| !k.starts_with("__")).cloned().collect();
+    names.extend(hidden_controls(d).iter().filter(|f| settable_control(d, f)).map(|f| f.to_string()));
     names.extend(spec.discard.map(|_| "discard".to_string()));
     names.extend(spec.preview.then(|| "preview".to_string()));
     names.extend((spec.inputs)(&d.kind).iter().map(|i| i.to_string()));
@@ -500,6 +654,16 @@ fn run_and_close(app: &mut VectorcraftApp, id: &str, params: Value) -> DialogRes
     r
 }
 
+/// Set a tool's options with `tool.setOption` (`params`) and close the dialog; when the tool
+/// refuses one of them, nothing is set and the dialog stays open.
+fn set_tool_options_and_close(app: &mut VectorcraftApp, params: Value) -> DialogResult {
+    let r = app.run("tool.setOption", params);
+    if r.is_ok() {
+        app.ui.dialog = None;
+    }
+    r
+}
+
 /// The field of a dialog opened over another (Import Shortcut Set over Keyboard Shortcuts) that
 /// holds the dialog under it, which Cancel and Escape show again.
 pub(crate) const PARENT: &str = "__parent";
@@ -510,12 +674,25 @@ pub(crate) fn parent(d: &Dialog) -> Option<Dialog> {
 }
 
 /// `ui.dialog.set` changed `field` of the open dialog from `old`: a choice that sets other fields
-/// sets them as choosing it in the dialog does (Export for Screens' `exportPreset`), a change
+/// sets them as choosing it in the dialog does (Export for Screens' `exportPreset`, EPS Options'
+/// `flattenerPreset`, which drops the Custom… options), a change
 /// to Export for Screens' sub-folder controls ends an applied preset's item folders, as it does in
-/// the dialog, and Transform Each's Relative / Absolute keeps the Scale fields' size.
+/// the dialog, Transform Each's Relative / Absolute keeps the Scale fields' size, and Recolor
+/// Artwork's `group` selects that color group and its `groupAction` runs the button at once. A value
+/// Composite Fonts' Show Sample can't take is refused.
 pub(crate) fn field_set(app: &mut VectorcraftApp, field: &str, old: Option<&Value>) -> Result<(), String> {
     if app.ui.dialog.as_ref().is_some_and(|d| d.kind == transform_each::KIND) {
         transform_each::field_set(app, field, old);
+        return Ok(());
+    }
+    if app.ui.dialog.as_ref().is_some_and(|d| d.kind == recolor::KIND) {
+        return recolor::field_set(app, field);
+    }
+    if let Some(d) = app.ui.dialog.as_ref().filter(|d| d.kind == composite_fonts::KIND) {
+        return composite_fonts::field_set(d, field);
+    }
+    if let Some(d) = app.ui.dialog.as_mut().filter(|d| d.kind == eps_options::KIND) {
+        eps_options::field_set(d, field);
         return Ok(());
     }
     let Some(d) = app.ui.dialog.as_mut().filter(|d| d.kind == export_for_screens::KIND) else { return Ok(()) };
@@ -535,9 +712,36 @@ pub(crate) fn field_set(app: &mut VectorcraftApp, field: &str, old: Option<&Valu
 /// opened over (`ui.dialog.cancel`).
 pub fn cancel(app: &mut VectorcraftApp) {
     missing_fonts::requeue_replaced(app);
+    // More Settings' pop-up and Save Preset end on their own; New Document stays.
+    if app.ui.dialog.as_mut().is_some_and(new_document::close_popup) {
+        return;
+    }
     if let Some(d) = app.ui.dialog.take() {
         if d.kind == swatch_conflict::KIND {
             crate::placing::cancel_swatch_paste(app);
+        }
+        if d.kind == plugin::INSTALL_KIND {
+            app.pending_plugin_install = None;
+        }
+        if d.kind == safe_mode::STOPPED {
+            safe_mode::cancel_stopped(app);
+        }
+        // The growth question's Cancel button is its Stop button.
+        if d.kind == script_run::GROWTH_KIND {
+            app.session.script_request_stop();
+        }
+        if d.kind == script_run::NOTICE_KIND {
+            script_run::notice_cancel(app, &d);
+        }
+        if d.kind == script_run::PICKER_KIND {
+            script_run::picker_cancel(app, &d);
+        }
+        missing_links::cancelled(app, &d);
+        // Find Font's next open starts with an empty replacement search.
+        if d.kind == "findFont"
+            && let Some(ctx) = app.ui_ctx.clone()
+        {
+            crate::find_font::clear_search(&ctx);
         }
         // Toolbar-only Flare options start no preview and must not cancel a gesture
         // that was already active before opening them. The generic parameter dialog has a spec
@@ -557,12 +761,12 @@ pub(crate) fn can_reset(app: &VectorcraftApp) -> bool {
 }
 
 /// Reset (`ui.dialogReset`, or Cancel while Alt or Option is held): the open dialog's fields go
-/// back to their defaults and it stays open → the dialog; an error when no dialog is open or the
-/// open one has no Reset.
+/// back to their defaults and it stays open → the dialog; an error when no dialog is open, the
+/// open one has no Reset, or its Reset fails (the dialog is then left as it was).
 pub(crate) fn reset(app: &mut VectorcraftApp) -> DialogResult {
     let Some(mut d) = app.ui.dialog.clone() else { return Err("no dialog open".into()) };
     let Some(reset) = spec(&d.kind).reset else { return Err("the open dialog has no Reset".into()) };
-    reset(app, &mut d);
+    reset(app, &mut d)?;
     let out = serde_json::to_value(&d).unwrap_or_default();
     app.ui.dialog = Some(d);
     Ok(out)
@@ -580,13 +784,17 @@ pub fn confirm(app: &mut VectorcraftApp) -> DialogResult {
 
 /// After a dialog closes, and each frame: a Missing Fonts dialog that another dialog replaced waits
 /// for its turn again, the search a Missing Fonts or Find Linked Files dialog started stops once
-/// that dialog is gone, and with no dialog open the next document's Missing Fonts dialog opens
-/// (one dialog at a time).
+/// that dialog is gone, and with no dialog open the choice about a stopped plug-in that another
+/// dialog replaced opens again, else the questions about the next restored document's linked files
+/// ([`crate::recovery::ask_next`]), else the next document's Missing Fonts dialog (one dialog at a
+/// time).
 pub(crate) fn settle(app: &mut VectorcraftApp) {
     crate::placing::settle_swatch_paste(app);
     missing_fonts::requeue_replaced(app);
     missing_fonts::stop_when_closed(app);
     find_links::stop_when_closed(app);
+    safe_mode::reopen(app);
+    crate::recovery::ask_next(app);
     missing_fonts::open_next(app);
 }
 
@@ -605,6 +813,7 @@ pub(crate) fn opened_by_panel(app: &mut VectorcraftApp) {
 /// Draws the active dialog and handles shared initial focus, keyboard shortcuts and actions.
 /// Inline actions and footer buttons use the same confirmation and preview rollback paths.
 pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    crate::shortcuts::hold_back_keys(app, ctx);
     about::show(app, ctx);
     settle(app);
     confirm::show_waiting(app);
@@ -638,10 +847,15 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     }
     let focus_first = focus_first && !clicked;
     let spec = spec(&d.kind);
+    // Opened over another dialog, which Cancel shows again: that one keeps where it was scrolled to.
+    if d.fields.get(PARENT).is_some_and(|p| !p.is_null()) {
+        modal::over_parent(ctx);
+    }
     if let Some(window) = spec.window {
         return window(app, ctx);
     }
     let mut ok = false;
+    let mut ok_clicked = false;
     let mut ok_enabled = true;
     let mut cancel = false;
     let mut reset = false;
@@ -652,6 +866,9 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     if after_panel && !ctx.input(|i| i.key_down(egui::Key::Enter) || i.key_pressed(egui::Key::Enter)) {
         d.fields.remove(AFTER_PANEL);
     }
+    // A body can open another dialog in its place (EPS Options' Custom…): this frame's Enter
+    // doesn't confirm that one.
+    let opened = d.kind.clone();
     let heading = (spec.heading)(&d);
     let revolves = revolve_gizmo::active(&d);
     if revolves {
@@ -676,14 +893,16 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         if focus_first {
             ui.data_mut(|m| m.insert_temp(widgets::dialog_focus_flag(), true));
         }
+        // When the dialog is taller than the window, its body scrolls, and the heading and the
+        // buttons stay in view.
         if let Some(body) = spec.body_with_actions {
-            match body(app, ui, &mut d) {
+            match modal::body_rows(ui, |ui| body(app, ui, &mut d)) {
                 DialogAction::None => {}
                 DialogAction::Confirm => ok = true,
                 DialogAction::Cancel => cancel = true,
             }
         } else {
-            cancel = (spec.body)(app, ui, &mut d);
+            cancel = modal::body_rows(ui, |ui| (spec.body)(app, ui, &mut d));
         }
         // Taken (the flag is gone): done. Still there (the window's measuring frame): next frame.
         if focus_first && ui.data_mut(|m| m.remove_temp::<bool>(widgets::dialog_focus_flag())).is_none() {
@@ -702,7 +921,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             if let Some(label) = spec.ok.map(|ok| spec.ok_label.map_or(ok, |f| f(app)))
                 && widgets::primary_button_enabled(ui, label, ok_enabled).clicked()
             {
-                ok = true;
+                ok_clicked = true;
             }
             ui.add_space(8.0);
             // While Alt (Option) is held, Cancel reads Reset on a dialog that has one.
@@ -737,7 +956,21 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         });
     });
     let rejected = ctx.data_mut(|d| d.remove_temp::<bool>(widgets::dialog_reject_commit_flag())).unwrap_or(false);
-    if spec.ok.is_some() && ok_enabled && !after_panel && !rejected && ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
+    // A field that refused its text when the press on OK took its focus keeps the dialog open, as
+    // Enter does. Only a pointer click has such a press; the keyboard and screen readers press OK
+    // in one frame.
+    let press = egui::Id::unique("dialog-press-pass");
+    let (pressed, released) = ctx.input(|i| (i.pointer.any_pressed(), i.pointer.any_released()));
+    if pressed {
+        let pass = ctx.cumulative_pass_nr();
+        ctx.data_mut(|m| m.insert_temp(press, pass));
+    }
+    let (pressed_at, refused_at) = ctx.data(|m| (m.get_temp::<u64>(press), m.get_temp::<u64>(widgets::dialog_reject_pass())));
+    let refused_during_click = released && matches!((refused_at, pressed_at), (Some(r), Some(p)) if r >= p);
+    if ok_clicked && !rejected && !refused_during_click {
+        ok = true;
+    }
+    if spec.ok.is_some() && ok_enabled && !after_panel && !rejected && d.kind == opened && crate::shortcuts::pressed_anew(ctx, egui::Key::Enter) {
         ok = true;
     }
     if discard {
@@ -789,6 +1022,8 @@ mod tests_accessibility;
 #[cfg(test)]
 mod tests_export;
 #[cfg(test)]
+mod tests_export_selection;
+#[cfg(test)]
 mod tests_import_pdf;
 #[cfg(test)]
 mod tests_package;
@@ -797,7 +1032,11 @@ mod tests_plugin_export;
 #[cfg(test)]
 mod tests_plugin_fields;
 #[cfg(test)]
+mod tests_plugin_import;
+#[cfg(test)]
 mod tests_raster_formats;
+#[cfg(test)]
+mod tests_raster_supplied_options;
 #[cfg(test)]
 mod tests_svg_options_range;
 
@@ -813,6 +1052,9 @@ mod tests_eps;
 
 #[cfg(test)]
 mod tests_metafile;
+
+#[cfg(test)]
+mod tests_hpgl;
 
 #[cfg(test)]
 mod tests_tiff_bmp_tga;
@@ -840,6 +1082,9 @@ mod tests_perspective;
 
 #[cfg(test)]
 mod tests_modal;
+
+#[cfg(test)]
+mod tests_scroll;
 
 #[cfg(test)]
 mod tests_rectangular_grid;

@@ -45,12 +45,16 @@ pub(crate) const PANEL_MIN_WIDTH: f32 = 220.0;
 /// Docking state that lives for the session only.
 #[derive(Default)]
 pub(crate) struct Runtime {
+    /// Geometry commands waiting for the main window's desktop origin, by floating window id.
+    native_geometry: BTreeMap<u64, (u64, Value)>,
     /// Where the dock area floats panels, as it was last drawn.
     space: Option<FloatSpace<String>>,
     /// A panel a command showed: its floating window comes forward on the next frame.
     raise: Option<String>,
     /// The panel the user last clicked or pressed in (a tab, a panel body, a drop).
     focused: Option<String>,
+    /// Hidden panels shown from the window's edges ([`peek`]).
+    peek: peek::State,
 }
 
 /// Every docking control the main window drew last frame with its rect. Controls in floating
@@ -72,6 +76,7 @@ pub(crate) fn inspect(app: &VectorcraftApp, ctx: &egui::Context) -> Value {
         "hidden": app.ui.docking_hidden.keys().collect::<Vec<_>>(),
         "autoCollapse": app.session.prefs.auto_collapse_icon_panels,
         "panelsShown": app.ui.dock && app.ui.screen_mode < 3,
+        "peek": peek::shown(app),
         "hitRects": hits,
     })
 }
@@ -270,6 +275,12 @@ pub(crate) fn showing(ui: &UiState, panel: &str) -> bool {
     (ui.open_panel.as_deref() == Some(panel) && iconic) || (!iconic && layout.panel_state(&panel.to_string()) == craft_ui::docking::PanelState::Front)
 }
 
+/// Can `panel` be seen: [`showing`] while the dock is shown (Tab and Shift+Tab hide it) and
+/// Presentation Mode is off? The Window menu's check marks follow this.
+pub(crate) fn visible(ui: &UiState, panel: &str) -> bool {
+    ui.dock && ui.screen_mode < 3 && showing(ui, panel)
+}
+
 /// Can either panel that uses row thumbnails be seen, including in a floating window or flyout?
 /// An iconic group's open flyout is named for the icon that opened it; its active tab can differ.
 fn thumbnail_panel_showing(ui: &UiState, ctx: &egui::Context) -> bool {
@@ -307,7 +318,7 @@ fn apply(layout: &mut Layout<String>, action: Action<String>) -> Result<Vec<Stri
 }
 
 /// The docking commands VectorCraft handles here: `window.panel` (the Window menu), its own
-/// `window.panel.collapse` and `window.collapseDock`, the Tools panel's float and dock
+/// `window.panel.collapse`, `window.panel.cycleOptions` and `window.collapseDock`, the Tools panel's float and dock
 /// ([`crate::tools_float`]) and craft-ui's shared ids. Workspaces stay [`crate::workspaces`]'.
 pub(crate) fn command(app: &mut VectorcraftApp, id: &str, params: &Value) -> Option<Result<Value, String>> {
     if let Some(result) = crate::tools_float::command(app, id, params) {
@@ -316,6 +327,8 @@ pub(crate) fn command(app: &mut VectorcraftApp, id: &str, params: &Value) -> Opt
     match id {
         "window.panel" => return Some(show_panel(app, params)),
         "window.collapseDock" => return Some(crate::menus::opt_bool(params, "collapsed").and_then(|c| collapse_dock(app, c))),
+        "window.panels.peek" => return Some(peek::command(app, params)),
+        "window.panel.cycleOptions" => return Some(sizes::command(app, params)),
         "window.panel.collapse" => {
             let minimized = match crate::menus::opt_bool(params, "collapsed") {
                 Ok(c) => c,
@@ -343,19 +356,31 @@ pub(crate) fn command(app: &mut VectorcraftApp, id: &str, params: &Value) -> Opt
 
 /// `window.panel {panel}`: show a panel. One in an icon column opens (or puts away) its flyout;
 /// one in front of its floating window hides; one in a group comes to the front; one closed with a remembered place comes back there; a
-/// library panel or a panel the dock has no place for floats.
+/// library panel or a panel the dock has no place for floats. A flyout or floating panel is put
+/// away only while it can be seen ([`visible`]): with the dock hidden by Tab or Shift+Tab, the
+/// dock shows again with the panel where it was, and the toolbar and Control bar stay as they are.
+/// Presentation Mode hides every panel, so there the command fails and changes nothing.
 fn show_panel(app: &mut VectorcraftApp, params: &Value) -> Result<Value, String> {
     let raw = params.get("panel").and_then(Value::as_str).unwrap_or_default();
     let panel = normalize(raw).ok_or_else(|| format!("unknown panel `{raw}`"))?;
+    if app.ui.screen_mode >= 3 {
+        return Err("panels can't be shown in Presentation Mode".into());
+    }
+    place_panel(app, panel)
+}
+
+/// [`show_panel`] for a known panel, in any screen mode.
+fn place_panel(app: &mut VectorcraftApp, panel: &str) -> Result<Value, String> {
+    let was_visible = visible(&app.ui, panel);
     let layout = layout_of(&app.ui);
     app.ui.dock = true;
     if in_iconic_column(&layout, panel) {
-        app.ui.open_panel = if app.ui.open_panel.as_deref() == Some(panel) { None } else { Some(panel.into()) };
+        app.ui.open_panel = if was_visible { None } else { Some(panel.into()) };
         return Ok(json!({"open": app.ui.open_panel}));
     }
     // A floating panel in front of its window hides again, as an icon panel's flyout does: its
     // shortcut shows and hides it.
-    if floating_window(&layout, panel).is_some() && layout.panel_state(&panel.to_string()) == craft_ui::docking::PanelState::Front {
+    if was_visible && floating_window(&layout, panel).is_some() {
         return shared_command(app, "window.panel.close", &json!({"panel": panel}));
     }
     if !layout.contains(&panel.to_string()) && !app.ui.docking_hidden.contains_key(panel) && crate::panels::library_panel::parse(panel).is_some() {
@@ -404,14 +429,15 @@ fn restore_hidden_group(app: &mut VectorcraftApp, panel: &str) -> Result<Value, 
     Ok(result)
 }
 
-/// Show `panel` as `window.panel` does, but leave it be when it already shows ([`showing`]): a
-/// command that opens a panel to work in (Edit › Color Settings…) never puts it away.
+/// Show `panel` as `window.panel` does, but leave it be when it can be seen already ([`visible`]):
+/// a command that opens a panel to work in (Edit › Color Settings…) never puts it away. In
+/// Presentation Mode the panel comes to the front of its group and shows when the mode ends.
 pub(crate) fn reveal_panel(app: &mut VectorcraftApp, panel: &str) -> Result<Value, String> {
-    if showing(&app.ui, panel) {
-        app.ui.dock = true;
+    if visible(&app.ui, panel) {
         return Ok(json!({"open": panel}));
     }
-    show_panel(app, &json!({ "panel": panel }))
+    let id = normalize(panel).ok_or_else(|| format!("unknown panel `{panel}`"))?;
+    place_panel(app, id)
 }
 
 /// `window.collapseDock {collapsed?}`: collapse every dock column to icons, or expand the outer
@@ -721,7 +747,7 @@ fn shared_command_with(app: &mut VectorcraftApp, id: &str, params: &Value, legac
     if let Some(fields) = params.as_object_mut() {
         fields.insert("command".into(), Value::String(id.to_owned()));
     }
-    let command: DockCommand<String> = serde_json::from_value(params).map_err(|e| e.to_string())?;
+    let mut command: DockCommand<String> = serde_json::from_value(params).map_err(|e| e.to_string())?;
     match &command {
         DockCommand::Workspace { name } => return app.run("window.workspace", json!({"name": name})),
         DockCommand::NewWorkspace { name } => return app.run("window.workspace.new", json!({"name": name})),
@@ -764,6 +790,7 @@ fn shared_command_with(app: &mut VectorcraftApp, id: &str, params: &Value, legac
         }
         _ => false,
     };
+    let native = if legacy.is_none() { native_float_geometry(app, &mut command, &txn.workspace.layout) } else { None };
     let mut actions = match (&command, &legacy) {
         (DockCommand::Float { panel, group, .. } | DockCommand::Dock { panel, group, .. }, Some(legacy)) => {
             legacy.actions(&txn.workspace.layout, panel, *group)?
@@ -793,7 +820,77 @@ fn shared_command_with(app: &mut VectorcraftApp, id: &str, params: &Value, legac
     for action in actions {
         closed.extend(txn.apply(action)?);
     }
-    Ok(txn.commit(app, closed, reveal))
+    if let Some(NativeFloatGeometry::Ready { panel, rect, .. }) = &native {
+        closed.extend(txn.apply(Action::SetNative { panel: panel.clone(), rect: Some(*rect) })?);
+    }
+    let result = txn.commit(app, closed, reveal);
+    match native {
+        Some(NativeFloatGeometry::Deferred { window, params }) => {
+            let layout = layout_of(&app.ui);
+            app.dock_rt
+                .native_geometry
+                .retain(|id, (generation, _)| *generation == app.ui.docking_generation && layout.floating.iter().any(|window| window.id == *id));
+            app.dock_rt.native_geometry.insert(window, (app.ui.docking_generation, params));
+        }
+        Some(NativeFloatGeometry::Ready { window, .. }) => {
+            app.dock_rt.native_geometry.remove(&window);
+        }
+        None => {}
+    }
+    Ok(result)
+}
+
+enum NativeFloatGeometry {
+    Ready { window: u64, panel: String, rect: [f32; 4] },
+    Deferred { window: u64, params: Value },
+}
+
+fn native_float_geometry(app: &VectorcraftApp, command: &mut DockCommand<String>, layout: &Layout<String>) -> Option<NativeFloatGeometry> {
+    let DockCommand::Float { panel, x, y, width, height, group, column } = command else { return None };
+    if [*x, *y, *width, *height].iter().all(Option::is_none) {
+        return None;
+    }
+    let window = floating_window(layout, panel)?;
+    let whole = *column || window.panels().count() == 1 || (*group && matches!(window.root, Node::Tabs { .. } | Node::Stack { .. }));
+    if !whole {
+        return None;
+    }
+    let [old_x, old_y, old_width, old_height] = window.native?;
+    if let Some((_, params)) = app.dock_rt.native_geometry.get(&window.id).filter(|(generation, _)| *generation == app.ui.docking_generation) {
+        let previous = |name| params.get(name).and_then(Value::as_f64).map(|value| value as f32);
+        *x = x.or_else(|| previous("x"));
+        *y = y.or_else(|| previous("y"));
+        *width = width.or_else(|| previous("width"));
+        *height = height.or_else(|| previous("height"));
+    }
+    let origin = app
+        .ui_ctx
+        .as_ref()
+        .and_then(|ctx| ctx.input(|input| input.raw.viewports.get(&egui::ViewportId::ROOT).and_then(|v| v.inner_rect)))
+        .map(|rect| rect.min)
+        .filter(|origin| origin.is_finite());
+    let Some(origin) = origin else {
+        let mut params = app
+            .dock_rt
+            .native_geometry
+            .get(&window.id)
+            .filter(|(generation, _)| *generation == app.ui.docking_generation)
+            .map_or_else(|| json!({}), |(_, params)| params.clone());
+        let fields = params.as_object_mut()?;
+        fields.insert("panel".into(), json!(panel));
+        fields.insert("group".into(), json!(group));
+        fields.insert("column".into(), json!(column));
+        for (name, value) in [("x", *x), ("y", *y), ("width", *width), ("height", *height)] {
+            if let Some(value) = value {
+                fields.insert(name.into(), json!(value));
+            }
+        }
+        return Some(NativeFloatGeometry::Deferred { window: window.id, params });
+    };
+    // Native windows report desktop coordinates; float commands use the main window's points.
+    let rect =
+        [*x.get_or_insert(old_x - origin.x), *y.get_or_insert(old_y - origin.y), *width.get_or_insert(old_width), *height.get_or_insert(old_height)];
+    Some(NativeFloatGeometry::Ready { window: window.id, panel: panel.clone(), rect: [origin.x + rect[0], origin.y + rect[1], rect[2], rect[3]] })
 }
 
 /// One action from the renderer: the user's own gesture.
@@ -949,6 +1046,8 @@ impl Transaction {
         }
         if let Some(saved) = &location.group {
             apply(&mut candidate, Action::ResizeGroup { panel: panel.clone(), height: saved.height })?;
+            apply(&mut candidate, Action::ResizeFlyoutWidth { panel: panel.clone(), width: saved.flyout_width })?;
+            apply(&mut candidate, Action::MoveFlyoutTop { panel: panel.clone(), offset: saved.flyout_offset })?;
             apply(&mut candidate, Action::SetMinimized { panel: panel.clone(), minimized: saved.minimized })?;
         }
         self.workspace.layout = candidate;
@@ -1087,6 +1186,8 @@ fn known(action: &Action<String>) -> bool {
         | Action::SetIconic { panel, .. }
         | Action::ResizeColumn { panel, .. }
         | Action::ResizeGroup { panel, .. }
+        | Action::ResizeFlyoutWidth { panel, .. }
+        | Action::MoveFlyoutTop { panel, .. }
         | Action::ResizeIconic { panel, .. }
         | Action::SetNative { panel, .. }
         | Action::SetMonitor { panel, .. } => registered(panel),
@@ -1095,11 +1196,29 @@ fn known(action: &Action<String>) -> bool {
     }
 }
 
-/// Draw the canvas and the panels in the space left by the bars and the Tools panel, and apply
+/// Draw the canvas, its docked Tools panel and the other panels below the bars, and apply
 /// what the user did to them.
 pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     let area = area_id();
     let ctx = ui.ctx().clone();
+    let origin = ctx.input(|input| input.raw.viewports.get(&egui::ViewportId::ROOT).and_then(|v| v.inner_rect)).map(|rect| rect.min);
+    if origin.is_some_and(|origin| origin.is_finite()) {
+        for (window, (generation, mut params)) in std::mem::take(&mut app.dock_rt.native_geometry) {
+            if generation != app.ui.docking_generation {
+                continue;
+            }
+            let layout = layout_of(&app.ui);
+            let panel = layout.floating.iter().find(|floating| floating.id == window).and_then(|floating| floating.panels().next()).cloned();
+            let (Some(panel), Some(fields)) = (panel, params.as_object_mut()) else { continue };
+            // The original panel may have docked while other panels kept this native window.
+            fields.insert("panel".into(), json!(panel));
+            fields.insert("column".into(), json!(true));
+            if let Err(error) = shared_command(app, "window.panel.float", &params) {
+                app.ui.status = error;
+            }
+        }
+    }
+    crate::tools_float::set_dock_area_left(&ctx, ui.available_rect_before_wrap().left());
     let changed_workspace = ctx.data_mut(|data| {
         let previous = data.get_temp::<u64>(area.with("generation"));
         data.insert_temp(area.with("generation"), app.ui.docking_generation);
@@ -1136,17 +1255,22 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     }
     let modal = modal_open(app, &ctx);
     // Palette windows are OS windows of their own, held above the app's window while it is active,
-    // so a dialog or a menu drawn in the main window would be covered by them.
+    // so a dialog, a menu, a tool flyout or the All Tools drawer drawn in the main window would be
+    // covered by them.
     #[cfg(not(target_arch = "wasm32"))]
-    palette_window_levels(&ctx, &layout, modal, egui::Popup::is_any_open(&ctx) || crate::menus::menu_open(&ctx));
+    palette_window_levels(&ctx, &layout, modal, egui::Popup::is_any_open(&ctx) || crate::menus::menu_open(&ctx) || crate::toolbar::flyout_open(&ctx));
     let mut blocked = Vec::new();
     if modal || egui::Popup::is_any_open(&ctx) {
         blocked.push(ctx.content_rect());
     }
+    // Panels hidden by Tab or Shift+Tab show on the side of the window edge the pointer rests on.
+    let peeking = peek::update(app, &ctx, ui.available_rect_before_wrap(), &layout, !blocked.is_empty()).map(|edge| peek::edge_panels(&layout, edge));
+    let shown_from_edge = |panel: &String| peeking.as_ref().is_some_and(|panels| panels.contains(panel));
     let style = dock_style(ui);
     let mut dock = craft_ui::docking::DockArea::new(area)
         .blocked_rects(&blocked)
         .input_blocked(modal)
+        .monitors(app.services.dock_monitors.clone())
         .auto_collapse_iconic(app.session.prefs.auto_collapse_icon_panels);
     #[cfg(not(target_arch = "wasm32"))]
     {
@@ -1162,12 +1286,12 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     // Tab and Shift+Tab (`window.dock`, `window.panels`) and the full screen modes hide the panels;
     // the canvas stays.
     if !app.ui.dock || app.ui.screen_mode >= 3 {
-        dock = dock.hide_panels(HidePanels::All);
+        dock = dock.hide_panels(if peeking.is_some() { HidePanels::Except(&shown_from_edge) } else { HidePanels::All });
     }
     if let Some(panel) = app.dock_rt.raise.take() {
         dock = dock.raise_panel(panel);
     }
-    let mut output = dock.show_content(ui, &layout, &style, &mut PanelContent { app: &mut *app });
+    let mut output = dock.show_content(ui, &layout, &style, &mut PanelContent { app: &mut *app, layout: &layout });
     app.dock_rt.space = craft_ui::docking::float_space(&ctx, area);
     if let Some(panel) = output.focused.take() {
         app.dock_rt.focused = Some(panel);
@@ -1195,15 +1319,15 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
         app.open_dropped_files(window.dropped, None, shift);
     }
     forward_keys(app, &ctx, output.forwarded_events, output.forwarded_modifiers);
-    if !thumbnail_panel_showing(&app.ui, &ctx) {
+    if peeking.is_none() && !thumbnail_panel_showing(&app.ui, &ctx) {
         // No panel can ask for these rows again this pass. Keep the cache of open documents, but
         // discard worker jobs queued behind the one already rendering.
         crate::panels::layers::show_thumbs_of(None);
     }
 }
 
-/// Whether a modal is open: a dialog, About, the command palette, a native file dialog, or a
-/// window behind the modal backdrop last frame (export progress, plug-in runs). Floating panels
+/// Whether a modal is open: a dialog, About, the command palette, a native file dialog, an update
+/// dialog, or a window behind the modal backdrop last frame (export progress, plug-in runs). Floating panels
 /// in OS windows of their own take no input meanwhile, as the main window behind it takes none.
 /// The window level and visibility a palette window takes: hidden under a modal dialog (a click
 /// must not bring it back over the dialog), at the normal level under a menu or another popup drawn
@@ -1234,18 +1358,28 @@ fn palette_window_state(modal: bool, popup: bool, active: bool) -> (egui::Window
 /// Sends the palette windows of `layout` the level and visibility [`palette_window_state`] gives
 /// when they change. craft-ui varies a palette's level through the viewport builder, which egui
 /// applies when the window opens and not to one already on screen, so the commands go explicitly to
-/// the windows there are.
+/// the windows there are. A window that opens while the others are hidden (a panel floated under a
+/// dialog, a menu, a flyout or the drawer) opens shown at its palette level, so it gets the commands
+/// in its first frame.
 #[cfg(not(target_arch = "wasm32"))]
 fn palette_window_levels(ctx: &egui::Context, layout: &Layout<String>, modal: bool, popup: bool) {
     let active = ctx.input(|i| i.focused || i.raw.viewports.values().any(|v| v.focused == Some(true)));
     let key = area_id().with("palette-levels-state");
-    if ctx.data(|d| d.get_temp::<(bool, bool, bool)>(key)) == Some((modal, popup, active)) {
-        return;
-    }
-    ctx.data_mut(|d| d.insert_temp(key, (modal, popup, active)));
-
+    let state = (modal, popup, active);
+    let windows: Vec<u64> = layout.floating.iter().map(|window| window.id).collect();
+    let sent = ctx.data(|d| d.get_temp::<((bool, bool, bool), Vec<u64>)>(key));
     let (level, visible) = palette_window_state(modal, popup, active);
-    for window in &layout.floating {
+    // The windows that already have this state's commands.
+    let known: &[u64] = match &sent {
+        Some((was, ids)) if *was == state && !visible => ids,
+        Some((was, _)) if *was == state => &windows,
+        _ => &[],
+    };
+    let fresh: Vec<u64> = windows.iter().copied().filter(|id| !known.contains(id)).collect();
+    if sent.as_ref().is_none_or(|(was, ids)| *was != state || *ids != windows) {
+        ctx.data_mut(|d| d.insert_temp(key, (state, windows)));
+    }
+    for window in layout.floating.iter().filter(|window| fresh.contains(&window.id)) {
         let viewport = craft_ui::docking::DockArea::<String>::window_viewport(area_id(), window.id);
         ctx.send_viewport_cmd_to(viewport, egui::ViewportCommand::WindowLevel(level));
         ctx.send_viewport_cmd_to(viewport, egui::ViewportCommand::Visible(visible));
@@ -1258,7 +1392,42 @@ pub(crate) fn modal_open(app: &VectorcraftApp, ctx: &egui::Context) -> bool {
         || app.ui.about
         || app.ui.palette_open
         || app.file_dialog_open()
+        || crate::updates_ui::blocks_input(app)
         || ctx.memory(|m| m.areas().is_visible(&crate::dialogs::modal::backdrop()))
+}
+
+/// Is a modal window open in this pass: a dialog, the About window, a file dialog, the update
+/// prompt, or a window such as a progress window drawn over the modal backdrop in this pass?
+pub(crate) fn modal_window_up(app: &VectorcraftApp, ctx: &egui::Context) -> bool {
+    app.ui.dialog.is_some()
+        || app.ui.about
+        || app.file_dialog_open()
+        || crate::updates_ui::blocks_input(app)
+        || crate::dialogs::modal::drawn_this_pass(ctx)
+}
+
+/// The key of whether a modal window was up in the last pass ([`close_overlays_for_modal`]).
+fn modal_window_up_id() -> egui::Id {
+    egui::Id::unique("modal-window-up")
+}
+
+/// While a modal window is up ([`modal_window_up`]), keeps the command palette closed, so a palette
+/// opened over it from the macOS menu bar or by an automation command does not take the keyboard
+/// from the window. In the pass the window opens, also closes a tool group's flyout, the All Tools
+/// drawer and any open popup, whatever opened the window: a press in the window, a pick in the
+/// macOS menu bar, an automation command or a run that ends in a dialog. Popups the window itself
+/// opens later stay open. Called after every window of the pass has drawn.
+pub(crate) fn close_overlays_for_modal(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    let up = modal_window_up(app, ctx);
+    let was = ctx.data_mut(|d| std::mem::replace(d.get_temp_mut_or_default::<bool>(modal_window_up_id()), up));
+    if up {
+        app.ui.palette_open = false;
+    }
+    if up && !was {
+        app.ui.flyout = None;
+        app.ui.tools_drawer = false;
+        egui::Popup::close_all(ctx);
+    }
 }
 
 /// Keys, text and clipboard events that a floating panel's own OS window left over run the main
@@ -1333,6 +1502,7 @@ pub(crate) fn floating_size(panel: &str) -> egui::Vec2 {
         // Tall enough to show its Corners and Shared Edges sections, last in it, which the Corner
         // Tool's and Shared Edge Merge Tool's menu items open.
         crate::addons::pathtools::ID => egui::vec2(260.0, 660.0),
+        crate::addons::packaging::preview::ID => egui::vec2(520.0, 440.0),
         _ => egui::vec2(260.0, 360.0),
     }
 }
@@ -1340,12 +1510,17 @@ pub(crate) fn floating_size(panel: &str) -> egui::Vec2 {
 /// The panels' content, labels and icons.
 struct PanelContent<'a> {
     app: &'a mut VectorcraftApp,
+    layout: &'a Layout<String>,
 }
 
 impl craft_ui::docking::DockContent<String> for PanelContent<'_> {
+    /// Draw a registered panel body, fitting untouched flyouts and pinning sized panels' footers.
     fn body(&mut self, ui: &mut egui::Ui, id: &String) {
         if id == CANVAS {
-            self.app.canvas_area(ui);
+            peek::canvas(self.app, ui, |app, ui| {
+                crate::toolbar::show_beside_canvas(app, ui);
+                app.canvas_area(ui);
+            });
             return;
         }
         let floating = ui.ctx().viewport_id() != egui::ViewportId::ROOT;
@@ -1360,15 +1535,23 @@ impl craft_ui::docking::DockContent<String> for PanelContent<'_> {
         }
         let width = ui.available_width();
         let height = (ui.available_height() - 20.0).max(0.0);
-        if DockTab::from_id(id).is_some() {
-            crate::dock::panel_body(self.app, ui, id, width, height);
-        } else {
-            // Shrinking to the content's height lets craft-ui fit a float or flyout to it.
-            crate::widgets::panel_scroll(ui, egui::ScrollArea::vertical().id_salt(("shared-panel-body", id)).auto_shrink([false, true]), |ui| {
-                let width = ui.available_width();
-                crate::dock::panel_body(self.app, ui, id, width, height)
-            });
-        }
+        let fitted = in_iconic_column(self.layout, id)
+            && self.layout.location(id).ok().and_then(|location| location.group).is_none_or(|group| group.height.is_none());
+        // Properties embeds other panels as sections, so their local button rows
+        // must remain beside those sections rather than pinning to the outer panel.
+        let bottom = (!fitted && id != "properties").then_some(back.bottom() - 10.0);
+        let info = egui::UiStackInfo::default().with_tag_value(crate::widgets::PANEL_FOOTER, bottom);
+        ui.scope_builder(egui::UiBuilder::new().ui_stack_info(info), |ui| {
+            if DockTab::from_id(id).is_some() {
+                crate::dock::panel_body(self.app, ui, id, width, height);
+            } else {
+                // Shrinking to the content's height lets craft-ui fit a float or flyout to it.
+                crate::widgets::panel_scroll(ui, egui::ScrollArea::vertical().id_salt(("shared-panel-body", id)).auto_shrink([false, true]), |ui| {
+                    let width = ui.available_width();
+                    crate::dock::panel_body(self.app, ui, id, width, height)
+                });
+            }
+        });
         if field_had_keyboard {
             keep_field_ending_keys(ui);
         }
@@ -1388,7 +1571,9 @@ impl craft_ui::docking::DockContent<String> for PanelContent<'_> {
     }
 
     fn limits(&self, id: &String) -> craft_ui::docking::PanelLimits {
-        let min = if id == CANVAS { egui::vec2(200.0, 120.0) } else { egui::vec2(PANEL_MIN_WIDTH, 80.0) };
+        // The canvas keeps room for Tools and the lane of toolbars docked beside it.
+        let beside = crate::toolbar::docked_width(&self.app.ui) + crate::custom_toolbars::beside_canvas_reserve(&self.app.ui);
+        let min = if id == CANVAS { egui::vec2(200.0 + beside, 120.0) } else { egui::vec2(PANEL_MIN_WIDTH, 80.0) };
         craft_ui::docking::PanelLimits { min, ..Default::default() }
     }
 
@@ -1414,15 +1599,66 @@ impl craft_ui::docking::DockContent<String> for PanelContent<'_> {
         crate::panels::panel_menu_items(self.app, ui, id);
     }
 
-    fn group_header_width(&self, _panels: &[String], _active: &String, _floating: bool, _strip_width: f32) -> f32 {
-        28.0
+    fn group_header_width(&self, panels: &[String], active: &String, floating: bool, _strip_width: f32) -> f32 {
+        let flyout = self.app.ui.open_panel.as_ref().is_some_and(|panel| panels.contains(panel));
+        let cycle = if sizes::has_sizes(active) { sizes::CELL } else { 0.0 };
+        cycle + if floating || flyout { 52.0 } else { 28.0 }
     }
 
-    fn group_header(&mut self, ui: &mut egui::Ui, _panels: &[String], active: &String, _floating: bool) {
-        let rect = egui::Rect::from_center_size(ui.max_rect().center(), egui::vec2(16.0, 16.0));
-        crate::panels::panel_menu(self.app, ui, active, rect);
+    fn group_header(&mut self, ui: &mut egui::Ui, panels: &[String], active: &String, floating: bool) {
+        let mut header = ui.max_rect();
+        // The double triangle comes first, for a panel with display sizes.
+        if sizes::has_sizes(active) {
+            let split = (header.left() + sizes::CELL).min(header.right());
+            let cell = egui::Rect::from_min_max(header.min, egui::pos2(split, header.bottom()));
+            sizes::button(self.app, ui, cell, active);
+            header.min.x = split;
+        }
+        let flyout = self.app.ui.open_panel.clone().filter(|panel| panels.contains(panel));
+        let menu_cell = if floating || flyout.is_some() {
+            let split = (header.right() - 28.0).max(header.left());
+            let cell = egui::Rect::from_min_max(header.min, egui::pos2(split, header.bottom()));
+            if cell.is_positive() {
+                let rect = egui::Rect::from_center_size(cell.center(), egui::vec2(24.0_f32.min(cell.width()), 24.0_f32.min(cell.height())));
+                let tokens = crate::theme::Tokens::get(ui.ctx());
+                let response = ui.interact(rect, ui.scope_id().with(("collapse-to-icons", active)), egui::Sense::click());
+                response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), tl!("Collapse to Icons")));
+                let color = if response.hovered() || response.has_focus() { tokens.text_strong } else { tokens.text_dim };
+                ui.painter().with_clip_rect(rect.intersect(ui.clip_rect())).text(
+                    rect.center(),
+                    egui::Align2::CENTER_CENTER,
+                    "»",
+                    egui::TextStyle::Button.resolve(ui.style()),
+                    color,
+                );
+                if response.on_hover_text(tl!("Collapse to Icons")).clicked() {
+                    let result = if let Some(panel) = flyout {
+                        // The opening icon can differ from the currently active tab.
+                        self.app.run("window.panel", json!({"panel": panel}))
+                    } else {
+                        self.app.run("window.panel.dock", json!({"panel": active, "icon": true, "group": true}))
+                    };
+                    match result {
+                        // Dock commands reveal their destination. This control leaves the group collapsed.
+                        Ok(_) => self.app.ui.open_panel = None,
+                        Err(error) => self.app.ui.status = error,
+                    }
+                }
+            }
+            egui::Rect::from_min_max(egui::pos2(split, header.top()), header.max)
+        } else {
+            header
+        };
+        if menu_cell.is_positive() {
+            let rect =
+                egui::Rect::from_center_size(menu_cell.center(), egui::vec2(16.0_f32.min(menu_cell.width()), 16.0_f32.min(menu_cell.height())));
+            crate::panels::panel_menu(self.app, ui, active, rect);
+        }
     }
 }
+
+mod peek;
+mod sizes;
 
 #[cfg(test)]
 mod tests;

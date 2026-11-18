@@ -65,6 +65,10 @@ pub(super) struct Thumbs {
     spent: (u64, f64, u32),
     /// Thumbnails rendered on the UI thread (tests count them).
     pub(super) renders: u64,
+    /// A test's clock (ms) for the render budget, replacing [`crate::now_ms`] so a test decides how
+    /// long each render takes (production always leaves this `None`).
+    #[cfg(test)]
+    pub(super) clock: Option<Box<dyn FnMut() -> f64>>,
 }
 
 thread_local! {
@@ -230,7 +234,8 @@ fn weigh(n: &Node, nodes: usize, anchors: usize, masks: bool, doc: Option<&Docum
             return false;
         }
         let mask = n.extras().mask.as_deref().filter(|m| left.masks && !m.disabled).map(|m| &m.art);
-        n.children().into_iter().flatten().chain(mask).all(|c| left.object() && count(c, doc, left, depth))
+        // A layer's ruler guides draw nothing in its thumbnail and use no budget.
+        n.children().into_iter().flatten().filter(|c| !c.is_ruler_guide()).chain(mask).all(|c| left.object() && count(c, doc, left, depth))
     }
     let mut left = Left { nodes, anchors, steps: THUMB_COUNT_STEPS, masks };
     let small = count(n, doc, &mut left, 0);
@@ -257,6 +262,15 @@ impl Thumbs {
         self.entries.keys().any(|key| key.0 == uid)
     }
 
+    /// The time (ms) a render on the UI thread is measured by: [`crate::now_ms`], or a test's clock.
+    fn now_ms(&mut self) -> f64 {
+        #[cfg(test)]
+        if let Some(clock) = self.clock.as_mut() {
+            return clock();
+        }
+        crate::now_ms()
+    }
+
     /// Release thumbnails and queued jobs for documents that have closed, keeping the cache for
     /// other open documents even when the panels are hidden or another document is active. When a
     /// document closes, the worker drops its jobs, the one running included, and the images it
@@ -266,18 +280,17 @@ impl Thumbs {
             return;
         }
         let open: HashSet<u64> = uids.iter().copied().collect();
-        let closed = self.open_docs.as_ref().is_some_and(|before| before.iter().any(|uid| !open.contains(uid)));
+        let closed: HashSet<u64> = self.open_docs.as_ref().map(|before| before.difference(&open).copied().collect()).unwrap_or_default();
         let stale =
             self.entries.keys().chain(self.pending.keys()).any(|key| !open.contains(&key.0)) || self.showing.is_some_and(|uid| !open.contains(&uid));
         self.entries.retain(|key, _| open.contains(&key.0));
         self.pending.retain(|key, _| open.contains(&key.0));
         self.showing = self.showing.filter(|uid| open.contains(uid));
-        if closed {
+        if !closed.is_empty() {
             // Images finished before now are dropped with the rest of the queue: the open
-            // documents' rows are asked for again.
+            // documents' rows are asked for again. Documents opened later keep their jobs.
             if let Some(w) = &self.worker {
-                let open = open.clone();
-                w.forget(move |key| !open.contains(&key.0));
+                w.forget(move |key| closed.contains(&key.0));
                 if w.poll().is_none() {
                     self.worker = None;
                 }
@@ -416,9 +429,9 @@ impl Thumbs {
         thread_local! {
             static RENDERER: std::cell::RefCell<vectorcraft_render::Renderer> = std::cell::RefCell::new(vectorcraft_render::Renderer::new());
         }
-        let t0 = crate::now_ms();
+        let t0 = self.now_ms();
         let img = RENDERER.with(|r| render_thumb(&mut r.borrow_mut(), src.doc, n, px));
-        let ms = crate::now_ms() - t0;
+        let ms = self.now_ms() - t0;
         self.spent.1 += ms;
         self.spent.2 += 1;
         self.renders += 1;
@@ -534,6 +547,37 @@ mod tests {
         assert!(thumbs.worker.as_ref().is_some_and(|w| w.submit(next, (next, Weak::new(), 1), Box::new(|_| None))));
         let done = thumbs.worker.as_ref().and_then(ThumbWorker::wait).expect("the same worker finishes document 2's job");
         assert_eq!(done.key.0, next, "no worker keeps the closed document's image");
+    }
+
+    #[test]
+    fn a_document_opened_while_a_job_runs_after_a_close_gets_its_thumbnails() {
+        let ctx = egui::Context::default();
+        let Some(worker) = ThumbWorker::start(&ctx, "test") else { return };
+        let mut thumbs = Thumbs { worker: Some(worker), worker_started: true, ..Default::default() };
+        thumbs.retain_open(&[1, 2]);
+        // A job of document 2 is running.
+        let (started, running) = std::sync::mpsc::channel::<()>();
+        let (release, held) = std::sync::mpsc::channel::<()>();
+        let blocker = (2, NodeId(1));
+        let job: crate::thumb_worker::JobFn = Box::new(move |_| {
+            started.send(()).ok();
+            held.recv().ok();
+            None
+        });
+        assert!(thumbs.worker.as_ref().is_some_and(|w| w.submit(blocker, (blocker, Weak::new(), 1), job)));
+        running.recv().expect("the job starts");
+        // Document 1 closes, then document 3 opens and one of its rows is queued.
+        thumbs.retain_open(&[2]);
+        thumbs.retain_open(&[2, 3]);
+        let opened = (3, NodeId(2));
+        assert!(thumbs.worker.as_ref().is_some_and(|w| w.submit(opened, (opened, Weak::new(), 1), Box::new(|_| None))));
+        // A job of document 2 queued after it marks the end of the queue.
+        let last = (2, NodeId(3));
+        assert!(thumbs.worker.as_ref().is_some_and(|w| w.submit(last, (last, Weak::new(), 1), Box::new(|_| None))));
+        release.send(()).ok();
+        let worker = thumbs.worker.as_ref().expect("the worker is kept");
+        let order: Vec<(u64, NodeId)> = (0..3).map_while(|_| worker.wait().map(|d| d.key.0)).take_while(|key| *key != last).collect();
+        assert_eq!(order, [blocker, opened], "document 3's job comes back before the last one");
     }
 
     /// An open zigzag of `anchors` anchors.
@@ -898,6 +942,7 @@ mod tests {
         thumbs.receive(ctx, done);
     }
 
+    /// Prioritize the shown document’s thumbnails, requeue them when revisited, and retain cached rows.
     #[test]
     fn the_shown_documents_thumbnails_are_made_before_the_queued_ones_of_another() {
         let ctx = egui::Context::default();
@@ -927,10 +972,15 @@ mod tests {
             assert!(thumbs.texture(&ctx, &src_b, n, 24).is_some(), "the shown document's thumbnails are shown");
         }
         // Shown again, document 1's rows are asked for again and come back.
+        // Hold the worker so texture() cannot collect a completed row before the count.
+        let release = hold(&thumbs);
         for n in &a_rows {
             assert!(thumbs.texture(&ctx, &src_a, n, 24).is_none());
         }
         assert_eq!(thumbs.pending.keys().filter(|k| k.0 == 1).count(), 3);
+        release.send(()).expect("the held job is waiting");
+        let held = thumbs.worker.as_ref().and_then(ThumbWorker::wait).expect("the held job finishes");
+        assert_eq!(held.key.0, (0, NodeId(0)));
         for _ in &a_rows {
             receive_checked(&ctx, &mut thumbs, 1, &a, &a_rows);
         }

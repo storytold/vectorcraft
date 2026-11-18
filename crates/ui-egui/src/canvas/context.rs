@@ -6,7 +6,8 @@ use super::{Ui, VectorcraftApp, Xf, json, widgets};
 /// objects under the pointer ([`vectorcraft_doc::hit::locked_objects_at`]) are kept in
 /// `ui.context_locked` while the menu is open, for its Unlock submenu. With the Intertwine tool, a
 /// right-click where three or more objects of the group overlap keeps the selection and puts what
-/// it arranges in `ui.context_intertwine` ([`vectorcraft_tools::intertwine::menu_target`]).
+/// it arranges in `ui.context_intertwine` ([`vectorcraft_tools::intertwine::menu_target`]). With the
+/// Artboard tool, an artboard takes the place of the object ([`crate::panels::artboards::right_click`]).
 pub(super) fn context_menu(app: &mut VectorcraftApp, resp: &egui::Response, xf: &Xf) {
     if resp.secondary_clicked()
         && let Some(p) = resp.interact_pointer_pos()
@@ -19,7 +20,14 @@ pub(super) fn context_menu(app: &mut VectorcraftApp, resp: &egui::Response, xf: 
             .active()
             .filter(|_| app.session.tool_id() == "intertwine")
             .and_then(|st| vectorcraft_tools::intertwine::menu_target(&st.doc, &st.selection.objects, p).map(|(g, m)| (st.uid, g, p, m)));
-        if app.ui.context_intertwine.is_none()
+        // Auto Spell Check: the underlined word right-clicked, for its suggestions.
+        app.ui.context_spelling = if app.ui.view.auto_spell_check { super::tool_overlays::misspelled_word_at(app, p) } else { None };
+        let on_artboards = app.session.tool_id() == "artboard";
+        if on_artboards {
+            crate::panels::artboards::right_click(app, p);
+        }
+        if !on_artboards
+            && app.ui.context_intertwine.is_none()
             && let Some(st) = app.session.active()
             && let Some(top) = selection_hit_at(app, p, xf.zoom).map(|h| h.top_object(st.isolation))
             && !st.selection.contains(top)
@@ -32,6 +40,8 @@ pub(super) fn context_menu(app: &mut VectorcraftApp, resp: &egui::Response, xf: 
     if resp.context_menu(|ui| crate::menus::context_menu_body(app, ui, &mut clicked)).is_none() {
         app.ui.context_locked = None;
         app.ui.context_intertwine = None;
+        app.ui.context_artboards = None;
+        app.ui.context_spelling = None;
     }
     if let Some((id, p)) = clicked {
         crate::menus::invoke(app, &id, p);
@@ -40,10 +50,15 @@ pub(super) fn context_menu(app: &mut VectorcraftApp, resp: &egui::Response, xf: 
 
 /// A panel drag ([`widgets::PanelDrag`]) dropped on art acts on the object under the pointer,
 /// selected or not: a paint (swatches, a Fill/Stroke proxy, the Gradient panel's thumbnail) goes
-/// to its active proxy (`paint.setFill`/`paint.setStroke` with its `ids`; a gradient fits it), the
+/// to its active proxy (`paint.setFill`/`paint.setStroke` with its `ids`; a gradient fits it; a
+/// solid fill color on a selected gradient mesh recolors the mesh point under the pointer, else the
+/// four points of the patch there, with `object.mesh.setPointColor`), the
 /// Appearance panel's thumbnail gives the object (the topmost one hit) the appearance it carries
 /// (`appearance.copyFrom`), a graphic style is applied to it (`graphicStyle.apply`; with Alt, on
-/// top of its appearance). A chip follows the pointer meanwhile.
+/// top of its appearance), and a brush is applied to it (`brush.apply`, `brush.addFromLibrary`
+/// for a brush library's). A Brushes panel scatter, art or pattern
+/// brush dropped where there is no art places a copy of its art there (`brush.placeArt`). A chip
+/// follows the pointer meanwhile.
 pub(super) fn panel_drop(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, xf: &Xf) {
     crate::panels::swatches::drag_preview(app, ui.ctx());
     let Some(pos) = ui.input(|i| i.pointer.interact_pos()) else { return };
@@ -60,10 +75,11 @@ pub(super) fn panel_drop(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respons
         }
         return;
     }
-    // A symbol from the Symbols panel: an instance centred where it is dropped, on art or not.
-    if let widgets::PanelDrag::Symbol(name) = &*d {
+    // A symbol from the Symbols panel: an instance centred where it is dropped, on art or not. A
+    // symbol of another document is added to this one first.
+    if let widgets::PanelDrag::Symbol { document, name } = &*d {
         let at = xf.to_doc(pos);
-        if let Err(e) = app.run("symbol.place", json!({"name": name, "x": at.x, "y": at.y})) {
+        if let Err(e) = app.run("symbol.placeFromDocument", json!({"sourceDocument": document, "name": name, "x": at.x, "y": at.y})) {
             app.status(e);
         }
         return;
@@ -76,7 +92,34 @@ pub(super) fn panel_drop(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respons
         }
         return;
     }
-    let Some(hit) = hit_at(app, xf.to_doc(pos), xf.zoom) else { return };
+    // A solid fill color on a selected gradient mesh: the point under the pointer, else the four
+    // points around the patch there, take it. The selected meshes are looked at directly, so
+    // Object Selection by Path Only and the selection tolerance do not stop it.
+    if let widgets::PanelDrag::Paint { params, paint, .. } = &*d
+        && !params.is_null()
+        && let Some(color) = paint.color()
+        && crate::panels::proxy_cmd(app, false) == "paint.setFill"
+        && let Some((id, points)) = selected_mesh_drop(app, xf.to_doc(pos), xf.zoom)
+    {
+        let params = json!({"id": id.0, "points": points, "color": crate::panels::color_json(&color), "keepModel": true});
+        if let Err(e) = app.run("object.mesh.setPointColor", params) {
+            app.status(e);
+        }
+        return;
+    }
+    let hit = hit_at(app, xf.to_doc(pos), xf.zoom);
+    // A scatter, art or pattern brush from the Brushes panel dropped where there is no art: a copy
+    // of its art, centered where it is dropped, to edit and Alt-drag back onto the brush.
+    if let (None, widgets::PanelDrag::Brush { name, def }) = (&hit, &*d)
+        && matches!(def["type"].as_str(), Some("scatter" | "art" | "pattern"))
+    {
+        let at = xf.to_doc(pos);
+        if let Err(e) = app.run("brush.placeArt", json!({"name": name, "x": at.x, "y": at.y})) {
+            app.status(e);
+        }
+        return;
+    }
+    let Some(hit) = hit else { return };
     let Some(st) = app.session.active() else { return };
     let (cmd, params) = match &*d {
         widgets::PanelDrag::Paint { params, .. } => {
@@ -113,7 +156,7 @@ pub(super) fn panel_drop(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respons
         // Art dragged back onto the canvas: its move was already dropped. (A symbol was placed
         // above.)
         widgets::PanelDrag::Art(_)
-        | widgets::PanelDrag::Symbol(_)
+        | widgets::PanelDrag::Symbol { .. }
         | widgets::PanelDrag::LibrarySymbol { .. }
         | widgets::PanelDrag::LibraryGraphic { .. } => return,
         // A Libraries panel style or group only moves within that panel.
@@ -122,4 +165,22 @@ pub(super) fn panel_drop(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respons
     if let Err(e) = app.run(cmd, params) {
         app.status(e);
     }
+}
+
+/// The selected, editable gradient mesh and its points that a solid color dropped at document
+/// point `p` at `zoom` recolors: the topmost object within 5 screen pixels of `p` must be that mesh
+/// (fills count even with Object Selection by Path Only, and clipping applies), and the points are
+/// its point within 5 screen pixels, else the four points around its patch under `p`.
+fn selected_mesh_drop(app: &VectorcraftApp, p: vectorcraft_geom::Point, zoom: f64) -> Option<(vectorcraft_doc::NodeId, Vec<usize>)> {
+    let tol = 5.0 / zoom.max(1e-9);
+    let leaf = hit_with(app, p, zoom, |doc, p, opt| {
+        vectorcraft_doc::hit::hit_test(doc, p, vectorcraft_doc::hit::HitOptions { path_only: false, tol: opt.tol.max(tol), ..opt })
+    })?
+    .leaf;
+    let st = app.session.active()?;
+    if !st.selection.contains(leaf) || !st.doc.editable()(leaf) {
+        return None;
+    }
+    let Some(vectorcraft_doc::NodeKind::Mesh(m)) = st.doc.node(leaf).map(|n| &n.kind) else { return None };
+    Some((leaf, vectorcraft_tools::meshedit::color_points(m, p, tol)?))
 }

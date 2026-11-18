@@ -12,7 +12,7 @@ use vectorcraft_geom::FillRule;
 
 use super::appearance::{ItemTarget, item_target};
 use super::edit::selected_roots;
-use super::{CommandSpec, Result, Session, bad, bool_or, cmd, f64_or, has_doc, ids_param, targets};
+use super::{CommandSpec, Result, Session, bad, cmd, has_doc, ids_param, number_or, switch_or, targets};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -126,14 +126,18 @@ fn kinds(p: &Value, cmd: &str, keys: [&str; 2]) -> Result<Vec<(bool, bool)>> {
         .collect()
 }
 
-/// Each kind's item target and objects: (fill?, item, ids).
-fn aims(s: &Session, p: &Value, cmd: &str, kinds: impl IntoIterator<Item = bool>) -> Result<Vec<(bool, ItemTarget, Vec<NodeId>)>> {
+/// Each kind's item target and objects: (fill?, item, ids). With `edit`, the art of graph designs drawn in graph series
+/// is left out, and an explicit item that the art left out has no row of that kind for is an error, as when the edit
+/// resolves it on the other objects. Without it, the art is read with the other objects.
+fn aims(s: &Session, p: &Value, cmd: &str, kinds: impl IntoIterator<Item = bool>, edit: bool) -> Result<Vec<(bool, ItemTarget, Vec<NodeId>)>> {
     let item = item_target(s, p, cmd)?;
     kinds
         .into_iter()
         .map(|fill| {
             let it = item.of_kind(s, fill);
-            Ok((fill, it, it.targets(s, p)?))
+            let ids = it.targets(s, p)?;
+            let ids = if edit { super::appearance::drop_design_art_rows(s, ids, it, fill, cmd)? } else { ids };
+            Ok((fill, it, ids))
         })
         .collect()
 }
@@ -156,10 +160,10 @@ pub(super) fn edit_counted(s: &mut Session, label: &str, f: impl FnOnce(&mut Doc
 pub(super) type OverprintJob = ((bool, ItemTarget, Vec<NodeId>), bool);
 
 /// The overprint edits `p` asks for under `keys` (the fill's and the stroke's), aimed as
-/// `object.setOverprint` aims.
+/// `object.setOverprint` aims, leaving out the art of graph designs drawn in graph series.
 pub(super) fn overprint_jobs(s: &Session, p: &Value, cmd: &str, keys: [&str; 2]) -> Result<Vec<OverprintJob>> {
     let kinds = kinds(p, cmd, keys)?;
-    Ok(aims(s, p, cmd, kinds.iter().map(|k| k.0))?.into_iter().zip(kinds.iter().map(|k| k.1)).collect())
+    Ok(aims(s, p, cmd, kinds.iter().map(|k| k.0), true)?.into_iter().zip(kinds.iter().map(|k| k.1)).collect())
 }
 
 /// Apply `jobs` to `d`, adding the objects changed to `changed`.
@@ -198,7 +202,7 @@ fn attributes(s: &Session, p: &Value) -> Result<AttributesInfo> {
     let d = &s.doc()?.doc;
     let mut info = AttributesInfo { ids: targets(s, p)?, recent_urls: s.recent_urls.clone(), ..Default::default() };
     super::attributes::fill_info(d, &mut info);
-    for (fill, item, ids) in aims(s, p, C, [true, false])? {
+    for (fill, item, ids) in aims(s, p, C, [true, false], false)? {
         let mut all =
             ids.iter().filter_map(|id| d.node(*id)).filter_map(|n| Some(flags(n, fill, item.resolve(&n.appearance, fill, C).ok()?))).flatten();
         let same = all.next().and_then(|first| all.all(|b| b == first).then_some(first));
@@ -214,22 +218,23 @@ fn attributes(s: &Session, p: &Value) -> Result<AttributesInfo> {
 /// Overprint Black on `n` and its descendants; returns the objects changed.
 fn overprint_black_tree(n: &mut Node, op: &OverprintBlack, spots: &[String]) -> usize {
     let mut changed = usize::from(op.apply(n, spots));
-    for c in n.children_mut().into_iter().flatten() {
+    for c in n.children_mut().into_iter().flatten().filter(|c| !c.is_ruler_guide()) {
         changed += overprint_black_tree(Arc::make_mut(c), op, spots);
     }
     changed
 }
 
 pub(crate) fn overprint_black(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "edit.colors.overprintBlack";
     let op = OverprintBlack {
-        remove: bool_or(p, "remove", false),
-        min_k: (f64_or(p, "percentage", 100.0) / 100.0).clamp(0.0, 1.0) as f32,
-        fill: bool_or(p, "fill", true),
-        stroke: bool_or(p, "stroke", true),
-        rich: bool_or(p, "includeCmyBlacks", false),
-        spot: bool_or(p, "includeSpotBlacks", false),
+        remove: switch_or(p, "remove", false, C)?,
+        min_k: (number_or(p, "percentage", 100.0, C)? / 100.0).clamp(0.0, 1.0) as f32,
+        fill: switch_or(p, "fill", true, C)?,
+        stroke: switch_or(p, "stroke", true, C)?,
+        rich: switch_or(p, "includeCmyBlacks", false, C)?,
+        spot: switch_or(p, "includeSpotBlacks", false, C)?,
     };
-    let ids = match ids_param(p, "ids") {
+    let ids = match ids_param(p, "ids", C)? {
         Some(v) => v,
         None => selected_roots(s)?,
     };

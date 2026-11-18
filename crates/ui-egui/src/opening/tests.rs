@@ -50,6 +50,68 @@ fn open_ready(app: &mut VectorcraftApp) {
     poll(app);
 }
 
+fn install_importer(app: &mut VectorcraftApp, src: &str) {
+    let wasm = wat::parse_str(src).unwrap();
+    app.run("plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&wasm)})).unwrap();
+}
+
+/// A file for the importers below, in a folder of its own.
+fn importer_file(tag: &str) -> (crate::tests_folder::Folder, String) {
+    let dir = crate::tests_folder::Folder::new(&format!("ui-opening-{tag}"));
+    let file = dir.file("a.tob", b"not json");
+    (dir, file)
+}
+
+/// Open With off the UI thread: nothing opens until the importer has read the file with the
+/// parameters it was given; then the document opens and joins Open Recent, and a failure is
+/// reported in a dialog.
+#[test]
+fn open_with_runs_the_importer_off_the_ui_thread() {
+    use vectorcraft_plugins::wat::{self as tpl, Given};
+    let rect = r#"{"objects":[{"type":"path","path":{"subpaths":[{"closed":true,"anchors":[{"p":[10,20]},{"p":[110,20]},{"p":[110,70]},{"p":[10,70]}]}]}}]}"#;
+    let (_dir, file) = importer_file("with");
+    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    app.services.read = Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string())));
+    let params = r#"{"density":{"type":"number","min":0,"max":10,"default":4}}"#;
+    install_importer(&mut app, &tpl::when_given(&tpl::importer("test.opening.with", r#"["tob"]"#, params), Given::Params, r#""density":7"#, rect));
+
+    let open = |density: i64| json!({"importer": "plugin.test.opening.with", "path": file, "params": {"density": density}});
+    let r = crate::io::open_with_on(&mut app, &open(7), true).unwrap();
+    assert_eq!(r["background"], true, "{r}");
+    assert!(app.session.documents().is_empty(), "nothing opens before the importer has read the file");
+    assert!(app.ui.recent_files.is_empty());
+    open_ready(&mut app);
+    assert_eq!(app.session.documents().len(), 1);
+    assert_eq!(app.ui.recent_files, std::slice::from_ref(&file));
+
+    // Density 4 gives the file back, which isn't JSON.
+    app.ui.recent_files.clear();
+    crate::io::open_with_on(&mut app, &open(4), true).unwrap();
+    open_ready(&mut app);
+    assert_eq!(app.session.documents().len(), 1);
+    assert!(app.ui.status.contains("Couldn't open a.tob"), "{}", app.ui.status);
+    assert!(app.ui.dialog.is_some(), "the failure is reported in a dialog");
+    assert!(app.ui.recent_files.is_empty());
+    app.run("plugin.remove", json!({"id": "test.opening.with"})).unwrap();
+}
+
+/// Cancel stops an importer that never returns, on the thread reading the file.
+#[test]
+fn cancel_stops_a_running_importer() {
+    use vectorcraft_plugins::wat as tpl;
+    let (_dir, file) = importer_file("cancel");
+    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    app.services.read = Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string())));
+    install_importer(&mut app, &tpl::module(&tpl::importer("test.opening.spins", r#"["tob"]"#, "{}"), "(loop $l (br $l)) (i64.const 0)", "", 1));
+    crate::io::open_with_on(&mut app, &json!({"importer": "plugin.test.opening.spins", "path": file}), true).unwrap();
+    let done = std::mem::replace(&mut app.opening.pending[0].done, std::sync::mpsc::channel().1);
+    assert_eq!(cancel_all(&mut app)["cancelled"], 1);
+    let r = done.recv().unwrap();
+    assert!(r.as_ref().err().is_some_and(|e| e.contains("cancelled")), "{:?}", r.err());
+    assert!(app.session.documents().is_empty());
+    app.run("plugin.remove", json!({"id": "test.opening.spins"})).unwrap();
+}
+
 /// #1694: a file that finishes opening while a dialog is up waits for it to close, so the
 /// dialog's document stays the active one.
 #[test]
@@ -100,7 +162,41 @@ fn a_file_ready_during_a_place_cursor_drag_waits_for_it_to_end() {
     let mut app = VectorcraftApp::new(Session::new(), Services::default());
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
     let mut png = vec![];
-    image::RgbImage::new(8, 8).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::RgbImage::new(8, 8)).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     app.run("file.place.queue", json!({"files": [{"name": "a.png", "dataBase64": vectorcraft_format::base64_encode(&png)}]})).unwrap();
     let view = vectorcraft_engine::ViewInfo::default();
     for (kind, x) in [(PointerKind::Down, 20.0), (PointerKind::Drag, 60.0)] {
@@ -220,15 +316,47 @@ fn a_file_read_off_the_ui_thread_opens_as_one_read_at_once() {
 /// leaves a step to undo, and both ask the same question.
 #[test]
 fn a_file_read_off_the_ui_thread_has_its_links_and_type_as_one_read_at_once() {
-    use image::ImageFormat::{Bmp, Jpeg, Png, Tiff};
-    let dir = std::env::temp_dir().join(format!("vc-opening-links-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
+    use craft_image_codecs::Format::{Bmp, Jpeg, Png, Tiff};
+    let dir = crate::tests_folder::Folder::new("opening-links");
     let (before, after) = (dir.join("before"), dir.join("after"));
     std::fs::create_dir_all(&before).unwrap();
     let file = |folder: &std::path::Path, name: &str| folder.join(name).to_string_lossy().into_owned();
-    let picture = |format: image::ImageFormat, rgb: [u8; 3]| {
+    let picture = |format: craft_image_codecs::Format, rgb: [u8; 3]| {
         let mut out = vec![];
-        image::RgbImage::from_pixel(60, 40, image::Rgb(rgb)).write_to(&mut std::io::Cursor::new(&mut out), format).unwrap();
+        {
+            let __dyn: image::DynamicImage = (image::RgbImage::from_pixel(60, 40, image::Rgb(rgb))).into();
+            let (__w, __h) = (__dyn.width(), __dyn.height());
+            let (__layout, __sample, __raw) = match __dyn {
+                image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageLuma16(b) => (
+                    craft_image_codecs::ChannelLayout::Gray,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageLumaA16(b) => (
+                    craft_image_codecs::ChannelLayout::GrayA,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageRgb16(b) => (
+                    craft_image_codecs::ChannelLayout::Rgb,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageRgba16(b) => (
+                    craft_image_codecs::ChannelLayout::Rgba,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+            };
+            let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+            craft_image_codecs::encode(&__cimg, format, &craft_image_codecs::EncodeOptions::default()).map(|__b| out.extend_from_slice(&__b))
+        }
+        .unwrap();
         out
     };
     let mut app = VectorcraftApp::new(Session::new(), Services::default());
@@ -268,7 +396,6 @@ fn a_file_read_off_the_ui_thread_has_its_links_and_type_as_one_read_at_once() {
         assert!(st.history.undo.is_empty() && !st.is_dirty(), "{update}");
         assert_eq!(asked(&app), question, "{update}");
     }
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// A file opened under automation roots is installed under them too: the open keeps the scope it
@@ -276,7 +403,7 @@ fn a_file_read_off_the_ui_thread_has_its_links_and_type_as_one_read_at_once() {
 #[test]
 fn a_file_opened_under_automation_roots_finishes_under_them() {
     use vectorcraft_engine::file_access;
-    let dir = scope_dir();
+    let dir = crate::tests_folder::Folder::new("opening-scope");
     let roots = file_access::AutomationRoots::new(&[dir.as_path()], &[]).unwrap();
     let mut app = VectorcraftApp::new(Session::new(), Services::default());
     file_access::confine(roots.as_ref(), || {
@@ -285,12 +412,6 @@ fn a_file_opened_under_automation_roots_finishes_under_them() {
     .unwrap();
     let scope = app.opening.pending[0].scope.clone();
     assert!(scope.run(file_access::current).is_some(), "the roots go with the open");
-}
-
-fn scope_dir() -> std::path::PathBuf {
-    let dir = std::env::temp_dir().join(format!("vectorcraft-opening-scope-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
-    dir
 }
 
 /// A file asked for again while it is still being read is not read a second time (#3455).
@@ -310,9 +431,7 @@ fn a_file_asked_for_again_while_it_is_read_opens_once() {
 /// the dialog acts on its own document (#5369).
 #[test]
 fn a_queued_reopen_that_asks_holds_back_files_ready_to_open() {
-    let dir = std::env::temp_dir().join(format!("vectorcraft-opening-queued-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = crate::tests_folder::Folder::new("opening-queued");
     let mut app = VectorcraftApp::new(Session::new(), Services::default());
     app.services.read = Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string())));
     let (doc, other) = (dir.join("doc.vectorcraft"), dir.join("other.vectorcraft"));
@@ -339,7 +458,6 @@ fn a_queued_reopen_that_asks_holds_back_files_ready_to_open() {
     assert_eq!(app.session.doc().unwrap().path.as_deref(), Some(&*doc), "the dialog's document stays active");
     assert_eq!(app.opening.activate.first().map(|(p, _)| p), Some(&other), "the later activation waits");
     assert_eq!(app.opening.pending.len(), 1, "the other file waits");
-    let _ = std::fs::remove_dir_all(dir);
 }
 
 /// Of two files read off the UI thread and ready in the same frame, the first that opens and asks
@@ -362,4 +480,91 @@ fn a_file_that_opens_and_asks_holds_back_the_next_one_ready() {
     assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(crate::dialogs::missing_fonts::KIND));
     assert_eq!(app.session.doc().unwrap().path.as_deref(), Some("/art/Asks.vectorcraft"), "the dialog's document stays active");
     assert_eq!(app.opening.pending.len(), 1, "the next file waits");
+}
+
+/// Draws the opening progress window at `time` seconds → the texts it drew.
+fn progress(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64) -> String {
+    let mut out = ctx.run_ui(egui::RawInput { time: Some(time), ..Default::default() }, |ui| show(app, ui.ctx()));
+    out.textures_delta.clear();
+    let mut texts = String::new();
+    for shape in out.shapes {
+        if let egui::epaint::Shape::Text(t) = shape.shape {
+            texts.push_str(t.galley.text());
+            texts.push('\n');
+        }
+    }
+    texts
+}
+
+/// A document's bytes, `title` naming it.
+fn bytes(title: &str) -> Vec<u8> {
+    let mut d = vectorcraft_doc::Document::new(120.0, 80.0);
+    d.title = title.into();
+    vectorcraft_format::save(&d, false)
+}
+
+/// #5930: a file that takes a while to open shows a progress window with its name and a moving
+/// bar, after [`DELAY`] so a quick open doesn't flash it; a second file says it waits, and the
+/// window waits for a dialog to close.
+#[test]
+fn a_file_that_takes_a_while_to_open_shows_a_progress_window() {
+    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    assert_eq!(progress(&mut app, &ctx, 0.0), "", "nothing opening");
+    start(&mut app, "/art/Big.vectorcraft", bytes("Big")).unwrap();
+    assert_eq!(progress(&mut app, &ctx, 1.0), "", "not at once");
+    progress(&mut app, &ctx, 1.0 + DELAY + 0.05); // a new window measures itself unseen first
+    let texts = progress(&mut app, &ctx, 1.0 + DELAY + 0.1);
+    for want in ["Opening Big.vectorcraft…", "Reading the file…", "Cancel", "Continue in Background"] {
+        assert!(texts.contains(want), "{want} in {texts}");
+    }
+    assert!(!texts.contains("waiting"), "{texts}");
+    start(&mut app, "/art/Next.vectorcraft", bytes("Next")).unwrap();
+    let texts = progress(&mut app, &ctx, 2.0);
+    assert!(texts.contains("Opening Big.vectorcraft…") && texts.contains("1 more file waiting"), "{texts}");
+    app.ui.dialog = Some(crate::state::Dialog::new(crate::dialogs::save_options::KIND, json!({})));
+    assert_eq!(progress(&mut app, &ctx, 3.0), "", "never two modals at once");
+    app.ui.dialog = None;
+    // Continue in Background: the window closes, the files still open.
+    let before = app.session.documents().len();
+    assert!(crate::menus::enabled(&app, "file.openInBackground"));
+    assert_eq!(app.run("file.openInBackground", json!({})).unwrap()["hidden"], 2);
+    assert_eq!(progress(&mut app, &ctx, 4.0), "");
+    assert!(!crate::menus::enabled(&app, "file.openInBackground"));
+    assert!(long_operation_busy(&app), "the status bar still shows them");
+    open_ready(&mut app);
+    assert_eq!(app.session.documents().len(), before + 2);
+}
+
+/// #5930: the progress window's Cancel (`file.cancelOpen`): the file doesn't open, even once it
+/// has been read, and the status bar no longer says it is opening.
+#[test]
+fn cancelling_an_open_opens_nothing() {
+    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    assert!(!crate::menus::enabled(&app, "file.cancelOpen"));
+    let before = app.session.documents().len();
+    start(&mut app, "/art/Big.vectorcraft", bytes("Big")).unwrap();
+    assert!(crate::menus::enabled(&app, "file.cancelOpen"));
+    assert_eq!(app.run("file.cancelOpen", json!({})).unwrap()["cancelled"], 1);
+    assert!(app.opening.pending.is_empty() && !long_operation_busy(&app));
+    assert!(!app.ui.status.starts_with("Opening"), "{}", app.ui.status);
+    std::thread::sleep(std::time::Duration::from_millis(50));
+    poll(&mut app);
+    assert_eq!(app.session.documents().len(), before);
+    assert_ne!(app.ui.recent_files.first().map(String::as_str), Some("/art/Big.vectorcraft"));
+}
+
+/// The moving bar's segment enters at the left, crosses the track and leaves at the right, and a
+/// time that isn't finite puts it at the start.
+#[test]
+fn the_indeterminate_bar_sweeps_across_its_track() {
+    use crate::export_progress::sweep_at;
+    assert_eq!(sweep_at(0.0), (0.0, 0.0));
+    let (from, to) = sweep_at(0.8);
+    assert!(from > 0.0 && to < 1.0 && to > from, "{from} {to}");
+    let (from, to) = sweep_at(1.55);
+    assert!(from > 0.6 && to == 1.0, "{from} {to}");
+    assert_eq!(sweep_at(f64::NAN), (0.0, 0.0));
+    assert_eq!(sweep_at(-0.8), sweep_at(0.8));
 }

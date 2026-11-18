@@ -261,3 +261,20 @@ fn log_records_go_out_as_notifications_once_asked_for() {
     assert!(lines[last_reply + 1..].iter().all(|l| l.get("id").is_none()), "{lines:?}");
     result(&mut s, 4, "logging/setLevel", json!({"level": null}));
 }
+
+/// `list_commands` gives each command's input schema over stdin and stdout, as a client reads it.
+#[test]
+fn list_commands_over_stdio_carries_input_schemas() {
+    let mut s = server();
+    let call = json!({"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "list_commands", "arguments": {"filter": "view.saved"}}});
+    let mut out = Vec::new();
+    s.serve((call.to_string() + "\n").as_bytes(), &mut out).unwrap();
+    let lines: Vec<Value> = String::from_utf8(out).unwrap().lines().map(|l| serde_json::from_str(l).unwrap()).collect();
+    let reply = lines.iter().find(|l| l["id"] == 1).cloned().unwrap_or(Value::Null);
+    assert_eq!(reply["result"]["isError"], false, "{reply}");
+    let listed: Value = serde_json::from_str(reply["result"]["content"][0]["text"].as_str().unwrap_or("null")).unwrap_or(Value::Null);
+    let commands = listed["commands"].as_array().cloned().unwrap_or_default();
+    assert!(commands.iter().filter(|c| c.get("inputSchema").is_some()).count() >= 3, "{listed}");
+    let saved_list = commands.iter().find(|c| c["id"] == "view.saved.list").cloned().unwrap_or(Value::Null);
+    assert_eq!(saved_list["inputSchema"]["type"], "object", "{listed}");
+}

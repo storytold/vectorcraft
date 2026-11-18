@@ -3,6 +3,7 @@ use super::{
     Appearance, AppearanceItem, BezPath, Effect, FillRule, Node, NodeKind, PathData, Rect, StrokeLayer, Value, WarpStyle, distort, stroke, stylize,
     util, warp,
 };
+use vectorcraft_doc::Document;
 
 /// Context the geometry effects may need from the object's appearance.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -22,6 +23,13 @@ pub struct GeomContext<'a> {
     /// The index in `appearance.items` of the fill or stroke whose own effects these are; `None`:
     /// the object's effects.
     pub item: Option<usize>,
+    /// The document that the swatches and patterns named by a live-effect plug-in that paints its
+    /// pieces are looked up in. Without one, a result that names any is refused.
+    pub doc: Option<&'a Document>,
+    /// The object, fill or stroke and effect index a deferred live-effect plug-in is listed by
+    /// ([`vectorcraft_plugins::deferred`]). When `None`, it is the object `seed` names, `item` and
+    /// the effect's index in the list being applied.
+    pub stage: Option<vectorcraft_plugins::deferred::Stage>,
 }
 
 impl<'a> GeomContext<'a> {
@@ -32,7 +40,17 @@ impl<'a> GeomContext<'a> {
             _ => FillRule::NonZero,
         };
         let stroke = n.appearance.stroke().filter(|s| !s.paint.is_none() && s.width > 0.0);
-        Self { stroke, rule, seed: n.id.0, appearance: Some(&n.appearance), item: None }
+        Self { stroke, rule, seed: n.id.0, appearance: Some(&n.appearance), item: None, doc: None, stage: None }
+    }
+
+    /// The context of effect `e`, one of `list`: unless [`Self::stage`] is set, a live-effect
+    /// plug-in there is listed by `e`'s index in `list`.
+    pub(crate) fn at(self, list: &[Effect], e: &Effect) -> Self {
+        let stage = self.stage.or_else(|| {
+            let effect = list.iter().position(|x| std::ptr::eq(x, e))?;
+            Some(vectorcraft_plugins::deferred::Stage { object: self.seed, effect, item: self.item })
+        });
+        Self { stage, ..self }
     }
 
     /// The context of the effects on `item`, one of the same object's appearance items: a
@@ -157,6 +175,181 @@ pub(crate) fn optimize_geometry_effects<'a>(effects: &[&'a Effect], style_safe: 
 /// [`apply_geometry_with`] whose effects keep to `budget`, raised to what `path` costs where that
 /// is more.
 pub(crate) fn apply_geometry_within(effects: &[Effect], path: &PathData, bounds: Rect, ctx: &GeomContext, budget: Budget) -> PathData {
+    apply_geometry_carrying_within(effects, path, bounds, ctx, budget, None)
+}
+
+/// [`apply_geometry_with`], and the [`Carry`] that moves the object's gradients along with the
+/// effects that move the object as a whole.
+pub fn apply_geometry_carrying(effects: &[Effect], path: &PathData, bounds: Rect, ctx: &GeomContext) -> (PathData, Carry) {
+    let mut carry = Carry::default();
+    let out = apply_geometry_carrying_within(effects, path, bounds, ctx, Budget::EFFECTS, Some(&mut carry));
+    (out, carry)
+}
+
+/// [`apply_geometry_carrying`] on kurbo paths.
+pub fn apply_geometry_bez_carrying(effects: &[Effect], path: &BezPath, bounds: Rect, ctx: &GeomContext) -> (BezPath, Carry) {
+    let (out, carry) = apply_geometry_carrying(effects, &PathData::from_bezpath(path), bounds, ctx);
+    (out.to_bezpath(), carry)
+}
+
+/// How gradients follow geometry effects. The Transform effect without copies maps placed
+/// gradients as it maps the object (with copies, `crate::reshape` gives each copy its own). Free
+/// Distort and the Warp effects move and scale them from the object's bounds before the effect to
+/// its bounds after it. For the other geometry effects it is empty. A gradient fitted to the
+/// object fits the geometry each effect makes, until a Transform effect turns, reflects or scales
+/// it unevenly (a map after which a refit would not match the mapped gradient): it is fixed to its
+/// fit on the geometry that effect takes, and then follows that effect and the ones after it as a
+/// placed gradient does.
+///
+/// It also lists the visible Transform effects that move the art once and that the pass left out,
+/// their results past the budget, by their index in the effect list it was given: the raster
+/// effects before such an effect stay as they are, as the art does ([`Self::hide_skipped`]).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Carry(Vec<CarryStep>, Vec<usize>);
+
+/// Does `m` fix a gradient fitted to the object to its fit before mapping it? It does when a refit
+/// would not reproduce the map (a turn, a reflection or an uneven scale) and `m` keeps area: a map
+/// that flattens the geometry to a line (a scale of 0) leaves the gradient fitted, since mapping it
+/// would flatten it to one color ([`vectorcraft_doc::node::flattens`]).
+pub(crate) fn fixes_fit(m: vectorcraft_geom::Affine) -> bool {
+    !vectorcraft_doc::node::flattens(m) && !vectorcraft_doc::node::keeps_gradient_fit(m)
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum CarryStep {
+    /// Map `m`; `from` is the geometric bounds of the geometry it takes, which a fitted gradient
+    /// fits before `m` moves it (none: fitted gradients stay fitted).
+    Affine { m: vectorcraft_geom::Affine, from: Option<Rect> },
+    /// From box `from` to box `to` (strokes: their stroke-inflated boxes).
+    Boxes { from: Rect, to: Rect },
+}
+
+impl Carry {
+    /// Does effect `id` with merged params `p` on geometry with reference box `b` (`seed` for
+    /// Random) move placed gradients? Free Distort does unless it leaves every corner in place, a
+    /// Warp effect unless it has no bend and no distortion, and the Transform effect does without
+    /// copies (with copies the original stays where it is, and `crate::reshape` gives each copy
+    /// its own gradients).
+    pub(crate) fn follows(id: &str, p: &Value, b: Rect, seed: u64) -> bool {
+        match id {
+            "distort.transform" => {
+                let (m, copies) = distort::transform_map(b, p, seed);
+                copies == 0 && m != vectorcraft_geom::Affine::IDENTITY && m.is_finite()
+            }
+            "distort.freeDistort" => {
+                let corners = distort::free_distort_corners(b, p);
+                let tol = 1e-9 * b.width().hypot(b.height()).max(1.0);
+                let still =
+                    [(b.x0, b.y0), (b.x1, b.y0), (b.x1, b.y1), (b.x0, b.y1)].iter().zip(&corners).all(|(a, c)| c.distance((*a).into()) <= tol);
+                !still && corners.iter().all(|c| c.x.is_finite() && c.y.is_finite())
+            }
+            _ if id.starts_with("warp.") => crate::warp::bends(id, p),
+            _ => false,
+        }
+    }
+
+    /// Does effect `id` move placed gradients from each path's bounds before it to its bounds
+    /// after it, rather than by one map for the whole object?
+    pub(crate) fn by_bounds(id: &str) -> bool {
+        id == "distort.freeDistort" || id.starts_with("warp.")
+    }
+
+    /// How placed gradients follow effect `id` (as [`Self::follows`]) on an object whose geometric
+    /// bounds are `from` before the effect and `to` after it; empty when they stay in place.
+    pub(crate) fn of(id: &str, p: &Value, b: Rect, from: Option<Rect>, to: Option<Rect>, seed: u64) -> Carry {
+        if !Self::follows(id, p, b, seed) {
+            return Carry::default();
+        }
+        let step = match id {
+            "distort.transform" => Some(CarryStep::Affine { m: distort::transform_map(b, p, seed).0, from }),
+            _ => match (from, to) {
+                (Some(from), Some(to)) if from != to && [to.x0, to.y0, to.x1, to.y1].iter().all(|v| v.is_finite()) => {
+                    Some(CarryStep::Boxes { from, to })
+                }
+                _ => None,
+            },
+        };
+        Carry(step.into_iter().collect(), vec![])
+    }
+
+    /// Does it leave gradients where they are?
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    /// Does it move any of the gradients of `ap` (those drawn at a place in document space, a
+    /// freeform gradient's own points included)? Callers check first, so an appearance shared with
+    /// other objects is not copied for nothing.
+    pub fn moves(&self, ap: &Appearance) -> bool {
+        !self.0.is_empty() && (ap.has_positioned_gradient() || (self.pin().is_some() && ap.has_unplaced_gradient()))
+    }
+
+    /// The first step that fixes gradients fitted to the object: a map a refit would not
+    /// reproduce, on geometry whose bounds are known.
+    fn pin(&self) -> Option<usize> {
+        self.0.iter().position(|s| matches!(s, CarryStep::Affine { m, from: Some(_) } if fixes_fit(*m)))
+    }
+
+    /// Move the gradients of `ap` along. Placed gradients take every step in turn; fitted ones
+    /// are fixed to their fit at the first step [`Self::pin`] finds and take it and the steps
+    /// after it.
+    pub fn apply(&self, ap: &mut Appearance) {
+        if !self.moves(ap) {
+            return;
+        }
+        // The steps move placed gradients only; fitted ones become placed at the pin.
+        let pin = self.pin();
+        for (k, s) in self.0.iter().enumerate() {
+            if Some(k) == pin
+                && let CarryStep::Affine { from: Some(b), .. } = *s
+            {
+                ap.pin_gradients(b);
+            }
+            match *s {
+                CarryStep::Affine { m, .. } => ap.transform_gradients(m),
+                CarryStep::Boxes { from, to } => crate::reshape::follow_boxes(ap, from, to),
+            }
+        }
+    }
+
+    pub(crate) fn push(&mut self, more: Carry) {
+        self.0.extend(more.0);
+        self.1.extend(more.1);
+    }
+
+    /// Did the pass leave out a Transform effect that moves the art once ([`Self::hide_skipped`])?
+    pub fn skipped(&self) -> bool {
+        !self.1.is_empty()
+    }
+
+    /// Hide each Transform effect of `effects`, the list the pass was given, that it left out (its
+    /// result past the budget): the art stays where it was, so the raster effects listed before it
+    /// do not follow it ([`crate::raster::followed`]). Other effects stay as they are.
+    pub fn hide_skipped(&self, effects: &mut [Effect]) {
+        for &i in &self.1 {
+            if let Some(e) = effects.get_mut(i).filter(|e| e.id == "distort.transform") {
+                e.visible = false;
+            }
+        }
+    }
+
+    /// Note that the Transform effect at index `i` of the pass's list was left out.
+    pub(crate) fn skip(&mut self, i: usize) {
+        if !self.1.contains(&i) {
+            self.1.push(i);
+        }
+    }
+}
+
+/// [`apply_geometry_within`], adding to `carry` how gradients follow each effect.
+pub(crate) fn apply_geometry_carrying_within(
+    effects: &[Effect],
+    path: &PathData,
+    bounds: Rect,
+    ctx: &GeomContext,
+    budget: Budget,
+    mut carry: Option<&mut Carry>,
+) -> PathData {
     // `budget` raised to what `path` costs, measured once, and only for a path that has geometry
     // effects.
     let has_stroke = match (ctx.item, ctx.appearance) {
@@ -184,8 +377,18 @@ pub(crate) fn apply_geometry_within(effects: &[Effect], path: &PathData, bounds:
         }
         let p = merged_params(&e.id, &e.params);
         let limit = *limit.get_or_insert_with(|| budget.at_least(Budget::of(path)));
-        if let Some(next) = apply_one(&e.id, &p, &cur, b, ctx, limit) {
+        if let Some(next) = apply_one(&e.id, &p, &cur, b, &ctx.at(effects, e), limit) {
+            if let Some(c) = carry.as_deref_mut() {
+                c.push(Carry::of(&e.id, &p, b, cur.bounds(), next.bounds(), ctx.seed));
+            }
             cur = next;
+        } else if let Some(c) = carry.as_deref_mut()
+            && e.id == "distort.transform"
+            && !crate::raster::holds_back(e)
+            && let Some(i) = effects.iter().position(|x| std::ptr::eq(x, e))
+        {
+            // The raster effects before it stay as the art does.
+            c.skip(i);
         }
     }
     cur
@@ -223,8 +426,8 @@ fn builds_within(id: &str) -> bool {
 fn apply_unchecked(id: &str, p: &Value, path: &PathData, b: Rect, ctx: &GeomContext, max: usize) -> PathData {
     use util::{join, num};
     if let Some(plugin) = vectorcraft_plugins::effect::plugin_id(id) {
-        let paints = vectorcraft_plugins::effect::Paints { appearance: ctx.appearance, item: ctx.item };
-        return vectorcraft_plugins::effect::apply(plugin, p, path, b, ctx.rule, paints).unwrap_or_else(|| path.clone());
+        let paints = vectorcraft_plugins::effect::Paints { appearance: ctx.appearance, item: ctx.item, at: ctx.stage };
+        return vectorcraft_plugins::effect::apply(plugin, p, path, b, ctx.rule, paints, ctx.doc).unwrap_or_else(|| path.clone());
     }
     match id {
         "distort.freeDistort" => distort::free_distort(path, b, p, max),

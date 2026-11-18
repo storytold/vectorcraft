@@ -105,6 +105,22 @@ fn apply_to_all_answers_the_rest_and_cancel_pastes_nothing() {
 }
 
 #[test]
+fn ok_pastes_nothing_after_another_document_became_active() {
+    let mut app = conflicting();
+    run(&mut app, "edit.paste", json!({}));
+    set(&mut app, "applyToAll", json!(true));
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    let before = objects(&app);
+    let undo = app.session.active().unwrap().history.undo.len();
+    dialogs::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none(), "it closes as Cancel does");
+    assert_eq!(objects(&app), before, "the document made active pastes nothing");
+    assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    assert!(objects(&app).is_empty(), "the document it asked in pastes nothing");
+}
+
+#[test]
 fn paste_goes_to_the_centre_of_the_view() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     run(&mut app, "file.new", json!({"width": 400, "height": 300}));
@@ -580,4 +596,43 @@ fn type_range_copy_stays_styled_when_pasted_as_art() {
     assert_eq!(t.runs[0].style.size, 28.0);
     assert_eq!(t.runs[0].style.fill, Paint::solid(Color::rgb8(0, 255, 0)));
     assert_eq!(t.runs[0].style.style_name.as_deref(), Some("Emphasis"));
+}
+
+/// #5929: a styled Type-range Copy pasted into a new point type object made by a Type tool click
+/// (placeholder text selected) keeps its font, size and colour, and replaces the placeholder: the
+/// paste takes the copied runs, not the new object's default style.
+#[test]
+fn a_type_range_paste_into_new_point_type_keeps_its_formatting() {
+    let _guard = TEST_CLIP_LOCK.lock().unwrap();
+    let (mut app, board) = super::sysclip::app();
+    let source = run(
+        &mut app,
+        "text.create",
+        json!({"x": 20, "y": 40, "text": "Hello world", "font": "Source Serif 4", "size": 28, "color": "#00ff00"}),
+    )["id"]
+        .as_u64()
+        .unwrap();
+    let view = app.view_info();
+    app.session.select_tool("type", view).unwrap();
+    app.session.set_tool_option("textSelection", &json!({"id": source, "start": 0, "end": 5}));
+    crate::panels::character::intercept_text_command(&mut app, "edit.copy");
+    crate::background::wait_all(&mut app);
+    assert!(super::sysclip::written(&board).contains(&vectorcraft_engine::cmd::clipboard::TEXT));
+    // The first click ends editing the source; the second places new point type with its
+    // placeholder text selected.
+    for _ in 0..2 {
+        for kind in [vectorcraft_tools::PointerKind::Down, vectorcraft_tools::PointerKind::Up] {
+            app.session.pointer(&vectorcraft_tools::PointerEvent::new(kind, 300.0, 250.0), view).unwrap();
+        }
+    }
+    let fresh = app.session.tool_options()["editing"].as_u64().expect("editing new point type");
+    assert_ne!(fresh, source);
+    crate::panels::character::intercept_text_command(&mut app, "edit.paste");
+    app.session.select_tool("selection", view).unwrap();
+    let node = app.session.active().unwrap().doc.node(NodeId(fresh)).unwrap().clone();
+    let vectorcraft_doc::NodeKind::Text(t) = &node.kind else { panic!("not text") };
+    assert_eq!(t.plain_text(), "Hello", "the paste replaces the placeholder");
+    assert_eq!(t.runs[0].style.font_family, "Source Serif 4");
+    assert_eq!(t.runs[0].style.size, 28.0);
+    assert_eq!(t.runs[0].style.fill, Paint::solid(Color::rgb8(0, 255, 0)));
 }

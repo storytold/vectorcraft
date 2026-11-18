@@ -9,8 +9,10 @@
 
 pub mod addons;
 pub mod bbox;
+pub mod blendwidget;
 pub mod builder;
 pub mod catalog;
+pub mod circle;
 pub mod corners;
 pub mod cropimage;
 pub mod cut;
@@ -26,6 +28,7 @@ pub mod meshedit;
 pub mod mirror;
 pub mod nineslice;
 pub mod objects_on_path;
+pub mod option_check;
 pub mod params;
 pub mod pathtype;
 pub mod pen;
@@ -33,6 +36,7 @@ pub mod pie;
 pub mod place;
 pub mod printtiling;
 pub mod repeat_grid;
+pub mod repeat_radial;
 pub mod rulerguide;
 pub mod select;
 pub mod settings;
@@ -56,18 +60,29 @@ pub use catalog::{TOOL_GROUPS, ToolInfo, tool_info};
 mod context;
 mod cursor;
 mod input;
+mod readout;
 
-pub use context::{GlyphSnap, PaintDefaults, ScreenFrame, ToolContext};
+pub use context::{GlyphSnap, MarqueeMode, PaintDefaults, PixelOp, PixelSnap, ScreenFrame, ToolContext, ordinary_isolation};
 pub use cursor::Cursor;
 pub use input::{Action, Mods, PenPose, PointerEvent, PointerKind, ToolKey};
+pub use readout::Readout;
 
 /// Visual feedback drawn by the UI in screen space (coordinates here are document space).
 #[derive(Clone, Debug, PartialEq)]
 pub enum Overlay {
     /// Marquee / rubber band rectangle.
     Marquee(Rect),
+    /// Selection-tool marquee, with its effective rule and pointer position for feedback.
+    SelectionMarquee { rect: Rect, enclosed: bool, pointer: Point },
     /// A path preview (e.g. pen rubber band) in a colour (RGB).
     Path { path: BezPath, color: [u8; 3], width: f32, dashed: bool },
+    /// A path preview that later calls return again, as the same shared `path`, for as long as it
+    /// does not change (the settled outline of a long Blob Brush or Eraser drag, the pieces of a long
+    /// drag's line). The host can keep what it built to draw it while `path` is the same allocation.
+    /// With `dash`, it is dashed as a dashed [`Overlay::Path`] is, from `dash` document units along
+    /// the dash pattern: the pieces of one line, each starting where the one before it ends, dash
+    /// as the whole line does.
+    SharedPath { path: std::sync::Arc<BezPath>, color: [u8; 3], width: f32, dash: Option<f64> },
     /// A line segment (smart guide, handle line).
     Line { a: Point, b: Point, color: [u8; 3], dashed: bool },
     /// An anchor square: filled = selected.
@@ -133,6 +148,12 @@ pub trait Tool: Send {
     fn overlays(&self, _cx: &ToolContext) -> Vec<Overlay> {
         vec![]
     }
+    /// Did the last [`Tool::overlays`] leave part of its overlays for later calls (the outline of a
+    /// long Blob Brush or Eraser drag, the band of a long smoothing drag outlined again after a
+    /// zoom change)? The host then draws again on the next frame, even when the pointer holds still.
+    fn overlays_pending(&self) -> bool {
+        false
+    }
     fn cursor(&self, _cx: &ToolContext, _p: Point, _mods: Mods) -> Cursor {
         Cursor::Arrow
     }
@@ -141,18 +162,59 @@ pub trait Tool: Send {
         Value::Null
     }
     fn set_option(&mut self, _key: &str, _value: &Value) {}
+    /// Whether [`Self::set_option`] takes `value` for option `key` as it is: an error names an
+    /// option the tool doesn't have, a value of the wrong type or a number out of range
+    /// (`tool.setOption` checks every option it is given with this before it sets any). A tool
+    /// without options takes none.
+    fn check_option(&self, key: &str, _value: &Value) -> Result<(), String> {
+        Err(option_check::unknown(key))
+    }
+    /// Whether [`Self::set_option`] takes all of `values`, set together in one call: by default
+    /// each one checked on its own with [`Self::check_option`].
+    fn check_options(&self, values: &serde_json::Map<String, Value>) -> Result<(), String> {
+        values.iter().try_for_each(|(k, v)| self.check_option(k, v))
+    }
     /// Is an interaction in progress (drag, open pen path)?
     fn busy(&self) -> bool {
         false
     }
     /// Is a drag moving, scaling or rotating the selection (the canvas then hides the bounding box,
-    /// so only the art is seen going with the pointer)?
+    /// so only the art is seen going with the pointer, except during a handle resize, and during a
+    /// move with General › Show Bounding Box While Moving and Drawing on)?
     fn transforming(&self) -> bool {
+        false
+    }
+    /// Is the transforming drag a resize by a bounding-box handle? The canvas then keeps drawing
+    /// the bounding box at the changing bounds.
+    fn resizing(&self) -> bool {
+        false
+    }
+    /// Is the transforming drag a move of the selection (an Alt-drag copy included)? With General ›
+    /// Show Bounding Box While Moving and Drawing on, the canvas then draws the bounding box where
+    /// the drag has moved the selection.
+    fn moving(&self) -> bool {
+        false
+    }
+    /// Is a drag drawing a new shape that the tool shows the bounding box of once drawn? With
+    /// General › Show Bounding Box While Moving and Drawing on, the canvas then draws the box around
+    /// the shape as it is drawn.
+    fn drawing_boxed(&self) -> bool {
         false
     }
     /// Does the tool take `key` now, ahead of the command shortcuts bound to it (the Gradient tool
     /// with a stop selected takes Delete and the arrows)?
     fn claims_key(&self, _cx: &ToolContext, _key: ToolKey) -> bool {
+        false
+    }
+    /// [`Self::claims_key`] for a press with `mods` held. By default the modifiers do not matter;
+    /// a tool that takes a key only without modifiers leaves the modified presses to the shortcuts.
+    fn claims_key_with(&self, cx: &ToolContext, key: ToolKey, _mods: Mods) -> bool {
+        self.claims_key(cx, key)
+    }
+    /// Has the tool started something that Escape ends while no button is pressed (a path being
+    /// drawn, the Blend tool's first pick)? That Escape ends nothing else, such as isolation mode or
+    /// a rotated view.
+    fn ends_on_escape(&self, _cx: &ToolContext) -> bool {
         false
     }
     /// Does the tool want typed text (Type tool editing)? Single-key shortcuts are suppressed.
@@ -223,12 +285,19 @@ pub trait Tool: Send {
     fn wants_rehover(&self) -> bool {
         false
     }
+    /// What the Info panel shows for the tool as it is now: the drag in progress (a move of the
+    /// selection, a gradient vector, a handle the Pen pulls out, a Scale, Rotate, Reflect or Shear
+    /// tool drag), or the Paintbrush's brush. None for a tool with nothing of its own to show.
+    fn readout(&self, _cx: &ToolContext) -> Option<Readout> {
+        None
+    }
     /// Called when the user switches away (finish pending work).
     fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
         vec![]
     }
     /// The tool, already active, is chosen again (its toolbar button, its shortcut, `tool.select`).
-    /// Most tools keep their state; the Blend tool finishes the blend it is adding to.
+    /// Most tools keep their state; the Blend tool finishes the blend it is adding to, and the Pen
+    /// ends the path it is drawing.
     fn chosen_again(&mut self, _cx: &ToolContext) -> Vec<Action> {
         vec![]
     }
@@ -237,6 +306,13 @@ pub trait Tool: Send {
     fn after_command(&mut self, _cx: &ToolContext) -> Vec<Action> {
         vec![]
     }
+    /// The undo history moved outside the tool (an edit, Undo or Redo the tool did not make), or
+    /// another document became active. The Blend tool drops its first pick and stops adding to the
+    /// blend it just made.
+    fn history_moved(&mut self) {}
+    /// A press on the canvas did not reach the tool: it went to the view tools (held Space, the
+    /// middle button), or with Cmd/Ctrl held to the selection tool the session lends. The Live Paint Bucket counts it among the clicks a triple-click compares.
+    fn press_elsewhere(&mut self) {}
     /// Time passes while the pointer button is held (`dt` seconds since the last tick, whether or
     /// not the pointer moved): tools that keep working while the brush holds still (Twirl, Pucker,
     /// Bloat) act on it. The host supplies the time, so tests and agents drive it exactly.
@@ -256,19 +332,39 @@ pub trait Tool: Send {
         false
     }
     /// Is the tool waiting for work it runs on another thread (the planar map of a large selection
-    /// for the Shape Builder and the Live Paint Bucket)? It highlights no region under the pointer
-    /// until the work is done. While this holds, the desktop app calls [`Tool::poll`] each frame,
-    /// and hosts without frames call it with `wait` after a [`PointerKind::Move`].
+    /// for the Shape Builder and the Live Paint Bucket, a Shape Builder merge of one)? It
+    /// highlights nothing under the pointer until a map is done. While this holds, the desktop app
+    /// calls [`Tool::poll`] each frame, and hosts without frames call it with `wait` after each
+    /// pointer event.
     fn waiting(&self) -> bool {
         false
     }
-    /// Checks on the work [`Tool::waiting`] reports, waiting for it to finish with `wait`. Once it
-    /// is done, the tool shows the highlight under the pointer where it last moved.
-    fn poll(&mut self, _cx: &ToolContext, _wait: bool) {}
+    /// Is the tool computing an edit on another thread, which [`Tool::poll`] applies once it is
+    /// done (a Shape Builder merge of a large selection)?
+    fn editing(&self) -> bool {
+        false
+    }
+    /// Checks on the work [`Tool::waiting`] reports, waiting for it to finish with `wait`. Once a
+    /// map is done, the tool shows the highlight under the pointer where it last moved; once an
+    /// edit is done, the actions returned apply it.
+    fn poll(&mut self, _cx: &ToolContext, _wait: bool) -> Vec<Action> {
+        vec![]
+    }
+    /// Waits for the edit [`Tool::editing`] reports and returns the actions that apply it, before
+    /// a command runs on the document; none when the document's revision or the selection changed
+    /// since the gesture.
+    fn finish_edit(&mut self, _cx: &ToolContext) -> Vec<Action> {
+        vec![]
+    }
     /// The Shape Builder's planar map of the selection, with the outline edges, and the gap it
     /// closes, when the tool has one. `shapeBuilder.merge` uses it in place of a map of its own
     /// when the map's inputs are the merge's inputs.
     fn shape_builder_map(&self) -> Option<(std::sync::Arc<builder::BuilderMap>, f64)> {
+        None
+    }
+    /// The Shape Builder merge the tool computed on another thread for its last gesture, which
+    /// `shapeBuilder.merge` takes when it would compute the same ([`builder::PreparedMerge`]).
+    fn shape_builder_merge(&self) -> Option<std::sync::Arc<builder::PreparedMerge>> {
         None
     }
 }
@@ -283,6 +379,7 @@ pub fn create(id: &str) -> Box<dyn Tool> {
         "dimension" => Box::new(dimension::DimensionTool::default()),
         "type" | "areaType" | "typeOnPath" | "verticalType" | "verticalAreaType" | "verticalTypeOnPath" => Box::new(text::TypeTool::new(id)),
         "rectangle" | "roundedRectangle" | "ellipse" | "polygon" | "star" | "lineSegment" => Box::new(shape::ShapeTool::new(id)),
+        circle::ID => Box::new(circle::CircleTool::default()),
         // Not in the toolbar: `file.place.queue` loads it.
         "place" => Box::new(place::PlaceTool::default()),
         other => symbolism::create(other)
@@ -348,6 +445,28 @@ pub(crate) mod testutil {
         (d, id)
     }
 
+    /// A live 100 × 100 rectangle at (100, 100)–(200, 200) with no paint: its centre point
+    /// (Attributes › Show Center) is at (150, 150), and a press in the middle of it hits no art.
+    pub fn doc_with_live_rect() -> (Document, NodeId) {
+        use vectorcraft_doc::{LiveShape, NodeKind};
+        let shape = LiveShape::Rectangle {
+            w: 100.0,
+            h: 100.0,
+            radii: [0.0; 4],
+            kinds: Default::default(),
+            radii_relative: false,
+            xf: vectorcraft_geom::Affine::translate((100.0, 100.0)),
+        };
+        let mut d = Document::new(500.0, 500.0);
+        let (l, id) = (d.layers[0].id, d.alloc_id());
+        let mut n = Node::path(id, shape.to_path(), Appearance::default());
+        if let NodeKind::Path { live: slot, .. } = &mut n.kind {
+            *slot = Some(Box::new(shape));
+        }
+        d.insert(Some(l), 0, n).unwrap();
+        (d, id)
+    }
+
     /// [`doc_with_rect`] plus a clip group: a filled 200 × 200 square (350, 350)–(550, 550)
     /// clipped to an unpainted rectangle (400, 400)–(500, 500), so the art lies over the mask's
     /// edges. The group, the clipping path and the art.
@@ -364,6 +483,36 @@ pub(crate) mod testutil {
             Node::new(g, vectorcraft_doc::NodeKind::Group { children: vec![std::sync::Arc::new(path), std::sync::Arc::new(picture)], clip: true });
         d.insert(Some(l), 1, group).unwrap();
         (d, g, clip, art)
+    }
+
+    /// A document with the rectangle of [`doc_with_rect`] and a clip group whose clipping path,
+    /// (400, 400)–(500, 500), has a live effect that moves the region it clips to 100 pt right
+    /// (registered with [`vectorcraft_doc::hit::set_clip_region`]), over art at (420, 420)–(480, 480),
+    /// inside the clipping path's own shape and outside the moved region: the document, the clip
+    /// group and the art.
+    pub fn doc_with_moved_clip_region() -> (Document, NodeId, NodeId) {
+        fn moved(clip: &Node) -> Option<Option<(vectorcraft_geom::BezPath, vectorcraft_geom::FillRule)>> {
+            let mut moves = false;
+            clip.walk(&mut |n| moves |= n.appearance.effects.iter().any(|e| e.visible && e.id == "test.move"));
+            if !moves {
+                return None;
+            }
+            Some(vectorcraft_doc::hit::clip_regions(clip).into_iter().next().map(|(mut bp, rule)| {
+                bp.apply_affine(vectorcraft_geom::Affine::translate((100.0, 0.0)));
+                (bp, rule)
+            }))
+        }
+        vectorcraft_doc::hit::set_clip_region(moved);
+        let (mut d, _) = doc_with_rect();
+        let l = d.layers[0].id;
+        let (g, clip, art) = (d.alloc_id(), d.alloc_id(), d.alloc_id());
+        let mut path = Node::path(clip, shapes::rectangle(Rect::new(400.0, 400.0, 500.0, 500.0)), Default::default());
+        path.appearance.effects.push(vectorcraft_doc::Effect { id: "test.move".into(), params: serde_json::json!({}), visible: true });
+        let picture = Node::path(art, shapes::rectangle(Rect::new(420.0, 420.0, 480.0, 480.0)), Appearance::default_art());
+        let group =
+            Node::new(g, vectorcraft_doc::NodeKind::Group { children: vec![std::sync::Arc::new(path), std::sync::Arc::new(picture)], clip: true });
+        d.insert(Some(l), 1, group).unwrap();
+        (d, g, art)
     }
 
     /// A new layer of `d`, above the others, with the unpainted rectangle `mask` as its clipping
@@ -460,6 +609,7 @@ pub(crate) mod testutil {
             revision: (0, 0),
             selection: s,
             zoom: 1.0,
+            marquee_mode: MarqueeMode::Touching,
             isolation: None,
             paint: p,
             outline: false,
@@ -468,6 +618,7 @@ pub(crate) mod testutil {
             snap_to_grid: false,
             show_bbox: true,
             snap_to_pixel: false,
+            pixel_snap: crate::PixelSnap::default(),
             snap_to_point: true,
             snap_tangent: true,
             snap_perpendicular: true,
@@ -482,10 +633,12 @@ pub(crate) mod testutil {
             freeform_point: None,
             raster_sample: 1,
             preview_bounds: false,
+            glyph_bounds: false,
             preview_memo: None,
             unit: Unit::Points,
             stroke_unit: Unit::Points,
             paste_plain_text: false,
+            typed_from_keyboard: false,
             slices_hidden: false,
             slices_locked: false,
             auto_add_delete: true,
@@ -503,6 +656,7 @@ pub(crate) mod testutil {
             pen_rubber_band: true,
             curvature_rubber_band: true,
             placeholder_text: false,
+            typed_lists: true,
             smart_guide_color: guides::MAGENTA,
             alignment_guides: true,
             anchor_path_labels: true,
@@ -510,10 +664,12 @@ pub(crate) mod testutil {
             transform_tools_guides: true,
             spacing_guides: true,
             distance_guides: true,
+            snap_to_last_location: false,
             snapping_tolerance: 4.0,
             construction_angles: guides::construction_angles(guides::DEFAULT_CONSTRUCTION_ANGLES),
             screen: None,
             plane_widget: Some(Default::default()),
+            plane_targets: distort::perspective::widget::PlaneTargets::ALL,
             precise_cursors: false,
             global_edit: &[],
         }
@@ -534,11 +690,20 @@ mod cursor_tests {
     /// Use Precise Cursors turns it into the crosshair.
     #[test]
     fn drawing_tools_show_their_own_cursor() {
-        let (d, _) = doc_with_rect();
+        let (d, rect) = doc_with_rect();
         let away = Point::new(400.0, 400.0);
+        // The Smooth tool shows its own cursor only with a selected path (Not Allowed without one).
+        let mut selected = Selection::default();
+        selected.set([rect]);
+        let paint = paint();
+        let cursor_of = |id: &str| match id {
+            "smooth" => create(id).cursor(&cx(&d, &selected, &paint), away, Mods::default()),
+            _ => cursor_at(id, &d, away),
+        };
         for (id, c) in [
             ("lasso", Cursor::Lasso),
             (addons::enclosing_lasso::ID, Cursor::Lasso),
+            (addons::polygonal_lasso::ID, Cursor::Lasso),
             ("magicWand", Cursor::MagicWand),
             ("paintbrush", Cursor::Paintbrush),
             ("blobBrush", Cursor::BlobBrush),
@@ -547,6 +712,7 @@ mod cursor_tests {
             ("pathEraser", Cursor::PathEraser),
             ("join", Cursor::Join),
             ("knife", Cursor::Knife),
+            (addons::trim::ID, Cursor::Knife),
             ("shaper", Cursor::Shaper),
             ("livePaintBucket", Cursor::LivePaintBucket),
             ("measure", Cursor::Measure),
@@ -561,12 +727,13 @@ mod cursor_tests {
             ("symbolStyler", Cursor::SymbolStyler),
             ("mesh", Cursor::MeshAdd),
         ] {
-            assert_eq!(cursor_at(id, &d, away), c, "{id}");
+            assert_eq!(cursor_of(id), c, "{id}");
             assert_eq!(c.precise(), Cursor::Crosshair, "{id}");
-            // The Blob Brush's and the Eraser's dot is drawn: their tip outline goes round it.
+            // The Blob Brush's and the Eraser's dot is drawn: their tip outline goes round it. The
+            // Live Paint Bucket's bucket and the Knife's knife are drawn.
             let stand_in = match id {
                 "mesh" => Some(Cursor::PenAdd),
-                "blobBrush" | "eraser" => None,
+                "blobBrush" | "eraser" | "livePaintBucket" | "knife" | addons::trim::ID => None,
                 _ => Some(Cursor::Crosshair),
             };
             assert_eq!(c.stand_in(), stand_in, "{id}");
@@ -574,7 +741,10 @@ mod cursor_tests {
         // Away from a selected path the Pencil shows its new-path cursor, drawn with a star; its
         // own cursor, for drawing and for a selected path under the pointer, borrows the crosshair.
         assert_eq!(cursor_at("pencil", &d, away), Cursor::PencilNew);
-        assert_eq!(Cursor::PencilNew.precise(), Cursor::Crosshair);
+        // Its badged cursors too: Use Precise Cursors shows the plain crosshair.
+        for c in [Cursor::PencilNew, Cursor::PencilClose, Cursor::PencilStraight, Cursor::PencilContinue, Cursor::PaintbrushClose] {
+            assert_eq!(c.precise(), Cursor::Crosshair, "{c:?}");
+        }
         assert_eq!(Cursor::PencilNew.stand_in(), None);
         assert_eq!(Cursor::Pencil.precise(), Cursor::Crosshair);
         assert_eq!(Cursor::Pencil.stand_in(), Some(Cursor::Crosshair));

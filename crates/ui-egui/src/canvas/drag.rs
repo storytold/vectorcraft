@@ -29,6 +29,11 @@ pub(crate) fn end_document_drag(ctx: &egui::Context) {
     });
 }
 
+/// Whether a Selection tool move has left the canvas ([`drag_art_out`]) and still waits there.
+pub(crate) fn art_out(ctx: &egui::Context) -> bool {
+    matches!(ctx.data(|d| d.get_temp::<Drag>(drag_id())), Some(Drag::Art))
+}
+
 /// Temp-memory key for the active canvas drag state.
 pub(super) fn drag_id() -> egui::Id {
     egui::Id::unique("canvas-drag")
@@ -265,6 +270,12 @@ pub fn mods(m: egui::Modifiers, space: bool) -> Mods {
     Mods { shift: m.shift, alt: m.alt, cmd: m.command, ctrl: m.ctrl, space }
 }
 
+/// Whether Space, held with the modifiers `m`, lends the Hand, Rotate View or Zoom tool. While the
+/// Type tool edits text, Space types a space, and only Cmd+Space still lends the Zoom tool.
+pub(super) fn space_lends_view_tools(app: &VectorcraftApp, m: egui::Modifiers, space: bool) -> bool {
+    space && (m.command || !app.session.tool_wants_text())
+}
+
 /// Drop the tool press in progress, if any: nothing it began is kept, and the rest of the press
 /// does nothing ([`Drag::Gesture`]).
 pub(super) fn drop_press(app: &mut VectorcraftApp, ui: &Ui, view: vectorcraft_engine::ViewInfo) {
@@ -293,9 +304,7 @@ pub(super) fn drag_art_out(app: &VectorcraftApp, ui: &Ui, resp: &egui::Response,
     let tool = app.session.tool_id();
     let Some(st) = app.session.active().filter(|_| matches!(tool, "selection" | "directSelection" | "groupSelection")) else { return false };
     // The tool's interaction while it moves (or Alt-copies) the selection.
-    if !st.interaction.as_ref().is_some_and(|i| i.label == "Move" || i.label == "Copy") {
-        return false;
-    }
+    let Some(it) = st.interaction.as_ref().filter(|i| i.label == "Move" || i.label == "Copy") else { return false };
     if tool != "selection" && st.selection.objects.iter().any(|id| st.selection.partial(*id).is_some() || st.selection.segments.contains_key(id)) {
         return false;
     }
@@ -305,8 +314,10 @@ pub(super) fn drag_art_out(app: &VectorcraftApp, ui: &Ui, resp: &egui::Response,
     if on_canvas(ui, resp, p) && ui.input(|i| i.pointer.has_pointer()) {
         return false;
     }
-    let ids = st.selection.objects.clone();
-    egui::DragAndDrop::set_payload(ui.ctx(), widgets::PanelDrag::Art(ids));
+    // The art the drag started with: the release rolls the move back to it, and an Alt-copy's
+    // copies, selected while it previews, go with that.
+    let ids = it.selection.objects.clone();
+    widgets::drag_art(ui.ctx(), st.uid, ids);
     true
 }
 
@@ -314,6 +325,9 @@ pub(super) fn drag_art_out(app: &VectorcraftApp, ui: &Ui, resp: &egui::Response,
 /// panel that takes the art ([`widgets::PanelDrag::Art`]) takes it where it was, and no move is
 /// left open (#2826). The art stays where it last moved while the pointer is over the panel.
 pub(crate) fn release_over_panel(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    // A floating window's pane, or the main window's while the current window floats, takes the
+    // art first.
+    super::release_on_noted(app, ctx);
     crate::document_drag::cleanup(app, ctx);
     let art = matches!(ctx.data(|d| d.get_temp::<Drag>(drag_id())), Some(Drag::Art));
     // Over a floating panel's own OS window the pointer is gone from this window, and the release
@@ -349,8 +363,9 @@ pub(crate) fn release_art_in_window(app: &mut VectorcraftApp, ctx: &egui::Contex
     }
 }
 
-/// Roll back the art move dragged off the canvas; a panel takes the art instead.
-fn end_art_move(app: &mut VectorcraftApp, ctx: &egui::Context) {
+/// Roll back the art move dragged off the canvas, and end the canvas's drag; a panel or another
+/// window's tiled pane takes the art instead.
+pub(crate) fn end_art_move(app: &mut VectorcraftApp, ctx: &egui::Context) {
     // With no document open there is nothing to roll back; the tool still gets its mouse-up.
     let _ = app.session.cancel_interaction();
     let view = app.view_info();
@@ -363,6 +378,10 @@ fn end_art_move(app: &mut VectorcraftApp, ctx: &egui::Context) {
 
 /// Send a pointer event to the active tool and act on UI requests (dialogs, tool switches).
 pub fn dispatch(app: &mut VectorcraftApp, ev: &PointerEvent, view: vectorcraft_engine::ViewInfo) {
+    // A press lent to a selection tool (Cmd/Ctrl held) does not use the tool of a held key.
+    if ev.kind == PointerKind::Down && app.session.lent_tool_id(&ev.mods).is_none() {
+        crate::shortcuts::note_tool_use(app);
+    }
     let r = app.session.pointer(ev, view);
     // The artboard the Artboard tool makes active is the active one (the navigator's, the
     // Artboards panel's).
@@ -372,32 +391,63 @@ pub fn dispatch(app: &mut VectorcraftApp, ev: &PointerEvent, view: vectorcraft_e
     {
         v.artboard = i;
     }
-    // A press with a selection tool inside an artboard makes it the active one (#693), as the
-    // Artboard tool's does: Paste in Place and in Front or Back then paste onto it, Align to
-    // Artboard aligns to it, and All on Active Artboard selects on it.
-    if ev.kind == PointerKind::Down
-        && vectorcraft_tools::catalog::is_selection_tool(app.session.tool_id())
-        && let Some(i) = app.session.active().and_then(|d| d.doc.artboard_at(ev.pos))
-        && let Some(v) = app.view_mut()
-    {
-        v.artboard = i;
+    if ev.kind == PointerKind::Down {
+        pressed_with(app, app.session.active_index(), ev.pos, app.session.tool_id());
     }
     apply_requests(app, r);
 }
 
-/// Act on what a tool event asked the UI for (dialogs, tool switches), or show its error.
+/// A press at `pos` in document `index` with tool `tool` (a selection tool) inside an artboard
+/// makes it that document's active one (#693), as the Artboard tool's does: Paste in Place and in
+/// Front or Back then paste onto it, Align to Artboard aligns to it, and All on Active Artboard
+/// selects on it.
+fn pressed_with(app: &mut VectorcraftApp, index: Option<usize>, pos: Point, tool: &str) {
+    if !vectorcraft_tools::catalog::is_selection_tool(tool) {
+        return;
+    }
+    app.sync_views();
+    if let Some(i) = index
+        && let Some(board) = app.session.documents().get(i).and_then(|d| d.doc.artboard_at(pos))
+        && let Some(v) = app.views.get_mut(i)
+    {
+        v.artboard = board;
+    }
+}
+
+/// Act on what a tool event asked the UI for (dialogs, tool switches), or show its error. When an
+/// edit the tool committed or ran no longer fits in the action being recorded, the edit stays and
+/// the status bar names the limit ([`crate::panels::actions::after_journaled_edit`]).
 pub fn apply_requests(app: &mut VectorcraftApp, r: vectorcraft_engine::Result<Vec<vectorcraft_engine::UiRequest>>) {
     match r {
         Ok(reqs) => {
             for r in reqs {
                 match r {
                     vectorcraft_engine::UiRequest::Dialog(kind, p) => crate::dialogs::open_tool_dialog(app, &kind, p),
+                    vectorcraft_engine::UiRequest::Panel(panel) => activate_panel(app, &panel),
                     vectorcraft_engine::UiRequest::SwitchTool(t) => app.select_tool(&t),
                     vectorcraft_engine::UiRequest::Status(msg) => app.status(msg),
                     vectorcraft_engine::UiRequest::Place(p) => crate::place::place_from_cursor(app, &p),
+                    // In the document the press was made in, which may no longer be the active one.
+                    vectorcraft_engine::UiRequest::HeldPress { doc, pos, tool } => {
+                        let index = doc.and_then(|uid| app.session.documents().iter().position(|d| d.uid == uid));
+                        pressed_with(app, index, pos, tool);
+                        // The selection tool Cmd lent has the press now, so its drag can carry art to another tab.
+                        if let Some(ctx) = app.ui_ctx.clone() {
+                            crate::document_drag::begin(app, &ctx, pos);
+                        }
+                    }
                 }
             }
+            crate::panels::actions::after_journaled_edit(app);
         }
         Err(e) => app.status(e.to_string()),
+    }
+}
+
+/// Show and select `panel` where it is (`window.panel.activate`): a panel already on show stays on
+/// show, and a dock hidden by Tab shows again.
+fn activate_panel(app: &mut VectorcraftApp, panel: &str) {
+    if let Err(e) = app.run("window.panel.activate", serde_json::json!({ "panel": panel })) {
+        app.status(e);
     }
 }

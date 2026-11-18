@@ -2,13 +2,17 @@
 //! ruler numbered in the General unit on which a click adds a stop, dragging moves one and dragging
 //! it off the ruler deletes it. Ctrl-dragging a stop (Command on macOS) moves all the stops by the
 //! same distance. A stop placed or dragged on the ruler lands on the nearest whole point. With Snap
-//! to Unit on, or Shift held, it lands on the ruler's nearest tick.
+//! to Unit on, or Shift held, it lands on the ruler's nearest tick. While a stop is dragged, the
+//! canvas draws a guide through the selected text where the stop would land.
+
+use std::collections::HashSet;
 
 use egui::{Sense, Stroke, Ui, vec2};
 use serde_json::{Value, json};
-use vectorcraft_doc::{Node, NodeKind, ParaStyle, TabAlign, TabStop, TextKind};
+use vectorcraft_doc::{Document, Node, NodeId, NodeKind, ParaStyle, TabAlign, TabStop, TextKind, TextObject};
+use vectorcraft_geom::{Point, Vec2};
 
-use super::{first_selected, pstate, set_pstate};
+use super::{pstate, set_pstate};
 use crate::VectorcraftApp;
 use crate::theme::Tokens;
 use crate::widgets::{self, menu_item};
@@ -18,7 +22,7 @@ const ALIGNS: [(TabAlign, &str); 4] = [(TabAlign::Left, "⇥"), (TabAlign::Cente
 /// The name of alignment `a`'s button: its tool tip and what screen readers call it. A line of
 /// vertical type runs from top to bottom, so in vertical type a Left stop is named Top-Justified
 /// and a Right stop is named Bottom-Justified.
-fn align_name(a: TabAlign, vertical: bool) -> &'static str {
+pub(crate) fn align_name(a: TabAlign, vertical: bool) -> &'static str {
     match (a, vertical) {
         (TabAlign::Left, false) => tl!("Left-Justified Tab"),
         (TabAlign::Left, true) => tl!("Top-Justified Tab"),
@@ -57,8 +61,17 @@ enum IndentMarker {
 struct IndentTarget {
     id: u64,
     start: usize,
+    /// The left indent as laid out: the paragraph's own plus its list level's ([`Self::level`]).
     left: f64,
     first_line: f64,
+    /// How much further in the paragraph's list level sets it than its own left indent.
+    level: f64,
+}
+
+fn indent_target(id: NodeId, text: &TextObject, i: usize, start: usize) -> IndentTarget {
+    let para = text.para_at(i);
+    let left = para.laid_out_left_indent();
+    IndentTarget { id: id.0, start, left, first_line: para.first_line_indent, level: left - para.left_indent }
 }
 
 fn append_indent_targets(node: &Node, range: std::ops::Range<usize>, targets: &mut Vec<IndentTarget>) {
@@ -66,26 +79,79 @@ fn append_indent_targets(node: &Node, range: std::ops::Range<usize>, targets: &m
     let plain = text.plain_text();
     let mut starts = vec![0];
     starts.extend(plain.bytes().enumerate().filter_map(|(i, c)| (c == b'\n').then_some(i + 1)));
-    targets.extend(range.filter_map(|i| {
-        let para = text.para_at(i);
-        Some(IndentTarget { id: node.id.0, start: *starts.get(i)?, left: para.left_indent, first_line: para.first_line_indent })
-    }));
+    targets.extend(range.filter_map(|i| Some(indent_target(node.id, text, i, *starts.get(i)?))));
 }
 
-/// Paragraphs touched by the Type selection, or all paragraphs of selected text objects.
+/// One target for each paragraph of `story` (its frames in thread order), in story order. Where
+/// one frame ends and the next begins, the last paragraph of the one and the first of the next are
+/// pieces of one story paragraph: a paragraph that runs on into the next frame, or an empty piece
+/// after a frame's last paragraph break. Such a paragraph is targeted once, by its last piece with
+/// text, the piece whose style the story keeps when it flows again. An empty paragraph takes its
+/// style from its last piece when the story flows again, so it is targeted by that piece. Locked and
+/// hidden frames are targeted like the others.
+fn append_story_targets(doc: &Document, story: &[NodeId], targets: &mut Vec<IndentTarget>) {
+    /// The part of a story paragraph in one frame: paragraph `index` there, starting at byte `start`.
+    struct Piece<'a> {
+        id: NodeId,
+        text: &'a TextObject,
+        index: usize,
+        start: usize,
+        has_text: bool,
+    }
+    // Each story paragraph's pieces, in thread order.
+    let mut paragraphs: Vec<Vec<Piece<'_>>> = vec![];
+    for frame in story.iter().filter_map(|id| doc.node(*id)) {
+        let NodeKind::Text(text) = &frame.kind else { continue };
+        let plain = text.plain_text();
+        let mut start = 0;
+        for (index, part) in plain.split('\n').enumerate() {
+            let piece = Piece { id: frame.id, text, index, start, has_text: !part.is_empty() };
+            start += part.len() + 1;
+            match paragraphs.last_mut() {
+                Some(last) if index == 0 => last.push(piece),
+                _ => paragraphs.push(vec![piece]),
+            }
+        }
+    }
+    for pieces in &paragraphs {
+        let pick = pieces.iter().rev().find(|p| p.has_text).or_else(|| pieces.last());
+        if let Some(p) = pick {
+            targets.push(indent_target(p.id, p.text, p.index, p.start));
+        }
+    }
+}
+
+/// Paragraphs touched by the Type selection (every paragraph of the story after Select All in
+/// threaded text), or all paragraphs of selected text objects. A selected frame of a threaded story
+/// selects the whole story, its locked and hidden frames included. Each paragraph of a threaded
+/// story is listed once, in story order ([`append_story_targets`]).
 fn indent_targets(app: &VectorcraftApp, node: &Node) -> Vec<IndentTarget> {
     let mut targets = Vec::new();
     if let Some((_, a, b)) = super::character::text_editing(app) {
-        if let NodeKind::Text(text) = &node.kind {
+        if let (Some(story), Some(st)) = (super::character::text_story(app), app.session.active()) {
+            append_story_targets(&st.doc, &story, &mut targets);
+        } else if let NodeKind::Text(text) = &node.kind {
             append_indent_targets(node, text.paragraphs_in(a, b), &mut targets);
         }
     } else if let Some(st) = app.session.active() {
+        // The selected text objects and the text in selected groups, each once.
+        let mut frames = Vec::new();
+        let mut taken = HashSet::new();
         for selected in st.selection.objects.iter().filter_map(|id| st.doc.node(*id)) {
             selected.walk(&mut |child| {
-                if let NodeKind::Text(text) = &child.kind {
-                    append_indent_targets(child, 0..text.paragraph_count(), &mut targets);
+                if matches!(child.kind, NodeKind::Text(_)) && taken.insert(child.id) {
+                    frames.push(child.id);
                 }
             });
+        }
+        let mut done = HashSet::new();
+        for id in frames {
+            if done.contains(&id) {
+                continue;
+            }
+            let story = st.doc.story_of(id);
+            done.extend(story.iter().copied());
+            append_story_targets(&st.doc, &story, &mut targets);
         }
     }
     targets
@@ -106,13 +172,14 @@ fn bounded_marker_position(marker: IndentMarker, target: f64, span: f64, targets
         IndentMarker::Upper => {
             (targets.iter().map(|p| p.left - 1296.0).fold(0.0_f64, f64::max), targets.iter().map(|p| p.left + 1296.0).fold(span, f64::min))
         }
+        // A paragraph's own left indent stays within 0 to 1296 pt, its list level's indent added.
         IndentMarker::Lower if both => (
-            targets.iter().map(|p| -p.first_line).fold(0.0_f64, f64::max),
-            targets.iter().map(|p| span - p.first_line).fold(span.min(1296.0), f64::min),
+            targets.iter().map(|p| p.level.max(-p.first_line)).fold(0.0_f64, f64::max),
+            targets.iter().map(|p| (span - p.first_line).min(p.level + 1296.0)).fold(span, f64::min),
         ),
         IndentMarker::Lower => (
-            targets.iter().map(|p| p.left + p.first_line - 1296.0).fold(0.0_f64, f64::max),
-            targets.iter().map(|p| p.left + p.first_line + 1296.0).fold(span.min(1296.0), f64::min),
+            targets.iter().map(|p| p.level.max(p.left + p.first_line - 1296.0)).fold(0.0_f64, f64::max),
+            targets.iter().map(|p| (p.left + p.first_line + 1296.0).min(p.level + 1296.0)).fold(span, f64::min),
         ),
     };
     (low <= high).then(|| target.clamp(low, high))
@@ -174,7 +241,9 @@ fn paint_markers(ui: &mut Ui, painter: &egui::Painter, tokens: &Tokens, view: Ma
     }
 }
 
-/// Apply an absolute ruler position through paragraph-format commands.
+/// Apply an absolute ruler position through paragraph-format commands. When the paragraphs need
+/// values of their own, one command sets each paragraph's ([`set_each_indent`]), and threaded text
+/// flows again once.
 fn set_marker(app: &mut VectorcraftApp, marker: IndentMarker, target: f64, para: &ParaStyle, span: f64, targets: &[IndentTarget], both: bool) {
     if targets.is_empty() || !target.is_finite() {
         return;
@@ -182,49 +251,76 @@ fn set_marker(app: &mut VectorcraftApp, marker: IndentMarker, target: f64, para:
     let Some(target) = bounded_marker_position(marker, target, span, targets, both) else { return };
     if marker == IndentMarker::Upper {
         if targets.iter().all(|p| p.left == para.left_indent) {
-            if let Err(e) = super::paragraph::run_on_paragraphs(app, "text.setFormat", json!({"firstLineIndent": target - para.left_indent})) {
-                app.status(e);
-            }
+            run_on_targets(app, targets, json!({"firstLineIndent": target - para.left_indent}));
         } else {
-            super::character::end_typing(app);
-            let commands: Vec<Value> = targets
-                .iter()
-                .map(|p| {
-                    json!({"command": "text.setFormat", "params": {
-                        "ids": [p.id], "start": p.start, "end": p.start, "firstLineIndent": target - p.left
-                    }})
-                })
-                .collect();
-            if let Err(e) = app.run("command.batch", json!({"label": tl!("First-line Left Indent"), "commands": commands})) {
-                app.status(e);
-            }
-        }
-    } else if both {
-        if let Err(e) = super::paragraph::run_on_paragraphs(app, "text.setFormat", json!({"leftIndent": target})) {
-            app.status(e);
-        }
-    } else if targets.iter().all(|p| p.left + p.first_line == marker_position(IndentMarker::Upper, para)) {
-        if let Err(e) = super::paragraph::run_on_paragraphs(
-            app,
-            "text.setFormat",
-            json!({"leftIndent": target, "firstLineIndent": marker_position(IndentMarker::Upper, para) - target}),
-        ) {
-            app.status(e);
+            let changes = targets.iter().map(|p| (p, None, Some(target - p.left))).collect();
+            set_each_indent(app, tl!("First-line Left Indent"), changes);
         }
     } else {
-        super::character::end_typing(app);
-        let commands: Vec<Value> = targets
-            .iter()
-            .map(|p| {
-                json!({"command": "text.setFormat", "params": {
-                    "ids": [p.id], "start": p.start, "end": p.start,
-                    "leftIndent": target, "firstLineIndent": p.left + p.first_line - target
-                }})
-            })
-            .collect();
-        if let Err(e) = app.run("command.batch", json!({"label": tl!("Left Indent"), "commands": commands})) {
-            app.status(e);
+        // The ruler shows each paragraph's left indent with its list level's added; the paragraph
+        // keeps its own.
+        let upper = marker_position(IndentMarker::Upper, para);
+        let level = targets.first().map(|p| p.level).filter(|l| targets.iter().all(|p| p.level == *l));
+        let params = match level {
+            Some(level) if both => Some(json!({"leftIndent": target - level})),
+            Some(level) if targets.iter().all(|p| p.left + p.first_line == upper) => {
+                Some(json!({"leftIndent": target - level, "firstLineIndent": upper - target}))
+            }
+            _ => None,
+        };
+        if let Some(params) = params {
+            run_on_targets(app, targets, params);
+            return;
         }
+        let changes = targets.iter().map(|p| (p, Some(target - p.level), (!both).then_some(p.left + p.first_line - target))).collect();
+        set_each_indent(app, tl!("Left Indent"), changes);
+    }
+}
+
+/// Run one `text.setFormat` with `params` on the paragraphs the Paragraph panel acts on while typing,
+/// and with the Selection tool on every type object of `targets`, so a selected frame of a threaded
+/// story sets the whole story ([`indent_targets`]).
+fn run_on_targets(app: &mut VectorcraftApp, targets: &[IndentTarget], mut params: Value) {
+    if super::character::text_editing(app).is_none() {
+        let mut seen = HashSet::new();
+        params["ids"] = json!(targets.iter().map(|p| p.id).filter(|id| seen.insert(*id)).collect::<Vec<_>>());
+    }
+    if let Err(e) = super::paragraph::run_on_paragraphs(app, "text.setFormat", params) {
+        app.status(e);
+    }
+}
+
+/// Give each paragraph its own left and first-line indents (None: as it is) in one `text.setFormat`
+/// with `paragraphIndents`, one undo step named `label`. Paragraphs that keep their indents are
+/// left out, and when every paragraph keeps them nothing is run.
+fn set_each_indent(app: &mut VectorcraftApp, label: &str, changes: Vec<(&IndentTarget, Option<f64>, Option<f64>)>) {
+    // As `text.setFormat` keeps a paragraph's indents, within 1296 pt either way.
+    let bound = |v: Option<f64>| v.map(|v| v.clamp(-1296.0, 1296.0));
+    let entries: Vec<Value> = changes
+        .into_iter()
+        .filter_map(|(p, left, first_line)| {
+            let (left, first_line) = (bound(left), bound(first_line));
+            let own_left = p.left - p.level;
+            if left.is_none_or(|v| v == own_left) && first_line.is_none_or(|v| v == p.first_line) {
+                return None;
+            }
+            let mut entry = json!({"id": p.id, "start": p.start});
+            if let Some(v) = left {
+                entry["leftIndent"] = json!(v);
+            }
+            if let Some(v) = first_line {
+                entry["firstLineIndent"] = json!(v);
+            }
+            Some(entry)
+        })
+        .collect();
+    if entries.is_empty() {
+        return;
+    }
+    super::character::end_typing(app);
+    let command = json!({"command": "text.setFormat", "params": {"paragraphIndents": entries}});
+    if let Err(e) = app.run("command.batch", json!({"label": label, "commands": [command]})) {
+        app.status(e);
     }
 }
 
@@ -234,21 +330,32 @@ fn current(app: &VectorcraftApp) -> Option<(Node, Vec<TabStop>, f64)> {
     current_para(app).map(|(n, para, span)| (n, para.tabs, span))
 }
 
-/// As [`current`], with all the attributes of the paragraph whose stops the panel shows.
+/// As [`current`], with all the attributes of the paragraph whose stops the panel shows, its left
+/// indent as laid out ([`ParaStyle::laid_out_left_indent`]: its list level's indent added), where
+/// the ruler shows it. Without the Type tool editing text, the panel shows the first paragraph of
+/// the first selected text object, also when that text is in a selected group or follows a
+/// selected object that is not text.
 fn current_para(app: &VectorcraftApp) -> Option<(Node, ParaStyle, f64)> {
     let editing = super::character::text_editing(app);
     let n = match editing {
         Some((id, _, _)) => app.session.active()?.doc.node(id)?.clone(),
-        None => first_selected(app)?,
+        None => super::character::first_selected_text_node(app)?.clone(),
     };
     let NodeKind::Text(t) = &n.kind else { return None };
-    let para = editing.map_or(0, |(_, a, _)| t.paragraphs_in(a, a).start);
+    let para = shown_paragraph(app, t);
     let span = match &t.kind {
         TextKind::Area { frame } => frame.bounds().map_or(360.0, |b| b.width()),
         _ => 360.0,
     };
-    let para = t.para_at(para).clone();
+    let para = t.para_at(para);
+    let para = ParaStyle { left_indent: para.laid_out_left_indent(), ..para.clone() };
     Some((n, para, span.max(72.0)))
+}
+
+/// The index of the paragraph of text `t` whose stops the panel shows: the paragraph of the Type
+/// tool's insertion point, else the first.
+fn shown_paragraph(app: &VectorcraftApp, t: &TextObject) -> usize {
+    super::character::text_editing(app).map_or(0, |(_, a, _)| t.paragraphs_in(a, a).start)
 }
 
 /// [`above_text`], then note the active document and text `n`. A floating panel is
@@ -264,7 +371,7 @@ fn place_above_text(app: &mut VectorcraftApp, ctx: &egui::Context, n: &Node, spa
 /// Screen points per point of text `n` at the canvas zoom, as [`above_text`] sizes the ruler:
 /// across the frame for area type, the zoom for point type.
 fn screen_scale(app: &VectorcraftApp, n: &Node, span: f64) -> Option<f64> {
-    let xf = crate::canvas::Xf::new(app.canvas_rect?, app.view()?);
+    let xf = app.canvas_xf()?;
     let per = match &n.kind {
         NodeKind::Text(t) if matches!(t.kind, TextKind::Area { .. }) => f64::from(xf.rect_to_screen(n.geometric_bounds()?).width()) / span,
         _ => xf.zoom,
@@ -276,7 +383,7 @@ fn screen_scale(app: &VectorcraftApp, n: &Node, span: f64) -> Option<f64> {
 /// put 0 on the text's left edge and its marks at the canvas zoom, so each stop sits over the
 /// column it sets (#729). `span`: the ruler's length in the text's points.
 fn above_text(app: &mut VectorcraftApp, ctx: &egui::Context, n: &Node, span: f64) -> Option<()> {
-    let xf = crate::canvas::Xf::new(app.canvas_rect?, app.view()?);
+    let xf = app.canvas_xf()?;
     let on_screen = xf.rect_to_screen(n.geometric_bounds()?);
     // Screen points per point of the text: across the frame for area type (so a scaled frame
     // lines up too), the zoom for point type.
@@ -320,10 +427,12 @@ fn stops_json(stops: &[TabStop]) -> Value {
     )
 }
 
-/// Run `text.tabs.set` with `stops` on the text the panel acts on. Returns false when it fails.
+/// Run `text.tabs.set` with `stops` on the text the panel acts on: with the Selection tool, every
+/// frame of the selected stories ([`super::character::selected_stories`]). Returns false when it
+/// fails.
 fn apply(app: &mut VectorcraftApp, stops: &[TabStop]) -> bool {
-    if let Some((id, a, b)) = super::character::text_editing(app) {
-        super::character::end_typing(app);
+    let Ok(editing) = super::character::text_editing_kept(app) else { return false };
+    if let Some((id, a, b)) = editing {
         let p = match super::character::text_story(app) {
             // After Select All in threaded text: every paragraph of every frame.
             Some(story) => json!({"stops": stops_json(stops), "ids": story.iter().map(|f| f.0).collect::<Vec<_>>()}),
@@ -331,7 +440,9 @@ fn apply(app: &mut VectorcraftApp, stops: &[TabStop]) -> bool {
         };
         app.run("text.tabs.set", p).is_ok()
     } else {
-        app.run("text.tabs.set", json!({"stops": stops_json(stops)})).is_ok()
+        let mut p = json!({"stops": stops_json(stops)});
+        super::character::target_selected_stories(app, &mut p);
+        app.run("text.tabs.set", p).is_ok()
     }
 }
 
@@ -372,6 +483,94 @@ fn apply_moved_all(app: &mut VectorcraftApp, ctx: &egui::Context, stops: &mut Ve
         set_pstate(ctx, "tabs-sel", i);
         i
     })
+}
+
+/// While a tab stop is dragged on the ruler: the document and text whose stops the ruler shows, the
+/// paragraph it shows them for, where the dragged stop would land (points from the ruler's 0), and
+/// the main window's frame in which [`show`] last set it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct StopGuide {
+    doc: u64,
+    id: NodeId,
+    para: usize,
+    position: f64,
+    frame: u64,
+}
+
+/// The guide through text `t` for paragraph `para`'s stop at 0 on the ruler, in document space:
+/// its two ends and how far it moves per point of stop position. For area type it crosses the frame
+/// cell the paragraph starts in, and the ruler's 0 is where the frame lets the paragraph's first
+/// line start (the cell's edge inside the inset, or past a wrap object); for point
+/// type it crosses the paragraph's lines, and the ruler's 0 is the type's origin. In vertical type
+/// it runs across the columns. `None` for type on a path and for a paragraph that does not fit in
+/// the frame.
+fn guide_axis(t: &TextObject, para: usize) -> Option<(Point, Point, Vec2)> {
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+    if lay.on_path {
+        return None;
+    }
+    let text = t.plain_text();
+    let start = if para == 0 { 0 } else { text.match_indices('\n').nth(para - 1)?.0 + 1 };
+    let end = text.get(start..)?.find('\n').map_or(text.len(), |i| start + i);
+    let mut lines = lay.lines.iter().filter(|l| l.start >= start && l.start <= end);
+    let to_doc = |x: f64, y: f64| t.xf * lay.physical_point(Point::new(x, y));
+    let (x, top, bottom) = match &t.kind {
+        TextKind::Area { .. } => {
+            // The layout measures a line's stops from where the frame lets the line start (past a
+            // wrap object, or in a frame that is not a rectangle): the paragraph's first line's
+            // room less its indent, mirrored for a right-to-left list.
+            let first = lines.next()?;
+            let style = t.para_at(para);
+            let indent = if first.rtl && style.list.is_some() {
+                style.right_indent
+            } else {
+                style.laid_out_left_indent() + if para == 0 && t.first_para_continues { 0.0 } else { style.first_line_indent }
+            };
+            let cell = lay.line_xf.inverse().transform_rect_bbox(*lay.frames.get(first.region)?);
+            (first.avail.0 - indent, cell.y0, cell.y1)
+        }
+        TextKind::Point => {
+            let (top, bottom) =
+                lines.fold((f64::INFINITY, f64::NEG_INFINITY), |(a, b), l| (a.min(l.baseline - l.ascent), b.max(l.baseline + l.descent)));
+            (0.0, top, bottom)
+        }
+        _ => return None,
+    };
+    let (a, b) = (to_doc(x, top), to_doc(x, bottom));
+    let along = to_doc(x + 1.0, top) - a;
+    [a.x, a.y, b.x, b.y, along.x, along.y].iter().all(|v| v.is_finite()).then_some((a, b, along))
+}
+
+/// The guide [`show`] keeps through the selected text while a tab stop is dragged on the ruler, as
+/// two document points: set in this frame of the main window or the one before, for text in the
+/// active document. A drag that ends while the panel is not drawn leaves no guide behind.
+pub(crate) fn stop_guide(app: &VectorcraftApp, ctx: &egui::Context) -> Option<(Point, Point)> {
+    let g = pstate::<Option<StopGuide>>(ctx, "tabs-guide")?;
+    let doc = app.session.active()?;
+    if doc.uid != g.doc || g.frame + 1 < ctx.cumulative_frame_nr_for(egui::ViewportId::ROOT) {
+        return None;
+    }
+    let NodeKind::Text(t) = &doc.doc.node(g.id)?.kind else { return None };
+    // Lay the text out once per document change, not in every frame of the drag.
+    let key = (doc.uid, g.id, g.para, doc.revision);
+    type Axis = Option<((u64, NodeId, usize, u64), Option<(Point, Point, Vec2)>)>;
+    let (a, b, along) = match pstate::<Axis>(ctx, "tabs-guide-axis") {
+        Some((k, axis)) if k == key => axis,
+        _ => {
+            let axis = guide_axis(t, g.para);
+            set_pstate::<Axis>(ctx, "tabs-guide-axis", Some((key, axis)));
+            axis
+        }
+    }?;
+    Some((a + along * g.position, b + along * g.position))
+}
+
+/// Draw [`stop_guide`] on the canvas in the theme's accent.
+pub(crate) fn paint_stop_guide(app: &VectorcraftApp, painter: &egui::Painter, xf: &crate::canvas::Xf) {
+    let ctx = painter.ctx();
+    if let Some((a, b)) = stop_guide(app, ctx) {
+        painter.line_segment([xf.to_screen(a), xf.to_screen(b)], Stroke::new(1.0, Tokens::get(ctx).accent));
+    }
 }
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
@@ -540,7 +739,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // The stop within 5 px of `x`.
     let hit_at = |x: f32| stops.iter().position(|s| (to_x(s.position) - x).abs() <= 5.0);
     let cancel_drag = ui.input(|i| i.key_pressed(egui::Key::Escape));
-    if cancel_drag || (marker_drag.is_some() && !resp.drag_stopped() && !ui.input(|i| i.pointer.any_down())) {
+    // A stop or marker drag also ends when no button is down and the ruler reports no release.
+    if cancel_drag || ((marker_drag.is_some() || drag.is_some()) && !resp.drag_stopped() && !ui.input(|i| i.pointer.any_down())) {
         set_pstate::<Option<(IndentMarker, bool)>>(ui.ctx(), "tabs-marker-drag", None);
         set_pstate::<Option<usize>>(ui.ctx(), "tabs-drag", None);
     }
@@ -604,21 +804,58 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     // A click that lands on a stop's whole point or tick selects that stop and records no
                     // undo step.
                     let added = !stops.iter().any(|s| s.position == position);
-                    if added {
-                        stops.push(TabStop { position, align: ALIGNS[align_idx.min(3)].0, leader: String::new(), align_on: '.' });
-                        stops.sort_by(|a, b| a.position.total_cmp(&b.position));
-                    }
-                    let i = stops.iter().position(|s| s.position == position).unwrap_or(0);
-                    set_pstate::<Option<IndentMarker>>(ui.ctx(), "tabs-marker-sel", None);
-                    set_pstate(ui.ctx(), "tabs-sel", i);
-                    if added {
-                        apply(app, &stops);
+                    let max = TabStop::MAX_STOPS;
+                    if added && stops.len() >= max {
+                        // A full list takes no more stops: the click leaves the stops and the
+                        // selection as they are and shows the limit.
+                        app.status(format!("at most {max} tab stops"));
+                    } else {
+                        if added {
+                            stops.push(TabStop { position, align: ALIGNS[align_idx.min(3)].0, leader: String::new(), align_on: '.' });
+                            stops.sort_by(|a, b| a.position.total_cmp(&b.position));
+                        }
+                        let i = stops.iter().position(|s| s.position == position).unwrap_or(0);
+                        set_pstate::<Option<IndentMarker>>(ui.ctx(), "tabs-marker-sel", None);
+                        set_pstate(ui.ctx(), "tabs-sel", i);
+                        if added {
+                            apply(app, &stops);
+                        }
                     }
                 }
             }
         }
     }
+    // While a stop is dragged, a guide through the selected text shows where it would land: the
+    // grabbed stop's place in a Ctrl-drag (Command on macOS), and none while a release would delete it.
+    let drag: Option<usize> = pstate(ui.ctx(), "tabs-drag");
+    let drag_all = pstate::<bool>(ui.ctx(), "tabs-drag-all");
+    let pointer = ui.input(|i| i.pointer.any_down().then(|| i.pointer.interact_pos()).flatten());
+    let guide = drag.zip(pointer).filter(|(_, at)| at.y <= rect.bottom() + 20.0).and_then(|(i, at)| {
+        let position = if drag_all { moved_all(&stops, i, place(at.x))?.get(i)?.position } else { (i < stops.len()).then(|| place(at.x))? };
+        let NodeKind::Text(text) = &node.kind else { return None };
+        let frame = ui.ctx().cumulative_frame_nr_for(egui::ViewportId::ROOT);
+        Some(StopGuide { doc: app.session.active()?.uid, id: node.id, para: shown_paragraph(app, text), position, frame })
+    });
+    if guide.is_some() || pstate::<Option<StopGuide>>(ui.ctx(), "tabs-guide").is_some() {
+        // The canvas may be drawn before the panel in a frame: draw it again with the guide moved.
+        ui.ctx().request_repaint_of(egui::ViewportId::ROOT);
+    }
+    set_pstate(ui.ctx(), "tabs-guide", guide);
     resp.on_hover_text(tl!("Click to add a tab stop, drag to move it, drag it off the ruler to delete it"));
+}
+
+/// Whether a paragraph of the whole story Clear All Tabs acts on has tab stops: after Select All in
+/// threaded text, every frame of the edited story; with the Selection tool, every frame of the
+/// selected stories ([`super::character::selected_stories`]).
+fn story_has_tabs(app: &VectorcraftApp) -> bool {
+    let has_tabs = |t: &TextObject| (0..t.paragraph_count()).any(|i| !t.para_at(i).tabs.is_empty());
+    match (super::character::text_editing(app), super::character::text_story(app), app.session.active()) {
+        (Some(_), Some(story), Some(st)) => {
+            story.iter().any(|id| matches!(st.doc.node(*id).map(|n| &n.kind), Some(NodeKind::Text(t)) if has_tabs(t)))
+        }
+        (Some(_), _, _) => false,
+        (None, _, _) => super::character::selected_story_texts(app).into_iter().any(has_tabs),
+    }
 }
 
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
@@ -627,6 +864,8 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         snap_to_unit_item(ui);
         return;
     };
+    // `current_para` gives the left indent with the list level's indent added.
+    let left_indent = para.left_indent;
     let mut stops = para.tabs;
     let selected_marker: Option<IndentMarker> = pstate(ui.ctx(), "tabs-marker-sel");
     // Clamp the selection to the last stop, as `show` does for the ruler.
@@ -634,7 +873,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     if sel >= stops.len() {
         sel = stops.len().saturating_sub(1);
     }
-    if menu_item(ui, tl!("Clear All Tabs"), !stops.is_empty(), false)
+    if menu_item(ui, tl!("Clear All Tabs"), !stops.is_empty() || story_has_tabs(app), false)
         && let Err(e) = super::paragraph::run_on_paragraphs(app, "text.tabs.clear", json!({}))
     {
         app.status(e);
@@ -644,17 +883,23 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         apply(app, &stops);
     }
     // Repeat Tab: copies of the selected stop across the ruler, spaced by its distance from the
-    // previous stop, or from the paragraph's left indent when it is the first stop.
+    // previous stop, or from the paragraph's left indent plus its list level's indent when it is
+    // the first stop. The copies stop at the 256-stop limit, which the status bar then shows.
     if menu_item(ui, tl!("Repeat Tab"), sel < stops.len() && selected_marker.is_none(), false) {
         let step = match sel {
-            0 => (stops[0].position - para.left_indent).abs(),
+            0 => (stops[0].position - left_indent).abs(),
             _ => stops[sel].position - stops[sel - 1].position,
         }
         .max(1.0);
         let base = stops[sel].clone();
         stops.truncate(sel + 1);
+        let max = TabStop::MAX_STOPS;
         let mut pos = base.position + step;
         while pos <= base.position + step * 20.0 && pos < 2000.0 {
+            if stops.len() >= max {
+                app.status(format!("at most {max} tab stops"));
+                break;
+            }
             stops.push(TabStop { position: pos, ..base.clone() });
             pos += step;
         }
