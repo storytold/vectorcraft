@@ -1,4 +1,4 @@
-use super::transform::transform_patterns;
+use super::transform::{keeps_guides, transform_patterns};
 use super::{
     Affine, Document, EngineError, NodeId, OrientedBox, Point, Rect, Result, Scaling, Session, Value, Vec2, bad, check_numbers, check_switches,
     effects, has_multi, ok, selected_roots, str_param,
@@ -107,7 +107,8 @@ fn items_bounds(d: &Document, ids: &[NodeId], m: Measure) -> Vec<(NodeId, Rect)>
 /// so for `ids`. When every move is a rounding error (1e-9 pt or less on both axes), the document
 /// and its undo history stay as they are.
 fn apply_moves(s: &mut Session, label: &str, p: &Value, ids: &[NodeId], moves: &[(NodeId, Vec2)], guides: &[(NodeId, f64)]) -> Result<Value> {
-    let sc = Scaling { patterns: transform_patterns(s, p, ids)?, ..Scaling::default() };
+    // Locked guides inside the groups moved stay where they are, as a move leaves them (#8538).
+    let sc = Scaling { patterns: transform_patterns(s, p, ids)?, keep_guides: keeps_guides(s, false), ..Scaling::default() };
     let guides: Vec<(NodeId, f64)> = {
         let d = &s.doc()?.doc;
         guides.iter().copied().filter(|&(i, pos)| d.ruler_guide(i).is_some_and(|g| (g.pos - pos).abs() > 1e-9)).collect()

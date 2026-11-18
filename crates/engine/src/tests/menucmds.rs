@@ -4442,6 +4442,53 @@ fn locked_guides_lock_guide_paths() {
     assert_eq!(selected(&s), vec![b]);
 }
 
+/// #8538: while guides are locked, a transform of a group leaves the guide paths in it where they
+/// are and transforms its other members: a move, Transform Each and Align. A copy leaves the
+/// original guide and takes a copy of it with the copied group. With guides unlocked, the guide
+/// moves with its group.
+#[test]
+fn transforming_a_group_leaves_its_locked_guide_paths_in_place() {
+    let mut s = session();
+    let (guide, x) = (rect(&mut s, 0.0, 0.0, 10.0, 10.0), rect(&mut s, 20.0, 0.0, 10.0, 10.0));
+    sel(&mut s, &[guide, x]);
+    let g = id_of(&s.execute("object.group", &json!({})).unwrap());
+    sel(&mut s, &[guide]);
+    s.execute("view.guides.make", &json!({})).unwrap();
+    s.execute("view.guides.lock", &json!({"locked": true})).unwrap();
+    sel(&mut s, &[g]);
+    assert_eq!(selected(&s), vec![g], "the group stays selected");
+    let x0 = |s: &Session| (bounds(s, guide).x0, bounds(s, x).x0);
+    s.execute("object.move", &json!({"dx": 50, "dy": 0})).unwrap();
+    assert_eq!(x0(&s), (0.0, 70.0), "a move");
+    s.execute("object.transformEach", &json!({"moveH": 10})).unwrap();
+    assert_eq!(x0(&s), (0.0, 80.0), "Transform Each");
+    s.execute("object.align", &json!({"horizontal": "right", "to": "artboard"})).unwrap();
+    assert_eq!(bounds(&s, guide).x0, 0.0, "Align");
+    let after_align = bounds(&s, x).x0;
+    assert_ne!(after_align, 80.0, "Align moves the art");
+    // A copy: the original guide stays, the copy's guide goes with the copied group.
+    let guides = |s: &Session| {
+        let mut out = vec![];
+        for l in &s.doc().unwrap().doc.layers {
+            l.walk(&mut |n| {
+                if matches!(n.kind, NodeKind::Path { guide: true, .. }) {
+                    out.push(n.id);
+                }
+            });
+        }
+        out
+    };
+    s.execute("object.move", &json!({"dx": 0, "dy": 50, "copy": true})).unwrap();
+    let copied: Vec<NodeId> = guides(&s).into_iter().filter(|id| *id != guide).collect();
+    assert_eq!(copied.len(), 1);
+    assert_eq!((bounds(&s, guide).y0, bounds(&s, copied[0]).y0), (0.0, 50.0), "a copy");
+    // Unlocked, the guide moves with its group.
+    s.execute("view.guides.lock", &json!({"locked": false})).unwrap();
+    sel(&mut s, &[g]);
+    s.execute("object.move", &json!({"dx": 5, "dy": 0})).unwrap();
+    assert_eq!(x0(&s), (5.0, after_align + 5.0), "unlocked");
+}
+
 /// A rectangle at (`x`, 0), 10 pt wide, made into a guide; nothing is selected after.
 fn guide_path(s: &mut Session, x: f64) -> NodeId {
     let g = rect(s, x, 0.0, 10.0, 10.0);

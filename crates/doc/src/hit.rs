@@ -2106,20 +2106,50 @@ pub fn compound_part_at(n: &Node, p: Point, tol: f64) -> Option<NodeId> {
 /// the members of a group or layer with geometry effects of its own, are touched where the art those
 /// effects draw lies ([`set_drawn_art`]), as clicks hit them.
 pub fn marquee(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool) -> Vec<NodeId> {
-    marquee_with(doc, r, scope, leaves, false, false)
+    marquee_with(doc, r, scope, leaves, false, false, false)
 }
 
 /// [`marquee`] in the view the canvas shows: with `outline` (Outline view), and below a layer
 /// whose Preview is off, a clipping path counts by its plain shapes, without its live effects, as
-/// the clicks of [`HitOptions::outline`] do.
-pub fn marquee_in_view(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool, outline: bool) -> Vec<NodeId> {
-    marquee_with(doc, r, scope, leaves, false, outline)
+/// the clicks of [`HitOptions::outline`] do. With `skip_guides` (Lock Guides is on or the guides
+/// are hidden, as [`HitOptions::skip_guides`]), the paths made into guides are not touched, at the
+/// top or inside a group, so a group is not taken for a guide in it (#8538).
+pub fn marquee_in_view(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool, outline: bool, skip_guides: bool) -> Vec<NodeId> {
+    marquee_with(doc, r, scope, leaves, false, outline, skip_guides)
 }
 
 /// Candidates for whole-object enclosure by a loop bounded by `r`. Eligibility and group
 /// traversal follow [`marquee_in_view`]; compounds contribute the complete path they paint.
-pub fn enclosure_candidates(doc: &Document, r: Rect, scope: Option<NodeId>, outline: bool) -> Vec<NodeId> {
-    marquee_with(doc, r, scope, true, true, outline)
+pub fn enclosure_candidates(doc: &Document, r: Rect, scope: Option<NodeId>, outline: bool, skip_guides: bool) -> Vec<NodeId> {
+    marquee_with(doc, r, scope, true, true, outline, skip_guides)
+}
+
+thread_local! {
+    /// Whether the marquee under way leaves out the paths made into guides ([`GuidesOff`]).
+    static GUIDES_OFF: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// While a guard lives, a marquee ([`marquee_with`]) touches no path made into a guide, at any
+/// level: [`HitOptions::skip_guides`] for the marquee.
+struct GuidesOff {
+    was: bool,
+}
+
+impl GuidesOff {
+    fn set() -> Self {
+        Self { was: GUIDES_OFF.replace(true) }
+    }
+
+    /// Is `n` a path made into a guide that the marquee under way leaves out?
+    fn skips(n: &Node) -> bool {
+        GUIDES_OFF.get() && matches!(n.kind, NodeKind::Path { guide: true, .. })
+    }
+}
+
+impl Drop for GuidesOff {
+    fn drop(&mut self) {
+        GUIDES_OFF.set(self.was);
+    }
 }
 
 /// Is `n` a layer whose Preview is off (its art is drawn and clicked in outline)?
@@ -2127,8 +2157,17 @@ fn previews_off(n: &Node) -> bool {
     matches!(n.kind, NodeKind::Layer { preview: false, .. })
 }
 
-fn marquee_with(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool, whole_compounds: bool, outline: bool) -> Vec<NodeId> {
+fn marquee_with(
+    doc: &Document,
+    r: Rect,
+    scope: Option<NodeId>,
+    leaves: bool,
+    whole_compounds: bool,
+    outline: bool,
+    skip_guides: bool,
+) -> Vec<NodeId> {
     let _walk = ArtWalk::open();
+    let _guides = skip_guides.then(GuidesOff::set);
     let mut out = Vec::new();
     // The locks first: they copy the kept art boxes that `symbols` takes, and `symbols` keeps theirs.
     let locks = doc.locked_artboards_kept();
@@ -2272,6 +2311,10 @@ fn marquee_with(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool, wh
     /// path is touched by its own geometry ([`mask_marquee`]) and on the edge of its region
     /// ([`clip_edge_touches`]).
     fn touches(n: &Node, s: &SymbolBoxes, r: Rect, scope: Option<NodeId>, whole_compounds: bool, outline: bool) -> bool {
+        // Locked or hidden guides are not touched ([`GuidesOff`]).
+        if GuidesOff::skips(n) {
+            return false;
+        }
         // A path or compound path whose geometry effects reshape it, or a group or layer whose own
         // geometry effects reshape its members, is touched where that art is drawn ([`drawn_art`]).
         if let Some(art) = drawn_art(s, n, outline || previews_off(n)) {

@@ -227,8 +227,15 @@ fn assert_round_corners(n: &Node, back: Affine, r: f64) {
     }
 }
 
-const KEEP_CORNERS: Scaling =
-    Scaling { strokes: false, effects: None, keep_type_strokes: false, keep_corners: true, patterns: false, keep_fit_when_flat: false };
+const KEEP_CORNERS: Scaling = Scaling {
+    strokes: false,
+    effects: None,
+    keep_type_strokes: false,
+    keep_corners: true,
+    patterns: false,
+    keep_fit_when_flat: false,
+    keep_guides: false,
+};
 
 #[test]
 fn uneven_scales_keep_live_corners_circular() {

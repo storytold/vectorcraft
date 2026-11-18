@@ -527,10 +527,13 @@ impl Node {
                     }
                 }
             }
-            NodeKind::Layer { children, .. }
-            | NodeKind::Group { children, .. }
-            | NodeKind::Compound { children, .. }
-            | NodeKind::Intertwine { children } => {
+            NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } | NodeKind::Intertwine { children } => {
+                // Locked guides stay where they are ([`Scaling::keep_guides`]).
+                for c in children.iter_mut().filter(|c| !(sc.keep_guides && matches!(c.kind, NodeKind::Path { guide: true, .. }))) {
+                    Arc::make_mut(c).transform_scaled(a, sc);
+                }
+            }
+            NodeKind::Compound { children, .. } => {
                 for c in children.iter_mut() {
                     Arc::make_mut(c).transform_scaled(a, sc);
                 }

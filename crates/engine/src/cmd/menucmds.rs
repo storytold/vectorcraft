@@ -637,6 +637,7 @@ fn transform_each_as(s: &mut Session, p: &Value, label: &str) -> Result<Value> {
     let mut rng = Rng(whole_or(p, "seed", 0x9E37_79B9_7F4A_7C15, "object.transformEach")?.max(1));
     let mut sc = if !relative || sh != Some(100.0) || sv != Some(100.0) { super::object::scaling(s, p) } else { Default::default() };
     sc.patterns = super::object::transform_patterns(s, p, &roots)?;
+    sc.keep_guides = super::object::keeps_guides(s, copy);
     // With no object to transform, or without a copy when nothing would change (both scales 100%
     // or, with Absolute, the size each object already has, and no move, rotation or reflection,
     // with or without Random), the document and its undo history stay as they are.
