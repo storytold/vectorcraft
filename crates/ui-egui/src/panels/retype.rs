@@ -1,5 +1,5 @@
-//! Retype panel (Window › Retype): the fonts whose glyphs the selected outlined text is, ranked by
-//! how many of its shapes each matches (`type.retypeFonts`), each with a sample
+//! Retype panel (Window › Retype): the fonts whose glyphs match the selected outlined text, ranked
+//! by how many of its shapes each matches (`type.retypeFonts`), each with a sample
 //! (<https://helpx.adobe.com/illustrator/desktop/design-with-text/fonts-and-scripts/identify-fonts-using-retype.html>,
 //! <https://helpx.adobe.com/illustrator/desktop/design-with-text/fonts-and-scripts/apply-retype-suggested-fonts-to-live-text.html>).
 //! Find Matching Fonts lists ten, and Find more font matches at the end of the list five more. The
@@ -59,6 +59,9 @@ pub struct View {
     pub rest: Vec<Found>,
     /// The shapes the last search compared.
     pub shapes: u64,
+    /// The last search left out shapes past `type.retype`'s limits (2,048 shapes, 16 nested
+    /// groups).
+    pub truncated: bool,
     pub size: Size,
     /// The samples' text (empty: a generic sample).
     pub text: String,
@@ -92,6 +95,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     widgets::divider(ui);
     let view = app.ui.retype.clone();
+    if view.searched && view.truncated {
+        widgets::dim_label(ui, tl!("Shapes past the first 2,048, or more than 16 groups deep, were not compared."));
+    }
     if !view.searched {
         widgets::dim_label(ui, tl!("Select outlined text, then Find Matching Fonts."));
     } else if view.fonts.is_empty() {
@@ -176,7 +182,7 @@ pub(crate) fn command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         "retype.preview" => preview(app, p),
         "retype.reset" => {
             let v = &mut app.ui.retype;
-            (v.searched, v.fonts, v.rest, v.shapes) = (false, vec![], vec![], 0);
+            (v.searched, v.fonts, v.rest, v.shapes, v.truncated) = (false, vec![], vec![], 0, false);
             Ok(list(&app.ui.retype))
         }
         _ => return None,
@@ -184,13 +190,14 @@ pub(crate) fn command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
 }
 
 /// `retype.list`: what the panel shows → `{searched, fonts: [{family, style, matched}], shapes,
-/// more, size, text}`.
+/// more, truncated, size, text}`.
 fn list(v: &View) -> Value {
     json!({
         "searched": v.searched,
         "fonts": v.fonts.iter().map(|f| json!({"family": f.family, "style": f.style, "matched": f.matched})).collect::<Vec<_>>(),
         "shapes": v.shapes,
         "more": !v.rest.is_empty(),
+        "truncated": v.truncated,
         "size": size_name(v.size),
         "text": v.text,
     })
@@ -228,6 +235,7 @@ fn find(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let rest = fonts.split_off(fonts.len().min(FIRST));
     let v = &mut app.ui.retype;
     (v.searched, v.fonts, v.rest, v.shapes) = (true, fonts, rest, r["shapes"].as_u64().unwrap_or(0));
+    v.truncated = r["truncated"].as_bool().unwrap_or(false);
     Ok(list(&app.ui.retype))
 }
 

@@ -785,13 +785,13 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "retype.find",
         "Find Matching Fonts",
         "",
-        "{more?: bool} show the Retype panel and list the fonts whose glyphs the selected outlined text is, ranked as type.retypeFonts ranks them: ten, as Find Matching Fonts does, or with more: true the next five fonts the last search found (whatever is selected now; before any search, a first search), as Find more font matches does; the document does not change; a selection with no path or compound path, or a more that is not true or false, is an error and leaves the list as it was; returns what retype.list returns",
+        "{more?: bool} show the Retype panel and list the fonts whose glyphs match the selected outlined text, ranked as type.retypeFonts ranks them: ten, as Find Matching Fonts does, or with more: true the next five fonts the last search found (whatever is selected now; before any search, a first search), as Find more font matches does; the document does not change; a selection with no path or compound path, or a more that is not true or false, is an error and leaves the list as it was; returns what retype.list returns",
     ),
     (
         "retype.list",
         "List Matching Fonts",
         "",
-        "{} what the Retype panel shows: {searched (a search ran since the last reset), fonts: [{family, style, matched (shapes it matches)}], shapes (shapes the last search compared), more (more fonts match than the list holds), size: small|medium|large, text (the samples' text; empty for a generic sample)}",
+        "{} what the Retype panel shows: {searched (a search ran since the last reset), fonts: [{family, style, matched (shapes it matches)}], shapes (shapes the last search compared), more (more fonts match than the list holds), truncated (the last search left out shapes past type.retype's limits), size: small|medium|large, text (the samples' text; empty for a generic sample)}",
     ),
     (
         "retype.preview",

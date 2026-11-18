@@ -1,5 +1,5 @@
-//! Retype's matching fonts (`type.retypeFonts`): the fonts whose glyphs the selected outlined text
-//! is, ranked, for the Retype panel's list
+//! Retype's matching fonts (`type.retypeFonts`): the fonts whose glyphs match the selected outlined
+//! text, ranked, for the Retype panel's list
 //! (<https://helpx.adobe.com/illustrator/desktop/design-with-text/fonts-and-scripts/identify-fonts-using-retype.html>,
 //! <https://helpx.adobe.com/illustrator/desktop/design-with-text/fonts-and-scripts/apply-retype-suggested-fonts-to-live-text.html>).
 //! The panel lists ten fonts and five more on request. Each selected glyph shape is compared with
@@ -26,7 +26,7 @@ pub(in crate::cmd) fn specs() -> Vec<CommandSpec> {
         "Find Matching Fonts",
         [],
         None,
-        "{count?: 1..96 (default 10)} the fonts whose glyphs the selected outlined text is, as the Retype panel lists them: each selected shape (paths and compound paths, inside groups too) is compared with the glyphs of up to 96 loaded fonts, those of the document's live type first, by type.retype's matching (exact matches only); of two versions of a font loaded at once, only the version its family and style name gives is compared, the one choosing the font sets; the fonts rank by how many shapes each matches, then by the mean distance left after fitting, then by family and style name; the document does not change → {fonts: [{family, style, matched (shapes it matches)}] (the first count), shapes (shapes compared), more (more fonts match than count), truncated (shapes past the limits were left out)}; a count that is not a whole number from 1 to 96 is an error",
+        "{count?: 1..96 (default 10)} the fonts whose glyphs match the selected outlined text, as the Retype panel lists them: each selected shape (paths and compound paths, inside groups too) is compared with the glyphs of up to 96 loaded fonts, those of the document's live type first, by type.retype's matching (exact matches only); of two versions of a font loaded at once, only the version its family and style name gives is compared, the one choosing the font sets; the fonts rank by how many shapes each matches, then by the mean distance left after fitting, then by family and style name; the document does not change → {fonts: [{family, style, matched (shapes it matches)}] (the first count), shapes (shapes compared), more (more fonts match than count), truncated (shapes past the limits were left out)}; a count that is not a whole number from 1 to 96 is an error",
         has_selected_path,
         retype_fonts
     )]

@@ -2902,6 +2902,7 @@ fn retype_panel_strings_are_in_complete_catalogs() {
             "Type your text to preview",
             "Select outlined text, then Find Matching Fonts.",
             "No font matches the selected shapes.",
+            "Shapes past the first 2,048, or more than 16 groups deep, were not compared.",
             "Reset Retype Panel",
             "List Matching Fonts",
             "Retype Preview",
@@ -2917,6 +2918,7 @@ fn retype_panel_strings_are_in_complete_catalogs() {
             "`count` must be a whole number from 1 to 96",
             "`size` must be small, medium or large",
             "`text` must be a string of at most 100 characters",
+            "Retype: select outlined text (paths or compound paths)",
         ] {
             if message(lang, m) == m {
                 missing.push(format!("{code} @msg {m}"));

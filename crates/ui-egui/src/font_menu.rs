@@ -2005,6 +2005,23 @@ fn sample_texture(ctx: &egui::Context, family: &str, style: Option<&str>, sample
                 s.ready.insert(key, tex.clone());
                 return tex;
             }
+            if s.pending.len() >= MAX_PENDING {
+                // Finished samples join the ready ones, so samples nobody asks for again (their
+                // text or size changed) do not keep new ones from starting.
+                let mut done = vec![];
+                for (k, rx) in &s.pending {
+                    match rx.try_recv() {
+                        Err(std::sync::mpsc::TryRecvError::Empty) => {}
+                        Ok(img) => done.push((k.clone(), img)),
+                        Err(std::sync::mpsc::TryRecvError::Disconnected) => done.push((k.clone(), None)),
+                    }
+                }
+                for (k, img) in done {
+                    s.pending.remove(&k);
+                    let tex = img.map(|img| ctx.load_texture(format!("font-sample-{}-{}", k.0, k.3), img, egui::TextureOptions::LINEAR));
+                    s.ready.insert(k, tex);
+                }
+            }
             if s.pending.len() >= MAX_PENDING || !s.take_budget(ctx) {
                 return None;
             }

@@ -106,6 +106,21 @@ fn shapes_that_are_no_glyph_list_no_font() {
     assert!(s.execute("type.retypeFonts", &json!({})).is_err());
 }
 
+#[test]
+fn shapes_past_the_limits_are_reported_as_left_out() {
+    let mut s = session();
+    let top = outlined(&mut s, json!({"x": 40, "y": 100, "text": "A", "size": 40}));
+    // B, nested deeper than Retype looks.
+    let mut deep = outlined(&mut s, json!({"x": 40, "y": 200, "text": "B", "size": 40}));
+    for _ in 0..20 {
+        s.execute("select.set", &json!({"ids": [deep]})).unwrap();
+        deep = s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap();
+    }
+    s.execute("select.set", &json!({"ids": [top, deep]})).unwrap();
+    let r = query(&mut s, json!({}), bundled());
+    assert_eq!((r["shapes"].clone(), r["truncated"].clone()), (json!(1), json!(true)), "{r}");
+}
+
 /// Two versions of one font: choosing the font by name sets the version the name gives, so only
 /// that version is compared, and a font whose other version alone matches is not listed.
 #[test]

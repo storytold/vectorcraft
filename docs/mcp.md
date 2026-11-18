@@ -11489,7 +11489,7 @@ on an open path that are not drawn because they fall before the path's start can
 
 ## Retype panel
 
-`type.retypeFonts {count?}` lists the fonts whose glyphs the selected outlined text is. It compares each selected path
+`type.retypeFonts {count?}` lists the fonts whose glyphs match the selected outlined text. It compares each selected path
 and compound path, inside groups too, with the glyphs of up to 96 loaded fonts, those of the document's live type
 first, by the matching `type.retype` uses, and it counts only exact matches. When two versions of a font are loaded,
 only the version its family and style name gives is compared, which is the version that choosing the font sets. The
@@ -11509,9 +11509,10 @@ was. Each row shows the font's family and style over a sample of the font. While
 click on a row sets that font on it, as the font menus do; live type inside a selected group counts too. The list
 stays when the selection changes.
 
-`retype.list {}` → `{searched, fonts: [{family, style, matched}], shapes, more, size, text}`. `searched` is false
-until a search runs and after a reset. `size` is `small`, `medium` or `large`, and `text` is the samples' text (empty
-for a generic sample). The panel menu's Small, Medium and Large items and the sample field run
+`retype.list {}` → `{searched, fonts: [{family, style, matched}], shapes, more, truncated, size, text}`. `searched` is
+false until a search runs and after a reset. `truncated` is true when the last search left out shapes past the limits
+of `type.retype` (2,048 shapes, 16 nested groups); the panel then says that some shapes were not compared.
+`size` is `small`, `medium` or `large`, and `text` is the samples' text (empty for a generic sample). The panel menu's Small, Medium and Large items and the sample field run
 `retype.preview {size?, text?}`. `text` holds at most 100 characters; any other value of either key is an error and
 changes nothing. Reset Retype Panel in the panel menu runs `retype.reset {}`, which clears the list and keeps the size
 and text. `retype.find`, `retype.preview` and `retype.reset` return what `retype.list` returns.

@@ -1275,12 +1275,14 @@ font-technology	Variable	Değişken
 	Type your text to preview	Önizleme için metninizi yazın
 	Select outlined text, then Find Matching Fonts.	Anahatlara dönüştürülmüş metni seçin, ardından Eşleşen Yazı Tiplerini Bul komutunu seçin.
 	No font matches the selected shapes.	Seçili şekillerle eşleşen yazı tipi yok.
+	Shapes past the first 2,048, or more than 16 groups deep, were not compared.	İlk 2.048 şeklin ötesindeki veya 16 gruptan daha derindeki şekiller karşılaştırılmadı.
 	Reset Retype Panel	Yeniden Yaz Panelini Sıfırla
 	List Matching Fonts	Eşleşen Yazı Tiplerini Listele
 	Retype Preview	Yeniden Yaz Paneli Önizlemesi
 @msg	`count` must be a whole number from 1 to 96	`count` 1 ile 96 arasında bir tam sayı olmalıdır
 @msg	`size` must be small, medium or large	`size` small, medium veya large olmalıdır
 @msg	`text` must be a string of at most 100 characters	`text` en fazla 100 karakterlik bir dize olmalıdır
+@msg	Retype: select outlined text (paths or compound paths)	Yeniden Yaz: anahatlara dönüştürülmüş metni seçin (yollar veya bileşik yollar)
 	Find Next	Sonrakini Bul
 	Find Objects	Nesneleri Bul
 	Compare with Image	Görüntüyle Karşılaştır

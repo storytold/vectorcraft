@@ -67,7 +67,11 @@ fn find_lists_the_matching_fonts_and_shows_the_panel() {
     let r = app.run("retype.find", json!({})).unwrap();
     assert_eq!(r["searched"], json!(true), "{r}");
     assert_eq!(r["shapes"], json!(6));
-    assert_eq!(families(&r).first(), Some(&("Source Sans 3".to_string(), "Bold".to_string())), "{r}");
+    // The panel reads the app's shared font database, where other tests load renamed copies of the
+    // bundled fonts; a copy ties with its original, so the font is checked among the first rank.
+    let fonts = r["fonts"].as_array().unwrap();
+    let top = fonts.first().map(|f| f["matched"].clone());
+    assert!(fonts.iter().any(|f| f["family"] == json!("Source Sans 3") && f["style"] == json!("Bold") && Some(f["matched"].clone()) == top), "{r}");
     assert!(families(&r).len() <= 10, "ten at first: {r}");
     assert!(crate::panel_docking::showing(&app.ui, ID), "the panel shows");
     assert!(app.session.active().unwrap().doc == before, "the document does not change");
@@ -146,7 +150,32 @@ fn preview_sets_the_size_and_text_and_reset_keeps_them() {
     select(&mut app, &[g]);
     app.run("retype.find", json!({})).unwrap();
     let r = app.run("retype.reset", json!({})).unwrap();
-    assert_eq!(r, json!({"searched": false, "fonts": [], "shapes": 0, "more": false, "size": "large", "text": "Hamburg"}));
+    assert_eq!(r, json!({"searched": false, "fonts": [], "shapes": 0, "more": false, "truncated": false, "size": "large", "text": "Hamburg"}));
+}
+
+#[test]
+fn a_search_that_left_out_shapes_says_so() {
+    let mut app = app();
+    let top = outlined(&mut app, json!({"x": 40, "y": 100, "text": "A", "size": 40}));
+    // B, nested deeper than Retype looks.
+    let mut deep = outlined(&mut app, json!({"x": 40, "y": 200, "text": "B", "size": 40}));
+    for _ in 0..20 {
+        select(&mut app, &[deep]);
+        deep = app.session.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap();
+    }
+    select(&mut app, &[top, deep]);
+    let r = app.run("retype.find", json!({})).unwrap();
+    assert_eq!((r["shapes"].clone(), r["truncated"].clone()), (json!(1), json!(true)), "{r}");
+    let note = "Shapes past the first 2,048, or more than 16 groups deep, were not compared.";
+    let ctx = context();
+    frame(&mut app, &ctx, vec![], show);
+    assert!(frame(&mut app, &ctx, vec![], show).iter().any(|n| n.label() == Some(note) || n.value() == Some(note)), "the panel says so");
+    // A search that left nothing out, and a reset, clear it.
+    select(&mut app, &[top]);
+    assert_eq!(app.run("retype.find", json!({})).unwrap()["truncated"], json!(false));
+    select(&mut app, &[top, deep]);
+    app.run("retype.find", json!({})).unwrap();
+    assert_eq!(app.run("retype.reset", json!({})).unwrap()["truncated"], json!(false));
 }
 
 #[test]
