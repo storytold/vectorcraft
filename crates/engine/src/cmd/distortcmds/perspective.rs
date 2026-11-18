@@ -104,9 +104,14 @@ fn plane_param(g: &PerspectiveGrid, p: &Value, cmd: &str) -> Result<Plane> {
     Ok(plane)
 }
 
+/// The objects a perspective command acts on: the outermost of `ids` (each once, in the order first
+/// given), else the selection's roots.
 pub(super) fn roots(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
     match named_ids(p)? {
-        Some(v) => Ok(outermost(&s.doc()?.doc, v)),
+        Some(v) => {
+            let mut seen = std::collections::HashSet::new();
+            Ok(outermost(&s.doc()?.doc, v.into_iter().filter(|id| seen.insert(*id)).collect()))
+        }
         None => selected_roots(s),
     }
 }

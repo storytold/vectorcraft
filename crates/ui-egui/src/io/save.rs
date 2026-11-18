@@ -263,7 +263,9 @@ pub(super) fn save_current_in(app: &mut VectorcraftApp, p: &Value, folder: Optio
         return Ok(r);
     }
     let retry = super::read_only_save::Retry::new(&first, folder);
-    write_plan(app, first, ("file.save", p.clone()), Some(retry))
+    // Only `path` was asked about: the files written beside it are checked against the file the
+    // document was read from when the save writes them.
+    write_plan(app, plan(app, SaveMode::Save, p)?, ("file.save", p.clone()), Some(retry))
 }
 
 /// File → Save, Save As…, Save a Copy…, Save as Template… and the options dialogs' OK. `p` is the
@@ -499,6 +501,16 @@ pub(crate) fn show_with_notes(app: &mut VectorcraftApp, status: String, notes: V
     app.ui.status_notes = (!notes.is_empty()).then(|| (app.ui.status.clone(), notes));
 }
 
+/// Clear the status bar's message and its hover notes when `left` is still what the status bar
+/// shows: a message with notes, and [`crate::state::UiState::status_sets`] when it was shown.
+/// A message set since stays, one with the same text included.
+pub(crate) fn clear_notes_left(app: &mut VectorcraftApp, left: Option<(String, u64)>) {
+    if left.is_some_and(|(status, sets)| status == app.ui.status && sets == app.ui.status_sets) {
+        app.status("");
+        app.ui.status_notes = None;
+    }
+}
+
 /// [`report_saved`]'s message.
 pub(crate) fn saved_status(path: &str, r: &Value) -> String {
     let warnings = notes_of(r);
@@ -592,6 +604,9 @@ fn write_plan(
         })
     };
     let failed = target.clone().unwrap_or_default();
+    // The status line before the save starts: on the worker, the save sets one line ("<label>…")
+    // right after this; written right away, it sets none before `then` runs.
+    let (sets, started_line) = (app.ui.status_sets, format!("{label}…"));
     let then = move |app: &mut VectorcraftApp, r: Result<Value, String>| {
         if r.is_err()
             && location_refused.load(std::sync::atomic::Ordering::Relaxed)
@@ -621,7 +636,10 @@ fn write_plan(
             let beside: Vec<String> = beside.filter(|p| *p != path).map(str::to_string).collect();
             app.picks.written_beside.insert(uid, beside);
         }
-        report_saved(app, &path, &r);
+        // A line set while the file was written (another command's, another job's) stays.
+        if background::status_unchanged(app, sets, &started_line) {
+            report_saved(app, &path, &r);
+        }
         Ok(r)
     };
     let mut r = background::run(app, enabled, label, Some(uid), work, then)?;

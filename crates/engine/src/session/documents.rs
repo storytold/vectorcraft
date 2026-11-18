@@ -24,6 +24,11 @@ impl Session {
         });
         // Clicks find an image's own fills and strokes where their effects draw them.
         vectorcraft_doc::hit::set_image_paint(vectorcraft_render::effects::image_paint);
+        // Clicks inside a clip group fall in the region its clipping path's effects give it.
+        vectorcraft_doc::hit::set_clip_region(vectorcraft_render::effects::reshaped_clip_outline);
+        // Clicks and marquees find paths, compound paths, groups and layers where their geometry
+        // effects draw them.
+        vectorcraft_doc::hit::set_drawn_art(vectorcraft_render::effects::preview::drawn_art);
         // Clicks find a blend's steps and an envelope's distorted art where the canvas draws them,
         // evaluated again when the fonts, the hyphenation exceptions or the plug-ins change.
         vectorcraft_doc::hit::set_live_art(vectorcraft_render::effects::expand_live, || {
@@ -91,7 +96,9 @@ impl Session {
             color_settings_file: None,
             plugin_dir: None,
             scripts_dir: None,
+            metadata_templates_dir: None,
             new_doc_profile_dir: None,
+            script_data_dir: None,
             plugin_output: None,
             plugin_install_approval: None,
             plugin_grants_from_requests: false,
@@ -111,6 +118,7 @@ impl Session {
             place_hand_off: None,
             queue_hand_off: None,
             place_queue_roots: None,
+            place_queue_loads: 0,
             image_hand_off: None,
             trace_hand_off: None,
             place_cursor_requests: false,
@@ -139,7 +147,9 @@ impl Session {
             link_stamps: Default::default(),
             link_scan: None,
             global_edit_options: Default::default(),
+            select_similar: crate::cmd::SIMILAR[0].0,
             keyboard_text: false,
+            toasts: Default::default(),
             script_key: None,
             script_engines: crate::script::EnginesKey::new(),
             script_stop: vectorcraft_js::Interrupt::new(),
@@ -195,8 +205,7 @@ impl Session {
         let _ = self.finish_tool_edit_later();
         // The switch goes on whatever the lent tool's last actions did, as for the deactivation.
         let _ = self.give_back_tool(view);
-        let acts = self.with_tool_cx(view, |t, cx| t.deactivate(cx));
-        let _ = self.apply_actions(acts);
+        let _ = self.deactivate_tool(view);
         // A batch leaves its interaction open in the document it leaves, to keep or roll back with
         // the rest of the batch; anything else in progress (a drag) is cancelled.
         if self.batch_stash.is_none() {

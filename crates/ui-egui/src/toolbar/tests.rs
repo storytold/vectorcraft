@@ -102,7 +102,7 @@ fn the_tool_buttons_are_centred_in_the_panel() {
 fn saved_flyout_choices_must_still_belong_to_the_slot() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
-    for (saved, shown) in [(vectorcraft_tools::addons::enclosing_lasso::ID, "lasso"), ("magicWand", "magicWand")] {
+    for (saved, shown) in [(vectorcraft_tools::addons::polygonal_lasso::ID, "lasso"), ("magicWand", "magicWand")] {
         app.ui.slot_tool.insert("lasso".into(), saved.into());
         let tree = tree(|ui| show(&mut app, ui));
         assert_eq!(role_and_state(&tree, &tip(tool_info(shown).unwrap())), (Role::Button, Some(Toggled::False)));
@@ -147,9 +147,9 @@ fn more_tools_open_their_options() {
     assert!(open_options(&mut app, "pieGraph").is_err());
     assert!(app.ui.dialog.is_none());
     app.run("graph.create", json!({"type": "column", "x": 0, "y": 0, "width": 200, "height": 150})).unwrap();
-    assert_eq!(open_options(&mut app, "pieGraph").unwrap()["dialog"], "command");
+    assert_eq!(open_options(&mut app, "pieGraph").unwrap()["dialog"], "graphType");
     let d = app.ui.dialog.take().unwrap();
-    assert_eq!((d.str("__command"), d.str("type")), ("graph.setType".to_string(), "column".to_string()));
+    assert_eq!((d.kind.as_str(), d.str("type")), (crate::dialogs::graph_type::KIND, "column".to_string()));
     // The Magic Wand panel opens, and stays open on a second double-click.
     open_options(&mut app, "magicWand").unwrap();
     assert!(crate::panel_docking::showing(&app.ui, "magicWand"));
@@ -853,7 +853,7 @@ fn window_float_tools_floats_and_puts_back_a_group() {
     assert!(app.ui.floating_flyouts.is_empty() && check(&app) == Some(false));
     assert_eq!(app.run("window.floatTools", json!({"tool": "pen", "floating": false})).unwrap(), json!(false));
     // A tool alone in its slot, an unknown tool, a bad flag.
-    assert!(app.run("window.floatTools", json!({"tool": "ellipse"})).is_err());
+    assert!(app.run("window.floatTools", json!({"tool": "polygon"})).is_err());
     assert!(app.run("window.floatTools", json!({"tool": "nope"})).is_err());
     assert!(app.run("window.floatTools", json!({})).is_err());
     assert!(app.run("window.floatTools", json!({"tool": "pen", "floating": "yes"})).is_err());

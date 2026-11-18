@@ -231,7 +231,7 @@ fn a_warichu_line_keeps_the_auto_leading_of_its_own_size() {
 #[test]
 fn the_first_baseline_measures_a_block_at_its_own_size() {
     use vectorcraft_doc::FirstBaseline;
-    for first in [FirstBaseline::Ascent, FirstBaseline::CapHeight, FirstBaseline::XHeight, FirstBaseline::Leading] {
+    for first in [FirstBaseline::Ascent, FirstBaseline::CapHeight, FirstBaseline::XHeight, FirstBaseline::Leading, FirstBaseline::EmBoxHeight] {
         let baseline = |inside: CharStyle| {
             let mut t = area("", style(20.0), Rect::new(0.0, 0.0, 300.0, 300.0), Justify::Left);
             t.area.first_baseline = first;
@@ -624,6 +624,24 @@ fn a_block_of_several_fonts_keeps_the_tallest_of_them() {
     assert!((first_short.0 - first_tall.0).abs() < 1e-6 && (first_short.1 - first_tall.1).abs() < 1e-6, "{first_short:?} {first_tall:?}");
     let deepest = plain[pair.0].1.max(plain[pair.1].1);
     assert!(first_short.0 >= plain[pair.0].0 - 1e-6 && first_short.1 >= deepest - 1e-6, "{first_short:?} {plain:?}");
+}
+
+/// The line holds each block line's characters at their own height: with a wide Line Gap, the
+/// ascent of the top block line's characters and the descent of the bottom one's stay inside the
+/// line.
+#[test]
+fn a_wide_line_gap_keeps_the_outer_block_lines_inside_the_line() {
+    let small = layout(db(), &point("x", style(10.0)));
+    let (ascent, descent) = (small.lines[0].ascent, small.lines[0].descent);
+    for lines in [2, 3] {
+        let l = layout(db(), &with_block("cdefgh", CharStyle { warichu_lines: lines, warichu_gap: 20.0, ..marked(20.0) }));
+        let line = &l.lines[0];
+        let block = &l.glyphs[2..8];
+        let top = block.iter().map(|g| g.origin.y).fold(f64::INFINITY, f64::min);
+        let bottom = block.iter().map(|g| g.origin.y).fold(f64::NEG_INFINITY, f64::max);
+        assert!(line.baseline - line.ascent <= top - ascent + 1e-6, "{lines}: {} {} {top} {ascent}", line.baseline, line.ascent);
+        assert!(line.baseline + line.descent >= bottom + descent - 1e-6, "{lines}: {} {} {bottom} {descent}", line.baseline, line.descent);
+    }
 }
 
 /// Warichu Settings on characters not marked Warichu leave their shaping alone: "fi" keeps its

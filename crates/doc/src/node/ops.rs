@@ -90,6 +90,42 @@ impl Node {
         matches!(self.kind, NodeKind::RulerGuide { .. } | NodeKind::Path { guide: true, .. })
     }
 
+    /// This object without the paths made into guides among the members of its groups, layers,
+    /// Intertwine groups and compound paths, at any depth, for measuring the art around them while
+    /// Lock Guides or Hide Guides leaves them out (#8538). The clipping path of a clip group or
+    /// layer and the original shapes of a Shaper group stay, guides or not, so the object keeps
+    /// its structure. `None` when it holds no such guide.
+    pub fn without_guides(&self) -> Option<Node> {
+        let (NodeKind::Layer { children, .. }
+        | NodeKind::Group { children, .. }
+        | NodeKind::Intertwine { children }
+        | NodeKind::Compound { children, .. }) = &self.kind
+        else {
+            return None;
+        };
+        let keep = usize::from(self.clips() || self.extras().shaper.is_some());
+        let mut changed = false;
+        let mut out = Vec::with_capacity(children.len());
+        for (i, c) in children.iter().enumerate() {
+            if i >= keep && matches!(c.kind, NodeKind::Path { guide: true, .. }) {
+                changed = true;
+            } else if let Some(stripped) = c.without_guides() {
+                changed = true;
+                out.push(Arc::new(stripped));
+            } else {
+                out.push(c.clone());
+            }
+        }
+        if !changed {
+            return None;
+        }
+        let mut n = self.clone();
+        if let Some(c) = n.children_mut() {
+            *c = out;
+        }
+        Some(n)
+    }
+
     /// A template layer (Layer Options → Template).
     pub fn is_template(&self) -> bool {
         matches!(self.kind, NodeKind::Layer { template: true, .. })
@@ -211,11 +247,15 @@ impl Node {
 
     /// A quick box round everything the object can paint, for culling clicks: paths and compound
     /// paths grow their geometric bounds by the farthest their strokes can reach from any path
-    /// ([`Appearance::outset`]) instead of measuring along their shape. An image's box takes in
+    /// ([`Appearance::outset`]) instead of measuring along their shape. A clip group's or a
+    /// clipping layer's box takes in the region that the live geometry effects of its clipping
+    /// path give it ([`crate::hit::set_clip_region`]). An image's box takes in
     /// the shapes its own fills and strokes paint ([`crate::hit::set_image_paint`]). Groups, layers
     /// without a clipping mask and Intertwine groups take in their members' boxes, grown by their
-    /// own strokes. Symbol instances are measured as in [`Node::visual_bounds`]. A blend's box
-    /// takes in where its spine can put its keys and steps.
+    /// own strokes. Symbol instances are measured as in [`Node::visual_bounds`], taking in the
+    /// shapes their art paints with the geometry effects of their own fill or stroke
+    /// ([`crate::hit::set_image_paint`]). A blend's box takes in where its spine can put its keys
+    /// and steps.
     pub fn reach_bounds(&self) -> Option<Rect> {
         self.reach(None)
     }
@@ -226,7 +266,11 @@ impl Node {
     /// grown by the farthest a stroke in the art can reach. For an instance placed through 9-slice
     /// guides, that box also holds the art box placed by each cell's map
     /// ([`crate::NineSliceMap::placement_bounds`]). An instance whose art holds an instance of a
-    /// symbol with 9-slice guides at any depth is measured as its art placed by its transform.
+    /// symbol with 9-slice guides at any depth is measured as its art placed by its transform. An
+    /// instance whose art holds a clipping path with live geometry effects also takes in the region
+    /// they give it ([`crate::hit::set_clip_region`]): moved with the instance when it only moves its
+    /// art, otherwise placed by it and grown by as far as the region reaches past the art, times √2
+    /// and the larger of 1 and the Frobenius norm of the transform's linear part.
     pub fn reach_bounds_with(&self, symbols: &SymbolBoxes) -> Option<Rect> {
         symbols.quickly(|| self.reach(Some(symbols)))
     }
@@ -248,21 +292,56 @@ impl Node {
                     .map(|b| b.inflate(o, o))
             }
             NodeKind::Intertwine { children } => children.iter().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, c.reach(symbols))),
-            // The frame and each shape the image's own fills and strokes paint, a stroke's grown by
-            // the farthest it can reach from its shape.
-            NodeKind::Image(_) => {
-                crate::hit::image_paint(symbols.map(SymbolBoxes::document), self).iter().fold(self.geometric(symbols), |acc, (bp, _, item)| {
-                    let o = if let crate::AppearanceItem::Stroke(s) = item { s.reach() } else { 0.0 };
-                    vectorcraft_geom::union_opt(acc, (!bp.elements().is_empty()).then(|| bp.bounding_box().inflate(o, o)))
-                })
-            }
+            // The frame and each shape the image's own fills and strokes paint.
+            NodeKind::Image(_) => self.with_own_paint(self.geometric(symbols), symbols),
             // Keys and steps placed on a spine, turned to it with Align to Path, can reach past the
             // keys and the spine.
             NodeKind::Blend { children, spec } => {
                 vectorcraft_geom::union_opt(self.visual(symbols), crate::blend::rail_reach(children, spec, symbols))
             }
+            // The live geometry effects of a clipping path can move or grow the region it clips to
+            // past its plain shape ([`crate::hit::set_clip_region`]).
+            NodeKind::Layer { children, clip: true, .. } | NodeKind::Group { children, clip: true } => {
+                vectorcraft_geom::union_opt(self.visual(symbols), children.first().and_then(|c| crate::hit::reshaped_clip_box(c)))
+            }
+            // The live geometry effects of the clipping paths in the art can draw it past its box,
+            // and the box takes in each shape the art paints with the geometry effects of the
+            // instance's own fill or stroke.
+            NodeKind::SymbolInstance { symbol, xf } => {
+                let Some((s, art, region)) = symbols.and_then(|s| {
+                    let a = s.art(symbol)?;
+                    Some((s, a, a.reshaped?))
+                }) else {
+                    return self.with_own_paint(self.visual(symbols), symbols);
+                };
+                let map = s.document().symbol_slice_map_of(symbol, art.geometric, *xf);
+                let placed = if moves_only(*xf) && map.is_none() {
+                    xf.transform_rect_bbox(region)
+                } else {
+                    // An effect can reach a fixed distance past the art or a distance in proportion
+                    // to its size, as `SymbolBoxes::effects_reach` estimates it.
+                    let g = art.geometric;
+                    let all = region.union(g);
+                    let past = [g.x0 - region.x0, region.x1 - g.x1, g.y0 - region.y0, region.y1 - g.y1].into_iter().fold(0.0_f64, f64::max);
+                    let [a, b, c, d, _, _] = xf.as_coeffs();
+                    let grow = past * std::f64::consts::SQRT_2 * (a * a + b * b + c * c + d * d).sqrt().max(1.0);
+                    map.map_or_else(|| xf.transform_rect_bbox(all), |m| m.placement_bounds(all)).inflate(grow, grow)
+                };
+                let o = self.appearance.outset();
+                self.with_own_paint(vectorcraft_geom::union_opt(self.visual(symbols), self.projected(Some(placed)).map(|b| b.inflate(o, o))), symbols)
+            }
             _ => self.visual(symbols),
         }
+    }
+
+    /// `start` grown by each shape the node's own fills and strokes paint
+    /// ([`crate::hit::set_image_paint`]), a stroke's grown by the farthest it can reach from its
+    /// shape.
+    fn with_own_paint(&self, start: Option<Rect>, symbols: Option<&SymbolBoxes>) -> Option<Rect> {
+        crate::hit::image_paint(symbols.map(SymbolBoxes::document), self).iter().fold(start, |acc, (bp, _, item)| {
+            let o = if let crate::AppearanceItem::Stroke(s) = item { s.reach() } else { 0.0 };
+            vectorcraft_geom::union_opt(acc, (!bp.elements().is_empty()).then(|| bp.bounding_box().inflate(o, o)))
+        })
     }
 
     /// Geometric bounds (no stroke), recursively. Clip groups are bounded by their clip path. A
@@ -362,7 +441,7 @@ impl Node {
             NodeKind::Group { children, clip: true } | NodeKind::Layer { children, clip: true, .. } => {
                 // A clipping path that paints (see `clip_paint`) strokes over the clip edge.
                 let clip = children.first()?;
-                if matches!(clip.kind, NodeKind::Path { .. } | NodeKind::Compound { .. } | NodeKind::Text(_)) {
+                if matches!(clip.kind, NodeKind::Path { .. } | NodeKind::Compound { .. } | NodeKind::Text(_)) || clip.extras().clip_pieces {
                     clip.visual(symbols)
                 } else {
                     clip.geometric(symbols)
@@ -571,6 +650,18 @@ impl Node {
                 c.walk(f);
             }
         }
+    }
+
+    /// [`Self::walk`] that ends at the first node for which `f` returns [`std::ops::ControlFlow::Break`]: no
+    /// node after it is visited, and the break is returned.
+    pub fn try_walk<'a, B>(&'a self, f: &mut impl FnMut(&'a Node) -> std::ops::ControlFlow<B>) -> std::ops::ControlFlow<B> {
+        f(self)?;
+        if let Some(ch) = self.children() {
+            for c in ch {
+                c.try_walk(f)?;
+            }
+        }
+        std::ops::ControlFlow::Continue(())
     }
 
     /// Count of nodes in this subtree, ruler guides left out.

@@ -288,6 +288,49 @@ fn a_glyph_filled_with_one_colour_is_one_path() {
     assert_eq!(fill(only), Paint::solid(rgb(COLR_RED)));
 }
 
+/// A fill that paints nothing (a palette index past the palette) followed by another glyph
+/// inside the same glyph's clip keeps the clip: the second glyph is drawn clipped to the first,
+/// not on its own.
+#[test]
+fn a_fill_that_paints_nothing_keeps_the_clip_around_the_glyph_after_it() {
+    use write_fonts::tables::colr::{BaseGlyphList, BaseGlyphPaint, Colr, LayerList};
+    use write_fonts::types::GlyphId16;
+    let bytes = colr_font(false).unwrap();
+    let read = skrifa::FontRef::new(&bytes).unwrap();
+    let gid = |ch| GlyphId16::new(u16::try_from(read.charmap().map(ch).unwrap().to_u32()).unwrap());
+    let mut colr = Colr::new(0, None, None, 0);
+    let paint = ColrPaint::glyph(ColrPaint::colr_layers(2, 0), gid('O'));
+    colr.base_glyph_list = Some(BaseGlyphList::new(1, vec![BaseGlyphPaint::new(gid(COLOUR_CHAR), paint)])).into();
+    colr.layer_list = Some(LayerList::new(2, vec![solid(99), ColrPaint::glyph(solid(0), gid('I'))])).into();
+    let font = crate::test_fonts::colr_font_with("Colrtest Empty Fill", &colr).unwrap();
+    let root = art(&font, COLOUR_CHAR);
+    let [clipped] = children(&root) else { panic!("{:?}", children(&root).iter().map(|c| c.kind_label()).collect::<Vec<_>>()) };
+    assert!(matches!(clipped.kind, NodeKind::Group { clip: true, .. }), "the `O` still clips: {}", clipped.kind_label());
+    let [clip, inner] = children(clipped) else { panic!("{:?}", children(clipped).iter().map(|c| c.kind_label()).collect::<Vec<_>>()) };
+    assert!(matches!(clip.kind, NodeKind::Path { clipping: true, .. }), "{}", clip.kind_label());
+    assert_eq!(fill(inner), Paint::solid(rgb(COLR_RED)));
+}
+
+/// A fill that paints nothing after a colour flooding the glyph leaves it that glyph filled:
+/// one path, as without the empty fill.
+#[test]
+fn a_fill_that_paints_nothing_after_a_flood_keeps_one_path() {
+    use write_fonts::tables::colr::{BaseGlyphList, BaseGlyphPaint, Colr, LayerList};
+    use write_fonts::types::GlyphId16;
+    let bytes = colr_font(false).unwrap();
+    let read = skrifa::FontRef::new(&bytes).unwrap();
+    let gid = |ch| GlyphId16::new(u16::try_from(read.charmap().map(ch).unwrap().to_u32()).unwrap());
+    let mut colr = Colr::new(0, None, None, 0);
+    let paint = ColrPaint::glyph(ColrPaint::colr_layers(2, 0), gid('O'));
+    colr.base_glyph_list = Some(BaseGlyphList::new(1, vec![BaseGlyphPaint::new(gid(COLOUR_CHAR), paint)])).into();
+    colr.layer_list = Some(LayerList::new(2, vec![solid(0), solid(99)])).into();
+    let font = crate::test_fonts::colr_font_with("Colrtest Flood Then Empty", &colr).unwrap();
+    let root = art(&font, COLOUR_CHAR);
+    let [only] = children(&root) else { panic!("{:?}", children(&root).iter().map(|c| c.kind_label()).collect::<Vec<_>>()) };
+    assert!(matches!(only.kind, NodeKind::Path { .. }), "{}", only.kind_label());
+    assert_eq!(fill(only), Paint::solid(rgb(COLR_RED)));
+}
+
 /// A sweep glyph in a font without clip boxes, its base glyph without an outline (the space's,
 /// as COLRv1 fonts make them): its image is as large as what it paints.
 #[test]
