@@ -5814,6 +5814,8 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	automation path rejected: outside the read root {root}: {path}	automaation polku hylättiin: lukujuuren {root} ulkopuolella: {path}
 @msg	automation path rejected: outside the read roots {roots}: {path}	automaation polku hylättiin: lukujuurten {roots} ulkopuolella: {path}
 @msg	a linked JavaScript file is outside the read roots	linkitetty JavaScript-tiedosto on lukujuurten ulkopuolella
+@msg	a linked image file is outside the read roots	linkitetty kuvatiedosto on lukujuurten ulkopuolella
+@msg	a linked file's export folder is outside the read roots	linkitetyn tiedoston vientikansio on lukujuurten ulkopuolella
 @msg	the library's file is outside the read roots	kirjaston tiedosto on lukujuurten ulkopuolella
 @msg	{file} names more than one linked JavaScript file	{file} vastaa useampaa kuin yhtä linkitettyä JavaScript-tiedostoa
 @msg	automation path rejected: outside the write root {root}: {path}	automaation polku hylättiin: kirjoitusjuuren {root} ulkopuolella: {path}

@@ -1409,6 +1409,7 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	a line needs at least two points	en linje kræver mindst to punkter
 @msg	a linked JavaScript file is outside the read roots	en linket JavaScript-fil ligger uden for læserødderne
 @msg	a linked image file is outside the read roots	en linket billedfil ligger uden for læserødderne
+@msg	a linked file's export folder is outside the read roots	eksportmappen for en linket fil ligger uden for læserødderne
 @msg	a name names one asset: give multiple: false, or one object	et navn angiver ét aktiv: angiv multiple: false eller ét objekt
 @msg	a namespace declaration uses a reserved prefix or URI	en navnerumserklæring bruger et reserveret præfiks eller en reserveret URI
 @msg	a namespace qualifier is undefined	en navnerumskvalifikator er udefineret
