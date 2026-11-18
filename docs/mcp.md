@@ -13165,6 +13165,18 @@ Commands:
   drawn, and the path's fills stay on it, below its dashes (a path without fills goes). A compound path's dashes are
   plain paths with its appearance. Paths without a dashed stroke stay as they are, and it is an error if none has one.
   The dashes are selected; more than 100,000 (or a pattern too fine to draw) is refused. → `{ids, dashes}`.
+- `addon.pathtools.bridge {radius?, keepOriginals?, ids?}` joins two circles (`ids`, default: the selection; paths
+  whose outline is a circle, not hidden or locked) into one closed outline, as one undo step (Object › Plug-ins › Path
+  Precision Tools › Smooth Bridge…). The outline goes around each circle on its side away from the other and along two
+  concave arcs, one on each side of the line through the centers, each touching both circles from outside, so every
+  anchor is smooth. `radius` is the arcs' radius as a percentage of the smaller circle's radius (1 to 1,000, 100 by
+  default): a larger radius makes a wider, gentler bridge. Overlapping and touching circles are joined at every radius.
+  One circle inside the other is an error, and so are circles too far apart for the radius: the arcs would not reach
+  both circles, or would cross before they do. The error suggests a larger radius only when one up to 1,000 would
+  bridge the circles. The outline replaces the two circles, painted as the upper one (a plain
+  path), unless `keepOriginals` is true: then it goes directly above the upper circle, painted as it, and the circles
+  stay. The outline is selected. → `{id}`. Smooth Bridge… opens a dialog (`ui.menuDialog {command}`, kind
+  `smoothBridge`) with a Radius field in percent, Keep Originals and Preview.
 - `addon.pathtools.tangentCircle {ids?, radius?, circle?}` draws the circles that touch two paths or compound paths
   and have `radius` (0.01 to 1,000,000 pt, needed with two), or that touch three (which set the radius themselves, so
   `radius` is then an error), as one undo step (Object › Plug-ins › Path Precision Tools › Tangent Circle…). `ids`

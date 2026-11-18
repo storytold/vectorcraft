@@ -478,6 +478,7 @@ registry! {
     RenameArtboards: [rename_artboards::KIND] => rename_artboards::SPEC,
     PathToolOptions: [crate::addons::pathtools::KIND] => crate::addons::pathtools::OPTIONS_SPEC,
     DivideDashes: [crate::addons::pathtools::dashes::KIND] => crate::addons::pathtools::dashes::SPEC,
+    SmoothBridge: [crate::addons::pathtools::bridge::KIND] => crate::addons::pathtools::bridge::SPEC,
     TangentCircle: [crate::addons::pathtools::tangent_circle::KIND] => crate::addons::pathtools::tangent_circle::SPEC,
     SetCorners: [crate::addons::pathtools::set_corners::KIND] => crate::addons::pathtools::set_corners::SPEC,
     NearestSwatch: [crate::addons::color::nearest::KIND] => crate::addons::color::nearest::SPEC,
