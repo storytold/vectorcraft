@@ -1,4 +1,4 @@
-use super::entry::{INVISIBLE_TEXT_NOTE, MAX_NESTED, OUTLINED_TEXT_NOTE, UNSORTED, WHITE_KEY};
+use super::entry::{INTENT_KEY, INVISIBLE_TEXT_NOTE, MAX_NESTED, OUTLINED_TEXT_NOTE, UNSORTED, WHITE_KEY};
 use super::state::{
     Builder, Decoded, Frame, FrameKind, GlyphRun, blend, fill_rule, gray_png, line_width, mean_scale, resize_alpha, rgb_png, rgba_png, same_outline,
     stroke_layer, stroke_outline,
@@ -242,8 +242,11 @@ impl<'a> Device<'a> for Builder<'_> {
         match image {
             Image::Raster(r) => {
                 let white = self.white_images;
+                // A DeviceCMYK image takes the output intent's profile only where no DefaultCMYK
+                // replaces DeviceCMYK, so it is cached apart from the same image drawn where one does.
+                let intent = !white && self.intent_cmyk.is_some() && self.scan.cmyk_defaults.get(&r.stream().dict().obj_id()) == Some(&false);
                 // Inside an alpha mask the same image is read again, white (its own cache key).
-                let key = craft_pdf::interpret::CacheKey::cache_key(&r) ^ if white { WHITE_KEY } else { 0 };
+                let key = craft_pdf::interpret::CacheKey::cache_key(&r) ^ if white { WHITE_KEY } else { 0 } ^ if intent { INTENT_KEY } else { 0 };
                 let st = r.stream();
                 let (w, h) = (r.width(), r.height());
                 // CMYK images keep their samples (read once per image).
@@ -251,7 +254,8 @@ impl<'a> Device<'a> for Builder<'_> {
                 let cmyk = if known || white {
                     None
                 } else {
-                    crate::import_image::cmyk(st, w, h).unwrap_or_else(|why| {
+                    let intent = self.intent_cmyk.as_deref().filter(|_| intent);
+                    crate::import_image::cmyk(st, w, h, intent).unwrap_or_else(|why| {
                         self.warn(why);
                         None
                     })
@@ -449,12 +453,20 @@ impl<'a> Device<'a> for Builder<'_> {
             self.flush();
         }
         self.marked.pop();
-        self.actual.end();
+        // A span's glyphs are stroked within it: a stroke after it goes over none of them.
+        if self.actual.end() {
+            self.end_fills();
+        }
     }
 
     fn actual_text(&mut self, text: &[u8]) {
+        let active = self.actual.active();
         if self.nested == 0 && self.text_as == crate::TextAs::Text && !self.actual.set(text) {
             self.warn("ActualText beyond the import size or nesting limit was left to glyph mappings");
+        }
+        // Nor does a stroke in a span go over a glyph filled before it.
+        if !active && self.actual.active() {
+            self.end_fills();
         }
     }
 }
