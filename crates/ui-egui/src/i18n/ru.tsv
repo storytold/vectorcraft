@@ -139,6 +139,7 @@
 	Add to Swatches	Добавить в образцы
 	Add Used Colors	Добавить использованные цвета
 	Additional Plug-ins Folder	Папка дополнительных модулей
+	Plug-in Instruction Budget	Бюджет инструкций модулей
 	Additional Fonts Folder	Папка дополнительных шрифтов
 	Adjust Adjoining Width Points	Настроить смежные точки ширины
 	Incoming	Входящая
@@ -3503,6 +3504,9 @@ digits	Malayalam	Малаялам
 	Search commands, tools, panels and effects…	Поиск команд, инструментов, панелей и эффектов…
 	No commands match	Нет подходящих команд
 	{pos} of {total}: {name}	{pos} из {total}: {name}
+	No menu item	Нет пункта меню
+	Toolbar	Панель инструментов
+	{toolbar}, in the {tool} group	{toolbar}, в группе «{tool}»
 @plural	{n} result|{n} results	{n} результат|{n} результата|{n} результатов
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} из {n} результата. Продолжайте вводить, чтобы сузить их.|{shown} из {n} результатов. Продолжайте вводить, чтобы сузить их.|{shown} из {n} результатов. Продолжайте вводить, чтобы сузить их.
 	Recent Commands	Недавние команды
@@ -5775,6 +5779,7 @@ variable-list-end	{0}, {1}	{0} и {1}
 @msg	a linked JavaScript file is outside the read roots	связанный файл JavaScript находится вне корневых папок для чтения
 @msg	a linked image file is outside the read roots	связанный файл изображения находится вне корневых папок для чтения
 @msg	a linked file's export folder is outside the read roots	папка экспорта связанного файла находится вне корневых папок для чтения
+@msg	a linked file's editing data can't be read to check it against the read roots	не удаётся прочитать данные редактирования связанного файла, чтобы сверить их с корневыми папками для чтения
 @msg	automation path rejected: outside the write root {root}: {path}	путь автоматизации отклонён: вне корневой папки для записи {root}: {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	путь автоматизации отклонён: вне корневых папок для записи {roots}: {path}
 @msg	automation path rejected: path is empty	путь автоматизации отклонён: путь пуст

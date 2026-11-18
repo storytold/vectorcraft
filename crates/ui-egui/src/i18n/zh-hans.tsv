@@ -90,6 +90,7 @@
 	Add to Swatches	添加到色板
 	Add Used Colors	添加已用颜色
 	Additional Plug-ins Folder	附加增效工具文件夹
+	Plug-in Instruction Budget	增效工具指令预算
 	Additional Fonts Folder	附加字体文件夹
 	Adjust Adjoining Width Points	调整相邻宽度点
 	Incoming	入侧
@@ -3338,6 +3339,9 @@ digits	Malayalam	马拉雅拉姆数字
 	Search commands, tools, panels and effects…	搜索命令、工具、面板和效果…
 	No commands match	没有匹配的命令
 	{pos} of {total}: {name}	第 {pos} 个，共 {total} 个：{name}
+	No menu item	无菜单项
+	Toolbar	工具栏
+	{toolbar}, in the {tool} group	{toolbar}，位于 {tool} 组中
 @plural	{n} result|{n} results	{n} 个结果
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	共 {n} 个结果，显示 {shown} 个。继续输入以缩小范围。
 	Recent Commands	最近使用的命令
@@ -5487,6 +5491,7 @@ liquify-list-end	{0}, {1}	{0}和{1}
 @msg	a linked JavaScript file is outside the read roots	链接的 JavaScript 文件位于所有读取根目录之外
 @msg	a linked image file is outside the read roots	链接的图像文件位于所有读取根目录之外
 @msg	a linked file's export folder is outside the read roots	链接文件的导出文件夹位于所有读取根目录之外
+@msg	a linked file's editing data can't be read to check it against the read roots	无法读取链接文件的编辑数据，因此无法对照读取根目录进行检查
 @msg	automation path rejected: outside the write root {root}: {path}	已拒绝自动化路径：位于写入根目录 {root} 之外：{path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	已拒绝自动化路径：位于所有写入根目录 {roots} 之外：{path}
 @msg	automation path rejected: path is empty	已拒绝自动化路径：路径为空

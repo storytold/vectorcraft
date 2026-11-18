@@ -147,6 +147,7 @@
 	Add to Selection	Adicionar à Seleção
 	Add to Swatches	Adicionar às Amostras
 	Additional Plug-ins Folder	Pasta Adicional de Plug-ins
+	Plug-in Instruction Budget	Orçamento de Instruções de Plug-ins
 	Additional Fonts Folder	Pasta Adicional de Fontes
 	Adjust Adjoining Width Points	Ajustar Pontos de Largura Adjacentes
 	Incoming	Entrada
@@ -2923,6 +2924,9 @@ digits	Malayalam	Malaiala
 	Search commands, tools, panels and effects…	Pesquisar comandos, ferramentas, painéis e efeitos…
 	No commands match	Nenhum comando corresponde
 	{pos} of {total}: {name}	{pos} de {total}: {name}
+	No menu item	Nenhum item de menu
+	Toolbar	Barra de Ferramentas
+	{toolbar}, in the {tool} group	{toolbar}, no grupo {tool}
 @plural	{n} result|{n} results	{n} resultado|{n} resultados
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} de {n} resultado. Continue digitando para filtrá-los.|{shown} de {n} resultados. Continue digitando para filtrá-los.
 	Recent Commands	Comandos recentes
@@ -4966,6 +4970,7 @@ variable-list-end	{0}, {1}	{0} e {1}
 @msg	a linked JavaScript file is outside the read roots	um arquivo JavaScript vinculado está fora das raízes de leitura
 @msg	a linked image file is outside the read roots	um arquivo de imagem vinculado está fora das raízes de leitura
 @msg	a linked file's export folder is outside the read roots	a pasta de exportação de um arquivo vinculado está fora das raízes de leitura
+@msg	a linked file's editing data can't be read to check it against the read roots	não é possível ler os dados de edição de um arquivo vinculado para verificá-los em relação às raízes de leitura
 @msg	automation path rejected: outside the write root {root}: {path}	caminho da automação rejeitado: fora da raiz de gravação {root}: {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	caminho da automação rejeitado: fora das raízes de gravação {roots}: {path}
 @msg	automation path rejected: path is empty	caminho da automação rejeitado: o caminho está vazio
