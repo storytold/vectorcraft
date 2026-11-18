@@ -48,7 +48,7 @@ craft-jxl = { git = "https://github.com/storytold/craft-libs", rev = "a499742a93
 # per-user store, catalogs and installing from GitHub releases. Pinned to the fork commit the RFC's
 # reference pull request offers; re-pinned upstream once it lands. Without `http`: the app wraps
 # its own craft-update client (`craft_plugin::Fetch`).
-craft-plugin = { git = "https://github.com/Dasemu/craft-libs", rev = "77f66b33f7366abb9927113f1f5e427e2593ef84" }
+craft-plugin = { git = "https://github.com/Dasemu/craft-libs", rev = "b9821a27936e4f8a5ef3ad30a9559ecb897c5cc4" }
 craft-update = { git = "https://github.com/storytold/craft-libs", version = "=0.1.0", rev = "a499742a9389f47d10cdc61e4cdbf4e5f07f48cd", features = ["egui"] }
 # internal
 vectorcraft-geom = { path = "crates/geom" }

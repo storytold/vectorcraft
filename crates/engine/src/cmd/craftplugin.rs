@@ -40,8 +40,14 @@ use super::{EngineError, Result, Session, bad};
 
 /// VectorCraft as shared manifests name it, for command plug-ins: every version of the shared
 /// command ABI, and only manifests that name `vectorcraft` in `apps`.
-pub const APP: AppInfo<'static> =
-    AppInfo { id: "vectorcraft", version: env!("CARGO_PKG_VERSION"), api: 1..=API_VERSION, kinds: &[KIND_COMMAND], accept_legacy: false };
+pub const APP: AppInfo<'static> = AppInfo {
+    id: "vectorcraft",
+    version: env!("CARGO_PKG_VERSION"),
+    api: 1..=API_VERSION,
+    kinds: &[KIND_COMMAND],
+    accept_legacy: false,
+    kind_api: &[],
+};
 
 /// VectorCraft's own kinds as a bundle's `craft-plugin.json` names them, with VectorCraft's own
 /// plug-in API levels: a bundle of one of them carries a module `plugin.install` installs as it
@@ -52,6 +58,7 @@ pub const OWN_KINDS: AppInfo<'static> = AppInfo {
     api: 1..=vectorcraft_plugins::permissions::API_LEVEL,
     kinds: &["filter", "effect", "exporter", "importer"],
     accept_legacy: false,
+    kind_api: &[],
 };
 
 /// What one plug-in may keep in its settings (keys and JSON values, in bytes), and its longest key.
@@ -231,14 +238,11 @@ impl Runtime {
     #[cfg(not(target_arch = "wasm32"))]
     fn reload(&mut self) {
         let Some(store) = &self.store else { return };
-        let (installed, problems) = store.list();
+        let listing = store.list_for(&APP);
         self.plugins.retain(|p| !p.stored);
-        self.problems = problems.into_iter().map(|p| format!("{}: {}", p.dir.display(), p.error)).collect();
-        for i in installed {
-            if let Err(why) = i.manifest.target(&APP) {
-                self.problems.push(format!("{}: {why}", i.manifest.name));
-                continue;
-            }
+        self.problems = listing.problems.into_iter().map(|p| format!("{}: {}", p.dir.display(), p.error)).collect();
+        self.problems.extend(listing.not_runnable.into_iter().map(|(i, why)| format!("{}: {why}", i.manifest.name)));
+        for (i, _) in listing.runnable {
             let settings = read_settings(&i.dir);
             let source = serde_json::to_value(&i.record.source).unwrap_or(Value::Null);
             let plugin = Plugin { manifest: i.manifest, sha256: i.record.sha256, source, stored: true, wasm: Arc::new(i.bundle.wasm) };
@@ -684,7 +688,7 @@ fn install(s: &mut Session, cmd: &str, c: Candidate, manifest: Manifest) -> Resu
     #[cfg(not(target_arch = "wasm32"))]
     if let Some(store) = &s.craft_plugins.store {
         let source: craft_plugin::store::Source = serde_json::from_value(c.source.clone()).map_err(|e| bad(cmd, e.to_string()))?;
-        let i = store.install(&c.bytes, source).map_err(|e| bad(cmd, e))?;
+        let (i, _) = store.install_for(&APP, &c.bytes, source).map_err(|e| bad(cmd, e))?;
         let plugin = Plugin { manifest: i.manifest, sha256: i.record.sha256, source: c.source, stored: true, wasm: Arc::new(i.bundle.wasm) };
         let id = plugin.manifest.id.clone();
         let p = keep(s, plugin);
