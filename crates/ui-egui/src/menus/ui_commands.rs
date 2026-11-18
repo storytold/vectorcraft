@@ -1027,7 +1027,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.symbolOptions",
         "Symbol Options…",
         "F8",
-        "{name?} open Symbol Options (dialog `symbolOptions`, fields `name`, `exportType`: movieClip|graphic, `registration` 0..8). Without `name` and with a selection: New Symbol (default name the first free \"New Symbol\"/\"New Symbol N\", Export Type Movie Clip, Registration centre); OK runs symbol.new {name, exportType, registration}. With `edit: true` or `name`: edit that symbol; OK runs symbol.options {name, newName?, exportType, registration}",
+        "{name?, edit?, keepArt?: false} open Symbol Options (dialog `symbolOptions`, fields `name`, `exportType`: movieClip|graphic, `registration` 0..8). Without `name` and with a selection: New Symbol (default name the first free \"New Symbol\"/\"New Symbol N\", Export Type Movie Clip, Registration centre); OK runs symbol.new {name, exportType, registration}, with keepArt: true when it was opened with keepArt: true (the selection stays ordinary art). With `edit: true` or `name`: edit that symbol; OK runs symbol.options {name, newName?, exportType, registration}; keepArt: true is then an error",
     ),
     (
         "tool.options",
