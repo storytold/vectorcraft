@@ -285,8 +285,8 @@ pub trait Tool: Send {
         false
     }
     /// What the Info panel shows for the tool as it is now: the drag in progress (a move of the
-    /// selection, a gradient vector, a Scale, Rotate, Reflect or Shear tool drag), or the
-    /// Paintbrush's brush. None for a tool with nothing of its own to show.
+    /// selection, a gradient vector, a handle the Pen pulls out, a Scale, Rotate, Reflect or Shear
+    /// tool drag), or the Paintbrush's brush. None for a tool with nothing of its own to show.
     fn readout(&self, _cx: &ToolContext) -> Option<Readout> {
         None
     }
