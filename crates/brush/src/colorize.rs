@@ -97,6 +97,75 @@ pub fn colorize(n: &mut Node, mode: Colorization, stroke: &Paint) {
     walk(n, mode, key);
 }
 
+/// Mixed into a stroke's seed for its hue jitter, so the amounts come from a sequence of their own
+/// and a copy's size, spacing, scatter and rotation stay as they were without hue jitter.
+const HUE_JITTER_SALT: u64 = 0x6875_655f_6a69_7474;
+
+/// Turn the hue of each of `copies` (a scatter brush's copies, in order along the path) by its
+/// own amount between −`amount` and `amount` degrees, drawn from `seed` (the stroke's
+/// [`crate::track::seed_of`]).
+pub(crate) fn jitter_hues(copies: &mut [Node], amount: f64, seed: u64) {
+    let mut rng = crate::track::Rng::new(seed ^ HUE_JITTER_SALT);
+    for n in copies {
+        let turn = rng.range(-amount, amount) as f32;
+        turn_hues(n, turn);
+    }
+}
+
+/// `c` with its hue turned by `degrees`, worked out on its own components so nothing else about it
+/// changes: RGB in HSB of its values, CMYK over C, M and Y with K kept (as
+/// [`Color::complement_keep_model`] does), Lab by turning a and b. `None` for a color without a hue:
+/// white, black and grays, in their own model (Gray, CMYK with no C, M or Y ink).
+fn turned(c: &Color, degrees: f32) -> Option<Color> {
+    if !degrees.is_finite() || vectorcraft_color::recolor::Neutral::of(c).is_some() {
+        return None;
+    }
+    let turn = |v: [f32; 3]| {
+        let [h, s, b] = vectorcraft_color::rgb_to_hsb(v);
+        (s > 0.0).then(|| vectorcraft_color::hsb_to_rgb([(h + degrees).rem_euclid(360.0), s, b]))
+    };
+    match *c {
+        Color::Rgb { r, g, b } => turn([r, g, b]).map(|[r, g, b]| Color::rgb(r, g, b)),
+        Color::Cmyk { c, m, y, k } => turn([1.0 - c, 1.0 - m, 1.0 - y]).map(|[r, g, b]| Color::cmyk(1.0 - r, 1.0 - g, 1.0 - b, k)),
+        Color::Gray { .. } => None,
+        Color::Lab { l, a, b } => {
+            let (sin, cos) = f64::from(degrees).to_radians().sin_cos();
+            let (a, b) = (f64::from(a), f64::from(b));
+            Some(Color::lab(l, (a * cos - b * sin) as f32, (a * sin + b * cos) as f32))
+        }
+    }
+}
+
+fn turn_paint(p: &mut Paint, degrees: f32) {
+    if let Paint::Solid { color, .. } = p
+        && let Some(c) = turned(color, degrees)
+    {
+        *p = Paint::solid(c);
+    }
+}
+
+/// Turn the hue of the solid fills and strokes under `n`, its type's characters included. A
+/// mask's colors are its values, so they stay.
+fn turn_hues(n: &mut Node, degrees: f32) {
+    for it in &mut n.appearance.items {
+        match it {
+            AppearanceItem::Fill(f) => turn_paint(&mut f.paint, degrees),
+            AppearanceItem::Stroke(s) => turn_paint(&mut s.paint, degrees),
+        }
+    }
+    if let NodeKind::Text(t) = &mut n.kind {
+        for r in &mut t.runs {
+            turn_paint(&mut r.style.fill, degrees);
+            turn_paint(&mut r.style.stroke, degrees);
+        }
+    }
+    if let Some(ch) = n.children_mut() {
+        for c in ch.iter_mut() {
+            turn_hues(Arc::make_mut(c), degrees);
+        }
+    }
+}
+
 /// Strip the brushes from every stroke under `n`, its masks' art included.
 fn strip_brushes(n: &mut Node) {
     for it in &mut n.appearance.items {

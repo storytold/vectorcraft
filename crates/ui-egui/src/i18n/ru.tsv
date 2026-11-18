@@ -2286,6 +2286,7 @@ file-filter	Templates	Шаблоны
 	Scatter:	Рассеивание:
 	Rotation:	Поворот:
 	Rotation relative to:	Поворот относительно:
+	Hue Jitter:	Разброс тона:
 	Brush Scale Options	Параметры масштабирования кисти
 	Scale Proportionately	Масштабировать пропорционально
 	Stretch to Fit Stroke Length	Растянуть по длине обводки
