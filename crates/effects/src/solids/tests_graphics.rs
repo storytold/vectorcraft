@@ -531,12 +531,13 @@ fn graphics_are_checked() {
     let n = object(EXTRUDE, json!({}));
     let check = |id: &str, graphics: Value| validate_three_d_in(None, &n, id, &json!({"graphics": graphics}));
     assert!(check(EXTRUDE, json!([{"symbol": "Mark", "face": "back", "x": 3.0, "scale": 50.0, "rotation": -90.0}])).is_ok());
+    assert!(check(EXTRUDE, json!([{"symbol": "Mark", "face": "side", "x": -40.0, "y": 5.0}])).is_ok());
     assert!(check(EXTRUDE, json!([])).is_ok());
     for bad in [
         json!("Mark"),
         json!([{"face": "front"}]),
         json!([{"symbol": ""}]),
-        json!([{"symbol": "Mark", "face": "side"}]),
+        json!([{"symbol": "Mark", "face": "top"}]),
         json!([{"symbol": "Mark", "scale": 0.0}]),
         json!([{"symbol": "Mark", "rotation": 400.0}]),
         json!([{"symbol": "Mark", "x": "1"}]),
@@ -546,10 +547,12 @@ fn graphics_are_checked() {
         assert!(check(EXTRUDE, bad.clone()).is_err(), "{bad}");
     }
     assert!(check(ROTATE, json!([{"symbol": "Mark", "face": "back"}])).is_err());
+    assert!(check(ROTATE, json!([{"symbol": "Mark", "face": "side"}])).is_err());
     assert!(check(INFLATE, json!([{"symbol": "Mark"}])).is_err());
     // Revolve takes graphics on its side, named the front; Revolve (Classic) takes none.
     assert!(validate_three_d_params(crate::REVOLVE, &json!({"graphics": [{"symbol": "Mark"}]})).is_ok());
     assert!(validate_three_d_params(crate::REVOLVE, &json!({"graphics": [{"symbol": "Mark", "face": "back"}]})).is_err());
+    assert!(validate_three_d_params(crate::REVOLVE, &json!({"graphics": [{"symbol": "Mark", "face": "side"}]})).is_err());
     assert!(validate_three_d_params(crate::CLASSIC_REVOLVE, &json!({"graphics": [{"symbol": "Mark"}]})).is_err());
     // A loaded file's invalid entries are left out when drawn.
     assert_eq!(mapped_graphics(&json!({"graphics": [{"symbol": "Mark"}, {"face": "back"}, 3]})).len(), 1);
@@ -569,10 +572,13 @@ fn the_frame_at_an_index_is_that_effects() {
 
 #[test]
 fn a_change_to_a_plane_drops_the_back_caps_graphics() {
-    let p = json!({"graphics": [{"symbol": "Mark", "face": "front"}, {"symbol": "Mark", "face": "back"}]});
+    let p = json!({"graphics": [{"symbol": "Mark", "face": "front"}, {"symbol": "Mark", "face": "back"}, {"symbol": "Mark", "face": "side"}]});
     let plane = three_d_params_as(EXTRUDE, &p, ROTATE);
     assert_eq!(plane["graphics"], json!([{"symbol": "Mark", "face": "front"}]));
     assert!(validate_three_d_params(ROTATE, &plane).is_ok());
+    // Revolve drops the side's graphics too; Extrude & Bevel keeps every face's.
+    assert_eq!(three_d_params_as(EXTRUDE, &p, crate::REVOLVE)["graphics"], json!([{"symbol": "Mark", "face": "front"}]));
+    assert_eq!(three_d_params_as(EXTRUDE, &p, EXTRUDE)["graphics"], p["graphics"]);
     // Back to Extrude & Bevel, the front's graphic stays.
     assert_eq!(three_d_params_as(ROTATE, &plane, EXTRUDE)["graphics"], plane["graphics"]);
 }

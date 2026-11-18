@@ -251,7 +251,8 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         ui.vertical(|ui| {
             ui.set_width(500.0);
             ui.label(egui::RichText::new(tl!(section)).font(theme::semibold(14.0)).color(t.text_strong));
-            egui::ScrollArea::vertical().id_salt(("print", section)).max_height(360.0).auto_shrink([false, false]).show(ui, |ui| match section {
+            let list_h = super::modal::list_height(ui, 360.0);
+            egui::ScrollArea::vertical().id_salt(("print", section)).max_height(list_h).auto_shrink([false, false]).show(ui, |ui| match section {
                 "Marks and Bleed" => super::save_pdf::marks_and_bleeds(app, ui, d),
                 "Output" => output(ui, d, &preview),
                 "Graphics" => graphics(ui, d),

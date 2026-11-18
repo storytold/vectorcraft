@@ -109,6 +109,23 @@ fn grid_prefs_apply_to_open_documents() {
     assert_eq!((g.spacing, g.subdivisions), (36.0, 4));
 }
 
+/// The grid preferences are not an undo step in the documents they apply to, so undo and redo
+/// leave the grid as the preferences set it.
+#[test]
+fn undo_and_redo_keep_the_grid_prefs() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();
+    s.execute("prefs.set", &json!({"values": {"gridlineEvery": 36, "gridSubdivisions": 4}})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    let g = &s.doc().unwrap().doc.grid;
+    assert_eq!((g.spacing, g.subdivisions), (36.0, 4));
+    s.execute("prefs.set", &json!({"values": {"gridlineEvery": 18, "gridSubdivisions": 3}})).unwrap();
+    s.execute("edit.redo", &json!({})).unwrap();
+    let g = &s.doc().unwrap().doc.grid;
+    assert_eq!((g.spacing, g.subdivisions), (18.0, 3));
+}
+
 /// Guides & Grid › Gridline every and Subdivisions (#394): set with no document open, as the
 /// desktop app restores them at launch, they give `file.new`'s document their grid.
 #[test]
@@ -445,6 +462,38 @@ fn gpu_preference_defaults_to_automatic_and_validates() {
     s.execute("prefs.set", &json!({"key": "gpuPreference", "value": "highPerformance"})).unwrap();
     s.execute("prefs.reset", &json!({"category": "Performance"})).unwrap();
     assert_eq!(s.prefs.gpu_preference, "automatic");
+}
+
+/// Plug-ins & Scratch Disks › Plug-in Instruction Budget: Normal by default, Large by value or
+/// label, kept through a save and load, and reset with its category. Setting another value is an
+/// error that changes nothing; a saved value that is missing, unknown or of another type reads as
+/// Normal and leaves the other saved preferences as they are.
+#[test]
+fn plugin_instruction_budget_defaults_to_normal_and_validates() {
+    let mut s = Session::new();
+    assert_eq!(s.prefs.plugin_instruction_budget, PluginBudget::Normal);
+    assert_eq!(s.execute("prefs.get", &json!({"key": "pluginInstructionBudget"})).unwrap(), json!("normal"));
+    set_pref(&mut s, "pluginInstructionBudget", json!("Large"));
+    assert_eq!(s.prefs.plugin_instruction_budget, PluginBudget::Large);
+    assert_eq!(s.execute("prefs.get", &json!({"key": "pluginInstructionBudget"})).unwrap(), json!("large"));
+    for bad in [json!("unlimited"), json!(""), json!(5), json!(null), json!(true), json!(["large"])] {
+        assert!(s.execute("prefs.set", &json!({"key": "pluginInstructionBudget", "value": bad})).is_err(), "{bad}");
+        assert_eq!(s.prefs.plugin_instruction_budget, PluginBudget::Large, "{bad}");
+    }
+    let back: Prefs = serde_json::from_value(s.prefs.to_json()).unwrap();
+    assert_eq!(back.plugin_instruction_budget, PluginBudget::Large);
+    let other_values = [json!("unlimited"), json!(5), json!(null), json!(["large"]), json!({"large": true}), json!("LARGE")];
+    let saved_files = other_values.map(|v| json!({"keyboardIncrement": 4, "pluginInstructionBudget": v}));
+    for saved in std::iter::once(json!({"keyboardIncrement": 4})).chain(saved_files) {
+        let read: Prefs = serde_json::from_value(saved.clone()).unwrap();
+        assert_eq!((read.plugin_instruction_budget, read.keyboard_increment), (PluginBudget::Normal, 4.0), "{saved}");
+    }
+    let l = s.execute("prefs.list", &json!({})).unwrap();
+    let row = l.as_array().unwrap().iter().find(|e| e["key"] == "pluginInstructionBudget").unwrap().clone();
+    assert_eq!((row["category"].as_str(), row["section"].as_str()), (Some("Plug-ins & Scratch Disks"), Some("Plug-ins")));
+    assert_eq!((&row["options"], &row["value"]), (&json!(["normal", "large"]), &json!("large")));
+    s.execute("prefs.reset", &json!({"category": "Plug-ins & Scratch Disks"})).unwrap();
+    assert_eq!(s.prefs.plugin_instruction_budget, PluginBudget::Normal);
 }
 
 /// Performance › Low-Latency Drawing (#6013): off by default and for preference files written

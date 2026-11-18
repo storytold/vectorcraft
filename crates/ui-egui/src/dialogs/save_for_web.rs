@@ -57,6 +57,8 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
 
 /// The preview area (panes and their captions) and the settings column.
 const PREVIEW_W: f32 = 620.0;
+/// The narrowest the panes get in a narrow window.
+const MIN_PREVIEW_W: f32 = 240.0;
 const PREVIEW_H: f32 = 470.0;
 const SIDE_W: f32 = 296.0;
 const GAP: f32 = 16.0;
@@ -538,10 +540,19 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     take_shift(d);
     let settings = settings_of(app, d);
     let mut browser = false;
-    ui.horizontal_top(|ui| {
+    // In a window too narrow for both, the panes are narrower, so the settings beside them and the
+    // buttons below stay in view. The room is the screen's (the window's own width follows what it
+    // drew last), less a column for the bar of the body while it scrolls; the settings column is as
+    // wide as it was drawn last.
+    let bar = if super::modal::body_view(ui).is_some() { ui.spacing().scroll.allocated_width() } else { 0.0 };
+    let room = ui.ctx().content_rect().width() - 2.0 * (f32::from(super::MARGIN) + super::EDGE_GAP) - bar;
+    let rest_id = egui::Id::unique("save-for-web-beside-panes");
+    let rest = ui.ctx().data(|m| m.get_temp::<f32>(rest_id)).unwrap_or(ui.spacing().item_spacing.x + GAP + SIDE_W);
+    let preview_w = (room.min(ui.available_width()) - rest).clamp(MIN_PREVIEW_W, PREVIEW_W);
+    let row = ui.horizontal_top(|ui| {
         ui.vertical(|ui| {
-            ui.set_width(PREVIEW_W);
-            browser = preview_area(app, ui, d, &settings);
+            ui.set_width(preview_w);
+            browser = preview_area(app, ui, d, &settings, preview_w);
         });
         ui.add_space(GAP);
         ui.vertical(|ui| {
@@ -549,6 +560,10 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
             side(app, ui, d, settings.as_ref().ok());
         });
     });
+    let drawn = row.response.rect.width() - preview_w;
+    if (ui.ctx().data_mut(|m| std::mem::replace(m.get_temp_mut_or(rest_id, rest), drawn)) - drawn).abs() > 0.5 {
+        ui.ctx().request_repaint();
+    }
     optimize_on_enter(ui.ctx(), d);
     if browser && let Err(e) = app.run("file.saveForWeb.browser", params(d)) {
         app.status(e);
@@ -562,16 +577,16 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     false
 }
 
-/// The view tabs, the panes and the zoom and speed row. Returns whether Preview in Browser was
-/// clicked.
-fn preview_area(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, settings: &Result<WebSettings, String>) -> bool {
+/// The view tabs, the panes (`width` wide) and the zoom and speed row. Returns whether Preview in
+/// Browser was clicked.
+fn preview_area(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, settings: &Result<WebSettings, String>, width: f32) -> bool {
     let t = Tokens::get(ui.ctx());
     let view = VIEWS.iter().position(|v| *v == d.str("__view")).unwrap_or(2);
     if let Some(i) = widgets::tab_bar(ui, &VIEW_LABELS, view) {
         d.fields.insert("__view".into(), json!(VIEWS[i]));
     }
     ui.add_space(4.0);
-    let (area, resp) = ui.allocate_exact_size(egui::vec2(PREVIEW_W, PREVIEW_H), egui::Sense::click_and_drag());
+    let (area, resp) = ui.allocate_exact_size(egui::vec2(width, PREVIEW_H), egui::Sense::click_and_drag());
     let pan_id = egui::Id::unique("save-for-web-pan");
     let mut pan: egui::Vec2 = ui.ctx().data(|m| m.get_temp(pan_id)).unwrap_or_default();
     if resp.dragged() {
@@ -616,6 +631,17 @@ fn preview_area(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, set
     }
     ui.add_space(6.0);
     let mut browser = false;
+    // Preview in Browser goes on a row of its own when the panes are too narrow for it beside the
+    // two lists (its width as `widgets::secondary_button` draws it).
+    let label = tl!("Preview in Browser");
+    let button_w = (ui.painter().layout_no_wrap(label.to_string(), crate::theme::semibold(12.5), t.text).size().x + 32.0).max(72.0);
+    let mut beside = false;
+    let mut button = |ui: &mut egui::Ui| {
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            let b = ui.add_enabled(!io::is_web(app), |ui: &mut egui::Ui| widgets::secondary_button(ui, label));
+            browser = b.on_disabled_hover_text(tl!("Needs the desktop app")).clicked();
+        });
+    };
     ui.horizontal(|ui| {
         let z = ZOOMS.iter().position(|z| *z == d.str("__zoom")).unwrap_or(2);
         let zoom = ui.name_inputs(tl!("Zoom"), |ui| widgets::dropdown(ui, "sfw-zoom", ZOOM_LABELS[z], &ZOOM_LABELS, 110.0));
@@ -632,11 +658,15 @@ fn preview_area(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, set
         {
             d.fields.insert("__kbps".into(), json!(s));
         }
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            let b = ui.add_enabled(!io::is_web(app), |ui: &mut egui::Ui| widgets::secondary_button(ui, tl!("Preview in Browser")));
-            browser = b.on_disabled_hover_text(tl!("Needs the desktop app")).clicked();
-        });
+        beside = ui.available_width() >= button_w;
+        if beside {
+            button(ui);
+        }
     });
+    if !beside {
+        ui.add_space(4.0);
+        ui.horizontal(button);
+    }
     browser
 }
 
@@ -741,7 +771,8 @@ fn side(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, s: Option<&
     presets_row(app, ui, d, s);
     optimize_rows(ui, d, s, &art_key(app));
     widgets::divider(ui);
-    egui::ScrollArea::vertical().id_salt("sfw-settings").max_height(PREVIEW_H - 40.0).auto_shrink([false, true]).show(ui, |ui| {
+    let list_h = super::modal::list_height(ui, PREVIEW_H - 40.0);
+    egui::ScrollArea::vertical().id_salt("sfw-settings").max_height(list_h).auto_shrink([false, true]).show(ui, |ui| {
         let choice = |ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str, options: &[(&str, &str)]| {
             form::choice(ui, d, key, label, (LABEL_W, FIELD_W), options);
         };
