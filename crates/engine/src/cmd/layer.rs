@@ -110,7 +110,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move Rows",
             [],
             None,
-            "{ids|id, target, place?: \"above\"|\"below\"|\"inside\" (default inside), copy?: bool} drag rows in the Layers panel: above or below the target row (beside it, in its layer or group), or inside a layer, group or Intertwine group (on top of its contents). Layers go only in layers or at the top level, objects in layers, groups and Intertwine groups; an object placed beside a top-level layer goes inside it. An object placed in an Intertwine group becomes a member drawn in its row's order, with no arranged areas, and one placed in a group that is a member becomes part of that member; one that is or holds an Intertwine group, a Repeat, a graph or a Live Paint group is refused. A member moved out of its Intertwine group drops its arranged areas, and a group left with one member is replaced by that member, or becomes a plain group of it when the group has an opacity, blending, appearance, mask, lock or hidden state of its own (with no member, it is removed). A row never goes into itself; a locked layer or group takes nothing. `copy` (Alt-drag) moves copies. Every selected object left hidden or locked, such as one moved into a hidden layer or group, is deselected (the key object too). One undo step → {ids}",
+            "{ids|id, target, place?: \"above\"|\"below\"|\"inside\" (default inside), copy?: bool} drag rows in the Layers panel: above or below the target row (beside it, in its layer or group), or inside a layer, group or Intertwine group (on top of its contents). Layers go only in layers or at the top level, objects in layers, groups and Intertwine groups; an object placed beside a top-level layer goes inside it. An object placed in an Intertwine group becomes a member drawn in its row's order, with no arranged areas, and one placed in a group that is a member becomes part of that member; one that is or holds an Intertwine group, a Repeat, a graph or a Live Paint group is refused. A member moved out of its Intertwine group drops its arranged areas, and a group left with one member is replaced by that member, or becomes a plain group of it when the group has an opacity, blending, appearance, mask, lock or hidden state of its own (with no member, it is removed). A row never goes into itself; a locked layer or group takes nothing. `copy` (Alt-drag) moves copies, which may also go above or below a row they copy (the target among `ids`). Every selected object left hidden or locked, such as one moved into a hidden layer or group, is deselected (the key object too). One undo step → {ids}",
             has_doc,
             move_rows
         ),
@@ -774,9 +774,11 @@ fn move_rows(s: &mut Session, p: &Value) -> Result<Value> {
     if ids.is_empty() {
         return Err(bad(C, "no such rows"));
     }
-    // Never into itself or a row inside it.
+    // Never into itself or a row inside it. A copy may go above or below one of the rows it
+    // copies, which a move there would leave where it is (#8237).
+    let beside_itself = copy && place != Place::Inside && ids.contains(&target);
     let around = d.ancestry(target).unwrap_or_default();
-    if ids.iter().any(|i| around.contains(i)) {
+    if ids.iter().any(|i| around.contains(i) && !(beside_itself && *i == target)) {
         return Err(bad(C, "a row can't go into itself"));
     }
     let nodes: Vec<&Node> = ids.iter().filter_map(|i| d.node(*i)).collect();
@@ -788,6 +790,11 @@ fn move_rows(s: &mut Session, p: &Value) -> Result<Value> {
             parent => (parent, Some(target)),
         },
     };
+    // A copy beside a top-level layer it copies, with objects among the rows, would go inside
+    // that layer: into itself.
+    if parent.is_some_and(|p| ids.contains(&p)) {
+        return Err(bad(C, "a row can't go into itself"));
+    }
     if let Some(n) = nodes.iter().find(|n| !accepts(d, parent, n)) {
         let into = parent.and_then(|p| d.node(p)).map_or("the top level", |p| if p.is_layer() { "a layer" } else { p.kind_label() });
         return Err(bad(C, format!("{} can't go into {into}", n.display_name())));
