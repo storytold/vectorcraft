@@ -26,6 +26,7 @@ mod justify;
 mod kashida;
 mod kept;
 mod layout;
+pub mod retype;
 mod shape;
 #[cfg(not(target_arch = "wasm32"))]
 mod suitcase;
