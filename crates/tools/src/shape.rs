@@ -680,17 +680,6 @@ impl Tool for ShapeTool {
     fn busy(&self) -> bool {
         self.start.is_some() || self.widget.is_some() || self.selection.is_some()
     }
-    /// Switching tools during a polygon's side widget drag cancels it, as Escape does: the count
-    /// goes back.
-    fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
-        match self.widget.take() {
-            Some(WidgetDrag::Sides(d)) => d.cancel(),
-            other => {
-                self.widget = other;
-                vec![]
-            }
-        }
-    }
     /// A widget or selection drag takes the pointer; otherwise a press draws, unless it lands on a
     /// handle of the selection's box, its centre point or the rotate zone just outside its box's
     /// corner.
@@ -846,6 +835,12 @@ impl Tool for ShapeTool {
             _ => vec![],
         }
     }
+    /// Switching tools during a drag of a corner, pie or side widget cancels it, as Escape does:
+    /// the shape goes back.
+    fn deactivate(&mut self, cx: &ToolContext) -> Vec<Action> {
+        if self.widget.is_some() { self.key(cx, ToolKey::Escape, Mods::default()) } else { vec![] }
+    }
+
     /// ↑/↓ change a polygon's sides, a star's points or the rounded rectangle's radius while it is
     /// drawn; Escape turns a widget or selection drag back.
     fn key(&mut self, cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {

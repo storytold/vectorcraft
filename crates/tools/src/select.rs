@@ -905,13 +905,15 @@ impl Tool for SelectionTool {
         out
     }
 
-    /// Switching tools during a blend widget's or a polygon's side widget's drag cancels it, as
-    /// Escape does: its value goes back.
+    /// Switching tools during a drag of a blend widget, a corner widget, a pie widget or a
+    /// polygon's side widget cancels it, as Escape does: its value goes back.
     fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
         match std::mem::take(&mut self.state) {
             State::BlendWidget(d) if d.adjusting() => vec![Action::Cancel],
-            State::BlendWidget(_) => vec![],
+            State::Corner(c) if c.adjusting() => vec![Action::Cancel],
+            State::Pie(d) if d.adjusting() => vec![Action::Cancel],
             State::Sides(d) => d.cancel(),
+            State::BlendWidget(_) | State::Corner(_) | State::Pie(_) => vec![],
             other => {
                 self.state = other;
                 vec![]
@@ -1412,11 +1414,17 @@ fn object_behind(cx: &ToolContext, p: Point) -> Option<NodeId> {
 /// object selected whole between it and the art under the pointer, such as members of a group
 /// picked with Group Selection. A press there keeps the selection and a drag moves it (#8047). A
 /// member with only some anchors or segments selected does not count: the press selects `top`.
+/// A member with every anchor selected (as `select.anchors` and `select.key` leave a path) counts.
 fn selected_under(cx: &ToolContext, h: &Hit, top: NodeId) -> Option<NodeId> {
     if cx.selection.contains(top) {
         return Some(top);
     }
-    let whole = |id: NodeId| cx.selection.contains(id) && cx.selection.partial(id).is_none() && !cx.selection.segments.contains_key(&id);
+    let every_anchor = |id: NodeId| {
+        cx.selection
+            .partial(id)
+            .is_none_or(|picked| cx.doc.node(id).and_then(|n| n.path_data()).is_some_and(|p| p.anchors().all(|(s, i, _)| picked.contains(&(s, i)))))
+    };
+    let whole = |id: NodeId| cx.selection.contains(id) && every_anchor(id) && !cx.selection.segments.contains_key(&id);
     let below = h.ancestry.iter().position(|id| *id == top).map_or(&[][..], |i| h.ancestry.get(i..).unwrap_or_default());
     below.iter().copied().chain(std::iter::once(h.leaf)).find(|id| whole(*id))
 }
@@ -1711,9 +1719,13 @@ impl SelectionTool {
         if let Some(a) = release_guide_at(cx, p, m) {
             return vec![a];
         }
-        // A selected blend's widget and a selected polygon's side widget take a plain double-click:
-        // the artwork under them is neither edited nor isolated.
-        if blendwidget::over_widget(cx, p) || sidewidget::over_widget(cx, p) {
+        // A selected blend's widget takes a plain double-click: the artwork under it is neither
+        // edited nor isolated.
+        if blendwidget::over_widget(cx, p) {
+            return vec![];
+        }
+        // A live polygon's side widget takes a plain double-click the same way.
+        if sidewidget::over_widget(cx, p) {
             return vec![];
         }
         if crate::rulerguide::guide_at(cx, p).is_some() {
