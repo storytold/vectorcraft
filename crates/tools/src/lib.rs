@@ -42,6 +42,7 @@ pub mod select;
 pub mod settings;
 pub mod shape;
 pub mod shaperwidget;
+pub mod sidewidget;
 pub mod slice;
 pub mod symbolism;
 pub mod text;
