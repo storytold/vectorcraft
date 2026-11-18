@@ -7477,6 +7477,33 @@ font-technology	Variable	ცვლადი
 @msg	the PSD file's layer groups are nested too deeply	PSD ფაილის შრეების ჯგუფები ზედმეტად ღრმადაა ჩადგმული
 @msg	a layer of the PSD file is too large to read	PSD ფაილის შრე ზედმეტად დიდია წასაკითხად
 @msg	the PSD file's layers take more memory to read than allowed	PSD ფაილის შრეების წასაკითხად დაშვებულზე მეტი მეხსიერებაა საჭირო
+@msg	the layers can't be read ({e}): the file was placed as its merged image	შრეების წაკითხვა ვერ ხერხდება ({e}): ფაილი განთავსდა როგორც მისი გაერთიანებული გამოსახულება
+@msg	1 type layer came in as pixels: the text isn't editable	1 ტექსტის შრე შემოვიდა პიქსელებად: ტექსტი არ რედაქტირდება
+@msg	{n} type layers came in as pixels: the text isn't editable	{n} ტექსტის შრე შემოვიდა პიქსელებად: ტექსტი არ რედაქტირდება
+@msg	1 adjustment layer was not applied	1 კორექციის შრე არ იქნა გამოყენებული
+@msg	{n} adjustment layers were not applied	{n} კორექციის შრე არ იქნა გამოყენებული
+@msg	1 fill layer was not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	1 შევსების შრე არ დაიხატა (გრადიენტული ან ნიმუშის შევსება, ფერი, რომლის წაკითხვაც ვერ ხერხდება, ან ფიგურა, რომელიც პიქსელებს არ ინახავს)
+@msg	{n} fill layers were not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	{n} შევსების შრე არ დაიხატა (გრადიენტული ან ნიმუშის შევსება, ფერი, რომლის წაკითხვაც ვერ ხერხდება, ან ფიგურა, რომელიც პიქსელებს არ ინახავს)
+@msg	the layer effects of 1 layer weren't drawn	1 შრის შრის ეფექტები არ დაიხატა
+@msg	the layer effects of {n} layers weren't drawn	{n} შრის შრის ეფექტები არ დაიხატა
+@msg	the vector masks of 1 layer weren't applied	1 შრის ვექტორული ნიღბები არ იქნა გამოყენებული
+@msg	the vector masks of {n} layers weren't applied	{n} შრის ვექტორული ნიღბები არ იქნა გამოყენებული
+@msg	the knockout of 1 layer wasn't applied	1 შრის ამოჭრა არ იქნა გამოყენებული
+@msg	the knockout of {n} layers wasn't applied	{n} შრის ამოჭრა არ იქნა გამოყენებული
+@msg	1 layer was left out (hidden layers and the layers clipped to them)	1 შრე გამოტოვებულია (დამალული შრეები და მათზე მოჭრილი შრეები)
+@msg	{n} layers were left out (hidden layers and the layers clipped to them)	{n} შრე გამოტოვებულია (დამალული შრეები და მათზე მოჭრილი შრეები)
+@msg	1 layer clipped to a fill layer that wasn't drawn was left out	დაუხატავ შევსების შრეზე მოჭრილი 1 შრე გამოტოვებულია
+@msg	{n} layers clipped to fill layers that weren't drawn were left out	დაუხატავ შევსების შრეებზე მოჭრილი {n} შრე გამოტოვებულია
+@msg	layers in blend modes VectorCraft doesn't have ({modes}) were merged with the layers below them	შრეები შერევის რეჟიმებში, რომლებიც VectorCraft-ს არ აქვს ({modes}), გაერთიანდა მათ ქვემოთ მყოფ შრეებთან
+@msg	1 layer in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	1 შრე შერევის რეჟიმში, რომელიც VectorCraft-ს არ აქვს, შემოვიდა როგორც ჩვეულებრივი: გაერთიანებას დასაშვებზე მეტი მეხსიერება სჭირდება
+@msg	{n} layers in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	{n} შრე შერევის რეჟიმებში, რომლებიც VectorCraft-ს არ აქვს, შემოვიდა როგორც ჩვეულებრივი: გაერთიანებას დასაშვებზე მეტი მეხსიერება სჭირდება
+@msg	1 layer clipped to the layer below came in unclipped: the merge needs more memory than allowed	ქვედა შრეზე მოჭრილი 1 შრე შემოვიდა მოუჭრელად: გაერთიანებას დასაშვებზე მეტი მეხსიერება სჭირდება
+@msg	{n} layers clipped to the layer below came in unclipped: the merge needs more memory than allowed	ქვედა შრეზე მოჭრილი {n} შრე შემოვიდა მოუჭრელად: გაერთიანებას დასაშვებზე მეტი მეხსიერება სჭირდება
+@msg	the slices can't be read ({e}) and were left out	ნაჭრების წაკითხვა ვერ ხერხდება ({e}) და ისინი გამოტოვებულია
+@msg	1 slice lies outside the canvas or has no size and was left out	1 ნაჭერი ტილოს გარეთაა ან ზომა არ აქვს და გამოტოვებულია
+@msg	{n} slices lie outside the canvas or have no size and were left out	{n} ნაჭერი ტილოს გარეთაა ან ზომა არ აქვს და გამოტოვებულია
+@msg	1 slice would lie outside the canvas and was left out	1 ნაჭერი ტილოს გარეთ აღმოჩნდებოდა და გამოტოვებულია
+@msg	{n} slices would lie outside the canvas and were left out	{n} ნაჭერი ტილოს გარეთ აღმოჩნდებოდა და გამოტოვებულია
 @msg	the layers can't be read ({e}): the file opened as its merged image	შრეების წაკითხვა ვერ ხერხდება ({e}): ფაილი გაიხსნა როგორც მისი გაერთიანებული გამოსახულება
 @msg	{depth}-bit PSD files in this colour mode can't be read	ამ ფერის რეჟიმში {depth}-ბიტიანი PSD ფაილების წაკითხვა ვერ ხერხდება
 @msg	the PSD file is cut short	PSD ფაილი შეკვეცილია
