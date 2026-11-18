@@ -12,7 +12,7 @@ pub enum Live {
 }
 
 /// A colour slider with a gradient track (`track(t)` gives the colour at 0..1) and a triangular
-/// thumb below it, like Illustrator's Color panel. Returns the new normalized value and the phase.
+/// thumb below it, as in the Color panel. Returns the new normalized value and the phase.
 pub fn color_slider(ui: &mut Ui, id: impl std::hash::Hash, value: f32, width: f32, track: &dyn Fn(f32) -> Color32) -> (Option<f32>, Live) {
     color_slider_named(ui, id, "", value, width, track)
 }
@@ -141,7 +141,7 @@ pub fn color_slider_stepped(
 ) -> (Option<f32>, Live, Option<f64>) {
     let id = id_with(ui.scope_id(), id);
     let (resp, picked, phase) = color_rail(ui, id, name, shown.clone(), value, width, track);
-    let stepped = slider_keys(ui, &resp, shown);
+    let stepped = slider_keys(ui, &resp, shown, false);
     (picked, phase, stepped.filter(|_| picked.is_none()))
 }
 
@@ -152,19 +152,27 @@ pub fn color_slider_stepped(
 /// `shown`'s units that a key or an action gives.
 pub fn stepped_area(ui: &Ui, resp: &Response, name: &str, shown: Option<SliderValue>) -> Option<f64> {
     slider_info(ui, resp, name, shown.clone());
-    slider_keys(ui, resp, shown)
+    slider_keys(ui, resp, shown, false)
+}
+
+/// Gives the keyboard focus to the control `id` of [`stepped_area`] as a click or a drag on it
+/// does, with no focus outline until a key steps it, for a control whose pointer input another
+/// response reads.
+pub(crate) fn focus_by_pointer(ui: &Ui, id: egui::Id) {
+    ui.memory_mut(|m| m.request_focus(id));
+    ui.data_mut(|d| d.insert_temp(id.with("focused-by-pointer"), true));
 }
 
 /// The focus, keys, actions and focus outline of [`color_slider_stepped`] on the control `resp`:
-/// the number a key or an action gives.
-fn slider_keys(ui: &Ui, resp: &Response, shown: Option<SliderValue>) -> Option<f64> {
+/// the number a key or an action gives. With `always`, a key or an action that leaves the number
+/// as it was still gives it.
+fn slider_keys(ui: &Ui, resp: &Response, shown: Option<SliderValue>, always: bool) -> Option<f64> {
     let id = resp.id;
     // Focus a click or a drag gave shows no outline until a key steps the rail: the outline tells
     // a keyboard user where the focus is, and after a drag it only framed the rail.
     let by_pointer = id.with("focused-by-pointer");
     if resp.drag_started() || resp.clicked() {
-        resp.request_focus();
-        ui.data_mut(|d| d.insert_temp(by_pointer, true));
+        focus_by_pointer(ui, id);
     }
     let focused = ui.memory(|m| m.has_focus(id));
     if !focused {
@@ -177,7 +185,7 @@ fn slider_keys(ui: &Ui, resp: &Response, shown: Option<SliderValue>) -> Option<f
             node.add_action(egui::accesskit::Action::Increment);
             node.add_action(egui::accesskit::Action::Decrement);
         });
-        rail_step(ui, id, focused, &s)
+        rail_step(ui, id, focused, always, &s)
     });
     if stepped.is_some() {
         ui.data_mut(|d| d.remove_temp::<bool>(by_pointer));
@@ -190,8 +198,9 @@ fn slider_keys(ui: &Ui, resp: &Response, shown: Option<SliderValue>) -> Option<f
 }
 
 /// The number of slider `id` (`s`) after this frame's keys while it is `focused`, and after screen
-/// readers' actions on it ([`color_slider_stepped`]); `None` when they leave it as it was.
-fn rail_step(ui: &Ui, id: egui::Id, focused: bool, s: &SliderValue) -> Option<f64> {
+/// readers' actions on it ([`color_slider_stepped`]); `None` when they leave it as it was, unless
+/// `always` and a key or an action came.
+fn rail_step(ui: &Ui, id: egui::Id, focused: bool, always: bool, s: &SliderValue) -> Option<f64> {
     use egui::accesskit::{Action, ActionData};
     use egui::{Event, Key};
     let (lo, hi) = (*s.range.start(), *s.range.end());
@@ -208,6 +217,8 @@ fn rail_step(ui: &Ui, id: egui::Id, focused: bool, s: &SliderValue) -> Option<f6
     };
     // Home or End: an end of the range, which also replaces a number past it.
     let mut end = false;
+    // A key or an action came this frame.
+    let mut asked = false;
     if focused {
         // The arrows step the rail and do not move the focus. egui keeps the filter only when the
         // rail also had the focus in the frame before, and applies it from the next frame; until
@@ -235,6 +246,7 @@ fn rail_step(ui: &Ui, id: egui::Id, focused: bool, s: &SliderValue) -> Option<f6
                     }
                     _ => return true,
                 }
+                asked = true;
                 false
             });
         });
@@ -246,8 +258,9 @@ fn rail_step(ui: &Ui, id: egui::Id, focused: bool, s: &SliderValue) -> Option<f6
     // asked; only the keys' and the steps' numbers are rounded to `STEP_DECIMALS`.
     let mut exact = false;
     ui.input(|i| {
-        let n = i.num_accesskit_action_requests(id, Action::Increment) as f64 - i.num_accesskit_action_requests(id, Action::Decrement) as f64;
-        v = by(v, n).clamp(lo, hi);
+        let (up, down) = (i.num_accesskit_action_requests(id, Action::Increment), i.num_accesskit_action_requests(id, Action::Decrement));
+        asked |= up + down > 0;
+        v = by(v, up as f64 - down as f64).clamp(lo, hi);
         // The last set-value request this frame.
         let set = i.accesskit_action_requests(id, Action::SetValue).last().and_then(|request| match request.data {
             Some(ActionData::NumericValue(value)) if value.is_finite() => Some(value),
@@ -260,9 +273,10 @@ fn rail_step(ui: &Ui, id: egui::Id, focused: bool, s: &SliderValue) -> Option<f6
             v = shown.clamp(lo.min(s.value), hi.max(s.value));
             end = true;
             exact = true;
+            asked = true;
         }
     });
-    (v != from || (end && v != s.value)).then_some(if exact { v } else { round_to(v, STEP_DECIMALS).clamp(lo, hi) })
+    (v != from || (end && v != s.value) || (always && asked)).then_some(if exact { v } else { round_to(v, STEP_DECIMALS).clamp(lo, hi) })
 }
 
 /// The rail of [`color_slider_valued`] with the id `id`: its response, the new value from 0 to 1
@@ -499,23 +513,68 @@ pub fn channel_slider_valued(
     size: Vec2,
     track: &dyn Fn(f32) -> Color32,
 ) -> (Option<f32>, Live) {
+    let id = id_with(ui.scope_id(), id);
+    let (_, picked, phase) = channel_rail(ui, id, name, shown, value, true, size, track);
+    (picked, phase)
+}
+
+/// [`channel_slider_valued`] that also responds to the keyboard and to screen readers' actions as
+/// the rail of [`color_slider_stepped`] does: a click or a drag gives it the keyboard focus, and
+/// while it has the focus ↑ and → raise the number `shown` holds and ↓ and ← lower it. When not
+/// `marked`, the rail draws no arrows and screen readers read 0, as [`hue_ring`] does, while the
+/// keys and actions still step from `shown` and give a number even when it equals `shown`'s, as
+/// [`color_field`] does. Returns the new value from 0 to 1 that a click or a
+/// drag gives, its phase, and the number in `shown`'s units that a key or an action gives.
+#[allow(clippy::too_many_arguments)]
+pub fn channel_slider_stepped(
+    ui: &mut Ui,
+    id: impl std::hash::Hash,
+    name: &str,
+    shown: Option<SliderValue>,
+    value: f32,
+    marked: bool,
+    size: Vec2,
+    track: &dyn Fn(f32) -> Color32,
+) -> (Option<f32>, Live, Option<f64>) {
+    let id = id_with(ui.scope_id(), id);
+    let read = if marked { shown.clone() } else { shown.as_ref().map(|s| SliderValue { value: 0.0, text: None, ..s.clone() }) };
+    let (resp, picked, phase) = channel_rail(ui, id, name, read, value, marked, size, track);
+    let stepped = slider_keys(ui, &resp, shown, !marked);
+    (picked, phase, stepped.filter(|_| picked.is_none()))
+}
+
+/// The vertical rail of [`channel_slider_valued`] with the id `id`, with its arrows at `value`
+/// when `marked`: its response, the new value from 0 to 1 that a click or drag gives and the
+/// phase.
+#[allow(clippy::too_many_arguments)]
+fn channel_rail(
+    ui: &mut Ui,
+    id: egui::Id,
+    name: &str,
+    shown: Option<SliderValue>,
+    value: f32,
+    marked: bool,
+    size: Vec2,
+    track: &dyn Fn(f32) -> Color32,
+) -> (Response, Option<f32>, Live) {
     let t = Tokens::get(ui.ctx());
     let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
-    let resp = ui.interact(rect, id_with(ui.scope_id(), id), Sense::click_and_drag());
+    let resp = ui.interact(rect, id, Sense::click_and_drag());
     let bar = rect.shrink2(vec2(6.0, 0.0));
     gradient_strip(ui, bar, (bar.height() / 2.0).ceil().max(2.0) as usize, true, track);
     ui.painter().rect_stroke(bar, 0.0, Stroke::new(1.0, t.border), StrokeKind::Outside);
     let y = bar.bottom() - value.clamp(0.0, 1.0) * bar.height();
     let fill = if resp.dragged() || resp.hovered() { t.text_strong } else { t.icon };
-    for (x, d) in [(rect.left(), 1.0), (rect.right(), -1.0)] {
+    for (x, d) in [(rect.left(), 1.0), (rect.right(), -1.0)].into_iter().filter(|_| marked) {
         let tip = pos2(x + d * 5.0, y);
         ui.painter().add(egui::Shape::convex_polygon(vec![tip, pos2(x, y + 4.0 * d), pos2(x, y - 4.0 * d)], fill, Stroke::NONE));
     }
     slider_info(ui, &resp, name, shown);
-    match pointer_phase(&resp) {
+    let (picked, phase) = match pointer_phase(&resp) {
         Some((p, phase)) => (Some(((bar.bottom() - p.y) / bar.height()).clamp(0.0, 1.0)), phase),
         None => (None, Live::Idle),
-    }
+    };
+    (resp, picked, phase)
 }
 
 /// A hex colour field (`E67828`, no `#`) after a `#` label. Returns the text on commit when it
@@ -700,17 +759,57 @@ fn wheel_pos(c: Pos2, r: f32, h: f32, s: f32) -> Pos2 {
     c + vec2(a.cos(), -a.sin()) * r * s
 }
 
-/// The hue and saturation wheel at brightness `v`: hue around, saturation outwards.
-fn wheel_shape(c: Pos2, r: f32, v: f32) -> egui::Shape {
+/// Which HSB component the distance from a [`harmony_wheel`]'s center shows; hue is always the
+/// angle.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum WheelAxes {
+    /// Saturation outwards (gray at the center), at the selected color's brightness.
+    #[default]
+    HueSaturation,
+    /// Brightness outwards (black at the center), at the selected color's saturation.
+    HueBrightness,
+}
+
+impl WheelAxes {
+    /// The HSB index the distance from the center sets: 1 (saturation) or 2 (brightness).
+    pub fn radial(self) -> usize {
+        match self {
+            WheelAxes::HueSaturation => 1,
+            WheelAxes::HueBrightness => 2,
+        }
+    }
+
+    /// The HSB index of the slider under the wheel: the component the wheel does not show.
+    pub fn other(self) -> usize {
+        3 - self.radial()
+    }
+
+    /// HSB `[h°, s, v]` of hue `h`, `t` for the component the distance from the center shows and
+    /// `o` for the other one.
+    pub fn hsb(self, h: f32, t: f32, o: f32) -> [f32; 3] {
+        match self {
+            WheelAxes::HueSaturation => [h, t, o],
+            WheelAxes::HueBrightness => [h, o, t],
+        }
+    }
+}
+
+/// The wheel of `axes` with `o` for the component it does not show: hue around, the other
+/// component outwards.
+fn wheel_shape(c: Pos2, r: f32, axes: WheelAxes, o: f32) -> egui::Shape {
     const SEG: u32 = 72;
     const RINGS: u32 = 8;
+    let col = |h: f32, t: f32| {
+        let [h, s, v] = axes.hsb(h, t, o);
+        crate::panels::c32(&Color::from_hsb(h, s, v))
+    };
     let mut mesh = egui::Mesh::default();
-    mesh.colored_vertex(c, crate::panels::c32(&Color::from_hsb(0.0, 0.0, v)));
+    mesh.colored_vertex(c, col(0.0, 0.0));
     for ring in 1..=RINGS {
-        let s = ring as f32 / RINGS as f32;
+        let t = ring as f32 / RINGS as f32;
         for k in 0..SEG {
             let h = k as f32 * 360.0 / SEG as f32;
-            mesh.colored_vertex(wheel_pos(c, r, h, s), crate::panels::c32(&Color::from_hsb(h, s, v)));
+            mesh.colored_vertex(wheel_pos(c, r, h, t), col(h, t));
         }
     }
     let at = |ring: u32, k: u32| if ring == 0 { 0 } else { 1 + (ring - 1) * SEG + k % SEG };
@@ -873,23 +972,31 @@ pub fn hue_ring(ui: &mut Ui, id: impl std::hash::Hash, name: &str, size: f32, hu
     out
 }
 
-/// Hue sectors and saturation rings of the [`segmented_wheel`]: patches 15° of hue by 20%
-/// saturation wide, the sectors centered on red at 0°.
+/// Hue sectors and rings of the [`segmented_wheel`]: patches 15° of hue by 20% saturation (or
+/// brightness) wide, the sectors centered on red at 0°.
 const WHEEL_SECTORS: u32 = 24;
 const WHEEL_RINGS: u32 = 5;
 
 /// The color of the [`segmented_wheel`] patch that holds hue `h` (degrees) and saturation `s` (0 to
 /// 1), at brightness `v`: the hue and saturation at the patch's center.
 pub fn segment_color(h: f32, s: f32, v: f32) -> Color {
-    let step = 360.0 / WHEEL_SECTORS as f32;
-    let sector = (h.rem_euclid(360.0) / step).round() % WHEEL_SECTORS as f32;
-    let ring = (s.clamp(0.0, 1.0) * WHEEL_RINGS as f32).floor().min((WHEEL_RINGS - 1) as f32);
-    Color::from_hsb(sector * step, (ring + 0.5) / WHEEL_RINGS as f32, v)
+    segment_color_on(WheelAxes::HueSaturation, h, s, v)
 }
 
-/// The segmented hue and saturation wheel at brightness `v`: a solid patch per hue sector and
-/// saturation ring, in its [`segment_color`].
-fn segmented_wheel_shape(c: Pos2, r: f32, v: f32) -> egui::Shape {
+/// The color of the patch of the [`segmented_wheel`] of `axes` that holds hue `h` (degrees) and `t`
+/// (0 to 1) for the component the wheel shows, with `o` for the other one: the hue and `t` at the
+/// patch's center.
+pub fn segment_color_on(axes: WheelAxes, h: f32, t: f32, o: f32) -> Color {
+    let step = 360.0 / WHEEL_SECTORS as f32;
+    let sector = (h.rem_euclid(360.0) / step).round() % WHEEL_SECTORS as f32;
+    let ring = (t.clamp(0.0, 1.0) * WHEEL_RINGS as f32).floor().min((WHEEL_RINGS - 1) as f32);
+    let [h, s, v] = axes.hsb(sector * step, (ring + 0.5) / WHEEL_RINGS as f32, o);
+    Color::from_hsb(h, s, v)
+}
+
+/// The segmented wheel of `axes` with `o` for the component it does not show: a solid patch per
+/// hue sector and ring, in its [`segment_color_on`].
+fn segmented_wheel_shape(c: Pos2, r: f32, axes: WheelAxes, o: f32) -> egui::Shape {
     // Points along each patch's arcs.
     const ARC: u32 = 4;
     let step = 360.0 / WHEEL_SECTORS as f32;
@@ -898,7 +1005,7 @@ fn segmented_wheel_shape(c: Pos2, r: f32, v: f32) -> egui::Shape {
         let (s0, s1) = (ring as f32 / WHEEL_RINGS as f32, (ring + 1) as f32 / WHEEL_RINGS as f32);
         for k in 0..WHEEL_SECTORS {
             let h = k as f32 * step;
-            let col = crate::panels::c32(&segment_color(h, (s0 + s1) / 2.0, v));
+            let col = crate::panels::c32(&segment_color_on(axes, h, (s0 + s1) / 2.0, o));
             let first = mesh.vertices.len() as u32;
             for j in 0..=ARC {
                 let a = h - step / 2.0 + step * j as f32 / ARC as f32;
@@ -920,9 +1027,14 @@ fn segmented_wheel_shape(c: Pos2, r: f32, v: f32) -> egui::Shape {
 pub struct WheelResponse {
     /// The colour whose marker was pressed (it becomes the selected one).
     pub pressed: Option<usize>,
-    /// A colour moved by dragging its marker (a new hue and saturation) or, the selected colour,
-    /// the brightness slider (a new brightness): `[h°, s, v]`, `None` where the control kept it.
+    /// A colour moved by dragging its marker (a new hue and saturation, or with
+    /// [`WheelAxes::HueBrightness`] a new hue and brightness) or, the selected colour, the slider
+    /// under the wheel (a new brightness, or saturation): `[h°, s, v]`, `None` where the control
+    /// kept it.
     pub moved: Option<(usize, [Option<f32>; 3])>,
+    /// A click on the wheel: the color whose marker is within reach of it (if any), and the hue
+    /// (degrees) and the saturation (or brightness) under the pointer (1 past the wheel's edge).
+    pub clicked: Option<(Option<usize>, [f32; 2])>,
 }
 
 /// The harmony wheel of Recolor Artwork's Edit tab and the Color Themes panel: a hue and saturation
@@ -930,32 +1042,40 @@ pub struct WheelResponse {
 /// marker per colour joined to the centre (the selected colour, `base`, larger) and a Brightness
 /// slider for the selected colour below it.
 pub fn harmony_wheel(ui: &mut Ui, id: &str, size: f32, colors: &[Color], base: Option<usize>) -> WheelResponse {
-    wheel(ui, id, size, colors, base, false)
+    wheel_of(ui, id, size, colors, base, false, WheelAxes::HueSaturation)
 }
 
 /// [`harmony_wheel`] drawn as solid patches (24 hues by 5 saturations, each in its
 /// [`segment_color`]). The markers sit at their colors' own hue and
 /// saturation, and a drag moves them as freely as on the smooth wheel.
 pub fn segmented_wheel(ui: &mut Ui, id: &str, size: f32, colors: &[Color], base: Option<usize>) -> WheelResponse {
-    wheel(ui, id, size, colors, base, true)
+    wheel_of(ui, id, size, colors, base, true, WheelAxes::HueSaturation)
 }
 
-/// [`harmony_wheel`], or with `segmented` [`segmented_wheel`].
-fn wheel(ui: &mut Ui, id: &str, size: f32, colors: &[Color], base: Option<usize>, segmented: bool) -> WheelResponse {
+/// [`harmony_wheel`], or with `segmented` [`segmented_wheel`], showing `axes`. With
+/// [`WheelAxes::HueBrightness`] the distance from the center is brightness (black at the center,
+/// full brightness at the edge, a ring of patches per 20% on the segmented wheel), the wheel is drawn
+/// at the selected colour's saturation (full without one), a marker drag sets hue and brightness,
+/// and the slider under the wheel is a Saturation slider.
+pub fn wheel_of(ui: &mut Ui, id: &str, size: f32, colors: &[Color], base: Option<usize>, segmented: bool, axes: WheelAxes) -> WheelResponse {
     let t = Tokens::get(ui.ctx());
     let mut out = WheelResponse::default();
     let base_hsb = base.and_then(|b| colors.get(b)).map(Color::to_hsb);
-    let v = base_hsb.map_or(1.0, |c| c[2]);
+    let (radial, other) = (axes.radial(), axes.other());
+    // The component the wheel does not show: the slider's value, and the wheel's background at it.
+    let o = base_hsb.map_or(1.0, |c| c[other]);
+    // A dark wheel still shows its hues.
+    let shown = if axes == WheelAxes::HueSaturation { o.max(0.15) } else { o };
     ui.horizontal(|ui| {
         ui.add_space(((ui.available_width() - size) / 2.0).max(0.0));
         let (rect, resp) = ui.allocate_exact_size(vec2(size, size), Sense::click_and_drag());
         let (c, r) = (rect.center(), size / 2.0 - 10.0);
         let painter = ui.painter_at(rect);
-        painter.add(if segmented { segmented_wheel_shape(c, r, v.max(0.15)) } else { wheel_shape(c, r, v.max(0.15)) });
+        painter.add(if segmented { segmented_wheel_shape(c, r, axes, shown) } else { wheel_shape(c, r, axes, shown) });
         painter.circle_stroke(c, r, Stroke::new(1.0, t.border));
         let at = |col: &Color| {
-            let [h, s, _] = col.to_hsb();
-            wheel_pos(c, r, h, s)
+            let hsb = col.to_hsb();
+            wheel_pos(c, r, hsb[0], hsb[radial])
         };
         for (i, col) in colors.iter().enumerate() {
             let (p, big) = (at(col), Some(i) == base);
@@ -971,14 +1091,23 @@ fn wheel(ui: &mut Ui, id: &str, size: f32, colors: &[Color], base: Option<usize>
             let near = colors.iter().map(at).enumerate().map(|(i, m)| (i, m.distance(p))).filter(|x| x.1 <= 14.0).min_by(|a, b| a.1.total_cmp(&b.1));
             out.pressed = near.map(|x| x.0);
             ui.data_mut(|m| m.insert_temp(drag, out.pressed));
+            // A click inside the wheel, or on a marker, gives the hue and saturation (or
+            // brightness) under it.
+            let dv = p - c;
+            if resp.clicked() && (dv.length() <= r || out.pressed.is_some()) {
+                let h = (-dv.y).atan2(dv.x).to_degrees().rem_euclid(360.0);
+                out.clicked = Some((out.pressed, [h, (dv.length() / r).clamp(0.0, 1.0)]));
+            }
         }
         if resp.dragged()
             && let (Some(i), Some(p)) = (ui.data(|m| m.get_temp::<Option<usize>>(drag)).flatten(), resp.interact_pointer_pos())
             && i < colors.len()
         {
             let dv = p - c;
-            let h = (-dv.y).atan2(dv.x).to_degrees().rem_euclid(360.0);
-            out.moved = Some((i, [Some(h), Some((dv.length() / r).clamp(0.0, 1.0)), None]));
+            let mut set = [None; 3];
+            set[0] = Some((-dv.y).atan2(dv.x).to_degrees().rem_euclid(360.0));
+            set[radial] = Some((dv.length() / r).clamp(0.0, 1.0));
+            out.moved = Some((i, set));
         }
         let name = if segmented { tl!("Segmented color wheel") } else { tl!("Color wheel") };
         resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Slider, ui.is_enabled(), name));
@@ -986,15 +1115,19 @@ fn wheel(ui: &mut Ui, id: &str, size: f32, colors: &[Color], base: Option<usize>
     ui.add_space(6.0);
     ui.horizontal(|ui| {
         ui.add_space(((ui.available_width() - size - 76.0) / 2.0).max(0.0));
-        ui.add_sized([70.0, 22.0], egui::Label::new(egui::RichText::new(tl!("Brightness")).color(t.text_dim)));
-        // Screen readers get the brightness in percent, as the Color panel's HSB B field shows it.
-        let shown = SliderValue::field((f64::from(v) * 100.0).round(), 0.0..=100.0, "%", 0);
-        if let (Some(b), Some([h, s, _])) = (base, base_hsb)
-            && let (Some(nv), _) = color_slider_valued(ui, (id, "brightness"), tl!("Brightness"), Some(shown), v, size, &|x| {
-                crate::panels::c32(&Color::from_hsb(h, s, x))
+        let (name, key) = if other == 2 { (tl!("Brightness"), "brightness") } else { (tl!("Saturation"), "saturation") };
+        ui.add_sized([70.0, 22.0], egui::Label::new(egui::RichText::new(name).color(t.text_dim)));
+        // Screen readers get the value in percent, as the Color panel's HSB fields show it.
+        let shown = SliderValue::field((f64::from(o) * 100.0).round(), 0.0..=100.0, "%", 0);
+        if let (Some(b), Some(hsb)) = (base, base_hsb)
+            && let (Some(nv), _) = color_slider_valued(ui, (id, key), name, Some(shown), o, size, &|x| {
+                let [h, s, v] = axes.hsb(hsb[0], hsb[radial], x);
+                crate::panels::c32(&Color::from_hsb(h, s, v))
             })
         {
-            out.moved = Some((b, [None, None, Some(nv)]));
+            let mut set = [None; 3];
+            set[other] = Some(nv);
+            out.moved = Some((b, set));
         }
     });
     out

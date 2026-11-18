@@ -1,11 +1,12 @@
 //! usvg tree → document conversion.
 
+use craft_svg::tree::usvg;
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 use std::sync::Arc;
 
-use usvg::roxmltree;
+use craft_svg::tree::usvg::roxmltree;
 use vectorcraft_color::{BlendMode, Color, Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop, Paint};
 use vectorcraft_doc::{
     Appearance, AppearanceItem, Dash, Document, FillLayer, ForeignAttribute, ImageBlob, ImageObject, LayerColor, LineCap, LineJoin, MAX_SVG_SCRIPTS,
@@ -20,7 +21,7 @@ use text::TextSlots;
 
 pub use depth::MAX_ELEMENT_DEPTH;
 pub(crate) use depth::xml_too_deep;
-pub use files::{MAX_NESTED_SVG_IMAGES, MAX_NESTED_SVG_READS, MAX_NESTED_SVG_TEXT};
+pub use files::{MAX_DATA_URL_BYTES, MAX_NESTED_SVG_IMAGES, MAX_NESTED_SVG_READS, MAX_NESTED_SVG_TEXT};
 pub(crate) use fx::BLEND;
 
 /// Most objects an imported SVG may expand to: a guard against `<use>` and nested-image
@@ -110,6 +111,8 @@ pub(crate) fn svg_filters(svg: &str, room: usize, taken: impl Fn(&str) -> bool) 
         return Err(too_deep());
     }
     let xml = parse(svg)?;
+    // Before the style cascade of `depth::height`, as `import` measures it.
+    budget::check(&xml, budget::Cost::LIMITS, depth::MAX_ELEMENT_DEPTH)?;
     if depth::height(&xml, depth::MAX_ELEMENT_DEPTH).is_none() {
         return Err(too_deep());
     }
@@ -139,7 +142,7 @@ pub(crate) fn import_finding(
     let xml = parse(svg)?;
     // Before the style cascade of `depth::height` and the prepass, which keeps the declarations of
     // each element it reads; measured again below on the text usvg reads when that differs.
-    let styles = budget::check(&xml, budget::MAX_COPIED_STYLES, depth::MAX_ELEMENT_DEPTH)?;
+    let spent = budget::check(&xml, budget::Cost::LIMITS, depth::MAX_ELEMENT_DEPTH)?;
     let Some(height) = depth::height(&xml, depth::MAX_ELEMENT_DEPTH) else {
         return Err(too_deep());
     };
@@ -160,13 +163,13 @@ pub(crate) fn import_finding(
     let text_xml = found.text_source.as_deref().map(parse).transpose()?;
     let (src, slots) = text::prepare(svg, &xml, text_xml.as_ref(), units.dpi, &mut warnings);
     // Before usvg copies what `<use>`s show and the style values of each copy: the text usvg reads.
-    let styles = match &src {
-        Cow::Borrowed(_) if !rewritten => styles,
-        Cow::Borrowed(_) => budget::check(&xml, budget::MAX_COPIED_STYLES, usize::MAX)?,
-        Cow::Owned(prepared) => budget::check(&parse(prepared)?, budget::MAX_COPIED_STYLES, usize::MAX)?,
+    let spent = match &src {
+        Cow::Borrowed(_) if !rewritten => spent,
+        Cow::Borrowed(_) => budget::check(&xml, budget::Cost::LIMITS, usize::MAX)?,
+        Cow::Owned(prepared) => budget::check(&parse(prepared)?, budget::Cost::LIMITS, usize::MAX)?,
     };
     let files = found.files;
-    files.copied_styles(styles);
+    files.spent_by_svg(spent);
     let tree = {
         let opt = usvg::Options {
             dpi: units.dpi as f32,
@@ -199,12 +202,13 @@ pub(crate) fn import_finding(
         hidden: found.hidden,
         uses: found.uses,
         symbols: HashMap::new(),
-        symbol_names: HashSet::new(),
+        symbol_names: HashMap::new(),
         symbol_suffixes: HashMap::new(),
         pattern_suffixes: HashMap::new(),
         blends: fx::blends(&xml, &scan.markers),
-        filter_sources: fx::sources(&xml, &scan.markers),
+        filter_sources: fx::sources(&xml, &scan.markers, |h| files.data_href(h)),
         files,
+        image_keys: HashMap::new(),
         non_scaling: found.non_scaling,
         data: found.data,
         events: found.events,
@@ -357,8 +361,8 @@ struct Importer {
     uses: HashMap<String, String>,
     /// The symbols made so far, by `<symbol>` id.
     symbols: HashMap<String, SymbolMade>,
-    /// The names of the symbols made so far.
-    symbol_names: HashSet<String>,
+    /// The names of the symbols made so far, each with its index in the document's symbols.
+    symbol_names: HashMap<String, usize>,
     /// Where the suffixes of each symbol and pattern name base go on from (`unique_name`).
     symbol_suffixes: HashMap<String, usize>,
     pattern_suffixes: HashMap<String, usize>,
@@ -368,6 +372,9 @@ struct Importer {
     filter_sources: HashMap<String, fx::Source>,
     /// The files `<image>` elements link to.
     files: files::Files,
+    /// The image key of each raster image usvg got, by the address of its bytes, with the bytes
+    /// held so that the address isn't given to other bytes during the import.
+    image_keys: HashMap<usize, (Arc<Vec<u8>>, String)>,
     /// Ids of the shapes whose strokes don't scale ([`vector_effect`]).
     non_scaling: HashSet<String>,
     /// The `data-*` attributes of elements, by id ([`user_data`]).

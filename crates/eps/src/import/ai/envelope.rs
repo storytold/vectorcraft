@@ -59,6 +59,16 @@ pub(crate) fn drawn_note(typed: bool) -> &'static str {
 pub(super) const MAX_PENDING: usize = 64;
 /// The most envelopes and warped text objects one import draws to check; more keep their drawn art.
 pub(crate) const MAX_CHECKED: usize = 256;
+/// The most strokes with dashes aligned to corners one import draws to check against their drawn
+/// looks (apart from [`MAX_CHECKED`]); more keep their drawn looks.
+pub(crate) const MAX_DASH_CHECKS: usize = 256;
+
+#[cfg(test)]
+thread_local! {
+    /// How many strokes with dashes aligned to corners have been drawn on this thread to check them
+    /// against their looks.
+    pub(crate) static DASH_CHECKS_MADE: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
 /// The most rows or columns of a mesh read (Make with Mesh's own limit).
 const MAX_GRID: u32 = 50;
 /// How far, in points over width and height together, a saved size may lie from the contents'
@@ -121,11 +131,12 @@ pub(super) fn options(o: &Obj) -> Option<(EnvelopeOptions, f64)> {
 
 /// The margins of `content` when the size the file saves for it (`AIDeformArtWidthKey`,
 /// `AIDeformArtHeightKey`) matches its bounds with its strokes within [`SAVED_SIZE_SLACK`] and lies
-/// nearer them than its geometric bounds. None without that size, or for contents with no width or
-/// no height.
-fn saved_margin(o: &Obj, content: &[Arc<Node>]) -> Option<[f32; 4]> {
+/// nearer them than its geometric bounds. The saved size is in art space, and `scale` takes it to the
+/// contents' space (a Large Canvas copy read at its declared scale). None without that size, or for
+/// contents with no width or no height.
+fn saved_margin(o: &Obj, content: &[Arc<Node>], scale: f64) -> Option<[f32; 4]> {
     let saved = |key: &str| match o.nums(key).as_slice() {
-        [v] if v.is_finite() => Some(*v),
+        [v] if v.is_finite() => Some(*v * scale).filter(|v| v.is_finite()),
         _ => None,
     };
     let (w, h) = (saved("AIDeformArtWidthKey")?, saved("AIDeformArtHeightKey")?);
@@ -508,9 +519,10 @@ fn unwrapped(mut nodes: Vec<Node>) -> Vec<Arc<Node>> {
 }
 
 /// The live envelope of dictionary `o`, the group on `%_` lines before it (`before`) and the art
-/// in its `AIDeformArtKey` block (`inner`); `None` where they don't make one.
-pub(super) fn live(o: &Obj, before: Option<Node>, inner: Vec<Node>) -> Option<NodeKind> {
-    envelope_as(o, before, inner, false)
+/// in its `AIDeformArtKey` block (`inner`); `None` where they don't make one. `scale` takes sizes in
+/// art space to the space the art was read into ([`saved_margin`]).
+pub(super) fn live(o: &Obj, before: Option<Node>, inner: Vec<Node>, scale: f64) -> Option<NodeKind> {
+    envelope_as(o, before, inner, false, scale)
 }
 
 /// Is the envelope of dictionary `o` a warp?
@@ -521,12 +533,12 @@ fn is_warp(o: &Obj) -> bool {
 /// [`live`] for a warp, as a mesh envelope on the grid its editing data saves (the mesh that shapes
 /// it), its points and handles as saved: it draws as that grid does, without the warp's style, bend
 /// and distortions. `None` for an envelope that isn't a warp, or whose grid doesn't read.
-fn live_on_saved_grid(o: &Obj, before: Option<Node>, inner: Vec<Node>) -> Option<NodeKind> {
-    envelope_as(o, before, inner, true)
+fn live_on_saved_grid(o: &Obj, before: Option<Node>, inner: Vec<Node>, scale: f64) -> Option<NodeKind> {
+    envelope_as(o, before, inner, true, scale)
 }
 
 /// [`live`], or with `on_grid` [`live_on_saved_grid`].
-fn envelope_as(o: &Obj, before: Option<Node>, inner: Vec<Node>, on_grid: bool) -> Option<NodeKind> {
+fn envelope_as(o: &Obj, before: Option<Node>, inner: Vec<Node>, on_grid: bool, scale: f64) -> Option<NodeKind> {
     let editing = switch(o, "AIDeformEditModeKey")?;
     let (mut options, fidelity) = options(o)?;
     let before = before?;
@@ -546,7 +558,7 @@ fn envelope_as(o: &Obj, before: Option<Node>, inner: Vec<Node>, on_grid: bool) -
         return None;
     }
     if options.distort_appearance {
-        options.bounds_margin = saved_margin(o, &content).unwrap_or_default();
+        options.bounds_margin = saved_margin(o, &content, scale).unwrap_or_default();
     }
     let kind = match (whole(o, "AIDeformStyle")??, on_grid) {
         (1, false) => warp(o)?,
@@ -637,14 +649,15 @@ pub(super) struct WarpedLook {
 
 /// An envelope of type read with its drawn art: its dictionary, the group on `%_` lines before it
 /// and the art in its `AIDeformArtKey` block, as [`live`] takes them (their text slots still
-/// empty), and the id of its drawn art in the document. Type is laid out after the layers are read,
-/// so it waits for that ([`WarpedType::settle_envelopes`]).
+/// empty), the id of its drawn art in the document, and the scale [`live`] takes. Type is laid out
+/// after the layers are read, so it waits for that ([`WarpedType::settle_envelopes`]).
 #[derive(Debug)]
 pub(crate) struct TypedEnvelope {
     pub(super) obj: Obj,
     pub(super) before: Option<Node>,
     pub(super) inner: Vec<Node>,
     pub(super) drawn: NodeId,
+    pub(super) scale: f64,
 }
 
 /// Why an envelope of type kept its drawn art.
@@ -689,6 +702,8 @@ pub struct WarpedType {
     pub(super) checks: usize,
     pub(super) spent: Spent,
     pub(super) page: Option<Rect>,
+    /// [`super::Structure::type_clips`]: type in an envelope's contents clips its clipping group too.
+    pub(super) type_clips: HashMap<NodeId, NodeId>,
     /// The envelopes of type that may open live in layers built without a page, by their place
     /// among them ([`Self::open_alone`]): none when `None`.
     pub(super) alone: Option<BTreeSet<usize>>,
@@ -788,7 +803,7 @@ impl WarpedType {
         shown: &BTreeSet<NodeId>,
         waiting: usize,
     ) -> Result<(NodeId, Vec<Node>), TypeKept> {
-        let TypedEnvelope { obj, mut before, mut inner, drawn } = envelope;
+        let TypedEnvelope { obj, mut before, mut inner, drawn, scale } = envelope;
         let art = doc.node(drawn).cloned().ok_or(TypeKept::Read)?;
         // The text slots in the contents, in the order the reader put their hidden copies in.
         let mut slots = vec![];
@@ -808,18 +823,20 @@ impl WarpedType {
             texts.insert(slot, text);
             hidden.push(id);
         }
+        let typed = |slot: NodeId| texts.get(&slot).map(|t| t.id);
         for n in before.iter_mut().chain(inner.iter_mut()) {
             put_type(n, &texts);
+            super::clip_by_type(n, &self.type_clips, &typed, &mut |_| ());
         }
         // A warp that VectorCraft's own warp doesn't draw as its drawn art may still draw as the
         // grid the file saves for it: then it opens as a mesh envelope on that grid.
-        let on_grid = if is_warp(&obj) { live_on_saved_grid(&obj, before.clone(), inner.clone()) } else { None };
+        let on_grid = if is_warp(&obj) { live_on_saved_grid(&obj, before.clone(), inner.clone(), scale) } else { None };
         // With Distort Appearance, a file's envelope may map its type from its glyphs grown by half
         // their strokes' weight or from the glyphs alone, and for type the size the file saves for
         // that box is often out of date (not the size of the type there now): each is checked.
         // After all of those, each is checked mapping from what its type paints, where that box is
         // another: it is measured only when such a check comes and one is left.
-        let kinds: Vec<NodeKind> = live(&obj, before, inner).into_iter().chain(on_grid).collect();
+        let kinds: Vec<NodeKind> = live(&obj, before, inner, scale).into_iter().chain(on_grid).collect();
         if kinds.is_empty() {
             return Err(TypeKept::Read);
         }
@@ -977,10 +994,11 @@ pub(super) fn warps(appearance: &Appearance) -> bool {
     appearance.effects.iter().any(warp) || appearance.items.iter().any(|i| i.visible() && i.effects().iter().any(warp))
 }
 
-/// Do `live` and `drawn` draw alike: few of the pixels either inks differ, and fewer still where a
-/// whole patch differs; and, on `page` (when the file has one), do they differ little enough that
-/// with the differences in `spent` the page check still takes the layers' art (it is added to
-/// `spent` when they do)? Both are drawn on `layer`, a layer id no other node has.
+/// Do `live` and `drawn` draw alike? Either neither has any paint ([`paints`]), or few of the
+/// pixels either inks differ and fewer still where a whole patch differs, and, on `page` (when the
+/// file has one), they differ little enough that with the differences in `spent` the page check
+/// still takes the layers' art (it is added to `spent` when they do). Both are drawn on `layer`, a
+/// layer id no other node has.
 pub(super) fn drawn_alike(live: &Node, drawn: &Node, layer: NodeId, shared: &Shared<'_>, page: Option<Rect>, spent: &mut Spent) -> bool {
     alike_within(live, drawn, live.visual_bounds(), layer, shared, page, spent)
 }
@@ -994,6 +1012,12 @@ pub(super) fn warped_alike(live: &Node, drawn: &Node, layer: NodeId, shared: &Sh
 
 /// [`drawn_alike`], with `live` measured as `reach`.
 fn alike_within(live: &Node, drawn: &Node, reach: Option<Rect>, layer: NodeId, shared: &Shared<'_>, page: Option<Rect>, spent: &mut Spent) -> bool {
+    // Neither has any paint (type with no fill and no stroke, its drawn art the outlines unpainted):
+    // both draw nothing, so they draw alike and add nothing to what the page check sees. Their
+    // shapes aren't compared. Art that paints, however faintly, is compared as before.
+    if !paints(live, 0) && !paints(drawn, 0) {
+        return true;
+    }
     let (Some(a), Some(b)) = (reach, drawn.visual_bounds()) else { return false };
     let region = a.union(b).inflate(2.0, 2.0);
     if !(region.is_finite() && region.width() > 0.0 && region.height() > 0.0) || region.width().max(region.height()) > 1e6 {
@@ -1026,6 +1050,26 @@ fn alike_within(live: &Node, drawn: &Node, reach: Option<Rect>, layer: NodeId, s
     true
 }
 
+/// Does `n`, shown, paint anything: a fill or stroke of its own or of its type with a paint, an
+/// effect, or an object of another kind than a path, type or container (an image, a mesh, a symbol
+/// instance…)? Hidden objects paint nothing. Past `depth` 64 it is taken to paint.
+fn paints(n: &Node, depth: usize) -> bool {
+    if depth > 64 {
+        return true;
+    }
+    if !n.visible {
+        return false;
+    }
+    if n.appearance.items.iter().any(|i| i.visible() && !i.paint().is_none()) || n.appearance.effects.iter().any(|e| e.visible) {
+        return true;
+    }
+    match &n.kind {
+        NodeKind::Path { .. } => false,
+        NodeKind::Text(t) => t.runs.iter().any(|r| !r.style.fill.is_none() || !r.style.stroke.is_none()),
+        _ => n.children().is_none_or(|c| c.iter().any(|c| paints(c, depth + 1))),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1051,6 +1095,41 @@ mod tests {
             Some(NodeKind::Envelope { options, .. }) => Some(options.bounds_margin),
             _ => None,
         }
+    }
+
+    /// A 40 × 40 square at (10, 10) filled black at `opacity`, or with no fill when `None`.
+    fn square_node(id: u64, opacity: Option<f32>) -> Node {
+        let mut bp = BezPath::new();
+        bp.move_to((10.0, 10.0));
+        bp.line_to((50.0, 10.0));
+        bp.line_to((50.0, 50.0));
+        bp.line_to((10.0, 50.0));
+        bp.close_path();
+        let mut n = Node::new(
+            NodeId(id),
+            NodeKind::Path { path: PathData::from_bezpath(&bp), rule: Default::default(), live: None, clipping: false, guide: false },
+        );
+        let mut appearance = (*n.appearance).clone();
+        appearance.items.clear();
+        if let Some(o) = opacity {
+            appearance.items.push(AppearanceItem::Fill(vectorcraft_doc::FillLayer::new(Paint::solid(Color::BLACK))));
+            n.opacity = o;
+        }
+        n.appearance = appearance.into();
+        n
+    }
+
+    /// Two objects with no paint draw alike; two that paint too faintly to ink a pixel (an alpha of
+    /// 8 or less) aren't taken as alike, nor is one with paint against one without.
+    #[test]
+    fn art_with_no_paint_draws_alike_and_faint_art_is_still_compared() {
+        let shared = Shared { patterns: &[], images: &BTreeMap::new() };
+        let alike = |a: &Node, b: &Node| drawn_alike(a, b, NodeId(999), &shared, None, &mut Spent::default());
+        let (none, other_none) = (square_node(1, None), square_node(2, None));
+        assert!(alike(&none, &other_none));
+        let (faint, other_faint) = (square_node(1, Some(0.02)), square_node(2, Some(0.02)));
+        assert!(!alike(&faint, &other_faint));
+        assert!(!alike(&none, &square_node(2, Some(1.0))));
     }
 
     /// "AVA" at 40 points, at (10, 60).

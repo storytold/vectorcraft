@@ -65,11 +65,28 @@ pub fn attach_scripts_dir(session: &mut vectorcraft_engine::Session) {
     }
 }
 
+/// Keep File Info's metadata templates in the `Metadata Templates` folder, which a saved template
+/// makes.
+pub fn attach_metadata_templates_dir(session: &mut vectorcraft_engine::Session) {
+    if let Some(dir) = store_dir("Metadata Templates") {
+        session.attach_metadata_templates_dir(dir);
+    }
+}
+
 /// Have File › New start each category's documents from its profile in the `New Document
 /// Profiles` folder, which `file.newProfiles.edit` makes.
 pub fn attach_new_doc_profiles(session: &mut vectorcraft_engine::Session) {
     if let Some(dir) = store_dir("New Document Profiles") {
         session.attach_new_doc_profiles(dir);
+    }
+}
+
+/// Keep each script's `Folder.userData` in the `Script Data` folder, and the file access people
+/// allow scripts with Always in `Script Grants.json` beside it. Both are made when a script first
+/// needs them.
+pub fn attach_script_data(session: &mut vectorcraft_engine::Session) {
+    if let Some(dir) = store_dir("Script Data") {
+        session.attach_script_data(dir);
     }
 }
 

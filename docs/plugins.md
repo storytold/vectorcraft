@@ -126,7 +126,7 @@ defaults):
 | Module size | 32 MiB | rejected |
 | Linear memory | 512 MiB per instance (input and parameters: at most half) | `memory.grow` returns -1; oversized input or initial memory fails |
 | Output | 64 MiB of JSON | `Limit("output size")` |
-| Instructions (fuel) | 50 M per call + 4,000 per input byte for `vc_run`; a [heavy filter](#heavy-filters) 1 G + 4,000 per byte; an export or import 10 G + 4,000 per byte | `Limit("instruction budget")` |
+| Instructions (fuel) | 50 M per call + 4,000 per input byte for `vc_run`; an object filter with the [Large instruction budget](#instruction-budget-preference) 250 M + 4,000 per byte; a [heavy filter](#heavy-filters) 1 G + 4,000 per byte; an export or import 10 G + 4,000 per byte | `Limit("instruction budget")` |
 | Wall clock | 60 s per filter run, 5 s per live-effect run, 300 s per heavy filter run, export or import (checked every 20 M instructions; the web build reads the page's `performance.now()`) | `Limit("time budget")` |
 | Import input | 128 MiB of the file (`vectorcraft_plugins::import::MAX_INPUT_BYTES`) | the file doesn't open; a larger file named by `path` is not read past that |
 | Call depth | 1,024 frames | trap |
@@ -135,6 +135,22 @@ defaults):
 An export runs where the export runs: with Background Export on, on the export's worker, whose Cancel stops the
 plug-in between two of those 20 M-instruction slices; nothing is written then. An import stops the same way when the
 open it runs in is cancelled, and nothing opens then.
+
+### Instruction budget preference
+
+Preferences › Plug-ins & Scratch Disks › Plug-in Instruction Budget (`pluginInstructionBudget`, VectorCraft's own
+setting) sets the instructions each object filter run gets, from the app, `plugin.run`, a plug-in's commands, scripts
+and MCP alike:
+
+- **Normal** (`normal`, the default): the limits in the table above, 50 M + 4,000 per input byte.
+- **Large** (`large`): 250 M + 4,000 per input byte (`vectorcraft_plugins::LARGE_FUEL`, 5 times Normal). The 60 s time
+  budget, the memory, output and call depth limits stay as they are.
+
+A [heavy filter](#heavy-filters) keeps its 1 G and 300 s with either choice. Live effects, exporters and importers keep
+their own budgets. A change applies to the next run of every installed filter, without installing it again. Cancel and
+the time budget stop a run between two 20 M-instruction slices with either choice. `prefs.set {key:
+"pluginInstructionBudget", value}` takes `normal` or `large` (or the labels Normal and Large) and refuses any other
+value; a saved preferences file with another value reads as Normal.
 
 ### Live effects while a document opens
 
@@ -804,9 +820,10 @@ is a piece drawn by itself, in the order returned, with paints of its own:
   anchors, 256 fills and 256 strokes per piece, 256 stops per gradient), finite numbers in range with nothing clamped
   (color components, tints, offsets, opacities, midpoints 0.13 to 0.87, stops in order of `offset`, stroke
   widths 0 to 1,000 pt, miter limits 1 to 500), and every swatch a solid paint, gradient or stop links to and every
-  pattern named in the document. One fault refuses the whole result: that step of the stack draws its input as it was,
-  the effect record stays, and `plugin.info`'s `lastError` names the plug-in and the field, for example `Test Tone:
-  plug-in output: objects[1].strokes[0].width: …`.
+  pattern named in the document. A gradient stop's `plates` need that stop's own link to a spot swatch of the document;
+  the gradient's `swatch` does not link its stops. One fault refuses the whole result: that step of the stack draws
+  its input as it was, the effect record stays, and `plugin.info`'s `lastError` names the plug-in and the field, for
+  example `Test Tone: plug-in output: objects[1].strokes[0].width: …`.
 - The pieces are never written into the document while it is drawn, measured, previewed, saved or exported. PDF and SVG
   export draw them as the canvas does, from a copy of the document. Object › Expand Appearance writes each piece as an
   ordinary path or compound path with its fills and strokes, as one undo step. Object › Expand of gradient and pattern

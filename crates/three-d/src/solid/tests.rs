@@ -438,9 +438,11 @@ fn malformed_and_degenerate_input_is_bounded() {
         cap: true,
         bevel: Some(Bevel { width: f64::NAN, height: 1e12, repeat: usize::MAX, space: 7.0, ..Bevel::default() }),
         hidden: false,
+        map_surface: true,
     };
     let f = extrude(&p, FillRule::EvenOdd, b, wild, View { rotation_x: f64::NAN, perspective: 900.0, ..front() }).unwrap();
     assert!(f.iter().flat_map(|f| f.contours.iter().flatten()).all(|q| q.x.is_finite() && q.y.is_finite()));
+    assert!(f.iter().filter_map(|f| f.surface.as_ref()).flat_map(|c| c.uv.iter()).all(|q| q.x.is_finite() && q.y.is_finite()));
     assert!(
         inflate(
             &p,
@@ -1457,7 +1459,7 @@ fn touching_contours_keep_their_parts_and_holes() {
 #[test]
 fn an_open_subpath_closes_straight_whether_or_not_contours_meet() {
     let open = vectorcraft_geom::SubPath {
-        anchors: vec![
+        anchors: vectorcraft_geom::anchors![
             vectorcraft_geom::Anchor {
                 p: Point::new(0.0, 0.0),
                 h_in: Point::new(0.0, -50.0),
@@ -1505,7 +1507,7 @@ fn flat_far_and_too_large_merges() {
     assert!(close(area(&cap), 200.0, 1e-3), "joined, not lost");
     // Handles count too: a lobe whose handles reach 1.3e8 widens the boolean's snapping to 1.85e-6.
     let lobe = vectorcraft_geom::SubPath {
-        anchors: vec![
+        anchors: vectorcraft_geom::anchors![
             vectorcraft_geom::Anchor {
                 p: Point::new(0.0, 1000.0),
                 h_in: Point::new(0.0, 1000.0),
@@ -1604,7 +1606,7 @@ fn meets_within_twice_the_boolean_tolerance() {
     // What the boolean is given decides the tolerance: an open subpath's end handles (closed
     // straight) and a one-anchor subpath (skipped) don't widen it.
     let ends = vectorcraft_geom::SubPath {
-        anchors: vec![
+        anchors: vectorcraft_geom::anchors![
             vectorcraft_geom::Anchor {
                 p: Point::new(0.0, 0.0),
                 h_in: Point::new(1e9, 0.0),
@@ -1620,7 +1622,8 @@ fn meets_within_twice_the_boolean_tolerance() {
         ],
         closed: false,
     };
-    let speck = vectorcraft_geom::SubPath { anchors: vec![vectorcraft_geom::Anchor::corner(Point::new(1e9, 1e9))], closed: true };
+    let speck =
+        vectorcraft_geom::SubPath { anchors: vectorcraft_geom::anchors![vectorcraft_geom::Anchor::corner(Point::new(1e9, 1e9))], closed: true };
     let quiet = PathData::new(vec![ends, speck]);
     assert_eq!(rings::touch(&rings::closed_straight(&quiet)), 1e-6);
     // A closing-side handle at either end alone is enough to close the subpath straight.
@@ -1653,7 +1656,7 @@ fn the_merged_rings_are_turned_as_a_whole() {
 #[test]
 fn a_one_anchor_subpath_builds_nothing() {
     let loop_ = vectorcraft_geom::SubPath {
-        anchors: vec![vectorcraft_geom::Anchor {
+        anchors: vectorcraft_geom::anchors![vectorcraft_geom::Anchor {
             p: Point::new(0.0, 0.0),
             h_in: Point::new(-20.0, 30.0),
             h_out: Point::new(20.0, 30.0),

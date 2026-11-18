@@ -497,6 +497,48 @@ pub fn map_nonlinear(path: &PathData, max_piece: f64, f: impl Fn(Point) -> Point
 /// where pieces of `max_piece` would make more, the pieces grow until they don't ([`fit_piece`]),
 /// a coarser approximation of the image curve. Geometry effects map within their anchor budget.
 pub fn map_nonlinear_within(path: &PathData, max_piece: f64, max: usize, f: impl Fn(Point) -> Point) -> PathData {
+    map_pieces_within(path, max_piece, max, &f, |_, h| f(h))
+}
+
+/// [`map_nonlinear_within`] with each handle mapped along `f`'s derivative at its point
+/// ([`mapped_handle`]) rather than as a point of its own: where `f` turns quickly (Twist), handles
+/// mapped as points point different ways on the two sides of a join and the curve kinks there
+/// (#7069); along the derivative, the pieces on both sides leave each join in one direction.
+pub fn map_smooth_within(path: &PathData, max_piece: f64, max: usize, f: impl Fn(Point) -> Point) -> PathData {
+    map_pieces_within(path, max_piece, max, &f, |p, h| mapped_handle(&f, p, h))
+}
+
+/// [`map_nonlinear_within`] with `handle(point, handle)` supplying each mapped handle position.
+pub fn map_handles_within(
+    path: &PathData,
+    max_piece: f64,
+    max: usize,
+    f: impl Fn(Point) -> Point,
+    handle: impl Fn(Point, Point) -> Point,
+) -> PathData {
+    map_pieces_within(path, max_piece, max, &f, handle)
+}
+
+/// Handle `h` of point `p` mapped through `f`: `f(p)` plus `f`'s derivative at `p` along `h - p`
+/// (a central difference), so the image curve leaves `f(p)` the way `f` takes the curve.
+fn mapped_handle(f: &impl Fn(Point) -> Point, p: Point, h: Point) -> Point {
+    let v = h - p;
+    let len = v.hypot();
+    // A retracted handle stays retracted, and a non-finite one has no direction to follow.
+    if len.is_nan() || len <= 0.0 || len.is_infinite() {
+        return f(p);
+    }
+    // A thousandth of the handle, or more where the coordinates are so large that so short a
+    // step would round away (#7069): the samples stay a billionth of the coordinates apart, and
+    // at most at the handle's own end.
+    let size = p.x.abs().max(p.y.abs()).max(1.0);
+    let step = (1e-3f64).max(size * 1e-9 / len).min(1.0);
+    let d = (f(p + v * step) - f(p - v * step)) / (2.0 * step);
+    f(p) + d
+}
+
+/// [`map_nonlinear_within`]'s pieces, with `handle(point, handle)` giving each mapped handle.
+fn map_pieces_within(path: &PathData, max_piece: f64, max: usize, f: &impl Fn(Point) -> Point, handle: impl Fn(Point, Point) -> Point) -> PathData {
     let mut max_piece = max_piece.max(1e-3);
     // Each segment adds one anchor per piece past its first.
     let room = max.saturating_sub(path.anchor_count());
@@ -516,20 +558,21 @@ pub fn map_nonlinear_within(path: &PathData, max_piece: f64, max: usize, f: impl
         let mut pending_in: Option<Point> = None;
         for i in 0..n {
             let a = &sp.anchors[i];
-            let h_in = pending_in.take().unwrap_or_else(|| f(a.h_in));
-            res.push(Anchor { p: f(a.p), h_in, h_out: f(a.h_out), kind: a.kind });
+            let h_in = pending_in.take().unwrap_or_else(|| handle(a.p, a.h_in));
+            res.push(Anchor { p: f(a.p), h_in, h_out: handle(a.p, a.h_out), kind: a.kind });
             if i < segs {
                 let c = seg_cubic(sp, i);
                 let k = pieces(poly_len(&c), max_piece, MAX_PIECES);
                 for j in 0..k {
-                    let sub = c.subsegment((j as f64 / k as f64)..((j + 1) as f64 / k as f64));
+                    // Evaluating an unchanged curve can overflow even when its control points are finite.
+                    let sub = if k == 1 { c } else { c.subsegment((j as f64 / k as f64)..((j + 1) as f64 / k as f64)) };
                     if let Some(last) = res.last_mut() {
-                        last.h_out = f(sub.p1);
+                        last.h_out = handle(sub.p0, sub.p1);
                     }
                     if j + 1 < k {
-                        res.push(Anchor { p: f(sub.p3), h_in: f(sub.p2), h_out: f(sub.p3), kind: Default::default() });
+                        res.push(Anchor { p: f(sub.p3), h_in: handle(sub.p3, sub.p2), h_out: f(sub.p3), kind: Default::default() });
                     } else {
-                        pending_in = Some(f(sub.p2));
+                        pending_in = Some(handle(sub.p3, sub.p2));
                     }
                 }
             }
@@ -581,4 +624,54 @@ pub(super) fn resample(poly: &[Point], m: usize) -> Vec<Point> {
         out.push(poly[i].lerp(poly[i + 1], ((s - cum[i]) / seg).clamp(0.0, 1.0)));
     }
     out
+}
+
+#[cfg(test)]
+mod handle_tests {
+    use super::*;
+
+    #[test]
+    fn an_unsplit_curve_keeps_its_finite_control_points() {
+        let start = Point::new(1e308, 0.0);
+        let end = Point::new(1.03e308, 0.0);
+        let path = PathData::new(vec![SubPath::new(
+            vec![Anchor::with_handles(start, start, Point::new(1.01e308, 1.0)), Anchor::with_handles(end, Point::new(1.02e308, 1.0), end)],
+            false,
+        )]);
+        assert_eq!(map_handles_within(&path, 1.0, 2, |p| p, |_, h| h), path);
+    }
+
+    #[test]
+    fn rounded_samples_preserve_a_smooth_interior_join() {
+        let center = Point::new(1e16, 0.0);
+        let path = PathData::new(vec![SubPath::new(
+            vec![
+                Anchor::corner(center + vectorcraft_geom::kurbo::Vec2::new(-18.0, 0.0)),
+                Anchor::with_handles(
+                    center,
+                    center + vectorcraft_geom::kurbo::Vec2::new(-6.0, 0.0),
+                    center + vectorcraft_geom::kurbo::Vec2::new(6.0, 0.0),
+                ),
+                Anchor::corner(center + vectorcraft_geom::kurbo::Vec2::new(18.0, 0.0)),
+            ],
+            false,
+        )]);
+        let mapped = map_smooth_within(&path, f64::INFINITY, 3, |p| Point::new(p.x, p.y + (p.x - center.x).powi(2) * 0.1));
+        let join = &mapped.subpaths[0].anchors[1];
+        let incoming = join.p - join.h_in;
+        let outgoing = join.h_out - join.p;
+        assert!(incoming.cross(outgoing).abs() < 1e-9, "{incoming:?} {outgoing:?}");
+        assert!(incoming.dot(outgoing) > 0.0);
+    }
+
+    #[test]
+    fn a_midpoint_rounded_to_an_endpoint_keeps_the_handle_direction() {
+        for x in [1e16, 1e16 + 2.0, -1e16] {
+            for offset in [-6.0, -2.0, 2.0, 6.0] {
+                let p = Point::new(x, 0.0);
+                let h = Point::new(x + offset, 0.0);
+                assert_eq!(mapped_handle(&|point| point, p, h), h);
+            }
+        }
+    }
 }

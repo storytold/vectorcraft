@@ -89,7 +89,13 @@ fn save_panels_show_the_file_type_they_write() {
     app.run("shortcuts.export", json!({})).unwrap();
     assert_eq!(last_shown(&shown), FilePick::filters([("Shortcut sets", &["json"][..])]), "Keyboard Shortcuts › Export…");
     app.run("shortcuts.exportText", json!({})).unwrap();
-    assert_eq!(last_shown(&shown), FilePick::filters([("Text", &["txt"][..])]), "Keyboard Shortcuts › Export Text…");
+    assert_eq!(
+        last_shown(&shown),
+        FilePick::filters([("Text", &["txt"][..]), ("Shortcut sheet", &["pdf"][..]), ("CSV", &["csv"][..])]),
+        "Keyboard Shortcuts › Export Text…"
+    );
+    app.run("shortcuts.exportText", json!({"format": "sheet"})).unwrap();
+    assert_eq!(last_shown(&shown), FilePick::filters([("Shortcut sheet", &["pdf"][..])]), "shortcuts.exportText with a format");
     let presets = [
         ("pdf.preset.save", json!({"name": "Mine"}), "pdf.preset.export", "PDF presets", pdfcmds::PRESET_EXTS),
         ("print.presets.save", json!({"name": "Mine"}), "print.presets.export", "Print presets", printpresets::PRESET_EXTS),

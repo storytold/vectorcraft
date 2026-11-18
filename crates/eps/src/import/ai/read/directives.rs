@@ -242,10 +242,13 @@ impl<'a> Reader<'a> {
             && let Ok(n) = v.trim().parse::<u8>()
         {
             self.ruler_units = Some(n);
+        } else if self.frames.is_empty() && line.starts_with("AI5_FileFormat") {
+            self.file_format = true;
         } else if let Some(v) = line.strip_prefix("AI5_ArtSize:") {
             self.art_size = two(v);
         } else if let Some(v) = line.strip_prefix("AI3_TemplateBox:").or_else(|| line.strip_prefix("%TemplateBox:")) {
-            self.template_center = two(v);
+            // The center of the box (a file without a template writes it with no width or height).
+            self.template_center = four(v).map(|[x0, y0, x1, y1]| ((x0 + x1) / 2.0, (y0 + y1) / 2.0)).or_else(|| two(v));
             self.template = four(v).or(self.template);
         } else if let Some(v) = line.strip_prefix("AI24_LargeCanvasScale:") {
             self.large_canvas_scale(v);
@@ -834,11 +837,13 @@ impl<'a> Reader<'a> {
     }
 
     /// Lend `sub`, a reader of a definition, what this import may still spend on laying out blends
-    /// and checking envelopes ([`Reader::take_back_budgets`] takes back what is left).
+    /// and checking envelopes and aligned dashes ([`Reader::take_back_budgets`] takes back what is
+    /// left).
     fn lend_budgets(&mut self, sub: &mut Reader<'_>) {
         sub.blend_budget = self.blend_budget;
         sub.envelope_checks = self.envelope_checks;
         sub.envelope_spent = std::mem::take(&mut self.envelope_spent);
+        sub.dash_checks = self.dash_checks;
     }
 
     /// Take back from `sub` what [`Self::lend_budgets`] lent it, less what it spent.
@@ -846,6 +851,7 @@ impl<'a> Reader<'a> {
         self.blend_budget = sub.blend_budget;
         self.envelope_checks = sub.envelope_checks;
         self.envelope_spent = std::mem::take(&mut sub.envelope_spent);
+        self.dash_checks = sub.dash_checks;
     }
 
     /// In a pattern's definition, the operands of its first operator start with its head,

@@ -28,7 +28,9 @@ use vectorcraft_tools::{PaintDefaults, Tool};
 
 pub use cmd::clipboard::{Clipboard, SourceLayer};
 pub use cmd::create::constrain_click;
-pub use cmd::distortcmds::perspective_click;
+pub use cmd::distortcmds::{perspective_click, width_point_pair};
+pub use cmd::flare::flare_settings;
+pub use cmd::graph::{GraphTypeSubject, calculated_axes as graph_calculated_axes, graph_type_subject};
 pub use cmd::params::{check_keys, check_params};
 pub use cmd::pathops::auto_simplify_level;
 pub use cmd::rasterfx::{export_pdf, flatten_raster_effects};
@@ -178,9 +180,16 @@ pub struct Session {
     /// The Scripts folder, whose scripts File › Scripts lists; `None`: no folder
     /// ([`Session::attach_scripts_dir`]).
     scripts_dir: Option<std::path::PathBuf>,
+    /// The folder of File Info's metadata templates; `None`: no folder
+    /// ([`Session::attach_metadata_templates_dir`]).
+    metadata_templates_dir: Option<std::path::PathBuf>,
     /// The folder of the New Document profiles `file.new` starts documents from; `None`: none,
     /// every document starts with the defaults ([`Session::attach_new_doc_profiles`]).
     new_doc_profile_dir: Option<std::path::PathBuf>,
+    /// The folder of each script's data folder (`Folder.userData`), beside which the grants file
+    /// keeps the file access people allowed scripts; `None`: no folder
+    /// ([`Session::attach_script_data`]).
+    script_data_dir: Option<std::path::PathBuf>,
     /// A filter's output that a run made in the background handed in for `plugin.run` to apply
     /// ([`cmd::plugin::FilterRun::hand_in`]); the next `plugin.run` takes it.
     plugin_output: Option<cmd::plugin::HandedIn>,
@@ -190,7 +199,8 @@ pub struct Session {
     /// `plugin.install` takes `grant` and `allowHeavy` from any request
     /// ([`Session::allow_plugin_grants_from_requests`]).
     plugin_grants_from_requests: bool,
-    /// URLs recently given in the Attributes panel (`attributes.set {url}`), newest first; not saved.
+    /// URLs recently given in the Attributes panel (`attributes.set {url}`), newest first, at most
+    /// [`cmd::RECENT_URLS`]; not saved.
     pub recent_urls: Vec<String>,
     /// The saved tracing presets' revision and latest changes ([`Session::trace_presets_revision`]).
     pub(crate) trace_preset_changes: cmd::TracePresetChanges,
@@ -244,6 +254,8 @@ pub struct Session {
     /// keyboard: those files, and the files they link to, are read under these roots, so a queue
     /// an agent loaded never reads beyond what it was given.
     pub(crate) place_queue_roots: Option<std::sync::Arc<file_access::AutomationRoots>>,
+    /// How many times the place cursor has been loaded ([`Session::place_queue_loads`]).
+    pub(crate) place_queue_loads: u64,
     /// While [`Session::import_image_read`] runs `clipboard.importImage`: the image read for it,
     /// which the command loads instead of reading `dataBase64`; `None` otherwise.
     pub(crate) image_hand_off: Option<cmd::clipboard::ImageRead>,
@@ -344,9 +356,14 @@ pub struct Session {
     /// The Global Edit Options Start Global Edit matches with (`select.globalEditOptions`); not
     /// saved.
     pub global_edit_options: cmd::globaledit::Options,
+    /// The attribute Select Similar Objects selects by (`select.similar`), one of
+    /// [`cmd::SIMILAR`]; not saved.
+    pub select_similar: &'static str,
     /// Set while [`Session::tool_typed_text`] passes keyboard input to the active tool
     /// ([`vectorcraft_tools::ToolContext::typed_from_keyboard`]).
     keyboard_text: bool,
+    /// The messages `app.toast` and [`Session::toast`] queued for the app to show; not saved.
+    pub(crate) toasts: cmd::toast::Queue,
 }
 
 impl Default for Session {
@@ -402,7 +419,7 @@ use history::history_budget_for;
 pub use history::{History, HistoryEntry, NamedStep, default_history_budget};
 pub(crate) use interaction::PreviewCopies;
 pub use interaction::{Interaction, LastTransform, UndoGroup, UndoScope};
-pub use prefs::{DrawMode, Prefs};
+pub use prefs::{DrawMode, KEY_HOLD_DELAY, KEY_HOLD_DELAY_RANGE, PluginBudget, Prefs};
 pub use sanity::TOO_DEEP;
 pub(crate) use sanity::{deselect_hidden, is_guide_path};
 #[cfg(test)]
