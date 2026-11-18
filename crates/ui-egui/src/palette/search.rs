@@ -829,6 +829,10 @@ pub(crate) fn menu_homes(native: bool) -> HashMap<String, (String, &'static str)
             match it {
                 menus::Item::Cmd(label, id, p) if !skip.contains(id) => {
                     out.entry(key(id, p)).or_insert_with(|| (path.join(" › "), *label));
+                    // Window › Learn runs `window.learn`, which is a result of its own too.
+                    if *id == "window.learn" {
+                        out.entry((*id).to_string()).or_insert_with(|| (path.join(" › "), *label));
+                    }
                 }
                 menus::Item::Sub(name, children) => {
                     path.push(name);
@@ -879,6 +883,8 @@ mod tests {
             kind: kind(id, home.as_deref()),
             home,
             menu_item: "",
+            label_at: 0,
+            names_item: false,
         }
     }
 

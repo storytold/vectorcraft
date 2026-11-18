@@ -287,6 +287,12 @@ pub(crate) struct Entry {
     menu_item: &'static str,
     /// The entry's kind, in the order [`search::kind`] ranks kinds.
     kind: u8,
+    /// Where the row's label starts in `shown`: after the menu path, which the row shows as the
+    /// entry's home instead ([`home_text`]), or 0.
+    label_at: usize,
+    /// Does the row's home name the item of the menu bar after its menu path, since the item's
+    /// label differs from the entry's?
+    names_item: bool,
 }
 
 /// The palette's entries, the index a query is looked up in, and the last query's ranked results.
@@ -392,7 +398,16 @@ fn build_in(lang: crate::i18n::Lang, native: bool) -> Vec<Entry> {
             }
             let (home, menu_item) = homes.get(&d.id).map_or((None, ""), |(path, item)| (Some(path.clone()), *item));
             let kind = search::kind(&d.id, home.as_deref());
-            Entry { id: d.id, shortcut: d.shortcut, shown, haystack, home, menu_item, kind }
+            // A row with a home shows its label without the menu path in front of it. A path that
+            // makes the name distinct ([`distinct_names`]) stays, unless the row's home shows that
+            // same path or it is the Tools in front of a tool's name, which the tool's kind and
+            // toolbar show.
+            let tool = d.id.starts_with("tool:");
+            let drop = if d.in_context { home.as_deref() == Some(d.path.as_str()) || (tool && d.path == "Tools") } else { home.is_some() || tool };
+            let prefix = format!("{} › ", shown_label(lang, &d.path));
+            let label_at = if drop && !d.path.is_empty() && shown.starts_with(&prefix) { prefix.len() } else { 0 };
+            let names_item = !menu_item.is_empty() && menu_item != d.label;
+            Entry { id: d.id, shortcut: d.shortcut, shown, haystack, home, menu_item, kind, label_at, names_item }
         })
         .collect()
 }
@@ -463,10 +478,87 @@ const TOP: f32 = 90.0;
 /// The space kept between the popup and the bottom of the window, in points.
 const BOTTOM_GAP: f32 = 8.0;
 
-/// What a result row shows and screen readers read: its name, and its shortcut after a comma.
-fn row_label(e: &Entry) -> String {
+/// The point size of the kind icon at the start of a result row.
+const KIND_ICON: f32 = 14.0;
+/// The point size of the home's text after a row's label.
+const HOME_TEXT: f32 = 11.0;
+
+/// The kind of result `e` is: the icon its row starts with and the word screen readers read
+/// first, in the UI language. A tool shows its own icon.
+fn kind_of(e: &Entry) -> (&'static str, &'static str) {
+    match e.id.split_once(':') {
+        Some(("tool", tool)) => (vectorcraft_tools::tool_info(tool).map_or("square-dashed", |t| crate::icons::tool_icon(t.icon)), tl!("Tool")),
+        Some(("panel", _)) => ("layout-grid", tl!("Panel")),
+        Some(("effect", _)) => ("dc-fx", tl!("Effect")),
+        Some(("plugin", _)) => ("dc-filter", tl!("Filter")),
+        _ => ("menu", tl!("Command")),
+    }
+}
+
+/// The label a result row shows: its name without the menu path its home shows.
+fn label_of(e: &Entry) -> &str {
+    e.shown.get(e.label_at..).unwrap_or(&e.shown)
+}
+
+/// Where result `e` lives, as its row shows it: a tool's place on the toolbars ([`tool_home`]),
+/// the menu path of the item of the menu bar that runs it (with the item's label when it differs
+/// from the result's), or "No menu item".
+fn home_text(app: &VectorcraftApp, e: &Entry) -> String {
+    let lang = crate::i18n::current();
+    if let Some(tool) = e.id.strip_prefix("tool:") {
+        return tool_home(app, tool);
+    }
+    match &e.home {
+        Some(path) if e.names_item => format!("{} › {}", shown_label(lang, path), crate::i18n::tr(lang, e.menu_item)),
+        Some(path) => shown_label(lang, path),
+        None => tl!("No menu item").to_string(),
+    }
+}
+
+/// Where `tool` is in the current layout: "Toolbar" for its button on the Tools panel, or the name
+/// of the toolbar made with New Toolbar that holds it, followed by ", in the <tool> group", naming
+/// the tool its slot's button shows, when the tool is hidden in that slot's group; "All Tools"
+/// when no toolbar holds it. A toolbar shown now comes first: the Tools panel, then the toolbars
+/// made with New Toolbar; then a hidden Tools panel, then hidden toolbars made with New Toolbar.
+/// Toolbars are hidden in Presentation Mode and while Tab hides the panels.
+fn tool_home(app: &VectorcraftApp, tool: &str) -> String {
+    let lang = crate::i18n::current();
+    let place = |name: &str, shown: Option<&str>| match shown.filter(|s| *s != tool).and_then(vectorcraft_tools::tool_info) {
+        // The tool goes in first, so a toolbar named with a placeholder keeps its name.
+        Some(t) => crate::i18n::fmt(tl!("{toolbar}, in the {tool} group"), &[("tool", crate::i18n::tr(lang, t.label)), ("toolbar", name)]),
+        None => name.to_string(),
+    };
+    let toolbars_shown = app.ui.screen_mode < 3 && app.ui.tab_hid.is_none();
+    let main = crate::toolbar::slots(app).into_iter().map(|(_, s)| s).find(|s| s.contains(&tool));
+    let main = main.map(|slot| place(tl!("Toolbar"), Some(crate::toolbar::shown_tool(app, &slot))));
+    let active = app.session.tool_id();
+    let custom = |shown: bool| {
+        app.ui.custom_toolbars.iter().filter(|b| b.shown == shown).find_map(|bar| {
+            let slot = bar.slots.iter().find(|s| s.iter().any(|t| t == tool))?;
+            let tools: Vec<&'static str> = slot.iter().filter_map(|id| vectorcraft_tools::tool_info(id).map(|t| t.id)).collect();
+            Some(place(&bar.name, crate::custom_toolbars::shown_tool(bar, active, &tools)))
+        })
+    };
+    if toolbars_shown {
+        if app.ui.toolbar
+            && let Some(main) = &main
+        {
+            return main.clone();
+        }
+        if let Some(bar) = custom(true) {
+            return bar;
+        }
+    }
+    main.or_else(|| custom(true)).or_else(|| custom(false)).unwrap_or_else(|| tl!("All Tools").to_string())
+}
+
+/// What screen readers read for a result row, and its hover text: its kind, its label, where it
+/// lives (`home`) and its shortcut, after commas.
+fn row_label(e: &Entry, home: &str) -> String {
     let shortcut = menus::shown_shortcut(&e.shortcut);
-    if shortcut.is_empty() { e.shown.clone() } else { format!("{}, {shortcut}", e.shown) }
+    let kind = kind_of(e).1;
+    let start = format!("{kind}, {}, {home}", label_of(e));
+    if shortcut.is_empty() { start } else { format!("{start}, {shortcut}") }
 }
 
 /// The line under the results: how many results matched, how many of them the list holds when it
@@ -518,6 +610,41 @@ fn name_galley(painter: &egui::Painter, name: &str, font: egui::FontId, color: e
     let mut job = egui::text::LayoutJob::simple_singleline(name.to_owned(), font, color);
     job.wrap = egui::text::TextWrapping { max_width: width.max(0.0), max_rows: 1, break_anywhere: true, overflow_character: Some('…') };
     painter.layout_job(job)
+}
+
+/// A result row's label and home laid out in `width` points, and whether either was cut short. The
+/// home goes after the label in the smaller dim text and is cut first; when the label alone does
+/// not fit, the home is left out and the label is cut before the id it shows after its name
+/// ([`distinct_names`]), which stays whole unless the id alone is wider than the row.
+fn row_galleys(
+    painter: &egui::Painter,
+    e: &Entry,
+    home: &str,
+    font: egui::FontId,
+    color: egui::Color32,
+    dim: egui::Color32,
+    width: f32,
+) -> (Arc<egui::Galley>, Option<Arc<egui::Galley>>, bool) {
+    let label = label_of(e);
+    let full = name_galley(painter, label, font.clone(), color, f32::INFINITY);
+    let room = width - full.size().x - 10.0;
+    if full.size().x <= width {
+        if room < HOME_TEXT {
+            return (full, None, !home.is_empty());
+        }
+        let home = name_galley(painter, home, egui::FontId::new(HOME_TEXT, font.family), dim, room);
+        let cut = home.elided;
+        return (full, Some(home), cut);
+    }
+    let suffix = format!(" ({})", e.id);
+    let (head, suffix) = match label.strip_suffix(suffix.as_str()) {
+        Some(head) => (head, suffix),
+        None => (label, String::new()),
+    };
+    let suffix_width = name_galley(painter, &suffix, font.clone(), color, f32::INFINITY).size().x;
+    let cut_head = name_galley(painter, head, font.clone(), color, width - suffix_width);
+    let shown: String = cut_head.rows.iter().flat_map(|r| r.glyphs.iter().map(|g| g.chr)).collect();
+    (name_galley(painter, &format!("{shown}{suffix}"), font, color, width), None, true)
 }
 
 /// The scroll offset that keeps row `sel` in a list `view` points tall that was scrolled to `offset`.
@@ -765,7 +892,8 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 let rank = if sel + 1 == matches.len() { kept.unwrap_or(sel) } else { sel };
                 let pos = (rank + 1).to_string();
                 let of = total.to_string();
-                let said = crate::i18n::fmt(tl!("{pos} of {total}: {name}"), &[("pos", &pos), ("total", &of), ("name", &row_label(e))]);
+                let name = row_label(e, &home_text(app, e));
+                let said = crate::i18n::fmt(tl!("{pos} of {total}: {name}"), &[("pos", &pos), ("total", &of), ("name", &name)]);
                 ui.ctx().accesskit_node_builder(r.id, |node| node.set_description(said));
             }
             if n > 0 {
@@ -790,16 +918,29 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                             }
                             let font = egui::TextStyle::Body.resolve(ui.style());
                             let shortcut = menus::shown_shortcut(&e.shortcut);
+                            let home = home_text(app, e);
+                            let said = row_label(e, &home);
                             let p = ui.painter();
                             let shortcut_at = rect.right_center() - egui::vec2(8.0, 0.0);
                             let used = p.text(shortcut_at, egui::Align2::RIGHT_CENTER, &shortcut, font.clone(), t.text_dim);
                             let name_end = if shortcut.is_empty() { rect.right() - 8.0 } else { used.left() - 12.0 };
-                            let name_at = rect.left() + 8.0;
-                            let name = name_galley(p, &e.shown, font, t.text, name_end - name_at);
-                            p.galley(egui::pos2(name_at, rect.center().y - name.size().y / 2.0), name, t.text);
+                            let icon = egui::Rect::from_center_size(
+                                egui::pos2(rect.left() + 8.0 + KIND_ICON / 2.0, rect.center().y),
+                                egui::Vec2::splat(KIND_ICON),
+                            );
+                            crate::icons::paint(ui, kind_of(e).0, icon, t.icon);
+                            let name_at = icon.right() + 6.0;
+                            let (label, home, cut) = row_galleys(p, e, &home, font, t.text, t.text_dim, name_end - name_at);
+                            let home_at = name_at + label.size().x + 10.0;
+                            p.galley(egui::pos2(name_at, rect.center().y - label.size().y / 2.0), label, t.text);
+                            if let Some(home) = home {
+                                p.galley(egui::pos2(home_at, rect.center().y - home.size().y / 2.0), home, t.text_dim);
+                            }
+                            // A row whose text is cut short shows all of it while the pointer rests on it.
+                            let resp = if cut { resp.on_hover_text(said.clone()) } else { resp };
                             // `WidgetInfo::selected` reaches screen readers as a toggled state, so the
                             // row sets the selected state on its node itself.
-                            resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::ListItem, true, row_label(e)));
+                            resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::ListItem, true, said.clone()));
                             ui.ctx().accesskit_node_builder(resp.id, |node| node.set_selected(on));
                             if resp.clicked() {
                                 run = Some(e.id.clone());
@@ -1959,6 +2100,12 @@ mod tests {
             self.ctx.memory(|m| m.area_rect(egui::Id::unique("palette"))).unwrap()
         }
 
+        /// What screen readers read for result `id`'s row.
+        fn said(&self, id: &str) -> String {
+            let entries = entries(&self.ctx, Lang::EN);
+            entries.iter().find(|e| e.id == id).map(|e| row_label(e, &home_text(&self.app, e))).unwrap()
+        }
+
         /// The results the palette lists for its query.
         fn listed(&self) -> Vec<String> {
             let entries = entries(&self.ctx, Lang::EN);
@@ -2067,8 +2214,7 @@ mod tests {
         let nodes = open.press(egui::Key::ArrowDown, 15);
         assert_eq!(open.highlighted(), 15);
         let lit: Vec<_> = rows(&nodes).into_iter().filter(|r| r.1).collect();
-        let entries = entries(&open.ctx, Lang::EN);
-        let want = entries.iter().find(|e| e.id == listed[15]).map(row_label).unwrap();
+        let want = open.said(&listed[15]);
         assert_eq!(lit.len(), 1, "{lit:?}");
         assert_eq!(lit[0].0, want);
         let popup = open.popup();
@@ -2143,7 +2289,7 @@ mod tests {
         let lit: Vec<_> = rows(&nodes).into_iter().filter(|r| r.1).collect();
         assert_eq!(lit.len(), 1, "{lit:?}");
         assert!(lit[0].2 >= f64::from(popup.top()) && lit[0].3 <= f64::from(popup.bottom()), "{lit:?} in {popup:?}");
-        assert_eq!(lit[0].0, row_label(entries(&open.ctx, Lang::EN).iter().find(|e| e.id == open.listed()[sel]).unwrap()));
+        assert_eq!(lit[0].0, open.said(&open.listed()[sel]));
     }
 
     /// Page Down, Up and Enter pressed in one frame move the highlight in that order, and Enter
@@ -2236,7 +2382,7 @@ mod tests {
         assert!(open.repaint, "the frame that moved the highlight asks for another");
         let nodes = open.frame(vec![]);
         let lit: Vec<String> = rows(&nodes).into_iter().filter(|r| r.1).map(|r| r.0).collect();
-        let label = entries.iter().find(|e| e.id == listed[3]).map(row_label).unwrap();
+        let label = open.said(&listed[3]);
         assert_eq!(lit, std::slice::from_ref(&label));
         assert_eq!(field_description(&nodes), format!("4 of {}: {label}", matching(&entries, "select").len()));
     }
@@ -2256,6 +2402,206 @@ mod tests {
             assert!(!short.elided);
         });
         out.textures_delta.clear();
+    }
+
+    /// The label and home of English result `id`'s row with the app's current layout.
+    fn label_and_home(app: &VectorcraftApp, id: &str) -> (String, String) {
+        crate::i18n::set_current(Lang::EN);
+        let entries = build(Lang::EN);
+        let e = entries.iter().find(|e| e.id == id).unwrap_or_else(|| panic!("{id} is listed"));
+        (label_of(e).to_string(), home_text(app, e))
+    }
+
+    /// A row shows its label without the menu path, and the menu path of the item of the menu bar
+    /// that runs it after it: with that item's label when it differs, and "No menu item" for a
+    /// command no item runs.
+    #[test]
+    fn rows_show_where_each_result_lives() {
+        let app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+        let row = |id: &str| label_and_home(&app, id);
+        assert_eq!(row("effect:stylize.roundCorners"), ("Round Corners…".into(), "Effect › Stylize".into()));
+        assert_eq!(row("panel:layers"), ("Layers".into(), "Window".into()));
+        assert_eq!(row("object.group"), ("Group".into(), "Object".into()));
+        assert_eq!(row("app.quit").1, "File › Exit");
+        // Window › Learn runs the Learn command as well as showing the Learn panel.
+        assert_eq!(row("window.learn").1, "Window");
+        let entries = build(Lang::EN);
+        let learn = entries.iter().find(|e| e.id == "window.learn").expect("the Learn command");
+        assert_eq!(learn.kind, search::kind("object.group", Some("Object")), "the Learn command ranks as a command of the menu bar");
+        let none = entries.iter().find(|e| e.home.is_none() && !e.id.starts_with("tool:")).expect("a command with no menu item");
+        assert_eq!((label_of(none), home_text(&app, none).as_str()), (none.shown.as_str(), "No menu item"));
+        // A path that keeps two names apart stays, unless the home shows it: the Knife tool's row
+        // drops the Tools in front of its name, and an Other Library… row shows its library menu
+        // as its home only.
+        assert_eq!(row("tool:knife").0, "Knife");
+        let other: Vec<(&str, String)> =
+            entries.iter().filter(|e| e.shown.ends_with("Other Library…")).map(|e| (label_of(e), home_text(&app, e))).collect();
+        assert!(other.len() >= 2 && other.iter().all(|(label, home)| *label == "Other Library…" && home.starts_with("Window › ")), "{other:?}");
+        let kept = entries.iter().find(|e| e.label_at == 0 && e.shown.contains(" › ")).expect("a row that keeps its path");
+        assert!(kept.home.as_deref().is_none_or(|h| !kept.shown.starts_with(&format!("{h} › "))), "{}", kept.shown);
+        for e in entries.iter().filter(|e| e.label_at > 0) {
+            assert!(e.home.is_some() || e.id.starts_with("tool:"), "{} has no home but drops its path", e.id);
+        }
+    }
+
+    /// No two results' rows show the same kind, label and home, in any language, with the menu bar
+    /// in the window or the native one.
+    #[test]
+    fn no_two_rows_read_alike() {
+        let app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+        let mut alike = vec![];
+        for lang in Lang::all() {
+            crate::i18n::set_current(lang);
+            for native in [false, true] {
+                let mut seen = std::collections::HashMap::new();
+                for e in &build_in(lang, native) {
+                    let row = (kind_of(e).1, label_of(e).to_string(), home_text(&app, e));
+                    if let Some(other) = seen.insert(row.clone(), e.id.clone())
+                        && other != e.id
+                    {
+                        alike.push(format!("{} (native {native}): {other} and {}: {row:?}", lang.code(), e.id));
+                    }
+                }
+            }
+        }
+        crate::i18n::set_current(Lang::EN);
+        assert!(alike.is_empty(), "{}", alike.join("\n"));
+    }
+
+    /// Every catalog translates the words a row's kind and home are read with.
+    #[test]
+    fn catalogs_translate_the_kind_and_home_words() {
+        let words = ["Tool", "Panel", "Effect", "Filter", "Command", "Toolbar", "{toolbar}, in the {tool} group", "All Tools", "No menu item"];
+        let missing: Vec<String> = Lang::all()
+            .filter(|l| *l != Lang::EN)
+            .flat_map(|l| words.iter().filter(move |w| !crate::i18n::has(l, w)).map(move |w| format!("{}: {w}", l.code())))
+            .collect();
+        assert!(missing.is_empty(), "{missing:?}");
+    }
+
+    /// A tool's row names the toolbar it is on, and the tool its slot's button shows while it is
+    /// hidden in that slot's group. A toolbar shown now comes before a hidden Tools panel, which
+    /// comes before a hidden toolbar made with New Toolbar.
+    #[test]
+    fn a_tool_row_names_its_toolbar_slot() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+        let home = |app: &VectorcraftApp, id: &str| label_and_home(app, id).1;
+        assert_eq!(home(&app, "tool:groupSelection"), "Toolbar, in the Direct Selection Tool group");
+        assert_eq!(home(&app, "tool:directSelection"), "Toolbar");
+        app.select_tool("groupSelection");
+        assert_eq!(home(&app, "tool:groupSelection"), "Toolbar");
+        assert_eq!(home(&app, "tool:directSelection"), "Toolbar, in the Group Selection Tool group");
+        let bar = |name: &str, slot: &[&str], shown: bool| crate::state::CustomToolbar {
+            name: name.into(),
+            slots: vec![slot.iter().map(|t| t.to_string()).collect()],
+            shown,
+            pos: [0.0, 0.0],
+            dock: None,
+            dock_right: false,
+            slot_tool: Default::default(),
+            double: false,
+            floating: vec![],
+        };
+        // Window › Tools hides the Tools panel while a toolbar made with New Toolbar holds the Pen
+        // Tool: the row names that toolbar.
+        app.ui.toolbar = false;
+        assert_eq!(home(&app, "tool:pen"), "Toolbar");
+        app.ui.custom_toolbars.push(bar("Drawing", &["pen", "curvature"], true));
+        assert_eq!(home(&app, "tool:pen"), "Drawing");
+        assert_eq!(home(&app, "tool:curvature"), "Drawing, in the Pen Tool group");
+        app.ui.custom_toolbars[0].name = "{tool}".into();
+        assert_eq!(home(&app, "tool:curvature"), "{tool}, in the Pen Tool group");
+        app.ui.custom_toolbars[0].name = "Drawing".into();
+        // Tab hides the toolbars made with New Toolbar too: the hidden Tools panel comes first.
+        app.ui.tab_hid = Some(crate::state::TabHid { dock: true, toolbar: true, control_bar: true });
+        assert_eq!(home(&app, "tool:pen"), "Toolbar");
+        app.ui.tab_hid = None;
+        // The Tools panel shown again comes first.
+        app.ui.toolbar = true;
+        assert_eq!(home(&app, "tool:pen"), "Toolbar");
+        // In Presentation Mode no toolbar shows; the tool still lives on the Tools panel.
+        app.ui.screen_mode = 3;
+        assert_eq!(home(&app, "tool:pen"), "Toolbar");
+        app.ui.screen_mode = 0;
+        // A tool that only a hidden toolbar made with New Toolbar holds is named on it, and one no
+        // toolbar holds is in All Tools.
+        let on_tools: Vec<&str> = crate::toolbar::slots(&app).into_iter().flat_map(|(_, s)| s).collect();
+        let loose = vectorcraft_tools::catalog::all_tools().map(|t| t.id).find(|t| !on_tools.contains(t)).expect("a tool not on the Tools panel");
+        let id = format!("tool:{loose}");
+        assert_eq!(home(&app, &id), "All Tools");
+        app.ui.custom_toolbars.push(bar("Cutting", &[loose], false));
+        assert_eq!(home(&app, &id), "Cutting");
+    }
+
+    /// A row too narrow for its label and home cuts the home first; a label that does not fit
+    /// alone is cut before the id it shows after its name, which stays whole.
+    #[test]
+    fn a_narrow_row_cuts_the_home_first_and_keeps_the_id() {
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let entries = build(Lang::EN);
+        let keyed = entries.iter().find(|e| e.shown.ends_with(&format!(" ({})", e.id))).expect("a result that shows its id");
+        let copy = entries.iter().find(|e| e.id == "edit.copy").expect("Copy");
+        let app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            let font = egui::TextStyle::Body.resolve(ui.style());
+            let p = ui.painter();
+            let lay = |e: &Entry, home: &str, width: f32| row_galleys(p, e, home, font.clone(), egui::Color32::WHITE, egui::Color32::GRAY, width);
+            let text = |g: &egui::Galley| g.rows.iter().flat_map(|r| r.glyphs.iter().map(|g| g.chr)).collect::<String>();
+            let (label, home, cut) = lay(copy, "Edit", 400.0);
+            assert_eq!((text(&label), home.map(|h| text(&h)), cut), ("Copy".into(), Some("Edit".into()), false));
+            let long = "A Menu › A Submenu With A Long Name › Another Submenu";
+            let (label, home, cut) = lay(copy, long, 160.0);
+            let home = home.expect("some of the home fits");
+            assert!(cut && home.elided && text(&label) == "Copy", "{}", text(&home));
+            assert!(label.size().x + 10.0 + home.size().x <= 160.0 + 0.5);
+            // A long German menu path is cut before the label.
+            crate::i18n::set_current(Lang::from_code("de").expect("German"));
+            let german = build_in(crate::i18n::current(), false);
+            let deep = german
+                .iter()
+                .filter(|e| e.label_at > 0)
+                .max_by_key(|e| e.home.as_ref().map_or(0, |h| shown_label(crate::i18n::current(), h).chars().count()));
+            let deep = deep.expect("a German row with a home");
+            let path = home_text(&app, deep);
+            crate::i18n::set_current(Lang::EN);
+            let label_width = name_galley(p, label_of(deep), font.clone(), egui::Color32::WHITE, f32::INFINITY).size().x;
+            let (label, home, cut) = lay(deep, &path, label_width + 60.0);
+            assert!(cut && text(&label) == label_of(deep) && home.is_some_and(|h| h.elided), "{path}");
+            let suffix = format!(" ({})", keyed.id);
+            let suffix_width = name_galley(p, &suffix, font.clone(), egui::Color32::WHITE, f32::INFINITY).size().x;
+            let full = name_galley(p, label_of(keyed), font.clone(), egui::Color32::WHITE, f32::INFINITY).size().x;
+            assert!(full - 5.0 > suffix_width + 20.0, "{}", label_of(keyed));
+            for width in [full - 5.0, suffix_width + 20.0, suffix_width / 2.0] {
+                let (label, home, cut) = lay(keyed, long, width);
+                let shown = text(&label);
+                assert!(cut && home.is_none(), "{width}");
+                assert!(label.size().x <= width + 0.5, "{width}: {shown} is {} wide", label.size().x);
+                // An id wider than the row is cut too.
+                assert_eq!(shown.ends_with(&format!("…{suffix}")), width > suffix_width, "{width}: {shown}");
+            }
+        });
+        out.textures_delta.clear();
+    }
+
+    /// Screen readers read a row as its kind, label, home and shortcut, and the field's
+    /// description names them too; the row's height is unchanged.
+    #[test]
+    fn screen_readers_hear_the_kind_and_home() {
+        let mut open = Open::new("round corners", WINDOW);
+        let nodes = open.frame(vec![]);
+        let said = open.said("effect:stylize.roundCorners");
+        assert_eq!(said, "Effect, Round Corners…, Effect › Stylize");
+        let row = rows(&nodes).into_iter().find(|r| r.0 == said).expect("its row is drawn");
+        assert!((row.3 - row.2 - f64::from(ROW_HEIGHT)).abs() < 0.01, "{row:?}");
+        assert!(field_description(&nodes).ends_with(&said), "{}", field_description(&nodes));
+        let open = Open::new("group selection", WINDOW);
+        assert_eq!(open.said("tool:groupSelection"), "Tool, Group Selection Tool, Toolbar, in the Direct Selection Tool group");
+        let mut open = Open::new("layers", WINDOW);
+        let said = open.said("panel:layers");
+        assert!(said.starts_with("Panel, Layers, Window"), "{said}");
+        let nodes = open.frame(vec![]);
+        assert!(rows(&nodes).iter().any(|r| r.0 == said));
     }
 
     /// The popup stays inside a short window, showing fewer rows when 12 don't fit; a page is the
@@ -2308,7 +2654,8 @@ mod tests {
         let mut open = Open::new("show panel", WINDOW);
         let listed = open.listed();
         let entries = entries(&open.ctx, Lang::EN);
-        let label = |i: usize| entries.iter().find(|e| e.id == listed[i]).map(row_label).unwrap();
+        let said: Vec<String> = listed.iter().map(|id| open.said(id)).collect();
+        let label = |i: usize| said[i].clone();
         let nodes = open.frame(vec![]);
         // More results match than the list holds: the place counts every match, as the footer does.
         let total = matching(&entries, "show panel").len();
@@ -2323,7 +2670,7 @@ mod tests {
         let mut open = Open::new("eyedropper", WINDOW);
         let n = open.listed().len();
         assert!((1..MAX_RESULTS).contains(&n), "{n}");
-        let first = entries.iter().find(|e| e.id == open.listed()[0]).map(row_label).unwrap();
+        let first = open.said(&open.listed()[0]);
         let nodes = open.frame(vec![]);
         assert_eq!(field_description(&nodes), format!("1 of {n}: {first}"));
         assert!(labels(&nodes).contains(&footer(n, n)), "{:?}", labels(&nodes));
@@ -2660,7 +3007,7 @@ mod tests {
         let listed: Vec<_> = matching(&entries, "show panel").into_iter().take(MAX_RESULTS).collect();
         let hidden = |e: &&&Entry| e.id.strip_prefix("panel:").is_some_and(|p| !crate::panel_docking::showing(&window.app.ui, p));
         let e = listed.iter().find(hidden).expect("a hidden panel's result");
-        let label = row_label(e);
+        let label = row_label(e, &home_text(&window.app, e));
         let row = rows(&nodes).into_iter().find(|r| r.0 == label).expect("its row is drawn");
         let panel = e.id.strip_prefix("panel:").unwrap_or_default().to_string();
         window.click(egui::pos2(window.popup().center().x, ((row.2 + row.3) / 2.0) as f32));
@@ -2748,7 +3095,7 @@ mod tests {
         assert!(plugin.is_some_and(|p| p < MAX_RESULTS), "the plug-in is shown: {plugin:?}");
         assert_eq!(ranked.iter().position(|e| e.id == id), Some(MAX_RESULTS), "the plug-in pushed the highlight past the limit");
         assert_eq!((sel, &now), (MAX_RESULTS - 1, &id), "the highlight stays on its result, in the last row");
-        let label = row_label(ranked[MAX_RESULTS]);
+        let label = row_label(ranked[MAX_RESULTS], &home_text(&open.app, ranked[MAX_RESULTS]));
         assert!(rows(&nodes).iter().any(|r| r.1 && r.0 == label), "its row is drawn and highlighted");
         assert_eq!(field_description(&nodes), format!("{} of {}: {label}", MAX_RESULTS + 1, ranked.len()));
     }
