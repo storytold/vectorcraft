@@ -7593,8 +7593,8 @@ Commands take and return lengths in points (the distances of `object.path.offset
 string takes the same arithmetic as the desktop app's fields, where `%` is a share of the value before it:
 `"200mm*50%"` is 100 mm and `"50pt+25%"` is 62.5 pt. `x`, `X` and `×` multiply as `*` does (`"2x3 mm"` is 6 mm),
 except a lowercase `x` right after a `p`, which is the `px` suffix (`"2px3"` is not read; `"2p x 3"` and `"2pX3"`
-are 6 picas). A string such as `"8.5x11 in"` reads as one length, 93.5 in.
-A length string with more than 128 `+ - * /` signs (each multiplication sign counts) is not read as a length. The units
+are 6 picas). A string such as `"8.5x11 in"` reads as one length, 93.5 in, and `"0x10"` reads as 0 pt. A length
+string with more than 128 `+ - * /` signs (each multiplication sign counts) is not read as a length. The units
 only change what the UI shows and how it reads typed numbers. Preferences ▸ Units has
 four: General (rulers, positions and sizes, the Info panel, dialog distances, canvas measurement labels), Stroke
 (weights, dashes), Type (font size, leading, baseline shift) and East Asian Type (no field uses it yet). General is the active document's units

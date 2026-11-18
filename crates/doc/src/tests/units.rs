@@ -121,6 +121,7 @@ fn x_is_a_multiplication_sign() {
         (Unit::Points, "2p×3", 72.0),
         // Text that used to be refused now reads as a product.
         (Unit::Points, "8.5x11 in", 93.5 * 72.0),
+        (Unit::Points, "0x10", 0.0),
     ] {
         let got = u.parse(s).unwrap_or_else(|| panic!("{u:?} can't read `{s}`"));
         assert!((got - want).abs() < 1e-9, "{u:?}: `{s}` → {got}, want {want}");

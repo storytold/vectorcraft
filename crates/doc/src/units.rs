@@ -151,17 +151,18 @@ impl Unit {
     /// Parse `12`, `12pt`, `1in`, `3 mm`, `2p6` (picas+points), `6q` (Q) and `6h` (Ha), simple
     /// `+ - * /` arithmetic.
     ///
+    /// A unit after a `*` or `/` operand measures the whole expression (`1080/2 px` is 540 px), so
+    /// math typed before a field's unit suffix works. After `*` or `/`, a percentage scales the term
+    /// before it (`3cm*50%` is 1.5 cm, `3cm/50%` is 6 cm). After `+` or `-`, it adds or takes away
+    /// that share of everything before it (`50pt+25%` is 62.5 pt, `100pt+20pt-50%` is 60 pt). A
+    /// percentage on its own (`50%`) reads as nothing.
+    ///
     /// `x`, `X` and `×` multiply as `*` does (`10x2` is 20, `2x3 mm` is 6 mm), except a lowercase
     /// `x` right after a `p`, which is the `px` suffix (`2px x 3` is 6 px, and `2px3` reads as
     /// nothing; write `2p x 3` for picas). `X` and `×` after a `p` multiply (`2pX3` is 6 picas).
     ///
-    /// A unit after a `*` or `/` operand measures the whole expression (`1080/2 px` is 540 px),
-    /// so math typed before a field's unit suffix works. After `*` or `/`, a percentage scales the
-    /// term before it (`3cm*50%` is 1.5 cm, `3cm/50%` is 6 cm). After `+` or `-`, it adds or takes
-    /// away that share of everything before it (`50pt+25%` is 62.5 pt, `100pt+20pt-50%` is 60
-    /// pt). A percentage on its own (`50%`) reads as nothing.
-    ///
-    /// Text with more than 128 [`arithmetic_signs`] reads as nothing.
+    /// Text with more than 128 `+ - * /` signs ([`arithmetic_signs`], a multiplication sign counted
+    /// as `*`) reads as nothing.
     pub fn parse(self, s: &str) -> Option<f64> {
         if arithmetic_signs(s) > MAX_MEASURE_OPERATORS {
             return None;
