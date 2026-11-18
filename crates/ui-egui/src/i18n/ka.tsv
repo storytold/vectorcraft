@@ -4912,6 +4912,8 @@ digits	Malayalam	მალაიალამური
 	Overprint and Transparency Flattener Options	ზედდაბეჭდვისა და გამჭვირვალობის გაბრტყელების პარამეტრები
 	Custom…	მორგებული…
 	Custom Transparency Flattener Options	გამჭვირვალობის გაბრტყელების მორგებული პარამეტრები
+	The PDF preset keeps the flattener preset but not the Custom… settings.	PDF პრესეტი ინახავს გაბრტყელების პრესეტს, მაგრამ არა მორგებული… პარამეტრებს.
+	PDF 1.3 files clip rasterized areas to their regions, and Overprint sets whether overprints are kept.	PDF 1.3 ფაილები რასტრირებულ უბნებს მათ არეებზე ჭრის, ხოლო ზედდაბეჭდვა განსაზღვრავს, შენარჩუნდება თუ არა ზედდაბეჭდვები.
 	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	EPS-ს არ აქვს ალფა-გამჭვირვალობა, ხოლო ზედდაბეჭდვები განსაზღვრავს, შენარჩუნდება თუ არა ზედდაბეჭდვები.
 	Place the pages with the placement again	გვერდების ხელახლა განთავსება განთავსების მიხედვით
 	Placement:	განთავსება:
