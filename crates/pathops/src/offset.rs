@@ -85,6 +85,14 @@ pub fn outline_stroke(path: &PathData, width: f64, cap: Cap, join: Join, miter_l
 /// The area covered by stroke outlines (each filled with the non-zero rule, open subpaths
 /// closed) as one clean path: overlaps removed and the stroker's pieces refitted.
 pub fn stroke_region(outlines: &[BezPath]) -> PathData {
+    match crate::sweep_axis::turned_outlines(outlines) {
+        Some(turned) => crate::sweep_axis::unturn(stroke_region_upright(&turned)),
+        None => stroke_region_upright(outlines),
+    }
+}
+
+/// [`stroke_region`] with the sweep run on `outlines` as they are.
+pub(crate) fn stroke_region_upright(outlines: &[BezPath]) -> PathData {
     let tidy = Tidy::free(DEFAULT_PRECISION);
     let parts: Vec<BezPath> = outlines.iter().map(close_all).filter(|o| !o.elements().is_empty()).collect();
     if let [one] = &parts[..] {
@@ -118,21 +126,49 @@ fn path_is_finite(path: &PathData) -> bool {
 /// Fallible [`offset_path`] that returns an error when the input is non-finite or exceeds
 /// the complexity bound ([`MAX_OFFSET_SEGMENT_PAIRS`]), or when planar arrangement fails.
 pub fn try_offset_path(path: &PathData, delta: f64, join: Join, miter_limit: f64) -> Result<PathData, PathOpsError> {
-    let src = std::cell::LazyCell::new(|| SegmentTree::new(boxed_segments(&path.to_bezpath())));
-    offset_with_check(path, delta, join, miter_limit, |p, r| any_within(&src, p, r))
+    offset_with_check(path, delta, join, miter_limit, |part| {
+        let bp = part.to_bezpath();
+        let src = std::cell::LazyCell::new(move || SegmentTree::new(boxed_segments(&bp)));
+        move |p, r| any_within(&src, p, r)
+    })
 }
 
-/// [`try_offset_path`] with the test of whether some segment of `path` lies closer than a radius to a point.
-fn offset_with_check(
+/// [`try_offset_path`] with `within_of(part)`, the test of whether some segment of `part` lies
+/// closer than a radius to a point.
+fn offset_with_check<W: Fn(kurbo::Point, f64) -> bool>(
+    path: &PathData,
+    delta: f64,
+    join: Join,
+    miter_limit: f64,
+    within_of: impl Fn(&PathData) -> W,
+) -> Result<PathData, PathOpsError> {
+    if !delta.is_finite() || !path_is_finite(path) {
+        return Err(PathOpsError::NonFinite);
+    }
+    // An inset keeps only faces inside the closed fill, so it would drop the outline of every
+    // open subpath (#6427). Inset the closed subpaths, outline the open ones as a positive offset
+    // does, and unite the two.
+    if delta < 0.0 && path.subpaths.iter().any(|s| s.anchors.len() > 1 && !close_if_ends_meet(s).closed) {
+        let (closed, open): (Vec<SubPath>, Vec<SubPath>) = path.subpaths.iter().cloned().partition(|s| close_if_ends_meet(s).closed);
+        let (closed, open) = (PathData::new(closed), PathData::new(open));
+        let inset = offset_region(&closed, delta, join, miter_limit, within_of(&closed))?;
+        let outline = offset_region(&open, -delta, join, miter_limit, within_of(&open))?;
+        if inset.is_empty() {
+            return Ok(outline);
+        }
+        return crate::boolean::try_unite_all(&[(&inset, FillRule::NonZero), (&outline, FillRule::NonZero)]);
+    }
+    offset_region(path, delta, join, miter_limit, within_of(path))
+}
+
+/// [`offset_with_check`] of a finite `path` with the `within` test of its own segments.
+fn offset_region(
     path: &PathData,
     delta: f64,
     join: Join,
     miter_limit: f64,
     within: impl Fn(kurbo::Point, f64) -> bool,
 ) -> Result<PathData, PathOpsError> {
-    if !delta.is_finite() || !path_is_finite(path) {
-        return Err(PathOpsError::NonFinite);
-    }
     if path.is_empty() {
         return Ok(PathData::default());
     }
@@ -147,11 +183,19 @@ fn offset_with_check(
     } else {
         BezPath::new()
     };
-    let arr = Arrangement::new_budgeted(
-        vec![(fill, FillRule::NonZero), (ring, FillRule::NonZero), (open_bp, FillRule::NonZero)],
-        MAX_OFFSET_SEGMENT_PAIRS,
-    )?;
-    let c = if delta >= 0.0 { arr.contours(|m| m[0] || m[1] || m[2]) } else { arr.contours(|m| m[0] && !m[1]) };
+    let parts = vec![fill, ring, open_bp];
+    match crate::sweep_axis::turned_outlines(&parts) {
+        Some(turned) => offset_faces(turned, delta, |p, r| within(crate::sweep_axis::unturn_point(p), r)).map(crate::sweep_axis::unturn),
+        None => offset_faces(parts, delta, within),
+    }
+}
+
+/// The faces of the offset by `delta` from `parts` (the closed fill, the ring stroked around it and
+/// the stroke of the open subpaths, in that order), less the spurious ones that `within` finds.
+fn offset_faces(parts: Vec<BezPath>, delta: f64, within: impl Fn(kurbo::Point, f64) -> bool) -> Result<PathData, PathOpsError> {
+    let d = delta.abs();
+    let arr = Arrangement::new_budgeted(parts.into_iter().map(|p| (p, FillRule::NonZero)).collect(), MAX_OFFSET_SEGMENT_PAIRS)?;
+    let c = if delta >= 0.0 { arr.contours_covering(|c| !c.is_empty()) } else { arr.contours_covering(|c| c.contains(&0) && !c.contains(&1)) };
     // When `d` exceeds a curvature radius the stroker's inner offset inverts and its loops cancel
     // winding, leaving faces uncovered that are really within `d` of the path. Every face of the
     // true offset is bounded by arrangement edges, so a contour is spurious iff a point deep inside
@@ -622,14 +666,17 @@ mod tests {
     fn offsets_with_the_tree_are_identical_to_offsets_with_the_scan() {
         let (mut checks, mut hits, mut misses) = (0, 0, 0);
         for path in offset_inputs() {
-            let segs = boxed_segments(&path.to_bezpath());
             for delta in [0.0, 0.05, 1.0, 5.0, 60.0, -0.05, -1.0, -5.0, -60.0] {
                 for join in [Join::Round, Join::Miter, Join::Bevel] {
                     let found = std::cell::Cell::new((0, 0));
-                    let by_scan = offset_with_check(&path, delta, join, 4.0, |p, r| {
-                        let v = any_within_by_scan(&segs, p, r);
-                        found.set((found.get().0 + usize::from(v), found.get().1 + usize::from(!v)));
-                        v
+                    let by_scan = offset_with_check(&path, delta, join, 4.0, |part| {
+                        let segs = boxed_segments(&part.to_bezpath());
+                        let found = &found;
+                        move |p, r| {
+                            let v = any_within_by_scan(&segs, p, r);
+                            found.set((found.get().0 + usize::from(v), found.get().1 + usize::from(!v)));
+                            v
+                        }
                     });
                     checks += 1;
                     hits += found.get().0;

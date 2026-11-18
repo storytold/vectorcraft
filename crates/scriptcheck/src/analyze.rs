@@ -88,12 +88,25 @@ pub(crate) struct Scan {
 /// Scan `src` (already through [`unescaped`]): the script itself (`file` none) or a file it includes
 /// (`file`: its path inside the script's folder), with the names it declares (`declared`, from
 /// [`declarations`] on the same `src`), the `#includepath` folders `paths` in force at its start and
-/// its variables holding what `known` says.
-pub(crate) fn scan<'s>(src: &'s str, declared: &Declared<'s>, file: Option<&str>, paths: Rc<[String]>, known: &Known, acc: &mut Acc) -> Scan {
+/// its variables holding what `known` says. Each of the `\u{…}` escapes `braced` that [`unescaped`]
+/// read is syntax later than ECMAScript 3, reported when the scan reaches the escape's line.
+pub(crate) fn scan<'s>(
+    src: &'s str,
+    declared: &Declared<'s>,
+    braced: &[Braced],
+    file: Option<&str>,
+    paths: Rc<[String]>,
+    known: &Known,
+    acc: &mut Acc,
+) -> Scan {
     let mut lexer = Lexer::new(src, acc.limits.nesting);
     let mut a = Analyzer::new(acc, file, paths, known, declared);
     let mut breaks = LineBreaks::default();
+    let mut braced = braced.iter().peekable();
     for t in lexer.by_ref() {
+        while let Some((line, escape)) = braced.next_if(|(line, _)| *line <= t.line) {
+            a.acc.problem(report::NEWER_SYNTAX, Some(*line), file, Some(escape));
+        }
         if let Some(code) = t.problem {
             a.problem(code, t.line);
         }
@@ -102,6 +115,9 @@ pub(crate) fn scan<'s>(src: &'s str, declared: &Declared<'s>, file: Option<&str>
             Read::Directive => a.directive(&t),
             Read::Token(sig) => a.token(sig),
         }
+    }
+    for (line, escape) in braced {
+        a.acc.problem(report::NEWER_SYNTAX, Some(*line), file, Some(escape));
     }
     if let Some(line) = lexer.unclosed_xml {
         a.problem(report::UNTERMINATED_XML, line);
@@ -115,28 +131,61 @@ pub(crate) fn scan<'s>(src: &'s str, declared: &Declared<'s>, file: Option<&str>
     Scan { includes, module, lines: lexer.lines(), known }
 }
 
-/// `src` with the `\uXXXX` escapes in its names written as the characters they stand for (ECMA-262
-/// 3rd edition, section 7.6), and `src` itself when no name has one. An escape for a character no
-/// name may hold stays as written. Line breaks don't change, so every line keeps its number.
-pub(crate) fn unescaped<'a>(src: Cow<'a, str>, acc: &mut Acc) -> Cow<'a, str> {
-    match unescape_names(&src, acc) {
-        Some(out) => Cow::Owned(out),
-        None => src,
+/// A `\u{…}` escape in a name, which ECMAScript 3 does not have: its line and its text.
+pub(crate) type Braced = (usize, String);
+
+/// `src` with the `\uXXXX` and `\u{…}` escapes in its names and private names written as the
+/// characters they stand for (ECMA-262, Names and Keywords), and `src` itself when no name has one,
+/// with the `\u{…}` escapes read, each listed once per line in a row. An escape for a character a
+/// name may not hold where the escape stands stays as written, and so does a private name that
+/// starts a line where the name it spells would start a preprocessor line. Line breaks don't
+/// change, so every line keeps its number.
+pub(crate) fn unescaped<'a>(src: Cow<'a, str>, acc: &mut Acc) -> (Cow<'a, str>, Vec<Braced>) {
+    let mut braced = vec![];
+    match unescape_names(&src, acc, &mut braced) {
+        Some(out) => (Cow::Owned(out), braced),
+        None => (src, braced),
     }
 }
 
-fn unescape_names(src: &str, acc: &mut Acc) -> Option<String> {
+fn unescape_names(src: &str, acc: &mut Acc, braced: &mut Vec<Braced>) -> Option<String> {
     if !src.contains("\\u") {
         return None;
     }
     let mut out = String::with_capacity(src.len());
     let mut changed = false;
     let mut lexer = Lexer::new(src, acc.limits.nesting);
-    for t in lexer.by_ref() {
-        if t.kind == T::Ident && t.text.contains("\\u") {
-            let name = unescape_name(t.text);
-            changed |= name != t.text;
-            out.push_str(&name);
+    // One more than the report keeps, so that the report is marked truncated.
+    let room = acc.limits.entries.saturating_add(1);
+    // Only blanks since the last line break (or the start).
+    let mut line_start = true;
+    let mut found = vec![];
+    while let Some(t) = lexer.next() {
+        // A private name is `#` and a name.
+        let (mark, name) = match t.kind {
+            T::Ident => ("", t.text),
+            T::Other => t.text.strip_prefix('#').map_or(("", ""), |name| ("#", name)),
+            _ => ("", ""),
+        };
+        let starts_line = line_start;
+        line_start = t.kind == T::Newline || (line_start && t.kind == T::Space);
+        if name.contains("\\u") {
+            found.clear();
+            let written = unescape_name(name, t.line, &mut found, room);
+            for escape in found.drain(..) {
+                if braced.last() != Some(&escape) && braced.len() < room {
+                    braced.push(escape);
+                }
+            }
+            // A private name that starts a line stays as written where the name it spells would
+            // start a preprocessor line.
+            if mark == "#" && starts_line && !lexer.private_line(&written) {
+                out.push_str(t.text);
+                continue;
+            }
+            changed |= written != name;
+            out.push_str(mark);
+            out.push_str(&written);
         } else {
             out.push_str(t.text);
         }
@@ -145,28 +194,31 @@ fn unescape_names(src: &str, acc: &mut Acc) -> Option<String> {
     changed.then_some(out)
 }
 
-/// The name `text` with each `\uXXXX` escape for a character a name may hold written as that
-/// character.
-fn unescape_name(text: &str) -> String {
+/// The name `text`, on `line`, with each escape for a character a name may hold where it stands
+/// written as that character: a character a name may start with first, and one a name may hold
+/// after that. Each `\u{…}` escape read goes into `braced`, unless the last one there is the same
+/// escape on the same line or `braced` holds `room` of them.
+fn unescape_name(text: &str, line: usize, braced: &mut Vec<Braced>, room: usize) -> String {
     let mut out = String::with_capacity(text.len());
     let mut rest = text;
     while let Some(i) = rest.find("\\u") {
         out.push_str(rest.get(..i).unwrap_or_default());
-        let after = rest.get(i + 2..).unwrap_or_default();
-        let c = after
-            .get(..4)
-            .filter(|hex| hex.bytes().all(|b| b.is_ascii_hexdigit()))
-            .and_then(|hex| u32::from_str_radix(hex, 16).ok())
-            .and_then(char::from_u32)
-            .filter(|&c| crate::lex::ident_part(c));
+        let at = rest.get(i..).unwrap_or_default();
+        let first = out.is_empty();
+        let c = crate::lex::escape(at).filter(|&(c, _)| if first { crate::lex::ident_start(c) } else { crate::lex::ident_part(c) });
         match c {
-            Some(c) => {
+            Some((c, len)) => {
                 out.push(c);
-                rest = after.get(4..).unwrap_or_default();
+                let source = at.get(..len).unwrap_or_default();
+                let repeated = braced.last().is_some_and(|(l, s)| *l == line && s == source);
+                if source.starts_with("\\u{") && !repeated && braced.len() < room {
+                    braced.push((line, source.to_string()));
+                }
+                rest = at.get(len..).unwrap_or_default();
             }
             None => {
                 out.push_str("\\u");
-                rest = after;
+                rest = at.get(2..).unwrap_or_default();
             }
         }
     }
