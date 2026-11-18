@@ -1047,7 +1047,10 @@ fn review_followup_release_position_survives_a_later_hover_move() {
         &mut app,
         &ctx,
         start + 4.0 * step,
-        vec![Event::PointerButton { pos: at, button: PointerButton::Primary, pressed: false, modifiers: Default::default() }, Event::PointerMoved(hover)],
+        vec![
+            Event::PointerButton { pos: at, button: PointerButton::Primary, pressed: false, modifiers: Default::default() },
+            Event::PointerMoved(hover),
+        ],
     );
     assert!(ctx.input(|i| i.pointer.button_double_clicked(PointerButton::Primary)));
     assert_eq!(ctx.input(|i| i.pointer.interact_pos()), Some(hover));
