@@ -177,6 +177,19 @@ fn guide_row(ui: &mut Ui, view: &View, item: &Row, i: usize, out: &mut Out) {
         }
         out.actions.push(("guide.select".into(), json!({"indexes": [i], "toggle": m.shift || m.command})));
     }
+    if resp.secondary_clicked() {
+        crate::panels::set_row_keys(ui.ctx(), ROW_KEYS, true);
+        if editable && !selected {
+            if !view.rows.is_empty() {
+                out.actions.push(("layer.highlight".into(), json!({"ids": [], "mode": "set"})));
+                out.rows_after_click = Some(vec![]);
+            }
+            out.actions.push(("guide.select".into(), json!({"indexes": [i]})));
+        }
+    }
+    resp.context_menu(|ui| {
+        guide_context_menu(ui, view, item, i, out);
+    });
     // Dragged: the selected guides when this is one of them, else this one, to another layer's row.
     // Only the primary button drags a guide row, and not while a drag down a column passes it.
     if editable && resp.drag_started_by(egui::PointerButton::Primary) && view.column.is_none() {
@@ -191,6 +204,46 @@ fn guide_row(ui: &mut Ui, view: &View, item: &Row, i: usize, out: &mut Out) {
         && let LayersDrag::Guides(guides) = &*drag
     {
         guide_drop(ui, view, guides, item.node.id, r, &resp, out);
+    }
+}
+
+/// The right-click context menu of ruler guide row `i` (`item`).
+fn guide_context_menu(ui: &mut Ui, view: &View, item: &Row, i: usize, out: &mut Out) {
+    let Some(g) = view.ruler_guides.get(i) else { return };
+    let selected = view.guides.contains(&i);
+    let editable = view.doc.guide_editable(g);
+    let guides: Vec<usize> = if selected { view.guides.clone() } else { vec![i] };
+    let node = g.id.and_then(|id| view.doc.node(id));
+    let guide_nodes: Vec<u64> = if selected {
+        guides.iter().filter_map(|&idx| view.ruler_guides.get(idx)?.id.map(|id| id.0)).collect()
+    } else {
+        node.map(|n| vec![n.id.0]).unwrap_or_default()
+    };
+    let visible = node.is_none_or(|n| n.visible);
+    if widgets::menu_item(ui, if visible { "Hide" } else { "Show" }, !guide_nodes.is_empty(), false) {
+        out.actions.push(("layer.setProps".into(), json!({ "ids": guide_nodes, "visible": !visible })));
+        ui.close();
+    }
+    let locked = node.is_some_and(|n| n.locked);
+    if widgets::menu_item(ui, if locked { "Unlock" } else { "Lock" }, !guide_nodes.is_empty(), false) {
+        out.actions.push(("layer.setProps".into(), json!({ "ids": guide_nodes, "locked": !locked })));
+        ui.close();
+    }
+    ui.separator();
+    if widgets::menu_item(ui, "Release Guides", editable, false) {
+        let params = if guides.len() > 1 { json!({}) } else { json!({ "index": i }) };
+        out.actions.push(("view.guides.release".into(), params));
+        ui.close();
+    }
+    if widgets::menu_item(ui, "Delete", editable, false) {
+        out.actions.push(("guide.remove".into(), json!({ "indexes": guides })));
+        ui.close();
+    }
+    ui.separator();
+    let layers_only = view.opts.layers_only;
+    if widgets::menu_item(ui, if layers_only { "Locate Layer" } else { "Locate Object" }, true, false) {
+        out.actions.push(("layer.locate".into(), json!({ "id": item.node.id.0, "layersOnly": layers_only })));
+        ui.close();
     }
 }
 
@@ -232,6 +285,64 @@ fn spine_row(ui: &mut Ui, view: &View, item: &Row, out: &mut Out) {
         let m = ui.input(|i| i.modifiers);
         let action = if m.shift || m.command { "select.toggle" } else { "select.set" };
         out.actions.push((action.into(), json!({"ids": [blend.0]})));
+    }
+    if resp.secondary_clicked() {
+        crate::panels::set_row_keys(ui.ctx(), ROW_KEYS, true);
+        if editable && !selected {
+            out.actions.push(("select.set".into(), json!({"ids": [blend.0]})));
+        }
+    }
+    resp.context_menu(|ui| {
+        spine_context_menu(ui, view, item, out);
+    });
+}
+
+/// The right-click context menu of blend spine row `item`.
+fn spine_context_menu(ui: &mut Ui, view: &View, item: &Row, out: &mut Out) {
+    let blend = item.node.id;
+    let selected = view.sel.contains(&blend);
+    let editable = (view.doc.editable())(blend);
+    let has_spine = !matches!(&item.node.kind, NodeKind::Blend { spec, .. } if spec.no_spine);
+    let ensure_selected = |out: &mut Out| {
+        if !selected {
+            out.actions.push(("select.set".into(), json!({ "ids": [blend.0] })));
+        }
+    };
+    if widgets::menu_item(ui, "Select", editable, false) {
+        out.actions.push(("select.set".into(), json!({ "ids": [blend.0] })));
+        ui.close();
+    }
+    if widgets::menu_item(ui, "Blend Options…", editable, false) {
+        ensure_selected(out);
+        out.actions.push(("ui.blendOptions".into(), json!({})));
+        ui.close();
+    }
+    ui.separator();
+    if widgets::menu_item(ui, "Reverse Spine", editable && has_spine, false) {
+        ensure_selected(out);
+        out.actions.push(("object.blend.reverseSpine".into(), json!({})));
+        ui.close();
+    }
+    if widgets::menu_item(ui, "Reverse Front to Back", editable, false) {
+        ensure_selected(out);
+        out.actions.push(("object.blend.reverseFrontToBack".into(), json!({})));
+        ui.close();
+    }
+    if widgets::menu_item(ui, "Expand", editable, false) {
+        ensure_selected(out);
+        out.actions.push(("object.blend.expand".into(), json!({})));
+        ui.close();
+    }
+    if widgets::menu_item(ui, "Release", editable, false) {
+        ensure_selected(out);
+        out.actions.push(("object.blend.release".into(), json!({})));
+        ui.close();
+    }
+    ui.separator();
+    let layers_only = view.opts.layers_only;
+    if widgets::menu_item(ui, if layers_only { "Locate Layer" } else { "Locate Object" }, true, false) {
+        out.actions.push(("layer.locate".into(), json!({ "id": blend.0, "layersOnly": layers_only })));
+        ui.close();
     }
 }
 

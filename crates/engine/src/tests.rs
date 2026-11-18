@@ -3393,6 +3393,149 @@ fn flare_rotation_turns_only_the_rays() {
     }
 }
 
+/// A flare keeps its settings: `shape.editFlare` draws it again with the settings changed, in its
+/// place and transformed as it has been since, as one undo step (none when nothing changes). A
+/// flare with a changed part, a locked one and an expanded one are not edited.
+#[test]
+fn edit_flare_draws_a_transformed_flare_again_in_its_place_in_one_undo_step() {
+    let mut s = session();
+    let p = json!({"cx": 200, "cy": 200, "diameter": 60, "rays": 9, "rings": 4, "x2": 400, "y2": 200, "seed": 3});
+    let id = NodeId(s.execute("shape.flare", &p).unwrap()["id"].as_u64().unwrap());
+    // Reflected twice, sheared and back, turned a quarter and moved: it stays a flare.
+    for (c, p) in [
+        ("object.reflect", json!({"axis": "vertical"})),
+        ("object.reflect", json!({"axis": "horizontal"})),
+        ("object.shear", json!({"angle": 30})),
+        ("object.shear", json!({"angle": -30})),
+        ("object.rotate", json!({"angle": 90})),
+        ("object.move", json!({"dx": 50, "dy": 10})),
+    ] {
+        s.execute(c, &p).unwrap();
+    }
+    let spec = |s: &Session| flare_settings(&s.doc().unwrap().doc, id).expect("still a flare");
+    let part = |s: &Session, name: &str| {
+        let g = s.doc().unwrap().doc.node(id).unwrap();
+        g.children().unwrap().iter().filter(|c| c.name.as_deref() == Some(name)).map(|c| c.geometric_bounds().unwrap()).collect::<Vec<_>>()
+    };
+    let (c, e) = (spec(&s).center().unwrap(), spec(&s).end().unwrap());
+    // The quarter turn made the rings run vertically, 200 points from the center.
+    assert!((c.distance(e) - 200.0).abs() < 1e-6 && (c.x - e.x).abs() < 1e-6, "{c:?} {e:?}");
+    let undo = s.doc().unwrap().history.undo.len();
+    s.execute("shape.editFlare", &json!({"diameter": 100, "rings": 6, "rays": 0})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+    assert_eq!(s.doc().unwrap().selection.objects, vec![id]);
+    let centre = part(&s, "Center")[0];
+    assert!(centre.center().distance(c) < 1e-6 && (centre.width() - 100.0).abs() < 1e-6, "{centre:?}");
+    assert_eq!((part(&s, "Ring").len(), part(&s, "Rays").len()), (6, 0));
+    assert!(spec(&s).end().unwrap().distance(e) < 1e-6, "the end point stays");
+    // Each ring lies on the line from the center to the end point.
+    assert!(part(&s, "Ring").iter().all(|r| (r.center().x - c.x).abs() < 1e-6), "{:?}", part(&s, "Ring"));
+    // The center handle, where it is drawn now: the end point stays where it is.
+    s.execute("shape.editFlare", &json!({"ids": [id.0], "cx": c.x + 20.0, "cy": c.y})).unwrap();
+    assert!(spec(&s).center().unwrap().distance(Point::new(c.x + 20.0, c.y)) < 1e-6);
+    assert!(spec(&s).end().unwrap().distance(e) < 1e-6);
+    assert!(part(&s, "Center")[0].center().distance(Point::new(c.x + 20.0, c.y)) < 1e-6);
+    // The end handle, then the path length and direction.
+    s.execute("shape.editFlare", &json!({"x2": c.x + 20.0, "y2": c.y + 80.0})).unwrap();
+    assert!(spec(&s).end().unwrap().distance(Point::new(c.x + 20.0, c.y + 80.0)) < 1e-6);
+    // The path length and direction are where the flare is drawn now, though it was turned.
+    s.execute("shape.editFlare", &json!({"direction": 0, "pathLength": 50})).unwrap();
+    assert!(spec(&s).end().unwrap().distance(Point::new(c.x + 70.0, c.y)) < 1e-6, "{:?}", spec(&s).end());
+    s.execute("edit.undo", &json!({})).unwrap();
+    // Nothing changes: no undo step.
+    let undo = s.doc().unwrap().history.undo.len();
+    s.execute("shape.editFlare", &json!({"diameter": 100})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+    // Bad values are refused.
+    for bad in [json!({"rings": 2.5}), json!({"diameter": "big"}), json!({"cx": 10}), json!({"diameter": 1e20})] {
+        assert!(s.execute("shape.editFlare", &bad).is_err(), "{bad}");
+    }
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(spec(&s).end().unwrap().distance(e) < 1e-6, "undo puts the end point back");
+    // A changed part: no longer a flare.
+    s.edit("Opacity", |d, _| {
+        let ring = d.node(id).unwrap().children().unwrap().iter().find(|c| c.name.as_deref() == Some("Center")).unwrap().id;
+        d.node_mut(ring).unwrap().opacity = 0.25;
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(s.execute("shape.editFlare", &json!({"rings": 3})).unwrap_err().to_string(), "select a flare");
+    s.execute("edit.undo", &json!({})).unwrap();
+    // A locked flare.
+    s.execute("object.lock", &json!({})).unwrap();
+    assert!(s.execute("shape.editFlare", &json!({"ids": [id.0], "rings": 3})).is_err());
+    s.execute("object.unlockAll", &json!({})).unwrap();
+    // Object › Expand: a plain group that is no longer a flare.
+    s.execute("object.expand", &json!({"object": true, "fill": false, "stroke": false})).unwrap();
+    assert!(s.doc().unwrap().doc.node(id).unwrap().extras().flare.is_none());
+    assert!(s.execute("shape.editFlare", &json!({"rings": 3})).is_err());
+}
+
+/// `shape.flare` reads whole-number counts written as floats, and refuses fractions.
+#[test]
+fn flare_counts_are_whole_numbers() {
+    let mut s = session();
+    let id = NodeId(s.execute("shape.flare", &json!({"cx": 100, "cy": 100, "rays": 4.0, "rings": 2})).unwrap()["id"].as_u64().unwrap());
+    let g = s.doc().unwrap().doc.node(id).unwrap();
+    let rays = g.children().unwrap().iter().find(|c| c.name.as_deref() == Some("Rays")).unwrap();
+    assert_eq!(rays.path_data().unwrap().subpaths.len(), 4);
+    assert!(s.execute("shape.flare", &json!({"cx": 100, "cy": 100, "rays": 2.5})).is_err());
+}
+
+/// `shape.editFlare` on a flare scaled far down: a `pathLength`, an end point or a center that,
+/// taken back to where the flare was drawn, is not a finite number is an error, and the flare keeps
+/// its settings.
+#[test]
+fn edit_flare_end_points_that_are_not_finite_are_errors() {
+    let mut s = session();
+    let id = NodeId(s.execute("shape.flare", &json!({"cx": 100, "cy": 100, "rings": 2})).unwrap()["id"].as_u64().unwrap());
+    s.execute("object.scale", &json!({"sx": 1e-4, "sy": 1e-4})).unwrap();
+    let before = flare_settings(&s.doc().unwrap().doc, id).expect("a flare");
+    for (p, key) in [
+        (json!({"pathLength": 1e305}), "x2"),
+        (json!({"x2": 1e305, "y2": 0}), "x2"),
+        (json!({"x2": 0, "y2": -1e305}), "y2"),
+        (json!({"cx": 1e305, "cy": 0}), "cx"),
+    ] {
+        let err = s.execute("shape.editFlare", &p).unwrap_err().to_string();
+        assert!(err.ends_with(&format!("{key} must be a finite coordinate")), "{p}: {err}");
+        assert_eq!(flare_settings(&s.doc().unwrap().doc, id).expect("still a flare"), before, "{p}");
+    }
+}
+
+/// A flare drawn again keeps its parts' pixel-aligned property, whatever the document's Align New
+/// Objects to Pixel Grid is now, and a pixel-aligned flare that was moved is still a flare.
+#[test]
+fn edit_flare_keeps_its_parts_pixel_alignment() {
+    let mut s = session();
+    let aligned = |s: &Session, id: NodeId| -> Vec<bool> {
+        s.doc().unwrap().doc.node(id).unwrap().children().unwrap().iter().map(|c| c.extras().pixel_aligned).collect()
+    };
+    s.execute("document.setup", &json!({"alignNewObjectsToPixelGrid": true})).unwrap();
+    let on = NodeId(s.execute("shape.flare", &json!({"cx": 100.3, "cy": 200.6, "rings": 2})).unwrap()["id"].as_u64().unwrap());
+    s.execute("object.move", &json!({"dx": 10.25, "dy": 3.5})).unwrap();
+    s.execute("document.setup", &json!({"alignNewObjectsToPixelGrid": false})).unwrap();
+    let part = |s: &Session, id: NodeId, name: &str| -> NodeId {
+        s.doc().unwrap().doc.node(id).unwrap().children().unwrap().iter().find(|c| c.name.as_deref() == Some(name)).unwrap().id
+    };
+    let centre = part(&s, on, "Center");
+    s.execute("shape.editFlare", &json!({"rings": 4})).unwrap();
+    assert!(aligned(&s, on).len() > 4 && aligned(&s, on).iter().all(|a| *a));
+    // Each part drawn again keeps its id and its own property: without the rays, the center does
+    // not take theirs.
+    assert_eq!(part(&s, on, "Center"), centre);
+    s.execute("object.setPixelAligned", &json!({"ids": [centre.0], "on": false})).unwrap();
+    s.execute("select.set", &json!({"ids": [on.0]})).unwrap();
+    s.execute("shape.editFlare", &json!({"rays": 0})).unwrap();
+    let node = |s: &Session, id: NodeId| s.doc().unwrap().doc.node(id).unwrap().extras().pixel_aligned;
+    assert!(!node(&s, centre) && node(&s, part(&s, on, "Halo")));
+    let off = NodeId(s.execute("shape.flare", &json!({"cx": 300.3, "cy": 200.6, "rings": 2})).unwrap()["id"].as_u64().unwrap());
+    s.execute("document.setup", &json!({"alignNewObjectsToPixelGrid": true})).unwrap();
+    s.execute("shape.editFlare", &json!({"rings": 4})).unwrap();
+    assert!(aligned(&s, off).iter().all(|a| !*a));
+}
+
 /// `shape.flare`'s `ringSeed` places the rings along the path anew and keeps their count and
 /// sizes and the other parts; the same `ringSeed` draws the same flare, neighboring ones differ,
 /// and a seed that is not a whole number of at least 0 (for `ringSeed`, below 2^53) is refused.
@@ -3451,6 +3594,38 @@ fn flare_small_ring_seeds_spread_the_first_ring_along_the_path() {
     let lo = positions[..5].iter().copied().fold(f64::INFINITY, f64::min);
     let hi = positions[..5].iter().copied().fold(f64::NEG_INFINITY, f64::max);
     assert!(hi - lo > 250.0, "small seeds spread the first ring along the path: {positions:?}");
+}
+
+/// A flare drawn with a small `ringSeed` and then drawn again by `shape.editFlare` keeps its first
+/// ring where `shape.flare` put it: the SplitMix64-initialized Xorshift64 stream's first value
+/// along the path, for each seed.
+#[test]
+fn edit_flare_draws_the_first_ring_of_a_small_ring_seed_where_it_was() {
+    let first_t = |seed: u64| {
+        let mut z = seed.wrapping_add(0x9e37_79b9_7f4a_7c15);
+        z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+        let mut state = z ^ (z >> 31);
+        state ^= state << 13;
+        state ^= state >> 7;
+        state ^= state << 17;
+        (state >> 11) as f64 / (1u64 << 53) as f64
+    };
+    let ring_x = |s: &Session, id: NodeId| {
+        let NodeKind::Group { children, .. } = &s.doc().unwrap().doc.node(id).unwrap().kind else { panic!("flare is a group") };
+        children.iter().find(|n| n.name.as_deref() == Some("Ring")).unwrap().geometric_bounds().unwrap().center().x
+    };
+    let mut s = session();
+    for seed in [0, 1, 2, 5, 11] {
+        let p = json!({"cx": 20, "cy": 30, "x2": 1020, "y2": 30, "rays": 0, "rings": 1, "ringSeed": seed});
+        let id = NodeId(s.execute("shape.flare", &p).unwrap()["id"].as_u64().unwrap());
+        let expected = 20.0 + 1000.0 * first_t(seed);
+        assert!((ring_x(&s, id) - expected).abs() < 1e-6, "seed {seed}: drawn at {}, expected {expected}", ring_x(&s, id));
+        s.execute("shape.editFlare", &json!({"ids": [id.0], "opacity": 80})).unwrap();
+        assert!((ring_x(&s, id) - expected).abs() < 1e-6, "seed {seed}: drawn again at {}, expected {expected}", ring_x(&s, id));
+        s.execute("shape.editFlare", &json!({"ids": [id.0], "opacity": 40})).unwrap();
+        assert!((ring_x(&s, id) - expected).abs() < 1e-6, "seed {seed}: a second edit keeps the ring");
+    }
 }
 
 /// `shape.ellipse` without `anchors`, or with 4, draws the live ellipse it always drew.
@@ -4327,6 +4502,124 @@ fn object_mosaic_refuses_a_boolean_given_as_text() {
     }
     let r = s.execute("object.createObjectMosaic", &json!({"columns": 2, "rows": 1, "gray": true, "deleteRaster": null})).unwrap();
     assert_eq!((r["tiles"].clone(), images(&s)), (json!(2), 1));
+}
+
+/// The size of the mosaic a call makes from the 100 × 50 pt image selected in `s`, with its column and row counts.
+fn mosaic_size(s: &mut Session, p: serde_json::Value) -> (f64, f64, serde_json::Value, serde_json::Value) {
+    let image = s.doc().unwrap().selection.objects.clone();
+    let r = s.execute("object.createObjectMosaic", &p).unwrap();
+    let b = s.doc().unwrap().doc.node(NodeId(r["id"].as_u64().unwrap())).unwrap().geometric_bounds().unwrap();
+    s.execute("select.set", &json!({ "ids": image })).unwrap();
+    ((b.width() * 1e6).round() / 1e6, (b.height() * 1e6).round() / 1e6, r["columns"].clone(), r["rows"].clone())
+}
+
+/// Resize Using Percentages reads the new width and height as percentages of the image's size; Constrain Ratio keeps
+/// the image's proportions, the named side leading; Use Ratio makes the tiles square from the count on the
+/// constrained side (columns by default), and the call answers the counts it used.
+#[test]
+fn object_mosaic_resizes_by_percentages_constrains_the_ratio_and_squares_the_tiles() {
+    let mut s = session();
+    rect(&mut s, 0.0, 0.0, 100.0, 50.0);
+    s.execute("paint.setStroke", &json!({"none": true})).unwrap();
+    s.execute("object.rasterize", &json!({"ppi": 72})).unwrap();
+    assert_eq!(mosaic_size(&mut s, json!({"columns": 2, "rows": 1})), (100.0, 50.0, json!(2), json!(1)));
+    assert_eq!(mosaic_size(&mut s, json!({"width": 50, "height": 200, "percentages": true})), (50.0, 100.0, json!(10), json!(10)));
+    // A side left out is 100% of the image's.
+    assert_eq!(mosaic_size(&mut s, json!({"width": 150, "percentages": true})).0, 150.0);
+    assert_eq!(mosaic_size(&mut s, json!({"width": 200, "height": 10, "constrain": "width"})), (200.0, 100.0, json!(10), json!(10)));
+    assert_eq!(mosaic_size(&mut s, json!({"width": 10, "height": 25, "constrain": "height"})), (50.0, 25.0, json!(10), json!(10)));
+    assert_eq!(mosaic_size(&mut s, json!({"width": 50, "constrain": "width", "percentages": true})), (50.0, 25.0, json!(10), json!(10)));
+    // Square tiles: 10 columns of 10 pt over 50 pt are 5 rows; 4 rows of 12.5 pt over 100 pt are 8 columns.
+    assert_eq!(mosaic_size(&mut s, json!({"columns": 10, "rows": 3, "useRatio": true})), (100.0, 50.0, json!(10), json!(5)));
+    assert_eq!(mosaic_size(&mut s, json!({"columns": 3, "rows": 4, "useRatio": true, "constrain": "height"})), (100.0, 50.0, json!(8), json!(4)));
+    // A side named for Use Ratio is kept without Constrain Ratio: the size stays as given.
+    assert_eq!(mosaic_size(&mut s, json!({"rows": 4, "height": 100, "useRatio": "height"})), (100.0, 100.0, json!(4), json!(4)));
+    // On a new size: 30 columns over 300 × 50 pt are 5 rows.
+    assert_eq!(mosaic_size(&mut s, json!({"columns": 30, "width": 300, "useRatio": true})), (300.0, 50.0, json!(30), json!(5)));
+    // The count is kept within 1..1000.
+    assert_eq!(mosaic_size(&mut s, json!({"columns": 1, "width": 1, "height": 5000, "useRatio": true})).3, json!(1000));
+    assert_eq!(mosaic_size(&mut s, json!({"columns": 1, "width": 5000, "height": 1, "useRatio": true})).3, json!(1));
+    // A size under 0.1 pt grows in proportion while Constrain Ratio keeps it.
+    let (w, h, ..) = mosaic_size(&mut s, json!({"width": 0.1, "constrain": "width"}));
+    assert!((w - 0.2).abs() < 1e-6 && (h - 0.1).abs() < 1e-6, "{w} × {h}");
+    // A side Constrain Ratio works out above 1,000,000 pt shrinks to it, in proportion: a height of
+    // 1,000,000 pt over the 100 × 50 pt image would need a width of 2,000,000 pt.
+    assert_eq!(mosaic_size(&mut s, json!({"height": 1e6, "constrain": "height"})), (1e6, 5e5, json!(10), json!(10)));
+    // An image 20,000,000 times wider than it is tall has no such size: the call is refused.
+    s.execute("object.scale", &json!({"sx": 1, "sy": 1e-7})).unwrap();
+    let r = s.execute("object.createObjectMosaic", &json!({"width": 1e6, "constrain": "width"}));
+    let msg = "the image's proportions leave no size with both sides between 0.1 and 1000000 pt";
+    assert!(matches!(&r, Err(EngineError::BadParams { msg: m, .. }) if m == msg), "{r:?}");
+}
+
+/// Use Ratio squares the tiles as drawn: with 4 pt between columns, 10 columns of 10 pt cells draw 6 pt wide, so the
+/// rows are 6 pt plus their own 4 pt apart (5 rows down 50 pt); on an image turned 90°, the tiles are measured along
+/// its own axes.
+#[test]
+fn object_mosaic_use_ratio_takes_spacing_and_turned_images_into_account() {
+    let mut s = session();
+    rect(&mut s, 0.0, 0.0, 100.0, 50.0);
+    s.execute("paint.setStroke", &json!({"none": true})).unwrap();
+    s.execute("object.rasterize", &json!({"ppi": 72})).unwrap();
+    let image = s.doc().unwrap().selection.objects.clone();
+    let counts = |s: &Session, p: serde_json::Value| crate::cmd::mosaic_counts(s, &p).unwrap();
+    assert_eq!(counts(&s, json!({"columns": 10, "useRatio": true, "spacingX": 4, "spacingY": 4})), (10, 5));
+    assert_eq!(counts(&s, json!({"columns": 10, "useRatio": true, "spacingX": 4})), (10, 8));
+    assert_eq!(counts(&s, json!({"columns": 10, "rows": 7})), (10, 7), "without Use Ratio the counts are kept");
+    let r = s.execute("object.createObjectMosaic", &json!({"columns": 10, "useRatio": true, "spacingX": 4})).unwrap();
+    let g = s.doc().unwrap().doc.node(NodeId(r["id"].as_u64().unwrap())).unwrap().clone();
+    let t = g.children().unwrap()[0].geometric_bounds().unwrap();
+    assert!((t.width() - 6.0).abs() < 1e-6 && (t.height() - 6.25).abs() < 1e-6, "{t:?}");
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("select.set", &json!({ "ids": image })).unwrap();
+    // Turned 90°, the image's 100 pt side runs down the page; 10 columns along it are still 5 rows across its 50.
+    s.execute("object.rotate", &json!({"angle": 90})).unwrap();
+    assert_eq!(counts(&s, json!({"columns": 10, "useRatio": true})), (10, 5));
+}
+
+#[test]
+fn object_mosaic_square_count_is_the_nearest_whole_count() {
+    use crate::cmd::menucmds::mosaic_square_count;
+    assert_eq!(mosaic_square_count(10, 100.0, 50.0, 0.0, 0.0), 5);
+    assert_eq!(mosaic_square_count(3, 100.0, 50.0, 0.0, 0.0), 2);
+    assert_eq!(mosaic_square_count(0, 100.0, 50.0, 0.0, 0.0), 1);
+    assert_eq!(mosaic_square_count(10, 0.0, 50.0, 0.0, 0.0), 1);
+    assert_eq!(mosaic_square_count(1000, 1.0, 1000.0, 0.0, 0.0), 1000);
+    // Spacing wider than a cell leaves 10% of it, on either side.
+    assert_eq!(mosaic_square_count(10, 100.0, 50.0, 50.0, 0.0), 50);
+    // 10 columns of 1 pt tiles (9 pt gaps) over 100 pt; rows 100 pt apart are capped too, so 10 rows draw 1 pt.
+    assert_eq!(mosaic_square_count(10, 100.0, 100.0, 9.0, 100.0), 10);
+    // 15 pt tiles over 50 pt: 3 rows draw 16.7 pt and 4 rows 12.5 pt, so 3.
+    assert_eq!(mosaic_square_count(1, 15.0, 50.0, 0.0, 0.0), 3);
+}
+
+/// A Constrain Ratio side that is not "width" or "height", a new size of 0 or less, and Use Ratio or Resize Using
+/// Percentages given as text are errors naming the key; no mosaic is made.
+#[test]
+fn object_mosaic_refuses_a_bad_ratio_side_size_or_switch() {
+    let mut s = session();
+    rect(&mut s, 0.0, 0.0, 100.0, 50.0);
+    s.execute("object.rasterize", &json!({"ppi": 72})).unwrap();
+    let undo = |s: &Session| s.doc().unwrap().history.undo.len();
+    let before = undo(&s);
+    for (p, msg) in [
+        (json!({"constrain": "both"}), "`constrain` must be one of \"width\", \"height\" or null"),
+        (json!({"constrain": 1}), "`constrain` must be one of \"width\", \"height\" or null"),
+        (json!({"width": 0}), "`width` must be between 0.1 and 1000000 (got 0)"),
+        (json!({"height": -5, "percentages": true}), "`height` must be between 0.1 and 1000000 (got -5)"),
+        (json!({"width": 2e6, "percentages": true}), "`width` must be between 0.1 and 1000000 (got 2000000)"),
+        // A side Constrain Ratio works out is not used, but a size given for it is still checked.
+        (json!({"width": 200, "height": 0, "constrain": "width"}), "`height` must be between 0.1 and 1000000 (got 0)"),
+        (json!({"useRatio": "true"}), "`useRatio` must be one of \"width\", \"height\", true, false or null"),
+        (json!({"useRatio": 1}), "`useRatio` must be one of \"width\", \"height\", true, false or null"),
+        (json!({"percentages": 1}), "`percentages` must be true or false"),
+    ] {
+        let r = s.execute("object.createObjectMosaic", &p);
+        assert!(matches!(&r, Err(EngineError::BadParams { msg: m, .. }) if m == msg), "{p}: {r:?}");
+        assert_eq!(undo(&s), before, "{p}");
+    }
+    let r = s.execute("object.createObjectMosaic", &json!({"constrain": null, "useRatio": null, "percentages": null})).unwrap();
+    assert_eq!(r["tiles"], json!(100));
 }
 
 #[test]
