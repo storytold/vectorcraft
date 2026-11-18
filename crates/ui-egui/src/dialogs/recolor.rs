@@ -392,7 +392,8 @@ fn prominent_bar(ui: &mut Ui, d: &mut Dialog, rows: &[Value]) {
         let c = to_color(&rows[*i]).or_else(|| from_colors(&rows[*i]).first().copied()).unwrap_or_default();
         chip(ui, r, c, false);
         let share = (widths[n] * 100.0).round();
-        ui.interact(r, egui::Id::unique((PROMINENT_PART, n)), Sense::hover()).on_hover_text(format!("{} {}: {share}%", tl!("Color"), i + 1));
+        ui.interact(r, egui::Id::unique((PROMINENT_PART, n)), Sense::hover())
+            .on_hover_text(format!("{} {share}%", crate::i18n::colon(&format!("{} {}", tl!("Color"), i + 1))));
         left = right;
     }
     let mut ended = false;
@@ -1949,7 +1950,7 @@ fn global_sliders(ui: &mut Ui, d: &mut Dialog, sample: Color) {
 /// and its number field, showing `shown` with `suffix`. Returns the whole number in `shown`'s
 /// range that a drag, a key or the field sets.
 #[allow(clippy::too_many_arguments)]
-fn slider_cell(
+pub(crate) fn slider_cell(
     ui: &mut Ui,
     id: impl std::hash::Hash + Copy,
     label: &str,

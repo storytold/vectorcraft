@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use super::mesh::whole;
 use super::{
     Arc, BlendEase, BlendEaseType, BlendOrientation, BlendSpacing, Document, EngineError, Node, NodeId, NodeKind, Result, Selection, Session, Value,
@@ -20,13 +22,14 @@ pub(super) fn roots_param(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
         let mut sel = Selection::default();
         sel.set(ids.iter().copied().filter(|id| st.doc.node(*id).is_some_and(|n| !n.is_layer())));
         let ordered = sel.in_paint_order(&st.doc);
+        let given: HashSet<NodeId> = ordered.iter().copied().collect();
         // Drop ids nested inside other given ids.
         return Ok(ordered
             .iter()
             .copied()
             .filter(|id| {
                 let anc = st.doc.ancestry(*id).unwrap_or_default();
-                !anc[..anc.len().saturating_sub(1)].iter().any(|a| ordered.contains(a))
+                !anc[..anc.len().saturating_sub(1)].iter().any(|a| given.contains(a))
             })
             .collect());
     }
@@ -37,18 +40,25 @@ pub(super) fn roots_param(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
 /// dynamic symbol instance's art is selected.
 pub(super) fn selected_of(s: &Session, pred: fn(&Node) -> bool) -> Vec<NodeId> {
     let Some(st) = s.active().filter(|st| st.selection.symbol_part.is_none()) else { return vec![] };
+    let mut find = st.doc.nearest_finder();
+    let mut seen = HashSet::new();
     let mut out = vec![];
     for id in &st.selection.objects {
-        for a in st.doc.ancestry(*id).unwrap_or_default().into_iter().rev() {
-            if st.doc.node(a).is_some_and(pred) {
-                if !out.contains(&a) {
-                    out.push(a);
-                }
-                break;
-            }
+        if let Some(n) = find.nearest(*id, pred)
+            && seen.insert(n.id)
+        {
+            out.push(n.id);
         }
     }
     out
+}
+
+/// Whether some selected object's node of a kind ([`selected_of`]) passes `test`; stops at the
+/// first one that does.
+pub(super) fn any_selected_of(s: &Session, pred: fn(&Node) -> bool, test: impl Fn(&Node) -> bool) -> bool {
+    let Some(st) = s.active().filter(|st| st.selection.symbol_part.is_none()) else { return false };
+    let mut find = st.doc.nearest_finder();
+    st.selection.objects.iter().any(|id| find.nearest(*id, pred).is_some_and(&test))
 }
 
 pub(super) fn is_blend(n: &Node) -> bool {
@@ -66,19 +76,19 @@ pub(super) fn is_mesh(n: &Node) -> bool {
 pub(super) fn has_blend(s: &Session) -> std::result::Result<(), String> {
     has_selection(s)?;
     crate::cmd::edit::no_symbol_part(s)?;
-    if selected_of(s, is_blend).is_empty() { Err("select a blend".into()) } else { Ok(()) }
+    if any_selected_of(s, is_blend, |_| true) { Ok(()) } else { Err("select a blend".into()) }
 }
 
 pub(super) fn has_envelope(s: &Session) -> std::result::Result<(), String> {
     has_selection(s)?;
     crate::cmd::edit::no_symbol_part(s)?;
-    if selected_of(s, is_envelope).is_empty() { Err("select an envelope".into()) } else { Ok(()) }
+    if any_selected_of(s, is_envelope, |_| true) { Ok(()) } else { Err("select an envelope".into()) }
 }
 
 pub(super) fn has_mesh(s: &Session) -> std::result::Result<(), String> {
     has_selection(s)?;
     crate::cmd::edit::no_symbol_part(s)?;
-    if selected_of(s, is_mesh).is_empty() { Err("select a gradient mesh".into()) } else { Ok(()) }
+    if any_selected_of(s, is_mesh, |_| true) { Ok(()) } else { Err("select a gradient mesh".into()) }
 }
 
 /// Wrap `roots` (paint order) into a new node built by `make`, placed where the topmost root was.

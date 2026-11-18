@@ -225,9 +225,11 @@ pub const ICON_PANELS: &[(&str, &str, &str)] = &[
     (crate::panels::variables::ID, "Variables", "chart-column"),
     (crate::panels::script_console::ID, "Script Console", "message-circle"),
     (crate::panels::learn::ID, "Learn", "graduation-cap"),
+    (crate::panels::discover::ID, "VectorCraft Help…", "search"),
     (crate::addons::cleanup::ID, "Artwork Cleanup", "sparkles"),
     (crate::addons::color::ID, "Color Effects", "sun"),
     (crate::addons::packaging::ID, "Fold Lines", "scissors"),
+    (crate::addons::packaging::preview::ID, "Fold Preview", "box"),
     (crate::addons::pathtools::ID, "Anchor Inspector", "dc-anchor-smooth"),
     (crate::addons::pathtools::shape::ID, "Parametric Shape", "hexagon"),
     (crate::addons::pen::ID, "Smart Pen", "spline-pointer"),
@@ -419,9 +421,16 @@ pub struct UiState {
     /// Type › Find Font…'s last Find In choice (`find_font::FIND_IN`), kept while the app runs.
     #[serde(skip)]
     pub find_font_in: String,
+    /// Ellipse Properties' Constrain Pie Angle link (Transform and Properties panels): a Pie Start
+    /// or End Angle typed while it is on keeps each selected ellipse's pie span. Kept while the app
+    /// runs; off at every launch.
+    #[serde(skip)]
+    pub constrain_pie_angle: bool,
     /// The Learn panel's tab, skill and tutorial, kept while the app runs.
     #[serde(skip)]
     pub learn: crate::panels::learn::View,
+    #[serde(skip)]
+    pub discover: crate::panels::discover::View,
     /// The tool whose place a Learn tutorial step's link shows (`learn.locateTool`), while its mark
     /// is on screen. Not saved.
     #[serde(skip)]
@@ -724,6 +733,10 @@ pub struct UiState {
     /// Flattener Preview panel: highlight, overprints, preset and options (`ui.flattenerPreview`).
     #[serde(default)]
     pub flattener_preview: crate::panels::flattener_preview::Settings,
+    /// Fold Preview window: fold amount, view, zoom, perspective, inside color, fold lines and
+    /// base panel (`ui.foldPreview`).
+    #[serde(default)]
+    pub fold_preview: crate::addons::packaging::preview::Settings,
     /// Color Guide panel: Limit to Library, a swatch library id, "document" (the document's
     /// swatches) or "" (none) (`ui.colorGuideLimit`).
     #[serde(default)]
@@ -1175,7 +1188,9 @@ impl Default for UiState {
             transient_focus: false,
             color_settings_scroll: false,
             find_font_in: String::new(),
+            constrain_pie_angle: false,
             learn: Default::default(),
+            discover: Default::default(),
             learn_locate: None,
             learn_practice: Default::default(),
             learn_progress: Default::default(),
@@ -1265,6 +1280,7 @@ impl Default for UiState {
             color_guide: Default::default(),
             library_panels: vec![],
             flattener_preview: Default::default(),
+            fold_preview: Default::default(),
             color_guide_limit: String::new(),
             color_guide_base: None,
             color_guide_spot: None,
