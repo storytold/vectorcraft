@@ -8305,4 +8305,9 @@ breakText	Glyphs	Γλύφοι
 @msg	A joint does not close by {gap} pt.	Μια ένωση δεν κλείνει κατά {gap} pt.
 @msg	Two panels pass through each other.	Δύο πάνελ διαπερνούν το ένα το άλλο.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	το composer πρέπει να είναι "singleLine", "everyLine", "standardSingleLine" ή "standardEveryLine"
+	Pressure Sensitive	Ευαίσθητα στην πίεση
+	Flex Ribbon	Εύκαμπτη κορδέλα
+	Pulse Stroke	Παλμική πινελιά
+	Round Flow	Στρογγυλή ροή
+	Chisel Flow	Λοξή ροή
 @msg	text.{key} `{v}`: use "{_1}" or "{_2}"	text.{key} `{v}`: χρησιμοποιήστε "{_1}" ή "{_2}"

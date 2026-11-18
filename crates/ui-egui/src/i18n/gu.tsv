@@ -5113,3 +5113,8 @@ swatch	[Registration]	[રજિસ્ટ્રેશન]
 	Standard Single-line Composer	સ્ટાન્ડર્ડ સિંગલ-લાઇન કમ્પોઝર
 	Standard Every-line Composer	સ્ટાન્ડર્ડ એવરી-લાઇન કમ્પોઝર
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer આમાંથી એક હોવું જોઈએ: "singleLine", "everyLine", "standardSingleLine" અથવા "standardEveryLine"
+	Pressure Sensitive	દબાણ સંવેદનશીલ
+	Flex Ribbon	લવચીક પટ્ટી
+	Pulse Stroke	ધબકતો ઘસારો
+	Round Flow	ગોળ પ્રવાહ
+	Chisel Flow	ત્રાંસો પ્રવાહ

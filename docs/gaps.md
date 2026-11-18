@@ -4,6 +4,8 @@
 
 > Selection update (2026-11-11): path and compound-path interiors follow enabled non-None fill rows, including lower fills beneath a top None row (#6625). Hidden-only interiors miss; zero-opacity fills remain selectable. Cap/join follow-up (2026-11-12): hidden-fill and no-fill stroke hits must respect cap and join geometry; focused cap/join CPU regressions passed. Scores and estimates unchanged.
 
+> Blend redraw update (#5179): renderer bounds include spine-placed keys and steps; both focused CPU regressions pass. Scores and estimates unchanged.
+
 ## Feature submission evidence
 
 **Feature evidence last updated:** 2026-11-15.
@@ -332,6 +334,8 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
 - **Estimate:** 30–50 h (the corpus and QA part blocks beta).
 
 ## G11 Correctness bugs in core tools
+
+- **Resolved redraw-bounds defect (#5179):** a curved-spine blend's renderer bounds include its rotated keys and steps after Replace Spine; `crates/engine/tests/blend_render_consistency.rs` keeps the straight-blend control and checks all changed pixels against the advertised area. Both focused CPU regressions pass; broader G11 scope and estimates unchanged.
 
 - **Export-only improvement (#6309):** PDF export keeps harakat and zero-advance Noto Arabic dot glyphs in one compatible batch per layout line, with per-glyph vertical offsets (#6309). `crates/pdf/src/tests/realtext.rs` (`mark_text_*`) checks decoded cluster mappings, mixed Arabic/Latin/digits, contour placement against outline export, vertical columns, differing path rotations and PDF/X-1a/3/4. Editable-text import preserves authored ActualText separately (#6165), with cross-line/style layout limits; separately styled or differently rotated clusters and external viewer search/copy remain outside this export-only evidence. Broader G11 scope, scores and estimates unchanged.
 
@@ -678,7 +682,7 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
   libraries ([public source](https://helpx.adobe.com/illustrator/desktop/paint-and-fill/apply-and-edit-strokes/create-new-brush-libraries.html),
   [import](https://helpx.adobe.com/illustrator/desktop/paint-and-fill/apply-and-edit-strokes/import-brushes-from-brush-libraries-or-other-files.html)):
   Window › Brush Libraries and the Brushes panel's Brush Libraries Menu open each library in a library panel of
-  its own (ten original libraries generated in code: Art Ribbons, Ink and Wash, Calligraphic Nibs, Bristle Brushes (one
+  its own (eleven original libraries generated in code: Art Ribbons, Ink and Wash, Calligraphic Nibs, Pressure Sensitive, Bristle Brushes (one
   bristle brush for each tip shape), Pattern Borders, Scatter Shapes, Game Trails, Energy Beams, Dry Media (grainy chalk, pencil, crayon and charcoal art brushes) and Tech Circuit (Circuit Trace, Bus Lines and Terminal Nodes); User Defined; Other Library… reads the brushes of any document VectorCraft opens); a
   click adds a
   brush to the document's Brushes with the patterns, symbols and other resources its art uses, as one undo
@@ -920,6 +924,7 @@ trap, and the defaults (0.25 pt, 100%, 40%) are VectorCraft's own, the pages giv
 | 2026-11-15 | minor | G12: Swatches item menus validated in all five views: 39 focused tests passed, regression fails without the menu hooks, rendered list/thumbnail layouts inspected, and fresh local deep CodeRabbit review found zero issues. Full workspace CI passed on Linux/WSL on the merged branch (all 13 gates), including the test-helper correction for the upstream compile error tracked in #7727; native Windows full CI has two unchanged engine-test failures. Scores and estimates unchanged. |
 | 2026-11-12 | minor | Explicit editing-data import keeps a single artboard beyond a capped 14,400 pt PDF page (#6865), with a warning; automatic mode stays unchanged. Scores and estimates unchanged. |
 | 2026-11-12 | minor | #6625 cap/join follow-up: hidden-fill and no-fill stroke hits must respect their cap/join geometry; focused CPU regressions passed. Existing fill-stack evidence, scores and estimates unchanged. |
+| 2026-11-12 | minor | Blend redraw (#5179): renderer bounds include spine-placed keys and steps. Original straight and curved Replace Spine, move and Undo CPU regressions pass; scores and estimates unchanged. |
 | 2026-11-09 | minor | G4 review (#6084): positional variants no supported feature draws can be applied as glyph choices in both Glyphs views; unlisted glyphs still respect name ownership. OpenType style options keep only a valid last on-value when enabling a set. Existing contextual/ligature lookup and unsupported-feature gaps remain; estimate unchanged. |
 | 2026-11-07 | minor | G4: the Glyphs panel's Alternates for Current Selection applies the OpenType feature that draws a variant to that letter alone (`salt=2`; the style commands take `tag=N`; runs that differ only in their features shape as one piece of text), so an Arabic word stays joined, and Show › Entire Font lists the unencoded glyphs (#5514). Estimate unchanged. |
 | 2026-11-12 | minor | G11: numeric fields keep the caret when a focus click is released more than 1 pt from its press; a tap within 1 pt still selects the whole value (#6659, follow-up to #1326); short-drag and jitter-tap regressions in `tests/numfields.rs`; estimates unchanged. |

@@ -10112,3 +10112,8 @@ breakText	Glyphs	Glyphes
 @msg	A joint does not close by {gap} pt.	Un joint ne se ferme pas, avec un écart de {gap} pt.
 @msg	Two panels pass through each other.	Deux panneaux se traversent.
 @msg	{_1} × {_2} pixels is too large for GIF (at most 65535 pixels a side): lower the resolution	{_1} × {_2} pixels, c’est trop grand pour le GIF (65535 pixels par côté au plus) : réduisez la résolution
+	Pressure Sensitive	Sensible à la pression
+	Flex Ribbon	Ruban souple
+	Pulse Stroke	Trait pulsé
+	Round Flow	Flux rond
+	Chisel Flow	Flux biseauté
