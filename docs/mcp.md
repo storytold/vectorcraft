@@ -6318,7 +6318,7 @@ The command refuses another mode, and a variation below 0 or past its range, and
 the Eraser's tip outline at the pointer takes the angle, roundness and size the pen gives while it erases, and the
 outline of the area a drag covers takes, at each step, the tip the pen's readings give halfway along it. A Random
 value shows as the value itself there, since the release draws it.
-`tool.setOption {tool: "eraser"}` takes the same keys.
+`tool.setOption {tool: "eraser"}` takes the same keys, with `sizeVariation` from 0 to 1000.
 
 `path.eraseRegion {rect: [x, y, width, height]}` takes a rectangle in place of `points` and erases everything inside
 it from the paths (selected, or all), as an Alt-drag with the Eraser does ([Eraser tool
@@ -11938,9 +11938,22 @@ intensity), and the Symbolism tools one brush. Interaction state (pins, a refere
 desktop app, while the Artboard tool is in use, a change to its `selected` or `active` makes the artboard it then has
 active the active artboard (the navigator's and the Artboards panel's).
 
+Every option given is checked before any is set. A key that the tool's `check_option` does not take (it is unknown
+to that tool), a value of the wrong type, a number outside the tool's range, an unknown choice, a `key` without a
+`value`, a `values` that is not an object or a `tool` that is not a tool id is an error result that names the tool and
+the option, and nothing changes: no option, no saved preference and no undo step, also when another option given with
+it is good. Parameters that are not an object are an error too. `{}`, or no parameters, reads the options and sets
+nothing. The ranges are VectorCraft's own (for example the Smooth tool's `fidelity` takes 0.05 to 100, the Pencil's
+0.01 to 100); a refused value in a Tool Options dialog keeps the dialog open. The Live Paint tools' `width` and the
+Shape Builder's `gapLength` are set to the nearest end of their range when a number outside it is given, as their
+sections above say.
+
 ```json
 {"name":"run_command","arguments":{"command":"tool.setOption","params":{"tool":"twirl","values":{"width":60,"rate":90}}}}
+{"name":"run_command","arguments":{"command":"tool.setOption","params":{"tool":"smooth","key":"fidelity","value":-3}}}
 ```
+
+The second call returns the error ``tool `smooth`: `fidelity` must be a number from 0.05 to 100``.
 
 The Pencil's, the Paintbrush's and the Smooth tool's `fidelity` is in screen pixels: the tools send `path.freehand` and
 `path.smoothRegion` the option divided by the zoom, so a stroke keeps as many points and a Smooth drag smooths as much
