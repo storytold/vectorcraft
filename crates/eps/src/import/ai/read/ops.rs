@@ -1453,16 +1453,30 @@ pub(crate) fn read_style_list(section: &[u8]) -> Vec<String> {
     crate::import::ai::style::art_style_list(section).iter().map(|raw| obj::text(raw)).filter(|name| !name.is_empty()).collect()
 }
 
-/// Art style `name` of `section` as the reader reads it ([`StyleRead`]): [`appearance_from_art_style`],
-/// with a style's one gradient fill as `own_gradient`, the object's own gradient, as [`styled`] reads
-/// it on objects other than type. A stroke that names a brush is read with that brush's name, as
-/// [`styled`] reads it on a path or compound path when the Brushes panel keeps that brush at those
-/// settings, which [`crate::import::ai::brush::BrushesRead::style_reads`] checks. `None` when the section
-/// doesn't define it, the reader doesn't read it, or it paints with a pattern or a gradient that
-/// isn't the object's own.
-pub(crate) fn read_art_style(section: &[u8], name: &str, own_gradient: Option<&Paint>) -> Option<StyleRead> {
+/// An art style as the reader parses it ([`parse_art_style`]), which a writer reads on any number of
+/// objects ([`read_parsed_style`], [`parsed_moves_with`],
+/// [`crate::import::ai::brush::BrushesRead::style_reads`]).
+#[derive(Clone, Debug)]
+pub(crate) struct ParsedStyle {
+    pub(in crate::import::ai) style: crate::import::ai::style::ArtStyle,
+}
+
+/// Art style `name` of `section` (the text between `%AI9_BeginArtStyles` and its end) as the reader
+/// parses it. `None` when the section doesn't define it.
+pub(crate) fn parse_art_style(section: &[u8], name: &str) -> Option<ParsedStyle> {
+    crate::import::ai::style::art_styles(section).remove(name).map(|style| ParsedStyle { style })
+}
+
+/// Art style `parsed` as the reader reads it ([`StyleRead`]): [`appearance_from_art_style`], with a
+/// style's one gradient fill as `own_gradient`, the object's own gradient, as [`styled`] reads it on
+/// objects other than type. A stroke that names a brush is read with that brush's name, as [`styled`]
+/// reads it on a path or compound path when the Brushes panel keeps that brush at those settings,
+/// which [`crate::import::ai::brush::BrushesRead::style_reads`] checks. `None` when the reader doesn't
+/// read it, or it paints with a pattern or a gradient that isn't the object's own. `parsed` is left as
+/// it is, for the next object.
+pub(crate) fn read_parsed_style(parsed: &ParsedStyle, own_gradient: Option<&Paint>) -> Option<StyleRead> {
     use crate::import::ai::style::StyleItem;
-    let mut st = crate::import::ai::style::art_styles(section).remove(name)?;
+    let mut st = parsed.style.clone();
     if st.items.iter().filter(|i| matches!(i, StyleItem::Gradient { .. })).count() == 1 {
         let own = own_gradient?;
         for item in &mut st.items {
@@ -1491,11 +1505,10 @@ pub(crate) fn read_art_style(section: &[u8], name: &str, own_gradient: Option<&P
     Some(StyleRead { appearance, simple: st.simple, image_warp: st.image_warp, pathfinder: st.pathfinder, transparency: st.transparency })
 }
 
-/// Is art style `name` of `section` read on `object` as far as an effect that moves the outline
-/// goes: the style has none, or `object` is one [`moves_with`] reads it on, as [`styled`] checks?
-/// `false` when the section doesn't define it.
-pub(crate) fn style_moves_with(section: &[u8], name: &str, object: &Node) -> bool {
-    crate::import::ai::style::art_styles(section).remove(name).is_some_and(|st| !st.moves_outline() || moves_with(object, &st))
+/// Is art style `parsed` read on `object` as far as an effect that moves the outline goes: the style
+/// has none, or `object` is one [`moves_with`] reads it on, as [`styled`] checks?
+pub(crate) fn parsed_moves_with(parsed: &ParsedStyle, object: &Node) -> bool {
+    !parsed.style.moves_outline() || moves_with(object, &parsed.style)
 }
 
 /// A style's stroke as an appearance item (`None` for a fill).

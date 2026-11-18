@@ -11,26 +11,48 @@ use crate::menus;
 const INDEX_CHARS: usize = 200;
 
 /// The field of a result a word comes from, best first, and the fields of the English stem forms
-/// ([`stems`]) of the words of the label and the menu path.
+/// ([`stems`]) of the words of the label, the menu path and the description ([`description`]).
 const LABEL: u8 = 0;
 const PATH: u8 = 1;
 const ID: u8 = 2;
 const LABEL_STEMMED: u8 = 3;
 const PATH_STEMMED: u8 = 4;
+const DESCRIPTION: u8 = 5;
+const DESCRIPTION_STEMMED: u8 = 6;
 
 /// A word's grade in a result, best first: a whole word of the label, a word of the label it
 /// shares an English stem form with ("outlines" and Outline), a word of the label it starts, a
-/// word of the menu path it is, shares a stem form with or starts, a word of the id it is or
-/// starts, or text inside a word of any field ([`super::matching`]'s substring rule). The grades
-/// without a stem are twice the values they had before stems were added, so results matched
-/// without a stem keep their order by the sum of the grades.
+/// word of the label with the same meaning ([`super::words`]), a word of the menu path it is,
+/// shares a stem form with or starts, a word of the menu path with the same meaning, a word of the
+/// id it is or starts, text inside a word of any field ([`super::matching`]'s substring rule), a
+/// word of the description it is, shares a stem form with, starts or means the same as, a word of
+/// the label a typo away from it ([`Index::typos`]), or a word of the menu path a typo away. A word
+/// of the description comes after the substring rule, so every result the substring rule finds
+/// ranks above a result found only by its description. The grades without a stem or a word with
+/// the same meaning are twice the values they had before those were added, so results matched
+/// without them keep their order by the sum of the grades.
 const LABEL_WORD: u8 = 2;
 const LABEL_STEM: u8 = 3;
 const LABEL_PREFIX: u8 = 4;
+const LABEL_SYNONYM: u8 = 5;
 const PATH_WORD: u8 = 6;
+const PATH_SYNONYM: u8 = 7;
 const ID_WORD: u8 = 8;
 const SUBSTRING: u8 = 10;
+const DESCRIPTION_WORD: u8 = 11;
+const LABEL_TYPO: u8 = 12;
+const PATH_TYPO: u8 = 14;
 const NONE: u8 = u8::MAX;
+
+/// The most characters of a command's description the index reads (VectorCraft's own limit).
+const DESCRIPTION_CHARS: usize = 300;
+
+/// The words of a description the index leaves out, besides words of 2 characters or fewer and
+/// words with no letter.
+const STOP_WORDS: &[&str] = &["the", "and", "ids", "true", "false", "null"];
+
+/// The most words a query word with a typo meets ([`Index::typos`]), nearest first.
+const TYPO_TERMS: usize = 32;
 
 /// How a whole query matches a result, best first: it is the result's id, it is a label, a label
 /// starts with it, or it is the initials of a label.
@@ -62,6 +84,38 @@ pub(crate) struct Index {
     initials_text: String,
     /// Each result's offset and length in `initials_text`.
     initials: Vec<(u32, u16)>,
+    /// Each word of a group of words with the same meaning ([`super::words::GROUPS`], and the
+    /// words the UI language's catalog adds), with the group's place in the table.
+    synonyms: HashMap<Box<str>, u16>,
+}
+
+/// Is `w` one word as the index splits text ([`words`])?
+pub(crate) fn is_one_word(w: &str) -> bool {
+    let mut it = words(w);
+    it.next() == Some(w) && it.next().is_none()
+}
+
+/// The words of each group of [`super::words::GROUPS`], with the words `search_row` gives for the
+/// group's catalog row ([`super::words::row_key`]) in the UI language. A word the catalog gives
+/// that is not a single word, or that is already a word of a group, is left out.
+fn synonym_groups(search_row: impl Fn(&str) -> Option<String>) -> HashMap<Box<str>, u16> {
+    let mut out: HashMap<Box<str>, u16> = HashMap::new();
+    let groups = super::words::GROUPS.iter().enumerate().filter_map(|(g, words)| u16::try_from(g).ok().map(|g| (g, words)));
+    for (g, words) in groups.clone() {
+        for &w in *words {
+            out.insert(w.into(), g);
+        }
+    }
+    for (g, words) in groups {
+        let Some(text) = search_row(&super::words::row_key(words)) else { continue };
+        for (w, single) in super::words::row_words(&text) {
+            if single {
+                out.entry(w.into()).or_insert(g);
+            }
+        }
+    }
+    out.shrink_to_fit();
+    out
 }
 
 /// Splits `text` into lowercase words at whitespace and at `.`, `-`, `/`, `(`, `)`, `…`, `›`, `,`
@@ -133,6 +187,80 @@ fn stems(word: &str) -> Vec<String> {
     vec![]
 }
 
+/// Is `c` a letter of a script written without spaces between words (Han, kana or Hangul)?
+fn spaceless(c: char) -> bool {
+    matches!(
+        u32::from(c),
+        0x1100..=0x11FF
+            | 0x3040..=0x30FF
+            | 0x3130..=0x318F
+            | 0x31F0..=0x31FF
+            | 0x3400..=0x4DBF
+            | 0x4E00..=0x9FFF
+            | 0xA960..=0xA97F
+            | 0xAC00..=0xD7FF
+            | 0xF900..=0xFAFF
+            | 0xFF66..=0xFFDC
+            | 0x20000..=0x323AF
+    )
+}
+
+/// The most edits a query word may be away from a word it meets as a typo: 1 for a word of 4 to 7
+/// characters, 2 for a longer one, and none for a shorter word or one with letters of a script
+/// written without spaces ([`spaceless`]).
+fn typo_bound(word: &str) -> Option<usize> {
+    if word.chars().any(spaceless) {
+        return None;
+    }
+    match word.chars().count() {
+        0..=3 => None,
+        4..=7 => Some(1),
+        _ => Some(2),
+    }
+}
+
+/// The number of edits between `a` and `b` when it is at most `bound`: a character inserted,
+/// removed or changed, or two adjacent characters swapped (`gruop` and `group`), each count as one.
+/// The count stops as soon as every way of lining the two up needs more than `bound`.
+fn edits_within(a: &[char], b: &[char], bound: usize) -> Option<usize> {
+    if a.len().abs_diff(b.len()) > bound {
+        return None;
+    }
+    let at = |row: &[usize], j: usize| row.get(j).copied().unwrap_or(usize::MAX);
+    // The edits between the first i characters of `a` and the first j of `b`, for the rows i - 2,
+    // i - 1 and i.
+    let mut before: Vec<usize> = vec![0; b.len() + 1];
+    let mut last: Vec<usize> = (0..=b.len()).collect();
+    let mut row: Vec<usize> = vec![0; b.len() + 1];
+    for (i, &ca) in a.iter().enumerate() {
+        if let Some(first) = row.first_mut() {
+            *first = i + 1;
+        }
+        for (j, &cb) in b.iter().enumerate() {
+            let changed = at(&last, j).saturating_add(usize::from(ca != cb));
+            let removed = at(&last, j + 1).saturating_add(1);
+            let inserted = at(&row, j).saturating_add(1);
+            let mut edits = changed.min(removed).min(inserted);
+            let swapped = i.checked_sub(1).and_then(|k| a.get(k)).zip(j.checked_sub(1).and_then(|k| b.get(k)));
+            if let Some((&pa, &pb)) = swapped
+                && pa == cb
+                && pb == ca
+            {
+                edits = edits.min(at(&before, j - 1).saturating_add(1));
+            }
+            if let Some(cell) = row.get_mut(j + 1) {
+                *cell = edits;
+            }
+        }
+        if row.iter().all(|&e| e > bound) {
+            return None;
+        }
+        std::mem::swap(&mut before, &mut last);
+        std::mem::swap(&mut last, &mut row);
+    }
+    last.last().copied().filter(|&e| e <= bound)
+}
+
 /// Adds each word of `text` to `found` for result `entry` in `field`, and with `stemmed`, each
 /// word's English stem forms in that field.
 fn add_words(found: &mut Vec<(String, u16, u8)>, text: &str, entry: u16, field: u8, stemmed: Option<u8>) {
@@ -150,6 +278,50 @@ fn split_name(name: &str) -> (&str, &str) {
         Some((path, label)) => (label, path),
         None => (name, ""),
     }
+}
+
+/// A command's description, read from its params text: the text without each `{…}` group that is
+/// not inside a `{`, `[` or `(` group (braces inside double quotes are text), without each such
+/// `[…]` or `(…)` group just after a `→`, and without the `→` just before a removed group, with
+/// each run of whitespace made one space and cut to its first [`DESCRIPTION_CHARS`] characters at
+/// the end of a word. A group that is never closed stays in the text, and so does a result written
+/// as words after a `→`. Params text that is only a group has an empty description.
+pub(crate) fn description(params: &str) -> String {
+    let mut out = String::new();
+    // The end of the text copied to `out`, and whether a removed group is open.
+    let (mut copied, mut open) = (0, false);
+    for (i, ch, depth) in crate::shortcut_editor::outside_quotes(params) {
+        let before = params.get(copied..i).unwrap_or_default();
+        match ch {
+            '{' | '[' | '(' if depth == 0 && (ch == '{' || before.trim_end().ends_with('→')) => {
+                out.push_str(before);
+                (copied, open) = (i, true);
+            }
+            '}' | ']' | ')' if depth == 1 && open => {
+                let kept = out.trim_end().strip_suffix('→').unwrap_or(&out).len();
+                out.truncate(kept);
+                out.push(' ');
+                (copied, open) = (i + ch.len_utf8(), false);
+            }
+            _ => {}
+        }
+    }
+    out.push_str(params.get(copied..).unwrap_or_default());
+    let text = out.split_whitespace().collect::<Vec<_>>().join(" ");
+    // A cut inside a word drops the rest of that word, so no part of a word is read as a word.
+    let Some((head, rest)) = text.char_indices().nth(DESCRIPTION_CHARS).and_then(|(end, _)| text.split_at_checked(end)) else { return text };
+    let head = if rest.starts_with(' ') { head } else { head.rsplit_once(' ').map_or("", |(kept, _)| kept) };
+    head.trim_end().to_string()
+}
+
+/// The lowercase words of the lowercased `description` the index holds: split at every character
+/// that is not a letter, a digit or an apostrophe, without apostrophes at either end, and leaving
+/// out words of 2 characters or fewer, words with no letter and [`STOP_WORDS`].
+fn description_words(description: &str) -> impl Iterator<Item = &str> {
+    description
+        .split(|c: char| !(c.is_alphanumeric() || c == '\''))
+        .map(|w| w.trim_matches('\''))
+        .filter(|w| w.chars().count() > 2 && w.chars().any(char::is_alphabetic) && !STOP_WORDS.contains(w))
 }
 
 /// `name` without the id that follows it when the result shows its id.
@@ -172,9 +344,12 @@ impl Index {
     /// The index of `entries`, whose menu homes and menu items read `homes` in the UI language. The
     /// words of a result's menu home and of its menu item's label count as menu path words. The
     /// words of the English names, menu home and menu item label also add their English stem forms
-    /// ([`stems`]); words in the UI language do not. A catalog with more results than a posting can
-    /// name gets an empty index, and queries match by the substring rule alone.
-    pub(crate) fn build(entries: &[Entry], homes: &[Option<String>]) -> Index {
+    /// ([`stems`]); words in the UI language do not. `params` gives each result's params text, whose
+    /// [`description`] adds its words ([`description_words`]) and their stem forms; only the words
+    /// are kept. `search_row` gives the UI language's words for a group of words with the same
+    /// meaning ([`synonym_groups`]). A catalog with more results than a posting can name gets an
+    /// empty index, and queries match by the substring rule alone.
+    pub(crate) fn build(entries: &[Entry], homes: &[Option<String>], params: &[&str], search_row: impl Fn(&str) -> Option<String>) -> Index {
         if entries.len() > usize::from(u16::MAX) {
             return Index::default();
         }
@@ -211,12 +386,18 @@ impl Index {
             for id in ids(e) {
                 found.extend(words(id).map(|w| (w.to_string(), entry, ID)));
             }
+            if let Some(text) = params.get(i).filter(|p| !p.is_empty()) {
+                for w in description_words(&description(text).to_lowercase()) {
+                    found.push((w.to_string(), entry, DESCRIPTION));
+                    found.extend(stems(w).into_iter().map(|s| (s, entry, DESCRIPTION_STEMMED)));
+                }
+            }
             let len = u16::try_from(initials_text.len() - start).unwrap_or(0);
             initials.push((u32::try_from(start).unwrap_or(0), len));
         }
         found.sort_unstable();
         found.dedup();
-        let mut index = Index { initials_text, initials, ..Index::default() };
+        let mut index = Index { initials_text, initials, synonyms: synonym_groups(search_row), ..Index::default() };
         let mut last: Option<&str> = None;
         for (word, entry, field) in &found {
             if last != Some(word.as_str()) {
@@ -253,6 +434,8 @@ impl Index {
             + self.postings.capacity() * std::mem::size_of::<Posting>()
             + self.initials_text.capacity()
             + self.initials.capacity() * std::mem::size_of::<(u32, u16)>()
+            + self.synonyms.capacity() * (std::mem::size_of::<(Box<str>, u16)>() + 1)
+            + self.synonyms.keys().map(|w| w.len()).sum::<usize>()
     }
 
     /// The text of the word at `(offset, len)` in `term_text`.
@@ -273,10 +456,11 @@ impl Index {
         self.terms.binary_search_by(|t| self.text(t).cmp(text)).ok()
     }
 
-    /// The best grade ([`LABEL_WORD`] to [`ID_WORD`]) `word` gets in each result, [`NONE`] where it
-    /// is no word, shares no English stem form with a word of the label or menu path, and starts no
-    /// word of the result. The words it starts are found by a binary search of the sorted words; a
-    /// stem form matches only a word or stem form equal to it.
+    /// The best grade ([`LABEL_WORD`] to [`DESCRIPTION_WORD`], without [`SUBSTRING`]) `word` gets in
+    /// each result, [`NONE`] where it is no word, shares no English stem form with a word of the
+    /// label, menu path or description, means the same as none of them, and starts no word of the
+    /// result. The words it starts are found by a binary search of the sorted words; a stem form
+    /// matches only a word or stem form equal to it.
     fn grades(&self, word: &str, n: usize) -> Vec<u8> {
         let mut out = vec![NONE; n];
         let mut mark = |postings: &[Posting], grade: &dyn Fn(u8) -> Option<u8>| {
@@ -301,19 +485,22 @@ impl Index {
                 LABEL if whole => Some(LABEL_WORD),
                 LABEL => Some(LABEL_PREFIX),
                 PATH => Some(PATH_WORD),
+                DESCRIPTION => Some(DESCRIPTION_WORD),
                 ID => Some(ID_WORD),
                 _ => None,
             });
         }
         // The word meets a stem form of a word of the result ("scale" and Scaling) when it is itself
-        // a word of some result, so a partly typed word ("scal") that only equals a stem form does
-        // not lift Scaling above Scale.
+        // a word of some result's label, menu path, id or description, so a partly typed word
+        // ("scal") that only equals a stem form does not lift Scaling above Scale. A description is
+        // cut at the end of a word ([`description`]), so it holds no partly typed word.
         if let Some(t) = self.find(word)
-            && self.postings_of(t).iter().any(|p| matches!(p.field, LABEL | PATH | ID))
+            && self.postings_of(t).iter().any(|p| matches!(p.field, LABEL | PATH | ID | DESCRIPTION))
         {
             mark(self.postings_of(t), &|field| match field {
                 LABEL_STEMMED => Some(LABEL_STEM),
                 PATH_STEMMED => Some(PATH_WORD),
+                DESCRIPTION_STEMMED => Some(DESCRIPTION_WORD),
                 _ => None,
             });
         }
@@ -324,10 +511,86 @@ impl Index {
             mark(self.postings_of(t), &|field| match field {
                 LABEL | LABEL_STEMMED => Some(LABEL_STEM),
                 PATH | PATH_STEMMED => Some(PATH_WORD),
+                DESCRIPTION | DESCRIPTION_STEMMED => Some(DESCRIPTION_WORD),
+                _ => None,
+            });
+        }
+        // Each other word of the word's group of words with the same meaning ([`Index::synonyms_of`])
+        // meets a word of the label, menu path or description, or a stem form of one, equal to it.
+        // Ids are not matched this way.
+        for t in self.synonyms_of(word) {
+            mark(self.postings_of(t), &|field| match field {
+                LABEL | LABEL_STEMMED => Some(LABEL_SYNONYM),
+                PATH | PATH_STEMMED => Some(PATH_SYNONYM),
+                DESCRIPTION | DESCRIPTION_STEMMED => Some(DESCRIPTION_WORD),
                 _ => None,
             });
         }
         out
+    }
+
+    /// The other words of the group of words with the same meaning that `word`, or a stem form of
+    /// it, is in ("bg" and background, "flipped" and reflect), as places in `terms`; the words of the
+    /// group no result holds are left out.
+    fn synonyms_of(&self, word: &str) -> Vec<usize> {
+        let group = std::iter::once(word.to_string()).chain(stems(word)).find_map(|w| self.synonyms.get(w.as_str()).copied());
+        let Some(group) = group else { return vec![] };
+        let mut found: Vec<usize> = self.synonyms.iter().filter(|&(w, &g)| g == group && &**w != word).filter_map(|(w, _)| self.find(w)).collect();
+        // The map's order changes from one build to the next; the words' order in `terms` does not.
+        found.sort_unstable();
+        found
+    }
+
+    /// The words of labels and menu paths that `word` is a typo of: within [`typo_bound`] edits of
+    /// it ([`edits_within`]), at most [`TYPO_TERMS`], nearest first, as places in `terms`. Ids and
+    /// words with letters of a script written without spaces ([`spaceless`]) are not compared.
+    fn typos(&self, word: &str) -> Vec<usize> {
+        let Some(bound) = typo_bound(word) else { return vec![] };
+        let word: Vec<char> = word.chars().collect();
+        let mut term: Vec<char> = vec![];
+        let mut near: Vec<(usize, usize)> = vec![];
+        for (t, at) in self.terms.iter().enumerate() {
+            let text = self.text(at);
+            if text.chars().count().abs_diff(word.len()) > bound || text.chars().any(spaceless) {
+                continue;
+            }
+            term.clear();
+            term.extend(text.chars());
+            if let Some(edits) = edits_within(&word, &term, bound)
+                && self.postings_of(t).iter().any(|p| matches!(p.field, LABEL | PATH))
+            {
+                near.push((edits, t));
+            }
+        }
+        near.sort_unstable();
+        near.truncate(TYPO_TERMS);
+        near.into_iter().map(|(_, t)| t).collect()
+    }
+
+    /// Gives each result a word of `near` ([`Index::typos`]) is a word of its label or menu path
+    /// [`LABEL_TYPO`] or [`PATH_TYPO`] in `grades`, where its grade is not better. A typo replaces
+    /// [`DESCRIPTION_WORD`], since a result found only by its description ranks below one found
+    /// through a typo ([`rank`]).
+    fn mark_typos(&self, near: &[usize], grades: &mut [u8]) {
+        for &t in near {
+            for p in self.postings_of(t) {
+                let grade = match p.field {
+                    LABEL => LABEL_TYPO,
+                    PATH => PATH_TYPO,
+                    _ => continue,
+                };
+                if let Some(g) = grades.get_mut(usize::from(p.entry)) {
+                    *g = if *g == DESCRIPTION_WORD { grade } else { (*g).min(grade) };
+                }
+            }
+        }
+    }
+
+    /// The text of the first word of `near` that is a word of result `i` in one of `fields` (its
+    /// label or its menu path, and their stem forms).
+    fn nearest_of(&self, near: &[usize], i: usize, fields: &[u8]) -> Option<&str> {
+        let t = near.iter().find(|&&t| self.postings_of(t).iter().any(|p| usize::from(p.entry) == i && fields.contains(&p.field)))?;
+        self.terms.get(*t).map(|at| self.text(at))
     }
 
     /// Is `query` (no spaces) the initials of one of result `i`'s labels?
@@ -379,18 +642,29 @@ fn phrase(e: &Entry, query: &str, initials: bool) -> u8 {
     NO_PHRASE
 }
 
-/// What results are ordered by, compared field by field: how the whole query matches, the worst
-/// grade a word gets, the sum of the grades, the kind of result and the label's length.
-type RankKey = (u8, u8, u32, u8, usize);
+/// What results are ordered by, compared field by field: whether a word matched only through a
+/// description, whether a word matched only through a typo, how the whole query matches, the worst
+/// grade a word gets, the sum of the grades, how the whole query matches when read with the words
+/// of the same meaning it matched through, the kind of result and the label's length.
+type RankKey = (bool, bool, u8, u8, u32, u8, u8, usize);
 
 /// The results of `entries` that the lowercased `query` matches, best first, as places in
 /// `entries`. A result matches when every word of the query is text in one of its names or ids
 /// (the rule the palette always had, so nothing it found is lost), when every word of the query is
-/// or starts a word of its label, menu path or id or shares an English stem form with a word of its
-/// label or menu path ("rounded corners" for Round Corners…), or when the query is the initials of
-/// a label ("ea" for Export As…). Results are ordered by how the whole query matches ([`phrase`]),
-/// then by the worst grade a word gets, the sum of the grades, the kind of result ([`kind`]), the
-/// label's length and the catalog order. An empty query lists every result in catalog order.
+/// or starts a word of its label, menu path, description ([`description`]) or id, shares an English
+/// stem form with a word of its label, menu path or description ("rounded corners" for Round
+/// Corners…) or means the same as a word of its label, menu path or description ("remove bg" for
+/// Remove Background…), or when the query is the initials of a label ("ea" for Export As…). A query
+/// word that is no word, stem form or word start of any result's label, menu path or id also
+/// matches the words of labels and menu paths it is a typo of ([`Index::typos`]).
+/// Results where a word matched only through a description come after every other result. Before
+/// them, results where a word matched only through a typo come after every other result, and their
+/// whole-query match is read with each such word replaced by the word it is a typo of ("gruop" as
+/// "group"). Results are ordered by that, by how the whole query matches ([`phrase`]), then by the
+/// worst grade a word gets, the sum of the grades, how the whole query matches when read with each
+/// word matched through a word of the same meaning replaced by that word ("colour" as "color"),
+/// the kind of result ([`kind`]), the label's length and the catalog order. An empty query lists
+/// every result in catalog order.
 pub(crate) fn rank(entries: &[Entry], index: &Index, query: &str) -> Vec<u32> {
     let query = normalize(query);
     if query.is_empty() {
@@ -399,8 +673,39 @@ pub(crate) fn rank(entries: &[Entry], index: &Index, query: &str) -> Vec<u32> {
     let spaced: Vec<&str> = query.split(' ').collect();
     let head: String = query.chars().take(INDEX_CHARS).collect();
     let tokens: Vec<&str> = words(&head).collect();
+    // Where each word starts in the query (`head` is its start), for reading the query with a typo
+    // corrected.
+    let starts: Vec<usize> = tokens.iter().map(|t| (t.as_ptr() as usize).saturating_sub(head.as_ptr() as usize)).collect();
     let n = entries.len();
-    let indexed: Vec<Vec<u8>> = tokens.iter().map(|t| index.grades(t, n)).collect();
+    let mut indexed: Vec<Vec<u8>> = Vec::with_capacity(tokens.len());
+    let mut typos: Vec<Vec<usize>> = Vec::with_capacity(tokens.len());
+    let mut meanings: Vec<Vec<usize>> = Vec::with_capacity(tokens.len());
+    // After a word that is nothing in any result and a typo of nothing, a result is found only by
+    // the substring rule or its initials, where a typo grade changes nothing, so the later words are
+    // not compared.
+    let mut compare = true;
+    for (k, t) in tokens.iter().enumerate() {
+        // A repeated word is graded once.
+        if let Some(j) = tokens.iter().take(k).position(|u| u == t)
+            && let (Some(grades), Some(near), Some(same)) = (indexed.get(j).cloned(), typos.get(j).cloned(), meanings.get(j).cloned())
+        {
+            indexed.push(grades);
+            typos.push(near);
+            meanings.push(same);
+            continue;
+        }
+        meanings.push(index.synonyms_of(t));
+        let mut grades = index.grades(t, n);
+        // A word that matches only words of descriptions is still compared with the words of labels
+        // and menu paths it may be a typo of.
+        let near = if compare && grades.iter().all(|&g| g == NONE || g == DESCRIPTION_WORD) { index.typos(t) } else { vec![] };
+        if near.is_empty() && grades.iter().all(|&g| g == NONE) {
+            compare = false;
+        }
+        index.mark_typos(&near, &mut grades);
+        indexed.push(grades);
+        typos.push(near);
+    }
     // The index reads only the start of a longer query, so such a query matches by the substring
     // rule, which reads all of it.
     let fits = query.chars().count() <= INDEX_CHARS;
@@ -414,24 +719,80 @@ pub(crate) fn rank(entries: &[Entry], index: &Index, query: &str) -> Vec<u32> {
         // Each word's grade, the worst and their sum; with initials, every word counts as a word
         // the label starts, as the initials stand for every word of the label.
         let (mut all_indexed, mut worst, mut sum) = (fits && !tokens.is_empty(), 0u8, 0u32);
-        for (grades, token) in indexed.iter().zip(&tokens) {
+        // The query as read for the whole-query match, with each word matched only through a typo
+        // replaced by the word of this result it is a typo of; and as read with each word matched
+        // through a word with the same meaning replaced by that word too.
+        let (mut typo, mut corrected, mut copied) = (false, String::new(), 0);
+        let mut described = false;
+        let (mut synonym, mut meant, mut meant_copied) = (false, String::new(), 0);
+        let splice = |out: &mut String, copied: &mut usize, k: usize, token: &str, word: &str| {
+            if let Some(&start) = starts.get(k)
+                && let Some(between) = query.get(*copied..start)
+            {
+                out.push_str(between);
+                out.push_str(word);
+                *copied = start + token.len();
+            }
+        };
+        for (k, (grades, token)) in indexed.iter().zip(&tokens).enumerate() {
             let mut g = grades.get(i).copied().unwrap_or(NONE);
             if g == NONE {
                 all_indexed = false;
-                if e.haystack.contains(token) {
-                    g = SUBSTRING;
+            }
+            if g > SUBSTRING && e.haystack.contains(token) {
+                g = SUBSTRING;
+            }
+            let g = if initials {
+                g.min(LABEL_PREFIX)
+            } else if g == NONE {
+                SUBSTRING
+            } else {
+                g
+            };
+            described |= g == DESCRIPTION_WORD;
+            let field = match g {
+                LABEL_TYPO => Some(LABEL),
+                PATH_TYPO => Some(PATH),
+                _ => None,
+            };
+            if let Some(field) = field {
+                typo = true;
+                if let Some(near) = typos.get(k).and_then(|near| index.nearest_of(near, i, &[field])) {
+                    splice(&mut corrected, &mut copied, k, token, near);
+                    splice(&mut meant, &mut meant_copied, k, token, near);
                 }
             }
-            let g = if initials { g.min(LABEL_PREFIX) } else { g.min(SUBSTRING) };
+            let fields: &[u8] = match g {
+                LABEL_SYNONYM => &[LABEL, LABEL_STEMMED],
+                PATH_SYNONYM => &[PATH, PATH_STEMMED],
+                _ => &[],
+            };
+            if !fields.is_empty() {
+                synonym = true;
+                if let Some(same) = meanings.get(k).and_then(|same| index.nearest_of(same, i, fields)) {
+                    splice(&mut meant, &mut meant_copied, k, token, same);
+                }
+            }
             worst = worst.max(g);
             sum += u32::from(g);
         }
         if !(substring || all_indexed || initials) {
             continue;
         }
-        let tier = phrase(e, &query, initials);
+        let tier = if typo {
+            corrected.push_str(query.get(copied..).unwrap_or_default());
+            phrase(e, &corrected, false)
+        } else {
+            phrase(e, &query, initials)
+        };
+        let meant_tier = if synonym {
+            meant.push_str(query.get(meant_copied..).unwrap_or_default());
+            phrase(e, &meant, false)
+        } else {
+            tier
+        };
         let length = split_name(&e.shown).0.chars().count();
-        ranked.push(((tier, worst, sum, e.kind, length), place));
+        ranked.push(((described, typo, tier, worst, sum, meant_tier, e.kind, length), place));
     }
     ranked.sort_by_key(|&(key, place)| (key, place));
     ranked.into_iter().map(|(_, place)| place).collect()
@@ -460,6 +821,10 @@ pub(crate) fn menu_homes(native: bool) -> HashMap<String, (String, &'static str)
             match it {
                 menus::Item::Cmd(label, id, p) if !skip.contains(id) => {
                     out.entry(key(id, p)).or_insert_with(|| (path.join(" › "), *label));
+                    // Window › Learn runs `window.learn`, which is a result of its own too.
+                    if *id == "window.learn" {
+                        out.entry((*id).to_string()).or_insert_with(|| (path.join(" › "), *label));
+                    }
                 }
                 menus::Item::Sub(name, children) => {
                     path.push(name);
@@ -510,12 +875,19 @@ mod tests {
             kind: kind(id, home.as_deref()),
             home,
             menu_item: "",
+            label_at: 0,
+            names_item: false,
         }
     }
 
     /// `entries` with their index.
     fn synthetic(entries: Vec<Entry>) -> Catalog {
-        let index = Index::build(&entries, &[]);
+        described(entries, &[])
+    }
+
+    /// `entries` with their index, the params text of each in `params`.
+    fn described(entries: Vec<Entry>, params: &[&str]) -> Catalog {
+        let index = Index::build(&entries, &[], params, |_| None);
         Catalog { list: entries, index, ranked: std::sync::Mutex::new(None) }
     }
 
@@ -702,6 +1074,299 @@ mod tests {
         ] {
             assert!(place(&en, q, id).is_some(), "{q} finds {id}");
         }
+    }
+
+    /// Edits are counted up to a bound: a changed, inserted or removed character, or two adjacent
+    /// characters swapped, is one edit, and words further apart than the bound give none.
+    #[test]
+    fn edits_are_counted_up_to_a_bound() {
+        let edits = |a: &str, b: &str, bound: usize| edits_within(&a.chars().collect::<Vec<_>>(), &b.chars().collect::<Vec<_>>(), bound);
+        for (a, b, bound, expected) in [
+            ("group", "group", 1, Some(0)),
+            ("gruop", "group", 1, Some(1)),
+            ("elipse", "ellipse", 1, Some(1)),
+            ("rectange", "rectangle", 2, Some(1)),
+            ("eyedroper", "eyedropper", 2, Some(1)),
+            ("recktanglee", "rectangle", 2, Some(2)),
+            ("grop", "group", 1, Some(1)),
+            ("grap", "group", 1, None),
+            ("ab", "abcd", 1, None),
+            ("ca", "abc", 2, None),
+            ("abcd", "wxyz", 2, None),
+            ("über", "uber", 1, Some(1)),
+            ("", "ab", 2, Some(2)),
+        ] {
+            assert_eq!(edits(a, b, bound), expected, "{a} {b}");
+            assert_eq!(edits(b, a, bound), expected, "{b} {a}");
+        }
+        assert_eq!(typo_bound("pen"), None);
+        assert_eq!(typo_bound("elip"), Some(1));
+        assert_eq!(typo_bound("rectang"), Some(1));
+        assert_eq!(typo_bound("rectange"), Some(2));
+        for w in ["群組群組", "かなかなか", "한국어단어", "zz群組"] {
+            assert_eq!(typo_bound(w), None, "{w}");
+        }
+    }
+
+    /// A query word with a typo finds a result whose label or menu path holds the word, below every
+    /// result matched without a typo, and a word that is a word or a word start of some result, a
+    /// word of fewer than 4 letters, an id and a word of a script written without spaces get no
+    /// typo matches.
+    #[test]
+    fn a_word_with_a_typo_finds_the_result() {
+        let c = synthetic(vec![entry("Zz Group", "a.one"), entry("Zz Cut", "b.two"), entry("Zz Rectangle", "c.three")]);
+        assert_eq!(ranked(&c, "gruop"), ["a.one"], "two letters swapped");
+        assert_eq!(ranked(&c, "gruop zz"), ["a.one"]);
+        assert_eq!(ranked(&c, "cutx"), ["b.two"]);
+        assert!(ranked(&c, "cux").is_empty(), "3 letters");
+        assert_eq!(ranked(&c, "recktanglee"), ["c.three"], "two edits in a longer word");
+        assert!(ranked(&c, "rectanglexxx").is_empty());
+        // Below a result whose name holds the word as text, and below one that holds it whole.
+        let c = synthetic(vec![entry("Zz Color", "a.one"), entry("Zz Bcolrb", "b.two")]);
+        assert_eq!(ranked(&c, "colr"), ["b.two", "a.one"]);
+        let c = synthetic(vec![entry("Color", "a.one"), entry("Zz Bcolrb", "b.two")]);
+        assert_eq!(ranked(&c, "colr"), ["b.two", "a.one"], "also when the word spelled right is the label");
+        let c = synthetic(vec![entry("Zz Color", "a.one"), entry("Zz Colr", "b.two")]);
+        assert_eq!(ranked(&c, "colr"), ["b.two"], "a word some result holds gets no typo matches");
+        // A word of the label before a word of the menu path.
+        let c = synthetic(vec![entry("Color › Zz Other", "a.one"), entry("Zz Color", "b.two")]);
+        assert_eq!(ranked(&c, "colr"), ["b.two", "a.one"]);
+        // Ids and words of scripts written without spaces.
+        let c = synthetic(vec![entry("Zz One", "group.one"), entry("物件 › 群組群組", "b.two")]);
+        assert!(ranked(&c, "gruop").is_empty());
+        assert!(ranked(&c, "群組群物").is_empty());
+        // A word of Latin letters followed by Han letters, one edit from "abcd", is not compared.
+        let c = synthetic(vec![entry("Zz Abc群", "a.one")]);
+        assert!(ranked(&c, "abcd").is_empty());
+        // The whole query is read with the word it is a typo of: "gruop" names Group as "group" does.
+        let c = synthetic(vec![entry("Group Selection Tool", "tool:groupSelection"), entry("Object › Group", "object.group")]);
+        assert_eq!(ranked(&c, "gruop"), ranked(&c, "group"));
+        assert_eq!(ranked(&c, "gruop").first().map(String::as_str), Some("object.group"));
+        // The rest of the query is read as typed, `›` included.
+        let c = synthetic(vec![entry("Object › Group Zz Tool", "tool:zz"), entry("Object › Group", "object.group")]);
+        assert_eq!(ranked(&c, "object › group"), ["object.group", "tool:zz"]);
+        assert_eq!(ranked(&c, "object › gruop"), ranked(&c, "object › group"));
+        // A label typo is read with the word of the label, even when a word of the menu path is
+        // nearer: "abcdefgh" reads as "abcdefyy" in the first, which is then its label.
+        let c = synthetic(vec![entry("Abcdefyy Zz", "tool:b"), entry("Abcdefgx › Abcdefyy", "a.one")]);
+        assert_eq!(ranked(&c, "abcdefgh"), ["a.one", "tool:b"]);
+    }
+
+    /// A query word with a typo meets at most 32 words, the nearest first, and a long word with no
+    /// match finds nothing.
+    #[test]
+    fn a_typo_meets_at_most_32_words() {
+        // 35 words one edit from the query and one word two edits from it, which sorts before them.
+        let near = ('a'..='z').chain('0'..='9').filter(|&ch| ch != 'q');
+        let mut entries: Vec<Entry> = near.enumerate().map(|(i, ch)| entry(&format!("Abcdefg{ch}"), &format!("a.n{i}"))).collect();
+        entries.insert(0, entry("Abcdeaxq", "far.one"));
+        let c = synthetic(entries);
+        let found = ranked(&c, "abcdefgq");
+        assert_eq!(found.len(), 32, "{found:?}");
+        assert!(!found.contains(&"far.one".to_string()));
+        let c = synthetic(vec![entry("Abcdeaxq", "far.one")]);
+        assert_eq!(ranked(&c, "abcdefgq"), ["far.one"], "two edits in a word of 8 letters");
+        assert!(ranked(&c, &"q".repeat(30)).is_empty());
+    }
+
+    /// On the English results, misspelled words list first the commands the word spelled right
+    /// lists first by labels, menu paths and ids (a typo does not match descriptions), the tool among
+    /// the first four, and a word of 3 letters is not read as a typo.
+    #[test]
+    fn misspelled_words_find_the_command() {
+        let c = catalog(Lang::EN, false);
+        let first = |q: &str| ranked(&c, q).first().cloned().unwrap_or_default();
+        assert_eq!(first("gruop"), "object.group");
+        let plain = Index::build(&c.list, &[], &[], |_| None);
+        let id = |&i: &u32| c.list.get(i as usize).map(|e| e.id.clone()).unwrap_or_default();
+        for (typo, word, tool) in [
+            ("eyedroper", "eyedropper", "tool:eyedropper"),
+            ("rectange", "rectangle", "tool:rectangle"),
+            ("elipse", "ellipse", "tool:ellipse"),
+            ("gruop", "group", "tool:groupSelection"),
+        ] {
+            assert!(substring_rule(&c, typo).is_empty(), "{typo} matched nothing before");
+            let top = |q: &str| ranked(&c, q).into_iter().take(4).collect::<Vec<_>>();
+            let spelled_right: Vec<String> = rank(&c.list, &plain, word).iter().take(4).map(id).collect();
+            assert_eq!(top(typo), spelled_right, "{typo}");
+            assert!(place(&c, typo, tool).is_some_and(|p| p < 4), "{typo}: {:?}", ranked(&c, typo));
+        }
+        assert_eq!(first("pen"), "tool:pen");
+        assert!(place(&c, "pen", "file.open").is_some(), "Open… holds the text");
+    }
+
+    /// A query word finds a result whose label or menu path holds another word of its group of words
+    /// with the same meaning: below a result whose label holds the word itself, above one whose menu
+    /// path holds the word, and with a menu path word of the group last. A stem form of the query word
+    /// and of a result's word meet the group too; ids, word starts and words of no group do not.
+    #[test]
+    fn a_word_with_the_same_meaning_finds_the_result() {
+        let c = synthetic(vec![
+            entry("Delete › Zz Path", "d.four"),
+            entry("Remove › Zz Other", "c.three"),
+            entry("Zz Delete", "a.one"),
+            entry("Zz Remove", "b.two"),
+        ]);
+        assert_eq!(ranked(&c, "remove"), ["b.two", "a.one", "c.three", "d.four"]);
+        assert!(ranked(&c, "remo zz").iter().all(|id| id != "a.one" && id != "d.four"), "a word start is not looked up");
+        let c = synthetic(vec![entry("Zz Reflect…", "a.one"), entry("Zz Reflecting", "b.two"), entry("Zz One", "reflect.one")]);
+        assert_eq!(ranked(&c, "flipped zz"), ["a.one", "b.two"], "stem forms on both sides, and no id");
+        let c = synthetic(vec![entry("Zz Unite", "a.one"), entry("Zz Merge", "b.two")]);
+        assert_eq!(ranked(&c, "merge"), ["b.two"], "merge is in no group");
+        assert_eq!(ranked(&c, "combine"), ["a.one"]);
+        // Among results that match equally well, the whole query read with the word of the same
+        // meaning ("colour" as "color") puts the label Color first, but never above a label that
+        // holds the query word itself.
+        let c = synthetic(vec![entry("Zz Color", "tool:zz"), entry("Color", "panel:color"), entry("Zz Colour", "c.three")]);
+        assert_eq!(ranked(&c, "colour"), ["c.three", "panel:color", "tool:zz"]);
+    }
+
+    /// A catalog row adds words in the UI language to a group, and a word that is not a single word
+    /// or that is a word of another group is left out.
+    #[test]
+    fn a_catalog_row_adds_words_to_a_group() {
+        let entries = || vec![entry("Zz Delete", "a.one")];
+        let row = |key: &str| (key == "remove, delete, erase, clear").then(|| "Entfernen, ganz weg, text".to_string());
+        let with = Catalog { list: entries(), index: Index::build(&entries(), &[], &[], row), ranked: std::sync::Mutex::new(None) };
+        assert_eq!(ranked(&with, "entfernen"), ["a.one"]);
+        assert!(ranked(&with, "ganz weg").is_empty(), "two words are left out");
+        assert!(ranked(&with, "text").is_empty(), "text stays in its own group");
+        let without = synthetic(entries());
+        assert!(ranked(&without, "entfernen").is_empty(), "only while the row's language is the UI language");
+    }
+
+    /// A description is the params text without the groups of its schema and result: one fixture
+    /// of each shape the params texts take.
+    #[test]
+    fn a_description_leaves_out_the_schema_and_the_result() {
+        for (params, expected) in [
+            // A schema, prose and a result.
+            ("{a: 1, b?: bool (true)} make it so → {changed, ids}", "make it so"),
+            // A quoted brace inside a schema.
+            ("{sep: \"}\" or \"{\" (\"}\")} split the text", "split the text"),
+            // A schema only.
+            ("{radius: pt (10)}", ""),
+            // An empty schema, then prose with no arrow.
+            ("{} choose the Corner Tool", "choose the Corner Tool"),
+            // Prose after the result.
+            ("{from?: index} → {index}: moves the document", ": moves the document"),
+            // Nested braces and brackets.
+            ("{a: {b: 1}, c: [x, {y}]} trims the path", "trims the path"),
+            // Alternative schemas.
+            ("{id, dx} or {items: [{id}…], dx} move anchors", "or move anchors"),
+            // A result in brackets or parentheses, and a result written as words.
+            ("{} → [name…] for the active document", "for the active document"),
+            ("{id} → ({x, y}) its place", "its place"),
+            ("{id} → its id.", "→ its id."),
+            // A group inside parentheses is text, and so is a group that is never closed.
+            ("fits it (as {x} does) here", "fits it (as {x} does) here"),
+            ("{a: 1 never closed", "{a: 1 never closed"),
+            // No group at all.
+            ("plain   words\n here", "plain words here"),
+            ("", ""),
+        ] {
+            assert_eq!(description(params), expected, "{params}");
+        }
+        // A long description ends at the end of a word.
+        let cut = description(&"word ".repeat(100));
+        assert!(cut.chars().count() <= DESCRIPTION_CHARS && cut.ends_with(" word"), "{cut}");
+        let cut = description(&format!("{}handles", "abcd ".repeat(59)));
+        assert!(cut.chars().count() <= DESCRIPTION_CHARS && cut.ends_with(" abcd"), "{cut}");
+        let whole = format!("{}handles", "abcd ".repeat(58));
+        assert_eq!(description(&whole), whole);
+        assert!(description_words("the and ids true false null of a 16 10pt x").eq(["10pt"]));
+        assert!(description_words("image's 'quoted' png").eq(["image's", "quoted", "png"]));
+    }
+
+    /// A word of a description finds the result as a whole word, a stem form, a word start or a word
+    /// with the same meaning, below a result that holds the word in its label or menu path or inside
+    /// a word. A schema's words, words left out of descriptions and typos do not find it.
+    #[test]
+    fn a_word_of_the_description_finds_the_result() {
+        let c = described(
+            vec![
+                entry("Zz Alpha", "a.one"),
+                entry("Zz Background", "b.two"),
+                entry("Zz Underbackground", "c.three"),
+                entry("Background › Zz Delta", "d.four"),
+            ],
+            &["{corners?: bool (true)} make the background of the images transparent → {changed}", "", "", ""],
+        );
+        assert_eq!(ranked(&c, "transparent"), ["a.one"]);
+        assert_eq!(ranked(&c, "making images"), ["a.one"], "stem forms");
+        assert_eq!(ranked(&c, "transp"), ["a.one"], "a word start");
+        assert_eq!(ranked(&c, "background"), ["b.two", "d.four", "c.three", "a.one"]);
+        assert_eq!(ranked(&c, "bg"), ["b.two", "d.four", "a.one"], "a word with the same meaning");
+        assert_eq!(ranked(&c, "transparent background"), ["a.one"]);
+        assert!(ranked(&c, "corners").is_empty(), "a word of the schema");
+        assert!(ranked(&c, "changed").is_empty(), "a word of the result");
+        assert!(ranked(&c, "the").is_empty(), "a word left out");
+        assert!(ranked(&c, "trasnparent").is_empty(), "a typo");
+        assert!(synthetic(vec![entry("Zz Alpha", "a.one")]).index.find("transparent").is_none());
+    }
+
+    /// A result found only by its description ranks below a result found through a typo of a word
+    /// of its label: "centr" starts "centred" in a description and is a typo of "center". A result
+    /// matched both ways ranks as matched through the typo.
+    #[test]
+    fn a_description_match_ranks_below_a_typo() {
+        let c = described(vec![entry("Zz Beta", "b.two"), entry("Zz Center", "a.one")], &["{} keeps the art centred on the page", ""]);
+        assert_eq!(ranked(&c, "centr"), ["a.one", "b.two"]);
+        assert_eq!(ranked(&c, "zz centr"), ["a.one", "b.two"]);
+        let both = described(vec![entry("Zz Center", "a.one"), entry("Center", "c.three")], &["", "{} keeps the art centred on the page"]);
+        assert_eq!(ranked(&both, "centr"), ["c.three", "a.one"]);
+    }
+
+    /// On the English results, words of what a command does find it: "transparent background"
+    /// lists Remove Background… near the top, and "png" lists it below every result with png in its
+    /// name or menu path, while a word of its schema alone ("corners") does not list it.
+    #[test]
+    fn words_of_a_description_find_the_command() {
+        let c = catalog(Lang::EN, false);
+        let remove = "addon.image.removeBackground";
+        let text = super::super::params_texts(&c.list);
+        let at = c.list.iter().position(|e| e.id == remove).unwrap();
+        assert!(description(text[at]).starts_with("make the background of each image transparent"), "{}", description(text[at]));
+        assert!(substring_rule(&c, "transparent background").len() < ranked(&c, "transparent background").len());
+        assert!(place(&c, "transparent background", remove).is_some_and(|p| p < 3), "{:?}", ranked(&c, "transparent background"));
+        let png = ranked(&c, "png");
+        let below = png.iter().position(|id| id == remove).unwrap();
+        let named = |e: &Entry| names(e).chain(e.home.as_deref()).any(|n| n.to_lowercase().contains("png"));
+        let with_png: Vec<usize> = c.list.iter().filter(|e| named(e)).filter_map(|e| png.iter().position(|id| *id == e.id)).collect();
+        assert!(!with_png.is_empty() && with_png.iter().all(|&p| p < below), "{png:?}");
+        assert!(place(&c, "corners", remove).is_none());
+        assert!(place(&c, "corners", "effect:stylize.roundCorners").is_some_and(|p| p < 3), "{:?}", ranked(&c, "corners"));
+    }
+
+    /// On the English results, everyday words find commands whose names use another word, and a
+    /// result whose label holds a word with the same meaning as the query ranks above one that holds
+    /// the query only in its menu path.
+    #[test]
+    fn words_with_the_same_meaning_find_the_command() {
+        let c = catalog(Lang::EN, false);
+        let first = |q: &str| ranked(&c, q).first().cloned().unwrap_or_default();
+        let within = |q: &str, id: &str, n: usize| place(&c, q, id).is_some_and(|p| p < n);
+        for q in ["remove bg", "outline text", "flip", "combine", "vectorize", "colour"] {
+            assert!(substring_rule(&c, q).len() < ranked(&c, q).len(), "{q} finds more than before");
+        }
+        assert_eq!(first("remove bg"), "addon.image.removeBackground");
+        assert_eq!(first("outline text"), "type.createOutlines");
+        assert!(within("flip", "object.reflect", 3), "{:?}", ranked(&c, "flip"));
+        assert!(within("combine", "object.pathfinder.unite", 3), "{:?}", ranked(&c, "combine"));
+        assert!(ranked(&c, "vectorize").iter().take(3).any(|id| id.starts_with("imageTrace.")), "{:?}", ranked(&c, "vectorize"));
+        assert_eq!(first("colour"), "panel:color", "{:?}", ranked(&c, "colour"));
+        // A word that only starts other labels is in a group, and its labels follow the direct match.
+        assert_eq!(first("unite"), "object.pathfinder.unite");
+        assert!(place(&c, "unite", "object.slice.combine").is_some(), "{:?}", ranked(&c, "unite"));
+        assert!(place(&c, "delete", "view.guides.clear").is_some(), "{:?}", ranked(&c, "delete"));
+        assert!(place(&c, "settings", "edit.preferences").is_some(), "{:?}", ranked(&c, "settings"));
+        let merge = ranked(&c, "merge");
+        let unite = merge.iter().position(|id| id == "object.pathfinder.unite");
+        let named = |id: &String| c.list.iter().any(|e| &e.id == id && split_name(&e.shown).0 == "Merge");
+        assert!(merge.first().is_some_and(named), "{merge:?}");
+        assert!(unite.is_none() || merge.iter().rposition(named) < unite, "{merge:?}");
+        let (scale, vertical) = (place(&c, "type", "type.scaleTextAttributes"), place(&c, "type", "type.orientation.vertical"));
+        assert!(scale.is_some() && scale < vertical, "{scale:?} {vertical:?}");
     }
 
     /// The application menu of the native Mac menu bar holds the items [`menu_homes`] puts there,
@@ -949,8 +1614,8 @@ mod tests {
         assert_eq!(of("tool:pen"), None);
         // The home's words find the result: Preferences… under the native bar's Settings.
         let native_catalog = catalog(Lang::EN, true);
-        assert!(place(&native_catalog, "settings pref", "edit.preferences").is_some());
-        assert!(place(&c, "settings pref", "edit.preferences").is_none());
+        assert!(place(&native_catalog, "vectorcraft settings pref", "edit.preferences").is_some());
+        assert!(place(&c, "vectorcraft settings pref", "edit.preferences").is_none());
         // The menu item's own label finds the result too: File › Exit runs Quit VectorCraft.
         assert!(place(&c, "exit", "app.quit").is_some());
     }
@@ -972,10 +1637,32 @@ mod tests {
         let c = catalog(Lang::EN, false);
         let built = started.elapsed();
         let started = std::time::Instant::now();
-        let index = Index::build(&c.list, &[]);
+        let params = super::super::params_texts(&c.list);
+        let index = Index::build(&c.list, &[], &params, |_| None);
         println!("catalog {built:?}, index alone {:?}, {} results, {} bytes", started.elapsed(), c.list.len(), index.bytes());
+        let started = std::time::Instant::now();
+        let without = Index::build(&c.list, &[], &[], |_| None);
+        println!("index without descriptions {:?}, {} bytes", started.elapsed(), without.bytes());
         let long = "q".repeat(200);
-        for q in ["e", "ea", "select", "bring front", "zzzz", long.as_str()] {
+        let typos = "gruop elipse rectange eyedroper trasnform patern gradeint symbl";
+        let repeated = format!("{typos} ").repeat(3);
+        let queries = [
+            "e",
+            "ea",
+            "select",
+            "bring front",
+            "zzzz",
+            "eyedroper",
+            "gruop zz",
+            "remove bg",
+            "colour",
+            "transparent background",
+            "png",
+            typos,
+            repeated.as_str(),
+            long.as_str(),
+        ];
+        for q in queries {
             let started = std::time::Instant::now();
             let runs = 100;
             for _ in 0..runs {

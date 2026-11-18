@@ -278,9 +278,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 }
 
 /// The Export 3D Object button, available while a selected object has a 3D effect that
-/// `assets.add3D` exports ([`can_export_3d`]). An error goes to the status bar.
+/// `assets.add3D` exports ([`can_export_3d_shown`]). An error goes to the status bar.
 fn export_button(app: &mut VectorcraftApp, ui: &mut Ui, ctx: &egui::Context) {
-    let any = can_export_3d(app);
+    let any = can_export_3d_shown(app);
     ui.add_space(10.0);
     if ui.add_enabled(any, egui::Button::new(tl!("Export 3D Object"))).clicked() {
         finish(app, ctx);
@@ -297,6 +297,22 @@ pub(crate) fn can_export_3d(app: &VectorcraftApp) -> bool {
     let Some(st) = app.session.active() else { return false };
     let compound = |id: NodeId| st.doc.parent_of(id).filter(|p| st.doc.node(*p).is_some_and(|n| matches!(n.kind, NodeKind::Compound { .. })));
     st.selection.objects.iter().any(|id| st.doc.node(compound(*id).unwrap_or(*id)).is_some_and(vectorcraft_effects::exports_three_d))
+}
+
+/// [`can_export_3d`], worked out once per (document uid, revision)
+/// ([`crate::caches::CanvasCache::three_d_exportable`]): the panel reads it every frame, and Select
+/// All can select hundreds of thousands of objects.
+pub(crate) fn can_export_3d_shown(app: &mut VectorcraftApp) -> bool {
+    let Some(st) = app.session.active() else { return false };
+    let key = (st.uid, st.revision);
+    if let Some((k, any)) = app.canvas.three_d_exportable
+        && k == key
+    {
+        return any;
+    }
+    let any = can_export_3d(app);
+    app.canvas.three_d_exportable = Some((key, any));
+    any
 }
 
 /// Export 3D Object: adds the selected objects that have a 3D effect to Asset Export as 3D assets
