@@ -1,4 +1,4 @@
-//! VectorCraft's egui frontend: an Illustrator-style UI over `vectorcraft-engine`.
+//! VectorCraft's egui frontend: menus, tools, panels and dialogs over `vectorcraft-engine`.
 //!
 //! The UI is thin: every action goes through [`VectorcraftApp::run`], which dispatches UI commands
 //! (view/window) here and everything else to the engine. The same entry point serves menus,
@@ -129,6 +129,7 @@ pub use services::{
 };
 use state::{GeometryStamp, InputGeneration, PendingScreenshot, QueuedScreenshot};
 pub(crate) use state::{InputFrame, take_frame_once};
+pub use ui_fonts::on_missing_glyphs;
 
 pub struct VectorcraftApp {
     pub session: Session,
@@ -348,6 +349,11 @@ pub struct VectorcraftApp {
     /// The file File › Open read that waits for the answer to its profile question
     /// ([`dialogs::profile_mismatch`]), kept out of the dialog's fields.
     pub(crate) pending_profile_open: Option<dialogs::profile_mismatch::PendingOpen>,
+    /// The paths Choose… picked in a script's file dialog, kept out of the dialog's fields, which
+    /// `ui.dialog.set` writes.
+    pub(crate) script_picked: Vec<String>,
+    /// Choose… left out files past the most a script is given.
+    pub(crate) script_picked_left_out: bool,
     /// The pen end the canvas saw last and the tool its eraser end stands in for
     /// ([`stylus::sync_eraser_tool`]).
     pub(crate) pen_end: stylus::PenEnd,
