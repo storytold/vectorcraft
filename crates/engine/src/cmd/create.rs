@@ -256,6 +256,11 @@ pub(crate) fn draw_inside_group(d: &mut vectorcraft_doc::Document, target: NodeI
     mask.set_clipping_path(true);
     let gid = d.alloc_id();
     d.insert(par, idx + 1, Node::new(gid, NodeKind::Group { children: vec![std::sync::Arc::new(mask)], clip: true }))?;
+    // The object goes in as art: a clipping path drawn into (another clip's) leaves its mark, and
+    // its copy alone clips.
+    if let Some(t) = d.node_mut(target).filter(|t| t.is_clipping_path()) {
+        t.set_clipping_path(false);
+    }
     d.move_node(target, Some(gid), 0)?;
     // Copied type whose layout caches `reid` dropped has them again.
     super::typecmd::refresh_bounds_of(d, &[gid]);

@@ -339,25 +339,22 @@ fn the_clipping_path_is_marked_whatever_its_kind_until_the_clip_goes() {
     assert!(!marked(&s, donut), "releasing the layer's clip takes it off");
 }
 
-/// A clip group finds its clipping path by the mark, not by its place: moved to the top of its
-/// group, the ring still clips the art as before, on screen, in clicks, in its bounds and in the
-/// SVG and PDF output.
+/// A clip group finds its clipping path by the mark, not by its place: on top of the art, where
+/// Make Clipping Mask leaves it and where the first member, the art, would clip by its place, the
+/// ring clips the art, on screen, in clicks, in its bounds and in the SVG and PDF output.
 #[test]
 fn a_marked_clipping_path_clips_wherever_it_sits_in_its_group() {
     let mut s = session();
     let (art, donut) = art_and_donut(&mut s);
     select(&mut s, &[art, donut]);
     let g = id_of(&s.execute("object.clippingMask.make", &json!({})).unwrap());
-    let bounds = |s: &Session| s.doc().unwrap().doc.node(g).unwrap().geometric_bounds();
-    let before = bounds(&s);
-    // `node.move` puts a row anywhere, the bottom of a clip group included.
-    s.execute("node.move", &json!({"id": donut.0, "parent": g.0, "index": 1})).unwrap();
-    assert_eq!(child_ids(&s, g), [art, donut]);
+    assert_eq!(child_ids(&s, g), [art, donut], "on top");
+    let bounds = |s: &Session, id: NodeId| s.doc().unwrap().doc.node(id).unwrap().geometric_bounds();
     let r = render(&s);
     assert!(opaque(&r, 20, 50), "the ring shows the art");
     assert!(!opaque(&r, 50, 50), "the hole stays transparent");
     assert!(!opaque(&r, 3, 3), "outside the ring");
-    assert_eq!(bounds(&s), before);
+    assert_eq!(bounds(&s, g), bounds(&s, donut), "the ring's bounds");
     assert_eq!(hit(&s, 20.0, 50.0), Some(art));
     assert_eq!(hit(&s, 50.0, 50.0), None, "the hole");
     // The SVG and PDF drawings (the PDF without the native document, which reopens in its place).
@@ -836,4 +833,24 @@ fn a_brush_made_from_a_clip_with_a_compound_clipping_path_clips_by_it() {
     select(&mut s, &[line]);
     let expanded = s.execute("object.expandBrush", &json!({})).unwrap()["ids"][0].as_u64().unwrap();
     clips_by_the_compound(&clip_in(s.doc().unwrap().doc.node(NodeId(expanded)).unwrap()).unwrap());
+}
+
+/// Draw Inside a clip group's clipping path: the object goes into the new clip group as art, under
+/// its unpainted copy, which alone is marked and clips.
+#[test]
+fn drawing_inside_a_clipping_path_leaves_its_copy_the_one_clipping_path() {
+    let mut s = session();
+    let (art, donut) = art_and_donut(&mut s);
+    select(&mut s, &[art, donut]);
+    s.execute("object.clippingMask.make", &json!({})).unwrap();
+    select(&mut s, &[donut]);
+    s.execute("view.drawMode", &json!({"mode": "inside"})).unwrap();
+    let drawn = id_of(&s.execute("shape.rectangle", &json!({"x": 40, "y": 40, "width": 20, "height": 20})).unwrap());
+    let d = &s.doc().unwrap().doc;
+    let inner = d.parent_of(drawn).unwrap();
+    let members = child_ids(&s, inner);
+    assert_eq!(members[0], donut, "the object, as art");
+    let marked: Vec<NodeId> = members.iter().copied().filter(|id| d.node(*id).unwrap().is_clipping_path()).collect();
+    assert_eq!(marked, [members[1]], "its copy over it, alone");
+    assert_eq!(clips_by(&s, inner), Some(members[1]));
 }
