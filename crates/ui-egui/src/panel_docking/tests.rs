@@ -408,7 +408,7 @@ fn a_character_field_shortcut_brings_the_floating_character_panel_forward() {
     h.frame(vec![]);
     assert!(showing(&h.app.ui, "character"));
     assert_eq!(h.app.dock_rt.raise, None);
-    for command in ["type.highlightKerning", "type.highlightTracking", "type.highlightFontName"] {
+    for command in ["type.highlightKerning", "type.highlightTracking", "type.highlightFontName", "type.highlightFontSize"] {
         h.app.run(command, json!({})).unwrap();
         assert_eq!(h.app.dock_rt.raise.as_deref(), Some("character"), "{command}");
         h.frame(vec![]);
