@@ -4440,6 +4440,7 @@ digits	Malayalam	Malayalam
 	Rule:	Regel:
 	Save changes to {name}	Gem ændringer i {name}
 	Save theme to My Themes	Gem tema i Mine temaer
+	Set the current fill or stroke to the selected color	Sæt den aktuelle udfyldning eller streg til den markerede farve
 	Set the selected color to the current color	Sæt den markerede farve til den aktuelle farve
 	Copy All Styles	Kopiér alle typografier
 	Exported {path}	Eksporterede {path}

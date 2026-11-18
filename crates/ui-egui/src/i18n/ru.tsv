@@ -3571,6 +3571,7 @@ digits	Malayalam	Малаялам
 	Set Slice Rectangle	Задать прямоугольник фрагмента
 	Set Tab Stops	Задать табуляции
 	Set Text	Задать текст
+	Set the current fill or stroke to the selected color	Назначить выбранный цвет текущей заливке или обводке
 	Set the selected color to the current color	Назначить текущий цвет выбранному цвету
 	Set Zoom	Задать масштаб
 	Settings…	Параметры…

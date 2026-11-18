@@ -3856,6 +3856,7 @@ digits	Malayalam	მალაიალამური
 	Rule:	წესი:
 	Save changes to {name}	ცვლილებების შენახვა: {name}
 	Save theme to My Themes	თემის შენახვა „ჩემ თემებში“
+	Set the current fill or stroke to the selected color	მიმდინარე შევსების ან კონტურის მონიშნულ ფერად დაყენება
 	Set the selected color to the current color	მონიშნული ფერის მიმდინარე ფერად დაყენება
 	Copy All Styles	ყველა სტილის კოპირება
 	Exported {path}	ექსპორტირებულია: {path}

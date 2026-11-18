@@ -1120,7 +1120,9 @@ Color Themes (local only: no online service) keeps five-colour themes in the pre
 harmony rule makes from a base colour (base first; `name?` defaults to "Theme N", `replace: "<name>"` overwrites
 that theme in place). `colorTheme.list` answers `{themes: [{name, colors: [hex], keys: [colour keys], rule?}]}`,
 `colorTheme.delete {name}` removes one and `colorTheme.addToSwatches {name}` adds one to the Swatches panel as a
-colour group (one undo step).
+colour group (one undo step). The Create tab's Set the current fill or stroke to the selected color button runs
+`paint.setFill` (or `paint.setStroke` with the Stroke proxy in front) with the selected colour and `keepModel: true`;
+a script does the same with those commands.
 
 ```json
 {"name":"run_command","arguments":{"command":"colorTheme.save","params":{"color":"#2266aa","rule":"splitComplementary","name":"Harbor"}}}
