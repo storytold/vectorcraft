@@ -3123,6 +3123,8 @@ fn bristle_tip_annotator_follows_a_rotation_capable_pen() {
     assert!(bounds(&newly_selected, &view).is_some(), "no selected path borrows Smooth yet");
     assert_eq!(newly_selected.cursor(&selected_view, new_stroke.pos, new_stroke.mods), Cursor::Smooth);
     assert!(bounds(&newly_selected, &selected_view).is_none(), "post-commit selection also hides the tip");
+    tool.pointer(&view, &at(Some(0.0)));
+    assert!(bounds(&tool, &view).is_some(), "a normal pen hover shows the tip before Precise Cursors hides it");
     let precise = ToolContext { precise_cursors: true, ..cx(&d, &s, &p) };
     assert!(bounds(&tool, &precise).is_none());
     tool.pointer(&view, &at(Some(0.0)).with_mods(Mods { cmd: true, ..Default::default() }));
