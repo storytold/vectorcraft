@@ -51,6 +51,8 @@ pub mod transform;
 pub mod transparency;
 pub mod variables;
 
+use std::sync::Arc;
+
 use egui::{Rect, Sense, Ui, vec2};
 use serde_json::{Value, json};
 use vectorcraft_color::{BlendMode, Color, Paint};
@@ -62,9 +64,11 @@ use crate::theme::Tokens;
 use crate::widgets::{Live, dim_label};
 use crate::{VectorcraftApp, icons};
 
-/// The first selected node (cloned), if any.
-pub fn first_selected(app: &VectorcraftApp) -> Option<Node> {
-    first_node(app).cloned()
+/// The first selected node, as the `Arc` the document holds, if any. It does not change with later
+/// edits: read it again after one.
+pub fn first_selected(app: &VectorcraftApp) -> Option<Arc<Node>> {
+    let st = app.session.active()?;
+    st.selection.objects.first().and_then(|id| layers::node_arc(&st.doc, *id))
 }
 
 /// The radius the Live Corners of path `n` show in the panels: that of the corners the panels set
@@ -194,6 +198,7 @@ pub fn show_icon_panel(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
         crate::addons::pathtools::ID => crate::addons::pathtools::show(app, ui),
         crate::addons::pathtools::shape::ID => crate::addons::pathtools::shape::show(app, ui),
         crate::addons::pen::ID => crate::addons::pen::show(app, ui),
+        crate::addons::units::ID => crate::addons::units::show(app, ui),
         id if library_panel::parse(id).is_some() => library_panel::show(app, ui, id),
         _ => {
             dim_label(ui, tl!("This panel is on the roadmap (see the parity plan)."));
@@ -239,6 +244,7 @@ pub fn panel_menu_items(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) -> bool
         "attributes" => attributes::menu(app, ui),
         svg_interactivity::ID => svg_interactivity::menu(app, ui),
         "colorThemes" => color_themes::menu(app, ui),
+        color_wheel::ID => color_wheel::menu(app, ui),
         "layers" => layers::menu(app, ui),
         links::ID => links::menu(app, ui),
         asset_export::ID => asset_export::menu(app, ui),
@@ -492,12 +498,14 @@ pub(crate) fn live_run(app: &mut VectorcraftApp, label: &str, cmd: &str, params:
     match phase {
         Live::Idle => {}
         Live::Dragging | Live::Released => {
-            if app.session.begin_interaction(label).is_ok() {
+            if app.begin_interaction(label).is_ok() {
                 if let Err(e) = app.session.preview(cmd, &params) {
                     app.ui.status = e.to_string();
                 }
-                if phase == Live::Released {
-                    app.session.commit_interaction().ok();
+                if phase == Live::Released
+                    && let Err(e) = app.session.commit_interaction()
+                {
+                    app.ui.status = e.to_string();
                 }
                 app.sync_views();
             } else if phase == Live::Released {
@@ -794,6 +802,8 @@ mod tests_blend;
 mod tests_brush_libraries;
 #[cfg(test)]
 mod tests_color_wheel;
+#[cfg(test)]
+mod tests_color_wheel_box;
 #[cfg(test)]
 mod tests_constrain;
 #[cfg(test)]
