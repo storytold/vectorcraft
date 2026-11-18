@@ -593,6 +593,7 @@ fn default_swatches_pattern_composite_family_survives_restart_and_profile_collis
         let held =
             CompositeFont::named(&d.composite_fonts, &family).expect("saved pattern must carry its document-defined composite family after restart");
         assert_eq!(held.parts, source_font.parts, "the pattern keeps the source definition, not a category's same-named definition");
+        assert_eq!(held.custom, source_font.custom, "the pattern keeps the source family's custom character sets");
         assert_eq!(CompositeFont::same_name(&held.name, &source_font.name), !collision);
         let style = d.char_styles.iter().find(|s| s.name == style_name).unwrap();
         assert_eq!(style.attrs["font_family"].as_str(), Some(family.as_str()), "the referenced character style follows the imported family");
@@ -612,6 +613,9 @@ fn default_swatches_pattern_composite_family_survives_restart_and_profile_collis
     let dir = TestDirectory::new();
     let mut palette_font = CompositeFont::new("PaletteFamily", "Source Sans 3", "Regular");
     palette_font.parts.roman.size = 110.0;
+    let mut custom = vectorcraft_doc::CustomCharSet::new("Palette letters", palette_font.parts.roman.clone());
+    custom.characters.push('A');
+    palette_font.custom.push(custom);
     let unused_font = CompositeFont::new("PaletteUnused", "Source Sans 3", "Regular");
     let profile_font = CompositeFont::new("palettefamily", "Source Serif 4", "Regular");
 
@@ -692,6 +696,21 @@ fn default_swatches_pattern_composite_family_survives_restart_and_profile_collis
     assert_eq!(source.doc().unwrap().doc, original);
     assert_eq!(source.doc().unwrap().selection, selection);
     assert_eq!(source.doc().unwrap().history.undo.len(), history);
+
+    // Matching fixed classes are not the same family when its custom sets differ.
+    let mut same_parts_font = palette_font.clone();
+    same_parts_font.name = profile_font.name.clone();
+    same_parts_font.custom.clear();
+    let mut same_parts_profile = profile.clone();
+    same_parts_profile.composite_fonts = vec![same_parts_font.clone()].into();
+    save_profile(&dir.0, &same_parts_profile);
+    let mut custom_sets = restarted(&source);
+    custom_sets.attach_new_doc_profiles(dir.0.clone());
+    custom_sets.execute("file.new", &json!({"profile": "Print"})).unwrap();
+    let doc = &custom_sets.doc().unwrap().doc;
+    assert_pattern_family(doc, &palette_font, true);
+    assert_eq!(CompositeFont::named(&doc.composite_fonts, &same_parts_font.name), Some(&same_parts_font));
+    save_profile(&dir.0, &profile);
 
     // The same document-local family survives the normal missing-full-brush-image error path.
     let saved = source.prefs.to_json();

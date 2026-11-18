@@ -136,6 +136,36 @@ fn the_panel_lists_the_images_with_link_info_for_the_selected_one() {
     }
 }
 
+/// A frame that fetches nothing keeps the stored rows and Link Info as they are, without a copy; the
+/// two-second recheck, another first selected image and an edit each store a new cache.
+#[test]
+fn frames_that_fetch_nothing_reuse_the_cached_rows() {
+    let dir = Folder::new("cache");
+    let (mut app, linked, _) = app(&dir);
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let frame = |app: &mut VectorcraftApp, time: f64| {
+        let raw = egui::RawInput { time: Some(time), ..Default::default() };
+        let text: Vec<String> = super::tests_appearance::frame_raw(&ctx, app, raw, super::links::show).into_iter().map(|(t, _)| t).collect();
+        (super::pstate::<std::sync::Arc<super::links::Cache>>(&ctx, "links-cache"), text)
+    };
+    let (first, text) = frame(&mut app, 1.0);
+    assert!(text.iter().any(|t| t == "linked.png") && text.iter().any(|t| t == "40 × 20 px"), "{text:?}");
+    let (same, text) = frame(&mut app, 1.5);
+    assert!(std::sync::Arc::ptr_eq(&first, &same), "a frame that fetches nothing stores no new cache");
+    assert!(text.iter().any(|t| t == "linked.png") && text.iter().any(|t| t == "40 × 20 px"), "{text:?}");
+    let (rechecked, _) = frame(&mut app, 3.6);
+    assert!(!std::sync::Arc::ptr_eq(&same, &rechecked), "the files are looked at again after two seconds");
+    app.run("select.set", json!({"ids": [linked]})).unwrap();
+    let (picked, text) = frame(&mut app, 3.7);
+    assert!(!std::sync::Arc::ptr_eq(&rechecked, &picked), "Link Info follows the first selected image");
+    assert!(text.iter().any(|t| t == "300 × 200 px"), "{text:?}");
+    app.run("edit.clear", json!({"ids": [linked]})).unwrap();
+    let (edited, text) = frame(&mut app, 3.8);
+    assert!(!std::sync::Arc::ptr_eq(&picked, &edited), "an edit lists the rows again");
+    assert!(!text.iter().any(|t| t == "linked.png") && text.iter().any(|t| t == "embedded.png"), "{text:?}");
+}
+
 /// Copy Info copies the file names of the selected links, or of `ids` in the order given, one per
 /// line; it is off with nothing selected, and a bad `ids` leaves the clipboard as it was.
 #[test]
@@ -498,6 +528,36 @@ fn properties_shows_the_selected_image_and_its_link_actions() {
     app.run("select.set", json!({"ids": [linked]})).unwrap();
     let text = painted_text(&mut app, super::properties::show);
     assert!(text.contains("Linked File") && text.contains("Edit Original") && text.contains("Embed"), "{text}");
+}
+
+/// Unembed… acts on several selected embedded images: it asks for one folder, writes a file for
+/// each image there and links each one to its file; with no folder picked, nothing changes.
+#[test]
+fn unembed_writes_several_images_to_one_picked_folder() {
+    let dir = Folder::new("unembed-several");
+    let (mut app, _, embedded) = app(&dir);
+    let c = dir.file("other.png", &png(30, 10));
+    let other = app.run("file.place", json!({"path": c, "at": [50, 50], "link": false})).unwrap()["ids"][0].as_u64().unwrap();
+    assert!(super::links::can_unembed(&app, 1));
+    assert!(!super::links::can_unembed(&app, 0));
+    assert!(!super::links::can_unembed(&app, 2), "no folder to pick");
+    let out = dir.0.join("out");
+    std::fs::create_dir_all(&out).unwrap();
+    // No folder picked: nothing written or linked.
+    app.services.pick_folder = Some(Box::new(|| None));
+    assert!(super::links::can_unembed(&app, 2));
+    super::links::unembed_several(&mut app, vec![embedded, other]);
+    assert_eq!(std::fs::read_dir(&out).unwrap().count(), 0);
+    assert_eq!(app.run("links.info", json!({"id": embedded})).unwrap()["status"], "embedded");
+    let picked = out.to_string_lossy().into_owned();
+    let answer = picked.clone();
+    app.services.pick_folder = Some(Box::new(move || Some(answer.clone())));
+    super::links::unembed_several(&mut app, vec![embedded, other]);
+    for (id, name) in [(embedded, "embedded.png"), (other, "other.png")] {
+        let info = app.run("links.info", json!({"id": id})).unwrap();
+        assert_eq!(info["path"], out.join(name).to_string_lossy().as_ref(), "{info}");
+    }
+    assert_eq!(app.ui.status, format!("Unembedded 2 images to {picked}"));
 }
 
 #[test]

@@ -11,7 +11,7 @@ use vectorcraft_brush::Brush;
 use vectorcraft_color::cms::{self, ColorSettings};
 use vectorcraft_color::{Color, Paint, Swatch, SwatchGroup};
 use vectorcraft_doc::text::{COMPOSITE_FONTS_MAX, COMPOSITE_NAME_MAX};
-use vectorcraft_doc::{Appearance, CharClass, CompositeFont, Document, LayerColor, Node, NodeId, NodeKind};
+use vectorcraft_doc::{Appearance, CompositeFont, Document, LayerColor, Node, NodeId, NodeKind};
 use vectorcraft_geom::{Rect, shapes};
 use vectorcraft_text::FontDb;
 
@@ -197,8 +197,7 @@ fn check_composites(fonts: &[CompositeFont], allow_installed_names: bool) -> Res
         }
     }
     for font in fonts {
-        for class in CharClass::ALL {
-            let part = &font.parts.get(class).font;
+        for part in font.part_fonts() {
             // Validate the prospective document, not another Session's active registry.
             if names.contains(&part.to_lowercase()) {
                 return Err(failure(format!("composite font {:?} has a composite font as a part", font.name)));
@@ -254,13 +253,13 @@ fn import_composites(saved: &mut Document, target: &mut Document) -> Result<()> 
     let mut target_taken = target_families.clone();
     for font in target.composite_fonts.iter() {
         target_taken.insert(font.name.to_lowercase());
-        target_taken.extend(CharClass::ALL.map(|class| font.parts.get(class).font.to_lowercase()));
+        target_taken.extend(font.part_fonts().map(str::to_lowercase));
     }
     let mut reserved = family_names(saved)?;
     reserved.extend(target_families.iter().cloned());
     for font in source.iter().chain(target.composite_fonts.iter()) {
         reserved.insert(font.name.to_lowercase());
-        reserved.extend(CharClass::ALL.map(|class| font.parts.get(class).font.to_lowercase()));
+        reserved.extend(font.part_fonts().map(str::to_lowercase));
     }
     let db = FontDb::global();
     let mut names = BTreeMap::new();
@@ -268,7 +267,7 @@ fn import_composites(saved: &mut Document, target: &mut Document) -> Result<()> 
     let mut renamed = Vec::new();
     for font in source {
         let existing = CompositeFont::named(&target.composite_fonts, &font.name);
-        let reused = existing.filter(|other| other.parts == font.parts);
+        let reused = existing.filter(|other| other.parts == font.parts && other.custom == font.custom);
         let name = match reused {
             Some(other) => other.name.clone(),
             None if target_taken.contains(&font.name.to_lowercase()) || db.has_installed_family(&font.name) => {
@@ -278,7 +277,7 @@ fn import_composites(saved: &mut Document, target: &mut Document) -> Result<()> 
         };
         reserved.insert(name.to_lowercase());
         names.insert(font.name.to_lowercase(), name.clone());
-        let copy = CompositeFont { name, parts: font.parts };
+        let copy = CompositeFont { name, ..font };
         if reused.is_none() {
             combined.push(copy.clone());
         }
