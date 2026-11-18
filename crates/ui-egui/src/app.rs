@@ -89,6 +89,7 @@ impl VectorcraftApp {
                 selection_box: None,
                 selection_bounds: None,
                 content_bounds: None,
+                pixel_aligned: None,
                 plugin_keys: Default::default(),
                 placed_keys: Default::default(),
                 cursors: Default::default(),
@@ -600,10 +601,6 @@ impl VectorcraftApp {
         }
         if self.ui.toolbar && self.ui.screen_mode < 3 {
             tools_float::set_window_dock_zone(&ctx, ui.available_rect_before_wrap());
-        }
-        if !self.ui.tools_beside_canvas {
-            // A canvas-edge target left from before the setting was turned off docks nothing.
-            tools_float::clear_canvas_dock_zone(&ctx);
         }
         // Beside the canvas, docked Tools draws inside the canvas panel (`toolbar::show_beside_canvas`).
         // So does Tools docked on the right, left of the panels.

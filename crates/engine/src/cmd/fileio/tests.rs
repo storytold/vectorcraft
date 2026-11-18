@@ -492,6 +492,19 @@ fn library_open_filters_list_library_formats_first() {
     }
 }
 
+/// Other Library…'s Swatch Libraries filter lists the `.ai` and `.eps` documents whose swatches load
+/// as a library, and it is the only filter of that label.
+#[test]
+fn the_swatch_library_filter_lists_ai_and_eps_files() {
+    let filters: Vec<_> = library_open_filters("Swatch libraries", crate::cmd::swatchlib::LIBRARY_PICK_EXTS).collect();
+    for ext in ["ai", "ait", "eps", "epsf", "ase", "gpl", "acb", "vcswatches"] {
+        assert!(filters[0].1.contains(&ext), "{ext}: {:?}", filters[0]);
+    }
+    assert_eq!(filters.iter().filter(|f| f.0 == "Swatch libraries").count(), 1, "{filters:?}");
+    // File › Open still opens a `.ai` as a document, not as a swatch library.
+    assert!(!crate::cmd::swatchlib::LIBRARY_EXTS.contains(&"ai") && !opens_as_other("ai"));
+}
+
 /// The extensions usage texts list for export: one per writable format, each picking that format
 /// (`.png` picks PNG; PNG-8 is asked for by `format`).
 #[test]

@@ -94,7 +94,7 @@ pub(super) const HOLD_DELAY: f32 = 0.3;
 /// …and how fast it zooms then (as `exp(seconds × HOLD_ZOOM)`: twice as close each second).
 pub(super) const HOLD_ZOOM: f64 = std::f64::consts::LN_2;
 
-/// Performance › Animated Zoom, which needs GPU Performance as in Illustrator: the Zoom tool zooms
+/// Performance › Animated Zoom, which needs GPU Performance: the Zoom tool zooms
 /// as it is dragged sideways or held, instead of zooming to the area dragged across, and a wheel
 /// notch's zoom glides in ([`wheel`]).
 pub(crate) fn animated_zoom(p: &vectorcraft_engine::Prefs) -> bool {

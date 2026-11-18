@@ -282,30 +282,7 @@ fn resolution(ppi: f64) -> Values {
 /// `data` run-length encoded (PackBits: what TIFF's compression 32773 and PostScript's
 /// `RunLengthDecode` read), without an end marker.
 pub fn packbits(data: &[u8], out: &mut Vec<u8>) {
-    let mut i = 0;
-    while i < data.len() {
-        let Some(&b) = data.get(i) else { break };
-        let run = data.get(i..).map_or(1, |rest| rest.iter().take(128).take_while(|x| **x == b).count());
-        if run >= 3 {
-            out.push((257 - run) as u8);
-            out.push(b);
-            i += run;
-            continue;
-        }
-        // Literal bytes up to the next run of three.
-        let mut j = i;
-        while j < data.len() && j - i < 128 {
-            let three = data.get(j..j + 3).is_some_and(|w| w[0] == w[1] && w[1] == w[2]);
-            if three {
-                break;
-            }
-            j += 1;
-        }
-        let j = j.max(i + 1).min(data.len());
-        out.push((j - i - 1) as u8);
-        out.extend(data.get(i..j).unwrap_or_default());
-        i = j;
-    }
+    craft_stream_codecs::runlength::encode_packbits_into(data, out);
 }
 
 /// The TIFF options of a raster export.
