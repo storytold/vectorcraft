@@ -38,11 +38,12 @@ pub enum Palette {
     #[serde(alias = "Limited")]
     Limited,
     /// As many colours as the image's tones need, up to [`FULL_TONE_MAX`] (photos, gradients):
-    /// `color_detail` sets how close two colours may be and stay apart.
+    /// `color_detail` sets how close two colours may be and stay apart. Before merging colors that
+    /// look alike, it splits to at least one color per step of `color_detail` where the image has that many.
     #[serde(alias = "Full Tone")]
     FullTone,
     /// Flat art (a few colours cover nearly all of it) traces with exactly those colours, anything
-    /// else as Full Tone.
+    /// else with as many as its tones need, without Full Tone's least count and merging close RGB colors.
     #[serde(alias = "Automatic")]
     Automatic,
     /// The most used colours of a swatch library ([`TraceParams::swatches`]), at most `colors` of
@@ -243,7 +244,10 @@ pub fn preset(name: &str) -> Option<TraceParams> {
         // many as its tones need where it is not.
         // (Color detail 85: a colour on a hundredth of the picture is still one of its colours.)
         "auto color" => TraceParams { palette: Palette::Automatic, color_detail: 85.0, ..color(6, 65.0, 60.0, 16, Method::Abutting) },
-        "high fidelity photo" => color(64, 50.0, 50.0, 5, Method::Overlapping),
+        // A photo's tones: as many colors as they need (Full Tone), split until no color spans more
+        // than about 21 levels of a channel and into at least 85 (Color detail 85) before colors that
+        // look alike merge, as abutting shapes. VectorCraft's own values.
+        "high fidelity photo" => TraceParams { palette: Palette::FullTone, color_detail: 85.0, ..color(64, 50.0, 50.0, 5, Method::Abutting) },
         "low fidelity photo" => color(20, 50.0, 50.0, 10, Method::Overlapping),
         "3 colors" => color(3, 50.0, 50.0, 15, Method::Abutting),
         "6 colors" => color(6, 50.0, 50.0, 8, Method::Abutting),
