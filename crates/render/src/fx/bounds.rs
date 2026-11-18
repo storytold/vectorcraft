@@ -726,6 +726,12 @@ fn cull_bounds_in(symbols: &SymbolBoxes, n: &Node, after_reshape: bool, brush: b
             let a = art_effects_reach(symbols, n);
             Some(b.inflate(a, a))
         }
+        // A spine can rotate a blend's keys and steps past their unrotated visual bounds.
+        NodeKind::Blend { .. } => {
+            let b = n.reach_bounds_with(symbols)?;
+            let a = live_content_reach(symbols, n);
+            vectorcraft_geom::union_opt(Some(b.inflate(a, a)), placed_blend_effect_bounds(symbols, n))
+        }
         _ => {
             let b = n.visual_bounds_with(symbols)?;
             let b = match &n.kind {
@@ -804,14 +810,41 @@ pub(crate) fn with_own_raster_reach(symbols: &SymbolBoxes, n: &Node, b: Rect) ->
     b.inflate(o, o)
 }
 
-/// `n`'s own visual box, type's grown to hold its glyphs ([`glyphs_box`]): what it draws when its
-/// object effects leave it as it is (Revolve builds no art from type).
+/// `n`'s own box, type's grown to hold its glyphs ([`glyphs_box`]) and a blend's to hold its
+/// spine-placed keys and steps: what it draws when its object effects leave it as it is
+/// (Revolve builds no art from type).
 fn own_box(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
-    let b = n.visual_bounds_with(symbols)?;
+    let b = match &n.kind {
+        NodeKind::Blend { .. } => vectorcraft_geom::union_opt(n.reach_bounds_with(symbols), placed_blend_effect_bounds(symbols, n)),
+        _ => n.visual_bounds_with(symbols),
+    }?;
     Some(match &n.kind {
         NodeKind::Text(t) => vectorcraft_geom::union_opt(Some(b), glyphs_box(t, n.appearance.outset())).unwrap_or(b),
         _ => b,
     })
+}
+
+/// A rotated blend's effect-bearing content, measured after spine placement. Geometry effects
+/// run on the placed shapes, so their reach on the original keys need not cover what they paint.
+/// Effect-free blends keep the quick rail envelope without evaluating their steps.
+fn placed_blend_effect_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
+    let NodeKind::Blend { spec, .. } = &n.kind else { return None };
+    if spec.orientation != vectorcraft_doc::BlendOrientation::AlignToPath {
+        return None;
+    }
+    let mut has_effects = false;
+    n.walk(&mut |c| {
+        has_effects |= has_fx(c)
+            || has_object_fx(c)
+            || match &c.kind {
+                NodeKind::SymbolInstance { symbol, .. } => symbols.has_effects(symbol),
+                _ => false,
+            };
+    });
+    if !has_effects {
+        return None;
+    }
+    effects::expand_live(Some(symbols.document()), n).iter().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, cull_bounds(symbols, c)))
 }
 
 /// The box of type `t`'s glyphs as laid out (its layout bounds, else laid out now), grown by its
