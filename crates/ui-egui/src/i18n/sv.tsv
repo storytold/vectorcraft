@@ -817,6 +817,7 @@ font-technology	Variable	Variabla
 	Delete Brush	Radera pensel
 	Delete Color	Radera färg
 	Restore Generated Table	Återställ genererad tabell
+	Unshift All Colors	Ta bort förskjutning av alla färger
 	Delete Character Style	Radera teckenstil
 	Delete Empty Artboards	Radera tomma ritytor
 	Delete Freeform Point	Radera fri punkt
@@ -5021,6 +5022,7 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	choose a location for the package	välj en plats för paketet
 @msg	clipboard is empty	urklippet är tomt
 @msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: minst en färg måste finnas kvar i färgtabellen
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted: `{k}` anger en färg som även en annan nyckel anger
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` är inte en färg som "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: högst {MAX_TABLE} färger
 @msg	command `{0}` is not available right now: {1}	kommandot `{0}` är inte tillgängligt just nu: {1}

@@ -815,6 +815,7 @@ font-technology	Variable	Variabel
 	Delete Brush	Pinsel löschen
 	Delete Color	Farbe löschen
 	Restore Generated Table	Generierte Tabelle wiederherstellen
+	Unshift All Colors	Verschiebung aller Farben aufheben
 	Delete Character Style	Zeichenformat löschen
 	Delete Empty Artboards	Leere Zeichenflächen löschen
 	Delete Freeform Point	Freiformpunkt löschen
@@ -5024,6 +5025,7 @@ liquify-list-end	{0}, {1}	{0} und {1}
 @msg	choose a location for the package	wählen Sie einen Speicherort für das Paket
 @msg	clipboard is empty	die Zwischenablage ist leer
 @msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: Mindestens eine Farbe muss in der Farbtabelle bleiben
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted: `{k}` bezeichnet eine Farbe, die auch ein anderer Schlüssel bezeichnet
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` ist keine Farbe wie "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: höchstens {MAX_TABLE} Farben
 @msg	command `{0}` is not available right now: {1}	der Befehl `{0}` ist derzeit nicht verfügbar: {1}

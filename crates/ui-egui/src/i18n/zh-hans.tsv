@@ -778,6 +778,7 @@ antiAlias	Sharp	锐利
 	Delete Brush	删除画笔
 	Delete Color	删除颜色
 	Restore Generated Table	恢复生成的颜色表
+	Unshift All Colors	取消偏移所有颜色
 	Delete Character Style	删除字符样式
 	Delete Empty Artboards	删除空白画板
 	Delete Freeform Point	删除自由点
@@ -4816,6 +4817,7 @@ imageTrace	Outline	轮廓
 @msg	paste unavailable	无法粘贴
 @msg	Save for Web: the image is empty	存储为 Web 所用格式：图像为空
 @msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted：颜色表中至少要保留一种颜色
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted：`{k}` 与另一个键指的是同一种颜色
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}：`{h}` 不是颜色，例如 "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}：最多 {MAX_TABLE} 种颜色
 @msg	no artboard {i} (0-based; the document has {_1})	没有画板 {i} (从 0 开始计数；文档有 {_1} 个)
