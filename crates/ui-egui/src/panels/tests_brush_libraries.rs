@@ -244,7 +244,7 @@ fn the_window_menu_and_the_brushes_panel_open_brush_libraries() {
     assert_eq!((r["open"].as_str(), r["count"].as_u64()), (Some("pressure-sensitive"), Some(4)));
     let path = app.run("shape.line", json!({"x1": 10, "y1": 100, "x2": 180, "y2": 100})).unwrap()["id"].as_u64().unwrap();
     let undo = undo_len(&app);
-    click(&mut app, &ctx, "Flex Ribbon", Modifiers::NONE, 3.0);
+    click(&mut app, &ctx, "Flex Ribbon", Modifiers::NONE, 4.0);
     assert!(has(&app, "Flex Ribbon") && !has(&app, "Pulse Stroke"));
     assert_eq!(undo_len(&app), undo + 1);
     assert_eq!(
