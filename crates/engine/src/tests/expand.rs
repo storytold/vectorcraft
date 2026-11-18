@@ -407,7 +407,7 @@ fn image_with_shaped_fill(s: &mut Session) -> NodeId {
 /// outline with `outline`.
 fn marquee_at(s: &Session, x0: f64, x1: f64, outline: bool) -> Vec<NodeId> {
     let r = vectorcraft_geom::Rect::new(x0, 90.0, x1, 110.0);
-    vectorcraft_doc::hit::marquee_in_view(&s.doc().unwrap().doc, r, None, true, outline)
+    vectorcraft_doc::hit::marquee_in_view(&s.doc().unwrap().doc, r, None, true, outline, false)
 }
 
 /// A marquee touches a symbol instance where the geometry effects of its fill or stroke paint its
