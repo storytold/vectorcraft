@@ -5294,6 +5294,8 @@ fn a_blank_frame_an_unread_group_leaves_alone_in_a_warp_is_weighed_as_lone_type(
     assert!(read, "{notes:?}");
     assert!(doc.text_threads.is_empty(), "{:?} {notes:?}", doc.text_threads);
     assert!(notes.iter().any(|w| w.starts_with(crate::import::ai::WARPED_TYPE_DRAWN)), "{notes:?}");
+    // The look took the frame's place: no text object is left.
+    assert!(text_kinds(&doc).is_empty(), "{:?} {notes:?}", text_kinds(&doc));
 }
 
 /// A point type frame at the point (`x`, `y`) of the art.
