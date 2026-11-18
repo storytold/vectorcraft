@@ -685,6 +685,12 @@ antiAlias	Sharp	Nítid
 	Character options	Opcions de caràcter
 	Paragraph options	Opcions de paràgraf
 	Character Rotation	Rotació de caràcters
+	Chinese Big 5	Xinès Big 5
+	Cyrillic	Ciríl·lic
+	Greek	Grec
+	Turkish	Turc
+	Baltic	Bàltic
+	Central European	Centreeuropeu
 	Character Set:	Joc de caràcters:
 	Character Style	Estil de caràcter
 	Character Style Options	Opcions de l’estil de caràcter
@@ -8258,3 +8264,4 @@ breakText	Glyphs	Glifs
 @msg	A joint does not close by {gap} pt.	Una unió no es tanca per {gap} pt.
 @msg	Two panels pass through each other.	Dos panells es travessen l’un a l’altre.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer ha de ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"
+@msg	text.{key} `{v}`: use "{_1}" or "{_2}"	text.{key} `{v}`: utilitzeu "{_1}" o "{_2}"
