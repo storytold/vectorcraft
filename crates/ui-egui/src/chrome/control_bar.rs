@@ -193,14 +193,56 @@ fn inline_label(t: &Tokens, lbl: &str) -> egui::RichText {
     egui::RichText::new(tl!(lbl)).size(12.0).color(t.text_dim)
 }
 
-/// The room the Control bar's inline X/Y/W/H fields take: their labels as drawn in the current
-/// language, the four fields, the W/H link and the item spacing ahead of each of them. With less,
-/// only the Transform link shows.
+/// The width of the 3×3 reference point locator (`2 * 9 + 5` in `widgets::reference_point`).
+const REFERENCE_LOCATOR_SIZE: f32 = 23.0;
+
+/// The room the Control bar's inline X/Y/W/H fields take: the reference point locator, their
+/// labels as drawn in the current language, the four fields, the W/H link and the item spacing
+/// ahead of each of them. With less, only the Transform link shows.
 fn inline_transform_width(ui: &Ui, t: &Tokens) -> f32 {
     let labels: f32 = INLINE_FIELDS.iter().map(|(_, lbl)| widgets::text_width(ui, inline_label(t, lbl))).sum();
     let fields = INLINE_FIELD_WIDTH * INLINE_FIELDS.len() as f32;
-    let items = 2 * INLINE_FIELDS.len() + 1;
-    labels + fields + crate::panels::transform::CONSTRAIN_LINK_SIZE + ui.spacing().item_spacing.x * items as f32
+    let items = 1 + 2 * INLINE_FIELDS.len() + 1;
+    REFERENCE_LOCATOR_SIZE + labels + fields + crate::panels::transform::CONSTRAIN_LINK_SIZE + ui.spacing().item_spacing.x * items as f32
+}
+
+/// The Control bar's inline reference point locator, X/Y/W/H fields and W/H constrain link.
+fn inline_transform_fields(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, b: &vectorcraft_doc::OrientedBox) {
+    let units = app.session.general_unit();
+    let reference = crate::panels::transform::panel_reference(app, ui, b);
+    let (refi, rp) = (reference.index, reference.point);
+    crate::panels::transform::reference_locator(ui, refi);
+    let origin = app.ruler_origin();
+    let link = crate::panels::transform::proportional(app, ui);
+    let copy = crate::panels::transform::alt_enter_copies(app, ui);
+    let values = [(rp.x, origin.x), (rp.y, origin.y), (b.rect.width(), 0.0), (b.rect.height(), 0.0)];
+    // The W/H link sits between W and H, but is made after H so Tab goes from W
+    // straight to H and finds the link after it.
+    let mut link_room = None;
+    for ((k, lbl), (v, offset)) in INLINE_FIELDS.into_iter().zip(values) {
+        if k == "height" {
+            link_room = Some(crate::panels::transform::constrain_link_room(ui));
+        }
+        widgets::field_label(ui, inline_label(t, lbl));
+        let (id, shown) = (("cb", k), Some(v - offset));
+        let set = if matches!(k, "width" | "height") {
+            widgets::size_field(ui, id, shown, units, INLINE_FIELD_WIDTH)
+        } else {
+            widgets::num_field(ui, id, shown, units, INLINE_FIELD_WIDTH)
+        };
+        if let Some(nv) = set {
+            let val = match k {
+                "x" => reference.bounds_xy(nv + offset, 0.0).0,
+                "y" => reference.bounds_xy(0.0, nv + offset).1,
+                _ => nv + offset,
+            };
+            crate::panels::transform::run_transform(app, "object.setBounds", json!({k: val, "reference": refi, "proportional": link, "copy": copy}));
+        }
+    }
+    if let Some(room) = link_room {
+        let id = ui.scope_id().with("cb-constrain-link");
+        crate::panels::transform::constrain_link_at(app, ui, ui.interact(room, id, Sense::click()));
+    }
 }
 
 /// The size of the Control bar's Align, Distribute and area type vertical alignment buttons, and
@@ -951,7 +993,6 @@ fn contents(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, bar: egui::Rect, 
         }
         let Some(st) = app.session.active() else { return };
         let sel = st.selection.objects.clone();
-        let units = app.session.general_unit();
         let first = sel.first().and_then(|id| st.doc.node(*id));
         let anchors = anchor_controls(app);
         let label = match first {
@@ -1041,33 +1082,7 @@ fn contents(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, bar: egui::Rect, 
         if selection_box.is_some() && ui.available_width() < inline_transform_width(ui, t) {
             left_out(ui);
         } else if let Some(b) = selection_box {
-            let c = b.center();
-            let origin = app.ruler_origin();
-            let link = crate::panels::transform::proportional(app, ui);
-            let copy = crate::panels::transform::alt_enter_copies(app, ui);
-            let values = [(c.x, origin.x), (c.y, origin.y), (b.rect.width(), 0.0), (b.rect.height(), 0.0)];
-            // The W/H link sits between W and H, but is made after H so Tab goes from W
-            // straight to H and finds the link after it.
-            let mut link_room = None;
-            for ((k, lbl), (v, offset)) in INLINE_FIELDS.into_iter().zip(values) {
-                if k == "height" {
-                    link_room = Some(crate::panels::transform::constrain_link_room(ui));
-                }
-                widgets::field_label(ui, inline_label(t, lbl));
-                let (id, shown) = (("cb", k), Some(v - offset));
-                let set = if matches!(k, "width" | "height") {
-                    widgets::size_field(ui, id, shown, units, INLINE_FIELD_WIDTH)
-                } else {
-                    widgets::num_field(ui, id, shown, units, INLINE_FIELD_WIDTH)
-                };
-                if let Some(nv) = set {
-                    app.run("object.setBounds", json!({k: nv + offset, "reference": 4, "proportional": link, "copy": copy})).ok();
-                }
-            }
-            if let Some(room) = link_room {
-                let id = ui.scope_id().with("cb-constrain-link");
-                crate::panels::transform::constrain_link_at(app, ui, ui.interact(room, id, Sense::click()));
-            }
+            inline_transform_fields(app, ui, t, &b);
         }
         // Select Similar Objects comes last: it takes only the room every control ahead of it left.
         trailing_select_similar(app, ui);

@@ -4651,3 +4651,76 @@ fn the_control_bar_shows_the_inline_transform_fields_only_when_they_fit() {
         assert!(groups_seen.iter().all(|s| *s), "{count} objects: a wide bar shows every group: {groups_seen:?}");
     }
 }
+
+/// The Control bar's X/Y/W/H fields read and resize about the shared reference point (#8473).
+#[test]
+fn the_control_bar_transform_fields_respect_the_reference_point() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300, "units": "Points"})).unwrap();
+    let id = app.run("shape.rectangle", json!({"x": 20, "y": 20, "width": 40, "height": 30})).unwrap()["id"].clone();
+    app.run("select.set", json!({ "ids": [id] })).unwrap();
+
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(2400.0, 300.0));
+    let frame = |app: &mut crate::VectorcraftApp, events: Vec<egui::Event>| {
+        let mut texts = Vec::new();
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| {
+            super::control_bar(app, ui);
+        });
+        out.textures_delta.clear();
+        for clipped in &out.shapes {
+            if let egui::epaint::Shape::Text(t) = &clipped.shape {
+                texts.push((t.galley.text().to_owned(), clipped.shape.visual_bounding_rect()));
+            }
+        }
+        let nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
+        (texts, nodes)
+    };
+    let click = |app: &mut crate::VectorcraftApp, pos: egui::Pos2| {
+        let btn = |pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(app, vec![egui::Event::PointerMoved(pos), btn(true)]);
+        frame(app, vec![btn(false)]);
+    };
+    let type_in = |app: &mut crate::VectorcraftApp, label: &str, typed: &str| {
+        frame(app, vec![]);
+        let (texts, _) = frame(app, vec![]);
+        let r = texts.iter().find(|(t, _)| t == label).map(|(_, r)| *r).unwrap_or_else(|| panic!("no {label:?} in {texts:?}"));
+        let at = egui::pos2(r.right() + 40.0, r.center().y);
+        click(app, at);
+        let key = |k, modifiers| vec![egui::Event::Key { key: k, physical_key: None, pressed: true, repeat: false, modifiers }];
+        frame(app, key(egui::Key::A, egui::Modifiers::COMMAND));
+        frame(app, vec![egui::Event::Text(typed.into())]);
+        frame(app, key(egui::Key::Enter, egui::Modifiers::NONE));
+        frame(app, vec![]);
+    };
+
+    // Choose Top Left in the Control bar's own reference point locator.
+    frame(&mut app, vec![]);
+    let (_, nodes) = frame(&mut app, vec![]);
+    let top_left = nodes
+        .iter()
+        .find(|(_, n)| n.role() == egui::accesskit::Role::RadioButton && n.label() == Some("Top Left"))
+        .and_then(|(_, n)| n.bounds())
+        .expect("Top Left radio button in the Control bar's Reference Point locator");
+    click(&mut app, egui::pos2(((top_left.x0 + top_left.x1) * 0.5) as f32, ((top_left.y0 + top_left.y1) * 0.5) as f32));
+    assert_eq!(ctx.data(|d| d.get_temp::<usize>(egui::Id::unique("refpt"))), Some(0));
+
+    type_in(&mut app, "W:", "80");
+    type_in(&mut app, "H:", "60");
+
+    let bx = app.selection_box().unwrap();
+    assert!((bx.rect.x0 - 20.0).abs() < 1e-6, "top-left x0 stayed at 20, got {:?}", bx.rect);
+    assert!((bx.rect.y0 - 20.0).abs() < 1e-6, "top-left y0 stayed at 20, got {:?}", bx.rect);
+    assert!((bx.rect.width() - 80.0).abs() < 1e-6, "width became 80, got {:?}", bx.rect);
+    assert!((bx.rect.height() - 60.0).abs() < 1e-6, "height became 60, got {:?}", bx.rect);
+
+    type_in(&mut app, "X:", "50");
+    type_in(&mut app, "Y:", "40");
+    let bx = app.selection_box().unwrap();
+    assert!((bx.rect.x0 - 50.0).abs() < 1e-6, "top-left x0 moved to 50, got {:?}", bx.rect);
+    assert!((bx.rect.y0 - 40.0).abs() < 1e-6, "top-left y0 moved to 40, got {:?}", bx.rect);
+}
