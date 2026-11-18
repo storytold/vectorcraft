@@ -3527,6 +3527,7 @@ digits	Malayalam	Malayalam
 	Set Slice Rectangle	Définir le rectangle de tranche
 	Set Tab Stops	Définir les taquets de tabulation
 	Set Text	Définir le texte
+	Set the current fill or stroke to the selected color	Appliquer la couleur sélectionnée au fond ou au contour actuel
 	Set the selected color to the current color	Remplacer la couleur sélectionnée par la couleur actuelle
 	Set Zoom	Définir le zoom
 	Settings…	Réglages…

@@ -1752,6 +1752,7 @@ digits	Malayalam	Malajalam
 	Rule:	Pravilo:
 	Save changes to {name}	Sačuvaj promjene u {name}
 	Save theme to My Themes	Sačuvaj temu u Moje teme
+	Set the current fill or stroke to the selected color	Postavi odabranu boju kao trenutnu ispunu ili potez
 	Set the selected color to the current color	Postavi odabranu boju na trenutnu boju
 	Copy All Styles	Kopiraj sve stilove
 	Exported {path}	Izvezeno: {path}

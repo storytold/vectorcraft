@@ -4174,6 +4174,7 @@ mark-style	Japanese	Japán
 	Set Slice Rectangle	Szelet téglalapjának beállítása
 	Set Tab Stops	Tabulátorpontok beállítása
 	Set Text	Szöveg beállítása
+	Set the current fill or stroke to the selected color	Az aktuális kitöltés vagy körvonal legyen a kijelölt szín
 	Set the selected color to the current color	A kijelölt szín legyen az aktuális szín
 	Set Zoom	Nagyítás beállítása
 	Set:	Készlet:
