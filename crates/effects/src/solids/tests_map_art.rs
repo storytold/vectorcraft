@@ -194,6 +194,7 @@ fn art_on_a_facet_with_a_curved_edge_is_clipped_to_that_edge() {
         away: false,
         end: None,
         plane: None,
+        surface: None,
         cell: None,
     };
     let cell = MapCell { surface: 0, page: quad.clone(), uv: quad.clone() };

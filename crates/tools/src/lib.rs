@@ -12,6 +12,7 @@ pub mod bbox;
 pub mod blendwidget;
 pub mod builder;
 pub mod catalog;
+pub mod circle;
 pub mod corners;
 pub mod cropimage;
 pub mod cut;
@@ -378,6 +379,7 @@ pub fn create(id: &str) -> Box<dyn Tool> {
         "dimension" => Box::new(dimension::DimensionTool::default()),
         "type" | "areaType" | "typeOnPath" | "verticalType" | "verticalAreaType" | "verticalTypeOnPath" => Box::new(text::TypeTool::new(id)),
         "rectangle" | "roundedRectangle" | "ellipse" | "polygon" | "star" | "lineSegment" => Box::new(shape::ShapeTool::new(id)),
+        circle::ID => Box::new(circle::CircleTool::default()),
         // Not in the toolbar: `file.place.queue` loads it.
         "place" => Box::new(place::PlaceTool::default()),
         other => symbolism::create(other)

@@ -491,18 +491,40 @@ pub(crate) fn line_rows(app: &mut VectorcraftApp, ui: &mut Ui, live: &LiveShape,
 }
 
 /// An ellipse's Pie Start and End Angle (degrees, counterclockwise from 3 o'clock; 0 to 360 is the
-/// whole ellipse) and Invert Pie, which shows the other part of it (Transform and Properties panels).
+/// whole ellipse), the Constrain Pie Angle link beside them, and Invert Pie, which shows the other
+/// part of it (Transform and Properties panels). With the link on, a typed angle moves the other
+/// one by as much, so each selected ellipse keeps its span.
 pub(crate) fn pie_rows(app: &mut VectorcraftApp, ui: &mut Ui, pie: (f64, f64), id: &str) {
-    for (label, key, v) in [(tl!("Pie Start Angle:"), "pieStart", pie.0), (tl!("Pie End Angle:"), "pieEnd", pie.1)] {
-        ui.horizontal(|ui| {
-            widgets::dim_label(ui, label);
-            if let Some(a) = widgets::plain_field(ui, (id, key), v, "°", 1, 60.0) {
-                app.run("object.setLiveShape", json!({ key: a })).ok();
+    ui.horizontal(|ui| {
+        ui.vertical(|ui| {
+            for (label, key, v) in [(tl!("Pie Start Angle:"), "pieStart", pie.0), (tl!("Pie End Angle:"), "pieEnd", pie.1)] {
+                ui.horizontal(|ui| {
+                    widgets::dim_label(ui, label);
+                    if let Some(a) = widgets::plain_field(ui, (id, key), v, "°", 1, 60.0) {
+                        let params = if app.ui.constrain_pie_angle { json!({ key: a, "constrainPie": true }) } else { json!({ key: a }) };
+                        app.run("object.setLiveShape", params).ok();
+                    }
+                });
             }
         });
-    }
+        pie_link(app, ui);
+    });
     if widgets::flat_button(ui, tl!("Invert Pie"), 90.0).clicked() {
         app.run("object.setLiveShape", json!({"invertPie": true})).ok();
+    }
+}
+
+/// The Constrain Pie Angle link between Pie Start and End Angle: one toggle for the Transform and
+/// Properties panels, kept while the app runs and off at launch. It is drawn after the fields, so
+/// Tab reaches them first; with the keyboard on it, Space or Enter toggles it.
+fn pie_link(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let (_, at) = ui.allocate_exact_size(egui::Vec2::splat(CONSTRAIN_LINK_SIZE), egui::Sense::click());
+    let on = app.ui.constrain_pie_angle;
+    let tip = tl!("Constrain Pie Angle");
+    let keyed = at.has_focus()
+        && ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Space) | i.consume_key(egui::Modifiers::NONE, egui::Key::Enter));
+    if widgets::paint_icon_button(ui, at, if on { "link" } else { "link-2-off" }, tip, on).clicked() || keyed {
+        app.ui.constrain_pie_angle = !on;
     }
 }
 
@@ -562,7 +584,13 @@ pub(crate) fn polygon_rows(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, live
 /// popover under it, as the Stroke link does with the Stroke panel.
 pub fn link(app: &mut VectorcraftApp, ui: &mut Ui) {
     let resp = ui.link(link_text(ui)).on_hover_text(tl!("Transform options"));
-    widgets::popover(&resp, resp.clicked(), |ui| {
+    popover(app, &resp);
+}
+
+/// The Transform panel in a popover under `resp`, which a click on it toggles: the Control bar's
+/// Transform [`link`], and its X:, Y:, W: and H: labels.
+pub fn popover(app: &mut VectorcraftApp, resp: &egui::Response) {
+    widgets::popover(resp, resp.clicked(), |ui| {
         ui.set_width(300.0);
         show(app, ui);
     });
