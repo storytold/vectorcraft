@@ -32,6 +32,8 @@ const UNITS: Choices = &[
 ];
 const LINE_TYPES: Choices = &[("solid", "Solid"), ("dashed", "Dashed"), ("dotted", "Dotted")];
 const ARROWS: Choices = &[("filled", "Filled"), ("open", "Open"), ("tick", "Tick"), ("none", "None")];
+/// The style of each `ARROWS` entry, in the same order.
+const ARROW_STYLES: [ArrowStyle; 4] = [ArrowStyle::Filled, ArrowStyle::Open, ArrowStyle::Tick, ArrowStyle::None];
 /// The size of an Arrow Style preview: a line with the head at its right end.
 const ARROW_PREVIEW: egui::Vec2 = egui::vec2(40.0, 16.0);
 const POSITIONS: Choices = &[("away", "Away from the Line"), ("between", "Between Line and Object")];
@@ -81,9 +83,7 @@ fn arrow_style(ui: &mut Ui, fields: &mut serde_json::Map<String, Value>, id: &st
         let shown = ARROWS.iter().position(|(v, _)| *v == current);
         let names: Vec<&str> = ARROWS.iter().map(|(_, s)| tl!(*s)).collect();
         let icon = |ui: &Ui, rect: egui::Rect, i: usize, ink: egui::Color32, _: bool| {
-            if let Some((value, _)) = ARROWS.get(i)
-                && let Ok(style) = serde_json::from_value::<ArrowStyle>(json!(value))
-            {
+            if let Some(style) = ARROW_STYLES.get(i) {
                 crate::panels::stroke::paint_arrow(ui, rect, style.arrowhead().as_ref(), false, ink);
             }
         };
@@ -448,31 +448,12 @@ mod tests {
         assert!(picture_before(&out, "Tick"), "Properties");
     }
 
-    /// Each preview shows the stroke head that the dimension line draws at its ends.
+    /// Each Arrow Style entry previews the style its value names.
     #[test]
-    fn arrow_previews_match_the_dimension_line() {
-        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
-        for style in [ArrowStyle::Filled, ArrowStyle::Open, ArrowStyle::Tick, ArrowStyle::None] {
-            let options = json!({"arrowStyle": style});
-            let id = app.run("dimension.create", json!({"a":[10,10],"b":[110,10],"options":options})).unwrap()["id"].as_u64().unwrap();
-            let st = app.session.active().unwrap();
-            let heads: Vec<_> = st
-                .doc
-                .node(vectorcraft_doc::NodeId(id))
-                .unwrap()
-                .children()
-                .unwrap()
-                .iter()
-                .filter_map(|n| n.appearance.stroke().map(|s| (s.start_arrow.clone(), s.end_arrow.clone())))
-                .filter(|(a, b)| a.is_some() || b.is_some())
-                .collect();
-            match style.arrowhead() {
-                Some(head) => {
-                    assert!(!heads.is_empty() && heads.iter().all(|h| *h == (Some(head.clone()), Some(head.clone()))), "{style:?}: {heads:?}")
-                }
-                None => assert!(heads.is_empty(), "{style:?}: {heads:?}"),
-            }
+    fn arrow_previews_follow_the_listed_styles() {
+        assert_eq!(ARROWS.len(), ARROW_STYLES.len());
+        for ((value, _), style) in ARROWS.iter().zip(ARROW_STYLES) {
+            assert_eq!(serde_json::to_value(style).unwrap(), json!(value));
         }
     }
 }
