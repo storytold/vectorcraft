@@ -8032,6 +8032,8 @@ imageTrace	Outline	Kontur
 @msg	Reload the page to go on (changes not saved yet may be lost).	Genindlæs siden for at fortsætte (ændringer, der endnu ikke er gemt, kan gå tabt).
 @msg	tool (a tool id) is required	tool (et værktøj-id) er påkrævet
 @msg	{tool} isn't in a toolbar group of several tools	{tool} er ikke i en værktøjsgruppe med flere værktøjer
+@msg	Presentation Mode hides the toolbars: change the screen mode to show them	Præsentationstilstand skjuler værktøjslinjerne: skift skærmtilstand for at vise dem
+@msg	Tab has hidden the toolbars: press Tab to show them	Tab har skjult værktøjslinjerne: tryk på Tab for at vise dem
 @msg	onto must name a panel floating in another group	onto skal angive et panel, der flyder i en anden gruppe
 @msg	below and above must name a panel floating in another group	below og above skal angive et panel, der flyder i en anden gruppe
 @msg	give only one of onto, below and above	angiv kun én af onto, below og above

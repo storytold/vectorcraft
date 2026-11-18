@@ -5340,6 +5340,8 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	Reload the page to go on (changes not saved yet may be lost).	Devam etmek için sayfayı yeniden yükleyin (henüz kaydedilmemiş değişiklikler kaybolabilir).
 @msg	tool (a tool id) is required	tool (bir araç kimliği) gerekli
 @msg	{tool} isn't in a toolbar group of several tools	{tool} çeşitli araçlardan oluşan bir araç çubuğu grubunda değil
+@msg	Presentation Mode hides the toolbars: change the screen mode to show them	Sunum Modu araç çubuklarını gizler: göstermek için ekran modunu değiştirin
+@msg	Tab has hidden the toolbars: press Tab to show them	Tab araç çubuklarını gizledi: göstermek için Tab tuşuna basın
 @msg	onto must name a panel floating in another group	onto başka bir grupta yüzen bir paneli adlandırmalıdır
 @msg	below and above must name a panel floating in another group	below ve above başka bir grupta yüzen bir paneli adlandırmalıdır
 @msg	give only one of onto, below and above	onto, below ve above değerlerinden yalnızca birini verin

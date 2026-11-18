@@ -5843,6 +5843,8 @@ variable-list-end	{0}, {1}	{0} ja {1}
 @msg	Reload the page to go on (changes not saved yet may be lost).	Lataa sivu uudelleen jatkaaksesi (tallentamattomat muutokset voivat kadota).
 @msg	tool (a tool id) is required	tool (työkalun tunnus) vaaditaan
 @msg	{tool} isn't in a toolbar group of several tools	{tool} ei ole usean työkalun työkaluriviryhmässä
+@msg	Presentation Mode hides the toolbars: change the screen mode to show them	Esitystila piilottaa työkalurivit: tuo ne näkyviin vaihtamalla näyttötilaa
+@msg	Tab has hidden the toolbars: press Tab to show them	Tab on piilottanut työkalurivit: tuo ne näkyviin painamalla Tab-näppäintä
 @msg	onto must name a panel floating in another group	onto-arvon on nimettävä toisessa ryhmässä kelluva paneeli
 @msg	below and above must name a panel floating in another group	below- ja above-arvojen on nimettävä toisessa ryhmässä kelluva paneeli
 @msg	give only one of onto, below and above	anna vain yksi arvoista onto, below ja above

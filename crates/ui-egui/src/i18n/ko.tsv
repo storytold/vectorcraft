@@ -5697,6 +5697,8 @@ liquify-list-end	{0}, {1}	{0} 및 {1}
 @msg	the {tool} tool has no options	{tool} 도구에는 옵션이 없습니다
 @msg	unknown tool `{tool}`	알 수 없는 도구 `{tool}`
 @msg	{tool} isn't in a toolbar group of several tools	{tool}은(는) 여러 도구가 있는 도구 모음 그룹에 속하지 않습니다
+@msg	Presentation Mode hides the toolbars: change the screen mode to show them	프레젠테이션 모드에서는 도구 모음이 숨겨집니다: 표시하려면 화면 모드를 변경하세요
+@msg	Tab has hidden the toolbars: press Tab to show them	Tab으로 도구 모음이 숨겨졌습니다: 표시하려면 Tab을 누르세요
 @msg	no such document	해당 문서가 없습니다
 @msg	{_1}: not saved, so not closed	{_1}: 저장되지 않아 닫지 않았습니다
 @msg	`{name}` is a built-in workspace; choose another name	`{name}`은(는) 기본 제공 작업 영역입니다: 다른 이름을 선택하세요

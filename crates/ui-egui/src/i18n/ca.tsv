@@ -7067,6 +7067,8 @@ variable-list-end	{0}, {1}	{0} i {1}
 @msg	{path}: {e}	{path}: {e}
 @msg	{status} ({e})	{status} ({e})
 @msg	{tool} isn't in a toolbar group of several tools	{tool} no forma part d’un grup de diverses eines a la barra d’eines
+@msg	Presentation Mode hides the toolbars: change the screen mode to show them	el Mode de presentació amaga les barres d’eines: canvieu el mode de pantalla per mostrar-les
+@msg	Tab has hidden the toolbars: press Tab to show them	Tab ha amagat les barres d’eines: premeu Tab per mostrar-les
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	«{_1}» demana un pressupost elevat (cada execució fins a {minutes} minuts i {times} vegades les instruccions habituals): una persona l’ha d’aprovar a l’aplicació d’escriptori, o passa `allowHeavy: true` en una sessió iniciada amb --allow-plugin-grants
 # Plug-in host messages: manifests, modules, runs and plug-in output
 @msg	`name` must be 1-64 printable characters	`name` ha de tenir 1-64 caràcters imprimibles

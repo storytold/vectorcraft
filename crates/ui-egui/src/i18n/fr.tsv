@@ -5588,6 +5588,8 @@ variable-list-end	{0}, {1}	{0} et {1}
 @msg	Reload the page to go on (changes not saved yet may be lost).	Rechargez la page pour continuer (les modifications non encore enregistrées risquent d’être perdues).
 @msg	tool (a tool id) is required	tool (un identifiant d’outil) est obligatoire
 @msg	{tool} isn't in a toolbar group of several tools	{tool} ne fait pas partie d’un groupe de plusieurs outils dans la barre d’outils
+@msg	Presentation Mode hides the toolbars: change the screen mode to show them	pour afficher les barres d’outils masquées par le Mode Présentation, changez de mode d’affichage
+@msg	Tab has hidden the toolbars: press Tab to show them	pour afficher les barres d’outils masquées par Tab, appuyez sur Tab
 @msg	onto must name a panel floating in another group	onto doit désigner un panneau flottant dans un autre groupe
 @msg	below and above must name a panel floating in another group	below et above doivent désigner un panneau flottant dans un autre groupe
 @msg	give only one of onto, below and above	indiquez un seul de onto, below et above

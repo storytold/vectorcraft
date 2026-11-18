@@ -3446,6 +3446,39 @@ own layout rules.
 {"name":"invoke_menu","arguments":{"command":"window.toolbar.dock","params":{"name":"Toolbar 1","side":"left","order":0}}}
 ```
 
+## Help search
+
+Help › VectorCraft Help… and F1 show the Help panel. `help.discover {query?}` opens it without
+toggling it closed. A supplied string searches tools, menu commands, and VectorCraft's built-in
+tutorials. Omitting `query` preserves the current search. Empty or whitespace-only text clears
+the results. VectorCraft limits a query to 1024 characters and rejects a longer supplied string.
+
+`help.discover.search {query}` runs the same search and shows the panel. Both commands return
+`{query, results: [{kind, id, label, path, shortcut}], selected}`. `kind` is `tool`, `command`, or
+`tutorial`; `selected` is a zero-based result index or `null`. Search matches all the query's
+words without regard to case, using translated tool labels, command labels as their menus show
+them, and the English labels, ids, and menu paths. A result's `path` names the menus as they are
+drawn, with plug-in submenus and Scripts folders under their own names. Outside macOS, items of
+the VectorCraft application menu, which only the macOS menu bar shows, are left out. Tutorial text remains in English. After a shortcut or the interface
+language changes, the kept results show the current shortcuts, labels, and menu paths, with the
+query and the selected result unchanged. A command result also shows its menu item's current
+label (Show Grid becomes Hide Grid), and a command that no menu lists any more, such as a removed
+recent file, drops out of the results. Parameters other than an object are an error.
+
+`help.discover.choose {index}` shows that result. A tool result marks its toolbar location without
+choosing the tool. A command result shows its menu path and current shortcut without running it.
+A tutorial result shows its numbered steps; a tool link in a step marks that tool's location.
+The reply is `{result, location}`, with the chosen result and the tool-location reply, tutorial
+id, or command path. An invalid index returns an error and preserves the selected result. When a
+tool cannot be marked because Tab or Presentation Mode hides the toolbars, the panel shows the
+tool-location reply's `reason` in the status bar.
+
+Home clears the search. Back and `help.discover.back {}` return to its results with the query
+preserved. Escape in the search field closes the panel. Escape on the canvas still cancels an
+active tool operation. The panel uses the existing tool-location marks; command guidance is a
+menu path. Articles, Quick Actions, personalized recommendations, and Discover preferences are
+not included.
+
 ## Learn panel
 
 Window › Learn and the Explore tutorials button beside the search field at the right end of the app bar show and hide
