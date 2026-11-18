@@ -2534,6 +2534,11 @@ file-filter	Templates	模板
 	Pathfinders:	路径查找器：
 	Paths	路径
 	Path Length	路径长度
+	Grid Size	网格大小
+	Grid Colors	网格颜色
+	Flattener Preset	拼合预设
+	X	X
+	Y	Y
 	Paths: {paths}    Anchors: {anchors}    Colors: {colors}	路径：{paths}    锚点：{anchors}    颜色：{colors}
 	Pattern	图案
 	Pattern Editing	图案编辑

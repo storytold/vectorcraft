@@ -3823,6 +3823,13 @@ liquify-list-end	{0}, {1}	{0}和{1}
 	Pathfinders:	路徑管理員：
 	Paths	路徑
 	Path Length	路徑長度
+	Grid Size	格點大小
+	Grid Colors	格點顏色
+	Flattener Preset	平面化預設集
+	X	X
+	Y	Y
+	Orange	橙色
+	Purple	紫色
 	Paths: {paths}    Anchors: {anchors}    Colors: {colors}	路徑：{paths}    錨點：{anchors}    顏色：{colors}
 	Pattern	圖樣
 	Pattern Editing	圖樣編輯

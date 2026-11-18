@@ -2668,6 +2668,11 @@ file-filter	Templates	Шаблоны
 	Pathfinders:	Обработка контуров:
 	Paths	Контуры
 	Path Length	Длина контуров
+	Grid Size	Размер сетки
+	Grid Colors	Цвета сетки
+	Flattener Preset	Набор объединения
+	X	X
+	Y	Y
 	Paths: {paths}    Anchors: {anchors}    Colors: {colors}	Контуры: {paths}    Опорные точки: {anchors}    Цвета: {colors}
 	Pattern	Узор
 	Pattern Editing	Редактирование узора

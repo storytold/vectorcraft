@@ -3138,6 +3138,11 @@ file-filter	Templates	Sablonok
 	Pathfinders:	Útvonalkezelők:
 	Paths	Útvonalak
 	Path Length	Útvonalak hossza
+	Grid Size	Rácsméret
+	Grid Colors	Rács színei
+	Flattener Preset	Lapítási előbeállítás
+	X	X
+	Y	Y
 	Paths: {paths}    Anchors: {anchors}    Colors: {colors}	Útvonalak: {paths}    Horgonypontok: {anchors}    Színek: {colors}
 	Pattern	Mintázat
 	Pattern Brush	Mintázatecset

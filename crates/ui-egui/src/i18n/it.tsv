@@ -2681,6 +2681,13 @@ file-filter	Templates	Modelli
 	Pathfinders:	Elaborazioni tracciati:
 	Paths	Tracciati
 	Path Length	Lunghezza dei tracciati
+	Grid Size	Dimensione griglia
+	Grid Colors	Colori griglia
+	Flattener Preset	Preset di appiattimento
+	X	X
+	Y	Y
+	Orange	Arancione
+	Purple	Viola
 	Paths: {paths}    Anchors: {anchors}    Colors: {colors}	Tracciati: {paths}    Ancoraggi: {anchors}    Colori: {colors}
 	Pattern	Motivo
 	Pattern Editing	Modifica motivo

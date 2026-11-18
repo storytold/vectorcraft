@@ -2415,6 +2415,11 @@ shape	Open	Açık
 	Pathfinders:	Yol Bulucular:
 	Paths	Yollar
 	Path Length	Yol Uzunluğu
+	Grid Size	Izgara Boyutu
+	Grid Colors	Izgara Renkleri
+	Flattener Preset	Düzleştirici ön ayarı
+	X	X
+	Y	Y
 	Paths: {paths}    Anchors: {anchors}    Colors: {colors}	Yollar: {paths} Bağlantılar: {anchors} Renkler: {colors}
 	Pattern	Desen
 	Pattern Editing	Desen Düzenleme

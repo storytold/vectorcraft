@@ -2792,6 +2792,13 @@ antiAlias	Sharp	シャープ
 	Pathfinders:	パスファインダー:
 	Paths	パス
 	Path Length	パスの長さ
+	Grid Size	グリッドのサイズ
+	Grid Colors	グリッドのカラー
+	Flattener Preset	分割・統合プリセット
+	X	X
+	Y	Y
+	Orange	オレンジ
+	Purple	パープル
 	Paths: {paths}    Anchors: {anchors}    Colors: {colors}	パス：{paths}    アンカー：{anchors}    カラー：{colors}
 	Pattern Editing	パターン編集
 	Pattern options are available in pattern editing mode.	パターンオプションはパターン編集モードで使用できます。
