@@ -37,7 +37,7 @@ pub(super) use envelopes::ENVELOPES;
 pub(super) use meshes::MESHES;
 pub(super) use styles::{LARGE_CANVAS_STYLES, style_links, styled_definitions, styled_objects};
 #[cfg(test)]
-pub(super) use styles::{PANEL_EMPTY, PANEL_STYLES, STYLE_LINKS, WARPED_IMAGES, same_appearance};
+pub(super) use styles::{PANEL_EMPTY, PANEL_STYLES, REPARSE, STYLE_LINKS, WARPED_IMAGES, same_appearance};
 pub(super) use texts::wraps_held;
 
 pub(super) use images::PAYLOAD;

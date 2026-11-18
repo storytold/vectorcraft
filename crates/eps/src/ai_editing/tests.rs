@@ -7340,6 +7340,166 @@ fn art_styles_are_written_in_their_forms() {
     assert!(!two.contains("%AI9_BeginArtStyleList"), "{two}");
 }
 
+/// A document with `k` of each object a save checks a style on, on rows 20 pt apart: objects linked
+/// to a new document's graphic style and to one of the document's own, objects with the same drop
+/// shadow, two objects with different gradients under a drop shadow on the same outline, and paths
+/// with a Calligraphic brush and a drop shadow.
+fn checked_styles_document(k: usize) -> Document {
+    let mut doc = Document::new(400.0, 20.0 * k as f64 + 20.0);
+    vectorcraft_brush::store(&mut doc, &brush_library());
+    let lit_ap = Appearance { effects: vec![drop_shadow()], ..Appearance::basic(solid(Color::rgb(0.2, 0.5, 0.9)), solid(Color::BLACK), 1.0) };
+    let mut lit = vectorcraft_doc::GraphicStyle::new("Lit", lit_ap);
+    lit.id = 40;
+    doc.graphic_styles.push(lit);
+    let ramp = |c: Color| {
+        let stops = vec![GradientStop::new(0.0, Color::WHITE), GradientStop::new(1.0, c)];
+        Paint::Gradient(Box::new(GradientPaint::new(Gradient { kind: GradientKind::Linear, stops, ..Gradient::default() })))
+    };
+    for i in 0..k {
+        let y = 10.0 + 20.0 * i as f64;
+        for (x, name) in [(10.0, "Sunshine"), (60.0, "Lit")] {
+            let g = doc.graphic_style(name).unwrap().clone();
+            let ap = g.appearance_on(&Node::group(vectorcraft_doc::NodeId(0), vec![])).into_owned();
+            let mut n = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(x, y, x + 40.0, y + 15.0)), ap);
+            n.extras_mut().graphic_style = Some(g.id);
+            put(&mut doc, n);
+        }
+        let n = styled_rect(&mut doc, "Shadowed", Rect::new(110.0, y, 150.0, y + 15.0), solid(Color::BLACK), Paint::None, vec![drop_shadow()]);
+        put(&mut doc, n);
+        for c in [Color::BLACK, Color::rgb(0.9, 0.2, 0.1)] {
+            let n = styled_rect(&mut doc, "Graded", Rect::new(160.0, y, 200.0, y + 15.0), ramp(c), Paint::None, vec![drop_shadow()]);
+            put(&mut doc, n);
+        }
+        let stroke = Appearance::basic(Paint::None, solid(Color::rgb(1.0, 0.0, 0.0)), 2.0);
+        let mut line = Node::path(doc.alloc_id(), shapes::line((210.0, y).into(), (380.0, y + 10.0).into()), stroke);
+        line.appearance.stroke_mut().unwrap().brush = Some("Nib".into());
+        line.appearance.effects = vec![drop_shadow()];
+        put(&mut doc, line);
+    }
+    doc
+}
+
+/// A save parses each style text once, however many objects it checks with it: the panel's styles,
+/// objects linked to them, objects with the same style of their own and brushed paths. Each object
+/// is still checked: every linked object keeps its link, each graded object reads back with its own
+/// gradient, and each brushed path with its brush.
+#[test]
+fn a_save_parses_each_style_text_once() {
+    let parses = |doc: &Document| {
+        crate::import::ART_STYLE_PARSES.set(0);
+        let out = export_ai_editing(doc, &opts()).unwrap();
+        (crate::import::ART_STYLE_PARSES.get(), String::from_utf8(out.program).unwrap().replace("\r\n", "\n"))
+    };
+    let (one, _) = parses(&checked_styles_document(1));
+    let doc = checked_styles_document(4);
+    let (four, p) = parses(&doc);
+    assert!(one > 0);
+    assert_eq!(four, one, "parses with one of each object and with four");
+    for linked in ["1 (Sunshine) XW\n", "1 (Lit) XW\n"] {
+        assert_eq!(p.matches(linked).count(), 4, "{linked}");
+    }
+    let back = read_back(&doc);
+    let kids = back.layers[0].children().unwrap();
+    let paints: Vec<&Paint> =
+        kids.iter().filter(|n| n.name.as_deref() == Some("Graded")).filter_map(|n| n.appearance.fill().map(|f| &f.paint)).collect();
+    let graded: Vec<&Paint> = doc.layers[0]
+        .children()
+        .unwrap()
+        .iter()
+        .filter(|n| n.name.as_deref() == Some("Graded"))
+        .map(|n| &n.appearance.fill().unwrap().paint)
+        .collect();
+    assert_eq!(paints.len(), 8);
+    for (got, want) in paints.iter().zip(&graded) {
+        let (Paint::Gradient(got), Paint::Gradient(want)) = (got, want) else { panic!("a gradient fill: {got:?}") };
+        assert_eq!(got.gradient.stops, want.gradient.stops);
+    }
+    let brushed: Vec<&Arc<Node>> = kids.iter().filter(|n| n.appearance.stroke().and_then(|s| s.brush.as_deref()) == Some("Nib")).collect();
+    assert_eq!(brushed.len(), 4);
+    assert!(brushed.iter().all(|n| n.appearance.effects.len() == 1 && matches!(n.kind, NodeKind::Path { .. })));
+}
+
+/// A save that keeps each style text's parse writes the same program, header, warnings and private
+/// data as one that parses the text again at every check.
+#[test]
+fn a_save_writes_the_same_with_each_style_text_parsed_once() {
+    let save = |doc: &Document, reparse: bool| {
+        writer::REPARSE.set(reparse);
+        let out = export_ai_editing(doc, &opts()).unwrap();
+        let private = private_data(doc, &opts()).unwrap();
+        writer::REPARSE.set(false);
+        (out.program, out.header, out.warnings, private.0.data, private.1)
+    };
+    for doc in [styles_document(), checked_styles_document(4), brushes_document()] {
+        let (once, again) = (save(&doc, false), save(&doc, true));
+        assert!(once == again, "{}", String::from_utf8_lossy(&once.0));
+    }
+}
+
+/// The CPU time of saving a document with 40 graphic styles, 20,000 rectangles linked to them in
+/// turn and 5,000 paths with an Outer Glow of their own in 20 settings, with each style text's parse
+/// kept and with the text parsed again at every check: the median of 7 runs of each, alternating.
+/// Run with `cargo test -p vectorcraft-eps --lib -- --ignored --nocapture style_parse_time`.
+#[test]
+#[ignore = "timing; run by hand"]
+fn style_parse_time() {
+    let mut doc = Document::new(2000.0, 2000.0);
+    let mut ids = vec![];
+    for i in 0..40u32 {
+        let shade = i as f32 / 40.0;
+        let mut ap = Appearance::basic(solid(Color::rgb(shade, 0.4, 1.0 - shade)), solid(Color::BLACK), 1.0 + f64::from(i % 4));
+        let round = fx("stylize.roundCorners", serde_json::json!({"radius": 2.0 + f64::from(i % 5)}));
+        ap.effects = vec![fx("stylize.dropShadow", serde_json::json!({"x": f64::from(i % 7), "y": 4.0})), round];
+        let mut g = vectorcraft_doc::GraphicStyle::new(format!("Style {i}"), ap);
+        g.id = 100 + i;
+        ids.push(g.id);
+        doc.graphic_styles.push(g);
+    }
+    for i in 0..20_000usize {
+        let g = doc.graphic_style_by_id(ids[i % ids.len()]).unwrap().clone();
+        let ap = g.appearance_on(&Node::group(vectorcraft_doc::NodeId(0), vec![])).into_owned();
+        let (x, y) = ((i % 200) as f64 * 10.0, (i / 200) as f64 * 10.0);
+        let mut n = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(x, y, x + 8.0, y + 8.0)), ap);
+        n.extras_mut().graphic_style = Some(g.id);
+        put(&mut doc, n);
+    }
+    for i in 0..5_000usize {
+        let glow = fx("stylize.outerGlow", serde_json::json!({"blur": 1.0 + (i % 20) as f64}));
+        let (x, y) = ((i % 100) as f64 * 20.0, 1000.0 + (i / 100) as f64 * 20.0);
+        let n = styled_rect(&mut doc, "Glow", Rect::new(x, y, x + 15.0, y + 15.0), solid(Color::BLACK), Paint::None, vec![glow]);
+        put(&mut doc, n);
+    }
+    // The CPU time this thread has run, in nanoseconds: Linux's scheduler statistics, else the clock.
+    let start = std::time::Instant::now();
+    let cpu = || {
+        std::fs::read_to_string("/proc/thread-self/schedstat")
+            .ok()
+            .and_then(|s| s.split_whitespace().next().and_then(|n| n.parse::<u64>().ok()))
+            .unwrap_or_else(|| u64::try_from(start.elapsed().as_nanos()).unwrap_or(u64::MAX))
+    };
+    let mut times: [Vec<u64>; 2] = [vec![], vec![]];
+    let mut parses = [0, 0];
+    let mut outputs: [Vec<u8>; 2] = [vec![], vec![]];
+    for _ in 0..7 {
+        for (k, reparse) in [(0, true), (1, false)] {
+            writer::REPARSE.set(reparse);
+            crate::import::ART_STYLE_PARSES.set(0);
+            let t = cpu();
+            let out = export_ai_editing(&doc, &opts()).unwrap();
+            times[k].push(cpu() - t);
+            parses[k] = crate::import::ART_STYLE_PARSES.get();
+            outputs[k] = out.program;
+        }
+    }
+    writer::REPARSE.set(false);
+    assert!(outputs[0] == outputs[1]);
+    for (k, label) in [(0, "parsed at every check"), (1, "parsed once")] {
+        times[k].sort_unstable();
+        let ms: Vec<String> = times[k].iter().map(|t| format!("{:.1}", *t as f64 / 1e6)).collect();
+        println!("{label}: median {:.1} ms CPU, {} parses, runs {}", times[k][3] as f64 / 1e6, parses[k], ms.join(" "));
+    }
+}
+
 /// Objects whose appearance the reader wouldn't read with their style are written as their
 /// drawn look, with the warnings they were written with before; graphic styles it wouldn't read
 /// are left out with a warning; and a document without effects or styles of its own has no art
