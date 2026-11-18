@@ -173,6 +173,49 @@ fn a_wall_beside_a_bevel_is_laid_out_at_its_own_length() {
 }
 
 #[test]
+fn art_on_a_facet_with_a_curved_edge_is_clipped_to_that_edge() {
+    let quad = vec![Point::new(0.0, 0.0), Point::new(10.0, 0.0), Point::new(10.0, 10.0), Point::new(0.0, 10.0)];
+    // The facet's top edge follows a curve that bows into the quad, down to y = 2.
+    let mut curved = BezPath::new();
+    curved.move_to((0.0, 0.0));
+    curved.curve_to((10.0 / 3.0, 8.0 / 3.0), (20.0 / 3.0, 8.0 / 3.0), (10.0, 0.0));
+    curved.line_to((10.0, 10.0));
+    curved.line_to((0.0, 10.0));
+    curved.close_path();
+    let facet = Facet {
+        contours: vec![quad.clone()],
+        depth: 0.0,
+        brightness: 1.0,
+        illumination: [1.0; 3],
+        normal: [0.0, 0.0, 1.0],
+        rgb_gradient: None,
+        outline: Some(PathData::from_bezpath(&curved)),
+        side: true,
+        away: false,
+        end: None,
+        plane: None,
+        cell: None,
+    };
+    let cell = MapCell { surface: 0, page: quad.clone(), uv: quad.clone() };
+    let whole = Rect::new(0.0, 0.0, 10.0, 10.0);
+    let art = Unrolled {
+        polygons: vec![quad],
+        boxes: vec![whole],
+        bounds: whole,
+        rule: FillRule::NonZero,
+        paint: Paint::solid(RED),
+        opacity: 1.0,
+        blend: Default::default(),
+        place: Affine::IDENTITY,
+    };
+    let (mut budget, mut copies) = (MapBudget::default(), 0);
+    let out = cell_art(NodeId(1), &[art], &cell, &facet, &|c| c, &mut budget, &mut copies).unwrap();
+    let area: f64 = out.iter().filter_map(|n| n.path_data()).map(|p| vectorcraft_geom::kurbo::Shape::area(&p.to_bezpath()).abs()).sum();
+    let want = vectorcraft_geom::kurbo::Shape::area(&curved).abs();
+    assert!((area - want).abs() < 1e-2, "{area} drawn, {want} inside the curved edge");
+}
+
+#[test]
 fn a_map_on_the_back_cap_reads_the_right_way_round_from_behind() {
     let d = document();
     let n = object(CLASSIC_EXTRUDE, json!({"rotationY": 180, "mapArt": [{"surface": 1, "symbol": "Corner"}, {"surface": 2, "symbol": "Corner"}]}));

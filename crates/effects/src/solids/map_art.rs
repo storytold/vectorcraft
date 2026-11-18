@@ -540,8 +540,9 @@ fn cell_art(
     let Some(reach) = box_of(&cell.uv) else { return Some(vec![]) };
     let apart = |b: &Rect| b.x1 < reach.x0 || b.x0 > reach.x1 || b.y1 < reach.y0 || b.y0 > reach.y1;
     let regions = regions(cell);
-    // A facet cut after it was built draws only the part of the art inside its own outline.
-    let whole = f.contours.first() == Some(&cell.page);
+    // A facet cut after it was built, or one whose edges follow the profile's curves, draws only the
+    // part of the art inside its own outline.
+    let whole = f.outline.is_none() && f.contours.first() == Some(&cell.page);
     let mut out = vec![];
     for piece in pieces.iter().filter(|p| !apart(&p.bounds)) {
         let mut path = BezPath::new();
