@@ -9717,6 +9717,11 @@ theme	Appearance	अपीयरेंस
 @msg	A panel is not joined to the rest by a crease.	कोई पैनल किसी क्रीज़ लाइन से बाकी से जुड़ा नहीं है।
 @msg	A fold line is on a non-printing layer.	एक फ़ोल्ड लाइन नॉन-प्रिंटिंग लेयर पर है।
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	पैनल: {panels}, हिंज: {hinges}, एरर: {errors}, वॉर्निंग: {warnings}
+	Orbit Lines	कक्षीय रेखाएँ
+	Petal Garland	पंखुड़ी माला
+	Lattice Braid	जाली चोटी
+	Facet Sweep	पहलूदार स्ट्रोक
+	Artistic Brushes	कलात्मक ब्रश
 	Fold Preview	फ़ोल्ड प्रीव्यू
 	Fold	फ़ोल्ड
 	Show Fold Lines	फ़ोल्ड लाइनें दिखाएँ

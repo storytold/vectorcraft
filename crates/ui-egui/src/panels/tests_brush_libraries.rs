@@ -201,7 +201,8 @@ fn the_window_menu_and_the_brushes_panel_open_brush_libraries() {
             json!("game-trails"),
             json!("energy-beams"),
             json!("dry-media"),
-            json!("tech-circuit")
+            json!("tech-circuit"),
+            json!("artistic")
         ]
     );
     let dry = entries.iter().find(|e| under(e) && e.params["library"] == "dry-media").map(|e| e.label.as_str());
@@ -231,6 +232,16 @@ fn the_window_menu_and_the_brushes_panel_open_brush_libraries() {
     let undo = undo_len(&app);
     click(&mut app, &ctx, "Circuit Trace", Modifiers::NONE, 2.0);
     assert!(has(&app, "Circuit Trace") && !has(&app, "Bus Lines"));
+    assert_eq!(undo_len(&app), undo + 1);
+    let r = app.run("window.brushLibrary", json!({"library": "Artistic Brushes"})).unwrap();
+    assert_eq!((r["open"].as_str(), r["count"].as_u64()), (Some("artistic"), Some(4)));
+    let previous = crate::i18n::current();
+    crate::i18n::set_current(crate::i18n::Lang::from_code("de").unwrap());
+    assert_eq!(crate::menus::display_label(&app, "window.brushLibrary", "Artistic Brushes"), "Künstlerische Pinsel");
+    crate::i18n::set_current(previous);
+    let undo = undo_len(&app);
+    click(&mut app, &ctx, "Orbit Lines", Modifiers::NONE, 3.0);
+    assert!(has(&app, "Orbit Lines") && !has(&app, "Facet Sweep"));
     assert_eq!(undo_len(&app), undo + 1);
     // Without brushes there is nothing to save.
     let all: Vec<String> = vectorcraft_brush::library(&app.session.doc().unwrap().doc).into_iter().map(|b| b.name).collect();

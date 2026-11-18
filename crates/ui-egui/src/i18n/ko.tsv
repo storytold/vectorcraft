@@ -9712,6 +9712,11 @@ breakText	Glyphs	글리프
 @msg	A panel is not joined to the rest by a crease.	패널이 어떤 오시선으로도 나머지와 연결되어 있지 않습니다.
 @msg	A fold line is on a non-printing layer.	접는 선이 인쇄되지 않는 레이어에 있습니다.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	패널: {panels}, 힌지: {hinges}, 오류: {errors}, 경고: {warnings}
+	Orbit Lines	궤도 선
+	Petal Garland	꽃잎 화환
+	Lattice Braid	격자 땋기
+	Facet Sweep	면 분할 붓질
+	Artistic Brushes	예술 브러시
 	Fold Preview	접기 미리 보기
 	Fold	접기
 	Show Fold Lines	접는 선 표시

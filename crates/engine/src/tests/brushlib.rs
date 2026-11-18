@@ -116,7 +116,8 @@ fn the_builtin_libraries_are_original_brushes_generated_in_code() {
             "game-trails",
             "energy-beams",
             "dry-media",
-            "tech-circuit"
+            "tech-circuit",
+            "artistic"
         ]
     );
     assert!(libs.iter().all(|l| l["category"] == "builtIn"));
@@ -160,6 +161,7 @@ fn the_builtin_libraries_are_original_brushes_generated_in_code() {
         ("game-trails", "art"),
         ("energy-beams", "art"),
         ("dry-media", "art"),
+        ("artistic", "art"),
     ] {
         let (_, lib) = cmd::brushlib::library(&s, id).unwrap();
         assert!(lib.len() >= 4, "{id}");
@@ -188,6 +190,48 @@ fn the_builtin_libraries_are_original_brushes_generated_in_code() {
         assert!(lib.brushes.iter().all(|b| !defaults.contains(&b.name.as_str())), "{id}");
     }
     assert!(s.execute("brush.library", &json!({"library": "nope"})).is_err());
+}
+
+#[test]
+fn artistic_library_strokes_are_editable_and_reopen_from_a_saved_library() {
+    let mut s = session();
+    let (_, lib) = cmd::brushlib::library(&s, "artistic").unwrap();
+    let (_, alias) = cmd::brushlib::library(&s, "Artistic").unwrap();
+    assert_eq!(alias.brushes, lib.brushes);
+    assert_eq!(run(&mut s, "brush.library", json!({"library": "Artistic"}))["id"], "artistic");
+    let names = ["Orbit Lines", "Petal Garland", "Lattice Braid", "Facet Sweep"];
+    assert_eq!(lib.brushes.iter().map(|b| b.name.as_str()).collect::<Vec<_>>(), names);
+    let line = run(&mut s, "shape.line", json!({"x1": 10, "y1": 50, "x2": 190, "y2": 50}))["id"].as_u64().unwrap();
+    for b in &lib.brushes {
+        let BrushKind::Art(a) = &b.kind else { panic!("{} is not an art brush", b.name) };
+        assert!(art_paths(&a.art).len() >= 2, "{} has no editable vector art", b.name);
+        for path in [line_to(180.0), line_to(1.0)] {
+            assert!(!vectorcraft_brush::stroke_pieces(&lib.doc, b, &path, &black_stroke()).is_empty(), "{} draws nothing", b.name);
+        }
+        let before = undo_len(&s);
+        let added = run(&mut s, "brush.addFromLibrary", json!({"library": "artistic", "name": b.name, "apply": true, "ids": [line]}));
+        assert_eq!(strs(&added["added"]), [b.name.as_str()]);
+        assert_eq!(added["applied"], json!([line]));
+        assert_eq!(undo_len(&s), before + 1);
+    }
+    let saved = run(&mut s, "brush.saveLibrary", json!({"names": names}));
+    let bytes = vectorcraft_format::base64_decode(saved["dataBase64"].as_str().unwrap()).unwrap();
+    let reopened = vectorcraft_format::load(&bytes).unwrap();
+    assert_eq!(vectorcraft_brush::library(&reopened), lib.brushes);
+}
+
+#[test]
+fn a_loaded_library_named_artistic_keeps_its_name_ahead_of_the_builtin_alias() {
+    let mut file = vectorcraft_doc::Document::new(100.0, 100.0);
+    vectorcraft_brush::store(&mut file, &[vectorcraft_brush::defaults()[0].clone()]);
+    let b64 = vectorcraft_format::base64_encode(&vectorcraft_format::save_file(&file));
+    let mut s = session();
+    let loaded = run(&mut s, "brush.loadLibrary", json!({"dataBase64": b64, "name": "Artistic.vectorcraft"}));
+    assert_eq!(loaded["name"], "Artistic");
+    let id = loaded["library"].as_str().unwrap();
+    assert_eq!(run(&mut s, "brush.library", json!({"library": "Artistic"}))["id"], id);
+    assert_eq!(run(&mut s, "brush.library", json!({"library": "ARTISTIC"}))["id"], id);
+    assert_eq!(run(&mut s, "brush.library", json!({"library": "artistic"}))["id"], "artistic", "exact built-in id still works");
 }
 
 /// Every path of brush art `n`: (anchors, opacity).
