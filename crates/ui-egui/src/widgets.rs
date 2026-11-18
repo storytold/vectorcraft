@@ -42,21 +42,22 @@ pub use color::{
     hex_field, hex_field_named, hsb32, hue_ring, opacity_slider, region_texture, ring_square, segment_color, segment_color_on, segmented_wheel,
     stepped_area, wheel_of,
 };
-pub(crate) use color::{HEX_FIELD_CHARS, hex_text, pointer_phase};
+pub(crate) use color::{HEX_FIELD_CHARS, focus_by_pointer, hex_text, pointer_phase};
 pub use drag::{
-    PanelDrag, RowClick, SwatchRows, apply_row_click, art_drop, doc_preview, drag_ghost, drag_source, drop_target_outline, ghost_row, row_click,
+    PanelDrag, RowClick, SwatchRows, apply_row_click, art_drag_doc, art_drop, doc_preview, drag_art, drag_ghost, drag_source, drop_target_outline,
+    ghost_row, row_click,
 };
 #[cfg(test)]
 use dropdowns::combo_button_id;
 pub(crate) use dropdowns::{combo, combo_menu, combo_menu_field_named, combo_named, field_focused_in, menu_min_width, popover_is_open};
 pub use dropdowns::{
-    dropdown, dropdown_icon_names, dropdown_named, dropdown_names, dropdown_names_named, dropdown_with, dropdown_with_named, list_scroll_style,
-    menu_room, menu_scroll, panel_scroll, popover, set_menu_floor, strip_scroll,
+    dropdown, dropdown_icon_names, dropdown_icon_names_sized, dropdown_named, dropdown_names, dropdown_names_named, dropdown_with,
+    dropdown_with_named, list_scroll_style, menu_room, menu_scroll, panel_scroll, popover, set_menu_floor, strip_scroll,
 };
 #[cfg(test)]
 pub(crate) use dropdowns::{menu_floor, menu_room_either};
 pub use labels::{dim_label, dim_name, divider, field_label, label_row, link_label, section_header, section_toggle, section_toggle_name, subheader};
-pub(crate) use labels::{dim_label_width, label_field, take_previous_label, text_width};
+pub(crate) use labels::{dim_label_width, field_panel_label, label_field, take_previous_label, text_width};
 pub(crate) use numeric::{ANY, round_to, set_bare_numbers_are_points, typed_unit};
 pub use numeric::{
     SpinPick, mixed_field, mixed_field_named, num_field, num_field_live, num_field_named, num_field_refusing, num_field_within,
@@ -211,7 +212,7 @@ pub(crate) mod accessibility_tests {
         let tree = tree(|ui| {
             icon_button(ui, "link", "Constrain Proportions", true, 24.0);
             toggle_icon(ui, "eye", true, 18.0, "Show all plates");
-            toggle_icon(ui, "eye", false, 18.0, "Show/hide plate (Alt-click: only this plate)");
+            toggle_icon(ui, "eye", false, 18.0, "Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)");
             orientation_button(ui, false, true, "Portrait");
             orientation_button(ui, true, false, "Landscape");
             layout_button(ui, &[(0, 0), (1, 0)], true, "Grid by Row");
@@ -221,7 +222,7 @@ pub(crate) mod accessibility_tests {
         let off = |label| assert_eq!(role_and_state(&tree, label), (Role::Button, Some(Toggled::False)), "{label}");
         on("Constrain Proportions");
         on("Show all plates");
-        off("Show/hide plate (Alt-click: only this plate)");
+        off("Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)");
         on("Portrait");
         off("Landscape");
         on("Grid by Row");

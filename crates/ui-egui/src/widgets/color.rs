@@ -187,6 +187,14 @@ pub fn stepped_area(ui: &Ui, resp: &Response, name: &str, shown: Option<SliderVa
     slider_keys(ui, resp, shown, false)
 }
 
+/// Gives the keyboard focus to the control `id` of [`stepped_area`] as a click or a drag on it
+/// does, with no focus outline until a key steps it, for a control whose pointer input another
+/// response reads.
+pub(crate) fn focus_by_pointer(ui: &Ui, id: egui::Id) {
+    ui.memory_mut(|m| m.request_focus(id));
+    ui.data_mut(|d| d.insert_temp(id.with("focused-by-pointer"), true));
+}
+
 /// The focus, keys, actions and focus outline of [`color_slider_stepped`] on the control `resp`:
 /// the number a key or an action gives. With `always`, a key or an action that leaves the number
 /// as it was still gives it.
@@ -196,8 +204,7 @@ fn slider_keys(ui: &Ui, resp: &Response, shown: Option<SliderValue>, always: boo
     // a keyboard user where the focus is, and after a drag it only framed the rail.
     let by_pointer = id.with("focused-by-pointer");
     if resp.drag_started() || resp.clicked() {
-        resp.request_focus();
-        ui.data_mut(|d| d.insert_temp(by_pointer, true));
+        focus_by_pointer(ui, id);
     }
     let focused = ui.memory(|m| m.has_focus(id));
     if !focused {
