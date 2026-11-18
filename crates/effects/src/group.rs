@@ -110,13 +110,15 @@ fn leaves(doc: Option<&Document>, n: &Node, hook: Option<OutlineHook>, nodes: &S
             // Every path of the outline art, at any depth, is drawn inside the object's opacity
             // and blend mode. A symbol's art comes with the live objects and the instances of
             // other symbols inside it given as their art, and the type inside it outlined, so the
-            // art has nothing left for `hook` to give.
+            // art has nothing left for `hook` to give. Its fills and strokes carry the geometry
+            // effects of the instance's active fill and stroke, as the canvas draws them.
             if let Some(h) = hook
                 && let Some(art) = h(n)
             {
                 let art = match &n.kind {
                     NodeKind::SymbolInstance { symbol, .. } if nodes.charge(&art) => {
-                        let mut art = crate::reshape::symbol_art_with(&art, h, nodes, symbol);
+                        let mut art = instance_art(doc, &art, h, nodes, symbol);
+                        crate::reshape::add_instance_row_effects(doc, n, &mut art);
                         crate::reshape::outline_nested_text(doc, &mut art, false);
                         transparency_into_members(&mut art);
                         art
@@ -132,6 +134,19 @@ fn leaves(doc: Option<&Document>, n: &Node, hook: Option<OutlineHook>, nodes: &S
             }
         }
     }
+}
+
+/// `art`, the art `hook` gave an instance of the symbol named `symbol`, with the live objects and
+/// the instances of other symbols inside it given as their art
+/// ([`crate::reshape::symbol_art_with`]). The art of each of those instances carries the geometry
+/// effects of its own active fill and stroke ([`crate::reshape::add_instance_row_effects`]).
+fn instance_art(doc: Option<&Document>, art: &Node, hook: OutlineHook, nodes: &SymbolNodes, symbol: &str) -> Node {
+    let drawn = |m: &Node| {
+        let mut a = hook(m)?;
+        crate::reshape::add_instance_row_effects(doc, m, &mut a);
+        Some(a)
+    };
+    crate::reshape::symbol_art_with(art, &drawn, nodes, symbol)
 }
 
 /// `l`, a path drawn inside `n`: its opacity multiplied by `n`'s, and `n`'s blend mode when it is
@@ -221,13 +236,15 @@ fn reshaped_art(doc: Option<&Document>, n: &Node, hook: Option<OutlineHook>, nod
             }
         },
         // A symbol instance with a warp: its symbol's art placed by the instance, with the type
-        // inside it outlined, reshaped as one piece, as the renderer draws it.
+        // inside it outlined, reshaped as one piece, as the renderer draws it. The fills and strokes
+        // of the art then carry the geometry effects of the instance's active fill and stroke.
         NodeKind::SymbolInstance { symbol, .. } if !fx.is_empty() => {
             let h = hook?;
             let art = h(n).filter(|art| nodes.charge(art))?;
-            let mut art = crate::reshape::symbol_art_with(&art, h, nodes, symbol);
+            let mut art = instance_art(doc, &art, h, nodes, symbol);
             crate::reshape::outline_nested_text(doc, &mut art, false);
             members_as_drawn(doc, &mut art);
+            crate::reshape::add_instance_row_effects(doc, n, &mut art);
             let carry = crate::reshape::reshape_leaves_carrying(&mut art, &fx, &n.appearance.effects, doc);
             // The art's own fills and strokes follow the effects as its members do.
             if carry.moves(&art.appearance) {
