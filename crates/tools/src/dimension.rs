@@ -79,8 +79,9 @@ pub struct DimensionTool {
     /// While a Linear dimension is placed with its line on the level of another dimension's line:
     /// the ends of that other line. A Smart Guide runs along the level across both lines.
     level_guide: Option<(Point, Point)>,
-    /// While a dimension is placed: the lines of the visible, unlocked linear dimensions in the
-    /// document before its first preview ([`dimension_lines`]), which its line can line up with.
+    /// While a linear dimension is placed: the lines of the visible, unlocked linear dimensions in
+    /// the document before its first preview ([`dimension_lines`]), which its line can line up with
+    /// while Smart Guides are on.
     levels: Vec<DimensionLine>,
 }
 
@@ -524,7 +525,7 @@ impl DimensionTool {
         // With Smart Guides on, a linear dimension's line lands on the level of a parallel
         // dimension line already drawn within the Smart Guides snapping tolerance. The lines are
         // read before the first preview, so the preview of this dimension is not one of them.
-        if !self.began {
+        if !self.began && d.mode == DimensionMode::Linear {
             self.levels = dimension_lines(cx);
         }
         let level = if cx.smart_guides { line_level(&self.levels, d, p, cx.snap_tol()) } else { None };
@@ -876,6 +877,40 @@ mod tests {
             assert!(at.distance(pt(250.0, 170.0)) < 1e-9, "{at:?}");
             assert_eq!(ends, across.0);
         }
+    }
+
+    /// The lines of the dimensions in the document are read only for a linear dimension. They are
+    /// read with Smart Guides off too, so a line placed after Smart Guides are turned on lines up.
+    #[test]
+    fn dimension_lines_are_read_only_for_a_linear_dimension() {
+        use vectorcraft_doc::{Node, NodeKind};
+        let (mut d, _) = doc_with_rect();
+        let id = d.alloc_id();
+        let mut drawn = Node::new(id, NodeKind::Group { children: vec![], clip: false });
+        let pt = Point::new;
+        drawn.extras_mut().dimension =
+            Some(Box::new(DimensionTool::default().recipe(DimensionMode::Linear, pt(300.0, 300.0), pt(400.0, 300.0), pt(350.0, 300.0), None)));
+        let l = d.layers[0].id;
+        d.insert(Some(l), usize::MAX, drawn).unwrap();
+        let (s, p) = (Selection::default(), paint());
+        let ev = |kind, x: f64, y: f64| PointerEvent::new(kind, x, y);
+        let c = cx(&d, &s, &p);
+        let off = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+        let mut t = DimensionTool::default();
+        for (x, y) in [(400.0, 400.0), (450.0, 400.0)] {
+            t.pointer(&off, &ev(PointerKind::Down, x, y));
+            t.pointer(&off, &ev(PointerKind::Up, x, y));
+        }
+        assert!(matches!(t.pointer(&off, &ev(PointerKind::Move, 420.0, 450.0)).first(), Some(Action::Begin(_))));
+        assert_eq!(t.levels.len(), 1);
+        let acts = t.pointer(&c, &ev(PointerKind::Move, 420.0, 302.0));
+        let Some(Action::Preview(_, params)) = acts.last() else { panic!("{acts:?}") };
+        assert_eq!(params["offset"], json!(-100.0), "on the level of the line drawn at y = 300");
+        let mut t = DimensionTool::default();
+        t.set_option("mode", &json!("angular"));
+        t.pointer(&c, &ev(PointerKind::Down, 100.0, 100.0));
+        assert!(matches!(t.pointer(&c, &ev(PointerKind::Drag, 130.0, 140.0)).first(), Some(Action::Begin(_))));
+        assert!(t.levels.is_empty(), "an angular dimension reads no lines");
     }
 
     #[test]
