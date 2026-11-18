@@ -265,7 +265,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Redefine Symbol",
             [],
             None,
-            "{name, ids?|id?} replace the symbol's art with the selection (instances update, keeping their appearance changes to the objects at paths the new art still has; the selection becomes an instance; a frame of threaded text in the selection leaves its thread with the text it shows, which the symbol's art holds; art that holds an instance of the symbol (opacity masks included), directly or through the symbols it nests, is refused) → {name, id}",
+            "{name, ids?|id?, keepArt?: false} replace the symbol's art with the selection (instances update, keeping their appearance changes to the objects at paths the new art still has; the selection becomes an instance, or with keepArt: true stays ordinary art where it is, still selected, and id is null; a frame of threaded text in the selection that becomes an instance leaves its thread with the text it shows, which the symbol's art holds; art that holds an instance of the symbol (opacity masks included), directly or through the symbols it nests, is refused) → {name, id}",
             has_selection,
             symbol_update
         ),
