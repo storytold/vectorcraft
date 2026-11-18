@@ -42,6 +42,10 @@ pub struct CanvasCache {
     pub print_tiling: Option<PrintTilingCache>,
     /// The gap lines View → Show Live Paint Gaps draws for (document uid, revision).
     pub live_paint_gaps: Option<LivePaintGapsCache>,
+    /// Type → Find Font's list of the document's fonts and whether the document misses one, for a
+    /// version of the document's content and of the available fonts: the dialog reads them every
+    /// frame.
+    pub find_font: Option<FindFontCache>,
     /// The marks Type → Show Hidden Characters drew on each text object in the last frame. A frame
     /// that does not draw them drops them ([`canvas::show`]).
     pub hidden_chars: canvas::HiddenChars,
@@ -61,9 +65,15 @@ pub struct CanvasCache {
     pub selection_bounds: Option<((u64, u64), Option<vectorcraft_geom::Rect>)>,
     /// [`VectorcraftApp::content_bounds`] for (document uid, revision).
     pub content_bounds: Option<((u64, u64), Option<vectorcraft_geom::Rect>)>,
+    /// Whether the 3D and Materials panel's Export 3D Object button is available (a selected
+    /// object has a 3D effect that `assets.add3D` exports) for (document uid, revision).
+    pub three_d_exportable: Option<((u64, u64), bool)>,
     /// The Transform panel's Align to Pixel Grid state (on, off or mixed, and whether every
     /// selected object can be aligned) for (document uid, revision).
     pub pixel_aligned: Option<((u64, u64), Option<PixelAligned>)>,
+    /// The symbol instances in the selection and its groups, for (document uid, revision): the
+    /// Properties and Symbols panels read them every frame.
+    pub symbol_instances: Option<((u64, u64), SymbolInstances)>,
     /// [`CacheKey::plugins`] by document uid, with the plug-in revision
     /// ([`vectorcraft_render::effects::plugin_revision`]) it was last checked at.
     pub plugin_keys: std::collections::HashMap<u64, (u64, u64)>,
@@ -111,9 +121,47 @@ pub type SliceCache = ((u64, u64), std::sync::Arc<Vec<vectorcraft_doc::SliceArea
 /// uid, revision).
 pub type LivePaintGapsCache = ((u64, u64), std::sync::Arc<Vec<vectorcraft_tools::Overlay>>);
 
+/// [`CanvasCache::find_font`]: the document's fonts as `text.fonts` lists them, and whether
+/// [`vectorcraft_engine::cmd::fontfiles::missing_fonts`] finds any (`None` until it is asked).
+#[derive(Clone, Debug)]
+pub struct FindFontCache {
+    /// The document and the content and fonts the answers were worked out from.
+    pub key: FontsKey,
+    pub fonts: std::sync::Arc<Vec<serde_json::Value>>,
+    pub missing: Option<bool>,
+}
+
+/// A document's uid, a version of its content (compared by identity) and the font database's
+/// generation ([`vectorcraft_text::FontDb::generation`]). The weak reference keeps the version's
+/// allocation, so a later version is never placed at the same address while the key is kept.
+#[derive(Clone, Debug)]
+pub struct FontsKey {
+    pub uid: u64,
+    pub doc: std::sync::Weak<vectorcraft_doc::Document>,
+    pub generation: u64,
+}
+
+impl PartialEq for FontsKey {
+    fn eq(&self, other: &Self) -> bool {
+        self.uid == other.uid && self.generation == other.generation && std::sync::Weak::ptr_eq(&self.doc, &other.doc)
+    }
+}
+
 /// [`CanvasCache::pixel_aligned`]: the selected objects' Align to Pixel Grid, on or off when they
 /// agree and `None` when they differ, with whether every one can be aligned.
 pub type PixelAligned = (Option<bool>, bool);
+
+/// [`CanvasCache::symbol_instances`]: the symbol instances in the selection and its groups.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct SymbolInstances {
+    /// Each instance's id, in the order the selection's subtrees list them.
+    pub ids: Vec<vectorcraft_doc::NodeId>,
+    /// One of them has appearance changes of its own (`symbol_overrides`).
+    pub changed: bool,
+    /// One of them has a scale, rotation or shear that Reset Transformation would change; measured
+    /// on the first read.
+    pub transformed: Option<bool>,
+}
 
 /// [`CanvasCache::print_tiling`]: the print tiling of (document uid, revision).
 pub type PrintTilingCache = ((u64, u64), std::sync::Arc<Vec<vectorcraft_pdf::TilingPage>>);
