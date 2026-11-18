@@ -126,7 +126,13 @@ const PATTERN_MODES: [(&str, &str); 3] = [("object", "Transform Object Only"), (
 /// Only (the pattern tiles alone) or Transform Both. Until one is chosen (`default`, or any other
 /// value) neither is passed: patterns follow General › Transform Pattern Tiles. Errors are
 /// dropped, as the panels' fields have always done.
-pub fn run_transform(app: &mut VectorcraftApp, cmd: &str, mut params: serde_json::Value) {
+pub fn run_transform(app: &mut VectorcraftApp, cmd: &str, params: serde_json::Value) {
+    let params = with_pattern_switches(app, params);
+    app.run(cmd, params).ok();
+}
+
+/// `params` with the `objects` and `patterns` switches [`run_transform`] adds.
+pub fn with_pattern_switches(app: &VectorcraftApp, mut params: serde_json::Value) -> serde_json::Value {
     let switches = match app.session.prefs.transform_panel_patterns.as_str() {
         "object" => Some((true, false)),
         "pattern" => Some((false, true)),
@@ -137,7 +143,7 @@ pub fn run_transform(app: &mut VectorcraftApp, cmd: &str, mut params: serde_json
         params["objects"] = json!(objects);
         params["patterns"] = json!(patterns);
     }
-    app.run(cmd, params).ok();
+    params
 }
 
 /// The panel menu's checked choice of [`PATTERN_MODES`]: the one chosen, else (`default`) what
@@ -416,10 +422,11 @@ fn pixel_aligned_ids(app: &VectorcraftApp) -> Vec<u64> {
     app.session.active().map(|st| st.selection.objects.iter().filter(|id| st.doc.node(**id).is_some()).map(|id| id.0).collect()).unwrap_or_default()
 }
 
-/// A live rectangle's, polygon's or ellipse's properties (Transform and Properties panels, and the
-/// Contextual Task Bar), their widget ids under `id`. `headed` adds the Rectangle and Polygon
-/// Properties headings; an ellipse's heading always shows. Returns false, drawing nothing, for
-/// other live shapes.
+/// A live rectangle's, polygon's, ellipse's or line's properties (Transform and Properties panels,
+/// and for the first three the Contextual Task Bar), their widget ids under `id`. `headed` adds
+/// the Rectangle and Polygon Properties headings; an ellipse's and a line's heading always show.
+/// Returns false, drawing nothing, for other live shapes, and for a line unless every selected
+/// object is one.
 pub(crate) fn live_shape_rows(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, live: &LiveShape, id: &str, headed: bool) -> bool {
     match live {
         LiveShape::Rectangle { .. } => {
@@ -438,24 +445,86 @@ pub(crate) fn live_shape_rows(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, l
             widgets::subheader(ui, tl!("Ellipse Properties:"));
             pie_rows(app, ui, *pie, &format!("{id}-pie"));
         }
+        LiveShape::Line { .. } => return line_rows(app, ui, live, &format!("{id}-line")),
         _ => return false,
     }
     true
 }
 
+/// Whether every selected object is a live line (and one is selected).
+fn only_lines_selected(app: &VectorcraftApp) -> bool {
+    let Some(st) = app.session.active() else { return false };
+    let line = |n: &Node| matches!(&n.kind, NodeKind::Path { live: Some(l), .. } if matches!(**l, LiveShape::Line { .. }));
+    !st.selection.objects.is_empty() && st.selection.objects.iter().all(|o| st.doc.node(*o).is_some_and(line))
+}
+
+/// A live line's Line Properties (Transform and Properties panels), under its heading: its length,
+/// end to end, and its angle (counterclockwise from 3 o'clock, from its first end to its second). A new length keeps each selected line's first end in place, and a
+/// new angle turns each one about its midpoint. Returns false, drawing nothing, unless every
+/// selected object is a live line.
+pub(crate) fn line_rows(app: &mut VectorcraftApp, ui: &mut Ui, live: &LiveShape, id: &str) -> bool {
+    if !only_lines_selected(app) {
+        return false;
+    }
+    let (units, fw) = (app.session.general_unit(), super::field_width(ui));
+    widgets::subheader(ui, tl!("Line Properties:"));
+    // The `object.setLiveShape` params the edited fields set, all sent in one call.
+    let mut set = serde_json::Map::new();
+    egui::Grid::new((id, "grid")).num_columns(2).spacing([6.0, 6.0]).show(ui, |ui| {
+        widgets::dim_label(ui, tl!("Line Length:"));
+        if let Some(l) = widgets::num_field_named(ui, (id, "length"), Some(tl!("Line Length:")), live.line_length(), units, fw) {
+            set.insert("lineLength".into(), json!(l));
+        }
+        ui.end_row();
+        widgets::dim_label(ui, tl!("Line Angle:"));
+        if let Some(a) = widgets::plain_field_named(ui, (id, "angle"), Some(tl!("Line Angle:")), live.line_angle().unwrap_or(0.0), "°", 1, fw) {
+            set.insert("lineAngle".into(), json!(a));
+        }
+        ui.end_row();
+    });
+    if !set.is_empty()
+        && let Err(e) = app.run("object.setLiveShape", serde_json::Value::Object(set))
+    {
+        app.status(e);
+    }
+    true
+}
+
 /// An ellipse's Pie Start and End Angle (degrees, counterclockwise from 3 o'clock; 0 to 360 is the
-/// whole ellipse) and Invert Pie, which shows the other part of it (Transform and Properties panels).
+/// whole ellipse), the Constrain Pie Angle link beside them, and Invert Pie, which shows the other
+/// part of it (Transform and Properties panels). With the link on, a typed angle moves the other
+/// one by as much, so each selected ellipse keeps its span.
 pub(crate) fn pie_rows(app: &mut VectorcraftApp, ui: &mut Ui, pie: (f64, f64), id: &str) {
-    for (label, key, v) in [(tl!("Pie Start Angle:"), "pieStart", pie.0), (tl!("Pie End Angle:"), "pieEnd", pie.1)] {
-        ui.horizontal(|ui| {
-            widgets::dim_label(ui, label);
-            if let Some(a) = widgets::plain_field(ui, (id, key), v, "°", 1, 60.0) {
-                app.run("object.setLiveShape", json!({ key: a })).ok();
+    ui.horizontal(|ui| {
+        ui.vertical(|ui| {
+            for (label, key, v) in [(tl!("Pie Start Angle:"), "pieStart", pie.0), (tl!("Pie End Angle:"), "pieEnd", pie.1)] {
+                ui.horizontal(|ui| {
+                    widgets::dim_label(ui, label);
+                    if let Some(a) = widgets::plain_field(ui, (id, key), v, "°", 1, 60.0) {
+                        let params = if app.ui.constrain_pie_angle { json!({ key: a, "constrainPie": true }) } else { json!({ key: a }) };
+                        app.run("object.setLiveShape", params).ok();
+                    }
+                });
             }
         });
-    }
+        pie_link(app, ui);
+    });
     if widgets::flat_button(ui, tl!("Invert Pie"), 90.0).clicked() {
         app.run("object.setLiveShape", json!({"invertPie": true})).ok();
+    }
+}
+
+/// The Constrain Pie Angle link between Pie Start and End Angle: one toggle for the Transform and
+/// Properties panels, kept while the app runs and off at launch. It is drawn after the fields, so
+/// Tab reaches them first; with the keyboard on it, Space or Enter toggles it.
+fn pie_link(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let (_, at) = ui.allocate_exact_size(egui::Vec2::splat(CONSTRAIN_LINK_SIZE), egui::Sense::click());
+    let on = app.ui.constrain_pie_angle;
+    let tip = tl!("Constrain Pie Angle");
+    let keyed = at.has_focus()
+        && ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Space) | i.consume_key(egui::Modifiers::NONE, egui::Key::Enter));
+    if widgets::paint_icon_button(ui, at, if on { "link" } else { "link-2-off" }, tip, on).clicked() || keyed {
+        app.ui.constrain_pie_angle = !on;
     }
 }
 
@@ -515,7 +584,13 @@ pub(crate) fn polygon_rows(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, live
 /// popover under it, as the Stroke link does with the Stroke panel.
 pub fn link(app: &mut VectorcraftApp, ui: &mut Ui) {
     let resp = ui.link(link_text(ui)).on_hover_text(tl!("Transform options"));
-    widgets::popover(&resp, resp.clicked(), |ui| {
+    popover(app, &resp);
+}
+
+/// The Transform panel in a popover under `resp`, which a click on it toggles: the Control bar's
+/// Transform [`link`], and its X:, Y:, W: and H: labels.
+pub fn popover(app: &mut VectorcraftApp, resp: &egui::Response) {
+    widgets::popover(resp, resp.clicked(), |ui| {
         ui.set_width(300.0);
         show(app, ui);
     });

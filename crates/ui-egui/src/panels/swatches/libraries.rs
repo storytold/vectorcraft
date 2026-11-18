@@ -3,7 +3,7 @@ use super::dnd::selection;
 use super::tiles::{describe, global_mark, list_icons, pattern_thumb_in};
 use super::{
     Arc, BuiltinLibrary, GRADIENT_LIBRARIES, Item, LibraryKind, LibraryRef, PATTERN_LIBRARIES, Rect, Row, SWATCH_LIBRARIES, Swatch, SwatchLibrary,
-    Ui, Value, VectorcraftApp, json, library_panel, menu_item, patternlib, swatch_tile, swatchlib,
+    Ui, Value, VectorcraftApp, json, library_panel, menu_item, swatch_tile, swatchlib,
 };
 
 fn library_refs(libs: Vec<swatchlib::LibraryInfo>) -> Vec<LibraryRef> {
@@ -97,10 +97,10 @@ impl LibraryKind for SwatchLibraries {
         }
         out
     }
-    fn draw(_: &VectorcraftApp, ui: &Ui, r: Rect, w: &Swatch, selected: bool, hovered: bool) {
+    fn draw(app: &VectorcraftApp, ui: &Ui, r: Rect, w: &Swatch, selected: bool, hovered: bool) {
         swatch_tile(ui, r, &w.paint, selected, hovered);
-        // A built-in pattern library's pattern, drawn from the library.
-        if let Some(src) = patternlib::swatch_source(w) {
+        // A pattern library's pattern, or a loaded library's, drawn from the library.
+        if let Some(src) = swatchlib::pattern_source(&app.session, w) {
             pattern_thumb_in(&src, ui, r.shrink(1.0), &w.paint);
         }
         if w.global {
@@ -142,7 +142,7 @@ impl LibraryKind for SwatchLibraries {
             app.status(e);
         }
         if menu_item(ui, tl!("Save Swatch Library…"), app.session.active().is_some(), false) {
-            let names = deletable(&selection(app, ui));
+            let names = deletable(app, &selection(app, ui));
             app.run("ui.saveSwatchLibrary", json!({ "names": names })).ok();
         }
     }
