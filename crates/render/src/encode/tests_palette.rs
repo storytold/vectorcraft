@@ -102,11 +102,18 @@ fn a_given_palette_keeps_the_entries_pixels_use() {
     assert_eq!(ix.transparent, Some(0));
     assert_eq!(ix.palette[1..], [[255, 0, 0], [0, 0, 255]], "unused entries left out, the order kept");
     assert_eq!(ix.indices, [1, 2, 0, 1]);
-    // At most 255 of the given colors are used, leaving room for the transparent entry.
+    // With no transparent pixel all 256 of the given colors can be used; with one, the first 255
+    // leave room for the transparent entry.
     let many: Vec<[u8; 3]> = (0..300u32).map(|i| [(i % 256) as u8, (i / 256) as u8, 0]).collect();
     let all = image(256, 2, |x, y| [x as u8, y as u8, 0]);
     let ix = quantize_to(&all, 256, 2, &o, &many);
-    assert!(ix.palette.len() <= 255 && ix.palette.iter().all(|c| many[..255].contains(c)), "{}", ix.palette.len());
+    assert!(ix.palette.len() == 256 && ix.palette.iter().all(|c| many[..256].contains(c)), "{}", ix.palette.len());
+    assert!(ix.palette.contains(&many[255]), "the 256th color is used");
+    let mut clear = all.clone();
+    clear[3] = 0;
+    let ix = quantize_to(&clear, 256, 2, &o, &many);
+    assert_eq!(ix.transparent, Some(0));
+    assert!(ix.palette.len() <= 256 && ix.palette[1..].iter().all(|c| many[..255].contains(c)), "{}", ix.palette.len());
 }
 
 #[test]
