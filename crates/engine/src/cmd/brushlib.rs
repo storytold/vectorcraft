@@ -822,11 +822,15 @@ pub fn library(s: &Session, key: &str) -> Option<(LibraryInfo, Arc<BrushLibrary>
     if let Some(found) = concealed_library_id(s, key).and_then(|id| s.brush_libraries.get(&id)) {
         return Some(found);
     }
-    if let Some(b) = BUILTIN.iter().find(|b| b.id == key || (b.id == "artistic" && key.eq_ignore_ascii_case("Artistic"))) {
+    if let Some(b) = BUILTIN.iter().find(|b| b.id == key) {
         return Some((builtin_info(b), builtin_library(b.id)?));
     }
-    let id = libraries(s).into_iter().find(|l| l.name.eq_ignore_ascii_case(key))?.id;
-    library(s, &id)
+    if let Some(id) = libraries(s).into_iter().find(|l| l.name.eq_ignore_ascii_case(key)).map(|l| l.id) {
+        return library(s, &id);
+    }
+    // Keep the short built-in alias, but let a user or loaded library own its display name.
+    let b = key.eq_ignore_ascii_case("Artistic").then(|| BUILTIN.iter().find(|b| b.id == "artistic")).flatten()?;
+    Some((builtin_info(b), builtin_library(b.id)?))
 }
 
 fn library_param(s: &Session, p: &Value, cmd: &str) -> Result<(LibraryInfo, Arc<BrushLibrary>)> {

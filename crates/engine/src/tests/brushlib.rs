@@ -220,6 +220,20 @@ fn artistic_library_strokes_are_editable_and_reopen_from_a_saved_library() {
     assert_eq!(vectorcraft_brush::library(&reopened), lib.brushes);
 }
 
+#[test]
+fn a_loaded_library_named_artistic_keeps_its_name_ahead_of_the_builtin_alias() {
+    let mut file = vectorcraft_doc::Document::new(100.0, 100.0);
+    vectorcraft_brush::store(&mut file, &[vectorcraft_brush::defaults()[0].clone()]);
+    let b64 = vectorcraft_format::base64_encode(&vectorcraft_format::save_file(&file));
+    let mut s = session();
+    let loaded = run(&mut s, "brush.loadLibrary", json!({"dataBase64": b64, "name": "Artistic.vectorcraft"}));
+    assert_eq!(loaded["name"], "Artistic");
+    let id = loaded["library"].as_str().unwrap();
+    assert_eq!(run(&mut s, "brush.library", json!({"library": "Artistic"}))["id"], id);
+    assert_eq!(run(&mut s, "brush.library", json!({"library": "ARTISTIC"}))["id"], id);
+    assert_eq!(run(&mut s, "brush.library", json!({"library": "artistic"}))["id"], "artistic", "exact built-in id still works");
+}
+
 /// Every path of brush art `n`: (anchors, opacity).
 fn art_paths(n: &vectorcraft_doc::Node) -> Vec<(usize, f32)> {
     let mut out = vec![];
