@@ -10,10 +10,7 @@ use super::names::{norm, norm_chars, script_families};
 #[cfg(not(target_arch = "wasm32"))]
 use super::scan::{enumerate_faces, font_files};
 use super::traits::{Alias, FontMatch, FontTraits, regular_rank};
-use super::{
-    Arc, BezPath, CANONICAL_CACHE_MAX, Color, ColourContent, FontDb, GlyphId, GlyphImage, MetadataProvider, NEXT_ID, OUTLINE_CACHE_MAX, Ordering,
-    Size,
-};
+use super::{Arc, BezPath, CANONICAL_CACHE_MAX, Color, ColourContent, FontDb, GlyphImage, MetadataProvider, NEXT_ID, OUTLINE_CACHE_MAX, Ordering};
 
 /// The most faces [`FontDb::postscript_faces`] gives, and the most families it loads.
 const MAX_POSTSCRIPT_FACES: usize = 16;
