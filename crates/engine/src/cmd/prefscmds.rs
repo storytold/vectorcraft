@@ -139,6 +139,7 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("cornerRadius", "General", "", "Corner Radius", len(0.0, 1296.0, General)),
     p!("pasteOffset", "General", "", "Paste Offset", len(0.0, 1296.0, General)),
     p!("disableAutoAddDelete", "General", "Options", "Disable Auto Add/Delete", bool),
+    p!("interpolateControlPoints", "General", "Options", "Interpolate Control Points When Moving Anchors", bool),
     p!("usePreciseCursors", "General", "Options", "Use Precise Cursors", bool),
     p!("showToolTips", "General", "Options", "Show Tool Tips", bool),
     p!("showExternalScriptWarning", "General", "Options", "Show External Script Warning", bool),
@@ -325,6 +326,14 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("hyphenationExceptions", "Hyphenation", "", "Exceptions (comma separated)", text),
     // Plug-ins & Scratch Disks
     p!("pluginsFolder", "Plug-ins & Scratch Disks", "Plug-ins", "Additional Plug-ins Folder", text),
+    // The instructions each object filter run gets: Large gives at least 250 M besides those for each byte of input.
+    p!(
+        "pluginInstructionBudget",
+        "Plug-ins & Scratch Disks",
+        "Plug-ins",
+        "Plug-in Instruction Budget",
+        choice(&[("normal", "Normal"), ("large", "Large")])
+    ),
     p!("scratchPrimary", "Plug-ins & Scratch Disks", "Scratch Disks", "Primary", text),
     p!("scratchSecondary", "Plug-ins & Scratch Disks", "Scratch Disks", "Secondary", text),
     // User Interface

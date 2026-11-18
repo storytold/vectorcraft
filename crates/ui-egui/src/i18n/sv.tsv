@@ -129,8 +129,12 @@
 	Add to Swatches	Lägg till i färgrutor
 	Add Used Colors	Lägg till använda färger
 	Additional Plug-ins Folder	Mapp för ytterligare plugins
+	Plug-in Instruction Budget	Instruktionsbudget för plugins
 	Additional Fonts Folder	Mapp för ytterligare typsnitt
 	Adjust Adjoining Width Points	Justera angränsande breddpunkter
+	Incoming	Inkommande
+	Outgoing	Utgående
+	Single Width Only	Endast en bredd
 	Adjust Color Balance…	Justera färgbalans…
 	Adjust Colors	Justera färger
 	Adjust Options:	Justeringsalternativ:
@@ -482,6 +486,8 @@ font-technology	Variable	Variabla
 	Choose a folder	Välj en mapp
 	Choose…	Välj…
 	Circle	Cirkel
+	Circle Tool	Cirkelverktyg
+	Circle too large	Cirkeln är för stor
 	Classic Defaults	Klassiska standardvärden
 	Clean Up…	Rensa upp…
 	Clear	Rensa
@@ -799,6 +805,8 @@ font-technology	Variable	Variabla
 	Delete Artboard	Radera rityta
 	Delete Artboards	Radera ritytor
 	Delete Brush	Radera pensel
+	Delete Color	Radera färg
+	Restore Generated Table	Återställ genererad tabell
 	Delete Character Style	Radera teckenstil
 	Delete Empty Artboards	Radera tomma ritytor
 	Delete Freeform Point	Radera fri punkt
@@ -867,6 +875,7 @@ font-technology	Variable	Variabla
 	Direct Selection Tool	Direktmarkeringsverktyg
 	Direction Handles	Riktningshandtag
 	Disable Auto Add/Delete	Inaktivera Lägg till/radera automatiskt
+	Interpolate Control Points When Moving Anchors	Interpolera riktningshandtag vid flyttning av ankarpunkter
 	Disable Opacity Mask	Inaktivera opacitetsmask
 	Discard	Släng
 	Discard Empty Type	Släng tom text
@@ -1249,6 +1258,8 @@ font-technology	Variable	Variabla
 	Files	Filer
 	Files of a PDF standard can't be password-protected.	Filer enligt en PDF-standard kan inte lösenordsskyddas.
 	Files of this standard tag their colours with ICC profiles.	Filer enligt den här standarden märker sina färger med ICC-profiler.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	Filer enligt den här standarden märker sina färger med ICC-profiler, utom CMYK-färger i profilen för utgångsavsikt, som skrivs som DeviceCMYK.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	Med ”Inkludera inte profiler” och en CMYK-utgångsavsikt skrivs varje CMYK-färg som DeviceCMYK, om den inte konverteras till ett CMYK-mål med en annan profil.
 	Fill	Fyllning
 	Fill & Stroke	Fyllning och kontur
 	Fill (X), double-click for the Color Picker	Fyllning (X), dubbelklicka för färgväljaren
@@ -1988,6 +1999,7 @@ font-technology	Variable	Variabla
 	Load SVG into Clipboard	Läs in SVG till urklipp
 	Load Text into Clipboard	Läs in text till urklipp
 	Local Libraries	Lokala bibliotek
+	Locate Layer	Hitta lager
 	Locate Object	Hitta objekt
 	Locate Selected Objects	Hitta markerade objekt
 	Location	Plats
@@ -2182,6 +2194,7 @@ font-technology	Variable	Variabla
 	Scatter:	Spridning:
 	Rotation:	Rotation:
 	Rotation relative to:	Rotation i förhållande till:
+	Hue Jitter:	Nyansvariation:
 	Brush Scale Options	Alternativ för penselskala
 	Scale Proportionately	Skala proportionellt
 	Stretch to Fit Stroke Length	Sträck för att passa konturlängden
@@ -2218,6 +2231,7 @@ font-technology	Variable	Variabla
 	Black becomes the stroke color and white stays white. Other colors become tints of the stroke color by their lightness.	Svart blir konturfärgen och vitt förblir vitt. Andra färger blir ljusare toner av konturfärgen, och ju ljusare en färg är, desto ljusare är dess ton.
 	Black and white stay as they are. Dark colors become shades of the stroke color and light colors become tints of it.	Svart förblir svart och vitt förblir vitt. Andra färger blir mörkare toner av konturfärgen när de är mörka och ljusare toner av den när de är ljusa.
 	The key color becomes the stroke color. The other colors shift their hue by the same amount and keep their saturation and brightness.	Nyckelfärgen blir konturfärgen. De andra färgerna flyttas lika långt runt färghjulet som nyckelfärgen och behåller sin mättnad och ljusstyrka.
+	Roundness	Rundhet
 	Roundness:	Rundhet:
 	Fixed	Fast
 	Pressure	Tryck
@@ -2646,6 +2660,10 @@ font-technology	Variable	Variabla
 	Polar Grid Tool	Verktyg för polärt rutnät
 	Polygon	Polygon
 	Polygon Properties:	Polygonegenskaper:
+	Line Properties:	Linjeegenskaper:
+	Line Length:	Linjelängd:
+	Line Angle:	Linjevinkel:
+	Constrain Pie Angle	Behåll cirkeldiagrammets vinkel
 	Polygon Tool	Polygonverktyg
 	Portrait	Stående
 	Power Saving (integrated)	Energisparläge (integrerad)
@@ -2805,6 +2823,9 @@ digits	Malayalam	Malayalam
 	Real World:	Verkligt mått:
 	Real-time Drawing and Editing	Ritning och redigering i realtid
 	Use Monitor Profile for Canvas	Använd skärmprofil för arbetsytan
+	Refresh Monitor Profile	Uppdatera skärmprofil
+@msg	turn on Use Monitor Profile for Canvas first	slå först på ”Använd skärmprofil för arbetsytan”
+@msg	this build doesn't read display profiles	den här versionen läser inte skärmprofiler
 	The canvas is drawn in sRGB.	Arbetsytan ritas i sRGB.
 	Canvas display profile:	Arbetsytans skärmprofil:
 	The system matches the window to the display's colors.	Systemet anpassar fönstret till skärmens färger.
@@ -3067,6 +3088,7 @@ digits	Malayalam	Malayalam
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	En rotationsgest med två fingrar på en styrplatta roterar arbetsytans vy.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Om du håller ned en tangent körs verktyget eller kommandot i dess Håll-kolumn i Kortkommandon; ett kort tryck kör dess vanliga kortkommando.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Hur många sekunder en tangent måste hållas ned innan dess hållkortkommando körs i stället för dess vanliga kortkommando.
+	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	När du flyttar ankarpunkter behåller varje kurva med en flyttad ände sin form i förhållande till sina ändar.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	När du håller ned ett verktygs kortkommando är verktyget valt tills du släpper, och sedan väljs det föregående verktyget igen.
 	Shows the bounding box while you move the selection or draw a shape.	Visar avgränsningsramen medan du flyttar markeringen eller ritar en form.
 	Create Trim Marks draws Japanese-style marks instead of Roman ones.	Skapa skärmärken ritar märken i japansk stil i stället för romerska.
@@ -3364,6 +3386,9 @@ digits	Malayalam	Malayalam
 	Search commands, tools, panels and effects…	Sök kommandon, verktyg, paneler och effekter…
 	No commands match	Inga kommandon matchar
 	{pos} of {total}: {name}	{pos} av {total}: {name}
+	No menu item	Inget menyalternativ
+	Toolbar	Verktygsfält
+	{toolbar}, in the {tool} group	{toolbar}, i gruppen {tool}
 @plural	{n} result|{n} results	{n} resultat|{n} resultat
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} av {n} resultat. Fortsätt skriva för att begränsa dem.|{shown} av {n} resultat. Fortsätt skriva för att begränsa dem.
 	Recent Commands	Senaste kommandon
@@ -3444,6 +3469,7 @@ digits	Malayalam	Malayalam
 	Set Slice Rectangle	Ange skivrektangel
 	Set Tab Stops	Ange tabbstopp
 	Set Text	Ange text
+	Set the current fill or stroke to the selected color	Ersätt den aktuella fyllningen eller konturen med den markerade färgen
 	Set the selected color to the current color	Ersätt den markerade färgen med den aktuella färgen
 	Set Zoom	Ange zoom
 	Settings…	Inställningar…
@@ -3565,7 +3591,7 @@ digits	Malayalam	Malayalam
 	Show Vivid/Muted	Visa livfull/dämpad
 	Show Warm/Cool	Visa varm/kall
 	Show {kind} Brushes	Visa {kind}-penslar
-	Show/hide plate (Alt-click: only this plate)	Visa/dölj plåt (Alt-klick: endast den här plåten)
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	Visa/dölj plåt (Alt-klick: endast den här plåten; Alt-klick igen: alla plåtar)
 	Show:	Visa:
 	Shown with the optimised preview.	Visas med den optimerade förhandsgranskningen.
 	Side 1:	Sida 1:
@@ -4174,6 +4200,8 @@ digits	Malayalam	Malayalam
 	V Spacing:	V-avstånd:
 	V:	V:
 	Variable Width Profile	Profil för variabel bredd
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Konturens pensel behåller sin egen storlek, så en breddprofil ändrar inte konturen. Ta bort penseln för att använda en profil.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Konturens pensel behåller sin egen storlek, så en breddprofil ändrar inte konturen. Ta bort penseln för att använda en profil.
 	Variables	Variabler
 	New Variable	Ny variabel
 	Delete Variable	Radera variabel
@@ -4447,6 +4475,7 @@ imageTrace	Outline	Kontur
 	Bevel	Fasning
 	Offset	Förskjutning
 	Axis	Axel
+	Axis Angle	Axelvinkel
 axis	Horizontal	Horisontell
 axis	Vertical	Vertikal
 axis	Both	Båda
@@ -4693,6 +4722,14 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	is a prompt's answer, whose `value` must be a string or null	är svaret på en prompt, vars `value` måste vara en sträng eller null
 @msg	must have `kind` alert, confirm or prompt	måste ha `kind` alert, confirm eller prompt
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` är bara för en körning utan någon att fråga: i appen svarar personen på varje dialogruta
+@msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel` måste vara ett heltal från 1 till {_1}
+@msg	`args{place}` is nested more than 64 levels deep	`args{place}` är kapslat mer än 64 nivåer djupt
+@msg	`args` must be an object	`args` måste vara ett objekt
+@msg	`args` is larger than 1 MiB	`args` är större än 1 MiB
+@msg	`path` is empty	`path` är tomt
+@msg	`installed` takes a `path`, not a `source`	`installed` tar en `path`, inte en `source`
+@msg	`path` must name a .js or .jsx file	`path` måste ange en .js- eller .jsx-fil
+@msg	give exactly one of `path` and `source`	ange exakt en av `path` och `source`
 @msg	Running a script	Kör ett skript
 @msg	Copied the script report	Kopierade skriptrapporten
 @msg	Script file access denied: {path}	Skriptets filåtkomst nekades: {path}
@@ -4945,6 +4982,7 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	choose a folder to export to	välj en mapp att exportera till
 @msg	choose a location for the package	välj en plats för paketet
 @msg	clipboard is empty	urklippet är tomt
+@msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: minst en färg måste finnas kvar i färgtabellen
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` är inte en färg som "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: högst {MAX_TABLE} färger
 @msg	command `{0}` is not available right now: {1}	kommandot `{0}` är inte tillgängligt just nu: {1}
@@ -5012,9 +5050,15 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	no PNG encoder	ingen PNG-kodare
 @msg	no active document	inget aktivt dokument
 @msg	no active perspective plane	inget aktivt perspektivplan
+@msg	the perspective grid is hidden	perspektivrutnätet är dolt
+@msg	Automatic Plane Positioning is off: turn on anchorPoint or gridlineIntersection (perspective.widget.options)	Automatisk planplacering är avstängd: slå på anchorPoint eller gridlineIntersection (perspective.widget.options)
+@msg	anchorPoint must be true or false	anchorPoint måste vara true eller false
+@msg	gridlineIntersection must be true or false	gridlineIntersection måste vara true eller false
+@msg	tolerance must be 0 or more	tolerance måste vara 0 eller mer
+@msg	give `at` or `clear`, not both	ange `at` eller `clear`, inte båda
 @msg	no anchor points selected	inga ankarpunkter är markerade
-@msg	`points` must be three [x, y] pairs of numbers	`points` måste vara tre talpar [x, y]
-@msg	direct-select three anchor points, or give `points`	direktmarkera tre ankarpunkter eller ange `points`
+@msg	`points` must be two or three [x, y] pairs of numbers	`points` måste vara två eller tre talpar [x, y]
+@msg	direct-select two or three anchor points, or give `points`	direktmarkera två eller tre ankarpunkter eller ange `points`
 @msg	no circle passes through these points: two are the same or all three lie on one line	ingen cirkel går genom de här punkterna: två är samma punkt eller så ligger alla tre på en linje
 @msg	no app to open files here	det finns ingen app för att öppna filer här
 @msg	no artboard	ingen rityta
@@ -5116,6 +5160,9 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	no such user library	användarbiblioteket finns inte
 @msg	no such view	vyn finns inte
 @msg	no such width point	breddpunkten finns inte
+@msg	`single` must be `incoming` or `outgoing`	`single` måste vara `incoming` eller `outgoing`
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` och `outIndex` måste vara de två halvorna av en och samma diskontinuerliga breddpunkt
+@msg	a discontinuous width point keeps its place	en diskontinuerlig breddpunkt behåller sin plats
 @msg	no swatch `{name}`	ingen färgruta `{name}`
 @msg	no swatch library `{l}` (see swatch.library.list)	inget färgrutebibliotek `{l}` (se swatch.library.list)
 @msg	no symbol instances selected	inga symbolinstanser är markerade
@@ -5474,6 +5521,8 @@ variable-list-end	{0}, {1}	{0} och {1}
 @msg	Reload the page to go on (changes not saved yet may be lost).	Läs in sidan igen för att fortsätta (ändringar som inte sparats än kan gå förlorade).
 @msg	tool (a tool id) is required	tool (ett verktygs-id) krävs
 @msg	{tool} isn't in a toolbar group of several tools	{tool} ingår inte i en verktygsgrupp med flera verktyg
+@msg	Presentation Mode hides the toolbars: change the screen mode to show them	Presentationsläge döljer verktygsfälten: byt skärmläge för att visa dem
+@msg	Tab has hidden the toolbars: press Tab to show them	Tab har dolt verktygsfälten: tryck på Tab för att visa dem
 @msg	onto must name a panel floating in another group	onto måste ange en panel som flyter i en annan grupp
 @msg	below and above must name a panel floating in another group	below och above måste ange en panel som flyter i en annan grupp
 @msg	give only one of onto, below and above	ange bara en av onto, below och above
@@ -5610,6 +5659,7 @@ variable-list-end	{0}, {1}	{0} och {1}
 @msg	automation path rejected: outside the read roots {roots}: {path}	automatiseringssökvägen avvisades: utanför läsrötterna {roots}: {path}
 @msg	a linked image file is outside the read roots	en länkad bildfil ligger utanför läsrötterna
 @msg	a linked file's export folder is outside the read roots	exportmappen för en länkad fil ligger utanför läsrötterna
+@msg	a linked file's editing data can't be read to check it against the read roots	redigeringsdata för en länkad fil kan inte läsas för att kontrolleras mot läsrötterna
 @msg	automation path rejected: outside the write root {root}: {path}	automatiseringssökvägen avvisades: utanför skrivroten {root}: {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	automatiseringssökvägen avvisades: utanför skrivrötterna {roots}: {path}
 @msg	automation path rejected: path is empty	automatiseringssökvägen avvisades: sökvägen är tom
@@ -5886,6 +5936,7 @@ lighting	Light	Ljus
 	Cove	Hålkäl
 	Depth	Djup
 	Front	Framifrån
+	Side	Från sidan
 	Isometric Bottom	Isometrisk underifrån
 	Isometric Left	Isometrisk vänster
 	Isometric Right	Isometrisk höger
@@ -5981,7 +6032,7 @@ lighting	Light	Ljus
 @msg	each of `{GRAPHICS}` must be an object	varje post i `{GRAPHICS}` måste vara ett objekt
 @msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	posterna i `{GRAPHICS}` tar symbol, face, x, y, scale och rotation, inte `{k}`
 @msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	varje post i `{GRAPHICS}` behöver `symbol`, namnet på en symbol
-@msg	`{GRAPHICS}` face must be front or back	face i `{GRAPHICS}` måste vara front eller back
+@msg	`{GRAPHICS}` face must be front, back or side	face i `{GRAPHICS}` måste vara front, back eller side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} i `{GRAPHICS}` måste vara ett tal från {lo} till {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` måste vara en matris
 @msg	Graphics map onto the Plane, Extrude and Revolve object types	Grafik placeras på objekttyperna Plan, Extrudera och Rotera runt axel
@@ -7763,6 +7814,14 @@ breakText	Glyphs	Glyfer
 	Remove Gaps	Ta bort mellanrum
 @msg	that makes too many pieces (at most 100000): make the dashes longer	det blir för många delar (högst 100000): gör strecken längre
 @msg	select paths, or segments, to divide	markera banor eller segment att dela upp
+# Path Precision Tools add-on: Smooth Bridge.
+	Smooth Bridge…	Mjuk brygga…
+	Smooth Bridge	Mjuk brygga
+	Keep Originals	Behåll original
+@msg	select two circles to bridge	markera två cirklar att förbinda
+@msg	one circle is inside the other	den ena cirkeln ligger inuti den andra
+@msg	the circles are too far apart for this radius: raise the radius	cirklarna ligger för långt ifrån varandra för den här radien: öka radien
+@msg	the circles are too far apart for this radius	cirklarna ligger för långt ifrån varandra för den här radien
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	Gemensamma tangenter…
 	Common Tangents	Gemensamma tangenter
@@ -8470,6 +8529,7 @@ digits	Hindi	Hindi
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	sammansatta former tar banor, sammansatta banor, grupper, sammansatta former, text, övergångar och kuvert
 @msg	connect end must be "start" or "end"	connect end måste vara "start" eller "end"
 @msg	connect needs a path other than the one extended	connect behöver en annan bana än den som förlängs
+@msg	connect needs extend	connect behöver extend
 @msg	connect needs id	connect behöver id
 @msg	connect path has no open end	connect-banan har ingen öppen ände
 @msg	Contour: select paths or shapes	Kontur: markera banor eller former

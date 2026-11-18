@@ -96,6 +96,29 @@ fn apply_to_all_restyles_every_dimension_in_one_undo_step() {
 }
 
 #[test]
+fn each_arrow_style_draws_its_stroke_arrowhead_at_both_ends() {
+    use vectorcraft_doc::Arrowhead;
+    let mut s = session();
+    for (style, head) in
+        [("filled", Some(Arrowhead::Triangle)), ("open", Some(Arrowhead::TriangleOpen)), ("tick", Some(Arrowhead::Slash)), ("none", None)]
+    {
+        let id = run(&mut s, "dimension.create", json!({"a":[0,0],"b":[72,0],"options":{"arrowStyle":style}}))["id"].as_u64().unwrap();
+        let n = s.doc().unwrap().doc.node(NodeId(id)).unwrap();
+        let heads: Vec<_> = n
+            .children()
+            .unwrap()
+            .iter()
+            .filter_map(|n| n.appearance.stroke().map(|s| (s.start_arrow.clone(), s.end_arrow.clone())))
+            .filter(|(a, b)| a.is_some() || b.is_some())
+            .collect();
+        match head {
+            Some(head) => assert!(!heads.is_empty() && heads.iter().all(|h| *h == (Some(head.clone()), Some(head.clone()))), "{style}: {heads:?}"),
+            None => assert!(heads.is_empty(), "{style}: {heads:?}"),
+        }
+    }
+}
+
+#[test]
 fn dimension_angles_circles_arcs_and_curves() {
     let mut s = session();
     let a = run(
@@ -1971,9 +1994,15 @@ fn dimension_colours_follow_the_document_colour_model() {
     let black = colours(&s, id);
     assert!(!black.is_empty() && black.iter().all(|c| *c == vectorcraft_color::Color::cmyk(0.0, 0.0, 0.0, 1.0)), "{black:?}");
     let pdf = pdf_content(&run(&mut s, "document.exportPdf", json!({"preset":"PDF/X-4:2010"})));
-    // PDF/X-4 paints in the output intent's CMYK space: `/c0 CS 0 0 0 1 SCN` strokes, `scn` fills.
-    let operands = |op: &str| pdf.match_indices(op).map(|(i, _)| pdf[i.saturating_sub(7)..i].to_string()).collect::<Vec<_>>();
-    let (strokes, fills) = (operands(" SCN"), operands(" scn"));
+    // PDF/X-4 writes CMYK in the output intent's profile as DeviceCMYK: `0 0 0 1 K` strokes, `k` fills.
+    let words: Vec<&str> = pdf.split_whitespace().collect();
+    let operands = |op: &str| {
+        (4..words.len())
+            .filter(|&i| words[i] == op && words[i - 4..i].iter().all(|w| w.parse::<f32>().is_ok()))
+            .map(|i| words[i - 4..i].join(" "))
+            .collect::<Vec<_>>()
+    };
+    let (strokes, fills) = (operands("K"), operands("k"));
     assert!(!strokes.is_empty() && !fills.is_empty(), "{pdf}");
     assert!(strokes.iter().chain(&fills).all(|v| v == "0 0 0 1"), "K-only colours: {strokes:?} {fills:?}");
     run(&mut s, "dimension.update", json!({"ids":[id],"options":{"lineColor":[255,0,0]}}));
