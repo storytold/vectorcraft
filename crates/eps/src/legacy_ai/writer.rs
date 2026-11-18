@@ -9,7 +9,7 @@ use super::{
     ROTATED_TYPE, Rect, STROKES, SUBLAYERS, Shape, StrokeLayer, SubPath, TITLE_AND_COLOR_NAMES, TRANSPARENCY, TYPE, TYPE_ATTRIBUTES, TextKind,
     TextObject, UNDECODED, Vec2, Write, ai_ops, latin, ps, stroke,
 };
-use super::{CONIC, CONIC_WEDGES, DIAMOND, GRAPHS, HUE_STOPS, SPREAD, SPREAD_CAPPED};
+use super::{CONIC, CONIC_WEDGES, DIAMOND, GRAPHS, HUE_STOPS, PERCEPTUAL_STOPS, SPREAD, SPREAD_CAPPED};
 
 #[cfg(test)]
 thread_local! {
@@ -710,10 +710,7 @@ impl<'a> Writer<'a> {
             Color::Cmyk { c, m, y, k } => Ink::Cmyk([c, m, y, k].map(unit)),
             // The CMYK equivalent of the RGB values as written.
             Color::Rgb { r, g, b } => Ink::Rgb(self.cms.to_cmyk(&ai_ops::as_written(*color), intent).map(unit), [r, g, b].map(unit)),
-            Color::Lab { .. } => {
-                let rgb = color.to_rgb().map(unit);
-                Ink::Rgb(self.cms.to_cmyk(color, intent).map(unit), rgb)
-            }
+            Color::Lab { .. } => Ink::Rgb(self.cms.to_cmyk(color, intent).map(unit), ai_ops::rgb_values(*color)),
         }
     }
 
@@ -755,11 +752,11 @@ impl<'a> Writer<'a> {
     /// (its distance a fraction of the radius, at most 1, §3.5.5; `0 0 0 0 Bh` at the center,
     /// §3.5.6), `1 (name) x y angle length 1 0 0 1 0 0 Bg`.
     fn gradient(&mut self, g: &GradientPaint, bounds: Rect) -> String {
-        // A gradient mixed around the hue wheel (the format's gradients mix their stops' colors
-        // directly): the stops on its curve, no more than the reader reads, in a definition of
-        // its own.
-        if g.gradient.method.is_hue() {
-            self.warn(HUE_STOPS);
+        // A gradient mixed by the Perceptual method or around the hue wheel (the format's
+        // gradients mix their stops' colors directly): the stops on its curve, in process colors,
+        // no more than the reader reads, in a definition of its own.
+        if !g.gradient.method.is_classic() {
+            self.warn(if g.gradient.method.is_hue() { HUE_STOPS } else { PERCEPTUAL_STOPS });
             let curve = g.gradient.as_classic_curve();
             let gradient = if curve.is_spread() { curve } else { curve.fitted(crate::import::MAX_GRADIENT_STOPS).into_owned() };
             let p = GradientPaint { gradient, swatch: None, ..g.clone() };
