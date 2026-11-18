@@ -2735,6 +2735,7 @@ font-technology	Variable	Variables
 	Line Properties:	Propiedades de la línea:
 	Line Length:	Longitud de la línea:
 	Line Angle:	Ángulo de la línea:
+	Constrain Pie Angle	Restringir ángulo del sector
 	Polygon Tool	Herramienta Polígono
 	Portrait	Vertical
 	Power Saving (integrated)	Ahorro de energía (integrada)

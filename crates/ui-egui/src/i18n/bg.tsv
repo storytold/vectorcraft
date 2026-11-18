@@ -2637,6 +2637,7 @@ font-technology	Variable	Променливи
 	Line Properties:	Свойства на линията:
 	Line Length:	Дължина на линията:
 	Line Angle:	Ъгъл на линията:
+	Constrain Pie Angle	Запазване на ъгъла на сектора
 	Polygon Tool	Инструмент „Многоъгълник“
 	Portrait	Портретна
 	Power Saving (integrated)	Пестене на енергия (интегрирано)
