@@ -1,7 +1,8 @@
 //! Select All (Cmd+A) follows the keyboard, from the window and from the system menu bar (macOS):
 //! a focused text field selects its own text, the Type tool editing selects the text being edited,
 //! the Artboards panel selects every artboard after a click on one of its rows with the Artboard
-//! tool, and only otherwise are all the objects selected.
+//! tool, and only otherwise are all the objects selected. The clipboard keys follow it too: Copy
+//! and Cut copy the text selected in a field or in a panel's label before the art.
 
 use egui::{Event, Key, Modifiers, PointerButton, Pos2, Rect, vec2};
 use serde_json::json;
@@ -258,6 +259,89 @@ fn the_clipboard_keys_in_a_focused_field_edit_its_text() {
         assert_eq!(a.selected(), 1, "{text}: the art stays");
         a.frame(vec![press(Key::Escape, Modifiers::NONE)]);
     }
+}
+
+/// The rectangle of the text `text` painted last in a frame's output.
+fn text_rect(out: &egui::FullOutput, text: &str) -> Rect {
+    out.shapes
+        .iter()
+        .rev()
+        .find_map(|s| match &s.shape {
+            egui::Shape::Text(t) if t.galley.text() == text => Some(t.galley.rect.translate(t.pos.to_vec2())),
+            _ => None,
+        })
+        .unwrap_or_else(|| panic!("no {text:?} painted"))
+}
+
+/// #8432: with a Document Info value's text selected, Copy and Cut (the keys or the menu bar's
+/// items) copy that text and leave the art. With nothing selected in the labels, or when the
+/// selected label is not drawn, Copy copies the art.
+#[test]
+fn copy_and_cut_copy_the_text_selected_in_a_panel_label() {
+    let mut a = App::new();
+    a.app.run("window.panel", json!({"panel": "docInfo"})).unwrap();
+    crate::panels::set_pstate(&a.ctx, "docinfo-category", "objects".to_string());
+    // The two rectangles' outlines: 2 × (20 + 20) + 2 × (37 + 40).
+    let length = "234 pt";
+    let mut out = a.frame(vec![]);
+    for _ in 0..3 {
+        out = a.frame(vec![]);
+    }
+    let select = |a: &mut App, out: &egui::FullOutput| {
+        let r = text_rect(out, length);
+        let (from, to) = (r.left_center() + vec2(1.0, 0.0), r.right_center() - vec2(1.0, 0.0));
+        a.frame(vec![Event::PointerMoved(from)]);
+        a.frame(vec![click(from, true)]);
+        for k in 1..=4 {
+            a.frame(vec![Event::PointerMoved(from + (to - from) * k as f32 / 4.0)]);
+        }
+        a.frame(vec![click(to, false)]);
+        a.frame(vec![])
+    };
+    // Cmd+C or Cmd+X: the chord's frame, then the frame after it, when the keys are let go.
+    let chord = |a: &mut App, e: Event| {
+        let out = a.frame(vec![Event::ModifiersChanged(Modifiers::COMMAND), e]);
+        (out, a.frame(vec![Event::ModifiersChanged(Modifiers::NONE)]))
+    };
+    let out = select(&mut a, &out);
+    let (copy, after) = chord(&mut a, Event::Copy);
+    assert_eq!(copied(&copy), [length], "Copy copies the selected value");
+    assert!(copied(&after).is_empty(), "and nothing after it");
+    assert!(a.app.session.clipboard.is_empty(), "no art copied");
+    let (cut, after) = chord(&mut a, Event::Cut);
+    assert_eq!(copied(&cut), [length], "Cut copies the selected value");
+    assert!(copied(&after).is_empty(), "and nothing after it");
+    assert_eq!(a.selected(), 1, "and leaves the art");
+    assert!(a.app.session.clipboard.is_empty(), "no art cut");
+    // The menu bar's Edit › Copy (macOS).
+    let menu = a.menu("edit.copy");
+    a.frame(vec![]);
+    assert_eq!(copied(&menu), [length], "the menu's Copy copies the selected value");
+    assert!(a.app.session.clipboard.is_empty(), "no art copied");
+    // A Copy another window sends on: a floating panel's window whose label copied its text copies
+    // nothing more. From any other window (a floating document's), the art is copied, not the text
+    // still selected in this window's panel.
+    let forward = |a: &mut App| {
+        crate::panel_docking::forward_keys(&mut a.app, &a.ctx, vec![Event::Copy], Some(Modifiers::COMMAND));
+        a.app.forwarded_frame = !a.app.forwarded.is_empty();
+        let events = std::iter::once(Event::ModifiersChanged(Modifiers::COMMAND)).chain(std::mem::take(&mut a.app.forwarded)).collect();
+        let out = a.frame(events);
+        a.app.forwarded_frame = false;
+        (out, a.frame(vec![Event::ModifiersChanged(Modifiers::NONE)]))
+    };
+    crate::shortcuts::note_copied_in_window(&a.ctx);
+    let (copy, after) = forward(&mut a);
+    assert!(copied(&copy).is_empty() && copied(&after).is_empty(), "the window copied its own text");
+    assert!(a.app.session.clipboard.is_empty(), "no art copied");
+    let (copy, _) = forward(&mut a);
+    assert!(copied(&copy).iter().all(|t| t != length), "{length} was copied from the other window");
+    assert!(!a.app.session.clipboard.is_empty(), "Copy from the other window copied the art");
+    // Tab hides the panels: the selected value is not drawn, so Copy copies the art, a frame later.
+    select(&mut a, &out);
+    a.app.ui.dock = false;
+    let (copy, after) = chord(&mut a, Event::Copy);
+    assert!(copied(&copy).is_empty(), "no label copied {length}");
+    assert!(copied(&after).iter().any(|t| t.starts_with("<?xml")), "Copy copied the art");
 }
 
 /// The centre of the text `label` painted last (in the topmost layer) in a frame's output; with

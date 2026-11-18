@@ -12,11 +12,16 @@ use vectorcraft_tools::{Mods, SurroundingUnit, ToolKey};
 use crate::VectorcraftApp;
 
 mod held_tool;
+mod labels;
 mod paste;
 mod presentation;
 mod typing;
 
 pub(crate) use held_tool::{HeldTool, note_tool_use};
+#[cfg(test)]
+pub(crate) use labels::note_copied_in_window;
+pub(crate) use labels::{leave_to_labels, take_copied_in_window};
+use labels::{left_to_labels, take_command_after_labels, watch_label_copies};
 use paste::unclip_chords;
 pub(crate) use paste::{PasteChord, paste_command};
 pub(crate) use presentation::presentation_step;
@@ -193,6 +198,12 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
         return;
     }
     ctx.input(|i| crate::shortcut_editor::note_backtick_text(&i.events));
+    // A Copy or Cut the last pass left to labels that copied nothing runs now, whatever this
+    // frame's keys do.
+    watch_label_copies(ctx);
+    if let Some(id) = take_command_after_labels(ctx) {
+        crate::menus::invoke(app, id, json!({}));
+    }
     note_key_surfaces(app, ctx);
     forget_opening_key(ctx);
     let focused = ctx.input(|input| input.focused) || app.forwarded_frame && ctx.viewport_id() == egui::ViewportId::ROOT;
@@ -348,7 +359,7 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
         return;
     }
     crate::ime::controls_without_editor(app, ctx);
-    handle_clipboard(app, ctx, textless_paste);
+    let to_labels = handle_clipboard(app, ctx, textless_paste);
     if busy {
         busy_tool_keys(app, ctx, view);
         return;
@@ -368,10 +379,12 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
     };
     // An Escape that ended a ruler-origin drag or floating Tools move runs no command bound to it.
     let gesture_escape = |chord: &craft_keymap::Chord| escape_ended_gesture && chord.is_plain() && chord.key == craft_keymap::Key::Escape;
+    // A Copy or Cut left to the labels runs neither command from the keymap.
+    let labels_clip = |hit: &Hit| to_labels && matches!(hit.command.id.as_str(), "edit.copy" | "edit.cut");
     let hits = dispatch(app, ctx, |hit| {
         let chord = &hit.trigger.chord;
         let shifted_punctuation = chord.mods.shift && chord.key.name().chars().all(|c| !c.is_alphanumeric());
-        !(chord.is_plain() && types_text(chord.key) && !shifted_punctuation || row_key(chord) || gesture_escape(chord))
+        !(chord.is_plain() && types_text(chord.key) && !shifted_punctuation || row_key(chord) || gesture_escape(chord) || labels_clip(hit))
     });
     let ran = !hits.is_empty();
     for c in hits {
@@ -737,8 +750,9 @@ fn nudge_and_clear(app: &mut VectorcraftApp, ctx: &egui::Context, rows_keys: boo
     }
 }
 
-/// Route clipboard events to the system clipboard or the app's rich-format paste path.
-fn handle_clipboard(app: &mut VectorcraftApp, ctx: &egui::Context, textless_paste: Option<Modifiers>) {
+/// Route clipboard events to the system clipboard or the app's rich-format paste path. → whether
+/// a Copy or Cut is left to the labels, so no shortcut runs it.
+fn handle_clipboard(app: &mut VectorcraftApp, ctx: &egui::Context, textless_paste: Option<Modifiers>) -> bool {
     // A clipboard image (eframe's `clipboard` feature, 0.37): the host's text paste path never
     // carries it. With the app's rich-format `SystemClipboard`, it is only the signal that the
     // clipboard holds no text — the next tick invokes Paste, whose `adopt_system_clipboard` reads
@@ -787,14 +801,28 @@ fn handle_clipboard(app: &mut VectorcraftApp, ctx: &egui::Context, textless_past
         let held = ctx.input(|i| i.modifiers);
         app.clipboard_in = Some(Flavour { mime: vectorcraft_engine::cmd::clipboard::PNG, data: png });
         crate::menus::invoke(app, paste_command(held), json!({}));
-        return;
+        return false;
     }
-    // Clipboard keys arrive as events, not key presses; the chord held says which paste.
+    // Clipboard keys arrive as events, not key presses; the chord held says which paste. Copy and
+    // Cut with text selected in a label copy that text ([`leave_to_labels`]), unless another window
+    // sent them on (a floating document's): those copy the art. The menu bar's Copy and Cut have
+    // left theirs to the labels already.
     let mut clip = vec![];
+    let forwarded = app.forwarded_frame && ctx.viewport_id() == egui::ViewportId::ROOT;
+    let to_labels =
+        |e: egui::Event, id| ctx.input(|i| i.events.contains(&e)) && (left_to_labels(ctx) == Some(id) || (!forwarded && leave_to_labels(ctx, id)));
+    let (labels_copy, labels_cut) = (to_labels(egui::Event::Copy, "edit.copy"), to_labels(egui::Event::Cut, "edit.cut"));
+    // The labels' text, or the art copied in the next pass when they copy nothing, replaces what an
+    // earlier Copy or Cut has not written yet.
+    if labels_copy || labels_cut {
+        app.drop_unwritten_formats();
+    }
     ctx.input_mut(|i| {
         let held = i.modifiers;
         i.events.retain(|e| {
             let (id, text) = match e {
+                egui::Event::Copy if labels_copy => return true,
+                egui::Event::Cut if labels_cut => return true,
                 egui::Event::Copy => ("edit.copy", None),
                 egui::Event::Cut => ("edit.cut", None),
                 egui::Event::Paste(t) => (paste_command(held), Some(t.clone())),
@@ -814,6 +842,7 @@ fn handle_clipboard(app: &mut VectorcraftApp, ctx: &egui::Context, textless_past
         app.clipboard_in = text.map(|t| Flavour { mime: TEXT, data: t.into_bytes() });
         crate::menus::invoke(app, id, json!({}));
     }
+    labels_copy || labels_cut
 }
 
 /// Route arrows, digits and letters to a tool while a gesture is active.

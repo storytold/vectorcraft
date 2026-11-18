@@ -1309,8 +1309,13 @@ pub(crate) fn modal_open(app: &VectorcraftApp, ctx: &egui::Context) -> bool {
 /// window's shortcuts, tool keys and clipboard on its next frame ([`VectorcraftApp::raw_input_hook`]).
 /// craft-ui forwards nothing while a field in that window has the keyboard. A field of the main
 /// window loses it, as a click elsewhere in one window would take it. A floating document's OS
-/// window forwards its keys here too ([`crate::doc_windows`]).
-pub(crate) fn forward_keys(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>, modifiers: Option<egui::Modifiers>) {
+/// window forwards its keys here too ([`crate::doc_windows`]). A Copy or Cut whose text a label of
+/// that window copied stays there.
+pub(crate) fn forward_keys(app: &mut VectorcraftApp, ctx: &egui::Context, mut events: Vec<egui::Event>, modifiers: Option<egui::Modifiers>) {
+    if crate::shortcuts::take_copied_in_window(ctx) {
+        events.retain(|e| !matches!(e, egui::Event::Copy | egui::Event::Cut));
+        app.drop_unwritten_formats();
+    }
     if events.is_empty() {
         return;
     }
