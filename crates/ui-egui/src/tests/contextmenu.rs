@@ -486,7 +486,7 @@ fn selected_type_has_apply_numbers() {
 
 /// A right-click on type has Spelling › Auto Spell Check, which turns it on or off as Edit ›
 /// Spelling does (helpx: Check and correct spelling, "Turn on Auto Spell Check"). The context menu
-/// draws no check marks, but this submenu holds only the toggle, so it shows whether it is on;
+/// draws no check marks, but this submenu shows whether it is on, with Check Spelling… after it;
 /// other submenus stay without the room for one. Other art has no Spelling submenu.
 #[test]
 fn right_click_on_type_turns_auto_spell_check_on_and_off() {
@@ -520,8 +520,70 @@ fn right_click_on_type_turns_auto_spell_check_on_and_off() {
     assert!(!has(&texts, "Spelling"), "the menu closed: {texts:?}");
     let texts = open_spelling(&mut app);
     assert!(texts.iter().any(|(s, _)| s == "✓  Auto Spell Check"), "checked: {texts:?}");
+    assert!(texts.iter().any(|(s, _)| s == "Check Spelling…"), "the dialog's item, which has no check mark: {texts:?}");
     click(&mut app, &ctx, at(&texts, "✓  Auto Spell Check"), PointerButton::Primary);
     assert!(!app.ui.view.auto_spell_check, "turned off");
+}
+
+/// A right-click on type has Spelling › Check Spelling… after Auto Spell Check, as Edit ›
+/// Spelling has, which opens the Check Spelling dialog on the type right-clicked (helpx: Check and
+/// correct spelling). Other art has no such item.
+#[test]
+fn right_click_on_type_opens_check_spelling() {
+    let mut app = app();
+    rect(&mut app, 200.0, 150.0);
+    let t = NodeId(app.run("text.create", json!({"x": 20, "y": 60, "text": "Hello wrold", "size": 24})).unwrap()["id"].as_u64().unwrap());
+    app.run("select.none", json!({})).unwrap();
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let p = screen(&app, 250.0, 200.0);
+    click(&mut app, &ctx, p, PointerButton::Secondary);
+    let dialog_item = |app: &VectorcraftApp| {
+        menus::context_entries(app).into_iter().position(|e| e.command.as_deref() == Some(crate::dialogs::check_spelling::COMMAND))
+    };
+    assert!(dialog_item(&app).is_none(), "a rectangle has no Check Spelling…");
+    let away = screen(&app, 390.0, 290.0);
+    click(&mut app, &ctx, away, PointerButton::Primary);
+    let p = word_at(&app, t, 0, 5);
+    let texts = click(&mut app, &ctx, p, PointerButton::Secondary);
+    assert_eq!(app.session.active().unwrap().selection.objects, [t], "the type right-clicked is selected");
+    // Agents see it under the Spelling path, after Auto Spell Check.
+    let entries = menus::context_entries(&app);
+    let i = dialog_item(&app).expect("Check Spelling…");
+    assert_eq!((entries[i].path.as_slice(), entries[i].label.as_str(), entries[i].enabled), (&["Spelling".to_string()][..], "Check Spelling…", true));
+    assert_eq!(entries.get(i.wrapping_sub(1)).and_then(|e| e.command.as_deref()), Some("edit.autoSpellCheck"));
+    frame(&mut app, &ctx, vec![Event::PointerMoved(at(&texts, "Spelling"))]);
+    let texts = frame(&mut app, &ctx, vec![]);
+    let (auto, check) = (at(&texts, "     Auto Spell Check"), at(&texts, "Check Spelling…"));
+    assert!(auto.y < check.y, "Auto Spell Check first: {texts:?}");
+    let texts = click(&mut app, &ctx, check, PointerButton::Primary);
+    assert!(!has(&texts, "Spelling"), "the menu closed: {texts:?}");
+    let d = app.ui.dialog.as_ref().expect("a dialog opened");
+    assert_eq!(d.kind.as_str(), crate::dialogs::check_spelling::KIND);
+    assert_eq!(d.fields["ids"], json!([t.0]), "it checks the type right-clicked");
+    assert_eq!(d.fields["not_in_dictionary"], json!("wrold"), "and stops at its unknown word");
+}
+
+/// A right-click on a word Auto Spell Check underlined lists the suggestions, Ignore All and Add
+/// to Dictionary, and the type's Spelling submenu with Check Spelling… as well.
+#[test]
+fn right_click_on_an_underlined_word_also_offers_check_spelling() {
+    let mut app = app();
+    let id = spelled(&mut app, "the speling cat");
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let p = word_at(&app, id, 4, 11);
+    let texts = click(&mut app, &ctx, p, PointerButton::Secondary);
+    assert!(has(&texts, "Ignore All") && has(&texts, "Add to Dictionary"), "{texts:?}");
+    let e = menus::context_entries(&app).into_iter().find(|e| e.command.as_deref() == Some(crate::dialogs::check_spelling::COMMAND));
+    assert_eq!(e.map(|e| e.path), Some(vec!["Spelling".to_string()]), "Spelling › Check Spelling…");
+    frame(&mut app, &ctx, vec![Event::PointerMoved(at(&texts, "Spelling"))]);
+    let texts = frame(&mut app, &ctx, vec![]);
+    assert!(texts.iter().any(|(s, _)| s == "✓  Auto Spell Check"), "checked: {texts:?}");
+    click(&mut app, &ctx, at(&texts, "Check Spelling…"), PointerButton::Primary);
+    let d = app.ui.dialog.as_ref().expect("a dialog opened");
+    assert_eq!(d.kind.as_str(), crate::dialogs::check_spelling::KIND);
+    assert_eq!(d.fields["not_in_dictionary"], json!("speling"));
 }
 
 /// The members of the overlap area of Intertwine group `g` at (x, y), in the order they are drawn

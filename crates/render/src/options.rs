@@ -419,7 +419,7 @@ impl Rendered {
     }
     /// Encode as lossless WebP.
     pub fn to_webp(&self) -> Result<Vec<u8>, String> {
-        encode::webp(self)
+        encode::webp(self, None)
     }
     /// Straight-alpha RGBA at (x, y).
     pub fn pixel(&self, x: u32, y: u32) -> [u8; 4] {

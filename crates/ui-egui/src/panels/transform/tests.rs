@@ -568,6 +568,187 @@ fn align_to_pixel_grid_shows_and_sets_the_property() {
     assert_eq!(pixel_aligned_state(&app).map(|s| s.1), Some(false));
 }
 
+/// The Align to Pixel Grid state measured from scratch in one pass over the selection, with the ids
+/// a click sends: what [`pixel_aligned_shown`] and [`pixel_aligned_ids`] are compared with.
+fn full_pixel_aligned_state(app: &VectorcraftApp) -> Option<(Option<bool>, bool, Vec<u64>)> {
+    let st = app.session.active()?;
+    let nodes: Vec<&Node> = st.selection.objects.iter().filter_map(|id| st.doc.node(*id)).collect();
+    let first = nodes.first()?.extras().pixel_aligned;
+    let value = nodes.iter().all(|n| n.extras().pixel_aligned == first).then_some(first);
+    let in_compound = |n: &Node| st.doc.parent_of(n.id).and_then(|p| st.doc.node(p)).is_some_and(|p| matches!(p.kind, NodeKind::Compound { .. }));
+    let alignable = nodes.iter().all(|n| matches!(n.kind, NodeKind::Path { guide: false, .. } | NodeKind::Compound { .. }) && !in_compound(n));
+    Some((value, alignable, nodes.iter().map(|n| n.id.0).collect()))
+}
+
+/// The Align to Pixel Grid state the panel shows, and the ids a click sends, equal a full measure
+/// of the selection: with no document, nothing selected, mixed values, a guide, a compound path,
+/// a path inside a compound path and a selection that holds both.
+#[test]
+fn align_to_pixel_grid_kept_state_equals_a_full_measure() {
+    fn same(app: &mut VectorcraftApp, why: &str) -> Option<PixelAligned> {
+        let full = full_pixel_aligned_state(app);
+        let shown = pixel_aligned_shown(app);
+        assert_eq!(shown, full.as_ref().map(|f| (f.0, f.1)), "{why}");
+        assert_eq!(pixel_aligned_ids(app), full.map_or(vec![], |f| f.2), "{why}");
+        shown
+    }
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    assert_eq!(same(&mut app, "no document"), None);
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    assert_eq!(same(&mut app, "nothing selected"), None);
+    let rect = |app: &mut VectorcraftApp, x: f64| {
+        app.run("shape.rectangle", json!({"x": x, "y": 20, "width": 30, "height": 10})).unwrap()["id"].as_u64().unwrap()
+    };
+    let (a, b, g) = (rect(&mut app, 10.0), rect(&mut app, 60.0), rect(&mut app, 110.0));
+    app.run("object.setPixelAligned", json!({"ids": [a], "on": true})).unwrap();
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    assert_eq!(same(&mut app, "mixed"), Some((None, true)));
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    assert_eq!(same(&mut app, "on"), Some((Some(true), true)));
+    app.run("select.set", json!({"ids": [g]})).unwrap();
+    app.run("view.guides.make", json!({})).unwrap();
+    app.run("select.set", json!({"ids": [g, b]})).unwrap();
+    assert_eq!(same(&mut app, "a guide"), Some((Some(false), false)));
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    let c = app.run("object.compoundPath.make", json!({})).unwrap()["id"].as_u64().unwrap();
+    assert_eq!(same(&mut app, "a compound path").map(|s| s.1), Some(true));
+    let member = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(c)).unwrap().children().unwrap()[0].id.0;
+    app.run("select.set", json!({"ids": [member]})).unwrap();
+    assert_eq!(same(&mut app, "a path inside a compound path").map(|s| s.1), Some(false));
+    app.run("select.set", json!({"ids": [c, member]})).unwrap();
+    assert_eq!(same(&mut app, "a compound path and its member").map(|s| s.1), Some(false));
+    app.run("select.none", json!({})).unwrap();
+    assert_eq!(same(&mut app, "deselected"), None);
+}
+
+/// A frame of the panel measures the Align to Pixel Grid state once and keeps it for the document's
+/// revision: later frames read it. An edit, Undo, Redo, a new selection, another document and a
+/// document read back from its file measure it again.
+#[test]
+fn align_to_pixel_grid_state_is_measured_once_per_revision() {
+    const PLANTED: Option<PixelAligned> = Some((None, false));
+    fn key(app: &VectorcraftApp) -> (u64, u64) {
+        app.session.active().map(|st| (st.uid, st.revision)).unwrap()
+    }
+    fn measured_again(app: &mut VectorcraftApp, why: &str, change: impl FnOnce(&mut VectorcraftApp)) {
+        app.canvas.pixel_aligned = Some((key(app), PLANTED));
+        change(app);
+        let shown = pixel_aligned_shown(app);
+        assert_ne!(shown, PLANTED, "{why}");
+        assert_eq!(shown, pixel_aligned_state(app), "{why}");
+    }
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    let a = app.run("shape.rectangle", json!({"x": 10, "y": 20, "width": 30, "height": 10})).unwrap()["id"].as_u64().unwrap();
+    let b = app.run("shape.rectangle", json!({"x": 60, "y": 20, "width": 30, "height": 10})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    let saved = (*app.session.active().unwrap().doc).clone();
+    texts(&mut app, show);
+    assert_eq!(app.canvas.pixel_aligned, Some((key(&app), Some((Some(false), true)))));
+    // A wrong answer planted for this revision shows: the state is not measured again.
+    app.canvas.pixel_aligned = Some((key(&app), PLANTED));
+    assert_eq!(pixel_aligned_shown(&mut app), PLANTED);
+    texts(&mut app, show);
+    assert_eq!(app.canvas.pixel_aligned, Some((key(&app), PLANTED)));
+    measured_again(&mut app, "an edit", |app| {
+        app.run("object.setPixelAligned", json!({"ids": [a], "on": true})).unwrap();
+    });
+    measured_again(&mut app, "Undo", |app| {
+        app.run("edit.undo", json!({})).unwrap();
+    });
+    measured_again(&mut app, "Redo", |app| {
+        app.run("edit.redo", json!({})).unwrap();
+    });
+    measured_again(&mut app, "a new selection", |app| {
+        app.run("select.set", json!({"ids": [a]})).unwrap();
+    });
+    measured_again(&mut app, "a new document", |app| {
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 20, "width": 30, "height": 10})).unwrap();
+    });
+    measured_again(&mut app, "back to the first document", |app| {
+        app.session.set_active(0);
+    });
+    assert_eq!(pixel_aligned_shown(&mut app), Some((Some(true), true)));
+    measured_again(&mut app, "the document read back", |app| {
+        assert!(app.session.replace_document(0, saved));
+    });
+}
+
+/// The thread's CPU time in nanoseconds, where Linux gives it.
+fn thread_cpu_ns() -> Option<u128> {
+    std::fs::read_to_string("/proc/thread-self/schedstat").ok()?.split_whitespace().next()?.parse().ok()
+}
+
+/// Time the Align to Pixel Grid state with Select All in a document of 100,000 paths, 1,000 of
+/// them inside 500 compound paths: measured from scratch on every frame
+/// ([`full_pixel_aligned_state`]), by [`pixel_aligned_shown`] on the first frame of a revision, and
+/// by [`pixel_aligned_shown`] on later frames of the same revision. The sides alternate, and the
+/// median time per frame of 7 runs is printed.
+/// Run with `cargo test --release -p vectorcraft-ui-egui --lib pixel_aligned_state_timing -- --ignored --nocapture`.
+#[test]
+#[ignore = "manual timing probe; performance depends on machine load"]
+fn pixel_aligned_state_timing() {
+    const PATHS: usize = 100_000;
+    const COMPOUNDS: usize = 500;
+    const MEASURES: u32 = 20;
+    const KEPT: u32 = 1_000_000;
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 2000, "height": 2000})).unwrap();
+    for i in 0..COMPOUNDS {
+        let (x, y) = ((i % 40 * 40) as f64, (i / 40 * 40) as f64);
+        let a = app.run("shape.rectangle", json!({"x": x, "y": y, "width": 30, "height": 30})).unwrap()["id"].clone();
+        let b = app.run("shape.rectangle", json!({"x": x + 5.0, "y": y + 5.0, "width": 10, "height": 10})).unwrap()["id"].clone();
+        app.run("select.set", json!({"ids": [a, b]})).unwrap();
+        app.run("object.compoundPath.make", json!({})).unwrap();
+    }
+    let rect = app.run("shape.rectangle", json!({"x": 0, "y": 1000, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+    let rect = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(rect)).cloned().unwrap();
+    app.session
+        .edit("Fill", |d, _| {
+            let layer = d.layers[0].id;
+            for _ in 0..PATHS - 2 * COMPOUNDS - 1 {
+                let mut n = rect.clone();
+                n.id = d.alloc_id();
+                d.insert(Some(layer), usize::MAX, n)?;
+            }
+            Ok(())
+        })
+        .unwrap();
+    app.run("select.all", json!({})).unwrap();
+    let selected = app.session.active().unwrap().selection.objects.len();
+    let mut paths = 0;
+    app.session.active().unwrap().doc.walk(|n| paths += usize::from(matches!(n.kind, NodeKind::Path { .. })));
+    let expected = full_pixel_aligned_state(&app).map(|f| (f.0, f.1));
+    assert_eq!(expected, Some((Some(false), true)));
+    let mut time = |frames: u32, f: &mut dyn FnMut(&mut VectorcraftApp) -> Option<PixelAligned>| {
+        let (cpu, wall) = (thread_cpu_ns(), std::time::Instant::now());
+        for _ in 0..frames {
+            assert_eq!(f(&mut app), expected);
+        }
+        let ns = thread_cpu_ns().zip(cpu).map_or_else(|| wall.elapsed().as_nanos(), |(b, a)| b - a);
+        ns as f64 / f64::from(frames) / 1000.0
+    };
+    let (mut full, mut first, mut kept) = (vec![], vec![], vec![]);
+    for _ in 0..7 {
+        full.push(time(MEASURES, &mut |app| full_pixel_aligned_state(app).map(|f| (f.0, f.1))));
+        first.push(time(MEASURES, &mut |app| {
+            app.canvas.pixel_aligned = None;
+            pixel_aligned_shown(app)
+        }));
+        kept.push(time(KEPT, &mut pixel_aligned_shown));
+    }
+    let median = |v: &mut Vec<f64>| {
+        v.sort_by(f64::total_cmp);
+        v[v.len() / 2]
+    };
+    let clock = if thread_cpu_ns().is_some() { "thread CPU time" } else { "wall-clock time" };
+    eprintln!("{paths} paths, {selected} objects selected; {clock} per frame, median of 7 runs");
+    eprintln!("every frame measured ({MEASURES} frames a run): {:>12.3} us  {full:.3?}", median(&mut full));
+    eprintln!("first frame of a revision ({MEASURES} a run):  {:>12.3} us  {first:.3?}", median(&mut first));
+    eprintln!("later frames ({KEPT} frames a run):         {:>12.4} us  {kept:.4?}", median(&mut kept));
+}
+
 /// The panel menu's Align New Objects to Pixel Grid shows and toggles the active document's
 /// setting, follows a switch to another document, and is unavailable with no document open.
 #[test]

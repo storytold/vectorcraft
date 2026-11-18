@@ -753,7 +753,7 @@ fn menu_bar_paths() -> &'static HashMap<&'static str, Vec<(String, Value)>> {
 /// The menu path of the item of the menu bar that runs command `id` as a key press runs it
 /// ([`a_menu_bar_item_runs`]): the first item that runs it with no params, or else the first item,
 /// whose params all its items give.
-fn menu_bar_path(id: &str) -> Option<&'static str> {
+pub(crate) fn menu_bar_path(id: &str) -> Option<&'static str> {
     let (_, params) = command_doc(id)?;
     let items = menu_bar_paths().get(id).filter(|_| a_menu_bar_item_runs(id, params))?;
     chosen_path(items)
@@ -924,7 +924,7 @@ pub(crate) fn menu_target_now(app: &VectorcraftApp, id: &str) -> Option<Result<(
 /// What [`menu_target_now`] gives for command `id` while its menu bar item is dimmed: the status
 /// line, with the engine's reason when it gives one. The app's own rules ([`menus::enabled`]) dim
 /// UI commands, and some commands the engine would run, without giving a reason.
-fn dimmed(app: &VectorcraftApp, id: &str) -> Result<(String, Value), String> {
+pub(crate) fn dimmed(app: &VectorcraftApp, id: &str) -> Result<(String, Value), String> {
     let Some(why) = vectorcraft_engine::find_command(id).and_then(|c| (c.enabled)(&app.session).err()) else {
         return Err(format!("command `{id}` is not available right now"));
     };
@@ -936,7 +936,7 @@ fn dimmed(app: &VectorcraftApp, id: &str) -> Result<(String, Value), String> {
 /// run without them (as the Variables panel's commands do), and it is a query, whose answer a key
 /// press drops (Select All Unused), a command of [`NEEDS_A_PARAM`], or a menu command whose params
 /// doc names a field a call must give (File › Document Setup › Units, `{units}`)?
-fn needs_a_value(key: &str) -> bool {
+pub(crate) fn needs_a_value(key: &str) -> bool {
     static KEYS: OnceLock<HashSet<&'static str>> = OnceLock::new();
     KEYS.get_or_init(|| {
         vectorcraft_engine::command_specs()
@@ -3190,5 +3190,17 @@ mod tests {
         let r = app.run("shortcuts.set", json!({"id": "object.isolate", "shortcut": "Cmd+Alt+Shift+F11", "force": null})).unwrap();
         assert_eq!(r["shortcut"], "Cmd+Alt+Shift+F11");
         assert!(app.run("shortcuts.preset", json!({"name": null})).unwrap_err().starts_with("unknown preset"));
+    }
+
+    /// A command that needs a value is listed in the editor once the user gives it a key, but the
+    /// command search still leaves it out: a pick gives it no value.
+    #[test]
+    fn a_command_given_a_key_that_needs_a_value_is_no_pick() {
+        let mut overrides = Overrides::default();
+        crate::keymap::set_override(&mut overrides, "document.setUnits", "Cmd+Alt+Shift+F12");
+        let entry = entries().iter().find(|e| e.key == "document.setUnits").cloned().expect("the editor has a row for it");
+        assert!(!listed(&Overrides::default(), &entry) && listed(&overrides, &entry));
+        assert!(needs_a_value("document.setUnits"));
+        assert!(crate::palette::items().iter().all(|(_, id, _)| id != "document.setUnits"));
     }
 }
