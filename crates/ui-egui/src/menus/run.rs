@@ -356,6 +356,7 @@ fn run_ui_part4(app: &mut VectorcraftApp, id: &str, _p: &Value) -> Option<Result
     let r = match id {
         "type.convertListToText" => crate::panels::paragraph::convert_list_to_text(app),
         id if let Some(b) = crate::panels::align::button(id) => crate::panels::align::run_button(app, b),
+        id if let Some(v) = crate::panels::align::align_to_command(id) => crate::panels::align::run_align_to(app, v),
         "view.gradientAnnotator" => flag(&mut app.ui.view.gradient_annotator),
         "view.livePaintGaps" => flag(&mut app.ui.view.live_paint_gaps),
         "effect.last" => match app.last_effect.clone() {

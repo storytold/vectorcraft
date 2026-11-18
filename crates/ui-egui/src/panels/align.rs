@@ -329,7 +329,7 @@ fn key_is_anchor(app: &VectorcraftApp) -> bool {
 /// The Align To choice that the Align panel and the Control bar show chosen: Artboard while one
 /// object is selected (the buttons then align it to the artboard), else [`align_to`]. With the
 /// Artboard tool chosen, it is the stored choice, Selection or Artboard.
-fn shown_align_to(app: &VectorcraftApp) -> AlignTo {
+pub(crate) fn shown_align_to(app: &VectorcraftApp) -> AlignTo {
     if on_artboards(app) {
         return app.ui.align_to;
     }
@@ -340,7 +340,7 @@ fn shown_align_to(app: &VectorcraftApp) -> AlignTo {
 /// guide, or something to make one of: two or more selected objects, or a guide selected with
 /// objects. With the Artboard tool chosen it is off: Align to Artboard keeps the active artboard
 /// in place.
-fn can_choose(app: &VectorcraftApp, v: AlignTo) -> bool {
+pub(crate) fn can_choose(app: &VectorcraftApp, v: AlignTo) -> bool {
     if on_artboards(app) {
         return v != AlignTo::Key;
     }
@@ -375,6 +375,33 @@ pub(crate) fn choose_align_to(app: &mut VectorcraftApp, v: AlignTo) {
             app.run("select.key", json!({})).ok();
         }
     }
+}
+
+/// The Align To choices as UI commands ([`crate::menus::UI_COMMANDS`]): (command id, choice). Object
+/// › Align lists them after its align items, checked as the Align panel shows its choice, and Edit ›
+/// Keyboard Shortcuts lists each under Align with no default shortcut.
+pub const ALIGN_TO_COMMANDS: [(&str, AlignTo); 3] =
+    [("align.toSelection", AlignTo::Selection), ("align.toKeyObject", AlignTo::Key), ("align.toArtboard", AlignTo::Artboard)];
+
+/// The Align To choice of UI command `id` ([`ALIGN_TO_COMMANDS`]). `None`: `id` is not one of them.
+pub(crate) fn align_to_command(id: &str) -> Option<AlignTo> {
+    ALIGN_TO_COMMANDS.iter().find(|c| c.0 == id).map(|c| c.1)
+}
+
+/// Runs the UI command of Align To choice `v`: chooses it as the Align panel's Align To buttons do
+/// ([`choose_align_to`]) → `{alignTo}`, the choice the Align panel then shows. An error when it
+/// can't be chosen: Align to Key Object with no key object and nothing to make one of, with the
+/// Artboard tool chosen, or when the topmost selected object can't be the key (it is inside
+/// another selected object).
+pub(crate) fn run_align_to(app: &mut VectorcraftApp, v: AlignTo) -> Result<Value, String> {
+    if !can_choose(app, v) {
+        return Err("no key object".into());
+    }
+    choose_align_to(app, v);
+    if v == AlignTo::Key && !has_key(app) {
+        return Err("no key object".into());
+    }
+    Ok(json!({"alignTo": shown_align_to(app).param()}))
 }
 
 /// The width of the Control bar's Align To menu ([`align_to_menu`]) for buttons `size` points
