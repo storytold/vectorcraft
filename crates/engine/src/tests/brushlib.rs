@@ -206,6 +206,9 @@ fn image_brush_stamps_draw_and_carry_their_pixels_when_added_and_saved() {
         assert!(lib.doc.images.get(&image.key).is_some_and(|blob| blob.bytes.starts_with(b"\x89PNG\r\n\x1a\n")));
         let pieces = vectorcraft_brush::stroke_pieces(&lib.doc, b, &line_to(180.0), &black_stroke());
         assert!(pieces.len() >= 3 && pieces.iter().all(|p| matches!(p.kind, NodeKind::Image(_))), "{}", b.name);
+        // A short accent shows at least one stamp at a 1 pt stroke.
+        let short = vectorcraft_brush::stroke_pieces(&lib.doc, b, &line_to(10.0), &black_stroke());
+        assert!(!short.is_empty() && short.iter().all(|p| matches!(p.kind, NodeKind::Image(_))), "{} on a 10 pt line", b.name);
         let before = undo_len(&s);
         let added = run(&mut s, "brush.addFromLibrary", json!({"library": "image-brush", "name": b.name, "apply": true, "ids": [path]}));
         assert_eq!(strs(&added["added"]), [b.name.as_str()]);

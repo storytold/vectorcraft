@@ -481,9 +481,11 @@ fn scatter(name: &str, art: Node, s: Scatter) -> Brush {
 }
 
 /// Four original raster stamps. Scatter brushes preserve their image art while placing a copy
-/// along the path; art brushes bend their art and cannot bend an image.
+/// along the path; art brushes bend their art and cannot bend an image. Each 24 px stamp is placed
+/// 6 pt wide, the size of the Scatter Shapes art, so a 1 pt stroke on a 10 pt line shows a stamp.
 fn image_brush() -> BrushLibrary {
     const SIDE: u32 = 24;
+    const PT_PER_PX: f64 = 0.25;
     let mut doc = Document::new(100.0, 100.0);
     let mut brushes = Vec::new();
     for (index, name) in ["Soft Bloom", "Halftone Field", "Solar Grain", "Color Flecks"].into_iter().enumerate() {
@@ -530,7 +532,7 @@ fn image_brush() -> BrushLibrary {
                 key,
                 width: SIDE,
                 height: SIDE,
-                xf: Affine::translate((-12.0, -12.0)),
+                xf: Affine::scale(PT_PER_PX) * Affine::translate((-12.0, -12.0)),
                 link: None,
                 placement: Default::default(),
                 pixels: None,
