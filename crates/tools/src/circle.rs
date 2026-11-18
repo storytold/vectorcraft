@@ -285,9 +285,10 @@ impl Tool for CircleTool {
                 // a drag from there draws the circle on the diameter it drags out.
                 (Some(Press::Second { on_first: true, dragged: false, .. }), ..) => vec![],
                 (Some(Press::Second { on_first: true, dragged: true, .. }), Some(a), Some(c)) => self.draw(&[a, c]),
+                // From a center: the outline passes through the point the tool shows it on, where
+                // the drag ends or, within DRAG_PX of the press, where the pointer last was.
+                (Some(Press::Second { .. }), Some(a), Some(c)) if self.centered => self.draw(&[a, c]),
                 (Some(Press::Second { at, dragged: false, .. }), Some(a), _) => self.draw(&[a, at]),
-                // From a center: the outline passes through the point the drag ends on.
-                (Some(Press::Second { dragged: true, .. }), Some(a), Some(c)) if self.centered => self.draw(&[a, c]),
                 // Three points: Alt's rounding of the diameter does not apply.
                 (Some(Press::Second { snapped, dragged: true, .. }), Some(a), Some(c)) => self.draw(&[a, snapped, c]),
                 _ => vec![],

@@ -409,6 +409,27 @@ fn from_center_two_clicks_draw_the_circle_through_the_second() {
     assert_eq!(drag(&mut t, &cx, (330.0, 340.0), &[(360.0, 300.0)], Mods::default()), centered((300.0, 300.0), (360.0, 300.0)));
 }
 
+/// With From Center, the release draws the circle the tool shows: a drag from the center ends
+/// where it is let go, and a second press moved less than 2 screen points draws the outline
+/// through the pointer, not through the point of the press.
+#[test]
+fn from_center_the_release_draws_the_circle_shown() {
+    let (d, _) = doc_with_rect();
+    let (s, p) = (Selection::default(), paint());
+    let cx = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    let mut t = from_center();
+    t.pointer(&cx, &ev(PointerKind::Down, (300.0, 300.0), Mods::default()));
+    t.pointer(&cx, &ev(PointerKind::Drag, (380.0, 300.0), Mods::default()));
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, (400.0, 300.0), Mods::default())), centered((300.0, 300.0), (400.0, 300.0)));
+    click(&mut t, &cx, (300.0, 300.0));
+    t.pointer(&cx, &ev(PointerKind::Down, (330.0, 340.0), Mods::default()));
+    t.pointer(&cx, &ev(PointerKind::Drag, (331.0, 340.0), Mods::default()));
+    let shown = preview(&t.overlays(&cx)).expect("the circle is shown");
+    let r = Point::new(300.0, 300.0).distance(Point::new(331.0, 340.0));
+    assert!(near(shown, Rect::new(300.0 - r, 300.0 - r, 300.0 + r, 300.0 + r)), "{:?}", t.overlays(&cx));
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, (331.0, 340.0), Mods::default())), centered((300.0, 300.0), (331.0, 340.0)));
+}
+
 /// With From Center, Shift keeps the point at 45° steps from the center, and Alt rounds the
 /// diameter, twice the radius, to the rulers' ticks (every 5 pt at 100% in points).
 #[test]
