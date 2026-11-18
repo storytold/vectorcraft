@@ -126,10 +126,7 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
 /// Menu slots that are left out while they have nothing to show (unused saved views, recent files,
 /// User Defined swatch and graphic style libraries).
 pub(super) fn hidden_when_disabled(id: &str) -> bool {
-    // A build with no cloud service configured offers nothing cloud-shaped at all. An item
-    // greyed out for ever would be a promise the application cannot keep.
-    id.starts_with("cloud.")
-        || id.starts_with("view.goto")
+    id.starts_with("view.goto")
         || saved_selection_slot(id).is_some()
         || id.starts_with("file.openRecent")
         || id.starts_with(crate::panels::swatches::USER_SLOT)
@@ -156,13 +153,27 @@ fn east_asian_hidden(app: &VectorcraftApp, id: &str) -> bool {
     id == crate::dialogs::composite_fonts::COMMAND && !app.session.prefs.show_east_asian_options
 }
 
+/// Cloud menu items, hidden in a build with no service configured: `available` is always false
+/// until a host connects one, and an item greyed out for ever would be a promise the application
+/// cannot keep.
+///
+/// Kept apart from [`hidden_when_disabled`] on purpose: that one marks slots [`menu_strings`]
+/// (`crate::menus::labels::menu_strings`) treats as absent user data, the same bucket as an unused
+/// swatch slot, so items in it are left out of what a language catalog has to cover. Cloud is a
+/// real, permanent feature whose labels translators need to see whether or not this particular
+/// build has a service wired, so this predicate runs only here, in the live menu, never in what
+/// `menu_strings` collects.
+fn cloud_hidden(app: &VectorcraftApp, id: &str) -> bool {
+    id.starts_with("cloud.") && !crate::cloud::available(app)
+}
+
 /// How the menus show item `id` (params `p`) now: (enabled, checked: `Some` for an item that is on
 /// or off), or `None` while they leave it out: an empty slot ([`hidden_when_disabled`]), an item
-/// another stands in for ([`swapped_out`]) or an East Asian item with those options hidden
-/// ([`east_asian_hidden`]).
+/// another stands in for ([`swapped_out`]), an East Asian item with those options hidden
+/// ([`east_asian_hidden`]), or a cloud item with no service configured ([`cloud_hidden`]).
 pub fn shown_state(app: &VectorcraftApp, id: &str, p: &Value) -> Option<(bool, Option<bool>)> {
     let en = enabled(app, id) && (id != crate::addons::select::link_status::COMMAND || crate::addons::select::link_status::enabled(app, p));
-    if (!en && hidden_when_disabled(id)) || swapped_out(app, id) || east_asian_hidden(app, id) {
+    if (!en && hidden_when_disabled(id)) || swapped_out(app, id) || east_asian_hidden(app, id) || cloud_hidden(app, id) {
         return None;
     }
     Some((en, checked(app, id, p)))
@@ -226,9 +237,10 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
     match id {
         // Save is off for a clean document that already has its own file.
         "file.save" => app.session.active().is_some_and(|d| d.path.is_none() || d.converted || d.is_dirty()),
-        // Cloud storage: nothing without a service. Save to the Cloud also needs a drawing open.
-        "cloud.open" => crate::cloud::available(app),
-        "cloud.saveAs" => crate::cloud::available(app) && app.session.active().is_some(),
+        // Cloud storage: nothing without a service, and the ones that act on a drawing need one open.
+        "cloud.open" | "cloud.browse" | "cloud.shared" | "cloud.link" | "cloud.status" | "cloud.openFile" => crate::cloud::available(app),
+        "cloud.share" => crate::cloud::available(app) && app.share.available() && app.session.active().is_some(),
+        "cloud.saveAs" | "cloud.save" | "cloud.reload" => crate::cloud::available(app) && app.session.active().is_some(),
         "type.bold"
         | "type.italic"
         | "type.underline"

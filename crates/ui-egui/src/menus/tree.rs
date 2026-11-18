@@ -675,6 +675,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                     arrange
                 }),
                 sub("Workspace", crate::workspaces::menu_items()),
+                c("Share…", "cloud.share"),
                 Sep,
                 c("Control", "window.control"),
                 c("Help Bar", "window.helpBar"),

@@ -171,8 +171,25 @@ pub struct VectorcraftApp {
     /// Open and Save against cloud storage ([`cloud`]). Nothing cloud-shaped is offered until the
     /// host connects a backend, so a build with no service configured is the app as it was.
     pub cloud: cloud::CloudFiles,
-    /// Which cloud page is open over the editor, if any ([`cloud::modal`]).
-    pub cloud_page: Option<cloud::CloudPage>,
+    /// The drawing each cloud save in flight encoded, so a save that lands clears the modified
+    /// flag for exactly that version and an edit made meanwhile stays unsaved.
+    pub(crate) cloud_sent: cloud::Sent,
+    /// URLs the cloud controls asked for while the frame was being drawn. Those calls hold a
+    /// shared borrow of the window and the host's own opener wants a mutable one, so they wait
+    /// here until [`Self::open_queued_urls`] runs.
+    cloud_urls: std::cell::RefCell<Vec<String>>,
+    /// Share, the same dialog every Craft app offers. It opens no socket; the host connects the
+    /// half that reaches the service.
+    pub share: craft_ui::share::ShareDialog,
+    /// Document uid Share was opened for (active tab can change before a cloud save finishes).
+    pub(crate) sharing_doc_uid: Option<u64>,
+    pub(crate) sharing_save_uid: Option<u64>,
+    pub(crate) sharing_save_epoch: Option<u64>,
+    pub(crate) share_open_epoch: u64,
+    pub(crate) share_was_open: bool,
+    /// Who else is in the open document, drawn beside the account badge. Nothing is drawn while a
+    /// person works alone.
+    pub presence: craft_ui::presence::PresenceBar,
     /// Commands run through [`Self::run`] so far: the native menu bar reads its rows again when it
     /// moves ([`native_menu::sync`]).
     run_count: u64,

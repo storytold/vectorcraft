@@ -1684,32 +1684,38 @@ fn window_menu_panels_are_sorted_alphabetically_in_active_language() {
 #[test]
 fn cloud_commands_refuse_without_a_service() {
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
-    for id in ["cloud.open", "cloud.saveAs"] {
+    for id in ["cloud.open", "cloud.browse", "cloud.shared", "cloud.link"] {
         assert_eq!(app.run(id, json!({})).unwrap_err(), crate::cloud::UNAVAILABLE, "{id}");
     }
+    assert_eq!(app.run("cloud.saveAs", json!({})).unwrap_err(), crate::cloud::UNAVAILABLE);
 }
 
 #[test]
 fn cloud_menu_items_stay_hidden_without_a_service() {
     let app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
-    for id in ["cloud.open", "cloud.saveAs"] {
+    for id in ["cloud.open", "cloud.saveAs", "cloud.browse", "cloud.shared", "cloud.link"] {
         assert!(shown_state(&app, id, &json!({})).is_none(), "{id}");
     }
 }
 
 #[test]
-fn cloud_commands_open_the_right_page_once_connected() {
+fn cloud_open_file_without_a_handle_or_name_is_refused() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    assert_eq!(app.run("cloud.openFile", json!({})).unwrap_err(), crate::cloud::UNAVAILABLE);
+}
+
+/// F9 (adversarial review, PR 2011): `menus::state::enabled` requires an open drawing for
+/// `cloud.saveAs`. A script that bypassed the (disabled, so hidden) menu item must meet the same
+/// requirement when it asks directly, with a connected backend and no document open.
+#[test]
+fn cloud_save_as_without_a_backend_target_or_open_drawing_is_refused() {
     struct Noop;
     impl crate::cloud::CloudBackend for Noop {
         fn submit(&self, _job: crate::cloud::Job, _post: crate::cloud::Post) {}
     }
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
     app.cloud.connect(Noop);
-    assert!(app.cloud_page.is_none());
-
-    app.run("cloud.open", json!({})).unwrap();
-    assert_eq!(app.cloud_page, Some(crate::cloud::CloudPage::Open));
-
-    app.run("cloud.saveAs", json!({})).unwrap();
-    assert_eq!(app.cloud_page, Some(crate::cloud::CloudPage::SaveAs));
+    assert!(!enabled(&app, "cloud.saveAs"), "enabled is off with no drawing open");
+    let err = app.run("cloud.saveAs", json!({})).unwrap_err();
+    assert_eq!(err, "no drawing open", "run agrees with enabled: {err}");
 }

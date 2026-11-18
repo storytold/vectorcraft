@@ -794,6 +794,13 @@ fn listed(overrides: &Overrides, e: &Entry) -> bool {
     !needs_a_value(&e.key) || crate::keymap::stored_texts(overrides, &e.key).is_some_and(|t| !t.is_empty())
 }
 
+/// Whether a cloud command's row is left out, the same predicate the File menu uses
+/// (`crate::menus::state::shown_state`'s `cloud_hidden`): a build with no service configured
+/// (`available` is always false until a host connects one) offers nothing to bind a key to.
+fn cloud_hidden(app: &VectorcraftApp, key: &str) -> bool {
+    key.starts_with("cloud.") && !crate::cloud::available(app)
+}
+
 /// Commands whose params are all optional that do nothing, or fail, when a key press runs them
 /// with none, and that no item of the menu bar runs: Transparency and Opacity Mask Options need
 /// a value to set, Align and Distribute a direction, Delete Swatch and Move Swatch a swatch name,
@@ -2003,7 +2010,9 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 }
             });
             egui::ScrollArea::vertical().max_height(360.0).auto_shrink([false, false]).show(ui, |ui| {
-                for (i, e) in view.entries.iter().enumerate().filter(|(_, e)| e.is_tool == tools && listed(km.overrides(), e)) {
+                for (i, e) in
+                    view.entries.iter().enumerate().filter(|(_, e)| e.is_tool == tools && listed(km.overrides(), e) && !cloud_hidden(app, &e.key))
+                {
                     let sc = match &km {
                         Cow::Borrowed(_) => view.texts.get(i).cloned().flatten(),
                         Cow::Owned(km) => dialog_shortcuts_with(km, &e.key, view.backtick.as_deref()),
@@ -3887,5 +3896,18 @@ mod tests {
         assert!(!listed(&Overrides::default(), &entry) && listed(&overrides, &entry));
         assert!(needs_a_value("document.setUnits"));
         assert!(crate::palette::items().iter().all(|(_, id, _)| id != "document.setUnits"));
+    }
+
+    /// F2 (adversarial review, PR 2011): a cloud command stayed listed in the Keyboard Shortcuts
+    /// editor in a build with no service configured, where the File menu already leaves it out.
+    #[test]
+    fn cloud_commands_have_a_row_but_are_hidden_from_the_editor_without_a_service() {
+        // The static entry list ([`entries`]) keeps the key regardless: it is what the row
+        // filter above checks `cloud_hidden` against, not something it is built from per app.
+        assert!(entries().iter().any(|e| e.key == "cloud.open"), "the editor has a row for it");
+        let app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+        assert!(cloud_hidden(&app, "cloud.open"));
+        assert!(cloud_hidden(&app, "cloud.saveAs"));
+        assert!(!cloud_hidden(&app, "file.open"), "a non-cloud key is never hidden by this predicate");
     }
 }

@@ -46,6 +46,12 @@ fn home_content(app: &mut VectorcraftApp, ui: &mut Ui) {
         });
     });
     recent(app, ui);
+    // Nothing is drawn in a build with no cloud service configured: `available` is always false
+    // until a host connects one, and the page is the one place this screen names the account.
+    if crate::cloud::available(app) {
+        ui.add_space(28.0);
+        crate::cloud::open_page(app, ui);
+    }
     learn(app, ui);
     ui.add_space(28.0);
     ui.label(egui::RichText::new(tl!("Quickly start a new file")).font(theme::semibold(14.0)).color(t.text));

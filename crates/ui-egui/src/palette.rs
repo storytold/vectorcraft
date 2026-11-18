@@ -436,6 +436,14 @@ fn build_in(lang: crate::i18n::Lang, native: bool) -> Vec<Entry> {
         .collect()
 }
 
+/// Whether a cloud result is left out of the palette's matches, the same predicate the File menu
+/// uses ([`crate::menus::state::shown_state`]'s `cloud_hidden`): a build with no service
+/// configured (`available` is always false until a host connects one) offers nothing cloud-shaped
+/// anywhere, not even dimmed as an effect with nothing selected is.
+fn cloud_result_hidden(app: &VectorcraftApp, id: &str) -> bool {
+    id.starts_with("cloud.") && !crate::cloud::available(app)
+}
+
 /// Runs the palette result `id`: selects a tool, or invokes a command with the params its entry
 /// stands for. A command whose menu bar item gives params runs what a click on that item runs
 /// ([`crate::shortcut_editor::menu_target_now`]), so Clean Up… and Find and Replace… open their
@@ -1057,6 +1065,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let q = app.ui.palette_query.to_lowercase();
     let entries = entries_in(ctx, crate::i18n::current(), app.services.native_menu.is_some());
     let mut matches = matching(&entries, &q);
+    matches.retain(|e| !cloud_result_hidden(app, &e.id));
     let total = matches.len();
     // The highlighted result (#1757): Up and Down move it (wrapping), Page Up and Page Down move it
     // by a page, the pointer over a result takes it, and a new query starts again from the first.
@@ -3650,7 +3659,10 @@ mod tests {
         vectorcraft_plugins::registry::install_bytes(&wat::parse_str(tpl::returning(&manifest, r#"{"objects":[]}"#)).unwrap()).unwrap();
         open.frame(vec![]);
         let entries = entries(&open.ctx, Lang::EN);
-        let ranked: Vec<&Entry> = matching(&entries, "path");
+        // The same cloud filter `show` applies to what it actually renders, so a cloud id this
+        // query happens to match is left out here too, the way `show` itself leaves it out.
+        let mut ranked: Vec<&Entry> = matching(&entries, "path");
+        ranked.retain(|e| !cloud_result_hidden(&open.app, &e.id));
         let nodes = open.frame(vec![]);
         let (sel, .., now) = held(&open);
         vectorcraft_plugins::registry::remove(filter);
@@ -4220,5 +4232,23 @@ mod tests {
             }
             assert_eq!(seen, Some(pointed), "{cover_at:?}");
         }
+    }
+
+    /// F2 (adversarial review, PR 2011): a cloud command stayed listed in the palette's results in
+    /// a build with no service configured, where the File menu already leaves it out. This is the
+    /// predicate `show` filters the matches with.
+    #[test]
+    fn cloud_commands_are_listed_in_items_but_hidden_from_results_without_a_service() {
+        // The static index ([`items`], which `menu_strings` and the catalog generator read from
+        // `UI_COMMANDS` too) keeps the ids regardless: a translator and `cargo xtask ui-commands`
+        // must still see them.
+        let ids: Vec<String> = items().into_iter().map(|(_, id, _)| id).collect();
+        assert!(ids.contains(&"cloud.open".to_owned()));
+        assert!(ids.contains(&"cloud.saveAs".to_owned()));
+        // The runtime filter leaves them out of what a search actually returns, same as the menu.
+        let app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+        assert!(cloud_result_hidden(&app, "cloud.open"));
+        assert!(cloud_result_hidden(&app, "cloud.saveAs"));
+        assert!(!cloud_result_hidden(&app, "file.open"), "a non-cloud id is never hidden by this predicate");
     }
 }

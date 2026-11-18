@@ -112,7 +112,17 @@ impl VectorcraftApp {
             last_warp: None,
             character_focus: None,
             cloud: cloud::CloudFiles::new(),
-            cloud_page: None,
+            cloud_sent: cloud::Sent::new(),
+            cloud_urls: std::cell::RefCell::new(Vec::new()),
+            share: craft_ui::share::ShareDialog::new(),
+            sharing_doc_uid: None,
+            sharing_save_uid: None,
+            sharing_save_epoch: None,
+            share_open_epoch: 0,
+            share_was_open: false,
+            // Initials alone: the app bar has room for a row of them beside the account, and a
+            // name each would crowd out the controls next to it.
+            presence: craft_ui::presence::PresenceBar::new().badges_only(),
             run_count: 0,
             clipboard_out: None,
             clipboard_published: None,
@@ -263,8 +273,6 @@ impl VectorcraftApp {
         }
         background::poll(self);
         opening::poll(self);
-        // Answers from the cloud worker, if a backend is connected.
-        cloud::pump(self);
         plugin_runs::poll(self);
         trace_runs::poll(self);
         placing::poll(self);
@@ -360,6 +368,9 @@ impl VectorcraftApp {
         // them, even if the worker below finishes them during this same tick.
         ctx.data_mut(|d| d.insert_temp(egui::Id::unique("clipboard.pending-at-tick"), self.clipboard_publishing.is_pending()));
         screen_color::poll(self, ctx);
+        // Answers from the cloud worker, and anything still in flight.
+        cloud::pump(self, ctx);
+        self.open_queued_urls();
         self.poll_finished_work();
         crate::script_runs::poll(self);
         // A panel's, a dialog's or the text input's commit journaled in the frame before.
@@ -635,10 +646,18 @@ impl VectorcraftApp {
         egui::CentralPanel::default().frame(egui::Frame::NONE.fill(t.pasteboard)).show(ui, |ui| panel_docking::show(self, ui));
         panels::learn::locate::tidy(self, &ctx);
         crate::doc_windows::show(self, &ctx);
+        self.share.show(&ctx);
+        // A share of a drawing that has never been saved. The dialog asked; only this side can
+        // encode one, so it answers.
+        share_save(self);
+        // Above the dialogs: a refused save has to be answered, and the answer decides what
+        // happens to the user's edits.
+        cloud::conflict_modal(self, &ctx);
         dialogs::show(self, &ctx);
-        cloud::modal(self, &ctx);
         updates_ui::show(self, &ctx);
         export_progress::show(self, &ctx);
+        // Save As that chose this computer instead, which cannot run inside the dialog's own body.
+        dialogs::cloud::settle(self);
         plugin_runs::show(self, &ctx);
         trace_runs::show(self, &ctx);
         opening::show(self, &ctx);
@@ -678,5 +697,59 @@ impl VectorcraftApp {
             }
         }
         let _ = json!(null);
+    }
+}
+
+/// Carry out a save the share dialog asked for, and report the outcome back.
+///
+/// Split into asking and answering because a cloud save is asynchronous. The dialog waits, showing
+/// its own progress, until one of these arrives. A drawing that has never been in the cloud has no
+/// handle to share, which is the one case this exists for.
+fn share_save(app: &mut VectorcraftApp) {
+    let open = app.share.is_open();
+    if open && !app.share_was_open {
+        app.share_open_epoch = app.share_open_epoch.wrapping_add(1);
+        app.sharing_doc_uid = app.session.active().map(|d| d.uid);
+    }
+    if !open && app.share_was_open {
+        app.sharing_doc_uid = None;
+    }
+    app.share_was_open = open;
+
+    if let Some(request) = app.share.take_save_request() {
+        let _ = request.destination;
+        let Some(uid) = app.sharing_doc_uid else {
+            app.share.save_failed("no drawing open".to_owned());
+            return;
+        };
+        match cloud::share_save_as(app, uid, "/", &request.name) {
+            Ok(_) => {
+                app.cloud.sharing_save = true;
+                app.sharing_save_uid = Some(uid);
+                app.sharing_save_epoch = Some(app.share_open_epoch);
+            }
+            Err(reason) => app.share.save_failed(reason),
+        }
+    }
+    if app.cloud.sharing_save && app.cloud.busy.is_none() {
+        app.cloud.sharing_save = false;
+        let Some(uid) = app.sharing_save_uid.take() else {
+            return;
+        };
+        let epoch = app.sharing_save_epoch.take();
+        let deliver = epoch.is_some_and(|epoch| app.share.is_open() && epoch == app.share_open_epoch);
+        if !deliver {
+            return;
+        }
+        match app.cloud.origins.get(&uid) {
+            Some(origin) => {
+                let (id, name) = (origin.entry.id.clone(), origin.entry.name.clone());
+                app.share.saved(id, name);
+            }
+            None => {
+                let reason = app.cloud.status.clone().unwrap_or_else(|| "the drawing was not saved".to_owned());
+                app.share.save_failed(reason);
+            }
+        }
     }
 }
