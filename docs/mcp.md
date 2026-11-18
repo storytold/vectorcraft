@@ -7567,6 +7567,14 @@ writes over it.
 with `index`, edits or moves one; `adjustAdjoining` changes the nearest points either side in proportion. Moving a
 point onto another one's `t` (or `stroke.widthPoint.copy {id, index, t}` landing there) makes a discontinuous point:
 two points at the same `t` (the width before it, then after it), and the stroke's width steps there.
+`stroke.widthPoint.set {id, t, index, left, right, outIndex, outLeft, outRight, single?, adjustAdjoining?}` sets both
+halves of one in one undo step: `index` is the incoming half, `outIndex` the outgoing half after it, and `t` must be
+their place. With `adjustAdjoining`, the nearest point before changes with the incoming half and the nearest point
+after with the outgoing half. `single: "incoming"` or `"outgoing"` keeps only that half's widths, leaving one
+continuous point. Indices that are not the two halves of one discontinuous point (three or more points at one `t`
+included), another `t`, or another `single` value are errors that leave the document and its undo history unchanged.
+Width Point Edit on either half shows both halves as Incoming and Outgoing, with Single Width Only, and its Delete
+removes both.
 `document.inspect` reports a path's `strokeOptions.widthPoints` (`[t, left, right]`, factors of half the weight; null
 for a uniform stroke). `stroke.widthPoint.remove {id, index | indices}` deletes points; `stroke.widthProfile.set {ids,
 points}` replaces them all, as dragging several Shift-selected points with the Width tool does in one undo step.

@@ -101,6 +101,9 @@
 	Additional Plug-ins Folder	額外的增效模組資料夾
 	Additional Fonts Folder	額外的字體資料夾
 	Adjust Adjoining Width Points	調整相鄰寬度點
+	Incoming	入側
+	Outgoing	出側
+	Single Width Only	僅保留一個寬度
 	Adjust Color Balance…	調整色彩平衡…
 	Adjust Colors	調整顏色
 	Adjust Options:	調整選項：
@@ -2514,6 +2517,9 @@ file-filter	Templates	範本
 @msg	`{color}` is not a colour (#rrggbb or a preset name)	`{color}` 不是顏色 (#rrggbb 或預設集名稱)
 @msg	give the path `id` and the width point `index`	請提供路徑的 `id` 和寬度點的 `index`
 @msg	no such width point	沒有這個寬度點
+@msg	`single` must be `incoming` or `outgoing`	`single` 必須是 `incoming` 或 `outgoing`
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` 和 `outIndex` 必須是同一個不連續寬度點的兩半
+@msg	a discontinuous width point keeps its place	不連續寬度點保持原位
 @msg	onto must name a panel floating in another group	onto 必須指定浮動在另一個群組中的面板
 @msg	below and above must name a panel floating in another group	below 和 above 必須指定浮動在另一個群組中的面板
 @msg	give only one of onto, below and above	onto、below 和 above 只能提供其中一個

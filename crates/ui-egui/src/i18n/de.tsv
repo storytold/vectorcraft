@@ -118,6 +118,9 @@
 	Additional Plug-ins Folder	Zusätzlicher Plug-in-Ordner
 	Additional Fonts Folder	Zusätzlicher Schriftenordner
 	Adjust Adjoining Width Points	Angrenzende Breitenpunkte anpassen
+	Incoming	Eingehend
+	Outgoing	Ausgehend
+	Single Width Only	Nur eine Breite
 	Adjust Color Balance…	Farbbalance anpassen…
 	Adjust Colors	Farben anpassen
 	Adjust Options:	Anpassungsoptionen:
@@ -5126,6 +5129,9 @@ liquify-list-end	{0}, {1}	{0} und {1}
 @msg	no such user library	keine solche Benutzerbibliothek
 @msg	no such view	keine solche Ansicht
 @msg	no such width point	kein solcher Breitenpunkt
+@msg	`single` must be `incoming` or `outgoing`	`single` muss `incoming` oder `outgoing` sein
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` und `outIndex` müssen die beiden Hälften eines unterbrochenen Breitenpunkts sein
+@msg	a discontinuous width point keeps its place	ein unterbrochener Breitenpunkt behält seine Position
 @msg	no swatch `{name}`	kein Farbfeld `{name}`
 @msg	no swatch library `{l}` (see swatch.library.list)	keine Farbfeldbibliothek `{l}` (siehe swatch.library.list)
 @msg	no symbol instances selected	keine Symbolinstanzen ausgewählt

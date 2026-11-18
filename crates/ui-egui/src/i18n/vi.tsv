@@ -158,6 +158,9 @@
 	Additional Fonts Folder	Thư mục phông bổ sung
 	Additional Plug-ins Folder	Thư mục plug-in bổ sung
 	Adjust Adjoining Width Points	Điều chỉnh các điểm chiều rộng kề nhau
+	Incoming	Phía vào
+	Outgoing	Phía ra
+	Single Width Only	Chỉ một chiều rộng
 	Adjust Color Balance…	Điều chỉnh cân bằng màu…
 	Adjust Colors	Điều chỉnh màu sắc
 	Adjust Options:	Tùy chọn điều chỉnh:
@@ -5595,6 +5598,9 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	no such user library	không có thư viện người dùng như vậy
 @msg	no such view	không có chế độ xem như vậy
 @msg	no such width point	không có điểm chiều rộng như vậy
+@msg	`single` must be `incoming` or `outgoing`	`single` phải là `incoming` hoặc `outgoing`
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` và `outIndex` phải là hai nửa của cùng một điểm chiều rộng gián đoạn
+@msg	a discontinuous width point keeps its place	điểm chiều rộng gián đoạn giữ nguyên vị trí
 @msg	no swatch `{name}`	không có mẫu màu `{name}`
 @msg	no swatch library `{l}` (see swatch.library.list)	không có thư viện mẫu màu `{l}` (xem swatch.library.list)
 @msg	no symbol instances selected	chưa chọn đối tượng ký hiệu

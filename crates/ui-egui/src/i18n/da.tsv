@@ -5913,6 +5913,9 @@ antiAlias	Sharp	Skarp
 	Variable Options	Indstillinger for variabel
 	Define a variable first	Definér først en variabel
 	Adjust Adjoining Width Points	Justér tilstødende breddepunkter
+	Incoming	Indgående
+	Outgoing	Udgående
+	Single Width Only	Kun én bredde
 	Keep both sides the same width	Bevar samme bredde på begge sider
 	Side 1:	Side 1:
 	Side 2:	Side 2:
@@ -7693,6 +7696,9 @@ imageTrace	Outline	Kontur
 @msg	no such user library	intet sådant brugerbibliotek
 @msg	no such view	ingen sådan visning
 @msg	no such width point	intet sådant breddepunkt
+@msg	`single` must be `incoming` or `outgoing`	`single` skal være `incoming` eller `outgoing`
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` og `outIndex` skal være de to halvdele af ét diskontinuert breddepunkt
+@msg	a discontinuous width point keeps its place	et diskontinuert breddepunkt bevarer sin placering
 @msg	no swatch `{name}`	ingen farveprøve `{name}`
 @msg	no swatch library `{l}` (see swatch.library.list)	intet farveprøvebibliotek `{l}` (se swatch.library.list)
 @msg	no symbol instances selected	ingen symbolforekomster markeret

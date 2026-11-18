@@ -123,6 +123,9 @@
 	Additional Plug-ins Folder	Πρόσθετος φάκελος επεκτάσεων
 	Additional Fonts Folder	Πρόσθετος φάκελος γραμματοσειρών
 	Adjust Adjoining Width Points	Ρύθμιση γειτονικών σημείων πλάτους
+	Incoming	Εισερχόμενο
+	Outgoing	Εξερχόμενο
+	Single Width Only	Μόνο ένα πλάτος
 	Adjust Color Balance…	Ρύθμιση ισορροπίας χρωμάτων…
 	Adjust Colors	Ρύθμιση χρωμάτων
 	Adjust Options:	Επιλογές ρύθμισης:
@@ -5180,6 +5183,9 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	no such user library	δεν υπάρχει τέτοια βιβλιοθήκη χρήστη
 @msg	no such view	δεν υπάρχει τέτοια προβολή
 @msg	no such width point	δεν υπάρχει τέτοιο σημείο πλάτους
+@msg	`single` must be `incoming` or `outgoing`	το `single` πρέπει να είναι `incoming` ή `outgoing`
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	τα `index` και `outIndex` πρέπει να είναι τα δύο μισά ενός ασυνεχούς σημείου πλάτους
+@msg	a discontinuous width point keeps its place	ένα ασυνεχές σημείο πλάτους διατηρεί τη θέση του
 @msg	no swatch `{name}`	δεν υπάρχει δείγμα χρώματος `{name}`
 @msg	no swatch library `{l}` (see swatch.library.list)	δεν υπάρχει βιβλιοθήκη δειγμάτων `{l}` (δείτε swatch.library.list)
 @msg	no symbol instances selected	δεν έχουν επιλεγεί στιγμιότυπα συμβόλων
