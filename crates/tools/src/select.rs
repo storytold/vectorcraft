@@ -22,7 +22,8 @@
 //! bracket drag) cancels it: the art returns to its state at the press.
 //! Selected area type and type on a path show an in port and an out port. A click on the out port
 //! loads the pointer with the text ([`Cursor::LoadedText`]): the next click threads it into the
-//! closed path, area type or type on a path under the pointer, or into a new frame of the same
+//! closed path, area type or type on a path under the pointer, where the pointer shows the link
+//! cursor ([`Cursor::LoadedTextLink`]), or into a new frame of the same
 //! kind, shape and size at the click on empty canvas, and a drag draws a rectangle for the new
 //! frame (`text.thread.add`), which comes after the clicked one in its thread. A click on the in
 //! port does the same with the new frame put before it: the story then starts there and flows on
@@ -770,21 +771,41 @@ impl SelectionTool {
     }
 }
 
-/// Where the text of `from` goes for a press at `start` released at `end`: a dragged rectangle,
-/// else the closed path, area type or type on a path pressed on, else a new frame with its
-/// top-left at `start`.
-fn thread_params(cx: &ToolContext, from: NodeId, start: Point, end: Point) -> Value {
+/// The rectangle a press at `start` dragged to `end` draws for a new frame, None when the drag
+/// is too small to be one (a click).
+fn new_frame_rect(cx: &ToolContext, start: Point, end: Point) -> Option<Rect> {
     let r = Rect::from_points(start, end);
-    if r.width() > cx.tol(6.0) && r.height() > cx.tol(6.0) {
-        return json!({ "from": from.0, "rect": [r.x0, r.y0, r.width(), r.height()] });
-    }
+    (r.width() > cx.tol(6.0) && r.height() > cx.tol(6.0)).then_some(r)
+}
+
+/// The object a click at `p` threads the text of `from` into: the closed path, area type or type
+/// on a path drawn there, other than `from`, not inside a compound path and in no thread yet, as
+/// `text.thread.add` takes for `to`. None elsewhere, where the click makes a new frame, and when
+/// `from` can no longer thread.
+fn thread_target(cx: &ToolContext, from: NodeId, p: Point) -> Option<NodeId> {
+    use vectorcraft_doc::NodeKind;
+    let d = cx.doc;
     let frame = |n: &vectorcraft_doc::Node| {
-        is_threadable(n) || matches!(&n.kind, vectorcraft_doc::NodeKind::Path { path, .. } if path.subpaths.first().is_some_and(|s| s.closed))
+        is_threadable(n) || matches!(&n.kind, NodeKind::Path { path, .. } if path.subpaths.first().is_some_and(|s| s.closed))
     };
     // The art the text flows into: what is drawn, not a clipping path's outline.
-    let to =
-        hit_test(cx.doc, start, cx.hit_options()).map(|h| h.top_object(cx.isolation)).filter(|id| *id != from && cx.doc.node(*id).is_some_and(frame));
-    match to {
+    let id = hit_test(d, p, cx.hit_options()).map(|h| h.top_object(cx.isolation))?;
+    let ok = id != from
+        && d.node(from).is_some_and(is_threadable)
+        && d.node(id).is_some_and(frame)
+        && !d.parent_of(id).and_then(|i| d.node(i)).is_some_and(|n| matches!(n.kind, NodeKind::Compound { .. }))
+        && !d.text_threads.iter().any(|t| t.contains(&id));
+    ok.then_some(id)
+}
+
+/// Where the text of `from` goes for a press at `start` released at `end`: a dragged rectangle,
+/// else the object pressed on that can take it ([`thread_target`]), else a new frame with its
+/// top-left at `start`.
+fn thread_params(cx: &ToolContext, from: NodeId, start: Point, end: Point) -> Value {
+    if let Some(r) = new_frame_rect(cx, start, end) {
+        return json!({ "from": from.0, "rect": [r.x0, r.y0, r.width(), r.height()] });
+    }
+    match thread_target(cx, from, start) {
         Some(to) => json!({ "from": from.0, "to": to.0 }),
         None => json!({ "from": from.0, "at": [start.x, start.y] }),
     }
@@ -1271,7 +1292,15 @@ impl Tool for SelectionTool {
             State::Space(_) => return Cursor::ArrowHollow,
             State::MoveAll(_) | State::Member(_) => return Cursor::Move,
             State::Bracket(_) => return Cursor::PathBracket,
-            State::Loaded { .. } => return Cursor::LoadedText,
+            // Loaded text: the link cursor where a click threads it into the object there (for a
+            // press held down, the object pressed on until the drag draws a new frame).
+            State::Loaded { from, press, .. } => {
+                let at = match press {
+                    Some((start, cur)) => new_frame_rect(cx, start, cur).is_none().then_some(start),
+                    None => Some(p),
+                };
+                return if at.and_then(|q| thread_target(cx, from, q)).is_some() { Cursor::LoadedTextLink } else { Cursor::LoadedText };
+            }
             _ => {}
         }
         if self.guide.busy() {
