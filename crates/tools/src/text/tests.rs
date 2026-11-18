@@ -1636,10 +1636,276 @@ fn the_edited_types_ports_follow_the_limit_too() {
     tool.start_editing(id, 0);
     let boxes = |o: &[Overlay]| o.iter().filter(|o| matches!(o, Overlay::Highlight { color: [255, 255, 255, 255], .. })).count();
     assert_eq!(boxes(&tool.overlays(&cx(&d, &sel, &p))), 2 * PORTS_MAX, "at the limit, the edited one's included");
+    assert_eq!(kept_frames(&tool), PORTS_MAX - 1, "the other frames' layouts are kept");
     let copy = d.alloc_id();
     d.insert(Some(l), 1, Node::new(copy, node.kind.clone())).unwrap();
     sel.add(copy);
     assert_eq!(boxes(&tool.overlays(&cx(&d, &sel, &p))), 0, "past it, not even the edited one's");
+    assert_eq!(kept_frames(&tool), 0, "no ports drawn, no layouts kept");
+}
+
+/// How many other frames' layouts the Type tool keeps between overlays calls.
+fn kept_frames(tool: &TypeTool) -> usize {
+    tool.frames.lock().unwrap().len()
+}
+
+/// The value `f` returns, and how many layouts this thread started while it ran.
+fn counted<T>(f: impl FnOnce() -> T) -> (T, u64) {
+    let before = vectorcraft_text::test_fonts::layouts_on_this_thread();
+    let v = f();
+    (v, vectorcraft_text::test_fonts::layouts_on_this_thread() - before)
+}
+
+/// A document with area type frames of `texts` (each 120 × 40 pt, one under the other) and their ids.
+fn area_frames(texts: &[&str]) -> (Document, Vec<NodeId>) {
+    let mut d = Document::new(500.0, 2000.0);
+    let l = d.layers[0].id;
+    let mut ids = Vec::new();
+    for (i, s) in texts.iter().enumerate() {
+        let id = d.alloc_id();
+        let mut t = TextObject::point(Point::new(50.0, 50.0 + 60.0 * i as f64), s, CharStyle::default());
+        t.kind = area_kind(120.0, 40.0);
+        d.insert(Some(l), 0, Node::new(id, NodeKind::Text(Box::new(t)))).unwrap();
+        ids.push(id);
+    }
+    (d, ids)
+}
+
+/// Area type in a `w` × `h` pt frame.
+fn area_kind(w: f64, h: f64) -> TextKind {
+    TextKind::Area { frame: vectorcraft_geom::PathData::from_bezpath(&Rect::new(0.0, 0.0, w, h).to_path(0.1)) }
+}
+
+fn text_mut(d: &mut Document, id: NodeId) -> &mut TextObject {
+    match &mut d.node_mut(id).unwrap().kind {
+        NodeKind::Text(t) => t,
+        _ => panic!("not text"),
+    }
+}
+
+const OVERFLOWS: &str = "This text is far too long to fit in a frame of one hundred and twenty by forty points.";
+
+/// The Type tools draw the ports of several different selected frames, with and without one of
+/// them being edited, without laying any of them out again on the next frame, and draw the same
+/// overlays as a tool that lays every frame out afresh.
+#[test]
+fn type_overlays_keep_the_selected_frames_layouts() {
+    let (d, ids) = area_frames(&["One", "Two words", "Three words here", OVERFLOWS]);
+    let (mut sel, p) = (Selection::default(), paint());
+    sel.set(ids.iter().copied());
+    let c = cx(&d, &sel, &p);
+    let mut probe = Vec::new();
+    push_port(&mut probe, Point::ZERO, PortState::Overflow, [0, 0, 0], 1.0);
+    let Some(Overlay::Line { color: red, .. }) = probe.last().cloned() else { panic!("the red plus is drawn with lines") };
+    let red_plus = |o: &[Overlay]| o.iter().filter(|o| matches!(o, Overlay::Line { color, .. } if *color == red)).count();
+    for editing in [None, Some(ids[0])] {
+        let mut tool = TypeTool::new("areaType");
+        if let Some(id) = editing {
+            tool.start_editing(id, 0);
+        }
+        let (first, n) = counted(|| tool.overlays(&c));
+        assert!(n > 0, "{editing:?}: the first frame lays the frames out");
+        let (second, n) = counted(|| tool.overlays(&c));
+        assert_eq!(n, 0, "{editing:?}: the next frame lays none out again");
+        assert_eq!(first, second, "{editing:?}");
+        let mut fresh = TypeTool::new("areaType");
+        if let Some(id) = editing {
+            fresh.start_editing(id, 0);
+        }
+        assert_eq!(second, fresh.overlays(&c), "{editing:?}: what laying out afresh draws");
+        assert!(red_plus(&second) > 0, "{editing:?}: the overflowing frame's out port shows its red plus");
+    }
+}
+
+/// After Select All in threaded text, the story's other frames are highlighted without laying them
+/// out again on the next frame.
+#[test]
+fn type_overlays_keep_a_selected_storys_layouts() {
+    let (mut d, ids) = area_frames(&["Story one ", "story two ", "story three ", "story four"]);
+    d.text_threads.push(ids.clone());
+    let (mut sel, p) = (Selection::default(), paint());
+    sel.set([ids[0]]);
+    let story = json!({ "story": ids.iter().map(|id| id.0).collect::<Vec<_>>() });
+    let c = cx(&d, &sel, &p);
+    let mut tool = TypeTool::new("areaType");
+    tool.start_editing(ids[0], 0);
+    tool.set_option("selectAll", &story);
+    assert_eq!(tool.story_others(&c).len(), 3);
+    let highlights = |o: &[Overlay]| o.iter().filter(|o| matches!(o, Overlay::Highlight { color: [60, 120, 255, 90], .. })).count();
+    let (first, n) = counted(|| tool.overlays(&c));
+    assert!(n > 0);
+    let (second, n) = counted(|| tool.overlays(&c));
+    assert_eq!(n, 0, "the story's other frames are not laid out again");
+    assert_eq!(first, second);
+    let mut fresh = TypeTool::new("areaType");
+    fresh.start_editing(ids[0], 0);
+    fresh.set_option("selectAll", &story);
+    assert_eq!(second, fresh.overlays(&c), "what laying out afresh draws");
+    assert!(highlights(&second) >= 4, "every frame's text is highlighted: {}", highlights(&second));
+}
+
+/// A kept layout is used only while its frame's text object is unchanged: editing the text,
+/// changing the frame and undoing both lay out just the frames that changed, a frame that is no
+/// longer drawn is dropped, and choosing another tool drops them all.
+#[test]
+fn type_overlays_lay_out_again_only_the_frames_that_changed() {
+    let (mut d, ids) = area_frames(&["One", "Two", "Three", OVERFLOWS]);
+    let (mut sel, p) = (Selection::default(), paint());
+    sel.set(ids.iter().copied());
+    let mut tool = TypeTool::new("areaType");
+    let fresh = |d: &Document, sel: &Selection| TypeTool::new("areaType").overlays(&cx(d, sel, &p));
+    tool.overlays(&cx(&d, &sel, &p));
+    let start = d.clone();
+    // Edit the text of one frame.
+    text_mut(&mut d, ids[1]).runs[0].text = OVERFLOWS.into();
+    let (o, n) = counted(|| tool.overlays(&cx(&d, &sel, &p)));
+    assert_eq!(n, 1, "only the edited frame");
+    assert_eq!(o, fresh(&d, &sel));
+    // Make another frame tall enough for its text.
+    text_mut(&mut d, ids[3]).kind = area_kind(120.0, 400.0);
+    let (o, n) = counted(|| tool.overlays(&cx(&d, &sel, &p)));
+    assert_eq!(n, 1, "only the changed frame");
+    assert_eq!(o, fresh(&d, &sel));
+    // Undo puts both back.
+    let (o, n) = counted(|| tool.overlays(&cx(&start, &sel, &p)));
+    assert_eq!(n, 2, "the two frames undo changed");
+    assert_eq!(o, fresh(&start, &sel));
+    // A smaller selection keeps only its frames; the others are laid out again when selected again.
+    let mut one = Selection::default();
+    one.set([ids[0]]);
+    assert_eq!(counted(|| tool.overlays(&cx(&start, &one, &p))).1, 0);
+    assert_eq!(kept_frames(&tool), 1);
+    let (o, n) = counted(|| tool.overlays(&cx(&start, &sel, &p)));
+    assert_eq!(n, 3);
+    assert_eq!(o, fresh(&start, &sel));
+    tool.deactivate(&cx(&start, &sel, &p));
+    assert_eq!(kept_frames(&tool), 0, "another tool chosen");
+}
+
+/// A story of more frames than [`FRAME_LAYOUTS_MAX`] keeps that many layouts, lays the rest out on
+/// each call, and draws what laying every frame out afresh draws.
+#[test]
+fn type_overlays_keep_at_most_frame_layouts_max() {
+    let texts = vec!["a "; FRAME_LAYOUTS_MAX + 3];
+    let (mut d, ids) = area_frames(&texts);
+    d.text_threads.push(ids.clone());
+    let (mut sel, p) = (Selection::default(), paint());
+    sel.set([ids[0]]);
+    let story = json!({ "story": ids.iter().map(|id| id.0).collect::<Vec<_>>() });
+    let c = cx(&d, &sel, &p);
+    let mut tool = TypeTool::new("areaType");
+    tool.start_editing(ids[0], 0);
+    tool.set_option("selectAll", &story);
+    let first = tool.overlays(&c);
+    assert_eq!(kept_frames(&tool), FRAME_LAYOUTS_MAX);
+    let (second, n) = counted(|| tool.overlays(&c));
+    assert_eq!(n, 2, "the two other frames past the limit");
+    assert_eq!(kept_frames(&tool), FRAME_LAYOUTS_MAX);
+    assert_eq!(first, second);
+}
+
+#[test]
+fn frame_layouts_follow_fonts_and_hyphenation_exceptions() {
+    // Other tests can load system fonts; this assertion needs its own process-wide database.
+    #[cfg(not(target_arch = "wasm32"))]
+    if std::env::var("VECTORCRAFT_FONT_CACHE_TEST_CHILD").as_deref() != Ok("1") {
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "text::tests::frame_layouts_follow_fonts_and_hyphenation_exceptions", "--nocapture", "--test-threads=1"])
+            .env("VECTORCRAFT_FONT_CACHE_TEST_CHILD", "1")
+            .output()
+            .unwrap();
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            output.status.success() && stdout.contains("test result: ok. 1 passed; 0 failed;"),
+            "isolated font cache test failed:\n{stdout}\n{}",
+            String::from_utf8_lossy(&output.stderr),
+        );
+        return;
+    }
+    let (mut d, ids) = area_frames(&["One", "Two", "Three ", "four"]);
+    d.text_threads.push(vec![ids[2], ids[3]]);
+    let (mut sel, p) = (Selection::default(), paint());
+    sel.set([ids[0], ids[1], ids[2]]);
+    let c = cx(&d, &sel, &p);
+    let mut tool = TypeTool::new("areaType");
+    tool.start_editing(ids[2], 0);
+    tool.set_option("selectAll", &json!({ "story": [ids[2].0, ids[3].0] }));
+    tool.overlays(&c);
+    assert_eq!(counted(|| tool.overlays(&c)).1, 0);
+    // Two selected frames, the story's other frame and the edited one.
+    let font = vectorcraft_text::test_fonts::variable_font().unwrap();
+    assert!(FontDb::global().add_font(font) > 0, "the test font is new to this process");
+    assert_eq!(counted(|| tool.overlays(&c)).1, 4, "a font added after the layouts refreshes them");
+    assert_eq!(counted(|| tool.overlays(&c)).1, 0);
+    vectorcraft_text::set_hyphenation_exceptions(&vectorcraft_text::hyphenation_exceptions());
+    assert_eq!(counted(|| tool.overlays(&c)).1, 4, "new hyphenation exceptions refresh them");
+}
+
+/// Times the Type tool's overlays on 200 selected area type frames of about 400 characters, one of
+/// them edited, and on a 5-frame story after Select All, laying every frame out on each call as the
+/// tool did before it kept their layouts (base) against keeping them (kept). Run with
+/// `cargo test --release -p vectorcraft-tools --lib type_overlays_timing -- --ignored --nocapture`.
+#[test]
+#[ignore = "timing, run by hand"]
+fn type_overlays_timing() {
+    use std::time::Instant;
+    let words = "The quick brown fox jumps over the lazy dog while seven wizards box. ".repeat(6);
+    let texts: Vec<String> = (0..200).map(|i| format!("{i} {words}")).collect();
+    let (mut d, ids) = area_frames(&texts.iter().map(String::as_str).collect::<Vec<_>>());
+    for id in &ids {
+        text_mut(&mut d, *id).kind = area_kind(200.0, 200.0);
+    }
+    let story: Vec<NodeId> = ids[..5].to_vec();
+    d.text_threads.push(story.clone());
+    let p = paint();
+    let mut all = Selection::default();
+    all.set(ids.iter().copied());
+    let mut first = Selection::default();
+    first.set([ids[0]]);
+    // Before, the selected frames' layouts replaced the edited one's single kept layout; with only
+    // the edited frame selected, it stayed.
+    let cases = [("200 selected frames, one edited", &all, None, true), ("5-frame story, Select All", &first, Some(story), false)];
+    for (name, sel, story, evicted) in cases {
+        let c = cx(&d, sel, &p);
+        let mut tool = TypeTool::new("areaType");
+        tool.start_editing(ids[0], 0);
+        if let Some(s) = &story {
+            tool.set_option("selectAll", &json!({ "story": s.iter().map(|id| id.0).collect::<Vec<_>>() }));
+        }
+        let expected = tool.overlays(&c);
+        tool.frames.lock().unwrap().clear();
+        if evicted {
+            *tool.cache.lock().unwrap() = None;
+        }
+        let (_, before) = counted(|| tool.overlays(&c));
+        let (_, after) = counted(|| tool.overlays(&c));
+        println!("{name}: {before} layouts per call before, {after} after");
+        let calls = 20;
+        let (mut base, mut kept) = (Vec::new(), Vec::new());
+        for _ in 0..7 {
+            let start = Instant::now();
+            for _ in 0..calls {
+                // Before: the other frames were laid out on every call.
+                tool.frames.lock().unwrap().clear();
+                if evicted {
+                    *tool.cache.lock().unwrap() = None;
+                }
+                assert_eq!(tool.overlays(&c), expected);
+            }
+            base.push(start.elapsed().as_secs_f64() * 1000.0 / f64::from(calls));
+            let start = Instant::now();
+            for _ in 0..calls {
+                assert_eq!(tool.overlays(&c), expected);
+            }
+            kept.push(start.elapsed().as_secs_f64() * 1000.0 / f64::from(calls));
+        }
+        let median = |v: &mut Vec<f64>| {
+            v.sort_by(f64::total_cmp);
+            v[v.len() / 2]
+        };
+        println!("{name}: base runs {base:.3?} ms per call, kept runs {kept:.3?} ms per call");
+        println!("{name}: median base {:.3} ms, kept {:.3} ms per call", median(&mut base), median(&mut kept));
+    }
 }
 
 /// Type on a path has its in port just before its start bracket and its out port just past its

@@ -71,6 +71,11 @@ pub struct StrokeLayer {
     /// Brush applied to the stroke (by brush name).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub brush: Option<String>,
+    /// This stroke's own brush settings (the Brushes panel's Options of Selected Object): brush
+    /// definition fields, by their `brush.options` names, that replace the brush's values on this
+    /// stroke only. Empty: the stroke draws the brush as it is. `vectorcraft-brush` reads them.
+    #[serde(default, skip_serializing_if = "serde_json::Map::is_empty")]
+    pub brush_options: serde_json::Map<String, serde_json::Value>,
     #[serde(default = "one", skip_serializing_if = "crate::skip::is_one")]
     pub opacity: f32,
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
@@ -170,6 +175,7 @@ impl StrokeLayer {
             arrow_scale: (100.0, 100.0),
             profile: None,
             brush: None,
+            brush_options: serde_json::Map::new(),
             opacity: 1.0,
             blend: BlendMode::Normal,
             visible: true,
