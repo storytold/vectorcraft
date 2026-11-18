@@ -2693,6 +2693,36 @@ fn the_blend_tool_shortcut_finishes_the_blend() {
     assert_eq!(app.session.active().unwrap().doc.layers, layers, "no blend was made");
 }
 
+/// P, the Pen's shortcut, pressed between clicks while the Pen draws a path ends that path: the Pen
+/// stays chosen, the path stays open, and the next click starts a new path.
+#[test]
+fn the_pen_shortcut_ends_the_path_being_drawn() {
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 600, "height": 300})).unwrap();
+    app.select_tool("pen");
+    let click = |app: &mut VectorcraftApp, x: f64| {
+        let v = app.view_info();
+        app.session.pointer(&PointerEvent::new(PointerKind::Down, x, 100.0), v).unwrap();
+        app.session.pointer(&PointerEvent::new(PointerKind::Up, x, 100.0), v).unwrap();
+    };
+    let press = |key| egui::Event::Key { key, physical_key: Some(key), pressed: true, repeat: false, modifiers: Modifiers::NONE };
+    let anchors = |app: &VectorcraftApp, id| {
+        let path = app.session.active().unwrap().doc.node(id).and_then(|n| n.path_data());
+        path.map(|pd| pd.subpaths.iter().map(|sp| sp.anchors.len()).collect::<Vec<_>>())
+    };
+    click(&mut app, 100.0);
+    click(&mut app, 200.0);
+    let first = app.session.active().unwrap().selection.objects[0];
+    frame(&mut app, vec![press(Key::P), egui::Event::Text("p".into())]);
+    assert_eq!(app.session.tool_id(), "pen");
+    click(&mut app, 300.0);
+    assert_eq!(anchors(&app, first), Some(vec![2]), "the path keeps its two anchors");
+    let second = app.session.active().unwrap().selection.objects[0];
+    assert_ne!(second, first, "the click starts a new path");
+    assert_eq!(anchors(&app, second), Some(vec![1]));
+}
+
 /// A Blend tool shortcut that arrives only as text (Shift+~ types `~`) also finishes the blend,
 /// while another tool's shifted shortcut does not.
 #[test]
@@ -3363,4 +3393,28 @@ fn artboard_navigation_commands_can_be_given_keys() {
     assert_eq!(at(&app), 2);
     frame(&mut app, press(Key::PageUp));
     assert_eq!(at(&app), 1, "Page Up goes to the previous artboard");
+}
+
+/// Ctrl+` (Windows and Linux) chooses the selection tool chosen last; macOS gives the command no
+/// default key. Edit › Keyboard Shortcuts lists it, and a chord the user assigns runs it.
+#[test]
+fn ctrl_backtick_chooses_the_last_selection_tool() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    let mac = crate::keymap::platform().is_mac();
+    let list = app.run("shortcuts.list", json!({ "query": "tool.selectLastSelection" })).unwrap();
+    let listed = list.as_array().unwrap().iter().find(|e| e["id"] == "tool.selectLastSelection").cloned();
+    let listed = listed.unwrap_or_else(|| panic!("listed: {list}"));
+    assert_eq!(listed["label"], "Select Last Selection Tool");
+    assert_eq!(listed["default"], if mac { json!(null) } else { json!("Cmd+~") });
+    app.select_tool("directSelection");
+    app.select_tool("pen");
+    frame(&mut app, press(Key::Backtick, cmd()));
+    assert_eq!(app.session.tool_id(), if mac { "pen" } else { "directSelection" });
+    crate::keymap::set_override(&mut app.ui.shortcut_overrides, "tool.selectLastSelection", "Alt+~");
+    app.select_tool("groupSelection");
+    app.select_tool("rectangle");
+    frame(&mut app, press(Key::Backtick, Modifiers::ALT));
+    assert_eq!(app.session.tool_id(), "groupSelection", "the user's chord");
+    crate::shortcut_editor::sync(&crate::state::UiState::default());
 }

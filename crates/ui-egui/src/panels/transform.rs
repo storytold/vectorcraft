@@ -131,7 +131,13 @@ pub fn run_transform(app: &mut VectorcraftApp, cmd: &str, params: serde_json::Va
 }
 
 /// [`run_transform`] that returns the command's result, for a field that shows its error.
-fn try_transform(app: &mut VectorcraftApp, cmd: &str, mut params: serde_json::Value) -> Result<serde_json::Value, String> {
+fn try_transform(app: &mut VectorcraftApp, cmd: &str, params: serde_json::Value) -> Result<serde_json::Value, String> {
+    let params = with_pattern_switches(app, params);
+    app.run(cmd, params)
+}
+
+/// `params` with the `objects` and `patterns` switches [`run_transform`] adds.
+pub fn with_pattern_switches(app: &VectorcraftApp, mut params: serde_json::Value) -> serde_json::Value {
     let switches = match app.session.prefs.transform_panel_patterns.as_str() {
         "object" => Some((true, false)),
         "pattern" => Some((false, true)),
@@ -142,7 +148,7 @@ fn try_transform(app: &mut VectorcraftApp, cmd: &str, mut params: serde_json::Va
         params["objects"] = json!(objects);
         params["patterns"] = json!(patterns);
     }
-    app.run(cmd, params)
+    params
 }
 
 /// The panel menu's checked choice of [`PATTERN_MODES`]: the one chosen, else (`default`) what
