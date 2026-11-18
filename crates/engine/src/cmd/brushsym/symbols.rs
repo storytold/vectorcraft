@@ -253,6 +253,9 @@ pub(super) fn symbol_new(s: &mut Session, p: &Value) -> Result<Value> {
     let nine = nine_slice_param(p, C, None)?.flatten();
     let dynamic = type_param(p, C)?.unwrap_or(false);
     let pixel = pixel_grid_param(p, C)?.unwrap_or(false);
+    // `keepArt` leaves the art as ordinary art instead of replacing it with an instance.
+    let keep_art = switch_or(p, "keepArt", false, C)?;
+    let iso = s.doc()?.isolation;
     // Keep the art where it was: the geometric centre stays at `c`, whatever the registration is.
     let place = place_xf(c + reg.offset_from_center(size.0, size.1), size, reg);
     let id = s.edit("New Symbol", |d, sel| {
@@ -264,13 +267,20 @@ pub(super) fn symbol_new(s: &mut Session, p: &Value) -> Result<Value> {
         d.set_symbol_export_type(&name, export);
         d.set_symbol_nine_slice(&name, nine);
         d.set_symbol_pixel_aligned(&name, pixel);
+        if keep_art {
+            // The art stays where it is and stays selected, apart from art that is hidden or
+            // locked, in a hidden or locked group or layer, or on a locked artboard.
+            let locks = d.locked_artboards();
+            sel.set(ids.iter().copied().filter(|i| crate::cmd::select::is_selectable(d, iso, &locks, *i)));
+            return Ok(None);
+        }
         let id = instance_in_place(d, &ids, &name, place)?;
         sel.set([id]);
-        Ok(id)
+        Ok(Some(id))
     })?;
     Ok(json!({
         "name": name,
-        "id": id.0,
+        "id": id.map(|i| i.0),
         "registration": reg.0,
         "exportType": export.id(),
         "nineSlice": nine.map_or(Value::Null, SymbolNineSlice::to_value),
