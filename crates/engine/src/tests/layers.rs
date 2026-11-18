@@ -592,6 +592,54 @@ fn new_layers_go_below_the_current_one_and_sublayers_under_the_contents() {
     assert_eq!(children(&s, layer), vec![front, under, back]);
 }
 
+/// In Draw Behind a new layer goes directly below the current layer, at its level, in one undo
+/// step; `top` and `below` keep their meaning, Draw Inside and Draw Normal keep it above, and new
+/// sublayers are not affected.
+#[test]
+fn new_layers_go_below_the_current_one_in_draw_behind() {
+    let mut s = session();
+    let (layer, sub, a, g, _, c) = tree(&mut s);
+    run(&mut s, "view.drawMode", json!({"mode": "behind"}));
+    run(&mut s, "layer.setCurrent", json!({"id": sub.0}));
+    let before = undos(&s);
+    let n = id(&run(&mut s, "layer.new", json!({})));
+    assert_eq!(children(&s, layer), vec![c, n, sub], "a sublayer directly below the current sublayer");
+    assert_eq!(undos(&s), before + 1);
+    assert_eq!(s.doc().unwrap().highlighted_rows(), vec![n]);
+    assert_eq!(s.doc().unwrap().current_layer(), Some(n));
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(children(&s, layer), vec![c, sub]);
+    // The Create New Layer button sends `top: false` for a plain click: still below.
+    run(&mut s, "layer.setCurrent", json!({"id": sub.0}));
+    let n = id(&run(&mut s, "layer.new", json!({"top": false})));
+    assert_eq!(children(&s, layer), vec![c, n, sub]);
+    run(&mut s, "edit.undo", json!({}));
+    // At the top level, and with options.
+    run(&mut s, "layer.setCurrent", json!({"id": layer.0}));
+    let back = id(&run(&mut s, "layer.new", json!({"name": "Back", "locked": true})));
+    let order = |s: &Session| s.doc().unwrap().doc.layers.iter().map(|l| l.id).collect::<Vec<_>>();
+    assert_eq!(order(&s), vec![back, layer]);
+    assert!(node(&s, back).locked);
+    // `top` and `below` win over the drawing mode.
+    let top = id(&run(&mut s, "layer.new", json!({"top": true})));
+    assert_eq!(order(&s), vec![back, layer, top]);
+    let below = id(&run(&mut s, "layer.new", json!({"below": true})));
+    assert_eq!(order(&s), vec![back, layer, below, top]);
+    assert!(s.execute("layer.new", &json!({"top": true, "below": true})).is_err());
+    // New sublayers still go on top of the parent's contents.
+    let inner = id(&run(&mut s, "layer.newSublayer", json!({"parent": sub.0})));
+    assert_eq!(children(&s, sub), vec![a, g, inner]);
+    // Draw Inside and Draw Normal put it above.
+    run(&mut s, "select.set", json!({"ids": [c.0]}));
+    for mode in ["inside", "normal"] {
+        run(&mut s, "view.drawMode", json!({"mode": mode}));
+        assert_eq!(s.draw_mode, if mode == "inside" { DrawMode::Inside } else { DrawMode::Normal });
+        run(&mut s, "layer.setCurrent", json!({"id": back.0}));
+        let n = id(&run(&mut s, "layer.new", json!({})));
+        assert_eq!(s.doc().unwrap().doc.layers[1].id, n, "{mode}");
+    }
+}
+
 #[test]
 fn rows_move_above_below_and_into_layers_and_groups() {
     let mut s = session();
