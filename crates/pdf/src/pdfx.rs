@@ -4,9 +4,11 @@
 //! - PDF/X-1a:2001: every colour is CMYK, grey or a spot ink with a CMYK alternate (colours and
 //!   images are converted to a CMYK destination and written untagged, see [`crate::output`]), no
 //!   transparency (the app flattens it before writing), no layers, PDF 1.3.
-//! - PDF/X-3:2002: colours are ICC-based (always tagged), no transparency, no layers, PDF 1.3.
-//! - PDF/X-4:2010: transparency and layers are kept, colours are tagged, PDF 1.6 at most, and the
-//!   XMP metadata names the standard too and carries `xmp:MetadataDate`.
+//! - PDF/X-3:2002: colors are ICC-based (always tagged), except CMYK colors in the CMYK output
+//!   intent's profile, which are DeviceCMYK (with `profiles` `none`, all CMYK colors unless they
+//!   are converted to a CMYK destination of another profile), no transparency, no layers, PDF 1.3.
+//! - PDF/X-4:2010: transparency and layers are kept, colors are tagged as in PDF/X-3, PDF 1.6 at
+//!   most, and the XMP metadata names the standard too and carries `xmp:MetadataDate`.
 //! - All of them: a `/GTS_PDFX` output intent (blank, the CMYK profile in effect, embedded), a
 //!   TrimBox on every page (the artboard), `/Trapped` True or False, `/GTS_PDFXVersion` in the
 //!   document information, a title and dates, embedded fonts (or text as outlines), no editing

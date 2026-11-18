@@ -231,19 +231,23 @@ pub(crate) const WEB_WARNING: (&str, &str) = ("dc-cube", "Out of Web Color Warni
 /// The out-of-gamut warning: its icon and tooltip.
 pub(crate) const GAMUT_WARNING: (&str, &str) = ("dc-gamut", "Out of Gamut Warning");
 
-/// A warning icon with the corrected colour beside it. Returns true when the colour is clicked.
+/// A warning icon with the corrected colour beside it. Returns true when the icon or the colour is
+/// clicked.
 pub(crate) fn warning_chip(ui: &mut Ui, (icon, warning): (&str, &str), fix: &Color) -> bool {
     let t = Tokens::get(ui.ctx());
+    let tip = crate::i18n::fmt(
+        tl!("{warning}: click to correct to the closest color ({hex})"),
+        &[("warning", tl!(warning)), ("hex", &format!("#{}", hex_digits(fix).to_ascii_lowercase()))],
+    );
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 3.0;
-        icons::icon(ui, icon, 16.0, t.icon).on_hover_text(tl!(warning));
+        let icon = icons::icon(ui, icon, 16.0, t.icon).interact(Sense::click());
+        icon.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, tl!(warning)));
         let (r, resp) = ui.allocate_exact_size(vec2(16.0, 16.0), Sense::click());
-        widgets::swatch_tile(ui, r, &Paint::solid(*fix), false, resp.hovered());
-        resp.on_hover_text(crate::i18n::fmt(
-            tl!("{warning}: click to correct to the closest color ({hex})"),
-            &[("warning", tl!(warning)), ("hex", &format!("#{}", hex_digits(fix).to_ascii_lowercase()))],
-        ))
-        .clicked()
+        resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &tip));
+        widgets::swatch_tile(ui, r, &Paint::solid(*fix), false, resp.hovered() || icon.hovered());
+        let icon = icon.on_hover_text(&tip).clicked();
+        resp.on_hover_text(&tip).clicked() || icon
     })
     .inner
 }

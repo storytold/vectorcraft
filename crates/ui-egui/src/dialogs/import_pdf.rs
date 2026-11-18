@@ -3,7 +3,10 @@
 //!
 //! Fields: `mode` (`open` | `place`), `name`, `path?`, `pageCount`, `page` (the page shown, and the
 //! one placed; 1-based), `allPages`, `range` and `linkPages` (open: Import PDF Pages as Links, for
-//! a file read from a path and opened without a password), `cropTo` and `password`. `__locked` is set
+//! a file read from a path and opened without a password; `null` until it is checked or cleared,
+//! when it follows the pages picked: on for All, off for a range; picking the other of All and
+//! Range sets it back to `null`; `__linkable` is false for a file `linkPages` does not take, such as
+//! one over its size limit), `cropTo` and `password`. `__locked` is set
 //! until the password is accepted: OK then unlocks the file, and with `__passwordOnly` (Place with
 //! Show Import Options off) places its first page at once. `__place` keeps the other `file.place`
 //! params (Link, Template, `at`…). The file's bytes stay out of the fields, in
@@ -144,10 +147,11 @@ pub fn offer(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Option<St
         "page": 1,
         "allPages": true,
         "range": "",
-        "linkPages": false,
+        "linkPages": null,
         "cropTo": CropTo::default().id(),
         "password": "",
         "__locked": locked,
+        "__linkable": fileio::pages_can_link(name, bytes),
     });
     if let Some(p) = path {
         fields["path"] = json!(p);
@@ -214,14 +218,40 @@ fn password(d: &Dialog) -> Option<String> {
 }
 
 /// Can the pages open linked: the file was read from a path (a linked page is read from its
-/// file again) and opens without a password (`document.open`'s `linkPages` refuses one).
+/// file again), `document.open`'s `linkPages` takes its size, and it opens without a password
+/// (`linkPages` refuses one).
 fn can_link(d: &Dialog) -> bool {
-    d.fields.get("path").and_then(Value::as_str).is_some() && password(d).is_none()
+    d.fields.get("path").and_then(Value::as_str).is_some() && d.bool("__linkable") && password(d).is_none()
+}
+
+/// Import PDF Pages as Links as checked or cleared, or, when it is `null`, as the pages picked
+/// default it: on for All, off for a range.
+fn link_pages(d: &Dialog) -> bool {
+    d.fields.get("linkPages").and_then(Value::as_bool).unwrap_or_else(|| d.bool("allPages"))
 }
 
 /// Import PDF Pages as Links is checked, and can be.
-fn links_on(d: &Dialog) -> bool {
-    d.bool("linkPages") && can_link(d)
+pub(super) fn links_on(d: &Dialog) -> bool {
+    link_pages(d) && can_link(d)
+}
+
+/// Picks All (true) or Range. A change of pick sets Import PDF Pages as Links back to that pick's
+/// default; picking the one already picked keeps the box as it is.
+fn pick_all_pages(d: &mut Dialog, all: bool) {
+    if d.bool("allPages") != all {
+        d.fields.insert("allPages".into(), json!(all));
+        d.fields.insert("linkPages".into(), Value::Null);
+    }
+}
+
+/// Records that `ui.dialog.set` sets `field` to `value`: a change of `allPages` sets Import PDF
+/// Pages as Links back to its default, as a click on All or Range does.
+pub(super) fn note_set(d: &mut Dialog, field: &str, value: &Value) {
+    if field == "allPages"
+        && let Some(all) = value.as_bool()
+    {
+        pick_all_pages(d, all);
+    }
 }
 
 /// OK: unlock the file with the password, else open the pages or place the page.
@@ -330,20 +360,20 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
                 ui.label(egui::RichText::new(tl!("Pages")).color(t.text));
                 let all = d.bool("allPages");
                 if widgets::radio(ui, tl!("All"), all, true) {
-                    d.fields.insert("allPages".into(), json!(true));
+                    pick_all_pages(d, true);
                 }
                 ui.horizontal(|ui| {
                     if widgets::radio(ui, tl!("Range:"), !all, true) {
-                        d.fields.insert("allPages".into(), json!(false));
+                        pick_all_pages(d, false);
                     }
                     if super::form::text_edit_named(ui, d, "range", tl!("Range:"), 90.0).gained_focus() {
-                        d.fields.insert("allPages".into(), json!(false));
+                        pick_all_pages(d, false);
                     }
                 });
                 widgets::dim_label(ui, tl!("e.g. 1-3, 5"));
                 ui.add_space(10.0);
                 if widgets::check(ui, tl!("Import PDF pages as links"), links_on(d), can_link(d)) {
-                    d.fields.insert("linkPages".into(), json!(!d.bool("linkPages")));
+                    d.fields.insert("linkPages".into(), json!(!link_pages(d)));
                 }
             }
         });

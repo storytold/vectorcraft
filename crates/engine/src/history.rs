@@ -32,6 +32,9 @@ pub struct HistoryEntry {
     pub(crate) color_mode_paints: Option<(vectorcraft_tools::PaintDefaults, vectorcraft_tools::PaintDefaults)>,
     /// Owned new-art snapshots included in both directional estimates.
     color_mode_bytes: usize,
+    /// The state that changes without an undo step as the next state had it: undo and redo compare
+    /// it with `doc` to tell what the step changed.
+    pub(crate) unrecorded: Arc<crate::cmd::Unrecorded>,
 }
 
 impl Clone for HistoryEntry {
@@ -49,6 +52,7 @@ impl Clone for HistoryEntry {
             serial: self.serial,
             color_mode_paints: self.color_mode_paints.clone(),
             color_mode_bytes: self.color_mode_bytes,
+            unrecorded: self.unrecorded.clone(),
         }
     }
 }
@@ -94,6 +98,7 @@ impl HistoryEntry {
             serial: next_serial(),
             color_mode_paints: None,
             color_mode_bytes: 0,
+            unrecorded: Arc::new(crate::cmd::Unrecorded::of(next)),
         }
     }
 
@@ -126,6 +131,7 @@ impl HistoryEntry {
             serial: next_serial(),
             color_mode_paints: None,
             color_mode_bytes: 0,
+            unrecorded: Arc::new(crate::cmd::Unrecorded::of(now)),
         }
     }
 
@@ -337,6 +343,7 @@ impl History {
             e.next_bytes = after.saturating_add(e.color_mode_bytes);
             e.next = std::ptr::from_ref(now) as usize;
             e.serial = next_serial();
+            e.unrecorded = Arc::new(crate::cmd::Unrecorded::of(now));
         }
     }
 }
