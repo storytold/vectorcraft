@@ -67,7 +67,7 @@ pub use read::{
 #[cfg(test)]
 pub(crate) use style::ART_STYLE_PARSES;
 
-pub(crate) use read::is_look_slot;
+pub(crate) use read::{clip_by_type, is_look_slot};
 pub(crate) use style::{MAX_LISTED, MAX_LISTED_NAME, warp_number};
 
 #[cfg(test)]
