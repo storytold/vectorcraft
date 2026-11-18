@@ -3,7 +3,7 @@
 
 use serde_json::{Value, json};
 use vectorcraft_doc::text::INLINE_MAX_SCALE;
-use vectorcraft_doc::{Document, InlineArt, NodeId, NodeKind, TextRun};
+use vectorcraft_doc::{Document, InlineArt, InlineMeasured, NodeId, NodeKind, TextRun};
 use vectorcraft_text::edit;
 
 use super::brushsym::current_symbol;
@@ -25,12 +25,33 @@ pub fn specs() -> Vec<CommandSpec> {
 /// Inline graphics follow their symbols: after an edit of a document that has (or had) symbols,
 /// resolve the inline art of every text again, in the layers and in the art of symbols, graph
 /// designs, pattern tiles and opacity masks, and lay out again the texts whose art changed (a
-/// symbol's type before the type that shows that symbol inline).
-pub(crate) fn refresh(before: &Document, d: &mut Document) {
+/// symbol's type before the type that shows that symbol inline). `last` is the document the last
+/// refresh left resolved, with what it measured: when nothing the inline art depends on changed
+/// since, only the layer trees that differ from its own are checked
+/// ([`Document::resolve_inline_art_since`]). Returns what this refresh measured, or `None` when
+/// neither document has symbols and nothing was checked.
+pub(crate) fn refresh(last: Option<&Resolved>, before: &Document, d: &mut Document) -> Option<InlineMeasured> {
     if before.symbols.is_empty() && d.symbols.is_empty() {
-        return;
+        return None;
     }
-    d.resolve_inline_art_with(&mut refresh_bounds);
+    #[cfg(test)]
+    let last = last.filter(|_| !FULL_PASS.get());
+    let pass = d.resolve_inline_art_since(last.map(|(doc, m)| (&**doc, m)), &mut refresh_bounds);
+    #[cfg(test)]
+    PASSES.with(|p| p.borrow_mut().push((pass.partial, pass.changed.clone())));
+    Some(pass.measured)
+}
+
+/// A document a [`refresh`] left resolved, and what that refresh measured.
+pub(crate) type Resolved = (std::sync::Arc<Document>, InlineMeasured);
+
+#[cfg(test)]
+thread_local! {
+    /// Each [`refresh`] on this thread that checked the document: whether it checked only the
+    /// changed layer trees, and the ids of the texts in the layers that changed.
+    pub(crate) static PASSES: std::cell::RefCell<Vec<(bool, Vec<NodeId>)>> = const { std::cell::RefCell::new(vec![]) };
+    /// Set: every [`refresh`] on this thread takes the full pass.
+    pub(crate) static FULL_PASS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 fn insert_inline(s: &mut Session, p: &Value) -> Result<Value> {
