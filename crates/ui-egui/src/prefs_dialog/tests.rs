@@ -20,6 +20,29 @@ fn marquee_selection_choices_are_saved_from_preferences() {
     assert!(text.contains("Drag Direction"), "{text}");
 }
 
+/// Plug-ins & Scratch Disks › Plug-in Instruction Budget: shown with its choices, applied by OK,
+/// saved with the UI state and read back from it when the app starts again.
+#[test]
+fn plugin_instruction_budget_shows_applies_and_restores() {
+    let mut a = app();
+    open(&mut a, Some("Plug-ins & Scratch Disks"));
+    let text = crate::tests_labels::painted_text(&mut a, |a, ui| show(a, ui.ctx()));
+    assert!(text.contains("Plug-in Instruction Budget") && text.contains("Normal"), "{text}");
+    a.ui.dialog.as_mut().unwrap().fields.insert("pluginInstructionBudget".into(), json!("large"));
+    confirm(&mut a).unwrap();
+    assert_eq!(a.session.prefs.plugin_instruction_budget, vectorcraft_engine::PluginBudget::Large);
+    let saved: Value = serde_json::from_slice(&serde_json::to_vec(&a.ui).unwrap()).unwrap();
+    assert_eq!(saved["engine_prefs"]["pluginInstructionBudget"], json!("large"));
+    let mut b = app();
+    b.ui.engine_prefs = saved["engine_prefs"].clone();
+    restore(&mut b);
+    assert_eq!(b.session.prefs.plugin_instruction_budget, vectorcraft_engine::PluginBudget::Large);
+    // A saved value this version doesn't offer reads as Normal, and the other preferences stay.
+    b.ui.engine_prefs = json!({"keyboardIncrement": 4, "pluginInstructionBudget": 7});
+    restore(&mut b);
+    assert_eq!((b.session.prefs.plugin_instruction_budget, b.session.prefs.keyboard_increment), (vectorcraft_engine::PluginBudget::Normal, 4.0));
+}
+
 #[test]
 fn geometric_snapping_is_a_saved_smart_guides_preference() {
     let mut a = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
@@ -1813,8 +1836,11 @@ fn a_row_without_a_description_leaves_the_line_empty() {
     description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(at(&texts, "General:"))]);
     let (texts, _) = description_frame(&mut a, &ctx, vec![]);
     assert!(painted(&texts, general), "the General row's sentence shows: {texts:?}");
-    // Go to the Slices category and point at a row with no sentence.
-    let button = at(&texts, "Slices");
+    // Go to the first other category that still has a row with no sentence (Slices when none is
+    // left) and point at that row.
+    let bare = settings().find(|s| s.category != "Units" && descriptions::description(s.key).is_none());
+    let category = bare.map_or("Slices", |s| s.category);
+    let button = at(&texts, category);
     let press = |pressed| egui::Event::PointerButton { pos: button, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
     description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(button), press(true), press(false)]);
     let (texts, _) = description_frame(&mut a, &ctx, vec![]);
@@ -1828,13 +1854,19 @@ fn a_row_without_a_description_leaves_the_line_empty() {
     description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(line.center())]);
     let (after, _) = description_frame(&mut a, &ctx, vec![]);
     empty(&after, "on the line after changing category");
-    assert_eq!(descriptions::description("showSliceNumbers"), None);
-    description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(at(&texts, "Show Slice Numbers"))]);
-    let (after, _) = description_frame(&mut a, &ctx, vec![]);
-    empty(&after, "on Show Slice Numbers");
-    description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(line.center())]);
-    let (after, _) = description_frame(&mut a, &ctx, vec![]);
-    empty(&after, "on the line after Show Slice Numbers");
+    if bare.is_some() {
+        // A checkbox shows its label as it is; other rows show it with a colon.
+        let (label, pos) = settings()
+            .filter(|s| s.category == category && descriptions::description(s.key).is_none())
+            .find_map(|s| texts.iter().find(|(t, _)| *t == s.label || *t == format!("{}:", s.label)).map(|(_, r)| (s.label, r.center())))
+            .unwrap_or_else(|| panic!("no row of {category} without a sentence is drawn: {texts:?}"));
+        description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(pos)]);
+        let (after, _) = description_frame(&mut a, &ctx, vec![]);
+        empty(&after, &format!("on {label}"));
+        description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(line.center())]);
+        let (after, _) = description_frame(&mut a, &ctx, vec![]);
+        empty(&after, &format!("on the line after {label}"));
+    }
     assert_eq!(preferences_window(&ctx).size(), size);
 }
 
