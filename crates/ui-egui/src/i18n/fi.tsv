@@ -7868,6 +7868,8 @@ breakText	Glyphs	Merkit
 # Path Precision Tools add-on: Tangent Circle.
 	Tangent Circle…	Sivuava ympyrä…
 	Tangent Circle	Sivuava ympyrä
+	Tangent Circle Tool	Sivuava ympyrä -työkalu
+	No tangent circle here	Tässä ei ole sivuavaa ympyrää
 	Circle:	Ympyrä:
 @msg	`ids` names an object twice	`ids` mainitsee saman objektin kahdesti
 @msg	select two or three paths or compound paths	valitse kaksi tai kolme polkua tai yhdistelmäpolkua

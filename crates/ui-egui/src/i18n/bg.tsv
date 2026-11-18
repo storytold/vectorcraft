@@ -7030,6 +7030,8 @@ breakText	Glyphs	Глифи
 # Path Precision Tools add-on: Tangent Circle.
 	Tangent Circle…	Допирателна окръжност…
 	Tangent Circle	Допирателна окръжност
+	Tangent Circle Tool	Инструмент „Допирателна окръжност“
+	No tangent circle here	Тук няма допирателна окръжност
 	Circle:	Окръжност:
 @msg	`ids` names an object twice	`ids` посочва обект два пъти
 @msg	select two or three paths or compound paths	изберете два или три пътя или съставни пътя

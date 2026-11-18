@@ -7838,6 +7838,8 @@ breakText	Glyphs	Glyfer
 # Path Precision Tools add-on: Tangent Circle.
 	Tangent Circle…	Tangentcirkel…
 	Tangent Circle	Tangentcirkel
+	Tangent Circle Tool	Tangentcirkelverktyget
+	No tangent circle here	Ingen tangentcirkel här
 	Circle:	Cirkel:
 @msg	`ids` names an object twice	`ids` anger ett objekt två gånger
 @msg	select two or three paths or compound paths	markera två eller tre banor eller sammansatta banor

@@ -628,6 +628,15 @@ fn marquee_selection_labels_are_in_complete_catalogs() {
     }
 }
 
+/// The note the Tangent Circle tool shows on the canvas over a segment that gives no circle.
+#[test]
+fn tangent_circle_tool_note_is_in_complete_catalogs() {
+    let label = vectorcraft_tools::addons::tangent_circle::NO_CIRCLE;
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
+    }
+}
+
 /// Preferences › Performance › Use Monitor Profile for Canvas and the note under it.
 #[test]
 fn monitor_profile_labels_are_in_complete_catalogs() {
