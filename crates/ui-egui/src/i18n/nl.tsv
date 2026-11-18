@@ -3931,6 +3931,7 @@ theme	Appearance	Vormgeving
 	Delete Brush	Penseel verwijderen
 	Delete Color	Kleur verwijderen
 	Restore Generated Table	Gegenereerde tabel herstellen
+	Unshift All Colors	Verschuiving van alle kleuren ongedaan maken
 	Delete Symbol	Symbool verwijderen
 	Delete the selected symbol?	Het geselecteerde symbool verwijderen?
 	Delete the selected symbols?	De geselecteerde symbolen verwijderen?
@@ -5465,6 +5466,7 @@ imageTrace	Outline	Contour
 @msg	choose a location for the package	kies een locatie voor het pakket
 @msg	clipboard is empty	het klembord is leeg
 @msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: er moet ten minste één kleur in de kleurentabel blijven
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted: `{k}` noemt een kleur die ook een andere sleutel noemt
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` is geen kleur zoals "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: maximaal {MAX_TABLE} kleuren
 @msg	command `{0}` is not available right now: {1}	opdracht `{0}` is nu niet beschikbaar: {1}

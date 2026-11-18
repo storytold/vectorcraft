@@ -831,6 +831,7 @@ font-technology	Variable	Вариативные
 	Delete Brush	Удалить кисть
 	Delete Color	Удалить цвет
 	Restore Generated Table	Восстановить созданную таблицу
+	Unshift All Colors	Отменить сдвиг всех цветов
 	Delete Character Style	Удалить стиль символа
 	Delete Empty Artboards	Удалить пустые монтажные области
 	Delete Freeform Point	Удалить произвольную точку
@@ -5130,6 +5131,7 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	choose a location for the package	выберите расположение для пакета
 @msg	clipboard is empty	буфер обмена пуст
 @msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: в цветовой таблице должен остаться хотя бы один цвет
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted: `{k}` обозначает цвет, который обозначает и другой ключ
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` не является цветом, например "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: не более {MAX_TABLE} цветов
 @msg	command `{0}` is not available right now: {1}	команда `{0}` сейчас недоступна: {1}
