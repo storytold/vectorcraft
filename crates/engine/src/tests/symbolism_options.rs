@@ -271,6 +271,7 @@ fn tool_set_option_refuses_bad_symbolism_options() {
         ("usePressure", json!("yes"), "`usePressure` must be true or false"),
         ("diameter", json!("big"), "`diameter` must be a number"),
         ("style", json!(3), "`style` must be a name or null"),
+        ("diameter", json!(1), "tool `symbolSizer`: `diameter` must be a number from 2 to 2000"),
     ] {
         let r = s.set_tool_option_cmd(&json!({"tool": "symbolSizer", "values": {key: bad}}));
         assert_eq!(r, Err(want.to_string()), "{key}");
@@ -278,6 +279,16 @@ fn tool_set_option_refuses_bad_symbolism_options() {
     }
     let r = s.set_tool_option_cmd(&json!({"tool": "symbolSizer", "values": {"method": "random", "sprayStain": "userDefined"}})).unwrap();
     assert_eq!((r["method"].as_str(), r["sprayStain"].as_str()), (Some("random"), Some("userDefined")));
+    // Every option the options dialog sends is taken, together.
+    let all = json!({
+        "diameter": 100.0, "intensity": 6.0, "density": 4.0, "usePressure": true, "method": "average", "showBrush": false,
+        "sprayScrunch": "userDefined", "spraySize": "userDefined", "spraySpin": "userDefined", "sprayScreen": "userDefined",
+        "sprayStain": "average", "sprayStyle": "userDefined", "proportional": false, "affectsDensity": true,
+    });
+    let r = s.set_tool_option_cmd(&json!({"tool": "symbolSizer", "values": all})).unwrap();
+    for (key, v) in all.as_object().unwrap() {
+        assert_eq!(&r[key], v, "{key}");
+    }
 }
 
 /// With `usePressure` each point's pen pressure is the intensity there; without it the pressure is
@@ -691,6 +702,97 @@ fn the_styler_applies_the_style_by_the_brushs_strength() {
     assert!(near(styled(json!({"usePressure": true, "points": [[100, 150, 0.25]]}), 100.0), 0.25));
     assert!(near(styled(json!({"usePressure": true, "points": [[100, 150, 1.0]]}), 100.0), 1.0));
     assert_eq!(styled(json!({"usePressure": true, "points": [[100, 150, 0.0]]}), 100.0), 0.0, "no pressure, no style");
-    let random = styled(json!({"usePressure": true, "points": [[100, 150, 0.25]], "method": "random"}), 100.0);
-    assert!(random <= 0.25 + 1e-6, "{random}");
+    // Random: instances the same distance from the point take different amounts, each from none to
+    // the User Defined amount there (0.25: pressure 0.5, half way to the brush's edge).
+    let mut s = session();
+    let ring: Vec<NodeId> = (0..6)
+        .map(|i| {
+            let a = f64::from(i) * std::f64::consts::TAU / 6.0;
+            dot(&mut s, 100.0 + 5.0 * a.cos(), 150.0 + 5.0 * a.sin())
+        })
+        .collect();
+    let id = s.execute("shape.rectangle", &json!({"x": 300, "y": 250, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+    s.execute("paint.setFill", &json!({"color": "#0000ff"})).unwrap();
+    s.execute("graphicStyle.new", &json!({"name": "Blue", "id": id})).unwrap();
+    s.select(|_, sel| sel.clear()).unwrap();
+    adjust(&mut s, json!({"tool": "style", "points": [[100, 150, 0.5]], "radius": 10, "usePressure": true, "method": "random", "style": "Blue"}));
+    let amounts: Vec<f32> = ring.iter().map(|a| node(&s, *a).appearance.fill().map_or(0.0, |f| f.opacity)).collect();
+    assert!(amounts.iter().all(|a| *a <= 0.25 + 1e-6), "{amounts:?}");
+    assert!(amounts.iter().any(|a| *a > 0.0), "{amounts:?}");
+    assert!(amounts.iter().any(|a| (a - amounts[0]).abs() > 1e-6), "{amounts:?}");
+}
+
+/// A sprayed instance's Average stain is the stain of the nearest instance whose stain shows: one
+/// at no opacity is passed over and counts as no stain in the mean amount.
+#[test]
+fn average_spray_passes_over_a_stain_at_no_opacity() {
+    use vectorcraft_color::{Color, Paint};
+    let mut s = session();
+    let set =
+        NodeId(s.execute("symbol.spray", &json!({"name": "Dot", "points": [[100, 150], [130, 150]], "radius": 4})).unwrap()["id"].as_u64().unwrap());
+    let ids = members(&s, set);
+    assert_eq!(ids.len(), 2);
+    s.edit("Stains", |d, _| {
+        for (id, color, amount) in [(ids[0], Color::rgb(1.0, 0.0, 0.0), 0.0), (ids[1], Color::rgb(0.0, 0.0, 1.0), 1.0)] {
+            let n = d.node_mut(id).unwrap();
+            n.appearance.items.retain(|i| !matches!(i, vectorcraft_doc::AppearanceItem::Fill(_)));
+            let mut f = vectorcraft_doc::FillLayer::new(Paint::solid(color));
+            f.opacity = amount;
+            n.appearance.items.insert(0, vectorcraft_doc::AppearanceItem::Fill(f));
+        }
+        Ok(())
+    })
+    .unwrap();
+    s.execute("symbol.spray", &json!({"name": "Dot", "points": [[100, 150]], "radius": 40})).unwrap();
+    let new: Vec<NodeId> = members(&s, set).into_iter().filter(|id| !ids.contains(id)).collect();
+    assert_eq!(new.len(), 1);
+    let f = node(&s, new[0]).appearance.fill().cloned().unwrap();
+    assert_eq!(f.paint, Paint::solid(Color::rgb(0.0, 0.0, 1.0)));
+    assert!((f.opacity - 0.5).abs() < 1e-6, "{}", f.opacity);
+}
+
+/// The Symbol Shifter moves an instance whose transform flattens it (it has no size), as it moves
+/// any other, and counts it.
+#[test]
+fn the_shifter_moves_an_instance_without_a_size() {
+    let mut s = session();
+    let a = dot(&mut s, 200.0, 150.0);
+    s.edit("Flatten", |d, _| {
+        if let Some(NodeKind::SymbolInstance { xf, .. }) = d.node_mut(a).map(|n| &mut n.kind) {
+            *xf = Affine::new([0.0, 0.0, 0.0, 0.0, 200.0, 150.0]);
+        }
+        Ok(())
+    })
+    .unwrap();
+    let r = adjust(&mut s, json!({"tool": "shift", "points": [[200, 150], [210, 150]], "radius": 40, "intensity": 10}));
+    assert_eq!(r["count"], 1);
+    assert!(center(&s, a).x > 200.0, "{:?}", center(&s, a));
+    // Average has no mean of such instances to move toward: it leaves them as they are.
+    let (before, x) = (state(&s), center(&s, a).x);
+    let r = adjust(&mut s, json!({"tool": "screen", "method": "average", "points": [[x, 150]], "radius": 40, "intensity": 10}));
+    assert_eq!(r["count"], 0);
+    assert!(state(&s) == before);
+}
+
+/// Average Stainer: an instance whose stain is at no opacity has no stain of its own, so it takes
+/// the stain the mean picks, not its hidden paint.
+#[test]
+fn average_stain_replaces_a_stain_at_no_opacity() {
+    use vectorcraft_color::{Color, Paint};
+    let mut s = session();
+    let (a, b) = (dot(&mut s, 100.0, 150.0), dot(&mut s, 120.0, 150.0));
+    s.edit("Stains", |d, _| {
+        for (id, color, amount) in [(a, Color::rgb(1.0, 0.0, 0.0), 0.0), (b, Color::rgb(0.0, 0.0, 1.0), 1.0)] {
+            let n = d.node_mut(id).unwrap();
+            let mut f = vectorcraft_doc::FillLayer::new(Paint::solid(color));
+            f.opacity = amount;
+            n.appearance.items.insert(0, vectorcraft_doc::AppearanceItem::Fill(f));
+        }
+        Ok(())
+    })
+    .unwrap();
+    adjust(&mut s, json!({"tool": "stain", "method": "average", "points": [[100, 150]], "radius": 40, "intensity": 10}));
+    let f = node(&s, a).appearance.fill().cloned().unwrap();
+    assert_eq!(f.paint, Paint::solid(Color::rgb(0.0, 0.0, 1.0)));
+    assert!(f.opacity > 0.0, "{}", f.opacity);
 }

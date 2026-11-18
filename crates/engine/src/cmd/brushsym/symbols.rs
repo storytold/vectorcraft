@@ -1,5 +1,5 @@
 use super::dynamic::{fit_overrides, type_id, type_param};
-use super::symbolism::{Grid, Mean, Method, look, mean, method_param, record_set_density, spacing, spray_modes, wrap_angle};
+use super::symbolism::{Grid, Look, Mean, Method, look, mean, method_param, record_set_density, spacing, spray_modes, wrap_angle};
 use super::{
     Affine, AppearanceItem, Arc, CURRENT_SYMBOL, Color, Document, EngineError, FillLayer, HALF, Node, NodeId, NodeKind, Paint, Point, Result,
     SIZES_KEY, Session, Symbol, SymbolExportType, SymbolNineSlice, SymbolRegistration, Value, Vec2, bad, brush, color_param, ids_json, json,
@@ -1205,18 +1205,21 @@ pub(super) fn symbol_adjust(s: &mut Session, p: &Value) -> Result<Value> {
                 if w <= 0.0 {
                     continue;
                 }
-                let Some(cur) = d.node(*id).and_then(|n| look(d, n)) else { continue };
+                // Average and the Shift forms of the Stainer and the Styler read the instance's look,
+                // and Average has no mean of instances without one. The other changes need only its
+                // center, so an instance without a size (one whose transform flattens it) still moves.
+                let Some(cur) = look_if(d, *id, method == Method::Average || recolor.is_some()) else { continue };
                 // Shift with the Symbol Stainer or the Symbol Styler: the instance keeps the amount
                 // of its stain or style, and its paint moves toward the color or the style. An
                 // instance without one is left as it is.
                 if let Some((to, step)) = &recolor {
-                    if recolor_keeping_amount(d, *id, cur.fill, to, step * w) {
+                    if recolor_keeping_amount(d, *id, cur.and_then(|l| l.fill), to, step * w) {
                         touched.insert(*id);
                     }
                     continue;
                 }
                 // Average leaves an instance that already has the mean as it is.
-                let at_mean = target.as_ref().is_some_and(|t| match tool.as_str() {
+                let at_mean = target.as_ref().zip(cur.as_ref()).is_some_and(|(t, cur)| match tool.as_str() {
                     "scrunch" => {
                         let out = (c - t.middle).hypot();
                         out <= 1e-9 || (t.reach - out).abs() < 1e-9
@@ -1250,8 +1253,8 @@ pub(super) fn symbol_adjust(s: &mut Session, p: &Value) -> Result<Value> {
                         n.transform(Affine::translate(v), false);
                     }
                     "size" => {
-                        let k = match &target {
-                            Some(t) => (t.scale / cur.scale).powf(w.min(1.0)),
+                        let k = match target.as_ref().zip(cur.as_ref()) {
+                            Some((t, cur)) => (t.scale / cur.scale).powf(w.min(1.0)),
                             None => (1.0 + 0.08 * w).powf(if alt { -share } else { share }),
                         };
                         // Without Proportional Resizing a drag resizes along its own direction: a
@@ -1273,8 +1276,8 @@ pub(super) fn symbol_adjust(s: &mut Session, p: &Value) -> Result<Value> {
                         }
                     }
                     "spin" => {
-                        let a = match (&target, method) {
-                            (Some(t), _) => wrap_angle(t.angle - cur.angle) * w.min(1.0),
+                        let a = match (target.as_ref().zip(cur.as_ref()), method) {
+                            (Some((t, cur)), _) => wrap_angle(t.angle - cur.angle) * w.min(1.0),
                             // A turn either way, whichever way the drag runs.
                             (None, Method::Random) => 0.1 * w * (share - 1.0),
                             // Turn towards the drag direction; a click spins a little.
@@ -1285,10 +1288,11 @@ pub(super) fn symbol_adjust(s: &mut Session, p: &Value) -> Result<Value> {
                     }
                     "stain" | "style" => {
                         let paint = if tool == "style" { style_paint.clone().unwrap_or(Paint::solid(color)) } else { Paint::solid(color) };
-                        let (paint, o) = match &target {
-                            // Toward the mean amount, keeping the stain or style the instance has.
-                            Some(t) => {
-                                let (own, cur) = cur.fill.map_or((None, 0.0), |(p, o)| (Some(p), o));
+                        let (paint, o) = match target.as_ref().zip(cur) {
+                            // Toward the mean amount, keeping the stain or style the instance has
+                            // (one at no opacity is none).
+                            Some((t, cur)) => {
+                                let (own, cur) = cur.fill.filter(|(_, o)| *o > 0.0).map_or((None, 0.0), |(p, o)| (Some(p), o));
                                 (own.or(t.paint.clone()).unwrap_or(paint), (cur + (t.amount - cur) * w.min(1.0)) as f32)
                             }
                             None => {
@@ -1332,6 +1336,15 @@ pub(super) fn symbol_adjust(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "count": count }))
 }
 
+/// The [`Look`] of instance `id` for the symbolism tools, or None to leave the instance as it is:
+/// one without a look (no size) is left only when `needed`.
+fn look_if(d: &Document, id: NodeId, needed: bool) -> Option<Option<Look>> {
+    match d.node(id).and_then(|n| look(d, n)) {
+        None if needed => None,
+        cur => Some(cur),
+    }
+}
+
 /// Move the paint of instance `id`'s stain or style (`fill`, its topmost fill with the amount)
 /// toward `to` by `t`. The fill keeps its amount and everything else it has, and the instance's
 /// other appearance items stay as they are. A paint with no form between it and `to` (a solid
@@ -1360,13 +1373,7 @@ fn recolor_keeping_amount(d: &mut Document, id: NodeId, fill: Option<(Paint, f64
 /// so do the clipping path of a clip group and the ruler guides above a layer's art. Returns how
 /// many moved.
 fn restack(d: &mut Document, ids: &std::collections::HashSet<NodeId>, back: bool) -> Result<usize> {
-    let mut parents: Vec<Option<NodeId>> = vec![];
-    for id in ids {
-        let par = d.parent_of(*id);
-        if !parents.contains(&par) {
-            parents.push(par);
-        }
-    }
+    let parents: std::collections::BTreeSet<Option<NodeId>> = ids.iter().map(|id| d.parent_of(*id)).collect();
     let mut moved = 0;
     for par in parents {
         let floor = usize::from(par.and_then(|p| d.node(p)).is_some_and(Node::clips));

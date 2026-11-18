@@ -124,8 +124,8 @@ fn selected_sets(app: &VectorcraftApp) -> Vec<u64> {
         .collect()
 }
 
-/// OK: set the brush the Symbolism tools share (the tool keeps it within its ranges), after giving
-/// a new Symbol Set Density to the selected symbol sets.
+/// OK: set the brush the Symbolism tools share, after giving a new Symbol Set Density to the
+/// selected symbol sets. A value outside its range is refused and changes nothing.
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> DialogResult {
     // Each value goes to the check as it is stored, so one of the wrong kind is refused rather than
     // read as 0 or false. A number stored as text is read as the field reads it, and other text is
@@ -137,12 +137,14 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> DialogResult {
     let mut values: Map<String, Value> = NUMBERS.iter().filter_map(|k| Some((k.to_string(), stored(k)?))).collect();
     values.extend(SWITCHES.iter().filter_map(|k| Some((k.to_string(), d.fields.get(*k)?.clone()))));
     values.extend(SPRAY.iter().chain(&["method"]).filter(|k| d.fields.contains_key(**k)).map(|k| (k.to_string(), json!(d.str(k)))));
-    // A tool or a value `tool.setOption` refuses changes no density either.
+    // A tool or a value `tool.setOption` refuses changes no density either: the values go through
+    // both of its checks, the kinds and then each option's range, before the density changes.
     let tool = d.str("tool");
     if !SYMBOLISM.contains(&tool.as_str()) {
         return Err(format!("unknown tool `{tool}`"));
     }
     vectorcraft_tools::symbolism::check_options(&tool, &values)?;
+    vectorcraft_tools::option_check::check_values(&vectorcraft_tools::symbolism::SymbolismTool::new(&tool), &values)?;
     let (from, to) = (d.f64(DENSITY_WAS, 0.0).clamp(1.0, 10.0), d.f64("density", 0.0).clamp(1.0, 10.0));
     let sets = selected_sets(app);
     if d.fields.contains_key(DENSITY_WAS) && from != to && !sets.is_empty() {
@@ -307,8 +309,11 @@ mod tests {
         assert!(super::super::confirm(&mut app).is_err());
         assert_eq!((width(&app), undo(&app)), (was, steps));
         assert_eq!(app.session.tool_options_of("symbolSizer")["density"].as_f64(), Some(5.0));
-        // So does a checkbox or a number stored as a value of the wrong kind.
+        // So does a checkbox or a number stored as a value of the wrong kind, or a number outside its
+        // range.
         for (k, v) in [
+            ("diameter", json!(1)),
+            ("intensity", json!(11)),
             ("usePressure", json!("invalid")),
             ("proportional", json!(1)),
             ("intensity", json!("strong")),

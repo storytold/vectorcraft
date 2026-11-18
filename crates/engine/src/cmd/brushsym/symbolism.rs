@@ -204,7 +204,10 @@ pub(super) fn mean(looks: &[&Look], at: Point, gap_cell: Option<f64>) -> Option<
         cos += l.angle.cos();
         opacity += l.opacity;
         middle += l.center.to_vec2();
-        if let Some((p, o)) = &l.fill {
+        // A fill at no opacity shows nothing: it is no stain or style, and its paint is not taken.
+        if let Some((p, o)) = &l.fill
+            && *o > 0.0
+        {
             amount += o;
             let far = l.center.distance(at);
             if paint.is_none_or(|(_, nearest)| far < nearest) {

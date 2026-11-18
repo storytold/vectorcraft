@@ -3783,38 +3783,48 @@ already walks Image Trace. Short agent entry points:
   `symbol.adjust` takes `method` (`userDefined`, `average` or `random`; not used by `shift`), `usePressure` with
   `points` as `[x, y, pressure]` (each point's pen pressure, 0..1, is the intensity there), and for `size`
   `proportional` (true) and `affectsDensity` (false). With `tool: style`, the style goes on by the brush's strength at
-  each instance, in full only at the brush's center at intensity 10 or full pressure, and a `style` name the document
+  each instance: one sample applies it in full only at the brush's center at intensity 10 or full pressure, and the
+  samples of a stroke add up (two samples at the center at intensity 5 apply it in full). With `alt`, `userDefined`
+  and `random` remove all of an instance's appearance items under the brush at once, whatever the brush's strength.
+  A `style` name the document
   has no graphic style for counts as none (the document's first style after the default one). The Symbol Styler sends
   the style last clicked into the Graphic Styles panel's selection. `tool.setOption` on a symbolism tool refuses a `method` or
   Symbol Sprayer option that is not one of its names, a non-number `diameter`, `intensity` or `density`, a
-  non-boolean switch, and a `symbol` or `style` that is neither a name nor null, and sets none of the values.
+  `diameter` outside 2..2000 or an `intensity` or `density` outside 1..10, a non-boolean switch, and a `symbol` or
+  `style` that is neither a name nor null, and sets none of the values. The options dialog's OK checks the same way
+  before it changes any symbol set's density.
   `symbol.spray` takes `attributes`
   `{scrunch?, size?, spin?, screen?, stain?, style?}`, each `average` or `userDefined`, with `color`, `keepModel` and
   `style` for the User Defined stain and style. `symbol.setDensity {from, to, ids?|id?}` gives the selected symbol
   sets a new Symbol Set Density. VectorCraft's own rules:
   - `random` gives each instance its own share of the tool's change for the whole stroke, from none of it to twice
-    it (the Spinner: a turn either way), the same each time the stroke is applied.
+    it (the Spinner: a turn either way; the Styler without `shift`: from none to the `userDefined` amount), the same
+    each time the stroke is applied.
   - `average` moves each instance's value toward the mean of the instances within the brush at that point: the
     Scruncher its distance from their middle toward their mean distance, the Sizer the geometric mean of their sizes,
     the Spinner their mean direction, the Stainer and the Styler their mean amount, the Screener their mean opacity.
     `alt` does not reverse it. An instance already at the mean is left as it is, and no undo step is added when
     no instance changes.
-  - With `proportional` false a drag resizes along its own direction (a level drag the width, an upright one the
-    height) and one point resizes both. With `affectsDensity` an instance also moves away from the point as it grows
+  - With `proportional` false a drag resizes along its own direction: the width by the drag's horizontal share and
+    the height by its vertical share (a level drag the width, an upright one the height, a 45° drag both alike), and
+    one point resizes both. With `affectsDensity` an instance also moves away from the point as it grows
     and toward it as it shrinks.
   - A sprayed instance's `average` values are the means of the selected set's instances within `radius` of the
-    stroke point: their spacing, size, rotation and opacity, and the stain or style of the nearest one that has one,
-    at the mean amount. With no instance there it has the symbol's size, no rotation, full opacity and no stain or
-    style. `attributes` left out means `average` for all six.
+    stroke point: their spacing, size, rotation and opacity, and the stain or style of the nearest one that has one
+    with an amount above 0, at the mean amount. With no instance there it has the symbol's size times `scale`, no
+    rotation, full opacity and no stain or style. The size, the mean or the symbol's, is a base: each new instance
+    varies from it by up to 10% either way. `attributes` left out means `average` for all six. A point's third value,
+    when given, must be a number or null; the Sprayer does not use it.
   - `symbol.setDensity` moves each instance of a set along the line from the middle of the set's instances, to
-    (1.15 − 0.1·`to`) / (1.15 − 0.1·`from`) of its distance from it (each factor at least 0.1), as one undo step, and
-    adds none when no instance moves. `from` is the density each set was created at or last given (a set
-    duplicated has its source's, and a pasted set the one its source had at Copy), and the
-    `from` passed applies only to a set without one (a group named "Symbol Set" by hand); the sets moved then have
+    (1.15 − 0.1·`to`) / (1.15 − 0.1·start) of its distance from it (each factor at least 0.1), as one undo step, and
+    adds none when no instance moves. start is the density each set was created at or last given (a set
+    duplicated has its source's, and a pasted set the one its source had at Copy); the
+    `from` passed is the start only for a set without one (a group named "Symbol Set" by hand). The sets moved then have
     density `to`. A locked or hidden instance stays where it is. It returns `{ids, count}`: the sets changed and the
     instances moved.
-  - A `method`, an attribute or a density outside these values, a pressure that isn't a number, or no symbol set
-    among the objects of `symbol.setDensity`, is an error and changes nothing.
+  - A `method` or an attribute outside these values, a `from` or `to` of `symbol.setDensity` that is not a number
+    from 1 to 10, a pressure that isn't a number, or no symbol set among the objects of `symbol.setDensity`, is an
+    error and changes nothing. `symbol.spray` takes a `density` number outside 1..10 as the nearer end.
 - The symbolism tools with Shift held ([the manual](https://web.archive.org/web/20210601162814/https://helpx.adobe.com/pdf/illustrator_reference.pdf#page=199),
   [the CS6 reference](https://web.archive.org/web/20220911143322/https://helpx.adobe.com/pdf/cs6/illustrator_reference.pdf#page=136)) send
   `shift: true` with `symbol.adjust`: a Shift-click with the Symbol Shifter brings the instances under the brush

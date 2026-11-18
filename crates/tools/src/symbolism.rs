@@ -385,6 +385,9 @@ impl Tool for SymbolismTool {
             "diameter" => c::number(key, v, 2.0, 2000.0),
             "intensity" | "density" => c::number(key, v, 1.0, 10.0),
             "symbol" | "style" => c::string_or_null(key, v),
+            "usePressure" | "showBrush" | "proportional" | "affectsDensity" => c::boolean(key, v),
+            "method" => c::one_of(key, v, &METHODS),
+            _ if SPRAY_ATTRIBUTES.iter().any(|(k, _)| *k == key) => c::one_of(key, v, &SPRAY_MODES),
             _ => Err(c::unknown(key)),
         }
     }

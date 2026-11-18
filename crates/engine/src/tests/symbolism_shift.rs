@@ -228,9 +228,11 @@ fn shift_changes_a_paint_that_has_no_form_in_between() {
 }
 
 /// A style name the document has no style for (the Styler's style from another document, or one
-/// since renamed or deleted) moves the fill toward the same style as no name.
+/// since renamed or deleted) moves the fill toward the document's first style after the default
+/// one, as no name does, and the stain's amount stays.
 #[test]
 fn the_styler_takes_the_first_style_for_a_name_the_document_lacks() {
+    use vectorcraft_color::{Color, Paint};
     let styled = |style: Option<&str>| {
         let mut s = session();
         let a = dot(&mut s, 100.0, 150.0);
@@ -241,10 +243,19 @@ fn the_styler_takes_the_first_style_for_a_name_the_document_lacks() {
         if let Some(n) = style {
             p["style"] = json!(n);
         }
+        let stained = node(&s, a).appearance.fill().map(|f| f.opacity);
         adjust(&mut s, p);
-        fill(&s, a).unwrap()
+        let f = node(&s, a).appearance.fill().cloned().unwrap();
+        assert_eq!(Some(f.opacity), stained, "the amount stays");
+        let first = s.doc().unwrap().doc.graphic_styles[1].appearance.fill_paint();
+        (f.paint, first)
     };
-    assert_eq!(styled(Some("No Such Style")), styled(None));
+    let (missing, first) = styled(Some("No Such Style"));
+    let (none, _) = styled(None);
+    assert_eq!(missing, none);
+    // The paint is the first style's, not the active fill color.
+    assert_eq!(none, first);
+    assert_ne!(none, Paint::solid(Color::rgb(0.0, 1.0, 0.0)));
 }
 
 /// A `shift` that is not true, false or null is refused and changes nothing.
