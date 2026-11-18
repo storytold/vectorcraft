@@ -47,6 +47,7 @@ vectorcraft-js = { workspace = true }
 vectorcraft-apischema = { workspace = true }
 image = { workspace = true }
 craft-image-codecs = { workspace = true }
+tiff = { workspace = true }
 jxl-oxide = { workspace = true }
 jxl-color = { workspace = true }
 jxl-grid = { workspace = true }
@@ -58,6 +59,9 @@ chrono = { workspace = true }
 craft-xml = { workspace = true }
 # The compound file that holds a Word 97-2003 document placed as type (place/doc.rs).
 cfb = "0.15"
+# The Text Import Options character sets other than Unicode and ANSI (place/text.rs). Already in
+# Cargo.lock (vectorcraft-eps), so this adds no new crate.
+encoding_rs = { workspace = true }
 kurbo = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -69,8 +73,9 @@ log = { workspace = true }
 [target.'cfg(unix)'.dependencies]
 rustix = { workspace = true, features = ["std", "process"] }
 
-# Whether a recovery area's lock file is still the one that was opened (`FolderStore::still_named`).
-# Already in Cargo.lock (walkdir), so this adds no new crate.
+# Whether a recovery area's lock file is still the one that was opened (`FolderStore::still_named`),
+# and whether two paths a script names are one file (`script::files`). Already in Cargo.lock
+# (walkdir), so this adds no new crate.
 [target.'cfg(windows)'.dependencies]
 same-file = "1.0.6"
 
@@ -88,7 +93,6 @@ craft-jxl = { workspace = true }
 # vectorcraft-doc's Group 3 TIFF reader before craft-stream-codecs, the reference
 # tests/group3_reference.rs compares it with.
 hayro-ccitt = { workspace = true }
-tiff = { workspace = true }
 craft-stream-codecs = { workspace = true }
 vectorcraft-affinity = { workspace = true, features = ["synth"] }
 crc32fast = { workspace = true }
@@ -98,6 +102,8 @@ proptest = { workspace = true }
 vectorcraft-text = { workspace = true, features = ["test-fonts"] }
 # How many times an open reads a PDF.
 vectorcraft-pdf = { workspace = true, features = ["read-count"] }
+# How many times the symbol list is read to find symbols by name.
+vectorcraft-doc = { workspace = true, features = ["symbol-read-count"] }
 wat = { workspace = true }
 # Zstandard streams for the Illustrator editing data fuzz tests.
 ruzstd = { workspace = true }
