@@ -1,6 +1,7 @@
 //! Color Themes panel (local only): the Create tab makes a five-colour theme on a harmony wheel (a
 //! harmony rule from the selected colour, or Custom: each colour moves on its own; with a rule the
-//! colours move together), the My Themes tab lists the themes saved in the preferences (the panel
+//! colours move together; the selected color is also edited in its hex field or with CMYK, RGB, Lab
+//! or HSB sliders), the My Themes tab lists the themes saved in the preferences (the panel
 //! menu's Show Find Field adds a field that lists only the themes whose names hold its text). Themes are
 //! saved, edited, deleted and added to Swatches as colour groups through `colorTheme.*`; the theme
 //! being made is panel state.
@@ -11,8 +12,10 @@ use vectorcraft_color::Color;
 use vectorcraft_color::harmony::{Harmony, THEME_SIZE, move_on_wheel};
 use vectorcraft_engine::cmd::colortheme::ColorTheme;
 
+use super::color::{Mode, components, from_components, track_color};
 use super::{active_paint, c32, color_json, empty_state, proxy_cmd, pstate, set_pstate};
 use crate::VectorcraftApp;
+use crate::dialogs::recolor::slider_cell;
 use crate::theme::{self, Tokens};
 use crate::widgets::{self, menu_item};
 
@@ -22,6 +25,11 @@ const DEFAULT_RULE: Harmony = Harmony::Analogous2;
 const DEFAULT_BASE: Color = Color::Rgb { r: 0.1, g: 0.55, b: 0.6 };
 /// Diameter of the harmony wheel.
 const WHEEL: f32 = 150.0;
+/// The color modes of the selected color's sliders, in the order the Color Mode menu lists them.
+const SLIDER_MODES: [Mode; 4] = [Mode::Cmyk, Mode::Rgb, Mode::Lab, Mode::Hsb];
+/// Widths of a slider's label and of its number field (the field's width is the Recolor dialog's).
+const SLIDER_LABEL_W: f32 = 12.0;
+const SLIDER_FIELD_W: f32 = 48.0;
 
 /// The theme being made on the Create tab.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -127,6 +135,78 @@ fn tab(ctx: &egui::Context) -> usize {
     pstate(ctx, "ct-tab")
 }
 
+/// The color mode of the sliders: the one last picked from their Color Mode menu while the app
+/// runs, or else the selected color's own model (HSB for a gray). Picking a mode changes no color.
+fn slider_mode(ctx: &egui::Context, c: Option<&Color>) -> Mode {
+    pstate::<Option<Mode>>(ctx, "ct-mode").unwrap_or_else(|| match c.map(Mode::of) {
+        Some(m @ (Mode::Cmyk | Mode::Rgb | Mode::Lab)) => m,
+        _ => Mode::Hsb,
+    })
+}
+
+/// The slider values a slider edit last set: the selected place and the color they made in
+/// `mode`. While those still hold, the sliders show `v` as it was set, so an edit of one slider
+/// leaves the others' numbers as they were instead of converting them back from the color.
+#[derive(Clone, Debug, PartialEq)]
+struct Held {
+    sel: usize,
+    color: Color,
+    mode: Mode,
+    v: Vec<f32>,
+}
+
+/// The numbers the sliders show for the selected color of `d` in `mode`.
+fn slider_values(ctx: &egui::Context, d: &Draft, mode: Mode) -> Option<Vec<f32>> {
+    let c = d.colors.get(d.sel)?;
+    let held =
+        pstate::<Option<Held>>(ctx, "ct-held").filter(|h| h.sel == d.sel && h.color == *c && h.mode == mode && h.v.len() == mode.labels().len());
+    Some(held.map_or_else(|| components(mode, c), |h| h.v))
+}
+
+/// The Color Mode menu (CMYK, RGB, Lab and HSB) and its sliders, each a rail and a number field, for
+/// the selected color of `d`. An edit sets the selected color in the menu's mode (an RGB or HSB
+/// edit makes it RGB, a CMYK edit CMYK and a Lab edit Lab) as the hex field does: with a rule the
+/// theme follows from it as the new base.
+fn sliders(ui: &mut Ui, d: &mut Draft) {
+    let t = Tokens::get(ui.ctx());
+    let ctx = ui.ctx().clone();
+    let current = slider_mode(&ctx, d.colors.get(d.sel));
+    ui.horizontal(|ui| {
+        ui.label(egui::RichText::new(tl!("Color Mode:")).color(t.text_dim));
+        let labels: Vec<&str> = SLIDER_MODES.iter().map(|m| m.label()).collect();
+        if let Some(&m) =
+            widgets::dropdown_named(ui, "ct-mode", Some(tl!("Color Mode:")), current.label(), &labels, 90.0).and_then(|i| SLIDER_MODES.get(i))
+        {
+            set_pstate(&ctx, "ct-mode", Some(m));
+        }
+    });
+    ui.add_space(2.0);
+    let mode = slider_mode(&ctx, d.colors.get(d.sel));
+    let Some(comps) = slider_values(&ctx, d, mode) else { return };
+    let spacing = 6.0;
+    let rail = (ui.available_width() - SLIDER_LABEL_W - SLIDER_FIELD_W - 2.0 * spacing - 4.0).max(40.0);
+    let mut set: Option<Vec<f32>> = None;
+    egui::Grid::new("ct-sliders").num_columns(3).spacing([spacing, 4.0]).show(ui, |ui| {
+        for (n, lbl) in mode.labels().iter().enumerate() {
+            let v = comps.get(n).copied().unwrap_or(0.0);
+            let shown = widgets::SliderValue::field(f64::from(v), f64::from(mode.min(n))..=f64::from(mode.max(n)), mode.suffix(n), 0);
+            let track = |x: f32| c32(&track_color(mode, &comps, n, x));
+            if let Some(nv) = slider_cell(ui, ("ct", mode.label(), n), lbl, shown, mode.suffix(n), &track, SLIDER_LABEL_W, rail) {
+                let mut c2 = comps.clone();
+                c2[n] = nv as f32;
+                set = Some(c2);
+            }
+            ui.end_row();
+        }
+    });
+    if let Some(v) = set {
+        d.set_selected(from_components(mode, &v));
+        if let Some(&color) = d.colors.get(d.sel) {
+            set_pstate(&ctx, "ct-held", Some(Held { sel: d.sel, color, mode, v }));
+        }
+    }
+}
+
 /// Save the theme being made (overwriting the theme it edits); it then edits the saved theme.
 fn save(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let mut d = draft(app, ctx);
@@ -225,6 +305,8 @@ fn create(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
     }
     ui.add_space(6.0);
+    sliders(ui, &mut d);
+    ui.add_space(4.0);
     ui.horizontal(|ui| {
         let hex = d.colors.get(d.sel).map(|c| c.to_hex().trim_start_matches('#').to_string()).unwrap_or_default();
         if let Some(c) = widgets::hex_field_named(ui, "ct-hex", Some(tl!("Color")), &hex).and_then(|h| Color::from_hex(&h)) {
@@ -860,6 +942,236 @@ mod tests {
         edit_saved(&app, &ctx, "Harbor");
         let colors = draft(&app, &ctx).colors;
         assert!(colors.iter().all(|c| matches!(c, Color::Rgb { .. })), "{colors:?}");
+        add_draft_to_swatches(&mut app, &ctx);
+        let g = app.session.doc().unwrap().doc.swatch_groups.last().expect("the group");
+        assert_eq!(g.swatches.iter().filter_map(|w| w.paint.color()).collect::<Vec<_>>(), colors);
+    }
+
+    /// One frame of the panel in a 260 × 700 window with `events`, in English, with screen readers on.
+    fn step(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> egui::FullOutput {
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        ctx.enable_accesskit();
+        let time = ctx.input(|i| i.time) + 0.1;
+        let screen = Rect::from_min_size(egui::Pos2::ZERO, vec2(260.0, 700.0));
+        let input = egui::RawInput { events, time: Some(time), screen_rect: Some(screen), ..Default::default() };
+        let mut out = ctx.run_ui(input, |ui| show(app, ui));
+        out.textures_delta.clear();
+        out
+    }
+
+    /// The screen-reader nodes of the frame after a settling one.
+    fn nodes(app: &mut VectorcraftApp, ctx: &egui::Context) -> Vec<(egui::accesskit::NodeId, egui::accesskit::Node)> {
+        step(app, ctx, vec![]);
+        step(app, ctx, vec![]).platform_output.accesskit_update.expect("an accessibility tree").nodes
+    }
+
+    /// The labels of the color sliders the Create tab shows (named by one letter, unlike the wheel's
+    /// Brightness slider), with each one's range, in order.
+    fn slider_ranges(app: &mut VectorcraftApp, ctx: &egui::Context) -> Vec<(String, f64, f64)> {
+        let mut found: Vec<(f64, String, f64, f64)> = nodes(app, ctx)
+            .into_iter()
+            .filter(|(_, n)| n.role() == egui::accesskit::Role::Slider && n.label().is_some_and(|l| l.chars().count() == 1))
+            .filter_map(|(_, n)| {
+                let top = n.bounds()?.y0;
+                Some((top, n.label()?.to_string(), n.min_numeric_value()?, n.max_numeric_value()?))
+            })
+            .collect();
+        found.sort_by(|a, b| a.0.total_cmp(&b.0));
+        found.into_iter().map(|(_, l, lo, hi)| (l, lo, hi)).collect()
+    }
+
+    /// The node id and bounds of the screen-reader node named `label` whose role is (with `rail`) or
+    /// is not a slider.
+    fn node(app: &mut VectorcraftApp, ctx: &egui::Context, label: &str, rail: bool) -> (egui::accesskit::NodeId, egui::Pos2) {
+        let all = nodes(app, ctx);
+        let (id, n) = all
+            .iter()
+            .find(|(_, n)| n.label() == Some(label) && (n.role() == egui::accesskit::Role::Slider) == rail)
+            .unwrap_or_else(|| panic!("nothing named {label:?}"));
+        let b = n.bounds().expect("bounds");
+        (*id, egui::pos2((b.x0 + b.x1) as f32 * 0.5, (b.y0 + b.y1) as f32 * 0.5))
+    }
+
+    /// A screen reader's set-value action on the slider named `label`.
+    fn set_slider(app: &mut VectorcraftApp, ctx: &egui::Context, label: &str, value: f64) {
+        use egui::accesskit::{Action, ActionData, ActionRequest, TreeId};
+        let (target_node, _) = node(app, ctx, label, true);
+        let data = Some(ActionData::NumericValue(value));
+        step(
+            app,
+            ctx,
+            vec![egui::Event::AccessKitActionRequest(ActionRequest { action: Action::SetValue, target_node, target_tree: TreeId::ROOT, data })],
+        );
+        step(app, ctx, vec![]);
+    }
+
+    /// A click at `at`, each event in a frame of its own.
+    fn press_at(app: &mut VectorcraftApp, ctx: &egui::Context, at: egui::Pos2) {
+        let button =
+            |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+        step(app, ctx, vec![egui::Event::PointerMoved(at)]);
+        step(app, ctx, vec![button(true)]);
+        step(app, ctx, vec![button(false)]);
+    }
+
+    fn key(app: &mut VectorcraftApp, ctx: &egui::Context, key: egui::Key, modifiers: egui::Modifiers) {
+        step(app, ctx, vec![egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers }]);
+        step(app, ctx, vec![egui::Event::Key { key, physical_key: None, pressed: false, repeat: false, modifiers }]);
+    }
+
+    /// Type `text` into the number field named `label` in place of its number, and press Enter.
+    fn type_into(app: &mut VectorcraftApp, ctx: &egui::Context, label: &str, text: &str) {
+        let (_, at) = node(app, ctx, label, false);
+        press_at(app, ctx, at);
+        key(app, ctx, egui::Key::A, egui::Modifiers::COMMAND);
+        step(app, ctx, vec![egui::Event::Text(text.into())]);
+        key(app, ctx, egui::Key::Enter, egui::Modifiers::NONE);
+        step(app, ctx, vec![]);
+    }
+
+    /// The Create tab offers a Color Mode menu of CMYK, RGB, Lab and HSB with a rail and a number
+    /// field for each component over its range, beside the hex field. It starts in the selected
+    /// color's own model (HSB for a gray), keeps the mode picked while the app runs, and picking a
+    /// mode changes no color.
+    #[test]
+    fn the_create_tab_offers_cmyk_rgb_lab_and_hsb_sliders() {
+        let mut app = app();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let mut d = five_colors(&ctx);
+        let named = |app: &mut VectorcraftApp, ctx: &egui::Context, label: &str| nodes(app, ctx).iter().any(|(_, n)| n.label() == Some(label));
+        assert!(named(&mut app, &ctx, "Color Mode:"), "the menu is named");
+        assert!(named(&mut app, &ctx, "Color"), "the hex field stays");
+        let rgb = vec![("R".to_string(), 0.0, 255.0), ("G".into(), 0.0, 255.0), ("B".into(), 0.0, 255.0)];
+        assert_eq!(slider_ranges(&mut app, &ctx), rgb, "an RGB color starts in RGB");
+        for (c, first) in [(Color::cmyk(0.1, 0.2, 0.3, 0.4), "C"), (Color::lab(50.0, -20.0, 30.0), "L"), (Color::gray(0.5), "H")] {
+            d.colors[2] = c;
+            set_draft(&ctx, d.clone());
+            assert_eq!(slider_ranges(&mut app, &ctx)[0].0, first, "{c:?}");
+        }
+        let expect = [
+            vec![("C", 0.0, 100.0), ("M", 0.0, 100.0), ("Y", 0.0, 100.0), ("K", 0.0, 100.0)],
+            vec![("R", 0.0, 255.0), ("G", 0.0, 255.0), ("B", 0.0, 255.0)],
+            vec![("L", 0.0, 100.0), ("a", -128.0, 127.0), ("b", -128.0, 127.0)],
+            vec![("H", 0.0, 360.0), ("S", 0.0, 100.0), ("B", 0.0, 100.0)],
+        ];
+        for (m, rows) in SLIDER_MODES.into_iter().zip(expect) {
+            set_pstate(&ctx, "ct-mode", Some(m));
+            let rows: Vec<(String, f64, f64)> = rows.into_iter().map(|(l, lo, hi)| (l.to_string(), lo, hi)).collect();
+            assert_eq!(slider_ranges(&mut app, &ctx), rows, "{m:?}");
+            assert_eq!(draft(&app, &ctx), d, "picking a mode changes no color");
+        }
+        // The picked mode stays when another color is selected.
+        set_draft(&ctx, Draft { sel: 0, ..d.clone() });
+        assert_eq!(slider_ranges(&mut app, &ctx)[0].0, "H");
+    }
+
+    /// In Custom, a rail, the arrow keys and the number field change the selected color alone, in
+    /// the menu's mode, and the selection stays; the other numbers stay as they were set.
+    #[test]
+    fn a_slider_edit_changes_only_the_selected_custom_color() {
+        let mut app = app();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let d = five_colors(&ctx);
+        let start = components(Mode::Rgb, &d.colors[2]);
+        set_slider(&mut app, &ctx, "R", 10.0);
+        let now = draft(&app, &ctx);
+        assert_eq!(now.colors[2], from_components(Mode::Rgb, &[10.0, start[1], start[2]]));
+        assert_eq!(now.sel, 2);
+        for i in [0, 1, 3, 4] {
+            assert_eq!(now.colors[i], d.colors[i], "color {i} stays");
+        }
+        // The arrow keys step the focused rail by one.
+        let (_, at) = node(&mut app, &ctx, "G", true);
+        press_at(&mut app, &ctx, at);
+        let held = pstate::<Option<Held>>(&ctx, "ct-held").expect("held").v;
+        key(&mut app, &ctx, egui::Key::ArrowRight, egui::Modifiers::NONE);
+        let after = pstate::<Option<Held>>(&ctx, "ct-held").expect("held").v;
+        assert_eq!(after, vec![10.0, held[1] + 1.0, start[2]]);
+        // The number field.
+        type_into(&mut app, &ctx, "B", "40");
+        let now = draft(&app, &ctx);
+        assert_eq!(now.colors[2], from_components(Mode::Rgb, &[10.0, held[1] + 1.0, 40.0]));
+        assert_eq!((now.sel, now.rule), (2, None));
+        assert_eq!(now.colors[0], d.colors[0]);
+    }
+
+    /// The sliders keep the numbers they set: an HSB color taken to no saturation keeps its hue on
+    /// the H slider, and S back up brings that hue back. Another color shows its own numbers.
+    #[test]
+    fn the_sliders_keep_the_numbers_they_set() {
+        let mut app = app();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        five_colors(&ctx);
+        set_pstate(&ctx, "ct-mode", Some(Mode::Hsb));
+        let hue = |app: &mut VectorcraftApp, ctx: &egui::Context| {
+            let (id, _) = node(app, ctx, "H", true);
+            nodes(app, ctx).into_iter().find(|(n, _)| *n == id).and_then(|(_, n)| n.numeric_value())
+        };
+        set_slider(&mut app, &ctx, "H", 200.0);
+        set_slider(&mut app, &ctx, "S", 0.0);
+        assert_eq!(hue(&mut app, &ctx), Some(200.0), "a gray keeps the hue it was set to");
+        set_slider(&mut app, &ctx, "S", 80.0);
+        let [h, s, _] = draft(&app, &ctx).colors[2].to_hsb();
+        assert!((h - 200.0).abs() < 0.5 && (s - 0.8).abs() < 1e-3, "{h} {s}");
+        set_draft(&ctx, Draft { sel: 0, ..draft(&app, &ctx) });
+        let own = components(Mode::Hsb, &draft(&app, &ctx).colors[0])[0].round();
+        assert_eq!(hue(&mut app, &ctx), Some(f64::from(own)), "another color shows its own numbers");
+    }
+
+    /// With a rule, a slider edit makes the edited color the theme's new base, as a hex edit does,
+    /// and selects it.
+    #[test]
+    fn with_a_rule_a_slider_edit_rebuilds_the_theme_from_the_edited_color() {
+        let mut app = app();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let d = Draft { rule: Some(Harmony::Triad), ..five_colors(&ctx) };
+        set_draft(&ctx, d.clone());
+        set_pstate(&ctx, "ct-mode", Some(Mode::Hsb));
+        let start = components(Mode::Hsb, &d.colors[2]);
+        set_slider(&mut app, &ctx, "H", 200.0);
+        let base = from_components(Mode::Hsb, &[200.0, start[1], start[2]]);
+        let now = draft(&app, &ctx);
+        assert_eq!((now.colors, now.sel), (Harmony::Triad.theme(base), 0));
+    }
+
+    /// A CMYK edit keeps the color CMYK and a Lab edit keeps it Lab, with the numbers set, through
+    /// Save and Add to Swatches in a CMYK document; a number that is not one, or not finite, changes
+    /// nothing, and one past the range sets its end.
+    #[test]
+    fn cmyk_and_lab_slider_edits_keep_their_models() {
+        let mut app = app();
+        app.run("file.documentColorMode", json!({"mode": "cmyk"})).unwrap();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let d = five_colors(&ctx);
+        set_pstate(&ctx, "ct-mode", Some(Mode::Cmyk));
+        let start = components(Mode::Cmyk, &d.colors[2]);
+        set_slider(&mut app, &ctx, "C", 20.0);
+        set_slider(&mut app, &ctx, "K", 40.0);
+        let cmyk = from_components(Mode::Cmyk, &[20.0, start[1], start[2], 40.0]);
+        assert_eq!(draft(&app, &ctx).colors[2], cmyk);
+        assert!(matches!(cmyk, Color::Cmyk { k, .. } if (k - 0.4).abs() < 1e-6));
+        // Lab on another color.
+        set_draft(&ctx, Draft { sel: 3, ..draft(&app, &ctx) });
+        set_pstate(&ctx, "ct-mode", Some(Mode::Lab));
+        let start = components(Mode::Lab, &d.colors[3]);
+        set_slider(&mut app, &ctx, "b", -60.0);
+        let lab = Color::lab(start[0], start[1], -60.0);
+        assert_eq!(draft(&app, &ctx).colors[3], lab);
+        // Not numbers, not finite, past the range.
+        let before = draft(&app, &ctx);
+        type_into(&mut app, &ctx, "L", "abc");
+        set_slider(&mut app, &ctx, "a", f64::NAN);
+        assert_eq!(draft(&app, &ctx), before);
+        set_slider(&mut app, &ctx, "a", 500.0);
+        assert_eq!(draft(&app, &ctx).colors[3], Color::lab(start[0], 127.0, -60.0));
+        let colors = draft(&app, &ctx).colors;
+        save(&mut app, &ctx);
+        assert_eq!(themes(&app)[0].colors, colors, "saved in their models");
         add_draft_to_swatches(&mut app, &ctx);
         let g = app.session.doc().unwrap().doc.swatch_groups.last().expect("the group");
         assert_eq!(g.swatches.iter().filter_map(|w| w.paint.color()).collect::<Vec<_>>(), colors);
