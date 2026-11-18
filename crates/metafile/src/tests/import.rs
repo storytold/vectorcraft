@@ -527,9 +527,98 @@ fn a_file_with_more_objects_than_are_read_says_so() {
     let many = hand_emf(5000, 3000, &vec![rect.clone(); 200_010]);
     let back = import(&many).unwrap();
     assert_eq!(paths(&back.document).len(), 200_000);
-    assert!(back.warnings.iter().any(|w| w.contains("reached the most objects")), "{:?}", back.warnings);
+    assert!(back.warnings.iter().any(|w| w.contains("reached a limit")), "{:?}", back.warnings);
+    // Exactly as many as the reader keeps: nothing was left unread.
+    let full = import(&hand_emf(5000, 3000, &vec![rect.clone(); 200_000])).unwrap();
+    assert_eq!(paths(&full.document).len(), 200_000);
+    assert!(full.warnings.is_empty(), "{:?}", full.warnings);
     let few = import(&hand_emf(5000, 3000, &vec![rect; 3])).unwrap();
     assert!(few.warnings.is_empty(), "{:?}", few.warnings);
+}
+
+#[test]
+fn a_file_cut_short_by_another_limit_says_so() {
+    // SAVEDC past the 1,024 levels the reader keeps stops the parse: the rectangle after them is
+    // not read.
+    let mut records = vec![(43, le(&[0, 0, 100, 100]))];
+    records.extend(vec![(33, vec![]); 1100]);
+    records.push((43, le(&[200, 200, 300, 300])));
+    let back = import(&hand_emf(5000, 3000, &records)).unwrap();
+    assert_eq!(paths(&back.document).len(), 1);
+    assert_eq!(
+        back.warnings,
+        vec!["the file or a picture inside it reached a limit on what one file may hold: what came after the limit was not read".to_string()]
+    );
+}
+
+#[test]
+fn images_the_reader_does_not_read_are_counted() {
+    let records = vec![(81, png_stretch_dibits(&png_claiming(1 << 13, 1 << 13))); 2];
+    let back = import(&hand_emf(5000, 3000, &records)).unwrap();
+    assert_eq!(back.warnings, vec!["2 images or pattern brushes that couldn't be read were left out".to_string()]);
+    let back = import(&hand_emf(5000, 3000, &records[..1])).unwrap();
+    assert_eq!(back.warnings, vec!["1 image or pattern brush that couldn't be read was left out".to_string()]);
+}
+
+#[test]
+fn a_wmf_reports_unread_pattern_brushes_and_raster_operations() {
+    let records = vec![
+        // DIBCREATEPATTERNBRUSH (style 5, usage 0) whose bitmap header can't be read.
+        (0x0142, [le16(&[5, 0]), vec![0xFF; 8]].concat()),
+        // A bitmap-less DIBBITBLT with DSTINVERT (0x00550009): rop, ySrc, xSrc, reserved, height,
+        // width, yDest, xDest.
+        (0x0940, le16(&[0x0009, 0x0055, 0, 0, 0, 100, 100, 0, 0])),
+    ];
+    let back = import(&hand_wmf(1440, 1440, &records)).unwrap();
+    assert_eq!(
+        back.warnings,
+        vec![
+            "1 image or pattern brush that couldn't be read was left out".to_string(),
+            "1 raster operation other than a plain copy (masks, inversions) was drawn as a plain copy or left out".to_string(),
+        ]
+    );
+}
+
+#[test]
+fn clips_that_are_not_applied_are_counted() {
+    // BEGINPATH, a rectangle, ENDPATH, SELECTCLIPPATH with RGN_XOR (3), then a rectangle drawn after it.
+    let records = vec![(59, vec![]), (43, le(&[100, 100, 2000, 2000])), (60, vec![]), (67, le(&[3])), (43, le(&[500, 500, 600, 600]))];
+    let back = import(&hand_emf(5000, 3000, &records)).unwrap();
+    assert_eq!(paths(&back.document).len(), 1);
+    assert_eq!(
+        back.warnings,
+        vec!["1 clip couldn't be applied as the file sets it: what is drawn after it may show more or less than the file does".to_string()]
+    );
+    // RGN_AND (1) is applied.
+    let mut records = records;
+    records[3] = (67, le(&[1]));
+    let back = import(&hand_emf(5000, 3000, &records)).unwrap();
+    assert!(back.warnings.is_empty(), "{:?}", back.warnings);
+}
+
+/// An EMR_BITBLT of the 100 × 100 box at the origin with `rop` and no source bitmap.
+fn bitblt(rop: u32) -> Vec<u8> {
+    // Bounds; destination; the operation; the source origin, transform (identity) and background
+    // color; usage, then no BITMAPINFO and no bits.
+    let mut body = vec![0; 16];
+    body.extend(le(&[0, 0, 100, 100, rop as i32, 0, 0]));
+    body.extend(le_f32(&[1.0, 0.0, 0.0, 1.0, 0.0, 0.0]));
+    body.extend(le(&[0, 0, 0, 0, 0, 0]));
+    body
+}
+
+#[test]
+fn raster_operations_that_are_not_played_are_counted() {
+    // DSTINVERT and PATINVERT take no source bitmap and are left out.
+    let records = vec![(76, bitblt(0x0055_0009)), (76, bitblt(0x005A_0049))];
+    let back = import(&hand_emf(5000, 3000, &records)).unwrap();
+    assert_eq!(
+        back.warnings,
+        vec!["2 raster operations other than a plain copy (masks, inversions) were drawn as a plain copy or left out".to_string()]
+    );
+    // WHITENESS is played.
+    let back = import(&hand_emf(5000, 3000, &[(76, bitblt(0x00FF_0062))])).unwrap();
+    assert!(back.warnings.is_empty(), "{:?}", back.warnings);
 }
 
 /// An EMR_STRETCHDIBITS copying `png` (a BI_PNG bitmap) to a 10 × 10 box.
@@ -675,6 +764,124 @@ fn text_keeps_a_stretch_across() {
     assert!((t.runs[0].style.size - 10.0 * mm).abs() < 0.01, "{}", t.runs[0].style.size);
     let [a, b, c, d, ..] = t.xf.as_coeffs();
     assert!((a - 2.0).abs() < 1e-6 && b.abs() < 1e-6 && c.abs() < 1e-6 && (d - 1.0).abs() < 1e-6, "{:?}", t.xf);
+}
+
+/// Source Sans 3 Regular's own values, read from its table directory: unitsPerEm (`head`),
+/// xAvgCharWidth and usWinAscent + usWinDescent (`OS/2`), in font units.
+fn source_sans_metrics() -> (f64, f64, f64) {
+    let font: &[u8] = include_bytes!("../../../../assets/fonts/SourceSans3-Regular.ttf");
+    let u16_at = |at: usize| u16::from_be_bytes([font[at], font[at + 1]]);
+    let table = |tag: &[u8; 4]| {
+        let at = (0..usize::from(u16_at(4))).map(|i| 12 + 16 * i).find(|at| &font[*at..*at + 4] == tag).unwrap();
+        u32::from_be_bytes([font[at + 8], font[at + 9], font[at + 10], font[at + 11]]) as usize
+    };
+    let (head, os2) = (table(b"head"), table(b"OS/2"));
+    let avg = f64::from(i16::from_be_bytes([font[os2 + 2], font[os2 + 3]]));
+    (f64::from(u16_at(head + 18)), avg, f64::from(u16_at(os2 + 74)) + f64::from(u16_at(os2 + 76)))
+}
+
+/// The style of "Hi" drawn in an EMF in Source Sans 3 with a LOGFONT of `height` and `width`
+/// (hundredths of a millimeter).
+fn emf_font_style(height: i32, width: i32) -> vectorcraft_doc::CharStyle {
+    emf_font_style_in("Source Sans 3", height, width)
+}
+
+/// [`emf_font_style`] with the LOGFONT naming `family`.
+fn emf_font_style_in(family: &str, height: i32, width: i32) -> vectorcraft_doc::CharStyle {
+    let mut text = vec![0; 16];
+    text.extend(le(&[1, 0, 0]));
+    text.extend(le(&[1000, 1500, 2, 76, 0, 0, 0, 0, 0, 0]));
+    text.extend("Hi".encode_utf16().flat_map(u16::to_le_bytes));
+    let mut font = le(&[2, height, width, 0, 0, 400]);
+    font.extend([0u8; 8]);
+    font.extend(family.encode_utf16().chain(std::iter::repeat_n(0, 32 - family.encode_utf16().count())).flat_map(u16::to_le_bytes));
+    let records = vec![(82, font), (37, le(&[2])), (84, text)];
+    let back = import(&hand_emf(5000, 3000, &records)).unwrap();
+    let t = all(&back.document)
+        .into_iter()
+        .find_map(|n| match n.kind {
+            NodeKind::Text(t) => Some(t),
+            _ => None,
+        })
+        .unwrap();
+    t.runs[0].style.clone()
+}
+
+#[test]
+fn a_font_width_becomes_horizontal_scale() {
+    let (upem, avg, _) = source_sans_metrics();
+    let mm = 72.0 / 25.4;
+    // A 10 mm em and an average character width of 6 mm: the face's average width, avg/upem of
+    // the em, is scaled to 6 mm.
+    let want = 6.0 / (avg / upem * 10.0) * 100.0;
+    for width in [600, -600] {
+        let st = emf_font_style(-1000, width);
+        assert_eq!(st.font_family, "Source Sans 3");
+        assert!((st.size - 10.0 * mm).abs() < 1e-9, "{}", st.size);
+        assert!((st.h_scale - want).abs() < 1e-9, "width {width}: {} for {want}", st.h_scale);
+    }
+    assert_eq!(emf_font_style(-1000, 0).h_scale, 100.0);
+    // A 4 m em is set at the largest type size, 5000 pt, and a 2.4 m average width keeps its
+    // width at that size.
+    let st = emf_font_style(-400_000, 240_000);
+    assert_eq!(st.size, 5000.0);
+    let want = 2400.0 * mm / (avg / upem * 5000.0) * 100.0;
+    assert!((st.h_scale - want).abs() < 1e-9, "{} for {want}", st.h_scale);
+    // With a height of 0 the type is set at the default size and the width is ignored.
+    assert_eq!(emf_font_style(0, 600).h_scale, 100.0);
+}
+
+#[test]
+fn a_positive_font_height_is_the_character_cell() {
+    let (upem, avg, cell) = source_sans_metrics();
+    let mm = 72.0 / 25.4;
+    // A 10 mm cell: the em is the cell times unitsPerEm divided by the face's usWinAscent plus
+    // usWinDescent, and a 6 mm average width is measured against that em.
+    let em = 10.0 * upem / cell;
+    let st = emf_font_style(1000, 600);
+    assert!((st.size - em * mm).abs() < 1e-9, "{} for {}", st.size, em * mm);
+    let want = 6.0 / (avg / upem * em) * 100.0;
+    assert!((st.h_scale - want).abs() < 1e-9, "{} for {want}", st.h_scale);
+}
+
+#[test]
+fn a_font_the_system_lacks_is_measured_in_the_face_that_draws_it() {
+    // A family no system has keeps its name, and layout draws it in Source Sans 3: the cell and
+    // the average width are measured in that face.
+    let (upem, avg, cell) = source_sans_metrics();
+    let mm = 72.0 / 25.4;
+    let st = emf_font_style_in("Missing Family 7183", 1000, 600);
+    assert_eq!(st.font_family, "Missing Family 7183");
+    let em = 10.0 * upem / cell;
+    assert!((st.size - em * mm).abs() < 1e-9, "{} for {}", st.size, em * mm);
+    let want = 6.0 / (avg / upem * em) * 100.0;
+    assert!((st.h_scale - want).abs() < 1e-9, "{} for {want}", st.h_scale);
+}
+
+#[test]
+fn wmf_font_width_becomes_horizontal_scale() {
+    let (upem, avg, _) = source_sans_metrics();
+    // CREATEFONTINDIRECT: a 0.1 inch em (144 units) with an average width of 72 units, then
+    // SELECTOBJECT and TEXTOUT "Hi" at (720, 360).
+    let mut font = le16(&[-144, 72, 0, 0, 400]);
+    font.extend([0u8; 8]);
+    font.extend(b"Source Sans 3".iter().copied().chain(std::iter::repeat_n(0, 19)));
+    let mut text = le16(&[2]);
+    text.extend(b"Hi");
+    text.extend(le16(&[360, 720]));
+    let records = vec![(0x02FB, font), (0x012D, le16(&[0])), (0x0521, text)];
+    let back = import(&hand_wmf(1440, 1440, &records)).unwrap();
+    let t = all(&back.document)
+        .into_iter()
+        .find_map(|n| match n.kind {
+            NodeKind::Text(t) => Some(t),
+            _ => None,
+        })
+        .unwrap();
+    let st = &t.runs[0].style;
+    assert!((st.size - 7.2).abs() < 1e-9, "{}", st.size);
+    let want = 72.0 / (avg / upem * 144.0) * 100.0;
+    assert!((st.h_scale - want).abs() < 1e-9, "{} for {want}", st.h_scale);
 }
 
 #[test]

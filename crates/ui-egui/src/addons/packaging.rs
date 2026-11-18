@@ -4,7 +4,8 @@
 //! paths that role (`addon.packaging.setRole`). Its menu's Role Swatches… picks the swatch that
 //! carries a role (`addon.packaging.setRoleSwatch`). Its Check button, like the Check Fold Lines menu
 //! item, checks the fold lines (`addon.packaging.check`) and lists the issues found under it, each
-//! with a Select button; each document's list is kept until that document changes.
+//! with a Select button; each document's list is kept until that document changes. Its Fold Preview
+//! button, like the Fold Preview menu item, shows the blank folded in 3D ([`preview`], `ui.foldPreview`).
 
 use std::collections::HashMap;
 use std::sync::{Arc, Weak};
@@ -26,6 +27,8 @@ pub const SET_ROLE: &str = "addon.packaging.setRole";
 pub const SET_ROLE_SWATCH: &str = "addon.packaging.setRoleSwatch";
 /// The command that checks the fold lines.
 pub const CHECK: &str = "addon.packaging.check";
+/// The command that shows the Fold Preview window.
+pub const PREVIEW: &str = "ui.foldPreview";
 /// The roles by name, as `addon.packaging.setRole` and Role Swatches… take them.
 pub const ROLES: &[(&str, &str)] =
     &[("Cut Line", "cut"), ("Crease Line", "crease"), ("Partial Cut Line", "partialCut"), ("Perforation Line", "perforation")];
@@ -47,6 +50,8 @@ pub fn menu() -> Vec<Item> {
         make("Make Perforation Line", "perforation"),
         Item::Sep,
         Item::Cmd("Check Fold Lines", CHECK, Value::Null),
+        Item::Sep,
+        Item::Cmd("Fold Preview", PREVIEW, json!({})),
     ]
 }
 
@@ -159,6 +164,11 @@ fn show_check(app: &mut VectorcraftApp, ui: &mut Ui) {
     let width = ui.available_width();
     if widgets::flat_button(ui, tl!("Check"), width).clicked() {
         run_check(app, ui.ctx(), json!({}));
+    }
+    if widgets::flat_button(ui, tl!("Fold Preview"), width).clicked()
+        && let Err(e) = app.run(PREVIEW, json!({}))
+    {
+        app.status(e);
     }
     let Some(checked) = last_check(app, ui.ctx()) else { return };
     ui.add_space(4.0);
@@ -284,6 +294,8 @@ pub fn panel_menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         crate::menus::invoke(app, &id, p);
     }
 }
+
+pub mod preview;
 
 #[cfg(test)]
 mod tests;
