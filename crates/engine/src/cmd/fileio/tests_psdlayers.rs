@@ -807,13 +807,26 @@ fn knockouts_that_change_nothing_keep_the_layers_apart() {
         group_end(),
         lower(255),
         group_end(),
-        words,
+        words.clone(),
         L { hidden: true, ..layer("Inner", [0, 0, 2, 2], [0, 0, 255, 255]) },
         L { hidden: true, ..knockout(group("Cut", b"norm"), 1, 255) },
         group("Group", b"norm"),
     ];
     let (s, r) = open(&file(4, 4, &layers, 8, false, false), json!({"hiddenLayers": true}));
     assert_eq!((inner(&s), &r["warnings"]), (vec!["Lower".to_string()], &json!([HIDDEN_1])), "{r}");
+    // One whose layer mask hides all of it needs no merge, but a knockout above it merges the layers
+    // and leaves it out: it is counted once, without its type layer.
+    let layers = [
+        group_end(),
+        lower(255),
+        group_end(),
+        words,
+        L { hidden: true, mask: Some(([0, 0, 2, 2], 0, 0, vec![0; 4])), ..knockout(group("Masked", b"norm"), 1, 255) },
+        cut(0, 255),
+        group("Group", b"norm"),
+    ];
+    let (s, r) = open(&file(4, 4, &layers, 8, false, false), json!({"hiddenLayers": true}));
+    assert_eq!((inner(&s), &r["warnings"]), (vec!["Lower + Cut".to_string()], &json!([HIDDEN_1])), "{r}");
 }
 
 /// With hidden layers asked for, the hidden layers of a group drawn for a knockout or a clip that
@@ -870,14 +883,18 @@ fn a_knockout_merge_past_the_memory_allowed_leaves_the_layers_apart() {
     let (doc, warnings) = psdlayers::import(&f, false, 1 << 20, cms).unwrap().unwrap();
     assert_eq!(names(&doc), ["Lower + Cut"]);
     assert!(warnings.is_empty(), "{warnings:?}");
-    let (doc, warnings) = psdlayers::import(&stack([2, 2, 4, 4]), false, 1 << 20, cms).unwrap().unwrap();
-    assert_eq!(names(&doc), ["Lower", "Cut"]);
-    assert!(warnings.is_empty(), "{warnings:?}");
+    for max_alloc in [128, 1 << 20] {
+        let (doc, warnings) = psdlayers::import(&stack([2, 2, 4, 4]), false, max_alloc, cms).unwrap().unwrap();
+        assert_eq!(names(&doc), ["Lower", "Cut"], "{max_alloc}");
+        assert!(warnings.is_empty(), "{max_alloc}: {warnings:?}");
+    }
 }
 
 /// A knockout merge that can't be made leaves the import the whole allowance for reading the layers
 /// apart: here the merge decodes 22 layers over one another before the layer beside them makes its
-/// canvas too large, which used up nearly all of eight times 64 KiB.
+/// canvas too large, which used up nearly all of eight times 64 KiB. The merge has that allowance
+/// also after five layers below the group were read, and a knockout at 0 fill over 22 transparent
+/// layers, which cuts no paint after they are drawn, leaves the same room.
 #[test]
 fn a_knockout_merge_not_made_leaves_room_to_read_the_layers() {
     let cms = |c: [f32; 4]| [c[0], c[1], c[2]];
@@ -888,6 +905,33 @@ fn a_knockout_merge_not_made_leaves_room_to_read_the_layers() {
     let (doc, warnings) = psdlayers::import(&file(96, 32, &layers, 8, false, false), false, 64 << 10, cms).unwrap().unwrap();
     assert_eq!(doc.layers[0].children().unwrap().len(), 24, "{warnings:?}");
     assert_eq!(warnings, ["the knockout of 1 layer wasn't applied"]);
+    let mut after_five = vec![layer("Outside", [0, 0, 32, 32], [0, 0, 0, 255]); 5];
+    after_five.extend(layers);
+    let (doc, warnings) = psdlayers::import(&file(96, 32, &after_five, 8, false, false), false, 64 << 10, cms).unwrap().unwrap();
+    assert_eq!((doc.layers.len(), doc.layers[5].children().unwrap().len()), (6, 24), "{warnings:?}");
+    assert_eq!(warnings, ["the knockout of 1 layer wasn't applied"]);
+    let mut layers = vec![group_end()];
+    layers.extend((0..22).map(|_| layer("Lower", [0, 0, 32, 32], [255, 0, 0, 0])));
+    layers.extend([knockout(layer("Cut", [0, 0, 32, 32], [0, 0, 255, 255]), 1, 0), group("Group", b"norm")]);
+    let (doc, warnings) = psdlayers::import(&file(32, 32, &layers, 8, false, false), false, 64 << 10, cms).unwrap().unwrap();
+    assert_eq!(doc.layers[0].children().unwrap().len(), 23, "{warnings:?}");
+    assert!(warnings.is_empty(), "{warnings:?}");
+}
+
+/// A hidden knockout in a mode VectorCraft lacks is left out without being drawn, hidden layers
+/// asked for: here its pixels are larger than the memory allowed for one image.
+#[test]
+fn a_hidden_knockout_in_a_mode_vectorcraft_lacks_is_left_out_unread() {
+    let cms = |c: [f32; 4]| [c[0], c[1], c[2]];
+    let layers = [
+        group_end(),
+        layer("Lower", [0, 0, 2, 2], [255, 0, 0, 255]),
+        L { hidden: true, blend: b"diss", ..knockout(layer("Cut", [0, 0, 8, 8], [0, 0, 255, 255]), 1, 255) },
+        group("Group", b"norm"),
+    ];
+    let (doc, warnings) = psdlayers::import(&file(8, 8, &layers, 8, false, false), true, 128, cms).unwrap().unwrap();
+    assert_eq!(doc.layers[0].children().unwrap().iter().map(|c| name(c)).collect::<Vec<_>>(), ["Lower"]);
+    assert_eq!(warnings, [HIDDEN_1]);
 }
 
 /// A Dissolve knockout at part opacity clears each pixel below it fully or not at all, at the share

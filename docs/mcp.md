@@ -9928,7 +9928,9 @@ The rest are VectorCraft's own rules:
 
 Each layer's pixels must fit the memory allowed for one image, and the pixels of all the layers and masks, with the
 canvases the merges make, must together fit eight times that; a file past either limit opens as its merged image,
-with a warning. The pixels and canvases of merges that aren't made count against a second limit of the same size. The
+with a warning. A merge being tried may use the whole of that limit beyond what was read before it. The pixels and
+canvases of merges that aren't made, including knockouts that turn out to cut nothing, then count against a second
+limit of the same size instead. The
 canvases one step of a merge holds at once must also fit the memory allowed for one image; when they don't, the
 layer that needed the merge comes in alone, with a warning: in the Normal mode, as a layer of its own instead of
 clipped, or without its knockout.

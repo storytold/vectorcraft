@@ -43,8 +43,9 @@
 //! groups nest at most [`MAX_DEPTH`] deep (layers deeper than a document may nest merge into the
 //! group around them, with a warning), each layer's pixels, like the canvases one step of a
 //! merge holds together, must fit the memory allowed, and all the pixels decoded and the canvases
-//! the merges make must fit [`TOTAL_DECODED`] times that. What the merges that can't be made, or
-//! that a hidden layer would need, decoded and made is counted apart, against the same limit.
+//! the merges make must fit [`TOTAL_DECODED`] times that. A merge being tried may take that much
+//! past what was read before it. What the merges that aren't made, or that a hidden layer would
+//! need, decoded and made is counted apart, against the same limit.
 
 use std::cell::Cell;
 use std::sync::Arc;
@@ -849,6 +850,9 @@ struct Builder<'a, F> {
     /// Those bytes that merges not made, and merges a hidden layer would need, took: given back to
     /// `spent` and counted here instead, against the same limit.
     wasted: Cell<u64>,
+    /// `spent` when the innermost merge being tried began: until it is made or given up, it may
+    /// spend the whole allowance past that (see [`Self::spend`]).
+    trial: Cell<u64>,
     /// The layers whose pixels were read so far (each time they were).
     painted: Cell<usize>,
     /// What each group gave when drawn alone without reading any layer's pixels (nothing, or a
@@ -872,14 +876,28 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
     }
 
     /// Count `bytes` of decoded pixels, or of a canvas a merge makes, against the whole import's
-    /// allowance, [`TOTAL_DECODED`] times the memory allowed for one image.
+    /// allowance, [`TOTAL_DECODED`] times the memory allowed for one image. While a merge is tried
+    /// (see [`Self::try_from_here`]), only what it spent counts against the allowance.
     fn spend(&self, bytes: u64) -> Result<(), String> {
         let total = self.spent.get().saturating_add(bytes);
         self.spent.set(total);
-        if total > self.max_alloc.saturating_mul(TOTAL_DECODED) {
+        if total.saturating_sub(self.trial.get()) > self.max_alloc.saturating_mul(TOTAL_DECODED) {
             return Err("the PSD file's layers take more memory to read than allowed".into());
         }
         Ok(())
+    }
+
+    /// Start trying a merge that may not be made: what it spends counts against the whole
+    /// allowance, however much was spent before it. Gives what [`Self::tried`] takes back.
+    fn try_from_here(&self) -> u64 {
+        self.trial.replace(self.spent.get())
+    }
+
+    /// End the merge tried since [`Self::try_from_here`] gave `outer`. A merge that is `made` keeps
+    /// what it spent, which must then fit the allowance with what was spent before it.
+    fn tried(&self, outer: u64, made: bool) -> Result<(), String> {
+        self.trial.set(outer);
+        if made { self.spend(0) } else { Ok(()) }
     }
 
     /// Move the bytes spent since `spent` was the count to [`Self::wasted`], which has an allowance
@@ -1030,7 +1048,10 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
                             u.base = true;
                         }
                         let spent = self.spent.get();
-                        if !unclipped && self.clip(&mut out, b, &body, i, &name, blend, opacity)? {
+                        let outer = self.try_from_here();
+                        let made = !unclipped && self.clip(&mut out, b, &body, i, &name, blend, opacity)?;
+                        self.tried(outer, made)?;
+                        if made {
                             continue;
                         }
                         self.refund(spent)?;
@@ -1275,10 +1296,19 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
         }
         let mut out: Vec<Unit<'i>> = vec![];
         for mut u in self.units(items, keep_hidden)? {
+            // A hidden layer in a mode VectorCraft lacks would need the merge for its mode: it is left
+            // out without being drawn.
+            if !u.visible && matches!(u.blend, Blend::Other(_)) {
+                self.skip(u.record);
+                continue;
+            }
             if self.knocks(&u, &out, level)? {
                 let saved = self.saved();
                 let noted = self.noted_so_far();
-                match self.knock(&out, &u)? {
+                let outer = self.try_from_here();
+                let knocked = self.knock(&out, &u)?;
+                self.tried(outer, u.visible && matches!(knocked, Knocked::Merged(_)))?;
+                match knocked {
                     // A hidden layer that would need the merge is left out, and nothing its drawing
                     // counted is counted.
                     Knocked::Merged(_) | Knocked::TooLarge if !u.visible => {
@@ -1297,8 +1327,14 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
                         continue;
                     }
                     // Nothing below it, or nothing of its own, to knock out: it comes in as a layer,
-                    // with the hidden layers its drawing left out (see `kept`).
-                    Knocked::Nothing => {}
+                    // with the hidden layers its drawing left out (see `kept`). What its drawing
+                    // read is read again when it comes in. A hidden one may still be left out by a
+                    // later merge: what its drawing counted is counted when it comes in instead.
+                    Knocked::Nothing if !u.visible => {
+                        self.restore(saved)?;
+                        self.unnote(noted);
+                    }
+                    Knocked::Nothing => self.refund(saved.spent)?,
                     Knocked::TooLarge => {
                         self.restore(saved)?;
                         self.unknock(u.record);
@@ -1309,13 +1345,9 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
                 out.push(u);
                 continue;
             };
-            // A hidden layer that would need the merge is left out.
-            if !u.visible {
-                self.skip(u.record);
-                continue;
-            }
             // A merge that can't be made counts nothing its groups would have counted.
             let saved = self.saved();
+            let outer = self.try_from_here();
             let made = match out.as_mut_slice() {
                 // Onto the previous merge alone: composited onto its canvas, in place.
                 [prev] if prev.is_merge() => {
@@ -1343,6 +1375,7 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
                     None => false,
                 },
             };
+            self.tried(outer, made)?;
             if made {
                 if !self.notes.merged.contains(&other.label()) {
                     self.notes.merged.push(other.label());
@@ -1465,6 +1498,10 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
             Drawn::Canvas(c) if c.px.iter().all(|p| p[3] <= 0.0) => return Ok(Knocked::Nothing),
             Drawn::Canvas(c) => c,
         };
+        // At 0 fill, beside every layer below it, it cuts nothing: no canvas for them is needed.
+        if fill <= 0.0 && self.beside(below, &k)? {
+            return Ok(Knocked::Nothing);
+        }
         // The layer's canvas is held while the units below are drawn.
         let bytes = 16 * k.px.len() as u64;
         self.held = self.held.saturating_add(bytes);
@@ -1497,6 +1534,41 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
             return Ok(Knocked::Nothing);
         }
         Ok(acc.map_or(Knocked::Nothing, Knocked::Merged))
+    }
+
+    /// Do the pixels `knock` paints lie outside the bounds of every visible unit `below`? Only the
+    /// bounds of layers and of merged canvases are known without drawing them: with a group below,
+    /// `false`.
+    fn beside(&self, below: &[Unit<'_>], knock: &Canvas) -> Result<bool, String> {
+        let width = knock.width.max(1);
+        let mut painted: Option<[i64; 4]> = None;
+        for (k, _) in knock.px.iter().enumerate().filter(|(_, p)| p[3] > 0.0) {
+            let (x, y) = (knock.left + (k % width) as i64, knock.top + (k / width) as i64);
+            painted = Some(painted.map_or([x, y, x + 1, y + 1], |[l, t, r, b]| [l.min(x), t.min(y), r.max(x + 1), b.max(y + 1)]));
+        }
+        let Some([left, top, right, bottom]) = painted else { return Ok(true) };
+        for u in below.iter().filter(|u| u.visible) {
+            let [l, t, r, b] = match &u.body {
+                Body::Merged(c) => [c.left, c.top, c.left + c.width as i64, c.top + c.height as i64],
+                Body::Layer(i) => {
+                    let rec = self.record(*i)?;
+                    match rec.content {
+                        Content::Adjustment => continue,
+                        Content::Solid(Some(_)) if rec.color_over_canvas() => [0, 0, i64::from(self.h.width), i64::from(self.h.height)],
+                        _ => {
+                            let (w, h) = rec.bounds.size();
+                            let (l, t) = (i64::from(rec.bounds.left), i64::from(rec.bounds.top));
+                            [l, t, l + w as i64, t + h as i64]
+                        }
+                    }
+                }
+                Body::Group(..) => return Ok(false),
+            };
+            if l < right && left < r && t < bottom && top < b {
+                return Ok(false);
+            }
+        }
+        Ok(true)
     }
 
     /// The bytes a merge step may still take: the memory allowed, less the copies of what is below
@@ -1948,6 +2020,7 @@ pub(super) fn import(
         kept: vec![false; records.len()],
         spent: Cell::new(0),
         wasted: Cell::new(0),
+        trial: Cell::new(0),
         painted: Cell::new(0),
         blank: vec![None; records.len()],
         laid_blank: vec![false; records.len()],
