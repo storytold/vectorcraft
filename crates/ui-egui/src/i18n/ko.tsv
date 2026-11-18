@@ -1083,6 +1083,7 @@ digits	Malayalam	말라얄람어
 	Add to Selection	선택 영역에 추가
 	Add to Swatches	견본에 추가
 	Additional Plug-ins Folder	추가 플러그인 폴더
+	Plug-in Instruction Budget	플러그인 명령어 예산
 	Additional Fonts Folder	추가 글꼴 폴더
 	Adjust Adjoining Width Points	인접한 너비 점 조정
 	Incoming	들어오는 쪽
@@ -1511,6 +1512,7 @@ antiAlias	Sharp	날카롭게
 	Delete Brush	브러시 삭제
 	Delete Color	색상 삭제
 	Restore Generated Table	생성된 표 복원
+	Unshift All Colors	모든 색상 이동 취소
 	Delete Character Style	문자 스타일 삭제
 	Delete Empty Artboards	빈 아트보드 삭제
 	Delete Freeform Point	자유 형태 포인트 삭제
@@ -2491,6 +2493,7 @@ antiAlias	Sharp	날카롭게
 	Scatter:	흩뿌림:
 	Rotation:	회전:
 	Rotation relative to:	회전 기준:
+	Hue Jitter:	색조 변화:
 	Brush Scale Options	브러시 크기 조절 옵션
 	Scale Proportionately	비율에 맞게 크기 조절
 	Stretch to Fit Stroke Length	선 길이에 맞게 늘이기
@@ -2966,6 +2969,9 @@ mark-style	Japanese	일본식
 	Real World:	실제 크기:
 	Real-time Drawing and Editing	실시간 그리기 및 편집
 	Use Monitor Profile for Canvas	캔버스에 모니터 프로필 사용
+	Refresh Monitor Profile	모니터 프로필 새로 고침
+@msg	turn on Use Monitor Profile for Canvas first	먼저 "캔버스에 모니터 프로필 사용"을 켜세요
+@msg	this build doesn't read display profiles	이 빌드는 디스플레이 프로필을 읽지 않습니다
 	The canvas is drawn in sRGB.	캔버스는 sRGB로 그려집니다.
 	Canvas display profile:	캔버스 디스플레이 프로필:
 	The system matches the window to the display's colors.	시스템이 창을 디스플레이 색상에 맞춥니다.
@@ -3259,6 +3265,8 @@ mark-style	Japanese	일본식
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	스마트 안내선이 스냅하려면 포인터나 드래그한 점이 화면에서 아트에 얼마나 가까이 와야 하는지입니다. 이 거리는 모든 확대/축소에서 같습니다.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	선 세그먼트의 끝이나 중심에서 그린 원을 가까운 곡선에 닿도록 스냅합니다.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	선 세그먼트의 끝을 가까운 직선 세그먼트와 직각으로 만나도록 스냅합니다.
+	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	캔버스에서 각 슬라이스의 번호를 왼쪽 위의 상자에 표시합니다. 끄더라도 슬라이스 윤곽선은 계속 표시됩니다.
+	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	사용자 슬라이스와 개체 슬라이스의 윤곽선 및 번호 상자의 색상입니다. 자동 슬라이스에는 이 색상의 더 흐린 색조가 사용됩니다.
 	Reset all preferences to their defaults?	모든 환경 설정을 기본값으로 재설정하시겠습니까?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	기본값은 환경 설정에서 확인을 클릭하면 적용됩니다. 그곳에서 취소를 누르면 현재 환경 설정이 유지됩니다.
 	Restored documents open unsaved: save them to keep them.	복원된 문서는 저장되지 않은 상태로 열립니다. 보존하려면 저장하세요.
@@ -3391,6 +3399,14 @@ mark-style	Japanese	일본식
 	Search commands, tools, panels and effects…	명령, 도구, 패널 및 효과 검색…
 	No commands match	일치하는 명령이 없습니다
 	{pos} of {total}: {name}	{total}개 중 {pos}번째: {name}
+	No menu item	메뉴 항목 없음
+	Toolbar	도구 모음
+	{toolbar}, in the {tool} group	{toolbar}, {tool} 그룹
+	In the menu bar: {path}	메뉴 막대: {path}
+	In the {group} group: press and hold to open it	{group} 그룹: 길게 눌러 여세요
+	{home}, not shown now	{home}, 지금 표시되지 않음
+	Tool	도구
+	Command	명령
 @plural	{n} result|{n} results	결과 {n}개
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	결과 {n}개 중 {shown}개. 계속 입력하여 범위를 좁히세요.
 	Recent Commands	최근 명령
@@ -4999,6 +5015,7 @@ variable-list-end	{0}, {1}	{0} 및 {1}
 @msg	paste unavailable	붙여넣을 수 없습니다
 @msg	Save for Web: the image is empty	웹용으로 저장: 이미지가 비어 있습니다
 @msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: 색상 표에 색상이 하나 이상 남아 있어야 합니다
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted: `{k}`이(가) 다른 키와 같은 색상을 가리킵니다
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}`은(는) "#ff8800" 같은 색상이 아닙니다
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: 색상은 최대 {MAX_TABLE}개입니다
 @msg	no artboard {i} (0-based; the document has {_1})	아트보드 {i}이(가) 없습니다(0부터 시작, 문서의 아트보드 수: {_1})
@@ -5246,6 +5263,12 @@ variable-list-end	{0}, {1}	{0} 및 {1}
 @msg	no preset editor	프리셋 편집기가 없습니다
 @msg	no perspective grid preset named `{name}`	`{name}`이라는 원근 격자 프리셋이 없습니다
 @msg	no active perspective plane	활성 원근 평면이 없습니다
+@msg	the perspective grid is hidden	원근 격자가 숨겨져 있습니다
+@msg	Automatic Plane Positioning is off: turn on anchorPoint or gridlineIntersection (perspective.widget.options)	자동 평면 배치가 꺼져 있습니다: anchorPoint 또는 gridlineIntersection을 켜세요 (perspective.widget.options)
+@msg	anchorPoint must be true or false	anchorPoint는 true 또는 false여야 합니다
+@msg	gridlineIntersection must be true or false	gridlineIntersection은 true 또는 false여야 합니다
+@msg	tolerance must be 0 or more	tolerance는 0 이상이어야 합니다
+@msg	give `at` or `clear`, not both	`at`과 `clear` 중 하나만 지정하세요
 @msg	plane must be left, right or ground	plane은 left, right 또는 ground여야 합니다
 @msg	missing `id` (see plugin.list)	`id`가 없습니다(plugin.list 참조)
 @msg	no plug-in {id} is installed	플러그인 {id}이(가) 설치되어 있지 않습니다
@@ -5563,6 +5586,14 @@ liquify-list-end	{0}, {1}	{0} 및 {1}
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	기본 스크립트 엔진은 실행마다 새로 만들어지고 유지되지 않으므로 삭제할 수 없습니다
 @msg	there is no script engine named {name}	이름이 {name}인 스크립트 엔진이 없습니다
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers`는 물어볼 사람이 없는 실행에만 쓰입니다. 앱에서는 사람이 각 대화 상자에 답합니다
+@msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel`은(는) 1에서 {_1} 사이의 정수여야 합니다
+@msg	`args{place}` is nested more than 64 levels deep	`args{place}`이(가) 64단계보다 깊게 중첩되어 있습니다
+@msg	`args` must be an object	`args`은(는) 개체여야 합니다
+@msg	`args` is larger than 1 MiB	`args`이(가) 1 MiB보다 큽니다
+@msg	`path` is empty	`path`이(가) 비어 있습니다
+@msg	`installed` takes a `path`, not a `source`	`installed`에는 `source`가 아니라 `path`를 지정하세요
+@msg	`path` must name a .js or .jsx file	`path`은(는) .js 또는 .jsx 파일을 가리켜야 합니다
+@msg	give exactly one of `path` and `source`	`path`, `source` 중 정확히 하나를 지정하세요
 @msg	Running a script	스크립트 실행 중
 @msg	Copied the script report	스크립트 보고서를 복사했습니다
 @msg	Script file access denied: {path}	스크립트 파일 접근이 거부되었습니다: {path}
@@ -5680,6 +5711,8 @@ liquify-list-end	{0}, {1}	{0} 및 {1}
 @msg	the {tool} tool has no options	{tool} 도구에는 옵션이 없습니다
 @msg	unknown tool `{tool}`	알 수 없는 도구 `{tool}`
 @msg	{tool} isn't in a toolbar group of several tools	{tool}은(는) 여러 도구가 있는 도구 모음 그룹에 속하지 않습니다
+@msg	Presentation Mode hides the toolbars: change the screen mode to show them	프레젠테이션 모드에서는 도구 모음이 숨겨집니다: 표시하려면 화면 모드를 변경하세요
+@msg	Tab has hidden the toolbars: press Tab to show them	Tab으로 도구 모음이 숨겨졌습니다: 표시하려면 Tab을 누르세요
 @msg	no such document	해당 문서가 없습니다
 @msg	{_1}: not saved, so not closed	{_1}: 저장되지 않아 닫지 않았습니다
 @msg	`{name}` is a built-in workspace; choose another name	`{name}`은(는) 기본 제공 작업 영역입니다: 다른 이름을 선택하세요
@@ -5731,6 +5764,7 @@ liquify-list-end	{0}, {1}	{0} 및 {1}
 @msg	a linked JavaScript file is outside the read roots	연결된 JavaScript 파일이 읽기 루트 밖에 있습니다
 @msg	a linked image file is outside the read roots	연결된 이미지 파일이 읽기 루트 밖에 있습니다
 @msg	a linked file's export folder is outside the read roots	연결된 파일의 내보내기 폴더가 읽기 루트 밖에 있습니다
+@msg	a linked file's editing data can't be read to check it against the read roots	연결된 파일의 편집 데이터를 읽을 수 없어 읽기 루트와 대조할 수 없습니다
 @msg	automation path rejected: outside the write root {root}: {path}	자동화 경로가 거부되었습니다: 쓰기 루트 {root} 밖입니다: {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	자동화 경로가 거부되었습니다: 쓰기 루트 {roots} 밖입니다: {path}
 @msg	automation path rejected: path is empty	자동화 경로가 거부되었습니다: 경로가 비어 있습니다
@@ -6008,6 +6042,7 @@ lighting	Light	광원
 	Cove	오목
 	Depth	깊이
 	Front	앞면
+	Side	옆면
 	Isometric Bottom	등각 밑면
 	Isometric Left	등각 왼쪽
 	Isometric Right	등각 오른쪽
@@ -6102,7 +6137,7 @@ lighting	Light	광원
 @msg	each of `{GRAPHICS}` must be an object	`{GRAPHICS}`의 각 항목은 개체여야 합니다
 @msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	`{GRAPHICS}` 항목에는 symbol, face, x, y, scale, rotation만 사용할 수 있으며 `{k}`은(는) 사용할 수 없습니다
 @msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	`{GRAPHICS}`의 각 항목에는 심볼 이름인 `symbol`이 필요합니다
-@msg	`{GRAPHICS}` face must be front or back	`{GRAPHICS}`의 face는 front 또는 back이어야 합니다
+@msg	`{GRAPHICS}` face must be front, back or side	`{GRAPHICS}`의 face는 front, back 또는 side여야 합니다
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}`의 {key}은(는) {lo}에서 {hi} 사이의 숫자여야 합니다
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}`은(는) 배열이어야 합니다
 @msg	Graphics map onto the Plane, Extrude and Revolve object types	그래픽은 평면, 돌출, 회전체 개체 유형에 매핑됩니다
@@ -7373,6 +7408,7 @@ breakText	Glyphs	글리프
 @msg	One path lies inside the other, so they have no common tangents	한 패스가 다른 패스 안에 있어 공통 접선이 없습니다
 @msg	The paths overlap, so they have no internal tangents	패스가 겹쳐 있어 내부 접선이 없습니다
 @msg	One path lies inside the other, so they have no internal tangents	한 패스가 다른 패스 안에 있어 내부 접선이 없습니다
+@msg	The point lies inside the path, so it has no tangents	점이 패스 안에 있어 접선이 없습니다
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	대시를 패스로 확장
 @msg	select paths with dashed strokes to expand	확장할 점선 획의 패스를 선택하십시오
@@ -9683,6 +9719,11 @@ breakText	Glyphs	글리프
 @msg	A panel is not joined to the rest by a crease.	패널이 어떤 오시선으로도 나머지와 연결되어 있지 않습니다.
 @msg	A fold line is on a non-printing layer.	접는 선이 인쇄되지 않는 레이어에 있습니다.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	패널: {panels}, 힌지: {hinges}, 오류: {errors}, 경고: {warnings}
+	Pressure Sensitive	압력 감지
+	Flex Ribbon	유연한 리본
+	Pulse Stroke	맥동 획
+	Round Flow	둥근 흐름
+	Chisel Flow	비스듬한 흐름
 	Fold Preview	접기 미리 보기
 	Fold	접기
 	Show Fold Lines	접는 선 표시

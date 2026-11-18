@@ -1697,6 +1697,46 @@ fn brush_options_set_variation_modes() {
     assert_eq!(s.execute("brush.get", &json!({"name": "Dots"})).unwrap()["modes"], modes);
 }
 
+/// The fill colors of the copies brushed path `id` draws in `doc`, as `#rrggbb`.
+fn piece_fills(doc: &Document, id: NodeId) -> Vec<String> {
+    let pieces = vectorcraft_brush::node_pieces(doc, doc.node(id).unwrap()).expect("brushed");
+    pieces.iter().map(|n| n.appearance.fill_paint().color().unwrap().to_hex()).collect()
+}
+
+/// Scatter Brush Options' `hue_jitter`: shown by `brush.get`, set by `brush.options`, saved with the
+/// document, and the turned colors drawn the same after Open and written by SVG export.
+#[test]
+fn scatter_hue_jitter_saves_and_exports() {
+    let mut s = session();
+    let r = rect(&mut s, 10.0, 200.0, 8.0, 8.0);
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    let name = s.execute("brush.new", &json!({"type": "scatter", "name": "Confetti", "ids": [r.0]})).unwrap()["name"].as_str().unwrap().to_string();
+    let id = line(&mut s);
+    select(&mut s, &[id]);
+    s.execute("brush.apply", &json!({ "name": name })).unwrap();
+    let plain = piece_fills(&s.doc().unwrap().doc, id);
+    assert!(plain.len() > 10 && plain.iter().all(|c| c == "#ff0000"), "{plain:?}");
+    assert_eq!(s.execute("brush.get", &json!({ "name": name })).unwrap()["hue_jitter"], json!(0.0), "brush.get shows the option at 0");
+    s.execute("brush.options", &json!({"name": name, "params": {"hue_jitter": 120}})).unwrap();
+    assert_eq!(s.execute("brush.get", &json!({ "name": name })).unwrap()["hue_jitter"], json!(120.0));
+    let doc = s.doc().unwrap().doc.clone();
+    let turned = piece_fills(&doc, id);
+    assert_eq!(turned.len(), plain.len());
+    let distinct: std::collections::HashSet<&String> = turned.iter().collect();
+    assert!(distinct.len() > 5, "{turned:?}");
+    // Saved and opened again, the stroke draws the same colors.
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&doc, false)).unwrap();
+    assert_eq!(piece_fills(&back, id), turned);
+    // SVG export writes each copy's turned color.
+    let svg = vectorcraft_svg::export(&doc, &Default::default());
+    for c in &distinct {
+        assert!(svg.contains(&format!("fill=\"{c}\"")), "{c} missing from the SVG");
+    }
+    // Back to 0, the copies draw the art's own color.
+    s.execute("brush.options", &json!({"name": name, "params": {"hue_jitter": 0}})).unwrap();
+    assert_eq!(piece_fills(&s.doc().unwrap().doc, id), plain);
+}
+
 /// The bounds of the brush art `id`'s strokes draw.
 fn brushed_bounds(s: &Session, id: NodeId) -> Rect {
     let st = s.doc().unwrap();
@@ -2232,6 +2272,93 @@ fn redefine_with_keep_art_selects_only_selectable_art_and_refuses_a_bad_switch()
     for id in [a, locked, hidden] {
         assert!(matches!(node(&s, id).kind, NodeKind::Path { .. }), "{id:?} stays ordinary art");
     }
+}
+
+/// The number of symbol instances in the document.
+fn instance_count(s: &Session) -> usize {
+    let mut n = 0;
+    s.doc().unwrap().doc.walk(|c| n += usize::from(matches!(c.kind, NodeKind::SymbolInstance { .. })));
+    n
+}
+
+/// New Symbol with `keepArt: true` makes a symbol of the selection and makes it the current
+/// symbol, and the selected art stays ordinary art in its place, with its ids, still selected; the
+/// result has no instance id and nothing places the symbol. One undo step takes the symbol away
+/// and redo makes it again. Without `keepArt`, or with false, the art becomes an instance.
+#[test]
+fn new_symbol_with_keep_art_leaves_the_art_as_ordinary_art() {
+    let mut s = session();
+    let a = rect(&mut s, 20.0, 200.0, 60.0, 30.0);
+    let b = rect(&mut s, 100.0, 200.0, 40.0, 50.0);
+    let spot = |s: &Session, id: NodeId| s.doc().unwrap().doc.position(id).map(|(p, i, _)| (p, i));
+    let before = (node(&s, a), node(&s, b), spot(&s, a), spot(&s, b));
+    let steps = s.doc().unwrap().history.undo.len();
+    select(&mut s, &[a, b]);
+    let r = s.execute("symbol.new", &json!({"name": "Kept", "keepArt": true})).unwrap();
+    assert_eq!((&r["name"], &r["id"]), (&json!("Kept"), &Value::Null), "{r}");
+    assert_eq!((node(&s, a), node(&s, b), spot(&s, a), spot(&s, b)), before, "the art is unchanged and in its place");
+    assert_eq!(s.doc().unwrap().selection.objects, vec![a, b], "the art stays selected");
+    assert_eq!(instance_count(&s), 0, "no instance");
+    let list = s.execute("symbol.list", &json!({})).unwrap();
+    assert_eq!((&list["current"], &list["symbols"][0]["name"], &list["symbols"][0]["instances"]), (&json!("Kept"), &json!("Kept"), &json!(0)));
+    // The symbol's art is the pair: an instance placed from it is 120 × 50.
+    let placed = NodeId(s.execute("symbol.place", &json!({"name": "Kept"})).unwrap()["id"].as_u64().unwrap());
+    let w = bounds(&s, placed);
+    assert!((w.width() - 120.0).abs() < 1e-6 && (w.height() - 50.0).abs() < 1e-6, "{w:?}");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1, "New Symbol is one undo step");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(s.doc().unwrap().doc.symbols.is_empty(), "undo takes the symbol away");
+    assert_eq!((node(&s, a), node(&s, b)), (before.0.clone(), before.1.clone()), "and leaves the art");
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(s.execute("symbol.list", &json!({})).unwrap()["current"], json!("Kept"), "redo");
+    assert_eq!(instance_count(&s), 0, "redo places no instance");
+    // false, like no keepArt, makes the art an instance.
+    for p in [json!({"name": "Plain", "ids": [a.0], "keepArt": false}), json!({"name": "Plain", "ids": [b.0]})] {
+        let r = s.execute("symbol.new", &p).unwrap();
+        let id = NodeId(r["id"].as_u64().expect("an instance id"));
+        assert!(matches!(node(&s, id).kind, NodeKind::SymbolInstance { .. }), "{p}");
+        assert_eq!(s.doc().unwrap().selection.objects, vec![id], "{p}");
+    }
+    assert!(s.doc().unwrap().doc.node(a).is_none() && s.doc().unwrap().doc.node(b).is_none());
+}
+
+/// New Symbol with `keepArt: true` and explicit ids keeps the named art selected only where it
+/// can be selected: locked or hidden art is left out. A symbol instance in the art stays the
+/// instance it was. A `keepArt` that is not true or false is refused, with no symbol, no change and
+/// no undo step.
+#[test]
+fn new_symbol_with_keep_art_selects_only_selectable_art_and_refuses_a_bad_switch() {
+    let mut s = session();
+    let (inst, _, _) = make_symbol(&mut s);
+    let a = rect(&mut s, 20.0, 200.0, 60.0, 30.0);
+    let locked = rect(&mut s, 100.0, 200.0, 40.0, 50.0);
+    let hidden = rect(&mut s, 200.0, 200.0, 40.0, 50.0);
+    {
+        let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        doc.node_mut(locked).unwrap().locked = true;
+        doc.node_mut(hidden).unwrap().visible = false;
+    }
+    for bad in [json!("true"), json!(1), json!([true])] {
+        let before = s.doc().unwrap().doc.clone();
+        let steps = s.doc().unwrap().history.undo.len();
+        let e = s.execute("symbol.new", &json!({"name": "Bad", "ids": [a.0], "keepArt": bad})).unwrap_err();
+        assert!(e.to_string().contains("`keepArt` must be true or false"), "{bad}: {e}");
+        assert!(std::sync::Arc::ptr_eq(&before, &s.doc().unwrap().doc), "{bad}: the document is unchanged");
+        assert_eq!(s.doc().unwrap().history.undo.len(), steps, "{bad}: no undo step");
+    }
+    select(&mut s, &[]);
+    let symbols = s.doc().unwrap().doc.symbols.len();
+    let ids = [a.0, locked.0, hidden.0, inst.0];
+    s.execute("symbol.new", &json!({"name": "Kept", "ids": ids, "keepArt": true})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.symbols.len(), symbols + 1);
+    let selected = &s.doc().unwrap().selection.objects;
+    assert!(selected.len() == 2 && selected.contains(&a) && selected.contains(&inst), "only the selectable art is selected: {selected:?}");
+    for id in [a, locked, hidden] {
+        assert!(matches!(node(&s, id).kind, NodeKind::Path { .. }), "{id:?} stays ordinary art");
+    }
+    assert!(matches!(node(&s, inst).kind, NodeKind::SymbolInstance { .. }), "the instance stays an instance");
+    assert_eq!(instance_count(&s), 1, "no new instance");
 }
 
 /// Redefine Symbol refuses art that holds an instance of the symbol it redefines, directly, in a
