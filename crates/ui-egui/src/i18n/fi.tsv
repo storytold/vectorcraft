@@ -5678,6 +5678,8 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	All colors are within the CMYK gamut	Kaikki värit ovat CMYK-väriavaruuden sisällä
 @msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	{n} väri on CMYK-väriavaruuden ulkopuolella|{n} väriä on CMYK-väriavaruuden ulkopuolella
 @msg	Unembedded to {_1}	Upotus purettiin kohteeseen {_1}
+@msgplural	Unembedded {n} image to {folder}|Unembedded {n} images to {folder}	Upotus purettiin {n} kuvalta kohteeseen {folder}|Upotus purettiin {n} kuvalta kohteeseen {folder}
+@msg	every numbered name for {name} is taken in that folder	kaikki kohteen {name} numeroidut nimet ovat jo käytössä siinä kansiossa
 @msg	Reset {_1}	Palautettiin oletukseksi {_1}
 @msg	Sent to {_1}	Lähetettiin kohteeseen {_1}
 @msg	{_1} files	{_1}-tiedostot

@@ -5754,6 +5754,8 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	All colors are within the CMYK gamut	Všechny barvy jsou v gamutu CMYK
 @msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	{n} barva je mimo gamut CMYK|{n} barvy jsou mimo gamut CMYK|{n} barev je mimo gamut CMYK
 @msg	Unembedded to {_1}	Vložení zrušeno, uloženo do: {_1}
+@msgplural	Unembedded {n} image to {folder}|Unembedded {n} images to {folder}	Vložení zrušeno u {n} obrázku, uloženo do: {folder}|Vložení zrušeno u {n} obrázků, uloženo do: {folder}|Vložení zrušeno u {n} obrázků, uloženo do: {folder}
+@msg	every numbered name for {name} is taken in that folder	v této složce jsou obsazena všechna číslovaná jména pro {name}
 @msg	Reset {_1}	Obnoveno: {_1}
 @msg	Sent to {_1}	Odesláno do {_1}
 @msg	{_1} files	Soubory {_1}

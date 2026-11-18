@@ -6765,6 +6765,8 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	Trap: select two or more objects filled with solid colours	Trap: selecciona dos o més objectes emplenats amb colors sòlids
 @msg	truncated	truncat
 @msg	Unembedded to {_1}	S’ha desincrustat a {_1}
+@msgplural	Unembedded {n} image to {folder}|Unembedded {n} images to {folder}	S’ha desincrustat {n} imatge a {folder}|S’han desincrustat {n} imatges a {folder}
+@msg	every numbered name for {name} is taken in that folder	tots els noms numerats per a {name} estan ocupats en aquesta carpeta
 @msg	unknown command `{0}`	ordre desconeguda `{0}`
 @msg	step {step} of “{action}” runs the unknown command `{command}`	el pas {step} de “{action}” executa l’ordre desconeguda `{command}`
 @msg	unknown command `{0}`; did you mean `{1}`?	ordre desconeguda `{0}`; volies dir `{1}`?

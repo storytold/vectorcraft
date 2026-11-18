@@ -5462,6 +5462,8 @@ liquify-list-end	{0}, {1}	{0}, {1}
 @msg	All colors are within the CMYK gamut	Todos los colores están dentro de la gama CMYK
 @msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	{n} color está fuera de la gama CMYK|{n} colores están fuera de la gama CMYK
 @msg	Unembedded to {_1}	Se desincrustó en {_1}
+@msgplural	Unembedded {n} image to {folder}|Unembedded {n} images to {folder}	Se desincrustó {n} imagen en {folder}|Se desincrustaron {n} imágenes en {folder}
+@msg	every numbered name for {name} is taken in that folder	todos los nombres numerados para {name} ya existen en esa carpeta
 @msg	Reset {_1}	Se restableció {_1}
 @msg	Sent to {_1}	Se envió a {_1}
 @msg	{_1} files	{_1} archivos
