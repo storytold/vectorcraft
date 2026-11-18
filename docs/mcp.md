@@ -10688,6 +10688,25 @@ after Remove Threading or Release Selection, in a frame converted to point type,
 duplicated, copied in the Layers panel, or taken out of a symbol or a placed file). A symbol made of a thread keeps the
 numbers in the symbol's art.
 
+`text.setFormat {startNumber: 1..999999999}` gives a numbered paragraph a number of its own, and
+`text.setFormat {restartNumbering: true}` gives it 1. Both are VectorCraft's own. The number goes to the first numbered
+paragraph the call touches: the first that holds text, or the first when none does, taking the type objects in the
+order of `ids`. A threaded frame's first paragraph is passed over when it continues from the frame before. The
+paragraph given the number shows it, and the numbered paragraphs after it at its level count on from it,
+through the frames of threaded type. Deeper levels count from 1 after it, as after any list paragraph, and a paragraph in
+no list still starts the count again. `restartNumbering: false` takes the number away from every paragraph the call
+touches except such a continued first paragraph, and they count on from the paragraph before. `startNumber` is a whole number (`5` or `5.0`); 0, a negative
+number, a fraction, a number past 999999999 and any other type are errors, and giving both keys is an error. A call
+that touches no numbered paragraph, or that gives the number the paragraph already has, changes nothing and records no
+undo step. A call that also puts paragraphs in a numbered list gives the number after the list is set. Return in a
+paragraph with a number of its own does not give the number to the new paragraph; Return, or pasted text that starts
+new paragraphs, at the start of its text moves the number with the text. Making the paragraph bulleted or taking it out of its list removes the number, and Convert to
+Text writes the numbers the paragraphs showed. The list saves the number (`"start": 5`) only when it is set; a file's
+number below 1 or past 999999999 opens as the nearest of them. A paragraph style made from the paragraph does not keep
+the number, and a paragraph style's `list` with a `start` is an error (`unknown attribute`). A graph keeps one paragraph
+style for every label of a kind, so a graph label loses its number when the graph is drawn again. The canvas and the formats
+that write the marker (below) write the number the paragraph shows.
+
 The canvas, EPS, PDF and Type › Create Outlines draw the marker. PDF writes the marker as text of its own, where the
 canvas draws it, and a PDF viewer selects, copies and finds its characters. Each of its glyphs stands for the marker
 character that the glyph's font maps to that glyph in its character map. Glyphs that an OpenType feature such as
@@ -10708,11 +10727,14 @@ More Options at the end of the Paragraph panel's Bullets and Numbered List prese
 dialog (`bulletsAndNumbering`) on the paragraphs the Paragraph panel acts on, on that tab; without `tab` it opens on
 Numbers when the paragraphs are a numbered list and on Bullets otherwise. On both tabs the Level field, above the
 presets, holds the paragraphs' list level (1 to 9; 1 for paragraphs in no list). The Bullets tab has the five bullet
-presets and the Numbers tab has None and the seven number styles. The Position group has Alignment (Left or Right),
+presets and the Numbers tab has None and the seven number styles, then Start at, a box with a number from 1 to
+999999999 (1 until one is typed). The box is on when the paragraphs have the same number of their own, off when none
+has one, and blank when they differ; on, OK sends `startNumber` with the number, and off, it sends
+`restartNumbering: false`, unless a preset makes the paragraphs bulleted or takes them out of their list. The Position group has Alignment (Left or Right),
 Left Indent and First Line Indent. The dialog opens with the values the Paragraph panel shows; where the paragraphs
 differ, no preset is picked and the field is blank. Its fields are `tab`, `list` (`none`, `bullet` or `number`: the
 kind of the preset picked), `bullet`, `number`, `listAlign`, `listLevel`, `leftIndent` and `firstLineIndent` (points),
-and `ui.dialog.set` sets them, including those the dialog opened blank or without. The type shows the dialog's values while it is open. A preset picked for paragraphs that are in no list and have
+`startAt` (true or false) and `startNumber`, and `ui.dialog.set` sets them, including those the dialog opened blank or without. The type shows the dialog's values while it is open. A preset picked for paragraphs that are in no list and have
 no indents fills in 18 pt and -18 pt, and None takes them out again while they are unchanged. OK runs `text.setFormat`
 with the values that changed, as one undo step, and Cancel puts the type back as it was. When a preset puts the
 paragraphs in a list, OK also sends the indents the dialog shows, and the paragraphs take them, 0 included. OK does not
@@ -10773,6 +10795,8 @@ the paragraph's text now starts; when the text before `at` starts no list, nothi
 {"name":"run_command","arguments":{"command":"text.setFormat","params":{"number":"upperRoman"}}}
 {"name":"run_command","arguments":{"command":"text.setFormat","params":{"listAlign":"right"}}}
 {"name":"run_command","arguments":{"command":"text.setFormat","params":{"listLevel":2,"start":4,"end":4}}}
+{"name":"run_command","arguments":{"command":"text.setFormat","params":{"startNumber":5,"start":4,"end":4}}}
+{"name":"run_command","arguments":{"command":"text.setFormat","params":{"restartNumbering":true,"start":12,"end":12}}}
 {"name":"invoke_menu","arguments":{"command":"ui.bulletsAndNumbering","params":{"tab":"numbers"}}}
 {"name":"run_command","arguments":{"command":"text.convertListToText","params":{}}}
 ```
