@@ -49,7 +49,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add to Swatches",
             ["Window", "Swatch Libraries"],
             None,
-            "{library: id or name, names?: [swatch or colour group names in the library] (default: all of it; a group comes as a colour group, a single swatch ungrouped), apply?: \"fill\"|\"stroke\" (also apply the first one to the selection and the defaults, as paint.setFill / paint.setStroke), focus?: true (with apply: false keeps the active proxy)} copy library swatches into the document as one undo step. A gradient or pattern swatch in a library color group is refused (color groups hold solid colors only), and the document is left unchanged. A swatch the document already has (same name and paint) isn't added again; a name taken by another swatch gets a number (\"Clay 1 2\"). A pattern swatch brings its pattern, as pasting art painted with it does: the same pattern the document has is used, and a name another pattern or swatch has gets a number; a global or spot color its art links to whose name the document gives another color comes in numbered, and the pattern links to it → {library, added: [names in the document], existing: [names already there], applied?: name}",
+            "{library: id or name, names?: [swatch or colour group names in the library] (default: all of it; a group comes as a colour group, a single swatch ungrouped), apply?: \"fill\"|\"stroke\" (also apply the first one to the selection and the defaults, as paint.setFill / paint.setStroke), focus?: true (with apply: false keeps the active proxy)} copy library swatches into the document as one undo step. A swatch the document already has (same name and paint) isn't added again; a name taken by another swatch gets a number (\"Clay 1 2\"). A pattern swatch brings its pattern, as pasting art painted with it does: the same pattern the document has is used, and a name another pattern or swatch has gets a number; a global or spot color its art links to whose name the document gives another color comes in numbered, and the pattern links to it → {library, added: [names in the document], existing: [names already there], applied?: name}",
             has_doc,
             add
         ),
@@ -860,14 +860,7 @@ fn copy_to_user(s: &mut Session, p: &Value) -> Result<Value> {
 
 /// The library swatches `names` stand for, each once, with the colour group it goes into (`None`:
 /// ungrouped): a group's name brings the group, a swatch's name the swatch alone; no names, all.
-/// A picked group that holds a gradient or pattern swatch is refused.
 fn picked<'a>(lib: &'a SwatchLibrary, names: &[String], cmd: &str) -> Result<Vec<(Option<&'a str>, &'a Swatch)>> {
-    // Color groups hold solid colors only, as swatch.new, swatch.newGroup and swatch.move keep them.
-    // Each picked group is checked whole, so a member also named on its own is not skipped.
-    let solid = |g: &SwatchGroup| match g.swatches.iter().find(|w| w.paint.color().is_none()) {
-        Some(w) => Err(bad(cmd, format!("`{}`: colour groups hold solid colours only", w.name))),
-        None => Ok(()),
-    };
     let mut out: Vec<(Option<&str>, &Swatch)> = vec![];
     let mut seen: HashSet<&str> = HashSet::new();
     let mut push = |g: Option<&'a str>, w: &'a Swatch| {
@@ -876,16 +869,12 @@ fn picked<'a>(lib: &'a SwatchLibrary, names: &[String], cmd: &str) -> Result<Vec
         }
     };
     if names.is_empty() {
-        lib.groups.iter().try_for_each(solid)?;
         lib.swatches.iter().for_each(|w| push(None, w));
         lib.groups.iter().for_each(|g| g.swatches.iter().for_each(|w| push(Some(&g.name), w)));
     }
     for n in names {
         match (lib.group(n), lib.swatch(n)) {
-            (Some(g), _) => {
-                solid(g)?;
-                g.swatches.iter().for_each(|w| push(Some(&g.name), w));
-            }
+            (Some(g), _) => g.swatches.iter().for_each(|w| push(Some(&g.name), w)),
             (None, Some(w)) => push(None, w),
             (None, None) => return Err(bad(cmd, format!("no swatch or colour group `{n}` in `{}`", lib.name))),
         }
