@@ -525,10 +525,12 @@ impl Tool for PenTool {
             && let (Some((id, _, _, last, out)), Some(h)) = (self.active(cx), self.hover)
         {
             if cx.pen_rubber_band {
+                // The segment a click at `h` adds: it leaves the last anchor along its outgoing
+                // handle and arrives at the new corner anchor without a handle.
                 let mut bp = BezPath::new();
                 bp.move_to(last);
                 if out.distance(last) > 1e-9 {
-                    bp.quad_to(out, h);
+                    bp.curve_to(out, h, h);
                 } else {
                     bp.line_to(h);
                 }
@@ -629,7 +631,7 @@ impl PenTool {
         if !alt_converts(cx, ev.pos, ev.mods) {
             return None;
         }
-        let mut t = AnchorTool::new("anchorPoint");
+        let mut t = AnchorTool::lent_by_pen();
         let acts = t.pointer(cx, ev);
         if !t.busy() {
             return None;
@@ -708,7 +710,7 @@ fn auto_add_delete(cx: &ToolContext, p: Point, m: Mods, tol: f64) -> Option<Acti
 /// A click on a selected blend's spine: delete the point under `p` when no key object sits on it
 /// (a key's point does nothing), else add one where the spine passes within `tol`.
 fn spine_click(cx: &ToolContext, p: Point, tol: f64) -> Option<Vec<Action>> {
-    for (id, path) in crate::direct::spines(cx).into_iter().filter(|(id, _)| cx.selection.contains(*id)) {
+    for (id, path) in crate::direct::selected_spines(cx) {
         let Some(NodeKind::Blend { children, spec }) = cx.doc.node(id).map(|n| &n.kind) else { continue };
         let keys = vectorcraft_doc::live::blend_spine(children, spec).and_then(|(_, a)| a).unwrap_or_default();
         if let Some((_, ai, _)) = path.anchors().find(|(_, _, a)| a.p.distance(p) <= tol) {

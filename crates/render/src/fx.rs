@@ -64,9 +64,12 @@ use crate::{Frame, Renderer, blend_mode, fill_rule, paint};
 mod bounds;
 mod entries;
 mod pixels;
+mod placement;
 mod predicates;
 mod raster;
 mod renderer;
+
+pub use placement::pinned_appearance_for_geometry_edit;
 
 #[cfg(test)]
 pub(crate) use bounds::visual_bounds;
