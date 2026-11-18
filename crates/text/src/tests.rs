@@ -874,6 +874,19 @@ fn on_path_align_takes_a_variable_font_instances_em_box() {
     assert!(ascender.len() == 2 && (ascender[0] - 9.0).abs() < 1e-6 && (ascender[1] - 10.0).abs() < 1e-6, "{ascender:?}");
 }
 
+/// A variable font's instance takes its Windows character cell from the `usWinAscent` and
+/// `usWinDescent` its `MVAR` table varies: 200 units taller in Bold.
+#[test]
+fn win_cell_height_takes_a_variable_font_instances_mvar() {
+    use crate::test_fonts::{PATH_ALIGN_VARIABLE_FAMILY, path_align_font};
+    let db = FontDb::with_font_dirs(vec![]);
+    db.add_font(path_align_font(PATH_ALIGN_VARIABLE_FAMILY).unwrap());
+    let st = |font_style: &str| CharStyle { font_family: PATH_ALIGN_VARIABLE_FAMILY.into(), font_style: font_style.into(), ..style(10.0) };
+    let cell = |font_style: &str| db.style_face(&st(font_style)).and_then(|f| f.win_cell_height()).unwrap();
+    let (regular, bold) = (cell("Regular"), cell("Bold"));
+    assert!((bold - regular - 200.0).abs() < 1e-6, "Regular {regular}, Bold {bold}");
+}
+
 /// In vertical type, Align to Path moves the glyphs half an em, with their horizontal scale and not
 /// their vertical scale, for Ascender and Descender, and leaves them on the path for Center: their
 /// baselines and their drawn outlines both.
