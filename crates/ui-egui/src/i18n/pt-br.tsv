@@ -738,6 +738,7 @@ antiAlias	Sharp	Nítido
 	Delete Brush	Excluir Pincel
 	Delete Color	Excluir Cor
 	Restore Generated Table	Restaurar Tabela Gerada
+	Unshift All Colors	Desfazer Mudança de Todas as Cores
 	Delete Character Style	Excluir Estilo de Caractere
 	Delete Empty Artboards	Excluir Mesas de Trabalho Vazias
 	Delete Freeform Point	Excluir Ponto Livre
@@ -4352,6 +4353,7 @@ axis	Both	Ambos
 @msg	choose a location for the package	escolha um local para o pacote
 @msg	clipboard is empty	a área de transferência está vazia
 @msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: pelo menos uma cor deve permanecer na tabela de cores
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted: `{k}` indica uma cor que outra chave também indica
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` não é uma cor como "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: no máximo {MAX_TABLE} cores
 @msg	command `{0}` is not available right now: {1}	o comando `{0}` não está disponível agora: {1}
