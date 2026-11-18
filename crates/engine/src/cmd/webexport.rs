@@ -32,7 +32,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Save for Web",
             [],
             None,
-            "{path?, preset?: a webExport.presets name (its settings, then these keys), format?: gif (default)|jpg|png8|png24, reduction?: perceptual|selective (default)|adaptive|web|blackWhite|gray (gif/png8, as the next five), colors?: 128 (2–256), dither?: none|diffusion (default)|pattern|noise, ditherAmount?: 100, webSnap?: 0 (0–100 %: colours that close to a web-safe one become it), lossy?: 0 (0–100, gif), colorTable?: {locked?: [\"#rrggbb\"…] (kept when reducing), transparent?: [\"#rrggbb\"…] (become transparent), webShift?: [\"#rrggbb\"…] (become web-safe), sort?: none|hue|luminance|popularity} (colours as the preview's colors[].source; #rrggbbaa and #rgba are refused here and in matte), transparency?: true (gif/png8/png24), matte?: white (default)|black|none|\"#rrggbb\" (what edges blend into; jpg and opaque png24: the background), interlaced?: false (gif/png8/png24), quality?: 60 (jpg: 0–100), progressive?: false (jpg), optimized?: true (jpg), embedProfile?: false (jpg: sRGB profile), width?: px | height?: px | percent?: 100 (the image size, proportional; width wins over height, height over percent), antiAlias?: none|art (default)|type, clipToArtboard?: true (the artboard; false: the art and the slices), artboard?: 0 (0-based), convertToSrgb?: true (PNG files say they are sRGB), metadata?: none|copyright (default)|contact|all (File Info written as PNG text, a GIF or JPEG comment), slices?: all (default)|selected|none (one image per slice: images/<slice name>.<ext>), output?: images (default)|html (an HTML page placing the image or slices, <stem>.html)} → {path, files: [path…], bytes (total), width, height, warnings: [] or [a note that an image couldn't be decoded and is missing from the image]}; no path → {files: [{name, dataBase64}], bytes, width, height, warnings} (names such as page.html, images/page_01.gif). A single image without HTML is written at path itself",
+            "{path?, preset?: a webExport.presets name (its settings, then these keys), format?: gif (default)|jpg|png8|png24, reduction?: perceptual|selective (default)|adaptive|web|blackWhite|gray (gif/png8, as the next five), colors?: 128 (2–256), dither?: none|diffusion (default)|pattern|noise, ditherAmount?: 100, webSnap?: 0 (0–100 %: colours that close to a web-safe one become it), lossy?: 0 (0–100, gif), colorTable?: {locked?: [\"#rrggbb\"…] (kept when reducing), transparent?: [\"#rrggbb\"…] (become transparent), webShift?: [\"#rrggbb\"…] (become web-safe), sort?: none|hue|luminance|popularity, deleted?: [\"#rrggbb\"…] (taken out of the table: their pixels take the nearest color left, and at least one color stays), customPalette?: [\"#rrggbb\"…] (a fixed palette used instead of the reduction's, at most `colors` entries; a new reduction without colorTable clears it and deleted)} (colours as the preview's colors[].source; #rrggbbaa and #rgba are refused here and in matte), transparency?: true (gif/png8/png24), matte?: white (default)|black|none|\"#rrggbb\" (what edges blend into; jpg and opaque png24: the background), interlaced?: false (gif/png8/png24), quality?: 60 (jpg: 0–100), progressive?: false (jpg), optimized?: true (jpg), embedProfile?: false (jpg: sRGB profile), width?: px | height?: px | percent?: 100 (the image size, proportional; width wins over height, height over percent), antiAlias?: none|art (default)|type, clipToArtboard?: true (the artboard; false: the art and the slices), artboard?: 0 (0-based), convertToSrgb?: true (PNG files say they are sRGB), metadata?: none|copyright (default)|contact|all (File Info written as PNG text, a GIF or JPEG comment), slices?: all (default)|selected|none (one image per slice: images/<slice name>.<ext>), output?: images (default)|html (an HTML page placing the image or slices, <stem>.html)} → {path, files: [path…], bytes (total), width, height, warnings: [] or [a note that an image couldn't be decoded and is missing from the image]}; no path → {files: [{name, dataBase64}], bytes, width, height, warnings} (names such as page.html, images/page_01.gif). A single image without HTML is written at path itself",
             has_doc,
             export
         ),
@@ -325,27 +325,39 @@ pub struct ColorTable {
     pub web_shift: Vec<String>,
     #[serde(serialize_with = "ser_key", deserialize_with = "de_key")]
     pub sort: ColorSort,
+    /// Taken out of the table: their pixels take the nearest color left. A deleted color is no
+    /// longer locked, transparent or web-shifted.
+    pub deleted: Vec<String>,
+    /// A fixed palette (a Custom table) used instead of the reduction's own: the colors of the
+    /// table when the first color was deleted. Empty: the reduction makes the palette.
+    pub custom_palette: Vec<String>,
 }
 
 /// The most colours a colour table list holds.
 const MAX_TABLE: usize = 256;
 
+/// The error for a deletion that would leave the color table no color for the pixels.
+pub const KEEP_ONE: &str = "colorTable.deleted: at least one color has to stay in the color table";
+
 impl ColorTable {
+    /// Whether the table is a Custom one: a color was deleted or the palette is fixed.
+    pub fn is_custom(&self) -> bool {
+        !self.deleted.is_empty() || !self.custom_palette.is_empty()
+    }
+
     fn colors(list: &[String], what: &str) -> std::result::Result<Vec<[u8; 3]>, String> {
         if list.len() > MAX_TABLE {
             return Err(format!("colorTable.{what}: at most {MAX_TABLE} colours"));
         }
-        list.iter()
-            .map(|h| {
-                vectorcraft_color::Color::from_hex(h)
-                    .filter(|_| !super::hex_with_alpha(h))
-                    .map(|c| {
-                        let [r, g, b, _] = c.to_rgba8(1.0);
-                        [r, g, b]
-                    })
-                    .ok_or_else(|| format!("colorTable.{what}: `{h}` is not a colour such as \"#ff8800\""))
-            })
-            .collect()
+        list.iter().map(|h| Self::rgb(h).ok_or_else(|| format!("colorTable.{what}: `{h}` is not a colour such as \"#ff8800\""))).collect()
+    }
+
+    /// `h` as RGB; `None` when it is not a color such as `#ff8800`.
+    fn rgb(h: &str) -> Option<[u8; 3]> {
+        vectorcraft_color::Color::from_hex(h).filter(|_| !super::hex_with_alpha(h)).map(|c| {
+            let [r, g, b, _] = c.to_rgba8(1.0);
+            [r, g, b]
+        })
     }
 }
 
@@ -445,7 +457,13 @@ impl WebSettings {
                 }
             }
         }
-        let s: WebSettings = serde_json::from_value(v).map_err(|e| format!("Save for Web settings: {e}"))?;
+        let mut s: WebSettings = serde_json::from_value(v).map_err(|e| format!("Save for Web settings: {e}"))?;
+        // Another reduction makes a new palette: the deletions and the fixed palette go, unless
+        // the params give the color table too.
+        if p.get("reduction").is_some() && p.get("colorTable").is_none() && s.reduction != self.reduction {
+            s.color_table.deleted.clear();
+            s.color_table.custom_palette.clear();
+        }
         s.checked()
     }
 
@@ -463,10 +481,18 @@ impl WebSettings {
             return Err("width and height are at least 1 pixel".into());
         }
         self.matte_rgb()?;
+        let table = &mut self.color_table;
         for (list, what) in
-            [(&self.color_table.locked, "locked"), (&self.color_table.transparent, "transparent"), (&self.color_table.web_shift, "webShift")]
+            [(&table.locked, "locked"), (&table.transparent, "transparent"), (&table.web_shift, "webShift"), (&table.custom_palette, "customPalette")]
         {
             ColorTable::colors(list, what)?;
+        }
+        // A deleted color is no longer locked, transparent or web-shifted.
+        let deleted = ColorTable::colors(&table.deleted, "deleted")?;
+        if !deleted.is_empty() {
+            for list in [&mut table.locked, &mut table.transparent, &mut table.web_shift] {
+                list.retain(|h| ColorTable::rgb(h).is_none_or(|c| !deleted.contains(&c)));
+            }
         }
         Ok(self)
     }
@@ -741,7 +767,7 @@ fn palette_image(rgba: &[u8], w: u32, h: u32, s: &WebSettings, matte: Option<[u8
         transparency: s.transparency,
         matte,
     };
-    let mut ix = quantize::quantize_locked(rgba, w, h, &o, &locked);
+    let mut ix = reduced(rgba, w, h, s, &o, &locked)?;
     // Map to transparent works on the colours the reduction made.
     let before = ix.palette.clone();
     let clear = ix.transparent.map(usize::from);
@@ -787,6 +813,45 @@ fn palette_image(rgba: &[u8], w: u32, h: u32, s: &WebSettings, matte: Option<[u8
         })
         .collect();
     Ok(PaletteImage { ix, colors, mapped })
+}
+
+/// The pixels reduced to the palette `s` gives: the reduction's own (`locked` kept), or the
+/// color table's fixed one, without the deleted colors. The pixels of a deleted color take the
+/// nearest color left, with `o`'s dither. A deletion has to leave a color that is not mapped to
+/// transparent.
+fn reduced(rgba: &[u8], w: u32, h: u32, s: &WebSettings, o: &PaletteOptions, locked: &[[u8; 3]]) -> std::result::Result<Indexed, String> {
+    let table = &s.color_table;
+    let deleted = ColorTable::colors(&table.deleted, "deleted")?;
+    let custom = ColorTable::colors(&table.custom_palette, "customPalette")?;
+    let to_clear = ColorTable::colors(&table.transparent, "transparent")?;
+    let opaque_left = |left: &[[u8; 3]]| left.iter().any(|c| !to_clear.contains(c));
+    if custom.is_empty() {
+        let ix = quantize::quantize_locked(rgba, w, h, o, locked);
+        let clear = ix.transparent.map(usize::from);
+        let gone = |i: usize, c: &[u8; 3]| Some(i) != clear && deleted.contains(c);
+        if !ix.palette.iter().enumerate().any(|(i, c)| gone(i, c)) {
+            return Ok(ix);
+        }
+        let left: Vec<[u8; 3]> = ix.palette.iter().enumerate().filter(|&(i, c)| Some(i) != clear && !deleted.contains(c)).map(|(_, c)| *c).collect();
+        if left.is_empty() || !opaque_left(&left) {
+            return Err(KEEP_ONE.into());
+        }
+        return Ok(quantize::quantize_to(rgba, w, h, o, &left));
+    }
+    // A fixed palette holds at most `colors` entries, the transparent one included.
+    let has_clear = s.transparency && rgba.as_chunks::<4>().0.iter().any(|p| p[3] < 128);
+    let removed = custom.iter().any(|c| deleted.contains(c));
+    let mut left: Vec<[u8; 3]> = vec![];
+    for c in custom {
+        if !deleted.contains(&c) && !left.contains(&c) {
+            left.push(c);
+        }
+    }
+    left.truncate(usize::from(s.colors.clamp(2, 256)) - usize::from(has_clear));
+    if left.is_empty() || (removed && !opaque_left(&left)) {
+        return Err(KEEP_ONE.into());
+    }
+    Ok(quantize::quantize_to(rgba, w, h, o, &left))
 }
 
 /// An optimised image as straight RGBA → `(pixels, width, height)` (the dialog's preview).

@@ -1,5 +1,5 @@
-//! New Swatch: the Swatch Options fields (name, colour type, Global, mode, sliders and hex)
-//! prefilled from the active fill or stroke; a gradient, a pattern or a tint of a global colour
+//! New Swatch: the Swatch Options fields (name, colour type, Global, mode, sliders, hex and the
+//! colour warnings) prefilled from the active fill or stroke; a gradient, a pattern or a tint of a global colour
 //! (saved as a tint swatch, "Name 40%") only takes a name. OK runs `swatch.new`.
 //!
 //! Fields: `name`, `spot`, `global`, `mode` and `color` as in Swatch Options, `group` (the colour
@@ -45,7 +45,7 @@ pub fn open(app: &mut VectorcraftApp, spot: bool, global: bool, group: Option<&s
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     if d.fields.contains_key("__paint") {
         grid(ui, |ui| name_row(ui, d));
-    } else if editor(ui, d)
+    } else if editor(app, ui, d)
         && d.str("name") == d.str("__auto")
         && let Some(st) = app.session.active()
     {
@@ -85,6 +85,30 @@ mod tests {
         assert_eq!(params(&d), json!({"name": "Sky", "color": color_of(&d), "mode": "rgb", "spot": true, "global": true, "group": "Mine"}));
         let d = Dialog::new(KIND, json!({"name": "Dots", "__paint": {"pattern": "Dots"}, "group": ""}));
         assert_eq!(params(&d), json!({"name": "Dots", "pattern": "Dots"}));
+    }
+
+    #[test]
+    fn a_warning_corrects_the_new_colour_only_until_ok() {
+        use super::super::swatch_options::tests::{click_at, context, settled, warning_rows};
+        let (ctx, mut app) = (context(), VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default()));
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
+        app.run("paint.setFill", json!({"color": "#0000fe"})).unwrap();
+        let count = |app: &VectorcraftApp| app.session.active().unwrap().doc.swatches_iter().count();
+        let before = count(&app);
+        open(&mut app, false, false, None).unwrap();
+        let rows = warning_rows(&settled(&ctx, &mut app));
+        assert_eq!(rows.len(), 2, "out of gamut and out of web colors");
+        click_at(&ctx, &mut app, rows[1].1.center());
+        let d = app.ui.dialog.clone().unwrap();
+        assert_eq!((color_of(&d).to_hex(), d.str("mode")), ("#0000ff".to_string(), "rgb".to_string()));
+        assert_eq!(count(&app), before, "no swatch before OK");
+        assert_eq!(warning_rows(&settled(&ctx, &mut app)).len(), 1, "the web warning is gone");
+        let name = app.ui.dialog.as_ref().unwrap().str("name");
+        super::super::confirm(&mut app).unwrap();
+        assert_eq!(app.session.active().unwrap().doc.swatch(&name).and_then(|s| s.paint.color()).map(|c| c.to_hex()), Some("#0000ff".into()));
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(count(&app), before, "one undo step");
     }
 
     #[test]
