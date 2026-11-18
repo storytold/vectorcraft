@@ -90,6 +90,7 @@ impl VectorcraftApp {
                 selection_bounds: None,
                 content_bounds: None,
                 pixel_aligned: None,
+                symbol_instances: None,
                 plugin_keys: Default::default(),
                 placed_keys: Default::default(),
                 cursors: Default::default(),
@@ -583,6 +584,7 @@ impl VectorcraftApp {
         self.ime_caret_rect = None;
         scrub::begin_frame(self, &ctx);
         font_menu::end_stale_preview(self, &ctx);
+        font_menu::apply_preview_size(self, &ctx);
         tools_float::track(self, &ctx);
         // A selection move released over a panel ends before any panel sees the release (#2826).
         canvas::release_over_panel(self, &ctx);
@@ -631,6 +633,8 @@ impl VectorcraftApp {
         plugin_runs::show(self, &ctx);
         trace_runs::show(self, &ctx);
         opening::show(self, &ctx);
+        // After every window this pass may open, and before the palette's field takes the keyboard.
+        panel_docking::close_overlays_for_modal(self, &ctx);
         palette::show(self, &ctx);
         // After every panel had its chance to draw in this pass.
         crate::panels::three_d::end_stale_drag(self, &ctx);

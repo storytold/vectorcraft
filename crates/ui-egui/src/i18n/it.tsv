@@ -143,6 +143,9 @@
 	Additional Plug-ins Folder	Cartella plug-in aggiuntivi
 	Additional Fonts Folder	Cartella font aggiuntivi
 	Adjust Adjoining Width Points	Regola punti di larghezza adiacenti
+	Incoming	In entrata
+	Outgoing	In uscita
+	Single Width Only	Solo una larghezza
 	Adjust Color Balance…	Regola bilanciamento colore…
 	Adjust Colors	Regola colori
 	Adjust Options:	Opzioni di regolazione:
@@ -495,6 +498,8 @@ font-technology	Variable	Variabili
 	Choose a folder	Scegli una cartella
 	Choose…	Scegli…
 	Circle	Cerchio
+	Circle Tool	Strumento Cerchio
+	Circle too large	Cerchio troppo grande
 	Classic Defaults	Valori predefiniti classici
 	Clean Up…	Pulisci…
 	Clear	Cancella
@@ -1290,6 +1295,8 @@ font-technology	Variable	Variabili
 	Files	File
 	Files of a PDF standard can't be password-protected.	I file conformi a uno standard PDF non possono essere protetti da password.
 	Files of this standard tag their colours with ICC profiles.	I file conformi a questo standard contrassegnano i colori con profili ICC.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	I file conformi a questo standard contrassegnano i colori con profili ICC, tranne i colori CMYK nel profilo dell'intento di output, che vengono scritti come DeviceCMYK.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	Con «Non includere i profili» e un intento di output CMYK, ogni colore CMYK viene scritto come DeviceCMYK, a meno che non venga convertito in una destinazione CMYK di un altro profilo.
 	Fill	Riempimento
 	Fill & Stroke	Riempimento e traccia
 	Fill (X), double-click for the Color Picker	Riempimento (X), fai doppio clic per il selettore colore
@@ -2106,6 +2113,7 @@ file-filter	Templates	Modelli
 	Load SVG into Clipboard	Carica SVG negli appunti
 	Load Text into Clipboard	Carica testo negli appunti
 	Local Libraries	Librerie locali
+	Locate Layer	Individua livello
 	Locate Object	Individua oggetto
 	Locate Selected Objects	Individua oggetti selezionati
 	Location	Posizione
@@ -2777,6 +2785,9 @@ diagnostics	ui	interfaccia
 	Polar Grid Tool	Strumento Griglia polare
 	Polygon	Poligono
 	Polygon Properties:	Proprietà poligono:
+	Line Properties:	Proprietà linea:
+	Line Length:	Lunghezza linea:
+	Line Angle:	Angolo linea:
 	Polygon Tool	Strumento Poligono
 	Portrait	Verticale
 	Power Saving (integrated)	Risparmio energetico (integrata)
@@ -3591,6 +3602,7 @@ digits	Malayalam	Malayalam
 	Set Slice Rectangle	Imposta rettangolo sezione
 	Set Tab Stops	Imposta tabulazioni
 	Set Text	Imposta testo
+	Set the current fill or stroke to the selected color	Imposta il riempimento o la traccia corrente sul colore selezionato
 	Set the selected color to the current color	Imposta il colore selezionato sul colore corrente
 	Set Zoom	Imposta zoom
 	Settings…	Impostazioni…
@@ -3714,7 +3726,7 @@ digits	Malayalam	Malayalam
 	Show Vivid/Muted	Mostra vivaci/tenui
 	Show Warm/Cool	Mostra caldi/freddi
 	Show {kind} Brushes	Mostra pennelli di tipo {kind}
-	Show/hide plate (Alt-click: only this plate)	Mostra/nascondi lastra (Alt+clic: solo questa lastra)
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	Mostra/nascondi lastra (Alt+clic: solo questa lastra; di nuovo Alt+clic: tutte le lastre)
 	Show:	Mostra:
 	Shown with the optimised preview.	Mostrato con l'anteprima ottimizzata.
 	Side 1:	Lato 1:
@@ -4322,6 +4334,8 @@ digits	Malayalam	Malayalam
 	V Spacing:	Spaziatura verticale:
 	V:	V:
 	Variable Width Profile	Profilo larghezza variabile
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Il pennello della traccia mantiene la propria dimensione, quindi un profilo di larghezza non la modifica. Rimuovi il pennello per usare un profilo.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Il pennello della traccia mantiene la propria dimensione, quindi un profilo di larghezza non la modifica. Rimuovi il pennello per usare un profilo.
 	Variables	Variabili
 	New Variable	Nuova variabile
 	Delete Variable	Elimina variabile
@@ -5164,8 +5178,8 @@ liquify-list-end	{0}, {1}	{0} e {1}
 @msg	no active document	nessun documento attivo
 @msg	no active perspective plane	nessun piano prospettico attivo
 @msg	no anchor points selected	nessun punto di ancoraggio selezionato
-@msg	`points` must be three [x, y] pairs of numbers	`points` deve essere composto da tre coppie di numeri [x, y]
-@msg	direct-select three anchor points, or give `points`	seleziona con Selezione diretta tre punti di ancoraggio oppure indica `points`
+@msg	`points` must be two or three [x, y] pairs of numbers	`points` deve essere composto da due o tre coppie di numeri [x, y]
+@msg	direct-select two or three anchor points, or give `points`	seleziona con Selezione diretta due o tre punti di ancoraggio oppure indica `points`
 @msg	no circle passes through these points: two are the same or all three lie on one line	nessun cerchio passa per questi punti: due coincidono oppure tutti e tre sono allineati
 @msg	no app to open files here	nessuna app per aprire file qui
 @msg	no artboard	nessuna tavola da disegno
@@ -5267,6 +5281,9 @@ liquify-list-end	{0}, {1}	{0} e {1}
 @msg	no such user library	libreria utente inesistente
 @msg	no such view	vista inesistente
 @msg	no such width point	punto di larghezza inesistente
+@msg	`single` must be `incoming` or `outgoing`	`single` deve essere `incoming` o `outgoing`
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` e `outIndex` devono essere le due metà di un unico punto di larghezza discontinuo
+@msg	a discontinuous width point keeps its place	un punto di larghezza discontinuo mantiene la sua posizione
 @msg	no swatch `{name}`	nessun campione `{name}`
 @msg	no swatch library `{l}` (see swatch.library.list)	nessuna libreria campioni `{l}` (vedi swatch.library.list)
 @msg	no symbol instances selected	nessuna istanza di simbolo selezionata
@@ -8570,6 +8587,7 @@ breakText	Glyphs	Glifi
 @msg	compound {_1} must contain exactly one open path to join	il composto {_1} deve contenere esattamente un tracciato aperto da unire
 @msg	connect end must be "start" or "end"	end di connect deve essere "start" o "end"
 @msg	connect needs a path other than the one extended	connect richiede un tracciato diverso da quello esteso
+@msg	connect needs extend	connect richiede extend
 @msg	connect needs id	connect richiede id
 @msg	connect path has no open end	il tracciato di connect non ha un'estremità aperta
 @msg	copy needs path: the file to copy into the document's folder	copy richiede path: il file da copiare nella cartella del documento

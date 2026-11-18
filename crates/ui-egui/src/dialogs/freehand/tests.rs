@@ -28,6 +28,24 @@ fn blob_tip_fields_confirm_and_cancel() {
     assert_eq!(app.session.tool_options_of("blobBrush")["roundness"], json!(0.0));
 }
 
+/// OK with a Fidelity the Smooth tool refuses shows the error and keeps the dialog open, with
+/// nothing set; a Fidelity it takes then closes it.
+#[test]
+fn a_refused_fidelity_keeps_the_dialog_open() {
+    let mut app = app();
+    app.run("tool.options", json!({"tool": "smooth"})).unwrap();
+    let before = app.session.tool_options_of("smooth");
+    app.ui.dialog.as_mut().unwrap().fields.insert("fidelity".into(), json!(0.01));
+    let e = super::super::confirm(&mut app).unwrap_err();
+    assert_eq!(e, "tool `smooth`: `fidelity` must be a number from 0.05 to 100");
+    assert!(app.ui.dialog.is_some(), "the dialog stays open");
+    assert_eq!(app.session.tool_options_of("smooth"), before);
+    app.ui.dialog.as_mut().unwrap().fields.insert("fidelity".into(), json!(5));
+    super::super::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(app.session.tool_options_of("smooth")["fidelity"], json!(5.0));
+}
+
 #[test]
 fn the_tip_preview_is_as_flat_as_the_tip_the_brush_draws() {
     for roundness in [-5.0, 0.0, 0.05, 0.1, 1.0, 50.0, 100.0, 120.0] {
