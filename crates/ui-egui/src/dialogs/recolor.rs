@@ -503,11 +503,11 @@ fn select_group(app: &mut VectorcraftApp, d: &mut Dialog) -> Result<(), String> 
         Value::Null => {
             // No group: without art OK saves the rows as a new color group.
             d.fields.insert(GROUP_LOADED.into(), Value::Null);
-            restart_history(app);
             if !art {
                 d.fields.insert("__newGroup".into(), json!(true));
                 d.fields.insert("groupName".into(), json!(NEW_GROUP));
             }
+            restart_history(app, d);
             return Ok(());
         }
         Value::String(n) => n.clone(),
@@ -547,7 +547,7 @@ fn select_group(app: &mut VectorcraftApp, d: &mut Dialog) -> Result<(), String> 
         d.fields.remove(COMPS);
     }
     d.fields.insert("__assign".into(), Value::Array(assign));
-    restart_history(app);
+    restart_history(app, d);
     Ok(())
 }
 
@@ -569,7 +569,7 @@ fn group_action(app: &mut VectorcraftApp, d: &mut Dialog, action: &Value) -> Res
             // Nothing changed since the last save but perhaps the name.
             let name = d.str("groupName");
             if name.trim().is_empty() || group.as_deref() == Some(name.as_str()) {
-                restart_history(app);
+                restart_history(app, d);
                 return Ok(());
             }
             cancel_preview(app, d);
@@ -583,7 +583,7 @@ fn group_action(app: &mut VectorcraftApp, d: &mut Dialog, action: &Value) -> Res
             d.fields.insert("group".into(), name.clone());
             d.fields.insert(GROUP_LOADED.into(), name.clone());
             d.fields.insert("groupName".into(), name);
-            restart_history(app);
+            restart_history(app, d);
             Ok(())
         }
         Some("save") => {
@@ -690,7 +690,7 @@ fn group_action(app: &mut VectorcraftApp, d: &mut Dialog, action: &Value) -> Res
                     reread_rows(app, d, &rs, &before, &gone);
                 }
             }
-            restart_history(app);
+            restart_history(app, d);
             Ok(())
         }
         Some("delete") => {
@@ -1483,7 +1483,8 @@ type Snapshot = serde_json::Map<String, Value>;
 /// Changes could restore.
 #[derive(Clone, Debug, Default)]
 pub struct History {
-    /// The fields the dialog opened with, before it read the art, until its first frame or command.
+    /// The fields the dialog opened with (or had when its steps were dropped), before it read the
+    /// art, until its first frame or command.
     opened: Option<Snapshot>,
     /// The fields after the last step (none before the dialog's first frame).
     base: Option<Snapshot>,
@@ -1492,10 +1493,11 @@ pub struct History {
 }
 
 /// Drop the dialog's steps, after another color group is selected or Save Changes rewrites the
-/// group: Undo Changes and Redo Changes then have no step to go to, and the next frame or step
-/// takes the fields as they are then.
-fn restart_history(app: &mut VectorcraftApp) {
-    app.ui.recolor_history = History::default();
+/// group: Undo Changes and Redo Changes then have no step to go to. The fields of `d` are where
+/// Undo Changes starts again, as on a new opening, so fields set before the next frame or step
+/// (with `ui.dialog.set`) are a step back to them.
+fn restart_history(app: &mut VectorcraftApp, d: &Dialog) {
+    app.ui.recolor_history = History { opened: Some(snapshot(d)), ..History::default() };
 }
 
 /// The fields of `d` a step restores ([`STEP_FIELDS`] and [`STEP_MARKS`]).
@@ -3824,6 +3826,32 @@ mod tests {
         crate::dialogs::confirm(&mut app).unwrap();
         assert_eq!(group_hex(&app, "B"), Some(vec!["#008000".into(), "#ffff00".into(), "#ffffff".into()]), "OK keeps B's saved colors");
         assert_eq!(group_hex(&app, "A"), Some(vec!["#ff0000".into(), "#00ff00".into()]), "and leaves A as it was");
+    }
+
+    /// Without art: rows set after another color group is selected, with no frame between, are a
+    /// step back to the rows read for that group.
+    #[test]
+    fn an_edit_right_after_another_group_is_a_step() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        app.run("swatch.newGroup", json!({"name": "A", "colors": ["#ff0000", "#00ff00"], "keepModel": true})).unwrap();
+        app.run("swatch.newGroup", json!({"name": "B", "colors": ["#0000ff", "#ffff00", "#ffffff"], "keepModel": true})).unwrap();
+        app.run("ui.recolorDialog", json!({"group": "A"})).unwrap();
+        frame(&mut app, &ctx, 0.0, vec![], 0);
+        set(&mut app, "group", json!("B")).unwrap();
+        assert!(!super::can_step(&app, true) && !super::can_step(&app, false), "another group leaves no step");
+        let b = new_colors(&app);
+        let d = app.ui.dialog.as_mut().unwrap();
+        let mut rs = super::rows(d);
+        rs[0]["to"] = json!("rgb 0 0 0");
+        d.fields.insert("rows".into(), Value::Array(rs));
+        assert!(super::can_step(&app, true), "the edit is a step");
+        assert_eq!(super::step(&mut app, true).unwrap()["changed"], json!(true));
+        assert_eq!(new_colors(&app), b, "Undo Changes gives back the rows read for B");
+        assert_eq!(super::step(&mut app, false).unwrap()["changed"], json!(true));
+        assert_eq!(new_colors(&app)[0], json!("rgb 0 0 0"), "Redo Changes gives back the edit");
     }
 
     /// With art not linked to the group: Save Changes with the rows as the last Save Changes left
