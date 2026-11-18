@@ -391,7 +391,8 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
         !(chord.is_plain() && types_text(chord.key) && !shifted_punctuation || row_key(chord) || gesture_escape(chord) || labels_clip(hit))
     });
     let ran = !hits.is_empty();
-    for c in hits {
+    for hit in hits {
+        let c = unshifted_when_dimmed(app, hit);
         run_hit(app, ctx, &c);
         if dialog_or_palette_open(app) {
             break;
@@ -712,7 +713,8 @@ fn type_tool_input(app: &mut VectorcraftApp, ctx: &egui::Context, composing: boo
     // cut or paste after a deferred pointer or navigation notice is dropped there). Only chords
     // with the command key run commands: the rest type or edit.
     let hits = dispatch(app, ctx, |hit| hit.trigger.chord.mods.cmd);
-    for c in hits {
+    for hit in hits {
+        let c = unshifted_when_dimmed(app, hit);
         run_hit(app, ctx, &c);
         if dialog_or_palette_open(app) {
             break;
@@ -1051,8 +1053,9 @@ fn claimed_tool_keys(app: &mut VectorcraftApp, ctx: &egui::Context, view: ViewIn
 }
 
 /// Runs this frame's key presses against the keymap in effect; `accept` declines a hit, leaving
-/// its press (and the text it typed) to what follows.
-fn dispatch(app: &mut VectorcraftApp, ctx: &egui::Context, accept: impl FnMut(&Hit) -> bool) -> Vec<CommandRef> {
+/// its press (and the text it typed) to what follows. Each hit's command is worked out with
+/// [`unshifted_when_dimmed`] just before it runs, after the commands of the presses before it.
+fn dispatch(app: &mut VectorcraftApp, ctx: &egui::Context, accept: impl FnMut(&Hit) -> bool) -> Vec<Hit> {
     let mirror = crate::shortcut_editor::current();
     let dispatcher = &mut app.dispatcher;
     ctx.input_mut(|i| {
@@ -1084,7 +1087,7 @@ fn dispatch(app: &mut VectorcraftApp, ctx: &egui::Context, accept: impl FnMut(&H
             }
         }
         // Shift+`=` types `+`: as the Plus key it also reaches a `=` chord held with Shift
-        // (Cmd+Shift+= zooms in as Cmd+= does).
+        // (Cmd+Shift+= zooms in as Cmd+= does while Superscript is dimmed: [`unshifted_when_dimmed`]).
         for e in &mut i.events {
             if let egui::Event::Key { key, modifiers, .. } = e
                 && *key == Key::Equals
@@ -1093,8 +1096,26 @@ fn dispatch(app: &mut VectorcraftApp, ctx: &egui::Context, accept: impl FnMut(&H
                 *key = Key::Plus;
             }
         }
-        dispatcher.dispatch_filtered(i, &mirror.keymap, &Active::NONE, accept).into_iter().map(|h| h.command).collect()
+        dispatcher.dispatch_filtered(i, &mirror.keymap, &Active::NONE, accept)
     })
+}
+
+/// The command a hit runs. A Shift+`=` chord whose command is dimmed runs what the same chord
+/// without Shift runs, when that is bound: Cmd+Shift+= (Superscript) zooms in, as Cmd+= does,
+/// while no type is selected.
+fn unshifted_when_dimmed(app: &VectorcraftApp, hit: Hit) -> CommandRef {
+    let mirror = crate::shortcut_editor::current();
+    let chord = hit.trigger.chord;
+    if chord.key == craft_keymap::Key::Equals
+        && chord.mods.shift
+        && !hit.trigger.double
+        && !crate::menus::enabled(app, &hit.command.id)
+        && let Some(unshifted) =
+            crate::keymap::lookup(&mirror.keymap, &craft_keymap::Chord::new(craft_keymap::Mods { shift: false, ..chord.mods }, chord.key))
+    {
+        return unshifted;
+    }
+    hit.command
 }
 
 /// What a shortcut without params runs when its command's menu bar item gives params
