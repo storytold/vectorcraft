@@ -6654,6 +6654,8 @@ theme	Appearance	Görünüm
 @msg	no such spine point	böyle bir omurga noktası yok
 @msg	`with` must be a list of at most 10000 spine point indexes	`with` en fazla 10000 omurga noktası dizininden oluşan bir liste olmalıdır
 @msg	`with` moves points, not a handle	`with` noktaları taşır, tutamacı değil
+@msg	`link` and `independent` cannot both be true	`link` ve `independent` aynı anda true olamaz
+@msg	`link` places a handle: give `handle`	`link` bir tutamaç yerleştirir: `handle` verin
 @msg	no such spine segment	böyle bir omurga segmenti yok
 @msg	not a blend	bir karışım değil
 @msg	select a blend or give `id`	bir karışım seçin veya `id` belirtin

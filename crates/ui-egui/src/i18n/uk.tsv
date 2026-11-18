@@ -5284,6 +5284,8 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	no such spine point	такої точки осі немає
 @msg	`with` must be a list of at most 10000 spine point indexes	`with` має бути списком щонайбільше з 10000 індексів точок осі
 @msg	`with` moves points, not a handle	`with` переміщує точки, а не маркер
+@msg	`link` and `independent` cannot both be true	`link` і `independent` не можуть одночасно бути true
+@msg	`link` places a handle: give `handle`	`link` розміщує маркер: укажіть `handle`
 @msg	no such spine segment	такого сегмента осі немає
 @msg	no such subpath	такого вкладеного контуру немає
 @msg	no such user library	такої користувацької бібліотеки немає
