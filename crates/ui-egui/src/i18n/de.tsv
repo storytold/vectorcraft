@@ -2597,6 +2597,8 @@ file-filter	Templates	Vorlagen
 	Overprint and Transparency Flattener Options	Optionen für Überdrucken und Transparenzreduzierung
 	Custom…	Benutzerdefiniert…
 	Custom Transparency Flattener Options	Benutzerdefinierte Optionen für Transparenzreduzierung
+	The PDF preset keeps the flattener preset but not the Custom… settings.	Die PDF-Vorgabe speichert die Reduzierungsvorgabe, aber nicht die Einstellungen unter „Benutzerdefiniert…“.
+	PDF 1.3 files clip rasterized areas to their regions, and Overprint sets whether overprints are kept.	PDF-1.3-Dateien beschneiden gerasterte Bereiche auf ihre Regionen, und „Überdrucken“ legt fest, ob Überdrucken erhalten bleibt.
 	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	EPS hat keine Alphatransparenz, und „Überdrucken“ legt fest, ob Überdrucken erhalten bleibt.
 	Overprint Black…	Schwarz überdrucken…
 	Overprint Fill	Fläche überdrucken

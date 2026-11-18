@@ -2939,6 +2939,8 @@ digits	Malayalam	Malajalam
 	Overprint and Transparency Flattener Options	Opcje nadruku i spłaszczania przezroczystości
 	Custom…	Niestandardowe…
 	Custom Transparency Flattener Options	Niestandardowe opcje spłaszczania przezroczystości
+	The PDF preset keeps the flattener preset but not the Custom… settings.	Ustawienie PDF zachowuje ustawienie spłaszczania, ale nie ustawienia z Niestandardowe….
+	PDF 1.3 files clip rasterized areas to their regions, and Overprint sets whether overprints are kept.	Pliki PDF 1.3 przycinają rasteryzowane obszary do ich regionów, a Nadruk określa, czy nadruki są zachowywane.
 	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	EPS nie ma przezroczystości alfa, a Nadruki określają, czy nadruki są zachowywane.
 	Place the pages with the placement again	Ponownie rozmieść strony według położenia
 	Placement:	Położenie:

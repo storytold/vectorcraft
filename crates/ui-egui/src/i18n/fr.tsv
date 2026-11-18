@@ -2629,6 +2629,8 @@ font-technology	Variable	Variables
 	Overprint and Transparency Flattener Options	Options de surimpression et d’aplatissement des transparences
 	Custom…	Personnalisé…
 	Custom Transparency Flattener Options	Options personnalisées d’aplatissement des transparences
+	The PDF preset keeps the flattener preset but not the Custom… settings.	Le paramètre prédéfini PDF conserve le paramètre prédéfini d’aplatissement, mais pas les réglages de Personnalisé….
+	PDF 1.3 files clip rasterized areas to their regions, and Overprint sets whether overprints are kept.	Les fichiers PDF 1.3 écrêtent les zones pixellisées à leurs régions, et Surimpression détermine si les surimpressions sont conservées.
 	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	Le format EPS n’a pas de transparence alpha, et Surimpressions détermine si les surimpressions sont conservées.
 	Overprint Black…	Surimpression du noir…
 	Overprint Fill	Surimpression du fond
