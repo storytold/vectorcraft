@@ -4553,6 +4553,8 @@ antiAlias	Sharp	शार्प
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Cmd/Ctrl दबाकर माउस व्हील घुमाने से कैनवास बगल की ओर स्क्रॉल होता है।
 	Dragging sideways on a numeric field's label changes the field's value.	किसी संख्या वाले फ़ील्ड के लेबल पर बगल की ओर ड्रैग करने से फ़ील्ड का मान बदलता है।
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	ट्रैकपैड पर दो उंगलियों से घुमाने का जेस्चर कैनवास के व्यू को घुमाता है।
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	किसी कुंजी को दबाए रखने पर कीबोर्ड शॉर्टकट में उसके होल्ड कॉलम का टूल या कमांड चलता है; जल्दी दबाने पर उसका सामान्य शॉर्टकट चलता है।
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	किसी कुंजी को कितने सेकंड दबाए रखना होगा, ताकि उसके सामान्य शॉर्टकट के बजाय उसका होल्ड शॉर्टकट चले।
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	जब आप एंकर पॉइंट हिलाते हैं, तो एक हिले हुए सिरे वाला हर वक्र अपने सिरों के सापेक्ष अपना आकार बनाए रखता है।
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	किसी टूल की शॉर्टकट कुंजी दबाए रखने पर वह टूल छोड़ने तक चुना रहता है, फिर पिछला टूल दोबारा चुना जाता है।
 	Shows the bounding box while you move the selection or draw a shape.	सिलेक्शन खिसकाते या आकार ड्रॉ करते समय बाउंडिंग बॉक्स दिखाता है।
@@ -9984,6 +9986,16 @@ theme	Appearance	अपीयरेंस
 	No objects are selected.	कोई ऑब्जेक्ट सिलेक्ट नहीं है।
 	Open a document to mark its fold lines.	फ़ोल्ड लाइनें मार्क करने के लिए कोई डॉक्यूमेंट ओपन करें।
 	Remove Fold Line Role	लाइन प्रकार हटाएँ
+	Tap	जल्दी दबाना
+	Clear Hold	होल्ड साफ़ करें
+	Hold Shortcuts	होल्ड शॉर्टकट
+	Hold Shortcut Delay	होल्ड शॉर्टकट विलंब
+	How hold shortcuts work	होल्ड शॉर्टकट कैसे काम करते हैं
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	क्लिक करें, फिर इसके लिए दबाए रखने वाली कुंजी दबाएँ (Esc रद्द)। कुंजी दबाए रखने पर यह चलता है; जल्दी से दबाने पर कुंजी का अपना शॉर्टकट चलता है।
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	किसी कुंजी को जल्दी से दबाने पर उसका शॉर्टकट चलता है। कुंजी को विलंब जितनी देर दबाए रखने पर इसके बजाय उसके होल्ड कॉलम का टूल या कमांड चलता है। होल्ड शॉर्टकट कोई अक्षर, अंक या विराम चिह्न वाली कुंजी होती है, अकेले या Shift के साथ।
+@msg	Hold {_1} is already used by {_2}	होल्ड {_1} का उपयोग पहले से ही {_2} द्वारा किया जाता है
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	होल्ड शॉर्टकट ऐसी कुंजी होती है जो अकेले या Shift के साथ कोई कैरेक्टर टाइप करती है ({shown} में Cmd, Ctrl या Alt है)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} होल्ड शॉर्टकट नहीं हो सकता: कोई अक्षर, अंक या विराम चिह्न वाली कुंजी उपयोग करें
 	Check	चेक करें
 	Check Fold Lines	फ़ोल्ड लाइनें चेक करें
 @msg	No cut lines are in the selection.	सिलेक्शन में कोई कट लाइन नहीं है।
