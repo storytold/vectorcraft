@@ -4552,6 +4552,8 @@ font-technology	Variable	Varijabilni
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Točkić miša uz pritisnut Cmd/Ctrl pomjera platno u stranu.
 	Dragging sideways on a numeric field's label changes the field's value.	Prevlačenje u stranu po oznaci brojčanog polja mijenja vrijednost polja.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Pokret rotacije s dva prsta na dodirnoj podlozi rotira prikaz platna.
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Držanje tipke pokreće alat ili naredbu iz njene kolone „Zadrži“ u Prečicama na tastaturi; kratki pritisak pokreće njenu uobičajenu prečicu.
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Koliko sekundi tipka mora biti pritisnuta prije nego što se umjesto uobičajene prečice pokrene njena prečica zadržavanjem.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Kada pomjerate sidrene tačke, svaka kriva s jednim pomjerenim krajem zadržava svoj oblik u odnosu na svoje krajeve.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Držanje prečice alata bira taj alat dok je ne pustite, a zatim se ponovo bira prethodni alat.
 	Shows the bounding box while you move the selection or draw a shape.	Prikazuje granični okvir dok pomjerate odabir ili crtate oblik.
@@ -7711,6 +7713,16 @@ shape	Open	Otvoren
 @msg	A joint does not close by {gap} pt.	Spoj se ne zatvara za {gap} pt.
 @msg	Two panels pass through each other.	Dva panela prolaze jedan kroz drugi.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer mora biti "singleLine", "everyLine", "standardSingleLine" ili "standardEveryLine"
+	Tap	Kratki pritisak
+	Clear Hold	Očisti zadržavanje
+	Hold Shortcuts	Prečice zadržavanjem
+	Hold Shortcut Delay	Kašnjenje prečica zadržavanjem
+	How hold shortcuts work	Kako rade prečice zadržavanjem
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	Kliknite, zatim pritisnite tipku koju treba zadržati za ovo (Esc otkazuje). Zadržavanje tipke pokreće ovo; kratki pritisak pokreće vlastitu prečicu tipke.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	Kratki pritisak tipke pokreće njenu prečicu. Zadržavanje tipke tokom kašnjenja umjesto toga pokreće alat ili naredbu iz njene kolone Zadrži. Prečica zadržavanjem je tipka sa slovom, cifrom ili interpunkcijskim znakom, sama ili sa Shift.
+@msg	Hold {_1} is already used by {_2}	Zadržavanje {_1} već koristi {_2}
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	prečica zadržavanjem je tipka koja upisuje znak, sama ili sa Shift ({shown} ima Cmd, Ctrl ili Alt)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} ne može biti prečica zadržavanjem: koristite slovo, cifru ili interpunkcijsku tipku
 	Pressure Sensitive	Osjetljivo na pritisak
 	Flex Ribbon	Savijajuća traka
 	Pulse Stroke	Pulsirajući potez

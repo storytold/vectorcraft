@@ -4573,6 +4573,8 @@ font-technology	Variable	Muuttuvat
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Hiiren rulla vierittää piirtopintaa sivuttain, kun Cmd/Ctrl on painettuna.
 	Dragging sideways on a numeric field's label changes the field's value.	Numerokentän nimiön vetäminen sivuttain muuttaa kentän arvoa.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Kahden sormen kiertoele kosketuslevyllä kiertää piirtopinnan näkymää.
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Näppäimen pitäminen painettuna suorittaa työkalun tai komennon sen Pidä pohjassa -sarakkeesta Pikanäppäimissä; lyhyt painallus suorittaa sen tavallisen pikanäppäimen.
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Kuinka monta sekuntia näppäintä on pidettävä painettuna, ennen kuin tavallisen pikanäppäimen sijaan suoritetaan sen pitkän painalluksen pikanäppäin.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Kun siirrät ankkuripisteitä, jokainen käyrä, jonka toinen pää siirtyy, säilyttää muotonsa suhteessa päihinsä.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Työkalun pikanäppäimen pitäminen painettuna valitsee työkalun, kunnes päästät irti, ja sitten edellinen työkalu valitaan uudelleen.
 	Shows the bounding box while you move the selection or draw a shape.	Näyttää rajausruudun, kun siirrät valintaa tai piirrät muotoa.
@@ -8670,6 +8672,16 @@ breakText	Glyphs	Merkit
 @msg	A joint does not close by {gap} pt.	Liitos ei sulkeudu, rako {gap} pt.
 @msg	Two panels pass through each other.	Kaksi paneelia kulkee toistensa läpi.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer on oltava "singleLine", "everyLine", "standardSingleLine" tai "standardEveryLine"
+	Tap	Lyhyt painallus
+	Clear Hold	Tyhjennä pitkä painallus
+	Hold Shortcuts	Pitkän painalluksen pikanäppäimet
+	Hold Shortcut Delay	Pitkän painalluksen viive
+	How hold shortcuts work	Näin pitkän painalluksen pikanäppäimet toimivat
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	Napsauta ja paina sitten näppäintä, jota pidetään pohjassa tätä varten (Esc peruuttaa). Näppäimen pitäminen pohjassa suorittaa tämän; lyhyt painallus suorittaa näppäimen oman pikanäppäimen.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	Näppäimen lyhyt painallus suorittaa sen pikanäppäimen. Kun näppäintä pidetään pohjassa viiveen ajan, suoritetaan sen sijaan sen Pidä pohjassa -sarakkeen työkalu tai komento. Pitkän painalluksen pikanäppäin on kirjain-, numero- tai välimerkkinäppäin yksin tai Shiftin kanssa.
+@msg	Hold {_1} is already used by {_2}	Pitkä painallus {_1} on jo käytössä kohteella {_2}
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	pitkän painalluksen pikanäppäin on merkin kirjoittava näppäin yksin tai Shiftin kanssa ({shown} sisältää Cmd-, Ctrl- tai Alt-näppäimen)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} ei voi olla pitkän painalluksen pikanäppäin: käytä kirjainta, numeroa tai välimerkkinäppäintä
 @msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	viiva tai muu avoin polku, joka ei rajaa aluetta, ei lisää yhdistelmämuotoon aluetta; jos haluat sisällyttää sen, käytä siihen ensin komentoa Objekti › Polku › Ääriviivaa viiva
 	Pressure Sensitive	Paineherkkä
 	Flex Ribbon	Joustava nauha

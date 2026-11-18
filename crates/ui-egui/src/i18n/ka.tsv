@@ -6370,6 +6370,8 @@ font-technology	Variable	ცვლადი
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	დაჭერილი Cmd/Ctrl-ით მაუსის ბორბალი ტილოს გვერდულად გადაახვევს.
 	Dragging sideways on a numeric field's label changes the field's value.	რიცხვითი ველის წარწერაზე გვერდულად გადათრევა ველის მნიშვნელობას ცვლის.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	ტრეკპადზე ორი თითით მობრუნების ჟესტი ტილოს ხედს აბრუნებს.
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	კლავიშის ხანგრძლივი დაჭერა უშვებს ხელსაწყოს ან ბრძანებას კლავიატურის მალსახმობების დაჭერის სვეტიდან; მოკლე დაჭერა უშვებს მის ჩვეულ მალსახმობს.
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	რამდენი წამი უნდა იყოს კლავიში დაჭერილი, სანამ ჩვეული მალსახმობის ნაცვლად მისი ხანგრძლივი დაჭერის მალსახმობი გაეშვება.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	როცა ღუზის წერტილებს გადაადგილებთ, ყოველი მრუდი, რომლის ერთი ბოლოც გადაადგილდა, ინარჩუნებს ფორმას თავის ბოლოებთან მიმართებით.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	სანამ ხელსაწყოს მალსახმობ კლავიშს დაჭერილს გიჭირავთ, ეს ხელსაწყოა არჩეული; კლავიშის აშვების შემდეგ ისევ წინა ხელსაწყო აირჩევა.
 	Shows the bounding box while you move the selection or draw a shape.	აჩვენებს შემომსაზღვრელ ჩარჩოს, სანამ მონიშნულს გადაადგილებთ ან ფიგურას ხატავთ.
@@ -10749,6 +10751,16 @@ font-script	Japanese	იაპონური
 @msg	A joint does not close by {gap} pt.	შეერთება არ იხურება {gap} pt-ით.
 @msg	Two panels pass through each other.	ორი პანელი ერთმანეთში გადის.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer უნდა იყოს "singleLine", "everyLine", "standardSingleLine" ან "standardEveryLine"
+	Tap	მოკლე დაჭერა
+	Clear Hold	ხანგრძლივი დაჭერის გასუფთავება
+	Hold Shortcuts	ხანგრძლივი დაჭერის მალსახმობები
+	Hold Shortcut Delay	ხანგრძლივი დაჭერის დაყოვნება
+	How hold shortcuts work	როგორ მუშაობს ხანგრძლივი დაჭერის მალსახმობები
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	დაწკაპეთ, შემდეგ დააჭირეთ კლავიშს, რომელიც ამისთვის უნდა დაიჭიროთ (Esc აუქმებს). კლავიშის ხანგრძლივი დაჭერა ამას უშვებს; მოკლე დაჭერა კლავიშის საკუთარ მალსახმობს უშვებს.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	კლავიშის მოკლე დაჭერა მის მალსახმობს უშვებს. თუ კლავიშს დაყოვნების ხანგრძლივობით დაიჭერთ, ამის ნაცვლად გაეშვება მისი „დაჭერა“ სვეტის ხელსაწყო ან ბრძანება. ხანგრძლივი დაჭერის მალსახმობი არის ასოს, ციფრის ან სასვენი ნიშნის კლავიში, ცალკე ან Shift კლავიშთან ერთად.
+@msg	Hold {_1} is already used by {_2}	ხანგრძლივი დაჭერა {_1} უკვე გამოიყენება ამისთვის: {_2}
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	ხანგრძლივი დაჭერის მალსახმობი არის კლავიში, რომელიც სიმბოლოს წერს, ცალკე ან Shift კლავიშთან ერთად ({shown} შეიცავს Cmd, Ctrl ან Alt კლავიშს)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} ვერ იქნება ხანგრძლივი დაჭერის მალსახმობი: გამოიყენეთ ასო, ციფრი ან სასვენი ნიშნის კლავიში
 	Pressure Sensitive	წნევაზე მგრძნობიარე
 	Flex Ribbon	მოქნილი ლენტი
 	Pulse Stroke	პულსირებადი მონასმი

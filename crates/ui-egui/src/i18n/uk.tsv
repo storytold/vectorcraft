@@ -3234,6 +3234,8 @@ digits	Malayalam	Малаялам
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Колесо миші з натиснутою Cmd/Ctrl прокручує полотно по горизонталі.
 	Dragging sideways on a numeric field's label changes the field's value.	Перетягування вбік по підпису числового поля змінює значення поля.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Жест обертання двома пальцями на трекпаді обертає вигляд полотна.
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Утримання клавіші запускає інструмент або команду з її стовпця «Утримувати» в «Поєднаннях клавіш»; коротке натискання запускає її звичайне поєднання.
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Скільки секунд потрібно утримувати клавішу, перш ніж замість її звичайного поєднання спрацює поєднання утримання.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Коли ви переміщуєте опорні точки, кожна крива з одним переміщеним кінцем зберігає форму відносно своїх кінців.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Поки ви утримуєте клавішу інструмента, його вибрано, а після відпускання знову вибирається попередній інструмент.
 	Shows the bounding box while you move the selection or draw a shape.	Показує обмежувальну рамку, поки ви переміщуєте виділення або малюєте фігуру.
@@ -9999,6 +10001,16 @@ breakText	Glyphs	Гліфи
 	No objects are selected.	Об’єкти не виділено.
 	Open a document to mark its fold lines.	Відкрийте документ, щоб позначити його лінії згину.
 	Remove Fold Line Role	Прибрати тип лінії
+	Tap	Коротке натискання
+	Clear Hold	Очистити утримання
+	Hold Shortcuts	Клавіші утримання
+	Hold Shortcut Delay	Затримка клавіш утримання
+	How hold shortcuts work	Як працюють клавіші утримання
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	Клацніть, потім натисніть клавішу, яку слід утримувати для цього (Esc скасовує). Утримання клавіші запускає це; коротке натискання запускає власне сполучення клавіші.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	Коротке натискання клавіші запускає її сполучення. Утримання клавіші протягом затримки запускає натомість інструмент або команду з її стовпця «Утримувати». Клавіша утримання — це клавіша літери, цифри або розділового знака, окремо або з Shift.
+@msg	Hold {_1} is already used by {_2}	Утримання {_1} вже використовується для {_2}
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	клавіша утримання — це клавіша, що вводить символ, окремо або з Shift ({shown} містить Cmd, Ctrl або Alt)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} не може бути клавішею утримання: використайте літеру, цифру або клавішу розділового знака
 	Check	Перевірити
 	Check Fold Lines	Перевірити лінії згину
 @msg	No cut lines are in the selection.	У виділенні немає ліній різу.

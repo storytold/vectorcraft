@@ -3936,6 +3936,8 @@ digits	Malayalam	Malaiàlam
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	La roda del ratolí amb Cmd/Ctrl premut desplaça el llenç en horitzontal.
 	Dragging sideways on a numeric field's label changes the field's value.	Arrossegar en horitzontal sobre l’etiqueta d’un camp numèric canvia el valor del camp.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Un gest de rotació amb dos dits al trackpad gira la vista del llenç.
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Mantenir premuda una tecla executa l’eina o l’ordre de la seva columna Mantén a Dreceres de teclat; una pulsació breu executa la seva drecera habitual.
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Quants segons cal mantenir premuda una tecla perquè s’executi la seva drecera de pulsació llarga en lloc de la drecera habitual.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Quan moveu punts d’ancoratge, cada corba amb un extrem desplaçat conserva la forma respecte dels seus extrems.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Mantenir premuda la drecera d’una eina la tria fins que la deixeu anar, i després es torna a triar l’eina anterior.
 	Shows the bounding box while you move the selection or draw a shape.	Mostra el quadre delimitador mentre moveu la selecció o dibuixeu una forma.
@@ -8613,6 +8615,16 @@ breakText	Glyphs	Glifs
 @msg	A joint does not close by {gap} pt.	Una unió no es tanca per {gap} pt.
 @msg	Two panels pass through each other.	Dos panells es travessen l’un a l’altre.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer ha de ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"
+	Tap	Pulsació breu
+	Clear Hold	Esborra la pulsació llarga
+	Hold Shortcuts	Dreceres de pulsació llarga
+	Hold Shortcut Delay	Retard de les dreceres de pulsació llarga
+	How hold shortcuts work	Com funcionen les dreceres de pulsació llarga
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	Fes clic i prem una tecla per mantenir premuda per a això (Esc cancel·la). Mantenir premuda la tecla executa això; una pulsació breu executa la drecera pròpia de la tecla.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	Una pulsació breu d’una tecla executa la seva drecera. Mantenir premuda la tecla durant el retard executa en canvi l’eina o l’ordre de la seva columna Mantén. Una drecera de pulsació llarga és una tecla de lletra, xifra o puntuació, sola o amb Shift.
+@msg	Hold {_1} is already used by {_2}	La pulsació llarga de {_1} ja la fa servir {_2}
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	una drecera de pulsació llarga és una tecla que escriu un caràcter, sola o amb Shift ({shown} té Cmd, Ctrl o Alt)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} no pot ser una drecera de pulsació llarga: fes servir una lletra, una xifra o una tecla de puntuació
 @msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	una línia o un altre traçat obert que no tanca cap àrea no aporta cap àrea a la forma composta; per incloure’l, apliqueu-hi primer Objecte › Traçat › Contorneja el traç
 	Pressure Sensitive	Sensible a la pressió
 	Flex Ribbon	Cinta flexible

@@ -191,8 +191,13 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Cmd+I",
         "{} open the Check Spelling dialog to walk through unrecognized words with suggestions, ignore, change and dictionary options",
     ),
-    ("shortcuts.set", "Set Keyboard Shortcut", "", "{id: command id or tool:<id>, shortcut: \"Cmd+Shift+K\" | \"\" (none) | null (default), force?}"),
-    ("shortcuts.list", "List Keyboard Shortcuts", "", "{query?} → [{id, label, group, shortcut, default, overridden}]"),
+    (
+        "shortcuts.set",
+        "Set Keyboard Shortcut",
+        "",
+        "{id: command id or tool:<id>, shortcut?: \"Cmd+Shift+K\" | \"\" (none) | null (default), hold?: a character key alone or with Shift (\"X\", \"Shift+X\", \".\") | \"\" | null (none), force?} → {id, shortcut, hold, removedFrom}; `hold` alone leaves the shortcut as it is; a command listed only with a shortcut takes a hold only with one and loses it with the shortcut; a hold shortcut acts while the holdShortcuts preference is on",
+    ),
+    ("shortcuts.list", "List Keyboard Shortcuts", "", "{query?} → [{id, label, group, shortcut, hold, default, overridden}]"),
     ("shortcuts.conflicts", "Keyboard Shortcut Conflicts", "", "{} → [{shortcut, ids}]"),
     ("shortcuts.reset", "Reset Keyboard Shortcuts", "", "{}"),
     (
@@ -206,7 +211,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "shortcuts.exportText",
         "Export Keyboard Shortcuts as Text…",
         "",
-        "{path?, format?: \"text\"|\"sheet\"|\"csv\" (default text), pageSize?: \"letter\"|\"a4\" (sheet only; default A4 when the current document prints on A4, else letter)} save the current set's tools and menu commands with their shortcuts (Keyboard Shortcuts › Export Text…). text: a UTF-8 text file: the set's name, then a Tools and a Menu Commands section in the dialog's order, one `name<TAB>shortcut` line per row, empty after the tab when it has none. sheet: a printable PDF on landscape pages that lists the rows with a shortcut, Tools and then a group per top-level menu, under a colored band per group, shortcut then name, in four columns. csv: a UTF-8 CSV file (RFC 4180 quoting, CRLF) with a `Group,Command,Shortcut` header and one record per row in the sheet's groups, in the UI language; a field that starts with = + - @ and has more after it starts with '. A `path` is written as given. Without it, pick a file: the desktop save dialog offers the three formats (text first) unless `format` names one, and the file type picked decides and gives the name its extension; with no dialog, writer or download, returns {text} (text, csv) or {pdf: base64} (sheet); a bad `format` or `pageSize` is an error",
+        "{path?, format?: \"text\"|\"sheet\"|\"csv\" (default text), pageSize?: \"letter\"|\"a4\" (sheet only; default A4 when the current document prints on A4, else letter)} save the current set's tools and menu commands with their shortcuts (Keyboard Shortcuts › Export Text…). text: a UTF-8 text file: the set's name, then a Tools and a Menu Commands section in the dialog's order, one `name<TAB>shortcut` line per row, empty after the tab when it has none, and while the holdShortcuts preference is on a third `Hold <key>` column on a row with a hold shortcut. sheet: a printable PDF on landscape pages that lists the rows with a shortcut, Tools and then a group per top-level menu, under a colored band per group, shortcut then name, in four columns. csv: a UTF-8 CSV file (RFC 4180 quoting, CRLF) with a `Group,Command,Shortcut` header and one record per row in the sheet's groups, in the UI language; a field that starts with = + - @ and has more after it starts with '. A `path` is written as given. Without it, pick a file: the desktop save dialog offers the three formats (text first) unless `format` names one, and the file type picked decides and gives the name its extension; with no dialog, writer or download, returns {text} (text, csv) or {pdf: base64} (sheet); a bad `format` or `pageSize` is an error",
     ),
     ("shortcuts.import", "Import Keyboard Shortcuts…", "", "{path? | data?}"),
     (

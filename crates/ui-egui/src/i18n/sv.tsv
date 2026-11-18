@@ -3113,6 +3113,8 @@ digits	Malayalam	Malayalam
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Mushjulet med Cmd/Ctrl nedtryckt rullar arbetsytan i sidled.
 	Dragging sideways on a numeric field's label changes the field's value.	Att dra i sidled på ett sifferfälts etikett ändrar fältets värde.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	En rotationsgest med två fingrar på en styrplatta roterar arbetsytans vy.
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Om du håller ned en tangent körs verktyget eller kommandot i dess Håll-kolumn i Kortkommandon; ett kort tryck kör dess vanliga kortkommando.
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Hur många sekunder en tangent måste hållas ned innan dess hållkortkommando körs i stället för dess vanliga kortkommando.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	När du flyttar ankarpunkter behåller varje kurva med en flyttad ände sin form i förhållande till sina ändar.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	När du håller ned ett verktygs kortkommando är verktyget valt tills du släpper, och sedan väljs det föregående verktyget igen.
 	Shows the bounding box while you move the selection or draw a shape.	Visar avgränsningsramen medan du flyttar markeringen eller ritar en form.
@@ -10099,6 +10101,16 @@ digits	Hindi	Hindi
 @msg	A joint does not close by {gap} pt.	En fog sluter inte med {gap} pt.
 @msg	Two panels pass through each other.	Två paneler går igenom varandra.
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} pixlar är för stort för PSD (högst {MAX_SIDE} pixlar per sida): sänk upplösningen
+	Tap	Kort tryck
+	Clear Hold	Rensa håll
+	Hold Shortcuts	Hållkortkommandon
+	Hold Shortcut Delay	Fördröjning för hållkortkommandon
+	How hold shortcuts work	Så fungerar hållkortkommandon
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	Klicka och tryck sedan på en tangent som ska hållas ned för detta (Esc avbryter). Att hålla ned tangenten kör detta; ett kort tryck kör tangentens eget kortkommando.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	Ett kort tryck på en tangent kör dess kortkommando. Att hålla ned tangenten under fördröjningen kör i stället verktyget eller kommandot i dess Håll-kolumn. Ett hållkortkommando är en bokstavs-, siffer- eller skiljeteckentangent, ensam eller med Shift.
+@msg	Hold {_1} is already used by {_2}	Håll {_1} används redan av {_2}
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	ett hållkortkommando är en tangent som skriver ett tecken, ensam eller med Shift ({shown} har Cmd, Ctrl eller Alt)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} kan inte vara ett hållkortkommando: använd en bokstav, en siffra eller en skiljeteckentangent
 	Pressure Sensitive	Tryckkänslig
 	Flex Ribbon	Flexibelt band
 	Pulse Stroke	Pulserande drag

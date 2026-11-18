@@ -3091,6 +3091,8 @@ digits	Malayalam	马拉雅拉姆数字
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	按住 Cmd/Ctrl 滚动鼠标滚轮会横向滚动画布。
 	Dragging sideways on a numeric field's label changes the field's value.	在数值字段的标签上横向拖动可更改字段的值。
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	在触控板上用双指旋转手势可旋转画布视图。
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	按住某个键会运行键盘快捷键中其按住列的工具或命令；快速按下则运行其常规快捷键。
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	按住某个键多少秒后，运行其按住快捷键而不是常规快捷键。
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	移动锚点时，只有一端移动的每条曲线都会保持其相对于两端的形状。
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	按住工具的快捷键时选择该工具，松开后重新选择之前的工具。
 	Shows the bounding box while you move the selection or draw a shape.	移动所选对象或绘制形状时显示定界框。
@@ -10255,6 +10257,16 @@ breakText	Glyphs	字形
 @msg	A joint does not close by {gap} pt.	有一处接缝相差 {gap} pt 未闭合。
 @msg	Two panels pass through each other.	两个面板相互穿插。
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} 像素对 PSD 而言过大 (每边最多 {MAX_SIDE} 像素)：请降低分辨率
+	Tap	短按
+	Clear Hold	清除按住
+	Hold Shortcuts	按住快捷键
+	Hold Shortcut Delay	按住快捷键延迟
+	How hold shortcuts work	按住快捷键的工作方式
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	单击后按下要为此按住的键 (Esc 取消)。按住该键会运行此项；短按会运行该键自己的快捷键。
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	短按一个键会运行它的快捷键。按住该键达到延迟时间，则改为运行其“按住”列中的工具或命令。按住快捷键是字母、数字或标点键，可单独使用或与 Shift 组合。
+@msg	Hold {_1} is already used by {_2}	按住 {_1} 已被 {_2} 使用
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	按住快捷键是可输入字符的键，单独使用或与 Shift 组合 ({shown} 含有 Cmd、Ctrl 或 Alt)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} 不能作为按住快捷键：请使用字母、数字或标点键
 	Pressure Sensitive	压感画笔
 	Flex Ribbon	柔韧色带
 	Pulse Stroke	脉动笔触

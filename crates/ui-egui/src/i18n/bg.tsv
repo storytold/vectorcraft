@@ -3085,6 +3085,8 @@ digits	Malayalam	Малаялам
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Колелцето на мишката с натиснат Cmd/Ctrl превърта платното настрани.
 	Dragging sideways on a numeric field's label changes the field's value.	Влаченето настрани върху етикета на числово поле променя стойността на полето.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Жест за завъртане с два пръста върху тъчпад завърта изгледа на платното.
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Задържането на клавиш изпълнява инструмента или командата от колоната „Задръжте“ в „Клавишни комбинации“; краткото натискане изпълнява обичайната му комбинация.
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Колко секунди трябва да се задържи клавиш, преди вместо обичайната му комбинация да се изпълни комбинацията му със задържане.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Когато премествате котвени точки, всяка крива с една преместена крайна точка запазва формата си спрямо краищата си.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Задържането на клавишната комбинация на инструмент го избира, докато я пуснете, а след това отново се избира предишният инструмент.
 	Shows the bounding box while you move the selection or draw a shape.	Показва ограничителната рамка, докато премествате селекцията или рисувате форма.
@@ -7656,6 +7658,16 @@ breakText	Glyphs	Глифи
 @msg	A joint does not close by {gap} pt.	Една връзка не се затваря с {gap} pt.
 @msg	Two panels pass through each other.	Два панела минават един през друг.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer трябва да е "singleLine", "everyLine", "standardSingleLine" или "standardEveryLine"
+	Tap	Кратко натискане
+	Clear Hold	Изчистване на задържането
+	Hold Shortcuts	Комбинации със задържане
+	Hold Shortcut Delay	Забавяне на комбинациите със задържане
+	How hold shortcuts work	Как работят комбинациите със задържане
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	Щракнете и натиснете клавиш, който да се задържа за това (Esc отменя). Задържането на клавиша изпълнява това; краткото натискане изпълнява собствената комбинация на клавиша.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	Краткото натискане на клавиш изпълнява неговата комбинация. Задържането на клавиша за времето на забавяне изпълнява вместо това инструмента или командата от колоната му „Задръжте“. Комбинация със задържане е клавиш с буква, цифра или препинателен знак, самостоятелно или с Shift.
+@msg	Hold {_1} is already used by {_2}	Задържането на {_1} вече се използва от {_2}
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	комбинация със задържане е клавиш, който въвежда знак, самостоятелно или с Shift ({shown} съдържа Cmd, Ctrl или Alt)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} не може да бъде комбинация със задържане: използвайте буква, цифра или препинателен знак
 	Pressure Sensitive	Чувствителни на натиск
 	Flex Ribbon	Гъвкава лента
 	Pulse Stroke	Пулсиращ щрих

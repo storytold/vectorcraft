@@ -3182,6 +3182,8 @@ digits	Malayalam	Malayalam
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	La molette de la souris avec Cmd/Ctrl enfoncée fait défiler la zone de travail latéralement.
 	Dragging sideways on a numeric field's label changes the field's value.	Faire glisser latéralement le libellé d’un champ numérique modifie la valeur du champ.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Un geste de rotation à deux doigts sur un pavé tactile fait pivoter la vue de la zone de travail.
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Maintenir une touche exécute l’outil ou la commande de sa colonne Maintenir dans Raccourcis clavier. Un appui bref exécute son raccourci habituel.
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Durée, en secondes, pendant laquelle une touche doit être maintenue pour que son raccourci de maintien s’exécute à la place de son raccourci habituel.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Quand vous déplacez des points d’ancrage, chaque courbe dont une extrémité bouge garde sa forme par rapport à ses extrémités.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Maintenir le raccourci d’un outil choisit cet outil jusqu’à ce que vous le relâchiez, puis l’outil précédent est de nouveau choisi.
 	Shows the bounding box while you move the selection or draw a shape.	Affiche le cadre de sélection pendant que vous déplacez la sélection ou dessinez une forme.
@@ -10363,6 +10365,16 @@ breakText	Glyphs	Glyphes
 	No objects are selected.	Aucun objet n’est sélectionné.
 	Open a document to mark its fold lines.	Ouvrez un document pour marquer ses lignes de pliage.
 	Remove Fold Line Role	Supprimer le type de ligne
+	Tap	Appui bref
+	Clear Hold	Effacer le maintien
+	Hold Shortcuts	Raccourcis de maintien
+	Hold Shortcut Delay	Délai des raccourcis de maintien
+	How hold shortcuts work	Fonctionnement des raccourcis de maintien
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	Cliquez, puis appuyez sur une touche à maintenir pour cet élément (Échap annule). Maintenir la touche exécute cet élément ; un appui bref exécute le raccourci propre à la touche.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	Un appui bref sur une touche exécute son raccourci. Maintenir la touche pendant le délai exécute à la place l’outil ou la commande de sa colonne Maintenir. Un raccourci de maintien est une touche de lettre, de chiffre ou de ponctuation, seule ou avec Maj.
+@msg	Hold {_1} is already used by {_2}	Le maintien de {_1} est déjà utilisé par {_2}
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	un raccourci de maintien est une touche qui saisit un caractère, seule ou avec Maj ({shown} comporte Cmd, Ctrl ou Alt)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} ne peut pas être un raccourci de maintien : utilisez une lettre, un chiffre ou une touche de ponctuation
 	Check	Vérifier
 	Check Fold Lines	Vérifier les lignes de pliage
 @msg	No cut lines are in the selection.	La sélection ne contient aucune ligne de découpe.

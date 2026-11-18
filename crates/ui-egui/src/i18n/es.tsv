@@ -3194,6 +3194,8 @@ digits	Malayalam	Malayálam
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	La rueda del mouse con Cmd/Ctrl pulsado desplaza el lienzo en horizontal.
 	Dragging sideways on a numeric field's label changes the field's value.	Arrastrar en horizontal sobre la etiqueta de un campo numérico cambia el valor del campo.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Un gesto de giro con dos dedos en un trackpad gira la vista del lienzo.
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Mantener pulsada una tecla ejecuta la herramienta o el comando de su columna Mantener pulsado en Métodos abreviados de teclado; una pulsación breve ejecuta su método abreviado habitual.
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Cuántos segundos hay que mantener pulsada una tecla para que se ejecute su método abreviado de pulsación larga en lugar del habitual.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Al mover puntos de ancla, cada curva con un extremo movido conserva su forma respecto a sus extremos.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Mantener pulsado el atajo de una herramienta la elige hasta que lo suelta, y después vuelve a elegirse la herramienta anterior.
 	Shows the bounding box while you move the selection or draw a shape.	Muestra el cuadro delimitador mientras mueve la selección o dibuja una forma.
@@ -10334,6 +10336,16 @@ breakText	Glyphs	Glifos
 @msg	A joint does not close by {gap} pt.	Una unión no cierra por {gap} pt.
 @msg	Two panels pass through each other.	Dos paneles se atraviesan entre sí.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer debe ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"
+	Tap	Pulsación breve
+	Clear Hold	Borrar pulsación larga
+	Hold Shortcuts	Métodos abreviados de pulsación larga
+	Hold Shortcut Delay	Retardo de pulsación larga
+	How hold shortcuts work	Cómo funcionan los métodos abreviados de pulsación larga
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	Haz clic y presiona una tecla que mantener pulsada para esto (Esc cancela). Mantener pulsada la tecla ejecuta esto; una pulsación breve ejecuta el método abreviado propio de la tecla.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	Una pulsación breve de una tecla ejecuta su método abreviado. Mantener pulsada la tecla durante el retardo ejecuta en su lugar la herramienta o el comando de su columna Mantener pulsado. Un método abreviado de pulsación larga es una tecla de letra, dígito o puntuación, sola o con Shift.
+@msg	Hold {_1} is already used by {_2}	La pulsación larga de {_1} ya la usa {_2}
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	un método abreviado de pulsación larga es una tecla que escribe un carácter, sola o con Shift ({shown} tiene Cmd, Ctrl o Alt)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} no puede ser un método abreviado de pulsación larga: usa una letra, un dígito o una tecla de puntuación
 @msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	una línea u otro trazado abierto que no encierra ningún área no aporta ningún área a la forma compuesta; para incluirlo, aplícale primero Objeto › Trazado › Contornear trazo
 	Pressure Sensitive	Sensible a la presión
 	Flex Ribbon	Cinta flexible
