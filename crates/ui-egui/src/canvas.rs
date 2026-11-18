@@ -52,7 +52,7 @@ use fill::{fill_view, polygon_area};
 #[cfg(test)]
 use grid::ruler_rects;
 use grid::{LineLook, PIXEL_GRID, PIXEL_GRID_ZOOM, checker, clip_segment, grid, ruler_input, rulers, rulers_hidden, textured_quad, view_bounds};
-pub(crate) use grid::{RulerScale, checker_texture, ruler_label, ruler_origin_dragging};
+pub(crate) use grid::{RulerScale, checker_texture, checker_tile, ruler_label, ruler_origin_dragging};
 #[cfg(test)]
 pub(crate) use grid::{TRANSPARENCY_GRID, vertical_label_height};
 use home::home;
