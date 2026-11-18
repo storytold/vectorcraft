@@ -220,6 +220,7 @@ fn run_ui_part2(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             Ok(Value::Null)
         }
         "file.export.svg" => io::export(app, Some("svg"), s("path"), p),
+        "file.export.svg.browser" => crate::dialogs::svg_options::browser_preview(app, p),
         "file.exportForScreens" if p.as_object().is_none_or(|o| o.is_empty()) => {
             crate::dialogs::open_export_for_screens(app);
             Ok(Value::Null)
@@ -712,9 +713,17 @@ fn run_ui_part6(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         "ui.recolorDialog" => crate::dialogs::recolor::open(app, p),
         "ui.cropImage" if !selected_image(app, |_| true) => Err("select an image".into()),
         "ui.cropImage" => app.try_select_tool(vectorcraft_tools::cropimage::ID).map(|()| json!({"tool": app.session.tool_id()})),
+        // Create Object Mosaic… has a dialog of its own, opened on the selected image.
+        "ui.paramDialog" if s("command").as_deref() == Some(crate::dialogs::object_mosaic::COMMAND) => {
+            crate::dialogs::object_mosaic::open(app, p.get("params").unwrap_or(&Value::Null))
+        }
         "ui.paramDialog" => {
             let cmd = s("command").unwrap_or_default();
             let mut fields = p.get("params").and_then(Value::as_object).cloned().unwrap_or_default();
+            // Find and Replace has a dialog of its own, which stays open from match to match.
+            if cmd == crate::dialogs::find_replace::COMMAND {
+                return Some(crate::dialogs::find_replace::open(app, &fields));
+            }
             fields.insert("__command".into(), json!(cmd));
             fields.insert("__label".into(), json!(s("label").unwrap_or(cmd.clone())));
             app.ui.dialog = Some(crate::state::Dialog { kind: "command".into(), fields });
