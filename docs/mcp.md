@@ -5289,7 +5289,8 @@ with `ui.dialog.set` become a step at the dialog's next frame with the pointer u
 down. Reset is a step of its own, which Undo
 Changes reverses. A new edit after Undo Changes leaves nothing to redo. Switching tabs, displays or slider modes,
 selecting rows, Find and Preview make no step. The dialog keeps at most 64 steps and 4 MiB of them as JSON, dropping
-the oldest first. A button with no step to go to is disabled. Save All Colors and Save Prominent Colors add a color
+the oldest first. A button with no step to go to is disabled. Selecting another color group (or no group) and Save
+Changes leave nothing to undo or redo. Save All Colors and Save Prominent Colors add a color
 group to the document at once, as its own undo step, and Cancel and Undo Changes leave that group in place.
 
 The `recolor.*` commands refuse parameters of the wrong form. A `limitTo` or `method` that is not a string gets the

@@ -929,7 +929,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.recolorUndo",
         "Undo Changes",
         "",
-        "{} the open Recolor Artwork dialog goes back one of its own color edits (rows, Colors, Method, the Preserve options, Limit to Library, the harmony rule, Global Adjust, the Color Theme Picker's picks, the Prominent Colors weights): its fields and the preview return to their values before that edit; the document's undo history is unchanged, and OK still records one undo step → {changed, canUndo, canRedo}; an error when the dialog isn't open. Each opening starts with nothing to undo",
+        "{} the open Recolor Artwork dialog goes back one of its own color edits (rows, Colors, Method, the Preserve options, Limit to Library, the harmony rule, Global Adjust, the Color Theme Picker's picks, the Prominent Colors weights): its fields and the preview return to their values before that edit; the document's undo history is unchanged, and OK still records one undo step → {changed, canUndo, canRedo}; an error when the dialog isn't open. Each opening starts with nothing to undo, and selecting another color group or Save Changes leaves nothing to undo or redo",
     ),
     (
         "ui.recolorRedo",

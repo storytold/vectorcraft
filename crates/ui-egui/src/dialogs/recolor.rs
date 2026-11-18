@@ -73,7 +73,8 @@
 //! Undo Changes and Redo Changes beside the Color Theme Picker (`ui.recolorUndo`, `ui.recolorRedo`)
 //! step back and forward through the dialog's own color edits ([`History`]), not the document's
 //! undo history; Cancel discards them and OK still records one undo step. Each opening starts
-//! with nothing to undo.
+//! with nothing to undo, and selecting another color group or Save Changes leaves nothing to undo
+//! or redo.
 //!
 //! Fields (`ui.dialog.set`): `rows` ([{from: [keys], to: key, exclude?, tint?: percent of a spot
 //! color, added?}]; a row with no current colors, `from: []`, recolors no art, and with `added: true`
@@ -502,6 +503,7 @@ fn select_group(app: &mut VectorcraftApp, d: &mut Dialog) -> Result<(), String> 
         Value::Null => {
             // No group: without art OK saves the rows as a new color group.
             d.fields.insert(GROUP_LOADED.into(), Value::Null);
+            restart_history(app);
             if !art {
                 d.fields.insert("__newGroup".into(), json!(true));
                 d.fields.insert("groupName".into(), json!(NEW_GROUP));
@@ -545,6 +547,7 @@ fn select_group(app: &mut VectorcraftApp, d: &mut Dialog) -> Result<(), String> 
         d.fields.remove(COMPS);
     }
     d.fields.insert("__assign".into(), Value::Array(assign));
+    restart_history(app);
     Ok(())
 }
 
@@ -566,6 +569,7 @@ fn group_action(app: &mut VectorcraftApp, d: &mut Dialog, action: &Value) -> Res
             // Nothing changed since the last save but perhaps the name.
             let name = d.str("groupName");
             if name.trim().is_empty() || group.as_deref() == Some(name.as_str()) {
+                restart_history(app);
                 return Ok(());
             }
             cancel_preview(app, d);
@@ -579,6 +583,7 @@ fn group_action(app: &mut VectorcraftApp, d: &mut Dialog, action: &Value) -> Res
             d.fields.insert("group".into(), name.clone());
             d.fields.insert(GROUP_LOADED.into(), name.clone());
             d.fields.insert("groupName".into(), name);
+            restart_history(app);
             Ok(())
         }
         Some("save") => {
@@ -685,6 +690,7 @@ fn group_action(app: &mut VectorcraftApp, d: &mut Dialog, action: &Value) -> Res
                     reread_rows(app, d, &rs, &before, &gone);
                 }
             }
+            restart_history(app);
             Ok(())
         }
         Some("delete") => {
@@ -1483,6 +1489,13 @@ pub struct History {
     base: Option<Snapshot>,
     undo: Vec<Snapshot>,
     redo: Vec<Snapshot>,
+}
+
+/// Drop the dialog's steps, after another color group is selected or Save Changes rewrites the
+/// group: Undo Changes and Redo Changes then have no step to go to, and the next frame or step
+/// takes the fields as they are then.
+fn restart_history(app: &mut VectorcraftApp) {
+    app.ui.recolor_history = History::default();
 }
 
 /// The fields of `d` a step restores ([`STEP_FIELDS`] and [`STEP_MARKS`]).
@@ -3770,6 +3783,79 @@ mod tests {
         let last: Vec<String> = doc.swatch_groups.last().unwrap().swatches.iter().filter_map(|w| w.paint.color()).map(|c| c.to_hex()).collect();
         assert_eq!(last, ["#000000", "#ffff00", "#ffffff"]);
         assert_eq!(group_hex(&app, "A"), Some(vec!["#ff0000".into(), "#00ff00".into()]), "other groups are left as they are");
+    }
+
+    /// Without art: selecting another color group in the list and Save Changes leave Undo Changes
+    /// and Redo Changes no step to go to, so OK gives the selected group the rows read for it.
+    #[test]
+    fn another_group_or_save_changes_leaves_nothing_to_undo() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        app.run("swatch.newGroup", json!({"name": "A", "colors": ["#ff0000", "#00ff00"], "keepModel": true})).unwrap();
+        app.run("swatch.newGroup", json!({"name": "B", "colors": ["#0000ff", "#ffff00", "#ffffff"], "keepModel": true})).unwrap();
+        app.run("ui.recolorDialog", json!({"group": "A"})).unwrap();
+        frame(&mut app, &ctx, 0.0, vec![], 0);
+        let edit = |app: &mut VectorcraftApp, to: &str| {
+            let d = app.ui.dialog.as_mut().unwrap();
+            let mut rs = super::rows(d);
+            rs[0]["to"] = json!(to);
+            d.fields.insert("rows".into(), Value::Array(rs));
+        };
+        edit(&mut app, "rgb 0 0 0");
+        frame(&mut app, &ctx, 0.1, vec![], 0);
+        assert!(super::can_step(&app, true), "the edit is a step");
+
+        set(&mut app, "group", json!("B")).unwrap();
+        frame(&mut app, &ctx, 0.2, vec![], 0);
+        assert!(!super::can_step(&app, true) && !super::can_step(&app, false), "another group leaves no step");
+        assert_eq!(super::step(&mut app, true).unwrap()["changed"], json!(false));
+        assert_eq!(new_colors(&app).len(), 3, "the rows of B");
+
+        edit(&mut app, "rgb 0 128 0");
+        frame(&mut app, &ctx, 0.3, vec![], 0);
+        assert!(super::can_step(&app, true), "the edit is a step");
+        act(&mut app, &ctx, 0.4, "save").unwrap();
+        assert_eq!(group_hex(&app, "B"), Some(vec!["#008000".into(), "#ffff00".into(), "#ffffff".into()]));
+        assert!(!super::can_step(&app, true) && !super::can_step(&app, false), "Save Changes leaves no step");
+        assert_eq!(super::step(&mut app, true).unwrap()["changed"], json!(false));
+
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(group_hex(&app, "B"), Some(vec!["#008000".into(), "#ffff00".into(), "#ffffff".into()]), "OK keeps B's saved colors");
+        assert_eq!(group_hex(&app, "A"), Some(vec!["#ff0000".into(), "#00ff00".into()]), "and leaves A as it was");
+    }
+
+    /// With art not linked to the group: Save Changes with the rows as the last Save Changes left
+    /// them, after an edit and Undo Changes, leaves Redo Changes no step to go to either.
+    #[test]
+    fn an_unchanged_save_changes_leaves_nothing_to_redo() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        app.run("file.new", json!({"width": 300, "height": 100})).unwrap();
+        let (red, blue) = (square(&mut app, 10.0, "#ff0000"), square(&mut app, 40.0, "#0000ff"));
+        app.run("swatch.newGroup", json!({"name": "Plain", "colors": ["#ff0000", "#0000ff"], "keepModel": true})).unwrap();
+        app.run("select.set", json!({"ids": [red, blue]})).unwrap();
+        app.run("ui.recolorDialog", json!({"group": "Plain"})).unwrap();
+        frame(&mut app, &ctx, 0.0, vec![], 0);
+        let edit = |app: &mut VectorcraftApp, to: &str| {
+            let d = app.ui.dialog.as_mut().unwrap();
+            let mut rs = super::rows(d);
+            rs[0]["to"] = json!(to);
+            d.fields.insert("rows".into(), Value::Array(rs));
+        };
+        edit(&mut app, "rgb 0 128 0");
+        frame(&mut app, &ctx, 0.1, vec![], 0);
+        act(&mut app, &ctx, 0.2, "save").unwrap();
+        assert!(app.ui.dialog.as_ref().unwrap().fields.contains_key(SAVED_ROWS), "the art kept its colors");
+        edit(&mut app, "rgb 0 0 0");
+        frame(&mut app, &ctx, 0.3, vec![], 0);
+        assert_eq!(super::step(&mut app, true).unwrap()["changed"], json!(true));
+        assert!(unchanged_since_save(app.ui.dialog.as_ref().unwrap()), "the rows are as saved");
+        assert!(super::can_step(&app, false), "the edit can be redone");
+        act(&mut app, &ctx, 0.4, "save").unwrap();
+        assert!(!super::can_step(&app, true) && !super::can_step(&app, false), "Save Changes leaves no step");
     }
 
     /// Without art: after a group is picked in the list, the same Color Theme Picker picks that gave
