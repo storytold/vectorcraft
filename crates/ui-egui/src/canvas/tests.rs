@@ -11005,7 +11005,7 @@ fn the_tip_brings_back_the_perspective_grid_tool_without_showing_the_grid() {
 }
 
 /// The native pen feed's barrel rotation reaches the Paintbrush during canvas hover, before any
-/// stroke begins.
+/// stroke begins. Turning the pen or replacing it with a mouse updates a still pointer too.
 #[test]
 fn bristle_pen_tip_reaches_the_canvas_before_a_press() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -11031,6 +11031,17 @@ fn bristle_pen_tip_reaches_the_canvas_before_a_press() {
     frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at)]);
     let horizontal = tip(&mut app).expect("hovering pen shows its brush tip");
     assert!(horizontal.width() > horizontal.height() * 2.0, "{horizontal:?}");
+    feed.set_sample(Some(crate::stylus::PenSample {
+        pressure: 0.0,
+        pose: PenPose { rotation: Some(90.0), ..Default::default() },
+        ..Default::default()
+    }));
+    frame(&mut app, &ctx, vec![]);
+    let vertical = tip(&mut app).expect("turning a still pen turns its tip");
+    assert!(vertical.height() > vertical.width() * 2.0, "{vertical:?}");
+    feed.set(None);
+    frame(&mut app, &ctx, vec![]);
+    assert!(tip(&mut app).is_none(), "a mouse clears a still pen's tip");
 }
 
 /// #764: the pen's tilt and barrel rotation in the host's feed reach the Paintbrush's points,
