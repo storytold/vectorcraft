@@ -5335,6 +5335,8 @@ liquify-list-end	{0}, {1}	{0} e {1}
 @msg	no such spine point	punto della dorsale inesistente
 @msg	`with` must be a list of at most 10000 spine point indexes	`with` deve essere un elenco di al massimo 10000 indici di punti della dorsale
 @msg	`with` moves points, not a handle	`with` sposta punti, non una maniglia
+@msg	`link` and `independent` cannot both be true	`link` e `independent` non possono essere entrambi true
+@msg	`link` places a handle: give `handle`	`link` posiziona una maniglia: indica `handle`
 @msg	no such spine segment	segmento della dorsale inesistente
 @msg	no such subpath	sottotracciato inesistente
 @msg	no such user library	libreria utente inesistente

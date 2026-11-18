@@ -5982,6 +5982,8 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	no such spine point	nincs ilyen gerincpont
 @msg	`with` must be a list of at most 10000 spine point indexes	`with`: legfeljebb 10000 gerincpont-indexből álló lista kell
 @msg	`with` moves points, not a handle	`with` pontokat mozgat, nem fogantyút
+@msg	`link` and `independent` cannot both be true	`link` és `independent` nem lehet egyszerre true
+@msg	`link` places a handle: give `handle`	`link` fogantyút helyez el: adja meg a `handle` értéket
 @msg	no such spine segment	nincs ilyen gerincszakasz
 @msg	no such subpath	nincs ilyen részútvonal
 @msg	no such user library	nincs ilyen felhasználói könyvtár

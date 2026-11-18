@@ -5602,6 +5602,8 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	no such spine point	takový bod páteře neexistuje
 @msg	`with` must be a list of at most 10000 spine point indexes	`with` musí být seznam nejvýše 10000 indexů bodů páteře
 @msg	`with` moves points, not a handle	`with` posouvá body, ne táhlo
+@msg	`link` and `independent` cannot both be true	`link` a `independent` nemohou být zároveň true
+@msg	`link` places a handle: give `handle`	`link` umisťuje táhlo: zadejte `handle`
 @msg	no such spine segment	takový segment páteře neexistuje
 @msg	no such subpath	taková dílčí cesta neexistuje
 @msg	no such user library	taková uživatelská knihovna neexistuje

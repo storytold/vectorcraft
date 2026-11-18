@@ -3488,6 +3488,8 @@ liquify-list-end	{0}, {1}	{0}和{1}
 @msg	no such spine point	沒有這個脊線點
 @msg	`with` must be a list of at most 10000 spine point indexes	`with` 必須是最多 10000 個脊線點索引的清單
 @msg	`with` moves points, not a handle	`with` 移動的是點，不是控制把手
+@msg	`link` and `independent` cannot both be true	`link` 和 `independent` 不能同時為 true
+@msg	`link` places a handle: give `handle`	`link` 用於放置控制把手：請提供 `handle`
 @msg	no such spine segment	沒有這個脊線線段
 @msg	a key object sits on that point	該點上有關鍵物件
 @msg	a spine keeps at least two points	脊線至少要保留兩個點
