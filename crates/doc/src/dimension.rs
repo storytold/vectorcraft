@@ -124,6 +124,26 @@ impl ArrowStyle {
     }
 }
 
+/// `arrowHead`: null, or a built-in stroke arrowhead by its name (`Barbed`, as `stroke.set` takes
+/// it). A custom arrowhead and an unknown name are refused.
+mod arrow_head {
+    use crate::Arrowhead;
+    use serde::de::{Error, IntoDeserializer};
+    use serde::{Deserialize, Deserializer};
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<Arrowhead>, D::Error> {
+        let Some(name) = Option::<String>::deserialize(deserializer)? else { return Ok(None) };
+        let parsed: Result<Arrowhead, serde::de::value::Error> = Arrowhead::deserialize(name.as_str().into_deserializer());
+        match parsed {
+            Ok(head) if !matches!(head, Arrowhead::Custom(_)) => Ok(Some(head)),
+            _ => {
+                let shown: String = name.chars().take(64).collect();
+                Err(D::Error::custom(format!("Unknown arrowhead {shown}: a built-in stroke arrowhead name or null")))
+            }
+        }
+    }
+}
+
 /// Where the label sits across the dimension line.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -157,6 +177,10 @@ pub struct DimensionOptions {
     pub line_type: LineType,
     pub line_color: [u8; 3],
     pub arrow_style: ArrowStyle,
+    /// A built-in stroke arrowhead drawn at both ends in place of `arrow_style`'s head. Versions
+    /// that do not read it draw `arrow_style`.
+    #[serde(deserialize_with = "arrow_head::deserialize")]
+    pub arrow_head: Option<crate::Arrowhead>,
     pub arrow_scale: f64,
     pub extension_weight: f64,
     pub extension_type: LineType,
@@ -186,6 +210,7 @@ impl Default for DimensionOptions {
             line_type: LineType::Solid,
             line_color: [0, 0, 0],
             arrow_style: ArrowStyle::Filled,
+            arrow_head: None,
             arrow_scale: 100.0,
             extension_weight: 0.5,
             extension_type: LineType::Solid,
@@ -228,8 +253,16 @@ impl DimensionOptions {
         }
         Ok(f)
     }
+    /// The stroke arrowhead drawn at each end of the dimension line: `arrow_head`, or else the
+    /// arrow style's head.
+    pub fn arrowhead(&self) -> Option<crate::Arrowhead> {
+        self.arrow_head.clone().or_else(|| self.arrow_style.arrowhead())
+    }
     pub fn validate(&self) -> Result<(), String> {
         self.factor()?;
+        if matches!(self.arrow_head, Some(crate::Arrowhead::Custom(_))) {
+            return Err("A dimension's arrowhead is a built-in stroke arrowhead".into());
+        }
         if self.precision > 6 {
             return Err("Choose a precision from 0 to 6".into());
         }

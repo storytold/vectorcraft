@@ -118,6 +118,62 @@ fn each_arrow_style_draws_its_stroke_arrowhead_at_both_ends() {
     }
 }
 
+/// `arrowHead` draws any built-in stroke arrowhead at both ends of the dimension line, and the
+/// native file keeps it. The saved `arrowStyle` stays one of the four values versions without
+/// `arrowHead` read, and a dimension saved without `arrowHead` draws its arrow style. A custom
+/// arrowhead and an unknown name are refused.
+#[test]
+fn every_stroke_arrowhead_draws_as_a_dimension_arrowhead() {
+    use vectorcraft_doc::{Arrowhead, dimension::ArrowStyle};
+    let ends = |s: &Session, id: u64| -> Vec<_> {
+        let n = s.doc().unwrap().doc.node(NodeId(id)).unwrap();
+        let children = n.children().unwrap();
+        let strokes = children.iter().filter_map(|n| n.appearance.stroke().map(|s| (s.start_arrow.clone(), s.end_arrow.clone())));
+        strokes.filter(|(a, b)| a.is_some() || b.is_some()).collect()
+    };
+    let mut s = session();
+    let mut made = vec![];
+    for head in Arrowhead::ALL {
+        let name = serde_json::to_value(&head).unwrap();
+        let id = run(&mut s, "dimension.create", json!({"a":[0,0],"b":[72,0],"options":{"arrowHead":name}}))["id"].as_u64().unwrap();
+        let drawn = ends(&s, id);
+        assert!(!drawn.is_empty() && drawn.iter().all(|h| *h == (Some(head.clone()), Some(head.clone()))), "{name}: {drawn:?}");
+        let saved = serde_json::to_value(&recipe(&s, id).options).unwrap();
+        assert_eq!((&saved["arrowStyle"], &saved["arrowHead"]), (&json!("filled"), &name));
+        made.push((id, head));
+    }
+    let bytes = vectorcraft_format::save(&s.doc().unwrap().doc, false);
+    let mut reopened = Session::new();
+    reopened.add_document(vectorcraft_format::load(&bytes).unwrap(), None);
+    for (id, head) in made {
+        assert_eq!(recipe(&reopened, id).options.arrowhead(), Some(head));
+    }
+    // A dimension saved before `arrowHead` existed.
+    let id = run(&mut s, "dimension.create", json!({"a":[0,0],"b":[72,0],"options":{"arrowStyle":"open"}}))["id"].as_u64().unwrap();
+    let mut file: Value = serde_json::from_slice(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    fn drop_head(v: &mut Value) {
+        match v {
+            Value::Object(m) => {
+                m.remove("arrowHead");
+                m.values_mut().for_each(drop_head);
+            }
+            Value::Array(a) => a.iter_mut().for_each(drop_head),
+            _ => {}
+        }
+    }
+    drop_head(&mut file);
+    let mut older = Session::new();
+    older.add_document(vectorcraft_format::load(&serde_json::to_vec(&file).unwrap()).unwrap(), None);
+    let o = recipe(&older, id).options;
+    assert_eq!((o.arrow_style, o.arrow_head.clone(), o.arrowhead()), (ArrowStyle::Open, None, Some(Arrowhead::TriangleOpen)));
+    let custom = json!({"Custom":{"name":"Dot","path":{"subpaths":[]}}});
+    for bad in [json!("Custom"), json!("Arrowhead"), json!("barbed"), json!(3), custom] {
+        let p = json!({"a":[0,0],"b":[72,0],"options":{"arrowHead":bad}});
+        assert!(s.execute("dimension.create", &p).is_err(), "{bad}");
+    }
+    assert!(s.execute("dimension.create", &json!({"a":[0,0],"b":[72,0],"options":{"arrowStyle":"Barbed"}})).is_err());
+}
+
 #[test]
 fn dimension_angles_circles_arcs_and_curves() {
     let mut s = session();
