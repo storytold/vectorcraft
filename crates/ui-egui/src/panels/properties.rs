@@ -1,4 +1,4 @@
-//! The Properties panel: context-sensitive sections like Illustrator's.
+//! The Properties panel: sections that change with the selection.
 
 use egui::Ui;
 use serde_json::json;
@@ -26,7 +26,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let editing_artboards = app.session.tool_id() == "artboard";
     // Ruler guides selected on their own (a click on one): their position.
     let guides = super::transform::selected_guides(app);
-    let label = heading(first.as_ref(), n_sel, editing_artboards, guides.is_some());
+    let label = heading(first.as_deref(), n_sel, editing_artboards, guides.is_some());
     ui.label(egui::RichText::new(label).size(11.5).color(t.text_dim));
     ui.add_space(4.0);
     if editing_artboards {
@@ -985,7 +985,7 @@ fn width_profile_row(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     ui.horizontal(|ui| {
         dim_label(ui, tl!("Profile:"));
-        if let Some(id) = super::stroke::profile_dropdown(app, ui, profile) {
+        if let Some(id) = super::stroke::profile_dropdown(app, ui, stroke.as_ref()) {
             app.run("stroke.set", json!({"profile": id})).ok();
         }
     });

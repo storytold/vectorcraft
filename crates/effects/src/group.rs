@@ -110,13 +110,15 @@ fn leaves(doc: Option<&Document>, n: &Node, hook: Option<OutlineHook>, nodes: &S
             // Every path of the outline art, at any depth, is drawn inside the object's opacity
             // and blend mode. A symbol's art comes with the live objects and the instances of
             // other symbols inside it given as their art, and the type inside it outlined, so the
-            // art has nothing left for `hook` to give.
+            // art has nothing left for `hook` to give. Its fills and strokes carry the geometry
+            // effects of the instance's active fill and stroke, as the canvas draws them.
             if let Some(h) = hook
                 && let Some(art) = h(n)
             {
                 let art = match &n.kind {
                     NodeKind::SymbolInstance { symbol, .. } if nodes.charge(&art) => {
-                        let mut art = crate::reshape::symbol_art_with(&art, h, nodes, symbol);
+                        let mut art = instance_art(doc, &art, h, nodes, symbol);
+                        crate::reshape::add_instance_row_effects(doc, n, &mut art);
                         crate::reshape::outline_nested_text(doc, &mut art, false);
                         transparency_into_members(&mut art);
                         art
@@ -132,6 +134,19 @@ fn leaves(doc: Option<&Document>, n: &Node, hook: Option<OutlineHook>, nodes: &S
             }
         }
     }
+}
+
+/// `art`, the art `hook` gave an instance of the symbol named `symbol`, with the live objects and
+/// the instances of other symbols inside it given as their art
+/// ([`crate::reshape::symbol_art_with`]). The art of each of those instances carries the geometry
+/// effects of its own active fill and stroke ([`crate::reshape::add_instance_row_effects`]).
+fn instance_art(doc: Option<&Document>, art: &Node, hook: OutlineHook, nodes: &SymbolNodes, symbol: &str) -> Node {
+    let drawn = |m: &Node| {
+        let mut a = hook(m)?;
+        crate::reshape::add_instance_row_effects(doc, m, &mut a);
+        Some(a)
+    };
+    crate::reshape::symbol_art_with(art, &drawn, nodes, symbol)
 }
 
 /// `l`, a path drawn inside `n`: its opacity multiplied by `n`'s, and `n`'s blend mode when it is
@@ -221,13 +236,15 @@ fn reshaped_art(doc: Option<&Document>, n: &Node, hook: Option<OutlineHook>, nod
             }
         },
         // A symbol instance with a warp: its symbol's art placed by the instance, with the type
-        // inside it outlined, reshaped as one piece, as the renderer draws it.
+        // inside it outlined, reshaped as one piece, as the renderer draws it. The fills and strokes
+        // of the art then carry the geometry effects of the instance's active fill and stroke.
         NodeKind::SymbolInstance { symbol, .. } if !fx.is_empty() => {
             let h = hook?;
             let art = h(n).filter(|art| nodes.charge(art))?;
-            let mut art = crate::reshape::symbol_art_with(&art, h, nodes, symbol);
+            let mut art = instance_art(doc, &art, h, nodes, symbol);
             crate::reshape::outline_nested_text(doc, &mut art, false);
             members_as_drawn(doc, &mut art);
+            crate::reshape::add_instance_row_effects(doc, n, &mut art);
             let carry = crate::reshape::reshape_leaves_carrying(&mut art, &fx, &n.appearance.effects, doc);
             // The art's own fills and strokes follow the effects as its members do.
             if carry.moves(&art.appearance) {
@@ -703,6 +720,11 @@ pub fn member_shapes(doc: Option<&Document>, n: &Node) -> Vec<(PathData, FillRul
         }
     }
     fn members(doc: Option<&Document>, n: &Node, out: &mut Vec<(PathData, FillRule)>) {
+        // A clip group whose clipping type's strokes paint around it is outlined as that clip
+        // group: the strokes outside the clip add nothing.
+        if let Some(inner) = crate::reshape::painted_clip_inner(n) {
+            return members(doc, inner, out);
+        }
         // A clip group shows its members only inside its clipping path: its outline is that
         // region, not the clipped members' own shapes, which may reach far outside it (#7289).
         if n.clips() {
@@ -902,14 +924,18 @@ pub fn evaluate_container(doc: Option<&Document>, n: &Node) -> Option<Node> {
     }
     let PreparedContainer { mut m, guides, paint, .. } = prepare_container(doc, n)?;
     if paint {
-        let shapes = member_shapes(doc, &m);
-        let bounds = m.geometric_bounds();
+        // A clip group whose clipping type paints strokes is now a group of a clip group and those
+        // strokes ([`crate::reshape::paint_type_clip`]): its own fills and strokes paint inside
+        // that clip group. Such groups among the members are measured as their clip groups.
+        let wrapped = n.clips() && crate::reshape::painted_clip_inner(&m).is_some();
+        let (shapes, bounds) = (member_shapes(doc, &m), crate::reshape::clip_bounds(&m));
         let art =
             |items: &[AppearanceItem]| -> Vec<Arc<Node>> { items.iter().filter_map(|i| item_art(n.id, i, &shapes, bounds)).map(Arc::new).collect() };
         let (below, above) = m.appearance.split_contents();
         let (below, above) = (art(below), art(above));
-        let at = usize::from(m.clips());
-        if let Some(ch) = m.children_mut() {
+        let at = usize::from(wrapped || m.clips());
+        let target = if wrapped { m.children_mut().and_then(|ch| ch.first_mut()).map(Arc::make_mut) } else { Some(&mut m) };
+        if let Some(ch) = target.and_then(Node::children_mut) {
             let at = at.min(ch.len());
             ch.splice(at..at, below);
             ch.extend(above);

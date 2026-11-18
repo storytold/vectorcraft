@@ -105,8 +105,8 @@ pub use solids::{
     validate_three_d_params, view_options, with_graphic,
 };
 pub use solids::{
-    GRAPHIC_MAX_OFFSET, GRAPHIC_SCALE_RANGE, GRAPHICS_NOT_TAKEN, appearance_graphic_symbols, exports_three_d, graphic_frame_at,
-    graphics_reshaped_after, rename_appearance_graphic_symbol,
+    GRAPHIC_MAX_OFFSET, GRAPHIC_SCALE_RANGE, GRAPHICS_NOT_TAKEN, appearance_graphic_symbols, exports_three_d, graphic_fitting_scale,
+    graphic_frame_at, graphic_side_size, graphics_reshaped_after, rename_appearance_graphic_symbol,
 };
 pub use stylize::{ScribbleSetting, scribble_setting_id, scribble_settings};
 pub use svg_filter::SVG_FILTER;
