@@ -69,6 +69,64 @@ fn three_instances_give_one_symbol_and_three_uses() {
     assert!(boxes.iter().any(|b| (b.x0 - 90.0).abs() < 1e-3 && (b.y0 - 30.0).abs() < 1e-3), "{boxes:?}");
 }
 
+/// 2,000 symbols, then two named "Mark" (a red square with a black stroke, then a blue one) and
+/// "Holder", holding an instance of "Mark". Instances: "Mark" moved, "Mark" stretched (written as
+/// its own art) and "Holder". With `second` the blue square's symbol is named that instead.
+fn marks(second: &str) -> Document {
+    let mut d = Document::new(200.0, 120.0);
+    for i in 0..2000 {
+        let art = Node::path(
+            d.alloc_id(),
+            shapes::rectangle(Rect::new(0.0, 0.0, 1.0, 1.0)),
+            Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
+        );
+        d.symbols.push(Symbol { dynamic: false, name: format!("Filler {i}"), art: Arc::new(art) });
+    }
+    for (name, color) in [("Mark", Color::rgb8(255, 0, 0)), (second, Color::rgb8(0, 0, 255))] {
+        let ap = Appearance::basic(Paint::solid(color), Paint::solid(Color::BLACK), 2.0);
+        let art = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(-10.0, -10.0, 10.0, 10.0)), ap);
+        d.symbols.push(Symbol { dynamic: false, name: name.into(), art: Arc::new(art) });
+    }
+    let held = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Mark".into(), xf: Affine::translate((5.0, 5.0)) });
+    let holder = Node::group(d.alloc_id(), vec![Arc::new(held)]);
+    d.symbols.push(Symbol { dynamic: false, name: "Holder".into(), art: Arc::new(holder) });
+    instance(&mut d, "Mark", Affine::translate((25.0, 25.0)));
+    instance(&mut d, "Mark", Affine::translate((80.0, 60.0)) * Affine::scale_non_uniform(2.0, 1.0));
+    instance(&mut d, "Holder", Affine::translate((150.0, 60.0)));
+    d
+}
+
+/// Instances among many symbols are written with the first symbol of their name, the same SVG as
+/// when no other symbol has that name.
+#[test]
+fn instances_are_written_with_the_first_symbol_of_their_name() {
+    let svg = export(&marks("Mark"), &ExportOptions::default());
+    assert_eq!(svg, export(&marks("Other"), &ExportOptions::default()));
+    assert!(svg.contains("#ff0000") && !svg.contains("#0000ff"), "{svg}");
+}
+
+/// An export of 300 instances with drop shadows, among 2,000 symbols, reads the symbol list once
+/// to find their symbols.
+#[test]
+fn an_export_reads_the_symbol_list_once() {
+    let mut d = marks("Other");
+    for i in 0..300 {
+        let xf = Affine::translate((f64::from(i % 20) * 10.0, f64::from(i / 20) * 8.0)) * Affine::scale(0.2);
+        let mut n = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Mark".into(), xf });
+        n.appearance.effects.push(vectorcraft_doc::Effect {
+            id: "stylize.dropShadow".into(),
+            params: serde_json::json!({"x": 1, "y": 1, "blur": 0}),
+            visible: true,
+        });
+        let l = d.layers[0].id;
+        d.insert(Some(l), usize::MAX, n).unwrap();
+    }
+    let before = vectorcraft_doc::symbols_read();
+    export(&d, &ExportOptions::default());
+    let read = vectorcraft_doc::symbols_read() - before;
+    assert!(read <= d.symbols.len(), "{read} symbols read, {} in the document", d.symbols.len());
+}
+
 /// A scaled instance of a symbol with 9-slice guides is written as the canvas draws it, with no
 /// `<use>`: at 200 × 150 its 10 × 10 corner square stays 10 × 10 and its center square becomes
 /// 30 × 20. An instance at the natural size still uses the def.

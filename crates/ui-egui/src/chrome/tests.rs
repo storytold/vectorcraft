@@ -172,11 +172,11 @@ fn right_stage(g: &super::RightGroup) -> String {
         w if w > super::MIN_SWITCHER => "narrower switcher",
         _ => "minimal switcher",
     };
-    format!("community {}, learn {}, {:?}, {switcher}", g.community, g.learn, g.search)
+    format!("community {}, learn {}, arrange {}, {:?}, {switcher}", g.community, g.learn, g.arrange, g.search)
 }
 
-/// As the app bar's room runs short, the community button goes first, then Explore tutorials, then the search
-/// field becomes the icon, then the workspace switcher narrows to its minimum, then the icon goes.
+/// As the app bar's room runs short, the community button goes first, then Explore tutorials, then Arrange
+/// Documents, then the search field becomes the icon, then the workspace switcher narrows to its minimum, then the icon goes.
 /// Whatever shows fits in the room, down to the minimal switcher alone.
 #[test]
 fn the_app_bar_gives_up_its_right_hand_controls_in_order() {
@@ -193,31 +193,33 @@ fn the_app_bar_gives_up_its_right_hand_controls_in_order() {
             super::Search::Icon => w.gap + w.icon,
             super::Search::Hidden => 0.0,
         };
+        let arrange = if g.arrange { w.gap + w.icon } else { 0.0 };
         let learn = if g.learn { w.gap + w.icon } else { 0.0 };
         let community = if g.community { 10.0 + w.gap + w.community } else { 0.0 };
-        let used = g.switcher_w + 8.0 + search + learn + community;
+        let used = g.switcher_w + 8.0 + search + arrange + learn + community;
         assert!(used <= room || g.switcher_w == super::MIN_SWITCHER && g.search == super::Search::Hidden, "{room}: {g:?} needs {used}");
     }
     assert_eq!(
         stages,
         [
-            "community true, learn true, Field, full switcher",
-            "community false, learn true, Field, full switcher",
-            "community false, learn false, Field, full switcher",
-            "community false, learn false, Icon, full switcher",
-            "community false, learn false, Icon, narrower switcher",
-            "community false, learn false, Icon, minimal switcher",
+            "community true, learn true, arrange true, Field, full switcher",
+            "community false, learn true, arrange true, Field, full switcher",
+            "community false, learn false, arrange true, Field, full switcher",
+            "community false, learn false, arrange false, Field, full switcher",
+            "community false, learn false, arrange false, Icon, full switcher",
+            "community false, learn false, arrange false, Icon, narrower switcher",
+            "community false, learn false, arrange false, Icon, minimal switcher",
             // Once the icon has gone, the switcher takes the room it leaves.
-            "community false, learn false, Hidden, narrower switcher",
-            "community false, learn false, Hidden, minimal switcher",
+            "community false, learn false, arrange false, Hidden, narrower switcher",
+            "community false, learn false, arrange false, Hidden, minimal switcher",
         ]
     );
     // In Safe Mode the label's width is taken first (not counted in `room`), and the switcher goes
     // when a minimal one does not fit.
     let safe = |room| right_stage(&super::fit_right_group(&right_widths(room, true)));
-    assert_eq!(safe(700.0), "community true, learn true, Field, full switcher");
-    assert_eq!(safe(72.0), "community false, learn false, Hidden, minimal switcher");
-    assert_eq!(safe(71.0), "community false, learn false, Hidden, no switcher");
+    assert_eq!(safe(700.0), "community true, learn true, arrange true, Field, full switcher");
+    assert_eq!(safe(72.0), "community false, learn false, arrange false, Hidden, minimal switcher");
+    assert_eq!(safe(71.0), "community false, learn false, arrange false, Hidden, no switcher");
 }
 
 /// What screen readers call the app bar's search field, and the icon it becomes, before the shortcut.
@@ -1912,6 +1914,45 @@ fn isolation_bar_navigation_and_back_button_steps_up() {
     // Clicking g2 isolates g2 directly.
     click_at(&mut app, egui::pos2(115.0, 12.0));
     assert_eq!(app.session.active().unwrap().isolation, Some(NodeId(g2)));
+}
+
+/// With a sublayer isolated, the back arrow goes up one layer at a time and then leaves isolation
+/// mode. The top-level layer's crumb leaves isolation mode from any depth, and a parent sublayer's
+/// crumb isolates that sublayer.
+#[test]
+fn isolation_bar_back_button_steps_up_through_sublayers() {
+    use vectorcraft_doc::NodeId;
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    let top = app.session.active().unwrap().doc.layers[0].id;
+    let mid = NodeId(app.run("layer.newSublayer", json!({"parent": top.0, "name": "Sublayer B"})).unwrap()["id"].as_u64().unwrap());
+    let deep = NodeId(app.run("layer.newSublayer", json!({"parent": mid.0, "name": "Sublayer C"})).unwrap()["id"].as_u64().unwrap());
+    app.run("layer.setCurrent", json!({"id": deep.0})).unwrap();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap();
+    let ctx = isolation_bar_context();
+    let click = |app: &mut crate::VectorcraftApp, pos: egui::Pos2| isolation_bar_gesture(app, &ctx, pos, pos);
+    let back = egui::pos2(15.0, 12.0);
+    let isolation = |app: &crate::VectorcraftApp| app.session.active().unwrap().isolation;
+
+    app.run("object.isolate", json!({"id": deep.0})).unwrap();
+    let steps = app.session.doc().unwrap().history.undo.len();
+    click(&mut app, back);
+    assert_eq!(isolation(&app), Some(mid), "back from the deepest sublayer");
+    click(&mut app, back);
+    assert_eq!(isolation(&app), Some(top), "back from the middle sublayer");
+    click(&mut app, back);
+    assert_eq!(isolation(&app), None, "back from the top-level layer");
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), steps, "no undo step");
+
+    // "Layer 1" is the first crumb, at x 30 to about 75.
+    app.run("object.isolate", json!({"id": deep.0})).unwrap();
+    click(&mut app, egui::pos2(40.0, 12.0));
+    assert_eq!(isolation(&app), None, "the top-level layer's crumb");
+
+    // "Sublayer B" is the second crumb, from about x 95.
+    app.run("object.isolate", json!({"id": deep.0})).unwrap();
+    click(&mut app, egui::pos2(115.0, 12.0));
+    assert_eq!(isolation(&app), Some(mid), "the parent sublayer's crumb");
 }
 
 /// Headless frames of the isolation bar over a 1200 × 700 canvas for one pointer gesture: a press
@@ -4650,4 +4691,60 @@ fn the_control_bar_shows_the_inline_transform_fields_only_when_they_fit() {
         assert!(menu_seen, "{count} objects: a wide bar has room for the panel menu button");
         assert!(groups_seen.iter().all(|s| *s), "{count} objects: a wide bar shows every group: {groups_seen:?}");
     }
+}
+
+/// A click on the Control bar's X:, Y:, W: or H: label opens the Transform panel in a popover under
+/// it, as the Transform link does, and a second click closes it. The click leaves the selection and
+/// its bounds as they were, and no field takes the keyboard. A drag on W: still scrubs the width and
+/// opens nothing.
+#[test]
+fn the_control_bars_x_y_w_and_h_labels_open_the_transform_panel() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let id = app.run("shape.rectangle", json!({"x": 20, "y": 20, "width": 40, "height": 30})).unwrap()["id"].clone();
+    app.run("select.set", json!({ "ids": [id] })).unwrap();
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(2000.0, 600.0));
+    let frame = |app: &mut crate::VectorcraftApp, events| control_bar_frame_in(app, &ctx, screen, events);
+    let state = |app: &crate::VectorcraftApp| {
+        let st = app.session.active().unwrap();
+        let b = st.doc.bounds_of(&st.selection.objects, false).unwrap();
+        (st.selection.objects.len(), [b.x0, b.y0, b.x1, b.y1])
+    };
+    // The label's own node: a label whose text is `name` (the field it names is named the same).
+    let label = |nodes: &[egui::accesskit::Node], name: &str| {
+        let n = nodes.iter().find(|n| n.role() == egui::accesskit::Role::Label && n.value() == Some(name));
+        let b = n.and_then(|n| n.bounds()).unwrap_or_else(|| panic!("no {name} label"));
+        egui::pos2(((b.x0 + b.x1) / 2.0) as f32, ((b.y0 + b.y1) / 2.0) as f32)
+    };
+    // The Transform panel's Rotate field is not on the bar itself.
+    let open = |nodes: &[egui::accesskit::Node]| nodes.iter().any(|n| n.label() == Some("Rotate"));
+    let before = state(&app);
+    frame(&mut app, vec![]);
+    for name in ["X:", "Y:", "W:", "H:"] {
+        let nodes = frame(&mut app, vec![]);
+        assert!(!open(&nodes), "{name}: the Transform panel is closed at first");
+        let at = label(&nodes, name);
+        frame(&mut app, vec![egui::Event::PointerMoved(at), press_at(at, true)]);
+        frame(&mut app, vec![press_at(at, false)]);
+        assert!(open(&frame(&mut app, vec![])), "{name}: a click on the label opens the Transform panel");
+        assert_eq!(ctx.memory(|m| m.focused()), None, "{name}: no field took the keyboard");
+        assert_eq!(state(&app), before, "{name}: the selection and its bounds stay");
+        frame(&mut app, vec![egui::Event::PointerMoved(at), press_at(at, true)]);
+        frame(&mut app, vec![press_at(at, false)]);
+        assert!(!open(&frame(&mut app, vec![])), "{name}: a second click closes it");
+    }
+    let at = label(&frame(&mut app, vec![]), "W:");
+    frame(&mut app, vec![egui::Event::PointerMoved(at), press_at(at, true)]);
+    for i in 1..=4 {
+        frame(&mut app, vec![egui::Event::PointerMoved(at + egui::vec2(5.0 * i as f32, 0.0))]);
+    }
+    frame(&mut app, vec![press_at(at + egui::vec2(20.0, 0.0), false)]);
+    let nodes = frame(&mut app, vec![]);
+    assert!(!open(&nodes), "a drag on W: opens nothing");
+    let (_, [x0, _, x1, _]) = state(&app);
+    assert!(x1 - x0 > before.1[2] - before.1[0], "a drag on W: scrubs the width: {:?} to {:?}", before.1, [x0, x1]);
 }

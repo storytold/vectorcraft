@@ -112,7 +112,7 @@ pub fn open_tool_dialog(app: &mut VectorcraftApp, kind: &str, p: Value) {
                 "rotate" => json!({"angle": 0}),
                 "reflect" => json!({"axis": "vertical", "angle": 90}),
                 "scale" => json!({"sx": 100, "sy": 100, "uniform": true}),
-                "shear" => json!({"angle": 0, "axis": "horizontal"}),
+                "shear" => json!({"angle": 0, "axis": "horizontal", "axisAngle": 0}),
                 _ => json!({}),
             };
             if let (Some(b), Some(o)) = (base.as_object_mut(), p.as_object()) {

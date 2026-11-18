@@ -270,7 +270,7 @@ fn range_of(p: &Value, len: usize, cmd: &str) -> Result<(usize, usize)> {
     Ok((a.min(b), a.max(b)))
 }
 
-fn edit_range(s: &mut Session, p: &Value) -> Result<Value> {
+pub(crate) fn edit_range(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.editRange";
     let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing `id`"))?;
     let t = text_ref(s, id)?;
@@ -1883,13 +1883,14 @@ enum Step {
     BaselineShift,
 }
 
-/// The Type tool's selected text while it edits (its typing session ends first: one undo step).
+/// The Type tool's selected text while it edits (its typing session ends first: one undo step,
+/// with typing that Real-time Drawing off left unapplied applied first).
 pub(crate) fn editing_range(s: &mut Session) -> Result<Option<(NodeId, usize, usize)>> {
     let o = s.tool_options();
     let Some(id) = o.get("editing").and_then(Value::as_u64).map(NodeId) else { return Ok(None) };
     if super::edit::typing_in_progress(s) {
         s.set_tool_option("commitTyping", &Value::Bool(true));
-        s.commit_interaction()?;
+        super::edit::settle_interaction(s)?;
     }
     let at = |k: &str| byte_param(&o, k).unwrap_or(0);
     Ok(Some((id, at("start"), at("end"))))

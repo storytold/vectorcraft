@@ -129,7 +129,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Edit Color Group",
             ["Window", "Swatches"],
             None,
-            "{group: colour group, colors: [colour] (hex, key, {c,m,y,k} or {l,a,b}; #rrggbbaa and #rgba are refused; the group's swatches take them in order, extra colours become new swatches, swatches past the end are removed; built-in swatches can't change; a color the swatch already has keeps its model), keepModel?: bool (as paint.setFill), rename?: new group name} rewrite a colour group as one undo step; art linked to its global swatches takes their new colours (and keeps its colour, unlinked, when its swatch goes) → {name, swatches: [names], relinked}",
+            "{group: colour group, colors: [colour] (hex, key, {c,m,y,k} or {l,a,b}; #rrggbbaa and #rgba are refused; the group's swatches take them in order, extra colours become new swatches, swatches past the end are removed; a null removes the swatch at that place; built-in swatches can't change; a color the swatch already has keeps its model, and a key that names the swatch's color, rounded to the key's steps, keeps the swatch's color unrounded), keepModel?: bool (as paint.setFill), rename?: new group name} rewrite a colour group as one undo step; art linked to its global swatches takes their new colours (and keeps its colour, unlinked, when its swatch goes) → {name, swatches: [names], relinked}",
             has_doc,
             swatch_edit_group
         ),
@@ -1340,21 +1340,45 @@ pub(super) fn rewrite_group(d: &mut Document, group: &str, colors: &[Option<Colo
 fn swatch_edit_group(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "swatch.editGroup";
     let group = str_param(p, "group").ok_or_else(|| bad(C, "missing `group`"))?;
-    let colors: Vec<Color> = p
+    // A null removes the swatch at that place.
+    let colors: Vec<Option<Color>> = p
         .get("colors")
         .and_then(Value::as_array)
         .ok_or_else(|| bad(C, "missing `colors`"))?
         .iter()
-        .map(|v| color_value(v).ok_or_else(|| bad(C, format!("bad colour {v}"))))
+        .map(|v| if v.is_null() { Ok(None) } else { color_value(v).map(Some).ok_or_else(|| bad(C, format!("bad colour {v}"))) })
         .collect::<Result<_>>()?;
     super::paint::check_keep_model(p, C)?;
-    // A color its swatch already has keeps its model. The others take the document's.
+    // A color its swatch already has keeps its model. The others take the document's. A color key
+    // (`recolor.colors`) names a color rounded to its steps, so a key of the swatch's own color
+    // gives the swatch that color, unrounded.
     let old: Vec<Option<Color>> =
         s.doc()?.doc.swatch_groups.iter().find(|g| g.name == group).map(|g| g.swatches.iter().map(|w| w.paint.color()).collect()).unwrap_or_default();
-    let colors: Vec<Color> =
-        colors.into_iter().enumerate().map(|(i, c)| if old.get(i) == Some(&Some(c)) { c } else { super::paint::new_color(s, p, c) }).collect();
+    let entries = p.get("colors").and_then(Value::as_array);
+    let is_key = |i: usize| entries.and_then(|a| a.get(i)).and_then(Value::as_str).and_then(vectorcraft_color::recolor::ColorKey::parse);
+    let mut colors: Vec<Option<Color>> = colors
+        .into_iter()
+        .enumerate()
+        .map(|(i, c)| {
+            c.map(|c| match old.get(i).copied().flatten() {
+                Some(o) if o == c || is_key(i).is_some_and(|k| k == vectorcraft_color::recolor::ColorKey::of(&o)) => o,
+                _ => super::paint::new_color(s, p, c),
+            })
+        })
+        .collect();
+    // A null past the group's swatches removes nothing.
+    while colors.len() > old.len() && colors.last() == Some(&None) {
+        colors.pop();
+    }
     let rename = str_param(p, "rename");
-    let colors: Vec<Option<Color>> = colors.into_iter().map(Some).collect();
+    // The group's own colors, in order, under its own name change nothing: no undo step.
+    if let Some(g) = s.doc()?.doc.swatch_groups.iter().find(|g| g.name == group)
+        && rename.map(str::trim).is_none_or(|n| n.is_empty() || n == group)
+        && old.len() == colors.len()
+        && old.iter().zip(&colors).all(|(o, c)| c.is_some() && o == c)
+    {
+        return Ok(json!({"name": group, "swatches": g.swatches.iter().map(|w| w.name.clone()).collect::<Vec<_>>(), "relinked": 0}));
+    }
     let e = s.edit("Edit Color Group", |d, _| rewrite_group(d, group, &colors, rename, C))?;
     e.defaults(s)?;
     Ok(json!({"name": e.name, "swatches": e.swatches, "relinked": e.relinked}))

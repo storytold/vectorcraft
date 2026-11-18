@@ -1259,6 +1259,180 @@ fn export_3d_object_leaves_out_a_group_with_a_3d_fill() {
     assert_eq!(list.iter().map(|a| a["nodes"].clone()).collect::<Vec<_>>(), [json!([a])]);
 }
 
+/// Whether Export 3D Object is available as the panel reads it ([`super::can_export_3d_shown`]),
+/// checked against the state worked out from scratch ([`super::can_export_3d`]); with a document
+/// open, the panel keeps it for the document's uid and revision.
+fn exportable(app: &mut VectorcraftApp, why: &str) -> bool {
+    let fresh = super::can_export_3d(app);
+    assert_eq!(super::can_export_3d_shown(app), fresh, "{why}");
+    if let Some(key) = app.session.active().map(|st| (st.uid, st.revision)) {
+        assert_eq!(app.canvas.three_d_exportable, Some((key, fresh)), "{why}");
+    }
+    fresh
+}
+
+/// The Export 3D Object state the panel keeps for a revision equals the state worked out from
+/// scratch: with no document and no selection, for plain paths, with a 3D object selected first or
+/// last, for a path of a compound path whose compound path has the effect, after the effect is
+/// hidden, Undo and Redo, in another document and back, and for a group whose 3D effect moves onto
+/// its fill.
+#[test]
+fn export_3d_object_state_kept_for_a_revision_equals_a_fresh_one() {
+    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    assert!(!exportable(&mut app, "no document"));
+    app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+    assert!(!exportable(&mut app, "no selection"));
+    let rect = |app: &mut VectorcraftApp, x: f64| {
+        app.run("shape.rectangle", json!({"x": x, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap()
+    };
+    let (p, q) = (rect(&mut app, 10.0), rect(&mut app, 40.0));
+    app.run("select.set", json!({"ids": [p, q]})).unwrap();
+    assert!(!exportable(&mut app, "plain paths"));
+    let solid = rect(&mut app, 70.0);
+    app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null})).unwrap();
+    app.run("select.set", json!({"ids": [solid, p, q]})).unwrap();
+    assert!(exportable(&mut app, "a 3D object first"));
+    app.run("select.set", json!({"ids": [p, q]})).unwrap();
+    assert!(!exportable(&mut app, "plain paths again"));
+    app.run("select.set", json!({"ids": [p, q, solid]})).unwrap();
+    assert!(exportable(&mut app, "a 3D object last"));
+    let (a, b) = (rect(&mut app, 100.0), rect(&mut app, 110.0));
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    app.run("object.compoundPath.make", json!({})).unwrap();
+    let compound = app.session.active().unwrap().selection.objects[0].0;
+    app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null})).unwrap();
+    let member = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(compound)).unwrap().children().unwrap()[0].id.0;
+    app.run("select.set", json!({"ids": [p, q]})).unwrap();
+    assert!(!exportable(&mut app, "plain paths before the compound path's member"));
+    app.run("select.set", json!({"ids": [p, member]})).unwrap();
+    assert!(exportable(&mut app, "a path of a 3D compound path"));
+    // An edit that leaves the selection as it is.
+    app.run("effect.setParams", json!({"ids": [compound], "index": 0, "item": null, "visible": false})).unwrap();
+    assert!(!exportable(&mut app, "the compound path's 3D effect hidden"));
+    app.run("edit.undo", json!({})).unwrap();
+    assert!(exportable(&mut app, "Undo"));
+    app.run("edit.redo", json!({})).unwrap();
+    assert!(!exportable(&mut app, "Redo"));
+    app.run("edit.undo", json!({})).unwrap();
+    assert!(exportable(&mut app, "Undo again"));
+    app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+    assert!(!exportable(&mut app, "a new document"));
+    app.session.set_active(0);
+    assert!(exportable(&mut app, "back to the first document"));
+    // A group's own 3D effect exports; the same effect on its fill does not.
+    app.run("select.set", json!({"ids": [p, q]})).unwrap();
+    let group = app.run("object.group", json!({})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [group]})).unwrap();
+    app.run("appearance.addFill", json!({})).unwrap();
+    app.run("effect.apply", json!({"effect": "threeD.extrude"})).unwrap();
+    assert!(exportable(&mut app, "a group with its own 3D effect"));
+    app.session
+        .edit("fill", |d, _| {
+            let n = d.node_mut(vectorcraft_doc::NodeId(group)).unwrap();
+            let fx = n.appearance.effects.remove(0);
+            n.appearance.items[0].effects_mut().push(fx);
+            Ok(())
+        })
+        .unwrap();
+    assert!(!exportable(&mut app, "a group with a 3D effect on its fill"));
+}
+
+/// A frame of the panel works out the Export 3D Object state once and keeps it for the document's
+/// revision: later frames read it, and a new revision works it out again.
+#[test]
+fn export_3d_object_state_is_worked_out_once_per_revision() {
+    let key = |app: &VectorcraftApp| app.session.active().map(|st| (st.uid, st.revision)).unwrap();
+    let mut app = app();
+    painted_text(&mut app, show);
+    assert_eq!(app.canvas.three_d_exportable, Some((key(&app), false)));
+    // A wrong answer planted for this revision is what the panel reads: nothing works it out again.
+    app.canvas.three_d_exportable = Some((key(&app), true));
+    assert!(super::can_export_3d_shown(&mut app));
+    painted_text(&mut app, show);
+    assert_eq!(app.canvas.three_d_exportable, Some((key(&app), true)));
+    app.run("select.none", json!({})).unwrap();
+    painted_text(&mut app, show);
+    assert_eq!(app.canvas.three_d_exportable, Some((key(&app), false)));
+}
+
+/// The thread's CPU time in nanoseconds, where Linux gives it.
+fn thread_cpu_ns() -> Option<u128> {
+    std::fs::read_to_string("/proc/thread-self/schedstat").ok()?.split_whitespace().next()?.parse().ok()
+}
+
+/// Time the Export 3D Object state with 200,000 selected paths: worked out from scratch on every
+/// frame ([`super::can_export_3d`]), by [`super::can_export_3d_shown`] on the first frame of a
+/// revision, and by [`super::can_export_3d_shown`] on later frames of the same revision. The first
+/// case selects plain paths alone; the second adds a path of a compound path with Extrude & Bevel,
+/// selected last. The sides alternate, and the median time per frame of 7 runs is printed.
+/// Run with `cargo test --release -p vectorcraft-ui-egui --lib export_3d_object_state_timing -- --ignored --nocapture`.
+#[test]
+#[ignore = "manual timing probe; performance depends on machine load"]
+fn export_3d_object_state_timing() {
+    const PATHS: usize = 200_000;
+    const MEASURES: u32 = 20;
+    const KEPT: u32 = 1_000_000;
+    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    app.run("file.new", json!({"width": 2000, "height": 2000})).unwrap();
+    let rect = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+    let rect = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(rect)).cloned().unwrap();
+    app.session
+        .edit("Fill", |d, _| {
+            let layer = d.layers[0].id;
+            for _ in 0..PATHS - 1 {
+                let mut n = rect.clone();
+                n.id = d.alloc_id();
+                d.insert(Some(layer), usize::MAX, n)?;
+            }
+            Ok(())
+        })
+        .unwrap();
+    app.run("select.all", json!({})).unwrap();
+    let plain: Vec<u64> = app.session.active().unwrap().selection.objects.iter().map(|id| id.0).collect();
+    let a = app.run("shape.rectangle", json!({"x": 0, "y": 1000, "width": 30, "height": 30})).unwrap()["id"].clone();
+    let b = app.run("shape.rectangle", json!({"x": 5, "y": 1005, "width": 10, "height": 10})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    app.run("object.compoundPath.make", json!({})).unwrap();
+    let compound = app.session.active().unwrap().selection.objects[0];
+    app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null})).unwrap();
+    let member = app.session.active().unwrap().doc.node(compound).unwrap().children().unwrap()[0].id.0;
+    let mut last = plain.clone();
+    last.push(member);
+    let median = |v: &mut Vec<f64>| {
+        v.sort_by(f64::total_cmp);
+        v[v.len() / 2]
+    };
+    let clock = if thread_cpu_ns().is_some() { "thread CPU time" } else { "wall-clock time" };
+    for (name, ids, expected) in [("plain paths", plain, false), ("plain paths, then a path of a 3D compound path", last, true)] {
+        app.run("select.set", json!({"ids": &ids})).unwrap();
+        let selected: Vec<u64> = app.session.active().unwrap().selection.objects.iter().map(|id| id.0).collect();
+        assert_eq!(selected.len(), ids.len(), "{name}");
+        assert_eq!(selected.last(), ids.last(), "{name}");
+        assert_eq!(super::can_export_3d(&app), expected, "{name}");
+        let mut time = |frames: u32, f: &mut dyn FnMut(&mut VectorcraftApp) -> bool| {
+            let (cpu, wall) = (thread_cpu_ns(), std::time::Instant::now());
+            for _ in 0..frames {
+                assert_eq!(f(&mut app), expected);
+            }
+            let ns = thread_cpu_ns().zip(cpu).map_or_else(|| wall.elapsed().as_nanos(), |(b, a)| b - a);
+            ns as f64 / f64::from(frames) / 1000.0
+        };
+        let (mut full, mut first, mut kept) = (vec![], vec![], vec![]);
+        for _ in 0..7 {
+            full.push(time(MEASURES, &mut |app| super::can_export_3d(app)));
+            first.push(time(MEASURES, &mut |app| {
+                app.canvas.three_d_exportable = None;
+                super::can_export_3d_shown(app)
+            }));
+            kept.push(time(KEPT, &mut super::can_export_3d_shown));
+        }
+        eprintln!("{name}: {} objects selected, available: {expected}; {clock} per frame, median of 7 runs", selected.len());
+        eprintln!("every frame worked out ({MEASURES} frames a run): {:>12.3} us  {full:.3?}", median(&mut full));
+        eprintln!("first frame of a revision ({MEASURES} a run):     {:>12.3} us  {first:.3?}", median(&mut first));
+        eprintln!("later frames ({KEPT} frames a run):            {:>12.4} us  {kept:.4?}", median(&mut kept));
+    }
+}
+
 #[test]
 fn changed_settings_lists_only_new_values() {
     let before = json!({"depth": 50.0, "cap": true, "bevel": "none"});
