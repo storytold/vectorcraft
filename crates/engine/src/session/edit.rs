@@ -477,10 +477,13 @@ impl Session {
         self.clear_deferred_overlay_cache();
         self.decoded_images.empty();
         self.pending_paint = None;
+        // While the Live Paint Bucket is active, a previewed color is the bucket's color, which the
+        // cancel puts back as well.
+        let bucket = self.tool_id() == cmd::LIVE_PAINT_BUCKET;
         if let Some(paint) = self
             .active()
             .and_then(|st| st.interaction.as_ref())
-            .filter(|it| it.preview.as_ref().is_some_and(|(id, _)| id == "command.batch") || it.color_mode_paints.is_some())
+            .filter(|it| bucket || it.preview.as_ref().is_some_and(|(id, _)| id == "command.batch") || it.color_mode_paints.is_some())
             .map(|it| it.paint.clone())
         {
             self.paint = paint;

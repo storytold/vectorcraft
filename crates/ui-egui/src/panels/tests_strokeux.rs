@@ -121,6 +121,25 @@ fn align_stroke_styles_the_characters_the_type_tool_selects() {
     assert_eq!(aligns, [vectorcraft_doc::StrokeAlign::Outside, vectorcraft_doc::StrokeAlign::Center], "only the selected characters");
 }
 
+/// While the Live Paint Bucket is active, the Stroke panel shows the one stroke the bucket paints
+/// with, even when the selected objects' strokes differ, as it does with nothing selected.
+#[test]
+fn the_stroke_panel_shows_the_live_paint_bucket_stroke_as_one_stroke() {
+    let ctx = egui::Context::default();
+    let mut app = app_with_rect();
+    let a = app.session.active().unwrap().selection.objects[0].0;
+    let b = run(&mut app, "shape.rectangle", json!({"x": 200, "y": 200, "width": 40, "height": 40}))["id"].as_u64().unwrap();
+    run(&mut app, "stroke.set", json!({"weight": 1, "ids": [a]}));
+    run(&mut app, "stroke.set", json!({"weight": 7, "ids": [b]}));
+    run(&mut app, "select.set", json!({ "ids": [a, b] }));
+    let mixed = stroke_mixed(&app, &ctx);
+    assert!(mixed.weight, "the selection's weights differ");
+    app.session.select_tool("livePaintBucket", Default::default()).unwrap();
+    let mixed = stroke_mixed(&app, &ctx);
+    assert_eq!(mixed, StrokeMixed::default(), "one stroke, as with nothing selected");
+    assert_eq!(stroke::shown_weight(&app, current_stroke(&app).as_ref(), &mixed), Some(app.session.paint.stroke_width));
+}
+
 #[test]
 fn the_weight_presets_run_from_a_quarter_point_to_a_hundred() {
     let pt = stroke::weight_presets(vectorcraft_doc::Unit::Points);

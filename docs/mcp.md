@@ -4582,6 +4582,15 @@ already walks Image Trace. Short agent entry points:
   another scope, or one that is not an array of the group's edge ids or names an edge twice, is an error and changes
   nothing. `livePaint.fill` and `livePaint.strokeEdge` refuse a `scope` other than `"one"` with `points`. Both replies add `count`, the number of
   faces or edges the click reaches, including those that already had the paint.
+  While the Live Paint Bucket is the active tool, a fill or stroke color chosen without `ids`, `id` or `item`
+  (`paint.setFill`, `paint.setStroke`, `paint.none`, `paint.lastColor`, `paint.lastGradient`, `paint.editGradient`,
+  `paint.invert`, `paint.complement`, `paint.swap`, `paint.default`, a swatch or the Color Picker) becomes the color the
+  bucket paints with, and so do a stroke weight and the Stroke panel's options (`stroke.set`, `stroke.weightUp`,
+  `stroke.weightDown`, `stroke.setAdvanced` without `brush`): the selection keeps its paint, and no undo step is
+  recorded. The Fill and Stroke proxies (`paint.proxies`) show those colors, never mixed, the Stroke panel shows that
+  stroke as it does with nothing selected, and with New Art Has Basic Appearance off the selection's appearance does not
+  replace them after a command. They are the current fill and stroke, so another tool chosen afterwards keeps them
+  until a command or a new selection changes them.
   With the Live Paint Bucket selected and no drag in progress, Left and Right without Shift, Alt or Cmd/Ctrl (which
   keep their shortcuts) run `paint.setFill {swatch, ids: []}` (or
   `paint.setStroke` when the Stroke proxy is in front) with the color swatch before or after the active paint in the

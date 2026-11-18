@@ -1154,6 +1154,22 @@ fn the_fill_and_stroke_proxies_show_the_picked_object() {
     assert_eq!(proxy_colors(&mut s), (Some("#0000ff".into()), None));
 }
 
+/// With an object of a dynamic symbol instance picked and the Live Paint Bucket active, the stroke
+/// weight commands step the weight the bucket paints with and leave the instance as it is.
+#[test]
+fn live_paint_bucket_weight_steps_with_a_picked_symbol_object() {
+    let mut s = session();
+    let inst = pair(&mut s, "dynamic");
+    s.execute("symbol.instance.selectPart", &json!({"id": inst.0, "path": [1]})).unwrap();
+    s.select_tool("livePaintBucket", ViewInfo::default()).unwrap();
+    s.paint.stroke_width = 2.0;
+    for (cmd, weight) in [("stroke.weightUp", 3.0), ("stroke.weightDown", 2.0)] {
+        assert_eq!(s.execute(cmd, &json!({})).unwrap()["objects"], 0, "{cmd}");
+        assert_eq!(s.paint.stroke_width, weight, "{cmd}");
+    }
+    assert_eq!(overrides(&s, inst), 0);
+}
+
 #[test]
 fn selecting_a_guide_too_lets_go_of_the_picked_object() {
     let mut s = session();
