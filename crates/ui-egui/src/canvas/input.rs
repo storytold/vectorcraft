@@ -186,13 +186,15 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
             .unwrap_or(m.shift);
         select_named_artboard(app, i, shift || release_shift);
     }
-    if resp.double_clicked()
+    if !super::ignore_sampler_owns_primary(ui, resp.id)
+        && super::primary_click_count(ui, resp) == 2
         && !f.modal
         && let Some(p) = at
     {
         double_click(app, ui, &f, p);
     }
-    if resp.triple_clicked()
+    if !super::ignore_sampler_owns_primary(ui, resp.id)
+        && super::primary_click_count(ui, resp) == 3
         && !f.modal
         && let Some(p) = at
     {
@@ -343,9 +345,15 @@ fn begin_drag(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, p: Pos2) {
             pressure: pen_pressure(ui, app, true),
             pen: pen_pose(app, &xf),
         };
+        // Only a Down actually sent to this sampler owns the gesture. Cmd/Ctrl's borrowed
+        // selection press keeps the ordinary tool path.
+        let sampler = app.ui.trace_ignore_sampler.is_some() && tool == "eyedropper" && app.session.lent_tool_id(&ev.mods).is_none();
+        if sampler {
+            ui.data_mut(|data| data.insert_temp(super::ignore_sampler_primary_id(resp.id), true));
+        }
         dispatch(app, &ev, view);
         crate::document_drag::begin(app, ui.ctx(), ev.pos);
-        Drag::Tool
+        if sampler { Drag::Gesture } else { Drag::Tool }
     };
     // A drag of the Zoom, Hand or Rotate View tool uses the tool of a held shortcut; held Space's
     // view tools are not that tool.
@@ -527,7 +535,7 @@ fn drag_released(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, d: Drag, p: Po
             // The second click of a double-click: don't fit another artboard on this release.
             // A double-click on an object does not open Artboard Options. Empty artboard
             // space still does.
-            if resp.double_clicked() && app.session.tool_id() == "artboard" {
+            if super::primary_click_count(ui, resp) == 2 && app.session.tool_id() == "artboard" {
                 app.session.set_tool_option("suppressFitClick", &json!(true));
             }
             // A move that came in the release's own frame shapes the preview first: the

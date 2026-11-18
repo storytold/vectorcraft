@@ -1070,6 +1070,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if is_trace || !preview {
         st.preview_off = !preview;
     }
+    // Presets and restored panel settings can turn Ignore Color off without its checkbox.
+    if st.params["ignoreWhite"] != true {
+        cancel_ignore_sampler(app, true);
+    }
     if retrace && is_trace && preview {
         trace(app, ui.ctx(), &mut st);
     }

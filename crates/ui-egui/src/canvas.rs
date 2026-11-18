@@ -263,7 +263,15 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if app.ui.home.is_some_and(|k| k != crate::menus::home_key(app)) {
         app.ui.home = None;
     }
-    if crate::menus::home_showing(app) {
+    let home_showing = crate::menus::home_showing(app);
+    if home_showing || app.session.active().is_none() {
+        // Home and the empty window still advance egui's click history. Observe the same
+        // correction there so it retires after the two ordinary clicks that replace a pick.
+        let id = egui::Id::unique("canvas");
+        begin_ignore_sampler_pointer(ui, id, false);
+        end_ignore_sampler_pointer(ui, id);
+    }
+    if home_showing {
         // No IME owner this pass (`ime_caret_rect` stays None): the end-of-pass observation marks
         // the context absent and keeps any marked text as typed.
         home(app, ui, full);
@@ -466,25 +474,115 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
 }
 
-/// A press arriving with an invalidated sampler and its release belong to that cancelled pick.
-fn input_after_sampler_refresh(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: egui::Rect, cancelled: bool) {
-    let (pressed, released, down, any_pressed) =
-        ui.input(|i| (i.pointer.primary_pressed(), i.pointer.primary_released(), i.pointer.primary_down(), i.pointer.any_pressed()));
-    let consumed_primary = ui.data_mut(|data| {
-        let id = resp.id.with("image-trace-consumed-primary");
-        // A fresh press replaces any ownership whose release this canvas did not observe.
-        let consumed = if pressed { cancelled } else { data.get_temp::<bool>(id).unwrap_or(false) };
-        if consumed && down {
-            data.insert_temp(id, true);
-        } else {
-            data.remove::<bool>(id);
-        }
-        // egui classifies double/triple clicks on release, independently of the tool's Down.
-        consumed && (pressed || released || down)
+/// Two non-sampler clicks replace egui's last two click times after a consumed pick.
+#[derive(Clone, Copy)]
+struct IgnoreSamplerClicks {
+    last: Option<(f64, Pos2)>,
+    remaining: u8,
+}
+
+fn ignore_sampler_primary_id(id: egui::Id) -> egui::Id {
+    id.with("image-trace-consumed-primary")
+}
+
+fn ignore_sampler_owns_primary(ui: &Ui, id: egui::Id) -> bool {
+    ui.data(|data| data.get_temp::<bool>(ignore_sampler_primary_id(id)).unwrap_or(false))
+}
+
+fn reset_ignore_sampler_clicks(ui: &Ui, id: egui::Id) {
+    ui.data_mut(|data| data.insert_temp(id.with("image-trace-clicks"), IgnoreSamplerClicks { last: None, remaining: 2 }));
+}
+
+/// Reclassify only the two clicks whose raw history can still contain a consumed pick.
+/// Other widgets' clicks count too, as they do in egui; its pointer state stays untouched.
+fn ignore_sampler_clicks(ui: &Ui, id: egui::Id, consumed: bool) {
+    let (delay, distance) = ui.ctx().options(|o| (o.input_options.max_double_click_delay, o.input_options.max_click_dist));
+    let (clicked, primary, at, time) = ui.input(|i| {
+        (
+            i.pointer.any_click(),
+            i.pointer.button_clicked(egui::PointerButton::Primary),
+            i.pointer.interact_pos(),
+            i.time,
+        )
     });
-    if !consumed_primary && (!cancelled || !any_pressed) {
+    ui.data_mut(|data| data.remove::<u8>(id.with("image-trace-click-count")));
+    if !clicked {
+        return;
+    }
+    if consumed {
+        reset_ignore_sampler_clicks(ui, id);
+        return;
+    }
+    let Some(at) = at else { return };
+    ui.data_mut(|data| {
+        let history_id = id.with("image-trace-clicks");
+        let Some(mut clicks) = data.remove_temp::<IgnoreSamplerClicks>(history_id) else { return };
+        let double = clicks.last.is_some_and(|(last, pos)| time - last < delay && pos.distance_sq(at) < distance * distance);
+        if primary {
+            data.insert_temp(id.with("image-trace-click-count"), if double { 2u8 } else { 1u8 });
+        }
+        clicks.last = Some((time, at));
+        clicks.remaining -= 1;
+        if clicks.remaining != 0 {
+            data.insert_temp(history_id, clicks);
+        }
+    });
+}
+
+fn primary_click_count(ui: &Ui, resp: &egui::Response) -> u8 {
+    if !resp.clicked_by(egui::PointerButton::Primary) {
+        return 0;
+    }
+    ui.data(|data| data.get_temp::<u8>(resp.id.with("image-trace-click-count")))
+        .unwrap_or_else(|| if resp.triple_clicked() { 3 } else if resp.double_clicked() { 2 } else { 1 })
+}
+
+/// Remove only the pointer sequence acquired by this sampler, never a view or tool drag.
+fn clear_ignore_sampler_gesture(ui: &Ui, id: egui::Id) {
+    ui.data_mut(|data| {
+        data.remove::<bool>(ignore_sampler_primary_id(id));
+        if matches!(data.get_temp::<Drag>(drag::drag_id()), Some(Drag::Gesture)) {
+            data.remove::<Drag>(drag::drag_id());
+            data.remove::<Pos2>(drag::drag_pos_id());
+            data.remove::<Point>(drag::tool_drag_doc_id());
+            data.remove::<Point>(drag::tool_press_doc_id());
+        }
+    });
+}
+
+fn begin_ignore_sampler_pointer(ui: &Ui, id: egui::Id, cancelled: bool) -> bool {
+    let (pressed, released, down) = ui.input(|i| (i.pointer.primary_pressed(), i.pointer.primary_released(), i.pointer.primary_down()));
+    if pressed {
+        // A fresh press replaces the complete sampler gesture if its release was not observed.
+        if ignore_sampler_owns_primary(ui, id) {
+            clear_ignore_sampler_gesture(ui, id);
+        }
+        if cancelled {
+            ui.data_mut(|data| data.insert_temp(ignore_sampler_primary_id(id), true));
+        }
+    }
+    let consumed = ignore_sampler_owns_primary(ui, id) && (pressed || released || down);
+    ignore_sampler_clicks(ui, id, consumed);
+    consumed
+}
+
+fn end_ignore_sampler_pointer(ui: &Ui, id: egui::Id) {
+    // A valid Down can acquire ownership and complete in the same frame.
+    if ignore_sampler_owns_primary(ui, id) && !ui.input(|i| i.pointer.primary_down()) {
+        if ui.input(|i| i.pointer.button_clicked(egui::PointerButton::Primary)) {
+            reset_ignore_sampler_clicks(ui, id);
+        }
+        clear_ignore_sampler_gesture(ui, id);
+    }
+}
+
+/// A sampler press keeps its release, even if its Down completes or its binding expires held.
+fn input_after_sampler_refresh(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: egui::Rect, cancelled: bool) {
+    let consumed = begin_ignore_sampler_pointer(ui, resp.id, cancelled);
+    if !consumed && (!cancelled || !ui.input(|i| i.pointer.any_pressed())) {
         canvas_input(app, ui, resp, rect);
     }
+    end_ignore_sampler_pointer(ui, resp.id);
 }
 
 /// The pointer on the canvas: the tool's input, unless the context menu or the 3D gizmo has the press.
