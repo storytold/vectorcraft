@@ -8182,6 +8182,7 @@ breakText	Glyphs	Glifs
 @msg	the image is on a layer with a clipping mask, which would hide the results	La imatge és en una capa amb una màscara de retall, que amagaria els resultats
 @msg	the image is on a layer with an opacity mask, which would hide the results	La imatge és en una capa amb una màscara d’opacitat, que amagaria els resultats
 @msg	the image is on a layer with effects of its own, which would apply to the results	La imatge és en una capa amb efectes propis, que s’aplicarien també als resultats
+@msg	the image or a group around it has effects that move or reshape it, so the results would not go beside it	La imatge o un grup que la conté té efectes que la mouen o la deformen, de manera que els resultats no quedarien al seu costat
 @msg	`output` must be "vector"	`output` ha de ser "vector"
 @msg	`{pid}` takes no prompt and makes vector art only	`{pid}` no admet indicacions i només fa art vectorial
 @msg	Making the Concept to Vector styles	S’estan fent els estils de Concepte a vector

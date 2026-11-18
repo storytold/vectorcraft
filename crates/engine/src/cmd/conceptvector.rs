@@ -482,9 +482,16 @@ fn insert(s: &mut Session, p: &Value) -> Result<Value> {
     // it hides none of them, and above the outermost envelope, blend, repeat or other live object,
     // and the outermost group with effects or fills and strokes of its own, so that its content
     // and the place its effects measure from stay as they are. A layer that clips or masks its
-    // art, or has effects of its own, leaves them nowhere to go.
+    // art, or has effects of its own, leaves them nowhere to go. An effect that moves or reshapes
+    // the image, its own or a group's around it, shows it away from its placement, which the
+    // results are placed by.
+    let ancestry = st.doc.ancestry(source).ok_or_else(stale)?;
+    let moves = |id: &NodeId| st.doc.node(*id).is_some_and(|n| !n.is_layer() && vectorcraft_render::effects::has_geometry(&n.appearance.effects));
+    if ancestry.iter().any(moves) {
+        return Err(bad(C, "the image or a group around it has effects that move or reshape it, so the results would not go beside it"));
+    }
     let mut anchor = source;
-    for &id in st.doc.ancestry(source).ok_or_else(stale)?.iter().rev().skip(1) {
+    for &id in ancestry.iter().rev().skip(1) {
         let n = st.doc.node(id).ok_or_else(stale)?;
         let masked = n.extras().mask.as_ref().is_some_and(|m| !m.disabled);
         if matches!(n.kind, NodeKind::Layer { clip: true, .. }) {
@@ -722,7 +729,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Insert Concept to Vector Styles",
             [],
             None,
-            "{job, variations: [style id…] (different styles of the job)} put a group of each chosen variation, named after its style and in the provider's order, in a row to the right of the job's image, each the image's size with 24 pt between them, moved further right past other visible art in their way, where a variation reaches past its box too (the next one then starts 24 pt past what it paints); the groups go above the outermost clip group or opacity-masked group around the image, and above the outermost envelope, blend, repeat or other live object and the outermost group with effects or fills and strokes of its own around it; the image and other art stay as they are; one undo step; a variation with no paths is left out, and when every chosen one has none nothing changes (no undo step, ids []); an error when the job's document is not the active one, the object, its image or its placement changed, the object is now locked or hidden, or it is on a layer with a clipping mask, an opacity mask or effects of its own, and when it plays from recorded steps (an action or a replayed journal), since jobs are not saved →{ids: the groups, selected}",
+            "{job, variations: [style id…] (different styles of the job)} put a group of each chosen variation, named after its style and in the provider's order, in a row to the right of the job's image, each the image's size with 24 pt between them, moved further right past other visible art in their way, where a variation reaches past its box too (the next one then starts 24 pt past what it paints); the groups go above the outermost clip group or opacity-masked group around the image, and above the outermost envelope, blend, repeat or other live object and the outermost group with effects or fills and strokes of its own around it; the image and other art stay as they are; one undo step; a variation with no paths is left out, and when every chosen one has none nothing changes (no undo step, ids []); an error when the job's document is not the active one, the object, its image or its placement changed, the object is now locked or hidden, or it is on a layer with a clipping mask, an opacity mask or effects of its own, or it or a group around it has effects that move or reshape it, and when it plays from recorded steps (an action or a replayed journal), since jobs are not saved →{ids: the groups, selected}",
             has_doc,
             insert
         ),

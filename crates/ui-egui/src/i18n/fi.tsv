@@ -8236,6 +8236,7 @@ breakText	Glyphs	Merkit
 @msg	the image is on a layer with a clipping mask, which would hide the results	Kuva on tasolla, jolla on leikkausmaski, joka piilottaisi tulokset
 @msg	the image is on a layer with an opacity mask, which would hide the results	Kuva on tasolla, jolla on peittävyysmaski, joka piilottaisi tulokset
 @msg	the image is on a layer with effects of its own, which would apply to the results	Kuva on tasolla, jolla on omia tehosteita, jotka kohdistuisivat myös tuloksiin
+@msg	the image or a group around it has effects that move or reshape it, so the results would not go beside it	Kuvalla tai sitä ympäröivällä ryhmällä on tehosteita, jotka siirtävät tai muotoilevat sitä uudelleen, joten tulokset eivät tulisi sen viereen
 @msg	`output` must be "vector"	`output` on oltava "vector"
 @msg	`{pid}` takes no prompt and makes vector art only	`{pid}` ei ota kehotetta ja tekee vain vektorigrafiikkaa
 @msg	Making the Concept to Vector styles	Luodaan Konseptista vektoriksi -tyylejä

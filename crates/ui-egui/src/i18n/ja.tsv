@@ -9670,6 +9670,7 @@ breakText	Glyphs	字形
 @msg	the image is on a layer with a clipping mask, which would hide the results	画像はクリッピングマスクのあるレイヤー上にあり、結果が隠れてしまいます
 @msg	the image is on a layer with an opacity mask, which would hide the results	画像は不透明マスクのあるレイヤー上にあり、結果が隠れてしまいます
 @msg	the image is on a layer with effects of its own, which would apply to the results	画像は独自の効果を持つレイヤー上にあり、その効果が結果にも適用されてしまいます
+@msg	the image or a group around it has effects that move or reshape it, so the results would not go beside it	画像またはそれを含むグループに画像を移動または変形する効果があるため、結果が画像の横に配置されません
 @msg	`output` must be "vector"	`output` には "vector" を指定してください
 @msg	`{pid}` takes no prompt and makes vector art only	`{pid}` はプロンプトを受け付けず、ベクターアートのみを作成します
 @msg	Making the Concept to Vector styles	コンセプトからベクターのスタイルを作成中

@@ -10437,6 +10437,7 @@ font-script	Japanese	იაპონური
 @msg	the image is on a layer with a clipping mask, which would hide the results	გამოსახულება მოჭრის ნიღბიან ფენაზეა, რომელიც შედეგებს დამალავდა
 @msg	the image is on a layer with an opacity mask, which would hide the results	გამოსახულება გაუმჭვირვალობის ნიღბიან ფენაზეა, რომელიც შედეგებს დამალავდა
 @msg	the image is on a layer with effects of its own, which would apply to the results	გამოსახულება საკუთარი ეფექტების მქონე ფენაზეა, რომლებიც შედეგებზეც გავრცელდებოდა
+@msg	the image or a group around it has effects that move or reshape it, so the results would not go beside it	გამოსახულებას ან მის გარშემო მყოფ ჯგუფს აქვს ეფექტები, რომლებიც მას ანაცვლებს ან ფორმას უცვლის, ამიტომ შედეგები მის გვერდით არ აღმოჩნდებოდა
 @msg	`output` must be "vector"	`output` უნდა იყოს "vector"
 @msg	`{pid}` takes no prompt and makes vector art only	`{pid}` მოთხოვნას არ იღებს და მხოლოდ ვექტორულ გრაფიკას ქმნის
 @msg	Making the Concept to Vector styles	იქმნება „კონცეფციიდან ვექტორამდე“ სტილები

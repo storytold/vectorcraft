@@ -860,8 +860,7 @@ fn insert_keeps_out_of_a_group_or_layer_with_effects_of_its_own() {
     s.execute("object.group", &json!({})).unwrap();
     let d = &s.doc().unwrap().doc;
     let group = d.parent_of(img).unwrap();
-    let transform = json!({"effect": "distort.transform", "params": {"scaleH": 200}, "ids": [group.0]});
-    s.execute("effect.apply", &transform).unwrap();
+    s.execute("effect.apply", &json!({"effect": "stylize.dropShadow", "ids": [group.0]})).unwrap();
     let d = &s.doc().unwrap().doc;
     let (layer, before) = (d.parent_of(group).unwrap(), d.node(group).unwrap().clone());
     let job = generate(&mut s, json!({"provider": ID, "styles": ["outline"], "id": img.0})).unwrap()["job"].as_u64().unwrap();
@@ -877,6 +876,32 @@ fn insert_keeps_out_of_a_group_or_layer_with_effects_of_its_own() {
     let before = s.doc().unwrap().doc.clone();
     let e = s.execute("conceptVector.insert", &json!({"job": job, "variations": ["outline"]})).unwrap_err().to_string();
     assert!(e.contains("effects of its own"), "{e}");
+    assert!(s.doc().unwrap().doc == before);
+}
+
+/// An effect that moves or reshapes the image, on a group around it or on the image itself, shows
+/// it away from its placement, so insert is refused and changes nothing, even when the effect was
+/// added after the results were made.
+#[test]
+fn insert_refuses_an_image_that_effects_move_or_reshape() {
+    let (mut s, img) = doc_with(&art());
+    let other = s.execute("shape.rectangle", &json!({"x": 120, "y": 120, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [img.0, other]})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
+    let group = s.doc().unwrap().doc.parent_of(img).unwrap();
+    s.execute("effect.apply", &json!({"effect": "distort.transform", "params": {"moveV": 500}, "ids": [group.0]})).unwrap();
+    let job = generate(&mut s, json!({"provider": ID, "styles": ["outline"], "id": img.0})).unwrap()["job"].as_u64().unwrap();
+    let before = s.doc().unwrap().doc.clone();
+    let e = s.execute("conceptVector.insert", &json!({"job": job, "variations": ["outline"]})).unwrap_err().to_string();
+    assert!(e.contains("move or reshape"), "{e}");
+    assert!(s.doc().unwrap().doc == before);
+
+    let (mut s, img) = doc_with(&art());
+    let job = generate(&mut s, json!({"provider": ID, "styles": ["outline"], "id": img.0})).unwrap()["job"].as_u64().unwrap();
+    s.execute("effect.apply", &json!({"effect": "distort.transform", "params": {"scaleH": 200}, "ids": [img.0]})).unwrap();
+    let before = s.doc().unwrap().doc.clone();
+    let e = s.execute("conceptVector.insert", &json!({"job": job, "variations": ["outline"]})).unwrap_err().to_string();
+    assert!(e.contains("move or reshape"), "{e}");
     assert!(s.doc().unwrap().doc == before);
 }
 

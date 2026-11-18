@@ -8255,6 +8255,7 @@ shape	Open	Открытый
 @msg	the image is on a layer with a clipping mask, which would hide the results	Изображение находится на слое с обтравочной маской, которая скрыла бы результаты
 @msg	the image is on a layer with an opacity mask, which would hide the results	Изображение находится на слое с непрозрачной маской, которая скрыла бы результаты
 @msg	the image is on a layer with effects of its own, which would apply to the results	Изображение находится на слое с собственными эффектами, которые применились бы и к результатам
+@msg	the image or a group around it has effects that move or reshape it, so the results would not go beside it	У изображения или группы вокруг него есть эффекты, которые сдвигают или деформируют его, поэтому результаты оказались бы не рядом с ним
 @msg	`output` must be "vector"	`output` должно быть "vector"
 @msg	`{pid}` takes no prompt and makes vector art only	`{pid}` не принимает запрос и создаёт только векторную графику
 @msg	Making the Concept to Vector styles	Создание стилей «Концепт в вектор»

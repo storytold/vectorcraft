@@ -10044,6 +10044,7 @@ breakText	Glyphs	Glifler
 @msg	the image is on a layer with a clipping mask, which would hide the results	Görüntü, sonuçları gizleyecek bir kırpma maskesi olan bir katmanda
 @msg	the image is on a layer with an opacity mask, which would hide the results	Görüntü, sonuçları gizleyecek bir opaklık maskesi olan bir katmanda
 @msg	the image is on a layer with effects of its own, which would apply to the results	Görüntü, sonuçlara da uygulanacak kendi efektleri olan bir katmanda
+@msg	the image or a group around it has effects that move or reshape it, so the results would not go beside it	Görüntünün veya onu içeren bir grubun onu taşıyan ya da yeniden şekillendiren efektleri var, bu yüzden sonuçlar görüntünün yanına yerleşmez
 @msg	`output` must be "vector"	`output` "vector" olmalıdır
 @msg	`{pid}` takes no prompt and makes vector art only	`{pid}` istem almaz ve yalnızca vektör çizim yapar
 @msg	Making the Concept to Vector styles	Konseptten Vektöre stilleri yapılıyor

@@ -9582,6 +9582,7 @@ theme	Appearance	अपीयरेंस
 @msg	the image is on a layer with a clipping mask, which would hide the results	इमेज क्लिपिंग मास्क वाली लेयर पर है, जो परिणामों को छिपा देगा
 @msg	the image is on a layer with an opacity mask, which would hide the results	इमेज opacity मास्क वाली लेयर पर है, जो परिणामों को छिपा देगा
 @msg	the image is on a layer with effects of its own, which would apply to the results	इमेज अपने इफ़ेक्ट वाली लेयर पर है, जो परिणामों पर भी लागू हो जाएँगे
+@msg	the image or a group around it has effects that move or reshape it, so the results would not go beside it	इमेज या उसके आसपास के समूह में ऐसे इफ़ेक्ट हैं जो उसे खिसकाते या उसका आकार बदलते हैं, इसलिए परिणाम उसके बगल में नहीं आएँगे
 @msg	`output` must be "vector"	`output` "vector" होना चाहिए
 @msg	`{pid}` takes no prompt and makes vector art only	`{pid}` प्रॉम्प्ट नहीं लेता और केवल वेक्टर आर्ट बनाता है
 @msg	Making the Concept to Vector styles	कॉन्सेप्ट से वेक्टर स्टाइल बनाई जा रही हैं

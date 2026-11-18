@@ -7778,6 +7778,7 @@ breakText	Glyphs	Glifi
 @msg	the image is on a layer with a clipping mask, which would hide the results	L’immagine è su un livello con una maschera di ritaglio, che nasconderebbe i risultati
 @msg	the image is on a layer with an opacity mask, which would hide the results	L’immagine è su un livello con una maschera di opacità, che nasconderebbe i risultati
 @msg	the image is on a layer with effects of its own, which would apply to the results	L’immagine è su un livello con effetti propri, che verrebbero applicati anche ai risultati
+@msg	the image or a group around it has effects that move or reshape it, so the results would not go beside it	L’immagine o un gruppo che la contiene ha effetti che la spostano o la deformano, quindi i risultati non finirebbero accanto a essa
 @msg	`output` must be "vector"	`output` deve essere "vector"
 @msg	`{pid}` takes no prompt and makes vector art only	`{pid}` non accetta prompt e crea solo grafica vettoriale
 @msg	Making the Concept to Vector styles	Creazione degli stili Da concetto a vettore
