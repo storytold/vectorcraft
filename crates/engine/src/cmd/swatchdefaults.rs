@@ -50,11 +50,7 @@ struct FontScope {
 impl FontScope {
     fn enter() -> Self {
         let db = FontDb::global();
-        let previous = db
-            .composite_font_names()
-            .into_iter()
-            .filter_map(|name| db.composite_font(&name).map(|font| (*font).clone()))
-            .collect();
+        let previous = db.composite_font_names().into_iter().filter_map(|name| db.composite_font(&name).map(|font| (*font).clone())).collect();
         Self { previous }
     }
 }
@@ -166,13 +162,7 @@ fn import_composites(saved: &mut Document, target: &mut Document) -> Result<()> 
         return Ok(());
     }
     let source_families = family_names(saved)?;
-    let plan = plan_import(
-        saved.composite_fonts.to_vec(),
-        source_families,
-        target,
-        "the default palette and profile",
-        "a palette",
-    )?;
+    let plan = plan_import(saved.composite_fonts.to_vec(), source_families, target, "the default palette and profile", "a palette")?;
     each_family(saved, &mut |family| plan.rename(family))?;
     saved.composite_fonts = plan.incoming.into();
     target.composite_fonts = plan.combined.into();

@@ -1033,7 +1033,6 @@ fn default_swatches_script_document_edits_and_existing_pref_refusal_remain_suppo
     assert_eq!(s.prefs.to_json()["defaultSwatches"], defaults);
 }
 
-
 // Original public fixtures for the two resource-review reports; run on unchanged source first.
 struct ReviewResourceFonts(Vec<vectorcraft_doc::CompositeFont>);
 
@@ -1107,10 +1106,9 @@ fn default_swatches_review_resource_linked_native_composite_family() {
     let mut native = Session::new();
     native.add_document(Document::new(20.0, 20.0), None);
     native.execute("type.compositeFonts.set", &json!({"fonts": [incoming_font.clone()]})).unwrap();
-    let text = native.execute("text.create", &json!({"x": 1, "y": 12, "text": "Ab", "font": incoming_font.name})).unwrap()["id"]
-        .as_u64().unwrap();
-    let installed = native.execute("text.create", &json!({"x": 1, "y": 18, "text": "Installed", "font": "Source Sans 3"})).unwrap()["id"]
-        .as_u64().unwrap();
+    let text = native.execute("text.create", &json!({"x": 1, "y": 12, "text": "Ab", "font": incoming_font.name})).unwrap()["id"].as_u64().unwrap();
+    let installed =
+        native.execute("text.create", &json!({"x": 1, "y": 18, "text": "Installed", "font": "Source Sans 3"})).unwrap()["id"].as_u64().unwrap();
     let native_doc = native.doc().unwrap().doc.clone();
     assert_eq!(CompositeFont::named(&native_doc.composite_fonts, &incoming_font.name), Some(&incoming_font));
 
@@ -1131,7 +1129,11 @@ fn default_swatches_review_resource_linked_native_composite_family() {
     for collision in [false, true] {
         let path = directory.0.join(if collision { "family-collision.vectorcraft" } else { "family.vectorcraft" });
         let loaded = write_linked_native_fixture(&path, &native_doc, true);
-        assert_eq!(CompositeFont::named(&loaded.composite_fonts, &incoming_font.name), Some(&incoming_font), "CONTROL: native bytes carry the definition");
+        assert_eq!(
+            CompositeFont::named(&loaded.composite_fonts, &incoming_font.name),
+            Some(&incoming_font),
+            "CONTROL: native bytes carry the definition"
+        );
 
         if !collision {
             // The other adopt caller: ordinary unlinked placement of this same native file.
@@ -1165,7 +1167,8 @@ fn default_swatches_review_resource_linked_native_composite_family() {
         if collision {
             source.execute("type.compositeFonts.set", &json!({"fonts": [existing_font.clone()]})).unwrap();
             let id = source.execute("text.create", &json!({"x": 1, "y": 12, "text": "Destination", "font": existing_font.name})).unwrap()["id"]
-                .as_u64().unwrap();
+                .as_u64()
+                .unwrap();
             source.execute("object.pattern.make", &json!({"ids": [id], "name": "Existing lettering", "edit": false})).unwrap();
             source.execute("select.set", &json!({"ids": [id]})).unwrap();
             source.execute("edit.clear", &json!({})).unwrap();
@@ -1174,7 +1177,8 @@ fn default_swatches_review_resource_linked_native_composite_family() {
             target.add_document(Document::new(20.0, 20.0), None);
             target.execute("type.compositeFonts.set", &json!({"fonts": [existing_font.clone()]})).unwrap();
             let id = target.execute("text.create", &json!({"x": 1, "y": 12, "text": "Destination", "font": existing_font.name})).unwrap()["id"]
-                .as_u64().unwrap();
+                .as_u64()
+                .unwrap();
             let mut doc = (*target.doc().unwrap().doc).clone();
             let lettering = doc.node(NodeId(id)).unwrap().clone();
             Arc::make_mut(&mut doc.layers[0]).children_mut().unwrap().clear();
@@ -1199,7 +1203,10 @@ fn default_swatches_review_resource_linked_native_composite_family() {
             let bytes = Arc::new(png([19, 47, 83, 255]));
             bad.images.insert("pixels".into(), ImageBlob { mime: "image/png".into(), bytes: bytes.clone(), proxy: Some(bytes) });
             let image = image_node(&mut bad, Some(LinkInfo::new(directory.0.join("missing-native-family-brush.png").to_string_lossy().to_string())));
-            vectorcraft_brush::store(&mut bad, &[Brush { name: "Missing native ink".into(), kind: BrushKind::Art(ArtBrush { art: image, ..Default::default() }) }]);
+            vectorcraft_brush::store(
+                &mut bad,
+                &[Brush { name: "Missing native ink".into(), kind: BrushKind::Art(ArtBrush { art: image, ..Default::default() }) }],
+            );
             let mut line = rectangle(&mut bad, Paint::None);
             line.appearance = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0).into();
             line.appearance.stroke_mut().unwrap().brush = Some("Missing native ink".into());
@@ -1230,7 +1237,11 @@ fn default_swatches_review_resource_linked_native_composite_family() {
         assert_eq!(review_resource_family(d, "Native lettering", "Installed"), "Source Sans 3", "CONTROL: ordinary installed family survives");
         assert!(CompositeFont::named(&d.composite_fonts, "Source Sans 3").is_none(), "CONTROL: no synthetic installed-family definition");
         if let Some(profile) = &profile {
-            assert_eq!(CompositeFont::named(&d.composite_fonts, &existing_font.name), Some(&existing_font), "CONTROL: destination family is unchanged");
+            assert_eq!(
+                CompositeFont::named(&d.composite_fonts, &existing_font.name),
+                Some(&existing_font),
+                "CONTROL: destination family is unchanged"
+            );
             let actual = &d.symbols.iter().find(|s| s.name == "Existing destination lettering").unwrap().art;
             let expected = &profile.symbols.iter().find(|s| s.name == "Existing destination lettering").unwrap().art;
             let (NodeKind::Text(actual), NodeKind::Text(expected)) = (&actual.kind, &expected.kind) else {
@@ -1242,7 +1253,9 @@ fn default_swatches_review_resource_linked_native_composite_family() {
             assert_eq!(CompositeFont::named(&d.composite_fonts, &family), Some(&existing_font), "CONTROL: outer palette meaning is unchanged");
         }
         let family = review_resource_family(d, "Native lettering", "Ab");
-        if CompositeFont::named(&d.composite_fonts, &family).is_none_or(|font| font.parts != incoming_font.parts || font.custom != incoming_font.custom) {
+        if CompositeFont::named(&d.composite_fonts, &family)
+            .is_none_or(|font| font.parts != incoming_font.parts || font.custom != incoming_font.custom)
+        {
             regressions.push(format!("collision={collision}: linked native text family {family:?} lost its original parts/custom definition"));
         }
     }
@@ -1253,8 +1266,17 @@ fn review_resource_dynamic_document() -> (Document, vectorcraft_doc::NodeId) {
     let mut d = raw_palette();
     let dots = rectangle(&mut d, Paint::solid(Color::rgb8(31, 81, 123)));
     d.patterns.push(PatternDef::new("Dots", vec![Arc::new(dots)]));
-    d.swatches.push(Swatch { name: "Dots".into(), paint: Paint::Pattern { pattern: "Dots".into(), xf: Affine::IDENTITY }, global: false, spot: false });
-    let art = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 6.0, 5.0)), Appearance::basic(Paint::solid(Color::BLACK), Paint::solid(Color::BLACK), 1.0));
+    d.swatches.push(Swatch {
+        name: "Dots".into(),
+        paint: Paint::Pattern { pattern: "Dots".into(), xf: Affine::IDENTITY },
+        global: false,
+        spot: false,
+    });
+    let art = Node::path(
+        d.alloc_id(),
+        shapes::rectangle(Rect::new(0.0, 0.0, 6.0, 5.0)),
+        Appearance::basic(Paint::solid(Color::BLACK), Paint::solid(Color::BLACK), 1.0),
+    );
     d.symbols.push(Symbol { name: "Review dynamic".into(), art: Arc::new(art), dynamic: true });
     let mut instance = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Review dynamic".into(), xf: Affine::IDENTITY });
     instance.appearance = Appearance::basic(Paint::None, Paint::None, 0.0).into();
@@ -1298,7 +1320,12 @@ fn default_swatches_review_resource_dynamic_override_pattern_remapping() {
     let expected_override = instance.extras().symbol_overrides[0].clone();
     Arc::make_mut(&mut palette.layers[0]).children_mut().unwrap().clear();
     palette.patterns.push(PatternDef::new("Outer", vec![Arc::new(instance)]));
-    palette.swatches.push(Swatch { name: "Outer".into(), paint: Paint::Pattern { pattern: "Outer".into(), xf: Affine::IDENTITY }, global: false, spot: false });
+    palette.swatches.push(Swatch {
+        name: "Outer".into(),
+        paint: Paint::Pattern { pattern: "Outer".into(), xf: Affine::IDENTITY },
+        global: false,
+        spot: false,
+    });
     palette.fix_next_id();
 
     let mut profile = Document::new(20.0, 20.0);
@@ -1315,7 +1342,11 @@ fn default_swatches_review_resource_dynamic_override_pattern_remapping() {
     baseline.attach_new_doc_profiles(directory.0.clone());
     baseline.execute("file.new", &json!({"profile": "Print"})).unwrap();
     let loaded_profile = baseline.doc().unwrap().doc.clone();
-    assert_ne!(loaded_profile.pattern("Dots").unwrap().art[0].appearance, expected_dots.art[0].appearance, "CONTROL: the loaded destination Dots differs");
+    assert_ne!(
+        loaded_profile.pattern("Dots").unwrap().art[0].appearance,
+        expected_dots.art[0].appearance,
+        "CONTROL: the loaded destination Dots differs"
+    );
     assert!(loaded_profile.symbols.iter().any(|s| s.name == "Existing destination pattern user"), "CONTROL: the loaded destination symbol exists");
 
     let mut source = Session::new();
@@ -1351,14 +1382,15 @@ fn default_swatches_review_resource_dynamic_override_pattern_remapping() {
         assert_eq!(overrides[0].path, expected_override.path);
         assert_eq!(overrides[0].opacity, expected_override.opacity);
         assert_eq!(overrides[0].blend, expected_override.blend);
-        for (name, actual, expected) in [
-            ("fill", &overrides[0].fill, &expected_override.fill),
-            ("stroke", &overrides[0].stroke, &expected_override.stroke),
-        ] {
+        for (name, actual, expected) in
+            [("fill", &overrides[0].fill, &expected_override.fill), ("stroke", &overrides[0].stroke, &expected_override.stroke)]
+        {
             let Some(Paint::Pattern { pattern, xf }) = actual else { panic!("CONTROL: original override {name} remains a pattern") };
             let Some(Paint::Pattern { xf: expected_xf, .. }) = expected else { unreachable!() };
             assert_eq!(xf, expected_xf, "CONTROL: paint transform is unchanged");
-            if d.pattern(pattern).is_none_or(|p| p.art.len() != 1 || p.art[0].appearance != expected_dots.art[0].appearance || p.art[0].kind != expected_dots.art[0].kind) {
+            if d.pattern(pattern).is_none_or(|p| {
+                p.art.len() != 1 || p.art[0].appearance != expected_dots.art[0].appearance || p.art[0].kind != expected_dots.art[0].kind
+            }) {
                 regressions.push(format!("collision={collision}: override {name} key {pattern:?} does not resolve to incoming Dots"));
             }
         }
@@ -1449,7 +1481,10 @@ fn default_swatches_review_linked_color_lookup_preserves_first_match_contract() 
     }));
     // Ungrouped swatches precede each group in order; an ineligible first record still shadows its duplicate.
     assert!(!d.swatch("RGB original").unwrap().global, "CONTROL: the first RGB record is not global");
-    assert!(matches!(&d.swatch("Brand 40%").unwrap().paint, Paint::Solid { swatch: Some(base), .. } if base == "Brand"), "CONTROL: the first tint is linked");
+    assert!(
+        matches!(&d.swatch("Brand 40%").unwrap().paint, Paint::Solid { swatch: Some(base), .. } if base == "Brand"),
+        "CONTROL: the first tint is linked"
+    );
     assert!(matches!(&d.swatch("Brand ramp").unwrap().paint, Paint::Gradient(_)), "CONTROL: the first ramp is not a solid");
     for name in ["RGB original", "Brand 40%", "Brand ramp"] {
         assert_eq!(d.global_color(name), None, "{name}");
