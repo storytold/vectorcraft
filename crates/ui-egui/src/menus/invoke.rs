@@ -309,6 +309,18 @@ fn open_view_dialog(app: &mut VectorcraftApp, id: &str, p: &Value) -> bool {
         }
         return true;
     }
+    // Find Next with no text to find, as its menu item runs it: the next match of the last Find
+    // and Replace search, or the dialog when there has been none.
+    if id == crate::dialogs::find_replace::NEXT
+        && p.get("find").is_none_or(|f| f.as_str() == Some(""))
+        && p.as_object().is_none_or(|o| o.len() <= 1)
+        && app.session.active().is_some()
+    {
+        if let Err(e) = crate::dialogs::find_replace::find_next(app) {
+            app.status(e);
+        }
+        return true;
+    }
     // Check Spelling…: dialog to walk through unknown words.
     if id == crate::dialogs::check_spelling::COMMAND && p.as_object().is_none_or(|o| o.is_empty()) {
         if let Err(e) = crate::dialogs::check_spelling::open(app) {
