@@ -365,6 +365,12 @@ font-technology	Variable	Variabili
 	Brush Definition	Definizione pennello
 	Brush Libraries	Librerie pennelli
 	Brush Options…	Opzioni pennello…
+	Options of Selected Object…	Opzioni dell’oggetto selezionato…
+	Options of Selected Object	Opzioni dell’oggetto selezionato
+@msg	no path painted with a brush is selected	nessun tracciato dipinto con un pennello selezionato
+@msg	the selected paths are painted with brushes of different types	i tracciati selezionati sono dipinti con pennelli di tipi diversi
+@msg	give `params` or `reset`, not both	indica `params` o `reset`, non entrambi
+@msg	a bristle brush has no options of its own on a path	un pennello a setole non ha opzioni proprie su un tracciato
 	Brush Strokes	Pennellate
 	Brushes	Pennelli
 	Built-in Libraries	Librerie integrate

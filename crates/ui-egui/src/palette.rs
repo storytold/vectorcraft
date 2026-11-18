@@ -20,6 +20,7 @@ const WRAPPED: &[(&str, &str)] = &[
     ("layer.delete", "ui.layerDelete"),
     ("brush.new", "ui.newBrush"),
     ("brush.options", "ui.brushOptions"),
+    ("brush.objectOptions", "ui.brushObjectOptions"),
     ("symbol.options", "ui.symbolOptions"),
     ("svgFilter.import", "ui.importSvgFilter"),
     ("text.convertListToText", "type.convertListToText"),

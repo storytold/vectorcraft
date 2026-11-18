@@ -359,6 +359,12 @@ font-technology	Variable	Варіативні
 	Brush Definition	Визначення пензля
 	Brush Libraries	Бібліотеки пензлів
 	Brush Options…	Параметри пензля…
+	Options of Selected Object…	Параметри виділеного об’єкта…
+	Options of Selected Object	Параметри виділеного об’єкта
+@msg	no path painted with a brush is selected	не виділено контур, намальований пензлем
+@msg	the selected paths are painted with brushes of different types	виділені контури намальовано пензлями різних типів
+@msg	give `params` or `reset`, not both	укажіть `params` або `reset`, але не обидва
+@msg	a bristle brush has no options of its own on a path	щетинний пензель не має власних параметрів на контурі
 	Brush Strokes	Мазки пензля
 	Brushes	Пензлі
 	Built-in Libraries	Вбудовані бібліотеки

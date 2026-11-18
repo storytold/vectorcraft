@@ -347,6 +347,12 @@ font-technology	Variable	Değişken
 	Brush Definition	Fırça Tanımı
 	Brush Libraries	Fırça Kitaplıkları
 	Brush Options…	Fırça Seçenekleri…
+	Options of Selected Object…	Seçili Nesnenin Seçenekleri…
+	Options of Selected Object	Seçili Nesnenin Seçenekleri
+@msg	no path painted with a brush is selected	fırçayla boyanmış yol seçilmedi
+@msg	the selected paths are painted with brushes of different types	seçili yollar farklı türde fırçalarla boyanmış
+@msg	give `params` or `reset`, not both	`params` veya `reset` verin, ikisini birden değil
+@msg	a bristle brush has no options of its own on a path	kıl fırçanın bir yolda kendine ait seçenekleri yoktur
 	Brush Strokes	Fırça Darbeleri
 	Brushes	Fırçalar
 	Built-in Libraries	Yerleşik Kütüphaneler
