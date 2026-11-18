@@ -2190,7 +2190,7 @@ impl Session {
         let unwritten = job.host.flush_files();
         if !unwritten.is_empty() {
             let message = format!("{UNWRITTEN_FILES}: {}", unwritten.join(", "));
-            let e = RunError { kind: RunErrorKind::Thrown, message, line: 0, column: 0 };
+            let e = RunError { kind: RunErrorKind::Thrown, message, line: 0, column: 0, authored: false };
             return self.script_failed(job, &e);
         }
         // The working copy goes into the session; `job.world` holds the state before the run.
