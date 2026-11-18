@@ -583,6 +583,51 @@ fn small_caps_superscript_and_subscript_buttons_set_and_show_the_text() {
     assert_eq!(script_buttons(&ctx, &mut app).1, [false; 3]);
 }
 
+/// Superscript and Subscript decide from the characters they change. At a Type tool caret they
+/// change every character of the text, so text that is only partly superscript turns superscript
+/// everywhere, with the caret after a superscript character too, and the button there shows off.
+/// Superscripts in different proportions count as superscript, so a press turns them off.
+#[test]
+fn superscript_and_subscript_decide_from_the_characters_they_change() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let id = app.run("text.create", json!({"x": 20, "y": 50, "text": "x2", "size": 12})).unwrap()["id"].clone();
+    app.run("text.setRangeStyle", json!({"id": id, "start": 1, "end": 2, "position": "superscript"})).unwrap();
+    app.run("select.set", json!({"ids": [id.clone()]})).unwrap();
+    app.select_tool("type");
+    app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+    app.session.set_tool_option("select", &json!({"start": 2, "end": 2}));
+    assert_eq!(text_editing(&app).map(|(_, a, b)| (a, b)), Some((2, 2)));
+    let ctx = egui::Context::default();
+    assert_eq!(script_buttons(&ctx, &mut app).1, [false; 3], "the text is not all superscript");
+    assert_eq!(app.run("type.superscript", json!({})).unwrap(), json!("superscript"));
+    assert!(scripts(&app, &id).iter().all(|(_, p)| *p == "superscript"), "{:?}", scripts(&app, &id));
+    app.run("type.superscript", json!({})).unwrap();
+    assert!(scripts(&app, &id).iter().all(|(_, p)| *p == "normal"), "{:?}", scripts(&app, &id));
+
+    // A file whose two superscript runs have different proportions.
+    app.select_tool("selection");
+    app.run("text.setRangeStyle", json!({"id": id, "position": "superscript"})).unwrap();
+    app.run("text.setRangeStyle", json!({"id": id, "start": 1, "end": 2, "underline": true})).unwrap();
+    let mut d = (*app.session.active().unwrap().doc).clone();
+    if let Some(NodeKind::Text(t)) = d.node_mut(NodeId(id.as_u64().unwrap())).map(|n| &mut n.kind) {
+        assert_eq!(t.runs.len(), 2);
+        t.runs[0].style.position = vectorcraft_doc::CharPosition::Superscript(vectorcraft_doc::ScriptMetrics { size: 50.0, position: 40.0 });
+    }
+    let data = vectorcraft_format::base64_encode(&vectorcraft_format::save_file(&d));
+    app.run("document.open", json!({"name": "scripts.vectorcraft", "dataBase64": data})).unwrap();
+    app.run("select.set", json!({"ids": [id.clone()]})).unwrap();
+    let runs = |app: &VectorcraftApp| match &app.session.active().unwrap().doc.node(NodeId(id.as_u64().unwrap())).unwrap().kind {
+        NodeKind::Text(t) => t.runs.iter().map(|r| r.style.position).collect::<Vec<_>>(),
+        _ => panic!("text"),
+    };
+    let before = runs(&app);
+    assert!(before.len() == 2 && before[0] != before[1] && before.iter().all(|p| p.id() == "superscript"), "{before:?}");
+    assert_eq!(script_buttons(&ctx, &mut app).1, [false, true, false], "the button shows superscript");
+    assert_eq!(app.run("type.superscript", json!({})).unwrap(), json!("normal"));
+    assert!(scripts(&app, &id).iter().all(|(_, p)| *p == "normal"), "{:?}", scripts(&app, &id));
+}
+
 /// The panel menu's Small Caps, Superscript and Subscript set the selected type's small caps
 /// and position and show a check mark when on; Superscript and Subscript turn each other off.
 #[test]
