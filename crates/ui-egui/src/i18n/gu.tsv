@@ -2668,6 +2668,8 @@
 	Overprint and Transparency Flattener Options	ઓવરપ્રિન્ટ અને પારદર્શિતા ફ્લેટનર વિકલ્પો
 	Custom…	કસ્ટમ…
 	Custom Transparency Flattener Options	કસ્ટમ પારદર્શિતા ફ્લેટનર વિકલ્પો
+	The PDF preset keeps the flattener preset but not the Custom… settings.	PDF પ્રીસેટ ફ્લેટનર પ્રીસેટ રાખે છે, પરંતુ કસ્ટમ… સેટિંગ્સ નહીં.
+	PDF 1.3 files clip rasterized areas to their regions, and Overprint sets whether overprints are kept.	PDF 1.3 ફાઇલો રાસ્ટરાઇઝ્ડ વિસ્તારોને તેમના પ્રદેશો સુધી ક્લિપ કરે છે, અને ઓવરપ્રિન્ટ નક્કી કરે છે કે ઓવરપ્રિન્ટ્સ જાળવવામાં આવે કે નહીં.
 	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	EPS માં આલ્ફા પારદર્શિતા નથી, અને ઓવરપ્રિન્ટ્સ નક્કી કરે છે કે ઓવરપ્રિન્ટ્સ જાળવવામાં આવે કે નહીં.
 	Overprint:	ઓવરપ્રિન્ટ:
 	Overprints:	ઓવરપ્રિન્ટ્સ:

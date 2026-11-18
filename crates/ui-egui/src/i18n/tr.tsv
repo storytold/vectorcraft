@@ -2411,6 +2411,8 @@ shape	Open	Açık
 	Overprint and Transparency Flattener Options	Üst Baskı ve Asetat Düzleştirici Seçenekleri
 	Custom…	Özel…
 	Custom Transparency Flattener Options	Özel Şeffaflık Düzleştirici Seçenekleri
+	The PDF preset keeps the flattener preset but not the Custom… settings.	PDF ön ayarı düzleştirici ön ayarını korur, ancak Özel… ayarlarını korumaz.
+	PDF 1.3 files clip rasterized areas to their regions, and Overprint sets whether overprints are kept.	PDF 1.3 dosyaları rasterleştirilmiş alanları kendi bölgelerine kırpar ve Üst baskı, üst baskıların korunup korunmayacağını belirler.
 	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	EPS'de alfa şeffaflığı yoktur ve Üst baskılar, üst baskıların korunup korunmayacağını belirler.
 	Overprint Black…	Üst Baskı Siyah…
 	Overprint Fill	Üst Baskı Dolgusu
