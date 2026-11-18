@@ -5366,6 +5366,12 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	no PNG encoder	ei PNG-kooderia
 @msg	no active document	ei aktiivista asiakirjaa
 @msg	no active perspective plane	ei aktiivista perspektiivitasoa
+@msg	the perspective grid is hidden	perspektiiviruudukko on piilotettu
+@msg	Automatic Plane Positioning is off: turn on anchorPoint or gridlineIntersection (perspective.widget.options)	Tason automaattinen sijoittaminen on pois päältä: ota käyttöön anchorPoint tai gridlineIntersection (perspective.widget.options)
+@msg	anchorPoint must be true or false	anchorPoint-arvon on oltava true tai false
+@msg	gridlineIntersection must be true or false	gridlineIntersection-arvon on oltava true tai false
+@msg	tolerance must be 0 or more	tolerance-arvon on oltava 0 tai enemmän
+@msg	give `at` or `clear`, not both	anna `at` tai `clear`, ei molempia
 @msg	no anchor points selected	ankkuripisteitä ei ole valittu
 @msg	`points` must be two or three [x, y] pairs of numbers	`points` on annettava kahtena tai kolmena lukuparina [x, y]
 @msg	direct-select two or three anchor points, or give `points`	valitse suoraan kaksi tai kolme ankkuripistettä tai anna `points`

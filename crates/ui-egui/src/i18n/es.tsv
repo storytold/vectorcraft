@@ -5150,6 +5150,12 @@ liquify-list-end	{0}, {1}	{0}, {1}
 @msg	no PNG encoder	no hay codificador PNG
 @msg	no active document	no hay ningún documento activo
 @msg	no active perspective plane	no hay ningún plano de perspectiva activo
+@msg	the perspective grid is hidden	la cuadrícula de perspectiva está oculta
+@msg	Automatic Plane Positioning is off: turn on anchorPoint or gridlineIntersection (perspective.widget.options)	El posicionamiento automático del plano está desactivado: activa anchorPoint o gridlineIntersection (perspective.widget.options)
+@msg	anchorPoint must be true or false	anchorPoint debe ser true o false
+@msg	gridlineIntersection must be true or false	gridlineIntersection debe ser true o false
+@msg	tolerance must be 0 or more	tolerance debe ser 0 o más
+@msg	give `at` or `clear`, not both	indica `at` o `clear`, no ambos
 @msg	no anchor points selected	no hay puntos de ancla seleccionados
 @msg	`points` must be two or three [x, y] pairs of numbers	`points` debe ser dos o tres pares de números [x, y]
 @msg	direct-select two or three anchor points, or give `points`	seleccione directamente dos o tres puntos de ancla o indique `points`

@@ -5813,6 +5813,12 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	name the file	adj nevet a fájlnak
 @msg	no active document	nincs aktív dokumentum
 @msg	no active perspective plane	nincs aktív perspektivikus sík
+@msg	the perspective grid is hidden	a perspektivikus rács rejtett
+@msg	Automatic Plane Positioning is off: turn on anchorPoint or gridlineIntersection (perspective.widget.options)	Az automatikus síkpozicionálás ki van kapcsolva: kapcsold be az anchorPoint vagy a gridlineIntersection beállítást (perspective.widget.options)
+@msg	anchorPoint must be true or false	anchorPoint: true vagy false kell
+@msg	gridlineIntersection must be true or false	gridlineIntersection: true vagy false kell
+@msg	tolerance must be 0 or more	tolerance: 0 vagy nagyobb érték kell
+@msg	give `at` or `clear`, not both	az `at` vagy a `clear` értéket add meg, ne mindkettőt
 @msg	no anchor points selected	nincs kijelölt horgonypont
 @msg	`points` must be two or three [x, y] pairs of numbers	a `points` két vagy három [x, y] számpár legyen
 @msg	direct-select two or three anchor points, or give `points`	jelölj ki közvetlen kijelöléssel két vagy három horgonypontot, vagy add meg a `points` értéket

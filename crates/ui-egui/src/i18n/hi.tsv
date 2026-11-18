@@ -7782,6 +7782,12 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	no active data set	कोई सक्रिय डेटा सेट नहीं
 @msg	no active document	कोई सक्रिय डॉक्यूमेंट
 @msg	no active perspective plane	कोई सक्रिय पर्सपेक्टिव विमान नहीं
+@msg	the perspective grid is hidden	पर्सपेक्टिव ग्रिड छिपा हुआ है
+@msg	Automatic Plane Positioning is off: turn on anchorPoint or gridlineIntersection (perspective.widget.options)	स्वचालित प्लेन पोज़िशनिंग बंद है: anchorPoint या gridlineIntersection चालू करें (perspective.widget.options)
+@msg	anchorPoint must be true or false	anchorPoint को true या false होना चाहिए
+@msg	gridlineIntersection must be true or false	gridlineIntersection को true या false होना चाहिए
+@msg	tolerance must be 0 or more	tolerance को 0 या अधिक होना चाहिए
+@msg	give `at` or `clear`, not both	`at` या `clear` दें, दोनों नहीं
 @msg	no anchor points selected	कोई एंकर पॉइंट सिलेक्ट नहीं है
 @msg	`points` must be two or three [x, y] pairs of numbers	`points` में संख्याओं के दो या तीन [x, y] जोड़े होने चाहिए
 @msg	direct-select two or three anchor points, or give `points`	दो या तीन एंकर पॉइंट्स डायरेक्ट-सिलेक्ट करें, या `points` दें
