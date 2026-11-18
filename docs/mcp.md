@@ -1266,6 +1266,10 @@ Draw, look, export:
 {"name":"export","arguments":{"path":"/tmp/icon.png","range":"1-3","options":{"useArtboards":true}}}
 ```
 
+The desktop command `file.export.png` accepts `document.export` options. Without `path`, it asks for a destination
+and opens PNG Options with supplied values such as `ppi`, `background`, `antiAlias`, and `interlaced` retained.
+Omitted options use the dialog defaults. Nonpositive resolutions are rejected when the export is confirmed.
+
 Export As goes through `options` too: for PNG, JPEG and WebP `useArtboards: true` writes one file per artboard (all,
 or `range`), named `<file>-<artboard>.<ext>`, and returns `{path, files}` (a PDF keeps them as pages of one file; an
 SVG writes one file per artboard of a `range`); `useArtboards: false` exports the bounds of the visible art with what
