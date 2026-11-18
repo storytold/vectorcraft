@@ -8715,7 +8715,13 @@ breakText	Glyphs	Glyfy
 @msg	colorModel must be {own} (the document's mode), grayscale or bitmap	colorModel musí být {own} (režim dokumentu), grayscale nebo bitmap
 @msg	colour groups can't go into colour groups	skupiny barev nelze vkládat do skupin barev
 @msg	colour, mode and spot apply to solid-colour swatches only	colour, mode a spot platí jen pro položky vzorníku s plnou barvou
-@msg	column {column}: `{cell}` is a `%` column of graph data files, which are not read	sloupec {column}: `{cell}` je sloupec `%` pro soubory dat grafu, které se nečtou
+@msg	line {line}, column {column}: the graph data file `{path}` for `{var}` is a relative path: give `base`, or an absolute path	řádek {line}, sloupec {column}: soubor dat grafu `{path}` pro `{var}` je zadán relativní cestou: zadejte `base` nebo absolutní cestu
+@msg	line {line}, column {column}: the graph data file for `{var}` can't be read: {e}	řádek {line}, sloupec {column}: soubor dat grafu pro `{var}` nelze přečíst: {e}
+@msg	line {line}, column {column}: the graph data file `{path}` for `{var}` isn't followed: {r}	řádek {line}, sloupec {column}: soubor dat grafu `{path}` pro `{var}` se nenačítá: {r}
+@msg	line {line}, column {column}: the graph data file `{path}` for `{var}` is larger than {MAX_GRAPH_DATA_FILE} bytes	řádek {line}, sloupec {column}: soubor dat grafu `{path}` pro `{var}` je větší než {MAX_GRAPH_DATA_FILE} bajtů
+@msg	line {line}, column {column}: the graph data file `{path}` for `{var}` gives a graph value longer than {MAX_GRAPH_CSV} bytes	řádek {line}, sloupec {column}: soubor dat grafu `{path}` pro `{var}` dává hodnotu grafu delší než {MAX_GRAPH_CSV} bajtů
+@msg	line {line}, column {column}: the graph data files hold more than {MAX_GRAPH_FILES_TOTAL} bytes in all	řádek {line}, sloupec {column}: soubory dat grafu obsahují celkem více než {MAX_GRAPH_FILES_TOTAL} bajtů
+@msg	`base` is empty	`base` je prázdné
 @msg	column {column}: `{cell}` names `{name}`, which is a {_1} variable	sloupec {column}: `{cell}` uvádí `{name}`, což je proměnná typu {_1}
 @msg	column {column}: `{cell}` names no variable	sloupec {column}: `{cell}` neuvádí žádnou proměnnou
 @msg	column {column}: the variable name is longer than {MAX_NAME} characters	sloupec {column}: název proměnné je delší než {MAX_NAME} znaků
