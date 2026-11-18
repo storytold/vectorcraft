@@ -6669,10 +6669,11 @@ Crop Image (`object.cropImage`), Image Trace (`imageTrace.make`, `imageTrace.mak
 Relink's `preserve`; Relink then adds a `warnings` entry naming those images. The clipping path a PSD, PSB or DCS
 file names is drawn through the corners: the clip group of the old file's clipping path gets the new file's clipping
 path, or becomes a plain group when the new file names none. Embed (`links.embed`) and Unembed (`links.unembed`) keep
-the corners, each in one undo step. Unembed of a distorted image from a PSD or PSB file keeps the clip group of that
-file's clipping path, and so does Relink to the PNG or TIFF it wrote. Mask (`object.maskImage`) draws its clipping
-path through the image's corners. Rasterize (`object.rasterize`) draws the image between its corners and makes a
-plain image of the result. These rules are VectorCraft's own.
+the corners, each in one undo step. Unembed of a distorted image from a PSD or PSB file, written as stored (PNG, or
+TIFF for a CMYK file), keeps the clip group of that file's clipping path, and so do Relink and Update Links to the
+file it wrote; a path that converts the image writes no clipping path, and the clip group becomes a plain group. Mask
+(`object.maskImage`) draws its clipping path through the image's corners. Rasterize (`object.rasterize`) draws the
+image between its corners and makes a plain image of the result. These rules are VectorCraft's own.
 
 ```json
 {"name":"run_command","arguments":{"command":"object.distort","params":{"corners":[[40,0],[60,0],[100,100],[0,100]]}}}

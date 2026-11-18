@@ -714,9 +714,13 @@ fn unembed_keeps_the_clipping_path_of_a_distorted_psd() {
         };
         let ext = if *kind == "rgb" { ["png"].as_slice() } else { ["tif", "tiff"].as_slice() };
         assert!(ext.contains(&super::extension(&path).as_str()), "{kind}: {path}");
-        for step in ["unembed", "relink"] {
+        for step in ["unembed", "relink", "update"] {
             if step == "relink" {
                 s.execute("links.relink", &json!({"ids": [image.0], "path": path})).unwrap();
+            }
+            if step == "update" {
+                let r = s.execute("links.update", &json!({"ids": [image.0]})).unwrap();
+                assert_eq!(r["updated"], json!([image.0]), "{kind}: {r}");
             }
             let d = &s.doc().unwrap().doc;
             let NodeKind::Image(im) = &d.node(image).unwrap().kind else { panic!("an image") };
@@ -729,6 +733,21 @@ fn unembed_keeps_the_clipping_path_of_a_distorted_psd() {
             assert!(near && (even_odd, held) == (before.1, before.2), "{kind}, {step}, folder: {folder}: {anchors:?} vs {:?}", before.0);
         }
     }
+    // A path that converts the image writes a file without the clipping path: the clip group
+    // becomes a plain group of the image, as Relink to any file without one leaves it.
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 50})).unwrap();
+    let data = vectorcraft_format::base64_encode(&red_psd(&triangle_resources()));
+    let r = s.execute("file.place", &json!({"name": "cut.psd", "dataBase64": data, "at": [50, 25]})).unwrap();
+    let (group, image) = (NodeId(r["ids"][0].as_u64().unwrap()), NodeId(r["image"].as_u64().unwrap()));
+    s.execute("select.set", &json!({"ids": [group.0]})).unwrap();
+    s.execute("object.distort", &json!({"corners": [[0, 0], [100, 8], [90, 50], [6, 44]]})).unwrap();
+    s.execute("links.unembed", &json!({"id": image.0, "path": dir.join("converted.jpg")})).unwrap();
+    match s.doc().unwrap().doc.node(group).map(|n| &n.kind) {
+        Some(NodeKind::Group { children, clip: false }) => assert_eq!(children.iter().map(|c| c.id).collect::<Vec<_>>(), [image]),
+        other => panic!("a plain group of the image: {other:?}"),
+    }
+    assert!(s.doc().unwrap().doc.node(image).unwrap().is_distorted_image());
 }
 
 /// The PNG a PSD file's merged image is kept as holds the clipping path the file names, and only a
