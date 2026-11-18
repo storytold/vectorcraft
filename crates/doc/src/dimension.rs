@@ -112,6 +112,18 @@ pub enum ArrowStyle {
     None,
 }
 
+impl ArrowStyle {
+    /// The stroke arrowhead drawn at each end of the dimension line, or None for no head.
+    pub fn arrowhead(self) -> Option<crate::Arrowhead> {
+        match self {
+            Self::Filled => Some(crate::Arrowhead::Triangle),
+            Self::Open => Some(crate::Arrowhead::TriangleOpen),
+            Self::Tick => Some(crate::Arrowhead::Slash),
+            Self::None => None,
+        }
+    }
+}
+
 /// Where the label sits across the dimension line.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]

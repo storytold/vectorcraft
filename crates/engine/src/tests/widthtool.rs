@@ -40,6 +40,24 @@ fn the_width_tool_edits_a_compound_paths_stroke() {
     assert_eq!(s.journal.last().unwrap().1["id"], json!(c.0));
 }
 
+/// A compound path whose stroke draws with a brush: a press or a double-click on a member puts the
+/// tool's reason in the status bar and leaves the stroke and the undo history as they were.
+#[test]
+fn the_width_tool_says_why_it_leaves_a_brushed_compound_path_alone() {
+    let (mut s, c, _) = compound();
+    s.execute("brush.apply", &json!({"ids": [c.0], "name": "3 pt. Round"})).unwrap();
+    let steps = s.journal.len();
+    let v = ViewInfo::default();
+    s.select_tool("width", v).unwrap();
+    for (kind, reason) in [(PointerKind::Down, true), (PointerKind::Drag, false), (PointerKind::Up, false), (PointerKind::DoubleClick, true)] {
+        let ui = s.pointer(&PointerEvent::new(kind, 200.0, 301.0), v).unwrap();
+        let said = ui.iter().any(|r| matches!(r, UiRequest::Status(m) if m == vectorcraft_tools::distort::KEEPS_SIZE));
+        assert_eq!(said, reason, "{kind:?}: {ui:?}");
+    }
+    assert_eq!(profile(&s, c), None);
+    assert_eq!(s.journal.len(), steps, "no command ran");
+}
+
 #[test]
 fn width_point_commands_given_a_member_edit_the_compound() {
     let (mut s, c, members) = compound();
