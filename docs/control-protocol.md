@@ -302,7 +302,11 @@ right-click menu has Remove Color too. The base color can't be removed. A remove
 has current colors and art or a group is open: it then keeps them with `to: null`, that art keeps its colors, and the
 group's swatch at that place is removed. A row with no current colors recolors no art; with a group, the new color of
 one with `added: true` that is not excluded is added to the group after the group's other colors, and a row made with New Row adds none.
-Setting `colors`, a preserve flag or `limitTo` reduces the rows again (also on `ui.dialog.confirm`). The dialog previews
+`groupStorage` shows the Color Groups list (true when the dialog opens); setting `group` to a color group's name makes
+it the group being edited, as opening on it does, and refuses a name no group has; `groupAction` (`save`, `new` or
+`delete`) runs the list's Save Changes, New Color Group or Delete button on the next frame, or first on confirm (see
+`docs/mcp.md`). Setting `colors`, a preserve flag or `limitTo` reduces the rows again (also on `ui.dialog.confirm`).
+The dialog previews
 `recolor.apply` on the canvas; confirm keeps it as one undo step (with a group, the group is rewritten in the same
 step; with no art selected only the group changes). In the Swatches panel, double-clicking a colour group's folder,
 or the options button while a group is selected, opens it.
