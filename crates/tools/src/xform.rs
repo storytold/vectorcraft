@@ -18,7 +18,7 @@ use vectorcraft_geom::{BezPath, Point, Rect, Shape};
 
 use crate::{Overlay, Tool};
 
-pub use artboard::ArtboardTool;
+pub use artboard::{ArtboardTool, EDGE_BUTTON_TIP, EDGE_BUTTON_TIP_LOCKED};
 pub use eyedropper::EyedropperTool;
 pub use free::{DistortMode, FreeTransformTool};
 pub use gradient::GradientTool;
