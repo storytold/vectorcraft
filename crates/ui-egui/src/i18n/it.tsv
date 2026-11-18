@@ -7429,6 +7429,7 @@ breakText	Glyphs	Glifi
 @msg	One path lies inside the other, so they have no common tangents	Un tracciato si trova dentro l’altro, quindi non hanno tangenti comuni
 @msg	The paths overlap, so they have no internal tangents	I tracciati si sovrappongono, quindi non hanno tangenti interne
 @msg	One path lies inside the other, so they have no internal tangents	Un tracciato si trova dentro l’altro, quindi non hanno tangenti interne
+@msg	The point lies inside the path, so it has no tangents	Il punto si trova dentro il tracciato, quindi non ha tangenti
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Espandi trattini in tracciati
 @msg	select paths with dashed strokes to expand	seleziona tracciati con traccia tratteggiata da espandere

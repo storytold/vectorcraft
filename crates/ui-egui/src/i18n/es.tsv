@@ -7778,6 +7778,7 @@ breakText	Glyphs	Glifos
 @msg	One path lies inside the other, so they have no common tangents	Un trazado está dentro del otro, por lo que no tienen tangentes comunes
 @msg	The paths overlap, so they have no internal tangents	Los trazados se superponen, por lo que no tienen tangentes internas
 @msg	One path lies inside the other, so they have no internal tangents	Un trazado está dentro del otro, por lo que no tienen tangentes internas
+@msg	The point lies inside the path, so it has no tangents	El punto está dentro del trazado, por lo que no tiene tangentes
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Expandir guiones en trazados
 @msg	select paths with dashed strokes to expand	seleccione trazados con trazo discontinuo para expandir
