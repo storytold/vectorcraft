@@ -935,6 +935,109 @@ fn a_save_that_fails_while_streaming_leaves_the_file_as_it_was() {
     let _ = std::fs::remove_dir_all(&d);
 }
 
+/// A save canceled (Background Save's Cancel) before it starts, while a native file streams into
+/// its temporary file, or after the last byte went into it, fails with `Cancelled` and leaves the
+/// file as it was, with no temporary file behind. A file encoded first is never written.
+#[test]
+fn a_canceled_save_leaves_the_file_as_it_was() {
+    /// Passes every write on, and cancels the save after the first one.
+    struct CancelAfterFirst<'a> {
+        inner: &'a mut dyn std::io::Write,
+        token: crate::cancel::CancelToken,
+    }
+    impl std::io::Write for CancelAfterFirst<'_> {
+        fn write(&mut self, b: &[u8]) -> std::io::Result<usize> {
+            let n = self.inner.write(b)?;
+            self.token.cancel();
+            Ok(n)
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            self.inner.flush()
+        }
+    }
+    let d = tmp_dir("stream-cancel");
+    // A small document's file goes in one piece; a large one's in several.
+    for count in [1, 1500] {
+        let mut s = session(2000.0, 2000.0, 1);
+        for i in 0..count {
+            s.execute("shape.rectangle", &json!({"x": i % 100 * 20, "y": i / 100 * 20, "width": 10, "height": 10})).unwrap();
+        }
+        let path = d.join("a.vectorcraft").to_string_lossy().to_string();
+        s.execute("file.saveCopy", &json!({"path": path})).unwrap();
+        let before = std::fs::read(&path).unwrap();
+        s.execute("shape.ellipse", &json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap();
+        let plan = save_plan(&s, SaveMode::Copy, &json!({"path": path})).unwrap();
+        let job = save_job(&mut s, plan).unwrap();
+        assert!(job.streams());
+        let token = crate::cancel::CancelToken::new();
+        let r = crate::cancel::scope(&token, None, || {
+            job.write_streamed(&mut |p, fill| super::write_file_with(p, &mut |w| fill(&mut CancelAfterFirst { inner: w, token: token.clone() })))
+        });
+        assert!(matches!(r, Err(EngineError::Cancelled)), "{count}: {r:?}");
+        assert_eq!(std::fs::read(&path).unwrap(), before, "{count} objects");
+        assert_eq!(std::fs::read_dir(&d).unwrap().count(), 1, "no temporary file is left");
+        // Canceled before it starts: the file isn't opened.
+        let mut opened = false;
+        let r = crate::cancel::scope(&token, None, || {
+            job.write_streamed(&mut |_, _| {
+                opened = true;
+                Ok(())
+            })
+        });
+        assert!(matches!(r, Err(EngineError::Cancelled)) && !opened, "{r:?}");
+    }
+    // A file encoded first (SVG): nothing reaches the writer.
+    let mut s = session(200.0, 100.0, 1);
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 20})).unwrap();
+    let plan = save_plan(&s, SaveMode::Copy, &json!({"path": d.join("a.svg").to_string_lossy()})).unwrap();
+    let job = save_job(&mut s, plan).unwrap();
+    let token = crate::cancel::CancelToken::new();
+    token.cancel();
+    let mut writes = 0;
+    let r = crate::cancel::scope(&token, None, || {
+        job.write_streamed(&mut |_, _| {
+            writes += 1;
+            Ok(())
+        })
+    });
+    assert!(matches!(r, Err(EngineError::Cancelled)), "{r:?}");
+    let r = crate::cancel::scope(&token, None, || {
+        job.write(|_, _| {
+            writes += 1;
+            Ok(())
+        })
+    });
+    assert!(matches!(r, Err(EngineError::Cancelled)) && writes == 0, "{r:?}");
+    assert!(!d.join("a.svg").exists());
+    let _ = std::fs::remove_dir_all(&d);
+}
+
+/// A save that writes several files (EPS with Use Artboards) and is canceled once its first file is
+/// in place writes the others too and succeeds: the set is never left half written.
+#[test]
+fn a_save_canceled_after_its_first_file_writes_them_all() {
+    let d = tmp_dir("cancel-files");
+    let mut s = session(100.0, 100.0, 2);
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 30, "height": 30})).unwrap();
+    let path = d.join("logo.eps").to_string_lossy().to_string();
+    let plan = save_plan(&s, SaveMode::Copy, &json!({"path": path, "options": {"useArtboards": true}})).unwrap();
+    let job = save_job(&mut s, plan).unwrap();
+    let token = crate::cancel::CancelToken::new();
+    let mut written = vec![];
+    let r = crate::cancel::scope(&token, None, || {
+        job.write(|p, b| {
+            super::write_save_file(p, b)?;
+            written.push(p.to_string());
+            token.cancel();
+            Ok(())
+        })
+    });
+    assert!(r.is_ok(), "{r:?}");
+    assert_eq!(written.len(), 3, "{written:?}");
+    assert!(written.iter().all(|p| std::path::Path::new(p).is_file()), "{written:?}");
+    let _ = std::fs::remove_dir_all(&d);
+}
+
 /// A save that fails leaves File Info's dates and the saved state alone; one that works stamps them.
 #[test]
 fn a_failed_save_does_not_stamp_the_documents_dates() {
