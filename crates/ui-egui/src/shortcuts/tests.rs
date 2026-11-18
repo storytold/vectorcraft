@@ -456,8 +456,8 @@ fn a_shortcut_runs_what_its_menu_item_runs() {
 /// add-on, Set Corners…, Divide into Dashes, Tangent Circle…, Find Nearest Swatch, the swatch legend, the type
 /// tools, the select add-on and Select by Link Status…), three "…" items whose menu entry gives
 /// params, Smart Punctuation…, Edit Custom Dictionary…, Composite Fonts…, Recolor Artwork…, the Edit menu's preset
-/// dialogs and Apply SVG Filter….
-const MENU_DIALOG_COMMANDS: [&str; 40] = [
+/// dialogs (Transparency Flattener, Print, PDF, Tracing and Perspective Grid Presets…) and Apply SVG Filter….
+const MENU_DIALOG_COMMANDS: [&str; 41] = [
     "object.path.smooth",
     "object.path.simplify",
     "object.path.offsetPath",
