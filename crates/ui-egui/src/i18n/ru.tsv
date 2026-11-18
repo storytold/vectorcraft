@@ -10526,6 +10526,7 @@ shape	Open	Открытый
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} пикселей — слишком большой размер для PSD (не более {MAX_SIDE} пикселей по стороне): уменьшите разрешение
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer должен быть "singleLine", "everyLine", "standardSingleLine" или "standardEveryLine"
 # Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	Вместо подсказки показывает карточку о том, что делают инструмент панели и его клавиши; требуется Показывать подсказки.
 	Selects whole objects and groups to move, resize or rotate them.	Выделяет объекты и группы целиком, чтобы перемещать, масштабировать или поворачивать их.
 	Selects anchor points and path segments to reshape a path.	Выделяет опорные точки и сегменты контура, чтобы изменить форму контура.
 	Draws paths point by point, with straight segments and smooth curves.	Рисует контуры точка за точкой, с прямыми сегментами и плавными кривыми.

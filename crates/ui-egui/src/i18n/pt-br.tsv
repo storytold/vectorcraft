@@ -10480,6 +10480,7 @@ swatch	Yellow Green	Verde-amarelado
 	Open a document to mark its fold lines.	Abra um documento para marcar suas linhas de dobra.
 	Remove Fold Line Role	Remover Tipo de Linha
 # Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	Mostra um cartão com o que uma ferramenta da barra e suas teclas fazem, no lugar da dica; requer Mostrar Dicas de Ferramenta.
 	Selects whole objects and groups to move, resize or rotate them.	Seleciona objetos e grupos inteiros para movê-los, redimensioná-los ou girá-los.
 	Selects anchor points and path segments to reshape a path.	Seleciona pontos de ancoragem e segmentos de caminho para remodelar um caminho.
 	Draws paths point by point, with straight segments and smooth curves.	Desenha caminhos ponto a ponto, com segmentos retos e curvas suaves.

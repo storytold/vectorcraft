@@ -8643,6 +8643,7 @@ breakText	Glyphs	Glifs
 @msg	Two panels pass through each other.	Dos panells es travessen l’un a l’altre.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer ha de ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"
 # Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	Mostra una fitxa amb el que fa una eina de la barra i el que fan les seves tecles en lloc del seu consell; cal Mostra els consells d’eines.
 	Selects whole objects and groups to move, resize or rotate them.	Selecciona objectes i grups sencers per moure’ls, canviar-ne la mida o girar-los.
 	Selects anchor points and path segments to reshape a path.	Selecciona punts d’ancoratge i segments de traçat per canviar la forma d’un traçat.
 	Draws paths point by point, with straight segments and smooth curves.	Dibuixa traçats punt a punt, amb segments rectes i corbes suaus.

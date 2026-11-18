@@ -7686,6 +7686,7 @@ breakText	Glyphs	Глифи
 @msg	Two panels pass through each other.	Два панела минават един през друг.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer трябва да е "singleLine", "everyLine", "standardSingleLine" или "standardEveryLine"
 # Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	Показва карта с това какво прави инструментът от лентата и какво правят клавишите му вместо подсказката му; изисква Показване на подсказки.
 	Selects whole objects and groups to move, resize or rotate them.	Избира цели обекти и групи, за да ги премествате, оразмерявате или завъртате.
 	Selects anchor points and path segments to reshape a path.	Избира опорни точки и сегменти от път, за да промените формата на пътя.
 	Draws paths point by point, with straight segments and smooth curves.	Рисува пътища точка по точка, с прави сегменти и плавни криви.

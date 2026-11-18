@@ -8617,6 +8617,7 @@ breakText	Glyphs	Γλύφοι
 @msg	Two panels pass through each other.	Δύο πάνελ διαπερνούν το ένα το άλλο.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	το composer πρέπει να είναι "singleLine", "everyLine", "standardSingleLine" ή "standardEveryLine"
 # Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	Εμφανίζει μια κάρτα με το τι κάνει ένα εργαλείο της γραμμής και τα πλήκτρα του, αντί για τη συμβουλή του· απαιτεί την Εμφάνιση συμβουλών εργαλείων.
 	Selects whole objects and groups to move, resize or rotate them.	Επιλέγει ολόκληρα αντικείμενα και ομάδες για μετακίνηση, αλλαγή μεγέθους ή περιστροφή.
 	Selects anchor points and path segments to reshape a path.	Επιλέγει σημεία αγκύρωσης και τμήματα διαδρομής για αλλαγή του σχήματος μιας διαδρομής.
 	Draws paths point by point, with straight segments and smooth curves.	Σχεδιάζει διαδρομές σημείο προς σημείο, με ευθύγραμμα τμήματα και ομαλές καμπύλες.

@@ -10014,6 +10014,7 @@ theme	Appearance	अपीयरेंस
 	Open a document to mark its fold lines.	फ़ोल्ड लाइनें मार्क करने के लिए कोई डॉक्यूमेंट ओपन करें।
 	Remove Fold Line Role	लाइन प्रकार हटाएँ
 # Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	टूलबार का टूल और उसकी कुंजियाँ क्या करती हैं, यह टिप की जगह एक कार्ड में दिखाता है; इसके लिए टूल युक्तियाँ दिखाएँ चालू होना चाहिए।
 	Selects whole objects and groups to move, resize or rotate them.	पूरे ऑब्जेक्ट और समूह चुनता है, ताकि उन्हें खिसकाया, आकार बदला या घुमाया जा सके।
 	Selects anchor points and path segments to reshape a path.	पाथ का आकार बदलने के लिए एंकर पॉइंट और पाथ सेगमेंट चुनता है।
 	Draws paths point by point, with straight segments and smooth curves.	सीधे सेगमेंट और चिकने वक्रों के साथ बिंदु-दर-बिंदु पाथ बनाता है।

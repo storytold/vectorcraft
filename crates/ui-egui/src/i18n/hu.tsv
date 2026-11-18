@@ -10396,6 +10396,7 @@ breakText	Glyphs	Glifák
 	Open a document to mark its fold lines.	Nyiss meg egy dokumentumot a hajtásvonalai megjelöléséhez.
 	Remove Fold Line Role	Vonaltípus eltávolítása
 # Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	Az elemleírás helyett kártyán mutatja, mit csinál az eszköztár egy eszköze és a billentyűi; ehhez az Elemleírások megjelenítése szükséges.
 	Selects whole objects and groups to move, resize or rotate them.	Teljes objektumokat és csoportokat jelöl ki áthelyezéshez, átméretezéshez vagy forgatáshoz.
 	Selects anchor points and path segments to reshape a path.	Horgonypontokat és útvonalszakaszokat jelöl ki egy útvonal alakjának módosításához.
 	Draws paths point by point, with straight segments and smooth curves.	Pontról pontra rajzol útvonalakat egyenes szakaszokkal és sima görbékkel.

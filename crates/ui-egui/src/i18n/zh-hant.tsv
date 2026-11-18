@@ -10101,6 +10101,7 @@ breakText	Glyphs	字符
 @msg	Two panels pass through each other.	兩個面板相互穿插。
 @msg	{what} would print on more than {MAX_TILES} tiles: scale it down	{what} 會列印在超過 {MAX_TILES} 個拼貼上：請縮小
 # Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	以卡片取代提示，顯示工具列工具及其按鍵的作用；需要開啟顯示工具提示。
 	Selects whole objects and groups to move, resize or rotate them.	選取整個物件和群組，以移動、縮放或旋轉它們。
 	Selects anchor points and path segments to reshape a path.	選取錨點和路徑區段，以改變路徑的形狀。
 	Draws paths point by point, with straight segments and smooth curves.	逐點繪製路徑，包括直線區段和平滑曲線。

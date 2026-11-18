@@ -5433,6 +5433,7 @@ swatch	[Registration]	[રજિસ્ટ્રેશન]
 	Standard Every-line Composer	સ્ટાન્ડર્ડ એવરી-લાઇન કમ્પોઝર
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer આમાંથી એક હોવું જોઈએ: "singleLine", "everyLine", "standardSingleLine" અથવા "standardEveryLine"
 # Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	ટૂલબારનું ટૂલ અને તેની કીઓ શું કરે છે તે ટિપને બદલે કાર્ડમાં બતાવે છે; ટૂલ ટિપ્સ બતાવો ચાલુ હોવું જરૂરી છે.
 	Selects whole objects and groups to move, resize or rotate them.	આખા ઑબ્જેક્ટ અને જૂથો પસંદ કરે છે, જેથી તેમને ખસેડી, તેમનું કદ બદલી કે ફેરવી શકાય.
 	Selects anchor points and path segments to reshape a path.	પાથનો આકાર બદલવા માટે એન્કર બિંદુઓ અને પાથ સેગમેન્ટ પસંદ કરે છે.
 	Draws paths point by point, with straight segments and smooth curves.	સીધા સેગમેન્ટ અને સરળ વળાંકો સાથે બિંદુ-દર-બિંદુ પાથ દોરે છે.

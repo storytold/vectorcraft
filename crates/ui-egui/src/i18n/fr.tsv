@@ -10434,6 +10434,7 @@ breakText	Glyphs	Glyphes
 @msg	Two panels pass through each other.	Deux panneaux se traversent.
 @msg	{_1} × {_2} pixels is too large for GIF (at most 65535 pixels a side): lower the resolution	{_1} × {_2} pixels, c’est trop grand pour le GIF (65535 pixels par côté au plus) : réduisez la résolution
 # Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	Affiche une fiche indiquant ce que font un outil de la barre et ses touches, à la place de son info-bulle. Nécessite Afficher les info-bulles.
 	Selects whole objects and groups to move, resize or rotate them.	Sélectionne des objets et des groupes entiers pour les déplacer, les redimensionner ou les faire pivoter.
 	Selects anchor points and path segments to reshape a path.	Sélectionne des points d’ancrage et des segments de tracé pour modifier la forme d’un tracé.
 	Draws paths point by point, with straight segments and smooth curves.	Dessine des tracés point par point, avec des segments droits et des courbes lisses.

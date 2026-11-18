@@ -10017,6 +10017,7 @@ breakText	Glyphs	글리프
 	Open a document to mark its fold lines.	접는 선을 지정하려면 문서를 여세요.
 	Remove Fold Line Role	선 종류 제거
 # Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	도구 막대의 도구와 그 키가 하는 일을 도움말 대신 카드로 표시합니다. 도구 설명 표시가 켜져 있어야 합니다.
 	Selects whole objects and groups to move, resize or rotate them.	개체와 그룹 전체를 선택하여 이동하거나 크기를 조정하거나 회전합니다.
 	Selects anchor points and path segments to reshape a path.	기준점과 패스 세그먼트를 선택하여 패스의 모양을 바꿉니다.
 	Draws paths point by point, with straight segments and smooth curves.	직선 세그먼트와 부드러운 곡선으로 패스를 한 점씩 그립니다.

@@ -10408,6 +10408,7 @@ breakText	Glyphs	Glyfy
 	Open a document to mark its fold lines.	Otevřete dokument, abyste označili jeho linie skladu.
 	Remove Fold Line Role	Odstranit typ linie
 # Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	Místo popisku zobrazí kartu s tím, co dělá nástroj z panelu a co dělají jeho klávesy; vyžaduje Zobrazovat popisky nástrojů.
 	Selects whole objects and groups to move, resize or rotate them.	Vybírá celé objekty a skupiny, abyste je mohli přesunout, změnit jejich velikost nebo je otočit.
 	Selects anchor points and path segments to reshape a path.	Vybírá kotevní body a segmenty cesty, abyste mohli změnit tvar cesty.
 	Draws paths point by point, with straight segments and smooth curves.	Kreslí cesty bod po bodu, s rovnými segmenty a hladkými křivkami.

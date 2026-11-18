@@ -7741,6 +7741,7 @@ shape	Open	Otvoren
 @msg	Two panels pass through each other.	Dva panela prolaze jedan kroz drugi.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer mora biti "singleLine", "everyLine", "standardSingleLine" ili "standardEveryLine"
 # Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	Prikazuje karticu s onim što alat s trake radi i što rade njegove tipke, umjesto njegovog opisa; potrebno je Prikaži opise alata.
 	Selects whole objects and groups to move, resize or rotate them.	Odabire cijele objekte i grupe radi pomjeranja, promjene veličine ili rotacije.
 	Selects anchor points and path segments to reshape a path.	Odabire sidrene tačke i segmente putanje radi promjene oblika putanje.
 	Draws paths point by point, with straight segments and smooth curves.	Crta putanje tačku po tačku, s ravnim segmentima i glatkim krivuljama.

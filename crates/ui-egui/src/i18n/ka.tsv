@@ -10779,6 +10779,7 @@ font-script	Japanese	იაპონური
 @msg	Two panels pass through each other.	ორი პანელი ერთმანეთში გადის.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer უნდა იყოს "singleLine", "everyLine", "standardSingleLine" ან "standardEveryLine"
 # Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	ინსტრუმენტების ზოლის ინსტრუმენტისა და მისი კლავიშების მოქმედებას მინიშნების ნაცვლად ბარათზე აჩვენებს; საჭიროა მინიშნებების ჩვენება.
 	Selects whole objects and groups to move, resize or rotate them.	მთლიანად მონიშნავს ობიექტებსა და ჯგუფებს მათი გადასაადგილებლად, ზომის შესაცვლელად ან მოსაბრუნებლად.
 	Selects anchor points and path segments to reshape a path.	მონიშნავს საყრდენ წერტილებსა და ტრაექტორიის სეგმენტებს ტრაექტორიის ფორმის შესაცვლელად.
 	Draws paths point by point, with straight segments and smooth curves.	ხატავს ტრაექტორიებს წერტილ-წერტილ, სწორი სეგმენტებითა და გლუვი მრუდებით.

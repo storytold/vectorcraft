@@ -10445,6 +10445,7 @@ breakText	Glyphs	Glyphs
 	Open a document to mark its fold lines.	Open een document om de vouwlijnen te markeren.
 	Remove Fold Line Role	Lijnsoort verwijderen
 # Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	Toont in plaats van de tooltip een kaart met wat een gereedschap in de werkbalk en zijn toetsen doen; vereist Tooltips tonen.
 	Selects whole objects and groups to move, resize or rotate them.	Selecteert hele objecten en groepen om ze te verplaatsen, te schalen of te draaien.
 	Selects anchor points and path segments to reshape a path.	Selecteert ankerpunten en padsegmenten om de vorm van een pad te wijzigen.
 	Draws paths point by point, with straight segments and smooth curves.	Tekent paden punt voor punt, met rechte segmenten en vloeiende curven.

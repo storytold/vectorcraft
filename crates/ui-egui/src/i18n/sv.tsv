@@ -10129,6 +10129,7 @@ digits	Hindi	Hindi
 @msg	Two panels pass through each other.	Två paneler går igenom varandra.
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} pixlar är för stort för PSD (högst {MAX_SIDE} pixlar per sida): sänk upplösningen
 # Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	Visar ett kort med vad ett verktyg i verktygsfältet och dess tangenter gör i stället för dess tips; kräver Visa verktygstips.
 	Selects whole objects and groups to move, resize or rotate them.	Markerar hela objekt och grupper för att flytta, skala eller rotera dem.
 	Selects anchor points and path segments to reshape a path.	Markerar ankarpunkter och bansegment för att ändra formen på en bana.
 	Draws paths point by point, with straight segments and smooth curves.	Ritar banor punkt för punkt, med raka segment och mjuka kurvor.

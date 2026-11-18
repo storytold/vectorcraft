@@ -8288,6 +8288,7 @@ breakText	Glyphs	Glyph
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} điểm ảnh quá lớn cho PSD (tối đa {MAX_SIDE} điểm ảnh mỗi cạnh): hãy giảm độ phân giải
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer phải là "singleLine", "everyLine", "standardSingleLine" hoặc "standardEveryLine"
 # Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	Hiện thẻ cho biết công cụ trên thanh công cụ và các phím của nó làm gì thay cho chú thích; cần bật Hiện chú thích công cụ.
 	Selects whole objects and groups to move, resize or rotate them.	Chọn toàn bộ đối tượng và nhóm để di chuyển, đổi kích thước hoặc xoay chúng.
 	Selects anchor points and path segments to reshape a path.	Chọn điểm neo và đoạn đường dẫn để thay đổi hình dạng một đường dẫn.
 	Draws paths point by point, with straight segments and smooth curves.	Vẽ đường dẫn từng điểm một, với các đoạn thẳng và đường cong mượt.

@@ -7701,6 +7701,7 @@ breakText	Glyphs	Glif
 @msg	Two panels pass through each other.	Dua panel saling menembus.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer harus "singleLine", "everyLine", "standardSingleLine", atau "standardEveryLine"
 # Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	Menampilkan kartu berisi fungsi alat di bilah alat dan tombolnya sebagai pengganti tipnya; memerlukan Tampilkan tips alat.
 	Selects whole objects and groups to move, resize or rotate them.	Memilih objek dan grup utuh untuk dipindahkan, diubah ukurannya, atau diputar.
 	Selects anchor points and path segments to reshape a path.	Memilih titik jangkar dan segmen jalur untuk mengubah bentuk jalur.
 	Draws paths point by point, with straight segments and smooth curves.	Menggambar jalur titik demi titik, dengan segmen lurus dan lengkungan halus.
