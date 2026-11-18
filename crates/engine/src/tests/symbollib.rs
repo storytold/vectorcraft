@@ -375,3 +375,69 @@ fn other_documents_symbols_load_and_unreadable_files_are_errors() {
     let bytes = vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap();
     assert_eq!(vectorcraft_format::load(&bytes).unwrap().symbols.len(), 1);
 }
+
+/// `symbol.placeFromDocument` places another open document's symbol in the active document as
+/// one undo step, with the symbol it nests, the pattern its art uses and its Symbol Options. A
+/// second placement uses what the first added; the source document is left as it was; a symbol
+/// of the active document itself is placed as it is; a closed document, a name the document does
+/// not have and bad params are errors that change nothing.
+#[test]
+fn another_documents_symbol_is_added_and_placed_in_one_step() {
+    let mut s = kit();
+    let source = s.doc().unwrap().uid;
+    let source_doc = s.doc().unwrap().doc.clone();
+    run(&mut s, "file.new", json!({"width": 100, "height": 100}));
+    let before = undo_len(&s);
+    let r = run(&mut s, "symbol.placeFromDocument", json!({"sourceDocument": source, "name": "Badge", "x": 30, "y": 40}));
+    assert_eq!(undo_len(&s), before + 1, "added and placed in one step");
+    assert_eq!(r["name"], "Badge");
+    let mut names = symbols(&s);
+    names.sort();
+    assert_eq!(names, ["Badge", "Star"], "the nested Star came along");
+    assert_eq!(doc(&s).symbol_registration("Badge"), SymbolRegistration(0));
+    let placed = NodeId(r["id"].as_u64().unwrap());
+    assert_eq!(s.doc().unwrap().selection.objects, [placed]);
+    let NodeKind::SymbolInstance { symbol, .. } = &doc(&s).node(placed).unwrap().kind else { panic!("not an instance") };
+    assert_eq!(symbol, "Badge");
+    let size = |d: &vectorcraft_doc::Document| d.unknown.get("symbolSizes").and_then(|m| m.get("Badge")).cloned();
+    assert!(size(doc(&s)).is_some());
+    assert_eq!(size(doc(&s)), size(&source_doc));
+    // The Dots symbol brings its pattern and swatch.
+    run(&mut s, "symbol.placeFromDocument", json!({"sourceDocument": source, "name": "Dots"}));
+    assert!(doc(&s).pattern("Dots").is_some() && doc(&s).swatch("Dots").is_some());
+    // Placed again, Badge is the one already added.
+    let count = doc(&s).symbols.len();
+    let r = run(&mut s, "symbol.placeFromDocument", json!({"sourceDocument": source, "name": "Badge"}));
+    assert_eq!((r["name"].as_str(), doc(&s).symbols.len()), (Some("Badge"), count));
+    run(&mut s, "edit.undo", json!({}));
+    run(&mut s, "edit.undo", json!({}));
+    run(&mut s, "edit.undo", json!({}));
+    assert!(symbols(&s).is_empty() && doc(&s).pattern("Dots").is_none());
+    // The active document's own symbol, by its uid: placed, nothing added.
+    run(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10}));
+    run(&mut s, "symbol.new", json!({"name": "Star"}));
+    let own = s.doc().unwrap().uid;
+    let before = undo_len(&s);
+    let r = run(&mut s, "symbol.placeFromDocument", json!({"sourceDocument": own, "name": "Star", "x": 70, "y": 70}));
+    assert_eq!((undo_len(&s), r["name"].as_str(), symbols(&s)), (before + 1, Some("Star"), vec!["Star".to_string()]));
+    // Errors change nothing.
+    let before = (undo_len(&s), doc(&s).clone());
+    for p in [
+        json!({"sourceDocument": source, "name": "Nope"}),
+        json!({"sourceDocument": source}),
+        json!({"name": "Star"}),
+        json!({"sourceDocument": -1, "name": "Star"}),
+        json!({"sourceDocument": "1", "name": "Star"}),
+        json!({"sourceDocument": source, "name": "Star", "x": "10"}),
+        json!({"sourceDocument": u64::MAX, "name": "Star"}),
+    ] {
+        assert!(s.execute("symbol.placeFromDocument", &p).is_err(), "{p}");
+        assert_eq!((undo_len(&s), doc(&s)), (before.0, &before.1), "{p}");
+    }
+    // The source document is left as it was, and once it is closed its symbols are gone with it.
+    assert!(s.set_active(0));
+    assert_eq!(*s.doc().unwrap().doc, *source_doc);
+    run(&mut s, "file.close", json!({"index": 0}));
+    let e = s.execute("symbol.placeFromDocument", &json!({"sourceDocument": source, "name": "Star"})).unwrap_err();
+    assert!(e.to_string().contains("no longer open"), "{e}");
+}
