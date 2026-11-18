@@ -399,6 +399,10 @@ empty), without opening the dialog.
 Cmd/Ctrl+Alt+Shift+U (`document.switchUnits`, Switch Units in the shortcut editor) switches the document to the
 next unit in the order a right-click on a ruler lists them, from Feet back to Points.
 
+Cmd/Ctrl+Shift+0 (View › Zoom to Selection, `addon.arrange.zoomSelection`, a VectorCraft addition) fits the
+active view to the selection, beside Fit Artboard in Window (Cmd/Ctrl+0) and Fit All in Window (Cmd/Ctrl+Alt+0);
+the menu item is dimmed with nothing selected, and the shortcut can be reassigned (#5601).
+
 ## Panels, Control bar, Properties, context menus
 
 - [x] **Production Preflight (VectorCraft addition):** Window panel with PDF, Print and Screen targets, a minimum PPI and all/active-artboard scope; four check summaries, clickable findings, Find Font/Relink/Update actions, automatic revision/timed rechecks and explicit incomplete coverage. See [production-preflight.md](production-preflight.md).
