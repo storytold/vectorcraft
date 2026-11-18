@@ -98,7 +98,7 @@ fn plural_polish(n: u64) -> usize {
 }
 
 /// The registry. English first: it is the fallback and the source language.
-pub static LANGUAGES: [LangInfo; 29] = [
+pub static LANGUAGES: [LangInfo; 30] = [
     LangInfo { code: "en", name: "English", source: "", plural: plural_one_other, complete_menus: false, catalog: OnceLock::new() },
     // Hindi shares the integer zero/one rule with French. Desktop UI fonts are loaded lazily
     // from installed faces by ui_fonts; the web fetches a Devanagari craft-fonts face on demand.
@@ -468,7 +468,7 @@ fn candidates(tag: &str) -> Vec<String> {
     for n in (1..=parts.len()).rev() {
         out.push(parts[..n].join("-"));
     }
-    if matches!(primary, "no" | "nb" | "nn") && !parts.contains(&"nb") {
+    if matches!(primary, "no" | "nb" | "nn") && !out.iter().any(|c| c.as_str() == "nb") {
         // Norwegian: `nb` from Windows, macOS and browsers, `no` or `nn` from POSIX locales.
         out.insert(out.len() - 1, "nb".to_string());
     }
