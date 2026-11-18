@@ -1835,3 +1835,190 @@ fn eraser_ancestor_stroke_scene(container: &str, stroke: &str) -> Session {
     s.execute("select.set", &json!({"ids": [selected.0]})).unwrap();
     s
 }
+
+// Pinning-only checks: no Eraser operation or other geometry edit is performed below.
+fn eraser_pinning_only_same_pixels(a: &vectorcraft_render::Rendered, b: &vectorcraft_render::Rendered, label: &str) {
+    let changed = (0..300).find_map(|y| (0..300).find(|&x| a.pixel(x, y) != b.pixel(x, y)).map(|x| (x, y, a.pixel(x, y), b.pixel(x, y))));
+    assert_eq!(changed, None, "{label}: first changed pixel");
+}
+
+fn eraser_pinning_only_nested_scene(placed: bool, parent_offset: bool) -> (Session, NodeId) {
+    let mut s = session();
+    let (_, _, owner, _) = eraser_container_gradient_fixture(&mut s, false, false);
+    s.execute("select.set", &json!({"ids": [owner.0]})).unwrap();
+    let outer = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    if parent_offset {
+        s.execute(
+            "effect.apply",
+            &json!({"ids": [outer.0], "target": "object", "item": null,
+                "effect": "path.offsetPath", "params": {"offset": 10, "joins": "round"}}),
+        )
+        .unwrap();
+    }
+    // These are the retained ordinary fit and the existing +10 pt evaluated fit.
+    let (bottom, top) = if parent_offset { (210.0, 90.0) } else { (200.0, 100.0) };
+    s.execute(
+        "appearance.setItem",
+        &json!({"ids": [owner.0], "target": "object", "index": 0,
+            "gradient": eraser_placement_ramp(placed, bottom, top)}),
+    )
+    .unwrap();
+    let doc = &s.doc().unwrap().doc;
+    assert_eq!(doc.parent_of(owner), Some(outer), "INPUT: the gradient owner is nested in the effect owner");
+    assert_eq!(doc.node(owner).unwrap().geometric_bounds().unwrap(), vectorcraft_geom::Rect::new(100.0, 100.0, 220.0, 200.0));
+    assert!(doc.node(owner).unwrap().appearance.effects.is_empty(), "INPUT: the offset belongs to the enclosing Group only");
+    let effects = &doc.node(outer).unwrap().appearance.effects;
+    assert_eq!(effects.len(), usize::from(parent_offset));
+    if parent_offset {
+        assert_eq!(effects[0].id, "path.offsetPath");
+        assert!(effects[0].visible);
+        assert_eq!(effects[0].params["offset"].as_f64(), Some(10.0));
+        assert_eq!(effects[0].params["joins"], json!("round"));
+    }
+    let vectorcraft_doc::color::Paint::Gradient(g) = doc.node(owner).unwrap().appearance.fill_paint() else {
+        panic!("INPUT: the nested Group owns the gradient")
+    };
+    assert_eq!(g.geom.is_some(), placed);
+    assert!(!g.gradient.dither);
+    (s, owner)
+}
+
+fn eraser_pinning_only_nested_case(parent_offset: bool) {
+    let (s, owner) = eraser_pinning_only_nested_scene(false, parent_offset);
+    let (placed, placed_owner) = eraser_pinning_only_nested_scene(true, parent_offset);
+    let before = eraser_gradient_image(&s);
+    let explicit = eraser_gradient_image(&placed);
+    assert_eq!(before.pixel(190, 175)[3], 255, "INPUT: the retained sibling is painted");
+    assert_eq!(before.pixel(190, 185)[3], 255);
+    assert_ne!(before.pixel(190, 175), before.pixel(190, 185), "INPUT: the fitted ramp is nonconstant");
+    if parent_offset {
+        assert_eq!(before.pixel(190, 205)[3], 255, "INPUT: the enclosing positive offset reaches beyond the raw box");
+    }
+    eraser_pinning_only_same_pixels(&before, &explicit, "INPUT: the independently placed control matches before pinning");
+    let placed_doc = &placed.doc().unwrap().doc;
+    assert!(
+        vectorcraft_render::pinned_appearance_for_geometry_edit(placed_doc, placed_doc.node(placed_owner).unwrap()).is_none(),
+        "INPUT: an already explicit placement needs no pinning"
+    );
+    let label = if parent_offset { "PINNING_ONLY: nested Group under positive Offset Path" } else { "CONTROL: nested Group without enclosing effects" };
+    eraser_pinning_only_store(&s.doc().unwrap().doc, owner, &before, !parent_offset, label);
+}
+
+fn eraser_pinning_only_store(doc: &vectorcraft_doc::Document, owner: NodeId, before: &vectorcraft_render::Rendered, required: bool, label: &str) {
+    let original = serde_json::to_value(doc).unwrap();
+    let node = doc.node(owner).unwrap();
+    let Some(pinned) = vectorcraft_render::pinned_appearance_for_geometry_edit(doc, node) else {
+        assert!(!required, "INPUT: the ordinary control must pin reproducibly: {label}");
+        assert_eq!(serde_json::to_value(doc).unwrap(), original);
+        println!("PINNING_FALLBACK: {label} remains fitted; no pixel failure established");
+        return;
+    };
+    assert_eq!(serde_json::to_value(doc).unwrap(), original, "INPUT: the public helper leaves its input unchanged");
+    let vectorcraft_doc::color::Paint::Gradient(g) = pinned.fill_paint() else { panic!("INPUT: returned paint is a gradient") };
+    assert!(g.geom.is_some(), "INPUT: the returned fitted gradient has an explicit placement");
+    // The fixed linear fixture permits only stored gradient geometry to change, not effects or other row data.
+    let mut normalized = pinned.clone();
+    assert_eq!(normalized.items.len(), node.appearance.items.len());
+    for (after, before) in normalized.items.iter_mut().zip(&node.appearance.items) {
+        if let (vectorcraft_doc::color::Paint::Gradient(a), vectorcraft_doc::color::Paint::Gradient(b)) = (after.paint_mut(), before.paint()) {
+            a.geom = b.geom;
+        }
+    }
+    assert_eq!(serde_json::to_value(&normalized).unwrap(), serde_json::to_value(&node.appearance).unwrap(), "INPUT: only placement changes");
+    let mut only_paint = doc.clone();
+    only_paint.node_mut(owner).unwrap().appearance = pinned.into();
+    let mut restored = only_paint.clone();
+    restored.node_mut(owner).unwrap().appearance = node.appearance.clone();
+    assert_eq!(serde_json::to_value(&restored).unwrap(), original, "INPUT: geometry, effects and every other source field are unchanged");
+    let after = vectorcraft_render::Renderer::new().render(&only_paint, 300, 300, vectorcraft_geom::Affine::IDENTITY, &Default::default());
+    eraser_pinning_only_same_pixels(before, &after, label);
+}
+
+#[test]
+fn eraser_pinning_only_nested_gradient_matches_unchanged_render() {
+    // Establish the ordinary nested Group without an enclosing geometry effect FIRST.
+    eraser_pinning_only_nested_case(false);
+    // One retained positive offset, no cut, parameter search or timing measurement.
+    eraser_pinning_only_nested_case(true);
+}
+
+fn eraser_pinning_only_text_clip_case(stroked: bool) {
+    // Original clippaint.rs text, paint, font defaults and geometry; one retained ordinary scale.
+    let mut s = session();
+    let art = s.execute("shape.rectangle", &json!({"x": 0, "y": 50, "width": 30, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    s.execute("paint.setFill", &json!({"ids": [art], "color": "#ff0000"})).unwrap();
+    let text = NodeId(s.execute("text.create", &json!({"x": 10, "y": 120, "text": "Clip", "size": 72})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.all", &json!({})).unwrap();
+    let owner = NodeId(s.execute("object.clippingMask.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+    s.execute("paint.setFill", &json!({"ids": [text.0], "color": "#0000ff"})).unwrap();
+    if stroked {
+        s.execute("paint.setStroke", &json!({"ids": [text.0], "color": "#00ff00"})).unwrap();
+        s.execute("stroke.set", &json!({"ids": [text.0], "weight": 2})).unwrap();
+    } else {
+        s.execute("paint.setStroke", &json!({"ids": [text.0], "none": true})).unwrap();
+    }
+    s.execute("appearance.addFill", &json!({"ids": [owner.0], "target": "object"})).unwrap();
+    s.execute(
+        "appearance.setItem",
+        &json!({"ids": [owner.0], "target": "object", "index": 0, "gradient": eraser_placement_ramp(false, 200.0, 100.0)}),
+    )
+    .unwrap();
+    s.execute(
+        "effect.apply",
+        &json!({"ids": [owner.0], "target": "object", "item": null, "effect": "distort.transform",
+            "params": {"scaleH": 100, "scaleV": 150, "reference": 8, "objects": true, "copies": 0,
+                "random": false, "rotate": 0, "moveH": 0, "moveV": 0, "patterns": false, "strokes": false}}),
+    )
+    .unwrap();
+    let doc = &s.doc().unwrap().doc;
+    let node = doc.node(owner).unwrap();
+    assert!(node.clips(), "INPUT: the source is a clipping Group");
+    assert_eq!(node.children().unwrap()[0].id, text);
+    let t = doc.node(text).unwrap();
+    let NodeKind::Text(type_) = &t.kind else { panic!("INPUT: the clipping object is type") };
+    assert_eq!(type_.plain_text(), "Clip");
+    assert_eq!(t.clip_paint().stroke.is_some(), stroked, "INPUT: only the character-stroke paint distinguishes the control");
+    let bounds = t.geometric_bounds().unwrap();
+    assert!(bounds.width() > 0.0 && bounds.height() > 0.0, "INPUT: actual font setup supplies nonempty glyph geometry");
+    let effects = &node.appearance.effects;
+    assert_eq!(effects.len(), 1);
+    assert_eq!(effects[0].id, "distort.transform");
+    assert!(effects[0].visible);
+    for (key, expected) in [("scaleH", 100.0), ("scaleV", 150.0), ("reference", 8.0), ("copies", 0.0)] {
+        assert_eq!(effects[0].params[key].as_f64(), Some(expected), "INPUT: accepted Transform {key}");
+    }
+    let evaluated = vectorcraft_effects::evaluate_container(Some(doc), node).expect("INPUT: the real container pass evaluates the fixture");
+    if stroked {
+        let children = evaluated.children().unwrap();
+        assert!(!evaluated.clips() && children.len() >= 2, "INPUT: painted clipping strokes create an outer wrapper");
+        assert!(children[0].clips());
+        assert_eq!(children[0].id, owner);
+        assert_eq!(children[0].children().unwrap()[0].id, text);
+        assert_eq!(children[1].id, text);
+        assert!(!children[1].clips(), "INPUT: the second piece paints the stroke outside the clip");
+    } else {
+        assert!(evaluated.clips(), "INPUT: the same glyph/scale without character stroke has no painted-clip wrapper");
+    }
+    let before = eraser_gradient_image(&s);
+    let mut ramp = std::collections::BTreeSet::new();
+    let mut green = 0;
+    for y in 0..300 {
+        for x in 0..300 {
+            let p = before.pixel(x, y);
+            if p[3] == 255 && p[0] > 0 && p[2] > 0 && p[1] == 0 {
+                ramp.insert(p);
+            }
+            green += usize::from(p[3] > 0 && p[1] > 200 && p[0] < 60 && p[2] < 60);
+        }
+    }
+    assert!(ramp.len() > 1, "INPUT: the fitted container gradient paints actual nonconstant glyph pixels");
+    assert_eq!(green > 0, stroked, "INPUT: the painted-character stroke is actually visible only in the subject");
+    let label = if stroked { "PINNING_ONLY: painted clipping text under nonuniform scale" } else { "CONTROL: same glyph/scale without painted-clip wrapper" };
+    eraser_pinning_only_store(doc, owner, &before, !stroked, label);
+}
+
+#[test]
+fn eraser_pinning_only_painted_text_clip_matches_unchanged_render() {
+    eraser_pinning_only_text_clip_case(false);
+    eraser_pinning_only_text_clip_case(true);
+}
