@@ -46,12 +46,7 @@ use crate::{Imported, Kind};
 const PATTERNS: &str = "hatched and pattern brushes are filled with their average color";
 const ENDS_EARLY: &str = "the file ends early: what it held was imported";
 const TOO_MANY: &str = "objects past the most one file may hold were left out";
-const AT_LIMIT: &str = "the file reached the most objects one file may hold: any after them were not read";
-
-/// The most items `craft_metafile` keeps from one file (its `MAX_ITEMS`). It stops reading at the
-/// limit and does not say whether more items followed, so a picture holding this many may have
-/// been cut short.
-const READER_ITEMS: usize = 200_000;
+const AT_LIMIT: &str = "the file or a picture inside it reached a limit on what one file may hold: what came after the limit was not read";
 
 /// Points a unit of a WMF without a placeable header (1440 units an inch).
 const WMF_UNIT: f64 = 72.0 / 1440.0;
@@ -215,6 +210,18 @@ struct Pending {
     pen: Pen,
     clips: Vec<Arc<Clip>>,
     path: BezPath,
+}
+
+/// What `craft_metafile` counted as not read or not played as the file asks.
+struct Lost {
+    /// Records of kinds it doesn't read.
+    skipped: u32,
+    /// Images, and pattern brushes (a pen's included), whose bitmap it couldn't read.
+    images: u32,
+    /// Clip changes it didn't apply as the file sets them.
+    clips: u32,
+    /// Raster operations drawn as a plain copy or left out.
+    rops: u32,
 }
 
 /// Clip paths already made, by address (the `Arc` keeps the address from being reused); None for
@@ -720,14 +727,38 @@ impl Mapper {
     }
 
     /// The document: what was drawn on one layer, clipped art in clipping groups.
-    fn finish(mut self, kind: Kind, skipped: u32) -> Imported {
+    fn finish(mut self, kind: Kind, lost: Lost) -> Imported {
         self.flush();
-        if skipped > 0 {
-            let n = skipped;
+        let s = |n: u32| if n == 1 { "" } else { "s" };
+        let was = |n: u32| if n == 1 { "was" } else { "were" };
+        let n = lost.skipped;
+        if n > 0 {
+            self.warnings.push(format!("{n} record{} of kinds VectorCraft doesn't read {} skipped", s(n), was(n)));
+        }
+        let n = lost.images;
+        if n > 0 {
             self.warnings.push(format!(
-                "{n} record{} of kinds VectorCraft doesn't read {} skipped",
-                if n == 1 { "" } else { "s" },
-                if n == 1 { "was" } else { "were" }
+                "{n} image{} or pattern brush{} that couldn't be read {} left out",
+                s(n),
+                if n == 1 { "" } else { "es" },
+                was(n)
+            ));
+        }
+        let n = lost.clips;
+        if n > 0 {
+            self.warnings.push(format!(
+                "{n} clip{} couldn't be applied as the file sets {}: what is drawn after {} may show more or less than the file does",
+                s(n),
+                if n == 1 { "it" } else { "them" },
+                if n == 1 { "it" } else { "them" }
+            ));
+        }
+        let n = lost.rops;
+        if n > 0 {
+            self.warnings.push(format!(
+                "{n} raster operation{} other than a plain copy (masks, inversions) {} drawn as a plain copy or left out",
+                s(n),
+                was(n)
             ));
         }
         let out = std::mem::take(&mut self.out);
@@ -981,11 +1012,12 @@ pub(crate) fn import(bytes: &[u8]) -> Result<Imported, String> {
     if ends_early(bytes, kind) {
         m.warn(ENDS_EARLY);
     }
-    if pic.items.len() >= READER_ITEMS {
+    if pic.truncated {
         m.warn(AT_LIMIT);
     }
+    let lost = Lost { skipped: pic.skipped_records, images: pic.dropped_images, clips: pic.ignored_clips, rops: pic.unplayed_raster_ops };
     for item in pic.items {
         m.item(item);
     }
-    Ok(m.finish(kind, pic.skipped_records))
+    Ok(m.finish(kind, lost))
 }

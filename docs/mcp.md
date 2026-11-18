@@ -5441,7 +5441,11 @@ and `layerRows`, the rows highlighted in the panel.
   runs Hide or Lock Others for the row's layer, or Show or Unlock All when the others already are), `layer.pasteRemembersLayers`,
   `object.isolate {id?}` (a group, a layer or a single object, by default the first selected object; not type, not a
   hidden or locked object or one in a hidden or locked group or layer, not a guide path while Lock Guides is on, and
-  while a symbol is edited only the editing layer or art on it) / `object.exitIsolation`.
+  while a symbol is edited only the editing layer or art on it) / `object.exitIsolation`. Leaving an isolated Live
+  Paint group (`object.exitIsolation`, or `object.isolate` on a level outside it) adds the paths, compound paths and
+  groups of them drawn in it, shown and unlocked with everything in them, to the group as `livePaint.merge` does, in
+  one undo step; type, images and other objects stay in it as they are, and with nothing drawn no undo step is
+  recorded.
 - **Dialogs and panel state** (control channel and the app's MCP): `ui.layerOptions {ids?}` and `ui.newLayer
   {sublayer?}` open Layer Options (dialog `layerOptions`: name, color, template, locked, visible, printable, preview,
   dimImages, dimPercent; OK is one undo step; `ui.dialog.set` of `template` also sets `locked` and `dimImages`, as the
@@ -7598,6 +7602,12 @@ they can't be read, as with a PNG cut short by a download or a sync still runnin
 can't be read" and places nothing; `clipboard.importImage` fails the same way. A JPEG cut short is placed when its
 pixels still decode. Both keep the decoded pixels (except a CMYK JPEG's) in the image store the renderers share, so the first render
 that draws the image does not decode the file again.
+Opaque CMYK PSD/PSB merged images retain their 8-bit or 16-bit ink samples, CMYK ICC profile, resolution, and
+clipping path when placed, linked, relinked, updated, or embedded. `file.place.info`, `image.info`, and `links.info`
+report CMYK for these images. VectorCraft's native CMYK limit is 67,108,864 pixels. Composites with transparency,
+images beyond that limit, and native samples beyond the allocation allowance use the RGB import path, subject to
+its allocation limit. Importing individual layers with `layers: true` retains its existing behavior.
+
 `file.place.info` describes a file without placing it and `image.info` reports a placed image's link, colour mode and
 effective ppi. `file.place.queue` loads the place cursor (the `place` tool) with several files: headless, drive it
 with `pointer_gesture` (a click places at 100% with the top-left corner there, a drag at the dragged size) and
@@ -8848,6 +8858,9 @@ starts a new point type object at the position the advance gives, and an underli
 of the last character's advance. Type on more than one line is placed a line at a time: each line is aligned by its own advances and
 split as a single line is. An EMF that
 draws with EMF+ records is read from them. Hatched and pattern brushes fill with their average color. Records VectorCraft doesn't read are skipped with one warning.
+Each of these adds one warning, with a count: a file, or a metafile image inside it, cut short by one of the reader's
+limits; images and pattern brushes whose bitmap can't be read, which are left out; clips that can't be applied as the
+file sets them; and raster operations other than a plain copy, drawn as a plain copy or left out.
 `clipboard.importEmf {dataBase64, center?}` loads an EMF or WMF picture into the clipboard for `edit.paste`; the app
 pastes `image/emf` from the system clipboard ahead of text and bitmaps when the platform's clipboard service offers it
 (the Windows desktop service doesn't read metafiles yet).
@@ -9121,13 +9134,28 @@ default), `usdz`, `gltf` or `obj`; the panel shows a Format row for the 3D asset
 `assets.set3DFormat {assets, format}` sets it (an undo step only when the format changes). `assets.list` gives each
 asset's `format3D` (null for a picture asset).
 
-`assets.export3D {assets?, folder?, zip?}` writes each 3D asset (default: all of them) as a mesh file named after it:
+`assets.export3D {assets?, folder?, zip?, textureSize?}` writes each 3D asset (default: all of them) as a mesh file named after it:
 `.usda`, `.usdz`, `.gltf` (glTF 2.0, its buffer embedded) or `.obj` with its `.mtl` (whitespace and `#` in an OBJ's
 name become `_`). Every solid of the object (the
 fill's, each stroke's, a group's members') is its own mesh, with a two-sided material in the color it is painted
 (a gradient's stops averaged, a pattern gray). The mesh holds the solid's faces before they are projected onto the
 page, those turned away from the viewer included, at the object's 3D rotation, y up, about the point the object turns
 about: in points (USD's layer gives `metersPerUnit`), in meters in glTF. Files that would share a name get `-2`, `-3` and so on.
+Graphics mapped onto a plane or onto Extrude & Bevel's front or back cap (`threeD.mapGraphic`) are exported as a PNG
+texture of that face: the face's color with its graphics drawn over it, flat and unlit, on a mesh of the face's own
+triangles with texture coordinates and a material that shows the texture. A face that is not opaque keeps its opacity
+in the texture's alpha: as on the canvas, the graphics take the opacity of the face's fill or stroke, and the object's
+opacity applies to the face and its graphics together. glTF embeds the PNG as a data URI
+(`TEXCOORD_0`, `baseColorTexture`), USDZ stores it after the layer, USDA reads it through `primvars:st`, a
+`UsdPrimvarReader_float2` and a `UsdUVTexture` connected to the surface's `diffuseColor`, and OBJ gives `vt` coordinates
+and an MTL `map_Kd`; OBJ and USDA write the PNG beside them as `<name>-texture-1.png`, `-texture-2.png` and so on
+(whitespace, `#` and `@` become `_`). USD reads a face's opacity from the texture's alpha (`outputs:a`), and an OBJ
+whose face is not opaque also gets `<name>-texture-1-opacity.png`, the alpha as gray levels, for the MTL's `map_d`.
+Faces with the same color, graphics and bounds share one texture. `textureSize` (128 to
+4096, default 1024, VectorCraft's own values) is the number of pixels along the longer side of each texture; one export
+draws at most 67,108,864 texture pixels in all, and past that it is refused. Graphics on Revolve's side are not
+exported yet. The layouts follow glTF 2.0, UsdPreviewSurface (<https://openusd.org/release/spec_usdpreviewsurface.html>)
+and OBJ/MTL (<https://www.loc.gov/preservation/digital/formats/fdd/fdd000508.shtml>).
 With `zip`, the files go into one ZIP named after the document with `-3D` added (`Untitled-1-3D.zip`), or
 `3D Assets.zip` when the document's title gives no file name.
 An object whose face has a hole that crosses the face's outline or another hole is refused, by `assets.add3D` and
@@ -9813,6 +9841,20 @@ on again.
 
 ```json
 {"name":"run_command","arguments":{"command":"type.convertToAreaType","params":{"ids":[42]}}}
+```
+
+## Insert Special, Whitespace and Break Characters
+
+`type.insert {char?, text?, code?, unicode?, ids?|id?}` inserts one character (`char` names it, `code` and `unicode` give
+its code) or the string `text`. While the Type tool edits text and neither `ids` nor `id` is given, it replaces the
+tool's selection, or inserts at its caret, and the caret goes after the insertion; otherwise it appends to the end of each
+selected text object. Each call is one undo step; an empty `text` at the Type tool's caret changes nothing and records no undo step.
+`char: "forcedLineBreak"` (Type › Insert Break Character › Forced Line Break) inserts U+2028, which starts a new line in
+the same paragraph, as Shift+Enter does; `char: "paragraphReturn"` inserts a line feed, which starts a new paragraph. A
+`text` that holds U+2028 inserts the same break.
+
+```json
+{"name":"run_command","arguments":{"command":"type.insert","params":{"char":"forcedLineBreak"}}}
 ```
 
 ## Smart Punctuation
@@ -12247,7 +12289,12 @@ away); its click on a gradient mesh's line picks the line's two
 ends, and a click inside a patch picks the four points around it. The picked points show filled. Dragging one of them
 moves them all as one undo step (`object.mesh.movePoints`), a click on one of several picked points picks it alone,
 and the arrow keys nudge them by the keyboard increment. The active tool lists them in its options
-(`tool.setOption {}` returns them as `meshPoints: [{id, index}…]`). On gradient meshes a solid fill colour (`paint.setFill`, from the
+(`tool.setOption {}` returns them as `meshPoints: [{id, index}…]`). Switching to the Eyedropper keeps them picked, its
+options list them too, and the Mesh tool, Direct Selection or a Lasso chosen next picks them again. While a selected, editable mesh has
+points picked, an Eyedropper click or Shift-click on an image or other art samples the color under the pointer into
+those points alone as `paint.sampleColor {color, stroke: false, ids}` with the meshes that have points picked: one undo
+step, none when the color is unchanged. Other selected objects keep their paint. A click on one of those meshes, and
+Alt-click and Shift+Alt-click anywhere, are unchanged. On gradient meshes a solid fill colour (`paint.setFill`, from the
 Color panel, Swatches or the Eyedropper) recolours just the picked points, and when every target of
 `transparency.set` is a gradient mesh with points picked, its `opacity` fades those points instead of the objects
 (`transparency.info` then shows their opacity, `null` when it differs). Both are one undo step, and neither goes to the
@@ -12256,6 +12303,16 @@ gradient mesh with points picked, the Fill proxy, the Color panel, the Color Whe
 picked point's color, and `fillMixed` compares the picked points' colors with each other and with the fills of the other
 selected objects. The Transparency panel shows the picked points' opacity (blank when it differs), and the Control
 bar shows the first picked point's opacity.
+
+A solid color dragged from the Color or Swatches panel or a Fill proxy and dropped on a selected gradient mesh, while the
+Fill proxy is active, recolors the mesh point under the pointer (within 5 screen pixels), else the four points around the
+patch there, as `object.mesh.setPointColor {id, points, color, keepModel: true}`. With a gradient mesh selected and a
+solid fill color set, a plain Eyedropper click does the same with the fill color: on a point of any selected mesh, or
+inside a patch of the selected mesh the click hits. A gradient, a pattern, a fill of None, a stroke proxy or a mesh that
+is not selected keeps the earlier behavior (the whole object takes the paint, and the Eyedropper copies the appearance),
+and so does an unselected object on top of the mesh at that place.
+See [Edit mesh objects](https://web.archive.org/web/20210601162814/https://helpx.adobe.com/pdf/illustrator_reference.pdf#page=312);
+the 5-pixel reach is VectorCraft's own.
 
 `object.mesh.movePoints {id, points: [index…], dx, dy}` (or `{items: [{id, points}…], dx, dy}` over several meshes)
 moves points by (dx, dy), their handles with them; `object.mesh.setPointColor` takes `points` or `items` the same
