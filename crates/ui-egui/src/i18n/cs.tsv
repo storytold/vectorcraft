@@ -4795,6 +4795,9 @@ font-technology	Variable	Variabilní
 	Channel	Kanál
 	Circle	Kruh
 	Circle Tool	Nástroj Kruh
+	Curvature Circle Tool	Nástroj Kružnice křivosti
+	Cusp	Hrot
+	Straight segment	Přímý segment
 	Circle too large	Kruh je příliš velký
 	Clip to Art	Oříznout podle kresby
 	Colorize	Obarvit
@@ -5531,6 +5534,11 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	no anchor points selected	nejsou vybrány žádné kotevní body
 @msg	`points` must be two or three [x, y] pairs of numbers	`points` musí být dvě nebo tři dvojice čísel [x, y]
 @msg	direct-select two or three anchor points, or give `points`	vyberte přímým výběrem dva nebo tři kotevní body, nebo zadejte `points`
+@msg	the path is straight there, so no circle matches its curvature	cesta je v tomto místě rovná, takže jejímu zakřivení neodpovídá žádná kružnice
+@msg	the path has a cusp there, so it has no single curvature	cesta má v tomto místě hrot, takže nemá jediné zakřivení
+@msg	the path has a corner there, so it has no single curvature	cesta má v tomto místě roh, takže nemá jediné zakřivení
+@msg	a guide has no curvature circle	vodítko nemá kružnici křivosti
+@msg	the circle that matches the path there would reach past the canvas	kružnice odpovídající cestě v tomto místě by přesáhla plátno
 @msg	no circle passes through these points: two are the same or all three lie on one line	těmito body neprochází žádná kružnice: dva jsou stejné nebo všechny tři leží na jedné přímce
 @msg	no app to open files here	zde chybí aplikace pro otevírání souborů
 @msg	no artboard	žádná pracovní plocha

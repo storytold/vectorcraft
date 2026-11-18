@@ -500,6 +500,9 @@ font-technology	Variable	Variabili
 	Choose…	Scegli…
 	Circle	Cerchio
 	Circle Tool	Strumento Cerchio
+	Curvature Circle Tool	Strumento Cerchio di curvatura
+	Cusp	Cuspide
+	Straight segment	Segmento diritto
 	Circle too large	Cerchio troppo grande
 	Classic Defaults	Valori predefiniti classici
 	Clean Up…	Pulisci…
@@ -5264,6 +5267,11 @@ liquify-list-end	{0}, {1}	{0} e {1}
 @msg	no anchor points selected	nessun punto di ancoraggio selezionato
 @msg	`points` must be two or three [x, y] pairs of numbers	`points` deve essere composto da due o tre coppie di numeri [x, y]
 @msg	direct-select two or three anchor points, or give `points`	seleziona con Selezione diretta due o tre punti di ancoraggio oppure indica `points`
+@msg	the path is straight there, so no circle matches its curvature	il tracciato è diritto in quel punto, quindi nessun cerchio corrisponde alla sua curvatura
+@msg	the path has a cusp there, so it has no single curvature	il tracciato ha una cuspide in quel punto, quindi non ha un'unica curvatura
+@msg	the path has a corner there, so it has no single curvature	il tracciato ha un angolo in quel punto, quindi non ha un'unica curvatura
+@msg	a guide has no curvature circle	una guida non ha un cerchio di curvatura
+@msg	the circle that matches the path there would reach past the canvas	il cerchio che corrisponde al tracciato in quel punto supererebbe l'area di lavoro
 @msg	no circle passes through these points: two are the same or all three lie on one line	nessun cerchio passa per questi punti: due coincidono oppure tutti e tre sono allineati
 @msg	no app to open files here	nessuna app per aprire file qui
 @msg	no artboard	nessuna tavola da disegno
