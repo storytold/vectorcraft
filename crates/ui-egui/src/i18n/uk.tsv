@@ -815,6 +815,7 @@ font-technology	Variable	Варіативні
 	Delete Brush	Видалити пензель
 	Delete Color	Видалити колір
 	Restore Generated Table	Відновити створену таблицю
+	Unshift All Colors	Скасувати зсув усіх кольорів
 	Delete Character Style	Видалити стиль символу
 	Delete Empty Artboards	Видалити порожні монтажні області
 	Delete Freeform Point	Видалити довільну точку
@@ -3524,6 +3525,9 @@ digits	Malayalam	Малаялам
 	No menu item	Немає пункту меню
 	Toolbar	Панель інструментів
 	{toolbar}, in the {tool} group	{toolbar}, у групі «{tool}»
+	In the menu bar: {path}	У рядку меню: {path}
+	In the {group} group: press and hold to open it	У групі {group}: натисніть і утримуйте, щоб відкрити її
+	{home}, not shown now	{home}, зараз не показано
 	Tool	Інструмент
 	Command	Команда
 @plural	{n} result|{n} results	{n} результат|{n} результати|{n} результатів
@@ -5108,6 +5112,7 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	choose a location for the package	виберіть розташування для пакета
 @msg	clipboard is empty	буфер обміну порожній
 @msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: у колірній таблиці має залишитися принаймні один колір
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted: `{k}` позначає колір, який позначає й інший ключ
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` не є кольором, наприклад "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: не більше {MAX_TABLE} кольорів
 @msg	command `{0}` is not available right now: {1}	команда `{0}` зараз недоступна: {1}
@@ -7418,6 +7423,7 @@ breakText	Glyphs	Гліфи
 @msg	One path lies inside the other, so they have no common tangents	Один контур лежить усередині іншого, тому вони не мають спільних дотичних
 @msg	The paths overlap, so they have no internal tangents	Контури перекриваються, тому вони не мають внутрішніх дотичних
 @msg	One path lies inside the other, so they have no internal tangents	Один контур лежить усередині іншого, тому вони не мають внутрішніх дотичних
+@msg	The point lies inside the path, so it has no tangents	Точка лежить усередині контуру, тому вона не має дотичних
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Розібрати штрихи на контури
 @msg	select paths with dashed strokes to expand	виділіть контури зі штриховим обведенням для розбору
@@ -9730,6 +9736,11 @@ breakText	Glyphs	Гліфи
 @msg	A panel is not joined to the rest by a crease.	Панель не з’єднана з рештою жодною лінією біговки.
 @msg	A fold line is on a non-printing layer.	Лінія згину лежить на шарі, що не друкується.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Панелі: {panels}, шарніри: {hinges}, помилки: {errors}, попередження: {warnings}
+	Pressure Sensitive	Чутливі до натиску
+	Flex Ribbon	Гнучка стрічка
+	Pulse Stroke	Пульсуючий штрих
+	Round Flow	Круглий потік
+	Chisel Flow	Косий потік
 	Fold Preview	Перегляд згину
 	Fold	Згин
 	Show Fold Lines	Показати лінії згину

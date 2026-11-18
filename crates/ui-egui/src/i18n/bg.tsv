@@ -793,6 +793,7 @@ font-technology	Variable	Променливи
 	Delete Brush	Изтриване на четка
 	Delete Color	Изтриване на цвят
 	Restore Generated Table	Възстановяване на генерираната таблица
+	Unshift All Colors	Преместване назад на всички цветове
 	Delete Character Style	Изтриване на стил за знаци
 	Delete Empty Artboards	Изтриване на празни работни области
 	Delete Freeform Point	Изтриване на свободна точка
@@ -3369,6 +3370,9 @@ digits	Malayalam	Малаялам
 	No menu item	Няма елемент в менюто
 	Toolbar	Лента с инструменти
 	{toolbar}, in the {tool} group	{toolbar}, в групата на {tool}
+	In the menu bar: {path}	В лентата с менюта: {path}
+	In the {group} group: press and hold to open it	В групата {group}: натиснете и задръжте, за да я отворите
+	{home}, not shown now	{home}, не се показва сега
 @plural	{n} result|{n} results	{n} резултат|{n} резултата
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} от {n} резултат. Продължете да пишете, за да ги стесните.|{shown} от {n} резултата. Продължете да пишете, за да ги стесните.
 	Recent Commands	Последни команди
@@ -4688,6 +4692,7 @@ axis	Both	И двете
 @msg	choose a location for the package	изберете местоположение за пакета
 @msg	clipboard is empty	клипбордът е празен
 @msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: поне един цвят трябва да остане в цветовата таблица
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted: `{k}` назовава цвят, който друг ключ също назовава
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` не е цвят като "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: най-много {MAX_TABLE} цвята
 @msg	command `{0}` is not available right now: {1}	команда `{0}` не е налична в момента: {1}
@@ -7035,6 +7040,7 @@ breakText	Glyphs	Глифи
 @msg	One path lies inside the other, so they have no common tangents	Единият път е вътре в другия, затова нямат общи допирателни
 @msg	The paths overlap, so they have no internal tangents	Пътищата се припокриват, затова нямат вътрешни допирателни
 @msg	One path lies inside the other, so they have no internal tangents	Единият път е вътре в другия, затова нямат вътрешни допирателни
+@msg	The point lies inside the path, so it has no tangents	Точката е вътре в пътя, затова няма допирателни
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Разширяване на тиретата в пътища
 @msg	select paths with dashed strokes to expand	изберете пътища с прекъснат щрих за разширяване
@@ -7377,3 +7383,8 @@ breakText	Glyphs	Глифи
 @msg	A joint does not close by {gap} pt.	Една връзка не се затваря с {gap} pt.
 @msg	Two panels pass through each other.	Два панела минават един през друг.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer трябва да е "singleLine", "everyLine", "standardSingleLine" или "standardEveryLine"
+	Pressure Sensitive	Чувствителни на натиск
+	Flex Ribbon	Гъвкава лента
+	Pulse Stroke	Пулсиращ щрих
+	Round Flow	Кръгъл поток
+	Chisel Flow	Скосен поток

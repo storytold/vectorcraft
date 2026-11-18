@@ -1512,6 +1512,7 @@ antiAlias	Sharp	날카롭게
 	Delete Brush	브러시 삭제
 	Delete Color	색상 삭제
 	Restore Generated Table	생성된 표 복원
+	Unshift All Colors	모든 색상 이동 취소
 	Delete Character Style	문자 스타일 삭제
 	Delete Empty Artboards	빈 아트보드 삭제
 	Delete Freeform Point	자유 형태 포인트 삭제
@@ -3406,6 +3407,9 @@ mark-style	Japanese	일본식
 	No menu item	메뉴 항목 없음
 	Toolbar	도구 모음
 	{toolbar}, in the {tool} group	{toolbar}, {tool} 그룹
+	In the menu bar: {path}	메뉴 막대: {path}
+	In the {group} group: press and hold to open it	{group} 그룹: 길게 눌러 여세요
+	{home}, not shown now	{home}, 지금 표시되지 않음
 	Tool	도구
 	Command	명령
 @plural	{n} result|{n} results	결과 {n}개
@@ -5016,6 +5020,7 @@ variable-list-end	{0}, {1}	{0} 및 {1}
 @msg	paste unavailable	붙여넣을 수 없습니다
 @msg	Save for Web: the image is empty	웹용으로 저장: 이미지가 비어 있습니다
 @msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: 색상 표에 색상이 하나 이상 남아 있어야 합니다
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted: `{k}`이(가) 다른 키와 같은 색상을 가리킵니다
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}`은(는) "#ff8800" 같은 색상이 아닙니다
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: 색상은 최대 {MAX_TABLE}개입니다
 @msg	no artboard {i} (0-based; the document has {_1})	아트보드 {i}이(가) 없습니다(0부터 시작, 문서의 아트보드 수: {_1})
@@ -7408,6 +7413,7 @@ breakText	Glyphs	글리프
 @msg	One path lies inside the other, so they have no common tangents	한 패스가 다른 패스 안에 있어 공통 접선이 없습니다
 @msg	The paths overlap, so they have no internal tangents	패스가 겹쳐 있어 내부 접선이 없습니다
 @msg	One path lies inside the other, so they have no internal tangents	한 패스가 다른 패스 안에 있어 내부 접선이 없습니다
+@msg	The point lies inside the path, so it has no tangents	점이 패스 안에 있어 접선이 없습니다
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	대시를 패스로 확장
 @msg	select paths with dashed strokes to expand	확장할 점선 획의 패스를 선택하십시오
@@ -9718,6 +9724,11 @@ breakText	Glyphs	글리프
 @msg	A panel is not joined to the rest by a crease.	패널이 어떤 오시선으로도 나머지와 연결되어 있지 않습니다.
 @msg	A fold line is on a non-printing layer.	접는 선이 인쇄되지 않는 레이어에 있습니다.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	패널: {panels}, 힌지: {hinges}, 오류: {errors}, 경고: {warnings}
+	Pressure Sensitive	압력 감지
+	Flex Ribbon	유연한 리본
+	Pulse Stroke	맥동 획
+	Round Flow	둥근 흐름
+	Chisel Flow	비스듬한 흐름
 	Fold Preview	접기 미리 보기
 	Fold	접기
 	Show Fold Lines	접는 선 표시

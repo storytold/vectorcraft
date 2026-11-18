@@ -1319,6 +1319,7 @@ antiAlias	Sharp	शार्प
 	Delete Brush	ब्रश हटाएँ
 	Delete Color	रंग हटाएँ
 	Restore Generated Table	जनरेट की गई तालिका पुनर्स्थापित करें
+	Unshift All Colors	सभी रंग अनशिफ़्ट करें
 	Delete Character Style	कैरेक्टर स्टाइल हटाएँ
 	Delete Data Set	डेटा सेट हटाएँ
 	Delete Data Sets	डेटा सेट्स हटाएँ
@@ -4664,6 +4665,9 @@ antiAlias	Sharp	शार्प
 	No menu item	कोई मेनू आइटम नहीं
 	Toolbar	टूलबार
 	{toolbar}, in the {tool} group	{toolbar}, {tool} समूह में
+	In the menu bar: {path}	मेनू बार में: {path}
+	In the {group} group: press and hold to open it	{group} समूह में: खोलने के लिए दबाकर रखें
+	{home}, not shown now	{home}, अभी नहीं दिखाया गया
 @plural	{n} result|{n} results	{n} परिणाम|{n} परिणाम
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} में से {shown} परिणाम। इन्हें सीमित करने के लिए लिखते रहें।|{n} में से {shown} परिणाम। इन्हें सीमित करने के लिए लिखते रहें।
 	Recent Commands	हाल के आदेश
@@ -6987,6 +6991,7 @@ antiAlias	Sharp	शार्प
 @msg	colorMode must be rgb or cmyk, not `{m}`	colorMode को rgb या cmyk होना चाहिए, `{m}` नहीं
 @msg	colorModel must be {own} (the document's mode), grayscale or bitmap	colorModel को {own} (डॉक्यूमेंट का मोड), grayscale या bitmap होना चाहिए
 @msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: रंग तालिका में कम से कम एक रंग रहना चाहिए
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted: `{k}` वही रंग बताता है जो कोई दूसरी कुंजी भी बताती है
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}`, "#ff8800" जैसा रंग नहीं है
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: अधिकतम {MAX_TABLE} रंग
 @msg	colour groups can't go into colour groups	रंग समूह रंग समूहों में नहीं जा सकते हैं
@@ -8464,6 +8469,7 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	One path lies inside the other, so they have no common tangents	एक पाथ दूसरे के अंदर है, इसलिए उनकी कोई उभयनिष्ठ स्पर्शरेखा नहीं है
 @msg	The paths overlap, so they have no internal tangents	पाथ एक-दूसरे पर चढ़े हुए हैं, इसलिए उनकी कोई आंतरिक स्पर्शरेखा नहीं है
 @msg	One path lies inside the other, so they have no internal tangents	एक पाथ दूसरे के अंदर है, इसलिए उनकी कोई आंतरिक स्पर्शरेखा नहीं है
+@msg	The point lies inside the path, so it has no tangents	बिंदु पाथ के अंदर है, इसलिए उसकी कोई स्पर्शरेखा नहीं है
 @msg	select plain rectangles, ellipses or regular polygons to convert	बदलने के लिए सादे आयत, अंडाकार या नियमित बहुभुजों सिलेक्ट करें
 @msg	Select point type	पॉइंट टाइप सिलेक्ट करें
 @msg	select two or three paths or compound paths	दो या तीन पाथ या यौगिक पाथ सिलेक्ट करें
@@ -9721,6 +9727,11 @@ theme	Appearance	अपीयरेंस
 @msg	A panel is not joined to the rest by a crease.	कोई पैनल किसी क्रीज़ लाइन से बाकी से जुड़ा नहीं है।
 @msg	A fold line is on a non-printing layer.	एक फ़ोल्ड लाइन नॉन-प्रिंटिंग लेयर पर है।
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	पैनल: {panels}, हिंज: {hinges}, एरर: {errors}, वॉर्निंग: {warnings}
+	Pressure Sensitive	दबाव संवेदनशील
+	Flex Ribbon	लचीला फीता
+	Pulse Stroke	स्पंदित रेखा
+	Round Flow	गोल प्रवाह
+	Chisel Flow	तिरछा प्रवाह
 	Fold Preview	फ़ोल्ड प्रीव्यू
 	Fold	फ़ोल्ड
 	Show Fold Lines	फ़ोल्ड लाइनें दिखाएँ
