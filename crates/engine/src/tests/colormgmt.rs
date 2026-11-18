@@ -594,6 +594,78 @@ fn separations_preview_compares_the_visible_plates_as_a_set() {
     assert!(r["plates"].as_array().unwrap().iter().all(|p| p["visible"] == false), "{r}");
 }
 
+/// Each plate's visibility in a `view.separationsPreview` or `color.plates` reply, in plate order.
+fn visible_plates(r: &Value) -> Vec<bool> {
+    r["plates"].as_array().unwrap().iter().map(|p| p["visible"].as_bool().unwrap()).collect()
+}
+
+/// A session whose document has the process plates and the spot plate `Brand Orange`.
+fn session_with_spot_plate() -> Session {
+    let mut s = session();
+    s.execute("swatch.new", &json!({"name": "Brand Orange", "color": {"c": 0, "m": 60, "y": 100, "k": 0}, "global": true})).unwrap();
+    s.execute("swatch.setSpot", &json!({"name": "Brand Orange"})).unwrap();
+    let a = NodeId(s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap());
+    s.execute("paint.setFill", &json!({"ids": [a.0], "swatch": "Brand Orange"})).unwrap();
+    s
+}
+
+/// `soloToggle` (the panel's Alt-click on a plate's eye) shows that plate alone, and every plate
+/// when it already shows alone. A hidden plate, a plate among others, another solo plate and an
+/// empty set of plates all give the named plate alone. It leaves the document's undo list and
+/// modified state alone.
+#[test]
+fn separations_preview_solo_toggle_shows_every_plate_the_second_time() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let _v = DefaultView::new();
+    let mut s = session_with_spot_plate();
+    let undo = s.doc().unwrap().history.undo.len();
+    let dirty = s.doc().unwrap().is_dirty();
+    let solo = |s: &mut Session, n: &str| visible_plates(&s.execute("view.separationsPreview", &json!({"soloToggle": n})).unwrap());
+    // Off: the preview turns on with the plate alone.
+    assert_eq!(solo(&mut s, "Cyan"), [true, false, false, false, false]);
+    assert_eq!(vectorcraft_render::proof::view().separations, Some(vec!["Cyan".to_string()]));
+    // The same plate again: every plate, the spot plate included, and the preview stays on.
+    assert_eq!(solo(&mut s, "Cyan"), [true; 5]);
+    assert!(vectorcraft_render::proof::view().separations.is_some(), "the preview stays on");
+    // A plate shown among others, then another plate while one shows alone.
+    assert_eq!(solo(&mut s, "Magenta"), [false, true, false, false, false]);
+    assert_eq!(solo(&mut s, "Cyan"), [true, false, false, false, false]);
+    // A hidden plate.
+    s.execute("view.separationsPreview", &json!({"toggle": "Black"})).unwrap();
+    assert_eq!(solo(&mut s, "Yellow"), [false, false, true, false, false]);
+    // No plate shown.
+    s.execute("view.separationsPreview", &json!({"plates": []})).unwrap();
+    assert_eq!(solo(&mut s, "Black"), [false, false, false, true, false]);
+    // The spot plate alone, then every plate.
+    assert_eq!(solo(&mut s, "Brand Orange"), [false, false, false, false, true]);
+    assert_eq!(solo(&mut s, "Brand Orange"), [true; 5]);
+    // A plate the document doesn't have is an error and leaves the view as it is.
+    let before = vectorcraft_render::proof::view();
+    assert!(s.execute("view.separationsPreview", &json!({"soloToggle": "Mauve"})).is_err());
+    assert_eq!(vectorcraft_render::proof::view(), before);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "no undo step");
+    assert_eq!(s.doc().unwrap().is_dirty(), dirty, "not marked modified");
+    // `only` stays a setter: the same plate again keeps it alone.
+    s.execute("view.separationsPreview", &json!({"only": "Cyan"})).unwrap();
+    let r = s.execute("view.separationsPreview", &json!({"only": "Cyan"})).unwrap();
+    assert_eq!(visible_plates(&r), [true, false, false, false, false]);
+}
+
+/// A plate counts as shown alone when no other plate of the active document shows: names left in
+/// the visible set by another document's plates don't count.
+#[test]
+fn separations_preview_solo_toggle_counts_the_active_documents_plates() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let _v = DefaultView::new();
+    let mut s = session_with_spot_plate();
+    s.execute("view.separationsPreview", &json!({"plates": ["Cyan", "Brand Orange"]})).unwrap();
+    // A new document without the spot plate: Cyan is the only one of its plates shown.
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    assert_eq!(visible_plates(&s.execute("color.plates", &json!({})).unwrap()), [true, false, false, false]);
+    let r = s.execute("view.separationsPreview", &json!({"soloToggle": "Cyan"})).unwrap();
+    assert_eq!(visible_plates(&r), [true; 4]);
+}
+
 #[test]
 fn proof_setup_simulates_tritanopia() {
     let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());

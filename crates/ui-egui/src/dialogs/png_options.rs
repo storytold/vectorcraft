@@ -63,8 +63,13 @@ pub fn open(app: &mut VectorcraftApp, f: &Format, mut params: Value) {
         false => export_size(&st.doc, &params),
     });
     if let Some(o) = params.as_object_mut() {
-        o.insert("ppi".into(), json!(72));
-        o.extend(defaults(app, f));
+        let mut initial = defaults(app, f);
+        initial.insert("ppi".into(), json!(72));
+        for (key, value) in initial {
+            if o.get(&key).is_none_or(Value::is_null) {
+                o.insert(key, value);
+            }
+        }
         if let Some((w, h)) = size {
             o.insert("__size".into(), json!([w, h]));
         }
@@ -155,7 +160,7 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
                 d.fields.insert("__otherPpi".into(), json!(i == 3));
             }
             if preset.is_none()
-                && let Some(v) = widgets::range_field(ui, "ro-ppi-other", ppi, 1.0..=4608.0, " ppi", 0, 80.0)
+                && let Some(v) = widgets::range_field(ui, "ro-ppi-other", ppi, 1.0..=4608.0, &super::ppi_suffix(), 0, 80.0)
             {
                 d.fields.insert("ppi".into(), json!(v));
             }

@@ -3,12 +3,12 @@
 //! [`Backend`] (the desktop app's, through muda).
 //!
 //! Pure and platform-free, so it is tested everywhere and builds for the web; only the backend
-//! touches AppKit. What the layout does ([`mac_layout`], Illustrator on the Mac as the reference):
+//! touches AppKit. What the layout does ([`mac_layout`]):
 //! - an **app menu** named VectorCraft: About; Settings, a submenu with one item per Preferences
 //!   page (General… ⌘K first); Language; Appearance (the UI brightness); Services; Hide VectorCraft
 //!   ⌃⌘H (⌘H stays View › Hide Edges), Hide Others ⌥⌘H, Show All; and Quit ⌘Q, still the app's own
 //!   `app.quit`, so documents with unsaved changes are asked about. Language and Appearance have
-//!   no in-window menu (as in PhotoCraft) and are synthesized here; Quit is File › Exit in the
+//!   no in-window menu and are synthesized here; Quit is File › Exit in the
 //!   window and reads as Quit in the App menu. These leave the other menus (Edit › Preferences…,
 //!   Help › About), and Join Our Discord stays under Help only;
 //! - **Window** gets Minimize ⌃⌘M, Zoom and Bring All to Front, and **Help** the system's search
@@ -299,7 +299,7 @@ pub struct Layout {
 }
 
 /// The Mac menu bar of `bar` (the in-window menus, [`from_tree`]): see the module docs.
-/// Language and Appearance have no in-window menu (as in PhotoCraft); when the tree doesn't
+/// Language and Appearance have no in-window menu; when the tree doesn't
 /// carry them they are synthesized below, so the App menu keeps them.
 pub fn mac_layout(app: &VectorcraftApp, bar: &MenuBar, lang: Lang) -> Layout {
     let mut bar = bar.clone();
@@ -400,7 +400,7 @@ fn native_item(app: &VectorcraftApp, label: &'static str, command: &'static str,
 }
 
 /// Settings ▸: one item per page of the Preferences dialog (its own list), each opening it there;
-/// the first (General…) has Preferences' shortcut (⌘K), as in Illustrator.
+/// the first (General…) has Preferences' shortcut (⌘K).
 fn settings_pages(preferences: &Item, lang: Lang) -> Vec<Node> {
     vectorcraft_engine::cmd::prefscmds::PREF_CATEGORIES
         .iter()
@@ -610,7 +610,7 @@ pub fn sync(app: &mut VectorcraftApp, ctx: &egui::Context) {
 /// interaction is open (for example a move, scale or shape drag, a dialog's or the font menu's
 /// preview, or a typing session), the revision, which each of its previews changes, is left out:
 /// the hash changes as the interaction begins and as it ends.
-fn state_hash(app: &VectorcraftApp, input: Option<u64>) -> u64 {
+pub(crate) fn state_hash(app: &VectorcraftApp, input: Option<u64>) -> u64 {
     let mut h = DefaultHasher::new();
     input.hash(&mut h);
     app.run_count.hash(&mut h);
