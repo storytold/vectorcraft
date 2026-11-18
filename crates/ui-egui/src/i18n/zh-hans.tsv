@@ -8446,6 +8446,8 @@ breakText	Glyphs	字形
 @msg	`{f}` is the copy of a document open now	`{f}` 是当前已打开文档的副本
 @msg	`{id}` is no writable format (see document.formats)	`{id}` 不是可写入的格式 (参见 document.formats)
 @msg	`{id}` isn't a loaded library	`{id}` 不是已载入的库
+@msg	`{file}` has no swatches of its own	`{file}` 没有自己的色板
+@msg	`{_1}` has pattern swatches, which a .vcswatches file can't hold	`{_1}` 含有图案色板，.vcswatches 文件无法保存
 @msg	`{key}` has no colours	`{key}` 中没有颜色
 @msg	`{key}` is a design name	`{key}` 是设计名称
 @msg	`{key}` is a design name or a list of them	`{key}` 是一个设计名称或设计名称的列表

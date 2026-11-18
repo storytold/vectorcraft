@@ -5383,6 +5383,8 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	no target object has an opacity mask: select one or give `id`	millään kohdeobjektilla ei ole peittävyysmaskia: valitse sellainen tai anna `id`
 @msg	no threaded text selected	ketjutettua tekstiä ei ole valittu
 @msg	no user library folder here	täällä ei ole käyttäjäkirjastokansiota
+@msg	`{file}` has no swatches of its own	tiedostossa `{file}` ei ole omia värimalleja
+@msg	`{_1}` has pattern swatches, which a .vcswatches file can't hold	kirjastossa `{_1}` on kuviomalleja, joita .vcswatches-tiedosto ei voi sisältää
 @msg	no user workspace `{from}`	ei käyttäjän työtilaa `{from}`
 @msg	node {_1} is not text	solmu {_1} ei ole tekstiä
 @msg	node {_1} is on a locked artboard	solmu {_1} on lukitulla piirtoalustalla

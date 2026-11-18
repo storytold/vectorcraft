@@ -8375,6 +8375,8 @@ breakText	Glyphs	字符
 @msg	`{f}` is the copy of a document open now	`{f}` 是目前開啟文件的副本
 @msg	`{id}` is no writable format (see document.formats)	`{id}` 不是可寫入的格式 (請參閱 document.formats)
 @msg	`{id}` isn't a loaded library	`{id}` 不是已載入的資料庫
+@msg	`{file}` has no swatches of its own	`{file}` 沒有自己的色票
+@msg	`{_1}` has pattern swatches, which a .vcswatches file can't hold	`{_1}` 含有圖樣色票，.vcswatches 檔案無法儲存
 @msg	`{key}` has no colours	`{key}` 沒有顏色
 @msg	`{key}` is a design name	`{key}` 是設計名稱
 @msg	`{key}` is a design name or a list of them	`{key}` 是設計名稱或設計名稱的清單

@@ -8168,6 +8168,8 @@ breakText	Glyphs	Glyphen
 @msg	`{f}` is the copy of a document open now	`{f}` ist die Kopie eines gerade geöffneten Dokuments
 @msg	`{id}` is no writable format (see document.formats)	`{id}` ist kein beschreibbares Format (siehe document.formats)
 @msg	`{id}` isn't a loaded library	`{id}` ist keine geladene Bibliothek
+@msg	`{file}` has no swatches of its own	`{file}` hat keine eigenen Farbfelder
+@msg	`{_1}` has pattern swatches, which a .vcswatches file can't hold	`{_1}` enthält Musterfelder, die eine .vcswatches-Datei nicht aufnehmen kann
 @msg	`{key}` has no colours	`{key}` hat keine Farben
 @msg	`{key}` is a design name	`{key}` ist ein Designname
 @msg	`{key}` is a design name or a list of them	`{key}` ist ein Designname oder eine Liste davon

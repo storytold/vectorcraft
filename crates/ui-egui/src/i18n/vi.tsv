@@ -5517,6 +5517,8 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	no target object has an opacity mask: select one or give `id`	không có đối tượng đích có mặt nạ độ mờ: hãy chọn hoặc cung cấp `id`
 @msg	no threaded text selected	chưa chọn văn bản liên kết
 @msg	no user library folder here	không có thư mục thư viện người dùng ở đây
+@msg	`{file}` has no swatches of its own	`{file}` không có mẫu màu riêng
+@msg	`{_1}` has pattern swatches, which a .vcswatches file can't hold	`{_1}` có mẫu họa tiết, mà tệp .vcswatches không thể chứa
 @msg	no user workspace `{from}`	không có không gian làm việc người dùng `{from}`
 @msg	node {_1} is not text	nút {_1} không phải là văn bản
 @msg	node {_1} is on a locked artboard	nút {_1} nằm trên bảng vẽ bị khóa
