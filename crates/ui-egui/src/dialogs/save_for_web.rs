@@ -1205,14 +1205,18 @@ fn color_table(ui: &mut egui::Ui, d: &mut Dialog, s: Option<&WebSettings>) -> Re
             }
         });
     });
-    // Delete Color (the button and the table's menu) and Restore Generated Table.
+    // Delete Color (the button and the table's menu) and Restore Generated Table. Delete Color
+    // takes only selected colors the table shows (`palette`, by source).
+    let palette: Vec<String> =
+        shot.colors.iter().filter(|c| !c.transparent).map(|c| hex(c.source)).chain(shot.mapped.iter().map(|c| hex(*c))).collect();
+    let deletable = !selected_in(d, &palette).is_empty();
     let (mut delete, mut restore, mut unshift_all) = (false, false, false);
     ui.horizontal(|ui| {
-        delete |= widgets::icon_button_enabled(ui, "trash-2", tl!("Delete Color"), false, !picked.is_empty(), 24.0).clicked();
+        delete |= widgets::icon_button_enabled(ui, "trash-2", tl!("Delete Color"), false, deletable, 24.0).clicked();
         let menu = widgets::icon_button(ui, "menu", tl!("Color Table"), false, 24.0);
         let open = menu.clicked();
         let _ = widgets::popover(&menu, open, |ui| {
-            if widgets::menu_item(ui, tl!("Delete Color"), !picked.is_empty(), false) {
+            if widgets::menu_item(ui, tl!("Delete Color"), deletable, false) {
                 delete = true;
                 ui.close();
             }
@@ -1242,11 +1246,14 @@ fn color_table(ui: &mut egui::Ui, d: &mut Dialog, s: Option<&WebSettings>) -> Re
         unshift_all_colors(d);
     }
     if delete {
-        let palette: Vec<String> =
-            shot.colors.iter().filter(|c| !c.transparent).map(|c| hex(c.source)).chain(shot.mapped.iter().map(|c| hex(*c))).collect();
         delete_colors(d, &palette)?;
     }
     Ok(())
+}
+
+/// The selected colors (by source) that `palette`, the colors the table shows, holds.
+pub(super) fn selected_in(d: &Dialog, palette: &[String]) -> Vec<String> {
+    selection(d).into_iter().filter(|c| palette.iter().any(|p| p.eq_ignore_ascii_case(c))).collect()
 }
 
 /// The colour table's selected colors, by source: `__colors`, else `__color`.
@@ -1298,11 +1305,14 @@ pub(super) fn pick(d: &mut Dialog, order: &[String], color: &str, shift: bool, c
 /// Delete Color: the selected colors join the color table's `deleted` list and leave its other
 /// lists. The first deletion fixes the palette (`customPalette`) to `palette`, the table's colors
 /// (by source) with the deleted ones, so the colors left do not change. A deletion that leaves no
-/// color, or only colors mapped to transparent, is refused with nothing changed. The selection is
-/// cleared.
+/// color, or only colors mapped to transparent, is refused with nothing changed. Only selected
+/// colors that `palette` holds are deleted; when it holds none of them, the table is left as it is
+/// and the selection is cleared. The selection is cleared after a deletion too.
 pub(super) fn delete_colors(d: &mut Dialog, palette: &[String]) -> Result<(), String> {
-    let picked = selection(d);
+    let picked = selected_in(d, palette);
     if picked.is_empty() {
+        d.fields.remove("__colors");
+        d.fields.remove("__color");
         return Ok(());
     }
     let list = |d: &Dialog, key: &str| -> Vec<String> {

@@ -783,6 +783,26 @@ fn colour_table_selection_and_delete_color() {
     assert_eq!((&d.fields["colorTable"]["deleted"], &d.fields["colorTable"]["customPalette"]), (&json!([]), &json!([])));
 }
 
+/// Delete Color takes only selected colors the table shows: a selection the table no longer holds
+/// (after a change of reduction or color count, or set through `ui.dialog.set`) deletes nothing,
+/// fixes no palette and is cleared, and a selection partly in the table deletes only what it shows.
+#[test]
+fn delete_color_skips_selected_colors_the_table_does_not_show() {
+    let mut d = Dialog::new(save_for_web::KIND, json!({}));
+    let shown: Vec<String> = ["#000000", "#111111"].map(String::from).to_vec();
+    let table = |d: &Dialog, key: &str| d.fields.get("colorTable").and_then(|t| t.get(key)).cloned();
+    d.fields.insert("__colors".into(), json!(["#ABCDEF"]));
+    d.fields.insert("__color".into(), json!("#abcdef"));
+    assert!(save_for_web::selected_in(&d, &shown).is_empty());
+    save_for_web::delete_colors(&mut d, &shown).unwrap();
+    assert_eq!((table(&d, "customPalette"), table(&d, "deleted")), (None, None));
+    assert!(!d.fields.contains_key("__colors") && !d.fields.contains_key("__color"));
+    d.fields.insert("__colors".into(), json!(["#abcdef", "#111111"]));
+    assert_eq!(save_for_web::selected_in(&d, &shown), ["#111111"]);
+    save_for_web::delete_colors(&mut d, &shown).unwrap();
+    assert_eq!((table(&d, "customPalette"), table(&d, "deleted")), (Some(json!(shown)), Some(json!(["#111111"]))));
+}
+
 /// A shift by hand replaces a web shift and selects the color; a shift to the color itself takes it
 /// away; Unshift All Colors clears both kinds; Delete Color takes a deleted color's shift away.
 #[test]

@@ -9048,7 +9048,9 @@ at most 256 colors, and `#rrggbbaa` is refused. A `reduction` change without `co
 both lists. JPEG and PNG-24 have no color table and do not read them. Presets and `webExport.settings` keep them. In
 the dialog a click selects one color, Shift-click selects the colors between it and the last one clicked, and
 Ctrl-click (Command-click on macOS) adds or removes one (`__colors` holds the selection, `__color` the last one
-clicked). The trash button and Delete Color in the table's menu delete the selection in one edit, Restore Generated
+clicked). The trash button and Delete Color in the table's menu delete the selected colors the table shows in one edit,
+and are off when it shows none of them (a selected color can leave the table when the reduction or the color count
+changes). Restore Generated
 Table in that menu clears `deleted` and `customPalette`, and the table reads Custom while either is set. Choosing
 another reduction in the dialog also clears them.
 
