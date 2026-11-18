@@ -99,6 +99,7 @@
 	Add to Swatches	新增至色票
 	Add Used Colors	新增使用中的顏色
 	Additional Plug-ins Folder	額外的增效模組資料夾
+	Plug-in Instruction Budget	增效模組指令預算
 	Additional Fonts Folder	額外的字體資料夾
 	Adjust Adjoining Width Points	調整相鄰寬度點
 	Incoming	入側
@@ -782,6 +783,7 @@ font-technology	Variable	可變
 	Delete Brush	刪除筆刷
 	Delete Color	刪除顏色
 	Restore Generated Table	還原產生的色彩表
+	Unshift All Colors	取消位移所有顏色
 	Delete Character Style	刪除字元樣式
 	Delete Empty Artboards	刪除空白工作區域
 	Delete Freeform Point	刪除任意形狀錨點
@@ -2234,6 +2236,7 @@ file-filter	Templates	範本
 @msg	paste unavailable	無法貼上
 @msg	Save for Web: the image is empty	儲存為網頁用：影像是空的
 @msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted：色彩表中至少要保留一種顏色
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted：`{k}` 與另一個鍵指的是同一種顏色
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}：`{h}` 不是像 "#ff8800" 這樣的顏色
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}：最多 {MAX_TABLE} 種顏色
 @msg	no artboard {i} (0-based; the document has {_1})	沒有工作區域 {i} (從 0 起算；文件有 {_1} 個)
@@ -2960,6 +2963,7 @@ liquify-list-end	{0}, {1}	{0}和{1}
 @msg	a linked JavaScript file is outside the read roots	連結的 JavaScript 檔案位於所有讀取根目錄之外
 @msg	a linked image file is outside the read roots	連結的影像檔案位於所有讀取根目錄之外
 @msg	a linked file's export folder is outside the read roots	連結檔案的匯出資料夾位於所有讀取根目錄之外
+@msg	a linked file's editing data can't be read to check it against the read roots	無法讀取連結檔案的編輯資料，因此無法對照讀取根目錄進行檢查
 @msg	automation path rejected: outside the write root {root}: {path}	已拒絕自動化路徑：位於寫入根目錄 {root} 之外：{path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	已拒絕自動化路徑：位於所有寫入根目錄 {roots} 之外：{path}
 @msg	automation path rejected: path is empty	已拒絕自動化路徑：路徑是空的
@@ -4486,6 +4490,8 @@ digits	Malayalam	馬來亞拉姆數字
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	指標或拖曳的點在螢幕上需離圖稿多近，智慧型參考線才會靠齊；此距離在任何縮放比例下都相同。
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	靠齊線段的端點或從中心繪製的圓，使其與附近的曲線相切。
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	靠齊線段的端點，使其與附近的直線段成直角相交。
+	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	在畫布上於每個切片左上角的方框中顯示其編號；關閉時，切片輪廓仍會顯示。
+	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	使用者切片和物件切片的輪廓及其編號方框的顏色；自動切片使用此顏色較淡的色調。
 	Reset all preferences to their defaults?	要將所有偏好設定重設為預設值嗎？
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	在偏好設定中按下確定後才會套用預設值。在那裡按下取消會保留目前的偏好設定。
 	Restore Recovered Documents	還原找回的文件
@@ -4715,6 +4721,14 @@ digits	Malayalam	馬來亞拉姆數字
 	Search commands, tools, panels and effects…	搜尋指令、工具、面板與效果…
 	No commands match	沒有符合的指令
 	{pos} of {total}: {name}	第 {pos} 個，共 {total} 個：{name}
+	No menu item	無選單項目
+	Toolbar	工具列
+	{toolbar}, in the {tool} group	{toolbar}，位於 {tool} 群組中
+	In the menu bar: {path}	在選單列中：{path}
+	In the {group} group: press and hold to open it	在「{group}」群組中：按住即可開啟
+	{home}, not shown now	{home}，目前未顯示
+	Tool	工具
+	Command	指令
 @plural	{n} result|{n} results	{n} 個結果
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	共 {n} 個結果，顯示 {shown} 個。繼續輸入以縮小範圍。
 	Recent Commands	最近使用的指令
@@ -7456,6 +7470,7 @@ breakText	Glyphs	字符
 @msg	One path lies inside the other, so they have no common tangents	一條路徑位於另一條之內，因此它們沒有公切線
 @msg	The paths overlap, so they have no internal tangents	路徑互相重疊，因此它們沒有內公切線
 @msg	One path lies inside the other, so they have no internal tangents	一條路徑位於另一條之內，因此它們沒有內公切線
+@msg	The point lies inside the path, so it has no tangents	該點位於路徑之內，因此沒有切線
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	將短破折號展開為路徑
 @msg	select paths with dashed strokes to expand	請選取要展開的虛線筆畫路徑
@@ -9771,3 +9786,8 @@ breakText	Glyphs	字符
 @msg	A joint does not close by {gap} pt.	有一處接縫相差 {gap} pt 未閉合。
 @msg	Two panels pass through each other.	兩個面板相互穿插。
 @msg	{what} would print on more than {MAX_TILES} tiles: scale it down	{what} 會列印在超過 {MAX_TILES} 個拼貼上：請縮小
+	Pressure Sensitive	壓感筆刷
+	Flex Ribbon	柔韌色帶
+	Pulse Stroke	脈動筆觸
+	Round Flow	圓頭流線
+	Chisel Flow	斜頭流線

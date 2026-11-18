@@ -2066,6 +2066,7 @@
 @msg	{var_key} must be at most {most}	{var_key} უნდა იყოს მაქსიმუმ {most}
 @msg	a linked image file is outside the read roots	დაკავშირებული გამოსახულების ფაილი წაკითხვის ძირეული საქაღალდეების გარეთაა
 @msg	a linked file's export folder is outside the read roots	დაკავშირებული ფაილის ექსპორტის საქაღალდე წაკითხვის ძირეული საქაღალდეების გარეთაა
+@msg	a linked file's editing data can't be read to check it against the read roots	დაკავშირებული ფაილის რედაქტირების მონაცემების წაკითხვა ვერ ხერხდება წაკითხვის ძირეულ საქაღალდეებთან შესამოწმებლად
 	Neon & Glow	ნეონი და ნათება
 	Show Hidden Panels at Edge	დამალული პანელების ჩვენება კიდესთან
 @msg	`anchor` must be a [subpath, anchor] pair	`anchor` უნდა იყოს წყვილი [subpath, anchor]
@@ -5355,6 +5356,7 @@ theme	Appearance	იერსახე
 	Delete Brush	ფუნჯის წაშლა
 	Delete Color	ფერის წაშლა
 	Restore Generated Table	გენერირებული ცხრილის აღდგენა
+	Unshift All Colors	ყველა ფერის წანაცვლების მოხსნა
 	Delete Symbol	სიმბოლოს წაშლა
 	Delete the selected symbol?	წაიშალოს მონიშნული სიმბოლო?
 	Delete the selected symbols?	წაიშალოს მონიშნული სიმბოლოები?
@@ -5809,6 +5811,7 @@ theme	Appearance	იერსახე
 	90° & 45° Angles	90° და 45° კუთხეები
 	90° Angles	90° კუთხეები
 	Additional Plug-ins Folder	დამატებითი პლაგინები
+	Plug-in Instruction Budget	პლაგინების ინსტრუქციების ბიუჯეტი
 	Additional Fonts Folder	შრიფტების დამატებითი საქაღალდე
 	Alignment Guides	გასწორების დამხმარე ხაზები
 	Anchor Points, Handle, and Bounding Box Display	საყრდენი წერტილების, სახელურებისა და შემომსაზღვრელი ჩარჩოს ჩვენება
@@ -6297,6 +6300,12 @@ font-technology	Variable	ცვლადი
 	Search commands, tools, panels and effects…	ბრძანებების, ხელსაწყოების, პანელებისა და ეფექტების ძიება…
 	No commands match	შესაბამისი ბრძანება არ არის
 	{pos} of {total}: {name}	{pos} / {total}: {name}
+	No menu item	მენიუს ელემენტი არ არის
+	Toolbar	ხელსაწყოთა ზოლი
+	{toolbar}, in the {tool} group	{toolbar}, ჯგუფში {tool}
+	In the menu bar: {path}	მენიუს ზოლში: {path}
+	In the {group} group: press and hold to open it	ჯგუფში {group}: გასახსნელად დააჭირეთ და გეჭიროთ
+	{home}, not shown now	{home}, ახლა არ ჩანს
 @plural	{n} result|{n} results	{n} შედეგი
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} შედეგიდან {shown}. გააგრძელეთ აკრეფა მათ შესამცირებლად.
 	Recent Commands	ბოლოდროინდელი ბრძანებები
@@ -6415,6 +6424,8 @@ font-technology	Variable	ცვლადი
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	რამდენად ახლოს უნდა მივიდეს ეკრანზე მაჩვენებელი ან გადათრეული წერტილი გრაფიკასთან, რომ ჭკვიანმა დამხმარე ხაზებმა მიაბან; მანძილი ყველა მასშტაბზე ერთნაირია.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	ხაზის სეგმენტის ბოლოს, ან ცენტრიდან დახატულ წრეწირს, ისე აბამს, რომ ახლომდებარე მრუდს შეეხოს.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	ხაზის სეგმენტის ბოლოს ისე აბამს, რომ ახლომდებარე სწორ სეგმენტს მართი კუთხით შეხვდეს.
+	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	ტილოზე თითოეული ნაჭრის ნომერს აჩვენებს ჩარჩოში მის ზედა მარცხენა კუთხეში; გამორთულისას ნაჭრების კონტურები კვლავ ჩანს.
+	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	მომხმარებლისა და ობიექტის ნაჭრების კონტურებისა და მათი ნომრების ჩარჩოების ფერი; ავტომატური ნაჭრები ამ ფერის უფრო მკრთალ ელფერს იყენებს.
 	Reset all preferences to their defaults?	დავაბრუნოთ ყველა პარამეტრი ნაგულისხმევ მნიშვნელობებზე?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	ნაგულისხმევი მნიშვნელობები გამოიყენება, როცა პარამეტრებში OK-ს დააჭერთ. იქ გაუქმება ინარჩუნებს თქვენს მიმდინარე პარამეტრებს.
 	Smaller ↔ Larger	უფრო პატარა ↔ უფრო დიდი
@@ -6853,6 +6864,7 @@ font-technology	Variable	ცვლადი
 @msg	choose a location for the package	აირჩიეთ შეფუთვის მდებარეობა
 @msg	clipboard is empty	გაცვლის ბუფერი ცარიელია
 @msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: ფერების ცხრილში ერთი ფერი მაინც უნდა დარჩეს
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted: `{k}` ასახელებს ფერს, რომელსაც სხვა გასაღებიც ასახელებს
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` ფერი არ არის, მაგალითად "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: არაუმეტეს {MAX_TABLE} ფერი
 @msg	command `{0}` is not available right now: {1}	ბრძანება `{0}` ახლა ხელმისაწვდომი არ არის: {1}
@@ -9998,6 +10010,7 @@ breakText	Glyphs	გლიფები
 @msg	One path lies inside the other, so they have no common tangents	ერთი ტრაექტორია მეორის შიგნითაა, ამიტომ მათ საერთო მხებები არ აქვთ
 @msg	The paths overlap, so they have no internal tangents	ტრაექტორიები ერთმანეთს ფარავს, ამიტომ მათ შიდა მხებები არ აქვთ
 @msg	One path lies inside the other, so they have no internal tangents	ერთი ტრაექტორია მეორის შიგნითაა, ამიტომ მათ შიდა მხებები არ აქვთ
+@msg	The point lies inside the path, so it has no tangents	წერტილი ტრაექტორიის შიგნითაა, ამიტომ მას მხებები არ აქვს
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	ტირეების ტრაექტორიებად გაშლა
 @msg	select paths with dashed strokes to expand	აირჩიეთ გასაშლელი ტირეებიანი ხაზის კონტურები
@@ -10459,3 +10472,8 @@ font-script	Japanese	იაპონური
 @msg	A joint does not close by {gap} pt.	შეერთება არ იხურება {gap} pt-ით.
 @msg	Two panels pass through each other.	ორი პანელი ერთმანეთში გადის.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer უნდა იყოს "singleLine", "everyLine", "standardSingleLine" ან "standardEveryLine"
+	Pressure Sensitive	წნევაზე მგრძნობიარე
+	Flex Ribbon	მოქნილი ლენტი
+	Pulse Stroke	პულსირებადი მონასმი
+	Round Flow	მრგვალი ნაკადი
+	Chisel Flow	დახრილი ნაკადი
