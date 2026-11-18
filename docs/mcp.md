@@ -1209,6 +1209,13 @@ styles and brushes.
 `color.removeProfile`, `view.proofSetup`, `view.proofColors`, `view.overprintPreview`, `view.separationsPreview` and
 `swatch.setSpot` reject a param of the wrong type, such as `"bpc": "no"`, `"on": 1`, `"to": 5` or `"colors": "#fff"`,
 and change nothing. Omitting a param or giving null keeps its default.
+`view.separationsPreview {soloToggle: plate}` is the Separations panel's Alt-click on a plate's eye: it shows that
+plate alone, and when that plate is already the only one of the active document's plates shown, it shows every
+plate, spot plates included ([Print color separations](https://helpx.adobe.com/illustrator/using/printing-color-separations.html)
+describes the second Alt-click or Option-click on the eye bringing every separation back, and the first one showing
+that plate alone). A hidden plate, another plate while one shows alone, or any plate while none is shown becomes
+the only plate shown; these cases are VectorCraft's own rules. `only` always shows just the named plate, so
+repeating it changes nothing. Neither adds an undo step.
 The Separations panel's Assign rows (where Edit › Assign Profile… goes) act on the profile of the document's color
 mode: Don't Color Manage This Document runs `edit.assignProfile` with null for that model (no profile, so the colors
 show through the working space), Working RGB or Working CMYK with the working space's name (that profile stays

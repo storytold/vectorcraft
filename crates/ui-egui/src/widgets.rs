@@ -211,7 +211,7 @@ pub(crate) mod accessibility_tests {
         let tree = tree(|ui| {
             icon_button(ui, "link", "Constrain Proportions", true, 24.0);
             toggle_icon(ui, "eye", true, 18.0, "Show all plates");
-            toggle_icon(ui, "eye", false, 18.0, "Show/hide plate (Alt-click: only this plate)");
+            toggle_icon(ui, "eye", false, 18.0, "Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)");
             orientation_button(ui, false, true, "Portrait");
             orientation_button(ui, true, false, "Landscape");
             layout_button(ui, &[(0, 0), (1, 0)], true, "Grid by Row");
@@ -221,7 +221,7 @@ pub(crate) mod accessibility_tests {
         let off = |label| assert_eq!(role_and_state(&tree, label), (Role::Button, Some(Toggled::False)), "{label}");
         on("Constrain Proportions");
         on("Show all plates");
-        off("Show/hide plate (Alt-click: only this plate)");
+        off("Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)");
         on("Portrait");
         off("Landscape");
         on("Grid by Row");
