@@ -174,6 +174,27 @@ fn the_dialog_rejects_a_field_of_the_wrong_type() {
     assert_eq!((field(&app, "find"), field(&app, "replace"), field(&app, "wholeWord")), (json!("cat"), json!("dog"), json!(true)));
 }
 
+/// An `action` that is not a string runs no action, Find included: the error is the note, and the
+/// match found, the selection and the last search stay as they were.
+#[test]
+fn an_action_of_the_wrong_type_runs_no_action() {
+    let (mut app, _) = app_with(&["cat", "cat"]);
+    choose(&mut app);
+    set(&mut app, "find", json!("cat"));
+    crate::dialogs::confirm(&mut app).unwrap();
+    let (at, sel, last) = (matched(&app), selected(&app), app.ui.last_find.clone());
+    assert!(at.is_some());
+    for v in [json!(5), Value::Null, json!(["find"])] {
+        set(&mut app, "action", v.clone());
+        assert_eq!(crate::dialogs::confirm(&mut app).unwrap_err(), "`action` must be a string", "{v}");
+        assert_eq!((matched(&app), selected(&app), app.ui.last_find.clone()), (at, sel.clone(), last.clone()), "{v}");
+        assert_eq!(field(&app, "__note"), json!("`action` must be a string"), "{v}");
+    }
+    set(&mut app, "action", json!("find"));
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert_ne!(matched(&app), at, "a string action still runs");
+}
+
 /// The dialog stays open from match to match: Find goes to the next match and selects its
 /// object, Replace changes that match, Replace & Find changes it and goes on, Replace All changes
 /// the rest, and Done closes. Each Replace is one undo step, and so is Replace All; finding and a

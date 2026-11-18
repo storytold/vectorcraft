@@ -260,16 +260,21 @@ fn replace_all(app: &mut VectorcraftApp, d: &mut Dialog) -> Result<Value, String
 /// A button or `ui.dialog.confirm`: run the `action` and keep the dialog open, or close it for
 /// `done`. What a command refuses is the note, and the dialog stays open. A field set to a value
 /// of another type than its own ([`check_types`]) runs no action: the error is the note, shown
-/// under the match found, which Replace still changes once the field is set right.
+/// under the match found, which Replace still changes once the field is set right. So does an
+/// `action` that is not a string.
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let mut d = d.clone();
-    let action = d.fields.insert("action".into(), json!("find")).and_then(|a| a.as_str().map(str::to_string)).unwrap_or_default();
-    if let Err(e) = check_types(&d.fields, false) {
+    let action = d.fields.insert("action".into(), json!("find"));
+    let checked = match &action {
+        Some(a) if !a.is_string() => Err("`action` must be a string".to_string()),
+        _ => check_types(&d.fields, false),
+    };
+    if let Err(e) = checked {
         d.fields.insert(NOTE.into(), json!(e));
         app.ui.dialog = Some(d);
         return Err(e);
     }
-    let r = match action.as_str() {
+    let r = match action.as_ref().and_then(Value::as_str).unwrap_or_default() {
         "done" => {
             remember(app, &d);
             app.ui.dialog = None;
