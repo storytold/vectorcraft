@@ -1700,7 +1700,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.epsOptionsDialog",
         "EPS Options Dialog",
         "",
-        "{path?, useArtboards?, range?, …document.exportEps options} open EPS Options (dialog `epsOptions`: fields = these options over the ones used last); OK checks them, remembers them and writes path (else asks). Export As… → EPS opens it too",
+        "{path?, useArtboards?, range?, …document.exportEps options} open EPS Options (dialog `epsOptions`: fields = these options over the ones used last; Custom… sets `flattener`, which a flattenerPreset given without it drops); OK checks them, remembers them and writes path (else asks). Export As… → EPS opens it too",
     ),
     (
         "file.saveForWeb",

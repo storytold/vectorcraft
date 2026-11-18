@@ -8866,8 +8866,9 @@ Colorized grayscale and 1-bit images use their process or spot ink; the flattene
 
 PostScript has no transparency: it is flattened first with `flattenerPreset` (`high`, `medium` (default), `low` or a
 saved preset, see `flattener.presets.list`) and `flattener: {…}` options over it (those of
-`object.flattenTransparency`); a warning says so. `previewFormat` adds a TIFF preview behind a binary header (`tiffColor`
-(default), transparent unless `transparentPreview: false`, or 1-bit `tiffBw`; `none` writes plain PostScript),
+`object.flattenTransparency`); a warning says so. EPS Options' Custom… button sets every `flattener` option.
+`previewFormat` adds a TIFF preview behind a binary header (`tiffColor` (default), transparent unless
+`transparentPreview: false`, or 1-bit `tiffBw`; `none` writes plain PostScript),
 `thumbnails` a PNG thumbnail in comments, and the native document always rides along in the trailer's comments (with
 linked images whole when `includeLinkedFiles`), so a later EPS import can reopen the file as it was. Export for
 Screens doesn't write EPS.

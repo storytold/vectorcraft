@@ -2487,6 +2487,9 @@ font-technology	Variable	Променливи
 	Overprint	Напечатване върху друго
 	Overprint and Transparency Flattener	Сплескване на надпечатването и прозрачността
 	Overprint and Transparency Flattener Options	Опции за сплескване на надпечатването и прозрачността
+	Custom…	Потребителски…
+	Custom Transparency Flattener Options	Потребителски опции за сплескване на прозрачността
+	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	EPS няма алфа прозрачност, а „Надпечати“ определя дали надпечатванията се запазват.
 	Overprint Black…	Напечатване на черното върху друго…
 	Overprint Fill	Напечатване на запълването върху друго
 	Overprint Preview	Преглед на напечатването върху друго

@@ -2612,6 +2612,9 @@ file-filter	Templates	Modelli
 	Overprint	Sovrastampa
 	Overprint and Transparency Flattener	Sovrastampa e appiattimento trasparenza
 	Overprint and Transparency Flattener Options	Opzioni sovrastampa e appiattimento trasparenza
+	Custom…	Personalizzato…
+	Custom Transparency Flattener Options	Opzioni di appiattimento trasparenza personalizzate
+	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	EPS non ha trasparenza alfa, e Sovrastampe stabilisce se le sovrastampe vengono mantenute.
 	Overprint Black…	Sovrastampa nero…
 	Overprint Fill	Sovrastampa riempimento
 	Overprint Preview	Anteprima sovrastampa

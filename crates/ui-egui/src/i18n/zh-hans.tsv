@@ -2464,6 +2464,9 @@ file-filter	Templates	模板
 	Overprint	叠印
 	Overprint and Transparency Flattener	叠印和透明度拼合器
 	Overprint and Transparency Flattener Options	叠印和透明度拼合器选项
+	Custom…	自定义…
+	Custom Transparency Flattener Options	自定义透明度拼合器选项
+	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	EPS 没有 Alpha 透明度，“叠印”决定是否保留叠印。
 	Overprint Black…	黑色叠印…
 	Overprint Fill	叠印填色
 	Overprint Preview	叠印预览

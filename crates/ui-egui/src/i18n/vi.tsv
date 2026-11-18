@@ -2882,6 +2882,9 @@ digits	Hindi	Hindi
 	Overprint	In chồng
 	Overprint and Transparency Flattener	In chồng và làm phẳng trong suốt
 	Overprint and Transparency Flattener Options	Tùy chọn in chồng và làm phẳng trong suốt
+	Custom…	Tùy chỉnh…
+	Custom Transparency Flattener Options	Tùy chọn làm phẳng trong suốt tùy chỉnh
+	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	EPS không có trong suốt kênh Alpha, và In chồng quyết định có giữ in chồng hay không.
 	Overprint Black…	In chồng đen…
 	Overprint Fill	Tô in chồng
 	Overprint Preview	Xem trước in chồng

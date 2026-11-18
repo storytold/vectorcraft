@@ -3062,6 +3062,9 @@ file-filter	Templates	Sablonok
 	Overprint	Felülnyomás
 	Overprint and Transparency Flattener	Felülnyomás és átlátszóság-lapítás
 	Overprint and Transparency Flattener Options	Felülnyomás és átlátszóság-lapítás beállításai
+	Custom…	Egyéni…
+	Custom Transparency Flattener Options	Egyéni átlátszóság-lapítási beállítások
+	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	Az EPS-ben nincs alfa-átlátszóság, és a Felülnyomások beállítás dönti el, hogy megmaradnak-e a felülnyomások.
 	Overprint Black…	Fekete felülnyomása…
 	Overprint Fill	Kitöltés felülnyomása
 	Overprint Preview	Felülnyomás-előnézet

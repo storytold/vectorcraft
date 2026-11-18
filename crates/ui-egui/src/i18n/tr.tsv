@@ -2346,6 +2346,9 @@ shape	Open	Açık
 	Overprint	Üst Baskı
 	Overprint and Transparency Flattener	Üst Baskı ve Asetat Düzleştirici
 	Overprint and Transparency Flattener Options	Üst Baskı ve Asetat Düzleştirici Seçenekleri
+	Custom…	Özel…
+	Custom Transparency Flattener Options	Özel Şeffaflık Düzleştirici Seçenekleri
+	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	EPS'de alfa şeffaflığı yoktur ve Üst baskılar, üst baskıların korunup korunmayacağını belirler.
 	Overprint Black…	Üst Baskı Siyah…
 	Overprint Fill	Üst Baskı Dolgusu
 	Overprint Preview	Üst Baskı Önizleme

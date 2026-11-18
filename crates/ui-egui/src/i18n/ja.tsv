@@ -2735,6 +2735,9 @@ antiAlias	Sharp	シャープ
 	Overprint Stroke	線をオーバープリント
 	Overprint and Transparency Flattener	オーバープリントと透明の分割・統合
 	Overprint and Transparency Flattener Options	オーバープリントと透明の分割・統合オプション
+	Custom…	カスタム…
+	Custom Transparency Flattener Options	カスタムの透明の分割・統合オプション
+	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	EPS にはアルファ透明がなく、オーバープリントを保持するかどうかは「オーバープリント」で決まります。
 	Overprint:	オーバープリント:
 	Overprints:	オーバープリント:
 	Override Character Color	文字カラーを上書き
