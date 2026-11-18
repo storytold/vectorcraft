@@ -6344,6 +6344,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	no history state {v}	no hi ha cap estat de l’historial {v}
 @msg	no interaction in progress	no hi ha cap interacció en curs
 @msg	no key object	no hi ha objecte clau
+@msg	Align to Key Object isn't available with the Artboard tool	«Alinea a l’objecte clau» no està disponible amb l’eina de tauler
 @msg	no library `{id}`	no hi ha la biblioteca `{id}`
 @msg	the library has another item of that kind named `{name}`	la biblioteca ja té un altre element d’aquest tipus anomenat `{name}`
 @msg	no library `{key}` (see {list})	no hi ha la biblioteca `{key}` (vegeu {list})

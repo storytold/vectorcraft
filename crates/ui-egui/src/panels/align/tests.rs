@@ -689,7 +689,7 @@ fn align_to_commands_with_the_artboard_tool() {
     assert!(has_key(&app), "choosing the Artboard tool keeps the key");
     let key_item = crate::menus::menu_entries(&app).into_iter().find(|e| e.command.as_deref() == Some("align.toKeyObject")).unwrap();
     assert!(!key_item.enabled, "the Artboard tool");
-    assert_eq!(app.run("align.toKeyObject", json!({})).unwrap_err(), "no key object");
+    assert_eq!(app.run("align.toKeyObject", json!({})).unwrap_err(), "Align to Key Object isn't available with the Artboard tool");
     assert_eq!(app.run("align.toArtboard", json!({})).unwrap(), json!({"alignTo": "artboard"}));
     assert_eq!(app.ui.align_to, AlignTo::Artboard);
     assert_eq!(align_to_checks(&app), [Some(false), Some(false), Some(true)]);
@@ -699,16 +699,36 @@ fn align_to_commands_with_the_artboard_tool() {
     assert_eq!(app.session.active().unwrap().selection.key.map(|k| k.0), front.as_u64(), "the key stays");
 }
 
-/// Align to Key Object fails when the topmost selected object can't be the key: a group selected
-/// with an object inside it.
+/// Align to Key Object is off and fails when the topmost selected object can't be the key: a group
+/// selected with an object inside it.
 #[test]
 fn align_to_key_object_fails_when_the_topmost_object_cannot_be_the_key() {
     let (mut app, _, front) = back_and_front();
     let group = app.run("object.group", json!({})).unwrap()["id"].clone();
     app.run("select.set", json!({"ids": [group, front]})).unwrap();
     assert_eq!(app.session.active().unwrap().selection.objects.len(), 2, "the group and its member");
+    let key_item = crate::menus::menu_entries(&app).into_iter().find(|e| e.command.as_deref() == Some("align.toKeyObject")).unwrap();
+    assert!(!key_item.enabled, "the topmost object is inside the group");
+    assert!(!can_choose(&app, AlignTo::Key), "the panel's button is off too");
     assert_eq!(app.run("align.toKeyObject", json!({})).unwrap_err(), "no key object");
     assert!(!has_key(&app));
+}
+
+/// With a key anchor, Object → Align shows Align to Key Object checked under its menu name, and
+/// the command keeps the key anchor → `{alignTo: "key"}`.
+#[test]
+fn align_to_key_object_with_a_key_anchor() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    let id = app.run("path.create", json!({"d": "M100 40 L200 60 L150 160 Z"})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.anchors", json!({"id": id, "anchors": [[0, 0], [0, 2]], "mode": "set"})).unwrap();
+    app.run("select.key", json!({"id": id, "anchor": [0, 2]})).unwrap();
+    assert_eq!(align_to_checks(&app), [Some(false), Some(true), Some(false)]);
+    let key_item = crate::menus::menu_entries(&app).into_iter().find(|e| e.command.as_deref() == Some("align.toKeyObject")).unwrap();
+    assert_eq!((key_item.label.as_str(), key_item.enabled), ("Align to Key Object", true));
+    assert_eq!(app.run("align.toKeyObject", json!({})).unwrap(), json!({"alignTo": "key"}));
+    let key_anchor = app.session.active().unwrap().selection.key_anchor.map(|(k, a)| (k.0, a));
+    assert_eq!(key_anchor, Some((id, (0, 2))), "the key anchor stays");
 }
 
 /// With anchor points selected, Object → Align sends its params unchanged: two anchor points of

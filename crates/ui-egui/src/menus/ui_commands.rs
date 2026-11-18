@@ -379,13 +379,13 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "align.toSelection",
         "Align to Selection",
         "",
-        "{} the Align panel's Align to Selection button: Align To becomes Selection (saved with the preferences, ui.inspect › ui.align_to) and the key object, key guide or key anchor is let go → {alignTo: the choice the Align panel then shows: \"selection\", or \"artboard\" while one object is selected, since one object aligns to the artboard}",
+        "{} the Align panel's Align to Selection button: Align To becomes Selection (saved with the preferences, ui.inspect › ui.align_to) and the key object, key guide or key anchor is let go → {alignTo: the choice the Align panel then shows: \"selection\", or \"artboard\" while one object is selected, since one object aligns to the artboard}; with the Artboard tool chosen the selected objects keep their key",
     ),
     (
         "align.toKeyObject",
         "Align to Key Object",
         "",
-        "{} the Align panel's Align to Key Object button: with no key, the topmost of two or more selected objects becomes the key object, or a ruler guide selected with one object the key guide; the stored Selection or Artboard choice stays → {alignTo: \"key\"}; an error (\"no key object\") when there is no key and nothing to make one of, when the topmost selected object can't be the key (it is inside another selected object), or with the Artboard tool chosen",
+        "{} the Align panel's Align to Key Object button: with no key, the topmost of two or more selected objects becomes the key object, or a ruler guide selected with one object the key guide; the stored Selection or Artboard choice stays → {alignTo: \"key\"}; an error (\"no key object\") when there is no key and nothing to make one of, which includes a topmost selected object inside another selected object; an error (\"Align to Key Object isn't available with the Artboard tool\") with the Artboard tool chosen",
     ),
     (
         "align.toArtboard",

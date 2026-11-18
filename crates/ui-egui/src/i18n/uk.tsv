@@ -5212,6 +5212,7 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	no graphic style `{n}`	немає графічного стилю `{n}`
 @msg	no interaction in progress	немає взаємодії у процесі
 @msg	no key object	немає ключового об’єкта
+@msg	Align to Key Object isn't available with the Artboard tool	«Вирівняти за ключовим об’єктом» недоступно з інструментом «Монтажна область»
 @msg	no library `{key}` (see {list})	немає бібліотеки `{key}` (див. {list})
 @msg	no native format	немає власного формату
 @msg	no pages	немає сторінок

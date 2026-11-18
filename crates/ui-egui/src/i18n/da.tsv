@@ -7671,6 +7671,7 @@ imageTrace	Outline	Kontur
 @msg	no graphic style `{n}`	ingen grafisk stil `{n}`
 @msg	no interaction in progress	ingen interaktion i gang
 @msg	no key object	intet nøgleobjekt
+@msg	Align to Key Object isn't available with the Artboard tool	Juster til nøgleobjekt er ikke tilgængelig med tegnebrætværktøjet
 @msg	no library `{key}` (see {list})	intet bibliotek `{key}` (se {list})
 @msg	no native format	intet indbygget format
 @msg	no pages	ingen sider

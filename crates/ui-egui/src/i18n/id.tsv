@@ -4882,6 +4882,7 @@ imageTrace	Outline	Kontur
 @msg	no graphic style `{n}`	tidak ada gaya grafis `{n}`
 @msg	no interaction in progress	tidak ada interaksi yang berlangsung
 @msg	no key object	tidak ada objek kunci
+@msg	Align to Key Object isn't available with the Artboard tool	Ratakan ke objek kunci tidak tersedia dengan alat artboard
 @msg	no library `{key}` (see {list})	tidak ada pustaka `{key}` (lihat {list})
 @msg	no native format	tidak ada format asli
 @msg	no pages	tidak ada halaman

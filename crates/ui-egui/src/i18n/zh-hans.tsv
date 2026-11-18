@@ -4654,6 +4654,7 @@ imageTrace	Outline	轮廓
 @msg	no bounds	没有边界
 @msg	no current layer	没有当前图层
 @msg	no key object	没有关键对象
+@msg	Align to Key Object isn't available with the Artboard tool	使用画板工具时无法对齐关键对象
 @msg	no previous transform	没有上一次变换
 @msg	nothing to align	没有可对齐的内容
 @msg	select a clip group	请选择一个剪切组

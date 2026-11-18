@@ -5204,6 +5204,7 @@ liquify-list-end	{0}, {1}	{0}, {1}
 @msg	no graphic style `{n}`	no existe el estilo gráfico `{n}`
 @msg	no interaction in progress	no hay ninguna interacción en curso
 @msg	no key object	no hay objeto clave
+@msg	Align to Key Object isn't available with the Artboard tool	«Alinear con el objeto clave» no está disponible con la herramienta Mesa de trabajo
 @msg	no library `{key}` (see {list})	no existe la biblioteca `{key}` (consulta {list})
 @msg	no native format	no hay formato nativo
 @msg	no pages	no hay páginas
