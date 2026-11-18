@@ -293,6 +293,19 @@ pub(super) fn over_effect(parent: &Dialog, field: &str, colour: Color) -> Dialog
     );
     d.fields.insert(super::PARENT.into(), serde_json::to_value(parent).unwrap_or_default());
     store(&mut d, &Picked::of(colour));
+    d.fields.insert(crate::screen_color::PICKER_ID.into(), json!(crate::screen_color::picker_id()));
+    d
+}
+
+/// The entry of the dialog's color list that a Color Picker opened with [`over_list_entry`] sets.
+const COLOUR_INDEX: &str = "__colourIndex";
+
+/// The Color Picker over the dialog `parent`, on `colour`, that sets entry `index` of the dialog's
+/// list of colors `field` (Document Setup's `gridColors`) with its OK and goes back to it, leaving
+/// the other entries as they are. Cancel goes back to `parent` as it was. It previews nothing.
+pub(super) fn over_list_entry(parent: &Dialog, field: &str, index: usize, colour: Color) -> Dialog {
+    let mut d = over_effect(parent, field, colour);
+    d.fields.insert(COLOUR_INDEX.into(), json!(index));
     d
 }
 
@@ -749,7 +762,20 @@ fn swatch_list(app: &VectorcraftApp, ui: &mut Ui, d: &mut Dialog, current: &Colo
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     if let Some(field) = d.fields.get(COLOUR_FIELD).and_then(Value::as_str) {
         let mut parent = super::parent(d).ok_or("the dialog it was opened over is no longer open")?;
-        parent.fields.insert(field.to_string(), json!(picked(d).color.to_hex()));
+        let hex = json!(picked(d).color.to_hex());
+        match d.fields.get(COLOUR_INDEX) {
+            None => {
+                parent.fields.insert(field.to_string(), hex);
+            }
+            Some(index) => {
+                let entry = index
+                    .as_u64()
+                    .and_then(|i| usize::try_from(i).ok())
+                    .and_then(|i| parent.fields.get_mut(field)?.as_array_mut()?.get_mut(i))
+                    .ok_or("no such color")?;
+                *entry = hex;
+            }
+        }
         // The dialog previews the new colour when it comes back: end this picker's interaction, as
         // Cancel does, so the dialog starts its preview afresh.
         let _ = app.session.cancel_interaction();

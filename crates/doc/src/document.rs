@@ -339,6 +339,7 @@ impl Document {
     /// Index path from the top-level layer list to `id` (e.g. `[0, 3, 1]`): the first place in
     /// tree order where `id` appears.
     pub fn index_path(&self, id: NodeId) -> Option<Vec<usize>> {
+        crate::id_index::note_path_lookup();
         // The cached path, while the node there still has the id ([`id_index`]).
         let cached = self.index.get();
         match cached.as_ref().and_then(|m| m.get(&id)) {
