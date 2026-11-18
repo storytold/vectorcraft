@@ -3,7 +3,8 @@
 //! shows the shape outlined in black and filled with white, under a red slash. Clicking a style applies it to the
 //! selection (Alt-click adds it on top); Shift-click adds to the panel's selection every style from
 //! the last one clicked without Shift through this one; Cmd/Ctrl-click adds or removes one. The
-//! style last clicked into the selection is the one the Symbol Styler applies. Double-click opens
+//! style last clicked into the selection is the one the Symbol Styler and the Symbol Sprayer's User
+//! Defined Style apply. Double-click opens
 //! Graphic Style Options. Dragging a style moves it in the list (dropped on
 //! another style with Alt held, replaces that style with its look), applies it
 //! to the art it is dropped on (`canvas::panel_drop`), or, dropped on New Graphic Style, adds a
@@ -553,7 +554,8 @@ fn act(app: &mut VectorcraftApp, ui: &Ui, s: &Shown, ev: Events, picker: bool) {
         Some(Click::Pick(name, m)) => {
             let order: Vec<&str> = s.d.graphic_styles.iter().map(|g| g.name.as_str()).collect();
             let sel = super::swatches::click_selection(ui, "gs-anchor", selected(ui.ctx(), s.d), &order, &name, m);
-            // The style clicked into the selection is the one the Symbol Styler applies.
+            // The style clicked into the selection is the one the Symbol Styler and the Symbol
+            // Sprayer's User Defined Style apply (the two share it).
             if sel.contains(&name) {
                 app.run("tool.setOption", json!({"tool": "symbolStyler", "values": {"style": name}})).ok();
             }
@@ -1709,6 +1711,8 @@ mod tests {
         assert_eq!(styler(&app).as_ref(), Some(&n[3]));
         assert_eq!(click(&mut app, 2, egui::Modifiers::COMMAND), [n[0].clone(), n[1].clone(), n[3].clone(), n[2].clone()]);
         assert_eq!(styler(&app).as_ref(), Some(&n[2]));
+        // The Symbol Sprayer's User Defined Style applies the same style.
+        assert_eq!(app.session.tool_options_of("symbolSprayer")["style"].as_str(), Some(n[2].as_str()));
         // Shift-click extends from the style Cmd/Ctrl-clicked last.
         click(&mut app, 0, egui::Modifiers::NONE);
         click(&mut app, 2, egui::Modifiers::COMMAND);

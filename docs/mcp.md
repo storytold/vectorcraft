@@ -3787,8 +3787,8 @@ already walks Image Trace. Short agent entry points:
   samples of a stroke add up (two samples at the center at intensity 5 apply it in full). With `alt`, `userDefined`
   and `random` remove all of an instance's appearance items under the brush at once, whatever the brush's strength.
   A `style` name the document
-  has no graphic style for counts as none (the document's first style after the default one). The Symbol Styler sends
-  the style last clicked into the Graphic Styles panel's selection. `tool.setOption` on a symbolism tool refuses a `method` or
+  has no graphic style for counts as none (the document's first style after the default one). The Symbol Styler and the
+  Symbol Sprayer (its User Defined Style) send the style last clicked into the Graphic Styles panel's selection. `tool.setOption` on a symbolism tool refuses a `method` or
   Symbol Sprayer option that is not one of its names, a non-number `diameter`, `intensity` or `density`, a
   `diameter` outside 2..2000 or an `intensity` or `density` outside 1..10, a non-boolean switch, and a `symbol` or
   `style` that is neither a name nor null, and sets none of the values. The options dialog's OK checks the same way
