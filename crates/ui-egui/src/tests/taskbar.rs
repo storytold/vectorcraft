@@ -744,6 +744,144 @@ fn the_shape_properties_popup_keeps_its_corner_dropdown() {
     assert!(!kinds.is_empty() && kinds.iter().all(|k| *k == vectorcraft_geom::shapes::CornerKind::Chamfer), "{kinds:?}");
 }
 
+/// A rectangle's Corner menu in the popup sets the kind of all four corners in one undo step while
+/// Corner Radius is linked; picking the kind they already have adds no step. Unlinked, each
+/// corner's menu sets that corner alone.
+#[test]
+fn the_shape_properties_popup_changes_a_rectangle_corner_type() {
+    use vectorcraft_geom::shapes::CornerKind::{Chamfer, Round};
+    let mut app = app();
+    app.run("tool.select", json!({"tool": "selection"})).unwrap();
+    app.run("prefs.set", json!({"key": "singleCornerRadius", "value": true})).unwrap();
+    let rect = id(app.run("shape.rectangle", json!({"x": 40, "y": 40, "width": 80, "height": 60, "radius": 10})).unwrap());
+    select(&mut app, &[rect]);
+    let kinds = |app: &VectorcraftApp| match live(app, rect) {
+        vectorcraft_doc::LiveShape::Rectangle { kinds, radii, .. } => (kinds, radii),
+        l => panic!("{l:?}"),
+    };
+    let steps = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
+    let (ctx, texts) = click_lock_slot(&mut app);
+    let click = |app: &mut VectorcraftApp, p: Pos2| {
+        let press = |pressed| Event::PointerButton { pos: p, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(app, &ctx, vec![Event::PointerMoved(p), press(true), press(false)]);
+        frame(app, &ctx, vec![])
+    };
+    // The open list's entry for `name`, drawn after the closed menu that may show the same name.
+    let entry = |texts: &[(String, Rect)], name: &str| texts.iter().rev().find(|(t, _)| t == name).map(|(_, r)| r.center()).unwrap();
+    let before = steps(&app);
+    let texts = click(&mut app, at(&texts, "Round"));
+    let texts = click(&mut app, entry(&texts, "Chamfer"));
+    assert_eq!(kinds(&app), ([Chamfer; 4], [10.0; 4]), "all four corners, radii kept");
+    assert_eq!(steps(&app), before + 1, "one undo step");
+    let texts = click(&mut app, at(&texts, "Chamfer"));
+    click(&mut app, entry(&texts, "Chamfer"));
+    assert_eq!(steps(&app), before + 1, "the same kind adds no undo step");
+
+    app.run("prefs.set", json!({"key": "singleCornerRadius", "value": false})).unwrap();
+    let texts = frame(&mut app, &ctx, vec![]);
+    assert_eq!(texts.iter().filter(|(t, _)| t == "Chamfer").count(), 4, "{texts:?}");
+    // The first menu is the top left corner's.
+    let texts = click(&mut app, at(&texts, "Chamfer"));
+    click(&mut app, entry(&texts, "Round"));
+    assert_eq!(kinds(&app), ([Round, Chamfer, Chamfer, Chamfer], [10.0; 4]));
+    assert_eq!(steps(&app), before + 2);
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(kinds(&app).0, [Chamfer; 4]);
+}
+
+/// One Transform panel frame `width` points wide: the texts drawn, with their rectangles.
+fn panel_frame(app: &mut VectorcraftApp, ctx: &egui::Context, width: f32, events: Vec<Event>) -> Vec<(String, Rect)> {
+    let screen = Rect::from_min_size(Pos2::ZERO, vec2(width, 700.0));
+    let input = egui::RawInput { screen_rect: Some(screen), events, ..Default::default() };
+    let mut out = ctx.run_ui(input, |ui| crate::panels::transform::show(app, ui));
+    out.textures_delta.clear();
+    shapes_text(&out.shapes.iter().map(|c| c.shape.clone()).collect::<Vec<_>>())
+}
+
+/// With several rectangles selected, the linked Corner menu sets the kind on every corner of each
+/// of them, also when the rectangle the panel shows already has it, and leaves a selected polygon
+/// as it is.
+#[test]
+fn the_linked_corner_menu_sets_every_selected_rectangle() {
+    use vectorcraft_geom::shapes::CornerKind::{Chamfer, Round};
+    let mut app = app();
+    app.run("prefs.set", json!({"key": "singleCornerRadius", "value": true})).unwrap();
+    let a = id(app.run("shape.rectangle", json!({"x": 20, "y": 20, "width": 80, "height": 60, "radius": 8})).unwrap());
+    let b = id(app.run("shape.rectangle", json!({"x": 200, "y": 20, "width": 80, "height": 60, "radius": 8})).unwrap());
+    let polygon = id(app.run("shape.polygon", json!({"cx": 200, "cy": 200, "radius": 40, "sides": 6})).unwrap());
+    app.run("object.setLiveShape", json!({"ids": [a], "kind": "chamfer"})).unwrap();
+    select(&mut app, &[a, b, polygon]);
+    let kinds = |app: &VectorcraftApp, id: u64| match live(app, id) {
+        vectorcraft_doc::LiveShape::Rectangle { kinds, .. } => kinds,
+        l => panic!("{l:?}"),
+    };
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let click = |app: &mut VectorcraftApp, p: Pos2| {
+        let press = |pressed| Event::PointerButton { pos: p, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+        panel_frame(app, &ctx, 300.0, vec![Event::PointerMoved(p), press(true), press(false)]);
+        panel_frame(app, &ctx, 300.0, vec![])
+    };
+    panel_frame(&mut app, &ctx, 300.0, vec![]);
+    let texts = panel_frame(&mut app, &ctx, 300.0, vec![]);
+    let steps = app.session.active().unwrap().history.undo.len();
+    let texts = click(&mut app, at(&texts, "Chamfer"));
+    let entry = texts.iter().rev().find(|(t, _)| t == "Chamfer").map(|(_, r)| r.center()).unwrap();
+    click(&mut app, entry);
+    assert_eq!((kinds(&app, a), kinds(&app, b)), ([Chamfer; 4], [Chamfer; 4]));
+    let vectorcraft_doc::LiveShape::Polygon { kinds: sides, .. } = live(&app, polygon) else { panic!("not a polygon") };
+    assert!(sides.iter().all(|k| *k == Round), "the polygon keeps its corners: {sides:?}");
+    assert_eq!(app.session.active().unwrap().history.undo.len(), steps + 1, "one undo step");
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(kinds(&app, b), [Round; 4]);
+}
+
+/// Unlinked, a corner's radius field rounds that corner of each selected rectangle and leaves a
+/// selected polygon as it is.
+#[test]
+fn an_unlinked_corner_radius_leaves_other_selected_shapes() {
+    let mut app = app();
+    app.run("prefs.set", json!({"key": "singleCornerRadius", "value": false})).unwrap();
+    let rect = id(app.run("shape.rectangle", json!({"x": 20, "y": 20, "width": 80, "height": 60, "radius": 7})).unwrap());
+    let polygon = id(app.run("shape.polygon", json!({"cx": 200, "cy": 200, "radius": 40, "sides": 6})).unwrap());
+    select(&mut app, &[rect, polygon]);
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    panel_frame(&mut app, &ctx, 300.0, vec![]);
+    let texts = panel_frame(&mut app, &ctx, 300.0, vec![]);
+    // The top left corner's field is the first that shows the radius.
+    let p = at(&texts, "7 pt");
+    let press = |pressed| Event::PointerButton { pos: p, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+    panel_frame(&mut app, &ctx, 300.0, vec![Event::PointerMoved(p), press(true), press(false)]);
+    panel_frame(&mut app, &ctx, 300.0, vec![]);
+    panel_frame(&mut app, &ctx, 300.0, vec![Event::Text("15".into())]);
+    let enter = Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+    panel_frame(&mut app, &ctx, 300.0, vec![enter]);
+    panel_frame(&mut app, &ctx, 300.0, vec![]);
+    let vectorcraft_doc::LiveShape::Rectangle { radii, .. } = live(&app, rect) else { panic!("not a rectangle") };
+    assert_eq!(radii, [15.0, 7.0, 7.0, 7.0]);
+    let vectorcraft_doc::LiveShape::Polygon { radii, .. } = live(&app, polygon) else { panic!("not a polygon") };
+    assert!(radii.iter().all(|r| *r == 0.0), "the polygon keeps its corners: {radii:?}");
+}
+
+/// Unlinked, the four corner rows keep their Corner menus inside a panel at its narrowest.
+#[test]
+fn the_unlinked_corner_menus_fit_a_narrow_panel() {
+    let mut app = app();
+    app.run("prefs.set", json!({"key": "singleCornerRadius", "value": false})).unwrap();
+    let rect = id(app.run("shape.rectangle", json!({"x": 20, "y": 20, "width": 80, "height": 60, "radius": 8})).unwrap());
+    app.run("object.setLiveShape", json!({"ids": [rect], "kind": "invertedRound"})).unwrap();
+    select(&mut app, &[rect]);
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let width = 220.0;
+    panel_frame(&mut app, &ctx, width, vec![]);
+    let texts = panel_frame(&mut app, &ctx, width, vec![]);
+    let menus: Vec<_> = texts.iter().filter(|(t, _)| t.starts_with("Inverted")).collect();
+    assert_eq!(menus.len(), 4, "{texts:?}");
+    assert!(menus.iter().all(|(_, r)| r.right() <= width), "{menus:?}");
+}
+
 /// Every other selection keeps Lock: a plain closed path, a star (a plain path), a path with live
 /// corners, a group and several objects. The Direct Selection tool keeps it for a basic shape.
 #[test]
