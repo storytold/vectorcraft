@@ -6,8 +6,10 @@
 //! (Object › Plug-ins › Packaging Tools) and its Fold Lines panel are the UI's.
 
 mod check;
+mod fold;
 mod roles;
 
+pub use fold::{fold_source, print_hidden};
 pub(crate) use roles::{role_swatch_edited, role_swatches_merged};
 
 use super::super::CommandSpec;
@@ -15,6 +17,7 @@ use super::super::CommandSpec;
 pub fn specs() -> Vec<CommandSpec> {
     let mut v = roles::specs();
     v.extend(check::specs());
+    v.extend(fold::specs());
     v
 }
 
