@@ -51,6 +51,8 @@ pub struct PenTool {
     /// The anchor a press placed, while the drag shapes its handles.
     drag: Option<Place>,
     hover: Option<Point>,
+    /// The pointer at the last hover before snapping: a press picks anchors there first.
+    hover_raw: Option<Point>,
     /// The incoming handle of the anchor being dragged out, as last previewed.
     in_h: Point,
     /// The first anchor, as it was when a press on it began closing the path, and its outgoing
@@ -297,6 +299,7 @@ impl Tool for PenTool {
         match ev.kind {
             PointerKind::Move => {
                 self.hover = Some(p);
+                self.hover_raw = Some(ev.pos);
                 vec![]
             }
             PointerKind::Down => {
@@ -522,17 +525,19 @@ impl Tool for PenTool {
         // The rubber band preference hides only the preview segment; Measurement Labels decides the readout.
         if self.drag.is_none()
             && self.handle.is_none()
-            && let (Some((id, _, _, last, out)), Some(h)) = (self.active(cx), self.hover)
+            && let (Some((id, si, first, last, out)), Some(h)) = (self.active(cx), self.hover)
         {
             if cx.pen_rubber_band {
                 // The segment a click at `h` adds: it leaves the last anchor along its outgoing
-                // handle and arrives at the new corner anchor without a handle.
+                // handle and arrives at the anchor the click ends it on, with that anchor's handle.
+                let raw = self.hover_raw.unwrap_or(h);
+                let (end, end_h) = click_end(cx, id, si, first, last, raw, h);
                 let mut bp = BezPath::new();
                 bp.move_to(last);
-                if out.distance(last) > 1e-9 {
-                    bp.curve_to(out, h, h);
+                if out.distance(last) > 1e-9 || end_h.distance(end) > 1e-9 {
+                    bp.curve_to(out, end_h, end);
                 } else {
-                    bp.line_to(h);
+                    bp.line_to(end);
                 }
                 o.push(Overlay::Path { path: bp, color: cx.doc.layer_color(id), width: 1.0, dashed: false });
             }
@@ -639,6 +644,35 @@ impl PenTool {
         self.convert = Some(t);
         Some(acts)
     }
+}
+
+/// Where a click ends the next segment of subpath `si` of path `id` (first anchor `first`, last
+/// anchor `last`), and the incoming handle it arrives with, for a pointer at `raw` that snaps to
+/// `h`. The anchors are picked in the order a press picks them: at `raw` first, then at `h`. On the
+/// first anchor the path closes, with that anchor's incoming handle retracted
+/// ([`PenTool::begin_close`]). On an end of another open path the two join, and the segment arrives
+/// with that end's own handle on the joining side. Anywhere else the click adds a corner anchor at `h`.
+fn click_end(cx: &ToolContext, id: NodeId, si: usize, first: Point, last: Point, raw: Point, h: Point) -> (Point, Point) {
+    let tol = cx.tol(5.0).max(cx.point_tol());
+    let closing_end = last_anchor(cx, id, Some(si)).filter(|(_, ai)| *ai > 0).map(|_| first);
+    match pick_endpoint(closing_end, last, raw, tol, Endpoint::First) {
+        Some(Endpoint::First) => return (first, first),
+        Some(Endpoint::Last) => return (h, h),
+        None => {}
+    }
+    let raw_other = open_end_at(cx, raw, tol, Some((id, si)));
+    if raw_other.is_none() && h != raw {
+        match pick_endpoint(closing_end, last, h, tol, Endpoint::First) {
+            Some(Endpoint::First) => return (first, first),
+            Some(Endpoint::Last) => return (h, h),
+            None => {}
+        }
+    }
+    let joined = raw_other.or_else(|| open_end_at(cx, h, tol, Some((id, si)))).and_then(|(other, osi, at_first)| {
+        let sp = cx.doc.node(other)?.path_data()?.subpaths.get(osi)?;
+        if at_first { sp.anchors.first().map(|a| (a.p, a.h_in)) } else { sp.anchors.last().map(|a| (a.p, a.h_out)) }
+    });
+    joined.unwrap_or((h, h))
 }
 
 /// The first anchor of subpath `si` of path `id`.
