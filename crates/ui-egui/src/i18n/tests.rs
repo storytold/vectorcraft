@@ -402,6 +402,25 @@ fn catalan_reads_as_catalan() {
     assert_eq!(message(ca, nested), "l’ordre `object.group` no està disponible ara mateix: no hi ha res seleccionat");
 }
 
+/// The Swedish catalog names the SVG Filter and Check Spelling commands without their ellipsis,
+/// the SVG Filter undo step, and the 3D and Materials panel's note with its period.
+#[test]
+fn swedish_svg_filter_spelling_and_3d_labels_are_complete() {
+    let sv = Lang::from_code("sv").expect("sv registered");
+    for (en, want) in [
+        ("Apply SVG Filter", "Använd SVG-filter"),
+        ("Check Spelling", "Kontrollera stavning"),
+        ("SVG Filter", "SVG-filter"),
+        (
+            "Graphics map onto the Plane, Extrude, Revolve and Inflate object types.",
+            "Grafik placeras på objekttyperna Plan, Extrudera, Rotera runt axel och Blås upp.",
+        ),
+    ] {
+        assert_eq!(sv.catalog().plain(en), Some(want), "{en}");
+    }
+    assert_eq!(crate::panels::history::step_name(sv, "SVG Filter").as_deref(), Some("SVG-filter"));
+}
+
 /// Brazilian Portuguese spells Relink "Revincular", and no row calls a process color a
 /// selection color ("cor de seleção").
 #[test]
@@ -421,6 +440,27 @@ fn brazilian_portuguese_spells_relink_and_process_color() {
     assert!(wrong.is_empty(), "{} Brazilian Portuguese rows are wrong:\n{}", wrong.len(), wrong.join("\n"));
     assert_eq!(tr(pt, "Relink…"), "Revincular…");
     assert!(message(pt, "`{name}` is a process colour: tints apply to global and spot colours").to_lowercase().contains("cor de processo"));
+}
+
+/// Every Greek row that names a knockout says διάτρηση, never αποκοπή, which stays for clipping
+/// and cutting.
+#[test]
+fn greek_rows_use_one_term_for_knockout() {
+    let el = Lang::from_code("el").expect("el registered");
+    let (entries, _) = parse_entries(el.0.source);
+    let mut wrong = Vec::new();
+    for (_, src, translation) in &entries {
+        let greek = translation.to_lowercase();
+        let knockout_term = greek.contains("διάτρη") || greek.contains("διατρ");
+        if src.to_lowercase().contains("knockout") && (greek.contains("αποκοπ") || !knockout_term) {
+            wrong.push(format!("knockout in {src:?} -> {translation:?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{} Greek rows use the wrong term:\n{}", wrong.len(), wrong.join("\n"));
+    assert_eq!(tr(el, "Knockout Group"), "Ομάδα διάτρησης");
+    assert_eq!(tr(el, "Page Knockout Group"), "Ομάδα διάτρησης σελίδας");
+    assert_eq!(tr(el, "Opacity & Mask Define Knockout Shape"), "Η αδιαφάνεια και η μάσκα καθορίζουν το σχήμα διάτρησης");
+    assert_eq!(tr(el, "Clip Group"), "Ομάδα αποκοπής");
 }
 
 #[test]
@@ -571,13 +611,15 @@ fn control_bar_panel_menu_labels_are_in_complete_catalogs() {
 }
 
 /// Document Info's labels: every category title, which the panel and its menu show, every count
-/// label of the Objects category, and the Document category's fixed row labels (the artboard rows
-/// show artboard names and are left out).
+/// label of the Objects category, and the Document category's fixed row labels, those of the
+/// artboard the Artboard tool has selected included (the artboard rows show artboard names and are
+/// left out).
 #[test]
 fn document_info_labels_are_in_complete_catalogs() {
     let mut session = vectorcraft_engine::Session::new();
     session.execute("file.new", &serde_json::json!({"width": 100, "height": 100})).unwrap();
     session.execute("shape.rectangle", &serde_json::json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
+    session.select_tool("artboard", vectorcraft_engine::ViewInfo::default()).unwrap();
     let info = session.execute("document.info", &serde_json::json!({})).unwrap();
     let sections = info["sections"].as_array().unwrap();
     let titles: Vec<&str> = sections.iter().filter_map(|s| s["title"].as_str()).collect();
@@ -592,7 +634,7 @@ fn document_info_labels_are_in_complete_catalogs() {
     let artboards = document.iter().position(|r| r[0] == "Artboards").unwrap();
     let names = artboards + 1..=artboards + document[artboards][1].as_str().unwrap().parse::<usize>().unwrap();
     let fixed: Vec<&str> = document.iter().enumerate().filter(|(k, _)| !names.contains(k)).filter_map(|(_, r)| r[0].as_str()).collect();
-    assert_eq!(fixed.len(), 9, "{fixed:?}");
+    assert_eq!(fixed.len(), 18, "{fixed:?}");
     labels.extend(fixed);
     for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
         for label in &labels {
@@ -603,7 +645,8 @@ fn document_info_labels_are_in_complete_catalogs() {
 
 /// The values Document Info makes and shows in the interface language: the font states and
 /// embedding permissions, the templates of the font, image, raster effects and Repeat object
-/// values, the names of gradients named by their kind, and the counted instances, rows and columns.
+/// values, the names of gradients named by their kind, the counted instances, rows and columns, and
+/// the transparency settings' values.
 #[test]
 fn document_info_values_are_in_complete_catalogs() {
     const VALUES: [&str; 20] = [
@@ -629,6 +672,17 @@ fn document_info_values_are_in_complete_catalogs() {
         "Freeform gradient",
     ];
     const COUNTED: [(&str, &str); 3] = [("{n} instance", "{n} instances"), ("{n} row", "{n} rows"), ("{n} column", "{n} columns")];
+    // The transparency settings' values: the grid's sizes and color presets, on and off, and the
+    // built-in flattener presets.
+    let transparency = ["Small", "Medium", "Large", "On", "Off", "High Resolution", "Medium Resolution", "Low Resolution"]
+        .into_iter()
+        .chain(vectorcraft_doc::setup::GRID_COLOR_PRESETS.iter().map(|(name, _)| *name));
+    let transparency: Vec<&str> = transparency.collect();
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        for value in &transparency {
+            assert!(lang.catalog().plain(value).is_some(), "{} is missing {value}", lang.code);
+        }
+    }
     let gradient_kinds: Vec<String> = vectorcraft_color::GradientKind::ALL.iter().map(|k| format!("{} gradient", k.label())).collect();
     assert!(gradient_kinds.iter().all(|k| VALUES.contains(&k.as_str())), "{gradient_kinds:?}");
     for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
@@ -1144,6 +1198,26 @@ fn leading_term_agrees_within_each_catalog() {
         }
     }
     assert!(bad.is_empty(), "rows that name leading differently from the Leading field:\n{}", bad.join("\n"));
+}
+
+/// A plain row whose English ends with a number, such as "Saved View 10", has that number in its
+/// translation as a number of its own, so the rows of a numbered list do not swap or repeat names.
+/// Messages are left out: "index must be ≥ 0" can be translated as "index must not be negative".
+#[test]
+fn numbered_rows_keep_their_number() {
+    let mut bad = Vec::new();
+    for l in LANGUAGES.iter().filter(|l| !l.source.is_empty()) {
+        let (entries, _) = parse_entries(l.source);
+        for (_, src, tr) in entries.into_iter().filter(|(ctx, _, _)| ctx.is_empty()) {
+            let Some((_, n)) = src.rsplit_once(' ').filter(|(_, n)| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit())) else {
+                continue;
+            };
+            if !tr.split(|c: char| !c.is_ascii_digit()).any(|run| run == n) {
+                bad.push(format!("{}: {src:?} → {tr:?}", l.code));
+            }
+        }
+    }
+    assert!(bad.is_empty(), "numbered rows without their number:\n{}", bad.join("\n"));
 }
 
 /// No translated word mixes Latin, Cyrillic and Greek letters, such as a Latin "A" typed in place
@@ -1783,6 +1857,26 @@ fn menu_items_side_by_side_have_different_labels() {
     assert!(same.is_empty(), "{} pairs of menu items look alike:\n{}", same.len(), same.join("\n"));
 }
 
+/// Whether a menu label shows an id: a dotted command id, inside backticks or outside them, or
+/// `key`, the command or effect id of its item, on its own.
+fn label_shows_an_id(label: &str, key: &str) -> bool {
+    let plain = label.replace('`', " ");
+    !command_ids(&plain).is_empty() || plain.trim() == key
+}
+
+#[test]
+fn label_shows_an_id_finds_ids_in_backticks_and_bare_keys() {
+    let key = "type.convertListToText";
+    assert!(label_shows_an_id("type.convertListToText", key));
+    assert!(label_shows_an_id("`type.convertListToText`", key));
+    assert!(label_shows_an_id("`type.convertListToText", key));
+    assert!(label_shows_an_id("Convert (`slice.list`)", key));
+    assert!(label_shows_an_id("roughen", "roughen"));
+    assert!(label_shows_an_id("`roughen`", "roughen"));
+    assert!(!label_shows_an_id("Convert to Text", key));
+    assert!(!label_shows_an_id("Roughen…", "roughen"));
+}
+
 /// Menu items show words, never the command or effect id their catalog row is keyed by.
 #[test]
 fn menu_items_never_show_an_id() {
@@ -1791,7 +1885,7 @@ fn menu_items_never_show_an_id() {
             if let crate::menus::Item::Cmd(l, id, p) = item {
                 let key = menu_item_effect(id, p).unwrap_or(id);
                 let shown = shown_menu_label(lang, item).unwrap_or_default();
-                if !command_ids(shown).is_empty() && command_ids(l).is_empty() {
+                if label_shows_an_id(shown, key) && !label_shows_an_id(l, key) {
                     out.push(format!("{}: {l:?} ({key}) shows {shown:?}", lang.0.code));
                 }
             }
@@ -2517,6 +2611,70 @@ fn file_info_control_character_refusals_translate_in_every_complete_catalog() {
     }
 }
 
+/// The warning about an SVG's variables that aren't text shows each kind VectorCraft names in the
+/// interface language and each `trait` the file names, in backticks, as the warning writes it, the
+/// entries in their order with their counts and joined as the language joins a list, in every
+/// complete-message language.
+#[test]
+fn svg_variable_kinds_left_out_translate_in_every_complete_catalog() {
+    const KINDS: [&str; 4] = ["Visibility", "Linked File", "Graph Data", "Unknown"];
+    let warning = |kinds: &str| format!("variables that aren't text were left out: {kinds}");
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        let cat = lang.catalog();
+        for ctx in ["variable-list-two", "variable-list-middle", "variable-list-end"] {
+            assert!(cat.contextual(ctx, "{0}, {1}").is_some(), "{code} has no {ctx} row");
+        }
+        let kind = |k: &str| cat.contextual("variable-kind", k).unwrap_or_else(|| panic!("{code} has no variable-kind row for {k}"));
+        let template = message(lang, &warning("{kinds}"));
+        assert!(template.contains("{kinds}"), "{code}: {template}");
+        let shown_with = |list: &str| template.replace("{kinds}", list);
+        let join = |ctx: &str, a: &str, b: &str| cat.contextual(ctx, "{0}, {1}").unwrap_or("{0}, {1}").replace("{0}", a).replace("{1}", b);
+        for k in KINDS {
+            // One kind, with its count.
+            let shown = message(lang, &warning(&format!("{k} (3)")));
+            assert_eq!(shown, shown_with(&format!("{} (3)", kind(k))), "{code}");
+            assert_ne!(kind(k), k, "{code}: {k} stays English");
+        }
+        // Two entries, one a `trait` that holds a backtick, a list separator and a count.
+        let shown = message(lang, &warning("Unknown (1), `a``b (1), c` (2)"));
+        assert_eq!(shown, shown_with(&join("variable-list-two", &format!("{} (1)", kind("Unknown")), "`a``b (1), c` (2)")), "{code}");
+        // Every kind, in the engine's order and in reverse, then a `trait` that is a kind's name.
+        for kinds in [KINDS.to_vec(), KINDS.iter().rev().copied().collect()] {
+            let list = kinds.iter().enumerate().map(|(i, k)| format!("{k} ({})", i + 1)).collect::<Vec<_>>().join(", ");
+            let shown = message(lang, &warning(&format!("{list}, `Visibility` (12)")));
+            let entries: Vec<String> =
+                kinds.iter().enumerate().map(|(i, k)| format!("{} ({})", kind(k), i + 1)).chain(["`Visibility` (12)".to_string()]).collect();
+            let head = entries[1..entries.len() - 1].iter().fold(entries[0].clone(), |acc, e| join("variable-list-middle", &acc, e));
+            assert_eq!(shown, shown_with(&join("variable-list-end", &head, &entries[entries.len() - 1])), "{code}");
+        }
+    }
+    let de = Lang::from_code("de").expect("registered");
+    assert_eq!(
+        message(de, &warning("Visibility (2), Linked File (1), Graph Data (4), Unknown (1)")),
+        "die Variablen, die kein Text sind, wurden ausgelassen: Sichtbarkeit (2), Verknüpfte Datei (1), Diagrammdaten (4) und Unbekannt (1)"
+    );
+    assert_eq!(
+        message(de, &warning("Unknown (1), `a``b (1), c` (2)")),
+        "die Variablen, die kein Text sind, wurden ausgelassen: Unbekannt (1) und `a``b (1), c` (2)"
+    );
+    assert_eq!(message(de, &warning("`Visibility` (1)")), "die Variablen, die kein Text sind, wurden ausgelassen: `Visibility` (1)");
+    let fr = Lang::from_code("fr").expect("registered");
+    assert_eq!(message(fr, &warning("Visibility (1)")), "les variables qui ne sont pas du texte ont été ignorées\u{a0}: Visibilité (1)");
+    let ja = Lang::from_code("ja").expect("registered");
+    assert_eq!(
+        message(ja, &warning("Visibility (1), Linked File (2), Unknown (1)")),
+        "テキスト以外の変数は除外されました: 表示状態 (1)、リンクファイル (2)、不明 (1)"
+    );
+    // A list not in the warning's form, and a `trait` whose backticks don't close, stay as written.
+    for kinds in ["fileref (1)", "`abc (1)", "Visibility (x)", "Visibility (1),Linked File (2)"] {
+        assert_eq!(message(de, &warning(kinds)), format!("die Variablen, die kein Text sind, wurden ausgelassen: {kinds}"));
+    }
+    // English shows the warning as the engine wrote it.
+    let english = warning("Visibility (2), `a``b (1), c` (1)");
+    assert_eq!(message(Lang::EN, &english), english);
+}
+
 /// Every complete-message catalog has a row for each error that `type.compositeFonts.set`,
 /// `.export` and `.import`, the composite font checks behind them and the Composite Fonts dialog
 /// give, and translates them with the font name, the key and the class key kept, and the reason
@@ -2524,7 +2682,7 @@ fn file_info_control_character_refusals_translate_in_every_complete_catalog() {
 #[test]
 fn composite_font_errors_translate_in_complete_languages() {
     const SOURCES: &[&str] = &[
-        "each font must be {name, parts}",
+        "each font must be {{name, parts}}",
         "unknown key `{k}`; a font takes name and parts",
         "each font needs a name",
         "`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)",
@@ -2537,7 +2695,7 @@ fn composite_font_errors_translate_in_complete_languages() {
         "two composite fonts are named `{_1}`",
         "`{_1}` is the name of an installed font",
         "`{_1}`: {_2} is set in `{font}`, a composite font",
-        "give fonts: [{name, parts}…]",
+        "give fonts: [{{name, parts}}…]",
         "path is empty",
         "fonts must be a list of composite fonts",
         "names must be strings",
@@ -2926,6 +3084,53 @@ fn literal_brace_rows_match_only_their_message() {
     assert_eq!(message(de(), "plug-in output: expected value at line 1 column 1"), "Plug-in-Ausgabe: expected value at line 1 column 1");
 }
 
+/// Every complete-message catalog translates the messages that print braces as text through an
+/// exact row with doubled braces, keeps each literal example whole, and has no row with a
+/// placeholder in their place: such a row also translates other text with the same start and end.
+#[test]
+fn literal_brace_messages_have_exact_rows_in_complete_languages() {
+    // A row's source, the message as shown, and the text its translation keeps.
+    let cases: &[(&str, &str, &[&str])] = &[
+        ("each font must be {{name, parts}}", "each font must be {name, parts}", &["{name, parts}"]),
+        ("give fonts: [{{name, parts}}…]", "give fonts: [{name, parts}…]", &["fonts", "[{name, parts}…]"]),
+        (
+            r#"`scope` must be "document", {{artboards: [index, …]}} or {{layers: [id, …]}}"#,
+            r#"`scope` must be "document", {artboards: [index, …]} or {layers: [id, …]}"#,
+            &["`scope`", r#""document""#, "{artboards: [index, …]}", "{layers: [id, …]}"],
+        ),
+        ("numbers out of order in {{}} quantifier", "numbers out of order in {} quantifier", &["{}"]),
+        (
+            r#"the paint is not a freeform gradient (apply one with paint.editGradient {{kind: "freeform"}})"#,
+            r#"the paint is not a freeform gradient (apply one with paint.editGradient {kind: "freeform"})"#,
+            &["paint.editGradient", r#"{kind: "freeform"}"#],
+        ),
+    ];
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        let (entries, _) = parse_entries(lang.0.source);
+        let rows: Vec<(&str, &str)> = entries.iter().filter(|(ctx, _, _)| ctx == "@msg").map(|(_, src, tr)| (src.as_str(), tr.as_str())).collect();
+        for (source, shown, kept) in cases {
+            let Some((_, tr)) = rows.iter().find(|(src, _)| src == source) else { panic!("{code} has no row for {source:?}") };
+            let out = message(lang, shown);
+            assert_eq!(out, fill_once(tr, &[]), "{code}: {shown}");
+            assert_ne!(out, *shown, "{code} leaves {shown:?} in English");
+            for k in *kept {
+                assert!(out.contains(k), "{code}: {k} in {out}");
+            }
+            // The text before the first brace and after the last one, which an older row with a
+            // placeholder in place of the braced example also starts and ends with.
+            let head = source.find('{').map_or("", |at| &source[..at]);
+            let tail = source.rfind('}').map_or("", |at| &source[at + 1..]);
+            let broad: Vec<&str> = rows
+                .iter()
+                .map(|(src, _)| *src)
+                .filter(|src| src != source && src.contains('{') && src.starts_with(head) && src.ends_with(tail))
+                .collect();
+            assert!(broad.is_empty(), "{code} keeps placeholder rows in place of {source:?}: {broad:?}");
+        }
+    }
+}
+
 /// `plugin.run` of an importer, an exporter or a live effect names the command that runs it with
 /// the JSON that picks it, and every complete-message catalog translates that error with the
 /// plug-in's id and the JSON kept.
@@ -3143,9 +3348,9 @@ fn three_d_refusals_are_translated_in_every_complete_catalog() {
     assert!(missing.is_empty(), "{} 3D messages have no @msg row:\n{}", missing.len(), missing.join("\n"));
 }
 
-/// The Eraser's range refusals (`path.eraseRegion` `angle` and `roundness`) and the Scissors' (`path.split`
-/// `t`) show in every complete-message language with the key and the range numbers as given; the
-/// error the command returns stays English.
+/// The Eraser's range refusals (`path.eraseRegion` `angle` and `roundness`), the Path Eraser's
+/// (`path.eraseSegments` `width`) and the Scissors' (`path.split` `t`) show in every complete-message
+/// language with the key and the range numbers as given; the error the command returns stays English.
 #[test]
 fn eraser_and_scissors_range_refusals_translate_with_their_values() {
     use serde_json::json;
@@ -3155,6 +3360,7 @@ fn eraser_and_scissors_range_refusals_translate_with_their_values() {
     let refusals = [
         ("path.eraseRegion", json!({"points": [[10, 10], [60, 10]], "angle": 200}), "`angle`", ["-180", "180"]),
         ("path.eraseRegion", json!({"points": [[10, 10], [60, 10]], "roundness": 0}), "`roundness`", ["1", "100"]),
+        ("path.eraseSegments", json!({"points": [[30, 0], [30, 70]], "width": 2000}), "`width`", ["0.001", "1000"]),
         ("path.split", json!({"id": id, "segment": 0, "t": 1.5}), "`t`", ["0", "1"]),
     ];
     for (cmd, p, key, numbers) in &refusals {
@@ -3463,23 +3669,42 @@ const COUNTED_STATUS_MESSAGES: &[(&str, &str)] = &[
     ("Downloaded 1 file", "Downloaded 2 files"),
     ("Exported 1 file to /out", "Exported 2 files to /out"),
     ("Loaded “Tidy”: 1 step was left out", "Loaded “Tidy”: 2 steps were left out"),
+    ("Copied with 1 note: a note", "Copied with 2 notes: a note"),
+    ("Cut with 1 note: a note", "Cut with 2 notes: a note"),
+    ("Traced with 1 note: a note", "Traced with 2 notes: a note"),
     (
         "Loaded “Tidy”: 1 step has an unknown command and was kept: “Export”, step 4, `example.finish`",
         "Loaded “Tidy”: 2 steps have unknown commands and were kept; the first: “Export”, step 4.2, `example.finish`",
     ),
 ];
 
-/// The link, font, export and action set status messages name a count of 1 in the singular and other counts in
-/// the plural, and every complete catalog translates both, in the form its plural rule picks.
+/// The link, font, export, action set, clipboard and Image Trace status messages name a count of 1 in the singular
+/// and other counts in the plural, and every complete catalog translates both, in the form its plural rule picks.
 #[test]
 fn counted_status_messages_take_the_plural_form() {
     use crate::panels::links::{relinked_status, updated_status};
+    use crate::sysclip::copied_with_notes;
+    use crate::trace_runs::traced_with_notes;
     assert_eq!((relinked_status(1), relinked_status(2)), ("Relinked 1 image".to_string(), "Relinked 2 images".to_string()));
     assert_eq!((updated_status(1), updated_status(2)), ("Updated 1 image".to_string(), "Updated 2 images".to_string()));
     assert_eq!(crate::dialogs::missing_links::changed_on_disk_status(1), COUNTED_STATUS_MESSAGES[2].0);
     assert_eq!(crate::dialogs::missing_links::changed_on_disk_status(2), COUNTED_STATUS_MESSAGES[2].1);
     assert_eq!(crate::io::exported_with_notes("/out/a.svg", 1, "a note"), COUNTED_STATUS_MESSAGES[4].0);
     assert_eq!(crate::io::exported_with_notes("/out/a.svg", 2, "a note"), COUNTED_STATUS_MESSAGES[4].1);
+    // Each pair is found in the list by its text.
+    let listed = |got: (String, String), want: (&str, &str)| {
+        assert_eq!((got.0.as_str(), got.1.as_str()), want);
+        assert!(COUNTED_STATUS_MESSAGES.contains(&want), "{want:?} is not in COUNTED_STATUS_MESSAGES");
+    };
+    let copied = (copied_with_notes(false, 1, "a note"), copied_with_notes(false, 2, "a note"));
+    listed(copied, ("Copied with 1 note: a note", "Copied with 2 notes: a note"));
+    let cut = (copied_with_notes(true, 1, "a note"), copied_with_notes(true, 2, "a note"));
+    listed(cut, ("Cut with 1 note: a note", "Cut with 2 notes: a note"));
+    let traced = (traced_with_notes(1, "a note"), traced_with_notes(2, "a note"));
+    listed(traced, ("Traced with 1 note: a note", "Traced with 2 notes: a note"));
+    // A note that holds placeholder text is not filled in again.
+    assert_eq!(copied_with_notes(true, 3, "{n} {first}"), "Cut with 3 notes: {n} {first}");
+    assert_eq!(message(de(), &traced_with_notes(2, "{n}")), "Mit 2 Hinweisen nachgezeichnet: {n}");
     // A value that holds placeholder text is not filled in again.
     assert_eq!(crate::io::exported_with_notes("/out/{first}.svg", 1, "{n}"), "Exported /out/{first}.svg with 1 note: {n}");
     for code in COMPLETE_MESSAGES {
@@ -3692,6 +3917,21 @@ fn run() -> Result<()> {
     let found: std::collections::BTreeSet<String> = source_messages(code, &[], &consts).into_iter().collect();
     assert_eq!(found.iter().collect::<Vec<_>>(), ["the selection is too large to hand over", "time budget"]);
     assert!(source_messages(code, &[], &Default::default()).is_empty());
+}
+
+/// A message split over lines with a `\` at the end of a line is read as Rust reads it: the line
+/// break and the next line's leading whitespace are dropped, with LF and CRLF line endings, in a
+/// constant and in a literal an error takes.
+#[test]
+fn message_scan_joins_a_literal_continued_on_the_next_line() {
+    for eol in ["\n", "\r\n"] {
+        let declared = format!("const LONG: &str = \"too many elements: \\{eol}     drawn as a plain group\";{eol}");
+        let consts = std::collections::BTreeMap::from_iter(str_consts(&declared).into_iter().map(|(name, value)| (name, vec![value])));
+        assert_eq!(consts.get("LONG"), Some(&vec!["too many elements: drawn as a plain group".to_string()]), "{eol:?}");
+        let code = format!("fn run() {{ let _ = Err(\"the file \\{eol}\t\t is too large\"); let _ = Err(LONG); }}{eol}");
+        let found: std::collections::BTreeSet<String> = source_messages(&code, &[], &consts).into_iter().collect();
+        assert_eq!(found.iter().collect::<Vec<_>>(), ["the file is too large", "too many elements: drawn as a plain group"], "{eol:?}");
+    }
 }
 
 /// The scan reads the message of each of the plug-in host's [`ERROR_HELPERS`]: a literal, a
@@ -4029,6 +4269,23 @@ fn selected_path_reason_is_translated() {
         assert_eq!(message(lang, reason), row, "{code}");
         let shown = message(lang, &error);
         assert!(shown.contains(row) && !shown.contains(reason) && shown.contains("`path.reverse`"), "{code}: {shown}");
+    }
+}
+
+/// The error of a played action step is translated in every language of [`COMPLETE_MESSAGES`], with
+/// its reason; the step's number and command id stay as they are.
+#[test]
+fn action_step_errors_are_translated() {
+    let template = "action step {_1} (`{id}`) failed: {reason}";
+    assert!(message_literals().contains(template));
+    let reason = "select a path";
+    let error = format!("action step 4 (`path.reverse`) failed: {reason}");
+    assert_eq!(message(Lang::EN, &error), error);
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        let shown = message(lang, &error);
+        assert!(!shown.starts_with("action step") && shown.contains('4') && shown.contains("`path.reverse`"), "{code}: {shown}");
+        assert!(shown.contains(&message(lang, reason)) && !shown.contains(reason), "{code}: {shown}");
     }
 }
 
@@ -5039,6 +5296,27 @@ fn pdfx_bleed_warning_is_translated() {
     }
 }
 
+/// The Shape Mode commands' warning for a selected line that encloses no area, which the status bar
+/// shows and the message scan doesn't read, and Intersect's error when such a line leaves nothing,
+/// are translated in each language of [`COMPLETE_MESSAGES`].
+#[test]
+fn shape_mode_open_path_warning_is_translated() {
+    let warning = vectorcraft_engine::cmd::SHAPE_MODE_OPEN_PATH_NO_AREA;
+    let mut s = vectorcraft_engine::Session::new();
+    let run = |s: &mut vectorcraft_engine::Session, id: &str, p: serde_json::Value| s.execute(id, &p);
+    run(&mut s, "file.new", serde_json::json!({"width": 200, "height": 200})).unwrap();
+    let square = run(&mut s, "shape.rectangle", serde_json::json!({"x": 0, "y": 0, "width": 100, "height": 100})).unwrap()["id"].clone();
+    let line = run(&mut s, "shape.line", serde_json::json!({"x1": 20, "y1": 50, "x2": 80, "y2": 50})).unwrap()["id"].clone();
+    run(&mut s, "select.set", serde_json::json!({"ids": [square, line]})).unwrap();
+    let error = run(&mut s, "object.pathfinder.intersect", serde_json::json!({})).unwrap_err().to_string();
+    assert!(error.contains("Outline Stroke"), "{error}");
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        assert_ne!(message(lang, warning), warning, "{code}");
+        assert!(!message(lang, &error).contains("encloses no area"), "{code}: {error}");
+    }
+}
+
 /// The errors of saving, renaming and deleting a tracing preset are translated in every language
 /// that translates every message.
 #[test]
@@ -5464,9 +5742,9 @@ const NAMED_KEYS: &[(&str, &[&str])] = &[
     ("dataBase64 is not base64", &["dataBase64"]),
     ("decimals must be {_1}–{_2} (got {_3})", &["decimals"]),
     ("detect must be true or false", &["detect"]),
-    ("each font must be {name, parts}", &["name", "parts"]),
+    ("each font must be {{name, parts}}", &["name", "parts"]),
     ("fonts must be a list of composite fonts", &["fonts"]),
-    ("give fonts: [{name, parts}…]", &["fonts", "name", "parts"]),
+    ("give fonts: [{{name, parts}}…]", &["fonts", "name", "parts"]),
     ("give one of path, data or dataBase64", &["path", "data", "dataBase64"]),
     ("give origin: [x, y], or reset: true", &["origin", "reset"]),
     ("global must be true or false", &["global"]),
@@ -6204,7 +6482,8 @@ fn without_test_module(text: &str) -> &str {
     text
 }
 
-/// The text of a string literal whose opening quote was just read, escapes resolved.
+/// The text of a string literal whose opening quote was just read, escapes resolved. A `\` at the
+/// end of a line drops the line break and the whitespace that starts the next line, as Rust does.
 fn string_literal(s: &str) -> Option<String> {
     let mut out = String::new();
     let mut it = s.chars();
@@ -6214,6 +6493,7 @@ fn string_literal(s: &str) -> Option<String> {
             '\\' => match it.next()? {
                 'n' => out.push('\n'),
                 't' => out.push('\t'),
+                '\n' | '\r' => it = it.as_str().trim_start_matches([' ', '\t', '\n', '\r']).chars(),
                 c => out.push(c),
             },
             c => out.push(c),
@@ -6311,6 +6591,20 @@ const RENDER_SITE_ROWS: &[(&str, &str)] = &[
 
 fn pl() -> Lang {
     Lang::from_code("pl").expect("pl registered")
+}
+
+/// Polish translates the dimension commands' errors.
+#[test]
+fn polish_translates_dimension_messages() {
+    for english in [
+        "Choose original artwork, not a dimension's generated paths",
+        "Dimension is locked or hidden",
+        "Dimension mode does not match its source",
+        "Invalid dimension offset",
+        "Invalid point",
+    ] {
+        assert_ne!(message(pl(), english), english);
+    }
 }
 
 #[test]
