@@ -14,6 +14,7 @@
 //! they are and are reported. Near matches (another version of the font, simplified outlines,
 //! merged glyphs) and images are phase 2.
 
+use std::f64::consts::{PI, TAU};
 use std::sync::Arc;
 
 use kurbo::{BezPath, Point, Vec2};
@@ -72,6 +73,11 @@ fn collect(n: &Node, parent: Option<NodeId>, depth: usize, barrier: &mut bool, t
         *truncated = true;
         return;
     }
+    // Hidden and locked art is left as it is: a hidden glyph must not come back as visible type.
+    if !n.visible || n.locked {
+        *barrier = true;
+        return;
+    }
     let piece = |path: BezPath, after_barrier: bool| Piece {
         id: n.id,
         parent,
@@ -126,15 +132,20 @@ fn candidate_faces(db: &FontDb, d: &Document, fonts: &[String]) -> Vec<Arc<vecto
             }
         }
     });
+    let cap = vectorcraft_text::retype::MAX_FACES;
     let mut faces = vec![];
-    for f in &families {
+    'families: for f in &families {
         for style in db.styles(f) {
+            // No more faces are loaded than the index takes.
+            if faces.len() >= cap {
+                break 'families;
+            }
             if let Some(face) = db.face(f, &style) {
                 faces.push(face);
             }
         }
     }
-    faces.extend(db.loaded_faces());
+    faces.extend(db.loaded_faces().into_iter().take(cap.saturating_sub(faces.len())));
     faces
 }
 
@@ -174,7 +185,8 @@ impl Line {
             && m.face.id() == self.face.id()
             // One size and turn for the whole line: the type sets every glyph at the first one's.
             && (m.scale - self.scale).abs() <= self.scale * 1e-4
-            && (m.angle - self.angle).abs() < 1e-5
+            // Wrapped: type turned 180° has angles near +π and −π.
+            && ((m.angle - self.angle + PI).rem_euclid(TAU) - PI).abs() < 1e-5
             && across < size * 0.05
             && (m.origin - self.end).dot(dir) > -size * 0.25
     }
@@ -362,7 +374,11 @@ fn retype(s: &mut Session, p: &Value) -> Result<Value> {
         if pieces.is_empty() {
             return Err(EngineError::Other("Retype: select outlined text (paths or compound paths)".into()));
         }
-        let index = RetypeIndex::build(db, candidate_faces(db, d, &fonts));
+        // Only glyphs with a selected shape's key (segments per contour) can match one: the others are
+        // not sampled.
+        let wanted: std::collections::BTreeSet<Vec<usize>> =
+            pieces.iter().filter(|pc| !pc.keeps_outline).filter_map(|pc| vectorcraft_text::retype::shape_key(&pc.path)).collect();
+        let index = RetypeIndex::build(db, candidate_faces(db, d, &fonts), &wanted);
         let found: Vec<Vec<GlyphMatch>> = pieces.iter().map(|pc| if pc.keeps_outline { vec![] } else { index.matches(&pc.path) }).collect();
         // The face most shapes match, so a glyph several fonts share is set in the same font as
         // the glyphs around it.
@@ -395,7 +411,19 @@ fn retype(s: &mut Session, p: &Value) -> Result<Value> {
             }
             open = true;
         }
-        let lines = verified(lines, system_layout, &mut unmatched);
+        let mut lines = verified(lines, system_layout, &mut unmatched);
+        // A lone one-contour glyph (a period, a hyphen, a bullet) is too plain to tell from drawn
+        // art (a dot, a bar): beside other shapes it stays an outline. Selected on its own, it is
+        // what was asked for.
+        if pieces.len() > 1 {
+            lines.retain(|l| {
+                let lone = matches!(l.matches.as_slice(), [m] if m.contours == 1);
+                if lone {
+                    unmatched.extend(l.pieces.iter().copied());
+                }
+                !lone
+            });
+        }
         (lines, unmatched, truncated)
     };
     if lines.is_empty() {
@@ -434,7 +462,11 @@ fn retype(s: &mut Session, p: &Value) -> Result<Value> {
                 && n.blend == vectorcraft_color::BlendMode::Normal
                 && *n.appearance == Appearance::default()
                 && n.name.is_none()
-                && n.extras().mask.is_none();
+                && n.extras().mask.is_none()
+                // Isolation and knockout change how the group composites its type.
+                && !n.isolate
+                && n.knockout == vectorcraft_doc::Knockout::default()
+                && !n.knockout_shape;
             let only_type = children.iter().all(|c| ids.contains(&c.id));
             if children.is_empty() {
                 d.remove(g)?;

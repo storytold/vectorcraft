@@ -49,6 +49,8 @@ pub struct GlyphMatch {
     pub origin: Point,
     /// The leftover distance, relative to the shape's spread.
     pub residual: f64,
+    /// How many contours the glyph has.
+    pub contours: usize,
 }
 
 /// A shape reduced for matching: points along each contour, centred.
@@ -79,8 +81,11 @@ pub struct RetypeIndex {
 }
 
 impl RetypeIndex {
-    /// Index the outline glyphs of `faces` (the first [`MAX_FACES`], each face once).
-    pub fn build(db: &FontDb, faces: impl IntoIterator<Item = Arc<FontFace>>) -> Self {
+    /// Index the outline glyphs of `faces` (the first [`MAX_FACES`], each face once) that have one
+    /// of the shape keys in `keys` (the selected shapes' [`shape_key`]s): the others could match no
+    /// shape, so they are not sampled. Outlines are read past the shared outline
+    /// cache, which keeps the canvas's glyphs.
+    pub fn build(db: &FontDb, faces: impl IntoIterator<Item = Arc<FontFace>>, keys: &std::collections::BTreeSet<Vec<usize>>) -> Self {
         let mut kept: Vec<Arc<FontFace>> = vec![];
         for f in faces {
             if kept.len() >= MAX_FACES {
@@ -95,22 +100,16 @@ impl RetypeIndex {
             if entries.len() >= MAX_GLYPHS {
                 break;
             }
-            // One entry per glyph, under the lowest character that maps to it.
-            let mut by_gid: HashMap<u32, char> = HashMap::new();
-            for &(c, gid) in face.mapped_chars().iter().take(MAX_GLYPHS_PER_FACE) {
-                if c.is_whitespace() || c.is_control() || is_shape_symbol(c) {
-                    continue;
-                }
-                by_gid.entry(gid).and_modify(|e| *e = (*e).min(c)).or_insert(c);
-            }
-            let mut gids: Vec<(u32, char)> = by_gid.into_iter().collect();
-            gids.sort_unstable();
-            for (gid, ch) in gids {
-                // The budget holds inside a face too: no glyph is loaded past it.
+            for (gid, ch, key) in face_keys(db, face).iter() {
+                // The budget holds inside a face too: no glyph is sampled past it.
                 if entries.len() >= MAX_GLYPHS {
                     break;
                 }
-                let outline = db.outline(face, gid);
+                if !keys.contains(key) {
+                    continue;
+                }
+                let (gid, ch) = (*gid, *ch);
+                let outline = db.outline_uncached(face, gid);
                 if let Some(sig) = signature(&outline) {
                     entries.push(Entry { face: fi, gid, ch, sig });
                 }
@@ -165,7 +164,16 @@ impl RetypeIndex {
             // The glyph's origin is (0, 0) in font units: it lands at centre − z·glyph centre.
             let gc = mul(z, e.sig.centre);
             let origin = Point::new(sig.centre.x - gc.x, sig.centre.y - gc.y);
-            let m = GlyphMatch { face: face.clone(), gid: e.gid, ch: e.ch, scale: z.0.hypot(z.1), angle: z.1.atan2(z.0), origin, residual };
+            let m = GlyphMatch {
+                face: face.clone(),
+                gid: e.gid,
+                ch: e.ch,
+                scale: z.0.hypot(z.1),
+                angle: z.1.atan2(z.0),
+                origin,
+                residual,
+                contours: e.sig.contours,
+            };
             match best.get(&e.face) {
                 Some(b) if b.residual < m.residual || (b.residual == m.residual && b.ch <= m.ch) => {}
                 _ => {
@@ -177,6 +185,41 @@ impl RetypeIndex {
         out.sort_by(|a, b| a.1.residual.total_cmp(&b.1.residual).then(a.0.cmp(&b.0)));
         out.into_iter().map(|(_, m)| m).collect()
     }
+}
+
+/// A face's glyphs as the index looks them up: (glyph, character, [`shape_key`]), one per glyph
+/// under the lowest character that maps to it.
+type FaceKeys = Arc<Vec<(u32, char, Vec<usize>)>>;
+
+/// How many faces' keys [`face_keys`] keeps.
+const KEPT_FACE_KEYS: usize = 32;
+
+/// [`FaceKeys`] of `face`, worked out once per face (each glyph drawn once, past the outline
+/// cache) and kept: a later Retype samples only the glyphs whose key a selected shape has.
+fn face_keys(db: &FontDb, face: &FontFace) -> FaceKeys {
+    type Kept = std::sync::Mutex<HashMap<(u64, u32), FaceKeys>>;
+    static KEPT: std::sync::OnceLock<Kept> = std::sync::OnceLock::new();
+    let kept = KEPT.get_or_init(Default::default);
+    let at = (db.id(), face.id());
+    if let Some(k) = kept.lock().unwrap_or_else(|e| e.into_inner()).get(&at) {
+        return k.clone();
+    }
+    let mut by_gid: HashMap<u32, char> = HashMap::new();
+    for &(c, gid) in face.mapped_chars().iter().take(MAX_GLYPHS_PER_FACE) {
+        if c.is_whitespace() || c.is_control() || is_shape_symbol(c) {
+            continue;
+        }
+        by_gid.entry(gid).and_modify(|e| *e = (*e).min(c)).or_insert(c);
+    }
+    let mut gids: Vec<(u32, char)> = by_gid.into_iter().collect();
+    gids.sort_unstable();
+    let keys: FaceKeys = Arc::new(gids.into_iter().filter_map(|(gid, ch)| Some((gid, ch, shape_key(&db.outline_uncached(face, gid))?))).collect());
+    let mut kept = kept.lock().unwrap_or_else(|e| e.into_inner());
+    if kept.len() >= KEPT_FACE_KEYS {
+        kept.clear();
+    }
+    kept.insert(at, keys.clone());
+    keys
 }
 
 /// Characters whose glyphs are plain shapes (box drawing, blocks, geometric shapes, legacy
@@ -264,6 +307,21 @@ fn contours(path: &BezPath) -> Option<Vec<Vec<PathSeg>>> {
     }
     flush(&mut cur, start, last);
     (out.len() <= MAX_CONTOURS).then_some(out)
+}
+
+/// How many contours with length `path` has, as matching counts them; `None` past the size caps.
+/// A cheap key two shapes share when one is the other scaled, turned and moved: how many segments
+/// each of its contours has, in order (segments that go nowhere left out, a closing line counted
+/// once whether the path draws it or closes onto it). Glyphs whose key no selected shape has are
+/// not sampled. `None` past the size caps.
+pub fn shape_key(path: &BezPath) -> Option<Vec<usize>> {
+    let moves = |s: &PathSeg| match s {
+        PathSeg::Line(l) => l.p0 != l.p1,
+        PathSeg::Quad(q) => q.p0 != q.p1 || q.p1 != q.p2,
+        PathSeg::Cubic(c) => c.p0 != c.p1 || c.p1 != c.p2 || c.p2 != c.p3,
+    };
+    let key: Vec<usize> = contours(path)?.iter().map(|c| c.iter().filter(|s| moves(s)).count()).filter(|n| *n > 0).collect();
+    (!key.is_empty()).then_some(key)
 }
 
 fn signature(path: &BezPath) -> Option<Signature> {

@@ -148,7 +148,7 @@ fn a_shape_between_glyphs_ends_the_line_so_paint_order_holds() {
 fn glyphs_of_different_groups_and_transparency_stay_apart() {
     let mut s = session();
     let a = outlined(&mut s, json!({"x": 40, "y": 100, "text": "ab", "size": 20}));
-    let b = outlined(&mut s, json!({"x": 120, "y": 100, "text": "cd", "size": 20}));
+    let b = outlined(&mut s, json!({"x": 120, "y": 100, "text": "ed", "size": 20}));
     let first_d = children_of(&s, b)[1];
     s.edit("test", |d, _| {
         d.node_mut(NodeId(b)).unwrap().opacity = 0.5;
@@ -158,7 +158,7 @@ fn glyphs_of_different_groups_and_transparency_stay_apart() {
     .unwrap();
     s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
     let r = s.execute("type.retype", &json!({})).unwrap();
-    assert_eq!(r["texts"], json!(["ab", "c", "d"]), "same baseline, other group; d has its own opacity: {r}");
+    assert_eq!(r["texts"], json!(["ab", "e", "d"]), "same baseline, other group; d has its own opacity: {r}");
     let ids: Vec<u64> = r["ids"].as_array().unwrap().iter().map(|v| v.as_u64().unwrap()).collect();
     let d = &s.doc().unwrap().doc;
     assert!(d.node(NodeId(a)).is_none(), "a plain group gives way to its type");
@@ -232,11 +232,11 @@ fn live_type_selected_between_loose_glyphs_still_ends_the_line() {
 fn glyphs_selected_inside_groups_join_only_their_siblings() {
     let mut s = session();
     let g1 = outlined(&mut s, json!({"x": 40, "y": 100, "text": "ab", "size": 20}));
-    let g2 = outlined(&mut s, json!({"x": 70, "y": 100, "text": "cd", "size": 20}));
+    let g2 = outlined(&mut s, json!({"x": 70, "y": 100, "text": "ed", "size": 20}));
     let (a, b, c) = (children_of(&s, g1)[0], children_of(&s, g1)[1], children_of(&s, g2)[0]);
     s.execute("select.set", &json!({"ids": [a, b, c]})).unwrap();
     let r = s.execute("type.retype", &json!({})).unwrap();
-    assert_eq!(r["texts"], json!(["ab", "c"]), "a and b are siblings; c is in another group: {r}");
+    assert_eq!(r["texts"], json!(["ab", "e"]), "a and b are siblings; e is in another group: {r}");
     let d = &s.doc().unwrap().doc;
     assert!(d.node(NodeId(g2)).is_some(), "d's group stays with c's type and d in it");
 }
@@ -244,7 +244,7 @@ fn glyphs_selected_inside_groups_join_only_their_siblings() {
 #[test]
 fn tracked_type_splits_where_its_spacing_cannot_be_set_again() {
     let mut s = session();
-    let id = s.execute("text.create", &json!({"x": 40, "y": 100, "text": "abc", "size": 30})).unwrap()["id"].as_u64().unwrap();
+    let id = s.execute("text.create", &json!({"x": 40, "y": 100, "text": "abe", "size": 30})).unwrap()["id"].as_u64().unwrap();
     // Less than half a space: no whole number of spaces makes up the gap (0.4 em would be two
     // spaces in this font, and the outlines cannot tell those apart from tracking).
     s.execute("text.setRangeStyle", &json!({"id": id, "start": 1, "end": 3, "tracking": 50})).unwrap();
@@ -253,7 +253,7 @@ fn tracked_type_splits_where_its_spacing_cannot_be_set_again() {
     s.execute("select.set", &json!({"ids": [g]})).unwrap();
     let r = s.execute("type.retype", &json!({})).unwrap();
     let texts: Vec<String> = r["texts"].as_array().unwrap().iter().map(|t| t.as_str().unwrap().to_owned()).collect();
-    assert_eq!(texts.concat(), "abc", "{r}");
+    assert_eq!(texts.concat(), "abe", "{r}");
     assert!(texts.len() > 1, "the tracked glyphs are set where the outlines are, not where untracked type puts them: {r}");
     assert_eq!(r["unmatched"], json!([]));
 }
@@ -318,4 +318,96 @@ fn a_glyph_painted_beyond_what_type_takes_stays_an_outline() {
     let r = s.execute("type.retype", &json!({})).unwrap();
     assert_eq!(r["texts"], json!(["B"]), "two fills: A stays an outline: {r}");
     assert_eq!(r["unmatched"], json!([a]));
+}
+
+#[test]
+fn a_hidden_or_locked_glyph_stays_an_outline() {
+    let mut s = session();
+    let g = outlined(&mut s, json!({"x": 40, "y": 100, "text": "ABD", "size": 40}));
+    let k = children_of(&s, g);
+    s.edit("test", |d, _| {
+        d.node_mut(NodeId(k[0])).unwrap().visible = false;
+        d.node_mut(NodeId(k[2])).unwrap().locked = true;
+        Ok(())
+    })
+    .unwrap();
+    s.execute("select.set", &json!({"ids": [g]})).unwrap();
+    let r = s.execute("type.retype", &json!({})).unwrap();
+    assert_eq!(r["texts"], json!(["B"]), "{r}");
+    let d = &s.doc().unwrap().doc;
+    assert!(!d.node(NodeId(k[0])).unwrap().visible, "A stays a hidden outline");
+    assert!(d.node(NodeId(k[2])).unwrap().locked, "D stays a locked outline");
+}
+
+#[test]
+fn an_isolated_or_knockout_group_keeps_its_type_inside() {
+    for knock in [false, true] {
+        let mut s = session();
+        let g = outlined(&mut s, json!({"x": 40, "y": 100, "text": "AB", "size": 40}));
+        s.edit("test", |d, _| {
+            let n = d.node_mut(NodeId(g)).unwrap();
+            if knock {
+                n.knockout = vectorcraft_doc::Knockout::On;
+            } else {
+                n.isolate = true;
+            }
+            Ok(())
+        })
+        .unwrap();
+        s.execute("select.set", &json!({"ids": [g]})).unwrap();
+        let r = s.execute("type.retype", &json!({})).unwrap();
+        let id = r["ids"][0].as_u64().unwrap();
+        assert_eq!(children_of(&s, g), vec![id], "knockout {knock}: the group stays, holding the type");
+    }
+}
+
+#[test]
+fn type_turned_half_round_stays_one_object() {
+    let mut s = session();
+    let g = outlined(&mut s, json!({"x": 300, "y": 200, "text": "Upside", "size": 30, "rotation": 180}));
+    s.execute("select.set", &json!({"ids": [g]})).unwrap();
+    let r = s.execute("type.retype", &json!({})).unwrap();
+    assert_eq!(r["texts"], json!(["Upside"]), "{r}");
+}
+
+#[test]
+fn a_drawn_dot_or_bar_beside_type_stays_art() {
+    let mut s = session();
+    let g = outlined(&mut s, json!({"x": 40, "y": 100, "text": "AB", "size": 40}));
+    let dot = s.execute("shape.ellipse", &json!({"x": 300, "y": 60, "width": 8, "height": 8})).unwrap()["id"].as_u64().unwrap();
+    // A bar that is exactly a hyphen of the font, somewhere else: the worst case.
+    let bar = outlined(&mut s, json!({"x": 200, "y": 300, "text": "-", "size": 50}));
+    s.execute("select.set", &json!({"ids": [g, dot, bar]})).unwrap();
+    let r = s.execute("type.retype", &json!({})).unwrap();
+    assert_eq!(r["texts"], json!(["AB"]), "{r}");
+    let un = r["unmatched"].as_array().unwrap();
+    assert!(un.contains(&json!(dot)) && un.len() == 2, "the dot and the bar stay art: {r}");
+    // Selected on its own, the hyphen is what was asked for.
+    s.execute("select.set", &json!({"ids": [bar]})).unwrap();
+    let r = s.execute("type.retype", &json!({})).unwrap();
+    assert_eq!(r["texts"], json!(["-"]), "{r}");
+}
+
+/// How long Retype takes with a large CJK face to match against (run with `--ignored
+/// --nocapture`; skips when no such face is installed). Not a pass/fail budget: it prints.
+#[test]
+#[ignore = "timing: needs an installed CJK font"]
+fn timing_with_a_large_cjk_face() {
+    let db = vectorcraft_text::FontDb::global();
+    let Some(family) = ["Microsoft YaHei", "Yu Gothic", "MS Gothic", "Noto Sans CJK JP", "Hiragino Sans"].into_iter().find(|f| db.has_family(f))
+    else {
+        eprintln!("skipped: no large CJK font installed");
+        return;
+    };
+    let face = db.resolve(family, "Regular").map(|(f, _)| f).unwrap();
+    let mut s = session();
+    let g = outlined(&mut s, json!({"x": 20, "y": 80, "text": "漢字のテスト ABC", "size": 24, "font": family, "style": face.style}));
+    for run in ["cold", "warm"] {
+        s.execute("select.set", &json!({"ids": [g]})).unwrap();
+        let t0 = std::time::Instant::now();
+        let r = s.execute("type.retype", &json!({"fonts": [family]})).unwrap();
+        let ms = t0.elapsed().as_secs_f64() * 1000.0;
+        eprintln!("{run}: Retype with {family} ({} encoded glyphs) loaded: {ms:.0} ms → {}", face.mapped_chars().len(), r["texts"]);
+        s.execute("edit.undo", &json!({})).unwrap();
+    }
 }

@@ -675,6 +675,18 @@ impl FontDb {
         p
     }
 
+    /// [`Self::outline`] without the cache: for reading many glyphs once (Retype's index), which
+    /// would otherwise push out the outlines the canvas keeps there.
+    pub fn outline_uncached(&self, face: &FontFace, gid: u32) -> BezPath {
+        let mut pen = FlipPen(BezPath::new());
+        if let Some(f) = face.skrifa()
+            && let Some(g) = f.outline_glyphs().get(GlyphId::new(gid))
+        {
+            let _ = g.draw(DrawSettings::unhinted(Size::unscaled(), face.location()), &mut pen);
+        }
+        pen.0
+    }
+
     /// Glyph `gid`'s colour bitmap (`sbix`, `CBDT`) in `face`, cached per (face, glyph).
     pub fn glyph_image(&self, face: &FontFace, gid: u32) -> Option<Arc<GlyphImage>> {
         if !face.colour_bitmaps {
