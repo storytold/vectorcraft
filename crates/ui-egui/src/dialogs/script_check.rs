@@ -271,7 +271,7 @@ fn report(ui: &mut egui::Ui, r: &Value, t: &Tokens) {
                     for p in problems {
                         let Some(label) = p["code"].as_str().and_then(problem_label) else { continue };
                         let label = match p["detail"].as_str() {
-                            Some(detail) => format!("{label}: {detail}"),
+                            Some(detail) => format!("{} {detail}", crate::i18n::colon(label)),
                             None => label.to_string(),
                         };
                         row(ui, t, &label, false, &place(p));

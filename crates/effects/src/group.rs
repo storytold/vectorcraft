@@ -110,13 +110,15 @@ fn leaves(doc: Option<&Document>, n: &Node, hook: Option<OutlineHook>, nodes: &S
             // Every path of the outline art, at any depth, is drawn inside the object's opacity
             // and blend mode. A symbol's art comes with the live objects and the instances of
             // other symbols inside it given as their art, and the type inside it outlined, so the
-            // art has nothing left for `hook` to give.
+            // art has nothing left for `hook` to give. Its fills and strokes carry the geometry
+            // effects of the instance's active fill and stroke, as the canvas draws them.
             if let Some(h) = hook
                 && let Some(art) = h(n)
             {
                 let art = match &n.kind {
                     NodeKind::SymbolInstance { symbol, .. } if nodes.charge(&art) => {
-                        let mut art = crate::reshape::symbol_art_with(&art, h, nodes, symbol);
+                        let mut art = instance_art(doc, &art, h, nodes, symbol);
+                        crate::reshape::add_instance_row_effects(doc, n, &mut art);
                         crate::reshape::outline_nested_text(doc, &mut art, false);
                         transparency_into_members(&mut art);
                         art
@@ -132,6 +134,19 @@ fn leaves(doc: Option<&Document>, n: &Node, hook: Option<OutlineHook>, nodes: &S
             }
         }
     }
+}
+
+/// `art`, the art `hook` gave an instance of the symbol named `symbol`, with the live objects and
+/// the instances of other symbols inside it given as their art
+/// ([`crate::reshape::symbol_art_with`]). The art of each of those instances carries the geometry
+/// effects of its own active fill and stroke ([`crate::reshape::add_instance_row_effects`]).
+fn instance_art(doc: Option<&Document>, art: &Node, hook: OutlineHook, nodes: &SymbolNodes, symbol: &str) -> Node {
+    let drawn = |m: &Node| {
+        let mut a = hook(m)?;
+        crate::reshape::add_instance_row_effects(doc, m, &mut a);
+        Some(a)
+    };
+    crate::reshape::symbol_art_with(art, &drawn, nodes, symbol)
 }
 
 /// `l`, a path drawn inside `n`: its opacity multiplied by `n`'s, and `n`'s blend mode when it is
@@ -221,13 +236,15 @@ fn reshaped_art(doc: Option<&Document>, n: &Node, hook: Option<OutlineHook>, nod
             }
         },
         // A symbol instance with a warp: its symbol's art placed by the instance, with the type
-        // inside it outlined, reshaped as one piece, as the renderer draws it.
+        // inside it outlined, reshaped as one piece, as the renderer draws it. The fills and strokes
+        // of the art then carry the geometry effects of the instance's active fill and stroke.
         NodeKind::SymbolInstance { symbol, .. } if !fx.is_empty() => {
             let h = hook?;
             let art = h(n).filter(|art| nodes.charge(art))?;
-            let mut art = crate::reshape::symbol_art_with(&art, h, nodes, symbol);
+            let mut art = instance_art(doc, &art, h, nodes, symbol);
             crate::reshape::outline_nested_text(doc, &mut art, false);
             members_as_drawn(doc, &mut art);
+            crate::reshape::add_instance_row_effects(doc, n, &mut art);
             let carry = crate::reshape::reshape_leaves_carrying(&mut art, &fx, &n.appearance.effects, doc);
             // The art's own fills and strokes follow the effects as its members do.
             if carry.moves(&art.appearance) {
@@ -703,6 +720,11 @@ pub fn member_shapes(doc: Option<&Document>, n: &Node) -> Vec<(PathData, FillRul
         }
     }
     fn members(doc: Option<&Document>, n: &Node, out: &mut Vec<(PathData, FillRule)>) {
+        // A clip group whose clipping type's strokes paint around it is outlined as that clip
+        // group: the strokes outside the clip add nothing.
+        if let Some(inner) = crate::reshape::painted_clip_inner(n) {
+            return members(doc, inner, out);
+        }
         // A clip group shows its members only inside its clipping path: its outline is that
         // region, not the clipped members' own shapes, which may reach far outside it (#7289).
         if n.clips() {
@@ -824,22 +846,18 @@ fn take_sublayer_guides(n: &mut Node, out: &mut Vec<Arc<Node>>, is_guide: &impl 
     take_held_guides(n, held, out, false, false);
 }
 
-/// `n`, a group or layer, as plain art: its Pathfinder effects evaluated, its geometry effects
-/// reshaping all its members as one piece (the whole art's bounds as their reference box) after
-/// the members' own geometry and Pathfinder effects ([`members_as_drawn`]), and its
-/// own fills and strokes turned into art painting the members' geometry ([`member_shapes`]) below
-/// the members (after a clipping path) or above them, as its contents slot says. Its
-/// transparency, opacity mask and raster effects stay. `None` when it has none of these. Live
-/// objects among the members are evaluated with the symbols of `doc` (see [`member_shapes`]), and
-/// a Pathfinder operation or compound shape takes the symbol instances among its members as their
-/// symbols' art from `doc`. A Transform effect that makes copies with raster effects listed before
-/// it gives each copy those raster effects ([`copied_container`]).
-pub fn evaluate_container(doc: Option<&Document>, n: &Node) -> Option<Node> {
+struct PreparedContainer {
+    m: Node,
+    guides: Vec<Arc<Node>>,
+    paint: bool,
+    carry: crate::Carry,
+}
+
+/// The existing container pass up to its own rows becoming art. Keep its carried appearance for
+/// rendering, and retain the same Carry for freezing only missing stored placements separately.
+fn prepare_container(doc: Option<&Document>, n: &Node) -> Option<PreparedContainer> {
     if !is_container(n) {
         return None;
-    }
-    if let Some(t) = crate::reshape::copied_container_raster_at(n) {
-        return Some(copied_container(doc, n, t));
     }
     let pathfinder = has_pathfinder(n);
     let fx = crate::reshape::geometry_effects(n);
@@ -848,6 +866,7 @@ pub fn evaluate_container(doc: Option<&Document>, n: &Node) -> Option<Node> {
         return None;
     }
     let mut m = n.clone();
+    let mut carry = crate::Carry::default();
     // Its ruler guides take no part: they go back above the evaluated art at the end. With effects
     // that replace or copy the art, so do its guides among the art and those in its sublayers and
     // groups, which would otherwise go with that art: they stay on `n`, in order, hidden and
@@ -874,7 +893,7 @@ pub fn evaluate_container(doc: Option<&Document>, n: &Node) -> Option<Node> {
             let _later = crate::raster::LaterGroups::enter(&n.appearance.effects);
             members_as_drawn(doc, &mut m);
         }
-        let carry = crate::reshape::reshape_leaves_carrying(&mut m, &fx, &n.appearance.effects, doc);
+        carry = crate::reshape::reshape_leaves_carrying(&mut m, &fx, &n.appearance.effects, doc);
         // The group's own fills and strokes paint the members as a whole: their gradients follow
         // the effects as the members' do.
         if paint && carry.moves(&m.appearance) {
@@ -883,15 +902,40 @@ pub fn evaluate_container(doc: Option<&Document>, n: &Node) -> Option<Node> {
     }
     m.appearance.effects = crate::raster::without_geometry(&m.appearance.effects);
     m.appearance.effects.retain(|e| !is_pathfinder(&e.id));
+    Some(PreparedContainer { m, guides, paint, carry })
+}
+
+/// `n`, a group or layer, as plain art: its Pathfinder effects evaluated, its geometry effects
+/// reshaping all its members as one piece (the whole art's bounds as their reference box) after
+/// the members' own geometry and Pathfinder effects ([`members_as_drawn`]), and its
+/// own fills and strokes turned into art painting the members' geometry ([`member_shapes`]) below
+/// the members (after a clipping path) or above them, as its contents slot says. Its
+/// transparency, opacity mask and raster effects stay. `None` when it has none of these. Live
+/// objects among the members are evaluated with the symbols of `doc` (see [`member_shapes`]), and
+/// a Pathfinder operation or compound shape takes the symbol instances among its members as their
+/// symbols' art from `doc`. A Transform effect that makes copies with raster effects listed before
+/// it gives each copy those raster effects ([`copied_container`]).
+pub fn evaluate_container(doc: Option<&Document>, n: &Node) -> Option<Node> {
+    if !is_container(n) {
+        return None;
+    }
+    if let Some(t) = crate::reshape::copied_container_raster_at(n) {
+        return Some(copied_container(doc, n, t));
+    }
+    let PreparedContainer { mut m, guides, paint, .. } = prepare_container(doc, n)?;
     if paint {
-        let shapes = member_shapes(doc, &m);
-        let bounds = m.geometric_bounds();
+        // A clip group whose clipping type paints strokes is now a group of a clip group and those
+        // strokes ([`crate::reshape::paint_type_clip`]): its own fills and strokes paint inside
+        // that clip group. Such groups among the members are measured as their clip groups.
+        let wrapped = n.clips() && crate::reshape::painted_clip_inner(&m).is_some();
+        let (shapes, bounds) = (member_shapes(doc, &m), crate::reshape::clip_bounds(&m));
         let art =
             |items: &[AppearanceItem]| -> Vec<Arc<Node>> { items.iter().filter_map(|i| item_art(n.id, i, &shapes, bounds)).map(Arc::new).collect() };
         let (below, above) = m.appearance.split_contents();
         let (below, above) = (art(below), art(above));
-        let at = usize::from(m.clips());
-        if let Some(ch) = m.children_mut() {
+        let at = usize::from(wrapped || m.clips());
+        let target = if wrapped { m.children_mut().and_then(|ch| ch.first_mut()).map(Arc::make_mut) } else { Some(&mut m) };
+        if let Some(ch) = target.and_then(Node::children_mut) {
             let at = at.min(ch.len());
             ch.splice(at..at, below);
             ch.extend(above);
@@ -905,16 +949,8 @@ pub fn evaluate_container(doc: Option<&Document>, n: &Node) -> Option<Node> {
     Some(m)
 }
 
-/// `n`, a group or layer whose own effects split at `t` ([`crate::reshape::copied_container_raster_at`]),
-/// as plain art: the effects before the Transform effect at `t` evaluated on its members as one
-/// piece ([`evaluate_container`]), with the raster effects among them, and that piece copied by the
-/// Transform effect, each copy a group of its own carrying those raster effects moved, turned,
-/// reflected and scaled with it ([`crate::reshape::copied_container_art`]). The art keeps the kind,
-/// transparency and opacity mask of `n` and the raster effects from `t` on, which paint once around
-/// all the copies; a clip group's or clipping layer's copies each clip, and the art itself does not.
-/// Its ruler guides, those in its sublayers and groups included, go once above the copies, hidden
-/// and locked as their containers were.
-fn copied_container(doc: Option<&Document>, n: &Node, t: usize) -> Node {
+/// The exact pre-copy source shared by rendering and stored gradient placement.
+fn copied_container_source(doc: Option<&Document>, n: &Node, t: usize) -> (Node, Vec<Arc<Node>>, Node) {
     let mut m = n.clone();
     let mut guides = vec![];
     take_sublayer_guides(&mut m, &mut guides, &Node::is_ruler_guide);
@@ -929,6 +965,20 @@ fn copied_container(doc: Option<&Document>, n: &Node, t: usize) -> Node {
         let _later = crate::raster::LaterGroups::enter(&n.appearance.effects);
         members_as_drawn(doc, &mut source);
     }
+    (m, guides, source)
+}
+
+/// `n`, a group or layer whose own effects split at `t` ([`crate::reshape::copied_container_raster_at`]),
+/// as plain art: the effects before the Transform effect at `t` evaluated on its members as one
+/// piece ([`evaluate_container`]), with the raster effects among them, and that piece copied by the
+/// Transform effect, each copy a group of its own carrying those raster effects moved, turned,
+/// reflected and scaled with it ([`crate::reshape::copied_container_art`]). The art keeps the kind,
+/// transparency and opacity mask of `n` and the raster effects from `t` on, which paint once around
+/// all the copies; a clip group's or clipping layer's copies each clip, and the art itself does not.
+/// Its ruler guides, those in its sublayers and groups included, go once above the copies, hidden
+/// and locked as their containers were.
+fn copied_container(doc: Option<&Document>, n: &Node, t: usize) -> Node {
+    let (mut m, guides, source) = copied_container_source(doc, n, t);
     let mut piece = evaluate_container(doc, &source).unwrap_or_else(|| {
         let mut p = source.clone();
         p.appearance.effects = crate::raster::without_geometry(&p.appearance.effects);
@@ -960,6 +1010,36 @@ fn copied_container(doc: Option<&Document>, n: &Node, t: usize) -> Node {
         ch.extend(guides);
     }
     m
+}
+
+/// Freeze representable fitted own paints to the box the container pass gives them, retaining
+/// every live effect and already explicit placement. Hidden-only containers the pass does not
+/// evaluate stay unchanged; this does not add a different fallback to `evaluate_container`.
+pub fn pinned_container_appearance(doc: &Document, n: &Node) -> Option<Appearance> {
+    if !n.appearance.has_unplaced_gradient() {
+        return None;
+    }
+    if let Some(t) = crate::reshape::copied_container_raster_at(n) {
+        let (_, _, source) = copied_container_source(Some(doc), n, t);
+        let pinned = pinned_container_appearance(doc, &source)?;
+        let mut out = (*n.appearance).clone();
+        out.items = pinned.items;
+        return Some(out);
+    }
+    let PreparedContainer { m, carry, .. } = prepare_container(Some(doc), n)?;
+    let bounds = m.geometric_bounds()?;
+    let mut out = (*n.appearance).clone();
+    let mut changed = false;
+    for (item, original) in out.items.iter_mut().zip(&n.appearance.items) {
+        if paints(original)
+            && matches!(original.paint(), Paint::Gradient(g) if !g.is_placed())
+            && let Some(pinned) = crate::pinned_gradient_item(original, bounds, &[&carry])
+        {
+            *item = pinned;
+            changed = true;
+        }
+    }
+    changed.then_some(out)
 }
 
 /// Replace each visible member of `n` with geometry or Pathfinder effects of its own, at every
