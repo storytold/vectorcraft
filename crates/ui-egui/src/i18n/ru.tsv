@@ -817,6 +817,7 @@ font-technology	Variable	Вариативные
 	Delete Brush	Удалить кисть
 	Delete Color	Удалить цвет
 	Restore Generated Table	Восстановить созданную таблицу
+	Unshift All Colors	Отменить сдвиг всех цветов
 	Delete Character Style	Удалить стиль символа
 	Delete Empty Artboards	Удалить пустые монтажные области
 	Delete Freeform Point	Удалить произвольную точку
@@ -3273,6 +3274,8 @@ digits	Malayalam	Малаялам
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Насколько близко на экране указатель или перетаскиваемая точка должны подойти к объекту, чтобы умные направляющие привязали их; расстояние одинаково при любом масштабе.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Привязывает конец отрезка или окружность, нарисованную от центра, так, чтобы она касалась ближайшей кривой.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Привязывает конец отрезка так, чтобы он встречал ближайший прямой сегмент под прямым углом.
+	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Показывает на холсте номер каждого фрагмента в рамке в его левом верхнем углу; если параметр выключен, контуры фрагментов по-прежнему видны.
+	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Цвет контуров пользовательских и объектных фрагментов и рамок с их номерами; автоматические фрагменты используют более бледный оттенок этого цвета.
 	Reset all preferences to their defaults?	Сбросить все настройки до значений по умолчанию?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Значения по умолчанию применяются, когда вы нажимаете ОК в окне «Настройки». Отмена там сохраняет текущие настройки.
 	Restore Recovered Documents	Восстановить восстановленные документы
@@ -3507,6 +3510,9 @@ digits	Malayalam	Малаялам
 	No menu item	Нет пункта меню
 	Toolbar	Панель инструментов
 	{toolbar}, in the {tool} group	{toolbar}, в группе «{tool}»
+	In the menu bar: {path}	В строке меню: {path}
+	In the {group} group: press and hold to open it	В группе {group}: нажмите и удерживайте, чтобы открыть её
+	{home}, not shown now	{home}, сейчас не показано
 @plural	{n} result|{n} results	{n} результат|{n} результата|{n} результатов
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} из {n} результата. Продолжайте вводить, чтобы сузить их.|{shown} из {n} результатов. Продолжайте вводить, чтобы сузить их.|{shown} из {n} результатов. Продолжайте вводить, чтобы сузить их.
 	Recent Commands	Недавние команды
@@ -5112,6 +5118,7 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	choose a location for the package	выберите расположение для пакета
 @msg	clipboard is empty	буфер обмена пуст
 @msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: в цветовой таблице должен остаться хотя бы один цвет
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted: `{k}` обозначает цвет, который обозначает и другой ключ
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` не является цветом, например "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: не более {MAX_TABLE} цветов
 @msg	command `{0}` is not available right now: {1}	команда `{0}` сейчас недоступна: {1}
@@ -7792,6 +7799,7 @@ breakText	Glyphs	Глифы
 @msg	One path lies inside the other, so they have no common tangents	Один контур лежит внутри другого, поэтому у них нет общих касательных
 @msg	The paths overlap, so they have no internal tangents	Контуры перекрываются, поэтому у них нет внутренних касательных
 @msg	One path lies inside the other, so they have no internal tangents	Один контур лежит внутри другого, поэтому у них нет внутренних касательных
+@msg	The point lies inside the path, so it has no tangents	Точка лежит внутри контура, поэтому у неё нет касательных
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Разобрать штрихи на контуры
 @msg	select paths with dashed strokes to expand	выделите контуры со штриховой обводкой для разбора
@@ -10206,3 +10214,8 @@ shape	Open	Открытый
 @msg	Two panels pass through each other.	Две панели проходят друг сквозь друга.
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} пикселей — слишком большой размер для PSD (не более {MAX_SIDE} пикселей по стороне): уменьшите разрешение
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer должен быть "singleLine", "everyLine", "standardSingleLine" или "standardEveryLine"
+	Pressure Sensitive	Чувствительные к нажиму
+	Flex Ribbon	Гибкая лента
+	Pulse Stroke	Пульсирующий штрих
+	Round Flow	Круглый поток
+	Chisel Flow	Косой поток
