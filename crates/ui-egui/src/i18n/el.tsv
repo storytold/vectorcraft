@@ -5702,6 +5702,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	missing panel layout	λείπει η διάταξη πινάκων
 @msg	unsupported native docking operation	μη υποστηριζόμενη εγγενής λειτουργία σύνδεσης πινάκων
 	Linux Display Server	Διακομιστής οθόνης Linux
+	Low-Latency Drawing	Σχεδίαση χαμηλής καθυστέρησης
 	Ruler Origin	Αρχή χαράκων
 	Reset Ruler Origin	Επαναφορά αρχής χαράκων
 @msg	the compressed file unpacks to more than VectorCraft reads ({_1} MB of document, {_2} MB per image)	το αποσυμπιεσμένο αρχείο υπερβαίνει τα όρια ανάγνωσης του VectorCraft ({_1} MB ανά έγγραφο, {_2} MB ανά εικόνα)

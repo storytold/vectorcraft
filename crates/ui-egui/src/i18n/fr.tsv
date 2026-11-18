@@ -5832,6 +5832,7 @@ lighting	Light	Lumière
 @msg	missing panel layout	Disposition des panneaux manquante
 @msg	unsupported native docking operation	Opération native d’ancrage non prise en charge
 	Linux Display Server	Serveur d’affichage Linux
+	Low-Latency Drawing	Dessin à faible latence
 	X11 (XWayland) When a Pen Is Attached	X11 (XWayland) quand un stylet est branché
 	If a drawing tablet's pen doesn't draw, choose an X11 (XWayland) option.	Si le stylet d’une tablette graphique ne dessine pas, choisissez une option X11 (XWayland).
 	X11 (XWayland)	X11 (XWayland)
