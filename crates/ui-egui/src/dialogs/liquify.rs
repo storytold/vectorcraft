@@ -12,7 +12,7 @@ use serde_json::{Map, Value, json};
 use vectorcraft_tools::distort::liquify::LiquifyKind;
 
 use super::document_setup::check;
-use super::{DialogSpec, form, run_and_close};
+use super::{DialogSpec, form, set_tool_options_and_close};
 use crate::state::Dialog;
 use crate::theme::Tokens;
 use crate::{VectorcraftApp, widgets};
@@ -145,7 +145,7 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
             values.insert(key.into(), json!(d.f64(key, 0.0) / 100.0));
         }
     }
-    run_and_close(app, "tool.setOption", json!({ "tool": kind(d).id(), "values": values }))
+    set_tool_options_and_close(app, json!({ "tool": kind(d).id(), "values": values }))
 }
 
 #[cfg(test)]

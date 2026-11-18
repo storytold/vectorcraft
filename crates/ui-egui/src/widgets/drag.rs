@@ -13,19 +13,23 @@ pub enum PanelDrag {
     /// it is dropped.
     Paint { paint: Paint, params: serde_json::Value, rows: Option<SwatchRows>, library: Option<(String, String)> },
     /// The Appearance panel's thumbnail: art it is dropped on takes object `0`'s appearance
-    /// (`appearance.copyFrom`); the Graphic Styles panel makes a style of it.
+    /// (`appearance.copyFrom`); the Graphic Styles panel makes a style of it, or with Alt held
+    /// replaces the style it is dropped on with it (`graphicStyle.redefine`).
     Appearance(vectorcraft_doc::NodeId),
     /// A Graphic Styles panel style: art it is dropped on takes it (`graphicStyle.apply` with its
-    /// `ids`); the panel moves it to where it is dropped.
+    /// `ids`); the panel moves it to where it is dropped, or with Alt held replaces the style it is
+    /// dropped on with its look (`graphicStyle.redefine` with `from`).
     GraphicStyle(String),
     /// The selected art, dragged off the canvas with the Selection tool: the Graphic Styles panel
-    /// makes a style of the first object (`graphicStyle.new`), the Symbols panel a symbol of it all
+    /// makes a style of the first object (`graphicStyle.new`), or with Alt held replaces the style
+    /// it is dropped on with that object's look (`graphicStyle.redefine`), the Symbols panel a symbol of it all
     /// (`symbol.new`), the Swatches panel a pattern swatch of a copy (`object.pattern.make`) and the
     /// Brushes panel an Art brush (`brush.new`).
     Art(Vec<vectorcraft_doc::NodeId>),
-    /// A Symbols panel symbol: the canvas places an instance of it centred where it is dropped
-    /// (`symbol.place`).
-    Symbol(String),
+    /// A Symbols panel symbol (`document`: the uid of the document whose panel it was dragged
+    /// from): the canvas places an instance of it centered where it is dropped, adding the symbol
+    /// first when another document is active by then (`symbol.placeFromDocument`).
+    Symbol { document: u64, name: String },
     /// A symbol of a symbol library panel (`name`: its name in `library`): the canvas adds it to the
     /// document's Symbols and places an instance where it is dropped (`symbol.addFromLibrary` with
     /// `place`).
@@ -48,12 +52,32 @@ pub enum PanelDrag {
 }
 
 /// A panel list `zone` that takes art dragged off the canvas: outlined while art is held over it;
-/// → the dragged ids when it is released there.
+/// → the dragged ids when the primary button is released there (the release of another button
+/// ends the drag).
 pub fn art_drop(ui: &Ui, zone: &Response) -> Option<Vec<u64>> {
     let drag = zone.dnd_hover_payload::<PanelDrag>()?;
     let PanelDrag::Art(ids) = &*drag else { return None };
     ui.painter().rect_stroke(zone.rect, 0.0, Stroke::new(1.5, Tokens::get(ui.ctx()).accent), StrokeKind::Inside);
+    if !ui.input(|i| i.pointer.button_released(egui::PointerButton::Primary)) {
+        return None;
+    }
     zone.dnd_release_payload::<PanelDrag>().map(|_| ids.iter().map(|id| id.0).collect())
+}
+
+/// Key of the document whose art a [`PanelDrag::Art`] carries.
+fn art_doc_id() -> egui::Id {
+    egui::Id::unique("panel-drag-art-doc")
+}
+
+/// Start (or keep up) a panel drag of the art `ids` of document `uid`, dragged off its canvas.
+pub fn drag_art(ctx: &egui::Context, uid: u64, ids: Vec<vectorcraft_doc::NodeId>) {
+    ctx.data_mut(|d| d.insert_temp(art_doc_id(), uid));
+    egui::DragAndDrop::set_payload(ctx, PanelDrag::Art(ids));
+}
+
+/// The document (`uid`) whose art the last [`drag_art`] carried.
+pub fn art_drag_doc(ctx: &egui::Context) -> Option<u64> {
+    ctx.data(|d| d.get_temp::<u64>(art_doc_id()))
 }
 
 /// The Swatches panel rows a drag from that panel moves: the swatch, None, Registration or colour
