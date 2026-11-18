@@ -382,6 +382,25 @@ fn one_edge_past_the_canvas_edge_is_enough_to_refuse() {
     assert!(s.execute(RECTANGLE, &json!({"offset": 5})).is_ok(), "the right edge at 3,999,995 pt is inside");
 }
 
+/// The commands are dimmed while an object of a symbol instance's art is selected, which they
+/// refuse, and available again once it is not.
+#[test]
+fn a_selected_symbol_part_dims_the_commands() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    let enabled = |s: &Session, id: &str| (crate::find_command(id).unwrap().enabled)(s);
+    for command in [RECTANGLE, CIRCLE] {
+        assert!(enabled(&s, command).is_ok(), "{command}");
+    }
+    s.doc_mut().unwrap().selection.symbol_part = Some(vectorcraft_doc::SymbolPart { instance: a, path: vec![0] });
+    for command in [RECTANGLE, CIRCLE] {
+        assert!(enabled(&s, command).is_err(), "{command} with a symbol part selected");
+    }
+    s.doc_mut().unwrap().selection.symbol_part = None;
+    assert!(enabled(&s, RECTANGLE).is_ok());
+}
+
 /// Many points keep only their hull's corners, and the circle around them is the one around all
 /// of the points.
 #[test]

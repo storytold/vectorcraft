@@ -426,6 +426,11 @@ pub fn enclosing_circle(points: &[Point]) -> Option<(Point, f64)> {
 /// not finite are left out.
 pub fn convex_hull(mut points: Vec<Point>) -> Vec<Point> {
     points.retain(|p| p.is_finite());
+    // -0.0 and 0.0 are one coordinate: adding 0.0 turns -0.0 into 0.0, so the sort below puts
+    // points with the same x in y order.
+    for p in &mut points {
+        *p = Point::new(p.x + 0.0, p.y + 0.0);
+    }
     points.sort_by(|a, b| a.x.total_cmp(&b.x).then(a.y.total_cmp(&b.y)));
     points.dedup();
     if points.len() < 3 {
@@ -954,6 +959,8 @@ mod tests {
         assert_eq!(convex_hull(vec![p(3.0, 1.0), p(1.0, 2.0)]), vec![p(1.0, 2.0), p(3.0, 1.0)]);
         assert_eq!(convex_hull(vec![p(1.0, 1.0), p(1.0, 1.0)]), vec![p(1.0, 1.0)]);
         assert_eq!(convex_hull(vec![p(f64::INFINITY, 1.0)]), vec![]);
+        // -0.0 is 0.0: the three points lie on one line, and the hull is its two ends.
+        assert_eq!(convex_hull(vec![p(-0.0, 10.0), p(0.0, 0.0), p(0.0, 5.0)]), vec![p(0.0, 0.0), p(0.0, 10.0)]);
     }
 
     #[test]

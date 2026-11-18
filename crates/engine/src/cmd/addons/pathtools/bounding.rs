@@ -6,7 +6,7 @@ use serde_json::{Value, json};
 use vectorcraft_doc::{Document, LiveShape, Node, NodeId, NodeKind, SymbolBoxes};
 use vectorcraft_geom::{Affine, CubicBez, FillRule, ParamCurve, PathSeg, Point, Rect, shapes};
 
-use super::super::super::edit::selected_roots;
+use super::super::super::edit::{no_symbol_part, selected_roots};
 use super::super::super::{CommandSpec, bad, cmd, has_selection, number_or, switch_or};
 use crate::sanity::rect_in_range;
 use crate::{Result, Session};
@@ -31,7 +31,7 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             ["Object", "Plug-ins", "Path Precision Tools"],
             None,
             "{each?: bool (default false: one rectangle around the whole selection; true: one around each selected object), offset?: pt (0 or more; default 0: added on every side)} draw a live rectangle on the geometric bounding box of the selected objects (strokes and effects left out), with the current paint, on top of the current layer or of the isolated group, as other new art; the rectangles are selected; one undo step. An object whose box has no width or no height (a straight horizontal or vertical line) gets no rectangle unless `offset` is more than 0, nor does an object with no bounds (an empty group); with `each` the result's `skipped` counts them. It is an error when no rectangle is left (\"the shape would have no size\" when a rectangle with no size was left out, else \"nothing to enclose\") and when an edge of a rectangle would lie more than 4,000,000 pt from the origin along either axis (\"the shape would reach past the edge of the canvas\"). The menu item Add Bounding Rectangle… opens a dialog with Offset and One per Object (`each`) and a Preview → {id: the first rectangle, ids, skipped?}",
-            has_selection,
+            whole_objects,
             bounding_rectangle
         ),
         cmd!(
@@ -40,10 +40,17 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             ["Object", "Plug-ins", "Path Precision Tools"],
             None,
             "{each?: bool (default false: one circle around the whole selection; true: one around each selected object), offset?: pt (0 or more; default 0: added to the radius)} draw the smallest live circle that holds the outlines of the selected objects (paths and compound paths by their curves, clip groups and sublayers that clip their contents by their clipping paths, other sublayers by their shown objects, images by their corners, type and other objects by the corners of their bounding box; strokes and effects left out), with the radius 0.01 pt larger so it holds the curves themselves, with the current paint, on top of the current layer or of the isolated group, as other new art; the circles are selected; one undo step. An object at a single point gets no circle unless `offset` is more than 0, nor does an object with no outline (an empty group); with `each` the result's `skipped` counts them. It is an error when no circle is left (\"the shape would have no size\" when a circle with no size was left out, else \"nothing to enclose\") and when an edge of a circle's bounding box would lie more than 4,000,000 pt from the origin along either axis (\"the shape would reach past the edge of the canvas\"). The menu item Add Bounding Circle… opens a dialog with Offset and One per Object (`each`) and a Preview → {id: the first circle, ids, skipped?}",
-            has_selection,
+            whole_objects,
             bounding_circle
         ),
     ]
+}
+
+/// Enabled with a selection that is not an object of a symbol instance's art, which
+/// [`selected_roots`] refuses.
+fn whole_objects(s: &Session) -> std::result::Result<(), String> {
+    has_selection(s)?;
+    no_symbol_part(s)
 }
 
 /// The shape a command draws.
@@ -183,7 +190,10 @@ fn outline_points(n: &Node, symbols: &SymbolBoxes, out: &mut Gathered, depth: us
     match &n.kind {
         NodeKind::Path { path, .. } => {
             // The anchors count too, so a path of one anchor, which has no segments, is held.
-            out.points.extend(path.subpaths.iter().flat_map(|sp| sp.anchors.iter().map(|a| a.p)));
+            for p in path.subpaths.iter().flat_map(|sp| sp.anchors.iter().map(|a| a.p)) {
+                out.points.push(p);
+                out.compact();
+            }
             for seg in path.to_bezpath().segments() {
                 match seg {
                     PathSeg::Line(l) => out.points.extend([l.p0, l.p1]),
