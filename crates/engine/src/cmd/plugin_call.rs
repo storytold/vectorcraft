@@ -625,6 +625,8 @@ mod tests {
             "edit.paste",
             "prefs.set",
             "stroke.arrowheads.list",
+            "swatch.defaults.reset",
+            "swatch.defaults.save",
         ] {
             let Some(spec) = crate::cmd::find_command(id) else { panic!("no command {id}") };
             assert!(denied(spec).is_some(), "{id} is allowed");
@@ -638,6 +640,8 @@ mod tests {
             "object.maskImage",
             "imageTrace.make",
             "svgInteractivity.info",
+            "swatch.list",
+            "swatch.resetDefaults",
             "addon.cleanup.rejoin",
         ] {
             let Some(spec) = crate::cmd::find_command(id) else { panic!("no command {id}") };

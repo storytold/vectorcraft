@@ -1023,6 +1023,443 @@ fn default_swatches_script_document_edits_and_existing_pref_refusal_remain_suppo
     assert!(report["log"][0].as_str().unwrap().contains("a script cannot run `prefs.reset`"));
     assert_eq!(report["changed"].as_array().unwrap().len(), 1, "ordinary direct and batched document edits still commit");
     assert_ne!(s.doc().unwrap().doc, original);
+    let artwork = s.doc().unwrap().doc.layers[0].children().unwrap();
+    assert_eq!(artwork.len(), 2, "both direct and batched rectangle commands create artwork");
+    assert!(artwork.iter().all(|node| matches!(&node.kind, NodeKind::Path { .. })));
+    let bounds: Vec<_> = artwork.iter().map(|node| node.geometric_bounds().unwrap()).collect();
+    assert!(bounds.contains(&Rect::new(10.0, 8.0, 22.0, 17.0)), "the direct rectangle keeps its requested bounds");
+    assert!(bounds.contains(&Rect::new(30.0, 8.0, 42.0, 17.0)), "the batched rectangle keeps its requested bounds");
     assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "the document script remains one undo step");
     assert_eq!(s.prefs.to_json()["defaultSwatches"], defaults);
+}
+
+
+// Original public fixtures for the two resource-review reports; run on unchanged source first.
+struct ReviewResourceFonts(Vec<vectorcraft_doc::CompositeFont>);
+
+impl ReviewResourceFonts {
+    fn hold() -> Self {
+        let db = vectorcraft_text::FontDb::global();
+        Self(db.composite_font_names().iter().map(|name| (*db.composite_font(name).unwrap()).clone()).collect())
+    }
+}
+
+impl Drop for ReviewResourceFonts {
+    fn drop(&mut self) {
+        let db = vectorcraft_text::FontDb::global();
+        for name in db.composite_font_names() {
+            if vectorcraft_doc::CompositeFont::named(&self.0, &name).is_none() {
+                db.remove_composite_font(&name);
+            }
+        }
+        for font in &self.0 {
+            db.set_composite_font(font);
+        }
+    }
+}
+
+fn review_resource_pattern<'a>(d: &'a Document, swatch: &str) -> &'a PatternDef {
+    let Paint::Pattern { pattern, .. } = &d.swatch(swatch).expect("CONTROL: palette row exists").paint else {
+        panic!("CONTROL: palette row must be a pattern")
+    };
+    d.pattern(pattern).expect("CONTROL: palette row resolves to its pattern")
+}
+
+fn review_resource_family(d: &Document, swatch: &str, text: &str) -> String {
+    let mut families = vec![];
+    for art in &review_resource_pattern(d, swatch).art {
+        art.walk(&mut |n| {
+            if let NodeKind::Text(t) = &n.kind {
+                families.extend(t.runs.iter().filter(|r| r.text == text).map(|r| r.style.font_family.clone()));
+            }
+        });
+    }
+    assert_eq!(families.len(), 1, "CONTROL: one original text run named {text:?}");
+    families.pop().unwrap()
+}
+
+fn review_resource_registry() -> Vec<vectorcraft_doc::CompositeFont> {
+    let db = vectorcraft_text::FontDb::global();
+    db.composite_font_names().iter().map(|name| (*db.composite_font(name).unwrap()).clone()).collect()
+}
+
+#[test]
+fn default_swatches_review_resource_linked_native_composite_family() {
+    use vectorcraft_doc::{CompositeFont, CustomCharSet, NodeId};
+    use vectorcraft_text::FontDb;
+
+    let _cms = color_context();
+    let _fonts = ReviewResourceFonts::hold();
+    let db = FontDb::global();
+    assert!(db.has_installed_family("Source Sans 3"), "CONTROL: the existing test font is installed");
+    let directory = TestDirectory::new();
+    let mut incoming_font = CompositeFont::new("Review native family", "Source Sans 3", "Regular");
+    incoming_font.parts.roman.size = 110.0;
+    let mut custom = CustomCharSet::new("Review letters", incoming_font.parts.roman.clone());
+    custom.characters.push('A');
+    incoming_font.custom.push(custom);
+    incoming_font.check().unwrap();
+    let existing_font = CompositeFont::new("review native family", "Source Sans 3", "Regular");
+    existing_font.check().unwrap();
+    assert_ne!(incoming_font.parts, existing_font.parts, "CONTROL: the same-name meanings differ");
+    assert_ne!(incoming_font.custom, existing_font.custom, "CONTROL: custom-set preservation is observable");
+
+    let mut native = Session::new();
+    native.add_document(Document::new(20.0, 20.0), None);
+    native.execute("type.compositeFonts.set", &json!({"fonts": [incoming_font.clone()]})).unwrap();
+    let text = native.execute("text.create", &json!({"x": 1, "y": 12, "text": "Ab", "font": incoming_font.name})).unwrap()["id"]
+        .as_u64().unwrap();
+    let installed = native.execute("text.create", &json!({"x": 1, "y": 18, "text": "Installed", "font": "Source Sans 3"})).unwrap()["id"]
+        .as_u64().unwrap();
+    let native_doc = native.doc().unwrap().doc.clone();
+    assert_eq!(CompositeFont::named(&native_doc.composite_fonts, &incoming_font.name), Some(&incoming_font));
+
+    // A direct, unlinked palette proves these exact text/family definitions work first.
+    native.execute("object.pattern.make", &json!({"ids": [text, installed], "name": "Direct lettering", "edit": false})).unwrap();
+    native.execute("select.set", &json!({"ids": [text, installed]})).unwrap();
+    native.execute("edit.clear", &json!({})).unwrap();
+    native.execute("swatch.defaults.save", &json!({})).unwrap();
+    let mut direct = restarted(&native);
+    direct.execute("file.new", &json!({"profile": null})).unwrap();
+    let direct_doc = &direct.doc().unwrap().doc;
+    let direct_family = review_resource_family(direct_doc, "Direct lettering", "Ab");
+    assert_eq!(CompositeFont::named(&direct_doc.composite_fonts, &direct_family), Some(&incoming_font), "CONTROL: direct capture works");
+    assert_eq!(review_resource_family(direct_doc, "Direct lettering", "Installed"), "Source Sans 3");
+    assert!(CompositeFont::named(&direct_doc.composite_fonts, "Source Sans 3").is_none(), "CONTROL: installed text needs no composite");
+
+    let mut regressions = vec![];
+    for collision in [false, true] {
+        let path = directory.0.join(if collision { "family-collision.vectorcraft" } else { "family.vectorcraft" });
+        let loaded = write_linked_native_fixture(&path, &native_doc, true);
+        assert_eq!(CompositeFont::named(&loaded.composite_fonts, &incoming_font.name), Some(&incoming_font), "CONTROL: native bytes carry the definition");
+
+        if !collision {
+            // The other adopt caller: ordinary unlinked placement of this same native file.
+            let mut placed = Session::new();
+            placed.add_document(Document::new(100.0, 80.0), None);
+            let result = placed.execute("file.place", &json!({"path": path, "link": false, "at": [60, 40]})).unwrap();
+            assert_eq!(result["linked"], false);
+            let id = NodeId(result["ids"][0].as_u64().unwrap());
+            let doc = &placed.doc().unwrap().doc;
+            let root = doc.node(id).unwrap();
+            assert_eq!(root.id, id, "the returned placed id names the inserted root");
+            assert!(matches!(&root.kind, NodeKind::Group { .. }));
+            assert_eq!(root.name.as_deref(), path.file_name().unwrap().to_str());
+            let center = root.geometric_bounds_with(&doc.symbol_boxes()).unwrap().center();
+            assert!((center - Point::new(60.0, 40.0)).hypot() < 1e-6, "ordinary placement keeps the requested center");
+            let mut families = vec![];
+            root.walk(&mut |node| {
+                if let NodeKind::Text(text) = &node.kind {
+                    families.extend(text.runs.iter().map(|run| (run.text.clone(), run.style.font_family.clone())));
+                }
+            });
+            let family = &families.iter().find(|(text, _)| text == "Ab").unwrap().1;
+            let imported = CompositeFont::named(&doc.composite_fonts, family).unwrap();
+            assert_eq!(imported.parts, incoming_font.parts);
+            assert_eq!(imported.custom, incoming_font.custom);
+            assert_eq!(families.iter().find(|(text, _)| text == "Installed").unwrap().1, "Source Sans 3");
+        }
+        let mut source = linked_native_palette(&path, "Native lettering");
+        assert!(source.doc().unwrap().doc.composite_fonts.is_empty(), "CONTROL: definition starts only inside the linked file");
+        let mut profile = None;
+        if collision {
+            source.execute("type.compositeFonts.set", &json!({"fonts": [existing_font.clone()]})).unwrap();
+            let id = source.execute("text.create", &json!({"x": 1, "y": 12, "text": "Destination", "font": existing_font.name})).unwrap()["id"]
+                .as_u64().unwrap();
+            source.execute("object.pattern.make", &json!({"ids": [id], "name": "Existing lettering", "edit": false})).unwrap();
+            source.execute("select.set", &json!({"ids": [id]})).unwrap();
+            source.execute("edit.clear", &json!({})).unwrap();
+            assert_eq!(review_resource_family(&source.doc().unwrap().doc, "Existing lettering", "Destination"), existing_font.name);
+            let mut target = Session::new();
+            target.add_document(Document::new(20.0, 20.0), None);
+            target.execute("type.compositeFonts.set", &json!({"fonts": [existing_font.clone()]})).unwrap();
+            let id = target.execute("text.create", &json!({"x": 1, "y": 12, "text": "Destination", "font": existing_font.name})).unwrap()["id"]
+                .as_u64().unwrap();
+            let mut doc = (*target.doc().unwrap().doc).clone();
+            let lettering = doc.node(NodeId(id)).unwrap().clone();
+            Arc::make_mut(&mut doc.layers[0]).children_mut().unwrap().clear();
+            doc.symbols.push(Symbol { name: "Existing destination lettering".into(), art: Arc::new(lettering), dynamic: false });
+            doc.fix_next_id();
+            save_profile(&directory.0, &doc);
+            profile = Some(doc);
+        }
+        let original = source.doc().unwrap().doc.clone();
+        let selection = source.doc().unwrap().selection.clone();
+        let history = source.doc().unwrap().history.undo.len();
+        let registry = review_resource_registry();
+        source.execute("swatch.defaults.save", &json!({})).unwrap();
+        assert_eq!(review_resource_registry(), registry, "capture restores all registered names and exact definitions, including private aliases");
+        assert_eq!(source.doc().unwrap().doc, original, "CONTROL: capture leaves its source untouched");
+        assert_eq!(source.doc().unwrap().selection, selection);
+        assert_eq!(source.doc().unwrap().history.undo.len(), history);
+        if collision {
+            // The retained ordinary missing-full-brush-image failure, alongside the native
+            // document whose expansion introduces an alias in the private session.
+            let mut bad = (*original).clone();
+            let bytes = Arc::new(png([19, 47, 83, 255]));
+            bad.images.insert("pixels".into(), ImageBlob { mime: "image/png".into(), bytes: bytes.clone(), proxy: Some(bytes) });
+            let image = image_node(&mut bad, Some(LinkInfo::new(directory.0.join("missing-native-family-brush.png").to_string_lossy().to_string())));
+            vectorcraft_brush::store(&mut bad, &[Brush { name: "Missing native ink".into(), kind: BrushKind::Art(ArtBrush { art: image, ..Default::default() }) }]);
+            let mut line = rectangle(&mut bad, Paint::None);
+            line.appearance = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0).into();
+            line.appearance.stroke_mut().unwrap().brush = Some("Missing native ink".into());
+            let Paint::Pattern { pattern, .. } = &bad.swatch("Native lettering").unwrap().paint else { panic!("native pattern missing") };
+            let pattern = pattern.clone();
+            bad.patterns.iter_mut().find(|p| p.name == pattern).unwrap().art.push(Arc::new(line));
+            let mut failing = restarted(&source);
+            failing.add_document(bad, None);
+            let prefs = failing.prefs.to_json();
+            let document = failing.doc().unwrap().doc.clone();
+            let selection = failing.doc().unwrap().selection.clone();
+            let history = failing.doc().unwrap().history.undo.len();
+            let registry = review_resource_registry();
+            assert!(failing.execute("swatch.defaults.save", &json!({})).is_err());
+            assert_eq!(failing.prefs.to_json(), prefs);
+            assert_eq!(failing.doc().unwrap().doc, document);
+            assert_eq!(failing.doc().unwrap().selection, selection);
+            assert_eq!(failing.doc().unwrap().history.undo.len(), history);
+            assert_eq!(review_resource_registry(), registry, "failed capture restores every registered name and exact definition");
+        }
+        std::fs::remove_file(&path).unwrap();
+        let mut fresh = restarted(&source);
+        if collision {
+            fresh.attach_new_doc_profiles(directory.0.clone());
+        }
+        fresh.execute("file.new", &json!({"profile": if collision { Some("Print") } else { None }})).unwrap();
+        let d = &fresh.doc().unwrap().doc;
+        assert_eq!(review_resource_family(d, "Native lettering", "Installed"), "Source Sans 3", "CONTROL: ordinary installed family survives");
+        assert!(CompositeFont::named(&d.composite_fonts, "Source Sans 3").is_none(), "CONTROL: no synthetic installed-family definition");
+        if let Some(profile) = &profile {
+            assert_eq!(CompositeFont::named(&d.composite_fonts, &existing_font.name), Some(&existing_font), "CONTROL: destination family is unchanged");
+            let actual = &d.symbols.iter().find(|s| s.name == "Existing destination lettering").unwrap().art;
+            let expected = &profile.symbols.iter().find(|s| s.name == "Existing destination lettering").unwrap().art;
+            let (NodeKind::Text(actual), NodeKind::Text(expected)) = (&actual.kind, &expected.kind) else {
+                panic!("CONTROL: destination lettering is still text")
+            };
+            assert_eq!(actual.runs, expected.runs, "CONTROL: destination text/family/formatting are unchanged");
+            assert_eq!(actual.xf, expected.xf, "CONTROL: destination text placement is unchanged");
+            let family = review_resource_family(d, "Existing lettering", "Destination");
+            assert_eq!(CompositeFont::named(&d.composite_fonts, &family), Some(&existing_font), "CONTROL: outer palette meaning is unchanged");
+        }
+        let family = review_resource_family(d, "Native lettering", "Ab");
+        if CompositeFont::named(&d.composite_fonts, &family).is_none_or(|font| font.parts != incoming_font.parts || font.custom != incoming_font.custom) {
+            regressions.push(format!("collision={collision}: linked native text family {family:?} lost its original parts/custom definition"));
+        }
+    }
+    assert!(regressions.is_empty(), "REVIEW RESOURCE REGRESSION linked-native composite: {regressions:?}");
+}
+
+fn review_resource_dynamic_document() -> (Document, vectorcraft_doc::NodeId) {
+    let mut d = raw_palette();
+    let dots = rectangle(&mut d, Paint::solid(Color::rgb8(31, 81, 123)));
+    d.patterns.push(PatternDef::new("Dots", vec![Arc::new(dots)]));
+    d.swatches.push(Swatch { name: "Dots".into(), paint: Paint::Pattern { pattern: "Dots".into(), xf: Affine::IDENTITY }, global: false, spot: false });
+    let art = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 6.0, 5.0)), Appearance::basic(Paint::solid(Color::BLACK), Paint::solid(Color::BLACK), 1.0));
+    d.symbols.push(Symbol { name: "Review dynamic".into(), art: Arc::new(art), dynamic: true });
+    let mut instance = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Review dynamic".into(), xf: Affine::IDENTITY });
+    instance.appearance = Appearance::basic(Paint::None, Paint::None, 0.0).into();
+    instance.extras_mut().symbol_overrides.push(vectorcraft_doc::SymbolOverride {
+        path: vec![],
+        fill: Some(Paint::Pattern { pattern: "Dots".into(), xf: Affine::IDENTITY }),
+        stroke: Some(Paint::Pattern { pattern: "Dots".into(), xf: Affine::scale(2.0) }),
+        opacity: Some(0.65),
+        blend: None,
+    });
+    let id = instance.id;
+    Arc::make_mut(&mut d.layers[0]).children_mut().unwrap().push(Arc::new(instance));
+    d.fix_next_id();
+    (d, id)
+}
+
+fn review_resource_dynamic_control(d: &Document, instance: &Node) {
+    let NodeKind::SymbolInstance { symbol, .. } = &instance.kind else { panic!("CONTROL: dynamic instance expected") };
+    let definition = d.symbols.iter().find(|s| &s.name == symbol).unwrap();
+    assert!(definition.dynamic, "CONTROL: source symbol is dynamic");
+    assert!(instance.appearance.fill_paint().is_none(), "CONTROL: no instance stain hides overrides");
+    let overrides = &instance.extras().symbol_overrides;
+    assert_eq!(overrides.len(), 1);
+    let art = vectorcraft_doc::symbol_overrides::instance_art(&definition.art, instance);
+    assert_eq!(Some(art.appearance.fill_paint()), overrides[0].fill.clone(), "CONTROL: override fill is actually applied");
+    assert_eq!(Some(art.appearance.stroke().unwrap().paint.clone()), overrides[0].stroke.clone(), "CONTROL: override stroke is actually applied");
+    for paint in [&overrides[0].fill, &overrides[0].stroke].into_iter().flatten() {
+        let Paint::Pattern { pattern, .. } = paint else { panic!("CONTROL: pattern override expected") };
+        assert!(d.pattern(pattern).is_some(), "CONTROL: input override resolves");
+    }
+}
+
+#[test]
+fn default_swatches_review_resource_dynamic_override_pattern_remapping() {
+    let _cms = color_context();
+    let directory = TestDirectory::new();
+    let (mut palette, id) = review_resource_dynamic_document();
+    let instance = palette.node(id).unwrap().clone();
+    review_resource_dynamic_control(&palette, &instance);
+    let expected_dots = palette.pattern("Dots").unwrap().clone();
+    let expected_override = instance.extras().symbol_overrides[0].clone();
+    Arc::make_mut(&mut palette.layers[0]).children_mut().unwrap().clear();
+    palette.patterns.push(PatternDef::new("Outer", vec![Arc::new(instance)]));
+    palette.swatches.push(Swatch { name: "Outer".into(), paint: Paint::Pattern { pattern: "Outer".into(), xf: Affine::IDENTITY }, global: false, spot: false });
+    palette.fix_next_id();
+
+    let mut profile = Document::new(20.0, 20.0);
+    let different = rectangle(&mut profile, Paint::solid(Color::rgb8(213, 47, 79)));
+    profile.patterns.push(PatternDef::new("Dots", vec![Arc::new(different)]));
+    let existing = rectangle(&mut profile, Paint::Pattern { pattern: "Dots".into(), xf: Affine::IDENTITY });
+    profile.symbols.push(Symbol { name: "Existing destination pattern user".into(), art: Arc::new(existing), dynamic: false });
+    profile.fix_next_id();
+    assert_ne!(profile.pattern("Dots").unwrap().art[0].appearance, expected_dots.art[0].appearance, "CONTROL: destination Dots differs");
+    save_profile(&directory.0, &profile);
+
+    let mut baseline = Session::new();
+    assert!(baseline.prefs.default_swatches.is_none(), "CONTROL: the profile baseline has no custom defaults");
+    baseline.attach_new_doc_profiles(directory.0.clone());
+    baseline.execute("file.new", &json!({"profile": "Print"})).unwrap();
+    let loaded_profile = baseline.doc().unwrap().doc.clone();
+    assert_ne!(loaded_profile.pattern("Dots").unwrap().art[0].appearance, expected_dots.art[0].appearance, "CONTROL: the loaded destination Dots differs");
+    assert!(loaded_profile.symbols.iter().any(|s| s.name == "Existing destination pattern user"), "CONTROL: the loaded destination symbol exists");
+
+    let mut source = Session::new();
+    source.add_document(palette, None);
+    let original = source.doc().unwrap().doc.clone();
+    let selection = source.doc().unwrap().selection.clone();
+    let history = source.doc().unwrap().history.undo.len();
+    source.execute("swatch.defaults.save", &json!({})).unwrap();
+    assert_eq!(source.doc().unwrap().doc, original);
+    assert_eq!(source.doc().unwrap().selection, selection);
+    assert_eq!(source.doc().unwrap().history.undo.len(), history);
+    let mut regressions = vec![];
+    for collision in [false, true] {
+        let mut fresh = restarted(&source);
+        if collision {
+            fresh.attach_new_doc_profiles(directory.0.clone());
+        }
+        fresh.execute("file.new", &json!({"profile": if collision { Some("Print") } else { None }})).unwrap();
+        let d = &fresh.doc().unwrap().doc;
+        if collision {
+            assert_eq!(d.pattern("Dots"), loaded_profile.pattern("Dots"), "CONTROL: destination pattern definition is unchanged");
+            assert_eq!(
+                d.symbols.iter().find(|s| s.name == "Existing destination pattern user"),
+                loaded_profile.symbols.iter().find(|s| s.name == "Existing destination pattern user"),
+                "CONTROL: existing destination pattern user is unchanged"
+            );
+        }
+        let outer = review_resource_pattern(d, "Outer");
+        assert_eq!(outer.art.len(), 1, "CONTROL: one original instance is preserved");
+        let instance = &outer.art[0];
+        let overrides = &instance.extras().symbol_overrides;
+        assert_eq!(overrides.len(), 1, "CONTROL: override entry is preserved");
+        assert_eq!(overrides[0].path, expected_override.path);
+        assert_eq!(overrides[0].opacity, expected_override.opacity);
+        assert_eq!(overrides[0].blend, expected_override.blend);
+        for (name, actual, expected) in [
+            ("fill", &overrides[0].fill, &expected_override.fill),
+            ("stroke", &overrides[0].stroke, &expected_override.stroke),
+        ] {
+            let Some(Paint::Pattern { pattern, xf }) = actual else { panic!("CONTROL: original override {name} remains a pattern") };
+            let Some(Paint::Pattern { xf: expected_xf, .. }) = expected else { unreachable!() };
+            assert_eq!(xf, expected_xf, "CONTROL: paint transform is unchanged");
+            if d.pattern(pattern).is_none_or(|p| p.art.len() != 1 || p.art[0].appearance != expected_dots.art[0].appearance || p.art[0].kind != expected_dots.art[0].kind) {
+                regressions.push(format!("collision={collision}: override {name} key {pattern:?} does not resolve to incoming Dots"));
+            }
+        }
+    }
+    assert!(regressions.is_empty(), "REVIEW RESOURCE REGRESSION dynamic override remapping: {regressions:?}");
+}
+
+#[test]
+fn default_swatches_review_resource_dynamic_override_clipboard_dependency() {
+    let _cms = color_context();
+    let (document, id) = review_resource_dynamic_document();
+    review_resource_dynamic_control(&document, document.node(id).unwrap());
+    let expected = document.pattern("Dots").unwrap().clone();
+
+    // First prove the ordinary public-copy route gathers the same pattern paint.
+    let mut control_doc = document.clone();
+    Arc::make_mut(&mut control_doc.layers[0]).children_mut().unwrap().clear();
+    let painted = rectangle(&mut control_doc, Paint::Pattern { pattern: "Dots".into(), xf: Affine::IDENTITY });
+    let painted_id = painted.id;
+    Arc::make_mut(&mut control_doc.layers[0]).children_mut().unwrap().push(Arc::new(painted));
+    control_doc.fix_next_id();
+    let mut control = Session::new();
+    control.add_document(control_doc, None);
+    control.execute("select.set", &json!({"ids": [painted_id.0]})).unwrap();
+    control.execute("edit.copy", &json!({})).unwrap();
+    assert_eq!(control.clipboard.nodes.len(), 1, "CONTROL: public copy selects one direct-painted object");
+    assert_eq!(control.clipboard.patterns.iter().find(|p| p.name == "Dots"), Some(&expected), "CONTROL: ordinary paint dependency is gathered");
+
+    let mut source = Session::new();
+    source.add_document(document, None);
+    source.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let original = source.doc().unwrap().doc.clone();
+    let history = source.doc().unwrap().history.undo.len();
+    source.execute("edit.copy", &json!({})).unwrap();
+    assert_eq!(source.doc().unwrap().doc, original, "CONTROL: copy leaves its source document untouched");
+    assert_eq!(source.doc().unwrap().history.undo.len(), history);
+    assert_eq!(source.clipboard.nodes.len(), 1, "CONTROL: only the dynamic instance was copied");
+    assert_eq!(source.clipboard.symbols.len(), 1, "CONTROL: its symbol definition was gathered");
+    assert_eq!(source.clipboard.nodes[0].extras().symbol_overrides, original.node(id).unwrap().extras().symbol_overrides);
+    assert_eq!(
+        source.clipboard.patterns.iter().find(|p| p.name == "Dots"),
+        Some(&expected),
+        "REVIEW RESOURCE REGRESSION dynamic override dependency: Dots is used only through the copied instance's fill/stroke overrides"
+    );
+}
+
+// Append to the existing default_swatches integration target; reuse its imports/helpers.
+#[test]
+fn default_swatches_review_malformed_saved_record_keeps_unrelated_preferences() {
+    let _cms = color_context();
+    let mut s = Session::new();
+    s.add_document(raw_palette(), None);
+    s.execute("swatch.defaults.save", &json!({})).unwrap();
+    let custom = s.prefs.to_json()["defaultSwatches"].clone();
+    assert_eq!(custom["kind"], "custom");
+    assert!(custom["data"].as_str().is_some());
+
+    // Valid records must remain on the existing path before checking the damaged field.
+    for palette in [json!({"kind": "factory"}), custom] {
+        let saved = json!({"keyboardIncrement": 4, "defaultSwatches": palette});
+        let read: Prefs = serde_json::from_value(saved.clone()).unwrap();
+        assert_eq!(read.keyboard_increment, 4.0);
+        assert_eq!(read.to_json()["defaultSwatches"], saved["defaultSwatches"]);
+    }
+
+    let saved = json!({"keyboardIncrement": 4, "defaultSwatches": {"kind": "custom"}});
+    let read: Prefs = serde_json::from_value(saved).expect("a damaged palette field must not discard unrelated preferences");
+    assert_eq!(read.keyboard_increment, 4.0);
+    assert!(read.default_swatches.is_none());
+}
+
+// A semantic oracle for the future lookup repair, not a cost/performance regression.
+// Append to the existing default_swatches target; reuse its imports/helpers.
+#[test]
+fn default_swatches_review_linked_color_lookup_preserves_first_match_contract() {
+    let _cms = color_context();
+    let mut d = raw_palette();
+    // A global flag does not turn a linked tint or gradient into a base solid.
+    for name in ["Brand 40%", "Brand ramp"] {
+        d.swatches_iter_mut().find(|w| w.name == name).unwrap().global = true;
+    }
+    // Every original record must precede its otherwise eligible duplicate, including the tint in group 1.
+    d.swatch_groups.last_mut().unwrap().swatches.extend(["RGB original", "Brand 40%", "Brand ramp"].map(|name| Swatch {
+        name: name.into(),
+        paint: Paint::solid(Color::rgb8(9, 19, 29)),
+        global: true,
+        spot: false,
+    }));
+    // Ungrouped swatches precede each group in order; an ineligible first record still shadows its duplicate.
+    assert!(!d.swatch("RGB original").unwrap().global, "CONTROL: the first RGB record is not global");
+    assert!(matches!(&d.swatch("Brand 40%").unwrap().paint, Paint::Solid { swatch: Some(base), .. } if base == "Brand"), "CONTROL: the first tint is linked");
+    assert!(matches!(&d.swatch("Brand ramp").unwrap().paint, Paint::Gradient(_)), "CONTROL: the first ramp is not a solid");
+    for name in ["RGB original", "Brand 40%", "Brand ramp"] {
+        assert_eq!(d.global_color(name), None, "{name}");
+    }
+    let Paint::Solid { color, .. } = d.swatch("Brand").unwrap().paint.clone() else { panic!("Brand is a solid spot swatch") };
+    for use_lab in [false, true] {
+        d.spot_use_lab = use_lab;
+        assert_eq!(d.global_color("Brand"), Some(d.linked_color(color, true)));
+    }
+    let registration = vectorcraft_color::swatch::REGISTRATION;
+    assert!(d.swatches_iter().all(|w| w.name != registration));
+    assert!(d.global_color(registration).is_some(), "Registration has a separate built-in lookup");
 }

@@ -5,13 +5,15 @@
 //! defines differently keeps its colour, unlinked. Text styles are left as they are: the art carries
 //! its own formatting.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use vectorcraft_brush::{Brush, BrushKind};
 use vectorcraft_color::Paint;
 use vectorcraft_doc::{AppearanceItem, Document, Node, NodeKind, PatternDef, Symbol};
 
+use super::super::compositefonts::{node_families, plan_import};
+use super::super::{Result, bad};
 use super::unique_name;
 
 /// Visit `n` and every descendant (children and opacity-mask art) mutably.
@@ -219,12 +221,17 @@ fn brush_art(b: &mut Brush) -> Vec<&mut Node> {
 
 /// Bring the resources `nodes` (art from `src`) use into `dst`, renaming on conflict, and point
 /// `nodes` at the names they got.
-pub(crate) fn adopt(dst: &mut Document, src: &Document, nodes: &mut [Node]) {
+pub(crate) fn adopt(dst: &mut Document, src: &Document, nodes: &mut [Node], cmd: &str) -> Result<()> {
     let mut used = Used::default();
+    let mut families = BTreeSet::new();
+    let mut note_family = |name: &mut String| {
+        families.insert(name.to_lowercase());
+    };
     for n in nodes.iter_mut() {
         refs(n, &mut |r| used.note(r));
+        each_mut(n, &mut |n| node_families(n, &mut note_family));
     }
-    let src_brushes = vectorcraft_brush::library(src);
+    let mut src_brushes = vectorcraft_brush::library(src);
     // Symbol, pattern and brush art and tint swatches can use more resources (the lists grow while
     // they are walked).
     let (mut si, mut pi, mut wi, mut bi) = (0, 0, 0, 0);
@@ -251,8 +258,42 @@ pub(crate) fn adopt(dst: &mut Document, src: &Document, nodes: &mut [Node]) {
         }
         for mut a in art {
             refs(&mut a, &mut |r| used.note(r));
+            each_mut(&mut a, &mut |n| node_families(n, &mut note_family));
         }
     }
+
+    let fonts = src.composite_fonts.iter().filter(|font| families.contains(&font.name.to_lowercase())).cloned().collect::<Vec<_>>();
+    // Plan first: no destination resource or incoming family changes survive a planning error.
+    let plan = if fonts.is_empty() {
+        None
+    } else {
+        Some(plan_import(fonts, families, dst, "the placed art and document", "placed art").map_err(|error| bad(cmd, error.to_string()))?)
+    };
+    // Resource equality must see the incoming aliases. Never remap destination art, unused
+    // source definitions or the source document itself.
+    let mut staged;
+    let src = if let Some(plan) = &plan {
+        staged = src.clone();
+        for n in nodes.iter_mut() {
+            each_mut(n, &mut |n| node_families(n, &mut |family| plan.rename(family)));
+        }
+        for symbol in staged.symbols.iter_mut().filter(|symbol| used.symbols.contains(&symbol.name)) {
+            each_mut(Arc::make_mut(&mut symbol.art), &mut |n| node_families(n, &mut |family| plan.rename(family)));
+        }
+        for pattern in staged.patterns.iter_mut().filter(|pattern| used.patterns.contains(&pattern.name)) {
+            for art in &mut pattern.art {
+                each_mut(Arc::make_mut(art), &mut |n| node_families(n, &mut |family| plan.rename(family)));
+            }
+        }
+        for brush in src_brushes.iter_mut().filter(|brush| used.brushes.contains(&brush.name)) {
+            for art in brush_art(brush) {
+                each_mut(art, &mut |n| node_families(n, &mut |family| plan.rename(family)));
+            }
+        }
+        &staged
+    } else {
+        src
+    };
 
     let images = names(&used.images, |k| src.images.get(k), |k| dst.images.get(k), |a, b| a == b, |c| dst.images.contains_key(c));
     // Symbol and pattern art copied in takes ids of `dst`, so their art is compared by what it
@@ -327,6 +368,9 @@ pub(crate) fn adopt(dst: &mut Document, src: &Document, nodes: &mut [Node]) {
         unshare(&mut brushes, &bru, &used.brushes, |c| dst_brushes.iter().any(|b| b.name == c));
     }
 
+    if let Some(plan) = plan {
+        dst.composite_fonts = plan.combined.into();
+    }
     let mut rename = |r: Ref| {
         let (map, k) = match r {
             Ref::Image(k) => (&images, k),
@@ -390,4 +434,5 @@ pub(crate) fn adopt(dst: &mut Document, src: &Document, nodes: &mut [Node]) {
             dst.swatches.push(w);
         }
     }
+    Ok(())
 }

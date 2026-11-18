@@ -117,6 +117,9 @@ fn attrs_refs(attrs: &Map<String, Value>, f: Visit) {
 fn node_refs(n: &Node, f: Visit) {
     n.walk(&mut |m| {
         appearance_refs(&m.appearance, f);
+        for paint in vectorcraft_doc::swatches::override_paints(m) {
+            paint_refs(paint, f);
+        }
         if let Some(id) = m.extras().graphic_style {
             f(Ref::Style(id));
         }
@@ -681,6 +684,11 @@ impl Relink {
     /// Relink a node tree (the mirror of [`node_refs`]).
     fn node(&self, n: &mut Node) {
         self.appearance(&mut n.appearance);
+        if let Some(extras) = n.extras_if_any() {
+            for paint in extras.symbol_overrides.iter_mut().flat_map(|o| [&mut o.fill, &mut o.stroke]).flatten() {
+                self.paint(paint);
+            }
+        }
         if !self.keep_styles {
             n.extras_mut().graphic_style = n.extras().graphic_style.and_then(|id| self.styles.get(&id).copied());
         }

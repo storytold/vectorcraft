@@ -10,9 +10,12 @@
 //! custom character sets:
 //! <https://web.archive.org/web/20220911143322/https://helpx.adobe.com/pdf/cs6/illustrator_reference.pdf#page=348>.
 
+use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
+
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::text::{COMPOSITE_FONTS_MAX, COMPOSITE_NAME_MAX, CUSTOM_CHARS_MAX, CUSTOM_SETS_MAX};
-use vectorcraft_doc::{CharClass, CompositeFont, CompositePart, CompositeParts, CustomCharSet};
+use vectorcraft_doc::{CharClass, CompositeFont, CompositePart, CompositeParts, CustomCharSet, Document, Node, NodeKind};
 use vectorcraft_text::FontDb;
 
 use super::fileio::{read_file_head, write_file};
@@ -72,6 +75,189 @@ pub fn specs() -> Vec<CommandSpec> {
             import
         ),
     ]
+}
+
+/// Text runs are not the only retained family names: styles and a graph's regeneration
+/// settings keep them too. Use the same typed leaves for dependency collection and renaming.
+pub(super) fn each_family(d: &mut Document, visit: &mut impl FnMut(&mut String)) -> Result<()> {
+    super::textstyles::each_text_mut(d, &mut |text| {
+        for run in &mut text.runs {
+            visit(&mut run.style.font_family);
+        }
+        Ok(())
+    })?;
+    for style in d.char_styles.iter_mut().chain(d.para_styles.iter_mut()) {
+        if let Some(serde_json::Value::String(family)) = style.attrs.get_mut("font_family") {
+            visit(family);
+        }
+    }
+    let mut graphs = Vec::new();
+    d.visit_stored(|node, _| {
+        if node.extras().graph.is_some() {
+            graphs.push(node.id);
+        }
+    });
+    for id in graphs {
+        if let Some(node) = d.stored_node_mut(id) {
+            graph_families(node, visit);
+        }
+    }
+    // Brush art is outside visit_stored. Text runs were handled by each_text_mut above;
+    // visit only the remaining graph settings here and store only actual changes.
+    fn brush_graphs(node: &mut Node, visit: &mut impl FnMut(&mut String)) {
+        graph_families(node, visit);
+        if let Some(mask) = node.extras_if_any().and_then(|extras| extras.mask.as_mut()) {
+            brush_graphs(Arc::make_mut(&mut mask.art), visit);
+        }
+        for child in node.children_mut().into_iter().flatten() {
+            brush_graphs(Arc::make_mut(child), visit);
+        }
+    }
+    let mut brushes = vectorcraft_brush::library(d);
+    let original = brushes.clone();
+    for art in brushes.iter_mut().flat_map(|brush| brush.art_mut()) {
+        brush_graphs(art, visit);
+    }
+    if brushes != original {
+        vectorcraft_brush::store(d, &brushes);
+    }
+    Ok(())
+}
+
+fn graph_families(node: &mut Node, visit: &mut impl FnMut(&mut String)) {
+    if let Some(graph) = node.extras_if_any().and_then(|extras| extras.graph.as_deref_mut()) {
+        let labels = &mut graph.label_styles;
+        for style in [&mut labels.values, &mut labels.categories, &mut labels.legend].into_iter().flatten() {
+            visit(&mut style.font_family);
+        }
+    }
+}
+
+pub(super) fn family_names(d: &mut Document) -> Result<BTreeSet<String>> {
+    let mut names = BTreeSet::new();
+    each_family(d, &mut |name| {
+        names.insert(name.to_lowercase());
+    })?;
+    Ok(names)
+}
+
+pub(super) fn check_composites(fonts: &[CompositeFont], allow_installed_names: bool, limit_context: &str) -> Result<()> {
+    if fonts.len() > COMPOSITE_FONTS_MAX {
+        return Err(crate::EngineError::Other(format!("{limit_context} need more than {COMPOSITE_FONTS_MAX} composite fonts")));
+    }
+    let db = FontDb::global();
+    let mut names = BTreeSet::new();
+    for font in fonts {
+        font.check().map_err(crate::EngineError::Other)?;
+        if !names.insert(font.name.to_lowercase()) {
+            return Err(crate::EngineError::Other(format!("two composite fonts are named {:?}", font.name)));
+        }
+        if !allow_installed_names && db.has_installed_family(&font.name) {
+            return Err(crate::EngineError::Other(format!("composite font {:?} names an installed family", font.name)));
+        }
+    }
+    for font in fonts {
+        for part in font.part_fonts() {
+            // Validate the prospective document, not another Session's active registry.
+            if names.contains(&part.to_lowercase()) {
+                return Err(crate::EngineError::Other(format!("composite font {:?} has a composite font as a part", font.name)));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn composite_alias(base: &str, reserved: &BTreeSet<String>, alias_context: &str) -> Result<String> {
+    let db = FontDb::global();
+    let mut number = 2_u64;
+    loop {
+        let suffix = format!(" {number}");
+        let stem: String = base.chars().take(COMPOSITE_NAME_MAX.saturating_sub(suffix.chars().count())).collect();
+        let name = format!("{}{suffix}", stem.trim_end());
+        if CompositeFont::clean_name(&name).as_deref() == Some(name.as_str())
+            && !reserved.contains(&name.to_lowercase())
+            && !db.has_installed_family(&name)
+        {
+            return Ok(name);
+        }
+        number = number.checked_add(1).ok_or_else(|| crate::EngineError::Other(format!("no free name for {alias_context} composite font")))?;
+    }
+}
+
+/// Family fields held directly by one node. Tree/resource traversal belongs to the caller.
+pub(super) fn node_families(node: &mut Node, visit: &mut impl FnMut(&mut String)) {
+    if let NodeKind::Text(text) = &mut node.kind {
+        for run in &mut text.runs {
+            visit(&mut run.style.font_family);
+        }
+    }
+    graph_families(node, visit);
+}
+
+/// Validated incoming aliases and definitions; planning never mutates the documents or FontDb.
+pub(super) struct CompositeImport {
+    names: BTreeMap<String, String>,
+    pub(super) incoming: Vec<CompositeFont>,
+    pub(super) combined: Vec<CompositeFont>,
+}
+
+impl CompositeImport {
+    pub(super) fn rename(&self, family: &mut String) {
+        if let Some(name) = self.names.get(&family.to_lowercase()) {
+            *family = name.clone();
+        }
+    }
+}
+
+/// Import only the definitions the caller's incoming art uses, preserving existing meanings.
+/// The contexts keep the palette's existing errors while placement names its own operation.
+pub(super) fn plan_import(
+    source: Vec<CompositeFont>,
+    source_families: BTreeSet<String>,
+    target: &Document,
+    limit_context: &str,
+    alias_context: &str,
+) -> Result<CompositeImport> {
+    // A family installed since capture may occupy a saved name; choose an alias first.
+    check_composites(&source, true, limit_context)?;
+    check_composites(&target.composite_fonts, false, limit_context)?;
+    let mut target_view = target.clone();
+    let target_families = family_names(&mut target_view)?;
+    let mut target_taken = target_families.clone();
+    for font in target.composite_fonts.iter() {
+        target_taken.insert(font.name.to_lowercase());
+        target_taken.extend(font.part_fonts().map(str::to_lowercase));
+    }
+    let mut reserved = source_families;
+    reserved.extend(target_families.iter().cloned());
+    for font in source.iter().chain(target.composite_fonts.iter()) {
+        reserved.insert(font.name.to_lowercase());
+        reserved.extend(font.part_fonts().map(str::to_lowercase));
+    }
+    let db = FontDb::global();
+    let mut names = BTreeMap::new();
+    let mut combined = target.composite_fonts.to_vec();
+    let mut incoming = Vec::new();
+    for font in source {
+        let existing = CompositeFont::named(&target.composite_fonts, &font.name);
+        let reused = existing.filter(|other| other.parts == font.parts && other.custom == font.custom);
+        let name = match reused {
+            Some(other) => other.name.clone(),
+            None if target_taken.contains(&font.name.to_lowercase()) || db.has_installed_family(&font.name) => {
+                composite_alias(&font.name, &reserved, alias_context)?
+            }
+            None => font.name.clone(),
+        };
+        reserved.insert(name.to_lowercase());
+        names.insert(font.name.to_lowercase(), name.clone());
+        let copy = CompositeFont { name, ..font };
+        if reused.is_none() {
+            combined.push(copy.clone());
+        }
+        incoming.push(copy);
+    }
+    check_composites(&combined, false, limit_context)?;
+    Ok(CompositeImport { names, incoming, combined })
 }
 
 /// Register the active document's composite fonts in the font database, and remove the ones the

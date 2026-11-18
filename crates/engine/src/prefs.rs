@@ -47,6 +47,12 @@ pub enum SavedSwatchDefaults {
     Custom { data: String },
 }
 
+/// An unreadable saved palette is ignored without discarding the other preferences.
+fn saved_swatch_defaults<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<Option<SavedSwatchDefaults>, D::Error> {
+    let saved = <Value as serde::Deserialize>::deserialize(d)?;
+    Ok(serde_json::from_value(saved).ok())
+}
+
 /// Application preferences (Edit → Preferences). Every field is reachable through `prefs.get` /
 /// `prefs.set {key, value}` (camelCase keys, validated against [`cmd::prefscmds::PREF_SPECS`]).
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -338,7 +344,7 @@ pub struct Prefs {
     pub gradient_presets: Vec<cmd::GradientPreset>,
     /// Swatches panel defaults for regular new documents. A local library, not a Preferences
     /// dialog field; swatch.defaults.save/reset replace it without editing an open document.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "saved_swatch_defaults", skip_serializing_if = "Option::is_none")]
     pub default_swatches: Option<SavedSwatchDefaults>,
     /// Width profiles saved to the Stroke panel's Profile list (`stroke.widthProfile.*`). Not a
     /// Preferences dialog field, so it has no [`cmd::prefscmds::PREF_SPECS`] row.

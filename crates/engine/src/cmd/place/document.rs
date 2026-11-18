@@ -501,7 +501,7 @@ pub(crate) fn expand(d: &mut Document, id: NodeId, cmd: &str) -> Result<()> {
     let a = document_art(p.link.name(), &bytes, Some(&p.link.path), p.page(), p.bounding, p.page_box, cmd)?;
     let m = p.art_xf(a.frame).ok_or_else(|| bad(cmd, format!("object {} has no size", id.0)))?;
     let mut nodes = a.nodes;
-    super::adopt::adopt(d, &a.doc, &mut nodes);
+    super::adopt::adopt(d, &a.doc, &mut nodes, cmd)?;
     let mut children: Vec<Arc<Node>> = nodes.iter().map(|n| Arc::new(d.reid(n))).collect();
     if let Some(r) = a.clip {
         children.insert(0, Arc::new(super::clip_path(d.alloc_id(), r)));

@@ -550,7 +550,7 @@ fn art_of<'a>(nodes: impl Iterator<Item = &'a Arc<Node>>) -> Vec<Node> {
 }
 
 /// The art as one object of `d` (its resources added), at its natural size and position.
-fn build(d: &mut Document, l: Loaded, link: Option<LinkInfo>) -> Node {
+fn build(d: &mut Document, l: Loaded, link: Option<LinkInfo>, cmd: &str) -> Result<Node> {
     let mut node = match l.art {
         Art::Image(img, clip) => {
             let (sx, sy) = pt_per_px(img.ppi);
@@ -585,7 +585,7 @@ fn build(d: &mut Document, l: Loaded, link: Option<LinkInfo>) -> Node {
         Art::Text(t) => Node::new(d.alloc_id(), NodeKind::Text(Box::new(text::area_text(t, l.natural, &d.setup)))),
         Art::Document(s, link, bounding) => document::node(d, &s, link, bounding),
         Art::Vector { src, mut nodes, clip } => {
-            adopt::adopt(d, &src, &mut nodes);
+            adopt::adopt(d, &src, &mut nodes, cmd)?;
             let mut children: Vec<Arc<Node>> = nodes.iter().map(|n| Arc::new(d.reid(n))).collect();
             if let Some(r) = clip {
                 children.insert(0, Arc::new(clip_path(d.alloc_id(), r)));
@@ -594,7 +594,7 @@ fn build(d: &mut Document, l: Loaded, link: Option<LinkInfo>) -> Node {
         }
     };
     node.name = Some(l.name);
-    node
+    Ok(node)
 }
 
 /// `node` moved and scaled by `m` as a whole: strokes, effects and pattern tiles go along.
@@ -848,7 +848,7 @@ fn apply(s: &mut Session, read: PlaceRead) -> Result<Value> {
         n => warnings.push(format!("{n} slices would lie outside the canvas and were left out")),
     }
     let (id, size, slice_ids) = s.edit("Place", |d, sel| {
-        let node = transformed(build(d, loaded, link), m);
+        let node = transformed(build(d, loaded, link, PLACE)?, m);
         let size = node.geometric_bounds_with(&d.symbol_boxes()).unwrap_or_default();
         let (into, index) = match old {
             Some(old) => {
@@ -1101,7 +1101,7 @@ fn thumbnail_png(l: Loaded, px: f64) -> Result<String> {
     let natural = l.natural;
     let mut d = Document::new(natural.width().max(1.0), natural.height().max(1.0));
     let layer = d.layers.first().map(|l| l.id);
-    let node = build(&mut d, l, None);
+    let node = build(&mut d, l, None, "file.place.info")?;
     d.insert(layer, 0, node)?;
     let k = px.clamp(1.0, MAX_THUMBNAIL) / natural.width().max(natural.height()).max(1e-9);
     let png = vectorcraft_render::Renderer::new().render_region(&d, natural, k, false).to_png().map_err(EngineError::Other)?;
