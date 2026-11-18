@@ -1,5 +1,5 @@
 //! Shared `command` plug-ins and installing from bundles, catalogs and GitHub (`craft-plugin`,
-//! RFC-0041).
+//! RFC-0046).
 //!
 //! VectorCraft's own plug-in kinds (object filters, live effects, exporters, importers: the
 //! `vectorcraft-plugins` crate, [`super::plugin`]) keep their ABI, manifest, permissions and store.

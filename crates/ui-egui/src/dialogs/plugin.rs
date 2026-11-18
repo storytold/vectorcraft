@@ -81,7 +81,7 @@ pub fn object_menu() -> Vec<Item> {
     if items.is_empty() {
         items.push(Item::Header(NO_FILTERS));
     }
-    // The shared command plug-ins' commands (RFC-0041), then Manage Plug-ins….
+    // The shared command plug-ins' commands (RFC-0046), then Manage Plug-ins….
     let (shared, manage) = crate::plugin_bundles::menu_items();
     if !shared.is_empty() {
         items.push(Item::Sep);

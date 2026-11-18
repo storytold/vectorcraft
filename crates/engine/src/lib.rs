@@ -194,7 +194,7 @@ pub struct Session {
     /// `plugin.install` takes `grant` and `allowHeavy` from any request
     /// ([`Session::allow_plugin_grants_from_requests`]).
     plugin_grants_from_requests: bool,
-    /// The shared `command` plug-ins (`craft-plugin`, RFC-0041), their store, catalogs, settings and
+    /// The shared `command` plug-ins (`craft-plugin`, RFC-0046), their store, catalogs, settings and
     /// HTTPS client ([`cmd::craftplugin::Runtime`]).
     pub(crate) craft_plugins: cmd::craftplugin::Runtime,
     /// URLs recently given in the Attributes panel (`attributes.set {url}`), newest first; not saved.

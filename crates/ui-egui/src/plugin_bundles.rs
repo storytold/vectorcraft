@@ -1,4 +1,4 @@
-//! Shared plug-ins in the UI (`craft-plugin`, RFC-0041): command plug-ins' commands in Object ›
+//! Shared plug-ins in the UI (`craft-plugin`, RFC-0046): command plug-ins' commands in Object ›
 //! Plug-ins, Manage Plug-ins… (the command plug-ins installed, installing from a `.craftplugin`
 //! file, a GitHub repository or a catalog, updates and catalogs), the install confirmation and a
 //! parameter dialog generated from a command's `params`. Everything goes through the engine's

@@ -202,7 +202,7 @@ const BUNDLE_EXT: &str = vectorcraft_engine::cmd::craftplugin::craft_plugin::BUN
 /// `catalog` with `id` installs through [`crate::plugin_bundles::install_bundle`].
 pub fn install_plugin(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let given = |k: &str| p.get(k).and_then(Value::as_str).is_some_and(|v| !v.is_empty());
-    // A shared `.craftplugin` bundle, a GitHub repository or a catalog's package (RFC-0041).
+    // A shared `.craftplugin` bundle, a GitHub repository or a catalog's package (RFC-0046).
     if crate::plugin_bundles::names_bundle(p) {
         return crate::plugin_bundles::install_bundle(app, p);
     }

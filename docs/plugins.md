@@ -26,7 +26,7 @@ in `crates/engine/src/cmd/plugin.rs`).
 A fifth kind is shared with the other Craft apps: **command plug-ins** (`"kind": "command"`), which act on the document
 only through VectorCraft's commands. They, and installing any plug-in from a `.craftplugin` bundle, a catalog or a
 GitHub repository, come from the shared [`craft-plugin`](https://github.com/storytold/craft-libs/tree/main/crates/plugin)
-crate ([RFC-0041](https://github.com/storytold/craft-contrib/blob/main/rfcs/0041-shared-plugin-runtime.md)); see
+crate ([RFC-0046](https://github.com/storytold/craft-contrib/blob/main/rfcs/0046-shared-plugin-runtime.md)); see
 [Shared plug-ins](#shared-plug-ins-command-plug-ins-bundles-catalogs-and-github).
 
 ## Using plug-ins

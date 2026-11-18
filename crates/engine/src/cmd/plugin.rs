@@ -363,7 +363,7 @@ fn not_granted(name: &str, permission: Permission) -> EngineError {
 /// is one ([`FilterRun::hand_in`]), else the plug-in's, run now. → `{plugin, ids}`: what it made or
 /// changed, which is then selected.
 fn run(s: &mut Session, p: &Value) -> Result<Value> {
-    // A shared command plug-in (RFC-0041): `{id, command?, params?}`.
+    // A shared command plug-in (RFC-0046): `{id, command?, params?}`.
     if let Some(id) = str_param(p, "id")
         && registry::get(id).is_none()
         && s.craft_plugins.get(id).is_some()
@@ -401,7 +401,7 @@ pub fn is_command_id(id: &str) -> bool {
     id.strip_prefix(vectorcraft_plugins::PREFIX).is_some_and(|rest| rest.contains('.')) && !SHARED_COMMANDS.contains(&id)
 }
 
-/// The `plugin.*` commands every Craft app shares (RFC-0041) whose ids have a dot after the prefix:
+/// The `plugin.*` commands every Craft app shares (RFC-0046) whose ids have a dot after the prefix:
 /// commands of this module, not plug-in commands. A plug-in with id `catalog` can't add commands
 /// with these ids.
 const SHARED_COMMANDS: &[&str] = &["plugin.catalog.list", "plugin.catalog.add"];
@@ -739,7 +739,7 @@ pub(crate) fn hold_plugin_changes() -> std::sync::MutexGuard<'static, ()> {
 /// process using the same folder changes it before or after; when the store can't be locked, nothing
 /// is installed.
 fn install(s: &mut Session, p: &Value) -> Result<Value> {
-    // A `.craftplugin` bundle, a catalog's package or a GitHub repository's release (RFC-0041).
+    // A `.craftplugin` bundle, a catalog's package or a GitHub repository's release (RFC-0046).
     if super::craftplugin::names_bundle(p) {
         return super::craftplugin::install_cmd(s, p);
     }
@@ -1135,7 +1135,7 @@ fn list(s: &mut Session, _: &Value) -> Result<Value> {
     let folder = FOLDER.lock().unwrap_or_else(|e| e.into_inner()).as_ref().map(|(_, _, r)| shown_report(r.clone()));
     let disabled: Vec<Value> = safe_mode::disabled().iter().map(shown_item).collect();
     let mut plugins: Vec<Value> = registry::list().iter().map(|p| describe_installed(p)).collect();
-    // The shared command plug-ins (RFC-0041), after VectorCraft's own.
+    // The shared command plug-ins (RFC-0046), after VectorCraft's own.
     let shared = s.command_plugins();
     plugins.extend(shared.list().iter().map(super::craftplugin::Plugin::describe));
     let mut v = json!({"plugins": plugins, "folder": folder, "safeMode": safe_mode::active(), "disabled": disabled});
