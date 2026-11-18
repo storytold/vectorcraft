@@ -591,6 +591,7 @@ since 2026-10-01.
 ## Evidence: what ships today, by area
 
 - `object.setBounds` uses the same reference point for whole-number integer and floating-point values, including `0` and `0.0`. It rejects negative and fractional indices without changing geometry, selection, or undo history. An omitted or null reference uses the center, and whole-number references above 8 use point 8. Object and direct-anchor selections follow these rules (`tests::bboxrotate::set_bounds_whole_number_references_match_integer_references`, `set_bounds_rejects_invalid_references_without_changes`).
+- Twist keeps boundary handles tangent to the rotation inside its outer circle. Regressions cover 90, 400, and -720 degree twists, unchanged boundary anchors, and a sampling midpoint that rounds to an endpoint at large coordinates (`twist_boundary_handles_follow_the_inward_tangent` and `a_midpoint_rounded_to_an_endpoint_keeps_the_handle_direction`).
 
 - **Recolor picker follow-up (#8031/#4028):** native Lab numeric entry, document/loaded-library swatches in the Color Picker, and Assign-row Pick from Swatches / Limit to Library menus. #4090 provided the double-click picker and #5113 the Assign sliders. Regression tests `native_lab_entry_in_color_picker` and `row_context_menu_pick_from_swatches_and_limit_to_library` exercise the fields and menu callbacks rather than writing their result state. Area score and hours unchanged.
 
