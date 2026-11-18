@@ -239,6 +239,44 @@ fn errors_carry_line_and_column() {
     assert_eq!(e.message, "42");
 }
 
+/// A run error says whether its message is the script's own text, whatever that text reads: an
+/// error the interpreter or a host function threw is not, even when a script caught it and threw
+/// it again, and a value or error the script made, or an error whose name or message it changed,
+/// is.
+#[test]
+fn script_error_origin_distinguishes_native_and_authored_values() {
+    let native = "RangeError: invalid array length";
+    for (src, message, authored) in [
+        ("new Array(-1)", native, false),
+        ("try { new Array(-1); } catch (e) { throw e; }", native, false),
+        ("try { new Array(-1); } catch (e) { e.message = 'invalid array length'; throw e; }", native, false),
+        ("nope()", "ReferenceError: nope is not defined", false),
+        ("throw new RangeError('invalid array length')", native, true),
+        ("throw new Error('invalid array length')", "Error: invalid array length", true),
+        ("throw 'invalid array length'", "invalid array length", true),
+        ("throw 17", "17", true),
+        ("throw {}", "[object Object]", true),
+        ("throw new Error()", "Error", true),
+        ("try { new Array(-1); } catch (e) { throw e.message; }", "invalid array length", true),
+        ("try { new Array(-1); } catch (e) { throw new RangeError(e.message); }", native, true),
+        ("try { new Array(-1); } catch (e) { e.message = 'mine'; throw e; }", "RangeError: mine", true),
+        ("try { nope(); } catch (e) { e.name = 'TypeError'; throw e; }", "TypeError: nope is not defined", true),
+        ("try { new Array(-1); } catch (e) { RangeError.prototype.name = 'Mine'; throw e; }", "Mine: invalid array length", true),
+        ("RangeError.prototype.name = 'Mine'; new Array(-1)", "Mine: invalid array length", true),
+        ("RangeError.prototype.name = 'RangeError'; new Array(-1)", native, false),
+    ] {
+        let e = fail(src);
+        assert_eq!((e.kind, e.message.as_str(), e.authored), (RunErrorKind::Thrown, message, authored), "{src}");
+    }
+    assert!(!fail("var x = ;").authored, "a syntax error");
+    let mut realm = Realm::new();
+    realm.define_function("add", |_| Err("add takes two numbers".into()));
+    let e = realm.run("add()").unwrap_err();
+    assert_eq!((e.message.as_str(), e.authored), ("Error: add takes two numbers", false), "a host function's error");
+    let e = realm.run("throw new Error('add takes two numbers')").unwrap_err();
+    assert_eq!((e.message.as_str(), e.authored), ("Error: add takes two numbers", true));
+}
+
 /// An error about a property of `null` or `undefined` names a computed property whose name is a
 /// primitive, and says whether the script read or set it, never naming an empty property; a
 /// member assignment, an object key and a long name leave the name out.
