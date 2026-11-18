@@ -2748,6 +2748,9 @@ diagnostics	ui	интерфейс
 	Polar Grid Tool	Инструмент «Полярная сетка»
 	Polygon	Многоугольник
 	Polygon Properties:	Свойства многоугольника:
+	Line Properties:	Свойства линии:
+	Line Length:	Длина линии:
+	Line Angle:	Угол линии:
 	Polygon Tool	Инструмент «Многоугольник»
 	Portrait	Книжная
 	Power Saving (integrated)	Энергосбережение (встроенная)

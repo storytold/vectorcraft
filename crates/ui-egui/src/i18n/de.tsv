@@ -2682,6 +2682,9 @@ diagnostics	ui	Oberfläche
 	Polar Grid Tool	Radiales-Raster-Werkzeug
 	Polygon	Polygon
 	Polygon Properties:	Polygoneigenschaften:
+	Line Properties:	Linieneigenschaften:
+	Line Length:	Linienlänge:
+	Line Angle:	Linienwinkel:
 	Polygon Tool	Polygon-Werkzeug
 	Portrait	Hochformat
 	Power Saving (integrated)	Energiesparen (integriert)

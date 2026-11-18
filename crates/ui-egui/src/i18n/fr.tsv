@@ -2709,6 +2709,9 @@ font-technology	Variable	Variables
 	Polar Grid Tool	Outil Grille à coordonnées polaires
 	Polygon	Polygone
 	Polygon Properties:	Propriétés du polygone :
+	Line Properties:	Propriétés de la ligne :
+	Line Length:	Longueur de la ligne :
+	Line Angle:	Angle de la ligne :
 	Polygon Tool	Outil Polygone
 	Portrait	Portrait
 	Power Saving (integrated)	Économie d’énergie (intégrée)

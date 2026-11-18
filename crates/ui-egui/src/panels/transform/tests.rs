@@ -154,6 +154,52 @@ fn an_ellipse_shows_its_pie_properties() {
     assert!(shown.iter().any(|s| s == "30°") && shown.iter().any(|s| s == "120°"), "{shown:?}");
 }
 
+/// A live line shows its Line Properties in the Transform panel and the Properties panel's
+/// Transform section: a typed length keeps its first end in place and a typed angle turns it
+/// about its midpoint, each one undo step. A line with other objects selected, and a line after
+/// Expand Shape, show none.
+#[test]
+fn a_line_shows_and_takes_its_line_properties() {
+    let ends = |app: &VectorcraftApp| match &first_selected(app).unwrap().kind {
+        NodeKind::Path { live: Some(l), .. } => match **l {
+            LiveShape::Line { a, b } => (a, b),
+            ref k => panic!("{k:?}"),
+        },
+        k => panic!("{k:?}"),
+    };
+    let near = |p: Point, x: f64, y: f64| (p.x - x).abs() < 1e-6 && (p.y - y).abs() < 1e-6;
+    for draw in [show as fn(&mut VectorcraftApp, &mut Ui), crate::panels::properties::transform_section] {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        // 100 pt long, going down the page to the right: 53.13° clockwise, 306.87° counterclockwise.
+        let id = app.run("shape.line", json!({"x1": 50, "y1": 50, "x2": 110, "y2": 130})).unwrap()["id"].as_u64().unwrap();
+        let shown = texts(&mut app, draw);
+        for t in ["Line Properties:", "Line Length:", "100 pt", "Line Angle:", "306.9°"] {
+            assert!(shown.iter().any(|s| s == t), "{t} in {shown:?}");
+        }
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        type_into(&ctx, &mut app, draw, "100 pt", "50");
+        let (a, b) = ends(&app);
+        assert!(near(a, 50.0, 50.0) && near(b, 80.0, 90.0), "{a:?} {b:?}");
+        type_into(&ctx, &mut app, draw, "306.9°", "90");
+        let (a, b) = ends(&app);
+        assert!(near(a, 65.0, 95.0) && near(b, 65.0, 45.0), "{a:?} {b:?}");
+        assert!(texts(&mut app, draw).iter().any(|s| s == "90°"));
+        app.run("edit.undo", json!({})).unwrap();
+        let (a, b) = ends(&app);
+        assert!(near(a, 50.0, 50.0) && near(b, 80.0, 90.0), "one undo step: {a:?} {b:?}");
+        // With a rectangle selected too, the fields would set the line alone: they don't show.
+        let rect = app.run("shape.rectangle", json!({"x": 200, "y": 200, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.set", json!({"ids": [id, rect]})).unwrap();
+        assert!(!texts(&mut app, draw).iter().any(|s| s == "Line Properties:" || s == "Line Length:"));
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        assert!(texts(&mut app, draw).iter().any(|s| s == "Line Properties:"));
+        app.run("object.expandShape", json!({})).unwrap();
+        assert!(!texts(&mut app, draw).iter().any(|s| s == "Line Properties:" || s == "Line Length:"));
+    }
+}
+
 #[test]
 fn the_artboard_tool_shows_the_active_artboard() {
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());

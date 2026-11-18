@@ -3939,6 +3939,9 @@ diagnostics	ui	介面
 	Polar Grid Tool	極座標格點工具
 	Polygon	多邊形
 	Polygon Properties:	多邊形內容：
+	Line Properties:	直線內容：
+	Line Length:	直線長度：
+	Line Angle:	直線角度：
 	Polygon Tool	多邊形工具
 	Portrait	直向
 	Power Saving (integrated)	節能 (內建顯示晶片)

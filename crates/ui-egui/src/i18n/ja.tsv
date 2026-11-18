@@ -2859,6 +2859,9 @@ diagnostics	ui	UI
 	Polar Grid Tool	同心円グリッドツール
 	Polygon	多角形
 	Polygon Properties:	多角形のプロパティ:
+	Line Properties:	線のプロパティ:
+	Line Length:	線の長さ:
+	Line Angle:	線の角度:
 	Polygon Tool	多角形ツール
 	Portrait	縦置き
 	Portuguese	ポルトガル語
