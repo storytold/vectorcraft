@@ -386,6 +386,12 @@ impl Session {
     }
 
     pub fn commit_interaction(&mut self) -> Result<()> {
+        /// An artboard drag that ended where it began moved nothing (a copy there is still a
+        /// copy): it leaves the last transform as it was.
+        fn moved_artboards(p: &serde_json::Value) -> bool {
+            let num = |k: &str| p.get(k).and_then(serde_json::Value::as_f64).unwrap_or(0.0);
+            p.get("copy").and_then(serde_json::Value::as_bool).unwrap_or(false) || num("dx") != 0.0 || num("dy") != 0.0
+        }
         self.clear_deferred_overlay_cache();
         self.decoded_images.empty();
         if let Some(paint) = self.active().and_then(|st| st.interaction.as_ref()).and_then(|it| it.preview_paint.clone()) {
@@ -455,7 +461,7 @@ impl Session {
             // Transform Again repeats it as it stood when OK was pressed.
             st.last_transform = Some(LastTransform::Each(preview.1.clone()));
             st.last_perspective = None;
-        } else if preview.0 == "artboard.move" && changed {
+        } else if preview.0 == "artboard.move" && changed && moved_artboards(&preview.1) {
             // The Artboard tool's drag: Transform Again moves or copies the artboards it left.
             if let Some(again) = artboards_again {
                 st.last_transform = Some(LastTransform::Artboards(again));

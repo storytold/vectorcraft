@@ -476,6 +476,11 @@ fn artboard_move(s: &mut Session, p: &Value) -> Result<Value> {
     if let Some(o) = again.as_object_mut() {
         o.remove("index");
         o.remove("indices");
+        // The values this move used, not the preferences of the moment the repeat runs.
+        o.insert("moveArt".into(), json!(move_art));
+        o.insert("copy".into(), json!(copy));
+        o.insert("patterns".into(), json!(sc.patterns));
+        o.insert("lockedAndHidden".into(), json!(locked_art));
         let d = &s.doc()?.doc;
         o.insert("ids".into(), json!(index.iter().filter_map(|i| d.artboards.get(*i).map(|a| a.id)).collect::<Vec<_>>()));
     }
