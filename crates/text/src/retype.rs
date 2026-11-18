@@ -1,18 +1,20 @@
 //! Retype's glyph matching (Type › Retype, #4934): which glyph of which loaded font an outlined
 //! glyph's shape is, the same up to uniform scale, rotation and translation.
 //!
-//! Phase 1 is exact matching only: a shape matches a glyph when, after the best similarity
-//! transform (a Procrustes fit over points sampled at equal steps of arc length along each
-//! contour), the leftover distance is a tiny fraction of the shape's size. That holds for outlines
-//! made from a font the app has (Create Outlines' output, and other apps' that keep each glyph's
-//! contours whole and in the font's order). Near matches (other versions of a font, hinted or
-//! simplified outlines, faux styles, glyphs merged into one path) are left unmatched; fuzzy
-//! identification is phase 2.
+//! Phase 1 is exact matching only. Each contour is read from a starting corner that does not
+//! depend on where the path happens to start (the corner farthest from the shape's corners'
+//! centre; every such corner is tried when several tie), with straight edges split in two read as
+//! one. Points sampled at equal steps of arc length along the contours shortlist the glyphs whose
+//! best similarity transform (a Procrustes fit) leaves a tiny leftover distance, and the whole
+//! outline, turned onto the shape, must then lie on it. That holds for outlines made from a font
+//! the app has (Create Outlines' output, and other apps' that keep each glyph's contours whole and
+//! in the font's order). Near matches (other versions of a font, hinted or simplified outlines,
+//! faux styles, glyphs merged into one path) are left unmatched; fuzzy identification is phase 2.
 
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
 
-use kurbo::{BezPath, CubicBez, Line, ParamCurve, ParamCurveArclen, PathEl, PathSeg, Point, QuadBez, Shape};
+use kurbo::{Affine, BezPath, CubicBez, Line, ParamCurve, ParamCurveArclen, ParamCurveNearest, PathEl, PathSeg, Point, QuadBez, Shape};
 
 use crate::{FontDb, FontFace};
 
@@ -28,9 +30,16 @@ pub const MAX_ELEMENTS: usize = 4096;
 const MAX_CONTOURS: usize = 48;
 /// Points sampled along each contour.
 const SAMPLES: usize = 32;
+/// The most readings of a shape (one per choice of tied starting corners) that are tried.
+const MAX_VARIANTS: usize = 64;
 /// The largest leftover distance (root mean square over the samples) for a match, as a fraction of
 /// the shape's spread about its centre.
 const TOLERANCE: f64 = 2e-3;
+/// How far the whole outline, turned onto the shape, may lie from it (both ways), as a fraction of
+/// the shape's spread.
+const OUTLINE_TOLERANCE: f64 = 5e-3;
+/// Points of a flattened outline past which the whole-outline check gives up (and so rejects).
+const MAX_OUTLINE_POINTS: usize = 8192;
 /// How far apart two shapes' spread-to-length ratios may be and still be compared.
 const INVARIANT_SLACK: f64 = 0.02;
 
@@ -70,9 +79,12 @@ struct Entry {
     gid: u32,
     ch: char,
     sig: Signature,
+    /// The glyph's outline in font units, for the whole-outline check.
+    outline: BezPath,
 }
 
 /// The glyphs of a set of faces, ready to match shapes against.
+#[derive(Default)]
 pub struct RetypeIndex {
     faces: Vec<Arc<FontFace>>,
     entries: Vec<Entry>,
@@ -81,11 +93,11 @@ pub struct RetypeIndex {
 }
 
 impl RetypeIndex {
-    /// Index the outline glyphs of `faces` (the first [`MAX_FACES`], each face once) that have one
-    /// of the shape keys in `keys` (the selected shapes' [`shape_key`]s): the others could match no
-    /// shape, so they are not sampled. Outlines are read past the shared outline
-    /// cache, which keeps the canvas's glyphs.
-    pub fn build(db: &FontDb, faces: impl IntoIterator<Item = Arc<FontFace>>, keys: &std::collections::BTreeSet<Vec<usize>>) -> Self {
+    /// Index the outline glyphs of `faces` (the first [`MAX_FACES`], each face once) whose
+    /// [`shape_key`] is in `keys` (the selected shapes' keys): the others could match no shape, so
+    /// they are not sampled. Outlines are read past the shared outline cache, which keeps the
+    /// canvas's glyphs.
+    pub fn build(db: &FontDb, faces: impl IntoIterator<Item = Arc<FontFace>>, keys: &BTreeSet<u64>) -> Self {
         let mut kept: Vec<Arc<FontFace>> = vec![];
         for f in faces {
             if kept.len() >= MAX_FACES {
@@ -96,22 +108,18 @@ impl RetypeIndex {
             }
         }
         let mut entries = vec![];
-        for (fi, face) in kept.iter().enumerate() {
-            if entries.len() >= MAX_GLYPHS {
-                break;
-            }
-            for (gid, ch, key) in face_keys(db, face).iter() {
+        'faces: for (fi, face) in kept.iter().enumerate() {
+            for &(gid, ch, key) in face_keys(db, face).iter() {
                 // The budget holds inside a face too: no glyph is sampled past it.
                 if entries.len() >= MAX_GLYPHS {
-                    break;
+                    break 'faces;
                 }
-                if !keys.contains(key) {
+                if !keys.contains(&key) {
                     continue;
                 }
-                let (gid, ch) = (*gid, *ch);
                 let outline = db.outline_uncached(face, gid);
-                if let Some(sig) = signature(&outline) {
-                    entries.push(Entry { face: fi, gid, ch, sig });
+                if let Some(sig) = signatures(&outline, false).into_iter().next() {
+                    entries.push(Entry { face: fi, gid, ch, sig, outline });
                 }
             }
         }
@@ -145,10 +153,11 @@ impl RetypeIndex {
     /// The glyphs `shape` (in document space) is, the closest one per face, closest first; empty
     /// when it is no glyph of the indexed faces.
     pub fn matches(&self, shape: &BezPath) -> Vec<GlyphMatch> {
-        let Some(sig) = signature(shape) else { return vec![] };
-        let Some(list) = self.buckets.get(&sig.contours) else { return vec![] };
-        let lo = sig.invariant * (1.0 - INVARIANT_SLACK);
-        let hi = sig.invariant * (1.0 + INVARIANT_SLACK);
+        let variants = signatures(shape, true);
+        let Some(first) = variants.first() else { return vec![] };
+        let Some(list) = self.buckets.get(&first.contours) else { return vec![] };
+        let lo = first.invariant * (1.0 - INVARIANT_SLACK);
+        let hi = first.invariant * (1.0 + INVARIANT_SLACK);
         let start = list.partition_point(|i| self.entries.get(*i).is_some_and(|e| e.sig.invariant < lo));
         let mut best: HashMap<usize, GlyphMatch> = HashMap::new();
         for i in list.iter().skip(start) {
@@ -156,7 +165,11 @@ impl RetypeIndex {
             if e.sig.invariant > hi {
                 break;
             }
-            let Some((z, residual)) = fit(&e.sig, &sig) else { continue };
+            // The reading of the shape (its tied starting corners) that fits the glyph best.
+            let Some((sig, z, residual)) = variants.iter().filter_map(|s| fit(&e.sig, s).map(|(z, r)| (s, z, r))).min_by(|a, b| a.2.total_cmp(&b.2))
+            else {
+                continue;
+            };
             if residual > TOLERANCE {
                 continue;
             }
@@ -164,6 +177,12 @@ impl RetypeIndex {
             // The glyph's origin is (0, 0) in font units: it lands at centre − z·glyph centre.
             let gc = mul(z, e.sig.centre);
             let origin = Point::new(sig.centre.x - gc.x, sig.centre.y - gc.y);
+            // The samples can step over a detail (a notch between two of them): the whole outline,
+            // turned onto the shape, must lie on it.
+            let onto = Affine::new([z.0, z.1, -z.1, z.0, origin.x, origin.y]);
+            if !outlines_agree(&(onto * e.outline.clone()), shape, sig.spread * OUTLINE_TOLERANCE) {
+                continue;
+            }
             let m = GlyphMatch {
                 face: face.clone(),
                 gid: e.gid,
@@ -189,20 +208,36 @@ impl RetypeIndex {
 
 /// A face's glyphs as the index looks them up: (glyph, character, [`shape_key`]), one per glyph
 /// under the lowest character that maps to it.
-type FaceKeys = Arc<Vec<(u32, char, Vec<usize>)>>;
+type FaceKeys = Arc<Vec<(u32, char, u64)>>;
 
-/// How many faces' keys [`face_keys`] keeps.
-const KEPT_FACE_KEYS: usize = 32;
+/// How many glyph keys [`face_keys`] keeps in all (16 bytes each).
+const KEPT_KEYS: usize = 1 << 20;
+
+/// The faces' keys [`face_keys`] keeps, for the database generation they were read in.
+#[derive(Default)]
+struct KeptKeys {
+    generation: u64,
+    glyphs: usize,
+    faces: HashMap<(u64, u32), FaceKeys>,
+}
 
 /// [`FaceKeys`] of `face`, worked out once per face (each glyph drawn once, past the outline
-/// cache) and kept: a later Retype samples only the glyphs whose key a selected shape has.
+/// cache) and kept: a later Retype samples only the glyphs whose key a selected shape has. Keys
+/// already kept stay while new faces' keys would not fit, so a run over more faces than fit still
+/// finds the same ones kept the next time; they are let go when fonts are added or rescanned.
 fn face_keys(db: &FontDb, face: &FontFace) -> FaceKeys {
-    type Kept = std::sync::Mutex<HashMap<(u64, u32), FaceKeys>>;
-    static KEPT: std::sync::OnceLock<Kept> = std::sync::OnceLock::new();
+    static KEPT: std::sync::OnceLock<std::sync::Mutex<KeptKeys>> = std::sync::OnceLock::new();
     let kept = KEPT.get_or_init(Default::default);
     let at = (db.id(), face.id());
-    if let Some(k) = kept.lock().unwrap_or_else(|e| e.into_inner()).get(&at) {
-        return k.clone();
+    let generation = db.generation();
+    {
+        let mut k = kept.lock().unwrap_or_else(|e| e.into_inner());
+        if k.generation != generation {
+            *k = KeptKeys { generation, ..Default::default() };
+        }
+        if let Some(keys) = k.faces.get(&at) {
+            return keys.clone();
+        }
     }
     let mut by_gid: HashMap<u32, char> = HashMap::new();
     for &(c, gid) in face.mapped_chars().iter().take(MAX_GLYPHS_PER_FACE) {
@@ -214,11 +249,11 @@ fn face_keys(db: &FontDb, face: &FontFace) -> FaceKeys {
     let mut gids: Vec<(u32, char)> = by_gid.into_iter().collect();
     gids.sort_unstable();
     let keys: FaceKeys = Arc::new(gids.into_iter().filter_map(|(gid, ch)| Some((gid, ch, shape_key(&db.outline_uncached(face, gid))?))).collect());
-    let mut kept = kept.lock().unwrap_or_else(|e| e.into_inner());
-    if kept.len() >= KEPT_FACE_KEYS {
-        kept.clear();
+    let mut k = kept.lock().unwrap_or_else(|e| e.into_inner());
+    if k.generation == generation && k.glyphs + keys.len() <= KEPT_KEYS {
+        k.glyphs += keys.len();
+        k.faces.insert(at, keys.clone());
     }
-    kept.insert(at, keys.clone());
     keys
 }
 
@@ -264,7 +299,68 @@ fn fit(g: &Signature, s: &Signature) -> Option<((f64, f64), f64)> {
     rel.is_finite().then_some((z, rel))
 }
 
-/// `path`'s contours as segments, the closing line included; `None` past the size caps.
+/// Do outlines `a` and `b` (in one space) lie on each other: every point of each, flattened, within
+/// `tol` of the other? `false` when either is too large to check.
+fn outlines_agree(a: &BezPath, b: &BezPath, tol: f64) -> bool {
+    if !tol.is_finite() || tol <= 0.0 {
+        return false;
+    }
+    let flat = |p: &BezPath| -> Option<Vec<(Point, Point)>> {
+        let mut segs = vec![];
+        let (mut start, mut last) = (Point::ZERO, Point::ZERO);
+        let mut too_many = false;
+        kurbo::flatten(p.iter(), tol / 4.0, |el| {
+            if segs.len() > MAX_OUTLINE_POINTS {
+                too_many = true;
+                return;
+            }
+            match el {
+                PathEl::MoveTo(q) => (start, last) = (q, q),
+                PathEl::LineTo(q) => {
+                    segs.push((last, q));
+                    last = q;
+                }
+                PathEl::ClosePath => {
+                    segs.push((last, start));
+                    last = start;
+                }
+                _ => {}
+            }
+        });
+        (!too_many).then_some(segs)
+    };
+    let (Some(sa), Some(sb)) = (flat(a), flat(b)) else { return false };
+    let near = |p: Point, segs: &[(Point, Point)]| segs.iter().any(|(s, e)| Line::new(*s, *e).nearest(p, 1e-9).distance_sq <= tol * tol);
+    sa.iter().all(|(p, _)| near(*p, &sb)) && sb.iter().all(|(p, _)| near(*p, &sa))
+}
+
+/// `seg` as a line when it is one (a curve with its handles on its ends or on its line), else as it is.
+fn as_line(seg: PathSeg) -> PathSeg {
+    let on_line = |a: Point, b: Point, p: Point| {
+        let ab = b - a;
+        let len = ab.hypot();
+        len > 0.0 && (ab.cross(p - a)).abs() <= len * len * 1e-12 && (p - a).dot(ab) >= 0.0 && (p - b).dot(ab) <= 0.0
+    };
+    match seg {
+        PathSeg::Quad(q) if q.p1 == q.p0 || q.p1 == q.p2 || on_line(q.p0, q.p2, q.p1) => PathSeg::Line(Line::new(q.p0, q.p2)),
+        PathSeg::Cubic(c) if (c.p1 == c.p0 || on_line(c.p0, c.p3, c.p1)) && (c.p2 == c.p3 || on_line(c.p0, c.p3, c.p2)) => {
+            PathSeg::Line(Line::new(c.p0, c.p3))
+        }
+        s => s,
+    }
+}
+
+/// Lines `a` then `b` run on in one direction: one edge split in two.
+fn runs_on(a: &PathSeg, b: &PathSeg) -> bool {
+    let (PathSeg::Line(a), PathSeg::Line(b)) = (a, b) else { return false };
+    let (u, v) = (a.p1 - a.p0, b.p1 - b.p0);
+    let (lu, lv) = (u.hypot(), v.hypot());
+    lu > 0.0 && lv > 0.0 && u.cross(v).abs() <= lu * lv * 1e-9 && u.dot(v) > 0.0
+}
+
+/// `path`'s contours as segments, the closing line included, read the same however the path was
+/// written: segments that go nowhere are dropped, curves that are straight read as lines, and a
+/// straight edge split in two (around the start too) reads as one. `None` past the size caps.
 fn contours(path: &BezPath) -> Option<Vec<Vec<PathSeg>>> {
     if path.elements().len() > MAX_ELEMENTS {
         return None;
@@ -272,9 +368,29 @@ fn contours(path: &BezPath) -> Option<Vec<Vec<PathSeg>>> {
     let mut out: Vec<Vec<PathSeg>> = vec![];
     let mut cur: Vec<PathSeg> = vec![];
     let (mut start, mut last) = (Point::ZERO, Point::ZERO);
-    let mut flush = |cur: &mut Vec<PathSeg>, start: Point, last: Point| {
+    let push = |cur: &mut Vec<PathSeg>, seg: PathSeg| {
+        let seg = as_line(seg);
+        if seg.start() == seg.end() && matches!(seg, PathSeg::Line(_)) {
+            return;
+        }
+        match cur.last_mut() {
+            Some(prev) if runs_on(prev, &seg) => *prev = PathSeg::Line(Line::new(prev.start(), seg.end())),
+            _ => cur.push(seg),
+        }
+    };
+    let flush = |cur: &mut Vec<PathSeg>, start: Point, last: Point, out: &mut Vec<Vec<PathSeg>>| {
         if last.distance(start) > 0.0 {
-            cur.push(PathSeg::Line(Line::new(last, start)));
+            push(cur, PathSeg::Line(Line::new(last, start)));
+        }
+        // An edge split at the contour's start: its two halves are the last and first segments.
+        if cur.len() > 1
+            && let (Some(l), Some(f)) = (cur.last().copied(), cur.first().copied())
+            && runs_on(&l, &f)
+        {
+            cur.pop();
+            if let Some(first) = cur.first_mut() {
+                *first = PathSeg::Line(Line::new(l.start(), f.end()));
+            }
         }
         if !cur.is_empty() {
             out.push(std::mem::take(cur));
@@ -283,74 +399,135 @@ fn contours(path: &BezPath) -> Option<Vec<Vec<PathSeg>>> {
     for el in path.elements() {
         match *el {
             PathEl::MoveTo(p) => {
-                flush(&mut cur, start, last);
+                flush(&mut cur, start, last, &mut out);
                 start = p;
                 last = p;
             }
             PathEl::LineTo(p) => {
-                cur.push(PathSeg::Line(Line::new(last, p)));
+                push(&mut cur, PathSeg::Line(Line::new(last, p)));
                 last = p;
             }
             PathEl::QuadTo(a, p) => {
-                cur.push(PathSeg::Quad(QuadBez::new(last, a, p)));
+                push(&mut cur, PathSeg::Quad(QuadBez::new(last, a, p)));
                 last = p;
             }
             PathEl::CurveTo(a, b, p) => {
-                cur.push(PathSeg::Cubic(CubicBez::new(last, a, b, p)));
+                push(&mut cur, PathSeg::Cubic(CubicBez::new(last, a, b, p)));
                 last = p;
             }
             PathEl::ClosePath => {
-                flush(&mut cur, start, last);
+                flush(&mut cur, start, last, &mut out);
                 last = start;
             }
         }
+        if out.len() > MAX_CONTOURS {
+            return None;
+        }
     }
-    flush(&mut cur, start, last);
+    flush(&mut cur, start, last, &mut out);
     (out.len() <= MAX_CONTOURS).then_some(out)
 }
 
-/// How many contours with length `path` has, as matching counts them; `None` past the size caps.
 /// A cheap key two shapes share when one is the other scaled, turned and moved: how many segments
-/// each of its contours has, in order (segments that go nowhere left out, a closing line counted
-/// once whether the path draws it or closes onto it). Glyphs whose key no selected shape has are
-/// not sampled. `None` past the size caps.
-pub fn shape_key(path: &BezPath) -> Option<Vec<usize>> {
-    let moves = |s: &PathSeg| match s {
-        PathSeg::Line(l) => l.p0 != l.p1,
-        PathSeg::Quad(q) => q.p0 != q.p1 || q.p1 != q.p2,
-        PathSeg::Cubic(c) => c.p0 != c.p1 || c.p1 != c.p2 || c.p2 != c.p3,
-    };
-    let key: Vec<usize> = contours(path)?.iter().map(|c| c.iter().filter(|s| moves(s)).count()).filter(|n| *n > 0).collect();
-    (!key.is_empty()).then_some(key)
+/// each of its contours has, in order, as [`contours`] reads them, hashed. Glyphs whose key no
+/// selected shape has are not sampled. `None` past the size caps or for an empty shape.
+pub fn shape_key(path: &BezPath) -> Option<u64> {
+    let cs = contours(path)?;
+    if cs.is_empty() {
+        return None;
+    }
+    // FNV-1a over the counts: equal keys for equal counts; a rare clash only samples a glyph more.
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for n in std::iter::once(cs.len()).chain(cs.iter().map(Vec::len)) {
+        for b in (n as u64).to_le_bytes() {
+            h ^= u64::from(b);
+            h = h.wrapping_mul(0x0000_0100_0000_01b3);
+        }
+    }
+    Some(h)
 }
 
-fn signature(path: &BezPath) -> Option<Signature> {
+/// `path` read for matching: one reading per choice of starting corners (the corner of each contour
+/// farthest from the centre of all the shape's corners; every tied corner when `all_ties`, else the
+/// first), at most [`MAX_VARIANTS`]. Empty for a shape with nothing to match.
+fn signatures(path: &BezPath, all_ties: bool) -> Vec<Signature> {
     let bounds = path.bounding_box();
     let size = bounds.width().hypot(bounds.height());
     if !size.is_finite() || size <= 0.0 {
-        return None;
+        return vec![];
     }
     let accuracy = size * 1e-6;
-    let mut pts = vec![];
-    let mut total = 0.0;
-    let mut contours_n = 0;
-    for c in contours(path)? {
-        let lens: Vec<f64> = c.iter().map(|s| s.arclen(accuracy)).collect();
-        let len: f64 = lens.iter().sum();
-        // A contour with no length (a lone move) draws nothing.
-        if !len.is_finite() || len <= size * 1e-9 {
-            continue;
+    let Some(cs) = contours(path) else { return vec![] };
+    // Each contour with length, with its segments' lengths.
+    let cs: Vec<(Vec<PathSeg>, Vec<f64>)> = cs
+        .into_iter()
+        .map(|c| {
+            let lens: Vec<f64> = c.iter().map(|s| s.arclen(accuracy)).collect();
+            (c, lens)
+        })
+        .filter(|(_, lens)| {
+            let len: f64 = lens.iter().sum();
+            len.is_finite() && len > size * 1e-9
+        })
+        .collect();
+    let corners: Vec<Point> = cs.iter().flat_map(|(c, _)| c.iter().map(|s| s.start())).collect();
+    if corners.is_empty() {
+        return vec![];
+    }
+    let n = corners.len() as f64;
+    let mid = Point::new(corners.iter().map(|p| p.x).sum::<f64>() / n, corners.iter().map(|p| p.y).sum::<f64>() / n);
+    // Each contour's starting corners: those farthest from `mid`, ties within a hair.
+    let starts: Vec<Vec<usize>> = cs
+        .iter()
+        .map(|(c, _)| {
+            let d: Vec<f64> = c.iter().map(|s| s.start().distance(mid)).collect();
+            let far = d.iter().copied().fold(0.0, f64::max);
+            let tied: Vec<usize> = d.iter().enumerate().filter(|(_, v)| **v >= far - size * 1e-7).map(|(i, _)| i).collect();
+            if all_ties { tied } else { tied.into_iter().take(1).collect() }
+        })
+        .collect();
+    let mut out = vec![];
+    let mut pick = vec![0usize; cs.len()];
+    loop {
+        if out.len() >= MAX_VARIANTS {
+            break;
         }
-        total += len;
-        contours_n += 1;
-        let (mut si, mut before) = (0usize, 0.0);
-        for k in 0..SAMPLES {
-            let at = len * k as f64 / SAMPLES as f64;
-            while si + 1 < c.len() && before + lens.get(si).copied().unwrap_or(0.0) < at {
-                before += lens.get(si).copied().unwrap_or(0.0);
-                si += 1;
+        if let Some(sig) = sample(&cs, &starts, &pick, accuracy) {
+            out.push(sig);
+        }
+        // The next choice of tied corners (a counter in mixed radix).
+        let mut i = 0;
+        loop {
+            let Some((p, s)) = pick.get_mut(i).zip(starts.get(i)) else { return out };
+            *p += 1;
+            if *p < s.len() {
+                break;
             }
-            let (Some(seg), Some(l)) = (c.get(si), lens.get(si)) else { return None };
+            *p = 0;
+            i += 1;
+        }
+    }
+    out
+}
+
+/// One reading of the contours `cs`, contour `i` starting at segment `starts[i][pick[i]]`.
+fn sample(cs: &[(Vec<PathSeg>, Vec<f64>)], starts: &[Vec<usize>], pick: &[usize], accuracy: f64) -> Option<Signature> {
+    let mut pts = Vec::with_capacity(cs.len() * SAMPLES);
+    let mut total = 0.0;
+    for (((c, lens), s), p) in cs.iter().zip(starts).zip(pick) {
+        let from = *s.get(*p)?;
+        let m = c.len();
+        let len: f64 = lens.iter().sum();
+        total += len;
+        let (mut k, mut before) = (0usize, 0.0);
+        let at_k = |k: usize| (from + k) % m;
+        for j in 0..SAMPLES {
+            let at = len * j as f64 / SAMPLES as f64;
+            while k + 1 < m && before + lens.get(at_k(k)).copied().unwrap_or(0.0) < at {
+                before += lens.get(at_k(k)).copied().unwrap_or(0.0);
+                k += 1;
+            }
+            let (Some(seg), Some(l)) = (c.get(at_k(k)), lens.get(at_k(k))) else { return None };
             let t = if *l > 0.0 { seg.inv_arclen((at - before).clamp(0.0, *l), accuracy) } else { 0.0 };
             pts.push(seg.eval(t));
         }
@@ -364,16 +541,21 @@ fn signature(path: &BezPath) -> Option<Signature> {
         *p = Point::new(p.x - centre.x, p.y - centre.y);
     }
     let spread = (pts.iter().map(|p| p.x * p.x + p.y * p.y).sum::<f64>() / n).sqrt();
-    if !spread.is_finite() || spread <= 0.0 {
+    if !spread.is_finite() || spread <= 0.0 || !total.is_finite() || total <= 0.0 {
         return None;
     }
-    Some(Signature { contours: contours_n, pts, centre, spread, invariant: spread / total })
+    Some(Signature { contours: cs.len(), pts, centre, spread, invariant: spread / total })
+}
+
+/// The first reading of `path` (for tests).
+#[cfg(test)]
+fn signature(path: &BezPath) -> Option<Signature> {
+    signatures(path, false).into_iter().next()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use kurbo::Affine;
 
     fn letter() -> BezPath {
         // A hand-made "P"-like shape: an outer contour and a counter.
@@ -463,5 +645,87 @@ mod tests {
             huge.line_to((i as f64, (i % 7) as f64));
         }
         assert!(signature(&huge).is_none());
+    }
+
+    /// The best fit of `shape`'s readings onto `glyph`'s first one.
+    fn best_fit(glyph: &BezPath, shape: &BezPath) -> f64 {
+        let g = signature(glyph).unwrap();
+        signatures(shape, true).iter().filter_map(|s| fit(&g, s)).map(|(_, r)| r).fold(f64::INFINITY, f64::min)
+    }
+
+    #[test]
+    fn a_contour_started_at_another_corner_still_matches() {
+        // The counter of letter(), started at its second corner instead of its first.
+        let mut p = BezPath::new();
+        p.move_to((0.0, 0.0));
+        p.line_to((0.0, -700.0));
+        p.curve_to((300.0, -700.0), (450.0, -600.0), (450.0, -480.0));
+        p.quad_to((450.0, -300.0), (120.0, -300.0));
+        p.line_to((120.0, 0.0));
+        p.close_path();
+        p.move_to((120.0, -400.0));
+        p.quad_to((330.0, -400.0), (330.0, -500.0));
+        p.quad_to((330.0, -600.0), (120.0, -600.0));
+        p.line_to((120.0, -400.0));
+        p.close_path();
+        let shape = Affine::translate((40.0, 90.0)) * Affine::rotate(-1.1) * Affine::scale(0.03) * p;
+        assert_eq!(shape_key(&shape), shape_key(&letter()));
+        assert!(best_fit(&letter(), &shape) < 1e-6);
+        // A triangle started at each of its corners.
+        let tri = |a: (f64, f64), b: (f64, f64), c: (f64, f64)| {
+            let mut t = BezPath::new();
+            t.move_to(a);
+            t.line_to(b);
+            t.line_to(c);
+            t.close_path();
+            t
+        };
+        let g = tri((0.0, 0.0), (300.0, 0.0), (0.0, -400.0));
+        for s in [tri((300.0, 0.0), (0.0, -400.0), (0.0, 0.0)), tri((0.0, -400.0), (0.0, 0.0), (300.0, 0.0))] {
+            assert!(best_fit(&g, &s) < 1e-6);
+        }
+    }
+
+    #[test]
+    fn an_edge_split_in_two_reads_as_one() {
+        let mut p = BezPath::new();
+        p.move_to((0.0, 0.0));
+        p.line_to((0.0, -350.0));
+        p.line_to((0.0, -700.0));
+        p.curve_to((300.0, -700.0), (450.0, -600.0), (450.0, -480.0));
+        p.quad_to((450.0, -300.0), (120.0, -300.0));
+        p.line_to((120.0, 0.0));
+        p.line_to((60.0, 0.0));
+        p.close_path();
+        p.move_to((120.0, -600.0));
+        p.line_to((120.0, -400.0));
+        p.quad_to((330.0, -400.0), (330.0, -500.0));
+        p.quad_to((330.0, -600.0), (120.0, -600.0));
+        p.close_path();
+        assert_eq!(shape_key(&p), shape_key(&letter()), "split edges, the closing one too, read as one");
+        assert!(best_fit(&letter(), &p) < 1e-6);
+    }
+
+    #[test]
+    fn a_detail_between_samples_fails_the_whole_outline_check() {
+        let bar = |notch: f64| {
+            let mut p = BezPath::new();
+            p.move_to((0.0, 0.0));
+            p.line_to((1000.0, 0.0));
+            p.line_to((1000.0, -100.0));
+            // A notch 2 units wide, in or out, between two samples along the top edge.
+            p.line_to((501.0, -100.0));
+            p.line_to((501.0, -100.0 + notch));
+            p.line_to((499.0, -100.0 + notch));
+            p.line_to((499.0, -100.0));
+            p.line_to((0.0, -100.0));
+            p.close_path();
+            p
+        };
+        let (out, inn) = (bar(-10.0), bar(10.0));
+        assert_eq!(shape_key(&out), shape_key(&inn), "same key");
+        let tol = signature(&inn).unwrap().spread * OUTLINE_TOLERANCE;
+        assert!(!outlines_agree(&out, &inn, tol), "the whole outline does");
+        assert!(outlines_agree(&out, &out, tol));
     }
 }

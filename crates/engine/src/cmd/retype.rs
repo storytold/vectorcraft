@@ -100,7 +100,8 @@ fn collect(n: &Node, parent: Option<NodeId>, depth: usize, barrier: &mut bool, t
             let mut path = BezPath::new();
             for c in children {
                 match &c.kind {
-                    NodeKind::Path { path: p, .. } if p.is_closed() => path.extend(p.to_bezpath()),
+                    // A hidden or locked path keeps its whole compound as it is.
+                    NodeKind::Path { path: p, .. } if p.is_closed() && c.visible && !c.locked => path.extend(p.to_bezpath()),
                     _ => {
                         *barrier = true;
                         return;
@@ -140,12 +141,21 @@ fn candidate_faces(db: &FontDb, d: &Document, fonts: &[String]) -> Vec<Arc<vecto
             if faces.len() >= cap {
                 break 'families;
             }
-            if let Some(face) = db.face(f, &style) {
+            if let Some(face) = db.face(f, &style)
+                && !faces.iter().any(|k: &Arc<vectorcraft_text::FontFace>| k.id() == face.id())
+            {
                 faces.push(face);
             }
         }
     }
-    faces.extend(db.loaded_faces().into_iter().take(cap.saturating_sub(faces.len())));
+    for face in db.loaded_faces() {
+        if faces.len() >= cap {
+            break;
+        }
+        if !faces.iter().any(|k| k.id() == face.id()) {
+            faces.push(face);
+        }
+    }
     faces
 }
 
@@ -376,9 +386,10 @@ fn retype(s: &mut Session, p: &Value) -> Result<Value> {
         }
         // Only glyphs with a selected shape's key (segments per contour) can match one: the others are
         // not sampled.
-        let wanted: std::collections::BTreeSet<Vec<usize>> =
+        let wanted: std::collections::BTreeSet<u64> =
             pieces.iter().filter(|pc| !pc.keeps_outline).filter_map(|pc| vectorcraft_text::retype::shape_key(&pc.path)).collect();
-        let index = RetypeIndex::build(db, candidate_faces(db, d, &fonts), &wanted);
+        // Nothing to match (every shape stays an outline): no font is read.
+        let index = if wanted.is_empty() { RetypeIndex::default() } else { RetypeIndex::build(db, candidate_faces(db, d, &fonts), &wanted) };
         let found: Vec<Vec<GlyphMatch>> = pieces.iter().map(|pc| if pc.keeps_outline { vec![] } else { index.matches(&pc.path) }).collect();
         // The face most shapes match, so a glyph several fonts share is set in the same font as
         // the glyphs around it.
@@ -462,7 +473,12 @@ fn retype(s: &mut Session, p: &Value) -> Result<Value> {
                 && n.blend == vectorcraft_color::BlendMode::Normal
                 && *n.appearance == Appearance::default()
                 && n.name.is_none()
-                && n.extras().mask.is_none()
+                // Its mask, Attributes note and the rest of what few objects have stay with it.
+                && {
+                    let mut ex = n.extras().clone();
+                    ex.type_outlines = false;
+                    ex == vectorcraft_doc::NodeExtras::default()
+                }
                 // Isolation and knockout change how the group composites its type.
                 && !n.isolate
                 && n.knockout == vectorcraft_doc::Knockout::default()

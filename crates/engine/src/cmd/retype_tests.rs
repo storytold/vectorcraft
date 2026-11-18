@@ -411,3 +411,49 @@ fn timing_with_a_large_cjk_face() {
         s.execute("edit.undo", &json!({})).unwrap();
     }
 }
+
+#[test]
+fn a_compound_with_a_locked_or_hidden_part_stays_whole() {
+    let mut s = session();
+    // "B" outlines as a compound path of three contours.
+    let g = outlined(&mut s, json!({"x": 40, "y": 100, "text": "AB", "size": 40}));
+    let b = children_of(&s, g)[1];
+    let part = children_of(&s, b)[1];
+    s.edit("test", |d, _| {
+        d.node_mut(NodeId(part)).unwrap().locked = true;
+        Ok(())
+    })
+    .unwrap();
+    s.execute("select.set", &json!({"ids": [g]})).unwrap();
+    let r = s.execute("type.retype", &json!({})).unwrap();
+    assert_eq!(r["texts"], json!(["A"]), "{r}");
+    let d = &s.doc().unwrap().doc;
+    assert!(d.node(NodeId(part)).unwrap().locked, "B's locked part, and B, stay as they are");
+}
+
+#[test]
+fn a_group_with_an_attributes_note_keeps_its_type_inside() {
+    let mut s = session();
+    let g = outlined(&mut s, json!({"x": 40, "y": 100, "text": "AB", "size": 40}));
+    s.execute("attributes.set", &json!({"ids": [g], "note": "logo, keep"})).unwrap();
+    s.execute("select.set", &json!({"ids": [g]})).unwrap();
+    let r = s.execute("type.retype", &json!({})).unwrap();
+    let id = r["ids"][0].as_u64().unwrap();
+    assert_eq!(children_of(&s, g), vec![id], "the group and its note stay, holding the type");
+}
+
+#[test]
+fn nothing_retypable_reads_no_font() {
+    let mut s = session();
+    let g = outlined(&mut s, json!({"x": 40, "y": 100, "text": "A", "size": 40}));
+    let a = children_of(&s, g)[0];
+    s.edit("test", |d, _| {
+        let art = vectorcraft_doc::Node::path(d.alloc_id(), vectorcraft_geom::PathData::default(), Default::default());
+        d.node_mut(NodeId(a)).unwrap().extras_mut().mask = Some(Box::new(vectorcraft_doc::OpacityMask::new(art, true)));
+        Ok(())
+    })
+    .unwrap();
+    s.execute("select.set", &json!({"ids": [g]})).unwrap();
+    let e = s.execute("type.retype", &json!({})).unwrap_err().to_string();
+    assert!(e.contains("(1 checked)"), "the masked shape is reported, and no font was indexed: {e}");
+}
