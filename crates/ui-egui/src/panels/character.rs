@@ -540,6 +540,8 @@ pub(crate) fn highlight(app: &mut VectorcraftApp, field: Field) -> Result<Value,
 /// `type.underline` (Cmd+Shift+U): what the Underline button does, on the text the panels act on.
 /// Returns whether the text is now underlined: off only when every character was underlined.
 pub(crate) fn toggle_underline(app: &mut VectorcraftApp) -> Result<Value, String> {
+    // The typing Real-time Drawing off left unapplied is applied before the text is read.
+    text_editing_kept(app)?;
     text_style(app).ok_or("select some type first")?;
     let on = shared(app, |s| s.underline) != Some(true);
     run_format(app, json!({"underline": on}))?;
@@ -550,6 +552,8 @@ pub(crate) fn toggle_underline(app: &mut VectorcraftApp) -> Result<Value, String
 /// or Subscript button does, on the text the panels act on. Returns the position the text now
 /// has: `"normal"` only when every character had `position`, else `position`.
 pub(crate) fn toggle_position(app: &mut VectorcraftApp, position: &str) -> Result<Value, String> {
+    // The typing Real-time Drawing off left unapplied is applied before the text is read.
+    text_editing_kept(app)?;
     text_style(app).ok_or("select some type first")?;
     let change = position_toggle(shared_position(app), position);
     let to = change["position"].clone();

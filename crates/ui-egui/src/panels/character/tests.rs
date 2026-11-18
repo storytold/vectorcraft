@@ -628,6 +628,43 @@ fn superscript_and_subscript_decide_from_the_characters_they_change() {
     assert!(scripts(&app, &id).iter().all(|(_, p)| *p == "normal"), "{:?}", scripts(&app, &id));
 }
 
+/// With Real-time Drawing off, Superscript, Subscript and Underline decide from the text with the
+/// typing applied: after a Backspace not yet applied takes out the one plain character, the rest
+/// is all superscript (or underlined), so a press turns it off.
+#[test]
+fn superscript_and_underline_decide_from_the_text_with_the_typing_applied() {
+    for (command, set, off) in
+        [("type.superscript", json!({"position": "superscript"}), json!("normal")), ("type.underline", json!({"underline": true}), json!(false))]
+    {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        app.session.execute("prefs.set", &json!({"key": "realTimeDrawing", "value": false})).unwrap();
+        let id = app.run("text.create", json!({"x": 20, "y": 50, "text": "x2", "size": 12})).unwrap()["id"].clone();
+        let mut range = set.clone();
+        range["id"] = id.clone();
+        range["start"] = json!(1);
+        range["end"] = json!(2);
+        app.run("text.setRangeStyle", range).unwrap();
+        app.run("select.set", json!({"ids": [id.clone()]})).unwrap();
+        app.select_tool("type");
+        app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+        app.session.set_tool_option("select", &json!({"start": 1, "end": 1}));
+        let ctx = egui::Context::default();
+        let backspace =
+            |pressed| egui::Event::Key { key: egui::Key::Backspace, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
+        let raw = egui::RawInput { events: vec![backspace(true), backspace(false)], ..Default::default() };
+        ctx.run_ui(raw, |ui| crate::shortcuts::handle(&mut app, ui.ctx())).textures_delta.clear();
+        assert_eq!(app.session.tool_options()["typing"], json!(true), "{command}");
+        let node = |app: &VectorcraftApp| match &app.session.active().unwrap().doc.node(NodeId(id.as_u64().unwrap())).unwrap().kind {
+            NodeKind::Text(t) => (t.plain_text(), t.runs.iter().map(|r| (r.style.position.id(), r.style.underline)).collect::<Vec<_>>()),
+            _ => panic!("text"),
+        };
+        assert_eq!(node(&app).0, "x2", "{command}: the Backspace is not applied yet");
+        assert_eq!(app.run(command, json!({})).unwrap(), off, "{command}");
+        assert_eq!(node(&app), ("2".to_string(), vec![("normal", false)]), "{command}");
+    }
+}
+
 /// The panel menu's Small Caps, Superscript and Subscript set the selected type's small caps
 /// and position and show a check mark when on; Superscript and Subscript turn each other off.
 #[test]

@@ -1156,6 +1156,12 @@ fn cmd_shift_equals_and_cmd_alt_shift_equals_toggle_superscript_and_subscript() 
         assert!(zoom(&mut app) > before, "{key:?} with Cmd+Shift zooms in");
     }
     assert!(subscript(&mut app), "{:?}", positions(&mut app));
+    // Cmd+A and Cmd+Shift+= in one frame: Select All runs first, so Cmd+Shift+= applies
+    // Superscript to the text it selected instead of zooming in.
+    let before = zoom(&mut app);
+    frame(&mut app, [press(Key::A, Modifiers::NONE), press(Key::Equals, shift)].concat());
+    assert_eq!(zoom(&mut app), before, "no zoom once Select All selected the type");
+    assert!(positions(&mut app).iter().all(|(_, p)| *p == json!("superscript")), "{:?}", positions(&mut app));
 }
 
 /// Tab shows and hides the panels, and in the Type tool it types a tab, without moving the
