@@ -854,6 +854,7 @@ font-technology	Variable	Variabel
 	Duplicate Action or Action Set	Aktion oder Aktionssatz duplizieren
 	Delete the action set “{name}” and its actions?	Aktionssatz „{name}“ und seine Aktionen löschen?
 	Delete the selected action sets and their actions?	Ausgewählte Aktionssätze und ihre Aktionen löschen?
+	Delete all action sets and their actions?	Alle Aktionssätze und ihre Aktionen löschen?
 	Delete Theme	Thema löschen
 	Delete theme	Thema löschen
 	Delete these {n} graphic styles?	Diese {n} Grafikstile löschen?
@@ -1357,6 +1358,7 @@ font-technology	Variable	Variabel
 	Fit to Selected Art	An ausgewählte Grafik anpassen
 	Flag…	Flagge…
 	Flare	Blendenfleck
+	Edit Flare	Blendenfleck bearbeiten
 	Flare Tool	Blendenfleck-Werkzeug
 	Flare Tool Options	Optionen für das Blendenfleck-Werkzeug
 	Halo	Lichtkranz
@@ -2275,6 +2277,9 @@ file-filter	Templates	Vorlagen
 	Navigate	Navigieren
 	Navigator	Navigator
 	Navigator Panel Options	Optionen für das Navigatorbedienfeld
+	Attributes Panel Options	Optionen für das Attributebedienfeld
+	Number of Recent URLs:	Anzahl zuletzt verwendeter URLs:
+@msg	`count` must be a whole number from 1 to 30	`count` muss eine ganze Zahl von 1 bis 30 sein
 	Draw Dashed Lines as Solid Lines	Gestrichelte Linien als durchgezogene Linien zeichnen
 	Needs the desktop app	Erfordert die Desktop-App
 	Neutral Gradients	Neutrale Verläufe
@@ -2711,6 +2716,7 @@ diagnostics	ui	Oberfläche
 	Save Actions…	Aktionen speichern…
 	Load Actions…	Aktionen laden…
 	Replace Actions…	Aktionen ersetzen…
+	Clear Actions	Aktionen löschen
 	Reset Actions	Aktionen zurücksetzen
 	Replace the current actions with the default set?	Aktuelle Aktionen durch den Standardsatz ersetzen?
 	Append adds the default set after the current sets instead.	Mit „Anhängen“ wird der Standardsatz stattdessen nach den aktuellen Sätzen hinzugefügt.
@@ -3156,6 +3162,8 @@ digits	Malayalam	Malayalam
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Mit gedrückter Befehls-/Strg-Taste scrollt das Mausrad die Arbeitsfläche seitwärts.
 	Dragging sideways on a numeric field's label changes the field's value.	Seitliches Ziehen auf der Beschriftung eines Zahlenfelds ändert den Wert des Felds.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Eine Drehgeste mit zwei Fingern auf einem Trackpad dreht die Ansicht der Arbeitsfläche.
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Halten Sie eine Taste, wird das Werkzeug oder der Befehl aus ihrer Spalte „Halten“ unter „Tastaturbefehle“ ausgeführt; ein kurzer Druck führt ihren üblichen Tastaturbefehl aus.
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Wie viele Sekunden eine Taste gehalten werden muss, bevor statt ihres üblichen Tastaturbefehls ihr Halte-Tastaturbefehl ausgeführt wird.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Wenn Sie Ankerpunkte verschieben, behält jede Kurve mit einem verschobenen Ende ihre Form relativ zu ihren Enden.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Solange Sie das Tastaturkürzel eines Werkzeugs gedrückt halten, ist dieses Werkzeug gewählt; danach wird wieder das vorherige gewählt.
 	Shows the bounding box while you move the selection or draw a shape.	Zeigt den Begrenzungsrahmen an, während Sie die Auswahl verschieben oder eine Form zeichnen.
@@ -5184,6 +5192,7 @@ liquify-list-end	{0}, {1}	{0} und {1}
 @msg	no graphic style `{n}`	kein Grafikstil `{n}`
 @msg	no interaction in progress	keine Interaktion im Gange
 @msg	no key object	kein Basisobjekt
+@msg	Align to Key Object isn't available with the Artboard tool	„An Basisobjekt ausrichten“ ist mit dem Zeichenflächen-Werkzeug nicht verfügbar
 @msg	no library `{key}` (see {list})	keine Bibliothek `{key}` (siehe {list})
 @msg	no native format	kein natives Format
 @msg	no pages	keine Seiten
@@ -5239,6 +5248,8 @@ liquify-list-end	{0}, {1}	{0} und {1}
 @msg	no such spine point	kein solcher Achsenpunkt
 @msg	`with` must be a list of at most 10000 spine point indexes	`with` muss eine Liste von höchstens 10000 Achsenpunkt-Indizes sein
 @msg	`with` moves points, not a handle	`with` verschiebt Punkte, keinen Griff
+@msg	`link` and `independent` cannot both be true	`link` und `independent` können nicht beide true sein
+@msg	`link` places a handle: give `handle`	`link` platziert einen Griff: geben Sie `handle` an
 @msg	no such spine segment	kein solches Achsensegment
 @msg	no such subpath	kein solcher Teilpfad
 @msg	no such user library	keine solche Benutzerbibliothek
@@ -5328,6 +5339,7 @@ liquify-list-end	{0}, {1}	{0} und {1}
 @msg	select a blend	wählen Sie eine Angleichung aus
 @msg	select a blend or give `id`	wählen Sie eine Angleichung aus oder geben Sie `id` an
 @msg	select a clip group	wählen Sie eine Schnittgruppe aus
+@msg	select a flare	wählen Sie einen Blendenfleck aus
 @msg	select a gradient mesh	wählen Sie ein Verlaufsgitter aus
 @msg	select a linked image: an embedded one has no file	wählen Sie ein verknüpftes Bild aus: Ein eingebettetes hat keine Datei
 @msg	select a repeat	wählen Sie eine Wiederholung aus
@@ -5585,6 +5597,7 @@ variable-list-end	{0}, {1}	{0} und {1}
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} verknüpftes Bild wurde auf dem Datenträger geändert: „Verknüpfungen aktualisieren“ zeigt die neue Version|{n} verknüpfte Bilder wurden auf dem Datenträger geändert: „Verknüpfungen aktualisieren“ zeigt die neuen Versionen
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	{n} auf dem Datenträger geänderte verknüpfte Datei aktualisiert|{n} auf dem Datenträger geänderte verknüpfte Dateien aktualisiert
 @msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	das Dokument legt einen Anschnitt fest, den diese PDF/X-Datei auslässt: „Anschnitteinstellungen des Dokuments verwenden“ aktivieren
+@msgplural	{n} object reaches the trim edge but stops short of the bleed|{n} objects reach the trim edge but stop short of the bleed	{n} Objekt reicht bis zur Endformatkante, endet aber vor dem Anschnitt|{n} Objekte reichen bis zur Endformatkante, enden aber vor dem Anschnitt
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	{what} mit {n} Hinweis exportiert: {first}|{what} mit {n} Hinweisen exportiert: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} Schriftdatei liegt jetzt in {folder}|{n} Schriftdateien liegen jetzt in {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} Schriftdatei liegt jetzt in {folder}; {failed} konnten nicht hinzugefügt werden: {reason}|{n} Schriftdateien liegen jetzt in {folder}; {failed} konnten nicht hinzugefügt werden: {reason}
@@ -6493,6 +6506,9 @@ effect	Soft	Weich
 	Continue in Background	Im Hintergrund fortsetzen
 	Cancel Export	Export abbrechen
 @msg	Export cancelled	Export abgebrochen
+	Cancel Save	Speichern abbrechen
+@plural	{n} more save waiting|{n} more saves waiting	{n} weiterer Speichervorgang wartet|{n} weitere Speichervorgänge warten
+@msg	Save canceled	Speichern abgebrochen
 # Paragraph panel menu › Justification…
 	Desired	Optimal
 	Word Spacing:	Wortabstand:
@@ -7015,6 +7031,13 @@ axis	Y Axis	Y-Achse
 	Circuit Trace	Leiterbahn
 	Bus Lines	Busleitungen
 	Terminal Nodes	Anschlussknoten
+
+# Original arrow art brushes.
+	Arrows	Pfeile
+	Solid Arrow	Gefüllter Pfeil
+	Open Arrow	Offener Pfeil
+	Double Arrow	Doppelpfeil
+	Chevron Arrow	Winkelpfeil
 
 	Notched Ribbon	Gekerbtes Band
 	Double Line	Doppellinie
@@ -7711,10 +7734,18 @@ breakText	Glyphs	Glyphen
 	Smooth Bridge…	Weiche Brücke…
 	Smooth Bridge	Weiche Brücke
 	Keep Originals	Originale beibehalten
-@msg	select two circles to bridge	wählen Sie zwei Kreise zum Verbinden aus
+@msg	select two or more circles to bridge	wählen Sie zwei oder mehr Kreise zum Verbinden aus
 @msg	one circle is inside the other	ein Kreis liegt im anderen
 @msg	the circles are too far apart for this radius: raise the radius	die Kreise liegen für diesen Radius zu weit auseinander: vergrößern Sie den Radius
 @msg	the circles are too far apart for this radius	die Kreise liegen für diesen Radius zu weit auseinander
+	Constant Gap	Konstanter Abstand
+	Reach:	Reichweite:
+@msg	the circles are too far apart for this gap: raise the gap	die Kreise liegen für diesen Abstand zu weit auseinander: vergrößern Sie den Abstand
+@msg	the circles are too far apart for this gap	die Kreise liegen für diesen Abstand zu weit auseinander
+@msg	no two circles are within reach: raise the reach	keine zwei Kreise liegen in Reichweite: vergrößern Sie die Reichweite
+@msg	select at most 2000 circles to bridge	wählen Sie höchstens 2000 Kreise zum Verbinden aus
+@msg	that makes too many bridges (at most 8000): lower the reach	das ergibt zu viele Brücken (höchstens 8000): verringern Sie die Reichweite
+@msg	the bridged circles are too complex to unite	die verbundenen Kreise sind zu komplex zum Vereinen
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	Gemeinsame Tangenten…
 	Common Tangents	Gemeinsame Tangenten
@@ -10035,6 +10066,16 @@ breakText	Glyphs	Glyphen
 	No objects are selected.	Es sind keine Objekte ausgewählt.
 	Open a document to mark its fold lines.	Öffnen Sie ein Dokument, um seine Faltlinien festzulegen.
 	Remove Fold Line Role	Linienart entfernen
+	Tap	Kurz drücken
+	Clear Hold	Halten löschen
+	Hold Shortcuts	Halte-Tastaturbefehle
+	Hold Shortcut Delay	Verzögerung für Halte-Tastaturbefehle
+	How hold shortcuts work	So funktionieren Halte-Tastaturbefehle
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	Klicken Sie und drücken Sie dann eine Taste, die hierfür gehalten werden soll (Esc bricht ab). Halten der Taste führt dies aus; kurzes Drücken führt den eigenen Tastaturbefehl der Taste aus.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	Kurzes Drücken einer Taste führt ihren Tastaturbefehl aus. Halten der Taste für die Dauer der Verzögerung führt stattdessen das Werkzeug oder den Befehl in ihrer Spalte „Halten“ aus. Ein Halte-Tastaturbefehl ist eine Buchstaben-, Ziffern- oder Satzzeichentaste, allein oder mit Shift.
+@msg	Hold {_1} is already used by {_2}	Halten {_1} wird bereits von {_2} verwendet
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	Ein Halte-Tastaturbefehl ist eine Taste, die ein Zeichen eingibt, allein oder mit Shift ({shown} enthält Cmd, Ctrl oder Alt)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} kann kein Halte-Tastaturbefehl sein: Verwenden Sie einen Buchstaben, eine Ziffer oder eine Satzzeichentaste
 	Check	Prüfen
 	Check Fold Lines	Faltlinien prüfen
 @msg	No cut lines are in the selection.	Die Auswahl enthält keine Schnittlinien.
@@ -10055,6 +10096,7 @@ breakText	Glyphs	Glyphen
 @msg	A panel is not joined to the rest by a crease.	Ein Feld ist durch keine Rilllinie mit den übrigen verbunden.
 @msg	A fold line is on a non-printing layer.	Eine Faltlinie liegt auf einer nicht druckbaren Ebene.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Felder: {panels}, Scharniere: {hinges}, Fehler: {errors}, Warnungen: {warnings}
+	Dashed Arrow	Gestrichelter Pfeil
 	Pressure Sensitive	Druckempfindlich
 	Flex Ribbon	Flexibles Band
 	Pulse Stroke	Pulsierender Strich

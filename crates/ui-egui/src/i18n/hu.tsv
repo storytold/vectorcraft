@@ -1107,6 +1107,7 @@ font-technology	Variable	Változó
 	Duplicate Action or Action Set	Művelet vagy műveletkészlet kettőzése
 	Delete the action set “{name}” and its actions?	Törlöd ezt a műveletkészletet és a műveleteit: „{name}”?
 	Delete the selected action sets and their actions?	Törlöd a kijelölt műveletkészleteket és a műveleteiket?
+	Delete all action sets and their actions?	Törlöd az összes műveletkészletet és a műveleteiket?
 	Delete the library “{name}”?	Törlöd ezt a könyvtárat: „{name}”?
 	Delete Theme	Téma törlése
 	Delete theme	Téma törlése
@@ -1699,6 +1700,7 @@ digits	Malayalam	Malajálam
 	Fixed	Rögzített
 	Flag…	Zászló…
 	Flare	Fényvillanás
+	Edit Flare	Fényvillanás szerkesztése
 	Flare Tool	Fényvillanás
 	Flare Tool Options	Fényvillanás beállításai
 	Flat Angle	Lapos, ferde
@@ -2818,6 +2820,9 @@ file-filter	Templates	Sablonok
 	Navigate	Navigálás
 	Navigator	Navigátor
 	Navigator Panel Options	Navigátor panel beállításai
+	Attributes Panel Options	Attribútumok panel beállításai
+	Number of Recent URLs:	Legutóbbi URL-ek száma:
+@msg	`count` must be a whole number from 1 to 30	`count`: 1 és 30 közötti egész szám kell
 	Draw Dashed Lines as Solid Lines	Szaggatott vonalak rajzolása folytonosként
 	Needs the desktop app	Az asztali alkalmazás kell hozzá
 	Negative	Negatív
@@ -3296,6 +3301,7 @@ diagnostics	ui	felület
 	Save Actions…	Műveletek mentése…
 	Load Actions…	Műveletek betöltése…
 	Replace Actions…	Műveletek cseréje…
+	Clear Actions	Műveletek törlése
 	Reset Actions	Műveletek visszaállítása
 	Replace the current actions with the default set?	Lecseréled az aktuális műveleteket az alapértelmezett készletre?
 	Append adds the default set after the current sets instead.	A Hozzáfűzés ehelyett az aktuális készletek után adja hozzá az alapértelmezett készletet.
@@ -3774,6 +3780,8 @@ mark-style	Japanese	Japán
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Az egérgörgő lenyomott Cmd/Ctrl billentyűvel oldalirányban görgeti a vásznat.
 	Dragging sideways on a numeric field's label changes the field's value.	Egy számmező címkéjén oldalirányban húzva módosul a mező értéke.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Az érintőpadon végzett kétujjas forgató kézmozdulat elforgatja a vászon nézetét.
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Egy billentyű nyomva tartása a Billentyűparancsok Nyomva tartás oszlopában lévő eszközt vagy parancsot futtatja; egy rövid lenyomás a szokásos billentyűparancsát futtatja.
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Hány másodpercig kell nyomva tartani egy billentyűt, hogy a szokásos billentyűparancsa helyett a nyomva tartásos billentyűparancsa fusson.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Horgonypontok mozgatásakor minden olyan görbe, amelynek egyik vége elmozdul, megtartja az alakját a végeihez képest.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Egy eszköz billentyűparancsát lenyomva tartva az eszköz a felengedésig ki van választva, utána ismét az előző eszköz lesz kiválasztva.
 	Shows the bounding box while you move the selection or draw a shape.	Megjeleníti a befoglaló keretet, miközben a kijelölést mozgatja vagy alakzatot rajzol.
@@ -5961,6 +5969,7 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	no graphic style `{n}`	nincs ilyen grafikai stílus: `{n}`
 @msg	no interaction in progress	nincs folyamatban lévő művelet
 @msg	no key object	nincs kulcsobjektum
+@msg	Align to Key Object isn't available with the Artboard tool	az „Igazítás a kulcsobjektumhoz” nem érhető el a Rajztábla eszközzel
 @msg	no library `{id}`	nincs ilyen könyvtár: `{id}`
 @msg	the library has another item of that kind named `{name}`	a könyvtárban már van egy másik ilyen fajta elem `{name}` néven
 @msg	no library `{key}` (see {list})	nincs ilyen könyvtár: `{key}` (lásd: {list})
@@ -6023,6 +6032,8 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	no such spine point	nincs ilyen gerincpont
 @msg	`with` must be a list of at most 10000 spine point indexes	`with`: legfeljebb 10000 gerincpont-indexből álló lista kell
 @msg	`with` moves points, not a handle	`with` pontokat mozgat, nem fogantyút
+@msg	`link` and `independent` cannot both be true	`link` és `independent` nem lehet egyszerre true
+@msg	`link` places a handle: give `handle`	`link` fogantyút helyez el: adja meg a `handle` értéket
 @msg	no such spine segment	nincs ilyen gerincszakasz
 @msg	no such subpath	nincs ilyen részútvonal
 @msg	no such user library	nincs ilyen felhasználói könyvtár
@@ -6153,6 +6164,7 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	A lemezen módosult csatolt képek: {n}; a Csatolások frissítése az új változatokat mutatja
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Frissített, a lemezen módosult csatolt fájlok: {n}
 @msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	a dokumentum kifutót állít be, amelyet ez a PDF/X-fájl kihagy: kapcsolja be „A dokumentum kifutóbeállításainak használata” beállítást
+@msgplural	{n} object reaches the trim edge but stops short of the bleed|{n} objects reach the trim edge but stop short of the bleed	{n} objektum eléri a vágási élt, de nem ér ki a kifutóig
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	Exportálva: {what}; megjegyzések: {n}, az első: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	Betűtípusfájlok száma: {n}, mappa: {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	Betűtípusfájlok száma: {n}, mappa: {folder}; nem sikerült hozzáadni: {failed} ({reason})
@@ -6193,6 +6205,7 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	select a blend	jelölj ki egy összemosást
 @msg	select a blend or give `id`	jelölj ki egy összemosást, vagy add meg az `id` értékét
 @msg	select a clip group	jelölj ki egy vágócsoportot
+@msg	select a flare	jelölj ki egy fényvillanást
 @msg	select a gradient mesh	jelölj ki egy színátmenetes hálót
 @msg	select a linked image: an embedded one has no file	jelölj ki egy csatolt képet: a beágyazottnak nincs fájlja
 @msg	select a Live Paint group	jelölj ki egy élőfestés-csoportot
@@ -6898,6 +6911,9 @@ variable-list-end	{0}, {1}	{0} és {1}
 	Continue in Background	Folytatás a háttérben
 	Cancel Export	Exportálás megszakítása
 @msg	Export cancelled	Az exportálás megszakítva
+	Cancel Save	Mentés megszakítása
+@plural	{n} more save waiting|{n} more saves waiting	Még {n} mentés várakozik
+@msg	Save canceled	A mentés megszakítva
 # Paragraph panel menu › Justification…
 	Desired	Kívánt
 	Word Spacing:	Szóköz:
@@ -7415,6 +7431,12 @@ axis	Y Axis	Y tengely
 	Circuit Trace	Vezetősáv
 	Bus Lines	Buszvonalak
 	Terminal Nodes	Csatlakozási pontok
+
+# Original arrow art brushes.
+	Arrows	Nyilak
+	Solid Arrow	Tömör nyíl
+	Open Arrow	Nyitott nyíl
+	Chevron Arrow	Ékmintás nyíl
 
 	Notched Ribbon	Csipkézett szalag
 	Double Line	Dupla vonal
@@ -8101,10 +8123,18 @@ breakText	Glyphs	Glifák
 	Smooth Bridge…	Sima híd…
 	Smooth Bridge	Sima híd
 	Keep Originals	Eredetik megtartása
-@msg	select two circles to bridge	jelöljön ki két kört az összekötéshez
+@msg	select two or more circles to bridge	jelöljön ki legalább két kört az összekötéshez
 @msg	one circle is inside the other	az egyik kör a másikon belül van
 @msg	the circles are too far apart for this radius: raise the radius	a körök túl messze vannak egymástól ehhez a sugárhoz: növelje a sugarat
 @msg	the circles are too far apart for this radius	a körök túl messze vannak egymástól ehhez a sugárhoz
+	Constant Gap	Állandó hézag
+	Reach:	Hatótávolság:
+@msg	the circles are too far apart for this gap: raise the gap	a körök túl messze vannak egymástól ehhez a hézaghoz: növelje a hézagot
+@msg	the circles are too far apart for this gap	a körök túl messze vannak egymástól ehhez a hézaghoz
+@msg	no two circles are within reach: raise the reach	nincs két kör hatótávolságon belül: növelje a hatótávolságot
+@msg	select at most 2000 circles to bridge	legfeljebb 2000 kört jelöljön ki az összekötéshez
+@msg	that makes too many bridges (at most 8000): lower the reach	ez túl sok hidat eredményez (legfeljebb 8000): csökkentse a hatótávolságot
+@msg	the bridged circles are too complex to unite	az összekötött körök túl összetettek az egyesítéshez
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	Közös érintők…
 	Common Tangents	Közös érintők
@@ -10411,6 +10441,16 @@ breakText	Glyphs	Glifák
 	No objects are selected.	Nincs kijelölt objektum.
 	Open a document to mark its fold lines.	Nyiss meg egy dokumentumot a hajtásvonalai megjelöléséhez.
 	Remove Fold Line Role	Vonaltípus eltávolítása
+	Tap	Rövid lenyomás
+	Clear Hold	Nyomva tartás törlése
+	Hold Shortcuts	Nyomva tartásos billentyűparancsok
+	Hold Shortcut Delay	Nyomva tartás késleltetése
+	How hold shortcuts work	Így működnek a nyomva tartásos billentyűparancsok
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	Kattints, majd nyomd le a billentyűt, amelyet ehhez nyomva kell tartani (Esc: mégse). A billentyű nyomva tartása ezt futtatja; a rövid lenyomás a billentyű saját billentyűparancsát futtatja.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	Egy billentyű rövid lenyomása a billentyűparancsát futtatja. Ha a késleltetés idejéig nyomva tartod, helyette a Nyomva tartás oszlopában lévő eszköz vagy parancs fut. Nyomva tartásos billentyűparancs lehet egy betű-, szám- vagy írásjelbillentyű, önmagában vagy Shifttel.
+@msg	Hold {_1} is already used by {_2}	már foglalt: nyomva tartás {_1} (használja: {_2})
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	a nyomva tartásos billentyűparancs egy karaktert beíró billentyű, önmagában vagy Shifttel ({shown} Cmd, Ctrl vagy Alt billentyűt tartalmaz)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} nem lehet nyomva tartásos billentyűparancs: használj betű-, szám- vagy írásjelbillentyűt
 	Check	Ellenőrzés
 	Check Fold Lines	Hajtásvonalak ellenőrzése
 @msg	No cut lines are in the selection.	A kijelölésben nincs vágóvonal.
@@ -10431,6 +10471,7 @@ breakText	Glyphs	Glifák
 @msg	A panel is not joined to the rest by a crease.	Egy panelt egyetlen bigvonal sem köt a többihez.
 @msg	A fold line is on a non-printing layer.	Egy hajtásvonal nem nyomtatható rétegen van.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panelek: {panels}, zsanérok: {hinges}, hibák: {errors}, figyelmeztetések: {warnings}
+	Dashed Arrow	Szaggatott nyíl
 	Pressure Sensitive	Nyomásérzékeny
 	Flex Ribbon	Rugalmas szalag
 	Pulse Stroke	Lüktető vonás
