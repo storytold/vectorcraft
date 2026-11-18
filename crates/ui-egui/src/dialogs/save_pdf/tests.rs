@@ -633,6 +633,30 @@ fn ui_dialog_set_links_the_bleed() {
     assert!(!d.fields.contains_key(BLEED_LINKED) && bleed_linked(d), "equal values set are linked");
     set(&mut app, "bleed", json!({"top": 1, "bottom": 2, "left": 1, "right": 1})).unwrap();
     assert!(!bleed_linked(app.ui.dialog.as_ref().unwrap()), "unequal values set are unlinked");
+
+    // Writing the same `bleed` again also lets the link follow its values; a `__bleedLinked` set
+    // after it in the same request still decides.
+    set(&mut app, "bleed", json!({"top": 1, "bottom": 1, "left": 1, "right": 1})).unwrap();
+    set(&mut app, BLEED_LINKED, json!(false)).unwrap();
+    set(&mut app, "bleed", json!({"top": 1, "bottom": 1, "left": 1, "right": 1})).unwrap();
+    assert!(bleed_linked(app.ui.dialog.as_ref().unwrap()), "the same equal values set again are linked");
+    set(&mut app, BLEED_LINKED, json!(false)).unwrap();
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert!(!bleed_linked(d) && bleed_of(d) == [1.0; 4], "a later __bleedLinked unlinks them");
+}
+
+/// An unlinked edit that makes the four sides equal leaves the link off, so the next edit
+/// changes one side only.
+#[test]
+fn an_unlinked_edit_that_evens_the_sides_keeps_the_link_off() {
+    let (mut app, _, _) = app();
+    app.run("ui.savePdfDialog", json!({"bleed": {"top": 3, "bottom": 5, "left": 3, "right": 3}})).unwrap();
+    let d = app.ui.dialog.as_mut().unwrap();
+    assert!(!bleed_linked(d));
+    edit_bleed(d, 1, 3.0);
+    assert!(!bleed_linked(d), "the link stays off");
+    edit_bleed(d, 2, 6.0);
+    assert_eq!(bleed_of(d), [3.0, 3.0, 6.0, 3.0], "the next edit changes one side");
 }
 
 #[test]

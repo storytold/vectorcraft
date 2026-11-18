@@ -754,9 +754,13 @@ fn link_bleed(d: &mut Dialog, on: bool) {
     }
 }
 
-/// Side `side` of the custom bleed was edited to `value`: linked, every side takes it.
+/// Side `side` of the custom bleed was edited to `value`: linked, every side takes it. The link
+/// keeps the state it had before the edit, so an unlinked edit that makes the sides equal leaves
+/// it off.
 fn edit_bleed(d: &mut Dialog, side: usize, value: f64) {
-    if bleed_linked(d) {
+    let linked = bleed_linked(d);
+    d.fields.insert(BLEED_LINKED.into(), json!(linked));
+    if linked {
         for p in BLEED_SIDES {
             set(d, p, json!(value));
         }
@@ -766,9 +770,9 @@ fn edit_bleed(d: &mut Dialog, side: usize, value: f64) {
 }
 
 /// `ui.dialog.set` set `field` of Save PDF or the PDF preset editor: `__bleedLinked` links or
-/// unlinks the bleed as its button does, and must be true or false; a new `bleed` drops the link's
-/// state, so the link follows the values set.
-pub(super) fn field_set(d: &mut Dialog, field: &str, old: Option<&Value>) -> Result<(), String> {
+/// unlinks the bleed as its button does, and must be true or false; every write of `bleed`, the
+/// same values included, drops the link's state, so the link follows the values set.
+pub(super) fn field_set(d: &mut Dialog, field: &str) -> Result<(), String> {
     match field {
         BLEED_LINKED => match d.fields.get(BLEED_LINKED).cloned() {
             Some(Value::Bool(on)) => {
@@ -777,7 +781,7 @@ pub(super) fn field_set(d: &mut Dialog, field: &str, old: Option<&Value>) -> Res
             }
             v => Err(format!("{BLEED_LINKED} must be true or false, not {}", v.unwrap_or(Value::Null))),
         },
-        "bleed" if d.fields.get("bleed") != old => {
+        "bleed" => {
             d.fields.remove(BLEED_LINKED);
             Ok(())
         }
