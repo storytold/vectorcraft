@@ -432,7 +432,7 @@ pub(super) fn rulers(ui: &Ui, full: egui::Rect, xf: &Xf, hover: Option<Point>, s
         let sy = left.top() + d;
         clip_left.line_segment([pos2(left.right() - len, sy), pos2(left.right(), sy)], Stroke::new(1.0, t.ruler_tick));
         if let Some(text) = label {
-            // Vertical labels read top-to-bottom, one digit per line like Illustrator.
+            // Vertical labels read top-to-bottom, one digit per line.
             let top = sy + 2.0;
             if top < filled_to {
                 return;
