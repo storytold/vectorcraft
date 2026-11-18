@@ -164,6 +164,7 @@
 	Add to the Current Shortcuts	વર્તમાન શૉર્ટકટમાં ઉમેરો
 	Additional Fonts Folder	વધારાનું ફોન્ટ ફોલ્ડર
 	Additional Plug-ins Folder	વધારાનું પ્લગ-ઇન ફોલ્ડર
+	Plug-in Instruction Budget	પ્લગ-ઇન સૂચના બજેટ
 	Adjust Adjoining Width Points	અડીને આવેલા પહોળાઈ બિંદુઓ ગોઠવો
 	Incoming	આવતી બાજુ
 	Outgoing	જતી બાજુ
@@ -230,6 +231,7 @@
 	Anchors selected: {count}	પસંદ કરેલા એન્કર: {count}
 	Anchors:	એન્કર:
 	Angle	ખૂણો
+	Axis Angle	અક્ષનો ખૂણો
 	Angle:	ખૂણો:
 	Angled Strokes…	ત્રાંસા સ્ટ્રોક…
 	Angles	ખૂણા
@@ -920,6 +922,8 @@
 	Delete Artboard	આર્ટબોર્ડ કાઢી નાખો
 	Delete Artboards	આર્ટબોર્ડ્સ કાઢી નાખો
 	Delete Brush	બ્રશ કાઢી નાખો
+	Delete Color	રંગ કાઢી નાખો
+	Restore Generated Table	જનરેટ થયેલું ટેબલ પુનઃસ્થાપિત કરો
 	Delete Character Style	અક્ષર સ્ટાઇલ કાઢી નાખો
 	Delete Data Set	ડેટા સેટ કાઢી નાખો
 	Delete Data Sets	ડેટા સેટ્સ કાઢી નાખો
@@ -1011,6 +1015,7 @@
 	Direction:	દિશા:
 	Directives	નિર્દેશો
 	Disable Auto Add/Delete	ઑટો ઍડ/ડિલીટ બંધ કરો
+	Interpolate Control Points When Moving Anchors	એન્કર બિંદુઓ ખસેડતી વખતે દિશા હેન્ડલ્સ ઇન્ટરપોલેટ કરો
 	Disable Opacity Mask	ઓપેસિટી માસ્ક બંધ કરો
 	Disable and Continue	બંધ કરો અને ચાલુ રાખો
 	Disabled plug-ins	બંધ કરેલા પ્લગ-ઇન્સ
@@ -1530,6 +1535,7 @@
 	From Selection	પસંદગીમાંથી
 	From:	થી:
 	Front	આગળ
+	Side	બાજુ
 	Full Document	સંપૂર્ણ દસ્તાવેજ
 	Full Justify	સંપૂર્ણ જસ્ટિફાય
 	Full Screen Mode	ફુલ સ્ક્રીન મોડ
@@ -1929,6 +1935,7 @@
 	Kashidas	કાશીદા
 	Keep Formatting	ફોર્મેટિંગ રાખો
 	Keep Original	મૂળ રાખો
+	Keep Originals	મૂળ રાખો
 	Keep Plain Text	સાદો ટેક્સ્ટ રાખો
 	Keep Shared Points Together	વહેંચાયેલા પોઇન્ટ સાથે રાખો
 	Keep Tools Beside the Canvas	ટૂલ્સ કેનવાસની બાજુમાં રાખો
@@ -2788,6 +2795,7 @@
 	Line Properties:	રેખાના ગુણધર્મો:
 	Line Length:	રેખાની લંબાઈ:
 	Line Angle:	રેખાનો કોણ:
+	Constrain Pie Angle	પાઇ કોણ મર્યાદિત કરો
 	Polygon Tool	બહુકોણ ટૂલ
 	Polygonal Lasso	બહુકોણીય લાસો
 	Polygonal Lasso Tool	બહુકોણીય લાસો ટૂલ
@@ -3213,6 +3221,7 @@
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Cmd/Ctrl દબાવી રાખીને માઉસ વ્હીલ ફેરવવાથી કેનવાસ બાજુમાં સ્ક્રોલ થાય છે.
 	Dragging sideways on a numeric field's label changes the field's value.	સંખ્યાત્મક ફીલ્ડના લેબલ પર બાજુમાં ખેંચવાથી ફીલ્ડનું મૂલ્ય બદલાય છે.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	ટ્રેકપેડ પર બે આંગળીથી ફેરવવાનો હાવભાવ કેનવાસનું દૃશ્ય ફેરવે છે.
+	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	જ્યારે તમે એન્કર પોઇન્ટ ખસેડો છો, ત્યારે એક ખસેલા છેડાવાળો દરેક વળાંક તેના છેડાઓની સાપેક્ષે પોતાનો આકાર જાળવે છે.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	ટૂલની શોર્ટકટ કી દબાવી રાખવાથી છોડો ત્યાં સુધી તે ટૂલ પસંદ રહે છે, પછી અગાઉનું ટૂલ ફરી પસંદ થાય છે.
 	Shows the bounding box while you move the selection or draw a shape.	તમે પસંદગી ખસેડો કે આકાર દોરો ત્યારે બાઉન્ડિંગ બોક્સ બતાવે છે.
 	Create Trim Marks draws Japanese-style marks instead of Roman ones.	ટ્રિમ માર્ક્સ બનાવો રોમન ને બદલે જાપાની શૈલીના ચિહ્નો દોરે છે.
@@ -3337,6 +3346,7 @@
 	Rotation Y	પરિભ્રમણ Y
 	Rotation Z	પરિભ્રમણ Z
 	Rotation relative to:	આના સાપેક્ષે પરિભ્રમણ:
+	Hue Jitter:	રંગછટામાં ફેરફાર:
 	Rotation:	પરિભ્રમણ:
 	Rough Pastels…	રફ પેસ્ટલ્સ…
 	Roughen…	રફ બનાવો…
@@ -3348,6 +3358,7 @@
 	Rounded Rectangle	ગોળાકાર લંબચોરસ
 	Rounded Rectangle Tool	ગોળાકાર લંબચોરસ ટૂલ
 	Rounded Rectangle…	ગોળાકાર લંબચોરસ…
+	Roundness	ગોળાઈ
 	Roundness:	ગોળાઈ:
 	Row Size:	પંક્તિનું માપ:
 	Rows	પંક્તિઓ
@@ -3558,6 +3569,12 @@
 	Search commands, tools, panels and effects…	આદેશો, ટૂલ્સ, પેનલ્સ અને ઇફેક્ટ્સ શોધો…
 	No commands match	કોઈ આદેશ મેળ ખાતો નથી
 	{pos} of {total}: {name}	{total} માંથી {pos}: {name}
+	No menu item	કોઈ મેનૂ આઇટમ નથી
+	Toolbar	ટૂલબાર
+	{toolbar}, in the {tool} group	{toolbar}, {tool} જૂથમાં
+	Tool	ટૂલ
+	Command	કમાન્ડ
+	Panel	પેનલ
 @plural	{n} result|{n} results	{n} પરિણામ|{n} પરિણામો
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} માંથી {shown} પરિણામ. તેમને સંકુચિત કરવા લખતા રહો.|{n} માંથી {shown} પરિણામો. તેમને સંકુચિત કરવા લખતા રહો.
 	Recent Commands	તાજેતરના આદેશો
@@ -3865,6 +3882,8 @@
 	Report Results	પરિણામોનો અહેવાલ
 	Smooth	સ્મૂધ
 	Smooth Anchors…	એન્કર સ્મૂધ કરો…
+	Smooth Bridge	સ્મૂધ બ્રિજ
+	Smooth Bridge…	સ્મૂધ બ્રિજ…
 	Smooth Tool	સ્મૂધ ટૂલ
 	Smooth…	સ્મૂધ કરો…
 	Smudge Stick…	સ્મજ સ્ટિક…
@@ -4701,6 +4720,7 @@ antiAlias	Sharp	શાર્પ
 	Include Placed Images	પ્લેસ કરેલી ઇમેજો સામેલ કરો
 	Include Fill Hatches	ફિલ હેચિસ સામેલ કરો
 	Use Monitor Profile for Canvas	કેનવાસ માટે મોનિટર પ્રોફાઇલ વાપરો
+	Refresh Monitor Profile	મોનિટર પ્રોફાઇલ તાજી કરો
 	The canvas is drawn in sRGB.	કેનવાસ sRGBમાં દોરાય છે.
 	Canvas display profile:	કેનવાસ ડિસ્પ્લે પ્રોફાઇલ:
 	The system matches the window to the display's colors.	સિસ્ટમ વિન્ડોના રંગો ડિસ્પ્લેના રંગો સાથે મેળવે છે.

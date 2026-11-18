@@ -1637,6 +1637,7 @@ digits	Malayalam	Malayalam
 	Underline	Garis bawah
 	Vertical Scale %	Skala vertikal %
 	Axis	Sumbu
+	Axis Angle	Sudut sumbu
 	ICF Top/Right	ICF atas/kanan
 	ICF Bottom/Left	ICF bawah/kiri
 	Show Font Height Options	Tampilkan opsi tinggi font
@@ -2192,6 +2193,7 @@ digits	Malayalam	Malayalam
 	Line Properties:	Properti garis:
 	Line Length:	Panjang garis:
 	Line Angle:	Sudut garis:
+	Constrain Pie Angle	Kendalikan sudut pai
 	Rectangle Properties:	Properti persegi panjang:
 	Shape Properties:	Properti bentuk:
 	Shape Properties	Properti bentuk
@@ -2233,6 +2235,7 @@ digits	Malayalam	Malayalam
 	Scatter:	Sebaran:
 	Rotation:	Rotasi:
 	Rotation relative to:	Rotasi relatif terhadap:
+	Hue Jitter:	Variasi rona:
 	Brush Scale Options	Opsi skala kuas
 	Scale Proportionately	Skalakan proporsional
 	Stretch to Fit Stroke Length	Regangkan sesuai panjang stroke
@@ -2271,6 +2274,7 @@ digits	Malayalam	Malayalam
 	Size:	Ukuran:
 	Calligraphic Brush Options	Opsi kuas kaligrafi
 	Bristle Brush Options	Opsi kuas bristle
+	Roundness	Kebulatan
 	Roundness:	Kebulatan:
 	Shape:	Bentuk:
 	Bristle Length:	Panjang bristle:
@@ -3256,6 +3260,8 @@ theme	Appearance	Tampilan
 	Current Brush	Kuas saat ini
 	Current Symbol	Simbol saat ini
 	Delete Brush	Hapus kuas
+	Delete Color	Hapus warna
+	Restore Generated Table	Pulihkan tabel yang dibuat
 	Delete Symbol	Hapus simbol
 	Delete the selected symbol?	Hapus simbol yang dipilih?
 	Delete the selected symbols?	Hapus simbol yang dipilih?
@@ -3709,6 +3715,7 @@ theme	Appearance	Tampilan
 	90° & 45° Angles	Sudut 90° & 45°
 	90° Angles	Sudut 90°
 	Additional Plug-ins Folder	Folder plug-in tambahan
+	Plug-in Instruction Budget	Anggaran instruksi plug-in
 	Additional Fonts Folder	Folder font tambahan
 	Alignment Guides	Panduan perataan
 	Anchor Points, Handle, and Bounding Box Display	Tampilan titik jangkar, pegangan, dan kotak pembatas
@@ -3735,6 +3742,7 @@ theme	Appearance	Tampilan
 	Data Recovery	Pemulihan data
 	Default Language	Bahasa standar
 	Disable Auto Add/Delete	Nonaktifkan tambah/hapus otomatis
+	Interpolate Control Points When Moving Anchors	Interpolasikan gagang arah saat memindahkan titik jangkar
 	Display All Blacks Accurately	Tampilkan semua warna hitam secara akurat
 	Display All Blacks as Rich Black	Tampilkan semua warna hitam sebagai rich black
 	Display Bitmaps as Anti-aliased Images in Pixel Preview	Tampilkan bitmap sebagai gambar anti-alias dalam pratinjau piksel
@@ -3823,6 +3831,7 @@ theme	Appearance	Tampilan
 	Printing / Exporting	Pencetakan / Ekspor
 	Real-time Drawing and Editing	Penggambaran dan pengeditan waktu nyata
 	Use Monitor Profile for Canvas	Gunakan profil monitor untuk kanvas
+	Refresh Monitor Profile	Segarkan profil monitor
 	The canvas is drawn in sRGB.	Kanvas digambar dalam sRGB.
 	Canvas display profile:	Profil layar kanvas:
 	The system matches the window to the display's colors.	Sistem menyesuaikan jendela dengan warna layar.
@@ -4219,6 +4228,9 @@ font-technology	Variable	Variabel
 	Search commands, tools, panels and effects…	Cari perintah, alat, panel, dan efek…
 	No commands match	Tidak ada perintah yang cocok
 	{pos} of {total}: {name}	{pos} dari {total}: {name}
+	No menu item	Tidak ada item menu
+	Toolbar	Bilah alat
+	{toolbar}, in the {tool} group	{toolbar}, dalam grup {tool}
 @plural	{n} result|{n} results	{n} hasil
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} dari {n} hasil. Terus ketik untuk mempersempitnya.
 	Recent Commands	Perintah terbaru
@@ -4255,6 +4267,7 @@ font-technology	Variable	Variabel
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Roda mouse dengan Cmd/Ctrl ditahan menggulir kanvas ke samping.
 	Dragging sideways on a numeric field's label changes the field's value.	Menyeret ke samping pada label bidang angka mengubah nilai bidang itu.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Gerakan putar dua jari pada trackpad memutar tampilan kanvas.
+	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Saat Anda memindahkan titik jangkar, setiap kurva dengan satu ujung yang dipindahkan mempertahankan bentuknya terhadap ujung-ujungnya.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Menahan tombol pintasan alat memilih alat itu sampai Anda melepasnya, lalu alat sebelumnya dipilih lagi.
 	Shows the bounding box while you move the selection or draw a shape.	Menampilkan kotak pembatas saat Anda memindahkan seleksi atau menggambar bentuk.
 	Create Trim Marks draws Japanese-style marks instead of Roman ones.	Buat tanda potong menggambar tanda bergaya Jepang, bukan Romawi.
@@ -4777,6 +4790,7 @@ imageTrace	Outline	Kontur
 @msg	choose a folder to export to	pilih folder tujuan ekspor
 @msg	choose a location for the package	pilih lokasi untuk paket
 @msg	clipboard is empty	papan klip kosong
+@msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: setidaknya satu warna harus tetap ada di tabel warna
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` bukan warna seperti "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: maksimal {MAX_TABLE} warna
 @msg	command `{0}` is not available right now: {1}	perintah `{0}` tidak tersedia saat ini: {1}
@@ -5676,6 +5690,7 @@ mark-style	Japanese	Jepang
 	Cove	Cove
 	Depth	Kedalaman
 	Front	Depan
+	Side	Samping
 	Isometric Bottom	Isometrik bawah
 	Isometric Left	Isometrik kiri
 	Isometric Right	Isometrik kanan
@@ -7006,6 +7021,14 @@ breakText	Glyphs	Glif
 	Remove Gaps	Hapus celah
 @msg	that makes too many pieces (at most 100000): make the dashes longer	itu menghasilkan terlalu banyak potongan (paling banyak 100000): perpanjang garisnya
 @msg	select paths, or segments, to divide	pilih jalur atau segmen yang akan dibagi
+# Path Precision Tools add-on: Smooth Bridge.
+	Smooth Bridge…	Jembatan Halus…
+	Smooth Bridge	Jembatan Halus
+	Keep Originals	Pertahankan Asli
+@msg	select two circles to bridge	pilih dua lingkaran untuk dijembatani
+@msg	one circle is inside the other	satu lingkaran berada di dalam lingkaran lainnya
+@msg	the circles are too far apart for this radius: raise the radius	lingkaran terlalu berjauhan untuk radius ini: perbesar radius
+@msg	the circles are too far apart for this radius	lingkaran terlalu berjauhan untuk radius ini
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	Garis Singgung Persekutuan…
 	Common Tangents	Garis Singgung Persekutuan

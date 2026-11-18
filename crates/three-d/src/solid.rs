@@ -19,6 +19,7 @@ mod inflate;
 mod membrane;
 mod outline;
 mod rings;
+mod side;
 
 #[cfg(test)]
 pub(crate) use build::EXTRUDED;
@@ -27,7 +28,7 @@ pub(crate) use build::PLANES;
 #[cfg(test)]
 use build::{Camera, cuts, edge_distance, newell, section};
 pub(crate) use build::{Face3, Keep, extrude_faces, plane_faces};
-pub use build::{extrude, plane};
+pub use build::{extrude, extrude_side_size, plane};
 pub use face_map::{FaceMap, MeshFace, extrude_face_map, extrude_mesh_face, plane_face_map, plane_mesh_face};
 pub(crate) use inflate::inflate_faces;
 #[cfg(test)]
@@ -218,11 +219,14 @@ pub struct Extrude {
     /// Keep the faces of a closed solid that are turned away from the viewer (Draw Hidden Faces,
     /// and the classic Wireframe surface), drawn behind the faces turned toward it.
     pub hidden: bool,
+    /// Graphics are mapped onto the side: the pieces of the walls and bevels of the solid's longest
+    /// contour carry a [`Facet::surface`]. Off by default, which leaves the facets without one.
+    pub map_surface: bool,
 }
 
 impl Default for Extrude {
     fn default() -> Self {
-        Self { depth: 50.0, twist: 0.0, taper: 1.0, cap: true, bevel: None, hidden: false }
+        Self { depth: 50.0, twist: 0.0, taper: 1.0, cap: true, bevel: None, hidden: false, map_surface: false }
     }
 }
 
@@ -253,21 +257,24 @@ impl Default for Inflate {
     }
 }
 
-/// A planar face of a solid that a graphic can be mapped onto: Extrude & Bevel's front cap (the
-/// art itself, or a plane's only face) or its back cap.
+/// A face of a solid that a graphic can be mapped onto: Extrude & Bevel's front cap (the art itself,
+/// or a plane's only face), its back cap, or its side (the walls and bevels, unrolled flat:
+/// [`Facet::surface`]). Only the caps are planar.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum PlanarFace {
     Front,
     Back,
+    Side,
 }
 
 impl PlanarFace {
-    pub const ALL: [PlanarFace; 2] = [Self::Front, Self::Back];
+    pub const ALL: [PlanarFace; 3] = [Self::Front, Self::Back, Self::Side];
 
     pub fn id(self) -> &'static str {
         match self {
             Self::Front => "front",
             Self::Back => "back",
+            Self::Side => "side",
         }
     }
 
@@ -300,13 +307,16 @@ pub struct Facet {
     /// The planar end of the solid the facet is: Extrude & Bevel's front or back cap, or a plane
     /// (its front). `None` for every other facet.
     pub end: Option<PlanarFace>,
-    /// For a piece of Inflate's front or puffed back built for graphics ([`Inflate::map_surface`]):
-    /// where its corners lie in the art's plane, as offsets from the center of the bounds the solid
-    /// was built with ([`crate::SurfaceCell`]). The back's corners are where they were in the art
-    /// before the twist and taper turned and scaled it.
+    /// For a piece of Extrude & Bevel's side built for graphics ([`Extrude::map_surface`]): where
+    /// its corners lie on the side unrolled flat, for a graphic mapped onto it. x runs along the
+    /// outline and y from the front toward the back ([`crate::SurfaceCell`]). For a piece of
+    /// Inflate's front or puffed back built for graphics ([`Inflate::map_surface`]): where its
+    /// corners lie in the art's plane, as offsets from the center of the bounds the solid was built
+    /// with. The back's corners are where they were in the art before the twist and taper turned
+    /// and scaled it.
     pub surface: Option<crate::SurfaceCell>,
     /// The face of Inflate's solid that a facet with a [`Facet::surface`] is a piece of: its front
-    /// or its puffed back.
+    /// or its puffed back. `None` for every other facet, Extrude & Bevel's side included.
     pub membrane: Option<PlanarFace>,
     /// The face's plane in view space and the projection it was drawn with, for its depth at a
     /// point of the drawing ([`Facet::depth_at`]). `None` for a face whose corners lie more than
@@ -396,6 +406,7 @@ impl Facet {
             // A revolved cap is not one of the planar faces graphics map onto.
             end: None,
             away: false,
+            // Revolve's graphics are drawn from its faces, before they become facets.
             surface: None,
             membrane: None,
             plane: face.plane,

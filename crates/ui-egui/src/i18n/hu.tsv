@@ -211,6 +211,7 @@
 	Add Used Colors	Használt színek hozzáadása
 	Additional Fonts Folder	További betűtípusok mappája
 	Additional Plug-ins Folder	További bővítmények mappája
+	Plug-in Instruction Budget	Bővítmények utasításkerete
 	Adjust Adjoining Width Points	Szomszédos szélességi pontok igazítása
 	Incoming	Bejövő
 	Outgoing	Kimenő
@@ -387,6 +388,7 @@ font-technology	Variable	Változó
 	Average	Átlagolás
 	Average…	Átlagolás…
 	Axis	Tengely
+	Axis Angle	Tengely szöge
 	Axis side	Tengely oldala
 	Axis:	Tengely:
 	B4	B4
@@ -1044,6 +1046,8 @@ font-technology	Variable	Változó
 	Delete Artboard	Rajztábla törlése
 	Delete Artboards	Rajztáblák törlése
 	Delete Brush	Ecset törlése
+	Delete Color	Szín törlése
+	Restore Generated Table	Előállított tábla visszaállítása
 	Delete Character Style	Karakterstílus törlése
 	Delete Data Set	Adatkészlet törlése
 	Delete Empty Artboards	Üres rajztáblák törlése
@@ -1132,6 +1136,7 @@ font-technology	Variable	Változó
 	Direction Handles	Iránykezelő fogantyúk
 	Direction:	Irány:
 	Disable Auto Add/Delete	Automatikus hozzáadás és törlés kikapcsolása
+	Interpolate Control Points When Moving Anchors	Iránykezelő fogantyúk interpolálása horgonypontok mozgatásakor
 	Disable Opacity Mask	Átlátszósági maszk kikapcsolása
 	Discard	Elvetés
 	Discard Empty Type	Üres szöveg elvetése
@@ -3282,6 +3287,7 @@ diagnostics	ui	felület
 	Line Properties:	Vonal tulajdonságai:
 	Line Length:	Vonal hossza:
 	Line Angle:	Vonal szöge:
+	Constrain Pie Angle	Körcikk szögének megtartása
 	Polygon Tool	Sokszög
 	Portrait	Álló
 	Portrait (flipped)	Álló (megfordítva)
@@ -3461,6 +3467,9 @@ mark-style	Japanese	Japán
 	Real World:	Valós méret:
 	Real-time Drawing and Editing	Valós idejű rajzolás és szerkesztés
 	Use Monitor Profile for Canvas	Monitorprofil használata a vászonhoz
+	Refresh Monitor Profile	Monitorprofil frissítése
+@msg	turn on Use Monitor Profile for Canvas first	előbb kapcsolja be a „Monitorprofil használata a vászonhoz” beállítást
+@msg	this build doesn't read display profiles	ez a változat nem olvassa be a kijelzőprofilokat
 	The canvas is drawn in sRGB.	A vászon sRGB-ben jelenik meg.
 	Canvas display profile:	A vászon kijelzőprofilja:
 	The system matches the window to the display's colors.	A rendszer a kijelző színeihez igazítja az ablakot.
@@ -3734,6 +3743,7 @@ mark-style	Japanese	Japán
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Az egérgörgő lenyomott Cmd/Ctrl billentyűvel oldalirányban görgeti a vásznat.
 	Dragging sideways on a numeric field's label changes the field's value.	Egy számmező címkéjén oldalirányban húzva módosul a mező értéke.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Az érintőpadon végzett kétujjas forgató kézmozdulat elforgatja a vászon nézetét.
+	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Horgonypontok mozgatásakor minden olyan görbe, amelynek egyik vége elmozdul, megtartja az alakját a végeihez képest.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Egy eszköz billentyűparancsát lenyomva tartva az eszköz a felengedésig ki van választva, utána ismét az előző eszköz lesz kiválasztva.
 	Shows the bounding box while you move the selection or draw a shape.	Megjeleníti a befoglaló keretet, miközben a kijelölést mozgatja vagy alakzatot rajzol.
 	Create Trim Marks draws Japanese-style marks instead of Roman ones.	A Vágójelek létrehozása római helyett japán stílusú jeleket rajzol.
@@ -3872,6 +3882,7 @@ mark-style	Japanese	Japán
 	Rotate…	Elforgatás…
 	Rotation	Elforgatás
 	Rotation relative to:	Elforgatás viszonyítási alapja:
+	Hue Jitter:	Színárnyalat-szórás:
 	Rotation X	X-elforgatás
 	Rotation Y	Y-elforgatás
 	Rotation Z	Z-elforgatás
@@ -3890,6 +3901,7 @@ mark-style	Japanese	Japán
 	Rounded Rectangle	Lekerekített téglalap
 	Rounded Rectangle Tool	Lekerekített téglalap
 	Rounded Rectangle…	Lekerekített téglalap…
+	Roundness	Kerekség
 	Roundness:	Kerekség:
 	Row Size:	Sorméret:
 	Rows	Sorok
@@ -4083,6 +4095,9 @@ mark-style	Japanese	Japán
 	Search commands, tools, panels and effects…	Parancsok, eszközök, panelek és effektusok keresése…
 	No commands match	Nincs egyező parancs
 	{pos} of {total}: {name}	{pos}/{total}: {name}
+	No menu item	Nincs menüpont
+	Toolbar	Eszköztár
+	{toolbar}, in the {tool} group	{toolbar}, a(z) {tool} csoportjában
 @plural	{n} result|{n} results	{n} találat
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} találatból {shown} látható. Gépeljen tovább a szűkítéshez.
 	Recent Commands	Legutóbbi parancsok
@@ -5388,6 +5403,7 @@ imageTrace	Outline	Körvonal
 @msg	a linked JavaScript file is outside the read roots	egy csatolt JavaScript-fájl kívül esik az olvasási gyökereken
 @msg	a linked image file is outside the read roots	egy csatolt képfájl kívül esik az olvasási gyökereken
 @msg	a linked file's export folder is outside the read roots	egy csatolt fájl exportálási mappája kívül esik az olvasási gyökereken
+@msg	a linked file's editing data can't be read to check it against the read roots	egy csatolt fájl szerkesztési adatai nem olvashatók be az olvasási gyökerekkel való ellenőrzéshez
 @msg	automation path rejected: outside the write root {root}: {path}	az automatizálás útvonala elutasítva: kívül esik az írási gyökéren ({root}): {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	az automatizálás útvonala elutasítva: kívül esik az írási gyökereken ({roots}): {path}
 @msg	automation path rejected: parent traversal below a folder that doesn't exist: {path}	az automatizálás útvonala elutasítva: szülőmappára lépés egy nem létező mappa alatt: {path}
@@ -5437,6 +5453,7 @@ imageTrace	Outline	Körvonal
 @msg	choose the font files to add	válaszd ki a hozzáadandó betűtípusfájlokat
 @msg	clipboard is empty	a vágólap üres
 @msg	closing needs three anchors	a lezáráshoz három horgonypont kell
+@msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: legalább egy színnek a színtáblában kell maradnia
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` nem szín (például "#ff8800")
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: legfeljebb {MAX_TABLE} szín
 @msg	column must be true or a number from 1	a column értéke true vagy 1-től kezdődő szám lehet
@@ -5606,6 +5623,14 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	there is no script engine named {name}	nincs {name} nevű parancsfájlmotor
 @msg	`answers[{i}]` {e}	`answers[{i}]`: {e}
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	az `answers` csak olyan futtatáshoz való, ahol nincs kit megkérdezni: az alkalmazásban minden párbeszédpanelre a felhasználó válaszol
+@msg	`maxFuel` must be a whole number from 1 to {_1}	a `maxFuel` értéke 1 és {_1} közötti egész szám lehet
+@msg	`args{place}` is nested more than 64 levels deep	az `args{place}` 64 szintnél mélyebben van egymásba ágyazva
+@msg	`args` must be an object	az `args` értékének objektumnak kell lennie
+@msg	`args` is larger than 1 MiB	`args`: nagyobb 1 MiB-nál
+@msg	`path` is empty	a `path` üres
+@msg	`installed` takes a `path`, not a `source`	az `installed` `path` értéket vár, nem `source` értéket
+@msg	`path` must name a .js or .jsx file	a `path` értékének .js vagy .jsx fájlt kell megadnia
+@msg	give exactly one of `path` and `source`	pontosan egyet adj meg ezek közül: `path`, `source`
 @msg	Running a script	Parancsfájl futtatása
 @msg	Copied the script report	Szkriptjelentés másolva
 @msg	Script file access denied: {path}	A parancsfájl fájlhozzáférése megtagadva: {path}
@@ -5797,6 +5822,12 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	name the file	adj nevet a fájlnak
 @msg	no active document	nincs aktív dokumentum
 @msg	no active perspective plane	nincs aktív perspektivikus sík
+@msg	the perspective grid is hidden	a perspektivikus rács rejtett
+@msg	Automatic Plane Positioning is off: turn on anchorPoint or gridlineIntersection (perspective.widget.options)	Az automatikus síkpozicionálás ki van kapcsolva: kapcsold be az anchorPoint vagy a gridlineIntersection beállítást (perspective.widget.options)
+@msg	anchorPoint must be true or false	anchorPoint: true vagy false kell
+@msg	gridlineIntersection must be true or false	gridlineIntersection: true vagy false kell
+@msg	tolerance must be 0 or more	tolerance: 0 vagy nagyobb érték kell
+@msg	give `at` or `clear`, not both	az `at` vagy a `clear` értéket add meg, ne mindkettőt
 @msg	no anchor points selected	nincs kijelölt horgonypont
 @msg	`points` must be two or three [x, y] pairs of numbers	a `points` két vagy három [x, y] számpár legyen
 @msg	direct-select two or three anchor points, or give `points`	jelölj ki közvetlen kijelöléssel két vagy három horgonypontot, vagy add meg a `points` értéket
@@ -6381,6 +6412,8 @@ variable-list-end	{0}, {1}	{0} és {1}
 @msg	{path}: {e}	{path}: {e}
 @msg	{status} ({e})	{status} ({e})
 @msg	{tool} isn't in a toolbar group of several tools	az eszköz nincs többeszközös eszköztár-csoportban: {tool}
+@msg	Presentation Mode hides the toolbars: change the screen mode to show them	a Bemutató mód elrejti az eszköztárakat: a megjelenítésükhöz váltson képernyőmódot
+@msg	Tab has hidden the toolbars: press Tab to show them	a Tab elrejtette az eszköztárakat: a megjelenítésükhöz nyomja meg a Tab billentyűt
 @msg	the compressed file unpacks to more than VectorCraft reads ({_1} MB of document, {_2} MB per image)	a tömörített fájl kicsomagolva nagyobb lenne, mint amennyit a VectorCraft beolvas ({_1} MB dokumentum, képenként {_2} MB)
 @msg	the document is too large to save compressed ({0}): save it with Use Compression off	a dokumentum túl nagy a tömörített mentéshez ({0}): mentsd a Tömörítés használata beállítás kikapcsolásával
 @msg	the file stopped being read (please report this bug)	a fájl beolvasása megszakadt (kérjük, jelentsd ezt a hibát)
@@ -6401,6 +6434,7 @@ variable-list-end	{0}, {1}	{0} és {1}
 	Cove	Homorú
 	Depth	Mélység
 	Front	Elölről
+	Side	Oldalról
 	Isometric Bottom	Izometrikus alsó
 	Isometric Left	Izometrikus bal
 	Isometric Right	Izometrikus jobb
@@ -6495,7 +6529,7 @@ variable-list-end	{0}, {1}	{0} és {1}
 @msg	each of `{GRAPHICS}` must be an object	a `{GRAPHICS}` minden elemének objektumnak kell lennie
 @msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	a `{GRAPHICS}` elemei symbol, face, x, y, scale és rotation értéket fogadnak, nem `{k}` értéket
 @msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	a `{GRAPHICS}` minden eleméhez kell `symbol`, egy szimbólum neve
-@msg	`{GRAPHICS}` face must be front or back	a `{GRAPHICS}` face értéke front vagy back lehet
+@msg	`{GRAPHICS}` face must be front, back or side	a `{GRAPHICS}` face értéke front, back vagy side lehet
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	a `{GRAPHICS}` {key} értéke {lo} és {hi} közötti szám lehet
 @msg	`{GRAPHICS}` must be an array	a `{GRAPHICS}` értéke tömb kell legyen
 @msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	A grafikák a Sík, a Kihúzás, a Forgatás tengely körül és a Felfújás objektumtípusra kerülnek
@@ -7730,6 +7764,14 @@ breakText	Glyphs	Glifák
 	Remove Gaps	Hézagok eltávolítása
 @msg	that makes too many pieces (at most 100000): make the dashes longer	ez túl sok darabot adna (legfeljebb 100000): hosszabbítsa meg a szaggatásokat
 @msg	select paths, or segments, to divide	jelöljön ki felosztandó útvonalakat vagy szakaszokat
+# Path Precision Tools add-on: Smooth Bridge.
+	Smooth Bridge…	Sima híd…
+	Smooth Bridge	Sima híd
+	Keep Originals	Eredetik megtartása
+@msg	select two circles to bridge	jelöljön ki két kört az összekötéshez
+@msg	one circle is inside the other	az egyik kör a másikon belül van
+@msg	the circles are too far apart for this radius: raise the radius	a körök túl messze vannak egymástól ehhez a sugárhoz: növelje a sugarat
+@msg	the circles are too far apart for this radius	a körök túl messze vannak egymástól ehhez a sugárhoz
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	Közös érintők…
 	Common Tangents	Közös érintők

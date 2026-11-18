@@ -1,6 +1,6 @@
-//! Graphics mapped onto a 3D object's planar faces (Window › 3D and Materials › Materials ›
-//! Graphics): the art of a document symbol drawn on Extrude & Bevel's front or back cap, or on a
-//! plane, turned, foreshortened and shaded with that face and clipped to it.
+//! Graphics mapped onto a 3D object's faces (Window › 3D and Materials › Materials ›
+//! Graphics): the art of a document symbol drawn on Extrude & Bevel's front or back cap or on its
+//! side, or on a plane, turned, foreshortened and shaded with that face and clipped to it.
 //!
 //! The effect keeps its graphics in its `graphics` parameter, each `{symbol, face, x, y, scale,
 //! rotation}`: the symbol's name, the face, the offset of the graphic's center from the center of
@@ -12,7 +12,10 @@
 //! On Revolve the graphics lie on the swept side surface, unrolled flat
 //! ([`vectorcraft_three_d::SurfaceCell`]): x and y are the offset of the graphic's center from the
 //! middle of that surface, x around the axis and y along the profile, and each face of the side
-//! draws the part of the graphics that falls on it ([`surface_parts`]).
+//! draws the part of the graphics that falls on it ([`surface_parts`]). Graphics on Extrude &
+//! Bevel's side (face `side`) lie on its walls and bevels unrolled the same way, x along the
+//! outline and y from the front toward the back, drawn on the pieces of the side of the solid with
+//! the longest outline.
 //!
 //! On Inflate the graphics lie on the puffed front, and on the puffed back when Both Sides is on:
 //! each is placed in the art's plane as on Extrude & Bevel's caps and carried straight out onto
@@ -117,7 +120,7 @@ impl MappedGraphic {
         };
         let face = match m.get("face") {
             None => PlanarFace::Front,
-            Some(v) => v.as_str().and_then(PlanarFace::parse).ok_or_else(|| format!("`{GRAPHICS}` face must be front or back"))?,
+            Some(v) => v.as_str().and_then(PlanarFace::parse).ok_or_else(|| format!("`{GRAPHICS}` face must be front, back or side"))?,
         };
         let number = |key: &str, default: f64, (lo, hi): (f64, f64)| -> Result<f64, String> {
             match m.get(key) {
@@ -146,7 +149,7 @@ impl MappedGraphic {
             * Affine::scale(self.scale / 100.0)
             * Affine::translate(-art.center().to_vec2());
         match self.face {
-            PlanarFace::Front => place,
+            PlanarFace::Front | PlanarFace::Side => place,
             // Seen from behind, the back's right is the front's left.
             PlanarFace::Back => {
                 Affine::translate(center.to_vec2()) * Affine::scale_non_uniform(-1.0, 1.0) * Affine::translate(-center.to_vec2()) * place
@@ -155,8 +158,8 @@ impl MappedGraphic {
     }
 }
 
-/// The 3D effects that take graphics: Extrude & Bevel (its caps), Rotate (the plane), Revolve (its
-/// swept side) and Inflate (its puffed front and back).
+/// The 3D effects that take graphics: Extrude & Bevel (its caps and its side), Rotate (the plane),
+/// Revolve (its swept side) and Inflate (its puffed front and back).
 pub fn takes_graphics(id: &str) -> bool {
     id == super::EXTRUDE || id == super::ROTATE || id == crate::REVOLVE || id == super::INFLATE
 }
@@ -172,7 +175,7 @@ pub fn mapped_graphics(p: &Value) -> Vec<MappedGraphic> {
 
 /// Are the graphics in parameters `p` of 3D effect `id` valid? Only Extrude & Bevel, Rotate,
 /// Revolve and Inflate take graphics; a plane has only a front, and Revolve's graphics go on its
-/// side, named the front.
+/// side, named the front. Only Extrude & Bevel takes graphics on its side.
 pub fn validate(id: &str, p: &Value) -> Result<(), String> {
     let list = match p.get(GRAPHICS) {
         None => return Ok(()),
@@ -190,11 +193,14 @@ pub fn validate(id: &str, p: &Value) -> Result<(), String> {
     }
     for v in list {
         let g = MappedGraphic::from_value(v)?;
-        if id == super::ROTATE && g.face == PlanarFace::Back {
+        if id == super::ROTATE && g.face != PlanarFace::Front {
             return Err("A plane has one face: map its graphics onto the front".into());
         }
-        if id == crate::REVOLVE && g.face == PlanarFace::Back {
+        if id == crate::REVOLVE && g.face != PlanarFace::Front {
             return Err("Revolve maps graphics onto its side: map them onto the front".into());
+        }
+        if id == super::INFLATE && g.face == PlanarFace::Side {
+            return Err("Inflate maps graphics onto its front and back, not onto a side".into());
         }
     }
     Ok(())
@@ -605,11 +611,11 @@ struct Unrolled {
     place: Affine,
 }
 
-/// The areas of `graphics` on `face` (the front, for Revolve's side; Inflate's front or back)
-/// placed on the unrolled side surface, or in the art's plane about the center of the object's
-/// bounds, cut into straight pieces. A graphic whose symbol `doc` does not have, or whose art is
-/// past the limits of [`pieces_of`], is left out. `None` when the pieces take more than
-/// [`MAX_ELEMENTS`] points together.
+/// The areas of `graphics` on `face` (the front, for Revolve's side; Extrude & Bevel's side;
+/// Inflate's front or back) placed on the unrolled side surface, or in the art's plane about the
+/// center of the object's bounds, cut into straight pieces. A graphic whose symbol `doc` does not
+/// have, or whose art is past the limits of [`pieces_of`], is left out. `None` when the pieces take
+/// more than [`MAX_ELEMENTS`] points together.
 fn unrolled(doc: &Document, graphics: &[MappedGraphic], face: PlanarFace) -> Option<Vec<Unrolled>> {
     let mut pieces = vec![];
     let mut points = 0usize;
@@ -690,9 +696,9 @@ fn straight_pieces(path: &BezPath, points: &mut usize) -> Option<Vec<Vec<Point>>
     (*points <= MAX_ELEMENTS).then_some(polygons)
 }
 
-/// Do the graphics on `face` in parameters `p` (the front of Revolve; Inflate's front or back) fit
-/// the limits with the symbols of `doc`? Their art, cut into straight pieces on the surface, may
-/// take up to [`MAX_ELEMENTS`] points together.
+/// Do the graphics on `face` in parameters `p` (the front of Revolve; Extrude & Bevel's side;
+/// Inflate's front or back) fit the limits with the symbols of `doc`? Their art, cut into straight
+/// pieces on the surface, may take up to [`MAX_ELEMENTS`] points together.
 pub(crate) fn validate_surface_symbols(doc: &Document, p: &Value, face: PlanarFace) -> Result<(), String> {
     let list = mapped_graphics(p);
     if !list.iter().any(|g| g.face == face) || unrolled(doc, &list, face).is_some() {
@@ -702,7 +708,7 @@ pub(crate) fn validate_surface_symbols(doc: &Document, p: &Value, face: PlanarFa
 }
 
 /// A face of a surface that graphics are drawn on ([`surface_parts`]): a face of Revolve's swept
-/// side, or a piece of Inflate's front or back.
+/// side, a piece of Extrude & Bevel's walls and bevels, or a piece of Inflate's front or back.
 pub(crate) trait SurfaceFace {
     /// Where the face lies on the surface, when it carries graphics and shows the surface's outside
     /// to the viewer.
@@ -722,6 +728,30 @@ impl SurfaceFace for vectorcraft_three_d::Face {
     }
     fn curved(&self) -> Option<Cow<'_, PathData>> {
         self.outline.as_ref().map(Cow::Borrowed)
+    }
+    fn rgb_light(&self) -> Option<vectorcraft_three_d::RgbGradient> {
+        self.rgb_gradient
+    }
+    fn light(&self) -> [f64; 3] {
+        self.illumination
+    }
+    fn outline_path(&self) -> PathData {
+        self.path()
+    }
+}
+
+/// A piece of Extrude & Bevel's side ([`Facet::surface`]).
+impl SurfaceFace for Facet {
+    fn outer_cell(&self) -> Option<&vectorcraft_three_d::SurfaceCell> {
+        self.surface.as_ref().filter(|c| c.outward)
+    }
+    fn curved(&self) -> Option<Cow<'_, PathData>> {
+        if let Some(outline) = &self.outline {
+            return Some(Cow::Borrowed(outline));
+        }
+        // A piece of a stroke's face cut where it passes through a wall keeps its face's cell.
+        let cut = self.surface.as_ref().is_some_and(|c| self.contours.len() != 1 || self.contours.first() != Some(&c.page));
+        cut.then(|| Cow::Owned(self.path()))
     }
     fn rgb_light(&self) -> Option<vectorcraft_three_d::RgbGradient> {
         self.rgb_gradient
@@ -764,11 +794,11 @@ impl SurfaceFace for OnFace<'_> {
     }
 }
 
-/// The parts of the graphics on `face` of `graphics` (the front of Revolve; Inflate's front or
-/// back) that fall on each of `faces`, a surface's faces in drawing order, for an object with id
-/// `id`: for each face, the nodes to draw right after it. Only faces of the surface that show their
-/// outside to the viewer carry a part, so a graphic narrows toward the silhouette, is hidden past
-/// it and is covered by the nearer faces drawn after it.
+/// The parts of the graphics on `face` of `graphics` (the front of Revolve; Extrude & Bevel's side;
+/// Inflate's front or back) that fall on each of `faces`, a surface's faces in drawing order, for
+/// an object with id `id`: for each face, the nodes to draw right after it. Only faces of the
+/// surface that show their outside to the viewer carry a part, so a graphic narrows toward the
+/// silhouette, is hidden past it and is covered by the nearer faces drawn after it.
 /// `shade` gives the paint of a solid color on a face, as the surface under it is shaded; the
 /// colors of gradients and patterns are multiplied by the face's light. A graphic whose symbol
 /// `doc` does not have, or that is past the limits of its art, draws nothing. `None` past
@@ -1071,13 +1101,92 @@ pub(super) fn art_bounds(doc: &Document, name: &str) -> Option<Rect> {
 
 /// Where a 3D object's graphics are drawn: the bounds its solids are built with (the graphics'
 /// offsets are from their center), the maps of its front and back faces, when it has them, and
-/// for Inflate the pieces of its puffed faces the viewer sees.
+/// the visible part of its side unrolled, when it has graphics there, and for Inflate the pieces of
+/// its puffed faces the viewer sees.
 #[derive(Clone, Debug, PartialEq)]
 pub struct GraphicFrame {
     pub bounds: Rect,
     front: Option<FaceMap>,
     back: Option<FaceMap>,
+    side: Option<SideFrame>,
     membrane: Option<MembraneFrame>,
+}
+
+/// Does triangle `t` hold point `q`, its edges included?
+fn in_triangle(t: &[Point; 3], q: Point) -> bool {
+    let side = |a: Point, b: Point| (b - a).cross(q - a);
+    let s = [side(t[0], t[1]), side(t[1], t[2]), side(t[2], t[0])];
+    s.iter().all(|v| *v >= -1e-9) || s.iter().all(|v| *v <= 1e-9)
+}
+
+/// The pieces of Extrude & Bevel's side that show their outside to the viewer, as the graphics are
+/// drawn on them ([`surface_parts`]): each piece's corners on the side unrolled and on the page, the
+/// outline its parts are cut to when that is not the polygon of its corners, and its depth (larger
+/// is nearer).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct SideFrame {
+    pieces: Vec<SidePiece>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct SidePiece {
+    uv: Vec<Point>,
+    page: Vec<Point>,
+    outline: Option<BezPath>,
+    depth: f64,
+}
+
+impl SideFrame {
+    /// The pieces of `facets` that carry where they lie on the side unrolled and show its outside.
+    pub(super) fn of(facets: &[Facet]) -> Self {
+        let pieces = facets
+            .iter()
+            .filter_map(|f| {
+                let cell = f.outer_cell().filter(|c| c.uv.len() == c.page.len() && (3..=4).contains(&c.uv.len()))?;
+                let outline = f.curved().map(|o| o.to_bezpath());
+                Some(SidePiece { uv: cell.uv.clone(), page: cell.page.clone(), outline, depth: f.depth })
+            })
+            .collect();
+        Self { pieces }
+    }
+
+    /// Point `p` of the side unrolled mapped onto the page, or with `from_page` a page point mapped
+    /// onto the side unrolled, through the nearest piece whose drawn part holds it: within the
+    /// triangle of its corners on the same side of its diagonal from corner 0 to corner 2, grown and
+    /// cut to its outline as [`surface_parts`] cuts the parts. `None` when no piece holds it.
+    fn map(&self, p: Point, from_page: bool) -> Option<Point> {
+        let mut best: Option<(Point, f64)> = None;
+        for piece in &self.pieces {
+            let (from, to) = if from_page { (&piece.page, &piece.uv) } else { (&piece.uv, &piece.page) };
+            let triangles: &[[usize; 3]] = if from.len() == 3 { &[[0, 1, 2]] } else { &[[0, 1, 2], [0, 2, 3]] };
+            for corners in triangles {
+                let pick = |of: &[Point]| Some([*of.get(corners[0])?, *of.get(corners[1])?, *of.get(corners[2])?]);
+                let (Some(a), Some(b)) = (pick(from), pick(to)) else { continue };
+                let window = if piece.outline.is_some() { grown(a, 3.0) } else { a };
+                if !in_triangle(&window, p) {
+                    continue;
+                }
+                // A four-cornered piece's two triangles meet along its diagonal: each holds its side.
+                if triangles.len() == 2
+                    && let (Some(&d0), Some(&d2), Some(&own)) = (from.first(), from.get(2), from.get(if corners[1] == 1 { 1 } else { 3 }))
+                {
+                    let across = |q: Point| (d2 - d0).cross(q - d0);
+                    if across(p) * across(own) < 0.0 {
+                        continue;
+                    }
+                }
+                let Some(q) = triangle_map(&a, &b).map(|m| m * p).filter(|q| q.is_finite()) else { continue };
+                let on_page = if from_page { p } else { q };
+                if piece.outline.as_ref().is_some_and(|o| !o.contains(on_page)) {
+                    continue;
+                }
+                if best.is_none_or(|(_, depth)| piece.depth > depth) {
+                    best = Some((q, piece.depth));
+                }
+            }
+        }
+        best.map(|(q, _)| q)
+    }
 }
 
 /// The pieces of Inflate's front and puffed back that show their outside to the viewer, as the
@@ -1165,11 +1274,7 @@ impl MembraneFrame {
     /// that point of the page. `None` when no piece the viewer sees holds it, or when another nearer
     /// piece, of either face, or a nearer cover hides that point of the page.
     fn map(&self, face: PlanarFace, p: Point, from_page: bool) -> Option<Point> {
-        let inside = |t: &[Point; 3], q: Point| {
-            let side = |a: Point, b: Point| (b - a).cross(q - a);
-            let s = [side(t[0], t[1]), side(t[1], t[2]), side(t[2], t[0])];
-            s.iter().all(|v| *v >= -1e-9) || s.iter().all(|v| *v <= 1e-9)
-        };
+        let inside = in_triangle;
         let mut best: Option<(Point, f64, &MembranePiece)> = None;
         for piece in self.pieces.iter().filter(|piece| piece.face == face) {
             let (from, to) = if from_page { (&piece.page, &piece.uv) } else { (&piece.uv, &piece.page) };
@@ -1213,19 +1318,25 @@ impl MembraneFrame {
 
 impl GraphicFrame {
     pub(super) fn new(bounds: Rect, front: Option<FaceMap>, back: Option<FaceMap>) -> Self {
-        Self { bounds, front, back, membrane: None }
+        Self { bounds, front, back, side: None, membrane: None }
+    }
+
+    /// The frame with the visible part of the side `side`, for its graphics' handles.
+    pub(super) fn with_side(self, side: SideFrame) -> Self {
+        Self { side: Some(side), ..self }
     }
 
     /// The frame of an Inflate object built about `bounds`, whose graphics are drawn on the pieces
     /// of `membrane`.
     pub(super) fn inflated(bounds: Rect, membrane: MembraneFrame) -> Self {
-        Self { bounds, front: None, back: None, membrane: Some(membrane) }
+        Self { bounds, front: None, back: None, side: None, membrane: Some(membrane) }
     }
 
     pub fn map(&self, face: PlanarFace) -> Option<&FaceMap> {
         match face {
             PlanarFace::Front => self.front.as_ref(),
             PlanarFace::Back => self.back.as_ref(),
+            PlanarFace::Side => None,
         }
     }
 
@@ -1236,41 +1347,41 @@ impl GraphicFrame {
         match face {
             PlanarFace::Front => Point::new(c.x + x, c.y + y),
             PlanarFace::Back => Point::new(c.x - x, c.y + y),
+            PlanarFace::Side => Point::new(x, y),
         }
     }
 
     /// Where graphic `g`'s center lands on the page, and whether its face is turned toward the
-    /// viewer. `None` when the object has no such face or the point has no page point. On Inflate
-    /// the center lands on the puffed face above it, and is `None` where the viewer does not see
-    /// that face.
+    /// viewer. `None` when the object has no such face or the point has no page point. A graphic on
+    /// the side lands where its center is on the part of the side the viewer sees, and is `None`
+    /// elsewhere. On Inflate the center lands on the puffed face above it, and is `None` where the
+    /// viewer does not see that face.
     pub fn handle(&self, g: &MappedGraphic) -> Option<(Point, bool)> {
+        if g.face == PlanarFace::Side {
+            return Some((self.side.as_ref()?.map(Point::new(g.x, g.y), false)?, true));
+        }
         if let Some(membrane) = &self.membrane {
-            let uv = match g.face {
-                PlanarFace::Front => Point::new(g.x, g.y),
-                PlanarFace::Back => Point::new(-g.x, g.y),
-            };
+            let uv = if g.face == PlanarFace::Back { Point::new(-g.x, g.y) } else { Point::new(g.x, g.y) };
             return Some((membrane.map(g.face, uv, false)?, true));
         }
         let map = self.map(g.face)?;
         Some((map.to_page(self.art_point(g.face, (g.x, g.y)))?, map.visible))
     }
 
-    /// The offset of a graphic on `face` whose center lands on page point `page`. On Inflate, only
-    /// a point on the part of the puffed face the viewer sees has one.
+    /// The offset of a graphic on `face` whose center lands on page point `page`. On the side, only
+    /// a point on the part of the side the viewer sees has one, and on Inflate only a point on the
+    /// part of the puffed face the viewer sees.
     pub fn offset_at(&self, face: PlanarFace, page: Point) -> Option<(f64, f64)> {
-        let (x, y) = if let Some(membrane) = &self.membrane {
+        let (x, y) = if face == PlanarFace::Side {
+            let art = self.side.as_ref()?.map(page, true)?;
+            (art.x, art.y)
+        } else if let Some(membrane) = &self.membrane {
             let uv = membrane.map(face, page, true)?;
-            match face {
-                PlanarFace::Front => (uv.x, uv.y),
-                PlanarFace::Back => (-uv.x, uv.y),
-            }
+            if face == PlanarFace::Back { (-uv.x, uv.y) } else { (uv.x, uv.y) }
         } else {
             let art = self.map(face)?.to_art(page)?;
             let c = self.bounds.center();
-            match face {
-                PlanarFace::Front => (art.x - c.x, art.y - c.y),
-                PlanarFace::Back => (c.x - art.x, art.y - c.y),
-            }
+            if face == PlanarFace::Back { (c.x - art.x, art.y - c.y) } else { (art.x - c.x, art.y - c.y) }
         };
         (x.abs() <= MAX_OFFSET && y.abs() <= MAX_OFFSET).then_some((x, y))
     }
@@ -1278,9 +1389,15 @@ impl GraphicFrame {
     /// The scale (percent) at which art with bounds `art` fits inside the object's bounds, at most
     /// 100: where a newly mapped graphic starts.
     pub fn fitting_scale(&self, art: Rect) -> f64 {
-        let fit = (self.bounds.width() / art.width().max(1e-9)).min(self.bounds.height() / art.height().max(1e-9));
-        (fit * 100.0).clamp(SCALE_RANGE.0, 100.0)
+        fitting(self.bounds.width(), self.bounds.height(), art)
     }
+}
+
+/// The scale (percent) at which art with bounds `art` fits inside a `width` × `height` area, at
+/// most 100.
+pub fn fitting(width: f64, height: f64, art: Rect) -> f64 {
+    let fit = (width / art.width().max(1e-9)).min(height / art.height().max(1e-9));
+    (fit * 100.0).clamp(SCALE_RANGE.0, 100.0)
 }
 
 /// The symbols the graphics of `n`'s 3D effects name (its own effects and its fills' and strokes').
@@ -1366,3 +1483,7 @@ pub fn with_graphic(p: &Value, g: &MappedGraphic) -> Value {
 #[cfg(test)]
 #[path = "tests_graphics.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "tests_graphics_side.rs"]
+mod tests_side;
