@@ -1380,7 +1380,12 @@ mod tests {
         assert_eq!(first("outline text"), "type.createOutlines");
         assert!(within("flip", "object.reflect", 3), "{:?}", ranked(&c, "flip"));
         assert!(within("combine", "object.pathfinder.unite", 3), "{:?}", ranked(&c, "combine"));
-        assert!(ranked(&c, "vectorize").iter().take(3).any(|id| id.starts_with("imageTrace.")), "{:?}", ranked(&c, "vectorize"));
+        // "vectorize" finds the image trace commands, and only results whose label holds a form of
+        // "trace" rank above them.
+        let vectorize = ranked(&c, "vectorize");
+        let traced = |id: &String| c.list.iter().any(|e| &e.id == id && split_name(&e.shown).0.to_lowercase().contains("trac"));
+        let traces = vectorize.iter().position(|id| id.starts_with("imageTrace."));
+        assert!(traces.is_some_and(|p| vectorize.get(..p).is_some_and(|above| above.iter().all(traced))), "{vectorize:?}");
         assert_eq!(first("colour"), "panel:color", "{:?}", ranked(&c, "colour"));
         // A word that only starts other labels is in a group, and its labels follow the direct match.
         assert_eq!(first("unite"), "object.pathfinder.unite");
