@@ -425,6 +425,12 @@ font-technology	Variable	Variables
 	Character Alignment	Alineación de caracteres
 	Character / Paragraph	Carácter / Párrafo
 	Character Rotation	Rotación de caracteres
+	Chinese Big 5	Chino Big 5
+	Cyrillic	Cirílico
+	Greek	Griego
+	Turkish	Turco
+	Baltic	Báltico
+	Central European	Centroeuropeo
 	Character Set:	Juego de caracteres:
 	Character Style	Estilo de carácter
 	Character Style Options	Opciones de estilo de carácter
@@ -8203,3 +8209,4 @@ breakText	Glyphs	Glifos
 @msg	A joint does not close by {gap} pt.	Una unión no cierra por {gap} pt.
 @msg	Two panels pass through each other.	Dos paneles se atraviesan entre sí.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer debe ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"
+@msg	text.{key} `{v}`: use "{_1}" or "{_2}"	text.{key} `{v}`: use "{_1}" o "{_2}"

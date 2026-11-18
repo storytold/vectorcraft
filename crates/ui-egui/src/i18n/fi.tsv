@@ -3363,6 +3363,12 @@ antiAlias	Sharp	Terävä
 	LF (macOS, Linux)	LF (macOS, Linux)
 	CRLF (Windows)	CRLF (Windows)
 	Text Export Options	Tekstin vientiasetukset
+	Chinese Big 5	Kiina Big 5
+	Cyrillic	Kyrillinen
+	Greek	Kreikka
+	Turkish	Turkki
+	Baltic	Balttilainen
+	Central European	Keskieurooppalainen
 	Character Set:	Merkistö:
 	Join the lines of each paragraph	Yhdistä kunkin kappaleen rivit
 	Line Breaks	Rivinvaihdot
@@ -8299,3 +8305,4 @@ breakText	Glyphs	Merkit
 @msg	A joint does not close by {gap} pt.	Liitos ei sulkeudu, rako {gap} pt.
 @msg	Two panels pass through each other.	Kaksi paneelia kulkee toistensa läpi.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer on oltava "singleLine", "everyLine", "standardSingleLine" tai "standardEveryLine"
+@msg	text.{key} `{v}`: use "{_1}" or "{_2}"	text.{key} `{v}`: käytä arvoa "{_1}" tai "{_2}"
