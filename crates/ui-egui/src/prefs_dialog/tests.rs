@@ -2260,6 +2260,38 @@ fn keyboard_focus_on_a_slices_row_shows_its_description() {
     assert!(described.iter().any(|d| d == numbers), "the focused control carries the sentence: {described:?}");
 }
 
+/// Whether `sentence` is one of `texts` and is drawn on the description line of the frame that
+/// painted them.
+fn painted_on_line(ctx: &egui::Context, texts: &[(String, egui::Rect)], sentence: &str) -> bool {
+    let line = description_line_rects(ctx).line;
+    texts.iter().any(|(t, r)| t == sentence && r.intersects(line))
+}
+
+/// Tab from the search field, which must have the keyboard, until each of `sentences` has shown on
+/// the description line. Other controls may come between them, but a sentence that shows before the
+/// ones ahead of it in `sentences` fails the test. → For each sentence, the description of the focused
+/// accessibility node and the focused widget when it first showed.
+fn tab_to_each(a: &mut VectorcraftApp, ctx: &egui::Context, sentences: &[&str]) -> Vec<(Option<String>, Option<egui::Id>)> {
+    assert!(ctx.memory(|m| m.has_focus(search_edit_id())), "the search field has the keyboard before the first Tab");
+    let mut first = vec![];
+    for _ in 0..40 {
+        if first.len() == sentences.len() {
+            break;
+        }
+        let (texts, described) = description_frame(a, ctx, key_press(egui::Key::Tab, egui::Modifiers::NONE));
+        if let Some(i) = sentences.iter().position(|s| painted_on_line(ctx, &texts, s)) {
+            assert!(i <= first.len(), "Tab reaches {:?} before {:?}", sentences[i], sentences[first.len()]);
+            if i == first.len() {
+                first.push((described, ctx.memory(|m| m.focused())));
+            }
+        }
+    }
+    if let Some(missing) = sentences.get(first.len()) {
+        panic!("Tab does not reach the row of {missing:?}");
+    }
+    first
+}
+
 /// The pointer over Hyphenation's Default Language row and over its Exceptions row shows each
 /// row's sentence.
 #[test]
@@ -2277,10 +2309,10 @@ fn hovering_a_hyphenation_row_shows_its_description() {
     let exceptions = descriptions::description("hyphenationExceptions").expect("Exceptions has a sentence");
     description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(row(&texts, "Default Language:"))]);
     let (after, _) = description_frame(&mut a, &ctx, vec![]);
-    assert!(painted(&after, language) && !painted(&after, exceptions), "the Default Language row's sentence shows: {after:?}");
+    assert!(painted_on_line(&ctx, &after, language) && !painted(&after, exceptions), "the Default Language row's sentence shows: {after:?}");
     description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(row(&texts, "Exceptions"))]);
     let (after, _) = description_frame(&mut a, &ctx, vec![]);
-    assert!(painted(&after, exceptions) && !painted(&after, language), "the Exceptions row's sentence shows: {after:?}");
+    assert!(painted_on_line(&ctx, &after, exceptions) && !painted(&after, language), "the Exceptions row's sentence shows: {after:?}");
 }
 
 /// Tab from the search field reaches Hyphenation's Default Language menu and then its Exceptions
@@ -2297,19 +2329,10 @@ fn keyboard_focus_on_a_hyphenation_row_shows_its_description() {
     description_frame(&mut a, &ctx, vec![]);
     let language = descriptions::description("hyphenationLanguage").expect("Default Language has a sentence");
     let exceptions = descriptions::description("hyphenationExceptions").expect("Exceptions has a sentence");
-    let mut tab_to = |sentence: &str| {
-        for _ in 0..40 {
-            let (texts, described) = description_frame(&mut a, &ctx, key_press(egui::Key::Tab, egui::Modifiers::NONE));
-            if painted(&texts, sentence) {
-                return Some(described);
-            }
-        }
-        None
-    };
-    let described = tab_to(language).expect("Tab reaches the Default Language row and its sentence shows");
-    assert!(described.iter().any(|d| d == language), "the focused menu carries the sentence: {described:?}");
-    let described = tab_to(exceptions).expect("Tab goes on to the Exceptions row and its sentence shows");
-    assert!(described.iter().any(|d| d == exceptions), "the focused field carries the sentence: {described:?}");
+    let visits = tab_to_each(&mut a, &ctx, &[language, exceptions]);
+    let [(menu, _), (field, _)] = visits.as_slice() else { panic!("two rows: {visits:?}") };
+    assert!(menu.iter().any(|d| d == language), "the focused menu carries the sentence: {menu:?}");
+    assert!(field.iter().any(|d| d == exceptions), "the focused field carries the sentence: {field:?}");
 }
 
 /// The pointer over each row of Plug-ins & Scratch Disks, Additional Plug-ins Folder, Primary and
@@ -2331,36 +2354,38 @@ fn hovering_a_plugins_and_scratch_disks_row_shows_its_description() {
         description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(row(&texts, label))]);
         let (after, _) = description_frame(&mut a, &ctx, vec![]);
         for (j, sentence) in sentences.iter().enumerate() {
-            assert_eq!(painted(&after, sentence), i == j, "pointer over `{label}`, sentence {j}: {after:?}");
+            let shown = if i == j { painted_on_line(&ctx, &after, sentence) } else { painted(&after, sentence) };
+            assert_eq!(shown, i == j, "pointer over `{label}`, sentence {j}: {after:?}");
         }
     }
 }
 
 /// Tab from the search field reaches the Additional Plug-ins Folder field, then Primary, then
 /// Secondary: the line shows each one's sentence in turn, and a screen reader gets it as the focused
-/// field's description.
+/// field's description. With a folder picker, Choose… shares the folder's row, and the folder's
+/// text field still has the keyboard when its sentence first shows.
 #[test]
 fn keyboard_focus_on_a_plugins_and_scratch_disks_row_shows_its_description() {
-    let mut a = app();
-    open(&mut a, Some("Plug-ins & Scratch Disks"));
-    let ctx = egui::Context::default();
-    ctx.enable_accesskit();
-    crate::theme::install_fonts(&ctx);
-    description_frame(&mut a, &ctx, vec![]);
-    description_frame(&mut a, &ctx, vec![]);
-    let mut tab_to = |sentence: &str| {
-        for _ in 0..40 {
-            let (texts, described) = description_frame(&mut a, &ctx, key_press(egui::Key::Tab, egui::Modifiers::NONE));
-            if painted(&texts, sentence) {
-                return Some(described);
-            }
+    let keys = ["pluginsFolder", "scratchPrimary", "scratchSecondary"];
+    let sentences: Vec<_> = keys.iter().map(|key| descriptions::description(key).unwrap_or_else(|| panic!("`{key}` has a sentence"))).collect();
+    for picker in [false, true] {
+        let mut a = app();
+        if picker {
+            a.services.pick_folder = Some(Box::new(|| None));
         }
-        None
-    };
-    for key in ["pluginsFolder", "scratchPrimary", "scratchSecondary"] {
-        let sentence = descriptions::description(key).unwrap_or_else(|| panic!("`{key}` has a sentence"));
-        let described = tab_to(sentence).unwrap_or_else(|| panic!("Tab reaches the `{key}` field and its sentence shows"));
-        assert!(described.iter().any(|d| d == sentence), "the focused `{key}` field carries the sentence: {described:?}");
+        open(&mut a, Some("Plug-ins & Scratch Disks"));
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        crate::theme::install_fonts(&ctx);
+        description_frame(&mut a, &ctx, vec![]);
+        let (texts, _) = description_frame(&mut a, &ctx, vec![]);
+        assert_eq!(texts.iter().any(|(t, _)| t == "Choose…"), picker, "Choose… shows only with a folder picker: {texts:?}");
+        let visits = tab_to_each(&mut a, &ctx, &sentences);
+        for ((described, focused), (key, sentence)) in visits.iter().zip(keys.iter().zip(&sentences)) {
+            let field = focused.is_some_and(|id| egui::text_edit::TextEditState::load(&ctx, id).is_some());
+            assert!(field, "the `{key}` text field has the keyboard (picker {picker})");
+            assert!(described.iter().any(|d| d == sentence), "the focused `{key}` field carries the sentence (picker {picker}): {described:?}");
+        }
     }
 }
 
