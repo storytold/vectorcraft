@@ -632,6 +632,11 @@ font-technology	Variable	Biến thiên
 	Color blindness – Deuteranopia-type	Mù màu – loại Deuteranopia
 	Color blindness – Protanopia-type	Mù màu – loại Protanopia
 	Color blindness – Tritanopia-type	Mù màu – loại Tritanopia
+	Show Color Vision Preview	Hiện xem trước thị giác màu
+	Protanopia	Mù màu đỏ
+	Deuteranopia	Mù màu lục
+	Tritanopia	Mù màu lam
+	Achromatopsia	Mù màu toàn phần
 	Color Burn	Đốt màu
 	Color conversion:	Chuyển đổi màu:
 	Color Dodge	Tránh màu

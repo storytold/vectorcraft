@@ -536,6 +536,11 @@ font-technology	Variable	Варіативні
 	Color blindness – Deuteranopia-type	Дальтонізм - дейтеранопія
 	Color blindness – Protanopia-type	Дальтонізм - протанопія
 	Color blindness – Tritanopia-type	Дальтонізм - тританопія
+	Show Color Vision Preview	Показати імітацію колірного зору
+	Protanopia	Протанопія
+	Deuteranopia	Дейтеранопія
+	Tritanopia	Тританопія
+	Achromatopsia	Ахроматопсія
 	Color Burn	Затемнення основи
 	Color conversion:	Перетворення кольору:
 	Color Dodge	Освітлення основи

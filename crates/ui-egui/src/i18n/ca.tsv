@@ -788,6 +788,11 @@ antiAlias	Sharp	Nítid
 	Color blindness – Deuteranopia-type	Daltonisme – tipus deuteranòpsia
 	Color blindness – Protanopia-type	Daltonisme – tipus protanòpsia
 	Color blindness – Tritanopia-type	Daltonisme – tipus tritanòpsia
+	Show Color Vision Preview	Mostra la previsualització de la visió del color
+	Protanopia	Protanòpsia
+	Deuteranopia	Deuteranòpsia
+	Tritanopia	Tritanòpsia
+	Achromatopsia	Acromatòpsia
 	Color Burn	Subexposa el color
 	Color conversion:	Conversió de color:
 	Color Dodge	Sobreexposició de color
