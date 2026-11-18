@@ -2551,6 +2551,8 @@ font-technology	Variable	Variabla
 	Overprint and Transparency Flattener Options	Alternativ för övertryck och transparensutplattning
 	Custom…	Anpassad…
 	Custom Transparency Flattener Options	Anpassade alternativ för transparensutplattning
+	The PDF preset keeps the flattener preset but not the Custom… settings.	PDF-förinställningen sparar utplattningsförinställningen men inte inställningarna under Anpassad….
+	PDF 1.3 files clip rasterized areas to their regions, and Overprint sets whether overprints are kept.	PDF 1.3-filer klipper rastrerade områden till sina regioner, och Övertryck avgör om övertryck behålls.
 	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	EPS har ingen alfatransparens, och Övertryck avgör om övertryck behålls.
 	Overprint Black…	Övertryck svart…
 	Overprint Fill	Övertryck fyllning

@@ -3559,6 +3559,8 @@ theme	Appearance	Εμφάνιση
 	Overprint and Transparency Flattener Options	Επιλογές υπερεκτύπωσης και ισοπέδωσης διαφάνειας
 	Custom…	Προσαρμοσμένο…
 	Custom Transparency Flattener Options	Προσαρμοσμένες επιλογές ισοπέδωσης διαφάνειας
+	The PDF preset keeps the flattener preset but not the Custom… settings.	Η προεπιλογή PDF διατηρεί την προεπιλογή ισοπέδωσης, αλλά όχι τις ρυθμίσεις του Προσαρμοσμένο….
+	PDF 1.3 files clip rasterized areas to their regions, and Overprint sets whether overprints are kept.	Τα αρχεία PDF 1.3 αποκόπτουν τις ραστεροποιημένες περιοχές στα όριά τους και η Υπερεκτύπωση ορίζει αν διατηρούνται οι υπερεκτυπώσεις.
 	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	Το EPS δεν έχει διαφάνεια άλφα και οι Υπερεκτυπώσεις ορίζουν αν διατηρούνται οι υπερεκτυπώσεις.
 	Overprint Black…	Υπερεκτύπωση μαύρου…
 	Overprint Fill	Υπερεκτύπωση γεμίσματος
