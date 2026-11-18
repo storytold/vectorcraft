@@ -4048,6 +4048,7 @@ theme	Appearance	Motiv
 	90° & 45° Angles	Úhly 90° a 45°
 	90° Angles	Úhly 90°
 	Additional Plug-ins Folder	Další složka zásuvných modulů
+	Plug-in Instruction Budget	Rozpočet instrukcí zásuvných modulů
 	Additional Fonts Folder	Další složka písem
 	Alignment Guides	Vodítka zarovnání
 	Anchor Points, Handle, and Bounding Box Display	Zobrazení kotevních bodů, úchytů a ohraničovacího rámečku
@@ -4587,6 +4588,9 @@ font-technology	Variable	Variabilní
 	Search commands, tools, panels and effects…	Hledat příkazy, nástroje, panely a efekty…
 	No commands match	Žádný příkaz neodpovídá
 	{pos} of {total}: {name}	{pos} z {total}: {name}
+	No menu item	Žádná položka nabídky
+	Toolbar	Panel nástrojů
+	{toolbar}, in the {tool} group	{toolbar}, ve skupině {tool}
 @plural	{n} result|{n} results	{n} výsledek|{n} výsledky|{n} výsledků
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} z {n} výsledku. Pište dál a výsledky se zúží.|{shown} z {n} výsledků. Pište dál a výsledky se zúží.|{shown} z {n} výsledků. Pište dál a výsledky se zúží.
 	Recent Commands	Nedávné příkazy
@@ -6017,6 +6021,7 @@ variable-list-end	{0}, {1}	{0} a {1}
 @msg	a linked JavaScript file is outside the read roots	propojený soubor JavaScript je mimo kořeny pro čtení
 @msg	a linked image file is outside the read roots	propojený soubor obrázku je mimo kořeny pro čtení
 @msg	a linked file's export folder is outside the read roots	exportní složka propojeného souboru je mimo kořeny pro čtení
+@msg	a linked file's editing data can't be read to check it against the read roots	editační data propojeného souboru nelze přečíst a ověřit vůči kořenům pro čtení
 @msg	automation path rejected: outside the write root {root}: {path}	cesta automatizace odmítnuta: mimo kořen pro zápis {root}: {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	cesta automatizace odmítnuta: mimo kořeny pro zápis {roots}: {path}
 @msg	automation path rejected: path is empty	cesta automatizace odmítnuta: cesta je prázdná
