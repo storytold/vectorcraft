@@ -481,6 +481,17 @@ fn a_consumed_stale_sampler_press_does_not_complete_a_double_click() {
             assert_eq!((state.history.undo.len(), state.history.redo.len()), history);
             assert_eq!(app.session.paint, paint);
             assert_eq!(app.session.tool_id(), "selection");
+            // The consumed release must not take the next independent ordinary gesture with it.
+            let next = start + 4.0 * step + delay + 1.0;
+            frame_at(&mut app, &ctx, next, vec![Event::PointerMoved(at), press(true)]);
+            frame_at(&mut app, &ctx, next + step, vec![press(false)]);
+            assert!(!ctx.input(|i| i.pointer.button_double_clicked(PointerButton::Primary)));
+            assert_eq!(app.session.active().unwrap().selection.objects, vec![group], "the next ordinary first click selects the group");
+            assert_eq!(app.session.active().unwrap().isolation, None);
+            frame_at(&mut app, &ctx, next + 3.0 * step, vec![press(true)]);
+            frame_at(&mut app, &ctx, next + 4.0 * step, vec![press(false)]);
+            assert!(ctx.input(|i| i.pointer.button_double_clicked(PointerButton::Primary)));
+            assert_eq!(app.session.active().unwrap().isolation, Some(group), "the next ordinary double-click still isolates the group");
         } else {
             assert_eq!(app.session.active().unwrap().selection.objects, vec![group], "the ordinary first click really selects the group");
             frame_at(&mut app, &ctx, start + 3.0 * step, vec![press(true)]);
