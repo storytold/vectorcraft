@@ -52,8 +52,6 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
 
 /// The preview area (panes and their captions) and the settings column.
 const PREVIEW_W: f32 = 620.0;
-/// The narrowest the panes get in a narrow window.
-const MIN_PREVIEW_W: f32 = 240.0;
 const PREVIEW_H: f32 = 470.0;
 const SIDE_W: f32 = 296.0;
 const GAP: f32 = 16.0;
@@ -534,18 +532,10 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     }
     let settings = settings_of(app, d);
     let mut browser = false;
-    // In a window too narrow for both, the panes are narrower, so the settings beside them and the
-    // buttons below stay in view. The room is the screen's (the window's own width follows what it
-    // drew last), less a column for the bar of the body when it scrolls; the settings column is as
-    // wide as it was drawn last.
-    let room = ui.ctx().content_rect().width() - 2.0 * (f32::from(super::MARGIN) + super::EDGE_GAP) - ui.spacing().scroll.allocated_width();
-    let rest_id = egui::Id::unique("save-for-web-beside-panes");
-    let rest = ui.ctx().data(|m| m.get_temp::<f32>(rest_id)).unwrap_or(ui.spacing().item_spacing.x + GAP + SIDE_W);
-    let preview_w = (room.min(ui.available_width()) - rest).clamp(MIN_PREVIEW_W, PREVIEW_W);
-    let row = ui.horizontal_top(|ui| {
+    ui.horizontal_top(|ui| {
         ui.vertical(|ui| {
-            ui.set_width(preview_w);
-            browser = preview_area(app, ui, d, &settings, preview_w);
+            ui.set_width(PREVIEW_W);
+            browser = preview_area(app, ui, d, &settings);
         });
         ui.add_space(GAP);
         ui.vertical(|ui| {
@@ -553,10 +543,6 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
             side(app, ui, d, settings.as_ref().ok());
         });
     });
-    let drawn = row.response.rect.width() - preview_w;
-    if ui.ctx().data_mut(|m| std::mem::replace(m.get_temp_mut_or(rest_id, rest), drawn)) != drawn {
-        ui.ctx().request_repaint();
-    }
     optimize_on_enter(ui.ctx(), d);
     if browser && let Err(e) = app.run("file.saveForWeb.browser", params(d)) {
         app.status(e);
@@ -564,16 +550,16 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     false
 }
 
-/// The view tabs, the panes (`width` wide) and the zoom and speed row. Returns whether Preview in
-/// Browser was clicked.
-fn preview_area(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, settings: &Result<WebSettings, String>, width: f32) -> bool {
+/// The view tabs, the panes and the zoom and speed row. Returns whether Preview in Browser was
+/// clicked.
+fn preview_area(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, settings: &Result<WebSettings, String>) -> bool {
     let t = Tokens::get(ui.ctx());
     let view = VIEWS.iter().position(|v| *v == d.str("__view")).unwrap_or(2);
     if let Some(i) = widgets::tab_bar(ui, &VIEW_LABELS, view) {
         d.fields.insert("__view".into(), json!(VIEWS[i]));
     }
     ui.add_space(4.0);
-    let (area, resp) = ui.allocate_exact_size(egui::vec2(width, PREVIEW_H), egui::Sense::click_and_drag());
+    let (area, resp) = ui.allocate_exact_size(egui::vec2(PREVIEW_W, PREVIEW_H), egui::Sense::click_and_drag());
     let pan_id = egui::Id::unique("save-for-web-pan");
     let mut pan: egui::Vec2 = ui.ctx().data(|m| m.get_temp(pan_id)).unwrap_or_default();
     if resp.dragged() {

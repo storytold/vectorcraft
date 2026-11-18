@@ -856,16 +856,14 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         if focus_first {
             ui.data_mut(|m| m.insert_temp(widgets::dialog_focus_flag(), true));
         }
-        // A body taller than the window has room for scrolls, so the heading and the buttons stay
-        // in view.
         if let Some(body) = spec.body_with_actions {
-            match modal::body_rows(ui, |ui| body(app, ui, &mut d)) {
+            match body(app, ui, &mut d) {
                 DialogAction::None => {}
                 DialogAction::Confirm => ok = true,
                 DialogAction::Cancel => cancel = true,
             }
         } else {
-            cancel = modal::body_rows(ui, |ui| (spec.body)(app, ui, &mut d));
+            cancel = (spec.body)(app, ui, &mut d);
         }
         // Taken (the flag is gone): done. Still there (the window's measuring frame): next frame.
         if focus_first && ui.data_mut(|m| m.remove_temp::<bool>(widgets::dialog_focus_flag())).is_none() {
@@ -1052,6 +1050,3 @@ mod tests_shortcut_import;
 
 #[cfg(test)]
 mod tests_warp;
-
-#[cfg(test)]
-mod tests_scroll;

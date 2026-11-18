@@ -982,7 +982,6 @@ fn content_id(ui: &egui::Ui) -> egui::Id {
 /// (as drawn last frame). The section list stays put while the content scrolls. Returns whether
 /// the dialog asks to be canceled (never: Cancel comes from the button row in `dialogs::show`).
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    super::modal::fits_itself(ui);
     let window = ui.ctx().memory(|m| m.area_rect(ui.layer_id().id)).map_or(0.0, |r| r.height());
     let content = ui.ctx().data(|m| m.get_temp::<f32>(content_id(ui))).unwrap_or(0.0);
     let rest = (window - content).max(0.0);
