@@ -240,6 +240,7 @@ fn wrap(r: Result<Value, String>) -> Outcome {
 pub fn all_commands(app: &VectorcraftApp) -> Value {
     let mut v: Vec<Value> = app.session.commands().into_iter().map(|c| serde_json::to_value(c).unwrap_or_default()).collect();
     for (id, label, sc, params) in crate::menus::UI_COMMANDS {
+        let sc = crate::shortcut_editor::ui_command_default(id, sc, crate::keymap::platform());
         v.push(json!({"id": id, "label": label, "shortcut": sc, "params": params, "enabled": crate::menus::enabled(app, id), "ui": true}));
     }
     Value::Array(v)
@@ -274,11 +275,12 @@ pub fn inspect(app: &VectorcraftApp, ctx: &egui::Context) -> Value {
         // The display profile the canvas is drawn through, or why none (Preferences ›
         // Performance › Use Monitor Profile for Canvas).
         "displayProfile": app.display_profile.status(app.session.prefs.monitor_profile_display),
-        // Window › Arrange › Tile (not saved, so not in `ui`) and the panes the last frame drew:
-        // each one's document index, view number (Window › New Window) and rect. Canvas
-        // coordinates map to the current window's pane, inside its rulers and scroll bars
+        // Window › Arrange › Tile and its layout (not saved, so not in `ui`) and the panes the
+        // last frame drew: each one's document index, view number (Window › New Window) and rect.
+        // Canvas coordinates map to the current window's pane, inside its rulers and scroll bars
         // (`canvasRect`).
         "tiled": app.ui.tiled,
+        "tileLayout": app.ui.tile_layout.name(),
         "panes": app.canvas.panes.last.iter().map(|(w, c)| json!({
             "document": w.0,
             "view": w.1,
@@ -2105,7 +2107,7 @@ fn set_ui(app: &mut VectorcraftApp, req: &ControlRequest) -> Outcome {
         r = app.run("window.panel", json!({"panel": pn}));
     }
     if let Some(st) = s("status") {
-        app.ui.status = st.to_string();
+        app.status(st);
     }
     for (k, flag) in [
         ("rulers", "view.rulers"),
