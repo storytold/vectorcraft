@@ -591,9 +591,10 @@ fn image_rows(ui: &mut egui::Ui, d: &mut Dialog, key: &str, title: &str) {
     ui.horizontal(|ui| {
         pick::<Downsample>(ui, d, &format!("{base}.downsample"), 150.0, |_| true);
         ui.label(tl!("to"));
-        number(ui, d, &format!("{base}.ppi"), " ppi", on);
+        let ppi = super::ppi_suffix();
+        number(ui, d, &format!("{base}.ppi"), &ppi, on);
         ui.label(tl!("above"));
-        number(ui, d, &format!("{base}.abovePpi"), " ppi", on);
+        number(ui, d, &format!("{base}.abovePpi"), &ppi, on);
     });
     ui.horizontal(|ui| {
         ui.label(tl!("Compression:"));
@@ -762,7 +763,18 @@ fn advanced(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
             }
         });
     });
-    if !flat {
+    if flat {
+        let name = get(d, "flattenerPreset").as_str().map(str::trim).filter(|n| !n.is_empty()).unwrap_or(pdf::DEFAULT_FLATTENER);
+        let preset_opts = FlattenOptions::for_export(Some(name), d.fields.get("flattener"), &app.session.prefs.flattener_presets).unwrap_or_default();
+        let line_ppi = preset_opts.line_art_ppi.round() as u32;
+        let grad_ppi = preset_opts.gradient_ppi.round() as u32;
+        note(
+            ui,
+            &crate::i18n::fmt(
+                tl!("Raster resolution: {line_ppi} ppi line art and text, {grad_ppi} ppi gradient and mesh"),
+                &[("line_ppi", &line_ppi.to_string()), ("grad_ppi", &grad_ppi.to_string())],
+            ),
+        );
         note(ui, tl!("PDF 1.3 files have no transparency: the preset flattens it."));
     }
 }
@@ -1029,19 +1041,24 @@ fn write_summary(app: &mut VectorcraftApp, path: Option<String>, text: &str) -> 
 pub(super) fn option_rows<'a>(ui: &mut egui::Ui, changed: impl IntoIterator<Item = &'a Value>, label: impl Fn(&str) -> String) {
     let t = Tokens::get(ui.ctx());
     for c in changed {
-        ui.label(egui::RichText::new(option_line(c, &label)).color(t.text));
+        let value = option_value(c);
+        ui.label(egui::RichText::new(format!("{} {value}", crate::i18n::colon(&label(c["option"].as_str().unwrap_or_default())))).color(t.text));
+    }
+}
+
+/// The displayed value of the changed option `c` (`{option, value}`).
+fn option_value(c: &Value) -> String {
+    match &c["value"] {
+        Value::Bool(b) => if *b { tl!("On") } else { tl!("Off") }.to_string(),
+        Value::String(s) if c["option"] == "marks.kind" => choice_label(crate::i18n::current(), "marks.kind", s).to_string(),
+        Value::String(s) => s.clone(),
+        other => other.to_string(),
     }
 }
 
 /// The Summary's line for the changed option `c` (`{option, value}`), labeled by `label`.
 fn option_line(c: &Value, label: impl Fn(&str) -> String) -> String {
-    let value = match &c["value"] {
-        Value::Bool(b) => if *b { tl!("On") } else { tl!("Off") }.to_string(),
-        Value::String(s) if c["option"] == "marks.kind" => choice_label(crate::i18n::current(), "marks.kind", s).to_string(),
-        Value::String(s) => s.clone(),
-        other => other.to_string(),
-    };
-    format!("{}: {value}", label(c["option"].as_str().unwrap_or_default()))
+    format!("{}: {}", label(c["option"].as_str().unwrap_or_default()), option_value(c))
 }
 
 /// The Summary's warnings ("None." without any).
