@@ -14,6 +14,7 @@
 //! the same tiles ([`picker`]). Graphic style libraries open in library panels
 //! ([`GraphicStyleLibraries`]).
 
+use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -927,8 +928,8 @@ impl LibraryKind for GraphicStyleLibraries {
     }
     /// A built-in library's style in the UI language; a User Defined or loaded library's style as
     /// it is named.
-    fn label<'a>(id: &str, name: &'a str) -> &'a str {
-        super::label_or_name(name, STYLE_LIBRARIES.iter().any(|b| b.id == id))
+    fn label<'a>(id: &str, name: &'a str) -> Cow<'a, str> {
+        super::label_or_name(name, STYLE_LIBRARIES.iter().any(|b| b.id == id)).into()
     }
     /// The style on the Graphic Styles panel's preview shape.
     fn draw(app: &VectorcraftApp, ui: &Ui, r: Rect, s: &LibStyle, selected: bool, hovered: bool) {

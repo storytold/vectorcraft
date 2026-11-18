@@ -10,7 +10,7 @@
 mod tests;
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{OrientedBox, Unit, decimal_point, finite_in_every_unit};
+use vectorcraft_doc::{OrientedBox, Unit, arithmetic_signs, decimal_point, finite_in_every_unit};
 use vectorcraft_render::effects;
 
 use super::super::{CommandSpec, always, bad, cmd, has_selection};
@@ -22,8 +22,8 @@ const SELECTION_SIZE: &str = "addon.units.selectionSize";
 const SHOWN_CHARS: usize = 64;
 /// The longest `value` or `unit` text `addon.units.convert` reads, in bytes.
 const MAX_TEXT_LEN: usize = 1024;
-/// The most `+ - * /` signs `addon.units.convert` reads in one `value`: [`Unit::parse`] takes one
-/// level of recursion per sign.
+/// The most `+ - * /` signs `addon.units.convert` reads in one `value`, a multiplication sign
+/// counted as a `*`: [`Unit::parse`] takes one level of recursion per sign.
 const MAX_OPERATORS: usize = 128;
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -33,7 +33,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Convert Units",
             [],
             None,
-            "{value: a length (a number, or text as a number field reads it, with a unit suffix and + - * / arithmetic: \"10mm\", \"1in/2\", \"2p6\", \"3cm*50%\"; a decimal comma reads as a point: \"0,5 mm\"; at most 1024 bytes and 128 operators), unit?: the unit of a number without a suffix (a unit's name, suffix or key: points, picas, inches, millimeters, centimeters, pixels, feetInches, meters, yards, feet, q, ha; default: points)} the length in every unit of Preferences › Units › East Asian Type, written as the number fields write it (rounded to 3 decimals in pt, px, picas, Q and Ha and to 4 in the others; pixels are points). Nothing in the document changes → {points, units: [{unit (its key), label, number (no suffix), text (with the suffix)}]}",
+            "{value: a length (a number, or text as a number field reads it, with a unit suffix and + - * / arithmetic, x, X or × multiplying as * does: \"10mm\", \"1in/2\", \"2p6\", \"3cm*50%\", \"2x3 mm\"; a decimal comma reads as a point: \"0,5 mm\"; at most 1024 bytes and 128 operators, each multiplication sign counted), unit?: the unit of a number without a suffix (a unit's name, suffix or key: points, picas, inches, millimeters, centimeters, pixels, feetInches, meters, yards, feet, q, ha; default: points)} the length in every unit of Preferences › Units › East Asian Type, written as the number fields write it (rounded to 3 decimals in pt, px, picas, Q and Ha and to 4 in the others; pixels are points). Nothing in the document changes → {points, units: [{unit (its key), label, number (no suffix), text (with the suffix)}]}",
             always,
             convert
         ),
@@ -88,9 +88,9 @@ fn convert(_: &mut Session, p: &Value) -> Result<Value> {
 }
 
 /// Is `s` short enough to read: at most [`MAX_TEXT_LEN`] bytes and [`MAX_OPERATORS`] `+ - * /`
-/// signs?
+/// signs, a multiplication sign typed as `x`, `X` or `×` counted as a `*` ([`arithmetic_signs`])?
 fn readable(s: &str) -> bool {
-    s.len() <= MAX_TEXT_LEN && s.chars().filter(|c| matches!(c, '+' | '-' | '*' | '/')).count() <= MAX_OPERATORS
+    s.len() <= MAX_TEXT_LEN && arithmetic_signs(s) <= MAX_OPERATORS
 }
 
 /// `v` as an error message shows it: text cut at [`SHOWN_CHARS`] characters with "…", as JSON,
