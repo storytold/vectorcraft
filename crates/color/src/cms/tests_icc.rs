@@ -1,4 +1,5 @@
 use super::*;
+use craft_cms::{Builtin, ColorSpace, Profile};
 
 fn parse(bytes: &[u8]) -> Profile {
     Profile::parse(bytes).unwrap()
