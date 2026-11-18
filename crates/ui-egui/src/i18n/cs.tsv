@@ -3025,6 +3025,8 @@ digits	Malayalam	Malajálamské
 	Overprint and Transparency Flattener Options	Možnosti přetisku a sloučení průhlednosti
 	Custom…	Vlastní nastavení…
 	Custom Transparency Flattener Options	Vlastní možnosti sloučení průhlednosti
+	The PDF preset keeps the flattener preset but not the Custom… settings.	Přednastavení PDF zachová přednastavení sloučení, ale ne nastavení z Vlastní nastavení….
+	PDF 1.3 files clip rasterized areas to their regions, and Overprint sets whether overprints are kept.	Soubory PDF 1.3 ořezávají rastrované oblasti podle jejich tvaru a Přetisk určuje, zda se přetisky zachovají.
 	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	EPS nemá průhlednost alfa a Přetisky určují, zda se přetisky zachovají.
 	Place the pages with the placement again	Znovu rozmístit stránky podle umístění
 	Placement:	Umístění:

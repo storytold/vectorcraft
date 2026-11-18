@@ -2543,6 +2543,8 @@ font-technology	Variable	Променливи
 	Overprint and Transparency Flattener Options	Опции за сплескване на надпечатването и прозрачността
 	Custom…	Потребителски…
 	Custom Transparency Flattener Options	Потребителски опции за сплескване на прозрачността
+	The PDF preset keeps the flattener preset but not the Custom… settings.	PDF наборът запазва набора за сплескване, но не и настройките от „Потребителски…“.
+	PDF 1.3 files clip rasterized areas to their regions, and Overprint sets whether overprints are kept.	Файловете PDF 1.3 изрязват растеризираните области по техните очертания, а „Надпечат“ определя дали надпечатванията се запазват.
 	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	EPS няма алфа прозрачност, а „Надпечати“ определя дали надпечатванията се запазват.
 	Overprint Black…	Напечатване на черното върху друго…
 	Overprint Fill	Напечатване на запълването върху друго
