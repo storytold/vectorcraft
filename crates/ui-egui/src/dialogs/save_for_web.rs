@@ -619,6 +619,17 @@ fn preview_area(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, set
     }
     ui.add_space(6.0);
     let mut browser = false;
+    // Preview in Browser goes on a row of its own when the panes are too narrow for it beside the
+    // two lists (its width as `widgets::secondary_button` draws it).
+    let label = tl!("Preview in Browser");
+    let button_w = (ui.painter().layout_no_wrap(label.to_string(), crate::theme::semibold(12.5), t.text).size().x + 32.0).max(72.0);
+    let mut beside = false;
+    let mut button = |ui: &mut egui::Ui| {
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            let b = ui.add_enabled(!io::is_web(app), |ui: &mut egui::Ui| widgets::secondary_button(ui, label));
+            browser = b.on_disabled_hover_text(tl!("Needs the desktop app")).clicked();
+        });
+    };
     ui.horizontal(|ui| {
         let z = ZOOMS.iter().position(|z| *z == d.str("__zoom")).unwrap_or(2);
         let zoom = ui.name_inputs(tl!("Zoom"), |ui| widgets::dropdown(ui, "sfw-zoom", ZOOM_LABELS[z], &ZOOM_LABELS, 110.0));
@@ -635,11 +646,15 @@ fn preview_area(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, set
         {
             d.fields.insert("__kbps".into(), json!(s));
         }
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            let b = ui.add_enabled(!io::is_web(app), |ui: &mut egui::Ui| widgets::secondary_button(ui, tl!("Preview in Browser")));
-            browser = b.on_disabled_hover_text(tl!("Needs the desktop app")).clicked();
-        });
+        beside = ui.available_width() >= button_w;
+        if beside {
+            button(ui);
+        }
     });
+    if !beside {
+        ui.add_space(4.0);
+        ui.horizontal(button);
+    }
     browser
 }
 

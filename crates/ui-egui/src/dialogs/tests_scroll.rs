@@ -239,6 +239,12 @@ fn save_for_web_in_the_smallest_window_keeps_its_settings_and_buttons_in_view() 
         if !matches!((controls, settings), (Some(c), Some(s)) if c < s) {
             wrong.push(format!("{size:?}: Preview in Browser ({controls:?}) is left of the settings ({settings:?})"));
         }
+        // Preview in Browser is right of the download speed list or on a row below it, not over it.
+        let button = text_rects(&shown, "Preview in Browser").first().copied();
+        let speed = text_rects(&shown, "56.6 Kbps").first().copied();
+        if !matches!((button, speed), (Some(b), Some(s)) if b.left() > s.right() + 16.0 || b.top() > s.bottom() + 8.0) {
+            wrong.push(format!("{size:?}: Preview in Browser ({button:?}) clears the download speed list ({speed:?})"));
+        }
     }
     assert!(wrong.is_empty(), "{wrong:#?}");
 }
