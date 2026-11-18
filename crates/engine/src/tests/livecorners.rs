@@ -59,6 +59,28 @@ fn a_whole_rectangle_rounds_all_corners_and_given_corners_alone() {
     assert_eq!(corners(&s, id).1[3], CornerKind::Chamfer);
 }
 
+/// The Corner menus of Rectangle Properties: a kind for all four corners or one, set on corners
+/// with no radius too and leaving the radii as they are, in one undo step; the kind the corners
+/// already have adds no step.
+#[test]
+fn rectangle_kind_menu_targets_all_or_one_corner_and_skips_noop_undo() {
+    let (mut s, id) = session();
+    run(&mut s, json!({"corners": [1], "radius": 12}));
+    let steps = |s: &Session| s.doc().unwrap().history.undo.len();
+    let undo = steps(&s);
+    run(&mut s, json!({"corners": [0, 1, 2, 3], "kind": "invertedRound"}));
+    assert_eq!(corners(&s, id).0, [0.0, 12.0, 0.0, 0.0]);
+    assert_eq!(corners(&s, id).1, [CornerKind::InvertedRound; 4]);
+    assert_eq!(steps(&s), undo + 1);
+    run(&mut s, json!({"corners": [0, 1, 2, 3], "kind": "invertedRound"}));
+    run(&mut s, json!({"corners": [2], "kind": "invertedRound"}));
+    assert_eq!(steps(&s), undo + 1, "no step when nothing changes");
+    run(&mut s, json!({"corners": [2], "kind": "chamfer"}));
+    assert_eq!(corners(&s, id).1, [CornerKind::InvertedRound, CornerKind::InvertedRound, CornerKind::Chamfer, CornerKind::InvertedRound]);
+    assert_eq!(corners(&s, id).0, [0.0, 12.0, 0.0, 0.0]);
+    assert_eq!(steps(&s), undo + 2);
+}
+
 /// #938: `items` rounds several objects in one step, each its own corners (or all of them).
 #[test]
 fn items_round_several_objects_each_its_own_corners() {
