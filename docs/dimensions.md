@@ -53,7 +53,7 @@ The **Dimension Tool** is in the Modify section of the toolbar. Its strip offers
   far past the outermost point as before.
   With Smart Guides on, a linear dimension placed with its line within the Smart Guides snapping
   tolerance of the level of a parallel line of a visible, unlocked linear dimension already drawn
-  has its line on that level, so chained dimensions line up. This is VectorCraft's own rule. With
+  anywhere in the document has its line on that level. This is VectorCraft's own rule. With
   Alignment Guides on, a guide runs along the level across both lines while the dimension is
   placed.
 - **Angular:** hover a corner where two straight segments meet and drag outwards. Or click two
