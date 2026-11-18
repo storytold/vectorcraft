@@ -800,6 +800,7 @@ font-technology	Variable	Variabel
 	Delete Brush	Pinsel löschen
 	Delete Color	Farbe löschen
 	Restore Generated Table	Generierte Tabelle wiederherstellen
+	Unshift All Colors	Verschiebung aller Farben aufheben
 	Delete Character Style	Zeichenformat löschen
 	Delete Empty Artboards	Leere Zeichenflächen löschen
 	Delete Freeform Point	Freiformpunkt löschen
@@ -3206,6 +3207,8 @@ digits	Malayalam	Malayalam
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Wie nah der Zeiger oder ein gezogener Punkt auf dem Bildschirm an Bildmaterial kommen muss, damit intelligente Hilfslinien einrasten; der Abstand ist bei jedem Zoom gleich.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Richtet das Ende eines Liniensegments oder einen von der Mitte aus gezeichneten Kreis so aus, dass er eine nahe Kurve berührt.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Richtet das Ende eines Liniensegments so aus, dass es ein nahes gerades Segment im rechten Winkel trifft.
+	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Zeigt auf der Arbeitsfläche die Nummer jedes Slices in einem Kästchen oben links im Slice; ist die Option aus, werden die Slice-Umrisse weiterhin angezeigt.
+	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Die Farbe der Umrisse von Benutzer- und Objekt-Slices und ihrer Nummernkästchen; automatische Slices verwenden einen blasseren Ton davon.
 	Reset all preferences to their defaults?	Alle Voreinstellungen auf ihre Standardwerte zurücksetzen?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Die Standardwerte werden angewendet, wenn Sie in den Voreinstellungen auf OK klicken. Abbrechen dort behält Ihre aktuellen Voreinstellungen.
 	Restore Recovered Documents	Wiederhergestellte Dokumente öffnen
@@ -3437,6 +3440,14 @@ digits	Malayalam	Malayalam
 	Search commands, tools, panels and effects…	Befehle, Werkzeuge, Bedienfelder und Effekte suchen…
 	No commands match	Keine passenden Befehle
 	{pos} of {total}: {name}	{pos} von {total}: {name}
+	No menu item	Kein Menüeintrag
+	Toolbar	Werkzeugleiste
+	{toolbar}, in the {tool} group	{toolbar}, in der Gruppe „{tool}“
+	In the menu bar: {path}	In der Menüleiste: {path}
+	In the {group} group: press and hold to open it	In der Gruppe {group}: zum Öffnen gedrückt halten
+	{home}, not shown now	{home}, derzeit nicht angezeigt
+	Tool	Werkzeug
+	Command	Befehl
 @plural	{n} result|{n} results	{n} Ergebnis|{n} Ergebnisse
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} von {n} Ergebnis. Tippen Sie weiter, um sie einzugrenzen.|{shown} von {n} Ergebnissen. Tippen Sie weiter, um sie einzugrenzen.
 	Recent Commands	Zuletzt verwendete Befehle
@@ -4974,6 +4985,7 @@ liquify-list-end	{0}, {1}	{0} und {1}
 @msg	choose a location for the package	wählen Sie einen Speicherort für das Paket
 @msg	clipboard is empty	die Zwischenablage ist leer
 @msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: Mindestens eine Farbe muss in der Farbtabelle bleiben
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted: `{k}` bezeichnet eine Farbe, die auch ein anderer Schlüssel bezeichnet
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` ist keine Farbe wie "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: höchstens {MAX_TABLE} Farben
 @msg	command `{0}` is not available right now: {1}	der Befehl `{0}` ist derzeit nicht verfügbar: {1}
@@ -7385,6 +7397,7 @@ breakText	Glyphs	Glyphen
 @msg	One path lies inside the other, so they have no common tangents	Ein Pfad liegt im anderen, daher haben sie keine gemeinsamen Tangenten
 @msg	The paths overlap, so they have no internal tangents	Die Pfade überlappen sich, daher haben sie keine inneren Tangenten
 @msg	One path lies inside the other, so they have no internal tangents	Ein Pfad liegt im anderen, daher haben sie keine inneren Tangenten
+@msg	The point lies inside the path, so it has no tangents	Der Punkt liegt im Pfad, daher hat er keine Tangenten
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Striche in Pfade umwandeln
 @msg	select paths with dashed strokes to expand	wählen Sie Pfade mit gestrichelter Kontur zum Umwandeln aus
@@ -9707,6 +9720,11 @@ breakText	Glyphs	Glyphen
 @msg	A panel is not joined to the rest by a crease.	Ein Feld ist durch keine Rilllinie mit den übrigen verbunden.
 @msg	A fold line is on a non-printing layer.	Eine Faltlinie liegt auf einer nicht druckbaren Ebene.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Felder: {panels}, Scharniere: {hinges}, Fehler: {errors}, Warnungen: {warnings}
+	Pressure Sensitive	Druckempfindlich
+	Flex Ribbon	Flexibles Band
+	Pulse Stroke	Pulsierender Strich
+	Round Flow	Runder Fluss
+	Chisel Flow	Schräger Fluss
 	Fold Preview	Faltvorschau
 	Fold	Falten
 	Show Fold Lines	Faltlinien einblenden
