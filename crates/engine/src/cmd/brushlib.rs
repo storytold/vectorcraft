@@ -549,7 +549,6 @@ fn spacer(r: Rect) -> Node {
     Node::path(NodeId(0), shapes::rectangle(r), Appearance::default())
 }
 
-/// Pattern Borders: pattern brushes of tiles drawn here; Beads has corner tiles.
 /// Paint: original filled vector art with broad, broken, loaded, and fanned marks. Each is one
 /// stroke stretched along the path, with an intentionally different edge and paint distribution.
 fn paint() -> BrushLibrary {
@@ -589,6 +588,7 @@ fn paint() -> BrushLibrary {
     )
 }
 
+/// Pattern Borders: pattern brushes of tiles drawn here; Beads has corner tiles.
 fn pattern_borders() -> BrushLibrary {
     let zigzag = black(polygon(&[(0.0, 1.4), (5.0, -2.6), (10.0, 1.4), (10.0, 2.6), (5.0, -1.4), (0.0, 2.6)]));
     let beads = group(vec![black(shapes::rectangle(Rect::new(0.0, -0.3, 8.0, 0.3))), black(shapes::ellipse(Rect::new(1.5, -2.5, 6.5, 2.5)))]);
