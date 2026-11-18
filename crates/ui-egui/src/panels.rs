@@ -17,6 +17,7 @@ pub mod color_guide;
 pub mod color_themes;
 pub mod color_wheel;
 pub mod css_properties;
+pub mod discover;
 pub mod doc_info;
 pub mod flattener_preview;
 pub mod glyphs;
@@ -37,6 +38,7 @@ pub mod opentype;
 pub mod paragraph;
 pub mod pathfinder;
 pub mod pattern_options;
+pub mod preflight;
 pub mod properties;
 pub mod script_console;
 pub mod separations;
@@ -187,11 +189,13 @@ pub fn show_icon_panel(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
         "colorThemes" => color_themes::show(app, ui),
         color_wheel::ID => color_wheel::show(app, ui),
         links::ID => links::show(app, ui),
+        preflight::ID => preflight::show(app, ui),
         asset_export::ID => asset_export::show(app, ui),
         css_properties::ID => css_properties::show(app, ui),
         three_d::ID => three_d::show(app, ui),
         script_console::ID => script_console::show(app, ui),
         learn::ID => learn::show(app, ui),
+        discover::ID => discover::show(app, ui),
         crate::addons::cleanup::ID => crate::addons::cleanup::show(app, ui),
         crate::addons::color::ID => crate::addons::color::show(app, ui),
         crate::addons::packaging::ID => crate::addons::packaging::show(app, ui),

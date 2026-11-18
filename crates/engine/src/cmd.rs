@@ -74,6 +74,7 @@ pub mod perspgrid;
 pub mod place;
 pub mod plugin;
 pub(crate) mod plugin_call;
+mod preflight;
 pub mod prefscmds;
 pub mod print;
 pub(crate) mod printadvanced;
@@ -98,7 +99,6 @@ pub(crate) mod symboledit;
 pub mod symbollib;
 pub(crate) mod tabs;
 mod textedit;
-mod xmlattrs;
 
 pub use textedit::effective_kerning;
 pub mod textstyles;
@@ -382,6 +382,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(package::specs());
         v.extend(slices::specs());
         v.extend(print::specs());
+        v.extend(preflight::specs());
         v.extend(recovery::specs());
         v.extend(fileio::dxfimport::specs());
         v.extend(webexport::specs());
@@ -407,7 +408,18 @@ pub fn command_specs() -> &'static [CommandSpec] {
 /// The command `id`: a built-in one, or a command an installed plug-in adds
 /// ([`plugin::command_specs`]).
 pub fn find_command(id: &str) -> Option<&'static CommandSpec> {
-    command_specs().iter().find(|c| c.id == id).or_else(|| plugin::find_spec(id))
+    static INDEX: std::sync::OnceLock<std::collections::HashMap<&'static str, &'static CommandSpec>> = std::sync::OnceLock::new();
+    INDEX.get_or_init(|| index_by_id(command_specs())).get(id).copied().or_else(|| plugin::find_spec(id))
+}
+
+/// `specs` by id. An id that more than one spec has names the first of them, as a search of
+/// `specs` in order finds.
+pub(crate) fn index_by_id(specs: &[CommandSpec]) -> std::collections::HashMap<&'static str, &CommandSpec> {
+    let mut index = std::collections::HashMap::with_capacity(specs.len());
+    for spec in specs {
+        index.entry(spec.id).or_insert(spec);
+    }
+    index
 }
 
 /// Runs command `spec`'s implementation with `p`. A plug-in command's runs the plug-in
@@ -829,6 +841,8 @@ pub use docmenu::guide_indexes;
 pub(crate) use edit::{Unrecorded, settle_interaction, typing_in_progress};
 pub(crate) use object::bounds_rewrite;
 pub(crate) use object::{keep_aligned_in, refresh_pixel_aligned};
+/// The rules `object.scale`, `object.reflect` and `object.shear` check their params with.
+pub use object::{reflect_axis, scale_factors, shear_tangent};
 pub use plugin_call::{Location, ParamsPlace, key_location, location_in, location_keys};
 pub use select::SIMILAR;
 pub(crate) use vectorcraft_doc::range::parse_range;
