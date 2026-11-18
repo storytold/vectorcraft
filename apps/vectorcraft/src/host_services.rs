@@ -96,7 +96,24 @@ fn dialog_for<D: DialogSettings>(d: D, request: &PickRequest) -> D {
         Some(folder) => d.folder(folder),
         None => d,
     };
-    if pick.name.is_empty() { d } else { d.file_name(&pick.name) }
+    if pick.name.is_empty() {
+        return d;
+    }
+    // Windows' save dialog changes the extension when a different file type is chosen only when
+    // the suggested name has no explicit extension. rfd supplies the first filter's extension to
+    // that dialog, so leave the suffix to Windows for saves that offer several formats (#5451).
+    // A remaining dot in the stem would look like another explicit extension to Windows.
+    #[cfg(windows)]
+    if matches!(request, PickRequest::Save(_))
+        && pick.filters.len() > 1
+        && let Some(ext) = std::path::Path::new(&pick.name).extension().and_then(|e| e.to_str())
+        && pick.filters.iter().any(|(_, exts)| exts.iter().any(|e| e.eq_ignore_ascii_case(ext)))
+        && let Some(stem) = std::path::Path::new(&pick.name).file_stem().and_then(|s| s.to_str())
+        && !stem.contains('.')
+    {
+        return d.file_name(stem);
+    }
+    d.file_name(&pick.name)
 }
 
 #[cfg(test)]
@@ -796,7 +813,7 @@ mod dialog_tests {
 
     /// The file types a dialog was given, by label.
     #[derive(Default)]
-    struct Filters(Vec<(String, Vec<String>)>);
+    struct Filters(Vec<(String, Vec<String>)>, Option<String>);
 
     impl DialogSettings for Filters {
         fn parent(self, _window: &winit::window::Window) -> Self {
@@ -812,7 +829,8 @@ mod dialog_tests {
         fn folder(self, _folder: &str) -> Self {
             self
         }
-        fn file_name(self, _name: &str) -> Self {
+        fn file_name(mut self, name: &str) -> Self {
+            self.1 = Some(name.to_string());
             self
         }
     }
@@ -868,5 +886,25 @@ mod dialog_tests {
         let placed = dialog_for(Filters::default(), &PickRequest::OpenMany).0;
         let first = fileio::place_filters().next().map(|(_, exts)| open_extensions(exts, CASE_SENSITIVE_FILTERS));
         assert_eq!(placed.first().map(|(_, exts)| exts.clone()), first);
+    }
+
+    /// A format selected after the Windows Save As dialog opens can replace the suffix of the
+    /// suggested name. Single-format saves and open dialogs keep the supplied name verbatim.
+    #[cfg(windows)]
+    #[test]
+    fn save_dialog_with_several_formats_leaves_the_extension_to_windows() {
+        let filters = vec![FilePick::filter("VectorCraft", &["vectorcraft"]), FilePick::filter("PDF-compatible .ai", &["ai"])];
+        let pick = FilePick { name: "Poster.vectorcraft".into(), filters: filters.clone(), ..Default::default() };
+        assert_eq!(dialog_for(Filters::default(), &PickRequest::Save(pick.clone())).1.as_deref(), Some("Poster"));
+        assert_eq!(dialog_for(Filters::default(), &PickRequest::Open(pick)).1.as_deref(), Some("Poster.vectorcraft"));
+
+        let pick = FilePick { name: "Poster.AI".into(), filters: filters.clone(), ..Default::default() };
+        assert_eq!(dialog_for(Filters::default(), &PickRequest::Save(pick)).1.as_deref(), Some("Poster"));
+        let pick = FilePick { name: "Poster.design".into(), filters: filters.clone(), ..Default::default() };
+        assert_eq!(dialog_for(Filters::default(), &PickRequest::Save(pick)).1.as_deref(), Some("Poster.design"));
+        let pick = FilePick { name: "draft.v1.vectorcraft".into(), filters: filters.clone(), ..Default::default() };
+        assert_eq!(dialog_for(Filters::default(), &PickRequest::Save(pick)).1.as_deref(), Some("draft.v1.vectorcraft"));
+        let pick = FilePick { name: "Poster.vectorcraft".into(), filters: vec![filters[0].clone()], ..Default::default() };
+        assert_eq!(dialog_for(Filters::default(), &PickRequest::Save(pick)).1.as_deref(), Some("Poster.vectorcraft"));
     }
 }

@@ -146,13 +146,21 @@ impl Interp<'_> {
     fn token(&mut self) -> Res {
         match self.pop()? {
             Obj::Str(s) => {
-                let bytes = s.to_vec();
-                let mut lex = Lexer::new(&bytes);
-                let Some(o) = lex.next()? else { return self.push(Obj::Bool(false)) };
-                let o = self.scanned(o, lex.immediate)?;
-                // The whitespace after the token is read with it.
-                let used = bytes.len() - lex.data().len();
-                self.push_interval(Obj::Str(s), used, bytes.len() - used)?;
+                // The scanner reads the string in place. The borrow ends before `scanned`, which
+                // can fail or charge the budget, and before the results are pushed.
+                let read = {
+                    let bytes = s.borrow();
+                    let mut lex = Lexer::new(&bytes);
+                    // The whitespace after the token is read with it.
+                    lex.next()?.map(|o| {
+                        let immediate = lex.immediate;
+                        let rest = lex.data().len();
+                        (o, immediate, bytes.len() - rest, rest)
+                    })
+                };
+                let Some((o, immediate, used, rest)) = read else { return self.push(Obj::Bool(false)) };
+                let o = self.scanned(o, immediate)?;
+                self.push_interval(Obj::Str(s), used, rest)?;
                 self.push(o)?;
             }
             Obj::File { stream: f, .. } => {
