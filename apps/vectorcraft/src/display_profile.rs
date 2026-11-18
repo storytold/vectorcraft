@@ -10,7 +10,7 @@
 //! - macOS: the window's layer is tagged sRGB and macOS converts it (`mac_color_space`).
 //!
 //! While the preference is on, a background thread reads the display every [`EVERY`] seconds,
-//! and at once when the window moves to another display.
+//! and at once when the window moves to another display or Edit › Refresh Monitor Profile asks.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -31,6 +31,8 @@ pub(crate) struct Reader {
     looked: Option<f64>,
     /// A reading is running.
     busy: Arc<AtomicBool>,
+    /// [`DisplayProfile::attach_reader`] was called.
+    attached: bool,
 }
 
 /// Clears [`Reader::busy`] when the reading thread ends, also by a panic.
@@ -45,28 +47,54 @@ impl Drop for Done {
 impl Reader {
     /// Starts a reading when one is due and none is running. `now` is the frame's time in seconds.
     pub(crate) fn tick(&mut self, window: &winit::window::Window, now: f64, enabled: bool, profile: &DisplayProfile, ctx: &egui::Context) {
-        if !enabled || self.busy.load(Ordering::Acquire) || self.looked.is_some_and(|at| (at..at + LOOK_EVERY).contains(&now)) {
-            return;
+        if !self.attached {
+            profile.attach_reader();
+            self.attached = true;
         }
-        self.looked = Some(now);
-        let display = window.current_monitor().and_then(|m| m.name());
-        if !due(self.last.as_ref(), now, display.as_deref()) {
+        let Some(display) = self.start(now, enabled, profile, || window.current_monitor().and_then(|m| m.name())) else {
             return;
-        }
-        self.last = Some((now, display.clone()));
+        };
         profile.pending();
         self.busy.store(true, Ordering::Release);
         let done = Done(self.busy.clone());
         let (profile, ctx) = (profile.clone(), ctx.clone());
         let spawned = std::thread::Builder::new().name("display profile".into()).spawn(move || {
-            let _done = done;
-            if profile.report(read(display)) {
+            let changed = profile.report(read(display));
+            drop(done);
+            // A request made while this reading ran starts on the next frame.
+            if changed || profile.read_requested() {
                 ctx.request_repaint();
             }
         });
         if let Err(e) = spawned {
             log::warn!("couldn't start reading the display profile: {e}");
         }
+    }
+
+    /// The display to read at `now` when a reading is to start, looked up with `display`. A
+    /// request from Refresh Monitor Profile ([`DisplayProfile::request_read`]) starts one at once,
+    /// past [`EVERY`] and [`LOOK_EVERY`]; while a reading runs it waits, and a frame that finds the
+    /// preference off drops it. A request made with the preference on is kept when the preference
+    /// goes off and on again between two frames.
+    fn start(&mut self, now: f64, enabled: bool, profile: &DisplayProfile, display: impl FnOnce() -> Option<String>) -> Option<Option<String>> {
+        if !enabled {
+            profile.take_request();
+            return None;
+        }
+        if self.busy.load(Ordering::Acquire) {
+            return None;
+        }
+        let asked = profile.take_request();
+        if !asked && self.looked.is_some_and(|at| (at..at + LOOK_EVERY).contains(&now)) {
+            return None;
+        }
+        self.looked = Some(now);
+        let display = display();
+        if !asked && !due(self.last.as_ref(), now, display.as_deref()) {
+            return None;
+        }
+        self.last = Some((now, display.clone()));
+        Some(display)
     }
 }
 
@@ -568,6 +596,56 @@ mod tests {
         assert!(due(Some(&last), 101.0, None));
         // A clock that went back.
         assert!(due(Some(&last), 50.0, Some("DP-1")));
+    }
+
+    fn attached() -> DisplayProfile {
+        let profile = DisplayProfile::default();
+        profile.attach_reader();
+        profile
+    }
+
+    #[test]
+    fn a_requested_reading_starts_on_the_next_frame_past_both_intervals() {
+        let (mut r, profile) = (Reader::default(), attached());
+        let dp1 = || Some("DP-1".to_string());
+        assert_eq!(r.start(100.0, true, &profile, dp1), Some(Some("DP-1".into())));
+        // Inside the display lookup interval and the reading interval: nothing starts.
+        assert_eq!(r.start(100.5, true, &profile, || panic!("not looked up")), None);
+        assert_eq!(r.start(102.0, true, &profile, dp1), None);
+        profile.request_read(true).unwrap();
+        assert_eq!(r.start(102.1, true, &profile, dp1), Some(Some("DP-1".into())));
+        assert!(!profile.read_requested(), "the request is taken");
+        // The intervals run again from the requested reading.
+        assert_eq!(r.start(102.2, true, &profile, dp1), None);
+        assert_eq!(r.start(111.0, true, &profile, dp1), None);
+        assert_eq!(r.start(113.0, true, &profile, dp1), Some(Some("DP-1".into())));
+    }
+
+    #[test]
+    fn a_request_made_while_a_reading_runs_waits_for_it_to_end() {
+        let (mut r, profile) = (Reader::default(), attached());
+        let dp1 = || Some("DP-1".to_string());
+        assert!(r.start(0.0, true, &profile, dp1).is_some());
+        r.busy.store(true, Ordering::Release);
+        profile.request_read(true).unwrap();
+        assert_eq!(r.start(0.1, true, &profile, dp1), None);
+        assert_eq!(r.start(5.0, true, &profile, dp1), None);
+        assert!(profile.read_requested(), "kept while the reading runs");
+        r.busy.store(false, Ordering::Release);
+        assert_eq!(r.start(5.1, true, &profile, dp1), Some(Some("DP-1".into())));
+        assert!(!profile.read_requested());
+    }
+
+    #[test]
+    fn a_request_is_dropped_when_the_preference_goes_off() {
+        let (mut r, profile) = (Reader::default(), attached());
+        let dp1 = || Some("DP-1".to_string());
+        assert!(r.start(0.0, true, &profile, dp1).is_some());
+        profile.request_read(true).unwrap();
+        assert_eq!(r.start(0.1, false, &profile, dp1), None);
+        assert!(!profile.read_requested());
+        assert_eq!(r.start(0.2, true, &profile, dp1), None, "no reading starts later for it");
+        assert!(profile.request_read(false).is_err());
     }
 
     #[test]
