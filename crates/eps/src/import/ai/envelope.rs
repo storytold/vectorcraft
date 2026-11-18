@@ -692,6 +692,8 @@ pub struct WarpedType {
     pub(super) checks: usize,
     pub(super) spent: Spent,
     pub(super) page: Option<Rect>,
+    /// [`super::Structure::type_clips`]: type in an envelope's contents clips its clipping group too.
+    pub(super) type_clips: HashMap<NodeId, NodeId>,
     /// The envelopes of type that may open live in layers built without a page, by their place
     /// among them ([`Self::open_alone`]): none when `None`.
     pub(super) alone: Option<BTreeSet<usize>>,
@@ -811,8 +813,10 @@ impl WarpedType {
             texts.insert(slot, text);
             hidden.push(id);
         }
+        let typed = |slot: NodeId| texts.get(&slot).map(|t| t.id);
         for n in before.iter_mut().chain(inner.iter_mut()) {
             put_type(n, &texts);
+            super::clip_by_type(n, &self.type_clips, &typed, &mut |_| ());
         }
         // A warp that VectorCraft's own warp doesn't draw as its drawn art may still draw as the
         // grid the file saves for it: then it opens as a mesh envelope on that grid.
