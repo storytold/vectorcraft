@@ -38,27 +38,78 @@ pub fn in_srgb(rgb: [f64; 3]) -> bool {
 
 /// The largest chroma sRGB holds at lightness `l` and hue `h°`: 0 at or outside black and white.
 pub fn max_chroma(l: f64, h: f64) -> f64 {
+    largest_fitting_chroma(l, h, f64::INFINITY)
+}
+
+/// The primary and secondary colors of sRGB: the corners of its cube next to black.
+const PRIMARIES: [[f32; 3]; 6] = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [0.0, 1.0, 1.0], [1.0, 0.0, 1.0], [1.0, 1.0, 0.0]];
+
+/// The largest chroma no more than `limit` that sRGB holds at lightness `l` and hue `h°`: 0 at or
+/// outside black and white.
+fn largest_fitting_chroma(l: f64, h: f64, limit: f64) -> f64 {
     if !(l > 0.0 && l < 1.0) || !h.is_finite() {
         return 0.0;
     }
-    // sRGB holds every chroma from 0 up to its edge along a hue at a given lightness.
+    let fits = |c: f64| in_srgb(oklch_to_srgb(l, c, h));
+    // The edge of the chromas from 0 that sRGB holds without a break.
     let (mut lo, mut hi) = (0.0, 0.5);
     for _ in 0..40 {
         let mid = (lo + hi) / 2.0;
-        if in_srgb(oklch_to_srgb(l, mid, h)) { lo = mid } else { hi = mid }
+        if fits(mid) { lo = mid } else { hi = mid }
     }
-    lo
+    // Past that edge the ray can come back into sRGB near a line from black to a primary or
+    // secondary color. Such a line is straight in Oklab, so it keeps that color's hue and its
+    // chroma grows with its lightness. At the lightness and hue of blue, for example, the ray leaves
+    // sRGB at a chroma of about 0.266 and meets blue itself at about 0.313; at L 0.44 and a hue
+    // 0.01° past blue's, a second stretch runs from about 0.3042 to 0.3048. Each such stretch ends
+    // at or just below the line's chroma, so the search walks down from there in small steps to the
+    // first chroma that fits and then finds the stretch's end between it and the step above.
+    let past = PRIMARIES.iter().filter_map(|rgb| {
+        let [pl, a, b] = srgb_to_oklab(*rgb);
+        let edge = l / pl * a.hypot(b);
+        let off = (h - b.atan2(a).to_degrees()).rem_euclid(360.0);
+        if l > pl || edge <= lo || off.min(360.0 - off) > NEAR_PRIMARY_HUE {
+            return None;
+        }
+        let start = edge.min(limit);
+        let mut c = start;
+        while c > lo && start - c <= PAST_WALK {
+            if fits(c) {
+                let (mut inside, mut outside) = (c, (c + PAST_STEP).min(start));
+                if outside > inside && !fits(outside) {
+                    for _ in 0..20 {
+                        let mid = (inside + outside) / 2.0;
+                        if fits(mid) { inside = mid } else { outside = mid }
+                    }
+                } else {
+                    inside = outside;
+                }
+                return Some(inside);
+            }
+            c -= PAST_STEP;
+        }
+        None
+    });
+    past.fold(lo.min(limit), f64::max)
 }
 
+/// How near a primary or secondary color's hue, in degrees, the ray must pass for
+/// [`largest_fitting_chroma`] to look past the first edge.
+const NEAR_PRIMARY_HUE: f64 = 2.0;
+/// The step of that walk.
+const PAST_STEP: f64 = 2e-4;
+/// How far below the line's chroma that walk goes.
+const PAST_WALK: f64 = 0.06;
+
 /// The sRGB color (gamma encoded, 0..=1) of OKLCH `(l, c, h°)`, and whether its chroma was lowered:
-/// a color outside sRGB keeps its lightness and hue and takes the largest chroma that fits.
-/// Lightness is clamped to 0..=1 and chroma to 0 or more.
+/// a color outside sRGB keeps its lightness and hue and takes the largest chroma below it that
+/// fits. Lightness is clamped to 0..=1 and chroma to 0 or more.
 pub fn from_oklch(l: f64, c: f64, h: f64) -> ([f32; 3], bool) {
     let l = if l.is_nan() { 0.0 } else { l.clamp(0.0, 1.0) };
     let c = if c.is_nan() { 0.0 } else { c.max(0.0) };
     let h = if h.is_finite() { h } else { 0.0 };
     let exact = oklch_to_srgb(l, c, h);
-    let (rgb, lowered) = if in_srgb(exact) { (exact, false) } else { (oklch_to_srgb(l, max_chroma(l, h).min(c), h), true) };
+    let (rgb, lowered) = if in_srgb(exact) { (exact, false) } else { (oklch_to_srgb(l, largest_fitting_chroma(l, h, c), h), true) };
     (rgb.map(|v| v.clamp(0.0, 1.0) as f32), lowered)
 }
 
@@ -124,6 +175,45 @@ mod tests {
         let [ol, oc, oh] = to_oklch(rgb);
         assert!((ol - l).abs() < 2e-3 && (oh - h).abs() < 1.0 && (oc - max).abs() < 2e-3, "{ol} {oc} {oh}");
         assert!(!from_oklch(l, max * 0.5, h).1);
+    }
+
+    /// At the lightness and hue of blue the ray leaves sRGB and comes back at blue itself, so the
+    /// largest chroma is blue's, and a chroma past it gives blue.
+    #[test]
+    fn the_largest_chroma_at_blues_hue_is_blues() {
+        let [l, c, h] = to_oklch([0.0, 0.0, 1.0]);
+        let max = max_chroma(l, h);
+        assert!((max - c).abs() < 1e-4 && in_srgb(oklch_to_srgb(l, max, h)), "{max} {c}");
+        let (rgb, lowered) = from_oklch(l, CHROMA_FULL, h);
+        assert_eq!((eight(rgb), lowered), ([0, 0, 255], true));
+        // A chroma between the two stretches takes the end of the first one, inside sRGB.
+        let (rgb, lowered) = from_oklch(l, 0.29, h);
+        let [_, gc, _] = to_oklch(rgb);
+        assert!(lowered && gc < 0.27 && in_srgb(oklch_to_srgb(l, gc, h)), "{gc}");
+        // A hue just past blue's: a narrow second stretch ends just below the line from black to blue.
+        let (l, h) = (0.44, 264.06);
+        let max = max_chroma(l, h);
+        assert!(max > 0.304 && max < 0.305 && in_srgb(oklch_to_srgb(l, max, h)), "{max}");
+        let [_, got, _] = to_oklch(from_oklch(l, 0.35, h).0);
+        assert!(got > 0.303, "{got}");
+        // A darker blue on the line from black to blue.
+        let [l, c, h] = to_oklch([0.0, 0.0, 0.25]);
+        assert!((max_chroma(l, h) - c).abs() < 1e-4, "{} {c}", max_chroma(l, h));
+    }
+
+    /// sRGB channels below 0 go through the transfer curve with its sign turned, as CSS Color 4's
+    /// extended sRGB does, in both directions.
+    #[test]
+    fn negative_channels_use_the_signed_transfer_curve() {
+        let linear = -((0.5_f64 + 0.055) / 1.055).powf(2.4);
+        let [l, c, _] = to_oklch([-0.5; 3]);
+        assert!((l - linear.cbrt()).abs() < 1e-4 && c <= POWERLESS_CHROMA, "{l} {c}");
+        for v in oklch_to_srgb(linear.cbrt(), 0.0, 0.0) {
+            assert!((v + 0.5).abs() < 1e-4, "{v}");
+        }
+        // Small values near 0 keep the straight part of the curve.
+        let [l, _, _] = to_oklch([-0.01; 3]);
+        assert!((l - (-0.01_f64 / 12.92).cbrt()).abs() < 1e-4, "{l}");
     }
 
     #[test]

@@ -891,7 +891,8 @@ fn convert_color(_: &mut Session, p: &Value) -> Result<Value> {
         "gray" | "grayscale" => ("gray", json!(values(&c.convert(&col, Model::Gray, intent)))),
         "lab" => ("lab", json!([lab.l, lab.a, lab.b])),
         "oklch" => {
-            let [l, ch, h] = vectorcraft_color::oklab::to_oklch(c.display_rgb(&col));
+            // RGB numbers past 0..1 ([2, 2, 2]) display clipped, as `hex` reports them.
+            let [l, ch, h] = vectorcraft_color::oklab::to_oklch(c.display_rgb(&col).map(|v| v.clamp(0.0, 1.0)));
             ("oklch", json!([l * 100.0, ch, h]))
         }
         other => return Err(bad(C, format!("unknown model `{other}`"))),

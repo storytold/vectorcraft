@@ -691,6 +691,15 @@ fn the_oklch_tracks_dim_the_colors_outside_srgb_and_the_tick_marks_the_largest_c
     let [r, g, b] = stored.map(|v| (f64::from(v).clamp(0.0, 1.0) * 255.0).round() as u8);
     assert!(lowered);
     assert_eq!(oklch_track([0.98, 0.2, h], None), egui::Color32::from_rgb(r, g, b).gamma_multiply(0.3));
+    // At blue's L and H the ray leaves sRGB below the largest chroma and comes back at blue: the C
+    // track dims that gap and shows the color a pick there stores.
+    let [bl, _, bh] = vectorcraft_color::oklab::to_oklch([0.0, 0.0, 1.0]);
+    let blue_max = vectorcraft_color::oklab::max_chroma(bl, bh);
+    let (stored, lowered) = vectorcraft_color::oklab::from_oklch(bl, 0.29, bh);
+    let [r, g, b] = stored.map(|v| (f64::from(v).clamp(0.0, 1.0) * 255.0).round() as u8);
+    assert!(lowered && blue_max > 0.3);
+    assert_eq!(oklch_track([bl, 0.29, bh], Some(blue_max)), egui::Color32::from_rgb(r, g, b).gamma_multiply(0.3));
+    assert_eq!(oklch_track([bl, blue_max, bh], Some(blue_max)).a(), 255, "blue itself is inside sRGB");
     assert!((chroma_tick(max) - (max / 0.4) as f32).abs() < 1e-6 && chroma_tick(max) > 0.1 && chroma_tick(max) < 1.0);
     assert_eq!((chroma_tick(0.0), chroma_tick(0.5)), (0.0, 1.0));
 }
@@ -792,16 +801,17 @@ fn oklch_sliders_need_srgb_as_the_working_space() {
         move |ui, app: &mut VectorcraftApp| {
             let tgt = super::color::wheel_target(app, ui);
             let color = tgt.color();
-            let _ = oklch_rows(app, ui, &tgt, color, &p3);
+            let picked = oklch_rows(app, ui, &tgt, color, &p3);
+            assert!(picked.is_none(), "a gray row picks nothing: {picked:?}");
         },
         app(json!("#ff0000")),
     );
     h.run_steps(2);
     assert!(oklch_slider(&h, "Lightness").accesskit_node().is_disabled());
-    let undo = undo_len(h.state());
     let rail = oklch_slider(&h, "Lightness").rect();
     click(&mut h, on_rail(rail, 0.2), Modifiers::NONE);
-    assert_eq!(undo_len(h.state()), undo, "a gray row picks nothing");
+    key(&mut h, egui::Key::ArrowRight, Modifiers::NONE);
+    set_slider_value(&mut h, "Lightness", 20.0);
 }
 
 /// The rows show what they asked for while the color displays as it did, and the color's own
@@ -1023,4 +1033,61 @@ fn ui_color_wheel_sets_and_reads_the_sliders() {
     let e = app.run("ui.colorWheel", json!({"view": "wheel", "sliders": "hwb"})).unwrap_err();
     assert_eq!(e, "`sliders` must be none, oklch or hsl");
     assert_eq!(app.ui.color_wheel.view, crate::panels::color_wheel::View::Box, "an error changes nothing");
+}
+
+/// A hue given to a Gray color does not change how it displays, so its paint stays a Gray color
+/// and no undo step is recorded; the hue row keeps the hue.
+#[test]
+fn a_hue_on_a_gray_color_leaves_its_paint_gray() {
+    for (rows, hue) in [("hsl", "HSL Hue"), ("oklch", "Hue")] {
+        let mut app = app(json!({"gray": 0.5}));
+        app.run("ui.colorWheel", json!({"sliders": rows})).unwrap();
+        let mut h = oklch_harness_shown(app);
+        let (gray, undo) = (fill(h.state()), undo_len(h.state()));
+        assert!(matches!(gray, Color::Gray { .. }), "{gray:?}");
+        set_slider_value(&mut h, hue, 200.0);
+        assert_eq!(oklch_slider(&h, hue).accesskit_node().numeric_value(), Some(200.0), "{rows}");
+        assert_eq!((fill(h.state()), undo_len(h.state())), (gray, undo), "{rows}: the Gray fill stays as it was");
+    }
+}
+
+/// The hue given to a gray is dropped once the panel shows another color, so the same gray applied
+/// again later shows its own hue, 0°.
+#[test]
+fn a_remembered_hue_is_dropped_after_the_paint_changes() {
+    for (rows, hue) in [("hsl", "HSL Hue"), ("oklch", "Hue")] {
+        let mut app = app(json!("#808080"));
+        app.run("ui.colorWheel", json!({"sliders": rows})).unwrap();
+        let mut h = oklch_harness_shown(app);
+        set_slider_value(&mut h, hue, 240.0);
+        assert_eq!(oklch_slider(&h, hue).accesskit_node().numeric_value(), Some(240.0), "{rows}");
+        h.state_mut().run("paint.setFill", json!({"color": "#ff0000"})).unwrap();
+        h.run_steps(2);
+        h.state_mut().run("paint.setFill", json!({"color": "#808080"})).unwrap();
+        h.run_steps(2);
+        assert_eq!(oklch_slider(&h, hue).accesskit_node().numeric_value(), Some(0.0), "{rows}: the gray's own hue");
+    }
+}
+
+/// Hiding the rows, or showing the other rows, during a drag on a row keeps the color the drag
+/// previewed as one undo step and leaves no interaction open.
+#[test]
+fn hiding_the_rows_during_a_drag_keeps_its_color_as_one_undo_step() {
+    for rows in ["none", "oklch"] {
+        let mut h = hsl_harness(app(json!("#ff8000")));
+        let rail = oklch_slider(&h, "HSL Lightness").rect();
+        let undo = undo_len(h.state());
+        press(&mut h, on_rail(rail, 0.5), true, Modifiers::NONE);
+        for _ in 0..2 {
+            h.event(Event::PointerMoved(on_rail(rail, 0.25)));
+            h.run_steps(1);
+        }
+        assert!(h.state().session.in_interaction(), "{rows}: the drag previews");
+        let previewed = fill(h.state());
+        h.state_mut().run("ui.colorWheel", json!({"sliders": rows})).unwrap();
+        h.run_steps(2);
+        press(&mut h, on_rail(rail, 0.25), false, Modifiers::NONE);
+        assert!(!h.state().session.in_interaction(), "{rows}: the interaction ended");
+        assert_eq!((fill(h.state()), undo_len(h.state())), (previewed, undo + 1), "{rows}");
+    }
 }

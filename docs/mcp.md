@@ -677,11 +677,13 @@ the list return an error and change nothing. The command returns `{view, channel
 kept with the preferences.
 
 `ui.colorWheel {"sliders": "oklch"}` shows the Color Wheel panel's OKLCH Sliders (L, C and H rows under the wheel or
-the box), and `"none"` hides them; `"oklch"` is an error while the working RGB space is not sRGB.
+the box), and `"none"` hides them in any RGB space. `"oklch"` is an error while the active document's RGB space is
+not sRGB: the profile assigned to the document when it has one, else the working RGB space of Edit › Color Settings.
 `ui.colorWheel {"sliders": "hsl"}` shows HSL Sliders in their place: H, S and L rows with the hue (0 to 360°),
 saturation and lightness (0 to 100 %) of the color's display sRGB, as CSS Color 4's `hsl()` defines them.
-`color.convert {"to": "oklch"}` answers the color's OKLCH as `[L %, C, H°]` of its display sRGB. A color outside sRGB
-(a Lab or CMYK color, or an RGB color in a wider working RGB space) is clipped to sRGB first.
+`color.convert {"color": "#ff0000", "to": "oklch"}` answers the color's OKLCH as `[L %, C, H°]` of its display sRGB.
+A color outside sRGB (a Lab or CMYK color, an RGB color in a wider RGB space, or RGB numbers past 0 to 1) is clipped
+to sRGB first.
 
 In remote desktop mode, `invoke_menu` with `{"command":"ui.sampleScreenColor","params":{}}` shows the system's
 screen color sampler and returns `null` before a color is picked: the system's sampler on macOS, the XDG desktop

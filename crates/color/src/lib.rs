@@ -151,15 +151,6 @@ impl Color {
         let [r, g, b] = hsb_to_rgb([h, s, v]);
         Color::Rgb { r, g, b }
     }
-    /// HSL with hue in degrees 0..360, saturation and lightness 0..1 ([`rgb_to_hsl`] of the
-    /// display color).
-    pub fn to_hsl(&self) -> [f32; 3] {
-        rgb_to_hsl(self.to_rgb())
-    }
-    pub fn from_hsl(h: f32, s: f32, l: f32) -> Self {
-        let [r, g, b] = hsl_to_rgb([h, s, l]);
-        Color::Rgb { r, g, b }
-    }
     /// `#rrggbb` (display RGB).
     pub fn to_hex(&self) -> String {
         let [r, g, b, _] = self.to_rgba8(1.0);
@@ -380,10 +371,11 @@ pub fn rgb_to_hsl([r, g, b]: [f32; 3]) -> [f32; 3] {
 
 /// RGB numbers 0..1 of HSL `[h, s, l]` (hue in degrees, saturation and lightness 0..1), as CSS
 /// Color 4 converts HSL to sRGB (<https://www.w3.org/TR/css-color-4/#hsl-to-rgb>): the inverse of
-/// [`rgb_to_hsl`]. A hue outside 0..360 wraps into that range, so -120° gives the color of 240°.
-/// The specification's sample code uses JavaScript's remainder operator and gives a different
-/// color for a negative hue.
+/// [`rgb_to_hsl`]. A hue outside 0..360 wraps into that range before the conversion, so -120°
+/// gives the color of 240° and a hue of 10,000,000,000° the color of 280°. The specification's
+/// sample code uses JavaScript's remainder operator and gives a different color for a negative hue.
 pub fn hsl_to_rgb([h, s, l]: [f32; 3]) -> [f32; 3] {
+    let h = h.rem_euclid(360.0);
     let a = s * l.min(1.0 - l);
     let f = |n: f32| {
         let k = (n + h / 30.0).rem_euclid(12.0);
@@ -565,11 +557,12 @@ mod tests {
             ([360.0, 1.0, 0.5], "#ff0000"),
             ([-120.0, 1.0, 0.5], "#0000ff"),
         ] {
-            assert_eq!(Color::from_hsl(hsl[0], hsl[1], hsl[2]).to_hex(), hex, "{hsl:?}");
+            let [r, g, b] = hsl_to_rgb(hsl);
+            assert_eq!(Color::rgb(r, g, b).to_hex(), hex, "{hsl:?}");
         }
         let [h, s, l] = rgb_to_hsl([1.0, 0.5, 0.0]);
         assert!((h - 30.0).abs() < 1e-4 && (s - 1.0).abs() < 1e-6 && (l - 0.5).abs() < 1e-6, "{h} {s} {l}");
-        let [h, s, l] = Color::rgb8(255, 128, 0).to_hsl();
+        let [h, s, l] = rgb_to_hsl(Color::rgb8(255, 128, 0).to_rgb_uncalibrated());
         assert!((h - 30.0).abs() < 0.2 && (s - 1.0).abs() < 1e-6 && (l - 0.5).abs() < 1e-3, "{h} {s} {l}");
         // A gray has no hue: the hue is 0 and the saturation 0, at any lightness.
         for v in [0.0, 0.25, 0.5, 1.0] {
@@ -581,6 +574,9 @@ mod tests {
         // A color past the gamut that gives a negative saturation turns its hue by 180°.
         let [h, s, _] = rgb_to_hsl([1.2, 1.5, 1.4]);
         assert!(s > 0.0 && (h - (160.0 + 180.0)).abs() < 1e-3, "{h} {s}");
+        // A huge hue wraps before the channels are worked out: 10,000,000,000° is 280°.
+        let (huge, wrapped) = (hsl_to_rgb([10_000_000_000.0, 1.0, 0.5]), hsl_to_rgb([280.0, 1.0, 0.5]));
+        assert!((0..3).all(|i| (huge[i] - wrapped[i]).abs() < 1e-6), "{huge:?} {wrapped:?}");
     }
 
     /// The 216 web colors go to HSL and back to the same 8-bit color.
