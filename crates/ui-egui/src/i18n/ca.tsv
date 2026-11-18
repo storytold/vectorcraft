@@ -4307,6 +4307,12 @@ digits	Malayalam	Malaiàlam
 	Bus Lines	Línies de bus
 	Terminal Nodes	Nodes terminals
 
+# Original arrow art brushes.
+	Arrows	Fletxes
+	Solid Arrow	Fletxa sòlida
+	Open Arrow	Fletxa oberta
+	Chevron Arrow	Fletxa amb galó
+
 	Notched Ribbon	Cinta dentada
 	Double Line	Línia doble
 	Wave	Ona
@@ -8640,6 +8646,7 @@ breakText	Glyphs	Glifs
 @msg	Hold {_1} is already used by {_2}	La pulsació llarga de {_1} ja la fa servir {_2}
 @msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	una drecera de pulsació llarga és una tecla que escriu un caràcter, sola o amb Shift ({shown} té Cmd, Ctrl o Alt)
 @msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} no pot ser una drecera de pulsació llarga: fes servir una lletra, una xifra o una tecla de puntuació
+	Dashed Arrow	Fletxa discontínua
 @msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	una línia o un altre traçat obert que no tanca cap àrea no aporta cap àrea a la forma composta; per incloure’l, apliqueu-hi primer Objecte › Traçat › Contorneja el traç
 	Pressure Sensitive	Sensible a la pressió
 	Flex Ribbon	Cinta flexible

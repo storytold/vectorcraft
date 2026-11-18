@@ -7402,6 +7402,12 @@ axis	Y Axis	Y-axel
 	Bus Lines	Bussledningar
 	Terminal Nodes	Anslutningspunkter
 
+# Original arrow art brushes.
+	Arrows	Pilar
+	Solid Arrow	Massiv pil
+	Open Arrow	Öppen pil
+	Chevron Arrow	Chevronpil
+
 	Notched Ribbon	Hackat band
 	Double Line	Dubbellinje
 	Wave	Våg
@@ -10126,6 +10132,7 @@ digits	Hindi	Hindi
 @msg	Hold {_1} is already used by {_2}	Håll {_1} används redan av {_2}
 @msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	ett hållkortkommando är en tangent som skriver ett tecken, ensam eller med Shift ({shown} har Cmd, Ctrl eller Alt)
 @msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} kan inte vara ett hållkortkommando: använd en bokstav, en siffra eller en skiljeteckentangent
+	Dashed Arrow	Streckad pil
 	Pressure Sensitive	Tryckkänslig
 	Flex Ribbon	Flexibelt band
 	Pulse Stroke	Pulserande drag

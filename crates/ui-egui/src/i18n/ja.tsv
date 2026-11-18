@@ -8909,6 +8909,13 @@ axis	Y Axis	Y 軸
 	Bus Lines	バス配線
 	Terminal Nodes	端子ノード
 
+# Original arrow art brushes.
+	Arrows	矢印ブラシ
+	Solid Arrow	塗りつぶし矢印
+	Open Arrow	中抜き矢印
+	Double Arrow	両矢印
+	Chevron Arrow	山形付き矢印
+
 	Notched Ribbon	ノッチリボン
 	Double Line	二重線
 	Wave	波
@@ -10134,6 +10141,7 @@ breakText	Glyphs	字形
 @msg	A panel is not joined to the rest by a crease.	パネルがどの筋入れ線でも他とつながっていません。
 @msg	A fold line is on a non-printing layer.	折り線が印刷しないレイヤーにあります。
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	パネル: {panels}、ヒンジ: {hinges}、エラー: {errors}、警告: {warnings}
+	Dashed Arrow	破線矢印
 	Pressure Sensitive	筆圧対応
 	Flex Ribbon	しなやかなリボン
 	Pulse Stroke	脈打つ線

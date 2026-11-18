@@ -7371,6 +7371,12 @@ axis	Y Axis	Eje Y
 	Bus Lines	Líneas de bus
 	Terminal Nodes	Nodos terminales
 
+# Original arrow art brushes.
+	Arrows	Flechas
+	Solid Arrow	Flecha sólida
+	Open Arrow	Flecha abierta
+	Chevron Arrow	Flecha con cheurón
+
 	Notched Ribbon	Cinta dentada
 	Double Line	Línea doble
 	Wave	Onda
@@ -10361,6 +10367,7 @@ breakText	Glyphs	Glifos
 @msg	Hold {_1} is already used by {_2}	La pulsación larga de {_1} ya la usa {_2}
 @msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	un método abreviado de pulsación larga es una tecla que escribe un carácter, sola o con Shift ({shown} tiene Cmd, Ctrl o Alt)
 @msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} no puede ser un método abreviado de pulsación larga: usa una letra, un dígito o una tecla de puntuación
+	Dashed Arrow	Flecha discontinua
 @msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	una línea u otro trazado abierto que no encierra ningún área no aporta ningún área a la forma compuesta; para incluirlo, aplícale primero Objeto › Trazado › Contornear trazo
 	Pressure Sensitive	Sensible a la presión
 	Flex Ribbon	Cinta flexible

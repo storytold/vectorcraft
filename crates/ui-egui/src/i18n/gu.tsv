@@ -4882,6 +4882,13 @@ antiAlias	Sharp	શાર્પ
 	Bus Lines	બસ રેખાઓ
 	Terminal Nodes	ટર્મિનલ નોડ્સ
 
+# Original arrow art brushes.
+	Arrows	તીરો
+	Solid Arrow	ભરેલું તીર
+	Open Arrow	ખુલ્લું તીર
+	Double Arrow	બેવડું તીર
+	Chevron Arrow	શેવરોન તીર
+
 	Notched Ribbon	ખાંચાવાળી રિબન
 	Double Line	બેવડી રેખા
 	Wave	તરંગ
@@ -5433,6 +5440,7 @@ swatch	[Registration]	[રજિસ્ટ્રેશન]
 @msg	Hold {_1} is already used by {_2}	હોલ્ડ {_1} પહેલેથી {_2} વાપરે છે
 @msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	હોલ્ડ શોર્ટકટ એ અક્ષર લખતી કી છે, એકલી અથવા Shift સાથે ({shown} માં Cmd, Ctrl અથવા Alt છે)
 @msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} હોલ્ડ શોર્ટકટ ન હોઈ શકે: અક્ષર, અંક અથવા વિરામચિહ્નની કી વાપરો
+	Dashed Arrow	તૂટક તીર
 	Pressure Sensitive	દબાણ સંવેદનશીલ
 	Flex Ribbon	લવચીક પટ્ટી
 	Pulse Stroke	ધબકતો ઘસારો

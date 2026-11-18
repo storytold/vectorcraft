@@ -9286,6 +9286,12 @@ axis	Y Axis	Y ekseni
 	Bus Lines	Veriyolu hatları
 	Terminal Nodes	Bağlantı düğümleri
 
+# Original arrow art brushes.
+	Arrows	Oklar
+	Solid Arrow	Dolu Ok
+	Open Arrow	Açık Ok
+	Chevron Arrow	Köşeli Ok
+
 	Notched Ribbon	Çentikli Şerit
 	Double Line	Çift Çizgi
 	Wave	Dalga
@@ -10383,6 +10389,7 @@ breakText	Glyphs	Glifler
 @msg	A panel is not joined to the rest by a crease.	Bir panel geri kalanlara hiçbir pilyaj çizgisiyle bağlı değil.
 @msg	A fold line is on a non-printing layer.	Bir katlama çizgisi yazdırılmayan bir katmanda.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Paneller: {panels}, menteşeler: {hinges}, hatalar: {errors}, uyarılar: {warnings}
+	Dashed Arrow	Kesikli Ok
 	Pressure Sensitive	Basınca Duyarlı
 	Flex Ribbon	Esnek Şerit
 	Pulse Stroke	Atımlı Çizgi

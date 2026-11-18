@@ -7019,6 +7019,12 @@ axis	Y Axis	Ось Y
 	Bus Lines	Линии шины
 	Terminal Nodes	Контактные узлы
 
+# Original arrow art brushes.
+	Arrows	Кисти-стрелки
+	Solid Arrow	Сплошная стрелка
+	Open Arrow	Открытая стрелка
+	Chevron Arrow	Стрелка с шевроном
+
 	Notched Ribbon	Лента с насечками
 	Double Line	Двойная линия
 	Wave	Волна
@@ -10523,6 +10529,7 @@ shape	Open	Открытый
 @msg	Hold {_1} is already used by {_2}	Удержание {_1} уже используется для {_2}
 @msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	клавиша удержания — это клавиша, которая вводит символ, отдельно или с Shift ({shown} содержит Cmd, Ctrl или Alt)
 @msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} не может быть клавишей удержания: используйте букву, цифру или клавишу знака препинания
+	Dashed Arrow	Пунктирная стрелка
 	Pressure Sensitive	Чувствительные к нажиму
 	Flex Ribbon	Гибкая лента
 	Pulse Stroke	Пульсирующий штрих

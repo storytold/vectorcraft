@@ -7396,6 +7396,12 @@ axis	Y Axis	osa Y
 	Bus Lines	Sběrnicové linky
 	Terminal Nodes	Koncové uzly
 
+# Original arrow art brushes.
+	Arrows	Šipky
+	Solid Arrow	Plná šipka
+	Open Arrow	Otevřená šipka
+	Chevron Arrow	Šipka s krokví
+
 	Notched Ribbon	Vroubkovaná stuha
 	Double Line	Dvojitá čára
 	Wave	Vlna
@@ -10425,6 +10431,7 @@ breakText	Glyphs	Glyfy
 @msg	A panel is not joined to the rest by a crease.	Panel není se zbytkem spojen žádnou linií bigu.
 @msg	A fold line is on a non-printing layer.	Linie skladu je na netisknutelné vrstvě.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panely: {panels}, panty: {hinges}, chyby: {errors}, upozornění: {warnings}
+	Dashed Arrow	Přerušovaná šipka
 	Pressure Sensitive	Citlivé na tlak
 	Flex Ribbon	Pružná stuha
 	Pulse Stroke	Pulzující tah
