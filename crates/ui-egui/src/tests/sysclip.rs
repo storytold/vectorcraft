@@ -164,6 +164,11 @@ pub(super) fn copy_rect(app: &mut VectorcraftApp) {
     run(app, "edit.copy", json!({}));
 }
 
+/// How many times the app wrote the clipboard.
+pub(super) fn writes(board: &Rc<RefCell<Board>>) -> usize {
+    board.borrow().writes
+}
+
 pub(super) fn written(board: &Rc<RefCell<Board>>) -> Vec<&'static str> {
     board.borrow().flavours.iter().map(|f| f.mime).collect()
 }

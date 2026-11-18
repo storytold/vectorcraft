@@ -1323,6 +1323,40 @@ fn copy_and_paste_events_use_the_system_clipboard() {
     assert_eq!(app.session.doc().unwrap().doc.layers[0].children().unwrap().len(), 8);
 }
 
+/// #8432: a window of its own (a floating panel's) notes that its labels copied the text a Copy
+/// asked for, so that the Copy it sends on to the main window copies nothing more. A field with
+/// the keyboard copying its own text is not noted, and a note lasts only until the main window's
+/// next pass, so it never drops a later Copy from another window.
+#[test]
+fn a_window_notes_only_its_labels_copies_until_the_next_main_window_pass() {
+    let ctx = egui::Context::default();
+    watch_label_copies(&ctx);
+    let main_window_pass = || ctx.run_ui(egui::RawInput::default(), |_| {}).drop_without_applying_deltas();
+    main_window_pass();
+    let window = egui::ViewportId::from_hash_of("floating panel");
+    let mut window_input = egui::RawInput { viewport_id: window, events: vec![egui::Event::Copy], ..Default::default() };
+    window_input.viewports.insert(window, egui::ViewportInfo { parent: Some(egui::ViewportId::ROOT), ..Default::default() });
+    // `field`: the text is copied by a field with the keyboard instead of a label.
+    let copy_in_window = |field: bool| {
+        ctx.run_ui(window_input.clone(), |ui| {
+            if field {
+                let mut text = String::from("234 pt");
+                ui.text_edit_singleline(&mut text).request_focus();
+            }
+            ui.ctx().copy_text("234 pt".into());
+        })
+        .drop_without_applying_deltas();
+    };
+    copy_in_window(false);
+    assert!(take_copied_in_window(&ctx), "the window's label copied the text");
+    assert!(!take_copied_in_window(&ctx), "once");
+    copy_in_window(false);
+    main_window_pass();
+    assert!(!take_copied_in_window(&ctx), "the main window's next pass forgets the note");
+    copy_in_window(true);
+    assert!(!take_copied_in_window(&ctx), "a field's copy is not noted");
+}
+
 /// While a grid is dragged out, ↑/↓ change its rows and ←/→ its columns.
 #[test]
 fn arrows_while_dragging_a_grid_change_its_rows_and_columns() {

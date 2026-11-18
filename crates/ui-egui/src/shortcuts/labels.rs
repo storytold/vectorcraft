@@ -12,6 +12,7 @@ fn after_labels_id() -> egui::Id {
 
 /// Set when a label in a window of its own (a floating panel's) copied its selected text: the
 /// window then sends the Copy or Cut on to the main window ([`crate::panel_docking::forward_keys`]).
+/// It lasts until the main window's next pass starts.
 fn copied_in_window_id() -> egui::Id {
     egui::Id::unique("labels-copied-in-window")
 }
@@ -71,11 +72,21 @@ impl egui::Plugin for CopyAfterLabels {
         "CopyAfterLabels"
     }
 
+    /// The windows of their own run their passes inside the main window's pass, and their Copy or
+    /// Cut is sent on in that pass: a copy noted before it is not theirs.
+    fn on_begin_pass(&mut self, ui: &mut egui::Ui) {
+        if ui.ctx().viewport_id() == egui::ViewportId::ROOT {
+            take_copied_in_window(ui.ctx());
+        }
+    }
+
     fn on_end_pass(&mut self, ui: &mut egui::Ui) {
         let ctx = ui.ctx();
         let copied = ctx.output(|o| o.commands.iter().any(|c| matches!(c, egui::OutputCommand::CopyText(_))));
+        // A field with the keyboard copies its own text, and its window sends nothing on.
         if ctx.viewport_id() != egui::ViewportId::ROOT
             && copied
+            && ctx.memory(|m| m.focused().is_none())
             && ctx.input(|i| i.events.iter().any(|e| matches!(e, egui::Event::Copy | egui::Event::Cut)))
         {
             ctx.data_mut(|d| d.insert_temp(copied_in_window_id(), true));

@@ -808,7 +808,7 @@ fn handle_clipboard(app: &mut VectorcraftApp, ctx: &egui::Context, textless_past
     // sent them on (a floating document's): those copy the art. The menu bar's Copy and Cut have
     // left theirs to the labels already.
     let mut clip = vec![];
-    let forwarded = app.forwarded_frame && ctx.viewport_id() == egui::ViewportId::ROOT;
+    let forwarded = app.forwarded_clipboard && ctx.viewport_id() == egui::ViewportId::ROOT;
     let to_labels =
         |e: egui::Event, id| ctx.input(|i| i.events.contains(&e)) && (left_to_labels(ctx) == Some(id) || (!forwarded && leave_to_labels(ctx, id)));
     let (labels_copy, labels_cut) = (to_labels(egui::Event::Copy, "edit.copy"), to_labels(egui::Event::Cut, "edit.cut"));

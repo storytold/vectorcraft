@@ -214,6 +214,7 @@ impl VectorcraftApp {
             raw.events.insert(0, egui::Event::ModifiersChanged(self.host_modifiers));
         }
         self.forwarded_frame = !self.forwarded.is_empty();
+        self.forwarded_clipboard = self.forwarded.iter().any(|e| matches!(e, egui::Event::Copy | egui::Event::Cut));
         if !self.forwarded.is_empty() {
             if let Some(m) = self.forwarded_modifiers.take() {
                 raw.events.push(egui::Event::ModifiersChanged(m));
