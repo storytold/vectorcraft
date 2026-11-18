@@ -458,6 +458,12 @@ impl Tool for PenTool {
             _ => vec![],
         }
     }
+    /// Choosing the Pen again (P, its toolbar button, `tool.select`) ends the path being drawn as
+    /// Escape does: the path stays open, the Pen stays chosen, and the next click starts a new
+    /// path. With no path being drawn it changes nothing.
+    fn chosen_again(&mut self, cx: &ToolContext) -> Vec<Action> {
+        self.deactivate(cx)
+    }
     /// A dropped press drops only the anchor it was placing, a handle it was dragging or the
     /// close it was making: the path being drawn goes on with the next click.
     fn drop_press(&mut self, _cx: &ToolContext) -> Vec<Action> {
