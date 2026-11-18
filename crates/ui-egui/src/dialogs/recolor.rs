@@ -3619,13 +3619,17 @@ mod tests {
         let undo = undo_len(&app);
         let d = app.ui.dialog.as_mut().unwrap();
         let mut rs = super::rows(d);
-        rs[0]["to"] = json!("rgb 0 0 0");
+        let row_of = |rs: &[Value], hex: &str| rs.iter().position(|r| super::from_colors(r).iter().any(|c| c.to_hex() == hex)).unwrap();
+        let red_row = row_of(&rs, "#ff0000");
+        rs[red_row]["to"] = json!("rgb 0 0 0");
+        let blue_to = super::to_color(&rs[row_of(&rs, "#0000ff")]).unwrap().to_hex();
         d.fields.insert("rows".into(), Value::Array(rs));
         frame(&mut app, &ctx, 0.1, vec![], 0);
         assert!(app.session.in_interaction(), "the art previews");
         let previewed = app.session.doc().unwrap().doc.swatch_groups.iter().find(|g| g.name == "Mixed").map(|g| g.swatches.clone());
         assert_eq!(previewed.as_ref().map(Vec::len), Some(3), "the preview's rewrite of the group keeps its other swatch");
         assert_eq!(previewed.and_then(|s| s.last().cloned()), Some(fade_swatch()), "with its paint");
+        assert_eq!(group_hex(&app, "Mixed"), Some(vec!["#000000".into(), blue_to]), "each color swatch takes its row's new color");
         let refused: Result<(), String> = Err("color group `Mixed` holds swatches that are not colors, which Save Changes can't keep".into());
         assert_eq!(act(&mut app, &ctx, 0.2, "save"), refused);
         crate::dialogs::cancel(&mut app);
