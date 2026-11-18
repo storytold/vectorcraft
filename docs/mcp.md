@@ -5419,8 +5419,9 @@ and `layerRows`, the rows highlighted in the panel.
   inside it); a row never goes into itself or a row inside it, and a locked layer or group takes nothing. Dragging the
   selected-art square is `layer.move` with the selected objects. `node.move {id, parent?, index}` is the low-level
   form with the same nesting rules; unlike `layer.move`, it also moves a row into a locked layer or group.
-- **Buttons**: `layer.new {name?, top?, below?, …options}` (above the current layer at its level; `top` with
-  Ctrl/Cmd; `below`, directly below the current layer at its level, with Ctrl/Cmd+Alt),
+- **Buttons**: `layer.new {name?, top?, below?, …options}` (above the current layer at its level, or directly
+  below it in Draw Behind; `top` with Ctrl/Cmd; `below`, directly below the current layer at its level, with
+  Ctrl/Cmd+Alt; `top` and `below` apply in every drawing mode),
   `layer.newSublayer {parent?, bottom?, name?, …options}` (on top of the parent's contents; `bottom`, under them but
   above a clipping layer's clipping path, with Ctrl/Cmd+Alt; both refused while an opacity mask is edited),
   `layer.delete {ids?}` (rows with what they hold; the
