@@ -480,6 +480,7 @@ registry! {
     RenameArtboards: [rename_artboards::KIND] => rename_artboards::SPEC,
     PathToolOptions: [crate::addons::pathtools::KIND] => crate::addons::pathtools::OPTIONS_SPEC,
     DivideDashes: [crate::addons::pathtools::dashes::KIND] => crate::addons::pathtools::dashes::SPEC,
+    SmoothBridge: [crate::addons::pathtools::bridge::KIND] => crate::addons::pathtools::bridge::SPEC,
     TangentCircle: [crate::addons::pathtools::tangent_circle::KIND] => crate::addons::pathtools::tangent_circle::SPEC,
     SetCorners: [crate::addons::pathtools::set_corners::KIND] => crate::addons::pathtools::set_corners::SPEC,
     NearestSwatch: [crate::addons::color::nearest::KIND] => crate::addons::color::nearest::SPEC,
@@ -548,8 +549,8 @@ fn hidden_controls(d: &Dialog) -> &'static [&'static str] {
         }
         // The selected rows and Randomize's seed.
         Some(DialogKind::Recolor) => &["__seed", "__sel"],
-        // The view, zoom, download speed, selected color table entry and the preset name being typed.
-        Some(DialogKind::SaveForWeb) => &["__color", "__kbps", "__presetName", "__view", "__zoom"],
+        // The view, zoom, download speed, selected color table entries and the preset name being typed.
+        Some(DialogKind::SaveForWeb) => &["__color", "__colors", "__kbps", "__presetName", "__view", "__zoom"],
         // The link that keeps width and height in proportion.
         Some(DialogKind::Shape | DialogKind::TransformEach) => &["__constrain"],
         // The attention filter, the Keys section, the search text and the key being recorded.
@@ -601,7 +602,8 @@ pub fn accepts_field(d: &Dialog, field: &str) -> bool {
 /// Options setting set this way for several rows is sent to every row (Template also sets Lock
 /// and Dim Images, as its checkbox does). A DXF Options preset set this way sets its fields, as
 /// one picked from its menu does, and the preset it shows follows the DXF options set this way.
-/// A Graph Data Column Width set this way sets every column, as Cell Style's does.
+/// A Graph Data Column Width set this way sets every column, as Cell Style's does. An Import PDF
+/// `allPages` set this way to the other pick sets Import PDF pages as links back to its default.
 pub fn set_field(d: &mut Dialog, field: String, value: Value) {
     if d.kind == brush_options::KIND {
         brush_art_options::note_set(d, &field);
@@ -611,6 +613,9 @@ pub fn set_field(d: &mut Dialog, field: String, value: Value) {
     }
     if d.kind == layer_options::KIND {
         layer_options::note_set(d, &field, &value);
+    }
+    if d.kind == import_pdf::KIND {
+        import_pdf::note_set(d, &field, &value);
     }
     if d.kind == "preferences" {
         crate::prefs_dialog::note_set(d, &field, &value);
@@ -647,6 +652,16 @@ pub fn field_names(d: &Dialog) -> Vec<String> {
 fn run_and_close(app: &mut VectorcraftApp, id: &str, params: Value) -> DialogResult {
     let r = app.run(id, params);
     app.ui.dialog = None;
+    r
+}
+
+/// Set a tool's options with `tool.setOption` (`params`) and close the dialog; when the tool
+/// refuses one of them, nothing is set and the dialog stays open.
+fn set_tool_options_and_close(app: &mut VectorcraftApp, params: Value) -> DialogResult {
+    let r = app.run("tool.setOption", params);
+    if r.is_ok() {
+        app.ui.dialog = None;
+    }
     r
 }
 
@@ -1015,6 +1030,8 @@ mod tests_plugin_fields;
 mod tests_plugin_import;
 #[cfg(test)]
 mod tests_raster_formats;
+#[cfg(test)]
+mod tests_raster_supplied_options;
 #[cfg(test)]
 mod tests_svg_options_range;
 

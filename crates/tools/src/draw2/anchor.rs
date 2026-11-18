@@ -168,7 +168,7 @@ impl AnchorTool {
             | State::SpineHandle { id, .. }
             | State::Reshape { id, .. } => Some((cx.selection.contains(id), cx.doc.index_path(id))),
         };
-        for (id, path) in crate::direct::spines(cx).into_iter().filter(|(id, _)| cx.selection.contains(*id)) {
+        for (id, path) in crate::direct::selected_spines(cx) {
             let candidate = if let Some((ai, out)) = Self::spine_handle(cx, &path, p, point) {
                 State::SpineHandle { id, ai, out, start: p, began: false }
             } else if let Some(ai) = Self::spine_point(&path, p, point) {
@@ -192,7 +192,7 @@ impl AnchorTool {
     /// tool switch. Show the handles on selected blends so they stay editable.
     fn spine_overlays(cx: &ToolContext) -> Vec<Overlay> {
         let mut out = vec![];
-        for (id, path) in crate::direct::spines(cx).into_iter().filter(|(id, _)| cx.selection.contains(*id)) {
+        for (id, path) in crate::direct::selected_spines(cx) {
             let anchors: Vec<_> = path.anchors().filter(|(si, _, _)| *si == 0).collect();
             if !cx.handles_multiple && anchors.len() > 1 {
                 continue;

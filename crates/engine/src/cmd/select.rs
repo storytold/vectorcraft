@@ -375,6 +375,59 @@ fn is_selectable_within(d: &Document, iso: Option<NodeId>, locks: Option<&Locked
     }
 }
 
+/// The object Next Object Above (`dir` > 0) or Next Object Below selects from `cur`: the nearest
+/// sibling of `cur` in that direction that [`walk_selectable`] visits. Hidden and locked objects
+/// and sublayers are passed over. Only the siblings are read, not the rest of the document.
+fn step_target(d: &Document, iso: Option<NodeId>, cur: NodeId, dir: i64) -> Option<NodeId> {
+    let path = d.index_path(cur)?;
+    let (&idx, up) = path.split_last()?;
+    // The objects that hold `cur` and its siblings, from the top-level layer down.
+    let mut holders = Vec::with_capacity(up.len());
+    let mut siblings = &d.layers;
+    for &i in up {
+        let n = siblings.get(i)?;
+        holders.push(n.as_ref());
+        siblings = n.children()?;
+    }
+    let iso = iso.and_then(|i| d.node(i));
+    let locks = d.locked_artboards();
+    let visits = |n: &Node| walk_visits(&holders, n, iso, &locks);
+    let next = if dir > 0 { siblings.iter().skip(idx + 1).find(|n| visits(n)) } else { siblings.iter().take(idx).rev().find(|n| visits(n)) };
+    next.map(|n| n.id)
+}
+
+/// Whether [`walk_selectable`] visits `n`, read from the objects that hold it: `holders` are its
+/// layer and the sublayers, groups and other containers inside it that hold `n`, outermost first
+/// (its [`Document::ancestry`] without `n`). `iso` is the isolated object. Unlike
+/// [`is_selectable`], it passes over sublayers and the ruler guides of a layer, which the walk
+/// looks through or leaves out.
+fn walk_visits(holders: &[&Node], n: &Node, iso: Option<&Node>, locks: &LockedArtboards) -> bool {
+    let len = holders.len() + 1;
+    let at = |i: usize| holders.get(i).copied().unwrap_or(n);
+    let open = |i: usize| at(i).visible && !at(i).locked;
+    let start = match iso {
+        Some(c) => {
+            let Some(p) = (0..len).find(|&i| at(i).id == c.id) else { return false };
+            if !(0..=p).all(|i| open(i) && !at(i).is_template()) {
+                return false;
+            }
+            // A single object isolated is all there is to select.
+            if !c.is_container() {
+                return p + 1 == len;
+            }
+            p + 1
+        }
+        None => 0,
+    };
+    // The object Select All takes: the first one that is not a layer, inside visible, unlocked
+    // layers and sublayers that are not template layers.
+    let Some(top) = (start..len).find(|&i| !at(i).is_layer()) else { return false };
+    (start..top).all(|i| open(i) && !at(i).is_template())
+        && !at(top).is_ruler_guide()
+        && (top..len).all(open)
+        && (iso.is_some() || locks.is_empty() || !locks.holds(at(top)))
+}
+
 /// The first selected object, in selection order, that [`is_selectable`] accepts.
 pub(crate) fn first_selectable(st: &DocState) -> Option<&Node> {
     let locks = st.doc.locked_artboards();
@@ -475,17 +528,7 @@ fn inverse(s: &mut Session, _: &Value) -> Result<Value> {
 fn step(s: &mut Session, dir: i64) -> Result<Value> {
     let st = s.doc()?;
     let Some(cur) = st.selection.objects.first().copied() else { return ok() };
-    let Some((par, idx, _)) = st.doc.position(cur) else { return ok() };
-    let Some(siblings) = st.doc.children(par) else { return ok() };
-    // The nearest sibling in that direction that `walk_selectable` visits: hidden and locked
-    // objects and sublayers are passed over.
-    let can = selectable_ids(&st.doc, st.isolation);
-    let next = if dir > 0 {
-        siblings.iter().skip(idx + 1).find(|n| can.contains(&n.id))
-    } else {
-        siblings.iter().take(idx).rev().find(|n| can.contains(&n.id))
-    };
-    let Some(id) = next.map(|n| n.id) else { return ok() };
+    let Some(id) = step_target(&st.doc, st.isolation, cur, dir) else { return ok() };
     s.select(|_, sel| sel.set([id]))?;
     ok()
 }
@@ -1398,6 +1441,9 @@ fn not_pixel_aligned(s: &mut Session, _: &Value) -> Result<Value> {
 
 #[cfg(test)]
 mod same_tests;
+
+#[cfg(test)]
+mod step_tests;
 
 #[cfg(test)]
 mod tests;
