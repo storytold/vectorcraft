@@ -98,6 +98,7 @@ impl Session {
             scripts_dir: None,
             metadata_templates_dir: None,
             new_doc_profile_dir: None,
+            script_data_dir: None,
             plugin_output: None,
             plugin_install_approval: None,
             plugin_grants_from_requests: false,

@@ -1,6 +1,6 @@
 //! Object menu long tail: Lock/Hide All Artwork Above & Other Layers, Transform Each, Reset
-//! Bounding Box, Rasterize, Crop Image, Mask (an image), Create Trim Marks, Convert to Shape and
-//! Artboards → Convert / Rearrange. (Live blends are in `live.rs`.)
+//! Bounding Box, Rotate Bounding Box, Rasterize, Crop Image, Mask (an image), Create Trim Marks,
+//! Convert to Shape and Artboards → Convert / Rearrange. (Live blends are in `live.rs`.)
 
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::sync::Arc;
@@ -15,8 +15,8 @@ use vectorcraft_render::encode::{RasterExportOptions, RasterFormat};
 
 use super::edit::{duplicate_in, selected_roots, selected_roots_to_transform};
 use super::{
-    CommandSpec, EngineError, Result, Session, bad, check_numbers, check_switches, cmd, f64_or, fileio, find_command, has_doc, has_selected_member,
-    has_selection, switch_or,
+    CommandSpec, EngineError, Result, Session, bad, check_numbers, check_switches, cmd, f64_or, f64_req, fileio, find_command, has_doc,
+    has_selected_member, has_selection, switch_or,
 };
 
 /// Session-level (not saved) state owned by the menu commands.
@@ -109,6 +109,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{} square the bounding box of the selected objects, and of every object inside them (the children of groups, compound paths, clip groups, blends, envelopes, repeats and intertwines, and the art of linked opacity masks), to the page again after a rotation (their geometry stays; one undo step, none when no box is rotated) → {changed: objects reset, the objects inside included}",
             has_selection,
             reset_bounding_box
+        ),
+        cmd!(
+            "object.rotateBoundingBox",
+            "Rotate Bounding Box…",
+            ["Object", "Transform"],
+            None,
+            "{angle: degrees (counter-clockwise), absolute?: bool (true: turn the box to angle; default false: turn it by angle from the angle the selected objects share, 0 when theirs differ)} turn the bounding box of the selected objects to one angle without moving their art; the objects inside them (the children of groups, compound paths, clip groups, blends, envelopes, repeats and intertwines, and the art of linked opacity masks) turn with them and keep their angle relative to them; a path of a compound path selected on its own turns only its own box; one undo step, none when every box is already at the angle; object.resetBoundingBox squares the boxes again; a missing or non-numeric angle is an error → {angle: the new angle of the boxes, in (-180, 180], changed: objects whose box turned, the objects inside the selected ones included}",
+            has_selection,
+            rotate_bounding_box
         ),
         cmd!(
             "object.rasterize",
@@ -225,9 +234,10 @@ pub(crate) fn squash(s: &mut Session, from: usize, label: &str) {
 // ---------- Reset Bounding Box ----------
 
 /// Squares each selected object and every object inside it: the children of groups, compound paths,
-/// clip groups, blends, envelopes, repeats and intertwines, and the art of linked opacity masks.
+/// clip groups, blends, envelopes, repeats and intertwines, and the art of linked opacity masks. A
+/// path of a compound path selected on its own is squared alone, as the transforms move it alone.
 fn reset_bounding_box(s: &mut Session, _: &Value) -> Result<Value> {
-    let ids = selected_roots(s)?;
+    let ids = selected_roots_to_transform(s)?;
     let d = &s.doc()?.doc;
     let mut changed = 0;
     let squared: Vec<(NodeId, Node)> = ids
@@ -249,6 +259,69 @@ fn reset_bounding_box(s: &mut Session, _: &Value) -> Result<Value> {
         })?;
     }
     Ok(json!({ "changed": changed }))
+}
+
+// ---------- Rotate Bounding Box ----------
+
+/// Turns the bounding box of the selected objects to one angle without moving their art: by `angle`
+/// from the angle they share (0 when it differs), or to `angle` with `absolute`. Each object's box
+/// turns by what takes it there, and so do the boxes of the objects inside it (the children of
+/// groups and the art of linked opacity masks), which keep their angle relative to it.
+fn rotate_bounding_box(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "object.rotateBoundingBox";
+    // A JSON number is always finite.
+    let angle = f64_req(p, "angle", C)?;
+    let absolute = switch_or(p, "absolute", false, C)?;
+    // The same objects the transforms move: a path of a compound path selected on its own turns
+    // its own box. Layers are left out, as they have no box.
+    let owners = selected_roots_to_transform(s)?;
+    let d = &s.doc()?.doc;
+    let start = if absolute { 0.0 } else { d.bbox_angle(&owners) };
+    // An angle within the tolerance of 0 is stored as 0, as `Node::turn_boxes` stores it.
+    let target = match vectorcraft_geom::normalize_deg(start + angle) {
+        a if a.abs() <= BOX_EPS_DEG => 0.0,
+        a => a,
+    };
+    let mut changed = 0;
+    let turned: Vec<(NodeId, Node)> = owners
+        .iter()
+        .filter_map(|id| {
+            let n = d.node(*id)?;
+            let by = vectorcraft_geom::normalize_deg(target - n.bbox_angle);
+            (by.abs() > BOX_EPS_DEG).then(|| {
+                let mut c = n.clone();
+                c.turn_boxes(by);
+                // The selected object's box is set to the target itself, so repeated turns add no
+                // rounding error to it.
+                c.bbox_angle = target;
+                changed += boxes(&c);
+                (*id, c)
+            })
+        })
+        .collect();
+    if !turned.is_empty() {
+        s.edit("Rotate Bounding Box", |d, _| {
+            for (id, n) in turned {
+                if let Some(slot) = d.node_mut(id) {
+                    *slot = n;
+                }
+            }
+            Ok(())
+        })?;
+    }
+    Ok(json!({ "angle": target, "changed": changed }))
+}
+
+/// Angles closer than this (degrees) are the same, as `vectorcraft_doc::orient` compares them.
+const BOX_EPS_DEG: f64 = 1e-6;
+
+/// The number of objects in `n`'s subtree whose box [`Node::turn_boxes`] turns: `n`, its children
+/// and the art of a linked opacity mask, layers left out.
+fn boxes(n: &Node) -> usize {
+    let own = usize::from(!n.is_layer());
+    let children: usize = n.children().into_iter().flatten().map(|c| boxes(c)).sum();
+    let mask = n.extras().mask.as_ref().filter(|m| m.linked).map_or(0, |m| boxes(&m.art));
+    own + children + mask
 }
 
 /// A copy of `n` with the angle of every object in its subtree set to 0, or `None` when no box in
@@ -719,10 +792,16 @@ fn cmyk_raster(
     if alpha.iter().all(|&a| a == 255) {
         return Ok((blob, None));
     }
-    let mask = image::GrayImage::from_raw(img.width, img.height, alpha)
-        .ok_or_else(|| EngineError::Other("the image's transparency doesn't fit it".into()))?;
-    let mut png = Vec::new();
-    mask.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).map_err(|e| EngineError::Other(e.to_string()))?;
+    let mask = craft_image_codecs::Image::from_raw(
+        img.width,
+        img.height,
+        craft_image_codecs::ChannelLayout::Gray,
+        craft_image_codecs::SampleType::U8,
+        alpha,
+    )
+    .map_err(|_| EngineError::Other("the image's transparency doesn't fit it".into()))?;
+    let png = craft_image_codecs::encode(&mask, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+        .map_err(|e| EngineError::Other(e.to_string()))?;
     Ok((blob, Some(png)))
 }
 
@@ -1072,9 +1151,16 @@ pub(crate) fn check_resample_size(sw: u32, sh: u32, w: u32, h: u32) -> Result<()
 
 /// `img` as PNG bytes.
 fn encode_png(img: &image::RgbaImage) -> Result<Vec<u8>> {
-    let mut png = Vec::new();
-    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).map_err(|e| bad("object.cropImage", e.to_string()))?;
-    Ok(png)
+    let fail = |e: craft_image_codecs::CodecError| bad("object.cropImage", e.to_string());
+    let raw = craft_image_codecs::Image::from_raw(
+        img.width(),
+        img.height(),
+        craft_image_codecs::ChannelLayout::Rgba,
+        craft_image_codecs::SampleType::U8,
+        img.as_raw().clone(),
+    )
+    .map_err(fail)?;
+    craft_image_codecs::encode(&raw, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).map_err(fail)
 }
 
 fn crop_image(s: &mut Session, p: &Value) -> Result<Value> {
@@ -1221,22 +1307,24 @@ fn crop_image(s: &mut Session, p: &Value) -> Result<Value> {
 /// The image's pixels as RGBA, held to the allowance opening a raster has.
 fn decode_rgba(c: &str, blob: &vectorcraft_doc::ImageBlob) -> Result<image::RgbaImage> {
     // Print rasters run to gigabytes decoded: the same allowance opening them has.
-    let reader = || {
-        image::ImageReader::new(std::io::Cursor::new(blob.bytes.as_slice()))
-            .with_guessed_format()
-            .map_err(|_| bad(c, "the image's pixels can't be read"))
-    };
     // The image's size as RGBA, read from its header, is held to that allowance before anything
     // is decoded (#1717).
-    let (w, h) = reader()?.into_dimensions().map_err(|e| bad(c, format!("the image's pixels can't be read: {e}")))?;
-    if u64::from(w) * u64::from(h) > crate::cmd::fileio::MAX_RASTER_ALLOC / 4 {
+    let header = vectorcraft_doc::header_size(&blob.bytes);
+    if let Some((w, h)) = header
+        && u64::from(w) * u64::from(h) > crate::cmd::fileio::MAX_RASTER_ALLOC / 4
+    {
         return Err(bad(c, format!("an image of {w} × {h} pixels is too large to draw")));
     }
-    let mut reader = reader()?;
-    let mut limits = image::Limits::default();
-    limits.max_alloc = Some(crate::cmd::fileio::MAX_RASTER_ALLOC);
-    reader.limits(limits);
-    Ok(reader.decode().map_err(|e| bad(c, format!("the image's pixels can't be read: {e}")))?.to_rgba8())
+    let mut opts = craft_image_codecs::DecodeOptions::default();
+    opts.limits.max_pixels = crate::cmd::fileio::MAX_RASTER_ALLOC / 4;
+    opts.limits.max_alloc = crate::cmd::fileio::MAX_RASTER_ALLOC;
+    let img = craft_image_codecs::decode_with(&blob.bytes, &opts).map_err(|e| match e {
+        // Within the allowance from its header: a file that can't hold the pixels it declares.
+        craft_image_codecs::CodecError::LimitExceeded(_) if header.is_none() => bad(c, "the image is too large to draw"),
+        _ => bad(c, format!("the image's pixels can't be read: {e}")),
+    })?;
+    let (w, h) = img.dimensions();
+    image::RgbaImage::from_raw(w, h, img.to_rgba8()).ok_or_else(|| bad(c, "the image's pixels can't be read"))
 }
 
 /// Crop Image's trim: the image cut to the box of its pixels that aren't fully transparent, the
@@ -1265,9 +1353,12 @@ fn trim_image(s: &mut Session, id: NodeId, im: ImageObject) -> Result<Value> {
         return Ok(json!({ "id": id.0, "width": w, "height": h, "trimmed": false }));
     }
     let cut = image::imageops::crop_imm(&px, x0, y0, x1 - x0, y1 - y0).to_image();
-    let mut png = Vec::new();
-    cut.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).map_err(|e| bad(C, e.to_string()))?;
     let (cw, ch) = (x1 - x0, y1 - y0);
+    let raw =
+        craft_image_codecs::Image::from_raw(cw, ch, craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, cut.into_raw())
+            .map_err(|e| bad(C, e.to_string()))?;
+    let png = craft_image_codecs::encode(&raw, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+        .map_err(|e| bad(C, e.to_string()))?;
     put_pixels(s, id, png, cw, ch, im.xf * Affine::translate((f64::from(x0), f64::from(y0))))?;
     Ok(json!({ "id": id.0, "width": cw, "height": ch, "trimmed": true }))
 }

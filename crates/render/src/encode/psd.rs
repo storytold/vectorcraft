@@ -1,14 +1,15 @@
 //! PSD export: a layered bitmap at 8 bits per channel, written from the format's public
-//! specification. The file holds the header, the resolution and colour profile resources, the
-//! layer records and their channels (PackBits row by row; groups as section dividers), then the
+//! specification. The file holds the header, the resolution, colour profile and slices resources,
+//! the layer records and their channels (PackBits row by row; groups as section dividers), then the
 //! merged image, which readers that skip layers show. RGB, CMYK (stored as 255 − ink, as the
 //! format keeps inks) or grayscale.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use vectorcraft_color::{BlendMode, cms};
 use vectorcraft_doc::text::TypeAntiAlias;
-use vectorcraft_doc::{Document, Knockout, LayerColor, Node, NodeKind};
+use vectorcraft_doc::{Document, Knockout, LayerColor, Node, NodeId, NodeKind, SliceKind, SliceOptions, SliceSource};
 use vectorcraft_geom::{Point, Rect};
 
 use super::jpeg::{self, ColorModel};
@@ -302,6 +303,8 @@ struct File {
     records: Vec<Record>,
     ppi: f64,
     icc: Option<Arc<[u8]>>,
+    /// Image resource 1050's data, when the file has slices.
+    slices: Option<Vec<u8>>,
 }
 
 /// Refuse a size the format can't store.
@@ -332,7 +335,8 @@ impl File {
         out.extend(mode(self.model).to_be_bytes());
         // No colour mode data.
         out.extend(0u32.to_be_bytes());
-        // Image resources: the resolution (16.16 fixed point, pixels per inch shown in inches), the profile.
+        // Image resources: the resolution (16.16 fixed point, pixels per inch shown in inches), the
+        // profile, the slices.
         let ppi = if self.ppi.is_finite() && self.ppi > 0.0 { self.ppi } else { 72.0 };
         let fixed = (ppi.min(30_000.0) * 65536.0).round() as u32;
         let res = [fixed.to_be_bytes(), [0, 1, 0, 1], fixed.to_be_bytes(), [0, 1, 0, 1]].concat();
@@ -340,6 +344,9 @@ impl File {
         resource(&mut resources, 1005, &res)?;
         if let Some(icc) = &self.icc {
             resource(&mut resources, 1039, icc)?;
+        }
+        if let Some(slices) = &self.slices {
+            resource(&mut resources, SLICES, slices)?;
         }
         out.extend(len32(resources.len())?.to_be_bytes());
         out.extend(resources);
@@ -390,17 +397,20 @@ fn icc(o: &PsdOptions) -> Result<Option<Arc<[u8]>>, String> {
 pub fn encode(img: &Rendered, ppi: f64, o: &PsdOptions) -> Result<Vec<u8>, String> {
     let inks = (o.color_model == ColorModel::Cmyk).then(|| jpeg::separated(img));
     let merged = planes(o.color_model, &img.to_straight(), inks.as_deref(), true, false);
-    File { width: img.width, height: img.height, model: o.color_model, merged, alpha: false, records: vec![], ppi, icc: icc(o)? }.write()
+    File { width: img.width, height: img.height, model: o.color_model, merged, alpha: false, records: vec![], ppi, icc: icc(o)?, slices: None }
+        .write()
 }
 
 /// `region` of `doc` as a PSD with `opts` (see [`PsdOptions`]). The merged image is the export's
 /// render; with Write Layers each part is also drawn alone as its own layer, cropped to what it
-/// paints, its opacity and blend mode in the layer's record.
+/// paints, its opacity and blend mode in the layer's record. The user and object slices that reach
+/// into `region` are written with or without layers ([`slices`]).
 pub(crate) fn export(r: &mut Renderer, doc: &Document, region: Rect, opts: &RasterExportOptions) -> Result<Vec<u8>, String> {
     let o = &opts.psd;
     let scale = opts.scale();
     let (width, height) = crate::region_pixels(region, scale);
     check_size(width, height)?;
+    let slices = slices(doc, region, scale, (width, height))?;
     let ro = opts.render_options(RasterFormat::Psd);
     let (mut merged, mut alpha) = {
         let px = r.render_region_with(doc, region, scale, &ro).to_straight();
@@ -426,7 +436,156 @@ pub(crate) fn export(r: &mut Renderer, doc: &Document, region: Rect, opts: &Rast
         merged.pop();
         alpha = false;
     }
-    File { width, height, model: o.color_model, merged, alpha, records, ppi: opts.ppi, icc: icc(o)? }.write()
+    File { width, height, model: o.color_model, merged, alpha, records, ppi: opts.ppi, icc: icc(o)?, slices }.write()
+}
+
+/// The image resource that holds the slices.
+const SLICES: u16 = 1050;
+
+/// The most slices one file holds (as many as `document.open` reads).
+pub(crate) const MAX_SLICES: usize = 10_000;
+
+/// The longest text of a slice, in UTF-16 units (as long as `document.open` reads).
+pub(crate) const MAX_SLICE_TEXT: usize = 65_536;
+
+/// Resource 1050's data for the user and object slices of `doc` that reach into `region`, in the
+/// "Slices resource format" of the Photoshop File Formats Specification
+/// (<https://www.adobe.com/devnet-apps/photoshop/fileformatashtml/>), version 6: the bounds of all
+/// the slices, the group's name, the count, then one record per slice. `None` when no slice
+/// reaches into `region`. Each rectangle is the slice as laid out ([`Document::slice_layout`]),
+/// clipped to `region` and given in the `size` canvas's pixels at `scale`, at least one pixel
+/// each way. Every slice is written as one the user made (origin 2): an object slice keeps its
+/// rectangle and options. Auto slices aren't written; a reader lays them out again. An HTML Text
+/// slice is written as No Image with its type's text as HTML. Text alignment is written as the
+/// default. An error when a slice's bounds aren't finite, or there are more than [`MAX_SLICES`]
+/// slices, a text longer than [`MAX_SLICE_TEXT`], or more than 4 GB of slices ([`room`]).
+fn slices(doc: &Document, region: Rect, scale: f64, (w, h): (u32, u32)) -> Result<Option<Vec<u8>>, String> {
+    let users: HashMap<NodeId, &SliceOptions> = doc.slices.iter().map(|s| (s.id, &s.options)).collect();
+    let mut found = vec![];
+    for area in doc.slice_layout().iter().filter(|a| a.source != SliceSource::Auto) {
+        let Some(id) = area.id else { continue };
+        let r = area.rect;
+        if ![r.x0, r.y0, r.x1, r.y1].iter().all(|v| v.is_finite()) {
+            let number = area.number;
+            return Err(format!("slice {number} has no finite bounds and can't be written to PSD"));
+        }
+        let Some(options) = users.get(&id).copied().or_else(|| doc.slice_options(id)) else { continue };
+        // The part inside `region`, found before the region is rounded to whole pixels.
+        let (x0, y0, x1, y1) = (r.x0.max(region.x0), r.y0.max(region.y0), r.x1.min(region.x1), r.y1.min(region.y1));
+        if !(x0 < x1 && y0 < y1) {
+            continue;
+        }
+        let edge = |v: f64, origin: f64, max: u32| ((v - origin) * scale).clamp(0.0, f64::from(max));
+        let (l, t, r, b) = (edge(x0, region.x0, w), edge(y0, region.y0, h), edge(x1, region.x0, w), edge(y1, region.y0, h));
+        // Whole pixels, at least one each way.
+        let span = |a: f64, b: f64, max: u32| {
+            let max = i64::from(max);
+            let (mut a, mut b) = ((a.round() as i64).clamp(0, max), (b.round() as i64).clamp(0, max));
+            if b <= a {
+                a = a.min(max - 1);
+                b = a + 1;
+            }
+            (a as i32, b as i32)
+        };
+        let ((l, r), (t, b)) = (span(l, r, w), span(t, b, h));
+        let text = match options.kind {
+            SliceKind::HtmlText => doc.node(id).map(html_text).unwrap_or_default(),
+            _ => options.text.clone(),
+        };
+        found.push(([l, t, r, b], options, text));
+    }
+    if found.is_empty() {
+        return Ok(None);
+    }
+    if found.len() > MAX_SLICES {
+        let count = found.len();
+        return Err(format!("the document has {count} slices, more than the {MAX_SLICES} a PSD file holds"));
+    }
+    let (mut top, mut left, mut bottom, mut right) = (i32::MAX, i32::MAX, 0, 0);
+    for ([l, t, r, b], _, _) in &found {
+        (left, top, right, bottom) = (left.min(*l), top.min(*t), right.max(*r), bottom.max(*b));
+    }
+    let mut out = 6u32.to_be_bytes().to_vec();
+    for v in [top, left, bottom, right] {
+        out.extend(v.to_be_bytes());
+    }
+    let stem = doc.title.rsplit_once('.').map_or(doc.title.as_str(), |(s, _)| s);
+    unicode(&mut out, stem)?;
+    out.extend((found.len() as u32).to_be_bytes());
+    // IDs from 1.
+    for ((rect, o, text), id) in found.into_iter().zip(1u32..) {
+        out.extend(id.to_be_bytes());
+        // Group 0; made by the user.
+        out.extend(0u32.to_be_bytes());
+        out.extend(2u32.to_be_bytes());
+        unicode(&mut out, &o.name)?;
+        out.extend(u32::from(o.kind == SliceKind::Image).to_be_bytes());
+        for v in rect {
+            out.extend(v.to_be_bytes());
+        }
+        for s in [&o.url, &o.target, &o.message, &o.alt] {
+            unicode(&mut out, s)?;
+        }
+        // The cell text is HTML, as a No Image slice shows it.
+        out.push(1);
+        unicode(&mut out, &text)?;
+        // The default horizontal and vertical alignment.
+        out.extend([0; 8]);
+        out.extend(background(o));
+    }
+    Ok(Some(out))
+}
+
+/// A slice's background as alpha, red, green and blue: none (all 0), the matte (alpha 0 over a
+/// colour) or an opaque `#rrggbb`.
+fn background(o: &SliceOptions) -> [u8; 4] {
+    let bg = o.background.trim();
+    if bg.eq_ignore_ascii_case("matte") {
+        return [0, 255, 255, 255];
+    }
+    let hex = bg.strip_prefix('#').filter(|h| h.len() == 6 && h.bytes().all(|b| b.is_ascii_hexdigit()));
+    match hex.and_then(|h| u32::from_str_radix(h, 16).ok()) {
+        Some(c) => {
+            let [_, r, g, b] = c.to_be_bytes();
+            [255, r, g, b]
+        }
+        None => [0; 4],
+    }
+}
+
+/// The text of type object `n` as the HTML an HTML Text slice shows: `&`, `<` and `>` escaped, a
+/// line break as `<br>` (CR LF is one break). Empty for anything but type.
+fn html_text(n: &Node) -> String {
+    let NodeKind::Text(t) = &n.kind else { return String::new() };
+    t.plain_text()
+        .replace("\r\n", "\n")
+        .split(['\n', '\r', '\u{2029}'])
+        .map(|l| l.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;"))
+        .collect::<Vec<_>>()
+        .join("<br>")
+}
+
+/// `s` as a Unicode string: a count of UTF-16 units, then the units. An error past
+/// [`MAX_SLICE_TEXT`] units, or when the string would take `out` past [`room`].
+fn unicode(out: &mut Vec<u8>, s: &str) -> Result<(), String> {
+    let units = s.encode_utf16().count();
+    if units > MAX_SLICE_TEXT {
+        return Err(format!("a slice's text has more than the {MAX_SLICE_TEXT} characters a PSD file holds"));
+    }
+    room(out.len(), units)?;
+    out.extend((units as u32).to_be_bytes());
+    out.extend(s.encode_utf16().flat_map(|u| u.to_be_bytes()));
+    Ok(())
+}
+
+/// An error when `units` UTF-16 units and their count, added to a slices resource of `len` bytes,
+/// make it longer than the 4 GB a PSD resource holds.
+pub(crate) fn room(len: usize, units: usize) -> Result<(), String> {
+    let end = units.checked_mul(2).and_then(|n| n.checked_add(4)).and_then(|n| n.checked_add(len));
+    match end.map(u32::try_from) {
+        Some(Ok(_)) => Ok(()),
+        _ => Err("the slices are too large for PSD (at most 4 GB)".into()),
+    }
 }
 
 /// Draws the parts of a document as layer records, bottom first.

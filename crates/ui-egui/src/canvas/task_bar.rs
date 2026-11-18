@@ -22,11 +22,7 @@ pub(crate) fn task_bar_shows_fonts(ctx: &egui::Context) -> bool {
 /// Whether the objects `ids` (or anything inside them) are painted with a colour: a solid colour,
 /// a gradient's stops or a mesh's points, which Recolor Artwork can change.
 pub(crate) fn has_colors(doc: &vectorcraft_doc::Document, ids: &[vectorcraft_doc::NodeId]) -> bool {
-    ids.iter().filter_map(|id| doc.node(*id)).any(|n| {
-        let mut found = false;
-        vectorcraft_doc::swatches::node_colors(n, &mut |_, _| found = true);
-        found
-    })
+    ids.iter().filter_map(|id| doc.node(*id)).any(vectorcraft_doc::swatches::node_has_colors)
 }
 
 /// The bounds of the artboards the Artboard tool has selected ([`crate::panels::artboards::picked`]).

@@ -209,9 +209,11 @@ pub struct ToolContext<'a> {
     /// [`Self::snap_tolerance`].
     pub snap_to_point: bool,
     /// View → Snapping → Snap to Tangent: with Smart Guides on, a line drawn
-    /// from an anchor lands where it touches a nearby curve.
+    /// from an anchor lands where it touches a nearby curve, and a Line Segment
+    /// drag from one convex curved path to another lands on their common tangent.
     pub snap_tangent: bool,
-    /// View → Snapping → Snap to Perpendicular: likewise where it meets a nearby segment square.
+    /// View → Snapping → Snap to Perpendicular: with Smart Guides on, a line drawn from an anchor
+    /// lands where it meets a nearby segment square.
     pub snap_perpendicular: bool,
     /// View → Snap to Glyph: drawn points snap to live-text glyph bounds, and on a single line of type
     /// to its baseline, x-height, character widths and glyph anchor points (with Smart Guides).

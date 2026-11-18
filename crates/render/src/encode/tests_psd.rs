@@ -1,15 +1,16 @@
 //! PSD export: the header, the layer records (names, bounds, opacity, blend modes, groups,
-//! hidden layers), the merged image, the colour models, and a reader's view of the file.
+//! hidden layers), the merged image, the colour models, the slices, and a reader's view of the
+//! file.
 
 use std::sync::Arc;
 
 use vectorcraft_color::{BlendMode, Color};
-use vectorcraft_doc::{Document, LayerColor, Node};
+use vectorcraft_doc::{Document, LayerColor, Node, NodeId, Slice, SliceKind, SliceOptions};
 use vectorcraft_geom::Rect;
 use vectorcraft_testkit::fixtures::DocBuilder;
 
 use super::jpeg::ColorModel;
-use super::psd::{MAX_SIDE, PsdOptions};
+use super::psd::{MAX_SIDE, MAX_SLICE_TEXT, MAX_SLICES, PsdOptions, room};
 use super::*;
 
 /// A 100 × 60 pt document: a red square on Layer 1, and on "Top" a half-opaque blue multiply
@@ -734,4 +735,146 @@ fn long_unicode_name_is_cut_on_a_character_boundary() {
     b.rect(Rect::new(0.0, 0.0, 5.0, 5.0), Color::rgb8(0, 0, 0), |_| {});
     let file = export(&b.build(), &opts(PsdOptions::default()));
     assert_eq!(parse(&file).records.last().unwrap().name, "a".repeat(254));
+}
+
+/// `doc()` with a user slice over (20, 5)–(50, 15) and the red square made an object slice.
+fn sliced() -> Document {
+    let mut d = doc();
+    let red = d.layers[0].children().unwrap()[0].id;
+    let user = SliceOptions {
+        name: "banner".into(),
+        url: "https://example.com/".into(),
+        target: "_blank".into(),
+        message: "Go".into(),
+        alt: "Banner".into(),
+        background: "#123456".into(),
+        ..SliceOptions::default()
+    };
+    let id = d.alloc_id();
+    d.slices.push(Slice { id, rect: Rect::new(20.0, 5.0, 50.0, 15.0), options: user });
+    let cell = SliceOptions { kind: SliceKind::NoImage, text: "<b>Hi</b>".into(), background: "matte".into(), ..SliceOptions::default() };
+    d.node_mut(red).unwrap().extras_mut().slice = Some(Box::new(cell));
+    d
+}
+
+/// The slices resource of `file` as an independent reader reads it.
+fn slices_of(file: &[u8]) -> Option<craft_psd::slices::SlicesResource> {
+    let psd = craft_psd::PsdFile::from_bytes(file).expect("a PSD a reader takes");
+    psd.resource(1050).map(|r| craft_psd::slices::SlicesResource::from_bytes(&r.data).expect("a slices resource a reader takes"))
+}
+
+#[test]
+fn slices_are_written_with_or_without_layers() {
+    let d = sliced();
+    for layers in [true, false] {
+        let file = export(&d, &opts(PsdOptions { layers, ..PsdOptions::default() }));
+        let res = slices_of(&file).expect("the slices resource");
+        assert_eq!((res.version, res.bounds, res.group_name.as_str()), (6, [5, 10, 40, 50], "Untitled-1"));
+        let s = &res.slices;
+        assert_eq!(s.len(), 2, "{s:?}");
+        // Laid out top to bottom: the user slice, then the object slice, both written as made by
+        // the user.
+        let user = &s[0];
+        assert_eq!((user.id, user.origin, user.layer_id, user.kind, user.rect), (1, 2, None, 1, [20, 5, 50, 15]));
+        assert_eq!(
+            (user.name.as_str(), user.url.as_str(), user.target.as_str(), user.message.as_str(), user.alt.as_str()),
+            ("banner", "https://example.com/", "_blank", "Go", "Banner")
+        );
+        assert_eq!(user.color, [255, 0x12, 0x34, 0x56]);
+        let cell = &s[1];
+        assert_eq!((cell.id, cell.origin, cell.kind, cell.rect), (2, 2, 0, [10, 10, 40, 40]));
+        assert_eq!((cell.name.as_str(), cell.cell_text.as_str(), cell.cell_text_is_html), ("", "<b>Hi</b>", true));
+        assert_eq!((cell.color[0], cell.color[1..].iter().any(|c| *c != 0)), (0, true), "the matte");
+        assert_eq!((cell.horizontal_align, cell.vertical_align), (0, 0));
+    }
+    // A document without slices has no slices resource.
+    assert!(slices_of(&export(&doc(), &opts(PsdOptions::default()))).is_none());
+}
+
+#[test]
+fn slices_are_cut_to_the_exported_region_in_its_pixels() {
+    let doc = sliced();
+    // The right part at 2 px a point: the user slice is cut at the region's left edge, and the red
+    // square's slice ends at that edge.
+    let o = RasterExportOptions { ppi: 144.0, ..opts(PsdOptions::default()) };
+    let file = Renderer::new().export_region(&doc, Rect::new(40.0, 0.0, 100.0, 60.0), RasterFormat::Psd, &o).unwrap();
+    let res = slices_of(&file).unwrap();
+    assert_eq!(res.slices.iter().map(|s| s.rect).collect::<Vec<_>>(), [[0, 10, 20, 30]]);
+    assert_eq!(res.bounds, [10, 0, 30, 20]);
+    // A region no slice reaches has none.
+    let file = Renderer::new().export_region(&doc, Rect::new(60.0, 30.0, 100.0, 60.0), RasterFormat::Psd, &o).unwrap();
+    assert!(slices_of(&file).is_none());
+    // A slice thinner than a pixel keeps one pixel.
+    let mut thin = doc.clone();
+    thin.slices[0].rect = Rect::new(20.0, 5.0, 20.2, 15.0);
+    let res = slices_of(&export(&thin, &opts(PsdOptions::default()))).unwrap();
+    assert_eq!(res.slices[0].rect, [20, 5, 21, 15]);
+    // The overlap is found before the region is rounded to whole pixels: a slice inside a region
+    // that ends at 10.4 keeps its last pixel, and one past a region that ends at 10.6 isn't written.
+    let o = opts(PsdOptions::default());
+    let mut edge = doc.clone();
+    edge.slices[0].rect = Rect::new(10.1, 5.0, 10.3, 15.0);
+    edge.node_mut(edge.layers[0].children().unwrap()[0].id).unwrap().extras_mut().slice = None;
+    let file = Renderer::new().export_region(&edge, Rect::new(0.0, 0.0, 10.4, 60.0), RasterFormat::Psd, &o).unwrap();
+    assert_eq!(slices_of(&file).unwrap().slices.iter().map(|s| s.rect).collect::<Vec<_>>(), [[9, 5, 10, 15]]);
+    edge.slices[0].rect = Rect::new(10.7, 5.0, 10.9, 15.0);
+    let file = Renderer::new().export_region(&edge, Rect::new(0.0, 0.0, 10.6, 60.0), RasterFormat::Psd, &o).unwrap();
+    assert!(slices_of(&file).is_none());
+}
+
+#[test]
+fn an_html_text_slice_writes_one_break_for_each_line_ending() {
+    use vectorcraft_doc::{CharStyle, NodeKind, TextObject};
+    use vectorcraft_geom::Point;
+    let mut d = DocBuilder::new(100.0, 60.0).build();
+    let t = TextObject::point(Point::new(10.0, 30.0), "A\r\nB\rC\nD\u{2029}E", CharStyle { size: 12.0, ..CharStyle::default() });
+    let mut n = Node::new(d.alloc_id(), NodeKind::Text(Box::new(t)));
+    n.extras_mut().slice = Some(Box::new(SliceOptions { kind: SliceKind::HtmlText, ..SliceOptions::default() }));
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, n).unwrap();
+    let res = slices_of(&export(&d, &opts(PsdOptions::default()))).unwrap();
+    assert_eq!(res.slices[0].cell_text, "A<br>B<br>C<br>D<br>E");
+}
+
+#[test]
+fn slice_ids_count_from_1_and_the_limits_are_errors() {
+    let mut doc = doc();
+    for i in 0..20 {
+        let id = doc.alloc_id();
+        let x = f64::from(i) * 5.0;
+        doc.slices.push(Slice { id, rect: Rect::new(x, 0.0, x + 5.0, 5.0), options: SliceOptions::default() });
+    }
+    let res = slices_of(&export(&doc, &opts(PsdOptions::default()))).unwrap();
+    let ids: Vec<u32> = res.slices.iter().map(|s| s.id).collect();
+    assert_eq!(ids, (1..=20).collect::<Vec<_>>());
+    let export_err = |d: &Document| {
+        Renderer::new().export_region(d, d.artboards[0].rect, RasterFormat::Psd, &opts(PsdOptions::default())).err().unwrap_or_default()
+    };
+    let mut long = doc.clone();
+    long.slices[0].options.alt = "a".repeat(MAX_SLICE_TEXT + 1);
+    let e = export_err(&long);
+    assert!(e.contains("characters"), "{e}");
+    let mut many = doc.clone();
+    many.slices = (0..=MAX_SLICES as u64)
+        .map(|i| Slice { id: NodeId(1_000_000 + i), rect: Rect::new(0.0, 0.0, 5.0, 5.0), options: SliceOptions::default() })
+        .collect();
+    let e = export_err(&many);
+    assert!(e.contains("slices"), "{e}");
+    // Not clipped to the artboard, a slice keeps bounds that aren't finite.
+    let mut bad = doc;
+    bad.slices_clip_to_artboard = false;
+    bad.slices[0].rect = Rect::new(f64::NAN, 0.0, 5.0, 5.0);
+    let e = export_err(&bad);
+    assert!(e.contains("finite"), "{e}");
+}
+
+#[test]
+fn slices_past_4_gb_are_an_error_before_they_are_written() {
+    let max = u32::MAX as usize;
+    assert_eq!(room(0, MAX_SLICE_TEXT), Ok(()));
+    assert_eq!(room(max - 4 - 2 * 10, 10), Ok(()));
+    let e = room(max - 4 - 2 * 10, 11).err().unwrap_or_default();
+    assert!(e.contains("4 GB"), "{e}");
+    assert!(room(max, 0).is_err());
+    assert!(room(0, usize::MAX).is_err());
 }

@@ -1,4 +1,4 @@
-//! Scrubbing numeric fields (#400, beyond Illustrator; Photoshop's scrubby labels): a horizontal
+//! Scrubbing numeric fields (#400): a horizontal
 //! drag on a numeric field's label (`W:`, `Opacity:`, the Character panel's size icon) steps the
 //! field's value by one unit every [`PX_PER_STEP`] points, ten with Shift and a tenth with
 //! Ctrl/Cmd, as the arrow keys step a focused field; a click on the label focuses the field. A

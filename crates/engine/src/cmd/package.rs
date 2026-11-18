@@ -24,7 +24,7 @@ pub fn specs() -> Vec<CommandSpec> {
         "Package",
         [],
         None,
-        "{folder?, name?: (default: \"<document> Folder\"), copyLinks?: true, linksFolder?: true (the linked files go in Links/, else next to the document), relink?: true (the packaged document links to the copies), copyFonts?: true (the fonts its type uses go in Fonts/; fonts whose licence doesn't allow embedding are left out), report?: true (<document> Report.txt)} copy the saved document as it is now into folder/name as <document>.vectorcraft with its linked files and fonts; the open document doesn't change → {folder, files: [paths relative to folder/name], links, fonts (counts copied), missingLinks: [file names not found], skippedFonts: [{font, reason}], warnings: [nested files copied unchanged or cycles/depth stopped]}; no folder → the same with {name: \"<name>.zip\", dataBase64} (a zip of the files in <name>/) instead of folder. The warnings and the report name a file outside the automation read roots by its file name",
+        "{folder?, name?: (default: \"<document> Folder\"), copyLinks?: true, linksFolder?: true (the linked files go in Links/, else next to the document), relink?: true (the packaged document links to the copies), copyFonts?: true (the fonts its type uses go in Fonts/; fonts whose licence doesn't allow embedding are left out), report?: true (<document> Report.txt)} copy the saved document as it is now into folder/name as <document>.vectorcraft with its linked files and fonts; the open document doesn't change → {folder, files: [paths relative to folder/name], links, fonts (counts copied), missingLinks: [file names not found], skippedFonts: [{font, reason}], warnings: [nested files copied unchanged or cycles/depth stopped]}; no folder → the same with {name: \"<name>.zip\", dataBase64} (a zip of the files in <name>/) instead of folder. The warnings and the report name a file outside the automation read roots by its file name. Under automation read roots, the package is refused, before any file is written, while the document, or a linked native document or a linked PDF, .ai or EPS file's native document, links a JavaScript file outside them (svgInteractivity; a URL is not checked)",
         has_doc,
         package
     )]
@@ -113,6 +113,48 @@ thread_local! {
     pub(crate) static PARTS_READ: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
+/// The native document that the linked file `name` (`bytes`) is, or carries as the editing data of
+/// a PDF, `.ai` or EPS file; `None` for other files and for data that can't be read.
+fn carried_document(name: &str, bytes: &[u8]) -> Option<Document> {
+    if super::place::document::is_native(name, bytes) {
+        return vectorcraft_format::load_file(bytes).ok().map(|f| f.doc);
+    }
+    let data =
+        if super::place::document::is_pdf(name, bytes) { vectorcraft_pdf::editing(bytes).map(|e| e.data) } else { vectorcraft_eps::native(bytes) };
+    vectorcraft_format::load(&data?).ok()
+}
+
+/// Under read roots, the linked file `name` (`bytes`, found at `path`) is copied only when the
+/// native document it is or carries ([`carried_document`]) links no JavaScript file outside them (a
+/// relative path taken from the file's folder): the copy would name it.
+fn check_carried_scripts(name: &str, bytes: &[u8], path: &str) -> Result<()> {
+    if crate::file_access::current().is_none() {
+        return Ok(());
+    }
+    match carried_document(name, bytes) {
+        Some(carried) => super::fileio::check_scripts_of(C, &carried, Some(path), || true),
+        None => Ok(()),
+    }
+}
+
+/// The error for a linked file the package would copy with an Export for Screens folder outside
+/// the read roots in the native document it is or carries.
+const FOLDER_OUTSIDE: &str = "a linked file's export folder is outside the read roots";
+
+/// Under read roots, the linked file `name` (`bytes`, as the package writes it) is copied only when
+/// the native document it is or carries ([`carried_document`]) keeps no Export for Screens folder
+/// outside them: a file copied as it is, a PDF, `.ai` or EPS file or a native document not
+/// rewritten, would name it. The error names no file or folder.
+fn check_carried_folder(name: &str, bytes: &[u8]) -> Result<()> {
+    if crate::file_access::current().is_none() {
+        return Ok(());
+    }
+    match carried_document(name, bytes) {
+        Some(carried) if matches!(super::fileio::with_readable_settings_folder(&carried), std::borrow::Cow::Owned(_)) => Err(bad(C, FOLDER_OUTSIDE)),
+        _ => Ok(()),
+    }
+}
+
 /// The fonts of the type on `pages` of the PDF or `.ai` file `name` (`bytes`, found at `path`);
 /// none for other files.
 fn page_fonts(name: &str, bytes: &[u8], path: &str, pages: &PlacedPages) -> BTreeSet<super::fonts::UsedFont> {
@@ -127,6 +169,20 @@ fn page_fonts(name: &str, bytes: &[u8], path: &str, pages: &PlacedPages) -> BTre
         }
     }
     fonts
+}
+
+/// The document whose links are copied beside the placed file `name` (`bytes`), which is copied
+/// as it is: a `.ai` file's editing data ([`super::place::document::editing_data`]), or the native
+/// document an EPS or PostScript file carries, which placing it reads. `None` for other files and
+/// for data that can't be read.
+fn editing_data(name: &str, bytes: &[u8]) -> Option<Document> {
+    if let Some(doc) = super::place::document::editing_data(name, bytes) {
+        return Some(doc);
+    }
+    if !super::place::document::is_postscript(bytes) {
+        return None;
+    }
+    vectorcraft_format::load(&vectorcraft_eps::native(bytes)?).ok()
 }
 
 /// Collect dependencies depth-first so nested VectorCraft files are rewritten before
@@ -176,7 +232,7 @@ impl<'a> Collector<'a> {
         self.warnings.push(message);
     }
 
-    /// Warns when a file that placed `.ai` file `source` links (`name`) was copied as `copy`: the
+    /// Warns when a file that placed `.ai` or EPS file `source` links (`name`) was copied as `copy`: the
     /// copy of `source` finds it only by its name, beside it.
     /// `path` is the link's path as the warning names it.
     fn renamed(&mut self, lines: &mut Vec<String>, source: &str, path: &str, name: &str, copy: &str) {
@@ -189,8 +245,8 @@ impl<'a> Collector<'a> {
         }
     }
 
-    /// Collects the files `doc` links. `by_name`: `doc` is a placed `.ai` file's editing data,
-    /// whose links are not rewritten, so its copy finds them by name beside it. `lookup`: the
+    /// Collects the files `doc` links. `by_name`: `doc` is a placed `.ai` or EPS file's editing
+    /// data, whose links are not rewritten, so its copy finds them by name beside it. `lookup`: the
     /// document whose links (with the same paths as `doc`'s) are looked for, and where from, when
     /// not `doc` from `source`.
     fn collect(
@@ -287,11 +343,13 @@ impl<'a> Collector<'a> {
                 if by_name {
                     self.renamed(&mut lines, source, &shown, &file.name, &destination_file);
                 }
-                // A placed PDF or .ai file is copied as it is, as an image is; the files a .ai file
-                // read from its editing data links are copied beside it.
+                // A placed PDF, .ai or EPS file is copied as it is, as an image is; the files a .ai
+                // file read from its editing data, or an EPS file read from the native document it
+                // carries, links are copied beside it.
                 let pages = placed.get(&file.path);
                 let placed_file = pages.is_some();
-                if placed_file && let Some(mut art) = super::place::document::editing_data(&file.name, &bytes) {
+                check_carried_scripts(&file.name, &bytes, found_path)?;
+                if placed_file && let Some(mut art) = editing_data(&file.name, &bytes) {
                     if depth >= vectorcraft_doc::placed_document::MAX_DEPTH {
                         self.warn(&mut lines, format!("{shown}: nesting limit reached; copied unchanged without collecting its own links"));
                     } else {
@@ -323,6 +381,7 @@ impl<'a> Collector<'a> {
                                     options.profiles = saved.profiles;
                                     options.compress = compressed;
                                     options.include_linked = include_linked;
+                                    let nested = super::fileio::with_readable_settings_folder(&nested);
                                     match vectorcraft_format::save_with(&nested, &options) {
                                         Ok(rewritten) => bytes = rewritten,
                                         Err(e) => self.warn(
@@ -341,6 +400,7 @@ impl<'a> Collector<'a> {
                         }
                     }
                 }
+                check_carried_folder(&file.name, &bytes)?;
                 let copy = Copied { name: destination_file.clone(), size: Some(bytes.len() as u64), hash: Some(hash_bytes(&bytes)) };
                 self.copies.insert(found_path.to_string(), copy.clone());
                 local.insert(file.path.clone(), copy);
@@ -471,6 +531,8 @@ fn prepare(s: &mut Session, p: &Value) -> Result<Package> {
     let given_name = text_param(p, "name", C)?;
     let folder = text_param(p, "folder", C)?;
     let doc_path = s.doc()?.path.clone().ok_or_else(|| bad(C, "save the document first: Package collects a saved document"))?;
+    // Before anything is collected or written, here where the request's read roots are in force.
+    super::fileio::check_linked_scripts(C, "vectorcraft", s.doc()?, &Value::Null)?;
     let stem = Path::new(&doc_path).file_stem().map_or_else(|| "Untitled".into(), |s| s.to_string_lossy().into_owned());
     let name = given_name.map_or_else(|| format!("{stem} Folder"), str::to_string);
     if name.trim().is_empty() || name == "." || name == ".." || name.contains(['/', '\\', ':', '*', '?', '"', '<', '>', '|']) {
@@ -478,7 +540,9 @@ fn prepare(s: &mut Session, p: &Value) -> Result<Package> {
     }
     let root = folder.map(|f| Path::new(f).join(&name));
     let info = if o.report { Some(super::docinfo::report(s, false)?) } else { None };
+    // The package's document leaves out an Export for Screens folder outside the read roots.
     let doc = s.doc()?.doc.clone();
+    let doc = if let std::borrow::Cow::Owned(kept) = super::fileio::with_readable_settings_folder(&doc) { std::sync::Arc::new(kept) } else { doc };
     let links_from = s.doc()?.links_from.clone().unwrap_or_else(|| doc_path.clone());
     Ok(Package { o, doc_path, links_from, stem, name, root, info, doc })
 }
