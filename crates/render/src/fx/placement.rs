@@ -18,6 +18,15 @@ pub fn pinned_appearance_for_geometry_edit(doc: &Document, n: &Node) -> Option<A
     if !n.appearance.has_unplaced_gradient() || unsupported(n) || has_non_container_art_fx(n) {
         return None;
     }
+    // Enclosing geometry effects change the fit outside this node-local pass.
+    // Without that context, leave the paint fitted rather than storing a false frame.
+    if doc.ancestry(n.id)?.into_iter().filter(|&id| id != n.id).any(|id| {
+        doc.node(id).is_some_and(|ancestor| {
+            matches!(ancestor.kind, NodeKind::Group { .. } | NodeKind::Layer { .. }) && effects::has_geometry(&ancestor.appearance.effects)
+        })
+    }) {
+        return None;
+    }
     match &n.kind {
         NodeKind::Group { .. } | NodeKind::Layer { .. } => effects::pinned_container_appearance(doc, n),
         NodeKind::Path { guide: false, .. } | NodeKind::Compound { .. } => pinned_shape(doc, n),

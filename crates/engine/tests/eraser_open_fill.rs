@@ -1900,7 +1900,8 @@ fn eraser_pinning_only_nested_case(parent_offset: bool) {
         vectorcraft_render::pinned_appearance_for_geometry_edit(placed_doc, placed_doc.node(placed_owner).unwrap()).is_none(),
         "INPUT: an already explicit placement needs no pinning"
     );
-    let label = if parent_offset { "PINNING_ONLY: nested Group under positive Offset Path" } else { "CONTROL: nested Group without enclosing effects" };
+    let label =
+        if parent_offset { "PINNING_ONLY: nested Group under positive Offset Path" } else { "CONTROL: nested Group without enclosing effects" };
     eraser_pinning_only_store(&s.doc().unwrap().doc, owner, &before, !parent_offset, label);
 }
 
@@ -2013,7 +2014,8 @@ fn eraser_pinning_only_text_clip_case(stroked: bool, no_stroke: Option<&vectorcr
     if stroked {
         assert!(outside_green > 0, "INPUT: the actual character stroke paints where the no-stroke control has only clear background");
     }
-    let label = if stroked { "PINNING_ONLY: painted clipping text under nonuniform scale" } else { "CONTROL: same glyph/scale without painted-clip wrapper" };
+    let label =
+        if stroked { "PINNING_ONLY: painted clipping text under nonuniform scale" } else { "CONTROL: same glyph/scale without painted-clip wrapper" };
     eraser_pinning_only_store(doc, owner, &before, !stroked, label);
     before
 }
@@ -2022,4 +2024,39 @@ fn eraser_pinning_only_text_clip_case(stroked: bool, no_stroke: Option<&vectorcr
 fn eraser_pinning_only_painted_text_clip_matches_unchanged_render() {
     let control = eraser_pinning_only_text_clip_case(false, None);
     eraser_pinning_only_text_clip_case(true, Some(&control));
+}
+
+#[test]
+fn eraser_pinning_only_keeps_hidden_geometry_and_raster_ancestors_supported() {
+    for raster in [false, true] {
+        let (mut s, owner) = eraser_pinning_only_nested_scene(false, !raster);
+        let outer = s.doc().unwrap().doc.parent_of(owner).unwrap();
+        if raster {
+            s.execute(
+                "effect.apply",
+                &json!({"ids": [outer.0], "target": "object", "item": null, "effect": "blur.gaussian", "params": {"radius": 3}}),
+            )
+            .unwrap();
+        }
+        let mut doc = (*s.doc().unwrap().doc).clone();
+        if !raster {
+            let ancestor = doc.node_mut(outer).unwrap();
+            ancestor.appearance.effects[0].visible = false;
+        }
+        let effect = &doc.node(outer).unwrap().appearance.effects[0];
+        assert_eq!(doc.node(outer).unwrap().appearance.effects.len(), 1);
+        assert_eq!(effect.visible, raster);
+        if raster {
+            assert_eq!(effect.id, "blur.gaussian");
+            assert_eq!(effect.params["radius"].as_f64(), Some(3.0));
+        } else {
+            assert_eq!(effect.id, "path.offsetPath");
+            assert_eq!(effect.params["offset"].as_f64(), Some(10.0));
+        }
+        let before = vectorcraft_render::Renderer::new().render(&doc, 300, 300, vectorcraft_geom::Affine::IDENTITY, &Default::default());
+        assert_eq!(before.pixel(190, 175)[3], 255, "INPUT: ordinary gradient art remains visible");
+        assert_ne!(before.pixel(190, 175), before.pixel(190, 185), "INPUT: the paint is nonconstant");
+        let label = if raster { "CONTROL: visible Gaussian ancestor" } else { "CONTROL: hidden Offset Path ancestor" };
+        eraser_pinning_only_store(&doc, owner, &before, true, label);
+    }
 }
