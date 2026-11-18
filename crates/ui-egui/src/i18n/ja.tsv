@@ -1265,6 +1265,12 @@ antiAlias	Sharp	シャープ
 	Channel	チャンネル
 	Character / Paragraph	文字／段落
 	Character Rotation	文字回転
+	Chinese Big 5	中国語 Big 5
+	Cyrillic	キリル文字
+	Greek	ギリシャ語
+	Turkish	トルコ語
+	Baltic	バルト言語
+	Central European	中央ヨーロッパ言語
 	Character Set:	文字セット:
 	Character Style Options	文字スタイルオプション
 	Check Links	リンクを確認
@@ -1859,6 +1865,8 @@ antiAlias	Sharp	シャープ
 	Files	ファイル
 	Files of a PDF standard can't be password-protected.	PDF 規格のファイルにはパスワードを設定できません。
 	Files of this standard tag their colours with ICC profiles.	この規格のファイルでは、カラーに ICC プロファイルが付けられます。
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	この規格のファイルでは、カラーに ICC プロファイルが付けられます。ただし、出力インテントのプロファイルの CMYK カラーは DeviceCMYK として書き出されます。
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	「プロファイルを含めない」と CMYK の出力インテントでは、別のプロファイルの CMYK 変換先に変換されない限り、すべての CMYK カラーが DeviceCMYK として書き出されます。
 	Fill	塗り
 	Fill New Type Objects With Placeholder Text	新規テキストオブジェクトをダミーテキストで埋める
 	Start Lists From Typed Markers	入力した記号からリストを開始
@@ -2363,6 +2371,7 @@ antiAlias	Sharp	シャープ
 	Load SVG into Clipboard	SVG をクリップボードに読み込む
 	Load Text into Clipboard	テキストをクリップボードに読み込む
 	Local Libraries	ローカルライブラリ
+	Locate Layer	レイヤーを検索
 	Locate Object	オブジェクトを検索
 	Locate Selected Objects	選択したオブジェクトを検索
 	Location	場所
@@ -2853,6 +2862,9 @@ diagnostics	ui	UI
 	Polar Grid Tool	同心円グリッドツール
 	Polygon	多角形
 	Polygon Properties:	多角形のプロパティ:
+	Line Properties:	線のプロパティ:
+	Line Length:	線の長さ:
+	Line Angle:	線の角度:
 	Polygon Tool	多角形ツール
 	Portrait	縦置き
 	Portuguese	ポルトガル語
@@ -9752,3 +9764,13 @@ breakText	Glyphs	字形
 @msg	A panel is not joined to the rest by a crease.	パネルがどの筋入れ線でも他とつながっていません。
 @msg	A fold line is on a non-printing layer.	折り線が印刷しないレイヤーにあります。
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	パネル: {panels}、ヒンジ: {hinges}、エラー: {errors}、警告: {warnings}
+	Fold Preview	折りプレビュー
+	Fold	折り
+	Show Fold Lines	折り線を表示
+	Three-Quarter	斜め
+	Open a document to preview its folded shape.	ドキュメントを開くと折った形をプレビューできます。
+@msg	Check the fold lines first.	先に折り線をチェックしてください。
+@msg	Panels: {panels}, hinges: {hinges}	パネル: {panels}、ヒンジ: {hinges}
+@msg	Other blanks not shown: {count}	表示されていない他の展開図: {count}
+@msg	A joint does not close by {gap} pt.	継ぎ目が {gap} pt 閉じていません。
+@msg	Two panels pass through each other.	2 つのパネルが互いを貫通しています。

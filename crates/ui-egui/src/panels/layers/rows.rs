@@ -510,9 +510,10 @@ fn row_context_menu(ui: &mut Ui, view: &View, n: &Node, collect_ids: &[u64], out
         }
     }
     ui.separator();
-    // Locate Object
-    if widgets::menu_item(ui, "Locate Object", true, false) {
-        out.actions.push(("layer.locate".into(), json!({ "id": n.id.0 })));
+    // Locate Object, or Locate Layer with Show Layers Only on
+    let layers_only = view.opts.layers_only;
+    if widgets::menu_item(ui, if layers_only { "Locate Layer" } else { "Locate Object" }, true, false) {
+        out.actions.push(("layer.locate".into(), json!({ "id": n.id.0, "layersOnly": layers_only })));
         ui.close();
     }
     ui.separator();
@@ -674,15 +675,20 @@ fn drop_target(ui: &Ui, view: &View, n: &Node, r: egui::Rect, indent: f32, open:
             return;
         }
     };
-    // Never into itself or a row inside it.
+    // Never into itself or a row inside it. With Alt, rows held over one of their own rows copy
+    // beside it, above or below, as `layer.move` places a copy there (#8237).
+    let alt = ui.input(|i| i.modifiers.alt);
+    let beside_itself = alt && matches!(&*drag, LayersDrag::Rows(_)) && moving.contains(&n.id);
     let around = doc.ancestry(n.id).unwrap_or_default();
-    if moving.is_empty() || moving.iter().any(|m| around.contains(m)) {
+    if moving.is_empty() || moving.iter().any(|m| around.contains(m) && !(beside_itself && *m == n.id)) {
         return;
     }
     let Some(p) = ui.input(|i| i.pointer.hover_pos()) else { return };
     let rel = (p.y - r.top()) / r.height().max(1.0);
     let inside = takes(n, &drag, &moving, doc);
     let place = match &*drag {
+        LayersDrag::Rows(_) if beside_itself && rel < 0.5 => Place::Above,
+        LayersDrag::Rows(_) if beside_itself => Place::Below,
         LayersDrag::Art if inside => Place::Inside,
         LayersDrag::Art => Place::Above,
         LayersDrag::Rows(_) if inside && rel >= 0.25 && (rel <= 0.75 || open) => Place::Inside,

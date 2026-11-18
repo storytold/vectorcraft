@@ -584,6 +584,12 @@ font-technology	Variable	Változó
 	Character options	Karakterbeállítások
 	Paragraph options	Bekezdésbeállítások
 	Character Rotation	Karakterforgatás
+	Chinese Big 5	Kínai Big 5
+	Cyrillic	Cirill
+	Greek	Görög
+	Turkish	Török
+	Baltic	Balti
+	Central European	Közép-európai
 	Character Set:	Karakterkészlet:
 	Character Style	Karakterstílus
 	Character Style Options	Karakterstílus beállításai
@@ -1581,6 +1587,8 @@ digits	Malayalam	Malajálam
 	Files	Fájlok
 	Files of a PDF standard can't be password-protected.	A PDF-szabványnak megfelelő fájlok nem védhetők jelszóval.
 	Files of this standard tag their colours with ICC profiles.	Ennek a szabványnak a fájljai ICC-profillal jelölik a színeiket.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	Ennek a szabványnak a fájljai ICC-profillal jelölik a színeiket, kivéve a kimeneti cél profiljában lévő CMYK-színeket, amelyek DeviceCMYK-ként íródnak.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	„Profilok nélkül” beállítással és CMYK kimeneti céllal minden CMYK-szín DeviceCMYK-ként íródik, kivéve, ha egy másik profil CMYK-céljába konvertálódik.
 	Fill	Kitöltés
 	Fill & Stroke	Kitöltés és körvonal
 	Fill (X), double-click for the Color Picker	Kitöltés (X), dupla kattintás: Színválasztó
@@ -2552,6 +2560,7 @@ file-filter	Templates	Sablonok
 	Load Texture…	Textúra betöltése…
 	Loaded Texture	Betöltött textúra
 	Local Libraries	Helyi könyvtárak
+	Locate Layer	Réteg megkeresése
 	Locate Object	Objektum megkeresése
 	Locate Selected Objects	Kijelölt objektumok megkeresése
 	Location	Hely
@@ -3269,6 +3278,9 @@ diagnostics	ui	felület
 	Polar Grid Tool	Polárrács
 	Polygon	Sokszög
 	Polygon Properties:	Sokszög tulajdonságai:
+	Line Properties:	Vonal tulajdonságai:
+	Line Length:	Vonal hossza:
+	Line Angle:	Vonal szöge:
 	Polygon Tool	Sokszög
 	Portrait	Álló
 	Portrait (flipped)	Álló (megfordítva)
@@ -10036,3 +10048,13 @@ breakText	Glyphs	Glifák
 @msg	A panel is not joined to the rest by a crease.	Egy panelt egyetlen bigvonal sem köt a többihez.
 @msg	A fold line is on a non-printing layer.	Egy hajtásvonal nem nyomtatható rétegen van.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panelek: {panels}, zsanérok: {hinges}, hibák: {errors}, figyelmeztetések: {warnings}
+	Fold Preview	Hajtás előnézete
+	Fold	Hajtás
+	Show Fold Lines	Hajtásvonalak megjelenítése
+	Three-Quarter	Háromnegyed
+	Open a document to preview its folded shape.	Nyiss meg egy dokumentumot a hajtogatott alakja előnézetéhez.
+@msg	Check the fold lines first.	Előbb ellenőrizd a hajtásvonalakat.
+@msg	Panels: {panels}, hinges: {hinges}	Panelek: {panels}, zsanérok: {hinges}
+@msg	Other blanks not shown: {count}	További kiterítékek nincsenek megjelenítve: {count}
+@msg	A joint does not close by {gap} pt.	Egy illesztés {gap} pt-tal nem záródik.
+@msg	Two panels pass through each other.	Két panel áthatol egymáson.

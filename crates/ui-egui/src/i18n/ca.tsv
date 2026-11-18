@@ -685,6 +685,12 @@ antiAlias	Sharp	Nítid
 	Character options	Opcions de caràcter
 	Paragraph options	Opcions de paràgraf
 	Character Rotation	Rotació de caràcters
+	Chinese Big 5	Xinès Big 5
+	Cyrillic	Ciríl·lic
+	Greek	Grec
+	Turkish	Turc
+	Baltic	Bàltic
+	Central European	Centreeuropeu
 	Character Set:	Joc de caràcters:
 	Character Style	Estil de caràcter
 	Character Style Options	Opcions de l’estil de caràcter
@@ -1722,6 +1728,8 @@ digits	Malayalam	Malaiàlam
 	Files	Fitxers
 	Files of a PDF standard can't be password-protected.	Els fitxers d’un estàndard PDF no es poden protegir amb contrasenya.
 	Files of this standard tag their colours with ICC profiles.	Els fitxers d’aquest estàndard etiqueten els colors amb perfils ICC.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	Els fitxers d’aquest estàndard etiqueten els colors amb perfils ICC, excepte els colors CMYK del perfil d’intenció de sortida, que s’escriuen com a DeviceCMYK.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	Amb «No incloguis els perfils» i una intenció de sortida CMYK, cada color CMYK s’escriu com a DeviceCMYK, tret que es converteixi a una destinació CMYK d’un altre perfil.
 	Fill	Farciment
 	Fill & Stroke	Farciment i traç
 	Fill (X), double-click for the Color Picker	Farciment (X), fes doble clic per al selector de color
@@ -2566,6 +2574,7 @@ digits	Malayalam	Malaiàlam
 	Loads native code	Carrega codi natiu
 	Local Libraries	Biblioteques locals
 	Locate Library…	Localitza la biblioteca…
+	Locate Layer	Localitza la capa
 	Locate Object	Localitza l’objecte
 	Locate Selected Objects	Localitza els objectes seleccionats
 	Location	Ubicació
@@ -3397,6 +3406,9 @@ digits	Malayalam	Malaiàlam
 	Polar Grid Tool Options	Opcions de l’eina de quadrícula polar
 	Polygon	Polígon
 	Polygon Properties:	Propietats del polígon:
+	Line Properties:	Propietats de la línia:
+	Line Length:	Longitud de la línia:
+	Line Angle:	Angle de la línia:
 	Polygon Tool	Eina de polígon
 	Portrait	Vertical
 	Portrait (flipped)	Vertical (invertit)
@@ -8253,4 +8265,15 @@ breakText	Glyphs	Glifs
 @msg	A panel is not joined to the rest by a crease.	Un panell no està unit a la resta per cap línia d’hendit.
 @msg	A fold line is on a non-printing layer.	Una línia de plegat és en una capa que no s’imprimeix.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panells: {panels}, frontisses: {hinges}, errors: {errors}, avisos: {warnings}
+	Fold Preview	Previsualització del plegat
+	Fold	Plegat
+	Show Fold Lines	Mostra les línies de plegat
+	Three-Quarter	Tres quarts
+	Open a document to preview its folded shape.	Obre un document per previsualitzar-ne la forma plegada.
+@msg	Check the fold lines first.	Primer comprova les línies de plegat.
+@msg	Panels: {panels}, hinges: {hinges}	Panells: {panels}, frontisses: {hinges}
+@msg	Other blanks not shown: {count}	Altres troquelats no mostrats: {count}
+@msg	A joint does not close by {gap} pt.	Una unió no es tanca per {gap} pt.
+@msg	Two panels pass through each other.	Dos panells es travessen l’un a l’altre.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer ha de ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"
+@msg	text.{key} `{v}`: use "{_1}" or "{_2}"	text.{key} `{v}`: utilitzeu "{_1}" o "{_2}"

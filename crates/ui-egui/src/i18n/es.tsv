@@ -425,6 +425,12 @@ font-technology	Variable	Variables
 	Character Alignment	Alineación de caracteres
 	Character / Paragraph	Carácter / Párrafo
 	Character Rotation	Rotación de caracteres
+	Chinese Big 5	Chino Big 5
+	Cyrillic	Cirílico
+	Greek	Griego
+	Turkish	Turco
+	Baltic	Báltico
+	Central European	Centroeuropeo
 	Character Set:	Juego de caracteres:
 	Character Style	Estilo de carácter
 	Character Style Options	Opciones de estilo de carácter
@@ -1272,6 +1278,8 @@ font-technology	Variable	Variables
 	Files	Archivos
 	Files of a PDF standard can't be password-protected.	Los archivos de un estándar PDF no se pueden proteger con contraseña.
 	Files of this standard tag their colours with ICC profiles.	Los archivos de este estándar etiquetan sus colores con perfiles ICC.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	Los archivos de este estándar etiquetan sus colores con perfiles ICC, excepto los colores CMYK en el perfil de propósito de salida, que se escriben como DeviceCMYK.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	Con «No incluir perfiles» y un propósito de salida CMYK, cada color CMYK se escribe como DeviceCMYK, salvo que se convierta a un destino CMYK de otro perfil.
 	Fill	Relleno
 	Fill & Stroke	Relleno y trazo
 	Fill (X), double-click for the Color Picker	Relleno (X), doble clic para el selector de color
@@ -2052,6 +2060,7 @@ font-technology	Variable	Variables
 	Load SVG into Clipboard	Cargar SVG en el portapapeles
 	Load Text into Clipboard	Cargar texto en el portapapeles
 	Local Libraries	Bibliotecas locales
+	Locate Layer	Localizar capa
 	Locate Object	Localizar objeto
 	Locate Selected Objects	Localizar objetos seleccionados
 	Location	Ubicación
@@ -2719,6 +2728,9 @@ font-technology	Variable	Variables
 	Polar Grid Tool	Herramienta Cuadrícula polar
 	Polygon	Polígono
 	Polygon Properties:	Propiedades del polígono:
+	Line Properties:	Propiedades de la línea:
+	Line Length:	Longitud de la línea:
+	Line Angle:	Ángulo de la línea:
 	Polygon Tool	Herramienta Polígono
 	Portrait	Vertical
 	Power Saving (integrated)	Ahorro de energía (integrada)
@@ -8214,4 +8226,15 @@ breakText	Glyphs	Glifos
 @msg	A panel is not joined to the rest by a crease.	Un panel no está unido al resto por ninguna línea de hendido.
 @msg	A fold line is on a non-printing layer.	Una línea de plegado está en una capa que no se imprime.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Paneles: {panels}, bisagras: {hinges}, errores: {errors}, advertencias: {warnings}
+	Fold Preview	Vista previa del plegado
+	Fold	Plegado
+	Show Fold Lines	Mostrar líneas de plegado
+	Three-Quarter	Tres cuartos
+	Open a document to preview its folded shape.	Abre un documento para previsualizar su forma plegada.
+@msg	Check the fold lines first.	Comprueba primero las líneas de plegado.
+@msg	Panels: {panels}, hinges: {hinges}	Paneles: {panels}, bisagras: {hinges}
+@msg	Other blanks not shown: {count}	Otros troquelados no mostrados: {count}
+@msg	A joint does not close by {gap} pt.	Una unión no cierra por {gap} pt.
+@msg	Two panels pass through each other.	Dos paneles se atraviesan entre sí.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer debe ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"
+@msg	text.{key} `{v}`: use "{_1}" or "{_2}"	text.{key} `{v}`: use "{_1}" o "{_2}"

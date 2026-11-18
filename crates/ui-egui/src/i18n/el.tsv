@@ -398,6 +398,12 @@ font-technology	Variable	Μεταβλητές
 	Character Alignment	Στοίχιση χαρακτήρων
 	Character / Paragraph	Χαρακτήρας / Παράγραφος
 	Character Rotation	Περιστροφή χαρακτήρων
+	Chinese Big 5	Κινεζικά Big 5
+	Cyrillic	Κυριλλικά
+	Greek	Ελληνικά
+	Turkish	Τουρκικά
+	Baltic	Βαλτικά
+	Central European	Κεντρικής Ευρώπης
 	Character Set:	Σύνολο χαρακτήρων:
 	Character Style	Στυλ χαρακτήρων
 	Character Style Options	Επιλογές στυλ χαρακτήρων
@@ -1209,6 +1215,8 @@ font-technology	Variable	Μεταβλητές
 	Files	Αρχεία
 	Files of a PDF standard can't be password-protected.	Τα αρχεία αυτού του προτύπου PDF δεν μπορούν να προστατεύονται με κωδικό.
 	Files of this standard tag their colours with ICC profiles.	Τα αρχεία αυτού του προτύπου χαρακτηρίζουν τα χρώματά τους με προφίλ ICC.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	Τα αρχεία αυτού του προτύπου χαρακτηρίζουν τα χρώματά τους με προφίλ ICC, εκτός από τα χρώματα CMYK στο προφίλ προορισμού εξόδου, τα οποία γράφονται ως DeviceCMYK.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	Με «Να μη συμπεριληφθούν προφίλ» και προορισμό εξόδου CMYK, κάθε χρώμα CMYK γράφεται ως DeviceCMYK, εκτός αν μετατραπεί σε προορισμό CMYK άλλου προφίλ.
 	Fill	Γέμισμα
 	Fill & Stroke	Γέμισμα και περίγραμμα
 	Fill (X), double-click for the Color Picker	Γέμισμα (X), διπλό κλικ για τον επιλογέα χρώματος
@@ -3168,6 +3176,7 @@ theme	Appearance	Εμφάνιση
 	Load SVG into Clipboard	Φόρτωση SVG στο πρόχειρο
 	Load Text into Clipboard	Φόρτωση κειμένου στο πρόχειρο
 	Local Libraries	Τοπικές βιβλιοθήκες
+	Locate Layer	Εντοπισμός επιπέδου
 	Locate Object	Εντοπισμός αντικειμένου
 	Locate Selected Objects	Εντοπισμός επιλεγμένων αντικειμένων
 	Lock (⌘2)	Κλείδωμα (⌘2)
@@ -3617,6 +3626,9 @@ theme	Appearance	Εμφάνιση
 	Polar Grid Tool	Πολικό πλέγμα (Polar Grid Tool)
 	Polygon	Πολύγωνο
 	Polygon Properties:	Ιδιότητες πολυγώνου:
+	Line Properties:	Ιδιότητες γραμμής:
+	Line Length:	Μήκος γραμμής:
+	Line Angle:	Γωνία γραμμής:
 	Power Saving (integrated)	Εξοικονόμηση ενέργειας (ενσωματωμένη GPU)
 	Portuguese	Πορτογαλικά
 	PostScript:	PostScript:
@@ -8227,4 +8239,15 @@ breakText	Glyphs	Γλύφοι
 @msg	A panel is not joined to the rest by a crease.	Ένα πάνελ δεν συνδέεται με τα υπόλοιπα με καμία γραμμή πτύχωσης.
 @msg	A fold line is on a non-printing layer.	Μια γραμμή δίπλωσης βρίσκεται σε επίπεδο που δεν εκτυπώνεται.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Πάνελ: {panels}, μεντεσέδες: {hinges}, σφάλματα: {errors}, προειδοποιήσεις: {warnings}
+	Fold Preview	Προεπισκόπηση δίπλωσης
+	Fold	Δίπλωση
+	Show Fold Lines	Εμφάνιση γραμμών δίπλωσης
+	Three-Quarter	Τρία τέταρτα
+	Open a document to preview its folded shape.	Ανοίξτε ένα έγγραφο για να δείτε σε προεπισκόπηση το διπλωμένο σχήμα του.
+@msg	Check the fold lines first.	Ελέγξτε πρώτα τις γραμμές δίπλωσης.
+@msg	Panels: {panels}, hinges: {hinges}	Πάνελ: {panels}, μεντεσέδες: {hinges}
+@msg	Other blanks not shown: {count}	Άλλα αναπτύγματα δεν εμφανίζονται: {count}
+@msg	A joint does not close by {gap} pt.	Μια ένωση δεν κλείνει κατά {gap} pt.
+@msg	Two panels pass through each other.	Δύο πάνελ διαπερνούν το ένα το άλλο.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	το composer πρέπει να είναι "singleLine", "everyLine", "standardSingleLine" ή "standardEveryLine"
+@msg	text.{key} `{v}`: use "{_1}" or "{_2}"	text.{key} `{v}`: χρησιμοποιήστε "{_1}" ή "{_2}"

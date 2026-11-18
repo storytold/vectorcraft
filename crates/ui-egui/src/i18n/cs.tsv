@@ -2434,6 +2434,9 @@ digits	Malayalam	Malajálamské
 	Flip Horizontal	Překlopit vodorovně
 	Flip Vertical	Překlopit svisle
 	Polygon Properties:	Vlastnosti mnohoúhelníku:
+	Line Properties:	Vlastnosti čáry:
+	Line Length:	Délka čáry:
+	Line Angle:	Úhel čáry:
 	Rectangle Properties:	Vlastnosti obdélníku:
 	Shape Properties:	Vlastnosti tvaru:
 	Shape Properties	Vlastnosti tvaru
@@ -3195,6 +3198,8 @@ antiAlias	Sharp	Ostré
 	Every option matches {base}.	Všechny možnosti odpovídají: {base}.
 	Files of a PDF standard can't be password-protected.	Soubory podle standardu PDF nelze chránit heslem.
 	Files of this standard tag their colours with ICC profiles.	Soubory tohoto standardu označují své barvy profily ICC.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	Soubory tohoto standardu označují své barvy profily ICC, kromě barev CMYK v profilu výstupního záměru, které se zapisují jako DeviceCMYK.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	S volbou „Nezahrnovat profily“ a výstupním záměrem CMYK se každá barva CMYK zapíše jako DeviceCMYK, pokud se nepřevede do cíle CMYK s jiným profilem.
 	Flattener preset:	Přednastavení sloučení:
 	General › Thumbnails	Obecné › Miniatury
 	Grayscale images	Obrazy ve stupních šedi
@@ -3414,6 +3419,12 @@ antiAlias	Sharp	Ostré
 	LF (macOS, Linux)	LF (macOS, Linux)
 	CRLF (Windows)	CRLF (Windows)
 	Text Export Options	Možnosti exportu textu
+	Chinese Big 5	Čínština Big 5
+	Cyrillic	Cyrilice
+	Greek	Řečtina
+	Turkish	Turečtina
+	Baltic	Baltské jazyky
+	Central European	Středoevropské jazyky
 	Character Set:	Znaková sada:
 	Join the lines of each paragraph	Spojit řádky každého odstavce
 	Line Breaks	Zalomení řádků
@@ -3848,6 +3859,7 @@ theme	Appearance	Motiv
 	Select Art	Vybrat kresbu
 	Set Current Layer	Nastavit aktuální vrstvu
 	Flatten Artwork	Sloučit kresbu
+	Locate Layer	Najít vrstvu
 	Locate Object	Najít objekt
 	Lock Others	Zamknout ostatní
 	Merge Selected	Sloučit vybrané
@@ -10048,3 +10060,13 @@ breakText	Glyphs	Glyfy
 @msg	A panel is not joined to the rest by a crease.	Panel není se zbytkem spojen žádnou linií bigu.
 @msg	A fold line is on a non-printing layer.	Linie skladu je na netisknutelné vrstvě.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panely: {panels}, panty: {hinges}, chyby: {errors}, upozornění: {warnings}
+	Fold Preview	Náhled skládání
+	Fold	Složení
+	Show Fold Lines	Zobrazit linie skladu
+	Three-Quarter	Tři čtvrtě
+	Open a document to preview its folded shape.	Otevřete dokument, abyste zobrazili náhled jeho složeného tvaru.
+@msg	Check the fold lines first.	Nejprve zkontrolujte linie skladu.
+@msg	Panels: {panels}, hinges: {hinges}	Panely: {panels}, panty: {hinges}
+@msg	Other blanks not shown: {count}	Další přířezy nejsou zobrazeny: {count}
+@msg	A joint does not close by {gap} pt.	Spoj se nezavírá o {gap} pt.
+@msg	Two panels pass through each other.	Dva panely procházejí jeden druhým.

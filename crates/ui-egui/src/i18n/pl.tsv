@@ -2353,6 +2353,9 @@ digits	Malayalam	Malajalam
 	Flip Horizontal	Odbij w poziomie
 	Flip Vertical	Odbij w pionie
 	Polygon Properties:	Właściwości wielokąta:
+	Line Properties:	Właściwości linii:
+	Line Length:	Długość linii:
+	Line Angle:	Kąt linii:
 	Rectangle Properties:	Właściwości prostokąta:
 	Shape Properties:	Właściwości kształtu:
 	Shape Properties	Właściwości kształtu
@@ -3085,6 +3088,8 @@ antiAlias	Sharp	Ostre
 	Every option matches {base}.	Wszystkie opcje są zgodne z {base}.
 	Files of a PDF standard can't be password-protected.	Plików standardu PDF nie można chronić hasłem.
 	Files of this standard tag their colours with ICC profiles.	Pliki tego standardu oznaczają kolory profilami ICC.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	Pliki tego standardu oznaczają kolory profilami ICC, z wyjątkiem kolorów CMYK w profilu docelowych warunków wyjściowych, które są zapisywane jako DeviceCMYK.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	Przy opcji „Nie dołączaj profili” i docelowych warunkach wyjściowych CMYK każdy kolor CMYK jest zapisywany jako DeviceCMYK, chyba że zostanie przekonwertowany do miejsca docelowego CMYK z innym profilem.
 	Flattener preset:	Ustawienie spłaszczania:
 	General › Thumbnails	Ogólne › Miniatury
 	Grayscale images	Obrazy w skali szarości
@@ -3295,6 +3300,12 @@ antiAlias	Sharp	Ostre
 	Encoding:	Kodowanie:
 	Line Endings:	Znaki końca wiersza:
 	Text Export Options	Opcje eksportu tekstu
+	Chinese Big 5	Chiński Big 5
+	Cyrillic	Cyrylica
+	Greek	Grecki
+	Turkish	Turecki
+	Baltic	Bałtycki
+	Central European	Środkowoeuropejski
 	Character Set:	Zestaw znaków:
 	Join the lines of each paragraph	Połącz wiersze każdego akapitu
 	Line Breaks	Podziały wierszy
@@ -3729,6 +3740,7 @@ theme	Appearance	Wygląd
 	Select Art	Zaznacz kompozycję
 	Set Current Layer	Ustaw bieżącą warstwę
 	Flatten Artwork	Spłaszcz kompozycję
+	Locate Layer	Znajdź warstwę
 	Locate Object	Znajdź obiekt
 	Lock Others	Zablokuj pozostałe
 	Merge Selected	Scal zaznaczone
@@ -9908,3 +9920,13 @@ breakText	Glyphs	Glify
 @msg	A panel is not joined to the rest by a crease.	Panel nie jest połączony z resztą żadną linią bigowania.
 @msg	A fold line is on a non-printing layer.	Linia zgięcia znajduje się na warstwie niedrukowanej.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panele: {panels}, zawiasy: {hinges}, błędy: {errors}, ostrzeżenia: {warnings}
+	Fold Preview	Podgląd złożenia
+	Fold	Złożenie
+	Show Fold Lines	Pokaż linie zgięcia
+	Three-Quarter	Trzy czwarte
+	Open a document to preview its folded shape.	Otwórz dokument, aby zobaczyć podgląd jego złożonego kształtu.
+@msg	Check the fold lines first.	Najpierw sprawdź linie zgięcia.
+@msg	Panels: {panels}, hinges: {hinges}	Panele: {panels}, zawiasy: {hinges}
+@msg	Other blanks not shown: {count}	Inne wykroje nie są pokazane: {count}
+@msg	A joint does not close by {gap} pt.	Połączenie nie domyka się o {gap} pt.
+@msg	Two panels pass through each other.	Dwa panele przechodzą przez siebie.

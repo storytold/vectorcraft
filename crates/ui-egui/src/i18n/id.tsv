@@ -2186,6 +2186,9 @@ digits	Malayalam	Malayalam
 	Flip Horizontal	Balik horizontal
 	Flip Vertical	Balik vertikal
 	Polygon Properties:	Properti poligon:
+	Line Properties:	Properti garis:
+	Line Length:	Panjang garis:
+	Line Angle:	Sudut garis:
 	Rectangle Properties:	Properti persegi panjang:
 	Shape Properties:	Properti bentuk:
 	Shape Properties	Properti bentuk
@@ -2922,6 +2925,8 @@ antiAlias	Sharp	Tajam
 	Every option matches {base}.	Setiap opsi cocok dengan {base}.
 	Files of a PDF standard can't be password-protected.	File standar PDF tidak dapat dilindungi kata sandi.
 	Files of this standard tag their colours with ICC profiles.	File standar ini menandai warnanya dengan profil ICC.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	File standar ini menandai warnanya dengan profil ICC, kecuali warna CMYK dalam profil output intent, yang ditulis sebagai DeviceCMYK.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	Dengan “Jangan sertakan profil” dan output intent CMYK, setiap warna CMYK ditulis sebagai DeviceCMYK, kecuali dikonversi ke tujuan CMYK dengan profil lain.
 	Flattener preset:	Preset flattener:
 	General › Thumbnails	Umum › Miniatur
 	Grayscale images	Gambar skala abu-abu
@@ -3105,6 +3110,12 @@ antiAlias	Sharp	Tajam
 	LF (macOS, Linux)	LF (macOS, Linux)
 	CRLF (Windows)	CRLF (Windows)
 	Text Export Options	Opsi ekspor teks
+	Chinese Big 5	Tionghoa Big 5
+	Cyrillic	Sirilik
+	Greek	Yunani
+	Turkish	Turki
+	Baltic	Baltik
+	Central European	Eropa Tengah
 	Character Set:	Set karakter:
 	Join the lines of each paragraph	Gabungkan baris setiap paragraf
 	Line Breaks	Pemisah baris
@@ -3515,6 +3526,7 @@ theme	Appearance	Tampilan
 	Select Art	Pilih karya seni
 	Set Current Layer	Tetapkan lapisan saat ini
 	Flatten Artwork	Ratakan karya seni
+	Locate Layer	Temukan lapisan
 	Locate Object	Temukan objek
 	Lock Others	Kunci lainnya
 	Merge Selected	Gabungkan terpilih
@@ -7336,4 +7348,14 @@ breakText	Glyphs	Glif
 @msg	A panel is not joined to the rest by a crease.	Sebuah panel tidak tersambung ke bagian lain oleh garis lekuk apa pun.
 @msg	A fold line is on a non-printing layer.	Sebuah garis lipat berada di lapisan yang tidak dicetak.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panel: {panels}, engsel: {hinges}, galat: {errors}, peringatan: {warnings}
+	Fold Preview	Pratinjau lipatan
+	Fold	Lipat
+	Show Fold Lines	Tampilkan garis lipat
+	Three-Quarter	Tiga perempat
+	Open a document to preview its folded shape.	Buka dokumen untuk melihat pratinjau bentuk terlipatnya.
+@msg	Check the fold lines first.	Periksa garis lipat terlebih dahulu.
+@msg	Panels: {panels}, hinges: {hinges}	Panel: {panels}, engsel: {hinges}
+@msg	Other blanks not shown: {count}	Bentangan lain tidak ditampilkan: {count}
+@msg	A joint does not close by {gap} pt.	Sebuah sambungan tidak menutup sejauh {gap} pt.
+@msg	Two panels pass through each other.	Dua panel saling menembus.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer harus "singleLine", "everyLine", "standardSingleLine", atau "standardEveryLine"

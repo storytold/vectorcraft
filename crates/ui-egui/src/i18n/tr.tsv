@@ -408,6 +408,12 @@ font-technology	Variable	Değişken
 	Character Alignment	Karakter Hizalaması
 	Character / Paragraph	Karakter / Paragraf
 	Character Rotation	Karakter Rotasyonu
+	Chinese Big 5	Çince Big 5
+	Cyrillic	Kiril
+	Greek	Yunanca
+	Turkish	Türkçe
+	Baltic	Baltık
+	Central European	Orta Avrupa
 	Character Set:	Karakter Seti:
 	Character Style	Karakter Stili
 	Character Style Options	Karakter Stili Seçenekleri
@@ -1233,6 +1239,8 @@ font-technology	Variable	Değişken
 	Files	Dosyalar
 	Files of a PDF standard can't be password-protected.	PDF standardının dosyaları parola korumalı olamaz.
 	Files of this standard tag their colours with ICC profiles.	Bu standardın dosyaları renklerini ICC profilleriyle etiketler.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	Bu standardın dosyaları renklerini ICC profilleriyle etiketler, ancak çıkış amacı profilindeki CMYK renkleri DeviceCMYK olarak yazılır.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	“Profilleri ekleme” ve bir CMYK çıkış amacıyla, başka bir profilin CMYK hedefine dönüştürülmedikçe her CMYK rengi DeviceCMYK olarak yazılır.
 	Fill	Dolgu
 	Fill & Stroke	Doldur ve Konturla
 	Fill (X), double-click for the Color Picker	Doldur (X), Renk Seçici için çift tıklayın
@@ -1873,6 +1881,7 @@ font-technology	Variable	Değişken
 	Load SVG into Clipboard	SVG'yi Panoya yükleyin
 	Load Text into Clipboard	Metni Panoya Yükle
 	Local Libraries	Yerel Kütüphaneler
+	Locate Layer	Katmanı Bul
 	Locate Object	Nesneyi Bul
 	Location	Konum
 	Location:	Konum:
@@ -2491,6 +2500,9 @@ shape	Open	Açık
 	Polar Grid Tool	Yuvarlak Izgara Aracı
 	Polygon	Çokgen
 	Polygon Properties:	Poligon Özellikleri:
+	Line Properties:	Çizgi Özellikleri:
+	Line Length:	Çizgi Uzunluğu:
+	Line Angle:	Çizgi Açısı:
 	Polygon Tool	Çokgen Aracı
 	Portrait	Portre
 	Power Saving (integrated)	Güç Tasarrufu (entegre)
@@ -10006,3 +10018,13 @@ breakText	Glyphs	Glifler
 @msg	A panel is not joined to the rest by a crease.	Bir panel geri kalanlara hiçbir pilyaj çizgisiyle bağlı değil.
 @msg	A fold line is on a non-printing layer.	Bir katlama çizgisi yazdırılmayan bir katmanda.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Paneller: {panels}, menteşeler: {hinges}, hatalar: {errors}, uyarılar: {warnings}
+	Fold Preview	Katlama Önizlemesi
+	Fold	Katlama
+	Show Fold Lines	Katlama Çizgilerini Göster
+	Three-Quarter	Dörtte Üç
+	Open a document to preview its folded shape.	Katlanmış şeklini önizlemek için bir belgeyi açın.
+@msg	Check the fold lines first.	Önce katlama çizgilerini denetleyin.
+@msg	Panels: {panels}, hinges: {hinges}	Paneller: {panels}, menteşeler: {hinges}
+@msg	Other blanks not shown: {count}	Gösterilmeyen diğer açınımlar: {count}
+@msg	A joint does not close by {gap} pt.	Bir birleşim {gap} pt kadar kapanmıyor.
+@msg	Two panels pass through each other.	İki panel birbirinin içinden geçiyor.

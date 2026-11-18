@@ -801,6 +801,11 @@ antiAlias	Sharp	शार्प
 	Character Direction	कैरेक्टर दिशा
 	Character options	कैरेक्टर ऑप्शन्स
 	Character Rotation	कैरेक्टर रोटेशन
+	Chinese Big 5	चीनी Big 5
+	Cyrillic	सिरिलिक
+	Greek	ग्रीक
+	Baltic	बाल्टिक
+	Central European	मध्य यूरोपीय
 	Character Set:	कैरेक्टर सेट:
 	Character Style	कैरेक्टर स्टाइल
 	Character Style Options	कैरेक्टर स्टाइल ऑप्शन्स
@@ -1915,6 +1920,8 @@ antiAlias	Sharp	शार्प
 	Files	फ़ाइलें
 	Files of a PDF standard can't be password-protected.	एक PDF मानक की फ़ाइलें पासवर्ड की रक्षा नहीं की जा सकती है।
 	Files of this standard tag their colours with ICC profiles.	इस मानक की फ़ाइलें ICC प्रोफ़ाइल के साथ उनके रंगों को टैग करती हैं।
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	इस मानक की फ़ाइलें ICC प्रोफ़ाइल के साथ उनके रंगों को टैग करती हैं, आउटपुट इंटेंट प्रोफ़ाइल के CMYK रंगों को छोड़कर, जो DeviceCMYK के रूप में लिखे जाते हैं।
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	“प्रोफ़ाइल शामिल नहीं है” और CMYK आउटपुट इंटेंट के साथ, हर CMYK रंग DeviceCMYK के रूप में लिखा जाता है, जब तक कि उसे किसी अन्य प्रोफ़ाइल के CMYK गंतव्य में रूपांतरित न किया जाए।
 	Fill	फ़िल
 	Fill (X), double-click for the Color Picker	फ़िल (X), कलर पिकर के लिए डबल-क्लिक करें
 	Fill & Stroke	भरें और स्ट्रोक करें
@@ -2813,6 +2820,7 @@ antiAlias	Sharp	शार्प
 	Loads native code	मूल कोड लोड करता है
 	Local Libraries	स्थानीय लाइब्रेरी
 	Locate Library…	लाइब्रेरी…
+	Locate Layer	लेयर का पता लगाएं
 	Locate Object	ऑब्जेक्ट का पता लगाएं
 	Locate Selected Objects	सिलेक्टेड ऑब्जेक्ट्स का पता लगाएँ
 	Location	स्थान
@@ -3731,6 +3739,9 @@ antiAlias	Sharp	शार्प
 	Polish	पोलिश
 	Polygon	बहुभुज
 	Polygon Properties:	बहुभुज प्रॉपर्टीज़:
+	Line Properties:	रेखा प्रॉपर्टीज़:
+	Line Length:	रेखा की लंबाई:
+	Line Angle:	रेखा का कोण:
 	Polygon Tool	पॉलीगोन टूल
 	Polygonal Lasso	बहुभुज लैस्सो
 	Polygonal Lasso Tool	बहुभुज लैस्सो टूल
@@ -9656,3 +9667,13 @@ theme	Appearance	अपीयरेंस
 @msg	A panel is not joined to the rest by a crease.	कोई पैनल किसी क्रीज़ लाइन से बाकी से जुड़ा नहीं है।
 @msg	A fold line is on a non-printing layer.	एक फ़ोल्ड लाइन नॉन-प्रिंटिंग लेयर पर है।
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	पैनल: {panels}, हिंज: {hinges}, एरर: {errors}, वॉर्निंग: {warnings}
+	Fold Preview	फ़ोल्ड प्रीव्यू
+	Fold	फ़ोल्ड
+	Show Fold Lines	फ़ोल्ड लाइनें दिखाएँ
+	Three-Quarter	तीन-चौथाई
+	Open a document to preview its folded shape.	इसका फ़ोल्ड किया हुआ आकार देखने के लिए कोई डॉक्यूमेंट ओपन करें।
+@msg	Check the fold lines first.	पहले फ़ोल्ड लाइनें चेक करें।
+@msg	Panels: {panels}, hinges: {hinges}	पैनल: {panels}, हिंज: {hinges}
+@msg	Other blanks not shown: {count}	दूसरे ब्लैंक नहीं दिखाए गए: {count}
+@msg	A joint does not close by {gap} pt.	एक जोड़ {gap} pt से बंद नहीं होता।
+@msg	Two panels pass through each other.	दो पैनल एक-दूसरे के आर-पार जाते हैं।

@@ -402,6 +402,12 @@ font-technology	Variable	Variabel
 	Character Alignment	Zeichenausrichtung
 	Character / Paragraph	Zeichen / Absatz
 	Character Rotation	Zeichendrehung
+	Chinese Big 5	Chinesisch Big 5
+	Cyrillic	Kyrillisch
+	Greek	Griechisch
+	Turkish	Türkisch
+	Baltic	Baltisch
+	Central European	Mitteleuropäisch
 	Character Set:	Zeichensatz:
 	Character Style	Zeichenformat
 	Character Style Options	Zeichenformatoptionen
@@ -1247,6 +1253,8 @@ font-technology	Variable	Variabel
 	Files	Dateien
 	Files of a PDF standard can't be password-protected.	Dateien eines PDF-Standards können nicht mit einem Kennwort geschützt werden.
 	Files of this standard tag their colours with ICC profiles.	Dateien dieses Standards kennzeichnen ihre Farben mit ICC-Profilen.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	Dateien dieses Standards kennzeichnen ihre Farben mit ICC-Profilen, außer CMYK-Farben im Profil der Ausgabemethode, die als DeviceCMYK geschrieben werden.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	Mit „Profile nicht einschließen“ und einer CMYK-Ausgabemethode wird jede CMYK-Farbe als DeviceCMYK geschrieben, sofern sie nicht in ein CMYK-Ziel mit einem anderen Profil konvertiert wird.
 	Fill	Fläche
 	Fill & Stroke	Fläche und Kontur
 	Fill (X), double-click for the Color Picker	Fläche (X), Doppelklick öffnet den Farbwähler
@@ -2053,6 +2061,7 @@ file-filter	Templates	Vorlagen
 	Load SVG into Clipboard	SVG in die Zwischenablage laden
 	Load Text into Clipboard	Text in die Zwischenablage laden
 	Local Libraries	Lokale Bibliotheken
+	Locate Layer	Ebene ausfindig machen
 	Locate Object	Objekt ausfindig machen
 	Locate Selected Objects	Ausgewählte Objekte ausfindig machen
 	Location	Speicherort
@@ -2680,6 +2689,9 @@ diagnostics	ui	Oberfläche
 	Polar Grid Tool	Radiales-Raster-Werkzeug
 	Polygon	Polygon
 	Polygon Properties:	Polygoneigenschaften:
+	Line Properties:	Linieneigenschaften:
+	Line Length:	Linienlänge:
+	Line Angle:	Linienwinkel:
 	Polygon Tool	Polygon-Werkzeug
 	Portrait	Hochformat
 	Power Saving (integrated)	Energiesparen (integriert)
@@ -9650,3 +9662,13 @@ breakText	Glyphs	Glyphen
 @msg	A panel is not joined to the rest by a crease.	Ein Feld ist durch keine Rilllinie mit den übrigen verbunden.
 @msg	A fold line is on a non-printing layer.	Eine Faltlinie liegt auf einer nicht druckbaren Ebene.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Felder: {panels}, Scharniere: {hinges}, Fehler: {errors}, Warnungen: {warnings}
+	Fold Preview	Faltvorschau
+	Fold	Falten
+	Show Fold Lines	Faltlinien einblenden
+	Three-Quarter	Dreiviertelansicht
+	Open a document to preview its folded shape.	Öffnen Sie ein Dokument, um seine gefaltete Form in der Vorschau zu sehen.
+@msg	Check the fold lines first.	Prüfen Sie zuerst die Faltlinien.
+@msg	Panels: {panels}, hinges: {hinges}	Felder: {panels}, Scharniere: {hinges}
+@msg	Other blanks not shown: {count}	Weitere Zuschnitte nicht angezeigt: {count}
+@msg	A joint does not close by {gap} pt.	Eine Verbindung schließt um {gap} pt nicht.
+@msg	Two panels pass through each other.	Zwei Felder durchdringen einander.

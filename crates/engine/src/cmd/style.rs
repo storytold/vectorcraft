@@ -318,8 +318,14 @@ impl Session {
     /// it is still linked (still has that style's look). A graph series group that holds nothing of its own stands
     /// for the topmost path directly inside it, which a style applied to the group links.
     pub fn selection_graphic_style(&self) -> Option<(&GraphicStyle, bool)> {
+        self.graphic_style_of(*self.active()?.selection.subjects().first()?)
+    }
+
+    /// The graphic style of object `id` of the active document, as [`Self::selection_graphic_style`]
+    /// gives it for the first selected object.
+    pub fn graphic_style_of(&self, id: NodeId) -> Option<(&GraphicStyle, bool)> {
         let st = self.active()?;
-        let n = super::appearance::look_holder(&st.doc, st.doc.node(*st.selection.subjects().first()?)?);
+        let n = super::appearance::look_holder(&st.doc, st.doc.node(id)?);
         let g = st.doc.graphic_style_by_id(n.extras().graphic_style?)?;
         Some((g, in_sync(n, g)))
     }

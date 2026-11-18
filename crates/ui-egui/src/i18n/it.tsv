@@ -427,6 +427,12 @@ font-technology	Variable	Variabili
 	Character Alignment	Allineamento caratteri
 	Character / Paragraph	Carattere / Paragrafo
 	Character Rotation	Rotazione caratteri
+	Chinese Big 5	Cinese Big 5
+	Cyrillic	Cirillico
+	Greek	Greco
+	Turkish	Turco
+	Baltic	Baltico
+	Central European	Centroeuropeo
 	Character Set:	Set di caratteri:
 	Character Style	Stile carattere
 	Character Style Options	Opzioni stile carattere
@@ -1284,6 +1290,8 @@ font-technology	Variable	Variabili
 	Files	File
 	Files of a PDF standard can't be password-protected.	I file conformi a uno standard PDF non possono essere protetti da password.
 	Files of this standard tag their colours with ICC profiles.	I file conformi a questo standard contrassegnano i colori con profili ICC.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	I file conformi a questo standard contrassegnano i colori con profili ICC, tranne i colori CMYK nel profilo dell'intento di output, che vengono scritti come DeviceCMYK.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	Con «Non includere i profili» e un intento di output CMYK, ogni colore CMYK viene scritto come DeviceCMYK, a meno che non venga convertito in una destinazione CMYK di un altro profilo.
 	Fill	Riempimento
 	Fill & Stroke	Riempimento e traccia
 	Fill (X), double-click for the Color Picker	Riempimento (X), fai doppio clic per il selettore colore
@@ -2093,6 +2101,7 @@ file-filter	Templates	Modelli
 	Load SVG into Clipboard	Carica SVG negli appunti
 	Load Text into Clipboard	Carica testo negli appunti
 	Local Libraries	Librerie locali
+	Locate Layer	Individua livello
 	Locate Object	Individua oggetto
 	Locate Selected Objects	Individua oggetti selezionati
 	Location	Posizione
@@ -2764,6 +2773,9 @@ diagnostics	ui	interfaccia
 	Polar Grid Tool	Strumento Griglia polare
 	Polygon	Poligono
 	Polygon Properties:	Proprietà poligono:
+	Line Properties:	Proprietà linea:
+	Line Length:	Lunghezza linea:
+	Line Angle:	Angolo linea:
 	Polygon Tool	Strumento Poligono
 	Portrait	Verticale
 	Power Saving (integrated)	Risparmio energetico (integrata)
@@ -9685,3 +9697,13 @@ breakText	Glyphs	Glifi
 @msg	A panel is not joined to the rest by a crease.	Un pannello non è unito al resto da alcuna linea di cordonatura.
 @msg	A fold line is on a non-printing layer.	Una linea di piega si trova su un livello non stampabile.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Pannelli: {panels}, cerniere: {hinges}, errori: {errors}, avvisi: {warnings}
+	Fold Preview	Anteprima piegatura
+	Fold	Piegatura
+	Show Fold Lines	Mostra linee di piega
+	Three-Quarter	Tre quarti
+	Open a document to preview its folded shape.	Apri un documento per vederne in anteprima la forma piegata.
+@msg	Check the fold lines first.	Verifica prima le linee di piega.
+@msg	Panels: {panels}, hinges: {hinges}	Pannelli: {panels}, cerniere: {hinges}
+@msg	Other blanks not shown: {count}	Altri fustellati non mostrati: {count}
+@msg	A joint does not close by {gap} pt.	Una giunzione non si chiude di {gap} pt.
+@msg	Two panels pass through each other.	Due pannelli si attraversano.

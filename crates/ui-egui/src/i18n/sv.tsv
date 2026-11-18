@@ -415,6 +415,11 @@ font-technology	Variable	Variabla
 	Character Alignment	Teckenjustering
 	Character / Paragraph	Tecken / stycke
 	Character Rotation	Teckenrotation
+	Chinese Big 5	Kinesisk Big 5
+	Cyrillic	Kyrillisk
+	Greek	Grekisk
+	Baltic	Baltisk
+	Central European	Centraleuropeisk
 	Character Set:	Teckenuppsättning:
 	Character Style	Teckenstil
 	Character Style Options	Alternativ för teckenstil
@@ -1244,6 +1249,8 @@ font-technology	Variable	Variabla
 	Files	Filer
 	Files of a PDF standard can't be password-protected.	Filer enligt en PDF-standard kan inte lösenordsskyddas.
 	Files of this standard tag their colours with ICC profiles.	Filer enligt den här standarden märker sina färger med ICC-profiler.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	Filer enligt den här standarden märker sina färger med ICC-profiler, utom CMYK-färger i profilen för utgångsavsikt, som skrivs som DeviceCMYK.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	Med ”Inkludera inte profiler” och en CMYK-utgångsavsikt skrivs varje CMYK-färg som DeviceCMYK, om den inte konverteras till ett CMYK-mål med en annan profil.
 	Fill	Fyllning
 	Fill & Stroke	Fyllning och kontur
 	Fill (X), double-click for the Color Picker	Fyllning (X), dubbelklicka för färgväljaren
@@ -1987,6 +1994,7 @@ font-technology	Variable	Variabla
 	Load SVG into Clipboard	Läs in SVG till urklipp
 	Load Text into Clipboard	Läs in text till urklipp
 	Local Libraries	Lokala bibliotek
+	Locate Layer	Hitta lager
 	Locate Object	Hitta objekt
 	Locate Selected Objects	Hitta markerade objekt
 	Location	Plats
@@ -2645,6 +2653,9 @@ font-technology	Variable	Variabla
 	Polar Grid Tool	Verktyg för polärt rutnät
 	Polygon	Polygon
 	Polygon Properties:	Polygonegenskaper:
+	Line Properties:	Linjeegenskaper:
+	Line Length:	Linjelängd:
+	Line Angle:	Linjevinkel:
 	Polygon Tool	Polygonverktyg
 	Portrait	Stående
 	Power Saving (integrated)	Energisparläge (integrerad)
@@ -9738,4 +9749,14 @@ digits	Hindi	Hindi
 @msg	A panel is not joined to the rest by a crease.	En panel är inte förbunden med resten av någon biglinje.
 @msg	A fold line is on a non-printing layer.	En falslinje ligger på ett lager som inte skrivs ut.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Paneler: {panels}, gångjärn: {hinges}, fel: {errors}, varningar: {warnings}
+	Fold Preview	Förhandsgranskning av falsning
+	Fold	Falsning
+	Show Fold Lines	Visa falslinjer
+	Three-Quarter	Trekvarts
+	Open a document to preview its folded shape.	Öppna ett dokument för att förhandsgranska dess falsade form.
+@msg	Check the fold lines first.	Kontrollera falslinjerna först.
+@msg	Panels: {panels}, hinges: {hinges}	Paneler: {panels}, gångjärn: {hinges}
+@msg	Other blanks not shown: {count}	Andra ämnen visas inte: {count}
+@msg	A joint does not close by {gap} pt.	En fog sluter inte med {gap} pt.
+@msg	Two panels pass through each other.	Två paneler går igenom varandra.
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} pixlar är för stort för PSD (högst {MAX_SIDE} pixlar per sida): sänk upplösningen

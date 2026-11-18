@@ -408,6 +408,12 @@ font-technology	Variable	Променливи
 	Character Alignment	Подравняване на знаците
 	Character / Paragraph	Знак / Абзац
 	Character Rotation	Въртене на знак
+	Chinese Big 5	Китайски Big 5
+	Cyrillic	Кирилица
+	Greek	Гръцки
+	Turkish	Турски
+	Baltic	Балтийски
+	Central European	Централноевропейски
 	Character Set:	Набор от знаци:
 	Character Style	Стил на знак
 	Character Style Options	Опции за стил на знак
@@ -1220,6 +1226,8 @@ font-technology	Variable	Променливи
 	Files	Файлове
 	Files of a PDF standard can't be password-protected.	Файлове от PDF стандарт не могат да бъдат защитени с парола.
 	Files of this standard tag their colours with ICC profiles.	Файловете от този стандарт етикетират цветовете си с ICC профили.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	Файловете от този стандарт етикетират цветовете си с ICC профили, с изключение на CMYK цветовете в профила на предназначението на изхода, които се записват като DeviceCMYK.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	С „Без включване на профили“ и CMYK предназначение на изхода всеки CMYK цвят се записва като DeviceCMYK, освен ако не се преобразува към CMYK местоназначение с друг профил.
 	Fill	Запълване
 	Fill & Stroke	Запълване и щрих
 	Fill (X), double-click for the Color Picker	Запълване (X), щракнете двукратно за избор на цвят
@@ -1965,6 +1973,7 @@ font-technology	Variable	Променливи
 	Load SVG into Clipboard	Зареждане на SVG в клипборда
 	Load Text into Clipboard	Зареждане на текст в клипборда
 	Local Libraries	Локални библиотеки
+	Locate Layer	Намиране на слой
 	Locate Object	Намиране на обект
 	Locate Selected Objects	Намиране на избраните обекти
 	Location	Местоположение
@@ -2621,6 +2630,9 @@ font-technology	Variable	Променливи
 	Polar Grid Tool	Инструмент „Полярна мрежа“
 	Polygon	Многоъгълник
 	Polygon Properties:	Свойства на многоъгълника:
+	Line Properties:	Свойства на линията:
+	Line Length:	Дължина на линията:
+	Line Angle:	Ъгъл на линията:
 	Polygon Tool	Инструмент „Многоъгълник“
 	Portrait	Портретна
 	Power Saving (integrated)	Пестене на енергия (интегрирано)
@@ -7319,4 +7331,14 @@ breakText	Glyphs	Глифи
 @msg	A panel is not joined to the rest by a crease.	Панел не е свързан с останалите с линия за биговане.
 @msg	A fold line is on a non-printing layer.	Линия на сгъване е на слой, който не се печата.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Панели: {panels}, панти: {hinges}, грешки: {errors}, предупреждения: {warnings}
+	Fold Preview	Преглед на сгъването
+	Fold	Сгъване
+	Show Fold Lines	Покажи линиите на сгъване
+	Three-Quarter	Три четвърти
+	Open a document to preview its folded shape.	Отворете документ, за да прегледате сгънатата му форма.
+@msg	Check the fold lines first.	Първо проверете линиите на сгъване.
+@msg	Panels: {panels}, hinges: {hinges}	Панели: {panels}, панти: {hinges}
+@msg	Other blanks not shown: {count}	Други разкрои не са показани: {count}
+@msg	A joint does not close by {gap} pt.	Една връзка не се затваря с {gap} pt.
+@msg	Two panels pass through each other.	Два панела минават един през друг.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer трябва да е "singleLine", "everyLine", "standardSingleLine" или "standardEveryLine"

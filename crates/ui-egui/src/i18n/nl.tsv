@@ -2822,6 +2822,9 @@ digits	Malayalam	Malayalam
 	Flip Horizontal	Horizontaal spiegelen
 	Flip Vertical	Verticaal spiegelen
 	Polygon Properties:	Veelhoekeigenschappen:
+	Line Properties:	Lijneigenschappen:
+	Line Length:	Lijnlengte:
+	Line Angle:	Lijnhoek:
 	Rectangle Properties:	Rechthoekeigenschappen:
 	Shape Properties:	Vormeigenschappen:
 	Shape Properties	Vormeigenschappen
@@ -3565,6 +3568,8 @@ antiAlias	Sharp	Scherp
 	Every option matches {base}.	Elke optie komt overeen met {base}.
 	Files of a PDF standard can't be password-protected.	Bestanden volgens een PDF-standaard kunnen niet met een wachtwoord worden beveiligd.
 	Files of this standard tag their colours with ICC profiles.	Bestanden volgens deze standaard voorzien hun kleuren van ICC-profielen.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	Bestanden volgens deze standaard voorzien hun kleuren van ICC-profielen, behalve CMYK-kleuren in het profiel voor uitvoerintentie, die als DeviceCMYK worden geschreven.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	Met ‘Geen profielen opnemen’ en een CMYK-uitvoerintentie wordt elke CMYK-kleur als DeviceCMYK geschreven, tenzij deze wordt omgezet naar een CMYK-bestemming met een ander profiel.
 	Flattener preset:	Voorinstelling voor afvlakking:
 	General › Thumbnails	Algemeen › Miniaturen
 	Grayscale images	Grijswaardenafbeeldingen
@@ -3748,6 +3753,12 @@ antiAlias	Sharp	Scherp
 	LF (macOS, Linux)	LF (macOS, Linux)
 	CRLF (Windows)	CRLF (Windows)
 	Text Export Options	Opties tekstexport
+	Chinese Big 5	Chinees Big 5
+	Cyrillic	Cyrillisch
+	Greek	Grieks
+	Turkish	Turks
+	Baltic	Baltisch
+	Central European	Centraal-Europees
 	Character Set:	Tekenset:
 	Join the lines of each paragraph	De regels van elke alinea samenvoegen
 	Line Breaks	Regeleinden
@@ -4162,6 +4173,7 @@ theme	Appearance	Vormgeving
 	Select Art	Kunst selecteren
 	Set Current Layer	Huidige laag instellen
 	Flatten Artwork	Kunst afvlakken
+	Locate Layer	Laag lokaliseren
 	Locate Object	Object lokaliseren
 	Lock Others	Overigen vergrendelen
 	Merge Selected	Selectie samenvoegen
@@ -10085,3 +10097,13 @@ breakText	Glyphs	Glyphs
 @msg	A panel is not joined to the rest by a crease.	Een paneel is door geen rillijn met de rest verbonden.
 @msg	A fold line is on a non-printing layer.	Een vouwlijn staat op een laag die niet wordt afgedrukt.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panelen: {panels}, scharnieren: {hinges}, fouten: {errors}, waarschuwingen: {warnings}
+	Fold Preview	Vouwvoorbeeld
+	Fold	Vouwen
+	Show Fold Lines	Vouwlijnen tonen
+	Three-Quarter	Driekwart
+	Open a document to preview its folded shape.	Open een document om de gevouwen vorm te bekijken.
+@msg	Check the fold lines first.	Controleer eerst de vouwlijnen.
+@msg	Panels: {panels}, hinges: {hinges}	Panelen: {panels}, scharnieren: {hinges}
+@msg	Other blanks not shown: {count}	Andere uitslagen niet getoond: {count}
+@msg	A joint does not close by {gap} pt.	Een naad sluit {gap} pt niet.
+@msg	Two panels pass through each other.	Twee panelen gaan door elkaar heen.
