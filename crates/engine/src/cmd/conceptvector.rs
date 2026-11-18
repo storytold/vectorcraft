@@ -503,6 +503,11 @@ fn insert(s: &mut Session, p: &Value) -> Result<Value> {
         }
     }
     let src = image_rect(&image).ok_or_else(stale)?;
+    // A variation with no paths adds nothing: it is left out, and with none left nothing changes.
+    let (picked, label_of): (Vec<Variation>, Vec<String>) = picked.into_iter().zip(label_of).filter(|(v, _)| !v.paths.is_empty()).unzip();
+    if picked.is_empty() {
+        return Ok(json!({ "ids": [] }));
+    }
     let unit = image.xf.determinant().abs().sqrt();
     // Each chosen variation's box over the image: the image's box and the variation's painted
     // bounds, which may reach past it. A square cap's corner lies half the width along the path
@@ -697,7 +702,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Insert Concept to Vector Styles",
             [],
             None,
-            "{job, variations: [style id…] (different styles of the job)} put a group of each chosen variation, named after its style and in the provider's order, in a row to the right of the job's image, each the image's size with 24 pt between them, moved further right past other visible art in their way, where a variation reaches past its box too (the next one then starts 24 pt past what it paints); the groups go above the outermost clip group or opacity-masked group around the image, and above the outermost envelope, blend, repeat or other live object and the outermost group with effects or fills and strokes of its own around it; the image and other art stay as they are; one undo step; an error when the job's document is not the active one, the object, its image or its placement changed, the object is now locked or hidden, or it is on a layer with a clipping mask, an opacity mask or effects of its own, and when it plays from recorded steps (an action or a replayed journal), since jobs are not saved →{ids: the groups, selected}",
+            "{job, variations: [style id…] (different styles of the job)} put a group of each chosen variation, named after its style and in the provider's order, in a row to the right of the job's image, each the image's size with 24 pt between them, moved further right past other visible art in their way, where a variation reaches past its box too (the next one then starts 24 pt past what it paints); the groups go above the outermost clip group or opacity-masked group around the image, and above the outermost envelope, blend, repeat or other live object and the outermost group with effects or fills and strokes of its own around it; the image and other art stay as they are; one undo step; a variation with no paths is left out, and when every chosen one has none nothing changes (no undo step, ids []); an error when the job's document is not the active one, the object, its image or its placement changed, the object is now locked or hidden, or it is on a layer with a clipping mask, an opacity mask or effects of its own, and when it plays from recorded steps (an action or a replayed journal), since jobs are not saved →{ids: the groups, selected}",
             has_doc,
             insert
         ),

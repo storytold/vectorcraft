@@ -4008,7 +4008,8 @@ already walks Image Trace. Short agent entry points:
   `conceptVector.insert {job, variations: [style id…]}` puts a group of each chosen variation, named after its style and
   in the provider's order, to the right of the image, each the image's size with 24 pt between them, moved further
   right past other visible art, also where a variation reaches past its image-sized box (the next one then starts 24
-  pt past what it paints); it is one undo step and selects the groups. The groups go above the outermost clip group or
+  pt past what it paints); it is one undo step and selects the groups. A variation with no paths is left out, and when
+  every chosen one has none, nothing changes (no undo step, `ids` empty). The groups go above the outermost clip group or
   opacity-masked group around the image, so that it does not hide them, and above the outermost envelope, blend,
   repeat or other live object, and the outermost group with effects or fills and strokes of its own, around it, whose
   content stays as it is. It is an error when the job was canceled or dropped, when its document is not the active

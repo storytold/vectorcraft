@@ -659,6 +659,30 @@ fn insert_follows_the_providers_order_whatever_order_generate_was_given() {
     assert!(bounds(&s, ids[0]).x1 < bounds(&s, ids[1]).x0);
 }
 
+/// A variation with no paths adds no empty group: it is left out, and when every chosen one has
+/// none, nothing changes and no undo step is recorded.
+#[test]
+fn insert_leaves_out_variations_with_no_paths() {
+    fn s1_empty(r: &Request, st: Steps) -> Result<Vec<Variation>, ProviderError> {
+        let mut v = squares(r, st)?;
+        v.iter_mut().filter(|v| v.style == "s1").for_each(|v| v.paths.clear());
+        Ok(v)
+    }
+    let (mut s, _) = doc_with(&art());
+    with_fake(&mut s, fake(s1_empty));
+    let job = generate(&mut s, json!({"provider": "test.fake", "styles": ["s0", "s1"]})).unwrap()["job"].as_u64().unwrap();
+    let (before, depth) = (s.doc().unwrap().doc.clone(), undo_len(&s));
+    let r = s.execute("conceptVector.insert", &json!({"job": job, "variations": ["s1"]})).unwrap();
+    assert_eq!(r["ids"], json!([]));
+    assert_eq!(undo_len(&s), depth);
+    assert!(s.doc().unwrap().doc == before, "nothing changes");
+    let r = s.execute("conceptVector.insert", &json!({"job": job, "variations": ["s0", "s1"]})).unwrap();
+    let ids = r["ids"].as_array().unwrap();
+    assert_eq!(ids.len(), 1);
+    assert_eq!(s.doc().unwrap().doc.node(NodeId(ids[0].as_u64().unwrap())).unwrap().name.as_deref(), Some("s0"));
+    assert_eq!(undo_len(&s), depth + 1);
+}
+
 #[test]
 fn insert_moves_the_row_past_art_in_its_way() {
     let (mut s, img) = doc_with(&art());
