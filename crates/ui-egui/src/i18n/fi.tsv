@@ -3530,6 +3530,7 @@ theme	Appearance	Ulkoasu
 	Delete Brush	Poista sivellin
 	Delete Color	Poista väri
 	Restore Generated Table	Palauta luotu taulukko
+	Unshift All Colors	Peru kaikkien värien siirto
 	Delete Symbol	Poista symboli
 	Delete the selected symbol?	Poistetaanko valittu symboli?
 	Delete the selected symbols?	Poistetaanko valitut symbolit?
@@ -4506,6 +4507,9 @@ font-technology	Variable	Muuttuvat
 	No menu item	Ei valikkokohdetta
 	Toolbar	Työkalurivi
 	{toolbar}, in the {tool} group	{toolbar}, ryhmässä {tool}
+	In the menu bar: {path}	Valikkorivillä: {path}
+	In the {group} group: press and hold to open it	Ryhmässä {group}: avaa painamalla pitkään
+	{home}, not shown now	{home}, ei näkyvissä nyt
 @plural	{n} result|{n} results	{n} tulos|{n} tulosta
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown}/{n} tulosta. Kirjoita lisää rajataksesi tuloksia.|{shown}/{n} tulosta. Kirjoita lisää rajataksesi tuloksia.
 	Recent Commands	Viimeisimmät komennot
@@ -4623,6 +4627,8 @@ font-technology	Variable	Muuttuvat
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Kuinka lähelle grafiikkaa osoittimen tai vedettävän pisteen on tultava näytöllä, jotta älykkäät apuviivat kohdistavat siihen; etäisyys on sama kaikilla zoomauksilla.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Kohdistaa janan pään tai keskipisteestä piirretyn ympyrän niin, että se koskettaa lähellä olevaa käyrää.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Kohdistaa janan pään niin, että se kohtaa lähellä olevan suoran segmentin suorassa kulmassa.
+	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Näyttää piirtopinnalla kunkin viipaleen numeron ruudussa sen vasemmassa yläkulmassa; kun asetus on pois päältä, viipaleiden ääriviivat näkyvät edelleen.
+	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Käyttäjä- ja objektiviipaleiden ääriviivojen ja niiden numeroruutujen väri; automaattiset viipaleet käyttävät siitä himmeämpää sävyä.
 	Reset all preferences to their defaults?	Palautetaanko kaikki asetukset oletuksiin?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Oletukset otetaan käyttöön, kun valitset Asetuksissa OK. Peruuta siellä säilyttää nykyiset asetuksesi.
 	Smaller ↔ Larger	Pienempi ↔ Suurempi
@@ -5307,6 +5313,7 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	choose a location for the package	valitse paketin sijainti
 @msg	clipboard is empty	leikepöytä on tyhjä
 @msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: väritaulukkoon on jäätävä vähintään yksi väri
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted: `{k}` nimeää värin, jonka myös toinen avain nimeää
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` ei ole väri, kuten "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: enintään {MAX_TABLE} väriä
 @msg	command `{0}` is not available right now: {1}	komento `{0}` ei ole nyt käytettävissä: {1}
@@ -7866,6 +7873,7 @@ breakText	Glyphs	Merkit
 @msg	One path lies inside the other, so they have no common tangents	Toinen polku on toisen sisällä, joten niillä ei ole yhteisiä tangentteja
 @msg	The paths overlap, so they have no internal tangents	Polut ovat päällekkäin, joten niillä ei ole sisäisiä tangentteja
 @msg	One path lies inside the other, so they have no internal tangents	Toinen polku on toisen sisällä, joten niillä ei ole sisäisiä tangentteja
+@msg	The point lies inside the path, so it has no tangents	Piste on polun sisällä, joten sillä ei ole tangentteja
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Laajenna viivat poluiksi
 @msg	select paths with dashed strokes to expand	valitse laajennettavat polut, joissa on katkoviiva
@@ -8385,4 +8393,9 @@ breakText	Glyphs	Merkit
 	Botanical Sprig	Kasvinoksa
 	Facet Diamond	Särmätty timantti
 	Tide Crest	Aallonharja
+	Pressure Sensitive	Paineherkkä
+	Flex Ribbon	Joustava nauha
+	Pulse Stroke	Sykkivä veto
+	Round Flow	Pyöreä veto
+	Chisel Flow	Viisto veto
 @msg	text.{key} `{v}`: use "{_1}" or "{_2}"	text.{key} `{v}`: käytä arvoa "{_1}" tai "{_2}"
