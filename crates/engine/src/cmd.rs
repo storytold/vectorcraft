@@ -74,6 +74,7 @@ pub mod perspgrid;
 pub mod place;
 pub mod plugin;
 pub(crate) mod plugin_call;
+mod preflight;
 pub mod prefscmds;
 pub mod print;
 pub(crate) mod printadvanced;
@@ -98,7 +99,6 @@ pub(crate) mod symboledit;
 pub mod symbollib;
 pub(crate) mod tabs;
 mod textedit;
-mod xmlattrs;
 
 pub use textedit::effective_kerning;
 pub mod textstyles;
@@ -382,6 +382,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(package::specs());
         v.extend(slices::specs());
         v.extend(print::specs());
+        v.extend(preflight::specs());
         v.extend(recovery::specs());
         v.extend(fileio::dxfimport::specs());
         v.extend(webexport::specs());
