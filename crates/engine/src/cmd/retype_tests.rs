@@ -166,3 +166,40 @@ fn glyphs_of_different_groups_and_transparency_stay_apart() {
     assert_eq!(children_of(&s, b), vec![ids[1], ids[2]]);
     assert_eq!(s.doc().unwrap().doc.node(NodeId(ids[2])).unwrap().opacity, 0.25, "the glyph's own opacity carries over");
 }
+
+#[test]
+fn live_type_between_glyphs_ends_the_line_too() {
+    let mut s = session();
+    let g = outlined(&mut s, json!({"x": 40, "y": 100, "text": "AB", "size": 40}));
+    let live = s.execute("text.create", &json!({"x": 30, "y": 90, "text": "x", "size": 60})).unwrap()["id"].as_u64().unwrap();
+    s.edit("test", |d, _| {
+        let n = d.node(NodeId(live)).unwrap().clone();
+        d.remove(NodeId(live))?;
+        d.insert(Some(NodeId(g)), 1, n)?;
+        Ok(())
+    })
+    .unwrap();
+    s.execute("select.set", &json!({"ids": [g]})).unwrap();
+    let r = s.execute("type.retype", &json!({})).unwrap();
+    assert_eq!(r["texts"], json!(["A", "B"]), "{r}");
+    let ids: Vec<u64> = r["ids"].as_array().unwrap().iter().map(|v| v.as_u64().unwrap()).collect();
+    assert_eq!(children_of(&s, g), vec![ids[0], live, ids[1]], "B stays over the live type");
+    let t = text_of(&s, ids[0]);
+    assert!(t.first_style().features.iter().any(|f| f == "-liga"), "glyphs drawn one by one: no ligatures");
+}
+
+#[test]
+fn an_open_path_along_a_glyph_is_not_a_glyph() {
+    let mut s = session();
+    let g = outlined(&mut s, json!({"x": 40, "y": 100, "text": "I", "size": 40}));
+    s.edit("test", |d, _| {
+        let glyph = d.node(NodeId(g)).unwrap().children().unwrap()[0].id;
+        for sp in &mut d.node_mut(glyph).unwrap().path_data_mut().unwrap().subpaths {
+            sp.closed = false;
+        }
+        Ok(())
+    })
+    .unwrap();
+    s.execute("select.set", &json!({"ids": [g]})).unwrap();
+    assert!(s.execute("type.retype", &json!({})).is_err(), "nothing matches");
+}

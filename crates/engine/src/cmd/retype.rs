@@ -47,9 +47,12 @@ pub fn specs() -> Vec<CommandSpec> {
 /// A shape to match: a path or compound path, in document space.
 struct Piece {
     id: NodeId,
-    /// The group holding it (`None` for a selected shape at the top): glyphs of different
-    /// groups, which may composite differently, never share a line.
+    /// The group or layer holding it: glyphs of different groups, which may composite
+    /// differently, never share a line.
     parent: Option<NodeId>,
+    /// Other art (not retyped) lies between it and the shape before it, so the type after that
+    /// art must stay painted after it: the line ends here.
+    after_barrier: bool,
     path: BezPath,
     appearance: Appearance,
     /// The shape's own transparency, which the new type takes.
@@ -57,28 +60,45 @@ struct Piece {
     blend: vectorcraft_color::BlendMode,
 }
 
-fn collect(n: &Node, parent: Option<NodeId>, depth: usize, out: &mut Vec<Piece>) {
+/// The shapes in `n` (held by `parent`), in paint order. `barrier` is set when art that is not a
+/// shape lies before the next one; it starts set for a root that does not follow the last root.
+fn collect(n: &Node, parent: Option<NodeId>, depth: usize, barrier: &mut bool, out: &mut Vec<Piece>) {
     if out.len() >= MAX_PIECES || depth > MAX_DEPTH {
+        *barrier = true;
         return;
     }
-    let piece = |path: BezPath| Piece { id: n.id, parent, path, appearance: (*n.appearance).clone(), opacity: n.opacity, blend: n.blend };
+    let piece = |path: BezPath, after_barrier: bool| Piece {
+        id: n.id,
+        parent,
+        after_barrier,
+        path,
+        appearance: (*n.appearance).clone(),
+        opacity: n.opacity,
+        blend: n.blend,
+    };
     match &n.kind {
         NodeKind::Group { children, clip: false } => {
             for c in children {
-                collect(c, Some(n.id), depth + 1, out);
+                collect(c, Some(n.id), depth + 1, barrier, out);
             }
         }
-        NodeKind::Path { path, clipping: false, guide: false, .. } => out.push(piece(path.to_bezpath())),
+        // Only closed shapes can be glyphs: an open path stroked along a glyph's outline is not one.
+        NodeKind::Path { path, clipping: false, guide: false, .. } if path.is_closed() => out.push(piece(path.to_bezpath(), std::mem::take(barrier))),
         NodeKind::Compound { children, .. } => {
             let mut path = BezPath::new();
             for c in children {
-                if let NodeKind::Path { path: p, .. } = &c.kind {
-                    path.extend(p.to_bezpath());
+                match &c.kind {
+                    NodeKind::Path { path: p, .. } if p.is_closed() => path.extend(p.to_bezpath()),
+                    _ => {
+                        *barrier = true;
+                        return;
+                    }
                 }
             }
-            out.push(piece(path));
+            out.push(piece(path, std::mem::take(barrier)));
         }
-        _ => {}
+        // Live type, images, clip groups and the rest stay, and the type after them stays after them.
+        _ => *barrier = true,
     }
 }
 
@@ -194,10 +214,16 @@ fn retype(s: &mut Session, p: &Value) -> Result<Value> {
     let (lines, unmatched) = {
         let d = &s.doc()?.doc;
         let mut pieces = vec![];
+        let mut last: Option<(Option<NodeId>, usize)> = None;
         for r in &roots {
-            if let Some(n) = d.node(*r) {
-                collect(n, None, 0, &mut pieces);
-            }
+            let Some(n) = d.node(*r) else { continue };
+            let parent = d.parent_of(*r);
+            let idx = d.position(*r).map(|(_, i, _)| i);
+            // A root right after the last one, in the same parent, continues its lines; unselected
+            // art between two roots is a barrier.
+            let mut barrier = !matches!((last, idx), (Some((p, i)), Some(j)) if p == parent && i + 1 == j);
+            last = idx.map(|i| (parent, i));
+            collect(n, parent, 0, &mut barrier, &mut pieces);
         }
         if pieces.is_empty() {
             return Err(EngineError::Other("Retype: select outlined text (paths or compound paths)".into()));
@@ -219,6 +245,9 @@ fn retype(s: &mut Session, p: &Value) -> Result<Value> {
         // An unmatched shape between glyphs ends the line: the type after it is painted after it.
         let mut open = false;
         for (pc, ms) in pieces.iter().zip(&found) {
+            if pc.after_barrier {
+                open = false;
+            }
             // Earlier matches win ties: they are the closer fits.
             let best = ms.iter().enumerate().max_by_key(|(i, m)| (rank(m.face.id()), std::cmp::Reverse(*i))).map(|(_, m)| m);
             let Some(m) = best else {
@@ -249,6 +278,8 @@ fn retype(s: &mut Session, p: &Value) -> Result<Value> {
                 font_style: l.face.style.clone(),
                 // The version that matched, when two of the family and style are loaded.
                 font_version: (!l.face.version.is_empty()).then(|| l.face.version.clone()),
+                // Each outlined glyph was drawn on its own; a ligature would draw another shape.
+                features: vec!["-liga".into()],
                 size: l.scale * l.face.units_per_em(),
                 fill: l.appearance.fill_paint(),
                 stroke: l.appearance.stroke_paint(),
