@@ -637,6 +637,69 @@ fn an_edited_profile_starts_the_documents_of_its_category() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// The fill, stroke and weight of `id` in the active document.
+fn look(s: &Session, id: u64) -> (vectorcraft_color::Paint, vectorcraft_color::Paint, Option<f64>) {
+    let n = s.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).cloned().unwrap();
+    (n.appearance.fill_paint(), n.appearance.stroke_paint(), n.appearance.stroke().map(|st| st.width))
+}
+
+#[test]
+fn a_redefined_default_graphic_style_in_a_profile_is_the_default_fill_and_stroke() {
+    use vectorcraft_color::Paint;
+    let (mut s, dir) = with_profiles("default-style");
+    // The Print profile's Default Graphic Style becomes no fill and a 0.25 pt red stroke.
+    s.execute("file.newProfiles.edit", &json!({"name": "Print"})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap();
+    s.execute("paint.setFill", &json!({"none": true})).unwrap();
+    s.execute("paint.setStroke", &json!({"color": "#ff0000"})).unwrap();
+    s.execute("stroke.set", &json!({"weight": 0.25})).unwrap();
+    s.execute("graphicStyle.redefine", &json!({"name": "Default Graphic Style"})).unwrap();
+    s.execute("document.save", &json!({})).unwrap();
+    let style = s.doc().unwrap().doc.graphic_styles[0].clone();
+    let red = style.appearance.stroke_paint();
+    assert!(matches!(red, Paint::Solid { .. }), "{red:?}");
+    assert_eq!(style.appearance.stroke().map(|st| st.width), Some(0.25), "{style:?}");
+    // The Mobile profile is saved as shipped.
+    s.execute("file.newProfiles.edit", &json!({"name": "Mobile"})).unwrap();
+    s.execute("document.save", &json!({})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#00ff00"})).unwrap();
+    let green = s.paint.fill.clone();
+
+    // A document from the Print profile starts with the style's fill, stroke and weight, and its art takes them.
+    s.execute("file.new", &json!({"profile": "Print", "colorMode": "cmyk"})).unwrap();
+    assert_eq!((s.paint.fill.clone(), s.paint.stroke.clone(), s.paint.stroke_width), (Paint::None, red.clone(), 0.25));
+    let id = s.execute("shape.rectangle", &json!({"x": 20, "y": 20, "width": 60, "height": 60})).unwrap()["id"].as_u64().unwrap();
+    assert_eq!(look(&s, id), (Paint::None, red.clone(), Some(0.25)));
+    // Default Fill and Stroke gives the selection and the defaults that look again, as one undo step.
+    s.execute("paint.setFill", &json!({"color": "#0000ff"})).unwrap();
+    s.execute("stroke.set", &json!({"weight": 3})).unwrap();
+    let steps = s.doc().unwrap().history.undo.len();
+    s.execute("paint.default", &json!({})).unwrap();
+    assert_eq!(look(&s, id), (Paint::None, red.clone(), Some(0.25)));
+    assert_eq!((s.paint.fill.clone(), s.paint.stroke_width), (Paint::None, 0.25));
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1);
+    // Nothing to change: no undo step.
+    let step = s.doc().unwrap().history.step();
+    s.execute("paint.default", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().history.step(), step);
+    // The new art is not linked to the style.
+    assert!(s.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().extras().graphic_style.is_none());
+
+    // A profile with the shipped style, here converted to CMYK, leaves the fill and stroke the user chose.
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#00ff00", "keepModel": true})).unwrap();
+    s.execute("file.new", &json!({"profile": "Mobile", "colorMode": "cmyk"})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.color_mode, ColorMode::Cmyk);
+    assert_eq!(s.paint.fill, green);
+    // So does a document without a profile, and Default Fill and Stroke there gives white and 1 pt black.
+    s.execute("file.new", &json!({})).unwrap();
+    assert_eq!(s.paint.fill, green);
+    s.execute("paint.default", &json!({})).unwrap();
+    assert_eq!(s.paint, vectorcraft_tools::PaintDefaults::default());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn the_profile_follows_the_preset_access_and_reset() {
     let (mut s, dir) = with_profiles("choice");

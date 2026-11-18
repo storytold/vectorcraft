@@ -1095,6 +1095,9 @@ digits	Malayalam	マラヤーラム数字
 	Additional Plug-ins Folder	追加プラグインフォルダー
 	Additional Fonts Folder	追加フォントフォルダー
 	Adjust Adjoining Width Points	隣接する幅ポイントを調整
+	Incoming	入り側
+	Outgoing	出側
+	Single Width Only	1 つの幅のみ
 	Adjust Colors	カラーを調整
 	Adjust Options:	調整オプション:
 	Advanced Options	詳細オプション
@@ -1330,6 +1333,8 @@ antiAlias	Sharp	シャープ
 	Choose a folder	フォルダーを選択
 	Choose…	選択…
 	Circle	円
+	Circle Tool	円ツール
+	Circle too large	円が大きすぎます
 	Clear All Tabs	すべてのタブを消去
 	Above Text	テキストの上
 	Position Panel Above Text	テキストの上にパネルを配置
@@ -1865,6 +1870,8 @@ antiAlias	Sharp	シャープ
 	Files	ファイル
 	Files of a PDF standard can't be password-protected.	PDF 規格のファイルにはパスワードを設定できません。
 	Files of this standard tag their colours with ICC profiles.	この規格のファイルでは、カラーに ICC プロファイルが付けられます。
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	この規格のファイルでは、カラーに ICC プロファイルが付けられます。ただし、出力インテントのプロファイルの CMYK カラーは DeviceCMYK として書き出されます。
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	「プロファイルを含めない」と CMYK の出力インテントでは、別のプロファイルの CMYK 変換先に変換されない限り、すべての CMYK カラーが DeviceCMYK として書き出されます。
 	Fill	塗り
 	Fill New Type Objects With Placeholder Text	新規テキストオブジェクトをダミーテキストで埋める
 	Start Lists From Typed Markers	入力した記号からリストを開始
@@ -2369,6 +2376,7 @@ antiAlias	Sharp	シャープ
 	Load SVG into Clipboard	SVG をクリップボードに読み込む
 	Load Text into Clipboard	テキストをクリップボードに読み込む
 	Local Libraries	ローカルライブラリ
+	Locate Layer	レイヤーを検索
 	Locate Object	オブジェクトを検索
 	Locate Selected Objects	選択したオブジェクトを検索
 	Location	場所
@@ -2859,6 +2867,9 @@ diagnostics	ui	UI
 	Polar Grid Tool	同心円グリッドツール
 	Polygon	多角形
 	Polygon Properties:	多角形のプロパティ:
+	Line Properties:	線のプロパティ:
+	Line Length:	線の長さ:
+	Line Angle:	線の角度:
 	Polygon Tool	多角形ツール
 	Portrait	縦置き
 	Portuguese	ポルトガル語
@@ -3446,6 +3457,7 @@ mark-style	Japanese	日本式
 	Set Text	テキストを設定
 	Set Zoom	ズーム率を設定
 	Set base color to the current color	基本カラーを現在のカラーに設定
+	Set the current fill or stroke to the selected color	現在の塗りまたは線を選択したカラーに設定
 	Set the selected color to the current color	選択したカラーを現在のカラーに設定
 	Setup…	設定…
 	Shape Builder	シェイプ形成ツール
@@ -3504,7 +3516,7 @@ mark-style	Japanese	日本式
 	Show all plates	すべての版を表示
 	Show handles when multiple anchors are selected	複数のアンカーを選択したときにハンドルを表示
 	Show {kind} Brushes	{kind}ブラシを表示
-	Show/hide plate (Alt-click: only this plate)	版の表示／非表示 (Alt+クリック: この版のみ)
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	版の表示／非表示 (Alt+クリック: この版のみ、もう一度 Alt+クリック: すべての版)
 	Show:	表示:
 	Shown with the optimised preview.	最適化プレビューで表示されます。
 	Side 1:	辺 1:
@@ -3859,6 +3871,8 @@ mark-style	Japanese	日本式
 	User Swatch Library 9	ユーザースウォッチライブラリ 9
 	V Spacing:	垂直方向の間隔:
 	Variable Width Profile	可変幅プロファイル
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	線のブラシは独自のサイズを保つため、幅プロファイルでは変わりません。プロファイルを使うにはブラシを削除してください。
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	線のブラシは独自のサイズを保つため、幅プロファイルでは変わりません。プロファイルを使うにはブラシを削除してください。
 	Variation:	バリエーション:
 	Vector Halftone	ベクトルハーフトーン
 	Vector illustration — fast, open, scriptable.	ベクターイラスト — 高速・オープン・スクリプト対応
@@ -4928,8 +4942,8 @@ variable-list-end	{0}, {1}	{0}、{1}
 @msg	image would be too large; lower the resolution	画像が大きくなりすぎるため、解像度を下げてください
 @msg	clipboard is empty	クリップボードが空です
 @msg	no anchor points selected	アンカーポイントが選択されていません
-@msg	`points` must be three [x, y] pairs of numbers	`points` は 3 組の数値 [x, y] にしてください
-@msg	direct-select three anchor points, or give `points`	アンカーポイントを 3 つダイレクト選択するか、`points` を指定してください
+@msg	`points` must be two or three [x, y] pairs of numbers	`points` は 2 組または 3 組の数値 [x, y] にしてください
+@msg	direct-select two or three anchor points, or give `points`	アンカーポイントを 2 つまたは 3 つダイレクト選択するか、`points` を指定してください
 @msg	no circle passes through these points: two are the same or all three lie on one line	これらの点を通る円はありません: 2 つの点が同じか、3 点すべてが一直線上にあります
 @msg	select at least two objects	オブジェクトを 2 つ以上選択してください
 @msg	exit isolation mode first	先に分離モードを終了してください
@@ -5351,6 +5365,9 @@ variable-list-end	{0}, {1}	{0}、{1}
 @msg	`{color}` is not a colour (#rrggbb or a preset name)	`{color}` はカラーではありません (#rrggbb またはプリセット名で指定してください)
 @msg	give the path `id` and the width point `index`	パスの `id` と幅ポイントの `index` を指定してください
 @msg	no such width point	指定された幅ポイントが見つかりません
+@msg	`single` must be `incoming` or `outgoing`	`single` は `incoming` または `outgoing` にしてください
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` と `outIndex` は 1 つの不連続な幅ポイントの 2 つの半分である必要があります
+@msg	a discontinuous width point keeps its place	不連続な幅ポイントの位置は変わりません
 @msg	onto must name a panel floating in another group	onto には、別のグループでフローティングしているパネルを指定してください
 @msg	below and above must name a panel floating in another group	below と above には別のグループでフローティングしているパネルを指定してください
 @msg	give only one of onto, below and above	onto、below、above のうち 1 つだけを指定してください
@@ -7707,6 +7724,7 @@ axis	Y Axis	Y 軸
 @msg	compound {_1} must contain exactly one open path to join	連結するには、複合パス {_1} にオープンパスがちょうど 1 つ含まれている必要があります
 @msg	connect end must be "start" or "end"	connect の end には "start" または "end" を指定してください
 @msg	connect needs a path other than the one extended	connect には、延長したパスとは別のパスが必要です
+@msg	connect needs extend	connect には extend が必要です
 @msg	connect needs id	connect には id が必要です
 @msg	connect path has no open end	connect のパスに開いた端点がありません
 @msg	copy needs path: the file to copy into the document's folder	copy には path が必要です: ドキュメントのフォルダーにコピーするファイルを指定してください

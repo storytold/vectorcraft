@@ -121,7 +121,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Separations Preview",
             [],
             None,
-            "{on?: bool, plates?: [names], toggle?: plate, only?: plate} Separations Preview: show the chosen plates (one plate = greyscale ink coverage) → {on, plates: [{name, spot, visible, rgb}]}",
+            "{on?: bool, plates?: [names], toggle?: plate, only?: plate, soloToggle?: plate (only that plate, or every plate when it is the only one shown)} Separations Preview: show the chosen plates (one plate = grayscale ink coverage) → {on, plates: [{name, spot, visible, rgb}]}",
             always,
             separations
         ),
@@ -1063,6 +1063,13 @@ fn separations(s: &mut Session, p: &Value) -> Result<Value> {
     }
     if let Some(n) = text_param(p, "only", C)? {
         v.separations = Some(vec![check(n)?]);
+    }
+    // The panel's Alt-click on a plate's eye: that plate alone, or every plate when it already
+    // shows alone among the active document's plates.
+    if let Some(n) = text_param(p, "soloToggle", C)? {
+        let n = check(n)?;
+        let alone = v.separations.as_ref().is_some_and(|vis| all.iter().filter(|a| vis.contains(a)).eq([&n]));
+        v.separations = Some(if alone { all.clone() } else { vec![n] });
     }
     if let Some(n) = text_param(p, "toggle", C)? {
         let n = check(n)?;

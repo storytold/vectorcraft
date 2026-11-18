@@ -165,6 +165,9 @@
 	Additional Fonts Folder	વધારાનું ફોન્ટ ફોલ્ડર
 	Additional Plug-ins Folder	વધારાનું પ્લગ-ઇન ફોલ્ડર
 	Adjust Adjoining Width Points	અડીને આવેલા પહોળાઈ બિંદુઓ ગોઠવો
+	Incoming	આવતી બાજુ
+	Outgoing	જતી બાજુ
+	Single Width Only	ફક્ત એક પહોળાઈ
 	Adjust Color Balance…	રંગ બૅલેન્સ ગોઠવો…
 	Adjust Colors	રંગ ગોઠવો
 	Adjust Options:	ગોઠવણ વિકલ્પો:
@@ -571,6 +574,8 @@
 	Chosen: {n} of {total}	પસંદ કરેલ: {total} માંથી {n}
 	Chrome…	ક્રોમ…
 	Circle	વર્તુળ
+	Circle Tool	વર્તુળ ટૂલ
+	Circle too large	વર્તુળ ખૂબ મોટું છે
 	Circle:	વર્તુળ:
 	Classic	ક્લાસિક
 	Clean Up	સાફ કરો
@@ -1390,6 +1395,8 @@
 	Files	ફાઇલો
 	Files of a PDF standard can't be password-protected.	PDF સ્ટાન્ડર્ડની ફાઇલો પાસવર્ડ-સુરક્ષિત કરી શકાતી નથી.
 	Files of this standard tag their colours with ICC profiles.	આ સ્ટાન્ડર્ડની ફાઇલો તેમના રંગોને ICC પ્રોફાઇલ્સ સાથે ટૅગ કરે છે.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	આ સ્ટાન્ડર્ડની ફાઇલો તેમના રંગોને ICC પ્રોફાઇલ્સ સાથે ટૅગ કરે છે, આઉટપુટ ઇન્ટેન્ટ પ્રોફાઇલમાંના CMYK રંગો સિવાય, જે DeviceCMYK તરીકે લખાય છે.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	“પ્રોફાઇલ્સ શામેલ કરશો નહીં” અને CMYK આઉટપુટ ઇન્ટેન્ટ સાથે, દરેક CMYK રંગ DeviceCMYK તરીકે લખાય છે, સિવાય કે તેને બીજી પ્રોફાઇલના CMYK ગંતવ્યમાં રૂપાંતરિત કરવામાં આવે.
 	Fill	ભરો
 	Fill & Stroke	ભરો અને સ્ટ્રોક
 	Fill (X), double-click for the Color Picker	ભરો (X), કલર પીકર માટે ડબલ-ક્લિક કરો
@@ -2110,6 +2117,7 @@
 	Loads native code	નેટિવ કોડ લોડ કરે છે
 	Local Libraries	સ્થાનિક લાઇબ્રેરીઓ
 	Locate Library…	લાઇબ્રેરી શોધો…
+	Locate Layer	લેયર શોધો
 	Locate Object	ઑબ્જેક્ટ શોધો
 	Locate Selected Objects	પસંદ કરેલા ઑબ્જેક્ટ શોધો
 	Location	સ્થાન
@@ -2777,6 +2785,9 @@
 	Polish	પોલિશ
 	Polygon	બહુકોણ
 	Polygon Properties:	બહુકોણના ગુણધર્મો:
+	Line Properties:	રેખાના ગુણધર્મો:
+	Line Length:	રેખાની લંબાઈ:
+	Line Angle:	રેખાનો કોણ:
 	Polygon Tool	બહુકોણ ટૂલ
 	Polygonal Lasso	બહુકોણીય લાસો
 	Polygonal Lasso Tool	બહુકોણીય લાસો ટૂલ
@@ -3665,6 +3676,7 @@
 	Set Zoom	ઝૂમ સેટ કરો
 	Set as Default	ડિફૉલ્ટ તરીકે સેટ કરો
 	Set base color to the current color	બેઝ રંગ વર્તમાન રંગ પર સેટ કરો
+	Set the current fill or stroke to the selected color	વર્તમાન ભરો અથવા સ્ટ્રોક પસંદ કરેલ રંગ પર સેટ કરો
 	Set the selected color to the current color	પસંદ કરેલ રંગ વર્તમાન રંગ પર સેટ કરો
 	Set {n}	{n} સેટ કરો
 	Settings	સેટિંગ્સ
@@ -3782,7 +3794,7 @@
 	Show its progress, see Cancel and write log lines	તેની પ્રગતિ બતાવવી, રદ કરવાની વિનંતી જોવી અને લૉગ લાઇનો લખવી
 	Show segmented color wheel	સેગમેન્ટેડ રંગ ચક્ર બતાવો
 	Show smooth color wheel	સ્મૂધ રંગ ચક્ર બતાવો
-	Show/hide plate (Alt-click: only this plate)	પ્લેટ બતાવો/છુપાવો (Alt-ક્લિક: માત્ર આ પ્લેટ)
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	પ્લેટ બતાવો/છુપાવો (Alt-ક્લિક: માત્ર આ પ્લેટ; ફરી Alt-ક્લિક: બધી પ્લેટ)
 	Show:	બતાવો:
 	Shown with the optimised preview.	ઑપ્ટિમાઇઝ્ડ પ્રીવ્યૂ સાથે બતાવેલ.
 	Side 1:	બાજુ 1:
@@ -4383,6 +4395,8 @@
 	Variable Font	વેરિએબલ ફૉન્ટ
 	Variable Options…	વેરિએબલ વિકલ્પો…
 	Variable Width Profile	વેરિએબલ પહોળાઈ પ્રોફાઇલ
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	સ્ટ્રોકનું બ્રશ પોતાનું કદ જાળવે છે, તેથી પહોળાઈ પ્રોફાઇલ તેને બદલતી નથી. પ્રોફાઇલ વાપરવા માટે બ્રશ દૂર કરો.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	સ્ટ્રોકનું બ્રશ પોતાનું કદ જાળવે છે, તેથી પહોળાઈ પ્રોફાઇલ તેને બદલતી નથી. પ્રોફાઇલ વાપરવા માટે બ્રશ દૂર કરો.
 	Variables	વેરિએબલ્સ
 	Variation:	વેરિએશન:
 	Vector Effects	વેક્ટર અસરો
