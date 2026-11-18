@@ -1445,7 +1445,8 @@ fn warp_numbers_are_the_dialogs_order() {
 /// and nothing for styles it doesn't read.
 #[test]
 fn a_style_is_read_as_a_writer_checks_it() {
-    let read = |data: &str, own: Option<&Paint>| crate::import::read_art_style(data.as_bytes(), "Odd", own);
+    let parse = |data: &str, name: &str| crate::import::parse_art_style(data.as_bytes(), name);
+    let read = |data: &str, own: Option<&Paint>| parse(data, "Odd").and_then(|st| crate::import::read_parsed_style(&st, own));
     let style = |kids: &[String]| format!("/KnownStyle :\n(Odd) /Name ,\n/ActiveStyle :\n{}", compound("Chain Style Filter", kids));
     let gradient = fill("Bb\n1 (G) 0 0 0 1 1 0 0 1 0 0 1 Bg\n0 BB");
     let stack = compound("Stack Style Filter", std::slice::from_ref(&gradient));
@@ -1456,11 +1457,18 @@ fn a_style_is_read_as_a_writer_checks_it() {
     assert_eq!(got.appearance.items[0].paint(), &own);
     assert_eq!(got.transparency.map(|t| (t.0, t.1)), Some((0.5, BlendMode::Multiply)));
     assert!(got.simple && !got.pathfinder);
+    // One parse read on two objects: each takes its own gradient, and the parse is left as it was.
+    let parsed = parse(&data, "Odd").unwrap();
+    let black = Paint::solid(vectorcraft_color::Color::BLACK);
+    let first = crate::import::read_parsed_style(&parsed, Some(&own)).unwrap();
+    let second = crate::import::read_parsed_style(&parsed, Some(&black)).unwrap();
+    assert_eq!((first.appearance.items[0].paint(), second.appearance.items[0].paint()), (&own, &black));
+    assert_eq!(parsed.style, parse(&data, "Odd").unwrap().style);
     // A gradient that isn't the object's own, a pattern, another name, two gradients: nothing.
     assert!(read(&data, None).is_none());
     let pattern = style(&[compound("Stack Style Filter", &[fill("(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p")])]);
     assert!(read(&pattern, None).is_none());
-    assert!(crate::import::read_art_style(data.as_bytes(), "Even", Some(&own)).is_none());
+    assert!(parse(&data, "Even").is_none());
     assert!(read(&style(&[compound("Stack Style Filter", &[gradient.clone(), gradient])]), Some(&own)).is_none());
     // Damaged text: every cut of the style, and stray bytes, without a panic.
     for cut in 0..data.len() {

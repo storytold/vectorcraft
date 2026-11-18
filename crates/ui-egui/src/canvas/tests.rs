@@ -1647,6 +1647,37 @@ fn switch_selection_and_drawing_modes_command() {
     }
 }
 
+/// Select Last Selection Tool: the Selection tool before any selection tool is chosen, then the
+/// one of Selection, Direct Selection and Group Selection chosen last; Magic Wand and Lasso don't
+/// count. Running it again keeps that tool, and it changes no art, selection or undo history.
+#[test]
+fn select_last_selection_tool_command() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let id = app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap()["id"].clone();
+    app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let last = |app: &mut VectorcraftApp| app.run("tool.selectLastSelection", json!({})).unwrap();
+    let state = |app: &VectorcraftApp| {
+        let st = app.session.active().unwrap();
+        (st.doc.clone(), st.selection.clone(), st.history.undo.len())
+    };
+    app.select_tool("pen");
+    let before = state(&app);
+    assert_eq!((last(&mut app), app.session.tool_id()), (json!({"tool": "selection"}), "selection"), "none chosen yet: Selection");
+    for id in ["directSelection", "groupSelection", "selection"] {
+        app.select_tool(id);
+        app.select_tool("pen");
+        assert_eq!(last(&mut app), json!({"tool": id}), "{id}");
+    }
+    app.select_tool("directSelection");
+    for other in ["magicWand", "lasso", "rectangle", "hand"] {
+        app.select_tool(other);
+    }
+    assert_eq!(last(&mut app), json!({"tool": "directSelection"}), "Magic Wand and Lasso are not remembered");
+    assert_eq!(last(&mut app), json!({"tool": "directSelection"}), "again: the same tool, no cycling");
+    assert!(state(&app) == before, "no art, selection or undo step changes");
+}
+
 /// A Switch Selection and Drawing Modes whose tool choice fails returns the error, in both
 /// directions: the tool stays, the drawing tool to return to stays, and no undo step is added.
 #[test]
@@ -6869,8 +6900,134 @@ fn hidden_char_marks(app: &mut VectorcraftApp, ctx: &egui::Context) -> Vec<Shape
     let blue = Color32::from_rgb(0x4f, 0x9d, 0xff);
     shapes(app, ctx)
         .into_iter()
-        .filter(|s| matches!(s, Shape::Circle(c) if c.fill == blue) || matches!(s, Shape::Text(t) if t.fallback_color == blue))
+        .filter(|s| match s {
+            Shape::Circle(c) => c.fill == blue || c.stroke.color == blue,
+            Shape::Text(t) => t.fallback_color == blue,
+            Shape::LineSegment { stroke, .. } => stroke.color == blue,
+            Shape::Path(p) => p.stroke.color == egui::epaint::ColorMode::Solid(blue),
+            _ => false,
+        })
         .collect()
+}
+
+/// Show Hidden Characters marks each tab, nonbreaking space, narrow nonbreaking space, space of
+/// a set width and discretionary hyphen with a mark of its kind, a plain space with a dot, and
+/// a tab's arrow spans the tab's advance to its stop.
+#[test]
+fn hidden_characters_mark_tabs_nonbreaking_spaces_and_discretionary_hyphens() {
+    use super::tool_overlays::CharMark::*;
+    let text = "a b\tc\u{00A0}d\u{202F}e\u{2003}f\u{2009}g\u{200A}h\u{00AD}i";
+    let t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(10.0, 50.0), text, vectorcraft_doc::CharStyle::default());
+    let marks = HiddenMarks::of(&t);
+    let kinds: Vec<_> = marks.chars.iter().map(|c| c.0).collect();
+    assert_eq!(kinds, [Tab, NoBreakSpace, NarrowNoBreakSpace, FixedSpace, FixedSpace, FixedSpace, DiscretionaryHyphen]);
+    assert_eq!(marks.spaces.len(), 1, "only the plain space has a dot");
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+    let tab = lay.glyphs.iter().find(|g| text[g.byte..].starts_with('\t')).unwrap();
+    assert!(tab.advance > 1.0, "{}", tab.advance);
+    let (_, a, b) = marks.chars[0];
+    let start = t.xf * vectorcraft_geom::Point::new(tab.origin.x, tab.origin.y - 3.0);
+    assert!((a - start).hypot() < 1e-9 && (b.x - a.x - tab.advance).abs() < 1e-9 && b.y == a.y, "{a:?} {b:?} {start:?}");
+}
+
+/// Show Hidden Characters marks a line that a forced line break (U+2028) ends with a bent arrow
+/// and no ¶; the line a paragraph return ends gets ¶, and the story's end #.
+#[test]
+fn hidden_characters_mark_forced_line_breaks() {
+    let t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::ZERO, "ab\u{2028}cd\nef", vectorcraft_doc::CharStyle::default());
+    let marks = HiddenMarks::of(&t);
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+    assert_eq!(lay.lines.len(), 3);
+    assert_eq!(marks.breaks.len(), 1);
+    let (at, along, up) = marks.breaks[0];
+    let first = &lay.lines[0];
+    assert_eq!(at, vectorcraft_geom::Point::new(first.x1 + 1.0, first.baseline));
+    assert_eq!((along - at, up - at), (vectorcraft_geom::Vec2::new(1.0, 0.0), vectorcraft_geom::Vec2::new(0.0, -1.0)));
+    let ends: Vec<_> = marks.ends.iter().map(|e| (e.1, e.0.y)).collect();
+    assert_eq!(ends, [("¶", lay.lines[1].baseline), ("#", lay.lines[2].baseline)]);
+    // A story that ends with a forced line break: the arrow, and # on the empty line after it.
+    let t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::ZERO, "ab\u{2028}", vectorcraft_doc::CharStyle::default());
+    let marks = HiddenMarks::of(&t);
+    assert_eq!((marks.breaks.len(), marks.ends.iter().map(|e| e.1).collect::<Vec<_>>()), (1, vec!["#"]));
+}
+
+/// A discretionary hyphen gets one ¬ also where the line breaks at it and the layout draws a
+/// hyphen there, which stands for no character of the text.
+#[test]
+fn hidden_characters_mark_a_discretionary_hyphen_at_a_break_once() {
+    let style = vectorcraft_doc::CharStyle::default();
+    let db = vectorcraft_text::FontDb::global();
+    let word = vectorcraft_text::layout(db, &vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::ZERO, "coco-", style.clone()));
+    let width = word.lines[0].x1 - word.lines[0].x0 + 2.0;
+    let mut t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::ZERO, "coco\u{00AD}co", style);
+    t.kind = vectorcraft_doc::text::TextKind::Area {
+        frame: vectorcraft_geom::PathData::from_bezpath(&vectorcraft_geom::Rect::new(0.0, 0.0, width, 400.0).to_path(0.1)),
+    };
+    let lay = vectorcraft_text::layout(db, &t);
+    assert_eq!(lay.lines.len(), 2, "the line breaks at the discretionary hyphen");
+    assert!(lay.glyphs.iter().any(|g| g.len == 0), "the layout draws a hyphen at the break");
+    let marks = HiddenMarks::of(&t);
+    assert_eq!(marks.chars.iter().map(|c| c.0).collect::<Vec<_>>(), [super::tool_overlays::CharMark::DiscretionaryHyphen]);
+}
+
+/// In vertical type the marks follow the column: a space's dot sits beside the column, halfway
+/// down the space, and ¶ goes below the column's last character.
+#[test]
+fn hidden_characters_follow_vertical_type() {
+    let mut t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::ZERO, "a b\nc", vectorcraft_doc::CharStyle::default());
+    t.vertical = true;
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+    let space = lay.glyphs.iter().find(|g| g.byte == 1).unwrap();
+    let marks = HiddenMarks::of(&t);
+    let dot = marks.spaces[0];
+    assert!((dot - vectorcraft_geom::Point::new(space.origin.x + 3.0, space.origin.y + space.advance / 2.0)).hypot() < 1e-9, "{dot:?} {space:?}");
+    let (at, glyph, align) = marks.ends[0];
+    assert_eq!((glyph, align), ("¶", egui::Align2::CENTER_TOP));
+    let b = lay.glyphs.iter().find(|g| g.byte == 2).unwrap();
+    assert!(at.y > b.origin.y, "{at:?} below {:?}", b.origin);
+}
+
+/// In a right-to-left paragraph ¶ goes at the line's left end, where the paragraph ends.
+#[test]
+fn hidden_characters_end_a_right_to_left_line_at_its_left() {
+    let t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::ZERO, "אב גד\nהו", vectorcraft_doc::CharStyle::default());
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+    assert!(lay.lines[0].rtl);
+    let marks = HiddenMarks::of(&t);
+    let (at, glyph, align) = marks.ends[0];
+    assert_eq!((glyph, align), ("¶", egui::Align2::RIGHT_BOTTOM));
+    assert_eq!(at.x, lay.lines[0].x0 - 1.0);
+}
+
+/// Type on a path has the marks over its characters and # after its last one.
+#[test]
+fn hidden_characters_mark_type_on_a_path() {
+    let mut t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::ZERO, "a b\tc", vectorcraft_doc::CharStyle::default());
+    let path = vectorcraft_geom::Line::new((0.0, 100.0), (600.0, 100.0)).to_path(0.1);
+    t.kind = vectorcraft_doc::text::TextKind::OnPath { path: vectorcraft_geom::PathData::from_bezpath(&path), start: 0.0, end: None };
+    let marks = HiddenMarks::of(&t);
+    assert_eq!(marks.spaces.len(), 1);
+    assert_eq!(marks.chars.iter().map(|c| c.0).collect::<Vec<_>>(), [super::tool_overlays::CharMark::Tab]);
+    assert_eq!(marks.ends.iter().map(|e| e.1).collect::<Vec<_>>(), ["#"]);
+}
+
+/// The overlay draws each kind of mark: a dot, two rings, the tab's arrow, a tick, ¬, the forced
+/// line break's bent arrow, ¶ and #.
+#[test]
+fn show_hidden_characters_draws_every_kind_of_mark() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let text = "a b\tc\u{00A0}d\u{202F}e\u{2003}f\u{00AD}g\u{2028}h\ni";
+    app.session.execute("text.create", &json!({"x": 20, "y": 60, "text": text})).unwrap();
+    let ctx = egui::Context::default();
+    let xf = Xf { rect: egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0)), zoom: 1.0, center: Point::new(200.0, 150.0), rot: 0.0 };
+    let shapes = hidden_chars(&mut app, &ctx, &xf);
+    let count = |f: &dyn Fn(&Shape) -> bool| shapes.iter().filter(|s| f(s)).count();
+    assert_eq!(count(&|s| matches!(s, Shape::Circle(c) if c.fill != Color32::TRANSPARENT)), 1, "{shapes:?}");
+    assert_eq!(count(&|s| matches!(s, Shape::Circle(c) if c.fill == Color32::TRANSPARENT)), 2, "{shapes:?}");
+    assert_eq!(count(&|s| matches!(s, Shape::LineSegment { .. })), 2, "the tab's shaft and the tick: {shapes:?}");
+    assert_eq!(count(&|s| matches!(s, Shape::Path(_))), 3, "the tab's head and the break's arrow: {shapes:?}");
+    assert_eq!(count(&|s| matches!(s, Shape::Text(_))), 3, "¬, ¶ and #: {shapes:?}");
 }
 
 /// Show Hidden Characters puts a dot over each space of a list paragraph and none over its
@@ -6890,7 +7047,7 @@ fn hidden_characters_mark_no_space_at_a_bullet() {
 fn show_hidden_characters_off_releases_the_text_nodes() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
-    let text = json!({"x": 20, "y": 60, "text": "one two\nthree four"});
+    let text = json!({"x": 20, "y": 60, "text": "one\ttwo\u{00A0}x\nthree\u{2028}four"});
     let id = vectorcraft_doc::NodeId(app.session.execute("text.create", &text).unwrap()["id"].as_u64().unwrap());
     let ctx = egui::Context::default();
     app.run("type.hiddenCharacters", json!({})).unwrap();
@@ -8871,6 +9028,36 @@ fn escape_while_editing_in_isolation_returns_to_selection_tool_and_keeps_isolati
     assert!(app.session.active().unwrap().isolation.is_none(), "2nd Escape must exit isolation mode");
 }
 
+/// One Escape leaves isolation mode from a sublayer two levels down, where Exit Isolation Mode goes
+/// up one layer at a time.
+#[test]
+fn escape_leaves_an_isolated_sublayer_in_one_step() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let top = app.session.active().unwrap().doc.layers[0].id;
+    let mid = app.session.execute("layer.newSublayer", &json!({"parent": top.0})).unwrap()["id"].as_u64().unwrap();
+    let deep = app.session.execute("layer.newSublayer", &json!({"parent": mid})).unwrap()["id"].as_u64().unwrap();
+    app.session.execute("layer.setCurrent", &json!({"id": deep})).unwrap();
+    app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 40, "height": 20})).unwrap();
+    app.session.execute("object.isolate", &json!({"id": deep})).unwrap();
+    app.select_tool("selection");
+    let ctx = egui::Context::default();
+    let timed = |app: &mut VectorcraftApp, time: f64, events: Vec<egui::Event>| {
+        let screen = egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0));
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), time: Some(time), events, ..Default::default() }, |ui| {
+            crate::shortcuts::handle(app, ui.ctx());
+            show(app, ui)
+        });
+        out.textures_delta.clear();
+    };
+    let esc = |pressed| egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
+    timed(&mut app, 0.0, vec![]);
+    assert_eq!(app.session.active().unwrap().isolation, Some(vectorcraft_doc::NodeId(deep)));
+    timed(&mut app, 1.0, vec![esc(true), esc(false)]);
+    timed(&mut app, 1.1, vec![]);
+    assert_eq!(app.session.active().unwrap().isolation, None, "one Escape leaves every level");
+}
+
 #[test]
 fn a_symbol_dropped_on_the_canvas_is_placed_there() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -8883,7 +9070,8 @@ fn a_symbol_dropped_on_the_canvas_is_placed_there() {
     let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
     // Released over empty canvas: an instance centred there.
     let at = xf.to_screen(Point::new(250.0, 180.0));
-    egui::DragAndDrop::set_payload(&ctx, widgets::PanelDrag::Symbol(name.clone()));
+    let document = app.session.active().unwrap().uid;
+    egui::DragAndDrop::set_payload(&ctx, widgets::PanelDrag::Symbol { document, name: name.clone() });
     let up = egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() };
     frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at), up]);
     let st = app.session.active().unwrap();
@@ -8892,6 +9080,106 @@ fn a_symbol_dropped_on_the_canvas_is_placed_there() {
     assert!(matches!(&n.kind, NodeKind::SymbolInstance { symbol, .. } if *symbol == name));
     let c = n.geometric_bounds().unwrap().center();
     assert!((c - xf.to_doc(at)).hypot() < 1e-6, "{c:?}");
+}
+
+/// A new active document with a symbol `name` made from a `w` by `h` rectangle and no art; → its
+/// uid.
+fn document_with_symbol(app: &mut VectorcraftApp, name: &str, w: f64, h: f64) -> u64 {
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": w, "height": h})).unwrap();
+    app.session.execute("symbol.new", &json!({"name": name})).unwrap();
+    app.session.execute("edit.clear", &json!({})).unwrap();
+    app.session.active().unwrap().uid
+}
+
+/// The natural size the active document records for symbol `name`.
+fn symbol_size(app: &VectorcraftApp, name: &str) -> (f64, f64) {
+    let st = app.session.active().unwrap();
+    let size = st.doc.unknown.get(vectorcraft_doc::SYMBOL_SIZES).and_then(|m| m.get(name)).cloned().unwrap();
+    (size[0].as_f64().unwrap(), size[1].as_f64().unwrap())
+}
+
+/// A symbol dragged from one document's Symbols panel and released on the canvas after another
+/// document with a different symbol of the same name became active places the dragged symbol: it
+/// is added under a free name, the other document's symbol is left as it was, the source document
+/// is not changed, and one Undo takes back both the symbol and the instance.
+#[test]
+fn a_symbol_dragged_from_another_document_places_that_documents_symbol() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let source = document_with_symbol(&mut app, "Leaf", 40.0, 20.0);
+    let ctx = egui::Context::default();
+    // While Leaf is held, a document with a Leaf of its own becomes active.
+    egui::DragAndDrop::set_payload(&ctx, widgets::PanelDrag::Symbol { document: source, name: "Leaf".into() });
+    document_with_symbol(&mut app, "Leaf", 10.0, 70.0);
+    frame(&mut app, &ctx, vec![]);
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let undo = app.session.active().unwrap().history.undo.len();
+    let at = xf.to_screen(Point::new(250.0, 180.0));
+    let up = egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() };
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at), up]);
+    let st = app.session.active().unwrap();
+    assert_eq!(st.doc.symbols.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(), ["Leaf", "Leaf 2"]);
+    assert_eq!(st.history.undo.len(), undo + 1, "added and placed as one undo step");
+    let placed = st.selection.objects.first().copied().expect("the placed instance is selected");
+    let n = st.doc.node(placed).unwrap();
+    assert!(matches!(&n.kind, NodeKind::SymbolInstance { symbol, .. } if symbol == "Leaf 2"), "{:?}", n.kind);
+    let b = n.geometric_bounds().unwrap();
+    assert!((b.width() - 40.0).abs() < 1e-6 && (b.height() - 20.0).abs() < 1e-6, "the dragged symbol's size: {b:?}");
+    assert!((b.center() - xf.to_doc(at)).hypot() < 1e-6, "{b:?}");
+    assert_eq!(symbol_size(&app, "Leaf"), (10.0, 70.0), "this document's Leaf is unchanged");
+    app.run("edit.undo", json!({})).unwrap();
+    let st = app.session.active().unwrap();
+    assert_eq!(st.doc.symbols.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(), ["Leaf"]);
+    assert!(st.doc.node(placed).is_none());
+    assert!(app.session.set_active(0));
+    assert_eq!(app.session.active().unwrap().uid, source);
+    assert_eq!(app.session.active().unwrap().doc.symbols.len(), 1, "the source document is unchanged");
+    assert_eq!(symbol_size(&app, "Leaf"), (40.0, 20.0));
+}
+
+/// A symbol dragged from a document that was closed before the release places nothing, even
+/// where the active document has a symbol of the same name.
+#[test]
+fn a_symbol_whose_document_closed_places_nothing() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let source = document_with_symbol(&mut app, "Leaf", 40.0, 20.0);
+    document_with_symbol(&mut app, "Leaf", 10.0, 70.0);
+    app.session.execute("file.close", &json!({"index": 0})).unwrap();
+    assert!(app.session.documents().iter().all(|d| d.uid != source));
+    let ctx = egui::Context::default();
+    egui::DragAndDrop::set_payload(&ctx, widgets::PanelDrag::Symbol { document: source, name: "Leaf".into() });
+    frame(&mut app, &ctx, vec![]);
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let undo = app.session.active().unwrap().history.undo.len();
+    let at = xf.to_screen(Point::new(250.0, 180.0));
+    let up = egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() };
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at), up]);
+    let st = app.session.active().unwrap();
+    assert_eq!(st.history.undo.len(), undo, "no edit");
+    assert!(st.selection.objects.is_empty(), "nothing placed");
+}
+
+/// The chip at the pointer shows the dragged symbol from the document it was dragged from after
+/// another document, without a symbol of that name, became active.
+#[test]
+fn the_pointer_chip_of_a_dragged_symbol_shows_its_own_documents_symbol() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let source = document_with_symbol(&mut app, "Leaf", 40.0, 20.0);
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let ctx = egui::Context::default();
+    egui::DragAndDrop::set_payload(&ctx, widgets::PanelDrag::Symbol { document: source, name: "Leaf".into() });
+    let screen_rect = Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(400.0, 300.0)));
+    let run = |events| {
+        let mut out =
+            ctx.run_ui(egui::RawInput { screen_rect, events, ..Default::default() }, |ui| crate::panels::swatches::drag_preview(&app, ui.ctx()));
+        out.textures_delta.clear();
+        out
+    };
+    // The chip's area is drawn from its second frame.
+    run(vec![egui::Event::PointerMoved(pos2(200.0, 150.0))]);
+    let out = run(vec![]);
+    let thumbnail = out.shapes.iter().any(|c| matches!(&c.shape, Shape::Mesh(m) if m.texture_id != egui::TextureId::default()));
+    assert!(thumbnail, "the chip draws the source document's thumbnail of Leaf");
 }
 
 #[test]
