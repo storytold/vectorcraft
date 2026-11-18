@@ -923,12 +923,18 @@ fn as_written(o: &mut FlattenOptions, parent: &Dialog) {
 /// (the default preset's while those are not valid).
 pub(super) fn over(parent: &Dialog, saved: &[FlattenerPreset]) -> Dialog {
     let mut o = flattener(parent, saved).unwrap_or_else(|_| FlattenOptions::preset(pdf::DEFAULT_FLATTENER).unwrap_or_default());
+    let kept = o.preserve_overprints;
     as_written(&mut o, parent);
     let mut d = Dialog::new(CUSTOM_KIND, json!({}));
     super::flatten::put_options(&mut d.fields, &o);
+    d.fields.insert(KEPT_OVERPRINTS.into(), json!(kept));
     d.fields.insert(super::PARENT.into(), serde_json::to_value(parent).unwrap_or_default());
     d
 }
+
+/// The `preserveOverprints` value of the options Custom Transparency Flattener Options opened on,
+/// before Overprint applies to it.
+const KEPT_OVERPRINTS: &str = "__keptOverprints";
 
 /// The options Custom Transparency Flattener Options `d` holds.
 fn custom_options(d: &Dialog) -> Result<FlattenOptions, String> {
@@ -968,10 +974,14 @@ fn custom_confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String>
     };
     // The writer sets the first two itself, so they take the preset's values: options that
     // otherwise match the preset leave its name showing. The writer keeps overprints only where the
-    // options and Overprint both keep them, so the options keep the value they had before.
+    // options and Overprint both keep them, so the options keep the value they had before, or the
+    // value they opened with when those can no longer be read.
     o.clip_complex_regions = base.clip_complex_regions;
     o.preserve_alpha = base.preserve_alpha;
-    o.preserve_overprints = before.map_or(base.preserve_overprints, |b| b.preserve_overprints);
+    o.preserve_overprints = match before {
+        Some(before) => before.preserve_overprints,
+        None => d.fields.get(KEPT_OVERPRINTS).and_then(Value::as_bool).unwrap_or(o.preserve_overprints),
+    };
     if o == base {
         parent.fields.remove("flattener");
     } else {

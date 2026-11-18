@@ -1134,6 +1134,23 @@ fn custom_options_outlive_a_saved_preset_deleted_meanwhile() {
     assert!(written.borrow()[0].1.starts_with(b"%PDF-1.3"));
 }
 
+/// OK keeps the overprint option of a saved preset deleted meanwhile, whichever value Overprint
+/// shows it with, although the default preset keeps overprints.
+#[test]
+fn custom_keeps_the_overprint_option_of_a_saved_preset_deleted_meanwhile() {
+    let (mut app, _, _) = app();
+    for (kept, overprint) in [(false, "preserve"), (true, "discard")] {
+        app.run("flattener.presets.save", json!({"name": "Mine", "balance": 20, "preserveOverprints": kept})).unwrap();
+        open_advanced(&mut app, json!({"compatibility": "1.3", "flattenerPreset": "Mine", "advanced": {"overprint": overprint}}));
+        Reader::new().click_custom(&mut app);
+        assert!(!app.ui.dialog.as_ref().unwrap().bool("preserveOverprints"), "shown as written ({overprint})");
+        app.run("flattener.presets.delete", json!({"name": "Mine"})).unwrap();
+        super::super::confirm(&mut app).unwrap();
+        let d = app.ui.dialog.as_ref().unwrap();
+        assert_eq!(d.fields["flattener"]["preserveOverprints"].as_bool(), Some(kept), "{overprint}");
+    }
+}
+
 #[test]
 fn save_preset_says_it_leaves_the_custom_flattener_options_out() {
     let (mut app, _, _) = app();
