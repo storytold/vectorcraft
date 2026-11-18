@@ -27,7 +27,7 @@ use crate::Tool;
 pub use liquify::LiquifyTool;
 pub use perspective::{PerspectiveGridTool, PerspectiveSelectionTool};
 pub use puppet::{PinSet, PuppetWarpTool, mesh_for, mesh_input, rest_and_pins, warp_from_rest};
-pub use width::{WidthTool, stroke_owner};
+pub use width::{KEEPS_SIZE, WidthTool, stroke_owner};
 
 /// Create a distortion tool by id (None = not one of ours).
 pub fn create(id: &str) -> Option<Box<dyn Tool>> {
