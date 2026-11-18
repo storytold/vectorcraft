@@ -211,6 +211,7 @@
 	Add Used Colors	Használt színek hozzáadása
 	Additional Fonts Folder	További betűtípusok mappája
 	Additional Plug-ins Folder	További bővítmények mappája
+	Plug-in Instruction Budget	Bővítmények utasításkerete
 	Adjust Adjoining Width Points	Szomszédos szélességi pontok igazítása
 	Incoming	Bejövő
 	Outgoing	Kimenő
@@ -1047,6 +1048,7 @@ font-technology	Variable	Változó
 	Delete Brush	Ecset törlése
 	Delete Color	Szín törlése
 	Restore Generated Table	Előállított tábla visszaállítása
+	Unshift All Colors	Az összes szín eltolásának visszavonása
 	Delete Character Style	Karakterstílus törlése
 	Delete Data Set	Adatkészlet törlése
 	Delete Empty Artboards	Üres rajztáblák törlése
@@ -3826,6 +3828,8 @@ mark-style	Japanese	Japán
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Milyen közel kell a mutatónak vagy egy húzott pontnak a képernyőn a grafikához érnie, hogy az intelligens segédvonalak illesszenek; a távolság minden nagyításnál azonos.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Egy szakasz végét vagy a középpontjából rajzolt kört úgy illeszti, hogy érintse a közeli görbét.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Egy szakasz végét úgy illeszti, hogy derékszögben találkozzon egy közeli egyenes szakasszal.
+	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	A vásznon minden szelet számát egy keretben mutatja a szelet bal felső sarkában; kikapcsolva a szeletek körvonalai továbbra is látszanak.
+	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	A felhasználói és objektumszeletek körvonalainak és számkereteinek színe; az automatikus szeletek ennek egy halványabb árnyalatát használják.
 	Reset all preferences to their defaults?	Visszaállítja az összes beállítást az alapértékre?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Az alapértékek akkor lépnek életbe, amikor a Beállításokban az OK gombra kattint. Az ottani Mégse megtartja a jelenlegi beállításokat.
 	Restore Recovered Documents	Helyreállított dokumentumok visszaállítása
@@ -4097,6 +4101,12 @@ mark-style	Japanese	Japán
 	Search commands, tools, panels and effects…	Parancsok, eszközök, panelek és effektusok keresése…
 	No commands match	Nincs egyező parancs
 	{pos} of {total}: {name}	{pos}/{total}: {name}
+	No menu item	Nincs menüpont
+	Toolbar	Eszköztár
+	{toolbar}, in the {tool} group	{toolbar}, a(z) {tool} csoportjában
+	In the menu bar: {path}	A menüsorban: {path}
+	In the {group} group: press and hold to open it	A(z) {group} csoportban: a megnyitáshoz nyomja le és tartsa lenyomva
+	{home}, not shown now	{home}, most nem látható
 @plural	{n} result|{n} results	{n} találat
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} találatból {shown} látható. Gépeljen tovább a szűkítéshez.
 	Recent Commands	Legutóbbi parancsok
@@ -5402,6 +5412,7 @@ imageTrace	Outline	Körvonal
 @msg	a linked JavaScript file is outside the read roots	egy csatolt JavaScript-fájl kívül esik az olvasási gyökereken
 @msg	a linked image file is outside the read roots	egy csatolt képfájl kívül esik az olvasási gyökereken
 @msg	a linked file's export folder is outside the read roots	egy csatolt fájl exportálási mappája kívül esik az olvasási gyökereken
+@msg	a linked file's editing data can't be read to check it against the read roots	egy csatolt fájl szerkesztési adatai nem olvashatók be az olvasási gyökerekkel való ellenőrzéshez
 @msg	automation path rejected: outside the write root {root}: {path}	az automatizálás útvonala elutasítva: kívül esik az írási gyökéren ({root}): {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	az automatizálás útvonala elutasítva: kívül esik az írási gyökereken ({roots}): {path}
 @msg	automation path rejected: parent traversal below a folder that doesn't exist: {path}	az automatizálás útvonala elutasítva: szülőmappára lépés egy nem létező mappa alatt: {path}
@@ -5452,6 +5463,7 @@ imageTrace	Outline	Körvonal
 @msg	clipboard is empty	a vágólap üres
 @msg	closing needs three anchors	a lezáráshoz három horgonypont kell
 @msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: legalább egy színnek a színtáblában kell maradnia
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted: a(z) `{k}` olyan színt nevez meg, amelyet egy másik kulcs is megnevez
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` nem szín (például "#ff8800")
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: legfeljebb {MAX_TABLE} szín
 @msg	column must be true or a number from 1	a column értéke true vagy 1-től kezdődő szám lehet
@@ -7785,6 +7797,7 @@ breakText	Glyphs	Glifák
 @msg	One path lies inside the other, so they have no common tangents	Az egyik útvonal a másikon belül van, így nincsenek közös érintőik
 @msg	The paths overlap, so they have no internal tangents	Az útvonalak átfedik egymást, így nincsenek belső érintőik
 @msg	One path lies inside the other, so they have no internal tangents	Az egyik útvonal a másikon belül van, így nincsenek belső érintőik
+@msg	The point lies inside the path, so it has no tangents	A pont az útvonalon belül van, így nincsenek érintői
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Szaggatások kibontása útvonalakká
 @msg	select paths with dashed strokes to expand	jelöljön ki szaggatott körvonalú útvonalakat a kibontáshoz
@@ -10094,6 +10107,11 @@ breakText	Glyphs	Glifák
 @msg	A panel is not joined to the rest by a crease.	Egy panelt egyetlen bigvonal sem köt a többihez.
 @msg	A fold line is on a non-printing layer.	Egy hajtásvonal nem nyomtatható rétegen van.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panelek: {panels}, zsanérok: {hinges}, hibák: {errors}, figyelmeztetések: {warnings}
+	Pressure Sensitive	Nyomásérzékeny
+	Flex Ribbon	Rugalmas szalag
+	Pulse Stroke	Lüktető vonás
+	Round Flow	Kerek vonás
+	Chisel Flow	Ferde vonás
 	Fold Preview	Hajtás előnézete
 	Fold	Hajtás
 	Show Fold Lines	Hajtásvonalak megjelenítése

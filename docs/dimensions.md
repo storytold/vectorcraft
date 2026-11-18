@@ -51,6 +51,11 @@ The **Dimension Tool** is in the Modify section of the toolbar. Its strip offers
   point as before. An unlinked dimension that
   turns has its line where the turn puts it, or, when that would put it between the points, as
   far past the outermost point as before.
+  With Smart Guides on, a linear dimension placed with its line within the Smart Guides snapping
+  tolerance of the level of a parallel line of a visible, unlocked linear dimension already drawn
+  anywhere in the document has its line on that level. This is VectorCraft's own rule. With
+  Alignment Guides on, a guide runs along the level across both lines while the dimension is
+  placed.
 - **Angular:** hover a corner where two straight segments meet and drag outwards. Or click two
   straight lines that meet (or would, extended), then click to place.
 - **Radial:** hover a circle, or a segment that is a perfect arc, and drag: outwards gives its
