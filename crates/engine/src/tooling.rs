@@ -1562,6 +1562,7 @@ impl Session {
                 Action::Dialog(k, p) => ui.push(UiRequest::Dialog(k, p)),
                 Action::Panel(panel) => ui.push(UiRequest::Panel(panel)),
                 Action::SwitchTool(t) => ui.push(UiRequest::SwitchTool(t)),
+                Action::Status(msg) => ui.push(UiRequest::Status(msg)),
                 Action::Notify(what) => {
                     let view = self.last_view;
                     self.with_tool_cx(view, |t, cx| t.notify(cx, &what));

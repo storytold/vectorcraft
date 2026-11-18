@@ -2704,8 +2704,8 @@ script reads files with them:
 - `open('r')` opens a file to read, and `read([chars])`, `readln()`, `readch()`, `seek(pos[, mode])`, `tell()`, `eof`
   and `close()` read it. `read`, `readln` and `readch` count characters, and `seek` and `tell` count bytes. `readln`
   and `readch` take CR, LF, CRLF and LF CR as one line end. `folder.getFiles([mask])` lists a folder, sorted by name;
-  the mask matches `*` and `?` without regard to case, and a function as the mask keeps the entries it returns true
-  for.
+  the mask matches `*` and `?`, without regard to case on Windows and macOS and with case elsewhere, and a function
+  as the mask keeps the entries it returns true for.
 - A method that fails returns `false`, `null` or an empty string and sets `error`, such as `Script file access
   denied`, `Script file does not exist` or `Script file is not open`. A count or a position that is not a finite
   number, or a negative count, throws a `RangeError`.
@@ -2720,7 +2720,9 @@ VectorCraft reads files by these rules of its own:
   `getFiles` leaves such an entry out. A missing file is refused the same way unless the nearest folder above it that
   exists is inside the script's folder. It is also refused when a link above it leads to a folder that does not exist.
 - `open` reads the whole file. A file larger than 8 MiB is refused from its size before any of it is read, with
-  `Script file exceeds 8 MiB`, and a run that opens more than 32 MiB in all ends with an error. A run has at most 256
+  `Script file exceeds 8 MiB`, and a run that opens more than 32 MiB in all ends with an error. A file opened again
+  after its objects closed counts only the bytes it grew by, and a file that another object has open counts again. A
+  run has at most 256
   files open at once; another `open` returns `false` with `Script has 256 files open` until one is closed.
 - The encoding is the one the file's byte order mark gives (UTF-8, UTF-16LE or UTF-16BE), otherwise the `encoding`
   the script set before `open`, otherwise UTF-8 when the bytes are valid UTF-8, otherwise CP1252. `BINARY` reads each
@@ -2731,11 +2733,116 @@ VectorCraft reads files by these rules of its own:
   folder gives `null` with `Script folder mask takes too many steps to match`.
 - A path longer than 32,767 characters throws a `RangeError` (`Script file path exceeds 32,767 characters`) when a
   `File` or `Folder` is made from it.
-- Writing is not available yet: `open('w')`, `open('e')`, `open('a')`, `write`, `writeln`, `copy`, `remove`,
-  `rename`, `create` and `createAlias` return `false` with `Script file writing is not available`, and setting
-  `length`, `hidden` or `readonly` sets `error` to that message and changes nothing. The file
-  and folder dialogs return `null`, and `execute` opens nothing and returns `false`. In the web build every lookup
-  fails with `Script file access is unavailable on the web`.
+- `createAlias` returns `false` with `Script files cannot make aliases`, setting `hidden` sets `error` to `Script
+  file hidden setting cannot be changed` and changes nothing, and `execute` opens nothing and returns `false`. In the
+  web build every lookup fails with `Script file access is unavailable on the web`.
+
+The help page's writing members work as it describes
+(<https://extendscript.docsforadobe.dev/file-system-access/file-object/>,
+<https://extendscript.docsforadobe.dev/file-system-access/folder-object/>):
+
+- `open('w')` empties the file, or makes it, `open('e')` opens a file that is there, and `open('a')` opens it at its
+  end. `write(...values)` writes the values as `String(value)` gives them, and `writeln(...values)` adds the line end
+  `lineFeed` names: CR LF for `Windows`, CR for `Macintosh` and LF for `Unix`. A byte order mark is written only
+  when the script writes `\uFEFF`.
+- `copy(target)` copies the file to a path or a `File` and replaces a file that is there. `remove()` deletes a file,
+  or a folder only when it is empty (`Script folder is not empty`), at once and without the trash. `rename(name)`
+  takes a name without a folder; a name that is in use gives `Script file name is already in use`, and the object
+  takes the new path; another object that has the file open writes to the new path. An object whose changes
+  `close` could not write does not remove or rename its file, and another object that has a removed file open
+  drops its changes and takes no more writes. `copy` of a file over 8 MiB gives `Script file exceeds 8 MiB`, and `copy` of a file that
+  is open copies what the open file holds; an object that has the target open then holds the copy. `folder.create()` makes the folder and the folders above it, and gives `Script file access denied` without making any when one of them is outside the places the script may write. Setting `length` cuts the file or
+  pads it with zero bytes, also in an object that has the file open, and setting `readonly` changes the file (on
+  Unix, setting it clears every write bit, and clearing it gives back the bits the run cleared, or else the owner's
+  write bit). `changePath` of an object whose changes cannot be written gives `false` with `error` set and keeps its path. `copy` onto the file itself leaves it as it is, and `open('w')` with an
+  encoding that is not one gives `false` and leaves the file as it is.
+- `File.openDialog(prompt, filter, multiSelect)`, `File.saveDialog(prompt, filter)` and `Folder.selectDialog(prompt)`,
+  and the objects' `openDlg`, `saveDlg` and `selectDlg`, give a `File` or a `Folder`, or `null` when the person
+  cancels; `multiSelect` gives an array of the files picked. A string `filter` such as `"JavaScript:*.jsx;All
+  files:*.*"` gives the file types the dialog shows: each `name:pattern` starts a type, a pattern without a name adds
+  to the type before it, and patterns are separated by `,` or `;`. `*.ext` patterns name extensions and `*` or `*.*`
+  every file; other patterns are left out. A `filter` that is a function is called with a `File` for each file
+  picked, and the files it gives a false value for are left out of the result; when none is left, the dialog
+  gives `null`. The dialog itself then shows every file.
+
+VectorCraft writes files by these rules of its own:
+
+- A script writes only in `Folder.temp`, `Folder.userData` and what a person allowed it in a file dialog. Its own
+  folder is only read. `Folder.temp` is a folder for the run, made when the script first names it and deleted when
+  the run ends; `new File()` names a new file there. `Folder.userData` is the script's own folder in the Script Data
+  folder next to the settings, kept between runs; a script given as `source`, or a session without a settings
+  folder, gets one inside `Folder.temp`. When that folder is a link, `Folder.userData` is `null` and the place the
+  link leads to is not granted. When automation write roots are set and do not take the folder, `Folder.temp` or
+  `Folder.userData` is `null` and the folder is not made; the same holds when they do not take a missing folder above it. When automation write roots are set, the place written must also be inside
+  them. Opening a file with `e` or `a` reads it, so the automation read roots apply to it as well. The folder that
+  holds the settings (the Scripts and Plug-ins folders among them) is kept out of every grant, also before it has
+  been made, apart from the script's own `Folder.userData`, and a folder that holds it cannot be renamed. Anything
+  else gives `false` with
+  `Script file access denied`.
+- What a script writes is written when it closes the file or when the run ends, also when the run fails. At the
+  run's end the files left open are written in the order they were opened. A file
+  that `close` could not write stays open, so a later `close` tries again, and is written again when the run ends; a
+  `write` that would pass the run's limit
+  is not written. A run that
+  would otherwise succeed fails when a changed file it left open cannot be written, with
+  `Error: the script left open files that could not be written` and the files' paths. One file
+  holds at most 8 MiB, and a run that writes more than 32 MiB in all ends with an error. `write` encodes in the
+  file's encoding: `ASCII` and `ISO-8859-1` give `false` with `Script file cannot encode the text` for a character
+  they cannot hold, and `BINARY` writes each character's low byte. `write` and `writeln` turn their values into text
+  only for an open file, and stop once the text is longer than 16,777,216 UTF-16 code units, giving `false` with
+  `Script file exceeds 8 MiB`. Each object that has a file open holds its own bytes, so the 32 MiB counts what
+  setting `length` adds to the file and to each such object, and what `copy` writes to its target and to each such
+  object of the target. The report's `written` names each file written, at most 4,096 of them; a run that wrote more
+  also has `writtenMore: true`.
+- In the app a file dialog shows the script's prompt and what the script asks for: a file to read (open), a file to
+  read and write (save), or a folder to read and write with everything in it. The person chooses with Choose…, whose
+  dialog picks several files at once, and adds them to those chosen before, when the script asked for several with
+  `multiSelect` (Choose… keeps at most 2,048, and the dialog says when it left out the files picked after them), and
+  then picks Allow Once, Always Allow This Script or Deny; Deny, Enter, Escape and Cancel give `null`, and Stop ends
+  the run. Choose… for a folder's `selectDlg` opens the host's folder dialog in that folder.
+  The prompt and what the dialog says the script asks for come from the script's request, so `ui.dialog.set` on the
+  dialog's `kind` or `prompt` does not change them. Only the person at the keyboard allows access: an `answer` of
+  `once` or `always` from `ui.dialog.set`, `ui.dialog.confirm` or synthetic input gives `Only the person at the
+  keyboard can allow a script's file access`, and the dialog stays open; `deny` and `stop` are taken from automation.
+  Always Allow This Script keeps the grant in `Script Grants.json` next to the settings for that script file with
+  that text with the files it includes, by its SHA-256, so a changed or moved script, or a changed included file,
+  asks again. It is offered only for a script run from a file. The grant also keeps the SHA-256 of each source the
+  run evaluated up to its end (a file `$.evalFile` ran, a string given to `eval` or `Function`, at most 256). A later
+  run loses the grant before it evaluates a source the grant does not list, and from the start when its
+  `#targetengine` engine holds code the grant does not list, such as another script's. A file opened under a
+  grant the run loses gives `Script file access denied` when it is read or `seek` is called after that. A kept grant stays on the
+  real path that was allowed: when that path now leads elsewhere, through a link put in its place or in a folder
+  above it, the grant is not used.
+- A command a script runs with `vc.run` reads and writes files only where the script's `File` and `Folder` objects
+  may, and in the files the open documents were opened from or saved to. Anything else fails with
+  `Script file access denied` and the path, saving into a user library (swatches, brushes, symbols or graphic
+  styles) included; reading the app's own libraries is allowed. A script given as `source` that a person allowed nothing writes only in
+  its `Folder.temp` and `Folder.userData` and to the open documents' own files.
+  A pick inside the folder that holds the settings gives `null` and sets `error` to `Script file access to the app's
+  own folders is not allowed`.
+- A run with nobody to ask, as over MCP or the command line, gives `null` from every file dialog and sets `error` to
+  `Script file dialogs need a person to answer them`, and takes no kept grant. In the app, a file dialog inside a
+  built-in's callback, a getter, a conversion or a file `$.evalFile` runs throws an error.
+
+`script.grants {}` lists the kept grants: `{grants: [{script, sha256, code, path, write, folder}], file}`, with `code`
+the SHA-256 of each evaluated source (of its UTF-16 code units in little-endian order), `folder` true for a folder's
+grant, which covers everything in the folder (a file's grant covers its own path only, also when a folder later
+takes its place), and `file` the grants
+file's path, or `null` without a settings folder. Under automation read roots, a `script`, `path` or `file` outside them
+is given as its file name alone. `script.grants.revoke {script?, path?, all?}` removes the grants of
+a script file, of a path, of both together, or with `all: true` every grant, and returns `{removed}`. A path is
+matched after its links are followed; under automation read roots, a path outside them is matched as given. While a script
+runs it is refused with the busy error, as the run keeps the grants it started with. A grants file that is there but
+cannot be read is left as it is: `script.grants.revoke` fails, and a grant picked with Always is not kept. A script
+cannot run either command.
+
+```json
+{"name":"run_command","arguments":{"command":"script.grants.revoke","params":{"all":true}}}
+```
+
+```sh
+vectorcraft-cli run --cmd script.grants --params '{}'
+```
 
 Window › Script Console shows the session's script lines, oldest first: each run's start, its `$.write` and
 `$.writeln` output, its `vc.log` entries, its uncaught error as `name:line:column: message` (or `name: file:line:column: message` when the error is in another
@@ -3204,16 +3311,26 @@ dropped.
 ## Navigator panel options
 
 The Navigator panel menu's Panel Options… opens the `navigatorPanelOptions` dialog (fields `color`, `solidDashes`),
-and `ui.navigatorPanelOptions {color?, solidDashes?}` sets the options without it → `{color, solidDashes}`; with
-neither key it opens the dialog. `color` is the color the panel's view box is drawn in: `#rrggbb` or a preset name.
+and `ui.navigatorPanelOptions {color?, solidDashes?, viewArtboardContentsOnly?}` sets the options without it →
+`{color, solidDashes, viewArtboardContentsOnly}`; with none of the keys it opens the dialog. `color` is the color the
+panel's view box is drawn in: `#rrggbb` or a preset name.
 The presets are VectorCraft's own list: Light Red (`#ff3030`, the default), then the layer colors ("Light Blue",
 "Red", "Green" and the rest). `solidDashes` (Draw Dashed Lines as Solid Lines, off by default) makes the panel's
-thumbnail draw dashed strokes without their dashes; the canvas, printing and exports keep the dashes. Both are kept
-with the UI state. A `color` that is not a color, or a `solidDashes` that is not true or false, is an error and
-changes neither option. Behavior reference: [View artwork](https://helpx.adobe.com/illustrator/using/viewing-artwork.html).
+thumbnail draw dashed strokes without their dashes; the canvas, printing and exports keep the dashes.
+`viewArtboardContentsOnly` is the panel menu's View Artboard Contents Only, on by default: the thumbnail fits the
+artboards and draws only the art inside them, so art on the pasteboard and in the gaps between artboards is left out
+and a shape that crosses an artboard's edge is cut there. Off, the thumbnail also fits and draws the art outside the
+artboards. The view box still shows the canvas's view either way. All three are kept with the UI state and apply to
+every document; UI state saved without `viewArtboardContentsOnly` reads it as on, and a saved off stays off. Fitting
+the thumbnail to the union of the artboards with a small margin, cutting the art at each artboard, and keeping the
+choice with the UI state are VectorCraft's own rules. A `color` that is not a color, or a `solidDashes` or
+`viewArtboardContentsOnly` that is not true or false, is an error and changes none of the options. Behavior
+references: [View artwork](https://helpx.adobe.com/illustrator/using/viewing-artwork.html) and
+[Navigate and zoom artwork](https://helpx.adobe.com/illustrator/desktop/get-started/learn-the-basics/navigate-and-zoom-artwork.html).
 
 ```json
 {"name":"invoke_menu","arguments":{"command":"ui.navigatorPanelOptions","params":{"color":"Light Blue","solidDashes":true}}}
+{"name":"invoke_menu","arguments":{"command":"ui.navigatorPanelOptions","params":{"viewArtboardContentsOnly":false}}}
 ```
 
 ## Info panel
@@ -7590,15 +7707,22 @@ document current, and its tool keeps its state; closing the current document mak
 current, or the one before it when it was the last tab. In the desktop app a modified document comes to the front first,
 to ask whether to save it.
 `window.arrange.tile` (Window › Arrange › Tile) shows every open document in its own pane, edge to edge in the document
-area, in a grid of as many columns as the square root of the number of documents, rounded up, and fits each document to
-its pane; with fewer than two documents open it leaves the view and `tiled` as they are. It returns `{tiled, panes}`.
-The current document's pane is the canvas, and a press in another pane makes its document the current one.
-`window.arrange.consolidateAllWindows` (Window › Arrange › Consolidate All Windows) shows one document under its tab
-again and returns `{tiled: false}`. The arrangement is not saved. `ui.inspect` reports `tiled` and `panes` (each pane's
-`document` index, `rect` and whether it is `active`); canvas coordinates map to the current document's pane
-(`canvasRect`).
-its pane; it returns `{tiled, panes}`. The current document's pane is the canvas, and a press in another pane makes its
-document the current one. `window.arrange.floatInWindow` (Window › Arrange › Float in Window) moves the current document
+area, in a grid of as many columns as the square root of the number of windows, rounded up, and fits each document to
+its pane. Each view of a document counts as a window (see `window.newWindow` below). With fewer than two windows open it
+leaves the view, `tiled` and the layout as they are. It returns
+`{tiled, panes, layout}`. `window.arrange.tile {layout}` picks another layout, as the other Tile items of Window ›
+Arrange and of the application bar's Arrange Documents button do: `grid` (the default), `vertical` (Tile All
+Vertically: side by side in one row), `horizontal` (Tile All Horizontally: stacked in one column), and `2up`, `3up`,
+`4up` and `6up`, which show at most that many windows (2-Up and 3-Up side by side, 4-Up two by two, 6-Up three by
+two) and leave the others under their tabs. Those layouts show the first windows in tab order, and the current
+window takes the last pane when it is not among them, so a click on another tab brings that window into the last
+pane. Any other `layout` is an error, and the view stays as it is. The set of layouts and how each one places the panes
+are VectorCraft's own. The current document's pane is the canvas, and a press in another pane makes its document the
+current one. `window.arrange.consolidateAllWindows` (Window › Arrange › Consolidate All Windows, also first in Arrange
+Documents) shows one document under its tab again and returns `{tiled: false}`. The arrangement is not saved.
+`ui.inspect` reports `tiled`, `tileLayout` and `panes` (each pane's `document` index, `rect` and whether it is
+`active`); canvas coordinates map to the current document's pane (`canvasRect`).
+`window.arrange.floatInWindow` (Window › Arrange › Float in Window) moves the current document
 out of the tab strip into a floating window of its own, `window.arrange.floatAllInWindows` (Float All in Windows) does
 so for every tabbed document, and `window.arrange.cascade` (Cascade) floats every document and stacks the windows 30 pt
 apart from the upper left of the document area; each returns `{floating}`, the floating documents' indices. On the
@@ -8385,10 +8509,15 @@ the document; so does `object.expand`.
 ```
 
 Placing a text file (`.txt`) sets it as area type: `file.place {path | name+dataBase64, text?: {characterSet?:
-"unicode" | "ansi", platform?: "windows" | "mac", removeLineReturns?, removeParagraphReturns?, replaceSpaces?: n}}`
+"unicode" | "ansi" | "shiftJis" | "gb2312" | "chineseBig5" | "cyrillic" | "gb18030" | "greek" | "turkish" | "baltic" |
+"centralEuropean", platform?: "windows" | "mac", removeLineReturns?, removeParagraphReturns?, replaceSpaces?: n}}`
 (Text Import Options). Unicode reads UTF-8, or UTF-16 with a byte-order mark; ANSI reads Windows-1252 (Mac Roman on
-`mac`). Unicode reads a file without a byte-order mark as UTF-16 by the rule `dataset.import` uses: at least half of
-its two-byte units hold a NUL byte, in the byte order that reads a line break, or for a file with one line, big-endian
+`mac`). The other sets use the WHATWG Encoding Standard's decoders: `shiftJis` Shift_JIS, `gb2312` GBK, `chineseBig5`
+Big5, `cyrillic` windows-1251 (x-mac-cyrillic on `mac`), `gb18030` gb18030, and `greek`, `turkish`, `baltic` and
+`centralEuropean` windows-1253, 1254, 1257 and 1250 on both platforms. They read a byte-order mark as ordinary bytes
+and a malformed sequence as U+FFFD. An unknown set, or an option of the wrong type (`characterSet: 3`,
+`removeLineReturns: "yes"`), is an error, and nothing is placed. Unicode reads a file without a byte-order mark as
+UTF-16 by the rule `dataset.import` uses: at least half of its two-byte units hold a NUL byte, in the byte order that reads a line break, or for a file with one line, big-endian
 when more of its units start with a NUL byte than end with one, and little-endian otherwise. Any other file is read as
 UTF-8, else as the platform's 8-bit set: one with fewer NUL bytes, one with an odd length, one where both byte orders
 read a line break, and one that isn't valid UTF-16 in that order or holds a NUL character. `removeLineReturns` joins
@@ -13612,10 +13741,10 @@ there is no step. → `{symbols: [name…], ids: [instance id…], skipped: [{la
 ## Packaging Tools add-on
 
 Packaging Tools is a built-in add-on for the dielines of boxes and other folded packaging. Its commands are
-`addon.packaging.setRole`, `addon.packaging.roles`, `addon.packaging.setRoleSwatch` and `addon.packaging.check`. In the
-desktop app, Object › Plug-ins › Packaging Tools › Fold Lines opens the Fold Lines panel, Make Cut Line, Make Crease Line,
-Make Partial Cut Line and Make Perforation Line run `addon.packaging.setRole` on the selection, and Check Fold Lines runs
-`addon.packaging.check`.
+`addon.packaging.setRole`, `addon.packaging.roles`, `addon.packaging.setRoleSwatch`, `addon.packaging.check` and
+`addon.packaging.fold`. In the desktop app, Object › Plug-ins › Packaging Tools › Fold Lines opens the Fold Lines panel,
+Make Cut Line, Make Crease Line, Make Partial Cut Line and Make Perforation Line run `addon.packaging.setRole` on the
+selection, Check Fold Lines runs `addon.packaging.check`, and Fold Preview runs `ui.foldPreview`.
 
 ### Fold line roles
 
@@ -13709,6 +13838,54 @@ The list is shown until the document changes.
 
 ```json
 {"name":"run_command","arguments":{"command":"addon.packaging.check","params":{"tolerance":0.5,"select":true}}}
+```
+
+### Fold Preview
+
+`addon.packaging.fold` (`{ids?, base?: [x, y], amount?: 1, tolerance?: 0.1}`) folds a blank into its 3D shape. It reads
+the fold lines as `addon.packaging.check` does, and folds the blank that holds the base panel: the panel under `base`, or
+the largest panel of all the blanks. The base panel stays in place. Every other panel turns about the hinges that join it
+to the base, each by its angle times `amount` (0 is flat, 1 is folded): a Crease or a Perforation folds 90° away from
+the printed side, so the print ends up outside, and a Partial Cut folds 90° toward it. A hinge that closes a loop of
+panels is not turned about; `gap` says how far apart its two placements end up when every hinge is folded all the way,
+whatever `amount` is, and it `closes` when that is within `tolerance` or 0.5% of its length. A panel that no chain of
+hinges joins to the base stays flat where it is. `amount` must be from 0 to 1 and `base` a point in a panel; anything
+else is an error. The command does not change the document.
+
+Result: `{ok, blank, blanks, base, panels: [{outline, frame: {x, y, z, origin}, parent, depth}], hinges: [{a, b,
+angle, kind, closes, gap}], collisions: [[a, b]], issues}`. `outline` is the panel's SVG path data in document
+coordinates. `frame` gives where the flat blank's x and y directions, its printed side and its origin end up, in points,
+with x to the right, y up and z toward the printed side of the flat blank. `kind` is `tree` for the hinges the panels
+turn about and `closing` for the others. `collisions` lists the panels that pass through each other; panels stacked in
+one plane, such as the top flaps of a closed box, are not listed. Without a blank (`ok` false), `blank` and `base` are
+null and the lists are empty; `issues` are those of `addon.packaging.check`.
+
+The Fold Preview window (Object › Plug-ins › Packaging Tools › Fold Preview, or the Fold Lines panel's Fold Preview
+button) shows the blank that the document's shown fold lines make, folded, with the document's printed art on the
+outside of each panel and the board's inside color on the back. The print leaves out the fold lines, unless Show Fold
+Lines is on, and the layers that do not print. Under the view, the Fold slider sets the amount and the Zoom slider the
+zoom; a status line gives the panels and hinges and says when a joint does not close, when two panels pass through each
+other, when other blanks are not shown and when the fold lines have an error. Dragging in the view turns it, a
+Shift-drag keeps to one axis, a middle-drag or a Space-drag moves it, the wheel zooms, a double-click on a panel makes it
+the base, and the arrow keys turn the view by 5° when it has the keyboard focus. The view is drawn at the display's
+pixel density up to 2,097,152 pixels (2,048 × 1,024) and 4,096 pixels along a side, and at a lower density past either,
+and the print is a raster whose longest side is 2,048 pixels, rendered again when the document changes.
+
+`ui.foldPreview` (`{amount?, view?: front|back|left|right|top|bottom|threeQuarter, rotateX?, rotateY?, zoom?,
+perspective?, inside?, showFoldLines?, base?}`) sets the window, shows it and draws it again. A second run leaves the
+window open. `rotateX` (-180 to 180) tips the top toward the viewer and `rotateY` (-180 to 180) turns the right side
+toward the viewer, in degrees; `zoom` is 0.1 to 8, where 1 fits the folded blank; `perspective` is the field of view, 0 to
+160 degrees, 0 for none; `inside` is the name of a swatch with a plain color, or else `#rrggbb`, or `""` for white; `base` is a point in a panel
+of the document's blanks, or null for the largest panel. With perspective, the zoom of 1 keeps the eye at least twice
+the folded blank's radius from its middle. A value of the wrong kind or out of range is an error and sets nothing.
+VectorCraft's own defaults are a Three-Quarter view (`rotateX` 25, `rotateY` 35), no perspective, a white inside and the
+fold lines hidden. Saved settings out of range are brought into range when the window is drawn. Result: the window's
+settings, and `frame`: the last frame's `{width, height}` in pixels and how long the fold and the drawing took (`foldMs`,
+`drawMs`), or null before the first frame. The view is folded and drawn again only when the document, the settings or
+the window's size change.
+
+```json
+{"name":"run_command","arguments":{"command":"ui.foldPreview","params":{"amount":0.5,"view":"threeQuarter","perspective":30}}}
 ```
 
 ## Image Tools add-on

@@ -542,6 +542,11 @@
 	Character Color	અક્ષર રંગ
 	Character Direction	અક્ષર દિશા
 	Character Rotation	અક્ષર પરિભ્રમણ
+	Chinese Big 5	ચાઇનીઝ Big 5
+	Cyrillic	સિરિલિક
+	Greek	ગ્રીક
+	Baltic	બાલ્ટિક
+	Central European	મધ્ય યુરોપિયન
 	Character Set:	અક્ષર સેટ:
 	Character Style Options	અક્ષર સ્ટાઇલ વિકલ્પો
 	Character Styles	અક્ષર સ્ટાઇલ
@@ -4129,6 +4134,13 @@
 	Three Point Perspective Preset 5	ત્રણ બિંદુ પર્સ્પેક્ટિવ પ્રીસેટ 5
 	Thumbnails:	થંબનેલ:
 	Tile	ટાઇલ
+	Tile All Vertically	બધું ઊભી રીતે ટાઇલ કરો
+	Tile All Horizontally	બધું આડી રીતે ટાઇલ કરો
+	2-Up Layout	2 નું લેઆઉટ
+	3-Up Layout	3 નું લેઆઉટ
+	4-Up Layout	4 નું લેઆઉટ
+	6-Up Layout	6 નું લેઆઉટ
+	Arrange Documents	દસ્તાવેજો ગોઠવો
 	Tile Edge Color	ટાઇલ કિનારીનો રંગ
 	Tile Edge Color…	ટાઇલ કિનારીનો રંગ…
 	Tile Range:	ટાઇલ શ્રેણી:
@@ -4413,7 +4425,7 @@
 	Video	વિડિયો
 	Video Ruler Pixel Aspect Ratio:	વિડિયો રૂલર પિક્સેલ ગુણોત્તર:
 	View	વ્યૂ
-	View Artboard Only	માત્ર આર્ટબોર્ડ જુઓ
+	View Artboard Contents Only	માત્ર આર્ટબોર્ડની સામગ્રી જુઓ
 	View Opacity Mask	ઓપેસિટી માસ્ક જુઓ
 	View PDF after saving	સાચવ્યા પછી PDF જુઓ
 	Viewing Angle:	જોવાનો ખૂણો:
@@ -5048,6 +5060,16 @@ swatch	[Registration]	[રજિસ્ટ્રેશન]
 @msg	A panel is not joined to the rest by a crease.	એક પેનલ કોઈ ક્રીઝ લાઇનથી બાકીના સાથે જોડાયેલી નથી.
 @msg	A fold line is on a non-printing layer.	એક ફોલ્ડ લાઇન નોન-પ્રિન્ટિંગ લેયર પર છે.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	પેનલ: {panels}, હિન્જ: {hinges}, ભૂલો: {errors}, ચેતવણીઓ: {warnings}
+	Fold Preview	ફોલ્ડ પ્રિવ્યૂ
+	Fold	ફોલ્ડ
+	Show Fold Lines	ફોલ્ડ લાઇન્સ બતાવો
+	Three-Quarter	ત્રણ-ચતુર્થાંશ
+	Open a document to preview its folded shape.	તેનો ફોલ્ડ કરેલો આકાર જોવા દસ્તાવેજ ખોલો.
+@msg	Check the fold lines first.	પહેલાં ફોલ્ડ લાઇન્સ ચેક કરો.
+@msg	Panels: {panels}, hinges: {hinges}	પેનલ: {panels}, હિન્જ: {hinges}
+@msg	Other blanks not shown: {count}	બીજા બ્લેન્ક બતાવ્યા નથી: {count}
+@msg	A joint does not close by {gap} pt.	એક સાંધો {gap} pt થી બંધ થતો નથી.
+@msg	Two panels pass through each other.	બે પેનલ એકબીજામાંથી પસાર થાય છે.
 	Middle Eastern & South Asian Single-line Composer	સિંગલ-લાઇન કમ્પોઝર (મધ્ય પૂર્વ અને દક્ષિણ એશિયા)
 	Middle Eastern & South Asian Every-line Composer	એવરી-લાઇન કમ્પોઝર (મધ્ય પૂર્વ અને દક્ષિણ એશિયા)
 	Standard Single-line Composer	સ્ટાન્ડર્ડ સિંગલ-લાઇન કમ્પોઝર

@@ -669,6 +669,13 @@
 	Previous Document	Dokumen sebelumnya
 	Cascade	Bertingkat
 	Tile	Ubin
+	Tile All Vertically	Ubin semua secara vertikal
+	Tile All Horizontally	Ubin semua secara horizontal
+	2-Up Layout	Tata letak 2
+	3-Up Layout	Tata letak 3
+	4-Up Layout	Tata letak 4
+	6-Up Layout	Tata letak 6
+	Arrange Documents	Susun dokumen
 	Float in Window	Mengambang di jendela
 	Float All in Windows	Mengambangkan semua di jendela
 	Consolidate All Windows	Konsolidasikan semua jendela
@@ -1887,7 +1894,7 @@ digits	Malayalam	Malayalam
 	Stroke: click for swatches, Shift-click for the color mixer	Stroke: klik untuk swatch, Shift+klik untuk pencampur warna
 	This panel is on the roadmap (see the parity plan).	Panel ini masih dalam roadmap (lihat rencana paritas).
 	Open a document to navigate it.	Buka dokumen untuk menjelajahinya.
-	View Artboard Only	Tampilkan artboard saja
+	View Artboard Contents Only	Tampilkan isi artboard saja
 	Contextual Alternates	Alternatif kontekstual
 	Default Figure	Angka default
 	Discretionary Ligatures	Ligatur opsional
@@ -3098,6 +3105,12 @@ antiAlias	Sharp	Tajam
 	LF (macOS, Linux)	LF (macOS, Linux)
 	CRLF (Windows)	CRLF (Windows)
 	Text Export Options	Opsi ekspor teks
+	Chinese Big 5	Tionghoa Big 5
+	Cyrillic	Sirilik
+	Greek	Yunani
+	Turkish	Turki
+	Baltic	Baltik
+	Central European	Eropa Tengah
 	Character Set:	Set karakter:
 	Join the lines of each paragraph	Gabungkan baris setiap paragraf
 	Line Breaks	Pemisah baris
@@ -4545,6 +4558,13 @@ imageTrace	Outline	Kontur
 	Show External Script Warning	Tampilkan Peringatan Skrip Eksternal
 	A Script Is Running	Skrip Sedang Berjalan
 	Script Alert	Peringatan Skrip
+	Script File Access	Akses Berkas Skrip
+	The script asks to read a file you choose.	Skrip meminta izin untuk membaca berkas yang Anda pilih.
+	The script asks to read and write a file you choose.	Skrip meminta izin untuk membaca dan menulis berkas yang Anda pilih.
+	The script asks to read and write a folder you choose, with everything in it.	Skrip meminta izin untuk membaca dan menulis folder yang Anda pilih, beserta seluruh isinya.
+	Allow Once	Izinkan Sekali
+	Always Allow This Script	Selalu Izinkan Skrip Ini
+	Deny	Tolak
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Skrip dapat mengubah dokumen yang terbuka dan menulis file melalui perintah yang dijalankannya. Jalankan hanya skrip yang Anda percayai.
 	Do not show this warning again	Jangan tampilkan peringatan ini lagi
 	Stop the script and undo what it did? Then quit again.	Hentikan skrip dan batalkan yang telah dilakukannya? Lalu keluar lagi.
@@ -7321,4 +7341,14 @@ breakText	Glyphs	Glif
 @msg	A panel is not joined to the rest by a crease.	Sebuah panel tidak tersambung ke bagian lain oleh garis lekuk apa pun.
 @msg	A fold line is on a non-printing layer.	Sebuah garis lipat berada di lapisan yang tidak dicetak.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panel: {panels}, engsel: {hinges}, galat: {errors}, peringatan: {warnings}
+	Fold Preview	Pratinjau lipatan
+	Fold	Lipat
+	Show Fold Lines	Tampilkan garis lipat
+	Three-Quarter	Tiga perempat
+	Open a document to preview its folded shape.	Buka dokumen untuk melihat pratinjau bentuk terlipatnya.
+@msg	Check the fold lines first.	Periksa garis lipat terlebih dahulu.
+@msg	Panels: {panels}, hinges: {hinges}	Panel: {panels}, engsel: {hinges}
+@msg	Other blanks not shown: {count}	Bentangan lain tidak ditampilkan: {count}
+@msg	A joint does not close by {gap} pt.	Sebuah sambungan tidak menutup sejauh {gap} pt.
+@msg	Two panels pass through each other.	Dua panel saling menembus.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer harus "singleLine", "everyLine", "standardSingleLine", atau "standardEveryLine"

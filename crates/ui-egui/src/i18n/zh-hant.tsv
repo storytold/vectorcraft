@@ -389,6 +389,12 @@ font-technology	Variable	可變
 	Character / Paragraph	字元／段落
 	Character Alignment	字元對齊
 	Character Rotation	字元旋轉
+	Chinese Big 5	繁體中文 Big 5
+	Cyrillic	西里爾文
+	Greek	希臘文
+	Turkish	土耳其文
+	Baltic	波羅的海文
+	Central European	中歐文
 	Character Set:	字元集：
 	Character Style	字元樣式
 	Character Style Options	字元樣式選項
@@ -1953,6 +1959,7 @@ file-filter	Templates	範本
 @msg	Live Paint: select paths or compound paths	即時上色：請選取路徑或複合路徑
 @msg	Live Paint: these paths are too degenerate to paint	即時上色：這些路徑過度退化，無法上色
 @msg	Shape Builder: no region under the pointer	形狀建立：指標下方沒有區域
+@msg	Shape Builder: select all paths you want to merge	形狀建立：請選取要合併的所有路徑
 @msg	Shape Builder: select paths or compound paths	形狀建立：請選取路徑或複合路徑
 @msg	image data `{_1}` is missing	找不到影像資料 `{_1}`
 @msg	no Live Paint edge near that point	該點附近沒有即時上色邊緣
@@ -2619,6 +2626,13 @@ file-filter	Templates	範本
 	Show External Script Warning	顯示外部指令碼警告
 	A Script Is Running	指令碼正在執行
 	Script Alert	指令碼提示
+	Script File Access	指令碼檔案存取
+	The script asks to read a file you choose.	指令碼要求讀取您選擇的檔案。
+	The script asks to read and write a file you choose.	指令碼要求讀寫您選擇的檔案。
+	The script asks to read and write a folder you choose, with everything in it.	指令碼要求讀寫您選擇的資料夾及其中的所有內容。
+	Allow Once	允許一次
+	Always Allow This Script	一律允許此指令碼
+	Deny	拒絕
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	指令碼可以變更開啟的文件，並可透過其執行的命令寫入檔案。請只執行您信任的指令碼。
 	Do not show this warning again	不再顯示此警告
 	Stop the script and undo what it did? Then quit again.	要停止指令碼並還原其變更嗎？然後請再次結束。
@@ -2649,8 +2663,6 @@ file-filter	Templates	範本
 @msg	Script file could not be read	無法讀取指令碼檔案
 @msg	Script folder has more than 2,048 entries	指令碼資料夾的項目超過 2,048 個
 @msg	Script file open mode must be r, w, e or a	指令碼檔案的開啟模式必須是 r、w、e 或 a
-@msg	Script file writing is not available	無法使用指令碼檔案寫入
-@msg	Script file dialogs are not available	無法使用指令碼檔案對話方塊
 @msg	Script files cannot be opened in another application	指令碼檔案無法在其他應用程式中開啟
 @msg	Script file access is unavailable on the web	網頁版無法存取指令碼檔案
 @msg	Script has 256 files open	指令碼已開啟 256 個檔案
@@ -2768,6 +2780,27 @@ liquify-list-end	{0}, {1}	{0}和{1}
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` 僅適用於沒有人可詢問的執行：在應用程式中，由使用者回答每個對話框
 @msg	Running a script	正在執行指令碼
 @msg	Copied the script report	已複製指令碼報告
+@msg	Script file access denied: {path}	指令碼的檔案存取遭拒：{path}
+@msg	Script file access to the app's own folders is not allowed	不允許指令碼存取應用程式本身的資料夾
+@msg	Script file cannot encode the text	指令碼的檔案無法編碼該文字
+@msg	Script file could not be written	無法寫入指令碼的檔案
+@msg	Script file dialogs need a person to answer them	指令碼的檔案對話框需要有人回應
+@msg	Script file is not open for writing	指令碼的檔案未以寫入方式開啟
+@msg	Script file name is already in use	指令碼的檔案名稱已在使用中
+@msg	Script file name must be a name without a folder	指令碼的檔案名稱必須是不含資料夾的名稱
+@msg	Script file permission can be kept only for a script run from a file	只有從檔案執行的指令碼才能保留檔案權限
+@msg	Script file permission could not be saved	無法儲存指令碼的檔案權限
+@msg	Script folder is not empty	指令碼的資料夾不是空的
+@msg	Script files cannot make aliases	指令碼的檔案無法建立別名
+@msg	Script file hidden setting cannot be changed	無法變更指令碼檔案的隱藏設定
+@msg	{name}: a file dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}：檔案對話框無法在內建函式、getter、轉換或 $.evalFile 執行的檔案的回呼中開啟；請從指令碼本身的程式碼中呼叫
+@msg	the script wrote more file data than one run may write (32 MiB)	指令碼寫入的檔案資料超過一次執行可寫入的上限 (32 MiB)
+@msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	指令碼檔案對話框的 `answer` 必須是下列之一：once、always、deny、stop
+@msg	choose a file or folder first, or deny	請先選擇檔案或資料夾，或拒絕
+@msg	the script file permissions could not be saved: {e}	無法儲存指令碼的檔案權限：{e}
+@msg	this script's file access can be allowed only once	此指令碼的檔案存取只能允許一次
+@msg	Only the person at the keyboard can allow a script's file access	只有鍵盤前的人才能允許指令碼存取檔案
+@msg	A script is given at most 2,048 files: the files picked after them were left out	指令碼最多取得 2,048 個檔案：之後選擇的檔案已略去
 @msg	Copied the link info	已複製連結資訊
 @msg	Exported {path}	已匯出 {path}
 @msg	no CSS to copy: select objects with CSS of their own	沒有可複製的 CSS：請選取有自己 CSS 的物件
@@ -5255,6 +5288,13 @@ digits	Malayalam	馬來亞拉姆數字
 	Thumbnail View	縮圖檢視
 	Thumbnails:	縮圖：
 	Tile	並排顯示
+	Tile All Vertically	全部垂直並排顯示
+	Tile All Horizontally	全部水平並排顯示
+	2-Up Layout	雙聯版面
+	3-Up Layout	三聯版面
+	4-Up Layout	四聯版面
+	6-Up Layout	六聯版面
+	Arrange Documents	排列文件
 	Tile Edge Color	拼貼邊緣顏色
 	Tile Edge Color…	拼貼邊緣顏色…
 	Tile Full Pages	並排完整頁面
@@ -5542,7 +5582,7 @@ variable-list-end	{0}, {1}	{0}和{1}
 	Vertical:	垂直：
 	Very High	極高
 	View	檢視
-	View Artboard Only	僅檢視工作區域
+	View Artboard Contents Only	僅檢視工作區域內容
 	View Opacity Mask	檢視不透明度遮色片
 	View PDF after saving	儲存後檢視 PDF
 	View {n}	檢視 {n}
@@ -9667,4 +9707,14 @@ breakText	Glyphs	字符
 @msg	A panel is not joined to the rest by a crease.	一個面板沒有透過任何壓痕線與其餘部分相連。
 @msg	A fold line is on a non-printing layer.	一條摺線位於不列印的圖層上。
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	面板：{panels}，鉸鏈：{hinges}，錯誤：{errors}，警告：{warnings}
+	Fold Preview	摺疊預覽
+	Fold	摺疊
+	Show Fold Lines	顯示摺線
+	Three-Quarter	四分之三視圖
+	Open a document to preview its folded shape.	開啟文件以預覽其摺疊後的形狀。
+@msg	Check the fold lines first.	請先檢查摺線。
+@msg	Panels: {panels}, hinges: {hinges}	面板：{panels}，鉸鏈：{hinges}
+@msg	Other blanks not shown: {count}	未顯示的其他展開圖：{count}
+@msg	A joint does not close by {gap} pt.	有一處接縫相差 {gap} pt 未閉合。
+@msg	Two panels pass through each other.	兩個面板相互穿插。
 @msg	{what} would print on more than {MAX_TILES} tiles: scale it down	{what} 會列印在超過 {MAX_TILES} 個拼貼上：請縮小

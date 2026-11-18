@@ -710,6 +710,13 @@
 	Previous Document	Prethodni dokument
 	Cascade	Kaskadno
 	Tile	Popločaj
+	Tile All Vertically	Popločaj sve okomito
+	Tile All Horizontally	Popločaj sve vodoravno
+	2-Up Layout	Raspored po 2
+	3-Up Layout	Raspored po 3
+	4-Up Layout	Raspored po 4
+	6-Up Layout	Raspored po 6
+	Arrange Documents	Rasporedi dokumente
 	Float in Window	Odvoji u prozor
 	Float All in Windows	Odvoji sve u prozore
 	Consolidate All Windows	Objedini sve prozore
@@ -2057,7 +2064,7 @@ digits	Malayalam	Malajalam
 	Stroke: click for swatches, Shift-click for the color mixer	Potez: kliknite za uzorke boja, Shift-klik za mikser boja
 	This panel is on the roadmap (see the parity plan).	Ovaj panel je u planu (vidi plan usklađenosti).
 	Open a document to navigate it.	Otvorite dokument da se krećete kroz njega.
-	View Artboard Only	Prikaži samo radnu ploču
+	View Artboard Contents Only	Prikaži samo sadržaj radne ploče
 	Contextual Alternates	Kontekstualne alternative
 	Default Figure	Zadane brojke
 	Discretionary Ligatures	Diskrecione ligature
@@ -3319,6 +3326,12 @@ antiAlias	Sharp	Oštro
 	LF (macOS, Linux)	LF (macOS, Linux)
 	CRLF (Windows)	CRLF (Windows)
 	Text Export Options	Opcije izvoza teksta
+	Chinese Big 5	Kineski Big 5
+	Cyrillic	Ćirilica
+	Greek	Grčki
+	Turkish	Turski
+	Baltic	Baltički
+	Central European	Srednjoevropski
 	Character Set:	Skup znakova:
 	Join the lines of each paragraph	Spoji redove svakog pasusa
 	Line Breaks	Prelomi reda
@@ -4809,6 +4822,13 @@ imageTrace	Outline	Obris
 	Show External Script Warning	Prikaži upozorenje za vanjske skripte
 	A Script Is Running	Skripta se izvršava
 	Script Alert	Upozorenje skripte
+	Script File Access	Pristup skripte datotekama
+	The script asks to read a file you choose.	Skripta traži da pročita datoteku koju odaberete.
+	The script asks to read and write a file you choose.	Skripta traži da čita i piše datoteku koju odaberete.
+	The script asks to read and write a folder you choose, with everything in it.	Skripta traži da čita i piše folder koji odaberete, sa svim što je u njemu.
+	Allow Once	Dozvoli jednom
+	Always Allow This Script	Uvijek dozvoli ovu skriptu
+	Deny	Odbij
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Skripta može mijenjati otvorene dokumente i pisati datoteke putem naredbi koje pokreće. Pokrećite samo skripte kojima vjerujete.
 	Do not show this warning again	Ne prikazuj više ovo upozorenje
 	Stop the script and undo what it did? Then quit again.	Zaustaviti skriptu i poništiti ono što je uradila? Zatim ponovo izađite.
@@ -7359,4 +7379,14 @@ shape	Open	Otvoren
 @msg	A panel is not joined to the rest by a crease.	Panel nije povezan s ostatkom nijednom linijom bigovanja.
 @msg	A fold line is on a non-printing layer.	Linija savijanja je na sloju koji se ne štampa.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Paneli: {panels}, šarke: {hinges}, greške: {errors}, upozorenja: {warnings}
+	Fold Preview	Pregled savijanja
+	Fold	Savijanje
+	Show Fold Lines	Prikaži linije savijanja
+	Three-Quarter	Tri četvrtine
+	Open a document to preview its folded shape.	Otvorite dokument da pregledate njegov savijeni oblik.
+@msg	Check the fold lines first.	Prvo provjerite linije savijanja.
+@msg	Panels: {panels}, hinges: {hinges}	Paneli: {panels}, šarke: {hinges}
+@msg	Other blanks not shown: {count}	Ostali krojevi nisu prikazani: {count}
+@msg	A joint does not close by {gap} pt.	Spoj se ne zatvara za {gap} pt.
+@msg	Two panels pass through each other.	Dva panela prolaze jedan kroz drugi.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer mora biti "singleLine", "everyLine", "standardSingleLine" ili "standardEveryLine"
