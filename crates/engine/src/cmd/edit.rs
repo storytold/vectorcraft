@@ -1076,8 +1076,10 @@ fn cut(s: &mut Session, p: &Value) -> Result<Value> {
 /// Select every surviving piece while retaining intentional compound-path structure.
 /// `roots` contains the copied targets: whole-object roots are removed in full, while partial paths
 /// lose only the copied geometry. An exhausted partial path is removed, along with its compound
-/// parent if now empty; layers remain. Returns JSON `null` on success, replacing direct-selection
-/// references with surviving object IDs.
+/// parent if now empty; a compound left with one member stays a compound path, as after Clear;
+/// layers remain. Removed and replaced roots go through one [`super::pathops::Beside`], which
+/// rebuilds each parent's children once when the roots are separate. Returns JSON `null` on
+/// success, replacing direct-selection references with surviving object IDs.
 fn cut_direct_selection(s: &mut Session, roots: &[NodeId]) -> Result<Value> {
     let st = s.doc()?;
     let sel = st.selection.clone();
@@ -1085,13 +1087,18 @@ fn cut_direct_selection(s: &mut Session, roots: &[NodeId]) -> Result<Value> {
         // The selected ruler guides were copied too (#3226): they go in the same undo step.
         let gone = selection.guides.clone();
         d.retain_guides(selection, |g| !g.id.is_some_and(|id| gone.contains(&id)));
+        // The compound paths that hold a root; one left with no members goes too.
+        let compounds: BTreeSet<NodeId> = roots
+            .iter()
+            .filter_map(|id| d.parent_of(*id).filter(|p| matches!(d.node(*p).map(|n| &n.kind), Some(NodeKind::Compound { .. }))))
+            .collect();
         let mut survivors = vec![];
         let mut pieces = super::pathops::Beside::replacing(d, roots);
         for id in roots {
             let Some(node) = d.node(*id) else { continue };
             let has_direct = sel.anchors.contains_key(id) || sel.segments.contains_key(id);
             if !has_direct || node.path_data().is_none() {
-                remove_leaving_no_empty_compound(d, *id)?;
+                pieces.put(d, *id, vec![])?;
                 continue;
             }
             let original = super::path::deletion_source(d, *id)?;
@@ -1114,31 +1121,20 @@ fn cut_direct_selection(s: &mut Session, roots: &[NodeId]) -> Result<Value> {
             }
             subpaths.retain(|sp| sp.anchors.len() >= 2);
             if subpaths.is_empty() {
-                remove_leaving_no_empty_compound(d, *id)?;
+                pieces.put(d, *id, vec![])?;
             } else {
                 survivors.extend(super::path::replace_deleted_pieces(d, &mut pieces, original, subpaths)?);
             }
         }
         pieces.finish(d)?;
+        let emptied: Vec<NodeId> = compounds.into_iter().filter(|p| d.node(*p).is_some_and(|n| n.children().is_some_and(|c| c.is_empty()))).collect();
+        super::pathops::remove_each(d, &emptied)?;
         selection.set(survivors);
         selection.anchors.clear();
         selection.segments.clear();
         Ok(())
     })?;
     ok()
-}
-
-/// Remove object `id`, and the compound path that held it when it was the compound's last member.
-/// A compound left with one member stays a compound path, as after Clear.
-fn remove_leaving_no_empty_compound(d: &mut Document, id: NodeId) -> Result<()> {
-    let parent = d.parent_of(id).filter(|p| matches!(d.node(*p).map(|n| &n.kind), Some(NodeKind::Compound { .. })));
-    d.remove(id)?;
-    if let Some(p) = parent
-        && d.node(p).is_some_and(|n| n.children().is_some_and(|c| c.is_empty()))
-    {
-        d.remove(p)?;
-    }
-    Ok(())
 }
 
 fn clear(s: &mut Session, p: &Value) -> Result<Value> {
@@ -1751,3 +1747,6 @@ pub(crate) fn copy_above(d: &mut Document, roots: &[NodeId], mut change: impl Fn
 pub(crate) fn arc_nodes(v: Vec<Node>) -> Vec<Arc<Node>> {
     v.into_iter().map(Arc::new).collect()
 }
+
+#[cfg(test)]
+mod tests;
