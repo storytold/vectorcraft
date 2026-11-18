@@ -647,6 +647,20 @@ fn text_flow_is_saved_only_when_by_rows() {
     assert!(serde_json::from_value::<AreaOptions>(serde_json::json!({"flow": "diagonal"})).is_err());
 }
 
+/// First Baseline Em Box Height saves as `emBoxHeight` with its minimum and reads back; files from
+/// before it read their own first baseline as they did, Ascent when they have none.
+#[test]
+fn em_box_height_first_baseline_is_saved_and_read_back() {
+    let set = AreaOptions { first_baseline: FirstBaseline::EmBoxHeight, first_baseline_min: 9.0, ..AreaOptions::default() };
+    let saved = serde_json::to_value(&set).unwrap();
+    assert_eq!((saved["firstBaseline"].as_str(), saved["firstBaselineMin"].as_f64()), (Some("emBoxHeight"), Some(9.0)));
+    assert_eq!(serde_json::from_value::<AreaOptions>(saved).unwrap(), set);
+    let old = serde_json::json!({"firstBaseline": "leading", "firstBaselineMin": 3.0});
+    assert_eq!(serde_json::from_value::<AreaOptions>(old).unwrap().first_baseline, FirstBaseline::Leading);
+    assert_eq!(serde_json::from_value::<AreaOptions>(serde_json::json!({})).unwrap().first_baseline, FirstBaseline::Ascent);
+    assert!(serde_json::from_value::<AreaOptions>(serde_json::json!({"firstBaseline": "emBox"})).is_err());
+}
+
 /// 120 × 40 area type at (40, 40), its text drawn at twice its size.
 fn area_type() -> TextObject {
     let mut t = TextObject::point(Point::ZERO, "Some text", CharStyle::default());

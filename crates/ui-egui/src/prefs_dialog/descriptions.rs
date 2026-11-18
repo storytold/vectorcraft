@@ -39,6 +39,7 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
     ("ctrlWheelScrollsSideways", "The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways."),
     ("scrubNumericFields", "Dragging sideways on a numeric field's label changes the field's value."),
     ("trackpadRotateView", "A two-finger rotate gesture on a trackpad rotates the canvas view."),
+    ("interpolateControlPoints", "When you move anchor points, each curve with one moved end keeps its shape relative to its ends."),
     ("holdToolKeys", "Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again."),
     ("boundingBoxWhileMovingAndDrawing", "Shows the bounding box while you move the selection or draw a shape."),
     ("japaneseCropMarks", "Create Trim Marks draws Japanese-style marks instead of Roman ones."),

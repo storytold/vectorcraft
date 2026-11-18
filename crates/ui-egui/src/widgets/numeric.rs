@@ -917,7 +917,19 @@ fn bounded_field_reading(
     let stepped = step_value(ui, &resp, &mut buf, bounds, (read, show), step, &[]).map(|v| round_to(v, decimals));
     let scrubbed = scrub::field(ui, id, rect, &buf, value, decimals, bounds);
     if commit && buf != shown {
-        read(&buf)
+        let typed = read(&buf);
+        if typed.is_none() {
+            // Text that reads as no number is refused as [`unit_field_from`] refuses it: the field
+            // flashes, shows its value again, and an open dialog is not confirmed by this Enter.
+            let end = ui.input(|i| i.time + 0.25);
+            ui.data_mut(|d| {
+                d.remove::<String>(id);
+                d.insert_temp(id.with("invalid-flash"), end);
+            });
+            crate::widgets::reject_dialog_commit(ui.ctx());
+            ui.ctx().request_repaint();
+        }
+        typed
     } else if let Some(v) = stepped.or(scrubbed).filter(|&v| Some(v) != value) {
         Some(v)
     } else if live && resp.changed() {
