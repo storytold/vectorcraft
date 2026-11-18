@@ -109,7 +109,8 @@ fn export_selection_to_text_writes_the_selected_type() {
     frame(&mut app);
     confirm(&mut app).unwrap();
     assert_eq!(names(&written), ["/out/sel.txt"]);
-    assert_eq!(last_text(&written), "Selected\n");
+    // Text Export Options defaults to the platform's line endings.
+    assert_eq!(last_text(&written), if cfg!(windows) { "Selected\r\n" } else { "Selected\n" });
 }
 
 /// SVG Options opened by Export Selection hides Use Artboards, and its OK leaves the Use
