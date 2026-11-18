@@ -258,11 +258,16 @@ pub fn check_keys(id: &str, doc: &'static str, params: &Value) -> Result<()> {
 
 /// Parameters a command takes instead of one another: (command, key, other key). Giving both,
 /// neither null, is a parameter error ([`check_exclusive_keys`]).
-const EXCLUSIVE_KEYS: &[(&str, &str, &str)] = &[("addon.pathtools.cornerSet", "items", "ids"), ("addon.pathtools.cornerRemove", "items", "ids")];
+const EXCLUSIVE_KEYS: &[(&str, &str, &str)] = &[
+    ("addon.pathtools.cornerSet", "items", "ids"),
+    ("addon.pathtools.cornerRemove", "items", "ids"),
+    ("links.unembed", "id", "ids"),
+    ("links.unembed", "path", "folder"),
+];
 
 /// `params` of command `id` give at most one of each pair in [`EXCLUSIVE_KEYS`], or the parameter
 /// error naming the pair.
-fn check_exclusive_keys(id: &str, params: &Value) -> Result<()> {
+pub(crate) fn check_exclusive_keys(id: &str, params: &Value) -> Result<()> {
     let given = |key: &str| params.get(key).filter(|v| !v.is_null());
     for (_, key, other) in EXCLUSIVE_KEYS.iter().filter(|(c, ..)| *c == id) {
         if given(key).is_some() && given(other).is_some() {
