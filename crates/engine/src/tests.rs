@@ -24,6 +24,7 @@ mod build;
 mod cancel;
 mod caret_kerning;
 mod charstroke;
+mod circle_through;
 pub(super) mod clip;
 mod clipboard;
 mod clipflavours;
@@ -122,6 +123,7 @@ mod panelcmds;
 mod paragraphs;
 mod params;
 mod path_menu_enabled;
+mod pathfinder_clip;
 mod pathops;
 mod pathtype;
 mod pattern;
@@ -196,6 +198,7 @@ mod symbol_nine_slice;
 mod symbolbounds;
 mod symboledit;
 mod symbollib;
+mod tangent_line;
 mod targeting;
 mod textcombos;
 mod textedit;
@@ -2806,6 +2809,26 @@ fn an_isolated_compound_paths_member_moves_alone() {
     assert_eq!((x0(&s, outer), x0(&s, hole)), (5.0, 55.0), "the compound path selected: the whole ring");
 }
 
+/// Rotate Bounding Box and Reset Bounding Box take the same objects as the transforms: a path of
+/// a compound path selected alone turns or squares its own box, and the compound path selected
+/// turns its box and its paths'.
+#[test]
+fn rotate_bounding_box_of_a_compound_paths_member_turns_only_that_path() {
+    let angle = |s: &Session, id: NodeId| s.doc().unwrap().doc.node(id).unwrap().bbox_angle;
+    let mut s = session();
+    let (c, outer, hole) = isolated_ring(&mut s);
+    s.execute("object.exitIsolation", &json!({})).unwrap();
+    s.execute("select.set", &json!({"ids": [hole.0]})).unwrap();
+    s.execute("object.rotateBoundingBox", &json!({"angle": 30})).unwrap();
+    assert_eq!((angle(&s, c), angle(&s, outer), angle(&s, hole)), (0.0, 0.0, 30.0), "only the hole's box turned");
+    s.execute("select.set", &json!({"ids": [c.0]})).unwrap();
+    s.execute("object.rotateBoundingBox", &json!({"angle": 10})).unwrap();
+    assert_eq!((angle(&s, c), angle(&s, outer), angle(&s, hole)), (10.0, 10.0, 40.0), "the compound path and its paths");
+    s.execute("select.set", &json!({"ids": [hole.0]})).unwrap();
+    assert_eq!(s.execute("object.resetBoundingBox", &json!({})).unwrap()["changed"], 1);
+    assert_eq!((angle(&s, c), angle(&s, outer), angle(&s, hole)), (10.0, 10.0, 0.0), "Reset squared only the hole's box");
+}
+
 /// The X, Y, W and H of the Properties and Transform panels run `object.setBounds`, which takes the
 /// same objects as the other transforms: a path of a compound path selected alone sets its own
 /// box and leaves the ring around it (#4046). The hole is off-centre, and a plain rectangle
@@ -3308,6 +3331,26 @@ fn flare_ring_seed_moves_only_the_rings() {
         assert!(s.execute("shape.flare", &json!({"cx": 0, "cy": 0, "seed": bad})).is_err(), "{bad}");
     }
     assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+}
+
+#[test]
+fn flare_small_ring_seeds_spread_the_first_ring_along_the_path() {
+    let mut s = session();
+    let mut positions = Vec::new();
+    for seed in [0, 1, 2, 5, 11, (1u64 << 53) - 1] {
+        let p = json!({"cx": 20, "cy": 30, "x2": 1020, "y2": 30, "rays": 0, "rings": 1, "ringSeed": seed});
+        let id = NodeId(s.execute("shape.flare", &p).unwrap()["id"].as_u64().unwrap());
+        let NodeKind::Group { children, .. } = &s.doc().unwrap().doc.node(id).unwrap().kind else { panic!("flare is a group") };
+        let ring = children.iter().find(|n| n.name.as_deref() == Some("Ring")).unwrap();
+        let center = ring.geometric_bounds().unwrap().center();
+        assert!((20.0..=1020.0).contains(&center.x), "seed {seed}: {center:?}");
+        assert!((center.y - 30.0).abs() < 1e-9);
+        positions.push(center.x);
+    }
+    assert!((positions[0] - positions[1]).abs() > 1.0, "neighboring small seeds visibly move the first ring: {positions:?}");
+    let lo = positions[..5].iter().copied().fold(f64::INFINITY, f64::min);
+    let hi = positions[..5].iter().copied().fold(f64::NEG_INFINITY, f64::max);
+    assert!(hi - lo > 250.0, "small seeds spread the first ring along the path: {positions:?}");
 }
 
 /// `shape.ellipse` without `anchors`, or with 4, draws the live ellipse it always drew.
