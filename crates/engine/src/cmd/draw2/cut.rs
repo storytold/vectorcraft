@@ -522,13 +522,13 @@ fn apply_plan(s: &mut Session, label: &str, plan: Vec<(NodeId, Vec<PathData>)>) 
     Ok(ids_json(&ids))
 }
 
+/// The Path Eraser's band width, in points (VectorCraft's own range).
+const PATH_ERASER_WIDTHS: (f64, f64) = (0.001, 1000.0);
+
 pub(super) fn erase_segments(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "path.eraseSegments";
     let pts = points_param(p, "points", C)?;
-    let w = number_or(p, "width", 8.0, C)?;
-    if !(w.is_finite() && w > 0.0) {
-        return Err(bad(C, "width must be positive"));
-    }
+    let w = ranged(p, "width", 8.0, PATH_ERASER_WIDTHS, C)?;
     let st = s.doc()?;
     let mut plan = vec![];
     for id in target_paths(&st.doc, &st.selection, poly_bounds(&pts, w)) {

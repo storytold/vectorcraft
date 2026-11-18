@@ -171,6 +171,15 @@ shown_when = [
 hotspot = "Where the new frame's top-left corner goes (the click), or the path clicked."
 look = "A small block of text lines: the overflow text the pointer carries."
 
+[[cursor]]
+id = "LoadedTextLink"
+group = "Selection"
+shown_when = [
+    "The Selection tool loaded with text from a port, over a closed path, area type or type on a path that a click threads the text into: not the frame the text came from, not a frame already in a thread and not a path inside a compound path. Over empty canvas or other art the pointer stays the loaded text, and a click there makes a new frame.",
+]
+hotspot = "The point of the object's path the click threads the text into."
+look = "The loaded text's block of lines with two linked chain rings below right."
+
 # ── Pen family ────────────────────────────────────────────────────────────────────────────────────
 
 [[cursor]]
