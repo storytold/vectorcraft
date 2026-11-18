@@ -3111,6 +3111,8 @@ mod tests {
         assert_eq!(shown("file.new"), Some(("File".into(), "New…".into(), true)));
         assert_eq!(shown("text.fitHeadline"), Some(("Type".into(), "Fit Headline".into(), false)));
         assert_eq!(shown("type.fitHeadline"), Some(("Type".into(), "Fit Headline".into(), true)));
+        assert_eq!(shown("text.convertListToText"), Some(("Type".into(), "Convert to Text".into(), false)));
+        assert_eq!(shown("type.convertListToText"), Some(("Type › Bullets and Numbering".into(), "Convert to Text".into(), false)));
         for id in ["file.exportInBackground", "file.openInBackground"] {
             assert_eq!(shown(id), Some(("File".into(), "Continue in Background".into(), true)), "{id}");
         }
@@ -3133,6 +3135,26 @@ mod tests {
         record(&mut d, &mut km, "type.fitHeadline", "Cmd+Alt+Shift+F10");
         record(&mut d, &mut km, "text.fitHeadline", "Cmd+Alt+Shift+F10");
         assert!(d.str("__message").contains("was already used by Type › Fit Headline (type.fitHeadline) "), "{}", d.str("__message"));
+    }
+
+    /// No two entries of Keyboard Shortcuts have the same name in any UI language: each catalog
+    /// translates two different English names two different ways.
+    #[test]
+    fn no_two_entries_have_the_same_name_in_any_language() {
+        let all = entries();
+        let mut shared = vec![];
+        let previous = crate::i18n::current();
+        for lang in crate::i18n::Lang::all() {
+            crate::i18n::set_current(lang);
+            let mut by_name: HashMap<String, Vec<&str>> = HashMap::new();
+            for e in all.iter() {
+                by_name.entry(shown_name(e)).or_default().push(e.key.as_str());
+            }
+            shared.extend(by_name.into_iter().filter(|(_, keys)| keys.len() > 1).map(|(name, keys)| (lang.code(), name, keys)));
+        }
+        crate::i18n::set_current(previous);
+        shared.sort();
+        assert!(shared.is_empty(), "{} names: {shared:#?}", shared.len());
     }
 
     /// Two filter plug-ins with the same name in the same menu show their ids, and a third whose

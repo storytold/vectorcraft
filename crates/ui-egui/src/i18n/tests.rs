@@ -1197,6 +1197,26 @@ fn leading_term_agrees_within_each_catalog() {
     assert!(bad.is_empty(), "rows that name leading differently from the Leading field:\n{}", bad.join("\n"));
 }
 
+/// A plain row whose English ends with a number, such as "Saved View 10", has that number in its
+/// translation as a number of its own, so the rows of a numbered list do not swap or repeat names.
+/// Messages are left out: "index must be ≥ 0" can be translated as "index must not be negative".
+#[test]
+fn numbered_rows_keep_their_number() {
+    let mut bad = Vec::new();
+    for l in LANGUAGES.iter().filter(|l| !l.source.is_empty()) {
+        let (entries, _) = parse_entries(l.source);
+        for (_, src, tr) in entries.into_iter().filter(|(ctx, _, _)| ctx.is_empty()) {
+            let Some((_, n)) = src.rsplit_once(' ').filter(|(_, n)| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit())) else {
+                continue;
+            };
+            if !tr.split(|c: char| !c.is_ascii_digit()).any(|run| run == n) {
+                bad.push(format!("{}: {src:?} → {tr:?}", l.code));
+            }
+        }
+    }
+    assert!(bad.is_empty(), "numbered rows without their number:\n{}", bad.join("\n"));
+}
+
 /// No translated word mixes Latin, Cyrillic and Greek letters, such as a Latin "A" typed in place
 /// of a Cyrillic "А". A word written in one script, such as "PDF" or "X" in a Russian row, is
 /// allowed.
@@ -1834,6 +1854,26 @@ fn menu_items_side_by_side_have_different_labels() {
     assert!(same.is_empty(), "{} pairs of menu items look alike:\n{}", same.len(), same.join("\n"));
 }
 
+/// Whether a menu label shows an id: a dotted command id, inside backticks or outside them, or
+/// `key`, the command or effect id of its item, on its own.
+fn label_shows_an_id(label: &str, key: &str) -> bool {
+    let plain = label.replace('`', " ");
+    !command_ids(&plain).is_empty() || plain.trim() == key
+}
+
+#[test]
+fn label_shows_an_id_finds_ids_in_backticks_and_bare_keys() {
+    let key = "type.convertListToText";
+    assert!(label_shows_an_id("type.convertListToText", key));
+    assert!(label_shows_an_id("`type.convertListToText`", key));
+    assert!(label_shows_an_id("`type.convertListToText", key));
+    assert!(label_shows_an_id("Convert (`slice.list`)", key));
+    assert!(label_shows_an_id("roughen", "roughen"));
+    assert!(label_shows_an_id("`roughen`", "roughen"));
+    assert!(!label_shows_an_id("Convert to Text", key));
+    assert!(!label_shows_an_id("Roughen…", "roughen"));
+}
+
 /// Menu items show words, never the command or effect id their catalog row is keyed by.
 #[test]
 fn menu_items_never_show_an_id() {
@@ -1842,7 +1882,7 @@ fn menu_items_never_show_an_id() {
             if let crate::menus::Item::Cmd(l, id, p) = item {
                 let key = menu_item_effect(id, p).unwrap_or(id);
                 let shown = shown_menu_label(lang, item).unwrap_or_default();
-                if !command_ids(shown).is_empty() && command_ids(l).is_empty() {
+                if label_shows_an_id(shown, key) && !label_shows_an_id(l, key) {
                     out.push(format!("{}: {l:?} ({key}) shows {shown:?}", lang.0.code));
                 }
             }
