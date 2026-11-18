@@ -7,8 +7,8 @@ use vectorcraft_doc::{Document, LiveShape, Node, NodeId, NodeKind, SymbolBoxes};
 use vectorcraft_geom::{Affine, CubicBez, FillRule, ParamCurve, PathSeg, Point, Rect, shapes};
 
 use super::super::super::edit::selected_roots;
-use super::super::super::{CommandSpec, bad, check_switches, cmd, has_selection, number_or, switch_or};
-use crate::{Result, Session};
+use super::super::super::{CommandSpec, bad, cmd, has_selection, number_or, switch_or};
+use crate::{MAX_COORD, Result, Session};
 
 #[cfg(test)]
 mod tests;
@@ -29,7 +29,7 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             "Add Bounding Rectangle",
             ["Object", "Plug-ins", "Path Precision Tools"],
             None,
-            "{each?: bool (default false: one rectangle around the whole selection; true: one around each selected object), offset?: pt (0 or more; default 0: added on every side)} draw a live rectangle on the geometric bounding box of the selected objects (strokes and effects left out), with the current paint, on top of the current layer or of the isolated group, as other new art; the rectangles are selected; one undo step. An object whose box has no width or no height (a straight horizontal or vertical line) gets no rectangle unless `offset` is more than 0, nor does an object with no bounds (an empty group); with `each` the result's `skipped` counts them, and it is an error when no rectangle is left → {id: the first rectangle, ids, skipped?}",
+            "{each?: bool (default false: one rectangle around the whole selection; true: one around each selected object), offset?: pt (0 or more; default 0: added on every side)} draw a live rectangle on the geometric bounding box of the selected objects (strokes and effects left out), with the current paint, on top of the current layer or of the isolated group, as other new art; the rectangles are selected; one undo step. An object whose box has no width or no height (a straight horizontal or vertical line) gets no rectangle unless `offset` is more than 0, nor does an object with no bounds (an empty group); with `each` the result's `skipped` counts them. It is an error when no rectangle is left (\"the shape would have no size\" when a rectangle with no size was left out, else \"nothing to enclose\") and when a rectangle would reach more than 4,000,000 pt from the origin → {id: the first rectangle, ids, skipped?}",
             has_selection,
             bounding_rectangle
         ),
@@ -38,7 +38,7 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             "Add Bounding Circle",
             ["Object", "Plug-ins", "Path Precision Tools"],
             None,
-            "{each?: bool (default false: one circle around the whole selection; true: one around each selected object), offset?: pt (0 or more; default 0: added to the radius)} draw the smallest live circle that holds the outlines of the selected objects (paths and compound paths by their curves, clip groups by their clipping paths, images by their corners, type and other objects by the corners of their bounding box; strokes and effects left out), with the radius 0.01 pt larger so it holds the curves themselves, with the current paint, on top of the current layer or of the isolated group, as other new art; the circles are selected; one undo step. An object at a single point gets no circle unless `offset` is more than 0, nor does an object with no outline (an empty group); with `each` the result's `skipped` counts them, and it is an error when no circle is left → {id: the first circle, ids, skipped?}",
+            "{each?: bool (default false: one circle around the whole selection; true: one around each selected object), offset?: pt (0 or more; default 0: added to the radius)} draw the smallest live circle that holds the outlines of the selected objects (paths and compound paths by their curves, clip groups and sublayers that clip their contents by their clipping paths, other sublayers by their shown objects, images by their corners, type and other objects by the corners of their bounding box; strokes and effects left out), with the radius 0.01 pt larger so it holds the curves themselves, with the current paint, on top of the current layer or of the isolated group, as other new art; the circles are selected; one undo step. An object at a single point gets no circle unless `offset` is more than 0, nor does an object with no outline (an empty group); with `each` the result's `skipped` counts them. It is an error when no circle is left (\"the shape would have no size\" when a circle with no size was left out, else \"nothing to enclose\") and when a circle would reach more than 4,000,000 pt from the origin → {id: the first circle, ids, skipped?}",
             has_selection,
             bounding_circle
         ),
@@ -65,7 +65,6 @@ fn add(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
         Kind::Rectangle => (RECTANGLE, "Add Bounding Rectangle"),
         Kind::Circle => (CIRCLE, "Add Bounding Circle"),
     };
-    check_switches(p, &["each"], c)?;
     let each = switch_or(p, "each", false, c)?;
     let offset = number_or(p, "offset", 0.0, c)?;
     if !(offset.is_finite() && offset >= 0.0) {
@@ -78,14 +77,20 @@ fn add(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
     let mut made: Vec<LiveShape> = vec![];
     // Objects that get no shape: no outline, or a shape with no size.
     let mut skipped = 0;
+    let mut no_size = false;
     for ids in &groups {
         match shape_around(d, &symbols, ids, kind, offset) {
-            Some(live) => made.push(live),
-            None => skipped += 1,
+            Around::Shape(live) => made.push(live),
+            Around::NoOutline => skipped += 1,
+            Around::NoSize => {
+                skipped += 1;
+                no_size = true;
+            }
+            Around::PastCanvas => return Err(bad(c, "the shape would reach past the edge of the canvas")),
         }
     }
     if made.is_empty() {
-        return Err(bad(c, "nothing to enclose"));
+        return Err(bad(c, if no_size { "the shape would have no size" } else { "nothing to enclose" }));
     }
     let parent = s.doc()?.target_parent()?;
     let look = s.new_art_look(s.paint.fill.clone(), s.paint.stroke.clone(), s.paint.stroke_width);
@@ -109,16 +114,35 @@ fn add(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
     Ok(out)
 }
 
-/// The live rectangle or circle around `ids`, grown by `offset`; `None` when they have no bounds
-/// or the shape would have no width or no height.
-fn shape_around(d: &Document, symbols: &SymbolBoxes, ids: &[NodeId], kind: Kind, offset: f64) -> Option<LiveShape> {
+/// What [`shape_around`] finds.
+enum Around {
+    Shape(LiveShape),
+    /// The objects have no bounds or no outline.
+    NoOutline,
+    /// The rectangle would have no width or no height, or the circle no radius.
+    NoSize,
+    /// The shape would reach past [`MAX_COORD`] from the origin.
+    PastCanvas,
+}
+
+/// Is every edge of `r` finite and within [`MAX_COORD`] of the origin?
+fn on_canvas(r: Rect) -> bool {
+    [r.x0, r.y0, r.x1, r.y1].iter().all(|v| v.abs() <= MAX_COORD)
+}
+
+/// The live rectangle or circle around `ids`, grown by `offset`.
+fn shape_around(d: &Document, symbols: &SymbolBoxes, ids: &[NodeId], kind: Kind, offset: f64) -> Around {
     match kind {
         Kind::Rectangle => {
-            let r = d.bounds_of_with(ids, false, symbols)?.inflate(offset, offset);
-            if !r.is_finite() || r.width() <= 0.0 || r.height() <= 0.0 {
-                return None;
+            let Some(r) = d.bounds_of_with(ids, false, symbols) else { return Around::NoOutline };
+            let r = r.inflate(offset, offset);
+            if !on_canvas(r) {
+                return Around::PastCanvas;
             }
-            Some(LiveShape::Rectangle {
+            if r.width() <= 0.0 || r.height() <= 0.0 {
+                return Around::NoSize;
+            }
+            Around::Shape(LiveShape::Rectangle {
                 w: r.width(),
                 h: r.height(),
                 radii: [0.0; 4],
@@ -133,16 +157,16 @@ fn shape_around(d: &Document, symbols: &SymbolBoxes, ids: &[NodeId], kind: Kind,
                 outline_points(n, symbols, &mut gathered, 0);
                 gathered.compact();
             }
-            let (center, radius) = shapes::enclosing_circle(&gathered.points)?;
+            let Some((center, radius)) = shapes::enclosing_circle(&gathered.points) else { return Around::NoOutline };
             if radius + offset <= 0.0 {
-                return None;
+                return Around::NoSize;
             }
             let r = radius + FLATNESS + offset;
             let b = Rect::new(center.x - r, center.y - r, center.x + r, center.y + r);
-            if !b.is_finite() {
-                return None;
+            if !on_canvas(b) {
+                return Around::PastCanvas;
             }
-            Some(LiveShape::Ellipse { w: b.width(), h: b.height(), pie: (0.0, 360.0), xf: Affine::translate(b.origin().to_vec2()) })
+            Around::Shape(LiveShape::Ellipse { w: b.width(), h: b.height(), pie: (0.0, 360.0), xf: Affine::translate(b.origin().to_vec2()) })
         }
     }
 }

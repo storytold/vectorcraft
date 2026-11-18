@@ -7614,6 +7614,8 @@ breakText	Glyphs	字形
 	Add Bounding Circle	添加外接圆
 @msg	nothing to enclose	没有可包围的内容
 @msg	`offset` must be 0 or more	`offset` 必须大于或等于 0
+@msg	the shape would have no size	形状将没有大小
+@msg	the shape would reach past the edge of the canvas	形状将超出画布边缘
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	文档工具
 	Save a Timestamped Copy	保存带时间戳的副本

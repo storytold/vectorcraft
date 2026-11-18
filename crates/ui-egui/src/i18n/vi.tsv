@@ -7420,6 +7420,8 @@ breakText	Glyphs	Glyph
 	Add Bounding Circle	Thêm hình tròn bao quanh
 @msg	nothing to enclose	không có gì để bao quanh
 @msg	`offset` must be 0 or more	`offset` phải từ 0 trở lên
+@msg	the shape would have no size	hình sẽ không có kích thước
+@msg	the shape would reach past the edge of the canvas	hình sẽ vượt quá mép vùng vẽ
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Công cụ tài liệu
 	Save a Timestamped Copy	Lưu bản sao có ngày giờ

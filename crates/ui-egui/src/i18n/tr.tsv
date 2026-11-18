@@ -9658,6 +9658,8 @@ breakText	Glyphs	Glifler
 	Add Bounding Circle	Çevreleyen Daire Ekle
 @msg	nothing to enclose	çevrelenecek hiçbir şey yok
 @msg	`offset` must be 0 or more	`offset` 0 veya daha büyük olmalıdır
+@msg	the shape would have no size	şeklin boyutu olmayacaktır
+@msg	the shape would reach past the edge of the canvas	şekil tuvalin kenarını aşacaktır
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Belge Araçları
 	Save a Timestamped Copy	Zaman Damgalı Bir Kopya Kaydet

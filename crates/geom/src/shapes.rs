@@ -905,6 +905,32 @@ mod tests {
         assert_eq!(enclosing_circle(&[Point::new(f64::INFINITY, 0.0)]), None);
     }
 
+    /// The hull keeps a square's corners counter-clockwise (y up) from the lowest-leftmost one,
+    /// without points inside, points on its edges, repeated corners or points that are not finite;
+    /// points on one line give their ends, and one or two points give themselves.
+    #[test]
+    fn the_convex_hull_keeps_only_the_corners() {
+        let p = Point::new;
+        let pts = vec![
+            p(5.0, 5.0),
+            p(10.0, 10.0),
+            p(0.0, 10.0),
+            p(5.0, 0.0),
+            p(0.0, 0.0),
+            p(10.0, 0.0),
+            p(10.0, 10.0),
+            p(0.0, 5.0),
+            p(f64::NAN, 3.0),
+            p(2.0, 7.0),
+        ];
+        assert_eq!(convex_hull(pts), vec![p(0.0, 0.0), p(10.0, 0.0), p(10.0, 10.0), p(0.0, 10.0)]);
+        let line: Vec<Point> = (0..9).rev().map(|i| p(f64::from(i), 2.0 * f64::from(i))).collect();
+        assert_eq!(convex_hull(line), vec![p(0.0, 0.0), p(8.0, 16.0)]);
+        assert_eq!(convex_hull(vec![p(3.0, 1.0), p(1.0, 2.0)]), vec![p(1.0, 2.0), p(3.0, 1.0)]);
+        assert_eq!(convex_hull(vec![p(1.0, 1.0), p(1.0, 1.0)]), vec![p(1.0, 1.0)]);
+        assert_eq!(convex_hull(vec![p(f64::INFINITY, 1.0)]), vec![]);
+    }
+
     #[test]
     fn rect_is_4_corners_clockwise() {
         let p = rectangle(Rect::new(0.0, 0.0, 100.0, 50.0));

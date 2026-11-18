@@ -150,7 +150,7 @@ fn shapes_of_no_size_are_skipped_unless_offset_gives_them_room() {
     let lone = id_of(&s.execute("path.create", &json!({"anchors": [{"x": 50, "y": 70}]})).unwrap());
     let box_ = rect(&mut s, 200.0, 200.0, 10.0, 10.0);
     s.execute("select.set", &json!({"ids": [line.0]})).unwrap();
-    assert!(refused(&mut s, RECTANGLE, json!({})).contains("nothing to enclose"));
+    assert!(refused(&mut s, RECTANGLE, json!({})).contains("the shape would have no size"));
     let r = id_of(&s.execute(RECTANGLE, &json!({"offset": 2})).unwrap());
     assert!(rect_near(bounds(&s, r), Rect::new(8.0, 48.0, 92.0, 52.0), 1e-9), "{:?}", bounds(&s, r));
     // The line has length, so its circle has size.
@@ -159,7 +159,7 @@ fn shapes_of_no_size_are_skipped_unless_offset_gives_them_room() {
     assert!(rect_near(bounds(&s, c), Rect::new(9.99, 9.99, 90.01, 90.01), 1e-9), "{:?}", bounds(&s, c));
 
     s.execute("select.set", &json!({"ids": [lone.0]})).unwrap();
-    assert!(refused(&mut s, CIRCLE, json!({})).contains("nothing to enclose"));
+    assert!(refused(&mut s, CIRCLE, json!({})).contains("the shape would have no size"));
     let c = id_of(&s.execute(CIRCLE, &json!({"offset": 3})).unwrap());
     assert!(rect_near(bounds(&s, c), Rect::new(46.99, 66.99, 53.01, 73.01), 1e-9), "{:?}", bounds(&s, c));
 
@@ -343,6 +343,23 @@ fn bad_params_and_an_empty_selection_draw_nothing() {
         }
         assert!(refused(&mut s, command, json!({"offset": -1})).contains("`offset` must be 0 or more"));
     }
+}
+
+/// An offset that would take the shape more than 4,000,000 pt from the origin is an error that
+/// names the canvas edge, and nothing is drawn; the largest offset that stays inside is drawn.
+#[test]
+fn an_offset_past_the_canvas_edge_draws_nothing() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    for command in [RECTANGLE, CIRCLE] {
+        for offset in [1e308, 4.0e6] {
+            let e = refused(&mut s, command, json!({ "offset": offset }));
+            assert!(e.contains("the shape would reach past the edge of the canvas"), "{command} {offset}: {e}");
+        }
+    }
+    let r = id_of(&s.execute(RECTANGLE, &json!({"offset": 3.99e6})).unwrap());
+    assert!(rect_near(bounds(&s, r), Rect::new(-3.99e6, -3.99e6, 3.99e6 + 10.0, 3.99e6 + 10.0), 1e-3));
 }
 
 /// Many points keep only their hull's corners, and the circle around them is the one around all

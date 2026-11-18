@@ -7745,6 +7745,8 @@ breakText	Glyphs	Glifos
 	Add Bounding Circle	Agregar círculo delimitador
 @msg	nothing to enclose	no hay nada que rodear
 @msg	`offset` must be 0 or more	`offset` debe ser 0 o más
+@msg	the shape would have no size	la forma no tendría tamaño
+@msg	the shape would reach past the edge of the canvas	la forma sobrepasaría el borde del lienzo
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Herramientas de documento
 	Save a Timestamped Copy	Guardar una copia con fecha y hora

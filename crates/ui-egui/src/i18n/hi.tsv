@@ -8406,6 +8406,8 @@ liquify-list-end	{0}, {1}	{0} और {1}
 	Add Bounding Circle	बाउंडिंग वृत्त जोड़ें
 @msg	nothing to enclose	घेरने के लिए कुछ नहीं
 @msg	`offset` must be 0 or more	`offset` 0 या उससे अधिक होना चाहिए
+@msg	the shape would have no size	आकृति का कोई आकार नहीं होगा
+@msg	the shape would reach past the edge of the canvas	आकृति कैनवास के किनारे से आगे निकल जाएगी
 @msg	select plain rectangles, ellipses or regular polygons to convert	बदलने के लिए सादे आयत, अंडाकार या नियमित बहुभुजों सिलेक्ट करें
 @msg	Select point type	पॉइंट टाइप सिलेक्ट करें
 @msg	select two or three paths or compound paths	दो या तीन पाथ या यौगिक पाथ सिलेक्ट करें

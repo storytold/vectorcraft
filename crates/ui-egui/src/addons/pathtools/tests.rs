@@ -329,3 +329,44 @@ fn common_tangents_previews_cancels_and_runs_on_ok() {
     assert_eq!((steps(&app), count(&app)), (n, nodes));
     assert!(app.ui.status.contains("inside the other"), "{}", app.ui.status);
 }
+
+/// Object › Plug-ins › Path Precision Tools › Add Bounding Rectangle and Add Bounding Circle are
+/// dimmed with nothing selected, open no dialog, and draw one shape around the whole selection with
+/// no offset as one undo step.
+#[test]
+fn add_bounding_rectangle_and_circle_draw_around_the_whole_selection() {
+    let mut app = app();
+    let items = [("Add Bounding Rectangle", "addon.pathtools.boundingRectangle"), ("Add Bounding Circle", "addon.pathtools.boundingCircle")];
+    for (label, command) in items {
+        let entries = menus::menu_entries(&app);
+        let item = entries.iter().find(|e| e.path == ["Object", "Plug-ins", "Path Precision Tools"] && e.label == label).expect(label);
+        assert_eq!((item.command.as_deref(), &item.params), (Some(command), &json!({})));
+        assert!(!item.enabled, "{label} with nothing selected");
+    }
+    let a = app.run("shape.rectangle", json!({"x": 10, "y": 20, "width": 30, "height": 40})).unwrap()["id"].as_u64().unwrap();
+    let b = app.run("shape.rectangle", json!({"x": 100, "y": 20, "width": 20, "height": 40})).unwrap()["id"].as_u64().unwrap();
+    // The selection's box.
+    let [x0, y0, x1, y1] = [10.0, 20.0, 120.0, 60.0];
+    for (label, _) in items {
+        app.run("select.set", json!({"ids": [a, b]})).unwrap();
+        let steps = app.session.doc().unwrap().history.undo.len();
+        let entries = menus::menu_entries(&app);
+        let item = entries.iter().find(|e| e.path == ["Object", "Plug-ins", "Path Precision Tools"] && e.label == label).unwrap();
+        assert!(item.enabled, "{label}");
+        let (cmd, p) = menus::click_target(&item.label, item.command.as_deref().unwrap(), &item.params);
+        menus::invoke(&mut app, &cmd, p);
+        assert!(app.ui.dialog.is_none(), "{label} opens no dialog");
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), steps + 1, "{label}: one undo step");
+        let made = app.session.doc().unwrap().selection.objects.clone();
+        assert_eq!(made.len(), 1, "{label}: one shape around the whole selection");
+        let r = app.session.doc().unwrap().doc.bounds_of(&made, false).unwrap();
+        assert!(r.x0 <= x0 + 1e-6 && r.y0 <= y0 + 1e-6 && r.x1 >= x1 - 1e-6 && r.y1 >= y1 - 1e-6, "{label}: {r:?}");
+        if label == "Add Bounding Rectangle" {
+            assert!((r.x0 - x0).abs() < 1e-6 && (r.y0 - y0).abs() < 1e-6 && (r.x1 - x1).abs() < 1e-6 && (r.y1 - y1).abs() < 1e-6, "no offset: {r:?}");
+        } else {
+            // The circle on the diagonal from (10, 20) to (120, 60), with the 0.01 pt allowance.
+            let radius = (110.0f64.hypot(40.0)) / 2.0 + 0.01;
+            assert!((r.width() / 2.0 - radius).abs() < 1e-6, "no offset: {r:?}");
+        }
+    }
+}
