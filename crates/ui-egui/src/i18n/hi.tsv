@@ -801,6 +801,11 @@ antiAlias	Sharp	शार्प
 	Character Direction	कैरेक्टर दिशा
 	Character options	कैरेक्टर ऑप्शन्स
 	Character Rotation	कैरेक्टर रोटेशन
+	Chinese Big 5	चीनी Big 5
+	Cyrillic	सिरिलिक
+	Greek	ग्रीक
+	Baltic	बाल्टिक
+	Central European	मध्य यूरोपीय
 	Character Set:	कैरेक्टर सेट:
 	Character Style	कैरेक्टर स्टाइल
 	Character Style Options	कैरेक्टर स्टाइल ऑप्शन्स
@@ -9655,3 +9660,13 @@ theme	Appearance	अपीयरेंस
 	Dense Hatching	घना रेखांकन
 	Tapered Hatching	पतला होता रेखांकन
 	Broken Hatching	टूटा रेखांकन
+	Fold Preview	फ़ोल्ड प्रीव्यू
+	Fold	फ़ोल्ड
+	Show Fold Lines	फ़ोल्ड लाइनें दिखाएँ
+	Three-Quarter	तीन-चौथाई
+	Open a document to preview its folded shape.	इसका फ़ोल्ड किया हुआ आकार देखने के लिए कोई डॉक्यूमेंट ओपन करें।
+@msg	Check the fold lines first.	पहले फ़ोल्ड लाइनें चेक करें।
+@msg	Panels: {panels}, hinges: {hinges}	पैनल: {panels}, हिंज: {hinges}
+@msg	Other blanks not shown: {count}	दूसरे ब्लैंक नहीं दिखाए गए: {count}
+@msg	A joint does not close by {gap} pt.	एक जोड़ {gap} pt से बंद नहीं होता।
+@msg	Two panels pass through each other.	दो पैनल एक-दूसरे के आर-पार जाते हैं।

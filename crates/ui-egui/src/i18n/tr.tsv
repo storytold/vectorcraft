@@ -408,6 +408,12 @@ font-technology	Variable	Değişken
 	Character Alignment	Karakter Hizalaması
 	Character / Paragraph	Karakter / Paragraf
 	Character Rotation	Karakter Rotasyonu
+	Chinese Big 5	Çince Big 5
+	Cyrillic	Kiril
+	Greek	Yunanca
+	Turkish	Türkçe
+	Baltic	Baltık
+	Central European	Orta Avrupa
 	Character Set:	Karakter Seti:
 	Character Style	Karakter Stili
 	Character Style Options	Karakter Stili Seçenekleri
@@ -10005,3 +10011,13 @@ breakText	Glyphs	Glifler
 	Dense Hatching	Yoğun tarama
 	Tapered Hatching	İncelen tarama
 	Broken Hatching	Kesikli tarama
+	Fold Preview	Katlama Önizlemesi
+	Fold	Katlama
+	Show Fold Lines	Katlama Çizgilerini Göster
+	Three-Quarter	Dörtte Üç
+	Open a document to preview its folded shape.	Katlanmış şeklini önizlemek için bir belgeyi açın.
+@msg	Check the fold lines first.	Önce katlama çizgilerini denetleyin.
+@msg	Panels: {panels}, hinges: {hinges}	Paneller: {panels}, menteşeler: {hinges}
+@msg	Other blanks not shown: {count}	Gösterilmeyen diğer açınımlar: {count}
+@msg	A joint does not close by {gap} pt.	Bir birleşim {gap} pt kadar kapanmıyor.
+@msg	Two panels pass through each other.	İki panel birbirinin içinden geçiyor.

@@ -500,6 +500,12 @@ font-technology	Variable	Biến thiên
 	Character options	Tùy chọn ký tự
 	Paragraph options	Tùy chọn đoạn văn
 	Character Rotation	Xoay ký tự
+	Chinese Big 5	Tiếng Trung Big 5
+	Cyrillic	Chữ Kirin
+	Greek	Tiếng Hy Lạp
+	Turkish	Tiếng Thổ Nhĩ Kỳ
+	Baltic	Vùng Baltic
+	Central European	Trung Âu
 	Character Set:	Bộ ký tự:
 	Character Style	Kiểu ký tự
 	Character Style Options	Tùy chọn kiểu ký tự
@@ -7766,6 +7772,16 @@ breakText	Glyphs	Glyph
 @msg	A panel is not joined to the rest by a crease.	Một mặt không được nối với phần còn lại bằng đường cấn nào.
 @msg	A fold line is on a non-printing layer.	Một đường gấp nằm trên lớp không in.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Mặt: {panels}, bản lề: {hinges}, lỗi: {errors}, cảnh báo: {warnings}
+	Fold Preview	Xem trước nếp gấp
+	Fold	Gấp
+	Show Fold Lines	Hiện đường gấp
+	Three-Quarter	Ba phần tư
+	Open a document to preview its folded shape.	Mở tài liệu để xem trước hình dạng đã gấp của nó.
+@msg	Check the fold lines first.	Hãy kiểm tra đường gấp trước.
+@msg	Panels: {panels}, hinges: {hinges}	Mặt: {panels}, bản lề: {hinges}
+@msg	Other blanks not shown: {count}	Các khuôn trải khác không được hiển thị: {count}
+@msg	A joint does not close by {gap} pt.	Một mối nối hở {gap} pt.
+@msg	Two panels pass through each other.	Hai mặt xuyên qua nhau.
 
 # Messages of the effects, 3D, image export, color profiles, swatch exchange files, color books and DXF import.
 @msg	3D effects require finite coordinates within 100 million points	Hiệu ứng 3D yêu cầu tọa độ hữu hạn trong phạm vi 100 triệu điểm
@@ -7890,3 +7906,4 @@ breakText	Glyphs	Glyph
 	Dense Hatching	Nét gạch dày
 	Tapered Hatching	Nét gạch thuôn
 	Broken Hatching	Nét gạch đứt
+@msg	text.{key} `{v}`: use "{_1}" or "{_2}"	text.{key} `{v}`: hãy dùng "{_1}" hoặc "{_2}"

@@ -1265,6 +1265,12 @@ antiAlias	Sharp	シャープ
 	Channel	チャンネル
 	Character / Paragraph	文字／段落
 	Character Rotation	文字回転
+	Chinese Big 5	中国語 Big 5
+	Cyrillic	キリル文字
+	Greek	ギリシャ語
+	Turkish	トルコ語
+	Baltic	バルト言語
+	Central European	中央ヨーロッパ言語
 	Character Set:	文字セット:
 	Character Style Options	文字スタイルオプション
 	Check Links	リンクを確認
@@ -9751,3 +9757,13 @@ breakText	Glyphs	字形
 	Dense Hatching	密なハッチング
 	Tapered Hatching	先細りハッチング
 	Broken Hatching	途切れたハッチング
+	Fold Preview	折りプレビュー
+	Fold	折り
+	Show Fold Lines	折り線を表示
+	Three-Quarter	斜め
+	Open a document to preview its folded shape.	ドキュメントを開くと折った形をプレビューできます。
+@msg	Check the fold lines first.	先に折り線をチェックしてください。
+@msg	Panels: {panels}, hinges: {hinges}	パネル: {panels}、ヒンジ: {hinges}
+@msg	Other blanks not shown: {count}	表示されていない他の展開図: {count}
+@msg	A joint does not close by {gap} pt.	継ぎ目が {gap} pt 閉じていません。
+@msg	Two panels pass through each other.	2 つのパネルが互いを貫通しています。

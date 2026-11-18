@@ -421,6 +421,12 @@ font-technology	Variable	Варіативні
 	Character Alignment	Вирівнювання символів
 	Character / Paragraph	Символ / Абзац
 	Character Rotation	Поворот символів
+	Chinese Big 5	Китайська Big 5
+	Cyrillic	Кирилиця
+	Greek	Грецька
+	Turkish	Турецька
+	Baltic	Балтійська
+	Central European	Центральноєвропейська
 	Character Set:	Набір символів:
 	Character Style	Стиль символу
 	Character Style Options	Параметри стилю символу
@@ -9660,3 +9666,13 @@ breakText	Glyphs	Гліфи
 	Dense Hatching	Щільне штрихування
 	Tapered Hatching	Звужене штрихування
 	Broken Hatching	Переривчасте штрихування
+	Fold Preview	Перегляд згину
+	Fold	Згин
+	Show Fold Lines	Показати лінії згину
+	Three-Quarter	Три чверті
+	Open a document to preview its folded shape.	Відкрийте документ, щоб переглянути його у складеному вигляді.
+@msg	Check the fold lines first.	Спершу перевірте лінії згину.
+@msg	Panels: {panels}, hinges: {hinges}	Панелі: {panels}, шарніри: {hinges}
+@msg	Other blanks not shown: {count}	Інші розгортки не показано: {count}
+@msg	A joint does not close by {gap} pt.	Стик не змикається на {gap} pt.
+@msg	Two panels pass through each other.	Дві панелі проходять одна крізь одну.

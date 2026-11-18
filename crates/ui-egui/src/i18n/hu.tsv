@@ -584,6 +584,12 @@ font-technology	Variable	Változó
 	Character options	Karakterbeállítások
 	Paragraph options	Bekezdésbeállítások
 	Character Rotation	Karakterforgatás
+	Chinese Big 5	Kínai Big 5
+	Cyrillic	Cirill
+	Greek	Görög
+	Turkish	Török
+	Baltic	Balti
+	Central European	Közép-európai
 	Character Set:	Karakterkészlet:
 	Character Style	Karakterstílus
 	Character Style Options	Karakterstílus beállításai
@@ -10035,3 +10041,13 @@ breakText	Glyphs	Glifák
 	Dense Hatching	Sűrű vonalkázás
 	Tapered Hatching	Elvékonyodó vonalkázás
 	Broken Hatching	Szaggatott vonalkázás
+	Fold Preview	Hajtás előnézete
+	Fold	Hajtás
+	Show Fold Lines	Hajtásvonalak megjelenítése
+	Three-Quarter	Háromnegyed
+	Open a document to preview its folded shape.	Nyiss meg egy dokumentumot a hajtogatott alakja előnézetéhez.
+@msg	Check the fold lines first.	Előbb ellenőrizd a hajtásvonalakat.
+@msg	Panels: {panels}, hinges: {hinges}	Panelek: {panels}, zsanérok: {hinges}
+@msg	Other blanks not shown: {count}	További kiterítékek nincsenek megjelenítve: {count}
+@msg	A joint does not close by {gap} pt.	Egy illesztés {gap} pt-tal nem záródik.
+@msg	Two panels pass through each other.	Két panel áthatol egymáson.
