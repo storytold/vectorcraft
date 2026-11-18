@@ -7385,3 +7385,8 @@ breakText	Glyphs	Glif
 @msg	A joint does not close by {gap} pt.	Sebuah sambungan tidak menutup sejauh {gap} pt.
 @msg	Two panels pass through each other.	Dua panel saling menembus.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer harus "singleLine", "everyLine", "standardSingleLine", atau "standardEveryLine"
+	Paint	Cat
+	Flat Sweep	Sapuan Datar
+	Dry Drag	Tarikan Kering
+	Loaded Stroke	Sapuan Tebal
+	Fan Sweep	Sapuan Kipas
