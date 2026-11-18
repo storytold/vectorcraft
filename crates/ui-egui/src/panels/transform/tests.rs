@@ -1069,8 +1069,14 @@ fn show_on_shape_creation_shows_the_transform_panel_after_a_shape() {
     assert!(!visible(&app), "off: the panel stays closed");
 
     let mut app = app_without_transform_panel();
+    // A selected rectangle to move, drawn while the preference is off.
+    let id = app.run("shape.rectangle", rect.clone()).unwrap()["id"].as_u64().unwrap();
+    app.session.take_shape_drawn();
     set_pref(&mut app, "showOnShapeCreation", true);
-    app.run("object.move", json!({"dx": 5, "dy": 0})).ok();
+    let x0 = |app: &VectorcraftApp| app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().geometric_bounds().unwrap().x0;
+    let before = x0(&app);
+    app.run("object.move", json!({"dx": 5, "dy": 0})).unwrap();
+    assert_eq!(x0(&app), before + 5.0, "the move moved the rectangle");
     show_on_shape_creation(&mut app, &ctx);
     assert!(!visible(&app), "an edit that draws no shape");
     app.replay("shape.rectangle", rect.clone()).unwrap();
@@ -1111,22 +1117,46 @@ fn show_on_shape_creation_shows_the_transform_panel_after_a_shape() {
     assert!(visible(&app), "a floating panel");
 }
 
-/// The app's frame shows the Transform panel after a shape is drawn, with Show on Shape Creation on.
+/// The app's frame shows the Transform panel after a shape is drawn, with Show on Shape Creation on,
+/// and the next frame draws the panel's controls; with it off, no frame draws them.
 #[test]
 fn a_frame_after_a_shape_shows_the_transform_panel() {
-    let mut app = app_without_transform_panel();
-    set_pref(&mut app, "showOnShapeCreation", true);
+    fn walk(s: &egui::Shape, out: &mut Vec<String>) {
+        match s {
+            egui::Shape::Text(t) => out.push(t.galley.text().to_string()),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
+            _ => {}
+        }
+    }
     let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
     let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 800.0));
+    // One frame of the app: the texts it drew.
     let frame = |app: &mut VectorcraftApp| {
         let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| app.ui(ui));
         out.textures_delta.clear();
+        let mut texts = vec![];
+        out.shapes.iter().for_each(|c| walk(&c.shape, &mut texts));
+        texts
     };
-    for _ in 0..3 {
+    // The Transform panel's heading for a selected live rectangle.
+    let heading = "Rectangle Properties:";
+    let rect = json!({"x": 10, "y": 10, "width": 40, "height": 30});
+    for on in [false, true] {
+        let mut app = app_without_transform_panel();
+        set_pref(&mut app, "showOnShapeCreation", on);
+        for _ in 0..3 {
+            frame(&mut app);
+        }
+        assert!(!crate::panel_docking::visible(&app.ui, "transform"));
+        app.run("shape.rectangle", rect.clone()).unwrap();
         frame(&mut app);
+        assert_eq!(crate::panel_docking::visible(&app.ui, "transform"), on, "on: {on}");
+        // The panel opens in its icon column's flyout: the next pass draws the flyout's tabs and the
+        // one after it the panel's controls.
+        let tabs = frame(&mut app);
+        let texts = frame(&mut app);
+        assert!(!tabs.iter().any(|t| t == heading) || on, "on: {on}, {tabs:?}");
+        assert_eq!(texts.iter().any(|t| t == heading), on, "on: {on}, {texts:?}");
     }
-    assert!(!crate::panel_docking::visible(&app.ui, "transform"));
-    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 30})).unwrap();
-    frame(&mut app);
-    assert!(crate::panel_docking::visible(&app.ui, "transform"));
 }

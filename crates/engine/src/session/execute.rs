@@ -314,17 +314,20 @@ impl Session {
         self.replaying
     }
 
-    /// Note that journal entry `id` with `params` drew a shape ([`DRAWS_SHAPE`], also as a step of
-    /// `command.batch`), unless saved steps are playing or a script runs.
+    /// Note that journal entry `id` with `params` drew a shape ([`DRAWS_SHAPE`], also on the active
+    /// perspective plane as `perspective.draw` naming one, and as a step of `command.batch`), unless
+    /// saved steps are playing or a script runs.
     pub(crate) fn note_shape_drawn(&mut self, id: &str, params: &Value) {
-        let draws = |id: &str| DRAWS_SHAPE.contains(&id);
-        let in_batch = || {
-            params
-                .get("commands")
-                .and_then(Value::as_array)
-                .is_some_and(|steps| steps.iter().any(|step| step.get("command").and_then(Value::as_str).is_some_and(draws)))
+        let shape = |id: &str| DRAWS_SHAPE.contains(&id);
+        let draws = |id: &str, params: Option<&Value>| {
+            shape(id) || (id == "perspective.draw" && params.and_then(|p| p.get("command")).and_then(Value::as_str).is_some_and(shape))
         };
-        if !self.replaying && !self.script_in_run && (draws(id) || (id == "command.batch" && in_batch())) {
+        let in_batch = || {
+            params.get("commands").and_then(Value::as_array).is_some_and(|steps| {
+                steps.iter().any(|step| step.get("command").and_then(Value::as_str).is_some_and(|c| draws(c, step.get("params"))))
+            })
+        };
+        if !self.replaying && !self.script_in_run && (draws(id, Some(params)) || (id == "command.batch" && in_batch())) {
             self.shape_drawn = true;
         }
     }

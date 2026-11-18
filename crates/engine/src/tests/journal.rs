@@ -1372,6 +1372,35 @@ fn take_shape_drawn_follows_the_shapes_that_were_drawn() {
     assert!(!s.take_shape_drawn(), "a script");
 }
 
+/// With the perspective grid shown and a plane active, a shape tool's drag journals
+/// `perspective.draw` naming the shape command: `take_shape_drawn` is true for a Rectangle drawn on
+/// the plane and for `perspective.draw` naming a shape command (alone or as a batch step), and false
+/// for one naming a shape outside [`crate::DRAWS_SHAPE`].
+#[test]
+fn take_shape_drawn_counts_shapes_drawn_in_perspective() {
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    let (mut s, _) = super::persp_select::persp_session();
+    s.execute("perspective.grid.show", &json!({"visible": true})).unwrap();
+    s.execute("perspective.plane.set", &json!({"plane": "left"})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    s.take_shape_drawn();
+    let v = crate::tooling::ViewInfo { smart_guides: false, ..Default::default() };
+    s.select_tool("rectangle", v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 250.0, 350.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 280.0, 380.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 300.0, 410.0), v).unwrap();
+    assert_eq!(s.journal.last().unwrap().0, "perspective.draw");
+    assert!(s.take_shape_drawn(), "a Rectangle drawn on the plane");
+    let rect = json!({"x": 260, "y": 360, "width": 30, "height": 30});
+    s.execute("perspective.draw", &json!({"command": "shape.rectangle", "params": rect})).unwrap();
+    assert!(s.take_shape_drawn(), "perspective.draw naming shape.rectangle");
+    s.execute("command.batch", &json!({"commands": [{"command": "perspective.draw", "params": {"command": "shape.ellipse", "params": rect}}]}))
+        .unwrap();
+    assert!(s.take_shape_drawn(), "a batch step drawing in perspective");
+    s.execute("perspective.draw", &json!({"command": "shape.flare", "params": {"cx": 300, "cy": 380, "diameter": 40}})).unwrap();
+    assert!(!s.take_shape_drawn(), "perspective.draw naming a flare");
+}
+
 /// Show on Shape Creation (`showOnShapeCreation`) is off until set, is set and read through
 /// `prefs.set` and `prefs.get`, refuses a value that is not a boolean, and is kept with the saved
 /// preferences.

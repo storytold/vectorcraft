@@ -12119,8 +12119,8 @@ and Y at the symbol's registration point (`symbol.options` `registration`) where
 (after a flip the art's top-left corner is the box's top-right one), give `reference` as the box's point nearest it
 and turn, shear and flip about it (`origin`). Show on Shape Creation is the `showOnShapeCreation` preference (off
 until set): with it on, the app shows the Transform panel, as `window.panel {"panel": "transform"}` does, after a
-`shape.rectangle`, `shape.ellipse`, `shape.polygon`, `shape.star` or `shape.line` succeeds, alone or as a
-`command.batch` step, whether a shape tool's drag, its dialog, the Shaper tool or an agent ran it. A panel that is showing already
+`shape.rectangle`, `shape.ellipse`, `shape.polygon`, `shape.star` or `shape.line` succeeds, alone, as a
+`command.batch` step or on the active perspective plane as the `command` of `perspective.draw`, whether a shape tool's drag, its dialog, the Shaper tool or an agent ran it. A panel that is showing already
 stays as it is. Failed commands, saved steps an action plays, a script's commands and Presentation Mode leave the
 panels as they are.
 
