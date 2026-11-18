@@ -26,8 +26,7 @@ pub(crate) fn show_at<R>(ctx: &egui::Context, title: &str, id: Id, initial: Vec2
         // Not focusable (`Sense::click()` is): Tab goes through the dialog's controls, not the backdrop.
         ui.allocate_rect(ctx.content_rect(), egui::Sense::CLICK);
     });
-    let pass = ctx.cumulative_pass_nr();
-    ctx.data_mut(|d| d.insert_temp(drawn_pass_id(), pass));
+    let opened = opened(ctx, id);
     let shown = egui::Window::new(title)
         .id(id)
         .order(egui::Order::Foreground)
@@ -39,7 +38,7 @@ pub(crate) fn show_at<R>(ctx: &egui::Context, title: &str, id: Id, initial: Vec2
         .show(ctx, |ui| {
             // Just opened: what scrolls in the window starts at its top, wherever it was left when
             // the window last closed.
-            if opened(ctx, id) {
+            if opened {
                 ctx.data_mut(|m| {
                     m.insert_temp(id.with(TOP_ROWS_KEY), true);
                     m.insert_temp(id.with(TOP_WHOLE_KEY), true);
@@ -76,16 +75,18 @@ pub(crate) fn show_at<R>(ctx: &egui::Context, title: &str, id: Id, initial: Vec2
     shown.inner
 }
 
-/// Mark the modal window drawn next in this pass as opened over the one drawn in the pass before,
-/// which it hides until it closes and shows that one again (Import Shortcut Set over Keyboard
-/// Shortcuts). The window under it keeps where it was scrolled to.
+/// Mark the modal window drawn next in this pass as opened over the windows drawn in the pass
+/// before (a dialog and any alert of its own), which it hides until it closes and shows them again
+/// (Import Shortcut Set over Keyboard Shortcuts). The windows under it keep where they were
+/// scrolled to.
 pub(crate) fn over_parent(ctx: &egui::Context) {
     let pass = ctx.cumulative_pass_nr();
     ctx.data_mut(|m| m.insert_temp(Id::unique(OVER_KEY), pass));
 }
 
-/// Whether modal window `id`, drawn in this pass, opened in it: it was not drawn in the pass before,
-/// and none of the windows drawn in the pass before was one opened over it ([`over_parent`]).
+/// Record that modal window `id` is drawn in this pass, and return whether it opened in it: it was
+/// not drawn in the pass before, and none of the windows drawn in the pass before was one opened
+/// over it ([`over_parent`]).
 fn opened(ctx: &egui::Context, id: Id) -> bool {
     let pass = ctx.cumulative_pass_nr();
     ctx.data_mut(|m| {
@@ -101,25 +102,30 @@ fn opened(ctx: &egui::Context, id: Id) -> bool {
         let before: Vec<Id> = prev.iter().copied().filter(|&other| other != id).collect();
         now.push(id);
         m.insert_temp(Id::unique(LAST_KEY), (pass, now, prev));
+        // Only the window drawn next after `over_parent` is opened over the others.
+        let over = m.remove_temp::<u64>(Id::unique(OVER_KEY)) == Some(pass);
         let last = std::mem::replace(m.get_temp_mut_or(id.with(SHOWN_KEY), u64::MAX), pass);
         if last != u64::MAX && last.saturating_add(1) >= pass {
             return false;
         }
         // Shown again as the window opened over it closed.
-        if before.iter().any(|over| m.get_temp::<Id>(over.with(HOLDS_KEY)) == Some(id)) {
+        if before.iter().any(|under| m.get_temp::<Vec<Id>>(under.with(HOLDS_KEY)).is_some_and(|held| held.contains(&id))) {
             return false;
         }
-        // Opened over the window drawn last in the pass before, it holds that one; otherwise none.
-        match before.last().copied().filter(|_| m.get_temp::<u64>(Id::unique(OVER_KEY)) == Some(pass)) {
-            Some(under) => {
-                m.insert_temp(id.with(HOLDS_KEY), under);
-            }
-            None => {
-                m.remove::<Id>(id.with(HOLDS_KEY));
-            }
+        // Opened over the windows drawn in the pass before, it holds them; otherwise none.
+        if over && !before.is_empty() {
+            m.insert_temp(id.with(HOLDS_KEY), before);
+        } else {
+            m.remove::<Vec<Id>>(id.with(HOLDS_KEY));
         }
         true
     })
+}
+
+/// The windows modal window `id` was opened over and hides ([`over_parent`]).
+#[cfg(test)]
+fn holds(ctx: &egui::Context, id: Id) -> Vec<Id> {
+    ctx.data(|m| m.get_temp::<Vec<Id>>(id.with(HOLDS_KEY))).unwrap_or_default()
 }
 
 /// The room for the contents of a modal window with `margin` inside its frame.
@@ -133,15 +139,11 @@ pub(crate) fn backdrop() -> egui::LayerId {
     egui::LayerId::new(egui::Order::Middle, Id::unique("modal-dim"))
 }
 
-/// The key of the pass in which [`show_at`] last drew a modal window.
-fn drawn_pass_id() -> Id {
-    Id::unique("modal-drawn-pass")
-}
-
 /// Whether [`show_at`] drew a modal window in this pass. Unlike the backdrop's visibility, which
 /// also counts the last pass, it is false in the pass after the window closes.
 pub(crate) fn drawn_this_pass(ctx: &egui::Context) -> bool {
-    ctx.data(|d| d.get_temp::<u64>(drawn_pass_id())) == Some(ctx.cumulative_pass_nr())
+    let pass = ctx.cumulative_pass_nr();
+    ctx.data_mut(|d| d.get_temp_mut_or::<(u64, Vec<Id>, Vec<Id>)>(Id::unique(LAST_KEY), (u64::MAX, vec![], vec![])).0 == pass)
 }
 
 /// The dialog's heading, which also moves the window ([`drag_band`]).
@@ -197,9 +199,10 @@ const SHOWN_KEY: &str = "modal-shown";
 const TOP_ROWS_KEY: &str = "modal-top-rows";
 const TOP_WHOLE_KEY: &str = "modal-top-whole";
 /// For all modal windows: the pass the last one was drawn in, the ids of those drawn in that pass
-/// and of those drawn in the pass before it (`LAST_KEY`), and the pass
-/// in which the window drawn next was marked as opened over another ([`over_parent`], `OVER_KEY`).
-/// Under a modal window's id: the window it was opened over and hides (`HOLDS_KEY`).
+/// and of those drawn in the pass before it (`LAST_KEY`, which [`drawn_this_pass`] also reads), and
+/// the pass in which the window drawn next was marked as opened over others ([`over_parent`],
+/// `OVER_KEY`, taken by that window). Under a modal window's id: the windows it was opened over and
+/// hides (`HOLDS_KEY`).
 const LAST_KEY: &str = "modal-last";
 const OVER_KEY: &str = "modal-over";
 const HOLDS_KEY: &str = "modal-holds";
@@ -446,24 +449,36 @@ mod tests {
     #[test]
     fn a_window_hidden_under_one_opened_over_it_keeps_its_scroll() {
         // As Keyboard Shortcuts is while Import Shortcut Set is open over it: it is not drawn, but it
-        // did not close. A window that another replaced did close. Either may have shown an alert
-        // of its own, drawn after it in the same passes.
+        // did not close. A window that another replaced did close. Any of them may have shown an
+        // alert of its own, drawn after it in the same passes: A before B or C opens, or B or C.
         let others: [(&[&str], bool); 4] = [(&["over B"], true), (&["over B", "Alert"], true), (&["C"], false), (&["C", "Alert"], false)];
+        let id = |name: &str| Id::unique(("modal-reopen-test", name));
         let mut wrong = vec![];
         for in_rows in [false, true] {
-            for (other, kept) in others {
-                let ctx = egui::Context::default();
-                crate::theme::apply(&ctx, Default::default());
-                let mut time = 0.0;
-                first_row_seen(&ctx, &["A"], in_rows, vec![], &mut time, 4);
-                if first_row_seen(&ctx, &["A"], in_rows, wheel_down(), &mut time, 60) {
-                    wrong.push(format!("rows {in_rows}: the wheel does not scroll A"));
-                }
-                if !first_row_seen(&ctx, other, in_rows, vec![], &mut time, 4) {
-                    wrong.push(format!("rows {in_rows}: {other:?} does not open at its top"));
-                }
-                if first_row_seen(&ctx, &["A"], in_rows, vec![], &mut time, 4) == kept {
-                    wrong.push(format!("rows {in_rows}: after {other:?}, A {} where it was scrolled to", if kept { "is not" } else { "is still" }));
+            for lead in [&["A"][..], &["A", "Alert"][..]] {
+                for (other, kept) in others {
+                    let ctx = egui::Context::default();
+                    crate::theme::apply(&ctx, Default::default());
+                    let mut time = 0.0;
+                    first_row_seen(&ctx, &["A"], in_rows, vec![], &mut time, 4);
+                    if first_row_seen(&ctx, &["A"], in_rows, wheel_down(), &mut time, 60) {
+                        wrong.push(format!("rows {in_rows}: the wheel does not scroll A"));
+                    }
+                    first_row_seen(&ctx, lead, in_rows, vec![], &mut time, 4);
+                    if !first_row_seen(&ctx, other, in_rows, vec![], &mut time, 4) {
+                        wrong.push(format!("rows {in_rows}: after {lead:?}, {other:?} does not open at its top"));
+                    }
+                    // Only the window opened over A holds it; an alert drawn after that window holds none.
+                    let held: Vec<Vec<Id>> = other.iter().map(|&name| holds(&ctx, id(name))).collect();
+                    let want: Vec<Vec<Id>> =
+                        other.iter().map(|&name| if name.starts_with("over ") { lead.iter().map(|&l| id(l)).collect() } else { vec![] }).collect();
+                    if held != want {
+                        wrong.push(format!("rows {in_rows}: after {lead:?}, {other:?} hold {held:?}, not {want:?}"));
+                    }
+                    if first_row_seen(&ctx, &["A"], in_rows, vec![], &mut time, 4) == kept {
+                        let state = if kept { "is not" } else { "is still" };
+                        wrong.push(format!("rows {in_rows}: after {lead:?} and {other:?}, A {state} where it was scrolled to"));
+                    }
                 }
             }
         }
