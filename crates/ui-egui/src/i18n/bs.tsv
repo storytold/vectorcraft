@@ -1710,6 +1710,7 @@ digits	Malayalam	Malajalam
 	Underline	Podvučeno
 	Vertical Scale %	Okomita skala %
 	Axis	Osa
+	Axis Angle	Ugao ose
 	ICF Top/Right	ICF vrh/desno
 	ICF Bottom/Left	ICF dno/lijevo
 	Show Font Height Options	Prikaži opcije visine fonta
@@ -1752,6 +1753,7 @@ digits	Malayalam	Malajalam
 	Rule:	Pravilo:
 	Save changes to {name}	Sačuvaj promjene u {name}
 	Save theme to My Themes	Sačuvaj temu u Moje teme
+	Set the current fill or stroke to the selected color	Postavi odabranu boju kao trenutnu ispunu ili potez
 	Set the selected color to the current color	Postavi odabranu boju na trenutnu boju
 	Copy All Styles	Kopiraj sve stilove
 	Exported {path}	Izvezeno: {path}
@@ -2214,7 +2216,7 @@ digits	Malayalam	Malajalam
 	Overprint Preview (separations)	Pregled pretiska (separacije)
 	Show All Plates	Prikaži sve ploče
 	Show all plates	Prikaži sve ploče
-	Show/hide plate (Alt-click: only this plate)	Prikaži/sakrij ploču (Alt-klik: samo ova ploča)
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	Prikaži/sakrij ploču (Alt-klik: samo ova ploča; ponovni Alt-klik: sve ploče)
 	Simulate Paper	Simuliraj papir
 	Use Black Point Compensation	Koristi kompenzaciju crne tačke
 	Working CMYK (don't tag)	Radni CMYK (bez oznake)
@@ -2254,6 +2256,8 @@ digits	Malayalam	Malajalam
 	Tip extends past the end point	Vrh prelazi preko krajnje tačke
 	Tip on the end point	Vrh na krajnjoj tački
 	Variable Width Profile	Profil promjenjive širine
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Četkica poteza zadržava vlastitu veličinu, pa je profil širine ne mijenja. Uklonite četkicu da biste koristili profil.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Četkica poteza zadržava vlastitu veličinu, pa je profil širine ne mijenja. Uklonite četkicu da biste koristili profil.
 	Weight:	Debljina:
 	Art using a deleted global swatch keeps its colour.	Crtež koji koristi izbrisani globalni uzorak boje zadržava svoju boju.
 	Color Group: {name}	Grupa boja: {name}
@@ -2363,6 +2367,10 @@ digits	Malayalam	Malajalam
 	Flip Horizontal	Preokreni vodoravno
 	Flip Vertical	Preokreni okomito
 	Polygon Properties:	Svojstva mnogougla:
+	Line Properties:	Svojstva linije:
+	Line Length:	Dužina linije:
+	Line Angle:	Ugao linije:
+	Constrain Pie Angle	Zadrži ugao pite
 	Rectangle Properties:	Svojstva pravougaonika:
 	Shape Properties:	Svojstva oblika:
 	Shape Properties	Svojstva oblika
@@ -2404,6 +2412,7 @@ digits	Malayalam	Malajalam
 	Scatter:	Raspršenost:
 	Rotation:	Rotacija:
 	Rotation relative to:	Rotacija u odnosu na:
+	Hue Jitter:	Variranje nijanse:
 	Brush Scale Options	Opcije skale četkice
 	Scale Proportionately	Skaliraj proporcionalno
 	Stretch to Fit Stroke Length	Razvuci da stane u dužinu poteza
@@ -2442,6 +2451,7 @@ digits	Malayalam	Malajalam
 	Size:	Veličina:
 	Calligraphic Brush Options	Opcije kaligrafske četkice
 	Bristle Brush Options	Opcije četkice s čekinjama
+	Roundness	Zaobljenost
 	Roundness:	Zaobljenost:
 	Shape:	Oblik:
 	Bristle Length:	Dužina čekinja:
@@ -3113,6 +3123,8 @@ antiAlias	Sharp	Oštro
 	Every option matches {base}.	Sve opcije odgovaraju {base}.
 	Files of a PDF standard can't be password-protected.	Datoteke PDF standarda ne mogu se zaštititi lozinkom.
 	Files of this standard tag their colours with ICC profiles.	Datoteke ovog standarda označavaju svoje boje ICC profilima.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	Datoteke ovog standarda označavaju svoje boje ICC profilima, osim CMYK boja u profilu izlazne namjene, koje se zapisuju kao DeviceCMYK.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	Uz „Ne uključuj profile“ i CMYK izlaznu namjenu, svaka CMYK boja zapisuje se kao DeviceCMYK, osim ako se ne pretvori u CMYK odredište s drugim profilom.
 	Flattener preset:	Predložak spljoštavanja:
 	General › Thumbnails	Općenito › Sličice
 	Grayscale images	Slike u nijansama sive
@@ -3361,6 +3373,9 @@ antiAlias	Sharp	Oštro
 	Variable Options	Opcije varijable
 	Define a variable first	Prvo definišite varijablu
 	Adjust Adjoining Width Points	Podesi susjedne tačke širine
+	Incoming	Ulazna
+	Outgoing	Izlazna
+	Single Width Only	Samo jedna širina
 	Keep both sides the same width	Zadrži obje strane iste širine
 	Side 1:	Strana 1:
 	Side 2:	Strana 2:
@@ -3471,6 +3486,9 @@ theme	Appearance	Izgled
 	Current Brush	Trenutna četkica
 	Current Symbol	Trenutni simbol
 	Delete Brush	Izbriši četkicu
+	Delete Color	Izbriši boju
+	Restore Generated Table	Vrati generisanu tabelu
+	Unshift All Colors	Poništi pomak svih boja
 	Delete Symbol	Izbriši simbol
 	Delete the selected symbol?	Izbrisati odabrani simbol?
 	Delete the selected symbols?	Izbrisati odabrane simbole?
@@ -3750,6 +3768,7 @@ theme	Appearance	Izgled
 	Select Art	Odaberi crtež
 	Set Current Layer	Postavi trenutni sloj
 	Flatten Artwork	Spljošti crtež
+	Locate Layer	Pronađi sloj
 	Locate Object	Pronađi objekat
 	Lock Others	Zaključaj ostale
 	Merge Selected	Spoji odabrano
@@ -3926,6 +3945,7 @@ theme	Appearance	Izgled
 	90° & 45° Angles	Uglovi od 90° i 45°
 	90° Angles	Uglovi od 90°
 	Additional Plug-ins Folder	Dodatni folder dodataka
+	Plug-in Instruction Budget	Budžet instrukcija za dodatke
 	Additional Fonts Folder	Dodatni folder fontova
 	Alignment Guides	Vodilice za poravnanje
 	Anchor Points, Handle, and Bounding Box Display	Prikaz sidrenih tačaka, ručki i graničnog okvira
@@ -3952,6 +3972,7 @@ theme	Appearance	Izgled
 	Data Recovery	Oporavak podataka
 	Default Language	Zadani jezik
 	Disable Auto Add/Delete	Onemogući automatsko dodavanje/brisanje
+	Interpolate Control Points When Moving Anchors	Interpoliraj ručke smjera pri pomjeranju sidrenih tačaka
 	Display All Blacks Accurately	Prikaži sve crne tačno
 	Display All Blacks as Rich Black	Prikaži sve crne kao bogatu crnu
 	Display Bitmaps as Anti-aliased Images in Pixel Preview	Prikaži bitmape kao slike sa zaglađenim ivicama u pregledu piksela
@@ -4052,6 +4073,7 @@ theme	Appearance	Izgled
 	Printing / Exporting	Štampanje / izvoz
 	Real-time Drawing and Editing	Crtanje i uređivanje u stvarnom vremenu
 	Use Monitor Profile for Canvas	Koristi profil monitora za platno
+	Refresh Monitor Profile	Osvježi profil monitora
 	The canvas is drawn in sRGB.	Platno se iscrtava u sRGB-u.
 	Canvas display profile:	Profil ekrana za platno:
 	The system matches the window to the display's colors.	Sistem prilagođava boje prozora ekranu.
@@ -4459,6 +4481,12 @@ font-technology	Variable	Varijabilni
 	Search commands, tools, panels and effects…	Pretraži naredbe, alate, panele i efekte…
 	No commands match	Nijedna naredba se ne podudara
 	{pos} of {total}: {name}	{pos} od {total}: {name}
+	No menu item	Nema stavke menija
+	Toolbar	Traka s alatima
+	{toolbar}, in the {tool} group	{toolbar}, u grupi {tool}
+	In the menu bar: {path}	Na traci menija: {path}
+	In the {group} group: press and hold to open it	U grupi {group}: pritisnite i držite da je otvorite
+	{home}, not shown now	{home}, trenutno nije prikazano
 @plural	{n} result|{n} results	{n} rezultat|{n} rezultata|{n} rezultata
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} od {n} rezultata. Nastavite kucati da ih suzite.|{shown} od {n} rezultata. Nastavite kucati da ih suzite.|{shown} od {n} rezultata. Nastavite kucati da ih suzite.
 	Recent Commands	Nedavne naredbe
@@ -4495,6 +4523,7 @@ font-technology	Variable	Varijabilni
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Točkić miša uz pritisnut Cmd/Ctrl pomjera platno u stranu.
 	Dragging sideways on a numeric field's label changes the field's value.	Prevlačenje u stranu po oznaci brojčanog polja mijenja vrijednost polja.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Pokret rotacije s dva prsta na dodirnoj podlozi rotira prikaz platna.
+	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Kada pomjerate sidrene tačke, svaka kriva s jednim pomjerenim krajem zadržava svoj oblik u odnosu na svoje krajeve.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Držanje prečice alata bira taj alat dok je ne pustite, a zatim se ponovo bira prethodni alat.
 	Shows the bounding box while you move the selection or draw a shape.	Prikazuje granični okvir dok pomjerate odabir ili crtate oblik.
 	Create Trim Marks draws Japanese-style marks instead of Roman ones.	Kreiraj oznake za obrezivanje crta oznake u japanskom stilu umjesto rimskih.
@@ -4575,6 +4604,8 @@ font-technology	Variable	Varijabilni
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Koliko blizu na ekranu pokazivač ili prevučena tačka mora doći do objekta da bi ga pametne vodilice uhvatile; udaljenost je ista pri svakom zumu.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Hvata kraj segmenta linije ili krug nacrtan iz središta tako da dodiruje obližnju krivu.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Hvata kraj segmenta linije tako da pod pravim uglom susreće obližnji ravni segment.
+	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Prikazuje broj svakog isječka u okviru u njegovom gornjem lijevom uglu na platnu; kada je isključeno, obrisi isječaka i dalje se prikazuju.
+	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Boja obrisa korisničkih i objektnih isječaka i okvira s njihovim brojevima; automatski isječci koriste blijeđu nijansu te boje.
 	Reset all preferences to their defaults?	Vratiti sve postavke na zadane vrijednosti?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Zadane vrijednosti primjenjuju se kada kliknete U redu u Postavkama. Otkaži tamo zadržava vaše trenutne postavke.
 	Smaller ↔ Larger	Manje ↔ veće
@@ -4591,6 +4622,8 @@ font-technology	Variable	Varijabilni
 	Couldn't paste from the clipboard: {e}	Nije moguće zalijepiti iz međuspremnika: {e}
 	Channel	Kanal
 	Circle	Krug
+	Circle Tool	Alat za krug
+	Circle too large	Krug je prevelik
 	Clip to Art	Isijeci prema crtežu
 	Colorize	Oboji
 	Gamma	Gama
@@ -5061,6 +5094,8 @@ imageTrace	Outline	Obris
 @msg	choose a folder to export to	odaberite folder za izvoz
 @msg	choose a location for the package	odaberite lokaciju za paket
 @msg	clipboard is empty	međuspremnik je prazan
+@msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: barem jedna boja mora ostati u tabeli boja
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted: `{k}` imenuje boju koju imenuje i drugi ključ
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` nije boja poput "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: najviše {MAX_TABLE} boja
 @msg	command `{0}` is not available right now: {1}	naredba `{0}` trenutno nije dostupna: {1}
@@ -5219,6 +5254,9 @@ imageTrace	Outline	Obris
 @msg	no such user library	nema takve korisničke biblioteke
 @msg	no such view	nema takvog pogleda
 @msg	no such width point	nema takve tačke širine
+@msg	`single` must be `incoming` or `outgoing`	`single` mora biti `incoming` ili `outgoing`
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` i `outIndex` moraju biti dvije polovine jedne isprekidane tačke širine
+@msg	a discontinuous width point keeps its place	isprekidana tačka širine zadržava svoje mjesto
 @msg	no swatch `{name}`	nema uzorka boje `{name}`
 @msg	no swatch library `{l}` (see swatch.library.list)	nema biblioteke uzoraka boja `{l}` (vidi swatch.library.list)
 @msg	no symbol instances selected	nisu odabrane instance simbola
@@ -6029,6 +6067,7 @@ mark-style	Japanese	Japanski
 	Cove	Udubina
 	Depth	Dubina
 	Front	Prednja strana
+	Side	Bočna strana
 	Isometric Bottom	Izometrijsko dno
 	Isometric Left	Izometrijski lijevo
 	Isometric Right	Izometrijski desno
@@ -7021,6 +7060,14 @@ shape	Open	Otvoren
 	Remove Gaps	Ukloni razmake
 @msg	that makes too many pieces (at most 100000): make the dashes longer	to daje previše dijelova (najviše 100000): produžite crtice
 @msg	select paths, or segments, to divide	odaberite putanje ili segmente za dijeljenje
+# Path Precision Tools add-on: Smooth Bridge.
+	Smooth Bridge…	Glatki most…
+	Smooth Bridge	Glatki most
+	Keep Originals	Zadrži originale
+@msg	select two circles to bridge	odaberite dva kruga za premošćavanje
+@msg	one circle is inside the other	jedan krug je unutar drugog
+@msg	the circles are too far apart for this radius: raise the radius	krugovi su predaleko jedan od drugog za ovaj radijus: povećajte radijus
+@msg	the circles are too far apart for this radius	krugovi su predaleko jedan od drugog za ovaj radijus
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	Zajedničke tangente…
 	Common Tangents	Zajedničke tangente
@@ -7037,6 +7084,7 @@ shape	Open	Otvoren
 @msg	One path lies inside the other, so they have no common tangents	Jedna putanja leži unutar druge, pa nemaju zajedničkih tangenti
 @msg	The paths overlap, so they have no internal tangents	Putanje se preklapaju, pa nemaju unutrašnjih tangenti
 @msg	One path lies inside the other, so they have no internal tangents	Jedna putanja leži unutar druge, pa nemaju unutrašnjih tangenti
+@msg	The point lies inside the path, so it has no tangents	Tačka leži unutar putanje, pa nema tangenti
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Proširi crtice u putanje
 @msg	select paths with dashed strokes to expand	odaberite putanje s isprekidanim potezom za proširivanje
@@ -7390,3 +7438,8 @@ shape	Open	Otvoren
 	Lattice Braid	Rešetkasti preplet
 	Facet Sweep	Fasetni potez
 	Artistic Brushes	Umjetničke četke
+	Pressure Sensitive	Osjetljivo na pritisak
+	Flex Ribbon	Savijajuća traka
+	Pulse Stroke	Pulsirajući potez
+	Round Flow	Okrugli tok
+	Chisel Flow	Kosi tok

@@ -510,9 +510,10 @@ fn row_context_menu(ui: &mut Ui, view: &View, n: &Node, collect_ids: &[u64], out
         }
     }
     ui.separator();
-    // Locate Object
-    if widgets::menu_item(ui, "Locate Object", true, false) {
-        out.actions.push(("layer.locate".into(), json!({ "id": n.id.0 })));
+    // Locate Object, or Locate Layer with Show Layers Only on
+    let layers_only = view.opts.layers_only;
+    if widgets::menu_item(ui, if layers_only { "Locate Layer" } else { "Locate Object" }, true, false) {
+        out.actions.push(("layer.locate".into(), json!({ "id": n.id.0, "layersOnly": layers_only })));
         ui.close();
     }
     ui.separator();

@@ -539,7 +539,8 @@ fn escape_ends_one_thing(app: &mut VectorcraftApp, ctx: &egui::Context) {
     if app.session.active().is_some_and(|d| d.doc.pattern_edit.is_some()) {
         let _ = app.run("object.pattern.done", json!({}));
     } else if app.session.active().is_some_and(|d| d.isolation.is_some()) {
-        let _ = app.run("object.exitIsolation", json!({}));
+        // From an isolated sublayer, Escape leaves isolation mode rather than going up one layer.
+        let _ = app.run("object.exitIsolation", json!({ "all": true }));
     } else if app.session.active().is_some_and(|d| d.global_edit.is_some()) {
         let _ = app.run("select.globalEdit", json!({}));
     } else if app.ui.flyout.is_some() {

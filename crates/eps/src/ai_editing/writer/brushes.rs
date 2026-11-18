@@ -566,14 +566,14 @@ impl Writer<'_> {
     /// Does the reader read the brushed strokes of style text `text` with their brushes on them?
     pub(super) fn brushed_style_reads(&mut self, text: &str) -> bool {
         self.brush_set();
-        let section = super::styles::known_style("x", text);
+        let Some(parsed) = self.styles.parsed.get(text) else { return false };
         let written = &self.brush_set.written;
         let read = self.brush_set.read.get_or_insert_with(|| {
             let brushes: Vec<(&str, &str, &str, Option<&Node>)> =
                 written.iter().map(|b| (b.plugin, b.brush.name.as_str(), b.params.as_str(), b.art.as_ref())).collect();
             crate::import::BrushesRead::new(&brushes)
         });
-        read.style_reads(section.as_bytes(), "x")
+        read.style_reads(parsed)
     }
 
     /// The brushes' art in a non-printing block, then the brush manager's order and the brushes in
