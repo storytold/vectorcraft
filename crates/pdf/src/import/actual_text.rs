@@ -63,9 +63,19 @@ impl Builder<'_> {
     pub(super) fn actual_glyph(&mut self, o: &craft_pdf::interpret::font::OutlineGlyph, m: Affine, at: Placement, look: Look, opacity: f32) -> bool {
         let key = o.font_cache_key();
         self.flush_glyphs();
-        // A fill and stroke callback for the same glyph consumes its text only once.
+        // A fill and stroke callback for the same glyph consumes its text only once, on a line
+        // the operator's kerning finished too.
+        let stroking = look.fill.is_none() && look.stroke.is_some();
+        if let Some(stroke) = &look.stroke
+            && stroking
+            && self.stroke_parked(|line| line.has_actual_fill(key, at))
+            && let Some((line, _)) = self.parked.first_mut()
+            && line.stroke_actual(key, at, stroke.clone(), look.overprint_stroke)
+        {
+            return true;
+        }
         if let (Some(stroke), Some(line)) = (&look.stroke, &mut self.text)
-            && look.fill.is_none()
+            && stroking
             && line.stroke_actual(key, at, stroke.clone(), look.overprint_stroke)
         {
             return true;
@@ -87,7 +97,7 @@ impl Builder<'_> {
             None => line.push_content(&look, at, opacity, advance, content),
         };
         if !self.text.as_mut().is_some_and(place) {
-            self.flush_text();
+            self.park_text(!stroking);
             let mut line = TextLine::new(at, opacity);
             if !place(&mut line) {
                 self.actual.pending = pending;

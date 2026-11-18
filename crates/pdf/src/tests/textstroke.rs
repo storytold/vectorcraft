@@ -346,3 +346,66 @@ fn glyphs_filled_and_stroked_one_by_one_stay_one_run() {
         assert_eq!(type_runs(content), [vec![("ABC".to_string(), true, true)]], "{content}");
     }
 }
+
+/// Fill and stroke rendering of a `TJ` whose kerning starts a new line part way through: the
+/// reader fills every glyph of the operator before it strokes them, and each part comes in as
+/// type filled and stroked, in the order drawn, not as each part filled and then each part
+/// stroked over it (#8543). So too a `TJ` that jumps back to start a line before it, one whose
+/// kerning starts two new lines, and one in a span with replacement text (`ActualText`); small
+/// kerning keeps one line as before.
+#[test]
+fn a_tj_whose_kerning_starts_a_new_line_is_filled_and_stroked() {
+    // Each type object as its text, and whether all of it is filled and all of it stroked.
+    let objects = |content: &str| -> Vec<(String, bool, bool)> {
+        type_runs(content)
+            .into_iter()
+            .map(|runs| (runs.iter().map(|r| r.0.as_str()).collect(), runs.iter().all(|r| r.1), runs.iter().all(|r| r.2)))
+            .collect()
+    };
+    let both = |text: &str| (text.to_string(), true, true);
+    for mode in ["2", "6"] {
+        let cases = [
+            ("/F1 48 Tf 20 80 Td [(AB) -3500 (CD)] TJ", vec![both("AB"), both("CD")]),
+            ("/F1 24 Tf 20 80 Td [(AB) -3500 (CD) -3500 (EF)] TJ", vec![both("AB"), both("CD"), both("EF")]),
+            ("/F1 24 Tf 200 80 Td [(AB) 6000 (CD)] TJ", vec![both("AB"), both("CD")]),
+            ("/F1 48 Tf 20 80 Td [(AB) -100 (CD)] TJ", vec![both("ABCD")]),
+            // In a span with replacement text, which places all of its text with the first glyph.
+            ("/F1 48 Tf 20 80 Td /Span << /ActualText (ABCD) >> BDC [(AB) -3500 (CD)] TJ EMC", vec![both("ABCD")]),
+        ];
+        for (show, want) in cases {
+            let content = format!("BT {mode} Tr {show} 0 Tr ET");
+            assert_eq!(objects(&content), want, "{content}: {:?}", type_runs(&content));
+        }
+    }
+}
+
+/// Stroke rendering (modes 1 and 5) of a `TJ` whose kerning starts a new line stays stroke only,
+/// one type object per line (#8543).
+#[test]
+fn a_stroked_tj_whose_kerning_starts_a_new_line_stays_stroke_only() {
+    for mode in ["1", "5"] {
+        let content = format!("BT {mode} Tr /F1 48 Tf 20 80 Td [(AB) -3500 (CD)] TJ 0 Tr ET");
+        let want = [vec![("AB".to_string(), false, true)], vec![("CD".to_string(), false, true)]];
+        assert_eq!(type_runs(&content), want, "{content}");
+    }
+}
+
+/// Translucent type filled and stroked by a `TJ` whose kerning starts a new line stays a filled
+/// object and a stroked one for each part, in the order the file draws them (#8015, #8543).
+#[test]
+fn a_translucent_tj_whose_kerning_starts_a_new_line_stays_fill_and_stroke_apart() {
+    use vectorcraft_testkit::pdf::{PdfPage, pdf};
+    let resources = "/Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> >> /ExtGState << /G << /ca 0.5 /CA 0.5 >> >>";
+    let content = "/G gs 0 0 0 RG 1 1 0.8 rg 3 w BT 2 Tr /F1 48 Tf 20 80 Td [(AB) -3500 (CD)] TJ 0 Tr ET";
+    let bytes = pdf(&[PdfPage { resources: resources.into(), ..PdfPage::new(300.0, 200.0, content) }], None);
+    let d = import(&bytes).unwrap();
+    let mut types = vec![];
+    d.walk(|n| {
+        if let NodeKind::Text(t) = &n.kind {
+            let st = t.first_style();
+            types.push((t.plain_text(), n.opacity < 1.0, !st.fill.is_none(), !st.stroke.is_none()));
+        }
+    });
+    let part = |text: &str, fill: bool| (text.to_string(), true, fill, !fill);
+    assert_eq!(types, [part("AB", true), part("CD", true), part("AB", false), part("CD", false)], "{content}");
+}

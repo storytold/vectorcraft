@@ -12,6 +12,10 @@ use super::{
     Upright, Walked, clipped, contains, fold_stop_opacity, function_paint, gradient_shape, is_rectangle, luminance, mask_spec, shading_gradient,
 };
 
+/// The most lines of type kept for a text-showing operator's stroke pass ([`Builder::park_text`]):
+/// beyond them the oldest is finished, and strokes over its glyphs come in as type of their own.
+const MAX_PARKED: usize = 64;
+
 fn is_colour_face(face: &vectorcraft_text::FontFace) -> bool {
     use skrifa::Tag;
     use skrifa::raw::TableProvider;
@@ -37,6 +41,7 @@ impl<'p> Builder<'p> {
             type3_run: None,
             text: None,
             text_glyphs: vec![],
+            parked: vec![],
             text_as,
             actual: Default::default(),
             images: HashMap::new(),
@@ -119,6 +124,7 @@ impl<'p> Builder<'p> {
         self.type3_run = None;
         self.text = None;
         self.text_glyphs.clear();
+        self.parked.clear();
         self.mask = None;
         self.masked.clear();
         self.marked.clear();
@@ -450,11 +456,73 @@ impl<'p> Builder<'p> {
         }
     }
 
-    /// Finish the open line of type. `true`: it was kept as outlines instead ([`reshaped`]), which
-    /// are left open as the glyph run for an outline drawn next to join.
+    /// Finish the open line of type, after the lines parked before it ([`Self::park_text`]).
+    /// `true`: the open line was kept as outlines instead ([`reshaped`]), which are left open as
+    /// the glyph run for an outline drawn next to join.
     pub(super) fn end_text(&mut self) -> bool {
+        self.release_parked(usize::MAX);
         let glyphs = std::mem::take(&mut self.text_glyphs);
-        let Some(mut line) = self.text.take() else { return false };
+        let Some(line) = self.text.take() else { return false };
+        self.end_line(line, glyphs)
+    }
+
+    /// Finish the first `n` parked lines ([`Self::park_text`]), in the order they were drawn.
+    pub(super) fn release_parked(&mut self, n: usize) {
+        let n = n.min(self.parked.len());
+        if n == 0 {
+            return;
+        }
+        let lines: Vec<_> = self.parked.drain(..n).collect();
+        for (line, glyphs) in lines {
+            if self.end_line(line, glyphs) {
+                self.flush_glyphs();
+            }
+        }
+    }
+
+    /// The open line ends where glyph drawn next starts another. The reader fills every glyph of
+    /// a text-showing operator before it strokes them (fill and stroke rendering): a line that a
+    /// stroke may still be drawn over is parked instead of finished, so that the operator's
+    /// stroke pass still finds the glyphs it filled when its kerning started a new line part way
+    /// through (#8543). Any other line, or with `park` false, is finished with the lines parked
+    /// before it.
+    ///
+    /// Parked lines are finished, oldest first, when the stroke pass goes past them (a stroke is
+    /// drawn over a later line, the open one, or none of them: [`Self::stroke_parked`]), when
+    /// anything else ends the open line ([`Self::end_text`]), and beyond [`MAX_PARKED`] lines.
+    pub(super) fn park_text(&mut self, park: bool) {
+        match self.text.take() {
+            Some(line) if park && line.awaits_stroke() => {
+                let glyphs = std::mem::take(&mut self.text_glyphs);
+                self.parked.push((line, glyphs));
+                self.release_parked(self.parked.len().saturating_sub(MAX_PARKED));
+            }
+            line => {
+                self.text = line;
+                self.flush_text();
+            }
+        }
+    }
+
+    /// Whether a stroke goes over a glyph of a parked line ([`Self::park_text`]), which `takes`
+    /// tells of each line (a glyph it filled that the stroke is drawn over). The open line comes
+    /// first, then the parked lines from the last parked back: the same glyph filled at the same
+    /// place twice is stroked where it was filled last, by the operator that strokes it. `true`:
+    /// a parked line takes it, the stroke pass is on it, and the lines before it are finished,
+    /// so it is the first. `false`: the open line takes it or none does, so the stroke pass is
+    /// past them all, and they are finished.
+    pub(super) fn stroke_parked(&mut self, takes: impl Fn(&TextLine) -> bool) -> bool {
+        if self.parked.is_empty() {
+            return false;
+        }
+        let found = if self.text.as_ref().is_some_and(&takes) { None } else { self.parked.iter().rposition(|(line, _)| takes(line)) };
+        self.release_parked(found.unwrap_or(usize::MAX));
+        found.is_some()
+    }
+
+    /// Finish `line` of type, whose `glyphs` are its outlines ([`Self::keep_glyph`]). `true`:
+    /// it was kept as them ([`Self::end_text`]).
+    fn end_line(&mut self, mut line: TextLine, glyphs: Vec<GlyphRun>) -> bool {
         let held = std::mem::take(&mut line.held);
         // Type the file names itself (ActualText) is in reading order as it stands.
         let checked = !glyphs.is_empty() && line.mapped() && !line.has_type3;
@@ -880,13 +948,9 @@ impl<'p> Builder<'p> {
         scale: f64,
         overprint: bool,
     ) {
-        let Some((paint, stroke)) = drawn else { return };
-        let mut path = o.outline();
-        if path.elements().is_empty() {
-            return;
+        if let Some(g) = glyph_run(o, m, drawn, opacity, scale, overprint) {
+            self.text_glyphs.push(g);
         }
-        path.apply_affine(m);
-        self.text_glyphs.push(GlyphRun { path, paint, opacity, stroke, scale, overprint });
     }
 
     fn type3_font_name(&mut self, key: u128) -> FontInfo {
@@ -1151,9 +1215,24 @@ impl<'p> Builder<'p> {
             None => line.push(&look, at, opacity, advance, &text),
         };
         self.flush_glyphs();
+        let stroking = look.fill.is_none() && look.stroke.is_some();
+        // A stroke over a glyph filled on a line the same operator's kerning finished.
+        if let Some(s) = &look.stroke
+            && stroking
+            && self.stroke_parked(|line| line.has_filled(key, at, opacity, &text))
+            && let Some((line, glyphs)) = self.parked.first_mut()
+        {
+            line.stroke_filled(key, at, opacity, &text, s.clone(), overprint);
+            if top.is_none()
+                && let Some(g) = glyph_run(o, m, drawn, opacity, scale, overprint)
+            {
+                glyphs.push(g);
+            }
+            return true;
+        }
         // A stroke over the glyph just filled (fill and stroke rendering).
         if let (Some(s), Some(line)) = (&look.stroke, &mut self.text)
-            && look.fill.is_none()
+            && stroking
             && line.stroke_filled(key, at, opacity, &text, s.clone(), overprint)
         {
             // Upright glyphs aren't kept as outlines (nor, below, are those filled only): a
@@ -1164,7 +1243,7 @@ impl<'p> Builder<'p> {
             return true;
         }
         if !self.text.as_mut().is_some_and(place) {
-            self.flush_text();
+            self.park_text(!stroking);
             let mut line = TextLine::new(at, opacity);
             place(&mut line);
             self.text = Some(line);
@@ -1182,6 +1261,25 @@ impl<'p> Builder<'p> {
         }
         true
     }
+}
+
+/// Glyph `o` placed by `m` and drawn with `drawn` as the outline it is kept as
+/// ([`Builder::keep_glyph`]). Nothing for a glyph that shows nothing.
+fn glyph_run(
+    o: &craft_pdf::interpret::font::OutlineGlyph,
+    m: Affine,
+    drawn: Option<(Paint, Option<StrokeProps>)>,
+    opacity: f32,
+    scale: f64,
+    overprint: bool,
+) -> Option<GlyphRun> {
+    let (paint, stroke) = drawn?;
+    let mut path = o.outline();
+    if path.elements().is_empty() {
+        return None;
+    }
+    path.apply_affine(m);
+    Some(GlyphRun { path, paint, opacity, stroke, scale, overprint })
 }
 
 /// The characters of one glyph in the order they are drawn: a PDF names a ligature's characters

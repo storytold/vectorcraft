@@ -94,6 +94,11 @@ pub(super) struct Builder<'p> {
     /// kept as: what the line becomes when its type wouldn't draw as the file does
     /// ([`super::reshaped`]).
     pub(super) text_glyphs: Vec<GlyphRun>,
+    /// Lines of type a text-showing operator's fill pass finished (a `TJ`'s kerning starts a new
+    /// line part way through) that its stroke pass may still go over, oldest first, each with
+    /// its [`text_glyphs`](Self::text_glyphs): written before the open line, in this order
+    /// ([`Builder::park_text`]).
+    pub(super) parked: Vec<(TextLine, Vec<GlyphRun>)>,
     pub(super) text_as: TextAs,
     pub(super) actual: super::actual_text::ActualText,
     pub(super) images: HashMap<String, ImageBlob>,
