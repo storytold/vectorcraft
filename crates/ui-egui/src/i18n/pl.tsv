@@ -4572,7 +4572,7 @@ font-technology	Variable	Zmienne
 	Makes the document tabs taller and their names larger.	Sprawia, że karty dokumentów są wyższe, a ich nazwy większe.
 	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own.	Od następnego uruchomienia system rysuje pasek tytułu okna tam, gdzie VectorCraft w przeciwnym razie rysowałby własny.
 	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on.	Od następnego uruchomienia VectorCraft rysuje pasek tytułu okna nawet tam, gdzie narysowałoby go środowisko pulpitu, chyba że Systemowy pasek tytułu jest włączony.
-	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	Powiększa lub pomniejsza interfejs; grafika na płótnie zachowuje rozmiar przy tym samym powiększeniu.
+	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	Powiększa lub pomniejsza interfejs; kompozycja na płótnie zachowuje rozmiar przy tym samym powiększeniu.
 	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	Wskaźniki narzędzi rysowane przez VectorCraft rosną i maleją wraz ze Skalowaniem interfejsu; po wyłączeniu zachowują swój rozmiar.
 	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	Język interfejsu; Auto używa języka systemu. Okno dialogowe zmienia język, gdy tylko go wybierzesz.
 	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	Animowane powiększanie działa tylko wtedy, gdy to jest włączone; po wyłączeniu Animowane powiększanie jest wyszarzone, a powiększanie nie jest animowane.
