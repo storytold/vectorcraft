@@ -590,7 +590,7 @@ pub fn shape_key(path: &BezPath) -> Option<u64> {
 
 /// `path` read for matching: one reading per choice of starting corners (the corner of each contour
 /// farthest from the centre of all the shape's corners; every tied corner when `all_ties`, else the
-/// first), at most [`MAX_VARIANTS`]. Empty for a shape with nothing to match.
+/// first), at most [`MAX_VARIANTS`] tried. Empty for a shape with nothing to match.
 fn signatures(path: &BezPath, all_ties: bool) -> Vec<Signature> {
     let bounds = path.bounding_box();
     let size = bounds.width().hypot(bounds.height());
@@ -629,10 +629,14 @@ fn signatures(path: &BezPath, all_ties: bool) -> Vec<Signature> {
         .collect();
     let mut out = vec![];
     let mut pick = vec![0usize; cs.len()];
+    // Readings tried, kept or not: a shape whose readings all fail (its sums run past what f64
+    // holds) tries no more than this either.
+    let mut tried = 0usize;
     loop {
-        if out.len() >= MAX_VARIANTS {
+        if tried >= MAX_VARIANTS {
             break;
         }
+        tried += 1;
         if let Some(sig) = sample(&cs, &starts, &pick, accuracy) {
             out.push(sig);
         }
@@ -868,6 +872,24 @@ mod tests {
         let tol = signature(&inn).unwrap().spread * OUTLINE_TOLERANCE;
         assert!(!outlines_agree(&out, &inn, tol), "the whole outline does");
         assert!(outlines_agree(&out, &out, tol));
+    }
+
+    #[test]
+    fn readings_that_all_fail_stop_at_the_cap() {
+        // 48 concentric squares (four tied corners each: 4^48 choices) so large that every reading
+        // overflows: the tries stop at the cap instead of running through the choices.
+        let mut p = BezPath::new();
+        for i in 1..=48 {
+            let r = 1e153 * f64::from(i);
+            p.move_to((-r, -r));
+            p.line_to((r, -r));
+            p.line_to((r, r));
+            p.line_to((-r, r));
+            p.close_path();
+        }
+        let t0 = std::time::Instant::now();
+        assert!(signatures(&p, true).is_empty());
+        assert!(t0.elapsed() < std::time::Duration::from_secs(5), "{:?}", t0.elapsed());
     }
 
     #[test]

@@ -518,3 +518,22 @@ fn timing_with_hundreds_of_cjk_outlines() {
         s.execute("edit.undo", &json!({})).unwrap();
     }
 }
+
+#[test]
+fn a_long_tracked_line_is_checked_in_time() {
+    // Tracking splits the line at every glyph: the layout check must not lay out the rest of the
+    // line again after each split.
+    let text = "abe".repeat(150);
+    let mut s = session();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 100, "text": text, "size": 4})).unwrap()["id"].as_u64().unwrap();
+    s.execute("text.setRangeStyle", &json!({"id": id, "start": 0, "end": text.len(), "tracking": 50})).unwrap();
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let g = s.execute("type.createOutlines", &json!({})).unwrap()["ids"][0].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [g]})).unwrap();
+    let t0 = std::time::Instant::now();
+    let r = s.execute("type.retype", &json!({})).unwrap();
+    let texts: Vec<String> = r["texts"].as_array().unwrap().iter().map(|t| t.as_str().unwrap().to_owned()).collect();
+    assert_eq!(texts.concat(), text);
+    assert_eq!(r["unmatched"], json!([]));
+    eprintln!("450 tracked glyphs: {:?}, {} objects", t0.elapsed(), texts.len());
+}
