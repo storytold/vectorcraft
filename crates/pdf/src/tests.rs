@@ -1449,6 +1449,41 @@ fn empty_and_populated_file_info_preserve_key_presence() {
     assert!(s.contains("/ViewerPreferences<</DisplayDocTitle true>>"), "viewers should show the document title (#3646)");
 }
 
+/// The text of the `/Lang` entry of the catalog of `pdf` (a literal string), if any.
+fn catalog_lang(pdf: &[u8]) -> Option<String> {
+    let xref = crate::patch::Xref::read(pdf).expect("a cross-reference table");
+    let root = xref.trailer_ref(pdf, b"/Root").expect("a catalog");
+    let (start, end) = xref.dict(pdf, root).expect("the catalog's dictionary");
+    let catalog = String::from_utf8_lossy(&pdf[start..end]).into_owned();
+    let at = catalog.find("/Lang")? + "/Lang".len();
+    let rest = catalog[at..].trim_start().strip_prefix('(').expect("a literal string");
+    Some(rest[..rest.find(')').expect("a closed string")].to_string())
+}
+
+/// The catalog gives the document language chosen in Document Setup as its BCP 47 tag, in
+/// exported and printed PDFs, and the XMP packet says it too (#3644).
+#[test]
+fn the_catalog_gives_the_document_language() {
+    let mut d = doc(100.0, 100.0);
+    for (language, tag) in [(None, "en-US"), (Some("French"), "fr"), (Some("German: Swiss"), "de-CH")] {
+        if let Some(language) = language {
+            d.setup.language = language.into();
+        }
+        for opts in [PdfOptions::uncompressed(), PdfOptions::default()] {
+            let bytes = export(&d, &opts).unwrap();
+            assert_eq!(catalog_lang(&bytes).as_deref(), Some(tag), "{language:?}");
+        }
+        // Print to PDF writes its file with the same writer.
+        let printed = print(&d, &PrintOptions { created: Some(1_700_000_000), ..Default::default() }).unwrap();
+        assert_eq!(catalog_lang(&printed.bytes).as_deref(), Some(tag), "{language:?}: printed");
+        let s = uncompressed(&d);
+        assert!(s.contains(&format!("<dc:language><rdf:Bag><rdf:li>{tag}</rdf:li></rdf:Bag></dc:language>")), "{language:?}: {s}");
+    }
+    // A language without a tag (from a file) writes none rather than a guess.
+    d.setup.language = "Klingon".into();
+    assert_eq!(catalog_lang(&export(&d, &PdfOptions::uncompressed()).unwrap()), None);
+}
+
 /// A function or colour space built on itself is refused before the interpreter builds it (by
 /// recursion, with no cap: a stack overflow), and those of real files are read.
 #[test]

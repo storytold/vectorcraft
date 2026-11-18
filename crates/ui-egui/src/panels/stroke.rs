@@ -416,7 +416,7 @@ pub(super) fn arrow_doc(mut a: Option<Arrowhead>, start: bool, w: f64, h: f64) -
 
 /// Draw an arrowhead preview (the head as the canvas draws it) in `r`: a line with the head at the
 /// left (`start`) or right end.
-fn paint_arrow(ui: &Ui, r: Rect, a: Option<&Arrowhead>, start: bool, color: Color32) {
+pub(crate) fn paint_arrow(ui: &Ui, r: Rect, a: Option<&Arrowhead>, start: bool, color: Color32) {
     if let Some(tex) = widgets::doc_preview(ui, &format!("arrow:{}:{start}", arrow_key(a)), r.size(), |w, h| arrow_doc(a.cloned(), start, w, h)) {
         ui.painter().image(tex.id(), r, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), color);
     }
