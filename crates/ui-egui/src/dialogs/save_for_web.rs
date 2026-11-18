@@ -2,13 +2,16 @@
 //! as the web image Save writes, beside the original (Original, Optimized, 2-Up and 4-Up views,
 //! each with its file size and download time), and the settings: format (GIF, JPEG, PNG-8,
 //! PNG-24), colour reduction, colours, dither, transparency and matte, interlacing, web snap,
-//! lossy, JPEG quality, the colour table (lock, map to transparent, web shift, sort), image size
-//! and anti-aliasing, Clip to Artboard, sRGB, metadata, slices and HTML output, and presets.
+//! lossy, JPEG quality, the colour table (lock, map to transparent, web shift, sort, Delete Color
+//! and Restore Generated Table), image size and anti-aliasing, Clip to Artboard, sRGB, metadata,
+//! slices and HTML output, and presets.
 //!
 //! Fields are the `document.exportForWeb` settings (`webExport.settings` gives them; set one with
 //! `ui.dialog.set`, or `preset` to load a preset), plus the dialog's own: `__view` (`original`,
 //! `optimized`, `2up`, `4up`), `__zoom` (`fit` or a percentage), `__kbps` (connection speed),
-//! `__color` (the colour table's selected colour, by source), `__presetName` (shown while saving a
+//! `__color` (the colour table's selected colour, by source: the one Lock, Transparent and Web
+//! Shift edit, and where a Shift-click range starts), `__colors` (every selected color, by source,
+//! which Delete Color deletes; when it is empty, `__color` alone), `__presetName` (shown while saving a
 //! preset) and `__hasSlices`. Optimize to File Size… (`__optimizeOpen: true`) shows `__optimizeK` (the desired size in K),
 //! `__optimizeStart` (`current`, `auto`) and with slices `__optimizeUse` (`allSlices`,
 //! `eachSlice`, `currentSlice`); `__optimizeGo: true` runs `webExport.optimizeToFileSize` and
@@ -107,10 +110,10 @@ fn remembered(app: &VectorcraftApp) -> WebSettings {
 /// Reset (Cancel with Alt or Option held, or `ui.dialogReset`): the settings go back to the
 /// remembered ones on the document's active artboard ([`remembered`]), and a pending `preset`, a
 /// pending Done (`discard`, which a failed Done leaves), the preset name being typed and the
-/// selected color table entry are dropped. The view, zoom, connection speed and `path` stay,
+/// selected color table entries are dropped. The view, zoom, connection speed and `path` stay,
 /// nothing is remembered or written, and the dialog stays open.
 fn reset(app: &VectorcraftApp, d: &mut Dialog) -> Result<(), String> {
-    for key in ["preset", "discard", "__presetName", "__color"] {
+    for key in ["preset", "discard", "__presetName", "__color", "__colors"] {
         d.fields.remove(key);
     }
     d.fields.extend(settings_fields(&remembered(app)));
@@ -737,7 +740,12 @@ fn side(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, s: Option<&
         let format = s.map_or(WebFormat::Gif, |s| s.format);
         match format {
             WebFormat::Gif | WebFormat::Png8 => {
+                let reduction = d.str("reduction");
                 choice(ui, d, "reduction", tl!("Reduction:"), &pairs(&Reduction::ALL, Reduction::id, Reduction::label));
+                // Another reduction makes a new palette.
+                if d.str("reduction") != reduction {
+                    restore_table(d);
+                }
                 colors_row(ui, d);
                 choice(ui, d, "dither", tl!("Dither:"), &pairs(&Dither::ALL, Dither::id, Dither::label));
                 if Dither::from_id(&d.str("dither")).is_some_and(|x| x != Dither::None) {
@@ -765,7 +773,9 @@ fn side(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, s: Option<&
         choice(ui, d, "metadata", tl!("Metadata:"), &pairs(&WebMetadata::ALL, WebMetadata::key, WebMetadata::label));
         if format.palette() {
             widgets::divider(ui);
-            color_table(ui, d, s);
+            if let Err(e) = color_table(ui, d, s) {
+                app.status(e);
+            }
         }
         widgets::divider(ui);
         image_size(app, ui, d, s);
@@ -1043,10 +1053,13 @@ fn matte_row(ui: &mut egui::Ui, d: &mut Dialog) {
     });
 }
 
-/// The colour table of the current settings' preview: swatches (the selected one ringed; locked
-/// ones with a square, web-safe ones with a diamond, transparent ones over the grid) and the
-/// buttons that edit the selected colour, plus the sort order.
-fn color_table(ui: &mut egui::Ui, d: &mut Dialog, s: Option<&WebSettings>) {
+/// The colour table of the current settings' preview: swatches (the selected ones ringed; locked
+/// ones with a square, web-safe ones with a diamond, transparent ones over the grid), the buttons
+/// that edit the selected colour, Delete Color and the table's menu, plus the sort order. A click
+/// selects one color, a Shift-click the colors from the anchor, and a Ctrl-click
+/// (Command-click on macOS) adds or removes one. Returns an error for a deletion that would leave
+/// no color.
+fn color_table(ui: &mut egui::Ui, d: &mut Dialog, s: Option<&WebSettings>) -> Result<(), String> {
     let t = Tokens::get(ui.ctx());
     let cache: Option<Cache> = ui.ctx().data(|m| m.get_temp(cache_id()));
     let key = s.map(|s| s.to_json().to_string());
@@ -1054,10 +1067,20 @@ fn color_table(ui: &mut egui::Ui, d: &mut Dialog, s: Option<&WebSettings>) {
     let Some(shot) = shot else {
         widgets::subheader(ui, tl!("Color Table"));
         widgets::dim_label(ui, tl!("Shown with the optimised preview."));
-        return;
+        // A Custom table the preview can't use (a deletion that left only colors mapped to
+        // transparent) can still go back to the generated palette.
+        if s.is_some_and(|s| s.color_table.is_custom()) && widgets::flat_button_fit(ui, tl!("Restore Generated Table"), 88.0).clicked() {
+            restore_table(d);
+        }
+        return Ok(());
     };
+    let table = s.map(|s| s.color_table.clone()).unwrap_or_default();
     widgets::subheader(ui, &crate::i18n::tn(shot.colors.len() as u64, "Color Table ({n} color)", "Color Table ({n} colors)"));
+    if table.is_custom() {
+        widgets::dim_label(ui, tl!("Custom"));
+    }
     let selected = d.str("__color");
+    let picked = selection(d);
     // (colour shown, source, transparent, locked, web-safe, mapped by hand)
     let rows: Vec<(TableColor, bool)> = shot
         .colors
@@ -1069,6 +1092,9 @@ fn color_table(ui: &mut egui::Ui, d: &mut Dialog, s: Option<&WebSettings>) {
     let per_row = ((SIDE_W - 8.0) / (CELL + 2.0)).floor().max(1.0) as usize;
     let lines = rows.len().div_ceil(per_row).max(1);
     let (area, resp) = ui.allocate_exact_size(egui::vec2(SIDE_W - 8.0, lines as f32 * (CELL + 2.0)), egui::Sense::click());
+    // The colors that can be selected, in table order (for Shift-click ranges).
+    let order: Vec<String> = rows.iter().filter(|(c, mapped)| !c.transparent || *mapped).map(|(c, _)| hex(c.source)).collect();
+    let mut clicked = None;
     let p = ui.painter();
     for (i, (c, mapped)) in rows.iter().enumerate() {
         let r = egui::Rect::from_min_size(
@@ -1102,14 +1128,17 @@ fn color_table(ui: &mut egui::Ui, d: &mut Dialog, s: Option<&WebSettings>) {
         }
         // The transparent entry itself isn't a colour to edit.
         let pickable = !c.transparent || *mapped;
-        let picked = pickable && hex(c.source) == selected;
-        p.rect_stroke(r, 0.0, egui::Stroke::new(if picked { 2.0 } else { 1.0 }, if picked { t.accent } else { t.border }), egui::StrokeKind::Outside);
+        let ringed = pickable && picked.iter().any(|h| h.eq_ignore_ascii_case(&hex(c.source)));
+        p.rect_stroke(r, 0.0, egui::Stroke::new(if ringed { 2.0 } else { 1.0 }, if ringed { t.accent } else { t.border }), egui::StrokeKind::Outside);
         if pickable && resp.clicked() && resp.interact_pointer_pos().is_some_and(|pos| r.contains(pos)) {
-            d.fields.insert("__color".into(), json!(hex(c.source)));
+            clicked = Some(hex(c.source));
         }
     }
+    if let Some(c) = clicked {
+        let m = ui.input(|i| i.modifiers);
+        pick(d, &order, &c, m.shift, m.command);
+    }
     ui.add_space(4.0);
-    let table = s.map(|s| s.color_table.clone()).unwrap_or_default();
     let on = |list: &[String]| list.iter().any(|h| h.eq_ignore_ascii_case(&selected));
     ui.horizontal(|ui| {
         ui.add_enabled_ui(!selected.is_empty(), |ui| {
@@ -1130,6 +1159,23 @@ fn color_table(ui: &mut egui::Ui, d: &mut Dialog, s: Option<&WebSettings>) {
             }
         });
     });
+    // Delete Color (the button and the table's menu) and Restore Generated Table.
+    let (mut delete, mut restore) = (false, false);
+    ui.horizontal(|ui| {
+        delete |= widgets::icon_button_enabled(ui, "trash-2", tl!("Delete Color"), false, !picked.is_empty(), 24.0).clicked();
+        let menu = widgets::icon_button(ui, "menu", tl!("Color Table"), false, 24.0);
+        let open = menu.clicked();
+        let _ = widgets::popover(&menu, open, |ui| {
+            if widgets::menu_item(ui, tl!("Delete Color"), !picked.is_empty(), false) {
+                delete = true;
+                ui.close();
+            }
+            if widgets::menu_item(ui, tl!("Restore Generated Table"), table.is_custom(), false) {
+                restore = true;
+                ui.close();
+            }
+        });
+    });
     let sort = table.sort;
     widgets::label_row(ui, tl!("Order:"), LABEL_W, |ui| {
         let labels = ColorSort::ALL.map(ColorSort::label);
@@ -1139,6 +1185,118 @@ fn color_table(ui: &mut egui::Ui, d: &mut Dialog, s: Option<&WebSettings>) {
             set_table(d, "sort", json!(o.id()));
         }
     });
+    if restore {
+        restore_table(d);
+    }
+    if delete {
+        let palette: Vec<String> =
+            shot.colors.iter().filter(|c| !c.transparent).map(|c| hex(c.source)).chain(shot.mapped.iter().map(|c| hex(*c))).collect();
+        delete_colors(d, &palette)?;
+    }
+    Ok(())
+}
+
+/// The colour table's selected colors, by source: `__colors`, else `__color`.
+pub(super) fn selection(d: &Dialog) -> Vec<String> {
+    let many: Vec<String> =
+        d.fields.get("__colors").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str).map(str::to_ascii_lowercase).collect();
+    if !many.is_empty() {
+        return many;
+    }
+    let one = d.str("__color");
+    if one.is_empty() { vec![] } else { vec![one.to_ascii_lowercase()] }
+}
+
+/// A click on the table's color `color`: it alone is selected and becomes the anchor (`__color`);
+/// with `shift`, the colors from the anchor to it in table order (`order`), the anchor unchanged;
+/// with `command` (Ctrl, or Command on macOS), it is added to the selection and becomes the anchor,
+/// or taken out, and the anchor moves to the last color left in the selection.
+pub(super) fn pick(d: &mut Dialog, order: &[String], color: &str, shift: bool, command: bool) {
+    let color = color.to_ascii_lowercase();
+    let at = |c: &str| order.iter().position(|o| o.eq_ignore_ascii_case(c));
+    if shift && let (Some(a), Some(b)) = (at(&d.str("__color")), at(&color)) {
+        let range: Vec<String> = order[a.min(b)..=a.max(b)].iter().map(|c| c.to_ascii_lowercase()).collect();
+        d.fields.insert("__colors".into(), json!(range));
+        return;
+    }
+    let mut set = selection(d);
+    let anchor = if command {
+        match set.iter().position(|c| *c == color) {
+            Some(i) => {
+                set.remove(i);
+                set.last().cloned()
+            }
+            None => {
+                set.push(color.clone());
+                Some(color)
+            }
+        }
+    } else {
+        set = vec![color.clone()];
+        Some(color)
+    };
+    d.fields.insert("__colors".into(), json!(set));
+    match anchor {
+        Some(c) => d.fields.insert("__color".into(), json!(c)),
+        None => d.fields.remove("__color"),
+    };
+}
+
+/// Delete Color: the selected colors join the color table's `deleted` list and leave its other
+/// lists. The first deletion fixes the palette (`customPalette`) to `palette`, the table's colors
+/// (by source) with the deleted ones, so the colors left do not change. A deletion that leaves no
+/// color, or only colors mapped to transparent, is refused with nothing changed. The selection is
+/// cleared.
+pub(super) fn delete_colors(d: &mut Dialog, palette: &[String]) -> Result<(), String> {
+    let picked = selection(d);
+    if picked.is_empty() {
+        return Ok(());
+    }
+    let list = |d: &Dialog, key: &str| -> Vec<String> {
+        d.fields
+            .get("colorTable")
+            .and_then(|t| t.get(key))
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+            .map(str::to_ascii_lowercase)
+            .collect()
+    };
+    let mut custom = list(d, "customPalette");
+    if custom.is_empty() {
+        custom = palette.iter().map(|c| c.to_ascii_lowercase()).collect();
+    }
+    let mut deleted = list(d, "deleted");
+    for c in &picked {
+        if !deleted.contains(c) {
+            deleted.push(c.clone());
+        }
+    }
+    // A color has to stay that is neither deleted nor mapped to transparent.
+    let clear: Vec<String> = list(d, "transparent").into_iter().filter(|c| !picked.contains(c)).collect();
+    if custom.iter().all(|c| deleted.contains(c) || clear.contains(c)) {
+        return Err(webexport::KEEP_ONE.into());
+    }
+    for key in ["locked", "transparent", "webShift"] {
+        if list(d, key).iter().any(|c| picked.contains(c)) {
+            for c in &picked {
+                toggle(d, key, c, false);
+            }
+        }
+    }
+    set_table(d, "customPalette", json!(custom));
+    set_table(d, "deleted", json!(deleted));
+    d.fields.remove("__colors");
+    d.fields.remove("__color");
+    Ok(())
+}
+
+/// Restore Generated Table: no deleted colors and no fixed palette; the reduction makes the
+/// palette again.
+pub(super) fn restore_table(d: &mut Dialog) {
+    set_table(d, "deleted", json!([]));
+    set_table(d, "customPalette", json!([]));
 }
 
 /// Add `color` to the colour table's `list`, or take it out.
