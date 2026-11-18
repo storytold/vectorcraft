@@ -115,6 +115,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         .or_else(|| crate::edit_toolbar::command(app, id, p))
         .or_else(|| crate::custom_toolbars::command(app, id, p))
         .or_else(|| crate::panels::learn::command(app, id, p))
+        .or_else(|| crate::panels::discover::command(app, id, p))
     {
         return Some(r);
     }
@@ -261,6 +262,13 @@ fn run_ui_part2(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
                 app.session.execute(id, p).map_err(|e| e.to_string())
             })
         }
+        // Edit › Refresh Monitor Profile: the desktop app's next frame reads the display's profile.
+        "view.refreshMonitorProfile" => app.display_profile.request_read(app.session.prefs.monitor_profile_display).map(|()| {
+            if let Some(ctx) = &app.ui_ctx {
+                ctx.request_repaint();
+            }
+            json!({ "requested": true })
+        }),
         // Outline or Preview is a setting of the active document's view.
         "view.outline" => match app.view_mut() {
             Some(v) => flag(&mut v.outline),
@@ -679,7 +687,7 @@ fn run_ui_part6(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         },
         "window.newWindow" => crate::doc_windows::new_window(app),
         "window.arrange.cascade" => crate::doc_windows::cascade(app),
-        "window.arrange.tile" => crate::canvas::tile(app),
+        "window.arrange.tile" => crate::canvas::tile(app, p),
         "window.arrange.floatInWindow" => crate::doc_windows::float_in_window(app, p),
         "window.arrange.floatAllInWindows" => crate::doc_windows::float_all(app),
         "window.arrange.consolidateAllWindows" if p.get("index").is_some_and(|i| !i.is_null()) => crate::doc_windows::dock(app, p),
@@ -801,6 +809,7 @@ fn run_ui_part7(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         }
         "ui.newBrush" => crate::dialogs::new_brush::open(app, p.get("ids").cloned()),
         "ui.brushOptions" => crate::dialogs::brush_options::open(app, s("name").as_deref()),
+        "ui.brushObjectOptions" => crate::dialogs::brush_options::open_object(app),
         "tool.options" => crate::toolbar::open_options(app, &s("tool").unwrap_or_default()),
         _ => return None,
     };
@@ -872,6 +881,7 @@ fn run_ui_part9(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         }
         "ui.imageTracePresetDialog" => crate::dialogs::trace_presets::open(app, p),
         "ui.flattenerPreview" => crate::panels::flattener_preview::command(app, p),
+        "ui.foldPreview" => crate::addons::packaging::preview::command(app, p),
         "ui.copyScriptConsole" => crate::panels::script_console::copy(app, p),
         "window.graphicStyleLibrary" => crate::panels::graphic_styles::open_library(app, p),
         "ui.libraryPanel" => crate::panels::library_panel::command(app, p),
@@ -955,6 +965,7 @@ fn run_ui_part10(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
         "ui.colorGuideLimit" => crate::panels::color_guide::set_limit(app, p),
         "ui.colorPanel" => crate::panels::color::command(app, p),
         "ui.colorRgbPercent" => crate::panels::color::rgb_percent_command(app, p),
+        "ui.colorWheel" => crate::panels::color_wheel::command(app, p),
         "ui.savePdfDialog" => crate::dialogs::open_save_pdf(app, p),
         "file.exportAs" if s("path").is_none() => {
             crate::dialogs::open_export_as(app, s("format").as_deref(), p);

@@ -17,6 +17,7 @@ pub mod color_guide;
 pub mod color_themes;
 pub mod color_wheel;
 pub mod css_properties;
+pub mod discover;
 pub mod doc_info;
 pub mod flattener_preview;
 pub mod glyphs;
@@ -192,9 +193,11 @@ pub fn show_icon_panel(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
         three_d::ID => three_d::show(app, ui),
         script_console::ID => script_console::show(app, ui),
         learn::ID => learn::show(app, ui),
+        discover::ID => discover::show(app, ui),
         crate::addons::cleanup::ID => crate::addons::cleanup::show(app, ui),
         crate::addons::color::ID => crate::addons::color::show(app, ui),
         crate::addons::packaging::ID => crate::addons::packaging::show(app, ui),
+        crate::addons::packaging::preview::ID => crate::addons::packaging::preview::show(app, ui),
         crate::addons::pathtools::ID => crate::addons::pathtools::show(app, ui),
         crate::addons::pathtools::shape::ID => crate::addons::pathtools::shape::show(app, ui),
         crate::addons::pen::ID => crate::addons::pen::show(app, ui),
@@ -244,6 +247,7 @@ pub fn panel_menu_items(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) -> bool
         "attributes" => attributes::menu(app, ui),
         svg_interactivity::ID => svg_interactivity::menu(app, ui),
         "colorThemes" => color_themes::menu(app, ui),
+        color_wheel::ID => color_wheel::menu(app, ui),
         "layers" => layers::menu(app, ui),
         links::ID => links::menu(app, ui),
         asset_export::ID => asset_export::menu(app, ui),
@@ -801,6 +805,8 @@ mod tests_blend;
 mod tests_brush_libraries;
 #[cfg(test)]
 mod tests_color_wheel;
+#[cfg(test)]
+mod tests_color_wheel_box;
 #[cfg(test)]
 mod tests_constrain;
 #[cfg(test)]

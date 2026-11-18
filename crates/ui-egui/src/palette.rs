@@ -20,6 +20,7 @@ const WRAPPED: &[(&str, &str)] = &[
     ("layer.delete", "ui.layerDelete"),
     ("brush.new", "ui.newBrush"),
     ("brush.options", "ui.brushOptions"),
+    ("brush.objectOptions", "ui.brushObjectOptions"),
     ("symbol.options", "ui.symbolOptions"),
     ("svgFilter.import", "ui.importSvgFilter"),
     ("text.convertListToText", "type.convertListToText"),
@@ -563,8 +564,9 @@ pub(crate) fn recent_list_open(ctx: &egui::Context) -> bool {
 
 pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     // The widget that had the keyboard focus when the palette opened takes it back when the palette
-    // closes, unless a pick opened a dialog, which focuses its own first field, or the press that
-    // closed it focused another widget, such as a field in a window above the backdrop.
+    // closes, unless a modal window is up (a pick opened a dialog, which focuses its own first
+    // field, or a window that opened closed the palette), or the press that closed it focused
+    // another widget, such as a field in a window above the backdrop.
     let focus_id = egui::Id::unique("palette-focus-before");
     let field_id = egui::Id::unique("palette-field");
     if !app.ui.palette_open {
@@ -575,7 +577,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         });
         let now = ctx.memory(|m| m.focused());
         if let Some(Some(before)) = ctx.data_mut(|d| d.remove_temp::<Option<egui::Id>>(focus_id))
-            && app.ui.dialog.is_none()
+            && !crate::panel_docking::modal_window_up(app, ctx)
             && (now.is_none() || now == field)
         {
             ctx.memory_mut(|m| m.request_focus(before));
@@ -2302,6 +2304,38 @@ mod tests {
         assert!(labels(&nodes).contains(&footer(n, n)), "{:?}", labels(&nodes));
     }
 
+    /// When a modal window that is not a dialog, such as the About window, closes the palette, the
+    /// widget under the window's backdrop does not get the keyboard focus back.
+    #[test]
+    fn a_modal_window_that_closes_the_palette_keeps_the_focus_from_the_widget_under_it() {
+        let ctx = egui::Context::default();
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+        let mut text = String::new();
+        let field = egui::Id::unique("other field");
+        let mut frame = |app: &mut VectorcraftApp, focus: bool| {
+            ctx.run_ui(egui::RawInput::default(), |ui| {
+                let r = ui.add(egui::TextEdit::singleline(&mut text).id(field));
+                if focus {
+                    r.request_focus();
+                }
+                show(app, ui.ctx());
+            })
+            .textures_delta
+            .clear();
+        };
+        frame(&mut app, true);
+        frame(&mut app, false);
+        app.ui.palette_open = true;
+        frame(&mut app, false);
+        frame(&mut app, false);
+        // As `panel_docking::close_overlays_for_modal` does when the About window opens.
+        app.ui.about = true;
+        app.ui.palette_open = false;
+        frame(&mut app, false);
+        frame(&mut app, false);
+        assert_ne!(ctx.memory(|m| m.focused()), Some(field), "the field under the About window does not take the focus");
+    }
+
     /// The widget that had the keyboard focus when the palette opened has it again once the
     /// palette closes.
     #[test]
@@ -2397,6 +2431,9 @@ mod tests {
         /// app, as a progress window is drawn, and count its clicks.
         above: Option<egui::Pos2>,
         above_clicks: usize,
+        /// Draw a modal window over the backdrop before the app's windows, as a progress window
+        /// of a plug-in, trace or open run is drawn.
+        progress: bool,
     }
 
     impl Window {
@@ -2408,7 +2445,7 @@ mod tests {
             assert!(!app.session.doc().unwrap().selection.is_empty());
             let ctx = egui::Context::default();
             ctx.enable_accesskit();
-            let mut window = Window { app, ctx, time: 0.0, above: None, above_clicks: 0 };
+            let mut window = Window { app, ctx, time: 0.0, above: None, above_clicks: 0, progress: false };
             window.frame(vec![]);
             window.frame(vec![]);
             window
@@ -2420,9 +2457,13 @@ mod tests {
             let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, WINDOW);
             let input = egui::RawInput { time: Some(self.time), screen_rect: Some(screen), events, ..Default::default() };
             let app = &mut self.app;
-            let (above, clicks) = (self.above, &mut self.above_clicks);
+            let (above, clicks, progress) = (self.above, &mut self.above_clicks, self.progress);
             let mut out = self.ctx.run_ui(input, |ui| {
                 app.logic(ui.ctx());
+                if progress {
+                    let id = egui::Id::unique("test-progress");
+                    crate::dialogs::modal::show_at(ui.ctx(), "Progress", id, egui::Vec2::ZERO, 12, |ui| ui.label("Working"));
+                }
                 app.ui(ui);
                 if let Some(at) = above {
                     let area = egui::Area::new(egui::Id::unique("test-above")).order(egui::Order::Foreground).fixed_pos(at);
@@ -2492,6 +2533,150 @@ mod tests {
         assert!(!window.app.ui.palette_open, "the click outside closes the palette");
         window.frame(vec![]);
         assert_eq!(window.selection(), before, "the click does not reach the canvas");
+    }
+
+    /// #7906: a pick in the macOS menu bar that opens a dialog closes the palette, and the search
+    /// field does not keep the keyboard from the dialog.
+    #[test]
+    fn a_dialog_opened_from_the_system_menu_closes_the_palette() {
+        let mut window = Window::new();
+        window.app.ui.palette_open = true;
+        window.frame(vec![]);
+        window.frame(vec![]);
+        let field = window.ctx.data(|d| d.get_temp::<egui::Id>(egui::Id::unique("palette-field"))).expect("the search field is drawn");
+        assert_eq!(window.ctx.memory(|m| m.focused()), Some(field), "the search field has the keyboard");
+        menus::invoke_from_system_menu(&mut window.app, &window.ctx, "object.move", json!({}));
+        assert!(window.app.ui.dialog.is_some(), "Move… opens its dialog: {}", window.app.ui.status);
+        window.frame(vec![]);
+        assert!(!window.app.ui.palette_open, "the dialog closes the palette");
+        window.frame(vec![]);
+        assert!(window.app.ui.dialog.is_some(), "the dialog stays open");
+        assert_ne!(window.ctx.memory(|m| m.focused()), Some(field), "the search field does not keep the keyboard");
+    }
+
+    /// #7906: with the palette open, the About window that opens without a press closes the palette.
+    #[test]
+    fn the_about_window_closes_the_palette() {
+        let mut window = Window::new();
+        window.app.ui.palette_open = true;
+        window.frame(vec![]);
+        menus::invoke_from_system_menu(&mut window.app, &window.ctx, "help.about", json!({}));
+        assert!(window.app.ui.about, "About opens");
+        window.frame(vec![]);
+        assert!(!window.app.ui.palette_open, "the About window closes the palette");
+    }
+
+    /// #7906: a window drawn over the modal backdrop, as a plug-in, trace or open run's progress
+    /// window is, closes the palette in the pass it first draws.
+    #[test]
+    fn a_progress_window_closes_the_palette() {
+        let mut window = Window::new();
+        window.app.ui.palette_open = true;
+        window.frame(vec![]);
+        assert!(window.app.ui.palette_open, "the palette is open");
+        window.progress = true;
+        window.frame(vec![]);
+        assert!(!window.app.ui.palette_open, "the progress window closes the palette");
+    }
+
+    /// #7906: the palette opened from the macOS menu bar while a dialog is open closes again, and its
+    /// search field does not take the keyboard from the dialog.
+    #[test]
+    fn the_palette_opened_over_a_dialog_closes() {
+        let mut window = Window::new();
+        menus::invoke(&mut window.app, "object.move", json!({}));
+        assert!(window.app.ui.dialog.is_some(), "Move… opens its dialog: {}", window.app.ui.status);
+        window.frame(vec![]);
+        window.frame(vec![]);
+        let before = window.ctx.memory(|m| m.focused());
+        menus::invoke_from_system_menu(&mut window.app, &window.ctx, "help.commandPalette", json!({}));
+        assert!(window.app.ui.palette_open, "the command opens the palette");
+        window.frame(vec![]);
+        window.frame(vec![]);
+        assert!(!window.app.ui.palette_open, "the dialog keeps the palette closed");
+        assert!(window.app.ui.dialog.is_some(), "the dialog stays open");
+        let field = window.ctx.data(|d| d.get_temp::<egui::Id>(egui::Id::unique("palette-field")));
+        let now = window.ctx.memory(|m| m.focused());
+        assert!(field.is_none() || now != field, "the search field does not take the keyboard");
+        assert_eq!(now, before, "the dialog keeps its focus");
+    }
+
+    /// #7906 as reported: with the palette open, a click on the Effect menu in the window's menu bar
+    /// closes the palette, and a dialog opened afterwards is not under it.
+    #[test]
+    fn a_click_on_the_menu_bar_closes_the_palette_before_a_dialog_opens() {
+        let mut window = Window::new();
+        window.app.ui.palette_open = true;
+        let nodes = window.frame(vec![]);
+        window.click(button_at(&nodes, "Effect"));
+        assert!(!window.app.ui.palette_open, "the click on the menu bar closes the palette");
+        menus::invoke(&mut window.app, "object.move", json!({}));
+        assert!(window.app.ui.dialog.is_some(), "Move… opens its dialog: {}", window.app.ui.status);
+        window.frame(vec![]);
+        window.frame(vec![]);
+        assert!(!window.app.ui.palette_open, "the palette stays closed over the dialog");
+    }
+
+    /// Opens `overlay` ("flyout", "drawer" or "menu") in a new window, then opens Move… without a
+    /// press, as the macOS menu bar or an automation command does: whether the overlay is still open.
+    fn overlay_open_after_a_dialog_opens(overlay: &str) -> bool {
+        let mut window = Window::new();
+        match overlay {
+            "flyout" => {
+                window.app.ui.flyout = Some(0);
+                let tools = vec!["rectangle".to_string(), "ellipse".to_string()];
+                window.ctx.data_mut(|d| d.insert_temp(egui::Id::unique("flyout-tools"), tools));
+            }
+            "drawer" => window.app.ui.tools_drawer = true,
+            _ => {
+                let nodes = window.frame(vec![]);
+                window.click(button_at(&nodes, "Object"));
+            }
+        }
+        window.frame(vec![]);
+        let open = |w: &Window| w.app.ui.flyout.is_some() || w.app.ui.tools_drawer || egui::Popup::is_any_open(&w.ctx);
+        assert!(open(&window), "the {overlay} is open");
+        menus::invoke(&mut window.app, "object.move", json!({}));
+        assert!(window.app.ui.dialog.is_some(), "Move… opens its dialog: {}", window.app.ui.status);
+        window.frame(vec![]);
+        open(&window)
+    }
+
+    /// #7906: a dialog that opens without a press closes a tool group's flyout.
+    #[test]
+    fn a_dialog_opened_without_a_press_closes_a_flyout() {
+        assert!(!overlay_open_after_a_dialog_opens("flyout"), "the dialog closes the flyout");
+    }
+
+    /// #7906: a dialog that opens without a press closes the All Tools drawer.
+    #[test]
+    fn a_dialog_opened_without_a_press_closes_the_tools_drawer() {
+        assert!(!overlay_open_after_a_dialog_opens("drawer"), "the dialog closes the drawer");
+    }
+
+    /// #7906: a dialog that opens without a press closes an open menu.
+    #[test]
+    fn a_dialog_opened_without_a_press_closes_a_menu() {
+        assert!(!overlay_open_after_a_dialog_opens("menu"), "the dialog closes the menu");
+    }
+
+    /// The palette opened in the pass after a dialog closes stays open, and the next dialog to open,
+    /// one pass later, closes it.
+    #[test]
+    fn the_palette_opened_as_a_dialog_closes_stays_open_until_the_next_dialog() {
+        let mut window = Window::new();
+        menus::invoke(&mut window.app, "object.move", json!({}));
+        assert!(window.app.ui.dialog.is_some(), "Move… opens its dialog: {}", window.app.ui.status);
+        window.frame(vec![]);
+        window.frame(vec![]);
+        crate::dialogs::cancel(&mut window.app);
+        window.app.ui.palette_open = true;
+        window.frame(vec![]);
+        assert!(window.app.ui.palette_open, "the palette stays open");
+        menus::invoke(&mut window.app, "object.move", json!({}));
+        assert!(window.app.ui.dialog.is_some(), "Move… opens its dialog again: {}", window.app.ui.status);
+        window.frame(vec![]);
+        assert!(!window.app.ui.palette_open, "the next dialog closes the palette");
     }
 
     /// A click on another control outside the popup closes the popup and does not press the

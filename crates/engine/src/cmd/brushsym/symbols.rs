@@ -612,6 +612,8 @@ pub(super) fn symbol_update(s: &mut Session, p: &Value) -> Result<Value> {
     }
     // Redefining the symbol being edited leaves symbol editing mode in the same step.
     let session = s.doc()?.doc.symbol_edit.clone().filter(|e| e.symbol == name);
+    // `keepArt` leaves the art as ordinary art instead of replacing it with an instance.
+    let keep_art = switch_or(p, "keepArt", false, C)?;
     if session.is_some() {
         crate::cmd::settle_interaction(s)?;
         s.end_text_edit();
@@ -625,10 +627,20 @@ pub(super) fn symbol_update(s: &mut Session, p: &Value) -> Result<Value> {
         }
     }
     let mut art = selection_art(s, p)?.ok_or_else(|| EngineError::Other("nothing selected".into()))?;
+    // Nor can art that holds an instance of it, directly or through the symbols it nests.
+    if crate::cmd::symboledit::holds_symbol(&s.doc()?.doc, &art, &name, &mut Default::default()) {
+        return Err(EngineError::Other("a symbol can't hold an instance of itself".into()));
+    }
     crate::cmd::threads::keep_shown_text(&s.doc()?.doc, &mut art);
     let (art, size, c) = normalize(art)?;
     let old = natural_size(&s.doc()?.doc, &name);
     let editing = session.is_some();
+    // The isolation the kept art is selected in: the one from before symbol editing mode when
+    // the step leaves it.
+    let iso = match &session {
+        Some(se) => se.back_isolation,
+        None => s.doc()?.isolation,
+    };
     let id = s.edit("Redefine Symbol", |d, sel| {
         if editing {
             crate::cmd::symboledit::finish(d, sel);
@@ -647,15 +659,22 @@ pub(super) fn symbol_update(s: &mut Session, p: &Value) -> Result<Value> {
         }
         // Each instance keeps its appearance changes to the objects the new art still has.
         fit_overrides(d, &instances);
+        if keep_art {
+            // The art stays where it is and stays selected, apart from art that is hidden or
+            // locked, in a hidden or locked group or layer, or on a locked artboard.
+            let locks = d.locked_artboards();
+            sel.set(ids.iter().copied().filter(|i| crate::cmd::select::is_selectable(d, iso, &locks, *i)));
+            return Ok(None);
+        }
         let reg = d.symbol_registration(&name);
         let id = instance_in_place(d, &ids, &name, place_xf(c + reg.offset_from_center(size.0, size.1), size, reg))?;
         sel.set([id]);
-        Ok(id)
+        Ok(Some(id))
     })?;
     if let Some(se) = &session {
         crate::cmd::symboledit::leave_editing(s, se)?;
     }
-    Ok(json!({ "name": name, "id": id.0 }))
+    Ok(json!({ "name": name, "id": id.map(|i| i.0) }))
 }
 
 /// How many levels of nested instances Delete Symbol expands before it gives up.

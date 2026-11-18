@@ -507,6 +507,56 @@ fn a_form_drawn_many_times_reads_its_font_resources_once() {
     assert_eq!(walk.fonts.len(), 1);
 }
 
+/// A Type 3 font that every page lists in a font dictionary of its own, and a form lists in its
+/// resources, has its glyph procedures read once for the document. Each page still maps the font's
+/// glyphs, and the font whose glyphs set their own color (`d0`) is told from the one whose glyphs
+/// don't (`d1`).
+#[test]
+fn a_type3_font_on_every_page_has_its_glyph_procedures_read_once() {
+    const PAGES: usize = 6;
+    let n = first_extra(PAGES);
+    let (shape, color, shape_a, shape_b, color_a, form) = (n, n + 1, n + 2, n + 3, n + 4, n + 5);
+    let font = |name: &str, procs: &str| {
+        format!(
+            "<< /Type /Font /Subtype /Type3 /Name /{name} /FontBBox [0 0 1000 1000] /FontMatrix [0.001 0 0 0.001 0 0] /CharProcs << {procs} >> /Encoding << /Type /Encoding /Differences [97 /a /b] >> /FirstChar 97 /LastChar 98 /Widths [1000 1000] /Resources << >> >>"
+        )
+    };
+    let objects = [
+        font("Vcshape", &format!("/a {shape_a} 0 R /b {shape_b} 0 R")),
+        font("Vccolor", &format!("/a {color_a} 0 R /b {color_a} 0 R")),
+        stream("", "1000 0 0 0 1000 1000 d1 0 0 1000 1000 re f"),
+        stream("", "1000 0 0 0 1000 1000 d1 0 0 500 500 re f"),
+        stream("", "1000 0 d0 1 0 0 rg 0 0 1000 1000 re f"),
+        stream(
+            &format!("/Type /XObject /Subtype /Form /BBox [0 0 100 100] /Resources << /Font << /C {color} 0 R /S {shape} 0 R >> >>"),
+            "BT /S 12 Tf (ab) Tj /C 12 Tf (ab) Tj ET",
+        ),
+    ];
+    let pages: Vec<PdfPage> = (0..PAGES)
+        .map(|_| PdfPage {
+            resources: format!("/Font << /S {shape} 0 R /C {color} 0 R >> /XObject << /X0 {form} 0 R >>"),
+            ..PdfPage::new(100.0, 100.0, "BT /S 24 Tf 10 30 Td (ab) Tj /C 24 Tf (ab) Tj ET /X0 Do")
+        })
+        .collect();
+    let extra: Vec<&str> = objects.iter().map(String::as_str).collect();
+    let pdf = craft_pdf::syntax::Pdf::new(pdf_with(&pages, &extra, None)).unwrap();
+    let mut fonts = crate::import_scan::FontNames::new();
+    let mut ocgs = crate::import_scan::Ocgs::read(&pdf);
+    crate::import_scan::TEST_CHARPROC_DECODES.with(|d| d.set(0));
+    for page in pdf.pages().iter() {
+        let scan = crate::import_scan::scan_page(page, &mut ocgs, false, &mut fonts, pdf.decode_limits().max_decoded_stream()).unwrap();
+        let mapped: std::collections::HashSet<(u128, bool)> = scan.type3_cache_map.values().copied().collect();
+        let noted: std::collections::HashSet<(u128, bool)> = fonts.keys().map(|k| (*k, false)).collect();
+        assert_eq!(scan.type3_cache_map.len(), 2 * 257);
+        assert_eq!(mapped, noted);
+        let mut colors: Vec<(String, bool)> = fonts.values().map(|f| (f.name.clone(), f.is_colour)).collect();
+        colors.sort();
+        assert_eq!(colors, [("Vccolor".to_string(), true), ("Vcshape".to_string(), false)]);
+    }
+    // The `d1` font's two procedures and the `d0` font's one.
+    assert_eq!(crate::import_scan::TEST_CHARPROC_DECODES.with(std::cell::Cell::get), 3);
+}
+
 /// A value of the page's font dictionary that the reader can't parse (a name with a broken `#`
 /// escape, a number with a stray `-`) is left out when the page's fonts are noted, and the fonts
 /// after it are noted.

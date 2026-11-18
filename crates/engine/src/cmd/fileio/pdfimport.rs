@@ -222,6 +222,13 @@ fn page_options(page: usize, o: &LoadOptions) -> ImportOptions {
     ImportOptions { pages: Some(vec![page]), crop: o.crop, password: o.password.clone(), text_as: o.text_as, layers: false, ..Default::default() }
 }
 
+/// Whether `document.open`'s `linkPages` takes the file `name` holding `bytes`: a PDF or a
+/// PDF-compatible `.ai` or `.ait` of at most [`document::MAX_FILE`] bytes. Its path, a password
+/// and `textAs` are checked apart ([`linked_pages`]).
+pub fn pages_can_link(name: &str, bytes: &[u8]) -> bool {
+    bytes.len() <= document::MAX_FILE && document::is_pdf(name, bytes)
+}
+
 /// `document.open` with `linkPages`: the pages `o` picks of the PDF (or PDF-compatible `.ai` or
 /// `.ait`) `name`, read from `path`, as a document holding one placed document per page, linked to
 /// that page of the file as File › Place with Link places one ([`document::source`]). Each page

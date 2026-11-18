@@ -238,7 +238,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move Guide",
             [],
             None,
-            "{index, pos: pt} | {dx?, dy?: pt, copy?: bool} put ruler guide `index` at `pos`, or move the selected guides (vertical ones by dx, horizontal ones by dy); copy leaves them and selects the moved copies",
+            "{index, pos: pt} | {dx?, dy?: pt, copy?: bool, interpolate?: bool (with art selected too: as object.move's)} put ruler guide `index` at `pos`, or move the selected guides (vertical ones by dx, horizontal ones by dy); copy leaves them and selects the moved copies",
             guides_unlocked,
             guide_move
         ),
@@ -990,6 +990,7 @@ pub(crate) fn guide_move(s: &mut Session, p: &Value) -> Result<Value> {
     let dx = number_or(p, "dx", 0.0, "guide.move")?;
     let dy = number_or(p, "dy", 0.0, "guide.move")?;
     let copy = switch_or(p, "copy", false, "guide.move")?;
+    switch_or(p, "interpolate", false, "guide.move")?;
     if !s.doc()?.selection.is_empty() {
         let ids = super::edit::selected_roots(s)?;
         return super::object::apply_transform(
