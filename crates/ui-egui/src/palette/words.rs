@@ -91,6 +91,27 @@ pub(crate) fn row_problems(source: &str, text: &str) -> Vec<String> {
     problems
 }
 
+/// What is wrong with one catalog's `search` rows, each a group's `source` and its translation
+/// `text`: each row's [`row_problems`], and a word that rows add to two different groups.
+#[cfg(test)]
+pub(crate) fn catalog_problems<'a>(rows: impl IntoIterator<Item = (&'a str, &'a str)>) -> Vec<String> {
+    let mut problems = vec![];
+    let mut groups: std::collections::HashMap<String, &str> = std::collections::HashMap::new();
+    for (source, text) in rows {
+        problems.extend(row_problems(source, text));
+        for (w, _) in row_words(text).filter(|(_, single)| *single) {
+            match groups.get(w.as_str()) {
+                Some(&first) if first != source => problems.push(format!("{w:?} is a word of {first:?} and {source:?}")),
+                Some(_) => {}
+                None => {
+                    groups.insert(w, source);
+                }
+            }
+        }
+    }
+    problems
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -121,5 +142,17 @@ mod tests {
         assert_eq!(row_problems("remove, delete, erase, clear", "entfernen,, löschen").len(), 1, "an empty word");
         assert_eq!(row_problems("remove, delete, erase, clear", "ganz entfernen").len(), 1, "two words");
         assert_eq!(row_problems("remove, delete, erase, clear", "Text").len(), 1, "a word of another group once lowercased");
+    }
+
+    /// A catalog's rows fail when they add one word to two groups, and pass when a word is repeated
+    /// for one group or the catalog has no rows.
+    #[test]
+    fn a_word_in_two_groups_of_a_catalog_is_checked() {
+        let (remove, artboard) = ("remove, delete, erase, clear", "artboard, canvas");
+        let problems = catalog_problems([(remove, "retrait"), (artboard, "plan, Retrait")]);
+        assert_eq!(problems.len(), 1, "{problems:?}");
+        assert!(problems.iter().all(|p| p.contains("retrait") && p.contains(remove) && p.contains(artboard)), "{problems:?}");
+        assert!(catalog_problems([(remove, "retrait, retrait"), (remove, "Retrait"), (artboard, "plan")]).is_empty());
+        assert!(catalog_problems([]).is_empty());
     }
 }
