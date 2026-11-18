@@ -25,8 +25,8 @@ pub(crate) use source::{resolve, resolve_for};
 
 pub(crate) mod graphics;
 pub use graphics::{
-    GRAPHICS, GraphicFrame, MAX_GRAPHICS, MappedGraphic, graphic_symbols, mapped_graphics, missing_symbol, names_graphic_symbol,
-    rename_graphic_symbol, rename_graphic_symbol_in, takes_graphics, with_graphic,
+    GRAPHICS, GraphicFrame, MAX_GRAPHICS, MappedGraphic, MeshGraphics, graphic_symbols, mapped_graphics, mesh_graphics_art, missing_symbol,
+    names_graphic_symbol, rename_graphic_symbol, rename_graphic_symbol_in, takes_graphics, with_graphic,
 };
 pub use graphics::{
     MAX_OFFSET as GRAPHIC_MAX_OFFSET, NOT_TAKEN as GRAPHICS_NOT_TAKEN, SCALE_RANGE as GRAPHIC_SCALE_RANGE, appearance_graphic_symbols,
@@ -2322,6 +2322,71 @@ pub struct SolidMesh {
     /// The paint's display color (sRGB, 0..1) and its opacity: a gradient's stops averaged, gray
     /// for a pattern.
     pub color: [f32; 4],
+    /// The graphics mapped onto the mesh when it is the part of a solid's planar face that carries
+    /// some ([`split_graphics`]); `None` otherwise.
+    pub graphics: Option<MeshGraphics>,
+}
+
+impl SolidMesh {
+    /// A mesh painted `color`, with no graphics.
+    pub fn plain(mesh: Mesh, color: [f32; 4]) -> Self {
+        Self { mesh, color, graphics: None }
+    }
+}
+
+/// The parts of `mesh`, a solid that 3D effect `id` with parameters `p` built about `bounds`, painted
+/// `color` from a fill or stroke at `opacity`: for each planar face that carries graphics (Extrude &
+/// Bevel's caps, the plane), the triangles on it as a mesh of their own with the art point of each
+/// corner ([`MeshGraphics`]), then the rest. Revolve's side, whose graphics are not mapped onto its
+/// mesh, stays plain.
+fn split_graphics(id: &str, p: &Value, bounds: Rect, mesh: Mesh, (color, opacity): ([f32; 4], f32)) -> Vec<SolidMesh> {
+    let list = graphics::mapped_graphics(p);
+    if list.is_empty() || !takes_graphics(id) || id == crate::REVOLVE {
+        return vec![SolidMesh::plain(mesh, color)];
+    }
+    let view = view_options(p);
+    let mut rest = mesh;
+    let mut out = vec![];
+    for face in PlanarFace::ALL {
+        if !list.iter().any(|g| g.face == face) {
+            continue;
+        }
+        let on_mesh = if id == ROTATE {
+            vectorcraft_three_d::plane_mesh_face(bounds, view)
+        } else {
+            vectorcraft_three_d::extrude_mesh_face(bounds, extrude_options(p), view, face)
+        };
+        let Some(on_mesh) = on_mesh else { continue };
+        let (mut taken, mut left, mut art) = (Mesh::default(), Mesh::default(), vec![]);
+        for t in &rest.triangles {
+            let corner = |i: u32| rest.positions.get(i as usize).copied().zip(rest.normals.get(i as usize).copied());
+            let Some(corners) = t.iter().map(|&i| corner(i)).collect::<Option<Vec<_>>>() else { continue };
+            let points: Option<Vec<Point>> = corners.iter().map(|(m, n)| on_mesh.art_point(*m, *n)).collect();
+            let into = match points {
+                Some(points) => {
+                    art.extend(points);
+                    &mut taken
+                }
+                None => &mut left,
+            };
+            let base = into.positions.len() as u32;
+            for (m, n) in corners {
+                into.positions.push(m);
+                into.normals.push(n);
+            }
+            into.triangles.push([base, base + 1, base + 2]);
+        }
+        rest = left;
+        if !taken.is_empty() {
+            let graphics = list.iter().filter(|g| g.face == face).cloned().collect();
+            let graphics = MeshGraphics { face, graphics, center: bounds.center(), art, opacity, object: 1.0 };
+            out.push(SolidMesh { mesh: taken, color, graphics: Some(graphics) });
+        }
+    }
+    if !rest.is_empty() {
+        out.insert(0, SolidMesh::plain(rest, color));
+    }
+    out
 }
 
 /// The color a mesh of `paint` at `opacity` takes ([`SolidMesh::color`]).
@@ -2363,13 +2428,18 @@ fn meshes_for(fx: &Effect, shapes: &[Profile], total: &mut usize, limit: usize) 
     let p = crate::merged_params(&fx.id, &fx.params);
     let view = view_options(&p);
     let mut out = vec![];
-    let mut keep = |out: &mut Vec<SolidMesh>, mesh: Mesh, color: [f32; 4]| keep_mesh(out, total, SolidMesh { mesh, color }, limit);
+    // A solid's parts with and without graphics count together against the limit.
+    let mut keep = |out: &mut Vec<SolidMesh>, mesh: Mesh, (paint, opacity): (&Paint, f32), bounds: Rect| {
+        split_graphics(&fx.id, &p, bounds, mesh, (mesh_color(paint, opacity), opacity))
+            .into_iter()
+            .try_for_each(|part| keep_mesh(out, total, part, limit))
+    };
     if is_plane(&fx.id) {
         for s in shapes {
             for item in &s.items {
                 let (paint, opacity, _) = paint_of(item, s.opacity);
                 let (area, rule) = region(&s.path, s.rule, item);
-                keep(&mut out, vectorcraft_three_d::plane_mesh(&area, rule, b, view)?, mesh_color(&paint, opacity))?;
+                keep(&mut out, vectorcraft_three_d::plane_mesh(&area, rule, b, view)?, (&paint, opacity), b)?;
             }
         }
         return Ok(out);
@@ -2406,7 +2476,7 @@ fn meshes_for(fx: &Effect, shapes: &[Profile], total: &mut usize, limit: usize) 
         match solid.mesh() {
             Ok(mesh) => {
                 let (paint, opacity, _) = paint_of(item, *member);
-                keep(&mut out, mesh, mesh_color(&paint, opacity))?;
+                keep(&mut out, mesh, (&paint, opacity), bounds)?;
             }
             Err(_) if matches!(item, AppearanceItem::Stroke(_)) => {}
             Err(e) => return Err(e),
@@ -2494,6 +2564,9 @@ fn meshes_within(doc: Option<&Document>, n: &Node, total: &mut usize, limit: usi
         .filter(|m| !m.mesh.is_empty())
         .map(|mut m| {
             m.color[3] *= n.opacity.clamp(0.0, 1.0);
+            if let Some(g) = &mut m.graphics {
+                g.object *= n.opacity.clamp(0.0, 1.0);
+            }
             m
         })
         .collect();
