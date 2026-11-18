@@ -1027,3 +1027,34 @@ fn review_followup_preset_off_cancels_sampler_but_enhanced_on_keeps_it() {
     assert_eq!(settings(&app)["preset"], "High Fidelity Photo", "the following opaque canvas click cannot turn the off preset into Custom");
     assert_eq!(settings(&app)["params"], expected, "the hidden pick cannot replace the off preset's ignored color");
 }
+
+#[test]
+fn review_followup_release_position_survives_a_later_hover_move() {
+    let (mut app, ctx, point, group) = review_gesture_group_fixture();
+    click_control(&mut app, &ctx, SAMPLE_TIP);
+    app.run("select.none", json!({})).unwrap();
+    let at = review_gesture_screen(&app, &ctx, point);
+    let hover = at + vec2(80.0, 0.0);
+    assert!(app.canvas_rect.unwrap().contains(hover));
+    assert!(at.distance(hover) > ctx.options(|o| o.input_options.max_click_dist));
+    let expected = review_gesture_state(&app);
+    let (start, step) = review_gesture_times(&ctx);
+    review_gesture_press(&mut app, &ctx, at, start);
+    review_gesture_release(&mut app, &ctx, at, start + step);
+    assert_eq!(review_gesture_state(&app), expected, "the stale prefix is consumed");
+    review_gesture_press(&mut app, &ctx, at, start + 3.0 * step);
+    frame_at(
+        &mut app,
+        &ctx,
+        start + 4.0 * step,
+        vec![Event::PointerButton { pos: at, button: PointerButton::Primary, pressed: false, modifiers: Default::default() }, Event::PointerMoved(hover)],
+    );
+    assert!(ctx.input(|i| i.pointer.button_double_clicked(PointerButton::Primary)));
+    assert_eq!(ctx.input(|i| i.pointer.interact_pos()), Some(hover));
+    assert_eq!(app.session.active().unwrap().selection.objects, vec![group]);
+    assert_eq!(app.session.active().unwrap().isolation, None, "the first fresh click remains single");
+    review_gesture_press(&mut app, &ctx, at, start + 6.0 * step);
+    review_gesture_release(&mut app, &ctx, at, start + 7.0 * step);
+    assert!(ctx.input(|i| i.pointer.button_triple_clicked(PointerButton::Primary)));
+    assert_eq!(app.session.active().unwrap().isolation, Some(group), "the fresh pair uses release positions, not subsequent hover positions");
+}

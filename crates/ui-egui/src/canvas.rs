@@ -491,8 +491,14 @@ fn reset_ignore_sampler_clicks(ui: &Ui, id: egui::Id) {
 /// Other widgets' clicks count too, as they do in egui; its pointer state stays untouched.
 fn ignore_sampler_clicks(ui: &Ui, id: egui::Id, consumed: bool) {
     let (delay, distance) = ui.ctx().options(|o| (o.input_options.max_double_click_delay, o.input_options.max_click_dist));
-    let (clicked, primary, at, time) =
-        ui.input(|i| (i.pointer.any_click(), i.pointer.button_clicked(egui::PointerButton::Primary), i.pointer.interact_pos(), i.time));
+    let (clicked, primary, at, time) = ui.input(|i| {
+        // A hover move after the release is not the position egui put in its click history.
+        let at = i.events.iter().rev().find_map(|event| match event {
+            egui::Event::PointerButton { pos, button, pressed: false, .. } if i.pointer.button_clicked(*button) => Some(*pos),
+            _ => None,
+        });
+        (i.pointer.any_click(), i.pointer.button_clicked(egui::PointerButton::Primary), at, i.time)
+    });
     ui.data_mut(|data| data.remove::<u8>(id.with("image-trace-click-count")));
     if !clicked {
         return;
