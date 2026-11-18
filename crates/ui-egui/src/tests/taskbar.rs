@@ -215,6 +215,185 @@ fn an_image_with_vector_art_offers_make_clipping_mask() {
     assert!(has(&texts, "Unite") && !has(&texts, "Make Clipping Mask"), "{texts:?}");
 }
 
+/// Places a 2 by 2 pixel image from `dir` and returns its id.
+fn place_image(app: &mut VectorcraftApp, dir: &crate::tests_folder::Folder) -> u64 {
+    let raw = [0u8, 128, 255, 255].repeat(4);
+    let image = craft_image_codecs::Image::from_raw(2, 2, craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, raw).unwrap();
+    let png = craft_image_codecs::encode(&image, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap();
+    let path = dir.file("tile.png", &png);
+    app.services.read = Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string())));
+    app.run("file.place", json!({"path": path, "link": false})).unwrap();
+    let img = app.session.active().unwrap().selection.objects[0].0;
+    assert!(matches!(kind(app, img), NodeKind::Image(_)));
+    img
+}
+
+/// Whether the bar offers Make Clipping Mask, worked out by counting the selected images: some of
+/// the selected ids, but not all, are images.
+fn mixed_by_count(st: &vectorcraft_engine::DocState) -> bool {
+    let n = st.selection.len();
+    let images = st.selection.objects.iter().filter_map(|id| st.doc.node(*id)).filter(|o| matches!(o.kind, NodeKind::Image(_))).count();
+    images > 0 && images < n
+}
+
+/// Sets the selected objects and anchors directly, as no command can select an id with no object,
+/// and moves the document's revision as every selection change does.
+fn set_selection(app: &mut VectorcraftApp, ids: &[u64], anchors: &[u64]) {
+    let st = app.session.active_mut().unwrap();
+    st.selection.objects = ids.iter().map(|i| NodeId(*i)).collect();
+    st.selection.anchors = anchors.iter().map(|i| (NodeId(*i), [(0, 0)].into_iter().collect())).collect();
+    st.revision += 1;
+}
+
+/// The task bar's check for images selected with other objects gives the count's answer for every
+/// selection: empty, one object, paths only, images only, images with paths or type, an id
+/// selected twice, anchors picked out, and ids with no object.
+#[test]
+fn images_with_other_art_matches_the_image_count() {
+    let mut app = app();
+    let dir = crate::tests_folder::Folder::new("ui-taskbar-mixed");
+    let img = place_image(&mut app, &dir);
+    let img2 = place_image(&mut app, &dir);
+    let a = id(app.run("shape.rectangle", json!({"x": 10, "y": 200, "width": 40, "height": 40})).unwrap());
+    let b = id(app.run("shape.rectangle", json!({"x": 30, "y": 210, "width": 40, "height": 40})).unwrap());
+    let t = id(app.run("text.create", json!({"x": 60, "y": 80, "text": "Hello"})).unwrap());
+    let stale = 1_000_000;
+    assert!(app.session.active().unwrap().doc.node(NodeId(stale)).is_none());
+    let ctx = egui::Context::default();
+    let cases: [(&[u64], &[u64], bool); 17] = [
+        (&[], &[], false),
+        (&[a], &[], false),
+        (&[img], &[], false),
+        (&[a, b], &[], false),
+        (&[img, img2], &[], false),
+        (&[img, a], &[], true),
+        (&[a, img], &[], true),
+        (&[a, b, img], &[], true),
+        (&[img, t], &[], true),
+        (&[img, img], &[], false),
+        (&[img, img, a], &[], true),
+        (&[img, a], &[a], true),
+        (&[a, b], &[a, b], false),
+        (&[img, stale], &[], true),
+        (&[img, img2, stale], &[], true),
+        (&[a, stale], &[], false),
+        (&[stale, stale], &[], false),
+    ];
+    for (ids, anchors, mixed) in cases {
+        set_selection(&mut app, ids, anchors);
+        let st = app.session.active().unwrap();
+        assert_eq!(mixed_by_count(st), mixed, "{ids:?} with anchors on {anchors:?}: the count");
+        assert_eq!(canvas::images_with_other_art(st, &ctx), mixed, "{ids:?} with anchors on {anchors:?}");
+    }
+}
+
+/// The check is worked out once for each revision of the document: an unchanged revision gives the
+/// kept answer, and a selection change, which moves the revision, works it out again.
+#[test]
+fn images_with_other_art_is_kept_for_the_revision() {
+    let mut app = app();
+    let dir = crate::tests_folder::Folder::new("ui-taskbar-mixed-kept");
+    let img = place_image(&mut app, &dir);
+    let a = id(app.run("shape.rectangle", json!({"x": 10, "y": 200, "width": 40, "height": 40})).unwrap());
+    let b = id(app.run("shape.rectangle", json!({"x": 30, "y": 210, "width": 40, "height": 40})).unwrap());
+    select(&mut app, &[img, a]);
+    let ctx = egui::Context::default();
+    assert!(canvas::images_with_other_art(app.session.active().unwrap(), &ctx));
+    // Changing the objects behind the revision's back shows the kept answer is used.
+    app.session.active_mut().unwrap().selection.objects = vec![NodeId(a), NodeId(b)];
+    assert!(canvas::images_with_other_art(app.session.active().unwrap(), &ctx), "the revision's answer is kept");
+    select(&mut app, &[a, b]);
+    assert!(!canvas::images_with_other_art(app.session.active().unwrap(), &ctx), "a new revision works it out again");
+    select(&mut app, &[b, img]);
+    assert!(canvas::images_with_other_art(app.session.active().unwrap(), &ctx));
+    // Another context keeps its own answer.
+    assert!(canvas::images_with_other_art(app.session.active().unwrap(), &egui::Context::default()));
+}
+
+/// The CPU time this thread has used, where the system reports it (Linux), else none.
+fn cpu_time() -> Option<std::time::Duration> {
+    std::fs::read_to_string("/proc/thread-self/schedstat")
+        .ok()
+        .and_then(|s| s.split_whitespace().next()?.parse::<u64>().ok())
+        .map(std::time::Duration::from_nanos)
+}
+
+/// Runs `f` and returns the CPU time it used (zero where the system does not report it) and the
+/// time it took.
+fn timed(f: impl FnOnce()) -> (std::time::Duration, std::time::Duration) {
+    let (cpu, wall) = (cpu_time(), std::time::Instant::now());
+    f();
+    let wall = wall.elapsed();
+    (cpu_time().zip(cpu).map_or_else(Default::default, |(b, a)| b.saturating_sub(a)), wall)
+}
+
+/// Times the image check on a selection of 131,072 rectangles: 120 frames with an unchanged
+/// revision, counting each frame as before against the kept answer, and the first frame after a
+/// change. Each cell is the median of 7 runs, CPU time then elapsed time. Run with
+/// `cargo test -p vectorcraft-ui-egui --lib images_with_other_art_timing -- --ignored --nocapture`.
+#[test]
+#[ignore = "a timing run on a large selection"]
+fn images_with_other_art_timing() {
+    let dir = crate::tests_folder::Folder::new("ui-taskbar-mixed-timing");
+    let doubled = |app: &mut VectorcraftApp, times: usize| {
+        for _ in 0..times {
+            app.run("select.all", json!({})).unwrap();
+            app.run("edit.duplicate", json!({})).unwrap();
+        }
+        app.run("select.all", json!({})).unwrap();
+    };
+    let rects = |app: &mut VectorcraftApp| {
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+        doubled(app, 17);
+    };
+    let mut variants: Vec<(&str, VectorcraftApp)> = vec![];
+    let mut none = app();
+    rects(&mut none);
+    variants.push(("131,072 rectangles", none));
+    let mut one = app();
+    rects(&mut one);
+    place_image(&mut one, &dir);
+    one.run("select.all", json!({})).unwrap();
+    variants.push(("131,072 rectangles and 1 image", one));
+    let mut images = app();
+    place_image(&mut images, &dir);
+    doubled(&mut images, 9);
+    variants.push(("512 images", images));
+    let median = |mut v: Vec<(std::time::Duration, std::time::Duration)>| {
+        let mut wall: Vec<_> = v.iter().map(|t| t.1).collect();
+        v.sort();
+        wall.sort();
+        format!("{:.2?} / {:.2?}", v[v.len() / 2].0, wall[wall.len() / 2])
+    };
+    println!("| Selection | Count, 120 frames | Kept, 120 frames | Count, 1 frame | First frame after a change |");
+    println!("| --- | --- | --- | --- | --- |");
+    for (name, mut app) in variants {
+        let mut runs = [vec![], vec![], vec![], vec![]];
+        for _ in 0..7 {
+            let ctx = egui::Context::default();
+            let st = app.session.active().unwrap();
+            let expected = mixed_by_count(st);
+            assert_eq!(canvas::images_with_other_art(st, &ctx), expected, "{name}");
+            runs[0].push(timed(|| {
+                for _ in 0..120 {
+                    assert_eq!(std::hint::black_box(mixed_by_count(st)), expected);
+                }
+            }));
+            runs[1].push(timed(|| {
+                for _ in 0..120 {
+                    assert_eq!(std::hint::black_box(canvas::images_with_other_art(st, &ctx)), expected);
+                }
+            }));
+            runs[2].push(timed(|| assert_eq!(std::hint::black_box(mixed_by_count(st)), expected)));
+            app.session.active_mut().unwrap().revision += 1;
+            let st = app.session.active().unwrap();
+            runs[3].push(timed(|| assert_eq!(std::hint::black_box(canvas::images_with_other_art(st, &ctx)), expected)));
+        }
+        let [a, b, c, d] = runs.map(median);
+        println!("| {name} ({} selected) | {a} | {b} | {c} | {d} |", app.session.active().unwrap().selection.len());
+    }
+}
+
 #[test]
 fn type_converts_between_point_and_area_type() {
     let mut app = app();

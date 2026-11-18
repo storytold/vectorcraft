@@ -17,6 +17,7 @@ pub mod color_guide;
 pub mod color_themes;
 pub mod color_wheel;
 pub mod css_properties;
+pub mod discover;
 pub mod doc_info;
 pub mod flattener_preview;
 pub mod glyphs;
@@ -261,6 +262,7 @@ pub fn show_icon_panel(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
         three_d::ID => three_d::show(app, ui),
         script_console::ID => script_console::show(app, ui),
         learn::ID => learn::show(app, ui),
+        discover::ID => discover::show(app, ui),
         crate::addons::cleanup::ID => crate::addons::cleanup::show(app, ui),
         crate::addons::color::ID => crate::addons::color::show(app, ui),
         crate::addons::packaging::ID => crate::addons::packaging::show(app, ui),
