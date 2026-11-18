@@ -5194,7 +5194,6 @@ liquify-list-end	{0}, {1}	{0}, {1}
 @msg	missing `folder`	falta `folder`
 @msg	missing `id` (see plugin.list)	falta `id` (consulta plugin.list)
 @msg	missing `name`	falta `name`
-@msg	missing `path`	falta `path`
 @msg	missing `tool`	falta `tool`
 @msg	missing id	falta id
 @msg	missing index	falta index
