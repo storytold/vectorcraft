@@ -637,6 +637,69 @@ fn an_edited_profile_starts_the_documents_of_its_category() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// The fill, stroke and weight of `id` in the active document.
+fn look(s: &Session, id: u64) -> (vectorcraft_color::Paint, vectorcraft_color::Paint, Option<f64>) {
+    let n = s.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).cloned().unwrap();
+    (n.appearance.fill_paint(), n.appearance.stroke_paint(), n.appearance.stroke().map(|st| st.width))
+}
+
+#[test]
+fn a_redefined_default_graphic_style_in_a_profile_is_the_default_fill_and_stroke() {
+    use vectorcraft_color::Paint;
+    let (mut s, dir) = with_profiles("default-style");
+    // The Print profile's Default Graphic Style becomes no fill and a 0.25 pt red stroke.
+    s.execute("file.newProfiles.edit", &json!({"name": "Print"})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap();
+    s.execute("paint.setFill", &json!({"none": true})).unwrap();
+    s.execute("paint.setStroke", &json!({"color": "#ff0000"})).unwrap();
+    s.execute("stroke.set", &json!({"weight": 0.25})).unwrap();
+    s.execute("graphicStyle.redefine", &json!({"name": "Default Graphic Style"})).unwrap();
+    s.execute("document.save", &json!({})).unwrap();
+    let style = s.doc().unwrap().doc.graphic_styles[0].clone();
+    let red = style.appearance.stroke_paint();
+    assert!(matches!(red, Paint::Solid { .. }), "{red:?}");
+    assert_eq!(style.appearance.stroke().map(|st| st.width), Some(0.25), "{style:?}");
+    // The Mobile profile is saved as shipped.
+    s.execute("file.newProfiles.edit", &json!({"name": "Mobile"})).unwrap();
+    s.execute("document.save", &json!({})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#00ff00"})).unwrap();
+    let green = s.paint.fill.clone();
+
+    // A document from the Print profile starts with the style's fill, stroke and weight, and its art takes them.
+    s.execute("file.new", &json!({"profile": "Print", "colorMode": "cmyk"})).unwrap();
+    assert_eq!((s.paint.fill.clone(), s.paint.stroke.clone(), s.paint.stroke_width), (Paint::None, red.clone(), 0.25));
+    let id = s.execute("shape.rectangle", &json!({"x": 20, "y": 20, "width": 60, "height": 60})).unwrap()["id"].as_u64().unwrap();
+    assert_eq!(look(&s, id), (Paint::None, red.clone(), Some(0.25)));
+    // Default Fill and Stroke gives the selection and the defaults that look again, as one undo step.
+    s.execute("paint.setFill", &json!({"color": "#0000ff"})).unwrap();
+    s.execute("stroke.set", &json!({"weight": 3})).unwrap();
+    let steps = s.doc().unwrap().history.undo.len();
+    s.execute("paint.default", &json!({})).unwrap();
+    assert_eq!(look(&s, id), (Paint::None, red.clone(), Some(0.25)));
+    assert_eq!((s.paint.fill.clone(), s.paint.stroke_width), (Paint::None, 0.25));
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1);
+    // Nothing to change: no undo step.
+    let step = s.doc().unwrap().history.step();
+    s.execute("paint.default", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().history.step(), step);
+    // The new art is not linked to the style.
+    assert!(s.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().extras().graphic_style.is_none());
+
+    // A profile with the shipped style, here converted to CMYK, leaves the fill and stroke the user chose.
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#00ff00", "keepModel": true})).unwrap();
+    s.execute("file.new", &json!({"profile": "Mobile", "colorMode": "cmyk"})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.color_mode, ColorMode::Cmyk);
+    assert_eq!(s.paint.fill, green);
+    // So does a document without a profile, and Default Fill and Stroke there gives white and 1 pt black.
+    s.execute("file.new", &json!({})).unwrap();
+    assert_eq!(s.paint.fill, green);
+    s.execute("paint.default", &json!({})).unwrap();
+    assert_eq!(s.paint, vectorcraft_tools::PaintDefaults::default());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn the_profile_follows_the_preset_access_and_reset() {
     let (mut s, dir) = with_profiles("choice");
@@ -679,6 +742,56 @@ fn the_profile_follows_the_preset_access_and_reset() {
     assert_eq!(s.execute("file.newProfiles.reset", &json!({"name": "Print"})).unwrap(), json!({"name": "Print", "reset": false}));
     let r = s.execute("file.new", &json!({"preset": "A4"})).unwrap();
     assert!(r.get("profile").is_none() && !swatch_names(&s).contains(&"Brand Red".to_string()), "{r}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The first run's style of text object `id`.
+fn first_run(s: &Session, id: &Value) -> vectorcraft_doc::CharStyle {
+    let n = s.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id.as_u64().unwrap())).cloned().unwrap();
+    let vectorcraft_doc::NodeKind::Text(t) = &n.kind else { panic!("not type: {n:?}") };
+    t.runs[0].style.clone()
+}
+
+#[test]
+fn a_profiles_normal_character_style_is_the_default_font() {
+    let (mut s, dir) = with_profiles("default-font");
+    // The Print profile's [Normal Character Style] becomes Source Serif 4 Regular at 9 pt.
+    s.execute("file.newProfiles.edit", &json!({"name": "Print"})).unwrap();
+    let attrs = json!({"font_family": "Source Serif 4", "font_style": "Regular", "size": 9, "charAlign": "emBoxBottom"});
+    s.execute("charStyle.setAttrs", &json!({"name": "[Normal Character Style]", "attrs": attrs})).unwrap();
+    s.execute("document.save", &json!({})).unwrap();
+
+    // New type in a document from the profile takes the font, size and Character Alignment.
+    s.execute("file.new", &json!({"preset": "A4"})).unwrap();
+    let made = s.execute("text.create", &json!({"x": 20, "y": 40, "text": "Serif"})).unwrap();
+    assert!(made.get("warning").is_none(), "{made}");
+    let st = first_run(&s, &made["id"]);
+    assert_eq!((st.font_family.as_str(), st.font_style.as_str(), st.size), ("Source Serif 4", "Regular", 9.0));
+    assert_eq!(st.char_align, vectorcraft_doc::CharAlign::EmBoxBottom);
+    // A font, size or Character Alignment given to the command still wins.
+    let made = s
+        .execute("text.create", &json!({"x": 20, "y": 80, "text": "Sans", "font": "Source Sans 3", "size": 14, "charAlign": "romanBaseline"}))
+        .unwrap();
+    let st = first_run(&s, &made["id"]);
+    assert_eq!((st.font_family.as_str(), st.size, st.char_align), ("Source Sans 3", 14.0, vectorcraft_doc::CharAlign::RomanBaseline));
+    // A family given alone starts in Regular, not the style's Bold, and without its axis settings.
+    let attrs = json!({"font_style": "Bold", "fontAxes": {"wght": 700}});
+    s.execute("charStyle.setAttrs", &json!({"name": "[Normal Character Style]", "attrs": attrs})).unwrap();
+    let made = s.execute("text.create", &json!({"x": 20, "y": 120, "text": "Inter", "font": "Inter"})).unwrap();
+    let st = first_run(&s, &made["id"]);
+    assert_eq!((st.font_family.as_str(), st.font_style.as_str()), ("Inter", "Regular"));
+    assert!(st.font_axes.is_empty(), "{:?}", st.font_axes);
+    // A font of the style that isn't available is reported, as one given to the command is.
+    s.execute("charStyle.setAttrs", &json!({"name": "[Normal Character Style]", "attrs": {"font_family": "No Such Family 7498"}})).unwrap();
+    let made = s.execute("text.create", &json!({"x": 20, "y": 160, "text": "Missing"})).unwrap();
+    assert!(made["warning"].as_str().is_some_and(|w| w.contains("No Such Family 7498")), "{made}");
+
+    // A document from a profile left as shipped starts type in the default font and size.
+    s.execute("file.new", &json!({"profile": "Web"})).unwrap();
+    let made = s.execute("text.create", &json!({"x": 20, "y": 40, "text": "Default"})).unwrap();
+    let st = first_run(&s, &made["id"]);
+    let default = vectorcraft_doc::CharStyle::default();
+    assert_eq!((st.font_family, st.size), (default.font_family, default.size));
     let _ = std::fs::remove_dir_all(&dir);
 }
 

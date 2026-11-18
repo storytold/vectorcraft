@@ -1,7 +1,7 @@
 //! OpenType panel: per-character OpenType features (ligatures, alternates, swashes, small caps,
-//! ordinals, fractions, figure style, position, and with the East Asian options the menu's H or V
-//! Style and Roman Italics) for the selected text (every frame of each selected threaded story) or
-//! the Type tool's selected characters.
+//! ordinals, fractions, figure style, position, stylistic sets from the panel or its menu, and with
+//! the East Asian options the menu's H or V Style and Roman Italics) for the selected text (every
+//! frame of each selected threaded story) or the Type tool's selected characters.
 
 use egui::Ui;
 use serde_json::json;
@@ -257,18 +257,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             change = Some(Change::Toggle(flag, shown != Some(true)));
         }
     }
-    // The font, not the text, decides which numbered sets can be offered. Each set is an
-    // independent feature, so the menu permits several at once. A font's own label wins over
-    // the numbered fallback. See the public Stylistic Sets help page. A set is checked when every
-    // character has it.
-    let sets: Vec<(StylisticSet, Flag, bool)> = offered_sets(&st)
-        .into_iter()
-        .map(|set| {
-            let flag = Flag::Extra(EXTRA_FEATURES[usize::from(set.number - 1)]);
-            let on = shown_flag(app, flag) == Some(true);
-            (set, flag, on)
-        })
-        .collect();
+    let sets = set_entries(app, &st);
     ui.add_enabled_ui(!sets.is_empty(), |ui| {
         ui.menu_button(tl!("Stylistic Sets"), |ui| {
             widgets::menu_scroll(ui, |ui| {
@@ -298,6 +287,22 @@ fn tracking_drops_ligatures(app: &VectorcraftApp) -> bool {
             && vectorcraft_text::ligatures_suppressed_by(s.tracking)
             && !vectorcraft_text::explicit_ligatures(&s.features)
     })
+}
+
+/// The Stylistic Sets entries of the panel's button and of the panel menu's submenu: each set the
+/// font `st` names offers, the feature it turns on and off, and whether it is checked. The font,
+/// not the text, decides which numbered sets can be offered. Each set is an independent feature,
+/// so the menu permits several at once. A font's own label wins over the numbered fallback. See
+/// the public Stylistic Sets help page. A set is checked when every character has it.
+fn set_entries(app: &VectorcraftApp, st: &CharStyle) -> Vec<(StylisticSet, Flag, bool)> {
+    offered_sets(st)
+        .into_iter()
+        .map(|set| {
+            let flag = Flag::Extra(EXTRA_FEATURES[usize::from(set.number - 1)]);
+            let on = shown_flag(app, flag) == Some(true);
+            (set, flag, on)
+        })
+        .collect()
 }
 
 /// The stylistic sets of the font `st` names. A font that is not available offers none, rather than
@@ -345,9 +350,30 @@ fn east_asian_items() -> [Toggle; 2] {
 }
 
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let has = text_style(app).is_some();
+    let style = text_style(app);
+    let has = style.is_some();
     if menu_item(ui, tl!("Reset OpenType Features"), has, false) {
         set(app, OtFeatures::default());
+    }
+    // Stylistic Sets: the sets, labels and checks of the panel's Stylistic Sets button. A set chosen
+    // while only some characters have it turns it on for all of them. Disabled with no text or when
+    // the font offers no sets.
+    let sets = style.map(|(st, _)| set_entries(app, &st)).unwrap_or_default();
+    let mut toggle = None;
+    ui.add_enabled_ui(!sets.is_empty(), |ui| {
+        // Indented like the items beside it (their check column).
+        ui.menu_button(format!("   {}", tl!("Stylistic Sets")), |ui| {
+            widgets::menu_scroll(ui, |ui| {
+                for (set, flag, on) in &sets {
+                    if widgets::menu_item_name(ui, &set_label(set), true, *on) {
+                        toggle = Some(Change::Toggle(*flag, !on));
+                    }
+                }
+            });
+        });
+    });
+    if let Some(c) = toggle {
+        edit(app, c);
     }
     if app.session.prefs.show_east_asian_options {
         ui.separator();
@@ -765,6 +791,48 @@ mod tests {
         assert_eq!(run_features(&mut app, &id, 4), [("1/23".to_string(), json!(["dnom"]))]);
         edit(&mut app, Change::Position(4));
         assert_eq!(undo_steps(&app), undo + 1);
+    }
+
+    /// The panel menu's Stylistic Sets submenu lists the font's sets with the labels of the panel's
+    /// Stylistic Sets button. Chosen, a set turns on for the selected type in one undo step and
+    /// shows checked, keeping the other features; chosen again, it turns off. With no text
+    /// selected the submenu is disabled and does not open.
+    #[test]
+    fn the_panel_menu_stylistic_sets_submenu_turns_sets_on_and_off() {
+        let mut app = selected_text();
+        let Some((st, _)) = text_style(&app) else { panic!("no text style") };
+        let sets = set_entries(&app, &st);
+        // Builds without the bundled fonts have no face that offers sets.
+        let Some((first, _, _)) = sets.first() else { return };
+        let (label, tag) = (set_label(first), EXTRA_FEATURES[usize::from(first.number - 1)]);
+        set(&mut app, OtFeatures { small_caps: true, ..Default::default() });
+        let entry = |t: &str| t.trim_start_matches(['✓', ' ']).to_string();
+        // Opens the submenu in a fresh context and returns the drawn text of `label`'s entry and
+        // its rect, if the submenu shows it.
+        let open = |app: &mut VectorcraftApp, ctx: &egui::Context| {
+            crate::theme::install_fonts(ctx);
+            let texts = super::super::tests_appearance::frame_events(ctx, app, vec![], menu);
+            let sub = super::super::tests_appearance::text_rect(&texts, "   Stylistic Sets");
+            super::super::tests_appearance::click(ctx, app, sub.center(), menu);
+            let texts = super::super::tests_appearance::frame_events(ctx, app, vec![], menu);
+            texts.into_iter().find(|(t, _)| entry(t) == label && t != "   Stylistic Sets")
+        };
+        let ctx = egui::Context::default();
+        let Some((text, at)) = open(&mut app, &ctx) else { panic!("{label} missing from the submenu") };
+        assert!(!text.starts_with('✓'), "{text:?}");
+        let undo = undo_steps(&app);
+        super::super::tests_appearance::click(&ctx, &mut app, at.center(), menu);
+        assert_eq!(undo_steps(&app), undo + 1);
+        let on = text_style(&app).unwrap().0.features;
+        assert!(on.iter().any(|f| f == tag) && on.iter().any(|f| f == "smcp"), "{on:?}");
+        let ctx = egui::Context::default();
+        let Some((text, at)) = open(&mut app, &ctx) else { panic!("{label} missing from the reopened submenu") };
+        assert!(text.starts_with('✓'), "{text:?}");
+        super::super::tests_appearance::click(&ctx, &mut app, at.center(), menu);
+        assert_eq!(text_style(&app).unwrap().0.features, ["smcp"]);
+        app.session.execute("select.set", &json!({"ids": []})).unwrap();
+        let ctx = egui::Context::default();
+        assert!(open(&mut app, &ctx).is_none(), "the submenu opened with no text selected");
     }
 
     /// H or V Style and Roman Italics are in the panel menu with the East Asian options only.

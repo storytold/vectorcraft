@@ -1,11 +1,12 @@
 //! Path Precision Tools in the interface: its submenu (Object › Plug-ins › Path Precision Tools),
 //! which selects its tools, opens its panels and runs Split / Add Points at Crossings, Set Corners… ([`set_corners`]), Divide into
-//! Dashes ([`dashes`]), Expand Dashes into Paths, Convert to Parametric Shape and Tangent Circle… ([`tangent_circle`]); the Anchor Inspector panel (the selected
+//! Dashes ([`dashes`]), Expand Dashes into Paths, Smooth Bridge ([`bridge`]), Convert to Parametric Shape and Tangent Circle… ([`tangent_circle`]); the Anchor Inspector panel (the selected
 //! anchor's position and handles as numbers, the add-on's anchor edits, the Corner Tool's values,
 //! [`corner`], and the Shared Edge Merge Tool's, [`shared_edge`]); the Parametric Shape panel
 //! ([`shape`]); and its tools' options dialog (a double-click on the tool). Everything acts through `addon.pathtools.*` and
 //! `tool.setOption`.
 
+pub mod bridge;
 pub mod corner;
 pub mod dashes;
 pub mod set_corners;
@@ -74,6 +75,7 @@ pub fn menu() -> Vec<Item> {
         Item::Cmd("Split at Crossings", "addon.pathtools.crossings", json!({ "cut": true })),
         Item::Cmd("Divide into Dashes…", dashes::COMMAND, Value::Null),
         Item::Cmd("Expand Dashes into Paths", "addon.pathtools.expandDashes", json!({})),
+        Item::Cmd("Smooth Bridge…", bridge::COMMAND, Value::Null),
         Item::Cmd("Convert to Parametric Shape", "addon.pathtools.shape.convert", json!({})),
         Item::Cmd("Tangent Circle…", tangent_circle::COMMAND, Value::Null),
         Item::Cmd("Common Tangents…", COMMON_TANGENTS, json!({ "tangents": "all", "centerline": false })),
@@ -246,12 +248,15 @@ fn body(_app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
     false
 }
 
-/// OK: set the tool's options.
+/// OK: set the tool's options. When the tool refuses one of them, nothing is set and the dialog
+/// stays open.
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let tool = d.str("__tool");
     let values: Map<String, Value> = d.fields.iter().filter(|(k, _)| !k.starts_with("__")).map(|(k, v)| (k.clone(), v.clone())).collect();
     let r = app.run("tool.setOption", json!({ "tool": tool, "values": values }));
-    app.ui.dialog = None;
+    if r.is_ok() {
+        app.ui.dialog = None;
+    }
     r
 }
 

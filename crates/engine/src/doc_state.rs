@@ -25,6 +25,10 @@ pub struct DocState {
     /// Panel state, not art selection: not saved, not undoable (`layer.setCurrent`,
     /// `layer.highlight`).
     pub layer_rows: Vec<NodeId>,
+    /// The row the last Locate Object or Locate Layer (`layer.locate`) highlighted, until the
+    /// Layers panel takes it: the panel opens the layers around that row and scrolls to it, also
+    /// when the row was already highlighted. Panel state: not saved, not undoable.
+    pub locate_reveal: Option<NodeId>,
     /// The variable highlighted in the Variables panel: what its Delete, Options… and Select
     /// Bound Object act on. Panel state, not art selection: not saved, not undoable
     /// (`variable.highlight`). A name, so renaming a variable moves the highlight with it.
@@ -136,6 +140,10 @@ pub struct DocState {
     /// same document comes to the front, its type set in them is not measured again. While this
     /// reference lasts, its allocation holds no other document. Not saved.
     pub(crate) measured_in_own: Option<(std::sync::Weak<Document>, std::collections::HashSet<String>)>,
+    /// The document as the last edit's refresh of inline graphics left it, and what that refresh
+    /// measured: the next refresh checks only the layer trees that differ from it
+    /// ([`cmd::inline::refresh`]). Not saved.
+    pub(crate) inline_resolved: Option<cmd::inline::Resolved>,
 }
 
 /// Whether a document has an artboard for Delete Empty Artboards to delete, with the document that
@@ -318,6 +326,7 @@ impl DocState {
             revision: 1,
             active_layer,
             layer_rows: vec![],
+            locate_reveal: None,
             variables_highlight: None,
             variables_sort: Default::default(),
             isolation: None,
@@ -355,6 +364,7 @@ impl DocState {
             plugin_effects: Default::default(),
             art_to_fit: Default::default(),
             measured_in_own: None,
+            inline_resolved: None,
         }
     }
     /// `measure`'s answer for the document now. `measure` runs once for each version of the document,

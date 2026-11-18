@@ -657,9 +657,8 @@ pub(super) fn blend_replace_spine(s: &mut Session, _: &Value) -> Result<Value> {
 }
 
 /// Is any selected blend one made without a spine?
-fn any_without_spine(s: &Session) -> bool {
-    let Ok(st) = s.doc() else { return false };
-    selected_of(s, is_blend).iter().any(|b| matches!(st.doc.node(*b).map(|n| &n.kind), Some(NodeKind::Blend { spec, .. }) if spec.no_spine))
+pub(super) fn any_without_spine(s: &Session) -> bool {
+    super::common::any_selected_of(s, is_blend, |n| matches!(&n.kind, NodeKind::Blend { spec, .. } if spec.no_spine))
 }
 
 pub(super) fn blend_reverse_spine(s: &mut Session, _: &Value) -> Result<Value> {
