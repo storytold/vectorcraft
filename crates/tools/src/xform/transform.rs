@@ -451,8 +451,10 @@ impl Tool for TransformTool {
                 self.end_drag();
                 vec![Action::Cancel]
             }
-            // Escape drops a Reflect axis waiting for its second point; the reference point stays.
+            // Escape drops a Reflect axis waiting for its second point, and a press not yet
+            // released with it, so the release sets no point; the reference point stays.
             ToolKey::Escape if self.axis.is_some() => {
+                self.end_drag();
                 self.drop_axis();
                 vec![]
             }
@@ -952,6 +954,29 @@ mod tests {
             assert!(!t.ends_on_escape(&c), "{kind:?}");
             assert_eq!(t.reference_point(&c), Some(Point::new(100.0, 200.0)), "{kind:?}");
         }
+    }
+
+    /// Escape pressed between the press and the release of the second click drops the axis and the
+    /// press with it: the release starts no new axis and moves no reference point, so the click
+    /// after it starts an axis and reflects nothing.
+    #[test]
+    fn escape_during_the_second_reflect_click_cancels_that_click() {
+        let (d, id) = doc_with_rect();
+        let mut s = Selection::default();
+        s.add(id);
+        let p = paint();
+        let mut c = cx(&d, &s, &p);
+        (c.smart_guides, c.snap_to_point) = (false, false);
+        let none = Mods::default();
+        let mut t = TransformTool::new(TransformKind::Reflect);
+        assert!(click(&mut t, &c, 100.0, 100.0, none).is_empty());
+        assert!(t.pointer(&c, &ev(PointerKind::Down, 200.0, 200.0)).is_empty());
+        assert!(t.key(&c, ToolKey::Escape, none).is_empty());
+        assert!(t.pointer(&c, &ev(PointerKind::Up, 200.0, 200.0)).is_empty());
+        assert!(!t.ends_on_escape(&c));
+        assert_eq!(t.reference_point(&c), Some(Point::new(100.0, 100.0)));
+        assert!(click(&mut t, &c, 150.0, 300.0, none).is_empty());
+        assert!(t.ends_on_escape(&c));
     }
 
     /// After a click sets the first point, a drag draws the axis from it (Shift in 45° steps from a
