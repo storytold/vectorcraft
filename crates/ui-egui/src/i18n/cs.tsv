@@ -90,6 +90,19 @@
 	Paste without Formatting	Vložit bez formátování
 	Clear	Smazat
 	Find and Replace…	Najít a nahradit…
+	Find and Replace	Najít a nahradit
+	Find:	Najít:
+	Replace With:	Nahradit čím:
+	Replace & Find	Nahradit a najít
+	Replace All	Nahradit vše
+	Match Case	Rozlišovat velká a malá písmena
+	Find Whole Word	Najít celé slovo
+	Search Backwards	Hledat zpět
+	Check Hidden Layers	Prohledat skryté vrstvy
+	Check Locked Layers	Prohledat zamknuté vrstvy
+@msg	No matches found	Nenalezeny žádné shody
+@msg	Matches replaced: {n}	Nahrazeno shod: {n}
+@msg	no match of `find` at bytes {_1}..{_2} of object {_3}	na bajtech {_1}..{_2} objektu {_3} není žádná shoda s `find`
 	Find Next	Najít další
 	Spelling	Pravopis
 	Auto Spell Check	Automatická kontrola pravopisu
@@ -230,6 +243,16 @@
 	To Center	Ke středu
 	To Edge	K okraji
 	Create Object Mosaic…	Vytvořit mozaiku objektů…
+	Create Object Mosaic	Vytvořit mozaiku objektů
+	Current Size:	Aktuální velikost:
+	New Size:	Nová velikost:
+	Tile Spacing:	Rozestupy dlaždic:
+	Number of Tiles:	Počet dlaždic:
+	Constrain Ratio:	Zachovat poměr:
+	Result:	Výsledek:
+	Resize Using Percentages	Změnit velikost v procentech
+	Delete Raster	Odstranit rastrový obraz
+	Use Ratio	Použít poměr
 	Vector Halftone…	Vektorový polotón…
 	Create Trim Marks	Vytvořit značky ořezu
 	Flatten Transparency…	Sloučit průhlednost…
@@ -624,6 +647,11 @@
 	Color blindness – Protanopia-type	Barvoslepost – protanopie
 	Color blindness – Deuteranopia-type	Barvoslepost – deuteranopie
 	Color blindness – Tritanopia-type	Barvoslepost – tritanopie
+	Show Color Vision Preview	Zobrazit náhled barevného vidění
+	Protanopia	Protanopie
+	Deuteranopia	Deuteranopie
+	Tritanopia	Tritanopie
+	Achromatopsia	Achromatopsie
 	Customize…	Vlastní…
 	Proof Colors	Barvy nátisku
 	Zoom In	Zvětšit
@@ -796,6 +824,9 @@
 	Magic Wand	Kouzelná hůlka
 	Navigator	Navigátor
 	Navigator Panel Options	Možnosti panelu Navigátor
+	Attributes Panel Options	Možnosti panelu Atributy
+	Number of Recent URLs:	Počet nedávných URL:
+@msg	`count` must be a whole number from 1 to 30	`count` musí být celé číslo od 1 do 30
 	Draw Dashed Lines as Solid Lines	Kreslit čárkované čáry jako plné
 	Pattern Options	Možnosti vzorku
 	Properties	Vlastnosti
@@ -1562,6 +1593,7 @@ lighting	Light	Světlo
 	Save Actions…	Uložit akce…
 	Load Actions…	Načíst akce…
 	Replace Actions…	Nahradit akce…
+	Clear Actions	Vymazat akce
 	Reset Actions	Obnovit akce
 	Replace the current actions with the default set?	Nahradit aktuální akce výchozí sadou?
 	Append adds the default set after the current sets instead.	Tlačítko Připojit místo toho přidá výchozí sadu za aktuální sady.
@@ -1909,6 +1941,7 @@ digits	Malayalam	Malajálamské
 	Duplicate Action or Action Set	Duplikovat akci nebo sadu akcí
 	Delete the action set “{name}” and its actions?	Odstranit sadu akcí „{name}“ a její akce?
 	Delete the selected action sets and their actions?	Odstranit vybrané sady akcí a jejich akce?
+	Delete all action sets and their actions?	Odstranit všechny sady akcí a jejich akce?
 	Delete these {n} graphic styles?	Odstranit tyto grafické styly ({n})?
 	Delete this {n} graphic style?	Odstranit tento grafický styl ({n})?
 	Graphic Style Libraries Menu	Nabídka knihoven grafických stylů
@@ -3358,6 +3391,7 @@ antiAlias	Sharp	Ostré
 	Preserve Editing Capabilities	Zachovat možnosti úprav
 	Responsive	Responzivní
 	Show Code	Zobrazit kód
+	Show in Browser	Zobrazit v prohlížeči
 	Style Attributes	Atributy stylu
 	Style Attributes (Entity References)	Atributy stylu (odkazy na entity)
 	Styling:	Stylování:
@@ -4342,6 +4376,7 @@ theme	Appearance	Motiv
 	Set Tab Stops	Nastavit zarážky tabulátoru
 	Tab Stops	Zarážky tabulátoru
 	Flare	Odlesk
+	Edit Flare	Upravit odlesk
 	Rays	Paprsky
 	Rectangle	Obdélník
 	Paintbrush	Štětec
@@ -4444,6 +4479,8 @@ axis	Both	Obě
 	Show	Zobrazit
 	Copy Width Point	Kopírovat bod šířky
 	Duplicate Artboard	Duplikovat pracovní plochu
+	Click to add an artboard on this side; Alt-click to duplicate this artboard with its art	Kliknutím přidáte pracovní plochu na tuto stranu, Alt+kliknutím duplikujete tuto pracovní plochu i s kresbou
+	Click to add an artboard on this side	Kliknutím přidáte pracovní plochu na tuto stranu
 	Area / Path Type	Text v oblasti / na cestě
 	Decrease Font Size	Zmenšit velikost písma
 	Decrease Font Size by Five Steps	Zmenšit velikost písma o pět kroků
@@ -4631,6 +4668,8 @@ font-technology	Variable	Variabilní
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Kolečko myši s podrženou klávesou Cmd/Ctrl posouvá plátno do stran.
 	Dragging sideways on a numeric field's label changes the field's value.	Tažení do stran po popisku číselného pole mění hodnotu pole.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Gesto otočení dvěma prsty na trackpadu otáčí zobrazení plátna.
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Podržení klávesy spustí nástroj nebo příkaz ze sloupce Podržení v Klávesových zkratkách; krátký stisk spustí její obvyklou zkratku.
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Jak dlouho v sekundách je nutné klávesu podržet, než se místo obvyklé zkratky spustí její zkratka podržením.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Když přesouváte kotvové body, každá křivka s jedním přesunutým koncem si zachová tvar vůči svým koncům.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Podržení zkratky nástroje vybere nástroj, dokud ji nepustíte, a pak se znovu vybere předchozí nástroj.
 	Shows the bounding box while you move the selection or draw a shape.	Zobrazí ohraničovací rámeček, když přesouváte výběr nebo kreslíte tvar.
@@ -4712,6 +4751,7 @@ font-technology	Variable	Variabilní
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Jak blízko na obrazovce musí ukazatel nebo tažený bod přijít ke kresbě, aby se chytrá vodítka přichytila; vzdálenost je stejná při každém zvětšení.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Přichytí konec úsečky nebo kružnici kreslenou od středu tak, aby se dotýkala blízké křivky.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Přichytí konec úsečky tak, aby se s blízkým rovným segmentem setkal v pravém úhlu.
+	Edit type set in fonts that aren't available?	Upravit text v písmech, která nejsou k dispozici?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Zobrazí na plátně číslo každého řezu v rámečku v jeho levém horním rohu; když je vypnuto, obrysy řezů zůstanou zobrazené.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Barva obrysů uživatelských a objektových řezů a rámečků s jejich čísly; automatické řezy používají tlumenější odstín této barvy.
 	Reset all preferences to their defaults?	Obnovit všechny předvolby na výchozí hodnoty?
@@ -5189,6 +5229,7 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	Installed plug-in {_1}	Nainstalován zásuvný modul {_1}
 @msg	Internal error: {msg} (please report this bug)	Vnitřní chyba: {msg} (nahlaste prosím tuto chybu)
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	Sloučit živou malbu: vyberte skupinu živé malby a cesty, které chcete přidat
+@msg	`Face` and `Edge` name the faces and edges of a Live Paint group: give the path another name	`Face` a `Edge` jsou názvy ploch a hran skupiny živé malby: dejte cestě jiný název
 @msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	Živá malba přijímá cesty a složené cesty: text, obrazy a jiné objekty nejprve převeďte na cesty
 @msg	Live Paint: select paths or compound paths	Živá malba: vyberte cesty nebo složené cesty
 @msg	Live Paint: these paths are too degenerate to paint	Živá malba: tyto cesty jsou příliš degenerované, aby je bylo možné malovat
@@ -5508,6 +5549,7 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	no graphic style `{n}`	grafický styl `{n}` neexistuje
 @msg	no interaction in progress	neprobíhá žádná interakce
 @msg	no key object	žádný klíčový objekt
+@msg	Align to Key Object isn't available with the Artboard tool	„Zarovnat ke klíčovému objektu“ není s nástrojem Pracovní plocha k dispozici
 @msg	no library `{key}` (see {list})	knihovna `{key}` neexistuje (viz {list})
 @msg	no native format	chybí nativní formát
 @msg	no pages	žádné stránky
@@ -5563,6 +5605,8 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	no such spine point	takový bod páteře neexistuje
 @msg	`with` must be a list of at most 10000 spine point indexes	`with` musí být seznam nejvýše 10000 indexů bodů páteře
 @msg	`with` moves points, not a handle	`with` posouvá body, ne táhlo
+@msg	`link` and `independent` cannot both be true	`link` a `independent` nemohou být zároveň true
+@msg	`link` places a handle: give `handle`	`link` umisťuje táhlo: zadejte `handle`
 @msg	no such spine segment	takový segment páteře neexistuje
 @msg	no such subpath	taková dílčí cesta neexistuje
 @msg	no such user library	taková uživatelská knihovna neexistuje
@@ -5651,6 +5695,7 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	select a blend	vyberte prolnutí
 @msg	select a blend or give `id`	vyberte prolnutí, nebo zadejte `id`
 @msg	select a clip group	vyberte ořezovou skupinu
+@msg	select a flare	vyberte odlesk
 @msg	select a gradient mesh	vyberte přechodovou síť
 @msg	select a linked image: an embedded one has no file	vyberte propojený obrázek: vložený nemá soubor
 @msg	select a repeat	vyberte opakování
@@ -5908,6 +5953,7 @@ variable-list-end	{0}, {1}	{0} a {1}
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	Na disku se změnil {n} propojený obrázek: novou verzi zobrazí Aktualizovat propojení|Na disku se změnily {n} propojené obrázky: nové verze zobrazí Aktualizovat propojení|Na disku se změnilo {n} propojených obrázků: nové verze zobrazí Aktualizovat propojení
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Aktualizován {n} propojený soubor změněný na disku|Aktualizovány {n} propojené soubory změněné na disku|Aktualizováno {n} propojených souborů změněných na disku
 @msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	dokument nastavuje spadávku, kterou tento soubor PDF/X vynechává: zapněte „Použít nastavení spadávky dokumentu“
+@msgplural	{n} object reaches the trim edge but stops short of the bleed|{n} objects reach the trim edge but stop short of the bleed	{n} objekt sahá k hraně ořezu, ale nedosahuje do spadávky|{n} objekty sahají k hraně ořezu, ale nedosahují do spadávky|{n} objektů sahá k hraně ořezu, ale nedosahuje do spadávky
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	Exportováno: {what}, {n} poznámka: {first}|Exportováno: {what}, {n} poznámky: {first}|Exportováno: {what}, {n} poznámek: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} soubor písma je nyní ve složce {folder}|{n} soubory písem jsou nyní ve složce {folder}|{n} souborů písem je nyní ve složce {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} soubor písma je nyní ve složce {folder}; nepodařilo se přidat {failed}: {reason}|{n} soubory písem jsou nyní ve složce {folder}; nepodařilo se přidat {failed}: {reason}|{n} souborů písem je nyní ve složce {folder}; nepodařilo se přidat {failed}: {reason}
@@ -6834,6 +6880,9 @@ mark-style	Japanese	Japonské
 	Continue in Background	Pokračovat na pozadí
 	Cancel Export	Zrušit export
 @msg	Export cancelled	Export byl zrušen
+	Cancel Save	Zrušit ukládání
+@plural	{n} more save waiting|{n} more saves waiting	Čeká ještě {n} uložení|Čekají ještě {n} uložení|Čeká ještě {n} uložení
+@msg	Save canceled	Ukládání bylo zrušeno
 # Paragraph panel menu › Justification…
 	Desired	Požadované
 	Word Spacing:	Mezery mezi slovy:
@@ -7246,6 +7295,7 @@ axis	Y Axis	osa Y
 	Checkpoint	Kontrolní bod
 	Inventory Icons	Ikony inventáře
 	Skill Icons	Ikony dovedností
+	Weather Icons	Ikony počasí
 	Attack	Útok
 	Defend	Obrana
 	Heal	Léčení
@@ -7351,6 +7401,12 @@ axis	Y Axis	osa Y
 	Bus Lines	Sběrnicové linky
 	Terminal Nodes	Koncové uzly
 
+# Original arrow art brushes.
+	Arrows	Šipky
+	Solid Arrow	Plná šipka
+	Open Arrow	Otevřená šipka
+	Chevron Arrow	Šipka s krokví
+
 	Notched Ribbon	Vroubkovaná stuha
 	Double Line	Dvojitá čára
 	Wave	Vlna
@@ -7367,6 +7423,252 @@ axis	Y Axis	osa Y
 	Stars	Hvězdy
 	Triangles	Trojúhelníky
 	Sparkles	Jiskry
+	Warm Gray	Teplá šedá
+	Cool Gray	Studená šedá
+	Neutrals	Neutrální tóny
+	Ivory	Slonovina
+	Linen	Len
+	Oat	Oves
+	Greige	Greige
+	Stone	Kámen
+	Taupe	Taupe
+	Slate	Břidlice
+	Clay	Hlína
+	Terracotta	Terakota
+	Ochre	Okr
+	Umber	Umbra
+	Sand	Písek
+	Olive	Olivová
+	Moss	Mech
+	Rosy	Růžová
+	Neutral	Neutrální
+	Golden	Zlatavá
+	Pastel	Pastelové
+	Pastel Red	Pastelová červená
+	Pastel Orange	Pastelová oranžová
+	Pastel Amber	Pastelová jantarová
+	Pastel Yellow	Pastelová žlutá
+	Pastel Lime	Pastelová limetková
+	Pastel Green	Pastelová zelená
+	Pastel Teal	Pastelová modrozelená
+	Pastel Cyan	Pastelová azurová
+	Pastel Azure	Pastelová blankytná
+	Pastel Blue	Pastelová modrá
+	Pastel Violet	Pastelová fialová
+	Pastel Magenta	Pastelová purpurová
+	Soft Red	Jemná červená
+	Soft Orange	Jemná oranžová
+	Soft Amber	Jemná jantarová
+	Soft Yellow	Jemná žlutá
+	Soft Lime	Jemná limetková
+	Soft Green	Jemná zelená
+	Soft Teal	Jemná modrozelená
+	Soft Cyan	Jemná azurová
+	Soft Azure	Jemná blankytná
+	Soft Blue	Jemná modrá
+	Soft Violet	Jemná fialová
+	Soft Magenta	Jemná purpurová
+	Vivid Red	Sytá červená
+	Vivid Orange	Sytá oranžová
+	Vivid Amber	Sytá jantarová
+	Vivid Yellow	Sytá žlutá
+	Vivid Lime	Sytá limetková
+	Vivid Green	Sytá zelená
+	Vivid Teal	Sytá modrozelená
+	Vivid Cyan	Sytá azurová
+	Vivid Azure	Sytá blankytná
+	Vivid Blue	Sytá modrá
+	Vivid Violet	Sytá fialová
+	Vivid Magenta	Sytá purpurová
+	Deep	Tmavé
+	Deep Red	Tmavě červená
+	Deep Orange	Tmavě oranžová
+	Deep Amber	Tmavě jantarová
+	Deep Yellow	Tmavě žlutá
+	Deep Lime	Tmavě limetková
+	Deep Green	Tmavě zelená
+	Deep Teal	Tmavě modrozelená
+	Deep Cyan	Tmavě azurová
+	Deep Azure	Tmavě blankytná
+	Deep Blue	Tmavě modrá
+	Deep Violet	Tmavě fialová
+	Deep Magenta	Tmavě purpurová
+	Gold	Zlato
+	Silver	Stříbro
+	Bronze	Bronz
+	Copper	Měď
+	Brass	Mosaz
+	Rose Gold	Růžové zlato
+	Gunmetal	Ocelově šedá
+	Platinum	Platina
+	Pewter	Cín
+	Ember	Žhavé uhlíky
+	Lagoon	Laguna
+	Dusk	Soumrak
+	Clay to Teal	Hlína do modrozelené
+	Plum to Olive	Švestka do olivové
+	Complementary Coral	Korálová, komplementární
+	Split Complementary Coral	Korálová, rozdělená komplementární
+	Analogous Coral	Korálová, analogická
+	Triad Coral	Korálová, triáda
+	Tetrad Coral	Korálová, tetráda
+	Pentagram Coral	Korálová, pentagram
+	Complementary Teal	Modrozelená, komplementární
+	Split Complementary Teal	Modrozelená, rozdělená komplementární
+	Analogous Teal	Modrozelená, analogická
+	Triad Teal	Modrozelená, triáda
+	Tetrad Teal	Modrozelená, tetráda
+	Pentagram Teal	Modrozelená, pentagram
+	Soft Spectrum	Jemné spektrum
+	Red to Amber	Červená do jantarové
+	Orange to Yellow	Oranžová do žluté
+	Amber to Lime	Jantarová do limetkové
+	Yellow to Green	Žlutá do zelené
+	Lime to Teal	Limetková do modrozelené
+	Green to Cyan	Zelená do azurové
+	Teal to Azure	Modrozelená do blankytné
+	Cyan to Blue	Azurová do modré
+	Azure to Violet	Blankytná do fialové
+	Blue to Magenta	Modrá do purpurové
+	Violet to Red	Fialová do červené
+	Magenta to Orange	Purpurová do oranžové
+	Dawn	Svítání
+	Noon	Poledne
+	Sunset	Západ slunce
+	Night	Noc
+	Overcast	Zataženo
+	White to Black	Bílá do černé
+	Light Grays	Světlé šedé
+	Dark Grays	Tmavé šedé
+	Warm Grays	Teplé šedé
+	Cool Grays	Studené šedé
+	Fade to Transparent	Přechod do průhledné
+	White Fade	Bílý přechod
+	Vignette	Viněta
+	Mist	Opar
+	Petal	Okvětní lístek
+	Fern	Kapradí
+	Smoke	Kouř
+	Honey	Med
+	Seafoam	Mořská pěna
+	Lavender	Levandule
+	Driftwood	Naplavené dřevo
+	Ink Wash	Tušová lavírovka
+	Tide	Příliv
+	Bloom	Rozkvět
+	Dew	Rosa
+	Pollen	Pyl
+	Lichen	Lišejník
+	Prism Veil	Hranolový závoj
+	Opal Ribbon	Opálová stuha
+	Pearl Flash	Perleťový záblesk
+	Aurora Foil	Polární fólie
+	Iris Sheen	Duhový lesk
+	Frost Spectrum	Ojíněné spektrum
+	Silver Tide	Stříbrný příliv
+	Rose Quartz Gleam	Lesk růženínu
+	Moonstone Shift	Měsíční třpyt
+	Violet Edge	Fialový okraj
+	Mint Halo	Mátová svatozář
+	Amber Corona	Jantarová koróna
+	Polar Glint	Polární záblesk
+	Pastel Orbit	Pastelová dráha
+	Coral and Navy	Korálová a námořnická modrá
+	Plum and Lime	Švestková a limetková
+	Teal and Gold	Modrozelená a zlatá
+	Indigo and Peach	Indigo a broskvová
+	Forest and Rose	Lesní a růžová
+	Red Glow	Červená záře
+	Orange Glow	Oranžová záře
+	Amber Glow	Jantarová záře
+	Yellow Glow	Žlutá záře
+	Lime Glow	Limetková záře
+	Green Glow	Zelená záře
+	Teal Glow	Modrozelená záře
+	Cyan Glow	Azurová záře
+	Azure Glow	Blankytná záře
+	Blue Glow	Modrá záře
+	Violet Glow	Fialová záře
+	Magenta Glow	Purpurová záře
+	Polka Dots	Puntíky
+	Vertical Stripes	Svislé pruhy
+	Horizontal Stripes	Vodorovné pruhy
+	Diagonal Stripes	Šikmé pruhy
+	Checkerboard	Šachovnice
+	Diamonds	Kosočtverce
+	Crosses	Křížky
+	Coarse Grit	Hrubé zrno
+	Stipple	Tečkování
+	Scratches	Škrábance
+	Sparse Flecks	Řídké skvrnky
+	Dense Flecks	Husté skvrnky
+	Sine Bands	Sinusové pásy
+	Ripple Lines	Zvlněné čáry
+	Interference Rings	Interferenční kruhy
+	Offset Rings	Posunuté kruhy
+	Warped Checks	Zkreslené kostky
+	Pinched Stripes	Sevřené pruhy
+	Chevron Pulse	Pulzující krokve
+	Radiating Lenses	Paprsčité čočky
+	Soft Shadow	Měkký stín
+	Hard Shadow	Ostrý stín
+	Lifted Card	Zvednutá karta
+	Neon Tube	Neonová trubice
+	Inner Light	Vnitřní světlo
+	Feathered	Měkké okraje
+	Haze	Mlžný opar
+	Double Rule	Dvojitá linka
+	Triple Rule	Trojitá linka
+	Dashed Border	Čárkovaný okraj
+	Dotted Border	Tečkovaný okraj
+	Offset Keyline	Posunutá obrysová linka
+	Inset Keyline	Vnitřní obrysová linka
+	Outside Stroke	Vnější tah
+	Pointer	Ukazatel
+	Highlighter	Zvýrazňovač
+	Sketchy Line	Skicovitá čára
+	Scribble Fill	Čmáraná výplň
+	Wobble	Kolísání
+	Zig Zag Edge	Klikatý okraj
+	Wavy Edge	Vlnitý okraj
+	Puffy	Nafouknutý
+	Starburst	Hvězdný výbuch
+	Glossy	Lesklý
+	Brushed Metal	Kartáčovaný kov
+	Spotlight	Reflektor
+	Sunset Band	Pás západu slunce
+	Sea Glass	Mořské sklo
+	Pearl	Perla
+	Chrome Rim	Chromový lem
+	Glow Orb	Zářící koule
+	Pill Badge	Odznak tvaru pilulky
+	Round Badge	Kulatý odznak
+	Flag Wave	Vlající vlajka
+	Bulge	Vyboulení
+	Twisted	Zkroucený
+	Echo	Ozvěna
+	Spiral Copies	Kopie ve spirále
+	Multiply Tint	Odstín násobení
+	Darken Veil	Ztmavující závoj
+	Ghosted	Průsvitný
+	Two Tone	Dvoubarevný
+	Overlay Glaze	Glazura překrytí
+	Screen Light	Světlo závoje
+	Soft Light Wash	Lavírka měkkého světla
+	Cyan Neon	Azurový neon
+	Magenta Laser	Purpurový laser
+	Amber Tube	Jantarová trubice
+	Electric Lime	Elektrická limetková
+	Pulse Violet	Pulzující fialová
+	Cobalt Phosphor	Kobaltový luminofor
+	Burst	Výbuch
+	Rounded Square	Zaoblený čtverec
+	Sun	Slunce
+	Moon	Měsíc
+	Cloud	Mrak
+	Rain	Déšť
+	Thunder	Hrom
+	Snow	Sníh
 	Save Brush Library…	Uložit knihovnu štětců…
 @msg	`{_1}` has no brushes to apply	`{_1}` nemá žádné štětce k použití
 @msg	missing `library` (see brush.libraries)	chybí `library` (viz brush.libraries)
@@ -7789,10 +8091,18 @@ breakText	Glyphs	Glyfy
 	Smooth Bridge…	Hladký most…
 	Smooth Bridge	Hladký most
 	Keep Originals	Zachovat originály
-@msg	select two circles to bridge	vyberte dva kruhy k propojení
+@msg	select two or more circles to bridge	vyberte dva nebo více kruhů k propojení
 @msg	one circle is inside the other	jeden kruh je uvnitř druhého
 @msg	the circles are too far apart for this radius: raise the radius	kruhy jsou pro tento poloměr příliš daleko od sebe: zvětšete poloměr
 @msg	the circles are too far apart for this radius	kruhy jsou pro tento poloměr příliš daleko od sebe
+	Constant Gap	Stálá mezera
+	Reach:	Dosah:
+@msg	the circles are too far apart for this gap: raise the gap	kruhy jsou pro tuto mezeru příliš daleko od sebe: zvětšete mezeru
+@msg	the circles are too far apart for this gap	kruhy jsou pro tuto mezeru příliš daleko od sebe
+@msg	no two circles are within reach: raise the reach	žádné dva kruhy nejsou v dosahu: zvětšete dosah
+@msg	select at most 2000 circles to bridge	vyberte nejvýše 2000 kruhů k propojení
+@msg	that makes too many bridges (at most 8000): lower the reach	to dává příliš mnoho mostů (nejvýše 8000): zmenšete dosah
+@msg	the bridged circles are too complex to unite	propojené kruhy jsou příliš složité na sloučení
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	Společné tečny…
 	Common Tangents	Společné tečny
@@ -9689,6 +9999,7 @@ breakText	Glyphs	Glyfy
 @msg	the character's size can't be measured	velikost znaku nelze změřit
 @msg	the code runs past its last instruction	kód běží za svou poslední instrukci
 @msg	the compound shape is too complex to expand	složený tvar je příliš složitý na rozložení
+@msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	čára nebo jiná otevřená cesta, která neohraničuje žádnou plochu, nepřidá složenému tvaru žádnou plochu; chcete-li ji zahrnout, použijte na ni nejprve Objekt › Cesta › Převést tah na obrys
 @msg	the container of the listed objects is gone	kontejner uvedených objektů už neexistuje
 @msg	the copy `{user_id}` can't be read as a library	kopii `{user_id}` nelze přečíst jako knihovnu
 @msg	the copy would leave the canvas	kopie by opustila plátno
@@ -10029,7 +10340,6 @@ breakText	Glyphs	Glyfy
 @msg	{kind} files have no transparency, and the file would have {what}: flatten it first (object.flattenTransparency)	soubory {kind} nemají průhlednost a soubor by obsahoval {what}: nejprve ji slučte (object.flattenTransparency)
 @msg	{kind} images can't be opened (see document.formats)	obrázky {kind} nelze otevřít (viz document.formats)
 @msg	{k} `{v}` is not one of the choices	{k} `{v}` není jedna z nabízených voleb
-@msg	{k} has control characters{_1}	{k} obsahuje řídicí znaky{_1}
 @msg	{k} is too long (at most {MAX_TEXT} characters)	{k} je příliš dlouhé (nejvýše {MAX_TEXT} znaků)
 @msg	{k} must be > 0	{k} musí být > 0
 @msg	{k} must be a number (pt) or a length such as "210 mm"	{k} musí být číslo (pt) nebo délka jako "210 mm"
@@ -10096,6 +10406,16 @@ breakText	Glyphs	Glyfy
 	No objects are selected.	Nejsou vybrány žádné objekty.
 	Open a document to mark its fold lines.	Otevřete dokument, abyste označili jeho linie skladu.
 	Remove Fold Line Role	Odstranit typ linie
+	Tap	Krátký stisk
+	Clear Hold	Vymazat podržení
+	Hold Shortcuts	Zkratky podržením
+	Hold Shortcut Delay	Prodleva zkratek podržením
+	How hold shortcuts work	Jak fungují zkratky podržením
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	Klikněte a stiskněte klávesu, kterou pro toto podržíte (Esc zruší). Podržení klávesy spustí toto; krátký stisk spustí vlastní zkratku klávesy.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	Krátký stisk klávesy spustí její zkratku. Podržení klávesy po dobu prodlevy místo toho spustí nástroj nebo příkaz z jejího sloupce Podržení. Zkratka podržením je klávesa s písmenem, číslicí nebo interpunkcí, samotná nebo se Shiftem.
+@msg	Hold {_1} is already used by {_2}	Podržení {_1} už používá {_2}
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	zkratka podržením je klávesa, která píše znak, samotná nebo se Shiftem ({shown} obsahuje Cmd, Ctrl nebo Alt)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} nemůže být zkratkou podržením: použijte písmeno, číslici nebo interpunkční klávesu
 	Check	Zkontrolovat
 	Check Fold Lines	Zkontrolovat linie skladu
 @msg	No cut lines are in the selection.	Ve výběru nejsou žádné linie řezu.
@@ -10116,6 +10436,7 @@ breakText	Glyphs	Glyfy
 @msg	A panel is not joined to the rest by a crease.	Panel není se zbytkem spojen žádnou linií bigu.
 @msg	A fold line is on a non-printing layer.	Linie skladu je na netisknutelné vrstvě.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panely: {panels}, panty: {hinges}, chyby: {errors}, upozornění: {warnings}
+	Dashed Arrow	Přerušovaná šipka
 	Pressure Sensitive	Citlivé na tlak
 	Flex Ribbon	Pružná stuha
 	Pulse Stroke	Pulzující tah

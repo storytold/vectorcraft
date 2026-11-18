@@ -1559,12 +1559,14 @@ fn kind_id(kind: &RunErrorKind) -> &'static str {
     }
 }
 
-/// `message`, with what to do about a failure that comes from a script written for another program.
-fn explained(kind: &RunErrorKind, message: &str) -> String {
+/// `e`'s message, with what to do about a failure that comes from a script written for another
+/// program. A message the script supplied itself ([`RunError::authored`]) is given as it is.
+fn explained(e: &RunError) -> String {
     const HOST_OBJECTS: &[&str] = &["app", "Window", "BridgeTalk", "activeDocument", "documents"];
+    let message = &e.message;
     let names_host_object =
         message.strip_prefix("ReferenceError: ").is_some_and(|m| HOST_OBJECTS.iter().any(|o| m.split_whitespace().next() == Some(o)));
-    if *kind == RunErrorKind::Thrown && names_host_object {
+    if e.kind == RunErrorKind::Thrown && !e.authored && names_host_object {
         format!("{message} (scripts here use the `vc` object; objects other applications give their scripts are not available)")
     } else {
         message.to_string()
@@ -1582,7 +1584,7 @@ fn preprocessor_error(f: include::Failure) -> (RunError, Option<Arc<str>>) {
         include::FailKind::Limit => (RunErrorKind::Limit(LimitKind::Host), f.message),
     };
     let file = (f.index > 0).then_some(f.file);
-    (RunError { kind, message, line: f.line, column: f.column }, file)
+    (RunError { kind, message, line: f.line, column: f.column, authored: false }, file)
 }
 
 /// `e`, the error `realm` raised in the run of `host`, at the line and column of the file it is in,
@@ -1591,20 +1593,20 @@ fn located(host: &Host, realm: &Realm, e: &RunError) -> (RunError, Option<Arc<st
     let map = |m: &include::SourceMap| {
         let (index, file, line, column) = m.locate(e.line, e.column);
         let message = if e.kind == RunErrorKind::Syntax { relocated(&e.message, e.line, e.column, line, column) } else { e.message.clone() };
-        (RunError { kind: e.kind.clone(), message, line, column }, index, file)
+        (RunError { kind: e.kind.clone(), message, line, column, authored: e.authored }, index, file)
     };
     // An error `$.evalFile` raised for a file it could not run, and no script caught, is at that
     // file's place.
     if let Some((file, line, column)) = realm.error_mark().and_then(|m| host.eval_failures.borrow().get(m as usize).cloned()) {
         let message = if e.kind == RunErrorKind::Syntax { relocated(&e.message, e.line, e.column, line, column) } else { e.message.clone() };
-        return (RunError { kind: e.kind.clone(), message, line, column }, Some(file));
+        return (RunError { kind: e.kind.clone(), message, line, column, authored: e.authored }, Some(file));
     }
     if e.line == 0 {
         return (e.clone(), None);
     }
     // An error in code from a source whose map is not at hand, such as code that `eval` compiled,
     // is given without a place.
-    let unplaced = || (RunError { kind: e.kind.clone(), message: e.message.clone(), line: 0, column: 0 }, None);
+    let unplaced = || (RunError { line: 0, column: 0, ..e.clone() }, None);
     match realm.error_source() {
         0 => {
             let (e, index, file) = map(&host.script_map.borrow());
@@ -1777,6 +1779,15 @@ impl Session {
         self.script_report.as_ref().filter(|r| r["ok"] == false).map(failure_text)
     }
 
+    /// [`Self::script_failure_text`] split around the message when that message is text the script
+    /// supplied itself (`messageOrigin` `script`): the text before it, the message and the text after
+    /// it. `None` when the last run did not fail, or failed with one of the app's own errors.
+    pub fn script_authored_failure(&self) -> Option<(String, &str, String)> {
+        let r = self.script_report.as_ref().filter(|r| r["ok"] == false && r["messageOrigin"] == "script")?;
+        let (before, after) = failure_frame(r);
+        Some((before, r["message"].as_str().unwrap_or_default(), after))
+    }
+
     /// Has the running script used up its growth allowance, so a person must answer? A run asked
     /// to stop no longer waits: the next [`Session::script_pump`] ends it.
     pub fn script_waiting(&self) -> bool {
@@ -1873,7 +1884,7 @@ impl Session {
         };
         drop(key);
         let kind = LimitKind::Interrupted;
-        let e = RunError { kind: RunErrorKind::Limit(kind), message: format!("limit reached: {kind:?}"), line: 0, column: 0 };
+        let e = RunError { kind: RunErrorKind::Limit(kind), message: format!("limit reached: {kind:?}"), line: 0, column: 0, authored: false };
         let _ = self.script_failed(job, &e);
         true
     }
@@ -2120,14 +2131,14 @@ impl Session {
         // A stop while a dialog waits ends the run there; the interpreter cannot go on from the call.
         if job.realm.waits() {
             let kind = LimitKind::Interrupted;
-            let e = RunError { kind: RunErrorKind::Limit(kind), message: format!("limit reached: {kind:?}"), line: 0, column: 0 };
+            let e = RunError { kind: RunErrorKind::Limit(kind), message: format!("limit reached: {kind:?}"), line: 0, column: 0, authored: false };
             return Some(self.script_failed(job, &e));
         }
         job.host.calls_this_slice.set(0);
         let outcome = run_slice(self, &mut job);
         match outcome {
             Err(panic) => {
-                let e = RunError { kind: RunErrorKind::Internal, message: panic, line: 0, column: 0 };
+                let e = RunError { kind: RunErrorKind::Internal, message: panic, line: 0, column: 0, authored: false };
                 Some(self.script_failed(job, &e))
             }
             Ok(Err(e)) => Some(self.script_failed(job, &e)),
@@ -2144,7 +2155,7 @@ impl Session {
                 } else {
                     format!("`answers` has {n} answers the script did not use")
                 };
-                Some(self.script_failed(job, &RunError { kind: RunErrorKind::Limit(kind), message, line: 0, column: 0 }))
+                Some(self.script_failed(job, &RunError { kind: RunErrorKind::Limit(kind), message, line: 0, column: 0, authored: false }))
             }
             Ok(Ok(Progress::Done(_))) => {
                 let r = self.script_commit(job);
@@ -2179,7 +2190,7 @@ impl Session {
         let unwritten = job.host.flush_files();
         if !unwritten.is_empty() {
             let message = format!("{UNWRITTEN_FILES}: {}", unwritten.join(", "));
-            let e = RunError { kind: RunErrorKind::Thrown, message, line: 0, column: 0 };
+            let e = RunError { kind: RunErrorKind::Thrown, message, line: 0, column: 0, authored: false };
             return self.script_failed(job, &e);
         }
         // The working copy goes into the session; `job.world` holds the state before the run.
@@ -2197,7 +2208,7 @@ impl Session {
             if changed && (!crate::sanity::doc_sane(&st.doc, &st.selection) || st.doc.too_deep(None)) {
                 job.world.docs = start;
                 job.world.swap(self);
-                let e = RunError { kind: RunErrorKind::Internal, message: INVALID_RESULT.to_string(), line: 0, column: 0 };
+                let e = RunError { kind: RunErrorKind::Internal, message: INVALID_RESULT.to_string(), line: 0, column: 0, authored: false };
                 return self.script_failed(job, &e);
             }
         }
@@ -2302,7 +2313,8 @@ fn failure_report(name: &str, e: &RunError, file: Option<&str>, host: &Host, fue
     let mut report = json!({
         "ok": false,
         "kind": kind_id(&e.kind),
-        "message": explained(&e.kind, &e.message),
+        "message": explained(e),
+        "messageOrigin": if e.authored { "script" } else { "built-in" },
         "name": name,
         "line": e.line,
         "column": e.column,
@@ -2395,6 +2407,12 @@ fn close_run(s: &mut Session, host: &Host, report: &mut Value, ending: console::
 
 /// The text of a failed run's error.
 fn failure_text(report: &Value) -> String {
+    let (before, after) = failure_frame(report);
+    format!("{before}{}{after}", report["message"].as_str().unwrap_or_default())
+}
+
+/// The text of a failed run's error before its message and after it.
+fn failure_frame(report: &Value) -> (String, String) {
     let s = |k: &str| report[k].as_str().unwrap_or_default();
     let (line, column) = (report["line"].as_u64().unwrap_or(0), report["column"].as_u64().unwrap_or(0));
     let at = match report["file"].as_str() {
@@ -2409,7 +2427,7 @@ fn failure_text(report: &Value) -> String {
     } else {
         String::new()
     };
-    format!("{}{at}: {} ({}){kept}", s("name"), s("message"), s("kind"))
+    (format!("{}{at}: ", s("name")), format!(" ({}){kept}", s("kind")))
 }
 
 /// A run's slice: the working copy in, the real session lent to the host functions, one measured

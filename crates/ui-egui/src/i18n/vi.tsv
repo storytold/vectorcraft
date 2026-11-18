@@ -651,6 +651,11 @@ font-technology	Variable	Biến thiên
 	Color blindness – Deuteranopia-type	Mù màu – loại Deuteranopia
 	Color blindness – Protanopia-type	Mù màu – loại Protanopia
 	Color blindness – Tritanopia-type	Mù màu – loại Tritanopia
+	Show Color Vision Preview	Hiện xem trước thị giác màu
+	Protanopia	Mù màu đỏ
+	Deuteranopia	Mù màu lục
+	Tritanopia	Mù màu lam
+	Achromatopsia	Mù màu toàn phần
 	Color Burn	Đốt màu
 	Color conversion:	Chuyển đổi màu:
 	Color Dodge	Tránh màu
@@ -838,6 +843,16 @@ font-technology	Variable	Biến thiên
 	Create New Swatch…	Tạo mẫu màu mới…
 	Create New {kind} Style	Tạo kiểu {kind} mới
 	Create Object Mosaic…	Tạo khảm đối tượng…
+	Create Object Mosaic	Tạo khảm đối tượng
+	Current Size:	Kích thước hiện tại:
+	New Size:	Kích thước mới:
+	Tile Spacing:	Khoảng cách ô:
+	Number of Tiles:	Số ô:
+	Constrain Ratio:	Ràng buộc tỷ lệ:
+	Result:	Kết quả:
+	Resize Using Percentages	Đổi kích thước theo phần trăm
+	Delete Raster	Xóa ảnh raster
+	Use Ratio	Dùng tỷ lệ
 	Create Outlines	Tạo đường bao
 	Create Path	Tạo đường dẫn
 	Create PDF layers from layers and sublayers	Tạo lớp PDF từ các lớp và lớp con
@@ -990,6 +1005,7 @@ font-technology	Variable	Biến thiên
 	Duplicate Action or Action Set	Nhân bản hành động hoặc bộ hành động
 	Delete the action set “{name}” and its actions?	Xóa bộ hành động “{name}” và các hành động của nó?
 	Delete the selected action sets and their actions?	Xóa các bộ hành động đã chọn và các hành động của chúng?
+	Delete all action sets and their actions?	Xóa tất cả các bộ hành động và các hành động của chúng?
 	Delete the library “{name}”?	Xóa thư viện “{name}”?
 	Delete Theme	Xóa bộ màu
 	Delete theme	Xóa bộ màu
@@ -1176,6 +1192,8 @@ font-technology	Variable	Biến thiên
 	Duplicate	Nhân bản
 	Duplicate and Offset 10 pt	Nhân bản và dịch 10 pt
 	Duplicate Artboard	Nhân bản bảng vẽ
+	Click to add an artboard on this side; Alt-click to duplicate this artboard with its art	Bấm để thêm bảng vẽ ở phía này, Alt-bấm để nhân bản bảng vẽ này cùng tác phẩm của nó
+	Click to add an artboard on this side	Bấm để thêm bảng vẽ ở phía này
 	Duplicate Artboards	Nhân bản các bảng vẽ
 	Duplicate Brush	Nhân bản cọ
 	Duplicate Character Style	Nhân bản kiểu ký tự
@@ -1543,6 +1561,19 @@ digits	Malayalam	Malayalam
 	Posterization	Áp phích hóa
 	Find	Tìm
 	Find and Replace…	Tìm và thay thế…
+	Find and Replace	Tìm và thay thế
+	Find:	Tìm:
+	Replace With:	Thay thế bằng:
+	Replace & Find	Thay thế và tìm
+	Replace All	Thay thế tất cả
+	Match Case	Phân biệt chữ hoa chữ thường
+	Find Whole Word	Tìm toàn bộ từ
+	Search Backwards	Tìm ngược
+	Check Hidden Layers	Kiểm tra lớp ẩn
+	Check Locked Layers	Kiểm tra lớp bị khóa
+@msg	No matches found	Không tìm thấy kết quả khớp
+@msg	Matches replaced: {n}	Số kết quả khớp đã thay thế: {n}
+@msg	no match of `find` at bytes {_1}..{_2} of object {_3}	không có kết quả khớp với `find` tại byte {_1}..{_2} của đối tượng {_3}
 	Find Font	Tìm phông
 	Find Font Files	Tìm tệp phông chữ
 	Find Fonts	Tìm phông chữ
@@ -1582,6 +1613,7 @@ digits	Malayalam	Malayalam
 	Fixed	Cố định
 	Flag…	Lá cờ…
 	Flare	Hào quang
+	Edit Flare	Chỉnh sửa hào quang
 	Flare Tool	Công cụ Hào quang
 	Flare Tool Options	Tùy chọn Công cụ Hào quang
 	Flat Angle	Góc phẳng
@@ -2612,6 +2644,9 @@ digits	Hindi	Hindi
 	Navigate	Dẫn hướng
 	Navigator	Bộ dẫn hướng
 	Navigator Panel Options	Tùy chọn bảng bộ dẫn hướng
+	Attributes Panel Options	Tùy chọn bảng thuộc tính
+	Number of Recent URLs:	Số URL gần đây:
+@msg	`count` must be a whole number from 1 to 30	`count` phải là số nguyên từ 1 đến 30
 	Draw Dashed Lines as Solid Lines	Vẽ đường nét đứt thành đường liền
 	Needs the desktop app	Cần ứng dụng máy tính để bàn
 	Neutral Gradients	Chuyển sắc trung tính
@@ -3074,6 +3109,7 @@ diagnostics	ui	giao diện
 	Save Actions…	Lưu hành động…
 	Load Actions…	Tải hành động…
 	Replace Actions…	Thay thế hành động…
+	Clear Actions	Xóa hết hành động
 	Reset Actions	Đặt lại hành động
 	Replace the current actions with the default set?	Thay thế các hành động hiện tại bằng bộ mặc định?
 	Append adds the default set after the current sets instead.	Nối thêm sẽ thêm bộ mặc định vào sau các bộ hiện tại.
@@ -3519,6 +3555,8 @@ mark-style	Japanese	Kiểu Nhật
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Con lăn chuột kèm giữ Cmd/Ctrl cuộn khung vẽ sang ngang.
 	Dragging sideways on a numeric field's label changes the field's value.	Kéo sang ngang trên nhãn của một trường số sẽ thay đổi giá trị của trường.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Cử chỉ xoay bằng hai ngón trên bàn di chuột sẽ xoay khung nhìn của khung vẽ.
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Giữ một phím sẽ chạy công cụ hoặc lệnh trong cột Giữ của Phím tắt; nhấn nhanh sẽ chạy phím tắt thông thường của phím đó.
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Số giây phải giữ một phím trước khi phím tắt nhấn giữ của nó chạy thay cho phím tắt thông thường.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Khi bạn di chuyển điểm neo, mỗi đường cong có một đầu bị di chuyển sẽ giữ hình dạng so với các đầu của nó.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Giữ phím tắt của một công cụ sẽ chọn công cụ đó cho đến khi bạn thả ra, rồi công cụ trước đó được chọn lại.
 	Shows the bounding box while you move the selection or draw a shape.	Hiển thị hộp giới hạn khi bạn di chuyển vùng chọn hoặc vẽ một hình.
@@ -3600,6 +3638,7 @@ mark-style	Japanese	Kiểu Nhật
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Con trỏ hoặc điểm đang kéo phải đến gần hình vẽ trên màn hình bao nhiêu để đường căn thông minh hút vào; khoảng cách này như nhau ở mọi mức thu phóng.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Hút đầu mút của đoạn thẳng, hoặc hình tròn vẽ từ tâm, để nó chạm vào một đường cong ở gần.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Hút đầu mút của đoạn thẳng để nó gặp một đoạn thẳng ở gần theo góc vuông.
+	Edit type set in fonts that aren't available?	Chỉnh sửa văn bản dùng phông chữ không có sẵn?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Hiển thị trên khung vẽ số của mỗi lát cắt trong một ô ở góc trên bên trái của nó; khi tắt, đường viền của các lát cắt vẫn hiện.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Màu của đường viền lát cắt người dùng và lát cắt đối tượng cùng các ô số của chúng; lát cắt tự động dùng một sắc độ nhạt hơn của màu này.
 	Reset all preferences to their defaults?	Đặt lại tất cả tùy chọn về mặc định?
@@ -4036,6 +4075,7 @@ mark-style	Japanese	Kiểu Nhật
 	Show Brush Size	Hiện kích thước cọ
 	Show Center	Hiện tâm
 	Show Code	Hiện mã
+	Show in Browser	Hiện trong trình duyệt
 	Show Color Groups	Hiện nhóm màu
 	Show Color Swatches	Hiện mẫu màu
 	Show Corner Widget	Hiện widget góc
@@ -5501,6 +5541,7 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	chữ dùng làm mặt nạ trong các vùng liên kết, chữ bao quanh hoặc đường dẫn phức không cắt xén
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	ảnh liên kết không có bản xem trước trong tệp hiển thị ô giữ chỗ cho đến khi tìm thấy tệp gốc: liên kết lại trong bảng Liên kết
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	Hợp nhất tô trực tiếp: chọn nhóm tô trực tiếp và các đường dẫn để thêm
+@msg	`Face` and `Edge` name the faces and edges of a Live Paint group: give the path another name	`Face` và `Edge` là tên của các mặt và cạnh trong nhóm tô trực tiếp: hãy đặt tên khác cho đường dẫn
 @msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	Tô trực tiếp nhận đường dẫn và đường dẫn phức: hãy chuyển văn bản, hình ảnh và các đối tượng khác thành đường dẫn trước
 @msg	Live Paint: select paths or compound paths	Tô trực tiếp: chọn đường dẫn hoặc đường dẫn phức
 @msg	Live Paint: these paths are too degenerate to paint	Tô trực tiếp: các đường dẫn này quá suy biến để tô
@@ -5574,6 +5615,7 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	no graphic style `{n}`	không có kiểu đồ họa `{n}`
 @msg	no interaction in progress	không có tương tác nào đang tiến hành
 @msg	no key object	không có đối tượng khóa
+@msg	Align to Key Object isn't available with the Artboard tool	không thể dùng Căn theo đối tượng chính với Công cụ Bảng vẽ
 @msg	no library `{id}`	không có thư viện `{id}`
 @msg	the library has another item of that kind named `{name}`	thư viện đã có một mục khác cùng loại tên là `{name}`
 @msg	no library `{key}` (see {list})	không có thư viện `{key}` (xem {list})
@@ -5639,6 +5681,8 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	no such spine point	không có điểm trục như vậy
 @msg	`with` must be a list of at most 10000 spine point indexes	`with` phải là danh sách tối đa 10000 chỉ số điểm trục
 @msg	`with` moves points, not a handle	`with` di chuyển các điểm, không phải tay nắm
+@msg	`link` and `independent` cannot both be true	`link` và `independent` không thể cùng là true
+@msg	`link` places a handle: give `handle`	`link` đặt một tay nắm: hãy cho `handle`
 @msg	no such spine segment	không có đoạn trục như vậy
 @msg	no such subpath	không có nhánh con như vậy
 @msg	no such user library	không có thư viện người dùng như vậy
@@ -5773,6 +5817,7 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} ảnh liên kết đã thay đổi trên đĩa: Cập nhật liên kết hiển thị phiên bản mới
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Đã cập nhật {n} tệp liên kết đã thay đổi trên đĩa
 @msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	tài liệu đặt bleed mà tệp PDF/X này bỏ qua: hãy bật "Dùng cài đặt bleed của tài liệu"
+@msgplural	{n} object reaches the trim edge but stops short of the bleed|{n} objects reach the trim edge but stop short of the bleed	{n} đối tượng chạm mép xén nhưng dừng trước bleed
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	Đã xuất {what} với {n} ghi chú: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} tệp phông chữ hiện ở trong {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} tệp phông chữ hiện ở trong {folder}; {failed} không thể thêm: {reason}
@@ -5815,6 +5860,7 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	select a blend	hãy chọn một đối tượng hòa trộn
 @msg	select a blend or give `id`	hãy chọn một đối tượng hòa trộn hoặc cung cấp `id`
 @msg	select a clip group	hãy chọn nhóm cắt
+@msg	select a flare	hãy chọn một hào quang
 @msg	select a gradient mesh	hãy chọn lưới chuyển sắc
 @msg	select a linked image: an embedded one has no file	hãy chọn ảnh liên kết: ảnh nhúng không có tệp
 @msg	select a Live Paint group	hãy chọn nhóm tô trực tiếp
@@ -6477,6 +6523,9 @@ variable-list-end	{0}, {1}	{0} và {1}
 	Continue in Background	Tiếp tục trong nền
 	Cancel Export	Hủy xuất
 @msg	Export cancelled	Đã hủy xuất
+	Cancel Save	Hủy lưu
+@plural	{n} more save waiting|{n} more saves waiting	Còn {n} lượt lưu đang chờ
+@msg	Save canceled	Đã hủy lưu
 # Paragraph panel menu › Justification…
 	Desired	Mong muốn
 	Word Spacing:	Khoảng cách từ:
@@ -6895,6 +6944,7 @@ axis	Y Axis	Trục Y
 	Checkpoint	Điểm kiểm tra
 	Inventory Icons	Biểu tượng túi đồ
 	Skill Icons	Biểu tượng kỹ năng
+	Weather Icons	Biểu tượng thời tiết
 	Attack	Tấn công
 	Defend	Phòng thủ
 	Heal	Hồi máu
@@ -7000,6 +7050,13 @@ axis	Y Axis	Trục Y
 	Bus Lines	Đường bus
 	Terminal Nodes	Nút đầu cuối
 
+# Original arrow art brushes.
+	Arrows	Cọ mũi tên
+	Solid Arrow	Mũi tên đặc
+	Open Arrow	Mũi tên rỗng
+	Double Arrow	Mũi tên đôi
+	Chevron Arrow	Mũi tên chữ V
+
 	Notched Ribbon	Dải băng khía
 	Double Line	Đường đôi
 	Wave	Sóng
@@ -7016,6 +7073,257 @@ axis	Y Axis	Trục Y
 	Stars	Ngôi sao
 	Triangles	Tam giác
 	Sparkles	Lấp lánh
+	Warm Gray	Xám ấm
+	Cool Gray	Xám lạnh
+	Neutrals	Màu trung tính
+	Ivory	Ngà
+	Linen	Vải lanh
+	Oat	Yến mạch
+	Greige	Xám be
+	Stone	Đá
+	Taupe	Nâu xám
+	Slate	Đá phiến
+	Clay	Đất sét
+	Terracotta	Đất nung
+	Ochre	Đất son
+	Umber	Nâu đất
+	Sand	Cát
+	Olive	Ô liu
+	Moss	Rêu
+	Rosy	Hồng phớt
+	Neutral	Trung tính
+	Golden	Vàng óng
+	Pastel	Màu phấn
+	Pastel Red	Đỏ phấn
+	Pastel Orange	Cam phấn
+	Pastel Amber	Hổ phách phấn
+	Pastel Yellow	Vàng phấn
+	Pastel Lime	Vàng chanh phấn
+	Pastel Green	Xanh lá phấn
+	Pastel Teal	Xanh mòng két phấn
+	Pastel Cyan	Xanh lơ phấn
+	Pastel Azure	Xanh da trời phấn
+	Pastel Blue	Xanh dương phấn
+	Pastel Violet	Tím phấn
+	Pastel Magenta	Đỏ hồng phấn
+	Soft Red	Đỏ dịu
+	Soft Orange	Cam dịu
+	Soft Amber	Hổ phách dịu
+	Soft Yellow	Vàng dịu
+	Soft Lime	Vàng chanh dịu
+	Soft Green	Xanh lá dịu
+	Soft Teal	Xanh mòng két dịu
+	Soft Cyan	Xanh lơ dịu
+	Soft Azure	Xanh da trời dịu
+	Soft Blue	Xanh dương dịu
+	Soft Violet	Tím dịu
+	Soft Magenta	Đỏ hồng dịu
+	Vivid Red	Đỏ rực
+	Vivid Orange	Cam rực
+	Vivid Amber	Hổ phách rực
+	Vivid Yellow	Vàng rực
+	Vivid Lime	Vàng chanh rực
+	Vivid Green	Xanh lá rực
+	Vivid Teal	Xanh mòng két rực
+	Vivid Cyan	Xanh lơ rực
+	Vivid Azure	Xanh da trời rực
+	Vivid Blue	Xanh dương rực
+	Vivid Violet	Tím rực
+	Vivid Magenta	Đỏ hồng rực
+	Deep	Đậm
+	Deep Red	Đỏ đậm
+	Deep Orange	Cam đậm
+	Deep Amber	Hổ phách đậm
+	Deep Yellow	Vàng đậm
+	Deep Lime	Vàng chanh đậm
+	Deep Green	Xanh lá đậm
+	Deep Teal	Xanh mòng két đậm
+	Deep Cyan	Xanh lơ đậm
+	Deep Azure	Xanh da trời đậm
+	Deep Blue	Xanh dương đậm
+	Deep Violet	Tím đậm
+	Deep Magenta	Đỏ hồng đậm
+	Gold	Vàng kim
+	Silver	Bạc
+	Bronze	Đồng thiếc
+	Copper	Đồng đỏ
+	Brass	Đồng thau
+	Rose Gold	Vàng hồng
+	Gunmetal	Xám thép
+	Platinum	Bạch kim
+	Pewter	Thiếc
+	Ember	Than hồng
+	Lagoon	Đầm phá
+	Dusk	Hoàng hôn
+	Clay to Teal	Đất sét sang xanh mòng két
+	Plum to Olive	Mận sang ô liu
+	Complementary Coral	San hô, bổ sung
+	Split Complementary Coral	San hô, bổ sung tách
+	Analogous Coral	San hô, tương đồng
+	Triad Coral	San hô, bộ ba
+	Tetrad Coral	San hô, bộ bốn
+	Pentagram Coral	San hô, ngôi sao năm cánh
+	Complementary Teal	Xanh mòng két, bổ sung
+	Split Complementary Teal	Xanh mòng két, bổ sung tách
+	Analogous Teal	Xanh mòng két, tương đồng
+	Triad Teal	Xanh mòng két, bộ ba
+	Tetrad Teal	Xanh mòng két, bộ bốn
+	Pentagram Teal	Xanh mòng két, ngôi sao năm cánh
+	Soft Spectrum	Quang phổ dịu
+	Red to Amber	Đỏ sang hổ phách
+	Orange to Yellow	Cam sang vàng
+	Amber to Lime	Hổ phách sang vàng chanh
+	Yellow to Green	Vàng sang xanh lá
+	Lime to Teal	Vàng chanh sang xanh mòng két
+	Green to Cyan	Xanh lá sang xanh lơ
+	Teal to Azure	Xanh mòng két sang xanh da trời
+	Cyan to Blue	Xanh lơ sang xanh dương
+	Azure to Violet	Xanh da trời sang tím
+	Blue to Magenta	Xanh dương sang đỏ hồng
+	Violet to Red	Tím sang đỏ
+	Magenta to Orange	Đỏ hồng sang cam
+	Dawn	Bình minh
+	Noon	Giữa trưa
+	Sunset	Hoàng hôn rực
+	Night	Đêm
+	Overcast	Trời âm u
+	White to Black	Trắng sang đen
+	Light Grays	Xám nhạt
+	Dark Grays	Xám sẫm
+	Warm Grays	Các sắc xám ấm
+	Cool Grays	Các sắc xám lạnh
+	Fade to Transparent	Mờ dần sang trong suốt
+	White Fade	Mờ dần sang trắng
+	Vignette	Viền tối
+	Mist	Sương mù
+	Petal	Cánh hoa
+	Fern	Dương xỉ
+	Smoke	Khói
+	Honey	Mật ong
+	Seafoam	Bọt biển
+	Lavender	Oải hương
+	Driftwood	Gỗ trôi dạt
+	Ink Wash	Mực loang
+	Tide	Thủy triều
+	Bloom	Nở hoa
+	Dew	Sương
+	Pollen	Phấn hoa
+	Lichen	Địa y
+	Prism Veil	Màn lăng kính
+	Opal Ribbon	Dải opal
+	Pearl Flash	Ánh ngọc trai
+	Aurora Foil	Lá cực quang
+	Iris Sheen	Ánh óng ánh
+	Frost Spectrum	Quang phổ sương giá
+	Silver Tide	Triều bạc
+	Rose Quartz Gleam	Ánh thạch anh hồng
+	Moonstone Shift	Ánh đá mặt trăng
+	Violet Edge	Viền tím
+	Mint Halo	Quầng bạc hà
+	Amber Corona	Vành hổ phách
+	Polar Glint	Ánh cực
+	Pastel Orbit	Quỹ đạo màu phấn
+	Coral and Navy	San hô và xanh hải quân
+	Plum and Lime	Mận và vàng chanh
+	Teal and Gold	Xanh mòng két và vàng kim
+	Indigo and Peach	Chàm và đào
+	Forest and Rose	Rừng và hoa hồng
+	Red Glow	Ánh đỏ
+	Orange Glow	Ánh cam
+	Amber Glow	Ánh hổ phách
+	Yellow Glow	Ánh vàng
+	Lime Glow	Ánh vàng chanh
+	Green Glow	Ánh xanh lá
+	Teal Glow	Ánh xanh mòng két
+	Cyan Glow	Ánh xanh lơ
+	Azure Glow	Ánh xanh da trời
+	Blue Glow	Ánh xanh dương
+	Violet Glow	Ánh tím
+	Magenta Glow	Ánh đỏ hồng
+	Polka Dots	Chấm bi
+	Vertical Stripes	Sọc dọc
+	Horizontal Stripes	Sọc ngang
+	Diagonal Stripes	Sọc chéo
+	Checkerboard	Bàn cờ
+	Diamonds	Hình thoi
+	Crosses	Chữ thập
+	Coarse Grit	Hạt thô
+	Stipple	Chấm điểm
+	Scratches	Vết xước
+	Sparse Flecks	Đốm thưa
+	Dense Flecks	Đốm dày
+	Sine Bands	Dải hình sin
+	Ripple Lines	Đường gợn sóng
+	Interference Rings	Vòng giao thoa
+	Offset Rings	Vòng lệch
+	Warped Checks	Ô vuông méo
+	Pinched Stripes	Sọc thắt
+	Chevron Pulse	Nhịp chữ V
+	Radiating Lenses	Thấu kính tỏa tia
+	Soft Shadow	Bóng mềm
+	Hard Shadow	Bóng cứng
+	Lifted Card	Thẻ nổi
+	Neon Tube	Ống neon
+	Inner Light	Ánh sáng bên trong
+	Feathered	Viền mềm
+	Haze	Mờ sương
+	Double Rule	Đường kẻ đôi
+	Triple Rule	Đường kẻ ba
+	Dashed Border	Viền nét đứt
+	Dotted Border	Viền chấm
+	Offset Keyline	Đường viền lệch
+	Inset Keyline	Đường viền trong
+	Outside Stroke	Nét ngoài
+	Pointer	Con trỏ
+	Highlighter	Bút dạ quang
+	Sketchy Line	Nét phác thảo
+	Scribble Fill	Tô nguệch ngoạc
+	Wobble	Chao đảo
+	Zig Zag Edge	Mép răng cưa
+	Wavy Edge	Mép lượn sóng
+	Puffy	Phồng
+	Starburst	Nổ sao
+	Glossy	Bóng loáng
+	Brushed Metal	Kim loại xước
+	Spotlight	Đèn chiếu
+	Sunset Band	Dải hoàng hôn
+	Sea Glass	Thủy tinh biển
+	Pearl	Ngọc trai
+	Chrome Rim	Vành crôm
+	Glow Orb	Quả cầu phát sáng
+	Pill Badge	Huy hiệu viên thuốc
+	Round Badge	Huy hiệu tròn
+	Flag Wave	Cờ bay
+	Bulge	Phình
+	Twisted	Xoắn
+	Echo	Tiếng vọng
+	Spiral Copies	Bản sao xoắn ốc
+	Multiply Tint	Sắc nhân
+	Darken Veil	Màn làm tối
+	Ghosted	Mờ ảo
+	Two Tone	Hai tông
+	Overlay Glaze	Men phủ lên
+	Screen Light	Ánh màn hình
+	Soft Light Wash	Loang ánh sáng mềm
+	Cyan Neon	Neon lục lam
+	Magenta Laser	Laser đỏ tươi
+	Amber Tube	Ống hổ phách
+	Electric Lime	Chanh điện
+	Pulse Violet	Tím nhấp nháy
+	Cobalt Phosphor	Lân quang coban
+	Burst	Bùng nổ
+	Rounded Square	Hình vuông bo góc
+	Sun	Mặt trời
+	Moon	Mặt trăng
+	Cloud	Mây
+	Rain	Mưa
+	Thunder	Sấm
+	Snow	Tuyết
+	Bar	Thanh
+	Hexagon	Lục giác
+	Spectrum	Quang phổ
+	Triangle	Tam giác
+	Vivid	Rực rỡ
 	Save Brush Library…	Lưu thư viện cọ…
 @msg	`{_1}` has no brushes to apply	`{_1}` không có cọ nào để áp dụng
 @msg	missing `library` (see brush.libraries)	thiếu `library` (xem brush.libraries)
@@ -7442,10 +7750,18 @@ breakText	Glyphs	Glyph
 	Smooth Bridge…	Cầu nối mượt…
 	Smooth Bridge	Cầu nối mượt
 	Keep Originals	Giữ bản gốc
-@msg	select two circles to bridge	chọn hai hình tròn để nối
+@msg	select two or more circles to bridge	chọn hai hình tròn trở lên để nối
 @msg	one circle is inside the other	một hình tròn nằm bên trong hình tròn kia
 @msg	the circles are too far apart for this radius: raise the radius	các hình tròn cách nhau quá xa so với bán kính này: hãy tăng bán kính
 @msg	the circles are too far apart for this radius	các hình tròn cách nhau quá xa so với bán kính này
+	Constant Gap	Khoảng hở cố định
+	Reach:	Tầm với:
+@msg	the circles are too far apart for this gap: raise the gap	các hình tròn cách nhau quá xa so với khoảng hở này: hãy tăng khoảng hở
+@msg	the circles are too far apart for this gap	các hình tròn cách nhau quá xa so với khoảng hở này
+@msg	no two circles are within reach: raise the reach	không có hai hình tròn nào trong tầm với: hãy tăng tầm với
+@msg	select at most 2000 circles to bridge	chọn tối đa 2000 hình tròn để nối
+@msg	that makes too many bridges (at most 8000): lower the reach	thao tác này tạo quá nhiều cầu nối (tối đa 8000): hãy giảm tầm với
+@msg	the bridged circles are too complex to unite	các hình tròn được nối quá phức tạp để hợp nhất
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	Tiếp tuyến chung…
 	Common Tangents	Tiếp tuyến chung
@@ -7970,6 +8286,18 @@ breakText	Glyphs	Glyph
 @msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} điểm ảnh quá lớn cho Targa (tối đa 65535 điểm ảnh mỗi cạnh): hãy giảm độ phân giải
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} điểm ảnh quá lớn cho PSD (tối đa {MAX_SIDE} điểm ảnh mỗi cạnh): hãy giảm độ phân giải
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer phải là "singleLine", "everyLine", "standardSingleLine" hoặc "standardEveryLine"
+	Tap	Nhấn nhanh
+	Clear Hold	Xóa nhấn giữ
+	Hold Shortcuts	Phím tắt nhấn giữ
+	Hold Shortcut Delay	Độ trễ phím tắt nhấn giữ
+	How hold shortcuts work	Cách phím tắt nhấn giữ hoạt động
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	Nhấp, rồi nhấn phím cần giữ cho mục này (Esc để hủy). Giữ phím sẽ chạy mục này; nhấn nhanh sẽ chạy phím tắt riêng của phím đó.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	Nhấn nhanh một phím sẽ chạy phím tắt của phím đó. Giữ phím trong khoảng độ trễ sẽ chạy công cụ hoặc lệnh trong cột Giữ của phím thay vào đó. Phím tắt nhấn giữ là một phím chữ cái, chữ số hoặc dấu câu, dùng riêng hoặc cùng Shift.
+@msg	Hold {_1} is already used by {_2}	Nhấn giữ {_1} đã được {_2} sử dụng
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	phím tắt nhấn giữ là một phím gõ ra ký tự, dùng riêng hoặc cùng Shift ({shown} có Cmd, Ctrl hoặc Alt)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} không thể là phím tắt nhấn giữ: hãy dùng chữ cái, chữ số hoặc phím dấu câu
+	Dashed Arrow	Mũi tên nét đứt
+@msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	một đường thẳng hoặc đường dẫn mở khác không bao quanh vùng nào sẽ không thêm vùng nào vào hình phức hợp; để đưa nó vào, trước tiên hãy áp dụng Đối tượng › Đường dẫn › Đường bao nét cho nó
 	Pressure Sensitive	Nhạy áp lực
 	Flex Ribbon	Dải mềm
 	Pulse Stroke	Nét rung
