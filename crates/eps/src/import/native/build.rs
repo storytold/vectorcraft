@@ -545,7 +545,8 @@ pub(super) fn build_weighing(
         }
         notes.push(format!("{}: they came in as the page's art", kinds.join(", ")));
     }
-    add_threads(&mut doc, threads, &threaded_frames, !unread.is_empty());
+    // The frames still threaded: a blank story's frame an unread object left alone isn't.
+    let threaded_frames = add_threads(&mut doc, threads, &threaded_frames, !unread.is_empty());
     // Area type flows around the wrap objects above it before it is compared with the page.
     resolve_text_wrap(&mut doc)?;
     let bound_text = bound_slots(&doc, &bindings, &xml_ids, VariableKind::Text);
@@ -1513,19 +1514,22 @@ fn held_frames(infos: &[SlotInfo], stories: &[Option<Arc<Story>>], threads: &[(u
     threads.iter().filter(|(story, _)| !blank.contains(story)).flat_map(|(_, ids)| ids.iter().copied()).collect()
 }
 
-/// `threads` as `doc`'s text threads. With `replaced` (unread objects were replaced by page art),
-/// the frames they took with them (`frames` that `doc` no longer has, only a blank story's) are left
-/// out, and so is a thread left with one frame.
-fn add_threads(doc: &mut Document, threads: Vec<(u32, Vec<NodeId>)>, frames: &BTreeSet<NodeId>, replaced: bool) {
+/// `threads` as `doc`'s text threads, and the frames of the threads added. With `replaced` (unread
+/// objects were replaced by page art), the frames they took with them (`frames` that `doc` no longer
+/// has, only a blank story's) are left out, and so is a thread left with one frame.
+fn add_threads(doc: &mut Document, threads: Vec<(u32, Vec<NodeId>)>, frames: &BTreeSet<NodeId>, replaced: bool) -> BTreeSet<NodeId> {
     let present = replaced.then(|| doc.index_paths(frames.iter().copied()));
+    let mut threaded = BTreeSet::new();
     for (_, mut ids) in threads {
         if let Some(present) = &present {
             ids.retain(|id| present.contains_key(id));
         }
         if ids.len() > 1 {
+            threaded.extend(ids.iter().copied());
             doc.text_threads.push(ids);
         }
     }
+    threaded
 }
 
 /// The slots of blank stories (nothing but spaces and line ends) that neither the text document nor

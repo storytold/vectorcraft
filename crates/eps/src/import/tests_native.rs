@@ -5273,6 +5273,29 @@ fn a_warp_or_an_envelope_holding_a_frame_of_a_blank_thread_keeps_its_thread_of_t
     assert!(!notes.iter().any(|w| w.starts_with(crate::import::ai::WARPED_TYPE_DRAWN)), "{notes:?}");
 }
 
+/// A blank story's thread whose first frame an unread group takes with it leaves its other frame
+/// alone, no longer threaded: in a warp, that frame is weighed against its look as any warped text
+/// object is (the look draws a square the empty frame doesn't, so the look takes its place).
+#[test]
+fn a_blank_frame_an_unread_group_leaves_alone_in_a_warp_is_weighed_as_lone_type() {
+    let frames = [
+        format!("<< /0 << /0 [ 0 0 ] /1 << /0 [ {} ] >> /2 << /0 1 >> >> >>", canvas_rect(50.0, 10.0, 54.0, 14.0)),
+        format!("<< /0 << /0 [ 0 0 ] /1 << /0 [ {} ] >> /2 << /0 1 >> >> >>", canvas_rect(70.0, 10.0, 74.0, 14.0)),
+    ];
+    let text = document_of(&frames, &[story("\\r", &[0, 1], "/0 0", "/1 10.0")]);
+    let grouped = os1_group(&format!("{}\n{}\nZZ", square(50, 10), frame_object(0, 0)));
+    let own: String = frame_object(0, 1).lines().map(|l| format!("%_{l}\n")).collect();
+    let warped = format!("u\n0 1 1 0 1 0 0 Xa\n70 10 m\n74 10 L\n74 14 L\n70 14 L\nf\nU\n9 () XW\n{own}1 (Warped) XW\n");
+    let art = native_with_text(
+        &(warped_style(40.0, WarpOn::Object) + &layer("Back", true, &square(10, 10)) + &layer("Mixed", true, &format!("{grouped}\n{warped}"))),
+        &text,
+    );
+    let (doc, notes, read) = crate::layered_ai(&private(&art), pdf_three_squares(), vec![], false, true, 1.0);
+    assert!(read, "{notes:?}");
+    assert!(doc.text_threads.is_empty(), "{:?} {notes:?}", doc.text_threads);
+    assert!(notes.iter().any(|w| w.starts_with(crate::import::ai::WARPED_TYPE_DRAWN)), "{notes:?}");
+}
+
 /// A point type frame at the point (`x`, `y`) of the art.
 fn point_frame(x: f64, y: f64) -> String {
     let (cx, cy) = canvas(x, y);
