@@ -9435,7 +9435,7 @@ File → Export → Save for Web (Legacy) writes optimised web images: `document
 …}` renders the artboard (`clipToArtboard`, the default; `artboard` picks one) or the visible art and the slices, at
 `width`, `height` or `percent`, and encodes it with the format's settings: for GIF and PNG-8 `reduction`, `colors`,
 `dither`, `ditherAmount`, `transparency`, `matte`, `interlaced`, `webSnap`, `lossy` (GIF) and `colorTable {locked,
-transparent, webShift, sort}`; for JPEG `quality`, `progressive`, `optimized`, `embedProfile` and `matte`; for PNG-24
+transparent, webShift, sort, deleted, customPalette}`; for JPEG `quality`, `progressive`, `optimized`, `embedProfile` and `matte`; for PNG-24
 `transparency`, `matte` and `interlaced`. `metadata` (none, copyright, contact, all) writes File Info as PNG text or a
 GIF/JPEG comment; `convertToSrgb` marks PNGs as sRGB. `<stem>` is the name of `path` without its extension, or
 without `path` the document's title with the characters Windows does not allow in a file name as `-` and a `-` after
@@ -9451,6 +9451,25 @@ file size), `seconds` to download at `kbps` (default 56.6), the size, and for pa
 (`colors: [{color, source, transparent, locked, webShifted, webSafe}]`). The colour table's lists name colours by
 `source` (the colour the reduction made), so a colour keeps its edits when it is web-shifted or snapped. `slice: n`
 previews one slice; `image: true` adds the file; `warnings` holds the export's warnings.
+
+Delete Color is `colorTable.deleted: ["#rrggbb"…]`, by `source`. The deleted colors leave the table and the file, and
+their pixels take the nearest color left, with the current reduction's color distance and dither; the preview and the
+file agree. A deleted color also leaves `locked`, `transparent` and `webShift`. A color the table does not hold is
+ignored. Deleting every opaque color is an error, and the settings, preview and files do not change; the transparent
+entry of transparent pixels cannot be deleted. `colorTable.customPalette: ["#rrggbb"…]` is a fixed palette (a Custom
+table) used instead of the reduction's own, at most `colors` entries with the transparent one included, so a color it
+lacks is not made again; the dialog's Delete Color sets it to the table's colors on the first deletion. Both lists hold
+at most 256 colors, and `#rrggbbaa` is refused. A `reduction` change without `colorTable` in the same params clears
+both lists. JPEG and PNG-24 have no color table and do not read them. Presets and `webExport.settings` keep them. In
+the dialog a click selects one color, Shift-click selects the colors between it and the last one clicked, and
+Ctrl-click (Command-click on macOS) adds or removes one (`__colors` holds the selection, `__color` the last one
+clicked). The trash button and Delete Color in the table's menu delete the selection in one edit, Restore Generated
+Table in that menu clears `deleted` and `customPalette`, and the table reads Custom while either is set. Choosing
+another reduction in the dialog also clears them.
+
+```json
+{"name":"run_command","arguments":{"command":"document.exportForWeb.preview","params":{"format":"png8","colorTable":{"deleted":["#ff0000"],"customPalette":["#0000ff","#00ff00","#ff0000"]}}}}
+```
 
 Optimize to File Size (the dialog's button under Preset) is `webExport.optimizeToFileSize {desiredK, startWith?,
 use?, slice?, …settings}`. It searches for settings whose files fit in `desiredK` K (1 K is 1024 bytes; above 0, at

@@ -1519,6 +1519,8 @@ antiAlias	Sharp	シャープ
 	Delete Artboard	アートボードを削除
 	Delete Artboards	アートボードを削除
 	Delete Brush	ブラシを削除
+	Delete Color	カラーを削除
+	Restore Generated Table	生成されたテーブルを復元
 	Delete Character Style	文字スタイルを削除
 	Delete Empty Artboards	空のアートボードを削除
 	Delete Freeform Point	フリーフォームポイントを削除
@@ -5064,6 +5066,7 @@ variable-list-end	{0}, {1}	{0}、{1}
 @msg	Create Outlines: select text objects	アウトラインを作成: テキストオブジェクトを選択してください
 @msg	paste unavailable	貼り付けを使用できません
 @msg	Save for Web: the image is empty	Web 用に保存: 画像が空です
+@msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: カラーテーブルには少なくとも 1 つのカラーを残す必要があります
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` は「#ff8800」のような形式のカラーではありません
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: 指定できるカラーは {MAX_TABLE} 色までです
 @msg	no artboard {i} (0-based; the document has {_1})	アートボード {i} はありません (番号は 0 始まり、このドキュメントには {_1} 個あります)

@@ -818,6 +818,8 @@ font-technology	Variable	Variables
 	Delete Artboard	Supprimer le plan de travail
 	Delete Artboards	Supprimer les plans de travail
 	Delete Brush	Supprimer la forme
+	Delete Color	Supprimer la couleur
+	Restore Generated Table	Restaurer la table générée
 	Delete Character Style	Supprimer le style de caractère
 	Delete Empty Artboards	Supprimer les plans de travail vides
 	Delete Freeform Point	Supprimer le point libre
@@ -5026,6 +5028,7 @@ liquify-list-end	{0}, {1}	{0} et {1}
 @msg	choose a folder to export to	choisissez un dossier d’exportation
 @msg	choose a location for the package	choisissez un emplacement pour l’assemblage
 @msg	clipboard is empty	le presse-papiers est vide
+@msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: au moins une couleur doit rester dans la table des couleurs
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what} : `{h}` n’est pas une couleur comme "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what} : {MAX_TABLE} couleurs au maximum
 @msg	command `{0}` is not available right now: {1}	la commande `{0}` n’est pas disponible pour le moment : {1}
