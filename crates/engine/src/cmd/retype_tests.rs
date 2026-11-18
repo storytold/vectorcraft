@@ -240,3 +240,62 @@ fn glyphs_selected_inside_groups_join_only_their_siblings() {
     let d = &s.doc().unwrap().doc;
     assert!(d.node(NodeId(g2)).is_some(), "d's group stays with c's type and d in it");
 }
+
+#[test]
+fn tracked_type_splits_where_its_spacing_cannot_be_set_again() {
+    let mut s = session();
+    let id = s.execute("text.create", &json!({"x": 40, "y": 100, "text": "abc", "size": 30})).unwrap()["id"].as_u64().unwrap();
+    // Less than half a space: no whole number of spaces makes up the gap (0.4 em would be two
+    // spaces in this font, and the outlines cannot tell those apart from tracking).
+    s.execute("text.setRangeStyle", &json!({"id": id, "start": 1, "end": 3, "tracking": 50})).unwrap();
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let g = s.execute("type.createOutlines", &json!({})).unwrap()["ids"][0].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [g]})).unwrap();
+    let r = s.execute("type.retype", &json!({})).unwrap();
+    let texts: Vec<String> = r["texts"].as_array().unwrap().iter().map(|t| t.as_str().unwrap().to_owned()).collect();
+    assert_eq!(texts.concat(), "abc", "{r}");
+    assert!(texts.len() > 1, "the tracked glyphs are set where the outlines are, not where untracked type puts them: {r}");
+    assert_eq!(r["unmatched"], json!([]));
+}
+
+#[test]
+fn a_masked_glyph_stays_an_outline() {
+    let mut s = session();
+    let g = outlined(&mut s, json!({"x": 40, "y": 100, "text": "AB", "size": 40}));
+    let a = children_of(&s, g)[0];
+    s.edit("test", |d, _| {
+        let art = vectorcraft_doc::Node::path(d.alloc_id(), vectorcraft_geom::PathData::default(), Default::default());
+        d.node_mut(NodeId(a)).unwrap().extras_mut().mask = Some(Box::new(vectorcraft_doc::OpacityMask::new(art, true)));
+        Ok(())
+    })
+    .unwrap();
+    s.execute("select.set", &json!({"ids": [g]})).unwrap();
+    let r = s.execute("type.retype", &json!({})).unwrap();
+    assert_eq!(r["texts"], json!(["B"]), "{r}");
+    assert_eq!(r["unmatched"], json!([a]));
+    assert!(s.doc().unwrap().doc.node(NodeId(a)).unwrap().extras().mask.is_some(), "A keeps its mask");
+}
+
+#[test]
+fn shapes_past_the_limits_are_reported_as_left_out() {
+    let mut s = session();
+    let top = outlined(&mut s, json!({"x": 40, "y": 100, "text": "A", "size": 40}));
+    let deep = outlined(&mut s, json!({"x": 40, "y": 200, "text": "B", "size": 40}));
+    // B, deeper than Retype looks.
+    s.edit("test", |d, _| {
+        let (par, idx, _) = d.position(NodeId(deep)).unwrap();
+        let mut n = d.node(NodeId(deep)).unwrap().clone();
+        d.remove(NodeId(deep))?;
+        for _ in 0..20 {
+            n = vectorcraft_doc::Node::group(d.alloc_id(), vec![std::sync::Arc::new(n)]);
+        }
+        let wrapper = n.id.0;
+        d.insert(par, idx, n)?;
+        Ok(wrapper)
+    })
+    .map(|w| s.execute("select.set", &json!({"ids": [top, w]})).unwrap())
+    .unwrap();
+    let r = s.execute("type.retype", &json!({})).unwrap();
+    assert_eq!(r["texts"], json!(["A"]));
+    assert_eq!(r["truncated"], json!(true), "{r}");
+}

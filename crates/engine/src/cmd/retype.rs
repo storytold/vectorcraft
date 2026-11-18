@@ -38,7 +38,7 @@ pub fn specs() -> Vec<CommandSpec> {
         "Retype",
         ["Type"],
         None,
-        "{fonts?: [family…]} turn the selected outlined text (glyph paths and compound paths, inside groups too) back into live point text: each shape is matched against the glyphs of the fonts the app has loaded, the document's fonts and the families in fonts, the same up to uniform scale, rotation and translation (exact matches only); matched glyphs become point text in that font and size at the same baseline, one object per line, with the first glyph's fill and stroke, in one undo step; shapes that match no font stay as they are → {ids (the new type), texts, fonts: [{family, style, size}], unmatched: [id…]}; an error when no shape matches",
+        "{fonts?: [family…]} turn the selected outlined text (glyph paths and compound paths, inside groups too) back into live point text: each shape is matched against the glyphs of the fonts the app has loaded, the document's fonts and the families in fonts, the same up to uniform scale, rotation and translation (exact matches only); matched glyphs become point text in that font and size at the same baseline, one object per line, with the first glyph's fill, stroke, opacity and blend mode, in one undo step; a line splits where its type would not draw the outlines' glyphs in their places (tracking, manual spacing, font substitutions); shapes that match no font, glyphs type cannot draw as they are, and shapes with their own opacity mask stay as they are → {ids (the new type), texts, fonts: [{family, style, size}], unmatched: [id…], truncated (shapes past the limits of 2048 shapes or 16 nested groups were left out)}; an error when no shape matches",
         has_selected_path,
         retype
     )]
@@ -58,13 +58,17 @@ struct Piece {
     /// The shape's own transparency, which the new type takes.
     opacity: f32,
     blend: vectorcraft_color::BlendMode,
+    /// The shape has an opacity mask of its own, which type cannot take: it stays an outline.
+    masked: bool,
 }
 
 /// The shapes in `n` (held by `parent`), in paint order. `barrier` is set when art that is not a
 /// shape lies before the next one; it starts set for a root that does not follow the last root.
-fn collect(n: &Node, parent: Option<NodeId>, depth: usize, barrier: &mut bool, out: &mut Vec<Piece>) {
+/// `truncated` is set when shapes past [`MAX_PIECES`] or [`MAX_DEPTH`] were left out.
+fn collect(n: &Node, parent: Option<NodeId>, depth: usize, barrier: &mut bool, truncated: &mut bool, out: &mut Vec<Piece>) {
     if out.len() >= MAX_PIECES || depth > MAX_DEPTH {
         *barrier = true;
+        *truncated = true;
         return;
     }
     let piece = |path: BezPath, after_barrier: bool| Piece {
@@ -75,11 +79,12 @@ fn collect(n: &Node, parent: Option<NodeId>, depth: usize, barrier: &mut bool, o
         appearance: (*n.appearance).clone(),
         opacity: n.opacity,
         blend: n.blend,
+        masked: n.extras().mask.is_some(),
     };
     match &n.kind {
         NodeKind::Group { children, clip: false } => {
             for c in children {
-                collect(c, Some(n.id), depth + 1, barrier, out);
+                collect(c, Some(n.id), depth + 1, barrier, truncated, out);
             }
         }
         // Only closed shapes can be glyphs: an open path stroked along a glyph's outline is not one.
@@ -129,6 +134,8 @@ fn candidate_faces(db: &FontDb, d: &Document, fonts: &[String]) -> Vec<Arc<vecto
 /// One line of retyped glyphs.
 struct Line {
     pieces: Vec<NodeId>,
+    /// What each piece matched, as `pieces`.
+    matches: Vec<GlyphMatch>,
     text: String,
     face: Arc<vectorcraft_text::FontFace>,
     scale: f64,
@@ -175,8 +182,110 @@ impl Line {
         }
         self.text.push(m.ch);
         self.pieces.push(id);
+        self.matches.push(m.clone());
         self.end = m.origin + dir * (m.face.advance(m.gid) * m.scale);
     }
+
+    /// The line of this one's glyphs `from..to`, with its group, paint and transparency.
+    fn part(&self, from: usize, to: usize) -> Option<Line> {
+        let (ids, ms) = (self.pieces.get(from..to)?, self.matches.get(from..to)?);
+        let (first, m) = (ids.first()?, ms.first()?);
+        let dir = Vec2::new(m.angle.cos(), m.angle.sin());
+        let mut l = Line {
+            pieces: vec![*first],
+            matches: vec![m.clone()],
+            text: m.ch.to_string(),
+            face: m.face.clone(),
+            scale: m.scale,
+            angle: m.angle,
+            origin: m.origin,
+            end: m.origin + dir * (m.face.advance(m.gid) * m.scale),
+            appearance: self.appearance.clone(),
+            parent: self.parent,
+            opacity: self.opacity,
+            blend: self.blend,
+        };
+        for (id, m) in ids.iter().zip(ms).skip(1) {
+            l.push(*id, m);
+        }
+        Some(l)
+    }
+
+    /// The point type that sets this line.
+    fn text_object(&self, system_layout: bool) -> TextObject {
+        let style = CharStyle {
+            font_family: self.face.family.clone(),
+            font_style: self.face.style.clone(),
+            // The version that matched, when two of the family and style are loaded.
+            font_version: (!self.face.version.is_empty()).then(|| self.face.version.clone()),
+            // Each outlined glyph was drawn on its own; a ligature would draw another shape.
+            features: vec!["-liga".into()],
+            size: self.scale * self.face.units_per_em(),
+            fill: self.appearance.fill_paint(),
+            stroke: self.appearance.stroke_paint(),
+            stroke_width: self.appearance.stroke_width(),
+            ..Default::default()
+        };
+        let mut t = TextObject::point(self.origin, &self.text, style);
+        if self.angle != 0.0 {
+            t.xf *= kurbo::Affine::rotate(self.angle);
+        }
+        t.para = super::create::new_type_para();
+        t.system_layout = system_layout;
+        super::typecmd::refresh_bounds(&mut t);
+        t
+    }
+
+    /// The first of this line's glyphs its type does not draw as the outlines did: another glyph
+    /// (a substitution the font makes) or the same glyph elsewhere (tracking, manual spacing,
+    /// more space than whole spaces make); `None` when the type draws every glyph in its place.
+    fn first_mismatch(&self, t: &TextObject) -> Option<usize> {
+        let lay = vectorcraft_text::layout(FontDb::global(), t);
+        let mut drawn = lay.glyphs.iter().filter(|g| !g.outline.elements().is_empty());
+        let tol = (self.scale * self.face.units_per_em() * 0.01).max(0.01);
+        for (k, m) in self.matches.iter().enumerate() {
+            let Some(g) = drawn.next() else { return Some(k) };
+            let at = t.xf * (g.xf * Point::ORIGIN);
+            if g.font_id != m.face.id() || g.gid != m.gid || at.distance(m.origin) > tol {
+                return Some(k);
+            }
+        }
+        // Ink the outlines did not have: the last glyph is where it went wrong.
+        drawn.next().map(|_| self.matches.len().saturating_sub(1))
+    }
+}
+
+/// `lines` checked against their own layout: a line splits where its type stops drawing the
+/// outlines, and a glyph its type cannot draw even on its own stays an outline (`unmatched`).
+/// The layouts are bounded by the number of glyphs.
+fn verified(lines: Vec<Line>, system_layout: bool, unmatched: &mut Vec<NodeId>) -> Vec<Line> {
+    let mut budget = lines.iter().map(|l| l.pieces.len() * 2 + 2).sum::<usize>();
+    let mut todo: std::collections::VecDeque<Line> = lines.into();
+    let mut out = vec![];
+    while let Some(l) = todo.pop_front() {
+        if budget == 0 {
+            // Unchecked glyphs stay outlines.
+            unmatched.extend(l.pieces);
+            continue;
+        }
+        budget -= 1;
+        let n = l.pieces.len();
+        match l.first_mismatch(&l.text_object(system_layout)) {
+            None => out.push(l),
+            Some(0) => {
+                unmatched.extend(l.pieces.first().copied());
+                if let Some(rest) = l.part(1, n) {
+                    todo.push_front(rest);
+                }
+            }
+            Some(k) => {
+                for part in [l.part(k, n), l.part(0, k)].into_iter().flatten() {
+                    todo.push_front(part);
+                }
+            }
+        }
+    }
+    out
 }
 
 fn space_advance(face: &vectorcraft_text::FontFace) -> f64 {
@@ -187,6 +296,7 @@ fn new_line(pc: &Piece, m: &GlyphMatch) -> Line {
     let dir = Vec2::new(m.angle.cos(), m.angle.sin());
     Line {
         pieces: vec![pc.id],
+        matches: vec![m.clone()],
         text: m.ch.to_string(),
         face: m.face.clone(),
         scale: m.scale,
@@ -211,9 +321,11 @@ fn retype(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let roots = selected_roots(s)?;
     let db = FontDb::global();
-    let (lines, unmatched) = {
+    let system_layout = s.doc()?.doc.setup.system_layout;
+    let (lines, unmatched, truncated) = {
         let d = &s.doc()?.doc;
         let mut pieces = vec![];
+        let mut truncated = false;
         let mut last: Option<(Option<NodeId>, usize)> = None;
         // Carried across roots: a selected root that yields no shape (live type, an open path) still
         // ends the line.
@@ -228,13 +340,13 @@ fn retype(s: &mut Session, p: &Value) -> Result<Value> {
                 barrier = true;
             }
             last = idx.map(|i| (parent, i));
-            collect(n, parent, 0, &mut barrier, &mut pieces);
+            collect(n, parent, 0, &mut barrier, &mut truncated, &mut pieces);
         }
         if pieces.is_empty() {
             return Err(EngineError::Other("Retype: select outlined text (paths or compound paths)".into()));
         }
         let index = RetypeIndex::build(db, candidate_faces(db, d, &fonts));
-        let found: Vec<Vec<GlyphMatch>> = pieces.iter().map(|pc| index.matches(&pc.path)).collect();
+        let found: Vec<Vec<GlyphMatch>> = pieces.iter().map(|pc| if pc.masked { vec![] } else { index.matches(&pc.path) }).collect();
         // The face most shapes match, so a glyph several fonts share is set in the same font as
         // the glyphs around it.
         let mut votes: Vec<(u32, usize)> = vec![];
@@ -266,38 +378,19 @@ fn retype(s: &mut Session, p: &Value) -> Result<Value> {
             }
             open = true;
         }
-        (lines, unmatched)
+        let lines = verified(lines, system_layout, &mut unmatched);
+        (lines, unmatched, truncated)
     };
     if lines.is_empty() {
         return Err(EngineError::Other(format!("Retype: no selected shape matches a glyph of an available font ({} checked)", unmatched.len())));
     }
-    let system_layout = s.doc()?.doc.setup.system_layout;
     let made = s.edit("Retype", |d, sel| {
         let mut ids = vec![];
         let mut emptied = vec![];
         for l in &lines {
             let Some(first) = l.pieces.first() else { continue };
             let (par, idx, _) = d.position(*first).ok_or(EngineError::NoNode(*first))?;
-            let style = CharStyle {
-                font_family: l.face.family.clone(),
-                font_style: l.face.style.clone(),
-                // The version that matched, when two of the family and style are loaded.
-                font_version: (!l.face.version.is_empty()).then(|| l.face.version.clone()),
-                // Each outlined glyph was drawn on its own; a ligature would draw another shape.
-                features: vec!["-liga".into()],
-                size: l.scale * l.face.units_per_em(),
-                fill: l.appearance.fill_paint(),
-                stroke: l.appearance.stroke_paint(),
-                stroke_width: l.appearance.stroke_width(),
-                ..Default::default()
-            };
-            let mut t = TextObject::point(l.origin, &l.text, style);
-            if l.angle != 0.0 {
-                t.xf *= kurbo::Affine::rotate(l.angle);
-            }
-            t.para = super::create::new_type_para();
-            t.system_layout = system_layout;
-            super::typecmd::refresh_bounds(&mut t);
+            let t = l.text_object(system_layout);
             let id = d.alloc_id();
             let mut node = Node::new(id, NodeKind::Text(Box::new(t)));
             // The glyphs' own transparency (the group's, kept, still applies over it).
@@ -347,6 +440,7 @@ fn retype(s: &mut Session, p: &Value) -> Result<Value> {
         "texts": lines.iter().map(|l| l.text.clone()).collect::<Vec<_>>(),
         "fonts": lines.iter().map(|l| json!({"family": l.face.family, "style": l.face.style, "size": l.scale * l.face.units_per_em()})).collect::<Vec<_>>(),
         "unmatched": unmatched.iter().map(|i| i.0).collect::<Vec<_>>(),
+        "truncated": truncated,
     }))
 }
 

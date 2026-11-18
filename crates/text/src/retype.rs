@@ -98,7 +98,7 @@ impl RetypeIndex {
             // One entry per glyph, under the lowest character that maps to it.
             let mut by_gid: HashMap<u32, char> = HashMap::new();
             for &(c, gid) in face.mapped_chars().iter().take(MAX_GLYPHS_PER_FACE) {
-                if c.is_whitespace() || c.is_control() {
+                if c.is_whitespace() || c.is_control() || is_shape_symbol(c) {
                     continue;
                 }
                 by_gid.entry(gid).and_modify(|e| *e = (*e).min(c)).or_insert(c);
@@ -177,6 +177,16 @@ impl RetypeIndex {
         out.sort_by(|a, b| a.1.residual.total_cmp(&b.1.residual).then(a.0.cmp(&b.0)));
         out.into_iter().map(|(_, m)| m).collect()
     }
+}
+
+/// Characters whose glyphs are plain shapes (box drawing, blocks, geometric shapes, legacy
+/// computing symbols) or a font's own icons (private use): a drawn rectangle or circle is the same
+/// shape as one of them, so matching them would turn art into text. They are not matched.
+fn is_shape_symbol(c: char) -> bool {
+    matches!(
+        u32::from(c),
+        0x2500..=0x25FF | 0x2B00..=0x2BFF | 0x1F780..=0x1F7FF | 0x1FB00..=0x1FBFF | 0xE000..=0xF8FF | 0xF0000..=0x10FFFF
+    )
 }
 
 /// Complex multiply: `z` (a scaled turn) applied to `p`.
@@ -365,6 +375,17 @@ mod tests {
         box_.extend(kurbo::Rect::new(0.0, -700.0, 450.0, 0.0).path_elements(0.1));
         let (a, b) = (signature(&o).unwrap(), signature(&box_).unwrap());
         assert!(fit(&a, &b).is_none_or(|(_, r)| r > TOLERANCE));
+    }
+
+    #[test]
+    fn plain_shape_symbols_are_not_matched() {
+        // A block element (U+1FB89) drew as a rectangle and took a drawn rectangle for it.
+        for c in ['\u{1FB89}', '\u{25A0}', '\u{2588}', '\u{E000}'] {
+            assert!(is_shape_symbol(c), "{c:?}");
+        }
+        for c in ['A', 'l', '-', '\u{6F22}', '\u{0915}'] {
+            assert!(!is_shape_symbol(c), "{c:?}");
+        }
     }
 
     #[test]
