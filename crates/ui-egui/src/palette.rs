@@ -9,6 +9,7 @@ use crate::theme::Tokens;
 use crate::{VectorcraftApp, menus};
 
 mod search;
+pub(crate) mod words;
 
 /// Engine commands the palette leaves out, each with the UI command of the same name that runs it
 /// the way the panels and menus do: (engine id, UI command id). The Layers panel's Delete
@@ -288,11 +289,14 @@ pub(crate) struct Entry {
     kind: u8,
 }
 
+/// The last query, the recent picks and the pick counts it was ranked with, and its ranked results.
+type Ranked = (String, Vec<u32>, CommandUses, Arc<[u32]>);
+
 /// The palette's entries, the index a query is looked up in, and the last query's ranked results.
 pub(crate) struct Catalog {
     list: Vec<Entry>,
     index: search::Index,
-    ranked: std::sync::Mutex<Option<(String, Arc<[u32]>)>>,
+    ranked: std::sync::Mutex<Option<Ranked>>,
 }
 
 impl std::ops::Deref for Catalog {
@@ -338,8 +342,25 @@ fn catalog(lang: crate::i18n::Lang, native: bool) -> Catalog {
     let list = build_in(lang, native);
     let shown_homes: Vec<Option<String>> =
         list.iter().map(|e| e.home.as_deref().map(|h| format!("{} › {}", shown_label(lang, h), crate::i18n::tr(lang, e.menu_item)))).collect();
-    let index = search::Index::build(&list, &shown_homes);
+    // A group's row in the `search` context gives its words in `lang`; a plain row is not read.
+    let search_row = |key: &str| crate::i18n::tr_ctx_row(lang, words::CONTEXT, key).map(str::to_string);
+    let index = search::Index::build(&list, &shown_homes, &params_texts(&list), search_row);
     Catalog { list, index, ranked: std::sync::Mutex::new(None) }
+}
+
+/// The params text of each entry's command, which the index reads a description from
+/// ([`search::description`]): an engine or plug-in command's, a UI command's (the one it wraps
+/// keeps its own) and an effect's. A tool, a panel and a filter plug-in have none.
+fn params_texts(list: &[Entry]) -> Vec<&'static str> {
+    let engine = vectorcraft_engine::command_specs().iter().chain(vectorcraft_engine::cmd::plugin::command_specs());
+    let mut by_id: std::collections::HashMap<&str, &'static str> = engine.map(|c| (c.id, c.params)).collect();
+    by_id.extend(menus::UI_COMMANDS.iter().map(|c| (c.0, c.3)));
+    list.iter()
+        .map(|e| match e.id.strip_prefix("effect:") {
+            Some(effect) => vectorcraft_effects::effect_info(effect).map_or("", |info| info.params),
+            None => by_id.get(e.id.as_str()).copied().unwrap_or(""),
+        })
+        .collect()
 }
 
 /// The palette's entries in `lang` with the in-window menu bar.
@@ -384,50 +405,102 @@ fn build_in(lang: crate::i18n::Lang, native: bool) -> Vec<Entry> {
 /// ([`crate::shortcut_editor::menu_target_now`]), so Clean Up… and Find and Replace… open their
 /// dialogs. While that item is dimmed, no dialog opens and the status line says why the command
 /// can't run. A panel's result shows the panel, and an effect's result runs what its Effect menu
-/// item runs ([`crate::keymap::command_of`]).
-pub(crate) fn run_pick(app: &mut VectorcraftApp, id: &str) {
-    if let Some(tool) = id.strip_prefix("tool:") {
-        app.select_tool(tool);
+/// item runs ([`crate::keymap::command_of`]). Returns what the pick did.
+pub(crate) fn run_pick(app: &mut VectorcraftApp, id: &str) -> Picked {
+    let had_dialog = app.ui.dialog.is_some();
+    let ran = if let Some(tool) = id.strip_prefix("tool:") {
+        match app.try_select_tool(tool) {
+            Ok(()) => true,
+            Err(e) => {
+                app.status(e);
+                false
+            }
+        }
     } else if let Some(panel) = id.strip_prefix("panel:") {
         // A panel that can be seen stays as it is, where `window.panel` would put an open flyout or
         // a floating panel away. In Presentation Mode the pick fails and changes nothing, as
         // `window.panel` does.
         if app.ui.screen_mode >= 3 {
             app.status("panels can't be shown in Presentation Mode");
+            false
         } else if let Err(e) = crate::panel_docking::reveal_panel(app, panel) {
             app.status(e);
+            false
+        } else {
+            true
         }
     } else if id.starts_with("plugin:") || id.starts_with("effect:") {
         let command = crate::keymap::command_of(id);
+        let on = menus::enabled(app, &command.id);
         // While the Effect menu dims the item (nothing selected), no dialog opens and the status
         // line says why.
-        if id.starts_with("effect:") && !menus::enabled(app, &command.id) {
+        if id.starts_with("effect:") && !on {
             if let Err(why) = crate::shortcut_editor::dimmed(app, &command.id) {
                 app.status(why);
             }
         } else {
             menus::invoke(app, &command.id, command.params);
         }
+        on
     } else {
         match crate::shortcut_editor::menu_target_now(app, id) {
-            Some(Ok((id, p))) => menus::invoke(app, &id, p),
-            Some(Err(why)) => app.status(why),
-            None => menus::invoke(app, id, json!({})),
+            Some(Ok((id, p))) => {
+                menus::invoke(app, &id, p);
+                true
+            }
+            Some(Err(why)) => {
+                app.status(why);
+                false
+            }
+            None => {
+                // The command is invoked while its menu item is dimmed too, and its own check
+                // reports why it can't run.
+                let on = menus::enabled(app, id);
+                menus::invoke(app, id, json!({}));
+                on
+            }
         }
+    };
+    // A dimmed command that still opens its dialog counts as opening it.
+    if !had_dialog && app.ui.dialog.is_some() {
+        Picked::OpenedDialog
+    } else if ran {
+        Picked::Ran
+    } else {
+        Picked::Refused
     }
 }
 
-/// The entries the query `q` matches, best first ([`search::rank`]). The ranking of the last query
-/// is kept, so a frame that draws the same query does not rank again. [`show`] lists the first
-/// [`MAX_RESULTS`] and counts the rest.
-fn matching<'a>(catalog: &'a Catalog, q: &str) -> Vec<&'a Entry> {
+/// What a pick of a palette result did ([`run_pick`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Picked {
+    /// The command ran, the tool was chosen or the panel was shown.
+    Ran,
+    /// The pick opened a dialog, which may still be canceled.
+    OpenedDialog,
+    /// The pick's menu item is dimmed now, its tool can't be chosen or its panel can't be shown:
+    /// the status line says why.
+    Refused,
+}
+
+/// The entries the query `q` matches, best first ([`search::rank`]), with the commands picked most
+/// often (`uses`) first among the entries that match as well, and then the picks that Recent
+/// Commands lists for the ids `recent_ids` ([`recent`]). The ranking of the last query is kept, so
+/// a frame that draws the same query with the same counts and recent picks does not rank again.
+/// [`show`] lists the first [`MAX_RESULTS`] and counts the rest.
+fn matching<'a>(catalog: &'a Catalog, q: &str, recent_ids: &[String], uses: &CommandUses) -> Vec<&'a Entry> {
     let q = search::normalize(q);
-    let kept = catalog.ranked.lock().ok().and_then(|last| last.as_ref().filter(|(k, _)| *k == q).map(|(_, r)| r.clone()));
+    let picks: Vec<u32> = recent_places(&catalog.list, recent_ids).into_iter().filter_map(|i| u32::try_from(i).ok()).collect();
+    let kept = catalog
+        .ranked
+        .lock()
+        .ok()
+        .and_then(|last| last.as_ref().filter(|(k, p, c, _)| *k == q && *p == picks && c == uses).map(|(_, _, _, r)| r.clone()));
     let ranked = kept.unwrap_or_else(|| {
-        let ranked: Arc<[u32]> = search::rank(&catalog.list, &catalog.index, &q).into();
+        let ranked: Arc<[u32]> = search::rank(&catalog.list, &catalog.index, &q, &picks, &uses.grades(&catalog.list)).into();
         // A poisoned lock only loses the kept ranking: the next frame ranks again.
         if let Ok(mut last) = catalog.ranked.lock() {
-            *last = Some((q, ranked.clone()));
+            *last = Some((q, picks, uses.clone(), ranked.clone()));
         }
         ranked
     });
@@ -523,11 +596,11 @@ fn nearest_in_view(sel: usize, offset: f32, view: f32, n: usize) -> usize {
 /// and the highlighted result's id.
 type Highlight = (usize, String, f32, f32, String);
 
-/// How many picks the Recent Commands list beside the search field holds.
-pub(crate) const MAX_RECENT_COMMANDS: usize = 5;
+/// How many picks the Recent Commands list beside the search field, and an empty search, show.
+pub(crate) const MAX_RECENT_COMMANDS: usize = 8;
 
 /// How many ids the saved Recent Commands list holds at most, unavailable ones included.
-const MAX_SAVED_RECENT_COMMANDS: usize = 4 * MAX_RECENT_COMMANDS;
+const MAX_SAVED_RECENT_COMMANDS: usize = 20;
 
 /// Puts `id` first in the Recent Commands ids `list`, removing its earlier place, and keeps the
 /// newest [`MAX_RECENT_COMMANDS`] ids that are `known`. An id that is not `known` now (a plug-in
@@ -546,10 +619,117 @@ fn remember(list: &mut Vec<String>, id: &str, known: impl Fn(&str) -> bool) {
     list.truncate(end.unwrap_or(list.len()).min(MAX_SAVED_RECENT_COMMANDS));
 }
 
+/// The command that opens and closes the palette. A pick of it is not recorded in Recent Commands:
+/// as the first recent pick, Enter on an empty search would close the palette and open it again.
+const PALETTE_TOGGLE: &str = "help.commandPalette";
+
 /// The entries the Recent Commands list shows for the ids `ids`, most recent first. An id with no
-/// entry (a removed plug-in) is skipped.
+/// entry (a removed plug-in) and the palette's own toggle, saved before its picks were left out,
+/// are skipped.
 fn recent<'a>(entries: &'a [Entry], ids: &[String]) -> Vec<&'a Entry> {
-    ids.iter().take(MAX_SAVED_RECENT_COMMANDS).filter_map(|id| entries.iter().find(|e| e.id == *id)).take(MAX_RECENT_COMMANDS).collect()
+    recent_places(entries, ids).into_iter().filter_map(|i| entries.get(i)).collect()
+}
+
+/// The places in `entries` of the entries [`recent`] lists for the ids `ids`, most recent first.
+fn recent_places(entries: &[Entry], ids: &[String]) -> Vec<usize> {
+    ids.iter()
+        .take(MAX_SAVED_RECENT_COMMANDS)
+        .filter(|id| *id != PALETTE_TOGGLE)
+        .filter_map(|id| entries.iter().position(|e| e.id == *id))
+        .take(MAX_RECENT_COMMANDS)
+        .collect()
+}
+
+/// How many command ids [`CommandUses`] counts at most.
+const MAX_COUNTED_COMMANDS: usize = 200;
+
+/// The count at which [`CommandUses::count`] halves every count.
+const HALVING_COUNT: u32 = 1_000;
+
+/// How many times each command was picked in the palette: commands picked often rank first among
+/// the results that match a query as well ([`matching`]). It counts at most
+/// [`MAX_COUNTED_COMMANDS`] ids. When a count reaches [`HALVING_COUNT`], every count is halved, so
+/// a count is at most 999.
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
+pub struct CommandUses {
+    /// The number of the last pick; each pick takes the next one.
+    pick: u32,
+    /// For each command id, its count and the number of its last pick.
+    uses: std::collections::BTreeMap<String, (u32, u32)>,
+}
+
+impl CommandUses {
+    /// Counts a pick of `id`. A new id when [`MAX_COUNTED_COMMANDS`] are counted first removes
+    /// one id from the half of the ids picked longest ago: the one with the lowest count, of those
+    /// the one picked longest ago. It then counts once.
+    pub(crate) fn count(&mut self, id: &str) {
+        self.pick = self.pick.saturating_add(1);
+        let pick = self.pick;
+        if let Some((n, last)) = self.uses.get_mut(id) {
+            *n = n.saturating_add(1);
+            *last = pick;
+        } else {
+            if self.uses.len() >= MAX_COUNTED_COMMANDS {
+                let mut by_age: Vec<(u32, u32, &String)> = self.uses.iter().map(|(k, &(n, last))| (last, n, k)).collect();
+                by_age.sort_unstable();
+                let older = by_age.len().div_ceil(2);
+                if let Some(least) = by_age.iter().take(older).min_by_key(|&&(last, n, _)| (n, last)).map(|&(_, _, k)| k.clone()) {
+                    self.uses.remove(&least);
+                }
+            }
+            self.uses.insert(id.to_string(), (1, pick));
+        }
+        if self.uses.get(id).is_some_and(|&(n, _)| n >= HALVING_COUNT) {
+            for (n, _) in self.uses.values_mut() {
+                *n /= 2;
+            }
+            self.uses.retain(|_, (n, _)| *n > 0);
+        }
+    }
+
+    /// The count of `id`'s picks as a grade from 0 (never picked) to 9: the base-2 logarithm of
+    /// the count plus one, so 1 pick gives 1, 3 give 2, 7 give 3, and so on.
+    fn grade(&self, id: &str) -> u8 {
+        self.uses.get(id).map_or(0, |&(n, _)| u8::try_from(n.min(HALVING_COUNT - 1).saturating_add(1).ilog2()).unwrap_or(u8::MAX))
+    }
+
+    /// The grade ([`CommandUses::grade`]) of each of `entries`, in their order, or none when no
+    /// command was picked.
+    fn grades(&self, entries: &[Entry]) -> Vec<u8> {
+        if self.uses.is_empty() {
+            return vec![];
+        }
+        entries.iter().map(|e| self.grade(&e.id)).collect()
+    }
+}
+
+/// Serde reader for the saved pick counts ([`crate::UiState::command_uses`]): an entry that is not
+/// a pair of counts is dropped, a count above 999 reads as 999, and of more than
+/// [`MAX_COUNTED_COMMANDS`] ids the ones picked most recently are kept. Anything else reads as no
+/// picks, so an unknown value doesn't lose the rest of the preferences.
+pub fn deserialize_command_uses<'de, D: serde::Deserializer<'de>>(d: D) -> Result<CommandUses, D::Error> {
+    use std::cmp::Reverse;
+    let v = <serde_json::Value as serde::Deserialize>::deserialize(d)?;
+    let number = |v: Option<&serde_json::Value>| v.and_then(serde_json::Value::as_u64).map(|n| u32::try_from(n).unwrap_or(u32::MAX));
+    // The heap holds at most MAX_COUNTED_COMMANDS + 1 entries, the least recent pick on top (of
+    // equal picks, the id that sorts last), so a long saved list is not collected whole.
+    let mut kept: std::collections::BinaryHeap<Reverse<(u32, Reverse<&String>, u32)>> = std::collections::BinaryHeap::new();
+    for (id, u) in v.get("uses").and_then(serde_json::Value::as_object).into_iter().flatten() {
+        let (Some(n), Some(last)) = (number(u.get(0)), number(u.get(1))) else { continue };
+        if n == 0 || !u.as_array().is_some_and(|a| a.len() == 2) {
+            continue;
+        }
+        kept.push(Reverse((last, Reverse(id), n.min(HALVING_COUNT - 1))));
+        if kept.len() > MAX_COUNTED_COMMANDS {
+            kept.pop();
+        }
+    }
+    let uses: std::collections::BTreeMap<String, (u32, u32)> =
+        kept.into_iter().map(|Reverse((last, Reverse(id), n))| (id.clone(), (n, last))).collect();
+    // The pick number stays above every saved last pick, so the next pick is the most recent.
+    let newest = uses.values().map(|&(_, last)| last).max().unwrap_or(0);
+    let pick = number(v.get("pick")).unwrap_or(0).max(newest);
+    Ok(CommandUses { pick, uses })
 }
 
 /// The id of the Recent Commands list's popup.
@@ -569,8 +749,12 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     // another widget, such as a field in a window above the backdrop.
     let focus_id = egui::Id::unique("palette-focus-before");
     let field_id = egui::Id::unique("palette-field");
+    let sel_id = egui::Id::unique("palette-selected");
     if !app.ui.palette_open {
+        // The palette opens again with its first row highlighted and its list scrolled to the top
+        // (a list height of 0 scrolls it to the highlighted row).
         let field = ctx.data_mut(|d| {
+            d.remove::<Highlight>(sel_id);
             let field = d.get_temp::<egui::Id>(field_id);
             d.remove::<egui::Id>(field_id);
             field
@@ -592,11 +776,13 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let t = Tokens::get(ctx);
     let q = app.ui.palette_query.to_lowercase();
     let entries = entries_in(ctx, crate::i18n::current(), app.services.native_menu.is_some());
-    let mut matches = matching(&entries, &q);
+    let recent = recent(&entries.list, &app.ui.recent_commands);
+    // An empty search lists the recent picks, most recent first, so Enter runs the last pick again.
+    let empty = app.ui.palette_query.trim().is_empty();
+    let mut matches = if empty { recent.clone() } else { matching(&entries, &q, &app.ui.recent_commands, &app.ui.command_uses) };
     let total = matches.len();
     // The highlighted result (#1757): Up and Down move it (wrapping), Page Up and Page Down move it
     // by a page, the pointer over a result takes it, and a new query starts again from the first.
-    let sel_id = egui::Id::unique("palette-selected");
     let (mut sel, last_q, mut offset, last_view, last_id) = ctx.data(|d| d.get_temp::<Highlight>(sel_id)).unwrap_or_default();
     let mut view = last_view;
     let new_query = last_q != q;
@@ -614,7 +800,6 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         kept = Some(at);
     }
     matches.truncate(MAX_RESULTS);
-    let recent = recent(&entries.list, &app.ui.recent_commands);
     // While the Recent Commands list is open, the arrow keys and Enter go to its rows, and the
     // search field leaves them the keyboard.
     let list_open = recent_list_open(ctx);
@@ -722,10 +907,15 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 .inner;
             ui.ctx().data_mut(|d| d.insert_temp(field_id, r.id));
             ui.add_space(6.0);
+            if empty && n > 0 {
+                ui.label(egui::RichText::new(tl!("Recent")).color(t.text_dim));
+            }
             // The list shows as many rows as fit above the footer in the window, up to
             // VISIBLE_ROWS; a page is that many rows.
             let spacing = ui.spacing().item_spacing.y;
-            let footer_height = spacing + 6.0 + ui.text_style_height(&egui::TextStyle::Body) + f32::from(margin) + BOTTOM_GAP;
+            // Under the recent picks no footer line is drawn.
+            let footer_line = if empty { 0.0 } else { spacing + 6.0 + ui.text_style_height(&egui::TextStyle::Body) };
+            let footer_height = footer_line + f32::from(margin) + BOTTOM_GAP;
             let room = screen.bottom() - footer_height - ui.cursor().top() - spacing;
             let rows = ((room / ROW_HEIGHT).floor().max(1.0) as usize).min(VISIBLE_ROWS);
             sel = moves.apply(sel, n, rows);
@@ -790,8 +980,15 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                     }
                 });
             }
-            ui.add_space(6.0);
-            ui.label(egui::RichText::new(footer(n, total)).color(t.text_dim));
+            // Under the recent picks no count is shown; with none, one dimmed line says what a search
+            // finds.
+            if !empty {
+                ui.add_space(6.0);
+                ui.label(egui::RichText::new(footer(n, total)).color(t.text_dim));
+            } else if n == 0 {
+                ui.add_space(6.0);
+                ui.label(egui::RichText::new(tl!("Type to search commands, tools, panels and effects")).color(t.text_dim));
+            }
             if !list_open
                 && !history_focused
                 && ui.input(|i| i.key_pressed(egui::Key::Enter))
@@ -828,10 +1025,28 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     });
     if let Some(id) = run {
         app.ui.palette_open = false;
-        remember(&mut app.ui.recent_commands, &id, |c| entries.list.iter().any(|e| e.id == c));
-        run_pick(app, &id);
+        // A pick goes first in Recent Commands before it runs, and stays there when it ran or
+        // opened a dialog, even when the dialog is then canceled. A refused pick puts the list
+        // back as it was. Only a pick that stays in the list is counted.
+        let before = (id != PALETTE_TOGGLE).then(|| app.ui.recent_commands.clone());
+        if before.is_some() {
+            remember(&mut app.ui.recent_commands, &id, |c| entries.list.iter().any(|e| e.id == c));
+        }
+        let picked = run_pick(app, &id);
+        if let Some(before) = before {
+            if picked == Picked::Refused {
+                app.ui.recent_commands = before;
+            } else {
+                app.ui.command_uses.count(&id);
+            }
+        }
     } else if outside {
         app.ui.palette_open = false;
+    }
+    // The search icon can open the palette again before the next frame draws it, so a palette that
+    // closes here forgets its highlight now and opens again at its first row.
+    if !app.ui.palette_open {
+        ctx.data_mut(|d| d.remove::<Highlight>(sel_id));
     }
 }
 
@@ -839,6 +1054,11 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
 mod tests {
     use super::*;
     use crate::i18n::Lang;
+
+    /// The entries `q` matches, best first, with the recent picks `recent_ids` and no pick counts.
+    fn matching<'a>(catalog: &'a Catalog, q: &str, recent_ids: &[String]) -> Vec<&'a Entry> {
+        super::matching(catalog, q, recent_ids, &CommandUses::default())
+    }
 
     #[test]
     fn entries_are_built_once_per_language_and_match_english_shown_text_and_ids() {
@@ -874,7 +1094,7 @@ mod tests {
         let ctx = egui::Context::default();
         let query = "use precise cursors";
         let entries = entries(&ctx, Lang::EN);
-        let matches = matching(&entries, query);
+        let matches = matching(&entries, query, &[]);
         assert!(matches.iter().any(|e| e.id == "view.preciseCursors"), "preference toggle appears for its name");
         assert!(entries.iter().filter(|e| e.id == "view.capsLock").all(|e| e.shown != "Use Precise Cursors"));
 
@@ -1153,7 +1373,7 @@ mod tests {
         }
         assert_eq!(list, ["object.group", "paint.swap"]);
         // A pick with Enter in the open palette is remembered.
-        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+        let mut app = VectorcraftApp::new(vectorcraft_testkit::fixtures::Fixture::Multi.session(), crate::Services::default());
         app.ui.recent_commands = list;
         app.ui.palette_open = true;
         app.ui.palette_query = "paint.swap".into();
@@ -1168,15 +1388,15 @@ mod tests {
         assert_eq!(restored.recent_commands, app.ui.recent_commands);
     }
 
-    /// #6376: Recent Commands keeps the last five picks.
+    /// Recent Commands keeps the last eight picks.
     #[test]
-    fn recent_commands_keep_the_last_five_picks() {
+    fn recent_commands_keep_the_last_eight_picks() {
         let mut list = vec![];
-        let ids = ["a", "b", "c", "d", "e", "f", "g"];
+        let ids = ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"];
         for id in ids {
             remember(&mut list, id, |_| true);
         }
-        assert_eq!(list, ["g", "f", "e", "d", "c"]);
+        assert_eq!(list, ["j", "i", "h", "g", "f", "e", "d", "c"]);
         let entries = build(Lang::EN);
         let many: Vec<String> = entries.iter().take(MAX_RECENT_COMMANDS + 2).map(|e| e.id.clone()).collect();
         assert_eq!(recent(&entries, &many).len(), MAX_RECENT_COMMANDS);
@@ -1184,7 +1404,7 @@ mod tests {
 
     /// #6376: a command that does not exist now, such as a plug-in's filter while the plug-in is
     /// not loaded, is left out of Recent Commands. A pick keeps it in the saved list, so it shows
-    /// again when the command comes back; five other commands picked after it push it out.
+    /// again when the command comes back; eight other commands picked after it push it out.
     #[test]
     fn recent_commands_skip_ids_that_no_longer_exist() {
         let entries = build(Lang::EN);
@@ -1195,13 +1415,14 @@ mod tests {
         let mut list = saved;
         remember(&mut list, "paint.swap", known);
         assert_eq!(list, ["paint.swap", "plugin:test.UI.palette_removed", "object.group", "tool:no-such-tool"]);
-        let four: Vec<String> = entries.iter().filter(|e| e.id != "paint.swap" && e.id != "object.group").take(4).map(|e| e.id.clone()).collect();
-        for id in &four {
+        let others: Vec<String> =
+            entries.iter().filter(|e| e.id != "paint.swap" && e.id != "object.group").take(MAX_RECENT_COMMANDS - 1).map(|e| e.id.clone()).collect();
+        for id in &others {
             remember(&mut list, id, known);
         }
         let expected: Vec<String> =
-            four.iter().rev().cloned().chain(["paint.swap".to_string(), "plugin:test.UI.palette_removed".to_string()]).collect();
-        assert_eq!(list, expected, "object.group, the sixth known id, and the ids after it go");
+            others.iter().rev().cloned().chain(["paint.swap".to_string(), "plugin:test.UI.palette_removed".to_string()]).collect();
+        assert_eq!(list, expected, "object.group, the ninth known id, and the ids after it go");
         // Unavailable ids are capped too.
         let mut list: Vec<String> = (0..50).map(|i| format!("plugin:test.UI.gone{i}")).collect();
         remember(&mut list, "paint.swap", known);
@@ -1321,7 +1542,7 @@ mod tests {
     /// result. Only the Recent Commands list takes them.
     #[test]
     fn another_popup_leaves_enter_to_the_palette() {
-        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+        let mut app = VectorcraftApp::new(vectorcraft_testkit::fixtures::Fixture::Multi.session(), crate::Services::default());
         app.ui.palette_open = true;
         app.ui.palette_query = "paint.swap".into();
         let first = build(crate::i18n::current()).into_iter().find(|e| e.haystack.contains("paint.swap")).unwrap().id;
@@ -1392,6 +1613,244 @@ mod tests {
         assert_eq!(app.ui.recent_commands, [id, "object.group"]);
     }
 
+    /// A result picked recently ranks first among the results that match the query as well as it
+    /// does: "rect" lists the Rectangle Tool above Effect › Convert to Shape › Rectangle…, and after
+    /// a pick of the effect, the effect comes first, so Enter runs it again.
+    #[test]
+    fn a_recent_pick_ranks_first_among_results_that_match_as_well() {
+        let (tool, effect) = ("tool:rectangle", "effect:convertToShape.rectangle");
+        let mut open = Open::new("rect", egui::vec2(1200.0, 900.0));
+        // A selected path, so the effect can run: a refused pick is not recorded.
+        open.app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        open.app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+        open.frame(vec![]);
+        let before = open.listed();
+        assert_eq!(before.first().map(String::as_str), Some(tool));
+        let at = before.iter().position(|id| id == effect).unwrap();
+        open.press(egui::Key::ArrowDown, at);
+        open.press(egui::Key::Enter, 1);
+        assert_eq!(open.app.ui.recent_commands, [effect]);
+
+        open.app.ui.dialog = None;
+        open.app.ui.palette_open = true;
+        open.app.ui.palette_query = "rect".into();
+        let nodes = open.frame(vec![]);
+        let after = open.listed();
+        assert_eq!(after.first().map(String::as_str), Some(effect));
+        assert_eq!(after.get(1).map(String::as_str), Some(tool), "only the pick moves");
+        let entries = entries(&open.ctx, Lang::EN);
+        let label = entries.iter().find(|e| e.id == effect).map(row_label).unwrap();
+        assert_eq!(field_description(&nodes), format!("1 of {}: {label}", after.len()));
+        open.press(egui::Key::Enter, 1);
+        assert!(open.app.ui.dialog.is_some(), "Enter ran the effect again: {}", open.app.ui.status);
+        assert_eq!(open.app.ui.recent_commands, [effect]);
+    }
+
+    /// The kept ranking of a query is ranked again when the recent picks change, and a saved id
+    /// with no result now is passed over.
+    #[test]
+    fn the_kept_ranking_follows_the_recent_picks() {
+        let ctx = egui::Context::default();
+        let entries = entries(&ctx, Lang::EN);
+        let ids = |recent: &[String]| matching(&entries, "rect", recent).into_iter().map(|e| e.id.clone()).collect::<Vec<_>>();
+        let plain = ids(&[]);
+        assert_eq!(plain.first().map(String::as_str), Some("tool:rectangle"));
+        let effect = "effect:convertToShape.rectangle".to_string();
+        assert_eq!(ids(std::slice::from_ref(&effect)).first(), Some(&effect));
+        assert_eq!(ids(&[]), plain);
+        assert_eq!(ids(&["plugin:test.UI.palette_removed".to_string(), effect.clone()]).first(), Some(&effect));
+    }
+
+    /// Pick counts for the ids `counts`, picked in that order.
+    fn counted(counts: &[(&str, u32)]) -> CommandUses {
+        let uses = counts.iter().zip(1..).map(|(&(id, n), last)| (id.to_string(), (n, last))).collect();
+        CommandUses { pick: u32::try_from(counts.len()).unwrap(), uses }
+    }
+
+    /// A command picked often ranks first among the results that match the query as well as it
+    /// does, also when it is no longer a recent pick, and the count is saved with the other
+    /// interface settings.
+    #[test]
+    fn a_command_picked_often_ranks_first_among_results_that_match_as_well() {
+        let (tool, effect) = ("tool:rectangle", "effect:convertToShape.rectangle");
+        let mut open = Open::new("rect", egui::vec2(1200.0, 900.0));
+        // The fixture has art selected, so the effect is not dimmed and its pick is counted.
+        open.app = VectorcraftApp::new(vectorcraft_testkit::fixtures::Fixture::Multi.session(), crate::Services::default());
+        open.app.ui.palette_open = true;
+        open.app.ui.palette_query = "rect".into();
+        open.frame(vec![]);
+        let before = open.listed();
+        assert_eq!(before.first().map(String::as_str), Some(tool));
+        let at = before.iter().position(|id| id == effect).unwrap();
+        open.press(egui::Key::ArrowDown, at);
+        open.press(egui::Key::Enter, 1);
+        assert_eq!(open.app.ui.command_uses.grade(effect), 1);
+        assert_eq!(open.app.ui.command_uses.grade(tool), 0);
+
+        open.app.ui.recent_commands.clear();
+        open.app.ui.dialog = None;
+        open.app.ui.palette_open = true;
+        open.app.ui.palette_query = "rect".into();
+        open.frame(vec![]);
+        let after = open.listed();
+        assert_eq!(after.first().map(String::as_str), Some(effect));
+        assert_eq!(after.get(1).map(String::as_str), Some(tool), "only the pick moves");
+        let restored: crate::state::UiState = serde_json::from_str(&serde_json::to_string(&open.app.ui).unwrap()).unwrap();
+        assert_eq!(restored.command_uses, open.app.ui.command_uses);
+    }
+
+    /// The kept ranking of a query is ranked again when a pick count changes.
+    #[test]
+    fn the_kept_ranking_follows_the_pick_counts() {
+        let ctx = egui::Context::default();
+        let entries = entries(&ctx, Lang::EN);
+        let first = |uses: &CommandUses| super::matching(&entries, "rect", &[], uses).first().map(|e| e.id.clone());
+        let effect = "effect:convertToShape.rectangle";
+        assert_eq!(first(&CommandUses::default()).as_deref(), Some("tool:rectangle"));
+        let mut uses = counted(&[("tool:rectangle", 1)]);
+        assert_eq!(first(&uses).as_deref(), Some("tool:rectangle"));
+        uses.count(effect);
+        assert_eq!(first(&uses).as_deref(), Some("tool:rectangle"), "the same grade: the catalog order");
+        uses.count(effect);
+        uses.count(effect);
+        assert_eq!(first(&uses).as_deref(), Some(effect), "three picks reach grade 2");
+        assert_eq!(first(&CommandUses::default()).as_deref(), Some("tool:rectangle"));
+    }
+
+    /// A count does not lift a result above one that matches the query better: the exact id
+    /// `view.goto1` lists Saved View 1 before Saved View 10, however often that was picked.
+    #[test]
+    fn a_count_does_not_pass_a_better_match() {
+        let ctx = egui::Context::default();
+        let entries = entries(&ctx, Lang::EN);
+        let uses = counted(&[("view.goto10", 999)]);
+        let ids: Vec<&str> = super::matching(&entries, "view.goto1", &[], &uses).into_iter().map(|e| e.id.as_str()).collect();
+        assert_eq!(ids.first(), Some(&"view.goto1"), "{ids:?}");
+        assert!(ids.contains(&"view.goto10"), "{ids:?}");
+    }
+
+    /// Counts grow in grades that double: 1 pick gives grade 1, 3 give 2, 7 give 3, and 999 give 9.
+    #[test]
+    fn pick_counts_rank_in_grades_that_double() {
+        let mut uses = CommandUses::default();
+        let grades: Vec<u8> = (0..8)
+            .map(|_| {
+                let g = uses.grade("a");
+                uses.count("a");
+                g
+            })
+            .collect();
+        assert_eq!(grades, [0, 1, 1, 2, 2, 2, 2, 3]);
+        assert_eq!(counted(&[("a", 999)]).grade("a"), 9);
+        assert_eq!(counted(&[("a", u32::MAX)]).grade("a"), 9);
+        assert!(CommandUses::default().grades(&[]).is_empty(), "no grades without counts");
+    }
+
+    /// A new id when 200 are counted removes, of the 100 ids picked longest ago, the id with the
+    /// lowest count, of those the one picked longest ago, and keeps the new one.
+    #[test]
+    fn the_201st_command_removes_the_least_used_and_keeps_itself() {
+        let ids: Vec<String> = (0..MAX_COUNTED_COMMANDS).map(|i| format!("c{i}")).collect();
+        let counts: Vec<(&str, u32)> = ids.iter().enumerate().map(|(i, id)| (id.as_str(), if i == 5 || i == 9 { 1 } else { 2 })).collect();
+        let mut uses = counted(&counts);
+        uses.count("new");
+        assert_eq!(uses.uses.len(), MAX_COUNTED_COMMANDS);
+        assert!(!uses.uses.contains_key("c5") && uses.uses.contains_key("c9"));
+        assert_eq!(uses.uses.get("new"), Some(&(1, 201)));
+        uses.count("newer");
+        assert!(!uses.uses.contains_key("c9"), "c9 was picked before new");
+        assert!(uses.uses.contains_key("new") && uses.uses.contains_key("newer"));
+        assert_eq!(uses.uses.len(), MAX_COUNTED_COMMANDS);
+    }
+
+    /// When all 200 counted ids have 2 picks or more, new ids picked in turn keep their places and
+    /// their counts grow; the ids removed are the ones picked longest ago.
+    #[test]
+    fn new_commands_build_up_counts_when_every_counted_one_has_more_picks() {
+        let ids: Vec<String> = (0..MAX_COUNTED_COMMANDS).map(|i| format!("c{i}")).collect();
+        let counts: Vec<(&str, u32)> = ids.iter().map(|id| (id.as_str(), 2)).collect();
+        let mut uses = counted(&counts);
+        for _ in 0..3 {
+            for id in ["a", "b", "c"] {
+                uses.count(id);
+            }
+        }
+        assert_eq!(uses.uses.len(), MAX_COUNTED_COMMANDS);
+        for id in ["a", "b", "c"] {
+            assert_eq!(uses.uses.get(id).map(|&(n, _)| n), Some(3), "{id}");
+        }
+        assert!(!uses.uses.contains_key("c0") && !uses.uses.contains_key("c2") && uses.uses.contains_key("c3"));
+        assert!(uses.uses.contains_key("c199"));
+    }
+
+    /// When a count reaches 1,000, every count is halved and ids left at 0 are removed.
+    #[test]
+    fn counts_are_halved_at_one_thousand() {
+        let mut uses = counted(&[("a", 999), ("b", 1), ("c", 5)]);
+        uses.count("a");
+        assert_eq!(uses.uses.get("a"), Some(&(500, 4)));
+        assert_eq!(uses.uses.get("c"), Some(&(2, 3)));
+        assert!(!uses.uses.contains_key("b"));
+        let mut stuck = counted(&[("a", 1)]);
+        stuck.pick = u32::MAX;
+        stuck.count("a");
+        assert_eq!(stuck.uses.get("a"), Some(&(2, u32::MAX)), "the pick number saturates");
+    }
+
+    /// Saved counts load what is readable: a count above 999 reads as 999, entries that are not a
+    /// pair of counts are dropped, of more than 200 ids the most recent picks are kept, and a value
+    /// of the wrong kind, or none (an older settings file), reads as no picks.
+    #[test]
+    fn saved_pick_counts_load_what_is_readable() {
+        let load = |v: serde_json::Value| serde_json::from_value::<crate::state::UiState>(json!({ "command_uses": v })).unwrap().command_uses;
+        let uses = load(json!({
+            "pick": 3,
+            "uses": {"a": [5000, 2], "b": "x", "c": [1], "d": [0, 1], "e": [2, 3, 4], "f": [-1, 2], "g": [4, 1], "h": [1.5, 1], "i": [3, 9]}
+        }));
+        assert_eq!(uses, CommandUses { pick: 9, uses: [("a", (999, 2)), ("g", (4, 1)), ("i", (3, 9))].map(|(k, v)| (k.to_string(), v)).into() });
+        for wrong in [json!("x"), json!(null), json!([1, 2]), json!({"uses": [1]}), json!({"pick": "x", "uses": {}})] {
+            assert_eq!(load(wrong.clone()), CommandUses::default(), "{wrong}");
+        }
+        let older: crate::state::UiState = serde_json::from_value(json!({})).unwrap();
+        assert_eq!(older.command_uses, CommandUses::default());
+        let many: serde_json::Map<String, serde_json::Value> = (1..=250).map(|i| (format!("c{i}"), json!([1, i]))).collect();
+        let uses = load(json!({ "pick": 250, "uses": many }));
+        assert_eq!(uses.uses.len(), MAX_COUNTED_COMMANDS);
+        assert!(uses.uses.contains_key("c51") && !uses.uses.contains_key("c50"));
+        // The next pick is the most recent, also when the saved pick number is behind.
+        let mut uses = load(json!({ "pick": 1, "uses": {"a": [1, 9]} }));
+        uses.count("b");
+        assert_eq!(uses.uses.get("b"), Some(&(1, 10)));
+    }
+
+    /// A pick is counted only when Recent Commands records it: a refused pick and a pick of the
+    /// palette's own toggle are not counted, and a pick that opens a dialog is.
+    #[test]
+    fn only_a_pick_recorded_in_recent_commands_is_counted() {
+        for (query, id) in [("find and replace", "edit.findReplace"), ("search commands", PALETTE_TOGGLE)] {
+            let mut open = Open::new(query, WINDOW);
+            let k = open.listed().iter().position(|c| c == id).unwrap_or_else(|| panic!("{query:?} finds {id}"));
+            open.frame(vec![]);
+            open.press(egui::Key::ArrowDown, k);
+            assert_eq!(open.highlighted(), k, "{id}");
+            open.press(egui::Key::Enter, 1);
+            assert!(open.app.ui.recent_commands.is_empty(), "{id}");
+            assert_eq!(open.app.ui.command_uses, CommandUses::default(), "{id}");
+        }
+        let id = "object.path.cleanUp";
+        let mut open = Open::new("clean up", WINDOW);
+        open.app = VectorcraftApp::new(vectorcraft_testkit::fixtures::Fixture::Single.session(), crate::Services::default());
+        open.app.ui.palette_open = true;
+        open.app.ui.palette_query = "clean up".into();
+        let k = open.listed().iter().position(|c| c == id).expect("the search finds Clean Up…");
+        open.frame(vec![]);
+        open.press(egui::Key::ArrowDown, k);
+        open.press(egui::Key::Enter, 1);
+        assert!(open.app.ui.dialog.is_some());
+        assert_eq!(open.app.ui.recent_commands, [id]);
+        assert_eq!(open.app.ui.command_uses.grade(id), 1);
+    }
+
     /// #6376: with nothing picked yet, Recent Commands shows a dimmed No recent commands row.
     #[test]
     fn recent_commands_without_picks_show_a_dimmed_row() {
@@ -1403,6 +1862,251 @@ mod tests {
         h.run_steps(2);
         assert!(h.get_by_label(tl!("No recent commands")).accesskit_node().is_disabled());
         assert!(h.state().ui.palette_open);
+    }
+
+    /// The row labels the palette shows for the commands `ids`, in that order.
+    fn row_labels(ctx: &egui::Context, ids: &[&str]) -> Vec<String> {
+        let entries = entries(ctx, Lang::EN);
+        ids.iter().map(|id| row_label(entries.iter().find(|e| e.id == *id).unwrap())).collect()
+    }
+
+    /// An empty search, or one of spaces only, lists the recent picks under a Recent heading, most
+    /// recent first, with the first highlighted. A pick whose command is gone is left
+    /// out, and no count is shown.
+    #[test]
+    fn an_empty_search_lists_the_recent_picks_most_recent_first() {
+        for query in ["", "   "] {
+            let mut open = Open::new("select", WINDOW);
+            open.app.ui.recent_commands = ["paint.swap", "plugin:test.UI.palette_gone", "object.group"].map(str::to_string).into();
+            open.app.ui.palette_query = query.into();
+            let nodes = open.frame(vec![]);
+            let shown: Vec<(String, bool)> = rows(&nodes).into_iter().map(|r| (r.0, r.1)).collect();
+            let expected = row_labels(&open.ctx, &["paint.swap", "object.group"]);
+            assert_eq!(shown, [(expected[0].clone(), true), (expected[1].clone(), false)], "{query:?}");
+            let labels = labels(&nodes);
+            assert!(labels.iter().any(|l| l == tl!("Recent")), "{query:?}: the heading: {labels:?}");
+            assert!(!labels.iter().any(|l| l.contains("result")), "{query:?}: no count: {labels:?}");
+        }
+    }
+
+    /// An empty search with nothing picked yet lists no rows and says what a search finds.
+    #[test]
+    fn an_empty_search_without_picks_says_what_to_type() {
+        let mut open = Open::new("", WINDOW);
+        let nodes = open.frame(vec![]);
+        assert!(rows(&nodes).is_empty(), "{:?}", rows(&nodes));
+        let labels = labels(&nodes);
+        assert!(labels.iter().any(|l| l == tl!("Type to search commands, tools, panels and effects")), "{labels:?}");
+        let other = [tl!("No commands match"), tl!("Recent"), tl!("No recent commands")];
+        assert!(!labels.iter().any(|l| other.contains(&l.as_str())), "{labels:?}");
+        assert!(open.app.ui.palette_open);
+    }
+
+    /// Enter on an empty search runs the last pick again, and Recent Commands keeps its order.
+    #[test]
+    fn enter_on_an_empty_search_runs_the_last_pick_again() {
+        let mut open = Open::new("", WINDOW);
+        open.app = VectorcraftApp::new(vectorcraft_testkit::fixtures::Fixture::Multi.session(), crate::Services::default());
+        open.app.ui.recent_commands = vec!["paint.swap".into(), "object.group".into()];
+        open.app.ui.palette_open = true;
+        open.frame(vec![]);
+        let before = open.app.session.active().unwrap().history.undo.len();
+        open.press(egui::Key::Enter, 1);
+        assert!(!open.app.ui.palette_open, "the palette closes");
+        assert_eq!(open.app.session.active().unwrap().history.undo.len(), before + 1, "{}", open.app.ui.status);
+        assert_eq!(open.app.ui.recent_commands, ["paint.swap", "object.group"]);
+    }
+
+    /// The palette opens again with its first row highlighted, even when it shows the same rows.
+    #[test]
+    fn the_palette_opens_again_with_its_first_row_highlighted() {
+        let mut open = Open::new("", WINDOW);
+        open.app.ui.recent_commands = vec!["paint.swap".into(), "object.group".into(), "view.zoomIn".into()];
+        open.frame(vec![]);
+        open.press(egui::Key::ArrowDown, 2);
+        assert_eq!(open.highlighted(), 2);
+        open.app.ui.palette_open = false;
+        open.frame(vec![]);
+        open.app.ui.palette_open = true;
+        let nodes = open.frame(vec![]);
+        assert_eq!(open.highlighted(), 0);
+        assert!(rows(&nodes).first().is_some_and(|r| r.1), "{:?}", rows(&nodes));
+        // A list scrolled down shows its first row again, highlighted, when the palette opens with
+        // the same search.
+        open.app.ui.palette_query = "select".into();
+        open.frame(vec![]);
+        open.press(egui::Key::ArrowDown, VISIBLE_ROWS + 5);
+        assert_eq!(open.highlighted(), VISIBLE_ROWS + 5);
+        open.app.ui.palette_open = false;
+        open.frame(vec![]);
+        open.app.ui.palette_open = true;
+        let nodes = open.frame(vec![]);
+        let first = open.listed().first().cloned().unwrap();
+        let shown = rows(&nodes);
+        let top = shown.iter().find(|r| r.1).expect("a row is highlighted");
+        assert_eq!(top.0, row_labels(&open.ctx, &[&first])[0], "{shown:?}");
+        assert!(top.2 >= f64::from(open.popup().top()), "the first row is in view: {shown:?}");
+    }
+
+    /// A palette closed by a click outside it and opened again in the next frame, as the search
+    /// icon does, starts at its first row, so Enter on an empty search runs the last pick.
+    #[test]
+    fn the_palette_reopened_in_the_next_frame_starts_at_its_first_row() {
+        let mut open = Open::new("", WINDOW);
+        open.app = VectorcraftApp::new(vectorcraft_testkit::fixtures::Fixture::Multi.session(), crate::Services::default());
+        open.app.ui.recent_commands = vec!["paint.swap".into(), "object.group".into()];
+        open.app.ui.palette_open = true;
+        open.frame(vec![]);
+        open.press(egui::Key::ArrowDown, 1);
+        assert_eq!(open.highlighted(), 1);
+        let at = egui::pos2(WINDOW.x - 4.0, WINDOW.y - 4.0);
+        let button =
+            |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+        open.frame(vec![egui::Event::PointerMoved(at), button(true), button(false)]);
+        assert!(!open.app.ui.palette_open, "the click outside closes the palette");
+        open.app.ui.palette_open = true;
+        open.frame(vec![]);
+        assert_eq!(open.highlighted(), 0);
+        let before = open.app.session.active().unwrap().history.undo.len();
+        open.press(egui::Key::Enter, 1);
+        assert!(!open.app.ui.palette_open, "the palette closes");
+        assert_eq!(open.app.session.active().unwrap().history.undo.len(), before + 1, "{}", open.app.ui.status);
+        assert_eq!(open.app.ui.recent_commands, ["paint.swap", "object.group"]);
+    }
+
+    /// A pick of the palette's own toggle is not recorded, and one saved earlier is not listed, so
+    /// Enter on an empty search runs the last other pick.
+    #[test]
+    fn the_palette_toggle_is_not_a_recent_pick() {
+        let mut open = Open::new("search commands", WINDOW);
+        open.app.ui.recent_commands = vec!["paint.swap".into()];
+        let k = open.listed().iter().position(|id| id == PALETTE_TOGGLE).expect("the toggle's result");
+        open.frame(vec![]);
+        open.press(egui::Key::ArrowDown, k);
+        assert_eq!(open.highlighted(), k);
+        open.press(egui::Key::Enter, 1);
+        assert_eq!(open.app.ui.recent_commands, ["paint.swap"]);
+        open.app.ui.recent_commands = vec![PALETTE_TOGGLE.into(), "paint.swap".into()];
+        open.app.ui.palette_query.clear();
+        open.app.ui.palette_open = true;
+        open.frame(vec![]);
+        assert_eq!(open.listed(), ["paint.swap"]);
+        let nodes = open.frame(vec![]);
+        let shown: Vec<(String, bool)> = rows(&nodes).into_iter().map(|r| (r.0, r.1)).collect();
+        assert_eq!(shown, [(row_labels(&open.ctx, &["paint.swap"])[0].clone(), true)]);
+    }
+
+    /// A click on a lower row of the empty search's list runs that pick and moves it to the top of
+    /// Recent Commands.
+    #[test]
+    fn a_click_on_a_recent_pick_runs_it_and_moves_it_first() {
+        let mut open = Open::new("", WINDOW);
+        open.app = VectorcraftApp::new(vectorcraft_testkit::fixtures::Fixture::Multi.session(), crate::Services::default());
+        open.app.ui.recent_commands = vec!["object.group".into(), "paint.swap".into()];
+        open.app.ui.palette_open = true;
+        let nodes = open.frame(vec![]);
+        let row = rows(&nodes).into_iter().nth(1).expect("the second pick's row");
+        assert_eq!(row.0, row_labels(&open.ctx, &["paint.swap"])[0]);
+        let before = open.app.session.active().unwrap().history.undo.len();
+        let at = egui::pos2(open.popup().right() - 24.0, ((row.2 + row.3) / 2.0) as f32);
+        let button =
+            |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+        open.frame(vec![egui::Event::PointerMoved(at)]);
+        open.frame(vec![button(true)]);
+        open.frame(vec![button(false)]);
+        assert!(!open.app.ui.palette_open, "the palette closes");
+        assert_eq!(open.app.session.active().unwrap().history.undo.len(), before + 1, "{}", open.app.ui.status);
+        assert_eq!(open.app.ui.recent_commands, ["paint.swap", "object.group"]);
+    }
+
+    /// A pick says what it did: it ran, it opened a dialog, or it was refused because its menu item
+    /// is dimmed or its panel can't be shown.
+    #[test]
+    fn a_pick_says_whether_it_ran_opened_a_dialog_or_was_refused() {
+        use vectorcraft_testkit::fixtures::Fixture;
+        let app = |session| VectorcraftApp::new(session, crate::Services::default());
+        assert_eq!(run_pick(&mut app(Fixture::Multi.session()), "object.group"), Picked::Ran);
+        assert_eq!(run_pick(&mut app(Fixture::Multi.session()), "tool:knife"), Picked::Ran);
+        assert_eq!(run_pick(&mut app(Fixture::Multi.session()), "panel:swatches"), Picked::Ran);
+        let mut dialog = app(Fixture::Single.session());
+        assert_eq!(run_pick(&mut dialog, "object.path.cleanUp"), Picked::OpenedDialog);
+        assert!(dialog.ui.dialog.is_some());
+        for id in ["edit.findReplace", "object.group"] {
+            assert_eq!(run_pick(&mut app(vectorcraft_engine::Session::new()), id), Picked::Refused, "{id}");
+        }
+        let mut presenting = app(Fixture::Multi.session());
+        presenting.ui.screen_mode = 3;
+        assert_eq!(run_pick(&mut presenting, "panel:swatches"), Picked::Refused);
+        assert_eq!(run_pick(&mut app(Fixture::Multi.session()), "panel:no-such-panel"), Picked::Refused);
+        let mut stuck = app(Fixture::Multi.session());
+        stuck.fail_next_tool_choice = Some("no switch".into());
+        assert_eq!(run_pick(&mut stuck, "tool:knife"), Picked::Refused);
+        assert_eq!(stuck.ui.status, "no switch");
+        // With nothing selected, the Effect menu dims every effect, and a plug-in's filter is dimmed.
+        let effect = crate::shortcut_editor::effect_items().first().map(|e| format!("effect:{}", e.effect)).expect("an effect");
+        let mut empty = app(vectorcraft_engine::Session::new());
+        assert_eq!(run_pick(&mut empty, &effect), Picked::Refused, "{effect}");
+        assert!(empty.ui.dialog.is_none(), "{effect}");
+        assert_eq!(run_pick(&mut app(vectorcraft_engine::Session::new()), "plugin:test.UI.palette_missing"), Picked::Refused);
+    }
+
+    /// A pick that is refused while its menu item is dimmed is not recorded in Recent Commands,
+    /// from a search or from the recent picks, which keep their order.
+    #[test]
+    fn a_refused_pick_is_not_recorded() {
+        for (query, id) in [("find and replace", "edit.findReplace"), ("group", "object.group")] {
+            let mut open = Open::new(query, WINDOW);
+            open.app.ui.recent_commands = vec!["paint.swap".into()];
+            let k = open.listed().iter().position(|c| c == id).unwrap_or_else(|| panic!("{query:?} finds {id}"));
+            open.frame(vec![]);
+            open.press(egui::Key::ArrowDown, k);
+            assert_eq!(open.highlighted(), k, "{id}");
+            open.app.ui.status.clear();
+            open.press(egui::Key::Enter, 1);
+            assert!(!open.app.ui.palette_open, "{id}: the palette closes");
+            assert!(open.app.ui.dialog.is_none(), "{id}");
+            assert_eq!(open.app.ui.recent_commands, ["paint.swap"], "{id}");
+        }
+        let mut open = Open::new("", WINDOW);
+        open.app.ui.recent_commands = vec!["paint.swap".into(), "object.group".into()];
+        open.frame(vec![]);
+        open.press(egui::Key::ArrowDown, 1);
+        assert_eq!(open.highlighted(), 1);
+        open.press(egui::Key::Enter, 1);
+        assert!(!open.app.ui.palette_open, "the palette closes");
+        assert_eq!(open.app.ui.recent_commands, ["paint.swap", "object.group"]);
+        // A tool that can't be chosen now is not recorded either.
+        let mut open = Open::new("knife", WINDOW);
+        open.app.ui.recent_commands = vec!["paint.swap".into()];
+        let k = open.listed().iter().position(|c| c == "tool:knife").expect("the search finds the Knife");
+        open.frame(vec![]);
+        open.press(egui::Key::ArrowDown, k);
+        open.app.fail_next_tool_choice = Some("no switch".into());
+        open.press(egui::Key::Enter, 1);
+        assert_eq!(open.app.ui.status, "no switch");
+        assert_eq!(open.app.ui.recent_commands, ["paint.swap"]);
+    }
+
+    /// A pick that opens a dialog is recorded in Recent Commands when the dialog opens, so it stays
+    /// there when the dialog is canceled.
+    #[test]
+    fn a_pick_that_opens_a_dialog_is_recorded_even_when_canceled() {
+        let id = "object.path.cleanUp";
+        let mut open = Open::new("clean up", WINDOW);
+        open.app = VectorcraftApp::new(vectorcraft_testkit::fixtures::Fixture::Single.session(), crate::Services::default());
+        open.app.ui.palette_open = true;
+        open.app.ui.palette_query = "clean up".into();
+        open.app.ui.recent_commands = vec!["paint.swap".into()];
+        let k = open.listed().iter().position(|c| c == id).expect("the search finds Clean Up…");
+        open.frame(vec![]);
+        open.press(egui::Key::ArrowDown, k);
+        open.press(egui::Key::Enter, 1);
+        assert!(open.app.ui.dialog.is_some(), "{}", open.app.ui.status);
+        assert_eq!(open.app.ui.recent_commands, [id, "paint.swap"]);
+        // Cancel closes the dialog without running the command.
+        open.app.ui.dialog = None;
+        open.frame(vec![]);
+        assert_eq!(open.app.ui.recent_commands, [id, "paint.swap"]);
     }
 
     /// #1757: Up and Down move the highlighted result, wrapping at the ends; a new query starts
@@ -1428,7 +2132,7 @@ mod tests {
         // With more matches than the list holds, Up on the first wraps to the last one it holds, and
         // Down there wraps to the first.
         app.ui.palette_query = "select".into();
-        assert!(matching(&entries(&ctx, Lang::EN), "select").len() > MAX_RESULTS);
+        assert!(matching(&entries(&ctx, Lang::EN), "select", &[]).len() > MAX_RESULTS);
         assert_eq!(frame(&mut app, vec![]), 0);
         assert_eq!(frame(&mut app, vec![key(egui::Key::ArrowUp)]), MAX_RESULTS - 1);
         assert_eq!(frame(&mut app, vec![key(egui::Key::ArrowDown)]), 0);
@@ -1768,7 +2472,7 @@ mod tests {
         for (query, want) in [("layers", "panel:layers"), ("color guide", "panel:colorGuide"), ("Layers ", "panel:layers")] {
             let all: Vec<&str> =
                 entries.iter().filter(|e| query.to_lowercase().split_whitespace().all(|w| e.haystack.contains(w))).map(|e| e.id.as_str()).collect();
-            let shown: Vec<&str> = matching(&entries, &query.to_lowercase()).into_iter().map(|e| e.id.as_str()).collect();
+            let shown: Vec<&str> = matching(&entries, &query.to_lowercase(), &[]).into_iter().map(|e| e.id.as_str()).collect();
             assert_eq!(shown.first(), Some(&want), "{query}: {shown:?}");
             // English plural and verb forms can find more results than the text alone.
             assert!(all.iter().all(|id| shown.contains(id)), "{query}");
@@ -1937,7 +2641,13 @@ mod tests {
         /// The results the palette lists for its query.
         fn listed(&self) -> Vec<String> {
             let entries = entries(&self.ctx, Lang::EN);
-            matching(&entries, &self.app.ui.palette_query.to_lowercase()).iter().take(MAX_RESULTS).map(|e| e.id.clone()).collect()
+            // An empty search lists the recent picks, as `show` does.
+            let listed = if self.app.ui.palette_query.trim().is_empty() {
+                recent(&entries.list, &self.app.ui.recent_commands)
+            } else {
+                super::matching(&entries, &self.app.ui.palette_query.to_lowercase(), &self.app.ui.recent_commands, &self.app.ui.command_uses)
+            };
+            listed.iter().take(MAX_RESULTS).map(|e| e.id.clone()).collect()
         }
     }
 
@@ -2009,7 +2719,7 @@ mod tests {
             ]
         );
         let mut open = Open::new("select", WINDOW);
-        let total = matching(&entries(&open.ctx, Lang::EN), "select").len();
+        let total = matching(&entries(&open.ctx, Lang::EN), "select", &[]).len();
         assert!(total > MAX_RESULTS, "{total}");
         let nodes = open.frame(vec![]);
         assert!(labels(&nodes).contains(&format!("50 of {total} results. Keep typing to narrow them.")), "{:?}", labels(&nodes));
@@ -2213,7 +2923,7 @@ mod tests {
         let lit: Vec<String> = rows(&nodes).into_iter().filter(|r| r.1).map(|r| r.0).collect();
         let label = entries.iter().find(|e| e.id == listed[3]).map(row_label).unwrap();
         assert_eq!(lit, std::slice::from_ref(&label));
-        assert_eq!(field_description(&nodes), format!("4 of {}: {label}", matching(&entries, "select").len()));
+        assert_eq!(field_description(&nodes), format!("4 of {}: {label}", matching(&entries, "select", &[]).len()));
     }
 
     /// A name too long for its row is cut short with "…" and stays inside the width it is given.
@@ -2286,7 +2996,7 @@ mod tests {
         let label = |i: usize| entries.iter().find(|e| e.id == listed[i]).map(row_label).unwrap();
         let nodes = open.frame(vec![]);
         // More results match than the list holds: the place counts every match, as the footer does.
-        let total = matching(&entries, "show panel").len();
+        let total = matching(&entries, "show panel", &[]).len();
         assert!(total > MAX_RESULTS && listed.len() == MAX_RESULTS, "{total}");
         assert_eq!(field_description(&nodes), format!("1 of {total}: {}", label(0)));
         let lit: Vec<String> = rows(&nodes).into_iter().filter(|r| r.1).map(|r| r.0).collect();
@@ -2295,7 +3005,7 @@ mod tests {
         let nodes = open.press(egui::Key::ArrowDown, 1);
         assert_eq!(field_description(&nodes), format!("2 of {total}: {}", label(1)));
         // Fewer results match than the list holds.
-        let mut open = Open::new("copy", WINDOW);
+        let mut open = Open::new("eyedropper", WINDOW);
         let n = open.listed().len();
         assert!((1..MAX_RESULTS).contains(&n), "{n}");
         let first = entries.iter().find(|e| e.id == open.listed()[0]).map(row_label).unwrap();
@@ -2777,7 +3487,7 @@ mod tests {
         assert_eq!(window.app.ui.palette_query, "show panel");
         let nodes = window.frame(vec![]);
         let entries = entries(&window.ctx, Lang::EN);
-        let listed: Vec<_> = matching(&entries, "show panel").into_iter().take(MAX_RESULTS).collect();
+        let listed: Vec<_> = matching(&entries, "show panel", &[]).into_iter().take(MAX_RESULTS).collect();
         let hidden = |e: &&&Entry| e.id.strip_prefix("panel:").is_some_and(|p| !crate::panel_docking::showing(&window.app.ui, p));
         let e = listed.iter().find(hidden).expect("a hidden panel's result");
         let label = row_label(e);
@@ -2837,7 +3547,7 @@ mod tests {
         open.frame(vec![]);
         let (sel, .., now) = held(&open);
         let de = entries(&open.ctx, Lang::from_code("de").unwrap());
-        let de_listed: Vec<String> = matching(&de, "group").iter().map(|e| e.id.clone()).collect();
+        let de_listed: Vec<String> = matching(&de, "group", &[]).iter().map(|e| e.id.clone()).collect();
         crate::i18n::set_current(Lang::EN);
         assert_eq!((de_listed.get(sel), &now), (Some(&id), &id), "after the language changed");
     }
@@ -2850,7 +3560,7 @@ mod tests {
         use vectorcraft_plugins::wat as tpl;
         // A query no other test searches for, so the plug-in below leaves their results alone.
         let mut open = Open::new("path", WINDOW);
-        assert!(matching(&entries(&open.ctx, Lang::EN), "path").len() > MAX_RESULTS);
+        assert!(matching(&entries(&open.ctx, Lang::EN), "path", &[]).len() > MAX_RESULTS);
         open.press(egui::Key::ArrowUp, 1);
         let held = |open: &Open| open.ctx.data(|d| d.get_temp::<Highlight>(egui::Id::unique("palette-selected"))).unwrap();
         let (sel, .., id) = held(&open);
@@ -2860,7 +3570,7 @@ mod tests {
         vectorcraft_plugins::registry::install_bytes(&wat::parse_str(tpl::returning(&manifest, r#"{"objects":[]}"#)).unwrap()).unwrap();
         open.frame(vec![]);
         let entries = entries(&open.ctx, Lang::EN);
-        let ranked: Vec<&Entry> = matching(&entries, "path");
+        let ranked: Vec<&Entry> = matching(&entries, "path", &[]);
         let nodes = open.frame(vec![]);
         let (sel, .., now) = held(&open);
         vectorcraft_plugins::registry::remove(filter);
