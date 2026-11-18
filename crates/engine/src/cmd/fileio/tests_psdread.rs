@@ -602,6 +602,56 @@ fn relink_and_update_follow_the_clipping_path_of_a_linked_psd() {
     assert_eq!(clip_group(&s.doc().unwrap().doc, group), (squared, true, NodeId(image)), "links.update reads the clipping path again");
 }
 
+/// Unembed keeps the clip group of the clipping path an embedded PSD file's image came with, with a
+/// path and with a folder, and so do relinking to the written file, placing it and opening it.
+#[test]
+fn unembed_keeps_the_clipping_path_of_an_embedded_psd() {
+    let dir = vectorcraft_testkit::TempDir::new("psd-unembed-clip");
+    // An RGB file is kept as a PNG, a CMYK one as a TIFF.
+    let cmyk = psd(1, 4, (100, 50), 8, 4, &[], &triangle_resources(), &[], &raw(&[&[0; 5000], &[255; 5000], &[255; 5000], &[0; 5000]]));
+    let files = [("rgb", red_psd(&triangle_resources())), ("cmyk", cmyk)];
+    for ((kind, file), folder) in files.iter().flat_map(|f| [(f, false), (f, true)]) {
+        let data = vectorcraft_format::base64_encode(file);
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 100, "height": 50})).unwrap();
+        let r = s.execute("file.place", &json!({"name": "cut.psd", "dataBase64": data, "at": [50, 25]})).unwrap();
+        let (group, image) = (NodeId(r["ids"][0].as_u64().unwrap()), NodeId(r["image"].as_u64().unwrap()));
+        let before = clip_group(&s.doc().unwrap().doc, group);
+        // Without an extension the image is written in the format it is stored in.
+        let path = if folder {
+            let out = dir.join(format!("folder-{kind}"));
+            std::fs::create_dir_all(&out).unwrap();
+            let r = s.execute("links.unembed", &json!({"ids": [image.0], "folder": out})).unwrap();
+            r["unembedded"][0]["path"].as_str().unwrap().to_string()
+        } else {
+            let r = s.execute("links.unembed", &json!({"id": image.0, "path": dir.join(format!("written-{kind}"))})).unwrap();
+            r["path"].as_str().unwrap().to_string()
+        };
+        let ext = if *kind == "rgb" { ["png"].as_slice() } else { ["tif", "tiff"].as_slice() };
+        assert!(ext.contains(&super::extension(&path).as_str()), "{kind}: {path}");
+        for step in ["unembed", "relink"] {
+            if step == "relink" {
+                s.execute("links.relink", &json!({"ids": [image.0], "path": path})).unwrap();
+            }
+            let d = &s.doc().unwrap().doc;
+            let NodeKind::Image(im) = &d.node(image).unwrap().kind else { panic!("an image") };
+            assert!(im.link.is_some(), "linked to the file written");
+            assert_eq!(clip_group(d, group), before, "{kind}, {step}, folder: {folder}");
+        }
+        // Placing the written file gives the same clip group as placing the PSD file did.
+        let r = s.execute("file.place", &json!({"path": path, "at": [50, 25]})).unwrap();
+        let placed = NodeId(r["ids"][0].as_u64().unwrap());
+        let (anchors, even_odd, _) = clip_group(&s.doc().unwrap().doc, placed);
+        assert_eq!((anchors, even_odd), (before.0.clone(), true), "{kind}, place");
+        // Opening it gives a document of the image in that clip group.
+        s.execute("document.open", &json!({"path": path})).unwrap();
+        let d = &s.doc().unwrap().doc;
+        let top = d.layers[0].children().and_then(|c| c.first()).map(|c| c.id).expect("an object");
+        let (anchors, even_odd, _) = clip_group(d, top);
+        assert_eq!((anchors, even_odd), (before.0.clone(), true), "{kind}, open");
+    }
+}
+
 /// The PNG a PSD file's merged image is kept as holds the clipping path the file names, and only a
 /// text chunk within the size limit that reads as a path gives one back.
 #[test]

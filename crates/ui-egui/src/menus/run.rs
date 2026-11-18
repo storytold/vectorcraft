@@ -183,6 +183,8 @@ fn run_ui_part1(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         "file.reveal" => io::reveal(app),
         "file.cancelExport" => Ok(io::cancel_exports(app)),
         "file.exportInBackground" => Ok(io::hide_exports(app)),
+        "file.cancelSave" => Ok(io::cancel_saves(app)),
+        "file.saveInBackground" => Ok(io::hide_saves(app)),
         "file.cancelOpen" => Ok(crate::opening::cancel_all(app)),
         "file.openInBackground" => Ok(crate::opening::hide_all(app)),
         id if id.starts_with("file.openRecent") => match recent_slot(app, id).filter(|path| recent_readable(path)).cloned() {
@@ -335,6 +337,8 @@ fn run_ui_part3(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         "type.highlightKerning" => crate::panels::character::highlight(app, crate::panels::character::Field::Kerning),
         "type.highlightTracking" => crate::panels::character::highlight(app, crate::panels::character::Field::Tracking),
         "type.underline" => crate::panels::character::toggle_underline(app),
+        "type.superscript" => crate::panels::character::toggle_position(app, "superscript"),
+        "type.subscript" => crate::panels::character::toggle_position(app, "subscript"),
         "type.lineComposer" => crate::panels::paragraph::toggle_composer(app),
         "type.hyphenate" => crate::panels::paragraph::toggle_hyphenate(app),
         id if let Some((_, justify)) = crate::panels::paragraph::ALIGN_COMMANDS.iter().find(|c| c.0 == id) => {
@@ -357,6 +361,7 @@ fn run_ui_part4(app: &mut VectorcraftApp, id: &str, _p: &Value) -> Option<Result
     let r = match id {
         "type.convertListToText" => crate::panels::paragraph::convert_list_to_text(app),
         id if let Some(b) = crate::panels::align::button(id) => crate::panels::align::run_button(app, b),
+        id if let Some(v) = crate::panels::align::align_to_command(id) => crate::panels::align::run_align_to(app, v),
         "view.gradientAnnotator" => flag(&mut app.ui.view.gradient_annotator),
         "view.livePaintGaps" => flag(&mut app.ui.view.live_paint_gaps),
         "effect.last" => match app.last_effect.clone() {
@@ -869,6 +874,7 @@ fn run_ui_part8(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         "artboard.selectAll" => crate::panels::artboards::select_all_command(app),
         "ui.layersPanelOptions" => crate::dialogs::layers_panel_options::open(app),
         "ui.navigatorPanelOptions" => crate::panels::navigator::set_options(app, p),
+        "ui.attributesPanelOptions" => crate::panels::attributes::set_options(app, p),
         "ui.layersExpand" => crate::panels::layers::expand(app, p),
         "ui.layersFilter" => crate::panels::layers::set_filter(app, p),
         "ui.panelView" => crate::panels::set_view(app, p),
@@ -1043,6 +1049,7 @@ fn run_ui_part11(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
         crate::panels::actions::DELETE_SETS => crate::panels::actions::delete_sets(app, p),
         crate::panels::actions::DUPLICATE => crate::panels::actions::duplicate(app, p),
         crate::panels::actions::RESET => crate::panels::actions::reset(app, p),
+        crate::panels::actions::CLEAR => crate::panels::actions::clear(app, p),
         "ui.shortcutImportDialog" => crate::dialogs::shortcut_import::command(app, p),
         _ => return None,
     };

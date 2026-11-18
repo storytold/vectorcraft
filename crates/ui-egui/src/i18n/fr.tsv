@@ -859,6 +859,7 @@ font-technology	Variable	Variables
 	Duplicate Action or Action Set	Dupliquer le script ou le jeu de scripts
 	Delete the action set “{name}” and its actions?	Supprimer le jeu de scripts « {name} » et ses scripts ?
 	Delete the selected action sets and their actions?	Supprimer les jeux de scripts sélectionnés et leurs scripts ?
+	Delete all action sets and their actions?	Supprimer tous les jeux de scripts et leurs scripts ?
 	Delete Slices	Supprimer les tranches
 	Delete Spine Point	Supprimer le point de la dorsale
 	Delete Stop	Supprimer l’étape de dégradé
@@ -1372,6 +1373,7 @@ font-technology	Variable	Variables
 	Fit to Selected Art	Ajuster à l’illustration sélectionnée
 	Flag…	Drapeau…
 	Flare	Halo
+	Edit Flare	Modifier le halo
 	Flare Tool	Outil Halo
 	Flare Tool Options	Options de l’outil Halo
 	Halo	Halo
@@ -2264,6 +2266,9 @@ font-technology	Variable	Variables
 	Navigate	Naviguer
 	Navigator	Navigation
 	Navigator Panel Options	Options du panneau Navigation
+	Attributes Panel Options	Options du panneau Options d’objet
+	Number of Recent URLs:	Nombre d’URL récentes :
+@msg	`count` must be a whole number from 1 to 30	`count` doit être un nombre entier compris entre 1 et 30
 	Draw Dashed Lines as Solid Lines	Dessiner les pointillés en traits pleins
 	Needs the desktop app	Nécessite l’application de bureau
 	Neutral Gradients	Dégradés neutres
@@ -2739,6 +2744,7 @@ font-technology	Variable	Variables
 	Save Actions…	Enregistrer les scripts…
 	Load Actions…	Charger des scripts…
 	Replace Actions…	Remplacer les scripts…
+	Clear Actions	Effacer les scripts
 	Reset Actions	Réinitialiser les scripts
 	Replace the current actions with the default set?	Remplacer les scripts actuels par le jeu par défaut ?
 	Append adds the default set after the current sets instead.	Le bouton Ajouter ajoute plutôt le jeu par défaut après les jeux actuels.
@@ -3181,6 +3187,8 @@ digits	Malayalam	Malayalam
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	La molette de la souris avec Cmd/Ctrl enfoncée fait défiler la zone de travail latéralement.
 	Dragging sideways on a numeric field's label changes the field's value.	Faire glisser latéralement le libellé d’un champ numérique modifie la valeur du champ.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Un geste de rotation à deux doigts sur un pavé tactile fait pivoter la vue de la zone de travail.
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Maintenir une touche exécute l’outil ou la commande de sa colonne Maintenir dans Raccourcis clavier. Un appui bref exécute son raccourci habituel.
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Durée, en secondes, pendant laquelle une touche doit être maintenue pour que son raccourci de maintien s’exécute à la place de son raccourci habituel.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Quand vous déplacez des points d’ancrage, chaque courbe dont une extrémité bouge garde sa forme par rapport à ses extrémités.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Maintenir le raccourci d’un outil choisit cet outil jusqu’à ce que vous le relâchiez, puis l’outil précédent est de nouveau choisi.
 	Shows the bounding box while you move the selection or draw a shape.	Affiche le cadre de sélection pendant que vous déplacez la sélection ou dessinez une forme.
@@ -5247,6 +5255,7 @@ liquify-list-end	{0}, {1}	{0} et {1}
 @msg	no graphic style `{n}`	aucun style graphique `{n}`
 @msg	no interaction in progress	aucune interaction en cours
 @msg	no key object	aucun objet clé
+@msg	Align to Key Object isn't available with the Artboard tool	L’alignement sur l’objet clé n’est pas disponible avec l’outil Plan de travail
 @msg	no library `{key}` (see {list})	aucune bibliothèque `{key}` (voir {list})
 @msg	no native format	aucun format natif
 @msg	no pages	aucune page
@@ -5302,6 +5311,8 @@ liquify-list-end	{0}, {1}	{0} et {1}
 @msg	no such spine point	point de la dorsale inexistant
 @msg	`with` must be a list of at most 10000 spine point indexes	`with` doit être une liste d’au plus 10000 indices de points de la dorsale
 @msg	`with` moves points, not a handle	`with` déplace des points, pas une poignée
+@msg	`link` and `independent` cannot both be true	`link` et `independent` ne peuvent pas valoir true tous les deux
+@msg	`link` places a handle: give `handle`	`link` place une poignée : indiquez `handle`
 @msg	no such spine segment	segment de la dorsale inexistant
 @msg	no such subpath	sous-tracé inexistant
 @msg	no such user library	bibliothèque utilisateur inexistante
@@ -5391,6 +5402,7 @@ liquify-list-end	{0}, {1}	{0} et {1}
 @msg	select a blend	sélectionnez un dégradé de formes
 @msg	select a blend or give `id`	sélectionnez un dégradé de formes ou indiquez son `id`
 @msg	select a clip group	sélectionnez un groupe d’écrêtage
+@msg	select a flare	sélectionnez un halo
 @msg	select a gradient mesh	sélectionnez un filet de dégradé
 @msg	select a linked image: an embedded one has no file	sélectionnez une image liée : une image incorporée n’a pas de fichier
 @msg	select a repeat	sélectionnez une répétition
@@ -5646,6 +5658,7 @@ variable-list-end	{0}, {1}	{0} et {1}
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} image liée modifiée sur le disque : Mettre à jour les liens affiche la nouvelle version|{n} images liées modifiées sur le disque : Mettre à jour les liens affiche les nouvelles versions
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	{n} fichier lié modifié sur le disque mis à jour|{n} fichiers liés modifiés sur le disque mis à jour
 @msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	le document définit un fond perdu que ce fichier PDF/X omet : activez « Utiliser les paramètres de fond perdu du document »
+@msgplural	{n} object reaches the trim edge but stops short of the bleed|{n} objects reach the trim edge but stop short of the bleed	{n} objet atteint le bord de coupe mais s’arrête avant le fond perdu|{n} objets atteignent le bord de coupe mais s’arrêtent avant le fond perdu
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	{what} exporté avec {n} remarque : {first}|{what} exporté avec {n} remarques : {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} fichier de polices se trouve maintenant dans {folder}|{n} fichiers de polices se trouvent maintenant dans {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} fichier de polices se trouve maintenant dans {folder} ; {failed} n’ont pas pu être ajoutés : {reason}|{n} fichiers de polices se trouvent maintenant dans {folder} ; {failed} n’ont pas pu être ajoutés : {reason}
@@ -6903,6 +6916,9 @@ theme	Appearance	Apparence
 	Continue in Background	Continuer en arrière-plan
 	Cancel Export	Annuler l’exportation
 @msg	Export cancelled	Exportation annulée
+	Cancel Save	Annuler l’enregistrement
+@plural	{n} more save waiting|{n} more saves waiting	{n} autre enregistrement en attente|{n} autres enregistrements en attente
+@msg	Save canceled	Enregistrement annulé
 # Paragraph panel menu › Justification…
 	Desired	Optimal
 	Word Spacing:	Espacement des mots :
@@ -7420,6 +7436,12 @@ axis	Y Axis	Axe Y
 	Circuit Trace	Piste de circuit
 	Bus Lines	Lignes de bus
 	Terminal Nodes	Nœuds terminaux
+
+# Original arrow art brushes.
+	Arrows	Flèches
+	Solid Arrow	Flèche pleine
+	Open Arrow	Flèche ouverte
+	Chevron Arrow	Flèche à chevron
 
 	Notched Ribbon	Ruban cranté
 	Double Line	Double ligne
@@ -8105,10 +8127,18 @@ breakText	Glyphs	Glyphes
 	Smooth Bridge…	Pont lissé…
 	Smooth Bridge	Pont lissé
 	Keep Originals	Conserver les originaux
-@msg	select two circles to bridge	sélectionnez deux cercles à relier
+@msg	select two or more circles to bridge	sélectionnez au moins deux cercles à relier
 @msg	one circle is inside the other	un cercle est à l’intérieur de l’autre
 @msg	the circles are too far apart for this radius: raise the radius	les cercles sont trop éloignés pour ce rayon : augmentez le rayon
 @msg	the circles are too far apart for this radius	les cercles sont trop éloignés pour ce rayon
+	Constant Gap	Écart constant
+	Reach:	Portée :
+@msg	the circles are too far apart for this gap: raise the gap	les cercles sont trop éloignés pour cet écart : augmentez l’écart
+@msg	the circles are too far apart for this gap	les cercles sont trop éloignés pour cet écart
+@msg	no two circles are within reach: raise the reach	aucun couple de cercles n’est à portée : augmentez la portée
+@msg	select at most 2000 circles to bridge	sélectionnez au plus 2000 cercles à relier
+@msg	that makes too many bridges (at most 8000): lower the reach	cela crée trop de ponts (au plus 8000) : réduisez la portée
+@msg	the bridged circles are too complex to unite	les cercles reliés sont trop complexes pour être réunis
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	Tangentes communes…
 	Common Tangents	Tangentes communes
@@ -10401,6 +10431,16 @@ breakText	Glyphs	Glyphes
 	No objects are selected.	Aucun objet n’est sélectionné.
 	Open a document to mark its fold lines.	Ouvrez un document pour marquer ses lignes de pliage.
 	Remove Fold Line Role	Supprimer le type de ligne
+	Tap	Appui bref
+	Clear Hold	Effacer le maintien
+	Hold Shortcuts	Raccourcis de maintien
+	Hold Shortcut Delay	Délai des raccourcis de maintien
+	How hold shortcuts work	Fonctionnement des raccourcis de maintien
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	Cliquez, puis appuyez sur une touche à maintenir pour cet élément (Échap annule). Maintenir la touche exécute cet élément ; un appui bref exécute le raccourci propre à la touche.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	Un appui bref sur une touche exécute son raccourci. Maintenir la touche pendant le délai exécute à la place l’outil ou la commande de sa colonne Maintenir. Un raccourci de maintien est une touche de lettre, de chiffre ou de ponctuation, seule ou avec Maj.
+@msg	Hold {_1} is already used by {_2}	Le maintien de {_1} est déjà utilisé par {_2}
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	un raccourci de maintien est une touche qui saisit un caractère, seule ou avec Maj ({shown} comporte Cmd, Ctrl ou Alt)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} ne peut pas être un raccourci de maintien : utilisez une lettre, un chiffre ou une touche de ponctuation
 	Check	Vérifier
 	Check Fold Lines	Vérifier les lignes de pliage
 @msg	No cut lines are in the selection.	La sélection ne contient aucune ligne de découpe.
@@ -10432,6 +10472,7 @@ breakText	Glyphs	Glyphes
 @msg	A joint does not close by {gap} pt.	Un joint ne se ferme pas, avec un écart de {gap} pt.
 @msg	Two panels pass through each other.	Deux panneaux se traversent.
 @msg	{_1} × {_2} pixels is too large for GIF (at most 65535 pixels a side): lower the resolution	{_1} × {_2} pixels, c’est trop grand pour le GIF (65535 pixels par côté au plus) : réduisez la résolution
+	Dashed Arrow	Flèche en pointillés
 	Pressure Sensitive	Sensible à la pression
 	Flex Ribbon	Ruban souple
 	Pulse Stroke	Trait pulsé
