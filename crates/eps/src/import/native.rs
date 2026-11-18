@@ -48,6 +48,8 @@ mod plan;
 mod slots;
 
 #[cfg(test)]
+pub(crate) use build::READ_AFRESH;
+#[cfg(test)]
 use build::{Frame, MADE, prune_unseen};
 pub(crate) use build::{MAX_WRAP_WORK, scale_document, scale_symbols};
 #[cfg(test)]
