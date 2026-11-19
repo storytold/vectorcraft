@@ -371,6 +371,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         // The frame renders the view at its zoom in the interface's points, as `xf` maps it.
         let drawn = v.on_screen(app.canvas_ui_zoom);
         let key = cache_key(app, ui, st, &t, &drawn, (w, h, ppp), (pixel, smooth_images, plugins, placed));
+        if app.canvas.waits_for_still {
+            edit_in_frame_shown(app, &key, &doc, &effects, &drawn, (mask_view, smooth_images));
+        }
         if needs_frame(app, ui, &key) {
             let (w, h, view) = frame_view(pixel, (w, h), &drawn, ppp);
             let opts = frame_options(app, &key, mask_view, smooth_images);
@@ -1218,6 +1221,72 @@ struct Frame<'a> {
 /// shows the document's paper without the art: about a frame at 60 Hz.
 pub(crate) const FIRST_FRAME_GRACE: std::time::Duration = std::time::Duration::from_millis(16);
 
+/// Draw `region` of `frame` again, into the texture of the frame shown, which then shows `frame`'s
+/// key: only the document changed since the frame shown, in that part of it
+/// ([`changed_pixels`]). `None`: nothing in view changed. `last_ms` stays the whole frame's.
+fn draw_changed(app: &mut VectorcraftApp, frame: &Frame, region: Option<[u32; 4]>) {
+    let Frame { key, doc, effects, view, opts, pixel, .. } = frame;
+    let t0 = now_ms();
+    if region.is_none() {
+        // Nothing in view to draw again: what was made to measure the edit isn't drawn.
+        app.canvas.renderer.let_go_of_measured();
+    }
+    let display = app.display_profile.transform(app.session.prefs.monitor_profile_display);
+    if let (Some([x0, y0, x1, y1]), Some(tex)) = (region, &mut app.canvas.texture) {
+        let renderer = &mut app.canvas.renderer;
+        let part_view = Affine::translate((-f64::from(x0), -f64::from(y0))) * *view;
+        let mut part = effects.view(|| renderer.render(doc, x1 - x0, y1 - y0, part_view, opts));
+        let width = part.width;
+        crate::display_profile::convert_over(display.as_deref(), &mut part.pixels, width, part_view, key.over());
+        let color = color_image(&part);
+        let options = if pixel.is_some() { egui::TextureOptions::NEAREST } else { egui::TextureOptions::LINEAR };
+        tex.set_partial([x0 as usize, y0 as usize], color, options);
+        app.canvas.moved |= app.canvas.renderer.stats.moved > 0;
+    }
+    app.canvas.key = Some((*key).clone());
+    app.canvas.shown = Some(((*doc).clone(), opts.clone()));
+    app.perf.render_ms = now_ms() - t0;
+}
+
+/// With `waits_for_still` set (the web build) and the last render slow, an edit while the view
+/// moves (a tool's drag that scrolls the view at an edge of the canvas, or a wheel scroll during a
+/// drag) is drawn into the frame shown, at the view it was rendered for: the part the edit changed
+/// only ([`changed_pixels`]). The frame shown then stays drawn reprojected with the view, and the
+/// canvas renders whole once the view has been still for [`STILL_SECS`], as for a view change
+/// without an edit (#8688). When more than the view and the document differ from the frame shown,
+/// or the edit changed more than half of it, nothing is drawn here: the frame renders whole.
+fn edit_in_frame_shown(
+    app: &mut VectorcraftApp,
+    key: &CacheKey,
+    doc: &std::sync::Arc<vectorcraft_doc::Document>,
+    effects: &vectorcraft_plugins::deferred::Deferrals,
+    drawn: &View,
+    (mask_view, smooth_images): (Option<vectorcraft_doc::NodeId>, bool),
+) {
+    let slow = app.canvas.last_ms > 8.0 && app.canvas.texture.is_some();
+    let Some(shown) = app.canvas.key.clone().filter(|_| slow) else { return };
+    let at_shown = CacheKey {
+        zoom: shown.zoom,
+        cx: shown.cx,
+        cy: shown.cy,
+        w: shown.w,
+        h: shown.h,
+        ppp: shown.ppp,
+        rot: shown.rot,
+        pixel: shown.pixel,
+        ..key.clone()
+    };
+    if at_shown == shown || at_shown == *key || shown.pixel.is_some() != key.pixel.is_some() {
+        return;
+    }
+    let v = View { center: Point::new(shown.cx, shown.cy), zoom: shown.zoom, rotation: shown.rot, ..*drawn };
+    let (w, h, view) = frame_view(at_shown.pixel, (at_shown.w, at_shown.h), &v, at_shown.ppp);
+    let opts = frame_options(app, &at_shown, mask_view, smooth_images);
+    if let Some(region) = changed_pixels(app, &at_shown, doc, &opts, view, w, h) {
+        draw_changed(app, &Frame { key: &at_shown, doc, effects, size: (w, h), view, opts, pixel: at_shown.pixel }, region);
+    }
+}
+
 fn draw_frame(app: &mut VectorcraftApp, ui: &Ui, frame: Frame) {
     let Frame { key, doc, effects, size: (w, h), view, opts, pixel } = frame;
     // Frames that would be slow on this thread (the last one took over 8 ms) go
@@ -1241,27 +1310,7 @@ fn draw_frame(app: &mut VectorcraftApp, ui: &Ui, frame: Frame) {
     match (&mut app.canvas.worker, heavy, changed) {
         // Only the document changed since the frame shown, in a part of it: that part is
         // rendered again, here, into the texture. `last_ms` stays the whole frame's.
-        (_, _, Some(region)) => {
-            let t0 = now_ms();
-            if region.is_none() {
-                // Nothing in view to draw again: what was made to measure the edit isn't drawn.
-                app.canvas.renderer.let_go_of_measured();
-            }
-            if let (Some([x0, y0, x1, y1]), Some(tex)) = (region, &mut app.canvas.texture) {
-                let renderer = &mut app.canvas.renderer;
-                let part_view = Affine::translate((-f64::from(x0), -f64::from(y0))) * view;
-                let mut part = effects.view(|| renderer.render(doc, x1 - x0, y1 - y0, part_view, &opts));
-                let width = part.width;
-                crate::display_profile::convert_over(display.as_deref(), &mut part.pixels, width, part_view, key.over());
-                let color = color_image(&part);
-                let options = if pixel.is_some() { egui::TextureOptions::NEAREST } else { egui::TextureOptions::LINEAR };
-                tex.set_partial([x0 as usize, y0 as usize], color, options);
-                app.canvas.moved |= app.canvas.renderer.stats.moved > 0;
-            }
-            app.canvas.key = Some(key.clone());
-            app.canvas.shown = Some((doc.clone(), opts.clone()));
-            app.perf.render_ms = now_ms() - t0;
-        }
+        (_, _, Some(region)) => draw_changed(app, &Frame { key, doc, effects, size: (w, h), view, opts, pixel }, region),
         (Some(worker), true, None) => {
             // The worker draws the frame: what this thread's renderer made to measure the edit
             // isn't drawn here.
