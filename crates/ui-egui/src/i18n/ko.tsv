@@ -861,6 +861,7 @@ digits	Malayalam	말라얄람어
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	휠 보기
 	Box View	상자 보기
+	Show Out-of-Gamut Colors	색상 범위를 벗어난 색상 표시
 	Box Channel	상자 채널
 	Color box	색상 상자
 	Color Wheel Options	색상환 옵션
@@ -3389,9 +3390,14 @@ mark-style	Japanese	일본식
 	Edit type set in fonts that aren't available?	사용할 수 없는 글꼴로 설정된 문자를 편집하시겠습니까?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	캔버스에서 각 슬라이스의 번호를 왼쪽 위의 상자에 표시합니다. 끄더라도 슬라이스 윤곽선은 계속 표시됩니다.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	사용자 슬라이스와 개체 슬라이스의 윤곽선 및 번호 상자의 색상입니다. 자동 슬라이스에는 이 색상의 더 흐린 색조가 사용됩니다.
+	In paragraphs with Hyphenate on, a listed word is hyphenated only at the hyphens typed in it, or never when it has none, whatever its language or case.	하이픈 넣기가 켜진 단락에서는 목록의 단어에 입력한 하이픈 위치에서만 하이픈이 들어가며, 하이픈이 없으면 하이픈이 들어가지 않습니다. 언어나 대소문자는 상관없습니다.
+	On the desktop, this folder's .wasm plug-ins load at startup and when OK sets a new folder, except in Safe Mode; one that asks for permissions loads only after you grant them. The web version loads none.	데스크톱 버전에서는 이 폴더의 .wasm 플러그인이 시작할 때와 확인으로 새 폴더를 설정할 때 로드됩니다(안전 모드 제외). 권한을 요청하는 플러그인은 권한을 허용한 뒤에만 로드됩니다. 웹 버전은 로드하지 않습니다.
+	Large gives each filter or command plug-in run at least 250 million instructions, with the same time limit; Normal keeps the plug-in's own budget. Live effects, exporters and importers keep theirs.	크게는 필터 또는 명령 플러그인의 각 실행에 같은 시간 제한으로 최소 2억 5천만 개의 명령어를 줍니다. 표준은 플러그인 자체의 예산을 유지합니다. 라이브 효과, 내보내기와 가져오기는 각자의 예산을 유지합니다.
 	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	문서 설정의 언어가 영어: 미국인 동안 새 텍스트는 이 언어를 받습니다. 문서에 이미 있는 텍스트는 자체 언어를 유지합니다.
+	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	문서 설정의 언어가 영어: 미국이고 [기본 문자 스타일]이 언어를 지정하지 않는 동안 새 텍스트는 이 언어를 받습니다. 문서에 이미 있는 텍스트는 자체 언어를 유지합니다.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	하이픈 넣기가 켜진 단락에서는 목록의 단어가 입력한 하이픈 위치에서만 나뉘며, 하이픈이 없으면 나뉘지 않습니다. 언어나 대소문자는 상관없습니다.
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	데스크톱 버전에서는 이 폴더의 .wasm 플러그인이 시작할 때와 여기에 새 폴더를 지정하고 확인을 클릭할 때 로드됩니다(안전 모드 제외). 웹 버전은 로드하지 않습니다.
+	Normal keeps each plug-in's own limits; with Large, a plug-in filter or command may run at least 250 million instructions besides those for its input. The time limit stays the same.	표준은 각 플러그인 자체의 제한을 유지합니다. 크게에서는 플러그인 필터나 명령이 입력에 필요한 명령어 외에 최소 2억 5천만 개의 명령어를 실행할 수 있습니다. 시간 제한은 그대로입니다.
 	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	플러그인의 개체 필터를 한 번 실행할 때 쓸 수 있는 명령어 수입니다. 크게는 표준보다 많이 허용하며 60초 제한은 같습니다. 무거운 필터는 자체 예산을 유지합니다.
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	첫 번째 스크래치 디스크 선택: Startup, None 또는 폴더 경로. VectorCraft는 이 값을 저장하지만 아직 스크래치 디스크를 사용하지 않습니다.
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	두 번째 스크래치 디스크 선택: Startup, None 또는 폴더 경로. VectorCraft는 이 값을 저장하지만 아직 스크래치 디스크를 사용하지 않습니다.
@@ -3403,13 +3409,15 @@ mark-style	Japanese	일본식
 	Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them.	도구 모음에서 각 도구 그룹의 이름을 해당 도구 위에 표시합니다. 끄면 그룹 사이에 아무것도 없이 이어집니다.
 	From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.	지금부터 열거나 만드는 문서는 탭으로 열립니다. 끄면 각 문서가 플로팅 창에서 열립니다. 이미 열린 문서는 그대로 있습니다.
 	Makes the document tabs taller and their names larger.	문서 탭을 더 높게, 이름을 더 크게 표시합니다.
-	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own.	다음 시작부터는 VectorCraft가 자체 제목 표시줄을 그렸을 곳에서 시스템이 창의 제목 표시줄을 그립니다.
-	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on.	다음 시작부터는 데스크톱이 제목 표시줄을 그리는 곳에서도 VectorCraft가 창의 제목 표시줄을 그립니다. 단, 시스템 제목 표시줄이 켜져 있으면 그렇지 않습니다.
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own; on Linux and the BSDs, the VECTORCRAFT_TITLEBAR variable takes precedence.	다음 시작부터는 VectorCraft가 자체 제목 표시줄을 그렸을 곳에서 시스템이 창의 제목 표시줄을 그립니다. Linux와 BSD에서는 VECTORCRAFT_TITLEBAR 변수가 우선합니다.
+	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on or the VECTORCRAFT_TITLEBAR variable chooses it.	다음 시작부터는 데스크톱이 제목 표시줄을 그리는 곳에서도 VectorCraft가 창의 제목 표시줄을 그립니다. 단, 시스템 제목 표시줄이 켜져 있거나 VECTORCRAFT_TITLEBAR 변수가 선택하면 그렇지 않습니다.
 	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	인터페이스를 크게 또는 작게 만듭니다. 같은 확대/축소에서 캔버스의 아트는 크기가 그대로입니다.
 	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	VectorCraft가 그리는 도구 포인터가 UI 배율에 따라 커지고 작아집니다. 끄면 크기가 그대로 유지됩니다.
 	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	인터페이스의 언어입니다. 자동은 시스템 언어를 사용합니다. 언어를 고르면 대화 상자가 바로 그 언어로 바뀝니다.
 	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	애니메이션 확대/축소는 이 옵션이 켜져 있을 때만 작동합니다. 끄면 애니메이션 확대/축소가 흐리게 표시되고 확대/축소에 애니메이션이 없습니다.
 	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	휠로 확대/축소하면 부드럽게 움직이고, 확대/축소 도구는 옆으로 드래그하거나 누르고 있으면 확대/축소합니다. 끄면 확대/축소 도구는 드래그한 영역으로 확대합니다.
+	From the next start, the desktop version shows the canvas through this kind of graphics processor; the artwork is drawn on the CPU either way. Automatic prefers the integrated one on Windows and macOS. The web version does not use it.	다음 시작부터 데스크톱 버전은 이 종류의 그래픽 프로세서를 통해 캔버스를 표시합니다. 아트워크는 항상 CPU에서 그려집니다. 자동은 Windows와 macOS에서 내장 프로세서를 우선합니다. 웹 버전은 사용하지 않습니다.
+	From the next start, the window shows each frame without waiting for the display's refresh where the graphics driver allows, at most 240 frames a second.	다음 시작부터 그래픽 드라이버가 허용하는 경우 창은 디스플레이 새로 고침을 기다리지 않고 각 프레임을 표시하며, 초당 최대 240프레임입니다.
 	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	다음 시작부터 데스크톱 버전은 이 종류의 그래픽 프로세서로 그립니다. 자동은 디스플레이를 구동하는 프로세서를 우선합니다. 웹 버전은 사용하지 않습니다.
 	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	다음 시작부터 창은 디스플레이 새로 고침을 기다리지 않고 프레임을 표시하며, 초당 최대 240프레임입니다. 끄면 디스플레이가 프레임 속도를 정합니다. 시작할 때 지정한 표시 모드가 우선합니다.
 	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	각 문서가 보관하는 실행 취소 단계의 최대 수입니다. 낮추면 확인을 클릭할 때 가장 오래된 단계가 삭제됩니다. 메모리를 너무 많이 쓰면 단계가 더 일찍 삭제될 수도 있습니다.
@@ -3428,6 +3436,9 @@ mark-style	Japanese	일본식
 	Open Recent Files and the Home screen list at most this many recent files; 0 lists none, and VectorCraft still remembers up to 30.	최근 파일 열기와 홈 화면에 표시하는 최근 파일의 최대 개수입니다. 0이면 표시하지 않지만 VectorCraft는 여전히 최대 30개를 기억합니다.
 	When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.	문서를 열 때 저장된 미리 보기를 표시하는 연결된 EPS 이미지는 EPS 파일을 다시 읽지 않고 그 미리 보기를 유지합니다. 변경된 파일은 계속 링크 업데이트 설정을 따릅니다.
 	In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.	픽셀 미리 보기에서 이미지를 매끄럽게 그립니다. 끄면 픽셀 가장자리가 선명하게 보입니다. 픽셀 미리 보기 밖에서는 이미지가 항상 매끄럽습니다.
+	PDF Text	PDF 텍스트
+	The text of a PDF you open or embed comes in as editable type, or as outlines that look the same on a computer without its fonts.	열거나 포함하는 PDF의 텍스트를 편집 가능한 텍스트로, 또는 글꼴이 없는 컴퓨터에서도 똑같이 보이는 윤곽선으로 가져옵니다.
+	Linked pages show the file's own text.	연결된 페이지는 파일 자체의 텍스트를 표시합니다.
 	When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.	연결된 파일이 바뀌면 자동으로는 다시 읽고, 수정 시 확인은 먼저 묻고, 수동은 그대로 두고 상태 표시줄에 메모를 표시합니다.
 	On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.	데스크톱 버전에서 템플릿에서 새로 만들기…와 템플릿으로 저장…이 처음 여는 폴더입니다. 비워 두면 문서 폴더의 VectorCraft Templates를 사용합니다.
 	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	원본 편집은 연결된 파일을 해당 유형에 대한 시스템 기본 앱에서 엽니다. 끄면 연결된 래스터 이미지는 PhotoCraft가 설치되어 있을 때 PhotoCraft에서 열립니다.
@@ -3442,7 +3453,6 @@ mark-style	Japanese	일본식
 	Output All Blacks as Rich Black draws pure CMYK black as RGB black in RGB and grayscale raster exports and Print as Bitmap; it does not change vector exports, CMYK JPEG, TIFF and PSD, or other printing.	모든 검정을 리치 블랙으로 출력은 RGB 및 그레이스케일 래스터 내보내기와 비트맵으로 인쇄에서 순수 CMYK 검정을 RGB 검정으로 그리며, 벡터 내보내기, CMYK JPEG, TIFF 및 PSD, 기타 인쇄는 바꾸지 않습니다.
 	On a touch screen, switches to the Touch workspace; turning this off, or losing the touch screen, goes back to the workspace it switched from.	터치 스크린에서는 터치 작업 영역으로 전환합니다. 이 설정을 끄거나 터치 스크린이 사라지면 전환하기 전의 작업 영역으로 돌아갑니다.
 	A two-finger tap on the canvas undoes, or switches between selection and drawing tools in the Touch workspace, and a three-finger tap redoes; neither works in Presentation Mode.	캔버스를 두 손가락으로 탭하면 실행 취소하거나 터치 작업 영역에서 선택 도구와 그리기 도구를 전환하고, 세 손가락으로 탭하면 다시 실행합니다. 프레젠테이션 모드에서는 둘 다 작동하지 않습니다.
-	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	문서 설정의 언어가 영어: 미국이고 [기본 문자 스타일]이 언어를 지정하지 않는 동안 새 텍스트는 이 언어를 받습니다. 문서에 이미 있는 텍스트는 자체 언어를 유지합니다.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	하이픈 넣기가 켜진 단락에서는 목록의 단어가 입력한 하이픈 위치에서만 나뉘며, 하이픈이 없으면 나뉘지 않습니다. 대소문자는 상관없습니다. 한국어 단어에는 하이픈이 붙지 않으며, 인도 언어의 단어는 문자 묶음 안에서 나뉘지 않습니다.
 	Reset all preferences to their defaults?	모든 환경 설정을 기본값으로 재설정하시겠습니까?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	기본값은 환경 설정에서 확인을 클릭하면 적용됩니다. 그곳에서 취소를 누르면 현재 환경 설정이 유지됩니다.
@@ -5612,6 +5622,10 @@ variable-list-end	{0}, {1}	{0} 및 {1}
 @msg	no such view	해당 보기가 없습니다
 @msg	printing isn't available here	여기서는 인쇄할 수 없습니다
 @msg	select an image	이미지를 선택하세요
+@msg	object {_1} is an image changed by Perspective Distort or Free Distort, which this command does not work on	개체 {_1}은(는) 원근 왜곡 또는 자유 왜곡으로 변경된 이미지이므로 이 명령을 사용할 수 없습니다
+@msg	image {_1} cannot be distorted this way: its corners would not make a convex shape	이미지 {_1}을(를) 이렇게 왜곡할 수 없습니다: 모서리가 볼록한 모양을 이루지 않습니다
+@msg	image {_1} cannot be distorted this way: its corners would cross the warp's horizon	이미지 {_1}을(를) 이렇게 왜곡할 수 없습니다: 모서리가 왜곡의 지평선을 넘습니다
+@msg	image {_1} cannot be distorted this way: its corners would be too close together for a perspective map	이미지 {_1}을(를) 이렇게 왜곡할 수 없습니다: 모서리가 원근 매핑을 하기에 너무 가깝습니다
 @msg	`background` must be edges, corners or colors	`background`는 edges, corners 또는 colors여야 합니다
 @msg	`match` must be distance or channels	`match`는 distance 또는 channels여야 합니다
 @msg	`{key}` must be from 0 to 100	`{key}`는 0에서 100 사이여야 합니다
@@ -10393,6 +10407,10 @@ breakText	Glyphs	글리프
 @msg	A panel is not joined to the rest by a crease.	패널이 어떤 오시선으로도 나머지와 연결되어 있지 않습니다.
 @msg	A fold line is on a non-printing layer.	접는 선이 인쇄되지 않는 레이어에 있습니다.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	패널: {panels}, 힌지: {hinges}, 오류: {errors}, 경고: {warnings}
+	Leaf Vine	잎 덩굴
+	Blossom Chain	꽃사슬
+	Pennant Garland	깃발 장식
+	Lantern String	등불 줄
 	Orbit Lines	궤도 선
 	Petal Garland	꽃잎 화환
 	Lattice Braid	격자 땋기

@@ -762,6 +762,10 @@ pub struct UiState {
     /// Help › Search Commands' Recent Commands list: the ids of the last picks, most recent first.
     #[serde(default)]
     pub recent_commands: Vec<String>,
+    /// How many times each command was picked in Help › Search Commands, which ranks the commands
+    /// picked most often first among results that match as well.
+    #[serde(default, deserialize_with = "crate::palette::deserialize_command_uses")]
+    pub command_uses: crate::palette::CommandUses,
     /// Families starred in the font menus (the ★ filter shows only these).
     #[serde(default)]
     pub favorite_fonts: Vec<String>,
@@ -825,8 +829,9 @@ pub struct UiState {
     /// of an RGB field, `ui.colorPanel`, [`crate::panels::color::deserialize_rgb_percent`]).
     #[serde(default, deserialize_with = "crate::panels::color::deserialize_rgb_percent")]
     pub color_rgb_percent: bool,
-    /// Color Wheel panel: the wheel or the box, the box's channel, the slider rows and the color
-    /// vision row (`ui.colorWheel`, [`crate::panels::color_wheel::deserialize_settings`]).
+    /// Color Wheel panel: the wheel or the box, the box's channel, the slider rows, the
+    /// out-of-gamut shading and the color vision row
+    /// (`ui.colorWheel`, [`crate::panels::color_wheel::deserialize_settings`]).
     #[serde(default, deserialize_with = "crate::panels::color_wheel::deserialize_settings")]
     pub color_wheel: crate::panels::color_wheel::Settings,
     /// Swatches panel: Show Recent Colors in its panel menu, which draws the panel's Recent Colors
@@ -1348,6 +1353,7 @@ impl Default for UiState {
             recent_files: vec![],
             recent_fonts: vec![],
             recent_commands: vec![],
+            command_uses: Default::default(),
             favorite_fonts: vec![],
             engine_prefs: Value::Null,
             original_editor: Default::default(),
