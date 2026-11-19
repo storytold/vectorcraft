@@ -74,11 +74,24 @@ pub struct HitOptions {
     /// its edge. Off for the tools that act on what is drawn (sampling, type, gradients…);
     /// [`hit_test_visible`] never does it.
     pub clip_outlines: bool,
+    /// The Type tool: area type is hit anywhere inside its frame, where a click places the caret.
+    /// Off, the empty part of the frame (away from its edge and its lines of type) takes no
+    /// clicks, so they reach the art behind (#7274).
+    pub area_type_interior: bool,
 }
 
 impl Default for HitOptions {
     fn default() -> Self {
-        Self { tol: 3.0, outline: false, path_only: false, type_path_only: false, skip_guides: false, clip_outlines: false, scope: None }
+        Self {
+            tol: 3.0,
+            outline: false,
+            path_only: false,
+            type_path_only: false,
+            skip_guides: false,
+            clip_outlines: false,
+            area_type_interior: false,
+            scope: None,
+        }
     }
 }
 
@@ -1507,7 +1520,11 @@ fn hit_leaf(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) -> Optio
             hit_painted(n, p, opt, symbols)
         }
         NodeKind::Text(_) | NodeKind::PlacedDocument(_) => {
-            n.geometric_bounds_with(symbols).filter(|b| b.inflate(opt.tol, opt.tol).contains(p)).map(|_| HitKind::Bounds)
+            n.geometric_bounds_with(symbols).filter(|b| b.inflate(opt.tol, opt.tol).contains(p))?;
+            match &n.kind {
+                NodeKind::Text(t) if !opt.area_type_interior => in_area_type_art(n, t, p, opt.tol).unwrap_or(true).then_some(HitKind::Bounds),
+                _ => Some(HitKind::Bounds),
+            }
         }
         // A symbol instance is hit within its bounds, and outside them where its art paints
         // ([`instance_art_hit`]) or where the geometry effects of its active fill or stroke reshape
@@ -1575,6 +1592,30 @@ fn on_type_path(n: &Node, t: &crate::TextObject, p: Point, tol: f64) -> bool {
         path = crate::live::map_nonlinear(&path, piece, project);
     }
     stroke_contains(&path.to_bezpath(), 0.0, tol, p)
+}
+
+/// Is `p` on area type `t` (in `n`) where it is drawn: within `tol` of its frame's edge or inside
+/// its laid-out lines ([`crate::TextObject::cached_bounds`], with the characters' strokes)? The
+/// rest of the frame is empty and takes no clicks (#7274). `None` when that is not known: other
+/// type, type in perspective, or area type not laid out yet, which are hit within their bounds.
+fn in_area_type_art(n: &Node, t: &crate::TextObject, p: Point, tol: f64) -> Option<bool> {
+    use vectorcraft_geom::kurbo::Shape;
+    let crate::TextKind::Area { frame } = &t.kind else { return None };
+    if n.projection().is_some() {
+        return None;
+    }
+    if stroke_contains(&frame.transformed(t.xf).to_bezpath(), 0.0, tol, p) {
+        return Some(true);
+    }
+    let lines = t.cached_bounds?;
+    // No lines (empty type): only the frame's edge.
+    if lines.width() <= 0.0 && lines.height() <= 0.0 {
+        return Some(false);
+    }
+    let mut lines = lines.to_path(0.1);
+    lines.apply_affine(t.xf);
+    let reach = tol + t.char_stroke_outset();
+    Some(fill_contains(&lines, FillRule::NonZero, p) || stroke_contains(&lines, 0.0, reach, p))
 }
 
 /// Hit anywhere in an evaluated subtree (groups recurse; leaves use [`hit_leaf`]). In symbol art

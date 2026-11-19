@@ -16,6 +16,7 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
     ("disableAutoAddDelete", "Stops the Pen tool from deleting the anchor you click on a selected path, or adding one where you click its segment."),
     ("usePreciseCursors", "Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on."),
     ("showToolTips", "Shows a tip when the pointer rests on a button or field that has one."),
+    ("showToolCards", "Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips."),
     ("showExternalScriptWarning", "Shows a warning before a script you choose runs."),
     ("antiAliasedArtwork", "Smooths the edges of artwork on the canvas."),
     (
@@ -59,6 +60,7 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
         "useRegistrationPointForSymbol",
         "With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.",
     ),
+    ("showOnShapeCreation", "Drawing a rectangle, ellipse, polygon, star or line opens the Transform panel if it is closed."),
     ("fadeRegionOutsideArtboard", "Darkens the canvas outside the artboards while the Artboard tool is active."),
     (
         "artboardUpdateWhileDragging",
@@ -230,7 +232,7 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
     ),
     (
         "hyphenationExceptions",
-        "In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.",
+        "In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.",
     ),
     // Plug-ins & Scratch Disks
     (
@@ -239,7 +241,7 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
     ),
     (
         "pluginInstructionBudget",
-        "Normal keeps each plug-in's own limits; with Large, a plug-in filter or command may run at least 250 million instructions besides those for its input. The time limit stays the same.",
+        "The larger budget raises each object filter run's base instructions fivefold and keeps the same allowance per input byte; heavy filters, live effects, exporters and importers keep their own limits.",
     ),
     ("scratchPrimary", "The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet."),
     ("scratchSecondary", "The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet."),
@@ -281,7 +283,7 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
     ),
     (
         "lowLatencyDrawing",
-        "From the next start, the window shows each frame without waiting for the display's refresh where the graphics driver allows, at most 240 frames a second.",
+        "From the next start, the desktop version shows frames without waiting for the display's refresh, at most 240 a second; off, the display paces them.",
     ),
     (
         "historyStates",
@@ -302,6 +304,69 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
     (
         "monitorProfileDisplay",
         "Converts the artwork and artboards on the canvas to the display's color profile where the system does not already do so; off, the canvas is drawn in sRGB.",
+    ),
+    // File Handling
+    ("backgroundSave", "On the desktop, a save to a file is written in the background while you keep editing; off, you wait until it is written."),
+    (
+        "backgroundExport",
+        "On the desktop, exports to files and packages are written in the background while you keep editing, except 3D exports; off, you wait for them.",
+    ),
+    (
+        "autosaveRecovery",
+        "Every few minutes, keeps a recovery copy of each document with unsaved changes made since its last copy; off, no timed copies are made.",
+    ),
+    ("autosaveInterval", "How many minutes pass between recovery copies while Automatically Save Recovery Data is on."),
+    (
+        "recoveryFolder",
+        "On the desktop, the folder recovery copies are kept in; leave it blank for VectorCraft's own folder. The web version keeps them in the browser.",
+    ),
+    ("recoveryOffForComplex", "No timed recovery copies are made of documents with more than 20,000 objects."),
+    (
+        "recentFilesCount",
+        "Open Recent Files and the Home screen list at most this many recent files; 0 lists none, and VectorCraft still remembers up to 30.",
+    ),
+    (
+        "lowResProxyEps",
+        "When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.",
+    ),
+    (
+        "antiAliasedBitmaps",
+        "In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.",
+    ),
+    (
+        "updateLinks",
+        "When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.",
+    ),
+    (
+        "templatesFolder",
+        "On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.",
+    ),
+    (
+        "editOriginalSystemDefaults",
+        "Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.",
+    ),
+    (
+        "appendConverted",
+        "A file saved by an older VectorCraft version opens with [Converted] after its name, and Save asks where to save it; off, Save replaces the file.",
+    ),
+    (
+        "useCompression",
+        "VectorCraft files and templates are saved compressed, so they are smaller, unless a save says otherwise; saves for versions that cannot open compressed files stay uncompressed.",
+    ),
+    // Clipboard Handling
+    (
+        "copyAsSvg",
+        "Copy and Cut also give other apps SVG code of the art; on the desktop, the code is not copied as text when the art embeds more than 1 MiB of images.",
+    ),
+    ("copyAsPdf", "On Windows, Copy and Cut also give other apps a PDF of the art; the other platforms do not copy a PDF yet."),
+    ("copyAicb", "VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet."),
+    (
+        "aicbMode",
+        "Preserve Paths or Preserve Appearance and Overprints for the legacy vector clipboard; VectorCraft stores the choice but does not use it yet.",
+    ),
+    (
+        "pasteTextFormatting",
+        "Keep Formatting keeps the styles of text copied from VectorCraft type when it is pasted into type; Keep Plain Text gives it the style where it lands.",
     ),
 ];
 

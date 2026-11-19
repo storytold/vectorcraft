@@ -1249,6 +1249,127 @@ fn an_artboard_add_button_shows_its_tooltip_while_the_pointer_rests_on_it() {
     }
 }
 
+/// The screen centers and radii of the Artboard tool's add-button tooltips (`tip`) in the view `xf`.
+fn add_button_tips(app: &mut VectorcraftApp, xf: &Xf, tip: &str) -> Vec<(Pos2, f32)> {
+    let view = app.view_info();
+    app.session
+        .overlays(view)
+        .into_iter()
+        .filter_map(|o| match o {
+            Overlay::HoverText { center, radius, text } if text == tip => Some((xf.to_screen(center), (radius * xf.zoom) as f32)),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Whether `tip` shows while the pointer rests at `at` for two seconds from `*t`, which moves on.
+fn rests_with_tooltip(app: &mut VectorcraftApp, ctx: &egui::Context, t: &mut f64, at: Pos2, tip: &str) -> bool {
+    texts_at(app, ctx, *t, vec![egui::Event::PointerMoved(at)]);
+    let mut seen = false;
+    for _ in 0..20 {
+        *t += 0.1;
+        seen |= texts_at(app, ctx, *t, vec![]).iter().any(|s| s == tip);
+    }
+    seen
+}
+
+/// While Space lends a view tool, a press on an add button pans the view instead of adding an
+/// artboard: the button shows no tooltip until Space is up.
+#[test]
+fn an_artboard_add_button_has_no_tooltip_while_space_is_held() {
+    use egui::{Event, Modifiers};
+    let tip = vectorcraft_tools::xform::EDGE_BUTTON_TIP;
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
+    app.select_tool("artboard");
+    let ctx = egui::Context::default();
+    texts_at(&mut app, &ctx, 0.0, vec![]);
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let (at, _) = add_button_tips(&mut app, &xf, tip).into_iter().max_by(|a, b| a.0.y.total_cmp(&b.0.y)).unwrap();
+    let space = |pressed| Event::Key { key: egui::Key::Space, physical_key: None, pressed, repeat: false, modifiers: Modifiers::NONE };
+    let mut t = 1.0;
+    texts_at(&mut app, &ctx, t, vec![Event::PointerMoved(at), space(true)]);
+    for _ in 0..20 {
+        t += 0.1;
+        assert!(!texts_at(&mut app, &ctx, t, vec![]).iter().any(|s| s == tip), "no tooltip while Space is held");
+    }
+    t += 0.1;
+    texts_at(&mut app, &ctx, t, vec![space(false)]);
+    assert!(rests_with_tooltip(&mut app, &ctx, &mut t, at, tip), "the tooltip shows again once Space is up");
+}
+
+/// On a narrow artboard with a long name, the name can cover part of the top add button, and a
+/// press there selects the named artboard: that part shows no tooltip, and the rest of the button
+/// keeps it.
+#[test]
+fn an_artboard_add_button_has_no_tooltip_where_the_artboard_name_covers_it() {
+    let tip = vectorcraft_tools::xform::EDGE_BUTTON_TIP;
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 20, "height": 100})).unwrap();
+    let name = "An artboard name long enough to run past the middle of its top edge";
+    app.session.execute("artboard.setProps", &json!({"artboards": [{"index": 0, "name": name}]})).unwrap();
+    app.select_tool("artboard");
+    let ctx = egui::Context::default();
+    texts_at(&mut app, &ctx, 0.0, vec![]);
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let (at, r) = add_button_tips(&mut app, &xf, tip).into_iter().min_by(|a, b| a.0.y.total_cmp(&b.0.y)).unwrap();
+    // The points of the button's disc, split by whether the canvas's name hit test takes them.
+    let probe = egui::Context::default();
+    let named = |p: Pos2| {
+        let mut hit = false;
+        let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), ..Default::default() };
+        let mut out = probe.run_ui(raw, |ui| hit = super::artboards::artboard_name_at(&app, ui, &xf, p).is_some());
+        out.textures_delta.clear();
+        hit
+    };
+    let steps = || (-6i8..=6).map(f32::from);
+    let disc: Vec<Pos2> = steps().flat_map(|dx| steps().map(move |dy| at + vec2(dx, dy))).filter(|p| p.distance(at) <= r - 0.5).collect();
+    let covered = disc.iter().copied().find(|p| named(*p)).expect("the name covers part of the button");
+    let clear = disc.iter().copied().rev().find(|p| !named(*p)).expect("part of the button is clear of the name");
+    let mut t = 1.0;
+    assert!(!rests_with_tooltip(&mut app, &ctx, &mut t, covered, tip), "no tooltip where the name takes the press");
+    assert!(rests_with_tooltip(&mut app, &ctx, &mut t, clear, tip), "the tooltip shows on the rest of the button");
+}
+
+/// An add button panned under the scroll bars is not drawn and takes no press: none of it shows a
+/// tooltip, in the square where the scroll bars meet or over a scroll bar, while the part of a
+/// button still on the canvas keeps its tooltip.
+#[test]
+fn an_artboard_add_button_has_no_tooltip_outside_the_canvas() {
+    let tip = vectorcraft_tools::xform::EDGE_BUTTON_TIP;
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
+    app.select_tool("artboard");
+    let ctx = egui::Context::default();
+    texts_at(&mut app, &ctx, 0.0, vec![]);
+    let rect = app.canvas_rect.unwrap();
+    // Pan the view so the right button's center lands on `to`, and return the button.
+    let pan_right_button_to = |app: &mut VectorcraftApp, t: f64, to: Pos2| {
+        let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+        let (at, _) = add_button_tips(app, &xf, tip).into_iter().max_by(|a, b| a.0.x.total_cmp(&b.0.x)).unwrap();
+        let d = to - at;
+        if let Some(v) = app.view_mut() {
+            v.center = Point::new(v.center.x - f64::from(d.x) / v.zoom, v.center.y - f64::from(d.y) / v.zoom);
+            v.fitted = true;
+        }
+        texts_at(app, &ctx, t, vec![]);
+        let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+        let (at, r) = add_button_tips(app, &xf, tip).into_iter().max_by(|a, b| a.0.x.total_cmp(&b.0.x)).unwrap();
+        assert!(at.distance(to) < 0.5, "the button moved to {to:?}: {at:?}");
+        (at, r)
+    };
+    // The middle of the square where the scroll bars meet, right of and below the canvas.
+    let corner = rect.max + vec2(SCROLL_BAR / 2.0, SCROLL_BAR / 2.0);
+    let mut t = 1.0;
+    let (at, _) = pan_right_button_to(&mut app, t, corner);
+    assert!(!rect.contains(at));
+    assert!(!rests_with_tooltip(&mut app, &ctx, &mut t, at, tip), "no tooltip in the corner between the scroll bars");
+    // Half on the canvas, half over the vertical scroll bar.
+    let (at, r) = pan_right_button_to(&mut app, t, pos2(rect.max.x, rect.center().y));
+    assert!(!rests_with_tooltip(&mut app, &ctx, &mut t, at + vec2(r - 2.0, 0.0), tip), "no tooltip over the scroll bar");
+    assert!(rests_with_tooltip(&mut app, &ctx, &mut t, at - vec2(r - 2.0, 0.0), tip), "the tooltip shows on the part on the canvas");
+}
+
 #[test]
 fn shift_clicking_canvas_artboard_label_toggles_multi_selection() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -4938,6 +5059,91 @@ fn mirror_axis_drag_uses_canvas_coordinates_in_a_zoomed_rotated_view() {
     }
 }
 
+/// The Split view's divider of a selected Image Trace object is drawn where the Selection tool
+/// takes it in a zoomed, turned view. Dragging its middle across the image previews the divider,
+/// commits one undo step and leaves the traced art where it was; Undo puts the divider back.
+#[test]
+fn trace_split_divider_drag_in_a_zoomed_rotated_view_is_one_undo_step() {
+    use vectorcraft_tools::trace_split::TraceDivider;
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let data = vectorcraft_format::base64_encode(&crate::tests_sysclip::blue_png());
+    app.run("file.place", json!({"name": "blue.png", "dataBase64": data, "link": false, "at": [200, 150]})).unwrap();
+    app.run("imageTrace.make", json!({"preset": "Default"})).unwrap();
+    app.run("imageTrace.setView", json!({"view": "split"})).unwrap();
+    app.select_tool("selection");
+    app.ui.task_bar = false;
+    app.ui.view.rulers = false;
+    let divider = |app: &VectorcraftApp| {
+        let st = app.session.active().unwrap();
+        TraceDivider::of(&st.doc, &st.selection, app.view().unwrap().zoom).unwrap()
+    };
+    let initial = divider(&app);
+    assert_eq!(initial.split, 0.5);
+    let middle = initial.ends[0].midpoint(initial.ends[1]);
+    {
+        let v = app.view_mut().unwrap();
+        (v.zoom, v.rotation, v.center, v.fitted) = (30.0, 30.0, middle, true);
+    }
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let art = |app: &VectorcraftApp| {
+        let st = app.session.active().unwrap();
+        st.doc.node(initial.id).unwrap().geometric_bounds()
+    };
+    let before = (art(&app), app.session.active().unwrap().history.undo.len());
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    // The divider is drawn between its ends on screen.
+    let ends = initial.ends.map(|q| xf.to_screen(q));
+    let drawn = shapes(&mut app, &ctx);
+    assert!(
+        drawn.iter().any(|s| matches!(s, Shape::LineSegment { points, .. }
+            if points.iter().zip(ends).all(|(a, b)| a.distance(b) < 0.5) || points.iter().rev().zip(ends).all(|(a, b)| a.distance(b) < 0.5))),
+        "the divider is drawn from {:?} to {:?}",
+        ends[0],
+        ends[1]
+    );
+    // A quarter of the image's width to the right, in the image's own direction.
+    let from = xf.to_screen(middle);
+    let st = app.session.active().unwrap();
+    let NodeKind::Image(im) = &st.doc.node(initial.id).unwrap().children().unwrap()[0].kind else { panic!("no source image") };
+    let to = xf.to_screen(im.xf * vectorcraft_geom::Point::new(f64::from(im.width) * 0.75, f64::from(im.height) * 0.5));
+    let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from), button(from, true)]);
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(to)]);
+    assert!((divider(&app).split - 0.75).abs() < 0.01, "the divider previews during the drag: {}", divider(&app).split);
+    frame(&mut app, &ctx, vec![button(to, false)]);
+    assert!((divider(&app).split - 0.75).abs() < 0.01);
+    assert_eq!((art(&app), app.session.active().unwrap().history.undo.len()), (before.0, before.1 + 1), "one undo step, the art unmoved");
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(divider(&app).split, 0.5);
+    // Escape during a drag puts the divider back with no undo step.
+    let steps = app.session.active().unwrap().history.undo.len();
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from), button(from, true)]);
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(to)]);
+    assert!((divider(&app).split - 0.75).abs() < 0.01);
+    let escape = egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+    let raw =
+        egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), events: vec![escape], ..Default::default() };
+    let mut out = ctx.run_ui(raw, |ui| {
+        crate::shortcuts::handle(&mut app, ui.ctx());
+        show(&mut app, ui)
+    });
+    out.textures_delta.clear();
+    assert!(!app.session.tool_busy(), "Escape ends the drag");
+    assert_eq!(divider(&app).split, 0.5, "Escape puts the divider back");
+    frame(&mut app, &ctx, vec![button(to, false)]);
+    assert_eq!(divider(&app).split, 0.5, "Escape cancels the drag");
+    assert_eq!(app.session.active().unwrap().history.undo.len(), steps, "no undo step");
+    // With the bounding box hidden, the divider is not drawn.
+    app.ui.view.bounding_box = false;
+    let drawn = shapes(&mut app, &ctx);
+    assert!(
+        !drawn.iter().any(|s| matches!(s, Shape::LineSegment { points, .. } if points.iter().zip(ends).all(|(a, b)| a.distance(b) < 0.5))),
+        "no divider with the bounding box hidden"
+    );
+}
+
 /// A selected grid repeat draws its row handle below the grid and a slider between its first
 /// two columns (none with the bounding box hidden). Dragging the row handle down two tiles in
 /// a zoomed view makes five rows without scaling the source, as one undo step, and the slider
@@ -6777,6 +6983,75 @@ fn a_selected_polygon_shows_its_side_widget() {
     assert_eq!(widgets(&mut app), 1, "back after the release");
     app.session.execute("shape.ellipse", &json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
     assert_eq!(widgets(&mut app), 0, "an ellipse has none");
+}
+
+/// Hide Shape Widgets (`view.shapeWidgets`) hides a selected live rectangle's and polygon's corner
+/// widgets, a polygon's side widget and an ellipse's pie widgets with the Selection tool and the
+/// shape tools, and leaves the bounding box and its eight handles; the Selection tool then shows no
+/// corner cursor over a hidden widget. Direct Selection keeps its corner widgets, which follow View ›
+/// Hide Corner Widget alone. Show Shape Widgets brings them back, neither adds an undo step, and a
+/// tool switch keeps the setting.
+#[test]
+fn hidden_shape_widgets_leave_the_bounding_box() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let id = |v: serde_json::Value| v["id"].as_u64().unwrap();
+    let rect = id(app.session.execute("shape.rectangle", &json!({"x": 20, "y": 20, "width": 80, "height": 80})).unwrap());
+    let polygon = id(app.session.execute("shape.polygon", &json!({"cx": 200, "cy": 150, "radius": 50, "sides": 5})).unwrap());
+    let ellipse = id(app.session.execute("shape.ellipse", &json!({"x": 280, "y": 100, "width": 100, "height": 60})).unwrap());
+    let ctx = egui::Context::default();
+    let side = 2.0 * vectorcraft_tools::sidewidget::RADIUS_PX;
+    let diamond = |ps: &egui::epaint::PathShape| {
+        let span = |f: fn(&egui::Pos2) -> f32| {
+            let v: Vec<f32> = ps.points.iter().map(f).collect();
+            v.iter().copied().fold(f32::MIN, f32::max) - v.iter().copied().fold(f32::MAX, f32::min)
+        };
+        ps.closed && ps.points.len() == 4 && ps.fill == Color32::WHITE && (span(|p| p.x) - side).abs() < 0.01 && (span(|p| p.y) - side).abs() < 0.01
+    };
+    // The selection's corner, pie and side widgets drawn, and the bounding box's handles.
+    let drawn = |app: &mut VectorcraftApp, id: u64| {
+        app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
+        let (_, handles) = bounding_box_drawn(app, &ctx);
+        let all = shapes(app, &ctx);
+        let circles = |r: f32| all.iter().filter(|s| matches!(s, Shape::Circle(c) if c.radius == r && c.fill == Color32::WHITE)).count();
+        let diamonds = all.iter().filter(|s| matches!(s, Shape::Path(ps) if diamond(ps))).count();
+        (circles(3.0), circles(vectorcraft_tools::pie::RADIUS_PX), diamonds, handles)
+    };
+    let steps = |app: &VectorcraftApp| app.session.doc().unwrap().history.undo.len();
+    for tool in ["selection", "polygon", "rectangle"] {
+        app.select_tool(tool);
+        assert_eq!(drawn(&mut app, rect), (4, 0, 0, 8), "{tool}");
+        assert_eq!(drawn(&mut app, polygon), (5, 0, 1, 8), "{tool}");
+        assert_eq!(drawn(&mut app, ellipse), (0, 2, 0, 8), "{tool}");
+        let before = steps(&app);
+        assert_eq!(app.run("view.shapeWidgets", json!({})).unwrap(), json!(false));
+        assert_eq!(steps(&app), before, "{tool}: the setting adds no undo step");
+        assert_eq!(drawn(&mut app, rect), (0, 0, 0, 8), "{tool}");
+        assert_eq!(drawn(&mut app, polygon), (0, 0, 0, 8), "{tool}");
+        assert_eq!(drawn(&mut app, ellipse), (0, 0, 0, 8), "{tool}");
+        assert_eq!(app.run("view.shapeWidgets", json!({})).unwrap(), json!(true));
+    }
+    // Direct Selection: the corner widgets stay until View › Hide Corner Widget.
+    app.run("view.shapeWidgets", json!({"on": false})).unwrap();
+    app.select_tool("directSelection");
+    assert_eq!(drawn(&mut app, rect).0, 4);
+    app.run("view.cornerWidget", json!({})).unwrap();
+    assert_eq!(drawn(&mut app, rect).0, 0);
+    app.run("view.cornerWidget", json!({})).unwrap();
+    // The Selection tool shows no corner cursor over a hidden widget, and the tool switches kept the
+    // setting.
+    app.select_tool("selection");
+    assert!(!app.ui.view.shape_widgets);
+    drawn(&mut app, rect);
+    let at = {
+        let st = app.session.active().unwrap();
+        vectorcraft_tools::corners::CornerWidgets::of(&st.doc, &st.selection, app.view_info().zoom, false).unwrap().visible().next().unwrap()
+    };
+    let view = app.view_info();
+    assert_ne!(app.session.cursor(at, Mods::default(), view), Cursor::CornerRadius);
+    app.run("view.shapeWidgets", json!({"on": true})).unwrap();
+    let view = app.view_info();
+    assert_eq!(app.session.cursor(at, Mods::default(), view), Cursor::CornerRadius);
 }
 
 /// A selected Objects on Path group shows its Rotate All widget with the Selection and Objects on
@@ -9164,6 +9439,31 @@ fn double_clicking_type_in_a_missing_font_asks_before_editing() {
     let NodeKind::Text(t) = &node(&app).kind else { panic!("not text") };
     assert_eq!(t.plain_text().find('X'), Some(caret as usize), "{}", t.plain_text());
     assert!(t.runs.iter().all(|r| r.style.font_family == "Missing Test Family 7258"));
+}
+
+/// A Type tool press that reaches type in a missing font while another dialog is open (as one sent
+/// with `ui.pointer` does) leaves that dialog open and starts no edit.
+#[test]
+fn a_press_on_type_in_a_missing_font_keeps_an_open_dialog() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let params = json!({"x": 100, "y": 150, "text": "Hello world", "size": 24, "font": "Missing Test Family 8408"});
+    let id = app.session.execute("text.create", &params).unwrap()["id"].as_u64().unwrap();
+    app.session.execute("select.none", &json!({})).unwrap();
+    app.select_tool("type");
+    let doc = app.session.active().unwrap().uid;
+    crate::dialogs::confirm::ask_replace_files(&mut app, doc, &["/tmp/a.svg".to_string()], &[], "file.export", json!({}));
+    let b = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().geometric_bounds().unwrap();
+    let view = app.view_info();
+    for kind in [PointerKind::Down, PointerKind::Up] {
+        crate::canvas::dispatch(&mut app, &PointerEvent::new(kind, b.center().x, b.center().y), view);
+    }
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(crate::dialogs::confirm::REPLACE_FILES));
+    crate::dialogs::cancel(&mut app);
+    let r = app.session.tool_poll(view, false);
+    crate::canvas::apply_requests(&mut app, r);
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(app.session.tool_options()["editing"], json!(null));
 }
 
 #[test]
