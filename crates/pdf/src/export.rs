@@ -60,6 +60,9 @@ pub(crate) struct Exporter<'a> {
     images: HashMap<String, Option<Image>>,
     /// `Some` while opacity mask art is written: whether an image in it was left out.
     image_left_out: Option<bool>,
+    /// While the pieces of a distorted image whose opacity mask is its own pixel grid are written:
+    /// its image key and the image written with the mask as its alpha, which each piece draws.
+    piece_image: Option<(String, Image)>,
     /// While the pieces of a mesh-warped image are written: the size its pixels are resampled for
     /// ([`Exporter::warp_image_size`]).
     warp_size: Option<images::SharedSize>,

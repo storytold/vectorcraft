@@ -708,9 +708,11 @@ fn ramp_row(app: &mut VectorcraftApp, ui: &mut Ui, g: &Gradient, is_grad: bool) 
 }
 
 /// The stop's eyedropper: the Eyedropper tool samples the next colour clicked on the art into the
-/// selected stop, then hands back to the current tool.
+/// selected stop, then hands back to the current tool (or, while a pick is already armed, to the
+/// tool that armed it).
 pub(crate) fn stop_eyedropper(app: &mut VectorcraftApp) {
-    let back = app.session.tool_id();
+    let tool = app.session.tool_id();
+    let back = (tool == "eyedropper").then(|| app.session.tool_returns_to()).flatten().unwrap_or_else(|| tool.to_string());
     app.select_tool("eyedropper");
     app.session.set_tool_option("stop", &json!(back));
 }
