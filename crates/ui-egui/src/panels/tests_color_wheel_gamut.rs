@@ -187,7 +187,7 @@ fn the_gamut_setting_is_kept_and_read_leniently() {
     let mut odd = saved;
     odd["color_wheel"] = json!({"view": "box", "channel": "red", "gamut": "yes"});
     let back: crate::UiState = serde_json::from_value(odd).unwrap();
-    assert_eq!(back.color_wheel, Settings { view: View::Box, channel: Channel::Red, gamut: false });
+    assert_eq!(back.color_wheel, Settings { view: View::Box, channel: Channel::Red, gamut: false, vision: false });
 }
 
 /// The panel menu's Show Out-of-Gamut Colors is checked while the setting is on, and switches it.

@@ -167,16 +167,19 @@ fn the_strip_takes_the_arrow_keys_and_screen_readers_actions() {
 #[test]
 fn ui_color_wheel_sets_and_reads_the_view_and_the_channel() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    assert_eq!(app.run("ui.colorWheel", json!({})).unwrap(), json!({"view": "wheel", "channel": "hue", "gamut": false}));
-    assert_eq!(app.run("ui.colorWheel", json!({"view": "box"})).unwrap(), json!({"view": "box", "channel": "hue", "gamut": false}));
-    assert_eq!(app.run("ui.colorWheel", json!({"channel": "green"})).unwrap(), json!({"view": "box", "channel": "green", "gamut": false}));
+    assert_eq!(app.run("ui.colorWheel", json!({})).unwrap(), json!({"view": "wheel", "channel": "hue", "gamut": false, "vision": false}));
+    assert_eq!(app.run("ui.colorWheel", json!({"view": "box"})).unwrap(), json!({"view": "box", "channel": "hue", "gamut": false, "vision": false}));
+    assert_eq!(
+        app.run("ui.colorWheel", json!({"channel": "green"})).unwrap(),
+        json!({"view": "box", "channel": "green", "gamut": false, "vision": false})
+    );
     let e = app.run("ui.colorWheel", json!({"view": "triangle"})).unwrap_err();
     assert_eq!(e, "`view` must be wheel or box");
     let e = app.run("ui.colorWheel", json!({"view": "wheel", "channel": 7})).unwrap_err();
     assert_eq!(e, "`channel` must be hue, saturation, brightness, red, green or blue");
     assert_eq!(app.ui.color_wheel, Settings { view: View::Box, channel: Channel::Green, ..Default::default() }, "an error changes nothing");
     let ui = crate::control::inspect(&app, &egui::Context::default());
-    assert_eq!(ui["ui"]["color_wheel"], json!({"view": "box", "channel": "green", "gamut": false}));
+    assert_eq!(ui["ui"]["color_wheel"], json!({"view": "box", "channel": "green", "gamut": false, "vision": false}));
 }
 
 /// The command's errors are translated in the catalogs that translate status and error messages,
@@ -211,9 +214,9 @@ fn ui_color_wheel_rejects_other_params() {
     let e = app.run("ui.colorWheel", json!([1])).unwrap_err();
     assert_eq!(e, "the params must be an object, not [1]");
     let e = app.run("ui.colorWheel", json!({"veiw": "wheel"})).unwrap_err();
-    assert_eq!(e, "unknown parameter `veiw`; the command takes: view, channel, gamut");
+    assert_eq!(e, "unknown parameter `veiw`; the command takes: view, channel, gamut, vision");
     let e = app.run("ui.colorWheel", json!({"view": "wheel", "chanel": "blue"})).unwrap_err();
-    assert_eq!(e, "unknown parameter `chanel`; the command takes: view, channel, gamut");
+    assert_eq!(e, "unknown parameter `chanel`; the command takes: view, channel, gamut, vision");
     assert_eq!(app.ui.color_wheel, Settings { view: View::Box, channel: Channel::Red, ..Default::default() }, "an error changes nothing");
 }
 
@@ -270,8 +273,11 @@ fn ui_color_wheel_answers_junk_params_without_a_panic() {
 /// not know reads as the key's default without losing the other preferences.
 #[test]
 fn the_settings_are_kept_and_read_leniently() {
-    let color_wheel = Settings { view: View::Box, channel: Channel::Blue, ..Default::default() };
-    let ui = crate::UiState { color_wheel, color_rgb_percent: true, ..Default::default() };
+    let ui = crate::UiState {
+        color_wheel: Settings { view: View::Box, channel: Channel::Blue, gamut: true, vision: true },
+        color_rgb_percent: true,
+        ..Default::default()
+    };
     let saved = serde_json::to_value(&ui).unwrap();
     let back: crate::UiState = serde_json::from_value(saved.clone()).unwrap();
     assert_eq!(back.color_wheel, ui.color_wheel);
