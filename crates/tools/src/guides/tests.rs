@@ -1653,3 +1653,137 @@ fn review_597185_bbox_free_domain_uses_same_original_segment() {
         "contact must stay on the original painted edge: {q:?} {guides:?}"
     );
 }
+
+fn review_ruler_597368_nearest(path: &BezPath, p: Point) -> Point {
+    path.segments()
+        .map(|segment| segment.eval(segment.nearest(p, 1e-6).t))
+        .min_by(|a, b| a.distance_squared(p).total_cmp(&b.distance_squared(p)))
+        .expect("CONTROL: real painted glyph geometry exists")
+}
+
+fn review_ruler_597368_move_document(text: Option<&vectorcraft_doc::TextObject>, crossing: Option<Point>, legacy: bool) -> (Document, Selection) {
+    use vectorcraft_doc::color::Paint;
+    let mut d = Document::new(800.0, 600.0);
+    let layer = d.layers[0].id;
+    if let Some(text) = text {
+        let id = d.alloc_id();
+        d.insert(Some(layer), 0, Node::new(id, NodeKind::Text(Box::new(text.clone())))).unwrap();
+    }
+    if let Some(r) = crossing {
+        d.add_ruler_guide(&vectorcraft_doc::Guide::new(true, r.x));
+        d.add_ruler_guide(&vectorcraft_doc::Guide::new(false, r.y));
+        if legacy {
+            let id = d.alloc_id();
+            let path = vectorcraft_geom::shapes::rectangle(Rect::new(r.x - 100.0, r.y, r.x + 300.0, r.y + 100.0));
+            d.insert(Some(layer), usize::MAX, Node::path(id, path, vectorcraft_doc::Appearance::basic(Paint::None, Paint::None, 0.0))).unwrap();
+        }
+    }
+    let moving = d.alloc_id();
+    let path = vectorcraft_geom::shapes::rectangle(Rect::new(50.0, 50.0, 70.0, 70.0));
+    d.insert(Some(layer), usize::MAX, Node::path(moving, path, vectorcraft_doc::Appearance::default())).unwrap();
+    let mut selection = Selection::default();
+    selection.set([moving]);
+    (d, selection)
+}
+
+fn review_ruler_597368_probe(band: &BezPath, ink: &BezPath, text: &vectorcraft_doc::TextObject, tol: f64) -> (Point, Point) {
+    let (d, selected) = review_ruler_597368_move_document(Some(text), None, false);
+    let legacy = Targets::collect(&d, &selected.objects, None);
+    for segment in band.segments() {
+        let PathSeg::Line(line) = segment else { continue };
+        let tangent = line.p1 - line.p0;
+        let length = tangent.hypot();
+        if length <= 12.0 {
+            continue;
+        }
+        let q = line.p0.midpoint(line.p1);
+        let p = q + Vec2::new(-tangent.y, tangent.x) * (0.75 / length);
+        if review_ruler_597368_nearest(band, p).distance(q) < 1e-6
+            && legacy.snap_point(p, tol).0 == p
+            && review_ruler_597368_nearest(ink, q).distance(q) > tol
+        {
+            return (p, q);
+        }
+    }
+    panic!("CONTROL: fixed Source Sans 3 H supplies an isolated genuine stroke contact");
+}
+
+fn review_ruler_597368_move(
+    text: Option<&vectorcraft_doc::TextObject>,
+    on: bool,
+    probe: Point,
+    crossing: Option<Point>,
+    legacy: bool,
+) -> (Point, Vec<Overlay>) {
+    let (d, selected) = review_ruler_597368_move_document(text, crossing, legacy);
+    let paint = paint();
+    let c = ToolContext {
+        smart_guides: true,
+        guides: true,
+        snap_to_point: true,
+        snap_to_grid: false,
+        snap_to_pixel: false,
+        snap_to_glyph: false,
+        snap_to_last_location: false,
+        spacing_guides: false,
+        snap_to_stroke_edges: on,
+        snapping_tolerance: 1.5,
+        ..cx(&d, &selected, &paint)
+    };
+    let targets = Targets::for_move_by_anchor(&c, &selected.objects);
+    assert_eq!(targets.segments.is_empty(), !legacy, "CONTROL: only actual legacy paths supply segments");
+    assert!(!targets.has_point_near(probe, 1.5), "CONTROL: no old anchor/center preempts this contact");
+    let original = d.clone();
+    let start = Point::new(50.0, 50.0);
+    let snap = crate::select::MoveSnap::by_anchor(&c);
+    let (delta, guides) = snap.snap(&c, start, probe - start, false);
+    assert_eq!(d, original, "CONTROL: real MoveSnap queries do not change source art");
+    (start + delta, guides)
+}
+
+#[test]
+fn review_597368_anchor_held_text_stroke_does_not_enable_a_ruler_only_crossing() {
+    use vectorcraft_doc::color::{Color, Paint};
+    use vectorcraft_doc::{CharStyle, TextObject};
+    use vectorcraft_geom::{FillRule, PathData};
+    let style = CharStyle {
+        font_family: "Source Sans 3".into(),
+        size: 160.0,
+        fill: Paint::solid(Color::BLACK),
+        stroke: Paint::solid(Color::rgb(1.0, 0.0, 0.0)),
+        stroke_width: 8.0,
+        ..CharStyle::default()
+    };
+    let mut text = TextObject::point(Point::ZERO, "H", style.clone());
+    text.xf = Affine::new([1.5, 0.0, 0.0, 1.5, 150.0, 300.0]);
+    let layout = layout_text(FontDb::global(), &text);
+    assert_eq!(layout.glyphs.len(), 1, "CONTROL: one actual H glyph");
+    let glyph = &layout.glyphs[0].outline;
+    let ink = text.xf * glyph.clone();
+    let band = vectorcraft_effects::stroke::outline_region(&PathData::from_bezpath(glyph), FillRule::NonZero, &style.stroke_layer())
+        .transformed(text.xf)
+        .to_bezpath();
+    let (probe, contact) = review_ruler_597368_probe(&band, &ink, &text, 1.5);
+    assert!((probe.distance(contact) - 0.75).abs() < 1e-6, "CONTROL: genuine nearby stroke");
+    let crossing = probe + Vec2::new(1.0, 1.0);
+    assert!(probe.distance(crossing) < 1.5 && contact.distance(crossing) > 0.25);
+    let ordinary = review_ruler_597368_move(Some(&text), false, probe, Some(crossing), false);
+    assert!(ordinary.0.distance(crossing) < 1e-8, "CONTROL: OFF keeps ordinary ruler snapping");
+    let empty = review_ruler_597368_move(None, true, probe, Some(crossing), false);
+    assert!(empty.0.distance(crossing) < 1e-8, "CONTROL: empty painted targets keep ordinary ruler snapping");
+    let mut distant = text.clone();
+    distant.xf = Affine::translate((300.0, 0.0)) * distant.xf;
+    let remote = review_ruler_597368_move(Some(&distant), true, probe, Some(crossing), false);
+    assert!(remote.0.distance(crossing) < 1e-8, "CONTROL: a distant stroke alone has the same ordinary result");
+    let painted = review_ruler_597368_move(Some(&text), true, probe, None, false);
+    assert!(painted.0.distance(contact) < 1e-6, "CONTROL: actual MoveSnap reaches the independent stroke contact");
+    assert!(painted.1.iter().any(|o| matches!(o, Overlay::Label { text, .. } if text == "stroke edge")));
+    let paths = review_ruler_597368_move(Some(&text), true, probe, Some(crossing), true);
+    assert!(paths.0.distance(crossing) < 1e-8, "CONTROL: real legacy segments retain crossing priority");
+    let actual = review_ruler_597368_move(Some(&text), true, probe, Some(crossing), false);
+    assert!(
+        actual.0.distance(contact) < 1e-6 && actual.1.iter().any(|o| matches!(o, Overlay::Label { text, .. } if text == "stroke edge")),
+        "REGRESSION: a genuine text stroke, not a ruler-only crossing, must take the painted contact guard: {:?}, expected {contact:?}",
+        actual
+    );
+}

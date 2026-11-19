@@ -1023,3 +1023,141 @@ fn review_597185_4626304646_invalid_artboard_anchor_does_not_block_a_valid_strok
     let stroke = review_462630_resize(&doc, start, raw, true);
     review_462630_bounds(&stroke, Rect::new(0.0, 0.0, 1.5, 10.0));
 }
+fn review_597368_resize(d: &vectorcraft_doc::Document, start: Point, end: Point, mods: Mods, stroke_edges: bool, view: (f64, f64)) -> Value {
+    let (selection, paint) = (Selection::default(), paint());
+    let c = ToolContext {
+        smart_guides: true,
+        snap_to_stroke_edges: stroke_edges,
+        zoom: view.0,
+        snapping_tolerance: view.1,
+        snap_to_grid: false,
+        snap_to_pixel: false,
+        ..cx(d, &selection, &paint)
+    };
+    let original = d.clone();
+    let mut tool = ArtboardTool::default();
+    tool.set_option("scaleArt", &json!(false));
+    tool.pointer(&c, &ev(PointerKind::Down, start.x, start.y));
+    let actions = tool.pointer(&c, &ev(PointerKind::Drag, end.x, end.y).with_mods(mods));
+    assert!(tool.busy(), "CONTROL: a real Artboard handle drag remains active until release");
+    assert!(actions.iter().any(|a| matches!(a, Action::Begin(label) if label == "Resize Artboard")));
+    assert!(actions.iter().any(|a| matches!(a, Action::Preview(id, _) if id == "artboard.setProps")), "CONTROL: this is a real handle resize");
+    let value = preview_params(&actions);
+    assert!(matches!(tool.pointer(&c, &ev(PointerKind::Up, end.x, end.y).with_mods(mods)).as_slice(), [Action::Commit]));
+    assert!(!tool.busy());
+    assert_eq!(d, &original, "CONTROL: the tool only emits a preview; source artwork/paint/bleed/resources stay exact");
+    value
+}
+
+fn review_597368_horizontal_edge(d: &mut vectorcraft_doc::Document, x0: f64, x1: f64, y: f64) -> vectorcraft_doc::NodeId {
+    let layer = d.layers[0].id;
+    let id = d.alloc_id();
+    let mut appearance = vectorcraft_doc::Appearance::default_art();
+    appearance.set_fill(vectorcraft_color::Paint::None);
+    appearance.stroke_mut().unwrap().width = 10.0;
+    d.insert(
+        Some(layer),
+        0,
+        vectorcraft_doc::Node::path(id, vectorcraft_geom::shapes::line(Point::new(x0, y - 5.0), Point::new(x1, y - 5.0)), appearance),
+    )
+    .unwrap();
+    id
+}
+
+fn review_597368_painted(d: &vectorcraft_doc::Document, id: vectorcraft_doc::NodeId, contact: Point, tol: f64) {
+    let node = d.node(id).unwrap();
+    let path = node.path_data().unwrap();
+    assert!(path.nearest(contact).unwrap().4 > tol, "CONTROL: the source centerline cannot explain this contour contact");
+    let painted = vectorcraft_effects::stroke::outline_region(path, vectorcraft_geom::FillRule::NonZero, node.appearance.stroke().unwrap());
+    assert!(painted.nearest(contact).unwrap().4 < 1e-7, "CONTROL: the expected contact is on the actual painted stroke: {contact:?}");
+}
+
+#[test]
+fn review_597368_artboard_collinear_contacts_keep_side_and_coupled_minima() {
+    let view = (1.0, 4.0);
+    let mut side = vectorcraft_doc::Document::new(2000.0, 1200.0);
+    side.artboards[0].rect = Rect::new(0.0, 0.0, 100.0, 100.0);
+    let side_stroke = review_597368_horizontal_edge(&mut side, -10.0, 110.0, 50.0);
+    review_597368_painted(&side, side_stroke, Point::new(1.0, 50.0), 4.0);
+    // All ordinary controls precede the first regression.
+    let start = Point::new(100.0, 50.0);
+    let raw = Point::new(0.5, 50.0);
+    review_462630_bounds(&review_597368_resize(&side, start, raw, Mods::default(), false, view), Rect::new(0.0, 0.0, 0.5, 100.0));
+    review_462630_bounds(&review_597368_resize(&side, start, Point::new(2.0, 50.0), Mods::default(), true, view), Rect::new(0.0, 0.0, 2.0, 100.0));
+    let mut crossing = vectorcraft_doc::Document::new(2000.0, 1200.0);
+    crossing.artboards[0].rect = side.artboards[0].rect;
+    let crossing_stroke = review_462530_stroke(&mut crossing, -4.0, 10.0, -1000.0, 2000.0);
+    review_597368_painted(&crossing, crossing_stroke, Point::new(1.0, 50.0), 4.0);
+    review_462630_bounds(&review_597368_resize(&crossing, start, raw, Mods::default(), true, view), Rect::new(0.0, 0.0, 1.0, 100.0));
+
+    let mut wide = vectorcraft_doc::Document::new(2000.0, 1200.0);
+    wide.artboards[0].rect = Rect::new(0.0, 0.0, 1000.0, 1.0);
+    let wide_stroke = review_597368_horizontal_edge(&mut wide, 980.0, 1020.0, 0.5);
+    // At zoom12, the5px handle radius is smaller than half the1pt height,
+    // so this really presses Right rather than the earlier TopRight hit.
+    // The ordinary allowed8px snap tolerance becomes2/3pt, still covering999.5->1000.
+    let wide_view = (12.0, 8.0);
+    let wide_start = Point::new(1000.0, 0.5);
+    review_597368_painted(&wide, wide_stroke, Point::new(1000.0, 0.5), 8.0 / 12.0);
+    review_462630_bounds(
+        &review_597368_resize(&wide, wide_start, Point::new(1002.0, 0.5), Mods::default(), false, wide_view),
+        Rect::new(0.0, 0.0, 1002.0, 1.0),
+    );
+    let shift = Mods { shift: true, ..Mods::default() };
+    review_462630_bounds(
+        &review_597368_resize(&wide, wide_start, Point::new(1000.25, 0.5), shift, true, wide_view),
+        Rect::new(0.0, -0.000125, 1000.25, 1.000125),
+    );
+    review_462630_bounds(&review_597368_resize(&wide, wide_start, Point::new(999.5, 0.5), shift, false, wide_view), Rect::new(0.0, 0.0, 1000.0, 1.0));
+
+    let mirrored = |left: f64| {
+        let mut d = vectorcraft_doc::Document::new(2000.0, 1200.0);
+        d.artboards[0].rect = Rect::new(300.0, 100.0, 400.0, 200.0);
+        d.setup.bleed = [3.0, 11.0, left, 7.0];
+        let stroke = review_597368_horizontal_edge(&mut d, 407.0, 430.0, 150.0);
+        review_597368_painted(&d, stroke, Point::new(408.0, 150.0), 4.0);
+        (d, stroke)
+    };
+    let mirror_start = Point::new(300.0, 150.0);
+    let mirror_raw = Point::new(400.5, 150.0);
+    for left in [2.0, 0.0] {
+        let (d, _) = mirrored(left);
+        review_462630_bounds(
+            &review_597368_resize(&d, mirror_start, mirror_raw, Mods::default(), false, view),
+            Rect::new(400.0, 100.0, 400.5, 200.0),
+        );
+        review_462630_bounds(
+            &review_597368_resize(&d, mirror_start, Point::new(402.0, 150.0), Mods::default(), true, view),
+            Rect::new(400.0, 100.0, 402.0, 200.0),
+        );
+    }
+
+    // REGRESSION1: the nearer feasible interval begins at width1, not the far
+    // collinear query endpoint4.5 chosen after rejecting the midpoint.
+    let v = review_597368_resize(&side, start, raw, Mods::default(), true, view);
+    review_462630_bounds(&v, Rect::new(0.0, 0.0, 1.0, 100.0));
+    assert_eq!(v["x"], 0.0, "the opposite side stays fixed");
+    assert!(v["width"].as_f64().unwrap() >= 1.0 && v["height"].as_f64().unwrap() >= 1.0);
+
+    // REGRESSION2: proportional Right changes height even though that grabbed
+    // coordinate stays at0.5; the1pt short side requires factor>=1, hence width1000.
+    let v = review_597368_resize(&wide, wide_start, Point::new(999.5, 0.5), shift, true, wide_view);
+    review_462630_bounds(&v, Rect::new(0.0, 0.0, 1000.0, 1.0));
+    assert!(v["width"].as_f64().unwrap() >= 1000.0 && v["height"].as_f64().unwrap() >= 1.0);
+    assert_eq!(v["x"], 0.0, "the proportional side keeps its opposite x origin");
+    let center_y = v["y"].as_f64().unwrap() + v["height"].as_f64().unwrap() / 2.0;
+    assert!((center_y - 0.5).abs() < 1e-12, "the inactive grabbed coordinate stays at its pivot: {v}");
+
+    // REGRESSION3: after Left crosses its fixed Right origin, the carried point
+    // uses the actual RIGHT bleed7; old LEFT bleed2/0 must not replace that offset.
+    for left in [2.0, 0.0] {
+        let (d, stroke) = mirrored(left);
+        let v = review_597368_resize(&d, mirror_start, mirror_raw, Mods::default(), true, view);
+        review_462630_bounds(&v, Rect::new(400.0, 100.0, 401.0, 200.0));
+        let contact = Point::new(v["x"].as_f64().unwrap() + v["width"].as_f64().unwrap() + 7.0, 150.0);
+        assert!(contact.distance(Point::new(408.0, 150.0)) <= 1e-6, "actual mirrored bleed contact: {contact:?}");
+        review_597368_painted(&d, stroke, contact, 4.0);
+        assert_eq!(v["x"], 400.0, "the opposite side stays fixed after mirroring");
+        assert!(v["width"].as_f64().unwrap() >= 1.0 && v["height"].as_f64().unwrap() >= 1.0);
+    }
+}
