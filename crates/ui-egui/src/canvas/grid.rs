@@ -372,7 +372,6 @@ fn end_ruler_origin_drag(app: &mut VectorcraftApp, ui: &Ui) {
     app.session.end_ruler_origin_drag();
 }
 
-/// The key of the ruler origin drag's state in egui's temporary data.
 /// A drag of the rulers' origin out of their corner, kept between frames.
 #[derive(Clone, Copy)]
 struct OriginDrag {
@@ -384,6 +383,7 @@ struct OriginDrag {
     trim_view: bool,
 }
 
+/// The key of the ruler origin drag's state in egui's temporary data.
 fn ruler_origin_drag_id() -> egui::Id {
     egui::Id::unique("ruler-origin-drag")
 }
