@@ -60,6 +60,11 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
         };
         drag_released(app, ui, &old, d, p, None);
         Some(up)
+    } else if let Some((up, _)) = super::split::primary_release(ui, None)
+        && press.is_some_and(|(down, _)| down > up)
+        && finish_name_press(app, ui, Some(up))
+    {
+        Some(up)
     } else {
         None
     };
@@ -242,19 +247,9 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
     // frame whether the work is done, and then shows the highlight under the pointer or applies
     // the edit.
     poll_tool(app, ui, view);
-    if pointer.primary_released()
-        && !pointer.primary_down()
-        && let Some((i, shift)) = ui.data_mut(|d| d.remove_temp::<(usize, bool)>(name_press_id()))
-    {
-        let release_shift = ui
-            .input(|inp| {
-                inp.events.iter().rev().find_map(|event| match event {
-                    egui::Event::PointerButton { button: egui::PointerButton::Primary, pressed: false, modifiers, .. } => Some(modifiers.shift),
-                    _ => None,
-                })
-            })
-            .unwrap_or(m.shift);
-        select_named_artboard(app, i, shift || release_shift);
+    if pointer.primary_released() && !pointer.primary_down() {
+        let up = super::split::primary_release(ui, press.map(|(down, _)| down)).map(|(up, _)| up);
+        finish_name_press(app, ui, up);
     }
     let click = super::primary_click(ui, resp);
     if !super::ignore_sampler_owns_primary(ui, resp.id)
@@ -672,10 +667,49 @@ fn dispatch_frame_moves(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, backquo
     }
 }
 
+/// Finish the stored name press at its own release, before a later press gets a new owner.
+fn finish_name_press(app: &mut VectorcraftApp, ui: &Ui, up: Option<usize>) -> bool {
+    let Some((index, shift)) = ui.data_mut(|d| d.remove_temp::<(usize, bool)>(name_press_id())) else { return false };
+    let release_shift = ui.input(|i| match up.and_then(|up| i.events.get(up)) {
+        Some(egui::Event::PointerButton { modifiers, .. }) => modifiers.shift,
+        _ => i.modifiers.shift,
+    });
+    select_named_artboard(app, index, shift || release_shift);
+    true
+}
+
+/// Settle an actual Up's remaining view motion before clearing the owner or picking a new press.
+fn release_view_drag(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, d: Drag, p: Pos2) -> Drag {
+    let ui_zoom = app.canvas_ui_zoom;
+    match d {
+        // Pan and rotation use absolute start-to-Up math, so already previewed motion is not repeated.
+        Drag::Pan { .. } | Drag::RotateView { .. } => {
+            drag_held(app, ui, f, d, p, None);
+            d
+        }
+        // A release contributes only unpreviewed physical motion, never another hold-time tick.
+        Drag::ZoomScrub { start, held, moved } => {
+            let before = ui.data(|data| data.get_temp::<Pos2>(drag_pos_id())).unwrap_or(start);
+            let moved = moved || (p - start).length() > SCRUB_SLOP;
+            let exponent = if moved { f64::from((p - before).x) * SCRUB_ZOOM } else { 0.0 };
+            if exponent != 0.0
+                && let Some(vm) = app.view_mut()
+            {
+                zoom_about(vm, f.rect, start, vm.zoom * exponent.exp(), ui_zoom);
+            }
+            Drag::ZoomScrub { start, held, moved }
+        }
+        _ => d,
+    }
+}
+
 /// A gesture released at `p`: the view settles, or the tool gets its up.
 fn drag_released(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, d: Drag, p: Pos2, owned: Option<(usize, usize)>) {
     let Pointing { resp, rect, m: frame_mods, space: frame_space, xf, view, .. } = *f;
-    let boundary = owned.map(|(_, up)| up).or(f.release);
+    let button = if matches!(d, Drag::Pan { middle: true, .. }) { egui::PointerButton::Middle } else { egui::PointerButton::Primary };
+    let boundary = owned.map(|(_, up)| up).or(f.release).or_else(|| {
+        ui.input(|i| i.events.iter().position(|event| matches!(event, egui::Event::PointerButton { button: b, pressed: false, .. } if *b == button)))
+    });
     let space = boundary.map_or(frame_space, |up| space_before(ui, up));
     let m = boundary.map_or(frame_mods, |up| {
         ui.input(|i| match i.events.get(up) {
@@ -683,17 +717,10 @@ fn drag_released(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, d: Drag, p: Po
             _ => frame_mods,
         })
     });
-    let release_index = boundary.or_else(|| super::split::primary_release(ui, None).map(|(up, _)| up));
+    let release_index = boundary;
     let released = Pointing { m, space, release: release_index, ..*f };
-    // A new view-only owner may not have had a held frame. Preview its final Up with the
-    // existing view math before clearing the start/state that the preview reads.
-    let d = if owned.is_some() && matches!(d, Drag::Pan { .. } | Drag::RotateView { .. } | Drag::ZoomScrub { .. }) {
-        let motion = if let Drag::ZoomScrub { start, .. } = d { Some(p - start) } else { None };
-        drag_held(app, ui, &released, d, p, motion);
-        ui.data(|data| data.get_temp::<Drag>(drag_id())).unwrap_or(d)
-    } else {
-        d
-    };
+    let ui_zoom = app.canvas_ui_zoom;
+    let d = if boundary.is_some() { release_view_drag(app, ui, &released, d, p) } else { d };
     // The last position the tool's drag got: none if the press never dragged.
     let last_drag: Option<Point> = ui.data(|dd| dd.get_temp(tool_drag_doc_id()));
     let press_doc: Option<Point> = ui.data(|dd| dd.get_temp(tool_press_doc_id()));
@@ -707,7 +734,6 @@ fn drag_released(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, d: Drag, p: Po
     });
     // Backtick as it was at the button-up: a key pressed or released later in the frame does not count.
     let backquote = backquote_at_release(ui, egui::PointerButton::Primary, f.backquote_before, owned);
-    let ui_zoom = app.canvas_ui_zoom;
     match d {
         Drag::ZoomBox { start } => {
             let start = zoom_marquee_start(ui, start, before, p, owned, boundary);

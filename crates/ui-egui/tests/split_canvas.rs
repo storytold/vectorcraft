@@ -2311,3 +2311,294 @@ fn review_597943_completed_divider_then_fresh_seam(coalesced: bool) {
     s.release(moved, PointerButton::Primary);
     assert_eq!(s.snapshot(), before);
 }
+
+// These witnesses use only real canvas frames; the original registrations remain above unchanged.
+fn review_598046_name_scene() -> (Scene, Pos2) {
+    let mut s = Scene::new();
+    s.app.run("file.new", json!({"width":320,"height":240,"artboards":2})).unwrap();
+    let v = s.app.view_mut().unwrap();
+    v.fitted = true;
+    v.center = Point::new(160.0, 120.0);
+    v.zoom = 1.5;
+    v.artboard = 1;
+    s.enable();
+    fn label(shape: &Shape) -> Option<Pos2> {
+        match shape {
+            Shape::Vec(shapes) => shapes.iter().find_map(label),
+            Shape::Text(text) if text.galley.job.text.starts_with("01 -") => Some(text.pos + text.galley.rect.center().to_vec2()),
+            _ => None,
+        }
+    }
+    let name = s.output.shapes.iter().find_map(|shape| label(&shape.shape)).expect("CONTROL: actual first artboard label is painted");
+    assert!(s.rect().contains(name));
+    assert!((name.x - s.point_on_divider().x).abs() > 20.0);
+    (s, name)
+}
+
+fn review_598046_name_then_divider(coalesced: bool) {
+    let (mut s, name) = review_598046_name_scene();
+    let before = s.snapshot();
+    let initial = s.fraction();
+    let divider = s.point_on_divider();
+    let up = review_597489_divider_point(&s, 0.7);
+    s.press(name, PointerButton::Primary);
+    assert_eq!(s.app.view().unwrap().artboard, 1, "CONTROL: the name is selected only at its Up");
+    s.frame(vec![Event::PointerMoved(divider)]);
+    assert_eq!(s.fraction(), initial, "CONTROL: a held name press does not move the divider");
+    assert_eq!(s.snapshot(), before);
+    if coalesced {
+        s.frame(vec![review_597489_primary(name, false), review_597489_primary(divider, true)]);
+    } else {
+        s.release(name, PointerButton::Primary);
+        assert_eq!(s.app.view().unwrap().artboard, 0, "CONTROL: the separate name release selects the first artboard");
+        s.press(divider, PointerButton::Primary);
+    }
+    assert_eq!(s.app.view().unwrap().artboard, 0, "REGRESSION: the old name completes before the new divider Down");
+    s.frame(vec![Event::PointerMoved(up)]);
+    assert!((s.fraction() - 0.7).abs() < 1e-6, "REGRESSION: the fresh divider Down owns its move");
+    s.release(up, PointerButton::Primary);
+    assert_eq!(s.snapshot(), before, "neither name selection nor divider motion changes art, object selection or history");
+    s.app.view_mut().unwrap().artboard = 1;
+    let blank = s.screen(Point::new(-20.0, 100.0));
+    assert!(s.rect().contains(blank));
+    s.click(blank);
+    assert_eq!(s.app.view().unwrap().artboard, 1, "a later release cannot finish a stale name press");
+}
+
+synchronous_test!(review_598046_name_up_precedes_fresh_divider_down, {
+    let _globals = Globals::new();
+    review_598046_name_then_divider(false);
+    review_598046_name_then_divider(true);
+});
+
+fn review_598046_zoom_up_ignores_later_input(coalesced: bool) -> (Point, f64, f64) {
+    let mut s = review_597704_zoom_scene();
+    let snapshot = s.snapshot();
+    let original = review_597943_camera(&s);
+    let p = s.rect().left_top() + vec2(100.0, 100.0);
+    let q = p + vec2(50.0, 50.0);
+    let up = p + vec2(80.0, 80.0);
+    let hover = up + vec2(35.0, 15.0);
+    let expected = review_597704_zoom_expected(&s, p, up);
+    assert!(s.rect().contains(hover));
+    s.press(p, PointerButton::Primary);
+    s.frame(vec![Event::PointerMoved(q)]);
+    review_597943_camera_eq(&s, original);
+    if coalesced {
+        // No PointerMoved(up): a real button-up carries the final position itself.
+        s.frame(vec![review_597489_primary(up, false), key(Key::Space, true), Event::PointerMoved(hover)]);
+    } else {
+        s.release(up, PointerButton::Primary);
+        review_597704_assert_camera(&s, expected, "CONTROL: ordinary release-only Zoom completes at Up");
+        s.frame(vec![key(Key::Space, true), Event::PointerMoved(hover)]);
+    }
+    review_597704_assert_camera(&s, expected, "REGRESSION: post-Up Space and hover cannot move the completed marquee");
+    let camera = review_597943_camera(&s);
+    s.frame(vec![Event::PointerMoved(hover + vec2(12.0, 8.0)), key(Key::Space, false)]);
+    review_597943_camera_eq(&s, camera);
+    assert_eq!(s.snapshot(), snapshot);
+    camera
+}
+
+synchronous_test!(review_598046_ordinary_zoom_release_cuts_off_post_up_input, {
+    let _globals = Globals::new();
+    let expected = review_598046_zoom_up_ignores_later_input(false);
+    let actual = review_598046_zoom_up_ignores_later_input(true);
+    assert!(actual.0.distance(expected.0) < 1e-6);
+    assert!((actual.1 - expected.1).abs() < 1e-6);
+    assert!((actual.2 - expected.2).abs() < 1e-6);
+});
+
+fn review_598046_current_mapped_handle(s: &Scene) -> Pos2 {
+    let doc = &s.app.session.active().unwrap().doc;
+    let node = doc.node(s.rectangle).unwrap();
+    let frame = vectorcraft_effects::graphic_frame_at(Some(doc), node, None, 0).expect("CONTROL: mapped plane still has a graphic frame");
+    let list = vectorcraft_effects::mapped_graphics(&node.appearance.effects[0].params);
+    let (at, visible) = frame.handle(&list[0]).expect("CONTROL: mapped graphic still has a handle");
+    assert!(visible);
+    s.screen(at)
+}
+
+fn review_598046_pan_final_up_then_handle(expected: Option<((Point, f64, f64), Pos2)>) -> ((Point, f64, f64), Pos2, Value) {
+    let (mut s, _) = review8211_mapped_scene();
+    let document = s.document();
+    let original_graphics = review8211_graphics(&s);
+    let selection = s.app.session.active().unwrap().selection.objects.clone();
+    let history = s.app.session.active().unwrap().history.undo.len();
+    let fraction = s.fraction();
+    let start = s.rect().left_top() + vec2(100.0, 80.0);
+    let q = start + vec2(12.0, 4.0);
+    let old_up = start + vec2(-40.0, 16.0);
+    s.review8211_materials_frame(vec![key(Key::Space, true), Event::PointerMoved(start), review_597489_primary(start, true)]);
+    s.review8211_materials_frame(vec![Event::PointerMoved(q)]);
+    let preview = review_597943_camera(&s);
+    let preview_handle = review_598046_current_mapped_handle(&s);
+    let (camera, handle) = if let Some(expected) = expected {
+        expected
+    } else {
+        s.review8211_materials_frame(vec![Event::PointerMoved(old_up)]);
+        let camera = review_597943_camera(&s);
+        s.review8211_materials_frame(vec![review_597489_primary(old_up, false), key(Key::Space, false)]);
+        review_597943_camera_eq(&s, camera);
+        (camera, review_598046_current_mapped_handle(&s))
+    };
+    assert!(camera.0.distance(preview.0) > 1e-6, "CONTROL: the last pan release contributes real remaining motion");
+    assert!(handle.distance(preview_handle) > 20.0, "CONTROL: using the old camera would miss the new handle press");
+    assert!(s.rect().contains(handle) && (handle.x - s.point_on_divider().x).abs() > 8.0);
+    let moved = handle + vec2(10.0, 4.0);
+    let up = handle + vec2(24.0, 0.0);
+    let hover = up + vec2(17.0, 13.0);
+    let expected_graphics = {
+        // The separate-frame camera supplies the real final coordinate mapping for both variants.
+        let xf = canvas::Xf::at(
+            s.rect(),
+            &vectorcraft_ui_egui::state::View { center: camera.0, zoom: camera.1, rotation: camera.2, ..*s.app.view().unwrap() },
+            s.ctx.zoom_factor(),
+        );
+        let doc = &s.app.session.active().unwrap().doc;
+        let node = doc.node(s.rectangle).unwrap();
+        let frame = vectorcraft_effects::graphic_frame_at(Some(doc), node, None, 0).unwrap();
+        let list = vectorcraft_effects::mapped_graphics(&node.appearance.effects[0].params);
+        let (at, _) = frame.handle(&list[0]).unwrap();
+        let grab = xf.to_doc(handle) - at;
+        let (x, y) = frame.offset_at(list[0].face, xf.to_doc(up) - grab).expect("CONTROL: mapped Up lies on the face");
+        let mut graphics = original_graphics.clone();
+        graphics[0]["x"] = json!((x * 10.0).round() / 10.0);
+        graphics[0]["y"] = json!((y * 10.0).round() / 10.0);
+        graphics
+    };
+    if expected.is_some() {
+        s.review8211_materials_frame(vec![
+            Event::PointerMoved(old_up),
+            review_597489_primary(old_up, false),
+            key(Key::Space, false),
+            review_597489_primary(handle, true),
+            Event::PointerMoved(moved),
+            review_597489_primary(up, false),
+            Event::PointerMoved(hover),
+        ]);
+    } else {
+        s.review8211_materials_frame(vec![review_597489_primary(handle, true)]);
+        s.review8211_materials_frame(vec![Event::PointerMoved(up)]);
+        s.review8211_materials_frame(vec![review_597489_primary(up, false), Event::PointerMoved(hover)]);
+    }
+    review_597943_camera_eq(&s, camera);
+    let graphics = review8211_graphics(&s);
+    assert_eq!(
+        graphics, expected_graphics,
+        "REGRESSION: fresh mapped handle uses the final old camera and commits at its own Up, not Q or later hover"
+    );
+    assert_ne!(graphics, original_graphics);
+    assert_eq!(s.app.session.active().unwrap().selection.objects, selection);
+    assert_eq!(s.app.session.active().unwrap().history.undo.len(), history + 1);
+    assert_eq!(s.fraction(), fraction);
+    let after = s.document();
+    s.review8211_materials_frame(vec![Event::PointerMoved(hover + vec2(15.0, 10.0))]);
+    review_597943_camera_eq(&s, camera);
+    assert_eq!(s.document(), after);
+    s.app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(s.document(), document, "one Undo restores the mapped edit, not view navigation");
+    assert_eq!(s.app.session.active().unwrap().history.undo.len(), history);
+    (camera, handle, graphics)
+}
+
+fn review_598046_rotate_final_up(coalesced: bool) -> (Point, f64, f64) {
+    let mut s = review_597704_zoom_scene();
+    s.app.select_tool("rotateView");
+    s.idle();
+    let before = s.snapshot();
+    let center = s.rect().center();
+    let start = center + vec2(60.0, 0.0);
+    let q = center + vec2(55.0, 15.0);
+    let up = center + vec2(10.0, 55.0);
+    s.press(start, PointerButton::Primary);
+    s.frame(vec![Event::PointerMoved(q)]);
+    let preview = review_597943_camera(&s);
+    let divider = s.point_on_divider();
+    if coalesced {
+        s.frame(vec![review_597489_primary(up, false), review_597489_primary(divider, true)]);
+    } else {
+        s.frame(vec![Event::PointerMoved(up)]);
+        s.release(up, PointerButton::Primary);
+        s.press(divider, PointerButton::Primary);
+    }
+    let final_camera = review_597943_camera(&s);
+    assert!((final_camera.2 - preview.2).abs() > 1.0, "REGRESSION: final rotation is at Up rather than the previous held point");
+    let divider_up = review_597489_divider_point(&s, 0.7);
+    s.frame(vec![Event::PointerMoved(divider_up)]);
+    s.release(divider_up, PointerButton::Primary);
+    review_597943_camera_eq(&s, final_camera);
+    assert!((s.fraction() - 0.7).abs() < 1e-6);
+    assert_eq!(s.snapshot(), before);
+    final_camera
+}
+
+fn review_598046_scrub_final_up(coalesced: bool) -> (Point, f64, f64) {
+    let mut s = review_597704_zoom_scene();
+    s.app.run("prefs.set", json!({"key":"animatedZoom","value":true})).unwrap();
+    s.app.run("prefs.set", json!({"key":"gpuPerformance","value":true})).unwrap();
+    s.idle();
+    assert!(s.app.session.prefs.animated_zoom && s.app.session.prefs.gpu_performance);
+    let before = s.snapshot();
+    let start = s.rect().left_top() + vec2(100.0, 100.0);
+    let q = start + vec2(20.0, 0.0);
+    let up = start + vec2(55.0, 0.0);
+    s.press(start, PointerButton::Primary);
+    s.frame(vec![Event::PointerMoved(q)]);
+    let preview = review_597943_camera(&s);
+    let divider = s.point_on_divider();
+    if coalesced {
+        s.frame(vec![review_597489_primary(up, false), review_597489_primary(divider, true)]);
+    } else {
+        s.frame(vec![Event::PointerMoved(up)]);
+        s.release(up, PointerButton::Primary);
+        s.press(divider, PointerButton::Primary);
+    }
+    let camera = review_597943_camera(&s);
+    assert!(camera.1 > preview.1, "REGRESSION: only the remaining physical scrub motion through Up is applied");
+    s.release(divider, PointerButton::Primary);
+    s.frame(vec![Event::PointerMoved(up + vec2(50.0, 20.0))]);
+    review_597943_camera_eq(&s, camera);
+    assert_eq!(s.snapshot(), before);
+    camera
+}
+
+fn review_598046_stationary_scrub_release() {
+    let mut s = review_597704_zoom_scene();
+    s.app.run("prefs.set", json!({"key":"animatedZoom","value":true})).unwrap();
+    s.app.run("prefs.set", json!({"key":"gpuPerformance","value":true})).unwrap();
+    s.idle();
+    let before = s.snapshot();
+    let start = s.rect().left_top() + vec2(100.0, 100.0);
+    let original = review_597943_camera(&s);
+    s.press(start, PointerButton::Primary);
+    for _ in 0..3 {
+        s.time += 0.5;
+        s.frame(vec![Event::PointerMoved(start)]);
+    }
+    let held = review_597943_camera(&s);
+    assert!(held.1 > original.1, "CONTROL: the real stationary held ZoomScrub has passed its hold delay and zooms");
+    s.frame(vec![review_597489_primary(start, false)]);
+    review_597943_camera_eq(&s, held);
+    s.frame(vec![Event::PointerMoved(start + vec2(50.0, 20.0))]);
+    review_597943_camera_eq(&s, held);
+    assert_eq!(s.snapshot(), before, "release adds no hold-time tick or document edit");
+}
+
+synchronous_test!(review_598046_old_view_final_up_precedes_new_hit_testing, {
+    let _globals = Globals::new();
+    let (camera, handle, expected) = review_598046_pan_final_up_then_handle(None);
+    let (_, _, actual) = review_598046_pan_final_up_then_handle(Some((camera, handle)));
+    assert_eq!(actual, expected);
+    let expected = review_598046_rotate_final_up(false);
+    let actual = review_598046_rotate_final_up(true);
+    assert!(actual.0.distance(expected.0) < 1e-6);
+    assert!((actual.1 - expected.1).abs() < 1e-6);
+    assert!((actual.2 - expected.2).abs() < 1e-6);
+    let expected = review_598046_scrub_final_up(false);
+    let actual = review_598046_scrub_final_up(true);
+    assert!(actual.0.distance(expected.0) < 1e-6);
+    assert!((actual.1 - expected.1).abs() < 1e-6);
+    assert!((actual.2 - expected.2).abs() < 1e-6);
+    review_598046_stationary_scrub_release();
+});
