@@ -675,12 +675,13 @@ objects' fills or strokes differ (`fillMixed` / `strokeMixed`, drawn as a "?" pr
 In the app's Color panel and Color Picker, RGB, HSB, hex and Web Safe RGB values describe the active working RGB
 space. RGB edits preserve the other native channels; HSB uses those same working RGB components. Colors outside
 display sRGB retain their native numeric values. `ui.colorPanel` selects the panel mode and `ui.colorPicker`
-opens the picker through `run_command` with the remote backend. `ui.colorPanel {"recentColors": false}` unchecks
-the panel menu's Show Recent Colors, which hides the Color panel's Recent Colors row, and `true` shows it again;
-applied colors still join the list while it is hidden. `ui.colorPanel {"rgbPercent": true}` shows the Color panel's
-RGB fields in percent, as a double-click right of an RGB field does, and `false` shows them from 0 to 255 again.
-`ui.colorRgbPercent` (Toggle RGB Percent in the command palette and Keyboard Shortcuts) switches between the two
-and answers true when the fields show in percent.
+opens the picker through `run_command` with the remote backend. Edit › Keyboard Shortcuts lists `ui.colorPicker` as
+Color Picker… with no default key; a key assigned there opens the picker for the proxy in front, as `{}` does.
+`ui.colorPanel {"recentColors": false}` unchecks the panel menu's Show Recent Colors, which hides the Color panel's
+Recent Colors row, and `true` shows it again; applied colors still join the list while it is hidden.
+`ui.colorPanel {"rgbPercent": true}` shows the Color panel's RGB fields in percent, as a double-click right of an RGB
+field does, and `false` shows them from 0 to 255 again. `ui.colorRgbPercent` (Toggle RGB Percent in the command
+palette and Keyboard Shortcuts) switches between the two and answers true when the fields show in percent.
 `ui.colorWheel {"view": "box", "channel": "red"}` shows the Color Wheel panel's box (a color field with the channel's
 strip at its right) in place of the wheel, as the panel menu's Box View and Box Channel do, and `"view": "wheel"`
 shows the wheel again. Keys left out keep their values. Params that are not an object, another key or a value off
