@@ -689,6 +689,17 @@ each have a hue of their own (not `monochromatic`, `shades`, `complementary2`, `
 `highContrast2`). Keys left out keep their values. Params that are not an object, another key or a value off
 the list return an error and change nothing. The command returns `{view, channel, harmony, harmonyRule, vision}`,
 and the settings are kept with the preferences.
+
+`ui.colorWheel {"sliders": "oklch"}` shows the Color Wheel panel's OKLCH Sliders (L, C and H rows under the wheel or
+the box), and `"none"` hides them in any RGB space. `"oklch"` is an error while the active document's RGB space is
+not sRGB: the profile assigned to the document when it has one, else the working RGB space of Edit › Color Settings.
+`ui.colorWheel {"sliders": "hsl"}` shows HSL Sliders in their place: H, S and L rows with the hue (0 to 360°),
+saturation and lightness (0 to 100 %) of the color's display sRGB, as CSS Color 4's `hsl()` defines them.
+`color.convert {"color": "#ff0000", "to": "oklch"}` answers the color's OKLCH as `[L %, C, H°]` of its display sRGB.
+A color outside sRGB (a Lab or CMYK color, an RGB color in a wider RGB space, or RGB numbers past 0 to 1) is clipped
+to sRGB first.
+The answer of `ui.colorWheel` and the settings also carry `sliders`.
+
 `ui.colorWheel {"vision": true}` turns on the Color Wheel panel's Show Color Vision Preview, as its panel menu
 does: a row of four chips under the wheel or the box shows the current color through the protanopia, deuteranopia
 and tritanopia simulations of `view.proofSetup`, and for achromatopsia as the gray with the color's CIE L*. Each
@@ -2335,7 +2346,7 @@ naming the key, and leave the document and its undo history as they were: `opaci
 The blend and envelope commands refuse a string, a number or another value that is not true or false with
 `` `smooth` must be true or false ``, naming the key, and leave the document, its undo history and the options new
 blends and envelopes start with as they were: `smooth` in `object.blend.make` and `object.blend.options`;
-`independent` and `link` in `object.blend.spine.moveAnchor`; `perpendicular` in `object.blend.spine.reshapeSegment`; `horizontal`
+`independent`, `symmetric` and `link` in `object.blend.spine.moveAnchor`; `perpendicular` in `object.blend.spine.reshapeSegment`; `horizontal`
 in `object.envelope.makeWithWarp`, `resetWithWarp` and `options`, also when an `orientation` is given; `maintainShape`
 in `object.envelope.resetWithMesh`; `antiAlias`, `distortAppearance`, `distortLinearGradients` and
 `distortPatternFills` in `object.envelope.options`; and `editing` in `object.envelope.editContents`. A null is read as
@@ -5753,7 +5764,10 @@ Brushes with one bristle brush for each tip shape, Pattern Borders, Scatter Shap
 Charcoal Dust art brushes, id `dry-media`, Tech Circuit with Circuit Trace (art), Bus Lines and Terminal Nodes (pattern), id `tech-circuit`, Engraving with Fine Hatching, Dense Hatching, Tapered Hatching and Broken Hatching art brushes, id `engraving`, and Arrows with Solid, Open, Double, Chevron and Dashed Arrow art brushes, id `arrows`), the `.vectorcraft` files in the user library folder of the desktop app (User
 Defined) and the brushes of any document loaded with `brush.loadLibrary` (a document without brushes of its own has
 the default ones). `brush.libraries` lists them (`id`, `name`, `category`: `builtIn`, `user` or `loaded`, `count`) and
-`brush.library {library}` returns one's brushes (`name`, `type`; `library` is an id or a name).
+`brush.library {library}` returns one's brushes (`name`, `type`; `library` is an id or a name). A name
+that a built-in library and a User Defined or loaded library share selects the built-in one; select the other by its
+`user/…` or `loaded/…` id. The exact id `artistic` selects the built-in Artistic Brushes library, and `Artistic`
+selects it too when no library is named `Artistic`.
 `brush.addFromLibrary {library, name? | names?}` copies brushes into the document's Brushes as one undo step (no
 names: the whole library), with the resources their art uses: patterns, symbols, swatches (`swatchConflict` as for
 `edit.paste`), graphic styles and images. Brushes the document already has (same name and definition) are reported
@@ -6747,6 +6761,14 @@ is not a whole number of 0 or more, such as 1.5, -1 or "1" ("`subpath` must be a
 an `anchor` or `segment` in the same way. The document does not change and no undo step is recorded.
 `path.moveAnchor` to the point the anchor is at, and `path.setHandle` to the point the handle is at on an anchor that
 keeps its kind, leave the document as it is and record no undo step.
+`path.setHandle` with `symmetric: true` also places the anchor's other handle opposite the moved one at the same
+length, and the anchor keeps its kind. At an open end, where no segment leaves the anchor on the other side,
+`symmetric` has no effect and the handle moves as it would without it. Both `symmetric` and `independent` default to false, and a call with both true is
+refused with `` `independent` and `symmetric` cannot both be true ``; the document does not change and no undo step
+is recorded. Direct Selection sends `symmetric` while Cmd/Ctrl is held during a handle drag, unless that Cmd/Ctrl
+press lent Direct Selection for the gesture while another tool, such as the Pen, was chosen and has not been let go
+since (#7842). A call that puts both handles where they already are records no undo step. `symmetric: true` with `link: true` is refused
+("`link` and `symmetric` cannot both be true"), and so is `symmetric: true` with `link: true` in `object.blend.spine.moveAnchor`.
 `path.setHandle` with `link: true` (the Anchor Point tool's Alt-drag on a handle) places the handle and makes the
 anchor smooth: the other handle turns to lie in line on the far side of the anchor and keeps its length. A retracted
 other handle is pulled out to the placed handle's length when a segment leaves the anchor on its side, and stays
@@ -6873,7 +6895,7 @@ Left out or null, `width` is 8 pt. The range is VectorCraft's own value.
 
 These commands refuse a string, a number or another value that is not true or false with
 `` `closed` must be true or false ``, naming the key; the document does not change and no undo step is recorded:
-`independent` in `path.close` and `path.setHandle`; `link` in `path.setHandle`; `patterns` in `path.moveAnchors`; `closed`, `keepSelected` and
+`independent` in `path.close` and `path.setHandle`; `symmetric` and `link` in `path.setHandle`; `patterns` in `path.moveAnchors`; `closed`, `keepSelected` and
 `fill` in `path.freehand` (and in `brush.freehand`); `closed` and the `corner` of a point in `path.curvature`; `corner`
 in `path.curvatureEdit`; `perpendicular` in `path.reshapeSegment`; and `keepSelected`, `mergeOnlySelection` and
 `merge` in `path.blob`. A null is read as a key left out.
@@ -8601,6 +8623,27 @@ is kept with the preferences and with the workspace; a workspace or preferences 
 and a group id the bar does not have is dropped when they are read. Another `group`, or none, fails with "`group` must
 be one of …", and a `visible` that is not true or false fails with "`visible` must be true or false"; either leaves
 every group as it is. The groups and their contents are VectorCraft's own.
+`window.taskBar.actions {action, visible?}` (desktop app) turns one of the Contextual Task Bar's actions or chips on
+(`visible: true`), off (`false`) or toggles it (omitted or null), and returns `{action, visible}`. The actions are `imageTrace`,
+`cropImage`, `removeBackground`, `removeAnchorPoints`, `join` (Connect and Join), `cutPath`, `convertToCorner`,
+`convertToSmooth`, `group`, `makeClippingMask`, `unite`, `expand`, `editClippingPath`, `releaseClippingMask`,
+`ungroup`, `isolate`, `editPath`, `releaseCompoundPath`, `createOutlines`, `convertToPointType`, `convertToAreaType`,
+`typeOnPathOptions`, `centerOnTop`, `centerOnBottom`, `dynamicText`, `offsetPath`, `simplify`, `smooth`, `duplicate`,
+`drawPencil`, `placeImage`, `fidelity` and `smoothToolOptions` (the Smooth tool's), and `resizeArtboard`,
+`duplicateArtboards`, `rearrangeArtboards` and `exportArtboards` (the Artboard tool's); the chips are `fill`, `stroke`,
+`recolor` (Recolor Artwork), `lock` and `shapeProperties` (a basic shape's Shape Properties, in Lock's place). The bar's
+More Options menu has Bar Actions, which lists the actions and chips the bar offers for the current selection or tool,
+each checked while it is on and named without a final colon or ellipsis, and runs the command for the one clicked. An
+action or chip that is off stays out of the bar and out of More Options wherever the bar would offer it; turning one off
+changes only the bar. With every action and chip it would offer off, the bar still shows its handle and More Options,
+where Bar Actions turns them on again. Every action starts
+on. The type font controls are not in Bar Actions and stay on the bar. Which actions are off is kept with the preferences
+and with the workspace; a workspace or preferences saved without them show every action, and an id the bar does not have
+is dropped when they are read. A `visible` of null toggles, as an omitted one does. Another `action`, or none, fails
+with "`action` must be one of …", and a `visible` that is not true, false or null fails with "`visible` must be true
+or false"; either leaves every action as it is.
+`window.taskBar.resetActions {}` (More Options › Reset Bar Actions) turns every action and chip on again and returns
+the ids it turned on. Choosing the bar's actions is VectorCraft's own.
 
 ```json
 {"name":"run_command","arguments":{"command":"file.new","params":{"preset":"A4","orientation":"landscape","artboards":4,"artboardLayout":{"columns":2},"bleed":9}}}
@@ -10887,10 +10930,12 @@ undo step. Object › Transform › Scale, the Scale tool and the Transform pane
 `text.reshapePath {id, anchors: [[subpath, anchor]…], dx, dy}` does the same for the path of type on a path
 (Direct Selection dragging one of its anchors): the start and end brackets keep their fractions of the path and the
 text reflows along it.
-`text.setPathHandle {id, subpath?, anchor, which: "in"|"out", x, y, independent?}` moves a direction handle of one
-of its anchors, as `path.setHandle` moves a path's (Direct Selection dragging a handle of the path, #3565), in one
-undo step. A call of `text.reshapeArea`, `text.reshapePath` or `text.setPathHandle` that changes nothing (`dx` and
-`dy` both 0, or a handle moved to where it already is) adds no undo step and keeps redo.
+`text.setPathHandle {id, subpath?, anchor, which: "in"|"out", x, y, independent?, symmetric?}` moves a direction handle
+of one of its anchors, as `path.setHandle` moves a path's (Direct Selection dragging a handle of the path, #3565), in
+one undo step. With `symmetric: true` the other handle goes opposite the moved one at the same length, measured on
+the page, as in `path.setHandle`; `symmetric` and `independent` cannot both be true. A call of `text.reshapeArea`,
+`text.reshapePath` or `text.setPathHandle` that changes nothing (`dx` and `dy` both 0, or handles left where they
+already are) adds no undo step and keeps redo.
 
 ```json
 {"name":"run_command","arguments":{"command":"text.reshapeArea","params":{"id":42,"anchors":[[0,2]],"dx":40,"dy":60}}}
@@ -13551,7 +13596,8 @@ the compound path selected), and the next click starts a new path. Choosing any 
 A blend's spine is the straight lines between its key centres until it is edited. `object.blend.info` lists it
 (`spine.anchors`, `keyAnchors`: the point each key sits on). `object.blend.spine.addAnchor {x, y}` adds a point where
 the spine passes nearest, `object.blend.spine.moveAnchor {anchor, x, y}` moves a point (a key on it moves along; with
-`handle: "in" | "out"` it places that handle), `object.blend.spine.convertAnchor {anchor, to: "smooth" | "corner", x?, y?}` converts a point's handles (a Smooth drag with `x, y` creates opposite handles; Corner retracts both), `object.blend.spine.reshapeSegment {segment, t, dx, dy, perpendicular?}` bends a segment
+`handle: "in" | "out"` it places that handle, and with `symmetric: true` also the other handle opposite it at the
+same length, as `path.setHandle` does; `symmetric` needs `handle` and cannot go with `independent`), `object.blend.spine.convertAnchor {anchor, to: "smooth" | "corner", x?, y?}` converts a point's handles (a Smooth drag with `x, y` creates opposite handles; Corner retracts both), `object.blend.spine.reshapeSegment {segment, t, dx, dy, perpendicular?}` bends a segment
 so its point at `t` moves by (dx, dy), turning a straight spine into a curve (`perpendicular` works as in `path.reshapeSegment`), and `object.blend.spine.removeAnchor
 {anchor}` deletes a point no key sits on; the first edit turns the spine into a path. Moving a key moves its end of the spine. Release
 (`object.blend.release`) leaves the spine of a blend that has one as a path that paints nothing (`spines` in the result):

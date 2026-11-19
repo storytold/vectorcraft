@@ -846,6 +846,8 @@ digits	Malayalam	マラヤーラム数字
 	Contextual Task Bar	コンテキストタスクバー
 	Pin Bar Position	バーの位置を固定
 	Reset Bar Position	バーの位置をリセット
+	Bar Actions	バーのアクション
+	Reset Bar Actions	バーのアクションをリセット
 	Resize	サイズを変更
 	Tools	ツール
 	Toolbars	ツールバー
@@ -3398,9 +3400,9 @@ mark-style	Japanese	日本式
 	Edit type set in fonts that aren't available?	使用できないフォントのテキストを編集しますか？
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	カンバス上で、各スライスの番号をスライスの左上のボックスに表示します。オフでもスライスの輪郭は表示されます。
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	ユーザースライスとオブジェクトスライスの輪郭、およびその番号のボックスの色です。自動スライスにはこの色の淡い色合いが使われます。
-	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	ドキュメント設定の言語が英語 (米国) の間は、新しいテキストにこの言語が設定されます。ドキュメント内の既存のテキストは自身の言語を保ちます。
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	ハイフネーションがオンの段落では、リストの単語は入力したハイフンの位置でのみ分割され、ハイフンがなければ分割されません。言語や大文字小文字は問いません。
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	デスクトップ版では、このフォルダーの .wasm プラグインが起動時と、ここに新しいフォルダーを指定して OK をクリックしたときに読み込まれます (セーフモードを除く)。Web 版では読み込まれません。
+	Normal keeps each plug-in's own limits; with Large, a plug-in filter or command may run at least 250 million instructions besides those for its input. The time limit stays the same.	通常では各プラグイン自身の制限が使われます。大では、プラグインのフィルターやコマンドは入力のための命令に加えて少なくとも 2 億 5000 万命令を実行できます。時間の制限は変わりません。
 	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	プラグインのオブジェクトフィルターを 1 回実行するときに使える命令の数です。大では通常より多く使え、60 秒の制限は変わりません。重いフィルターは独自の予算を保ちます。
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	1 つ目の仮想記憶ディスクの選択です。Startup、None またはフォルダーのパスを指定します。VectorCraft は保存しますが、仮想記憶ディスクはまだ使用しません。
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	2 つ目の仮想記憶ディスクの選択です。Startup、None またはフォルダーのパスを指定します。VectorCraft は保存しますが、仮想記憶ディスクはまだ使用しません。
@@ -3419,6 +3421,8 @@ mark-style	Japanese	日本式
 	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	インターフェイスの言語です。自動ではシステムの言語を使います。言語を選ぶとすぐにダイアログの表示が切り替わります。
 	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	アニメーションズームは、これがオンのときだけ働きます。オフの場合、アニメーションズームは淡色表示になり、ズームはアニメーションしません。
 	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	ホイールによるズームはなめらかに動き、ズームツールは横にドラッグするか押したままにするとズームします。オフの場合、ズームツールはドラッグした範囲にズームします。
+	From the next start, the desktop version shows the canvas through this kind of graphics processor; the artwork is drawn on the CPU either way. Automatic prefers the integrated one on Windows and macOS. The web version does not use it.	次回の起動から、デスクトップ版はこの種類のグラフィックプロセッサーを通してカンバスを表示します。アートワーク自体は常に CPU で描画されます。自動では Windows と macOS で内蔵のものが優先されます。Web 版では使われません。
+	From the next start, the window shows each frame without waiting for the display's refresh where the graphics driver allows, at most 240 frames a second.	次回の起動から、グラフィックドライバーが許す場合、ウィンドウはディスプレイのリフレッシュを待たずに各フレームを表示します。最大で毎秒 240 フレームです。
 	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	次回の起動から、デスクトップ版はこの種類のグラフィックプロセッサーで描画します。自動ではディスプレイを駆動しているものが優先されます。Web 版では使われません。
 	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	次回の起動から、ウィンドウはディスプレイの更新を待たずにフレームを表示します。上限は毎秒 240 フレームです。オフにすると、ディスプレイがフレームの間隔を決めます。起動時に指定した表示モードが優先されます。
 	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	各ドキュメントが保持する取り消しステップの最大数です。値を下げると、OK をクリックしたときに古いステップから削除されます。メモリを使いすぎる場合は、さらに早く削除されることがあります。
@@ -4416,6 +4420,11 @@ file-filter	Templates	テンプレート
 	Keep the pasted color as a new swatch with a numbered name.	ペーストしたカラーを、番号付きの名前で新規スウォッチとして残します。
 	Keep:	保持:
 	Lab	Lab
+	OKLCH Sliders	OKLCH スライダー
+	HSL Sliders	HSL スライダー
+	Chroma	クロマ
+	The largest chroma sRGB holds at this lightness and hue	この明度と色相で sRGB に収まる最大のクロマ
+	OKLCH needs sRGB as the working RGB space	OKLCH には作業用 RGB スペースとして sRGB が必要です
 	Lab Values	Lab 値
 	Large List View	大きいリスト表示
 	Large Thumbnail View	大きいサムネール表示
@@ -5640,6 +5649,8 @@ variable-list-end	{0}, {1}	{0}、{1}
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` には grayscale、rgb、hsb、cmyk、websafe のいずれかを指定してください
 @msg	`view` must be wheel or box	`view` には wheel、box のいずれかを指定してください
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` には hue、saturation、brightness、red、green、blue のいずれかを指定してください
+@msg	`sliders` must be none, oklch or hsl	`sliders` には none、oklch、hsl のいずれかを指定してください
+@msg	OKLCH needs sRGB as the working RGB space	OKLCH には作業用 RGB スペースとして sRGB が必要です
 @msg	`{key}` must be true or false	`{key}` には true または false を指定してください
 @msg	`top` and `below` can't both be true	`top` と `below` を同時に true にすることはできません
 @msg	`select` must be true or false	`select` には true または false を指定してください
@@ -10484,6 +10495,11 @@ breakText	Glyphs	字形
 @msg	A panel is not joined to the rest by a crease.	パネルがどの筋入れ線でも他とつながっていません。
 @msg	A fold line is on a non-printing layer.	折り線が印刷しないレイヤーにあります。
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	パネル: {panels}、ヒンジ: {hinges}、エラー: {errors}、警告: {warnings}
+	Orbit Lines	軌道線
+	Petal Garland	花びらのガーランド
+	Lattice Braid	格子編み
+	Facet Sweep	多面体のストローク
+	Artistic Brushes	アートブラシ
 	Paint	ペイント
 	Flat Sweep	平筆の一掃き
 	Dry Drag	ドライドラッグ
