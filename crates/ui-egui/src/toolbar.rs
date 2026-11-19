@@ -463,7 +463,8 @@ pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::
         // The Circle tool: what it shows while a circle is drawn, where its anchors go and how
         // the third point is placed.
         vectorcraft_tools::circle::ID => Ok(crate::dialogs::circle_options::open(app)),
-        // The Flare tool: its options, which draw the next flare (OK draws none).
+        // The Flare tool: its options, which draw the next flare (OK draws none); with flares
+        // selected, the first one's settings, and OK draws the selected flares again.
         "flare" => Ok(crate::dialogs::flare_options::open(app, None)),
         // A double click on the Print Tiling tool puts the pages back where the placement puts them.
         "printTiling" => app.run("print.tiling.set", json!({ "reset": true })),
