@@ -49,6 +49,8 @@ pub use drag::{
 };
 #[cfg(test)]
 use dropdowns::combo_button_id;
+#[cfg(test)]
+pub(crate) use dropdowns::top_popup_shapes;
 pub(crate) use dropdowns::{combo, combo_menu, combo_menu_field_named, combo_named, field_focused_in, menu_min_width, popover_is_open};
 pub use dropdowns::{
     dropdown, dropdown_icon_names, dropdown_icon_names_sized, dropdown_named, dropdown_names, dropdown_names_named, dropdown_with,

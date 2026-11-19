@@ -133,10 +133,13 @@ fn a_dropdown_in_a_short_window_opens_with_its_current_option_in_view() {
     for (height, above, current) in [(260.0, 117.0, 19), (260.0, 117.0, 10), (180.0, 77.0, 10), (180.0, 77.0, 3)] {
         let ctx = themed(Default::default());
         let field = std::cell::Cell::new(Rect::NOTHING);
+        let popup = std::cell::RefCell::new(vec![]);
         let mut add = |ui: &mut Ui| {
             ui.add_space(above);
             field.set(ui.horizontal(|ui| dropdown_names(ui, "short-list", labels[current], &labels, 160.0)).response.rect);
+            popup.replace(super::top_popup_shapes(ui.ctx()));
         };
+        // The shapes of the open list, without the field under it.
         let mut run = |time: f64, events: Vec<egui::Event>| {
             let raw = egui::RawInput {
                 time: Some(time),
@@ -146,7 +149,7 @@ fn a_dropdown_in_a_short_window_opens_with_its_current_option_in_view() {
             };
             let mut out = ctx.run_ui(raw, &mut add);
             out.textures_delta.clear();
-            out.shapes
+            popup.take()
         };
         run(0.0, vec![]);
         let at = field.get().center();
@@ -206,6 +209,7 @@ fn own_rows_reopen(height: f32, above: f32, wheel: f32, row: &str) {
     let ctx = themed(Default::default());
     let field = std::cell::Cell::new(Rect::NOTHING);
     let current = std::cell::RefCell::new(String::from("Row 00"));
+    let popup = std::cell::RefCell::new(vec![]);
     let mut add = |ui: &mut Ui| {
         ui.add_space(above);
         let shown = current.borrow().clone();
@@ -224,8 +228,10 @@ fn own_rows_reopen(height: f32, above: f32, wheel: f32, row: &str) {
             current.replace(items[i].clone());
         }
         field.set(r.response.rect);
+        popup.replace(super::top_popup_shapes(ui.ctx()));
     };
     let mut time = 0.0;
+    // The shapes of the open list, without the field under it.
     let mut run = |events: Vec<egui::Event>| {
         time += 0.1;
         let raw = egui::RawInput {
@@ -236,7 +242,7 @@ fn own_rows_reopen(height: f32, above: f32, wheel: f32, row: &str) {
         };
         let mut out = ctx.run_ui(raw, &mut add);
         out.textures_delta.clear();
-        out.shapes
+        popup.take()
     };
     // The rows that show whole, with their tops: inside the open list and the clip they are painted
     // in.
@@ -298,10 +304,12 @@ fn own_rows_reopen(height: f32, above: f32, wheel: f32, row: &str) {
     }
     let scrolled = rows(clipped);
     assert!(has(&scrolled, row), "{case}: the wheel scrolls {row} into view: {scrolled:?}");
-    // Closed and opened again twice: each time its rows are where they were when it closed.
+    // Closed and opened again twice: each time its rows are where they were when it closed. Escape
+    // closes it: a list taller than the room beside its field covers the field.
+    let escape = |pressed| egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
     for time in ["first", "second"] {
-        run(vec![egui::Event::PointerMoved(at), press(true)]);
-        run(vec![press(false)]);
+        run(vec![escape(true)]);
+        run(vec![escape(false)]);
         run(vec![]);
         let reopened = rows(open(&mut run));
         assert_eq!(reopened, scrolled, "{case}: the list opens again where it was scrolled, the {time} time");
@@ -892,6 +900,75 @@ fn a_long_dropdown_uses_window_room_and_shows_its_scroll_bar_when_clipped() {
             && r.rect.left() >= popup.right() - list_scroll_style().allocated_width() - 8.0
     });
     assert!(has_scroll_bar, "the overflowing dropdown draws its scroll bar without hover in {popup:?}");
+}
+
+// #5941: a drop-down list stopped at the room on one side of its field, so a window with room for
+// the whole list still cut it short. The list opens below its field when it fits there, above it
+// when it fits there instead, and otherwise moves up from below into the window over its field;
+// each time every option shows whole, inside the window.
+#[test]
+fn a_dropdown_list_shows_every_option_when_the_window_has_room() {
+    let items: Vec<String> = (0..20).map(|i| format!("Option {i:02}")).collect();
+    let labels: Vec<&str> = items.iter().map(String::as_str).collect();
+    // (window height, space above the field, where the list goes)
+    for (height, above, side) in [(700.0, 16.0, "below"), (700.0, 650.0, "above"), (640.0, 300.0, "over")] {
+        let case = format!("{height} pt window, field {above} pt down");
+        let ctx = themed(Default::default());
+        let field = std::cell::Cell::new(Rect::NOTHING);
+        let popup = std::cell::RefCell::new(vec![]);
+        let mut add = |ui: &mut Ui| {
+            ui.add_space(above);
+            field.set(ui.horizontal(|ui| dropdown_names(ui, "fit-list", labels[0], &labels, 160.0)).response.rect);
+            popup.replace(super::top_popup_shapes(ui.ctx()));
+        };
+        let screen = Rect::from_min_size(Pos2::ZERO, vec2(400.0, height));
+        // The shapes of the open list, without the field under it.
+        let mut run = |time: f64, events: Vec<egui::Event>| {
+            let mut out = ctx.run_ui(egui::RawInput { time: Some(time), screen_rect: Some(screen), events, ..Default::default() }, &mut add);
+            out.textures_delta.clear();
+            popup.take()
+        };
+        run(0.0, vec![]);
+        let at = field.get().center();
+        let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        run(0.1, vec![egui::Event::PointerMoved(at), press(true)]);
+        run(0.2, vec![press(false)]);
+        run(0.3, vec![egui::Event::PointerMoved(pos2(390.0, 2.0))]);
+        let mut clipped = vec![];
+        for i in 4..10 {
+            clipped = run(f64::from(i) * 0.1, vec![]);
+        }
+        let list = ctx
+            .memory(|m| {
+                m.layer_ids().filter(|l| l.order == egui::Order::Foreground && m.areas().is_visible(l)).last().and_then(|l| m.area_rect(l.id))
+            })
+            .expect("the list is open");
+        assert!(screen.contains_rect(list), "{case}: the list {list:?} is inside the window");
+        let field = field.get();
+        // The list opens from the button, 1 pt inside the field's border.
+        match side {
+            "below" => assert!(list.top() >= field.bottom() - 1.5, "{case}: the list {list:?} opens below the field {field:?}"),
+            "above" => assert!(list.bottom() <= field.top() + 1.5, "{case}: the list {list:?} opens above the field {field:?}"),
+            _ => assert!(list.top() < field.bottom() && list.bottom() > field.top(), "{case}: the list {list:?} covers the field {field:?}"),
+        }
+        let mut texts = vec![];
+        fn flat(s: &egui::Shape, clip: Rect, out: &mut Vec<(String, Rect, Rect)>) {
+            match s {
+                egui::Shape::Vec(v) => v.iter().for_each(|s| flat(s, clip, out)),
+                egui::Shape::Text(t) => out.push((t.galley.text().to_owned(), t.visual_bounding_rect(), clip)),
+                _ => {}
+            }
+        }
+        clipped.iter().for_each(|c| flat(&c.shape, c.clip_rect, &mut texts));
+        let whole: Vec<&str> = labels
+            .iter()
+            .copied()
+            .filter(|name| {
+                texts.iter().any(|(s, r, clip)| s == name && list.contains_rect(*r) && r.top() >= clip.top() && r.bottom() <= clip.bottom())
+            })
+            .collect();
+        assert_eq!(whole, labels, "{case}: every option shows whole in {list:?}");
+    }
 }
 
 /// Enter on text that reads as no number in a range field refuses it as a unit field does: the
