@@ -1566,15 +1566,16 @@ impl craft_ui::docking::DockContent<String> for PanelContent<'_> {
         // must remain beside those sections rather than pinning to the outer panel.
         let bottom = (!fitted && id != "properties").then_some(back.bottom() - 10.0);
         let info = egui::UiStackInfo::default().with_tag_value(crate::widgets::PANEL_FOOTER, bottom);
-        // The content ends at the 10 pt margin and is clipped there: nothing scrolls behind a
-        // pinned footer into the margin (#8307), and a panel without a footer still scrolls its
-        // last row into view above it.
-        let mut body = ui.available_rect_before_wrap();
+        // The content is clipped at the 10 pt margin, so nothing scrolled behind a pinned footer
+        // shows below its buttons (#8307). The body keeps its height: the margin covers only the
+        // body's own 10 pt bottom padding, and a panel without a footer still scrolls its last row
+        // to the top of the margin.
+        let mut clip = ui.available_rect_before_wrap();
         if let Some(bottom) = bottom {
-            body.max.y = bottom;
+            clip.max.y = bottom;
         }
-        ui.scope_builder(egui::UiBuilder::new().max_rect(body).ui_stack_info(info), |ui| {
-            ui.shrink_clip_rect(body);
+        ui.scope_builder(egui::UiBuilder::new().ui_stack_info(info), |ui| {
+            ui.shrink_clip_rect(clip);
             if DockTab::from_id(id).is_some() {
                 crate::dock::panel_body(self.app, ui, id, width, height);
             } else {

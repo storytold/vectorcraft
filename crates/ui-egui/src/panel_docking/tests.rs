@@ -363,12 +363,14 @@ fn the_margin_under_a_pinned_footer_hides_a_list_scrolled_behind_it() {
     assert_eq!(h.app.session.paint.fill.color().map(|c| c.to_hex()), fill, "a click in the margin applied the swatch behind it");
 }
 
-/// #8307: a sized panel without a footer (Color Wheel) keeps the same 10 pt margin. Its content
-/// is clipped where the margin starts, so the end of a list too long for the panel scrolls into
-/// view above the margin instead of under it.
+/// #8307: the margin under a sized panel covers only the panel body's 10 pt bottom padding. Scrolled
+/// to its end, a panel without a footer shows its last row down to the margin, as without the margin,
+/// and a click there reaches it: the bottom of Color Wheel's hue ring picks a hue.
 #[test]
-fn a_sized_panel_without_a_footer_scrolls_its_content_above_the_margin() {
+fn the_last_row_of_a_sized_panel_without_a_footer_scrolls_to_the_margin_and_takes_clicks() {
     let mut h = Harness::new();
+    h.ctx.enable_accesskit();
+    h.app.run("paint.setFill", json!({"color": "#ff0000"})).unwrap();
     h.app.run("window.panel.dock", json!({"panel": crate::panels::color_wheel::ID, "icon": true})).unwrap();
     let mut layout = h.layout();
     layout.apply(Action::ResizeGroup { panel: crate::panels::color_wheel::ID.into(), height: Some(120.0) }).unwrap();
@@ -378,27 +380,49 @@ fn a_sized_panel_without_a_footer_scrolls_its_content_above_the_margin() {
         h.frame(vec![]);
     }
     let edge = h.ctx.read_response(area_id().with("flyout").with("resize-bottom")).unwrap().rect;
-    let at = pos2(edge.center().x, edge.bottom() - 5.0);
+    let back = panel_background(&h, pos2(edge.center().x, edge.bottom() - 5.0));
+    let margin = back.bottom() - 10.0;
+    let ring = |h: &Harness| {
+        let b = h.nodes.iter().find(|(_, node)| node.label() == Some("Hue ring")).and_then(|(_, node)| node.bounds()).expect("the hue ring");
+        Rect::from_min_max(pos2(b.x0 as f32, b.y0 as f32), pos2(b.x1 as f32, b.y1 as f32))
+    };
+    let before = ring(&h);
+    assert!(before.bottom() > back.bottom(), "the ring fits the panel without scrolling: {before:?} in {back:?}");
+    let over = back.left_top() + vec2(20.0, 20.0);
+    let wheel = Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Point,
+        delta: vec2(0.0, -200.0),
+        modifiers: Default::default(),
+        phase: egui::TouchPhase::Move,
+        source: egui::MouseWheelSource::Unknown,
+    };
+    for _ in 0..10 {
+        h.frame(vec![Event::PointerMoved(over), wheel.clone()]);
+    }
+    for _ in 0..10 {
+        h.frame(vec![]);
+    }
+    let end = ring(&h);
+    assert!(end.bottom() < before.bottom(), "the panel did not scroll: {before:?}, then {end:?}");
+    assert!((end.bottom() - margin).abs() < 0.5, "scrolled to its end, the ring ends at {}, not at the margin's top at {margin}", end.bottom());
+    // The ring's band ends 4 pt inside its rect; 6 pt up is on the band at hue 270.
+    let fill = h.app.session.paint.fill.color().map(|c| c.to_hex());
+    h.click(pos2(end.center().x, end.bottom() - 6.0));
+    assert_ne!(h.app.session.paint.fill.color().map(|c| c.to_hex()), fill, "a click on the bottom of the ring picked nothing");
+}
+
+/// The background of the panel under `at`: the smallest panel-colored rect there, as the window
+/// behind a flyout is painted with the same color.
+fn panel_background(h: &Harness, at: Pos2) -> Rect {
     let panel = crate::theme::Tokens::get(&h.ctx).panel;
-    // The panel's background is the smallest panel-colored rect under the margin; the window
-    // behind it is painted with the same color.
-    let is_back = |shape: &egui::Shape| matches!(shape, egui::Shape::Rect(r) if r.fill == panel && r.rect.contains(at) && r.rect.height() > 60.0);
-    let back = h
-        .shapes
+    h.shapes
         .iter()
         .filter_map(|c| match &c.shape {
-            egui::Shape::Rect(r) if is_back(&c.shape) => Some(r.rect),
+            egui::Shape::Rect(r) if r.fill == panel && r.rect.contains(at) && r.rect.height() > 60.0 => Some(r.rect),
             _ => None,
         })
         .min_by(|a, b| a.area().total_cmp(&b.area()))
-        .expect("the panel's background");
-    // Everything else clipped inside the panel is its content.
-    let content: Vec<_> = h.shapes.iter().filter(|c| !is_back(&c.shape) && back.contains_rect(c.clip_rect)).collect();
-    assert!(!content.is_empty(), "no content clipped inside the panel");
-    let margin = back.bottom() - 10.0;
-    let under: Vec<_> =
-        content.iter().filter(|c| c.clip_rect.bottom() > margin + 0.5).map(|c| (c.clip_rect, c.shape.visual_bounding_rect())).collect();
-    assert!(under.is_empty(), "content clipped below the margin's top at {margin} (clip, bounds): {under:?}");
+        .expect("the panel's background")
 }
 
 #[test]
