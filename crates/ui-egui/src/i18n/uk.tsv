@@ -134,6 +134,7 @@
 	Add to Selection	Додати до виділення
 	Add to Swatches	Додати до зразків
 	Add Used Colors	Додати використані кольори
+	Add Selected Colors	Додати вибрані кольори
 	Additional Plug-ins Folder	Папка додаткових модулів
 	Plug-in Instruction Budget	Бюджет інструкцій модулів
 	Additional Fonts Folder	Папка додаткових шрифтів
@@ -233,6 +234,10 @@ font-technology	Variable	Варіативні
 	Arc	Дуга
 	Arc Lower…	Дуга знизу…
 	Arc Tool	Інструмент «Дуга»
+	Three-Point Arc Tool	Інструмент «Дуга за трьома точками»
+	Three-Point Arc	Дуга за трьома точками
+	Arc too large	Дуга завелика
+	Third Point Sets Direction	Третя точка задає напрямок
 	Arc Upper…	Дуга зверху…
 	Arch…	Арка…
 	Arc…	Дуга…
@@ -647,6 +652,8 @@ font-technology	Variable	Варіативні
 	Contextual Task Bar	Контекстна панель завдань
 	Pin Bar Position	Закріпити положення панелі
 	Reset Bar Position	Скинути положення панелі
+	Bar Actions	Дії панелі
+	Reset Bar Actions	Скинути дії панелі
 	Resize	Змінити розмір
 	Contrast	Контраст
 	Control	Панель керування
@@ -2068,6 +2075,7 @@ file-filter	Templates	Шаблони
 	Knockout Group	Група з вирізуванням
 	Lab	Lab
 	OKLCH Sliders	Повзунки OKLCH
+	HSL Sliders	Повзунки HSL
 	Chroma	Хрома
 	The largest chroma sRGB holds at this lightness and hue	Найбільша хрома, яку вміщує sRGB за цієї світлоти й відтінку
 	OKLCH needs sRGB as the working RGB space	Для OKLCH робочим простором RGB має бути sRGB
@@ -2919,6 +2927,7 @@ diagnostics	ui	інтерфейс
 	Device to Simulate:	Імітований пристрій:
 	Simulate Paper Color	Імітувати колір паперу
 	Simulate Black Ink	Імітувати чорну фарбу
+	Load…	Завантажити…
 	Preserve Editing Capabilities	Зберігати можливості редагування
 	Preserve editing capabilities	Зберігати можливості редагування
 	Preserve Lightness	Зберігати світлоту
@@ -3422,6 +3431,7 @@ digits	Malayalam	Малаялам
 	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	Новий текст отримує цю мову, доки в «Параметрах документа» вибрано мову Англійська: США; текст, який уже є в документі, зберігає свою мову.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	В абзацах з увімкненим параметром «Розставляти переноси» слово зі списку переноситься лише за введеними в ньому дефісами або ніде, якщо їх немає, незалежно від мови й регістру.
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	У настільній версії модулі .wasm з цієї папки завантажуються під час запуску і коли ви натискаєте ОК з новою папкою тут, крім безпечного режиму; веб-версія їх не завантажує.
+	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	Скільки інструкцій може використати кожен запуск фільтра об’єктів із модуля; «Великий» дозволяє більше, ніж «Звичайний», з тим самим обмеженням у 60 секунд. Важкі фільтри зберігають власний бюджет.
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Перший вибір робочого диска: Startup, None або шлях до папки; VectorCraft зберігає його, але поки не використовує робочі диски.
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Другий вибір робочого диска: Startup, None або шлях до папки; VectorCraft зберігає його, але поки не використовує робочі диски.
 	How light or dark the interface is.	Наскільки світлим чи темним є інтерфейс.
@@ -3440,6 +3450,7 @@ digits	Malayalam	Малаялам
 	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	Анімоване масштабування працює, лише поки це увімкнено; якщо вимкнено, Анімоване масштабування затінене і масштабування не анімується.
 	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	Масштабування коліщатком іде плавно, а Інструмент «Масштаб» масштабує, поки ви тягнете вбік або утримуєте його; якщо вимкнено, він масштабує до області, яку ви протягнули.
 	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	З наступного запуску настільна версія малює цим типом графічного процесора; «Автоматично» надає перевагу тому, що керує дисплеєм. Веб-версія його не використовує.
+	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	З наступного запуску вікно показує кадри, не чекаючи оновлення дисплея, не більше 240 на секунду; якщо вимкнено, темп задає дисплей. Режим виведення, заданий під час запуску, має пріоритет.
 	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	Найбільша кількість кроків скасування, яку зберігає кожен документ; менше число видаляє найстаріші кроки, коли ви натискаєте ОК. Кроки можуть зникнути й раніше, якщо займають надто багато пам’яті.
 	Shows the artwork changing while you drag; off, outlines follow the drag and the artwork changes when you release. A ruler guide always moves as you drag.	Показує, як змінюється графіка, поки ви тягнете; якщо вимкнено, за перетягуванням стежать контури, а графіка змінюється, коли ви відпускаєте. Напрямна з лінійки завжди рухається під час перетягування.
 	How many worker threads draw the artwork; -1 uses one fewer than the cores VectorCraft may use, at most 8, and 0 uses none. The web version always uses none.	Скільки робочих потоків малюють графіку; -1 використовує на один менше, ніж ядер, доступних VectorCraft, не більше 8, а 0 жодного. Веб-версія не використовує їх ніколи.
@@ -3466,6 +3477,10 @@ digits	Malayalam	Малаялам
 	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft зберігає цей вибір, але Копіювати й Вирізати поки не використовують формат застарілого векторного буфера обміну.
 	Preserve Paths or Preserve Appearance and Overprints for the legacy vector clipboard; VectorCraft stores the choice but does not use it yet.	Зберігати контури або Зберігати оформлення та накладення для застарілого векторного буфера обміну; VectorCraft зберігає вибір, але поки не використовує його.
 	Keep Formatting keeps the styles of text copied from VectorCraft type when it is pasted into type; Keep Plain Text gives it the style where it lands.	Зберігати форматування зберігає стилі тексту, скопійованого з текстового об’єкта VectorCraft, під час вставлення в текстовий об’єкт; Зберігати простий текст дає йому стиль місця вставлення.
+	Display All Blacks as Rich Black shows pure CMYK black (black ink alone at 100%) as RGB black on the canvas; Display All Blacks Accurately converts it through the CMYK working space.	Відображати всі чорні як складові чорні показує чистий чорний CMYK (лише чорна фарба на 100%) на полотні як чорний RGB; Відображати всі чорні точно перетворює його через робочий простір CMYK.
+	Output All Blacks as Rich Black draws pure CMYK black as RGB black in RGB and grayscale raster exports and Print as Bitmap; it does not change vector exports, CMYK JPEG, TIFF and PSD, or other printing.	Виводити всі чорні як складовий чорний малює чистий чорний CMYK як чорний RGB у растрових експортах RGB і у відтінках сірого та з «Друк як растрове зображення»; він не змінює векторні експорти, JPEG, TIFF і PSD у CMYK та інший друк.
+	On a touch screen, switches to the Touch workspace; turning this off, or losing the touch screen, goes back to the workspace it switched from.	На сенсорному екрані переходить у сенсорне робоче середовище; вимкнення параметра або зникнення сенсорного екрана повертає робоче середовище, яке було до переходу.
+	A two-finger tap on the canvas undoes, or switches between selection and drawing tools in the Touch workspace, and a three-finger tap redoes; neither works in Presentation Mode.	Дотик двома пальцями до полотна скасовує дію, а в сенсорному робочому середовищі перемикає між інструментами виділення й малювання; дотик трьома пальцями повторює. У режимі презентації жоден не працює.
 	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	Новий текст отримує цю мову, доки в «Параметрах документа» вибрано мову Англійська: США, а [Звичайний стиль символу] не задає мову; текст, який уже є в документі, зберігає свою мову.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	В абзацах з увімкненим параметром «Розставляти переноси» слово зі списку переноситься лише за введеними в ньому дефісами або ніде, якщо їх немає, незалежно від регістру; корейські слова не отримують дефіса, а слова індійськими мовами не переносяться всередині групи символів.
 	Reset all preferences to their defaults?	Скинути всі налаштування до значень за промовчанням?
@@ -3712,6 +3727,7 @@ digits	Malayalam	Малаялам
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} з {n} результату. Продовжуйте вводити, щоб звузити їх.|{shown} з {n} результатів. Продовжуйте вводити, щоб звузити їх.|{shown} з {n} результатів. Продовжуйте вводити, щоб звузити їх.
 	Recent Commands	Нещодавні команди
 	No recent commands	Немає нещодавніх команд
+	Type to search commands, tools, panels and effects	Почніть вводити для пошуку команд, інструментів, панелей та ефектів
 	Search commands	Пошук команд
 	Search Commands…	Пошук команд…
 	Secondary	Вторинний
@@ -5189,7 +5205,7 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` має бути grayscale, rgb, hsb, cmyk або websafe
 @msg	`view` must be wheel or box	`view` має бути wheel або box
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` має бути hue, saturation, brightness, red, green або blue
-@msg	`sliders` must be none or oklch	`sliders` має бути none або oklch
+@msg	`sliders` must be none, oklch or hsl	`sliders` має бути none, oklch або hsl
 @msg	OKLCH needs sRGB as the working RGB space	Для OKLCH робочим простором RGB має бути sRGB
 @msg	`text` must be a hex color (#rgb, #rgba, #rrggbb or #rrggbbaa) or a CSS rgb(), hsl() or oklch() color of at most 48 characters	`text` має бути кольором hex (#rgb, #rgba, #rrggbb або #rrggbbaa) або кольором CSS rgb(), hsl() або oklch() довжиною не більше 48 символів
 @msg	`{k}` must be [x, y]	`{k}` має бути [x, y]
@@ -5385,6 +5401,10 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	a guide has no curvature circle	напрямна не має кола кривини
 @msg	the circle that matches the path there would reach past the canvas	коло, що відповідає контуру в цьому місці, вийшло б за межі полотна
 @msg	no circle passes through these points: two are the same or all three lie on one line	через ці точки не проходить жодне коло: дві точки збігаються або всі три лежать на одній прямій
+@msg	`at` must be "start" or "end"	`at` має бути "start" або "end"
+@msg	give exactly one of `through` and `toward`	вкажіть рівно один із параметрів `through` і `toward`
+@msg	no arc fits these points: two are the same or all three lie on one line	жодна дуга не підходить до цих точок: дві точки збігаються або всі три лежать на одній прямій
+@msg	give `at` only with `toward`	вказуйте `at` лише разом із `toward`
 @msg	no app to open files here	тут немає програми для відкриття файлів
 @msg	no artboard	немає монтажної області
 @msg	no artboard {i} (0-based; the document has {_1})	немає монтажної області {i} (рахунок з 0; у документі {_1})
@@ -10397,6 +10417,16 @@ breakText	Glyphs	Гліфи
 @msg	A panel is not joined to the rest by a crease.	Панель не з’єднана з рештою жодною лінією біговки.
 @msg	A fold line is on a non-printing layer.	Лінія згину лежить на шарі, що не друкується.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Панелі: {panels}, шарніри: {hinges}, помилки: {errors}, попередження: {warnings}
+	Orbit Lines	Орбітальні лінії
+	Petal Garland	Гірлянда пелюсток
+	Lattice Braid	Ґратчасте плетіння
+	Facet Sweep	Гранований мазок
+	Artistic Brushes	Художні пензлі
+	Paint	Фарба
+	Flat Sweep	Плоский мазок
+	Dry Drag	Сухий протяг
+	Loaded Stroke	Густий мазок
+	Fan Sweep	Віяловий мазок
 	Engraving	Гравіювання
 	Fine Hatching	Тонке штрихування
 	Dense Hatching	Щільне штрихування

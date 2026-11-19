@@ -293,7 +293,7 @@ fn the_settings_are_kept_and_read_leniently() {
     let mut odd = saved.clone();
     odd["color_wheel"] = json!({"view": "box", "channel": 7});
     let back: crate::UiState = serde_json::from_value(odd).unwrap();
-    assert_eq!(back.color_wheel, Settings { view: View::Box, ..Default::default() });
+    assert_eq!(back.color_wheel, Settings { view: View::Box, channel: Channel::default(), ..Default::default() });
     let mut odd = saved.clone();
     odd["color_wheel"] = json!({"view": "triangle", "channel": "blue"});
     let back: crate::UiState = serde_json::from_value(odd).unwrap();

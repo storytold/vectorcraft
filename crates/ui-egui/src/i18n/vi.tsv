@@ -155,6 +155,7 @@
 	Add to Selection	Thêm vào vùng chọn
 	Add to Swatches	Thêm vào mẫu màu
 	Add Used Colors	Thêm các màu đã dùng
+	Add Selected Colors	Thêm các màu đã chọn
 	Additional Fonts Folder	Thư mục phông bổ sung
 	Additional Plug-ins Folder	Thư mục plug-in bổ sung
 	Plug-in Instruction Budget	Ngân sách lệnh của plug-in
@@ -258,6 +259,10 @@ font-technology	Variable	Biến thiên
 	Arc	Cung
 	Arc Lower…	Cung dưới…
 	Arc Tool	Công cụ Cung
+	Three-Point Arc Tool	Công cụ Cung ba điểm
+	Three-Point Arc	Cung ba điểm
+	Arc too large	Cung quá lớn
+	Third Point Sets Direction	Điểm thứ ba chỉ hướng
 	Arc Upper…	Cung trên…
 	Arch…	Vòm…
 	Arc…	Cung…
@@ -2368,6 +2373,7 @@ digits	Hindi	Hindi
 	Knockout Group	Nhóm Knockout
 	Lab	Lab
 	OKLCH Sliders	Thanh trượt OKLCH
+	HSL Sliders	Thanh trượt HSL
 	Chroma	Độ tươi màu
 	The largest chroma sRGB holds at this lightness and hue	Độ tươi màu lớn nhất mà sRGB chứa được ở độ sáng và sắc độ này
 	OKLCH needs sRGB as the working RGB space	OKLCH cần sRGB làm không gian RGB làm việc
@@ -3246,6 +3252,7 @@ diagnostics	ui	giao diện
 	Device to Simulate:	Thiết bị cần giả lập:
 	Simulate Paper Color	Giả lập màu giấy
 	Simulate Black Ink	Giả lập mực đen
+	Load…	Tải…
 	Preserve Editing Capabilities	Bảo lưu khả năng chỉnh sửa
 	Preserve editing capabilities	Bảo lưu khả năng chỉnh sửa
 	Preserve Lightness	Bảo lưu độ sáng
@@ -3568,6 +3575,8 @@ mark-style	Japanese	Kiểu Nhật
 	Reset all 3D settings to their defaults.	Đặt lại tất cả cài đặt 3D về mặc định.
 	Reset all Revolve settings to their defaults.	Đặt lại tất cả cài đặt Revolve về mặc định.
 	Reset Bar Position	Đặt lại vị trí thanh
+	Bar Actions	Thao tác của thanh
+	Reset Bar Actions	Đặt lại thao tác của thanh
 	Reset Bounding Box	Đặt lại hộp bao
 	Rotate Bounding Box	Xoay hộp bao
 	Rotate Bounding Box…	Xoay hộp bao…
@@ -3746,6 +3755,7 @@ mark-style	Japanese	Kiểu Nhật
 	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	Văn bản mới nhận ngôn ngữ này khi ngôn ngữ trong Thiết lập tài liệu là Tiếng Anh: Mỹ; văn bản đã có trong tài liệu giữ ngôn ngữ của nó.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	Trong các đoạn bật Gạch nối, một từ trong danh sách chỉ được ngắt tại các dấu gạch nối đã gõ trong từ, hoặc không ngắt ở đâu nếu không có, bất kể ngôn ngữ hay chữ hoa thường.
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	Trong phiên bản máy tính, các plug-in .wasm trong thư mục này được tải khi khởi động và khi bạn bấm OK với một thư mục mới ở đây, trừ trong Chế độ an toàn; phiên bản web không tải chúng.
+	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	Số lệnh mà mỗi lần chạy bộ lọc đối tượng của plug-in được dùng; Lớn cho phép nhiều hơn Thường với cùng giới hạn 60 giây. Bộ lọc nặng giữ ngân sách riêng.
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Lựa chọn đĩa tạm thứ nhất: Startup, None hoặc đường dẫn thư mục; VectorCraft lưu lựa chọn này nhưng chưa dùng đĩa tạm.
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Lựa chọn đĩa tạm thứ hai: Startup, None hoặc đường dẫn thư mục; VectorCraft lưu lựa chọn này nhưng chưa dùng đĩa tạm.
 	How light or dark the interface is.	Mức sáng hoặc tối của giao diện.
@@ -3764,6 +3774,7 @@ mark-style	Japanese	Kiểu Nhật
 	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	Thu phóng có hiệu ứng chỉ hoạt động khi mục này bật; khi tắt, Thu phóng có hiệu ứng bị làm mờ và việc thu phóng không có hiệu ứng.
 	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	Thu phóng bằng con lăn trượt mượt mà, và Công cụ thu phóng phóng to khi bạn kéo sang ngang hoặc giữ nó; khi tắt, Công cụ thu phóng phóng to vùng bạn kéo qua.
 	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	Từ lần khởi động tới, phiên bản máy tính vẽ bằng loại bộ xử lý đồ họa này; Tự động ưu tiên bộ xử lý điều khiển màn hình. Phiên bản web không dùng nó.
+	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	Từ lần khởi động tới, cửa sổ hiển thị khung hình mà không chờ màn hình làm mới, tối đa 240 mỗi giây; khi tắt, màn hình quyết định nhịp. Chế độ trình chiếu đặt khi khởi động sẽ được ưu tiên.
 	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	Số bước hoàn tác tối đa mà mỗi tài liệu giữ; số nhỏ hơn sẽ xóa các bước cũ nhất khi bạn bấm OK. Các bước cũng có thể bị xóa sớm hơn khi chúng dùng quá nhiều bộ nhớ.
 	Shows the artwork changing while you drag; off, outlines follow the drag and the artwork changes when you release. A ruler guide always moves as you drag.	Hiển thị hình vẽ thay đổi khi bạn kéo; khi tắt, đường viền đi theo thao tác kéo và hình vẽ thay đổi khi bạn thả ra. Đường gióng của thước luôn di chuyển khi bạn kéo.
 	How many worker threads draw the artwork; -1 uses one fewer than the cores VectorCraft may use, at most 8, and 0 uses none. The web version always uses none.	Số luồng làm việc vẽ hình vẽ; -1 dùng ít hơn một luồng so với số lõi VectorCraft được dùng, tối đa 8, và 0 không dùng luồng nào. Phiên bản web không bao giờ dùng luồng nào.
@@ -3790,6 +3801,10 @@ mark-style	Japanese	Kiểu Nhật
 	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft lưu lựa chọn này, nhưng Sao chép và Cắt chưa dùng định dạng bảng tạm vector cũ.
 	Preserve Paths or Preserve Appearance and Overprints for the legacy vector clipboard; VectorCraft stores the choice but does not use it yet.	Bảo lưu đường dẫn hoặc Bảo lưu diện mạo và in chồng cho bảng tạm vector cũ; VectorCraft lưu lựa chọn nhưng chưa dùng nó.
 	Keep Formatting keeps the styles of text copied from VectorCraft type when it is pasted into type; Keep Plain Text gives it the style where it lands.	Giữ định dạng giữ kiểu của văn bản sao chép từ đối tượng văn bản VectorCraft khi dán vào đối tượng văn bản; Giữ văn bản thuần cho nó kiểu tại nơi được dán.
+	Display All Blacks as Rich Black shows pure CMYK black (black ink alone at 100%) as RGB black on the canvas; Display All Blacks Accurately converts it through the CMYK working space.	Hiển thị tất cả màu đen là đen phong phú hiển thị màu đen CMYK thuần (chỉ mực đen 100%) thành đen RGB trên khung vẽ; Hiển thị tất cả màu đen chính xác chuyển đổi nó qua không gian CMYK làm việc.
+	Output All Blacks as Rich Black draws pure CMYK black as RGB black in RGB and grayscale raster exports and Print as Bitmap; it does not change vector exports, CMYK JPEG, TIFF and PSD, or other printing.	Xuất tất cả màu đen là đen phong phú vẽ màu đen CMYK thuần thành đen RGB trong các bản xuất raster RGB và thang xám và với In dưới dạng bitmap; tùy chọn này không thay đổi các bản xuất vector, JPEG, TIFF và PSD CMYK hay việc in khác.
+	On a touch screen, switches to the Touch workspace; turning this off, or losing the touch screen, goes back to the workspace it switched from.	Trên màn hình cảm ứng, chuyển sang không gian làm việc cảm ứng; tắt tùy chọn này hoặc mất màn hình cảm ứng sẽ trở về không gian làm việc trước khi chuyển.
+	A two-finger tap on the canvas undoes, or switches between selection and drawing tools in the Touch workspace, and a three-finger tap redoes; neither works in Presentation Mode.	Chạm hai ngón trên khung vẽ sẽ hoàn tác, hoặc trong không gian làm việc cảm ứng sẽ chuyển giữa công cụ chọn và công cụ vẽ, còn chạm ba ngón sẽ làm lại; cả hai không hoạt động trong chế độ trình bày.
 	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	Văn bản mới nhận ngôn ngữ này khi ngôn ngữ trong Thiết lập tài liệu là Tiếng Anh: Mỹ và [Kiểu ký tự thường] không đặt ngôn ngữ; văn bản đã có trong tài liệu giữ ngôn ngữ của nó.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	Trong các đoạn bật Gạch nối, một từ trong danh sách chỉ được ngắt tại các dấu gạch nối đã gõ trong từ, hoặc không ngắt ở đâu nếu không có, bất kể chữ hoa thường; từ tiếng Hàn không được thêm gạch nối, và từ trong các ngôn ngữ Ấn Độ không bị ngắt bên trong một cụm ký tự.
 	Reset all preferences to their defaults?	Đặt lại tất cả tùy chọn về mặc định?
@@ -4066,6 +4081,7 @@ mark-style	Japanese	Kiểu Nhật
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} trên {n} kết quả. Tiếp tục gõ để thu hẹp.
 	Recent Commands	Lệnh gần đây
 	No recent commands	Không có lệnh gần đây
+	Type to search commands, tools, panels and effects	Nhập để tìm kiếm lệnh, công cụ, bảng và hiệu ứng
 	Search commands	Tìm kiếm lệnh
 	Search Commands…	Tìm kiếm lệnh…
 	Search Fonts Folder	Tìm kiếm thư mục phông chữ
@@ -5187,7 +5203,7 @@ theme	Appearance	Giao diện
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` phải là grayscale, rgb, hsb, cmyk hoặc websafe
 @msg	`view` must be wheel or box	`view` phải là wheel hoặc box
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` phải là hue, saturation, brightness, red, green hoặc blue
-@msg	`sliders` must be none or oklch	`sliders` phải là none hoặc oklch
+@msg	`sliders` must be none, oklch or hsl	`sliders` phải là none, oklch hoặc hsl
 @msg	OKLCH needs sRGB as the working RGB space	OKLCH cần sRGB làm không gian RGB làm việc
 @msg	`text` must be a hex color (#rgb, #rgba, #rrggbb or #rrggbbaa) or a CSS rgb(), hsl() or oklch() color of at most 48 characters	`text` phải là màu hex (#rgb, #rgba, #rrggbb hoặc #rrggbbaa) hoặc màu CSS rgb(), hsl() hoặc oklch() dài tối đa 48 ký tự
 @msg	`{k}` must be [x, y]	`{k}` phải là [x, y]
@@ -5755,6 +5771,10 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	a guide has no curvature circle	đường căn không có đường tròn độ cong
 @msg	the circle that matches the path there would reach past the canvas	đường tròn khớp với đường dẫn tại đó sẽ vượt quá giới hạn vùng vẽ
 @msg	no circle passes through these points: two are the same or all three lie on one line	không có đường tròn nào đi qua các điểm này: hai điểm trùng nhau hoặc cả ba điểm thẳng hàng
+@msg	`at` must be "start" or "end"	`at` phải là "start" hoặc "end"
+@msg	give exactly one of `through` and `toward`	hãy cho đúng một trong hai `through` và `toward`
+@msg	no arc fits these points: two are the same or all three lie on one line	không có cung nào khớp với các điểm này: hai điểm trùng nhau hoặc cả ba điểm thẳng hàng
+@msg	give `at` only with `toward`	chỉ cho `at` cùng với `toward`
 @msg	no app to open files here	không có ứng dụng để mở tệp ở đây
 @msg	no artboard	không có bảng vẽ
 @msg	no artboard {i} (0-based; the document has {_1})	không có bảng vẽ {i} (bắt đầu từ 0; tài liệu có {_1})
@@ -8593,6 +8613,16 @@ breakText	Glyphs	Glyph
 @msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} điểm ảnh quá lớn cho Targa (tối đa 65535 điểm ảnh mỗi cạnh): hãy giảm độ phân giải
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} điểm ảnh quá lớn cho PSD (tối đa {MAX_SIDE} điểm ảnh mỗi cạnh): hãy giảm độ phân giải
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer phải là "singleLine", "everyLine", "standardSingleLine" hoặc "standardEveryLine"
+	Orbit Lines	Đường quỹ đạo
+	Petal Garland	Vòng hoa cánh
+	Lattice Braid	Bện lưới
+	Facet Sweep	Nét đa diện
+	Artistic Brushes	Cọ nghệ thuật
+	Paint	Sơn
+	Flat Sweep	Nét quét phẳng
+	Dry Drag	Nét kéo khô
+	Loaded Stroke	Nét cọ đậm
+	Fan Sweep	Nét quét hình quạt
 	Engraving	Khắc nét
 	Fine Hatching	Nét gạch mảnh
 	Dense Hatching	Nét gạch dày
