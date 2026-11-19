@@ -50,6 +50,7 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-19 | minor | G12: Graphic Styles panel item context menus (Options…, Duplicate, Delete, Redefine, Break Link); regression tests in crates/ui-egui/src/panels/graphic_styles.rs; scores and estimates unchanged. |
 | 2026-11-19 | minor | G12: Place: show progress window with Cancel for slow placed files exceeding 0.4 s (part of #5930, `file.cancelPlace`); indeterminate moving bar, Cancel (Esc) leaves the document unmodified without undo steps; scores and estimates unchanged. |
 | 2026-11-18 | minor | G11: SVG export writes physical unit suffixes on the root <svg width="..." height="..."> for documents with physical units (mm, cm, in, pc), preventing drawings from scaling to 75% in external tools and preserving units across round-trips (#864; general unit preference on restart remains open under #864). Estimate 8–15 → 6–13 h. |
 | 2026-11-18 | minor | G5: Media Controls joins Basic Shapes, UI Frames, Map Markers, Inventory Icons, Skill Icons and Weather Icons as a seventh built-in symbol library (Play, Pause, Stop, Skip Next, Shuffle, Repeat; original procedural vector symbols generated in code, no default 9-slice); estimate decremented (3–13 → 2–12 h). |
@@ -508,6 +509,8 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
 - **Estimate:** 34–47 h (type core 14–19 h blocks beta).
 
 ## G12 Preferences and panels that don't act yet
+
+- **Implemented and tested (2026-11-19):** Graphic Styles panel thumbnail and list views have item context menus with Graphic Style Options…, Duplicate Graphic Style, Delete Graphic Style, Redefine Graphic Style, and Break Link to Graphic Style. Right-click on an unselected style selects it first; existing multi-selections are preserved and offer plural commands ("Duplicate Graphic Styles", "Delete Graphic Styles"). Default Graphic Style disables Options and Delete; large preview remains accessible when holding the secondary button. Regression tests in `crates/ui-egui/src/panels/graphic_styles.rs` verify right-click selection, command dispatch, and one-step undo. Scores and estimates unchanged.
 
 - **Production workflow addition (2026-11-18):** Window > Production Preflight brings existing output-aware font/overflow checks, linked-file probes and effective image resolution into one panel. Findings select and zoom to affected art, and results recheck after edits, Undo/Redo and external link changes. Resource-art resolution is explicitly not checked. This does not close the remaining G12 gaps or change estimates.
 
