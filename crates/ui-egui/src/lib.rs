@@ -79,6 +79,7 @@ pub mod sysclip;
 pub mod theme;
 pub mod thumb_worker;
 pub mod titlebar;
+pub mod toasts;
 pub mod toolbar;
 mod tools_float;
 pub mod touch;
@@ -292,6 +293,8 @@ pub struct VectorcraftApp {
     pub placing: placing::Placing,
     /// Image Traces running off the UI thread ([`trace_runs`]).
     pub trace_runs: trace_runs::TraceRuns,
+    /// The messages shown over the window ([`toasts`]).
+    pub toasts: toasts::Shown,
     /// Data Recovery's timer and startup question ([`recovery`]).
     pub recovery: recovery::Timer,
     /// Modifiers the keyboard holds (from the host's input), given back after synthetic input.
@@ -375,6 +378,9 @@ pub struct VectorcraftApp {
     /// The single-key tool shortcuts held down, the last held last, and the tool each goes back to
     /// when it is let go ([`shortcuts::HeldTool`]).
     pub(crate) held_tool: Vec<shortcuts::HeldTool>,
+    /// A key with a hold shortcut that waits for its release, and the keys whose repeats are held
+    /// back until they are let go ([`shortcuts::HoldKeys`]).
+    pub(crate) hold_keys: shortcuts::HoldKeys,
     /// A synthetic batch is in the host's raw input and no settled UI pass has taken it yet.
     synthetic_injected: bool,
     /// The exact events of [`Self::synthetic_injected`], to remove them if the state they belong

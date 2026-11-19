@@ -12,7 +12,8 @@ use std::sync::{Arc, LazyLock};
 
 use serde_json::{Value, json};
 use vectorcraft_brush::{
-    self as brush, ArtBrush, Bristle, BristleShape, Brush, BrushKind, Calligraphic, Colorization, PatternBrush, PatternFit, Scatter, Variation,
+    self as brush, ArtBrush, ArtScale, Bristle, BristleShape, Brush, BrushKind, Calligraphic, Colorization, PatternBrush, PatternFit, Scatter,
+    Variation,
 };
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{Appearance, AppearanceItem, Document, FillLayer, Node, NodeId, NodeKind, PatternDef, Symbol};
@@ -181,6 +182,7 @@ pub const BUILTIN: &[BuiltinBrushLibrary] = &[
     BuiltinBrushLibrary { id: "dry-media", name: "Dry Media", make: dry_media },
     BuiltinBrushLibrary { id: "tech-circuit", name: "Tech Circuit", make: tech_circuit },
     BuiltinBrushLibrary { id: "engraving", name: "Engraving", make: engraving },
+    BuiltinBrushLibrary { id: "arrows", name: "Arrows", make: arrows },
 ];
 
 /// Built-in library `id`, made once.
@@ -273,6 +275,54 @@ fn engraving() -> BrushLibrary {
             art("Dense Hatching", lines(9, 0.42, 1.2), Colorization::Tints),
             art("Tapered Hatching", taper, Colorization::Tints),
             art("Broken Hatching", broken, Colorization::Tints),
+        ],
+    )
+}
+
+/// An Arrows brush whose art stretches only between `start` and `end` (fractions of its length).
+fn arrow_art(name: &str, art: Node, start: f64, end: f64) -> Brush {
+    Brush {
+        name: name.into(),
+        kind: BrushKind::Art(ArtBrush {
+            art,
+            scale: ArtScale::BetweenGuides { start, end },
+            colorization: Colorization::Tints,
+            ..Default::default()
+        }),
+    }
+}
+
+/// Arrows: original art brushes whose stems stretch while their heads keep their proportions.
+fn arrows() -> BrushLibrary {
+    let shaft = || black(shapes::rectangle(Rect::new(0.0, -1.0, 82.0, 1.0)));
+    let head = || black(polygon(&[(76.0, -7.0), (100.0, 0.0), (76.0, 7.0), (82.0, 0.0)]));
+    let solid = group(vec![shaft(), head()]);
+    let outline = group(vec![shaft(), black(polygon(&[(76.0, -7.0), (100.0, 0.0), (76.0, 7.0), (78.0, 4.0), (91.0, 0.0), (78.0, -4.0)]))]);
+    let double = group(vec![
+        black(shapes::rectangle(Rect::new(18.0, -1.0, 82.0, 1.0))),
+        head(),
+        black(polygon(&[(24.0, -7.0), (0.0, 0.0), (24.0, 7.0), (18.0, 0.0)])),
+    ]);
+    let chevrons = group(vec![shaft(), head(), black(polygon(&[(53.0, -5.0), (66.0, 0.0), (53.0, 5.0), (56.0, 0.0)]))]);
+    let dashed = group(
+        (0..5)
+            .map(|i| {
+                let x = f64::from(i) * 16.0;
+                black(shapes::rectangle(Rect::new(x, -1.0, x + 10.0, 1.0)))
+            })
+            .chain(std::iter::once(head()))
+            .collect(),
+    );
+    built(
+        "Arrows",
+        Document::new(100.0, 100.0),
+        vec![
+            arrow_art("Solid Arrow", solid, 0.0, 0.76),
+            arrow_art("Open Arrow", outline, 0.0, 0.76),
+            arrow_art("Double Arrow", double, 0.24, 0.76),
+            // The second chevron starts at 53 pt, so only the shaft before it stretches.
+            arrow_art("Chevron Arrow", chevrons, 0.0, 0.53),
+            arrow_art("Dashed Arrow", dashed, 0.0, 0.76),
         ],
     )
 }
