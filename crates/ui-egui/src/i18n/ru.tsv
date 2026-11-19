@@ -608,6 +608,7 @@ font-technology	Variable	Вариативные
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Вид «Круг»
 	Box View	Вид «Квадрат»
+	Show Out-of-Gamut Colors	Показать цвета вне цветового охвата
 	Box Channel	Канал квадрата
 	Color box	Цветовой квадрат
 	Color Wheel Options	Параметры цветового круга
@@ -3721,8 +3722,8 @@ digits	Malayalam	Малаялам
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} из {n} результата. Продолжайте вводить, чтобы сузить их.|{shown} из {n} результатов. Продолжайте вводить, чтобы сузить их.|{shown} из {n} результатов. Продолжайте вводить, чтобы сузить их.
 	Recent Commands	Недавние команды
 	No recent commands	Нет недавних команд
-	Clear Recent Commands	Очистить список недавних команд
 	Type to search commands, tools, panels and effects	Начните вводить для поиска команд, инструментов, панелей и эффектов
+	Clear Recent Commands	Очистить список недавних команд
 	Search commands	Поиск команд
 	Search Commands…	Поиск команд…
 	Secondary	Вторичный

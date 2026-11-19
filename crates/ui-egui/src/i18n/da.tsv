@@ -3528,6 +3528,7 @@ liquify-list-end	{0}, {1}	{0} og {1}
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Hjulvisning
 	Box View	Kvadratvisning
+	Show Out-of-Gamut Colors	Vis farver uden for gamut
 	Box Channel	Kvadratets kanal
 	Color box	Farvekvadrat
 	Color Wheel Options	Indstillinger for farvehjul
@@ -7200,8 +7201,8 @@ font-technology	Variable	Variable
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} af {n} resultat. Skriv videre for at indsnævre dem.|{shown} af {n} resultater. Skriv videre for at indsnævre dem.
 	Recent Commands	Seneste kommandoer
 	No recent commands	Ingen seneste kommandoer
-	Clear Recent Commands	Ryd seneste kommandoer
 	Type to search commands, tools, panels and effects	Skriv for at søge i kommandoer, værktøjer, paneler og effekter
+	Clear Recent Commands	Ryd seneste kommandoer
 	Dashed Line	Stiplet linje
 	Panel menu	Panelmenu
 	Unembed…	Ophæv integrering…

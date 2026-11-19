@@ -780,6 +780,7 @@
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Widok koła
 	Box View	Widok kwadratu
+	Show Out-of-Gamut Colors	Pokaż kolory poza gamutem
 	Box Channel	Kanał kwadratu
 	Color box	Kwadrat koloru
 	Color Wheel Options	Opcje koła kolorów
@@ -4600,8 +4601,8 @@ font-technology	Variable	Zmienne
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} z {n} wyniku. Pisz dalej, aby je zawęzić.|{shown} z {n} wyników. Pisz dalej, aby je zawęzić.|{shown} z {n} wyników. Pisz dalej, aby je zawęzić.
 	Recent Commands	Ostatnie polecenia
 	No recent commands	Brak ostatnich poleceń
-	Clear Recent Commands	Wyczyść listę ostatnich poleceń
 	Type to search commands, tools, panels and effects	Pisz, aby szukać poleceń, narzędzi, paneli i efektów
+	Clear Recent Commands	Wyczyść listę ostatnich poleceń
 	Dashed Line	Linia przerywana
 	Panel menu	Menu panelu
 	Unembed…	Wyodrębnij…

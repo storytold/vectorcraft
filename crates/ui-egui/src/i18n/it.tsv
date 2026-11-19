@@ -612,6 +612,7 @@ font-technology	Variable	Variabili
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Vista ruota
 	Box View	Vista riquadro
+	Show Out-of-Gamut Colors	Mostra colori fuori gamma
 	Box Channel	Canale del riquadro
 	Color box	Riquadro colore
 	Color Wheel Options	Opzioni ruota dei colori
@@ -3740,8 +3741,8 @@ digits	Malayalam	Malayalam
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} di {n} risultato. Continua a digitare per restringerli.|{shown} di {n} risultati. Continua a digitare per restringerli.
 	Recent Commands	Comandi recenti
 	No recent commands	Nessun comando recente
-	Clear Recent Commands	Cancella comandi recenti
 	Type to search commands, tools, panels and effects	Digita per cercare comandi, strumenti, pannelli ed effetti
+	Clear Recent Commands	Cancella comandi recenti
 	Search commands	Cerca comandi
 	Search Commands…	Cerca comandi…
 	Secondary	Secondario

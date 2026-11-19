@@ -831,6 +831,7 @@
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Zobrazení kola
 	Box View	Zobrazení čtverce
+	Show Out-of-Gamut Colors	Zobrazit barvy mimo gamut
 	Box Channel	Kanál čtverce
 	Color box	Barevný čtverec
 	Color Wheel Options	Možnosti barevného kola
@@ -4757,8 +4758,8 @@ font-technology	Variable	Variabilní
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} z {n} výsledku. Pište dál a výsledky se zúží.|{shown} z {n} výsledků. Pište dál a výsledky se zúží.|{shown} z {n} výsledků. Pište dál a výsledky se zúží.
 	Recent Commands	Nedávné příkazy
 	No recent commands	Žádné nedávné příkazy
-	Clear Recent Commands	Vymazat seznam nedávných příkazů
 	Type to search commands, tools, panels and effects	Pište pro hledání příkazů, nástrojů, panelů a efektů
+	Clear Recent Commands	Vymazat seznam nedávných příkazů
 	Dashed Line	Čárkovaná čára
 	Panel menu	Nabídka panelu
 	Unembed…	Zrušit vložení…

@@ -814,6 +814,7 @@ arrowhead	Target	Céltábla
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Körnézet
 	Box View	Négyzetnézet
+	Show Out-of-Gamut Colors	Színtartományon kívüli színek megjelenítése
 	Box Channel	Négyzet csatornája
 	Color box	Színnégyzet
 	Color Wheel Options	Színkör beállításai
@@ -4322,8 +4323,8 @@ mark-style	Japanese	Japán
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} találatból {shown} látható. Gépeljen tovább a szűkítéshez.
 	Recent Commands	Legutóbbi parancsok
 	No recent commands	Nincsenek legutóbbi parancsok
-	Clear Recent Commands	Legutóbbi parancsok listájának törlése
 	Type to search commands, tools, panels and effects	Gépeljen parancsok, eszközök, panelek és effektusok kereséséhez
+	Clear Recent Commands	Legutóbbi parancsok listájának törlése
 	Search commands	Parancsok keresése
 	Search Commands…	Parancsok keresése…
 	Search Fonts Folder	Keresés betűtípusmappában

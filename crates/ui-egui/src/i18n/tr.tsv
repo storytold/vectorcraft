@@ -591,6 +591,7 @@ font-technology	Variable	Değişken
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Tekerlek Görünümü
 	Box View	Kutu Görünümü
+	Show Out-of-Gamut Colors	Gamut Dışı Renkleri Göster
 	Box Channel	Kutu Kanalı
 	Color box	Renk kutusu
 	Color Wheel Options	Renk Tekerleği Seçenekleri
@@ -3476,8 +3477,8 @@ digits	Malayalam	Malayalam
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} sonuçtan {shown} tanesi. Daraltmak için yazmaya devam edin.
 	Recent Commands	Son komutlar
 	No recent commands	Son komut yok
-	Clear Recent Commands	Son Komutları Temizle
 	Type to search commands, tools, panels and effects	Komutları, araçları, panelleri ve efektleri aramak için yazın
+	Clear Recent Commands	Son Komutları Temizle
 	Search commands	Komutları arayın
 	Search Commands…	Arama Komutları…
 	Secondary	İkincil

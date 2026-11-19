@@ -593,6 +593,7 @@ font-technology	Variable	Variabla
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Hjulvy
 	Box View	Rutvy
+	Show Out-of-Gamut Colors	Visa färger utanför färgomfånget
 	Box Channel	Rutans kanal
 	Color box	Färgruta
 	Color Wheel Options	Alternativ för färghjulet
@@ -3596,8 +3597,8 @@ digits	Malayalam	Malayalam
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} av {n} resultat. Fortsätt skriva för att begränsa dem.|{shown} av {n} resultat. Fortsätt skriva för att begränsa dem.
 	Recent Commands	Senaste kommandon
 	No recent commands	Inga senaste kommandon
-	Clear Recent Commands	Rensa senaste kommandon
 	Type to search commands, tools, panels and effects	Skriv för att söka efter kommandon, verktyg, paneler och effekter
+	Clear Recent Commands	Rensa senaste kommandon
 	Search commands	Sök kommandon
 	Search Commands…	Sök kommandon…
 	Secondary	Sekundär

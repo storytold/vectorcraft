@@ -684,11 +684,16 @@ field does, and `false` shows them from 0 to 255 again. `ui.colorRgbPercent` (To
 palette and Keyboard Shortcuts) switches between the two and answers true when the fields show in percent.
 `ui.colorWheel {"view": "box", "channel": "red"}` shows the Color Wheel panel's box (a color field with the channel's
 strip at its right) in place of the wheel, as the panel menu's Box View and Box Channel do, and `"view": "wheel"`
-shows the wheel again. `{"harmony": true, "harmonyRule": "triad"}` puts a marker on the wheel's ring for each other
+shows the wheel again. `"gamut": true` grays out the parts of the wheel's square and the box's field whose colors
+the CMYK space cannot print, as the panel menu's Show Out-of-Gamut Colors does, and `false` shows them again. The
+test is the out-of-gamut warning's, which `color.gamutCheck` answers for one color. The shading is approximate: the
+panel tests the color at the center of each cell of a 16 by 16 grid over the square or the field and grays out the
+whole cell or none of it, so a grayed cell can hold printable colors and a clear cell can hold colors that cannot
+print. `{"harmony": true, "harmonyRule": "triad"}` puts a marker on the wheel's ring for each other
 color of a Color Guide harmony rule, as Show Harmony and Harmony Rule do; the wheel takes the 15 rules whose colors
 each have a hue of their own (not `monochromatic`, `shades`, `complementary2`, `triad2`, `triad3` or
 `highContrast2`). Keys left out keep their values. Params that are not an object, another key or a value off
-the list return an error and change nothing. The command returns `{view, channel, harmony, harmonyRule, vision}`,
+the list return an error and change nothing. The command returns `{view, channel, sliders, gamut, harmony, harmonyRule, vision}`,
 and the settings are kept with the preferences.
 
 `ui.colorWheel {"sliders": "oklch"}` shows the Color Wheel panel's OKLCH Sliders (L, C and H rows under the wheel or
@@ -3503,10 +3508,11 @@ dropped.
 
 Help › Search Commands… keeps the last commands, tools, panels and effects picked from it, most recent first: an
 empty search lists them, and so does the Recent Commands list beside the search field. The desktop app saves the ids
-with the UI state. `help.clearRecentCommands {}` (Clear Recent Commands) empties the list and the saved ids, and
-returns `null`. A pick of it in the search is not kept as a recent pick. It is a UI command, so it needs the desktop
-app (`--connect`); `command_list` gives it `enabled: false` while no ids are saved. Saved ids the list leaves out, such as those of a
-plug-in that is not loaded, count as saved and are cleared with the rest.
+with the UI state, and also how many times each command was picked, which ranks the results.
+`help.clearRecentCommands {}` (Clear Recent Commands) empties the list, the saved ids and the pick counts, and
+returns `null`. A pick of it in the search is not kept as a recent pick or counted. It is a UI command, so it needs
+the desktop app (`--connect`); `command_list` gives it `enabled: false` while no ids and no counts are saved. Saved ids
+the list leaves out, such as those of a plug-in that is not loaded, count as saved and are cleared with the rest.
 
 ## Messages over the window
 
@@ -7524,7 +7530,7 @@ and files saved without it open with it off.
 
 ## Live Corners
 
-`object.setLiveShape {id?, ids?, radius?, kind?, corners?, items?}` sets the corners of any path (one undo step): a live
+`object.setLiveShape {id?, ids?, radius?, kind?, corners?, rectanglesOnly?, items?}` sets the corners of any path (one undo step): a live
 rectangle's or polygon's, a star's, a pen path's. A corner is an anchor where two sides, straight or curved, meet at an angle
 (not an open path's ends, not a smooth anchor, not one the sides run straight on through); a curved side is trimmed to
 what the cut leaves of it. `radius` (pt) and `kind`
@@ -7543,7 +7549,9 @@ or keeps its size with Scale Corners off), and a rectangle from a file that kept
 (elliptical corners) gets circular ones in document units when its corners are next set. Dragging a corner widget
 rounds the corners whose widgets show (every corner, or the Direct-Selected ones) on every selected path at once,
 outlining in red those that reach their limit; the Selection tool shows the widgets of live rectangles and polygons,
-the Direct Selection tool those of any path. Several objects each with their own corners are one call:
+the Direct Selection tool those of any path. `rectanglesOnly: true` sets them on the live rectangles among the targets
+alone and leaves the other objects as they are (the Rectangle Properties corner fields and menus send it with the
+selection, so an action that records them acts on the rectangles selected when it plays). Several objects each with their own corners are one call:
 `items: [{id, corners?}]` in place of `ids` and `corners`. Alt-clicking one cycles their kind and double-clicking one opens Corners (`ui.corners {id?, corners?}`,
 dialog `corners`: `kind`, `radius`; OK runs `object.setLiveShape`).
 `view.shapeWidgets {on?}` (desktop app, the Hide Shape Widgets and Show Shape Widgets button in the Control bar of the
