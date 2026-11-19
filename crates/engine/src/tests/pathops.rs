@@ -1121,6 +1121,10 @@ fn path_commands_refuse_a_param_of_the_wrong_type() {
     s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
     let r = ids(&s.execute("object.path.offsetPath", &json!({"offset": "0.1 in", "joins": "Bevel"})).unwrap());
     assert!(close(bounds(&s, r[0]), Rect::new(92.8, 92.8, 157.2, 147.2), 1e-2), "{:?}", bounds(&s, r[0]));
+    // A product with a unit, which the offset used to refuse: 0.05x2 in is 0.1 in.
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    let r = ids(&s.execute("object.path.offsetPath", &json!({"offset": "0.05x2 in", "joins": "Bevel"})).unwrap());
+    assert!(close(bounds(&s, r[0]), Rect::new(92.8, 92.8, 157.2, 147.2), 1e-2), "{:?}", bounds(&s, r[0]));
     // Null switches keep Clean Up's defaults, which remove the stray point.
     let r = s.execute("object.path.cleanUp", &json!({"strayPoints": null, "unpaintedObjects": null, "emptyTextPaths": null})).unwrap();
     assert_eq!(r["removed"], 1);

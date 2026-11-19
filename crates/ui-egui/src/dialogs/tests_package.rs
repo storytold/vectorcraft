@@ -280,6 +280,27 @@ fn a_failed_save_before_packaging_writes_no_package() {
     }
 }
 
+/// A save before packaging that Cancel Save stops writes no package either: the document keeps
+/// its unsaved changes, so the package would not hold it as saved.
+#[test]
+fn a_canceled_save_before_packaging_writes_no_package() {
+    let dir = Folder::new("canceled-save");
+    let gate = Gate::default();
+    let (mut app, files) = saved_with_worker(&dir, &gate);
+    let out = dir.path("out");
+    // An export holds the worker, so the save waits behind it and Cancel comes before it starts.
+    crate::io::export(&mut app, Some("svg"), Some(dir.path("first.svg")), &json!({})).unwrap();
+    app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
+    package_dialog(&mut app, &out);
+    assert_eq!(confirm(&mut app).unwrap()["background"], true);
+    assert_eq!(app.run("file.cancelSave", json!({})).unwrap()["cancelled"], 1);
+    gate.open();
+    background::wait_all(&mut app);
+    assert_eq!(written(&files), [dir.path("first.svg")], "only the export");
+    assert!(!std::path::Path::new(&out).join("card Folder").exists(), "no package folder");
+    assert!(app.session.active().unwrap().is_dirty(), "the save was canceled");
+}
+
 /// A package that an automation request confined to its roots asks for, started once the
 /// document's background save is written, is still confined to those roots, though the save's
 /// result arrives outside the request.

@@ -3006,3 +3006,206 @@ fn context_menu_others_actions_sublayer_state_enables_all_commands() {
     assert_eq!(lock_cmd, "layer.unlockAll");
     assert!(lock_enabled, "locked sublayer enables Unlock All Layers");
 }
+
+/// One headless frame of the panel in a 300 × 600 window, returning every drawn text and its rect.
+fn frame_texts(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> Vec<(String, egui::Rect)> {
+    let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::pos2(0.0, 0.0), vec2(300.0, 600.0))), events, ..Default::default() };
+    let mut out = ctx.run_ui(raw, |ui| show(app, ui));
+    out.textures_delta.clear();
+    let mut texts = vec![];
+    for s in out.shapes {
+        if let egui::epaint::Shape::Text(t) = s.shape {
+            texts.push((t.galley.text().to_string(), t.galley.rect.translate(t.pos.to_vec2())));
+        }
+    }
+    texts
+}
+
+/// Click `button` at `pos` (pressed in one frame, released in the next) and return the texts drawn
+/// on the frame after release.
+fn click_menu_at(app: &mut VectorcraftApp, ctx: &egui::Context, pos: egui::Pos2, button: egui::PointerButton) -> Vec<(String, egui::Rect)> {
+    let ev = |pressed| egui::Event::PointerButton { pos, button, pressed, modifiers: Default::default() };
+    frame_texts(app, ctx, vec![egui::Event::PointerMoved(pos), ev(true)]);
+    frame_texts(app, ctx, vec![ev(false)]);
+    frame_texts(app, ctx, vec![])
+}
+
+/// The menu item labels in `texts` (which start with `"   "`), ordered from top to bottom.
+fn menu_entries(texts: &[(String, egui::Rect)]) -> Vec<String> {
+    let mut entries: Vec<_> = texts.iter().filter(|(t, _)| t.starts_with("   ")).map(|(t, r)| (t.trim().to_string(), r.top())).collect();
+    entries.sort_by(|a, b| a.1.total_cmp(&b.1));
+    entries.into_iter().map(|(t, _)| t).collect()
+}
+
+fn text_rect(texts: &[(String, egui::Rect)], name: &str) -> egui::Rect {
+    texts.iter().find(|(t, _)| t == name).map(|(_, r)| *r).unwrap_or_else(|| panic!("{name} not in {texts:?}"))
+}
+
+/// Right-clicking a ruler guide row selects the guide (or keeps a multi-guide selection), opens its
+/// context menu (Hide/Show, Lock/Unlock, Release Guides, Delete, Locate Object), and each item
+/// dispatches its command with Undo/Redo registration (#8592).
+#[test]
+fn guide_row_context_menu_selects_and_runs_guide_actions() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let run = |app: &mut VectorcraftApp, id: &str, p: serde_json::Value| app.session.execute(id, &p).unwrap();
+    run(&mut app, "file.new", json!({"width": 200, "height": 200}));
+    run(&mut app, "shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 20}));
+    run(&mut app, "guide.add", json!({"vertical": true, "pos": 50}));
+    run(&mut app, "guide.add", json!({"vertical": false, "pos": 80}));
+    run(&mut app, "select.none", json!({}));
+    let layer = app.session.active().unwrap().doc.layers[0].id;
+    run(&mut app, "layer.highlight", json!({"ids": [layer.0], "mode": "set"}));
+    expand(&mut app, &json!({})).unwrap();
+
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let texts = frame_texts(&mut app, &ctx, vec![]);
+    let h_guide_pos = text_rect(&texts, "<Horizontal Guide>").center();
+    let v_guide_pos = text_rect(&texts, "<Vertical Guide>").center();
+    let selected_guides = |app: &VectorcraftApp| {
+        let st = app.session.active().unwrap();
+        vectorcraft_engine::cmd::guide_indexes(&st.doc, &st.selection.guides)
+    };
+
+    // Right-clicking an unselected guide row selects it, clears highlighted rows, and opens the menu.
+    let menu = click_menu_at(&mut app, &ctx, v_guide_pos, egui::PointerButton::Secondary);
+    assert_eq!(selected_guides(&app), [0], "right-click selects the guide");
+    assert!(rows_of(&app).is_empty(), "highlighted rows cleared when selecting a guide");
+    assert_eq!(menu_entries(&menu), ["Hide", "Lock", "Release Guides", "Delete", "Locate Object"]);
+
+    // Hide toggles the guide's visibility off in one undo step; right-clicking again shows "Show".
+    let guide_node = app.session.active().unwrap().doc.ruler_guides()[0].id.unwrap();
+    let undo_before = app.session.active().unwrap().history.undo.len();
+    click_menu_at(&mut app, &ctx, text_rect(&menu, "   Hide").center(), egui::PointerButton::Primary);
+    assert!(!app.session.active().unwrap().doc.node(guide_node).unwrap().visible);
+    assert_eq!(app.session.active().unwrap().history.undo.len(), undo_before + 1);
+    let menu = click_menu_at(&mut app, &ctx, v_guide_pos, egui::PointerButton::Secondary);
+    assert_eq!(menu_entries(&menu), ["Show", "Lock", "Release Guides", "Delete", "Locate Object"]);
+    click_menu_at(&mut app, &ctx, text_rect(&menu, "   Show").center(), egui::PointerButton::Primary);
+    assert!(app.session.active().unwrap().doc.node(guide_node).unwrap().visible);
+
+    // Lock toggles the guide's lock on in one undo step; right-clicking again shows "Unlock".
+    let menu = click_menu_at(&mut app, &ctx, v_guide_pos, egui::PointerButton::Secondary);
+    click_menu_at(&mut app, &ctx, text_rect(&menu, "   Lock").center(), egui::PointerButton::Primary);
+    assert!(app.session.active().unwrap().doc.node(guide_node).unwrap().locked);
+    let menu = click_menu_at(&mut app, &ctx, v_guide_pos, egui::PointerButton::Secondary);
+    assert_eq!(menu_entries(&menu), ["Hide", "Unlock", "Release Guides", "Delete", "Locate Object"]);
+    click_menu_at(&mut app, &ctx, text_rect(&menu, "   Unlock").center(), egui::PointerButton::Primary);
+    assert!(!app.session.active().unwrap().doc.node(guide_node).unwrap().locked);
+
+    // Locate Object locates the guide's holding layer.
+    let menu = click_menu_at(&mut app, &ctx, v_guide_pos, egui::PointerButton::Secondary);
+    click_menu_at(&mut app, &ctx, text_rect(&menu, "   Locate Object").center(), egui::PointerButton::Primary);
+    assert_eq!(rows_of(&app), vec![layer]);
+
+    // Multi-guide selection is preserved when right-clicking an already-selected guide row.
+    run(&mut app, "guide.select", json!({"indexes": [0, 1]}));
+    let _menu = click_menu_at(&mut app, &ctx, h_guide_pos, egui::PointerButton::Secondary);
+    assert_eq!(selected_guides(&app), [0, 1], "right-click on selected guide preserves multi-guide selection");
+
+    // Release Guides on a single guide converts it into a path in one undo step; Undo brings it back.
+    run(&mut app, "guide.select", json!({"indexes": [0]}));
+    let menu = click_menu_at(&mut app, &ctx, v_guide_pos, egui::PointerButton::Secondary);
+    let undo_before = app.session.active().unwrap().history.undo.len();
+    click_menu_at(&mut app, &ctx, text_rect(&menu, "   Release Guides").center(), egui::PointerButton::Primary);
+    assert_eq!(app.session.active().unwrap().doc.ruler_guides().len(), 1, "one guide released to a path");
+    assert_eq!(app.session.active().unwrap().history.undo.len(), undo_before + 1);
+    run(&mut app, "edit.undo", json!({}));
+    assert_eq!(app.session.active().unwrap().doc.ruler_guides().len(), 2, "Undo restores the released guide");
+
+    // Delete removes the guide in one undo step; Undo restores it.
+    let texts = frame_texts(&mut app, &ctx, vec![]);
+    let v_guide_pos = text_rect(&texts, "<Vertical Guide>").center();
+    let menu = click_menu_at(&mut app, &ctx, v_guide_pos, egui::PointerButton::Secondary);
+    let undo_before = app.session.active().unwrap().history.undo.len();
+    click_menu_at(&mut app, &ctx, text_rect(&menu, "   Delete").center(), egui::PointerButton::Primary);
+    assert_eq!(app.session.active().unwrap().doc.ruler_guides().len(), 1, "Delete removes the guide");
+    assert_eq!(app.session.active().unwrap().history.undo.len(), undo_before + 1);
+    run(&mut app, "edit.undo", json!({}));
+    assert_eq!(app.session.active().unwrap().doc.ruler_guides().len(), 2, "Undo restores the deleted guide");
+}
+
+/// Right-clicking a blend spine row selects the blend, opens its context menu (Select, Blend
+/// Options…, Reverse Spine, Reverse Front to Back, Expand, Release, Locate Object), and each item
+/// dispatches its command with Undo/Redo registration (#8592).
+#[test]
+fn spine_row_context_menu_selects_blend_and_runs_blend_actions() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let run = |app: &mut VectorcraftApp, id: &str, p: serde_json::Value| app.session.execute(id, &p).unwrap();
+    run(&mut app, "file.new", json!({"width": 300, "height": 200}));
+    let a = NodeId(run(&mut app, "shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 20}))["id"].as_u64().unwrap());
+    let b = NodeId(run(&mut app, "shape.rectangle", json!({"x": 200, "y": 0, "width": 20, "height": 20}))["id"].as_u64().unwrap());
+    run(&mut app, "select.set", json!({"ids": [a.0, b.0]}));
+    let blend = NodeId(run(&mut app, "object.blend.make", json!({}))["id"].as_u64().unwrap());
+    run(&mut app, "select.none", json!({}));
+    expand(&mut app, &json!({})).unwrap();
+
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let spine_rect = |texts: &[(String, egui::Rect)]| {
+        texts
+            .iter()
+            .filter(|(t, _)| t == "<Path>")
+            .max_by(|x, y| x.1.top().total_cmp(&y.1.top()))
+            .map(|(_, r)| *r)
+            .unwrap_or_else(|| panic!("spine <Path> not in {texts:?}"))
+    };
+    let texts = frame_texts(&mut app, &ctx, vec![]);
+    let spine_pos = spine_rect(&texts).center();
+    let selected = |app: &VectorcraftApp| app.session.active().unwrap().selection.objects.to_vec();
+
+    // Right-clicking the unselected spine row selects the blend and opens the context menu.
+    let menu = click_menu_at(&mut app, &ctx, spine_pos, egui::PointerButton::Secondary);
+    assert_eq!(selected(&app), [blend], "right-clicking the spine row selects the blend");
+    assert_eq!(menu_entries(&menu), ["Select", "Blend Options…", "Reverse Spine", "Reverse Front to Back", "Expand", "Release", "Locate Object"]);
+
+    // Blend Options… opens the Blend Options dialog.
+    click_menu_at(&mut app, &ctx, text_rect(&menu, "   Blend Options…").center(), egui::PointerButton::Primary);
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some("blendOptions"));
+    crate::dialogs::cancel(&mut app);
+
+    // Reverse Spine reverses the key positions along the spine in one undo step.
+    let key_x = |app: &VectorcraftApp, id: NodeId| app.session.active().unwrap().doc.node(id).unwrap().geometric_bounds().unwrap().x0;
+    let a_x_before = key_x(&app, a);
+    let b_x_before = key_x(&app, b);
+    let undo_before = app.session.active().unwrap().history.undo.len();
+    let menu = click_menu_at(&mut app, &ctx, spine_pos, egui::PointerButton::Secondary);
+    click_menu_at(&mut app, &ctx, text_rect(&menu, "   Reverse Spine").center(), egui::PointerButton::Primary);
+    assert_eq!(app.session.active().unwrap().history.undo.len(), undo_before + 1);
+    assert!((key_x(&app, a) - b_x_before).abs() < 1e-6 && (key_x(&app, b) - a_x_before).abs() < 1e-6);
+
+    // Reverse Front to Back reverses the key stacking order in one undo step.
+    let key_ids = |app: &VectorcraftApp| -> Vec<NodeId> {
+        app.session.active().unwrap().doc.node(blend).unwrap().children().unwrap().iter().map(|c| c.id).collect()
+    };
+    assert_eq!(key_ids(&app), [a, b]);
+    let menu = click_menu_at(&mut app, &ctx, spine_pos, egui::PointerButton::Secondary);
+    click_menu_at(&mut app, &ctx, text_rect(&menu, "   Reverse Front to Back").center(), egui::PointerButton::Primary);
+    assert_eq!(key_ids(&app), [b, a]);
+
+    // Locate Object highlights the blend row.
+    let menu = click_menu_at(&mut app, &ctx, spine_pos, egui::PointerButton::Secondary);
+    click_menu_at(&mut app, &ctx, text_rect(&menu, "   Locate Object").center(), egui::PointerButton::Primary);
+    assert_eq!(rows_of(&app), vec![blend]);
+
+    // Expand replaces the blend with a group in one undo step; Undo brings the blend back.
+    let menu = click_menu_at(&mut app, &ctx, spine_pos, egui::PointerButton::Secondary);
+    let undo_before = app.session.active().unwrap().history.undo.len();
+    click_menu_at(&mut app, &ctx, text_rect(&menu, "   Expand").center(), egui::PointerButton::Primary);
+    assert_eq!(app.session.active().unwrap().history.undo.len(), undo_before + 1);
+    assert!(matches!(app.session.active().unwrap().doc.node(blend).unwrap().kind, NodeKind::Group { .. }));
+    run(&mut app, "edit.undo", json!({}));
+    assert!(matches!(app.session.active().unwrap().doc.node(blend).unwrap().kind, NodeKind::Blend { .. }));
+
+    // Release releases the blend into its keys and spine path in one undo step; Undo restores it.
+    expand(&mut app, &json!({})).unwrap();
+    let texts = frame_texts(&mut app, &ctx, vec![]);
+    let spine_pos = spine_rect(&texts).center();
+    let menu = click_menu_at(&mut app, &ctx, spine_pos, egui::PointerButton::Secondary);
+    let undo_before = app.session.active().unwrap().history.undo.len();
+    click_menu_at(&mut app, &ctx, text_rect(&menu, "   Release").center(), egui::PointerButton::Primary);
+    assert_eq!(app.session.active().unwrap().history.undo.len(), undo_before + 1);
+    assert!(app.session.active().unwrap().doc.node(blend).is_none(), "blend released into keys and spine path");
+    run(&mut app, "edit.undo", json!({}));
+    assert!(matches!(app.session.active().unwrap().doc.node(blend).unwrap().kind, NodeKind::Blend { .. }));
+}
