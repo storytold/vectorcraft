@@ -314,12 +314,12 @@ pub(crate) fn follow_history(st: &mut crate::DocState, was: Option<&SymbolEdit>)
     }
 }
 
-/// Does `n` hold an instance of symbol `name`, directly or through the art of the symbols it holds
-/// instances of?
-fn holds_symbol(d: &Document, n: &Node, name: &str, seen: &mut HashSet<String>) -> bool {
+/// Does `n` hold an instance of symbol `name` (opacity masks included), directly or through the art
+/// of the symbols it holds instances of?
+pub(crate) fn holds_symbol(d: &Document, n: &Node, name: &str, seen: &mut HashSet<String>) -> bool {
     let mut found = false;
     let mut nested = vec![];
-    n.walk(&mut |c| {
+    vectorcraft_doc::swatches::walk_with_masks(n, &mut |c| {
         if let NodeKind::SymbolInstance { symbol, .. } = &c.kind {
             if symbol == name {
                 found = true;
