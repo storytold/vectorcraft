@@ -1907,7 +1907,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.hpglOptionsDialog",
         "HP-GL Options Dialog",
         "",
-        "{path?, useArtboards?, range?, hpglVersion?, curveTolerance?, origin?, pens?, sortPaths?, insideFirst?} open HP-GL Options (dialog `hpglOptions`: fields = these document.export options over the ones used last; pens null is One Pen per Color); OK checks them, remembers them and writes path (else asks). Export As… → HP-GL opens it too",
+        "{path?, useArtboards?, range?, hpglVersion?, curveTolerance?, origin?, pens?, sortPaths?, insideFirst?} open HP-GL Options (dialog `hpglOptions`: fields = these document.export options over the ones used last; pens null is One Pen per Color); OK checks them, remembers them and writes path (else asks); OK after another document has become active closes the dialog and writes nothing. Export As… → HP-GL opens it too",
     ),
     (
         "file.saveForWeb",
