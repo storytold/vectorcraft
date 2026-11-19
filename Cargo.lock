@@ -1111,6 +1111,7 @@ dependencies = [
  "craft-jpeg",
  "craft-metadata",
  "craft-tiff",
+ "craft-video",
  "crc32fast",
  "exr",
  "flate2",
@@ -1156,6 +1157,11 @@ dependencies = [
  "serde",
  "serde_json",
 ]
+
+[[package]]
+name = "craft-media"
+version = "0.1.0"
+source = "git+https://github.com/storytold/craft-libs?rev=64b181977a0488e4d1e167bc5cc8cfededc2ed4b#64b181977a0488e4d1e167bc5cc8cfededc2ed4b"
 
 [[package]]
 name = "craft-metadata"
@@ -1349,6 +1355,15 @@ dependencies = [
  "flate2",
  "serde",
  "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "craft-video"
+version = "0.1.0"
+source = "git+https://github.com/storytold/craft-libs?rev=64b181977a0488e4d1e167bc5cc8cfededc2ed4b#64b181977a0488e4d1e167bc5cc8cfededc2ed4b"
+dependencies = [
+ "craft-media",
  "thiserror 2.0.21",
 ]
 

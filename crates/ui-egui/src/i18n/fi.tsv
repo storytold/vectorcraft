@@ -6175,6 +6175,9 @@ variable-list-end	{0}, {1}	{0} ja {1}
 @msg	the HEIC or HEIF file can't be read	tätä HEIC- tai HEIF-tiedostoa ei voi lukea
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	tässä HEIC- tai HEIF-tiedostossa on kuvatyyppi, jota ei voi lukea
 @msg	HEIC and HEIF images can't be opened in this build	HEIC- ja HEIF-kuvia ei voi avata tässä versiossa
+@msg	the AVIF file can't be read	tätä AVIF-tiedostoa ei voi lukea
+@msg	the AVIF file holds a kind of image that can't be read	tässä AVIF-tiedostossa on kuvatyyppi, jota ei voi lukea
+@msg	AVIF images can't be opened in this build	AVIF-kuvia ei voi avata tässä versiossa
 @msg	CDR {version} drawings can't be opened: VectorCraft reads versions 1 to 27	CDR {version} -piirroksia ei voi avata: VectorCraft lukee versioita 1–27
 @msg	this CDR drawing can't be read ({why})	tätä CDR-piirrosta ei voi lukea ({why})
 @msg	CDR text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out	CDR-tekstit, bittikartat, sulautukset, kontuurit, siveltimenvedot ja muut objektit, joita VectorCraft ei vielä lue, jätettiin pois

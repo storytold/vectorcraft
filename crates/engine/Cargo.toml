@@ -9,7 +9,7 @@ description = "VectorCraft engine: sessions, history, selection, the command reg
 workspace = true
 
 [features]
-default = ["bundled-fonts", "heif"]
+default = ["bundled-fonts", "heif", "avif"]
 # The fonts vectorcraft-text bundles (see its `bundled-fonts`). Embedders that supply every font at
 # run time (`vectorcraft_text::FontDb::add_font`) build with `default-features = false`.
 bundled-fonts = ["vectorcraft-text/bundled-fonts"]
@@ -17,6 +17,11 @@ bundled-fonts = ["vectorcraft-text/bundled-fonts"]
 # feature still recognizes the files and refuses them with a message. The apps list it beside
 # `bundled-fonts`.
 heif = ["dep:heic-rs", "dep:rayon"]
+# AVIF images open and place, decoded by craft-image-codecs's `avif-decode` (craft-video's
+# clean-room, pure-Rust AV1 decoder). The decoder runs on native targets only: on wasm32 a panic
+# aborts instead of unwinding, so the web build refuses AVIF files as a build without this feature
+# does, with a message. The apps list it beside `heif`.
+avif = ["craft-image-codecs/avif-decode"]
 
 [dependencies]
 # Which paths stored in documents may be opened.

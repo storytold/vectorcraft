@@ -5933,6 +5933,9 @@ variable-list-end	{0}, {1}	{0} και {1}
 @msg	the HEIC or HEIF file can't be read	δεν είναι δυνατή η ανάγνωση του αρχείου HEIC ή HEIF
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	το αρχείο HEIC ή HEIF περιέχει είδος εικόνας που δεν είναι δυνατό να διαβαστεί
 @msg	HEIC and HEIF images can't be opened in this build	οι εικόνες HEIC και HEIF δεν μπορούν να ανοίξουν σε αυτή την έκδοση
+@msg	the AVIF file can't be read	δεν είναι δυνατή η ανάγνωση του αρχείου AVIF
+@msg	the AVIF file holds a kind of image that can't be read	το αρχείο AVIF περιέχει είδος εικόνας που δεν είναι δυνατό να διαβαστεί
+@msg	AVIF images can't be opened in this build	οι εικόνες AVIF δεν μπορούν να ανοίξουν σε αυτή την έκδοση
 @msg	CDR {version} drawings can't be opened: VectorCraft reads versions 1 to 27	δεν είναι δυνατό το άνοιγμα σχεδίων του CDR {version}: το VectorCraft διαβάζει τις εκδόσεις 1 έως 27
 @msg	this CDR drawing can't be read ({why})	δεν είναι δυνατή η ανάγνωση αυτού του σχεδίου CDR ({why})
 @msg	CDR text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out	παραλείφθηκαν κείμενα, bitmap, αναμείξεις, ομόκεντρα περιγράμματα, πινελιές και άλλα αντικείμενα του CDR που το VectorCraft δεν διαβάζει ακόμη

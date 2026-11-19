@@ -5879,6 +5879,9 @@ imageTrace	Outline	Obris
 @msg	the HEIC or HEIF file can't be read	datoteku HEIC ili HEIF nije moguće pročitati
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	datoteka HEIC ili HEIF sadrži vrstu slike koju nije moguće pročitati
 @msg	HEIC and HEIF images can't be opened in this build	HEIC i HEIF slike nije moguće otvoriti u ovoj verziji programa
+@msg	the AVIF file can't be read	datoteku AVIF nije moguće pročitati
+@msg	the AVIF file holds a kind of image that can't be read	datoteka AVIF sadrži vrstu slike koju nije moguće pročitati
+@msg	AVIF images can't be opened in this build	AVIF slike nije moguće otvoriti u ovoj verziji programa
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD slika je prevelika za čitanje ({_1} × {_2} piksela)
 @msg	zipped 1-bit PSD image data with prediction can't be read	zipovani 1-bitni PSD podaci slike s predviđanjem ne mogu se pročitati
 @msg	the PSD file's layer data uses an unknown compression ({m})	podaci slojeva PSD datoteke koriste nepoznatu kompresiju ({m})

@@ -2768,6 +2768,33 @@ proptest! {
     }
 }
 
+proptest! {
+    #![proptest_config(config())]
+
+    /// Mutated AVIF boxes and AV1 data must return errors rather than unwind.
+    #[test]
+    fn mutated_avif_files_do_not_panic(which in 0usize..4, cut in 0usize..700, edits in prop::collection::vec((0usize..700, any::<u8>()), 0..8)) {
+        let mut bytes = match which {
+            0 => include_bytes!("fixtures/avif/quadrants.avif").to_vec(),
+            1 => include_bytes!("fixtures/avif/quadrants-alpha.avif").to_vec(),
+            2 => include_bytes!("fixtures/avif/quadrants-grid.avif").to_vec(),
+            // Its EXIF item and `irot` are read for the resolution.
+            _ => include_bytes!("fixtures/avif/wide-rotated-300x150.avif").to_vec(),
+        };
+        for (at, byte) in edits {
+            if let Some(slot) = bytes.get_mut(at) { *slot = byte; }
+        }
+        bytes.truncate(cut);
+        let result = catch_quiet(|| {
+            let mut s = vectorcraft_engine::Session::new();
+            let params = json!({"name": "a.avif", "dataBase64": vectorcraft_format::base64_encode(&bytes)});
+            let _ = no_panic(s.execute("document.open", &params));
+            let _ = no_panic(s.execute("file.place", &params));
+        });
+        prop_assert!(result.is_ok(), "a.avif: panicked: {:?}", result.err());
+    }
+}
+
 /// The rich document with a hidden layer, saved as SVG with its editing data.
 fn saved_svg() -> String {
     let mut d = rich_doc();
