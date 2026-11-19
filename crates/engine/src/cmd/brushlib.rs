@@ -182,6 +182,7 @@ pub const BUILTIN: &[BuiltinBrushLibrary] = &[
     BuiltinBrushLibrary { id: "energy-beams", name: "Energy Beams", make: energy_beams },
     BuiltinBrushLibrary { id: "dry-media", name: "Dry Media", make: dry_media },
     BuiltinBrushLibrary { id: "tech-circuit", name: "Tech Circuit", make: tech_circuit },
+    BuiltinBrushLibrary { id: "engraving", name: "Engraving", make: engraving },
     BuiltinBrushLibrary { id: "arrows", name: "Arrows", make: arrows },
     BuiltinBrushLibrary { id: "image-brush", name: "Image Brush", make: image_brush },
     BuiltinBrushLibrary { id: "vector-packs", name: "Vector Packs", make: vector_packs },
@@ -236,6 +237,49 @@ fn ring(c: Point, outer: f64, inner: f64) -> Node {
 
 fn art(name: &str, art: Node, colorization: Colorization) -> Brush {
     Brush { name: name.into(), kind: BrushKind::Art(ArtBrush { art, colorization, ..Default::default() }) }
+}
+
+/// Original fine-line art for an engraving-style brush library.
+fn engraving() -> BrushLibrary {
+    let lines = |count: usize, width: f64, spacing: f64| {
+        group(
+            (0..count)
+                .map(|i| {
+                    let y = (i as f64 - (count - 1) as f64 / 2.0) * spacing;
+                    black(shapes::rectangle(Rect::new(0.0, y - width / 2.0, 100.0, y + width / 2.0)))
+                })
+                .collect(),
+        )
+    };
+    let taper = group(
+        (0..5)
+            .map(|i| {
+                let y = (i as f64 - 2.0) * 2.2;
+                black(polygon(&[(0.0, y - 0.35), (80.0, y - 0.35), (100.0, y), (80.0, y + 0.35), (0.0, y + 0.35)]))
+            })
+            .collect(),
+    );
+    let broken = group(
+        (0..5)
+            .flat_map(|row| {
+                (0..4).map(move |segment| {
+                    let x = segment as f64 * 25.0 + if row % 2 == 0 { 0.0 } else { 8.0 };
+                    let y = (row as f64 - 2.0) * 2.2;
+                    black(shapes::rectangle(Rect::new(x, y - 0.3, (x + 16.0).min(100.0), y + 0.3)))
+                })
+            })
+            .collect(),
+    );
+    built(
+        "Engraving",
+        Document::new(100.0, 100.0),
+        vec![
+            art("Fine Hatching", lines(5, 0.65, 2.2), Colorization::Tints),
+            art("Dense Hatching", lines(9, 0.42, 1.2), Colorization::Tints),
+            art("Tapered Hatching", taper, Colorization::Tints),
+            art("Broken Hatching", broken, Colorization::Tints),
+        ],
+    )
 }
 
 /// An Arrows brush whose art stretches only between `start` and `end` (fractions of its length).

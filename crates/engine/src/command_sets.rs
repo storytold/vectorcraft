@@ -105,6 +105,7 @@ const WAIT_FOR_TOOL_EDIT: &[&str] = &[
     "symbol.selectInstances",
     "view.guides.lock",
     "view.proofSetup",
+    "view.proofSetup.load",
     "view.proofColors",
     "view.overprintPreview",
     "view.separationsPreview",

@@ -2061,6 +2061,10 @@ lighting	Light	Cahaya
 	Add Anchor Point Tool	Alat tambah titik jangkar
 	Anchor Point Tool	Alat titik jangkar
 	Arc Tool	Alat busur
+	Three-Point Arc Tool	Alat busur tiga titik
+	Three-Point Arc	Busur tiga titik
+	Arc too large	Busur terlalu besar
+	Third Point Sets Direction	Titik ketiga menentukan arah
 	Area Graph Tool	Alat grafik area
 	Area Type Tool	Alat teks area
 	Artboard Tool	Alat artboard
@@ -3504,6 +3508,11 @@ digits	Malayalam	Malayalam
 	Place the pages with the placement again	Tempatkan halaman lagi dengan penempatan tersebut
 	Placement:	Penempatan:
 	Preserve CMYK Numbers	Pertahankan angka CMYK
+	Preserve RGB Numbers	Pertahankan angka RGB
+	Device to Simulate:	Perangkat yang disimulasikan:
+	Simulate Paper Color	Simulasikan warna kertas
+	Simulate Black Ink	Simulasikan tinta hitam
+	Load…	Muat…
 	Previous page	Halaman sebelumnya
 	Print Layers:	Lapisan cetak:
 	Print Preset:	Preset cetak:
@@ -3581,6 +3590,10 @@ digits	Malayalam	Malayalam
 	Add Color Tool	Alat Tambah Warna
 	Remove Color Tool	Alat Hapus Warna
 	Remove Color	Hapus Warna
+	Set As Base Color	Atur sebagai Warna Dasar
+	Select Shade	Pilih Corak
+	Add New Color	Tambah Warna Baru
+	Set Current Color As Base Color	Atur Warna Saat Ini sebagai Warna Dasar
 	Find the selected colors in the artwork	Temukan warna yang dipilih di karya seni
 	Harmony Rules	Aturan harmoni
 	Keep this row's colors (exclude)	Pertahankan warna baris ini (kecualikan)
@@ -4758,6 +4771,7 @@ theme	Appearance	Tampilan
 	Add to Graphic Styles	Tambahkan ke gaya grafis
 	Graphic Style Library	Pustaka gaya grafis
 	Add Used Colors	Tambahkan warna yang digunakan
+	Add Selected Colors	Tambahkan warna terpilih
 	Delete Swatch	Hapus sampel
 	Duplicate Swatch	Duplikatkan sampel
 	Merge Swatches	Gabungkan sampel
@@ -5045,6 +5059,7 @@ font-technology	Variable	Variabel
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} dari {n} hasil. Terus ketik untuk mempersempitnya.
 	Recent Commands	Perintah terbaru
 	No recent commands	Tidak ada perintah terbaru
+	Type to search commands, tools, panels and effects	Ketik untuk mencari perintah, alat, panel, dan efek
 	Dashed Line	Garis putus-putus
 	Panel menu	Menu panel
 	Unembed…	Lepaskan sematan…
@@ -5167,6 +5182,7 @@ font-technology	Variable	Variabel
 	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	Teks baru mendapat bahasa ini selama bahasa di Pengaturan dokumen adalah Inggris: USA; teks yang sudah ada di dokumen mempertahankan bahasanya sendiri.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	Di paragraf dengan Pemenggalan kata aktif, kata dalam daftar hanya dipenggal pada tanda hubung yang diketik di dalamnya, atau tidak di mana pun jika tidak ada, apa pun bahasa atau huruf besar-kecilnya.
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	Di versi desktop, plug-in .wasm di folder ini dimuat saat memulai dan saat Anda mengeklik OK dengan folder baru di sini, kecuali dalam Mode aman; versi web tidak memuatnya.
+	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	Berapa banyak instruksi yang boleh dipakai setiap jalannya filter objek dari plug-in; Besar mengizinkan lebih banyak daripada Normal dengan batas 60 detik yang sama. Filter berat mempertahankan anggarannya sendiri.
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Pilihan disk scratch pertama: Startup, None, atau jalur folder; VectorCraft menyimpannya, tetapi belum menggunakan disk scratch.
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Pilihan disk scratch kedua: Startup, None, atau jalur folder; VectorCraft menyimpannya, tetapi belum menggunakan disk scratch.
 	How light or dark the interface is.	Seberapa terang atau gelap antarmuka.
@@ -5185,6 +5201,7 @@ font-technology	Variable	Variabel
 	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	Zoom animasi hanya berfungsi selama ini aktif; jika nonaktif, Zoom animasi diredupkan dan zoom tidak dianimasikan.
 	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	Zoom dengan roda meluncur halus, dan Alat zoom memperbesar saat Anda menyeret ke samping atau menahannya; jika nonaktif, Alat zoom memperbesar ke area yang Anda seret.
 	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	Mulai dari peluncuran berikutnya, versi desktop menggambar dengan jenis prosesor grafis ini; Otomatis mengutamakan yang menjalankan layar. Versi web tidak menggunakannya.
+	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	Mulai dari peluncuran berikutnya, jendela menampilkan bingkai tanpa menunggu layar menyegarkan, paling banyak 240 per detik; jika nonaktif, layar mengatur lajunya. Mode presentasi yang diatur saat peluncuran menggantikannya.
 	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	Jumlah maksimum langkah urungkan yang disimpan setiap dokumen; angka yang lebih kecil menghapus langkah terlama saat Anda mengeklik OK. Langkah juga dapat hilang lebih awal jika memakai terlalu banyak memori.
 	Shows the artwork changing while you drag; off, outlines follow the drag and the artwork changes when you release. A ruler guide always moves as you drag.	Menampilkan gambar yang berubah saat Anda menyeret; jika nonaktif, garis luar mengikuti seretan dan gambar berubah saat Anda melepas. Panduan penggaris selalu bergerak saat Anda menyeret.
 	How many worker threads draw the artwork; -1 uses one fewer than the cores VectorCraft may use, at most 8, and 0 uses none. The web version always uses none.	Berapa banyak thread pekerja yang menggambar; -1 memakai satu lebih sedikit dari inti yang boleh dipakai VectorCraft, paling banyak 8, dan 0 tidak memakai sama sekali. Versi web tidak pernah memakainya.
@@ -5211,6 +5228,10 @@ font-technology	Variable	Variabel
 	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft menyimpan pilihan ini, tetapi Salin dan Potong belum memakai format clipboard vektor lama.
 	Preserve Paths or Preserve Appearance and Overprints for the legacy vector clipboard; VectorCraft stores the choice but does not use it yet.	Pertahankan jalur atau Pertahankan tampilan dan overprint untuk clipboard vektor lama; VectorCraft menyimpan pilihan itu tetapi belum memakainya.
 	Keep Formatting keeps the styles of text copied from VectorCraft type when it is pasted into type; Keep Plain Text gives it the style where it lands.	Pertahankan pemformatan menjaga gaya teks yang disalin dari objek teks VectorCraft saat ditempel ke objek teks; Pertahankan teks polos memberinya gaya di tempat teks itu ditempel.
+	Display All Blacks as Rich Black shows pure CMYK black (black ink alone at 100%) as RGB black on the canvas; Display All Blacks Accurately converts it through the CMYK working space.	Tampilkan semua warna hitam sebagai rich black menampilkan hitam CMYK murni (hanya tinta hitam 100%) sebagai hitam RGB di kanvas; Tampilkan semua warna hitam secara akurat mengonversinya melalui ruang CMYK kerja.
+	Output All Blacks as Rich Black draws pure CMYK black as RGB black in RGB and grayscale raster exports and Print as Bitmap; it does not change vector exports, CMYK JPEG, TIFF and PSD, or other printing.	Keluarkan semua warna hitam sebagai rich black menggambar hitam CMYK murni sebagai hitam RGB dalam ekspor raster RGB dan skala abu-abu serta Cetak sebagai bitmap; opsi ini tidak mengubah ekspor vektor, JPEG, TIFF, dan PSD CMYK, atau pencetakan lain.
+	On a touch screen, switches to the Touch workspace; turning this off, or losing the touch screen, goes back to the workspace it switched from.	Pada layar sentuh, beralih ke ruang kerja sentuh; mematikan opsi ini atau hilangnya layar sentuh mengembalikan ruang kerja sebelum peralihan.
+	A two-finger tap on the canvas undoes, or switches between selection and drawing tools in the Touch workspace, and a three-finger tap redoes; neither works in Presentation Mode.	Ketukan dua jari di kanvas mengurungkan, atau di ruang kerja sentuh beralih antara alat seleksi dan alat gambar, dan ketukan tiga jari mengulangi; keduanya tidak berfungsi dalam mode presentasi.
 	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	Teks baru mendapat bahasa ini selama bahasa di Pengaturan dokumen adalah Inggris: USA dan [Gaya karakter normal] tidak menetapkan bahasa; teks yang sudah ada di dokumen mempertahankan bahasanya sendiri.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	Di paragraf dengan Pemenggalan kata aktif, kata dalam daftar hanya dipenggal pada tanda hubung yang diketik di dalamnya, atau tidak di mana pun jika tidak ada, apa pun huruf besar-kecilnya; kata Korea tidak diberi tanda hubung, dan kata dalam bahasa India tidak dipenggal di dalam satu gugus karakter.
 	Reset all preferences to their defaults?	Atur ulang semua preferensi ke defaultnya?
@@ -6379,6 +6400,7 @@ imageTrace	Outline	Kontur
 	Arrow	Panah
 	Arrow (open)	Panah (terbuka)
 	Barbed	Berduri
+arrowhead	Feather	Bulu
 	Half Arrow (left)	Setengah panah (kiri)
 	Half Arrow (right)	Setengah panah (kanan)
 	Concave	Cekung
@@ -6406,6 +6428,7 @@ imageTrace	Outline	Kontur
 	Kite	Layang-layang
 	Triangle to Bar	Segitiga ke batang
 	Oval	Oval
+	Line Arrow	Panah garis
 	Complementary	Komplementer
 	Complementary 2	Komplementer 2
 	Split Complementary	Komplementer terpisah
@@ -8145,6 +8168,7 @@ breakText	Glyphs	Glif
 	Remove Strokes	Hapus Stroke
 	Place Brush Art	Tempatkan karya seni kuas
 	Replace Brush Art	Ganti karya seni kuas
+	Replace Pattern Art	Ganti karya seni pola
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Stroke menggunakan kuas ini. Terapkan karya seni baru ke stroke tersebut, atau biarkan apa adanya dan tambahkan salinan kuas dengan karya seni baru?
 	Apply to Strokes	Terapkan ke Stroke
 	Leave Strokes	Biarkan Stroke
@@ -8565,6 +8589,15 @@ breakText	Glyphs	Glif
 	Botanical Sprig	Ranting Botani
 	Facet Diamond	Berlian Berfaset
 	Tide Crest	Puncak Gelombang
+@msg	`at` must be "start" or "end"	`at` harus "start" atau "end"
+@msg	give exactly one of `through` and `toward`	berikan tepat satu dari `through` dan `toward`
+@msg	no arc fits these points: two are the same or all three lie on one line	tidak ada busur yang cocok dengan titik-titik ini: dua titik sama atau ketiganya segaris
+@msg	give `at` only with `toward`	berikan `at` hanya bersama `toward`
+	Engraving	Ukiran
+	Fine Hatching	Arsiran halus
+	Dense Hatching	Arsiran rapat
+	Tapered Hatching	Arsiran meruncing
+	Broken Hatching	Arsiran terputus
 	Image Brush	Kuas gambar
 	Soft Bloom	Mekar lembut
 	Halftone Field	Bidang halftone
