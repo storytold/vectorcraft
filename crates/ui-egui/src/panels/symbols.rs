@@ -25,6 +25,16 @@ use crate::menus::Item;
 use crate::theme::Tokens;
 use crate::widgets::{self, PanelDrag, menu_item};
 
+/// The largest side of a symbol thumbnail, in pixels. A larger chip draws its thumbnail scaled up.
+const MAX_THUMB_PX: f32 = 1024.0;
+
+/// The pixels on a side of the thumbnail for a chip `size` points wide at `pixels_per_point`: 8
+/// to [`MAX_THUMB_PX`].
+fn thumb_px(size: f32, pixels_per_point: f32) -> u32 {
+    let px = (size * pixels_per_point).round();
+    if px.is_nan() { 8 } else { px.clamp(8.0, MAX_THUMB_PX) as u32 }
+}
+
 /// A thumbnail of symbol `name` (an instance at its natural size), cached by its key in `keys`
 /// ([`Thumbs`]).
 fn thumb(ui: &Ui, doc: &Document, keys: &Thumbs, name: &str, size: f32) -> Option<egui::TextureHandle> {
@@ -32,7 +42,7 @@ fn thumb(ui: &Ui, doc: &Document, keys: &Thumbs, name: &str, size: f32) -> Optio
         static RENDERER: RefCell<vectorcraft_render::Renderer> = RefCell::new(vectorcraft_render::Renderer::new());
         static CACHE: crate::graphics::TexCache<HashMap<(u64, u32), egui::TextureHandle>> = crate::graphics::TexCache::default();
     }
-    let px = (size * ui.ctx().pixels_per_point()).round().max(8.0) as u32;
+    let px = thumb_px(size, ui.ctx().pixels_per_point());
     let key = (*keys.keys.get(name)?, px);
     if let Some(t) = CACHE.with(|c| c.borrow().get(&key).cloned()) {
         return Some(t);
@@ -133,6 +143,67 @@ pub(crate) fn chip(ui: &Ui, doc: &Document, keys: &Thumbs, r: egui::Rect, name: 
     if let Some(tex) = thumb(ui, doc, keys, name, r.width()) {
         ui.painter().image(tex.id(), r, egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), egui::Color32::WHITE);
     }
+}
+
+/// The cache key of an [`art_chip`]: the symbol's key, the pixels across and down, and the bits of
+/// the art's bounds.
+type ArtKey = (u64, u32, u32, [u64; 4]);
+
+/// Symbol `name`'s art on white in `r`, its bounds `art` (at its own size, as a mapped graphic
+/// measures them) stretched to fill `r`, as a box the art is scaled into shows it. The art is
+/// rendered at most [`MAX_THUMB_PX`] pixels on a side, cached by its key in `keys`.
+pub(crate) fn art_chip(ui: &Ui, doc: &Document, keys: &Thumbs, r: egui::Rect, name: &str, art: vectorcraft_geom::Rect) {
+    thread_local! {
+        static RENDERER: RefCell<vectorcraft_render::Renderer> = RefCell::new(vectorcraft_render::Renderer::new());
+        static CACHE: crate::graphics::TexCache<HashMap<ArtKey, egui::TextureHandle>> = crate::graphics::TexCache::default();
+    }
+    ui.painter().rect_filled(r, 0.0, egui::Color32::WHITE);
+    let ppp = ui.ctx().pixels_per_point();
+    let (w, h) = (thumb_px(r.width(), ppp), thumb_px(r.height(), ppp));
+    let Some(&symbol) = keys.keys.get(name) else { return };
+    let key = (symbol, w, h, [art.x0, art.y0, art.x1, art.y1].map(f64::to_bits));
+    let tex = match CACHE.with(|c| c.borrow().get(&key).cloned()) {
+        Some(t) => t,
+        None => {
+            let Some(img) = RENDERER.with(|rr| render_art(&mut rr.borrow_mut(), doc, name, art, (w, h))) else { return };
+            let tex = ui.ctx().load_texture(format!("sym-art-{name}-{w}x{h}"), crate::canvas::color_image(&img), egui::TextureOptions::LINEAR);
+            CACHE.with(|c| {
+                let mut c = c.borrow_mut();
+                if c.len() > 64 {
+                    c.clear();
+                }
+                c.insert(key, tex.clone());
+            });
+            tex
+        }
+    };
+    ui.painter().image(tex.id(), r, egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), egui::Color32::WHITE);
+}
+
+/// Symbol `name` of `doc` (an instance at its natural size, as [`render_thumb`] places it) drawn
+/// into `w` × `h` pixels with its bounds `art` stretched to fill them. `None` for bounds with no
+/// area.
+fn render_art(
+    r: &mut vectorcraft_render::Renderer,
+    doc: &Document,
+    name: &str,
+    art: vectorcraft_geom::Rect,
+    (w, h): (u32, u32),
+) -> Option<vectorcraft_render::Rendered> {
+    let (aw, ah) = (art.width(), art.height());
+    if !(aw.is_finite() && ah.is_finite() && aw > 0.0 && ah > 0.0) {
+        return None;
+    }
+    let (sw, sh) = symbol_size(doc, name);
+    let mut d = doc.clone();
+    let layer = d.alloc_id();
+    d.layers = vec![Arc::new(Node::layer(layer, "Preview", vectorcraft_doc::LayerColor::Preset(0)))];
+    let id = d.alloc_id();
+    let xf = vectorcraft_geom::Affine::scale_non_uniform(sw / 20.0, sh / 20.0);
+    let n = Arc::new(Node::new(id, NodeKind::SymbolInstance { symbol: name.into(), xf }));
+    let view =
+        vectorcraft_geom::Affine::scale_non_uniform(f64::from(w) / aw, f64::from(h) / ah) * vectorcraft_geom::Affine::translate((-art.x0, -art.y0));
+    r.render_node(&d, &n, u16::try_from(w).ok()?, u16::try_from(h).ok()?, view)
 }
 
 /// The active document's current symbol (`symbol.list`'s `current`), read without running a
@@ -872,6 +943,35 @@ mod tests {
         (painted.len(), red)
     }
 
+    /// A thumbnail is at most 1,024 pixels on a side, whatever the size of the chip it draws.
+    #[test]
+    fn thumbnails_are_bounded_in_size() {
+        assert_eq!(thumb_px(40.0, 2.0), 80);
+        assert_eq!(thumb_px(1.0, 1.0), 8);
+        assert_eq!(thumb_px(100_000.0, 2.0), 1024);
+        assert_eq!(thumb_px(f32::NAN, 1.0), 8);
+    }
+
+    /// Art drawn into a box fills the box, its bounds stretched to the box's proportions, as the
+    /// art's map scales it; art with no area draws nothing.
+    #[test]
+    fn mapped_art_fills_its_box_in_the_box_s_proportions() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 40, "height": 20})).unwrap();
+        s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+        s.execute("paint.setStroke", &json!({"none": true})).unwrap();
+        s.execute("symbol.new", &json!({"name": "Wide"})).unwrap();
+        let doc = &*s.doc().unwrap().doc;
+        let art = vectorcraft_effects::graphic_bounds(doc, "Wide").expect("the art's bounds");
+        let mut r = vectorcraft_render::Renderer::new();
+        // A square box draws the 2:1 art stretched to fill it, as its map scales it.
+        let img = render_art(&mut r, doc, "Wide", art, (40, 40)).expect("the art");
+        let (painted, red) = painted(&img);
+        assert!(red * 10 >= 40 * 40 * 9 && red == painted, "{painted} painted, {red} red");
+        assert!(render_art(&mut r, doc, "Wide", vectorcraft_geom::Rect::new(0.0, 0.0, 0.0, 10.0), (40, 40)).is_none());
+    }
+
     /// A symbol that nests another (a library's included) shows the nested art in its
     /// thumbnail: the preview keeps the document's symbols and patterns, not its art.
     #[test]
@@ -1040,20 +1140,27 @@ mod tests {
             crate::theme::install_fonts(&ctx);
             ctx
         };
+        let made = ["Leaf", "Dot", "New Symbol"];
         let (mut app, _) = leaf_dot_and_rect();
         click_button_then(&mut app, "New Symbol", egui::Modifiers::SHIFT, let_go());
         crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(symbols(&mut app), made, "New Symbol button with Shift makes the symbol");
         assert_eq!(art(&app, "New Symbol"), (0, 1), "New Symbol button with Shift: the rectangle stays ordinary art");
         let (mut app, _) = leaf_dot_and_rect();
         click_button_then(&mut app, "New Symbol", egui::Modifiers::SHIFT | egui::Modifiers::ALT, let_go());
         assert_eq!(dialog_kind(&app), None, "Alt skips Symbol Options");
+        assert_eq!(symbols(&mut app), made, "New Symbol button with Shift and Alt makes the symbol");
         assert_eq!(art(&app, "New Symbol"), (0, 1), "New Symbol button with Shift and Alt: the rectangle stays ordinary art");
         let (mut app, _) = leaf_dot_and_rect();
         click_menu_held_then(&menu_ctx(), &mut app, "New Symbol…", egui::Modifiers::SHIFT, let_go());
         crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(symbols(&mut app), made, "New Symbol… with Shift makes the symbol");
         assert_eq!(art(&app, "New Symbol"), (0, 1), "New Symbol… with Shift: the rectangle stays ordinary art");
         let (mut app, _) = leaf_dot_and_rect();
+        let dot_art = |app: &VectorcraftApp| app.session.active().unwrap().doc.symbols.iter().find(|s| s.name == "Dot").map(|s| s.art.clone());
+        let before = dot_art(&app);
         click_menu_held_then(&menu_ctx(), &mut app, "Redefine Symbol", egui::Modifiers::SHIFT, let_go());
+        assert_ne!(dot_art(&app), before, "Redefine Symbol with Shift redefines Dot");
         assert_eq!(art(&app, "Dot"), (0, 1), "Redefine Symbol with Shift: the rectangle stays ordinary art");
         let mut app = leaf_and_dot();
         click_button_then(&mut app, "Delete Symbol", egui::Modifiers::ALT, let_go());

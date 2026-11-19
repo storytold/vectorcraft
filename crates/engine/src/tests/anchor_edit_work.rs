@@ -234,3 +234,65 @@ fn a_linked_handle_makes_the_anchor_smooth() {
     assert!(s.doc().unwrap().doc == before, "a refused request changed the document");
     assert_eq!(undo_steps(&s), undo);
 }
+
+/// A linked `path.setHandle` request repeated as it was changes nothing and records no undo step,
+/// even where turning the other handle again from its stored end rounds it differently, near the
+/// origin and 3e6 pt from it. On a smooth anchor whose other handle is off line by 1e-8, linking
+/// the handle where it is still turns the other one into line and records an undo step, at both
+/// places. 3.9e6 pt from the origin, a 1.5e-9 pt handle at right angles and a handle 1e-9 pt off
+/// line are turned too, and so is an other handle on the same side as the linked one.
+#[test]
+fn a_repeated_linked_handle_records_no_undo_step() {
+    let (mut s, id) = long_path(100);
+    let near = anchor(&s, id, 5).p;
+    for p in [near, Point::new(3e6, -2e6)] {
+        let corner =
+            Anchor { p, h_in: p + Vec2::new(117.73528366134629, 927.4795508230089), h_out: p + Vec2::new(3.0, 0.0), kind: AnchorKind::Corner };
+        let path = Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(id).unwrap().path_data_mut().unwrap();
+        path.subpaths[0].anchors[5] = corner;
+        for i in 0..40 {
+            let t = f64::from(i) * 0.37;
+            let to = p + Vec2::new(8.028549152229672 * t.cos() + 0.1 * f64::from(i), -9.388200339328929 * t.sin() - 0.03 * f64::from(i));
+            let link = json!({"id": id.0, "anchor": 5, "which": "out", "x": to.x, "y": to.y, "link": true});
+            s.execute("path.setHandle", &link).unwrap();
+            let (steps, a) = (undo_steps(&s), anchor(&s, id, 5));
+            s.execute("path.setHandle", &link).unwrap();
+            assert_eq!(undo_steps(&s), steps, "request {i} at {p:?} repeated recorded an undo step");
+            assert_eq!(anchor(&s, id, 5), a, "request {i} at {p:?} repeated changed the anchor");
+        }
+
+        let skewed = Anchor { p, h_in: p + Vec2::new(-10.0, 1e-8), h_out: p + Vec2::new(10.0, 0.0), kind: AnchorKind::Smooth };
+        let path = Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(id).unwrap().path_data_mut().unwrap();
+        path.subpaths[0].anchors[5] = skewed;
+        let steps = undo_steps(&s);
+        s.execute("path.setHandle", &json!({"id": id.0, "anchor": 5, "which": "out", "x": skewed.h_out.x, "y": skewed.h_out.y, "link": true}))
+            .unwrap();
+        assert_eq!(undo_steps(&s), steps + 1, "the off-line handle at {p:?} was left as it was");
+        let a = anchor(&s, id, 5);
+        assert!(a.h_out == skewed.h_out && a.h_in.y == p.y, "{a:?}");
+    }
+
+    // Far from the origin, a short handle at right angles and a handle 1e-9 pt off line are still
+    // turned into line.
+    let p = Point::new(3.9e6, 0.0);
+    for h_in in [Point::new(p.x, 1.5e-9), Point::new(p.x - 10.0, 1e-9)] {
+        let off = Anchor { p, h_in, h_out: p + Vec2::new(10.0, 0.0), kind: AnchorKind::Smooth };
+        let path = Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(id).unwrap().path_data_mut().unwrap();
+        path.subpaths[0].anchors[5] = off;
+        let steps = undo_steps(&s);
+        s.execute("path.setHandle", &json!({"id": id.0, "anchor": 5, "which": "out", "x": off.h_out.x, "y": off.h_out.y, "link": true})).unwrap();
+        assert_eq!(undo_steps(&s), steps + 1, "the handle at {h_in:?} was left as it was");
+        let a = anchor(&s, id, 5);
+        assert!(a.h_in.y == 0.0 && a.h_in.x < p.x, "{a:?}");
+    }
+
+    // An other handle on the same side as the linked one is turned to the far side.
+    let p = near;
+    let same = Anchor { p, h_in: p + Vec2::new(5.0, 0.0), h_out: p + Vec2::new(10.0, 0.0), kind: AnchorKind::Smooth };
+    let path = Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(id).unwrap().path_data_mut().unwrap();
+    path.subpaths[0].anchors[5] = same;
+    let steps = undo_steps(&s);
+    s.execute("path.setHandle", &json!({"id": id.0, "anchor": 5, "which": "out", "x": same.h_out.x, "y": same.h_out.y, "link": true})).unwrap();
+    assert_eq!(undo_steps(&s), steps + 1, "the handle on the same side was left as it was");
+    assert!(anchor(&s, id, 5).h_in.distance(p + Vec2::new(-5.0, 0.0)) < 1e-9, "{:?}", anchor(&s, id, 5));
+}
