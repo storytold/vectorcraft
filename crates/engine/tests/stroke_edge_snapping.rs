@@ -763,8 +763,19 @@ fn review_597185_free_scale_keeps_all_four_feasible_contact_regions() {
         f.session.execute("paint.setFill", &json!({"color": "#202020"})).unwrap();
         f.session.execute("paint.setStroke", &json!({"none": true})).unwrap();
         let bounds = review_597185_free_scale_and_undo(&mut f);
+        // A sign-boundary contact uses the contour solver's existing 1e-6 geometric
+        // accuracy. Keep the other four scenes' tighter oracle and independently
+        // verify the negative result's sign, solver floor and actual painted contact.
+        let negative = name == "ON negative same-segment region";
+        let accuracy = if negative { 1e-6 } else { 1e-7 };
         for (a, e) in [(bounds.x0, expected.x0), (bounds.y0, expected.y0), (bounds.x1, expected.x1), (bounds.y1, expected.y1)] {
-            assert!((a - e).abs() < 1e-7, "{name}: actual {bounds:?}, expected {expected:?}");
+            assert!((a - e).abs() < accuracy, "{name}: actual {bounds:?}, expected {expected:?}");
+        }
+        if negative {
+            let contact = Point::new(bounds.x0, bounds.y1);
+            assert!(bounds.x0 < 500.0 && bounds.x1 == 500.0 && 500.0 - bounds.x0 >= 0.01 && bounds.y1 - 500.0 >= 0.01);
+            assert!(contact.distance(Point::new(expected.x0, expected.y1)) <= 1e-6, "nearest geometric accuracy: {contact:?}");
+            assert!(painted.nearest(contact).unwrap().4 < 1e-7, "negative result remains on the real painted edge: {contact:?}");
         }
     }
 }
