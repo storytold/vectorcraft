@@ -8924,6 +8924,11 @@ breakText	Glyphs	Glifs
 @msg	A joint does not close by {gap} pt.	Una unió no es tanca per {gap} pt.
 @msg	Two panels pass through each other.	Dos panells es travessen l’un a l’altre.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer ha de ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"
+	Orbit Lines	Línies orbitals
+	Petal Garland	Garlanda de pètals
+	Lattice Braid	Trena reticular
+	Facet Sweep	Traç facetat
+	Artistic Brushes	Pinzells artístics
 	Paint	Pintura
 	Flat Sweep	Traç pla
 	Dry Drag	Arrossegament sec

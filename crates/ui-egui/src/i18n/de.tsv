@@ -10389,6 +10389,11 @@ breakText	Glyphs	Glyphen
 @msg	A panel is not joined to the rest by a crease.	Ein Feld ist durch keine Rilllinie mit den übrigen verbunden.
 @msg	A fold line is on a non-printing layer.	Eine Faltlinie liegt auf einer nicht druckbaren Ebene.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Felder: {panels}, Scharniere: {hinges}, Fehler: {errors}, Warnungen: {warnings}
+	Orbit Lines	Orbitlinien
+	Petal Garland	Blütengirlande
+	Lattice Braid	Gittergeflecht
+	Facet Sweep	Facettenstrich
+	Artistic Brushes	Künstlerische Pinsel
 	Paint	Farbe
 	Flat Sweep	Flacher Schwung
 	Dry Drag	Trockener Zug

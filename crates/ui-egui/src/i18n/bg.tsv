@@ -7888,6 +7888,11 @@ breakText	Glyphs	Глифи
 @msg	A joint does not close by {gap} pt.	Една връзка не се затваря с {gap} pt.
 @msg	Two panels pass through each other.	Два панела минават един през друг.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer трябва да е "singleLine", "everyLine", "standardSingleLine" или "standardEveryLine"
+	Orbit Lines	Орбитални линии
+	Petal Garland	Гирлянд от венчелистчета
+	Lattice Braid	Решетъчна плетка
+	Facet Sweep	Фасетен щрих
+	Artistic Brushes	Художествени четки
 	Paint	Боя
 	Flat Sweep	Плосък замах
 	Dry Drag	Сухо влачене

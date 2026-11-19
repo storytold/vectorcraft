@@ -11034,6 +11034,11 @@ font-script	Japanese	იაპონური
 @msg	A joint does not close by {gap} pt.	შეერთება არ იხურება {gap} pt-ით.
 @msg	Two panels pass through each other.	ორი პანელი ერთმანეთში გადის.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer უნდა იყოს "singleLine", "everyLine", "standardSingleLine" ან "standardEveryLine"
+	Orbit Lines	ორბიტული ხაზები
+	Petal Garland	ფურცლების გირლანდა
+	Lattice Braid	ბადის ნაწნავი
+	Facet Sweep	წახნაგოვანი მონასმი
+	Artistic Brushes	მხატვრული ფუნჯები
 	Paint	საღებავი
 	Flat Sweep	ბრტყელი მოსმა
 	Dry Drag	მშრალი მოსმა

@@ -8897,6 +8897,11 @@ breakText	Glyphs	Γλύφοι
 @msg	A joint does not close by {gap} pt.	Μια ένωση δεν κλείνει κατά {gap} pt.
 @msg	Two panels pass through each other.	Δύο πάνελ διαπερνούν το ένα το άλλο.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	το composer πρέπει να είναι "singleLine", "everyLine", "standardSingleLine" ή "standardEveryLine"
+	Orbit Lines	Τροχιακές γραμμές
+	Petal Garland	Γιρλάντα πετάλων
+	Lattice Braid	Πλεξούδα πλέγματος
+	Facet Sweep	Πολυεδρική πινελιά
+	Artistic Brushes	Καλλιτεχνικά πινέλα
 	Paint	Ζωγραφική
 	Flat Sweep	Επίπεδη πινελιά
 	Dry Drag	Στεγνό σύρσιμο
