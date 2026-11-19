@@ -1034,9 +1034,10 @@ const MAX_SAVED_RECENT_COMMANDS: usize = 20;
 /// Puts `id` first in the Recent Commands ids `list`, removing its earlier place, and keeps the
 /// newest [`MAX_RECENT_COMMANDS`] ids that are `known`. An id that is not `known` now (a plug-in
 /// that is disabled or not loaded yet) keeps its place among them, so it shows again when its
-/// command comes back. The list never holds more than [`MAX_SAVED_RECENT_COMMANDS`] ids.
+/// command comes back. The palette's own toggle, saved before its picks were left out, is dropped
+/// so that it does not take a place. The list never holds more than [`MAX_SAVED_RECENT_COMMANDS`] ids.
 fn remember(list: &mut Vec<String>, id: &str, known: impl Fn(&str) -> bool) {
-    list.retain(|c| c != id);
+    list.retain(|c| c != id && c != PALETTE_TOGGLE);
     list.insert(0, id.to_string());
     let mut kept = 0;
     let end = list.iter().position(|c| {
@@ -1374,9 +1375,9 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             // The list shows as many rows as fit above the footer in the window, up to
             // VISIBLE_ROWS; a page is that many rows.
             let spacing = ui.spacing().item_spacing.y;
-            // Under the recent picks no footer line is drawn.
-            let footer_line = if empty { 0.0 } else { spacing + 6.0 + ui.text_style_height(&egui::TextStyle::Body) };
-            let footer_height = footer_line + f32::from(margin) + BOTTOM_GAP;
+            // Under the recent picks the footer line holds only where the highlighted pick's home is,
+            // when no callout shows it, so the line's room is kept there too.
+            let footer_height = spacing + 6.0 + ui.text_style_height(&egui::TextStyle::Body) + f32::from(margin) + BOTTOM_GAP;
             let room = screen.bottom() - footer_height - ui.cursor().top() - spacing;
             let rows = ((room / ROW_HEIGHT).floor().max(1.0) as usize).min(VISIBLE_ROWS);
             sel = moves.apply(sel, n, rows);
@@ -1486,15 +1487,17 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 Some(Pointer::Footer(text)) => hint = Some(text),
                 None => {}
             }
-            // Under the recent picks no count is shown; with none, one dimmed line says what a search
-            // finds.
-            if !empty {
+            // Under the recent picks no count is shown, only where the highlighted pick's home is when
+            // no callout shows it; with no picks, one dimmed line says what a search finds.
+            if !empty || (n > 0 && hint.is_some()) {
                 ui.add_space(6.0);
                 ui.scope(|ui| {
                     // The footer stays one line of text tall, as the list's height counts it.
                     ui.spacing_mut().interact_size.y = 0.0;
                     ui.horizontal(|ui| {
-                        ui.label(egui::RichText::new(footer(n, total)).color(t.text_dim));
+                        if !empty {
+                            ui.label(egui::RichText::new(footer(n, total)).color(t.text_dim));
+                        }
                         if let Some(hint) = hint {
                             ui.add(egui::Label::new(egui::RichText::new(hint).color(t.text_dim)).truncate());
                         }
@@ -1963,6 +1966,24 @@ mod tests {
         assert_eq!(list.first().map(String::as_str), Some("paint.swap"));
     }
 
+    /// A palette toggle saved in a full Recent Commands list does not take one of its places: after
+    /// another pick the list keeps that pick and the seven newest commands before it, and the
+    /// toggle is dropped.
+    #[test]
+    fn a_saved_palette_toggle_does_not_take_a_recent_place() {
+        let entries = build(Lang::EN);
+        let known = |c: &str| entries.iter().any(|e| e.id == c);
+        assert!(known(PALETTE_TOGGLE), "the toggle has a result");
+        let others: Vec<String> =
+            entries.iter().filter(|e| e.id != PALETTE_TOGGLE && e.id != "paint.swap").take(MAX_RECENT_COMMANDS).map(|e| e.id.clone()).collect();
+        let mut list: Vec<String> = std::iter::once(PALETTE_TOGGLE.to_string()).chain(others.iter().cloned()).collect();
+        remember(&mut list, "paint.swap", known);
+        let expected: Vec<String> = std::iter::once("paint.swap".to_string()).chain(others.iter().take(MAX_RECENT_COMMANDS - 1).cloned()).collect();
+        assert_eq!(list, expected);
+        let shown: Vec<&str> = recent(&entries, &list).iter().map(|e| e.id.as_str()).collect();
+        assert_eq!(shown.len(), MAX_RECENT_COMMANDS);
+    }
+
     /// The open palette drawn over `app`, after the frame's keys go to the shortcuts as in the app,
     /// with a query no result matches, so the only command buttons are the Recent Commands list's.
     fn palette_harness(mut app: VectorcraftApp) -> egui_kittest::Harness<'static, VectorcraftApp> {
@@ -2171,8 +2192,7 @@ mod tests {
         let after = open.listed();
         assert_eq!(after.first().map(String::as_str), Some(effect));
         assert_eq!(after.get(1).map(String::as_str), Some(tool), "only the pick moves");
-        let entries = entries(&open.ctx, Lang::EN);
-        let label = entries.iter().find(|e| e.id == effect).map(|e| row_label(e, &home_text(&open.app, e))).unwrap();
+        let label = open.said(effect);
         assert_eq!(field_description(&nodes), format!("1 of {}: {label}", after.len()));
         open.press(egui::Key::Enter, 1);
         assert!(open.app.ui.dialog.is_some(), "Enter ran the effect again: {}", open.app.ui.status);
@@ -2420,13 +2440,7 @@ mod tests {
 
     /// The row labels the palette shows for the commands `ids`, in that order.
     fn row_labels(open: &Open, ids: &[&str]) -> Vec<String> {
-        let entries = entries(&open.ctx, Lang::EN);
-        ids.iter()
-            .map(|id| {
-                let e = entries.iter().find(|e| e.id == *id).unwrap();
-                row_label(e, &home_text(&open.app, e))
-            })
-            .collect()
+        ids.iter().map(|id| open.said(id)).collect()
     }
 
     /// An empty search, or one of spaces only, lists the recent picks under a Recent heading, most
@@ -2728,7 +2742,8 @@ mod tests {
         assert!(open.app.ui.dialog.is_some(), "{}", open.app.ui.status);
         assert_eq!(open.app.ui.recent_commands, [id, "paint.swap"]);
         // Cancel closes the dialog without running the command.
-        open.app.ui.dialog = None;
+        crate::dialogs::cancel(&mut open.app);
+        assert!(open.app.ui.dialog.is_none());
         open.frame(vec![]);
         assert_eq!(open.app.ui.recent_commands, [id, "paint.swap"]);
     }
@@ -4819,6 +4834,21 @@ mod tests {
         let footer = window.popup_labels(&nodes);
         assert!(footer.contains(&"Drawing".to_string()), "{footer:?}");
         assert!(!footer.iter().any(|l| l.contains("not shown now")), "{footer:?}");
+    }
+
+    /// Under the recent picks of an empty search, the footer still says where the highlighted
+    /// pick's home is when no callout can show it, without a count of the results.
+    #[test]
+    fn under_the_recent_picks_the_footer_names_a_home_out_of_view() {
+        let mut window = Window::new();
+        window.app.ui.recent_commands = vec!["tool:pen".into()];
+        window.app.ui.screen_mode = 3;
+        let nodes = window.search("");
+        assert_eq!(window.highlighted(), "tool:pen");
+        assert_eq!(window.callout(), None);
+        let footer = window.popup_labels(&nodes);
+        assert!(footer.contains(&"Toolbar, not shown now".to_string()), "{footer:?}");
+        assert!(!footer.iter().any(|l| l.ends_with(" result") || l.ends_with(" results")), "no count: {footer:?}");
     }
 
     /// No callout where no control in view shows the home: in Presentation Mode, with the Tools

@@ -149,6 +149,7 @@
 	Add Selected Artwork as One Asset	પસંદ કરેલી આર્ટવર્ક એક સંપત્તિ તરીકે ઉમેરો
 	Add Spine Point	સ્પાઇન બિંદુ ઉમેરો
 	Add Used Colors	વપરાયેલા રંગ ઉમેરો
+	Add Selected Colors	પસંદ કરેલા રંગ ઉમેરો
 	Add as Effect	ઇફેક્ટ તરીકે ઉમેરો
 	Add space to fit	ફિટ કરવા જગ્યા ઉમેરો
 	Add to Brushes	બ્રશમાં ઉમેરો
@@ -2902,6 +2903,11 @@
 	Preserve Alpha Transparency	આલ્ફા પારદર્શિતા જાળવો
 	Preserve Appearance and Overprints	દેખાવ અને ઓવરપ્રિન્ટ જાળવો
 	Preserve CMYK Numbers	CMYK નંબર જાળવો
+	Preserve RGB Numbers	RGB નંબર જાળવો
+	Device to Simulate:	અનુકરણ કરવાનું ઉપકરણ:
+	Simulate Paper Color	કાગળના રંગનું અનુકરણ કરો
+	Simulate Black Ink	કાળી શાહીનું અનુકરણ કરો
+	Load…	લોડ કરો…
 	Preserve Editing Capabilities	સંપાદન ક્ષમતાઓ જાળવો
 	Preserve Lightness	તેજ જાળવો
 	Preserve Overprints and Spot Colors	ઓવરપ્રિન્ટ અને સ્પોટ રંગ જાળવો
@@ -3156,6 +3162,37 @@
 	Remove Effect	ઇફેક્ટ દૂર કરો
 	Remove Effects	ઇફેક્ટ્સ દૂર કરો
 	Remove Gaps	ગેપ દૂર કરો
+# Stroke arrowheads (Stroke panel, Dimension Tool Options and Properties › Arrow Style).
+	Triangle (open)	ત્રિકોણ (ખુલ્લો)
+	Circle (open)	વર્તુળ (ખુલ્લું)
+	Square (open)	ચોરસ (ખુલ્લો)
+	Arrow (open)	તીર (ખુલ્લું)
+	Barbed	કાંટાળું
+arrowhead	Feather	પીંછું
+	Half Arrow (left)	અડધું તીર (ડાબે)
+	Half Arrow (right)	અડધું તીર (જમણે)
+	Double Bar	બેવડી પટ્ટી
+	Dot on Bar	પટ્ટી પર બિંદુ
+	Chevron	શેવરોન
+	Cross	ક્રોસ
+	Plus	પ્લસ
+	Hexagon (open)	ષટ્કોણ (ખુલ્લો)
+	Tag	ટૅગ
+	Tag (open)	ટૅગ (ખુલ્લો)
+	Half Circle	અર્ધવર્તુળ
+	Drop	ટીપું
+	Slash	સ્લૅશ
+	Double Slash	બેવડો સ્લૅશ
+	Diamond (open)	ડાયમંડ (ખુલ્લો)
+	Reverse Triangle	ઊંધો ત્રિકોણ
+	Swallowtail	અબાબીલની પૂંછડી
+	Bracket	કૌંસ
+	Fork	કાંટો
+	Leaf	પાંદડું
+	Kite	પતંગ
+	Triangle to Bar	ત્રિકોણથી પટ્ટી
+	Oval	અંડાકાર
+	Line Arrow	રેખા તીર
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	સામાન્ય સ્પર્શરેખાઓ…
 	Common Tangents	સામાન્ય સ્પર્શરેખાઓ
@@ -3405,6 +3442,7 @@
 	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	દસ્તાવેજ સેટઅપની ભાષા અંગ્રેજી: USA હોય ત્યાં સુધી નવા ટેક્સ્ટને આ ભાષા મળે છે; દસ્તાવેજમાં પહેલેથી રહેલું ટેક્સ્ટ પોતાની ભાષા રાખે છે.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	હાઇફનેટ કરો ચાલુ હોય તેવા ફકરાઓમાં, સૂચિમાંનો શબ્દ ફક્ત તેમાં લખેલા હાઇફન પર જ તૂટે છે, અથવા કોઈ ન હોય તો ક્યાંય નહીં, તેની ભાષા કે કેસ ગમે તે હોય.
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	ડેસ્કટોપ સંસ્કરણમાં, આ ફોલ્ડરના .wasm પ્લગ-ઇન્સ શરૂઆતમાં અને અહીં નવા ફોલ્ડર સાથે ઠીક પર ક્લિક કરો ત્યારે લોડ થાય છે, સેફ મોડ સિવાય; વેબ સંસ્કરણ તેમને લોડ કરતું નથી.
+	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	પ્લગ-ઇનના ઑબ્જેક્ટ ફિલ્ટરનું દરેક રન કેટલી સૂચનાઓ વાપરી શકે; મોટું સામાન્ય કરતાં વધુ મંજૂરી આપે છે, 60 સેકન્ડની એ જ મર્યાદા સાથે. ભારે ફિલ્ટર પોતાનું બજેટ રાખે છે.
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	પ્રથમ સ્ક્રેચ ડિસ્ક પસંદગી: Startup, None અથવા ફોલ્ડરનો પાથ; VectorCraft તેને સાચવે છે, પરંતુ હજી સ્ક્રેચ ડિસ્કનો ઉપયોગ કરતું નથી.
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	બીજી સ્ક્રેચ ડિસ્ક પસંદગી: Startup, None અથવા ફોલ્ડરનો પાથ; VectorCraft તેને સાચવે છે, પરંતુ હજી સ્ક્રેચ ડિસ્કનો ઉપયોગ કરતું નથી.
 	How light or dark the interface is.	ઇન્ટરફેસ કેટલું આછું કે ઘેરું છે.
@@ -3423,6 +3461,7 @@
 	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	ઍનિમેટેડ ઝૂમ ફક્ત આ ચાલુ હોય ત્યારે જ કામ કરે છે; બંધ હોય ત્યારે, ઍનિમેટેડ ઝૂમ ઝાંખું થાય છે અને ઝૂમ ઍનિમેટ થતું નથી.
 	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	વ્હીલથી ઝૂમ સરળતાથી સરકે છે, અને ઝૂમ ટૂલ તમે બાજુમાં ખેંચો અથવા દબાવી રાખો ત્યારે ઝૂમ કરે છે; બંધ હોય ત્યારે, ઝૂમ ટૂલ તમે ખેંચો તે વિસ્તાર પર ઝૂમ કરે છે.
 	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	આગલી શરૂઆતથી, ડેસ્કટોપ સંસ્કરણ આ પ્રકારના ગ્રાફિક્સ પ્રોસેસરથી દોરે છે; સ્વચાલિત ડિસ્પ્લે ચલાવતા પ્રોસેસરને પસંદ કરે છે. વેબ સંસ્કરણ તેનો ઉપયોગ કરતું નથી.
+	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	આગલી શરૂઆતથી, વિન્ડો ડિસ્પ્લે રિફ્રેશની રાહ જોયા વિના ફ્રેમ બતાવે છે, સેકન્ડમાં વધુમાં વધુ 240; બંધ હોય ત્યારે ગતિ ડિસ્પ્લે નક્કી કરે છે. શરૂઆતમાં સેટ કરેલો પ્રેઝન્ટ મોડ પ્રાથમિકતા ધરાવે છે.
 	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	દરેક દસ્તાવેજ રાખે તે પૂર્વવત્ પગલાંની મહત્તમ સંખ્યા; ઓછી સંખ્યા ઠીક પર ક્લિક કરો ત્યારે સૌથી જૂનાં પગલાં દૂર કરે છે. પગલાં વધુ મેમરી લે ત્યારે વહેલાં પણ દૂર થઈ શકે છે.
 	Shows the artwork changing while you drag; off, outlines follow the drag and the artwork changes when you release. A ruler guide always moves as you drag.	તમે ખેંચો ત્યારે આર્ટ બદલાતી બતાવે છે; બંધ હોય ત્યારે, રૂપરેખાઓ ખેંચાણને અનુસરે છે અને તમે છોડો ત્યારે આર્ટ બદલાય છે. રૂલરની માર્ગદર્શિકા ખેંચતી વખતે હંમેશા ખસે છે.
 	How many worker threads draw the artwork; -1 uses one fewer than the cores VectorCraft may use, at most 8, and 0 uses none. The web version always uses none.	કેટલા વર્કર થ્રેડ આર્ટ દોરે છે; -1 VectorCraft વાપરી શકે તે કોરથી એક ઓછો વાપરે છે, વધુમાં વધુ 8, અને 0 એક પણ નહીં. વેબ સંસ્કરણ ક્યારેય કોઈ વાપરતું નથી.
@@ -3449,6 +3488,10 @@
 	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft આ પસંદગી સાચવે છે, પણ નકલ અને કાપો હજી લેગસી વેક્ટર ક્લિપબોર્ડ ફોર્મેટ વાપરતા નથી.
 	Preserve Paths or Preserve Appearance and Overprints for the legacy vector clipboard; VectorCraft stores the choice but does not use it yet.	લેગસી વેક્ટર ક્લિપબોર્ડ માટે પાથ જાળવો અથવા દેખાવ અને ઓવરપ્રિન્ટ જાળવો; VectorCraft પસંદગી સાચવે છે પણ હજી તેને વાપરતું નથી.
 	Keep Formatting keeps the styles of text copied from VectorCraft type when it is pasted into type; Keep Plain Text gives it the style where it lands.	ફોર્મેટિંગ રાખો VectorCraftના ટેક્સ્ટ ઑબ્જેક્ટમાંથી નકલ કરેલા ટેક્સ્ટને ટેક્સ્ટ ઑબ્જેક્ટમાં ચોંટાડતાં તેની શૈલીઓ રાખે છે; સાદો ટેક્સ્ટ રાખો તેને જ્યાં પડે ત્યાંની શૈલી આપે છે.
+	Display All Blacks as Rich Black shows pure CMYK black (black ink alone at 100%) as RGB black on the canvas; Display All Blacks Accurately converts it through the CMYK working space.	બધા બ્લેક્સ રિચ બ્લેક તરીકે બતાવો કેનવાસ પર શુદ્ધ CMYK બ્લેક (માત્ર 100% બ્લેક શાહી)ને RGB બ્લેક તરીકે બતાવે છે; બધા બ્લેક્સ ચોક્કસ રીતે બતાવો તેને કાર્યકારી CMYK સ્પેસ દ્વારા રૂપાંતરિત કરે છે.
+	Output All Blacks as Rich Black draws pure CMYK black as RGB black in RGB and grayscale raster exports and Print as Bitmap; it does not change vector exports, CMYK JPEG, TIFF and PSD, or other printing.	બધા બ્લેકને રિચ બ્લેક તરીકે આઉટપુટ કરો RGB અને ગ્રેસ્કેલ રાસ્ટર એક્સપોર્ટમાં અને બિટમેપ તરીકે પ્રિન્ટ કરો સાથે શુદ્ધ CMYK બ્લેકને RGB બ્લેક તરીકે દોરે છે; તે વેક્ટર એક્સપોર્ટ, CMYK JPEG, TIFF અને PSD કે અન્ય પ્રિન્ટિંગ બદલતું નથી.
+	On a touch screen, switches to the Touch workspace; turning this off, or losing the touch screen, goes back to the workspace it switched from.	ટચ સ્ક્રીન પર ટચ વર્કસ્પેસમાં બદલે છે; આ વિકલ્પ બંધ કરવાથી અથવા ટચ સ્ક્રીન ન મળે ત્યારે તે પહેલાંના વર્કસ્પેસમાં પાછું જાય છે.
+	A two-finger tap on the canvas undoes, or switches between selection and drawing tools in the Touch workspace, and a three-finger tap redoes; neither works in Presentation Mode.	કેનવાસ પર બે આંગળીનો ટૅપ પૂર્વવત્ કરે છે, અથવા ટચ વર્કસ્પેસમાં પસંદગી અને ડ્રોઇંગ ટૂલ વચ્ચે બદલે છે, અને ત્રણ આંગળીનો ટૅપ ફરીથી કરે છે; પ્રેઝન્ટેશન મોડમાં બેમાંથી કોઈ કામ કરતું નથી.
 	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	દસ્તાવેજ સેટઅપની ભાષા અંગ્રેજી: USA હોય અને [Normal Character Style] કોઈ ભાષા સેટ ન કરે ત્યાં સુધી નવા ટેક્સ્ટને આ ભાષા મળે છે; દસ્તાવેજમાં પહેલેથી રહેલું ટેક્સ્ટ પોતાની ભાષા રાખે છે.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	હાઇફનેટ કરો ચાલુ હોય તેવા ફકરાઓમાં, સૂચિમાંનો શબ્દ ફક્ત તેમાં લખેલા હાઇફન પર જ તૂટે છે, અથવા કોઈ ન હોય તો ક્યાંય નહીં, તેનો કેસ ગમે તે હોય; કોરિયન શબ્દોને હાઇફન મળતો નથી, અને ભારતીય ભાષાઓના શબ્દો અક્ષર-સમૂહની અંદર તૂટતા નથી.
 	Restored documents open unsaved: save them to keep them.	પુનઃસ્થાપિત દસ્તાવેજો અસાચવેલા ખુલશે: તેમને રાખવા માટે સાચવો.
@@ -3960,6 +4003,10 @@
 	Add Color Tool	રંગ ઉમેરો સાધન
 	Remove Color Tool	રંગ દૂર કરો સાધન
 	Remove Color	રંગ દૂર કરો
+	Set As Base Color	આધાર રંગ તરીકે સેટ કરો
+	Select Shade	છાયા પસંદ કરો
+	Add New Color	નવો રંગ ઉમેરો
+	Set Current Color As Base Color	વર્તમાન રંગને આધાર રંગ તરીકે સેટ કરો
 	Find the selected colors in the artwork	પસંદ કરેલા રંગો આર્ટવર્કમાં શોધો
 	Show handles when multiple anchors are selected	બહુવિધ એન્કર પસંદ હોય ત્યારે હૅન્ડલ બતાવો
 	Show in Folder	ફોલ્ડરમાં બતાવો
@@ -5062,6 +5109,7 @@ antiAlias	Sharp	શાર્પ
 	Composition	કમ્પોઝિશન
 	Place Brush Art	બ્રશ આર્ટ પ્લેસ કરો
 	Replace Brush Art	બ્રશ આર્ટ બદલો
+	Replace Pattern Art	પેટર્ન આર્ટ બદલો
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	સ્ટ્રોક્સ આ બ્રશ વાપરે છે. તે સ્ટ્રોક્સ પર નવી આર્ટ લાગુ કરવી છે કે તેમને જેમ છે તેમ રાખીને નવી આર્ટવાળી બ્રશની નકલ ઉમેરવી છે?
 	Apply to Strokes	સ્ટ્રોક્સ પર લાગુ કરો
 	Leave Strokes	સ્ટ્રોક્સ જેમ છે તેમ રાખો
@@ -5583,6 +5631,11 @@ swatch	[Registration]	[રજિસ્ટ્રેશન]
 	Standard Single-line Composer	સ્ટાન્ડર્ડ સિંગલ-લાઇન કમ્પોઝર
 	Standard Every-line Composer	સ્ટાન્ડર્ડ એવરી-લાઇન કમ્પોઝર
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer આમાંથી એક હોવું જોઈએ: "singleLine", "everyLine", "standardSingleLine" અથવા "standardEveryLine"
+	Engraving	કોતરણી
+	Fine Hatching	ઝીણી રેખાઓ
+	Dense Hatching	ગાઢ રેખાઓ
+	Tapered Hatching	પાતળી થતી રેખાઓ
+	Broken Hatching	તૂટક રેખાઓ
 	Image Brush	છબી બ્રશ
 	Soft Bloom	નરમ ફૂલ
 	Halftone Field	હાફટોન ક્ષેત્ર

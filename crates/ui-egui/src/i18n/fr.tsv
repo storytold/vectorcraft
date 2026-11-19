@@ -141,6 +141,7 @@
 	Add to Selection	Ajouter à la sélection
 	Add to Swatches	Ajouter au nuancier
 	Add Used Colors	Ajouter les couleurs utilisées
+	Add Selected Colors	Ajouter les couleurs sélectionnées
 	Additional Plug-ins Folder	Dossier de modules externes supplémentaires
 	Plug-in Instruction Budget	Budget d’instructions des modules externes
 	Additional Fonts Folder	Dossier de polices supplémentaires
@@ -1696,6 +1697,10 @@ font-technology	Variable	Variables
 	Add Color Tool	Outil Ajouter une couleur
 	Remove Color Tool	Outil Supprimer une couleur
 	Remove Color	Supprimer la couleur
+	Set As Base Color	Définir comme couleur de base
+	Select Shade	Sélectionner une nuance
+	Add New Color	Ajouter une nouvelle couleur
+	Set Current Color As Base Color	Définir la couleur actuelle comme couleur de base
 	Find the selected colors in the artwork	Rechercher les couleurs sélectionnées dans l’illustration
 	Harmony Rules:	Règles d’harmonie :
 	Harmony Sets	Ensembles d’harmonies
@@ -2854,6 +2859,11 @@ font-technology	Variable	Variables
 	Preserve Alpha Transparency	Conserver la transparence alpha
 	Preserve Appearance and Overprints	Conserver l’aspect et les surimpressions
 	Preserve CMYK Numbers	Conserver les valeurs CMJN
+	Preserve RGB Numbers	Conserver les valeurs RVB
+	Device to Simulate:	Périphérique à simuler :
+	Simulate Paper Color	Simuler la couleur du papier
+	Simulate Black Ink	Simuler l’encre noire
+	Load…	Charger…
 	Preserve Editing Capabilities	Conserver les fonctions d’édition
 	Preserve editing capabilities	Conserver les fonctions d’édition
 	Preserve Lightness	Conserver la luminosité
@@ -3354,6 +3364,7 @@ digits	Malayalam	Malayalam
 	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	Le nouveau texte prend cette langue tant que la langue de Format de document est l’anglais des États-Unis. Le texte déjà présent dans un document garde sa langue.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	Dans les paragraphes où Césure est activée, un mot de la liste n’est coupé qu’aux traits d’union saisis dedans, ou nulle part s’il n’en a pas, quelles que soient sa langue et sa casse.
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	Dans la version de bureau, les modules externes .wasm de ce dossier se chargent au démarrage et lorsque vous cliquez sur OK avec un nouveau dossier ici, sauf en mode sans échec. La version web ne les charge pas.
+	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	Le nombre d’instructions que chaque exécution d’un filtre d’objets d’un module externe peut utiliser. Grand en autorise plus que Normal, avec la même limite de 60 secondes. Les filtres lourds gardent leur propre budget.
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Premier disque de travail (Startup, None ou le chemin d’un dossier). VectorCraft l’enregistre, mais n’utilise pas encore de disques de travail.
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Second disque de travail (Startup, None ou le chemin d’un dossier). VectorCraft l’enregistre, mais n’utilise pas encore de disques de travail.
 	How light or dark the interface is.	Le degré de clarté de l’interface, du plus sombre au plus clair.
@@ -3372,6 +3383,7 @@ digits	Malayalam	Malayalam
 	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	Le Zoom animé ne fonctionne que si cette option est activée. Désactivée, le Zoom animé est grisé et le zoom n’est pas animé.
 	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	Le zoom à la molette glisse en douceur, et l’Outil Zoom zoome quand vous faites glisser de côté ou le maintenez enfoncé. Désactivée, l’Outil Zoom zoome sur la zone que vous parcourez.
 	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	À partir du prochain démarrage, la version de bureau dessine avec ce type de processeur graphique. Automatique préfère celui qui pilote l’écran. La version web ne l’utilise pas.
+	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	À partir du prochain démarrage, la fenêtre affiche les images sans attendre le rafraîchissement de l’écran, au plus 240 par seconde. Désactivé, l’écran les cadence. Un mode de présentation défini au lancement a la priorité.
 	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	Le nombre maximal d’étapes d’annulation que chaque document conserve. Un nombre plus bas supprime les plus anciennes quand vous cliquez sur OK. Des étapes peuvent aussi partir plus tôt si elles occupent trop de mémoire.
 	Shows the artwork changing while you drag; off, outlines follow the drag and the artwork changes when you release. A ruler guide always moves as you drag.	Montre l’illustration qui change pendant que vous faites glisser. Désactivée, des contours suivent le glissement et l’illustration change quand vous relâchez. Un repère de règle suit toujours le glissement.
 	How many worker threads draw the artwork; -1 uses one fewer than the cores VectorCraft may use, at most 8, and 0 uses none. The web version always uses none.	Le nombre de threads de travail qui dessinent l’illustration. Avec -1, VectorCraft en utilise un de moins que les cœurs qu’il peut utiliser, 8 au plus, et avec 0 aucun. La version web n’en utilise jamais.
@@ -3398,6 +3410,10 @@ digits	Malayalam	Malayalam
 	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft enregistre ce choix, mais Copier et Couper n’utilisent pas encore de format de presse-papiers vectoriel hérité.
 	Preserve Paths or Preserve Appearance and Overprints for the legacy vector clipboard; VectorCraft stores the choice but does not use it yet.	Conserver les tracés ou Conserver l’aspect et les surimpressions pour le presse-papiers vectoriel hérité. VectorCraft enregistre le choix mais ne l’utilise pas encore.
 	Keep Formatting keeps the styles of text copied from VectorCraft type when it is pasted into type; Keep Plain Text gives it the style where it lands.	Conserver la mise en forme garde les styles du texte copié depuis un objet texte de VectorCraft quand il est collé dans un objet texte. Conserver le texte brut lui donne le style de l’endroit où il arrive.
+	Display All Blacks as Rich Black shows pure CMYK black (black ink alone at 100%) as RGB black on the canvas; Display All Blacks Accurately converts it through the CMYK working space.	Afficher tous les noirs en noir intense affiche le noir CMJN pur (encre noire seule à 100 %) en noir RVB sur la zone de travail. Afficher tous les noirs avec précision le convertit par l’espace CMJN de travail.
+	Output All Blacks as Rich Black draws pure CMYK black as RGB black in RGB and grayscale raster exports and Print as Bitmap; it does not change vector exports, CMYK JPEG, TIFF and PSD, or other printing.	Reproduire tous les noirs en noir intense dessine le noir CMJN pur en noir RVB dans les exportations matricielles RVB et en niveaux de gris et avec Imprimer en tant que bitmap. Les exportations vectorielles, les JPEG, TIFF et PSD CMJN et les autres impressions ne changent pas.
+	On a touch screen, switches to the Touch workspace; turning this off, or losing the touch screen, goes back to the workspace it switched from.	Sur un écran tactile, passe à l’espace de travail tactile. Désactiver l’option ou perdre l’écran tactile ramène à l’espace de travail d’avant ce changement.
+	A two-finger tap on the canvas undoes, or switches between selection and drawing tools in the Touch workspace, and a three-finger tap redoes; neither works in Presentation Mode.	Un toucher à deux doigts sur la zone de travail annule ou, dans l’espace de travail tactile, bascule entre outils de sélection et de dessin, et un toucher à trois doigts rétablit. Aucun ne fonctionne en mode Présentation.
 	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	Le nouveau texte prend cette langue tant que la langue de Format de document est l’anglais des États-Unis et que [Style de caractère normal] n’en définit aucune. Le texte déjà présent dans un document garde sa langue.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	Dans les paragraphes où Césure est activée, un mot de la liste n’est coupé qu’aux traits d’union saisis dedans, ou nulle part s’il n’en a pas, quelle que soit sa casse. Les mots coréens ne prennent pas de trait d’union, et les mots en langues indiennes ne sont pas coupés à l’intérieur d’un groupe de caractères.
 	Reset all preferences to their defaults?	Rétablir toutes les préférences à leur valeur par défaut ?
@@ -5362,6 +5378,7 @@ liquify-list-end	{0}, {1}	{0} et {1}
 @msg	no native format	aucun format natif
 @msg	no pages	aucune page
 @msg	no pattern `{name}`	aucun motif `{name}`
+@msg	art painted with `{name}` can't be its tile	une illustration peinte avec `{name}` ne peut pas être son carreau
 @msg	no perspective grid preset named `{name}`	aucun paramètre prédéfini de grille de perspective nommé `{name}`
 @msg	no plug-in {0} is installed	aucun plug-in {0} n’est installé
 @msg	no plug-in {id} is installed	aucun plug-in {id} n’est installé
@@ -6489,6 +6506,7 @@ lighting	Light	Lumière
 	B5	B5
 	Bar	Barre
 	Barbed	Barbelée
+arrowhead	Feather	Empennage
 	Baseline (Standard)	De base (standard)
 	Baseline Optimized	De base optimisé
 	Basic	De base
@@ -6617,6 +6635,7 @@ lighting	Light	Lumière
 	Letterhead A4	Papier à en-tête A4
 	Letterhead Letter	Papier à en-tête Lettre US
 	Line Art	Dessin au trait
+	Line Arrow	Flèche filaire
 	Linear	Linéaire
 	Logo 1000×1000	Logo 1000×1000
 	Low Fidelity Photo	Photo basse fidélité
@@ -8293,6 +8312,7 @@ breakText	Glyphs	Glyphes
 	Remove Strokes	Supprimer les contours
 	Place Brush Art	Placer l’illustration de la forme
 	Replace Brush Art	Remplacer l’illustration de la forme
+	Replace Pattern Art	Remplacer l’illustration du motif
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Des contours utilisent cette forme. Appliquer la nouvelle illustration à ces contours, ou les laisser tels quels et ajouter une copie de la forme avec la nouvelle illustration ?
 	Apply to Strokes	Appliquer aux contours
 	Leave Strokes	Conserver les contours
@@ -10682,6 +10702,11 @@ breakText	Glyphs	Glyphes
 @msg	A joint does not close by {gap} pt.	Un joint ne se ferme pas, avec un écart de {gap} pt.
 @msg	Two panels pass through each other.	Deux panneaux se traversent.
 @msg	{_1} × {_2} pixels is too large for GIF (at most 65535 pixels a side): lower the resolution	{_1} × {_2} pixels, c’est trop grand pour le GIF (65535 pixels par côté au plus) : réduisez la résolution
+	Engraving	Gravure
+	Fine Hatching	Hachures fines
+	Dense Hatching	Hachures denses
+	Tapered Hatching	Hachures effilées
+	Broken Hatching	Hachures interrompues
 	Image Brush	Pinceaux d’image
 	Soft Bloom	Floraison douce
 	Halftone Field	Champ de demi-teintes
