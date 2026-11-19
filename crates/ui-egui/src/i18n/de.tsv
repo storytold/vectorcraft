@@ -1356,6 +1356,20 @@ font-technology	Variable	Variabel
 @msg	no match of `find` at bytes {_1}..{_2} of object {_3}	kein Treffer für `find` bei Byte {_1}..{_2} von Objekt {_3}
 	Find Font	Schrift suchen
 	Find Font…	Schrift suchen…
+	Retype	Neu setzen
+	Find Matching Fonts	Passende Schriften suchen
+	Find more font matches	Weitere passende Schriften suchen
+	Type your text to preview	Text für die Vorschau eingeben
+	Select outlined text, then Find Matching Fonts.	Wählen Sie in Pfade umgewandelten Text aus und dann „Passende Schriften suchen“.
+	No font matches the selected shapes.	Keine Schrift passt zu den ausgewählten Formen.
+	Shapes past the first 2,048, or more than 16 groups deep, were not compared.	Formen nach den ersten 2.048 oder mehr als 16 Gruppen tief wurden nicht verglichen.
+	Reset Retype Panel	Bedienfeld „Neu setzen“ zurücksetzen
+	List Matching Fonts	Passende Schriften auflisten
+	Retype Preview	Vorschau im Bedienfeld „Neu setzen“
+@msg	`count` must be a whole number from 1 to 96	`count` muss eine ganze Zahl von 1 bis 96 sein
+@msg	`size` must be small, medium or large	`size` muss small, medium oder large sein
+@msg	`text` must be a string of at most 100 characters	`text` muss eine Zeichenfolge mit höchstens 100 Zeichen sein
+@msg	Retype: select outlined text (paths or compound paths)	Neu setzen: Wählen Sie in Pfade umgewandelten Text aus (Pfade oder zusammengesetzte Pfade)
 	Find Next	Weitersuchen
 	Find Objects	Objekte suchen
 	Compare with Image	Mit Bild vergleichen

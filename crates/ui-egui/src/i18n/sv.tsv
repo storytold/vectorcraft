@@ -1335,6 +1335,20 @@ font-technology	Variable	Variabla
 @msg	no match of `find` at bytes {_1}..{_2} of object {_3}	ingen träff för `find` vid byte {_1}..{_2} i objekt {_3}
 	Find Font	Sök typsnitt
 	Find Font…	Sök typsnitt…
+	Retype	Skriv om
+	Find Matching Fonts	Sök matchande typsnitt
+	Find more font matches	Sök fler matchande typsnitt
+	Type your text to preview	Skriv texten för förhandsgranskningen
+	Select outlined text, then Find Matching Fonts.	Markera text som gjorts om till konturer och välj sedan Sök matchande typsnitt.
+	No font matches the selected shapes.	Inget typsnitt matchar de markerade formerna.
+	Shapes past the first 2,048, or more than 16 groups deep, were not compared.	Former efter de första 2 048, eller mer än 16 grupper djupt, jämfördes inte.
+	Reset Retype Panel	Återställ panelen Skriv om
+	List Matching Fonts	Lista matchande typsnitt
+	Retype Preview	Förhandsgranskning i panelen Skriv om
+@msg	`count` must be a whole number from 1 to 96	`count` måste vara ett heltal från 1 till 96
+@msg	`size` must be small, medium or large	`size` måste vara small, medium eller large
+@msg	`text` must be a string of at most 100 characters	`text` måste vara en sträng på högst 100 tecken
+@msg	Retype: select outlined text (paths or compound paths)	Skriv om: markera text som gjorts om till konturer (banor eller sammansatta banor)
 	Find Next	Sök nästa
 	Find Objects	Sök objekt
 	Compare with Image	Jämför med bild

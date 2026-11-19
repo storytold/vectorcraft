@@ -702,6 +702,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "type.resetHorizontalScale",
     "type.resetTracking",
     "type.retype",
+    "type.retypeFonts",
     "type.ruby",
     "type.scaleTextAttributes",
     "type.size.decrease",

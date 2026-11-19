@@ -1311,6 +1311,20 @@ font-technology	Variable	Променливи
 	Check Locked Layers	Проверка на заключените слоеве
 	Find Font	Търсене на шрифт
 	Find Font…	Търсене на шрифт…
+	Retype	Повторно набиране
+	Find Matching Fonts	Търсене на съответстващи шрифтове
+	Find more font matches	Търсене на още съответстващи шрифтове
+	Type your text to preview	Въведете текст за преглед
+	Select outlined text, then Find Matching Fonts.	Изберете текст, превърнат в контури, след това „Търсене на съответстващи шрифтове“.
+	No font matches the selected shapes.	Никой шрифт не съответства на избраните фигури.
+	Shapes past the first 2,048, or more than 16 groups deep, were not compared.	Фигурите след първите 2048 или вложени на повече от 16 нива групи не бяха сравнени.
+	Reset Retype Panel	Нулиране на панела „Повторно набиране“
+	List Matching Fonts	Списък на съответстващите шрифтове
+	Retype Preview	Преглед в панела „Повторно набиране“
+@msg	`count` must be a whole number from 1 to 96	`count` трябва да е цяло число от 1 до 96
+@msg	`size` must be small, medium or large	`size` трябва да е small, medium или large
+@msg	`text` must be a string of at most 100 characters	`text` трябва да е низ с най-много 100 знака
+@msg	Retype: select outlined text (paths or compound paths)	Повторно набиране: изберете текст, превърнат в контури (пътища или съставни пътища)
 	Find Next	Търсене на следващ
 	Find Objects	Търсене на обекти
 	Compare with Image	Сравняване с изображение

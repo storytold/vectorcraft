@@ -227,6 +227,7 @@ pub const ICON_PANELS: &[(&str, &str, &str)] = &[
     (crate::panels::script_console::ID, "Script Console", "message-circle"),
     (crate::panels::learn::ID, "Learn", "graduation-cap"),
     (crate::panels::discover::ID, "VectorCraft Help…", "search"),
+    (crate::panels::retype::ID, "Retype", "type"),
     (crate::addons::cleanup::ID, "Artwork Cleanup", "sparkles"),
     (crate::addons::color::ID, "Color Effects", "sun"),
     (crate::addons::packaging::ID, "Fold Lines", "scissors"),
@@ -441,6 +442,9 @@ pub struct UiState {
     pub learn: crate::panels::learn::View,
     #[serde(skip)]
     pub discover: crate::panels::discover::View,
+    /// The Retype panel's list of matching fonts and its sample settings, kept while the app runs.
+    #[serde(skip)]
+    pub retype: crate::panels::retype::View,
     /// The tool whose place a Learn tutorial step's link shows (`learn.locateTool`), while its mark
     /// is on screen. Not saved.
     #[serde(skip)]
@@ -1221,6 +1225,7 @@ impl Default for UiState {
             constrain_pie_angle: false,
             learn: Default::default(),
             discover: Default::default(),
+            retype: Default::default(),
             learn_locate: None,
             learn_practice: Default::default(),
             learn_progress: Default::default(),

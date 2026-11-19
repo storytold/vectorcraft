@@ -1387,6 +1387,20 @@ font-technology	Variable	Варіативні
 @msg	no match of `find` at bytes {_1}..{_2} of object {_3}	у байтах {_1}..{_2} об’єкта {_3} немає збігу з `find`
 	Find Font	Знайти шрифт
 	Find Font…	Знайти шрифт…
+	Retype	Повторний набір
+	Find Matching Fonts	Знайти відповідні шрифти
+	Find more font matches	Знайти інші відповідні шрифти
+	Type your text to preview	Введіть текст для перегляду
+	Select outlined text, then Find Matching Fonts.	Виділіть текст, перетворений на криві, потім виберіть «Знайти відповідні шрифти».
+	No font matches the selected shapes.	Жоден шрифт не відповідає виділеним фігурам.
+	Shapes past the first 2,048, or more than 16 groups deep, were not compared.	Фігури після перших 2048 або вкладені глибше 16 рівнів груп не порівнювалися.
+	Reset Retype Panel	Скинути панель «Повторний набір»
+	List Matching Fonts	Список відповідних шрифтів
+	Retype Preview	Перегляд у панелі «Повторний набір»
+@msg	`count` must be a whole number from 1 to 96	`count` має бути цілим числом від 1 до 96
+@msg	`size` must be small, medium or large	`size` має бути small, medium або large
+@msg	`text` must be a string of at most 100 characters	`text` має бути рядком довжиною не більше 100 символів
+@msg	Retype: select outlined text (paths or compound paths)	Повторний набір: виділіть текст, перетворений на криві (контури або складені контури)
 	Find Next	Знайти далі
 	Find Objects	Знайти об’єкти
 	Compare with Image	Порівняти із зображенням

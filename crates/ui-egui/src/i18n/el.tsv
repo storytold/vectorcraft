@@ -1301,6 +1301,20 @@ font-technology	Variable	Μεταβλητές
 @msg	no match of `find` at bytes {_1}..{_2} of object {_3}	καμία αντιστοιχία του `find` στα byte {_1}..{_2} του αντικειμένου {_3}
 	Find Font	Εύρεση γραμματοσειράς
 	Find Font…	Εύρεση γραμματοσειράς…
+	Retype	Επαναπληκτρολόγηση
+	Find Matching Fonts	Εύρεση αντίστοιχων γραμματοσειρών
+	Find more font matches	Εύρεση περισσότερων αντίστοιχων γραμματοσειρών
+	Type your text to preview	Πληκτρολογήστε κείμενο για προεπισκόπηση
+	Select outlined text, then Find Matching Fonts.	Επιλέξτε κείμενο που έχει μετατραπεί σε περιγράμματα και μετά Εύρεση αντίστοιχων γραμματοσειρών.
+	No font matches the selected shapes.	Καμία γραμματοσειρά δεν αντιστοιχεί στα επιλεγμένα σχήματα.
+	Shapes past the first 2,048, or more than 16 groups deep, were not compared.	Τα σχήματα μετά τα πρώτα 2.048 ή σε βάθος πάνω από 16 ομάδες δεν συγκρίθηκαν.
+	Reset Retype Panel	Επαναφορά πίνακα Επαναπληκτρολόγησης
+	List Matching Fonts	Λίστα αντίστοιχων γραμματοσειρών
+	Retype Preview	Προεπισκόπηση πίνακα Επαναπληκτρολόγησης
+@msg	`count` must be a whole number from 1 to 96	Το `count` πρέπει να είναι ακέραιος από 1 έως 96
+@msg	`size` must be small, medium or large	Το `size` πρέπει να είναι small, medium ή large
+@msg	`text` must be a string of at most 100 characters	Το `text` πρέπει να είναι συμβολοσειρά έως 100 χαρακτήρων
+@msg	Retype: select outlined text (paths or compound paths)	Επαναπληκτρολόγηση: επιλέξτε κείμενο που έχει μετατραπεί σε περιγράμματα (διαδρομές ή σύνθετες διαδρομές)
 	Find Next	Εύρεση επόμενου
 	Find Objects	Εύρεση αντικειμένων
 	Compare with Image	Σύγκριση με εικόνα

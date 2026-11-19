@@ -3202,6 +3202,44 @@ fn svg_variable_kinds_left_out_translate_in_every_complete_catalog() {
     assert_eq!(message(Lang::EN, &english), english);
 }
 
+/// The Retype panel's labels and the errors its commands give.
+#[test]
+fn retype_panel_strings_are_in_complete_catalogs() {
+    let mut missing = vec![];
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        for label in [
+            "Retype",
+            "Find Matching Fonts",
+            "Find more font matches",
+            "Type your text to preview",
+            "Select outlined text, then Find Matching Fonts.",
+            "No font matches the selected shapes.",
+            "Shapes past the first 2,048, or more than 16 groups deep, were not compared.",
+            "Reset Retype Panel",
+            "List Matching Fonts",
+            "Retype Preview",
+        ] {
+            if lang.catalog().plain(label).is_none() {
+                missing.push(format!("{} {label}", lang.code));
+            }
+        }
+    }
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        for m in [
+            "`count` must be a whole number from 1 to 96",
+            "`size` must be small, medium or large",
+            "`text` must be a string of at most 100 characters",
+            "Retype: select outlined text (paths or compound paths)",
+        ] {
+            if message(lang, m) == m {
+                missing.push(format!("{code} @msg {m}"));
+            }
+        }
+    }
+    assert!(missing.is_empty(), "{missing:?}");
+}
+
 /// Every complete-message catalog has a row for each error that `type.compositeFonts.set`,
 /// `.export` and `.import`, the composite font checks behind them and the Composite Fonts dialog
 /// give, and translates them with the font name, the key and the class key kept, and the reason
