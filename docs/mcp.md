@@ -1876,6 +1876,31 @@ preferences (the folder the desktop app uses, so both see the same ones; `VECTOR
   target of `view.proofSetup` simulates the working CMYK space in such a document too. `color.convert`'s
   `outOfGamut` and `deltaE`, `color.gamutCheck`, and the out-of-gamut warning of the Color panel, the Color Picker,
   Swatch Options and New Swatch check against the assigned CMYK profile, else the working CMYK space; the warning updates when either changes.
+- **Profile Mismatches and Missing Profiles** (`edit.colorSettings {askMismatchOpen, askMismatchPaste,
+  askMissingOpen}`, all off by default and kept in `Color Settings.json`): with `askMismatchOpen` on, the desktop
+  app's File › Open asks before a document opens when the profile of its color mode is not the working space (use
+  the embedded profile, convert the colors to the working space, or discard the profile); with `askMissingOpen` on,
+  it asks when the document has no profile of its color mode (leave it, assign the working space, or assign a
+  profile). Each question starts on what the model's policy does, and Cancel leaves the file closed. Files opened
+  together ask one at a time, each opening only after its own answer. When Color Settings change the question
+  while it is open (another working space), OK asks the new question instead of opening. `document.open` never
+  asks: `profileChoice` (`useEmbedded`, `convert`, `discard`; `leave`, `assignWorking`, `assign` with
+  `assignProfile`) states the answer, else the policy applies. The reply's `profileChoice` names the choice given
+  for the document's question, not what it did: `convert` from a profile that is not available keeps the profile,
+  and a warning says the colors were not converted. Copy remembers the profiles the colors showed through (a
+  document's assigned profile that was removed since counts as the working space it draws through); pasting them
+  into a document with another RGB or CMYK profile keeps their numbers or converts them, as `profileMismatch` on the
+  paste commands and `edit.dropSelection` says (`preserveNumbers` or `convert` for both models, or `{rgb?, cmyk?}`
+  with one for each; `null` is the same as leaving it out), else as the model's policy does (`convert` converts, the
+  others keep the numbers). Colors whose source or destination profile is not available keep their numbers, also
+  with `convert`. `clipboard.profileMismatch` lists the models that differ, only those whose colors the copied
+  objects use (with `sourceDocument` and `ids`, the objects a drop brings; with `allArtboards: true`, without the
+  background colors of copied artboards, which Paste on All Artboards leaves behind), and gives `convertible: false`
+  for a model whose colors can't convert. With `askMismatchPaste` on, the desktop app asks first on Paste and on a
+  drag between documents, and offers only Preserve Numbers for a model that can't convert. A question about both
+  models has a choice for each, each starting on its model's policy. When the profiles a paste brings or the swatch
+  conflicts it raises change while the paste question or Swatch Conflict is open, OK asks again about them. New from
+  Template and File › Revert follow the policies without asking.
 
 Not remembered: the document, anything else. Nothing is read or written when
 `VECTORCRAFT_NO_PREFS` is set, and a server confined with `--automation-read-root` or
