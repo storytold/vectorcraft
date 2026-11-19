@@ -836,6 +836,49 @@ fn a_null_in_group_colors_removes_that_swatch_and_the_ones_after_it_keep_their_p
     assert_eq!(link(&s, green), ("#00ff00".into(), Some(names[2].clone())), "art linked to a swatch that stays keeps its link");
 }
 
+/// A gradient or pattern swatch of the group keeps its place and its paint when `recolor.apply`
+/// rewrites the group: the group's colors, from the rows or from `groupColors`, go to its color
+/// swatches in order.
+#[test]
+fn apply_with_a_group_keeps_its_gradient_swatch() {
+    let mut s = session();
+    run(&mut s, "swatch.newGroup", json!({"name": "Brand", "colors": ["#ff0000", "#0000ff"]}));
+    let fade = vectorcraft_color::Paint::Gradient(Box::new(vectorcraft_color::GradientPaint::new(vectorcraft_color::Gradient::default())));
+    s.edit("test", |d, _| {
+        let w = vectorcraft_color::Swatch { name: "Fade".into(), paint: fade.clone(), global: false, spot: false };
+        d.swatch_groups.iter_mut().find(|g| g.name == "Brand").unwrap().swatches.insert(1, w);
+        Ok(())
+    })
+    .unwrap();
+    let group = |s: &Session| -> Vec<(String, Option<String>)> {
+        let g = s.doc().unwrap().doc.swatch_groups.iter().find(|g| g.name == "Brand").unwrap().swatches.clone();
+        g.iter().map(|w| (w.name.clone(), w.paint.color().map(|c| c.to_hex()))).collect()
+    };
+    let names: Vec<String> = group(&s).into_iter().map(|(n, _)| n).collect();
+    rect(&mut s, json!("#ff0000"));
+    rect(&mut s, json!("#0000ff"));
+    select_all(&mut s);
+    // The rows' new colors go to the red and blue swatches; the gradient stays between them.
+    let map = json!([{"from": ["#ff0000"], "to": "#00ff00"}, {"from": ["#0000ff"], "to": "#ffff00"}]);
+    run(&mut s, "recolor.apply", json!({"map": map, "group": "Brand"}));
+    let want = |a: &str, b: &str| vec![(names[0].clone(), Some(a.to_string())), (names[1].clone(), None), (names[2].clone(), Some(b.to_string()))];
+    assert_eq!(group(&s), want("#00ff00", "#ffff00"));
+    assert_eq!(gradient_at(&s, 1), fade, "the gradient swatch keeps its paint");
+    // `groupColors` counts the color swatches only: "keep" is the first, and the second color is
+    // the blue swatch's.
+    run(&mut s, "recolor.apply", json!({"map": [], "group": "Brand", "groupColors": ["keep", "#123456"]}));
+    assert_eq!(group(&s), want("#00ff00", "#123456"));
+    // A null removes the color swatch at its place and leaves the gradient.
+    run(&mut s, "recolor.apply", json!({"map": [], "group": "Brand", "groupColors": [null, "#123456"]}));
+    assert_eq!(group(&s), [(names[1].clone(), None), (names[2].clone(), Some("#123456".into()))]);
+    assert_eq!(gradient_at(&s, 0), fade);
+}
+
+/// The paint of the swatch at place `i` of the group "Brand".
+fn gradient_at(s: &Session, i: usize) -> vectorcraft_color::Paint {
+    s.doc().unwrap().doc.swatch_groups.iter().find(|g| g.name == "Brand").unwrap().swatches[i].paint.clone()
+}
+
 /// A row whose new color was removed keeps its art's colors: art in it linked to another swatch of
 /// the group, which the rewrite gives another color, loses the link instead of following it.
 #[test]

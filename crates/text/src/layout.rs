@@ -62,30 +62,22 @@ fn continues_cluster(prev: Option<&SGlyph>, g: Option<&SGlyph>) -> bool {
 /// ([`upright_extent`]) as a share of `upright`, the length in font units its own width runs down.
 /// Empty for a glyph of one character.
 fn ligature_carets(text: &str, g: &SGlyph, rtl: bool, upright: Option<f64>) -> Vec<(usize, f64)> {
-    use unicode_segmentation::UnicodeSegmentation;
-    let Some(s) = text.get(g.byte..g.byte + g.len).filter(|_| g.len > 1) else { return Vec::new() };
-    let starts: Vec<usize> = s.grapheme_indices(true).skip(1).map(|(i, _)| g.byte + i).collect();
-    if starts.is_empty() {
-        return Vec::new();
-    }
-    let parts = starts.len() + 1;
-    let from_font = if let Some(length) = upright {
-        let (cell, top) = upright_extent(g);
-        g.face
-            .vertical_ligature_carets(g.gid, starts.len(), top, cell)
-            .filter(|c| c.len() == starts.len() && length > 0.0)
-            .map(|c| c.into_iter().map(|d| d / length).collect::<Vec<f64>>())
-            .filter(|c| c.iter().all(|f| *f > 0.0 && *f < 1.0))
-    } else {
-        let advance = g.face.advance(g.gid);
-        g.face
-            .ligature_carets(g.gid, starts.len())
-            .filter(|c| c.len() == starts.len() && advance > 0.0)
-            .map(|c| c.into_iter().map(|x| if rtl { 1.0 - x / advance } else { x / advance }).collect::<Vec<f64>>())
-    };
-    let mut at = from_font.unwrap_or_else(|| (1..parts).map(|j| j as f64 / parts as f64).collect());
-    at.sort_by(f64::total_cmp);
-    starts.into_iter().zip(at).collect()
+    craft_font_catalog::ligature_caret_stops(text, g.byte, g.len, |count| {
+        if let Some(length) = upright {
+            let (cell, top) = upright_extent(g);
+            g.face
+                .vertical_ligature_carets(g.gid, count, top, cell)
+                .filter(|c| c.len() == count && length > 0.0)
+                .map(|c| c.into_iter().map(|d| d / length).collect::<Vec<f64>>())
+                .filter(|c| c.iter().all(|f| *f > 0.0 && *f < 1.0))
+        } else {
+            let advance = g.face.advance(g.gid);
+            g.face
+                .ligature_carets(g.gid, count)
+                .filter(|c| c.len() == count && advance > 0.0)
+                .map(|c| c.into_iter().map(|x| if rtl { 1.0 - x / advance } else { x / advance }).collect::<Vec<f64>>())
+        }
+    })
 }
 
 /// Does glyph `g`, standing upright in vertical type, take a cell of its own down the column? Every
