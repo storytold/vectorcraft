@@ -6907,8 +6907,10 @@ mark-style	Japanese	Japonské
 @msg	`{GRAPHICS}` face must be front, back or side	face v `{GRAPHICS}` musí být front, back nebo side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} v `{GRAPHICS}` musí být číslo od {lo} do {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` musí být pole
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	Grafika se mapuje na typy objektu Rovina, Vysunutí a Rotační těleso
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	Grafika se mapuje na typy objektu Rovina, Vysunutí, Rotační těleso a Nafouknutí
 @msg	Revolve maps graphics onto its side: map them onto the front	Rotační těleso mapuje grafiku na svůj bok: umístěte ji na přední stranu
+@msg	Inflate maps graphics onto its front and back, not onto a side	Nafouknutí mapuje grafiku na přední a zadní stranu, ne na bok
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	objekt {_1}: zadní strana Nafouknutí přijímá grafiku jen se zapnutými volbami Obě strany a Uzávěr
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Grafika je pro tento povrch příliš složitá: zjednodušte kresbu symbolů nebo snižte Segmenty
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` přijímá nejvýše {MAX_GRAPHICS} grafik
 @msg	A plane has one face: map its graphics onto the front	Rovina má jednu stranu: umístěte její grafiku na přední stranu

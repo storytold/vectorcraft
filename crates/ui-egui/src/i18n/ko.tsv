@@ -6491,8 +6491,10 @@ lighting	Light	광원
 @msg	`{GRAPHICS}` face must be front, back or side	`{GRAPHICS}`의 face는 front, back 또는 side여야 합니다
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}`의 {key}은(는) {lo}에서 {hi} 사이의 숫자여야 합니다
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}`은(는) 배열이어야 합니다
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	그래픽은 평면, 돌출, 회전체 개체 유형에 매핑됩니다
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	그래픽은 평면, 돌출, 회전체, 부풀리기 개체 유형에 매핑됩니다
 @msg	Revolve maps graphics onto its side: map them onto the front	회전체는 그래픽을 옆면에 매핑합니다. 앞면에 매핑하십시오
+@msg	Inflate maps graphics onto its front and back, not onto a side	부풀리기는 그래픽을 앞면과 뒷면에 매핑하며 옆면에는 매핑하지 않습니다
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	개체 {_1}: 부풀리기의 뒷면에 그래픽을 매핑하려면 양면과 캡을 켜세요
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	그래픽이 이 표면에 비해 너무 복잡합니다. 심볼의 아트를 단순화하거나 세그먼트를 줄이십시오
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}`에는 그래픽을 최대 {MAX_GRAPHICS}개까지 넣을 수 있습니다
 @msg	A plane has one face: map its graphics onto the front	평면에는 면이 하나뿐입니다. 그래픽을 앞면에 매핑하십시오

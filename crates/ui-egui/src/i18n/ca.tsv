@@ -7317,8 +7317,10 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	`{GRAPHICS}` face must be front, back or side	face de `{GRAPHICS}` ha de ser front, back o side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} de `{GRAPHICS}` ha de ser un nombre de {lo} a {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` ha de ser una matriu
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	Els gràfics s’apliquen als tipus d’objecte Pla, Extrusió i Revolució
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	Els gràfics s’apliquen als tipus d’objecte Pla, Extrusió, Revolució i Infla
 @msg	Revolve maps graphics onto its side: map them onto the front	Revoluciona aplica els gràfics al seu lateral: aplica’ls a la cara davantera
+@msg	Inflate maps graphics onto its front and back, not onto a side	Infla aplica els gràfics a la cara davantera i a la posterior, no a un lateral
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	l’objecte {_1}: la cara posterior d’Infla només admet gràfics amb Tots dos costats i Tapa activats
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Els gràfics són massa complexos per a aquesta superfície: simplifica la il·lustració dels símbols o redueix Segments
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` admet com a màxim {MAX_GRAPHICS} gràfics
 @msg	A plane has one face: map its graphics onto the front	Un pla té una sola cara: aplica’n els gràfics a la cara davantera
