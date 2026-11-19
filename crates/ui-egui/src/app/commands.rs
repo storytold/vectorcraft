@@ -13,16 +13,27 @@ fn completed_pathfinder_operation<'a>(id: &'a str, params: &'a Value) -> Option<
     }
 }
 
-/// Does a direct command or one-level batch choose saved swatch defaults?
+/// Saved swatch commands may run directly or inside the supported batch shapes.
 fn changes_swatch_defaults(id: &str, params: &Value) -> bool {
     let changes = |id: &str| matches!(id, "swatch.defaults.save" | "swatch.defaults.reset");
-    if id == "command.batch" {
+    let direct_steps = |params: &Value| {
         params
             .get("commands")
             .and_then(Value::as_array)
             .is_some_and(|steps| steps.iter().any(|step| step.get("command").and_then(Value::as_str).is_some_and(changes)))
-    } else {
-        changes(id)
+    };
+    match id {
+        "action.batch" => direct_steps(params),
+        "command.batch" => params.get("commands").and_then(Value::as_array).is_some_and(|steps| {
+            steps.iter().any(|step| match step.get("command").and_then(Value::as_str) {
+                // This runner uses the same Session without re-entering the UI's command path.
+                // Scan only its direct steps: its own children cannot be either batch command.
+                Some("action.batch") => step.get("params").is_some_and(direct_steps),
+                Some(id) => changes(id),
+                None => false,
+            })
+        }),
+        _ => changes(id),
     }
 }
 
