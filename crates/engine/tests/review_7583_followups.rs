@@ -630,7 +630,7 @@ mod review_5972993766_adoption {
         // A separate retained palette consumer keeps the destination definition and option alive.
         let user = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: name.into(), xf: Affine::translate((2.0, 3.0)) });
         let tile = format!("Existing {name} tile");
-        d.patterns.push(PatternDef::new(tile.clone(), vec![Arc::new(user)]));
+        d.patterns.push(PatternDef::new(&tile, vec![Arc::new(user)]));
         d.swatches.push(Swatch { name: tile.clone(), paint: Paint::Pattern { pattern: tile, xf: Affine::IDENTITY }, global: false, spot: false });
         symbol
     }
