@@ -15563,3 +15563,44 @@ fn trim_view_toggled_during_a_ruler_origin_drag_cancels_it() {
         assert_eq!(origin(&app) != was, sets, "Trim View {start} then {end}: origin set {sets}");
     }
 }
+
+/// #8363: a Selection move begun with the guides shown gathers the ruler guides to snap to. When
+/// they stop showing during the move (Trim View or Hide Guides turned on), it no longer snaps to
+/// them; with them shown throughout, it does.
+#[test]
+fn a_move_stops_snapping_to_guides_hidden_during_it() {
+    // What hides the guides mid-move (none: they stay shown), and whether the move then snaps.
+    for (hide, snaps) in [(None, true), (Some("trim"), false), (Some("guides"), false)] {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        app.run("shape.rectangle", json!({"x": 50, "y": 50, "width": 50, "height": 50})).unwrap();
+        app.session.execute("guide.add", &json!({"vertical": true, "pos": 200})).unwrap();
+        app.select_tool("selection");
+        app.ui.view.smart_guides = false;
+        app.ui.view.snap_to_point = true;
+        app.ui.view.guides = true;
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        let rect = app.canvas_rect.unwrap();
+        let xf = Xf::new(rect, app.view().unwrap());
+        let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        // Grabbed at its centre, moved first well away from the guide, then 1.5 px short of it.
+        let grab = xf.to_screen(Point::new(75.0, 75.0));
+        let away = xf.to_screen(Point::new(120.0, 75.0));
+        let near = xf.to_screen(Point::new(200.0, 75.0)) - vec2(1.5, 0.0);
+        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(grab)]);
+        frame(&mut app, &ctx, vec![button(grab, true)]);
+        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(away)]);
+        match hide {
+            Some("trim") => app.ui.view.trim_view = true,
+            Some(_) => app.ui.view.guides = false,
+            None => {}
+        }
+        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(near)]);
+        frame(&mut app, &ctx, vec![button(near, false)]);
+        let b = app.session.active().unwrap().doc.art_bounds().unwrap();
+        let centre = (b.x0 + b.x1) / 2.0;
+        assert_eq!((centre - 200.0).abs() < 1e-6, snaps, "{hide:?}: the grabbed centre at {centre}");
+        assert!((centre - xf.to_doc(near).x).abs() < 1e-6 || snaps, "{hide:?}: unsnapped, it follows the pointer: {centre}");
+    }
+}
