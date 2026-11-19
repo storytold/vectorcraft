@@ -12156,6 +12156,27 @@ on an open path that are not drawn because they fall before the path's start can
 {"name":"run_command","arguments":{"command":"text.touchType","params":{"id":7,"start":1,"dx":10,"dy":4}}}
 ```
 
+## Retype tracking
+
+`type.retype {fonts?}` turns selected outlined text back into point text when its shapes are glyphs of a font the app
+has. A line of three or more glyphs gets the spacing that most of its gaps share as its tracking, in 1/1000 em. Retype
+tries the value rounded to a whole number first when it is within 0.05 of one, then the value as measured. The font's
+advances and pair kerning are left out of the measure, and word spaces are counted after the tracking. The tracking is
+kept when the tracked type draws the whole line in place, or more of it from its start than untracked type does. When
+untracked type also draws the whole line, for example when gaps are as wide as whole spaces, the line stays untracked
+if the tracking is under one unit or the tracked type would drop a gap one space wide, so `a b c` stays `a b c`.
+Otherwise the tracked type is kept, and only gaps wider than the tracking alone keep spaces (narrower gaps, when
+tracking tighter than a space gives each space a negative advance). Glyphs tracked tighter than a quarter em stay on
+one line as long as each one starts after the one before it. Negative tracking is set only on a line that is opaque,
+uses the Normal blend mode, has a solid fill or none and has no stroke; other tightly spaced lines split into one object
+per glyph. A line splits where its type stops drawing the outlines in place, and the glyphs after the split take the
+tracking their own gaps give. These rules are VectorCraft's own. Each entry of the result's `fonts` list has
+`tracking`.
+
+```json
+{"name":"run_command","arguments":{"command":"type.retype","params":{}}}
+```
+
 ## Retype panel
 
 `type.retypeFonts {count?}` lists the fonts whose glyphs match the selected outlined text. It compares each selected path
