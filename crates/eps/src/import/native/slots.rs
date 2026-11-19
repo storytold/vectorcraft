@@ -2,7 +2,7 @@ use super::build::MADE;
 use super::{AppearanceItem, Arc, BTreeSet, BlendMode, Document, Node, NodeId, NodeKind, PathData, Point, Rect, ai, slot_of};
 
 /// The notes that say the import left out something the file has (see [`is_loss`]).
-pub(super) const TEXT_LEFT_OUT: &str = "text objects on hidden layers or hidden objects couldn't be read, so they are left out";
+pub(super) const TEXT_LEFT_OUT: &str = "text objects whose type couldn't be read from the file's text document or its page are left out";
 
 /// The same for a file without a page to take shown type from.
 pub(super) const TYPE_LEFT_OUT: &str = "text objects of kinds VectorCraft doesn't read from the file's text document yet are left out";
@@ -230,7 +230,8 @@ pub(super) enum Content {
     /// Text objects (with the strokes round them) of the page.
     Page(Vec<Arc<Node>>),
     /// A text object made from the file's text document, where it draws on the document (when it
-    /// shows), and whether the page has type where it is.
+    /// shows), and whether it is kept without being weighed against the page: the page has type
+    /// where it is, or it draws nothing (an empty frame of a blank story).
     Made(Box<Node>, Option<Rect>, bool),
     /// Nothing the file lets this read.
     Empty,
