@@ -2510,11 +2510,13 @@ fn artboard_document_tabs_frame(app: &mut crate::VectorcraftApp, ctx: &egui::Con
     let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 700.0));
     let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| super::doc_tabs(app, ui));
     out.textures_delta.clear();
+    // A tab's title starts with its document's name (an inactive tab shows the name alone).
+    let names: Vec<String> = app.session.documents().iter().map(|d| d.title()).collect();
     let mut titles: Vec<_> = out
         .shapes
         .iter()
         .filter_map(|shape| match &shape.shape {
-            egui::Shape::Text(t) if t.galley.text().contains(" @ ") => Some(t.visual_bounding_rect()),
+            egui::Shape::Text(t) if names.iter().any(|n| t.galley.text().starts_with(n.as_str())) => Some(t.visual_bounding_rect()),
             _ => None,
         })
         .collect();
