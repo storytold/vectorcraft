@@ -630,6 +630,12 @@ impl Index {
         let (offset, len) = (offset as usize, usize::from(len));
         self.initials_text.get(offset..offset + len).is_some_and(|text| text.lines().any(|l| l == query))
     }
+
+    /// Does the index hold the `n` results it was built from? A catalog too large to index gets an
+    /// empty index ([`Index::build`]), which holds none.
+    fn holds(&self, n: usize) -> bool {
+        self.initials.len() == n
+    }
 }
 
 /// `query` trimmed, lowercased, with each run of whitespace made one space.
@@ -752,10 +758,8 @@ pub(crate) fn rank(entries: &[Entry], index: &Index, query: &str, recent: &[u32]
         typos.push(near);
     }
     // The index reads only the start of a longer query, so such a query matches by the substring
-    // rule, which reads all of it. With an empty index (a catalog too large for one,
-    // [`Index::build`]), a query matches by the substring rule alone, so words that are text in a
-    // result one by one don't match it.
-    let fits = query.chars().count() <= INDEX_CHARS && (entries.is_empty() || !index.initials.is_empty());
+    // rule, which reads all of it, as every query does in a catalog too large to index.
+    let fits = query.chars().count() <= INDEX_CHARS && index.holds(n);
     let packed: String = query.chars().filter(|c| !c.is_whitespace()).collect();
     let packed = Some(packed).filter(|p| (2..=6).contains(&p.chars().count()) && p.chars().all(char::is_alphabetic));
     let mut ranked: Vec<(RankKey, u32)> = vec![];
@@ -1454,19 +1458,15 @@ mod tests {
         assert!(ranked(&c, "bg qxq").is_empty());
     }
 
-    /// With an empty index (a catalog too large for one), a query matches by the substring rule
-    /// alone: words that are text in a result one by one don't match it.
+    /// A catalog without an index (one with more results than a posting can name) matches by the
+    /// substring rule alone: a query word whose parts are each text in a name, where the word
+    /// itself is not, finds nothing.
     #[test]
-    fn without_an_index_a_query_matches_as_one_text() {
-        let entries = || vec![entry("Zz Xabx Ycdy", "a.one"), entry("Zz Ab.cd", "b.two")];
-        let (list, empty) = (entries(), Index::default());
-        let found = |q: &str| -> Vec<String> {
-            rank(&list, &empty, q, &[], &[]).iter().filter_map(|&i| list.get(i as usize)).map(|e| e.id.clone()).collect()
-        };
-        assert_eq!(found("ab.cd"), ["b.two"]);
-        assert_eq!(found("xabx ycdy"), ["a.one"]);
-        // With the index, each word may be text in a word of the result.
-        assert_eq!(ranked(&synthetic(entries()), "ab.cd"), ["b.two", "a.one"]);
+    fn without_an_index_only_the_substring_rule_matches() {
+        let entries = vec![entry("Remove Background…", "a.one"), entry("Zz Group", "b.two")];
+        let c = Catalog { list: entries, index: Index::default(), ranked: std::sync::Mutex::new(None) };
+        assert!(ranked(&c, "mov.nd").is_empty(), "{:?}", ranked(&c, "mov.nd"));
+        assert_eq!(ranked(&c, "background mov"), ["a.one"]);
     }
 
     /// A query word that is an English stem form of a word of a group ("setting" of settings,

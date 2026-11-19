@@ -154,6 +154,56 @@ fn an_ellipse_shows_its_pie_properties() {
     assert!(shown.iter().any(|s| s == "30°") && shown.iter().any(|s| s == "120°"), "{shown:?}");
 }
 
+/// A live rectangle and a live ellipse show their own angle (Rectangle and Ellipse Angle) in the
+/// Transform panel and the Properties panel's Transform section, apart from the Rotate field's box
+/// angle, which Reset Bounding Box squares to the page. Selected shapes of one kind at different
+/// angles show a blank angle.
+#[test]
+fn a_rectangle_and_an_ellipse_show_their_angle() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+    for (shape, heading) in [("shape.rectangle", "Rectangle Properties:"), ("shape.ellipse", "Ellipse Properties:")] {
+        let mut ids = vec![];
+        for (y, angle) in [(20, 30), (200, 60)] {
+            let id = app.run(shape, json!({"x": 50, "y": y, "width": 100, "height": 50})).unwrap()["id"].as_u64().unwrap();
+            app.run("object.rotate", json!({"angle": angle, "absolute": true})).unwrap();
+            app.run("object.resetBoundingBox", json!({})).unwrap();
+            ids.push(id);
+        }
+        app.run("select.set", json!({"ids": [ids[0]]})).unwrap();
+        for (draw, rotate) in [(show as fn(&mut VectorcraftApp, &mut Ui), "Rotate"), (crate::panels::properties::transform_section, "Rotation")] {
+            assert_eq!(field_text(&mut app, draw, rotate), "0°", "{shape}: {rotate}");
+            assert_eq!(field_text(&mut app, draw, "Angle:"), "30°", "{shape}: {rotate}");
+        }
+        assert!(texts(&mut app, show).iter().any(|s| s == heading), "{heading}");
+        app.run("select.set", json!({"ids": ids})).unwrap();
+        assert_eq!(field_text(&mut app, show, "Angle:"), "", "{shape}: mixed angles");
+        app.run("select.set", json!({"ids": [ids[1]]})).unwrap();
+        assert_eq!(field_text(&mut app, show, "Angle:"), "60°", "{shape}");
+    }
+}
+
+/// The text in `draw`'s input named `label`, read from the accessibility tree of a headless frame.
+fn field_text(app: &mut VectorcraftApp, draw: fn(&mut VectorcraftApp, &mut Ui), label: &str) -> String {
+    use egui_kittest::kittest::Queryable;
+    let state = std::mem::replace(app, VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default()));
+    let mut fonts = false;
+    let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(320.0, 900.0)).with_accessibility_check(false).build_ui_state(
+        move |ui, app: &mut VectorcraftApp| {
+            if !std::mem::replace(&mut fonts, true) {
+                crate::theme::install_fonts(ui.ctx());
+                return;
+            }
+            draw(app, ui);
+        },
+        state,
+    );
+    h.run_steps(3);
+    let text = h.get_by_role_and_label(egui::accesskit::Role::TextInput, label).value().unwrap_or_default();
+    *app = h.into_state();
+    text
+}
+
 /// Ellipse Properties' Constrain Pie Angle link, in the Transform panel and the Properties panel's
 /// Transform section: off at first, a click or Space with the keyboard on it toggles it, and while
 /// it is on a typed Pie Start or End Angle moves the other angle by as much, keeping the span, in
