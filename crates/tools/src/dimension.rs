@@ -88,9 +88,17 @@ pub struct DimensionTool {
     /// While a Linear dimension is placed with its line on the level of another dimension's line:
     /// the ends of that other line. A Smart Guide runs along the level across both lines.
     level_guide: Option<(Point, Point)>,
-    /// While a dimension is placed: the lines of the visible, unlocked linear dimensions in the
-    /// document before its first preview ([`dimension_lines`]), which its line can line up with.
+    /// While a linear dimension is placed: the lines of the visible, unlocked linear dimensions in
+    /// the document ([`dimension_lines`]), which its line can line up with while Smart Guides are
+    /// on. With Smart Guides on, they are read again when the document they come from has changed.
     levels: Vec<DimensionLine>,
+    /// Which document `levels` were read from: the open document's id and revision, or, while an
+    /// interaction is in progress, the open document's id and the address of the document the
+    /// interaction began with.
+    levels_at: (u64, u64, usize),
+    /// The document's next object id at the dimension's first preview: the id its preview takes
+    /// (`dimension.create` gives the dimension the next id). The preview is not a level.
+    preview_id: u64,
 }
 
 /// What a linear dimension between `a` and `b` measures with the pointer at `p` while it is
@@ -439,6 +447,9 @@ fn on_dimensions(cx: &ToolContext, p: Point) -> Option<(Point, bool)> {
             }
         }
         for c in n.children().into_iter().flatten().rev() {
+            if *budget == 0 {
+                return;
+            }
             lines(c, measured, p, reach, budget, best);
         }
     }
@@ -453,6 +464,9 @@ fn on_dimensions(cx: &ToolContext, p: Point) -> Option<(Point, bool)> {
             return;
         }
         for c in n.children().into_iter().flatten().rev() {
+            if *budget == 0 {
+                return;
+            }
             visit(c, p, reach, budget, best);
         }
     }
@@ -461,6 +475,9 @@ fn on_dimensions(cx: &ToolContext, p: Point) -> Option<(Point, bool)> {
     }
     let (reach, mut budget, mut best) = ([cx.tol(ANCHOR_REACH), cx.tol(8.0)], 20_000usize, Best::default());
     for n in cx.doc.layers.iter().rev() {
+        if budget == 0 {
+            break;
+        }
         visit(n, p, reach, &mut budget, &mut best);
     }
     best.end.map(|(_, q)| (q, true)).or_else(|| best.line.map(|(_, q)| (q, false)))
@@ -469,11 +486,14 @@ fn on_dimensions(cx: &ToolContext, p: Point) -> Option<(Point, bool)> {
 /// The line of a linear dimension already drawn: its ends and its direction.
 type DimensionLine = ((Point, Point), Vec2);
 
-/// The lines of the visible, unlocked linear dimensions in the document. Bounded work, as in
-/// [`on_dimensions`].
-fn dimension_lines(cx: &ToolContext) -> Vec<DimensionLine> {
-    fn visit(n: &Node, budget: &mut usize, out: &mut Vec<DimensionLine>) {
-        if *budget == 0 || !n.visible || n.locked {
+/// The lines of the visible, unlocked linear dimensions in `doc`, except the preview of the
+/// dimension being placed: a dimension with the id `preview.0` that measures the points
+/// `preview.1`. Bounded work, as in [`on_dimensions`].
+fn dimension_lines(doc: &vectorcraft_doc::Document, preview: (u64, [Point; 2])) -> Vec<DimensionLine> {
+    fn visit(n: &Node, preview: (u64, [Point; 2]), budget: &mut usize, out: &mut Vec<DimensionLine>) {
+        let is_preview = n.id.0 == preview.0
+            && n.extras().dimension.as_ref().is_some_and(|d| d.a.distance(preview.1[0]) < 1e-9 && d.b.distance(preview.1[1]) < 1e-9);
+        if *budget == 0 || !n.visible || n.locked || is_preview {
             return;
         }
         *budget -= 1;
@@ -484,12 +504,18 @@ fn dimension_lines(cx: &ToolContext) -> Vec<DimensionLine> {
             return;
         }
         for c in n.children().into_iter().flatten().rev() {
-            visit(c, budget, out);
+            if *budget == 0 {
+                return;
+            }
+            visit(c, preview, budget, out);
         }
     }
     let (mut budget, mut out) = (20_000usize, vec![]);
-    for n in cx.doc.layers.iter().rev() {
-        visit(n, &mut budget, &mut out);
+    for n in doc.layers.iter().rev() {
+        if budget == 0 {
+            break;
+        }
+        visit(n, preview, &mut budget, &mut out);
     }
     out
 }
@@ -725,9 +751,24 @@ impl DimensionTool {
         }
         // With Smart Guides on, a linear dimension's line lands on the level of a parallel
         // dimension line already drawn within the Smart Guides snapping tolerance. The lines are
-        // read before the first preview, so the preview of this dimension is not one of them.
-        if !self.began {
-            self.levels = dimension_lines(cx);
+        // read at the first preview and, with Smart Guides on, again when the document they come
+        // from has changed since. They come from the document the next preview applies to: while
+        // the interaction is in progress, the document as it began, which each preview starts
+        // again from, so a dimension that a command moves or hides in between, and that the next
+        // preview puts back, stays a level where it was, and the previews themselves do not make
+        // the tool read the lines again. The preview of this dimension is not one of them.
+        if d.mode == DimensionMode::Linear {
+            if !self.began {
+                self.preview_id = cx.doc.peek_next_id();
+            }
+            let (from, at) = match cx.interaction_doc {
+                Some(began) => (began, (cx.revision.0, 0, std::ptr::from_ref(began).addr())),
+                None => (cx.doc, (cx.revision.0, cx.revision.1, 0)),
+            };
+            if !self.began || (cx.smart_guides && self.levels_at != at) {
+                self.levels = dimension_lines(from, (self.preview_id, [d.a, d.b]));
+                self.levels_at = at;
+            }
         }
         let level = if cx.smart_guides { line_level(&self.levels, d, p, cx.snap_tol()) } else { None };
         d.place(level.map_or(p, |(on_level, _)| on_level));
@@ -1090,6 +1131,219 @@ mod tests {
             assert!(at.distance(pt(250.0, 170.0)) < 1e-9, "{at:?}");
             assert_eq!(ends, across.0);
         }
+    }
+
+    /// The lines of the dimensions in the document are read only for a linear dimension. They are
+    /// read with Smart Guides off too, so a line placed after Smart Guides are turned on lines up.
+    #[test]
+    fn dimension_lines_are_read_only_for_a_linear_dimension() {
+        use vectorcraft_doc::{Node, NodeKind};
+        let (mut d, _) = doc_with_rect();
+        let id = d.alloc_id();
+        let mut drawn = Node::new(id, NodeKind::Group { children: vec![], clip: false });
+        let pt = Point::new;
+        drawn.extras_mut().dimension =
+            Some(Box::new(DimensionTool::default().recipe(DimensionMode::Linear, pt(300.0, 300.0), pt(400.0, 300.0), pt(350.0, 300.0), None)));
+        let l = d.layers[0].id;
+        d.insert(Some(l), usize::MAX, drawn).unwrap();
+        let (s, p) = (Selection::default(), paint());
+        let ev = |kind, x: f64, y: f64| PointerEvent::new(kind, x, y);
+        let c = cx(&d, &s, &p);
+        let off = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+        let mut t = DimensionTool::default();
+        for (x, y) in [(400.0, 400.0), (450.0, 400.0)] {
+            t.pointer(&off, &ev(PointerKind::Down, x, y));
+            t.pointer(&off, &ev(PointerKind::Up, x, y));
+        }
+        assert!(matches!(t.pointer(&off, &ev(PointerKind::Move, 420.0, 450.0)).first(), Some(Action::Begin(_))));
+        assert_eq!(t.levels.len(), 1);
+        let acts = t.pointer(&c, &ev(PointerKind::Move, 420.0, 302.0));
+        let Some(Action::Preview(_, params)) = acts.last() else { panic!("{acts:?}") };
+        assert_eq!(params["offset"], json!(-100.0), "on the level of the line drawn at y = 300");
+        let mut t = DimensionTool::default();
+        t.set_option("mode", &json!("angular"));
+        t.pointer(&c, &ev(PointerKind::Down, 100.0, 100.0));
+        assert!(matches!(t.pointer(&c, &ev(PointerKind::Drag, 130.0, 140.0)).first(), Some(Action::Begin(_))));
+        assert!(t.levels.is_empty(), "an angular dimension reads no lines");
+        // A radius (dragged outwards from a circle) and a diameter (inwards) read none either.
+        let circle = d.alloc_id();
+        let round = vectorcraft_geom::shapes::ellipse(Rect::new(400.0, 150.0, 500.0, 250.0));
+        d.insert(Some(l), usize::MAX, Node::path(circle, round, vectorcraft_doc::Appearance::default_art())).unwrap();
+        let c = cx(&d, &s, &p);
+        for (to, mode) in [(530.0, "radius"), (470.0, "diameter")] {
+            let mut t = DimensionTool::default();
+            t.set_option("mode", &json!("radial"));
+            t.pointer(&c, &ev(PointerKind::Down, 500.0, 200.0));
+            let acts = t.pointer(&c, &ev(PointerKind::Drag, to, 200.0));
+            assert!(matches!(acts.first(), Some(Action::Begin(_))), "{mode}: {acts:?}");
+            let Some(Action::Preview(_, params)) = acts.last() else { panic!("{mode}: {acts:?}") };
+            assert_eq!(params["mode"], json!(mode));
+            assert!(t.levels.is_empty(), "a {mode} dimension reads no lines");
+        }
+    }
+
+    /// A dimension hidden, locked or deleted while another is placed is no longer a level, and one
+    /// shown again or grouped is: the lines are read again when the document's revision moves. The
+    /// preview of the dimension itself, with the id the document gave next when it began, is never
+    /// a level.
+    #[test]
+    fn dimension_lines_are_read_again_when_the_document_changes() {
+        use vectorcraft_doc::{Node, NodeKind};
+        let (mut d, _) = doc_with_rect();
+        let pt = Point::new;
+        let line = |y: f64| Some(Box::new(DimensionTool::default().recipe(DimensionMode::Linear, pt(300.0, y), pt(400.0, y), pt(350.0, y), None)));
+        let id = d.alloc_id();
+        let mut drawn = Node::new(id, NodeKind::Group { children: vec![], clip: false });
+        drawn.extras_mut().dimension = line(300.0);
+        let l = d.layers[0].id;
+        d.insert(Some(l), usize::MAX, drawn).unwrap();
+        let (s, p) = (Selection::default(), paint());
+        let ev = |kind, x: f64, y: f64| PointerEvent::new(kind, x, y);
+        let offset = |t: &mut DimensionTool, c: &ToolContext| {
+            let acts = t.pointer(c, &ev(PointerKind::Move, 420.0, 302.0));
+            let Some(Action::Preview(_, params)) = acts.last() else { panic!("{acts:?}") };
+            params["offset"].clone()
+        };
+        let mut t = DimensionTool::default();
+        let c = cx(&d, &s, &p);
+        for (x, y) in [(400.0, 400.0), (450.0, 400.0)] {
+            t.pointer(&c, &ev(PointerKind::Down, x, y));
+            t.pointer(&c, &ev(PointerKind::Up, x, y));
+        }
+        assert!(matches!(t.pointer(&c, &ev(PointerKind::Move, 420.0, 450.0)).first(), Some(Action::Begin(_))));
+        assert_eq!(offset(&mut t, &c), json!(-100.0), "on the level of the line drawn at y = 300");
+        // With Smart Guides off the lines are not read; turned on, they are read as they are now.
+        let mut hidden = d.clone();
+        hidden.node_mut(id).unwrap().visible = false;
+        let off = ToolContext { revision: (0, 1), smart_guides: false, ..cx(&hidden, &s, &p) };
+        offset(&mut t, &off);
+        assert_eq!(t.levels.len(), 1, "not read with Smart Guides off");
+        let on = ToolContext { revision: (0, 1), ..cx(&hidden, &s, &p) };
+        assert_eq!(offset(&mut t, &on), json!(-98.0), "read when Smart Guides are turned on");
+        for (rev, edit) in [(1, "hidden"), (2, "locked"), (3, "deleted")] {
+            let mut doc = d.clone();
+            match edit {
+                "hidden" => doc.node_mut(id).unwrap().visible = false,
+                "locked" => doc.node_mut(id).unwrap().locked = true,
+                _ => {
+                    doc.remove(id).unwrap();
+                }
+            }
+            let c = ToolContext { revision: (0, rev), ..cx(&doc, &s, &p) };
+            assert_eq!(offset(&mut t, &c), json!(-98.0), "{edit}: off every level");
+        }
+        let c = ToolContext { revision: (0, 4), ..cx(&d, &s, &p) };
+        assert_eq!(offset(&mut t, &c), json!(-100.0), "shown again: on the level");
+        // Grouped while it is placed, in a group with the id the preview takes: still a level.
+        let mut doc = d.clone();
+        let moved = doc.remove(id).unwrap();
+        let group = doc.alloc_id();
+        doc.insert(Some(l), usize::MAX, Node::new(group, NodeKind::Group { children: vec![moved], clip: false })).unwrap();
+        let c = ToolContext { revision: (0, 5), ..cx(&doc, &s, &p) };
+        assert_eq!(offset(&mut t, &c), json!(-100.0), "grouped: on the level");
+        // The dimension's own preview, which takes the next id and measures its points, is not a
+        // level. Another dimension that takes that id is.
+        let mut own = DimensionTool::default().recipe(DimensionMode::Linear, pt(400.0, 400.0), pt(450.0, 400.0), pt(425.0, 400.0), None);
+        own.place(pt(425.0, 304.0));
+        assert_eq!(own.line_ends(), (pt(400.0, 304.0), pt(450.0, 304.0)));
+        for (rev, made, level) in [(6, Some(Box::new(own)), json!(-98.0)), (7, line(304.0), json!(-96.0))] {
+            let mut doc = d.clone();
+            let mut preview = Node::new(doc.alloc_id(), NodeKind::Group { children: vec![], clip: false });
+            preview.extras_mut().dimension = made;
+            doc.node_mut(id).unwrap().visible = false;
+            doc.insert(Some(l), usize::MAX, preview).unwrap();
+            let c = ToolContext { revision: (0, rev), ..cx(&doc, &s, &p) };
+            assert_eq!(offset(&mut t, &c), level, "revision {rev}");
+        }
+    }
+
+    /// While the interaction is in progress, the lines are read from the document it began with,
+    /// which the next preview starts from, not from the document a command changed in between: a
+    /// dimension moved or hidden there stays a level where it was.
+    #[test]
+    fn dimension_lines_are_read_from_the_document_the_preview_applies_to() {
+        use vectorcraft_doc::{Node, NodeKind};
+        let (mut d, _) = doc_with_rect();
+        let pt = Point::new;
+        let line = |y: f64| Some(Box::new(DimensionTool::default().recipe(DimensionMode::Linear, pt(300.0, y), pt(400.0, y), pt(350.0, y), None)));
+        let id = d.alloc_id();
+        let mut drawn = Node::new(id, NodeKind::Group { children: vec![], clip: false });
+        drawn.extras_mut().dimension = line(300.0);
+        let l = d.layers[0].id;
+        d.insert(Some(l), usize::MAX, drawn).unwrap();
+        let (s, p) = (Selection::default(), paint());
+        let ev = |kind, x: f64, y: f64| PointerEvent::new(kind, x, y);
+        let offset = |t: &mut DimensionTool, c: &ToolContext, y: f64| {
+            let acts = t.pointer(c, &ev(PointerKind::Move, 420.0, y));
+            let Some(Action::Preview(_, params)) = acts.last() else { panic!("{acts:?}") };
+            params["offset"].clone()
+        };
+        let mut t = DimensionTool::default();
+        let c = cx(&d, &s, &p);
+        for (x, y) in [(400.0, 400.0), (450.0, 400.0)] {
+            t.pointer(&c, &ev(PointerKind::Down, x, y));
+            t.pointer(&c, &ev(PointerKind::Up, x, y));
+        }
+        assert!(matches!(t.pointer(&c, &ev(PointerKind::Move, 420.0, 450.0)).first(), Some(Action::Begin(_))));
+        for (rev, edit) in [(1, "moved"), (2, "hidden")] {
+            let mut doc = d.clone();
+            match edit {
+                "moved" => doc.node_mut(id).unwrap().extras_mut().dimension = line(320.0),
+                _ => doc.node_mut(id).unwrap().visible = false,
+            }
+            let c = ToolContext { revision: (0, rev), interaction_doc: Some(&d), ..cx(&doc, &s, &p) };
+            assert_eq!(offset(&mut t, &c, 318.0), json!(-82.0), "{edit}: not on the level at y = 320");
+            assert_eq!(offset(&mut t, &c, 302.0), json!(-100.0), "{edit}: on the level at y = 300");
+        }
+        // A revision that moves with the same document the interaction began with does not read
+        // the lines again; another document it began with does.
+        t.levels.clear();
+        let c = ToolContext { revision: (0, 3), interaction_doc: Some(&d), ..cx(&d, &s, &p) };
+        assert_eq!(offset(&mut t, &c, 302.0), json!(-98.0), "not read again");
+        let again = d.clone();
+        let c = ToolContext { revision: (0, 4), interaction_doc: Some(&again), ..cx(&d, &s, &p) };
+        assert_eq!(offset(&mut t, &c, 302.0), json!(-100.0), "read again");
+    }
+
+    /// The preview of the dimension itself does not count toward the 20,000 objects read: a
+    /// dimension that was the last one read stays a level once the preview is in front of it.
+    #[test]
+    fn the_preview_does_not_push_the_last_dimension_read_out_of_reach() {
+        use std::sync::Arc;
+        use vectorcraft_doc::{Node, NodeKind};
+        let (mut d, _) = doc_with_rect();
+        let pt = Point::new;
+        let line = |y: f64| Some(Box::new(DimensionTool::default().recipe(DimensionMode::Linear, pt(300.0, y), pt(400.0, y), pt(350.0, y), None)));
+        let mut drawn = Node::new(d.alloc_id(), NodeKind::Group { children: vec![], clip: false });
+        drawn.extras_mut().dimension = line(300.0);
+        // The layer, the group and 19,997 empty groups before the dimension: it is the 20,000th.
+        let mut children = vec![Arc::new(drawn)];
+        children.extend((0..19_997).map(|_| Arc::new(Node::new(d.alloc_id(), NodeKind::Group { children: vec![], clip: false }))));
+        let l = d.layers[0].id;
+        let group = Node::new(d.alloc_id(), NodeKind::Group { children, clip: false });
+        d.insert(Some(l), usize::MAX, group).unwrap();
+        let (s, p) = (Selection::default(), paint());
+        let ev = |kind, x: f64, y: f64| PointerEvent::new(kind, x, y);
+        let offset = |t: &mut DimensionTool, c: &ToolContext| {
+            let acts = t.pointer(c, &ev(PointerKind::Move, 420.0, 302.0));
+            let Some(Action::Preview(_, params)) = acts.last() else { panic!("{acts:?}") };
+            params["offset"].clone()
+        };
+        let mut t = DimensionTool::default();
+        let c = cx(&d, &s, &p);
+        for (x, y) in [(400.0, 400.0), (450.0, 400.0)] {
+            t.pointer(&c, &ev(PointerKind::Down, x, y));
+            t.pointer(&c, &ev(PointerKind::Up, x, y));
+        }
+        assert!(matches!(t.pointer(&c, &ev(PointerKind::Move, 420.0, 450.0)).first(), Some(Action::Begin(_))));
+        assert_eq!(offset(&mut t, &c), json!(-100.0), "the 20,000th object is read");
+        let mut previewed = d.clone();
+        let mut preview = Node::new(previewed.alloc_id(), NodeKind::Group { children: vec![], clip: false });
+        preview.extras_mut().dimension =
+            Some(Box::new(DimensionTool::default().recipe(DimensionMode::Linear, pt(400.0, 400.0), pt(450.0, 400.0), pt(425.0, 304.0), None)));
+        previewed.insert(Some(l), usize::MAX, preview).unwrap();
+        let c = ToolContext { revision: (0, 1), ..cx(&previewed, &s, &p) };
+        assert_eq!(offset(&mut t, &c), json!(-100.0), "still read with the preview in front");
     }
 
     #[test]

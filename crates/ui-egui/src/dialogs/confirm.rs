@@ -130,6 +130,7 @@ pub(crate) fn ask_reset_prefs(app: &mut VectorcraftApp) {
 fn reset_prefs(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let mut prefs = super::parent(d).filter(|p| p.kind == "preferences").ok_or("the dialog it was opened over is no longer open")?;
     crate::prefs_dialog::reset_fields(&mut prefs);
+    crate::original_editor::reset(app);
     app.ui.dialog = Some(prefs);
     Ok(Value::Null)
 }
@@ -167,7 +168,13 @@ pub(super) const MISSING_FONT_EDIT_SPEC: DialogSpec = DialogSpec { confirm: edit
 /// tool names in `p` (`token`, `missing` and `style`: "family style" names, `more`: how many more
 /// there are). The detail names each font (family and style, the family's own names, which are
 /// not translated). OK starts the edit where the type was clicked; Cancel and Escape start nothing.
+/// While another dialog is open (a press sent with `ui.pointer` reaches the tool then), that dialog
+/// stays and the Type tool forgets the edit, as Cancel would.
 pub(crate) fn ask_missing_font_edit(app: &mut VectorcraftApp, p: &Value) {
+    if app.ui.dialog.as_ref().is_some_and(|d| d.kind != MISSING_FONT_EDIT) {
+        app.session.set_tool_option("missingFontEdit", &json!({"token": p.get("token"), "ok": false}));
+        return;
+    }
     let names = |k: &str| p.get(k).and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str).map(str::to_string).collect::<Vec<_>>();
     let mut fonts = names("missing");
     fonts.extend(names("style"));

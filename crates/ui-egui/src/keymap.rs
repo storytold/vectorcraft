@@ -21,6 +21,7 @@ pub const TOGGLES: &[&str] = &[
     "view.edges",
     "view.template",
     "view.cornerWidget",
+    "view.shapeWidgets",
     "view.textThreads",
     "type.hiddenCharacters",
     "view.gradientAnnotator",
