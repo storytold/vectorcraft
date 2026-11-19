@@ -341,8 +341,10 @@
 @msg	`{GRAPHICS}` face must be front, back or side	face `{GRAPHICS}` harus front, back, atau side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} `{GRAPHICS}` harus berupa angka dari {lo} sampai {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` harus berupa larik
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	Grafis dipetakan ke jenis objek Plane, Extrude, dan Revolve
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	Grafis dipetakan ke jenis objek Bidang, Ekstrusi, Revolusi, dan Gelembungkan
 @msg	Revolve maps graphics onto its side: map them onto the front	Revolusi memetakan grafis ke sisinya: petakan ke bagian depan
+@msg	Inflate maps graphics onto its front and back, not onto a side	Gelembungkan memetakan grafis ke bagian depan dan belakangnya, bukan ke sisi
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	objek {_1}: bagian belakang Gelembungkan hanya menerima grafis saat Kedua sisi dan Ujung diaktifkan
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Grafis terlalu rumit untuk permukaan ini: sederhanakan karya simbol atau kurangi Segmen
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` menerima paling banyak {MAX_GRAPHICS} grafis
 @msg	A plane has one face: map its graphics onto the front	Bidang memiliki satu sisi: petakan grafisnya ke bagian depan
