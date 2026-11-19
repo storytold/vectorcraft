@@ -10,7 +10,13 @@ fn session() -> Session {
 }
 
 /// Point text, outlined: the id of the outlines' group.
-fn outlined(s: &mut Session, p: serde_json::Value) -> u64 {
+fn outlined(s: &mut Session, mut p: serde_json::Value) -> u64 {
+    // A text without a font is set in the system's default face, which differs from machine to
+    // machine and decides which glyphs a near match can tell apart.
+    if p.get("font").is_none() {
+        p["font"] = json!("Source Sans 3");
+        p["style"] = json!("Regular");
+    }
     let id = s.execute("text.create", &p).unwrap()["id"].as_u64().unwrap();
     s.execute("select.set", &json!({"ids": [id]})).unwrap();
     s.execute("type.createOutlines", &json!({})).unwrap()["ids"][0].as_u64().unwrap()
