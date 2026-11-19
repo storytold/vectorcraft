@@ -35,6 +35,9 @@ pub struct ViewInfo {
     pub snap_to_glyph: bool,
     /// View → Show Corner Widget.
     pub corner_widgets: bool,
+    /// The Control bar's Show Shape Widgets: selected live shapes show their corner, pie and side
+    /// widgets to the Selection tool and the shape tools.
+    pub shape_widgets: bool,
     /// The document window (none headless): screen-fixed widgets sit in it.
     pub screen: Option<vectorcraft_tools::ScreenFrame>,
     /// The view's active artboard (an index): artboard rulers measure from it.
@@ -55,6 +58,7 @@ impl Default for ViewInfo {
             snap_to_point: true,
             snap_to_glyph: false,
             corner_widgets: true,
+            shape_widgets: true,
             screen: None,
             artboard: 0,
         }
@@ -420,6 +424,7 @@ impl Session {
             snap_to_glyph: view.snap_to_glyph && smart_guides && !view.snap_to_grid,
             glyph_snap: self.prefs.glyph_snap,
             corner_widgets: view.corner_widgets,
+            shape_widgets: view.shape_widgets,
             fill_active: self.fill_active,
             gradient_stop: self.selected_stop(),
             appearance_item: self.appearance_item(),
@@ -476,6 +481,7 @@ impl Session {
             plane_targets: self.prefs.perspective_widget.targets(),
             precise_cursors: self.precise_cursors(),
             global_edit: st.global_edit.as_ref().map_or(&[], |g| g.members.as_slice()),
+            interaction_doc: st.interaction.as_ref().map(|it| &*it.doc),
         };
         let tool = &mut self.tool;
         match crate::guard::catch_panic(|| f(tool.as_mut(), &cx)) {
@@ -1413,6 +1419,7 @@ impl Session {
         }
         // Every value is checked before any is set, so an invalid one changes nothing.
         vectorcraft_tools::builder::check_builder_options(id, &values)?;
+        vectorcraft_tools::symbolism::check_options(id, &values)?;
         if id == vectorcraft_tools::cropimage::ID {
             use vectorcraft_tools::cropimage as crop;
             // The most the selected image can be cropped to, when one is selected.

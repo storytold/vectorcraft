@@ -300,12 +300,20 @@ pub(super) fn over_effect(parent: &Dialog, field: &str, colour: Color) -> Dialog
 /// The entry of the dialog's color list that a Color Picker opened with [`over_list_entry`] sets.
 const COLOUR_INDEX: &str = "__colourIndex";
 
+/// The list a Color Picker opened with [`over_list_entry`] puts in the dialog's field before its OK
+/// sets the entry.
+const COLOUR_LIST: &str = "__colourList";
+
 /// The Color Picker over the dialog `parent`, on `colour`, that sets entry `index` of the dialog's
 /// list of colors `field` (Document Setup's `gridColors`) with its OK and goes back to it, leaving
-/// the other entries as they are. Cancel goes back to `parent` as it was. It previews nothing.
-pub(super) fn over_list_entry(parent: &Dialog, field: &str, index: usize, colour: Color) -> Dialog {
+/// the other entries as they are. With `fill`, its OK first puts `fill` in the field and then sets
+/// the entry. Cancel goes back to `parent` as it was. It previews nothing.
+pub(super) fn over_list_entry(parent: &Dialog, field: &str, index: usize, colour: Color, fill: Option<Value>) -> Dialog {
     let mut d = over_effect(parent, field, colour);
     d.fields.insert(COLOUR_INDEX.into(), json!(index));
+    if let Some(list) = fill {
+        d.fields.insert(COLOUR_LIST.into(), list);
+    }
     d
 }
 
@@ -769,6 +777,9 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
                 parent.fields.insert(field.to_string(), hex);
             }
             Some(index) => {
+                if let Some(list) = d.fields.get(COLOUR_LIST) {
+                    parent.fields.insert(field.to_string(), list.clone());
+                }
                 let entry = index
                     .as_u64()
                     .and_then(|i| usize::try_from(i).ok())
