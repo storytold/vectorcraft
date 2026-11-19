@@ -392,6 +392,67 @@ fn an_ellipse_takes_pie_angles_and_inverts() {
     assert!(s.execute("object.setLiveShape", &json!({"pieStart": "half"})).is_err());
 }
 
+/// Constrain Pie Angle (`constrainPie`): a new Pie Start or End Angle moves the other angle by as
+/// much, so each selected ellipse keeps its own span, across 0° too; a whole ellipse stays whole;
+/// after Invert Pie the inverted span is kept; one undo step for all of them; the angle each
+/// already has records nothing; and `constrainPie` with both angles, with neither, with Invert Pie
+/// or as text is an error that changes nothing.
+#[test]
+fn constrain_pie_keeps_each_ellipses_span() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 300, "height": 300})).unwrap();
+    let id = |v: Value| NodeId(v["id"].as_u64().unwrap());
+    let [a, b, c] = [0, 100, 200].map(|y| id(s.execute("shape.ellipse", &json!({"x": 0, "y": y, "width": 200, "height": 80})).unwrap()));
+    run(&mut s, json!({"ids": [a.0], "pieStart": 300, "pieEnd": 60}));
+    run(&mut s, json!({"ids": [b.0], "pieStart": 0, "pieEnd": 90}));
+    let pies = |s: &Session| {
+        [a, b, c].map(|i| match &s.doc().unwrap().doc.node(i).unwrap().kind {
+            NodeKind::Path { live: Some(l), .. } => match &**l {
+                LiveShape::Ellipse { pie, .. } => *pie,
+                k => panic!("{k:?}"),
+            },
+            k => panic!("{k:?}"),
+        })
+    };
+    let near = |p: (f64, f64), q: (f64, f64)| (p.0 - q.0).abs() < 1e-9 && (p.1 - q.1).abs() < 1e-9;
+    let undo = |s: &Session| s.doc().unwrap().history.undo.len();
+    let n = undo(&s);
+    // 300° to 60° spans 120°, through 0°; 0° to 90° spans 90°; the third ellipse is whole.
+    run(&mut s, json!({"ids": [a.0, b.0, c.0], "pieStart": 350, "constrainPie": true}));
+    let [pa, pb, pc] = pies(&s);
+    assert!(near(pa, (350.0, 110.0)) && near(pb, (350.0, 80.0)), "{pa:?} {pb:?}");
+    assert!(near(pc, (350.0, 350.0)), "{pc:?}");
+    assert_eq!(s.doc().unwrap().doc.node(c).unwrap().path_data().unwrap().anchor_count(), 4, "the whole ellipse stays whole");
+    assert_eq!(undo(&s), n + 1, "one undo step");
+    run(&mut s, json!({"ids": [a.0, b.0], "pieEnd": 20, "constrainPie": true}));
+    let [pa, pb, _] = pies(&s);
+    assert!(near(pa, (260.0, 20.0)) && near(pb, (290.0, 20.0)), "{pa:?} {pb:?}");
+    let n = undo(&s);
+    run(&mut s, json!({"ids": [a.0, b.0], "pieEnd": 380, "constrainPie": true}));
+    assert_eq!(undo(&s), n, "the end each already has: no undo step");
+    s.execute("edit.undo", &json!({})).unwrap();
+    let [pa, pb, _] = pies(&s);
+    assert!(near(pa, (350.0, 110.0)) && near(pb, (350.0, 80.0)), "{pa:?} {pb:?}");
+    // Inverted, 80° to 350° spans 270°, and a linked edit keeps that.
+    run(&mut s, json!({"ids": [b.0], "invertPie": true}));
+    run(&mut s, json!({"ids": [b.0], "pieStart": 0, "constrainPie": true}));
+    assert!(near(pies(&s)[1], (0.0, 270.0)), "{:?}", pies(&s)[1]);
+    let before = (undo(&s), pies(&s));
+    for (p, want) in [
+        (json!({"ids": [b.0], "pieStart": 10, "pieEnd": 20, "constrainPie": true}), "needs one of"),
+        (json!({"ids": [b.0], "constrainPie": true}), "needs one of"),
+        (json!({"ids": [b.0], "pieStart": 10, "constrainPie": true, "invertPie": true}), "needs one of"),
+        (json!({"ids": [b.0], "pieStart": 10, "constrainPie": "yes"}), "`constrainPie` must be true or false"),
+    ] {
+        let r = s.execute("object.setLiveShape", &p);
+        assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if msg.contains(want)), "{p}: {r:?}");
+        assert_eq!((undo(&s), pies(&s)), before, "{p}");
+    }
+    // Off, each angle is set on its own, as before.
+    run(&mut s, json!({"ids": [b.0], "pieStart": 90, "constrainPie": false}));
+    assert!(near(pies(&s)[1], (90.0, 270.0)), "{:?}", pies(&s)[1]);
+}
+
 /// Invert Pie and Make Sides Equal given as text or as another value that is not true or false are
 /// an error naming the key: the ellipse's pie, the polygon and the undo history stay as they were.
 /// True makes the change, and false and null leave the shape as it is.
@@ -524,6 +585,107 @@ fn a_polygon_takes_its_angle_radius_side_length_and_equal_sides() {
     }
 }
 
+/// A live line's Line Properties: Line Length keeps its first end in place, Line Angle (degrees
+/// counterclockwise, any finite value brought into 0 to 360) turns it about its midpoint, the
+/// length applies before the angle, every selected line takes them in one undo step, and a value
+/// that changes nothing records none.
+#[test]
+fn a_line_takes_its_length_and_angle() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let line = |s: &mut Session, a: (f64, f64), b: (f64, f64)| {
+        NodeId(s.execute("shape.line", &json!({"x1": a.0, "y1": a.1, "x2": b.0, "y2": b.1})).unwrap()["id"].as_u64().unwrap())
+    };
+    let id = line(&mut s, (100.0, 100.0), (200.0, 100.0));
+    let ends = |s: &Session, id: NodeId| match &s.doc().unwrap().doc.node(id).unwrap().kind {
+        NodeKind::Path { live: Some(l), path, .. } => {
+            let LiveShape::Line { a, b } = **l else { panic!("{l:?}") };
+            assert_eq!(*path, l.to_path(), "the path follows the line");
+            (a.x, a.y, b.x, b.y)
+        }
+        k => panic!("{k:?}"),
+    };
+    let near = |got: (f64, f64, f64, f64), want: (f64, f64, f64, f64)| {
+        assert!([got.0 - want.0, got.1 - want.1, got.2 - want.2, got.3 - want.3].iter().all(|d| d.abs() < 1e-9), "{got:?} ≠ {want:?}")
+    };
+    let steps = |s: &Session| s.doc().unwrap().history.undo.len();
+    run(&mut s, json!({"lineLength": 50}));
+    near(ends(&s, id), (100.0, 100.0, 150.0, 100.0));
+    // 90° points up the page.
+    run(&mut s, json!({"lineAngle": 90}));
+    near(ends(&s, id), (125.0, 125.0, 125.0, 75.0));
+    let n = steps(&s);
+    for same in [json!({"lineAngle": 450}), json!({"lineAngle": -270}), json!({"lineLength": 50}), json!({"lineLength": 50, "lineAngle": 90})] {
+        run(&mut s, same.clone());
+        assert_eq!(steps(&s), n, "{same} records no undo step");
+    }
+    near(ends(&s, id), (125.0, 125.0, 125.0, 75.0));
+    run(&mut s, json!({"lineLength": 20, "lineAngle": 0}));
+    near(ends(&s, id), (115.0, 115.0, 135.0, 115.0));
+    assert_eq!(steps(&s), n + 1, "both in one step");
+    run(&mut s, json!({"lineAngle": 180}));
+    near(ends(&s, id), (135.0, 115.0, 115.0, 115.0));
+    run(&mut s, json!({"lineAngle": -90}));
+    near(ends(&s, id), (125.0, 105.0, 125.0, 125.0));
+    let LiveShape::Line { .. } = s.doc().unwrap().doc.node(id).unwrap().live_shape().unwrap() else { panic!("still live") };
+    assert_eq!(s.doc().unwrap().doc.node(id).unwrap().live_shape().unwrap().line_angle(), Some(270.0));
+    // Several lines: each keeps its own first end, in one undo step.
+    let other = line(&mut s, (0.0, 0.0), (0.0, 40.0));
+    let n = steps(&s);
+    run(&mut s, json!({"ids": [id.0, other.0], "lineLength": 10}));
+    near(ends(&s, id), (125.0, 105.0, 125.0, 115.0));
+    near(ends(&s, other), (0.0, 0.0, 0.0, 10.0));
+    assert_eq!(steps(&s), n + 1);
+    s.execute("edit.undo", &json!({})).unwrap();
+    near(ends(&s, id), (125.0, 105.0, 125.0, 125.0));
+    near(ends(&s, other), (0.0, 0.0, 0.0, 40.0));
+    // Bad values, and a line that would reach past the coordinate limit, change neither line.
+    let far = line(&mut s, (3_900_000.0, 0.0), (3_900_100.0, 0.0));
+    let n = steps(&s);
+    for bad in [
+        json!({"ids": [id.0], "lineLength": 0}),
+        json!({"ids": [id.0], "lineLength": -3}),
+        json!({"ids": [id.0], "lineLength": "long"}),
+        json!({"ids": [id.0], "lineAngle": "up"}),
+        json!({"ids": [id.0], "lineLength": 1e300}),
+        json!({"ids": [id.0, far.0], "lineLength": 200_000}),
+    ] {
+        assert!(s.execute("object.setLiveShape", &bad).is_err(), "{bad}");
+        assert_eq!(steps(&s), n, "{bad}");
+    }
+    near(ends(&s, id), (125.0, 105.0, 125.0, 125.0));
+    near(ends(&s, far), (3_900_000.0, 0.0, 3_900_100.0, 0.0));
+    // A length past the coordinate limit is fine while both ends stay inside it.
+    let wide = line(&mut s, (-3_500_000.0, 0.0), (3_500_000.0, 0.0));
+    run(&mut s, json!({"ids": [wide.0], "lineLength": 6_000_000}));
+    near(ends(&s, wide), (-3_500_000.0, 0.0, 2_500_000.0, 0.0));
+    // A line whose ends meet reads 0°: an angle leaves it as it is, and a length points it right.
+    let dot = line(&mut s, (10.0, 10.0), (10.0, 10.0));
+    assert_eq!(s.doc().unwrap().doc.node(dot).unwrap().live_shape().unwrap().line_angle(), Some(0.0));
+    let n = steps(&s);
+    run(&mut s, json!({"lineAngle": 45}));
+    assert_eq!(steps(&s), n);
+    run(&mut s, json!({"lineLength": 30}));
+    near(ends(&s, dot), (10.0, 10.0, 40.0, 10.0));
+    // A very short length is applied.
+    let speck = line(&mut s, (20.0, 20.0), (20.0, 20.0));
+    let n = steps(&s);
+    run(&mut s, json!({"ids": [speck.0], "lineLength": 1e-12}));
+    assert_eq!(steps(&s), n + 1, "a length of 1e-12 pt is a change");
+    assert!(ends(&s, speck).2 > 20.0, "{:?}", ends(&s, speck));
+    // A length so short that the rounded ends do not move records no undo step.
+    let dust = line(&mut s, (20.0, 20.0), (20.0, 20.0));
+    let n = steps(&s);
+    run(&mut s, json!({"ids": [dust.0], "lineLength": 1e-20}));
+    assert_eq!(steps(&s), n, "a length of 1e-20 pt changes nothing");
+    near(ends(&s, dust), (20.0, 20.0, 20.0, 20.0));
+    // Other live shapes ignore the line params.
+    let rect = NodeId(s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap());
+    let n = steps(&s);
+    run(&mut s, json!({"ids": [rect.0], "lineLength": 30, "lineAngle": 45}));
+    assert_eq!(steps(&s), n);
+}
+
 #[test]
 fn relative_corner_rounding_keeps_fraction_on_resize() {
     let (mut s, id) = session();
@@ -612,4 +774,30 @@ fn an_arrow_press_without_a_drag_keeps_mixed_radii() {
     let (radii, kinds, _) = corners(&s, id);
     assert_eq!(radii, before, "each corner keeps its radius");
     assert!(kinds.iter().all(|k| *k == CornerKind::InvertedRound), "{kinds:?}");
+}
+
+/// A double-click on a corner widget with the Rectangle tool asks the frontend for the Transform
+/// panel, and leaves the document, its undo history, the selection and the tool as they were.
+#[test]
+fn a_double_click_on_a_corner_widget_with_a_shape_tool_asks_for_the_transform_panel() {
+    use vectorcraft_tools::{Mods, PointerEvent, PointerKind};
+    let (mut s, id) = session();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let v = ViewInfo::default();
+    s.select_tool("rectangle", v).unwrap();
+    let st = s.doc().unwrap();
+    let w = vectorcraft_tools::corners::CornerWidgets::showing(&st.doc, &st.selection, v.zoom, false, true, 180.0).expect("corner widgets show");
+    let at = w.visible().next().expect("a widget");
+    let (doc, selection, steps) = (st.doc.clone(), st.selection.clone(), st.history.undo.len());
+    let mut asked = vec![];
+    for kind in [PointerKind::Down, PointerKind::Up, PointerKind::Down, PointerKind::Up, PointerKind::DoubleClick] {
+        asked.extend(s.pointer(&PointerEvent::new(kind, at.x, at.y).with_mods(Mods::default()), v).unwrap());
+    }
+    assert_eq!(asked, vec![UiRequest::Panel("transform".into())]);
+    let st = s.doc().unwrap();
+    assert!(*st.doc == *doc, "the document is unchanged");
+    assert_eq!(st.selection, selection);
+    assert_eq!(st.history.undo.len(), steps, "no undo step");
+    assert!(st.interaction.is_none());
+    assert_eq!(s.tool_id(), "rectangle");
 }

@@ -10,6 +10,26 @@ pub enum DrawMode {
     Inside,
 }
 
+/// Plug-ins & Scratch Disks › Plug-in Instruction Budget: the instructions an object filter's run
+/// may use ([`vectorcraft_plugins::Plugin::large_limits`]).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PluginBudget {
+    /// The plug-in's own limits.
+    #[default]
+    Normal,
+    /// At least [`vectorcraft_plugins::LARGE_FUEL`] instructions besides those for each byte of
+    /// input; the time budget is unchanged.
+    Large,
+}
+
+/// A saved Plug-in Instruction Budget: any value but `large`, of any type, reads as Normal, and the
+/// other preferences are read as they are.
+fn plugin_budget<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<PluginBudget, D::Error> {
+    let saved = <Value as serde::Deserialize>::deserialize(d)?;
+    Ok(if saved.as_str() == Some("large") { PluginBudget::Large } else { PluginBudget::Normal })
+}
+
 /// A saved Default Language as its tag: older preferences hold the language's name, and one the list
 /// no longer has reads as the default.
 fn language_tag<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<String, D::Error> {
@@ -29,6 +49,12 @@ pub struct Prefs {
     pub constrain_angle: f64,
     pub corner_radius: f64,
     pub disable_auto_add_delete: bool,
+    /// General › Interpolate Control Points When Moving Anchors: the default of the `interpolate`
+    /// param of the commands that move direct-selected anchors (a Direct Selection drag, the arrow
+    /// keys, Move, Transform Again). On, the handles of each segment with one moved end are
+    /// re-mapped by the turn, scale and move that take its old ends to its new ends. Off (the
+    /// default), the handles of a moved anchor move with it and the other handles stay.
+    pub interpolate_control_points: bool,
     pub use_precise_cursors: bool,
     pub show_tool_tips: bool,
     /// Other Script… warns before it runs a chosen script.
@@ -71,6 +97,13 @@ pub struct Prefs {
     /// A single-key tool shortcut held down chooses its tool until the key is let go, and then the
     /// tool active before comes back; a quick press chooses the tool for good.
     pub hold_tool_keys: bool,
+    /// Hold shortcuts act (Edit › Keyboard Shortcuts › Hold Shortcuts, off by default): a key with a
+    /// hold shortcut runs it when held for [`Self::key_hold_delay`], and its own shortcut when let go
+    /// sooner. Off, every key runs on its press and the dialog shows no Hold column.
+    pub hold_shortcuts: bool,
+    /// Seconds a key with a hold shortcut must stay down before the hold shortcut runs (Hold
+    /// Shortcut Delay, 0.2 to 1.0). VectorCraft's own default, 0.35.
+    pub key_hold_delay: f64,
     /// With View › Show Bounding Box on, the bounding box stays visible while a drag moves the
     /// selection, and the shape tools that show it draw it around the shape being drawn. Off (the
     /// default), it hides during a move and while a shape is drawn, except that a Selection tool
@@ -173,6 +206,11 @@ pub struct Prefs {
     pub fonts_folder: String,
     // Plug-ins & Scratch Disks
     pub plugins_folder: String,
+    /// Plug-in Instruction Budget: the instructions each object filter run gets, from
+    /// `plugin.run`, a plug-in command and the app alike. Live effects, exporters and importers
+    /// keep their own budgets.
+    #[serde(deserialize_with = "plugin_budget")]
+    pub plugin_instruction_budget: PluginBudget,
     pub scratch_primary: String,
     pub scratch_secondary: String,
     // User Interface
@@ -214,6 +252,10 @@ pub struct Prefs {
     /// runs on: a Wayland compositor may not show frames from another GPU (#502). Single-GPU
     /// machines are unaffected.
     pub gpu_preference: String,
+    /// The desktop app's window presents without vsync, with frames capped at 240 a second (#6013).
+    /// Read at startup (it takes effect after a restart); `--present-mode` and
+    /// `VECTORCRAFT_PRESENT_MODE` take precedence over it.
+    pub low_latency_drawing: bool,
     pub history_states: u32,
     pub real_time_drawing: bool,
     /// Rasterizer worker threads; -1 = automatic.
@@ -385,6 +427,21 @@ pub struct Prefs {
     pub import_matches: Vec<cmd::importmatches::ImportMatch>,
 }
 
+/// The default Hold Shortcut Delay, in seconds (VectorCraft's own value).
+pub const KEY_HOLD_DELAY: f64 = 0.35;
+/// The range of the Hold Shortcut Delay, in seconds.
+pub const KEY_HOLD_DELAY_RANGE: (f64, f64) = (0.2, 1.0);
+
+impl Prefs {
+    /// The Hold Shortcut Delay in seconds, inside its range. A restored settings file is not
+    /// checked against the range, so a value outside it is brought inside, and one that is not a
+    /// number gives the default.
+    pub fn key_hold_delay(&self) -> f64 {
+        let (min, max) = KEY_HOLD_DELAY_RANGE;
+        if self.key_hold_delay.is_finite() { self.key_hold_delay.clamp(min, max) } else { KEY_HOLD_DELAY }
+    }
+}
+
 impl Default for Prefs {
     fn default() -> Self {
         let s = |v: &str| v.to_string();
@@ -393,6 +450,7 @@ impl Default for Prefs {
             constrain_angle: 0.0,
             corner_radius: 12.0,
             disable_auto_add_delete: false,
+            interpolate_control_points: false,
             use_precise_cursors: false,
             show_tool_tips: true,
             show_external_script_warning: true,
@@ -415,6 +473,8 @@ impl Default for Prefs {
             scrub_numeric_fields: true,
             trackpad_rotate_view: true,
             hold_tool_keys: true,
+            hold_shortcuts: false,
+            key_hold_delay: KEY_HOLD_DELAY,
             bounding_box_while_moving_and_drawing: false,
             paste_offset: 10.0,
             selection_tolerance: 3.0,
@@ -485,6 +545,7 @@ impl Default for Prefs {
             hyphenation_exceptions: String::new(),
             fonts_folder: String::new(),
             plugins_folder: String::new(),
+            plugin_instruction_budget: PluginBudget::Normal,
             scratch_primary: s("Startup"),
             scratch_secondary: s("None"),
             ui_brightness: s("mediumDark"),
@@ -503,6 +564,7 @@ impl Default for Prefs {
             gpu_performance: true,
             animated_zoom: true,
             gpu_preference: s("automatic"),
+            low_latency_drawing: false,
             history_states: 500,
             real_time_drawing: true,
             render_threads: -1,
