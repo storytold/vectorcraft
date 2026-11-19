@@ -239,6 +239,10 @@ font-technology	Variable	Variables
 	Arc	Arc
 	Arc Lower…	Arc inférieur…
 	Arc Tool	Outil Arc
+	Three-Point Arc Tool	Outil Arc par trois points
+	Three-Point Arc	Arc par trois points
+	Arc too large	Arc trop grand
+	Third Point Sets Direction	Le troisième point indique la direction
 	Arc Upper…	Arc supérieur…
 	Arch…	Arche…
 	Arc…	Arc…
@@ -654,6 +658,8 @@ font-technology	Variable	Variables
 	Contextual Task Bar	Barre des tâches contextuelle
 	Pin Bar Position	Épingler la position de la barre
 	Reset Bar Position	Réinitialiser la position de la barre
+	Bar Actions	Actions de la barre
+	Reset Bar Actions	Réinitialiser les actions de la barre
 	Resize	Redimensionner
 	Contrast	Contraste
 	Control	Contrôle
@@ -2024,6 +2030,11 @@ font-technology	Variable	Variables
 	Knife	Cutter
 	Knockout Group	Groupe perçant
 	Lab	Lab
+	OKLCH Sliders	Curseurs OKLCH
+	HSL Sliders	Curseurs HSL
+	Chroma	Chroma
+	The largest chroma sRGB holds at this lightness and hue	Le plus grand chroma que sRGB contient à cette luminosité et cette teinte
+	OKLCH needs sRGB as the working RGB space	OKLCH nécessite sRGB comme espace de travail RGB
 	Lab Spot Colors:	Tons directs Lab :
 	Lab Values	Valeurs Lab
 	Landscape	Paysage
@@ -5141,6 +5152,8 @@ liquify-list-end	{0}, {1}	{0} et {1}
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` doit valoir grayscale, rgb, hsb, cmyk ou websafe
 @msg	`view` must be wheel or box	`view` doit valoir wheel ou box
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` doit valoir hue, saturation, brightness, red, green ou blue
+@msg	`sliders` must be none, oklch or hsl	`sliders` doit valoir none, oklch ou hsl
+@msg	OKLCH needs sRGB as the working RGB space	OKLCH nécessite sRGB comme espace de travail RGB
 @msg	`{k}` must be [x, y]	`{k}` doit être [x, y]
 @msg	`{name}` has no options	`{name}` n’a pas d’options
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` est un espace de travail intégré ; choisissez un autre nom
@@ -5337,6 +5350,10 @@ liquify-list-end	{0}, {1}	{0} et {1}
 @msg	a guide has no curvature circle	un repère n’a pas de cercle de courbure
 @msg	the circle that matches the path there would reach past the canvas	le cercle qui correspond au tracé à cet endroit dépasserait la zone de travail
 @msg	no circle passes through these points: two are the same or all three lie on one line	aucun cercle ne passe par ces points : deux sont identiques ou les trois sont alignés
+@msg	`at` must be "start" or "end"	`at` doit valoir "start" ou "end"
+@msg	give exactly one of `through` and `toward`	indiquez exactement un seul de `through` et `toward`
+@msg	no arc fits these points: two are the same or all three lie on one line	aucun arc ne correspond à ces points : deux sont identiques ou les trois sont alignés
+@msg	give `at` only with `toward`	indiquez `at` uniquement avec `toward`
 @msg	no app to open files here	aucune application pour ouvrir des fichiers ici
 @msg	no artboard	aucun plan de travail
 @msg	no artboard {i} (0-based; the document has {_1})	aucun plan de travail {i} (numérotation à partir de 0 ; le document en a {_1})
@@ -10706,6 +10723,16 @@ breakText	Glyphs	Glyphes
 @msg	A joint does not close by {gap} pt.	Un joint ne se ferme pas, avec un écart de {gap} pt.
 @msg	Two panels pass through each other.	Deux panneaux se traversent.
 @msg	{_1} × {_2} pixels is too large for GIF (at most 65535 pixels a side): lower the resolution	{_1} × {_2} pixels, c’est trop grand pour le GIF (65535 pixels par côté au plus) : réduisez la résolution
+	Orbit Lines	Lignes orbitales
+	Petal Garland	Guirlande de pétales
+	Lattice Braid	Tresse en treillis
+	Facet Sweep	Trait à facettes
+	Artistic Brushes	Pinceaux artistiques
+	Paint	Peinture
+	Flat Sweep	Balayage plat
+	Dry Drag	Traînée sèche
+	Loaded Stroke	Trait chargé
+	Fan Sweep	Balayage en éventail
 	Engraving	Gravure
 	Fine Hatching	Hachures fines
 	Dense Hatching	Hachures denses

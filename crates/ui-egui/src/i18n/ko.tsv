@@ -839,6 +839,8 @@ digits	Malayalam	말라얄람어
 	Contextual Task Bar	상황별 작업 표시줄
 	Pin Bar Position	표시줄 위치 고정
 	Reset Bar Position	표시줄 위치 재설정
+	Bar Actions	표시줄 동작
+	Reset Bar Actions	표시줄 동작 재설정
 	Resize	크기 조절
 	Tools	도구
 	Toolbars	도구 모음
@@ -1226,6 +1228,10 @@ antiAlias	Sharp	날카롭게
 @plural	Apply to All ({n} more missing)|Apply to All ({n} more missing)	모두에 적용(누락 {n}개 더 있음)
 	Arc	호
 	Arc Tool	호 도구
+	Three-Point Arc Tool	3점 호 도구
+	Three-Point Arc	3점 호
+	Arc too large	호가 너무 큽니다
+	Third Point Sets Direction	세 번째 점으로 방향 지정
 	Area / Path Type	영역/패스 문자
 	Area Graph Tool	영역 그래프 도구
 	Area Type Tool	영역 문자 도구
@@ -4403,6 +4409,11 @@ file-filter	Templates	템플릿
 	Keep the pasted color as a new swatch with a numbered name.	붙여넣은 색상을 번호가 붙은 이름의 새 견본으로 보관합니다.
 	Keep:	유지:
 	Lab	Lab
+	OKLCH Sliders	OKLCH 슬라이더
+	HSL Sliders	HSL 슬라이더
+	Chroma	크로마
+	The largest chroma sRGB holds at this lightness and hue	이 명도와 색조에서 sRGB가 담을 수 있는 최대 크로마
+	OKLCH needs sRGB as the working RGB space	OKLCH를 사용하려면 작업 RGB 공간이 sRGB여야 합니다
 	Lab Values	Lab 값
 	Large List View	큰 목록 보기
 	Large Thumbnail View	큰 축소판 보기
@@ -5097,6 +5108,10 @@ variable-list-end	{0}, {1}	{0} 및 {1}
 @msg	a guide has no curvature circle	안내선에는 곡률원이 없습니다
 @msg	the circle that matches the path there would reach past the canvas	그 위치에서 패스에 맞는 원이 캔버스를 벗어납니다
 @msg	no circle passes through these points: two are the same or all three lie on one line	이 점들을 지나는 원이 없습니다: 두 점이 같거나 세 점이 모두 한 직선 위에 있습니다
+@msg	`at` must be "start" or "end"	`at`은(는) "start" 또는 "end"여야 합니다
+@msg	give exactly one of `through` and `toward`	`through`와 `toward` 중 정확히 하나만 지정하세요
+@msg	no arc fits these points: two are the same or all three lie on one line	이 점들에 맞는 호가 없습니다: 두 점이 같거나 세 점이 모두 한 직선 위에 있습니다
+@msg	give `at` only with `toward`	`at`은(는) `toward`와 함께만 지정하세요
 @msg	select at least two objects	개체를 두 개 이상 선택하세요
 @msg	exit isolation mode first	먼저 격리 모드를 종료하세요
 @msg	no saved presets	저장된 프리셋이 없습니다
@@ -5566,6 +5581,8 @@ variable-list-end	{0}, {1}	{0} 및 {1}
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode`은(는) grayscale, rgb, hsb, cmyk, websafe 중 하나여야 합니다
 @msg	`view` must be wheel or box	`view`은(는) wheel, box 중 하나여야 합니다
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel`은(는) hue, saturation, brightness, red, green, blue 중 하나여야 합니다
+@msg	`sliders` must be none, oklch or hsl	`sliders`는 none, oklch 또는 hsl이어야 합니다
+@msg	OKLCH needs sRGB as the working RGB space	OKLCH를 사용하려면 작업 RGB 공간이 sRGB여야 합니다
 @msg	`{key}` must be true or false	`{key}`은(는) true 또는 false여야 합니다
 @msg	`top` and `below` can't both be true	`top`과 `below`를 동시에 true로 지정할 수 없습니다
 @msg	`select` must be true or false	`select`은(는) true 또는 false여야 합니다
@@ -10381,6 +10398,16 @@ breakText	Glyphs	글리프
 @msg	A panel is not joined to the rest by a crease.	패널이 어떤 오시선으로도 나머지와 연결되어 있지 않습니다.
 @msg	A fold line is on a non-printing layer.	접는 선이 인쇄되지 않는 레이어에 있습니다.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	패널: {panels}, 힌지: {hinges}, 오류: {errors}, 경고: {warnings}
+	Orbit Lines	궤도 선
+	Petal Garland	꽃잎 화환
+	Lattice Braid	격자 땋기
+	Facet Sweep	면 분할 붓질
+	Artistic Brushes	예술 브러시
+	Paint	페인트
+	Flat Sweep	평평한 붓질
+	Dry Drag	마른 붓질
+	Loaded Stroke	두터운 붓질
+	Fan Sweep	부채꼴 붓질
 	Engraving	판화
 	Fine Hatching	가는 해칭
 	Dense Hatching	촘촘한 해칭

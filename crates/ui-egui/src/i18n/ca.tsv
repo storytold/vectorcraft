@@ -345,6 +345,10 @@ antiAlias	Sharp	Nítid
 	Arc Lower…	Arc inferior…
 	Arc Segment Tool Options	Opcions de l’eina de segment d’arc
 	Arc Tool	Eina d’arc
+	Three-Point Arc Tool	Eina d’arc per tres punts
+	Three-Point Arc	Arc per tres punts
+	Arc too large	Arc massa gran
+	Third Point Sets Direction	El tercer punt indica la direcció
 	Arc Upper…	Arc superior…
 	Arch…	Arqueja…
 	Arc…	Arc…
@@ -2496,6 +2500,11 @@ digits	Malayalam	Malaiàlam
 	Knife	Ganivet
 	Knockout Group	Grup knockout
 	Lab	Lab
+	OKLCH Sliders	Controls lliscants OKLCH
+	HSL Sliders	Controls lliscants HSL
+	Chroma	Croma
+	The largest chroma sRGB holds at this lightness and hue	El croma més gran que sRGB admet amb aquesta lluminositat i aquest to
+	OKLCH needs sRGB as the working RGB space	OKLCH necessita sRGB com a espai RGB de treball
 	Lab Spot Colors	Colors directes Lab
 	Lab Spot Colors:	Colors directes Lab:
 	Lab Values	Valors Lab
@@ -3946,6 +3955,8 @@ digits	Malayalam	Malaiàlam
 	Reset all Revolve settings to their defaults.	Restableix tots els paràmetres de revolució als valors predeterminats.
 	Reset Automation	Restableix Automation
 	Reset Bar Position	Restableix la posició de la barra
+	Bar Actions	Accions de la barra
+	Reset Bar Actions	Restableix les accions de la barra
 	Reset Bounding Box	Restableix el quadre delimitador
 	Rotate Bounding Box	Gira el quadre delimitador
 	Rotate Bounding Box…	Gira el quadre delimitador…
@@ -6141,6 +6152,8 @@ digits	Malayalam	Malaiàlam
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` ha de ser grayscale, rgb, hsb, cmyk o websafe
 @msg	`view` must be wheel or box	`view` ha de ser wheel o box
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` ha de ser hue, saturation, brightness, red, green o blue
+@msg	`sliders` must be none, oklch or hsl	`sliders` ha de ser none, oklch o hsl
+@msg	OKLCH needs sRGB as the working RGB space	OKLCH necessita sRGB com a espai RGB de treball
 @msg	`name` is empty	`name` és buit
 @msg	`newName` is empty	`newName` és buit
 @msg	`pathfinder` must be an object	`pathfinder` ha de ser un objecte
@@ -6804,6 +6817,10 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	a guide has no curvature circle	una guia no té cercle de curvatura
 @msg	the circle that matches the path there would reach past the canvas	el cercle que coincideix amb el traçat en aquest punt sortiria del llenç
 @msg	no circle passes through these points: two are the same or all three lie on one line	cap cercle no passa per aquests punts: dos són iguals o tots tres són en una mateixa recta
+@msg	`at` must be "start" or "end"	`at` ha de ser "start" o "end"
+@msg	give exactly one of `through` and `toward`	indiqueu exactament un de `through` i `toward`
+@msg	no arc fits these points: two are the same or all three lie on one line	cap arc no s’ajusta a aquests punts: dos són iguals o tots tres són en una mateixa recta
+@msg	give `at` only with `toward`	indiqueu `at` només amb `toward`
 @msg	no app to open files here	aquí no hi ha cap aplicació per obrir fitxers
 @msg	no artboard	no hi ha tauler
 @msg	no artboard {i} (0-based; the document has {_1})	no hi ha el tauler {i} (basat en 0; el document en té {_1})
@@ -8919,6 +8936,16 @@ breakText	Glyphs	Glifs
 @msg	A joint does not close by {gap} pt.	Una unió no es tanca per {gap} pt.
 @msg	Two panels pass through each other.	Dos panells es travessen l’un a l’altre.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer ha de ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"
+	Orbit Lines	Línies orbitals
+	Petal Garland	Garlanda de pètals
+	Lattice Braid	Trena reticular
+	Facet Sweep	Traç facetat
+	Artistic Brushes	Pinzells artístics
+	Paint	Pintura
+	Flat Sweep	Traç pla
+	Dry Drag	Arrossegament sec
+	Loaded Stroke	Traç carregat
+	Fan Sweep	Traç en ventall
 	Engraving	Gravat
 	Fine Hatching	Ratllat fi
 	Dense Hatching	Ratllat dens

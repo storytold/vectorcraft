@@ -2920,6 +2920,8 @@
 	Contextual Task Bar	კონტექსტური ამოცანების ზოლი
 	Pin Bar Position	ზოლის პოზიციის ჩამაგრება
 	Reset Bar Position	ზოლის პოზიციის ჩამოყრა
+	Bar Actions	ზოლის მოქმედებები
+	Reset Bar Actions	ზოლის მოქმედებების ჩამოყრა
 	Tools	ხელსაწყოები
 	Toolbars	ხელსაწყოთა ზოლები
 	Advanced	დამატებითი
@@ -3585,6 +3587,10 @@ lighting	Light	სინათლე
 	Add Anchor Point Tool	საყრდენი წერტილის დამატების ხელსაწყო
 	Anchor Point Tool	საყრდენი წერტილის ხელსაწყო
 	Arc Tool	რკალის ხელსაწყო
+	Three-Point Arc Tool	სამწერტილიანი რკალის ხელსაწყო
+	Three-Point Arc	სამწერტილიანი რკალი
+	Arc too large	რკალი ზედმეტად დიდია
+	Third Point Sets Direction	მესამე წერტილი მიმართულებას განსაზღვრავს
 	Area Graph Tool	ფართობითი დიაგრამის ხელსაწყო
 	Area Type Tool	არის ტექსტის ხელსაწყო
 	Artboard Tool	სამუშაო დაფის ხელსაწყო
@@ -6359,6 +6365,11 @@ axis	Both	ორივე
 	Image	გამოსახულება
 	Ink	მელანი
 	Lab	Lab
+	OKLCH Sliders	OKLCH სლაიდერები
+	HSL Sliders	HSL სლაიდერები
+	Chroma	ქრომა
+	The largest chroma sRGB holds at this lightness and hue	უდიდესი ქრომა, რომელსაც sRGB იტევს ამ სიღიავესა და ფერის ტონზე
+	OKLCH needs sRGB as the working RGB space	OKLCH-ს სამუშაო RGB სივრცედ sRGB სჭირდება
 	Medium	საშუალო
 	Name	სახელი
 	None	არცერთი
@@ -7144,6 +7155,10 @@ font-technology	Variable	ცვლადი
 @msg	a guide has no curvature circle	დამხმარე ხაზს სიმრუდის წრე არ აქვს
 @msg	the circle that matches the path there would reach past the canvas	წრეწირი, რომელიც იქ ტრაექტორიას შეესაბამება, ტილოს გასცდებოდა
 @msg	no circle passes through these points: two are the same or all three lie on one line	ამ წერტილებზე წრეწირი არ გადის: ორი ერთნაირია ან სამივე ერთ წრფეზე მდებარეობს
+@msg	`at` must be "start" or "end"	`at` უნდა იყოს "start" ან "end"
+@msg	give exactly one of `through` and `toward`	მიუთითეთ ზუსტად ერთი: `through` ან `toward`
+@msg	no arc fits these points: two are the same or all three lie on one line	ამ წერტილებს რკალი არ ერგება: ორი ერთნაირია ან სამივე ერთ წრფეზე მდებარეობს
+@msg	give `at` only with `toward`	`at` მიუთითეთ მხოლოდ `toward`-თან ერთად
 @msg	no app to open files here	აქ ფაილების გასახსნელი აპი არ არის
 @msg	no artboard	სამუშაო დაფა არ არის
 @msg	no artboard {i} (0-based; the document has {_1})	სამუშაო დაფა {i} არ არსებობს (0-დან ითვლება; დოკუმენტს აქვს {_1})
@@ -8770,6 +8785,8 @@ liquify-list-end	{0}, {1}	{0} და {1}
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` უნდა იყოს grayscale, rgb, hsb, cmyk ან websafe
 @msg	`view` must be wheel or box	`view` უნდა იყოს wheel ან box
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` უნდა იყოს hue, saturation, brightness, red, green ან blue
+@msg	`sliders` must be none, oklch or hsl	`sliders` უნდა იყოს none, oklch ან hsl
+@msg	OKLCH needs sRGB as the working RGB space	OKLCH-ს სამუშაო RGB სივრცედ sRGB სჭირდება
 @msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), not a PDF: File › Open and File › Place read it as EPS	ეს PostScript ფაილია (ძველ ფორმატში ან PDF-თან თავსებადობის გარეშე შენახული .ai, ან EPS ფაილი) და არა PDF: ფაილი › გახსნა და ფაილი › განთავსება მას EPS-ად კითხულობს
 # Upstream sync 2026-10-16 (3): Intertwine, symbol registration, gradient span, data sets, Batch.
 	Intertwine	გადახლართვა
@@ -11029,6 +11046,16 @@ font-script	Japanese	იაპონური
 @msg	A joint does not close by {gap} pt.	შეერთება არ იხურება {gap} pt-ით.
 @msg	Two panels pass through each other.	ორი პანელი ერთმანეთში გადის.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer უნდა იყოს "singleLine", "everyLine", "standardSingleLine" ან "standardEveryLine"
+	Orbit Lines	ორბიტული ხაზები
+	Petal Garland	ფურცლების გირლანდა
+	Lattice Braid	ბადის ნაწნავი
+	Facet Sweep	წახნაგოვანი მონასმი
+	Artistic Brushes	მხატვრული ფუნჯები
+	Paint	საღებავი
+	Flat Sweep	ბრტყელი მოსმა
+	Dry Drag	მშრალი მოსმა
+	Loaded Stroke	სქელი მონასმი
+	Fan Sweep	მარაოსებრი მოსმა
 	Engraving	გრავიურა
 	Fine Hatching	წვრილი შტრიხები
 	Dense Hatching	მჭიდრო შტრიხები
