@@ -4141,9 +4141,8 @@ already walks Image Trace. Short agent entry points:
   `ui.action.insertMenuItem` lists) with the item's params. `excluded: true` preserves a step but omits it from playback;
   an absent or false flag includes the step. Files with an action whose `automaticAlignTo` is true, or with an
   `object.align` step (excluded, or inside a `command.batch` or `action.batch` step, too) whose `to` is `"auto"`, use
-  version 7. Other
-  files with View menu steps use version 6, files with Select Path steps and
-  no View menu step use version 5, files with Select Object steps and neither use version 4, files with stops and none
+  version 7. Other files with View menu steps use version 6, files with Select Path steps and no View menu step use
+  version 5, files with Select Object steps and neither use version 4, files with stops and none
   of these use version 3, and files with excluded steps and none of these use version 2, so older builds refuse them
   instead of playing the excluded steps or failing at a stop, a Select Object step, a Select Path step or a View menu
   step; other files use version 1, and version 1 to 6 files still load. A file with another `format` or a `version` other than
@@ -4185,12 +4184,14 @@ already walks Image Trace. Short agent entry points:
   (`red`, `yellow`, `green`, `blue` or `violet`; null or `""` for none), the color of its button in Button Mode
   (`ui.action.buttonMode`). `automaticAlignTo: true` makes playback run each of the action's `object.align` steps,
   those in a recorded Batch run (`action.batch`) included, with `to: "auto"` (see [Align to Artboard](#align-to-artboard)):
-  the key object, key anchor or key guide, else the artboard for one whole selected object, else the selection. Playback also leaves out an `artboard` the step stores, so the step uses the
-  active artboard, as `object.align` without `artboard` does. A Batch run passes no active artboard to its steps, so
-  when an `object.align` step in a Batch run aligns to the artboard, it uses the artboard under the center of the
-  selection, or the first artboard when none is there. The stored steps keep the `to` they were recorded with,
-  and the action plays them as recorded again when the option is turned off. It is false when left out or null, and a value that is not
-  true, false or null is an error. These are VectorCraft's own rules. Action function
+  the key object, key anchor or key guide, else the artboard for one whole selected object, else the selection.
+  Playback also leaves out an `artboard` the step stores, so the step uses the active artboard, as `object.align`
+  without `artboard` does. A Batch run passes no active artboard to its steps, so when an `object.align` step in a
+  Batch run aligns to the artboard, it uses the artboard under the center of the selection, or the first artboard when
+  none is there. `object.distribute` and `object.distributeSpacing` steps play with the `to` they were recorded with.
+  The stored steps keep the `to` they were recorded with, and the action plays them as recorded again when the option
+  is turned off. It is false when left out or null, and a value that is not true, false or null is an error. These are
+  VectorCraft's own rules. Action function
   keys take priority over command shortcuts and preserve the command's binding. On Windows F1, Ctrl+F4 and Ctrl+F6
   cannot be used. While an action is recording, and for an index past the last set,
   an empty name, or a key or color that is not one of these, it is an error and nothing is added. So is an action that
@@ -7086,8 +7087,8 @@ below 3 or above 1000 counts as 3 or 1000, and a fractional or negative `sides` 
 ## Align to Artboard
 
 `object.align {to: "auto"}` chooses the target each time it runs: the key object, key anchor or key guide when the
-selection has one, else the artboard when exactly one object is selected and no anchor points are, else the selection. It then aligns
-as that `to` value does, and it changes neither the selection nor the key. These are VectorCraft's own rules.
+selection has one, else the artboard when exactly one object is selected and no anchor points are, else the
+selection. It then aligns as that `to` value does, and it changes neither the selection nor the key. These are VectorCraft's own rules.
 
 `object.align {to: "artboard", artboard?}` aligns the selected objects to artboard `artboard` (a 0-based index).
 Without `artboard`, or with an index the document doesn't have, it aligns them to the artboard under the center of the
