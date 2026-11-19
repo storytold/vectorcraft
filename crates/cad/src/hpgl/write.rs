@@ -43,16 +43,13 @@ use clip::Region;
 
 /// Plotter units per point.
 const PLU_PER_PT: f64 = 1016.0 / 72.0;
-/// The largest coordinate written, plotter units.
-pub const MAX_COORD: i64 = (1 << 23) - 1;
+pub use craft_plotter::hpgl::write::{MAX_COORD, MAX_PENS};
 /// The coordinates an HP-GL plot keeps to without a warning: 16-bit numbers, plotter units.
 const CLASSIC_RANGE: std::ops::RangeInclusive<i64> = -32_768..=32_767;
 /// The curve tolerance a path is flattened to by default, points.
 pub const DEFAULT_TOLERANCE: f64 = 0.1;
 /// The smallest and largest curve tolerance, points.
 pub const TOLERANCE_RANGE: std::ops::RangeInclusive<f64> = 0.01..=10.0;
-/// The most pens: a pen table's length, and the colors that get a pen of their own.
-pub const MAX_PENS: usize = 255;
 /// The most points the plots of one export hold.
 const MAX_POINTS: usize = if cfg!(test) { 100_000 } else { 10_000_000 };
 /// The most work sorting paths and finding which lie inside others may take, over the whole plot:
@@ -295,7 +292,14 @@ pub fn export_regions(doc: &Document, opts: &HpglOptions, regions: &[Rect]) -> R
         }
         let bytes = match opts.version {
             Version::Hpgl => plain(&by_pen),
-            Version::Hpgl2 => encoded(&by_pen, &pens),
+            Version::Hpgl2 => {
+                let pen_table: Vec<craft_plotter::hpgl::write::Pen> = pens
+                    .iter()
+                    .enumerate()
+                    .map(|(i, &rgb)| craft_plotter::hpgl::write::Pen { number: i + 1, rgb })
+                    .collect();
+                craft_plotter::hpgl::write::write_hpgl2(&pen_table, &by_pen).into_bytes()
+            }
         };
         out.push(HpglOutput { bytes, pens: pens.clone(), warnings, setting_notes });
     }
@@ -523,56 +527,7 @@ fn plain(by_pen: &[Vec<Vec<(i64, i64)>>]) -> Vec<u8> {
 }
 
 /// HP-GL/2: `IN;`, the palette, each pen's paths as one `PE`, `PU;SP0;`.
-fn encoded(by_pen: &[Vec<Vec<(i64, i64)>>], pens: &[[u8; 3]]) -> Vec<u8> {
-    let mut out = b"IN;".to_vec();
-    if !pens.is_empty() {
-        // Pens 1 to n on a plotter, and on a raster device (whose pens are 0 to NP − 1) too.
-        let np = (pens.len() + 1).next_power_of_two().max(2);
-        out.extend(format!("NP{np};").bytes());
-        for (i, [r, g, b]) in pens.iter().enumerate() {
-            out.extend(format!("PC{},{r},{g},{b};", i + 1).bytes());
-        }
-    }
-    let mut at: Option<(i64, i64)> = None;
-    for (i, paths) in by_pen.iter().enumerate().filter(|(_, p)| !p.is_empty()) {
-        out.extend(format!("PU;SP{};PE", i + 1).bytes());
-        for path in paths {
-            for (k, &p) in path.iter().enumerate() {
-                if k == 0 {
-                    out.push(b'<');
-                }
-                // The first move of the plot is absolute, and so is one longer than the range a
-                // device takes for each number; every other is relative.
-                match at.map(|a| (p.0 - a.0, p.1 - a.1)).filter(|d| d.0.abs() <= MAX_COORD && d.1.abs() <= MAX_COORD) {
-                    None => {
-                        out.push(b'=');
-                        pe_number(&mut out, p.0);
-                        pe_number(&mut out, p.1);
-                    }
-                    Some((dx, dy)) => {
-                        pe_number(&mut out, dx);
-                        pe_number(&mut out, dy);
-                    }
-                }
-                at = Some(p);
-            }
-        }
-        out.push(b';');
-    }
-    out.extend(b"PU;SP0;");
-    out
-}
 
-/// `v` as a base-64 PE number: the sign in the low bit, the low digits from 63 up and the last
-/// digit from 191 up.
-fn pe_number(out: &mut Vec<u8>, v: i64) {
-    let mut n = (v.unsigned_abs() << 1) | u64::from(v < 0);
-    while n >= 64 {
-        out.push(63 + (n % 64) as u8);
-        n /= 64;
-    }
-    out.push(191 + n as u8);
-}
 
 /// One line the pen draws, in document space, and its color.
 struct Run {
