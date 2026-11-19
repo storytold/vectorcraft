@@ -465,6 +465,9 @@ antiAlias	Sharp	Nítido
 	Choose…	Escolher…
 	Circle	Círculo
 	Circle Tool	Ferramenta Círculo
+	Curvature Circle Tool	Ferramenta Círculo de curvatura
+	Cusp	Cúspide
+	Straight segment	Segmento reto
 	Circle too large	Círculo grande demais
 	Clean Up…	Limpar…
 	Clear	Limpar
@@ -544,6 +547,9 @@ antiAlias	Sharp	Nítido
 	Box Channel	Canal da Caixa
 	Color box	Caixa de cor
 	Color Wheel Options	Opções da Roda de Cores
+	Show Harmony	Mostrar Harmonia
+	Harmony Rule	Regra de Harmonia
+	Harmony color	Cor da harmonia
 	Color Type:	Tipo de Cor:
 	Color blindness – Deuteranopia-type	Daltonismo – tipo deuteranopia
 	Color blindness – Protanopia-type	Daltonismo – tipo protanopia
@@ -720,10 +726,25 @@ antiAlias	Sharp	Nítido
 	Customize…	Personalizar…
 	Cut	Recortar
 	Cut Path at Selected Anchor Points	Cortar Caminho nos Pontos de Ancoragem Selecionados
+	PSD Import Options	Opções de Importação PSD
+	Place PSD	Colocar PSD
+	Convert Layers to Objects	Converter Camadas em Objetos
+	Import Hidden Layers	Importar Camadas Ocultas
+	Flatten Layers to a Single Image	Achatar Camadas em uma Única Imagem
+	Import Slices	Importar Fatias
 	DXF Import Options	Opções de Importação DXF
 	DXF Info	Informações DXF
 	DXF Options	Opções DXF
 	DXF Options Dialog	Diálogo de Opções DXF
+	HP-GL Options	Opções HP-GL
+	HP-GL Options Dialog	Diálogo de Opções HP-GL
+	Curve Tolerance:	Tolerância das curvas:
+	Origin:	Origem:
+	Pens:	Canetas:
+	One Pen per Color	Uma caneta por cor
+	Pen Table	Tabela de canetas
+	Draw the Nearest Path Next	Desenhar em seguida o caminho mais próximo
+	Draw Inner Paths First	Desenhar primeiro os caminhos internos
 	Dark	Escuro
 	Darken	Escurecer
 	Dashed	Tracejado
@@ -1160,6 +1181,15 @@ antiAlias	Sharp	Nítido
 	Shading Color	Cor do Sombreamento
 	Black Overprint	Preto em Sobreimpressão
 	Draw Hidden Faces	Desenhar Faces Ocultas
+	Map Art…	Mapear Ilustração…
+	Map Art	Mapear Ilustração
+	First Surface	Primeira Superfície
+	Previous Surface	Superfície Anterior
+	Next Surface	Próxima Superfície
+	Last Surface	Última Superfície
+	Scale to Fit	Dimensionar para Caber
+	Shade Artwork	Sombrear Ilustração
+	Invisible Geometry	Geometria Invisível
 	Eyedropper	Conta-gotas
 	Eyedropper Applies:	O Conta-gotas Aplica:
 	Eyedropper Options	Opções do Conta-gotas
@@ -1451,6 +1481,8 @@ antiAlias	Sharp	Nítido
 	More Options	Mais Opções
 	Show Properties Panel	Mostrar Painel Propriedades
 	Hide Corner Widget	Ocultar Widget de Canto
+	Hide Shape Widgets	Ocultar Widgets de Forma
+	Show Shape Widgets	Mostrar Widgets de Forma
 	Hide Corner Widget for angles greater than	Ocultar Widget de Canto para ângulos maiores que
 	Hide Edges	Ocultar Bordas
 	Hide Gradient Annotator	Ocultar Anotador de Gradiente
@@ -1938,6 +1970,9 @@ antiAlias	Sharp	Nítido
 	embedding for preview and print	incorporação para visualização e impressão
 	embedding allowed	incorporação permitida
 	{file}; {embedding}	{file}; {embedding}
+	unknown type	tipo desconhecido
+	{type}; {uses}	{type}; {uses}
+@plural	{n} use|{n} uses	{n} uso|{n} usos
 	substituted: shown in {family} {style} ({detail})	substituída: exibida em {family} {style} ({detail})
 	missing: shown in {family} {style}	ausente: exibida em {family} {style}
 	missing	ausente
@@ -2188,6 +2223,8 @@ antiAlias	Sharp	Nítido
 	Overprint and Transparency Flattener Options	Opções de Sobreimpressão e Achatamento de Transparência
 	Custom…	Personalizado…
 	Custom Transparency Flattener Options	Opções Personalizadas de Achatamento de Transparência
+	The PDF preset keeps the flattener preset but not the Custom… settings.	O predefinido PDF mantém o predefinido de achatamento, mas não as configurações de Personalizado….
+	PDF 1.3 files clip rasterized areas to their regions, and Overprint sets whether overprints are kept.	Arquivos PDF 1.3 recortam as áreas rasterizadas às suas regiões, e Sobreimpressão define se as sobreimpressões são mantidas.
 	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	O EPS não tem transparência alfa, e Sobreimpressões define se as sobreimpressões são mantidas.
 	Overprint:	Sobreimpressão:
 	Overprints:	Sobreimpressões:
@@ -2643,6 +2680,9 @@ digits	Malayalam	Malaiala
 	Rotate View to Selection	Girar Visualização para a Seleção
 	Reset the rows to the artwork's colors	Redefinir as linhas para as cores da arte
 	Color Theme Picker	Seletor de Tema de Cores
+	Undo Changes	Desfazer Alterações
+	Redo Changes	Refazer Alterações
+@msg	Recolor Artwork is not open	Recolorir Arte não está aberto
 	Click or drag across the art to pick its colors; Shift adds more	Clique ou arraste sobre a arte para pegar suas cores; Shift adiciona mais
 	Prominent Colors	Cores Proeminentes
 	Save All Colors	Salvar Todas as Cores
@@ -2695,6 +2735,7 @@ digits	Malayalam	Malaiala
 	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	As propriedades de um retângulo dinâmico mostram um só campo Raio do Canto para os quatro cantos; desativada, cada canto tem seu próprio campo.
 	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	O que as edições no painel Transformar transformam: o objeto, seus blocos de padrão ou ambos; Padrão segue Transformar Blocos de Padrão.
 	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	Com uma instância de símbolo selecionada, o painel Transformar usa o ponto de registro do símbolo como ponto de referência.
+	Drawing a rectangle, ellipse, polygon, star or line opens the Transform panel if it is closed.	Desenhar um retângulo, uma elipse, um polígono, uma estrela ou uma linha abre o painel Transformar se ele estiver fechado.
 	Darkens the canvas outside the artboards while the Artboard tool is active.	Escurece a tela fora das pranchetas enquanto a ferramenta Prancheta está ativa.
 	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	Com Escurecer Região Fora da Prancheta ativado, a área fora das pranchetas continua escura enquanto você arrasta com a ferramenta Prancheta.
 	How near, in pixels, the pointer must be to an object, anchor or handle for a click to select it.	Quão perto, em pixels, o ponteiro precisa estar de um objeto, ponto de ancoragem ou alça para que um clique o selecione.
@@ -2860,6 +2901,7 @@ digits	Malayalam	Malaiala
 	Save Preset	Salvar Predefinido
 	Save Document Preset	Salvar Predefinido de Documento
 	Save Preset…	Salvar Predefinido…
+	Save Summary…	Salvar Resumo…
 	Save Print Preset	Salvar Predefinido de Impressão
 	Save Recovery Data	Salvar Dados de Recuperação
 	Save Save for Web Preset	Salvar Predefinido de Salvar para Web
@@ -3118,6 +3160,7 @@ digits	Malayalam	Malaiala
 	Show List View	Mostrar Exibição de Lista
 	Show Note	Mostrar Nota
 	Show Options	Mostrar Opções
+	Show on Shape Creation	Mostrar ao Criar Formas
 	Show Recent Colors	Mostrar Cores Recentes
 	Toggle RGB Percent	Alternar RGB em Porcentagem
 	Show Original Path	Mostrar Caminho Original
@@ -3143,6 +3186,7 @@ digits	Malayalam	Malaiala
 	Show Thumbnails	Mostrar Miniaturas
 	Show Tile Edge	Mostrar Borda do Bloco
 	Show Tints/Shades	Mostrar Tons/Sombras
+	Show Tool Cards	Mostrar Cartões de Ferramenta
 	Show Tool Tips	Mostrar Dicas de Ferramenta
 	Show Transparency Grid	Mostrar Grade de Transparência
 	Show Video Rulers	Mostrar Réguas de Vídeo
@@ -3493,6 +3537,8 @@ digits	Malayalam	Malaiala
 	Unembed…	Desincorporar…
 	Ungroup	Desagrupar
 	Ungroup Color Group	Desagrupar Grupo de Cores
+	Color Group Options	Opções de Grupo de Cores
+	Color Group Options…	Opções de Grupo de Cores…
 	Uniform	Uniforme
 	Unite	Unir
 	Units	Unidades
@@ -3803,6 +3849,25 @@ imageTrace	Outline	Contorno
 	Preserve Embedded Profiles	Preservar perfis incorporados
 	Convert to Working Space	Converter para espaço de trabalho
 	Preserve Numbers	Preservar números
+	Profile Mismatches:	Incompatibilidades de perfil:
+	Ask When Opening	Perguntar ao abrir
+	Ask When Pasting	Perguntar ao colar
+	Missing Profiles:	Perfis ausentes:
+	Embedded Profile Mismatch	Incompatibilidade do perfil incorporado
+	Missing Profile	Perfil ausente
+	Paste Profile Mismatch	Incompatibilidade de perfil ao colar
+	“{name}” is not tagged with a {model} profile.	“{name}” não tem um perfil {model}.
+	“{name}” is tagged with the {model} profile “{profile}”, which is not the {model} working space “{working}”.	“{name}” tem o perfil {model} “{profile}”, que não é o espaço de trabalho {model} “{working}”.
+	Use the embedded profile	Usar o perfil incorporado
+	Convert the colors to the working space	Converter as cores para o espaço de trabalho
+	Discard the embedded profile	Descartar o perfil incorporado
+	Leave as is	Deixar como está
+	Assign the working space	Atribuir o espaço de trabalho
+	Assign profile:	Atribuir perfil:
+	Preserve the color numbers	Preservar os valores das cores
+	Convert to keep the colors' appearance	Converter para manter a aparência das cores
+@msg	`{path}` goes with `{key}`: "assign" only	`{path}` só acompanha `{key}`: "assign"
+	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	As cores coladas vêm de um documento com o perfil {model} “{from}”; o deste documento é “{to}”.
 	Texture	Textura
 	Craquelure…	Craquelê…
 	Grain…	Granulação…
@@ -3912,6 +3977,17 @@ font-technology	Variable	Variáveis
 	Largest:	Maior:
 	Direction:	Direção:
 	Symbolism Tools Options	Opções das ferramentas de simbolismo
+	Tool:	Ferramenta:
+	Symbol Set Density	Densidade do conjunto de símbolos
+	Symbol Sprayer Options	Opções do Pulverizador de Símbolos
+	Scrunch:	Amontoar:
+	Spin:	Girar:
+	Screen:	Peneira:
+	Stain:	Mancha:
+	Symbol Sizer Options	Opções do Dimensionador de Símbolos
+	Proportional Resizing	Redimensionamento proporcional
+	Resizing Affects Density	Redimensionamento afeta a densidade
+	Show Brush Size and Intensity	Mostrar tamanho e intensidade do pincel
 	Symbol Set Density:	Densidade do conjunto de símbolos:
 	Flatten Artwork	Achatar arte-final
 	Graphics	Gráficos
@@ -3953,6 +4029,15 @@ font-technology	Variable	Variáveis
 	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Conjunto Kinsoku
 	Kinsoku Shori Type	Tipo de Kinsoku Shori
+	Kinsoku Shori Settings…	Configurações de Kinsoku Shori…
+	Kinsoku Shori Settings	Configurações de Kinsoku Shori
+	Kinsoku Sets	Conjuntos Kinsoku
+	Kinsoku Set Base	Base do conjunto Kinsoku
+	Based on:	Com base em:
+	Cannot Start Line	Não pode iniciar linha
+	Cannot End Line	Não pode terminar linha
+	Hanging Punctuation	Pontuação suspensa
+	Inseparable Characters	Caracteres inseparáveis
 	Push In First	Primeiro para dentro
 	Push Out First	Primeiro para fora
 	Push Out Only	Somente para fora
@@ -4061,6 +4146,8 @@ font-technology	Variable	Variáveis
 	Outlines	Contornos
 	Outlines with Source Image	Contornos com imagem de origem
 	Source Image	Imagem de origem
+	Split View	Visualização dividida
+	Divider	Divisor
 	Press and hold to view the source image	Mantenha pressionado para ver a imagem de origem
 	Image Trace View	Exibição de vetorização de imagem
 	Stroke (X), double-click for the Color Picker	Traço (X), clique duas vezes para o seletor de cores
@@ -4339,6 +4426,7 @@ axis	Both	Ambos
 @msg	a freeform gradient keeps at least one point	um gradiente de forma livre mantém pelo menos um ponto
 @msg	a gradient needs at least two stops	um gradiente precisa de pelo menos duas paradas
 @msg	a graphic style named `{to}` already exists	já existe um estilo gráfico chamado `{to}`
+@msg	a swatch or color group named `{name}` already exists	já existe uma amostra ou um grupo de cores chamado `{name}`
 @msg	a key object sits on that point	há um objeto-chave nesse ponto
 @msg	a page is missing	falta uma página
 @msg	a page out of range	uma página fora do intervalo
@@ -4471,6 +4559,11 @@ axis	Both	Ambos
 @msg	no anchor points selected	nenhum ponto de ancoragem selecionado
 @msg	`points` must be two or three [x, y] pairs of numbers	`points` deve ter dois ou três pares de números [x, y]
 @msg	direct-select two or three anchor points, or give `points`	selecione diretamente dois ou três pontos de ancoragem ou informe `points`
+@msg	the path is straight there, so no circle matches its curvature	o caminho é reto nesse ponto, então nenhum círculo corresponde à sua curvatura
+@msg	the path has a cusp there, so it has no single curvature	o caminho tem uma cúspide nesse ponto, então não tem uma curvatura única
+@msg	the path has a corner there, so it has no single curvature	o caminho tem um canto nesse ponto, então não tem uma curvatura única
+@msg	a guide has no curvature circle	uma guia não tem círculo de curvatura
+@msg	the circle that matches the path there would reach past the canvas	o círculo que corresponde ao caminho nesse ponto ultrapassaria a tela
 @msg	no circle passes through these points: two are the same or all three lie on one line	nenhum círculo passa por esses pontos: dois são iguais ou os três estão na mesma reta
 @msg	no app to open files here	nenhum aplicativo para abrir arquivos aqui
 @msg	no artboard	nenhuma prancheta
@@ -4725,6 +4818,7 @@ axis	Both	Ambos
 @msg	the PDF is password-protected: give its password	o PDF é protegido por senha: informe a senha
 @msg	the PDF password is wrong	a senha do PDF está incorreta
 @msg	the Save PDF dialog didn't open	a caixa de diálogo Salvar PDF não abriu
+@msg	the Save PDF dialog is not open	a caixa de diálogo Salvar PDF não está aberta
 @msg	the WMF header is damaged	o cabeçalho WMF está danificado
 @msg	the art could not be sampled	não foi possível amostrar a arte
 @msg	the art has no bounds	a arte não tem limites
@@ -4947,6 +5041,7 @@ variable-list-end	{0}, {1}	{0} e {1}
 @msg	onto must name a panel floating in another group	onto deve nomear um painel flutuante em outro grupo
 @msg	below and above must name a panel floating in another group	below e above devem nomear um painel flutuante em outro grupo
 @msg	give only one of onto, below and above	informe apenas um entre onto, below e above
+@msg	give only one of `index`, `indices` and `t`	informe apenas um entre `index`, `indices` e `t`
 @msg	column must be true or a number from 1	column deve ser true ou um número a partir de 1
 @msg	x and y must both be numbers	x e y devem ser números
 @msg	"{0}" is not a colour: write it as #rrggbb	"{0}" não é uma cor: escreva-a como #rrggbb
@@ -5053,6 +5148,49 @@ variable-list-end	{0}, {1}	{0} e {1}
 @msg	the PSD file's layer groups are nested too deeply	os grupos de camadas do arquivo PSD estão aninhados profundamente demais
 @msg	a layer of the PSD file is too large to read	uma camada do arquivo PSD é grande demais para ser lida
 @msg	the PSD file's layers take more memory to read than allowed	as camadas do arquivo PSD precisam de mais memória do que o permitido para serem lidas
+@msg	the file is no longer loaded	o arquivo não está mais carregado
+@msg	the layers can't be read ({e}): the file was placed as its merged image	as camadas não podem ser lidas ({e}): o arquivo foi colocado como sua imagem mesclada
+@msg	1 type layer came in as pixels: the text isn't editable	1 camada de texto entrou como pixels: o texto não é editável
+@msg	{n} type layers came in as pixels: the text isn't editable	{n} camadas de texto entraram como pixels: o texto não é editável
+@msg	1 adjustment layer was not applied	1 camada de ajuste não foi aplicada
+@msg	{n} adjustment layers were not applied	{n} camadas de ajuste não foram aplicadas
+@msg	1 fill layer was not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	1 camada de preenchimento não foi desenhada (um preenchimento de gradiente ou de padrão, uma cor que não pode ser lida ou uma forma que não guarda pixels)
+@msg	{n} fill layers were not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	{n} camadas de preenchimento não foram desenhadas (um preenchimento de gradiente ou de padrão, uma cor que não pode ser lida ou uma forma que não guarda pixels)
+@msg	the layer effects of 1 layer weren't drawn	os efeitos de camada de 1 camada não foram desenhados
+@msg	the layer effects of {n} layers weren't drawn	os efeitos de camada de {n} camadas não foram desenhados
+@msg	the vector masks of 1 layer weren't applied	as máscaras vetoriais de 1 camada não foram aplicadas
+@msg	the vector masks of {n} layers weren't applied	as máscaras vetoriais de {n} camadas não foram aplicadas
+@msg	the knockout of 1 layer wasn't applied	o vazamento de 1 camada não foi aplicado
+@msg	the knockout of {n} layers wasn't applied	o vazamento de {n} camadas não foi aplicado
+@msg	1 layer was left out (hidden layers and the layers clipped to them)	1 camada foi omitida (camadas ocultas e as camadas recortadas nelas)
+@msg	{n} layers were left out (hidden layers and the layers clipped to them)	{n} camadas foram omitidas (camadas ocultas e as camadas recortadas nelas)
+@msg	1 layer clipped to a fill layer that wasn't drawn was left out	1 camada recortada em uma camada de preenchimento não desenhada foi omitida
+@msg	{n} layers clipped to fill layers that weren't drawn were left out	{n} camadas recortadas em camadas de preenchimento não desenhadas foram omitidas
+@msg	layers in blend modes VectorCraft doesn't have ({modes}) were merged with the layers below them	camadas em modos de mesclagem que o VectorCraft não tem ({modes}) foram mescladas com as camadas abaixo delas
+@msg	1 layer in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	1 camada em um modo de mesclagem que o VectorCraft não tem entrou como Normal: a mesclagem precisa de mais memória do que o permitido
+@msg	{n} layers in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	{n} camadas em modos de mesclagem que o VectorCraft não tem entraram como Normal: a mesclagem precisa de mais memória do que o permitido
+@msg	1 layer clipped to the layer below came in unclipped: the merge needs more memory than allowed	1 camada recortada na camada abaixo entrou sem recorte: a mesclagem precisa de mais memória do que o permitido
+@msg	{n} layers clipped to the layer below came in unclipped: the merge needs more memory than allowed	{n} camadas recortadas na camada abaixo entraram sem recorte: a mesclagem precisa de mais memória do que o permitido
+@msg	hiddenLayers applies to a PSD file placed with layers: true	hiddenLayers se aplica a um arquivo PSD colocado com layers: true
+@msg	importSlices: a linked PSD file is placed as its flat image; give link: false to embed it with its slices	importSlices: um arquivo PSD vinculado é colocado como sua imagem achatada; informe link: false para incorporá-lo com suas fatias
+@msg	layers: a linked PSD file is placed as its flat image; leave link out or give link: false	layers: um arquivo PSD vinculado é colocado como sua imagem achatada; omita link ou informe link: false
+@msg	the slices can't be read ({e}) and were left out	as fatias não podem ser lidas ({e}) e foram omitidas
+@msg	1 slice lies outside the canvas or has no size and was left out	1 fatia fica fora da tela de pintura ou não tem tamanho e foi omitida
+@msg	{n} slices lie outside the canvas or have no size and were left out	{n} fatias ficam fora da tela de pintura ou não têm tamanho e foram omitidas
+@msg	1 slice would lie outside the canvas and was left out	1 fatia ficaria fora da tela de pintura e foi omitida
+@msg	{n} slices would lie outside the canvas and were left out	{n} fatias ficariam fora da tela de pintura e foram omitidas
+@msg	the slices' descriptor holds too many values	o descritor das fatias contém valores demais
+@msg	the slices' descriptor has a version other than 16	o descritor das fatias tem uma versão diferente de 16
+@msg	the slices are stored in version {v}, which isn't read	as fatias estão salvas na versão {v}, que não é lida
+@msg	the file has {count} slices, more than the {MAX_SLICES} read	o arquivo tem {count} fatias, mais do que as {MAX_SLICES} lidas
+@msg	the slices' descriptor has no list of slices	o descritor das fatias não tem uma lista de fatias
+@msg	the slices' descriptor lists something other than a slice	o descritor das fatias lista algo que não é uma fatia
+@msg	a slice in the slices' descriptor has no bounds	uma fatia no descritor das fatias não tem limites
+@msg	a slice's bounds in the slices' descriptor aren't numbers	os limites de uma fatia no descritor das fatias não são números
+@msg	a text in the slices has more than the {MAX_TEXT} characters read	um texto nas fatias tem mais do que os {MAX_TEXT} caracteres lidos
+@msg	the slices' descriptor nests too deep	o descritor das fatias está aninhado fundo demais
+@msg	the slices' descriptor has a reference of an unknown kind ({_1})	o descritor das fatias tem uma referência de um tipo desconhecido ({_1})
+@msg	the slices' descriptor has a value of an unknown type ({_1})	o descritor das fatias tem um valor de um tipo desconhecido ({_1})
 @msg	the layers can't be read ({e}): the file opened as its merged image	as camadas não podem ser lidas ({e}): o arquivo foi aberto como sua imagem mesclada
 @msg	{depth}-bit PSD files in this colour mode can't be read	arquivos PSD de {depth} bits neste modo de cor não podem ser lidos
 @msg	the PSD file is cut short	o arquivo PSD está incompleto
@@ -5512,6 +5650,7 @@ variable-list-end	{0}, {1}	{0} e {1}
 	Pressure	Pressão
 	Tilt	Inclinação
 	Bearing	Orientação
+	Stylus Wheel	Roda da caneta
 	Bristle Length:	Comprimento das Cerdas:
 	Bristle Density:	Densidade das Cerdas:
 	Bristle Thickness:	Espessura das Cerdas:
@@ -8145,6 +8284,8 @@ breakText	Glyphs	Glifos
 # Path Precision Tools add-on: Tangent Circle.
 	Tangent Circle…	Círculo tangente…
 	Tangent Circle	Círculo tangente
+	Tangent Circle Tool	Ferramenta Círculo tangente
+	No tangent circle here	Nenhum círculo tangente aqui
 	Circle:	Círculo:
 @msg	`ids` names an object twice	`ids` indica um objeto duas vezes
 @msg	select two or three paths or compound paths	selecione dois ou três caminhos ou caminhos compostos
@@ -8160,6 +8301,16 @@ breakText	Glyphs	Glifos
 @msg	`circle` is past the last circle found ({found})	`circle` passa do último círculo encontrado ({found})
 @msg	object {value} is not a path or compound path	o objeto {value} não é um caminho nem um caminho composto
 @msg	these shapes are too small to measure	estas formas são pequenas demais para medir
+# Path Precision Tools add-on: Add Bounding Rectangle and Add Bounding Circle.
+	Add Bounding Rectangle	Adicionar Retângulo Delimitador
+	Add Bounding Circle	Adicionar Círculo Delimitador
+	Add Bounding Rectangle…	Adicionar Retângulo Delimitador…
+	Add Bounding Circle…	Adicionar Círculo Delimitador…
+	One per Object	Um por objeto
+@msg	nothing to enclose	nada para envolver
+@msg	`offset` must be 0 or more	`offset` deve ser 0 ou mais
+@msg	the shape would have no size	a forma não teria tamanho
+@msg	the shape would reach past the edge of the canvas	a forma ultrapassaria a borda da tela
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Ferramentas de Documento
 	Save a Timestamped Copy	Salvar uma Cópia com Data e Hora
@@ -10478,6 +10629,39 @@ swatch	Yellow Green	Verde-amarelado
 	No objects are selected.	Nenhum objeto selecionado.
 	Open a document to mark its fold lines.	Abra um documento para marcar suas linhas de dobra.
 	Remove Fold Line Role	Remover Tipo de Linha
+# Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	Mostra um cartão com o que uma ferramenta da barra e suas teclas fazem, no lugar da dica; requer Mostrar Dicas de Ferramenta.
+	Selects whole objects and groups to move, resize or rotate them.	Seleciona objetos e grupos inteiros para movê-los, redimensioná-los ou girá-los.
+	Selects anchor points and path segments to reshape a path.	Seleciona pontos de ancoragem e segmentos de caminho para remodelar um caminho.
+	Draws paths point by point, with straight segments and smooth curves.	Desenha caminhos ponto a ponto, com segmentos retos e curvas suaves.
+	Draws smooth curves through the points you click.	Desenha curvas suaves que passam pelos pontos em que você clica.
+	Adds text at a point, or in a frame you drag.	Adiciona texto em um ponto ou em um quadro que você arrasta.
+	Draws rectangles and squares.	Desenha retângulos e quadrados.
+	Draws rectangles with rounded corners.	Desenha retângulos com cantos arredondados.
+	Draws ellipses and circles.	Desenha elipses e círculos.
+	Draws polygons with sides of equal length.	Desenha polígonos com lados de mesmo comprimento.
+	Draws stars.	Desenha estrelas.
+	Turns objects around a reference point.	Gira objetos em torno de um ponto de referência.
+	Flips objects across an axis through a reference point.	Reflete objetos em um eixo que passa por um ponto de referência.
+	Resizes objects from a reference point.	Redimensiona objetos a partir de um ponto de referência.
+	Slants objects from a reference point.	Inclina objetos a partir de um ponto de referência.
+	Moves the view of the document.	Move a visualização do documento.
+	Magnifies or reduces the view.	Amplia ou reduz a visualização.
+	Copies the color and other attributes of one object to the selection.	Copia a cor e outros atributos de um objeto para a seleção.
+	Sets the direction and length of a gradient.	Define a direção e o comprimento de um degradê.
+	Creates, selects and resizes artboards.	Cria, seleciona e redimensiona mesas de trabalho.
+	Changes the width of a stroke along its length.	Altera a largura de um traçado ao longo do seu comprimento.
+	Bends art by dragging pins placed on it.	Deforma a arte arrastando alfinetes colocados nela.
+	Pushes the outlines of paths in the direction you drag.	Empurra os contornos dos caminhos na direção em que você arrasta.
+	Twists the outlines of paths into swirls.	Torce os contornos dos caminhos em espirais.
+	Pulls the outlines of paths in toward the brush.	Puxa os contornos dos caminhos em direção ao pincel.
+	Pushes the outlines of paths out from the brush.	Empurra os contornos dos caminhos para fora a partir do pincel.
+	Adds curved details along the outlines of paths.	Adiciona detalhes curvos ao longo dos contornos dos caminhos.
+	Adds spiky details along the outlines of paths.	Adiciona detalhes pontiagudos ao longo dos contornos dos caminhos.
+	Adds wrinkles along the outlines of paths.	Adiciona rugas ao longo dos contornos dos caminhos.
+	Moves, copies and resizes objects on the perspective grid.	Move, copia e redimensiona objetos na grade de perspectiva.
+	Makes a series of steps between two or more objects.	Cria uma série de etapas entre dois ou mais objetos.
+	Places dimension lines that show measured lengths.	Insere linhas de cota que mostram comprimentos medidos.
 	Tap	Toque Rápido
 	Clear Hold	Limpar Pressionamento Longo
 	Hold Shortcuts	Atalhos de Pressionamento Longo
@@ -10508,6 +10692,13 @@ swatch	Yellow Green	Verde-amarelado
 @msg	A panel is not joined to the rest by a crease.	Um painel não está unido ao restante por nenhuma linha de vinco.
 @msg	A fold line is on a non-printing layer.	Uma linha de dobra está em uma camada não imprimível.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Painéis: {panels}, dobradiças: {hinges}, erros: {errors}, avisos: {warnings}
+	Paper Cutouts	Recortes de papel
+	Coral Layers	Camadas de coral
+	Mint Layers	Camadas de menta
+	Midnight Layers	Camadas da meia-noite
+	Sunflower Sheet	Folha de girassol
+	Rose Layers	Camadas de rosa
+	Monochrome Stack	Pilha monocromática
 	Dashed Arrow	Seta tracejada
 	Fine Stipple	Pontilhado fino
 	Dense Stipple	Pontilhado denso
@@ -10528,3 +10719,7 @@ swatch	Yellow Green	Verde-amarelado
 @msg	Other blanks not shown: {count}	Outras planificações não exibidas: {count}
 @msg	A joint does not close by {gap} pt.	Uma junção não fecha por {gap} pt.
 @msg	Two panels pass through each other.	Dois painéis se atravessam.
+
+# #5804 native-picked raster editor (draft translations; native review welcome).
+	Edit Original with:	Editar original com:
+file-filter	Applications	Aplicativos

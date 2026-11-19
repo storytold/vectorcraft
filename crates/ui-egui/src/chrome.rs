@@ -27,6 +27,7 @@ use control_bar::{CONTROL_BAR_FLOAT_AT, ISOLATION_BUTTON};
 pub(crate) use control_bar::{Fit, group_separator, left_out, link_reserve};
 #[cfg(test)]
 use hints::hint_segments;
+pub(crate) use hints::tool_hint;
 pub use hints::{hint_bar, hint_strings};
 pub use status_bar::{StatusBarShow, deserialize_status_bar_show, set_status_bar_show, status_bar};
 #[cfg(test)]

@@ -48,6 +48,7 @@ mod info;
 pub(crate) mod inline;
 mod interactivity;
 mod intertwine;
+pub mod kinsokusets;
 pub(crate) mod layer;
 mod layerpanel;
 pub mod library;
@@ -335,6 +336,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(textstyles::specs());
         v.extend(fonts::specs());
         v.extend(compositefonts::specs());
+        v.extend(kinsokusets::specs());
         v.extend(fontfiles::specs());
         v.extend(help::specs());
         v.extend(toast::specs());
@@ -922,6 +924,10 @@ pub use buildcmds::live_paint_gaps;
 /// Whether Reset Transformation changes a symbol instance (the Symbols panel menu and the
 /// Control bar enable it when it changes one).
 pub use brushsym::reset_transformation_changes;
+
+/// Whether an object is a symbol set (the Symbolism Tools Options' Symbol Set Density applies to
+/// the selected ones).
+pub use brushsym::is_symbol_set;
 
 /// The Symbols panel's current symbol, as `symbol.list` answers it (the panel reads it on every
 /// frame without running the command).

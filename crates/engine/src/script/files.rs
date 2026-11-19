@@ -457,7 +457,7 @@ impl Disk {
     /// The gate for a command the script runs: the places it reads and writes now, and the files of
     /// the open documents, `documents`.
     pub(crate) fn gate(&self, documents: Vec<String>) -> crate::file_access::ScriptGate {
-        crate::file_access::ScriptGate { read: self.scope.clone(), write: self.writes.clone(), documents }
+        crate::file_access::ScriptGate { read: self.scope.clone(), write: self.writes.clone(), documents, also: None }
     }
 
     /// The files written since this was last asked, to name in the report.
