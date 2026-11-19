@@ -186,17 +186,18 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
             .unwrap_or(m.shift);
         select_named_artboard(app, i, shift || release_shift);
     }
+    let click = super::primary_click(ui, resp);
     if !super::ignore_sampler_owns_primary(ui, resp.id)
-        && super::primary_click_count(ui, resp) == 2
+        && click.count == 2
         && !f.modal
-        && let Some(p) = release_pos(ui, egui::PointerButton::Primary, true).or(at)
+        && let Some(p) = click.at.or(at)
     {
         double_click(app, ui, &f, p);
     }
     if !super::ignore_sampler_owns_primary(ui, resp.id)
-        && super::primary_click_count(ui, resp) == 3
+        && click.count == 3
         && !f.modal
-        && let Some(p) = release_pos(ui, egui::PointerButton::Primary, true).or(at)
+        && let Some(p) = click.at.or(at)
     {
         triple_click(app, ui, &f, p);
     }
@@ -337,7 +338,7 @@ fn begin_drag(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, p: Pos2) {
         Drag::RotateView { start_angle: (p.y - c.y).atan2(p.x - c.x) as f64, start_rot: v.rotation, snaps: !space }
     } else {
         // Cmd with another tool drags with the selection tool used last (the session lends it).
-        let ev = PointerEvent {
+        let mut ev = PointerEvent {
             kind: PointerKind::Down,
             pos: xf.to_doc(p),
             mods: mods(m, space),
@@ -349,6 +350,16 @@ fn begin_drag(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, p: Pos2) {
         // selection press keeps the ordinary tool path.
         let sampler = app.ui.trace_ignore_sampler.is_some() && tool == "eyedropper" && app.session.lent_tool_id(&ev.mods).is_none();
         if sampler {
+            // A later hover move is not the source pixel that was pressed.
+            let pressed = ui.input(|i| {
+                i.events.iter().find_map(|event| match event {
+                    egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed: true, .. } => Some(*pos),
+                    _ => None,
+                })
+            });
+            if let Some(pressed) = pressed {
+                ev.pos = xf.to_doc(pressed);
+            }
             ui.data_mut(|data| data.insert_temp(super::ignore_sampler_primary_id(resp.id), true));
         }
         dispatch(app, &ev, view);

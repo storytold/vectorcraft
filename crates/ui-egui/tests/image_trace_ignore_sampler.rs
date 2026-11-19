@@ -1318,3 +1318,112 @@ fn review_596866_coalesced_fresh_release_qualifies_its_own_click() {
     review_596866_coalesced_fresh_suffix(false);
     review_596866_coalesced_fresh_suffix(true);
 }
+
+fn review_597048_key(pressed: bool) -> Event {
+    Event::Key { key: egui::Key::Escape, physical_key: None, pressed, repeat: false, modifiers: Default::default() }
+}
+
+#[test]
+fn review_597048_escape_returns_to_a_hidden_grid_without_fresh_activation() {
+    let (mut control, _) = review_596866_hidden_grid_fixture();
+    control.select_tool("perspectiveGrid");
+    assert!(review_596866_grid_visible(&control), "CONTROL: explicit fresh selection still shows the grid");
+    let (mut app, ctx) = review_596866_hidden_grid_fixture();
+    let expected = review_gesture_state(&app);
+    click_control(&mut app, &ctx, SAMPLE_TIP);
+    assert_eq!(app.session.tool_id(), "eyedropper");
+    frame(&mut app, &ctx, vec![review_597048_key(true)]).textures_delta.clear();
+    frame(&mut app, &ctx, vec![review_597048_key(false)]).textures_delta.clear();
+    assert!(app.ui.trace_ignore_sampler.is_none());
+    assert_eq!(app.session.tool_id(), "perspectiveGrid");
+    assert!(!review_596866_grid_visible(&app), "Escape returns without revealing the grid");
+    assert_eq!(review_gesture_state(&app), expected, "cancellation changes no document, revision, history, selection or paint");
+}
+
+fn review_597048_down_pixel(later_move: bool) {
+    let (mut app, ctx) = fixture(true, [37, 83, 149], false);
+    let source = review_596866_source_image(&app, selected(&app).id);
+    let pressed = review_gesture_screen(&app, &ctx, source_point(&app, 0.25));
+    let hover = review_gesture_screen(&app, &ctx, source_point(&app, 0.75));
+    assert_ne!(pressed, hover);
+    let expected = review_gesture_state(&app);
+    click_control(&mut app, &ctx, SAMPLE_TIP);
+    let mut events = vec![Event::PointerMoved(pressed), review_596866_button(pressed, true)];
+    if later_move {
+        events.push(Event::PointerMoved(hover));
+    }
+    frame(&mut app, &ctx, events).textures_delta.clear();
+    assert_eq!(ctx.input(|i| i.pointer.interact_pos()), Some(if later_move { hover } else { pressed }));
+    assert_eq!(app.session.tool_id(), "selection");
+    assert!(app.ui.trace_ignore_sampler.is_none());
+    assert_eq!(review_gesture_state(&app), expected, "Preview off stores a panel draft only");
+    frame(&mut app, &ctx, vec![review_596866_button(if later_move { hover } else { pressed }, false)]).textures_delta.clear();
+    click_control(&mut app, &ctx, "Trace");
+    assert_eq!(review_596866_ignore_color(&app, source), "#255395", "the sampled pixel belongs to Down, later_move={later_move}");
+}
+
+#[test]
+fn review_597048_sampler_uses_down_pixel_before_a_later_move() {
+    review_597048_down_pixel(false);
+    review_597048_down_pixel(true);
+}
+
+fn review_597048_coalesced_pair(sampler_prefix: bool) {
+    let (mut app, ctx, point, group) = review_gesture_group_fixture();
+    let at = review_gesture_screen(&app, &ctx, point);
+    if sampler_prefix {
+        click_control(&mut app, &ctx, SAMPLE_TIP);
+    }
+    app.run("select.none", json!({})).unwrap();
+    let (start, step) = review_gesture_times(&ctx);
+    if sampler_prefix {
+        let expected = review_gesture_state(&app);
+        review_gesture_press(&mut app, &ctx, at, start);
+        review_gesture_release(&mut app, &ctx, at, start + step);
+        assert_eq!(review_gesture_state(&app), expected, "the stale prefix was consumed in the earlier frame");
+    }
+    frame_at(&mut app, &ctx, start + 3.0 * step, vec![
+        Event::PointerMoved(at), review_596866_button(at, true), review_596866_button(at, false),
+        review_596866_button(at, true), review_596866_button(at, false),
+    ]);
+    assert!(ctx.input(|i| i.pointer.button_double_clicked(PointerButton::Primary)));
+    assert_eq!(ctx.input(|i| i.pointer.button_triple_clicked(PointerButton::Primary)), sampler_prefix);
+    assert_eq!(app.session.active().unwrap().isolation, Some(group), "two ordinary clicks isolate after an earlier-frame prefix");
+    app.run("object.exitIsolation", json!({"all": true})).unwrap();
+    review_gesture_press(&mut app, &ctx, at, start + 5.0 * step);
+    review_gesture_release(&mut app, &ctx, at, start + 6.0 * step);
+    assert!(ctx.input(|i| i.pointer.button_triple_clicked(PointerButton::Primary)));
+    assert_eq!(app.session.active().unwrap().isolation, None, "the next ordinary Triple must not inherit a corrected Double");
+}
+
+#[test]
+fn review_597048_two_ordinary_clicks_in_one_frame_survive_sampler_correction() {
+    review_597048_coalesced_pair(false);
+    review_597048_coalesced_pair(true);
+}
+
+#[test]
+fn review_597048_a_later_drag_release_does_not_replace_a_qualified_double_click() {
+    let (mut control, control_ctx, point, group) = review_gesture_group_fixture();
+    let at = review_gesture_screen(&control, &control_ctx, point);
+    review_gesture_ordinary_pair(&mut control, &control_ctx, at, at, group);
+    let (mut app, ctx, point, group) = review_gesture_group_fixture();
+    app.run("select.none", json!({})).unwrap();
+    let at = review_gesture_screen(&app, &ctx, point);
+    let blank = review_gesture_screen(&app, &ctx, Point::new(340.0, 250.0));
+    let distance = ctx.options(|o| o.input_options.max_click_dist);
+    let away = blank + vec2(distance + 8.0, 0.0);
+    assert!(app.canvas_rect.unwrap().contains(away) && away.distance(blank) > distance);
+    let (start, step) = review_gesture_times(&ctx);
+    review_gesture_press(&mut app, &ctx, at, start);
+    review_gesture_release(&mut app, &ctx, at, start + step);
+    review_gesture_press(&mut app, &ctx, at, start + 3.0 * step);
+    frame_at(&mut app, &ctx, start + 4.0 * step, vec![
+        review_596866_button(at, false), Event::PointerMoved(blank), review_596866_button(blank, true),
+        Event::PointerMoved(away), review_596866_button(away, false),
+    ]);
+    assert!(ctx.input(|i| i.pointer.button_double_clicked(PointerButton::Primary)));
+    assert!(!ctx.input(|i| i.pointer.button_triple_clicked(PointerButton::Primary)), "the out-of-slop drag is not a third click");
+    assert_eq!(ctx.input(|i| i.pointer.interact_pos()), Some(away));
+    assert_eq!(app.session.active().unwrap().isolation, Some(group), "the qualified Double belongs to the earlier group release");
+}

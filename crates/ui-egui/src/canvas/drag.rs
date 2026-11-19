@@ -425,11 +425,27 @@ fn pressed_with(app: &mut VectorcraftApp, index: Option<usize>, pos: Point, tool
 pub fn apply_requests(app: &mut VectorcraftApp, r: vectorcraft_engine::Result<Vec<vectorcraft_engine::UiRequest>>) {
     match r {
         Ok(reqs) => {
+            let mut sampler_return = None;
             for r in reqs {
                 match r {
-                    vectorcraft_engine::UiRequest::Dialog(kind, p) => crate::dialogs::open_tool_dialog(app, &kind, p),
+                    vectorcraft_engine::UiRequest::Dialog(kind, p) => {
+                        let back = if kind == "imageTraceIgnoreColor" && p["cancel"] == true {
+                            app.ui.trace_ignore_sampler.as_ref().map(|sampler| sampler.back.clone())
+                        } else {
+                            None
+                        };
+                        crate::dialogs::open_tool_dialog(app, &kind, p);
+                        // A matching callback must actually consume the active sampler.
+                        sampler_return = back.filter(|_| app.ui.trace_ignore_sampler.is_none());
+                    }
                     vectorcraft_engine::UiRequest::Panel(panel) => activate_panel(app, &panel),
-                    vectorcraft_engine::UiRequest::SwitchTool(t) => app.select_tool(&t),
+                    vectorcraft_engine::UiRequest::SwitchTool(t) => {
+                        if sampler_return.take().is_some_and(|back| back == t) {
+                            app.return_to_tool(&t);
+                        } else {
+                            app.select_tool(&t);
+                        }
+                    }
                     vectorcraft_engine::UiRequest::Status(msg) => app.status(msg),
                     vectorcraft_engine::UiRequest::Place(p) => crate::place::place_from_cursor(app, &p),
                     // In the document the press was made in, which may no longer be the active one.
