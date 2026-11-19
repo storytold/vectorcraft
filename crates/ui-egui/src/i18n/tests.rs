@@ -619,21 +619,30 @@ fn psd_import_strings_are_in_complete_catalogs() {
         ]
         .map(String::from),
     );
-    let numbers = |s: &str| s.split(|c: char| !c.is_ascii_digit()).filter(|n| !n.is_empty()).map(String::from).collect::<Vec<_>>();
+    let numbers = |s: &str| {
+        let mut all = s.split(|c: char| !c.is_ascii_digit()).filter(|n| !n.is_empty()).map(String::from).collect::<Vec<_>>();
+        all.sort();
+        all
+    };
+    let (note, notes) = ("Opened with {n} note: {first}", "Opened with {n} notes: {first}");
     for code in COMPLETE_MESSAGES {
         let lang = Lang::from_code(code).expect("registered");
         for s in &shown {
             let tr = message(lang, s);
             assert_ne!(&tr, s, "{code}");
-            for n in numbers(s) {
-                assert!(tr.contains(&n), "{code}: {tr} lost {n}");
-            }
+            assert_eq!(numbers(&tr), numbers(s), "{code}: {s} -> {tr}");
         }
         for (s, inner) in [(unread_slices, nested), (unread_layers, damaged)] {
-            assert!(!message(lang, s).contains(inner), "{code}: {s}");
+            let (tr, inner_tr) = (message(lang, s), message(lang, inner));
+            assert_ne!(inner_tr, inner, "{code}: {inner}");
+            assert!(tr.contains(&inner_tr) && !tr.contains(inner), "{code}: {s} -> {tr}");
         }
         assert!(message(lang, &merged).contains("Hue, Luminosity"), "{code}");
-        assert!(message(lang, &opened_with_notes(1, &one)).ends_with(&message(lang, &one)), "{code}");
+        let opened = opened_with_notes(1, &one);
+        let (forms, _) = lang.catalog().message_forms(&opened).expect("the Open heading has a row");
+        let heading = &forms[(lang.0.plural)(1).min(forms.len() - 1)];
+        assert!(heading != note && heading != notes, "{code}");
+        assert_eq!(message(lang, &opened), fmt(heading, &[("n", "1"), ("first", &message(lang, &one))]), "{code}");
     }
     assert_eq!(message(de(), &many), "3 Einstellungsebenen wurden nicht angewendet");
     assert_eq!(message(de(), &opened_with_notes(1, &one)), "Mit 1 Hinweis geöffnet: 1 Einstellungsebene wurde nicht angewendet");
