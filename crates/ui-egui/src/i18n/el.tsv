@@ -1617,6 +1617,10 @@ font-technology	Variable	Μεταβλητές
 	Add Color Tool	Εργαλείο προσθήκης χρώματος
 	Remove Color Tool	Εργαλείο αφαίρεσης χρώματος
 	Remove Color	Αφαίρεση χρώματος
+	Set As Base Color	Ορισμός ως βασικό χρώμα
+	Select Shade	Επιλογή απόχρωσης
+	Add New Color	Προσθήκη νέου χρώματος
+	Set Current Color As Base Color	Ορισμός τρέχοντος χρώματος ως βασικού
 	Find the selected colors in the artwork	Εύρεση των επιλεγμένων χρωμάτων στο σχέδιο
 	Harmony Sets	Σύνολα χρωματικής αρμονίας
 	Height	Ύψος
@@ -1972,6 +1976,7 @@ font-technology	Variable	Μεταβλητές
 	Lighten	Φώτισμα
 	Lightness	Φωτεινότητα
 	Line	Γραμμή
+	Line Arrow	Γραμμικό βέλος
 	Line Segment Tool	Ευθύγραμμο τμήμα (Line Segment Tool)
 	Linear Gradient	Γραμμικό ντεγκραντέ
 	Lines	Γραμμές
@@ -3763,6 +3768,11 @@ theme	Appearance	Εμφάνιση
 	Preserve Alpha Transparency	Διατήρηση διαφάνειας άλφα
 	Preserve Appearance and Overprints	Διατήρηση εμφάνισης και υπερεκτυπώσεων
 	Preserve CMYK Numbers	Διατήρηση τιμών CMYK
+	Preserve RGB Numbers	Διατήρηση τιμών RGB
+	Device to Simulate:	Συσκευή προς προσομοίωση:
+	Simulate Paper Color	Προσομοίωση χρώματος χαρτιού
+	Simulate Black Ink	Προσομοίωση μαύρης μελάνης
+	Load…	Φόρτωση…
 	Preserve Editing Capabilities	Διατήρηση δυνατοτήτων επεξεργασίας
 	Preserve editing capabilities	Διατήρηση δυνατοτήτων επεξεργασίας
 	Preserve Lightness	Διατήρηση φωτεινότητας
@@ -4355,6 +4365,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} από {n} αποτέλεσμα. Συνεχίστε να πληκτρολογείτε για να τα περιορίσετε.|{shown} από {n} αποτελέσματα. Συνεχίστε να πληκτρολογείτε για να τα περιορίσετε.
 	Recent Commands	Πρόσφατες εντολές
 	No recent commands	Δεν υπάρχουν πρόσφατες εντολές
+	Type to search commands, tools, panels and effects	Πληκτρολογήστε για αναζήτηση εντολών, εργαλείων, πλαισίων και εφέ
 	Search commands	Αναζήτηση εντολών
 	Search Commands…	Αναζήτηση εντολών…
 	Secondary	Δευτερεύον
@@ -5350,6 +5361,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	no native format	δεν υπάρχει εγγενής μορφή
 @msg	no pages	δεν υπάρχουν σελίδες
 @msg	no pattern `{name}`	δεν υπάρχει μοτίβο `{name}`
+@msg	art painted with `{name}` can't be its tile	σχέδιο βαμμένο με `{name}` δεν μπορεί να είναι το πλακίδιό του
 @msg	no perspective grid preset named `{name}`	δεν υπάρχει προεπιλογή πλέγματος προοπτικής με όνομα `{name}`
 @msg	no plug-in {0} is installed	δεν είναι εγκατεστημένο το πρόσθετο {0}
 @msg	no plug-in {id} is installed	δεν είναι εγκατεστημένο το πρόσθετο {id}
@@ -6287,6 +6299,7 @@ variable-list-end	{0}, {1}	{0} και {1}
 	Auto Size	Αυτόματο μέγεθος
 	Bar	Ράβδος
 	Barbed	Αγκιστρωτό
+arrowhead	Feather	Φτερό
 	Baseline (Standard)	Γραμμή βάσης (τυπική)
 	Baseline Optimized	Βελτιστοποιημένο για γραμμή βάσης
 	Black Outline	Μαύρο περίγραμμα
@@ -8287,6 +8300,7 @@ breakText	Glyphs	Γλύφοι
 	Remove Strokes	Αφαίρεση περιγραμμάτων
 	Place Brush Art	Τοποθέτηση σχεδίου πινέλου
 	Replace Brush Art	Αντικατάσταση σχεδίου πινέλου
+	Replace Pattern Art	Αντικατάσταση σχεδίου μοτίβου
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Περιγράμματα χρησιμοποιούν αυτό το πινέλο. Να εφαρμοστεί το νέο σχέδιο σε αυτά τα περιγράμματα ή να μείνουν ως έχουν και να προστεθεί αντίγραφο του πινέλου με το νέο σχέδιο;
 	Apply to Strokes	Εφαρμογή στα περιγράμματα
 	Leave Strokes	Διατήρηση περιγραμμάτων
@@ -8867,6 +8881,11 @@ breakText	Glyphs	Γλύφοι
 @msg	A joint does not close by {gap} pt.	Μια ένωση δεν κλείνει κατά {gap} pt.
 @msg	Two panels pass through each other.	Δύο πάνελ διαπερνούν το ένα το άλλο.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	το composer πρέπει να είναι "singleLine", "everyLine", "standardSingleLine" ή "standardEveryLine"
+	Engraving	Χαρακτική
+	Fine Hatching	Λεπτή διαγράμμιση
+	Dense Hatching	Πυκνή διαγράμμιση
+	Tapered Hatching	Κωνική διαγράμμιση
+	Broken Hatching	Διακεκομμένη διαγράμμιση
 	Image Brush	Πινέλα εικόνας
 	Soft Bloom	Απαλό άνθος
 	Halftone Field	Πεδίο ημιτόνων

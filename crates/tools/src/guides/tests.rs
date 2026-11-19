@@ -1674,7 +1674,7 @@ fn review_ruler_597368_move_document(text: Option<&vectorcraft_doc::TextObject>,
         d.add_ruler_guide(&vectorcraft_doc::Guide::new(false, r.y));
         if legacy {
             let id = d.alloc_id();
-            let path = vectorcraft_geom::shapes::rectangle(Rect::new(r.x - 100.0, r.y, r.x + 300.0, r.y + 100.0));
+            let path = vectorcraft_geom::shapes::rectangle(Rect::new(r.x - 100.0, r.y - 0.5, r.x + 300.0, r.y + 100.0));
             d.insert(Some(layer), usize::MAX, Node::path(id, path, vectorcraft_doc::Appearance::basic(Paint::None, Paint::None, 0.0))).unwrap();
         }
     }
@@ -1779,7 +1779,10 @@ fn review_597368_anchor_held_text_stroke_does_not_enable_a_ruler_only_crossing()
     assert!(painted.0.distance(contact) < 1e-6, "CONTROL: actual MoveSnap reaches the independent stroke contact");
     assert!(painted.1.iter().any(|o| matches!(o, Overlay::Label { text, .. } if text == "stroke edge")));
     let paths = review_ruler_597368_move(Some(&text), true, probe, Some(crossing), true);
-    assert!(paths.0.distance(crossing) < 1e-8, "CONTROL: real legacy segments retain crossing priority");
+    let path_crossing = Point::new(crossing.x, crossing.y - 0.5);
+    assert!(paths.0.distance(path_crossing) < 1e-8, "CONTROL: real legacy segments retain crossing priority");
+    assert!(paths.0.distance(ordinary.0) > 0.25, "the actual path/ruler crossing differs from the ruler-only fallback");
+    assert_eq!(labels(&paths.1), ["intersect"], "the real path/ruler crossing owns this independent control");
     let actual = review_ruler_597368_move(Some(&text), true, probe, Some(crossing), false);
     assert!(
         actual.0.distance(contact) < 1e-6 && actual.1.iter().any(|o| matches!(o, Overlay::Label { text, .. } if text == "stroke edge")),
@@ -1855,7 +1858,7 @@ fn review_597569_forward_stroke_contact_cannot_turn_a_shift_drag_into_a_click() 
         "CONTROL: no anchor or center explains the painted hit"
     );
     let (same, guides) = targets.snap_point_along(start, Vec2::new(1.0, 1.0), 4.0);
-    assert_eq!(same, start, "CONTROL: a non-ray trajectory may retain its zero-travel contact");
+    assert!(same.distance(start) < 1e-9, "CONTROL: a non-ray trajectory may retain its zero-travel contact");
     assert!(review_597185_stroke_label(&guides), "CONTROL: that zero contact belongs to the real painted edge");
 
     // Before accepts the ray's t=0 stroke contact and never emits Begin/Preview;
@@ -1921,4 +1924,242 @@ fn review_597569_bbox_keeps_the_next_feasible_anchor_ahead_of_stroke() {
         );
         assert_eq!(labels(&guides), ["anchor"], "the real feasible anchor, not a stroke or axis alignment, owns the contact");
     }
+}
+
+fn review_597702_ray_document(edge: Option<f64>, anchors: &[Point]) -> Document {
+    let mut d = Document::new(2000.0, 1200.0);
+    if let Some(edge) = edge {
+        review_597185_path(&mut d, &[Point::new(edge + 10.0, -1000.0), Point::new(edge + 10.0, 2000.0)], Some(20.0));
+    }
+    for &at in anchors {
+        review_597185_anchor(&mut d, at);
+    }
+    d
+}
+
+fn review_597702_ray(d: &Document, on: bool, anchor: Option<Point>) -> (Point, Vec<Overlay>) {
+    let (selection, paint) = (Selection::default(), paint());
+    let c = ToolContext {
+        smart_guides: true,
+        snap_to_stroke_edges: on,
+        snap_to_grid: false,
+        snap_to_pixel: false,
+        snapping_tolerance: 4.0,
+        constrain_angle: 0.0,
+        ..cx(d, &selection, &paint)
+    };
+    let targets = Targets::for_drawing(d, &[], None, None).styled(&c).with_stroke_edges(&c, &[], None);
+    let raw = Point::new(102.0, 100.0);
+    assert_eq!(
+        targets.nearest_point(raw, 4.0).map(|(q, _)| q),
+        anchor,
+        "CONTROL: the actual document supplies only the intended nearby legacy point"
+    );
+    let leave = Leave::segment(&c, Point::new(100.0, 100.0), true);
+    let before = d.clone();
+    let result = targets.snap_from(raw, Some(&leave), 4.0);
+    assert_eq!(d, &before, "drawing-target queries do not edit the source artwork");
+    result
+}
+
+#[test]
+fn review_597702_forward_paint_survives_an_unreachable_nearby_anchor() {
+    let raw = Point::new(102.0, 100.0);
+    let rejected = Point::new(99.0, 101.0);
+    let forward = Point::new(103.0, 100.0);
+    // The same ordinary forward constraint and valid legacy priority work first.
+    for edge in [None, Some(104.0), Some(1000.0)] {
+        let d = review_597702_ray_document(edge, &[rejected]);
+        let off = review_597702_ray(&d, false, Some(rejected));
+        assert_eq!(off.0, raw, "CONTROL: an unreachable anchor cannot supply the ordinary horizontal forward snap");
+        if edge != Some(104.0) {
+            let on = review_597702_ray(&d, true, Some(rejected));
+            assert_eq!(on.0, off.0, "CONTROL: empty or distant-only paint keeps ordinary geometry");
+            assert_eq!(labels(&on.1), labels(&off.1));
+        }
+    }
+    let paint = review_597702_ray_document(Some(104.0), &[]);
+    let painted = review_597702_ray(&paint, true, None);
+    assert!(
+        painted.0.distance(Point::new(104.0, 100.0)) < 1e-7 && review_597185_stroke_label(&painted.1),
+        "CONTROL: real paint supplies the positive forward contact: {painted:?}"
+    );
+    let valid = review_597702_ray_document(Some(104.0), &[forward]);
+    let ordinary = review_597702_ray(&valid, true, Some(forward));
+    assert_eq!(ordinary.0, forward, "CONTROL: a reachable forward anchor keeps its existing priority");
+    assert!(!review_597185_stroke_label(&ordinary.1));
+
+    let d = review_597702_ray_document(Some(104.0), &[rejected]);
+    let actual = review_597702_ray(&d, true, Some(rejected));
+    assert!(
+        actual.0.distance(Point::new(104.0, 100.0)) < 1e-7 && review_597185_stroke_label(&actual.1),
+        "REGRESSION: a nearby anchor behind the origin and off the forward line cannot hide its reachable painted contact: {actual:?}"
+    );
+}
+
+fn review_597702_bbox_document(center: Option<f64>, anchors: &[Point]) -> Document {
+    let mut d = Document::new(2000.0, 1200.0);
+    if let Some(center) = center {
+        review_597185_path(&mut d, &[Point::new(center, 19.0), Point::new(center, 21.0)], Some(0.5));
+    }
+    for &at in anchors {
+        review_597185_anchor(&mut d, at);
+    }
+    d
+}
+
+fn review_597702_bbox_endpoint_paint(d: &Document) {
+    let (selection, paint) = (Selection::default(), paint());
+    let c = ToolContext { smart_guides: true, snap_to_stroke_edges: true, snapping_tolerance: 4.0, ..cx(d, &selection, &paint) };
+    let targets = Targets::for_scale(&c);
+    let dir = Vec2::new(10.0, 0.0);
+    for y in [10.0, 0.0] {
+        assert!(
+            targets.stroke_contours.on_line(Point::new(0.0, y), dir, Point::new(0.5, y), 4.0, false).is_none(),
+            "CONTROL: neither the grabbed handle nor its top endpoint has a painted contact"
+        );
+    }
+    let contact = targets.stroke_contours.on_line(Point::new(0.0, 20.0), dir, Point::new(0.5, 20.0), 4.0, false).unwrap();
+    assert!(contact.distance(Point::new(3.0, 20.0)) < 1e-7, "CONTROL: only the bottom trajectory reaches the genuine painted band: {contact:?}");
+}
+
+#[test]
+fn review_597702_bbox_uses_feasible_anchor_when_only_endpoint_has_paint() {
+    let raw = Point::new(0.5, 10.0);
+    let rejected = Point::new(-0.5, 10.0);
+    let feasible = Point::new(2.0, 10.0);
+    let both = [rejected, feasible];
+    // No eligible paint keeps the full original fallback, including its labels.
+    for center in [None, Some(1000.0), Some(-3.25)] {
+        let d = review_597702_bbox_document(center, &both);
+        let off = review_597185_scale(&d, false, Handle::Right, raw);
+        let on = review_597185_scale(&d, true, Handle::Right, raw);
+        assert_eq!(on.0, off.0, "CONTROL: empty, remote and sign-invalid paint leave OFF geometry unchanged: {center:?}");
+        assert_eq!(labels(&on.1), labels(&off.1));
+        assert!(!review_597185_stroke_label(&on.1));
+    }
+    let paint = review_597702_bbox_document(Some(3.25), &[]);
+    review_597702_bbox_endpoint_paint(&paint);
+    let ordinary = review_597185_scale(&paint, true, Handle::Right, raw);
+    assert!(
+        ordinary.0.distance(Point::new(3.25, 10.0)) < 1e-7,
+        "CONTROL: this real short stroke also supplies its ordinary feasible legacy center: {ordinary:?}"
+    );
+    let valid = review_597702_bbox_document(Some(3.25), &[feasible]);
+    let ordinary = review_597185_scale(&valid, true, Handle::Right, raw);
+    assert_eq!(ordinary.0, feasible, "CONTROL: an already-nearest feasible handle anchor has priority");
+    assert_eq!(labels(&ordinary.1), ["anchor"]);
+
+    let d = review_597702_bbox_document(Some(3.25), &both);
+    review_597702_bbox_endpoint_paint(&d);
+    let (selection, paint) = (Selection::default(), paint());
+    let c = ToolContext { smart_guides: true, snap_to_stroke_edges: true, snapping_tolerance: 4.0, ..cx(&d, &selection, &paint) };
+    assert_eq!(
+        Targets::for_scale(&c).nearest_point(raw, 4.0).map(|(q, _)| q),
+        Some(rejected),
+        "CONTROL: the raw nearest handle anchor is the sign-invalid one"
+    );
+    let actual = review_597185_scale(&d, true, Handle::Right, raw);
+    assert!(
+        actual.0.distance(feasible) < 1e-7,
+        "REGRESSION: paint on another trajectory enables the nearer feasible handle anchor before endpoint contacts: {actual:?}"
+    );
+    assert_eq!(labels(&actual.1), ["anchor"], "the feasible handle anchor owns the contact independently of an equal-coordinate axis fallback");
+}
+
+fn review_597702_move_document(stroke: Option<(f64, f64)>, ruler: Option<f64>, anchor: Option<Point>) -> (Document, Selection) {
+    let mut d = Document::new(800.0, 600.0);
+    if let Some((center, width)) = stroke {
+        review_597185_path(&mut d, &[Point::new(center, -1000.0), Point::new(center, 2000.0)], Some(width));
+    }
+    if let Some(x) = ruler {
+        d.add_ruler_guide(&vectorcraft_doc::Guide::new(true, x));
+    }
+    if let Some(at) = anchor {
+        review_597185_anchor(&mut d, at);
+    }
+    let moving = d.alloc_id();
+    let path = vectorcraft_geom::shapes::rectangle(Rect::new(50.0, 150.0, 70.0, 170.0));
+    d.insert(Some(d.layers[0].id), usize::MAX, Node::path(moving, path, vectorcraft_doc::Appearance::default())).unwrap();
+    let mut selection = Selection::default();
+    selection.set([moving]);
+    (d, selection)
+}
+
+fn review_597702_shift_move(stroke: Option<(f64, f64)>, ruler: Option<f64>, anchor: Option<Point>, on: bool, edge: bool) -> (Point, Vec<Overlay>) {
+    let (d, selection) = review_597702_move_document(stroke, ruler, anchor);
+    let paint = paint();
+    let c = ToolContext {
+        smart_guides: true,
+        guides: true,
+        snap_to_point: true,
+        snap_to_grid: false,
+        snap_to_pixel: false,
+        snap_to_glyph: false,
+        snap_to_last_location: false,
+        spacing_guides: false,
+        snap_to_stroke_edges: on,
+        snapping_tolerance: 4.0,
+        ..cx(&d, &selection, &paint)
+    };
+    let raw = Point::new(200.0, 150.0);
+    let targets = Targets::for_move_by_anchor(&c, &selection.objects);
+    assert_eq!(targets.has_point_near(raw, 4.0), anchor.is_some(), "CONTROL: distant stroke endpoints and center introduce no nearby legacy anchor");
+    let start = Point::new(if edge { 60.0 } else { 50.0 }, 150.0);
+    let snap = if edge { crate::select::MoveSnap::by_edge(&c) } else { crate::select::MoveSnap::by_anchor(&c) };
+    let original = d.clone();
+    let (delta, guides) = snap.snap_along(&c, start, raw - start, false);
+    assert_eq!(d, original, "the actual selected-anchor/edge constrained query leaves the source document intact");
+    (start + delta, guides)
+}
+
+#[test]
+fn review_597702_shift_move_keeps_a_closer_ruler_than_a_painted_contact() {
+    // Both public gather modes use an actual point on the selected rectangle.
+    for edge in [false, true] {
+        for center in [None, Some(213.0), Some(1000.0)] {
+            let off = review_597702_shift_move(center.map(|x| (x, 20.0)), Some(201.0), None, false, edge);
+            assert_eq!(
+                off.0,
+                Point::new(201.0, 150.0),
+                "CONTROL: ordinary OFF alignment followed by the shown ruler wins: edge={edge}, center={center:?}"
+            );
+            if center != Some(213.0) {
+                let on = review_597702_shift_move(center.map(|x| (x, 20.0)), Some(201.0), None, true, edge);
+                assert_eq!(on.0, off.0, "CONTROL: empty or remote-only paint preserves the ordinary ruler route");
+                assert_eq!(labels(&on.1), labels(&off.1));
+            }
+        }
+        let painted = review_597702_shift_move(Some((213.0, 20.0)), None, None, true, edge);
+        assert_eq!(painted.0, Point::new(203.0, 150.0), "CONTROL: with no ruler the genuine painted contact remains");
+        assert!(review_597185_stroke_label(&painted.1));
+        let closer = review_597702_shift_move(Some((211.0, 20.0)), Some(203.0), None, true, edge);
+        assert_eq!(closer.0, Point::new(201.0, 150.0), "CONTROL: a closer painted contact stays ahead of the farther ruler");
+        assert!(review_597185_stroke_label(&closer.1));
+        let legacy = review_597702_shift_move(Some((213.0, 20.0)), None, Some(Point::new(202.0, 150.0)), true, edge);
+        assert_eq!(legacy.0, Point::new(202.0, 150.0), "CONTROL: an ordinary usable legacy anchor still wins");
+        assert!(!review_597185_stroke_label(&legacy.1));
+        let zero = review_597702_shift_move(Some((233.0, 60.0)), Some(200.0), None, false, edge);
+        assert_eq!(zero.0, Point::new(200.0, 150.0), "CONTROL: the shown ruler already owns the raw constrained point");
+        assert!(
+            !zero.1.is_empty() && !review_597185_stroke_label(&zero.1),
+            "CONTROL: a real zero-displacement ruler contact has ordinary guide evidence: {zero:?}"
+        );
+    }
+    let observed: Vec<_> = [false, true]
+        .into_iter()
+        .map(|edge| {
+            let moved = review_597702_shift_move(Some((213.0, 20.0)), Some(201.0), None, true, edge);
+            let zero = review_597702_shift_move(Some((233.0, 60.0)), Some(200.0), None, true, edge);
+            (edge, moved, zero)
+        })
+        .collect();
+    assert!(
+        observed.iter().all(|(_, moved, zero)| moved.0 == Point::new(201.0, 150.0)
+            && !review_597185_stroke_label(&moved.1)
+            && zero.0 == Point::new(200.0, 150.0)
+            && !zero.1.is_empty()
+            && !review_597185_stroke_label(&zero.1)),
+        "REGRESSION: moved and zero-displacement closer ruler contacts must both survive farther genuine paint: {observed:?}"
+    );
 }

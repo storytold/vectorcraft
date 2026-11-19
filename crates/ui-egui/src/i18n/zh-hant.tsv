@@ -1696,6 +1696,10 @@ file-filter	Templates	範本
 	Add Color Tool	新增顏色工具
 	Remove Color Tool	移除顏色工具
 	Remove Color	移除顏色
+	Set As Base Color	設為基色
+	Select Shade	選取色調
+	Add New Color	新增顏色
+	Set Current Color As Base Color	將目前顏色設為基色
 	Find the selected colors in the artwork	在圖稿中尋找所選顏色
 	Harmony Sets	色彩調和組
 	Height	高度
@@ -2262,6 +2266,7 @@ file-filter	Templates	範本
 @msg	{label} produced an empty result: a line or other open path encloses no area; to include it, apply Object › Path › Outline Stroke to it first	{label} 產生了空的結果：直線或其他開放路徑不圍成區域；若要納入，請先對其套用「物件 › 路徑 › 外框筆畫」
 @msg	already editing a pattern	已在編輯圖樣
 @msg	no pattern `{name}`	沒有圖樣 `{name}`
+@msg	art painted with `{name}` can't be its tile	以 `{name}` 上色的圖稿不能作為它的拼貼
 @msg	not in pattern editing mode	不在圖樣編輯模式中
 @msg	finish editing the pattern first	請先完成圖樣編輯
 @msg	pattern missing	找不到圖樣
@@ -4186,6 +4191,11 @@ diagnostics	ui	介面
 	Preserve Alpha Transparency	保留 Alpha 透明度
 	Preserve Appearance and Overprints	保留外觀與疊印
 	Preserve CMYK Numbers	保留 CMYK 數值
+	Preserve RGB Numbers	保留 RGB 數值
+	Device to Simulate:	要模擬的裝置：
+	Simulate Paper Color	模擬紙張顏色
+	Simulate Black Ink	模擬黑色油墨
+	Load…	載入…
 	Preserve Editing Capabilities	保留編輯功能
 	Preserve editing capabilities	保留編輯功能
 	Preserve Lightness	保留亮度
@@ -4980,6 +4990,7 @@ digits	Malayalam	馬來亞拉姆數字
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	共 {n} 個結果，顯示 {shown} 個。繼續輸入以縮小範圍。
 	Recent Commands	最近使用的指令
 	No recent commands	沒有最近使用的指令
+	Type to search commands, tools, panels and effects	輸入以搜尋指令、工具、面板與效果
 	Search commands	搜尋指令
 	Search Commands…	搜尋指令…
 	Secondary	次要
@@ -7670,6 +7681,36 @@ anchor	Points:	點：
 @msg	`{id}` is not a colour adjustment	`{id}` 不是顏色調整
 @msg	missing `effect`	未提供 `effect`
 @msg	`params` must be an object	`params` 必須是物件
+# Stroke arrowheads (Stroke panel, Dimension Tool Options and Properties › Arrow Style).
+	Triangle (open)	三角 (空心)
+	Circle (open)	圓形 (空心)
+	Square (open)	正方形 (空心)
+	Arrow (open)	箭頭 (空心)
+	Barbed	倒鉤
+arrowhead	Feather	羽毛
+	Half Arrow (left)	半箭頭 (左)
+	Half Arrow (right)	半箭頭 (右)
+	Double Bar	雙長條
+	Dot on Bar	長條上的圓點
+	Chevron	人字形
+	Plus	加號
+	Hexagon (open)	六邊形 (空心)
+	Tag	標籤
+	Tag (open)	標籤 (空心)
+	Half Circle	半圓
+	Drop	水滴
+	Slash	斜線
+	Double Slash	雙斜線
+	Diamond (open)	菱形 (空心)
+	Reverse Triangle	倒三角
+	Swallowtail	燕尾
+	Bracket	括號
+	Fork	叉形
+	Leaf	葉形
+	Kite	風箏形
+	Triangle to Bar	三角至長條
+	Oval	橢圓
+	Line Arrow	線條箭頭
 # Path Precision Tools add-on (Object › Plug-ins › Path Precision Tools): its tools, Anchor Inspector panel, commands and messages.
 	Path Precision Tools	路徑精確工具
 	Anchor Eraser Brush	錨點橡皮擦筆刷
@@ -7960,6 +8001,7 @@ breakText	Glyphs	字符
 	Remove Strokes	移除筆畫
 	Place Brush Art	置入筆刷圖稿
 	Replace Brush Art	取代筆刷圖稿
+	Replace Pattern Art	取代圖樣圖稿
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	有筆畫使用了此筆刷。要將新圖稿套用到這些筆畫，還是保留筆畫不變並加入一個使用新圖稿的筆刷複本？
 	Apply to Strokes	套用至筆畫
 	Leave Strokes	保留筆畫
@@ -10348,6 +10390,11 @@ breakText	Glyphs	字符
 @msg	A joint does not close by {gap} pt.	有一處接縫相差 {gap} pt 未閉合。
 @msg	Two panels pass through each other.	兩個面板相互穿插。
 @msg	{what} would print on more than {MAX_TILES} tiles: scale it down	{what} 會列印在超過 {MAX_TILES} 個拼貼上：請縮小
+	Engraving	雕刻
+	Fine Hatching	細線排線
+	Dense Hatching	密集排線
+	Tapered Hatching	漸細排線
+	Broken Hatching	斷續排線
 	Image Brush	影像筆刷
 	Soft Bloom	柔和花朵
 	Halftone Field	半色調區域

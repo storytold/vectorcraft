@@ -45,7 +45,7 @@ use vectorcraft_doc::hit::{Hit, HitKind, hit_test, marquee_in_view, objects_at, 
 use vectorcraft_doc::{NodeId, OrientedBox};
 use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 
-use crate::bbox::{Handle, hit_handle, in_rotate_zone, move_delta, rotate_for_drag, scale_for_drag};
+use crate::bbox::{Handle, hit_handle, in_rotate_zone, move_delta, rotate_for_drag, scale_for_drag, slide_along};
 use crate::blendwidget::{self, BlendWidgetDrag};
 use crate::corners::{self, CornerDrag, over_widget};
 use crate::guides::{PointSnap, Targets, distance_guides, hold_on_path};
@@ -398,22 +398,14 @@ impl MoveSnap {
             return (d, vec![]);
         }
         let u = d / len;
-        // The way along the line that takes away the offset `pull` on one axis: on the axis the
-        // line runs along, the shorter way of the two.
-        let along = |pull: Vec2| {
-            [(pull.x, u.x), (pull.y, u.y)]
-                .into_iter()
-                .filter(|(_, c)| c.abs() > 1e-9)
-                .map(|(p, c)| p / c)
-                .min_by(|a, b| a.abs().total_cmp(&b.abs()))
-                .unwrap_or(0.0)
-        };
+        let along = |pull: Vec2| slide_along(pull, u);
         let (targets, points) = if copy { (&self.copy_targets, &self.copy_points) } else { (&self.targets, &self.points) };
         if let Some(ov) = targets.as_ref().and_then(|t| t.snap_back(self.bounds, d, cx.snap_tol())) {
             return (Vec2::ZERO, ov);
         }
         let mut guides = vec![];
         let mut on_contour = false;
+        let mut point_contour = None;
         if cx.snap_to_grid
             && let Some(b) = self.bounds
         {
@@ -430,9 +422,12 @@ impl MoveSnap {
                 d = q - start;
                 guides = ov;
             } else if let Some((q, ov)) = t.snap_stroke_along(start + d, u, cx.snap_tol()) {
-                d = q - start;
+                // Compare with the ruler result the ordinary OFF route would choose,
+                // not with a new ruler query after paint has already moved the point.
+                point_contour = Some((q - start, ov, d));
+                let (adj, ov) = t.snap_rects_along(&[b + d], u, cx.snap_tol());
+                d += adj;
                 guides = ov;
-                on_contour = true;
             } else {
                 let (adj, ov, contact) = t.snap_rects_along_contact(&[b + d], u, cx.snap_tol());
                 on_contour = contact;
@@ -440,8 +435,12 @@ impl MoveSnap {
                 guides = ov;
             }
         }
+        let mut on_ruler = false;
         if let Some(t) = self.rulers.as_ref().filter(|_| !on_contour) {
             let (q, ov) = t.snap_point_along(start + d, u, cx.snap_tol());
+            // A real ruler contact can already be at the OFF position: zero travel
+            // with its ruler overlays still beats a farther painted contact.
+            on_ruler = q != start + d || !ov.is_empty();
             if q != start + d {
                 d = q - start;
                 guides = ov;
@@ -451,8 +450,16 @@ impl MoveSnap {
                 // Nothing else lined up: the bounds slide along the line onto a ruler guide, as
                 // they do without Shift (#4312).
                 let (adj, ov) = t.snap_moved_along_to_rulers(start + d, b + d, u, cx.snap_tol());
+                on_ruler |= adj != Vec2::ZERO || !ov.is_empty();
                 d += adj;
                 guides = ov;
+            }
+        }
+        if let Some((painted, overlays, raw)) = point_contour {
+            let closer_ruler = on_ruler && (d - raw).hypot2() < (painted - raw).hypot2();
+            if !closer_ruler {
+                d = painted;
+                guides = overlays;
             }
         }
         if cx.snaps_to_pixel(PixelOp::Moving)

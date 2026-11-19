@@ -1141,8 +1141,9 @@ impl Targets {
         if !l2.is_finite() || l2 == 0.0 {
             return None;
         }
-        // A legacy anchor belongs to the ordinary slide route, not this painted channel.
-        if self.nearest_point(near, tol).is_some() {
+        // A nearby legacy anchor keeps its ordinary priority only when that route can
+        // actually reach a forward contact. A parallel/behind anchor cannot block paint.
+        if self.nearest_point(near, tol).is_some() && (!ray || self.slide(at, dir, near, tol, true).is_some()) {
             return None;
         }
         self.stroke_contours.on_line(at, dir, near, tol, ray).map(|q| (q, Kind::StrokeEdge))
@@ -1806,31 +1807,41 @@ impl Targets {
     /// Direct scale contacts in priority order: anchors/centres, then stroke contours.
     fn scale_contact_candidates(
         &self,
-        base: Point,
-        dir: Vec2,
-        near: Point,
+        probes: &[(Point, Vec2, Point)],
         tol: f64,
         valid: impl Fn(f64) -> bool,
-    ) -> [Option<(f64, Point, Kind, u8)>; 2] {
-        let l2 = dir.hypot2();
-        let stroke = if l2.is_finite() && l2 > 0.0 {
-            self.stroke_contours
-                .on_line_with(base, dir, near, tol, false, |q| valid((q - base).dot(dir) / l2))
-                .map(|q| ((q - base).dot(dir) / l2, q, Kind::StrokeEdge, 1))
-        } else {
-            None
-        };
-        let anchor = if l2 > 1e-18 {
-            let point = if stroke.is_some() {
-                self.nearest_point_with(near, tol, |q| valid((q - base).dot(dir) / l2))
-            } else {
-                self.nearest_point(near, tol)
-            };
-            point.map(|(q, kind)| ((q - base).dot(dir) / l2, q, kind, 0))
-        } else {
-            None
-        };
-        [anchor, stroke]
+    ) -> Vec<[Option<(f64, Point, Kind, u8)>; 2]> {
+        // The handle and both endpoints compete in one ranking. Paint on any of them
+        // opens feasible-anchor search on all of them, not just the painted probe.
+        let strokes: Vec<_> = probes
+            .iter()
+            .map(|&(base, dir, near)| {
+                let l2 = dir.hypot2();
+                if l2.is_finite() && l2 > 0.0 {
+                    self.stroke_contours
+                        .on_line_with(base, dir, near, tol, false, |q| valid((q - base).dot(dir) / l2))
+                        .map(|q| ((q - base).dot(dir) / l2, q, Kind::StrokeEdge, 1))
+                } else {
+                    None
+                }
+            })
+            .collect();
+        let painted = strokes.iter().any(Option::is_some);
+        probes
+            .iter()
+            .zip(strokes)
+            .map(|(&(base, dir, near), stroke)| {
+                let l2 = dir.hypot2();
+                let anchor = if l2 > 1e-18 {
+                    let point =
+                        if painted { self.nearest_point_with(near, tol, |q| valid((q - base).dot(dir) / l2)) } else { self.nearest_point(near, tol) };
+                    point.map(|(q, kind)| ((q - base).dot(dir) / l2, q, kind, 0))
+                } else {
+                    None
+                };
+                [anchor, stroke]
+            })
+            .collect()
     }
 
     /// Snap a bounding-box resize. `a` is the scale [`crate::bbox::scale_for_drag`] gave for
@@ -1922,13 +1933,19 @@ impl Targets {
                     best = Some((s, priority, moved, found));
                 }
             };
-            for h in std::iter::once(handle).chain(ends.into_iter().flatten().copied()) {
-                let v = h.pos(r) - origin;
-                let base = to_doc * (origin + Vec2::new(c.0 * v.x, c.1 * v.y));
-                let dir = (to_doc * Point::new(e.0 * v.x, e.1 * v.y)).to_vec2();
-                let p = base + dir * s0;
+            let probes: Vec<_> = std::iter::once(handle)
+                .chain(ends.into_iter().flatten().copied())
+                .map(|h| {
+                    let v = h.pos(r) - origin;
+                    let base = to_doc * (origin + Vec2::new(c.0 * v.x, c.1 * v.y));
+                    let dir = (to_doc * Point::new(e.0 * v.x, e.1 * v.y)).to_vec2();
+                    (base, dir, base + dir * s0)
+                })
+                .collect();
+            let direct = self.scale_contact_candidates(&probes, tol, eligible);
+            for ((base, dir, p), contacts) in probes.into_iter().zip(direct) {
                 // Direct contacts precede lining up with a target's x or y.
-                for (s, q, kind, priority) in self.scale_contact_candidates(base, dir, p, tol, eligible).into_iter().flatten() {
+                for (s, q, kind, priority) in contacts.into_iter().flatten() {
                     consider(s, priority, (None, None, Some((q, kind))));
                 }
                 for (is_x, b, d) in [(true, base.x, dir.x), (false, base.y, dir.y)] {

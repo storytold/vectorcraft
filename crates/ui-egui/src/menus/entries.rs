@@ -260,7 +260,8 @@ pub(super) fn flatten(app: &VectorcraftApp, path: Vec<String>, shown: Vec<String
     for it in items {
         match it {
             Item::Cmd(l, id, p) => {
-                if *id == crate::scripts_menu::COMMAND && !crate::scripts_menu::readable(p) {
+                // A listed script or saved proof setup outside an automation read root is left out.
+                if matches!(*id, crate::scripts_menu::COMMAND | crate::dialogs::proof_setup::LOAD) && !crate::scripts_menu::readable(p) {
                     continue;
                 }
                 // The other rows keep their ids: `file.openRecent3` still opens the third file.

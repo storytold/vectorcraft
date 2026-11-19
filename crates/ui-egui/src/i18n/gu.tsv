@@ -2902,6 +2902,11 @@
 	Preserve Alpha Transparency	આલ્ફા પારદર્શિતા જાળવો
 	Preserve Appearance and Overprints	દેખાવ અને ઓવરપ્રિન્ટ જાળવો
 	Preserve CMYK Numbers	CMYK નંબર જાળવો
+	Preserve RGB Numbers	RGB નંબર જાળવો
+	Device to Simulate:	અનુકરણ કરવાનું ઉપકરણ:
+	Simulate Paper Color	કાગળના રંગનું અનુકરણ કરો
+	Simulate Black Ink	કાળી શાહીનું અનુકરણ કરો
+	Load…	લોડ કરો…
 	Preserve Editing Capabilities	સંપાદન ક્ષમતાઓ જાળવો
 	Preserve Lightness	તેજ જાળવો
 	Preserve Overprints and Spot Colors	ઓવરપ્રિન્ટ અને સ્પોટ રંગ જાળવો
@@ -3156,6 +3161,37 @@
 	Remove Effect	ઇફેક્ટ દૂર કરો
 	Remove Effects	ઇફેક્ટ્સ દૂર કરો
 	Remove Gaps	ગેપ દૂર કરો
+# Stroke arrowheads (Stroke panel, Dimension Tool Options and Properties › Arrow Style).
+	Triangle (open)	ત્રિકોણ (ખુલ્લો)
+	Circle (open)	વર્તુળ (ખુલ્લું)
+	Square (open)	ચોરસ (ખુલ્લો)
+	Arrow (open)	તીર (ખુલ્લું)
+	Barbed	કાંટાળું
+arrowhead	Feather	પીંછું
+	Half Arrow (left)	અડધું તીર (ડાબે)
+	Half Arrow (right)	અડધું તીર (જમણે)
+	Double Bar	બેવડી પટ્ટી
+	Dot on Bar	પટ્ટી પર બિંદુ
+	Chevron	શેવરોન
+	Cross	ક્રોસ
+	Plus	પ્લસ
+	Hexagon (open)	ષટ્કોણ (ખુલ્લો)
+	Tag	ટૅગ
+	Tag (open)	ટૅગ (ખુલ્લો)
+	Half Circle	અર્ધવર્તુળ
+	Drop	ટીપું
+	Slash	સ્લૅશ
+	Double Slash	બેવડો સ્લૅશ
+	Diamond (open)	ડાયમંડ (ખુલ્લો)
+	Reverse Triangle	ઊંધો ત્રિકોણ
+	Swallowtail	અબાબીલની પૂંછડી
+	Bracket	કૌંસ
+	Fork	કાંટો
+	Leaf	પાંદડું
+	Kite	પતંગ
+	Triangle to Bar	ત્રિકોણથી પટ્ટી
+	Oval	અંડાકાર
+	Line Arrow	રેખા તીર
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	સામાન્ય સ્પર્શરેખાઓ…
 	Common Tangents	સામાન્ય સ્પર્શરેખાઓ
@@ -3732,6 +3768,8 @@
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} માંથી {shown} પરિણામ. તેમને સંકુચિત કરવા લખતા રહો.|{n} માંથી {shown} પરિણામો. તેમને સંકુચિત કરવા લખતા રહો.
 	Recent Commands	તાજેતરના આદેશો
 	No recent commands	કોઈ તાજેતરના આદેશો નથી
+	Type to search commands, tools, panels and effects	આદેશો, ટૂલ્સ, પેનલ્સ અને ઇફેક્ટ્સ શોધવા માટે લખો
+	Recent	તાજેતરના
 	Search commands	આદેશો શોધો
 	Search images	છબીઓ શોધો
 	Searching…	શોધી રહ્યા છીએ…
@@ -3957,6 +3995,10 @@
 	Add Color Tool	રંગ ઉમેરો સાધન
 	Remove Color Tool	રંગ દૂર કરો સાધન
 	Remove Color	રંગ દૂર કરો
+	Set As Base Color	આધાર રંગ તરીકે સેટ કરો
+	Select Shade	છાયા પસંદ કરો
+	Add New Color	નવો રંગ ઉમેરો
+	Set Current Color As Base Color	વર્તમાન રંગને આધાર રંગ તરીકે સેટ કરો
 	Find the selected colors in the artwork	પસંદ કરેલા રંગો આર્ટવર્કમાં શોધો
 	Show handles when multiple anchors are selected	બહુવિધ એન્કર પસંદ હોય ત્યારે હૅન્ડલ બતાવો
 	Show in Folder	ફોલ્ડરમાં બતાવો
@@ -5060,6 +5102,7 @@ antiAlias	Sharp	શાર્પ
 	Composition	કમ્પોઝિશન
 	Place Brush Art	બ્રશ આર્ટ પ્લેસ કરો
 	Replace Brush Art	બ્રશ આર્ટ બદલો
+	Replace Pattern Art	પેટર્ન આર્ટ બદલો
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	સ્ટ્રોક્સ આ બ્રશ વાપરે છે. તે સ્ટ્રોક્સ પર નવી આર્ટ લાગુ કરવી છે કે તેમને જેમ છે તેમ રાખીને નવી આર્ટવાળી બ્રશની નકલ ઉમેરવી છે?
 	Apply to Strokes	સ્ટ્રોક્સ પર લાગુ કરો
 	Leave Strokes	સ્ટ્રોક્સ જેમ છે તેમ રાખો
@@ -5581,6 +5624,11 @@ swatch	[Registration]	[રજિસ્ટ્રેશન]
 	Standard Single-line Composer	સ્ટાન્ડર્ડ સિંગલ-લાઇન કમ્પોઝર
 	Standard Every-line Composer	સ્ટાન્ડર્ડ એવરી-લાઇન કમ્પોઝર
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer આમાંથી એક હોવું જોઈએ: "singleLine", "everyLine", "standardSingleLine" અથવા "standardEveryLine"
+	Engraving	કોતરણી
+	Fine Hatching	ઝીણી રેખાઓ
+	Dense Hatching	ગાઢ રેખાઓ
+	Tapered Hatching	પાતળી થતી રેખાઓ
+	Broken Hatching	તૂટક રેખાઓ
 	Image Brush	છબી બ્રશ
 	Soft Bloom	નરમ ફૂલ
 	Halftone Field	હાફટોન ક્ષેત્ર

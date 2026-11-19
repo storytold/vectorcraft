@@ -811,6 +811,7 @@ antiAlias	Sharp	शार्प
 	Bar	बार
 	Bar Graph Tool	बार ग्राफ़ टूल
 	Barbed	कंटीले
+arrowhead	Feather	पंख
 	Bas Relief	बास रिलीफ़
 	Bas Relief…	बास रिलीफ़…
 	Base Along:	आधार के साथ:
@@ -3113,6 +3114,7 @@ antiAlias	Sharp	शार्प
 	Limit:	सीमा:
 	Limited	लिमिटेड
 	Line	लाइन
+	Line Arrow	लाइन तीर
 	line {line}	लाइन {line}
 	Line {line}	लाइन {line}
 	Line {line}: {name}: {status}	लाइन {line}: {name}: {status}
@@ -4165,6 +4167,11 @@ antiAlias	Sharp	शार्प
 	Preserve Appearance	उपस्थिति संरक्षित करें
 	Preserve Appearance and Overprints	उपस्थिति और ओवरप्रिंट को संरक्षित करें
 	Preserve CMYK Numbers	CMYK नंबर संरक्षित करें
+	Preserve RGB Numbers	RGB नंबर संरक्षित करें
+	Device to Simulate:	सिम्युलेट करने के लिए डिवाइस:
+	Simulate Paper Color	पेपर का रंग सिम्युलेट करें
+	Simulate Black Ink	काली स्याही सिम्युलेट करें
+	Load…	लोड करें…
 	Preserve editing capabilities	संपादन क्षमताओं को संरक्षित करना
 	Preserve Editing Capabilities	संपादन क्षमताओं को संरक्षित करना
 	Preserve Lightness	प्रकाश संरक्षण
@@ -4491,6 +4498,7 @@ antiAlias	Sharp	शार्प
 	Remove Strokes	स्ट्रोक हटाएँ
 	Place Brush Art	ब्रश आर्टवर्क रखें
 	Replace Brush Art	ब्रश आर्टवर्क बदलें
+	Replace Pattern Art	पैटर्न आर्टवर्क बदलें
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	स्ट्रोक्स इस ब्रश का उपयोग कर रहे हैं। नया आर्टवर्क उन स्ट्रोक्स पर लागू करें, या उन्हें जैसा है वैसा छोड़कर नए आर्टवर्क वाले ब्रश की एक कॉपी जोड़ें?
 	Apply to Strokes	स्ट्रोक्स पर लागू करें
 	Leave Strokes	स्ट्रोक्स जैसे हैं वैसे छोड़ें
@@ -5105,6 +5113,7 @@ antiAlias	Sharp	शार्प
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} में से {shown} परिणाम। इन्हें सीमित करने के लिए लिखते रहें।|{n} में से {shown} परिणाम। इन्हें सीमित करने के लिए लिखते रहें।
 	Recent Commands	हाल के आदेश
 	No recent commands	कोई हाल का आदेश नहीं
+	Type to search commands, tools, panels and effects	आदेश, टूल, पैनल्स और इफ़ेक्ट्स खोजने के लिए टाइप करें
 	Search commands	आदेश खोजें
 	Search Commands…	कमांड खोजें…
 	Search Fonts Folder	खोज फ़ॉन्ट फ़ोल्डर
@@ -5334,6 +5343,10 @@ antiAlias	Sharp	शार्प
 	Add Color Tool	रंग जोड़ें टूल
 	Remove Color Tool	रंग हटाएँ टूल
 	Remove Color	रंग हटाएँ
+	Set As Base Color	आधार रंग के रूप में सेट करें
+	Select Shade	शेड चुनें
+	Add New Color	नया रंग जोड़ें
+	Set Current Color As Base Color	वर्तमान रंग को आधार रंग के रूप में सेट करें
 	Find the selected colors in the artwork	चयनित रंगों को आर्टवर्क में खोजें
 	Show Color Groups	रंग समूह दिखाएँ
 	Show Color Swatches	रंग स्वॉचेस दिखाएँ
@@ -8391,6 +8404,7 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	no parent layer	कोई अभिभावक लेयर नहीं
 @msg	no Pathfinder operation applied yet	अभी तक कोई पाथफाइंडर ऑपरेशन लागू नहीं है
 @msg	no pattern `{name}`	कोई पैटर्न `{name}` नहीं
+@msg	art painted with `{name}` can't be its tile	`{name}` से रंगी कला उसकी टाइल नहीं हो सकती
 @msg	no pattern named `{choice}`	`{choice}` नाम का कोई पैटर्न नहीं
 @msg	no pattern swatch `{name}`	कोई पैटर्न स्वॉच `{name}` नहीं
 @msg	no PDF preset named `{n}`	कोई PDF प्रीसेट नहीं है जिसका नाम `{n}` है
@@ -10324,6 +10338,11 @@ theme	Appearance	अपीयरेंस
 @msg	A panel is not joined to the rest by a crease.	कोई पैनल किसी क्रीज़ लाइन से बाकी से जुड़ा नहीं है।
 @msg	A fold line is on a non-printing layer.	एक फ़ोल्ड लाइन नॉन-प्रिंटिंग लेयर पर है।
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	पैनल: {panels}, हिंज: {hinges}, एरर: {errors}, वॉर्निंग: {warnings}
+	Engraving	नक्काशी
+	Fine Hatching	बारीक रेखांकन
+	Dense Hatching	घना रेखांकन
+	Tapered Hatching	पतला होता रेखांकन
+	Broken Hatching	टूटा रेखांकन
 	Image Brush	छवि ब्रश
 	Soft Bloom	कोमल खिलावट
 	Halftone Field	हाफ़टोन क्षेत्र

@@ -3504,6 +3504,11 @@ digits	Malayalam	Malayalam
 	Place the pages with the placement again	Plaats de pagina's opnieuw met de plaatsing
 	Placement:	Plaatsing:
 	Preserve CMYK Numbers	CMYK-waarden behouden
+	Preserve RGB Numbers	RGB-waarden behouden
+	Device to Simulate:	Te simuleren apparaat:
+	Simulate Paper Color	Papierkleur simuleren
+	Simulate Black Ink	Zwarte inkt simuleren
+	Load…	Laden…
 	Previous page	Vorige pagina
 	Print Layers:	Lagen afdrukken:
 	Print Preset:	Afdrukvoorinstelling:
@@ -3581,6 +3586,10 @@ digits	Malayalam	Malayalam
 	Add Color Tool	Gereedschap Kleur toevoegen
 	Remove Color Tool	Gereedschap Kleur verwijderen
 	Remove Color	Kleur verwijderen
+	Set As Base Color	Instellen als basiskleur
+	Select Shade	Schakering selecteren
+	Add New Color	Nieuwe kleur toevoegen
+	Set Current Color As Base Color	Huidige kleur instellen als basiskleur
 	Find the selected colors in the artwork	De geselecteerde kleuren zoeken in de artwork
 	Harmony Rules	Harmonieregels
 	Keep this row's colors (exclude)	De kleuren van deze rij behouden (uitsluiten)
@@ -5051,6 +5060,7 @@ font-technology	Variable	Variabel
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} van {n} resultaat. Typ verder om ze te beperken.|{shown} van {n} resultaten. Typ verder om ze te beperken.
 	Recent Commands	Recente opdrachten
 	No recent commands	Geen recente opdrachten
+	Type to search commands, tools, panels and effects	Typ om opdrachten, gereedschappen, panelen en effecten te zoeken
 	Dashed Line	Streepjeslijn
 	Panel menu	Paneelmenu
 	Unembed…	Insluiten ongedaan maken…
@@ -5784,6 +5794,7 @@ imageTrace	Outline	Contour
 @msg	no native format	geen eigen indeling
 @msg	no pages	geen pagina's
 @msg	no pattern `{name}`	geen patroon `{name}`
+@msg	art painted with `{name}` can't be its tile	illustratie die met `{name}` is geverfd, kan niet de tegel ervan zijn
 @msg	no perspective grid preset named `{name}`	geen perspectiefrastervoorinstelling met de naam `{name}`
 @msg	no plug-in {0} is installed	er is geen plug-in {0} geïnstalleerd
 @msg	no plug-in {id} is installed	er is geen plug-in {id} geïnstalleerd
@@ -8290,6 +8301,7 @@ imageTrace	Outline	Contour
 	Arrow	Pijl
 	Arrow (open)	Pijl (open)
 	Barbed	Weerhaak
+arrowhead	Feather	Veer
 	Half Arrow (left)	Halve pijl (links)
 	Half Arrow (right)	Halve pijl (rechts)
 	Concave	Concaaf
@@ -8317,6 +8329,7 @@ imageTrace	Outline	Contour
 	Kite	Vlieger
 	Triangle to Bar	Driehoek naar balk
 	Oval	Ovaal
+	Line Arrow	Lijnpijl
 	Complementary	Complementair
 	Complementary 2	Complementair 2
 	Split Complementary	Gesplitst complementair
@@ -10190,6 +10203,7 @@ breakText	Glyphs	Glyphs
 	Remove Strokes	Contouren verwijderen
 	Place Brush Art	Penseelillustratie plaatsen
 	Replace Brush Art	Penseelillustratie vervangen
+	Replace Pattern Art	Patroonillustratie vervangen
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Contouren gebruiken dit penseel. De nieuwe illustratie op deze contouren toepassen, of ze laten zoals ze zijn en een kopie van het penseel met de nieuwe illustratie toevoegen?
 	Apply to Strokes	Op contouren toepassen
 	Leave Strokes	Contouren behouden
@@ -10757,6 +10771,11 @@ breakText	Glyphs	Glyphs
 @msg	A panel is not joined to the rest by a crease.	Een paneel is door geen rillijn met de rest verbonden.
 @msg	A fold line is on a non-printing layer.	Een vouwlijn staat op een laag die niet wordt afgedrukt.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panelen: {panels}, scharnieren: {hinges}, fouten: {errors}, waarschuwingen: {warnings}
+	Engraving	Gravure
+	Fine Hatching	Fijne arcering
+	Dense Hatching	Dichte arcering
+	Tapered Hatching	Taps toelopende arcering
+	Broken Hatching	Onderbroken arcering
 	Image Brush	Afbeeldingspenselen
 	Soft Bloom	Zachte bloei
 	Halftone Field	Halftoonveld
