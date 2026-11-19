@@ -199,6 +199,7 @@ fn the_window_menu_and_the_brushes_panel_open_brush_libraries() {
             json!("bristle-brushes"),
             json!("pattern-borders"),
             json!("scatter-shapes"),
+            json!("stipple"),
             json!("game-trails"),
             json!("energy-beams"),
             json!("dry-media"),
