@@ -7127,6 +7127,7 @@ axis	Y Axis	Вісь Y
 	Inventory Icons	Піктограми інвентарю
 	Skill Icons	Іконки навичок
 	Weather Icons	Іконки погоди
+	Media Controls	Елементи керування мультимедіа
 	Attack	Атака
 	Defend	Захист
 	Heal	Лікування
@@ -7501,6 +7502,10 @@ axis	Y Axis	Вісь Y
 	Rain	Дощ
 	Thunder	Грім
 	Snow	Сніг
+	Play	Відтворити
+	Pause	Пауза
+	Skip Next	Пропустити вперед
+	Shuffle	Перемішати
 	Bar	Панель
 	Hexagon	Шестикутник
 	Spectrum	Спектр

@@ -42,6 +42,7 @@
 	Reset Profile	პროფილის ჩამოყრა
 	Select Object on Path	ტრაექტორიაზე ობიექტის მონიშვნა
 	Weather Icons	ამინდის ხატულები
+	Media Controls	მედია მართვის საშუალებები
 @msg	'caller', 'callee' and 'arguments' cannot be used on strict mode functions	'caller', 'callee' და 'arguments' მკაცრი რეჟიმის ფუნქციებში ვერ გამოიყენება
 @msg	3D effects require finite coordinates within 100 million points	3D ეფექტებს სჭირდება სასრული კოორდინატები 100 მილიონი პუნქტის ფარგლებში
 @msg	3D effects require one to ten lights	3D ეფექტებს სჭირდება ერთიდან ათამდე სინათლის წყარო
@@ -9994,6 +9995,10 @@ axis	Y Axis	Y ღერძი
 	Rain	წვიმა
 	Thunder	ქუხილი
 	Snow	თოვლი
+	Play	დაკვრა
+	Pause	შეჩერება
+	Skip Next	შემდეგზე გადასვლა
+	Shuffle	არევა
 	Save Brush Library…	ფუნჯების ბიბლიოთეკის შენახვა…
 @msg	`{_1}` has no brushes to apply	`{_1}`-ში გამოსაყენებელი ფუნჯები არ არის
 @msg	missing `library` (see brush.libraries)	`library` აკლია (იხ. brush.libraries)

@@ -6713,6 +6713,7 @@ axis	Y Axis	Y ос
 	Inventory Icons	Икони на инвентара
 	Skill Icons	Икони на умения
 	Weather Icons	Икони за времето
+	Media Controls	Медийни контроли
 	Attack	Атака
 	Defend	Защита
 	Heal	Лечение
@@ -7080,6 +7081,10 @@ axis	Y Axis	Y ос
 	Rain	Дъжд
 	Thunder	Гръм
 	Snow	Сняг
+	Play	Възпроизвеждане
+	Pause	Пауза
+	Skip Next	Следващ
+	Shuffle	Разбъркване
 	Save Brush Library…	Запази библиотека с четки…
 @msg	no empty artboards to delete	няма празни работни области за изтриване
 	Scale Presets	Пресети за мащаб

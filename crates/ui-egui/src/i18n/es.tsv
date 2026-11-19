@@ -7497,6 +7497,7 @@ axis	Y Axis	Eje Y
 	Inventory Icons	Iconos de inventario
 	Skill Icons	Iconos de habilidad
 	Weather Icons	Iconos del tiempo
+	Media Controls	Controles de medios
 	Attack	Ataque
 	Defend	Defensa
 	Heal	Curación
@@ -7870,6 +7871,10 @@ axis	Y Axis	Eje Y
 	Rain	Lluvia
 	Thunder	Trueno
 	Snow	Nieve
+	Play	Reproducir
+	Pause	Pausa
+	Skip Next	Saltar siguiente
+	Shuffle	Aleatorio
 	Save Brush Library…	Guardar biblioteca de pinceles…
 @msg	`{_1}` has no brushes to apply	`{_1}` no tiene pinceles para aplicar
 @msg	missing `library` (see brush.libraries)	falta `library` (consulte brush.libraries)

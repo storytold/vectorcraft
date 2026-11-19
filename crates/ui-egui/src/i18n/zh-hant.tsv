@@ -7176,6 +7176,7 @@ axis	Y Axis	Y 軸
 	Inventory Icons	物品欄圖示
 	Skill Icons	技能圖示
 	Weather Icons	天氣圖示
+	Media Controls	媒體控制
 	Attack	攻擊
 	Defend	防禦
 	Heal	治療
@@ -7550,6 +7551,10 @@ axis	Y Axis	Y 軸
 	Rain	雨
 	Thunder	雷
 	Snow	雪
+	Play	播放
+	Pause	暫停
+	Skip Next	跳到下一個
+	Shuffle	隨機播放
 	Bar	長條
 	Hexagon	六邊形
 	Spectrum	光譜
