@@ -819,6 +819,7 @@
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Prikaz kotača
 	Box View	Prikaz kvadrata
+	Show Out-of-Gamut Colors	Prikaži boje izvan gamuta
 	Box Channel	Kanal kvadrata
 	Color box	Kvadrat boje
 	Color Wheel Options	Opcije kotača boja
@@ -4649,6 +4650,7 @@ font-technology	Variable	Varijabilni
 	Recent Commands	Nedavne naredbe
 	No recent commands	Nema nedavnih naredbi
 	Type to search commands, tools, panels and effects	Upišite za pretragu naredbi, alata, panela i efekata
+	Clear Recent Commands	Očisti nedavne naredbe
 	Dashed Line	Isprekidana linija
 	Panel menu	Meni panela
 	Unembed…	Poništi ugrađivanje…

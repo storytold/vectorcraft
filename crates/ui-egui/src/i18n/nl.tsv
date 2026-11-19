@@ -1397,6 +1397,7 @@ liquify-list-end	{0}, {1}	{0} en {1}
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Wielweergave
 	Box View	Vakweergave
+	Show Out-of-Gamut Colors	Kleuren buiten gamut tonen
 	Box Channel	Kanaal van het vak
 	Color box	Kleurvak
 	Color Wheel Options	Opties voor kleurenwiel
@@ -5072,6 +5073,7 @@ font-technology	Variable	Variabel
 	Recent Commands	Recente opdrachten
 	No recent commands	Geen recente opdrachten
 	Type to search commands, tools, panels and effects	Typ om opdrachten, gereedschappen, panelen en effecten te zoeken
+	Clear Recent Commands	Recente opdrachten wissen
 	Dashed Line	Streepjeslijn
 	Panel menu	Paneelmenu
 	Unembed…	Insluiten ongedaan maken…

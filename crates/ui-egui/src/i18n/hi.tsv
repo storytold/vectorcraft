@@ -1273,6 +1273,7 @@ arrowhead	Feather	पंख
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	व्हील व्यू
 	Box View	बॉक्स व्यू
+	Show Out-of-Gamut Colors	गैमट से बाहर के रंग दिखाएँ
 	Box Channel	बॉक्स चैनल
 	Color box	कलर बॉक्स
 	Color Wheel Options	कलर व्हील ऑप्शन्स
@@ -5141,6 +5142,7 @@ arrowhead	Feather	पंख
 	Recent Commands	हाल के आदेश
 	No recent commands	कोई हाल का आदेश नहीं
 	Type to search commands, tools, panels and effects	आदेश, टूल, पैनल्स और इफ़ेक्ट्स खोजने के लिए टाइप करें
+	Clear Recent Commands	हाल के आदेश साफ़ करें
 	Search commands	आदेश खोजें
 	Search Commands…	कमांड खोजें…
 	Search Fonts Folder	खोज फ़ॉन्ट फ़ोल्डर

@@ -606,6 +606,7 @@ font-technology	Variable	Варіативні
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Вигляд «Коло»
 	Box View	Вигляд «Квадрат»
+	Show Out-of-Gamut Colors	Показати кольори поза колірним охопленням
 	Box Channel	Канал квадрата
 	Color box	Колірний квадрат
 	Color Wheel Options	Параметри колірного кола
@@ -3733,6 +3734,7 @@ digits	Malayalam	Малаялам
 	Recent Commands	Нещодавні команди
 	No recent commands	Немає нещодавніх команд
 	Type to search commands, tools, panels and effects	Почніть вводити для пошуку команд, інструментів, панелей та ефектів
+	Clear Recent Commands	Очистити список нещодавніх команд
 	Search commands	Пошук команд
 	Search Commands…	Пошук команд…
 	Secondary	Вторинний

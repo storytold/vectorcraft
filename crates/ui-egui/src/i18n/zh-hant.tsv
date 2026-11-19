@@ -574,6 +574,7 @@ font-technology	Variable	可變
 	{name1} {value1}, {name2} {value2}	{name1} {value1}，{name2} {value2}
 	Wheel View	色輪檢視
 	Box View	方塊檢視
+	Show Out-of-Gamut Colors	顯示超出色域的顏色
 	Box Channel	方塊色版
 	Color box	顏色方塊
 	Color Wheel Options	色輪選項
@@ -5028,6 +5029,7 @@ digits	Malayalam	馬來亞拉姆數字
 	Recent Commands	最近使用的指令
 	No recent commands	沒有最近使用的指令
 	Type to search commands, tools, panels and effects	輸入以搜尋指令、工具、面板與效果
+	Clear Recent Commands	清除最近使用的指令
 	Search commands	搜尋指令
 	Search Commands…	搜尋指令…
 	Secondary	次要

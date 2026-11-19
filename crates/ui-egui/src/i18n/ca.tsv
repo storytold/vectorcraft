@@ -887,6 +887,7 @@ arrowhead	Target	Diana
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Visualització de roda
 	Box View	Visualització de quadre
+	Show Out-of-Gamut Colors	Mostra els colors fora de gama
 	Box Channel	Canal del quadre
 	Color box	Quadre de color
 	Color Wheel Options	Opcions de la roda de colors
@@ -4786,6 +4787,7 @@ digits	Malayalam	Malaiàlam
 	Recent Commands	Ordres recents
 	No recent commands	No hi ha ordres recents
 	Type to search commands, tools, panels and effects	Escriviu per cercar ordres, eines, panells i efectes
+	Clear Recent Commands	Esborra les ordres recents
 	Search commands	Cerca ordres
 	Search Commands…	Cerca ordres…
 	Search Fonts Folder	Cerca a la carpeta de tipus de lletra
