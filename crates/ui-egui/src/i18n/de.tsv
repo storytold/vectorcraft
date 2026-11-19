@@ -1356,6 +1356,20 @@ font-technology	Variable	Variabel
 @msg	no match of `find` at bytes {_1}..{_2} of object {_3}	kein Treffer für `find` bei Byte {_1}..{_2} von Objekt {_3}
 	Find Font	Schrift suchen
 	Find Font…	Schrift suchen…
+	Retype	Neu setzen
+	Find Matching Fonts	Passende Schriften suchen
+	Find more font matches	Weitere passende Schriften suchen
+	Type your text to preview	Text für die Vorschau eingeben
+	Select outlined text, then Find Matching Fonts.	Wählen Sie in Pfade umgewandelten Text aus und dann „Passende Schriften suchen“.
+	No font matches the selected shapes.	Keine Schrift passt zu den ausgewählten Formen.
+	Shapes past the first 2,048, or more than 16 groups deep, were not compared.	Formen nach den ersten 2.048 oder mehr als 16 Gruppen tief wurden nicht verglichen.
+	Reset Retype Panel	Bedienfeld „Neu setzen“ zurücksetzen
+	List Matching Fonts	Passende Schriften auflisten
+	Retype Preview	Vorschau im Bedienfeld „Neu setzen“
+@msg	`count` must be a whole number from 1 to 96	`count` muss eine ganze Zahl von 1 bis 96 sein
+@msg	`size` must be small, medium or large	`size` muss small, medium oder large sein
+@msg	`text` must be a string of at most 100 characters	`text` muss eine Zeichenfolge mit höchstens 100 Zeichen sein
+@msg	Retype: select outlined text (paths or compound paths)	Neu setzen: Wählen Sie in Pfade umgewandelten Text aus (Pfade oder zusammengesetzte Pfade)
 	Find Next	Weitersuchen
 	Find Objects	Objekte suchen
 	Compare with Image	Mit Bild vergleichen
@@ -3310,6 +3324,55 @@ digits	Malayalam	Malayalam
 	Edit type set in fonts that aren't available?	Text in Schriften bearbeiten, die nicht verfügbar sind?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Zeigt auf der Arbeitsfläche die Nummer jedes Slices in einem Kästchen oben links im Slice; ist die Option aus, werden die Slice-Umrisse weiterhin angezeigt.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Die Farbe der Umrisse von Benutzer- und Objekt-Slices und ihrer Nummernkästchen; automatische Slices verwenden einen blasseren Ton davon.
+	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	Neuer Text erhält diese Sprache, solange die Sprache unter „Dokument einrichten“ Englisch: USA ist; Text, der bereits in einem Dokument steht, behält seine Sprache.
+	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	In Absätzen mit eingeschalteter Silbentrennung wird ein aufgeführtes Wort nur an den darin eingegebenen Bindestrichen getrennt oder gar nicht, wenn es keine hat, unabhängig von Sprache und Groß- und Kleinschreibung.
+	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	In der Desktop-Version werden die .wasm-Plug-ins in diesem Ordner beim Start geladen und wenn Sie hier mit einem neuen Ordner auf OK klicken, außer im abgesicherten Modus; die Webversion lädt sie nicht.
+	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Die erste Wahl für das Arbeitsvolume: Startup, None oder ein Ordnerpfad; VectorCraft speichert sie, verwendet aber noch keine Arbeitsvolumes.
+	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Die zweite Wahl für das Arbeitsvolume: Startup, None oder ein Ordnerpfad; VectorCraft speichert sie, verwendet aber noch keine Arbeitsvolumes.
+	How light or dark the interface is.	Wie hell oder dunkel die Benutzeroberfläche ist.
+	The set of colors the interface is drawn in.	Die Farben, in denen die Benutzeroberfläche gezeichnet wird.
+	The color of controls that are on, chosen or focused; the menu is dimmed while the Color Scheme has an accent of its own.	Die Farbe von Bedienelementen, die eingeschaltet, gewählt oder fokussiert sind; das Menü ist abgeblendet, solange das „Farbschema“ eine eigene Akzentfarbe hat.
+	The color of the canvas around the artboards; Match User Interface Brightness takes it from Brightness. Outline view always shows it white.	Die Farbe der Arbeitsfläche um die Zeichenflächen; „An Helligkeit der Benutzeroberfläche anpassen“ übernimmt sie von „Helligkeit“. Die Pfadansicht zeigt sie immer weiß.
+	A panel opened from its icon closes when you press Esc or click outside it; off, it stays open until you click an icon.	Ein über sein Symbol geöffnetes Bedienfeld schließt sich, wenn Sie Esc drücken oder außerhalb klicken; ausgeschaltet bleibt es offen, bis Sie auf ein Symbol klicken.
+	Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them.	Zeigt den Namen jeder Werkzeuggruppe über ihren Werkzeugen in der Werkzeugleiste; ausgeschaltet folgen die Gruppen ohne etwas dazwischen aufeinander.
+	From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.	Ab jetzt öffnen sich Dokumente, die Sie öffnen oder erstellen, als Registerkarten; ausgeschaltet öffnet sich jedes in einem schwebenden Fenster. Bereits geöffnete Dokumente bleiben, wo sie sind.
+	Makes the document tabs taller and their names larger.	Macht die Registerkarten der Dokumente höher und ihre Namen größer.
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own.	Ab dem nächsten Start zeichnet das System die Titelleiste des Fensters dort, wo VectorCraft sonst seine eigene zeichnen würde.
+	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on.	Ab dem nächsten Start zeichnet VectorCraft die Titelleiste des Fensters auch dort, wo der Desktop sie zeichnen würde, außer „Systemtitelleiste“ ist eingeschaltet.
+	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	Macht die Benutzeroberfläche größer oder kleiner; Bildmaterial auf der Arbeitsfläche behält bei gleichem Zoom seine Größe.
+	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	Die Werkzeugzeiger, die VectorCraft zeichnet, wachsen und schrumpfen mit der „Skalierung der Benutzeroberfläche“; ausgeschaltet behalten sie ihre Größe.
+	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	Die Sprache der Benutzeroberfläche; „Auto“ verwendet die Sprache des Systems. Der Dialog wechselt die Sprache, sobald Sie eine wählen.
+	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	„Animierter Zoom“ funktioniert nur, solange dies eingeschaltet ist; ausgeschaltet ist „Animierter Zoom“ abgeblendet und das Zoomen wird nicht animiert.
+	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	Der Zoom mit dem Mausrad gleitet weich, und das Zoom-Werkzeug zoomt, während Sie seitwärts ziehen oder es gedrückt halten; ausgeschaltet zoomt es auf den Bereich, über den Sie ziehen.
+	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	Ab dem nächsten Start zeichnet die Desktop-Version mit dieser Art von Grafikprozessor; „Automatisch“ bevorzugt den, der den Bildschirm ansteuert. Die Webversion verwendet sie nicht.
+	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	Die Höchstzahl der Rückgängig-Schritte, die jedes Dokument behält; eine kleinere Zahl entfernt beim Klick auf OK die ältesten Schritte. Schritte können auch früher entfallen, wenn sie zu viel Speicher belegen.
+	Shows the artwork changing while you drag; off, outlines follow the drag and the artwork changes when you release. A ruler guide always moves as you drag.	Zeigt beim Ziehen, wie sich das Bildmaterial ändert; ausgeschaltet folgen Umrisse dem Ziehen, und das Bildmaterial ändert sich beim Loslassen. Eine Hilfslinie aus dem Lineal bewegt sich beim Ziehen immer mit.
+	How many worker threads draw the artwork; -1 uses one fewer than the cores VectorCraft may use, at most 8, and 0 uses none. The web version always uses none.	Wie viele Worker-Threads das Bildmaterial zeichnen; -1 verwendet einen weniger als die Kerne, die VectorCraft nutzen darf, höchstens 8, und 0 keinen. Die Webversion verwendet nie einen.
+	From the next start on a Wayland desktop, X11 (XWayland) opens the window through XWayland; the other choices do so only when a pen is attached.	Ab dem nächsten Start auf einem Wayland-Desktop öffnet „X11 (XWayland)“ das Fenster über XWayland; die anderen Optionen tun dies nur, wenn ein Stift angeschlossen ist.
+	From the next start, the desktop version shows frames without waiting for the display's refresh, at most 240 a second; off, the display paces them.	Ab dem nächsten Start zeigt die Desktop-Version Bilder an, ohne auf die Bildwiederholung des Bildschirms zu warten, höchstens 240 pro Sekunde; ausgeschaltet gibt der Bildschirm den Takt vor.
+	The larger budget raises each object filter run's base instructions fivefold and keeps the same allowance per input byte; heavy filters, live effects, exporters and importers keep their own limits.	Das größere Budget verfünffacht die Grundanweisungen jedes Laufs eines Objektfilters und behält den gleichen Zuschlag pro Eingabebyte bei; schwere Filter, Live-Effekte, Exporter und Importer behalten ihre eigenen Grenzen.
+	Converts the artwork and artboards on the canvas to the display's color profile where the system does not already do so; off, the canvas is drawn in sRGB.	Rechnet Bildmaterial und Zeichenflächen auf der Arbeitsfläche in das Farbprofil des Bildschirms um, wo das System das nicht schon tut; ausgeschaltet wird die Arbeitsfläche in sRGB gezeichnet.
+	On the desktop, a save to a file is written in the background while you keep editing; off, you wait until it is written.	In der Desktop-Version wird das Speichern in eine Datei im Hintergrund geschrieben, während Sie weiterarbeiten; ausgeschaltet warten Sie, bis es geschrieben ist.
+	On the desktop, exports to files and packages are written in the background while you keep editing, except 3D exports; off, you wait for them.	In der Desktop-Version werden Exporte in Dateien und Pakete im Hintergrund geschrieben, während Sie weiterarbeiten, außer 3D-Exporten; ausgeschaltet warten Sie darauf.
+	Every few minutes, keeps a recovery copy of each document with unsaved changes made since its last copy; off, no timed copies are made.	Legt alle paar Minuten eine Wiederherstellungskopie jedes Dokuments an, das seit seiner letzten Kopie ungespeicherte Änderungen hat; ausgeschaltet entstehen keine zeitgesteuerten Kopien.
+	How many minutes pass between recovery copies while Automatically Save Recovery Data is on.	Wie viele Minuten zwischen zwei Wiederherstellungskopien liegen, solange „Wiederherstellungsdaten automatisch speichern“ eingeschaltet ist.
+	On the desktop, the folder recovery copies are kept in; leave it blank for VectorCraft's own folder. The web version keeps them in the browser.	In der Desktop-Version der Ordner für die Wiederherstellungskopien; leer lassen für den eigenen Ordner von VectorCraft. Die Webversion bewahrt sie im Browser auf.
+	No timed recovery copies are made of documents with more than 20,000 objects.	Von Dokumenten mit mehr als 20.000 Objekten werden keine zeitgesteuerten Wiederherstellungskopien angelegt.
+	Open Recent Files and the Home screen list at most this many recent files; 0 lists none, and VectorCraft still remembers up to 30.	„Zuletzt geöffnete Dateien“ und der Startbildschirm listen höchstens so viele zuletzt verwendete Dateien; 0 listet keine, und VectorCraft merkt sich weiterhin bis zu 30.
+	When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.	Beim Öffnen eines Dokuments behält ein verknüpftes EPS-Bild, das seine gespeicherte Vorschau zeigt, diese, statt die EPS-Datei neu zu lesen; geänderte Dateien folgen weiterhin „Verknüpfungen aktualisieren“.
+	In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.	In der Pixelvorschau werden Bilder geglättet gezeichnet; ausgeschaltet zeigen ihre Pixel harte Kanten. Außerhalb der Pixelvorschau werden Bilder immer geglättet.
+	When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.	Ändert sich eine verknüpfte Datei, liest „Automatisch“ sie neu, „Bei Änderung fragen“ fragt Sie zuerst, und „Manuell“ lässt sie unverändert und zeigt einen Hinweis in der Statusleiste.
+	On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.	In der Desktop-Version der Ordner, in dem „Neu aus Vorlage…“ und „Als Vorlage speichern…“ beginnen; leer lassen für VectorCraft Templates in Ihrem Dokumentordner.
+	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	„Original bearbeiten“ öffnet eine verknüpfte Datei im Standardprogramm des Systems für ihren Typ; ausgeschaltet öffnet sich ein verknüpftes Rasterbild in PhotoCraft, sofern es installiert ist.
+	A file saved by an older VectorCraft version opens with [Converted] after its name, and Save asks where to save it; off, Save replaces the file.	Eine von einer älteren VectorCraft-Version gespeicherte Datei öffnet sich mit [Converted] hinter ihrem Namen, und „Speichern“ fragt nach dem Speicherort; ausgeschaltet ersetzt „Speichern“ die Datei.
+	VectorCraft files and templates are saved compressed, so they are smaller, unless a save says otherwise; saves for versions that cannot open compressed files stay uncompressed.	VectorCraft-Dateien und -Vorlagen werden komprimiert und damit kleiner gespeichert, sofern ein Speichern nichts anderes angibt; was für Versionen gespeichert wird, die keine komprimierten Dateien öffnen, bleibt unkomprimiert.
+	Copy and Cut also give other apps SVG code of the art; on the desktop, the code is not copied as text when the art embeds more than 1 MiB of images.	Kopieren und Ausschneiden geben anderen Apps auch den SVG-Code des Bildmaterials; auf dem Desktop wird der Code nicht als Text kopiert, wenn das Bildmaterial mehr als 1 MiB Bilder einbettet.
+	On Windows, Copy and Cut also give other apps a PDF of the art; the other platforms do not copy a PDF yet.	Unter Windows geben Kopieren und Ausschneiden anderen Apps auch ein PDF des Bildmaterials; die anderen Plattformen kopieren noch kein PDF.
+	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft speichert diese Wahl, aber Kopieren und Ausschneiden verwenden noch kein Format der älteren Vektorzwischenablage.
+	Preserve Paths or Preserve Appearance and Overprints for the legacy vector clipboard; VectorCraft stores the choice but does not use it yet.	„Pfade beibehalten“ oder „Aussehen und Überdrucken beibehalten“ für die ältere Vektorzwischenablage; VectorCraft speichert die Wahl, verwendet sie aber noch nicht.
+	Keep Formatting keeps the styles of text copied from VectorCraft type when it is pasted into type; Keep Plain Text gives it the style where it lands.	„Formatierung beibehalten“ behält die Stile von Text aus einem Textobjekt in VectorCraft beim Einfügen in ein Textobjekt; „Nur Text beibehalten“ gibt ihm den Stil der Einfügestelle.
+	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	Neuer Text erhält diese Sprache, solange die Sprache unter „Dokument einrichten“ Englisch: USA ist und [Normales Zeichenformat] keine Sprache festlegt; Text, der bereits in einem Dokument steht, behält seine Sprache.
+	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	In Absätzen mit Silbentrennung wird ein aufgeführtes Wort nur an seinen eingegebenen Bindestrichen getrennt, ohne solche gar nicht, unabhängig von Groß- und Kleinschreibung; koreanische Wörter erhalten keinen Trennstrich, Wörter indischer Sprachen keine Trennung in einer Zeichengruppe.
 	Reset all preferences to their defaults?	Alle Voreinstellungen auf ihre Standardwerte zurücksetzen?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Die Standardwerte werden angewendet, wenn Sie in den Voreinstellungen auf OK klicken. Abbrechen dort behält Ihre aktuellen Voreinstellungen.
 	Restore Recovered Documents	Wiederhergestellte Dokumente öffnen
@@ -7008,6 +7071,10 @@ axis	Y Axis	Y-Achse
 	Create New Action	Neue Aktion erstellen
 	Play Action	Aktion abspielen
 	Action Set:	Aktionssatz:
+	Choose Align To at playback	„Ausrichten an“ bei der Wiedergabe wählen
+	Align steps use the key object, key anchor or key guide when one is set.	Ausrichtungsschritte verwenden das Basisobjekt, den Basisankerpunkt oder die Basishilfslinie, wenn eines festgelegt ist.
+	With one whole object selected and no key, they use the artboard.	Bei einem vollständig ausgewählten Objekt ohne Basis verwenden sie die Zeichenfläche.
+	Otherwise they use the selection.	Sonst verwenden sie die Auswahl.
 	Function Key:	Funktionstaste:
 	Record	Aufzeichnen
 	Create New Set	Neuen Satz erstellen
@@ -7040,6 +7107,7 @@ axis	Y Axis	Y-Achse
 	Inventory Icons	Inventar-Symbole
 	Skill Icons	Fähigkeitssymbole
 	Weather Icons	Wettersymbole
+	Media Controls	Mediensteuerung
 	Attack	Angriff
 	Defend	Verteidigung
 	Heal	Heilung
@@ -7414,6 +7482,10 @@ axis	Y Axis	Y-Achse
 	Rain	Regen
 	Thunder	Donner
 	Snow	Schnee
+	Play	Wiedergabe
+	Pause	Pause
+	Skip Next	Vorblättern
+	Shuffle	Mischen
 	Bar	Balken
 	Fine Dots	Feine Punkte
 	Hexagon	Sechseck
@@ -10254,6 +10326,11 @@ breakText	Glyphs	Glyphen
 @msg	A panel is not joined to the rest by a crease.	Ein Feld ist durch keine Rilllinie mit den übrigen verbunden.
 @msg	A fold line is on a non-printing layer.	Eine Faltlinie liegt auf einer nicht druckbaren Ebene.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Felder: {panels}, Scharniere: {hinges}, Fehler: {errors}, Warnungen: {warnings}
+	Image Brush	Bildpinsel
+	Soft Bloom	Sanfte Blüte
+	Halftone Field	Rasterfeld
+	Solar Grain	Sonnenkorn
+	Color Flecks	Farbsprenkel
 	Paper Cutouts	Papierschnitte
 	Coral Layers	Korallschichten
 	Mint Layers	Minzschichten

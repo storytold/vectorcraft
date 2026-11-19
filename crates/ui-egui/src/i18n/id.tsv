@@ -1043,6 +1043,20 @@
 	Break Thread	Putus rangkaian
 	Fit Headline	Sesuaikan judul
 	Find Font…	Cari font…
+	Retype	Ketik Ulang
+	Find Matching Fonts	Temukan font yang cocok
+	Find more font matches	Temukan lebih banyak font yang cocok
+	Type your text to preview	Ketik teks untuk pratinjau
+	Select outlined text, then Find Matching Fonts.	Pilih teks yang sudah dijadikan kerangka, lalu Temukan font yang cocok.
+	No font matches the selected shapes.	Tidak ada font yang cocok dengan bentuk yang dipilih.
+	Shapes past the first 2,048, or more than 16 groups deep, were not compared.	Bentuk setelah 2.048 pertama, atau lebih dalam dari 16 grup, tidak dibandingkan.
+	Reset Retype Panel	Setel ulang panel Ketik Ulang
+	List Matching Fonts	Daftar font yang cocok
+	Retype Preview	Pratinjau panel Ketik Ulang
+@msg	`count` must be a whole number from 1 to 96	`count` harus bilangan bulat dari 1 sampai 96
+@msg	`size` must be small, medium or large	`size` harus small, medium, atau large
+@msg	`text` must be a string of at most 100 characters	`text` harus string dengan paling banyak 100 karakter
+@msg	Retype: select outlined text (paths or compound paths)	Ketik Ulang: pilih teks yang sudah dijadikan kerangka (path atau path gabungan)
 	Change Case	Ubah huruf besar-kecil
 	UPPERCASE	HURUF BESAR
 	lowercase	huruf kecil
@@ -5149,6 +5163,55 @@ font-technology	Variable	Variabel
 	Edit type set in fonts that aren't available?	Edit teks dengan font yang tidak tersedia?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Menampilkan nomor setiap irisan dalam kotak di sudut kiri atasnya di kanvas; saat nonaktif, garis tepi irisan tetap ditampilkan.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Warna garis tepi irisan pengguna dan objek serta kotak nomornya; irisan otomatis memakai nuansa yang lebih redup dari warna ini.
+	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	Teks baru mendapat bahasa ini selama bahasa di Pengaturan dokumen adalah Inggris: USA; teks yang sudah ada di dokumen mempertahankan bahasanya sendiri.
+	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	Di paragraf dengan Pemenggalan kata aktif, kata dalam daftar hanya dipenggal pada tanda hubung yang diketik di dalamnya, atau tidak di mana pun jika tidak ada, apa pun bahasa atau huruf besar-kecilnya.
+	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	Di versi desktop, plug-in .wasm di folder ini dimuat saat memulai dan saat Anda mengeklik OK dengan folder baru di sini, kecuali dalam Mode aman; versi web tidak memuatnya.
+	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Pilihan disk scratch pertama: Startup, None, atau jalur folder; VectorCraft menyimpannya, tetapi belum menggunakan disk scratch.
+	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Pilihan disk scratch kedua: Startup, None, atau jalur folder; VectorCraft menyimpannya, tetapi belum menggunakan disk scratch.
+	How light or dark the interface is.	Seberapa terang atau gelap antarmuka.
+	The set of colors the interface is drawn in.	Kumpulan warna yang digunakan untuk menggambar antarmuka.
+	The color of controls that are on, chosen or focused; the menu is dimmed while the Color Scheme has an accent of its own.	Warna kontrol yang aktif, dipilih, atau difokuskan; menu diredupkan selama Skema warna memiliki warna aksen sendiri.
+	The color of the canvas around the artboards; Match User Interface Brightness takes it from Brightness. Outline view always shows it white.	Warna kanvas di sekitar artboard; Sesuaikan dengan kecerahan antarmuka pengguna mengambilnya dari Kecerahan. Tampilan Garis luar selalu menampilkannya putih.
+	A panel opened from its icon closes when you press Esc or click outside it; off, it stays open until you click an icon.	Panel yang dibuka dari ikonnya tertutup saat Anda menekan Esc atau mengeklik di luarnya; jika nonaktif, panel tetap terbuka sampai Anda mengeklik ikon.
+	Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them.	Menampilkan nama setiap grup alat di atas alat-alatnya di bilah alat; jika nonaktif, grup-grup berurutan tanpa apa pun di antaranya.
+	From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.	Mulai sekarang, dokumen yang Anda buka atau buat terbuka sebagai tab; jika nonaktif, masing-masing terbuka di jendela mengambang. Dokumen yang sudah terbuka tetap di tempatnya.
+	Makes the document tabs taller and their names larger.	Membuat tab dokumen lebih tinggi dan namanya lebih besar.
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own.	Mulai dari peluncuran berikutnya, sistem menggambar bilah judul jendela di tempat VectorCraft biasanya menggambar miliknya sendiri.
+	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on.	Mulai dari peluncuran berikutnya, VectorCraft menggambar bilah judul jendela bahkan di tempat desktop akan menggambarnya, kecuali Bilah judul sistem aktif.
+	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	Memperbesar atau memperkecil antarmuka; gambar di kanvas mempertahankan ukurannya pada zoom yang sama.
+	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	Penunjuk alat yang digambar VectorCraft membesar dan mengecil mengikuti Penskalaan UI; jika nonaktif, ukurannya tetap.
+	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	Bahasa antarmuka; Otomatis menggunakan bahasa sistem. Dialog berganti bahasa begitu Anda memilih salah satunya.
+	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	Zoom animasi hanya berfungsi selama ini aktif; jika nonaktif, Zoom animasi diredupkan dan zoom tidak dianimasikan.
+	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	Zoom dengan roda meluncur halus, dan Alat zoom memperbesar saat Anda menyeret ke samping atau menahannya; jika nonaktif, Alat zoom memperbesar ke area yang Anda seret.
+	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	Mulai dari peluncuran berikutnya, versi desktop menggambar dengan jenis prosesor grafis ini; Otomatis mengutamakan yang menjalankan layar. Versi web tidak menggunakannya.
+	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	Jumlah maksimum langkah urungkan yang disimpan setiap dokumen; angka yang lebih kecil menghapus langkah terlama saat Anda mengeklik OK. Langkah juga dapat hilang lebih awal jika memakai terlalu banyak memori.
+	Shows the artwork changing while you drag; off, outlines follow the drag and the artwork changes when you release. A ruler guide always moves as you drag.	Menampilkan gambar yang berubah saat Anda menyeret; jika nonaktif, garis luar mengikuti seretan dan gambar berubah saat Anda melepas. Panduan penggaris selalu bergerak saat Anda menyeret.
+	How many worker threads draw the artwork; -1 uses one fewer than the cores VectorCraft may use, at most 8, and 0 uses none. The web version always uses none.	Berapa banyak thread pekerja yang menggambar; -1 memakai satu lebih sedikit dari inti yang boleh dipakai VectorCraft, paling banyak 8, dan 0 tidak memakai sama sekali. Versi web tidak pernah memakainya.
+	From the next start on a Wayland desktop, X11 (XWayland) opens the window through XWayland; the other choices do so only when a pen is attached.	Mulai dari peluncuran berikutnya di desktop Wayland, X11 (XWayland) membuka jendela melalui XWayland; pilihan lain melakukannya hanya saat pena terpasang.
+	From the next start, the desktop version shows frames without waiting for the display's refresh, at most 240 a second; off, the display paces them.	Mulai peluncuran berikutnya, versi desktop menampilkan bingkai tanpa menunggu penyegaran layar, paling banyak 240 per detik; jika nonaktif, layar mengatur temponya.
+	The larger budget raises each object filter run's base instructions fivefold and keeps the same allowance per input byte; heavy filters, live effects, exporters and importers keep their own limits.	Anggaran yang lebih besar menaikkan instruksi dasar setiap jalannya filter objek menjadi lima kali lipat dan mempertahankan jatah yang sama per byte masukan; filter berat, efek langsung, pengekspor, dan pengimpor tetap memakai batasnya sendiri.
+	Converts the artwork and artboards on the canvas to the display's color profile where the system does not already do so; off, the canvas is drawn in sRGB.	Mengonversi gambar dan artboard di kanvas ke profil warna layar jika sistem belum melakukannya; jika nonaktif, kanvas digambar dalam sRGB.
+	On the desktop, a save to a file is written in the background while you keep editing; off, you wait until it is written.	Di versi desktop, penyimpanan ke berkas ditulis di latar belakang selagi Anda terus menyunting; jika nonaktif, Anda menunggu sampai selesai ditulis.
+	On the desktop, exports to files and packages are written in the background while you keep editing, except 3D exports; off, you wait for them.	Di versi desktop, ekspor ke berkas dan paket ditulis di latar belakang selagi Anda terus menyunting, kecuali ekspor 3D; jika nonaktif, Anda menunggunya.
+	Every few minutes, keeps a recovery copy of each document with unsaved changes made since its last copy; off, no timed copies are made.	Setiap beberapa menit, menyimpan salinan pemulihan setiap dokumen yang memiliki perubahan belum disimpan sejak salinan terakhirnya; jika nonaktif, tidak ada salinan berkala.
+	How many minutes pass between recovery copies while Automatically Save Recovery Data is on.	Berapa menit jeda antara salinan pemulihan selama Simpan otomatis data pemulihan aktif.
+	On the desktop, the folder recovery copies are kept in; leave it blank for VectorCraft's own folder. The web version keeps them in the browser.	Di versi desktop, folder tempat salinan pemulihan disimpan; biarkan kosong untuk folder milik VectorCraft. Versi web menyimpannya di browser.
+	No timed recovery copies are made of documents with more than 20,000 objects.	Dokumen dengan lebih dari 20.000 objek tidak mendapat salinan pemulihan berkala.
+	Open Recent Files and the Home screen list at most this many recent files; 0 lists none, and VectorCraft still remembers up to 30.	Buka berkas terbaru dan layar Home menampilkan paling banyak sejumlah ini berkas terbaru; 0 tidak menampilkan satu pun, dan VectorCraft tetap mengingat hingga 30.
+	When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.	Saat dokumen dibuka, gambar EPS tertaut yang menampilkan pratinjau tersimpannya mempertahankannya alih-alih membaca berkas EPS lagi; berkas yang berubah tetap mengikuti Perbarui tautan.
+	In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.	Dalam Pratinjau piksel, gambar digambar halus; jika nonaktif, pikselnya tampil dengan tepi tajam. Di luar Pratinjau piksel, gambar selalu dihaluskan.
+	When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.	Saat berkas tertaut berubah, Otomatis membacanya lagi, Tanya saat diubah bertanya dulu kepada Anda, dan Secara manual membiarkannya lalu menampilkan catatan di bilah status.
+	On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.	Di versi desktop, folder tempat Baru dari templat… dan Simpan sebagai templat… dimulai; biarkan kosong untuk VectorCraft Templates di folder dokumen Anda.
+	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	Edit asli membuka berkas tertaut di aplikasi bawaan sistem untuk jenisnya; jika nonaktif, gambar raster tertaut terbuka di PhotoCraft jika terpasang.
+	A file saved by an older VectorCraft version opens with [Converted] after its name, and Save asks where to save it; off, Save replaces the file.	Berkas yang disimpan oleh versi VectorCraft lama terbuka dengan [Converted] di belakang namanya, dan Simpan menanyakan tempat menyimpannya; jika nonaktif, Simpan menimpa berkas itu.
+	VectorCraft files and templates are saved compressed, so they are smaller, unless a save says otherwise; saves for versions that cannot open compressed files stay uncompressed.	Berkas dan templat VectorCraft disimpan terkompresi sehingga lebih kecil, kecuali penyimpanan menentukan lain; penyimpanan untuk versi yang tidak bisa membuka berkas terkompresi tetap tidak terkompresi.
+	Copy and Cut also give other apps SVG code of the art; on the desktop, the code is not copied as text when the art embeds more than 1 MiB of images.	Salin dan Potong juga memberi aplikasi lain kode SVG dari karya; di desktop, kode tidak disalin sebagai teks jika karya menyematkan gambar lebih dari 1 MiB.
+	On Windows, Copy and Cut also give other apps a PDF of the art; the other platforms do not copy a PDF yet.	Di Windows, Salin dan Potong juga memberi aplikasi lain PDF dari karya; platform lain belum menyalin PDF.
+	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft menyimpan pilihan ini, tetapi Salin dan Potong belum memakai format clipboard vektor lama.
+	Preserve Paths or Preserve Appearance and Overprints for the legacy vector clipboard; VectorCraft stores the choice but does not use it yet.	Pertahankan jalur atau Pertahankan tampilan dan overprint untuk clipboard vektor lama; VectorCraft menyimpan pilihan itu tetapi belum memakainya.
+	Keep Formatting keeps the styles of text copied from VectorCraft type when it is pasted into type; Keep Plain Text gives it the style where it lands.	Pertahankan pemformatan menjaga gaya teks yang disalin dari objek teks VectorCraft saat ditempel ke objek teks; Pertahankan teks polos memberinya gaya di tempat teks itu ditempel.
+	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	Teks baru mendapat bahasa ini selama bahasa di Pengaturan dokumen adalah Inggris: USA dan [Gaya karakter normal] tidak menetapkan bahasa; teks yang sudah ada di dokumen mempertahankan bahasanya sendiri.
+	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	Di paragraf dengan Pemenggalan kata aktif, kata dalam daftar hanya dipenggal pada tanda hubung yang diketik di dalamnya, atau tidak di mana pun jika tidak ada, apa pun huruf besar-kecilnya; kata Korea tidak diberi tanda hubung, dan kata dalam bahasa India tidak dipenggal di dalam satu gugus karakter.
 	Reset all preferences to their defaults?	Atur ulang semua preferensi ke defaultnya?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Nilai default diterapkan saat Anda mengklik OK di Preferensi. Batal di sana mempertahankan preferensi Anda saat ini.
 	Smaller ↔ Larger	Lebih kecil ↔ Lebih besar
@@ -7319,6 +7382,10 @@ axis	Y Axis	Sumbu Y
 	Create New Action	Buat tindakan baru
 	Play Action	Putar tindakan
 	Action Set:	Set tindakan:
+	Choose Align To at playback	Pilih Ratakan ke saat pemutaran
+	Align steps use the key object, key anchor or key guide when one is set.	Langkah perataan memakai objek kunci, titik jangkar kunci, atau panduan kunci jika ada.
+	With one whole object selected and no key, they use the artboard.	Dengan satu objek utuh terpilih dan tanpa kunci, langkah memakai artboard.
+	Otherwise they use the selection.	Jika tidak, langkah memakai seleksi.
 	Function Key:	Tombol fungsi:
 	Record	Rekam
 	Create New Set	Buat set baru
@@ -7346,6 +7413,7 @@ axis	Y Axis	Sumbu Y
 	Inventory Icons	Ikon Inventaris
 	Skill Icons	Ikon Keahlian
 	Weather Icons	Ikon Cuaca
+	Media Controls	Kontrol Media
 	Attack	Serang
 	Defend	Bertahan
 	Heal	Pulihkan
@@ -7713,6 +7781,10 @@ axis	Y Axis	Sumbu Y
 	Rain	Hujan
 	Thunder	Guntur
 	Snow	Salju
+	Play	Putar
+	Pause	Jeda
+	Skip Next	Lewati Berikutnya
+	Shuffle	Acak
 	Save Brush Library…	Simpan pustaka kuas…
 @msg	no empty artboards to delete	tidak ada artboard kosong untuk dihapus
 	Scale Presets	Preset skala
@@ -8487,6 +8559,11 @@ breakText	Glyphs	Glif
 @msg	A joint does not close by {gap} pt.	Sebuah sambungan tidak menutup sejauh {gap} pt.
 @msg	Two panels pass through each other.	Dua panel saling menembus.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer harus "singleLine", "everyLine", "standardSingleLine", atau "standardEveryLine"
+	Image Brush	Kuas gambar
+	Soft Bloom	Mekar lembut
+	Halftone Field	Bidang halftone
+	Solar Grain	Butir surya
+	Color Flecks	Bintik warna
 	Fine Stipple	Arsiran titik halus
 	Dense Stipple	Arsiran titik rapat
 	Soft Stipple	Arsiran titik lembut

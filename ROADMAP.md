@@ -124,6 +124,8 @@ Ranked; detail in [docs/roadmap.md](docs/roadmap.md) and [docs/gaps.md](docs/gap
 
 ## Progress log
 
+- 2026-11-18: Built-in symbol library Media Controls: adds a seventh procedural symbol library (Window › Symbol Libraries, the Symbols panel's Symbol Libraries Menu) containing six original vector symbols (Play, Pause, Stop, Skip Next, Shuffle, Repeat) generated in code without default 9-slice guides (part of Gap 5). Headline numbers unchanged.
+
 - 2026-11-14: Built-in symbol library Weather Icons: adds a sixth procedural symbol library (Window › Symbol Libraries, the Symbols panel's Symbol Libraries Menu) containing six original vector symbols (Sun, Moon, Cloud, Rain, Thunder, Snow) generated in code without default 9-slice guides (part of Gap 5). Headline numbers unchanged.
 - 2026-11-14: Built-in Tech Circuit brush library: Circuit Trace (chamfered art with 45-degree elbows and terminal pads), Bus Lines (parallel conductor pattern) and Terminal Nodes (repeating solder pads, test points and leads), all original geometry generated in code. Ten built-in brush libraries; G5 remaining estimate 3–13 h (estimated), headline numbers unchanged.
 

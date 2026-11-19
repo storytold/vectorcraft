@@ -1335,6 +1335,20 @@ font-technology	Variable	Variabla
 @msg	no match of `find` at bytes {_1}..{_2} of object {_3}	ingen träff för `find` vid byte {_1}..{_2} i objekt {_3}
 	Find Font	Sök typsnitt
 	Find Font…	Sök typsnitt…
+	Retype	Skriv om
+	Find Matching Fonts	Sök matchande typsnitt
+	Find more font matches	Sök fler matchande typsnitt
+	Type your text to preview	Skriv texten för förhandsgranskningen
+	Select outlined text, then Find Matching Fonts.	Markera text som gjorts om till konturer och välj sedan Sök matchande typsnitt.
+	No font matches the selected shapes.	Inget typsnitt matchar de markerade formerna.
+	Shapes past the first 2,048, or more than 16 groups deep, were not compared.	Former efter de första 2 048, eller mer än 16 grupper djupt, jämfördes inte.
+	Reset Retype Panel	Återställ panelen Skriv om
+	List Matching Fonts	Lista matchande typsnitt
+	Retype Preview	Förhandsgranskning i panelen Skriv om
+@msg	`count` must be a whole number from 1 to 96	`count` måste vara ett heltal från 1 till 96
+@msg	`size` must be small, medium or large	`size` måste vara small, medium eller large
+@msg	`text` must be a string of at most 100 characters	`text` måste vara en sträng på högst 100 tecken
+@msg	Retype: select outlined text (paths or compound paths)	Skriv om: markera text som gjorts om till konturer (banor eller sammansatta banor)
 	Find Next	Sök nästa
 	Find Objects	Sök objekt
 	Compare with Image	Jämför med bild
@@ -3266,6 +3280,55 @@ digits	Malayalam	Malayalam
 	Edit type set in fonts that aren't available?	Redigera text i typsnitt som inte är tillgängliga?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Visar varje skivas nummer i en ruta i dess övre vänstra hörn på arbetsytan; när det är avstängt visas skivornas konturer fortfarande.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Färgen på konturerna för användar- och objektskivor och på deras nummerrutor; automatiska skivor använder en blekare nyans av den.
+	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	Ny text får det här språket så länge språket i Dokumentinställningar är Engelska: USA; text som redan finns i ett dokument behåller sitt eget språk.
+	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	I stycken med Avstava på avstavas ett listat ord bara vid bindestrecken som skrivits in i det, eller inte alls om det saknar sådana, oavsett språk och skiftläge.
+	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	I skrivbordsversionen läses .wasm-plugins i den här mappen in vid start och när du klickar på OK med en ny mapp här, utom i felsäkert läge; webbversionen läser inte in dem.
+	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Det första valet av arbetsdisk: Startup, None eller en mappsökväg; VectorCraft sparar det men använder ännu inte arbetsdiskar.
+	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Det andra valet av arbetsdisk: Startup, None eller en mappsökväg; VectorCraft sparar det men använder ännu inte arbetsdiskar.
+	How light or dark the interface is.	Hur ljust eller mörkt gränssnittet är.
+	The set of colors the interface is drawn in.	Den uppsättning färger som gränssnittet ritas med.
+	The color of controls that are on, chosen or focused; the menu is dimmed while the Color Scheme has an accent of its own.	Färgen på kontroller som är på, valda eller har fokus; menyn är nedtonad så länge Färgschema har en egen accentfärg.
+	The color of the canvas around the artboards; Match User Interface Brightness takes it from Brightness. Outline view always shows it white.	Färgen på arbetsytan runt ritytorna; Matcha gränssnittets ljusstyrka hämtar den från Ljusstyrka. Konturvy visar den alltid vit.
+	A panel opened from its icon closes when you press Esc or click outside it; off, it stays open until you click an icon.	En panel som öppnats från sin ikon stängs när du trycker på Esc eller klickar utanför den; avstängt förblir den öppen tills du klickar på en ikon.
+	Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them.	Visar varje verktygsgrupps namn ovanför dess verktyg i verktygsfältet; avstängt följer grupperna på varandra utan något emellan.
+	From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.	Från och med nu öppnas dokument som du öppnar eller skapar som flikar; avstängt öppnas vart och ett i ett flytande fönster. Dokument som redan är öppna stannar där de är.
+	Makes the document tabs taller and their names larger.	Gör dokumentflikarna högre och deras namn större.
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own.	Från nästa start ritar systemet fönstrets namnlist där VectorCraft annars skulle rita sin egen.
+	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on.	Från nästa start ritar VectorCraft fönstrets namnlist även där skrivbordsmiljön skulle rita den, om inte Systemets namnlist är på.
+	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	Gör gränssnittet större eller mindre; bilder på arbetsytan behåller sin storlek vid samma zoom.
+	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	Verktygspekarna som VectorCraft ritar växer och krymper med Gränssnittsskalning; avstängt behåller de sin storlek.
+	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	Gränssnittets språk; Auto använder systemets språk. Dialogrutan byter språk så fort du väljer ett.
+	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	Animerad zoom fungerar bara medan detta är på; avstängt är Animerad zoom nedtonad och zoomningen animeras inte.
+	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	Zoom med hjulet glider in mjukt, och Zoomverktyget zoomar medan du drar åt sidan eller håller det nedtryckt; avstängt zoomar Zoomverktyget till området du drar över.
+	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	Från nästa start ritar skrivbordsversionen med den här typen av grafikprocessor; Automatisk föredrar den som driver skärmen. Webbversionen använder den inte.
+	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	Det högsta antalet ångra-steg som varje dokument behåller; ett lägre tal tar bort de äldsta stegen när du klickar på OK. Steg kan också försvinna tidigare när de använder för mycket minne.
+	Shows the artwork changing while you drag; off, outlines follow the drag and the artwork changes when you release. A ruler guide always moves as you drag.	Visar hur bilden ändras medan du drar; avstängt följer konturer dragningen och bilden ändras när du släpper. En stödlinje från linjalen flyttas alltid medan du drar.
+	How many worker threads draw the artwork; -1 uses one fewer than the cores VectorCraft may use, at most 8, and 0 uses none. The web version always uses none.	Hur många arbetstrådar som ritar bilden; -1 använder en färre än de kärnor VectorCraft får använda, högst 8, och 0 ingen. Webbversionen använder aldrig någon.
+	From the next start on a Wayland desktop, X11 (XWayland) opens the window through XWayland; the other choices do so only when a pen is attached.	Från nästa start på ett Wayland-skrivbord öppnar X11 (XWayland) fönstret via XWayland; de andra valen gör det bara när en penna är ansluten.
+	From the next start, the desktop version shows frames without waiting for the display's refresh, at most 240 a second; off, the display paces them.	Från nästa start visar skrivbordsversionen bildrutor utan att vänta på skärmens uppdatering, högst 240 per sekund; avstängt bestämmer skärmen takten.
+	The larger budget raises each object filter run's base instructions fivefold and keeps the same allowance per input byte; heavy filters, live effects, exporters and importers keep their own limits.	Den större budgeten femdubblar grundinstruktionerna för varje körning av ett objektfilter och behåller samma tillägg per indatabyte; tunga filter, liveeffekter, exportörer och importörer behåller sina egna gränser.
+	Converts the artwork and artboards on the canvas to the display's color profile where the system does not already do so; off, the canvas is drawn in sRGB.	Konverterar bilder och ritytor på arbetsytan till skärmens färgprofil där systemet inte redan gör det; avstängt ritas arbetsytan i sRGB.
+	On the desktop, a save to a file is written in the background while you keep editing; off, you wait until it is written.	I skrivbordsversionen skrivs en sparning till fil i bakgrunden medan du fortsätter redigera; avstängt väntar du tills den är skriven.
+	On the desktop, exports to files and packages are written in the background while you keep editing, except 3D exports; off, you wait for them.	I skrivbordsversionen skrivs exporter till filer och paket i bakgrunden medan du fortsätter redigera, utom 3D-exporter; avstängt väntar du på dem.
+	Every few minutes, keeps a recovery copy of each document with unsaved changes made since its last copy; off, no timed copies are made.	Sparar med några minuters mellanrum en återställningskopia av varje dokument med osparade ändringar sedan dess senaste kopia; avstängt görs inga tidsstyrda kopior.
+	How many minutes pass between recovery copies while Automatically Save Recovery Data is on.	Hur många minuter det går mellan återställningskopior medan Spara återställningsdata automatiskt är på.
+	On the desktop, the folder recovery copies are kept in; leave it blank for VectorCraft's own folder. The web version keeps them in the browser.	I skrivbordsversionen mappen där återställningskopiorna sparas; lämna tom för VectorCrafts egen mapp. Webbversionen sparar dem i webbläsaren.
+	No timed recovery copies are made of documents with more than 20,000 objects.	Inga tidsstyrda återställningskopior görs av dokument med fler än 20 000 objekt.
+	Open Recent Files and the Home screen list at most this many recent files; 0 lists none, and VectorCraft still remembers up to 30.	Öppna senaste filer och startskärmen listar högst så här många senaste filer; 0 listar inga, och VectorCraft minns ändå upp till 30.
+	When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.	När ett dokument öppnas behåller en länkad EPS-bild som visar sin sparade förhandsvisning den i stället för att läsa EPS-filen igen; ändrade filer följer fortfarande Uppdatera länkar.
+	In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.	I Pixelförhandsgranskning ritas bilder utjämnade; avstängt visar deras pixlar skarpa kanter. Utanför Pixelförhandsgranskning utjämnas bilder alltid.
+	When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.	När en länkad fil ändras läser Automatiskt in den igen, Fråga vid ändring frågar dig först, och Manuellt låter den vara och visar en notis i statusfältet.
+	On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.	I skrivbordsversionen mappen som Ny från mall… och Spara som mall… börjar i; lämna tom för VectorCraft Templates i din dokumentmapp.
+	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	Redigera original öppnar en länkad fil i systemets standardapp för dess typ; avstängt öppnas en länkad rasterbild i PhotoCraft om det är installerat.
+	A file saved by an older VectorCraft version opens with [Converted] after its name, and Save asks where to save it; off, Save replaces the file.	En fil sparad av en äldre VectorCraft-version öppnas med [Converted] efter namnet, och Spara frågar var den ska sparas; avstängt ersätter Spara filen.
+	VectorCraft files and templates are saved compressed, so they are smaller, unless a save says otherwise; saves for versions that cannot open compressed files stay uncompressed.	VectorCraft-filer och -mallar sparas komprimerade och blir därmed mindre, om inte en sparning anger annat; sparningar för versioner som inte kan öppna komprimerade filer förblir okomprimerade.
+	Copy and Cut also give other apps SVG code of the art; on the desktop, the code is not copied as text when the art embeds more than 1 MiB of images.	Kopiera och Klipp ut ger även andra appar teckningens SVG-kod; på skrivbordet kopieras koden inte som text när teckningen bäddar in mer än 1 MiB bilder.
+	On Windows, Copy and Cut also give other apps a PDF of the art; the other platforms do not copy a PDF yet.	I Windows ger Kopiera och Klipp ut även andra appar en PDF av teckningen; de andra plattformarna kopierar ännu ingen PDF.
+	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft sparar det här valet, men Kopiera och Klipp ut använder ännu inget format för äldre vektorurklipp.
+	Preserve Paths or Preserve Appearance and Overprints for the legacy vector clipboard; VectorCraft stores the choice but does not use it yet.	Bevara banor eller Bevara utseende och övertryck för äldre vektorurklipp; VectorCraft sparar valet men använder det inte ännu.
+	Keep Formatting keeps the styles of text copied from VectorCraft type when it is pasted into type; Keep Plain Text gives it the style where it lands.	Behåll formatering behåller formaten för text som kopierats från ett textobjekt i VectorCraft när den klistras in i ett textobjekt; Behåll oformaterad text ger den formatet där den hamnar.
+	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	Ny text får det här språket så länge språket i Dokumentinställningar är Engelska: USA och [Normal teckenstil] inte anger något språk; text som redan finns i ett dokument behåller sitt eget språk.
+	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	I stycken med Avstava på avstavas ett listat ord bara vid bindestrecken som skrivits in i det, eller inte alls om det saknar sådana, oavsett skiftläge; koreanska ord får inget avstavningstecken, och ord på indiska språk avstavas inte inuti en teckengrupp.
 	Reset all preferences to their defaults?	Återställa alla inställningar till standard?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Standardvärdena verkställs när du klickar på OK i Inställningar. Avbryt där behåller dina nuvarande inställningar.
 	Restore Recovered Documents	Återställ återskapade dokument
@@ -7431,6 +7494,10 @@ axis	Y Axis	Y-axel
 	Create New Action	Skapa ny åtgärd
 	Play Action	Spela upp åtgärd
 	Action Set:	Åtgärdsuppsättning:
+	Choose Align To at playback	Välj Justera mot vid uppspelning
+	Align steps use the key object, key anchor or key guide when one is set.	Justeringssteg använder nyckelobjektet, nyckelankarpunkten eller nyckelstödlinjen när en sådan är angiven.
+	With one whole object selected and no key, they use the artboard.	Med ett helt markerat objekt och ingen nyckel använder de ritytan.
+	Otherwise they use the selection.	Annars använder de markeringen.
 	Function Key:	Funktionstangent:
 	Record	Spela in
 	Create New Set	Skapa ny uppsättning
@@ -7463,6 +7530,7 @@ axis	Y Axis	Y-axel
 	Inventory Icons	Inventarieikoner
 	Skill Icons	Färdighetsikoner
 	Weather Icons	Väderikoner
+	Media Controls	Mediekontroller
 	Attack	Attack
 	Defend	Försvar
 	Heal	Retuschering
@@ -7836,6 +7904,10 @@ axis	Y Axis	Y-axel
 	Rain	Regn
 	Thunder	Åska
 	Snow	Snö
+	Play	Spela upp
+	Pause	Paus
+	Skip Next	Hoppa till nästa
+	Shuffle	Blanda
 	Save Brush Library…	Spara penselbibliotek…
 @msg	`{_1}` has no brushes to apply	`{_1}` har inga penslar att använda
 @msg	missing `library` (see brush.libraries)	`library` saknas (se brush.libraries)
@@ -10735,6 +10807,11 @@ digits	Hindi	Hindi
 @msg	A joint does not close by {gap} pt.	En fog sluter inte med {gap} pt.
 @msg	Two panels pass through each other.	Två paneler går igenom varandra.
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} pixlar är för stort för PSD (högst {MAX_SIDE} pixlar per sida): sänk upplösningen
+	Image Brush	Bildpenslar
+	Soft Bloom	Mjuk blomning
+	Halftone Field	Halvtonsfält
+	Solar Grain	Solkorn
+	Color Flecks	Färgstänk
 	Fine Stipple	Fin prickning
 	Dense Stipple	Tät prickning
 	Soft Stipple	Mjuk prickning

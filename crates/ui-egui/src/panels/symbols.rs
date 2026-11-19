@@ -1140,20 +1140,27 @@ mod tests {
             crate::theme::install_fonts(&ctx);
             ctx
         };
+        let made = ["Leaf", "Dot", "New Symbol"];
         let (mut app, _) = leaf_dot_and_rect();
         click_button_then(&mut app, "New Symbol", egui::Modifiers::SHIFT, let_go());
         crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(symbols(&mut app), made, "New Symbol button with Shift makes the symbol");
         assert_eq!(art(&app, "New Symbol"), (0, 1), "New Symbol button with Shift: the rectangle stays ordinary art");
         let (mut app, _) = leaf_dot_and_rect();
         click_button_then(&mut app, "New Symbol", egui::Modifiers::SHIFT | egui::Modifiers::ALT, let_go());
         assert_eq!(dialog_kind(&app), None, "Alt skips Symbol Options");
+        assert_eq!(symbols(&mut app), made, "New Symbol button with Shift and Alt makes the symbol");
         assert_eq!(art(&app, "New Symbol"), (0, 1), "New Symbol button with Shift and Alt: the rectangle stays ordinary art");
         let (mut app, _) = leaf_dot_and_rect();
         click_menu_held_then(&menu_ctx(), &mut app, "New Symbol…", egui::Modifiers::SHIFT, let_go());
         crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(symbols(&mut app), made, "New Symbol… with Shift makes the symbol");
         assert_eq!(art(&app, "New Symbol"), (0, 1), "New Symbol… with Shift: the rectangle stays ordinary art");
         let (mut app, _) = leaf_dot_and_rect();
+        let dot_art = |app: &VectorcraftApp| app.session.active().unwrap().doc.symbols.iter().find(|s| s.name == "Dot").map(|s| s.art.clone());
+        let before = dot_art(&app);
         click_menu_held_then(&menu_ctx(), &mut app, "Redefine Symbol", egui::Modifiers::SHIFT, let_go());
+        assert_ne!(dot_art(&app), before, "Redefine Symbol with Shift redefines Dot");
         assert_eq!(art(&app, "Dot"), (0, 1), "Redefine Symbol with Shift: the rectangle stays ordinary art");
         let mut app = leaf_and_dot();
         click_button_then(&mut app, "Delete Symbol", egui::Modifiers::ALT, let_go());

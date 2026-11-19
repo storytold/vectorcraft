@@ -40,6 +40,7 @@ pub mod pathfinder;
 pub mod pattern_options;
 pub mod preflight;
 pub mod properties;
+pub mod retype;
 pub mod script_console;
 pub mod separations;
 pub mod stroke;
@@ -196,6 +197,7 @@ pub fn show_icon_panel(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
         script_console::ID => script_console::show(app, ui),
         learn::ID => learn::show(app, ui),
         discover::ID => discover::show(app, ui),
+        retype::ID => retype::show(app, ui),
         crate::addons::cleanup::ID => crate::addons::cleanup::show(app, ui),
         crate::addons::color::ID => crate::addons::color::show(app, ui),
         crate::addons::packaging::ID => crate::addons::packaging::show(app, ui),
@@ -256,6 +258,7 @@ pub fn panel_menu_items(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) -> bool
         css_properties::ID => css_properties::menu(app, ui),
         variables::ID => variables::menu(app, ui),
         script_console::ID => script_console::menu(app, ui),
+        retype::ID => retype::menu(app, ui),
         "actions" => actions::menu(app, ui),
         crate::addons::packaging::ID => crate::addons::packaging::panel_menu(app, ui),
         id if library_panel::parse(id).is_some() => library_panel::menu(app, ui, id),
