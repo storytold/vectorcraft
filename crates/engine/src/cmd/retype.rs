@@ -648,14 +648,14 @@ fn lookup_keys<'a>(
 fn retype(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "type.retype";
     let fonts: Vec<String> = match p.get("fonts") {
-        None | Some(Value::Null) => vec![],
+        None => vec![],
         Some(Value::Array(a)) => {
             a.iter().map(|v| v.as_str().map(str::to_owned).ok_or_else(|| bad(C, "fonts must be a list of family names"))).collect::<Result<_>>()?
         }
         Some(_) => return Err(bad(C, "fonts must be a list of family names")),
     };
     let tolerance = match p.get("tolerance") {
-        None | Some(Value::Null) => 0.0,
+        None => 0.0,
         Some(v) => match v.as_f64() {
             Some(t) if (0.0..=vectorcraft_text::retype::MAX_TOLERANCE).contains(&t) => t,
             _ => return Err(bad(C, "tolerance must be a number from 0 to 0.05")),

@@ -90,7 +90,7 @@ fn a_drawn_shape_is_reported_and_left_alone() {
     let g = outlined(&mut s, json!({"x": 40, "y": 200, "text": "AB", "size": 40}));
     s.execute("select.set", &json!({"ids": [g]})).unwrap();
     let before = s.doc().unwrap().doc.clone();
-    for bad in [json!("Source Sans 3"), json!([1]), json!({"family": "x"})] {
+    for bad in [json!("Source Sans 3"), json!([1]), json!({"family": "x"}), json!(null)] {
         let e = s.execute("type.retype", &json!({"fonts": bad})).unwrap_err().to_string();
         assert!(e.contains("fonts must be a list of family names"), "{e}");
     }
@@ -596,7 +596,7 @@ fn simplified_outlines_retype_only_with_a_tolerance_and_report_their_score() {
     let before = s.doc().unwrap().doc.clone();
     let e = s.execute("type.retype", &json!({})).unwrap_err().to_string();
     assert!(e.contains("no selected shape matches"), "no exact match: {e}");
-    for bad in [json!(-0.01), json!(0.06), json!("0.02"), json!(true)] {
+    for bad in [json!(-0.01), json!(0.06), json!("0.02"), json!(true), json!(null)] {
         let e = s.execute("type.retype", &json!({"tolerance": bad})).unwrap_err().to_string();
         assert!(e.contains("tolerance must be a number from 0 to 0.05"), "{e}");
     }
