@@ -479,19 +479,24 @@ impl<'p> Builder<'p> {
         self.push_node(n);
     }
 
-    /// Finish the open line of type ([`Self::end_text`]) and the outlines it was kept as, before
-    /// something else is drawn: a path, an image, a Type 3 glyph's art, or a change of blend mode
-    /// or soft mask. Nothing is drawn between a text-showing operator's fill pass and its stroke
-    /// pass, so no stroke drawn after this goes over a glyph finished before it either: the
-    /// glyphs of lines finished before their stroke pass could end are forgotten
-    /// ([`Self::park_text`]). It also finishes a line no stroke can go over as the next line
-    /// starts ([`Self::park_text`]): a fill pass whose glyphs a stroke can go over parks each of
-    /// its lines instead, so that is never in the middle of one that left such glyphs behind.
+    /// Finish the open line of type ([`Self::finish_text`]) before something else is drawn: a
+    /// path, an image, a Type 3 glyph's art, or a change of blend mode or soft mask. Nothing is
+    /// drawn between a text-showing operator's fill pass and its stroke pass, so no stroke drawn
+    /// after this goes over a glyph finished before it either: the glyphs of lines finished
+    /// before their stroke pass could end are forgotten ([`Self::park_text`]).
     pub(super) fn flush_text(&mut self) {
+        self.finish_text();
+        self.lost = None;
+    }
+
+    /// Finish the open line of type ([`Self::end_text`]) and the outlines it was kept as. Unlike
+    /// [`Self::flush_text`] it keeps the glyphs of lines finished past the most kept: it also
+    /// runs as the next line starts ([`Self::park_text`]), which may be in the middle of a fill
+    /// pass, after one of its glyphs was kept as an outline.
+    fn finish_text(&mut self) {
         if self.end_text() {
             self.flush_glyphs();
         }
-        self.lost = None;
     }
 
     /// Finish the open line of type, after the lines parked before it ([`Self::park_text`]).
@@ -532,7 +537,9 @@ impl<'p> Builder<'p> {
     /// drawn over a later line or the open one: [`Self::settle_strokes`]; or over none of them:
     /// [`Self::end_fills`]), when anything else ends the open line ([`Self::end_text`]), and
     /// beyond [`MAX_PARKED`] lines: the glyphs of those are kept for the stroke after them
-    /// ([`Self::hold_stroke`]).
+    /// ([`Self::hold_stroke`]). A line finished here keeps them too ([`Self::finish_text`]): the
+    /// next line starting draws nothing else, and after a glyph kept as an outline there is no
+    /// open line, so the operator's next glyph comes here in the middle of its fill pass.
     pub(super) fn park_text(&mut self, park: bool) {
         match self.text.take() {
             Some(line) if park && line.awaits_stroke() => {
@@ -549,7 +556,7 @@ impl<'p> Builder<'p> {
             }
             line => {
                 self.text = line;
-                self.flush_text();
+                self.finish_text();
             }
         }
     }

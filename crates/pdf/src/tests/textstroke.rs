@@ -606,3 +606,19 @@ fn type_filled_and_stroked_over_a_finished_glyph_after_a_path_is_filled_and_stro
     assert_eq!(types.first(), Some(&vec![("Title".to_string(), true, false)]), "{content}");
     assert_eq!(types.last(), Some(&vec![("Title".to_string(), true, true)]), "{content}");
 }
+
+/// A `TJ` over more lines than are kept, with a glyph kept as an outline after the lines it
+/// finished past the 64 kept, whose last part draws its first glyph again at the first glyph's
+/// origin, still comes in as a filled object and a stroked one for each part: the glyph after
+/// the outline starts a line in the middle of the fill pass, which keeps the glyphs of the lines
+/// finished, so the stroke over the first glyph doesn't take the last part's fill (#8549).
+#[test]
+fn an_outline_glyph_in_a_tj_over_more_lines_than_are_kept_leaves_fill_and_stroke_apart() {
+    // Helvetica's A is 667 units wide and code 1 draws no character (kept as an outline) and
+    // advances none: 66 As and 65 kerns of 3,500 back to the first A's origin.
+    let parts = vec!["(A)"; 66].join(" -3500 ");
+    let content = format!("BT 2 Tr /F1 4 Tf 20 80 Td [{parts} (\\001) 271522 (A)] TJ 0 Tr ET");
+    let (fill, stroke) = (vec![("A".to_string(), true, false)], vec![("A".to_string(), false, true)]);
+    let want: Vec<_> = std::iter::repeat_n(fill, 67).chain(std::iter::repeat_n(stroke, 67)).collect();
+    assert_eq!(type_runs(&content), want);
+}
