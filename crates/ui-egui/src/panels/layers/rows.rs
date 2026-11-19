@@ -564,6 +564,42 @@ pub(super) fn row(ui: &mut Ui, view: &View, item: &Row, out: &mut Out) {
 /// The right-click context menu of row `n`.
 fn row_context_menu(ui: &mut Ui, view: &View, n: &Node, collect_ids: &[u64], out: &mut Out) {
     let is_multi = collect_ids.len() > 1;
+    if n.is_guide() {
+        // "Release Guide" / "Release Guides"
+        let rel_label = if is_multi { "Release Guides" } else { "Release Guide" };
+        if widgets::menu_item(ui, rel_label, true, false) {
+            out.actions.push(("view.guides.release".into(), json!({ "ids": collect_ids })));
+            ui.close();
+        }
+        // "Duplicate" / "Duplicate Selection"
+        let dup_label = if is_multi { "Duplicate Selection" } else { "Duplicate" };
+        if widgets::menu_item(ui, dup_label, true, false) {
+            out.actions.push(("layer.duplicate".into(), json!({ "ids": collect_ids })));
+            ui.close();
+        }
+        // "Delete Guide" / "Delete Guides"
+        let del_label = if is_multi { "Delete Guides" } else { "Delete Guide" };
+        if widgets::menu_item(ui, del_label, true, false) {
+            out.actions.push(("layer.delete".into(), json!({ "ids": collect_ids })));
+            ui.close();
+        }
+        ui.separator();
+        // Lock / Unlock
+        let any_unlocked = collect_ids.iter().filter_map(|&id| view.doc.node(NodeId(id))).any(|node| !node.locked);
+        let lock_label = if any_unlocked { "Lock" } else { "Unlock" };
+        if widgets::menu_item(ui, lock_label, true, false) {
+            out.actions.push(("layer.setProps".into(), json!({ "ids": collect_ids, "locked": any_unlocked })));
+            ui.close();
+        }
+        // Hide / Show
+        let any_visible = collect_ids.iter().filter_map(|&id| view.doc.node(NodeId(id))).any(|node| node.visible);
+        let hide_label = if any_visible { "Hide" } else { "Show" };
+        if widgets::menu_item(ui, hide_label, true, false) {
+            out.actions.push(("layer.setProps".into(), json!({ "ids": collect_ids, "visible": !any_visible })));
+            ui.close();
+        }
+        return;
+    }
     // "Layer Options…" / "Options for Selection…" / "Options…"
     let options_label = if is_multi {
         "Options for Selection…"

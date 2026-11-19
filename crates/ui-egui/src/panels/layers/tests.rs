@@ -3360,6 +3360,250 @@ fn context_menu_others_actions_sublayer_state_enables_all_commands() {
     assert!(lock_enabled, "locked sublayer enables Unlock All Layers");
 }
 
+/// Right-clicking a guide row presents specialized context menu actions:
+/// Release Guide, Duplicate, Delete Guide, Lock/Unlock, Hide/Show.
+#[test]
+fn context_menu_on_guide_row_presents_specialized_actions() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    let rect = app.session.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+    app.session.execute("select.set", &json!({"ids": [rect]})).unwrap();
+    app.session.execute("view.guides.make", &json!({})).unwrap();
+    let doc = &app.session.active().unwrap().doc;
+    let layer = doc.layers[0].id;
+    assert!(doc.node(NodeId(rect)).unwrap().is_guide(), "node was made a guide");
+
+    app.session.active_mut().unwrap().layers_open.set(layer, true);
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+
+    let (circles, _) = frame(&mut app, &ctx, vec![], false);
+    assert_eq!(circles.len(), 2, "Layer 1 row and guide row");
+
+    // Secondary-click the guide row (bottom row)
+    let at = egui::pos2(150.0, circles[1].y);
+    let right = egui::PointerButton::Secondary;
+    for e in [egui::Event::PointerMoved(at), button_by(at, true, right), button_by(at, false, right)] {
+        frame(&mut app, &ctx, vec![e], false);
+    }
+
+    // Capture the open context menu shapes
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut app, ui));
+    out.textures_delta.clear();
+    let labels: Vec<String> = out
+        .shapes
+        .iter()
+        .filter_map(|c| match &c.shape {
+            egui::Shape::Text(t) => Some(t.galley.text().trim().to_string()),
+            _ => None,
+        })
+        .collect();
+
+    assert!(labels.iter().any(|s| s == "Release Guide"), "Release Guide present in {labels:?}");
+    assert!(labels.iter().any(|s| s == "Duplicate"), "Duplicate present in {labels:?}");
+    assert!(labels.iter().any(|s| s == "Delete Guide"), "Delete Guide present in {labels:?}");
+    assert!(labels.iter().any(|s| s == "Lock"), "Lock present in {labels:?}");
+    assert!(labels.iter().any(|s| s == "Hide"), "Hide present in {labels:?}");
+}
+
+/// Clicking "Release Guide" dispatches the command and converts the guide to a path in one undo step.
+#[test]
+fn context_menu_release_guide_dispatches_and_is_one_undo_step() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    let rect = app.session.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+    app.session.execute("select.set", &json!({"ids": [rect]})).unwrap();
+    app.session.execute("view.guides.make", &json!({})).unwrap();
+    let layer = app.session.active().unwrap().doc.layers[0].id;
+    app.session.active_mut().unwrap().layers_open.set(layer, true);
+
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+
+    let (circles, _) = frame(&mut app, &ctx, vec![], false);
+    assert_eq!(circles.len(), 2);
+
+    // Secondary-click the guide row
+    let at = egui::pos2(150.0, circles[1].y);
+    let right = egui::PointerButton::Secondary;
+    for e in [egui::Event::PointerMoved(at), button_by(at, true, right), button_by(at, false, right)] {
+        frame(&mut app, &ctx, vec![e], false);
+    }
+
+    // Find "Release Guide" position
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut app, ui));
+    out.textures_delta.clear();
+    let release_pos = out
+        .shapes
+        .iter()
+        .find_map(|c| match &c.shape {
+            egui::Shape::Text(t) if t.galley.text().trim() == "Release Guide" => Some(t.pos + egui::vec2(10.0, 5.0)),
+            _ => None,
+        })
+        .expect("Release Guide text position");
+
+    let undo_before = app.session.active().unwrap().history.undo.len();
+    click_with(&mut app, &ctx, release_pos, egui::Modifiers::NONE);
+
+    // Verify it is no longer a guide
+    let node = app.session.active().unwrap().doc.node(NodeId(rect)).unwrap();
+    assert!(!node.is_guide(), "node is now a regular path, not a guide");
+    let undo_after = app.session.active().unwrap().history.undo.len();
+    assert_eq!(undo_after, undo_before + 1, "exactly one undo step added");
+
+    // Undo restores the guide
+    app.session.execute("edit.undo", &json!({})).unwrap();
+    let node = app.session.active().unwrap().doc.node(NodeId(rect)).unwrap();
+    assert!(node.is_guide(), "undo restores guide status");
+}
+
+/// Clicking "Duplicate" and "Delete Guide" in a guide row's context menu dispatches duplicate and delete.
+#[test]
+fn context_menu_guide_row_duplicate_and_delete() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    let rect = app.session.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+    app.session.execute("select.set", &json!({"ids": [rect]})).unwrap();
+    app.session.execute("view.guides.make", &json!({})).unwrap();
+    let layer = app.session.active().unwrap().doc.layers[0].id;
+    app.session.active_mut().unwrap().layers_open.set(layer, true);
+
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+
+    let (circles, _) = frame(&mut app, &ctx, vec![], false);
+    assert_eq!(circles.len(), 2);
+
+    // 1. Right-click guide row and click "Duplicate"
+    let at = egui::pos2(150.0, circles[1].y);
+    let right = egui::PointerButton::Secondary;
+    for e in [egui::Event::PointerMoved(at), button_by(at, true, right), button_by(at, false, right)] {
+        frame(&mut app, &ctx, vec![e], false);
+    }
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut app, ui));
+    out.textures_delta.clear();
+    let dup_pos = out
+        .shapes
+        .iter()
+        .find_map(|c| match &c.shape {
+            egui::Shape::Text(t) if t.galley.text().trim() == "Duplicate" => Some(t.pos + egui::vec2(10.0, 5.0)),
+            _ => None,
+        })
+        .expect("Duplicate text position");
+    click_with(&mut app, &ctx, dup_pos, egui::Modifiers::NONE);
+
+    // Document now has 2 guides
+    let (circles2, _) = frame(&mut app, &ctx, vec![], false);
+    assert_eq!(circles2.len(), 3, "Layer and 2 guide rows");
+
+    // 2. Right-click the second guide row and click "Delete Guide"
+    let at2 = egui::pos2(150.0, circles2[2].y);
+    for e in [egui::Event::PointerMoved(at2), button_by(at2, true, right), button_by(at2, false, right)] {
+        frame(&mut app, &ctx, vec![e], false);
+    }
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut app, ui));
+    out.textures_delta.clear();
+    let del_pos = out
+        .shapes
+        .iter()
+        .find_map(|c| match &c.shape {
+            egui::Shape::Text(t) if t.galley.text().trim() == "Delete Guide" => Some(t.pos + egui::vec2(10.0, 5.0)),
+            _ => None,
+        })
+        .expect("Delete Guide text position");
+    click_with(&mut app, &ctx, del_pos, egui::Modifiers::NONE);
+
+    let (circles3, _) = frame(&mut app, &ctx, vec![], false);
+    assert_eq!(circles3.len(), 2, "Back to layer and 1 guide row");
+}
+
+/// Clicking "Lock"/"Unlock" and "Hide"/"Show" in a guide row's context menu toggles locked and visible.
+#[test]
+fn context_menu_guide_row_lock_and_hide() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    let rect = app.session.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+    app.session.execute("select.set", &json!({"ids": [rect]})).unwrap();
+    app.session.execute("view.guides.make", &json!({})).unwrap();
+    let layer = app.session.active().unwrap().doc.layers[0].id;
+    app.session.active_mut().unwrap().layers_open.set(layer, true);
+
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+
+    let (circles, _) = frame(&mut app, &ctx, vec![], false);
+    let at = egui::pos2(150.0, circles[1].y);
+    let right = egui::PointerButton::Secondary;
+
+    // 1. Right-click -> menu shows "Lock" -> click "Lock"
+    for e in [egui::Event::PointerMoved(at), button_by(at, true, right), button_by(at, false, right)] {
+        frame(&mut app, &ctx, vec![e], false);
+    }
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut app, ui));
+    out.textures_delta.clear();
+    let lock_pos = out
+        .shapes
+        .iter()
+        .find_map(|c| match &c.shape {
+            egui::Shape::Text(t) if t.galley.text().trim() == "Lock" => Some(t.pos + egui::vec2(10.0, 5.0)),
+            _ => None,
+        })
+        .expect("Lock text position");
+    click_with(&mut app, &ctx, lock_pos, egui::Modifiers::NONE);
+    assert!(app.session.active().unwrap().doc.node(NodeId(rect)).unwrap().locked, "guide is locked");
+
+    // 2. Right-click -> menu now shows "Unlock" -> click "Unlock"
+    for e in [egui::Event::PointerMoved(at), button_by(at, true, right), button_by(at, false, right)] {
+        frame(&mut app, &ctx, vec![e], false);
+    }
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut app, ui));
+    out.textures_delta.clear();
+    let unlock_pos = out
+        .shapes
+        .iter()
+        .find_map(|c| match &c.shape {
+            egui::Shape::Text(t) if t.galley.text().trim() == "Unlock" => Some(t.pos + egui::vec2(10.0, 5.0)),
+            _ => None,
+        })
+        .expect("Unlock text position");
+    click_with(&mut app, &ctx, unlock_pos, egui::Modifiers::NONE);
+    assert!(!app.session.active().unwrap().doc.node(NodeId(rect)).unwrap().locked, "guide is unlocked");
+
+    // 3. Right-click -> menu shows "Hide" -> click "Hide"
+    for e in [egui::Event::PointerMoved(at), button_by(at, true, right), button_by(at, false, right)] {
+        frame(&mut app, &ctx, vec![e], false);
+    }
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut app, ui));
+    out.textures_delta.clear();
+    let hide_pos = out
+        .shapes
+        .iter()
+        .find_map(|c| match &c.shape {
+            egui::Shape::Text(t) if t.galley.text().trim() == "Hide" => Some(t.pos + egui::vec2(10.0, 5.0)),
+            _ => None,
+        })
+        .expect("Hide text position");
+    click_with(&mut app, &ctx, hide_pos, egui::Modifiers::NONE);
+    assert!(!app.session.active().unwrap().doc.node(NodeId(rect)).unwrap().visible, "guide is hidden");
+
+    // 4. Right-click -> menu shows "Show" -> click "Show"
+    for e in [egui::Event::PointerMoved(at), button_by(at, true, right), button_by(at, false, right)] {
+        frame(&mut app, &ctx, vec![e], false);
+    }
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut app, ui));
+    out.textures_delta.clear();
+    let show_pos = out
+        .shapes
+        .iter()
+        .find_map(|c| match &c.shape {
+            egui::Shape::Text(t) if t.galley.text().trim() == "Show" => Some(t.pos + egui::vec2(10.0, 5.0)),
+            _ => None,
+        })
+        .expect("Show text position");
+    click_with(&mut app, &ctx, show_pos, egui::Modifiers::NONE);
+    assert!(app.session.active().unwrap().doc.node(NodeId(rect)).unwrap().visible, "guide is visible again");
+}
+
 /// One headless frame of the panel in a 300 × 600 window, returning every drawn text and its rect.
 fn frame_texts(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> Vec<(String, egui::Rect)> {
     let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::pos2(0.0, 0.0), vec2(300.0, 600.0))), events, ..Default::default() };
