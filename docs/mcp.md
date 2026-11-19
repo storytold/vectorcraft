@@ -675,25 +675,31 @@ objects' fills or strokes differ (`fillMixed` / `strokeMixed`, drawn as a "?" pr
 In the app's Color panel and Color Picker, RGB, HSB, hex and Web Safe RGB values describe the active working RGB
 space. RGB edits preserve the other native channels; HSB uses those same working RGB components. Colors outside
 display sRGB retain their native numeric values. `ui.colorPanel` selects the panel mode and `ui.colorPicker`
-opens the picker through `run_command` with the remote backend. `ui.colorPanel {"recentColors": false}` unchecks
-the panel menu's Show Recent Colors, which hides the Color panel's Recent Colors row, and `true` shows it again;
-applied colors still join the list while it is hidden. `ui.colorPanel {"rgbPercent": true}` shows the Color panel's
-RGB fields in percent, as a double-click right of an RGB field does, and `false` shows them from 0 to 255 again.
-`ui.colorRgbPercent` (Toggle RGB Percent in the command palette and Keyboard Shortcuts) switches between the two
-and answers true when the fields show in percent.
+opens the picker through `run_command` with the remote backend. Edit › Keyboard Shortcuts lists `ui.colorPicker` as
+Color Picker… with no default key; a key assigned there opens the picker for the proxy in front, as `{}` does.
+`ui.colorPanel {"recentColors": false}` unchecks the panel menu's Show Recent Colors, which hides the Color panel's
+Recent Colors row, and `true` shows it again; applied colors still join the list while it is hidden.
+`ui.colorPanel {"rgbPercent": true}` shows the Color panel's RGB fields in percent, as a double-click right of an RGB
+field does, and `false` shows them from 0 to 255 again. `ui.colorRgbPercent` (Toggle RGB Percent in the command
+palette and Keyboard Shortcuts) switches between the two and answers true when the fields show in percent.
 `ui.colorWheel {"view": "box", "channel": "red"}` shows the Color Wheel panel's box (a color field with the channel's
 strip at its right) in place of the wheel, as the panel menu's Box View and Box Channel do, and `"view": "wheel"`
 shows the wheel again. `"opacity": true` checks Show Opacity, as the panel menu does: a row under the wheel or the
 box with a slider and a percent field sets the opacity of the fill or stroke row (`paint.setFill {opacity}`), the
 selected gradient stop or the selected freeform point (the first stop or point when none is selected), and `false`
 hides the row. The row is gray with nothing selected, for an object selected in a symbol instance, and when the fill
-or stroke row it would set is on type characters or missing. `{"harmony": true, "harmonyRule": "triad"}` puts a
+or stroke row it would set is on type characters or missing. `"gamut": true` grays out the parts of the wheel's
+square and the box's field whose colors the CMYK space cannot print, as the panel menu's Show Out-of-Gamut Colors
+does, and `false` shows them again. The test is the out-of-gamut warning's, which `color.gamutCheck` answers for one
+color. The shading is approximate: the panel tests the color at the center of each cell of a 16 by 16 grid over the
+square or the field and grays out the whole cell or none of it, so a grayed cell can hold printable colors and a
+clear cell can hold colors that cannot print. `{"harmony": true, "harmonyRule": "triad"}` puts a
 marker on the wheel's ring for each other color of a Color Guide harmony rule, as Show Harmony and Harmony Rule do;
 the wheel takes the 15 rules whose colors each have a hue of their own (not `monochromatic`, `shades`,
 `complementary2`, `triad2`, `triad3` or `highContrast2`). Keys left out or null keep their values.
 Params that are not an object, another key or a value off the list return an error and change nothing. The command
-returns `{view, channel, opacity, hexField, sliders, harmony, harmonyRule, vision}`, and the settings are kept with
-the preferences.
+returns `{view, channel, opacity, hexField, sliders, gamut, harmony, harmonyRule, vision}`, and the settings are kept
+with the preferences.
 
 `ui.colorWheel {"sliders": "oklch"}` shows the Color Wheel panel's OKLCH Sliders (L, C and H rows under the wheel or
 the box), and `"none"` hides them in any RGB space. `"oklch"` is an error while the active document's RGB space is
@@ -3536,6 +3542,16 @@ enabled while the document has a saved view. In the desktop app the views are li
 checked when it opens: past 25, blank or repeated names, and views without a finite centre and a positive zoom are
 dropped.
 
+## Recent commands
+
+Help › Search Commands… keeps the last commands, tools, panels and effects picked from it, most recent first: an
+empty search lists them, and so does the Recent Commands list beside the search field. The desktop app saves the ids
+with the UI state, and also how many times each command was picked, which ranks the results.
+`help.clearRecentCommands {}` (Clear Recent Commands) empties the list, the saved ids and the pick counts, and
+returns `null`. A pick of it in the search is not kept as a recent pick or counted. It is a UI command, so it needs
+the desktop app (`--connect`); `command_list` gives it `enabled: false` while no ids and no counts are saved. Saved ids
+the list leaves out, such as those of a plug-in that is not loaded, count as saved and are cleared with the rest.
+
 ## Messages over the window
 
 `app.toast {message, level?, seconds?}` shows a short message over the desktop app's window without stopping work
@@ -5252,7 +5268,7 @@ it, masks that member's solids ([three-d.md](three-d.md#groups)).
 `threeD.extrude`: `depth` (points, 0..2000, default 50), `twist` (degrees, 0..360, 0), `taper` (1..100%, 100),
 `cap` (true solid, false hollow), `bevel` (`none`, `classic`, `rounded`, `cove`, `step`, `ogee`), `bevelWidth`
 and `bevelHeight` (points, default 4), `bevelRepeat` (1..32), `bevelSpace` (0..90%), `bevelInside`,
-`bevelBothSides`. `threeD.inflate`: `depth` (points, default 0), `twist` (degrees, 0..360, 0), `taper` (1..100%, 100), `cap` (true
+`bevelBothSides`; `bevel` `custom` with `bevelName` and `bevelProfile` is a custom bevel (below). `threeD.inflate`: `depth` (points, default 0), `twist` (degrees, 0..360, 0), `taper` (1..100%, 100), `cap` (true
 solid, false open behind), `volume` (0..100%, default 50), `bothSides`.
 All three take `rotationX/Y/Z` (degrees, -180..180, default the Off-Axis Front position -21.88/-23.4/9.06),
 `perspectiveAngle` and the lighting parameters as Revolve. See [three-d.md](three-d.md) for the Position presets,
@@ -5264,12 +5280,47 @@ points returns "The shape is too complex for a 3D effect", and one whose faces d
 has so many points across so many of its grid's cells that filling the grid would pass its work limit. `threeD.rotate`
 takes up to 65,536 points.
 
+Custom bevels come from the bevels file, `Bevels.vectorcraft` next to the preferences (none on the web or in runs
+with `VECTORCRAFT_NO_PREFS`). `threeD.bevels.edit` (3D and Materials panel › Bevel Shape › Edit Bevels…) opens it,
+and first creates it with one example bevel when it is missing. Each symbol whose art is one open path is one bevel,
+named after the symbol and listed after the built-in shapes. These rules are VectorCraft's own: the path runs from its
+first anchor at the cap's edge to its last at the side wall, across the page across the bevel's width and down the
+page along its height, and curves are cut into straight lines of at most 64 points. The file is read when the app
+starts and again each time VectorCraft saves it; `threeD.bevels.reload` reads it again. A file larger than 64 MB is
+not read, at most 256 symbols are read, and a symbol that is not one open path, has more than 4,096 anchors, is cut
+into more than 8,192 straight lines, needs more point-to-line distances to simplify than are left of the 40,000,000
+the file may take, has ends that are not apart both across and down, or repeats an earlier name is
+listed in `skipped`. `threeD.bevels.list`
+returns each bevel's `name` and `points`, the `file` path, the `skipped` symbols and any read `error`.
+
+Under automation read roots, the bevels file counts as a path the client did not give. `threeD.bevels.list` returns
+`file` as `null` when the file is outside the read roots, and its `error` names the file by its file name; the bevels,
+`skipped` and the reason stay. `threeD.bevels.edit` and `threeD.bevels.reload` refuse a file outside the read roots
+with the root-check error, naming the file by its file name: `edit` then makes no folder or file and neither opens the
+file nor brings it to the front, and `reload` does not read it. Inside the read roots, `edit` opens the file under the
+client's roots. The 3D and Materials panel's Edit Bevels… is not confined.
+
+`threeD.extrude` and `threeD.classicExtrude` take `bevel: {"custom": name}` in `effect.apply` and `effect.setParams`,
+and store it as `bevel: "custom"` with `bevelName` and `bevelProfile`, a copy of the points (`[[x, y], …]`, 2 to 64
+shares 0..1 of the width and height from `[0, 0]` to `[1, 1]`), so the document draws the bevel without the file. An
+unknown name, `custom` without `bevelProfile`, points that do not run from `[0, 0]` to `[1, 1]` within 0..1, or a
+`bevelName` that is not a string is refused and the document is not changed. The command's journal entry records the
+points as `savedBevel`, and `savedBevel` given with `{"custom": name}` is used in place of the file's points, so a
+replay draws the same bevel after the file changes or drops the name. The help page
+[Add custom bevel paths](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/add-custom-bevel-paths.html)
+describes custom bevels drawn as open paths and kept as symbols in a bevels document.
+
+```json
+{"name":"run_command","arguments":{"command":"threeD.bevels.list","params":{}}}
+{"name":"run_command","arguments":{"command":"effect.apply","params":{"effect":"threeD.extrude","item":null,"params":{"bevel":{"custom":"Example Bevel"},"bevelWidth":8,"bevelHeight":8}}}}
+```
+
 ## Extrude & Bevel (Classic)
 
 `effect.apply {effect: "threeD.classicExtrude", params: {...}, ids?, item?}` is Effect › 3D and Materials ›
 3D (Classic) › Extrude & Bevel (Classic)…. It builds the same solid as `threeD.extrude` and draws its faces with the
 classic surfaces. Parameters: `depth` (points, 0..2000, default 50), `cap` (true solid, false hollow), `bevel` (`none`,
-`classic`, `rounded`, `cove`, `step`, `ogee`), `bevelHeight` (points, 1..100, default 4; the bevel is as wide as it
+`classic`, `rounded`, `cove`, `step`, `ogee`, or a custom bevel as for `threeD.extrude`), `bevelHeight` (points, 1..100, default 4; the bevel is as wide as it
 is tall), `bevelInside` (false adds the bevel around the shape, true carves it into the shape), `rotationX/Y/Z` and
 `perspectiveAngle` as above, and the surface:
 
@@ -5835,8 +5886,8 @@ error.
 
 ## Brush libraries
 
-Brush libraries are read-only sets of brushes: fourteen generated in code (Art Ribbons, Ink and Wash, Calligraphic Nibs, Pressure Sensitive with Flex Ribbon, Pulse Stroke, Round Flow and Chisel Flow, Bristle
-Brushes with one bristle brush for each tip shape, Pattern Borders, Scatter Shapes, Stipple with Fine, Dense, Soft and Bold dot textures, Game Trails, Energy Beams, and Dry Media with the Chalk Grain, Graphite Pencil, Wax Crayon and
+Brush libraries are read-only sets of brushes: fifteen generated in code (Art Ribbons, Ink and Wash, Calligraphic Nibs, Pressure Sensitive with Flex Ribbon, Pulse Stroke, Round Flow and Chisel Flow, Bristle
+Brushes with one bristle brush for each tip shape, Pattern Borders, Decorative with Leaf Vine, Blossom Chain, Pennant Garland and Lantern String, Scatter Shapes, Stipple with Fine, Dense, Soft and Bold dot textures, Game Trails, Energy Beams, and Dry Media with the Chalk Grain, Graphite Pencil, Wax Crayon and
 Charcoal Dust art brushes, id `dry-media`, Tech Circuit with Circuit Trace (art), Bus Lines and Terminal Nodes (pattern), id `tech-circuit`, Engraving with Fine Hatching, Dense Hatching, Tapered Hatching and Broken Hatching art brushes, id `engraving`, and Arrows with Solid, Open, Double, Chevron and Dashed Arrow art brushes, id `arrows`), the `.vectorcraft` files in the user library folder of the desktop app (User
 Defined) and the brushes of any document loaded with `brush.loadLibrary` (a document without brushes of its own has
 the default ones). `brush.libraries` lists them (`id`, `name`, `category`: `builtIn`, `user` or `loaded`, `count`) and
@@ -7552,7 +7603,7 @@ and files saved without it open with it off.
 
 ## Live Corners
 
-`object.setLiveShape {id?, ids?, radius?, kind?, corners?, items?}` sets the corners of any path (one undo step): a live
+`object.setLiveShape {id?, ids?, radius?, kind?, corners?, rectanglesOnly?, items?}` sets the corners of any path (one undo step): a live
 rectangle's or polygon's, a star's, a pen path's. A corner is an anchor where two sides, straight or curved, meet at an angle
 (not an open path's ends, not a smooth anchor, not one the sides run straight on through); a curved side is trimmed to
 what the cut leaves of it. `radius` (pt) and `kind`
@@ -7571,7 +7622,9 @@ or keeps its size with Scale Corners off), and a rectangle from a file that kept
 (elliptical corners) gets circular ones in document units when its corners are next set. Dragging a corner widget
 rounds the corners whose widgets show (every corner, or the Direct-Selected ones) on every selected path at once,
 outlining in red those that reach their limit; the Selection tool shows the widgets of live rectangles and polygons,
-the Direct Selection tool those of any path. Several objects each with their own corners are one call:
+the Direct Selection tool those of any path. `rectanglesOnly: true` sets them on the live rectangles among the targets
+alone and leaves the other objects as they are (the Rectangle Properties corner fields and menus send it with the
+selection, so an action that records them acts on the rectangles selected when it plays). Several objects each with their own corners are one call:
 `items: [{id, corners?}]` in place of `ids` and `corners`. Alt-clicking one cycles their kind and double-clicking one opens Corners (`ui.corners {id?, corners?}`,
 dialog `corners`: `kind`, `radius`; OK runs `object.setLiveShape`).
 `view.shapeWidgets {on?}` (desktop app, the Hide Shape Widgets and Show Shape Widgets button in the Control bar of the
