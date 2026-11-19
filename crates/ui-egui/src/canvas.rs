@@ -1460,4 +1460,6 @@ fn selection_visuals(
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
+mod tests_edge_scroll;
+#[cfg(test)]
 mod tests_ui_scaling;

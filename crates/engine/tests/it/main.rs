@@ -9,6 +9,7 @@ mod text_fixture;
 
 mod affinity_features;
 mod affinity_local;
+mod align_automatic_reference;
 mod artboard_click;
 mod beyond_canvas;
 mod clear_commands;

@@ -4227,18 +4227,20 @@ already walks Image Trace. Short agent entry points:
   `stepIndex` from 0, and `batchStep` is the command's place in a `command.batch` step), and `unknownCount`, how many
   there are; the status bar names the first and the count, with control characters replaced and long names cut at 80
   characters. These are VectorCraft's own rules. An action set file (`.vcactions`) is JSON:
-  `{"format": "vcactions", "version": 1 to 6, "name", "actions": [{"name", "steps": [{"command", "params", "excluded"?}]}]}`, each step
+  `{"format": "vcactions", "version": 1 to 7, "name", "actions": [{"name", "steps": [{"command", "params", "excluded"?}], "automaticAlignTo"?}]}`, each step
   a command id and its params as `command.batch` takes them, or a stop: the command `action.stop` with
   `{message, allowContinue}`. A Select Object step is the command `select.byNote` with `{note, caseSensitive,
   wholeWord}`, and a Select Path step is the command `select.storedPath` with `{id, fingerprint}`. A View menu step is
   the id of a View menu command that the app runs itself (`view.outline`, `view.zoomIn`, `view.rotate` and the others
   `ui.action.insertMenuItem` lists) with the item's params. `excluded: true` preserves a step but omits it from playback;
-  an absent or false flag includes the step. Files with View menu steps use version 6, files with Select Path steps and
-  no View menu step use version 5, files with Select Object steps and neither use version 4, files with stops and none
+  an absent or false flag includes the step. Files with an action whose `automaticAlignTo` is true, or with an
+  `object.align` step (excluded, or inside a `command.batch` or `action.batch` step, too) whose `to` is `"auto"`, use
+  version 7. Other files with View menu steps use version 6, files with Select Path steps and no View menu step use
+  version 5, files with Select Object steps and neither use version 4, files with stops and none
   of these use version 3, and files with excluded steps and none of these use version 2, so older builds refuse them
   instead of playing the excluded steps or failing at a stop, a Select Object step, a Select Path step or a View menu
-  step; other files use version 1, and version 1 to 5 files still load. A file with another `format` or a `version` other than
-  1 to 6, a stop whose message is not text or whose `allowContinue` is not true or false, a Select Object step whose params `ui.action.insertSelectObject` would refuse, a View menu step whose params are not an object, a file larger than 8 MiB, one with more than 1,000 actions and one with an action of more than 10,000 steps are
+  step; other files use version 1, and version 1 to 6 files still load. A file with another `format` or a `version` other than
+  1 to 7, a stop whose message is not text or whose `allowContinue` is not true or false, a Select Object step whose params `ui.action.insertSelectObject` would refuse, a View menu step whose params are not an object, a file larger than 8 MiB, one with more than 1,000 actions and one with an action of more than 10,000 steps are
   refused, and no set is added. So is a file whose set `ui.actionSet.save` would write larger than 8 MiB (a file with
   less white space, a set name that gets a number, or an `.aia` set), with the error `the action set would be larger
   than 8 MiB`. The Actions panel menu's Save Actions… and Load Actions… run these; Load Actions… is
@@ -4269,18 +4271,28 @@ already walks Image Trace. Short agent entry points:
   exclusion that would give the set's action set file more than 8 MiB, counting the steps the recording in progress
   adds to the set; it is an error. A change that leaves the file as large or makes it smaller is never refused. The
   panel's checkmarks run this command; normal playback and Batch… skip excluded steps.
-- Actions: `ui.action.new {set, name, key?, cmd?, shift?, color?}` adds an action named `name` (spaces
+- Actions: `ui.action.new {set, name, key?, cmd?, shift?, color?, automaticAlignTo?}` adds an action named `name` (spaces
   trimmed) after the last action of set `set` (0 is the top set), starts recording into it and returns
   `{set, action}`; Stop Playing/Recording (`ui.action.stop`) ends the recording. `key` 1 to 15 is the function key F1 to F15 that plays the
   action (0 or null for none), with `cmd` (Ctrl, Command on macOS) and `shift`. `color` is its Button Mode color
   (`red`, `yellow`, `green`, `blue` or `violet`; null or `""` for none), the color of its button in Button Mode
-  (`ui.action.buttonMode`). Action function
+  (`ui.action.buttonMode`). `automaticAlignTo: true` makes playback run each of the action's `object.align` steps,
+  those in a recorded Batch run (`action.batch`) included, with `to: "auto"` (see [Align to Artboard](#align-to-artboard)):
+  the key object, key anchor or key guide, else the artboard for one whole selected object, else the selection.
+  Playback also leaves out an `artboard` the step stores, so the step uses the active artboard, as `object.align`
+  without `artboard` does. A Batch run passes no active artboard to its steps, so when an `object.align` step in a
+  Batch run aligns to the artboard, it uses the artboard under the center of the selection, or the first artboard when
+  none is there. `object.distribute` and `object.distributeSpacing` steps play with the `to` they were recorded with.
+  The stored steps keep the `to` they were recorded with, and the action plays them as recorded again when the option
+  is turned off. It is false when left out or null, and a value that is not true, false or null is an error. These are
+  VectorCraft's own rules. Action function
   keys take priority over command shortcuts and preserve the command's binding. On Windows F1, Ctrl+F4 and Ctrl+F6
   cannot be used. While an action is recording, and for an index past the last set,
   an empty name, or a key or color that is not one of these, it is an error and nothing is added. So is an action that
   would give the set more than 1,000 actions (`the action set file holds more than 1,000 actions`) or a file larger
   than 8 MiB (`the action set would be larger than 8 MiB`), and then no recording starts. The panel's Create
-  New Action button and menu's New Action… open the `actionNew` dialog, whose Record runs this.
+  New Action button and menu's New Action… open the `actionNew` dialog, whose Record runs this; its Choose Align To at
+  playback checkbox sets `automaticAlignTo`.
 - Actions: `ui.action.record {set?, action?, after?}` starts recording a new action in the chosen set, or the current
   set when `set` is left out, and returns `{set, name}`. With no sets, it creates Set 1. The action gets the next
   available `Action N` name in that set. With `action`, it records into the action at `action` in set `set` instead
@@ -4301,11 +4313,12 @@ already walks Image Trace. Short agent entry points:
   `ui.action.stop` keeps the steps that fit. A stop that playback reaches
   then is not recorded, and the status bar shows the reason. `ui.action.stop` leaves out any recorded steps still past
   either limit and shows which one in the status bar.
-- Actions: `ui.action.options {set, action, name?, key?, cmd?, shift?, color?}` changes the action at
+- Actions: `ui.action.options {set, action, name?, key?, cmd?, shift?, color?, automaticAlignTo?}` changes the action at
   `action` in set `set` and keeps its steps: `name` renames it, `key` with `cmd` and `shift` sets its function key,
-  and `color` its Button Mode color, as `ui.action.new` takes them; a param left out keeps what the action has, and
-  `cmd` or `shift` alone changes that modifier of its key. It
-  returns `{name, key, color}`. The panel menu's Action Options… runs this for the selected action. A function key
+  `color` its Button Mode color and `automaticAlignTo` how its Align steps play, as `ui.action.new` takes them; a param
+  left out (or a null `automaticAlignTo`) keeps what the action has, and `cmd` or `shift` alone changes that modifier
+  of its key. It returns `{name, key, color, automaticAlignTo}`. The panel menu's Action Options… runs this for the
+  selected action, and its dialog has the same checkbox as New Action…. A function key
   plays its action from the keyboard; like command shortcuts, it does nothing while a dialog, the command palette or
   a text field has the keyboard, or while a tool is busy. Editing command shortcuts (`shortcuts.set`, Keyboard Shortcuts), loading preferences and
   `ui.actionSet.load` preserve action function keys. When several actions have the same key, the first in panel order
@@ -4373,7 +4386,8 @@ already walks Image Trace. Short agent entry points:
   toggle, an Actions command, a Perspective Grid preset of the preferences or a recent-font, saved-selection or saved-view slot. Disabled items are listed, and playback checks the step when it runs. An Object › Align item's step
   keeps the `to` its click sends at insertion (`key` while the selection has a key object or key guide, `artboard` for one selected
   object or with Align to Artboard, else `selection`), so a later Align To choice does not change it, and a step that
-  aligns to the key object fails in playback when the selection has no key then. With anchor points selected the click
+  aligns to the key object fails in playback when the selection has no key then. In an action with `automaticAlignTo`
+  on (`ui.action.new`), playback sends `to: "auto"` for every `object.align` step instead. With anchor points selected the click
   sends no `to`, and neither does the step. These are VectorCraft's own rules. A
   View menu step plays as `ui.action.play` describes. With `set` and `action`, the
   step goes into that action, after step `step`, else after its last step, becomes the panel's selected step, and the
@@ -5636,8 +5650,8 @@ left out.
 
 ## Symbol libraries
 
-Symbol libraries are read-only sets of symbols: six generated in code (Basic Shapes, UI Frames, Map Markers,
-Inventory Icons, Skill Icons, Weather Icons), the `.vectorcraft` files in
+Symbol libraries are read-only sets of symbols: seven generated in code (Basic Shapes, UI Frames, Map Markers,
+Inventory Icons, Skill Icons, Weather Icons, Media Controls), the `.vectorcraft` files in
 the user library folder of the desktop app (User Defined) and the symbols of any document loaded with
 `symbol.loadLibrary`. `symbol.libraries` lists them (`id`, `name`, `category`: `builtIn`, `user` or `loaded`, `count`)
 and `symbol.library {library}` returns one's symbols (`name`, `size`, `registration`, `exportType`; `library` is an
@@ -7309,6 +7323,10 @@ below 3 or above 1000 counts as 3 or 1000, and a fractional or negative `sides` 
 ```
 
 ## Align to Artboard
+
+`object.align {to: "auto"}` chooses the target each time it runs: the key object, key anchor or key guide when the
+selection has one, else the artboard when exactly one object is selected and no anchor points are, else the
+selection. It then aligns as that `to` value does, and it changes neither the selection nor the key. These are VectorCraft's own rules.
 
 `object.align {to: "artboard", artboard?}` aligns the selected objects to artboard `artboard` (a 0-based index).
 Without `artboard`, or with an index the document doesn't have, it aligns them to the artboard under the center of the
@@ -12077,6 +12095,40 @@ on an open path that are not drawn because they fall before the path's start can
 
 ```json
 {"name":"run_command","arguments":{"command":"text.touchType","params":{"id":7,"start":1,"dx":10,"dy":4}}}
+```
+
+## Retype panel
+
+`type.retypeFonts {count?}` lists the fonts whose glyphs match the selected outlined text. It compares each selected path
+and compound path, inside groups too, with the glyphs of up to 96 loaded fonts, those of the document's live type
+first, by the matching `type.retype` uses, and it counts only exact matches. When two versions of a font are loaded,
+only the version its family and style name gives is compared, which is the version that choosing the font sets. The
+fonts rank by how many shapes each matches, then by the mean distance left after fitting, then by family and style
+name. `count` is a whole number from 1 to 96 (default 10); any other value is an error. The reply is
+`{fonts: [{family, style, matched}], shapes, more, truncated}`: `matched` is the number of shapes the font matches,
+`shapes` the number of shapes compared, `more` is true when more fonts match than `count`, and `truncated` is true when
+shapes past the limits of `type.retype` were left out. Shapes that `type.retype` would keep as outlines because of
+their paint still count. The command does not change the document and records no undo step. With no path or compound
+path selected it is an error.
+
+Window › Retype shows the Retype panel. Find Matching Fonts runs `retype.find {}`, which shows the panel, ranks up to
+96 fonts and lists the first ten. Find more font matches, at the end of the list when `more` is true, runs
+`retype.find {more: true}`, which adds the next five fonts that search found, whatever is selected now. Before any
+search, `retype.find {more: true}` runs a first search. A search that fails is an error and leaves the list as it
+was. Each row shows the font's family and style over a sample of the font. While live type is selected or edited, a
+click on a row sets that font on it, as the font menus do; live type inside a selected group counts too. The list
+stays when the selection changes.
+
+`retype.list {}` → `{searched, fonts: [{family, style, matched}], shapes, more, truncated, size, text}`. `searched` is
+false until a search runs and after a reset. `truncated` is true when the last search left out shapes past the limits
+of `type.retype` (2,048 shapes, 16 nested groups); the panel then says that some shapes were not compared.
+`size` is `small`, `medium` or `large`, and `text` is the samples' text (empty for a generic sample). The panel menu's Small, Medium and Large items and the sample field run
+`retype.preview {size?, text?}`. `text` holds at most 100 characters; any other value of either key is an error and
+changes nothing. Reset Retype Panel in the panel menu runs `retype.reset {}`, which clears the list and keeps the size
+and text. `retype.find`, `retype.preview` and `retype.reset` return what `retype.list` returns.
+
+```json
+{"name":"run_command","arguments":{"command":"type.retypeFonts","params":{"count":5}}}
 ```
 
 ## Alternate glyphs

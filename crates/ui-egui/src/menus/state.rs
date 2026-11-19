@@ -81,6 +81,7 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
             .is_some_and(|g| crate::chrome::CONTROL_BAR_GROUPS.contains(&g) && !app.ui.control_bar_hidden_groups.contains(g)),
         "window.toolbar" => app.ui.toolbar,
         "window.toolbarAdvanced" => app.ui.toolbar_advanced,
+        "window.toolbarCompact" => app.ui.toolbar_compact,
         "window.toolsBesideCanvas" => app.ui.tools_beside_canvas,
         "window.toolbarColumns" => match p.get("toolbar").and_then(Value::as_str) {
             None => app.ui.toolbar_double,
@@ -248,6 +249,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "file.cancelSave" | "file.saveInBackground" => app.background.running(crate::background::Kind::Save),
         "file.cancelOpen" => !app.opening.pending.is_empty(),
         "file.openInBackground" => crate::opening::any_shown(app),
+        "file.cancelPlace" => crate::placing::can_cancel(app),
         "plugin.cancelRuns" => crate::plugin_runs::any_running(app),
         "plugin.hideRuns" => crate::plugin_runs::any_shown(app),
         "imageTrace.cancelRuns" => crate::trace_runs::any_running(app),

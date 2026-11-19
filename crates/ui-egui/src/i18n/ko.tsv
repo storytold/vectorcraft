@@ -500,6 +500,20 @@ digits	Malayalam	말라얄람어
 	Highlight Tracking	자간 강조 표시
 	Step Type	단계별 문자
 	Find Font…	글꼴 찾기…
+	Retype	리타입
+	Find Matching Fonts	일치하는 글꼴 찾기
+	Find more font matches	일치하는 글꼴 더 찾기
+	Type your text to preview	미리 볼 텍스트 입력
+	Select outlined text, then Find Matching Fonts.	윤곽선으로 만든 텍스트를 선택한 다음 일치하는 글꼴 찾기를 누르세요.
+	No font matches the selected shapes.	선택한 모양과 일치하는 글꼴이 없습니다.
+	Shapes past the first 2,048, or more than 16 groups deep, were not compared.	처음 2,048개 이후의 모양이나 16단계보다 깊은 그룹 안의 모양은 비교하지 않았습니다.
+	Reset Retype Panel	리타입 패널 재설정
+	List Matching Fonts	일치하는 글꼴 목록
+	Retype Preview	리타입 패널 미리 보기
+@msg	`count` must be a whole number from 1 to 96	`count`는 1에서 96 사이의 정수여야 합니다
+@msg	`size` must be small, medium or large	`size`는 small, medium 또는 large여야 합니다
+@msg	`text` must be a string of at most 100 characters	`text`는 최대 100자의 문자열이어야 합니다
+@msg	Retype: select outlined text (paths or compound paths)	리타입: 윤곽선으로 만든 텍스트(패스 또는 컴파운드 패스)를 선택하세요
 	Change Case	대소문자 변경
 	UPPERCASE	대문자
 	lowercase	소문자
@@ -3357,6 +3371,55 @@ mark-style	Japanese	일본식
 	Edit type set in fonts that aren't available?	사용할 수 없는 글꼴로 설정된 문자를 편집하시겠습니까?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	캔버스에서 각 슬라이스의 번호를 왼쪽 위의 상자에 표시합니다. 끄더라도 슬라이스 윤곽선은 계속 표시됩니다.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	사용자 슬라이스와 개체 슬라이스의 윤곽선 및 번호 상자의 색상입니다. 자동 슬라이스에는 이 색상의 더 흐린 색조가 사용됩니다.
+	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	문서 설정의 언어가 영어: 미국인 동안 새 텍스트는 이 언어를 받습니다. 문서에 이미 있는 텍스트는 자체 언어를 유지합니다.
+	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	하이픈 넣기가 켜진 단락에서는 목록의 단어가 입력한 하이픈 위치에서만 나뉘며, 하이픈이 없으면 나뉘지 않습니다. 언어나 대소문자는 상관없습니다.
+	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	데스크톱 버전에서는 이 폴더의 .wasm 플러그인이 시작할 때와 여기에 새 폴더를 지정하고 확인을 클릭할 때 로드됩니다(안전 모드 제외). 웹 버전은 로드하지 않습니다.
+	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	첫 번째 스크래치 디스크 선택: Startup, None 또는 폴더 경로. VectorCraft는 이 값을 저장하지만 아직 스크래치 디스크를 사용하지 않습니다.
+	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	두 번째 스크래치 디스크 선택: Startup, None 또는 폴더 경로. VectorCraft는 이 값을 저장하지만 아직 스크래치 디스크를 사용하지 않습니다.
+	How light or dark the interface is.	인터페이스를 얼마나 밝게 또는 어둡게 표시할지입니다.
+	The set of colors the interface is drawn in.	인터페이스를 그리는 색의 조합입니다.
+	The color of controls that are on, chosen or focused; the menu is dimmed while the Color Scheme has an accent of its own.	켜져 있거나 선택되었거나 포커스가 있는 컨트롤의 색입니다. 색 구성표에 자체 강조 색상이 있는 동안에는 메뉴가 흐리게 표시됩니다.
+	The color of the canvas around the artboards; Match User Interface Brightness takes it from Brightness. Outline view always shows it white.	아트보드 주변 캔버스의 색입니다. 사용자 인터페이스 밝기에 맞춤은 밝기에서 색을 가져옵니다. 윤곽선 보기에서는 항상 흰색으로 표시됩니다.
+	A panel opened from its icon closes when you press Esc or click outside it; off, it stays open until you click an icon.	아이콘에서 연 패널은 Esc 키를 누르거나 패널 바깥을 클릭하면 닫힙니다. 끄면 아이콘을 클릭할 때까지 열려 있습니다.
+	Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them.	도구 모음에서 각 도구 그룹의 이름을 해당 도구 위에 표시합니다. 끄면 그룹 사이에 아무것도 없이 이어집니다.
+	From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.	지금부터 열거나 만드는 문서는 탭으로 열립니다. 끄면 각 문서가 플로팅 창에서 열립니다. 이미 열린 문서는 그대로 있습니다.
+	Makes the document tabs taller and their names larger.	문서 탭을 더 높게, 이름을 더 크게 표시합니다.
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own.	다음 시작부터는 VectorCraft가 자체 제목 표시줄을 그렸을 곳에서 시스템이 창의 제목 표시줄을 그립니다.
+	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on.	다음 시작부터는 데스크톱이 제목 표시줄을 그리는 곳에서도 VectorCraft가 창의 제목 표시줄을 그립니다. 단, 시스템 제목 표시줄이 켜져 있으면 그렇지 않습니다.
+	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	인터페이스를 크게 또는 작게 만듭니다. 같은 확대/축소에서 캔버스의 아트는 크기가 그대로입니다.
+	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	VectorCraft가 그리는 도구 포인터가 UI 배율에 따라 커지고 작아집니다. 끄면 크기가 그대로 유지됩니다.
+	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	인터페이스의 언어입니다. 자동은 시스템 언어를 사용합니다. 언어를 고르면 대화 상자가 바로 그 언어로 바뀝니다.
+	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	애니메이션 확대/축소는 이 옵션이 켜져 있을 때만 작동합니다. 끄면 애니메이션 확대/축소가 흐리게 표시되고 확대/축소에 애니메이션이 없습니다.
+	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	휠로 확대/축소하면 부드럽게 움직이고, 확대/축소 도구는 옆으로 드래그하거나 누르고 있으면 확대/축소합니다. 끄면 확대/축소 도구는 드래그한 영역으로 확대합니다.
+	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	다음 시작부터 데스크톱 버전은 이 종류의 그래픽 프로세서로 그립니다. 자동은 디스플레이를 구동하는 프로세서를 우선합니다. 웹 버전은 사용하지 않습니다.
+	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	각 문서가 보관하는 실행 취소 단계의 최대 수입니다. 낮추면 확인을 클릭할 때 가장 오래된 단계가 삭제됩니다. 메모리를 너무 많이 쓰면 단계가 더 일찍 삭제될 수도 있습니다.
+	Shows the artwork changing while you drag; off, outlines follow the drag and the artwork changes when you release. A ruler guide always moves as you drag.	드래그하는 동안 아트가 바뀌는 모습을 보여 줍니다. 끄면 윤곽선이 드래그를 따라가고 놓을 때 아트가 바뀝니다. 눈금자 안내선은 드래그하는 동안 항상 움직입니다.
+	How many worker threads draw the artwork; -1 uses one fewer than the cores VectorCraft may use, at most 8, and 0 uses none. The web version always uses none.	아트를 그리는 작업자 스레드 수입니다. -1은 VectorCraft가 쓸 수 있는 코어보다 하나 적게(최대 8개) 쓰고, 0은 하나도 쓰지 않습니다. 웹 버전은 항상 쓰지 않습니다.
+	From the next start on a Wayland desktop, X11 (XWayland) opens the window through XWayland; the other choices do so only when a pen is attached.	다음 시작부터 Wayland 데스크톱에서 X11 (XWayland)은 창을 XWayland를 통해 엽니다. 다른 선택은 펜이 연결되어 있을 때만 그렇게 합니다.
+	From the next start, the desktop version shows frames without waiting for the display's refresh, at most 240 a second; off, the display paces them.	다음 시작부터 데스크톱 버전은 디스플레이 새로 고침을 기다리지 않고 초당 최대 240프레임까지 표시합니다. 끄면 디스플레이가 프레임 간격을 정합니다.
+	The larger budget raises each object filter run's base instructions fivefold and keeps the same allowance per input byte; heavy filters, live effects, exporters and importers keep their own limits.	더 큰 예산은 오브젝트 필터 실행마다 기본 명령 수를 5배로 늘리고 입력 바이트당 추가분은 그대로 둡니다. 무거운 필터, 라이브 효과, 내보내기 도구와 가져오기 도구는 각자의 한도를 유지합니다.
+	Converts the artwork and artboards on the canvas to the display's color profile where the system does not already do so; off, the canvas is drawn in sRGB.	시스템이 아직 하지 않는 경우 캔버스의 아트와 아트보드를 디스플레이의 색상 프로필로 변환합니다. 끄면 캔버스는 sRGB로 그려집니다.
+	On the desktop, a save to a file is written in the background while you keep editing; off, you wait until it is written.	데스크톱 버전에서는 파일 저장이 계속 편집하는 동안 백그라운드에서 기록됩니다. 끄면 기록이 끝날 때까지 기다립니다.
+	On the desktop, exports to files and packages are written in the background while you keep editing, except 3D exports; off, you wait for them.	데스크톱 버전에서는 파일로 내보내기와 패키지가 계속 편집하는 동안 백그라운드에서 기록됩니다(3D 내보내기 제외). 끄면 끝날 때까지 기다립니다.
+	Every few minutes, keeps a recovery copy of each document with unsaved changes made since its last copy; off, no timed copies are made.	몇 분마다 마지막 복사본 이후 저장하지 않은 변경이 있는 각 문서의 복구 복사본을 만듭니다. 끄면 정기 복사본을 만들지 않습니다.
+	How many minutes pass between recovery copies while Automatically Save Recovery Data is on.	복구 데이터 자동 저장이 켜져 있는 동안 복구 복사본 사이의 간격(분)입니다.
+	On the desktop, the folder recovery copies are kept in; leave it blank for VectorCraft's own folder. The web version keeps them in the browser.	데스크톱 버전에서 복구 복사본을 보관하는 폴더입니다. 비워 두면 VectorCraft 자체 폴더를 사용합니다. 웹 버전은 브라우저에 보관합니다.
+	No timed recovery copies are made of documents with more than 20,000 objects.	개체가 20,000개를 넘는 문서는 정기 복구 복사본을 만들지 않습니다.
+	Open Recent Files and the Home screen list at most this many recent files; 0 lists none, and VectorCraft still remembers up to 30.	최근 파일 열기와 홈 화면에 표시하는 최근 파일의 최대 개수입니다. 0이면 표시하지 않지만 VectorCraft는 여전히 최대 30개를 기억합니다.
+	When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.	문서를 열 때 저장된 미리 보기를 표시하는 연결된 EPS 이미지는 EPS 파일을 다시 읽지 않고 그 미리 보기를 유지합니다. 변경된 파일은 계속 링크 업데이트 설정을 따릅니다.
+	In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.	픽셀 미리 보기에서 이미지를 매끄럽게 그립니다. 끄면 픽셀 가장자리가 선명하게 보입니다. 픽셀 미리 보기 밖에서는 이미지가 항상 매끄럽습니다.
+	When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.	연결된 파일이 바뀌면 자동으로는 다시 읽고, 수정 시 확인은 먼저 묻고, 수동은 그대로 두고 상태 표시줄에 메모를 표시합니다.
+	On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.	데스크톱 버전에서 템플릿에서 새로 만들기…와 템플릿으로 저장…이 처음 여는 폴더입니다. 비워 두면 문서 폴더의 VectorCraft Templates를 사용합니다.
+	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	원본 편집은 연결된 파일을 해당 유형에 대한 시스템 기본 앱에서 엽니다. 끄면 연결된 래스터 이미지는 PhotoCraft가 설치되어 있을 때 PhotoCraft에서 열립니다.
+	A file saved by an older VectorCraft version opens with [Converted] after its name, and Save asks where to save it; off, Save replaces the file.	이전 버전의 VectorCraft로 저장한 파일은 이름 뒤에 [Converted]가 붙어 열리고, 저장은 저장할 위치를 묻습니다. 끄면 저장이 파일을 바꿉니다.
+	VectorCraft files and templates are saved compressed, so they are smaller, unless a save says otherwise; saves for versions that cannot open compressed files stay uncompressed.	VectorCraft 파일과 템플릿은 저장에서 달리 지정하지 않는 한 압축되어 더 작게 저장됩니다. 압축 파일을 열 수 없는 버전용으로 저장하면 압축하지 않습니다.
+	Copy and Cut also give other apps SVG code of the art; on the desktop, the code is not copied as text when the art embeds more than 1 MiB of images.	복사와 잘라내기는 아트의 SVG 코드도 다른 앱에 전달합니다. 데스크톱에서는 아트에 1 MiB가 넘는 이미지가 포함되면 코드가 텍스트로 복사되지 않습니다.
+	On Windows, Copy and Cut also give other apps a PDF of the art; the other platforms do not copy a PDF yet.	Windows에서는 복사와 잘라내기가 아트의 PDF도 다른 앱에 전달합니다. 다른 플랫폼은 아직 PDF를 복사하지 않습니다.
+	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft는 이 선택을 저장하지만 복사와 잘라내기는 아직 레거시 벡터 클립보드 형식을 사용하지 않습니다.
+	Preserve Paths or Preserve Appearance and Overprints for the legacy vector clipboard; VectorCraft stores the choice but does not use it yet.	레거시 벡터 클립보드의 패스 보존 또는 모양 및 오버프린트 보존입니다. VectorCraft는 선택을 저장하지만 아직 사용하지 않습니다.
+	Keep Formatting keeps the styles of text copied from VectorCraft type when it is pasted into type; Keep Plain Text gives it the style where it lands.	서식 유지는 VectorCraft 텍스트 개체에서 복사한 텍스트를 텍스트 개체에 붙여넣을 때 스타일을 유지하고, 일반 텍스트 유지는 붙여넣은 위치의 스타일을 적용합니다.
+	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	문서 설정의 언어가 영어: 미국이고 [기본 문자 스타일]이 언어를 지정하지 않는 동안 새 텍스트는 이 언어를 받습니다. 문서에 이미 있는 텍스트는 자체 언어를 유지합니다.
+	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	하이픈 넣기가 켜진 단락에서는 목록의 단어가 입력한 하이픈 위치에서만 나뉘며, 하이픈이 없으면 나뉘지 않습니다. 대소문자는 상관없습니다. 한국어 단어에는 하이픈이 붙지 않으며, 인도 언어의 단어는 문자 묶음 안에서 나뉘지 않습니다.
 	Reset all preferences to their defaults?	모든 환경 설정을 기본값으로 재설정하시겠습니까?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	기본값은 환경 설정에서 확인을 클릭하면 적용됩니다. 그곳에서 취소를 누르면 현재 환경 설정이 유지됩니다.
 	Restored documents open unsaved: save them to keep them.	복원된 문서는 저장되지 않은 상태로 열립니다. 보존하려면 저장하세요.
@@ -7018,6 +7081,10 @@ axis	Y Axis	Y축
 	Create New Action	새 액션 만들기
 	Play Action	액션 재생
 	Action Set:	액션 세트:
+	Choose Align To at playback	재생 시 정렬 대상 선택
+	Align steps use the key object, key anchor or key guide when one is set.	키 개체, 키 앵커 포인트 또는 키 안내선이 설정되어 있으면 정렬 단계는 그것을 사용합니다.
+	With one whole object selected and no key, they use the artboard.	개체 하나 전체만 선택되어 있고 키가 없으면 아트보드를 사용합니다.
+	Otherwise they use the selection.	그 밖에는 선택 영역을 사용합니다.
 	Function Key:	기능 키:
 	Record	기록
 	Create New Set	새 세트 만들기
@@ -7050,6 +7117,7 @@ axis	Y Axis	Y축
 	Inventory Icons	인벤토리 아이콘
 	Skill Icons	스킬 아이콘
 	Weather Icons	날씨 아이콘
+	Media Controls	미디어 제어
 	Attack	공격
 	Defend	방어
 	Heal	치유
@@ -7424,6 +7492,10 @@ axis	Y Axis	Y축
 	Rain	비
 	Thunder	천둥
 	Snow	눈
+	Play	재생
+	Pause	일시 중지
+	Skip Next	다음으로 건너뛰기
+	Shuffle	셔플
 	Bar	막대
 	Hexagon	육각형
 	Spectrum	스펙트럼
@@ -10249,6 +10321,11 @@ breakText	Glyphs	글리프
 @msg	A panel is not joined to the rest by a crease.	패널이 어떤 오시선으로도 나머지와 연결되어 있지 않습니다.
 @msg	A fold line is on a non-printing layer.	접는 선이 인쇄되지 않는 레이어에 있습니다.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	패널: {panels}, 힌지: {hinges}, 오류: {errors}, 경고: {warnings}
+	Image Brush	이미지 브러시
+	Soft Bloom	부드러운 꽃
+	Halftone Field	하프톤 필드
+	Solar Grain	태양 입자
+	Color Flecks	색 점
 	Paper Cutouts	종이 오려내기
 	Coral Layers	산호색 레이어
 	Mint Layers	민트색 레이어

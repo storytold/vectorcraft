@@ -1035,6 +1035,20 @@ liquify-list-end	{0}, {1}	{0} en {1}
 	Break Thread	Koppeling verbreken
 	Fit Headline	Kop passend maken
 	Find Font…	Lettertype zoeken…
+	Retype	Opnieuw typen
+	Find Matching Fonts	Overeenkomende lettertypen zoeken
+	Find more font matches	Meer overeenkomende lettertypen zoeken
+	Type your text to preview	Typ de tekst voor het voorbeeld
+	Select outlined text, then Find Matching Fonts.	Selecteer omgezette tekst en kies dan Overeenkomende lettertypen zoeken.
+	No font matches the selected shapes.	Geen lettertype komt overeen met de geselecteerde vormen.
+	Shapes past the first 2,048, or more than 16 groups deep, were not compared.	Vormen na de eerste 2.048, of meer dan 16 groepen diep, zijn niet vergeleken.
+	Reset Retype Panel	Paneel Opnieuw typen herstellen
+	List Matching Fonts	Overeenkomende lettertypen weergeven
+	Retype Preview	Voorbeeld in paneel Opnieuw typen
+@msg	`count` must be a whole number from 1 to 96	`count` moet een geheel getal van 1 tot 96 zijn
+@msg	`size` must be small, medium or large	`size` moet small, medium of large zijn
+@msg	`text` must be a string of at most 100 characters	`text` moet een tekenreeks van hoogstens 100 tekens zijn
+@msg	Retype: select outlined text (paths or compound paths)	Opnieuw typen: selecteer omgezette tekst (paden of samengestelde paden)
 	Change Case	Hoofdlettergebruik wijzigen
 	UPPERCASE	HOOFDLETTERS
 	lowercase	kleine letters
@@ -5153,6 +5167,55 @@ font-technology	Variable	Variabel
 	Edit type set in fonts that aren't available?	Tekst in lettertypen bewerken die niet beschikbaar zijn?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Toont op het canvas het nummer van elke slice in een vakje linksboven in de slice; staat dit uit, dan blijven de omtrekken van de slices zichtbaar.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	De kleur van de omtrekken van gebruikers- en objectslices en van hun nummervakjes; automatische slices gebruiken een vagere tint ervan.
+	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	Nieuwe tekst krijgt deze taal zolang de taal in Documentinstellingen Engels: VS is; tekst die al in een document staat, behoudt zijn eigen taal.
+	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	In alinea's met Afbreken aan wordt een opgesomd woord alleen afgebroken bij de koppeltekens die erin getypt zijn, of nergens als het er geen heeft, ongeacht taal of hoofdletters.
+	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	In de desktopversie worden de .wasm-plug-ins in deze map geladen bij het starten en wanneer u hier met een nieuwe map op OK klikt, behalve in de veilige modus; de webversie laadt ze niet.
+	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	De eerste keuze voor de scratchschijf: Startup, None of een mappad; VectorCraft slaat deze op, maar gebruikt nog geen scratchschijven.
+	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	De tweede keuze voor de scratchschijf: Startup, None of een mappad; VectorCraft slaat deze op, maar gebruikt nog geen scratchschijven.
+	How light or dark the interface is.	Hoe licht of donker de gebruikersinterface is.
+	The set of colors the interface is drawn in.	De set kleuren waarin de gebruikersinterface wordt getekend.
+	The color of controls that are on, chosen or focused; the menu is dimmed while the Color Scheme has an accent of its own.	De kleur van besturingselementen die aan staan, gekozen zijn of de focus hebben; het menu is gedimd zolang het Kleurschema een eigen accentkleur heeft.
+	The color of the canvas around the artboards; Match User Interface Brightness takes it from Brightness. Outline view always shows it white.	De kleur van het canvas rond de tekengebieden; Aanpassen aan helderheid van gebruikersinterface neemt die over van Helderheid. De weergave Omtrek toont het altijd wit.
+	A panel opened from its icon closes when you press Esc or click outside it; off, it stays open until you click an icon.	Een paneel dat vanaf zijn pictogram is geopend, sluit als u op Esc drukt of erbuiten klikt; uit blijft het open tot u op een pictogram klikt.
+	Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them.	Toont de naam van elke gereedschapgroep boven de gereedschappen in de werkbalk; uit volgen de groepen elkaar op zonder iets ertussen.
+	From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.	Voortaan openen documenten die u opent of maakt als tabbladen; uit opent elk in een zwevend venster. Documenten die al open zijn, blijven waar ze zijn.
+	Makes the document tabs taller and their names larger.	Maakt de tabbladen van documenten hoger en hun namen groter.
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own.	Vanaf de volgende start tekent het systeem de titelbalk van het venster waar VectorCraft anders zijn eigen zou tekenen.
+	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on.	Vanaf de volgende start tekent VectorCraft de titelbalk van het venster ook waar het bureaublad die zou tekenen, tenzij Systeemtitelbalk aan staat.
+	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	Maakt de gebruikersinterface groter of kleiner; illustraties op het canvas houden bij dezelfde zoom hun grootte.
+	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	De gereedschapsaanwijzers die VectorCraft tekent, groeien en krimpen mee met UI-schaling; uit houden ze hun grootte.
+	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	De taal van de gebruikersinterface; Automatisch gebruikt de taal van het systeem. Het dialoogvenster wisselt van taal zodra u er een kiest.
+	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	Geanimeerd zoomen werkt alleen zolang dit aan staat; uit is Geanimeerd zoomen gedimd en wordt zoomen niet geanimeerd.
+	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	Zoomen met het wieltje glijdt soepel, en het Zoom-gereedschap zoomt terwijl u opzij sleept of het ingedrukt houdt; uit zoomt het Zoom-gereedschap in op het gebied waarover u sleept.
+	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	Vanaf de volgende start tekent de desktopversie met dit soort grafische processor; Automatisch kiest bij voorkeur de processor die het beeldscherm aanstuurt. De webversie gebruikt het niet.
+	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	Het grootste aantal ongedaanmaakstappen dat elk document bewaart; een lager getal verwijdert de oudste stappen wanneer u op OK klikt. Stappen kunnen ook eerder verdwijnen als ze te veel geheugen gebruiken.
+	Shows the artwork changing while you drag; off, outlines follow the drag and the artwork changes when you release. A ruler guide always moves as you drag.	Toont tijdens het slepen hoe de illustratie verandert; uit volgen contouren het slepen en verandert de illustratie wanneer u loslaat. Een hulplijn van de liniaal beweegt altijd mee tijdens het slepen.
+	How many worker threads draw the artwork; -1 uses one fewer than the cores VectorCraft may use, at most 8, and 0 uses none. The web version always uses none.	Hoeveel werkthreads de illustratie tekenen; -1 gebruikt er één minder dan de kernen die VectorCraft mag gebruiken, hoogstens 8, en 0 geen. De webversie gebruikt er nooit een.
+	From the next start on a Wayland desktop, X11 (XWayland) opens the window through XWayland; the other choices do so only when a pen is attached.	Vanaf de volgende start op een Wayland-bureaublad opent X11 (XWayland) het venster via XWayland; de andere keuzes doen dat alleen als er een pen is aangesloten.
+	From the next start, the desktop version shows frames without waiting for the display's refresh, at most 240 a second; off, the display paces them.	Vanaf de volgende start toont de desktopversie beelden zonder op de verversing van het beeldscherm te wachten, hoogstens 240 per seconde; uit bepaalt het beeldscherm het tempo.
+	The larger budget raises each object filter run's base instructions fivefold and keeps the same allowance per input byte; heavy filters, live effects, exporters and importers keep their own limits.	Het grotere budget vervijfvoudigt de basisinstructies van elke uitvoering van een objectfilter en houdt dezelfde toeslag per invoerbyte; zware filters, live-effecten, exporteurs en importeurs houden hun eigen limieten.
+	Converts the artwork and artboards on the canvas to the display's color profile where the system does not already do so; off, the canvas is drawn in sRGB.	Zet de illustraties en tekengebieden op het canvas om naar het kleurprofiel van het beeldscherm waar het systeem dat nog niet doet; uit wordt het canvas in sRGB getekend.
+	On the desktop, a save to a file is written in the background while you keep editing; off, you wait until it is written.	In de desktopversie wordt opslaan naar een bestand op de achtergrond geschreven terwijl u verder bewerkt; uit wacht u tot het geschreven is.
+	On the desktop, exports to files and packages are written in the background while you keep editing, except 3D exports; off, you wait for them.	In de desktopversie worden exports naar bestanden en pakketten op de achtergrond geschreven terwijl u verder bewerkt, behalve 3D-exports; uit wacht u erop.
+	Every few minutes, keeps a recovery copy of each document with unsaved changes made since its last copy; off, no timed copies are made.	Maakt om de paar minuten een herstelkopie van elk document met niet-opgeslagen wijzigingen sinds de laatste kopie; uit worden geen periodieke kopieën gemaakt.
+	How many minutes pass between recovery copies while Automatically Save Recovery Data is on.	Hoeveel minuten er tussen herstelkopieën zitten zolang Herstelgegevens automatisch opslaan aan staat.
+	On the desktop, the folder recovery copies are kept in; leave it blank for VectorCraft's own folder. The web version keeps them in the browser.	In de desktopversie de map waarin herstelkopieën worden bewaard; laat leeg voor de eigen map van VectorCraft. De webversie bewaart ze in de browser.
+	No timed recovery copies are made of documents with more than 20,000 objects.	Van documenten met meer dan 20.000 objecten worden geen periodieke herstelkopieën gemaakt.
+	Open Recent Files and the Home screen list at most this many recent files; 0 lists none, and VectorCraft still remembers up to 30.	Recente bestanden openen en het Home-scherm tonen hoogstens zoveel recente bestanden; 0 toont er geen, en VectorCraft onthoudt er nog steeds tot 30.
+	When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.	Bij het openen van een document houdt een gekoppelde EPS-afbeelding die haar opgeslagen voorvertoning toont die vast, in plaats van het EPS-bestand opnieuw te lezen; gewijzigde bestanden volgen nog steeds Koppelingen bijwerken.
+	In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.	In Pixelvoorbeeld worden afbeeldingen vloeiend getekend; uit tonen hun pixels harde randen. Buiten Pixelvoorbeeld worden afbeeldingen altijd vloeiend getekend.
+	When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.	Als een gekoppeld bestand verandert, leest Automatisch het opnieuw, vraagt Vragen bij wijziging het u eerst, en laat Handmatig het zoals het is met een melding in de statusbalk.
+	On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.	In de desktopversie de map waarin Nieuw van sjabloon… en Opslaan als sjabloon… beginnen; laat leeg voor VectorCraft Templates in uw documentenmap.
+	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	Origineel bewerken opent een gekoppeld bestand in de standaardapp van het systeem voor dat type; uit opent een gekoppelde rasterafbeelding in PhotoCraft als dat geïnstalleerd is.
+	A file saved by an older VectorCraft version opens with [Converted] after its name, and Save asks where to save it; off, Save replaces the file.	Een bestand dat een oudere VectorCraft-versie heeft opgeslagen, opent met [Converted] achter de naam, en Opslaan vraagt waar het moet worden opgeslagen; uit vervangt Opslaan het bestand.
+	VectorCraft files and templates are saved compressed, so they are smaller, unless a save says otherwise; saves for versions that cannot open compressed files stay uncompressed.	VectorCraft-bestanden en -sjablonen worden gecomprimeerd en dus kleiner opgeslagen, tenzij een opslag iets anders zegt; wat wordt opgeslagen voor versies die geen gecomprimeerde bestanden openen, blijft ongecomprimeerd.
+	Copy and Cut also give other apps SVG code of the art; on the desktop, the code is not copied as text when the art embeds more than 1 MiB of images.	Kopiëren en Knippen geven andere apps ook de SVG-code van de illustratie; op de desktop wordt de code niet als tekst gekopieerd als de illustratie meer dan 1 MiB aan afbeeldingen insluit.
+	On Windows, Copy and Cut also give other apps a PDF of the art; the other platforms do not copy a PDF yet.	Op Windows geven Kopiëren en Knippen andere apps ook een PDF van de illustratie; de andere platforms kopiëren nog geen PDF.
+	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft slaat deze keuze op, maar Kopiëren en Knippen gebruiken nog geen indeling van het verouderde vectorklembord.
+	Preserve Paths or Preserve Appearance and Overprints for the legacy vector clipboard; VectorCraft stores the choice but does not use it yet.	Paden behouden of Vormgeving en overprint behouden voor het verouderde vectorklembord; VectorCraft slaat de keuze op, maar gebruikt die nog niet.
+	Keep Formatting keeps the styles of text copied from VectorCraft type when it is pasted into type; Keep Plain Text gives it the style where it lands.	Opmaak behouden behoudt de stijlen van tekst uit een tekstobject in VectorCraft wanneer die in een tekstobject wordt geplakt; Platte tekst behouden geeft die de stijl van de plek waar hij terechtkomt.
+	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	Nieuwe tekst krijgt deze taal zolang de taal in Documentinstellingen Engels: VS is en [Normale tekenstijl] geen taal instelt; tekst die al in een document staat, behoudt zijn eigen taal.
+	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	In alinea's met Afbreken aan wordt een opgesomd woord alleen afgebroken bij de koppeltekens die erin getypt zijn, of nergens als het er geen heeft, ongeacht hoofdletters; Koreaanse woorden krijgen geen afbreekstreepje, en woorden in Indiase talen worden niet binnen een tekengroep afgebroken.
 	Reset all preferences to their defaults?	Alle voorkeuren terugzetten naar de standaardwaarden?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	De standaardwaarden worden toegepast wanneer u in Voorkeuren op OK klikt. Annuleren daar behoudt uw huidige voorkeuren.
 	Smaller ↔ Larger	Kleiner ↔ Groter
@@ -9359,6 +9422,10 @@ axis	Y Axis	Y-as
 	Create New Action	Nieuwe actie maken
 	Play Action	Actie afspelen
 	Action Set:	Actieset:
+	Choose Align To at playback	Uitlijnen op kiezen bij afspelen
+	Align steps use the key object, key anchor or key guide when one is set.	Uitlijnstappen gebruiken het sleutelobject, het sleutelankerpunt of de sleutelhulplijn als die is ingesteld.
+	With one whole object selected and no key, they use the artboard.	Met één volledig geselecteerd object en geen sleutel gebruiken ze het tekengebied.
+	Otherwise they use the selection.	Anders gebruiken ze de selectie.
 	Function Key:	Functietoets:
 	Record	Opnemen
 	Create New Set	Nieuwe set maken
@@ -9386,6 +9453,7 @@ axis	Y Axis	Y-as
 	Inventory Icons	Inventarisiconen
 	Skill Icons	Vaardigheidsiconen
 	Weather Icons	Weericonen
+	Media Controls	Mediabediening
 	Attack	Aanval
 	Defend	Verdediging
 	Heal	Genezen
@@ -9753,6 +9821,10 @@ axis	Y Axis	Y-as
 	Rain	Regen
 	Thunder	Donder
 	Snow	Sneeuw
+	Play	Afspelen
+	Pause	Pauze
+	Skip Next	Volgende
+	Shuffle	Shuffle
 	Save Brush Library…	Penseelbibliotheek opslaan…
 @msg	no empty artboards to delete	geen lege tekengebieden om te verwijderen
 	Scale Presets	Schaalvoorinstellingen
@@ -10679,6 +10751,11 @@ breakText	Glyphs	Glyphs
 @msg	A panel is not joined to the rest by a crease.	Een paneel is door geen rillijn met de rest verbonden.
 @msg	A fold line is on a non-printing layer.	Een vouwlijn staat op een laag die niet wordt afgedrukt.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panelen: {panels}, scharnieren: {hinges}, fouten: {errors}, waarschuwingen: {warnings}
+	Image Brush	Afbeeldingspenselen
+	Soft Bloom	Zachte bloei
+	Halftone Field	Halftoonveld
+	Solar Grain	Zonnekorrel
+	Color Flecks	Kleurspikkels
 	Paper Cutouts	Papieruitsneden
 	Coral Layers	Koraallagen
 	Mint Layers	Muntlagen

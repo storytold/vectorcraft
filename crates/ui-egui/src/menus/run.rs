@@ -116,6 +116,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         .or_else(|| crate::custom_toolbars::command(app, id, p))
         .or_else(|| crate::panels::learn::command(app, id, p))
         .or_else(|| crate::panels::discover::command(app, id, p))
+        .or_else(|| crate::panels::retype::command(app, id, p))
     {
         return Some(r);
     }
@@ -209,6 +210,7 @@ fn run_ui_part1(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         "file.saveInBackground" => Ok(io::hide_saves(app)),
         "file.cancelOpen" => Ok(crate::opening::cancel_all(app)),
         "file.openInBackground" => Ok(crate::opening::hide_all(app)),
+        "file.cancelPlace" => Ok(crate::placing::cancel_all(app)),
         id if id.starts_with("file.openRecent") => match recent_slot(app, id).filter(|path| recent_readable(path)).cloned() {
             Some(path) => io::open_reporting(app, &path),
             None => Err("no such recent file".into()),
@@ -597,6 +599,11 @@ fn run_ui_part5(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             }
         }
         "window.toolbar" => flag(&mut app.ui.toolbar),
+        "window.toolbarCompact" => opt_bool(p, "on").map(|on| {
+            let on = on.unwrap_or(!app.ui.toolbar_compact);
+            app.ui.toolbar_compact = on;
+            json!(on)
+        }),
         "window.toolbarColumns" => {
             let toolbar = match crate::custom_toolbars::target(&app.ui, p) {
                 Ok(t) => t,
@@ -731,6 +738,10 @@ fn run_ui_part6(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             let id = app.session.last_selection_tool();
             let switched = if app.session.tool_id() == id { Ok(()) } else { app.try_select_tool(id) };
             switched.map(|()| json!({"tool": app.session.tool_id()}))
+        }
+        "tool.switchSelectionTools" => {
+            let tool = if app.session.tool_id() == "selection" { "directSelection" } else { "selection" };
+            app.try_select_tool(tool).map(|()| json!({"tool": app.session.tool_id()}))
         }
         crate::touch::TOGGLE_MODE => crate::touch::toggle_mode(app),
         crate::addons::pathtools::corner::COMMAND => crate::addons::pathtools::corner::open(app),
