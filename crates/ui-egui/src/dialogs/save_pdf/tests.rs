@@ -1151,6 +1151,22 @@ fn custom_keeps_the_overprint_option_of_a_saved_preset_deleted_meanwhile() {
     }
 }
 
+/// OK keeps the overprint option Custom… opened with when its saved preset is deleted and made
+/// again under the same name with another overprint option meanwhile.
+#[test]
+fn custom_keeps_the_overprint_option_it_opened_with_over_a_preset_made_again() {
+    let (mut app, _, _) = app();
+    app.run("flattener.presets.save", json!({"name": "Mine", "balance": 20, "preserveOverprints": false})).unwrap();
+    open_advanced(&mut app, json!({"compatibility": "1.3", "flattenerPreset": "Mine", "advanced": {"overprint": "preserve"}}));
+    Reader::new().click_custom(&mut app);
+    assert!(!app.ui.dialog.as_ref().unwrap().bool("preserveOverprints"), "shown as the preset had it");
+    app.run("flattener.presets.delete", json!({"name": "Mine"})).unwrap();
+    app.run("flattener.presets.save", json!({"name": "Mine", "balance": 20, "preserveOverprints": true})).unwrap();
+    super::super::confirm(&mut app).unwrap();
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!(d.fields["flattener"]["preserveOverprints"].as_bool(), Some(false));
+}
+
 /// Flattener preset shows a preset named in another case by its name, not as [Custom].
 #[test]
 fn flattener_preset_shows_a_name_given_in_any_case() {

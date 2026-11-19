@@ -964,7 +964,11 @@ fn custom_body(_app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> 
 fn custom_confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let mut o = custom_options(d)?;
     let mut parent = super::parent(d).ok_or("the dialog it was opened over is no longer open")?;
-    let before = flattener(&parent, &app.session.prefs.flattener_presets).ok();
+    let kept = d
+        .fields
+        .get(KEPT_OVERPRINTS)
+        .and_then(Value::as_bool)
+        .or_else(|| flattener(&parent, &app.session.prefs.flattener_presets).ok().map(|before| before.preserve_overprints));
     let base = match FlattenOptions::find_preset(&flattener_name(&parent), &app.session.prefs.flattener_presets) {
         Some(base) => base,
         None => {
@@ -974,14 +978,11 @@ fn custom_confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String>
     };
     // The writer sets the first two itself, so they take the preset's values: options that
     // otherwise match the preset leave its name showing. The writer keeps overprints only where the
-    // options and Overprint both keep them, so the options keep the value they had before, or the
-    // value they opened with when those can no longer be read.
+    // options and Overprint both keep them, so the options keep the value they opened with, even
+    // when their preset was deleted, changed or made again under its name meanwhile.
     o.clip_complex_regions = base.clip_complex_regions;
     o.preserve_alpha = base.preserve_alpha;
-    o.preserve_overprints = match before {
-        Some(before) => before.preserve_overprints,
-        None => d.fields.get(KEPT_OVERPRINTS).and_then(Value::as_bool).unwrap_or(o.preserve_overprints),
-    };
+    o.preserve_overprints = kept.unwrap_or(o.preserve_overprints);
     if o == base {
         parent.fields.remove("flattener");
     } else {
