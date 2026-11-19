@@ -81,6 +81,7 @@ pub use tool_overlays::{HiddenChars, SpellingMarks};
 use tool_overlays::{
     grid_repeat_overlay, hidden_chars_overlay, live_paint_gap_overlays, mirror_axis_overlay, nine_slice_overlay, original_path_overlay,
     print_tiling_overlay, radial_repeat_overlay, rotate_view_dial, shaper_widget_overlay, slice_overlay, spelling_overlay, thread_overlays,
+    trace_split_overlay,
 };
 pub(crate) use view::animated_zoom;
 pub(crate) use view::drag_rotation;
@@ -429,7 +430,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         draw_overlays(&painter, &xf, &overlays, &t, HandleLook::of(&app.session.prefs), &mut shared_paths);
         app.canvas.shared_paths = shared_paths;
         crate::panels::tabs::paint_stop_guide(app, &painter, &xf);
-        overlay_hover_text(ui, &xf, &overlays, ui.data(|d| d.get_temp::<Drag>(drag_id())).is_some());
+        // The tooltips say what a click does, so none shows where the click does something else:
+        // while Space lends a view tool, or over an artboard's name.
+        let space = ui.input(|i| drag::space_lends_view_tools(app, i.modifiers, i.key_down(egui::Key::Space)));
+        let quiet = space || ui.data(|d| d.get_temp::<Drag>(drag_id())).is_some();
+        overlay_hover_text(ui, &xf, &overlays, quiet, |p| artboards::artboard_name_at(app, ui, &xf, p).is_some());
         if !revolve_edit {
             shaper_widget_overlay(app, &painter, &xf);
             crate::panels::three_d::paint_graphic_handles(app, &painter, &xf);
@@ -496,20 +501,24 @@ fn canvas_pointer_releases(ui: &Ui) -> Vec<IgnoreSamplerRelease> {
                 counts[*button as usize] += 1;
             }
         }
-        i.events.iter().enumerate().filter_map(|(index, event)| {
-            let egui::Event::PointerButton { pos, button, pressed: false, .. } = event else { return None };
-            let clicked = if counts[*button as usize] == 1 {
-                i.pointer.button_clicked(*button)
-            } else {
-                // Aggregated flags cannot identify a later non-click release. Replay only
-                // an ambiguous button's prefix, before its Up, through egui's public API.
-                let mut before = i.clone();
-                before.pointer = previous.clone();
-                let raw = egui::RawInput { time: Some(i.time), events: i.events[..index].to_vec(), ..i.raw.clone() };
-                before.begin_pass(raw, false, pixels_per_point, options).pointer.could_any_button_be_click()
-            };
-            Some(IgnoreSamplerRelease { button: *button, at: *pos, clicked })
-        }).collect()
+        i.events
+            .iter()
+            .enumerate()
+            .filter_map(|(index, event)| {
+                let egui::Event::PointerButton { pos, button, pressed: false, .. } = event else { return None };
+                let clicked = if counts[*button as usize] == 1 {
+                    i.pointer.button_clicked(*button)
+                } else {
+                    // Aggregated flags cannot identify a later non-click release. Replay only
+                    // an ambiguous button's prefix, before its Up, through egui's public API.
+                    let mut before = i.clone();
+                    before.pointer = previous.clone();
+                    let raw = egui::RawInput { time: Some(i.time), events: i.events[..index].to_vec(), ..i.raw.clone() };
+                    before.begin_pass(raw, false, pixels_per_point, options).pointer.could_any_button_be_click()
+                };
+                Some(IgnoreSamplerRelease { button: *button, at: *pos, clicked })
+            })
+            .collect()
     })
 }
 
@@ -576,7 +585,13 @@ fn primary_click(ui: &Ui, resp: &egui::Response) -> CanvasClick {
         return CanvasClick::default();
     }
     ui.data(|data| data.get_temp::<CanvasClick>(resp.id.with("image-trace-click-count"))).unwrap_or_else(|| {
-        let count = if resp.triple_clicked() { 3 } else if resp.double_clicked() { 2 } else { 1 };
+        let count = if resp.triple_clicked() {
+            3
+        } else if resp.double_clicked() {
+            2
+        } else {
+            1
+        };
         let at = ui.data(|data| data.get_temp::<Pos2>(resp.id.with("canvas-qualified-primary-release")));
         CanvasClick { count, at }
     })
@@ -1610,6 +1625,7 @@ fn selection_visuals(
         mirror_axis_overlay(app, painter, xf);
         grid_repeat_overlay(app, painter, xf);
         radial_repeat_overlay(app, painter, xf);
+        trace_split_overlay(app, painter, xf);
         if app.ui.view.text_threads {
             // Under the tools' overlays: a selected frame's own ports are drawn over its thread's.
             let mut threads = thread_overlays(app, xf.zoom);

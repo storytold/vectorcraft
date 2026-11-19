@@ -1382,10 +1382,18 @@ fn review_597048_coalesced_pair(sampler_prefix: bool) {
         review_gesture_release(&mut app, &ctx, at, start + step);
         assert_eq!(review_gesture_state(&app), expected, "the stale prefix was consumed in the earlier frame");
     }
-    frame_at(&mut app, &ctx, start + 3.0 * step, vec![
-        Event::PointerMoved(at), review_596866_button(at, true), review_596866_button(at, false),
-        review_596866_button(at, true), review_596866_button(at, false),
-    ]);
+    frame_at(
+        &mut app,
+        &ctx,
+        start + 3.0 * step,
+        vec![
+            Event::PointerMoved(at),
+            review_596866_button(at, true),
+            review_596866_button(at, false),
+            review_596866_button(at, true),
+            review_596866_button(at, false),
+        ],
+    );
     assert!(ctx.input(|i| i.pointer.button_double_clicked(PointerButton::Primary)));
     assert_eq!(ctx.input(|i| i.pointer.button_triple_clicked(PointerButton::Primary)), sampler_prefix);
     assert_eq!(app.session.active().unwrap().isolation, Some(group), "two ordinary clicks isolate after an earlier-frame prefix");
@@ -1418,10 +1426,18 @@ fn review_597048_a_later_drag_release_does_not_replace_a_qualified_double_click(
     review_gesture_press(&mut app, &ctx, at, start);
     review_gesture_release(&mut app, &ctx, at, start + step);
     review_gesture_press(&mut app, &ctx, at, start + 3.0 * step);
-    frame_at(&mut app, &ctx, start + 4.0 * step, vec![
-        review_596866_button(at, false), Event::PointerMoved(blank), review_596866_button(blank, true),
-        Event::PointerMoved(away), review_596866_button(away, false),
-    ]);
+    frame_at(
+        &mut app,
+        &ctx,
+        start + 4.0 * step,
+        vec![
+            review_596866_button(at, false),
+            Event::PointerMoved(blank),
+            review_596866_button(blank, true),
+            Event::PointerMoved(away),
+            review_596866_button(away, false),
+        ],
+    );
     assert!(ctx.input(|i| i.pointer.button_double_clicked(PointerButton::Primary)));
     assert!(!ctx.input(|i| i.pointer.button_triple_clicked(PointerButton::Primary)), "the out-of-slop drag is not a third click");
     assert_eq!(ctx.input(|i| i.pointer.interact_pos()), Some(away));

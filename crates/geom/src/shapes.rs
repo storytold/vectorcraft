@@ -441,6 +441,96 @@ pub fn straight_star_inner_radius(r1: f64, points: u32) -> f64 {
     r1 * (PI / n * 2.0).cos() / (PI / n).cos()
 }
 
+/// The smallest circle that holds every one of `points`: its center and radius. Points that are
+/// not finite are skipped; `None` when no finite point is left. One point gives a circle of
+/// radius 0 around it.
+pub fn enclosing_circle(points: &[Point]) -> Option<(Point, f64)> {
+    let mut world = convex_hull(points.iter().copied().filter(|p| p.is_finite()).collect());
+    // A fixed shuffle keeps the expected work linear for any order of the points, and the same
+    // points always give the same circle.
+    let mut seed: u64 = 0x9E37_79B9_7F4A_7C15;
+    for i in (1..world.len()).rev() {
+        seed ^= seed << 13;
+        seed ^= seed >> 7;
+        seed ^= seed << 17;
+        world.swap(i, (seed % (i as u64 + 1)) as usize);
+    }
+    // The work is done relative to one of the points, so the rounding allowance in `holds` scales
+    // with the size of the points' spread, not with their distance from the origin.
+    let origin = *world.first()?;
+    let rel = |p: &Point| (*p - origin).to_point();
+    let first = Point::ORIGIN;
+    let holds = |(c, r): (Point, f64), p: Point| (p - c).hypot() <= r + 1e-12 * (r + c.to_vec2().hypot());
+    let diameter = |a: Point, b: Point| (a.midpoint(b), (b - a).hypot() / 2.0);
+    let mut circle = (first, 0.0);
+    for (i, pi) in world.iter().map(rel).enumerate().skip(1) {
+        if holds(circle, pi) {
+            continue;
+        }
+        circle = (pi, 0.0);
+        for (j, pj) in world.iter().map(rel).enumerate().take(i) {
+            if holds(circle, pj) {
+                continue;
+            }
+            circle = diameter(pi, pj);
+            for pk in world[..j].iter().map(rel) {
+                if holds(circle, pk) {
+                    continue;
+                }
+                circle = circle_through(pi, pj, pk).unwrap_or_else(|| {
+                    // Three points on one line: the circle on the two farthest apart.
+                    let pairs = [(pi, pj), (pj, pk), (pk, pi)];
+                    let far = pairs.into_iter().fold((pi, pj), |a, b| if (b.1 - b.0).hypot2() > (a.1 - a.0).hypot2() { b } else { a });
+                    diameter(far.0, far.1)
+                });
+            }
+        }
+    }
+    // The radius reaches the farthest point from the center returned, whatever rounding the steps
+    // above and the move back from `origin` left.
+    let center = circle.0 + origin.to_vec2();
+    let radius = world.iter().map(|p| (*p - center).hypot()).fold(0.0, f64::max);
+    (center.is_finite() && radius.is_finite()).then_some((center, radius))
+}
+
+/// The corners of the convex hull of `points`, counter-clockwise in a y-up frame, without points
+/// on its edges. Fewer than three points, or points on one line, give their ends. Points that are
+/// not finite are left out.
+pub fn convex_hull(mut points: Vec<Point>) -> Vec<Point> {
+    points.retain(|p| p.is_finite());
+    // -0.0 and 0.0 are one coordinate: adding 0.0 turns -0.0 into 0.0, so the sort below puts
+    // points with the same x in y order.
+    for p in &mut points {
+        *p = Point::new(p.x + 0.0, p.y + 0.0);
+    }
+    points.sort_by(|a, b| a.x.total_cmp(&b.x).then(a.y.total_cmp(&b.y)));
+    points.dedup();
+    if points.len() < 3 {
+        return points;
+    }
+    // Andrew's monotone chain: the lower chain left to right, then the upper chain right to left.
+    let mut hull: Vec<Point> = Vec::with_capacity(points.len() + 1);
+    chain(&mut hull, points.iter().copied());
+    chain(&mut hull, points.iter().rev().copied());
+    hull
+}
+
+/// Adds to `hull` the chain of `points` that turns left at every corner, without its last point,
+/// which starts the next chain.
+fn chain(hull: &mut Vec<Point>, points: impl Iterator<Item = Point>) {
+    let start = hull.len();
+    for p in points {
+        while let [.., o, a] = hull[start..] {
+            if (a - o).cross(p - o) > 0.0 {
+                break;
+            }
+            hull.pop();
+        }
+        hull.push(p);
+    }
+    hull.pop();
+}
+
 /// Open straight line.
 pub fn line(a: Point, b: Point) -> PathData {
     PathData::single(SubPath::polyline(&[a, b], false))
@@ -793,6 +883,87 @@ mod tests {
         assert!((radius - want).abs() / want < 1e-9, "{radius} vs {want}");
         assert!(c.x.abs() < 1e-6 && (c.y - (h - want)).abs() / want < 1e-9, "{c:?}");
         assert_eq!(circle_through(a, b, Point::new(0.0, 1e-12)), None);
+    }
+
+    /// The smallest circle around a set of points: two points far apart are its diameter and the
+    /// points between them change nothing; an acute triangle's corners lie on it; a right triangle
+    /// is held by the circle on its hypotenuse; and points on one line give the circle on the two
+    /// ends.
+    #[test]
+    fn the_enclosing_circle_is_the_smallest_that_holds_every_point() {
+        let near = |(c, r): (Point, f64), want: Point, wr: f64| c.distance(want) < 1e-9 && (r - wr).abs() < 1e-9;
+        let pts = [Point::new(0.0, 0.0), Point::new(10.0, 0.0), Point::new(5.0, 1.0), Point::new(4.0, -2.0)];
+        let got = enclosing_circle(&pts).unwrap();
+        assert!(near(got, Point::new(5.0, 0.0), 5.0), "{got:?}");
+        // An equilateral triangle of side 6: radius 6 / √3, center at its centroid.
+        let h = 27.0_f64.sqrt();
+        let tri = [Point::new(0.0, 0.0), Point::new(6.0, 0.0), Point::new(3.0, h), Point::new(3.0, 1.0)];
+        let got = enclosing_circle(&tri).unwrap();
+        assert!(near(got, Point::new(3.0, h / 3.0), 6.0 / 3.0_f64.sqrt()), "{got:?}");
+        let right = [Point::new(0.0, 0.0), Point::new(8.0, 0.0), Point::new(0.0, 6.0)];
+        assert!(near(enclosing_circle(&right).unwrap(), Point::new(4.0, 3.0), 5.0));
+        let line: Vec<Point> = (0..20).map(|i| Point::new(f64::from(i), 2.0 * f64::from(i))).collect();
+        let got = enclosing_circle(&line).unwrap();
+        assert!(near(got, Point::new(9.5, 19.0), Point::new(19.0, 38.0).distance(Point::ORIGIN) / 2.0), "{got:?}");
+    }
+
+    /// Many points on a circle, in any order and far from the origin, give that circle; every
+    /// point is held. One point gives a circle of radius 0, and no finite point gives none.
+    #[test]
+    fn the_enclosing_circle_holds_every_point_in_any_order() {
+        let c = Point::new(4.0e5, -3.0e5);
+        let mut pts: Vec<Point> = (0..997).map(|i| c + Vec2::from_angle(f64::from(i) * 0.37) * 120.0).collect();
+        pts.extend((0..500).map(|i| c + Vec2::from_angle(f64::from(i)) * (f64::from(i % 97) + 1.0)));
+        for order in 0..3 {
+            if order == 1 {
+                pts.reverse();
+            } else if order == 2 {
+                pts.sort_by(|a, b| a.x.total_cmp(&b.x));
+            }
+            let (center, r) = enclosing_circle(&pts).unwrap();
+            assert!(center.distance(c) < 1e-6 && (r - 120.0).abs() < 1e-6, "{center:?} {r}");
+            assert!(pts.iter().all(|p| p.distance(center) <= r + 1e-9), "a point is outside");
+        }
+        // Small art far from the origin keeps its smallest circle.
+        let far = [Point::new(1.0e12, 5.0), Point::new(1.0e12 + 1.0, 5.0)];
+        assert_eq!(enclosing_circle(&far), Some((Point::new(1.0e12 + 0.5, 5.0), 0.5)));
+        // Where the center rounds on its way back from the first point, the radius still reaches
+        // every point from the center returned.
+        let wide = [Point::new(2f64.powi(53), 0.0), Point::new(2f64.powi(53) + 2.0, 0.0)];
+        let (center, r) = enclosing_circle(&wide).unwrap();
+        assert!(wide.iter().all(|p| p.distance(center) <= r), "{center:?} {r}");
+        let one = Point::new(3.0, 4.0);
+        assert_eq!(enclosing_circle(&[one, one, Point::new(f64::NAN, 1.0)]), Some((one, 0.0)));
+        assert_eq!(enclosing_circle(&[]), None);
+        assert_eq!(enclosing_circle(&[Point::new(f64::INFINITY, 0.0)]), None);
+    }
+
+    /// The hull keeps a square's corners counter-clockwise (y up) from the lowest-leftmost one,
+    /// without points inside, points on its edges, repeated corners or points that are not finite;
+    /// points on one line give their ends, and one or two points give themselves.
+    #[test]
+    fn the_convex_hull_keeps_only_the_corners() {
+        let p = Point::new;
+        let pts = vec![
+            p(5.0, 5.0),
+            p(10.0, 10.0),
+            p(0.0, 10.0),
+            p(5.0, 0.0),
+            p(0.0, 0.0),
+            p(10.0, 0.0),
+            p(10.0, 10.0),
+            p(0.0, 5.0),
+            p(f64::NAN, 3.0),
+            p(2.0, 7.0),
+        ];
+        assert_eq!(convex_hull(pts), vec![p(0.0, 0.0), p(10.0, 0.0), p(10.0, 10.0), p(0.0, 10.0)]);
+        let line: Vec<Point> = (0..9).rev().map(|i| p(f64::from(i), 2.0 * f64::from(i))).collect();
+        assert_eq!(convex_hull(line), vec![p(0.0, 0.0), p(8.0, 16.0)]);
+        assert_eq!(convex_hull(vec![p(3.0, 1.0), p(1.0, 2.0)]), vec![p(1.0, 2.0), p(3.0, 1.0)]);
+        assert_eq!(convex_hull(vec![p(1.0, 1.0), p(1.0, 1.0)]), vec![p(1.0, 1.0)]);
+        assert_eq!(convex_hull(vec![p(f64::INFINITY, 1.0)]), vec![]);
+        // -0.0 is 0.0: the three points lie on one line, and the hull is its two ends.
+        assert_eq!(convex_hull(vec![p(-0.0, 10.0), p(0.0, 0.0), p(0.0, 5.0)]), vec![p(0.0, 0.0), p(0.0, 10.0)]);
     }
 
     #[test]

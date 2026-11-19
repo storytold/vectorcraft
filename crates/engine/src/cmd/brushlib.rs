@@ -177,6 +177,7 @@ pub const BUILTIN: &[BuiltinBrushLibrary] = &[
     BuiltinBrushLibrary { id: "bristle-brushes", name: "Bristle Brushes", make: bristle_brushes },
     BuiltinBrushLibrary { id: "pattern-borders", name: "Pattern Borders", make: pattern_borders },
     BuiltinBrushLibrary { id: "scatter-shapes", name: "Scatter Shapes", make: scatter_shapes },
+    BuiltinBrushLibrary { id: "stipple", name: "Stipple", make: stipple },
     BuiltinBrushLibrary { id: "game-trails", name: "Game Trails", make: game_trails },
     BuiltinBrushLibrary { id: "energy-beams", name: "Energy Beams", make: energy_beams },
     BuiltinBrushLibrary { id: "dry-media", name: "Dry Media", make: dry_media },
@@ -625,6 +626,44 @@ fn scatter_shapes() -> BrushLibrary {
         ),
     ];
     built("Scatter Shapes", doc, brushes)
+}
+
+/// Stipple: original dot-based scatter brushes for fine and broad shading along a path.
+fn stipple() -> BrushLibrary {
+    let dot = |x: f64, y: f64, r: f64, opacity: f32| {
+        Node::path(
+            NodeId(0),
+            shapes::ellipse(Rect::new(x - r, y - r, x + r, y + r)),
+            Appearance {
+                items: vec![AppearanceItem::Fill(FillLayer { opacity, ..FillLayer::new(Paint::solid(Color::BLACK)) })],
+                ..Default::default()
+            },
+        )
+    };
+    let base = Scatter { colorization: Colorization::Tints, ..Default::default() };
+    let brushes = vec![
+        scatter(
+            "Fine Stipple",
+            dot(0.0, 0.0, 0.8, 1.0),
+            Scatter { size: (70.0, 110.0), spacing: (80.0, 130.0), scatter: (-100.0, 100.0), ..base.clone() },
+        ),
+        scatter(
+            "Dense Stipple",
+            group(vec![dot(-1.7, -1.4, 1.0, 1.0), dot(1.5, 0.5, 0.8, 1.0), dot(-0.5, 1.8, 0.65, 1.0)]),
+            Scatter { size: (80.0, 120.0), spacing: (55.0, 90.0), scatter: (-70.0, 70.0), ..base.clone() },
+        ),
+        scatter(
+            "Soft Stipple",
+            group(vec![dot(-1.2, -0.8, 1.0, 0.45), dot(1.2, 1.1, 0.7, 0.35)]),
+            Scatter { size: (55.0, 135.0), spacing: (80.0, 140.0), scatter: (-140.0, 140.0), ..base.clone() },
+        ),
+        scatter(
+            "Bold Stipple",
+            group(vec![dot(-1.5, -1.0, 1.8, 1.0), dot(1.6, 1.3, 1.4, 1.0)]),
+            Scatter { size: (80.0, 125.0), spacing: (75.0, 115.0), scatter: (-95.0, 95.0), ..base },
+        ),
+    ];
+    built("Stipple", Document::new(100.0, 100.0), brushes)
 }
 
 /// Game Trails: art brushes for motion lines and impact streaks (original game HUD / VFX art).
