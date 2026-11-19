@@ -691,6 +691,34 @@ fn a_clipping_path_on_top_still_clips_when_a_transform_effect_copies_it() {
     assert!(!opaque(&r, 25, 75) && !opaque(&r, 50, 25), "elsewhere the art is clipped away");
 }
 
+/// A file as versions that took a clip's first member as its clipping path saved it, with a
+/// compound clipping path (a file keeps no mark on one) and a path left marked among the art,
+/// beyond the canvas: opened, the compound path still clips and the art stays. Only the path beyond
+/// the canvas goes, not the clip with it.
+#[test]
+fn a_mark_left_beyond_the_canvas_takes_neither_the_clip_nor_its_art() {
+    let mut s = session();
+    let art = id_of(&s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 80, "height": 80})).unwrap());
+    let far = id_of(&s.execute("path.create", &json!({"anchors": [{"x": 0, "y": 0}, {"x": 10, "y": 0}, {"x": 10, "y": 10}]})).unwrap());
+    let (a, b) = (ellipse(&mut s, 20.0, 20.0), ellipse(&mut s, 50.0, 20.0));
+    select(&mut s, &[a, b]);
+    let holes = id_of(&s.execute("object.compoundPath.make", &json!({})).unwrap());
+    select(&mut s, &[art, far, holes]);
+    let g = id_of(&s.execute("object.clippingMask.make", &json!({})).unwrap());
+    let mut v: Value = serde_json::from_slice(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let members = node_json_mut(&mut v, g).unwrap()["kind"]["children"].as_array().unwrap();
+    assert_eq!(members.iter().map(|c| c["id"].as_u64().unwrap()).collect::<Vec<_>>(), [holes.0, art.0, far.0], "first in the file");
+    let stray = node_json_mut(&mut v, far).unwrap();
+    stray["kind"]["clipping"] = json!(true);
+    stray["kind"]["path"] = json!({"subpaths": [{"anchors": [{"p": [5.0e6, 5.0e6]}, {"p": [5.0e6 + 10.0, 5.0e6]}, {"p": [5.0e6 + 10.0, 5.0e6 + 10.0]}], "closed": true}]});
+    let data = vectorcraft_format::base64_encode(&serde_json::to_vec(&v).unwrap());
+    let mut o = Session::new();
+    o.execute("document.open", &json!({"name": "old.vectorcraft", "dataBase64": data})).unwrap();
+    assert!(o.doc().unwrap().doc.node(g).is_some(), "the clip stays");
+    assert_eq!(child_ids(&o, g), [art, holes], "the art stays; the path beyond the canvas goes");
+    assert_eq!(clips_by(&o, g), Some(holes), "the compound path still clips");
+}
+
 /// Flattening transparency in a clip group whose clipping path is type on top of the art: the
 /// type's outlines still clip the flattened art.
 #[test]
@@ -713,6 +741,18 @@ fn type_on_top_still_clips_when_its_clip_group_is_flattened() {
     assert!(!opaque(&after, ((b.x0 + b.x1) / 2.0) as u32, cy), "in the counter too");
 }
 
+/// The object `id` in `v`, a document as its file writes it.
+fn node_json_mut(v: &mut Value, id: NodeId) -> Option<&mut Value> {
+    if v.get("id").and_then(Value::as_u64) == Some(id.0) && v.get("kind").is_some() {
+        return Some(v);
+    }
+    match v {
+        Value::Object(o) => o.values_mut().find_map(|c| node_json_mut(c, id)),
+        Value::Array(a) => a.iter_mut().find_map(|c| node_json_mut(c, id)),
+        _ => None,
+    }
+}
+
 /// A file as versions that took a clip's first member as its clipping path saved it after the
 /// clipping path's row was dragged up within its clip, and another path's row out of its clip:
 /// both paths kept their marks. Opened, the clip clips by its first member, as such a version
@@ -727,21 +767,11 @@ fn marks_a_file_kept_off_a_clips_first_member_come_off() {
     let g = id_of(&s.execute("object.clippingMask.make", &json!({})).unwrap());
     let stray = ellipse(&mut s, 0.0, 10.0);
     let mut v: Value = serde_json::from_slice(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
-    fn find_mut(v: &mut Value, id: NodeId) -> Option<&mut Value> {
-        if v.get("id").and_then(Value::as_u64) == Some(id.0) && v.get("kind").is_some() {
-            return Some(v);
-        }
-        match v {
-            Value::Object(o) => o.values_mut().find_map(|c| find_mut(c, id)),
-            Value::Array(a) => a.iter_mut().find_map(|c| find_mut(c, id)),
-            _ => None,
-        }
-    }
     // The circle, marked, above the art; the stray path marked.
-    let members = find_mut(&mut v, g).unwrap()["kind"]["children"].as_array_mut().unwrap();
+    let members = node_json_mut(&mut v, g).unwrap()["kind"]["children"].as_array_mut().unwrap();
     assert_eq!(members.iter().map(|c| c["id"].as_u64().unwrap()).collect::<Vec<_>>(), [circle.0, art.0], "first in the file");
     members.reverse();
-    find_mut(&mut v, stray).unwrap()["kind"]["clipping"] = json!(true);
+    node_json_mut(&mut v, stray).unwrap()["kind"]["clipping"] = json!(true);
     let data = vectorcraft_format::base64_encode(&serde_json::to_vec(&v).unwrap());
     let mut o = Session::new();
     o.execute("document.open", &json!({"name": "old.vectorcraft", "dataBase64": data})).unwrap();

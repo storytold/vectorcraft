@@ -3868,10 +3868,18 @@ pub(crate) fn outlined_members_with(
     art
 }
 
-/// Run `f` on every path and compound path under `n` (guides skipped).
+/// Run `f` on every path and compound path under `n` (guides skipped). What `f` makes of a clipping
+/// path in its place (a group of its copies or of the pieces a live effect paints, a compound
+/// path) stays the clipping path: it keeps the mark ([`Node::is_clipping_path`]).
 fn for_each_leaf(n: &mut Node, f: &mut dyn FnMut(&mut Node)) {
     match &mut n.kind {
-        NodeKind::Path { guide: false, .. } | NodeKind::Compound { .. } => f(n),
+        NodeKind::Path { guide: false, .. } | NodeKind::Compound { .. } => {
+            let marked = n.is_clipping_path();
+            f(n);
+            if marked && !n.is_clipping_path() {
+                n.set_clipping_path(true);
+            }
+        }
         NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } => {
             for c in children.iter_mut() {
                 for_each_leaf(Arc::make_mut(c), f);

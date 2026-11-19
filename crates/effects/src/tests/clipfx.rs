@@ -994,3 +994,37 @@ fn a_clip_groups_own_fill_goes_behind_its_art_when_its_clipping_type_on_top_stro
     assert!(!children.iter().skip(1).any(|c| yellow_in(c)), "{children:?}");
     assert!(children.get(1).is_some_and(|s| paints(s, false)), "the type's stroke paints over the clip group: {children:?}");
 }
+
+#[test]
+fn a_clipping_path_on_top_copied_object_by_object_by_a_transform_effect_stays_the_clipping_path() {
+    // A clipping path on top of its art and marked, as Make Clipping Mask leaves it, that paints a
+    // gradient of its own, in a clip group whose Transform effect makes one copy 60 pt right: each
+    // copy is an object of its own, in a group in the clipping path's place, and that group clips,
+    // on the canvas and in an export, by the square and its copy, not by the art.
+    use vectorcraft_color::{Gradient, GradientKind, GradientPaint, GradientStop};
+    let stops = vec![GradientStop::new(0.0, Color::BLACK), GradientStop::new(1.0, Color::WHITE)];
+    let unplaced = Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, stops))));
+    let mut clip = clipping_path(3, vec![]);
+    clip.appearance = Appearance::basic(unplaced, Paint::None, 0.0).into();
+    let mut group = clip_group_on_top(2, clip);
+    group.appearance.effects.push(fx("distort.transform", json!({"moveH": 60, "copies": 1})));
+    let canvas = crate::evaluate_container(None, &group).unwrap();
+    let mut d = Document::new(400.0, 400.0);
+    let layer = d.layers[0].id;
+    d.insert(Some(layer), 0, group).unwrap();
+    let baked = bake_document(&d).unwrap();
+    fn clip_of(n: &Arc<Node>) -> Option<Arc<Node>> {
+        if n.clips() && matches!(n.kind, NodeKind::Group { .. }) {
+            return Some(n.clone());
+        }
+        n.children()?.iter().find_map(clip_of)
+    }
+    let exported = baked.layers.iter().find_map(clip_of).expect("a clip group in the export");
+    let both = Rect::new(50.0, 50.0, 210.0, 150.0);
+    for (what, g) in [("canvas", &canvas), ("export", &*exported)] {
+        let path = g.clipping_path().unwrap_or_else(|| panic!("{what}: no clipping path"));
+        assert!(matches!(path.kind, NodeKind::Group { .. }), "{what}: the copies are objects of their own: {:?}", path.kind);
+        let b = path.geometric_bounds().unwrap();
+        assert!(near_rect(b, both), "{what}: the square and its copy clip, not the art: {b:?}");
+    }
+}

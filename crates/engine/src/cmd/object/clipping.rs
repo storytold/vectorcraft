@@ -126,7 +126,8 @@ fn outcome(was: Option<&Node>, now: &Node, doc: &Document) -> Option<Outcome> {
         return Some(Outcome::Release(Some(path)));
     }
     // Deleted, unless new art took its place.
-    let had = |id: NodeId| was.children().is_some_and(|w| w.iter().any(|o| o.id == id));
+    let old: std::collections::HashSet<NodeId> = was.children().into_iter().flatten().map(|o| o.id).collect();
+    let had = |id: NodeId| old.contains(&id);
     // Its parts, members of their own now (a compound path released): the bottom one, wherever
     // the edit put it among the others, which other objects released with it may have moved.
     let mut parts = std::collections::HashSet::new();
