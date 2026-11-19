@@ -752,6 +752,13 @@ impl Session {
                     t.set_option("cornerRadius", &r);
                 }
             }
+            // A press of the tool that is dropped keeps the new radius, also when the tool lent a
+            // selection tool for the press.
+            if self.press_taken_by("roundedRectangle")
+                && let Some((_, saved)) = self.press_options.as_mut()
+            {
+                saved.insert("cornerRadius".into(), r);
+            }
         }
         if fonts_folder_changed {
             let folder = self.prefs.fonts_folder.trim();

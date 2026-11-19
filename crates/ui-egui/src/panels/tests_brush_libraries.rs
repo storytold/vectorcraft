@@ -208,6 +208,7 @@ fn the_window_menu_and_the_brushes_panel_open_brush_libraries() {
             json!("engraving"),
             json!("arrows"),
             json!("image-brush"),
+            json!("artistic"),
             json!("vector-packs")
         ]
     );
@@ -239,17 +240,27 @@ fn the_window_menu_and_the_brushes_panel_open_brush_libraries() {
     click(&mut app, &ctx, "Circuit Trace", Modifiers::NONE, 2.0);
     assert!(has(&app, "Circuit Trace") && !has(&app, "Bus Lines"));
     assert_eq!(undo_len(&app), undo + 1);
+    let r = app.run("window.brushLibrary", json!({"library": "Artistic Brushes"})).unwrap();
+    assert_eq!((r["open"].as_str(), r["count"].as_u64()), (Some("artistic"), Some(4)));
+    let previous = crate::i18n::current();
+    crate::i18n::set_current(crate::i18n::Lang::from_code("de").unwrap());
+    assert_eq!(crate::menus::display_label(&app, "window.brushLibrary", "Artistic Brushes"), "Künstlerische Pinsel");
+    crate::i18n::set_current(previous);
+    let undo = undo_len(&app);
+    click(&mut app, &ctx, "Orbit Lines", Modifiers::NONE, 3.0);
+    assert!(has(&app, "Orbit Lines") && !has(&app, "Facet Sweep"));
+    assert_eq!(undo_len(&app), undo + 1);
     let r = app.run("window.brushLibrary", json!({"library": "Vector Packs"})).unwrap();
     assert_eq!((r["open"].as_str(), r["count"].as_u64()), (Some("vector-packs"), Some(4)));
     let undo = undo_len(&app);
-    click(&mut app, &ctx, "Compass Rose", Modifiers::NONE, 3.0);
+    click(&mut app, &ctx, "Compass Rose", Modifiers::NONE, 4.0);
     assert!(has(&app, "Compass Rose") && !has(&app, "Facet Diamond"));
     assert_eq!(undo_len(&app), undo + 1);
     let r = app.run("window.brushLibrary", json!({"library": "Pressure Sensitive"})).unwrap();
     assert_eq!((r["open"].as_str(), r["count"].as_u64()), (Some("pressure-sensitive"), Some(4)));
     let path = app.run("shape.line", json!({"x1": 10, "y1": 100, "x2": 180, "y2": 100})).unwrap()["id"].as_u64().unwrap();
     let undo = undo_len(&app);
-    click(&mut app, &ctx, "Flex Ribbon", Modifiers::NONE, 4.0);
+    click(&mut app, &ctx, "Flex Ribbon", Modifiers::NONE, 5.0);
     assert!(has(&app, "Flex Ribbon") && !has(&app, "Pulse Stroke"));
     assert_eq!(undo_len(&app), undo + 1);
     assert_eq!(
@@ -260,7 +271,7 @@ fn the_window_menu_and_the_brushes_panel_open_brush_libraries() {
     assert_eq!((r["open"].as_str(), r["count"].as_u64()), (Some("paint"), Some(4)));
     let path = app.run("shape.line", json!({"x1": 10, "y1": 140, "x2": 180, "y2": 140})).unwrap()["id"].as_u64().unwrap();
     let undo = undo_len(&app);
-    click(&mut app, &ctx, "Flat Sweep", Modifiers::NONE, 4.0);
+    click(&mut app, &ctx, "Flat Sweep", Modifiers::NONE, 6.0);
     assert!(has(&app, "Flat Sweep") && !has(&app, "Dry Drag"));
     assert_eq!(undo_len(&app), undo + 1);
     assert_eq!(
@@ -270,7 +281,7 @@ fn the_window_menu_and_the_brushes_panel_open_brush_libraries() {
     let r = app.run("window.brushLibrary", json!({"library": "Image Brush"})).unwrap();
     assert_eq!((r["open"].as_str(), r["count"].as_u64()), (Some("image-brush"), Some(4)));
     let undo = undo_len(&app);
-    click(&mut app, &ctx, "Soft Bloom", Modifiers::NONE, 5.0);
+    click(&mut app, &ctx, "Soft Bloom", Modifiers::NONE, 7.0);
     assert!(has(&app, "Soft Bloom") && !has(&app, "Color Flecks"));
     assert_eq!(undo_len(&app), undo + 1);
     // Without brushes there is nothing to save.

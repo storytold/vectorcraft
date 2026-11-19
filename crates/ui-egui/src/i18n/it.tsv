@@ -658,6 +658,8 @@ font-technology	Variable	Variabili
 	Contextual Task Bar	Barra attività contestuale
 	Pin Bar Position	Fissa posizione barra
 	Reset Bar Position	Ripristina posizione barra
+	Bar Actions	Azioni barra
+	Reset Bar Actions	Ripristina azioni barra
 	Resize	Ridimensiona
 	Contrast	Contrasto
 	Control	Controllo
@@ -2078,6 +2080,11 @@ file-filter	Templates	Modelli
 	Knife	Coltello
 	Knockout Group	Gruppo con foratura
 	Lab	Lab
+	OKLCH Sliders	Cursori OKLCH
+	HSL Sliders	Cursori HSL
+	Chroma	Croma
+	The largest chroma sRGB holds at this lightness and hue	Il croma più alto che sRGB contiene con questa luminosità e tonalità
+	OKLCH needs sRGB as the working RGB space	OKLCH richiede sRGB come spazio di lavoro RGB
 	Lab Spot Colors:	Colori spot Lab:
 	Lab Values	Valori Lab
 	Landscape	Orizzontale
@@ -3425,9 +3432,10 @@ digits	Malayalam	Malayalam
 	Edit type set in fonts that aren't available?	Modificare il testo in font non disponibili?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Mostra sull’area di lavoro il numero di ogni sezione in un riquadro nel suo angolo in alto a sinistra; se è disattivata, i contorni delle sezioni restano visibili.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Il colore dei contorni delle sezioni utente e oggetto e dei riquadri con il loro numero; le sezioni automatiche usano una tonalità più tenue di questo colore.
-	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	Il nuovo testo prende questa lingua finché la lingua di Imposta documento è Inglese: Stati Uniti; il testo già presente in un documento mantiene la propria lingua.
+	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	Il nuovo testo prende questa lingua finché la lingua di Imposta documento è Inglese: Stati Uniti e [Stile carattere normale] non ne imposta una; il testo già presente in un documento mantiene la propria lingua.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	Nei paragrafi con Sillaba attivo, una parola dell'elenco va a capo solo ai trattini digitati al suo interno, o in nessun punto se non ne ha, qualunque sia la sua lingua o l'uso delle maiuscole.
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	Nella versione desktop, i plug-in .wasm di questa cartella vengono caricati all'avvio e quando fai clic su OK con una nuova cartella qui, tranne in modalità provvisoria; la versione web non li carica.
+	Normal keeps each plug-in's own limits; with Large, a plug-in filter or command may run at least 250 million instructions besides those for its input. The time limit stays the same.	Normale mantiene i limiti propri di ogni plug-in; con Grande, un filtro o un comando di un plug-in può eseguire almeno 250 milioni di istruzioni oltre a quelle per il suo input. Il limite di tempo resta invariato.
 	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	Quante istruzioni può usare ogni esecuzione di un filtro di oggetti di un plug-in; Grande ne consente più di Normale con lo stesso limite di 60 secondi. I filtri pesanti mantengono il proprio budget.
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	La prima scelta del disco di memoria virtuale: Startup, None o il percorso di una cartella; VectorCraft la memorizza, ma non usa ancora dischi di memoria virtuale.
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	La seconda scelta del disco di memoria virtuale: Startup, None o il percorso di una cartella; VectorCraft la memorizza, ma non usa ancora dischi di memoria virtuale.
@@ -3446,6 +3454,8 @@ digits	Malayalam	Malayalam
 	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	La lingua dell'interfaccia; Auto usa la lingua del sistema. La finestra di dialogo cambia lingua appena ne scegli una.
 	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	Lo Zoom animato funziona solo mentre questa opzione è attiva; se disattivata, lo Zoom animato è attenuato e lo zoom non è animato.
 	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	Lo zoom con la rotellina scorre in modo fluido, e lo Strumento Zoom ingrandisce mentre trascini di lato o lo tieni premuto; se disattivata, lo Strumento Zoom ingrandisce l'area che trascini.
+	From the next start, the desktop version shows the canvas through this kind of graphics processor; the artwork is drawn on the CPU either way. Automatic prefers the integrated one on Windows and macOS. The web version does not use it.	Dal prossimo avvio, la versione desktop mostra la tela tramite questo tipo di processore grafico; la grafica viene sempre disegnata sulla CPU. Automatico preferisce quello integrato su Windows e macOS. La versione web non lo usa.
+	From the next start, the window shows each frame without waiting for the display's refresh where the graphics driver allows, at most 240 frames a second.	Dal prossimo avvio, la finestra mostra ogni fotogramma senza attendere l’aggiornamento dello schermo dove il driver grafico lo consente, al massimo 240 fotogrammi al secondo.
 	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	Dal prossimo avvio, la versione desktop disegna con questo tipo di processore grafico; Automatico preferisce quello che gestisce lo schermo. La versione web non lo usa.
 	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	Dal prossimo avvio, la finestra mostra i fotogrammi senza attendere l'aggiornamento dello schermo, al massimo 240 al secondo; disattivato, è lo schermo a scandirli. Una modalità di presentazione impostata all'avvio ha la precedenza.
 	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	Il numero massimo di passaggi di annullamento che ogni documento conserva; un numero più basso rimuove i passaggi più vecchi quando fai clic su OK. I passaggi possono sparire anche prima se occupano troppa memoria.
@@ -3478,7 +3488,6 @@ digits	Malayalam	Malayalam
 	Output All Blacks as Rich Black draws pure CMYK black as RGB black in RGB and grayscale raster exports and Print as Bitmap; it does not change vector exports, CMYK JPEG, TIFF and PSD, or other printing.	Riproduci tutti i neri come nero ricco disegna il nero CMYK puro come nero RGB nelle esportazioni raster RGB e in scala di grigi e con Stampa come bitmap; non cambia le esportazioni vettoriali, i JPEG, TIFF e PSD CMYK né le altre stampe.
 	On a touch screen, switches to the Touch workspace; turning this off, or losing the touch screen, goes back to the workspace it switched from.	Su uno schermo touch passa all'area di lavoro touch; disattivando l'opzione o se lo schermo touch non è più rilevato, torna all'area di lavoro precedente.
 	A two-finger tap on the canvas undoes, or switches between selection and drawing tools in the Touch workspace, and a three-finger tap redoes; neither works in Presentation Mode.	Un tocco con due dita sull'area di lavoro annulla o, nell'area di lavoro touch, alterna tra strumenti di selezione e di disegno, e un tocco con tre dita ripete; nessuno dei due funziona in modalità presentazione.
-	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	Il nuovo testo prende questa lingua finché la lingua di Imposta documento è Inglese: Stati Uniti e [Stile carattere normale] non ne imposta una; il testo già presente in un documento mantiene la propria lingua.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	Nei paragrafi con Sillaba attivo, una parola dell'elenco va a capo solo ai trattini digitati al suo interno, o in nessun punto se non ne ha, qualunque sia l'uso delle maiuscole; le parole coreane non prendono trattino e le parole in lingue indiane non vanno a capo all'interno di un gruppo di caratteri.
 	Reset all preferences to their defaults?	Ripristinare tutte le preferenze ai valori predefiniti?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	I valori predefiniti vengono applicati quando fai clic su OK in Preferenze. Annulla lì mantiene le preferenze attuali.
@@ -5210,6 +5219,8 @@ liquify-list-end	{0}, {1}	{0} e {1}
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` deve essere grayscale, rgb, hsb, cmyk o websafe
 @msg	`view` must be wheel or box	`view` deve essere wheel o box
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` deve essere hue, saturation, brightness, red, green o blue
+@msg	`sliders` must be none, oklch or hsl	`sliders` deve essere none, oklch o hsl
+@msg	OKLCH needs sRGB as the working RGB space	OKLCH richiede sRGB come spazio di lavoro RGB
 @msg	`{k}` must be [x, y]	`{k}` deve essere [x, y]
 @msg	`{name}` has no options	`{name}` non ha opzioni
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` è un'area di lavoro integrata; scegli un altro nome
@@ -5620,6 +5631,10 @@ liquify-list-end	{0}, {1}	{0} e {1}
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	questo ricalco creerebbe più di {max} punti di ancoraggio, più di quanti il documento possa mostrare in modo fluido: aumenta Disturbo, riduci Tracciati o Colori, oppure scegli un preset a fedeltà inferiore
 @msg	select an envelope	seleziona un involucro
 @msg	select an image	seleziona un'immagine
+@msg	object {_1} is an image changed by Perspective Distort or Free Distort, which this command does not work on	l'oggetto {_1} è un'immagine modificata con Distorsione prospettica o Distorsione libera, su cui questo comando non funziona
+@msg	image {_1} cannot be distorted this way: its corners would not make a convex shape	l'immagine {_1} non può essere distorta così: i suoi angoli non formerebbero una forma convessa
+@msg	image {_1} cannot be distorted this way: its corners would cross the warp's horizon	l'immagine {_1} non può essere distorta così: i suoi angoli supererebbero l'orizzonte della distorsione
+@msg	image {_1} cannot be distorted this way: its corners would be too close together for a perspective map	l'immagine {_1} non può essere distorta così: i suoi angoli sarebbero troppo vicini per una proiezione prospettica
 @msg	`background` must be edges, corners or colors	`background` deve essere edges, corners o colors
 @msg	`match` must be distance or channels	`match` deve essere distance o channels
 @msg	`{key}` must be from 0 to 100	`{key}` deve essere compreso tra 0 e 100
@@ -10426,6 +10441,11 @@ breakText	Glyphs	Glifi
 	Botanical Sprig	Rametto botanico
 	Facet Diamond	Diamante sfaccettato
 	Tide Crest	Cresta dell'onda
+	Orbit Lines	Linee orbitali
+	Petal Garland	Ghirlanda di petali
+	Lattice Braid	Intreccio a reticolo
+	Facet Sweep	Tratto sfaccettato
+	Artistic Brushes	Pennelli artistici
 	Paint	Pittura
 	Flat Sweep	Passata piatta
 	Dry Drag	Trascinamento secco
