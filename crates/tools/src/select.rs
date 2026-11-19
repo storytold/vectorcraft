@@ -58,6 +58,14 @@ use crate::sidewidget::{self, SideDrag};
 use crate::typewidget;
 use crate::{Action, Cursor, Mods, Overlay, PixelOp, PointerEvent, PointerKind, Tool, ToolContext, ToolKey, json_ids};
 
+/// The release of the widget drag `d`: released away from the last press or drag (`away`), it is
+/// dragged there first (`drag`); then it ends (`finish`).
+fn released<D>(mut d: D, away: bool, drag: impl FnOnce(&mut D) -> Vec<Action>, finish: impl FnOnce(D) -> Vec<Action>) -> Vec<Action> {
+    let mut out = if away { drag(&mut d) } else { vec![] };
+    out.extend(finish(d));
+    out
+}
+
 /// Direction is read on screen, even in a turned view. Within three pixels of the press's
 /// horizontal position, retain the previous rule so hand jitter does not flip it.
 fn marquee_direction(cx: &ToolContext, start: Point, cur: Point, previous: bool) -> bool {
@@ -199,6 +207,9 @@ pub struct SelectionTool {
     loaded_at_press: Option<(NodeId, bool)>,
     /// Where the pointer last hovered: the type on a path bracket under it draws thicker.
     bracket_hover: Option<Point>,
+    /// Where the pointer was at the last press or drag: a widget drag released anywhere else is
+    /// dragged there before it ends.
+    held_at: Option<Point>,
 }
 
 /// What Distance Guides measure the selection to.
@@ -905,15 +916,32 @@ impl Tool for SelectionTool {
         out
     }
 
-    /// Switching tools during a drag of a blend widget, a corner widget, a pie widget or a
-    /// polygon's side widget cancels it, as Escape does: its value goes back.
+    /// Switching tools during a drag of a widget (a blend, corner, pie or side widget, an Objects on
+    /// Path widget, a bracket of type on a path, a repeat's control or a 9-slice guide) cancels it,
+    /// as Escape does: its value goes back.
     fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
         match std::mem::take(&mut self.state) {
             State::BlendWidget(d) if d.adjusting() => vec![Action::Cancel],
             State::Corner(c) if c.adjusting() => vec![Action::Cancel],
             State::Pie(d) if d.adjusting() => vec![Action::Cancel],
+            State::RotateAll(d) if d.adjusting() => vec![Action::Cancel],
+            State::Space(d) if d.adjusting() => vec![Action::Cancel],
+            State::MoveAll(d) if d.adjusting() => vec![Action::Cancel],
+            State::Member(d) if d.adjusting() => vec![Action::Cancel],
+            State::Bracket(b) if b.adjusting() => vec![Action::Cancel],
             State::Sides(d) => d.cancel(),
-            State::BlendWidget(_) | State::Corner(_) | State::Pie(_) => vec![],
+            State::Mirror(d) => d.cancel(),
+            State::GridRepeat(d) => d.cancel(),
+            State::RadialRepeat(d) => d.cancel(),
+            State::NineSlice(d) => d.cancel(),
+            State::BlendWidget(_)
+            | State::Corner(_)
+            | State::Pie(_)
+            | State::RotateAll(_)
+            | State::Space(_)
+            | State::MoveAll(_)
+            | State::Member(_)
+            | State::Bracket(_) => vec![],
             other => {
                 self.state = other;
                 vec![]
@@ -978,6 +1006,10 @@ impl Tool for SelectionTool {
     /// the art; the drags then move, scale, rotate, marquee or drag what it took.
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
         self.note_loaded_at_press(ev.kind);
+        let released_away = ev.kind == PointerKind::Up && self.held_at != Some(ev.pos);
+        if matches!(ev.kind, PointerKind::Down | PointerKind::Drag) {
+            self.held_at = Some(ev.pos);
+        }
         let hovering = ev.kind == PointerKind::Move && matches!(self.state, State::Idle);
         self.bracket_hover = hovering.then_some(ev.pos);
         self.alt_hover = hovering && ev.mods.alt;
@@ -988,7 +1020,7 @@ impl Tool for SelectionTool {
             return out;
         }
         // The edited symbol's 9-slice guides take precedence over every other control and the art.
-        if let Some(out) = self.nine_slice_guides(cx, ev) {
+        if let Some(out) = self.nine_slice_guides(cx, ev, released_away) {
             return out;
         }
         // Mirror and grid repeat controls take precedence over art and ruler guides; the mirror
@@ -1129,7 +1161,7 @@ impl Tool for SelectionTool {
             }
             (PointerKind::Up, State::Corner(c)) => {
                 self.state = State::Idle;
-                c.finish()
+                released(c, released_away, |c| c.drag(cx, p), CornerDrag::finish)
             }
             (PointerKind::Drag, State::Pie(mut d)) => {
                 let out = d.drag(cx, p);
@@ -1138,7 +1170,7 @@ impl Tool for SelectionTool {
             }
             (PointerKind::Up, State::Pie(d)) => {
                 self.state = State::Idle;
-                d.finish()
+                released(d, released_away, |d| d.drag(cx, p), PieDrag::finish)
             }
             (PointerKind::Drag, State::Sides(mut d)) => {
                 let out = d.drag(cx, p);
@@ -1156,7 +1188,7 @@ impl Tool for SelectionTool {
             }
             (PointerKind::Up, State::BlendWidget(d)) => {
                 self.state = State::Idle;
-                d.finish()
+                released(d, released_away, |d| d.drag(cx, p), BlendWidgetDrag::finish)
             }
             (PointerKind::Drag, State::RotateAll(mut d)) => {
                 let out = d.drag(cx, p, m.shift);
@@ -1165,7 +1197,7 @@ impl Tool for SelectionTool {
             }
             (PointerKind::Up, State::RotateAll(d)) => {
                 self.state = State::Idle;
-                d.finish()
+                released(d, released_away, |d| d.drag(cx, p, m.shift), RotateAllDrag::finish)
             }
             (PointerKind::Drag, State::Space(mut d)) => {
                 let out = d.drag(cx, p, m.alt);
@@ -1174,7 +1206,7 @@ impl Tool for SelectionTool {
             }
             (PointerKind::Up, State::Space(d)) => {
                 self.state = State::Idle;
-                d.finish()
+                released(d, released_away, |d| d.drag(cx, p, m.alt), SpaceDrag::finish)
             }
             (PointerKind::Drag, State::MoveAll(mut d)) => {
                 let out = d.drag(cx, p);
@@ -1183,7 +1215,7 @@ impl Tool for SelectionTool {
             }
             (PointerKind::Up, State::MoveAll(d)) => {
                 self.state = State::Idle;
-                d.finish()
+                released(d, released_away, |d| d.drag(cx, p), MoveAllDrag::finish)
             }
             (PointerKind::Drag, State::Member(mut d)) => {
                 let out = d.drag(cx, p);
@@ -1192,7 +1224,7 @@ impl Tool for SelectionTool {
             }
             (PointerKind::Up, State::Member(d)) => {
                 self.state = State::Idle;
-                d.finish()
+                released(d, released_away, |d| d.drag(cx, p), MemberDrag::finish)
             }
             (PointerKind::Drag, State::Bracket(mut b)) => {
                 let out = b.drag(cx, p, m.cmd);
@@ -1201,7 +1233,7 @@ impl Tool for SelectionTool {
             }
             (PointerKind::Up, State::Bracket(b)) => {
                 self.state = State::Idle;
-                b.finish()
+                released(b, released_away, |b| b.drag(cx, p, m.cmd), BracketDrag::finish)
             }
             (PointerKind::Up, State::Moving { began, deselect, key, exclude, .. }) => {
                 self.release_move(cx, ev.backquote, began, deselect, key, exclude)
@@ -1589,8 +1621,8 @@ impl SelectionTool {
     }
 
     /// A press on a 9-slice guide of the edited symbol starts dragging it; the drag and the
-    /// release go to it.
-    fn nine_slice_guides(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Option<Vec<Action>> {
+    /// release go to it, and a release away from the last drag (`released_away`) moves it there.
+    fn nine_slice_guides(&mut self, cx: &ToolContext, ev: &PointerEvent, released_away: bool) -> Option<Vec<Action>> {
         if let State::NineSlice(mut d) = self.state.clone() {
             return Some(match ev.kind {
                 PointerKind::Drag => {
@@ -1600,7 +1632,7 @@ impl SelectionTool {
                 }
                 PointerKind::Up => {
                     self.state = State::Idle;
-                    d.finish()
+                    released(d, released_away, |d| d.drag(cx, ev.pos), crate::nineslice::GuideDrag::finish)
                 }
                 _ => vec![],
             });

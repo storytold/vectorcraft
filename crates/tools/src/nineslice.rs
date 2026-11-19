@@ -238,6 +238,15 @@ mod tests {
         assert_eq!(t.pointer(&c, &ev(PointerKind::Up, 150.0, 250.0)), vec![Action::Commit]);
     }
 
+    /// A guide drag reads where it is released, and a tool switch cancels it.
+    #[test]
+    fn a_guide_drag_reads_its_release_and_a_tool_switch_cancels_it() {
+        let d = editing(Some(SymbolNineSlice::default()));
+        let (s, p) = (Selection::default(), paint());
+        let c = cx(&d, &s, &p);
+        check_widget_release_and_tool_switch(&c, Point::new(126.0, 150.0), Point::new(115.0, 150.0), Point::new(105.0, 150.0));
+    }
+
     /// Escape during a guide drag cancels it and is the tool's; the release after it commits
     /// nothing. A double-click on a guide neither edits the art nor leaves the mode.
     #[test]

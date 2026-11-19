@@ -305,6 +305,16 @@ mod tests {
         assert!(t.pointer(&c, &ev(PointerKind::Up, Point::new(100.0, 200.0))).is_empty(), "the release commits nothing");
     }
 
+    /// A pie widget drag with the Selection tool reads where it is released, and a tool switch
+    /// cancels it.
+    #[test]
+    fn a_pie_widget_drag_reads_its_release_and_a_tool_switch_cancels_it() {
+        let (d, _, s) = doc_with_ellipse((0.0, 360.0));
+        let p = paint();
+        let c = cx(&d, &s, &p);
+        check_widget_release_and_tool_switch(&c, Point::new(312.0, 150.0), Point::new(200.0, 20.0), Point::new(100.0, 150.0));
+    }
+
     /// On a whole ellipse the two widgets sit at the very same point, whatever its size, place or
     /// angle, so a press there always takes the End widget.
     #[test]
