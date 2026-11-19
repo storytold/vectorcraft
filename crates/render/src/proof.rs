@@ -31,11 +31,11 @@ use std::sync::{Arc, Mutex, OnceLock, RwLock, Weak};
 
 use vectorcraft_color::cms::{self, Cms, CmykLut, PROCESS_PLATES, ProofLut, lab};
 pub use vectorcraft_color::cms::{Intent, ProofSetup, ProofTarget};
-use vectorcraft_color::{Color, Swatch, SwatchGroup};
+use vectorcraft_color::{Color, Paint, Swatch, SwatchGroup};
 pub use vectorcraft_doc::inks::{Inks, Link, Plate, inks, map_document_colors, map_node_colors, plates, spot_color};
 use vectorcraft_doc::inks::{StopPlates, map_node_inks, stop_inks};
 use vectorcraft_doc::overprint::darken_overprints;
-use vectorcraft_doc::{Document, ImageBlob, Node, NodeId, Shared};
+use vectorcraft_doc::{AppearanceItem, Document, ImageBlob, Node, NodeId, Shared};
 use vello_cpu::Pixmap;
 use vello_cpu::color::PremulRgba8;
 
@@ -96,6 +96,46 @@ fn plate_color(doc: &Document, c: &Cms, proof: &ProofSetup, visible: &[String], 
     }
     let [r, g, b] = c.srgb_to_rgb(rgb);
     Color::Rgb { r, g, b }
+}
+
+/// Map grayscale inks created after document preparation to the visible plates.
+pub(crate) fn generated_black(doc: &Document, proof: &ProofSetup, art: &Arc<Node>) -> Arc<Node> {
+    let Some(visible) = proof.separations.as_deref() else { return art.clone() };
+    let c = cms::active();
+    let mut made = Node::clone(art);
+    if !visible.iter().any(|plate| plate == "Black") {
+        hide_generated_black(&mut made);
+    }
+    let mut changed = false;
+    map_node_inks(&mut made, &mut |color, link, plates| {
+        // Document colors are already display RGB; newly generated black retains its Gray ink.
+        if matches!(color, Color::Gray { .. }) {
+            changed = true;
+            plate_color(doc, &c, proof, visible, color, link, plates)
+        } else {
+            *color
+        }
+    });
+    if changed { Arc::new(made) } else { art.clone() }
+}
+
+fn hide_generated_black(node: &mut Node) {
+    for item in &mut node.appearance.items {
+        match item {
+            AppearanceItem::Fill(layer) if layer.overprint && matches!(layer.paint, Paint::Solid { color: Color::Gray { .. }, swatch: None, .. }) => {
+                layer.visible = false;
+            }
+            AppearanceItem::Stroke(layer)
+                if layer.overprint && matches!(layer.paint, Paint::Solid { color: Color::Gray { .. }, swatch: None, .. }) =>
+            {
+                layer.visible = false;
+            }
+            _ => {}
+        }
+    }
+    for child in node.children_mut().into_iter().flatten() {
+        hide_generated_black(Arc::make_mut(child));
+    }
 }
 
 /// Separations Preview's tables for placed images: what the visible plates show of display pixels
