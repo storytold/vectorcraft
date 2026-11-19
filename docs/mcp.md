@@ -8192,8 +8192,9 @@ changes only the bar. With every action and chip it would offer off, the bar sti
 where Bar Actions turns them on again. Every action starts
 on. The type font controls are not in Bar Actions and stay on the bar. Which actions are off is kept with the preferences
 and with the workspace; a workspace or preferences saved without them show every action, and an id the bar does not have
-is dropped when they are read. Another `action`, or none, fails with "`action` must be one of …", and a
-`visible` that is not true or false fails with "`visible` must be true or false"; either leaves every action as it is.
+is dropped when they are read. A `visible` of null toggles, as an omitted one does. Another `action`, or none, fails
+with "`action` must be one of …", and a `visible` that is not true, false or null fails with "`visible` must be true
+or false"; either leaves every action as it is.
 `window.taskBar.resetActions {}` (More Options › Reset Bar Actions) turns every action and chip on again and returns
 the ids it turned on. Choosing the bar's actions is VectorCraft's own.
 

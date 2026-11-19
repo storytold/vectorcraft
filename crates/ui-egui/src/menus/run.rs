@@ -640,15 +640,7 @@ fn run_ui_part6(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             Ok(Value::Null)
         }
         // More Options › Bar Actions: one of the bar's actions or chips on or off.
-        // A `visible` of null is an error, as any other value that is not true or false is; only
-        // an omitted one toggles.
-        "window.taskBar.actions" => match (
-            s("action").filter(|a| crate::canvas::is_task_bar_action(a)),
-            match p.get("visible") {
-                Some(Value::Null) => Err("`visible` must be true or false".to_string()),
-                _ => opt_bool(p, "visible"),
-            },
-        ) {
+        "window.taskBar.actions" => match (s("action").filter(|a| crate::canvas::is_task_bar_action(a)), opt_bool(p, "visible")) {
             (None, _) => {
                 let ids = crate::canvas::TASK_BAR_ACTIONS.iter().map(|a| a.0).chain(crate::canvas::TASK_BAR_CHIPS);
                 Err(format!("`action` must be one of {}", ids.collect::<Vec<_>>().join(", ")))

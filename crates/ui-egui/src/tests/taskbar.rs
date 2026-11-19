@@ -1608,6 +1608,9 @@ fn an_action_turned_off_leaves_the_bar_and_stays_in_its_menu() {
     assert_eq!(app.run("window.taskBar.actions", json!({"action": "offsetPath"})).unwrap(), json!({"action": "offsetPath", "visible": true}));
     let (_, texts) = bar(&mut app);
     assert!(has(&texts, "Offset Path"), "{texts:?}");
+    // A `visible` of null counts as omitted and toggles too.
+    let r = app.run("window.taskBar.actions", json!({"action": "offsetPath", "visible": null})).unwrap();
+    assert_eq!(r, json!({"action": "offsetPath", "visible": false}));
 }
 
 /// The Fill, Stroke, Recolor Artwork, Lock and Shape Properties chips each turn off on their own:
@@ -1677,13 +1680,7 @@ fn bar_action_ids_are_distinct() {
 fn bar_actions_refuse_bad_params() {
     let mut app = app();
     show_action(&mut app, "group", false);
-    for p in [
-        json!({"action": "teleport"}),
-        json!({}),
-        json!({"action": 3}),
-        json!({"action": "unite", "visible": "yes"}),
-        json!({"action": "unite", "visible": null}),
-    ] {
+    for p in [json!({"action": "teleport"}), json!({}), json!({"action": 3}), json!({"action": "unite", "visible": "yes"})] {
         assert!(app.run("window.taskBar.actions", p.clone()).is_err(), "{p}");
     }
     let err = app.run("window.taskBar.actions", json!({"action": "teleport"})).unwrap_err();
@@ -2029,4 +2026,16 @@ fn bar_actions_list_names_without_a_colon_or_an_ellipsis() {
     assert_eq!(canvas::bar_action_name("Duplicate"), "Duplicate");
     assert_eq!(canvas::bar_action_name("Tool Options..."), "Tool Options");
     assert_eq!(canvas::bar_action_name("Offset Path."), "Offset Path.");
+    // The colon and the ellipsis go in either order, with or without a space between them.
+    for label in [
+        "Tool Options...:",
+        "Tool Options... :",
+        "Tool Options: ...",
+        "Tool Options …:",
+        "Tool Options… :",
+        "Tool Options…\u{a0}:",
+        "Tool Options...\u{202f}：",
+    ] {
+        assert_eq!(canvas::bar_action_name(label), "Tool Options", "{label:?}");
+    }
 }
