@@ -5592,6 +5592,8 @@ digits	Malayalam	Malayalam
 	Overprint and Transparency Flattener Options	Indstillinger for overtryk og udfladning af gennemsigtighed
 	Custom…	Brugerdefineret…
 	Custom Transparency Flattener Options	Brugerdefinerede indstillinger for udfladning af gennemsigtighed
+	The PDF preset keeps the flattener preset but not the Custom… settings.	PDF-forudindstillingen gemmer fladgøringsforudindstillingen, men ikke indstillingerne fra Brugerdefineret….
+	PDF 1.3 files clip rasterized areas to their regions, and Overprint sets whether overprints are kept.	PDF 1.3-filer klipper rasteriserede områder til deres regioner, og Overprint bestemmer, om overtryk bevares.
 	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	EPS har ingen alfa-gennemsigtighed, og Overtryk bestemmer, om overtryk bevares.
 	Place the pages with the placement again	Placér siderne igen med placeringen
 	Placement:	Placering:

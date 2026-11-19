@@ -415,6 +415,7 @@ registry! {
     TextImport: [text_import::KIND] => text_import::SPEC,
     PdfPresets: [pdf_presets::KIND] => pdf_presets::SPEC,
     PdfPreset: [save_pdf::PRESET_KIND] => save_pdf::PRESET_SPEC,
+    PdfFlattenerOptions: [save_pdf::CUSTOM_KIND] => save_pdf::CUSTOM_SPEC,
     SaveOptions: [save_options::KIND] => save_options::SPEC,
     TextExport: [text_export::KIND] => text_export::SPEC,
     OfficeExport: [office_export::KIND] => office_export::SPEC,
@@ -701,7 +702,7 @@ pub(crate) fn parent(d: &Dialog) -> Option<Dialog> {
 
 /// `ui.dialog.set` changed `field` of the open dialog from `old`: a choice that sets other fields
 /// sets them as choosing it in the dialog does (Export for Screens' `exportPreset`, EPS Options'
-/// `flattenerPreset`, which drops the Custom… options), a change
+/// and Save PDF's `flattenerPreset`, which drop the Custom… options), a change
 /// to Export for Screens' sub-folder controls ends an applied preset's item folders, as it does in
 /// the dialog, Transform Each's Relative / Absolute keeps the Scale fields' size, and Recolor
 /// Artwork's `group` selects that color group and its `groupAction` runs the button at once. Save
