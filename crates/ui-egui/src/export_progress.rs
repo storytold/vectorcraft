@@ -135,11 +135,20 @@ pub enum Pressed {
     Hide,
 }
 
+/// A modal progress window with only a Cancel button (and bound to Esc).
+pub fn window_cancel(ctx: &egui::Context, id: &str, heading: &str, body: impl FnOnce(&mut egui::Ui)) -> Option<Pressed> {
+    window_impl(ctx, id, heading, false, body)
+}
+
 /// A modal window (`id`) headed `heading`, in the UI language: `body` draws how far the work has
 /// got, then come Cancel (also Esc) and Continue in Background → the one pressed. Work that may
 /// take a while in the background shows it: exports, and heavy plug-in filters
 /// ([`crate::plugin_runs`]).
 pub fn window(ctx: &egui::Context, id: &str, heading: &str, body: impl FnOnce(&mut egui::Ui)) -> Option<Pressed> {
+    window_impl(ctx, id, heading, true, body)
+}
+
+fn window_impl(ctx: &egui::Context, id: &str, heading: &str, allow_hide: bool, body: impl FnOnce(&mut egui::Ui)) -> Option<Pressed> {
     let mut pressed = None;
     modal::show(ctx, heading, egui::Id::unique(id), -40.0, 20, |ui| {
         ui.set_width(360.0);
@@ -152,9 +161,11 @@ pub fn window(ctx: &egui::Context, id: &str, heading: &str, body: impl FnOnce(&m
             if widgets::secondary_button(ui, "Cancel").clicked() {
                 pressed = Some(Pressed::Cancel);
             }
-            ui.add_space(8.0);
-            if widgets::secondary_button(ui, "Continue in Background").clicked() {
-                pressed = Some(Pressed::Hide);
+            if allow_hide {
+                ui.add_space(8.0);
+                if widgets::secondary_button(ui, "Continue in Background").clicked() {
+                    pressed = Some(Pressed::Hide);
+                }
             }
         });
     });
