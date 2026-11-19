@@ -27,9 +27,41 @@ fn tmp_dir(tag: &str) -> std::path::PathBuf {
 /// A session whose document holds one embedded 2×2 PNG.
 pub(super) fn image_session() -> Session {
     let mut png = Vec::new();
-    image::RgbaImage::from_pixel(2, 2, image::Rgba([10, 200, 30, 255]))
-        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
-        .unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::RgbaImage::from_pixel(2, 2, image::Rgba([10, 200, 30, 255]))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     let mut s = Session::new();
     s.execute("document.open", &json!({"name": "dot.png", "dataBase64": vectorcraft_format::base64_encode(&png)})).unwrap();
     s
@@ -120,7 +152,26 @@ fn linked_images_are_written_next_to_the_svg() {
     let path = dir.join("pic.svg").to_string_lossy().to_string();
     let r = s.execute("document.export", &json!({"path": path, "images": "link"})).unwrap();
     let linked = r["linked"][0].as_str().unwrap();
-    assert!(image::load_from_memory(&std::fs::read(linked).unwrap()).is_ok(), "{linked}");
+    assert!(
+        craft_image_codecs::decode(&std::fs::read(linked).unwrap())
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .is_ok(),
+        "{linked}"
+    );
     let text = std::fs::read_to_string(&path).unwrap();
     let name = std::path::Path::new(linked).file_name().unwrap().to_string_lossy().to_string();
     assert!(text.contains(&format!("href=\"{name}\"")), "{text}");
@@ -385,4 +436,49 @@ fn svg_darkness_uses_rendered_shadow_in_non_srgb_working_space() {
         let (a, b) = (actual.pixel(x, 30), expected.pixel(x, 30));
         assert!(a.iter().zip(b).all(|(a, b)| a.abs_diff(b) <= 8), "at {x}: {a:?} vs {b:?}");
     }
+}
+
+/// #864 / G11: SVG export preserves the document's physical units on the root `width`/`height` so
+/// that the unit setting survives a save/open round-trip. The engine-level test covers the full
+/// stack (file.new → document.setUnits → document.serialize → document.open).
+#[test]
+fn svg_round_trip_preserves_document_units() {
+    // (unit name the engine accepts, expected unit after re-import)
+    let cases: &[(&str, vectorcraft_doc::Unit)] = &[
+        ("millimeters", vectorcraft_doc::Unit::Millimeters),
+        ("centimeters", vectorcraft_doc::Unit::Centimeters),
+        ("inches", vectorcraft_doc::Unit::Inches),
+        ("picas", vectorcraft_doc::Unit::Picas),
+        // Points and pixels both serialise as bare user-unit numbers, so both import as Pixels.
+        ("pixels", vectorcraft_doc::Unit::Pixels),
+    ];
+    for (name, expected) in cases {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 100, "artboards": 1})).unwrap();
+        s.execute("document.setUnits", &json!({"units": name})).unwrap();
+        let r = s.execute("document.serialize", &json!({"format": "svg"})).unwrap();
+        let svg_text = r["text"].as_str().unwrap();
+        match *expected {
+            vectorcraft_doc::Unit::Millimeters => assert!(svg_text.contains("mm\""), "mm suffix missing: {svg_text}"),
+            vectorcraft_doc::Unit::Centimeters => assert!(svg_text.contains("cm\""), "cm suffix missing: {svg_text}"),
+            vectorcraft_doc::Unit::Inches => assert!(svg_text.contains("in\""), "in suffix missing: {svg_text}"),
+            vectorcraft_doc::Unit::Picas => assert!(svg_text.contains("pc\""), "pc suffix missing: {svg_text}"),
+            _ => {}
+        }
+        let b64 = vectorcraft_format::base64_encode(svg_text.as_bytes());
+        s.execute("document.open", &json!({"name": "test.svg", "dataBase64": b64})).unwrap();
+        let doc_state = s.doc().unwrap();
+        assert_eq!(doc_state.doc.units, *expected, "unit mismatch after round-trip for '{name}'");
+    }
+
+    // Points serialise without suffix and re-open as Pixels (equivalent in user units).
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 200, "height": 100, "artboards": 1})).unwrap();
+    s.execute("document.setUnits", &json!({"units": "points"})).unwrap();
+    let r = s.execute("document.serialize", &json!({"format": "svg"})).unwrap();
+    let svg_text = r["text"].as_str().unwrap();
+    assert!(svg_text.contains("width=\"200\" height=\"100\""), "{svg_text}");
+    let b64 = vectorcraft_format::base64_encode(svg_text.as_bytes());
+    s.execute("document.open", &json!({"name": "test.svg", "dataBase64": b64})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.units, vectorcraft_doc::Unit::Pixels);
 }

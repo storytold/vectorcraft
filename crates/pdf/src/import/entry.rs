@@ -9,6 +9,9 @@ use super::{
 /// Mixed into an image's cache key when it is read white inside an alpha soft mask.
 pub(super) const WHITE_KEY: u128 = 0x7717_e000_a1fa;
 
+/// Mixed into an image's cache key when a DeviceCMYK image there takes the output intent's profile.
+pub(super) const INTENT_KEY: u128 = 0x1e7e_0c3c_0b5a;
+
 /// The name of the paths text imports as.
 pub(super) const TEXT_OUTLINES: &str = "<Text Outlines>";
 
@@ -281,6 +284,7 @@ fn read_opened(
     b.unsure = route && ocgs.list.iter().any(|g| (all_on && !g.on) || !g.print);
     b.taken = taken;
     b.warnings = notes;
+    b.intent_cmyk = crate::import_image::output_intent_cmyk(pdf);
     b.colors.uncalibrated_rgb = opts.uncalibrated_rgb && picked.iter().filter_map(|&n| pages.get(n)).any(crate::pages::has_private_data);
     let cache = InterpreterCache::new();
     let mut x = 0.0;

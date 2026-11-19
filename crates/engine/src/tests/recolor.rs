@@ -489,6 +489,17 @@ fn edit_group_relinks_art_and_apply_rewrites_the_group_with_the_art() {
     run(&mut s, "recolor.apply", json!({"map": [], "group": "Theme", "groupColors": ["#010203", "cmyk 0 0 0 20"]}));
     let g = s.doc().unwrap().doc.swatch_groups.iter().find(|g| g.name == "Theme").unwrap().clone();
     assert_eq!(g.swatches.iter().map(|w| w.paint.color().unwrap()).collect::<Vec<_>>(), [Color::rgb8(1, 2, 3), Color::cmyk(0.0, 0.0, 0.0, 0.2)]);
+    // "keep" leaves a swatch its color, without the Global Adjust that the other colors take.
+    let adjust = json!({"brightness": -50});
+    run(&mut s, "recolor.apply", json!({"map": [], "group": "Theme", "groupColors": ["keep", "#ffffff"], "globalAdjust": adjust}));
+    let g = s.doc().unwrap().doc.swatch_groups.iter().find(|g| g.name == "Theme").unwrap().clone();
+    let colors: Vec<Color> = g.swatches.iter().map(|w| w.paint.color().unwrap()).collect();
+    assert_eq!(colors[0], Color::rgb8(1, 2, 3));
+    assert_ne!(colors[1].to_hex(), "#ffffff", "the other color takes the Global Adjust");
+    // Past the group's swatches it adds nothing.
+    run(&mut s, "recolor.apply", json!({"map": [], "group": "Theme", "groupColors": ["keep", "keep", "keep"]}));
+    let g = s.doc().unwrap().doc.swatch_groups.iter().find(|g| g.name == "Theme").unwrap().clone();
+    assert_eq!(g.swatches.iter().map(|w| w.paint.color().unwrap()).collect::<Vec<_>>(), colors);
 }
 
 /// Art linked to a global swatch of the group that `recolor.apply` rewrites stays linked when the
@@ -823,6 +834,49 @@ fn a_null_in_group_colors_removes_that_swatch_and_the_ones_after_it_keep_their_p
     };
     assert_eq!(link(&s, red), ("#ff0000".into(), None), "art linked to the removed swatch keeps its color, unlinked");
     assert_eq!(link(&s, green), ("#00ff00".into(), Some(names[2].clone())), "art linked to a swatch that stays keeps its link");
+}
+
+/// A gradient or pattern swatch of the group keeps its place and its paint when `recolor.apply`
+/// rewrites the group: the group's colors, from the rows or from `groupColors`, go to its color
+/// swatches in order.
+#[test]
+fn apply_with_a_group_keeps_its_gradient_swatch() {
+    let mut s = session();
+    run(&mut s, "swatch.newGroup", json!({"name": "Brand", "colors": ["#ff0000", "#0000ff"]}));
+    let fade = vectorcraft_color::Paint::Gradient(Box::new(vectorcraft_color::GradientPaint::new(vectorcraft_color::Gradient::default())));
+    s.edit("test", |d, _| {
+        let w = vectorcraft_color::Swatch { name: "Fade".into(), paint: fade.clone(), global: false, spot: false };
+        d.swatch_groups.iter_mut().find(|g| g.name == "Brand").unwrap().swatches.insert(1, w);
+        Ok(())
+    })
+    .unwrap();
+    let group = |s: &Session| -> Vec<(String, Option<String>)> {
+        let g = s.doc().unwrap().doc.swatch_groups.iter().find(|g| g.name == "Brand").unwrap().swatches.clone();
+        g.iter().map(|w| (w.name.clone(), w.paint.color().map(|c| c.to_hex()))).collect()
+    };
+    let names: Vec<String> = group(&s).into_iter().map(|(n, _)| n).collect();
+    rect(&mut s, json!("#ff0000"));
+    rect(&mut s, json!("#0000ff"));
+    select_all(&mut s);
+    // The rows' new colors go to the red and blue swatches; the gradient stays between them.
+    let map = json!([{"from": ["#ff0000"], "to": "#00ff00"}, {"from": ["#0000ff"], "to": "#ffff00"}]);
+    run(&mut s, "recolor.apply", json!({"map": map, "group": "Brand"}));
+    let want = |a: &str, b: &str| vec![(names[0].clone(), Some(a.to_string())), (names[1].clone(), None), (names[2].clone(), Some(b.to_string()))];
+    assert_eq!(group(&s), want("#00ff00", "#ffff00"));
+    assert_eq!(gradient_at(&s, 1), fade, "the gradient swatch keeps its paint");
+    // `groupColors` counts the color swatches only: "keep" is the first, and the second color is
+    // the blue swatch's.
+    run(&mut s, "recolor.apply", json!({"map": [], "group": "Brand", "groupColors": ["keep", "#123456"]}));
+    assert_eq!(group(&s), want("#00ff00", "#123456"));
+    // A null removes the color swatch at its place and leaves the gradient.
+    run(&mut s, "recolor.apply", json!({"map": [], "group": "Brand", "groupColors": [null, "#123456"]}));
+    assert_eq!(group(&s), [(names[1].clone(), None), (names[2].clone(), Some("#123456".into()))]);
+    assert_eq!(gradient_at(&s, 0), fade);
+}
+
+/// The paint of the swatch at place `i` of the group "Brand".
+fn gradient_at(s: &Session, i: usize) -> vectorcraft_color::Paint {
+    s.doc().unwrap().doc.swatch_groups.iter().find(|g| g.name == "Brand").unwrap().swatches[i].paint.clone()
 }
 
 /// A row whose new color was removed keeps its art's colors: art in it linked to another swatch of
@@ -1250,7 +1304,41 @@ fn global_adjust_refuses_params_of_the_wrong_form() {
 fn halves_image(s: &mut Session, w: u32, h: u32, left: [u8; 4], right: [u8; 4]) -> (NodeId, vectorcraft_geom::Rect) {
     let img = image::RgbaImage::from_fn(w, h, |x, _| image::Rgba(if x < w / 2 { left } else { right }));
     let mut png = Vec::new();
-    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = img.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     let r = run(s, "file.place", json!({"name": "halves.png", "dataBase64": vectorcraft_format::base64_encode(&png)}));
     let id = NodeId(r["ids"][0].as_u64().unwrap());
     let b = s.doc().unwrap().doc.node(id).unwrap().visual_bounds().unwrap();
@@ -1375,7 +1463,41 @@ fn theme_picker_reads_symbol_art_and_nested_patterns() {
 fn theme_picker_reads_the_color_of_a_colorized_image() {
     let mut s = session();
     let mut png = Vec::new();
-    image::GrayImage::from_pixel(8, 8, image::Luma([90])).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::GrayImage::from_pixel(8, 8, image::Luma([90]))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     let r = run(&mut s, "file.place", json!({"name": "gray.png", "dataBase64": vectorcraft_format::base64_encode(&png)}));
     let id = NodeId(r["ids"][0].as_u64().unwrap());
     let b = s.doc().unwrap().doc.node(id).unwrap().visual_bounds().unwrap();
@@ -1430,7 +1552,41 @@ fn theme_picker_reads_an_image_inside_its_clipping_path() {
         image::Rgba(if corner { [0, 0, 255, 255] } else { [255, 0, 0, 255] })
     });
     let mut png = Vec::new();
-    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = img.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     let r = run(&mut s, "file.place", json!({"name": "corners.png", "dataBase64": vectorcraft_format::base64_encode(&png)}));
     let id = NodeId(r["ids"][0].as_u64().unwrap());
     let b = s.doc().unwrap().doc.node(id).unwrap().visual_bounds().unwrap();

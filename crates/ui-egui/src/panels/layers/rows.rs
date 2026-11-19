@@ -5,6 +5,7 @@ use super::{
     Arc, COLUMN, Color32, ColumnDrag, Document, INDENT, LayersDrag, Node, NodeId, NodeKind, Out, PanelDrag, ROW_KEYS, SQUARE_X, Sense, Stroke,
     StrokeKind, TARGET_X, Tokens, Ui, Value, View, icons, json, vec2, widgets,
 };
+use vectorcraft_tools::intertwine::{in_intertwine, refused_member};
 
 /// Stable id for the layers panel's per-name UI state.
 pub(super) fn key(name: &str) -> egui::Id {
@@ -109,15 +110,20 @@ pub(super) fn resolve_click(ui: &Ui, view: &View, list: &[Row], out: &mut Out) {
     });
 }
 
-/// Whether row `n` can take `drag` inside it.
-fn takes(n: &Node, drag: &LayersDrag, doc: &Document) -> bool {
+/// Whether row `n` can take `drag` (the rows or objects `moving`) inside it. A group or an
+/// Intertwine group takes objects; an Intertwine group, or a group in one, only objects that can
+/// be intertwined.
+fn takes(n: &Node, drag: &LayersDrag, moving: &[NodeId], doc: &Document) -> bool {
     match n.kind {
         NodeKind::Layer { .. } => true,
-        NodeKind::Group { .. } => match drag {
-            LayersDrag::Rows(ids) => !ids.iter().any(|i| doc.node(*i).is_some_and(Node::is_layer)),
-            LayersDrag::Art => true,
-            LayersDrag::Guides(_) => false,
-        },
+        NodeKind::Group { .. } | NodeKind::Intertwine { .. } => {
+            let objects = match drag {
+                LayersDrag::Rows(ids) => !ids.iter().any(|i| doc.node(*i).is_some_and(Node::is_layer)),
+                LayersDrag::Art => true,
+                LayersDrag::Guides(_) => false,
+            };
+            objects && (!in_intertwine(doc, n.id) || moving.iter().filter_map(|i| doc.node(*i)).all(|m| refused_member(m).is_none()))
+        }
         _ => false,
     }
 }
@@ -171,6 +177,19 @@ fn guide_row(ui: &mut Ui, view: &View, item: &Row, i: usize, out: &mut Out) {
         }
         out.actions.push(("guide.select".into(), json!({"indexes": [i], "toggle": m.shift || m.command})));
     }
+    if resp.secondary_clicked() {
+        crate::panels::set_row_keys(ui.ctx(), ROW_KEYS, true);
+        if editable && !selected {
+            if !view.rows.is_empty() {
+                out.actions.push(("layer.highlight".into(), json!({"ids": [], "mode": "set"})));
+                out.rows_after_click = Some(vec![]);
+            }
+            out.actions.push(("guide.select".into(), json!({"indexes": [i]})));
+        }
+    }
+    resp.context_menu(|ui| {
+        guide_context_menu(ui, view, item, i, out);
+    });
     // Dragged: the selected guides when this is one of them, else this one, to another layer's row.
     // Only the primary button drags a guide row, and not while a drag down a column passes it.
     if editable && resp.drag_started_by(egui::PointerButton::Primary) && view.column.is_none() {
@@ -185,6 +204,46 @@ fn guide_row(ui: &mut Ui, view: &View, item: &Row, i: usize, out: &mut Out) {
         && let LayersDrag::Guides(guides) = &*drag
     {
         guide_drop(ui, view, guides, item.node.id, r, &resp, out);
+    }
+}
+
+/// The right-click context menu of ruler guide row `i` (`item`).
+fn guide_context_menu(ui: &mut Ui, view: &View, item: &Row, i: usize, out: &mut Out) {
+    let Some(g) = view.ruler_guides.get(i) else { return };
+    let selected = view.guides.contains(&i);
+    let editable = view.doc.guide_editable(g);
+    let guides: Vec<usize> = if selected { view.guides.clone() } else { vec![i] };
+    let node = g.id.and_then(|id| view.doc.node(id));
+    let guide_nodes: Vec<u64> = if selected {
+        guides.iter().filter_map(|&idx| view.ruler_guides.get(idx)?.id.map(|id| id.0)).collect()
+    } else {
+        node.map(|n| vec![n.id.0]).unwrap_or_default()
+    };
+    let visible = node.is_none_or(|n| n.visible);
+    if widgets::menu_item(ui, if visible { "Hide" } else { "Show" }, !guide_nodes.is_empty(), false) {
+        out.actions.push(("layer.setProps".into(), json!({ "ids": guide_nodes, "visible": !visible })));
+        ui.close();
+    }
+    let locked = node.is_some_and(|n| n.locked);
+    if widgets::menu_item(ui, if locked { "Unlock" } else { "Lock" }, !guide_nodes.is_empty(), false) {
+        out.actions.push(("layer.setProps".into(), json!({ "ids": guide_nodes, "locked": !locked })));
+        ui.close();
+    }
+    ui.separator();
+    if widgets::menu_item(ui, "Release Guides", editable, false) {
+        let params = if guides.len() > 1 { json!({}) } else { json!({ "index": i }) };
+        out.actions.push(("view.guides.release".into(), params));
+        ui.close();
+    }
+    if widgets::menu_item(ui, "Delete", editable, false) {
+        out.actions.push(("guide.remove".into(), json!({ "indexes": guides })));
+        ui.close();
+    }
+    ui.separator();
+    let layers_only = view.opts.layers_only;
+    if widgets::menu_item(ui, if layers_only { "Locate Layer" } else { "Locate Object" }, true, false) {
+        out.actions.push(("layer.locate".into(), json!({ "id": item.node.id.0, "layersOnly": layers_only })));
+        ui.close();
     }
 }
 
@@ -226,6 +285,64 @@ fn spine_row(ui: &mut Ui, view: &View, item: &Row, out: &mut Out) {
         let m = ui.input(|i| i.modifiers);
         let action = if m.shift || m.command { "select.toggle" } else { "select.set" };
         out.actions.push((action.into(), json!({"ids": [blend.0]})));
+    }
+    if resp.secondary_clicked() {
+        crate::panels::set_row_keys(ui.ctx(), ROW_KEYS, true);
+        if editable && !selected {
+            out.actions.push(("select.set".into(), json!({"ids": [blend.0]})));
+        }
+    }
+    resp.context_menu(|ui| {
+        spine_context_menu(ui, view, item, out);
+    });
+}
+
+/// The right-click context menu of blend spine row `item`.
+fn spine_context_menu(ui: &mut Ui, view: &View, item: &Row, out: &mut Out) {
+    let blend = item.node.id;
+    let selected = view.sel.contains(&blend);
+    let editable = (view.doc.editable())(blend);
+    let has_spine = !matches!(&item.node.kind, NodeKind::Blend { spec, .. } if spec.no_spine);
+    let ensure_selected = |out: &mut Out| {
+        if !selected {
+            out.actions.push(("select.set".into(), json!({ "ids": [blend.0] })));
+        }
+    };
+    if widgets::menu_item(ui, "Select", editable, false) {
+        out.actions.push(("select.set".into(), json!({ "ids": [blend.0] })));
+        ui.close();
+    }
+    if widgets::menu_item(ui, "Blend Options…", editable, false) {
+        ensure_selected(out);
+        out.actions.push(("ui.blendOptions".into(), json!({})));
+        ui.close();
+    }
+    ui.separator();
+    if widgets::menu_item(ui, "Reverse Spine", editable && has_spine, false) {
+        ensure_selected(out);
+        out.actions.push(("object.blend.reverseSpine".into(), json!({})));
+        ui.close();
+    }
+    if widgets::menu_item(ui, "Reverse Front to Back", editable, false) {
+        ensure_selected(out);
+        out.actions.push(("object.blend.reverseFrontToBack".into(), json!({})));
+        ui.close();
+    }
+    if widgets::menu_item(ui, "Expand", editable, false) {
+        ensure_selected(out);
+        out.actions.push(("object.blend.expand".into(), json!({})));
+        ui.close();
+    }
+    if widgets::menu_item(ui, "Release", editable, false) {
+        ensure_selected(out);
+        out.actions.push(("object.blend.release".into(), json!({})));
+        ui.close();
+    }
+    ui.separator();
+    let layers_only = view.opts.layers_only;
+    if widgets::menu_item(ui, if layers_only { "Locate Layer" } else { "Locate Object" }, true, false) {
+        out.actions.push(("layer.locate".into(), json!({ "id": blend.0, "layersOnly": layers_only })));
+        ui.close();
     }
 }
 
@@ -440,9 +557,7 @@ pub(super) fn row(ui: &mut Ui, view: &View, item: &Row, out: &mut Out) {
             d.insert_temp(key("grabbed"), n.id);
         });
     }
-    if resp.dragged_by(egui::PointerButton::Primary) {
-        ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
-    }
+    // The cursor of a row drag is the panel's ([`super::drag_cursor`]): Alt can change it on any frame.
     drop_target(ui, view, n, r, x - 16.0, open, &resp, out);
 }
 
@@ -506,9 +621,10 @@ fn row_context_menu(ui: &mut Ui, view: &View, n: &Node, collect_ids: &[u64], out
         }
     }
     ui.separator();
-    // Locate Object
-    if widgets::menu_item(ui, "Locate Object", true, false) {
-        out.actions.push(("layer.locate".into(), json!({ "id": n.id.0 })));
+    // Locate Object, or Locate Layer with Show Layers Only on
+    let layers_only = view.opts.layers_only;
+    if widgets::menu_item(ui, if layers_only { "Locate Layer" } else { "Locate Object" }, true, false) {
+        out.actions.push(("layer.locate".into(), json!({ "id": n.id.0, "layersOnly": layers_only })));
         ui.close();
     }
     ui.separator();
@@ -670,21 +786,33 @@ fn drop_target(ui: &Ui, view: &View, n: &Node, r: egui::Rect, indent: f32, open:
             return;
         }
     };
-    // Never into itself or a row inside it.
+    // Never into itself or a row inside it. With Alt, rows held over one of their own rows copy
+    // beside it, above or below, as `layer.move` places a copy there (#8237).
+    let alt = ui.input(|i| i.modifiers.alt);
+    let beside_itself = alt && matches!(&*drag, LayersDrag::Rows(_)) && moving.contains(&n.id);
     let around = doc.ancestry(n.id).unwrap_or_default();
-    if moving.is_empty() || moving.iter().any(|m| around.contains(m)) {
+    if moving.is_empty() || moving.iter().any(|m| around.contains(m) && !(beside_itself && *m == n.id)) {
         return;
     }
     let Some(p) = ui.input(|i| i.pointer.hover_pos()) else { return };
     let rel = (p.y - r.top()) / r.height().max(1.0);
-    let inside = takes(n, &drag, doc);
+    let inside = takes(n, &drag, &moving, doc);
     let place = match &*drag {
+        LayersDrag::Rows(_) if beside_itself && rel < 0.5 => Place::Above,
+        LayersDrag::Rows(_) if beside_itself => Place::Below,
         LayersDrag::Art if inside => Place::Inside,
         LayersDrag::Art => Place::Above,
         LayersDrag::Rows(_) if inside && rel >= 0.25 && (rel <= 0.75 || open) => Place::Inside,
         LayersDrag::Rows(_) if rel < 0.5 => Place::Above,
         LayersDrag::Rows(_) | LayersDrag::Guides(_) => Place::Below,
     };
+    // Beside a member of an Intertwine group (or a row in one) only what can be intertwined goes.
+    if place != Place::Inside
+        && doc.parent_of(n.id).is_some_and(|p| in_intertwine(doc, p))
+        && moving.iter().filter_map(|i| doc.node(*i)).any(|m| refused_member(m).is_some())
+    {
+        return;
+    }
     let stroke = Stroke::new(2.0, view.t.accent);
     match place {
         Place::Above => {

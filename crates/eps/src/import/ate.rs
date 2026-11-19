@@ -65,6 +65,14 @@ impl Val {
         }
     }
 
+    /// Removes the entry `key` of a dictionary and returns it, without copying it.
+    fn take(&mut self, key: &str) -> Option<Val> {
+        match self {
+            Val::Dict(d) => d.remove(key),
+            _ => None,
+        }
+    }
+
     fn num(&self) -> Option<f64> {
         match self {
             Val::Num(n) if n.is_finite() => Some(*n),
@@ -83,6 +91,14 @@ impl Val {
         match self {
             Val::List(l) => l,
             _ => &[],
+        }
+    }
+
+    /// [`Self::list`] as an owned vector, without copying the items: empty when this isn't a list.
+    fn into_list(self) -> Vec<Val> {
+        match self {
+            Val::List(l) => l,
+            _ => Vec::new(),
         }
     }
 
@@ -345,8 +361,9 @@ impl AreaFrame {
                 2 => F::CapHeight,
                 3 => F::Leading,
                 4 => F::XHeight,
-                // Em Box Height (5) and Legacy (6) have no first baseline of their own here: the
-                // first baseline stays as it was.
+                5 => F::EmBoxHeight,
+                // Legacy (6) has no first baseline of its own here: the first baseline stays as it
+                // was.
                 _ => return None,
             };
             Some((kind, length(b.get("1")).unwrap_or(0.0)))
@@ -576,6 +593,12 @@ impl DocFont {
     }
 }
 
+#[cfg(test)]
+thread_local! {
+    /// How many times [`Texts::read`] has read a text document on this thread.
+    pub(super) static TEXTS_READS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
 /// The text document of an editing copy.
 pub(super) struct Texts {
     stories: Vec<Val>,
@@ -615,6 +638,8 @@ impl Texts {
         fn find(h: &[u8], n: &[u8], from: usize) -> Option<usize> {
             h.get(from..)?.windows(n.len()).position(|w| w == n).map(|p| p + from)
         }
+        #[cfg(test)]
+        TEXTS_READS.set(TEXTS_READS.get() + 1);
         let start = find(data, b"%AI11_BeginTextDocument", 0)?;
         let from = find(data, b"/ASCII85Decode", start)? + b"/ASCII85Decode".len();
         let end = find(data, b"~>", from)? + 2;
@@ -652,20 +677,30 @@ impl Texts {
             })
             .collect();
         let main = doc.get("1")?;
+        main.get("1")?;
+        main.get("2")?;
+        doc.get("0")?.get("8")?.get("0")?;
         let sheets = |key: &str| -> Vec<Val> {
             let list = doc.get("0").and_then(|d| d.get(key)).and_then(|s| s.get("0")).map(Val::list).unwrap_or_default();
             list.iter().take(MAX_SHEETS).map(|s| s.get("0").cloned().unwrap_or(Val::Dict(BTreeMap::new()))).collect()
         };
+        let char_sheets = sheets("5");
+        let para_sheets = sheets("6");
+        let kinsoku_sets = kinsoku_sets(&doc);
+        // Every path is there (looked up above), so the stories, defaults and frames move out of the
+        // document without a copy.
+        let mut doc = doc;
+        let mut main = doc.take("1")?;
         Some(Texts {
-            stories: main.get("1")?.list().to_vec(),
+            stories: main.take("1")?.into_list(),
             fonts,
-            defaults: main.get("2")?.clone(),
-            para_defaults: main.get("3").cloned().unwrap_or(Val::Dict(BTreeMap::new())),
-            char_sheets: sheets("5"),
-            para_sheets: sheets("6"),
-            frames: doc.get("0")?.get("8")?.get("0")?.list().to_vec(),
+            defaults: main.take("2")?,
+            para_defaults: main.take("3").unwrap_or(Val::Dict(BTreeMap::new())),
+            char_sheets,
+            para_sheets,
+            frames: doc.take("0")?.take("8")?.take("0")?.into_list(),
             patterns: HashMap::new(),
-            kinsoku_sets: kinsoku_sets(&doc),
+            kinsoku_sets,
         })
     }
 
@@ -1154,6 +1189,12 @@ impl Story {
         self.text.len()
     }
 
+    /// Is frame `frame` of the story point type with nothing but spaces and line ends (its last
+    /// `\r` left out), which [`Self::node`] doesn't make: it draws nothing.
+    pub(super) fn blank_point(&self, frame: usize) -> bool {
+        frame == 0 && matches!(self.frames.first(), Some(FrameKind::Point(_))) && self.is_blank()
+    }
+
     /// The point frame's matrix (the first frame's, when it is one), else the identity.
     fn matrix(&self) -> [f64; 6] {
         match self.frames.first() {
@@ -1225,6 +1266,24 @@ impl Story {
     /// document), or `None` for type that is mirrored, has no size, or a frame past the first of
     /// threaded type (the first frame holds the whole story).
     pub(super) fn node(&self, id: NodeId, frame: usize, template: (f64, f64), to_doc: Affine) -> Option<Node> {
+        self.made_node(id, frame, template, to_doc, false)
+    }
+
+    /// For a blank story (nothing but spaces and line ends) in an area frame or on a path, an empty
+    /// text object with that frame or path, as [`Self::node`] would make it, as VectorCraft's Type
+    /// tool keeps such an empty frame (#85, #154). Its text is the story's, spaces kept. `None` for
+    /// any other story or frame.
+    pub(super) fn blank_frame_node(&self, id: NodeId, frame: usize, template: (f64, f64), to_doc: Affine) -> Option<Node> {
+        self.is_blank().then(|| self.made_node(id, frame, template, to_doc, true)).flatten()
+    }
+
+    /// Is the story's text nothing but spaces and line ends (`\r`, and `\x03`, a line break)?
+    pub(super) fn is_blank(&self) -> bool {
+        self.text.chars().all(|c| c.is_whitespace() || c == '\x03')
+    }
+
+    /// [`Self::node`]; with `blank_frame`, a blank story in an area frame or on a path is made too.
+    fn made_node(&self, id: NodeId, frame: usize, template: (f64, f64), to_doc: Affine, blank_frame: bool) -> Option<Node> {
         let kind = self.frames.get(frame)?;
         let threaded = frame > 0;
         let (scale, xf, kind) = match kind {
@@ -1266,7 +1325,9 @@ impl Story {
                 })
                 .collect()
         };
-        if text.trim().is_empty() && !threaded {
+        // A blank story isn't made here: the page may still have type for its object. What is left
+        // of one, an area frame or a path, is made by [`Self::blank_frame_node`].
+        if text.trim().is_empty() && !threaded && !(blank_frame && !matches!(kind, TextKind::Point)) {
             return None;
         }
         // The text document measures in the art's units too: the document's scale carries its
@@ -2936,12 +2997,12 @@ mod tests {
     #[test]
     fn area_frame_first_baseline_kinds_and_minimum_are_read() {
         use vectorcraft_doc::FirstBaseline as F;
-        for (code, kind) in [(0, F::Fixed), (2, F::CapHeight), (3, F::Leading), (4, F::XHeight)] {
+        for (code, kind) in [(0, F::Fixed), (2, F::CapHeight), (3, F::Leading), (4, F::XHeight), (5, F::EmBoxHeight)] {
             let a = area_of(vec![area_frame(&format!("/10 << /0 {code} /1 30 >>"))], 0, 2.0);
             assert_eq!((a.first_baseline, a.first_baseline_min), (kind, 60.0), "code {code}");
         }
         // A kind without its own first baseline here, or none known, leaves Ascent.
-        for code in ["1", "5", "6", "7", "-1", "2.5", "(x)"] {
+        for code in ["1", "6", "7", "-1", "2.5", "(x)"] {
             let a = area_of(vec![area_frame(&format!("/10 << /0 {code} /1 30 >>"))], 0, 1.0);
             assert_eq!((a.first_baseline, a.first_baseline_min), (F::Ascent, 0.0), "code {code}");
         }
@@ -2972,9 +3033,10 @@ mod tests {
         };
         let placed = |options: &str| placed_in(&[options]);
         assert_eq!(placed("/10 << /0 2 /1 0 >>"), (false, vectorcraft_doc::FirstBaseline::CapHeight));
+        assert_eq!(placed("/10 << /0 5 /1 0 >>"), (false, vectorcraft_doc::FirstBaseline::EmBoxHeight));
         // Without one (Ascent), or with one that isn't read, the line goes where the file has it.
         assert_eq!(placed(""), (true, vectorcraft_doc::FirstBaseline::Fixed));
-        assert_eq!(placed("/10 << /0 5 /1 0 >>"), (true, vectorcraft_doc::FirstBaseline::Fixed));
+        assert_eq!(placed("/10 << /0 6 /1 0 >>"), (true, vectorcraft_doc::FirstBaseline::Fixed));
         // Another frame of the thread keeping one doesn't count for the first.
         assert_eq!(placed_in(&["", "/10 << /0 2 /1 0 >>"]), (true, vectorcraft_doc::FirstBaseline::Fixed));
     }
@@ -3075,5 +3137,101 @@ mod tests {
         s.lines = vec![(0.0, 210.0 - own - 3.0)];
         let (placed, at, _) = first(&s, true);
         assert!(placed && at.is_some_and(|x| (x - (own + 3.0)).abs() < 1e-6), "{at:?} for {}", own + 3.0);
+    }
+
+    /// [`Val::take`] and [`Val::into_list`] hand over the value they find without copying it.
+    #[test]
+    fn taking_a_value_keeps_its_storage() {
+        let mut v = read(b"/1 [ (a story) << /0 (its frame) >> ] /2 (defaults)").unwrap();
+        let (Some(Val::List(l)), Some(Val::Str(s))) = (v.get("1"), v.get("2")) else { panic!("a list and a string") };
+        let (list, string) = (l.as_ptr(), s.as_ptr());
+        let taken = v.take("1").unwrap().into_list();
+        assert_eq!(taken.as_ptr(), list);
+        assert_eq!(taken.len(), 2);
+        let Some(Val::Str(s)) = v.take("2") else { panic!("a string") };
+        assert_eq!(s.as_ptr(), string);
+        assert_eq!(v, Val::Dict(BTreeMap::new()));
+        assert_eq!(v.take("1"), None);
+        assert_eq!(Val::Num(1.0).take("1"), None);
+        assert_eq!(Val::Str("x".into()).into_list(), Vec::new());
+    }
+
+    /// [`Texts::read`] gives the same stories, defaults, frames, styles, Kinsoku sets and fonts as
+    /// copying each of them out of the parsed document does, and reads nothing where that finds
+    /// nothing.
+    #[test]
+    fn the_text_document_reads_the_same_as_copying_its_parts() {
+        type Parts = (Vec<Val>, Val, Val, Vec<Val>, Vec<Val>, Vec<Val>, Vec<Option<Kinsoku>>, Vec<(String, Option<String>)>);
+        let copied = |document: &str| -> Option<Parts> {
+            let doc = names::numbered(read(document.as_bytes())?);
+            let fonts = doc.get("0")?.get("1")?.get("0")?.list();
+            let fonts = fonts
+                .iter()
+                .map(|f| {
+                    let record = f.get("0").and_then(|f| f.get("0"));
+                    let text = |k: &str| record.and_then(|r| r.get(k)).and_then(Val::str);
+                    (text("0").unwrap_or_default().to_string(), text("5").and_then(record_version).map(str::to_string))
+                })
+                .collect();
+            let main = doc.get("1")?;
+            let sheets = |key: &str| -> Vec<Val> {
+                let list = doc.get("0").and_then(|d| d.get(key)).and_then(|s| s.get("0")).map(Val::list).unwrap_or_default();
+                list.iter().take(MAX_SHEETS).map(|s| s.get("0").cloned().unwrap_or(Val::Dict(BTreeMap::new()))).collect()
+            };
+            Some((
+                main.get("1")?.list().to_vec(),
+                main.get("2")?.clone(),
+                main.get("3").cloned().unwrap_or(Val::Dict(BTreeMap::new())),
+                doc.get("0")?.get("8")?.get("0")?.list().to_vec(),
+                sheets("5"),
+                sheets("6"),
+                kinsoku_sets(&doc),
+                fonts,
+            ))
+        };
+        let read_parts = |document: &str| -> Option<Parts> {
+            // Padded so that the data's end, `~>`, stays on one line.
+            let mut document = document.to_string();
+            while crate::import::tests_native::native_with_text("", &document).contains("\n%>\n") {
+                document.push('\n');
+            }
+            let t = Texts::read(crate::import::tests_native::native_with_text("", &document).as_bytes())?;
+            let fonts = t.fonts.iter().map(|f| (f.name.clone(), f.version.clone())).collect();
+            Some((t.stories, t.defaults, t.para_defaults, t.frames, t.char_sheets, t.para_sheets, t.kinsoku_sets, fonts))
+        };
+        let plain = crate::import::tests_native::text_document(&[
+            ("First story", 0, (10.0, 20.0), (1.0, 2.0), 0.0),
+            ("Second, longer story", 2, (30.0, 40.0), (3.0, 4.0), 5.0),
+            ("Third", 1, (50.0, 60.0), (5.0, 6.0), 0.0),
+        ]);
+        let full = plain
+            .replacen(
+                "/8 << /0 [",
+                "/4 << /0 [ << /0 << /0 (PhotoshopKinsokuHard) >> >> << /0 << /0 (Own) >> >> ] >> \
+                 /5 << /0 [ << /0 << /0 (Normal) /6 << /1 9.0 >> >> >> << /1 0 >> ] >> \
+                 /6 << /0 [ << /0 << /0 (Body) /5 << /0 2 >> >> >> ] >> /8 << /0 [",
+                1,
+            )
+            .replacen("/2 << /1 12.0 >>", "/2 << /1 12.0 /0 1 >> /3 << /0 2 /33 1 >>", 1);
+        let cases = [
+            ("every part", full.clone(), true),
+            ("no paragraph defaults", plain.clone(), true),
+            ("stories that aren't a list", full.replacen("\n/1 << /1 [", "\n/1 << /1 5 /7 [", 1), true),
+            ("frames that aren't a list", full.replacen("/8 << /0 [", "/8 << /0 5 /7 [", 1), true),
+            ("no defaults", full.replacen("/2 << /1 12.0 /0 1 >>", "", 1), false),
+            ("no frames", full.replacen("/8 << /0 [", "/9 << /0 [", 1), false),
+            ("no stories", full.replacen("\n/1 << /1 [", "\n/1 << /7 [", 1), false),
+            ("no fonts", full.replacen("/0 << /1 << /0 [", "/0 << /1 << /7 [", 1), false),
+        ];
+        for (case, document, reads) in cases {
+            assert!(case == "every part" || document != full, "{case} changes the document");
+            let want = copied(&document);
+            assert_eq!(want.is_some(), reads, "{case}");
+            assert_eq!(read_parts(&document), want, "{case}");
+        }
+        let Some((stories, defaults, para_defaults, frames, char_sheets, para_sheets, kinsoku, fonts)) = read_parts(&full) else { panic!("read") };
+        assert_eq!((stories.len(), frames.len(), char_sheets.len(), para_sheets.len(), fonts.len()), (3, 3, 2, 1, 1));
+        assert_eq!(kinsoku, [Some(Kinsoku::Hard), None]);
+        assert!(defaults.get("0").is_some() && para_defaults.get("33").is_some());
     }
 }

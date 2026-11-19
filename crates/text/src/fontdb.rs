@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex, RwLock};
 
 use kurbo::BezPath;
 use skrifa::instance::{Location, LocationRef, Size};
-use skrifa::outline::{DrawSettings, OutlinePen};
+use skrifa::outline::OutlinePen;
 use skrifa::raw::FileRef;
 use skrifa::string::StringId;
 use skrifa::{GlyphId, MetadataProvider, Tag};
@@ -17,6 +17,7 @@ use crate::GlyphImage;
 use crate::colr::ColourContent;
 use vectorcraft_doc::color::Color;
 
+mod added;
 mod alternates;
 mod build;
 mod cache;
@@ -33,6 +34,9 @@ mod stylistic_sets;
 mod traits;
 mod wanted;
 
+#[cfg(test)]
+pub(crate) use added::recently_added_of;
+pub use added::{RECENTLY_ADDED_WITHIN, RecentlyAdded};
 pub use alternates::GlyphAlternate;
 pub(crate) use alternates::listed;
 pub use build::style_weight;
@@ -70,7 +74,7 @@ pub use stylistic_sets::StylisticSet;
 use traits::Alias;
 #[cfg(test)]
 use traits::{FaceKeys, face_names};
-pub use traits::{FontClass, FontLikeness, FontMatch, FontTraits};
+pub use traits::{FontClass, FontLikeness, FontMatch, FontTraits, GENERIC_FAMILIES, is_generic_family};
 #[cfg(test)]
 pub(crate) use traits::{alias_lists, face_styles, on_faces_published};
 pub use wanted::{WantedFont, WantedFonts};
