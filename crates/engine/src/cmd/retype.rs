@@ -219,6 +219,28 @@ impl Line {
         self.scale * self.face.units_per_em()
     }
 
+    /// The shapes of the one-contour glyphs that stand alone on this line: neither the glyph before
+    /// nor the one after continues it by starting after the end of the glyph before it. A glyph
+    /// that joined the line only through the tight-tracking test counts as alone. A line of three
+    /// glyphs or more is type (its tracking can be read), so none of its glyphs is alone.
+    fn lone_one_contour(&self) -> Vec<NodeId> {
+        if self.matches.len() >= 3 {
+            return vec![];
+        }
+        let dir = self.dir();
+        let size = self.size();
+        // Does glyph `k` start after the end of the glyph before it, less a quarter em?
+        let after_previous = |k: usize| match (k.checked_sub(1).and_then(|j| self.matches.get(j)), self.matches.get(k)) {
+            (Some(a), Some(b)) => (b.origin - (a.origin + dir * (a.face.advance(a.gid) * a.scale))).dot(dir) > -size * 0.25,
+            _ => false,
+        };
+        let n = self.matches.len();
+        (0..n)
+            .filter(|&k| !after_previous(k) && !after_previous(k + 1))
+            .filter_map(|k| self.matches.get(k).filter(|m| m.contours == 1).and_then(|_| self.pieces.get(k).copied()))
+            .collect()
+    }
+
     /// The line's tracking in points.
     fn tracking_pt(&self) -> f64 {
         self.tracking * self.size() / 1000.0
@@ -366,14 +388,15 @@ impl Line {
     /// crosses a space. The extra most gaps share (the lower median, so that the word spaces of a
     /// few gaps do not count) places the word spaces; the tracking is then the lower median, over
     /// the gaps, of each gap's extra less its spaces, per character. The upper median of the
-    /// extras is tried next, for a line whose word spaces are its tighter gaps. A tracking within
+    /// extras is tried next, for a line whose word spaces are its tighter gaps, and last the lower
+    /// median less one space, halved, for a line most of whose gaps hold a word space. A tracking within
     /// 0.05 of a whole number is tried rounded to it first, then as measured. A tracked line is
     /// kept when its type draws the whole line in place, or more of it from its start than
     /// untracked type does. When untracked type with the spaces also draws the whole line, the line stays
     /// untracked if the tracking is under one unit or the tracked reading drops a gap untracked
     /// type reads as one space. The line also stays as it is when its tracking is 0 or outside
     /// -1000..10000, and when its tracking is negative and the line does not paint the same as one
-    /// object ([`paints_as_one`]: its glyphs may overlap). Each of the seven layouts at most takes
+    /// object ([`paints_as_one`]: its glyphs may overlap). Each of the nine layouts at most takes
     /// its characters, spaces included, from `budget` before it runs; without enough left, the
     /// line stays as it is, or becomes the best tracked reading laid out before the budget ran out.
     fn tracked(self, system_layout: bool, budget: &mut usize) -> Line {
@@ -472,8 +495,14 @@ impl Line {
         };
         // The lower median of the extras places the word spaces first; the upper one second, for a
         // line whose word spaces are its tighter gaps (tracking tighter than a space).
+        let lower = median(extra.clone(), false);
+        // A line whose word gaps are most of its gaps has a space and two trackings in each extra
+        // (tracking is added after the glyph and after the space): the seed then places the spaces
+        // from the extra less one space, shared by the two. It goes last, so a reading that fits
+        // without it is kept (an untracked "a b c" has no such tracking).
+        let spaced_seed = lower.map(|e| (e - space) / 2.0);
         let mut tries = vec![];
-        for seed in [median(extra.clone(), false), median(extra, true)].into_iter().flatten() {
+        for seed in [lower, median(extra, true), spaced_seed].into_iter().flatten() {
             let Some(measured) = measure(seed) else { continue };
             for t in [round_tracking(measured), measured] {
                 if !tries.contains(&t) {
@@ -594,7 +623,7 @@ fn verified(lines: Vec<Line>, system_layout: bool, unmatched: &mut Vec<NodeId>) 
     // glyphs from half as much again as the glyph checks' budget.
     let mut remeasured = budget.saturating_add(budget / 2);
     let mut track_budget =
-        lines.iter().map(|l| l.text.chars().count().saturating_add(l.pieces.len().saturating_mul(264))).fold(budget, usize::saturating_add);
+        lines.iter().map(|l| l.text.chars().count().saturating_add(l.pieces.len().saturating_mul(394))).fold(budget, usize::saturating_add);
     let mut todo: std::collections::VecDeque<Line> = lines.into();
     let mut out = vec![];
     while let Some(l) = todo.pop_front() {
@@ -1109,14 +1138,13 @@ fn retype(s: &mut Session, p: &Value) -> Result<Value> {
         // art (a dot, a bar): beside other shapes it stays an outline. Selected on its own, it is
         // what was asked for. Lone means alone on its baseline as the outlines lie, before the
         // layout check splits lines (tracking and manual kerning split them glyph by glyph).
-        let lone_pieces: std::collections::HashSet<NodeId> =
-            lines.iter().filter(|l| matches!(l.matches.as_slice(), [m] if m.contours == 1)).flat_map(|l| l.pieces.iter().copied()).collect();
-        // Each line's tracking is measured with seven layouts at most: the line as read (its
+        let lone_pieces: std::collections::HashSet<NodeId> = lines.iter().flat_map(Line::lone_one_contour).collect();
+        // Each line's tracking is measured with nine layouts at most: the line as read (its
         // characters), its glyphs without and with one space between them (three times its
-        // glyphs) and four tracked readings of at most 64 spaces in each gap (260 times its
+        // glyphs) and six tracked readings of at most 64 spaces in each gap (390 times its
         // glyphs), so every line has what its measure can take.
         let mut budget =
-            lines.iter().map(|l| l.text.chars().count().saturating_add(l.pieces.len().saturating_mul(263))).fold(256usize, usize::saturating_add);
+            lines.iter().map(|l| l.text.chars().count().saturating_add(l.pieces.len().saturating_mul(393))).fold(256usize, usize::saturating_add);
         let lines = lines.into_iter().map(|l| l.tracked(system_layout, &mut budget)).collect();
         let mut lines = verified(lines, system_layout, &mut unmatched);
         if pieces.len() > 1 {
