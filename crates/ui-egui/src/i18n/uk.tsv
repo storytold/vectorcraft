@@ -2074,6 +2074,11 @@ file-filter	Templates	Шаблони
 	Knife	Ніж
 	Knockout Group	Група з вирізуванням
 	Lab	Lab
+	OKLCH Sliders	Повзунки OKLCH
+	HSL Sliders	Повзунки HSL
+	Chroma	Хрома
+	The largest chroma sRGB holds at this lightness and hue	Найбільша хрома, яку вміщує sRGB за цієї світлоти й відтінку
+	OKLCH needs sRGB as the working RGB space	Для OKLCH робочим простором RGB має бути sRGB
 	Lab Spot Colors:	Плашкові кольори Lab:
 	Lab Values	Значення Lab
 	Landscape	Альбомна
@@ -3419,9 +3424,9 @@ digits	Malayalam	Малаялам
 	Edit type set in fonts that aren't available?	Редагувати текст, набраний недоступними шрифтами?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Показує на полотні номер кожного фрагмента в рамці в його лівому верхньому куті; коли параметр вимкнено, контури фрагментів і далі видно.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Колір контурів користувацьких і об’єктних фрагментів та рамок з їхніми номерами; автоматичні фрагменти використовують блідіший відтінок цього кольору.
-	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	Новий текст отримує цю мову, доки в «Параметрах документа» вибрано мову Англійська: США; текст, який уже є в документі, зберігає свою мову.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	В абзацах з увімкненим параметром «Розставляти переноси» слово зі списку переноситься лише за введеними в ньому дефісами або ніде, якщо їх немає, незалежно від мови й регістру.
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	У настільній версії модулі .wasm з цієї папки завантажуються під час запуску і коли ви натискаєте ОК з новою папкою тут, крім безпечного режиму; веб-версія їх не завантажує.
+	Normal keeps each plug-in's own limits; with Large, a plug-in filter or command may run at least 250 million instructions besides those for its input. The time limit stays the same.	«Звичайний» зберігає власні обмеження кожного модуля; з «Великий» фільтр або команда модуля може виконати щонайменше 250 мільйонів інструкцій понад ті, що потрібні для її вхідних даних. Обмеження часу не змінюється.
 	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	Скільки інструкцій може використати кожен запуск фільтра об’єктів із модуля; «Великий» дозволяє більше, ніж «Звичайний», з тим самим обмеженням у 60 секунд. Важкі фільтри зберігають власний бюджет.
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Перший вибір робочого диска: Startup, None або шлях до папки; VectorCraft зберігає його, але поки не використовує робочі диски.
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Другий вибір робочого диска: Startup, None або шлях до папки; VectorCraft зберігає його, але поки не використовує робочі диски.
@@ -3440,6 +3445,8 @@ digits	Malayalam	Малаялам
 	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	Мова інтерфейсу; «Авто» використовує мову системи. Діалог перемикає мову, щойно ви її виберете.
 	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	Анімоване масштабування працює, лише поки це увімкнено; якщо вимкнено, Анімоване масштабування затінене і масштабування не анімується.
 	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	Масштабування коліщатком іде плавно, а Інструмент «Масштаб» масштабує, поки ви тягнете вбік або утримуєте його; якщо вимкнено, він масштабує до області, яку ви протягнули.
+	From the next start, the desktop version shows the canvas through this kind of graphics processor; the artwork is drawn on the CPU either way. Automatic prefers the integrated one on Windows and macOS. The web version does not use it.	З наступного запуску настільна версія показує полотно через цей тип графічного процесора; саму графіку завжди малює центральний процесор. «Автоматично» у Windows і macOS надає перевагу вбудованому. Веб-версія його не використовує.
+	From the next start, the window shows each frame without waiting for the display's refresh where the graphics driver allows, at most 240 frames a second.	З наступного запуску вікно показує кожен кадр, не чекаючи оновлення дисплея, якщо графічний драйвер це дозволяє, не більше 240 кадрів на секунду.
 	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	З наступного запуску настільна версія малює цим типом графічного процесора; «Автоматично» надає перевагу тому, що керує дисплеєм. Веб-версія його не використовує.
 	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	З наступного запуску вікно показує кадри, не чекаючи оновлення дисплея, не більше 240 на секунду; якщо вимкнено, темп задає дисплей. Режим виведення, заданий під час запуску, має пріоритет.
 	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	Найбільша кількість кроків скасування, яку зберігає кожен документ; менше число видаляє найстаріші кроки, коли ви натискаєте ОК. Кроки можуть зникнути й раніше, якщо займають надто багато пам’яті.
@@ -5196,6 +5203,8 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` має бути grayscale, rgb, hsb, cmyk або websafe
 @msg	`view` must be wheel or box	`view` має бути wheel або box
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` має бути hue, saturation, brightness, red, green або blue
+@msg	`sliders` must be none, oklch or hsl	`sliders` має бути none, oklch або hsl
+@msg	OKLCH needs sRGB as the working RGB space	Для OKLCH робочим простором RGB має бути sRGB
 @msg	`{k}` must be [x, y]	`{k}` має бути [x, y]
 @msg	`{name}` has no options	`{name}` не має параметрів
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` - вбудоване робоче середовище; виберіть інше ім’я
@@ -10399,6 +10408,11 @@ breakText	Glyphs	Гліфи
 @msg	A panel is not joined to the rest by a crease.	Панель не з’єднана з рештою жодною лінією біговки.
 @msg	A fold line is on a non-printing layer.	Лінія згину лежить на шарі, що не друкується.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Панелі: {panels}, шарніри: {hinges}, помилки: {errors}, попередження: {warnings}
+	Orbit Lines	Орбітальні лінії
+	Petal Garland	Гірлянда пелюсток
+	Lattice Braid	Ґратчасте плетіння
+	Facet Sweep	Гранований мазок
+	Artistic Brushes	Художні пензлі
 	Paint	Фарба
 	Flat Sweep	Плоский мазок
 	Dry Drag	Сухий протяг

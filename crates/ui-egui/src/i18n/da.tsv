@@ -7105,6 +7105,11 @@ axis	Both	Begge
 	Image	Billede
 	Ink	Blæk
 	Lab	Lab
+	OKLCH Sliders	OKLCH-skydere
+	HSL Sliders	HSL-skydere
+	Chroma	Kroma
+	The largest chroma sRGB holds at this lightness and hue	Den største kroma, sRGB kan rumme ved denne lyshed og farvetone
+	OKLCH needs sRGB as the working RGB space	OKLCH kræver sRGB som RGB-arbejdsfarverum
 	Medium	Medium
 	Name	Navn
 	None	Ingen
@@ -7315,9 +7320,9 @@ font-technology	Variable	Variable
 	Edit type set in fonts that aren't available?	Rediger tekst i skrifttyper, der ikke er tilgængelige?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Viser hvert udsnits nummer i en boks i dets øverste venstre hjørne på lærredet; når den er slået fra, vises udsnittenes konturer stadig.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Farven på konturerne af bruger- og objektudsnit og på boksene med deres numre; automatiske udsnit bruger en svagere nuance af den.
-	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	Ny tekst får dette sprog, så længe sproget i Dokumentopsætning er Engelsk: USA; tekst, der allerede er i et dokument, beholder sit eget sprog.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	I afsnit med Orddeling slået til deles et ord på listen kun ved de bindestreger, der er skrevet i det, eller slet ikke uden nogen, uanset sprog og store eller små bogstaver.
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	I desktopversionen indlæses .wasm-plug-ins i denne mappe ved start, og når du klikker på OK med en ny mappe her, undtagen i sikker tilstand; webversionen indlæser dem ikke.
+	Normal keeps each plug-in's own limits; with Large, a plug-in filter or command may run at least 250 million instructions besides those for its input. The time limit stays the same.	Normal beholder hvert plug-ins egne grænser; med Stor kan et plug-in-filter eller en plug-in-kommando køre mindst 250 millioner instruktioner ud over dem til sit input. Tidsgrænsen forbliver den samme.
 	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	Hvor mange instruktioner hver kørsel af et plug-ins objektfilter må bruge; Stor tillader flere end Normal med den samme grænse på 60 sekunder. Tunge filtre beholder deres eget budget.
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Det første valg af midlertidig disk: Startup, None eller en mappesti; VectorCraft gemmer det, men bruger endnu ikke midlertidige diske.
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Det andet valg af midlertidig disk: Startup, None eller en mappesti; VectorCraft gemmer det, men bruger endnu ikke midlertidige diske.
@@ -7336,6 +7341,8 @@ font-technology	Variable	Variable
 	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	Brugergrænsefladens sprog; Auto bruger systemets sprog. Dialogen skifter sprog, så snart du vælger et.
 	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	Animeret zoom virker kun, mens dette er slået til; slået fra er Animeret zoom nedtonet, og zoom animeres ikke.
 	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	Zoom med hjulet glider blødt ind, og Zoomværktøjet zoomer, mens du trækker til siden eller holder det nede; slået fra zoomer Zoomværktøjet til det område, du trækker hen over.
+	From the next start, the desktop version shows the canvas through this kind of graphics processor; the artwork is drawn on the CPU either way. Automatic prefers the integrated one on Windows and macOS. The web version does not use it.	Fra næste start viser desktopversionen lærredet gennem denne type grafikprocessor; illustrationen tegnes altid på CPU'en. Automatisk foretrækker den integrerede på Windows og macOS. Webversionen bruger den ikke.
+	From the next start, the window shows each frame without waiting for the display's refresh where the graphics driver allows, at most 240 frames a second.	Fra næste start viser vinduet hvert billede uden at vente på skærmens opdatering, hvor grafikdriveren tillader det, højst 240 billeder i sekundet.
 	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	Fra næste start tegner desktopversionen med denne type grafikprocessor; Automatisk foretrækker den, der styrer skærmen. Webversionen bruger den ikke.
 	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	Fra næste start viser vinduet billeder uden at vente på, at skærmen opdateres, højst 240 i sekundet; slået fra bestemmer skærmen tempoet. En visningstilstand angivet ved start har forrang.
 	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	Det største antal fortryd-trin, hvert dokument beholder; et lavere tal fjerner de ældste trin, når du klikker på OK. Trin kan også forsvinde tidligere, når de bruger for meget hukommelse.
@@ -9109,6 +9116,8 @@ variable-list-end	{0}, {1}	{0} og {1}
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` skal være grayscale, rgb, hsb, cmyk eller websafe
 @msg	`view` must be wheel or box	`view` skal være wheel eller box
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` skal være hue, saturation, brightness, red, green eller blue
+@msg	`sliders` must be none, oklch or hsl	`sliders` skal være none, oklch eller hsl
+@msg	OKLCH needs sRGB as the working RGB space	OKLCH kræver sRGB som RGB-arbejdsfarverum
 @msg	the Color Picker is not open	farvevælgeren er ikke åben
 @msg	the screen color sampler is already open	skærmfarvesampleren er allerede åben
 @msg	this system has no screen color sampler	dette system har ingen skærmfarvesampler
@@ -10810,6 +10819,11 @@ breakText	Glyphs	Glyffer
 @msg	A joint does not close by {gap} pt.	En samling lukker ikke med {gap} pt.
 @msg	Two panels pass through each other.	To paneler går gennem hinanden.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer skal være "singleLine", "everyLine", "standardSingleLine" eller "standardEveryLine"
+	Orbit Lines	Banekurver
+	Petal Garland	Kronbladsguirlande
+	Lattice Braid	Gitterfletning
+	Facet Sweep	Facetteret strøg
+	Artistic Brushes	Kunstneriske pensler
 	Paint	Maling
 	Flat Sweep	Fladt strøg
 	Dry Drag	Tørt træk

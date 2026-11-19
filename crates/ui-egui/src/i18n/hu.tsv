@@ -2521,6 +2521,11 @@ file-filter	Templates	Sablonok
 	Knife	Kés
 	Knockout Group	Kiütő csoport
 	Lab	Lab
+	OKLCH Sliders	OKLCH csúszkák
+	HSL Sliders	HSL csúszkák
+	Chroma	Króma
+	The largest chroma sRGB holds at this lightness and hue	A legnagyobb króma, amelyet az sRGB ezen a világosságon és színárnyalaton tartalmaz
+	OKLCH needs sRGB as the working RGB space	Az OKLCH-hoz sRGB munka-RGB-színtér szükséges
 	Lab Spot Colors	Lab-direktszínek
 	Lab Spot Colors:	Lab-direktszínek:
 	Lab Values	Lab-értékek
@@ -3971,9 +3976,9 @@ mark-style	Japanese	Japán
 	Edit type set in fonts that aren't available?	Szerkeszti a nem elérhető betűtípusokkal szedett szöveget?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	A vásznon minden szelet számát egy keretben mutatja a szelet bal felső sarkában; kikapcsolva a szeletek körvonalai továbbra is látszanak.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	A felhasználói és objektumszeletek körvonalainak és számkereteinek színe; az automatikus szeletek ennek egy halványabb árnyalatát használják.
-	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	Az új szöveg ezt a nyelvet kapja, amíg a Dokumentumbeállítás nyelve Angol: amerikai; a dokumentumban már meglévő szöveg megtartja a saját nyelvét.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	Azokban a bekezdésekben, ahol az Elválasztás be van kapcsolva, a felsorolt szó csak a beleírt kötőjeleknél válik el, vagy sehol, ha nincs benne, nyelvétől és kis- vagy nagybetűitől függetlenül.
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	Az asztali változatban a mappa .wasm bővítményei indításkor töltődnek be, és amikor itt új mappával az OK gombra kattint, kivéve csökkentett módban; a webes változat nem tölti be őket.
+	Normal keeps each plug-in's own limits; with Large, a plug-in filter or command may run at least 250 million instructions besides those for its input. The time limit stays the same.	A Normál megtartja minden bővítmény saját korlátait; a Nagy beállítással egy bővítményszűrő vagy -parancs legalább 250 millió utasítást futtathat a bemenetéhez tartozókon felül. Az időkorlát nem változik.
 	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	Hány utasítást használhat egy bővítmény objektumszűrőjének egy-egy futása; a Nagy többet enged, mint a Normál, ugyanazzal a 60 másodperces korláttal. A nehéz szűrők megtartják saját keretüket.
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Az első munkalemez-választás: Startup, None vagy egy mappa elérési útja; a VectorCraft tárolja, de munkalemezeket még nem használ.
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	A második munkalemez-választás: Startup, None vagy egy mappa elérési útja; a VectorCraft tárolja, de munkalemezeket még nem használ.
@@ -3992,6 +3997,8 @@ mark-style	Japanese	Japán
 	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	A felület nyelve; az Automatikus a rendszer nyelvét használja. A párbeszédablak azonnal nyelvet vált, amint választ egyet.
 	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	Az Animált nagyítás csak akkor működik, ha ez be van kapcsolva; kikapcsolva az Animált nagyítás halvány, és a nagyítás nem animált.
 	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	A görgős nagyítás simán úszik be, a Nagyító pedig akkor nagyít, amikor oldalra húz vagy lenyomva tartja; kikapcsolva a Nagyító arra a területre nagyít, amelyen áthúz.
+	From the next start, the desktop version shows the canvas through this kind of graphics processor; the artwork is drawn on the CPU either way. Automatic prefers the integrated one on Windows and macOS. The web version does not use it.	A következő indítástól az asztali változat ilyen típusú grafikus processzoron keresztül jeleníti meg a vásznat; a grafikát minden esetben a CPU rajzolja. Az Automatikus Windowson és macOS-en az integráltat részesíti előnyben. A webes változat nem használja.
+	From the next start, the window shows each frame without waiting for the display's refresh where the graphics driver allows, at most 240 frames a second.	A következő indítástól az ablak minden képkockát a kijelző frissítésének kivárása nélkül jelenít meg, ahol a grafikus illesztőprogram engedi, legfeljebb másodpercenként 240 képkockát.
 	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	A következő indítástól az asztali változat ilyen típusú grafikus processzorral rajzol; az Automatikus a kijelzőt meghajtót részesíti előnyben. A webes változat nem használja.
 	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	A következő indítástól az ablak a képkockákat a kijelző frissítésére várás nélkül jeleníti meg, legfeljebb másodpercenként 240-et; kikapcsolva a kijelző diktálja az ütemet. Az indításkor megadott megjelenítési mód felülírja.
 	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	A dokumentumonként megőrzött visszavonási lépések legnagyobb száma; kisebb szám az OK gombra kattintáskor törli a legrégebbi lépéseket. A lépések korábban is törlődhetnek, ha túl sok memóriát foglalnak.
@@ -5525,6 +5532,8 @@ imageTrace	Outline	Körvonal
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode`: grayscale, rgb, hsb, cmyk vagy websafe kell
 @msg	`view` must be wheel or box	`view`: wheel vagy box kell
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel`: hue, saturation, brightness, red, green vagy blue kell
+@msg	`sliders` must be none, oklch or hsl	A `sliders` értéke none, oklch vagy hsl lehet
+@msg	OKLCH needs sRGB as the working RGB space	Az OKLCH-hoz sRGB munka-RGB-színtér szükséges
 @msg	`{k}` must be [x, y]	`{k}`: [x, y] kell
 @msg	`{name}` has no options	ennek nincsenek beállításai: `{name}`
 @msg	`{name}` is a built-in workspace; choose another name	beépített munkaterület: `{name}`; válassz másik nevet
@@ -10737,6 +10746,11 @@ breakText	Glyphs	Glifák
 @msg	A panel is not joined to the rest by a crease.	Egy panelt egyetlen bigvonal sem köt a többihez.
 @msg	A fold line is on a non-printing layer.	Egy hajtásvonal nem nyomtatható rétegen van.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panelek: {panels}, zsanérok: {hinges}, hibák: {errors}, figyelmeztetések: {warnings}
+	Orbit Lines	Pályavonalak
+	Petal Garland	Sziromfüzér
+	Lattice Braid	Rácsfonat
+	Facet Sweep	Fazettás vonás
+	Artistic Brushes	Művészi ecsetek
 	Paint	Festék
 	Flat Sweep	Lapos húzás
 	Dry Drag	Száraz húzás
