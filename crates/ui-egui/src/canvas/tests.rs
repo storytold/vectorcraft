@@ -4357,7 +4357,8 @@ fn a_pan_fills_the_area() {
 /// With the web build's setting (`waits_for_still`, no render worker), a heavy document's canvas
 /// is not rendered while the view moves: each frame draws the frame shown moved and scaled with
 /// the view and asks for a frame within STILL_SECS. The canvas renders once the view has been
-/// still for STILL_SECS, and at once after an edit. With a worker's build settings the same frames render at once, as
+/// still for STILL_SECS. An edit while the view moves draws the part it changed into the frame
+/// shown, and one that changes most of the frame renders it whole at once. With a worker's build settings the same frames render at once, as
 /// before.
 #[test]
 fn without_a_worker_a_heavy_canvas_is_reprojected_until_the_view_is_still() {
@@ -4421,15 +4422,39 @@ fn without_a_worker_a_heavy_canvas() {
     let now = app.canvas.key.clone().unwrap();
     assert_eq!((now.cx, now.zoom), (app.view().unwrap().center.x, app.view().unwrap().zoom), "rendered for the view");
     assert!((b.min - rect.min).length() < 0.01 && (b.max - rect.max).length() < 0.01, "{b:?} over {rect:?}");
-    // An edit renders at once, even while the view moves.
+    // An edit while the view moves shows at once: the part it changed is drawn into the frame
+    // shown, at the view that frame was rendered for, and the frame stays drawn reprojected until
+    // the view is still (#8688).
     app.canvas.last_ms = 50.0;
     app.view_mut().unwrap().center.y += 10.0;
     frame(&mut app);
     assert_eq!(app.canvas.key.as_ref(), Some(&now), "waiting");
-    app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+    app.session.execute("shape.rectangle", &json!({"x": 110, "y": 60, "width": 20, "height": 20})).unwrap();
+    let render_ms = app.canvas.last_ms;
+    let (b, delay) = frame(&mut app);
+    let k = app.canvas.key.clone().unwrap();
+    assert_eq!(k.revision, app.session.active().unwrap().revision, "the edit is drawn");
+    assert_eq!((k.cx, k.cy, k.zoom), (now.cx, now.cy, now.zoom), "at the view of the frame shown");
+    assert_eq!(app.canvas.last_ms, render_ms, "the frame was not rendered whole");
+    let (old, new) = (Xf::new(rect, &View { center: Point::new(now.cx, now.cy), ..*app.view().unwrap() }), Xf::new(rect, app.view().unwrap()));
+    let (a, z) = (new.to_screen(old.to_doc(rect.min)), new.to_screen(old.to_doc(rect.max)));
+    assert!((b.min - a).length() < 0.01 && (b.max - z).length() < 0.01, "{b:?}: the frame shown at {a:?} to {z:?}");
+    assert!(delay <= std::time::Duration::from_secs_f64(STILL_SECS), "a frame within STILL_SECS: {delay:?}");
+    let mut frames = 0;
+    while app.canvas.key.as_ref() == Some(&k) && frames < 60 {
+        frames += 1;
+        frame(&mut app);
+    }
+    let k = app.canvas.key.clone().unwrap();
+    assert_eq!((k.revision, k.cy), (app.session.active().unwrap().revision, app.view().unwrap().center.y), "rendered once still");
+    // An edit that changes more than half of the frame renders whole at once, view and all.
+    app.canvas.last_ms = 50.0;
+    app.view_mut().unwrap().center.y += 10.0;
+    frame(&mut app);
+    app.session.execute("shape.rectangle", &json!({"x": -1000, "y": -1000, "width": 3000, "height": 3000})).unwrap();
     frame(&mut app);
     let k = app.canvas.key.clone().unwrap();
-    assert_eq!((k.revision, k.cy), (app.session.active().unwrap().revision, app.view().unwrap().center.y), "rendered after the edit");
+    assert_eq!((k.revision, k.cy), (app.session.active().unwrap().revision, app.view().unwrap().center.y), "rendered whole after the edit");
     // With a worker's build settings and no worker (VECTORCRAFT_SYNC_RENDER), a heavy document
     // renders every change of view at once.
     app.canvas.waits_for_still = false;
