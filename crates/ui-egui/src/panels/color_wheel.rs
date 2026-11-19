@@ -347,15 +347,15 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     if menu_item(ui, tl!("Show Color Vision Preview"), true, set.vision) {
         run(app, json!({ "vision": !set.vision }));
     }
+    if menu_item(ui, tl!("Show Document Colors"), true, set.document_colors) {
+        run(app, json!({ "documentColors": !set.document_colors }));
+    }
 }
 
 /// Run `ui.colorWheel` with `p` from the panel menu, and show an error in the status bar.
 fn run(app: &mut VectorcraftApp, p: Value) {
     if let Err(e) = app.run("ui.colorWheel", p) {
         app.status(e);
-    }
-    if menu_item(ui, tl!("Show Document Colors"), true, set.document_colors) {
-        command(app, &json!({ "documentColors": !set.document_colors })).ok();
     }
 }
 
