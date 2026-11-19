@@ -1257,7 +1257,7 @@ fn tab_glyph<'p>(
 ) -> (f64, &'p str) {
     let sg = &paragraph.sg;
     // The tab of a list marker keeps the width `prepend_marker` gave it.
-    if sg.get(glyph_index).is_none_or(|g| g.len == 0) {
+    if !sg.get(glyph_index).is_some_and(|g| g.len > 0) {
         return (advance, "");
     }
     let rest = line.order.iter().skip(order_index + 1).map(|&offset| line.index + offset).filter(|&j| j < line.trimmed).filter_map(|j| sg.get(j));
