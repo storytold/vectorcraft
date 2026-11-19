@@ -396,3 +396,40 @@ fn a_picked_mesh_point_takes_the_fill_opacity() {
     assert!(o.iter().enumerate().all(|(i, a)| i == 4 || *a == 1.0), "{o:?}");
     assert_eq!(proxies(&mut s)["fillOpacity"], 30.0);
 }
+
+/// A null `id` or `ids` names no object, so while the Type tool has characters selected the paint
+/// goes to those characters only, and the rest of the type keeps its paint.
+#[test]
+fn a_null_id_leaves_the_paint_to_the_selected_characters() {
+    for key in ["id", "ids"] {
+        let mut s = session();
+        let t = text(&mut s);
+        select(&mut s, &[t]);
+        s.select_tool("type", ViewInfo::default()).unwrap();
+        s.set_tool_option("textSelection", &json!({"editing": t.0, "anchor": 0, "caret": 1}));
+        s.execute("paint.setFill", &json!({"color": "#ff0000", key: null})).unwrap();
+        let NodeKind::Text(tx) = &node(&s, t).kind else { panic!("not type") };
+        let fills: Vec<Paint> = tx.runs.iter().map(|r| r.style.fill.clone()).collect();
+        assert_eq!(fills.first(), Some(&Paint::solid(Color::rgb8(255, 0, 0))), "{key}: {fills:?}");
+        assert!(fills.len() > 1 && fills[1..].iter().all(|f| *f != Paint::solid(Color::rgb8(255, 0, 0))), "{key}: {fills:?}");
+        let e = s.execute("paint.setFill", &json!({"opacity": 40, key: null})).unwrap_err();
+        assert!(e.to_string().contains("type characters have no opacity of their own"), "{key}: {e}");
+    }
+}
+
+/// While the Live Paint Bucket is the active tool, a fill or stroke chosen goes to the bucket, so
+/// `paint.proxies` answers no opacity for the selection and an opacity is an error that leaves the
+/// document as it was.
+#[test]
+fn the_live_paint_bucket_answers_no_opacity() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0);
+    select(&mut s, &[id]);
+    assert_eq!(proxies(&mut s)["fillOpacity"], 100.0);
+    s.select_tool("livePaintBucket", ViewInfo::default()).unwrap();
+    assert_eq!(proxies(&mut s)["fillOpacity"], Value::Null);
+    assert_eq!(proxies(&mut s)["strokeOpacity"], Value::Null);
+    let doc = s.doc().unwrap().doc.clone();
+    assert!(s.execute("paint.setFill", &json!({"opacity": 40})).is_err());
+    assert_eq!(*s.doc().unwrap().doc, *doc);
+}

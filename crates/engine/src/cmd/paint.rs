@@ -160,7 +160,7 @@ pub fn proxy_specs() -> Vec<CommandSpec> {
             "Fill and Stroke",
             [],
             None,
-            "{} → {fill, stroke: the paints the Fill/Stroke proxies show (the Appearance panel's active item for the proxy of its kind, else the first selected object's, a group's first painted object's, a Live Paint group's first face's fill and first edge's stroke, type: its first run's; else the defaults for new art; when that object is a gradient mesh with points picked by the Mesh tool, Direct Selection or the Lasso and no fill item is active, the fill is its first picked point's color), fillActive, fillMixed, strokeMixed: the selected objects' (or a selected group's contents') fills (strokes) differ, a Live Paint group counting with its faces' fills and its edges' strokes, shown as a \"?\" proxy (a gradient mesh with points picked counts with their colors), fillOpacity, strokeOpacity: 0..100, the opacity of the fill item that paint.setFill {opacity} sets (the stroke item that paint.setStroke {opacity} sets), from the first selected object (or painted object in a selected group; a selected path of a compound path stands for its compound) that has one (a gradient mesh's first picked point's), or null with nothing selected (the defaults for new art), for an object selected in a symbol instance, while the Type tool has characters selected, and when only type characters or objects without that item are selected}",
+            "{} → {fill, stroke: the paints the Fill/Stroke proxies show (the Appearance panel's active item for the proxy of its kind, else the first selected object's, a group's first painted object's, a Live Paint group's first face's fill and first edge's stroke, type: its first run's; else the defaults for new art; when that object is a gradient mesh with points picked by the Mesh tool, Direct Selection or the Lasso and no fill item is active, the fill is its first picked point's color), fillActive, fillMixed, strokeMixed: the selected objects' (or a selected group's contents') fills (strokes) differ, a Live Paint group counting with its faces' fills and its edges' strokes, shown as a \"?\" proxy (a gradient mesh with points picked counts with their colors), fillOpacity, strokeOpacity: 0..100, the opacity of the fill item that paint.setFill {opacity} sets (the stroke item that paint.setStroke {opacity} sets), from the first selected object (or painted object in a selected group; a selected path of a compound path stands for its compound) that has one (a gradient mesh's first picked point's), or null with nothing selected (the defaults for new art), for an object selected in a symbol instance, while the Live Paint Bucket is the active tool, while the Type tool has characters selected, and when only type characters or objects without that item are selected}",
             always,
             proxies
         ),
@@ -234,16 +234,19 @@ impl Session {
         None
     }
 
-    /// The opacity (0..1) of the fill (or stroke) that `paint.setFill {opacity}` sets: the item's,
-    /// or for a gradient mesh with points picked the first picked point's. The rows the command
-    /// would edit are read in order (a group without an active Appearance row stands for its
-    /// contents), and the first that exists answers. `None` with nothing selected, for an object
-    /// selected in a symbol instance, while the Type tool has characters selected, and when only
-    /// type characters, objects without that item or the art of graph designs in a graph series
-    /// are selected.
+    /// The opacity (0..1) of the fill that `paint.setFill {opacity}` sets (or of the stroke that
+    /// `paint.setStroke {opacity}` sets): the item's, or for a gradient mesh with points picked the
+    /// first picked point's. The rows the command would edit are read in order (a group without an
+    /// active Appearance row stands for its contents), and the first that exists answers. `None`
+    /// with nothing selected, for an object selected in a symbol instance, while the Live Paint
+    /// Bucket is the active tool, while the Type tool has characters selected, and when only type
+    /// characters, objects without that item or the art of graph designs in a graph series are
+    /// selected.
     pub fn proxy_opacity(&self, stroke: bool) -> Option<f32> {
         let st = self.active()?;
-        if st.selection.symbol_part.is_some() {
+        // The Live Paint Bucket takes a fill or stroke chosen as the color it paints with, and the
+        // selection keeps its own (for_bucket).
+        if st.selection.symbol_part.is_some() || self.tool_id() == LIVE_PAINT_BUCKET {
             return None;
         }
         // The command would give the opacity to the characters, which have none of their own.
@@ -638,9 +641,9 @@ fn apply_paint_opacity(s: &mut Session, p: &Value, paint: Option<Paint>, opacity
     let focus = switch_or(p, "focus", true, cmd)?;
     // An opacity alone places no gradient, so `span` may only be "object" with it.
     let span = spans_targets(p, paint.as_ref().unwrap_or(&Paint::None)).map_err(|e| bad(cmd, e))?;
-    // Characters selected with the Type tool take the paint, not the whole type object (#1063).
-    if p.get("ids").is_none()
-        && p.get("id").is_none()
+    // Characters selected with the Type tool take the paint, not the whole type object (#1063). A
+    // null `ids` or `id` names no object, as `given_nodes` reads it.
+    if ["ids", "id"].iter().all(|k| p.get(k).is_none_or(Value::is_null))
         && p.get("item").is_none()
         && let Some((id, a, b)) = super::textedit::editing_range(s)?
         && a != b
