@@ -1201,6 +1201,7 @@ impl Clipboard {
             para_styles: pick(Res::ParaStyle, &src.para_styles),
             brushes,
             graph_designs: src.graph_designs.iter().filter(|g| used.has(Res::GraphDesign, &g.name)).cloned().collect(),
+            set_densities: src.set_densities_of(&nodes),
             nodes,
             ..Default::default()
         }

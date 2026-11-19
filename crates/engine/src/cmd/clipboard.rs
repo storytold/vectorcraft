@@ -112,6 +112,9 @@ pub struct Clipboard {
     /// The selected ruler guides copied with (or without) the objects (#3226), as canvas guides on
     /// no layer: pasting puts them on the layer new art goes to, moved as the objects are.
     pub guides: Vec<vectorcraft_doc::Guide>,
+    /// The Symbol Set Density recorded at Copy for each copied symbol set, by its id in
+    /// [`Self::nodes`]: a pasted set packs from it.
+    pub set_densities: BTreeMap<NodeId, Value>,
     /// The RGB and CMYK profiles the objects' colors showed through in the document they were
     /// copied from (its assigned profiles, else the working spaces then), by name; none for objects
     /// from outside an open document. Paste compares them with the destination's
@@ -489,6 +492,7 @@ impl Clipboard {
                 })
                 .collect(),
             guides: self.guides.clone(),
+            set_densities: self.set_densities.clone(),
             source_profiles: self.source_profiles.clone(),
             colors_converted: self.colors_converted,
         }

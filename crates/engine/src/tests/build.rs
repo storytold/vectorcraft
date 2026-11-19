@@ -3331,6 +3331,68 @@ fn live_paint_bucket_paint_and_stroke_commands_leave_the_selection_unpainted() {
     assert!(failed.is_empty(), "{failed:#?}");
 }
 
+/// `paint.editGradient` with an `aspect` and no object to edit (the Live Paint Bucket's gradient,
+/// nothing selected, or a fill edit of a Live Paint group without faces) is an error that leaves the default gradient as it was, since a gradient
+/// fitted to each object has no aspect of its own. Named objects still take the aspect.
+#[test]
+fn edit_gradient_aspect_without_objects_is_an_error() {
+    let aspect = |n: &Node| match n.appearance.fill_paint() {
+        Paint::Gradient(g) => g.geom.map(|x| x.aspect),
+        _ => None,
+    };
+    let mut s = session();
+    let g = live(&mut s);
+    let rect = rect(&mut s, 300.0, 300.0, 40.0, 40.0);
+    s.execute("select.set", &json!({"ids": [g.0, rect.0]})).unwrap();
+    s.select_tool("livePaintBucket", ViewInfo::default()).unwrap();
+    s.execute("gradient.presets.apply", &json!({"name": "vignette"})).unwrap();
+    let (group, art, fill) = (node(&s, g), node(&s, rect), s.paint.fill.clone());
+    let steps = s.doc().unwrap().history.undo.len();
+    assert!(!s.gradient_edit_has_objects(false), "the bucket edits its own gradient");
+    for params in [json!({"stroke": false, "aspect": 50}), json!({"stroke": false, "aspect": 50, "reverse": true})] {
+        assert!(s.execute("paint.editGradient", &params).is_err(), "{params}");
+        assert_eq!(s.paint.fill, fill, "{params}: the bucket's gradient stays");
+    }
+    assert_eq!((node(&s, g), node(&s, rect)), (group, art), "the selection keeps its paint");
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps, "no undo step");
+    // Named objects take it.
+    s.execute("paint.editGradient", &json!({"stroke": false, "kind": "radial", "aspect": 50, "ids": [rect.0]})).unwrap();
+    assert_eq!(aspect(&node(&s, rect)), Some(0.5));
+    // Without the bucket and with nothing selected, the default gradient has no aspect either.
+    s.select_tool("selection", ViewInfo::default()).unwrap();
+    s.execute("select.set", &json!({"ids": []})).unwrap();
+    let fill = s.paint.fill.clone();
+    assert!(!s.gradient_edit_has_objects(false));
+    assert!(s.execute("paint.editGradient", &json!({"stroke": false, "aspect": 50})).is_err());
+    assert_eq!(s.paint.fill, fill, "the default gradient stays");
+    // An empty group has nothing to paint.
+    let empty = s
+        .edit("Group", |d, _| {
+            let id = d.alloc_id();
+            d.insert(d.default_layer(), 0, Node::group(id, vec![]))?;
+            Ok(id)
+        })
+        .unwrap();
+    s.execute("select.set", &json!({"ids": [empty.0]})).unwrap();
+    assert!(!s.gradient_edit_has_objects(false), "an empty group");
+    assert!(s.execute("paint.editGradient", &json!({"stroke": false, "aspect": 50})).is_err());
+    // A fill edit of a Live Paint group with edges and no faces edits no object; a stroke edit edits its edges.
+    let line = NodeId(s.execute("shape.line", &json!({"x1": 0, "y1": 0, "x2": 100, "y2": 0})).unwrap()["id"].as_u64().unwrap());
+    let edges_only = NodeId(s.execute("livePaint.make", &json!({"ids": [line.0]})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [edges_only.0]})).unwrap();
+    let (fill, group, steps) = (s.paint.fill.clone(), node(&s, edges_only), s.doc().unwrap().history.undo.len());
+    assert!(!s.gradient_edit_has_objects(false), "a Live Paint group without faces");
+    assert!(s.gradient_edit_has_objects(true), "its edges take a stroke edit");
+    assert!(s.execute("paint.editGradient", &json!({"stroke": false, "aspect": 50})).is_err());
+    assert_eq!((&s.paint.fill, node(&s, edges_only)), (&fill, group), "the default and the group stay");
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps, "no undo step");
+    // A selected object takes it.
+    s.execute("select.set", &json!({"ids": [rect.0]})).unwrap();
+    assert!(s.gradient_edit_has_objects(false) && s.gradient_edit_has_objects(true));
+    s.execute("paint.editGradient", &json!({"stroke": false, "aspect": 25})).unwrap();
+    assert_eq!(aspect(&node(&s, rect)), Some(0.25));
+}
+
 /// With the Live Paint Bucket active, objects named with `ids` still take a stroke, and a brush
 /// still goes to the selection.
 #[test]
@@ -3370,6 +3432,65 @@ fn live_paint_bucket_gradient_preset_and_sampled_stop_follow_the_active_proxy() 
     let Paint::Gradient(g) = &s.paint.fill else { panic!("the bucket's fill is not a gradient") };
     assert_eq!(g.gradient.stops[0].color, Color::from_hex("#00ffff").unwrap(), "the sampled stop");
     assert_eq!(node(&s, rect), art, "the selection keeps its paint");
+}
+
+/// The Gradient panel's eyedropper, used on a stop of the Live Paint Bucket's gradient, samples the
+/// color clicked into that stop of the bucket's fill, and the selection keeps its paint. A Cmd-click
+/// with the bucket, or with the Eyedropper armed for it, which the selection tool takes, leaves the
+/// bucket's colors as they were.
+#[test]
+fn live_paint_bucket_keeps_its_colors_through_the_stop_eyedropper_and_a_cmd_click() {
+    let v = ViewInfo::default();
+    let click = |s: &mut Session, mods: Mods| {
+        for kind in [PointerKind::Down, PointerKind::Up] {
+            s.pointer(&PointerEvent::new(kind, 320.0, 320.0).with_mods(mods), v).unwrap();
+        }
+    };
+    let mut s = session();
+    live(&mut s);
+    let rect = rect(&mut s, 300.0, 300.0, 40.0, 40.0);
+    s.execute("paint.setFill", &json!({"color": "#00ff00", "ids": [rect.0]})).unwrap();
+    s.execute("appearance.setNewArtBasic", &json!({"on": false})).unwrap();
+    s.execute("select.set", &json!({"ids": [rect.0]})).unwrap();
+    s.select_tool("livePaintBucket", v).unwrap();
+    s.execute("paint.editGradient", &json!({"stroke": false, "kind": "linear"})).unwrap();
+    s.execute("gradient.selectStop", &json!({"index": 1})).unwrap();
+    let art = node(&s, rect);
+    // The panel's eyedropper (`stop_eyedropper`): the Eyedropper, set to switch back to the bucket.
+    s.select_tool("eyedropper", v).unwrap();
+    s.set_tool_option("stop", &json!("livePaintBucket"));
+    assert_eq!(s.selected_stop(), Some(1), "the bucket's stop stays selected for the pick");
+    // A Cmd-click while the pick is armed selects the rectangle and leaves the bucket's gradient.
+    let fill = s.paint.fill.clone();
+    s.execute("select.set", &json!({"ids": []})).unwrap();
+    click(&mut s, Mods { cmd: true, ..Mods::default() });
+    assert_eq!(s.doc().unwrap().selection.objects, vec![rect], "the selection tool took the click");
+    assert_eq!((s.paint.fill.clone(), s.selected_stop()), (fill, Some(1)), "the bucket's fill and stop stay");
+    click(&mut s, Mods::default());
+    let Paint::Gradient(g) = &s.paint.fill else { panic!("the bucket's fill is not a gradient") };
+    assert_eq!(g.gradient.stops[1].color, Color::from_hex("#00ff00").unwrap(), "the sampled stop");
+    assert_eq!(node(&s, rect), art, "the selection keeps its paint");
+    // A Cmd-click selects the rectangle; the bucket keeps its gradient.
+    s.select_tool("livePaintBucket", v).unwrap();
+    let fill = s.paint.fill.clone();
+    s.execute("select.set", &json!({"ids": []})).unwrap();
+    click(&mut s, Mods { cmd: true, ..Mods::default() });
+    assert_eq!(s.doc().unwrap().selection.objects, vec![rect], "the selection tool took the click");
+    assert_eq!(s.paint.fill, fill, "the bucket's fill stays");
+    // Armed again, a Cmd-click on another object deselects the stop; the next click (a Shift-click,
+    // which would sample a color) ends the pick and leaves the bucket's gradient.
+    let other = self::rect(&mut s, 400.0, 400.0, 40.0, 40.0);
+    s.execute("select.set", &json!({"ids": [rect.0]})).unwrap();
+    s.execute("gradient.selectStop", &json!({"index": 1})).unwrap();
+    s.select_tool("eyedropper", v).unwrap();
+    s.set_tool_option("stop", &json!("livePaintBucket"));
+    for mods in [Mods { cmd: true, ..Mods::default() }, Mods { shift: true, ..Mods::default() }] {
+        for kind in [PointerKind::Down, PointerKind::Up] {
+            s.pointer(&PointerEvent::new(kind, 420.0, 420.0).with_mods(mods), v).unwrap();
+        }
+    }
+    assert_eq!(s.doc().unwrap().selection.objects, vec![other], "the Cmd-click selected the other object");
+    assert_eq!((s.paint.fill.clone(), s.tool_returns_to()), (fill, None), "the pick ended without a sample");
 }
 
 /// A gradient stop selected on the selection's gradient is not selected once the Live Paint
@@ -9429,9 +9550,12 @@ fn image_trace_split_view_keeps_and_validates_its_divider() {
     assert_eq!((back.node(g).unwrap().trace_view(), back.node(g).unwrap().trace_split()), (vectorcraft_doc::TraceView::Split, 0.25));
     // Bad dividers are refused and change nothing.
     let steps = s.doc().unwrap().history.undo.len();
-    for bad in [json!(-0.1), json!(1.01), json!("0.5"), json!(true), json!([0.5])] {
+    for bad in [json!(-0.1), json!(1.01), json!("0.5"), json!(true), json!([0.5]), json!(null)] {
         assert!(s.execute("imageTrace.setView", &json!({"view": "split", "split": bad})).is_err(), "{bad}");
     }
+    // A null divider with another view is refused too, and the view stays.
+    assert!(s.execute("imageTrace.setView", &json!({"view": "outlines", "split": null})).is_err());
+    assert_eq!(node(&s, g).trace_view(), vectorcraft_doc::TraceView::Split);
     assert_eq!((s.doc().unwrap().history.undo.len(), node(&s, g).trace_split()), (steps, 0.25));
     for edge in [0.0, 1.0] {
         s.execute("imageTrace.setView", &json!({"view": "split", "split": edge})).unwrap();

@@ -150,6 +150,7 @@ mod text_export;
 pub mod text_import;
 mod three_d_classic;
 pub(crate) mod three_d_materials;
+pub mod three_point_arc_options;
 mod tiff_bmp_tga;
 pub mod tile_edge_color;
 mod tools;
@@ -471,6 +472,7 @@ registry! {
     FreehandOptions: [freehand::KIND] => freehand::SPEC,
     ShapeBuilderOptions: [shape_builder_options::KIND] => shape_builder_options::SPEC,
     ObjectsOnPathOptions: [objects_on_path_options::KIND] => objects_on_path_options::SPEC,
+    ThreePointArcOptions: [three_point_arc_options::KIND] => three_point_arc_options::SPEC,
     FlareOptions: [flare_options::KIND] => flare_options::SPEC,
     SymbolOptions: [symbol_options::KIND] => symbol_options::SPEC,
     DeleteSymbol: [symbol_delete::KIND] => symbol_delete::SPEC,
@@ -627,6 +629,8 @@ pub fn accepts_field(d: &Dialog, field: &str) -> bool {
 /// Import PDF `allPages` set this way to the other pick sets Import PDF pages as links back to its
 /// default. A Dimension Tool Options `arrowStyle` set this way clears `arrowHead`, and a built-in
 /// `arrowHead` set this way sets both values of its Arrow Style entry, as that menu does.
+/// A Pathfinder effect's precision set this way replaces a stored precision out of range, the
+/// bound included.
 pub fn set_field(d: &mut Dialog, field: String, value: Value) {
     if d.kind == brush_options::KIND {
         brush_art_options::note_set(d, &field);
@@ -648,6 +652,11 @@ pub fn set_field(d: &mut Dialog, field: String, value: Value) {
     }
     if d.kind == new_document::KIND || new_document::popup_open(d) {
         new_document::note_set(d, &field);
+    }
+    // A Pathfinder effect's precision set this way replaces a stored one out of range, as one
+    // entered in its field does.
+    if d.kind == "effect" && field == "precision" {
+        d.fields.remove(effect::OPENED_PRECISION);
     }
     // Create Object Mosaic's Resize Using Percentages shows the new size the other way, as its checkbox does.
     if d.kind == object_mosaic::KIND && field == "percentages" {

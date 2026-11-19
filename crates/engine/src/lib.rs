@@ -74,6 +74,10 @@ pub struct Session {
     /// While Cmd lends `tool` (a selection tool) for a drag: the tool it was lent to, which comes
     /// back as it was at the release ([`Session::pointer`]).
     pub(crate) lender: Option<Box<dyn Tool>>,
+    /// Set while tool actions that end by switching back to the Live Paint Bucket are applied (the
+    /// Eyedropper's sample into a stop of the bucket's gradient): their paint commands change the
+    /// colors the bucket paints with ([`Session::bucket_paints`]).
+    pub(crate) back_to_bucket: bool,
     /// Pointer and key input that came while the tool computed an edit on another thread, each with
     /// its number and view, made in order once the edit is applied.
     held_input: std::collections::VecDeque<(u64, tooling::HeldInput, ViewInfo)>,
@@ -192,6 +196,11 @@ pub struct Session {
     /// The folder of the New Document profiles `file.new` starts documents from; `None`: none,
     /// every document starts with the defaults ([`Session::attach_new_doc_profiles`]).
     new_doc_profile_dir: Option<std::path::PathBuf>,
+    /// The folder of the proof setups `view.proofSetup.save` saves by name and View → Proof Setup
+    /// lists; `None`: no folder ([`Session::attach_proof_setups`]).
+    proof_setup_dir: Option<std::path::PathBuf>,
+    /// How many proof setup files `view.proofSetup.save` wrote ([`Session::proof_setup_saves`]).
+    proof_setup_saves: u64,
     /// The folder of each script's data folder (`Folder.userData`), beside which the grants file
     /// keeps the file access people allowed scripts; `None`: no folder
     /// ([`Session::attach_script_data`]).
@@ -327,6 +336,9 @@ pub struct Session {
     /// The id and persistent options of the tool when the press under way began, which a dropped
     /// press puts back ([`Session::drop_tool_press`]).
     pub(crate) press_options: Option<(String, serde_json::Map<String, serde_json::Value>)>,
+    /// An option of the active tool was set during the press under way, which stored all of its
+    /// options, so a dropped press stores the options it puts back.
+    pub(crate) press_options_stored: bool,
     /// The engine saves the selection and active layer before a Type press and restores them if it drops.
     pub(crate) press_type_selection: Option<(Selection, Option<NodeId>)>,
     /// The freeform gradient point selected once the tool took the press under way, which a
