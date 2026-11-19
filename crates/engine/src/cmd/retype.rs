@@ -10,7 +10,8 @@
 //! path, inside groups too) is compared with the glyphs of the candidate fonts
 //! ([`vectorcraft_text::retype`]), the same up to uniform scale, rotation and translation. Matched
 //! glyphs map back to characters through the font's cmap and are rebuilt as point text, one object
-//! per line of glyphs, with the first glyph's fill and stroke. Shapes that match no font stay as
+//! per line of glyphs, with the first glyph's fill and stroke. A line whose glyphs are evenly spaced
+//! apart takes that spacing as its tracking ([`Line::tracked`]). Shapes that match no font stay as
 //! they are and are reported. Near matches (another version of the font, simplified outlines,
 //! merged glyphs) and images are phase 2.
 
@@ -39,7 +40,7 @@ pub fn specs() -> Vec<CommandSpec> {
         "Retype",
         ["Type"],
         None,
-        "{fonts?: [family…]} turn the selected outlined text (glyph paths and compound paths, inside groups too) back into live point text: each shape is matched against the glyphs of the fonts the app has loaded, the document's fonts and the families in fonts, the same up to uniform scale, rotation and translation (exact matches only); matched glyphs become point text in that font and size at the same baseline, one object per line, with the first glyph's fill, stroke, opacity and blend mode, in one undo step; a line splits where its type would not draw the outlines' glyphs in their places (tracking, manual spacing, font substitutions); shapes that match no font, glyphs type cannot draw as they are, and shapes with their own opacity mask stay as they are → {ids (the new type), texts, fonts: [{family, style, size}], unmatched: [id…], truncated (shapes past the limits of 2048 shapes or 16 nested groups were left out)}; an error when no shape matches",
+        "{fonts?: [family…]} turn the selected outlined text (glyph paths and compound paths, inside groups too) back into live point text: each shape is matched against the glyphs of the fonts the app has loaded, the document's fonts and the families in fonts, the same up to uniform scale, rotation and translation (exact matches only); matched glyphs become point text in that font and size at the same baseline, one object per line, with the first glyph's fill, stroke, opacity and blend mode, in one undo step; a line of three or more glyphs takes the spacing most of its gaps share as its tracking (pair kerning left out) when tracked type draws all of it in place, or more of it than untracked type (when untracked type also draws it, untracked type is kept if the tracking is under one unit or the tracked type would drop a gap one space wide (a b c keeps its spaces), and the tracked type otherwise), and negative tracking only when the line is opaque, Normal, with a solid fill or none and no stroke (its glyphs may overlap); a line splits where its type would not draw the outlines' glyphs in their places (uneven spacing, manual kerning, font substitutions); shapes that match no font, glyphs type cannot draw as they are, and shapes with their own opacity mask stay as they are → {ids (the new type), texts, fonts: [{family, style, size, tracking (1/1000 em)}], unmatched: [id…], truncated (shapes past the limits of 2048 shapes or 16 nested groups were left out)}; an error when no shape matches",
         has_selected_path,
         retype
     )]
@@ -163,8 +164,11 @@ fn candidate_faces(db: &FontDb, d: &Document, fonts: &[String]) -> Vec<Arc<vecto
 }
 
 /// One line of retyped glyphs.
+#[derive(Clone)]
 struct Line {
     pieces: Vec<NodeId>,
+    /// Tracking in 1/1000 em, added after each character, spaces included.
+    tracking: f64,
     /// What each piece matched, as `pieces`.
     matches: Vec<GlyphMatch>,
     /// Every glyph the first piece fits, while the line holds only it: the next glyph may tell
@@ -204,16 +208,53 @@ impl Line {
             // Wrapped: type turned 180° has angles near +π and −π.
             && ((m.angle - self.angle + PI).rem_euclid(TAU) - PI).abs() < 1e-5
             && across < size * 0.05
-            && (m.origin - self.end).dot(dir) > -size * 0.25
+            // After the line's end, or, for type tracked tighter than that, still ahead of the
+            // last glyph's start (by more than rounding); the layout check decides whether it fits.
+            && ((m.origin - self.end).dot(dir) > -size * 0.25
+                || self.matches.last().is_some_and(|last| (m.origin - last.origin).dot(dir) > size * 1e-3))
+    }
+
+    fn size(&self) -> f64 {
+        self.scale * self.face.units_per_em()
+    }
+
+    /// The shapes of the one-contour glyphs that stand alone on this line: neither the glyph before
+    /// nor the one after continues it by starting after the end of the glyph before it. A glyph
+    /// that joined the line only through the tight-tracking test counts as alone. A line of three
+    /// glyphs or more is type (its tracking can be read), so none of its glyphs is alone.
+    fn lone_one_contour(&self) -> Vec<NodeId> {
+        if self.matches.len() >= 3 {
+            return vec![];
+        }
+        let dir = self.dir();
+        let size = self.size();
+        // Does glyph `k` start after the end of the glyph before it, less a quarter em?
+        let after_previous = |k: usize| match (k.checked_sub(1).and_then(|j| self.matches.get(j)), self.matches.get(k)) {
+            (Some(a), Some(b)) => (b.origin - (a.origin + dir * (a.face.advance(a.gid) * a.scale))).dot(dir) > -size * 0.25,
+            _ => false,
+        };
+        let n = self.matches.len();
+        (0..n)
+            .filter(|&k| !after_previous(k) && !after_previous(k + 1))
+            .filter_map(|k| self.matches.get(k).filter(|m| m.contours == 1).and_then(|_| self.pieces.get(k).copied()))
+            .collect()
+    }
+
+    /// The line's tracking in points.
+    fn tracking_pt(&self) -> f64 {
+        self.tracking * self.size() / 1000.0
     }
 
     fn push(&mut self, id: NodeId, m: &GlyphMatch) {
-        // A gap wider than half a space before the glyph is spaces the outlines left no shape for.
+        // A gap, past the tracking, wider than half a space before the glyph is spaces the
+        // outlines left no shape for. Each space takes the tracking too.
         let dir = self.dir();
-        let gap = (m.origin - self.end).dot(dir);
-        let space = space_advance(&self.face) * self.scale;
-        if space > 0.0 && gap > space * 0.5 {
-            let n = ((gap / space).round() as usize).clamp(1, 64);
+        let gap = (m.origin - self.end).dot(dir) - self.tracking_pt();
+        // Tracking tighter than a space's width gives each space a negative advance.
+        let space = space_advance(&self.face) * self.scale + self.tracking_pt();
+        let spaces = if space.abs() > 1e-9 { gap / space } else { 0.0 };
+        if spaces.is_finite() && spaces > 0.5 {
+            let n = (spaces.round() as usize).clamp(1, 64);
             self.text.extend(std::iter::repeat_n(' ', n));
         }
         self.text.push(m.ch);
@@ -222,13 +263,49 @@ impl Line {
         self.end = m.origin + dir * (m.face.advance(m.gid) * m.scale);
     }
 
-    /// The line of this one's glyphs `from..to`, with its group, paint and transparency.
+    /// The line of this one's glyphs `from..to`, with its group, paint, transparency, tracking and
+    /// the spaces between those glyphs.
     fn part(&self, from: usize, to: usize) -> Option<Line> {
+        let mut text = String::new();
+        let mut glyph = 0usize;
+        for c in self.text.chars() {
+            // The text after glyph `to - 1` is not read.
+            if glyph >= to {
+                break;
+            }
+            if c == ' ' {
+                // Spaces before glyph `glyph`, after glyph `glyph - 1`.
+                if glyph > from {
+                    text.push(c);
+                }
+                continue;
+            }
+            if glyph >= from {
+                text.push(c);
+            }
+            glyph += 1;
+        }
+        if glyph != to || to > self.matches.len() {
+            return self.respaced(from, to, self.tracking);
+        }
+        let mut l = self.respaced(from, to.min(from.saturating_add(1)), self.tracking)?;
+        l.pieces = self.pieces.get(from..to)?.to_vec();
+        l.matches = self.matches.get(from..to)?.to_vec();
+        let last = l.matches.last()?;
+        l.end = last.origin + l.dir() * (last.face.advance(last.gid) * last.scale);
+        l.text = text;
+        Some(l)
+    }
+
+    /// The line of this one's glyphs `from..to` at `tracking`, with its group, paint and
+    /// transparency, its spaces read again from the gaps at that tracking.
+    fn respaced(&self, from: usize, to: usize, tracking: f64) -> Option<Line> {
         let (ids, ms) = (self.pieces.get(from..to)?, self.matches.get(from..to)?);
         let (first, m) = (ids.first()?, ms.first()?);
         let dir = Vec2::new(m.angle.cos(), m.angle.sin());
         let mut l = Line {
             pieces: vec![*first],
+            tracking,
             matches: vec![m.clone()],
             first_cands: vec![],
             text: m.ch.to_string(),
@@ -248,8 +325,8 @@ impl Line {
         Some(l)
     }
 
-    /// The point type that sets this line.
-    fn text_object(&self, system_layout: bool) -> TextObject {
+    /// The point type that sets this line, not yet laid out (for a layout check).
+    fn probe(&self, system_layout: bool) -> TextObject {
         let style = CharStyle {
             font_family: self.face.family.clone(),
             font_style: self.face.style.clone(),
@@ -258,6 +335,7 @@ impl Line {
             // Each outlined glyph was drawn on its own; a ligature would draw another shape.
             features: vec!["-liga".into()],
             size: self.scale * self.face.units_per_em(),
+            tracking: self.tracking,
             fill: self.appearance.fill_paint(),
             stroke: self.appearance.stroke_paint(),
             stroke_width: self.appearance.stroke_width(),
@@ -277,6 +355,12 @@ impl Line {
         }
         t.para = super::create::new_type_para();
         t.system_layout = system_layout;
+        t
+    }
+
+    /// The point type that sets this line, laid out and measured.
+    fn text_object(&self, system_layout: bool) -> TextObject {
+        let mut t = self.probe(system_layout);
         super::typecmd::refresh_bounds(&mut t);
         t
     }
@@ -298,6 +382,217 @@ impl Line {
         // Ink the outlines did not have: the last glyph is where it went wrong.
         drawn.next().map(|_| self.matches.len().saturating_sub(1))
     }
+
+    /// This line with the tracking its glyphs are spaced by, when it has at least three glyphs.
+    /// The glyphs are laid out untracked and without spaces, so each gap's extra is how much
+    /// further apart the outlines are than the font's advances and pair kerning set them; a gap
+    /// read as word spaces is measured from the glyph's own advance instead, as no pair kerning
+    /// crosses a space. The extra most gaps share (the lower median, so that the word spaces of a
+    /// few gaps do not count) places the word spaces; the tracking is then the lower median, over
+    /// the gaps, of each gap's extra less its spaces, per character. The upper median of the
+    /// extras is tried next, for a line whose word spaces are its tighter gaps, and last the lower
+    /// median less one space, halved, for a line most of whose gaps hold a word space. A tracking within
+    /// 0.05 of a whole number is tried rounded to it first, then as measured. A tracked line is
+    /// kept when its type draws the whole line in place, or more of it from its start than
+    /// untracked type does. When untracked type with the spaces also draws the whole line, the line stays
+    /// untracked if the tracking is under one unit or the tracked reading drops a gap untracked
+    /// type reads as one space. The line also stays as it is when its tracking is 0 or outside
+    /// -1000..10000, and when its tracking is negative and the line does not paint the same as one
+    /// object ([`paints_as_one`]: its glyphs may overlap). Each of the nine layouts at most takes
+    /// its characters, spaces included, from `budget` before it runs; without enough left, the
+    /// line stays as it is, or becomes the best tracked reading laid out before the budget ran out.
+    fn tracked(self, system_layout: bool, budget: &mut usize) -> Line {
+        let size = self.size();
+        let n = self.pieces.len();
+        if n < 3 || size <= 0.0 {
+            return self;
+        }
+        // Each layout takes its characters, spaces included, from `budget` before it runs.
+        let mut take = |text: &str| match budget.checked_sub(text.chars().count()) {
+            Some(left) => {
+                *budget = left;
+                true
+            }
+            None => false,
+        };
+        if !take(&self.text) {
+            return self;
+        }
+        let plain_miss = self.first_mismatch(&self.probe(system_layout));
+        let dir = self.dir();
+        // Where untracked type draws the glyphs of `text` (each layout dropped once read).
+        let mut bare = self.clone();
+        bare.tracking = 0.0;
+        let mut origins = |text: String| -> Vec<Point> {
+            bare.text = text;
+            let t = bare.probe(system_layout);
+            let lay = vectorcraft_text::layout(FontDb::global(), &t);
+            lay.glyphs.iter().filter(|g| !g.outline.elements().is_empty()).map(|g| t.xf * (g.xf * Point::ORIGIN)).collect()
+        };
+        // With no spaces.
+        let joined: String = self.matches.iter().map(|m| m.ch).collect();
+        if !take(&joined) {
+            return self;
+        }
+        let drawn = origins(joined);
+        if drawn.len() != n {
+            return self;
+        }
+        // And with one space between each two glyphs (kerning against the space included).
+        let spaced = self.matches.iter().map(|m| m.ch.to_string()).collect::<Vec<_>>().join(" ");
+        if !take(&spaced) {
+            return self;
+        }
+        let drawn_spaced = origins(spaced);
+        // A font whose space has ink draws more glyphs: then the glyph's own advance stands in.
+        let spaced_ok = drawn_spaced.len() == n;
+        let space = space_advance(&self.face) * self.scale;
+        // Each gap's extra over the joined pair, and over the pair with one space between them
+        // plus a space (so the extra counts the spaces as the joined pair's extra counts none).
+        let gaps: Vec<(f64, f64)> = self
+            .matches
+            .windows(2)
+            .enumerate()
+            .zip(drawn.windows(2))
+            .filter_map(|((i, m), p)| match (m, p) {
+                ([a, b], [pa, pb]) => {
+                    let d = (b.origin - a.origin).dot(dir);
+                    let apart = match (spaced_ok, drawn_spaced.get(i), drawn_spaced.get(i + 1)) {
+                        (true, Some(qa), Some(qb)) => d - (*qb - *qa).dot(dir) + space,
+                        _ => d - a.face.advance(a.gid) * a.scale,
+                    };
+                    Some((d - (*pb - *pa).dot(dir), apart))
+                }
+                _ => None,
+            })
+            .collect();
+        let extra: Vec<f64> = gaps.iter().map(|g| g.0).collect();
+        // The spaces in each gap at a tracking of `tr` points: each space takes the tracking too,
+        // and tracking tighter than a space's width gives it a negative advance. A gap reads as
+        // spaces when they fit it better than the joined pair does.
+        let spaces = |tr: f64| -> Vec<usize> {
+            gaps.iter()
+                .map(|(joined, apart)| {
+                    let step = space + tr;
+                    // Spaces with no advance: one space, which still breaks the pair's kerning.
+                    let s = if step.abs() > 1e-9 { (apart - tr) / step } else { 1.0 };
+                    if !s.is_finite() {
+                        return 0;
+                    }
+                    // At least one space: the space's own kerning can make it fit a narrower gap.
+                    let k = (s.round().max(1.0) as usize).clamp(1, 64);
+                    // Spaces only where they fit better by more than rounding (1/100,000 em).
+                    if (apart - tr - k as f64 * step).abs() + size * 1e-5 < (joined - tr).abs() { k } else { 0 }
+                })
+                .collect()
+        };
+        // The tracking the gaps give when the word spaces are placed by `seed`.
+        let measure = |seed: f64| -> Option<f64> {
+            let per: Vec<f64> = gaps
+                .iter()
+                .zip(spaces(seed))
+                .map(|((joined, apart), s)| if s == 0 { *joined } else { (apart - s as f64 * space) / (s + 1) as f64 })
+                .collect();
+            median(per, false).map(|g| g / size * 1000.0)
+        };
+        // The lower median of the extras places the word spaces first; the upper one second, for a
+        // line whose word spaces are its tighter gaps (tracking tighter than a space).
+        let lower = median(extra.clone(), false);
+        // A line whose word gaps are most of its gaps has a space and two trackings in each extra
+        // (tracking is added after the glyph and after the space): the seed then places the spaces
+        // from the extra less one space, shared by the two. It goes last, so a reading that fits
+        // without it is kept (an untracked "a b c" has no such tracking).
+        // Where untracked type already draws the whole line, a space and a tracking of half its
+        // advance less draw it too: that reading is not tried.
+        let spaced_seed = lower.filter(|_| plain_miss.is_some()).map(|e| (e - space) / 2.0);
+        let mut tries = vec![];
+        for seed in [lower, median(extra, true), spaced_seed].into_iter().flatten() {
+            let Some(measured) = measure(seed) else { continue };
+            for t in [round_tracking(measured), measured] {
+                if !tries.contains(&t) {
+                    tries.push(t);
+                }
+            }
+        }
+        // The spaces in each gap of the line as it is (the reading `plain_miss` checked).
+        let mut plain_gaps = vec![];
+        let mut run = 0usize;
+        for (i, c) in self.text.chars().enumerate() {
+            if c == ' ' {
+                run += 1;
+            } else {
+                if i > 0 {
+                    plain_gaps.push(run);
+                }
+                run = 0;
+            }
+        }
+        let mut best: Option<(usize, Line)> = None;
+        for t in tries {
+            if t == 0.0 || !TRACKING.contains(&t) {
+                continue;
+            }
+            if t < 0.0 && !paints_as_one(&self) {
+                return self;
+            }
+            let mut tracked = self.clone();
+            tracked.tracking = t;
+            tracked.text = String::new();
+            let gaps = spaces(t * size / 1000.0);
+            for (k, (m, s)) in self.matches.iter().zip(std::iter::once(0).chain(gaps.iter().copied())).enumerate() {
+                if k > 0 {
+                    tracked.text.extend(std::iter::repeat_n(' ', s));
+                }
+                tracked.text.push(m.ch);
+            }
+            // A reading the budget cannot lay out is skipped; the next may be shorter.
+            if !take(&tracked.text) {
+                continue;
+            }
+            // When both draw the whole line (gaps as wide as whole spaces), the tracked reading is
+            // kept unless it drops a gap that untracked type reads as one space: such a gap is a
+            // word space ("a b c"), and the line keeps its spaces.
+            let drops_a_word_space = plain_gaps.iter().zip(&gaps).any(|(plain, tracked)| *plain == 1 && *tracked == 0);
+            match (tracked.first_mismatch(&tracked.probe(system_layout)), plain_miss) {
+                // Under a unit of tracking, or a word space the tracked reading drops, where
+                // untracked type draws the line: no tracking.
+                (None, None) if t.abs() < 1.0 || drops_a_word_space => return self,
+                (None, _) => return tracked,
+                (Some(k), Some(p)) if k > p && best.as_ref().is_none_or(|(b, _)| k > *b) => best = Some((k, tracked)),
+                _ => {}
+            }
+        }
+        best.map_or(self, |(_, l)| l)
+    }
+}
+
+/// Does line `l` paint the same as one object as glyph by glyph where its glyphs overlap: opaque,
+/// Normal blend, a solid fill or none, and no stroke? One object composites its transparency and
+/// blend once, spans a gradient over all of it, and strokes after filling every glyph.
+fn paints_as_one(l: &Line) -> bool {
+    l.opacity == 1.0
+        && l.blend == vectorcraft_color::BlendMode::Normal
+        && matches!(l.appearance.fill_paint(), vectorcraft_color::Paint::None | vectorcraft_color::Paint::Solid { .. })
+        && matches!(l.appearance.stroke_paint(), vectorcraft_color::Paint::None)
+}
+
+/// The tracking Retype sets, in 1/1000 em.
+const TRACKING: std::ops::RangeInclusive<f64> = -1000.0..=10000.0;
+
+/// The lower median of the finite values of `v`, or the upper one when `upper`; None for fewer
+/// than two.
+fn median(mut v: Vec<f64>, upper: bool) -> Option<f64> {
+    v.retain(|x| x.is_finite());
+    if v.len() < 2 {
+        return None;
+    }
+    v.sort_by(f64::total_cmp);
+    v.get(if upper { v.len() / 2 } else { (v.len() - 1) / 2 }).copied()
+}
+
+/// Tracking `t` rounded to a whole number when it is within 0.05 of one.
+fn round_tracking(t: f64) -> f64 {
+    if (t - t.round()).abs() < 0.05 { t.round() } else { t }
 }
 
 /// `lines` checked against their own layout: a line splits where its type stops drawing the
@@ -306,6 +601,15 @@ impl Line {
 fn verified(lines: Vec<Line>, system_layout: bool, unmatched: &mut Vec<NodeId>) -> Vec<Line> {
     // Glyphs laid out in all, at most: past it, the glyphs left unchecked stay outlines.
     let mut budget = lines.iter().map(|l| l.pieces.len()).sum::<usize>().saturating_mul(16).saturating_add(256);
+    // Measuring the tracking of the glyphs after a split has a budget of its own, so it cannot
+    // leave glyphs unchecked; past it they keep no tracking. Each measure takes the glyphs to
+    // rebuild the rest and the characters it lays out (see [`Line::tracked`]); the budget covers
+    // one measure of each whole line, as `retype` gives the first, and the glyph checks' budget.
+    // The glyphs measured again after splits are limited apart from it, at six times each rest's
+    // glyphs from half as much again as the glyph checks' budget.
+    let mut remeasured = budget.saturating_add(budget / 2);
+    let mut track_budget =
+        lines.iter().map(|l| l.text.chars().count().saturating_add(l.pieces.len().saturating_mul(394))).fold(budget, usize::saturating_add);
     let mut todo: std::collections::VecDeque<Line> = lines.into();
     let mut out = vec![];
     while let Some(l) = todo.pop_front() {
@@ -323,28 +627,58 @@ fn verified(lines: Vec<Line>, system_layout: bool, unmatched: &mut Vec<NodeId>) 
                 break;
             };
             budget = left;
-            match part.first_mismatch(&part.text_object(system_layout)) {
+            match part.first_mismatch(&part.probe(system_layout)) {
                 // The whole line is drawn as it was: one object.
                 None if e == n => {
                     out.push(part);
                     break;
                 }
                 None => w = w.saturating_mul(2),
-                // The first glyph on its own may still be drawn as it was (a contextual form
-                // changed it in the line); else it stays an outline. Checked again either way.
-                Some(0) if n > 1 => {
-                    todo.extend_front_parts(&l, [(0, 1), (1, n)]);
+                // Tracking that type does not set as the outlines are spaced: the line is
+                // checked again without it.
+                Some(k) if l.tracking != 0.0 && k < 2 => {
+                    match l.respaced(0, n, 0.0) {
+                        Some(p) => todo.push_front(p),
+                        None => unmatched.extend(l.pieces.iter().copied()),
+                    }
                     break;
                 }
-                Some(0) => {
+                // A single glyph its type cannot draw as it was stays an outline.
+                Some(0) if n == 1 => {
                     unmatched.extend(l.pieces.first().copied());
                     break;
                 }
                 // The glyphs before the mismatch, then the rest, each checked as a line of its
                 // own: the type before the mismatch may draw otherwise without what follows it (a
-                // font can place a glyph by the glyph after it).
+                // font can place a glyph by the glyph after it), and the first glyph on its own
+                // may still be drawn as it was (a contextual form changed it in the line). The
+                // rest takes the tracking its own glyphs are spaced by, while the budget for
+                // measuring it lasts and when type draws its first glyph as it was, followed by the
+                // next two (else that glyph splits off first, and the tracking is measured from the
+                // next one); past it, an untracked line's rest keeps its text as it is.
                 Some(k) => {
-                    todo.extend_front_parts(&l, [(0, k), (k, n)]);
+                    let k = k.max(1);
+                    // A measure takes at least six times the rest's glyphs from each budget.
+                    let measurable = n - k >= 3 && remeasured >= (n - k).saturating_mul(6) && track_budget >= (n - k).saturating_mul(6);
+                    let first_drawn = measurable && {
+                        budget = budget.saturating_sub(3);
+                        l.respaced(k, k + 3, l.tracking).is_some_and(|p| p.first_mismatch(&p.probe(system_layout)) != Some(0))
+                    };
+                    let rest = if first_drawn {
+                        // Rebuilding the rest for the measure takes its glyphs from the budget.
+                        remeasured = remeasured.saturating_sub((n - k).saturating_mul(6));
+                        track_budget = track_budget.saturating_sub(n - k);
+                        l.respaced(k, n, 0.0).map(|r| r.tracked(system_layout, &mut track_budget))
+                    } else if l.tracking == 0.0 {
+                        l.part(k, n)
+                    } else {
+                        l.respaced(k, n, 0.0)
+                    };
+                    match rest {
+                        Some(r) => todo.push_front(r),
+                        None => unmatched.extend(l.pieces.get(k..).unwrap_or_default().iter().copied()),
+                    }
+                    todo.extend_front_parts(&l, [(0, k)]);
                     break;
                 }
             }
@@ -407,6 +741,7 @@ fn reposed(l: &Line, id: NodeId, m: &GlyphMatch) -> Line {
     let dir = Vec2::new(m.angle.cos(), m.angle.sin());
     Line {
         pieces: vec![id],
+        tracking: 0.0,
         matches: vec![m.clone()],
         first_cands: l.first_cands.clone(),
         text: m.ch.to_string(),
@@ -428,6 +763,7 @@ fn new_line(pc: &Piece, cands: &[GlyphMatch]) -> Option<Line> {
     let dir = Vec2::new(m.angle.cos(), m.angle.sin());
     Some(Line {
         pieces: vec![pc.id],
+        tracking: 0.0,
         matches: vec![m.clone()],
         first_cands: cands.to_vec(),
         text: m.ch.to_string(),
@@ -531,8 +867,14 @@ fn retype(s: &mut Session, p: &Value) -> Result<Value> {
         // art (a dot, a bar): beside other shapes it stays an outline. Selected on its own, it is
         // what was asked for. Lone means alone on its baseline as the outlines lie, before the
         // layout check splits lines (tracking and manual kerning split them glyph by glyph).
-        let lone_pieces: std::collections::HashSet<NodeId> =
-            lines.iter().filter(|l| matches!(l.matches.as_slice(), [m] if m.contours == 1)).flat_map(|l| l.pieces.iter().copied()).collect();
+        let lone_pieces: std::collections::HashSet<NodeId> = lines.iter().flat_map(Line::lone_one_contour).collect();
+        // Each line's tracking is measured with nine layouts at most: the line as read (its
+        // characters), its glyphs without and with one space between them (three times its
+        // glyphs) and six tracked readings of at most 64 spaces in each gap (390 times its
+        // glyphs), so every line has what its measure can take.
+        let mut budget =
+            lines.iter().map(|l| l.text.chars().count().saturating_add(l.pieces.len().saturating_mul(393))).fold(256usize, usize::saturating_add);
+        let lines = lines.into_iter().map(|l| l.tracked(system_layout, &mut budget)).collect();
         let mut lines = verified(lines, system_layout, &mut unmatched);
         if pieces.len() > 1 {
             lines.retain(|l| {
@@ -611,7 +953,10 @@ fn retype(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({
         "ids": made.iter().map(|i| i.0).collect::<Vec<_>>(),
         "texts": lines.iter().map(|l| l.text.clone()).collect::<Vec<_>>(),
-        "fonts": lines.iter().map(|l| json!({"family": l.face.family, "style": l.face.style, "size": l.scale * l.face.units_per_em()})).collect::<Vec<_>>(),
+        "fonts": lines
+            .iter()
+            .map(|l| json!({"family": l.face.family, "style": l.face.style, "size": l.size(), "tracking": l.tracking}))
+            .collect::<Vec<_>>(),
         "unmatched": unmatched.iter().map(|i| i.0).collect::<Vec<_>>(),
         "truncated": truncated,
     }))
