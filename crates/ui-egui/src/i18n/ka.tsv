@@ -3228,6 +3228,15 @@ lighting	Light	სინათლე
 	Document Raster Effects Settings Dialog	დოკუმენტის რასტრული ეფექტების პარამეტრების დიალოგი
 	Drop Shadow	ჩრდილი
 	DXF Options Dialog	DXF პარამეტრების დიალოგი
+	HP-GL Options	HP-GL-ის პარამეტრები
+	HP-GL Options Dialog	HP-GL პარამეტრების დიალოგი
+	Curve Tolerance:	მრუდების დაშვება:
+	Origin:	სათავე:
+	Pens:	კალმები:
+	One Pen per Color	თითო კალამი თითო ფერზე
+	Pen Table	კალმების ცხრილი
+	Draw the Nearest Path Next	შემდეგ უახლოესი ტრაექტორიის დახატვა
+	Draw Inner Paths First	ჯერ შიდა ტრაექტორიების დახატვა
 	Edit Toolbar	ხელსაწყოთა ზოლის რედაქტირება
 	Edit Views	ხედების რედაქტირება
 	Effect…	ეფექტი…
@@ -5281,6 +5290,7 @@ antiAlias	Sharp	მკვეთრი
 	Width Point Edit	სიგანის წერტილის რედაქტირება
 	Art	ნახატი
 	Bearing	აზიმუტი
+	Stylus Wheel	სტილუსის ბორბალი
 	Bristle	ჯაგრისი
 	Calligraphic	კალიგრაფიული
 	Dots	წერტილები
@@ -5420,6 +5430,9 @@ theme	Appearance	იერსახე
 	embedding for preview and print	ჩაშენება გადახედვისა და ბეჭდვისთვის
 	embedding allowed	ჩაშენება დაშვებულია
 	{file}; {embedding}	{file}; {embedding}
+	unknown type	უცნობი ტიპი
+	{type}; {uses}	{type}; {uses}
+@plural	{n} use|{n} uses	{n} გამოყენება
 	substituted: shown in {family} {style} ({detail})	ჩანაცვლებულია: ნაჩვენებია შრიფტით {family} {style} ({detail})
 	missing: shown in {family} {style}	აკლია: ნაჩვენებია შრიფტით {family} {style}
 	missing	აკლია

@@ -724,6 +724,15 @@ antiAlias	Sharp	Nítido
 	DXF Info	Informações DXF
 	DXF Options	Opções DXF
 	DXF Options Dialog	Diálogo de Opções DXF
+	HP-GL Options	Opções HP-GL
+	HP-GL Options Dialog	Diálogo de Opções HP-GL
+	Curve Tolerance:	Tolerância das curvas:
+	Origin:	Origem:
+	Pens:	Canetas:
+	One Pen per Color	Uma caneta por cor
+	Pen Table	Tabela de canetas
+	Draw the Nearest Path Next	Desenhar em seguida o caminho mais próximo
+	Draw Inner Paths First	Desenhar primeiro os caminhos internos
 	Dark	Escuro
 	Darken	Escurecer
 	Dashed	Tracejado
@@ -1938,6 +1947,9 @@ antiAlias	Sharp	Nítido
 	embedding for preview and print	incorporação para visualização e impressão
 	embedding allowed	incorporação permitida
 	{file}; {embedding}	{file}; {embedding}
+	unknown type	tipo desconhecido
+	{type}; {uses}	{type}; {uses}
+@plural	{n} use|{n} uses	{n} uso|{n} usos
 	substituted: shown in {family} {style} ({detail})	substituída: exibida em {family} {style} ({detail})
 	missing: shown in {family} {style}	ausente: exibida em {family} {style}
 	missing	ausente
@@ -5517,6 +5529,7 @@ variable-list-end	{0}, {1}	{0} e {1}
 	Pressure	Pressão
 	Tilt	Inclinação
 	Bearing	Orientação
+	Stylus Wheel	Roda da caneta
 	Bristle Length:	Comprimento das Cerdas:
 	Bristle Density:	Densidade das Cerdas:
 	Bristle Thickness:	Espessura das Cerdas:

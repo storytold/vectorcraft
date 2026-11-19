@@ -1006,6 +1006,15 @@ font-technology	Variable	可變
 	DXF Info	DXF 資訊
 	DXF Options	DXF 選項
 	DXF Options Dialog	DXF 選項對話框
+	HP-GL Options	HP-GL 選項
+	HP-GL Options Dialog	HP-GL 選項對話框
+	Curve Tolerance:	曲線容許度：
+	Origin:	原點：
+	Pens:	筆：
+	One Pen per Color	每種顏色一支筆
+	Pen Table	筆表
+	Draw the Nearest Path Next	接著繪製最近的路徑
+	Draw Inner Paths First	先繪製內部路徑
 	e.g. 1-3, 5	例如 1-3, 5
 	Each page prints as one image, at the document's raster effects resolution.	每頁會以文件的點陣效果解析度列印為單一影像。
 	Earth Tones	大地色系
@@ -3581,6 +3590,7 @@ liquify-list-end	{0}, {1}	{0}和{1}
 	Pressure	壓力
 	Tilt	傾斜
 	Bearing	方位
+	Stylus Wheel	光筆滾輪
 	Shape:	形狀：
 	Bristle Length:	鬃毛長度：
 	Bristle Density:	鬃毛密度：
@@ -3611,6 +3621,9 @@ liquify-list-end	{0}, {1}	{0}和{1}
 	embedding for preview and print	允許內嵌以供預覽和列印
 	embedding allowed	允許內嵌
 	{file}; {embedding}	{file}；{embedding}
+	unknown type	未知類型
+	{type}; {uses}	{type}；{uses}
+@plural	{n} use|{n} uses	使用 {n} 次
 	substituted: shown in {family} {style} ({detail})	已替代：以 {family} {style} 顯示 ({detail})
 	missing: shown in {family} {style}	遺失：以 {family} {style} 顯示
 	missing	遺失

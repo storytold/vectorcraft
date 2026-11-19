@@ -1121,6 +1121,15 @@ lighting	Light	Valo
 	Document Raster Effects Settings Dialog	Asiakirjan rasteritehosteiden asetusten valintaikkuna
 	Drop Shadow	Pudotusvarjo
 	DXF Options Dialog	DXF-asetusten valintaikkuna
+	HP-GL Options	HP-GL-asetukset
+	HP-GL Options Dialog	HP-GL-asetusten valintaikkuna
+	Curve Tolerance:	Käyrien toleranssi:
+	Origin:	Origo:
+	Pens:	Kynät:
+	One Pen per Color	Yksi kynä kullekin värille
+	Pen Table	Kynätaulukko
+	Draw the Nearest Path Next	Piirrä seuraavaksi lähin polku
+	Draw Inner Paths First	Piirrä sisemmät polut ensin
 	Edit Toolbar	Muokkaa työkaluriviä
 	Edit Views	Muokkaa näkymiä
 	Effect…	Tehoste…
@@ -3452,6 +3461,7 @@ antiAlias	Sharp	Terävä
 	Width Point Edit	Leveyspisteen muokkaus
 	Art	Kuvitus
 	Bearing	Suunta
+	Stylus Wheel	Kynän rulla
 	Bristle	Harjas
 	Calligraphic	Kalligrafinen
 	Dots	Pisteet
@@ -3594,6 +3604,9 @@ theme	Appearance	Ulkoasu
 	embedding for preview and print	upottaminen esikatselua ja tulostusta varten
 	embedding allowed	upottaminen sallittu
 	{file}; {embedding}	{file}; {embedding}
+	unknown type	tuntematon tyyppi
+	{type}; {uses}	{type}; {uses}
+@plural	{n} use|{n} uses	{n} käyttö|{n} käyttöä
 	substituted: shown in {family} {style} ({detail})	korvattu: näytetään fontilla {family} {style} ({detail})
 	missing: shown in {family} {style}	puuttuu: näytetään fontilla {family} {style}
 	missing	puuttuu

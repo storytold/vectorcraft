@@ -1003,6 +1003,15 @@ font-technology	Variable	Променливи
 	DXF Info	Информация за DXF
 	DXF Options	Опции за DXF
 	DXF Options Dialog	Диалогов прозорец с опции за DXF
+	HP-GL Options	Опции за HP-GL
+	HP-GL Options Dialog	Диалогов прозорец с опции за HP-GL
+	Curve Tolerance:	Толеранс на кривите:
+	Origin:	Начало на координатите:
+	Pens:	Писци:
+	One Pen per Color	Един писец за всеки цвят
+	Pen Table	Таблица на писците
+	Draw the Nearest Path Next	Следващ да се чертае най-близкият път
+	Draw Inner Paths First	Първо да се чертаят вътрешните пътища
 	e.g. 1-3, 5	напр. 1-3, 5
 	Each page prints as one image, at the document's raster effects resolution.	Всяка страница се отпечатва като едно изображение при разделителната способност на растерните ефекти на документа.
 	Earth Tones	Земни тонове
@@ -2244,6 +2253,7 @@ font-technology	Variable	Променливи
 	Pressure	Натиск
 	Tilt	Наклон
 	Bearing	Азимут
+	Stylus Wheel	Колелце на писалката
 	Shape:	Форма:
 	Bristle Length:	Дължина на косъма:
 	Bristle Density:	Плътност на косъмчетата:
@@ -2274,6 +2284,9 @@ font-technology	Variable	Променливи
 	embedding for preview and print	вграждане за преглед и печат
 	embedding allowed	вграждането е разрешено
 	{file}; {embedding}	{file}; {embedding}
+	unknown type	неизвестен тип
+	{type}; {uses}	{type}; {uses}
+@plural	{n} use|{n} uses	{n} употреба|{n} употреби
 	substituted: shown in {family} {style} ({detail})	заместен: показан с {family} {style} ({detail})
 	missing: shown in {family} {style}	липсва: показан с {family} {style}
 	missing	липсва
