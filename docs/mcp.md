@@ -12720,9 +12720,13 @@ folder and no folder search.
 
 A Type tool click, or a Selection or Direct Selection double-click, that would start editing type whose story (every
 frame threaded with it) is drawn in a font that isn't available as named, as `text.missingFonts` reads them, opens a
-`missingFontEdit` question instead (fields `message`, `detail`, `__token`) and does not start editing. `ui.dialog.confirm`
-starts the edit with the caret where the type was clicked; `ui.dialog.cancel` leaves the document, its undo history and
-the selection as they were. Answering does not change the fonts the type names, install a font or open Find Font. The
+`missingFontEdit` question instead (fields `message`, `detail`, `__token`) and does not start editing. The double-click
+is one on the canvas or `ui.click` with `count: 2`. A `pointer_gesture` `doubleclick` event only switches to the Type
+tool; send the Type tool's `down` and `up` after it to start the edit. `ui.dialog.confirm` starts the edit with the
+caret where the type was clicked; `ui.dialog.cancel` leaves the document, its undo history and the selection as they
+were. When the document changed after the question opened, or the type is gone, `ui.dialog.confirm` closes the question
+and starts no edit; click the type again before sending text. A `pointer_gesture` press on such type while another
+dialog is open leaves that dialog open and starts no edit. Answering does not change the fonts the type names, install a font or open Find Font. The
 question comes again for each new edit, and not for a click within the type being edited or in another frame of its
 story. The Type tool's `missingFontEdit {token, ok}` option is how the question gives its answer. Commands that change
 text (`text.editRange`, `text.setRangeStyle` and the others) do not ask. This follows the help page
