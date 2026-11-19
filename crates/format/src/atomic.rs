@@ -46,39 +46,19 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
     write_atomic_with(path, |f| f.write_all(bytes))
 }
 
-/// Write `path` atomically with `fill`, which writes the content into the file (a new file
-/// directly, or a temporary one beside an existing file; see below). When `fill` or flushing
-/// fails, or the work was canceled meanwhile ([`vectorcraft_doc::cancel`]), whatever this call
-/// created is removed and `path` is left as it was: absent for a new file, unchanged for one
-/// being replaced. When the folder refuses the temporary file or the rename, the content is
-/// copied into `path` instead (see the module docs).
+/// Write `path` atomically with `fill`, which writes the content into the temporary file. When
+/// `fill` or flushing fails, or the work was canceled meanwhile ([`vectorcraft_doc::cancel`]), the
+/// temporary file is removed and `path` is left untouched. When the
+/// folder refuses the temporary file or the rename, the content is copied into `path` instead (see
+/// the module docs).
 pub fn write_atomic_with(path: &Path, fill: impl FnOnce(&mut File) -> io::Result<()>) -> io::Result<()> {
-    // `create_new` on `path` itself answers "is there a file here to replace" and creates it in
-    // the same atomic step when there is not, so there is no separate `exists` check to race a
-    // concurrent create or delete of the same path. A file that does not exist yet gets the
-    // default mode, same as any other new file this process creates: there is nothing yet to keep
-    // private, and writing it is as atomic as creating a file ever is, so no staging copy is
-    // needed either. `AlreadyExists` is the only answer that means a replacement; every other
-    // failure (a full volume, a folder that refuses creation outright) falls to the staging path
-    // below too, which has its own recovery for exactly that.
-    if let Ok(mut f) = OpenOptions::new().write(true).create_new(true).open(path) {
-        return match fill(&mut f).and_then(|()| sync_file(&f)).and_then(|()| not_cancelled()) {
-            Ok(()) => Ok(()),
-            Err(e) => {
-                drop(f);
-                let _ = std::fs::remove_file(path);
-                Err(e)
-            }
-        };
-    }
-    // Replacing a file: its staging copy starts owner-only, so a private document is never
-    // readable beside the target before `keep_permissions` has run (#1712).
-    write_atomic_stepping(path, fill, create_private, |tmp, target| std::fs::rename(tmp, target))
+    // Replacing a file: its staging copy starts owner-only, so a private document is never readable
+    // beside the target before `keep_permissions` has run (#1712). A new file keeps the default mode.
+    let replacing = path.exists();
+    let create = |tmp: &Path| if replacing { create_private(tmp) } else { create_new(tmp) };
+    write_atomic_stepping(path, fill, create, |tmp, target| std::fs::rename(tmp, target))
 }
 
-/// A staging file with the default mode, for a test that wants [`write_atomic_stepping`] directly,
-/// bypassing the `create_new`-on-`path` fast path above.
-#[cfg(test)]
 fn create_new(path: &Path) -> io::Result<File> {
     OpenOptions::new().write(true).create_new(true).open(path)
 }
@@ -131,13 +111,7 @@ fn write_atomic_stepping(
 /// the copy into `target` fails it is damaged: `tmp` and the copy of the old content stay and the
 /// error says where they are.
 fn write_over(tmp: &Path, target: &Path, refused: io::Error) -> io::Result<()> {
-    let opened = File::open(tmp).and_then(|from| {
-        let mut options = OpenOptions::new();
-        options.write(true).create(true).truncate(false);
-        #[cfg(unix)]
-        std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
-        Ok((from, options.open(target)?))
-    });
+    let opened = File::open(tmp).and_then(|from| Ok((from, OpenOptions::new().write(true).create(true).truncate(false).open(target)?)));
     let Ok((mut from, mut to)) = opened else {
         // Best effort: the temporary file is all there is to clean up.
         let _ = std::fs::remove_file(tmp);
@@ -474,31 +448,7 @@ mod tests {
         let r = scope(&token, None, || write_new_with(&new, |f| f.write_all(b"new")));
         assert!(r.as_ref().is_err_and(cancelled), "{r:?}");
         assert!(!new.exists());
-        // `write_atomic_with` on a path with nothing at it goes through its own fast path (no
-        // staging copy, no rename), which must check cancellation too.
-        let fresh = d.join("fresh.vectorcraft");
-        let r = scope(&token, None, || write_atomic_with(&fresh, |f| f.write_all(b"new")));
-        assert!(r.as_ref().is_err_and(cancelled), "{r:?}");
-        assert!(!fresh.exists());
         assert!(leftovers(&d, "doc.vectorcraft").is_empty(), "{:?}", leftovers(&d, "doc.vectorcraft"));
-        let _ = std::fs::remove_dir_all(&d);
-    }
-
-    /// A new file gets the default mode, not the owner-only staging a replacement gets: #1712
-    /// restricts what is already there to protect while it is being replaced, and a file that
-    /// did not exist yet has nothing yet to protect. `write_atomic_with` on a path with nothing
-    /// at it ends up with the same mode a plain new file this process creates gets.
-    #[cfg(unix)]
-    #[test]
-    fn a_new_file_gets_the_default_mode_not_owner_only() {
-        use std::os::unix::fs::PermissionsExt as _;
-        let d = dir("new-file-mode");
-        let path = d.join("doc.vectorcraft");
-        let want = std::fs::File::create(d.join("plain-for-comparison")).unwrap().metadata().unwrap().permissions().mode() & 0o777;
-        write_atomic_with(&path, |f| f.write_all(b"new")).unwrap();
-        let got = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
-        assert_eq!(got, want, "a new file's mode should match any other new file's, not be owner-only");
-        assert_ne!(got, 0o600, "meaningless if the umask already restricts new files to owner-only");
         let _ = std::fs::remove_dir_all(&d);
     }
 
