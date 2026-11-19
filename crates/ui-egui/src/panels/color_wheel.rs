@@ -13,8 +13,8 @@
 //! Picker's axes.
 //!
 //! The panel menu's Show Opacity adds a row under the wheel or the box that sets the opacity of
-//! what the panel edits: the fill or stroke item (`paint.setFill {opacity}`), the selected
-//! gradient stop or the selected freeform point (the first stop or point when none is selected,
+//! what the panel edits: the fill item (`paint.setFill {opacity}`), the stroke item
+//! (`paint.setStroke {opacity}`), the selected gradient stop or the selected freeform point (the first stop or point when none is selected,
 //! as for a color pick). The row is gray with nothing selected, for an object selected in a symbol
 //! instance, and when the fill or stroke item it would set is on type characters or missing.
 //!
