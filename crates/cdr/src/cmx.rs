@@ -108,7 +108,7 @@ fn chunks<'a>(b: &'a [u8], budget: &mut Budget, warn: &mut Vec<Warning>) -> Resu
     while let Some((mut pos, end, depth)) = stack.pop() {
         while pos.saturating_add(8) <= end {
             let Some(id) = Rd::at(b, pos).fourcc() else { break };
-            if !id.iter().all(|c| c.is_ascii_alphanumeric() || *c == b' ') {
+            if !is_id(&id) {
                 match resync(b, pos, end) {
                     Some(next) => {
                         pos = next;
@@ -157,12 +157,18 @@ fn chunks<'a>(b: &'a [u8], budget: &mut Budget, warn: &mut Vec<Warning>) -> Resu
     Ok(out)
 }
 
-/// Where the next chunk id after `pos` lies: four letters at an even distance of 2 to [`RESYNC`]
-/// bytes (R53).
+/// Is `t` a chunk id: an ASCII letter, then three ASCII letters, digits or spaces (R53)?
+fn is_id(t: &[u8]) -> bool {
+    matches!(t, [first, rest @ ..] if t.len() == 4 && first.is_ascii_alphabetic() && rest.iter().all(|c| c.is_ascii_alphanumeric() || *c == b' '))
+}
+
+/// Where the next chunk after `pos` lies: the first chunk id at an even distance of 2 to [`RESYNC`]
+/// bytes that names a chunk the reader uses, or another chunk whose length keeps it inside the list
+/// that ends at `end` (R53).
 fn resync(b: &[u8], pos: usize, end: usize) -> Option<usize> {
-    (pos + 2..=pos.saturating_add(RESYNC).min(end.saturating_sub(8)))
-        .step_by(2)
-        .find(|&p| b.get(p..p + 4).is_some_and(|t| t.iter().all(u8::is_ascii_alphabetic)))
+    let fits = |p: usize| u32_at(b, p + 4).and_then(|s| (p + 8).checked_add(s as usize)).is_some_and(|stop| stop <= end);
+    let chunk_at = |p: usize| Rd::at(b, p).fourcc().is_some_and(|id| is_id(&id) && (READ_IDS.contains(&id) || fits(p)));
+    (pos + 2..=pos.saturating_add(RESYNC).min(end.saturating_sub(8))).step_by(2).find(|&p| chunk_at(p))
 }
 
 /// The end of the field list at `pos` of `b`: after its 0xff, or the end of `b` when a field runs
@@ -278,6 +284,8 @@ impl Tables {
         if flags & 4 != 0 {
             let stored = usize::from(dash).checked_sub(1).and_then(|i| self.dashes.get(i));
             match stored {
+                // A pattern of zero lengths draws as a solid line, as in a `.cdr` outline (R48).
+                Some(d) if d.iter().all(|x| *x == 0) => {}
                 Some(d) if budget.take_dashes(d.len()) => dashes = d.iter().map(|x| f64::from(*x)).collect(),
                 Some(_) => push(warn, Warning::TooDeep),
                 None => push(warn, Warning::Damaged),
@@ -323,7 +331,9 @@ fn color(e: &[u8], record: Option<&Profile>, warn: &mut Vec<Warning>) -> Option<
     Some(match model {
         2 => Color::Cmyk([pct(0)?, pct(1)?, pct(2)?, pct(3)?]),
         3 => Color::Cmyk([full(0)?, full(1)?, full(2)?, full(3)?]),
+        4 => Color::Cmyk([full(0)?, full(1)?, full(2)?, 0.0]),
         5 => Color::Rgb([full(0)?, full(1)?, full(2)?]),
+        9 => Color::Gray(1.0 - full(0)?),
         _ => {
             push(warn, Warning::UnknownColors);
             Color::Rgb([0.0; 3])
@@ -453,7 +463,8 @@ impl<'t, 'b> PageRead<'t, 'b> {
             }
             BEGIN_LAYER => {
                 self.close_layer();
-                let name = self.layer_name(body).unwrap_or_else(|| format!("Layer {}", self.layers.len() + 1));
+                // A layer without a name is left unnamed, as in a `.cdr` drawing.
+                let name = self.layer_name(body).unwrap_or_default();
                 self.open = Some(LayerRead { name, lists: vec![Vec::new()] });
             }
             END_LAYER => self.close_layer(),
@@ -515,10 +526,9 @@ impl<'t, 'b> PageRead<'t, 'b> {
         }
     }
 
-    /// The open layer, or a new one when objects come before any layer begins.
+    /// The open layer, or a new unnamed one when objects come before any layer begins.
     fn layer(&mut self) -> &mut LayerRead {
-        let n = self.layers.len() + 1;
-        self.open.get_or_insert_with(|| LayerRead { name: format!("Layer {n}"), lists: vec![Vec::new()] })
+        self.open.get_or_insert_with(|| LayerRead { name: String::new(), lists: vec![Vec::new()] })
     }
 
     fn close_layer(&mut self) {
@@ -560,11 +570,17 @@ impl<'t, 'b> PageRead<'t, 'b> {
         };
         // `stored` points are read, so the type bytes are found after all of them, and the first
         // `n`, those that have a type byte, are kept. When the field holds every point, a short
-        // field has lost type bytes; otherwise it holds as many whole points and types as fit.
+        // field has lost type bytes. When it holds whole points and their types for fewer points,
+        // the count is too large. Otherwise the field lost points, and its type bytes can't be
+        // found: the curve is lost.
         let left = r.left();
         let (stored, n) = match count.checked_mul(8).filter(|c| *c <= left) {
             Some(c) => (count, count.min(left - c)),
-            None => (count.min(left / 9), count.min(left / 9)),
+            None if left.is_multiple_of(9) => (left / 9, left / 9),
+            None => {
+                push(self.warn, Warning::Damaged);
+                return None;
+            }
         };
         if n < count {
             push(self.warn, Warning::Damaged);
@@ -625,6 +641,10 @@ impl<'t, 'b> PageRead<'t, 'b> {
         }
         if mask & 4 != 0 {
             push(self.warn, Warning::Lenses);
+        }
+        // A canvas (8) or a container (16) is not read.
+        if mask & (8 | 16) != 0 {
+            push(self.warn, Warning::UnsupportedObjects);
         }
         (fill, outline)
     }

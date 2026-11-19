@@ -66,10 +66,10 @@ arrowhead tables, then each page's instructions in drawing order:
 | In the `.cmx` file | Read as |
 |---|---|
 | Pages, with the size the page gives, or else the size of the drawing's bounds that the page stores | pages; a page sized to the bounds is centered on them |
-| Layers, by their UTF-16 or 8-bit name | drawing layers; a layer that holds nothing is left out |
+| Layers, by their UTF-16 or 8-bit name | drawing layers, unnamed when the file gives no name; a layer that holds nothing is left out |
 | Groups | groups |
 | Curves (moves, lines and cubic curves, as `.cdr` point lists) | paths |
-| Uniform fills: CMYK in percent or 0 to 255, RGB, and library colors with their names | colors, spot colors |
+| Uniform fills: CMYK in percent or 0 to 255, CMY, RGB, gray, and library colors with their names | colors, spot colors |
 | Outlines: width, color, caps, joins, dashes, the no-outline, behind-the-fill and scaled-with flags | outlines |
 
 Text, images, rectangles, ellipses, clipping paths, fills other than uniform ones, outline

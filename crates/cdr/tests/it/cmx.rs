@@ -120,7 +120,8 @@ fn objects_before_any_layer_get_one() {
     let p = page(&[begin_page(None), square(&attrs(Some(1), None, false), 0, 0, 1000)]);
     let d = read_cmx(&file(&[p]), Limits::default()).unwrap();
     assert_eq!(d.pages[0].layers.len(), 1);
-    assert_eq!(d.pages[0].layers[0].name, "Layer 1");
+    // The layer is left unnamed, as a `.cdr` drawing's is; the importer names it by its place.
+    assert_eq!(d.pages[0].layers[0].name, "");
 }
 
 #[test]
@@ -217,6 +218,31 @@ fn colors_of_other_models_and_missing_entries() {
     let objects = &d.pages[0].layers[0].objects;
     assert_eq!(shape(&objects[0]).fill, Some(Color::Cmyk([1.0, 0.0, 0.0, 1.0])));
     assert_eq!(shape(&objects[1]).fill, Some(Color::Rgb([0.0; 3])));
+}
+
+#[test]
+fn gray_cmy_and_rgb_colors_of_the_older_fields() {
+    let mut children = vec![cont(b'4', 1e-7)];
+    children.push(page(&[
+        begin_page(None),
+        begin_layer("L", None),
+        square(&attrs(Some(1), None, false), 0, 0, 1000),
+        square(&attrs(Some(2), None, false), 0, 0, 1000),
+        square(&attrs(Some(3), None, false), 0, 0, 1000),
+    ]));
+    children.push(table(b"rclr", &[color(9, &[51]), color(4, &[255, 0, 51]), color(5, &[255, 0, 0])]));
+    let d = read_cmx(&riff(&children), Limits::default()).unwrap();
+    assert!(d.warnings.is_empty(), "{:?}", d.warnings);
+    let objects = &d.pages[0].layers[0].objects;
+    // The model holds objects front to back: the RGB square, the CMY one, then the gray one.
+    assert_eq!(shape(&objects[0]).fill, Some(Color::Rgb([1.0, 0.0, 0.0])));
+    match (shape(&objects[1]).fill.clone(), shape(&objects[2]).fill.clone()) {
+        (Some(Color::Cmyk([c, m, y, k])), Some(Color::Gray(g))) => {
+            assert!((c - 1.0).abs() < 1e-6 && m == 0.0 && (y - 0.2).abs() < 1e-6 && k == 0.0, "{c} {m} {y} {k}");
+            assert!((g - 0.8).abs() < 1e-6, "{g}");
+        }
+        other => panic!("{other:?}"),
+    }
 }
 
 #[test]
@@ -409,6 +435,115 @@ fn stray_letters_with_a_length_past_the_file_are_passed_over() {
     let d = read_cmx(&riff(&children), Limits::default()).unwrap();
     assert_eq!(d.pages.len(), 1);
     assert_eq!(d.pages[0].layers[0].objects.len(), 1);
+}
+
+#[test]
+fn a_dash_pattern_of_zero_lengths_draws_a_solid_line() {
+    let mut children = vec![cont(b'4', 1e-7)];
+    children.push(page(&[begin_page(None), begin_layer("L", None), square(&attrs(None, Some(1), false), 0, 0, 1000)]));
+    children.extend(tables().into_iter().filter(|t| !t.starts_with(b"rdot") && !t.starts_with(b"rotl")));
+    children.push(table(b"rdot", &[dashes(&[0, 0])]));
+    children.push(table(b"rotl", &[outline([3, 1, 2, 1, 1, 1])]));
+    let d = read_cmx(&riff(&children), Limits::default()).unwrap();
+    assert!(d.warnings.is_empty(), "{:?}", d.warnings);
+    let o = shape(&d.pages[0].layers[0].objects[0]).outline.clone().unwrap();
+    assert!(o.dashes.is_empty(), "{:?}", o.dashes);
+}
+
+#[test]
+fn a_curve_field_that_lost_points_is_left_out() {
+    // Three points claimed, two whole points stored and the third cut inside its y: the type
+    // bytes can't be found, so no node types are read from coordinates.
+    let mut g = 3u16.to_le_bytes().to_vec();
+    for (x, y) in [(0i32, 0i32), (1_000_000, 0)] {
+        g.extend(x.to_le_bytes());
+        g.extend(y.to_le_bytes());
+    }
+    g.extend(1_000_000i32.to_le_bytes());
+    g.extend([0x40, 0x42]);
+    let c = instr(67, &fields(&[field(1, &attrs(Some(1), None, false)), field(2, &g)]));
+    let d = read_cmx(&file(&[page(&[begin_page(None), begin_layer("L", None), c])]), Limits::default()).unwrap();
+    assert!(d.warnings.contains(&Warning::Damaged), "{:?}", d.warnings);
+    assert!(d.pages[0].layers.is_empty(), "{:?}", d.pages[0].layers);
+}
+
+#[test]
+fn a_chunk_whose_id_has_a_digit_is_found_after_stray_bytes() {
+    // Stray bytes, a chunk the reader passes over whose id ends in a digit, then the page.
+    let p = page(&[begin_page(None), begin_layer("L", None), square(&attrs(Some(1), None, false), 0, 0, 1000), end_layer()]);
+    let mut b = vec![1u8; 6];
+    b.extend(chunk(b"inf1", &[0; 70]));
+    b.extend(p);
+    let mut children = vec![cont(b'4', 1e-7), b];
+    children.extend(tables());
+    let d = read_cmx(&riff(&children), Limits::default()).unwrap();
+    assert!(d.warnings.is_empty(), "{:?}", d.warnings);
+    assert_eq!(d.pages.len(), 1);
+    assert_eq!(d.pages[0].layers[0].objects.len(), 1);
+}
+
+#[test]
+fn padding_and_ids_with_impossible_lengths_are_not_taken_for_chunks() {
+    // After stray bytes, four spaces with a small length, or letters with a length past the list,
+    // come before the page: neither is taken for a chunk, so the page is found.
+    for filler in [b"    \x08\x00\x00\x00".to_vec(), b"junk\x40\x42\x0f\x00".to_vec()] {
+        let p = page(&[begin_page(None), begin_layer("L", None), square(&attrs(Some(1), None, false), 0, 0, 1000), end_layer()]);
+        let mut b = vec![1u8; 2];
+        b.extend(filler);
+        b.extend(p);
+        let mut children = vec![cont(b'4', 1e-7), b];
+        children.extend(tables());
+        let d = read_cmx(&riff(&children), Limits::default()).unwrap();
+        assert!(d.warnings.is_empty(), "{:?}", d.warnings);
+        assert_eq!(d.pages.len(), 1);
+        assert_eq!(d.pages[0].layers[0].objects.len(), 1);
+    }
+}
+
+#[test]
+fn after_stray_bytes_a_chunk_the_reader_passes_over_keeps_what_it_holds() {
+    // Stray bytes, then a chunk the reader passes over whose body starts with the letters of a
+    // page chunk, then the page: only the page is read.
+    let p = page(&[begin_page(None), begin_layer("L", None), square(&attrs(Some(1), None, false), 0, 0, 1000), end_layer()]);
+    let mut inner = b"page".to_vec();
+    inner.extend(4u32.to_le_bytes());
+    inner.extend([0; 10]);
+    let mut b = vec![1u8; 2];
+    b.extend(chunk(b"inf1", &inner));
+    b.extend(p);
+    let mut children = vec![cont(b'4', 1e-7), b];
+    children.extend(tables());
+    let d = read_cmx(&riff(&children), Limits::default()).unwrap();
+    assert!(d.warnings.is_empty(), "{:?}", d.warnings);
+    assert_eq!(d.pages.len(), 1);
+    assert_eq!(d.pages[0].layers[0].objects.len(), 1);
+}
+
+#[test]
+fn a_canvas_or_a_container_is_reported() {
+    for bit in [8u8, 16] {
+        let mut a = attrs(Some(1), None, false);
+        a[0] |= bit;
+        let p = page(&[begin_page(None), begin_layer("L", None), square(&a, 0, 0, 1000), end_layer()]);
+        let d = read_cmx(&file(&[p]), Limits::default()).unwrap();
+        assert_eq!(d.warnings, vec![Warning::UnsupportedObjects], "{bit}");
+        assert!(shape(&d.pages[0].layers[0].objects[0]).fill.is_some());
+    }
+}
+
+#[test]
+fn a_library_color_with_its_name_reads_as_a_spot_color() {
+    let mut children = vec![cont(b'4', 1e-7)];
+    children.push(page(&[begin_page(None), begin_layer("L", None), square(&attrs(Some(1), None, false), 0, 0, 1000)]));
+    children.push(table(b"rclr", &[color_record_named(5, [0, 0, 255, 0], Some("Brick 12"))]));
+    let d = read_cmx(&riff(&children), Limits::default()).unwrap();
+    match shape(&d.pages[0].layers[0].objects[0]).fill.clone() {
+        Some(Color::Spot { name, tint, look }) => {
+            assert_eq!((name.as_str(), tint), ("Brick 12", 1.0));
+            assert!(look.is_some());
+        }
+        other => panic!("{other:?}"),
+    }
 }
 
 proptest! {

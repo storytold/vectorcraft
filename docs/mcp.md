@@ -10197,12 +10197,13 @@ its header fit the file. A RIFF file that names a version before 3 is refused wi
 
 `.cmx` exchange files with 32-bit coordinates open and place as editable art, found by their content whatever their
 extension. Each page becomes an artboard, side by side, at the size the page gives. A page that gives no size takes
-the size of the drawing's bounds stored with it, centered on the art, or 612 × 792 pt when it stores none either.
-Layers keep their names, and a layer that holds nothing is left out. Groups stay groups, and curves become paths with
-their uniform fills and outlines: colors in CMYK or RGB, and library colors stored with their names as spot swatches;
-outline widths, caps, joins, dashes, an outline behind the fill and an outline scaled with the object. Text, images,
+the size of the drawing's bounds stored with it, centered on the art, or 612 × 792 pt (VectorCraft's own size, as
+for a `.cdr` page without one) when it stores none either. Layers keep their names, a layer without one is named by
+its place as in a `.cdr` drawing, and a layer that holds nothing is left out. Groups stay groups, and curves become
+paths with their uniform fills and outlines: colors in CMYK, CMY, RGB or gray, and library colors stored with their
+names as spot swatches; outline widths, caps, joins, dashes, an outline behind the fill and an outline scaled with the object. Text, images,
 rectangles, ellipses, clipping paths and other objects the reader doesn't read yet, fills other than uniform ones and
-outline arrowheads are left out, and lenses are not applied. The objects a clipping path clips come in without it. The
+outline arrowheads are left out, and lenses, canvases and containers are not applied. The objects a clipping path clips come in without it. The
 `warnings` of `document.open` name each of these kinds the file had, and say when damaged parts or parts past the
 import limits were left out. Files in big-endian byte order and files with 16-bit coordinates are refused with a
 message. VectorCraft doesn't write `.cmx` files. After a file opens with warnings, an export or Save As to its own path

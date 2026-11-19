@@ -69,12 +69,25 @@ pub fn color(model: u8, values: &[u8]) -> Vec<u8> {
 /// A color entry with a property list in field 10 whose color record (part 1) holds `model` and
 /// the four value bytes `v` (R56).
 pub fn color_record(model: u16, v: [u8; 4]) -> Vec<u8> {
+    color_record_named(model, v, None)
+}
+
+/// A color entry as [`color_record`], with a name part (part 3: a u32 count and UTF-16 units)
+/// after the color when `name` is given (R56).
+pub fn color_record_named(model: u16, v: [u8; 4], name: Option<&str>) -> Vec<u8> {
     let mut part = vec![1u8];
     part.extend(12u32.to_le_bytes());
     part.extend(model.to_le_bytes());
     part.extend(5u16.to_le_bytes());
     part.extend([0; 4]);
     part.extend(v);
+    if let Some(name) = name {
+        let units: Vec<u16> = name.encode_utf16().collect();
+        part.push(3);
+        part.extend((4 + 2 * units.len() as u32).to_le_bytes());
+        part.extend((units.len() as u32).to_le_bytes());
+        part.extend(units.iter().flat_map(|u| u.to_le_bytes()));
+    }
     let mut rec = (part.len() as u32).to_le_bytes().to_vec();
     rec.extend(part);
     fields(&[field(10, &rec)])

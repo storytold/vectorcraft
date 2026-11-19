@@ -122,3 +122,24 @@ fn files_that_are_not_read_say_why() {
     let e = open_bytes(&mut s, "d.cmx", b"not a cmx file", None).unwrap_err().to_string();
     assert!(e.contains("this CMX file can't be read (not a CMX file)"), "{e}");
 }
+
+#[test]
+fn a_layer_without_a_name_is_named_by_its_place() {
+    // An empty layer, which is left out, then a layer named only by spaces: it comes in unnamed,
+    // and the importer numbers it by its place among the layers it keeps, as for a `.cdr` drawing.
+    let p = page(&[
+        begin_page(None),
+        begin_layer("Grid", None),
+        end_layer(),
+        begin_layer("  ", None),
+        square(&attrs(Some(2), None, false), 0, 0, 1000),
+        end_layer(),
+    ]);
+    let mut children = vec![cont(b'4', 1e-7), p];
+    children.extend(tables());
+    let mut s = Session::new();
+    let r = open_bytes(&mut s, "drawing.cmx", &riff(&children), None).unwrap();
+    assert!(warnings(&r).is_empty(), "{r}");
+    let names: Vec<String> = s.doc().unwrap().doc.layers.iter().map(|l| l.name.clone().unwrap_or_default()).collect();
+    assert_eq!(names, ["Layer 1"]);
+}
