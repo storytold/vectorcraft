@@ -1743,8 +1743,13 @@ impl Targets {
         (u * s, ov, true)
     }
 
-    fn scale_keeps_sign(n: f64, s: f64) -> bool {
-        n.is_finite() && n * s > 0.0
+    fn free_corner_stroke_contact(
+        &self,
+        anchor: Option<(Point, Kind)>,
+        valid: impl Fn(Point) -> bool,
+        find: impl FnOnce() -> Option<Point>,
+    ) -> Option<(Point, Kind)> {
+        if anchor.is_some_and(|(q, _)| valid(q)) || self.stroke_contours.is_empty() { None } else { find().map(|q| (q, Kind::StrokeEdge)) }
     }
 
     /// The existing open sign region for a free box corner, in local handle space.
@@ -1808,7 +1813,7 @@ impl Targets {
         let (d0, [sx, _, _, sy, _, _]) = (handle.pos(r) - origin, a.as_coeffs());
         let (to_doc, to_local) = (bx.to_doc(), bx.to_doc().inverse());
         // A scale that collapses or flips the box is no snap.
-        let valid = Self::scale_keeps_sign;
+        let valid = |n: f64, s: f64| n.is_finite() && n * s > 0.0;
         // The target line along the x axis (`x`: a vertical line) or the y axis nearest `p`, the
         // ruler guides running past it included.
         let nearest = |p: Point, x: bool| -> Hit {
@@ -1834,14 +1839,12 @@ impl Targets {
                 valid((local.x - origin.x) / d0.x, sx) && valid((local.y - origin.y) / d0.y, sy)
             };
             let anchor = self.nearest_point(p, tol);
-            let stroke = if anchor.is_some_and(|(q, _)| valid_contact(q)) || self.stroke_contours.is_empty() {
-                None
-            } else {
+            let stroke = self.free_corner_stroke_contact(anchor, &valid_contact, || {
                 // The existing corner solver accepts the current OPEN sign region, with no
                 // post-snap minimum scale. Bound it by the rotated query square, not a new floor.
                 let domain = Self::free_corner_contact_domain(to_local, p, origin, d0, (sx, sy), tol);
-                self.stroke_contours.nearest_with_domain(p, tol, Some(&domain), Vec2::ZERO, valid_contact).map(|q| (q, Kind::StrokeEdge))
-            };
+                self.stroke_contours.nearest_with_domain(p, tol, Some(&domain), Vec2::ZERO, &valid_contact)
+            });
             let direct = anchor.into_iter().chain(stroke).map(|(q, k)| (Some((q.x, q)), Some((q.y, q)), Some((q, k))));
             for (tx, ty, at) in direct.chain([(hx, hy, None), (hx, None, None), (None, hy, None)]) {
                 if tx.is_none() && ty.is_none() {
