@@ -45,6 +45,7 @@ impl Serialize for Node {
             is_default(&self.bbox_angle),
             e.perspective.is_none(),
             e.dimension.is_none(),
+            e.flare.is_none(),
             e.intertwine.is_none(),
             e.intertwine_tiers.is_empty(),
             e.live_paint_gaps.is_none(),
@@ -91,6 +92,7 @@ impl Serialize for Node {
         field!("bbox_angle", &self.bbox_angle);
         field!("perspective", &e.perspective);
         field!("dimension", &e.dimension);
+        field!("flare", &e.flare);
         field!("intertwine", &e.intertwine);
         field!("intertwine_tiers", &e.intertwine_tiers);
         field!("live_paint_gaps", &e.live_paint_gaps);
@@ -228,6 +230,8 @@ pub(super) struct NodeWire {
     #[serde(default)]
     dimension: Option<Box<crate::dimension::Dimension>>,
     #[serde(default)]
+    flare: Option<Box<crate::flare::FlareSpec>>,
+    #[serde(default)]
     intertwine: Option<Box<PathData>>,
     #[serde(default, deserialize_with = "counted_list")]
     intertwine_tiers: Vec<PathData>,
@@ -271,6 +275,7 @@ impl From<NodeWire> for Node {
             slice: w.slice,
             perspective: w.perspective,
             dimension: w.dimension,
+            flare: w.flare,
             intertwine: w.intertwine,
             intertwine_tiers: w.intertwine_tiers,
             live_paint_gaps: w.live_paint_gaps,

@@ -881,3 +881,25 @@ fn a_clipping_path_is_the_marked_member_else_the_first() {
     l.set_clips(true);
     assert_eq!(l.clipping_path_index(), None);
 }
+
+/// Measured without its guides (while Lock Guides or Hide Guides leaves them out), a clip group
+/// keeps its clipping path though it is a guide, wherever it sits among the members: on top, as
+/// Make Clipping Mask leaves it. The other guides go.
+#[test]
+fn measured_without_guides_a_clip_keeps_its_clipping_path_on_top() {
+    let path = |id: u64, x: f64, guide: bool| {
+        let mut p = Node::path(NodeId(id), shapes::rectangle(Rect::new(x, 0.0, x + 4.0, 2.0)), Appearance::default_art());
+        if let NodeKind::Path { guide: g, .. } = &mut p.kind {
+            *g = guide;
+        }
+        p
+    };
+    let mut clip = path(103, 10.0, true);
+    clip.set_clipping_path(true);
+    let mut g = Node::group(NodeId(100), vec![Arc::new(path(101, 0.0, true)), Arc::new(path(102, 5.0, false)), Arc::new(clip)]);
+    g.set_clips(true);
+    let out = g.without_guides().expect("a guide is left out");
+    let ids: Vec<NodeId> = out.children().unwrap().iter().map(|c| c.id).collect();
+    assert_eq!(ids, [NodeId(102), NodeId(103)], "the guide below the art goes, the clipping path on top stays");
+    assert_eq!(out.clipping_path().map(|c| c.id), Some(NodeId(103)));
+}

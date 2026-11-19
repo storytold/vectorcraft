@@ -86,8 +86,57 @@ fn blob_tip_zero_and_invalid_values_are_safe() {
         p[key] = value;
         assert!(s.execute("path.blob", &p).is_err(), "{key}: {p}");
     }
-    s.execute("path.blob", &json!({"points": [[100, 200], [300, 200]], "angle": 1e300, "roundness": -1e300, "merge": false})).unwrap();
-    assert!(paths(&s)[1].1.control_bounds().unwrap().height().is_finite());
+    let stroke = json!({"points": [[100, 200], [300, 200]], "merge": false});
+    refuses_with(&mut s, "path.blob", &with(&stroke, json!({"angle": 1e300})), "`angle` must be from -180 to 180 degrees");
+    refuses_with(&mut s, "path.blob", &with(&stroke, json!({"roundness": -1e300})), "`roundness` must be from 0 to 100%");
+    assert_eq!(paths(&s).len(), 1);
+}
+
+/// `path.blob` refuses an `angle`, `roundness` or `fidelity` outside its range and changes nothing;
+/// each end of a range paints, and a key left out or null takes its default (0°, 100% and no fitting).
+#[test]
+fn blob_brush_rejects_out_of_range_tip_and_fidelity_without_edit() {
+    let mut s = session();
+    let stroke = json!({"points": [[100, 100], [300, 100]], "size": 20, "merge": false});
+    let angle = "`angle` must be from -180 to 180 degrees";
+    let roundness = "`roundness` must be from 0 to 100%";
+    let fidelity = "`fidelity` must be from 0.01 to 100 pt";
+    for (extra, want) in [
+        (json!({"angle": -180.5}), angle),
+        (json!({"angle": 181}), angle),
+        (json!({"angle": 1e300}), angle),
+        (json!({"roundness": -0.5}), roundness),
+        (json!({"roundness": 101}), roundness),
+        (json!({"fidelity": 0.005}), fidelity),
+        (json!({"fidelity": 0}), fidelity),
+        (json!({"fidelity": -1}), fidelity),
+        (json!({"fidelity": 101}), fidelity),
+        (json!({"fidelity": 1e300}), fidelity),
+        (json!({"angle": 45, "roundness": 50, "fidelity": 100.5}), fidelity),
+    ] {
+        refuses_with(&mut s, "path.blob", &with(&stroke, extra), want);
+    }
+    assert!(paths(&s).is_empty());
+    let painted = |s: &mut Session, extra: serde_json::Value| {
+        let id = NodeId(s.execute("path.blob", &with(&stroke, extra)).unwrap()["id"].as_u64().unwrap());
+        path(s, id)
+    };
+    for extra in [
+        json!({"angle": -180}),
+        json!({"angle": 180}),
+        json!({"roundness": 0}),
+        json!({"roundness": 100}),
+        json!({"fidelity": 0.01}),
+        json!({"fidelity": 100}),
+    ] {
+        let pd = painted(&mut s, extra.clone());
+        assert!(pd.control_bounds().is_some_and(|b| b.height().is_finite() && b.height() > 0.0), "{extra}: {pd:?}");
+    }
+    let defaults = painted(&mut s, json!({}));
+    let nulls = painted(&mut s, json!({"angle": null, "roundness": null, "fidelity": null}));
+    let given = painted(&mut s, json!({"angle": 0, "roundness": 100}));
+    assert_eq!(nulls, defaults);
+    assert_eq!(given, defaults);
 }
 
 #[test]
@@ -328,6 +377,96 @@ fn pencil_connect_keeps_the_rest_of_a_compound_path_and_refuses_the_extended_pat
     assert_eq!(sp.anchors[sp.anchors.len() - 1].p, Point::new(300.0, 400.0));
     assert!(sp.anchors.iter().any(|x| x.p == Point::new(400.0, 400.0)));
     assert!(s.execute("path.freehand", &json!({"points": points, "extend": {"id": a.0}, "connect": {"id": a.0}})).is_err());
+}
+
+/// `path.freehand` refuses a `style` other than "pencil" or "brush" and an `extend` end other than
+/// "start" or "end" and changes nothing; left out or null, the style is "pencil" and the stroke
+/// continues the path from its end.
+#[test]
+fn pencil_refuses_an_unknown_style_or_extend_end() {
+    let mut s = session();
+    let a = line(&mut s, 100.0, 100.0, 200.0, 100.0);
+    let stroke = json!({"points": [[100, 300], [200, 320], [300, 300]]});
+    for style in [json!("calligraphic"), json!("Brush"), json!(""), json!(1), json!(true)] {
+        refuses_with(&mut s, "path.freehand", &with(&stroke, json!({ "style": style })), "style must be \"pencil\" or \"brush\"");
+    }
+    let from_end = json!({"points": [[200, 100], [250, 150], [300, 100]]});
+    for end in [json!("middle"), json!("START"), json!(""), json!(0), json!(false)] {
+        let p = with(&from_end, json!({"extend": {"id": a.0, "end": end}}));
+        refuses_with(&mut s, "path.freehand", &p, "extend end must be \"start\" or \"end\"");
+    }
+    assert_eq!((paths(&s).len(), path(&s, a).anchor_count()), (1, 2), "refused: nothing changed");
+    for style in [json!("pencil"), json!("brush"), json!(null)] {
+        s.execute("path.freehand", &with(&stroke, json!({ "style": style }))).unwrap();
+    }
+    assert_eq!(paths(&s).len(), 4);
+    for end in [json!(null), json!("end")] {
+        let mut s = session();
+        let a = line(&mut s, 100.0, 100.0, 200.0, 100.0);
+        s.execute("path.freehand", &with(&from_end, json!({"extend": {"id": a.0, "end": end}}))).unwrap();
+        let sp = &path(&s, a).subpaths[0];
+        assert_eq!((sp.anchors[0].p, sp.anchors[sp.anchors.len() - 1].p), (Point::new(100.0, 100.0), Point::new(300.0, 100.0)), "{end}");
+    }
+    let mut s = session();
+    let a = line(&mut s, 100.0, 100.0, 200.0, 100.0);
+    s.execute("path.freehand", &json!({"points": [[100, 100], [50, 150], [0, 100]], "extend": {"id": a.0, "end": "start"}})).unwrap();
+    let ends: Vec<Point> = path(&s, a).subpaths[0].anchors.iter().map(|x| x.p).collect();
+    assert!(ends.contains(&Point::new(0.0, 100.0)) && ends.contains(&Point::new(200.0, 100.0)), "continued from its start: {ends:?}");
+}
+
+/// `path.freehand` refuses a `connect` without `extend`, and checks a `connect` given with `extend`
+/// before a stroke of one point returns, so a bad one is refused there too; a refused call changes
+/// neither the document nor the undo history. A `connect` of null is a key left out.
+#[test]
+fn pencil_refuses_connect_without_extend_and_a_bad_connect_for_one_point() {
+    let mut s = session();
+    let a = line(&mut s, 100.0, 100.0, 200.0, 100.0);
+    let b = line(&mut s, 300.0, 200.0, 400.0, 200.0);
+    let closed = NodeId(s.execute("path.create", &json!({"d": "M0 500 L50 500 L50 550 Z"})).unwrap()["id"].as_u64().unwrap());
+    let inner = NodeId(s.execute("path.create", &json!({"d": "M600 500 L650 500"})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [inner.0]})).unwrap();
+    let group = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let stroke = json!({"points": [[200, 100], [250, 150], [300, 200]]});
+    for connect in [json!({"id": b.0, "end": "start"}), json!({"id": b.0, "end": "middle"}), json!({"id": b.0}), json!({})] {
+        refuses_with(&mut s, "path.freehand", &with(&stroke, json!({ "connect": connect })), "connect needs extend");
+        refuses_with(&mut s, "path.freehand", &with(&stroke, json!({"extend": null, "connect": connect})), "connect needs extend");
+    }
+    let refused = |s: &mut Session, p: &serde_json::Value| {
+        let before = s.doc().unwrap().doc.clone();
+        let undo = undo_steps(s);
+        assert!(s.execute("path.freehand", p).is_err(), "{p}");
+        assert!(s.doc().unwrap().doc == before, "{p} changed the document");
+        assert_eq!(undo_steps(s), undo, "{p} left an undo step");
+    };
+    refused(&mut s, &with(&stroke, json!({"connect": "b"})));
+    let one = json!({"points": [[200, 100]], "extend": {"id": a.0, "end": "end"}});
+    let end = "connect end must be \"start\" or \"end\"";
+    for e in [json!("middle"), json!(1), json!(null)] {
+        refuses_with(&mut s, "path.freehand", &with(&one, json!({"connect": {"id": b.0, "end": e}})), end);
+    }
+    refuses_with(&mut s, "path.freehand", &with(&one, json!({"connect": {"id": b.0}})), end);
+    refuses_with(&mut s, "path.freehand", &with(&one, json!({"connect": {"end": "end"}})), "connect needs id");
+    refuses_with(&mut s, "path.freehand", &with(&one, json!({"connect": {"id": "b", "end": "end"}})), "`id` must be a whole number");
+    let other = "connect needs a path other than the one extended";
+    refuses_with(&mut s, "path.freehand", &with(&one, json!({"connect": {"id": a.0, "end": "end"}})), other);
+    refuses_with(&mut s, "path.freehand", &with(&one, json!({"connect": {"id": closed.0, "end": "end"}})), "connect path has no open end");
+    for p in [
+        with(&one, json!({"connect": "b"})),
+        with(&one, json!({"connect": {"id": 999_999, "end": "end"}})),
+        with(&one, json!({"connect": {"id": group.0, "end": "end"}})),
+    ] {
+        refused(&mut s, &p);
+    }
+    assert_eq!((paths(&s).len(), path(&s, a).anchor_count(), path(&s, b).anchor_count()), (4, 2, 2), "refused: nothing changed");
+    // A good `connect`, or a null one, on a stroke of one point leaves the path as it was.
+    let undo = undo_steps(&s);
+    for connect in [json!({"id": b.0, "end": "start"}), json!(null)] {
+        assert_eq!(s.execute("path.freehand", &with(&one, json!({ "connect": connect }))).unwrap()["id"], json!(a.0));
+    }
+    assert_eq!((path(&s, a).anchor_count(), undo_steps(&s)), (2, undo));
+    // Null without `extend`, `connect` is left out, and the stroke draws a new path.
+    s.execute("path.freehand", &with(&stroke, json!({"connect": null}))).unwrap();
+    assert_eq!(paths(&s).len(), 5);
 }
 
 /// With Keep selected off, a compound path whose direct-selected anchors all lie on the subpath
@@ -3138,6 +3277,30 @@ fn blob_and_eraser_size_and_variation_outside_their_ranges_are_refused() {
                 s.execute(cmd, &at(extra.clone())).unwrap_or_else(|e| panic!("{cmd} {extra}: {e}"));
             }
         }
+    }
+}
+
+/// `path.eraseSegments` refuses a `width` outside 0.001 to 1000 pt, and nothing changes. The ends of
+/// the range and null still erase.
+#[test]
+fn path_eraser_width_outside_its_range_is_refused() {
+    let mut s = session();
+    let id = rect(&mut s, 100.0, 100.0, 100.0, 100.0);
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let drag = json!({"points": [[150, 90], [150, 110]]});
+    for x in [json!(0), json!(-1), json!(0.0009), json!(1e-300), json!(1000.01), json!(1e300)] {
+        let sel = s.doc().unwrap().selection.clone();
+        refuses_with(&mut s, "path.eraseSegments", &with(&drag, json!({"width": x})), "`width` must be from 0.001 to 1000");
+        assert_eq!(s.doc().unwrap().selection, sel, "width {x} changed the selection");
+    }
+    for x in [json!(0.001), json!(1000), json!(null)] {
+        let before = s.doc().unwrap().doc.clone();
+        let undo = undo_steps(&s);
+        s.execute("path.eraseSegments", &with(&drag, json!({"width": x}))).unwrap_or_else(|e| panic!("width {x}: {e}"));
+        assert!(s.doc().unwrap().doc != before, "width {x} erased nothing");
+        assert_eq!(undo_steps(&s), undo + 1, "width {x}");
+        s.execute("edit.undo", &json!({})).unwrap();
+        s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
     }
 }
 
@@ -6184,14 +6347,20 @@ fn pencil_at_the_lowest_fidelity_takes_degenerate_strokes() {
     }
 }
 
-/// The Pencil's Fidelity option takes 0.01, and the Smooth tool's stays at 0.05 or more.
+/// The Pencil's Fidelity option takes 0.01, and the Smooth tool's 0.05 or more: a lower Fidelity is
+/// an error that leaves the option as it was.
 #[test]
 fn pencil_option_takes_a_hundredth_and_smooth_keeps_its_floor() {
     let mut s = session();
-    for (tool, want) in [("pencil", 0.01), ("paintbrush", 0.01), ("smooth", 0.05)] {
-        s.set_tool_option_cmd(&json!({"tool": tool, "values": {"fidelity": 0.001}})).unwrap();
-        assert_eq!(s.tool_options_of(tool)["fidelity"].as_f64(), Some(want), "{tool}");
-        s.set_tool_option_cmd(&json!({"tool": tool, "values": {"fidelity": 0.02}})).unwrap();
+    for (tool, floor) in [("pencil", 0.01), ("paintbrush", 0.01), ("smooth", 0.05)] {
+        let before = s.tool_options_of(tool)["fidelity"].clone();
+        let e = s.set_tool_option_cmd(&json!({"tool": tool, "values": {"fidelity": 0.001}})).unwrap_err();
+        assert_eq!(e, format!("tool `{tool}`: `fidelity` must be a number from {floor} to 100"));
+        assert_eq!(s.tool_options_of(tool)["fidelity"], before, "{tool}");
+        s.set_tool_option_cmd(&json!({"tool": tool, "values": {"fidelity": floor}})).unwrap();
+        assert_eq!(s.tool_options_of(tool)["fidelity"].as_f64(), Some(floor), "{tool}");
+        let hundredth = s.set_tool_option_cmd(&json!({"tool": tool, "values": {"fidelity": 0.02}}));
+        assert_eq!(hundredth.is_ok(), tool != "smooth", "{tool}");
         assert_eq!(s.tool_options_of(tool)["fidelity"].as_f64(), Some(if tool == "smooth" { 0.05 } else { 0.02 }), "{tool}");
     }
 }
