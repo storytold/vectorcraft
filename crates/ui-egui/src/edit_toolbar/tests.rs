@@ -207,7 +207,7 @@ fn the_commands_add_move_remove_and_reset_tools() {
     assert_eq!(slots(&app)[2], ["slice"]);
     let ellipse = slot_of(&app, "ellipse").unwrap();
     app.run("toolbar.addTool", json!({"tool": "star", "slot": ellipse, "place": "group"})).unwrap();
-    assert_eq!(slots(&app)[ellipse], ["ellipse", "star"]);
+    assert_eq!(slots(&app)[ellipse], ["ellipse", "circle", "star"]);
     assert!(!slots(&app)[slot_of(&app, "rectangle").unwrap()].contains(&"star"));
     // Onto its own group: nothing changes.
     let before = slots(&app);
@@ -217,7 +217,7 @@ fn the_commands_add_move_remove_and_reset_tools() {
     assert_eq!(crate::toolbar::slots(&app)[0].0, Some("Select"));
     // Out: one tool, or its whole group; an emptied slot goes.
     app.run("toolbar.removeTool", json!({"tool": "ellipse"})).unwrap();
-    assert_eq!(slots(&app)[ellipse], ["star"]);
+    assert_eq!(slots(&app)[ellipse], ["circle", "star"]);
     app.run("toolbar.removeTool", json!({"tool": "addAnchor", "group": true})).unwrap();
     assert!(slot_of(&app, "pen").is_none() && slot_of(&app, "addAnchor").is_none());
     // Bad params change nothing.
@@ -398,7 +398,7 @@ fn tools_drag_between_the_drawer_and_the_toolbar() {
     let drawer = drawer_rect(&ctx).unwrap();
     let (slice, _) = cell_at(&shown, drawer, "Slice Tool");
     drag(&mut app, &ctx, 2.0, slice, tools[ellipse].center());
-    assert_eq!(slots(&app)[ellipse], ["ellipse", "slice"]);
+    assert_eq!(slots(&app)[ellipse], ["ellipse", "circle", "slice"]);
     // A dimmed tool (in the toolbar already) doesn't drag.
     let before = slots(&app);
     let shown = frame(&mut app, &ctx, 2.9, vec![]);

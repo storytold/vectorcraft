@@ -1009,6 +1009,11 @@ fn structured_junk() {
         ("addon.pathtools.expandDashes", json!({})),
         ("addon.pathtools.expandDashes", json!({"ids": [0, 1, 2, 3, u64::MAX]})),
         ("addon.pathtools.expandDashes", json!({"ids": "x", "junk": f64::MAX})),
+        ("addon.pathtools.bridge", json!({"radius": 1e-308, "keepOriginals": "x"})),
+        ("addon.pathtools.bridge", json!({"radius": 1000, "keepOriginals": true, "ids": [0, 1, 2, 3, u64::MAX]})),
+        ("addon.pathtools.bridge", json!({"radius": f64::MAX, "ids": [1, 1], "junk": [0]})),
+        ("addon.pathtools.bridge", json!({"gap": -1e308, "reach": f64::MAX, "ids": [0, 1, 2]})),
+        ("addon.pathtools.bridge", json!({"gap": 1000, "reach": 10000, "radius": null, "keepOriginals": true})),
         // Refused before anything is written: no format of that name, a time that is no time.
         ("addon.document.saveTimestampedCopy", json!({"format": "png", "folder": 7})),
         ("addon.document.saveTimestampedCopy", json!({"format": "svg", "time": [1e308], "folder": null})),
@@ -1265,6 +1270,36 @@ fn polygon_properties_junk() {
                 Ok(_) => {
                     if let Err(e) = catch_quiet(|| check_all(&mut s)).unwrap_or_else(|m| Err(format!("panic in checks: {m}"))) {
                         failures.push(format!("object.setLiveShape {p} [{scale:?}]: {e}"));
+                    }
+                }
+            }
+        }
+    }
+    assert!(failures.is_empty(), "{} failures:\n{}", failures.len(), failures.join("\n"));
+}
+
+/// A live line's Line Properties with junk values (the fixtures have no line), on a line, a line
+/// whose ends meet and one at the coordinate limit: never a panic, and the document stays sound.
+#[test]
+fn line_properties_junk() {
+    let mut cases: Vec<Value> = vec![json!({"lineLength": 4.0e6, "lineAngle": 45})];
+    for key in ["lineLength", "lineAngle"] {
+        for v in junk_values() {
+            cases.push(json!({ key: v }));
+        }
+    }
+    let mut failures = vec![];
+    for (a, b) in [((10.0, 20.0), (110.0, 70.0)), ((50.0, 50.0), (50.0, 50.0)), ((-4.0e6, 4.0e6), (4.0e6, -4.0e6))] {
+        for p in &cases {
+            let mut s = Fixture::Multi.session();
+            let Ok(_) = no_panic(s.execute("shape.line", &json!({"x1": a.0, "y1": a.1, "x2": b.0, "y2": b.1}))) else {
+                continue;
+            };
+            match catch_quiet(|| no_panic(s.execute("object.setLiveShape", p))) {
+                Err(m) => failures.push(format!("PANIC object.setLiveShape {p} [{a:?} {b:?}]: {m}")),
+                Ok(_) => {
+                    if let Err(e) = catch_quiet(|| check_all(&mut s)).unwrap_or_else(|m| Err(format!("panic in checks: {m}"))) {
+                        failures.push(format!("object.setLiveShape {p} [{a:?} {b:?}]: {e}"));
                     }
                 }
             }
