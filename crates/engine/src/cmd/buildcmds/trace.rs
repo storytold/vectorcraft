@@ -58,9 +58,10 @@ fn view_param(cmd: &str, p: &Value) -> Result<Option<TraceView>> {
     v.as_str().and_then(TraceView::from_id).map(Some).ok_or_else(|| bad(cmd, format!("view must be one of {}", ids())))
 }
 
-/// The `split` param (the Split view's divider, 0 to 1), if given.
+/// The `split` param (the Split view's divider, 0 to 1), if given. A null divider is an error, as
+/// any other value that is not such a number is; only an omitted one keeps the divider.
 fn split_param(cmd: &str, p: &Value) -> Result<Option<f64>> {
-    let Some(v) = p.get("split").filter(|v| !v.is_null()) else { return Ok(None) };
+    let Some(v) = p.get("split") else { return Ok(None) };
     v.as_f64().filter(|f| (0.0..=1.0).contains(f)).map(Some).ok_or_else(|| bad(cmd, "split must be a number from 0 to 1"))
 }
 
