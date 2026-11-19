@@ -14,7 +14,10 @@ repository = "https://github.com/storytold/vectorcraft"
 craft-pdf = { git = "https://github.com/storytold/craft-libs", rev = "64b181977a0488e4d1e167bc5cc8cfededc2ed4b", default-features = false, features = ["interpret", "write"] }
 craft-print = { git = "https://github.com/storytold/craft-libs", rev = "64b181977a0488e4d1e167bc5cc8cfededc2ed4b" }
 craft-docpath = { version = "0.1.0", git = "https://github.com/storytold/craft-libs", rev = "64b181977a0488e4d1e167bc5cc8cfededc2ed4b" }
-craft-ui = { git = "https://github.com/storytold/craft-libs", rev = "64b181977a0488e4d1e167bc5cc8cfededc2ed4b", features = ["serde"] }
+# The cloud feature draws the shared Open, Save and Share pages (storytold/craft-libs#160). Pinned
+# to the same revision as craft-cloud below, so the pages and the vocabulary they draw from are
+# never two different cuts of the contract.
+craft-ui = { git = "https://github.com/storytold/craft-libs", rev = "52fc6b5b3d2179239664136e84543231f8576f8d", features = ["serde", "cloud"] }
 craft-keymap = { git = "https://github.com/storytold/craft-libs", rev = "64b181977a0488e4d1e167bc5cc8cfededc2ed4b" }
 craft-proof = { git = "https://github.com/storytold/craft-libs", rev = "64b181977a0488e4d1e167bc5cc8cfededc2ed4b" }
 # Decides who draws the window frame (desktop vs. app) so the suite shares one native titlebar per
@@ -45,6 +48,10 @@ craft-psd = { git = "https://github.com/storytold/craft-libs", rev = "64b181977a
 craft-stream-codecs = { git = "https://github.com/storytold/craft-libs", rev = "64b181977a0488e4d1e167bc5cc8cfededc2ed4b" }
 craft-jxl = { git = "https://github.com/storytold/craft-libs", rev = "64b181977a0488e4d1e167bc5cc8cfededc2ed4b" }
 craft-update = { git = "https://github.com/storytold/craft-libs", version = "=0.1.0", rev = "64b181977a0488e4d1e167bc5cc8cfededc2ed4b", features = ["egui"] }
+# The vendor-neutral cloud vocabulary (a file entry, a capability). Types and contracts only: the
+# crate opens no socket and names no provider, so this builds for the web too. Same revision as
+# craft-ui above. Nothing in Cargo.lock comes from outside storytold.
+craft-cloud = { git = "https://github.com/storytold/craft-libs", rev = "52fc6b5b3d2179239664136e84543231f8576f8d" }
 # internal
 vectorcraft-geom = { path = "crates/geom" }
 vectorcraft-color = { path = "crates/color" }

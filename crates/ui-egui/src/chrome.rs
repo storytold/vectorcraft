@@ -101,8 +101,13 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
             let ws = ui.painter().layout_no_wrap(ws_name, egui::FontId::proportional(12.0), t.text);
             let shortcut = menus::shortcut_of("help.commandPalette").map(menus::shown_shortcut);
             let field = SearchField::new(ui, &t, shortcut);
+            // The account badge draws before the rest of this group and is never measured exactly
+            // here (its width follows the signed-in name, which this pass has not drawn yet). A
+            // fixed estimate wide enough for a short display name or the sign-in spinner keeps the
+            // budget below from claiming room the badge has already taken.
+            let cloud_w = if crate::cloud::available(app) { 150.0 + ui.spacing().item_spacing.x } else { 0.0 };
             let fit = fit_right_group(&RightWidths {
-                room: (right.width() - safe_w).max(0.0),
+                room: (right.width() - safe_w - cloud_w).max(0.0),
                 safe_mode: safe.is_some(),
                 switcher: (ws.size().x + 36.0).clamp(112.0, 190.0),
                 field: field.width,
@@ -113,6 +118,28 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
             let (switcher, ws_w, arrange, learn, discord) = (fit.switcher, fit.switcher_w, fit.arrange, fit.learn, fit.community);
             let mut rui = ui.new_child(egui::UiBuilder::new().max_rect(right).layout(egui::Layout::right_to_left(egui::Align::Center)));
             let ui = &mut rui;
+            // Who is signed in to cloud storage, and Share, drawn first in this right-to-left
+            // group so a build with no service configured (`available` is always false until a
+            // host connects one) subtracts nothing from the room the rest divides up.
+            if crate::cloud::available(app) {
+                crate::cloud::who(app, ui);
+                if crate::cloud::shares(app) {
+                    // Progressive hiding, like Discord: the Share split button is suppressed when
+                    // the right panel is too narrow to also keep a usable workspace switcher. The
+                    // account badge stays reachable at all widths; Window → Share… still reaches
+                    // sharing when the chrome button is hidden.
+                    let room_after_who = ui.available_width();
+                    if room_after_who >= 164.0 {
+                        ui.add_space(8.0);
+                        // A split button, drawn by craft-ui so every Craft app offers the same one.
+                        // Only the Save a Copy formats under the chevron are VectorCraft's own.
+                        if let Some(format) = crate::cloud::share_button(app, ui, &crate::cloud::copies()) {
+                            app.run("file.saveCopy", json!({"format": format})).ok();
+                        }
+                    }
+                }
+                ui.add_space(8.0);
+            }
             // Workspace switcher: shows the current workspace, opens Window → Workspace.
             if switcher {
                 let (wr, wresp) = ui.allocate_exact_size(vec2(ws_w, WIDGET_H), Sense::click());

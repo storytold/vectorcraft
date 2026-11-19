@@ -36,6 +36,27 @@ impl VectorcraftApp {
         self.ui.answering_control || self.synthetic_frame
     }
 
+    /// Keep a URL a control asked for while the window was being drawn ([`crate::cloud`]).
+    ///
+    /// A paint call holds a shared borrow, and [`Self::open_url`] wants a mutable one because the
+    /// host's own opener is `FnMut`. So the URL waits one step rather than the opener being made
+    /// reachable from everywhere.
+    pub(crate) fn queue_url(&self, url: &str) {
+        if let Ok(mut queue) = self.cloud_urls.try_borrow_mut() {
+            queue.push(url.to_owned());
+        }
+    }
+
+    /// Open what [`Self::queue_url`] kept. Once a frame, before anything is drawn.
+    pub(super) fn open_queued_urls(&mut self) {
+        let queued = self.cloud_urls.try_borrow_mut().map(|mut q| std::mem::take(&mut *q)).unwrap_or_default();
+        for url in queued {
+            if let Err(e) = self.open_document_url(&url) {
+                self.ui.status = e;
+            }
+        }
+    }
+
     /// Did automation ask for what is being handled now: [`Self::automation_is_acting`], or the
     /// answer of a file dialog that automation opened ([`crate::picks::as_automated`]), even when a
     /// person picked the file in it?
