@@ -12171,8 +12171,9 @@ path selected it is an error.
 Window › Retype shows the Retype panel. Find Matching Fonts runs `retype.find {}`, which shows the panel, ranks up to
 96 fonts and lists the first ten. Find more font matches, at the end of the list when `more` is true, runs
 `retype.find {more: true}`, which adds the next five fonts that search found, whatever is selected now. Before any
-search, `retype.find {more: true}` runs a first search. A search that fails is an error and leaves the list as it
-was. Each row shows the font's family and style over a sample of the font. While live type is selected or edited, a
+search, `retype.find {more: true}` runs a first search. With `more` false, omitted or null, `retype.find` runs a new
+search; any other value than true, false or null is an error. A search that fails is an error and leaves the list as
+it was. Each row shows the font's family and style over a sample of the font. While live type is selected or edited, a
 click on a row sets that font on it, as the font menus do; live type inside a selected group counts too. The list
 stays when the selection changes.
 
