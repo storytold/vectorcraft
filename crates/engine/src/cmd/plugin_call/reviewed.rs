@@ -463,6 +463,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "path.mirrorCut",
     "path.moveAnchor",
     "path.moveAnchors",
+    "path.quickPen",
     "path.rectCut",
     "path.removeAnchor",
     "path.removeAnchors",

@@ -6754,6 +6754,8 @@ theme	Appearance	Udseende
 	Paste Offset	Indsætningsforskydning
 	Pattern Editing	Mønsterredigering
 	Pen Tool	Pen-værktøj
+	Quick Pen Tool	Hurtigpen-værktøj
+	Quick Pen	Hurtigpen
 	Picas	Pica
 	Portuguese	Portugisisk
 	Preserve Appearance and Overprints	Bevar udseende og overprint
@@ -7949,6 +7951,9 @@ imageTrace	Outline	Kontur
 @msg	no such saved selection	ingen sådan gemt markering
 @msg	no such segment	intet sådant segment
 @msg	no such subpath	ingen sådan delsti
+@msg	`pieces` must be a list of at most 10000 pieces	`pieces` skal være en liste med højst 10000 stykker
+@msg	give either `start` for a new path or `id`, not both	angiv enten `start` til en ny sti eller `id`, ikke begge
+@msg	`subpath` and `keep` need `id`	`subpath` og `keep` kræver `id`
 @msg	no such user library	intet sådant brugerbibliotek
 @msg	no such view	ingen sådan visning
 @msg	no such width point	intet sådant breddepunkt

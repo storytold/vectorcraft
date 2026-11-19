@@ -2821,6 +2821,8 @@ file-filter	Templates	Шаблони
 	PDF/A files carry their own output intent.	Файли PDF/A містять власне призначення.
 	PDF/X-1a files are CMYK: every colour is converted to the destination (blank: the output intent's CMYK profile), untagged.	Файли PDF/X-1a використовують CMYK: кожен колір перетворюється на цільовий (порожньо: профіль CMYK призначення виведення) без позначки.
 	Pen Tool	Інструмент «Перо»
+	Quick Pen Tool	Інструмент «Швидке перо»
+	Quick Pen	Швидке перо
 	Pencil	Олівець
 	Pencil Tool	Інструмент «Олівець»
 	per slice	на фрагмент
@@ -5464,6 +5466,9 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	`link` places a handle: give `handle`	`link` розміщує маркер: укажіть `handle`
 @msg	no such spine segment	такого сегмента осі немає
 @msg	no such subpath	такого вкладеного контуру немає
+@msg	`pieces` must be a list of at most 10000 pieces	`pieces` має бути списком щонайбільше з 10000 фрагментів
+@msg	give either `start` for a new path or `id`, not both	вкажіть або `start` для нового контуру, або `id`, але не обидва
+@msg	`subpath` and `keep` need `id`	для `subpath` і `keep` потрібен `id`
 @msg	no such user library	такої користувацької бібліотеки немає
 @msg	no such view	такого виду немає
 @msg	no such width point	такої точки ширини немає

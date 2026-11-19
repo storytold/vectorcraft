@@ -380,6 +380,39 @@ fn alt_chords_outside_text_editing_type_nothing() {
     }
 }
 
+/// Alt+P (Option+P on macOS, which types π) chooses the Quick Pen tool, and is no Alt tap. Alt
+/// then pressed and let go on its own switches the tool to its next action; Alt let go after a
+/// click does not.
+#[test]
+fn alt_p_chooses_the_quick_pen_and_an_alt_tap_switches_its_action() {
+    // One headless frame with `modifiers` held at its end.
+    fn held(app: &mut VectorcraftApp, modifiers: Modifiers, mut events: Vec<egui::Event>) {
+        events.insert(0, egui::Event::ModifiersChanged(modifiers));
+        let ctx = egui::Context::default();
+        let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| {
+            app.logic(ui.ctx());
+            handle(app, ui.ctx());
+        });
+        out.textures_delta.clear();
+    }
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    crate::shortcut_editor::sync(&app.ui);
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    held(&mut app, Modifiers::ALT, alt_press(Key::P, false, Some("\u{3c0}")));
+    assert_eq!(app.session.tool_id(), vectorcraft_tools::quickpen::ID);
+    held(&mut app, Modifiers::NONE, vec![]);
+    assert_eq!(app.session.tool_options()["action"], "line", "Alt+P is no tap");
+    held(&mut app, Modifiers::ALT, vec![]);
+    held(&mut app, Modifiers::NONE, vec![]);
+    assert_eq!(app.session.tool_options()["action"], "continuousArc");
+    held(&mut app, Modifiers::ALT, vec![]);
+    let click =
+        egui::Event::PointerButton { pos: egui::pos2(5.0, 5.0), button: egui::PointerButton::Primary, pressed: true, modifiers: Modifiers::ALT };
+    held(&mut app, Modifiers::ALT, vec![click]);
+    held(&mut app, Modifiers::NONE, vec![]);
+    assert_eq!(app.session.tool_options()["action"], "continuousArc", "a click in between");
+}
+
 /// Cmd as egui reports it on this platform: the Command key on macOS, Ctrl elsewhere.
 fn cmd() -> Modifiers {
     if crate::keymap::platform().is_mac() { Modifiers::MAC_CMD | Modifiers::COMMAND } else { Modifiers::CTRL | Modifiers::COMMAND }

@@ -2924,6 +2924,8 @@ antiAlias	Sharp	シャープ
 	Pattern Editing	パターン編集
 	Pattern options are available in pattern editing mode.	パターンオプションはパターン編集モードで使用できます。
 	Pen Tool	ペンツール
+	Quick Pen Tool	クイックペンツール
+	Quick Pen	クイックペン
 	Pencil	鉛筆
 	Pencil Tool	鉛筆ツール
 	Percent:	パーセント:
@@ -5024,6 +5026,9 @@ variable-list-end	{0}, {1}	{0}、{1}
 @msg	`link` places a handle: give `handle`	`link` はハンドルを配置します：`handle` を指定してください
 @msg	no such spine segment	指定されたスパインセグメントが見つかりません
 @msg	no such subpath	指定されたサブパスが見つかりません
+@msg	`pieces` must be a list of at most 10000 pieces	`pieces` には最大 10000 個のピースのリストを指定してください
+@msg	give either `start` for a new path or `id`, not both	新しいパスの `start` か `id` のどちらか一方だけを指定してください
+@msg	`subpath` and `keep` need `id`	`subpath` と `keep` には `id` が必要です
 @msg	object {id} is not a path	オブジェクト {id} はパスではありません
 @msg	object {id} is not a selected top-level object	オブジェクト {id} は選択されている最上位のオブジェクトではありません
 @msg	nothing to redo	やり直す操作がありません

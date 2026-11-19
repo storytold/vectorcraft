@@ -2673,6 +2673,8 @@ file-filter	Templates	模板
 	PDF/A files carry their own output intent.	PDF/A 文件自带输出意图。
 	PDF/X-1a files are CMYK: every colour is converted to the destination (blank: the output intent's CMYK profile), untagged.	PDF/X-1a 文件为 CMYK：所有颜色都会转换至目的地 (留空：输出意图的 CMYK 配置文件)，且不加标记。
 	Pen Tool	钢笔工具
+	Quick Pen Tool	快速钢笔工具
+	Quick Pen	快速钢笔
 	Pencil	铅笔
 	Pencil Tool	铅笔工具
 	per slice	每个切片
@@ -4713,6 +4715,9 @@ imageTrace	Outline	轮廓
 @msg	no such anchor	没有此锚点
 @msg	no such segment	没有此线段
 @msg	no such subpath	没有此子路径
+@msg	`pieces` must be a list of at most 10000 pieces	`pieces` 必须是最多 10000 个片段的列表
+@msg	give either `start` for a new path or `id`, not both	请为新路径指定 `start`，或指定 `id`，不能同时指定
+@msg	`subpath` and `keep` need `id`	`subpath` 和 `keep` 需要 `id`
 @msg	object {id} is not a path	对象 {id} 不是路径
 @msg	object {id} is not a selected top-level object	对象 {id} 不是选中的顶层对象
 @msg	nothing to redo	没有可重做的操作
