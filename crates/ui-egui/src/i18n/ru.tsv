@@ -1717,6 +1717,10 @@ file-filter	Templates	Шаблоны
 	Add Color Tool	Инструмент «Добавить цвет»
 	Remove Color Tool	Инструмент «Удалить цвет»
 	Remove Color	Удалить цвет
+	Set As Base Color	Сделать базовым цветом
+	Select Shade	Выбрать оттенок
+	Add New Color	Добавить новый цвет
+	Set Current Color As Base Color	Сделать текущий цвет базовым
 	Find the selected colors in the artwork	Найти выбранные цвета в рисунке
 	Harmony Sets	Наборы гармонии
 	Height	Высота
@@ -2130,6 +2134,7 @@ file-filter	Templates	Шаблоны
 	Limit to Library:	Ограничить библиотекой:
 	Limit:	Предел:
 	Line	Линия
+	Line Arrow	Линейная стрелка
 	Line Art and Text Resolution:	Разрешение штрихового рисунка и текста:
 	Line Breaks	Разрывы строк
 	Line Color	Цвет линии
@@ -2893,6 +2898,11 @@ diagnostics	ui	интерфейс
 	Preserve Alpha Transparency	Сохранять альфа-прозрачность
 	Preserve Appearance and Overprints	Сохранять оформление и наложения
 	Preserve CMYK Numbers	Сохранять значения CMYK
+	Preserve RGB Numbers	Сохранять значения RGB
+	Device to Simulate:	Имитируемое устройство:
+	Simulate Paper Color	Имитировать цвет бумаги
+	Simulate Black Ink	Имитировать чёрную краску
+	Load…	Загрузить…
 	Preserve Editing Capabilities	Сохранять возможности редактирования
 	Preserve editing capabilities	Сохранять возможности редактирования
 	Preserve Lightness	Сохранять светлоту
@@ -3396,6 +3406,7 @@ digits	Malayalam	Малаялам
 	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	Новый текст получает этот язык, пока в «Параметрах документа» выбран язык Английский: США; текст, который уже есть в документе, сохраняет свой язык.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	В абзацах с включённым параметром «Расставлять переносы» слово из списка переносится только по введённым в нём дефисам или нигде, если их нет, независимо от языка и регистра.
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	В настольной версии модули .wasm из этой папки загружаются при запуске и при нажатии ОК с новой папкой здесь, кроме безопасного режима; веб-версия их не загружает.
+	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	Сколько инструкций может использовать каждый запуск фильтра объектов из модуля; «Большой» разрешает больше, чем «Обычный», при том же ограничении в 60 секунд. Тяжёлые фильтры сохраняют свой бюджет.
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Первый выбор рабочего диска: Startup, None или путь к папке; VectorCraft сохраняет его, но пока не использует рабочие диски.
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Второй выбор рабочего диска: Startup, None или путь к папке; VectorCraft сохраняет его, но пока не использует рабочие диски.
 	How light or dark the interface is.	Насколько светлый или тёмный интерфейс.
@@ -3414,6 +3425,7 @@ digits	Malayalam	Малаялам
 	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	Анимированное масштабирование работает, только пока это включено; если выключено, Анимированное масштабирование затенено и масштабирование не анимируется.
 	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	Масштабирование колесом идёт плавно, а Инструмент «Масштаб» масштабирует, пока вы тянете вбок или удерживаете его; если выключено, он масштабирует до области, по которой вы протянули.
 	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	Со следующего запуска настольная версия рисует этим типом графического процессора; «Автоматически» предпочитает тот, что управляет дисплеем. Веб-версия его не использует.
+	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	Со следующего запуска окно показывает кадры, не дожидаясь обновления дисплея, не более 240 в секунду; если выключено, темп задаёт дисплей. Режим вывода, заданный при запуске, имеет приоритет.
 	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	Наибольшее число шагов отмены, которое хранит каждый документ; меньшее число удаляет самые старые шаги при нажатии ОК. Шаги могут уйти и раньше, если занимают слишком много памяти.
 	Shows the artwork changing while you drag; off, outlines follow the drag and the artwork changes when you release. A ruler guide always moves as you drag.	Показывает, как меняется графика, пока вы тянете; если выключено, за перетаскиванием следуют контуры, а графика меняется, когда вы отпускаете. Направляющая с линейки всегда движется при перетаскивании.
 	How many worker threads draw the artwork; -1 uses one fewer than the cores VectorCraft may use, at most 8, and 0 uses none. The web version always uses none.	Сколько рабочих потоков рисуют графику; -1 использует на один меньше, чем ядер, доступных VectorCraft, не более 8, а 0 ни одного. Веб-версия не использует их никогда.
@@ -3440,6 +3452,10 @@ digits	Malayalam	Малаялам
 	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft сохраняет этот выбор, но Копировать и Вырезать пока не используют формат устаревшего векторного буфера обмена.
 	Preserve Paths or Preserve Appearance and Overprints for the legacy vector clipboard; VectorCraft stores the choice but does not use it yet.	Сохранять контуры или Сохранять оформление и наложения для устаревшего векторного буфера обмена; VectorCraft сохраняет выбор, но пока не использует его.
 	Keep Formatting keeps the styles of text copied from VectorCraft type when it is pasted into type; Keep Plain Text gives it the style where it lands.	Сохранять форматирование сохраняет стили текста, скопированного из текстового объекта VectorCraft, при вставке в текстовый объект; Сохранять простой текст даёт ему стиль места вставки.
+	Display All Blacks as Rich Black shows pure CMYK black (black ink alone at 100%) as RGB black on the canvas; Display All Blacks Accurately converts it through the CMYK working space.	Отображать все чёрные как составной чёрный показывает чистый чёрный CMYK (только чёрная краска на 100 %) на холсте как чёрный RGB; Отображать все чёрные точно преобразует его через рабочее пространство CMYK.
+	Output All Blacks as Rich Black draws pure CMYK black as RGB black in RGB and grayscale raster exports and Print as Bitmap; it does not change vector exports, CMYK JPEG, TIFF and PSD, or other printing.	Выводить все чёрные как составной чёрный рисует чистый чёрный CMYK как чёрный RGB в растровых экспортах RGB и в оттенках серого и при «Печатать как растровое изображение»; векторные экспорты, JPEG, TIFF и PSD в CMYK и другую печать он не меняет.
+	On a touch screen, switches to the Touch workspace; turning this off, or losing the touch screen, goes back to the workspace it switched from.	На сенсорном экране переключает на сенсорную рабочую среду; при выключении или пропаже сенсорного экрана возвращает рабочую среду, которая была до переключения.
+	A two-finger tap on the canvas undoes, or switches between selection and drawing tools in the Touch workspace, and a three-finger tap redoes; neither works in Presentation Mode.	Касание двумя пальцами по холсту отменяет действие, а в сенсорной рабочей среде переключает между инструментами выделения и рисования; касание тремя пальцами повторяет. В режиме презентации ни одно не работает.
 	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	Новый текст получает этот язык, пока в «Параметрах документа» выбран язык Английский: США, а [Обычный стиль символа] не задаёт язык; текст, который уже есть в документе, сохраняет свой язык.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	В абзацах с включённым параметром «Расставлять переносы» слово из списка переносится только по введённым в нём дефисам или нигде, если их нет, независимо от регистра; корейские слова не получают дефис, а слова на индийских языках не переносятся внутри группы символов.
 	Reset all preferences to their defaults?	Сбросить все настройки до значений по умолчанию?
@@ -3684,6 +3700,7 @@ digits	Malayalam	Малаялам
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} из {n} результата. Продолжайте вводить, чтобы сузить их.|{shown} из {n} результатов. Продолжайте вводить, чтобы сузить их.|{shown} из {n} результатов. Продолжайте вводить, чтобы сузить их.
 	Recent Commands	Недавние команды
 	No recent commands	Нет недавних команд
+	Type to search commands, tools, panels and effects	Начните вводить для поиска команд, инструментов, панелей и эффектов
 	Search commands	Поиск команд
 	Search Commands…	Поиск команд…
 	Secondary	Вторичный
@@ -5422,6 +5439,7 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	no native format	нет собственного формата
 @msg	no pages	нет страниц
 @msg	no pattern `{name}`	нет узора `{name}`
+@msg	art painted with `{name}` can't be its tile	графика, окрашенная узором `{name}`, не может быть его плиткой
 @msg	no perspective grid preset named `{name}`	нет набора сетки перспективы с именем `{name}`
 @msg	no plug-in {0} is installed	модуль {0} не установлен
 @msg	no plug-in {id} is installed	модуль {id} не установлен
@@ -7592,6 +7610,8 @@ axis	Y Axis	Ось Y
 	Auto Size	Авторазмер
 	Bar	Черта
 	Barbed	С зазубриной
+arrowhead	Feather	Перо
+arrowhead	Target	Мишень
 	Baseline (Standard)	Базовый (стандартный)
 	Baseline Optimized	Базовый оптимизированный
 	Bicubic	Бикубическая
@@ -8285,6 +8305,7 @@ breakText	Glyphs	Глифы
 	Remove Strokes	Убрать обводки
 	Place Brush Art	Поместить рисунок кисти
 	Replace Brush Art	Заменить рисунок кисти
+	Replace Pattern Art	Заменить рисунок узора
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Обводки используют эту кисть. Применить новый рисунок к этим обводкам или оставить их как есть и добавить копию кисти с новым рисунком?
 	Apply to Strokes	Применить к обводкам
 	Leave Strokes	Оставить обводки
@@ -10772,6 +10793,11 @@ shape	Open	Открытый
 @msg	Two panels pass through each other.	Две панели проходят друг сквозь друга.
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} пикселей — слишком большой размер для PSD (не более {MAX_SIDE} пикселей по стороне): уменьшите разрешение
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer должен быть "singleLine", "everyLine", "standardSingleLine" или "standardEveryLine"
+	Engraving	Гравировка
+	Fine Hatching	Тонкая штриховка
+	Dense Hatching	Плотная штриховка
+	Tapered Hatching	Сужающаяся штриховка
+	Broken Hatching	Прерывистая штриховка
 	Image Brush	Кисти изображений
 	Soft Bloom	Мягкое цветение
 	Halftone Field	Полутоновое поле

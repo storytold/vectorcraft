@@ -82,6 +82,26 @@ fn set_options(ctx: &egui::Context, f: impl FnOnce(&mut Options)) {
     set_pstate(ctx, "links-options", o);
 }
 
+/// Show the Links panel on the selected image (the Control bar's Linked File or Embedded label),
+/// wherever the panel is docked or floats; a panel that is already shown stays where it is. The
+/// Link Info section opens, and when the panel next draws the list, a Show filter that leaves out
+/// the image's row goes back to Show All and the list scrolls to the row ([`show`]). The sort,
+/// thumbnail size and DCS option keep their settings.
+pub(crate) fn show_selected_image(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    let first = selected_images(app).first().copied();
+    let request = app.session.active().map(|st| st.uid).zip(first);
+    set_pstate(ctx, "links-scroll-to", request);
+    // The list drawn next is read after this request, so a row a file change has just brought
+    // into the Show filter is there to scroll to.
+    let mut c: std::sync::Arc<Cache> = pstate(ctx, "links-cache");
+    std::sync::Arc::make_mut(&mut c).at = f64::NEG_INFINITY;
+    set_pstate(ctx, "links-cache", c);
+    set_options(ctx, |o| o.info = true);
+    if let Err(e) = crate::panel_docking::reveal_panel(app, ID) {
+        app.status(e);
+    }
+}
+
 /// The rows to show (cached per document revision, the files looked at again every [`RECHECK`]
 /// seconds) and the Link Info of the first selected image when the section is open. A frame that
 /// fetches nothing returns the stored cache without copying it and stores nothing.
@@ -577,12 +597,28 @@ fn click(app: &mut VectorcraftApp, ctx: &egui::Context, rows: &[Value], id: u64,
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
-    let o = options(ui.ctx());
+    let mut o = options(ui.ctx());
     super::layers::show_thumbs_of(app.session.active().map(|st| st.uid));
-    let Some(cache) = cached(app, ui.ctx(), &o) else {
+    let Some(mut cache) = cached(app, ui.ctx(), &o) else {
         widgets::dim_label(ui, tl!("No document"));
         return;
     };
+    // The row that `show_selected_image` asks for, used by this draw only and only in the document
+    // it was asked in. A Show filter that leaves the row out goes back to Show All, decided from the
+    // rows this frame draws and scrolls through.
+    let request: Option<(u64, u64)> = pstate(ui.ctx(), "links-scroll-to");
+    if request.is_some() {
+        set_pstate::<Option<(u64, u64)>>(ui.ctx(), "links-scroll-to", None);
+    }
+    let uid = app.session.active().map(|st| st.uid);
+    let scroll_to = request.filter(|(doc, _)| Some(*doc) == uid).map(|(_, id)| id);
+    let listed = |cache: &Cache, id: u64| cache.list["links"].as_array().is_some_and(|rows| rows.iter().any(|r| r["id"].as_u64() == Some(id)));
+    if scroll_to.filter(|id| o.show != "all" && !listed(&cache, *id)).is_some() {
+        set_options(ui.ctx(), |o| o.show = "all");
+        o = options(ui.ctx());
+        let Some(all) = cached(app, ui.ctx(), &o) else { return };
+        cache = all;
+    }
     let Some(st) = app.session.active() else { return };
     let doc = st.doc.clone();
     let thumbs = super::layers::ThumbSource::of(app, st, &doc);
@@ -606,6 +642,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             for r in rows {
                 let Some(id) = r["id"].as_u64() else { continue };
                 let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), h), Sense::click());
+                if scroll_to == Some(id) {
+                    ui.scroll_to_rect(rect, Some(egui::Align::Center));
+                }
                 if !ui.is_rect_visible(rect) {
                     continue;
                 }
