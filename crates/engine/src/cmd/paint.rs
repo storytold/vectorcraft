@@ -203,10 +203,11 @@ impl Session {
     /// The object whose fill (or stroke) the proxy shows, with the Appearance panel's active item
     /// when it stands for it (see [`Session::proxy_paints`]); None: the defaults for new art. With
     /// an object of a dynamic symbol instance selected ([`DocState::selected_symbol_part`]), that
-    /// object as the instance draws it. None while the Live Paint Bucket is the active tool: the
-    /// proxies show the colors it paints with.
+    /// object as the instance draws it. None while the Live Paint Bucket is the active tool (or
+    /// another tool works for it, [`Session::bucket_paints`]): the proxies show the colors it
+    /// paints with.
     pub(crate) fn proxy_source(&self, stroke: bool) -> Option<(Cow<'_, Node>, Option<usize>)> {
-        if self.tool_id() == LIVE_PAINT_BUCKET {
+        if self.bucket_paints() {
             return None;
         }
         let st = self.active()?;
@@ -427,11 +428,28 @@ impl DocState {
 }
 
 impl Session {
+    /// Do the fill and stroke proxies, and the paint commands that name no objects, stand for the
+    /// colors the Live Paint Bucket paints with? They do while the bucket is the active tool, while
+    /// a Cmd+click with the bucket uses the Selection tool, and while the Eyedropper samples into a
+    /// stop of the bucket's gradient for the Gradient panel's eyedropper, up to and including the
+    /// sample its click takes before it switches back to the bucket.
+    pub fn bucket_paints(&self) -> bool {
+        let for_bucket = |t: &dyn vectorcraft_tools::Tool| t.id() == LIVE_PAINT_BUCKET || t.returns_to() == Some(LIVE_PAINT_BUCKET);
+        // A Cmd+click lends the Selection tool to the bucket, or to the Eyedropper armed for it.
+        self.back_to_bucket || for_bucket(self.tool.as_ref()) || self.lender.as_deref().is_some_and(for_bucket)
+    }
+
+    /// The tool the active tool's armed one-shot pick switches back to after its click
+    /// ([`vectorcraft_tools::Tool::returns_to`]).
+    pub fn tool_returns_to(&self) -> Option<String> {
+        self.tool.returns_to().map(str::to_string)
+    }
+
     /// [`DocState::proxy_mixed`] of the active document for the Appearance panel's active item.
     /// A gradient mesh with points picked ([`Session::fill_mesh_points`]) counts with their colors.
     /// Neither is mixed while the Live Paint Bucket is the active tool ([`Session::proxy_source`]).
     pub fn proxy_mixed(&self) -> (bool, bool) {
-        if self.tool_id() == LIVE_PAINT_BUCKET {
+        if self.bucket_paints() {
             return (false, false);
         }
         self.active().map_or((false, false), |st| st.proxy_mixed_with(self.appearance_item(), &self.fill_mesh_points()))
@@ -887,12 +905,13 @@ fn apply_paint_opacity(s: &mut Session, p: &Value, paint: Option<Paint>, opacity
     Ok(json!({"objects": ids.iter().collect::<std::collections::BTreeSet<_>>().len()}))
 }
 
-/// Is the Live Paint Bucket the active tool while `p` names no `ids`, `id` or `item`? A fill,
+/// Is the Live Paint Bucket the active tool ([`Session::bucket_paints`]) while `p` names no `ids`,
+/// `id` or `item`? A fill,
 /// stroke or stroke weight chosen then is what the bucket paints with, so it goes to the defaults
 /// and the selection keeps its paint.
 pub(crate) fn for_bucket(s: &Session, p: &Value) -> bool {
     // A null `ids` or `id` is no target, as `given_nodes` reads it; `item: null` names the top row.
-    s.tool_id() == LIVE_PAINT_BUCKET && ["ids", "id"].iter().all(|k| p.get(k).is_none_or(Value::is_null)) && p.get("item").is_none()
+    s.bucket_paints() && ["ids", "id"].iter().all(|k| p.get(k).is_none_or(Value::is_null)) && p.get("item").is_none()
 }
 
 /// `p` with `ids: []` when [`for_bucket`]: the paint goes to the defaults only. None otherwise.

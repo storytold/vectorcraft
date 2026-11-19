@@ -514,7 +514,7 @@ pub(crate) const PROFILE_DROPDOWN_WIDTH: f32 = 100.0;
 /// member's.
 pub(crate) fn brush_keeps_size(app: &VectorcraftApp, ctx: &egui::Context, shown: Option<&StrokeLayer>) -> Option<bool> {
     let st = app.session.active()?;
-    let bucket = app.session.tool_id() == "livePaintBucket";
+    let bucket = app.session.bucket_paints();
     if bucket || (st.selection.objects.is_empty() && st.selection.subjects().is_empty()) {
         let s = shown?;
         let name = s.brush.as_deref()?;
