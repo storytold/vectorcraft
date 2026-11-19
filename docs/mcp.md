@@ -1,6 +1,6 @@
 # VectorCraft MCP server
 
-> **Last updated:** 2026-11-18 · **Change:** Production Preflight command and report coverage; previously: `text.setFormat {composer}` and paragraph styles also take `standardSingleLine` and `standardEveryLine` (#4935); existing values and responses unchanged. Previously: Pencil ignores Smart Guides and Snap to Point and shows no Smart Guides, #7252; no response-shape change. Previously: Pencil continuation, straight-line and closing cursors; scores and estimates unchanged; no response-shape change. Previously: Snap to Point with Smart Guides off draws no Smart Guides labels or lines, #7250; no response-shape change. Previously: Envelopes: a top object's side whose pieces are all one curve split at anchors follows that curve's parameter (#7097); existing response shapes retained.
+> **Last updated:** 2026-11-19 · **Change:** `pattern.options {proportional}` keeps the tile's proportions when only `width` or `height` is given (#8566); previously: Production Preflight command and report coverage; previously: `text.setFormat {composer}` and paragraph styles also take `standardSingleLine` and `standardEveryLine` (#4935); existing values and responses unchanged. Previously: Pencil ignores Smart Guides and Snap to Point and shows no Smart Guides, #7252; no response-shape change. Previously: Pencil continuation, straight-line and closing cursors; scores and estimates unchanged; no response-shape change. Previously: Snap to Point with Smart Guides off draws no Smart Guides labels or lines, #7250; no response-shape change. Previously: Envelopes: a top object's side whose pieces are all one curve split at anchors follows that curve's parameter (#7097); existing response shapes retained.
 >
 > Tech Circuit update (2026-11-14): three original procedural brushes; ten built-in brush libraries (G5).
 
@@ -6006,9 +6006,12 @@ the pattern's or the repeat's current value, with two exceptions. A brick `tileT
 `gridType` in `object.repeat.options` with `brickOffset` omitted or null sets the offset to 0.5. While `sizeTileToArt`
 is on, each `pattern.options` call sizes the tile to the art plus `hSpacing` and `vSpacing` again and ignores `width`
 and `height`, so a new `hSpacing` changes the tile's width. `pattern.options` still rejects a non-null `width` or
-`height` that is not a positive number, such as `"width": 0`, and changes nothing. Without a `name`,
-`object.pattern.edit` edits the pattern that fills or strokes a selected object, and `pattern.options` changes the
-pattern being edited; each returns an error when there is no such pattern. `pattern.delete` requires `name`.
+`height` that is not a positive number, such as `"width": 0`, and changes nothing. With `proportional: true` (the
+Pattern Options panel passes its Constrain Width and Height Proportions link), a `width` changes the height in
+proportion and a `height` given alone changes the width; with both given, the width wins, as in `object.setBounds`.
+Without a `name`, `object.pattern.edit` edits the pattern that fills or strokes a selected object, and
+`pattern.options` changes the pattern being edited; each returns an error when there is no such pattern.
+`pattern.delete` requires `name`.
 
 With `pattern.options {moveTileWithArt: true}` (Move Tile with Art), a move of all of the tile art in pattern editing
 mode moves the tile by the same offset: `object.move`, `object.nudge`, `object.transform` with a translation, and drags
@@ -15345,6 +15348,7 @@ the error text. The interactive fallback applies only to ordinary File > Save, n
 
 | Date | Change |
 |---|---|
+| 2026-11-19 | `pattern.options {proportional}`: a new width or height keeps the tile's proportions, as the Pattern Options panel's Constrain Width and Height Proportions link does (#8566). |
 | 2026-11-18 | Production Preflight: output and artboard scope, four check summaries, clickable canvas ids, effective PPI and explicit unchecked resolution coverage. |
 | 2026-11-14 | Built-in Tech Circuit brush library (id `tech-circuit`): Circuit Trace, Bus Lines and Terminal Nodes; ten built-in libraries. |
 | 2026-11-13 | The Pencil ignores Smart Guides and Snap to Point and shows no Smart Guides; Snap to Grid and Snap to Pixel still move its ends (#7252). |
