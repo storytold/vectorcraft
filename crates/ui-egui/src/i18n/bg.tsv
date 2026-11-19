@@ -7868,6 +7868,11 @@ breakText	Glyphs	Глифи
 @msg	A joint does not close by {gap} pt.	Една връзка не се затваря с {gap} pt.
 @msg	Two panels pass through each other.	Два панела минават един през друг.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer трябва да е "singleLine", "everyLine", "standardSingleLine" или "standardEveryLine"
+	Engraving	Гравюра
+	Fine Hatching	Фино щриховане
+	Dense Hatching	Гъсто щриховане
+	Tapered Hatching	Изтъняващо щриховане
+	Broken Hatching	Прекъснато щриховане
 	Image Brush	Четки за изображения
 	Soft Bloom	Мек цъфтеж
 	Halftone Field	Полутоново поле

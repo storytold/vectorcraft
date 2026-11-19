@@ -10381,6 +10381,11 @@ breakText	Glyphs	字符
 @msg	A joint does not close by {gap} pt.	有一處接縫相差 {gap} pt 未閉合。
 @msg	Two panels pass through each other.	兩個面板相互穿插。
 @msg	{what} would print on more than {MAX_TILES} tiles: scale it down	{what} 會列印在超過 {MAX_TILES} 個拼貼上：請縮小
+	Engraving	雕刻
+	Fine Hatching	細線排線
+	Dense Hatching	密集排線
+	Tapered Hatching	漸細排線
+	Broken Hatching	斷續排線
 	Image Brush	影像筆刷
 	Soft Bloom	柔和花朵
 	Halftone Field	半色調區域

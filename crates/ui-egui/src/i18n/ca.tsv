@@ -8899,6 +8899,11 @@ breakText	Glyphs	Glifs
 @msg	A joint does not close by {gap} pt.	Una unió no es tanca per {gap} pt.
 @msg	Two panels pass through each other.	Dos panells es travessen l’un a l’altre.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer ha de ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"
+	Engraving	Gravat
+	Fine Hatching	Ratllat fi
+	Dense Hatching	Ratllat dens
+	Tapered Hatching	Ratllat afilat
+	Broken Hatching	Ratllat interromput
 	Image Brush	Pinzells d'imatge
 	Soft Bloom	Floració suau
 	Halftone Field	Camp de semitons

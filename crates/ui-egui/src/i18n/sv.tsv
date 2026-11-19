@@ -10816,6 +10816,11 @@ digits	Hindi	Hindi
 @msg	A joint does not close by {gap} pt.	En fog sluter inte med {gap} pt.
 @msg	Two panels pass through each other.	Två paneler går igenom varandra.
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} pixlar är för stort för PSD (högst {MAX_SIDE} pixlar per sida): sänk upplösningen
+	Engraving	Gravyr
+	Fine Hatching	Fin skraffering
+	Dense Hatching	Tät skraffering
+	Tapered Hatching	Avsmalnande skraffering
+	Broken Hatching	Bruten skraffering
 	Image Brush	Bildpenslar
 	Soft Bloom	Mjuk blomning
 	Halftone Field	Halvtonsfält

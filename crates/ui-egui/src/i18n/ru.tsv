@@ -10779,6 +10779,11 @@ shape	Open	Открытый
 @msg	Two panels pass through each other.	Две панели проходят друг сквозь друга.
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} пикселей — слишком большой размер для PSD (не более {MAX_SIDE} пикселей по стороне): уменьшите разрешение
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer должен быть "singleLine", "everyLine", "standardSingleLine" или "standardEveryLine"
+	Engraving	Гравировка
+	Fine Hatching	Тонкая штриховка
+	Dense Hatching	Плотная штриховка
+	Tapered Hatching	Сужающаяся штриховка
+	Broken Hatching	Прерывистая штриховка
 	Image Brush	Кисти изображений
 	Soft Bloom	Мягкое цветение
 	Halftone Field	Полутоновое поле
