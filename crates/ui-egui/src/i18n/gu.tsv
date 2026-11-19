@@ -492,6 +492,25 @@
 	Preserve Embedded Profiles	એમ્બેડ કરેલી પ્રોફાઇલ જાળવો
 	Convert to Working Space	કાર્યકારી સ્પેસમાં રૂપાંતરિત કરો
 	Preserve Numbers	સંખ્યાઓ જાળવો
+	Profile Mismatches:	પ્રોફાઇલ મેળ ન ખાવા:
+	Ask When Opening	ખોલતી વખતે પૂછો
+	Ask When Pasting	પેસ્ટ કરતી વખતે પૂછો
+	Missing Profiles:	ખૂટતી પ્રોફાઇલ:
+	Embedded Profile Mismatch	એમ્બેડ કરેલી પ્રોફાઇલ મેળ ખાતી નથી
+	Missing Profile	પ્રોફાઇલ ખૂટે છે
+	Paste Profile Mismatch	પેસ્ટ કરતી વખતે પ્રોફાઇલ મેળ ખાતી નથી
+	“{name}” is not tagged with a {model} profile.	“{name}” પાસે કોઈ {model} પ્રોફાઇલ નથી.
+	“{name}” is tagged with the {model} profile “{profile}”, which is not the {model} working space “{working}”.	“{name}” પાસે {model} પ્રોફાઇલ “{profile}” છે, જે {model} કાર્યકારી સ્પેસ “{working}” નથી.
+	Use the embedded profile	એમ્બેડ કરેલી પ્રોફાઇલ વાપરો
+	Convert the colors to the working space	રંગોને કાર્યકારી સ્પેસમાં રૂપાંતરિત કરો
+	Discard the embedded profile	એમ્બેડ કરેલી પ્રોફાઇલ કાઢી નાખો
+	Leave as is	જેમ છે તેમ રહેવા દો
+	Assign the working space	કાર્યકારી સ્પેસ સોંપો
+	Assign profile:	પ્રોફાઇલ સોંપો:
+	Preserve the color numbers	રંગોની સંખ્યાઓ જાળવો
+	Convert to keep the colors' appearance	રંગોનો દેખાવ જાળવવા રૂપાંતરિત કરો
+@msg	`{path}` goes with `{key}`: "assign" only	`{path}` ફક્ત `{key}`: "assign" સાથે જ વપરાય છે
+	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	પેસ્ટ કરેલા રંગો એવા દસ્તાવેજમાંથી આવે છે જેની {model} પ્રોફાઇલ “{from}” છે; આ દસ્તાવેજની “{to}” છે.
 	CSS Properties	CSS ગુણધર્મો
 	Calligraphic Brush	કેલિગ્રાફિક બ્રશ
 	Calligraphic Brush Options	કેલિગ્રાફિક બ્રશ વિકલ્પો
@@ -576,6 +595,9 @@
 	Chop Design	ચૉપ ડિઝાઇન
 	Chosen: {n} of {total}	પસંદ કરેલ: {total} માંથી {n}
 	Chrome…	ક્રોમ…
+	Curvature Circle Tool	વક્રતા વર્તુળ ટૂલ
+	Cusp	અણી
+	Straight segment	સીધો સેગમેન્ટ
 	Circle	વર્તુળ
 	Circle Tool	વર્તુળ ટૂલ
 	Circle too large	વર્તુળ ખૂબ મોટું છે
@@ -890,6 +912,12 @@
 	Cut Path at Selected Anchor Points	પસંદ કરેલા એન્કર પોઇન્ટ પર પાથ કાપો
 	Cutout…	કટઆઉટ…
 	Czech	ચેક
+	PSD Import Options	PSD આયાત વિકલ્પો
+	Place PSD	PSD મૂકો
+	Convert Layers to Objects	લેયર્સને ઑબ્જેક્ટમાં ફેરવો
+	Import Hidden Layers	છુપાયેલા લેયર્સ આયાત કરો
+	Flatten Layers to a Single Image	લેયર્સને એક જ ઇમેજમાં ફ્લેટન કરો
+	Import Slices	સ્લાઇસ આયાત કરો
 	DXF Import Options	DXF આયાત વિકલ્પો
 	DXF Info	DXF માહિતી
 	DXF Options	DXF વિકલ્પો
@@ -1140,6 +1168,15 @@
 	Draw	દોરો
 	Draw Dashed Lines as Solid Lines	ડેશ્ડ રેખાઓ સોલિડ રેખાઓ તરીકે દોરો
 	Draw Hidden Faces	છુપાયેલી સપાટીઓ દોરો
+	Map Art…	આર્ટવર્ક મેપ કરો…
+	Map Art	આર્ટવર્ક મેપ કરો
+	First Surface	પ્રથમ સપાટી
+	Previous Surface	પાછલી સપાટી
+	Next Surface	આગલી સપાટી
+	Last Surface	છેલ્લી સપાટી
+	Scale to Fit	ફિટ થાય તેમ સ્કેલ કરો
+	Shade Artwork	આર્ટવર્કને છાયા આપો
+	Invisible Geometry	અદૃશ્ય ભૂમિતિ
 	Draw in Perspective	પર્સ્પેક્ટિવમાં દોરો
 	Draw:	દોરો:
 	Drawer menu	ડ્રોઅર મેનુ
@@ -1726,6 +1763,8 @@
 	Hide Bounding Box	બાઉન્ડિંગ બૉક્સ છુપાવો
 	Hide Code	કોડ છુપાવો
 	Hide Corner Widget	કૉર્નર વિજેટ છુપાવો
+	Hide Shape Widgets	શેપ વિજેટ્સ છુપાવો
+	Show Shape Widgets	શેપ વિજેટ્સ બતાવો
 	Hide Corner Widget for angles greater than	આથી વધુ એંગલ માટે કૉર્નર વિજેટ છુપાવો
 	Hide Edges	કિનારીઓ છુપાવો
 	Hide Font Height Options	ફોન્ટ ઊંચાઈ વિકલ્પો છુપાવો
@@ -2669,6 +2708,8 @@
 	Overprint and Transparency Flattener Options	ઓવરપ્રિન્ટ અને પારદર્શિતા ફ્લેટનર વિકલ્પો
 	Custom…	કસ્ટમ…
 	Custom Transparency Flattener Options	કસ્ટમ પારદર્શિતા ફ્લેટનર વિકલ્પો
+	The PDF preset keeps the flattener preset but not the Custom… settings.	PDF પ્રીસેટ ફ્લેટનર પ્રીસેટ રાખે છે, પરંતુ કસ્ટમ… સેટિંગ્સ નહીં.
+	PDF 1.3 files clip rasterized areas to their regions, and Overprint sets whether overprints are kept.	PDF 1.3 ફાઇલો રાસ્ટરાઇઝ્ડ વિસ્તારોને તેમના પ્રદેશો સુધી ક્લિપ કરે છે, અને ઓવરપ્રિન્ટ નક્કી કરે છે કે ઓવરપ્રિન્ટ્સ જાળવવામાં આવે કે નહીં.
 	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	EPS માં આલ્ફા પારદર્શિતા નથી, અને ઓવરપ્રિન્ટ્સ નક્કી કરે છે કે ઓવરપ્રિન્ટ્સ જાળવવામાં આવે કે નહીં.
 	Overprint:	ઓવરપ્રિન્ટ:
 	Overprints:	ઓવરપ્રિન્ટ્સ:
@@ -2799,6 +2840,10 @@
 	Plates	પ્લેટ્સ
 	Platform:	પ્લેટફોર્મ:
 	Play Action	ક્રિયા ચલાવો
+	Choose Align To at playback	પ્લેબેક વખતે સંરેખણ લક્ષ્ય પસંદ કરો
+	Align steps use the key object, key anchor or key guide when one is set.	કી ઑબ્જેક્ટ, કી એન્કર બિંદુ અથવા કી માર્ગદર્શિકા સેટ હોય ત્યારે સંરેખણ પગલાં તેનો ઉપયોગ કરે છે.
+	With one whole object selected and no key, they use the artboard.	એક આખો ઑબ્જેક્ટ પસંદ હોય અને કી ન હોય ત્યારે તે આર્ટબોર્ડનો ઉપયોગ કરે છે.
+	Otherwise they use the selection.	અન્યથા તે પસંદગીનો ઉપયોગ કરે છે.
 	Playback Options	પ્લેબેક વિકલ્પો
 	Plug-in Info	પ્લગ-ઇન માહિતી
 	Plug-ins	પ્લગ-ઇન્સ
@@ -3112,6 +3157,12 @@
 @msg	The paths overlap, so they have no internal tangents	પાથ એકબીજા પર ચઢેલા છે, તેથી તેમની કોઈ આંતરિક સ્પર્શરેખા નથી
 @msg	One path lies inside the other, so they have no internal tangents	એક પાથ બીજાની અંદર છે, તેથી તેમની કોઈ આંતરિક સ્પર્શરેખા નથી
 @msg	The point lies inside the path, so it has no tangents	બિંદુ પાથની અંદર છે, તેથી તેની કોઈ સ્પર્શરેખા નથી
+# Path Precision Tools add-on: Add Bounding Rectangle and Add Bounding Circle.
+	Add Bounding Rectangle	બાઉન્ડિંગ લંબચોરસ ઉમેરો
+	Add Bounding Circle	બાઉન્ડિંગ વર્તુળ ઉમેરો
+	Add Bounding Rectangle…	બાઉન્ડિંગ લંબચોરસ ઉમેરો…
+	Add Bounding Circle…	બાઉન્ડિંગ વર્તુળ ઉમેરો…
+	One per Object	દરેક ઑબ્જેક્ટ માટે એક
 	Remove Guide	ગાઇડ દૂર કરો
 	Remove Item	આઇટમ દૂર કરો
 	Remove JavaScript File	JavaScript ફાઇલ દૂર કરો
@@ -3260,6 +3311,7 @@
 	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	લાઇવ લંબચોરસના ગુણધર્મો ચારેય ખૂણા માટે ખૂણાની ત્રિજ્યાનું એક જ ફીલ્ડ બતાવે છે; બંધ હોય ત્યારે દરેક ખૂણાનું પોતાનું ફીલ્ડ હોય છે.
 	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	ટ્રાન્સફોર્મ પેનલમાંના ફેરફારો શું ટ્રાન્સફોર્મ કરે છે: ઑબ્જેક્ટ, તેની પૅટર્ન ટાઇલ્સ કે બંને; ડિફૉલ્ટ પૅટર્ન ટાઇલ્સ ટ્રાન્સફોર્મ કરો ને અનુસરે છે.
 	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	એક સિમ્બોલ ઇન્સ્ટન્સ પસંદ હોય ત્યારે ટ્રાન્સફોર્મ પેનલ સિમ્બોલના રજિસ્ટ્રેશન પોઇન્ટને સંદર્ભ પોઇન્ટ તરીકે વાપરે છે.
+	Drawing a rectangle, ellipse, polygon, star or line opens the Transform panel if it is closed.	લંબચોરસ, લંબવર્તુળ, બહુકોણ, તારો કે રેખા દોરવાથી ટ્રાન્સફોર્મ પેનલ બંધ હોય તો ખૂલે છે.
 	Darkens the canvas outside the artboards while the Artboard tool is active.	આર્ટબોર્ડ ટૂલ સક્રિય હોય ત્યારે આર્ટબોર્ડ બહારનો કેનવાસ ઘાટો કરે છે.
 	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	આર્ટબોર્ડ બહારનો વિસ્તાર ઝાંખો કરો ચાલુ હોય ત્યારે, આર્ટબોર્ડ ટૂલથી ખેંચતી વખતે આર્ટબોર્ડ બહારનો વિસ્તાર ઘાટો રહે છે.
 	How near, in pixels, the pointer must be to an object, anchor or handle for a click to select it.	ક્લિક કોઈ ઑબ્જેક્ટ, એન્કર પોઇન્ટ કે હૅન્ડલને પસંદ કરે તે માટે પોઇન્ટર તેનાથી કેટલા પિક્સેલ નજીક હોવો જોઈએ.
@@ -3334,6 +3386,8 @@
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	લાઇન સેગમેન્ટના છેડાને એ રીતે સ્નેપ કરે છે કે તે નજીકના સીધા સેગમેન્ટને કાટખૂણે મળે.
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	કેનવાસ પર દરેક સ્લાઇસનો નંબર તેના ઉપરના ડાબા ખૂણે એક બૉક્સમાં બતાવે છે; બંધ હોય ત્યારે પણ સ્લાઇસની રૂપરેખાઓ દેખાય છે.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	યુઝર અને ઑબ્જેક્ટ સ્લાઇસની રૂપરેખાઓ અને તેમના નંબર બૉક્સનો રંગ; ઑટો સ્લાઇસ તેની ઝાંખી છાયા વાપરે છે.
+	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	દસ્તાવેજ સેટઅપની ભાષા અંગ્રેજી: USA હોય અને [Normal Character Style] કોઈ ભાષા સેટ ન કરે ત્યાં સુધી નવા ટેક્સ્ટને આ ભાષા મળે છે; દસ્તાવેજમાં પહેલેથી રહેલું ટેક્સ્ટ પોતાની ભાષા રાખે છે.
+	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	હાઇફનેટ કરો ચાલુ હોય તેવા ફકરાઓમાં, સૂચિમાંનો શબ્દ ફક્ત તેમાં લખેલા હાઇફન પર જ તૂટે છે, અથવા કોઈ ન હોય તો ક્યાંય નહીં, તેનો કેસ ગમે તે હોય; કોરિયન શબ્દોને હાઇફન મળતો નથી, અને ભારતીય ભાષાઓના શબ્દો અક્ષર-સમૂહની અંદર તૂટતા નથી.
 	Restored documents open unsaved: save them to keep them.	પુનઃસ્થાપિત દસ્તાવેજો અસાચવેલા ખુલશે: તેમને રાખવા માટે સાચવો.
 	Restrict printing, editing and other tasks	છાપકામ, સંપાદન અને અન્ય કાર્યો પર પ્રતિબંધ મૂકો
 	Reticulation…	રેટિક્યુલેશન…
@@ -3454,6 +3508,7 @@
 	Save Perspective Grid Preset	પર્સ્પેક્ટિવ ગ્રિડ પ્રીસેટ સાચવો
 	Save Preset	પ્રીસેટ સાચવો
 	Save Preset…	પ્રીસેટ સાચવો…
+	Save Summary…	સારાંશ સાચવો…
 	Save Print Preset	પ્રિન્ટ પ્રીસેટ સાચવો
 	Save Recovery Data	પુનઃપ્રાપ્તિ ડેટા સાચવો
 	Save Save for Web Preset	વેબ માટેનો પ્રીસેટ સાચવો
@@ -3798,6 +3853,7 @@
 	Show Live Paint Gaps	લાઇવ પેઇન્ટ ગેપ બતાવો
 	Show Note	નોંધ બતાવો
 	Show Options	વિકલ્પો બતાવો
+	Show on Shape Creation	શેપ બનાવતી વખતે બતાવો
 	Show Original Path	મૂળ પાથ બતાવો
 	Show Package	પૅકેજ બતાવો
 	Show Panel	પેનલ બતાવો
@@ -3822,6 +3878,7 @@
 	Show Tile Edge	ટાઇલ કિનારી બતાવો
 	Show Tints/Shades	ટિન્ટ/શેડ બતાવો
 	Show Tool Group Labels	ટૂલ ગ્રૂપ લેબલ બતાવો
+	Show Tool Cards	ટૂલ કાર્ડ બતાવો
 	Show Tool Tips	ટૂલ ટિપ્સ બતાવો
 	Show Toolbar	ટૂલબાર બતાવો
 	Show Transparency Grid	પારદર્શિતા ગ્રિડ બતાવો
@@ -4091,6 +4148,17 @@
 	Symbol Screener Tool	સિમ્બોલ સ્ક્રીનર ટૂલ
 	Symbol Scruncher	સિમ્બોલ સ્ક્રન્ચર
 	Symbol Scruncher Tool	સિમ્બોલ સ્ક્રન્ચર ટૂલ
+	Tool:	ટૂલ:
+	Symbol Set Density	સિમ્બોલ સેટ ઘનતા
+	Symbol Sprayer Options	સિમ્બોલ સ્પ્રેયર વિકલ્પો
+	Scrunch:	સ્ક્રન્ચ:
+	Spin:	સ્પિન:
+	Screen:	સ્ક્રીન:
+	Stain:	સ્ટેઇન:
+	Symbol Sizer Options	સિમ્બોલ સાઇઝર વિકલ્પો
+	Proportional Resizing	પ્રમાણસર કદ બદલવું
+	Resizing Affects Density	કદ બદલવાથી ઘનતા બદલાય છે
+	Show Brush Size and Intensity	બ્રશનું કદ અને તીવ્રતા બતાવો
 	Symbol Set Density:	સિમ્બોલ સેટ ઘનતા:
 	Symbol Shifter	સિમ્બોલ શિફ્ટર
 	Symbol Shifter Tool	સિમ્બોલ શિફ્ટર ટૂલ
@@ -4118,6 +4186,8 @@
 	Tabs	ટૅબ
 	Tamil	તમિલ
 	Tangent Circle	સ્પર્શક વર્તુળ
+	Tangent Circle Tool	સ્પર્શક વર્તુળ ટૂલ
+	No tangent circle here	અહીં કોઈ સ્પર્શક વર્તુળ નથી
 	Tangent Circle…	સ્પર્શક વર્તુળ…
 	Taper	ટેપર
 	Target	લક્ષ્ય
@@ -4338,6 +4408,8 @@
 	Unembed…	એમ્બેડ દૂર કરો…
 	Ungroup	અનગ્રુપ કરો
 	Ungroup Color Group	રંગ ગ્રુપ અનગ્રુપ કરો
+	Color Group Options	રંગ ગ્રુપ વિકલ્પો
+	Color Group Options…	રંગ ગ્રુપ વિકલ્પો…
 	Uniform	યુનિફોર્મ
 	Uniformly Scaled	સમાન રીતે સ્કેલ કરેલ
 	Unite	યુનાઇટ
@@ -4613,6 +4685,9 @@
 	Box Channel	બૉક્સ ચેનલ
 	Color box	રંગ બૉક્સ
 	Color Wheel Options	રંગ વ્હીલ વિકલ્પો
+	Show Harmony	હાર્મની બતાવો
+	Harmony Rule	હાર્મની નિયમ
+	Harmony color	હાર્મની રંગ
 	{name} (spot)	{name} (સ્પૉટ)
 	{pages} in all, {count} per copy	કુલ {pages}, પ્રતિ નકલ {count}
 	{page} of {count}	{count} માંથી {page}
@@ -4772,6 +4847,9 @@ antiAlias	Sharp	શાર્પ
 	Edit Arrowheads…	એરોહેડ્સ સંપાદિત કરો…
 	Reload Arrowheads	એરોહેડ્સ ફરી લોડ કરો
 	Color Theme Picker	કલર થીમ પિકર
+	Undo Changes	ફેરફારો પૂર્વવત્ કરો
+	Redo Changes	ફેરફારો ફરીથી કરો
+@msg	Recolor Artwork is not open	કલાકૃતિનો રંગ બદલો ખુલ્લું નથી
 	Click or drag across the art to pick its colors; Shift adds more	આર્ટના રંગો પસંદ કરવા તેના પર ક્લિક કરો અથવા ડ્રેગ કરો; Shiftથી વધુ ઉમેરાય છે
 	Prominent Colors	મુખ્ય રંગો
 	Save All Colors	બધા રંગો સાચવો
@@ -4963,6 +5041,9 @@ antiAlias	Sharp	શાર્પ
 	embedding for preview and print	પ્રીવ્યૂ અને પ્રિન્ટ માટે એમ્બેડ કરવાની મંજૂરી
 	embedding allowed	એમ્બેડ કરવાની મંજૂરી છે
 	{file}; {embedding}	{file}; {embedding}
+	unknown type	અજ્ઞાત પ્રકાર
+	{type}; {uses}	{type}; {uses}
+@plural	{n} use|{n} uses	{n} ઉપયોગ|{n} ઉપયોગ
 	substituted: shown in {family} {style} ({detail})	બદલાયેલ: {family} {style}માં બતાવ્યું ({detail})
 	missing: shown in {family} {style}	ગુમ: {family} {style}માં બતાવ્યું
 	missing	ગુમ
@@ -5431,6 +5512,50 @@ swatch	[Registration]	[રજિસ્ટ્રેશન]
 	Standard Single-line Composer	સ્ટાન્ડર્ડ સિંગલ-લાઇન કમ્પોઝર
 	Standard Every-line Composer	સ્ટાન્ડર્ડ એવરી-લાઇન કમ્પોઝર
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer આમાંથી એક હોવું જોઈએ: "singleLine", "everyLine", "standardSingleLine" અથવા "standardEveryLine"
+	Fine Stipple	સૂક્ષ્મ બિંદુ છાંયાંકન
+	Dense Stipple	ઘન બિંદુ છાંયાંકન
+	Soft Stipple	નરમ બિંદુ છાંયાંકન
+	Bold Stipple	ઘાટું બિંદુ છાંયાંકન
+	Paper Cutouts	કાગળના કટઆઉટ
+	Coral Layers	કોરલ સ્તરો
+	Mint Layers	મિન્ટ સ્તરો
+	Midnight Layers	મધ્યરાત્રિના સ્તરો
+	Sunflower Sheet	સૂર્યમુખી શીટ
+	Rose Layers	ગુલાબી સ્તરો
+	Monochrome Stack	એકરંગી થપ્પો
+# Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	ટૂલબારનું ટૂલ અને તેની કીઓ શું કરે છે તે ટિપને બદલે કાર્ડમાં બતાવે છે; ટૂલ ટિપ્સ બતાવો ચાલુ હોવું જરૂરી છે.
+	Selects whole objects and groups to move, resize or rotate them.	આખા ઑબ્જેક્ટ અને જૂથો પસંદ કરે છે, જેથી તેમને ખસેડી, તેમનું કદ બદલી કે ફેરવી શકાય.
+	Selects anchor points and path segments to reshape a path.	પાથનો આકાર બદલવા માટે એન્કર બિંદુઓ અને પાથ સેગમેન્ટ પસંદ કરે છે.
+	Draws paths point by point, with straight segments and smooth curves.	સીધા સેગમેન્ટ અને સરળ વળાંકો સાથે બિંદુ-દર-બિંદુ પાથ દોરે છે.
+	Draws smooth curves through the points you click.	તમે ક્લિક કરો તે બિંદુઓમાંથી પસાર થતા સરળ વળાંકો દોરે છે.
+	Adds text at a point, or in a frame you drag.	કોઈ બિંદુ પર અથવા તમે ખેંચો તે ફ્રેમમાં ટેક્સ્ટ ઉમેરે છે.
+	Draws rectangles and squares.	લંબચોરસ અને ચોરસ દોરે છે.
+	Draws rectangles with rounded corners.	ગોળ ખૂણાવાળા લંબચોરસ દોરે છે.
+	Draws ellipses and circles.	લંબવર્તુળ અને વર્તુળ દોરે છે.
+	Draws polygons with sides of equal length.	સરખી લંબાઈની બાજુઓવાળા બહુકોણ દોરે છે.
+	Draws stars.	તારા દોરે છે.
+	Turns objects around a reference point.	ઑબ્જેક્ટને સંદર્ભ બિંદુની આસપાસ ફેરવે છે.
+	Flips objects across an axis through a reference point.	ઑબ્જેક્ટને સંદર્ભ બિંદુમાંથી પસાર થતી ધરી પર ઉલટાવે છે.
+	Resizes objects from a reference point.	સંદર્ભ બિંદુથી ઑબ્જેક્ટનું કદ બદલે છે.
+	Slants objects from a reference point.	સંદર્ભ બિંદુથી ઑબ્જેક્ટને ત્રાંસા કરે છે.
+	Moves the view of the document.	દસ્તાવેજના દૃશ્યને ખસેડે છે.
+	Magnifies or reduces the view.	દૃશ્યને મોટું અથવા નાનું કરે છે.
+	Copies the color and other attributes of one object to the selection.	એક ઑબ્જેક્ટનો રંગ અને અન્ય લક્ષણો પસંદગી પર કૉપિ કરે છે.
+	Sets the direction and length of a gradient.	ગ્રેડિયન્ટની દિશા અને લંબાઈ સેટ કરે છે.
+	Creates, selects and resizes artboards.	આર્ટબોર્ડ બનાવે છે, પસંદ કરે છે અને તેમનું કદ બદલે છે.
+	Changes the width of a stroke along its length.	સ્ટ્રોકની પહોળાઈ તેની લંબાઈ સાથે બદલે છે.
+	Bends art by dragging pins placed on it.	આર્ટ પર મૂકેલી પિન ખેંચીને તેને વાળે છે.
+	Pushes the outlines of paths in the direction you drag.	પાથની રૂપરેખાને તમે ખેંચો તે દિશામાં ધકેલે છે.
+	Twists the outlines of paths into swirls.	પાથની રૂપરેખાને વમળોમાં મરોડે છે.
+	Pulls the outlines of paths in toward the brush.	પાથની રૂપરેખાને બ્રશ તરફ અંદર ખેંચે છે.
+	Pushes the outlines of paths out from the brush.	પાથની રૂપરેખાને બ્રશથી બહારની તરફ ધકેલે છે.
+	Adds curved details along the outlines of paths.	પાથની રૂપરેખા સાથે વળાંકવાળી વિગતો ઉમેરે છે.
+	Adds spiky details along the outlines of paths.	પાથની રૂપરેખા સાથે અણીદાર વિગતો ઉમેરે છે.
+	Adds wrinkles along the outlines of paths.	પાથની રૂપરેખા સાથે કરચલીઓ ઉમેરે છે.
+	Moves, copies and resizes objects on the perspective grid.	પરસ્પેક્ટિવ ગ્રિડ પર ઑબ્જેક્ટને ખસેડે છે, કૉપિ કરે છે અને તેમનું કદ બદલે છે.
+	Makes a series of steps between two or more objects.	બે કે વધુ ઑબ્જેક્ટ વચ્ચે પગલાંની એક શ્રેણી બનાવે છે.
+	Places dimension lines that show measured lengths.	માપેલી લંબાઈ બતાવતી પરિમાણ રેખાઓ મૂકે છે.
 	Tap	ટૂંકું દબાણ
 	Clear Hold	હોલ્ડ સાફ કરો
 	Hold Shortcuts	હોલ્ડ શોર્ટકટ

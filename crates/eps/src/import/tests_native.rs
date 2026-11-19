@@ -3830,7 +3830,7 @@ fn type_with_a_frame_it_cant_read_is_left_out_with_a_note() {
     let art = native_with_text(&(layer("Back", true, &square(10, 10)) + &layer("Spare", false, &text_object(0))), &doc);
     let r = import(&eps(&page_square(10, 10), &art)).unwrap();
     assert!(text_of(&r.document.layers[1]).is_empty());
-    assert!(r.warnings.iter().any(|w| w.contains("1 text objects on hidden layers")), "{:?}", r.warnings);
+    assert!(r.warnings.iter().any(|w| w.contains("1 text objects whose type couldn't be read")), "{:?}", r.warnings);
     assert!(crate::is_loss(r.warnings.iter().find(|w| w.contains("couldn't be read")).unwrap()));
 }
 
@@ -5028,6 +5028,274 @@ fn area_type_keeps_its_area_type_options() {
     assert_eq!((b.rows, b.columns, b.gutter, b.row_gutter), (1, 2, 5.0, None));
     assert_eq!(b.first_baseline, vectorcraft_doc::FirstBaseline::CapHeight);
     assert_eq!(texts[2].area, vectorcraft_doc::AreaOptions::default());
+}
+
+/// A blank story in an area frame, hidden or shown, comes in as a text object that keeps its frame
+/// and draws nothing (its spaces kept), as VectorCraft's Type tool keeps an empty frame (#85, #154).
+/// As point type, hidden or shown, it draws nothing and has nothing to keep: it is left out, without
+/// a note that something wasn't read.
+#[test]
+fn blank_stories_keep_their_area_frame_and_leave_point_type_out_quietly() {
+    let frames = [area_frame(10.0, 50.0, 90.0, 90.0), point_frame(20.0, 20.0), point_frame(30.0, 30.0), area_frame(60.0, 10.0, 90.0, 40.0)];
+    let stories = [
+        story("\\r", &[0], "/0 0", "/1 6.0"),
+        story("\\r", &[1], "/0 0", "/1 6.0"),
+        story(" \\r", &[2], "/0 0", "/1 6.0"),
+        story(" \\r", &[3], "/0 0", "/1 6.0"),
+    ];
+    let doc = document_of(&frames, &stories);
+    // A shown blank area frame too: it draws nothing, so the page can't show it, and it stays.
+    let shown = square(10, 10) + &text_object(2) + &text_object(3);
+    let art = native_with_text(&(layer("Back", true, &shown) + &layer("Spare", false, &(text_object(0) + &text_object(1)))), &doc);
+    let r = import(&eps(&page_square(10, 10), &art)).unwrap();
+    let texts = text_of(&r.document.layers[1]);
+    assert_eq!(texts.len(), 1, "{:?}", r.warnings);
+    assert_eq!(texts[0].plain_text(), "");
+    let vectorcraft_doc::TextKind::Area { frame } = &texts[0].kind else { panic!("area type: {:?}", texts[0].kind) };
+    // Art y 50..90 is 10..50 down the 100 pt page.
+    let b = frame.bounds().unwrap();
+    assert!((b.x0 - 10.0).abs() < 1e-6 && (b.y0 - 10.0).abs() < 1e-6 && (b.x1 - 90.0).abs() < 1e-6 && (b.y1 - 50.0).abs() < 1e-6, "{b:?}");
+    let shown = text_of(&r.document.layers[0]);
+    assert_eq!(shown.len(), 1, "{:?}", r.warnings);
+    assert_eq!(shown[0].plain_text(), " ");
+    let vectorcraft_doc::TextKind::Area { frame } = &shown[0].kind else { panic!("area type: {:?}", shown[0].kind) };
+    // Art y 10..40 is 60..90 down the page.
+    let b = frame.bounds().unwrap();
+    assert!((b.x0 - 60.0).abs() < 1e-6 && (b.y0 - 60.0).abs() < 1e-6 && (b.x1 - 90.0).abs() < 1e-6 && (b.y1 - 90.0).abs() < 1e-6, "{b:?}");
+    assert!(!r.warnings.iter().any(|w| w.contains("couldn't be read")), "{:?}", r.warnings);
+}
+
+/// A blank story whose object the page still draws type for takes the page's type, as before: the
+/// empty frame is only for a slot nothing else fills.
+#[test]
+fn a_blank_area_story_the_page_draws_type_for_takes_the_pages_type() {
+    let doc = document_of(&[area_frame(10.0, 50.0, 90.0, 90.0)], &[story("\\r", &[0], "/0 0", "/1 6.0")]);
+    let art = native_with_text(&layer("Art", true, &text_object(0)), &doc);
+    let page = "0 0 0 1 setcmykcolor /Helvetica findfont 14 scalefont setfont 20 75 moveto (Hi there) show";
+    let r = import(&eps(page, &art)).unwrap();
+    let mut all = vec![];
+    r.document.walk(|n| {
+        if let NodeKind::Text(t) = &n.kind {
+            all.push(t.plain_text());
+        }
+    });
+    assert_eq!(all, ["Hi there".to_string()], "{:?}", r.warnings);
+}
+
+/// The text objects of `d`: each one's text and kind, in the layers' order.
+fn text_kinds(d: &Document) -> Vec<(String, &'static str)> {
+    let mut out = vec![];
+    d.walk(|n| {
+        if let NodeKind::Text(t) = &n.kind {
+            let kind = match t.kind {
+                vectorcraft_doc::TextKind::Area { .. } => "area",
+                vectorcraft_doc::TextKind::OnPath { .. } => "path",
+                _ => "point",
+            };
+            out.push((t.plain_text(), kind));
+        }
+    });
+    out
+}
+
+/// A blank story threaded through two shown area frames comes in as both frames, empty and still
+/// one thread: the later frame the text document makes empty stays with the first.
+#[test]
+fn a_blank_story_threaded_through_two_shown_frames_keeps_both() {
+    let frames = [area_frame(10.0, 60.0, 40.0, 80.0), area_frame(50.0, 60.0, 80.0, 80.0)];
+    let doc = document_of(&frames, &[story("\\r", &[0, 1], "/0 0", "/1 10.0")]);
+    let art = native_with_text(&layer("Art", true, &(square(10, 10) + &frame_object(0, 0) + &frame_object(0, 1))), &doc);
+    let r = import(&eps(&page_square(10, 10), &art)).unwrap();
+    // The thread names only text objects the document has.
+    assert!(r.document.text_threads.iter().flatten().all(|id| r.document.node(*id).is_some()), "{:?} {:?}", r.document.text_threads, r.warnings);
+    assert_eq!(text_kinds(&r.document), [("".to_string(), "area"), ("".to_string(), "area")], "{:?}", r.warnings);
+    let ids: Vec<_> = r.document.layers[0].children().unwrap().iter().filter(|n| matches!(n.kind, NodeKind::Text(_))).map(|n| n.id).collect();
+    assert_eq!(r.document.text_threads, [ids]);
+}
+
+/// A blank story threaded from a hidden frame into a shown one: both frames come in, one thread.
+#[test]
+fn a_blank_story_threaded_from_a_hidden_frame_into_a_shown_one_keeps_both() {
+    let frames = [area_frame(10.0, 60.0, 40.0, 80.0), area_frame(50.0, 60.0, 80.0, 80.0)];
+    let doc = document_of(&frames, &[story("\\r", &[0, 1], "/0 0", "/1 10.0")]);
+    let art = native_with_text(&(layer("Back", true, &(square(10, 10) + &frame_object(0, 1))) + &layer("Spare", false, &frame_object(0, 0))), &doc);
+    let r = import(&eps(&page_square(10, 10), &art)).unwrap();
+    assert!(r.document.text_threads.iter().flatten().all(|id| r.document.node(*id).is_some()), "{:?} {:?}", r.document.text_threads, r.warnings);
+    assert_eq!(text_kinds(&r.document), [("".to_string(), "area"), ("".to_string(), "area")], "{:?}", r.warnings);
+    assert_eq!(r.document.text_threads.len(), 1, "{:?}", r.warnings);
+    assert_eq!(r.document.text_threads[0].len(), 2, "{:?}", r.warnings);
+}
+
+/// An unread group holding a frame of a blank story's thread is replaced by its page art as for
+/// any other text object (the frame holds no type): the layers are read, and the thread, left with
+/// one frame, isn't one any more.
+#[test]
+fn unread_group_holding_a_blank_threaded_frame_is_replaced() {
+    let frames = [
+        format!("<< /0 << /0 [ 0 0 ] /1 << /0 [ {} ] >> /2 << /0 1 >> >> >>", canvas_rect(50.0, 10.0, 54.0, 14.0)),
+        format!("<< /0 << /0 [ 0 0 ] /1 << /0 [ {} ] >> /2 << /0 1 >> >> >>", canvas_rect(70.0, 10.0, 74.0, 14.0)),
+    ];
+    let text = document_of(&frames, &[story("\\r", &[0, 1], "/0 0", "/1 10.0")]);
+    for removed in [0, 1] {
+        let grouped = os1_group(&format!("{}\n{}\nZZ", square(if removed == 0 { 50 } else { 70 }, 10), frame_object(0, removed)));
+        let other = frame_object(0, 1 - removed);
+        let art = native_with_text(&(layer("Back", true, &square(10, 10)) + &layer("Mixed", true, &format!("{grouped}\n{other}"))), &text);
+        let (doc, notes, read) = crate::layered_ai(&private(&art), pdf_three_squares(), vec![], false, true, 1.0);
+        assert!(read, "removed frame {removed}: {notes:?}");
+        assert!(doc.text_threads.is_empty(), "removed frame {removed}: {:?} {notes:?}", doc.text_threads);
+        assert_eq!(text_kinds(&doc), [("".to_string(), "area")], "removed frame {removed}: {notes:?}");
+    }
+}
+
+/// A blank story on a path comes in as empty type on that path.
+#[test]
+fn a_blank_story_on_a_path_keeps_its_path() {
+    let (a, b, c) = (canvas(10.0, 70.0), canvas(30.0, 70.0), canvas(50.0, 70.0));
+    let path = format!(
+        "<< /0 << /0 [ 0 0 ] /1 << /0 [ {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} ] >> /2 << /0 2 /6 [ 0.5 2.0 ] >> >> >>",
+        a.0, a.1, a.0, a.1, b.0, b.1, b.0, b.1, b.0, b.1, b.0, b.1, c.0, c.1, c.0, c.1
+    );
+    let doc = document_of(&[path], &[story("\\r", &[0], "/0 0", "/1 8.0")]);
+    let art = native_with_text(&layer("Art", true, &(square(10, 10) + &text_object(0))), &doc);
+    let r = import(&eps(&page_square(10, 10), &art)).unwrap();
+    assert_eq!(text_kinds(&r.document), [("".to_string(), "path")], "{:?}", r.warnings);
+    let mut on_path = vec![];
+    r.document.walk(|n| {
+        if let NodeKind::Text(t) = &n.kind
+            && let vectorcraft_doc::TextKind::OnPath { path, start, end } = &t.kind
+        {
+            on_path.push((path.bounds(), *start, *end));
+        }
+    });
+    // The path as `area_type_and_type_on_a_path_come_from_the_text_document` reads it: 40 pt long,
+    // the type from a quarter of the way along.
+    let [(Some(b), start, end)] = on_path.as_slice() else { panic!("{on_path:?}") };
+    assert!((b.width() - 40.0).abs() < 1e-6 && (start - 0.25).abs() < 1e-3 && end.is_none(), "{b:?} {start} {end:?}");
+}
+
+/// Where every shown text object's type comes from the text document (the page isn't matched with
+/// them), a hidden blank area story still comes in as its empty frame, and blank point type is left
+/// out without a note.
+#[test]
+fn blank_stories_beside_type_the_text_document_makes() {
+    let frames = [point_frame(20.0, 20.0), area_frame(10.0, 50.0, 90.0, 90.0), point_frame(30.0, 30.0)];
+    let stories = [story("Hi there\\r", &[0], "/0 0", "/1 6.0"), story("\\r", &[1], "/0 0", "/1 6.0"), story("\\r", &[2], "/0 0", "/1 6.0")];
+    let doc = document_of(&frames, &stories);
+    let art = native_with_text(
+        &(layer("Back", true, &(square(10, 10) + &text_object(0))) + &layer("Spare", false, &(text_object(1) + &text_object(2)))),
+        &doc,
+    );
+    // The page draws the square and "Hi there" where the text document sets it.
+    let page = format!("{}\n0 0 0 1 setcmykcolor /Helvetica findfont 6 scalefont setfont 20 20 moveto (Hi there) show", page_square(10, 10));
+    let r = import(&eps(&page, &art)).unwrap();
+    assert_eq!(text_kinds(&r.document), [("Hi there".to_string(), "point"), ("".to_string(), "area")], "{:?}", r.warnings);
+    assert!(!r.warnings.iter().any(|w| w.contains("couldn't be read")), "{:?}", r.warnings);
+}
+
+/// Without a page (the editing data alone), a blank area story comes in as its empty frame and
+/// blank point type is left out, without the note for type of kinds that aren't read.
+#[test]
+fn blank_stories_without_a_page() {
+    let frames = [area_frame(10.0, 50.0, 90.0, 90.0), point_frame(30.0, 30.0)];
+    let doc = document_of(&frames, &[story("\\r", &[0], "/0 0", "/1 6.0"), story(" \\r", &[1], "/0 0", "/1 6.0")]);
+    let art = native_with_text(&layer("Art", true, &(text_object(0) + &text_object(1))), &doc);
+    let (d, notes) = crate::ai_alone(&private(&art)).unwrap();
+    assert_eq!(text_kinds(&d), [("".to_string(), "area")], "{notes:?}");
+    assert!(!notes.iter().any(|w| w.contains("left out")), "{notes:?}");
+}
+
+/// The page's spare type goes to a shown text object the text document can't make, not to a blank
+/// story beside it, whichever the page paints first: the blank area story comes in as its empty
+/// frame. A blank slot takes the page's type only where no other slot is open.
+#[test]
+fn spare_page_type_goes_to_the_unread_object_not_the_blank_one() {
+    // Story 0's frame is of a kind this doesn't read, so neither shown object is made: the page's
+    // one piece of type is spare.
+    let frames = [point_frame(20.0, 20.0).replace("/2 << /2 [", "/2 << /0 9 /2 ["), area_frame(10.0, 50.0, 90.0, 90.0)];
+    let doc = document_of(&frames, &[story("Hi there\\r", &[0], "/0 0", "/1 6.0"), story("\\r", &[1], "/0 0", "/1 6.0")]);
+    let page = "0 0 0 1 setcmykcolor /Helvetica findfont 6 scalefont setfont 20 20 moveto (Hi there) show";
+    for (order, body) in [("blank first", text_object(1) + &text_object(0)), ("blank last", text_object(0) + &text_object(1))] {
+        let art = native_with_text(&layer("Art", true, &body), &doc);
+        let r = import(&eps(page, &art)).unwrap();
+        let mut texts = text_kinds(&r.document);
+        texts.sort();
+        assert_eq!(texts, [("".to_string(), "area"), ("Hi there".to_string(), "point")], "{order}: {:?}", r.warnings);
+    }
+}
+
+/// Two shown blank area stories and one piece of the page's type that no text object owns: with no
+/// other slot open, the blank ones take it by painting order; the one left without type comes in as
+/// its empty frame, not dropped as merged type.
+#[test]
+fn a_blank_area_story_the_spare_page_type_skips_keeps_its_frame() {
+    let frames = [area_frame(10.0, 50.0, 90.0, 90.0), area_frame(10.0, 5.0, 40.0, 30.0)];
+    let doc = document_of(&frames, &[story("\\r", &[0], "/0 0", "/1 6.0"), story("\\r", &[1], "/0 0", "/1 6.0")]);
+    let art = native_with_text(&layer("Art", true, &(text_object(0) + &text_object(1))), &doc);
+    // Away from both frames, so neither owns it.
+    let page = "0 0 0 1 setcmykcolor /Helvetica findfont 6 scalefont setfont 60 40 moveto (Hi there) show";
+    let r = import(&eps(page, &art)).unwrap();
+    let mut texts = text_kinds(&r.document);
+    texts.sort();
+    assert_eq!(texts, [("".to_string(), "area"), ("Hi there".to_string(), "point")], "{:?}", r.warnings);
+}
+
+/// A warp or an envelope holding the second frame of a blank story threaded from a frame outside
+/// it: a thread names only text objects the document has. The warped frame stays type, and the
+/// thread stays whole, as for other threaded type, whatever the warp's look draws; the frame in the
+/// envelope comes in as the envelope's drawn art, and no thread is left.
+#[test]
+fn a_warp_or_an_envelope_holding_a_frame_of_a_blank_thread_keeps_its_thread_of_text() {
+    let frames = [area_frame(10.0, 5.0, 40.0, 30.0), area_frame(20.0, 40.0, 80.0, 70.0)];
+    let doc = document_of(&frames, &[story("\\r", &[0, 1], "/0 0", "/1 10.0")]);
+    let envelope = type_envelope_of(0, &arc_keys(0.3), &format!("{}\n", square(30, 50)), "").replace("%_0 /FrameIndex ,", "%_1 /FrameIndex ,");
+    assert!(envelope.contains("%_1 /FrameIndex ,"));
+    let warp: String = frame_object(0, 1).lines().map(|l| format!("%_{l}\n")).collect();
+    let warped = format!("u\n0 1 1 0 1 0 0 Xa\n2 2 m\n9 2 L\n9 9 L\n2 9 L\nf\nU\n9 () XW\n{warp}1 (Warped) XW\n");
+    let check = |what: &str, d: &Document, notes: &[String]| {
+        assert!(
+            d.text_threads.iter().flatten().all(|id| d.node(*id).is_some_and(|n| matches!(n.kind, NodeKind::Text(_)))),
+            "{what}: {:?} {notes:?}",
+            d.text_threads
+        );
+    };
+    let art = native_with_text(&layer("Art", true, &format!("{}\n{}\n{envelope}", square(10, 10), frame_object(0, 0))), &doc);
+    // The page draws the envelope's drawn art.
+    let r = import(&eps(&format!("{}\n{}", page_square(10, 10), page_square(30, 50)), &art)).unwrap();
+    check("envelope, with the page", &r.document, &r.warnings);
+    assert!(r.document.text_threads.is_empty(), "{:?} {:?}", r.document.text_threads, r.warnings);
+    let (d, notes) = crate::ai_alone(&private(&art)).unwrap();
+    check("envelope, editing data alone", &d, &notes);
+    assert!(d.text_threads.is_empty(), "{:?} {notes:?}", d.text_threads);
+    let art = native_with_text(&(warped_style(40.0, WarpOn::Object) + &layer("Art", true, &format!("{}\n{warped}", frame_object(0, 0)))), &doc);
+    let (d, notes) = crate::ai_alone(&private(&art)).unwrap();
+    check("warp", &d, &notes);
+    assert_eq!(d.text_threads.len(), 1, "{notes:?}");
+    assert!(!notes.iter().any(|w| w.starts_with(crate::import::ai::WARPED_TYPE_DRAWN)), "{notes:?}");
+}
+
+/// A blank story's thread whose first frame an unread group takes with it leaves its other frame
+/// alone, no longer threaded: in a warp, that frame is weighed against its look as any warped text
+/// object is (the look draws a square the empty frame doesn't, so the look takes its place).
+#[test]
+fn a_blank_frame_an_unread_group_leaves_alone_in_a_warp_is_weighed_as_lone_type() {
+    let frames = [
+        format!("<< /0 << /0 [ 0 0 ] /1 << /0 [ {} ] >> /2 << /0 1 >> >> >>", canvas_rect(50.0, 10.0, 54.0, 14.0)),
+        format!("<< /0 << /0 [ 0 0 ] /1 << /0 [ {} ] >> /2 << /0 1 >> >> >>", canvas_rect(70.0, 10.0, 74.0, 14.0)),
+    ];
+    let text = document_of(&frames, &[story("\\r", &[0, 1], "/0 0", "/1 10.0")]);
+    let grouped = os1_group(&format!("{}\n{}\nZZ", square(50, 10), frame_object(0, 0)));
+    let own: String = frame_object(0, 1).lines().map(|l| format!("%_{l}\n")).collect();
+    let warped = format!("u\n0 1 1 0 1 0 0 Xa\n70 10 m\n74 10 L\n74 14 L\n70 14 L\nf\nU\n9 () XW\n{own}1 (Warped) XW\n");
+    let art = native_with_text(
+        &(warped_style(40.0, WarpOn::Object) + &layer("Back", true, &square(10, 10)) + &layer("Mixed", true, &format!("{grouped}\n{warped}"))),
+        &text,
+    );
+    let (doc, notes, read) = crate::layered_ai(&private(&art), pdf_three_squares(), vec![], false, true, 1.0);
+    assert!(read, "{notes:?}");
+    assert!(doc.text_threads.is_empty(), "{:?} {notes:?}", doc.text_threads);
+    assert!(notes.iter().any(|w| w.starts_with(crate::import::ai::WARPED_TYPE_DRAWN)), "{notes:?}");
+    // The look took the frame's place: no text object is left.
+    assert!(text_kinds(&doc).is_empty(), "{:?} {notes:?}", text_kinds(&doc));
 }
 
 /// A point type frame at the point (`x`, `y`) of the art.
