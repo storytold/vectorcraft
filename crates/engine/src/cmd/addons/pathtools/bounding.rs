@@ -88,9 +88,8 @@ fn add(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
     // Objects that get no shape: no outline, or a shape with no size.
     let mut skipped = 0;
     let mut no_size = false;
-    // Each shape gets the same share of the halvings, so the shape around one object does not
-    // depend on the other objects.
-    let splits = TOTAL_SPLITS / groups.len().max(1);
+    // The shapes share the halvings, so the work stays bounded however many objects are selected.
+    let splits = split_share(groups.len());
     for ids in &groups {
         match shape_around(d, &symbols, ids, kind, offset, splits) {
             Around::Shape(live) => made.push(live),
@@ -139,9 +138,9 @@ enum Around {
     PastCanvas,
 }
 
-/// The live rectangle or circle around `ids`, grown by `offset`. A circle halves its curves
-/// `splits` times at most in all.
-fn shape_around(d: &Document, symbols: &SymbolBoxes, ids: &[NodeId], kind: Kind, offset: f64, splits: usize) -> Around {
+/// The live rectangle or circle around `ids`, grown by `offset`. A circle halves its curves as
+/// `splits` allows.
+fn shape_around(d: &Document, symbols: &SymbolBoxes, ids: &[NodeId], kind: Kind, offset: f64, splits: Splits) -> Around {
     match kind {
         Kind::Rectangle => {
             let Some(r) = d.bounds_of_with(ids, false, symbols) else { return Around::NoOutline };
@@ -231,10 +230,10 @@ fn outline_points(n: &Node, symbols: &SymbolBoxes, out: &mut Gathered, depth: us
 
 /// Adds to `out` points whose convex hull, grown by [`FLATNESS`], holds the curve `c`: the ends of
 /// pieces whose control points lie within [`FLATNESS`] of their chord, and for pieces still curved
-/// after [`MAX_SPLITS`] halvings, or once `splits` is used up, the corners of [`held`]. A flat piece
-/// that ends where it starts adds its control points too, so a small loop is not taken for a single
-/// point. A curve with a point that is not finite adds nothing.
-fn curve_points(c: CubicBez, depth: u32, out: &mut Vec<Point>, splits: &mut usize) {
+/// after [`MAX_SPLITS`] halvings, or when `splits` allows no more ([`Splits::take`]), the corners of
+/// [`held`]. A flat piece that ends where it starts adds its control points too, so a small loop is
+/// not taken for a single point. A curve with a point that is not finite adds nothing.
+fn curve_points(c: CubicBez, depth: u32, out: &mut Vec<Point>, splits: &mut Splits) {
     if ![c.p0, c.p1, c.p2, c.p3].iter().all(|p| p.is_finite()) {
         return;
     }
@@ -244,10 +243,9 @@ fn curve_points(c: CubicBez, depth: u32, out: &mut Vec<Point>, splits: &mut usiz
         if c.p0 == c.p3 {
             out.extend([c.p1, c.p2]);
         }
-    } else if depth >= MAX_SPLITS || *splits == 0 {
+    } else if depth >= MAX_SPLITS || !splits.take(depth) {
         out.extend(held(c));
     } else {
-        *splits -= 1;
         let (a, b) = c.subdivide();
         curve_points(a, depth + 1, out, splits);
         curve_points(b, depth + 1, out, splits);
@@ -289,27 +287,67 @@ fn clip(poly: &[Point], x: bool, bound: f64, below: bool) -> Vec<Point> {
     out
 }
 
-/// How many halvings [`curve_points`] makes for one command in all, over every curve it measures;
-/// with `each`, every shape gets an equal share.
+/// How many halvings [`curve_points`] makes for one command, over every curve it measures, before
+/// it halves each further curve [`MIN_SPLITS`] times only; with `each`, every shape gets an equal
+/// share ([`split_share`]).
 const TOTAL_SPLITS: usize = 1 << 20;
+
+/// How many more halvings [`curve_points`] makes for one command once [`TOTAL_SPLITS`] is used up,
+/// each within the first [`MIN_SPLITS`] halvings of a curve; with `each`, shared as
+/// [`TOTAL_SPLITS`] is. After that, curves count by [`held`] whole.
+const EARLY_SPLITS: usize = 7 << 20;
+
+/// How many times [`curve_points`] halves a curve once [`TOTAL_SPLITS`] is used up: 8 pieces, which
+/// keeps the circle fitted to a circle of four curves less than 0.3% larger than that circle.
+const MIN_SPLITS: u32 = 3;
+
+/// The halvings [`curve_points`] may still make.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Splits {
+    /// Halvings at any depth.
+    any: usize,
+    /// Halvings within the first [`MIN_SPLITS`] of a curve, once `any` is used up.
+    early: usize,
+}
+
+impl Splits {
+    /// Takes one halving of a piece `depth` halvings into its curve; false when none is left.
+    fn take(&mut self, depth: u32) -> bool {
+        if self.any > 0 {
+            self.any -= 1;
+        } else if depth < MIN_SPLITS && self.early > 0 {
+            self.early -= 1;
+        } else {
+            return false;
+        }
+        true
+    }
+}
+
+/// The halvings each of `shapes` shapes may make: an equal share of [`TOTAL_SPLITS`] and of
+/// [`EARLY_SPLITS`].
+fn split_share(shapes: usize) -> Splits {
+    let n = shapes.max(1);
+    Splits { any: TOTAL_SPLITS / n, early: EARLY_SPLITS / n }
+}
 
 /// How many points [`outline_points`] gathers before it keeps only the corners of their convex hull.
 const COMPACT_AT: usize = 1 << 16;
 
 /// Points gathered for a circle, kept down to the corners of their convex hull whenever they grow
 /// past `limit`: only the hull decides the circle. The points held stay within about twice the
-/// hull's corners, and grow only with the anchors and objects measured and the [`TOTAL_SPLITS`]
-/// halvings.
+/// hull's corners, and grow only with the anchors and objects measured and the halvings
+/// ([`TOTAL_SPLITS`] and [`EARLY_SPLITS`]).
 struct Gathered {
     points: Vec<Point>,
     limit: usize,
-    /// The halvings [`curve_points`] may still make ([`TOTAL_SPLITS`] at first).
-    splits: usize,
+    /// The halvings [`curve_points`] may still make (one shape's whole share at first).
+    splits: Splits,
 }
 
 impl Gathered {
     fn new() -> Self {
-        Self { points: vec![], limit: COMPACT_AT, splits: TOTAL_SPLITS }
+        Self { points: vec![], limit: COMPACT_AT, splits: split_share(1) }
     }
 
     /// Keeps only the hull's corners once there are more than `limit` points; the next time waits

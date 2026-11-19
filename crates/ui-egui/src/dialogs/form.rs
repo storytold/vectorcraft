@@ -846,8 +846,8 @@ pub(crate) fn humanize(k: &str) -> String {
         "Height Width" => "Height/Width:".into(),
         "Traps With Process Color" => "Traps with Process Color:".into(),
         "Cols" => "Columns:".into(),
-        "Each" => "One per Object:".into(),
         "Flip Cols" => "Flip Columns:".into(),
+        "Each" => "One per Object:".into(),
         _ => format!("{s}:"),
     }
 }

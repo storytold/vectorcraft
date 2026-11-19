@@ -367,6 +367,80 @@ pub fn circle_through_points(points: &[Point]) -> Option<(Point, f64)> {
     circle.filter(|(c, r)| c.is_finite() && r.is_finite() && *r > 0.0)
 }
 
+/// Regular polygon with `sides` (≥ 3), first vertex straight up from the centre.
+pub fn polygon(center: Point, radius: f64, sides: u32, rotation_deg: f64) -> PathData {
+    let n = sides.max(3);
+    let rot = rotation_deg.to_radians();
+    let pts: Vec<Point> = (0..n)
+        .map(|i| {
+            let a = -PI / 2.0 + rot + TAU * i as f64 / n as f64;
+            Point::new(center.x + radius * a.cos(), center.y + radius * a.sin())
+        })
+        .collect();
+    PathData::single(SubPath::polyline(&pts, true))
+}
+
+/// Regular polygon with `sides` (≥ 3), bezier tangent `rounded` factor and deterministic
+/// `randomized` vertex jitter.
+pub fn polygon_configured(center: Point, radius: f64, sides: u32, rotation_deg: f64, rounded: f64, randomized: f64) -> PathData {
+    if (!rounded.is_finite() || rounded.abs() < 1e-9) && (!randomized.is_finite() || randomized.abs() < 1e-9) {
+        return polygon(center, radius, sides.clamp(3, 1000), rotation_deg);
+    }
+    let n = sides.clamp(3, 1000);
+    let rot = if rotation_deg.is_finite() { rotation_deg.to_radians() } else { 0.0 };
+    let rand_amt = if randomized.is_finite() { randomized.clamp(0.0, 10.0) } else { 0.0 };
+    let pts: Vec<Point> = (0..n)
+        .map(|i| {
+            let (dr, da) = if rand_amt > 1e-9 { vertex_jitter(i, n) } else { (0.0, 0.0) };
+            let r = (radius * (1.0 + rand_amt * 0.45 * dr)).max(0.01);
+            let a = -PI / 2.0 + rot + TAU * (i as f64 / n as f64) + rand_amt * (PI / n as f64) * da;
+            Point::new(center.x + r * a.cos(), center.y + r * a.sin())
+        })
+        .collect();
+    contour_with_rounding(&pts, rounded)
+}
+
+/// Star with `points` tips (≥ 2), outer radius `r1`, inner radius `r2`, first tip up.
+pub fn star(center: Point, r1: f64, r2: f64, points: u32, rotation_deg: f64) -> PathData {
+    let n = points.max(2) * 2;
+    let rot = rotation_deg.to_radians();
+    let pts: Vec<Point> = (0..n)
+        .map(|i| {
+            let r = if i % 2 == 0 { r1 } else { r2 };
+            let a = -PI / 2.0 + rot + TAU * i as f64 / n as f64;
+            Point::new(center.x + r * a.cos(), center.y + r * a.sin())
+        })
+        .collect();
+    PathData::single(SubPath::polyline(&pts, true))
+}
+
+/// Star with `points` tips (≥ 2), outer radius `r1`, inner radius `r2`, bezier tangent `rounded`
+/// factor and deterministic `randomized` vertex jitter.
+pub fn star_configured(center: Point, r1: f64, r2: f64, points: u32, rotation_deg: f64, rounded: f64, randomized: f64) -> PathData {
+    if (!rounded.is_finite() || rounded.abs() < 1e-9) && (!randomized.is_finite() || randomized.abs() < 1e-9) {
+        return star(center, r1, r2, points.clamp(2, 1000), rotation_deg);
+    }
+    let n = points.clamp(2, 1000) * 2;
+    let rot = if rotation_deg.is_finite() { rotation_deg.to_radians() } else { 0.0 };
+    let rand_amt = if randomized.is_finite() { randomized.clamp(0.0, 10.0) } else { 0.0 };
+    let pts: Vec<Point> = (0..n)
+        .map(|i| {
+            let base_r = if i % 2 == 0 { r1 } else { r2 };
+            let (dr, da) = if rand_amt > 1e-9 { vertex_jitter(i, n) } else { (0.0, 0.0) };
+            let r = (base_r * (1.0 + rand_amt * 0.45 * dr)).max(0.01);
+            let a = -PI / 2.0 + rot + TAU * (i as f64 / n as f64) + rand_amt * (PI / n as f64) * da;
+            Point::new(center.x + r * a.cos(), center.y + r * a.sin())
+        })
+        .collect();
+    contour_with_rounding(&pts, rounded)
+}
+
+/// Inner radius of a "straight-armed" star (Illustrator's Alt-drag behaviour): shoulders aligned.
+pub fn straight_star_inner_radius(r1: f64, points: u32) -> f64 {
+    let n = points.max(3) as f64;
+    r1 * (PI / n * 2.0).cos() / (PI / n).cos()
+}
+
 /// The smallest circle that holds every one of `points`: its center and radius. Points that are
 /// not finite are skipped; `None` when no finite point is left. One point gives a circle of
 /// radius 0 around it.
@@ -455,80 +529,6 @@ fn chain(hull: &mut Vec<Point>, points: impl Iterator<Item = Point>) {
         hull.push(p);
     }
     hull.pop();
-}
-
-/// Regular polygon with `sides` (≥ 3), first vertex straight up from the centre.
-pub fn polygon(center: Point, radius: f64, sides: u32, rotation_deg: f64) -> PathData {
-    let n = sides.max(3);
-    let rot = rotation_deg.to_radians();
-    let pts: Vec<Point> = (0..n)
-        .map(|i| {
-            let a = -PI / 2.0 + rot + TAU * i as f64 / n as f64;
-            Point::new(center.x + radius * a.cos(), center.y + radius * a.sin())
-        })
-        .collect();
-    PathData::single(SubPath::polyline(&pts, true))
-}
-
-/// Regular polygon with `sides` (≥ 3), bezier tangent `rounded` factor and deterministic
-/// `randomized` vertex jitter.
-pub fn polygon_configured(center: Point, radius: f64, sides: u32, rotation_deg: f64, rounded: f64, randomized: f64) -> PathData {
-    if (!rounded.is_finite() || rounded.abs() < 1e-9) && (!randomized.is_finite() || randomized.abs() < 1e-9) {
-        return polygon(center, radius, sides.clamp(3, 1000), rotation_deg);
-    }
-    let n = sides.clamp(3, 1000);
-    let rot = if rotation_deg.is_finite() { rotation_deg.to_radians() } else { 0.0 };
-    let rand_amt = if randomized.is_finite() { randomized.clamp(0.0, 10.0) } else { 0.0 };
-    let pts: Vec<Point> = (0..n)
-        .map(|i| {
-            let (dr, da) = if rand_amt > 1e-9 { vertex_jitter(i, n) } else { (0.0, 0.0) };
-            let r = (radius * (1.0 + rand_amt * 0.45 * dr)).max(0.01);
-            let a = -PI / 2.0 + rot + TAU * (i as f64 / n as f64) + rand_amt * (PI / n as f64) * da;
-            Point::new(center.x + r * a.cos(), center.y + r * a.sin())
-        })
-        .collect();
-    contour_with_rounding(&pts, rounded)
-}
-
-/// Star with `points` tips (≥ 2), outer radius `r1`, inner radius `r2`, first tip up.
-pub fn star(center: Point, r1: f64, r2: f64, points: u32, rotation_deg: f64) -> PathData {
-    let n = points.max(2) * 2;
-    let rot = rotation_deg.to_radians();
-    let pts: Vec<Point> = (0..n)
-        .map(|i| {
-            let r = if i % 2 == 0 { r1 } else { r2 };
-            let a = -PI / 2.0 + rot + TAU * i as f64 / n as f64;
-            Point::new(center.x + r * a.cos(), center.y + r * a.sin())
-        })
-        .collect();
-    PathData::single(SubPath::polyline(&pts, true))
-}
-
-/// Star with `points` tips (≥ 2), outer radius `r1`, inner radius `r2`, bezier tangent `rounded`
-/// factor and deterministic `randomized` vertex jitter.
-pub fn star_configured(center: Point, r1: f64, r2: f64, points: u32, rotation_deg: f64, rounded: f64, randomized: f64) -> PathData {
-    if (!rounded.is_finite() || rounded.abs() < 1e-9) && (!randomized.is_finite() || randomized.abs() < 1e-9) {
-        return star(center, r1, r2, points.clamp(2, 1000), rotation_deg);
-    }
-    let n = points.clamp(2, 1000) * 2;
-    let rot = if rotation_deg.is_finite() { rotation_deg.to_radians() } else { 0.0 };
-    let rand_amt = if randomized.is_finite() { randomized.clamp(0.0, 10.0) } else { 0.0 };
-    let pts: Vec<Point> = (0..n)
-        .map(|i| {
-            let base_r = if i % 2 == 0 { r1 } else { r2 };
-            let (dr, da) = if rand_amt > 1e-9 { vertex_jitter(i, n) } else { (0.0, 0.0) };
-            let r = (base_r * (1.0 + rand_amt * 0.45 * dr)).max(0.01);
-            let a = -PI / 2.0 + rot + TAU * (i as f64 / n as f64) + rand_amt * (PI / n as f64) * da;
-            Point::new(center.x + r * a.cos(), center.y + r * a.sin())
-        })
-        .collect();
-    contour_with_rounding(&pts, rounded)
-}
-
-/// Inner radius of a "straight-armed" star (Illustrator's Alt-drag behaviour): shoulders aligned.
-pub fn straight_star_inner_radius(r1: f64, points: u32) -> f64 {
-    let n = points.max(3) as f64;
-    r1 * (PI / n * 2.0).cos() / (PI / n).cos()
 }
 
 /// Open straight line.

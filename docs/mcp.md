@@ -13711,9 +13711,12 @@ Commands:
   their corners, and type and other objects by the corners of their bounding box. It splits each curve into pieces
   until every piece's control points lie within 0.01 pt of its chord, fits the circle to the ends of the pieces, and
   makes the radius 0.01 pt larger, so the circle holds the curves themselves. A curve is split into 1,024 pieces at
-  most, and one command splits its curves 1,048,576 times at most in all (with `each`, shared equally among the
-  shapes); a piece that still bends more counts by the hull of its control points cut down to its bounding box,
-  which can make the circle slightly larger than the smallest one. A path of a compound path selected on its own
+  most. One command makes at most 1,048,576 splits at any depth, and with `each` every shape gets an equal share. A
+  shape that has used up its share splits each further curve into at most 8 pieces, with at most 7,340,032 more
+  splits shared the same way (8,388,608 in all), and then counts each further curve whole. A piece that still bends more counts by the hull of its control points cut down to its bounding box, which
+  can make the circle larger than the smallest one. Before the 0.01 pt is added, the circle around a circle of four
+  curves is less than 0.3% larger when each curve is split into 8 pieces, and about 14% larger when each counts
+  whole. A path of a compound path selected on its own
   counts as an object, as `object.transform` moves it. `offset` (0 or more, default 0) adds space: a rectangle grows
   by `offset` on each side and a circle's radius grows by `offset`. `each: true` draws one shape around each selected
   object instead of one around the whole selection. The menu items Add Bounding Rectangle… and Add Bounding Circle…

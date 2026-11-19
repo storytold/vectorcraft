@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 use vectorcraft_doc::{LiveShape, Node, NodeId, NodeKind};
 use vectorcraft_geom::{CubicBez, Point, Rect, Vec2, shapes};
 
-use super::{CIRCLE, COMPACT_AT, Gathered, RECTANGLE};
+use super::{CIRCLE, COMPACT_AT, Gathered, RECTANGLE, Splits};
 use crate::Session;
 
 fn session() -> Session {
@@ -353,15 +353,17 @@ fn a_small_loop_gets_a_circle() {
     assert!(w > 0.02, "{w}");
 }
 
-/// Once the command has used up its halvings, a curve counts by its control points' hull cut down to
-/// its bounding box: the points stay inside both and reach no farther than the curve along either
-/// axis, while its handles may.
+/// Once the command has used up both kinds of halvings, a curve counts by its control points' hull
+/// cut down to its bounding box: the points stay inside both and reach no farther than the curve
+/// along either axis, while its handles may.
 #[test]
 fn a_curve_past_the_halvings_counts_by_its_hull_inside_its_bounding_box() {
+    // With nothing left, `curve_points` takes no halving, so `none` stays as it is.
+    let mut none = Splits { any: 0, early: 0 };
     let c = CubicBez::new((0.0, 0.0), (20.0, 400.0), (380.0, 500.0), (400.0, 0.0));
     let b = vectorcraft_geom::kurbo::ParamCurveExtrema::bounding_box(&c);
     let mut out = vec![];
-    super::curve_points(c, 0, &mut out, &mut 0);
+    super::curve_points(c, 0, &mut out, &mut none);
     assert!(out.len() >= 4 && out.iter().all(|p| b.inflate(1e-9, 1e-9).contains(*p)), "{out:?} in {b:?}");
     assert!(out.iter().any(|p| (p.y - b.y1).abs() < 1e-9), "the curve's lowest point is reached: {out:?}");
     let (center, r) = shapes::enclosing_circle(&out).unwrap();
@@ -372,14 +374,47 @@ fn a_curve_past_the_halvings_counts_by_its_hull_inside_its_bounding_box() {
     // The handle at x = 4,000,000 stays out: the curve reaches x = 16,000,000 / 9.
     let reach = CubicBez::new((0.0, 0.0), (4.0e6, 0.0), (0.0, 0.0), (0.0, 0.0));
     out.clear();
-    super::curve_points(reach, 0, &mut out, &mut 0);
+    super::curve_points(reach, 0, &mut out, &mut none);
     let far = out.iter().map(|p| p.x).fold(0.0, f64::max);
     assert!((far - 16.0e6 / 9.0).abs() < 1e-6, "{far}");
     out.clear();
-    let mut splits = 3;
+    let mut splits = Splits { any: 3, early: 0 };
     super::curve_points(c, 0, &mut out, &mut splits);
-    assert_eq!(splits, 0);
+    assert_eq!(splits, Splits { any: 0, early: 0 });
     assert!(out.len() > 4, "{out:?}");
+}
+
+/// The circle fitted to a circle of four curves: less than 0.3% larger with only the early halvings
+/// left, and up to about 14% larger by the curves' hulls once those are used up too.
+#[test]
+fn a_circle_measured_past_the_halvings_stays_close() {
+    let fitted = |mut splits: Splits| {
+        let circle = shapes::ellipse(Rect::new(-100.0, -100.0, 100.0, 100.0)).to_bezpath();
+        let mut out = vec![];
+        for seg in circle.segments() {
+            super::curve_points(seg.to_cubic(), 0, &mut out, &mut splits);
+        }
+        shapes::enclosing_circle(&out).unwrap()
+    };
+    let (center, r) = fitted(Splits { any: 0, early: 1000 });
+    assert!(center.to_vec2().hypot() < 0.1 && (100.0..100.3).contains(&r), "{center:?} {r}");
+    let (_, r) = fitted(Splits { any: 0, early: 0 });
+    assert!((110.0..115.0).contains(&r), "{r}");
+}
+
+/// Past the halvings at any depth, only the first [`super::MIN_SPLITS`] halvings of a curve take
+/// from the early ones; with `each`, every shape gets an equal share of both.
+#[test]
+fn early_halvings_are_taken_near_the_start_of_a_curve_and_shared() {
+    let mut s = Splits { any: 1, early: 1 };
+    assert!(s.take(super::MIN_SPLITS + 1));
+    assert!(!s.take(super::MIN_SPLITS));
+    assert!(s.take(0));
+    assert!(!s.take(0));
+    let whole = Splits { any: super::TOTAL_SPLITS, early: super::EARLY_SPLITS };
+    assert_eq!(super::split_share(0), whole);
+    assert_eq!(super::split_share(1), whole);
+    assert_eq!(super::split_share(4), Splits { any: super::TOTAL_SPLITS / 4, early: super::EARLY_SPLITS / 4 });
 }
 
 /// In an isolated group the shape goes on top of the group's art; in an isolated compound path it
