@@ -6,7 +6,11 @@
 //! a file read from a path and opened without a password; `null` until it is checked or cleared,
 //! when it follows the pages picked: on for All, off for a range; picking the other of All and
 //! Range sets it back to `null`; `__linkable` is false for a file `linkPages` does not take, such as
-//! one over its size limit), `cropTo` and `password`. `__locked` is set
+//! one over its size limit), `cropTo`, `textAs` (`text` | `outlines`; it starts from the `pdfTextAs`
+//! preference for a PDF (`__pdf`; Editable for a `.ai` or `.ait` file), or from the `textAs` a place
+//! gives (`__textAsGiven`), and OK keeps a PDF's choice there; a
+//! linked place shows the file's own text, so placing linked leaves it as it is, and Outlines clears
+//! Import PDF Pages as Links) and `password`. `__locked` is set
 //! until the password is accepted: OK then unlocks the file, and with `__passwordOnly` (Place with
 //! Show Import Options off) places its first page at once. `__place` keeps the other `file.place`
 //! params (Link, Template, `at`…). The file's bytes stay out of the fields, in
@@ -17,7 +21,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use serde_json::{Value, json};
 use vectorcraft_engine::cmd::fileio;
-use vectorcraft_pdf::{Choice, CropTo, PdfError};
+use vectorcraft_pdf::{Choice, CropTo, PdfError, TextAs};
 
 use super::DialogSpec;
 use crate::state::Dialog;
@@ -149,6 +153,10 @@ pub fn offer(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Option<St
         "range": "",
         "linkPages": null,
         "cropTo": CropTo::default().id(),
+        // The PDF Text preference is for PDFs: a `.ai` or `.ait` file starts from Editable, as it
+        // opens or is placed without the dialog.
+        "textAs": if format == "pdf" { preferred_text_as(app) } else { TextAs::Text }.id(),
+        "__pdf": format == "pdf",
         "password": "",
         "__locked": locked,
         "__linkable": fileio::pages_can_link(name, bytes),
@@ -157,7 +165,15 @@ pub fn offer(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Option<St
         fields["path"] = json!(p);
     }
     if let Some(p) = place {
-        fields["__place"] = other_place_params(p, &["page", "crop", "password"]);
+        // A `textAs` the place gives starts the Text choice; one that isn't a choice stays with
+        // the other params, for `file.place` to refuse.
+        let given = p.get("textAs").and_then(Value::as_str).filter(|id| TextAs::IDS.iter().any(|i| i.eq_ignore_ascii_case(id)));
+        if let Some(id) = given {
+            fields["textAs"] = json!(text_as_of(id).id());
+            fields["__textAsGiven"] = json!(true);
+        }
+        let taken: &[&str] = if given.is_some() { &["page", "crop", "password", "textAs"] } else { &["page", "crop", "password"] };
+        fields["__place"] = other_place_params(p, taken);
     }
     app.ui.dialog = Some(Dialog::new(KIND, fields));
     true
@@ -217,11 +233,90 @@ fn password(d: &Dialog) -> Option<String> {
     Some(d.str("password")).filter(|p| !p.is_empty())
 }
 
-/// Can the pages open linked: the file was read from a path (a linked page is read from its
+/// The labels of the Text choices, in the order of [`TextAs::ALL`].
+const TEXT_AS_LABELS: [&str; 2] = ["Editable", "Outlines"];
+
+/// The `textAs` choice `id` (any case); anything else is editable text.
+fn text_as_of(id: &str) -> TextAs {
+    TextAs::ALL.iter().zip(TextAs::IDS).find(|(_, i)| i.eq_ignore_ascii_case(id)).map(|(t, _)| *t).unwrap_or_default()
+}
+
+/// What a PDF's text becomes when an open or place from the app does not say: the `pdfTextAs`
+/// preference.
+pub(crate) fn preferred_text_as(app: &VectorcraftApp) -> TextAs {
+    text_as_of(&app.session.prefs.pdf_text_as)
+}
+
+/// The `document.open` options `p` for the file `name` holding `bytes`, with the `pdfTextAs`
+/// preference as its `textAs` when it is a PDF opened as Outlines and `p` has no `textAs`. A `.ai`
+/// or `.ait` file opens as it says: Outlines would open it from its PDF content, without its
+/// editing data. So does an open with `linkPages`, which refuses Outlines: a linked page shows the
+/// file's own text.
+pub(crate) fn with_preferred_text_as(app: &VectorcraftApp, name: &str, bytes: &[u8], p: &Value) -> Value {
+    let given = p.get("textAs").is_some_and(|v| !v.is_null());
+    let linked = p.get("linkPages").and_then(Value::as_bool) == Some(true);
+    let options = p.is_object() || p.is_null();
+    if given || linked || !options || preferred_text_as(app) == TextAs::Text || fileio::detect(name, bytes).map(|f| f.id) != Some("pdf") {
+        return p.clone();
+    }
+    let mut p = if p.is_object() { p.clone() } else { json!({}) };
+    p["textAs"] = json!(TextAs::Outlines.id());
+    p
+}
+
+/// The `file.place` params `p` of a PDF the user places embedded (Link off, from bytes or with a
+/// password) get the `pdfTextAs` preference as their `textAs` when it is Outlines and they have no
+/// `textAs`. A linked page shows the file's own text, and a `.ai` or `.ait` file is placed as it
+/// says.
+pub(crate) fn place_with_preferred_text_as(app: &VectorcraftApp, p: &mut Value) {
+    let given = |k: &str| p.get(k).is_some_and(|v| !v.is_null());
+    let path = p.get("path").and_then(Value::as_str);
+    let name = path.or_else(|| p.get("name").and_then(Value::as_str)).unwrap_or_default();
+    let linked = path.is_some() && p.get("link").and_then(Value::as_bool) != Some(false) && !given("password");
+    if given("textAs") || linked || preferred_text_as(app) == TextAs::Text || fileio::extension(name) != "pdf" {
+        return;
+    }
+    if let Some(o) = p.as_object_mut() {
+        o.insert("textAs".into(), json!(TextAs::Outlines.id()));
+    }
+}
+
+fn text_as(d: &Dialog) -> TextAs {
+    text_as_of(&d.str("textAs"))
+}
+
+/// A place that links the page: from a path, with Link on, without a password (`file.place`
+/// embeds a page read with a password) and without a `textAs` given with the place (`__textAsGiven`:
+/// the Text choice then decides, and Outlines embeds the page). A linked page shows the file's own
+/// text, so the Text choice does not apply to it.
+fn places_linked(d: &Dialog) -> bool {
+    d.str("mode") == "place"
+        && d.fields.get("path").and_then(Value::as_str).is_some()
+        && d.fields.get("__place").and_then(|p| p.get("link")).and_then(Value::as_bool) != Some(false)
+        && password(d).is_none()
+        && !d.bool("__textAsGiven")
+}
+
+/// Can the file's pages open linked: it was read from a path (a linked page is read from its
 /// file again), `document.open`'s `linkPages` takes its size, and it opens without a password
 /// (`linkPages` refuses one).
-fn can_link(d: &Dialog) -> bool {
+fn file_can_link(d: &Dialog) -> bool {
     d.fields.get("path").and_then(Value::as_str).is_some() && d.bool("__linkable") && password(d).is_none()
+}
+
+/// Can the pages open linked: [`file_can_link`], with the text kept editable (`linkPages`
+/// refuses `textAs: outlines`).
+fn can_link(d: &Dialog) -> bool {
+    file_can_link(d) && text_as(d) == TextAs::Text
+}
+
+/// Keeps the Text choice OK confirmed in the `pdfTextAs` preference.
+fn keep_text_as(app: &mut VectorcraftApp, text_as: TextAs) {
+    if preferred_text_as(app) != text_as {
+        // The open or place has already happened; a preference that can't be written only means
+        // the next dialog starts from the old choice.
+        let _ = app.run("prefs.set", json!({"key": "pdfTextAs", "value": text_as.id()}));
+    }
 }
 
 /// Import PDF Pages as Links as checked or cleared, or, when it is `null`, as the pages picked
@@ -283,9 +378,13 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
         if let Some(pw) = password(&d) {
             p["password"] = json!(pw);
         }
+        // A `textAs` left with the other params is one `file.place` refuses; null leaves it out.
+        if !places_linked(&d) && p.get("textAs").is_none_or(Value::is_null) {
+            p["textAs"] = json!(text_as(&d).id());
+        }
         crate::place::run_for_user(app, &p).map(|_| ())
     } else {
-        let mut p = json!({"cropTo": crop(&d).id(), "password": password(&d)});
+        let mut p = json!({"cropTo": crop(&d).id(), "password": password(&d), "textAs": text_as(&d).id()});
         let range = d.str("range");
         if !d.bool("allPages") && !range.trim().is_empty() {
             p["pages"] = json!(range);
@@ -297,6 +396,11 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     };
     match r {
         Ok(()) => {
+            // Asked only for the password, the dialog showed no Text choice to keep; the choice
+            // for a `.ai` or `.ait` file is not kept for PDFs.
+            if !places_linked(&d) && !d.bool("__passwordOnly") && d.bool("__pdf") {
+                keep_text_as(app, text_as(&d));
+            }
             // Opening may have asked something else (the profile of the document); only this
             // dialog closes.
             if app.ui.dialog.as_ref().is_some_and(|x| x.kind == KIND) {
@@ -359,6 +463,18 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
                     d.fields.insert("cropTo".into(), json!(id));
                 }
             });
+            ui.add_space(4.0);
+            let linked = places_linked(d);
+            widgets::label_row(ui, tl!("Text"), LABEL_WIDTH, |ui| {
+                let current = TextAs::ALL.iter().position(|t| *t == text_as(d)).and_then(|i| TEXT_AS_LABELS.get(i)).copied().unwrap_or_default();
+                let picked = ui.add_enabled_ui(!linked, |ui| widgets::dropdown(ui, "pdf-text-as", current, &TEXT_AS_LABELS, 130.0)).inner;
+                if let Some(t) = picked.and_then(|i| TextAs::ALL.get(i)) {
+                    d.fields.insert("textAs".into(), json!(t.id()));
+                }
+            });
+            if linked {
+                widgets::dim_label(ui, tl!("Linked pages show the file's own text."));
+            }
             if d.str("mode") != "place" {
                 ui.add_space(10.0);
                 ui.label(egui::RichText::new(tl!("Pages")).color(t.text));
@@ -378,6 +494,10 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
                 ui.add_space(10.0);
                 if widgets::check(ui, tl!("Import PDF pages as links"), links_on(d), can_link(d)) {
                     d.fields.insert("linkPages".into(), json!(!link_pages(d)));
+                }
+                // Outlines alone dims the box.
+                if text_as(d) == TextAs::Outlines && file_can_link(d) {
+                    widgets::dim_label(ui, tl!("Linked pages show the file's own text."));
                 }
             }
         });
@@ -399,12 +519,14 @@ fn password_row(ui: &mut egui::Ui, d: &mut Dialog) {
     });
 }
 
-/// Page `page` (1-based) cropped as the dialog says, rendered once per file, page and box.
+/// Page `page` (1-based) cropped and with its text as the dialog says (a linked place: as
+/// editable text, as before the choice), rendered once per file, page, box and text choice.
 fn preview(app: &mut VectorcraftApp, ctx: &egui::Context, d: &Dialog, page: usize) -> Option<egui::TextureHandle> {
     let file = app.ui.dialog_file.clone()?;
     let crop = crop(d);
-    let key = egui::Id::unique(("pdf-preview", file.token, page, crop.id()));
-    let opts = fileio::LoadOptions { crop, password: password(d), ..Default::default() };
+    let text_as = if places_linked(d) { TextAs::Text } else { text_as(d) };
+    let key = egui::Id::unique(("pdf-preview", file.token, page, crop.id(), text_as.id()));
+    let opts = fileio::LoadOptions { crop, password: password(d), text_as, ..Default::default() };
     // A page that can't be read shows an empty preview (and isn't read again).
     preview_texture(app, ctx, key, &format!("pdf-preview-{page}"), PREVIEW, || {
         fileio::page_document(&file.bytes, page - 1, &opts).ok().map(|(doc, _)| doc)
