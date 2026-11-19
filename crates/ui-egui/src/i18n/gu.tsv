@@ -2823,6 +2823,13 @@
 	Pen Tool	પેન ટૂલ
 	Quick Pen Tool	ક્વિક પેન ટૂલ
 	Quick Pen	ક્વિક પેન
+	Quick Pen Toolbar	ક્વિક પેન ટૂલબાર
+	Continuous Arc	સતત આર્ક
+	Sharp Corner Arc	તીક્ષ્ણ ખૂણાવાળો આર્ક
+	Flip Arc	આર્ક ફ્લિપ કરો
+	Hide Toolbar	ટૂલબાર છુપાવો
+	Pin Toolbar Position	ટૂલબાર સ્થિતિ પિન કરો
+	Reset Toolbar Position	ટૂલબાર સ્થિતિ રીસેટ કરો
 	Pencil	પેન્સિલ
 	Pencil Tool	પેન્સિલ ટૂલ
 	Percent:	ટકા:
@@ -4825,6 +4832,10 @@ arrowhead	Feather	પીંછું
 	Box Channel	બૉક્સ ચેનલ
 	Color box	રંગ બૉક્સ
 	Color Wheel Options	રંગ વ્હીલ વિકલ્પો
+	Show Document Colors	દસ્તાવેજના રંગો બતાવો
+	Document Colors	દસ્તાવેજના રંગો
+	Selection Colors	પસંદગીના રંગો
+@plural	Used {n} time|Used {n} times	{n} વાર વપરાયો|{n} વાર વપરાયો
 	Show Harmony	હાર્મની બતાવો
 	Harmony Rule	હાર્મની નિયમ
 	Harmony color	હાર્મની રંગ

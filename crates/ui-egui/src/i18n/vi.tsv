@@ -734,6 +734,10 @@ font-technology	Variable	Biến thiên
 	Box Channel	Kênh của hộp
 	Color box	Hộp màu
 	Color Wheel Options	Tùy chọn bánh xe màu
+	Show Document Colors	Hiện màu của tài liệu
+	Document Colors	Màu của tài liệu
+	Selection Colors	Màu của vùng chọn
+@plural	Used {n} time|Used {n} times	Dùng {n} lần
 	Show Harmony	Hiện hài hòa màu
 	Harmony Rule	Quy tắc hài hòa màu
 	Harmony color	Màu hài hòa
@@ -3162,6 +3166,13 @@ digits	Hindi	Hindi
 	Pen Tool	Công cụ Bút
 	Quick Pen Tool	Công cụ Bút nhanh
 	Quick Pen	Bút nhanh
+	Quick Pen Toolbar	Thanh công cụ Bút nhanh
+	Continuous Arc	Cung liên tục
+	Sharp Corner Arc	Cung góc nhọn
+	Flip Arc	Lật cung
+	Hide Toolbar	Ẩn thanh công cụ
+	Pin Toolbar Position	Ghim vị trí thanh công cụ
+	Reset Toolbar Position	Đặt lại vị trí thanh công cụ
 	Pencil	Bút chì
 	Pencil Tool	Công cụ Bút chì
 	per slice	mỗi lát cắt
@@ -4820,6 +4831,10 @@ mark-style	Japanese	Kiểu Nhật
 	Rename Preset	Đổi tên thiết lập sẵn
 	Save Image Trace Preset	Lưu thiết lập sẵn vector hóa ảnh
 	Delete Image Trace Preset	Xóa thiết lập sẵn vector hóa ảnh
+	Tracing Presets…	Thiết lập sẵn vector hóa…
+	Import Image Trace Presets	Nhập thiết lập sẵn vector hóa ảnh
+	Export Image Trace Presets	Xuất thiết lập sẵn vector hóa ảnh
+	Replace the saved presets that have these names?	Thay thế các thiết lập sẵn đã lưu có những tên này?
 	Tracing Result	Kết quả vector hóa
 	Tracing Result with Outlines	Kết quả vector hóa với đường bao
 	Tracking	Giãn chữ

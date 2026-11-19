@@ -822,6 +822,10 @@ arrowhead	Target	Céltábla
 	Box Channel	Négyzet csatornája
 	Color box	Színnégyzet
 	Color Wheel Options	Színkör beállításai
+	Show Document Colors	Dokumentumszínek megjelenítése
+	Document Colors	Dokumentumszínek
+	Selection Colors	A kijelölés színei
+@plural	Used {n} time|Used {n} times	{n} alkalommal használva
 	Show Harmony	Harmónia megjelenítése
 	Harmony Rule	Harmóniaszabály
 	Harmony color	Harmóniaszín
@@ -3342,6 +3346,13 @@ file-filter	Templates	Sablonok
 	Pen Tool	Toll
 	Quick Pen Tool	Gyorstoll
 	Quick Pen	Gyorstoll
+	Quick Pen Toolbar	Gyorstoll eszköztár
+	Continuous Arc	Folytonos ív
+	Sharp Corner Arc	Éles sarkú ív
+	Flip Arc	Ív tükrözése
+	Hide Toolbar	Eszköztár elrejtése
+	Pin Toolbar Position	Eszköztár helyének rögzítése
+	Reset Toolbar Position	Eszköztár helyének visszaállítása
 	Pencil	Ceruza
 	Pencil Tool	Ceruza
 	Pentagram	Pentagram
@@ -5099,6 +5110,10 @@ mark-style	Japanese	Japán
 	Rename Preset	Előbeállítás átnevezése
 	Save Image Trace Preset	Képvektorizálási előbeállítás mentése
 	Delete Image Trace Preset	Képvektorizálási előbeállítás törlése
+	Tracing Presets…	Vektorizálási előbeállítások…
+	Import Image Trace Presets	Képvektorizálási előbeállítások importálása
+	Export Image Trace Presets	Képvektorizálási előbeállítások exportálása
+	Replace the saved presets that have these names?	Lecseréli az ilyen nevű mentett előbeállításokat?
 	Tracing Result	Vektorizálás eredménye
 	Tracing Result with Outlines	Vektorizálás eredménye vázlattal
 	Tracking	Betűköz
