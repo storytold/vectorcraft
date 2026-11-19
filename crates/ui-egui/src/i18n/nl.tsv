@@ -1376,6 +1376,8 @@ liquify-list-end	{0}, {1}	{0} en {1}
 	Contextual Task Bar	Contextuele taakbalk
 	Pin Bar Position	Balkpositie vastzetten
 	Reset Bar Position	Balkpositie herstellen
+	Bar Actions	Balkacties
+	Reset Bar Actions	Balkacties herstellen
 	Tools	Gereedschappen
 	Toolbars	Werkbalken
 	Advanced	Geavanceerd
@@ -2053,6 +2055,10 @@ lighting	Light	Licht
 	Add Anchor Point Tool	Ankerpunt toevoegen
 	Anchor Point Tool	Ankerpunt-gereedschap
 	Arc Tool	Boog-gereedschap
+	Three-Point Arc Tool	Driepuntsboog-gereedschap
+	Three-Point Arc	Driepuntsboog
+	Arc too large	Boog te groot
+	Third Point Sets Direction	Derde punt geeft de richting aan
 	Area Graph Tool	Vlakdiagram-gereedschap
 	Area Type Tool	Vlaktype-gereedschap
 	Artboard Tool	Tekengebied-gereedschap
@@ -4970,6 +4976,11 @@ axis	Both	Beide
 	Image	Afbeelding
 	Ink	Inkt
 	Lab	Lab
+	OKLCH Sliders	OKLCH-schuifregelaars
+	HSL Sliders	HSL-schuifregelaars
+	Chroma	Chroma
+	The largest chroma sRGB holds at this lightness and hue	De grootste chroma die sRGB bij deze helderheid en tint bevat
+	OKLCH needs sRGB as the working RGB space	OKLCH vereist sRGB als werk-RGB-ruimte
 	Medium	Gemiddeld
 	Name	Naam
 	None	Geen
@@ -5757,6 +5768,10 @@ imageTrace	Outline	Contour
 @msg	a guide has no curvature circle	een hulplijn heeft geen krommingscirkel
 @msg	the circle that matches the path there would reach past the canvas	de cirkel die daar bij het pad past, zou voorbij het canvas reiken
 @msg	no circle passes through these points: two are the same or all three lie on one line	er gaat geen cirkel door deze punten: twee zijn gelijk of alle drie liggen op één lijn
+@msg	`at` must be "start" or "end"	`at` moet "start" of "end" zijn
+@msg	give exactly one of `through` and `toward`	geef precies één van `through` en `toward`
+@msg	no arc fits these points: two are the same or all three lie on one line	er past geen boog bij deze punten: twee zijn gelijk of alle drie liggen op één lijn
+@msg	give `at` only with `toward`	geef `at` alleen samen met `toward`
 @msg	no app to open files here	hier is geen app om bestanden mee te openen
 @msg	no artboard	geen tekengebied
 @msg	no artboard {i} (0-based; the document has {_1})	geen tekengebied {i} (vanaf 0; het document heeft er {_1})
@@ -8882,6 +8897,8 @@ mark-style	Japanese	Japans
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` moet grayscale, rgb, hsb, cmyk of websafe zijn
 @msg	`view` must be wheel or box	`view` moet wheel of box zijn
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` moet hue, saturation, brightness, red, green of blue zijn
+@msg	`sliders` must be none, oklch or hsl	`sliders` moet none, oklch of hsl zijn
+@msg	OKLCH needs sRGB as the working RGB space	OKLCH vereist sRGB als werk-RGB-ruimte
 @msg	the Color Picker is not open	de kleurenkiezer is niet open
 @msg	the screen color sampler is already open	de schermkleurkiezer is al open
 @msg	this system has no screen color sampler	dit systeem heeft geen schermkleurkiezer
@@ -10781,6 +10798,16 @@ breakText	Glyphs	Glyphs
 	Blossom Chain	Bloemenketting
 	Pennant Garland	Vlaggetjesslinger
 	Lantern String	Lantaarnslinger
+	Orbit Lines	Baanlijnen
+	Petal Garland	Bloemblaadjesslinger
+	Lattice Braid	Rastervlecht
+	Facet Sweep	Gefacetteerde streek
+	Artistic Brushes	Artistieke penselen
+	Paint	Verf
+	Flat Sweep	Vlakke streek
+	Dry Drag	Droge sleep
+	Loaded Stroke	Dikke verfstreek
+	Fan Sweep	Waaierstreek
 	Engraving	Gravure
 	Fine Hatching	Fijne arcering
 	Dense Hatching	Dichte arcering

@@ -223,6 +223,10 @@ font-technology	Variable	Değişken
 	Arc	Yay
 	Arc Lower…	Ark Alt…
 	Arc Tool	Yay Aracı
+	Three-Point Arc Tool	Üç Noktalı Yay Aracı
+	Three-Point Arc	Üç Noktalı Yay
+	Arc too large	Yay çok büyük
+	Third Point Sets Direction	Üçüncü Nokta Yönü Belirler
 	Arc Upper…	Ark Üst…
 	Arch…	Kemer…
 	Arc…	Yay…
@@ -632,6 +636,8 @@ font-technology	Variable	Değişken
 	Contextual Task Bar	Bağlamsal Görev Çubuğu
 	Pin Bar Position	Pim Çubuğu Konumu
 	Reset Bar Position	Çubuk Konumunu Sıfırla
+	Bar Actions	Çubuk Eylemleri
+	Reset Bar Actions	Çubuk Eylemlerini Sıfırla
 	Contrast	Kontrast
 	Control	Kontrol
 	Convert	Dönüştür
@@ -1855,6 +1861,11 @@ font-technology	Variable	Değişken
 	Knife	Bıçak
 	Knockout Group	Nakavt Grubu
 	Lab	Laboratuvar
+	OKLCH Sliders	OKLCH Kaydırıcıları
+	HSL Sliders	HSL Kaydırıcıları
+	Chroma	Kroma
+	The largest chroma sRGB holds at this lightness and hue	sRGB'nin bu açıklık ve renk tonunda alabileceği en yüksek kroma
+	OKLCH needs sRGB as the working RGB space	OKLCH, çalışma RGB alanı olarak sRGB gerektirir
 	Lab Spot Colors:	Laboratuvar Spot Renkleri:
 	Lab Values	Laboratuvar Değerleri
 	Landscape	Manzara
@@ -4907,6 +4918,8 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` grayscale, rgb, hsb, cmyk veya websafe olmalıdır
 @msg	`view` must be wheel or box	`view` wheel veya box olmalıdır
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` hue, saturation, brightness, red, green veya blue olmalıdır
+@msg	`sliders` must be none, oklch or hsl	`sliders` none, oklch veya hsl olmalıdır
+@msg	OKLCH needs sRGB as the working RGB space	OKLCH, çalışma RGB alanı olarak sRGB gerektirir
 @msg	`{k}` must be [x, y]	`{k}` [x, y] olmalıdır
 @msg	`{name}` has no options	`{name}`nin seçeneği yok
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` yerleşik bir çalışma alanıdır; başka bir isim seç
@@ -5085,6 +5098,10 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	a guide has no curvature circle	bir kılavuzun eğrilik çemberi yoktur
 @msg	the circle that matches the path there would reach past the canvas	yolla orada eşleşen çember tuvalin dışına taşardı
 @msg	no circle passes through these points: two are the same or all three lie on one line	bu noktalardan geçen bir çember yok: ikisi aynı ya da üçü de aynı doğru üzerinde
+@msg	`at` must be "start" or "end"	`at` "start" veya "end" olmalıdır
+@msg	give exactly one of `through` and `toward`	`through` ve `toward` değerlerinden tam olarak birini verin
+@msg	no arc fits these points: two are the same or all three lie on one line	bu noktalara uyan bir yay yok: ikisi aynı ya da üçü de aynı doğru üzerinde
+@msg	give `at` only with `toward`	`at` değerini yalnızca `toward` ile birlikte verin
 @msg	no app to open files here	burada dosyaları açacak uygulama yok
 @msg	no artboard	çalışma yüzeyi yok
 @msg	no artboard {i} (0-based; the document has {_1})	çalışma yüzeyi yok {i} (0 tabanlı; belgede {_1} var)
@@ -10700,6 +10717,16 @@ breakText	Glyphs	Glifler
 	Blossom Chain	Çiçek zinciri
 	Pennant Garland	Bayrak süsü
 	Lantern String	Fener dizisi
+	Orbit Lines	Yörünge Çizgileri
+	Petal Garland	Taç Yaprağı Çelengi
+	Lattice Braid	Kafes Örgü
+	Facet Sweep	Fasetli Darbe
+	Artistic Brushes	Sanatsal Fırçalar
+	Paint	Boya
+	Flat Sweep	Düz fırça izi
+	Dry Drag	Kuru sürükleme
+	Loaded Stroke	Yoğun fırça izi
+	Fan Sweep	Yelpaze izi
 	Engraving	Gravür
 	Fine Hatching	İnce tarama
 	Dense Hatching	Yoğun tarama

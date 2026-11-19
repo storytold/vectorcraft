@@ -217,6 +217,10 @@ font-technology	Variable	Μεταβλητές
 	Arc	Τόξο
 	Arc Lower…	Κάτω τόξο…
 	Arc Tool	Τόξο (Arc Tool)
+	Three-Point Arc Tool	Εργαλείο τόξου τριών σημείων
+	Three-Point Arc	Τόξο τριών σημείων
+	Arc too large	Το τόξο είναι πολύ μεγάλο
+	Third Point Sets Direction	Το τρίτο σημείο ορίζει την κατεύθυνση
 	Arc Upper…	Πάνω τόξο…
 	Arch…	Αψίδα…
 	Arc…	Τόξο…
@@ -606,6 +610,8 @@ font-technology	Variable	Μεταβλητές
 	Contextual Task Bar	Γραμμή εργασιών βάσει περιβάλλοντος
 	Pin Bar Position	Σταθεροποίηση θέσης γραμμής
 	Reset Bar Position	Επαναφορά θέσης γραμμής
+	Bar Actions	Ενέργειες γραμμής
+	Reset Bar Actions	Επαναφορά ενεργειών γραμμής
 	Resize	Αλλαγή μεγέθους
 	Contrast	Αντίθεση
 	Control	Έλεγχος
@@ -1929,6 +1935,11 @@ font-technology	Variable	Μεταβλητές
 	Knife	Μαχαίρι (Knife)
 	Knockout Group	Ομάδα διάτρησης
 	Lab	Lab
+	OKLCH Sliders	Ρυθμιστικά OKLCH
+	HSL Sliders	Ρυθμιστικά HSL
+	Chroma	Χρωματική ένταση
+	The largest chroma sRGB holds at this lightness and hue	Η μεγαλύτερη χρωματική ένταση που χωρά το sRGB σε αυτή τη φωτεινότητα και απόχρωση
+	OKLCH needs sRGB as the working RGB space	Το OKLCH απαιτεί sRGB ως χώρο εργασίας RGB
 	Lab Spot Colors:	Πλακάτα χρώματα Lab:
 	Lab Values	Τιμές Lab
 	Landscape	Οριζόντιος προσανατολισμός
@@ -5322,6 +5333,10 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	a guide has no curvature circle	ένας οδηγός δεν έχει κύκλο καμπυλότητας
 @msg	the circle that matches the path there would reach past the canvas	ο κύκλος που ταιριάζει με τη διαδρομή εκεί θα υπερέβαινε τον καμβά
 @msg	no circle passes through these points: two are the same or all three lie on one line	κανένας κύκλος δεν περνά από αυτά τα σημεία: δύο είναι ίδια ή και τα τρία βρίσκονται σε μία ευθεία
+@msg	`at` must be "start" or "end"	το `at` πρέπει να είναι "start" ή "end"
+@msg	give exactly one of `through` and `toward`	δώστε ακριβώς ένα από τα `through` και `toward`
+@msg	no arc fits these points: two are the same or all three lie on one line	κανένα τόξο δεν ταιριάζει σε αυτά τα σημεία: δύο είναι ίδια ή και τα τρία βρίσκονται σε μία ευθεία
+@msg	give `at` only with `toward`	δώστε το `at` μόνο μαζί με το `toward`
 @msg	no app to open files here	δεν υπάρχει εφαρμογή για άνοιγμα αρχείων εδώ
 @msg	no artboard	δεν υπάρχει πίνακας σχεδίασης
 @msg	no artboard {i} (0-based; the document has {_1})	δεν υπάρχει πίνακας σχεδίασης {i} (αρίθμηση από 0· το έγγραφο περιέχει {_1})
@@ -6975,6 +6990,8 @@ effect	Points	Σημεία
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	το `mode` πρέπει να είναι grayscale, rgb, hsb, cmyk ή websafe
 @msg	`view` must be wheel or box	το `view` πρέπει να είναι wheel ή box
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	το `channel` πρέπει να είναι hue, saturation, brightness, red, green ή blue
+@msg	`sliders` must be none, oklch or hsl	Το `sliders` πρέπει να είναι none, oklch ή hsl
+@msg	OKLCH needs sRGB as the working RGB space	Το OKLCH απαιτεί sRGB ως χώρο εργασίας RGB
 @msg	`{key}` must be an array of these names: {_1}	το `{key}` πρέπει να είναι πίνακας με αυτά τα ονόματα: {_1}
 @msg	choose a destination folder	επιλέξτε φάκελο προορισμού
 @msg	choose a source folder	επιλέξτε φάκελο προέλευσης
@@ -8891,6 +8908,16 @@ breakText	Glyphs	Γλύφοι
 	Blossom Chain	Αλυσίδα λουλουδιών
 	Pennant Garland	Γιρλάντα σημαιών
 	Lantern String	Σειρά φαναριών
+	Orbit Lines	Τροχιακές γραμμές
+	Petal Garland	Γιρλάντα πετάλων
+	Lattice Braid	Πλεξούδα πλέγματος
+	Facet Sweep	Πολυεδρική πινελιά
+	Artistic Brushes	Καλλιτεχνικά πινέλα
+	Paint	Ζωγραφική
+	Flat Sweep	Επίπεδη πινελιά
+	Dry Drag	Στεγνό σύρσιμο
+	Loaded Stroke	Γεμάτη πινελιά
+	Fan Sweep	Βεντάλια
 	Engraving	Χαρακτική
 	Fine Hatching	Λεπτή διαγράμμιση
 	Dense Hatching	Πυκνή διαγράμμιση

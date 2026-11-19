@@ -233,6 +233,10 @@ antiAlias	Sharp	Nítido
 	Arc	Arco
 	Arc Lower…	Arco Inferior…
 	Arc Tool	Ferramenta Arco
+	Three-Point Arc Tool	Ferramenta Arco por três pontos
+	Three-Point Arc	Arco por três pontos
+	Arc too large	Arco grande demais
+	Third Point Sets Direction	O terceiro ponto indica a direção
 	Arc Upper…	Arco Superior…
 	Arch…	Abóbada…
 	Arc…	Arco…
@@ -597,6 +601,8 @@ antiAlias	Sharp	Nítido
 	Contextual Task Bar	Barra de Tarefas Contextual
 	Pin Bar Position	Fixar Posição da Barra
 	Reset Bar Position	Redefinir Posição da Barra
+	Bar Actions	Ações da Barra
+	Reset Bar Actions	Redefinir Ações da Barra
 	Resize	Redimensionar
 	Control	Controle
 	Convert	Converter
@@ -4647,6 +4653,10 @@ axis	Both	Ambos
 @msg	a guide has no curvature circle	uma guia não tem círculo de curvatura
 @msg	the circle that matches the path there would reach past the canvas	o círculo que corresponde ao caminho nesse ponto ultrapassaria a tela
 @msg	no circle passes through these points: two are the same or all three lie on one line	nenhum círculo passa por esses pontos: dois são iguais ou os três estão na mesma reta
+@msg	`at` must be "start" or "end"	`at` deve ser "start" ou "end"
+@msg	give exactly one of `through` and `toward`	informe exatamente um entre `through` e `toward`
+@msg	no arc fits these points: two are the same or all three lie on one line	nenhum arco se ajusta a esses pontos: dois são iguais ou os três estão na mesma reta
+@msg	give `at` only with `toward`	informe `at` somente com `toward`
 @msg	no app to open files here	nenhum aplicativo para abrir arquivos aqui
 @msg	no artboard	nenhuma prancheta
 @msg	no artboard {i} (0-based; the document has {_1})	nenhuma prancheta {i} (base 0; o documento tem {_1})
@@ -5710,6 +5720,11 @@ variable-list-end	{0}, {1}	{0} e {1}
 @plural	agrees with {n} default shortcut|agrees with {n} default shortcuts	coincide com {n} atalho padrão|coincide com {n} atalhos padrão
 @plural	{n} part of the file wasn't read|{n} parts of the file weren't read	{n} parte do arquivo não foi lida|{n} partes do arquivo não foram lidas
 	Lab	Lab
+	OKLCH Sliders	Controles Deslizantes OKLCH
+	HSL Sliders	Controles Deslizantes HSL
+	Chroma	Croma
+	The largest chroma sRGB holds at this lightness and hue	O maior croma que o sRGB comporta nesta luminosidade e neste tom
+	OKLCH needs sRGB as the working RGB space	OKLCH requer sRGB como espaço de trabalho RGB
 	Lab Values	Valores Lab
 	Large List View	Exibição em Lista Grande
 	Large Thumbnail View	Exibição em Miniaturas Grandes
@@ -6921,6 +6936,8 @@ mark-style	Japanese	Japonesas
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` deve ser grayscale, rgb, hsb, cmyk ou websafe
 @msg	`view` must be wheel or box	`view` deve ser wheel ou box
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` deve ser hue, saturation, brightness, red, green ou blue
+@msg	`sliders` must be none, oklch or hsl	`sliders` deve ser none, oklch ou hsl
+@msg	OKLCH needs sRGB as the working RGB space	OKLCH requer sRGB como espaço de trabalho RGB
 @msg	the image can't be read as a texture	a imagem não pode ser lida como textura
 
 # User Interface › Accent Color
@@ -10814,6 +10831,16 @@ swatch	Yellow Green	Verde-amarelado
 	Blossom Chain	Corrente de flores
 	Pennant Garland	Guirlanda de bandeirolas
 	Lantern String	Cordão de lanternas
+	Orbit Lines	Linhas orbitais
+	Petal Garland	Guirlanda de pétalas
+	Lattice Braid	Trança em grade
+	Facet Sweep	Traço facetado
+	Artistic Brushes	Pincéis artísticos
+	Paint	Pintura
+	Flat Sweep	Pincelada plana
+	Dry Drag	Arrasto seco
+	Loaded Stroke	Traço carregado
+	Fan Sweep	Pincelada em leque
 	Engraving	Gravura
 	Fine Hatching	Hachuras finas
 	Dense Hatching	Hachuras densas

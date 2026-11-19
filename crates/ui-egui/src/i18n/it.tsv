@@ -240,6 +240,10 @@ font-technology	Variable	Variabili
 	Arc	Arco
 	Arc Lower…	Arco inferiore…
 	Arc Tool	Strumento Arco
+	Three-Point Arc Tool	Strumento Arco per tre punti
+	Three-Point Arc	Arco per tre punti
+	Arc too large	Arco troppo grande
+	Third Point Sets Direction	Il terzo punto indica la direzione
 	Arc Upper…	Arco superiore…
 	Arch…	Arcata…
 	Arc…	Arco…
@@ -654,6 +658,8 @@ font-technology	Variable	Variabili
 	Contextual Task Bar	Barra attività contestuale
 	Pin Bar Position	Fissa posizione barra
 	Reset Bar Position	Ripristina posizione barra
+	Bar Actions	Azioni barra
+	Reset Bar Actions	Ripristina azioni barra
 	Resize	Ridimensiona
 	Contrast	Contrasto
 	Control	Controllo
@@ -2074,6 +2080,11 @@ file-filter	Templates	Modelli
 	Knife	Coltello
 	Knockout Group	Gruppo con foratura
 	Lab	Lab
+	OKLCH Sliders	Cursori OKLCH
+	HSL Sliders	Cursori HSL
+	Chroma	Croma
+	The largest chroma sRGB holds at this lightness and hue	Il croma più alto che sRGB contiene con questa luminosità e tonalità
+	OKLCH needs sRGB as the working RGB space	OKLCH richiede sRGB come spazio di lavoro RGB
 	Lab Spot Colors:	Colori spot Lab:
 	Lab Values	Valori Lab
 	Landscape	Orizzontale
@@ -5206,6 +5217,8 @@ liquify-list-end	{0}, {1}	{0} e {1}
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` deve essere grayscale, rgb, hsb, cmyk o websafe
 @msg	`view` must be wheel or box	`view` deve essere wheel o box
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` deve essere hue, saturation, brightness, red, green o blue
+@msg	`sliders` must be none, oklch or hsl	`sliders` deve essere none, oklch o hsl
+@msg	OKLCH needs sRGB as the working RGB space	OKLCH richiede sRGB come spazio di lavoro RGB
 @msg	`{k}` must be [x, y]	`{k}` deve essere [x, y]
 @msg	`{name}` has no options	`{name}` non ha opzioni
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` è un'area di lavoro integrata; scegli un altro nome
@@ -5399,6 +5412,10 @@ liquify-list-end	{0}, {1}	{0} e {1}
 @msg	a guide has no curvature circle	una guida non ha un cerchio di curvatura
 @msg	the circle that matches the path there would reach past the canvas	il cerchio che corrisponde al tracciato in quel punto supererebbe l'area di lavoro
 @msg	no circle passes through these points: two are the same or all three lie on one line	nessun cerchio passa per questi punti: due coincidono oppure tutti e tre sono allineati
+@msg	`at` must be "start" or "end"	`at` deve essere "start" o "end"
+@msg	give exactly one of `through` and `toward`	indicare esattamente uno tra `through` e `toward`
+@msg	no arc fits these points: two are the same or all three lie on one line	nessun arco si adatta a questi punti: due coincidono oppure tutti e tre sono allineati
+@msg	give `at` only with `toward`	indicare `at` solo insieme a `toward`
 @msg	no app to open files here	nessuna app per aprire file qui
 @msg	no artboard	nessuna tavola da disegno
 @msg	no artboard {i} (0-based; the document has {_1})	nessuna tavola da disegno {i} (a partire da 0; il documento ne ha {_1})
@@ -10417,6 +10434,16 @@ breakText	Glyphs	Glifi
 	Blossom Chain	Catena di fiori
 	Pennant Garland	Ghirlanda di bandierine
 	Lantern String	Fila di lanterne
+	Orbit Lines	Linee orbitali
+	Petal Garland	Ghirlanda di petali
+	Lattice Braid	Intreccio a reticolo
+	Facet Sweep	Tratto sfaccettato
+	Artistic Brushes	Pennelli artistici
+	Paint	Pittura
+	Flat Sweep	Passata piatta
+	Dry Drag	Trascinamento secco
+	Loaded Stroke	Tratto carico
+	Fan Sweep	Passata a ventaglio
 	Engraving	Incisione
 	Fine Hatching	Tratteggio fine
 	Dense Hatching	Tratteggio fitto

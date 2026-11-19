@@ -809,6 +809,8 @@
 	Contextual Task Bar	Kontextový panel úloh
 	Pin Bar Position	Připnout polohu panelu
 	Reset Bar Position	Obnovit polohu panelu
+	Bar Actions	Akce panelu
+	Reset Bar Actions	Obnovit akce panelu
 	Resize	Změnit velikost
 	Tools	Nástroje
 	Toolbars	Panely nástrojů
@@ -1531,6 +1533,10 @@ lighting	Light	Světlo
 	Add Anchor Point Tool	Nástroj Přidat kotevní bod
 	Anchor Point Tool	Nástroj Kotevní bod
 	Arc Tool	Nástroj Oblouk
+	Three-Point Arc Tool	Nástroj Oblouk třemi body
+	Three-Point Arc	Oblouk třemi body
+	Arc too large	Oblouk je příliš velký
+	Third Point Sets Direction	Třetí bod určuje směr
 	Area Graph Tool	Nástroj Plošný graf
 	Area Type Tool	Nástroj Text v oblasti
 	Artboard Tool	Nástroj Pracovní plocha
@@ -4654,6 +4660,11 @@ axis	Both	Obě
 	Image	Obraz
 	Ink	Inkoust
 	Lab	Lab
+	OKLCH Sliders	Posuvníky OKLCH
+	HSL Sliders	Posuvníky HSL
+	Chroma	Chroma
+	The largest chroma sRGB holds at this lightness and hue	Největší chroma, kterou sRGB obsáhne při této světlosti a odstínu
+	OKLCH needs sRGB as the working RGB space	OKLCH vyžaduje sRGB jako pracovní prostor RGB
 	Medium	Střední
 	Name	Název
 	None	Žádné
@@ -5492,6 +5503,8 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` musí být grayscale, rgb, hsb, cmyk nebo websafe
 @msg	`view` must be wheel or box	`view` musí být wheel nebo box
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` musí být hue, saturation, brightness, red, green nebo blue
+@msg	`sliders` must be none, oklch or hsl	`sliders` musí být none, oklch nebo hsl
+@msg	OKLCH needs sRGB as the working RGB space	OKLCH vyžaduje sRGB jako pracovní prostor RGB
 @msg	`{k}` must be [x, y]	`{k}` musí být [x, y]
 @msg	`{name}` has no options	`{name}` nemá žádné možnosti
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` je vestavěný pracovní prostor; zvolte jiný název
@@ -5685,6 +5698,10 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	a guide has no curvature circle	vodítko nemá kružnici křivosti
 @msg	the circle that matches the path there would reach past the canvas	kružnice odpovídající cestě v tomto místě by přesáhla plátno
 @msg	no circle passes through these points: two are the same or all three lie on one line	těmito body neprochází žádná kružnice: dva jsou stejné nebo všechny tři leží na jedné přímce
+@msg	`at` must be "start" or "end"	`at` musí být "start" nebo "end"
+@msg	give exactly one of `through` and `toward`	zadejte právě jeden z parametrů `through` a `toward`
+@msg	no arc fits these points: two are the same or all three lie on one line	těmto bodům neodpovídá žádný oblouk: dva jsou stejné nebo všechny tři leží na jedné přímce
+@msg	give `at` only with `toward`	parametr `at` zadejte jen s `toward`
 @msg	no app to open files here	zde chybí aplikace pro otevírání souborů
 @msg	no artboard	žádná pracovní plocha
 @msg	no artboard {i} (0-based; the document has {_1})	pracovní plocha {i} neexistuje (číslováno od 0; dokument jich má {_1})
@@ -10742,6 +10759,16 @@ breakText	Glyphs	Glyfy
 	Blossom Chain	Květinový řetěz
 	Pennant Garland	Girlanda praporků
 	Lantern String	Řetěz luceren
+	Orbit Lines	Orbitální čáry
+	Petal Garland	Okvětní girlanda
+	Lattice Braid	Mřížkový cop
+	Facet Sweep	Fazetový tah
+	Artistic Brushes	Umělecké štětce
+	Paint	Malba
+	Flat Sweep	Plochý tah
+	Dry Drag	Suchý tah
+	Loaded Stroke	Sytý tah
+	Fan Sweep	Vějířový tah
 	Engraving	Rytina
 	Fine Hatching	Jemné šrafování
 	Dense Hatching	Husté šrafování

@@ -259,6 +259,10 @@ font-technology	Variable	Biến thiên
 	Arc	Cung
 	Arc Lower…	Cung dưới…
 	Arc Tool	Công cụ Cung
+	Three-Point Arc Tool	Công cụ Cung ba điểm
+	Three-Point Arc	Cung ba điểm
+	Arc too large	Cung quá lớn
+	Third Point Sets Direction	Điểm thứ ba chỉ hướng
 	Arc Upper…	Cung trên…
 	Arch…	Vòm…
 	Arc…	Cung…
@@ -2368,6 +2372,11 @@ digits	Hindi	Hindi
 	Knife	Dao
 	Knockout Group	Nhóm Knockout
 	Lab	Lab
+	OKLCH Sliders	Thanh trượt OKLCH
+	HSL Sliders	Thanh trượt HSL
+	Chroma	Độ tươi màu
+	The largest chroma sRGB holds at this lightness and hue	Độ tươi màu lớn nhất mà sRGB chứa được ở độ sáng và sắc độ này
+	OKLCH needs sRGB as the working RGB space	OKLCH cần sRGB làm không gian RGB làm việc
 	Lab Spot Colors:	Màu đặc Lab:
 	Lab Values	Giá trị Lab
 	Landscape	Ngang
@@ -3562,6 +3571,8 @@ mark-style	Japanese	Kiểu Nhật
 	Reset all 3D settings to their defaults.	Đặt lại tất cả cài đặt 3D về mặc định.
 	Reset all Revolve settings to their defaults.	Đặt lại tất cả cài đặt Revolve về mặc định.
 	Reset Bar Position	Đặt lại vị trí thanh
+	Bar Actions	Thao tác của thanh
+	Reset Bar Actions	Đặt lại thao tác của thanh
 	Reset Bounding Box	Đặt lại hộp bao
 	Rotate Bounding Box	Xoay hộp bao
 	Rotate Bounding Box…	Xoay hộp bao…
@@ -5188,6 +5199,8 @@ theme	Appearance	Giao diện
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` phải là grayscale, rgb, hsb, cmyk hoặc websafe
 @msg	`view` must be wheel or box	`view` phải là wheel hoặc box
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` phải là hue, saturation, brightness, red, green hoặc blue
+@msg	`sliders` must be none, oklch or hsl	`sliders` phải là none, oklch hoặc hsl
+@msg	OKLCH needs sRGB as the working RGB space	OKLCH cần sRGB làm không gian RGB làm việc
 @msg	`{k}` must be [x, y]	`{k}` phải là [x, y]
 @msg	`{name}` has no options	`{name}` không có tùy chọn
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` là không gian làm việc tích hợp sẵn; hãy chọn tên khác
@@ -5753,6 +5766,10 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	a guide has no curvature circle	đường căn không có đường tròn độ cong
 @msg	the circle that matches the path there would reach past the canvas	đường tròn khớp với đường dẫn tại đó sẽ vượt quá giới hạn vùng vẽ
 @msg	no circle passes through these points: two are the same or all three lie on one line	không có đường tròn nào đi qua các điểm này: hai điểm trùng nhau hoặc cả ba điểm thẳng hàng
+@msg	`at` must be "start" or "end"	`at` phải là "start" hoặc "end"
+@msg	give exactly one of `through` and `toward`	hãy cho đúng một trong hai `through` và `toward`
+@msg	no arc fits these points: two are the same or all three lie on one line	không có cung nào khớp với các điểm này: hai điểm trùng nhau hoặc cả ba điểm thẳng hàng
+@msg	give `at` only with `toward`	chỉ cho `at` cùng với `toward`
 @msg	no app to open files here	không có ứng dụng để mở tệp ở đây
 @msg	no artboard	không có bảng vẽ
 @msg	no artboard {i} (0-based; the document has {_1})	không có bảng vẽ {i} (bắt đầu từ 0; tài liệu có {_1})
@@ -8590,6 +8607,16 @@ breakText	Glyphs	Glyph
 	Blossom Chain	Chuỗi hoa
 	Pennant Garland	Dây cờ tam giác
 	Lantern String	Dây đèn lồng
+	Orbit Lines	Đường quỹ đạo
+	Petal Garland	Vòng hoa cánh
+	Lattice Braid	Bện lưới
+	Facet Sweep	Nét đa diện
+	Artistic Brushes	Cọ nghệ thuật
+	Paint	Sơn
+	Flat Sweep	Nét quét phẳng
+	Dry Drag	Nét kéo khô
+	Loaded Stroke	Nét cọ đậm
+	Fan Sweep	Nét quét hình quạt
 	Engraving	Khắc nét
 	Fine Hatching	Nét gạch mảnh
 	Dense Hatching	Nét gạch dày
