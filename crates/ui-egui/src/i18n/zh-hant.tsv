@@ -2100,6 +2100,9 @@ file-filter	Templates	範本
 @msg	no such anchor	沒有這個錨點
 @msg	no such segment	沒有這個線段
 @msg	no such subpath	沒有這個子路徑
+@msg	`pieces` must be a list of at most 10000 pieces	`pieces` 必須是最多 10000 個片段的清單
+@msg	give either `start` for a new path or `id`, not both	請為新路徑指定 `start`，或指定 `id`，不可同時指定
+@msg	`subpath` and `keep` need `id`	`subpath` 與 `keep` 需要 `id`
 @msg	object {id} is not a path	物件 {id} 不是路徑
 @msg	object {id} is not a selected top-level object	物件 {id} 不是已選取的最上層物件
 @msg	nothing to redo	沒有可重做的動作
@@ -4101,6 +4104,8 @@ liquify-list-end	{0}, {1}	{0}和{1}
 	PDF/A files carry their own output intent.	PDF/A 檔案自帶輸出目的。
 	PDF/X-1a files are CMYK: every colour is converted to the destination (blank: the output intent's CMYK profile), untagged.	PDF/X-1a 檔案為 CMYK：所有顏色都會轉換至目的地 (留空：輸出目的的 CMYK 描述檔)，且不加標記。
 	Pen Tool	筆型工具
+	Quick Pen Tool	快速筆型工具
+	Quick Pen	快速筆型
 	Pencil	鉛筆
 	Pencil Tool	鉛筆工具
 	per slice	每個切片
