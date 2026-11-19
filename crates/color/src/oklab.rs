@@ -51,8 +51,8 @@ fn largest_fitting_chroma(l: f64, h: f64, limit: f64) -> f64 {
         return 0.0;
     }
     let fits = |c: f64| in_srgb(oklch_to_srgb(l, c, h));
-    // The edge of the chromas from 0 that sRGB holds without a break.
-    let (mut lo, mut hi) = (0.0, 0.5);
+    // An edge of the chromas sRGB holds, searched no higher than `limit`, so `lo` always fits.
+    let (mut lo, mut hi) = (0.0, limit.min(0.5));
     for _ in 0..40 {
         let mid = (lo + hi) / 2.0;
         if fits(mid) { lo = mid } else { hi = mid }
@@ -199,6 +199,19 @@ mod tests {
         // A darker blue on the line from black to blue.
         let [l, c, h] = to_oklch([0.0, 0.0, 0.25]);
         assert!((max_chroma(l, h) - c).abs() < 1e-4, "{} {c}", max_chroma(l, h));
+    }
+
+    /// Just below blue's lightness the line from black to blue passes a chroma of 0.3125, where a
+    /// search from 0 to 0.5 lands first. A chroma asked for below that line still gives a color
+    /// inside sRGB with the lightness and hue asked for.
+    #[test]
+    fn a_chroma_below_the_line_from_black_to_blue_stays_inside_srgb() {
+        let [bl, bc, h] = to_oklch([0.0, 0.0, 1.0]);
+        let l = bl * 0.3125 / bc;
+        let (rgb, lowered) = from_oklch(l, 0.29, h);
+        let [gl, gc, gh] = to_oklch(rgb);
+        assert!(lowered && gc < 0.29 && in_srgb(oklch_to_srgb(l, gc, h)), "{gc}");
+        assert!((gl - l).abs() < 2e-3 && (gh - h).abs() < 1.0, "{gl} {gh}");
     }
 
     /// sRGB channels below 0 go through the transfer curve with its sign turned, as CSS Color 4's
