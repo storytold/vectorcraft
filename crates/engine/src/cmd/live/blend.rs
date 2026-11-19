@@ -244,11 +244,21 @@ pub(super) fn spine_move_anchor(s: &mut Session, p: &Value) -> Result<Value> {
         Some(_) => return Err(bad(C, "handle must be in or out")),
     };
     let independent = switch_or(p, "independent", false, C)?;
+    let symmetric = switch_or(p, "symmetric", false, C)?;
     let link = switch_or(p, "link", false, C)?;
     let with = spine_points_param(p, C)?;
     // Any `with`, even an empty list, asks to move points, which a handle drag doesn't.
     if handle.is_some() && p.get("with").is_some_and(|v| !v.is_null()) {
         return Err(bad(C, "`with` moves points, not a handle"));
+    }
+    if symmetric && independent {
+        return Err(bad(C, "`independent` and `symmetric` cannot both be true"));
+    }
+    if symmetric && handle.is_none() {
+        return Err(bad(C, "`symmetric` places a handle: give `handle`"));
+    }
+    if link && symmetric {
+        return Err(bad(C, "`link` and `symmetric` cannot both be true"));
     }
     if link && independent {
         return Err(bad(C, "`link` and `independent` cannot both be true"));
@@ -264,12 +274,18 @@ pub(super) fn spine_move_anchor(s: &mut Session, p: &Value) -> Result<Value> {
     }
     edit_spine(s, p, C, "Reshape Spine", |sp, anchors, keys| {
         let pull_out = handle.is_some_and(|out| sp.has_segment(index, !out));
+        // At an open end of the spine the handle moves as it would without `symmetric`.
+        let symmetric = symmetric && pull_out;
         let a = sp.anchors.get_mut(index).ok_or_else(|| bad(C, "no such spine point"))?;
         if let Some(out) = handle {
             if link {
                 a.link_handle(out, q, pull_out);
             } else {
                 a.set_handle(out, q, independent);
+            }
+            if symmetric {
+                let opposite = a.p - (q - a.p);
+                if out { a.h_in = opposite } else { a.h_out = opposite }
             }
             return Ok(());
         }

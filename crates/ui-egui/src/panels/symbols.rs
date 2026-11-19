@@ -474,7 +474,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     });
     let zone = ui.interact(list_rect, ui.scope_id().with("symbols-drop"), Sense::hover());
     if !over_symbol && let Some(ids) = widgets::art_drop(ui, &zone) {
-        // Shift held at the release keeps the dropped art as ordinary art.
+        // Shift held at the release that ends the drag keeps the dropped art as ordinary art.
         let mut p = json!({ "ids": ids, "type": "dynamic" });
         if modifiers_at_release(ui).shift {
             p["keepArt"] = json!(true);
@@ -529,8 +529,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         } else if new.clicked() {
             // Alt skips Symbol Options: the symbol is made under the default name, dynamic as the
             // dialog's default. Shift keeps the selected art as ordinary art, with or without Alt.
-            // Both are read as the primary button went up, when it did in this frame.
-            let m = modifiers_at_release(ui);
+            // Both are read as the button went up on it.
+            let m = modifiers_released_in(ui, new.interact_rect, new.clicked_by(egui::PointerButton::Primary));
             let (cmd, mut p) = if m.alt { ("symbol.new", json!({"type": "dynamic"})) } else { ("ui.symbolOptions", json!({})) };
             if m.shift {
                 p["keepArt"] = json!(true);
@@ -545,7 +545,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             let picked = if marked.contains(&name) { &marked[..] } else { &[] };
             delete(app, picked, Some(&name), alt_at_release(ui));
         } else if trash.clicked() {
-            delete(app, &marked, sel.as_deref(), alt_at_release(ui));
+            let pointer = trash.clicked_by(egui::PointerButton::Primary);
+            delete(app, &marked, sel.as_deref(), modifiers_released_in(ui, trash.interact_rect, pointer).alt);
         }
     });
 }
@@ -558,18 +559,21 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let has_sel = app.session.active().is_some_and(|d| !d.selection.is_empty());
     let inst = has_instances_selected(app);
     let name = json!({"name": sel});
-    // Shift keeps the selected art as ordinary art instead of making it an instance. It is read as
-    // the primary button went up, when it did in this frame.
-    let shift = modifiers_at_release(ui).shift;
-    let redefine = if shift { json!({"name": sel, "keepArt": true}) } else { name.clone() };
-    let new = if shift { json!({"keepArt": true}) } else { json!({}) };
-    let items: [(&str, bool, &str, Value); 3] = [
-        (tl!("New Symbol…"), has_sel, "ui.symbolOptions", new),
-        (tl!("Redefine Symbol"), has_sel && sel.is_some(), "symbol.update", redefine),
-        (tl!("Duplicate Symbol"), sel.is_some(), "symbol.duplicate", name.clone()),
+    // Shift, held as the button went up on New Symbol… or Redefine Symbol, keeps the selected art
+    // as ordinary art instead of making it an instance.
+    let items: [(&str, bool, &str, Value, bool); 3] = [
+        (tl!("New Symbol…"), has_sel, "ui.symbolOptions", json!({}), true),
+        (tl!("Redefine Symbol"), has_sel && sel.is_some(), "symbol.update", name.clone(), true),
+        (tl!("Duplicate Symbol"), sel.is_some(), "symbol.duplicate", name.clone(), false),
     ];
-    for (label, enabled, cmd, params) in items {
-        if menu_item(ui, label, enabled, false) {
+    for (label, enabled, cmd, mut params, keeps_art) in items {
+        let top = ui.cursor().min.y;
+        let item = widgets::menu_item_response(ui, label, enabled, false);
+        if item.clicked() {
+            let row = egui::Rect::from_x_y_ranges(ui.max_rect().x_range(), top..=ui.cursor().min.y);
+            if keeps_art && modifiers_released_in(ui, row, item.clicked_by(egui::PointerButton::Primary)).shift {
+                params["keepArt"] = json!(true);
+            }
             app.run(cmd, params).ok();
         }
     }
@@ -668,14 +672,71 @@ fn art_redefine_drop(ui: &Ui, item: &egui::Response, doc: &Document, uid: Option
     item.dnd_release_payload::<PanelDrag>().map(|_| ids.iter().map(|id| id.0).collect())
 }
 
-/// Whether Alt (Option) is held for a drop or a click: when the primary button went up in this frame, as it
-/// went up, else now.
+/// Whether Alt (Option) is held for a drop: as [`modifiers_at_release`] gives it.
 fn alt_at_release(ui: &Ui) -> bool {
     modifiers_at_release(ui).alt
 }
 
-/// The modifiers held for a drop or a click: when the primary button went up in this frame, as it went up,
-/// else now.
+/// The modifiers held for a click on the widget whose interact rectangle is `rect`: when the
+/// primary button last went up in this frame as a click (the pointer stayed within egui's click
+/// distance of where the button went down) after going down over `rect` or within egui's interact
+/// radius of it (egui gives a press that close to the widget), as it went up (egui reports the
+/// click of the last such release in the frame); else, when no such click happened in this frame,
+/// as the first release of the frame went up, which ends a press of an earlier frame that egui
+/// counted as the click; else now. A release that ends a drag is not a click and is skipped.
+/// `pointer` is whether egui reports the widget clicked by the primary button; when it is false,
+/// the click came from the keyboard or a screen reader and the modifiers held now are used.
+fn modifiers_released_in(ui: &Ui, rect: egui::Rect, pointer: bool) -> egui::Modifiers {
+    if !pointer {
+        return ui.input(|i| i.modifiers);
+    }
+    let radius = ui.ctx().global_style().interaction.interact_radius;
+    let max_click_dist = ui.ctx().options(|o| o.input_options.max_click_dist);
+    ui.input(|i| {
+        // Where the button went down in this frame, and whether the pointer has since moved too far
+        // for a click.
+        let mut origin: Option<egui::Pos2> = None;
+        let mut moved = false;
+        // Whether a button went down earlier in this frame; until one does, a release ends a press
+        // of an earlier frame.
+        let mut pressed_here = false;
+        // The modifiers of the release that ends a press of an earlier frame.
+        let mut early = None;
+        let mut found = None;
+        for e in &i.events {
+            match e {
+                egui::Event::PointerMoved(pos) => {
+                    moved |= origin.is_some_and(|o| o.distance(*pos) > max_click_dist);
+                }
+                egui::Event::PointerButton { pos, pressed: true, .. } => {
+                    origin = Some(*pos);
+                    moved = false;
+                    pressed_here = true;
+                }
+                egui::Event::PointerButton { pos, button, pressed: false, modifiers } => {
+                    moved |= origin.is_some_and(|o| o.distance(*pos) > max_click_dist);
+                    let over = origin.is_some_and(|o| rect.distance_sq_to_pos(o) <= radius * radius);
+                    if *button == egui::PointerButton::Primary {
+                        if !pressed_here {
+                            early = early.or(Some(*modifiers));
+                        } else if !moved && over {
+                            found = Some(*modifiers);
+                        }
+                    }
+                    origin = None;
+                    moved = false;
+                }
+                _ => {}
+            }
+        }
+        // egui tracks a press of an earlier frame. A widget it reports clicked by the pointer, with
+        // no click on it after a press of this frame, was clicked by the early release.
+        found.or(early).unwrap_or(i.modifiers)
+    })
+}
+
+/// The modifiers held for a drop: when the primary button went up in this frame, as it first went
+/// up, which is the release that ends a drag under way when the frame starts; else now.
 fn modifiers_at_release(ui: &Ui) -> egui::Modifiers {
     ui.input(|i| {
         i.events
@@ -1110,6 +1171,21 @@ mod tests {
         assert_eq!(art(&app, "New Symbol 2"), (1, 0), "without Shift the rectangle becomes an instance");
     }
 
+    /// A Shift-click on New Symbol… in the panel menu that goes down in one frame and up in the next
+    /// keeps the art as ordinary art, though a plain click elsewhere follows in the same frame.
+    #[test]
+    fn a_shift_click_on_new_symbol_in_the_menu_counts_though_a_click_elsewhere_follows() {
+        let (mut app, _) = leaf_dot_and_rect();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let off = pos2(-10.0, -10.0);
+        let after = vec![egui::Event::PointerMoved(off), button(off, true), button(off, false), egui::Event::ModifiersChanged(egui::Modifiers::NONE)];
+        click_menu_held_then(&ctx, &mut app, "New Symbol…", egui::Modifiers::SHIFT, after);
+        assert_eq!(dialog_kind(&app), Some(crate::dialogs::symbol_options::KIND));
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(art(&app, "New Symbol"), (0, 1), "the rectangle stays ordinary art");
+    }
+
     /// Clicks the panel's New Symbol button with `modifiers` held.
     fn click_new(app: &mut VectorcraftApp, modifiers: egui::Modifiers) {
         click_button_then(app, "New Symbol", modifiers, vec![]);
@@ -1265,6 +1341,181 @@ mod tests {
         frame_held(&ctx, &mut app, vec![egui::Event::PointerMoved(at)], egui::Modifiers::NONE);
         frame_held(&ctx, &mut app, vec![release(egui::Modifiers::NONE)], egui::Modifiers::NONE);
         assert_eq!(art(&app, "New Symbol 2"), (1, 0), "without Shift the rectangle becomes an instance");
+    }
+
+    /// A drop on the panel reads Shift from the release that ends the drag: a click on the list
+    /// without Shift later in the same frame keeps a Shift drop's art as ordinary art, and a click
+    /// with Shift does not keep a plain drop's art.
+    #[test]
+    fn a_drop_on_the_panel_reads_shift_from_the_release_that_ends_the_drag() {
+        let (mut app, rect) = leaf_dot_and_rect();
+        let ctx = egui::Context::default();
+        let at = pos2(180.0, 60.0);
+        let release = |modifiers| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: false, modifiers };
+        let press = |modifiers| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: true, modifiers };
+        widgets::drag_art(&ctx, uid(&app).unwrap(), vec![rect]);
+        frame_held(&ctx, &mut app, vec![egui::Event::PointerMoved(at)], egui::Modifiers::SHIFT);
+        let plain = egui::Modifiers::NONE;
+        let events = vec![release(egui::Modifiers::SHIFT), egui::Event::ModifiersChanged(plain), press(plain), release(plain)];
+        frame_held(&ctx, &mut app, events, egui::Modifiers::SHIFT);
+        assert_eq!(art(&app, "New Symbol"), (0, 1), "the Shift drop keeps the rectangle as ordinary art");
+        widgets::drag_art(&ctx, uid(&app).unwrap(), vec![rect]);
+        frame_held(&ctx, &mut app, vec![egui::Event::PointerMoved(at)], plain);
+        let shift = egui::Modifiers::SHIFT;
+        let events = vec![release(plain), egui::Event::ModifiersChanged(shift), press(shift), release(shift)];
+        frame_held(&ctx, &mut app, events, plain);
+        assert_eq!(art(&app, "New Symbol 2"), (1, 0), "the plain drop makes the rectangle an instance");
+    }
+
+    /// A click of the primary button off the panel with no modifiers held, the pointer then back
+    /// at `at`.
+    fn stray_click(at: Pos2) -> [egui::Event; 4] {
+        let off = pos2(-10.0, -10.0);
+        let button =
+            |pressed| egui::Event::PointerButton { pos: off, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+        [egui::Event::PointerMoved(off), button(true), button(false), egui::Event::PointerMoved(at)]
+    }
+
+    /// Clicks the panel button labeled `label` with `modifiers` held as the primary button goes up,
+    /// between two clicks off the panel without them, and lets them go later in the same frame.
+    fn click_button_let_go(app: &mut VectorcraftApp, label: &str, modifiers: egui::Modifiers) {
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let out = frame_held(&ctx, app, vec![], modifiers);
+        let at = clickable(&out).into_iter().find(|(l, _)| l == label).unwrap_or_else(|| panic!("a {label} button")).1;
+        let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers };
+        let let_go = egui::Event::ModifiersChanged(egui::Modifiers::NONE);
+        let mut events = stray_click(at).to_vec();
+        events.extend([press(true), press(false), let_go]);
+        events.extend(stray_click(at));
+        frame_held(&ctx, app, events, modifiers);
+    }
+
+    /// Clicks the menu item labeled `label` with `modifiers` held as the primary button goes up,
+    /// between two clicks off the menu without them, and lets them go later in the same frame.
+    fn click_menu_let_go(ctx: &egui::Context, app: &mut VectorcraftApp, label: &str, modifiers: egui::Modifiers) {
+        let held = egui::Event::ModifiersChanged(modifiers);
+        let labels = menu_frame(ctx, app, vec![held.clone()]);
+        let item = labels.iter().find(|(t, _)| t.trim() == label).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("{label} in the menu"));
+        let press = |pressed| egui::Event::PointerButton { pos: item, button: egui::PointerButton::Primary, pressed, modifiers };
+        let mut events = vec![held];
+        events.extend(stray_click(item));
+        events.extend([press(true), press(false), egui::Event::ModifiersChanged(egui::Modifiers::NONE)]);
+        events.extend(stray_click(item));
+        menu_frame(ctx, app, events);
+    }
+
+    /// The New Symbol and Delete Symbol buttons and the menu's New Symbol… and Redefine Symbol read
+    /// Shift and Alt as the primary button goes up on them, though clicks elsewhere without them
+    /// come before and after and they are let go later in the same frame.
+    #[test]
+    fn symbol_clicks_read_the_modifiers_as_the_button_goes_up() {
+        let (mut app, rect) = leaf_dot_and_rect();
+        click_button_let_go(&mut app, "New Symbol", egui::Modifiers::SHIFT | egui::Modifiers::ALT);
+        assert_eq!(dialog_kind(&app), None, "Alt skips Symbol Options");
+        assert_eq!(symbols(&mut app), ["Leaf", "Dot", "New Symbol"]);
+        assert_eq!(art(&app, "New Symbol"), (0, 1), "Shift: the rectangle stays ordinary art");
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        click_menu_let_go(&ctx, &mut app, "New Symbol…", egui::Modifiers::SHIFT);
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(art(&app, "New Symbol 2"), (0, 1), "the menu's Shift keeps the rectangle as ordinary art");
+        app.run("symbol.setCurrent", json!({"name": "Dot"})).unwrap();
+        click_menu_let_go(&ctx, &mut app, "Redefine Symbol", egui::Modifiers::SHIFT);
+        assert_eq!(art(&app, "Dot"), (0, 1), "Redefine Symbol with Shift keeps the rectangle as ordinary art");
+        assert_eq!(app.session.active().unwrap().selection.objects, vec![rect]);
+        // Dot holds the rectangle now and nothing places it, so Alt deletes it without asking.
+        click_button_let_go(&mut app, "Delete Symbol", egui::Modifiers::ALT);
+        assert_eq!(dialog_kind(&app), None, "Alt deletes an unused symbol without asking");
+        assert_eq!(symbols(&mut app), ["Leaf", "New Symbol", "New Symbol 2"]);
+    }
+
+    /// A click just outside New Symbol, which egui still counts as a click on it, reads Shift and
+    /// Alt as the primary button goes up there, though they are let go later in the same frame.
+    #[test]
+    fn a_click_just_outside_new_symbol_reads_the_modifiers_as_the_button_goes_up() {
+        let (mut app, _) = leaf_dot_and_rect();
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let modifiers = egui::Modifiers::SHIFT | egui::Modifiers::ALT;
+        let out = frame_held(&ctx, &mut app, vec![], modifiers);
+        let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
+        let b = nodes
+            .iter()
+            .find(|(_, n)| n.label().is_some_and(|l| l.trim() == "New Symbol"))
+            .and_then(|(_, n)| n.bounds())
+            .expect("a New Symbol button");
+        let at = pos2(b.x0 as f32 - 2.0, ((b.y0 + b.y1) / 2.0) as f32);
+        let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers };
+        let events = vec![egui::Event::PointerMoved(at), press(true), press(false), egui::Event::ModifiersChanged(egui::Modifiers::NONE)];
+        frame_held(&ctx, &mut app, events, modifiers);
+        assert_eq!(dialog_kind(&app), None, "Alt skips Symbol Options");
+        assert_eq!(symbols(&mut app), ["Leaf", "Dot", "New Symbol"]);
+        assert_eq!(art(&app, "New Symbol"), (0, 1), "Shift: the rectangle stays ordinary art");
+    }
+
+    /// A click that goes down on the edge of New Symbol and, in the next frame, up past egui's
+    /// interact radius but within its click distance counts as a click on it and reads Shift and Alt
+    /// as the button goes up, though they are let go later in the same frame.
+    #[test]
+    fn a_click_released_past_the_interact_radius_reads_the_modifiers_as_the_button_goes_up() {
+        let (mut app, _) = leaf_dot_and_rect();
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let modifiers = egui::Modifiers::SHIFT | egui::Modifiers::ALT;
+        let out = frame_held(&ctx, &mut app, vec![], modifiers);
+        let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
+        let b = nodes
+            .iter()
+            .find(|(_, n)| n.label().is_some_and(|l| l.trim() == "New Symbol"))
+            .and_then(|(_, n)| n.bounds())
+            .expect("a New Symbol button");
+        let y = ((b.y0 + b.y1) / 2.0) as f32;
+        let (down, up) = (pos2(b.x0 as f32 + 0.5, y), pos2(b.x0 as f32 - 5.4, y));
+        let radius = ctx.global_style().interaction.interact_radius;
+        let max_click_dist = ctx.options(|o| o.input_options.max_click_dist);
+        assert!(down.distance(up) <= max_click_dist && b.x0 as f32 - up.x > radius, "the release is a click outside the radius");
+        let button = |at, pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers };
+        frame_held(&ctx, &mut app, vec![egui::Event::PointerMoved(down), button(down, true)], modifiers);
+        let events = vec![egui::Event::PointerMoved(up), button(up, false), egui::Event::ModifiersChanged(egui::Modifiers::NONE)];
+        frame_held(&ctx, &mut app, events, modifiers);
+        assert_eq!(dialog_kind(&app), None, "Alt skips Symbol Options");
+        assert_eq!(symbols(&mut app), ["Leaf", "Dot", "New Symbol"]);
+        assert_eq!(art(&app, "New Symbol"), (0, 1), "Shift: the rectangle stays ordinary art");
+    }
+
+    /// An Alt-click on Delete Symbol followed in the same frame by a drag that ends just outside
+    /// it without Alt reads Alt from the click: the release that ends the drag is not a click.
+    #[test]
+    fn a_drag_ending_near_delete_symbol_after_an_alt_click_keeps_the_click_modifiers() {
+        let mut app = leaf_and_dot();
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let out = frame_held(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
+        let b = nodes
+            .iter()
+            .find(|(_, n)| n.label().is_some_and(|l| l.trim() == "Delete Symbol"))
+            .and_then(|(_, n)| n.bounds())
+            .expect("a Delete Symbol button");
+        let center = pos2(((b.x0 + b.x1) / 2.0) as f32, ((b.y0 + b.y1) / 2.0) as f32);
+        let near = pos2(b.x0 as f32 - 1.0, center.y);
+        let from = pos2(near.x, near.y - 12.0);
+        let button = |pos, pressed, modifiers| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers };
+        let (alt, none) = (egui::Modifiers::ALT, egui::Modifiers::NONE);
+        let events = vec![
+            egui::Event::PointerMoved(center),
+            button(center, true, alt),
+            button(center, false, alt),
+            egui::Event::ModifiersChanged(none),
+            egui::Event::PointerMoved(from),
+            button(from, true, none),
+            egui::Event::PointerMoved(near),
+            button(near, false, none),
+        ];
+        frame_held(&ctx, &mut app, events, alt);
+        assert_eq!(dialog_kind(&app), None, "Alt deletes the unused symbol without asking");
+        assert_eq!(symbols(&mut app), ["Leaf"]);
     }
 
     /// `ui.symbolOptions` takes `keepArt` only as true or false, and only for a new symbol.
@@ -2960,6 +3211,111 @@ mod tests {
         frame(&ctx, &mut app, vec![button(at, false)]);
         assert_eq!(symbols(&mut app).len(), 3, "a new symbol");
         assert!(Arc::ptr_eq(&leaf, &symbol_art(&app, "Leaf")), "Leaf is unchanged");
+    }
+
+    /// A plain art drop on a symbol followed in the same frame by an Alt-click on that symbol makes
+    /// a new symbol and leaves the symbol as it was: the release that ends the drag decides.
+    #[test]
+    fn an_alt_click_after_a_plain_art_drop_in_the_same_frame_does_not_redefine() {
+        let mut app = leaf_and_dot();
+        let shape = app.run("shape.rectangle", json!({"x": 200, "y": 120, "width": 40, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        let leaf = symbol_art(&app, "Leaf");
+        let ctx = egui::Context::default();
+        let at = item_at(&ctx, &mut app, "Leaf");
+        widgets::drag_art(&ctx, uid(&app).unwrap(), vec![NodeId(shape)]);
+        frame_held(&ctx, &mut app, vec![egui::Event::PointerMoved(at)], egui::Modifiers::NONE);
+        let alt_press = egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: true, modifiers: egui::Modifiers::ALT };
+        let events = vec![button(at, false), egui::Event::ModifiersChanged(egui::Modifiers::ALT), alt_press, alt_release(at)];
+        frame_held(&ctx, &mut app, events, egui::Modifiers::NONE);
+        assert_eq!(symbols(&mut app).len(), 3, "a new symbol");
+        assert!(Arc::ptr_eq(&leaf, &symbol_art(&app, "Leaf")), "Leaf is unchanged");
+    }
+
+    /// A plain drop of an unused symbol on Delete Symbol followed in the same frame by an Alt-click
+    /// on the button still asks first: the release that ends the drag decides.
+    #[test]
+    fn an_alt_click_after_a_plain_drop_on_delete_in_the_same_frame_still_asks() {
+        let mut app = leaf_and_dot();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let trash = button_rect(&ctx, &mut app, "Delete Symbol").center();
+        let dot = item_at(&ctx, &mut app, "Dot");
+        frame(&ctx, &mut app, vec![]);
+        frame(&ctx, &mut app, vec![egui::Event::PointerMoved(dot), button(dot, true)]);
+        frame(&ctx, &mut app, vec![egui::Event::PointerMoved(dot + vec2(40.0, 40.0))]);
+        frame(&ctx, &mut app, vec![egui::Event::PointerMoved(dot + vec2(80.0, 80.0))]);
+        frame_held(&ctx, &mut app, vec![egui::Event::PointerMoved(trash)], egui::Modifiers::NONE);
+        let alt_press =
+            egui::Event::PointerButton { pos: trash, button: egui::PointerButton::Primary, pressed: true, modifiers: egui::Modifiers::ALT };
+        let events = vec![button(trash, false), egui::Event::ModifiersChanged(egui::Modifiers::ALT), alt_press, alt_release(trash)];
+        frame_held(&ctx, &mut app, events, egui::Modifiers::NONE);
+        assert_eq!(dialog_kind(&app), Some(crate::dialogs::symbol_delete::KIND), "the plain drop asks first");
+        assert_eq!(symbols(&mut app), ["Leaf", "Dot"]);
+    }
+
+    /// A screen reader's Click on Delete Symbol asks first for an unused symbol, though an Alt-click
+    /// elsewhere comes before it in the same frame and Alt is let go after.
+    #[test]
+    fn a_screen_reader_click_on_delete_does_not_take_alt_from_another_click() {
+        use egui::accesskit::{Action, ActionRequest, TreeId};
+        let mut app = leaf_and_dot();
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let out = frame_held(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
+        let node =
+            nodes.iter().find(|(_, n)| n.label().is_some_and(|l| l.trim() == "Delete Symbol")).map(|(id, _)| *id).expect("a Delete Symbol node");
+        let off = pos2(-10.0, -10.0);
+        let alt = |pressed| egui::Event::PointerButton { pos: off, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::ALT };
+        let click =
+            egui::Event::AccessKitActionRequest(ActionRequest { action: Action::Click, target_node: node, target_tree: TreeId::ROOT, data: None });
+        let events = vec![egui::Event::PointerMoved(off), alt(true), alt(false), egui::Event::ModifiersChanged(egui::Modifiers::NONE), click];
+        frame_held(&ctx, &mut app, events, egui::Modifiers::ALT);
+        assert_eq!(dialog_kind(&app), Some(crate::dialogs::symbol_delete::KIND), "the screen reader's Click asks first");
+        assert_eq!(symbols(&mut app), ["Leaf", "Dot"]);
+    }
+
+    /// A screen reader's Click on Delete Symbol asks first for an unused symbol, though in the same
+    /// frame an Alt release over the button ends a drag that began in an earlier frame and Alt is
+    /// let go after.
+    #[test]
+    fn a_screen_reader_click_on_delete_does_not_take_alt_from_a_drag_begun_earlier() {
+        use egui::accesskit::{Action, ActionRequest, TreeId};
+        let mut app = leaf_and_dot();
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let out = frame_held(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
+        let node =
+            nodes.iter().find(|(_, n)| n.label().is_some_and(|l| l.trim() == "Delete Symbol")).map(|(id, _)| *id).expect("a Delete Symbol node");
+        let trash = clickable(&out).into_iter().find(|(l, _)| l == "Delete Symbol").expect("a Delete Symbol button").1;
+        let off = pos2(-10.0, -10.0);
+        let press = egui::Event::PointerButton { pos: off, button: egui::PointerButton::Primary, pressed: true, modifiers: egui::Modifiers::ALT };
+        frame_held(&ctx, &mut app, vec![egui::Event::PointerMoved(off), press], egui::Modifiers::ALT);
+        frame_held(&ctx, &mut app, vec![egui::Event::PointerMoved(trash - vec2(0.0, 80.0))], egui::Modifiers::ALT);
+        let click =
+            egui::Event::AccessKitActionRequest(ActionRequest { action: Action::Click, target_node: node, target_tree: TreeId::ROOT, data: None });
+        let events = vec![egui::Event::PointerMoved(trash), alt_release(trash), egui::Event::ModifiersChanged(egui::Modifiers::NONE), click];
+        frame_held(&ctx, &mut app, events, egui::Modifiers::ALT);
+        assert_eq!(dialog_kind(&app), Some(crate::dialogs::symbol_delete::KIND), "the screen reader's Click asks first");
+        assert_eq!(symbols(&mut app), ["Leaf", "Dot"]);
+    }
+
+    /// A click on Delete Symbol that goes down in one frame and up with Alt held in the next deletes
+    /// an unused symbol without asking, though a plain click elsewhere follows in the same frame.
+    #[test]
+    fn an_alt_click_on_delete_across_frames_counts_though_a_click_elsewhere_follows() {
+        let mut app = leaf_and_dot();
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let out = frame_held(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let trash = clickable(&out).into_iter().find(|(l, _)| l == "Delete Symbol").expect("a Delete Symbol button").1;
+        frame_held(&ctx, &mut app, vec![egui::Event::PointerMoved(trash), button(trash, true)], egui::Modifiers::ALT);
+        let off = pos2(-10.0, -10.0);
+        let events = vec![alt_release(trash), egui::Event::PointerMoved(off), button(off, true), button(off, false)];
+        frame_held(&ctx, &mut app, events, egui::Modifiers::ALT);
+        assert_eq!(dialog_kind(&app), None, "Alt deletes an unused symbol without asking");
+        assert_eq!(symbols(&mut app), ["Leaf"]);
     }
 
     /// An Alt drop that cannot redefine the symbol under the pointer changes nothing, makes no new
