@@ -20,6 +20,7 @@ pub const SYMBOLISM: &[&str] =
 
 const ROWS: &[Row] = &[
     (&["dimension"], None, &["mode", "style"]),
+    (&[crate::quickpen::ID], None, &["action", "turn"]),
     // Global Brush Dimensions.
     (LIQUIFY, Some("liquify"), &["width", "height", "angle", "intensity", "usePressure", "showBrush"]),
     (LIQUIFY, None, &["detail", "simplify", "simplifyOn", "rate", "complexity", "horizontal", "vertical", "affectAnchors", "affectIn", "affectOut"]),

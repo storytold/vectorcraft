@@ -28,6 +28,7 @@ pub fn tool_icon(name: &str) -> &'static str {
         "tool-pen-add" => "pen-tool-add",
         "tool-pen-delete" => "pen-tool-delete",
         "tool-anchor" => "dc-anchor",
+        "tool-quick-pen" => "dc-quick-pen",
         "tool-curvature" => "spline",
         "tool-type" => "dc-type",
         "tool-type-area" => "dc-type-area",
