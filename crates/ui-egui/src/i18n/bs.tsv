@@ -1739,6 +1739,7 @@ digits	Malayalam	Malajalam
 	Roman Baseline	Latinična osnovna linija
 	Select a text object to edit its character attributes.	Odaberite tekstualni objekat da uredite njegove atribute znakova.
 	Show Options	Prikaži opcije
+	Show on Shape Creation	Prikaži pri kreiranju oblika
 	Show Recent Colors	Prikaži nedavne boje
 	Toggle RGB Percent	Uključi/isključi RGB u postocima
 	Color Panel Options	Opcije panela boja
@@ -4644,6 +4645,7 @@ font-technology	Variable	Varijabilni
 	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	Svojstva dinamičnog pravougaonika prikazuju jedno polje Poluprečnik ugla za sva četiri ugla; kada je isključeno, svaki ugao ima svoje polje.
 	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	Šta transformišu izmjene u panelu Transformiši: objekat, pločice njegovog uzorka ili oboje; Zadano prati Transformiši pločice uzorka.
 	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	Kada je odabrana jedna instanca simbola, panel Transformiši koristi tačku registracije simbola kao referentnu tačku.
+	Drawing a rectangle, ellipse, polygon, star or line opens the Transform panel if it is closed.	Crtanje pravougaonika, elipse, poligona, zvijezde ili linije otvara panel Transformiši ako je zatvoren.
 	Darkens the canvas outside the artboards while the Artboard tool is active.	Zatamnjuje platno izvan radnih ploča dok je alat Radna ploča aktivan.
 	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	Kada je uključeno Zatamni područje izvan radne ploče, područje izvan radnih ploča ostaje tamno dok prevlačite alatom Radna ploča.
 	How near, in pixels, the pointer must be to an object, anchor or handle for a click to select it.	Koliko blizu, u pikselima, pokazivač mora biti objektu, sidrenoj tački ili ručki da bi ga klik odabrao.

@@ -3249,6 +3249,7 @@ digits	Malayalam	Malayalam
 	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	Les propriétés d’un rectangle dynamique affichent un seul champ Rayon de l’angle pour les quatre angles. Désactivée, chaque angle a son propre champ.
 	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	Les modifications du panneau Transformation transforment l’objet, ses carreaux de motif ou les deux, et Par défaut suit Transformer les carreaux de motif.
 	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	Quand une occurrence de symbole est sélectionnée, le panneau Transformation utilise le point d’alignement du symbole comme point de référence.
+	Drawing a rectangle, ellipse, polygon, star or line opens the Transform panel if it is closed.	Dessiner un rectangle, une ellipse, un polygone, une étoile ou une ligne ouvre le panneau Transformation s’il est fermé.
 	Darkens the canvas outside the artboards while the Artboard tool is active.	Assombrit la zone de travail hors des plans de travail tant que l’outil Plan de travail est actif.
 	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	Avec Assombrir la zone hors du plan de travail activé, la zone hors des plans de travail reste sombre pendant que vous faites glisser avec l’outil Plan de travail.
 	How near, in pixels, the pointer must be to an object, anchor or handle for a click to select it.	Distance en pixels à laquelle le pointeur doit se trouver d’un objet, d’un point d’ancrage ou d’une poignée pour qu’un clic le sélectionne.
@@ -3732,6 +3733,7 @@ digits	Malayalam	Malayalam
 	Show Modified	Afficher les éléments modifiés
 	Show Note	Afficher la note
 	Show Options	Afficher les options
+	Show on Shape Creation	Afficher à la création de formes
 	Show Recent Colors	Afficher les couleurs récentes
 	Toggle RGB Percent	Basculer RVB en pourcentage
 	Show Original Path	Afficher le tracé d’origine

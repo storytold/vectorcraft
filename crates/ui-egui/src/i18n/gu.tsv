@@ -3294,6 +3294,7 @@
 	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	લાઇવ લંબચોરસના ગુણધર્મો ચારેય ખૂણા માટે ખૂણાની ત્રિજ્યાનું એક જ ફીલ્ડ બતાવે છે; બંધ હોય ત્યારે દરેક ખૂણાનું પોતાનું ફીલ્ડ હોય છે.
 	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	ટ્રાન્સફોર્મ પેનલમાંના ફેરફારો શું ટ્રાન્સફોર્મ કરે છે: ઑબ્જેક્ટ, તેની પૅટર્ન ટાઇલ્સ કે બંને; ડિફૉલ્ટ પૅટર્ન ટાઇલ્સ ટ્રાન્સફોર્મ કરો ને અનુસરે છે.
 	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	એક સિમ્બોલ ઇન્સ્ટન્સ પસંદ હોય ત્યારે ટ્રાન્સફોર્મ પેનલ સિમ્બોલના રજિસ્ટ્રેશન પોઇન્ટને સંદર્ભ પોઇન્ટ તરીકે વાપરે છે.
+	Drawing a rectangle, ellipse, polygon, star or line opens the Transform panel if it is closed.	લંબચોરસ, લંબવર્તુળ, બહુકોણ, તારો કે રેખા દોરવાથી ટ્રાન્સફોર્મ પેનલ બંધ હોય તો ખૂલે છે.
 	Darkens the canvas outside the artboards while the Artboard tool is active.	આર્ટબોર્ડ ટૂલ સક્રિય હોય ત્યારે આર્ટબોર્ડ બહારનો કેનવાસ ઘાટો કરે છે.
 	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	આર્ટબોર્ડ બહારનો વિસ્તાર ઝાંખો કરો ચાલુ હોય ત્યારે, આર્ટબોર્ડ ટૂલથી ખેંચતી વખતે આર્ટબોર્ડ બહારનો વિસ્તાર ઘાટો રહે છે.
 	How near, in pixels, the pointer must be to an object, anchor or handle for a click to select it.	ક્લિક કોઈ ઑબ્જેક્ટ, એન્કર પોઇન્ટ કે હૅન્ડલને પસંદ કરે તે માટે પોઇન્ટર તેનાથી કેટલા પિક્સેલ નજીક હોવો જોઈએ.
@@ -3833,6 +3834,7 @@
 	Show Live Paint Gaps	લાઇવ પેઇન્ટ ગેપ બતાવો
 	Show Note	નોંધ બતાવો
 	Show Options	વિકલ્પો બતાવો
+	Show on Shape Creation	શેપ બનાવતી વખતે બતાવો
 	Show Original Path	મૂળ પાથ બતાવો
 	Show Package	પૅકેજ બતાવો
 	Show Panel	પેનલ બતાવો

@@ -2267,6 +2267,7 @@ digits	Malayalam	Malayalam
 	Roman Baseline	Romeinse basislijn
 	Select a text object to edit its character attributes.	Selecteer een tekstobject om de tekenkenmerken ervan te bewerken.
 	Show Options	Opties tonen
+	Show on Shape Creation	Tonen bij maken van vorm
 	Show Recent Colors	Recente kleuren tonen
 	Toggle RGB Percent	RGB in procenten wisselen
 	Small Caps	Kleine kapitalen
@@ -5047,6 +5048,7 @@ font-technology	Variable	Variabel
 	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	De eigenschappen van een dynamische rechthoek tonen één veld Hoekradius voor alle vier hoeken; uitgeschakeld heeft elke hoek een eigen veld.
 	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	Wat bewerkingen in het deelvenster Transformeren transformeren: het object, de patroontegels ervan of beide; Standaard volgt Patroontegels transformeren.
 	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	Met één symboolinstantie geselecteerd gebruikt het deelvenster Transformeren het registratiepunt van het symbool als referentiepunt.
+	Drawing a rectangle, ellipse, polygon, star or line opens the Transform panel if it is closed.	Als u een rechthoek, ellips, veelhoek, ster of lijn tekent, wordt het deelvenster Transformeren geopend als het gesloten is.
 	Darkens the canvas outside the artboards while the Artboard tool is active.	Maakt het canvas buiten de tekenborden donkerder zolang het gereedschap Tekenbord actief is.
 	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	Met Gebied buiten tekenbord dimmen aan blijft het gebied buiten de tekenborden donker terwijl u sleept met het gereedschap Tekenbord.
 	How near, in pixels, the pointer must be to an object, anchor or handle for a click to select it.	Hoe dicht, in pixels, de aanwijzer bij een object, ankerpunt of greep moet zijn om het met een klik te selecteren.

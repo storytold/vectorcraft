@@ -60,6 +60,7 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
         "useRegistrationPointForSymbol",
         "With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.",
     ),
+    ("showOnShapeCreation", "Drawing a rectangle, ellipse, polygon, star or line opens the Transform panel if it is closed."),
     ("fadeRegionOutsideArtboard", "Darkens the canvas outside the artboards while the Artboard tool is active."),
     (
         "artboardUpdateWhileDragging",

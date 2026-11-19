@@ -4398,6 +4398,7 @@ digits	Malayalam	Malayalam
 	Roman Baseline	Romersk grundlinje
 	Select a text object to edit its character attributes.	Markér et tekstobjekt for at redigere dets tegnattributter.
 	Show Options	Vis indstillinger
+	Show on Shape Creation	Vis ved oprettelse af form
 	Show Recent Colors	Vis seneste farver
 	Toggle RGB Percent	Skift RGB i procent
 	Small Caps	Kapitæler
@@ -7176,6 +7177,7 @@ font-technology	Variable	Variable
 	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	Egenskaberne for et live-rektangel viser ét felt Hjørneradius for alle fire hjørner; når den er slået fra, har hvert hjørne sit eget felt.
 	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	Hvad ændringer i panelet Transformér transformerer: objektet, dets mønsterfliser eller begge; Standard følger Transformer mønsterfliser.
 	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	Når én symbolforekomst er markeret, bruger panelet Transformér symbolets registreringspunkt som referencepunkt.
+	Drawing a rectangle, ellipse, polygon, star or line opens the Transform panel if it is closed.	Når du tegner et rektangel, en ellipse, en polygon, en stjerne eller en linje, åbnes panelet Transformér, hvis det er lukket.
 	Darkens the canvas outside the artboards while the Artboard tool is active.	Gør lærredet uden for kunstpladerne mørkere, mens værktøjet Kunstplade er aktivt.
 	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	Når Ton området uden for kunstpladen ned er slået til, forbliver området uden for kunstpladerne mørkt, mens du trækker med værktøjet Kunstplade.
 	How near, in pixels, the pointer must be to an object, anchor or handle for a click to select it.	Hvor tæt markøren i pixels skal være på et objekt, ankerpunkt eller håndtag, for at et klik markerer det.

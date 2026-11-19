@@ -1736,6 +1736,7 @@ digits	Malayalam	Malajalam
 	Roman Baseline	Latinalainen perusviiva
 	Select a text object to edit its character attributes.	Valitse tekstiobjekti, jonka merkkimääritteitä haluat muokata.
 	Show Options	Näytä asetukset
+	Show on Shape Creation	Näytä muotoa luotaessa
 	Show Recent Colors	Näytä viimeisimmät värit
 	Toggle RGB Percent	Vaihda RGB prosentteina
 	Small Caps	Kapiteelit
@@ -4663,6 +4664,7 @@ font-technology	Variable	Muuttuvat
 	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	Dynaamisen suorakulmion ominaisuuksissa on yksi Kulman säde -kenttä kaikille neljälle kulmalle; kun asetus ei ole käytössä, jokaisella kulmalla on oma kenttänsä.
 	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	Mitä Muunna-paneelin muokkaukset muuntavat: objektin, sen kuvioruudut tai molemmat; Oletus noudattaa asetusta Muunna kuvioruudut.
 	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	Kun yksi symbolin esiintymä on valittuna, Muunna-paneeli käyttää symbolin kohdistuspistettä viitepisteenä.
+	Drawing a rectangle, ellipse, polygon, star or line opens the Transform panel if it is closed.	Suorakulmion, ellipsin, monikulmion, tähden tai viivan piirtäminen avaa Muunna-paneelin, jos se on suljettu.
 	Darkens the canvas outside the artboards while the Artboard tool is active.	Tummentaa piirtopinnan piirtoalustojen ulkopuolelta, kun Piirtoalusta-työkalu on käytössä.
 	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	Kun Himmennä piirtoalustan ulkopuolinen alue on käytössä, piirtoalustojen ulkopuolinen alue pysyy tummana, kun vedät Piirtoalusta-työkalulla.
 	How near, in pixels, the pointer must be to an object, anchor or handle for a click to select it.	Kuinka lähellä, pikseleinä, osoittimen on oltava objektia, ankkuripistettä tai kahvaa, jotta napsautus valitsee sen.

@@ -3850,6 +3850,7 @@ mark-style	Japanese	Japán
 	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	Egy élő téglalap tulajdonságai egyetlen Sarokkerekítés sugara mezőt mutatnak mind a négy sarokhoz; kikapcsolva minden saroknak saját mezője van.
 	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	Mit alakítanak át az Átalakítás panel módosításai: az objektumot, a mintázatcsempéit vagy mindkettőt; az Alapértelmezett a Mintázatcsempék átalakítása beállítást követi.
 	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	Ha egy szimbólumpéldány van kijelölve, az Átalakítás panel a szimbólum regisztrációs pontját használja referenciapontként.
+	Drawing a rectangle, ellipse, polygon, star or line opens the Transform panel if it is closed.	Téglalap, ellipszis, sokszög, csillag vagy vonal rajzolása megnyitja az Átalakítás panelt, ha zárva van.
 	Darkens the canvas outside the artboards while the Artboard tool is active.	Elsötétíti a vásznat a rajztáblákon kívül, amíg a Rajztábla eszköz aktív.
 	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	Ha A rajztáblán kívüli terület elhalványítása be van kapcsolva, a rajztáblákon kívüli terület sötét marad, miközben a Rajztábla eszközzel húz.
 	How near, in pixels, the pointer must be to an object, anchor or handle for a click to select it.	Hány pixelnyire kell a mutatónak egy objektumhoz, horgonyponthoz vagy fogantyúhoz lennie, hogy egy kattintás kijelölje.
@@ -4405,6 +4406,7 @@ mark-style	Japanese	Japán
 	Show Modified	Módosultak megjelenítése
 	Show Note	Megjegyzés megjelenítése
 	Show Options	Beállítások megjelenítése
+	Show on Shape Creation	Megjelenítés alakzat létrehozásakor
 	Show Recent Colors	Legutóbbi színek megjelenítése
 	Toggle RGB Percent	RGB százalékos megjelenítésének váltása
 	Show Original Path	Eredeti útvonal megjelenítése

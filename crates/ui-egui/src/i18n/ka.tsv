@@ -3802,6 +3802,7 @@ digits	Malayalam	მალაიალამური
 	Roman Baseline	რომაული საბაზისო ხაზი
 	Select a text object to edit its character attributes.	სიმბოლოების ატრიბუტების რედაქტირებისთვის მონიშნეთ ტექსტური ობიექტი.
 	Show Options	პარამეტრების ჩვენება
+	Show on Shape Creation	ჩვენება ფიგურის შექმნისას
 	Show Recent Colors	ბოლოდროინდელი ფერების ჩვენება
 	Toggle RGB Percent	RGB-ის პროცენტებში ჩვენების გადართვა
 	Small Caps	პატარა მთავრული
@@ -6454,6 +6455,7 @@ font-technology	Variable	ცვლადი
 	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	ცოცხალი მართკუთხედის თვისებები ოთხივე კუთხისთვის კუთხის რადიუსის ერთ ველს აჩვენებს; გამორთვისას თითოეულ კუთხეს თავისი ველი აქვს.
 	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	რას გარდაქმნის ცვლილებები გარდაქმნის პანელში: ობიექტს, მისი პატერნის ფილებს ან ორივეს; ნაგულისხმევი მისდევს პატერნის ფილების გარდაქმნას.
 	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	როცა სიმბოლოს ერთი ეგზემპლარია მონიშნული, გარდაქმნის პანელი სიმბოლოს რეგისტრაციის წერტილს საბაზისო წერტილად იყენებს.
+	Drawing a rectangle, ellipse, polygon, star or line opens the Transform panel if it is closed.	მართკუთხედის, ელიფსის, მრავალკუთხედის, ვარსკვლავის ან ხაზის დახატვა ხსნის გარდაქმნის პანელს, თუ ის დახურულია.
 	Darkens the canvas outside the artboards while the Artboard tool is active.	სანამ სამუშაო დაფის ხელსაწყო აქტიურია, სამუშაო დაფების გარეთ ტილოს აბნელებს.
 	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	როცა სამუშაო დაფის გარეთ არის დაბნელება ჩართულია, სამუშაო დაფის ხელსაწყოთი გადათრევისას სამუშაო დაფების გარეთ არე ბნელი რჩება.
 	How near, in pixels, the pointer must be to an object, anchor or handle for a click to select it.	რამდენად ახლოს, პიქსელებში, უნდა იყოს მაჩვენებელი ობიექტთან, საყრდენ წერტილთან ან სახელურთან, რომ დაწკაპუნებამ ის მონიშნოს.

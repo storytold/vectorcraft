@@ -3224,6 +3224,7 @@ digits	Malayalam	Malayalam
 	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	Die Eigenschaften eines Live-Rechtecks zeigen ein Feld „Eckenradius“ für alle vier Ecken; ist die Option aus, hat jede Ecke ihr eigenes Feld.
 	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	Was Änderungen im Bedienfeld „Transformieren“ transformieren: das Objekt, seine Musterkacheln oder beides; „Standard“ folgt „Musterkacheln transformieren“.
 	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	Ist eine Symbolinstanz ausgewählt, verwendet das Bedienfeld „Transformieren“ den Registrierungspunkt des Symbols als Referenzpunkt.
+	Drawing a rectangle, ellipse, polygon, star or line opens the Transform panel if it is closed.	Wenn Sie ein Rechteck, eine Ellipse, ein Polygon, einen Stern oder eine Linie zeichnen, wird das Bedienfeld „Transformieren“ geöffnet, falls es geschlossen ist.
 	Darkens the canvas outside the artboards while the Artboard tool is active.	Dunkelt die Arbeitsfläche außerhalb der Zeichenflächen ab, solange das Zeichenflächen-Werkzeug aktiv ist.
 	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	Ist „Bereich außerhalb der Zeichenfläche abblenden“ an, bleibt der Bereich außerhalb der Zeichenflächen dunkel, während Sie mit dem Zeichenflächen-Werkzeug ziehen.
 	How near, in pixels, the pointer must be to an object, anchor or handle for a click to select it.	Wie nah der Zeiger in Pixeln an einem Objekt, Ankerpunkt oder Griff sein muss, damit ein Klick es auswählt.
@@ -3711,6 +3712,7 @@ digits	Malayalam	Malayalam
 	Show Modified	Geänderte einblenden
 	Show Note	Notiz einblenden
 	Show Options	Optionen einblenden
+	Show on Shape Creation	Beim Erstellen von Formen einblenden
 	Show Recent Colors	Zuletzt verwendete Farben einblenden
 	Toggle RGB Percent	RGB in Prozent umschalten
 	Show Original Path	Originalpfad einblenden

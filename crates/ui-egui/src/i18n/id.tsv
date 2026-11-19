@@ -1662,6 +1662,7 @@ digits	Malayalam	Malayalam
 	Roman Baseline	Baseline Romawi
 	Select a text object to edit its character attributes.	Pilih objek teks untuk mengedit atribut karakternya.
 	Show Options	Tampilkan opsi
+	Show on Shape Creation	Tampilkan saat membuat bentuk
 	Show Recent Colors	Tampilkan warna terbaru
 	Toggle RGB Percent	Alihkan RGB dalam persen
 	Small Caps	Kapital kecil
@@ -4387,6 +4388,7 @@ font-technology	Variable	Variabel
 	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	Properti persegi panjang dinamis menampilkan satu bidang Radius sudut untuk keempat sudut; saat nonaktif, setiap sudut punya bidangnya sendiri.
 	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	Apa yang ditransformasi oleh pengeditan di panel Transformasi: objek, ubin polanya, atau keduanya; Default mengikuti Transformasi ubin pola.
 	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	Saat satu instans simbol dipilih, panel Transformasi memakai titik registrasi simbol sebagai titik referensi.
+	Drawing a rectangle, ellipse, polygon, star or line opens the Transform panel if it is closed.	Menggambar persegi panjang, elips, poligon, bintang, atau garis membuka panel Transformasi jika panel itu tertutup.
 	Darkens the canvas outside the artboards while the Artboard tool is active.	Menggelapkan kanvas di luar artboard selama alat Artboard aktif.
 	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	Saat Redupkan wilayah di luar artboard aktif, area di luar artboard tetap gelap selama Anda menyeret dengan alat Artboard.
 	How near, in pixels, the pointer must be to an object, anchor or handle for a click to select it.	Seberapa dekat, dalam piksel, penunjuk harus berada dari objek, titik jangkar, atau pegangan agar klik memilihnya.

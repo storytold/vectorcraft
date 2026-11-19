@@ -4011,6 +4011,7 @@ digits	Malayalam	Malaiàlam
 	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	Les propietats d’un rectangle dinàmic mostren un sol camp Radi de cantonada per a les quatre cantonades; desactivada, cada cantonada té el seu propi camp.
 	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	Què transformen els canvis al panell Transforma: l’objecte, les peces del seu motiu o tots dos; Predeterminat segueix Transforma les peces del motiu.
 	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	Amb una instància de símbol seleccionada, el panell Transforma fa servir el punt de registre del símbol com a punt de referència.
+	Drawing a rectangle, ellipse, polygon, star or line opens the Transform panel if it is closed.	Dibuixar un rectangle, una el·lipse, un polígon, una estrella o una línia obre el panell Transforma si està tancat.
 	Darkens the canvas outside the artboards while the Artboard tool is active.	Enfosqueix el llenç fora dels taulers mentre l’eina Tauler està activa.
 	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	Amb Enfosqueix la regió fora del tauler activat, l’àrea fora dels taulers continua fosca mentre arrossegueu amb l’eina Tauler.
 	How near, in pixels, the pointer must be to an object, anchor or handle for a click to select it.	A quina distància, en píxels, ha d’estar el punter d’un objecte, punt d’ancoratge o tirador perquè un clic el seleccioni.
@@ -4946,6 +4947,7 @@ digits	Malayalam	Malaiàlam
 	Show Modified	Mostra els modificats
 	Show Note	Mostra la nota
 	Show Options	Mostra les opcions
+	Show on Shape Creation	Mostra en crear formes
 	Show Recent Colors	Mostra els colors recents
 	Toggle RGB Percent	Commuta RGB en percentatge
 	Show Original Path	Mostra el traçat original
