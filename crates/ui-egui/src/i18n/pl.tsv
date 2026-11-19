@@ -1457,6 +1457,10 @@ lighting	Light	Światło
 	Add Anchor Point Tool	Narzędzie Dodaj punkt kontrolny
 	Anchor Point Tool	Narzędzie Punkt kontrolny
 	Arc Tool	Narzędzie Łuk
+	Three-Point Arc Tool	Narzędzie Łuk przez trzy punkty
+	Three-Point Arc	Łuk przez trzy punkty
+	Arc too large	Łuk jest za duży
+	Third Point Sets Direction	Trzeci punkt wyznacza kierunek
 	Area Graph Tool	Narzędzie Wykres warstwowy
 	Area Type Tool	Narzędzie Tekst akapitowy
 	Artboard Tool	Narzędzie Obszar kompozycji
@@ -4308,6 +4312,7 @@ theme	Appearance	Wygląd
 	Add to Graphic Styles	Dodaj do stylów graficznych
 	Graphic Style Library	Biblioteka stylów graficznych
 	Add Used Colors	Dodaj użyte kolory
+	Add Selected Colors	Dodaj zaznaczone kolory
 	Delete Swatch	Usuń próbkę
 	Duplicate Swatch	Powiel próbkę
 	Merge Swatches	Scal próbki
@@ -5501,6 +5506,10 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	a guide has no curvature circle	linia pomocnicza nie ma okręgu krzywizny
 @msg	the circle that matches the path there would reach past the canvas	okrąg pasujący w tym miejscu do ścieżki wykroczyłby poza płótno
 @msg	no circle passes through these points: two are the same or all three lie on one line	przez te punkty nie przechodzi żaden okrąg: dwa są takie same albo wszystkie trzy leżą na jednej prostej
+@msg	`at` must be "start" or "end"	`at` musi mieć wartość "start" lub "end"
+@msg	give exactly one of `through` and `toward`	podaj dokładnie jeden z parametrów `through` i `toward`
+@msg	no arc fits these points: two are the same or all three lie on one line	żaden łuk nie pasuje do tych punktów: dwa są takie same albo wszystkie trzy leżą na jednej prostej
+@msg	give `at` only with `toward`	podaj `at` tylko razem z `toward`
 @msg	no app to open files here	brak aplikacji do otwierania plików
 @msg	no artboard	brak obszaru kompozycji
 @msg	no artboard {i} (0-based; the document has {_1})	brak obszaru kompozycji {i} (numeracja od 0; dokument ma {_1})
@@ -10600,6 +10609,11 @@ breakText	Glyphs	Glify
 @msg	A panel is not joined to the rest by a crease.	Panel nie jest połączony z resztą żadną linią bigowania.
 @msg	A fold line is on a non-printing layer.	Linia zgięcia znajduje się na warstwie niedrukowanej.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panele: {panels}, zawiasy: {hinges}, błędy: {errors}, ostrzeżenia: {warnings}
+	Paint	Farba
+	Flat Sweep	Płaskie pociągnięcie
+	Dry Drag	Suche przeciągnięcie
+	Loaded Stroke	Grube pociągnięcie
+	Fan Sweep	Wachlarzowy ślad
 	Engraving	Grawerowanie
 	Fine Hatching	Drobne kreskowanie
 	Dense Hatching	Gęste kreskowanie

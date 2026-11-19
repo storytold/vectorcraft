@@ -138,6 +138,7 @@
 	Add to Selection	Добавить к выделению
 	Add to Swatches	Добавить в образцы
 	Add Used Colors	Добавить использованные цвета
+	Add Selected Colors	Добавить выбранные цвета
 	Additional Plug-ins Folder	Папка дополнительных модулей
 	Plug-in Instruction Budget	Бюджет инструкций модулей
 	Additional Fonts Folder	Папка дополнительных шрифтов
@@ -235,6 +236,10 @@ font-technology	Variable	Вариативные
 	Arc	Дуга
 	Arc Lower…	Дуга снизу…
 	Arc Tool	Инструмент «Дуга»
+	Three-Point Arc Tool	Инструмент «Дуга по трём точкам»
+	Three-Point Arc	Дуга по трём точкам
+	Arc too large	Дуга слишком велика
+	Third Point Sets Direction	Третья точка задаёт направление
 	Arc Upper…	Дуга сверху…
 	Arch…	Арка…
 	Arc…	Дуга…
@@ -5394,6 +5399,10 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	a guide has no curvature circle	у направляющей нет круга кривизны
 @msg	the circle that matches the path there would reach past the canvas	окружность, соответствующая контуру в этом месте, вышла бы за пределы холста
 @msg	no circle passes through these points: two are the same or all three lie on one line	через эти точки не проходит ни одна окружность: две точки совпадают или все три лежат на одной прямой
+@msg	`at` must be "start" or "end"	`at` должно быть "start" или "end"
+@msg	give exactly one of `through` and `toward`	укажите ровно один из параметров `through` и `toward`
+@msg	no arc fits these points: two are the same or all three lie on one line	ни одна дуга не подходит к этим точкам: две точки совпадают или все три лежат на одной прямой
+@msg	give `at` only with `toward`	указывайте `at` только вместе с `toward`
 @msg	no app to open files here	здесь нет приложения для открытия файлов
 @msg	no artboard	нет монтажной области
 @msg	no artboard {i} (0-based; the document has {_1})	нет монтажной области {i} (счёт с 0; в документе {_1})
@@ -10793,6 +10802,11 @@ shape	Open	Открытый
 @msg	Two panels pass through each other.	Две панели проходят друг сквозь друга.
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} пикселей — слишком большой размер для PSD (не более {MAX_SIDE} пикселей по стороне): уменьшите разрешение
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer должен быть "singleLine", "everyLine", "standardSingleLine" или "standardEveryLine"
+	Paint	Краска
+	Flat Sweep	Плоский мазок
+	Dry Drag	Сухой протяг
+	Loaded Stroke	Густой мазок
+	Fan Sweep	Веерный мазок
 	Engraving	Гравировка
 	Fine Hatching	Тонкая штриховка
 	Dense Hatching	Плотная штриховка

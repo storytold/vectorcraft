@@ -155,6 +155,7 @@
 	Add to Selection	Thêm vào vùng chọn
 	Add to Swatches	Thêm vào mẫu màu
 	Add Used Colors	Thêm các màu đã dùng
+	Add Selected Colors	Thêm các màu đã chọn
 	Additional Fonts Folder	Thư mục phông bổ sung
 	Additional Plug-ins Folder	Thư mục plug-in bổ sung
 	Plug-in Instruction Budget	Ngân sách lệnh của plug-in
@@ -258,6 +259,10 @@ font-technology	Variable	Biến thiên
 	Arc	Cung
 	Arc Lower…	Cung dưới…
 	Arc Tool	Công cụ Cung
+	Three-Point Arc Tool	Công cụ Cung ba điểm
+	Three-Point Arc	Cung ba điểm
+	Arc too large	Cung quá lớn
+	Third Point Sets Direction	Điểm thứ ba chỉ hướng
 	Arc Upper…	Cung trên…
 	Arch…	Vòm…
 	Arc…	Cung…
@@ -5752,6 +5757,10 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	a guide has no curvature circle	đường căn không có đường tròn độ cong
 @msg	the circle that matches the path there would reach past the canvas	đường tròn khớp với đường dẫn tại đó sẽ vượt quá giới hạn vùng vẽ
 @msg	no circle passes through these points: two are the same or all three lie on one line	không có đường tròn nào đi qua các điểm này: hai điểm trùng nhau hoặc cả ba điểm thẳng hàng
+@msg	`at` must be "start" or "end"	`at` phải là "start" hoặc "end"
+@msg	give exactly one of `through` and `toward`	hãy cho đúng một trong hai `through` và `toward`
+@msg	no arc fits these points: two are the same or all three lie on one line	không có cung nào khớp với các điểm này: hai điểm trùng nhau hoặc cả ba điểm thẳng hàng
+@msg	give `at` only with `toward`	chỉ cho `at` cùng với `toward`
 @msg	no app to open files here	không có ứng dụng để mở tệp ở đây
 @msg	no artboard	không có bảng vẽ
 @msg	no artboard {i} (0-based; the document has {_1})	không có bảng vẽ {i} (bắt đầu từ 0; tài liệu có {_1})
@@ -8585,6 +8594,11 @@ breakText	Glyphs	Glyph
 @msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} điểm ảnh quá lớn cho Targa (tối đa 65535 điểm ảnh mỗi cạnh): hãy giảm độ phân giải
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} điểm ảnh quá lớn cho PSD (tối đa {MAX_SIDE} điểm ảnh mỗi cạnh): hãy giảm độ phân giải
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer phải là "singleLine", "everyLine", "standardSingleLine" hoặc "standardEveryLine"
+	Paint	Sơn
+	Flat Sweep	Nét quét phẳng
+	Dry Drag	Nét kéo khô
+	Loaded Stroke	Nét cọ đậm
+	Fan Sweep	Nét quét hình quạt
 	Engraving	Khắc nét
 	Fine Hatching	Nét gạch mảnh
 	Dense Hatching	Nét gạch dày
