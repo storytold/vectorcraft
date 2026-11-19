@@ -1211,6 +1211,16 @@ pub(crate) fn set_image_from_path(d: &mut Document, id: NodeId, path: &str, doc_
     install(d, &[id], read, Some(Preserve::Bounds), None)
 }
 
+/// Distorted image `im` shows the file read for `link` (`img`) and keeps its corners and its
+/// clipping: the new pixels fill them. Its transform is scaled to the new pixel size, so a reader
+/// that places it by the transform still gives it its old size.
+fn refill_distorted(im: &mut ImageObject, link: &LinkInfo, img: &RasterImage) {
+    if (img.width, img.height) != (im.width, im.height) && img.width > 0 && img.height > 0 {
+        im.xf *= Affine::scale_non_uniform(f64::from(im.width) / f64::from(img.width), f64::from(im.height) / f64::from(img.height));
+    }
+    (im.key, im.width, im.height, im.link) = (img.key.clone(), img.width, img.height, Some(link.clone()));
+}
+
 /// Image objects `ids` (in the layers or outside them) show the file read for `link` (`img`), each
 /// placed as its Placement Options say (`force`: as that Preserve choice says, whatever they say);
 /// with `also` (a file's path and the content shown), so do the images outside the layer tree that
@@ -1235,7 +1245,12 @@ fn install(d: &mut Document, ids: &[NodeId], (link, img): FileRead, force: Optio
         let mut make = |n: &Node, held: Option<(&PathData, FillRule)>| {
             let mut n = n.clone();
             let mut clip = ClipTo::Keep;
+            let distorted = n.is_distorted_image();
             if let NodeKind::Image(im) = &mut n.kind {
+                if distorted {
+                    refill_distorted(im, &link, &img);
+                    return (n, clip);
+                }
                 let o = PlacementOptions { preserve: force.unwrap_or(im.placement.preserve), ..im.placement };
                 let size = |w: u32, h: u32| (w as f64, h as f64);
                 let (old_pt, old_clip) = match old.get(&im.key) {
@@ -1251,6 +1266,14 @@ fn install(d: &mut Document, ids: &[NodeId], (link, img): FileRead, force: Optio
         Nested { pick: &pick, make: &mut make, next: 0 }.run(d);
     }
     for id in ids {
+        if d.node(*id).is_some_and(Node::is_distorted_image) {
+            if let Some(n) = d.node_mut(*id)
+                && let NodeKind::Image(im) = &mut n.kind
+            {
+                refill_distorted(im, &link, &img);
+            }
+            continue;
+        }
         let Some(NodeKind::Image(im)) = d.node(*id).map(|n| &n.kind) else { continue };
         let o = PlacementOptions { preserve: force.unwrap_or(im.placement.preserve), ..im.placement };
         let size = |w: u32, h: u32| (w as f64, h as f64);
@@ -2068,6 +2091,9 @@ fn relink(s: &mut Session, p: &Value) -> Result<Value> {
             _ => None,
         })
     };
+    // Whether the images were found as the missing links (nothing selected, a folder given) rather
+    // than named or selected.
+    let mut found_missing = false;
     let mut ids: Vec<NodeId> = match (&each, ids_param(p, "ids", C)?) {
         (Some(each), _) => each.iter().flat_map(|(ids, _)| ids.iter().copied()).collect(),
         (None, Some(ids)) => ids,
@@ -2075,6 +2101,7 @@ fn relink(s: &mut Session, p: &Value) -> Result<Value> {
             let selected: Vec<NodeId> = st.selection.objects.iter().copied().filter(|id| image(id).is_some()).collect();
             match folder_param {
                 Some(_) if selected.is_empty() => {
+                    found_missing = true;
                     groups(&st.doc, None).into_iter().filter(|g| probe(g, LinkBase::of(st)).0 == Status::Missing).flat_map(|g| g.ids).collect()
                 }
                 _ => selected,
@@ -2086,6 +2113,11 @@ fn relink(s: &mut Session, p: &Value) -> Result<Value> {
     }
     if ids.is_empty() {
         return Err(bad(C, "select the images to relink, or pass ids"));
+    }
+    // A named or selected distorted image is refused before a folder is searched, whether or not
+    // its file is found there.
+    if !found_missing && let Some(id) = ids.iter().find(|id| stored(&doc, **id).is_some_and(Node::is_distorted_image)) {
+        return Err(super::xform::distorted_image_error(C, *id));
     }
     // All Instances: the other stored objects linked to the same files, each once.
     if scope == Scope::All {
@@ -2130,6 +2162,11 @@ fn relink(s: &mut Session, p: &Value) -> Result<Value> {
             }
         }
         (None, None, None) => return Err(bad(C, "give path (a file) or folder")),
+    }
+    // A new file's placement options place a plain image: a distorted one is left as it is.
+    let distorted = files.iter().flat_map(|(ids, _)| ids).find(|id| stored(&doc, **id).is_some_and(Node::is_distorted_image));
+    if let Some(id) = distorted {
+        return Err(super::xform::distorted_image_error(C, *id));
     }
     // Every file is read and checked before any is copied.
     let mut checked = vec![];
@@ -2593,6 +2630,9 @@ fn embed(s: &mut Session, p: &Value) -> Result<Value> {
     if ids.is_empty() {
         return Err(bad(C, "select the linked images or placed documents, or pass ids"));
     }
+    if let Some(id) = ids.iter().find(|id| stored(&doc, **id).is_some_and(Node::is_distorted_image)) {
+        return Err(super::xform::distorted_image_error(C, *id));
+    }
     // A DCS file's plates print from its file.
     let separated = |id: &NodeId| match kind(id) {
         Some(NodeKind::Image(im)) => st.doc.images.get(&im.key).is_some_and(ImageBlob::is_separated),
@@ -2721,6 +2761,9 @@ fn unembed(s: &mut Session, p: &Value) -> Result<Value> {
     if im.link.is_some() {
         return Err(bad(C, format!("image {} is linked already", id.0)));
     }
+    if n.is_distorted_image() {
+        return Err(super::xform::distorted_image_error(C, id));
+    }
     let blob = st.doc.images.get(&im.key).filter(|b| !b.is_proxy()).ok_or_else(|| bad(C, "the image's pixels aren't in the document"))?;
     // As stored (PNG, JPEG, GIF, WebP), unless the path names another format.
     let stored = stored_extension(blob);
@@ -2771,6 +2814,9 @@ fn unembed_to_folder(s: &mut Session, p: &Value, ids: Option<Vec<NodeId>>) -> Re
         if im.link.is_some() {
             skipped.push(id);
             continue;
+        }
+        if n.is_distorted_image() {
+            return Err(super::xform::distorted_image_error(C, id));
         }
         let blob = st.doc.images.get(&im.key).filter(|b| !b.is_proxy()).ok_or_else(|| bad(C, "the image's pixels aren't in the document"))?;
         embedded.push((id, n.display_name(), blob));
@@ -2984,7 +3030,9 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
     let (px, py) = file_pt(&st.doc, &im.key);
     out["effectivePpi"] = out["ppi"].take();
     out["ppi"] = json!([72.0 / px, 72.0 / py]);
-    (out["scale"], out["rotation"]) = scale_rotation(im.xf, (px, py));
+    // A distorted image is measured at its middle, as its effective resolution is.
+    let xf = stored(&doc, id).and_then(vectorcraft_doc::image_quad::nearest_affine).unwrap_or(im.xf);
+    (out["scale"], out["rotation"]) = scale_rotation(xf, (px, py));
     out["format"] = json!(format_label(&st.doc, im));
     out["placement"] = placement_json(im.placement);
     out["status"] = json!("embedded");

@@ -95,6 +95,10 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
         "window.taskBar" => app.ui.task_bar,
         "window.pathfinder.compoundShapes" => app.ui.shape_modes_compound,
         "window.taskBar.pin" => app.ui.task_bar_place.pinned,
+        "window.taskBar.actions" => p
+            .get("action")
+            .and_then(Value::as_str)
+            .is_some_and(|a| crate::canvas::is_task_bar_action(a) && !app.ui.task_bar_hidden_actions.contains(a)),
         "window.learn" => crate::panels::learn::visible(&app.ui),
         "window.panel" => {
             let panel = p.get("panel").and_then(Value::as_str).unwrap_or("");
@@ -269,6 +273,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "view.rotateToSelection" | crate::addons::arrange::ZOOM => app.session.active().is_some_and(|d| !d.selection.objects.is_empty()),
         id if id.starts_with("file.openRecent") => recent_slot(app, id).is_some(),
         "file.clearRecent" => !app.ui.recent_files.is_empty(),
+        "help.clearRecentCommands" => !app.ui.recent_commands.is_empty() || !app.ui.command_uses.is_empty(),
         id if id.starts_with("type.recentFont") => {
             id["type.recentFont".len()..].parse::<usize>().is_ok_and(|n| n >= 1 && n <= app.recent_fonts().len()) && app.session.active().is_some()
         }

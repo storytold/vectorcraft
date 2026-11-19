@@ -703,6 +703,25 @@ fn picture(doc: &mut Document, r: Rect) -> Node {
     )
 }
 
+/// A distorted image as deep as the writer goes, the art of the innermost of 8 nested symbols, is
+/// written as one image at the placement nearest its corners, with a warning, not left out.
+#[test]
+fn a_distorted_image_nested_as_deep_as_the_limit_is_written_as_its_nearest_placement() {
+    let mut doc = Document::new(200.0, 100.0);
+    let mut art = picture(&mut doc, Rect::new(10.0, 10.0, 90.0, 90.0));
+    art.set_image_corners([(40.0, 10.0), (60.0, 10.0), (90.0, 90.0), (10.0, 90.0)].map(|(x, y)| vectorcraft_geom::Point::new(x, y))).unwrap();
+    for i in 0..8 {
+        let name = format!("S{i}");
+        doc.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: name.clone(), art: Arc::new(art) });
+        art = Node::new(doc.alloc_id(), NodeKind::SymbolInstance { symbol: name, xf: Affine::IDENTITY });
+    }
+    doc.insert(doc.default_layer(), usize::MAX, art).unwrap();
+    let out = write(&doc);
+    assert!(out.warnings.iter().any(|w| w == DEEP_DISTORTED), "{:?}", out.warnings);
+    let text = String::from_utf8(out.bytes).unwrap();
+    assert_eq!(text.lines().filter(|l| l.ends_with(" XI")).count(), 1, "the one image");
+}
+
 /// A layer `Below` holding a clipping group (a circle clipping an image, as in #2692), a group
 /// holding an image and an image; a layer `Above` holding an orange square. Without `images`,
 /// `Below` is empty.

@@ -44,8 +44,12 @@ impl Node {
                 }
             }
             NodeKind::Image(im) => {
-                let frame = shapes::rectangle(Rect::new(0.0, 0.0, im.width as f64, im.height as f64)).transformed(im.xf);
-                out.push((frame.to_bezpath(), FillRule::NonZero));
+                // A distorted image's frame joins its corners.
+                let frame = match self.image_frame().filter(|_| self.is_distorted_image()) {
+                    Some(bp) => bp,
+                    None => shapes::rectangle(Rect::new(0.0, 0.0, im.width as f64, im.height as f64)).transformed(im.xf).to_bezpath(),
+                };
+                out.push((frame, FillRule::NonZero));
             }
             NodeKind::PlacedDocument(p) => {
                 let frame = shapes::rectangle(p.natural()).transformed(p.xf);
