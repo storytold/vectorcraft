@@ -463,17 +463,22 @@ fn target(s: &mut Session, p: &Value) -> Result<Value> {
 
 /// `layer.target` with `range`, a Shift-click range of target circles: the art of every listed row
 /// that is visible, unlocked and inside the isolated group is selected, or added to the selection
-/// with `add`. Nothing is targeted, and the highlighted rows and the current layer stay.
+/// with `add`. Nothing is targeted, and the highlighted rows stay. The current layer follows the
+/// selection, as with any selection change ([`Session::select`]).
 fn target_range(s: &mut Session, p: &Value, mut ids: Vec<NodeId>) -> Result<Value> {
     const C: &str = "layer.target";
     ids.truncate(MAX_ROWS);
     let add = switch_or(p, "add", false, C)?;
-    let st = s.doc()?;
-    ids.retain(|id| st.doc.node(*id).is_some() && st.doc.is_editable(*id) && in_isolation(&st.doc, st.isolation, *id));
+    let rows = {
+        let st = s.doc()?;
+        // Measures the locked artboards once for every row, not once per row.
+        let editable = st.doc.editable();
+        ids.retain(|id| st.doc.node(*id).is_some() && editable(*id) && in_isolation(&st.doc, st.isolation, *id));
+        st.layer_rows.clone()
+    };
     if ids.is_empty() {
         return Err(bad(C, "no row in the range is visible, unlocked and inside the isolated group"));
     }
-    let rows = st.layer_rows.clone();
     s.select(|d, sel| sel.target_range(d, &ids, add))?;
     let st = s.doc_mut()?;
     // Targeting doesn't change which rows are highlighted.

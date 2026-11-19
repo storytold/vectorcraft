@@ -211,6 +211,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         ui.data_mut(|d| {
             if before.is_some() {
                 d.remove::<(u64, String)>(rename_id());
+                // So is the target circles' Shift-click anchor: it could name another row here.
+                d.remove::<NodeId>(key("target-anchor"));
             }
             d.insert_temp(shown_doc, st.uid);
         });

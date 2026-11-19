@@ -447,6 +447,28 @@ fn shift_clicking_a_target_circle_selects_a_range_of_rows() {
     assert_eq!(selected(&app), (None, vec![a, c3]));
 }
 
+/// The Shift-click anchor of the target circles belongs to the document it was clicked in: node
+/// ids are per document, so in another document a Shift-click with no circle clicked there yet
+/// targets only its own row, never a range from a row that has the old anchor's id.
+#[test]
+fn the_target_circle_anchor_does_not_carry_over_to_another_document() {
+    let (mut app, _, [a, _]) = two_rects();
+    let ctx = egui::Context::default();
+    let (c, _) = frame(&mut app, &ctx, vec![], false);
+    // Rows top down: the layer, b, a. The anchor is a.
+    click_with(&mut app, &ctx, c[2], egui::Modifiers::NONE);
+    let run = |app: &mut VectorcraftApp, id: &str, p: serde_json::Value| app.session.execute(id, &p).unwrap();
+    run(&mut app, "file.new", json!({"width": 200, "height": 200}));
+    let a2 = NodeId(run(&mut app, "shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50}))["id"].as_u64().unwrap());
+    let b2 = NodeId(run(&mut app, "shape.rectangle", json!({"x": 60, "y": 0, "width": 50, "height": 50}))["id"].as_u64().unwrap());
+    run(&mut app, "select.none", json!({}));
+    assert_eq!(a2, a, "the new document reuses the old anchor's id, so a stale anchor would find a row");
+    let (c, _) = frame(&mut app, &ctx, vec![], false);
+    click_with(&mut app, &ctx, c[1], egui::Modifiers::SHIFT);
+    let st = app.session.active().unwrap();
+    assert_eq!((st.selection.target, st.selection.objects.clone()), (Some(b2), vec![b2]));
+}
+
 #[test]
 fn dragging_a_target_circle_moves_or_copies_the_appearance() {
     let (mut app, layer, [a, b]) = two_rects();
