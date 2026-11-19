@@ -915,6 +915,7 @@ impl Tool for SelectionTool {
             State::Corner(c) if c.adjusting() => vec![Action::Cancel],
             State::Pie(d) if d.adjusting() => vec![Action::Cancel],
             State::Sides(d) => d.cancel(),
+            State::TraceSplit(d) => d.cancel(),
             State::BlendWidget(_) | State::Corner(_) | State::Pie(_) => vec![],
             other => {
                 self.state = other;
