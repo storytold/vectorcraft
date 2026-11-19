@@ -3,7 +3,7 @@
 
 use egui::{Event, Modifiers, PointerButton, Pos2, vec2};
 use egui_kittest::Harness;
-use egui_kittest::kittest::Queryable;
+use egui_kittest::kittest::{NodeT, Queryable};
 use serde_json::{Value, json};
 use vectorcraft_color::wcag;
 use vectorcraft_engine::Session;
@@ -119,6 +119,10 @@ fn the_background_is_the_art_behind_the_selection() {
     let h = harness(app);
     let want = wcag::ratio_text(wcag::contrast_ratio([0.0; 3], [1.0, 1.0, 0.0]));
     assert!(shows(&h, &want), "black on the locked yellow: {want}");
+    // Screen readers find the chip by its name, with the background's hex value as its value.
+    let chip = h.get_by_label("Background");
+    assert_eq!(chip.accesskit_node().role(), egui::accesskit::Role::Image);
+    assert_eq!(chip.value().as_deref(), Some("FFFF00"));
 }
 
 #[test]

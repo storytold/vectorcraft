@@ -437,11 +437,22 @@ fn contrast_row(app: &mut VectorcraftApp, ui: &mut Ui) {
     };
     let resp = ui
         .horizontal(|ui| {
-            let (rect, _) = ui.allocate_exact_size(vec2(CHIP, CHIP), egui::Sense::hover());
+            // The chip takes the keyboard focus and gives screen readers its name and hex value, as
+            // the color vision chips do.
+            let (rect, chip_resp) = ui.allocate_exact_size(vec2(CHIP, CHIP), Sense::focusable_noninteractive());
             match chip {
                 Some(c) => widgets::swatch_tile(ui, rect, &Paint::solid(c), false, false),
                 None => widgets::swatch_tile(ui, rect, &Paint::None, false, false),
             }
+            if chip_resp.has_focus() {
+                ui.painter().rect_stroke(rect, 0.0, ui.visuals().selection.stroke, StrokeKind::Inside);
+            }
+            let enabled = ui.is_enabled();
+            let value = chip.map(|c| hex(bytes(cms::active().display_rgb(&c))));
+            chip_resp.widget_info(|| egui::WidgetInfo {
+                current_text_value: value.clone(),
+                ..egui::WidgetInfo::labeled(egui::Role::Image, enabled, tl!("Background"))
+            });
             let Some(ratio) = answer.as_ref().and_then(|r| r["ratio"].as_f64()) else {
                 ui.label("—");
                 return;
