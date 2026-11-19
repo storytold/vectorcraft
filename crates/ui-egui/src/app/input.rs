@@ -17,7 +17,9 @@ impl VectorcraftApp {
         if self.fonts_ready {
             tools_float::cancel_move_on_escape(self, ctx);
             crate::custom_toolbars::cancel_move_on_escape(self, ctx);
-            shortcuts::handle(self, ctx);
+            if !crate::menus::handle_keyboard_input(self, ctx) {
+                shortcuts::handle(self, ctx);
+            }
         }
         // A Copy taken in this UI phase (an egui copy event, or a command it runs) is published in
         // this same pass: waiting for the next `tick` can leave the command unissued when an idle
@@ -214,6 +216,8 @@ impl VectorcraftApp {
             raw.events.insert(0, egui::Event::ModifiersChanged(self.host_modifiers));
         }
         self.forwarded_frame = !self.forwarded.is_empty();
+        self.forwarded_clipboard = self.forwarded.iter().any(|e| matches!(e, egui::Event::Copy | egui::Event::Cut));
+        self.forwarded_presses = self.forwarded.iter().filter(|e| matches!(e, egui::Event::Key { pressed: true, .. })).cloned().collect();
         if !self.forwarded.is_empty() {
             if let Some(m) = self.forwarded_modifiers.take() {
                 raw.events.push(egui::Event::ModifiersChanged(m));
