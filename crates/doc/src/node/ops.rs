@@ -534,7 +534,7 @@ impl Node {
         // Type and symbols in perspective keep looking the same, moved by `a`.
         self.transform_projection(a);
         // Refitting an unplaced gradient only reproduces moves and uniform scales.
-        if !keeps_gradient_fit(a) && !(sc.keep_fit_when_flat && flattens(a)) {
+        if !(keeps_gradient_fit(a) || sc.keep_fit_when_flat && flattens(a)) {
             self.pin_gradients();
         }
         let k = Scaling::factor(a);
