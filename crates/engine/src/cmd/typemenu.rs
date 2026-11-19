@@ -21,7 +21,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Change Case",
             ["Type", "Change Case"],
             None,
-            "{case: \"upper\"|\"lower\"|\"title\"|\"sentence\", ids?|id?} → {ids}",
+            "{case: \"upper\"|\"lower\"|\"title\"|\"sentence\", ids?|id?, start?, end?} → {ids}",
             has_selection,
             change_case
         ),
@@ -184,18 +184,24 @@ fn ids_json(ids: &[NodeId]) -> Value {
     json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() })
 }
 
-/// Rewrite every run of the given text objects with `f(run text, state)`. When no run changes, the
-/// document and its undo history stay as they are.
-fn edit_runs<S: Default>(s: &mut Session, label: &str, ids: &[NodeId], f: impl Fn(&str, &mut S) -> String) -> Result<usize> {
+/// Rewrite every run of the given text objects with `f(run text, its byte offset in the text
+/// object, state)`. When no run changes, the document and its undo history stay as they are.
+fn edit_runs<S: Default>(s: &mut Session, label: &str, ids: &[NodeId], f: impl Fn(&str, usize, &mut S) -> String) -> Result<usize> {
     super::overprint::edit_counted(s, label, |d| {
         let mut changed = 0;
         for id in ids {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
             let mut st = S::default();
             let mut any = false;
-            // Inline graphics are art, not characters to rewrite.
-            for r in t.runs.iter_mut().filter(|r| r.inline.is_none()) {
-                let n = f(&r.text, &mut st);
+            let mut at = 0;
+            for r in t.runs.iter_mut() {
+                let start = at;
+                at += r.text.len();
+                // Inline graphics are art, not characters to rewrite.
+                if r.inline.is_some() {
+                    continue;
+                }
+                let n = f(&r.text, start, &mut st);
                 if n != r.text {
                     r.text = n;
                     any = true;
@@ -235,33 +241,51 @@ fn change_case(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(C, "case must be upper|lower|title|sentence"));
     }
     let ids = texts(s, p, C)?;
-    edit_runs::<CaseState>(s, "Change Case", &ids, |text, st| {
+    // With `start`/`end` (the characters the Type tool selects) only those characters change; title
+    // and sentence case still read the words and sentences around them (#8521).
+    let range = match super::typecmd::TextRange::parse(p, C)? {
+        None => None,
+        Some(range) => {
+            let [id] = ids[..] else { return Err(bad(C, "`start` and `end` take one text object")) };
+            let Some(NodeKind::Text(t)) = s.doc()?.doc.node(id).map(|n| &n.kind) else { return Err(bad(C, "no text objects selected")) };
+            Some(range.bytes(t))
+        }
+    };
+    edit_runs::<CaseState>(s, "Change Case", &ids, |text, start, st| {
         if !st.started {
             st.started = true;
             st.sentence = true;
         }
         let mut out = String::with_capacity(text.len());
-        for c in text.chars() {
+        for (i, c) in text.char_indices() {
+            let changes = range.is_none_or(|(a, b)| (a..b).contains(&(start + i)));
+            let mut put = |cased: &mut dyn Iterator<Item = char>| {
+                if changes {
+                    out.extend(cased);
+                } else {
+                    out.push(c);
+                }
+            };
             match case.as_str() {
-                "upper" | "uppercase" => out.extend(c.to_uppercase()),
-                "lower" | "lowercase" => out.extend(c.to_lowercase()),
+                "upper" | "uppercase" => put(&mut c.to_uppercase()),
+                "lower" | "lowercase" => put(&mut c.to_lowercase()),
                 "title" => {
                     if capitalizes(c) && st.prev.is_none_or(|p| p.is_whitespace() || matches!(p, '-' | '(' | '"' | '“' | '/')) {
-                        out.extend(c.to_uppercase())
+                        put(&mut c.to_uppercase())
                     } else {
-                        out.extend(c.to_lowercase())
+                        put(&mut c.to_lowercase())
                     }
                 }
                 _ => {
                     if c.is_alphabetic() && st.sentence {
                         if capitalizes(c) {
-                            out.extend(c.to_uppercase());
+                            put(&mut c.to_uppercase());
                         } else {
-                            out.extend(c.to_lowercase());
+                            put(&mut c.to_lowercase());
                         }
                         st.sentence = false;
                     } else {
-                        out.extend(c.to_lowercase());
+                        put(&mut c.to_lowercase());
                     }
                     if matches!(c, '.' | '!' | '?' | '\n') {
                         st.sentence = true;

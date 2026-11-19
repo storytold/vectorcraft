@@ -4032,6 +4032,28 @@ fn change_case_variants() {
     assert!(s.execute("type.changeCase", &json!({"case": "weird"})).is_err());
 }
 
+/// #8521: with a range (the characters the Type tool has selected) Change Case changes those
+/// characters only, and title and sentence case still read the words and sentences around them.
+#[test]
+fn change_case_changes_only_the_selected_characters() {
+    let mut s = session();
+    let t = text(&mut s, "hello wORLD. again here");
+    // "wORL": bytes 6 to 10.
+    s.execute("type.changeCase", &json!({"case": "upper", "id": t.0, "start": 0, "end": 3})).unwrap();
+    assert_eq!(plain(&s, t), "HELlo wORLD. again here");
+    s.execute("type.changeCase", &json!({"case": "lower", "id": t.0, "start": 6, "end": 10})).unwrap();
+    assert_eq!(plain(&s, t), "HELlo worlD. again here");
+    s.execute("type.changeCase", &json!({"case": "title", "id": t.0, "start": 7, "end": 18})).unwrap();
+    assert_eq!(plain(&s, t), "HELlo world. Again here", "a word's first letter outside the range stays");
+    s.execute("type.changeCase", &json!({"case": "sentence", "id": t.0, "start": 0, "end": 23})).unwrap();
+    assert_eq!(plain(&s, t), "Hello world. Again here");
+    // A range takes one text object.
+    let u = text(&mut s, "other");
+    sel(&mut s, &[t, u]);
+    assert!(s.execute("type.changeCase", &json!({"case": "upper", "start": 0, "end": 2})).is_err());
+    assert_eq!(plain(&s, u), "other");
+}
+
 /// Georgian has no word capitals: title and sentence case leave Mkhedruli lower case (and bring
 /// Mtavruli back to it) instead of capitalizing it; upper case still gives Mtavruli.
 #[test]
