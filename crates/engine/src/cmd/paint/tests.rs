@@ -11,7 +11,7 @@ use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{Appearance, Document, LayerColor, Node, NodeId, NodeKind};
 use vectorcraft_geom::{Rect, shapes};
 
-use super::{painted, picked_colors, proxy_paint, same_in_proxy};
+use super::{live_paint_parts, painted, picked_colors, proxy_paint, same_in_proxy};
 use crate::{DocState, Session};
 
 thread_local! {
@@ -38,17 +38,28 @@ fn walked(st: &DocState, item: Option<usize>, points: &[(NodeId, Vec<usize>)]) -
         return (false, false);
     }
     let ids: HashSet<NodeId> = st.selection.objects.iter().copied().collect();
-    let (mut selected, mut nodes) = (vec![], vec![]);
+    let (mut selected, mut fills, mut strokes) = (vec![], vec![], vec![]);
+    let mut covered = HashSet::new();
     st.doc.walk(|n| {
         if ids.contains(&n.id) {
             selected.push(n);
-            painted(n, true, &mut nodes);
+            if !covered.contains(&n.id) {
+                covered.extend(live_paint_parts(n));
+                painted(n, true, false, &mut fills);
+                painted(n, true, true, &mut strokes);
+            }
         }
     });
     let first = st.selection.objects.first().and_then(|id| st.doc.node(*id));
     let differ = |stroke: bool| {
         let item = first.and_then(|f| f.appearance.item_of_kind(item, !stroke));
-        let set = if item.is_some() { &selected } else { &nodes };
+        let set = if item.is_some() {
+            &selected
+        } else if stroke {
+            &strokes
+        } else {
+            &fills
+        };
         let mut paints = set.iter().flat_map(|n| match picked_colors(n, if stroke || item.is_some() { &[] } else { points }) {
             c if c.is_empty() => vec![proxy_paint(n, stroke, item)],
             c => c.into_iter().map(Paint::solid).collect(),

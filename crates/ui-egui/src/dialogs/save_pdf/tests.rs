@@ -68,6 +68,372 @@ fn every_section_draws() {
     assert!(warnings.len() == 1 && warnings[0].as_str().unwrap().contains("permissions"), "{warnings:?}");
 }
 
+/// `ui.pdfSummary.save` writes the Summary as the section shows it, as UTF-8 text with LF line
+/// endings: Options with each changed option in the order of the sections, a blank line, then
+/// Warnings. The dialog stays open and the document does not change.
+#[test]
+fn save_summary_writes_the_summary_as_text() {
+    let (mut app, written, _) = app();
+    app.run("file.export.pdf", json!({})).unwrap();
+    set_field(&mut app, "thumbnails", json!(true));
+    set_field(&mut app, "security.printing", json!("low"));
+    let revision = app.session.active().unwrap().revision;
+    let r = app.run(SAVE_SUMMARY, json!({"path": "/tmp/Ünïcode (1) summary.txt"})).unwrap();
+    assert_eq!(r["path"], "/tmp/Ünïcode (1) summary.txt", "the path is used as given");
+    let w = written.borrow();
+    assert_eq!(w.len(), 1);
+    assert_eq!(w[0].0, "/tmp/Ünïcode (1) summary.txt");
+    assert_eq!(r["bytes"], w[0].1.len());
+    let text = String::from_utf8(w[0].1.clone()).expect("UTF-8");
+    assert!(!text.contains('\r') && text.ends_with('\n'), "LF line endings: {text:?}");
+    let lines: Vec<&str> = text.lines().collect();
+    assert_eq!(lines[..5], ["Options", "General › Thumbnails: On", "Security › Printing: low", "", "Warnings"], "{text}");
+    assert!(lines.len() == 6 && lines[5].starts_with("⚠ ") && lines[5].contains("permissions"), "{text}");
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(KIND), "the dialog stays open");
+    assert_eq!(app.session.active().unwrap().revision, revision, "the document does not change");
+    assert_eq!(app.ui.status, "Saved /tmp/Ünïcode (1) summary.txt");
+}
+
+/// A text option whose value holds CRLF or CR line breaks is written with LF line breaks, so the
+/// file has one kind of line ending.
+#[test]
+fn save_summary_writes_line_breaks_in_values_as_lf() {
+    let (mut app, written, _) = app();
+    app.run("file.export.pdf", json!({})).unwrap();
+    set_field(&mut app, "output.outputCondition", json!("first\r\nsecond\rthird"));
+    app.run(SAVE_SUMMARY, json!({"path": "/tmp/summary.txt"})).unwrap();
+    let text = String::from_utf8(written.borrow()[0].1.clone()).unwrap();
+    assert!(!text.contains('\r'), "LF line endings: {text:?}");
+    assert!(text.contains("first\nsecond\nthird\n"), "{text:?}");
+}
+
+/// With every option as the preset has it and nothing to warn about, the file holds the lines
+/// that say so, in the interface language.
+#[test]
+fn save_summary_writes_the_lines_for_no_changes_and_no_warnings() {
+    let (mut app, written, _) = app();
+    app.run("file.export.pdf", json!({})).unwrap();
+    app.run(SAVE_SUMMARY, json!({"path": "/tmp/summary.txt"})).unwrap();
+    let text = String::from_utf8(written.borrow()[0].1.clone()).unwrap();
+    assert_eq!(text, "Options\nEvery option matches the preset.\n\nWarnings\nNone.\n");
+    crate::i18n::set_current(crate::i18n::Lang::from_code("de").expect("de registered"));
+    let r = app.run(SAVE_SUMMARY, json!({"path": "/tmp/zusammenfassung.txt"}));
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    r.unwrap();
+    let de = String::from_utf8(written.borrow()[1].1.clone()).unwrap();
+    let de_lang = crate::i18n::Lang::from_code("de").unwrap();
+    let expected = format!(
+        "{}\n{}\n\n{}\n{}\n",
+        crate::i18n::tr(de_lang, "Options"),
+        crate::i18n::fmt(crate::i18n::tr(de_lang, "Every option matches {base}."), &[("base", crate::i18n::tr(de_lang, "the preset"))]),
+        crate::i18n::tr(de_lang, "Warnings"),
+        crate::i18n::tr(de_lang, "None."),
+    );
+    assert_eq!(de, expected);
+    assert_ne!(de, text, "the labels are translated");
+}
+
+/// The preset editor's Summary is saved too, measured against the app's default preset, and the
+/// editor stays open.
+#[test]
+fn save_summary_writes_the_preset_editors_summary() {
+    let (mut app, written, _) = app();
+    open_preset(&mut app, &json!({})).unwrap();
+    set_field(&mut app, "thumbnails", json!(true));
+    app.run(SAVE_SUMMARY, json!({"path": "/tmp/preset summary.txt"})).unwrap();
+    let text = String::from_utf8(written.borrow()[0].1.clone()).unwrap();
+    assert_eq!(text, "Options\nGeneral › Thumbnails: On\n\nWarnings\nNone.\n");
+    set_field(&mut app, "thumbnails", json!(false));
+    app.run(SAVE_SUMMARY, json!({"path": "/tmp/preset summary.txt"})).unwrap();
+    let text = String::from_utf8(written.borrow()[1].1.clone()).unwrap();
+    assert_eq!(text, format!("Options\nEvery option matches {}.\n\nWarnings\nNone.\n", pdf::DEFAULT_PRESET));
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(PRESET_KIND), "the editor stays open");
+}
+
+/// A path that is empty or not a string, and no Save PDF dialog open, are errors that write
+/// nothing.
+#[test]
+fn save_summary_refuses_a_bad_path_and_a_closed_dialog() {
+    let (mut app, written, _) = app();
+    assert_eq!(app.run(SAVE_SUMMARY, json!({"path": "/tmp/s.txt"})).unwrap_err(), "the Save PDF dialog is not open");
+    app.run("file.export.pdf", json!({})).unwrap();
+    assert_eq!(app.run(SAVE_SUMMARY, json!({"path": ""})).unwrap_err(), "path is empty");
+    assert_eq!(app.run(SAVE_SUMMARY, json!({"path": "  "})).unwrap_err(), "path is empty");
+    assert_eq!(app.run(SAVE_SUMMARY, json!({"path": 5})).unwrap_err(), "`path` must be a string");
+    assert!(written.borrow().is_empty());
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(KIND));
+}
+
+/// The command needs a path: omitted or null, it is an error that shows no save panel and writes
+/// nothing.
+#[test]
+fn save_summary_requires_a_path() {
+    let (mut app, written, _) = app();
+    let asked: Rc<RefCell<usize>> = Rc::default();
+    let a = asked.clone();
+    app.services.pick_save = Some(Box::new(move |pick: &crate::FilePick| {
+        *a.borrow_mut() += 1;
+        Some(format!("/tmp/{}", pick.name))
+    }));
+    app.run("file.export.pdf", json!({})).unwrap();
+    assert_eq!(app.run(SAVE_SUMMARY, json!({})).unwrap_err(), "missing `path`");
+    assert_eq!(app.run(SAVE_SUMMARY, json!({"path": null})).unwrap_err(), "missing `path`");
+    assert_eq!(*asked.borrow(), 0, "no save panel");
+    assert!(written.borrow().is_empty());
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(KIND));
+}
+
+/// The command uses the Summary the section drew for the same fields and document, without
+/// computing the settings again (an export in memory), and computes them once a field changes.
+#[test]
+fn save_summary_uses_the_summary_the_section_drew() {
+    let (mut app, written, _) = app();
+    app.run("file.export.pdf", json!({})).unwrap();
+    set_field(&mut app, "__section", json!("Summary"));
+    let ctx = egui::Context::default();
+    theme::install_fonts(&ctx);
+    app.ui_ctx = Some(ctx.clone());
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| super::super::show(&mut app, ui.ctx()));
+    out.textures_delta.clear();
+    // The drawn Summary, replaced with one that no computation gives.
+    let (key, stamp) = summary_key(&app, &params(app.ui.dialog.as_ref().unwrap()));
+    let drawn = ctx.data(|m| m.get_temp::<(egui::Id, Result<Value, String>)>(key)).expect("the section's Summary");
+    assert_eq!(drawn.0, stamp, "drawn for these fields");
+    let kept: Result<Value, String> = Ok(json!({"changed": [{"option": "thumbnails", "value": "kept"}], "warnings": []}));
+    ctx.data_mut(|m| m.insert_temp(key, (stamp, kept)));
+    app.run(SAVE_SUMMARY, json!({"path": "/tmp/a.txt"})).unwrap();
+    let text = String::from_utf8(written.borrow()[0].1.clone()).unwrap();
+    assert_eq!(text, "Options\nGeneral › Thumbnails: kept\n\nWarnings\nNone.\n");
+    set_field(&mut app, "thumbnails", json!(true));
+    app.run(SAVE_SUMMARY, json!({"path": "/tmp/b.txt"})).unwrap();
+    let text = String::from_utf8(written.borrow()[1].1.clone()).unwrap();
+    assert!(text.starts_with("Options\nGeneral › Thumbnails: On\n"), "computed for the changed field: {text}");
+}
+
+/// The Summary drawn for one document is not used for another that becomes active with the same
+/// revision and the same fields.
+#[test]
+fn save_summary_does_not_use_another_documents_summary() {
+    let (mut app, written, _) = app();
+    let first = app.session.active_index().unwrap();
+    let revision = app.session.active().unwrap().revision;
+    app.run("file.new", json!({"width": 120, "height": 90})).unwrap();
+    let second = app.session.active_index().unwrap();
+    app.session.set_active(first);
+    app.run("file.export.pdf", json!({})).unwrap();
+    let ctx = egui::Context::default();
+    app.ui_ctx = Some(ctx.clone());
+    let (key, stamp) = summary_key(&app, &params(app.ui.dialog.as_ref().unwrap()));
+    let kept: Result<Value, String> = Ok(json!({"changed": [{"option": "thumbnails", "value": "kept"}], "warnings": []}));
+    ctx.data_mut(|m| m.insert_temp(key, (stamp, kept)));
+    app.session.set_active(second);
+    app.session.active_mut().unwrap().revision = revision;
+    app.run(SAVE_SUMMARY, json!({"path": "/tmp/a.txt"})).unwrap();
+    let text = String::from_utf8(written.borrow()[0].1.clone()).unwrap();
+    assert!(!text.contains("kept"), "the other document's Summary: {text}");
+}
+
+/// The Summary is computed again when the saved preset it compares against is replaced while the
+/// dialog stays open.
+#[test]
+fn save_summary_compares_against_a_replaced_preset() {
+    let (mut app, written, _) = app();
+    app.run("pdf.preset.save", json!({"name": "Mine", "thumbnails": true})).unwrap();
+    app.run("ui.savePdfDialog", json!({"preset": "Mine"})).unwrap();
+    set_field(&mut app, "thumbnails", json!(false));
+    app.ui_ctx = Some(egui::Context::default());
+    app.run(SAVE_SUMMARY, json!({"path": "/tmp/a.txt"})).unwrap();
+    let text = String::from_utf8(written.borrow()[0].1.clone()).unwrap();
+    assert!(text.starts_with("Options\nGeneral › Thumbnails: Off\n"), "{text}");
+    app.run("pdf.preset.save", json!({"name": "Mine", "thumbnails": false})).unwrap();
+    app.run(SAVE_SUMMARY, json!({"path": "/tmp/b.txt"})).unwrap();
+    let text = String::from_utf8(written.borrow()[1].1.clone()).unwrap();
+    assert!(text.starts_with("Options\nEvery option matches the preset.\n"), "compared against the replaced preset: {text}");
+}
+
+/// The Summary is computed again when the saved flattener preset the dialog names is deleted while
+/// the dialog stays open: the settings are then refused, and nothing is written.
+#[test]
+fn save_summary_sees_a_deleted_flattener_preset() {
+    let (mut app, written, _) = app();
+    app.run("flattener.presets.save", json!({"name": "Mine Flat", "preset": "Low Resolution"})).unwrap();
+    app.run("file.export.pdf", json!({})).unwrap();
+    set_field(&mut app, "flattenerPreset", json!("Mine Flat"));
+    app.ui_ctx = Some(egui::Context::default());
+    app.run(SAVE_SUMMARY, json!({"path": "/tmp/a.txt"})).unwrap();
+    app.run("flattener.presets.delete", json!({"name": "Mine Flat"})).unwrap();
+    let e = app.run(SAVE_SUMMARY, json!({"path": "/tmp/b.txt"})).unwrap_err();
+    assert!(e.contains("Mine Flat"), "the deleted preset is refused: {e}");
+    assert_eq!(written.borrow().len(), 1, "nothing written for the deleted preset");
+}
+
+/// The Summary is computed again when a loaded profile the dialog converts to is removed while the
+/// dialog stays open: the settings are then refused, and nothing is written.
+#[test]
+fn save_summary_sees_a_removed_profile() {
+    use vectorcraft_color::cms;
+    let name = "Summary Stamp CMYK";
+    // The built-in CMYK profile's file renamed `name`: padded with spaces, which names drop.
+    let utf16 = |s: &str| s.encode_utf16().flat_map(u16::to_be_bytes).collect::<Vec<u8>>();
+    let mut bytes = cms::icc_bytes(cms::DEVICE_CMYK).unwrap().to_vec();
+    let (from, to) = (utf16(cms::DEVICE_CMYK), utf16(&format!("{name:<width$}", width = cms::DEVICE_CMYK.len())));
+    let at = bytes.windows(from.len()).position(|w| w == from).unwrap();
+    bytes[at..at + to.len()].copy_from_slice(&to);
+    let path = vectorcraft_testkit::temp_dir("save-summary-profile").join("stamp.icc");
+    std::fs::write(&path, bytes).unwrap();
+    let (mut app, written, _) = app();
+    assert_eq!(app.run("color.loadProfile", json!({"path": path.to_str().unwrap()})).unwrap()["name"], name);
+    app.run("file.export.pdf", json!({})).unwrap();
+    set_field(&mut app, "output.conversion", json!("destination"));
+    set_field(&mut app, "output.destination", json!(name));
+    app.ui_ctx = Some(egui::Context::default());
+    app.run(SAVE_SUMMARY, json!({"path": "/tmp/a.txt"})).unwrap();
+    app.run("color.removeProfile", json!({"name": name})).unwrap();
+    let e = app.run(SAVE_SUMMARY, json!({"path": "/tmp/b.txt"})).unwrap_err();
+    assert!(e.contains(name), "the removed profile is refused: {e}");
+    assert_eq!(written.borrow().len(), 1, "nothing written for the removed profile");
+}
+
+/// With the desktop's file writer: a file already at the path is replaced whole, a folder's path
+/// is an error that leaves the folder as it was, and under automation write roots a path outside
+/// them is refused without writing.
+#[test]
+fn save_summary_writes_files_on_disk_within_the_automation_roots() {
+    let base = std::env::temp_dir().join(format!("vc-pdf-summary-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    for d in ["out", "outside"] {
+        std::fs::create_dir_all(base.join(d)).unwrap();
+    }
+    let roots = vectorcraft_engine::file_access::AutomationRoots::new(&[], &[&base.join("out")]).unwrap();
+    let services = Services {
+        write: Some(Box::new(|p: &str, b: &[u8]| vectorcraft_format::write_atomic(std::path::Path::new(p), b).map_err(|e| e.to_string()))),
+        ..Default::default()
+    };
+    let mut app = VectorcraftApp::new(Session::new(), services).with_automation_roots(roots.clone());
+    app.run("file.new", json!({"width": 120, "height": 90})).unwrap();
+    app.run("file.export.pdf", json!({})).unwrap();
+    let mut save = |path: &std::path::Path| {
+        let p = json!({"path": path.to_string_lossy()});
+        vectorcraft_engine::file_access::confine(roots.as_ref(), || app.run(SAVE_SUMMARY, p))
+    };
+    let file = base.join("out").join("Ünïcode (1), summary.txt");
+    std::fs::write(&file, "an older file, longer than the summary\n".repeat(40)).unwrap();
+    save(&file).unwrap();
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), "Options\nEvery option matches the preset.\n\nWarnings\nNone.\n");
+    assert!(save(&base.join("out")).is_err(), "a folder is not a file");
+    assert!(base.join("out").is_dir() && file.is_file());
+    let outside = base.join("outside").join("summary.txt");
+    assert!(save(&outside).is_err(), "outside the write roots");
+    assert!(!outside.exists());
+    let _ = std::fs::remove_dir_all(&base);
+}
+
+/// A failed `document.pdfSettings` is the command's error, and nothing is written.
+#[test]
+fn save_summary_reports_a_failed_summary() {
+    let (mut app, written, _) = app();
+    app.run("file.export.pdf", json!({})).unwrap();
+    set_field(&mut app, "compatibility", json!("bogus"));
+    let p = params(app.ui.dialog.as_ref().unwrap());
+    let expected = summary_settings(&mut app, &p).unwrap_err();
+    assert_eq!(app.run(SAVE_SUMMARY, json!({"path": "/tmp/s.txt"})).unwrap_err(), expected);
+    assert!(written.borrow().is_empty());
+}
+
+/// The Summary section's Save Summary… button: the save panel suggests `<document> PDF
+/// Summary.txt`, the file holds the text the section shows, and the dialog stays open. A canceled
+/// panel writes nothing; a failed write is told over the dialog, which shows again when the
+/// message closes. The web downloads the file under the suggested name.
+#[test]
+fn the_save_summary_button_writes_the_summary() {
+    let (mut app, written, _) = app();
+    let suggested: Rc<RefCell<Vec<String>>> = Rc::default();
+    let s = suggested.clone();
+    app.services.pick_save = Some(Box::new(move |pick: &crate::FilePick| {
+        s.borrow_mut().push(pick.name.clone());
+        Some(format!("/tmp/{}", pick.name))
+    }));
+    app.run("file.export.pdf", json!({})).unwrap();
+    set_field(&mut app, "__section", json!("Summary"));
+    set_field(&mut app, "thumbnails", json!(true));
+    let ctx = egui::Context::default();
+    theme::install_fonts(&ctx);
+    click_save_summary(&mut app, &ctx);
+    let title = app.session.active().unwrap().title();
+    let stem = std::path::Path::new(&title).file_stem().unwrap().to_string_lossy().into_owned();
+    let name = format!("{stem} PDF Summary.txt");
+    assert_eq!(suggested.borrow()[..], *std::slice::from_ref(&name));
+    {
+        let w = written.borrow();
+        assert_eq!(w.len(), 1, "written once");
+        assert_eq!(w[0].0, format!("/tmp/{name}"));
+        let text = String::from_utf8(w[0].1.clone()).unwrap();
+        assert!(text.starts_with("Options\nGeneral › Thumbnails: On\n\nWarnings\n"), "{text}");
+    }
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(KIND), "the dialog stays open");
+    // Canceled: nothing written, no status, the dialog stays.
+    app.services.pick_save = Some(Box::new(|_: &crate::FilePick| None));
+    app.ui.status.clear();
+    click_save_summary(&mut app, &ctx);
+    assert_eq!(written.borrow().len(), 1, "a canceled panel writes nothing");
+    assert!(app.ui.status.is_empty(), "{}", app.ui.status);
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(KIND));
+    // A failed write: a message names the file, over the dialog.
+    app.services.pick_save = Some(Box::new(|pick: &crate::FilePick| Some(format!("/tmp/{}", pick.name))));
+    app.services.write = Some(Box::new(|_: &str, _: &[u8]| Err("disk full".into())));
+    click_save_summary(&mut app, &ctx);
+    let told = app.ui.dialog.clone().expect("a message");
+    assert_eq!(told.kind, super::super::confirm::MESSAGE, "status {:?}, waiting {:?}", app.ui.status, app.ui.told);
+    assert!(told.str("message").contains(&name), "{:?}", told.fields);
+    assert_eq!(super::super::parent(&told).map(|d| d.kind), Some(KIND.to_string()), "the dialog is under the message");
+    super::super::cancel(&mut app);
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(KIND), "the dialog shows again");
+    // The web downloads it under the suggested name.
+    let downloads: Log = Log::default();
+    let dl = downloads.clone();
+    app.services.download = Some(Box::new(move |n: &str, b: &[u8]| {
+        dl.borrow_mut().push((n.to_string(), b.to_vec()));
+        Ok(())
+    }));
+    click_save_summary(&mut app, &ctx);
+    let d = downloads.borrow();
+    assert_eq!(d.len(), 1);
+    assert_eq!(d[0].0, name);
+    assert!(String::from_utf8(d[0].1.clone()).unwrap().starts_with("Options\n"));
+}
+
+/// The saved Summary writes each option line with the colon the interface language uses, as the
+/// Summary section shows it: French puts a no-break space before the colon, Japanese writes a
+/// full-width colon.
+#[test]
+fn the_summary_text_uses_the_languages_colon() {
+    let changed = json!({"option": "thumbnails", "value": true});
+    for (code, colon) in [("en", ":"), ("fr", "\u{a0}:"), ("ja", "：")] {
+        crate::i18n::set_current(crate::i18n::Lang::from_code(code).expect("registered"));
+        let line = option_line(&changed, |_| "X".to_string());
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        assert!(line.starts_with(&format!("X{colon} ")), "{code}: {line:?}");
+    }
+}
+
+/// Click the Summary section's Save Summary… button in frames of the dialog layer (the dialog's
+/// window draws nothing in its first frame, which sizes it).
+fn click_save_summary(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400.0, 1000.0));
+    let run = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| super::super::show(app, ui.ctx()));
+        out.textures_delta.clear();
+        crate::tests_removeanchors::shapes_text(&out.shapes.iter().map(|c| c.shape.clone()).collect::<Vec<_>>())
+    };
+    run(app, vec![]);
+    let labels = run(app, vec![]);
+    let at =
+        labels.iter().find(|(t, _)| t.trim() == "Save Summary…").map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no Save Summary… in {labels:?}"));
+    let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+    run(app, vec![egui::Event::PointerMoved(at), button(true)]);
+    run(app, vec![button(false)]);
+}
+
 #[test]
 fn confirm_runs_export_pdf_with_the_dialog_options() {
     let (mut app, written, opened) = app();
@@ -915,4 +1281,292 @@ fn advanced_section_shows_raster_resolution_note() {
     set_field(&mut app, "flattener.gradientPpi", json!(200));
     frame(&mut app);
     assert!(app.ui.dialog.is_some());
+}
+
+/// Headless frames of the dialog layer with screen-reader output.
+struct Reader(egui::Context);
+
+impl Reader {
+    fn new() -> Self {
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        theme::install_fonts(&ctx);
+        Self(ctx)
+    }
+
+    fn run(&self, app: &mut VectorcraftApp, events: Vec<egui::Event>) -> egui::FullOutput {
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1280.0, 900.0));
+        let mut out =
+            self.0.run_ui(egui::RawInput { events, screen_rect: Some(screen), ..Default::default() }, |ui| super::super::show(app, ui.ctx()));
+        out.textures_delta.clear();
+        out
+    }
+
+    /// The Custom… button of the open dialog, with whether it is enabled.
+    fn custom(&self, app: &mut VectorcraftApp) -> Option<(egui::accesskit::NodeId, bool)> {
+        self.run(app, vec![]);
+        let out = self.run(app, vec![]);
+        let nodes = &out.platform_output.accesskit_update.as_ref()?.nodes;
+        nodes.iter().find(|(_, n)| n.label() == Some("Custom…") && n.role() == egui::accesskit::Role::Button).map(|(id, n)| (*id, !n.is_disabled()))
+    }
+
+    /// The labels and values the open dialog shows.
+    fn texts(&self, app: &mut VectorcraftApp) -> Vec<String> {
+        self.run(app, vec![]);
+        let out = self.run(app, vec![]);
+        let nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
+        nodes.iter().flat_map(|(_, n)| [n.label(), n.value()]).flatten().map(str::to_string).collect()
+    }
+
+    /// Click Custom… in Save PDF's Advanced section.
+    fn click_custom(&self, app: &mut VectorcraftApp) {
+        let (node, enabled) = self.custom(app).expect("a Custom… button");
+        assert!(enabled, "Custom… is enabled");
+        let click = egui::accesskit::ActionRequest {
+            action: egui::accesskit::Action::Click,
+            target_node: node,
+            target_tree: egui::accesskit::TreeId::ROOT,
+            data: None,
+        };
+        self.run(app, vec![egui::Event::AccessKitActionRequest(click)]);
+    }
+}
+
+fn kind(app: &VectorcraftApp) -> Option<&str> {
+    app.ui.dialog.as_ref().map(|d| d.kind.as_str())
+}
+
+/// Save PDF on `params` (and `path`), showing Advanced.
+fn open_advanced(app: &mut VectorcraftApp, params: Value) {
+    let mut p = params;
+    p["path"] = json!("/tmp/out.pdf");
+    app.run("ui.savePdfDialog", p).unwrap();
+    set_field(app, "__section", json!("Advanced"));
+}
+
+/// A second rectangle, half transparent, over the first one.
+fn transparent_overlap(app: &mut VectorcraftApp) {
+    app.run("select.none", json!({})).unwrap();
+    app.run("shape.rectangle", json!({"x": 30, "y": 20, "width": 50, "height": 40})).unwrap();
+    app.run("transparency.set", json!({"opacity": 50})).unwrap();
+}
+
+/// The images a written PDF reopens with.
+fn images(pdf: &[u8]) -> usize {
+    let doc = vectorcraft_pdf::import(pdf).unwrap();
+    let mut n = 0;
+    for l in &doc.layers {
+        l.walk(&mut |x| n += matches!(x.kind, vectorcraft_doc::NodeKind::Image(_)) as usize);
+    }
+    n
+}
+
+#[test]
+fn custom_is_enabled_where_the_save_flattens() {
+    let (mut app, _, _) = app();
+    let r = Reader::new();
+    for (params, flattens) in [
+        (json!({"compatibility": "1.3"}), true),
+        (json!({"standard": "pdfX1a"}), true),
+        (json!({"standard": "pdfX3"}), true),
+        (json!({"compatibility": "1.4"}), false),
+        (json!({"standard": "pdfX4"}), false),
+    ] {
+        open_advanced(&mut app, params.clone());
+        assert_eq!(r.custom(&mut app).map(|(_, enabled)| enabled), Some(flattens), "{params}");
+    }
+    // PDF presets keep no custom flattener options, so the preset editor has no Custom….
+    open_preset(&mut app, &json!({})).unwrap();
+    set_field(&mut app, "__section", json!("Advanced"));
+    set_field(&mut app, "compatibility", json!("1.3"));
+    assert_eq!(r.custom(&mut app), None);
+}
+
+#[test]
+fn custom_starts_from_the_preset_and_cancel_goes_back_unchanged() {
+    let (mut app, _, _) = app();
+    open_advanced(&mut app, json!({"compatibility": "1.3", "flattenerPreset": "low"}));
+    let r = Reader::new();
+    r.custom(&mut app);
+    let before = app.ui.dialog.as_ref().unwrap().fields.clone();
+    r.click_custom(&mut app);
+    assert_eq!(kind(&app), Some(CUSTOM_KIND));
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!((d.f64("balance", 0.0), d.f64("gradientPpi", 0.0)), (75.0, 150.0), "Low Resolution's");
+    // Low Resolution doesn't clip, but the PDF 1.3 writer does.
+    assert!(d.bool("clipComplexRegions"), "shown as written");
+    app.ui.dialog.as_mut().unwrap().fields.insert("balance".into(), json!(10));
+    super::super::cancel(&mut app);
+    assert_eq!(kind(&app), Some(KIND));
+    assert_eq!(app.ui.dialog.as_ref().unwrap().fields, before, "Cancel leaves Save PDF as it was");
+}
+
+#[test]
+fn custom_options_are_written_until_a_preset_is_chosen() {
+    let (mut app, written, _) = app();
+    transparent_overlap(&mut app);
+    open_advanced(&mut app, json!({"compatibility": "1.3"}));
+    let r = Reader::new();
+    r.click_custom(&mut app);
+    app.ui.dialog.as_mut().unwrap().fields.insert("balance".into(), json!(0));
+    super::super::confirm(&mut app).unwrap();
+    assert_eq!(kind(&app), Some(KIND), "OK goes back to Save PDF");
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!(d.fields["flattener"]["balance"].as_f64(), Some(0.0));
+    let saved = &app.session.prefs.flattener_presets;
+    assert_ne!(flattener(d, saved).ok(), FlattenOptions::preset(pdf::DEFAULT_FLATTENER), "the preset shows [Custom]");
+    // A preset set through `ui.dialog.set` drops the custom options.
+    let kept = d.clone();
+    let dialog = app.ui.dialog.as_mut().unwrap();
+    assert!(super::super::accepts_field(dialog, "flattenerPreset"));
+    let old = dialog.fields.get("flattenerPreset").cloned();
+    super::super::set_field(dialog, "flattenerPreset".into(), json!("Low Resolution"));
+    super::super::field_set(&mut app, "flattenerPreset", old.as_ref()).unwrap();
+    assert!(!app.ui.dialog.as_ref().unwrap().fields.contains_key("flattener"));
+    app.ui.dialog = Some(kept);
+    super::super::confirm(&mut app).unwrap();
+    assert!(images(&written.borrow()[0].1) > 0, "balance 0 rasterizes the flattened art");
+    open_advanced(&mut app, json!({"compatibility": "1.3"}));
+    super::super::confirm(&mut app).unwrap();
+    assert_eq!(images(&written.borrow()[1].1), 0, "High Resolution keeps it vector");
+}
+
+#[test]
+fn custom_options_equal_to_the_preset_leave_its_name() {
+    let (mut app, _, _) = app();
+    let r = Reader::new();
+    for overprint in ["preserve", "discard"] {
+        open_advanced(&mut app, json!({"compatibility": "1.3", "flattenerPreset": "medium", "advanced": {"overprint": overprint}}));
+        r.click_custom(&mut app);
+        assert_eq!(app.ui.dialog.as_ref().unwrap().bool("preserveOverprints"), overprint == "preserve", "{overprint}");
+        super::super::confirm(&mut app).unwrap();
+        assert_eq!(kind(&app), Some(KIND));
+        assert!(!app.ui.dialog.as_ref().unwrap().fields.contains_key("flattener"), "{overprint}");
+    }
+}
+
+/// OK keeps Custom… options that drop overprints dropping them, although the preset keeps them.
+#[test]
+fn custom_keeps_options_that_drop_overprints() {
+    let (mut app, _, _) = app();
+    let params = json!({"compatibility": "1.3", "advanced": {"overprint": "preserve"}, "flattener": {"preserveOverprints": false}});
+    open_advanced(&mut app, params);
+    Reader::new().click_custom(&mut app);
+    assert!(!app.ui.dialog.as_ref().unwrap().bool("preserveOverprints"), "shown as written");
+    super::super::confirm(&mut app).unwrap();
+    assert_eq!(kind(&app), Some(KIND));
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!(flattener(d, &app.session.prefs.flattener_presets).map(|o| o.preserve_overprints), Ok(false));
+}
+
+#[test]
+fn custom_shows_alpha_as_the_pdf_1_3_writer_drops_it() {
+    let (mut app, written, _) = app();
+    transparent_overlap(&mut app);
+    open_advanced(&mut app, json!({"compatibility": "1.3", "flattener": {"balance": 0, "preserveAlpha": true}}));
+    Reader::new().click_custom(&mut app);
+    assert!(!app.ui.dialog.as_ref().unwrap().bool("preserveAlpha"), "shown as written");
+    super::super::confirm(&mut app).unwrap();
+    assert_eq!(kind(&app), Some(KIND));
+    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["flattener"]["preserveAlpha"].as_bool(), Some(false));
+    super::super::confirm(&mut app).unwrap();
+    assert!(written.borrow()[0].1.starts_with(b"%PDF-1.3") && images(&written.borrow()[0].1) > 0);
+}
+
+#[test]
+fn bad_custom_options_keep_the_dialog_open() {
+    let (mut app, _, _) = app();
+    open_advanced(&mut app, json!({"compatibility": "1.3"}));
+    Reader::new().click_custom(&mut app);
+    app.ui.dialog.as_mut().unwrap().fields.insert("gradientPpi".into(), json!(9000));
+    let e = super::super::confirm(&mut app).unwrap_err();
+    assert!(e.contains("resolutions"), "{e}");
+    assert_eq!(kind(&app), Some(CUSTOM_KIND));
+}
+
+#[test]
+fn custom_options_outlive_a_saved_preset_deleted_meanwhile() {
+    let (mut app, written, _) = app();
+    app.run("flattener.presets.save", json!({"name": "Mine", "balance": 20})).unwrap();
+    open_advanced(&mut app, json!({"compatibility": "1.3", "flattenerPreset": "Mine"}));
+    Reader::new().click_custom(&mut app);
+    assert_eq!(app.ui.dialog.as_ref().unwrap().f64("balance", 0.0), 20.0, "the saved preset's");
+    app.run("flattener.presets.delete", json!({"name": "Mine"})).unwrap();
+    app.ui.dialog.as_mut().unwrap().fields.insert("balance".into(), json!(30));
+    super::super::confirm(&mut app).unwrap();
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!((d.str("flattenerPreset"), d.fields["flattener"]["balance"].as_f64()), (String::new(), Some(30.0)));
+    super::super::confirm(&mut app).unwrap();
+    assert!(written.borrow()[0].1.starts_with(b"%PDF-1.3"));
+}
+
+/// OK keeps the overprint option of a saved preset deleted meanwhile, whichever value Overprint
+/// shows it with, although the default preset keeps overprints.
+#[test]
+fn custom_keeps_the_overprint_option_of_a_saved_preset_deleted_meanwhile() {
+    let (mut app, _, _) = app();
+    for (kept, overprint) in [(false, "preserve"), (true, "discard")] {
+        app.run("flattener.presets.save", json!({"name": "Mine", "balance": 20, "preserveOverprints": kept})).unwrap();
+        open_advanced(&mut app, json!({"compatibility": "1.3", "flattenerPreset": "Mine", "advanced": {"overprint": overprint}}));
+        Reader::new().click_custom(&mut app);
+        assert!(!app.ui.dialog.as_ref().unwrap().bool("preserveOverprints"), "shown as written ({overprint})");
+        app.run("flattener.presets.delete", json!({"name": "Mine"})).unwrap();
+        super::super::confirm(&mut app).unwrap();
+        let d = app.ui.dialog.as_ref().unwrap();
+        assert_eq!(d.fields["flattener"]["preserveOverprints"].as_bool(), Some(kept), "{overprint}");
+    }
+}
+
+/// OK keeps the overprint option Custom… opened with when its saved preset is deleted and made
+/// again under the same name with another overprint option meanwhile.
+#[test]
+fn custom_keeps_the_overprint_option_it_opened_with_over_a_preset_made_again() {
+    let (mut app, _, _) = app();
+    app.run("flattener.presets.save", json!({"name": "Mine", "balance": 20, "preserveOverprints": false})).unwrap();
+    open_advanced(&mut app, json!({"compatibility": "1.3", "flattenerPreset": "Mine", "advanced": {"overprint": "preserve"}}));
+    Reader::new().click_custom(&mut app);
+    assert!(!app.ui.dialog.as_ref().unwrap().bool("preserveOverprints"), "shown as the preset had it");
+    app.run("flattener.presets.delete", json!({"name": "Mine"})).unwrap();
+    app.run("flattener.presets.save", json!({"name": "Mine", "balance": 20, "preserveOverprints": true})).unwrap();
+    super::super::confirm(&mut app).unwrap();
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!(d.fields["flattener"]["preserveOverprints"].as_bool(), Some(false));
+}
+
+/// Flattener preset shows a preset named in another case by its name, not as [Custom].
+#[test]
+fn flattener_preset_shows_a_name_given_in_any_case() {
+    let (mut app, _, _) = app();
+    app.run("flattener.presets.save", json!({"name": "Mine", "balance": 20})).unwrap();
+    let r = Reader::new();
+    for (given, shown) in [("MINE", "Mine"), ("HIGH RESOLUTION", "High Resolution")] {
+        open_advanced(&mut app, json!({"compatibility": "1.3", "flattenerPreset": given}));
+        let texts = r.texts(&mut app);
+        assert!(texts.iter().any(|t| t == shown), "{given}: {texts:?}");
+        assert!(!texts.iter().any(|t| t == "[Custom]"), "{given}: {texts:?}");
+    }
+}
+
+#[test]
+fn save_preset_says_it_leaves_the_custom_flattener_options_out() {
+    let (mut app, _, _) = app();
+    let r = Reader::new();
+    let note = "The PDF preset keeps the flattener preset but not the Custom… settings.";
+    app.run("ui.savePdfDialog", json!({"compatibility": "1.3", "flattener": {"balance": 10}})).unwrap();
+    set_field(&mut app, SAVE_AS, json!("Mine"));
+    assert!(r.texts(&mut app).iter().any(|t| t == note), "with Custom… options");
+    app.ui.dialog.as_mut().unwrap().fields.remove("flattener");
+    assert!(!r.texts(&mut app).iter().any(|t| t == note), "without them");
+}
+
+#[test]
+fn save_pdf_opens_with_the_flattener_options_given_and_refuses_bad_ones() {
+    let (mut app, _, _) = app();
+    app.run("ui.savePdfDialog", json!({"compatibility": "1.3", "flattener": {"lineArtPpi": 600}})).unwrap();
+    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["flattener"], json!({"lineArtPpi": 600}));
+    for bad in [json!({"bogus": 1}), json!(5), json!({"gradientPpi": 9000})] {
+        app.ui.dialog = None;
+        assert!(app.run("ui.savePdfDialog", json!({"flattener": bad})).is_err(), "{bad}");
+        assert!(app.ui.dialog.is_none(), "{bad}");
+    }
 }

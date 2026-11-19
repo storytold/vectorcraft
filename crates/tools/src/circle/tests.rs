@@ -120,6 +120,69 @@ fn a_drag_ends_where_it_is_let_go() {
     assert_eq!(t.pointer(&cx, &ev(up, (381.0, 360.0), Mods::default())), circle(&[(300.0, 300.0), (380.0, 360.0)]));
 }
 
+/// A release within 2 screen points of the press is a click also after a drag that came back to
+/// it: a second press draws the circle on the diameter to the press, a press on the first point
+/// places nothing, and a first press places the first point.
+#[test]
+fn a_release_near_the_press_is_a_click_after_a_drag() {
+    let (d, _) = doc_with_rect();
+    let (s, p) = (Selection::default(), paint());
+    let cx = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    let mut t = CircleTool::default();
+    click(&mut t, &cx, (300.0, 300.0));
+    assert_eq!(drag(&mut t, &cx, (380.0, 300.0), &[(300.0, 360.0), (381.0, 300.0)], Mods::default()), circle(&[(300.0, 300.0), (380.0, 300.0)]));
+    click(&mut t, &cx, (300.0, 300.0));
+    assert_eq!(drag(&mut t, &cx, (300.0, 300.0), &[(300.0, 380.0), (301.0, 300.0)], Mods::default()), vec![]);
+    assert!(t.ends_on_escape(&cx), "the first point stays");
+    assert_eq!(click(&mut t, &cx, (380.0, 360.0)), circle(&[(300.0, 300.0), (380.0, 360.0)]));
+    assert_eq!(drag(&mut t, &cx, (300.0, 300.0), &[(380.0, 300.0), (301.0, 300.0)], Mods::default()), vec![]);
+    assert!(t.ends_on_escape(&cx), "the press placed the first point");
+    assert_eq!(click(&mut t, &cx, (380.0, 360.0)), circle(&[(300.0, 300.0), (380.0, 360.0)]));
+    // Let go near the press straight from far away, the tool shows no circle to the last drag.
+    t.pointer(&cx, &ev(PointerKind::Down, (300.0, 300.0), Mods::default()));
+    t.pointer(&cx, &ev(PointerKind::Drag, (380.0, 300.0), Mods::default()));
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, (301.0, 300.0), Mods::default())), vec![]);
+    assert_eq!(preview(&t.overlays(&cx)), None);
+    t.pointer(&cx, &ev(PointerKind::Down, (300.0, 300.0), Mods::default()));
+    t.pointer(&cx, &ev(PointerKind::Drag, (300.0, 380.0), Mods::default()));
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, (301.0, 300.0), Mods::default())), vec![]);
+    assert_eq!(preview(&t.overlays(&cx)), None);
+    assert!(t.ends_on_escape(&cx));
+}
+
+/// A click within 3 screen points of the first point, also one dragged away and let go where it
+/// was pressed, places nothing and leaves no circle shown.
+#[test]
+fn a_click_near_the_first_point_shows_no_circle() {
+    let (d, _) = doc_with_rect();
+    let (s, p) = (Selection::default(), paint());
+    let cx = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    let mut t = CircleTool::default();
+    click(&mut t, &cx, (300.0, 300.0));
+    assert_eq!(drag(&mut t, &cx, (302.0, 300.0), &[(302.0, 380.0), (302.0, 300.0)], Mods::default()), vec![]);
+    assert_eq!(preview(&t.overlays(&cx)), None);
+    assert_eq!(click(&mut t, &cx, (302.0, 300.0)), vec![]);
+    assert_eq!(preview(&t.overlays(&cx)), None);
+    assert!(t.ends_on_escape(&cx), "the first point stays");
+    assert_eq!(click(&mut t, &cx, (380.0, 360.0)), circle(&[(300.0, 300.0), (380.0, 360.0)]));
+}
+
+/// A press on the first point, dragged to snap to the rectangle's corner anchor and let go near
+/// the press, leaves no guides of the drag.
+#[test]
+fn a_release_near_the_press_hides_the_guides_of_the_drag() {
+    let (d, _) = doc_with_rect();
+    let (s, p) = (Selection::default(), paint());
+    let cx = cx(&d, &s, &p);
+    let mut t = CircleTool::default();
+    click(&mut t, &cx, (300.0, 300.0));
+    t.pointer(&cx, &ev(PointerKind::Down, (300.0, 300.0), Mods::default()));
+    t.pointer(&cx, &ev(PointerKind::Drag, (201.0, 201.0), Mods::default()));
+    assert!(!t.snap.guides().is_empty(), "the drag snapped to the corner anchor");
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, (301.0, 300.0), Mods::default())), vec![]);
+    assert!(t.snap.guides().is_empty(), "{:?}", t.snap.guides());
+}
+
 /// Three points on one line show no circle, and the release draws nothing and starts afresh. A
 /// circle past the canvas is not shown either.
 #[test]
