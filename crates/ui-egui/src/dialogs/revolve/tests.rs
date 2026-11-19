@@ -107,6 +107,83 @@ fn button(pos: Pos2, pressed: bool) -> Event {
 }
 
 #[test]
+fn map_art_maps_a_symbol_onto_a_surface_of_extrude_and_bevel_classic() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width":300,"height":300})).unwrap();
+    let mark = app.run("path.create", json!({"d":"M250 250L260 250L260 270L250 270Z"})).unwrap()["id"].clone();
+    app.run("threeD.addGraphic", json!({"name":"Mark","ids":[mark]})).unwrap();
+    app.run("path.create", json!({"d":"M50 50L150 50L150 150L50 150Z"})).unwrap();
+    app.run("effect.dialog", json!({"effect":CLASSIC_EXTRUDE,"item":null})).unwrap();
+    let ctx = egui::Context::default();
+    theme::install_fonts(&ctx);
+    theme::apply(&ctx, Default::default());
+    let mut h = Harness { app, ctx, screen: vec2(1280.0, 900.0), texts: vec![] };
+    h.settle();
+    h.click(h.rect("Map Art…").center());
+    assert!(h.app.ui.dialog.as_ref().unwrap().bool("__mapArt"), "Map Art… opens Map Art");
+    let count: usize = h.texts.iter().find_map(|(s, _)| s.strip_prefix("/ ")).and_then(|n| n.parse().ok()).expect("the surface count");
+    assert!(count >= 6, "a square's solid has at least six surfaces: {count}");
+    // The Symbol menu maps the symbol onto the surface shown, the first.
+    h.click(h.rect("None").center());
+    h.click(h.rect("Mark").center());
+    let maps = |h: &Harness| vectorcraft_effects::surface_maps(&json!({"mapArt": h.app.ui.dialog.as_ref().unwrap().fields.get("mapArt").cloned()}));
+    assert_eq!(maps(&h).iter().map(|m| (m.surface, m.symbol.as_str(), m.scale_x)).collect::<Vec<_>>(), [(1, "Mark", 100.0)]);
+    // The next surface has no map until it is given one; Scale to Fit fills the first.
+    h.click(h.rect(">").center());
+    assert_eq!(h.value("__mapSurface"), 2.0);
+    assert_eq!(maps(&h).len(), 1);
+    h.click(h.rect("<").center());
+    h.click(h.rect("Scale to Fit").center());
+    assert!(maps(&h)[0].scale_x > 100.0, "the 10-point art is scaled up to the 100-point cap: {:?}", maps(&h));
+    h.click(h.rect("Done").center());
+    assert!(!h.app.ui.dialog.as_ref().unwrap().bool("__mapArt"), "Done goes back to the effect's options");
+    dialogs::confirm(&mut h.app).unwrap();
+    let state = h.app.session.doc().unwrap();
+    let id = state.selection.objects[0];
+    let params = &state.doc.node(id).unwrap().appearance.effects[0].params;
+    assert_eq!(vectorcraft_effects::surface_maps(params).len(), 1, "{params}");
+    assert!(params.get("__mapArt").is_none() && params.get("__mapSurface").is_none(), "the dialog's own state stays out of the effect");
+}
+
+#[test]
+fn map_art_maps_no_more_surfaces_than_an_object_takes() {
+    let max = vectorcraft_effects::MAX_MAPS;
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width":300,"height":300})).unwrap();
+    let mark = app.run("path.create", json!({"d":"M250 250L260 250L260 270L250 270Z"})).unwrap()["id"].clone();
+    app.run("threeD.addGraphic", json!({"name":"Mark","ids":[mark]})).unwrap();
+    // A star with 36 points has 72 corners, so its solid has two caps and 72 walls.
+    let corners: Vec<String> = (0..72)
+        .map(|i| {
+            let (r, a) = (if i % 2 == 0 { 100.0 } else { 60.0 }, f64::from(i) * std::f64::consts::TAU / 72.0);
+            format!("{:.3} {:.3}", 150.0 + r * a.cos(), 150.0 + r * a.sin())
+        })
+        .collect();
+    app.run("path.create", json!({"d": format!("M{}Z", corners.join(" L"))})).unwrap();
+    app.run("effect.dialog", json!({"effect":CLASSIC_EXTRUDE,"item":null})).unwrap();
+    let ctx = egui::Context::default();
+    theme::install_fonts(&ctx);
+    theme::apply(&ctx, Default::default());
+    let mut h = Harness { app, ctx, screen: vec2(1280.0, 900.0), texts: vec![] };
+    h.settle();
+    h.click(h.rect("Map Art…").center());
+    let count: usize = h.texts.iter().find_map(|(s, _)| s.strip_prefix("/ ")).and_then(|n| n.parse().ok()).expect("the surface count");
+    assert!(count > max, "{count} surfaces");
+    // Every map the object takes is used, and the surface shown has none.
+    let full: Vec<Value> = (1..=max).map(|surface| json!({"surface": surface, "symbol": "Mark"})).collect();
+    let d = h.app.ui.dialog.as_mut().unwrap();
+    d.fields.insert("mapArt".into(), json!(full));
+    d.fields.insert("__mapSurface".into(), json!(max + 1));
+    h.settle();
+    h.click(h.rect("None").center());
+    if h.texts.iter().any(|(s, _)| s == "Mark") {
+        h.click(h.rect("Mark").center());
+    }
+    let raw = h.app.ui.dialog.as_ref().unwrap().fields.get("mapArt").cloned().unwrap_or_default();
+    assert_eq!(raw.as_array().map(Vec::len), Some(max), "no map past the limit is written");
+}
+
+#[test]
 fn values_labels_sliders_and_reset_dots_change_the_live_effect_in_one_undo_step() {
     let mut h = Harness::new(vec2(1280.0, 900.0));
     let before = h.app.session.doc().unwrap().doc.clone();
@@ -691,6 +768,27 @@ fn every_3d_dialog_has_color_and_reset_all_restores_white() {
         h.click(h.response("revolve-reset-all").center());
         assert_eq!(h.app.ui.dialog.as_ref().unwrap().str("lightColor"), "#ffffff");
         dialogs::confirm(&mut h.app).unwrap();
+    }
+}
+
+#[test]
+fn reset_all_keeps_map_art_and_its_options() {
+    for effect in [CLASSIC_EXTRUDE, CLASSIC_REVOLVE] {
+        let mut h = Harness::with("M100 100L200 100L200 200L100 200Z", effect, vec2(1280.0, 900.0));
+        h.settle();
+        let maps = json!([{"surface": 1, "symbol": "Mark"}]);
+        let d = h.app.ui.dialog.as_mut().unwrap();
+        d.fields.insert("mapArt".into(), maps.clone());
+        d.fields.insert("mapShade".into(), json!(true));
+        d.fields.insert("mapInvisible".into(), json!(true));
+        d.fields.insert("rotationX".into(), json!(40.0));
+        h.settle();
+        h.click(h.response("revolve-reset-all").center());
+        let d = h.app.ui.dialog.as_ref().unwrap();
+        assert_eq!(d.f64("rotationX", 0.0), -21.88, "{effect}: the view is reset");
+        assert_eq!(d.fields.get("mapArt"), Some(&maps), "{effect}: the maps stay");
+        assert!(d.bool("mapShade") && d.bool("mapInvisible"), "{effect}: Shade Artwork and Invisible Geometry stay");
+        dialogs::cancel(&mut h.app);
     }
 }
 
