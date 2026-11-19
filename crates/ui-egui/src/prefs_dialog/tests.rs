@@ -1250,6 +1250,46 @@ fn show_samples_on_white_dims_without_in_menu_font_previews() {
     }
 }
 
+/// General › Show Tool Cards: its checkbox is dimmed while Show Tool Tips is unchecked in the
+/// dialog, and a click on it then leaves the setting as it was.
+#[test]
+fn show_tool_cards_dims_without_tool_tips() {
+    fn label(s: &egui::Shape, text: &str) -> Option<(egui::Color32, egui::Rect)> {
+        match s {
+            egui::Shape::Text(t) if t.galley.text() == text => t.galley.job.sections.first().map(|s| (s.format.color, t.visual_bounding_rect())),
+            egui::Shape::Vec(v) => v.iter().find_map(|s| label(s, text)),
+            _ => None,
+        }
+    }
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let mut a = app();
+    let mut frame = |d: &mut Dialog, events: Vec<egui::Event>| {
+        let raw = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(600.0, 3000.0))),
+            events,
+            ..Default::default()
+        };
+        let mut out = ctx.run_ui(raw, |ui| {
+            category_fields(ui, &mut a, d, "General");
+        });
+        out.textures_delta.clear();
+        out.shapes.iter().find_map(|c| label(&c.shape, "Show Tool Cards"))
+    };
+    let t = Tokens::get(&ctx);
+    for (tips, color, what) in [(true, t.text, "enabled while tool tips are on"), (false, t.text_disabled, "dimmed while they are off")] {
+        let mut d = Dialog::new("preferences", json!({"showToolTips": tips, "showToolCards": false}));
+        let (shown, at) = frame(&mut d, vec![]).unwrap_or_else(|| panic!("no label ({what})"));
+        assert_eq!(shown, color, "{what}");
+        let press =
+            |pressed| egui::Event::PointerButton { pos: at.center(), button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(&mut d, vec![egui::Event::PointerMoved(at.center()), press(true)]);
+        frame(&mut d, vec![press(false)]);
+        // A click turns it on while it is enabled, and leaves it off while it is dimmed.
+        assert_eq!(d.fields["showToolCards"], json!(tips), "after a click, {what}");
+    }
+}
+
 /// 0.5.0 saved `powerSaving` for everyone (its default): it reads as Automatic, while the
 /// choices this version offers are kept (#502).
 #[test]
@@ -2317,8 +2357,8 @@ fn hovering_a_hyphenation_row_shows_its_description() {
 }
 
 /// Tab from the search field reaches Hyphenation's Default Language menu and then its Exceptions
-/// field: the line shows each one's sentence in turn, and a screen reader gets it as the focused
-/// control's description.
+/// field, in that order and before the focus comes back to the search field: the line shows each
+/// one's sentence in turn, and a screen reader gets it as the focused control's description.
 #[test]
 fn keyboard_focus_on_a_hyphenation_row_shows_its_description() {
     let mut a = app();
@@ -2328,21 +2368,27 @@ fn keyboard_focus_on_a_hyphenation_row_shows_its_description() {
     crate::theme::install_fonts(&ctx);
     description_frame(&mut a, &ctx, vec![]);
     description_frame(&mut a, &ctx, vec![]);
+    assert!(ctx.memory(|m| m.has_focus(search_edit_id())), "the search field has the focus on open");
     let language = descriptions::description("hyphenationLanguage").expect("Default Language has a sentence");
     let exceptions = descriptions::description("hyphenationExceptions").expect("Exceptions has a sentence");
-    let mut tab_to = |sentence: &str| {
-        for _ in 0..40 {
-            let (texts, described) = description_frame(&mut a, &ctx, key_press(egui::Key::Tab, egui::Modifiers::NONE));
-            if painted(&texts, sentence) {
-                return Some(described);
-            }
+    let mut language_seen = false;
+    let mut exceptions_seen = false;
+    for _ in 0..40 {
+        let (texts, described) = description_frame(&mut a, &ctx, key_press(egui::Key::Tab, egui::Modifiers::NONE));
+        assert!(!ctx.memory(|m| m.has_focus(search_edit_id())), "Tab came back to the search field before both rows were reached");
+        if painted(&texts, language) {
+            assert!(!exceptions_seen, "Tab reached the Exceptions row before the Default Language row");
+            assert!(described.iter().any(|d| d == language), "the focused menu carries the sentence: {described:?}");
+            language_seen = true;
+        } else if painted(&texts, exceptions) {
+            assert!(language_seen, "Tab reached the Exceptions row before the Default Language row");
+            assert!(described.iter().any(|d| d == exceptions), "the focused field carries the sentence: {described:?}");
+            exceptions_seen = true;
+            break;
         }
-        None
-    };
-    let described = tab_to(language).expect("Tab reaches the Default Language row and its sentence shows");
-    assert!(described.iter().any(|d| d == language), "the focused menu carries the sentence: {described:?}");
-    let described = tab_to(exceptions).expect("Tab goes on to the Exceptions row and its sentence shows");
-    assert!(described.iter().any(|d| d == exceptions), "the focused field carries the sentence: {described:?}");
+    }
+    assert!(language_seen, "Tab reaches the Default Language row and its sentence shows");
+    assert!(exceptions_seen, "Tab goes on to the Exceptions row and its sentence shows");
 }
 
 /// The pointer over each row of Plug-ins & Scratch Disks, Additional Plug-ins Folder, Plug-in
