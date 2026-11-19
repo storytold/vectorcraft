@@ -2786,6 +2786,8 @@ font-technology	Variable	Variables
 	PDF/A files carry their own output intent.	Los archivos PDF/A incluyen su propio propósito de salida.
 	PDF/X-1a files are CMYK: every colour is converted to the destination (blank: the output intent's CMYK profile), untagged.	Los archivos PDF/X-1a son CMYK: todos los colores se convierten al destino (en blanco: el perfil CMYK del propósito de salida), sin etiquetar.
 	Pen Tool	Herramienta Pluma
+	Quick Pen Tool	Herramienta Pluma rápida
+	Quick Pen	Pluma rápida
 	Pencil	Lápiz
 	Pencil Tool	Herramienta Lápiz
 	per slice	por sector
@@ -5455,6 +5457,9 @@ liquify-list-end	{0}, {1}	{0}, {1}
 @msg	`link` places a handle: give `handle`	`link` coloca un manejador: indique `handle`
 @msg	no such spine segment	no existe ese segmento del eje
 @msg	no such subpath	no existe ese subtrazado
+@msg	`pieces` must be a list of at most 10000 pieces	`pieces` debe ser una lista de como máximo 10000 tramos
+@msg	give either `start` for a new path or `id`, not both	indica `start` para un trazado nuevo o `id`, pero no ambos
+@msg	`subpath` and `keep` need `id`	`subpath` y `keep` necesitan `id`
 @msg	no such user library	no existe esa biblioteca de usuario
 @msg	no such view	no existe esa vista
 @msg	no such width point	no existe ese punto de anchura

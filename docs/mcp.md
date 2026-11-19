@@ -4734,6 +4734,21 @@ already walks Image Trace. Short agent entry points:
   dialog's OK) when every group already has the options and `closeGaps` finds no gap, and `livePaint.make` or
   `livePaint.merge` given one Live Paint group alone, which they select. Such a fill or stroke also leaves the recent
   colors and the last color as they are. `livePaint.gapOptions` makes a group's faces again, with new ids, only when it adds a path or when Gap Detection is turned on or off or given a new size while it is on.
+  With a tool other than the Live Paint Bucket, a whole Live Paint group that is selected, given in `ids`, or inside a
+  selected group takes a fill on its faces only and a stroke on its edges only, and its hidden source paths keep their
+  paint. Without an `item`, `paint.setFill`, `paint.setStroke`, `paint.lastColor`, `paint.lastGradient` and
+  `paint.none` paint the faces or the edges. `paint.editGradient`, `paint.setGradientGeom` and the `paint.freeform`
+  point and line edits change the faces' or the edges' gradients, `paint.invert` and `paint.complement` recolor the
+  faces' fills or the edges' strokes, and `stroke.set`, `stroke.weightUp`, `stroke.weightDown` and
+  `stroke.setAdvanced` change the edges. The Fill proxy shows the faces' fill, and the Stroke proxy, the Stroke panel
+  and the Control bar show the edges' stroke. A face or edge selected or given together with its whole group follows
+  the group's rule: a fill does not reach an edge, and a stroke does not reach a face. `paint.swap` gives the faces
+  the stroke the edges share and gives the edges the fill the faces share, with a gradient fitted to each face or
+  edge. It leaves a group as it is when its faces' fills or its edges' strokes differ, when any of them is a freeform
+  gradient, or when it has no face or no edge. `paint.default` replaces each face's appearance with no fill and each
+  edge's appearance with a 0.5 pt black stroke, also when the document's Default Graphic Style is redefined. With
+  only Live Paint groups selected or given, the fill and stroke for new art become no fill and a 0.5 pt black stroke;
+  with New Art Has Basic Appearance off, new art then takes the selection's appearance, as after any command.
 
 `brush.selectionArt {ids?|id?}` (a query) replies `{art}`: the object that `brush.new` given the same `ids` or `id`,
 or the same selection, takes as a new scatter or art brush's art and as a new pattern brush's side tile. Several
@@ -6980,6 +6995,48 @@ toggles a point with `path.convertAnchor`; an Alt-click on an end of an open sub
 {"name":"run_command","arguments":{"command":"path.curvatureEdit","params":{"id":12,"op":"move","anchor":2,"x":260,"y":140}}}
 {"name":"run_command","arguments":{"command":"path.curvatureEdit","params":{"id":12,"op":"extend","end":"end","x":550,"y":120}}}
 {"name":"run_command","arguments":{"command":"path.curvatureEdit","params":{"id":12,"op":"extend","x":650,"y":60,"from":"smooth"}}}
+```
+
+## Drawing with the Quick Pen tool
+
+The Quick Pen tool (`quickPen`, in the Pen tool's group, Alt+P or Option+P on macOS) draws paths of straight lines and
+circular arcs ([Draw with the Quick Pen tool](https://helpx.adobe.com/illustrator/web/add-and-edit-artwork/draw-and-edit-paths/draw-with-quick-pen-tool.html),
+[Quick Pen tool keyboard shortcuts](https://helpx.adobe.com/illustrator/web/add-and-edit-artwork/draw-and-edit-paths/quick-pen-tool-keyboard-shortcuts.html)).
+A click sets the start point. Each click after it, or a press dragged to where it is let go, adds a piece from the
+path's last point, drawn with the tool's `action` option:
+
+- `"line"` (the default): a straight line.
+- `"continuousArc"`: an arc that leaves the last point in the direction the path arrives there, so the two join
+  smoothly. The first piece of a path has no direction and is drawn as a sharp-corner arc; an end straight ahead of or
+  straight behind the last point gives a line.
+- `"sharpArc"`: an arc that turns through the tool's `turn` option (degrees, 1 to 359, 180 by default: a half circle)
+  and bulges to the left of the direction drawn, meeting the path before it at a corner.
+
+Alt (Option on macOS) pressed and let go with no other key, click or wheel turn in between switches to the next action:
+Line, Continuous Arc, Sharp Corner Arc, and back to Line. C flips the last piece, while it is a sharp-corner arc, to
+the other side of its chord. `[` and `]` make the arc size 15° smaller or larger, for the last sharp-corner arc and the
+arcs after it. A click on the first point closes the path, and a click on an end of an open path goes on drawing from
+that end. Escape or Enter ends the path, and so does an edit made to it by another command. The path's points show as circles without handles, and a preview shows the
+piece the next click adds. Points snap to Smart Guides. Each piece, flip and size change is one undo step. The arc
+size of 180°, its 15° steps, the side an arc bulges to and Enter ending the path are VectorCraft's own rules. The
+tool keeps `action` and `turn` with the preferences (`tool.setOption {tool: "quickPen", key, value}`).
+
+`path.quickPen {start?: [x, y], id?, subpath?, keep?, pieces?, closed?}` draws such a path and selects it, as one
+undo step, and answers `{id}`. With `start`, it makes a new path with the current paint (a black stroke when the paint
+has neither fill nor stroke). With `id`, it draws on the open subpath `subpath` (0 when left out) of that path: its
+first `keep` points stay (all of them when left out) and the pieces follow. Each piece is
+`{x, y, action?, turn?, flip?}`: it ends at `x`, `y`, `action` is `"line"` when left out, `turn` is 180 when left out,
+and `flip` puts a sharp-corner arc on the right of the direction drawn. A piece that ends where the path does adds
+nothing. With `closed: true`, a last piece that ends on the first point joins it; otherwise a straight segment closes
+the path. The command returns an error and changes nothing when both or neither of `start` and `id` are given
+(`` give either `start` for a new path or `id`, not both ``), when `subpath` or `keep` comes without `id`, when
+`pieces` is not a list of at most 10000 pieces, when a point's x or y is not a number or is 1e9 or more in size, for
+an unknown `action`, a `turn` outside 1 to 359, a `flip` or `closed` that is not true or false, a `keep` outside 1 to
+the subpath's points, and for a closed subpath, a locked or hidden path or an `id` that is not a path.
+
+```json
+{"name":"run_command","arguments":{"command":"path.quickPen","params":{"start":[100,100],"pieces":[{"x":200,"y":100},{"x":300,"y":200,"action":"continuousArc"},{"x":300,"y":300,"action":"sharpArc","turn":90,"flip":true}]}}}
+{"name":"run_command","arguments":{"command":"tool.setOption","params":{"tool":"quickPen","key":"action","value":"sharpArc"}}}
 ```
 
 ## Registration and trim marks

@@ -4626,6 +4626,8 @@ theme	Appearance	Vormgeving
 	Paste Offset	Plakoffset
 	Pattern Editing	Patroonbewerking
 	Pen Tool	Pen-gereedschap
+	Quick Pen Tool	Snelpen-gereedschap
+	Quick Pen	Snelpen
 	Picas	Pica's
 	Portuguese	Portugees
 	Preserve Appearance and Overprints	Vormgeving en overprint behouden
@@ -5826,6 +5828,9 @@ imageTrace	Outline	Contour
 @msg	no such saved selection	opgeslagen selectie bestaat niet
 @msg	no such segment	segment bestaat niet
 @msg	no such subpath	subpad bestaat niet
+@msg	`pieces` must be a list of at most 10000 pieces	`pieces` moet een lijst van hoogstens 10000 stukken zijn
+@msg	give either `start` for a new path or `id`, not both	geef `start` voor een nieuw pad of `id`, niet beide
+@msg	`subpath` and `keep` need `id`	`subpath` en `keep` vereisen `id`
 @msg	no such user library	gebruikersbibliotheek bestaat niet
 @msg	no such view	weergave bestaat niet
 @msg	no such width point	breedtepunt bestaat niet

@@ -220,6 +220,7 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
         "snappingTolerance",
         "How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.",
     ),
+    ("snapToStrokeEdges", "Include visible stroke edges when snapping with Smart Guides."),
     ("snapTangent", "Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve."),
     ("snapPerpendicular", "Snaps the end of a line segment so that it meets a nearby straight segment at a right angle."),
     // Slices

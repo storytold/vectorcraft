@@ -2682,6 +2682,8 @@ font-technology	Variable	Променливи
 	PDF/A files carry their own output intent.	Файловете PDF/A носят собствено предназначение за изход.
 	PDF/X-1a files are CMYK: every colour is converted to the destination (blank: the output intent's CMYK profile), untagged.	Файловете PDF/X-1a са в CMYK: всеки цвят се конвертира към дестинацията (при празно поле: CMYK профила на предназначението за изход), без етикет.
 	Pen Tool	Инструмент „Перо“
+	Quick Pen Tool	Инструмент „Бързо перо“
+	Quick Pen	Бързо перо
 	Pencil	Молив
 	Pencil Tool	Инструмент „Молив“
 	per slice	на отрязък

@@ -6039,6 +6039,8 @@ theme	Appearance	იერსახე
 	Paste Offset	ჩასმის წანაცვლება
 	Pattern Editing	პატერნის რედაქტირება
 	Pen Tool	კალმის ხელსაწყო
+	Quick Pen Tool	სწრაფი კალმის ხელსაწყო
+	Quick Pen	სწრაფი კალამი
 	Picas	პიკები
 	Portuguese	პორტუგალიური
 	Preserve Appearance and Overprints	იერსახისა და ზედდაბეჭდვების შენარჩუნება
@@ -7215,6 +7217,9 @@ font-technology	Variable	ცვლადი
 @msg	no such saved selection	ასეთი შენახული მონიშვნა არ არის
 @msg	no such segment	ასეთი სეგმენტი არ არის
 @msg	no such subpath	ასეთი ქვეტრაექტორია არ არის
+@msg	`pieces` must be a list of at most 10000 pieces	`pieces` უნდა იყოს არაუმეტეს 10000 ნაწილის სია
+@msg	give either `start` for a new path or `id`, not both	მიუთითეთ ან `start` ახალი ტრაექტორიისთვის, ან `id`, მაგრამ არა ორივე
+@msg	`subpath` and `keep` need `id`	`subpath`-სა და `keep`-ს სჭირდება `id`
 @msg	no such user library	მომხმარებლის ასეთი ბიბლიოთეკა არ არის
 @msg	no such view	ასეთი ხედი არ არის
 @msg	no such width point	ასეთი სიგანის წერტილი არ არის

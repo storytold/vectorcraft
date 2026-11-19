@@ -3990,6 +3990,8 @@ antiAlias	Sharp	शार्प
 	PDF/X-4:2010	PDF/X-4:2010
 	Pen	पेन
 	Pen Tool	पेन टूल
+	Quick Pen Tool	क्विक पेन टूल
+	Quick Pen	क्विक पेन
 	Pencil	पेंसिल
 	Pencil Tool	पेंसिल टूल
 	Pentagram	पेंटाग्राम
@@ -8476,6 +8478,9 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	no such spine point	ऐसा कोई स्पाइन बिंदु नहीं
 @msg	no such spine segment	ऐसा कोई खंड नहीं
 @msg	no such subpath	ऐसा कोई उप-पाथ नहीं
+@msg	`pieces` must be a list of at most 10000 pieces	`pieces` में अधिकतम 10000 टुकड़ों की लिस्ट होनी चाहिए
+@msg	give either `start` for a new path or `id`, not both	नए पाथ के लिए `start` या `id` में से एक दें, दोनों नहीं
+@msg	`subpath` and `keep` need `id`	`subpath` और `keep` के लिए `id` चाहिए
 @msg	no such user library	ऐसी कोई उपयोगकर्ता लाइब्रेरी नहीं
 @msg	no such view	कोई ऐसा दृश्य नहीं
 @msg	no such width point	ऐसी कोई चौड़ाई बिंदु नहीं

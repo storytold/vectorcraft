@@ -2829,6 +2829,8 @@ file-filter	Templates	Modelli
 	PDF/A files carry their own output intent.	I file PDF/A includono il proprio intento di output.
 	PDF/X-1a files are CMYK: every colour is converted to the destination (blank: the output intent's CMYK profile), untagged.	I file PDF/X-1a sono CMYK: ogni colore viene convertito nella destinazione (se vuota: il profilo CMYK dell'intento di output), senza tag.
 	Pen Tool	Strumento Penna
+	Quick Pen Tool	Strumento Penna rapida
+	Quick Pen	Penna rapida
 	Pencil	Matita
 	Pencil Tool	Strumento Matita
 	per slice	per sezione
@@ -5481,6 +5483,9 @@ liquify-list-end	{0}, {1}	{0} e {1}
 @msg	`link` places a handle: give `handle`	`link` posiziona una maniglia: indica `handle`
 @msg	no such spine segment	segmento della dorsale inesistente
 @msg	no such subpath	sottotracciato inesistente
+@msg	`pieces` must be a list of at most 10000 pieces	`pieces` deve essere un elenco di al massimo 10000 tratti
+@msg	give either `start` for a new path or `id`, not both	indica `start` per un nuovo tracciato oppure `id`, non entrambi
+@msg	`subpath` and `keep` need `id`	`subpath` e `keep` richiedono `id`
 @msg	no such user library	libreria utente inesistente
 @msg	no such view	vista inesistente
 @msg	no such width point	punto di larghezza inesistente

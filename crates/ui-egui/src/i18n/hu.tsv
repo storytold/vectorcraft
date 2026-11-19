@@ -3318,6 +3318,8 @@ file-filter	Templates	Sablonok
 	PDF/X-1a files are CMYK: every colour is converted to the destination (blank: the output intent's CMYK profile), untagged.	A PDF/X-1a-fájlok CMYK-sok: minden szín a célprofilra alakul (üresen hagyva a kimeneti cél CMYK-profiljára), profilcímke nélkül.
 	Pen	Toll
 	Pen Tool	Toll
+	Quick Pen Tool	Gyorstoll
+	Quick Pen	Gyorstoll
 	Pencil	Ceruza
 	Pencil Tool	Ceruza
 	Pentagram	Pentagram
@@ -6148,6 +6150,9 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	`link` places a handle: give `handle`	`link` fogantyút helyez el: adja meg a `handle` értéket
 @msg	no such spine segment	nincs ilyen gerincszakasz
 @msg	no such subpath	nincs ilyen részútvonal
+@msg	`pieces` must be a list of at most 10000 pieces	`pieces`: legfeljebb 10000 darabból álló lista kell
+@msg	give either `start` for a new path or `id`, not both	adja meg vagy a `start` értéket egy új útvonalhoz, vagy az `id` értéket, de ne mindkettőt
+@msg	`subpath` and `keep` need `id`	a `subpath` és a `keep` mellé `id` kell
 @msg	no such user library	nincs ilyen felhasználói könyvtár
 @msg	no such view	nincs ilyen nézet
 @msg	no such width point	nincs ilyen szélességi pont

@@ -3140,6 +3140,8 @@ digits	Hindi	Hindi
 	PDF/A files carry their own output intent.	Tệp PDF/A tích hợp mục đích đầu ra của riêng chúng.
 	PDF/X-1a files are CMYK: every colour is converted to the destination (blank: the output intent's CMYK profile), untagged.	Tệp PDF/X-1a là CMYK: mọi màu được chuyển đổi sang đích (trống: hồ sơ CMYK của mục đích đầu ra), không gắn thẻ.
 	Pen Tool	Công cụ Bút
+	Quick Pen Tool	Công cụ Bút nhanh
+	Quick Pen	Bút nhanh
 	Pencil	Bút chì
 	Pencil Tool	Công cụ Bút chì
 	per slice	mỗi lát cắt
@@ -5847,6 +5849,9 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	`link` places a handle: give `handle`	`link` đặt một tay nắm: hãy cho `handle`
 @msg	no such spine segment	không có đoạn trục như vậy
 @msg	no such subpath	không có nhánh con như vậy
+@msg	`pieces` must be a list of at most 10000 pieces	`pieces` phải là danh sách tối đa 10000 đoạn
+@msg	give either `start` for a new path or `id`, not both	hãy đưa `start` cho đường dẫn mới hoặc `id`, không đưa cả hai
+@msg	`subpath` and `keep` need `id`	`subpath` và `keep` cần có `id`
 @msg	no such user library	không có thư viện người dùng như vậy
 @msg	no such view	không có chế độ xem như vậy
 @msg	no such width point	không có điểm chiều rộng như vậy
