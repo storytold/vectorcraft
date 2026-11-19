@@ -725,6 +725,7 @@ font-technology	Variable	Biến thiên
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Hiển thị bánh xe
 	Box View	Hiển thị hộp
+	Show Out-of-Gamut Colors	Hiện màu ngoài dải màu
 	Box Channel	Kênh của hộp
 	Color box	Hộp màu
 	Color Wheel Options	Tùy chọn bánh xe màu
@@ -4087,6 +4088,7 @@ mark-style	Japanese	Kiểu Nhật
 	Recent Commands	Lệnh gần đây
 	No recent commands	Không có lệnh gần đây
 	Type to search commands, tools, panels and effects	Nhập để tìm kiếm lệnh, công cụ, bảng và hiệu ứng
+	Clear Recent Commands	Xóa lệnh gần đây
 	Search commands	Tìm kiếm lệnh
 	Search Commands…	Tìm kiếm lệnh…
 	Search Fonts Folder	Tìm kiếm thư mục phông chữ

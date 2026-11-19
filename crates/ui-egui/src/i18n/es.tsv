@@ -610,6 +610,7 @@ font-technology	Variable	Variables
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Vista de rueda
 	Box View	Vista de cuadro
+	Show Out-of-Gamut Colors	Mostrar colores fuera de gama
 	Box Channel	Canal del cuadro
 	Color box	Cuadro de color
 	Color Wheel Options	Opciones de la rueda de color
@@ -3689,6 +3690,7 @@ digits	Malayalam	Malayálam
 	Recent Commands	Comandos recientes
 	No recent commands	No hay comandos recientes
 	Type to search commands, tools, panels and effects	Escriba para buscar comandos, herramientas, paneles y efectos
+	Clear Recent Commands	Borrar comandos recientes
 	Search commands	Buscar comandos
 	Search Commands…	Buscar comandos…
 	Secondary	Secundario

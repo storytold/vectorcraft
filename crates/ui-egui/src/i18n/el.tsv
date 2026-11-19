@@ -565,6 +565,7 @@ font-technology	Variable	Μεταβλητές
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Προβολή τροχού
 	Box View	Προβολή τετραγώνου
+	Show Out-of-Gamut Colors	Εμφάνιση χρωμάτων εκτός χρωματικής γκάμας
 	Box Channel	Κανάλι τετραγώνου
 	Color box	Τετράγωνο χρώματος
 	Color Wheel Options	Επιλογές χρωματικού τροχού
@@ -4392,6 +4393,7 @@ digits	Malayalam	Μαλαγιάλαμ
 	Recent Commands	Πρόσφατες εντολές
 	No recent commands	Δεν υπάρχουν πρόσφατες εντολές
 	Type to search commands, tools, panels and effects	Πληκτρολογήστε για αναζήτηση εντολών, εργαλείων, πλαισίων και εφέ
+	Clear Recent Commands	Εκκαθάριση πρόσφατων εντολών
 	Search commands	Αναζήτηση εντολών
 	Search Commands…	Αναζήτηση εντολών…
 	Secondary	Δευτερεύον

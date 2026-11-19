@@ -868,6 +868,7 @@ digits	Malayalam	マラヤーラム数字
 	{name1} {value1}, {name2} {value2}	{name1} {value1}、{name2} {value2}
 	Wheel View	ホイール表示
 	Box View	ボックス表示
+	Show Out-of-Gamut Colors	色域外のカラーを表示
 	Box Channel	ボックスのチャンネル
 	Color box	カラーボックス
 	Color Wheel Options	カラーホイールオプション
@@ -3608,6 +3609,7 @@ mark-style	Japanese	日本式
 	Recent Commands	最近使ったコマンド
 	No recent commands	最近使ったコマンドはありません
 	Type to search commands, tools, panels and effects	入力してコマンド、ツール、パネル、効果を検索
+	Clear Recent Commands	最近使ったコマンドを消去
 	Search commands	コマンドを検索
 	Secondary	セカンダリ
 	Select All Art on Layer	レイヤー上のすべてのアートを選択

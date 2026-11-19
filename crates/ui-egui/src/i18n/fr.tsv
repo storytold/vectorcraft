@@ -611,6 +611,7 @@ font-technology	Variable	Variables
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Affichage roue
 	Box View	Affichage carré
+	Show Out-of-Gamut Colors	Afficher les couleurs hors gamme
 	Box Channel	Couche du carré
 	Color box	Carré de couleur
 	Color Wheel Options	Options de la roue chromatique
@@ -3677,6 +3678,7 @@ digits	Malayalam	Malayalam
 	Recent Commands	Commandes récentes
 	No recent commands	Aucune commande récente
 	Type to search commands, tools, panels and effects	Tapez pour rechercher des commandes, des outils, des panneaux et des effets
+	Clear Recent Commands	Effacer les commandes récentes
 	Search commands	Chercher des commandes
 	Search Commands…	Rechercher des commandes…
 	Secondary	Secondaire

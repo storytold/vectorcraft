@@ -931,22 +931,21 @@ fn shows_targeted(view: &View, n: &Node, is_sel: bool) -> bool {
 pub(super) const TARGET_RING: f32 = 2.8;
 /// The width of the inner ring.
 pub(super) const TARGET_STROKE: f32 = 1.0;
-/// The radius of the dot filling the circle of an item that has an appearance of its own and is
-/// not targeted.
-pub(super) const TARGET_DOT: f32 = 3.2;
-/// The radius of that dot inside a targeted item's inner ring: clear of the ring, so a targeted
-/// item with an appearance of its own shows both (#8711).
-pub(super) const TARGET_DOT_IN_RING: f32 = 1.5;
+/// The radius of the outlined diamond marking an item's own appearance or transparency.
+pub(super) const APPEARANCE_MARK: f32 = 2.5;
+/// A mitered 1 px stroke extends a diamond's corner by sqrt(2) / 2. At radius 1, its outer
+/// extent stays more than 0.5 px inside the targeted ring's inner edge (#8711).
+pub(super) const APPEARANCE_MARK_IN_RING: f32 = 1.0;
 
 /// The marks inside a target circle's outer ring: the inner ring's radius when the item is
-/// `targeted`, and the appearance dot's radius when it is `styled` (has an appearance of its own).
+/// `targeted`, and the appearance diamond's radius when it is `styled` (has an appearance of its own).
 /// Each of the four combinations looks different, as the Layers panel's target icons do.
 pub(super) fn target_marks(targeted: bool, styled: bool) -> (Option<f32>, Option<f32>) {
-    let dot = if targeted { TARGET_DOT_IN_RING } else { TARGET_DOT };
-    (targeted.then_some(TARGET_RING), styled.then_some(dot))
+    let mark = if targeted { APPEARANCE_MARK_IN_RING } else { APPEARANCE_MARK };
+    (targeted.then_some(TARGET_RING), styled.then_some(mark))
 }
 
-/// The target circle of `n`'s row at `c`: a ring, doubled while `n` is targeted, with a dot when
+/// The target circle of `n`'s row at `c`: a ring, doubled while `n` is targeted, with a diamond when
 /// `n` has an appearance or transparency of its own ([`target_marks`]). Its response is clicked to target `n`; dragging
 /// it carries `n`'s appearance ([`PanelDrag::Appearance`]) onto another row's circle (Alt
 /// copies it) or the trash.
@@ -966,20 +965,29 @@ fn target_circle(ui: &mut Ui, n: &Node, c: egui::Pos2, h: f32, targeted: bool, a
     }
     let ring = if held { t.accent } else { t.icon };
     ui.painter().circle_stroke(c, 5.0, Stroke::new(if held { 1.5 } else { 1.0 }, ring));
-    let (inner, dot) = target_marks(targeted, has_styled_target(n));
+    let styled = has_styled_target(n);
+    let (inner, mark) = target_marks(targeted, styled);
     if let Some(r) = inner {
         ui.painter().circle_stroke(c, r, Stroke::new(TARGET_STROKE, t.icon));
     }
-    if let Some(r) = dot {
-        ui.painter().circle_filled(c, r, t.icon);
+    if let Some(r) = mark {
+        let points = vec![c - vec2(0.0, r), c + vec2(r, 0.0), c + vec2(0.0, r), c - vec2(r, 0.0)];
+        ui.painter().add(egui::Shape::closed_line(points, Stroke::new(TARGET_STROKE, t.icon)));
     }
     if resp.dragged_by(egui::PointerButton::Primary) {
         ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
     }
-    resp
+    let label = match (targeted, styled) {
+        (true, true) => tl!("Target appearance: targeted, additional appearance or transparency"),
+        (true, false) => tl!("Target appearance: targeted, basic appearance"),
+        (false, true) => tl!("Target appearance: not targeted, additional appearance or transparency"),
+        (false, false) => tl!("Target appearance: not targeted, basic appearance"),
+    };
+    resp.widget_info(|| egui::WidgetInfo { selected: Some(targeted), ..egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), label) });
+    resp.on_hover_text(label)
 }
 
-/// Whether an object's target circle is filled: its appearance is not basic (a group or layer:
+/// Whether an object's target circle shows its appearance mark: its appearance is not basic (a group or layer:
 /// it has fills, strokes or effects of its own) or its transparency (opacity, blend mode,
 /// isolation, knockout or an opacity mask) is not the default.
 fn has_styled_target(n: &Node) -> bool {

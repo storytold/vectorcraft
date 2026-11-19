@@ -3,12 +3,26 @@ use vectorcraft_engine::Session;
 
 use super::*;
 
-/// Filled target circles drawn by one headless frame of the panel.
+/// Appearance diamonds drawn by one headless frame of the panel.
 fn filled_targets(app: &mut VectorcraftApp, ctx: &egui::Context) -> usize {
     let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui));
     out.textures_delta.clear();
-    let dot = |r: f32| r == rows::TARGET_DOT || r == rows::TARGET_DOT_IN_RING;
-    out.shapes.iter().filter(|c| matches!(&c.shape, egui::Shape::Circle(cs) if dot(cs.radius) && cs.fill != Color32::TRANSPARENT)).count()
+    out.shapes.iter().filter(|s| appearance_diamond(&s.shape).is_some()).count()
+}
+
+/// Read the actual unfilled, cardinal four-point diamond, independently of the painter helper.
+fn appearance_diamond(shape: &egui::Shape) -> Option<(egui::Pos2, f32, f32)> {
+    let egui::Shape::Path(path) = shape else { return None };
+    if !path.closed || path.fill != Color32::TRANSPARENT || path.points.len() != 4 {
+        return None;
+    }
+    let c = egui::pos2((path.points[0].x + path.points[2].x) / 2.0, (path.points[0].y + path.points[2].y) / 2.0);
+    let r = path.points[0].distance(c);
+    if ![2.5, 1.0].iter().any(|expected| (r - expected).abs() < 1e-4) {
+        return None;
+    }
+    let expected = [c - vec2(0.0, r), c + vec2(r, 0.0), c + vec2(0.0, r), c - vec2(r, 0.0)];
+    path.points.iter().zip(expected).all(|(a, b)| a.distance(b) < 1e-4).then_some((c, r, path.stroke.width))
 }
 
 /// A generated `<Kind>` name is translated where painted; an unnamed text object's text never
@@ -425,7 +439,7 @@ fn targeted_rows(app: &mut VectorcraftApp, ctx: &egui::Context) -> Vec<usize> {
 }
 
 /// The marks one headless frame paints inside the outer ring of each target circle, top row
-/// first: per circle, its (radius, fill, stroke width) circles, sorted by radius.
+/// first: per circle, its (radius, is-diamond, stroke width) marks, sorted by radius.
 fn target_marks_painted(app: &mut VectorcraftApp, ctx: &egui::Context) -> Vec<Vec<(f32, bool, f32)>> {
     let (circles, _) = frame(app, ctx, vec![], false);
     let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui));
@@ -437,10 +451,10 @@ fn target_marks_painted(app: &mut VectorcraftApp, ctx: &egui::Context) -> Vec<Ve
                 .shapes
                 .iter()
                 .filter_map(|s| match &s.shape {
-                    egui::Shape::Circle(cs) if cs.radius < 5.0 && cs.center.distance(*c) < 0.01 => {
-                        Some((cs.radius, cs.fill != Color32::TRANSPARENT, cs.stroke.width))
+                    egui::Shape::Circle(cs) if cs.radius < 5.0 && cs.center.distance(*c) < 0.01 && cs.fill == Color32::TRANSPARENT => {
+                        Some((cs.radius, false, cs.stroke.width))
                     }
-                    _ => None,
+                    shape => appearance_diamond(shape).filter(|(at, _, _)| at.distance(*c) < 0.01).map(|(_, r, width)| (r, true, width)),
                 })
                 .collect();
             marks.sort_by(|a, b| a.0.total_cmp(&b.0));
@@ -450,8 +464,8 @@ fn target_marks_painted(app: &mut VectorcraftApp, ctx: &egui::Context) -> Vec<Ve
 }
 
 /// A targeted item with an appearance of its own keeps its inner ring in view: the appearance
-/// dot sits inside the ring with a gap, so the four looks (neither, targeted, with an appearance,
-/// both) differ, as the target icons the Appearance attributes help describes do (#8711).
+/// diamond sits inside the ring with a gap, so the four looks (neither, targeted, with an appearance,
+/// both) still differ (#8711). The historical test name is retained for its original regression.
 #[test]
 fn a_targeted_circle_with_an_appearance_shows_both_ring_and_dot() {
     let (mut app, _layer, [a, b]) = two_rects();
@@ -465,11 +479,17 @@ fn a_targeted_circle_with_an_appearance_shows_both_ring_and_dot() {
     let targeted = target_marks_painted(&mut app, &ctx)[1].clone();
     app.session.execute("layer.target", &json!({"id": a.0})).unwrap();
     let both = target_marks_painted(&mut app, &ctx)[2].clone();
-    // The inner ring is painted, and nothing filled reaches its inner edge.
+    // The inner ring is painted, and the actual mitered diamond stays clear of its inner edge.
     let ring = both.iter().find(|m| m.0 == rows::TARGET_RING && !m.1).expect("the inner ring");
     let inner_edge = ring.0 - ring.2 / 2.0;
-    let dot = both.iter().find(|m| m.1).expect("the appearance dot");
-    assert!(dot.0 + dot.2 / 2.0 < inner_edge - 0.5, "the dot {dot:?} covers the ring {ring:?}");
+    let mark = both.iter().find(|m| m.1).expect("the appearance diamond");
+    let outer_extent = mark.0 + mark.2 * std::f32::consts::FRAC_1_SQRT_2;
+    assert!(outer_extent < inner_edge - 0.5, "the diamond {mark:?} covers the ring {ring:?}");
+    assert!((mark.0 - 1.0).abs() < 1e-4);
+    assert_eq!(mark.2, 1.0, "native one-pixel outline");
+    let alone = styled.iter().find(|m| m.1).expect("standalone appearance diamond");
+    assert!((alone.0 - 2.5).abs() < 1e-4);
+    assert_eq!(alone.2, 1.0);
     let looks = [&neither, &targeted, &styled, &both];
     for (i, x) in looks.iter().enumerate() {
         for y in &looks[i + 1..] {
@@ -3934,4 +3954,63 @@ fn spine_row_context_menu_selects_blend_and_runs_blend_actions() {
     assert!(app.session.active().unwrap().doc.node(blend).is_none(), "blend released into keys and spine path");
     run(&mut app, "edit.undo", json!({}));
     assert!(matches!(app.session.active().unwrap().doc.node(blend).unwrap().kind, NodeKind::Blend { .. }));
+}
+
+/// Hover and accessibility explain the persistent mark; the same response still targets art.
+#[test]
+fn appearance_marker_names_its_state_and_keeps_targeting_actions() {
+    struct RestoreLanguage(crate::i18n::Lang);
+    impl Drop for RestoreLanguage {
+        fn drop(&mut self) {
+            crate::i18n::set_current(self.0);
+        }
+    }
+    let _language = RestoreLanguage(crate::i18n::current());
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let (mut app, _layer, [a, b]) = two_rects();
+    app.session.execute("transparency.set", &json!({"ids": [a.0], "opacity": 30})).unwrap();
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    let (centers, _) = frame(&mut app, &ctx, vec![], false);
+    let start = ctx.input(|i| i.time) + 1.0;
+    let draw = |app: &mut VectorcraftApp, time, events| {
+        let mut out = ctx.run_ui(egui::RawInput { time: Some(time), events, ..Default::default() }, |ui| show(app, ui));
+        out.textures_delta.clear();
+        out
+    };
+    let check = |out: &egui::FullOutput, label: &str, targeted| {
+        let nodes = &out.platform_output.accesskit_update.as_ref().expect("accessibility frame").nodes;
+        let node = nodes.iter().map(|(_, n)| n).find(|n| n.label() == Some(label)).expect("named target control");
+        assert_eq!(node.role(), egui::accesskit::Role::Button);
+        assert_eq!(node.toggled(), Some(if targeted { egui::accesskit::Toggled::True } else { egui::accesskit::Toggled::False }));
+    };
+    let idle = "Target appearance: not targeted, additional appearance or transparency";
+    let active = "Target appearance: targeted, additional appearance or transparency";
+    let before = (app.session.active().unwrap().selection.clone(), app.session.active().unwrap().history.undo.len());
+    let out = draw(&mut app, start, vec![egui::Event::PointerGone]);
+    check(&out, idle, false);
+    check(&out, "Target appearance: not targeted, basic appearance", false);
+    for clipped in &out.shapes {
+        if appearance_diamond(&clipped.shape).is_some()
+            && let egui::Shape::Path(path) = &clipped.shape
+        {
+            assert!(path.stroke.color == egui::epaint::ColorMode::Solid(Tokens::get(&ctx).icon));
+        }
+    }
+    draw(&mut app, start + 1.0, vec![egui::Event::PointerMoved(centers[2])]);
+    draw(&mut app, start + 3.0, vec![]);
+    let out = draw(&mut app, start + 3.1, vec![]);
+    assert!(out.shapes.iter().any(|s| matches!(&s.shape, egui::Shape::Text(t) if t.galley.job.text == idle)), "the hover explains the mark");
+    assert_eq!((app.session.active().unwrap().selection.clone(), app.session.active().unwrap().history.undo.len()), before);
+    for e in [egui::Event::PointerMoved(centers[2]), button(centers[2], true), button(centers[2], false)] {
+        frame(&mut app, &ctx, vec![e], false);
+    }
+    assert_eq!(app.session.active().unwrap().selection.target, Some(a));
+    assert_eq!(app.session.active().unwrap().selection.objects, vec![a]);
+    check(&draw(&mut app, start + 5.0, vec![egui::Event::PointerGone]), active, true);
+    app.session.execute("layer.target", &json!({"id": b.0})).unwrap();
+    let out = draw(&mut app, start + 6.0, vec![]);
+    check(&out, idle, false);
+    check(&out, "Target appearance: targeted, basic appearance", true);
+    assert_eq!(filled_targets(&mut app, &ctx), 1, "the appearance stays after targeting other art");
 }
