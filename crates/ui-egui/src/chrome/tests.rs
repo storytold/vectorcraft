@@ -798,7 +798,26 @@ fn narrow_status_bars_preserve_the_message_and_hide_optional_readouts() {
     let (mut app, ctx) = status_readout_app();
     app.hover_doc = Some(vectorcraft_geom::Point::new(7.0, 5.0));
     let mut origin = None;
-    for (width, coords, perf) in [(1400.0, true, true), (1000.0, true, false), (800.0, false, false)] {
+    // The optional snapping controls reserve room too. Measure the same three readout stages
+    // instead of fixing their thresholds to the former status-bar contents.
+    let mut widths = [None; 3];
+    for width in (600..=1600).step_by(10).rev().map(|w| w as f32) {
+        let texts = status_readout_frame(&mut app, &ctx, width);
+        let coords = texts.iter().any(|t| t.text.starts_with("X:"));
+        let perf = texts.iter().any(|t| t.text.starts_with("render"));
+        let stage = match (coords, perf) {
+            (true, true) => 0,
+            (true, false) => 1,
+            (false, false) => 2,
+            _ => panic!("diagnostics cannot outlast coordinates: {width}: {texts:?}"),
+        };
+        widths[stage].get_or_insert(width);
+        if widths.iter().all(Option::is_some) {
+            break;
+        }
+    }
+    let [wide, middle, narrow] = widths.map(|w| w.expect("all three optional-readout stages remain available"));
+    for (width, coords, perf) in [(wide, true, true), (middle, true, false), (narrow, false, false)] {
         let texts = status_readout_frame(&mut app, &ctx, width);
         let message = status_text(&texts, "Saved recovery data");
         assert!(!message.elided, "{width}: message was truncated: {message:?}");
@@ -5013,4 +5032,219 @@ fn the_control_bars_x_y_w_and_h_labels_open_the_transform_panel() {
     assert!(!open(&nodes), "a drag on W: opens nothing");
     let (_, [x0, _, x1, _]) = state(&app);
     assert!(x1 - x0 > before.1[2] - before.1[0], "a drag on W: scrubs the width: {:?} to {:?}", before.1, [x0, x1]);
+}
+
+/// Real status-only frames reuse the existing chrome harness, including AccessKit and painted clips.
+fn review_8687_frame(app: &mut crate::VectorcraftApp, ctx: &egui::Context, width: f32) -> (Vec<StatusText>, Vec<egui::accesskit::Node>) {
+    bar_frame(app, ctx, width, None, vec![], super::status_bar);
+    bar_frame(app, ctx, width, None, vec![], super::status_bar)
+}
+
+fn review_8687_node(nodes: &[egui::accesskit::Node], name: &str, role: egui::accesskit::Role) -> egui::accesskit::Node {
+    let matching: Vec<_> = nodes.iter().filter(|n| n.label() == Some(name) && n.role() == role).collect();
+    assert_eq!(matching.len(), 1, "one visible {role:?} named {name}: {matching:?}");
+    matching[0].clone()
+}
+
+fn review_8687_click(app: &mut crate::VectorcraftApp, ctx: &egui::Context, width: f32, node: &egui::accesskit::Node) {
+    let b = node.bounds().expect("an actual visible control");
+    assert!(b.x0 >= 0.0 && b.x1 <= width as f64 && b.y0 >= 0.0 && b.y1 <= 300.0);
+    let at = egui::pos2(((b.x0 + b.x1) / 2.0) as f32, ((b.y0 + b.y1) / 2.0) as f32);
+    let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    bar_frame(app, ctx, width, None, vec![egui::Event::PointerMoved(at), button(true)], super::status_bar);
+    bar_frame(app, ctx, width, None, vec![button(false)], super::status_bar);
+}
+
+fn review_8687_dismiss(app: &mut crate::VectorcraftApp, ctx: &egui::Context, width: f32) {
+    for pressed in [true, false] {
+        let event = egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
+        bar_frame(app, ctx, width, None, vec![event], super::status_bar);
+    }
+}
+
+fn review_8687_direct_commands(app: &mut crate::VectorcraftApp, ctx: &egui::Context, width: f32) {
+    for (name, command) in [("Smart Guides", "view.smartGuides"), ("Snap to Point", "view.snapToPoint"), ("Snap to Grid", "view.snapToGrid")] {
+        let nodes = review_8687_frame(app, ctx, width).1;
+        let button = review_8687_node(&nodes, name, egui::accesskit::Role::Button);
+        assert_eq!(button.is_selected(), None, "off is an unselected Button, not a checkbox");
+        assert_eq!(button.toggled(), None);
+        let before = app.run_count;
+        review_8687_click(app, ctx, width, &button);
+        assert_eq!(app.run_count, before + 1, "direct {name} uses the existing command entry");
+        assert_eq!(crate::menus::checked(app, command, &json!({})), Some(true));
+        let button = review_8687_node(&review_8687_frame(app, ctx, width).1, name, egui::accesskit::Role::Button);
+        assert_eq!(button.is_selected(), Some(true));
+        crate::menus::invoke(app, command, json!({}));
+        let button = review_8687_node(&review_8687_frame(app, ctx, width).1, name, egui::accesskit::Role::Button);
+        assert_eq!(button.is_selected(), None, "an existing reverse command refreshes the live button");
+        assert_eq!(crate::menus::checked(app, command, &json!({})), Some(false));
+    }
+}
+
+fn review_8687_dropdown_commands(app: &mut crate::VectorcraftApp, ctx: &egui::Context, width: f32) {
+    for (name, command) in [
+        ("Smart Guides", "view.smartGuides"),
+        ("Snap to Point", "view.snapToPoint"),
+        ("Snap to Grid", "view.snapToGrid"),
+        ("Snap to Pixel", "view.snapToPixel"),
+        ("Snap to Glyph", "view.snapToGlyph"),
+    ] {
+        let menu = review_8687_node(&review_8687_frame(app, ctx, width).1, "Snapping", egui::accesskit::Role::Button);
+        review_8687_click(app, ctx, width, &menu);
+        let row = review_8687_node(&review_8687_frame(app, ctx, width).1, name, egui::accesskit::Role::CheckBox);
+        assert_eq!(row.toggled(), Some(egui::accesskit::Toggled::False));
+        let before = app.run_count;
+        review_8687_click(app, ctx, width, &row);
+        assert_eq!(app.run_count, before + 1, "menu {name} uses the existing command entry");
+        assert_eq!(crate::menus::checked(app, command, &json!({})), Some(true));
+        review_8687_dismiss(app, ctx, width);
+        crate::menus::invoke(app, command, json!({}));
+        let menu = review_8687_node(&review_8687_frame(app, ctx, width).1, "Snapping", egui::accesskit::Role::Button);
+        review_8687_click(app, ctx, width, &menu);
+        let row = review_8687_node(&review_8687_frame(app, ctx, width).1, name, egui::accesskit::Role::CheckBox);
+        assert_eq!(row.toggled(), Some(egui::accesskit::Toggled::False), "menu rereads external command state");
+        review_8687_dismiss(app, ctx, width);
+    }
+}
+
+/// Direct buttons and the shared dropdown operate existing commands and reflect reverse changes.
+#[test]
+fn review_8687_status_snapping_uses_existing_commands_and_accessible_state() {
+    let (mut app, ctx) = status_readout_app();
+    ctx.enable_accesskit();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 30})).unwrap();
+    app.ui.view.smart_guides = false;
+    app.ui.view.snap_to_point = false;
+    app.ui.view.snap_to_grid = false;
+    app.ui.view.snap_to_pixel = false;
+    app.ui.view.snap_to_glyph = false;
+    app.run("prefs.set", json!({"key": "alignmentGuides", "value": true})).unwrap();
+    let document = json!(app.session.doc().unwrap().doc.as_ref());
+    let selection = app.session.doc().unwrap().selection.clone();
+    let history = (app.session.doc().unwrap().history.undo.len(), app.session.doc().unwrap().history.redo.len());
+    let tool = app.session.tool_id().to_string();
+    let camera = app.view().map(|v| (v.zoom, v.rotation));
+    let width = 1600.0;
+    review_8687_direct_commands(&mut app, &ctx, width);
+    review_8687_dropdown_commands(&mut app, &ctx, width);
+    let menu = review_8687_node(&review_8687_frame(&mut app, &ctx, width).1, "Snapping", egui::accesskit::Role::Button);
+    review_8687_click(&mut app, &ctx, width, &menu);
+    let nodes = review_8687_frame(&mut app, &ctx, width).1;
+    for (name, on) in [
+        ("Alignment Guides", app.session.prefs.alignment_guides),
+        ("Snap to Tangent", app.session.prefs.snap_tangent),
+        ("Snap to Perpendicular", app.session.prefs.snap_perpendicular),
+    ] {
+        let row = review_8687_node(&nodes, name, egui::accesskit::Role::CheckBox);
+        assert_eq!(row.toggled(), Some(if on { egui::accesskit::Toggled::True } else { egui::accesskit::Toggled::False }));
+    }
+    let before = app.run_count;
+    review_8687_click(&mut app, &ctx, width, &review_8687_node(&nodes, "Alignment Guides", egui::accesskit::Role::CheckBox));
+    assert_eq!(app.run_count, before + 1);
+    assert!(!app.session.prefs.alignment_guides);
+    review_8687_dismiss(&mut app, &ctx, width);
+    let menu = review_8687_node(&review_8687_frame(&mut app, &ctx, width).1, "Snapping", egui::accesskit::Role::Button);
+    review_8687_click(&mut app, &ctx, width, &menu);
+    let options = review_8687_node(&review_8687_frame(&mut app, &ctx, width).1, "Pixel Snapping Options…", egui::accesskit::Role::Button);
+    let pixel = app.session.prefs.pixel_snap;
+    review_8687_click(&mut app, &ctx, width, &options);
+    let dialog = app.ui.dialog.as_ref().expect("the existing Pixel Snapping Options dialog");
+    assert_eq!(dialog.kind, crate::dialogs::pixel_snap_options::KIND);
+    assert_eq!(serde_json::Value::Object(dialog.fields.clone()), json!({"drawing": pixel.drawing, "moving": pixel.moving, "scaling": pixel.scaling}));
+    app.ui.dialog = None;
+    assert_eq!(app.session.prefs.pixel_snap, pixel, "closing options without OK changes no option");
+    assert_eq!(json!(app.session.doc().unwrap().doc.as_ref()), document);
+    assert_eq!(app.session.doc().unwrap().selection, selection);
+    assert_eq!((app.session.doc().unwrap().history.undo.len(), app.session.doc().unwrap().history.redo.len()), history);
+    assert_eq!(app.session.tool_id(), tool);
+    assert_eq!(app.view().map(|v| (v.zoom, v.rotation)), camera);
+}
+
+/// Width changes give up direct buttons, then the dropdown, while retaining core status content.
+#[test]
+fn review_8687_status_snapping_fits_full_menu_and_omitted_real_frames() {
+    let (mut app, ctx) = status_readout_app();
+    ctx.enable_accesskit();
+    app.hover_doc = Some(vectorcraft_geom::Point::new(7.0, 5.0));
+    let mut stages = Vec::new();
+    let mut origin = None;
+    let mut info_origin = None;
+    let zoom = crate::state::zoom_label(app.view().map(|v| v.zoom).unwrap_or(1.0), app.session.prefs.display_print_size);
+    for width in (400..=1600).step_by(10).rev().map(|w| w as f32) {
+        let (texts, nodes) = review_8687_frame(&mut app, &ctx, width);
+        let direct: Vec<_> = ["Smart Guides", "Snap to Point", "Snap to Grid"]
+            .into_iter()
+            .filter_map(|name| nodes.iter().find(|n| n.label() == Some(name) && n.role() == egui::accesskit::Role::Button))
+            .collect();
+        let menu = nodes.iter().find(|n| n.label() == Some("Snapping") && n.role() == egui::accesskit::Role::Button);
+        assert!(direct.is_empty() || direct.len() == 3, "the direct group remains whole at{width}");
+        let stage = if !direct.is_empty() {
+            2
+        } else if menu.is_some() {
+            1
+        } else {
+            0
+        };
+        assert!(stage != 2 || menu.is_some(), "full includes Snapping");
+        if let Some(previous) = stages.last() {
+            assert!(stage <= *previous, "controls cannot return as the bar narrows");
+        }
+        if stages.last() != Some(&stage) {
+            stages.push(stage);
+        }
+        let message = status_text(&texts, "Saved recovery data");
+        let info = status_text(&texts, "Selection");
+        assert!(message.clip.left() >= info.bounds.right(), "message stays after the info field at{width}");
+        if let Some(at) = origin {
+            assert_eq!(message.at, at, "message origin stays fixed across stages");
+        } else {
+            origin = Some(message.at);
+        }
+        if let Some(at) = info_origin {
+            assert_eq!(info.at, at, "snapping must not displace the selected info field");
+        } else {
+            info_origin = Some(info.at);
+        }
+        review_8687_layout(&texts, &nodes, width, stage, &zoom);
+        if stage == 0 {
+            break;
+        }
+    }
+    assert_eq!(stages, [2, 1, 0], "actual frames reach full, dropdown-only, then omitted");
+}
+
+fn review_8687_layout(texts: &[StatusText], nodes: &[egui::accesskit::Node], width: f32, stage: u8, zoom: &str) {
+    let message = status_text(texts, "Saved recovery data");
+    let info = status_text(texts, "Selection");
+    let direct = ["Smart Guides", "Snap to Point", "Snap to Grid"]
+        .into_iter()
+        .filter_map(|name| nodes.iter().find(|n| n.label() == Some(name) && n.role() == egui::accesskit::Role::Button));
+    let menu = nodes.iter().find(|n| n.label() == Some("Snapping") && n.role() == egui::accesskit::Role::Button);
+    for name in ["First Artboard", "Previous Artboard", "Next Artboard", "Last Artboard"] {
+        review_8687_node(nodes, name, egui::accesskit::Role::Button);
+    }
+    assert!(texts.iter().any(|t| t.text == zoom), "Zoom remains: {texts:?}");
+    assert!(texts.iter().any(|t| t.text == "0°"), "Rotation remains: {texts:?}");
+    let mut rects = Vec::new();
+    for node in direct.chain(menu) {
+        let b = node.bounds().expect("a visible status control");
+        let rect = egui::Rect::from_min_max(egui::pos2(b.x0 as f32, b.y0 as f32), egui::pos2(b.x1 as f32, b.y1 as f32));
+        assert!(rect.left() >= info.bounds.right() && rect.right() <= width, "controls stay after navigation/info and in the window");
+        assert!(!rect.intersects(message.clip), "controls leave the message its own rectangle");
+        assert!(rects.iter().all(|old: &egui::Rect| !old.intersects(rect)), "controls do not overlap");
+        rects.push(rect);
+    }
+    if stage > 0 {
+        // MESSAGE_MIN covers the message area, including the existing 18px idle-spinner slot.
+        // The painted text clip starts after that slot, so it alone is narrower than the area.
+        assert!(
+            message.clip.width() + 18.0 >= 180.0 - 0.01,
+            "admitted controls retain MESSAGE_MIN including the spinner reserve: {width}: {message:?}"
+        );
+    }
+    for field in texts.iter().filter(|t| t.text.starts_with("X:") || t.text.starts_with("Y:") || t.text.starts_with("render")) {
+        assert!(field.clip.left() >= info.bounds.right());
+        assert!(!field.clip.intersects(message.clip));
+        assert!(rects.iter().all(|r| !r.intersects(field.clip)));
+    }
 }
