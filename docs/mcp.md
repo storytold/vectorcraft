@@ -825,6 +825,35 @@ from −100 to 100 and is 50 when left out with `lengthX` and `lengthY`, or 100 
 `` `baseAlong` must be one of x, y ``), as is a `slope` outside its range; the arc is not drawn and no undo step is
 added.
 
+`shape.threePointArc {start: [x, y], end: [x, y], through?: [x, y], toward?: [x, y], at?: "start"|"end"}` draws an
+open circular arc from `start` to `end` and selects it. With `through`, the arc passes through that point. With
+`toward`, the arc leaves `start` heading toward that point, so the line from `start` to the point is the arc's tangent
+there. With `at: "end"`, the line from `end` to the point is the tangent at `end` instead. `at` is `"start"` when left
+out, and `at` with `through` is an error. The arc has no fill and the current stroke (black when the stroke is none),
+its ends are exactly the two points (it is not pixel-aligned), and it has a smooth anchor at the `through` point and
+further smooth anchors so that no curve of the path turns more than a quarter turn. The result is
+`{id, cx, cy, radius, sweep}`: the circle's center and radius, and the arc's turn in degrees, positive clockwise on the
+page. One undo removes the arc. The command returns an error and draws nothing when two of the points are the same,
+when the third point lies on the line through the ends, when the arc would reach past the canvas, when a point is not
+`[x, y]`, when both or neither of `through` and `toward` are given, when `at` is anything but `"start"` or `"end"`, and
+when `at` is given with `through`.
+
+The Three-Point Arc tool, in the Line Segment tool's group after the Arc tool, runs this command. A drag from one end to
+the other, or a click on each, places the ends; Shift keeps the second end at 45° steps from the first (from General ›
+Constrain Angle). A click on a third point, or a press dragged to it, then draws the arc through it. With the tool's
+`direction` option on, the third point gives the direction the arc leaves the first end in; with `mods.alt`, the
+direction is at the second end, and Shift keeps the direction at 45° steps. Three-Point Arc Tool Options (`tool.options`,
+or a double-click on the tool) sets `direction` with its Third Point Sets Direction box, and
+`]` (with or without Shift) switches it while the ends are placed; the option is saved with the preferences. Until the
+third point is placed, the tool shows the arc as a dashed outline, its center as a small cross, the direction line in
+direction mode and, with Measurement Labels on, the radius. Where no arc fits, the tool shows "Arc too large" by the
+pointer (nothing while the pointer is on an end), and a click there draws nothing and keeps the ends. Escape, and an
+edit, Undo or Redo made outside the tool, remove the ends.
+
+```json
+{"name":"run_command","arguments":{"command":"shape.threePointArc","params":{"start":[0,0],"end":[80,0],"through":[40,-40]}}}
+```
+
 While a spiral is being dragged out with the Spiral tool, a `drag` event with `mods.alt` or `mods.cmd` keeps the
 spiral's inner end at the distance from the center it had on the first modified `drag` event, and the outer end follows
 the pointer. With `mods.alt` alone, dragging outward adds whole winds of four segments and dragging inward removes
@@ -1101,7 +1130,9 @@ art's colours (by default as global swatches the art links to).
 `swatch.move {names, to?, group?}` reorders swatches or moves them into or out of a colour group (as dragging
 them in the Swatches panel does); give colour group names instead to reorder the groups. Dropping a swatch on art
 in the app runs `paint.setFill` (or `paint.setStroke`, the active proxy) with `ids: [the object under the pointer]`.
-The Swatches panel menu's commands: `swatch.addUsedColors {selection?, global?}`, `swatch.unused` (a query: the
+The Swatches panel menu's commands: `swatch.addUsedColors {selection?, global?}` (Add Used Colors sends `{}`; Add
+Selected Colors, on while art is selected, sends `{selection: true, global: true}`; a run with no new color records no
+undo step; with Global Edit on, the other members keep their colors), `swatch.unused` (a query: the
 names Select All Unused selects; a spot swatch counts as used while an image placed from a DCS file has a plate of
 its ink), `swatch.merge {names}` (the first is kept; gradient stops linked to the others drop their process
 plates), `swatch.ungroup {name}`, `swatch.renameGroup {group, name}` (Color Group Options: renames the group alone
@@ -1227,9 +1258,33 @@ Convert to Grayscale before the switch would give); other colors convert as usua
 colors that changed in the art, symbols, graph designs and pattern tiles; it does not count the colors of graphic
 styles and brushes.
 `edit.colorSettings`, `file.documentColorMode`, `color.convert`, `color.gamutCheck`, `color.loadProfile`,
-`color.removeProfile`, `view.proofSetup`, `view.proofColors`, `view.overprintPreview`, `view.separationsPreview` and
-`swatch.setSpot` reject a param of the wrong type, such as `"bpc": "no"`, `"on": 1`, `"to": 5` or `"colors": "#fff"`,
-and change nothing. Omitting a param or giving null keeps its default.
+`color.removeProfile`, `view.proofSetup`, `view.proofSetup.save`, `view.proofColors`, `view.overprintPreview`,
+`view.separationsPreview` and `swatch.setSpot` reject a param of the wrong type, such as `"bpc": "no"`, `"on": 1`,
+`"to": 5` or `"colors": "#fff"`, and change nothing. Omitting a param or giving null keeps its default.
+View › Proof Setup › Customize… (`ui.proofSetupDialog`, dialog `proofSetup`) sets the custom proof through
+`view.proofSetup`: `target` `"cmyk:<profile>"` or `"rgb:<profile>"` names any CMYK or RGB profile as the device to
+simulate (a profile that is not loaded is an error), `preserveNumbers` sends the colors' numbers in the document's
+space to the device unchanged instead of converting them with `intent` (each color as it is painted, and a placed
+CMYK image's own inks; an RGB image's pixels go through their numbers in the document's space, and transparency mixes
+the proofed colors on the device's paper), and
+`simulateBlack` shows the device's black
+as the dark gray it prints (`simulatePaper` does so too, on the paper's color; both act on CMYK devices only). The
+reply carries `preserveNumbers` and `simulateBlack` with the other proof settings.
+The dialog's Save… and Load… buttons save and load a custom proof setup
+([Save or load a custom proof setup](https://help.adobe.com/archive/en_US/illustrator/cs4/illustrator_cs4_help.pdf#page=148)).
+The buttons and the saved setups in View › Proof Setup are desktop only; the web build has neither. Load…'s picker
+starts in the Proof Setups folder once a save has made it.
+`view.proofSetup.save {path}` writes the current proof setup, or the settings it is given as `view.proofSetup` takes
+them, to a proof setup file without changing the proof view; the device must be `workingCmyk`, `cmyk:<profile>` or
+`rgb:<profile>`. `view.proofSetup.load {path}` reads one back, makes it the proof setup and turns Proof Colors on;
+`view.proofSetup.read {path}` only returns the file's settings, which is how Load… fills the dialog. All three take
+`name` in place of `path` for a setup in the Proof Setups folder next to the preferences, and `view.proofSetup.list` lists the setups
+there, at most 100, which View › Proof Setup shows below Customize…. The listing holds the files named
+`<name>.vcproof` whose name `name` accepts, the first 100 by name; `truncated` is true when more are there or an entry
+could not be read or has a file name that is not valid Unicode, and a folder that cannot be read is an error. A name is
+at most 100 characters without path characters. These are VectorCraft's own choices: the file is VectorCraft's own JSON format (extension `.vcproof`) of
+at most 64 KiB, checked by size before it is read; a file whose device is a profile that is not loaded is refused
+with an error naming the profile, and nothing changes.
 `view.separationsPreview {soloToggle: plate}` is the Separations panel's Alt-click on a plate's eye: it shows that
 plate alone, and when that plate is already the only one of the active document's plates shown, it shows every
 plate, spot plates included ([Print color separations](https://helpx.adobe.com/illustrator/using/printing-color-separations.html)
@@ -1649,7 +1704,9 @@ A conic gradient (`kind: "conic"`, also accepted as `angle` or `conical`) sweeps
 draws the extent ellipse, aspect dot and center ring of a radial gradient, without a focal point; a `focal` given
 for a conic gradient is an error. A negative `aspect` mirrors the sweep (counterclockwise), as reflecting the object
 does; for the other kinds a negative `aspect` is an error. The Gradient panel's Aspect Ratio field and the aspect dot
-keep a mirrored sweep mirrored. Dither and Method apply as they do to a linear gradient. PDF export writes it as a
+keep a mirrored sweep mirrored. The default gradient for new art, and the Live Paint Bucket's, fits each object it
+paints and keeps no aspect, so `paint.editGradient` with an `aspect` is an error when it edits no object (nothing
+selected, the bucket's gradient without `ids`, or a fill edit of a Live Paint group without faces) and leaves the default as it was. Dither and Method apply as they do to a linear gradient. PDF export writes it as a
 function-based shading (type 1) whose calculator function turns the angle into the ramp, and PDF import reads a
 function-based shading whose color turns around the origin of its space back as a conic gradient, with its stops'
 opacity, also when the origin lies outside the painted area; in a PDF/A file, or with more than 97 stops on its
@@ -2659,7 +2716,8 @@ change anything outside the documents: `script.*` except `script.check`, `plugin
 `shortcutSet.*`, `help.*`, `print.*`, `library.*`, `importMatches.*`, `edit.undoGroup.*`, `file.recovery.*`,
 `stroke.widthProfile.*`, saving, importing or deleting a preset, `text.addFontFiles`, `text.findFontFiles`,
 `text.rescanFonts`, `links.findFiles`, `file.place.queue`, `color.loadProfile`, `color.removeProfile`, `file.print`,
-`view.proofSetup`, `view.proofColors`, `view.overprintPreview` and `view.separationsPreview`. It also cannot run
+`view.proofSetup`, `view.proofSetup.save`, `view.proofSetup.load`, `view.proofColors`, `view.overprintPreview` and
+`view.separationsPreview`. It also cannot run
 `edit.clearHistory`: a run keeps each document's undo steps from before it and adds one. Calling one of these throws
 an error. With Data Recovery off for complex documents, a run in the web build does not start while a complex document
 has unsaved changes.
@@ -8144,7 +8202,7 @@ snap the pointer as drawing tools do, so dragging a corner onto another object's
 Every point a drawing tool places snaps the same way, through one snapper (#506): the Pen's and Curvature tool's
 anchors, the shape tools' start and dragged corner or radius (`rectangle`,
 `roundedRectangle`, `ellipse`, `polygon`, `star`, `lineSegment`, `arc`, `spiral`, `rectangularGrid`, `polarGrid`), the
-Type tool's click and frame, and a new artboard's corners. The Pencil ignores Smart Guides and Snap to Point and
+Three-Point Arc tool's ends and third point, the Type tool's click and frame, and a new artboard's corners. The Pencil ignores Smart Guides and Snap to Point and
 shows no Smart Guides: its strokes and straight lines follow the hand (Snap to Grid and Snap to Pixel still move
 their ends). The point lands on another object's anchor, centre or
 path ("anchor", "center", "path"), else lines up with the anchors, edges and centres of the art and the artboards (a
@@ -9989,7 +10047,11 @@ images and point type in the font the file names. Type keeps the file's characte
 kerning off. On a single left to right line, an advance that tracking can't give (wider than its range, or a tab)
 starts a new point type object at the position the advance gives, and an underline or strikethrough is filled across the space between and on to the end
 of the last character's advance. Type on more than one line is placed a line at a time: each line is aligned by its own advances and
-split as a single line is. An EMF that
+split as a single line is. A character cell runs from the font's OS/2
+`usWinAscent` above the baseline to its `usWinDescent` below it: top and bottom aligned text has the top or the
+bottom of its cells at the reference point. Text drawn in the opaque background mode, which a file is in until it
+sets the mode to transparent, gets one filled rectangle of the background color behind the character cells of each
+line, as far as its advances reach (NULs' included), placed before the type. An EMF that
 draws with EMF+ records is read from them. Hatched and pattern brushes fill with their average color. Records VectorCraft doesn't read are skipped with one warning.
 A file, or a metafile image inside it, cut short by one of the reader's limits adds one warning without a count.
 Each of these adds one warning, with a count: images and pattern brushes whose bitmap can't be read, which are left
@@ -12239,8 +12301,9 @@ path selected it is an error.
 Window › Retype shows the Retype panel. Find Matching Fonts runs `retype.find {}`, which shows the panel, ranks up to
 96 fonts and lists the first ten. Find more font matches, at the end of the list when `more` is true, runs
 `retype.find {more: true}`, which adds the next five fonts that search found, whatever is selected now. Before any
-search, `retype.find {more: true}` runs a first search. A search that fails is an error and leaves the list as it
-was. Each row shows the font's family and style over a sample of the font. While live type is selected or edited, a
+search, `retype.find {more: true}` runs a first search. With `more` false, omitted or null, `retype.find` runs a new
+search; any other value than true, false or null is an error. A search that fails is an error and leaves the list as
+it was. Each row shows the font's family and style over a sample of the font. While live type is selected or edited, a
 click on a row sets that font on it, as the font menus do; live type inside a selected group counts too. The list
 stays when the selection changes.
 

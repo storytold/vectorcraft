@@ -106,6 +106,7 @@ mod png_options;
 pub mod print;
 pub mod print_presets;
 pub mod profile_mismatch;
+pub mod proof_setup;
 pub mod psd_import;
 mod psd_options;
 pub mod raster_effects;
@@ -149,6 +150,7 @@ mod text_export;
 pub mod text_import;
 mod three_d_classic;
 pub(crate) mod three_d_materials;
+pub mod three_point_arc_options;
 mod tiff_bmp_tga;
 pub mod tile_edge_color;
 mod tools;
@@ -372,6 +374,7 @@ registry! {
     ColorGuideOptions: [color_guide_options::KIND] => color_guide_options::SPEC,
     ColorBalance: [color_balance::KIND] => color_balance::SPEC,
     Saturate: [saturate::KIND] => saturate::SPEC,
+    ProofSetup: [proof_setup::KIND] => proof_setup::SPEC,
     IndexedColor: [indexed_color::KIND] => indexed_color::SPEC,
     SaveSwatchLibrary: [save_swatch_library::KIND] => save_swatch_library::SPEC,
     TileEdgeColor: [tile_edge_color::KIND] => tile_edge_color::SPEC,
@@ -473,6 +476,7 @@ registry! {
     FreehandOptions: [freehand::KIND] => freehand::SPEC,
     ShapeBuilderOptions: [shape_builder_options::KIND] => shape_builder_options::SPEC,
     ObjectsOnPathOptions: [objects_on_path_options::KIND] => objects_on_path_options::SPEC,
+    ThreePointArcOptions: [three_point_arc_options::KIND] => three_point_arc_options::SPEC,
     FlareOptions: [flare_options::KIND] => flare_options::SPEC,
     SymbolOptions: [symbol_options::KIND] => symbol_options::SPEC,
     DeleteSymbol: [symbol_delete::KIND] => symbol_delete::SPEC,
@@ -792,6 +796,9 @@ pub fn cancel(app: &mut VectorcraftApp) {
         if d.kind == script_run::NOTICE_KIND {
             script_run::notice_cancel(app, &d);
         }
+        if d.kind == proof_setup::KIND {
+            proof_setup::cancel(app, &d);
+        }
         if d.kind == script_run::PICKER_KIND {
             script_run::picker_cancel(app, &d);
         }
@@ -847,13 +854,15 @@ pub fn confirm(app: &mut VectorcraftApp) -> DialogResult {
 }
 
 /// After a dialog closes, and each frame: a Missing Fonts dialog that another dialog replaced waits
-/// for its turn again, the search a Missing Fonts or Find Linked Files dialog started stops once
-/// that dialog is gone, and with no dialog open the choice about a stopped plug-in that another
+/// for its turn again, a Proof Setup preview that another dialog replaced is undone, the search a
+/// Missing Fonts or Find Linked Files dialog started stops once that dialog is gone, and with no
+/// dialog open the choice about a stopped plug-in that another
 /// dialog replaced opens again, else the questions about the next restored document's linked files
 /// ([`crate::recovery::ask_next`]), else the next document's Missing Fonts dialog (one dialog at a
 /// time).
 pub(crate) fn settle(app: &mut VectorcraftApp) {
     crate::placing::settle_swatch_paste(app);
+    proof_setup::restore_replaced(app);
     profile_mismatch::settle(app);
     missing_fonts::requeue_replaced(app);
     missing_fonts::stop_when_closed(app);

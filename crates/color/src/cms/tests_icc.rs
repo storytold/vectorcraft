@@ -187,6 +187,25 @@ fn black_point_compensation_maps_the_darkest_ink_to_rgb_black() {
     assert_eq!(abs(true), abs(false));
 }
 
+/// A loaded ICC CMYK profile as Proof Setup's device shows its darkest ink with the settings'
+/// black-point compensation, as the working CMYK proof of the same profile does, and Simulate
+/// Black Ink shows it as the lighter gray the press prints.
+#[test]
+fn simulate_black_ink_shows_a_loaded_cmyk_profiles_black_as_gray() {
+    let c = icc_cmyk(true);
+    let k100 = [0.0, 0.0, 0.0, 1.0];
+    let device = ProofSetup { target: ProofTarget::Cmyk(c.settings().cmyk.clone()), ..Default::default() };
+    let plain = c.proof_cmyk_to_srgb(k100, &device);
+    let working = c.proof_cmyk_to_srgb(k100, &ProofSetup { target: ProofTarget::WorkingCmyk, ..Default::default() });
+    assert!(plain.iter().zip(working).all(|(a, b)| (a - b).abs() < 0.01), "device {plain:?}, working {working:?}");
+    let black = c.proof_cmyk_to_srgb(k100, &ProofSetup { simulate_black: true, ..device.clone() });
+    assert!(plain.iter().zip(black).all(|(a, b)| b > a + 0.03), "black ink {black:?}, without {plain:?}");
+    // Without black-point compensation the device shows the darkest ink as the press prints it.
+    let off = icc_cmyk(false);
+    let plain_off = off.proof_cmyk_to_srgb(k100, &ProofSetup { target: ProofTarget::Cmyk(off.settings().cmyk.clone()), ..Default::default() });
+    assert!(plain_off.iter().zip(black).all(|(a, b)| (a - b).abs() < 0.02), "without compensation {plain_off:?}, black ink {black:?}");
+}
+
 /// #1584: every built-in profile (RGB, CMYK and gray) has each tag on a 4-byte boundary and a size
 /// that is a multiple of 4 (ICC.1 §7.1.2), and still reads back as the same space.
 #[test]

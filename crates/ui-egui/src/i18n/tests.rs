@@ -570,6 +570,27 @@ fn objects_on_path_detach_strings_are_in_complete_catalogs() {
     }
 }
 
+/// View › Proof Setup › Customize's labels.
+#[test]
+fn proof_setup_dialog_labels_are_in_complete_catalogs() {
+    let labels = [
+        "Proof Setup",
+        "Device to Simulate:",
+        "Preserve CMYK Numbers",
+        "Preserve RGB Numbers",
+        "Rendering intent:",
+        "Simulate Paper Color",
+        "Simulate Black Ink",
+        "Save…",
+        "Load…",
+    ];
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        for label in labels {
+            assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
+        }
+    }
+}
+
 /// The PSD Import Options dialog's labels, and the warnings and errors of opening and placing a
 /// PSD or PSB file with its layers and slices: each complete catalog translates every one, keeping
 /// its numbers, and translates a reason given inside one.

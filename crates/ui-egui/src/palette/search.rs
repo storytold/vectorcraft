@@ -630,6 +630,12 @@ impl Index {
         let (offset, len) = (offset as usize, usize::from(len));
         self.initials_text.get(offset..offset + len).is_some_and(|text| text.lines().any(|l| l == query))
     }
+
+    /// Does the index hold the `n` results it was built from? A catalog too large to index gets an
+    /// empty index ([`Index::build`]), which holds none.
+    fn holds(&self, n: usize) -> bool {
+        self.initials.len() == n
+    }
 }
 
 /// `query` trimmed, lowercased, with each run of whitespace made one space.
@@ -676,8 +682,9 @@ fn phrase(e: &Entry, query: &str, initials: bool) -> u8 {
 /// What results are ordered by, compared field by field: whether a word matched only through a
 /// description, whether a word matched only through a typo, how the whole query matches, the worst
 /// grade a word gets, the sum of the grades, how the whole query matches when read with the words
-/// of the same meaning it matched through, the kind of result and the label's length.
-type RankKey = (bool, bool, u8, u8, u32, u8, u8, usize);
+/// of the same meaning it matched through, the result's place among the recent picks, the kind of
+/// result and the label's length.
+type RankKey = (bool, bool, u8, u8, u32, u8, usize, u8, usize);
 
 /// The results of `entries` that the lowercased `query` matches, best first, as places in
 /// `entries`. A result matches when every word of the query is text in one of its names or ids
@@ -685,6 +692,7 @@ type RankKey = (bool, bool, u8, u8, u32, u8, u8, usize);
 /// or starts a word of its label, menu path, description ([`description`]) or id, shares an English
 /// stem form with a word of its label, menu path or description ("rounded corners" for Round
 /// Corners…) or means the same as a word of its label, menu path or description ("remove bg" for
+/// Remove Background…), where a word may also be text in one of its names or ids ("bg mov" for
 /// Remove Background…), or when the query is the initials of a label ("ea" for Export As…). A query
 /// word that is no word, stem form or word start of any result's label, menu path or id also
 /// matches the words of labels and menu paths it is a typo of ([`Index::typos`]); with such a word,
@@ -697,9 +705,12 @@ type RankKey = (bool, bool, u8, u8, u32, u8, u8, usize);
 /// worst grade a word gets, the sum of the grades, how the whole query matches when read with each
 /// word matched through a word of the same meaning replaced by that word ("colour" as "color"; of
 /// several such words the result holds, the ones that match the whole query best),
-/// the kind of result ([`kind`]), the label's length and the catalog order. An empty query lists
-/// every result in catalog order.
-pub(crate) fn rank(entries: &[Entry], index: &Index, query: &str) -> Vec<u32> {
+/// then by the result's place in `recent`, the places in `entries` of the recent picks, most
+/// recent first (a result not in it comes after every result in it), then the kind of result
+/// ([`kind`]), the label's length and the catalog order. So a recent pick ranks above the results
+/// that match the query as well as it does and below every result that matches it better. An
+/// empty query lists every result in catalog order.
+pub(crate) fn rank(entries: &[Entry], index: &Index, query: &str, recent: &[u32]) -> Vec<u32> {
     let query = normalize(query);
     if query.is_empty() {
         return (0..entries.len()).filter_map(|i| u32::try_from(i).ok()).collect();
@@ -745,8 +756,8 @@ pub(crate) fn rank(entries: &[Entry], index: &Index, query: &str) -> Vec<u32> {
         typos.push(near);
     }
     // The index reads only the start of a longer query, so such a query matches by the substring
-    // rule, which reads all of it.
-    let fits = query.chars().count() <= INDEX_CHARS;
+    // rule, which reads all of it, as every query does in a catalog too large to index.
+    let fits = query.chars().count() <= INDEX_CHARS && index.holds(n);
     let packed: String = query.chars().filter(|c| !c.is_whitespace()).collect();
     let packed = Some(packed).filter(|p| (2..=6).contains(&p.chars().count()) && p.chars().all(char::is_alphabetic));
     let mut ranked: Vec<(RankKey, u32)> = vec![];
@@ -779,11 +790,16 @@ pub(crate) fn rank(entries: &[Entry], index: &Index, query: &str) -> Vec<u32> {
         for (k, (grades, token)) in indexed.iter().zip(&tokens).enumerate() {
             let mut g = grades.get(i).copied().unwrap_or(NONE);
             if g == NONE {
-                all_indexed = false;
                 held &= e.haystack.contains(token);
             }
             if g > SUBSTRING && e.haystack.contains(token) {
                 g = SUBSTRING;
+            }
+            // A word that is text inside a word of the result counts as matched, so it combines
+            // with words matched through a stem form, a word of the same meaning, a typo or the
+            // description.
+            if g == NONE {
+                all_indexed = false;
             }
             let g = if initials {
                 g.min(LABEL_PREFIX)
@@ -841,7 +857,8 @@ pub(crate) fn rank(entries: &[Entry], index: &Index, query: &str) -> Vec<u32> {
         };
         let meant_tier = if synonym { best_reading(&query, &starts, &tokens, &meant, |read| phrase(e, read, false)) } else { tier };
         let length = split_name(&e.shown).0.chars().count();
-        ranked.push(((described, typo, tier, worst, sum, meant_tier, e.kind, length), place));
+        let picked = recent.iter().position(|&r| r == place).unwrap_or(recent.len());
+        ranked.push(((described, typo, tier, worst, sum, meant_tier, picked, e.kind, length), place));
     }
     ranked.sort_by_key(|&(key, place)| (key, place));
     ranked.into_iter().map(|(_, place)| place).collect()
@@ -943,7 +960,14 @@ mod tests {
 
     /// The ids of the results `query` lists, best first.
     fn ranked(c: &Catalog, query: &str) -> Vec<String> {
-        rank(&c.list, &c.index, query).iter().filter_map(|&i| c.list.get(i as usize)).map(|e| e.id.clone()).collect()
+        recently(c, query, &[])
+    }
+
+    /// The ids of the results `query` lists, best first, with the results of ids `picked` as the
+    /// recent picks, most recent first.
+    fn recently(c: &Catalog, query: &str, picked: &[&str]) -> Vec<String> {
+        let recent: Vec<u32> = picked.iter().filter_map(|id| c.list.iter().position(|e| e.id == *id)).filter_map(|i| u32::try_from(i).ok()).collect();
+        rank(&c.list, &c.index, query, &recent).iter().filter_map(|&i| c.list.get(i as usize)).map(|e| e.id.clone()).collect()
     }
 
     /// A result named `name` (`›`-separated, its last part the label) with id `id`.
@@ -1071,6 +1095,48 @@ mod tests {
         assert_eq!(ranked(&c, "same zz"), ranked(&c, "same zz"));
     }
 
+    /// For each pair of adjacent grades and whole-query tiers, a recent pick ranks above a result
+    /// that matches the query as well as it does and comes earlier in the catalog, and below the
+    /// result that matches better; of two such recent picks, the more recent ranks first.
+    #[test]
+    fn a_recent_pick_ranks_first_within_its_grades() {
+        let description = "{} keeps the art central on the page";
+        for (query, better, worse, said) in [
+            ("cut zz", entry("Zz Cut", "a.one"), entry("Zz Cutter", "b.two"), ""),
+            ("scale zz", entry("Zz Scale", "a.one"), entry("Zz Scaling", "b.two"), ""),
+            ("scale zz", entry("Zz Scaling", "a.one"), entry("Zz Scalers", "scale.two"), ""),
+            ("fill zz", entry("Zz Fillet", "a.one"), entry("Fill › Zz Other", "b.two"), ""),
+            ("zap zz", entry("Zap › Zz One", "a.one"), entry("Zz Two", "zap.two"), ""),
+            ("zip zz", entry("Zz Three", "zip.three"), entry("Zz Unzipped", "b.two"), ""),
+            ("zz.one", entry("Alpha", "zz.one"), entry("zz.one", "b.two"), ""),
+            ("snap", entry("Snap", "a.one"), entry("Snapshot", "b.two"), ""),
+            ("ab", entry("Abacus", "a.one"), entry("Alpha Beta", "b.two"), ""),
+            ("gb", entry("Green Blue", "a.one"), entry("Zz Gb", "b.two"), ""),
+            // Text inside a word, then a typo of a word of the label.
+            ("colr", entry("Zz Bcolrb", "b.two"), entry("Zz Color", "a.one"), ""),
+            // A typo of a word of the label, then a word of the description.
+            ("centr", entry("Zz Center", "a.one"), entry("Zz Beta", "b.two"), description),
+            // The word itself in the label, then a word of the same meaning in the label.
+            ("remove", entry("Zz Remove", "a.one"), entry("Zz Delete", "b.two"), ""),
+            // Matches through a word of the same meaning: the whole label, then a word of it.
+            ("colour", entry("Color", "a.one"), entry("Zz Color", "b.two"), ""),
+        ] {
+            let (b, w) = (better.id.clone(), worse.id.clone());
+            // A second result that matches as the worse one does and comes before it.
+            let twin = entry(&worse.shown, &format!("{w}x"));
+            let t = twin.id.clone();
+            let c = described(vec![twin, worse, better], &[said, said, ""]);
+            let (b, w, t) = (b.as_str(), w.as_str(), t.as_str());
+            assert_eq!(recently(&c, query, &[]), [b, t, w], "{query}: with no recent picks");
+            assert_eq!(recently(&c, query, &[w]), [b, w, t], "{query}: the recent pick first within its grades");
+            assert_eq!(recently(&c, query, &[w, t]), [b, w, t], "{query}: the more recent first");
+            assert_eq!(recently(&c, query, &[t, w]), [b, t, w], "{query}: the more recent first");
+        }
+        // An empty query lists every result in catalog order.
+        let c = synthetic(vec![entry("Zz One", "a.one"), entry("Zz Two", "b.two")]);
+        assert_eq!(recently(&c, "", &["b.two"]), ["a.one", "b.two"]);
+    }
+
     /// A query that is a menu's title ranks a result whose label holds it as a word above the items
     /// of that menu, which match only by their menu path. A query that names the menu with `›`
     /// still starts the item's name.
@@ -1081,7 +1147,7 @@ mod tests {
         assert_eq!(ranked(&c, "object › pa"), ["a.one"]);
         let en = catalog(Lang::EN, false);
         for q in ["object", "effect", "select", "view", "type", "edit"] {
-            let first = rank(&en.list, &en.index, q).first().and_then(|&i| en.list.get(i as usize)).map(|e| e.shown.to_lowercase());
+            let first = rank(&en.list, &en.index, q, &[]).first().and_then(|&i| en.list.get(i as usize)).map(|e| e.shown.to_lowercase());
             let label = first.as_deref().map(|n| split_name(n).0.to_string()).unwrap_or_default();
             assert!(words(&label).any(|w| w.starts_with(q)), "{q}: {first:?}");
         }
@@ -1296,7 +1362,7 @@ mod tests {
         ] {
             assert!(substring_rule(&c, typo).is_empty(), "{typo} matched nothing before");
             let top = |q: &str| ranked(&c, q).into_iter().take(4).collect::<Vec<_>>();
-            let spelled_right: Vec<String> = rank(&c.list, &plain, word).iter().take(4).map(id).collect();
+            let spelled_right: Vec<String> = rank(&c.list, &plain, word, &[]).iter().take(4).map(id).collect();
             assert_eq!(top(typo), spelled_right, "{typo}");
             assert!(place(&c, typo, tool).is_some_and(|p| p < 4), "{typo}: {:?}", ranked(&c, typo));
         }
@@ -1334,6 +1400,32 @@ mod tests {
         // holds the query word itself.
         let c = synthetic(vec![entry("Zz Color", "tool:zz"), entry("Color", "panel:color"), entry("Zz Colour", "c.three")]);
         assert_eq!(ranked(&c, "colour"), ["c.three", "panel:color", "tool:zz"]);
+    }
+
+    /// A word that is text inside a word of the result combines with a word matched through a word
+    /// of the same meaning, a stem form, a typo or the description, and a word that is text inside
+    /// a word of no result finds nothing.
+    #[test]
+    fn a_word_inside_a_word_combines_with_the_other_matches() {
+        let c = described(vec![entry("Remove Background…", "a.one"), entry("Zz Group", "b.two")], &["{} make the images transparent", ""]);
+        assert_eq!(ranked(&c, "bg remove"), ["a.one"]);
+        assert_eq!(ranked(&c, "background mov"), ["a.one"]);
+        assert_eq!(ranked(&c, "bg mov"), ["a.one"], "a word of the same meaning");
+        assert_eq!(ranked(&c, "removing kgrou"), ["a.one"], "a stem form");
+        assert_eq!(ranked(&c, "transparent kgrou"), ["a.one"], "the description");
+        assert_eq!(ranked(&c, "emov backgruond"), ["a.one"], "a typo after a word inside a word");
+        assert!(ranked(&c, "bg qxq").is_empty());
+    }
+
+    /// A catalog without an index (one with more results than a posting can name) matches by the
+    /// substring rule alone: a query word whose parts are each text in a name, where the word
+    /// itself is not, finds nothing.
+    #[test]
+    fn without_an_index_only_the_substring_rule_matches() {
+        let entries = vec![entry("Remove Background…", "a.one"), entry("Zz Group", "b.two")];
+        let c = Catalog { list: entries, index: Index::default(), ranked: std::sync::Mutex::new(None) };
+        assert!(ranked(&c, "mov.nd").is_empty(), "{:?}", ranked(&c, "mov.nd"));
+        assert_eq!(ranked(&c, "background mov"), ["a.one"]);
     }
 
     /// A query word that is an English stem form of a word of a group ("setting" of settings,
@@ -1840,7 +1932,7 @@ mod tests {
             let started = std::time::Instant::now();
             let runs = 100;
             for _ in 0..runs {
-                std::hint::black_box(rank(&c.list, &c.index, q));
+                std::hint::black_box(rank(&c.list, &c.index, q, &[]));
             }
             println!("{:>12}: {:?} per query", q.get(..12).unwrap_or(q), started.elapsed() / runs);
         }
