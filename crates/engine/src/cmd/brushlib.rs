@@ -175,6 +175,7 @@ pub const BUILTIN: &[BuiltinBrushLibrary] = &[
     BuiltinBrushLibrary { id: "calligraphic-nibs", name: "Calligraphic Nibs", make: calligraphic_nibs },
     BuiltinBrushLibrary { id: "pressure-sensitive", name: "Pressure Sensitive", make: pressure_sensitive },
     BuiltinBrushLibrary { id: "bristle-brushes", name: "Bristle Brushes", make: bristle_brushes },
+    BuiltinBrushLibrary { id: "paint", name: "Paint", make: paint },
     BuiltinBrushLibrary { id: "pattern-borders", name: "Pattern Borders", make: pattern_borders },
     BuiltinBrushLibrary { id: "scatter-shapes", name: "Scatter Shapes", make: scatter_shapes },
     BuiltinBrushLibrary { id: "stipple", name: "Stipple", make: stipple },
@@ -592,6 +593,45 @@ fn tech_circuit() -> BrushLibrary {
 /// An invisible rectangle that fixes a tile's width.
 fn spacer(r: Rect) -> Node {
     Node::path(NodeId(0), shapes::rectangle(r), Appearance::default())
+}
+
+/// Paint: original filled vector art with broad, broken, loaded, and fanned marks. Each is one
+/// stroke stretched along the path, with an intentionally different edge and paint distribution.
+fn paint() -> BrushLibrary {
+    let flat_sweep = group(vec![
+        black(band(100.0, 5.0, 64, |x| 0.8 * (x / 100.0 * std::f64::consts::TAU).sin())),
+        black(polygon(&[(0.0, -2.5), (7.0, -3.8), (18.0, -2.5)])),
+        black(polygon(&[(78.0, 2.5), (94.0, 4.0), (100.0, 2.5)])),
+    ]);
+    let mut dry_drag = vec![];
+    for (y, shift) in [(-5.0, 0.0), (-3.2, 4.0), (-1.3, 1.0), (0.8, 6.0), (2.8, 3.0), (4.8, 8.0)] {
+        dry_drag.push(black(shapes::rectangle(Rect::new(2.0 + shift, y, 35.0 + shift, y + 0.8))));
+        dry_drag.push(black(shapes::rectangle(Rect::new(40.0 + shift, y, 75.0 - shift / 2.0, y + 0.8))));
+        dry_drag.push(black(shapes::rectangle(Rect::new(80.0 - shift / 2.0, y, 98.0, y + 0.8))));
+    }
+    let mut loaded_stroke = vec![black(band(100.0, 6.0, 64, |x| 1.2 * (x / 100.0 * 2.0 * std::f64::consts::TAU).sin()))];
+    for (x, r) in [(12.0, 4.2), (39.0, 3.6), (64.0, 4.8), (88.0, 3.9)] {
+        loaded_stroke.push(black(shapes::ellipse(Rect::new(x - r, -r - 1.5, x + r, r + 1.5))));
+    }
+    let mut fan_sweep = vec![];
+    for i in -2..=2 {
+        let offset = i as f64;
+        fan_sweep.push(black(band(100.0, 1.2, 48, |x| offset * (1.4 + x * 0.045) + 0.3 * (x / 100.0 * std::f64::consts::TAU).sin())));
+    }
+    let paint_art = |name: &str, art: Node| Brush {
+        name: name.into(),
+        kind: BrushKind::Art(ArtBrush { art, width: 150.0, colorization: Colorization::Tints, ..Default::default() }),
+    };
+    built(
+        "Paint",
+        Document::new(100.0, 100.0),
+        vec![
+            paint_art("Flat Sweep", flat_sweep),
+            paint_art("Dry Drag", group(dry_drag)),
+            paint_art("Loaded Stroke", group(loaded_stroke)),
+            paint_art("Fan Sweep", group(fan_sweep)),
+        ],
+    )
 }
 
 /// Pattern Borders: pattern brushes of tiles drawn here; Beads has corner tiles.
