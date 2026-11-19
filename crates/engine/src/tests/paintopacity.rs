@@ -417,6 +417,22 @@ fn a_null_id_leaves_the_paint_to_the_selected_characters() {
     }
 }
 
+/// A selected Live Paint group stands for its faces in a fill opacity and for its edges in a stroke
+/// opacity, and `paint.proxies` answers from those same parts.
+#[test]
+fn a_live_paint_group_answers_from_the_parts_it_sets() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0);
+    s.execute("livePaint.make", &json!({"ids": [id.0]})).unwrap();
+    let g = s.doc().unwrap().selection.objects[0];
+    select(&mut s, &[g]);
+    s.execute("paint.setStroke", &json!({"opacity": 30})).unwrap();
+    assert_eq!(proxies(&mut s)["strokeOpacity"], 30.0);
+    s.execute("paint.setFill", &json!({"opacity": 40})).unwrap();
+    assert_eq!(proxies(&mut s)["fillOpacity"], 40.0);
+    assert_eq!(proxies(&mut s)["strokeOpacity"], 30.0);
+}
+
 /// While the Live Paint Bucket is the active tool, a fill or stroke chosen goes to the bucket, so
 /// `paint.proxies` answers no opacity for the selection and an opacity is an error that leaves the
 /// document as it was.

@@ -160,7 +160,7 @@ pub fn proxy_specs() -> Vec<CommandSpec> {
             "Fill and Stroke",
             [],
             None,
-            "{} → {fill, stroke: the paints the Fill/Stroke proxies show (the Appearance panel's active item for the proxy of its kind, else the first selected object's, a group's first painted object's, a Live Paint group's first face's fill and first edge's stroke, type: its first run's; else the defaults for new art; when that object is a gradient mesh with points picked by the Mesh tool, Direct Selection or the Lasso and no fill item is active, the fill is its first picked point's color), fillActive, fillMixed, strokeMixed: the selected objects' (or a selected group's contents') fills (strokes) differ, a Live Paint group counting with its faces' fills and its edges' strokes, shown as a \"?\" proxy (a gradient mesh with points picked counts with their colors), fillOpacity, strokeOpacity: 0..100, the opacity of the fill item that paint.setFill {opacity} sets (the stroke item that paint.setStroke {opacity} sets), from the first selected object (or painted object in a selected group; a selected path of a compound path stands for its compound) that has one (a gradient mesh's first picked point's), or null with nothing selected (the defaults for new art), for an object selected in a symbol instance, while the Live Paint Bucket is the active tool, while the Type tool has characters selected, and when only type characters or objects without that item are selected}",
+            "{} → {fill, stroke: the paints the Fill/Stroke proxies show (the Appearance panel's active item for the proxy of its kind, else the first selected object's, a group's first painted object's, a Live Paint group's first face's fill and first edge's stroke, type: its first run's; else the defaults for new art; when that object is a gradient mesh with points picked by the Mesh tool, Direct Selection or the Lasso and no fill item is active, the fill is its first picked point's color), fillActive, fillMixed, strokeMixed: the selected objects' (or a selected group's contents') fills (strokes) differ, a Live Paint group counting with its faces' fills and its edges' strokes, shown as a \"?\" proxy (a gradient mesh with points picked counts with their colors), fillOpacity, strokeOpacity: 0..100, the opacity of the fill item that paint.setFill {opacity} sets (the stroke item that paint.setStroke {opacity} sets), from the first selected object (or painted object in a selected group; a selected path of a compound path stands for its compound, and a Live Paint group for its faces' fills and its edges' strokes) that has one (a gradient mesh's first picked point's), or null with nothing selected (the defaults for new art), for an object selected in a symbol instance, while the Live Paint Bucket is the active tool, while the Type tool has characters selected, and when only type characters or objects without that item are selected}",
             always,
             proxies
         ),
@@ -300,8 +300,11 @@ impl Session {
                 of(n, at?.resolve(&n.appearance, !stroke, "paint.proxies").ok()?)
             });
         }
+        // A Live Paint group stands for its faces in a fill edit and for its edges in a stroke edit
+        // (ItemTarget::targets_for).
         let leaves = super::leaf_targets(self, &st.selection.objects).ok()?;
-        leaves.iter().filter(editable).filter_map(|id| st.doc.node(*id)).find_map(|n| of(n, None))
+        let skipped = live_paint_parts_skipped(&st.doc, &st.selection.objects, !stroke);
+        leaves.iter().filter(editable).filter(|id| !skipped.contains(*id)).filter_map(|id| st.doc.node(*id)).find_map(|n| of(n, None))
     }
 
     pub(crate) fn remember_paint_now(&mut self, p: &Paint) {

@@ -862,7 +862,8 @@ its kind (`paint.proxies`) and the Gradient tool's annotator then show that row.
 (0 to 100, a percentage as in `transparency.set`), which sets the opacity of the fill or stroke row they paint, with
 or without a new paint, as one undo step. An opacity that no target takes is an error and also leaves the paint
 undone. Without a new paint, `objects` counts only the targets that took the opacity. `paint.proxies` answers it as `fillOpacity` and `strokeOpacity`, from the first selected object that has
-that row (a selected path of a compound path answers with its compound path's row, which the commands edit). It answers null with nothing selected, for an object selected in a symbol instance, while the Live Paint Bucket is the
+that row (a selected path of a compound path answers with its compound path's row, which the commands edit, and a
+selected Live Paint group answers with its faces' fills and its edges' strokes). It answers null with nothing selected, for an object selected in a symbol instance, while the Live Paint Bucket is the
 active tool, while the Type tool has characters selected, and when only type characters (which have no opacity of their own) or objects without that
 row are selected. Live effects take the same `item` to apply to one fill or
 stroke instead of the whole object: `run_command effect.apply {"effect": "path.offsetPath", "item": 0}`, and
