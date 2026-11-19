@@ -971,6 +971,98 @@ fn a_dropdown_list_shows_every_option_when_the_window_has_room() {
     }
 }
 
+// #5941: a click on the scroll bar's track of an open drop-down list scrolls it and leaves it open,
+// so an option it scrolled into view can be picked. A list closed by that click would open again
+// with its current option in view.
+#[test]
+fn a_click_on_a_dropdown_lists_scroll_bar_scrolls_it_and_leaves_it_open() {
+    let items: Vec<String> = (0..40).map(|i| format!("Option {i:02}")).collect();
+    let labels: Vec<&str> = items.iter().map(String::as_str).collect();
+    let ctx = themed(Default::default());
+    let field = std::cell::Cell::new(Rect::NOTHING);
+    let picked = std::cell::Cell::new(None);
+    let popup = std::cell::RefCell::new(vec![]);
+    let mut add = |ui: &mut Ui| {
+        ui.add_space(16.0);
+        let r = ui.horizontal(|ui| dropdown_names(ui, "bar-click", labels[0], &labels, 160.0));
+        field.set(r.response.rect);
+        if let Some(i) = r.inner {
+            picked.set(Some(i));
+        }
+        popup.replace(super::top_popup_shapes(ui.ctx()));
+    };
+    let screen = Rect::from_min_size(Pos2::ZERO, vec2(400.0, 300.0));
+    let mut time = 0.0;
+    // The options that show whole on the open list, with their rects, and the scroll bar's rects.
+    let mut run = |events: Vec<egui::Event>| {
+        time += 0.1;
+        let mut out = ctx.run_ui(egui::RawInput { time: Some(time), screen_rect: Some(screen), events, ..Default::default() }, &mut add);
+        out.textures_delta.clear();
+        let (mut texts, mut bars) = (vec![], vec![]);
+        fn flat(s: &egui::Shape, clip: Rect, out: &mut Vec<(String, Rect)>, bars: &mut Vec<Rect>) {
+            match s {
+                egui::Shape::Vec(v) => v.iter().for_each(|s| flat(s, clip, out, bars)),
+                egui::Shape::Text(t) => {
+                    let r = t.visual_bounding_rect();
+                    if r.top() >= clip.top() && r.bottom() <= clip.bottom() {
+                        out.push((t.galley.text().to_owned(), r));
+                    }
+                }
+                egui::Shape::Rect(r) if r.fill.a() > 0 && r.rect.width() <= 8.0 && r.rect.height() > 40.0 => bars.push(r.rect),
+                _ => {}
+            }
+        }
+        popup.take().iter().for_each(|c| flat(&c.shape, c.clip_rect, &mut texts, &mut bars));
+        (texts, bars)
+    };
+    let list_rect = || {
+        ctx.memory(|m| m.layer_ids().filter(|l| l.order == egui::Order::Foreground && m.areas().is_visible(l)).last().and_then(|l| m.area_rect(l.id)))
+    };
+    let click =
+        |at: Pos2, pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    run(vec![]);
+    let at = field.get().center();
+    run(vec![egui::Event::PointerMoved(at), click(at, true)]);
+    run(vec![click(at, false)]);
+    let (mut before, mut bars) = (vec![], vec![]);
+    for _ in 0..4 {
+        (before, bars) = run(vec![]);
+    }
+    assert!(list_rect().is_some(), "the list is open");
+    assert!(before.iter().any(|(s, _)| s == "Option 00"), "the list opens at its first option: {before:?}");
+    // The track, below the handle: near the bottom of the tallest bar rect drawn (the track).
+    let bar = bars
+        .iter()
+        .copied()
+        .max_by(|a, b| a.height().total_cmp(&b.height()))
+        .unwrap_or_else(|| panic!("the list {:?} draws its scroll bar: {before:?}", list_rect()));
+    let track = pos2(bar.center().x, bar.bottom() - 6.0);
+    run(vec![egui::Event::PointerMoved(track), click(track, true)]);
+    run(vec![]);
+    // The button is let go just past the bar's edge, closer than a drag, and the pointer then moves
+    // sideways onto the rows, in the same pass.
+    let let_go = pos2(bar.right() + 1.0, track.y);
+    let onto_row = before.first().map(|(_, r)| pos2(r.center().x, track.y)).expect("a row shows");
+    run(vec![egui::Event::PointerMoved(let_go), click(let_go, false), egui::Event::PointerMoved(onto_row)]);
+    let mut after = vec![];
+    for _ in 0..4 {
+        (after, _) = run(vec![]);
+    }
+    assert!(list_rect().is_some(), "a click on the scroll bar leaves the list open");
+    let new = after
+        .iter()
+        .find(|(s, _)| !before.iter().any(|(b, _)| b == s))
+        .cloned()
+        .unwrap_or_else(|| panic!("the click scrolled options into view: {after:?}"));
+    let row = new.1.center();
+    run(vec![egui::Event::PointerMoved(row), click(row, true)]);
+    run(vec![click(row, false)]);
+    run(vec![]);
+    let index = labels.iter().position(|l| *l == new.0);
+    assert_eq!(picked.get(), index, "the option scrolled into view is picked: {}", new.0);
+    assert!(list_rect().is_none(), "picking an option closes the list");
+}
+
 /// Enter on text that reads as no number in a range field refuses it as a unit field does: the
 /// field flashes and an open dialog is not confirmed with the old value.
 #[test]

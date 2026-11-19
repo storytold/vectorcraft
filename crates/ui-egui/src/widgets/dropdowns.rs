@@ -321,8 +321,9 @@ fn combo_button<'a>(ui: &mut Ui, button_id: egui::Id, current: impl egui::IntoAt
 /// The list of [`combo_atoms_named`] while it is open, drawn by `list` in a popup of its own that
 /// opens from `button` and takes the whole list whenever the window has room for it (#5941): below
 /// the button when it fits there, above it when it fits there instead, and otherwise shifted from
-/// below into the window, over the button. A list taller than the window scrolls. Returns what
-/// `list` returned, or `None` while the list is closed.
+/// below into the window, over the button. A list taller than the window scrolls. A click closes
+/// the list, except a click on its scroll bar, which scrolls it. Returns what `list` returned, or
+/// `None` while the list is closed.
 fn combo_list<R>(ui: &Ui, button: &Response, list: impl FnOnce(&mut Ui) -> R) -> Option<R> {
     let ctx = ui.ctx();
     let id = button.id.with("popup");
@@ -330,8 +331,13 @@ fn combo_list<R>(ui: &Ui, button: &Response, list: impl FnOnce(&mut Ui) -> R) ->
         egui::containers::menu::menu_style(style);
         style.spacing.scroll = list_scroll_style();
     });
-    let popup =
-        egui::Popup::menu(button).id(id).width(button.rect.width()).style(style.clone()).close_behavior(egui::PopupCloseBehavior::CloseOnClick);
+    // The id of the list's scroll area. egui senses its vertical bar under the area's id with the
+    // axis, 1, and names the widget a click went to at the start of the pass.
+    let area_key = id.with("scroll-area-id");
+    let on_bar =
+        ctx.data(|d| d.get_temp::<egui::Id>(area_key)).is_some_and(|area| ctx.interaction_snapshot(|s| s.clicked == Some(area.with(1_usize))));
+    let close = if on_bar { egui::PopupCloseBehavior::IgnoreClicks } else { egui::PopupCloseBehavior::CloseOnClick };
+    let popup = egui::Popup::menu(button).id(id).width(button.rect.width()).style(style.clone()).close_behavior(close);
     let screen = ctx.content_rect();
     // The room on each side of the rect the popup opens from: the part of the button in view.
     let anchor = popup.get_anchor_rect().unwrap_or(button.rect);
@@ -364,7 +370,9 @@ fn combo_list<R>(ui: &Ui, button: &Response, list: impl FnOnce(&mut Ui) -> R) ->
         ui.set_max_height(height);
         // Labels widen a narrow list rather than wrap, as in egui's combo box.
         ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
-        egui::ScrollArea::vertical().max_height(height).show(ui, list).inner
+        let shown = egui::ScrollArea::vertical().max_height(height).show(ui, list);
+        ui.data_mut(|d| d.insert_temp(area_key, shown.id));
+        shown.inner
     });
     if shown.is_some() {
         ctx.accesskit_node_builder(id, |node| node.set_role(egui::Role::ListBox));
