@@ -3,7 +3,7 @@ use super::{
 };
 
 /// The Contextual Task Bar's area.
-pub(crate) fn task_bar_id() -> egui::Id {
+fn task_bar_id() -> egui::Id {
     egui::Id::unique("task-bar")
 }
 
@@ -17,6 +17,14 @@ pub(crate) fn task_bar_rect(ctx: &egui::Context) -> Option<egui::Rect> {
 /// too narrow for them it leaves them out.
 pub(crate) fn task_bar_shows_fonts(ctx: &egui::Context) -> bool {
     task_bar_rect(ctx).is_some() && ctx.data(|d| d.get_temp::<bool>(task_bar_id().with("fonts")).unwrap_or(false))
+}
+
+/// The actions and chips the Contextual Task Bar offered where it was last drawn, before Bar
+/// Actions left any out, as More Options › Bar Actions lists them: each one's name, its id in
+/// [`TASK_BAR_ACTIONS`] or [`TASK_BAR_CHIPS`] (none: Bar Actions cannot turn it off) and whether it
+/// shows.
+pub(crate) fn task_bar_offered(ctx: &egui::Context) -> Vec<(&'static str, Option<&'static str>, bool)> {
+    ctx.data(|d| d.get_temp(task_bar_id().with("offered")).unwrap_or_default())
 }
 
 /// Whether the objects `ids` (or anything inside them) are painted with a colour: a solid colour,
@@ -383,8 +391,9 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
     .collect();
     offered.extend(chips.iter().map(|c| (c.label(shape.is_some()), Some(c.id(shape.is_some())))));
     let chips: Vec<Chip> = chips.into_iter().filter(|c| !hidden.contains(c.id(shape.is_some()))).collect();
-    let bar_actions: Vec<(&str, &str, bool)> =
-        offered.iter().filter_map(|&(label, action)| action.map(|a| (label, a, !hidden.contains(a)))).collect();
+    // Bar Actions reads this list through task_bar_offered while its menu is open.
+    let offered: Vec<(&'static str, Option<&'static str>, bool)> =
+        offered.into_iter().map(|(label, action)| (label, action, action.is_none_or(|a| !hidden.contains(a)))).collect();
     ui.ctx().data_mut(|d| d.insert_temp(task_bar_id().with("offered"), offered));
     let any_hidden = !hidden.is_empty();
     let widths: Vec<f32> = items.iter().map(|(label, _, cmd, _)| item_width(ui, label, cmd)).collect();
@@ -519,8 +528,9 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
                             // Actions, which shows every action again.
                             ui.menu_button(format!("   {}", tl!("Bar Actions")), |ui| {
                                 ui.set_min_width(170.0);
-                                for (label, action, shown) in &bar_actions {
-                                    if widgets::menu_item_name(ui, bar_action_name(label), true, *shown) {
+                                for (label, action, shown) in task_bar_offered(ui.ctx()) {
+                                    let Some(action) = action else { continue };
+                                    if widgets::menu_item_name(ui, bar_action_name(label), true, shown) {
                                         run = Some(("window.taskBar.actions", json!({ "action": action })));
                                     }
                                 }

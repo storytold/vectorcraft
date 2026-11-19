@@ -1807,7 +1807,8 @@ fn an_action_turned_off_is_not_listed_in_more_options() {
 /// Actions, and with all of them turned off the bar shows none of them but still shows, with More
 /// Options. That covers Connect and Join (both `join`), the actions matched by the tool they switch
 /// to (`editPath`, `drawPencil`, `smoothToolOptions`), the Smooth tool's Fidelity, Dynamic Text,
-/// an Image Trace object's Expand, the Type tool's Fill and the Artboard tool's actions.
+/// an Image Trace object's Expand, the Type tool's Fill with type selected and while it edits
+/// type, and the Artboard tool's actions.
 #[test]
 fn every_action_the_bar_offers_can_be_turned_off() {
     let dir = crate::tests_folder::Folder::new("ui-taskbar-actions");
@@ -1887,6 +1888,13 @@ fn every_action_the_bar_offers_can_be_turned_off() {
                 let t = id(app.run("text.create", json!({"x": 60, "y": 80, "text": "Hello"})).unwrap());
                 select(app, &[t]);
                 app.run("tool.select", json!({"tool": "type"})).unwrap();
+            }),
+            &["fill"],
+        ),
+        (
+            "the Type tool editing type",
+            Box::new(|app| {
+                edited_type(app, "type");
             }),
             &["fill"],
         ),
@@ -1973,7 +1981,7 @@ fn every_action_the_bar_offers_can_be_turned_off() {
         app.run("tool.select", json!({"tool": "selection"})).unwrap();
         setup(&mut app);
         let (ctx, _) = bar(&mut app);
-        let offered: Vec<(&'static str, Option<&'static str>)> = ctx.data(|d| d.get_temp(canvas::task_bar_id().with("offered")).unwrap_or_default());
+        let offered: Vec<(&str, Option<&str>)> = canvas::task_bar_offered(&ctx).into_iter().map(|(label, action, _)| (label, action)).collect();
         assert!(canvas::task_bar_rect(&ctx).is_some() && !offered.is_empty(), "{case}: the bar shows actions");
         for (label, action) in &offered {
             assert!(action.is_some(), "{case}: {label} has no id in Bar Actions");
