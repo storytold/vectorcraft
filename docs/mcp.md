@@ -6341,7 +6341,9 @@ Arrowheads… is not confined.
 
 `stroke.set {endArrow: {"custom": name}}` puts a custom head on a stroke. The stroke keeps a copy of the head's art,
 so the document draws it, saves it and exports it to SVG and PDF the same way without the arrowheads file.
-`document.inspect` reports such a head as `{"Custom": {name, path}}`, which `stroke.set` takes back unchanged. It
+`document.inspect` reports such a head as `{"Custom": {name, path}}`, which `stroke.set` takes back unchanged. A head
+read from an Illustrator file also carries `stop`, where the stroke ends under it in head units back from the tip
+(0 to 64; without it, the stroke ends halfway along the head). It
 refuses a `path` that fills no area (non-zero rule; parts thinner than a millionth of a head unit count as none) or
 has more than 4,096 anchors, more than 4,096 subpaths or a point more than 64 head units from the tip. The help page
 [Apply stroke on an object](https://helpx.adobe.com/illustrator/using/stroke-object.html) describes defining custom
@@ -7366,6 +7368,25 @@ midpoint; any finite value is brought into 0 to 360). With both, the length appl
 0° and keeps its place under `lineAngle`; `lineLength` points it to the right. A length that isn't a number above 0,
 and a line that would reach past the coordinate limit (±4,000,000 pt), are errors that change no line. Each call is
 one undo step.
+
+A live rectangle's Rectangle Angle and a live ellipse's Ellipse Angle are `rectangleAngle` and `ellipseAngle`
+(degrees counterclockwise, 0 for a shape drawn level; any number is read modulo 360). The help page
+(https://helpx.adobe.com/illustrator/desktop/draw-shapes-and-paths/modify-live-shapes/live-shape-properties.html) lists
+both as the shape's rotation on the canvas from 0° to 360°. The rest are VectorCraft's own rules: each selected shape
+of that kind turns about its own center, keeping its size, corners and pie (an ellipse's pie turns with it), and other
+objects stay as they are. A pixel-aligned shape then goes back on the pixel grid, as after other edits, which can move
+its center or change its size. The Transform and Properties panels show the angle in each shape's Properties section,
+blank when the selected shapes of that kind differ. It is the shape's own angle: after Reset Bounding Box
+(`object.resetBoundingBox`) the Rotate field reads 0° while the shape angle keeps the turn. An angle that is not a
+number is an error and changes nothing (`null` counts as an omitted key), a shape that the turn would take past the
+coordinate limit (±4,000,000 pt) is an error that changes nothing, whether or not it is selected, and the angle the
+shape already has records no undo step; the same holds for `polygonAngle`, and the Polygon Properties angle is blank,
+too, when the selected polygons differ.
+
+```json
+{"name":"run_command","arguments":{"command":"object.setLiveShape","params":{"rectangleAngle":30}}}
+{"name":"run_command","arguments":{"command":"object.setLiveShape","params":{"ellipseAngle":45}}}
+```
 
 `object.setLiveShape` returns a parameter error, and leaves the document and its undo history as they were, for a key
 it does not take, at the top level (`` unknown parameter `path` ``) or in one of `items`
@@ -10446,8 +10467,8 @@ clipping mask into one layer and discards hidden layers that require merging; th
 imports one image, and Import Hidden Layers brings hidden layers in. `document.open` does the same, with
 `layers: false` for the single image and `hiddenLayers: true` for the hidden layers. The page also merges
 adjustment layers, layers with a knockout option, and layers that hold transparent pixels in some blend modes with
-the layers below them. `document.open` applies neither adjustments nor knockouts, and it merges a layer by its blend
-mode alone, as the rules below say.
+the layers below them. `document.open` does not apply adjustments, applies only shallow knockouts inside groups, and
+otherwise merges a layer by its blend mode alone, as the rules below say.
 
 The rest are VectorCraft's own rules:
 
@@ -10467,6 +10488,12 @@ The rest are VectorCraft's own rules:
   mask.
 - A Dissolve layer's partly transparent pixels are merged as opaque or transparent, opaque at the share of its
   pixels their transparency gives, in a fixed pattern that differs from layer to layer.
+- A layer or group inside a group with a Knockout value of 1 (shallow) is merged with the visible layers below it
+  in that group: where it has pixels, shaped by its layer mask, they are cleared to transparency, it is drawn there
+  at its fill opacity, and its opacity fades the result back toward them. In a Pass Through group this applies only
+  when it and the visible layers below it are in Normal mode. A knockout at 0 opacity, one that draws nothing, one
+  with nothing visible below it, and one at 0 fill that covers none of their painted pixels are not merged for the
+  knockout; one in a mode VectorCraft lacks is still merged by its mode.
 - A merged layer is named after the layers it holds, joined with ` + `.
 - A layer name the file stores only as a one-byte Pascal string, without its Unicode name, is read as Mac Roman.
 - A layer's opacity is multiplied by its fill opacity, in every blend mode. A layer that others are clipped to keeps
@@ -10478,16 +10505,21 @@ The rest are VectorCraft's own rules:
   (RGB, CMYK, Grayscale, Lab or HSB) over the canvas. One whose shape is a vector mask isn't drawn, and the layers
   clipped to it are left out.
 - Adjustment layers, fill layers that store no pixels and whose fill isn't read, layer effects that are switched on,
-  knockouts and vector masks are not applied; the `warnings` count them.
+  the other knockouts (top-level layers, clipped layers, layers that others are clipped to, Pass Through groups with
+  layers in other modes, other Knockout values, and merges that need more memory than allowed) and vector masks are
+  not applied; the `warnings` count them.
 - Layer channels may be raw, PackBits or zipped (with or without prediction) at 8, 16 and 32 bits.
 - A file without layers opens as its merged image. A file whose layers can't be read opens as its merged image
   with a warning, and when the merged image can't be read either, the file is refused with an error.
 
 Each layer's pixels must fit the memory allowed for one image, and the pixels of all the layers and masks, with the
 canvases the merges make, must together fit eight times that; a file past either limit opens as its merged image,
-with a warning. The canvases one step of a merge holds at once must also fit the memory allowed for one image; when
-they don't, the layer that needed the merge comes in alone, with a warning: in the Normal mode, or as a layer of its
-own instead of clipped.
+with a warning. A merge being tried may use the whole of that limit beyond what was read before it. The pixels and
+canvases of merges that aren't made, including knockouts that turn out to cut nothing, then count against a second
+limit of the same size instead. The
+canvases one step of a merge holds at once must also fit the memory allowed for one image; when they don't, the
+layer that needed the merge comes in alone, with a warning: in the Normal mode, as a layer of its own instead of
+clipped, or without its knockout.
 
 ```json
 {"name":"run_command","arguments":{"command":"document.open","params":{"path":"/tmp/poster.psd","hiddenLayers":true}}}

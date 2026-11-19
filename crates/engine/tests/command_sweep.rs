@@ -1278,6 +1278,39 @@ fn polygon_properties_junk() {
     assert!(failures.is_empty(), "{} failures:\n{}", failures.len(), failures.join("\n"));
 }
 
+/// A live rectangle's and ellipse's Rectangle and Ellipse Angle with junk values, drawn plain,
+/// scaled unevenly, flattened to nothing and sheared: never a panic, and the document stays sound.
+#[test]
+fn rectangle_and_ellipse_angle_junk() {
+    let mut failures = vec![];
+    for (shape, key) in [("shape.rectangle", "rectangleAngle"), ("shape.ellipse", "ellipseAngle")] {
+        for xf in [
+            None,
+            Some(("object.scale", json!({"sx": 300, "sy": 20}))),
+            Some(("object.scale", json!({"sx": 1e-300, "sy": 100}))),
+            Some(("object.shear", json!({"angle": 40}))),
+        ] {
+            for v in junk_values() {
+                let p = json!({ key: v });
+                let mut s = Fixture::Multi.session();
+                let Ok(_) = no_panic(s.execute(shape, &json!({"x": 60, "y": 60, "width": 80, "height": 50}))) else { continue };
+                if let Some((cmd, q)) = &xf {
+                    let _ = no_panic(s.execute(cmd, q));
+                }
+                match catch_quiet(|| no_panic(s.execute("object.setLiveShape", &p))) {
+                    Err(m) => failures.push(format!("PANIC object.setLiveShape {p} [{xf:?}]: {m}")),
+                    Ok(_) => {
+                        if let Err(e) = catch_quiet(|| check_all(&mut s)).unwrap_or_else(|m| Err(format!("panic in checks: {m}"))) {
+                            failures.push(format!("object.setLiveShape {p} [{xf:?}]: {e}"));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    assert!(failures.is_empty(), "{} failures:\n{}", failures.len(), failures.join("\n"));
+}
+
 /// A live line's Line Properties with junk values (the fixtures have no line), on a line, a line
 /// whose ends meet and one at the coordinate limit: never a panic, and the document stays sound.
 #[test]
