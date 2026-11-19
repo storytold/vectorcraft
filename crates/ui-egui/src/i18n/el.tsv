@@ -8948,6 +8948,11 @@ breakText	Glyphs	Γλύφοι
 @msg	A joint does not close by {gap} pt.	Μια ένωση δεν κλείνει κατά {gap} pt.
 @msg	Two panels pass through each other.	Δύο πάνελ διαπερνούν το ένα το άλλο.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	το composer πρέπει να είναι "singleLine", "everyLine", "standardSingleLine" ή "standardEveryLine"
+	Ornamental	Διακοσμητικά μοτίβα
+	Scrollwork	Σπείρα
+	Filigree Arrow	Φιλιγκράν βέλος
+	Petal Sweep	Καμπύλη πετάλων
+	Twin Curl	Διπλή σπείρα
 	Vector Packs	Διανυσματικά πακέτα
 	Compass Rose	Ρόδο πυξίδας
 	Botanical Sprig	Βοτανικό κλαδάκι

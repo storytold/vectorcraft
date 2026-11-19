@@ -10861,6 +10861,11 @@ breakText	Glyphs	Glyffer
 @msg	A joint does not close by {gap} pt.	En samling lukker ikke med {gap} pt.
 @msg	Two panels pass through each other.	To paneler går gennem hinanden.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer skal være "singleLine", "everyLine", "standardSingleLine" eller "standardEveryLine"
+	Ornamental	Ornamentik
+	Scrollwork	Slyngværk
+	Filigree Arrow	Filigranpil
+	Petal Sweep	Kronbladssvirp
+	Twin Curl	Dobbelt slyng
 	Vector Packs	Vektorpakker
 	Compass Rose	Kompasrose
 	Botanical Sprig	Botanisk kvist

@@ -8975,6 +8975,11 @@ breakText	Glyphs	Glifs
 @msg	A joint does not close by {gap} pt.	Una unió no es tanca per {gap} pt.
 @msg	Two panels pass through each other.	Dos panells es travessen l’un a l’altre.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer ha de ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"
+	Ornamental	Ornamental
+	Scrollwork	Voluta
+	Filigree Arrow	Fletxa de filigrana
+	Petal Sweep	Traç de pètals
+	Twin Curl	Voluta doble
 	Vector Packs	Paquets vectorials
 	Compass Rose	Rosa dels vents
 	Botanical Sprig	Branqueta botànica

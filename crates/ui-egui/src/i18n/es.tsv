@@ -10692,6 +10692,11 @@ breakText	Glyphs	Glifos
 @msg	A joint does not close by {gap} pt.	Una unión no cierra por {gap} pt.
 @msg	Two panels pass through each other.	Dos paneles se atraviesan entre sí.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer debe ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"
+	Ornamental	Ornamental
+	Scrollwork	Voluta
+	Filigree Arrow	Flecha de filigrana
+	Petal Sweep	Trazo de pétalos
+	Twin Curl	Voluta doble
 	Vector Packs	Paquetes vectoriales
 	Compass Rose	Rosa de los vientos
 	Botanical Sprig	Ramita botánica

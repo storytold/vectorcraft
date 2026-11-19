@@ -7930,6 +7930,11 @@ breakText	Glyphs	Глифи
 @msg	A joint does not close by {gap} pt.	Една връзка не се затваря с {gap} pt.
 @msg	Two panels pass through each other.	Два панела минават един през друг.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer трябва да е "singleLine", "everyLine", "standardSingleLine" или "standardEveryLine"
+	Ornamental	Орнаментални
+	Scrollwork	Завитък
+	Filigree Arrow	Филигранна стрела
+	Petal Sweep	Венчелистен замах
+	Twin Curl	Двоен завитък
 	Vector Packs	Векторни пакети
 	Compass Rose	Роза на компаса
 	Botanical Sprig	Ботаническо клонче

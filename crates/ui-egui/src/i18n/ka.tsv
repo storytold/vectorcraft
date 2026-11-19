@@ -11085,6 +11085,11 @@ font-script	Japanese	იაპონური
 @msg	A joint does not close by {gap} pt.	შეერთება არ იხურება {gap} pt-ით.
 @msg	Two panels pass through each other.	ორი პანელი ერთმანეთში გადის.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer უნდა იყოს "singleLine", "everyLine", "standardSingleLine" ან "standardEveryLine"
+	Ornamental	ორნამენტული
+	Scrollwork	ხვეული
+	Filigree Arrow	ფილიგრანული ისარი
+	Petal Sweep	ფურცლების რკალი
+	Twin Curl	ორმაგი ხვეული
 	Vector Packs	ვექტორული პაკეტები
 	Compass Rose	კომპასის ვარდი
 	Botanical Sprig	ბოტანიკური ტოტი

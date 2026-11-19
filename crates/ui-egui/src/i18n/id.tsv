@@ -8633,6 +8633,11 @@ breakText	Glyphs	Glif
 @msg	A joint does not close by {gap} pt.	Sebuah sambungan tidak menutup sejauh {gap} pt.
 @msg	Two panels pass through each other.	Dua panel saling menembus.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer harus "singleLine", "everyLine", "standardSingleLine", atau "standardEveryLine"
+	Ornamental	Ornamental
+	Scrollwork	Sulur Hias
+	Filigree Arrow	Panah Filigran
+	Petal Sweep	Sapuan Kelopak
+	Twin Curl	Sulur Ganda
 	Vector Packs	Paket Vektor
 	Compass Rose	Mawar Kompas
 	Botanical Sprig	Ranting Botani

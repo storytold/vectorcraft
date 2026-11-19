@@ -10799,6 +10799,11 @@ breakText	Glyphs	Glyfy
 @msg	A panel is not joined to the rest by a crease.	Panel není se zbytkem spojen žádnou linií bigu.
 @msg	A fold line is on a non-printing layer.	Linie skladu je na netisknutelné vrstvě.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panely: {panels}, panty: {hinges}, chyby: {errors}, upozornění: {warnings}
+	Ornamental	Ornamentální
+	Scrollwork	Rozvilina
+	Filigree Arrow	Filigránový šíp
+	Petal Sweep	Tah okvětních lístků
+	Twin Curl	Dvojitá rozvilina
 	Vector Packs	Vektorové balíčky
 	Compass Rose	Směrová růžice
 	Botanical Sprig	Botanická větvička

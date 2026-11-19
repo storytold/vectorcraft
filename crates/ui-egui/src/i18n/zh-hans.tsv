@@ -10642,6 +10642,11 @@ breakText	Glyphs	字形
 @msg	A joint does not close by {gap} pt.	有一处接缝相差 {gap} pt 未闭合。
 @msg	Two panels pass through each other.	两个面板相互穿插。
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} 像素对 PSD 而言过大 (每边最多 {MAX_SIDE} 像素)：请降低分辨率
+	Ornamental	装饰纹样
+	Scrollwork	卷饰
+	Filigree Arrow	花丝箭头
+	Petal Sweep	花瓣曲线
+	Twin Curl	双重卷饰
 	Vector Packs	矢量画笔包
 	Compass Rose	罗盘玫瑰
 	Botanical Sprig	植物枝条
