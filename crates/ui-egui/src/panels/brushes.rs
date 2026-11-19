@@ -199,13 +199,21 @@ fn multi(app: &VectorcraftApp, ctx: &egui::Context, list: &[(String, String)], c
         set_pstate(ctx, "br-selected", (None::<Vec<String>>, None::<ClickKey>));
         return None;
     }
-    let (names, _): (Option<Vec<String>>, Option<ClickKey>) = pstate(ctx, "br-selected");
+    let (names, key): (Option<Vec<String>>, Option<ClickKey>) = pstate(ctx, "br-selected");
     let names = names?;
     if names.is_empty() {
         return Some(names);
     }
+    let orig_len = names.len();
     let kept: Vec<String> = names.into_iter().filter(|n| list.iter().any(|b| &b.0 == n)).collect();
-    (!kept.is_empty()).then_some(kept)
+    if kept.is_empty() {
+        set_pstate(ctx, "br-selected", (None::<Vec<String>>, key));
+        return None;
+    }
+    if kept.len() != orig_len {
+        set_pstate(ctx, "br-selected", (Some(kept.clone()), key));
+    }
+    Some(kept)
 }
 
 /// The brushes Delete Brush and Duplicate Brush act on: the multi-selection, else the selected
@@ -300,6 +308,57 @@ fn replace_drop(ui: &Ui, resp: &egui::Response, name: &str, ty: &str, replaced: 
     }
 }
 
+/// A brush item's right-click context menu.
+fn item_context_menu(app: &mut VectorcraftApp, ui: &mut Ui, name: &str) {
+    let (current_list, current) = brushes(app);
+    let multi_names = multi(app, ui.ctx(), &current_list, current.as_deref());
+    let is_multi = multi_names.as_ref().is_some_and(|m| m.len() > 1 && m.iter().any(|b| b == name));
+    let targets = if is_multi { multi_names.unwrap_or_default() } else { vec![name.to_string()] };
+
+    let all_exist = app.session.active().is_some_and(|st| {
+        let lib = vectorcraft_brush::library(&st.doc);
+        targets.iter().all(|n| lib.iter().any(|b| &b.name == n))
+    });
+
+    let can_delete = all_exist && targets.len() < current_list.len() && current_list.len() > 1;
+    let can_duplicate = all_exist;
+
+    if is_multi {
+        if menu_item(ui, tl!("Duplicate Brushes"), can_duplicate, false) {
+            if let Err(e) = app.run("brush.duplicate", json!({ "names": targets })) {
+                app.status(e);
+            }
+            ui.close();
+        }
+        if menu_item(ui, tl!("Delete Brushes"), can_delete, false) {
+            if let Err(e) = app.run("brush.delete", json!({ "names": targets })) {
+                app.status(e);
+            }
+            ui.close();
+        }
+    } else {
+        let can_options = all_exist;
+        if menu_item(ui, tl!("Brush Options…"), can_options, false) {
+            if let Err(e) = app.run("ui.brushOptions", json!({ "name": name })) {
+                app.status(e);
+            }
+            ui.close();
+        }
+        if menu_item(ui, tl!("Duplicate Brush"), can_duplicate, false) {
+            if let Err(e) = app.run("brush.duplicate", json!({ "name": name })) {
+                app.status(e);
+            }
+            ui.close();
+        }
+        if menu_item(ui, tl!("Delete Brush"), can_delete, false) {
+            if let Err(e) = app.run("brush.delete", json!({ "name": name })) {
+                app.status(e);
+            }
+            ui.close();
+        }
+    }
+}
+
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let (list, current) = brushes(app);
@@ -316,6 +375,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let mut options: Option<String> = None;
     let mut moved: Option<Value> = None;
     let mut replaced: Option<(String, Vec<u64>)> = None;
+    let mut secondary_selected: Option<String> = None;
     let list_rect = widgets::list_box(ui, |ui| {
         ui.set_min_height(110.0);
         ui.set_width(ui.available_width());
@@ -366,8 +426,26 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 resp.on_hover_text(name)
             };
             // A click applies or selects the brush; the second click of a double-click opens its
-            // options.
+            // options; a right-click selects if unselected and displays its item context menu.
             let mut pick = |resp: egui::Response, name: &String| {
+                if resp.secondary_clicked() {
+                    let is_in_multi = multi.as_ref().is_some_and(|m| m.len() > 1 && m.iter().any(|b| b == name));
+                    let is_current = sel_brush.as_deref() == Some(name) || (sel_brush.is_none() && current.as_deref() == Some(name));
+                    if !is_in_multi && !is_current {
+                        set_pstate(&resp.ctx, "br-anchor", name.clone());
+                        let has_sel = app.session.active().is_some_and(|d| !d.selection.is_empty());
+                        if has_sel {
+                            app.run("brush.apply", json!({ "name": name })).ok();
+                        } else {
+                            app.run("brush.setCurrent", json!({ "name": name })).ok();
+                        }
+                        let now = brushes(app).1;
+                        let key = click_key(app, now.as_deref());
+                        set_pstate(&resp.ctx, "br-selected", (None::<Vec<String>>, key));
+                        secondary_selected = Some(name.clone());
+                    }
+                }
+                resp.context_menu(|ui| item_context_menu(app, ui, name));
                 if resp.double_clicked() {
                     options = Some(name.clone());
                 } else if resp.clicked() {
@@ -416,6 +494,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         && let Err(e) = app.run("brush.move", p)
     {
         app.status(e);
+    }
+    if secondary_selected.is_some() {
+        multi = None;
     }
     let highlighted = sel_brush.clone().or(current.clone());
     match clicked {
