@@ -298,7 +298,7 @@ fn bridgeable(circles: &[Circle], arc: ArcRadius, reach: f64) -> Result<Bridgeab
         return Err(ManyError::TooManyCircles);
     }
     let fine = |c: &Circle| c.center.x.is_finite() && c.center.y.is_finite() && c.radius.is_finite() && c.radius > 0.0;
-    if !(reach.is_finite() && reach >= 0.0) || !circles.iter().all(fine) {
+    if !(reach.is_finite() && reach >= 0.0 && circles.iter().all(fine)) {
         return Err(ManyError::Bad);
     }
     let (mut pairs, mut too_far) = pairs_within(circles, reach, arc)?;

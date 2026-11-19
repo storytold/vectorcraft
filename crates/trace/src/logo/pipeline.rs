@@ -547,7 +547,7 @@ pub(crate) fn trace_logo(img: &Raster, params: &TraceParams, max_anchors: usize)
             }
             // Holes are cut only under Ignore White or with no white class; otherwise white and the other colors are
             // traced as their own shapes.
-            if a2 >= 0.0 && !(params.ignore_white || !own_white) {
+            if a2 >= 0.0 && !params.ignore_white && own_white {
                 continue;
             }
             // More real outlines than we will fit is refused, not silently truncated.

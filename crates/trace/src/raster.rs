@@ -252,7 +252,7 @@ impl Raster {
                 return Err(TraceError::Empty);
             }
             let pixels = u64::from(info.width) * u64::from(info.height);
-            if pixels <= MAX_PIXELS && !gif_first_frame_pixels(bytes).is_some_and(|p| p > MAX_PIXELS) {
+            if pixels <= MAX_PIXELS && gif_first_frame_pixels(bytes).is_none_or(|p| p <= MAX_PIXELS) {
                 return Self::decode(bytes);
             }
             if pixels > MAX_SOURCE_PIXELS {

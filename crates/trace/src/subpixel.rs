@@ -364,7 +364,7 @@ pub(crate) fn outline(
             if k == 0 && first.is_some() {
                 // The junction itself: the one point every region around it has.
                 pts.push(junctions[crack].unwrap_or(corner));
-            } else if along_edge == 0 && !step[i] && !step[(i + n - 1) % n] && !(stair[i] && stair[(i + n - 1) % n]) {
+            } else if !(along_edge != 0 || step[i] || step[(i + n - 1) % n] || stair[i] && stair[(i + n - 1) % n]) {
                 // A true corner: where its two edges, each moved by its own shift, meet.
                 let before = &edges[(i + n - 1) % n];
                 pts.push(corner + outward(before.dir) * shifts[(crack + cracks - 1) % cracks] + outward(e.dir) * shifts[crack]);

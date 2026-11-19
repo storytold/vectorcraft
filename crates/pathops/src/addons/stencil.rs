@@ -88,7 +88,7 @@ pub struct Bridged {
 /// and no bridge is cut.
 pub fn stencil_bridges(art: &[(&PathData, FillRule)], spec: BridgeSpec) -> Result<Bridged, PathOpsError> {
     let (lo, hi) = BRIDGE_WIDTH_RANGE;
-    if !(spec.width.is_finite() && (lo..=hi).contains(&spec.width)) || !(1..=MAX_BRIDGES_PER_ISLAND).contains(&spec.count) {
+    if !(spec.width.is_finite() && (lo..=hi).contains(&spec.width) && (1..=MAX_BRIDGES_PER_ISLAND).contains(&spec.count)) {
         return Err(PathOpsError::Degenerate);
     }
     if too_large(art) {
