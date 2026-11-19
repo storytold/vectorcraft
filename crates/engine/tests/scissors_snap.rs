@@ -286,6 +286,11 @@ fn review_8655_session_endpoint_controls() -> Vec<(Vec<Point>, Point)> {
     assert!(session.doc().unwrap().doc.node(right_id).is_none());
     assert_eq!(session.doc().unwrap().selection, selection);
 
+    let (canonical_markers, canonical) = review_8655_session_canonical_control(session, view);
+    vec![(interior_markers, actual_interior), (canonical_markers, canonical)]
+}
+
+fn review_8655_session_canonical_control(mut session: Session, view: ViewInfo) -> (Vec<Point>, Point) {
     let closed = NodeId(
         session
             .execute(
@@ -328,5 +333,5 @@ fn review_8655_session_endpoint_controls() -> Vec<(Vec<Point>, Point)> {
     assert_eq!(path(&session, closed), original_closed);
     session.execute("edit.redo", &json!({})).unwrap();
     assert_eq!(path(&session, closed), opened);
-    vec![(interior_markers, actual_interior), (canonical_markers, canonical)]
+    (canonical_markers, canonical)
 }
