@@ -5778,15 +5778,28 @@ document's swatches, as a library to add from. From an `.ase` file it reads RGB,
 spot or process swatches and keeps their color groups. A color book (such as a Pantone book you own) gives its RGB,
 CMYK or Lab colors named with the book's prefix and suffix ("PANTONE 185 C"), as spot colors unless the book marks
 them as process colors; `.acb` files are read, never written. A file in the user library folder, or a file with the
-same extension and bytes as one there, loads as that User Defined library (category `user`).
+same extension and bytes as one there, loads as that User Defined library (category `user`). A file larger than 256 MB
+is refused before it is read.
 From a document, such as a `.ai` or `.eps` swatch library, it reads the colors, tints, gradients and pattern swatches
 in the document's order and color groups; `swatch.library.add` brings a pattern swatch's pattern, with its tile and
 art, into the document as a pattern swatch under the library swatch's name and in its color group. A global or spot
 color the pattern's art links to keeps the library's color: when the document gives its name another color, it comes
 in under a numbered name ("Ink 2") and the pattern links to that. A document with
 no swatches, and a `.ai`, `.eps` or PostScript file whose swatches are only the default ones, are refused with
-"`<file>` has no swatches of its own". The Swatch Libraries filter of Other Library… lists `.ai`, `.ait` and `.eps`
-(`.epsf`) files as well as the library files.
+"`<file>` has no swatches of its own", unless the document has graph designs: it then loads with no swatches. The
+Swatch Libraries filter of Other Library… lists `.ai`, `.ait` and `.eps` (`.epsf`) files as well as the library files.
+A document's graph designs come with it: the reply's `graphDesigns` counts them, and
+`graph.column`, `graph.marker` and `graph.design` take the library's id as `library` until the app quits (a User
+Defined copy made with `swatch.library.copyToUser` holds the swatches alone, so the designs stay under the loaded id).
+`graph.column {design, library}` and `graph.marker {design, library}` copy a design the document lacks into it, with the
+swatches, patterns, symbols, styles, brushes and images its art uses, in the same undo step as the graph change.
+`graph.design {library, add: name | [names]}` copies designs without applying them and returns `{added, existing}`, and
+`graph.design {library}` lists the library's designs. A design the document already has under the same name stays as it
+is. `graph.column` and `graph.marker` with no `design`, and `graph.design {}`, list the loaded libraries that hold
+designs as `libraries: [{library, name, designs}]`. Copying a graph and pasting it into another document brings the designs its series
+draw with in the same way; a pasted graph is drawn again with the document's design of that name when that design
+would draw it otherwise. The graphs already in the document that draw with a design the copy or paste adds, one a copied
+design's art uses included, are drawn again with it.
 `swatch.library.copyToUser {library}` copies a loaded library into the user library folder of the desktop
 app (a library file as it is; a document's swatches or a library loaded from `data` or `dataBase64`
 as `.vcswatches`; a library with pattern swatches is refused) under a name no file there has, and lists it as User
