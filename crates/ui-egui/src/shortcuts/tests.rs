@@ -2252,8 +2252,22 @@ fn brackets_size_the_quick_pen_arc_being_dragged() {
     app.session.pointer(&PointerEvent::new(PointerKind::Down, 280.0, 300.0), v).unwrap();
     app.session.pointer(&PointerEvent::new(PointerKind::Drag, 300.0, 300.0), v).unwrap();
     assert!(app.session.tool_busy());
+    let points = |app: &VectorcraftApp| {
+        let mut v = vec![];
+        app.session.doc().unwrap().doc.walk(|n| {
+            if let Some(pd) = n.path_data() {
+                v.extend(pd.subpaths.iter().flat_map(|sp| sp.anchors.iter().map(|a| a.p)));
+            }
+        });
+        v
+    };
+    let before = points(&app);
+    assert_eq!(before.len(), 3, "the arc being dragged is drawn");
     frame(&mut app, vec![egui::Event::Text("[".into())]);
     assert_eq!(app.session.tool_options()["turn"], 165.0);
+    let after = points(&app);
+    assert_eq!(after.len(), 3);
+    assert_ne!(after[1], before[1], "the arc being dragged is drawn again with the new size");
 }
 
 fn remembered_paint_app() -> VectorcraftApp {

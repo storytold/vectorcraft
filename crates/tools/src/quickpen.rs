@@ -536,6 +536,9 @@ impl Tool for QuickPenTool {
                     }
                     _ => vec![],
                 };
+                if let Some(dr) = self.drawing.as_mut() {
+                    dr.before_press = None;
+                }
                 self.press = None;
                 self.snap.clear();
                 out

@@ -295,8 +295,8 @@ fn a_look_edit_during_a_drag_ends_the_path() {
     assert_eq!(paths(&s).len(), 2, "a new path");
 }
 
-/// An edit made by another command to another object during a drag stays: the press previews no
-/// more, and its piece stays as last shown.
+/// An edit made by another command to another object during a drag stays and ends the path: the
+/// press previews no more, its piece stays as last shown, and the next click starts a new path.
 #[test]
 fn an_edit_to_another_object_during_a_drag_stays() {
     let mut s = session();
@@ -315,6 +315,52 @@ fn an_edit_to_another_object_during_a_drag_stays() {
     let pen = paths(&s).into_iter().find(|(id, _)| *id != rect).unwrap().1;
     let ends: Vec<Point> = pen.subpaths[0].anchors.iter().map(|a| a.p).collect();
     assert_eq!(ends, [pt(100.0, 100.0), pt(200.0, 100.0), pt(200.0, 200.0)], "the piece as last shown");
+    click(&mut s, 400.0, 400.0);
+    assert_eq!(paths(&s).len(), 3, "a new path");
+}
+
+/// With Real-time Drawing off, a drag during which another command edits the path adds no piece,
+/// and the edit stays.
+#[test]
+fn an_edit_during_a_deferred_drag_stays() {
+    let mut s = session();
+    s.execute("prefs.set", &json!({"key": "realTimeDrawing", "value": false})).unwrap();
+    quick_pen(&mut s);
+    click(&mut s, 100.0, 100.0);
+    click(&mut s, 200.0, 100.0);
+    let id = paths(&s)[0].0;
+    let v = view();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 200.0, 180.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 200.0, 200.0), v).unwrap();
+    s.execute("path.moveAnchor", &json!({"id": id.0, "anchor": 0, "x": 90, "y": 90})).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 250.0, 250.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 260.0, 260.0), v).unwrap();
+    let ends: Vec<Point> = only_path(&s).anchors.iter().map(|a| a.p).collect();
+    assert_eq!(ends, [pt(90.0, 90.0), pt(200.0, 100.0)], "the edit, and no piece");
+}
+
+/// An edit made by another command to another object during a click stays, and the path goes on:
+/// a click previews its piece only when the press begins.
+#[test]
+fn an_edit_to_another_object_during_a_click_stays() {
+    let mut s = session();
+    s.execute("shape.rectangle", &json!({"x": 500, "y": 400, "width": 50, "height": 50})).unwrap();
+    let rect = s.doc().unwrap().selection.objects[0];
+    quick_pen(&mut s);
+    click(&mut s, 100.0, 100.0);
+    click(&mut s, 200.0, 100.0);
+    let v = view();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 200.0, 200.0), v).unwrap();
+    s.execute("paint.setStroke", &json!({"ids": [rect.0], "color": "#00ff00"})).unwrap();
+    let edited = s.doc().unwrap().doc.node(rect).unwrap().clone();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 200.0, 200.0), v).unwrap();
+    assert_eq!(*s.doc().unwrap().doc.node(rect).unwrap(), edited, "the other object's edit stays");
+    click(&mut s, 300.0, 200.0);
+    let all = paths(&s);
+    assert_eq!(all.len(), 2, "no new path");
+    let pen = all.into_iter().find(|(id, _)| *id != rect).unwrap().1;
+    let ends: Vec<Point> = pen.subpaths[0].anchors.iter().map(|a| a.p).collect();
+    assert_eq!(ends, [pt(100.0, 100.0), pt(200.0, 100.0), pt(200.0, 200.0), pt(300.0, 200.0)]);
 }
 
 /// An edit made by another command during a click (a press let go where it went down) ends the

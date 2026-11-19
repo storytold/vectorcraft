@@ -971,6 +971,8 @@ fn busy_tool_keys(app: &mut VectorcraftApp, ctx: &egui::Context, view: ViewInfo)
         let _ = app.session.tool_key(ToolKey::Digit(d), Mods::default(), view);
     }
     // `[` and `]` while the Quick Pen tool draws a piece: the arc being dragged takes the new size.
+    // The Blob Brush, Eraser and Symbolism tools do not get them during a press, so their size and
+    // intensity stay as they were when the press began.
     if app.session.tool_id() == vectorcraft_tools::quickpen::ID {
         tool_brackets(app, ctx, view);
     }
