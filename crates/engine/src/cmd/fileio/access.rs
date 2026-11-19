@@ -144,8 +144,9 @@ pub(crate) fn check_scripts_of(cmd: &str, doc: &vectorcraft_doc::Document, doc_p
 }
 
 /// Does a file of a document with `artboards` artboards, written in format `format` with options
-/// `p`, name the JavaScript files the document links? SVG, SVGZ, native files, native templates and
-/// EPS files always do. A `.ai` or `.ait` file does unless it is a legacy version 7 `.ai` file or `p`
+/// `p`, name the JavaScript files the document links? SVG, SVGZ, native files, native templates,
+/// EPS files and the files of an exporter plug-in's format (`plugin.<id>`, whose plug-in is given
+/// the native document's JSON) always do. A `.ai` or `.ait` file does unless it is a legacy version 7 `.ai` file or `p`
 /// picks only some of the artboards; a PDF does with Preserve Editing on (as its preset, standard and
 /// options leave it) unless `p` picks only some of the artboards. Neither a `.ai` file nor a PDF
 /// does when `useArtboards` is false in `p` (one page, the bounds of the art). Options the encoder
@@ -159,6 +160,7 @@ pub(crate) fn names_linked_scripts(cmd: &str, format: &str, p: &Value, artboards
     let art_page = || super::encode::use_artboards(cmd, p).is_ok_and(|u| u == Some(false));
     match format {
         "svg" | "svgz" | "vectorcraft" | "template" | "eps" => true,
+        _ if vectorcraft_plugins::export::plugin_id(format).is_some() => true,
         "ai" | "ait" => {
             let legacy = super::format(format).is_some_and(|f| super::legacy_ai::wanted(cmd, f, p).unwrap_or(false));
             !legacy && !(format == "ai" && art_page()) && every_artboard()
@@ -171,13 +173,14 @@ pub(crate) fn names_linked_scripts(cmd: &str, format: &str, p: &Value, artboards
     }
 }
 
-/// The error for an SVG that would name a linked image's file outside the read roots.
+/// The error for a file that would name a linked image's file outside the read roots.
 pub(crate) const IMAGE_OUTSIDE: &str = "a linked image file is outside the read roots";
 
 /// `cmd` may write `d`, the document an output of `st` writes (all of it, or the objects it
-/// exports), in format `format` (a format id) with options `p`: any format but SVG and SVGZ, and
-/// those too unless read roots are in force and the file would name a linked image's file outside
-/// them (a relative path taken from `st`'s folder; a URL is not checked). An `<image>` names the
+/// exports), in format `format` (a format id) with options `p`: always, unless read roots are in
+/// force and the file would name a linked image's file outside them (a relative path taken from
+/// `st`'s folder; a URL is not checked). In any format but SVG and SVGZ, the file names them when it
+/// carries the native document ([`check_native_images`]). An `<image>` names the
 /// file with SVG Options › Images set to Link, and with Embed when the document holds no pixels for
 /// the image, for the images of the art each file draws (with chosen artboards, the art over each
 /// one; hidden layers and objects only with `hiddenLayers`, template layers and the opacity-mask
@@ -193,8 +196,11 @@ pub fn check_linked_images(cmd: &str, format: &str, st: &crate::DocState, d: &ve
 /// [`check_linked_images`] for `d`, a document whose links are looked for from `base` (the
 /// objects on the clipboard, looked for from the document they came from).
 pub(crate) fn check_images_in(cmd: &str, format: &str, d: &vectorcraft_doc::Document, base: crate::cmd::links::LinkBase, p: &Value) -> Result<()> {
-    if !matches!(format, "svg" | "svgz") || crate::file_access::current().is_none() {
+    if crate::file_access::current().is_none() {
         return Ok(());
+    }
+    if !matches!(format, "svg" | "svgz") {
+        return check_native_images(cmd, format, d, base, p);
     }
     // Options that don't read as the encoder's choices count as Link, Preserve Editing, hidden
     // layers kept and SVG 1.1: the encoder refuses them anyway.
@@ -220,6 +226,39 @@ pub(crate) fn check_images_in(cmd: &str, format: &str, d: &vectorcraft_doc::Docu
         return Err(bad(cmd, IMAGE_OUTSIDE));
     }
     Ok(())
+}
+
+/// `cmd` may write `d` in format `format` (a format id other than SVG and SVGZ) with options `p`:
+/// always, unless read roots are in force, the file carries the native document (a native file or
+/// template, an EPS file, a `.ai` or `.ait` file, a PDF with Preserve Editing or an exporter
+/// plug-in's file, as
+/// [`names_linked_scripts`] counts them with `d`'s artboards) and that document names a file
+/// outside them ([`crate::cmd::links::names_hidden_file`]: a linked image or placed file, the
+/// relative path kept of one taken from `base`, a data set's image, or stored brushes that can't be
+/// read). The error names no file or folder.
+pub(crate) fn check_native_images(
+    cmd: &str,
+    format: &str,
+    d: &vectorcraft_doc::Document,
+    base: crate::cmd::links::LinkBase,
+    p: &Value,
+) -> Result<()> {
+    let carried =
+        crate::file_access::current().is_some() && !matches!(format, "svg" | "svgz") && names_linked_scripts(cmd, format, p, d.artboards.len());
+    if carried && crate::cmd::links::names_hidden_file(d, base) { Err(bad(cmd, IMAGE_OUTSIDE)) } else { Ok(()) }
+}
+
+/// `doc` as a file written for the request being served carries it: without an Export for Screens
+/// `folder` outside the read roots ([`super::screens::leave_out_unreadable_settings_folder`]). The
+/// open document keeps it.
+pub(crate) fn with_readable_settings_folder(doc: &vectorcraft_doc::Document) -> std::borrow::Cow<'_, vectorcraft_doc::Document> {
+    let settings = super::screens::leave_out_unreadable_settings_folder(doc.export_settings.clone());
+    if settings.len() == doc.export_settings.len() {
+        return std::borrow::Cow::Borrowed(doc);
+    }
+    let mut kept = doc.clone();
+    kept.export_settings = settings;
+    std::borrow::Cow::Owned(kept)
 }
 
 /// `path` checked for writing against the automation roots in force.
@@ -258,7 +297,17 @@ pub(crate) fn write_file(path: &str, bytes: &[u8]) -> Result<()> {
     vectorcraft_doc::cancel::check()?;
     may_write(path)?;
     // Never a half-written file: see [`write_atomic`].
-    write_atomic(std::path::Path::new(path), bytes).map_err(|e| EngineError::Other(format!("{path}: {e}")))
+    write_atomic(std::path::Path::new(path), bytes).map_err(|e| write_error(path, e))
+}
+
+/// The error writing `path` failed with: [`EngineError::Cancelled`] for work canceled before the
+/// file was put in place ([`vectorcraft_format::write_atomic_with`]), otherwise the path and the reason.
+#[cfg(not(target_arch = "wasm32"))]
+fn write_error(path: &str, error: std::io::Error) -> EngineError {
+    if error.get_ref().is_some_and(|e| e.is::<vectorcraft_doc::cancel::Cancelled>()) {
+        return EngineError::Cancelled;
+    }
+    EngineError::Other(format!("{path}: {error}"))
 }
 
 /// [`write_file`] with what `fill` writes into the file (a save streamed into it).
@@ -266,7 +315,7 @@ pub(crate) fn write_file(path: &str, bytes: &[u8]) -> Result<()> {
 pub fn write_file_with(path: &str, fill: &mut dyn FnMut(&mut dyn std::io::Write) -> std::io::Result<()>) -> Result<()> {
     vectorcraft_doc::cancel::check()?;
     may_write(path)?;
-    vectorcraft_format::write_atomic_with(std::path::Path::new(path), |f| fill(f)).map_err(|e| EngineError::Other(format!("{path}: {e}")))
+    vectorcraft_format::write_atomic_with(std::path::Path::new(path), |f| fill(f)).map_err(|e| write_error(path, e))
 }
 
 /// The save commands' writer: preserves a filesystem location refusal as a typed error. Other
@@ -285,8 +334,10 @@ pub fn write_save_file_with(path: &str, fill: &mut dyn FnMut(&mut dyn std::io::W
 
 #[cfg(not(target_arch = "wasm32"))]
 pub(super) fn save_write_error(path: &str, error: std::io::Error) -> EngineError {
-    let reason = format!("{path}: {error}");
-    if vectorcraft_format::read_only_location(&error) { EngineError::ReadOnlyLocation(reason) } else { EngineError::Other(reason) }
+    if !vectorcraft_format::read_only_location(&error) {
+        return write_error(path, error);
+    }
+    EngineError::ReadOnlyLocation(format!("{path}: {error}"))
 }
 
 #[cfg(target_arch = "wasm32")]
