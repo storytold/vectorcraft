@@ -68,6 +68,7 @@ pub(super) const CLIP_PAINT: &str = "the fills and strokes of clipping paths tha
 pub(super) const CLIP_PAINT_MASKS: &str = "the opacity masks of clipping paths whose fills and strokes are written as paths of their own stay on the clipping path, not on those paths, in the editing data for other apps";
 pub(super) const LIVE: &str =
     "repeats, placed documents, intertwines and distorted images are written as their art in the editing data for other apps";
+pub(super) const DEEP_DISTORTED: &str = "images changed by Perspective Distort or Free Distort more than 8 deep in opacity masks, symbols, live objects and pattern tiles are written as the nearest parallelogram in the editing data for other apps";
 pub(super) const GRAPHS: &str = "graphs are written as their art, without their data or settings, in the editing data for other apps";
 pub(super) const STROKES: &str = "strokes a plain line can't draw (inside or outside the path, variable width, dots, dashes fitted to corners, gradients, patterns, arrowheads) are written as filled outlines, and brushed strokes as their brush's art, in the editing data for other apps";
 pub(super) const ITEM_TRANSPARENCY: &str =
@@ -800,7 +801,7 @@ impl<'a> Writer<'a> {
             }
             NodeKind::Compound { rule, .. } => self.shape(n, &compound_path(n), *rule, xy),
             NodeKind::Text(_) => self.text(n, xy),
-            NodeKind::Image(_) if n.is_distorted_image() => self.drawn_art(n, xy, Some(LIVE), true),
+            NodeKind::Image(im) if n.is_distorted_image() => self.distorted_image(n, im, xy),
             NodeKind::Image(im) => {
                 // An opacity mask that clips shows the image within what its art paints only (its
                 // effects and its symbol instances' art included, as the renderer measures it).
@@ -944,6 +945,18 @@ impl<'a> Writer<'a> {
             }
         }
         self.warn(GRAPHS);
+    }
+
+    /// Distorted image `n` (`im`), of transparency `xy`: the mesh of its pieces while the art may
+    /// nest further, else one image at the placement nearest its corners, with a warning.
+    fn distorted_image(&mut self, n: &Node, im: &vectorcraft_doc::ImageObject, xy: Xy) {
+        if self.nest < MAX_NEST {
+            return self.drawn_art(n, xy, Some(LIVE), true);
+        }
+        let Some(near) = vectorcraft_doc::image_quad::nearest_affine(n) else { return };
+        self.warn(DEEP_DISTORTED);
+        self.windowed = None;
+        self.image(&vectorcraft_doc::ImageObject { xf: near, ..self.doc.shown_image(n, im).into_owned() }, xy);
     }
 
     /// Live object `n`, of transparency `xy`, as a group of its art, with `warning` when it is given.

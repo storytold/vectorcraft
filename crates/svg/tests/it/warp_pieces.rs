@@ -172,16 +172,10 @@ fn hidden_warp_pieces_share_no_image() {
 /// quad is not.
 #[test]
 fn a_distorted_image_is_written_between_its_corners() {
-    let mut d = warped_pixels(&|p| p, false, [255, 0, 0, 255], |_| {});
-    let layer = std::sync::Arc::make_mut(&mut d.layers[0]);
-    let kids = layer.children_mut().unwrap();
-    let NodeKind::Group { children, .. } = &kids[0].kind else { panic!("the pieces") };
-    let NodeKind::Image(im) = &children[0].children().unwrap()[1].kind else { panic!("an image") };
-    let mut n =
-        Node::new(kids[0].id, NodeKind::Image(Box::new(ImageObject { xf: Affine::translate((10.0, 10.0)) * Affine::scale(20.0), ..(**im).clone() })));
     let q = [(40.0, 10.0), (60.0, 10.0), (90.0, 90.0), (10.0, 90.0)].map(|(x, y)| Point::new(x, y));
-    n.set_image_corners(q).unwrap();
-    kids[0] = std::sync::Arc::new(n);
+    let mut d = Document::new(100.0, 100.0);
+    let n = distorted_image(&mut d, q, 4);
+    d.insert(d.default_layer(), 0, n).unwrap();
     let svg = export_full(&d, &ExportOptions::default(), None).svg;
     let tree = resvg::usvg::Tree::from_str(&svg, &resvg::usvg::Options::default()).unwrap();
     let mut pixmap = resvg::tiny_skia::Pixmap::new(400, 400).unwrap();
@@ -196,6 +190,55 @@ fn a_distorted_image_is_written_between_its_corners() {
     // The rectangle's top corners lie outside the quad.
     assert_eq!(alpha(14.0, 14.0), 0);
     assert_eq!(alpha(86.0, 14.0), 0);
+}
+
+/// A plain opaque red `px` × `px` image over (10, 10)–(90, 90), its corners moved to `q`.
+fn distorted_image(d: &mut Document, q: [Point; 4], px: u32) -> Node {
+    let img = craft_image_codecs::Image::from_raw(
+        px,
+        px,
+        craft_image_codecs::ChannelLayout::Rgba,
+        craft_image_codecs::SampleType::U8,
+        [255, 0, 0, 255].repeat((px * px) as usize),
+    )
+    .unwrap();
+    let png = craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap();
+    d.images.insert("pic".into(), ImageBlob::png(png));
+    let im = ImageObject {
+        key: "pic".into(),
+        width: px,
+        height: px,
+        xf: Affine::translate((10.0, 10.0)) * Affine::scale(80.0 / f64::from(px)),
+        link: None,
+        placement: Default::default(),
+        pixels: None,
+    };
+    let mut n = Node::new(d.alloc_id(), NodeKind::Image(Box::new(im)));
+    n.set_image_corners(q).unwrap();
+    n
+}
+
+/// A distorted image in a symbol instance that scales it is cut into as many pieces as the same
+/// image placed directly at that size.
+#[test]
+fn a_distorted_image_in_a_scaled_instance_is_cut_as_finely_as_one_placed_directly() {
+    let q = [(40.0, 10.0), (60.0, 10.0), (90.0, 90.0), (10.0, 90.0)].map(|(x, y)| Point::new(x, y));
+    let pieces = |d: &Document| export_full(d, &ExportOptions::default(), None).svg.matches("<clipPath").count();
+    let mut direct = Document::new(400.0, 400.0);
+    let mut n = distorted_image(&mut direct, q, 64);
+    n.transform(Affine::scale(4.0), false);
+    direct.insert(direct.default_layer(), 0, n).unwrap();
+    let in_instance = |scale: f64| {
+        let mut d = Document::new(400.0, 400.0);
+        let n = distorted_image(&mut d, q, 64);
+        d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Pic".into(), art: std::sync::Arc::new(n) });
+        let inst = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Pic".into(), xf: Affine::scale(scale) });
+        d.insert(d.default_layer(), 0, inst).unwrap();
+        d
+    };
+    let (want, unscaled, scaled) = (pieces(&direct), pieces(&in_instance(1.0)), pieces(&in_instance(4.0)));
+    assert!(scaled > unscaled, "{scaled} {unscaled}");
+    assert!(scaled.abs_diff(want) * 10 <= want, "{scaled} against {want}");
 }
 
 /// Pieces of an opaque image are drawn one over another without knockout masks; a colorize paint

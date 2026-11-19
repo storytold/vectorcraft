@@ -175,9 +175,15 @@ fn warp_node(n: &mut Node, pr: &Projective) -> Option<Rect> {
     before
 }
 
-/// Whether `pr` takes the corners of `src` to `q`, within a millionth of `q`'s shortest side plus
-/// the rounding error of coordinates as far from the origin as `q`'s.
-fn reaches_corners(pr: &Projective, src: OrientedBox, q: [Point; 4]) -> bool {
+/// Whether the warp from `src` to `q` ([`Projective::from_box`]) takes the corners of `src` to `q`,
+/// within a millionth of `q`'s shortest side plus the rounding error of coordinates as far from `q`'s
+/// first corner as the others. The warp is solved and measured with `src` and `q` moved to the
+/// origin, so coordinates far from it do not widen the allowance.
+fn reaches_corners(src: OrientedBox, q: [Point; 4]) -> bool {
+    let origin = q[0].to_vec2();
+    let q = q.map(|p| p - origin);
+    let src = OrientedBox { rect: src.rect - src.rect.origin().to_vec2(), ..src };
+    let pr = Projective::from_box(src, q);
     let side = (0..4).map(|i| q[i].distance(q[(i + 1) % 4])).fold(f64::INFINITY, f64::min);
     let far = q.iter().map(|p| p.x.abs().max(p.y.abs())).fold(0.0, f64::max);
     let tol = side * 1e-6 + far * 1e-12;
@@ -317,7 +323,7 @@ fn distort(s: &mut Session, p: &Value) -> Result<Value> {
     }
     // Corners so close together that the map falls back to an affine one: the box's corners do
     // not reach the handles, so an image cannot follow them either.
-    if !reaches_corners(&pr, src, [tl, tr, br, bl])
+    if !reaches_corners(src, [tl, tr, br, bl])
         && let Some(id) = ids.iter().filter_map(|id| doc.node(*id)).find_map(first_image)
     {
         return Err(unwarpable_error(id, Unwarpable::TooNarrow));

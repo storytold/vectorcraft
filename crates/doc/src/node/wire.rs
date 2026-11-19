@@ -255,12 +255,55 @@ pub(super) struct NodeWire {
     warp_piece: bool,
     #[serde(default)]
     clip_pieces: bool,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "image_corners")]
     image_quad: Option<Box<[vectorcraft_geom::Point; 4]>>,
+}
+
+/// A distorted image's corners as a file holds them: a list of exactly four points, else none (the
+/// image is then placed by its transform). At most five points of a longer list are kept while it
+/// is read.
+fn image_corners<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<Box<[vectorcraft_geom::Point; 4]>>, D::Error> {
+    use vectorcraft_geom::Point;
+    struct Corners;
+    impl<'de> serde::de::Visitor<'de> for Corners {
+        type Value = Option<Box<[Point; 4]>>;
+        fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            f.write_str("a list of points")
+        }
+        fn visit_none<E: serde::de::Error>(self) -> Result<Self::Value, E> {
+            Ok(None)
+        }
+        fn visit_unit<E: serde::de::Error>(self) -> Result<Self::Value, E> {
+            Ok(None)
+        }
+        fn visit_some<D: serde::Deserializer<'de>>(self, d: D) -> Result<Self::Value, D::Error> {
+            d.deserialize_seq(Corners)
+        }
+        fn visit_seq<A: serde::de::SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+            let mut points = Vec::with_capacity(4);
+            while points.len() < 4
+                && let Some(p) = seq.next_element::<Point>()?
+            {
+                points.push(p);
+            }
+            // A fifth entry drops the field, so the rest is skipped without decoding it.
+            let mut extra = false;
+            while seq.next_element::<serde::de::IgnoredAny>()?.is_some() {
+                extra = true;
+            }
+            Ok(if extra { None } else { <[Point; 4]>::try_from(points).ok().map(Box::new) })
+        }
+    }
+    d.deserialize_option(Corners)
 }
 
 impl From<NodeWire> for Node {
     fn from(w: NodeWire) -> Self {
+        // Corners an image cannot take are dropped, so a later transform cannot make them its own.
+        let image_quad = match &w.kind {
+            NodeKind::Image(im) => w.image_quad.filter(|q| crate::image_quad::check_for(im, q).is_ok()),
+            _ => None,
+        };
         let extras = NodeExtras {
             mask: w.mask,
             trace: w.trace,
@@ -288,7 +331,7 @@ impl From<NodeWire> for Node {
             color_mask: w.color_mask,
             warp_piece: w.warp_piece,
             clip_pieces: w.clip_pieces,
-            image_quad: w.image_quad,
+            image_quad,
         };
         Node {
             id: w.id,

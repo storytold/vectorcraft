@@ -160,7 +160,8 @@ fn outline_mode_paints_a_distorted_images_pixels_once_where_its_pieces_overlap()
     d.insert(Some(d.layers[0].id), 0, n).unwrap();
     let r = Renderer::new().render(&d, 400, 400, Affine::scale(4.0), &RenderOptions { outline: true, background: None, ..Default::default() });
     let preview = drawn(&d);
-    assert!(preview.pixel(200, 200)[3] > 32);
+    let a = preview.pixel(200, 200)[3];
+    assert!(a.abs_diff(128) <= 4, "the image's own alpha inside it: {a}");
     let mut off = vec![];
     for y in 80..320 {
         for x in 100..300 {
@@ -187,4 +188,12 @@ fn the_canvas_cuts_a_distorted_images_mesh_for_the_zoom() {
     let mut pieces = |scale: f64| vectorcraft_doc::image_quad::distorted_pieces(&r.distorted_art(&n, Affine::scale(scale), false).unwrap()).len();
     let (small, large) = (pieces(1.0 / 25.0), pieces(8.0));
     assert!(small < page && page < large, "{small} {page} {large}");
+    // A view that stretches one way and squeezes the other as much keeps its area, and still
+    // takes a finer mesh than an unscaled one.
+    let (plain, stretched) = (pieces(1.0), r_pieces(&n, Affine::scale_non_uniform(16.0, 1.0 / 16.0)));
+    assert!(stretched > plain, "{stretched} {plain}");
+}
+
+fn r_pieces(n: &std::sync::Arc<Node>, view: Affine) -> usize {
+    vectorcraft_doc::image_quad::distorted_pieces(&Renderer::new().distorted_art(n, view, false).unwrap()).len()
 }

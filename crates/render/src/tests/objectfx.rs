@@ -633,6 +633,8 @@ fn a_distorted_image_is_opaque_between_its_corners_and_its_shadow_follows_them()
     assert_eq!(faded, vec![], "the image's red, also where its pieces meet");
     assert!(lum(img.pixel(40, 55)) < 100, "the shadow below the quad: {:?}", img.pixel(40, 55));
     assert_eq!(lum(img.pixel(24, 28)), WHITE, "outside the quad, inside the old rectangle");
+    // The rectangle's shadow would reach (58, 36); the quad's shadow ends at x = 56 there.
+    assert_eq!(lum(img.pixel(58, 36)), WHITE, "outside the quad's shadow, inside the rectangle's");
 }
 
 /// A distorted opaque image draws opaque inside its corners at any zoom, where the pieces of its

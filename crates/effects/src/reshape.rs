@@ -3734,9 +3734,12 @@ fn restore_warped_images(n: &mut Node, warped: &WarpedImages, cut: bool) {
         // The pieces start from the image as it was placed when it took its first warp.
         let first = warps.first().map(|(_, at)| ImageObject { xf: *at, ..(**own).clone() });
         let map = warped_map(warps, own.xf);
-        let back = warps.first().map(|(_, at)| *at * own.xf.inverse());
+        // A placement with no inverse cannot take a distorted image's corners back.
+        let det = own.xf.determinant();
+        let back = warps.first().filter(|_| det.is_finite() && det != 0.0).map(|(_, at)| *at * own.xf.inverse()).filter(Affine::is_finite);
+        let distorted = image.extras().image_quad.is_some();
         *c = Arc::new(match (first, map) {
-            (Some(first), Some(map)) if cut => {
+            (Some(first), Some(map)) if cut && (back.is_some() || !distorted) => {
                 // A distorted image's corners go back to where they stood at its first warp, as
                 // its placement does: the moves since then are in `map`.
                 if let Some(back) = back

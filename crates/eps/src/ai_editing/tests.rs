@@ -2432,6 +2432,26 @@ fn an_unpainted_paths_transparency_after_a_compound_path_is_its_own() {
     assert_eq!((art[0].opacity, art[0].blend, art[1].opacity, art[1].blend), (1.0, BlendMode::Normal, 0.5, BlendMode::Multiply));
 }
 
+/// A distorted image as deep as the writer goes, in the art of 8 nested opacity masks, is written
+/// as one image at the placement nearest its corners, with a warning, not left out.
+#[test]
+fn a_distorted_image_nested_as_deep_as_the_limit_is_written_as_its_nearest_placement() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let mut n = image_node(&mut doc, ImageBlob::png(rgb_png()), (3, 2), Affine::translate((10.0, 10.0)) * Affine::scale(10.0), None);
+    n.set_image_corners([(14.0, 10.0), (36.0, 10.0), (40.0, 30.0), (10.0, 30.0)].map(|(x, y)| vectorcraft_geom::Point::new(x, y))).unwrap();
+    for _ in 0..8 {
+        let mut owner = square(&mut doc, Rect::new(10.0, 10.0, 40.0, 30.0), Color::gray(0.5));
+        owner.extras_mut().mask = Some(Box::new(OpacityMask::new(n, true)));
+        n = owner;
+    }
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::DEEP_DISTORTED), "{:?}", out.warnings);
+    // The samples are binary: count the `XI` lines in the bytes.
+    assert_eq!(out.program.windows(4).filter(|w| w == b"XI\r\n").count(), 1, "the one image");
+}
+
 /// Opacity masks in mask art nested past the limit are left out, not written empty.
 #[test]
 fn opacity_masks_nested_too_deep_are_left_out() {

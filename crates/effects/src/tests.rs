@@ -504,6 +504,38 @@ fn warped_images_keep_document_keys_and_hidden_images_apart() {
     }
 }
 
+/// A distorted image that a later effect leaves with no area after its warp is not cut, and its
+/// corners stay finite.
+#[test]
+fn a_distorted_image_left_with_no_area_after_its_warp_keeps_finite_corners() {
+    use std::rc::Rc;
+    use std::sync::Arc;
+
+    use vectorcraft_doc::NodeId;
+    let lift: crate::reshape::WarpMap = Rc::new(|p: Point| Point::new(p.x, p.y - p.x * 0.1));
+    let mut image = (*warp_test_image(2)).clone();
+    image.set_image_corners([(10.0, 0.0), (30.0, 0.0), (40.0, 40.0), (0.0, 40.0)].map(|(x, y)| Point::new(x, y))).unwrap();
+    let mut art = Node::group(NodeId(1), vec![Arc::new(image)]);
+    let mut warped = crate::reshape::WarpedImages::new();
+    warped.reserve(&art);
+    crate::reshape::mark_warped_images(&mut art, &lift, &std::collections::HashSet::new(), false, &mut 0, &mut warped);
+    // A later effect squeezes the placement flat.
+    if let Some(c) = art.children_mut()
+        && let NodeKind::Image(im) = &mut Arc::make_mut(&mut c[0]).kind
+    {
+        im.xf = Affine::scale_non_uniform(1.0, 0.0);
+    }
+    crate::reshape::cut_warped_images_within(&mut art, &warped, usize::MAX);
+    let mut finite = true;
+    art.walk(&mut |c| {
+        if let Some(q) = c.extras().image_quad.as_deref() {
+            finite &= q.iter().all(|p| p.x.is_finite() && p.y.is_finite());
+        }
+    });
+    assert!(finite);
+    assert_eq!(warp_test_images(&art).0, 1, "not cut");
+}
+
 /// An image whose frame keeps its shape because the warp would pass the anchor budget keeps its
 /// pixels as they are; within the budget, both bend.
 #[test]

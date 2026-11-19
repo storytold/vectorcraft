@@ -997,6 +997,22 @@ fn a_distorted_image_is_written_as_its_nearest_parallelogram_with_a_warning() {
     let out = export(&d, &opts(&d)).unwrap();
     assert!(warned(&out), "{:?}", out.warnings);
     assert_eq!(kinds(&out).iter().filter(|k| *k == "IMAGE").count(), 1, "{:?}", kinds(&out));
+    // Placed as an undistorted image with the nearest affine placement as its transform would be.
+    let near = vectorcraft_doc::image_quad::nearest_affine(d.node(id).unwrap()).unwrap();
+    let mut plain = d.clone();
+    let n = plain.node_mut(id).unwrap();
+    n.extras_mut().image_quad = None;
+    if let NodeKind::Image(im) = &mut n.kind {
+        im.xf = near;
+    }
+    let placement = |o: &DxfOutput| {
+        let e = entities(o).into_iter().find(|e| kind(e) == "IMAGE").expect("an IMAGE");
+        [10, 20, 11, 21, 12, 22].map(|c| all(&e, c))
+    };
+    assert_eq!(placement(&out), placement(&export(&plain, &opts(&plain)).unwrap()));
+    // With images left out, no IMAGE is written and the distortion warning does not appear.
+    let left_out = export(&d, &DxfOptions { include_images: false, ..opts(&d) }).unwrap();
+    assert!(!warned(&left_out), "{:?}", left_out.warnings);
 }
 
 #[test]

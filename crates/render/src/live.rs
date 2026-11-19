@@ -527,11 +527,11 @@ impl Renderer {
     }
 
     /// Distorted image `a`'s art for drawing through `view`
-    /// ([`vectorcraft_doc::image_quad::distorted_art_at`] at the view's scale, rounded to a quarter
-    /// of an octave), kept with `cache` while the node stays the same. `None` when `a` is not a
-    /// distorted image.
+    /// ([`vectorcraft_doc::image_quad::distorted_art_at`] at the view's largest stretch, rounded to
+    /// a quarter of an octave), kept with `cache` while the node stays the same. `None` when `a` is
+    /// not a distorted image.
     pub(crate) fn distorted_art(&mut self, a: &Arc<Node>, view: Affine, cache: bool) -> Option<Arc<Node>> {
-        let scale = view.determinant().abs().sqrt();
+        let scale = vectorcraft_doc::image_quad::max_stretch(view);
         let step = if scale.is_finite() && scale > 0.0 { (scale.log2() * 4.0).round().clamp(-256.0, 256.0) } else { 0.0 };
         let key = (Arc::as_ptr(a) as usize, (step + 256.0) as usize);
         if cache

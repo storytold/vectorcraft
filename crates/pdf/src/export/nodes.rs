@@ -374,9 +374,8 @@ impl Exporter<'_> {
         let (mut pushes, isolated_children) = transparency(s, n, page, container, knockout);
         let mask = n.extras().mask.as_deref().filter(|m| !m.disabled);
         let alpha = match (&n.kind, mask) {
-            (NodeKind::Image(im), Some(m)) if !n.is_distorted_image() && !m.art.is_distorted_image() => {
-                self.masked_image(im, m, !n.extras().pixelated)
-            }
+            // The mask's image shares the pixel grid only when it has the same corners (or none).
+            (NodeKind::Image(im), Some(m)) if n.image_quad() == m.art.image_quad() => self.masked_image(im, m, !n.extras().pixelated),
             _ => None,
         };
         if let Some(m) = mask
@@ -444,7 +443,11 @@ impl Exporter<'_> {
                         self.warn(super::exporter::UNWRITABLE_IMAGE);
                     }
                 }
-                (_, im) => self.image(s, &im, alpha, n.extras().pixelated),
+                (_, im) => {
+                    // A piece of a distorted image draws the image its mask was written into.
+                    let alpha = alpha.or_else(|| self.piece_image.as_ref().filter(|(key, _)| *key == im.key).map(|(_, i)| i.clone()));
+                    self.image(s, &im, alpha, n.extras().pixelated)
+                }
             },
             NodeKind::SymbolInstance { symbol, xf } => {
                 // Within the objects a frame may draw of symbol instances, as on screen: nested
@@ -500,8 +503,17 @@ impl Exporter<'_> {
             | NodeKind::Intertwine { .. }
             | NodeKind::Image(_) => {
                 let g = vectorcraft_effects::expand_live_deep(Some(self.doc), n);
+                // The pieces draw the image as it is shown, under its color mask's key.
+                let piece = match (&n.kind, &alpha) {
+                    (NodeKind::Image(im), Some(img)) => Some((self.doc.shown_image(n, im).key.clone(), img.clone())),
+                    _ => None,
+                };
+                let outer = piece.map(|p| self.piece_image.replace(p));
                 for c in g.children().into_iter().flatten() {
                     self.node(s, c, page, false);
+                }
+                if let Some(outer) = outer {
+                    self.piece_image = outer;
                 }
             }
             // Ruler guides draw on screen only.
