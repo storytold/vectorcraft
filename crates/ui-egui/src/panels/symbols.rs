@@ -608,13 +608,13 @@ fn alt_at_release(ui: &Ui) -> bool {
 
 /// The modifiers held for a click on the widget whose interact rectangle is `rect`: when the
 /// primary button last went up in this frame as a click (the pointer stayed within egui's click
-/// distance of where the button went down) over `rect` or within egui's interact radius of it
-/// (egui counts a release that close as a click on the widget), as it went up (egui reports the
-/// click of the last such release in the frame), else now, as for a click from the keyboard or a
-/// screen reader. A release that ends a drag is not a click and is skipped, also when the drag
-/// began in an earlier frame. `pointer` is whether egui reports the widget clicked by the primary
-/// button; when it is false, the click came from the keyboard or a screen reader and the modifiers
-/// held now are used.
+/// distance of where the button went down) after going down over `rect` or within egui's interact
+/// radius of it (egui gives a press that close to the widget), as it went up (egui reports the
+/// click of the last such release in the frame); else, when no such click happened in this frame,
+/// as the first release of the frame went up, which ends a press of an earlier frame that egui
+/// counted as the click; else now. A release that ends a drag is not a click and is skipped.
+/// `pointer` is whether egui reports the widget clicked by the primary button; when it is false,
+/// the click came from the keyboard or a screen reader and the modifiers held now are used.
 fn modifiers_released_in(ui: &Ui, rect: egui::Rect, pointer: bool) -> egui::Modifiers {
     if !pointer {
         return ui.input(|i| i.modifiers);
@@ -629,7 +629,7 @@ fn modifiers_released_in(ui: &Ui, rect: egui::Rect, pointer: bool) -> egui::Modi
         // Whether a button went down earlier in this frame; until one does, a release ends a press
         // of an earlier frame.
         let mut pressed_here = false;
-        // The modifiers of the release over `rect` that ends a press of an earlier frame.
+        // The modifiers of the release that ends a press of an earlier frame.
         let mut early = None;
         let mut found = None;
         for e in &i.events {
@@ -644,10 +644,10 @@ fn modifiers_released_in(ui: &Ui, rect: egui::Rect, pointer: bool) -> egui::Modi
                 }
                 egui::Event::PointerButton { pos, button, pressed: false, modifiers } => {
                     moved |= origin.is_some_and(|o| o.distance(*pos) > max_click_dist);
-                    let over = rect.distance_sq_to_pos(*pos) <= radius * radius;
+                    let over = origin.is_some_and(|o| rect.distance_sq_to_pos(o) <= radius * radius);
                     if *button == egui::PointerButton::Primary {
                         if !pressed_here {
-                            early = over.then_some(*modifiers);
+                            early = early.or(Some(*modifiers));
                         } else if !moved && over {
                             found = Some(*modifiers);
                         }
@@ -1341,6 +1341,36 @@ mod tests {
         let at = pos2(b.x0 as f32 - 2.0, ((b.y0 + b.y1) / 2.0) as f32);
         let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers };
         let events = vec![egui::Event::PointerMoved(at), press(true), press(false), egui::Event::ModifiersChanged(egui::Modifiers::NONE)];
+        frame_held(&ctx, &mut app, events, modifiers);
+        assert_eq!(dialog_kind(&app), None, "Alt skips Symbol Options");
+        assert_eq!(symbols(&mut app), ["Leaf", "Dot", "New Symbol"]);
+        assert_eq!(art(&app, "New Symbol"), (0, 1), "Shift: the rectangle stays ordinary art");
+    }
+
+    /// A click that goes down on the edge of New Symbol and, in the next frame, up past egui's
+    /// interact radius but within its click distance counts as a click on it and reads Shift and Alt
+    /// as the button goes up, though they are let go later in the same frame.
+    #[test]
+    fn a_click_released_past_the_interact_radius_reads_the_modifiers_as_the_button_goes_up() {
+        let (mut app, _) = leaf_dot_and_rect();
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let modifiers = egui::Modifiers::SHIFT | egui::Modifiers::ALT;
+        let out = frame_held(&ctx, &mut app, vec![], modifiers);
+        let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
+        let b = nodes
+            .iter()
+            .find(|(_, n)| n.label().is_some_and(|l| l.trim() == "New Symbol"))
+            .and_then(|(_, n)| n.bounds())
+            .expect("a New Symbol button");
+        let y = ((b.y0 + b.y1) / 2.0) as f32;
+        let (down, up) = (pos2(b.x0 as f32 + 0.5, y), pos2(b.x0 as f32 - 5.4, y));
+        let radius = ctx.global_style().interaction.interact_radius;
+        let max_click_dist = ctx.options(|o| o.input_options.max_click_dist);
+        assert!(down.distance(up) <= max_click_dist && b.x0 as f32 - up.x > radius, "the release is a click outside the radius");
+        let button = |at, pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers };
+        frame_held(&ctx, &mut app, vec![egui::Event::PointerMoved(down), button(down, true)], modifiers);
+        let events = vec![egui::Event::PointerMoved(up), button(up, false), egui::Event::ModifiersChanged(egui::Modifiers::NONE)];
         frame_held(&ctx, &mut app, events, modifiers);
         assert_eq!(dialog_kind(&app), None, "Alt skips Symbol Options");
         assert_eq!(symbols(&mut app), ["Leaf", "Dot", "New Symbol"]);
