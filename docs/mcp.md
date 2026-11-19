@@ -686,7 +686,7 @@ strip at its right) in place of the wheel, as the panel menu's Box View and Box 
 shows the wheel again. `{"harmony": true, "harmonyRule": "triad"}` puts a marker on the wheel's ring for each other
 color of a Color Guide harmony rule, as Show Harmony and Harmony Rule do; the wheel takes the 15 rules whose colors
 each have a hue of their own (not `monochromatic`, `shades`, `complementary2`, `triad2`, `triad3` or
-`highContrast2`). Keys left out keep their values. Params that are not an object, another key or a value off
+`highContrast2`). Keys left out or `null` keep their values. Params that are not an object, another key or a value off
 the list return an error and change nothing. The command returns `{view, channel, sliders, harmony, harmonyRule, vision}`,
 and the settings are kept with the preferences.
 

@@ -1066,15 +1066,17 @@ fn the_remembered_hsl_follows_a_change_of_working_space() {
 fn saved_color_wheel_settings_are_read_leniently() {
     let mut saved = serde_json::to_value(crate::UiState::default()).unwrap();
     saved["color_rgb_percent"] = json!(true);
-    for (value, sliders) in [
-        (json!({"sliders": "oklch"}), Sliders::Oklch),
-        (json!({"sliders": "hsl"}), Sliders::Hsl),
-        (json!({"sliders": "hwb", "view": "box"}), Sliders::None),
-        (json!(5), Sliders::None),
+    let wheel = crate::panels::color_wheel::View::Wheel;
+    let box_view = crate::panels::color_wheel::View::Box;
+    for (value, sliders, view) in [
+        (json!({"sliders": "oklch"}), Sliders::Oklch, wheel),
+        (json!({"sliders": "hsl"}), Sliders::Hsl, wheel),
+        (json!({"sliders": "hwb", "view": "box"}), Sliders::None, box_view),
+        (json!(5), Sliders::None, wheel),
     ] {
         saved["color_wheel"] = value.clone();
         let ui: crate::UiState = serde_json::from_value(saved.clone()).unwrap();
-        assert_eq!((ui.color_wheel.sliders, ui.color_rgb_percent), (sliders, true), "{value}");
+        assert_eq!((ui.color_wheel.sliders, ui.color_wheel.view, ui.color_rgb_percent), (sliders, view, true), "{value}");
     }
 }
 
