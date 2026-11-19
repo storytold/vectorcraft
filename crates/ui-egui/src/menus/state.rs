@@ -95,6 +95,10 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
         "window.taskBar" => app.ui.task_bar,
         "window.pathfinder.compoundShapes" => app.ui.shape_modes_compound,
         "window.taskBar.pin" => app.ui.task_bar_place.pinned,
+        "window.taskBar.actions" => p
+            .get("action")
+            .and_then(Value::as_str)
+            .is_some_and(|a| crate::canvas::is_task_bar_action(a) && !app.ui.task_bar_hidden_actions.contains(a)),
         "window.learn" => crate::panels::learn::visible(&app.ui),
         "window.panel" => {
             let panel = p.get("panel").and_then(Value::as_str).unwrap_or("");

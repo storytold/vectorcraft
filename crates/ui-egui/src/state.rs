@@ -515,6 +515,10 @@ pub struct UiState {
     /// starts under the selection at every launch.
     #[serde(skip)]
     pub task_bar_place: TaskBarPlace,
+    /// The Contextual Task Bar's actions (`canvas::TASK_BAR_ACTIONS`) that More Options › Bar
+    /// Actions has off (`window.taskBar.actions`); none: the bar shows every action it offers.
+    #[serde(deserialize_with = "crate::canvas::read_hidden_task_bar_actions")]
+    pub task_bar_hidden_actions: std::collections::BTreeSet<String>,
     /// The Pathfinder panel's Shape Mode buttons make a compound shape on a click, and give the
     /// permanent Pathfinder result on Alt-click (off, the default: the other way round).
     #[serde(default)]
@@ -834,8 +838,8 @@ pub struct UiState {
     /// of an RGB field, `ui.colorPanel`, [`crate::panels::color::deserialize_rgb_percent`]).
     #[serde(default, deserialize_with = "crate::panels::color::deserialize_rgb_percent")]
     pub color_rgb_percent: bool,
-    /// Color Wheel panel: the wheel or the box, the box's channel, and the color vision row
-    /// (`ui.colorWheel`, [`crate::panels::color_wheel::deserialize_settings`]).
+    /// Color Wheel panel: the wheel or the box, the box's channel, the slider rows and the color
+    /// vision row (`ui.colorWheel`, [`crate::panels::color_wheel::deserialize_settings`]).
     #[serde(default, deserialize_with = "crate::panels::color_wheel::deserialize_settings")]
     pub color_wheel: crate::panels::color_wheel::Settings,
     /// Swatches panel: Show Recent Colors in its panel menu, which draws the panel's Recent Colors
@@ -1283,6 +1287,7 @@ impl Default for UiState {
             toolbar_advanced: false,
             task_bar: true,
             task_bar_place: TaskBarPlace::default(),
+            task_bar_hidden_actions: Default::default(),
             shape_modes_compound: false,
             context_locked: None,
             context_intertwine: None,

@@ -451,12 +451,25 @@ impl TextObject {
     /// fractions of the path. False, changing nothing, for other type, when the anchor doesn't
     /// exist, a degenerate `xf` or a path that would not be finite.
     pub fn set_path_handle(&mut self, (si, ai): (usize, usize), out: bool, pos: Point, independent: bool) -> bool {
+        self.set_path_handle_with_symmetry((si, ai), out, pos, independent, false)
+    }
+    /// [`Self::set_path_handle`] with an optional mirror of the opposite handle about the anchor
+    /// in document space, preserving the anchor kind. `independent` takes precedence, and at an
+    /// open end of the path, where no segment leaves the anchor on that side, the handle moves as
+    /// it would without `symmetric`. Both handles are edited in one reshape, using the same validated
+    /// document-to-text map.
+    pub fn set_path_handle_with_symmetry(&mut self, (si, ai): (usize, usize), out: bool, pos: Point, independent: bool, symmetric: bool) -> bool {
         let xf = self.xf;
         matches!(self.kind, TextKind::OnPath { .. })
             && self.reshape_local(|path, to_text| {
+                let mirror = symmetric && !independent && path.subpaths.get(si).is_some_and(|sp| sp.has_segment(ai, !out));
                 let Some(a) = path.anchor_mut(si, ai) else { return false };
                 let mut drawn = a.transform(xf);
                 drawn.set_handle(out, pos, independent);
+                if mirror {
+                    let opposite = drawn.p - (pos - drawn.p);
+                    if out { drawn.h_in = opposite } else { drawn.h_out = opposite }
+                }
                 *a = drawn.transform(to_text);
                 true
             })
