@@ -207,7 +207,7 @@ fn the_commands_add_move_remove_and_reset_tools() {
     assert_eq!(slots(&app)[2], ["slice"]);
     let ellipse = slot_of(&app, "ellipse").unwrap();
     app.run("toolbar.addTool", json!({"tool": "star", "slot": ellipse, "place": "group"})).unwrap();
-    assert_eq!(slots(&app)[ellipse], ["ellipse", "circle", "star"]);
+    assert_eq!(slots(&app)[ellipse], ["ellipse", "circle", "curvatureCircle", "star"]);
     assert!(!slots(&app)[slot_of(&app, "rectangle").unwrap()].contains(&"star"));
     // Onto its own group: nothing changes.
     let before = slots(&app);
@@ -217,7 +217,7 @@ fn the_commands_add_move_remove_and_reset_tools() {
     assert_eq!(crate::toolbar::slots(&app)[0].0, Some("Select"));
     // Out: one tool, or its whole group; an emptied slot goes.
     app.run("toolbar.removeTool", json!({"tool": "ellipse"})).unwrap();
-    assert_eq!(slots(&app)[ellipse], ["circle", "star"]);
+    assert_eq!(slots(&app)[ellipse], ["circle", "curvatureCircle", "star"]);
     app.run("toolbar.removeTool", json!({"tool": "addAnchor", "group": true})).unwrap();
     assert!(slot_of(&app, "pen").is_none() && slot_of(&app, "addAnchor").is_none());
     // Bad params change nothing.
@@ -398,7 +398,7 @@ fn tools_drag_between_the_drawer_and_the_toolbar() {
     let drawer = drawer_rect(&ctx).unwrap();
     let (slice, _) = cell_at(&shown, drawer, "Slice Tool");
     drag(&mut app, &ctx, 2.0, slice, tools[ellipse].center());
-    assert_eq!(slots(&app)[ellipse], ["ellipse", "circle", "slice"]);
+    assert_eq!(slots(&app)[ellipse], ["ellipse", "circle", "curvatureCircle", "slice"]);
     // A dimmed tool (in the toolbar already) doesn't drag.
     let before = slots(&app);
     let shown = frame(&mut app, &ctx, 2.9, vec![]);
@@ -761,6 +761,7 @@ fn addon_tools_are_in_the_drawer_not_the_toolbars() {
             "cornerTool",
             "slideAnchor",
             "sharedEdge",
+            "tangentCircle",
             "smartPen",
             contour,
             box3d,
@@ -776,7 +777,7 @@ fn addon_tools_are_in_the_drawer_not_the_toolbars() {
     let listed = |id: &str| {
         sections().iter().find(|(_, tools)| tools.iter().any(|t| t.id == id)).map(|(h, tools)| (*h, tools.iter().map(|t| t.id).collect::<Vec<_>>()))
     };
-    assert_eq!(listed("extendPath"), Some(("Path Precision Tools", addon[..7].to_vec())));
+    assert_eq!(listed("extendPath"), Some(("Path Precision Tools", addon[..8].to_vec())));
     assert_eq!(listed("smartPen"), Some(("Smart Pen", vec!["smartPen"])));
     assert_eq!(listed(contour), Some(("Contour", vec![contour])));
     assert_eq!(listed(box3d), Some(("3D Box", vec![box3d])));

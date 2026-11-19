@@ -1249,6 +1249,127 @@ fn an_artboard_add_button_shows_its_tooltip_while_the_pointer_rests_on_it() {
     }
 }
 
+/// The screen centers and radii of the Artboard tool's add-button tooltips (`tip`) in the view `xf`.
+fn add_button_tips(app: &mut VectorcraftApp, xf: &Xf, tip: &str) -> Vec<(Pos2, f32)> {
+    let view = app.view_info();
+    app.session
+        .overlays(view)
+        .into_iter()
+        .filter_map(|o| match o {
+            Overlay::HoverText { center, radius, text } if text == tip => Some((xf.to_screen(center), (radius * xf.zoom) as f32)),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Whether `tip` shows while the pointer rests at `at` for two seconds from `*t`, which moves on.
+fn rests_with_tooltip(app: &mut VectorcraftApp, ctx: &egui::Context, t: &mut f64, at: Pos2, tip: &str) -> bool {
+    texts_at(app, ctx, *t, vec![egui::Event::PointerMoved(at)]);
+    let mut seen = false;
+    for _ in 0..20 {
+        *t += 0.1;
+        seen |= texts_at(app, ctx, *t, vec![]).iter().any(|s| s == tip);
+    }
+    seen
+}
+
+/// While Space lends a view tool, a press on an add button pans the view instead of adding an
+/// artboard: the button shows no tooltip until Space is up.
+#[test]
+fn an_artboard_add_button_has_no_tooltip_while_space_is_held() {
+    use egui::{Event, Modifiers};
+    let tip = vectorcraft_tools::xform::EDGE_BUTTON_TIP;
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
+    app.select_tool("artboard");
+    let ctx = egui::Context::default();
+    texts_at(&mut app, &ctx, 0.0, vec![]);
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let (at, _) = add_button_tips(&mut app, &xf, tip).into_iter().max_by(|a, b| a.0.y.total_cmp(&b.0.y)).unwrap();
+    let space = |pressed| Event::Key { key: egui::Key::Space, physical_key: None, pressed, repeat: false, modifiers: Modifiers::NONE };
+    let mut t = 1.0;
+    texts_at(&mut app, &ctx, t, vec![Event::PointerMoved(at), space(true)]);
+    for _ in 0..20 {
+        t += 0.1;
+        assert!(!texts_at(&mut app, &ctx, t, vec![]).iter().any(|s| s == tip), "no tooltip while Space is held");
+    }
+    t += 0.1;
+    texts_at(&mut app, &ctx, t, vec![space(false)]);
+    assert!(rests_with_tooltip(&mut app, &ctx, &mut t, at, tip), "the tooltip shows again once Space is up");
+}
+
+/// On a narrow artboard with a long name, the name can cover part of the top add button, and a
+/// press there selects the named artboard: that part shows no tooltip, and the rest of the button
+/// keeps it.
+#[test]
+fn an_artboard_add_button_has_no_tooltip_where_the_artboard_name_covers_it() {
+    let tip = vectorcraft_tools::xform::EDGE_BUTTON_TIP;
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 20, "height": 100})).unwrap();
+    let name = "An artboard name long enough to run past the middle of its top edge";
+    app.session.execute("artboard.setProps", &json!({"artboards": [{"index": 0, "name": name}]})).unwrap();
+    app.select_tool("artboard");
+    let ctx = egui::Context::default();
+    texts_at(&mut app, &ctx, 0.0, vec![]);
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let (at, r) = add_button_tips(&mut app, &xf, tip).into_iter().min_by(|a, b| a.0.y.total_cmp(&b.0.y)).unwrap();
+    // The points of the button's disc, split by whether the canvas's name hit test takes them.
+    let probe = egui::Context::default();
+    let named = |p: Pos2| {
+        let mut hit = false;
+        let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), ..Default::default() };
+        let mut out = probe.run_ui(raw, |ui| hit = super::artboards::artboard_name_at(&app, ui, &xf, p).is_some());
+        out.textures_delta.clear();
+        hit
+    };
+    let steps = || (-6i8..=6).map(f32::from);
+    let disc: Vec<Pos2> = steps().flat_map(|dx| steps().map(move |dy| at + vec2(dx, dy))).filter(|p| p.distance(at) <= r - 0.5).collect();
+    let covered = disc.iter().copied().find(|p| named(*p)).expect("the name covers part of the button");
+    let clear = disc.iter().copied().rev().find(|p| !named(*p)).expect("part of the button is clear of the name");
+    let mut t = 1.0;
+    assert!(!rests_with_tooltip(&mut app, &ctx, &mut t, covered, tip), "no tooltip where the name takes the press");
+    assert!(rests_with_tooltip(&mut app, &ctx, &mut t, clear, tip), "the tooltip shows on the rest of the button");
+}
+
+/// An add button panned under the scroll bars is not drawn and takes no press: none of it shows a
+/// tooltip, in the square where the scroll bars meet or over a scroll bar, while the part of a
+/// button still on the canvas keeps its tooltip.
+#[test]
+fn an_artboard_add_button_has_no_tooltip_outside_the_canvas() {
+    let tip = vectorcraft_tools::xform::EDGE_BUTTON_TIP;
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
+    app.select_tool("artboard");
+    let ctx = egui::Context::default();
+    texts_at(&mut app, &ctx, 0.0, vec![]);
+    let rect = app.canvas_rect.unwrap();
+    // Pan the view so the right button's center lands on `to`, and return the button.
+    let pan_right_button_to = |app: &mut VectorcraftApp, t: f64, to: Pos2| {
+        let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+        let (at, _) = add_button_tips(app, &xf, tip).into_iter().max_by(|a, b| a.0.x.total_cmp(&b.0.x)).unwrap();
+        let d = to - at;
+        if let Some(v) = app.view_mut() {
+            v.center = Point::new(v.center.x - f64::from(d.x) / v.zoom, v.center.y - f64::from(d.y) / v.zoom);
+            v.fitted = true;
+        }
+        texts_at(app, &ctx, t, vec![]);
+        let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+        let (at, r) = add_button_tips(app, &xf, tip).into_iter().max_by(|a, b| a.0.x.total_cmp(&b.0.x)).unwrap();
+        assert!(at.distance(to) < 0.5, "the button moved to {to:?}: {at:?}");
+        (at, r)
+    };
+    // The middle of the square where the scroll bars meet, right of and below the canvas.
+    let corner = rect.max + vec2(SCROLL_BAR / 2.0, SCROLL_BAR / 2.0);
+    let mut t = 1.0;
+    let (at, _) = pan_right_button_to(&mut app, t, corner);
+    assert!(!rect.contains(at));
+    assert!(!rests_with_tooltip(&mut app, &ctx, &mut t, at, tip), "no tooltip in the corner between the scroll bars");
+    // Half on the canvas, half over the vertical scroll bar.
+    let (at, r) = pan_right_button_to(&mut app, t, pos2(rect.max.x, rect.center().y));
+    assert!(!rests_with_tooltip(&mut app, &ctx, &mut t, at + vec2(r - 2.0, 0.0), tip), "no tooltip over the scroll bar");
+    assert!(rests_with_tooltip(&mut app, &ctx, &mut t, at - vec2(r - 2.0, 0.0), tip), "the tooltip shows on the part on the canvas");
+}
+
 #[test]
 fn shift_clicking_canvas_artboard_label_toggles_multi_selection() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -4938,6 +5059,91 @@ fn mirror_axis_drag_uses_canvas_coordinates_in_a_zoomed_rotated_view() {
     }
 }
 
+/// The Split view's divider of a selected Image Trace object is drawn where the Selection tool
+/// takes it in a zoomed, turned view. Dragging its middle across the image previews the divider,
+/// commits one undo step and leaves the traced art where it was; Undo puts the divider back.
+#[test]
+fn trace_split_divider_drag_in_a_zoomed_rotated_view_is_one_undo_step() {
+    use vectorcraft_tools::trace_split::TraceDivider;
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let data = vectorcraft_format::base64_encode(&crate::tests_sysclip::blue_png());
+    app.run("file.place", json!({"name": "blue.png", "dataBase64": data, "link": false, "at": [200, 150]})).unwrap();
+    app.run("imageTrace.make", json!({"preset": "Default"})).unwrap();
+    app.run("imageTrace.setView", json!({"view": "split"})).unwrap();
+    app.select_tool("selection");
+    app.ui.task_bar = false;
+    app.ui.view.rulers = false;
+    let divider = |app: &VectorcraftApp| {
+        let st = app.session.active().unwrap();
+        TraceDivider::of(&st.doc, &st.selection, app.view().unwrap().zoom).unwrap()
+    };
+    let initial = divider(&app);
+    assert_eq!(initial.split, 0.5);
+    let middle = initial.ends[0].midpoint(initial.ends[1]);
+    {
+        let v = app.view_mut().unwrap();
+        (v.zoom, v.rotation, v.center, v.fitted) = (30.0, 30.0, middle, true);
+    }
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let art = |app: &VectorcraftApp| {
+        let st = app.session.active().unwrap();
+        st.doc.node(initial.id).unwrap().geometric_bounds()
+    };
+    let before = (art(&app), app.session.active().unwrap().history.undo.len());
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    // The divider is drawn between its ends on screen.
+    let ends = initial.ends.map(|q| xf.to_screen(q));
+    let drawn = shapes(&mut app, &ctx);
+    assert!(
+        drawn.iter().any(|s| matches!(s, Shape::LineSegment { points, .. }
+            if points.iter().zip(ends).all(|(a, b)| a.distance(b) < 0.5) || points.iter().rev().zip(ends).all(|(a, b)| a.distance(b) < 0.5))),
+        "the divider is drawn from {:?} to {:?}",
+        ends[0],
+        ends[1]
+    );
+    // A quarter of the image's width to the right, in the image's own direction.
+    let from = xf.to_screen(middle);
+    let st = app.session.active().unwrap();
+    let NodeKind::Image(im) = &st.doc.node(initial.id).unwrap().children().unwrap()[0].kind else { panic!("no source image") };
+    let to = xf.to_screen(im.xf * vectorcraft_geom::Point::new(f64::from(im.width) * 0.75, f64::from(im.height) * 0.5));
+    let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from), button(from, true)]);
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(to)]);
+    assert!((divider(&app).split - 0.75).abs() < 0.01, "the divider previews during the drag: {}", divider(&app).split);
+    frame(&mut app, &ctx, vec![button(to, false)]);
+    assert!((divider(&app).split - 0.75).abs() < 0.01);
+    assert_eq!((art(&app), app.session.active().unwrap().history.undo.len()), (before.0, before.1 + 1), "one undo step, the art unmoved");
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(divider(&app).split, 0.5);
+    // Escape during a drag puts the divider back with no undo step.
+    let steps = app.session.active().unwrap().history.undo.len();
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from), button(from, true)]);
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(to)]);
+    assert!((divider(&app).split - 0.75).abs() < 0.01);
+    let escape = egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+    let raw =
+        egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), events: vec![escape], ..Default::default() };
+    let mut out = ctx.run_ui(raw, |ui| {
+        crate::shortcuts::handle(&mut app, ui.ctx());
+        show(&mut app, ui)
+    });
+    out.textures_delta.clear();
+    assert!(!app.session.tool_busy(), "Escape ends the drag");
+    assert_eq!(divider(&app).split, 0.5, "Escape puts the divider back");
+    frame(&mut app, &ctx, vec![button(to, false)]);
+    assert_eq!(divider(&app).split, 0.5, "Escape cancels the drag");
+    assert_eq!(app.session.active().unwrap().history.undo.len(), steps, "no undo step");
+    // With the bounding box hidden, the divider is not drawn.
+    app.ui.view.bounding_box = false;
+    let drawn = shapes(&mut app, &ctx);
+    assert!(
+        !drawn.iter().any(|s| matches!(s, Shape::LineSegment { points, .. } if points.iter().zip(ends).all(|(a, b)| a.distance(b) < 0.5))),
+        "no divider with the bounding box hidden"
+    );
+}
+
 /// A selected grid repeat draws its row handle below the grid and a slider between its first
 /// two columns (none with the bounding box hidden). Dragging the row handle down two tiles in
 /// a zoomed view makes five rows without scaling the source, as one undo step, and the slider
@@ -6777,6 +6983,75 @@ fn a_selected_polygon_shows_its_side_widget() {
     assert_eq!(widgets(&mut app), 1, "back after the release");
     app.session.execute("shape.ellipse", &json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
     assert_eq!(widgets(&mut app), 0, "an ellipse has none");
+}
+
+/// Hide Shape Widgets (`view.shapeWidgets`) hides a selected live rectangle's and polygon's corner
+/// widgets, a polygon's side widget and an ellipse's pie widgets with the Selection tool and the
+/// shape tools, and leaves the bounding box and its eight handles; the Selection tool then shows no
+/// corner cursor over a hidden widget. Direct Selection keeps its corner widgets, which follow View ›
+/// Hide Corner Widget alone. Show Shape Widgets brings them back, neither adds an undo step, and a
+/// tool switch keeps the setting.
+#[test]
+fn hidden_shape_widgets_leave_the_bounding_box() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let id = |v: serde_json::Value| v["id"].as_u64().unwrap();
+    let rect = id(app.session.execute("shape.rectangle", &json!({"x": 20, "y": 20, "width": 80, "height": 80})).unwrap());
+    let polygon = id(app.session.execute("shape.polygon", &json!({"cx": 200, "cy": 150, "radius": 50, "sides": 5})).unwrap());
+    let ellipse = id(app.session.execute("shape.ellipse", &json!({"x": 280, "y": 100, "width": 100, "height": 60})).unwrap());
+    let ctx = egui::Context::default();
+    let side = 2.0 * vectorcraft_tools::sidewidget::RADIUS_PX;
+    let diamond = |ps: &egui::epaint::PathShape| {
+        let span = |f: fn(&egui::Pos2) -> f32| {
+            let v: Vec<f32> = ps.points.iter().map(f).collect();
+            v.iter().copied().fold(f32::MIN, f32::max) - v.iter().copied().fold(f32::MAX, f32::min)
+        };
+        ps.closed && ps.points.len() == 4 && ps.fill == Color32::WHITE && (span(|p| p.x) - side).abs() < 0.01 && (span(|p| p.y) - side).abs() < 0.01
+    };
+    // The selection's corner, pie and side widgets drawn, and the bounding box's handles.
+    let drawn = |app: &mut VectorcraftApp, id: u64| {
+        app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
+        let (_, handles) = bounding_box_drawn(app, &ctx);
+        let all = shapes(app, &ctx);
+        let circles = |r: f32| all.iter().filter(|s| matches!(s, Shape::Circle(c) if c.radius == r && c.fill == Color32::WHITE)).count();
+        let diamonds = all.iter().filter(|s| matches!(s, Shape::Path(ps) if diamond(ps))).count();
+        (circles(3.0), circles(vectorcraft_tools::pie::RADIUS_PX), diamonds, handles)
+    };
+    let steps = |app: &VectorcraftApp| app.session.doc().unwrap().history.undo.len();
+    for tool in ["selection", "polygon", "rectangle"] {
+        app.select_tool(tool);
+        assert_eq!(drawn(&mut app, rect), (4, 0, 0, 8), "{tool}");
+        assert_eq!(drawn(&mut app, polygon), (5, 0, 1, 8), "{tool}");
+        assert_eq!(drawn(&mut app, ellipse), (0, 2, 0, 8), "{tool}");
+        let before = steps(&app);
+        assert_eq!(app.run("view.shapeWidgets", json!({})).unwrap(), json!(false));
+        assert_eq!(steps(&app), before, "{tool}: the setting adds no undo step");
+        assert_eq!(drawn(&mut app, rect), (0, 0, 0, 8), "{tool}");
+        assert_eq!(drawn(&mut app, polygon), (0, 0, 0, 8), "{tool}");
+        assert_eq!(drawn(&mut app, ellipse), (0, 0, 0, 8), "{tool}");
+        assert_eq!(app.run("view.shapeWidgets", json!({})).unwrap(), json!(true));
+    }
+    // Direct Selection: the corner widgets stay until View › Hide Corner Widget.
+    app.run("view.shapeWidgets", json!({"on": false})).unwrap();
+    app.select_tool("directSelection");
+    assert_eq!(drawn(&mut app, rect).0, 4);
+    app.run("view.cornerWidget", json!({})).unwrap();
+    assert_eq!(drawn(&mut app, rect).0, 0);
+    app.run("view.cornerWidget", json!({})).unwrap();
+    // The Selection tool shows no corner cursor over a hidden widget, and the tool switches kept the
+    // setting.
+    app.select_tool("selection");
+    assert!(!app.ui.view.shape_widgets);
+    drawn(&mut app, rect);
+    let at = {
+        let st = app.session.active().unwrap();
+        vectorcraft_tools::corners::CornerWidgets::of(&st.doc, &st.selection, app.view_info().zoom, false).unwrap().visible().next().unwrap()
+    };
+    let view = app.view_info();
+    assert_ne!(app.session.cursor(at, Mods::default(), view), Cursor::CornerRadius);
+    app.run("view.shapeWidgets", json!({"on": true})).unwrap();
+    let view = app.view_info();
+    assert_eq!(app.session.cursor(at, Mods::default(), view), Cursor::CornerRadius);
 }
 
 /// A selected Objects on Path group shows its Rotate All widget with the Selection and Objects on
@@ -9166,6 +9441,31 @@ fn double_clicking_type_in_a_missing_font_asks_before_editing() {
     assert!(t.runs.iter().all(|r| r.style.font_family == "Missing Test Family 7258"));
 }
 
+/// A Type tool press that reaches type in a missing font while another dialog is open (as one sent
+/// with `ui.pointer` does) leaves that dialog open and starts no edit.
+#[test]
+fn a_press_on_type_in_a_missing_font_keeps_an_open_dialog() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let params = json!({"x": 100, "y": 150, "text": "Hello world", "size": 24, "font": "Missing Test Family 8408"});
+    let id = app.session.execute("text.create", &params).unwrap()["id"].as_u64().unwrap();
+    app.session.execute("select.none", &json!({})).unwrap();
+    app.select_tool("type");
+    let doc = app.session.active().unwrap().uid;
+    crate::dialogs::confirm::ask_replace_files(&mut app, doc, &["/tmp/a.svg".to_string()], &[], "file.export", json!({}));
+    let b = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().geometric_bounds().unwrap();
+    let view = app.view_info();
+    for kind in [PointerKind::Down, PointerKind::Up] {
+        crate::canvas::dispatch(&mut app, &PointerEvent::new(kind, b.center().x, b.center().y), view);
+    }
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(crate::dialogs::confirm::REPLACE_FILES));
+    crate::dialogs::cancel(&mut app);
+    let r = app.session.tool_poll(view, false);
+    crate::canvas::apply_requests(&mut app, r);
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(app.session.tool_options()["editing"], json!(null));
+}
+
 #[test]
 fn escape_while_editing_in_isolation_returns_to_selection_tool_and_keeps_isolation_until_second_escape() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -10985,8 +11285,8 @@ fn frame_moves_stop_at_the_button_up() {
     let up = egui::Event::PointerButton { pos: b, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() };
     let events = vec![egui::Event::PointerMoved(a), egui::Event::PointerMoved(b), up, egui::Event::PointerMoved(c), egui::Event::PointerMoved(d)];
     let feed = StylusFeed::default();
-    let at_b = PenPose { tilt: Some([20.0, 0.0]), rotation: None };
-    let after = PenPose { tilt: Some([50.0, 0.0]), rotation: None };
+    let at_b = PenPose { tilt: Some([20.0, 0.0]), ..PenPose::default() };
+    let after = PenPose { tilt: Some([50.0, 0.0]), ..PenPose::default() };
     for (p, pose) in [(0.4, PenPose::default()), (0.6, at_b), (0.7, after), (0.8, after)] {
         feed.set_move(crate::stylus::PenSample { pressure: p, pose, ..Default::default() });
     }
@@ -11011,7 +11311,7 @@ fn frame_moves_keep_the_last_move_when_the_button_went_up_elsewhere() {
     let up = egui::Event::PointerButton { pos: up_at, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() };
     let events = vec![egui::Event::PointerMoved(a), egui::Event::PointerMoved(b), up, egui::Event::PointerMoved(c)];
     let feed = StylusFeed::default();
-    let at_b = PenPose { tilt: Some([20.0, 0.0]), rotation: None };
+    let at_b = PenPose { tilt: Some([20.0, 0.0]), ..PenPose::default() };
     for (p, pose) in [(0.4, PenPose::default()), (0.6, at_b), (0.7, PenPose::default())] {
         feed.set_move(crate::stylus::PenSample { pressure: p, pose, ..Default::default() });
     }
@@ -11037,7 +11337,7 @@ fn frame_moves_keeps_touch_feed_and_mouse_samples_with_their_pressure() {
     assert_eq!(mouse, [(a, None, None), (b, None, None)], "the last move follows the normal pointer path");
     // A macOS pen: the feed kept a pressure and a pose for each move, the last for the last.
     let feed = StylusFeed::default();
-    let leaning = PenPose { tilt: Some([30.0, 0.0]), rotation: None };
+    let leaning = PenPose { tilt: Some([30.0, 0.0]), ..PenPose::default() };
     for (p, pose) in [(0.9, leaning), (0.3, leaning), (0.0, PenPose::default()), (0.5, leaning)] {
         feed.set_move(crate::stylus::PenSample { pressure: p, pose, ..Default::default() });
     }
@@ -11556,7 +11856,7 @@ fn the_hosts_pen_tilt_and_rotation_reach_the_paintbrush() {
         assert_eq!(cmd, "path.freehand");
         p["points"].as_array().unwrap().iter().map(|s| [3, 4, 5].map(|i| s.get(i).and_then(serde_json::Value::as_f64))).collect()
     };
-    let leaning = PenPose { tilt: Some([30.0, 0.0]), rotation: Some(45.0) };
+    let leaning = PenPose { tilt: Some([30.0, 0.0]), rotation: Some(45.0), wheel: None };
     let points = stroke(&mut app, 260.0, Some(leaning));
     assert!(!points.is_empty() && points.iter().all(|p| *p == [Some(30.0), Some(0.0), Some(45.0)]), "{points:?}");
     // With the view rotated 90° clockwise, a pen leaning to the right of the screen leans up the
@@ -11587,7 +11887,7 @@ fn moves_in_the_release_frame_reach_the_paintbrush_with_their_tilt() {
     let moved = |tilt: f32| {
         feed.set_move(crate::stylus::PenSample {
             pressure: 0.5,
-            pose: PenPose { tilt: Some([tilt, 0.0]), rotation: Some(0.0) },
+            pose: PenPose { tilt: Some([tilt, 0.0]), rotation: Some(0.0), wheel: None },
             ..Default::default()
         })
     };
@@ -11630,8 +11930,11 @@ fn the_last_move_of_a_frame_keeps_its_own_tilt() {
     let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
     let at = |x: f64| xf.to_screen(Point::new(x, 300.0));
     let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
-    let sample =
-        |tilt: f32| crate::stylus::PenSample { pressure: 0.5, pose: PenPose { tilt: Some([tilt, 0.0]), rotation: Some(0.0) }, ..Default::default() };
+    let sample = |tilt: f32| crate::stylus::PenSample {
+        pressure: 0.5,
+        pose: PenPose { tilt: Some([tilt, 0.0]), rotation: Some(0.0), wheel: None },
+        ..Default::default()
+    };
     feed.set_move(sample(10.0));
     frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at(300.0)), button(at(300.0), true)]);
     feed.set_move(sample(20.0));
@@ -13123,6 +13426,168 @@ fn text_threads_run_from_each_out_port_to_the_next_in_port() {
     assert!(thread_overlays(&app, zoom).is_empty());
 }
 
+#[test]
+fn text_thread_overlays_keep_document_order_with_mixed_selection() {
+    use vectorcraft_doc::NodeId;
+    use vectorcraft_tools::text::{Port, port_centre};
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 600, "height": 400})).unwrap();
+    let text = "Words that fill more than the frame holds. ".repeat(10);
+    let id = |value: serde_json::Value| NodeId(value["id"].as_u64().unwrap());
+    let first = id(app.run("text.create", json!({"x": 20, "y": 20, "text": text, "area": {"width": 150, "height": 60}})).unwrap());
+    let first_next = id(app.run("text.thread.add", json!({"from": first.0, "at": [300, 20]})).unwrap());
+    let second = id(app
+        .run(
+            "text.create",
+            json!({"x": 20, "y": 200, "text": "Words that fill more than the frame holds. ".repeat(10), "area": {"width": 150, "height": 60}}),
+        )
+        .unwrap());
+    let second_next = id(app.run("text.thread.add", json!({"from": second.0, "at": [300, 200]})).unwrap());
+    let unselected = id(app
+        .run("text.create", json!({"x": 20, "y": 100, "text": "An unselected story. ".repeat(20), "area": {"width": 150, "height": 60}}))
+        .unwrap());
+    let unselected_next = id(app.run("text.thread.add", json!({"from": unselected.0, "at": [300, 100]})).unwrap());
+    let unrelated_a = id(app.run("shape.rectangle", json!({"x": 450, "y": 300, "width": 20, "height": 20})).unwrap());
+    let unrelated_b = id(app.run("shape.rectangle", json!({"x": 480, "y": 300, "width": 20, "height": 20})).unwrap());
+    app.run("select.set", json!({"ids": [unrelated_a.0, unrelated_b.0, second_next.0, first.0]})).unwrap();
+
+    let state = app.session.active().unwrap();
+    assert_eq!(state.selection.objects, [unrelated_a, unrelated_b, second_next, first]);
+    assert_eq!(state.doc.text_threads, [vec![first, first_next], vec![second, second_next], vec![unselected, unselected_next]]);
+    let frame = |id| match &state.doc.node(id).unwrap().kind {
+        NodeKind::Text(text) => (**text).clone(),
+        _ => panic!("thread member is text"),
+    };
+    let px = 1.0;
+    let expected = [
+        (port_centre(&frame(first), Port::Out, px).unwrap(), port_centre(&frame(first_next), Port::In, px).unwrap()),
+        (port_centre(&frame(second), Port::Out, px).unwrap(), port_centre(&frame(second_next), Port::In, px).unwrap()),
+    ];
+    let overlays = thread_overlays(&app, 1.0);
+    let lines: Vec<_> = overlays
+        .iter()
+        .filter_map(|overlay| match overlay {
+            Overlay::Line { a, b, .. } if expected.iter().any(|(from, to)| *a == *from && *b == *to) => Some((*a, *b)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(lines, expected, "thread lines follow document order, not selection order");
+    assert_eq!(overlays.iter().filter(|overlay| matches!(overlay, Overlay::Line { .. })).count(), 14, "two thread links and their port arrows only");
+    let ports: Vec<_> = overlays
+        .iter()
+        .filter_map(|overlay| match overlay {
+            Overlay::Highlight { quad, .. } => Some(quad[0].midpoint(quad[2])),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(ports, expected.into_iter().flat_map(|(from, to)| [from, to]).collect::<Vec<_>>());
+}
+
+/// Two document-order threads hit the first two selected IDs among 512 unrelated paths.
+/// Their real port geometry and document-order output remain unchanged.
+#[test]
+fn text_thread_overlays_keep_two_early_hits_with_many_unrelated_paths() {
+    use std::sync::Arc;
+    use vectorcraft_doc::NodeId;
+    use vectorcraft_tools::text::{Port, port_centre, ports_shown};
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 600, "height": 400})).unwrap();
+    let text = "Words that fill more than the frame holds. ".repeat(10);
+    let id = |value: serde_json::Value| NodeId(value["id"].as_u64().unwrap());
+    let mut threads = vec![];
+    for y in [20, 200] {
+        let first = id(app.run("text.create", json!({"x": 20, "y": y, "text": text, "area": {"width": 150, "height": 60}})).unwrap());
+        let next = id(app.run("text.thread.add", json!({"from": first.0, "at": [300, y]})).unwrap());
+        threads.push([first, next]);
+    }
+    let path = id(app.run("shape.rectangle", json!({"x": 450, "y": 300, "width": 20, "height": 20})).unwrap());
+    let mut selected = vec![threads[0][0], threads[1][0], path];
+    {
+        let st = app.session.active_mut().unwrap();
+        let doc = Arc::make_mut(&mut st.doc);
+        let template = doc.node(path).unwrap().clone();
+        let mut additions = Vec::with_capacity(511);
+        for _ in 1..512 {
+            let mut p = template.clone();
+            p.id = doc.alloc_id();
+            selected.push(p.id);
+            additions.push(Arc::new(p));
+        }
+        Arc::make_mut(&mut doc.layers[0]).children_mut().unwrap().extend(additions);
+        doc.drop_lookup_cache();
+    }
+    app.run("select.set", json!({"ids": selected.iter().map(|id| id.0).collect::<Vec<_>>()})).unwrap();
+    let st = app.session.active().unwrap();
+    assert_eq!(st.doc.text_threads, threads.iter().map(|t| t.to_vec()).collect::<Vec<_>>());
+    assert_eq!(st.selection.objects, selected);
+    assert_eq!(st.selection.objects.len(), 514);
+    assert!(ports_shown(&st.doc, &st.selection.objects));
+    let frame = |id| match &st.doc.node(id).unwrap().kind {
+        NodeKind::Text(t) => (**t).clone(),
+        _ => panic!("thread member is text"),
+    };
+    let expected: Vec<_> =
+        threads.iter().map(|[a, b]| (port_centre(&frame(*a), Port::Out, 1.0).unwrap(), port_centre(&frame(*b), Port::In, 1.0).unwrap())).collect();
+    let overlays = thread_overlays(&app, 1.0);
+    let links: Vec<_> = overlays
+        .iter()
+        .filter_map(|o| match o {
+            Overlay::Line { a, b, .. } if expected.contains(&(*a, *b)) => Some((*a, *b)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(links, expected, "the two thread links stay in document order");
+    assert_eq!(overlays.iter().filter(|o| matches!(o, Overlay::Line { .. })).count(), 14, "two links and their port arrows only");
+    let ports: Vec<_> = overlays
+        .iter()
+        .filter_map(|o| match o {
+            Overlay::Highlight { quad, .. } => Some(quad[0].midpoint(quad[2])),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(ports, expected.into_iter().flat_map(|(a, b)| [a, b]).collect::<Vec<_>>());
+}
+
+/// One two-frame thread misses a selection of 512 unrelated paths.
+/// This checks ordinary empty output, not elapsed time or allocation.
+#[test]
+fn text_thread_overlays_skip_one_unselected_thread_with_many_unrelated_paths() {
+    use std::sync::Arc;
+    use vectorcraft_doc::NodeId;
+    use vectorcraft_tools::text::{ported, ports_shown};
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 600, "height": 400})).unwrap();
+    let text = "Words that fill more than the frame holds. ".repeat(10);
+    let id = |value: serde_json::Value| NodeId(value["id"].as_u64().unwrap());
+    let first = id(app.run("text.create", json!({"x": 20, "y": 20, "text": text, "area": {"width": 150, "height": 60}})).unwrap());
+    let next = id(app.run("text.thread.add", json!({"from": first.0, "at": [300, 20]})).unwrap());
+    let path = id(app.run("shape.rectangle", json!({"x": 450, "y": 300, "width": 20, "height": 20})).unwrap());
+    let mut selected = vec![path];
+    {
+        let st = app.session.active_mut().unwrap();
+        let doc = Arc::make_mut(&mut st.doc);
+        let template = doc.node(path).unwrap().clone();
+        let mut additions = Vec::with_capacity(511);
+        for _ in 1..512 {
+            let mut p = template.clone();
+            p.id = doc.alloc_id();
+            selected.push(p.id);
+            additions.push(Arc::new(p));
+        }
+        Arc::make_mut(&mut doc.layers[0]).children_mut().unwrap().extend(additions);
+        doc.drop_lookup_cache();
+    }
+    app.run("select.set", json!({"ids": selected.iter().map(|id| id.0).collect::<Vec<_>>()})).unwrap();
+    let st = app.session.active().unwrap();
+    assert_eq!(st.doc.text_threads, [vec![first, next]]);
+    assert_eq!(st.selection.objects, selected);
+    assert_eq!(st.selection.objects.len(), 512);
+    assert!(selected.iter().all(|id| *id != first && *id != next));
+    assert!([first, next].into_iter().all(|id| ported(&st.doc, id).is_some()), "both thread frames have ports");
+    assert!(ports_shown(&st.doc, &st.selection.objects));
+    assert!(thread_overlays(&app, 1.0).is_empty());
+}
+
 /// A double-click with the Selection tool on the out port of a threaded frame breaks the
 /// thread there: no new frame is threaded on, and the story flows back into the first frame.
 #[test]
@@ -13171,6 +13636,103 @@ fn text_threads_of_a_huge_selection_have_lines_but_no_ports() {
     let o = thread_overlays(&app, 1.0);
     assert!(o.iter().any(|x| matches!(x, Overlay::Line { .. })), "the thread lines");
     assert!(!o.iter().any(|x| matches!(x, Overlay::Highlight { .. } | Overlay::Path { .. })), "no port boxes");
+}
+
+/// An ignored diagnostic for the miss-heavy selection-membership work in `thread_overlays`.
+/// Construct the document and selection before timing: T unrelated threads of F frames each miss
+/// in a selection of S ordinary paths. There is deliberately no timing threshold; run on an idle
+/// machine and compare the printed cases.
+#[test]
+#[ignore = "manual performance diagnostic; no stable timing threshold"]
+fn thread_overlays_miss_heavy_selection_membership_diagnostic() {
+    use std::sync::Arc;
+    use std::time::Instant;
+    use vectorcraft_doc::NodeId;
+    use vectorcraft_tools::text::ported;
+
+    fn fixture(threads: usize, frames_per_thread: usize, selected: usize) -> VectorcraftApp {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 600, "height": 400})).unwrap();
+        let text = "Words that fill more than the frame holds. ".repeat(10);
+        let first = NodeId(
+            app.run("text.create", json!({"x": 20, "y": 20, "text": text, "area": {"width": 150, "height": 60}})).unwrap()["id"].as_u64().unwrap(),
+        );
+        let second = NodeId(app.run("text.thread.add", json!({"from": first.0, "at": [300, 200]})).unwrap()["id"].as_u64().unwrap());
+        let path = NodeId(app.run("shape.rectangle", json!({"x": 10, "y": 300, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap());
+        let (thread_ids, selected_ids) = {
+            let st = app.session.active_mut().unwrap();
+            let doc = Arc::make_mut(&mut st.doc);
+            let first_template = doc.node(first).unwrap().clone();
+            let second_template = doc.node(second).unwrap().clone();
+            let path_template = doc.node(path).unwrap().clone();
+            let mut thread_ids = vec![vec![first, second]];
+            let mut additions = Vec::with_capacity(
+                (threads.saturating_sub(1) * frames_per_thread) + frames_per_thread.saturating_sub(2) + selected.saturating_sub(1),
+            );
+
+            for _ in 2..frames_per_thread {
+                let mut next = second_template.clone();
+                next.id = doc.alloc_id();
+                thread_ids[0].push(next.id);
+                additions.push(Arc::new(next));
+            }
+
+            for _ in 1..threads {
+                let mut a = first_template.clone();
+                a.id = doc.alloc_id();
+                let mut b = second_template.clone();
+                b.id = doc.alloc_id();
+                let mut thread = vec![a.id, b.id];
+                additions.push(Arc::new(a));
+                additions.push(Arc::new(b));
+                for _ in 2..frames_per_thread {
+                    let mut next = second_template.clone();
+                    next.id = doc.alloc_id();
+                    thread.push(next.id);
+                    additions.push(Arc::new(next));
+                }
+                thread_ids.push(thread);
+            }
+
+            let mut selected_ids = vec![path];
+            for _ in 1..selected {
+                let mut p = path_template.clone();
+                p.id = doc.alloc_id();
+                selected_ids.push(p.id);
+                additions.push(Arc::new(p));
+            }
+
+            doc.text_threads = thread_ids.clone();
+            Arc::make_mut(&mut doc.layers[0]).children_mut().unwrap().extend(additions);
+            doc.drop_lookup_cache();
+            (thread_ids, selected_ids)
+        };
+        app.run("select.set", json!({"ids": selected_ids.iter().map(|id| id.0).collect::<Vec<_>>()})).unwrap();
+
+        let st = app.session.active().unwrap();
+        assert_eq!(st.doc.text_threads, thread_ids);
+        assert!(thread_ids.iter().all(|thread| thread.len() == frames_per_thread));
+        assert_eq!(st.selection.objects, selected_ids);
+        assert!(thread_ids.iter().flatten().all(|id| ported(&st.doc, *id).is_some()), "all thread frames have ports");
+        assert!(selected_ids.iter().all(|id| thread_ids.iter().flatten().all(|frame| frame != id)), "selection misses every thread");
+        app
+    }
+
+    const REPEATS: usize = 2_000;
+    for (threads, frames_per_thread, selected) in [(256, 2, 256), (256, 2, 512), (512, 2, 256), (512, 2, 512), (512, 2, 1), (1, 1024, 512)] {
+        let app = fixture(threads, frames_per_thread, selected);
+        let st = app.session.active().unwrap();
+        assert!(vectorcraft_tools::text::ports_shown(&st.doc, &st.selection.objects));
+
+        // Warm Document's id index and verify the negative output before timing.
+        assert!(thread_overlays(&app, 1.0).is_empty());
+        let started = Instant::now();
+        for _ in 0..REPEATS {
+            let overlays = thread_overlays(std::hint::black_box(&app), 1.0);
+            assert!(overlays.is_empty());
+        }
+        println!("thread_overlays diagnostic T={threads} F={frames_per_thread} S={selected} repeats={REPEATS} elapsed={:?}", started.elapsed());
+    }
 }
 
 /// A frame of a thread in perspective has no ports: Show Text Threads draws no port box on it
