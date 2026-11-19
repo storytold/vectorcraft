@@ -734,6 +734,10 @@ arrowhead	Target	Diana
 	Cusp	Punta
 	Straight segment	Segment recte
 	Circle too large	El cercle és massa gran
+	Show Radii	Mostra els radis
+	Show Diameter	Mostra el diàmetre
+	Anchors at Standard Positions	Punts d’ancoratge en posicions estàndard
+	Third Point by Dragging	Tercer punt arrossegant
 	Circle (open)	Cercle (obert)
 	Classic	Clàssic
 	Classic Defaults	Valors predeterminats clàssics
@@ -891,6 +895,10 @@ arrowhead	Target	Diana
 	Box Channel	Canal del quadre
 	Color box	Quadre de color
 	Color Wheel Options	Opcions de la roda de colors
+	Show Document Colors	Mostra els colors del document
+	Document Colors	Colors del document
+	Selection Colors	Colors de la selecció
+@plural	Used {n} time|Used {n} times	Utilitzat {n} vegada|Utilitzat {n} vegades
 	Show Harmony	Mostra l’harmonia
 	Harmony Rule	Regla d’harmonia
 	Harmony color	Color de l’harmonia
@@ -1222,6 +1230,10 @@ arrowhead	Target	Diana
 	Delete Guide	Suprimeix la guia
 	Delete Guides	Suprimeix les guies
 	Delete Image Trace Preset	Suprimeix el preajust de traçat d’imatge
+	Tracing Presets…	Preajustos de traçat…
+	Import Image Trace Presets	Importa preajustos de traçat d’imatge
+	Export Image Trace Presets	Exporta els preajustos de traçat d’imatge
+	Replace the saved presets that have these names?	Voleu substituir els preajustos desats que tenen aquests noms?
 	Delete Layer	Suprimeix la capa
 	Delete Library	Suprimeix la biblioteca
 	Delete Library Group	Suprimeix el grup de biblioteca
@@ -3458,6 +3470,13 @@ digits	Malayalam	Malaiàlam
 	Pen Tool	Eina de ploma
 	Quick Pen Tool	Eina de ploma ràpida
 	Quick Pen	Ploma ràpida
+	Quick Pen Toolbar	Barra d’eines de la ploma ràpida
+	Continuous Arc	Arc continu
+	Sharp Corner Arc	Arc de cantonada aguda
+	Flip Arc	Inverteix l’arc
+	Hide Toolbar	Amaga la barra d’eines
+	Pin Toolbar Position	Fixa la posició de la barra d’eines
+	Reset Toolbar Position	Restableix la posició de la barra d’eines
 	Pencil	Llapis
 	Pencil Tool	Eina de llapis
 	Pentagram	Pentagrama
@@ -7298,8 +7317,10 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	`{GRAPHICS}` face must be front, back or side	face de `{GRAPHICS}` ha de ser front, back o side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} de `{GRAPHICS}` ha de ser un nombre de {lo} a {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` ha de ser una matriu
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	Els gràfics s’apliquen als tipus d’objecte Pla, Extrusió i Revolució
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	Els gràfics s’apliquen als tipus d’objecte Pla, Extrusió, Revolució i Infla
 @msg	Revolve maps graphics onto its side: map them onto the front	Revoluciona aplica els gràfics al seu lateral: aplica’ls a la cara davantera
+@msg	Inflate maps graphics onto its front and back, not onto a side	Infla aplica els gràfics a la cara davantera i a la posterior, no a un lateral
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	l’objecte {_1}: la cara posterior d’Infla només admet gràfics amb Tots dos costats i Tapa activats
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Els gràfics són massa complexos per a aquesta superfície: simplifica la il·lustració dels símbols o redueix Segments
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` admet com a màxim {MAX_GRAPHICS} gràfics
 @msg	A plane has one face: map its graphics onto the front	Un pla té una sola cara: aplica’n els gràfics a la cara davantera
@@ -8958,6 +8979,11 @@ breakText	Glyphs	Glifs
 	Flower	Flor
 	Tree	Arbre
 	Mountain	Muntanya
+	Ornamental	Ornamental
+	Scrollwork	Voluta
+	Filigree Arrow	Fletxa de filigrana
+	Petal Sweep	Traç de pètals
+	Twin Curl	Voluta doble
 	Vector Packs	Paquets vectorials
 	Compass Rose	Rosa dels vents
 	Botanical Sprig	Branqueta botànica

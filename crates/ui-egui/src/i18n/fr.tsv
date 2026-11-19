@@ -508,6 +508,10 @@ font-technology	Variable	Variables
 	Cusp	Point de rebroussement
 	Straight segment	Segment droit
 	Circle too large	Cercle trop grand
+	Show Radii	Afficher les rayons
+	Show Diameter	Afficher le diamètre
+	Anchors at Standard Positions	Points d’ancrage aux positions standard
+	Third Point by Dragging	Troisième point par glissement
 	Classic Defaults	Valeurs par défaut classiques
 	Clean Up…	Nettoyer…
 	Clear	Effacer
@@ -615,6 +619,10 @@ font-technology	Variable	Variables
 	Box Channel	Couche du carré
 	Color box	Carré de couleur
 	Color Wheel Options	Options de la roue chromatique
+	Show Document Colors	Afficher les couleurs du document
+	Document Colors	Couleurs du document
+	Selection Colors	Couleurs de la sélection
+@plural	Used {n} time|Used {n} times	Utilisée {n} fois|Utilisée {n} fois
 	Show Harmony	Afficher l’harmonie
 	Harmony Rule	Règle d’harmonie
 	Harmony color	Couleur de l’harmonie
@@ -1899,6 +1907,10 @@ font-technology	Variable	Variables
 	Rename Preset	Renommer le paramètre prédéfini
 	Save Image Trace Preset	Enregistrer le paramètre prédéfini de vectorisation de l’image
 	Delete Image Trace Preset	Supprimer le paramètre prédéfini de vectorisation de l’image
+	Tracing Presets…	Paramètres prédéfinis de vectorisation…
+	Import Image Trace Presets	Importer des paramètres prédéfinis de vectorisation de l’image
+	Export Image Trace Presets	Exporter les paramètres prédéfinis de vectorisation de l’image
+	Replace the saved presets that have these names?	Remplacer les paramètres prédéfinis enregistrés qui portent ces noms ?
 	Image Trace Presets	Paramètres prédéfinis de vectorisation de l’image
 	Image:	Image :
 	Images:	Images :
@@ -2793,6 +2805,13 @@ font-technology	Variable	Variables
 	Pen Tool	Outil Plume
 	Quick Pen Tool	Outil Plume rapide
 	Quick Pen	Plume rapide
+	Quick Pen Toolbar	Barre d’outils Plume rapide
+	Continuous Arc	Arc continu
+	Sharp Corner Arc	Arc à angle vif
+	Flip Arc	Retourner l’arc
+	Hide Toolbar	Masquer la barre d’outils
+	Pin Toolbar Position	Épingler la position de la barre d’outils
+	Reset Toolbar Position	Réinitialiser la position de la barre d’outils
 	Pencil	Crayon
 	Pencil Tool	Outil Crayon
 	per slice	par tranche
@@ -6454,8 +6473,10 @@ lighting	Light	Lumière
 @msg	`{GRAPHICS}` face must be front or back	face de `{GRAPHICS}` doit valoir front ou back
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} de `{GRAPHICS}` doit être un nombre de {lo} à {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` doit être un tableau
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	Les graphiques s’appliquent aux types d’objet Plan, Extrusion et Révolution
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	Les graphiques s’appliquent aux types d’objet Plan, Extrusion, Révolution et Gonfler
 @msg	Revolve maps graphics onto its side: map them onto the front	Révolution applique les graphiques sur sa face latérale : appliquez-les sur la face avant
+@msg	Inflate maps graphics onto its front and back, not onto a side	Gonfler applique les graphiques sur la face avant et l’arrière, pas sur une face latérale
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	objet {_1} : l’arrière de Gonfler n’accepte des graphiques qu’avec Deux côtés et Fermeture activés
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Les graphiques sont trop complexes pour cette surface : simplifiez l’illustration des symboles ou réduisez Segments
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` accepte au plus {MAX_GRAPHICS} graphiques
 @msg	A plane has one face: map its graphics onto the front	Un plan n’a qu’une face : appliquez ses graphiques sur la face avant
@@ -10745,6 +10766,11 @@ breakText	Glyphs	Glyphes
 	Flower	Fleur
 	Tree	Arbre
 	Mountain	Montagne
+	Ornamental	Ornemental
+	Scrollwork	Volute
+	Filigree Arrow	Flèche filigrane
+	Petal Sweep	Courbe de pétales
+	Twin Curl	Double volute
 	Vector Packs	Packs vectoriels
 	Compass Rose	Rose des vents
 	Botanical Sprig	Rameau botanique

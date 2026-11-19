@@ -784,6 +784,10 @@
 	Box Channel	Kanał kwadratu
 	Color box	Kwadrat koloru
 	Color Wheel Options	Opcje koła kolorów
+	Show Document Colors	Pokaż kolory dokumentu
+	Document Colors	Kolory dokumentu
+	Selection Colors	Kolory zaznaczenia
+@plural	Used {n} time|Used {n} times	Użyty {n} raz|Użyty {n} razy|Użyty {n} razy
 	Show Harmony	Pokaż harmonię
 	Harmony Rule	Reguła harmonii
 	Harmony color	Kolor harmonii
@@ -2044,6 +2048,10 @@ digits	Malayalam	Malajalam
 	Rename Preset	Zmień nazwę ustawienia
 	Save Image Trace Preset	Zapisz ustawienie obrysu obrazu
 	Delete Image Trace Preset	Usuń ustawienie obrysu obrazu
+	Tracing Presets…	Ustawienia obrysu…
+	Import Image Trace Presets	Importuj ustawienia obrysu obrazu
+	Export Image Trace Presets	Eksportuj ustawienia obrysu obrazu
+	Replace the saved presets that have these names?	Zastąpić zapisane ustawienia o tych nazwach?
 	Method:	Metoda:
 	Pad	Przedłuż
 	Repeats	Liczba powtórzeń
@@ -4183,6 +4191,13 @@ theme	Appearance	Wygląd
 	Pen Tool	Narzędzie Pióro
 	Quick Pen Tool	Narzędzie Szybkie pióro
 	Quick Pen	Szybkie pióro
+	Quick Pen Toolbar	Pasek narzędzi szybkiego pióra
+	Continuous Arc	Łuk ciągły
+	Sharp Corner Arc	Łuk z ostrym narożnikiem
+	Flip Arc	Odwróć łuk
+	Hide Toolbar	Ukryj pasek narzędzi
+	Pin Toolbar Position	Przypnij położenie paska narzędzi
+	Reset Toolbar Position	Resetuj położenie paska narzędzi
 	Picas	Pica
 	Portuguese	Portugalski
 	Preserve Appearance and Overprints	Zachowaj wygląd i nadruki
@@ -4813,6 +4828,11 @@ font-technology	Variable	Zmienne
 	Cusp	Ostrze
 	Straight segment	Prosty segment
 	Circle too large	Okrąg jest za duży
+	Show Radii	Pokaż promienie
+	Show Diameter	Pokaż średnicę
+	Anchors at Standard Positions	Punkty kontrolne w standardowych położeniach
+	Third Point by Dragging	Trzeci punkt przez przeciągnięcie
+	Gray	Szary
 	Clip to Art	Przytnij do kompozycji
 	Colorize	Koloruj
 	Gamma	Gamma
@@ -6713,8 +6733,10 @@ mark-style	Japanese	Japońskie
 @msg	`{GRAPHICS}` face must be front, back or side	face w `{GRAPHICS}` musi mieć wartość front, back lub side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} w `{GRAPHICS}` musi być liczbą od {lo} do {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` musi być tablicą
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	Grafiki są nakładane na obiekty typu Płaszczyzna, Wyciągnięcie i Obrót
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	Grafiki są nakładane na obiekty typu Płaszczyzna, Wyciągnięcie, Obrót i Nadmuchanie
 @msg	Revolve maps graphics onto its side: map them onto the front	Obrót nakłada grafiki na swoją powierzchnię boczną: umieść je na przedniej stronie
+@msg	Inflate maps graphics onto its front and back, not onto a side	Nadmuchanie nakłada grafiki na przednią i tylną stronę, a nie na powierzchnię boczną
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	obiekt {_1}: tył Nadmuchania przyjmuje grafiki tylko przy włączonych opcjach Obie strony i Zakończenie
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Grafiki są zbyt złożone dla tej powierzchni: uprość kompozycje symboli lub zmniejsz Segmenty
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` przyjmuje najwyżej {MAX_GRAPHICS} grafik
 @msg	A plane has one face: map its graphics onto the front	Płaszczyzna ma jedną stronę: umieść jej grafiki na przedniej stronie
@@ -10646,6 +10668,11 @@ breakText	Glyphs	Glify
 	Flower	Kwiat
 	Tree	Drzewo
 	Mountain	Góra
+	Ornamental	Ornamentalne
+	Scrollwork	Zawijas
+	Filigree Arrow	Filigranowa strzałka
+	Petal Sweep	Smuga płatków
+	Twin Curl	Podwójny zawijas
 	Vector Packs	Pakiety wektorowe
 	Compass Rose	Róża wiatrów
 	Botanical Sprig	Gałązka botaniczna

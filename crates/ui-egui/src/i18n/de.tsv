@@ -484,6 +484,11 @@ font-technology	Variable	Variabel
 	Cusp	Spitze
 	Straight segment	Gerades Segment
 	Circle too large	Kreis zu groß
+	Show Radii	Radien anzeigen
+	Show Diameter	Durchmesser anzeigen
+	Anchors at Standard Positions	Ankerpunkte an Standardpositionen
+	Third Point by Dragging	Dritter Punkt durch Ziehen
+	Gray	Grau
 	Classic Defaults	Klassische Standardwerte
 	Clean Up…	Aufräumen…
 	Clear	Löschen
@@ -594,6 +599,10 @@ font-technology	Variable	Variabel
 	Box Channel	Kanal des Quadrats
 	Color box	Farbquadrat
 	Color Wheel Options	Optionen für den Farbkreis
+	Show Document Colors	Dokumentfarben einblenden
+	Document Colors	Dokumentfarben
+	Selection Colors	Farben der Auswahl
+@plural	Used {n} time|Used {n} times	{n}-mal verwendet|{n}-mal verwendet
 	Show Harmony	Harmonie einblenden
 	Harmony Rule	Harmonieregel
 	Harmony color	Harmoniefarbe
@@ -1908,6 +1917,10 @@ file-filter	Templates	Vorlagen
 	Rename Preset	Vorgabe umbenennen
 	Save Image Trace Preset	Bildnachzeichner-Vorgabe speichern
 	Delete Image Trace Preset	Bildnachzeichner-Vorgabe löschen
+	Tracing Presets…	Nachzeichnervorgaben…
+	Import Image Trace Presets	Bildnachzeichner-Vorgaben importieren
+	Export Image Trace Presets	Bildnachzeichner-Vorgaben exportieren
+	Replace the saved presets that have these names?	Gespeicherte Vorgaben mit diesen Namen ersetzen?
 	Image Trace Presets	Bildnachzeichner-Vorgaben
 	Image:	Bild:
 	Images:	Bilder:
@@ -2763,6 +2776,13 @@ file-filter	Templates	Vorlagen
 	Pen Tool	Zeichenstift-Werkzeug
 	Quick Pen Tool	Schnellzeichenstift-Werkzeug
 	Quick Pen	Schnellzeichenstift
+	Quick Pen Toolbar	Schnellzeichenstift-Werkzeugleiste
+	Continuous Arc	Fortlaufender Bogen
+	Sharp Corner Arc	Bogen mit scharfer Ecke
+	Flip Arc	Bogen spiegeln
+	Hide Toolbar	Werkzeugleiste ausblenden
+	Pin Toolbar Position	Position der Werkzeugleiste fixieren
+	Reset Toolbar Position	Position der Werkzeugleiste zurücksetzen
 	Pencil	Buntstift
 	Pencil Tool	Buntstift-Werkzeug
 	per slice	pro Slice
@@ -6454,8 +6474,10 @@ lighting	Light	Licht
 @msg	`{GRAPHICS}` face must be front, back or side	face in `{GRAPHICS}` muss front, back oder side sein
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} in `{GRAPHICS}` muss eine Zahl von {lo} bis {hi} sein
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` muss ein Array sein
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	Grafiken werden auf die Objekttypen Ebene, Extrudieren und Kreiseln abgebildet
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	Grafiken werden auf die Objekttypen Ebene, Extrudieren, Kreiseln und Aufblasen abgebildet
 @msg	Revolve maps graphics onto its side: map them onto the front	Kreiseln bildet Grafiken auf seiner Mantelfläche ab: Bilden Sie sie auf der Vorderseite ab
+@msg	Inflate maps graphics onto its front and back, not onto a side	Aufblasen bildet Grafiken auf der Vorder- und Rückseite ab, nicht auf einer Seitenfläche
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	Objekt {_1}: Die Rückseite von „Aufblasen“ nimmt Grafiken nur mit aktivierten Optionen „Beidseitig“ und „Deckflächen“ auf
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Die Grafiken sind für diese Oberfläche zu komplex: Vereinfachen Sie das Bildmaterial der Symbole oder verringern Sie Segmente
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` nimmt höchstens {MAX_GRAPHICS} Grafiken auf
 @msg	A plane has one face: map its graphics onto the front	Eine Ebene hat nur eine Seite: Bilden Sie ihre Grafiken auf der Vorderseite ab
@@ -10423,6 +10445,11 @@ breakText	Glyphs	Glyphen
 	Flower	Blume
 	Tree	Baum
 	Mountain	Berg
+	Ornamental	Ornamental
+	Scrollwork	Schnörkel
+	Filigree Arrow	Filigranpfeil
+	Petal Sweep	Blütenblattschwung
+	Twin Curl	Doppelschnörkel
 	Vector Packs	Vektorpakete
 	Compass Rose	Kompassrose
 	Botanical Sprig	Botanischer Zweig

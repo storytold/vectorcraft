@@ -399,6 +399,10 @@ digits	Malayalam	マラヤーラム数字
 	Rename Preset	プリセット名を変更
 	Save Image Trace Preset	画像トレースプリセットを保存
 	Delete Image Trace Preset	画像トレースプリセットを削除
+	Tracing Presets…	トレースプリセット…
+	Import Image Trace Presets	画像トレースプリセットを読み込み
+	Export Image Trace Presets	画像トレースプリセットを書き出し
+	Replace the saved presets that have these names?	これらの名前の保存済みプリセットを置き換えますか？
 	Text Wrap	テキストの回り込み
 	Text Wrap Options…	テキストの回り込みオプション…
 	Clipping Mask	クリッピングマスク
@@ -872,6 +876,10 @@ digits	Malayalam	マラヤーラム数字
 	Box Channel	ボックスのチャンネル
 	Color box	カラーボックス
 	Color Wheel Options	カラーホイールオプション
+	Show Document Colors	ドキュメントのカラーを表示
+	Document Colors	ドキュメントのカラー
+	Selection Colors	選択範囲のカラー
+@plural	Used {n} time|Used {n} times	{n} 回使用
 	Show Harmony	ハーモニーを表示
 	Harmony Rule	ハーモニールール
 	Harmony color	ハーモニーカラー
@@ -1415,6 +1423,11 @@ antiAlias	Sharp	シャープ
 	Cusp	尖点
 	Straight segment	直線セグメント
 	Circle too large	円が大きすぎます
+	Show Radii	半径を表示
+	Show Diameter	直径を表示
+	Anchors at Standard Positions	アンカーポイントを標準位置に配置
+	Third Point by Dragging	3 点目をドラッグで指定
+	Gray	グレー
 	Clear All Tabs	すべてのタブを消去
 	Above Text	テキストの上
 	Position Panel Above Text	テキストの上にパネルを配置
@@ -2938,6 +2951,13 @@ antiAlias	Sharp	シャープ
 	Pen Tool	ペンツール
 	Quick Pen Tool	クイックペンツール
 	Quick Pen	クイックペン
+	Quick Pen Toolbar	クイックペンツールバー
+	Continuous Arc	連続円弧
+	Sharp Corner Arc	鋭角円弧
+	Flip Arc	円弧を反転
+	Hide Toolbar	ツールバーを隠す
+	Pin Toolbar Position	ツールバーの位置を固定
+	Reset Toolbar Position	ツールバーの位置をリセット
 	Pencil	鉛筆
 	Pencil Tool	鉛筆ツール
 	Percent:	パーセント:
@@ -6550,9 +6570,11 @@ lighting	Light	ライト
 @msg	`{GRAPHICS}` face must be front, back or side	`{GRAPHICS}` の face には front、back、side のいずれかを指定してください
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}` の {key} は {lo} から {hi} までの数値にしてください
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` は配列にしてください
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	グラフィックはオブジェクトの種類が平面、押し出し、回転体のときにマッピングされます
-	Graphics map onto the Plane, Extrude and Revolve object types.	グラフィックはオブジェクトの種類が平面、押し出し、回転体のときにマッピングされます。
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	グラフィックはオブジェクトの種類が平面、押し出し、回転体、膨張のときにマッピングされます
+	Graphics map onto the Plane, Extrude, Revolve and Inflate object types.	グラフィックはオブジェクトの種類が平面、押し出し、回転体、膨張のときにマッピングされます。
 @msg	Revolve maps graphics onto its side: map them onto the front	回転体はグラフィックを側面にマッピングします。前面にマッピングしてください
+@msg	Inflate maps graphics onto its front and back, not onto a side	膨張はグラフィックを前面と背面にマッピングします。側面にはマッピングできません
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	オブジェクト {_1}: 「膨張」の背面にグラフィックをマッピングするには「両面」と「キャップ」をオンにしてください
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	グラフィックがこのサーフェスには複雑すぎます。シンボルのアートを単純化するか、分割数を減らしてください
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` に指定できるグラフィックは {MAX_GRAPHICS} 個までです
 @msg	A plane has one face: map its graphics onto the front	平面には面が 1 つしかありません。グラフィックは前面にマッピングしてください
@@ -10520,6 +10542,11 @@ breakText	Glyphs	字形
 	Flower	花
 	Tree	木
 	Mountain	山
+	Ornamental	装飾模様
+	Scrollwork	スクロール装飾
+	Filigree Arrow	フィリグリーの矢
+	Petal Sweep	花びらの流線
+	Twin Curl	二重カール
 	Vector Packs	ベクターパック
 	Compass Rose	羅針盤のバラ
 	Botanical Sprig	植物の小枝

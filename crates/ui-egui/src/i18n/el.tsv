@@ -477,6 +477,10 @@ font-technology	Variable	Μεταβλητές
 	Cusp	Ακίδα
 	Straight segment	Ευθύ τμήμα
 	Circle too large	Ο κύκλος είναι πολύ μεγάλος
+	Show Radii	Εμφάνιση ακτίνων
+	Show Diameter	Εμφάνιση διαμέτρου
+	Anchors at Standard Positions	Σημεία αγκύρωσης σε τυπικές θέσεις
+	Third Point by Dragging	Τρίτο σημείο με σύρσιμο
 	Classic Defaults	Κλασικές προεπιλογές
 	Clean Up…	Εκκαθάριση…
 	Clear	Εκκαθάριση
@@ -569,6 +573,10 @@ font-technology	Variable	Μεταβλητές
 	Box Channel	Κανάλι τετραγώνου
 	Color box	Τετράγωνο χρώματος
 	Color Wheel Options	Επιλογές χρωματικού τροχού
+	Show Document Colors	Εμφάνιση χρωμάτων εγγράφου
+	Document Colors	Χρώματα εγγράφου
+	Selection Colors	Χρώματα επιλογής
+@plural	Used {n} time|Used {n} times	Χρησιμοποιείται {n} φορά|Χρησιμοποιείται {n} φορές
 	Show Harmony	Εμφάνιση αρμονίας
 	Harmony Rule	Κανόνας χρωματικής αρμονίας
 	Harmony color	Χρώμα αρμονίας
@@ -1817,6 +1825,10 @@ font-technology	Variable	Μεταβλητές
 	Rename Preset	Μετονομασία προεπιλογής
 	Save Image Trace Preset	Αποθήκευση προεπιλογής ανίχνευσης περιγραμμάτων εικόνας
 	Delete Image Trace Preset	Διαγραφή προεπιλογής ανίχνευσης περιγραμμάτων εικόνας
+	Tracing Presets…	Προεπιλογές ανίχνευσης περιγραμμάτων…
+	Import Image Trace Presets	Εισαγωγή προεπιλογών ανίχνευσης περιγραμμάτων εικόνας
+	Export Image Trace Presets	Εξαγωγή προεπιλογών ανίχνευσης περιγραμμάτων εικόνας
+	Replace the saved presets that have these names?	Αντικατάσταση των αποθηκευμένων προεπιλογών με αυτά τα ονόματα;
 	Image Trace Presets	Προεπιλογές ανίχνευσης περιγραμμάτων εικόνας
 	Image:	Εικόνα:
 	Images:	Εικόνες:
@@ -2168,6 +2180,13 @@ font-technology	Variable	Μεταβλητές
 	Pen Tool	Πένα (Pen Tool)
 	Quick Pen Tool	Εργαλείο γρήγορης πένας
 	Quick Pen	Γρήγορη πένα
+	Quick Pen Toolbar	Γραμμή εργαλείων γρήγορης πένας
+	Continuous Arc	Συνεχές τόξο
+	Sharp Corner Arc	Τόξο με αιχμηρή γωνία
+	Flip Arc	Αναστροφή τόξου
+	Hide Toolbar	Απόκρυψη γραμμής εργαλείων
+	Pin Toolbar Position	Σταθεροποίηση θέσης γραμμής εργαλείων
+	Reset Toolbar Position	Επαναφορά θέσης γραμμής εργαλείων
 	Pencil	Μολύβι
 	Pencil Tool	Μολύβι (Pencil Tool)
 	Percent:	Ποσοστό:
@@ -6271,8 +6290,10 @@ variable-list-end	{0}, {1}	{0} και {1}
 @msg	`{GRAPHICS}` face must be front, back or side	το face του `{GRAPHICS}` πρέπει να είναι front, back ή side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	το {key} του `{GRAPHICS}` πρέπει να είναι αριθμός από {lo} έως {hi}
 @msg	`{GRAPHICS}` must be an array	το `{GRAPHICS}` πρέπει να είναι πίνακας
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	Τα γραφικά αντιστοιχίζονται στους τύπους αντικειμένου Επίπεδο, Εξώθηση και Περιστροφή γύρω από άξονα
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	Τα γραφικά αντιστοιχίζονται στους τύπους αντικειμένου Επίπεδο, Εξώθηση, Περιστροφή γύρω από άξονα και Φούσκωμα
 @msg	Revolve maps graphics onto its side: map them onto the front	Η Περιστροφή γύρω από άξονα αντιστοιχίζει τα γραφικά στην πλευρική της επιφάνεια: αντιστοιχίστε τα στην μπροστινή όψη
+@msg	Inflate maps graphics onto its front and back, not onto a side	Το Φούσκωμα αντιστοιχίζει τα γραφικά στην μπροστινή και την πίσω όψη, όχι σε πλευρική επιφάνεια
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	το αντικείμενο {_1}: η πίσω όψη του Φουσκώματος δέχεται γραφικά μόνο με ενεργά τα Και οι δύο πλευρές και Κλείσιμο άκρου
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Τα γραφικά είναι πολύ σύνθετα για αυτή την επιφάνεια: απλοποιήστε το σχέδιο των συμβόλων ή μειώστε τα Τμήματα
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	το `{GRAPHICS}` δέχεται το πολύ {MAX_GRAPHICS} γραφικά
 @msg	A plane has one face: map its graphics onto the front	Ένα επίπεδο έχει μία όψη: αντιστοιχίστε τα γραφικά του στην μπροστινή όψη
@@ -8931,6 +8952,11 @@ breakText	Glyphs	Γλύφοι
 	Flower	Λουλούδι
 	Tree	Δέντρο
 	Mountain	Βουνό
+	Ornamental	Διακοσμητικά μοτίβα
+	Scrollwork	Σπείρα
+	Filigree Arrow	Φιλιγκράν βέλος
+	Petal Sweep	Καμπύλη πετάλων
+	Twin Curl	Διπλή σπείρα
 	Vector Packs	Διανυσματικά πακέτα
 	Compass Rose	Ρόδο πυξίδας
 	Botanical Sprig	Βοτανικό κλαδάκι
