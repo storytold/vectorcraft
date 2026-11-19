@@ -689,23 +689,28 @@ impl Mapper {
             text.xf = base * Affine::translate((0.0, drop));
             text.cached_bounds = Some(laid.bounds);
             if background.is_some() {
-                // Where one line's glyphs start, and the sum of their advances, its trailing
-                // blanks included.
-                let along = laid
-                    .glyphs
-                    .iter()
-                    .fold((f64::INFINITY, 0.0), |(from, width), g| (from.min(g.origin.x.min(g.origin.x + g.advance)), width + g.advance));
-                let one = laid.lines.len() == 1 && along.0.is_finite() && along.1.is_finite();
-                // The cells of one line run across its advances, from where its type starts, or
-                // for blanks alone, which draw no type, where the alignment puts a line that long.
+                // How far one line's glyphs reach each way, and the sum of their advances, its
+                // trailing blanks included.
+                let along = laid.glyphs.iter().fold((f64::INFINITY, f64::NEG_INFINITY, 0.0), |(from, to, width), g| {
+                    let (a, b) = (g.origin.x, g.origin.x + g.advance);
+                    (from.min(a.min(b)), to.max(a.max(b)), width + g.advance)
+                });
+                let one = laid.lines.len() == 1 && along.0.is_finite() && along.1.is_finite() && along.2.is_finite();
+                // The cells of one line run as far as its glyphs' advances reach, or for blanks
+                // alone, which draw no type, where the alignment puts a line that long.
                 // Those of more than one line run across each line's glyphs. NULs alone span
                 // their advances, where the alignment puts them.
                 let cells = if nuls {
                     let start = aligned(first.by * k, 0.0, &t.h_align) - first.by * k;
                     cell_rect(start + first.reach.0 * k, start + first.reach.1 * k, 0.0, cell)
                 } else if one {
-                    let x0 = if shows { along.0 } else { aligned(0.0, along.1, &t.h_align) };
-                    cell_rect(x0, x0 + along.1, laid.glyphs.first().map_or(0.0, |g| g.origin.y), cell)
+                    let (x0, x1) = if shows {
+                        (along.0, along.1)
+                    } else {
+                        let x0 = aligned(0.0, along.2, &t.h_align);
+                        (x0, x0 + along.2)
+                    };
+                    cell_rect(x0, x1, laid.glyphs.first().map_or(0.0, |g| g.origin.y), cell)
                 } else {
                     cells(&laid, &s, cell, &t.h_align, shows && line.decorated)
                 };
