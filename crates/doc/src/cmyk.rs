@@ -674,7 +674,8 @@ fn tiff_source(bytes: &[u8]) -> Option<CmykSource> {
     let limits =
         craft_image_codecs::Limits { max_pixels: MAX_CMYK_PIXELS, max_alloc: crate::MAX_RASTER_ALLOC, ..craft_image_codecs::Limits::default() };
     let opts = craft_image_codecs::DecodeOptions { limits, keep_orientation: true };
-    let img = craft_image_codecs::decode_as_with(craft_image_codecs::Format::Tiff, bytes, &opts).ok()?;
+    // Header and metadata readers use IFD0; keep samples on the same page.
+    let img = craft_image_codecs::decode_tiff_page(bytes, 0, &opts).ok()?;
     if img.layout() != craft_image_codecs::ChannelLayout::Cmyk
         || img.warnings.iter().any(|w| matches!(w, craft_image_codecs::DecodeWarning::Truncated { .. }))
     {
@@ -1923,6 +1924,24 @@ mod tests {
 
     fn inks() -> Inks {
         Inks::new(3, 2, vec![0, 40, 100, 0, 255, 0, 0, 0, 0, 255, 0, 0, 0, 0, 255, 0, 0, 0, 0, 255, 12, 34, 56, 78]).unwrap()
+    }
+
+    #[test]
+    fn cmyk_samples_stay_with_the_first_tiff_directory() {
+        use tiff::encoder::{TiffEncoder, colortype::CMYK8};
+        use tiff::tags::Tag;
+        let mut bytes = Cursor::new(Vec::new());
+        {
+            let mut encoder = TiffEncoder::new(&mut bytes).unwrap();
+            let mut preview = encoder.new_image::<CMYK8>(1, 1).unwrap();
+            preview.encoder().write_tag(Tag::NewSubfileType, 1u32).unwrap();
+            preview.write_data(&[12, 34, 56, 78]).unwrap();
+            encoder.new_image::<CMYK8>(2, 1).unwrap().write_data(&[0, 255, 0, 0, 0, 0, 255, 0]).unwrap();
+        }
+        let source = tiff_source(bytes.get_ref()).unwrap();
+        assert_eq!((source.width, source.height), (1, 1));
+        let Samples::Eight(samples) = source.samples else { panic!("expected stored eight-bit samples") };
+        assert_eq!(samples, [12, 34, 56, 78]);
     }
 
     #[test]
