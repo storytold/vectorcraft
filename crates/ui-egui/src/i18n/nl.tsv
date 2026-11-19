@@ -10151,6 +10151,8 @@ breakText	Glyphs	Glyphs
 # Path Precision Tools add-on: Tangent Circle.
 	Tangent Circle…	Raakcirkel…
 	Tangent Circle	Raakcirkel
+	Tangent Circle Tool	Raakcirkel-gereedschap
+	No tangent circle here	Hier geen raakcirkel
 	Circle:	Cirkel:
 @msg	`ids` names an object twice	`ids` noemt een object twee keer
 @msg	select two or three paths or compound paths	selecteer twee of drie paden of samengestelde paden

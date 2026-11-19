@@ -22,6 +22,7 @@ fn the_plugins_submenu_selects_the_tools_and_opens_the_anchor_inspector() {
         ("Measure & Inspect Tool", "measureInspect"),
         ("Parametric Shape Tool", "parametricShape"),
         ("Slide Anchor Along Path", "slideAnchor"),
+        ("Tangent Circle Tool", "tangentCircle"),
         ("Trim at Crossings Tool", "trimAtCrossings"),
     ] {
         let e = under(label).expect(label);
@@ -98,6 +99,14 @@ fn double_clicking_the_brush_opens_its_options_and_ok_sets_them() {
     app.ui.dialog.as_mut().unwrap().fields.insert("mode".into(), json!("arc"));
     crate::dialogs::confirm(&mut app).unwrap();
     assert_eq!(app.session.tool_options_of("extendPath")["mode"], json!("arc"));
+    // The Tangent Circle tool's radius for Shift.
+    app.run("tool.options", json!({"tool": "tangentCircle"})).unwrap();
+    assert_eq!(app.ui.dialog.as_ref().unwrap().f64("radius", 0.0), 36.0);
+    let text = painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
+    assert!(text.contains("Tangent Circle Tool Options") && text.contains("Radius:"), "{text}");
+    app.ui.dialog.as_mut().unwrap().fields.insert("radius".into(), json!(12.5));
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert_eq!(app.session.tool_options_of("tangentCircle")["radius"], json!(12.5));
     assert!(app.run("tool.options", json!({"tool": "measureInspect"})).is_err());
 }
 

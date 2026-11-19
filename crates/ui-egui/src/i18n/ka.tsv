@@ -10431,6 +10431,8 @@ breakText	Glyphs	გლიფები
 # Path Precision Tools add-on: Tangent Circle.
 	Tangent Circle…	მხები წრე…
 	Tangent Circle	მხები წრე
+	Tangent Circle Tool	მხები წრის ხელსაწყო
+	No tangent circle here	აქ მხები წრე არ არის
 	Circle:	წრე:
 @msg	`ids` names an object twice	`ids` ერთსა და იმავე ობიექტს ორჯერ მიუთითებს
 @msg	select two or three paths or compound paths	მონიშნეთ ორი ან სამი ტრაექტორია ან შედგენილი ტრაექტორია

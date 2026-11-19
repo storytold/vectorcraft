@@ -17,6 +17,7 @@ pub mod tangent_circle;
 use egui::Ui;
 use serde_json::{Map, Value, json};
 use vectorcraft_geom::Point;
+use vectorcraft_tools::addons::tangent_circle as tangent_circle_tool;
 use vectorcraft_tools::addons::{anchor_eraser, extend_path, measure_inspect, parametric_shape, slide_anchor, trim};
 
 use crate::VectorcraftApp;
@@ -70,6 +71,7 @@ pub fn menu() -> Vec<Item> {
         Item::Cmd("Set Corners…", set_corners::COMMAND, Value::Null),
         tool("Slide Anchor Along Path", slide_anchor::ID),
         Item::Cmd("Shared Edge Merge Tool", shared_edge::COMMAND, json!({})),
+        tool("Tangent Circle Tool", tangent_circle_tool::ID),
         tool("Trim at Crossings Tool", trim::ID),
         Item::Sep,
         Item::Cmd("Anchor Inspector", "window.panel", json!({ "panel": ID })),
@@ -205,7 +207,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 
 /// Tools whose options the dialog edits.
 pub fn has_options(tool: &str) -> bool {
-    [anchor_eraser::ID, extend_path::ID].contains(&tool)
+    [anchor_eraser::ID, extend_path::ID, tangent_circle_tool::ID].contains(&tool)
 }
 
 /// Open the options of add-on tool `tool` with its current values.
@@ -231,6 +233,16 @@ fn body(_app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
         widgets::label_row(ui, tl!("Mode:"), LABEL_W, |ui| {
             if let Some((m, _)) = widgets::dropdown(ui, "extend-path-mode", current, &labels, 140.0).and_then(|i| modes.get(i)) {
                 d.fields.insert("mode".into(), json!(m));
+            }
+        });
+        return false;
+    }
+    if d.str("__tool") == tangent_circle_tool::ID {
+        let (lo, hi) = tangent_circle_tool::RADIUS_RANGE;
+        let r = d.f64("radius", tangent_circle_tool::RADIUS);
+        widgets::label_row(ui, tl!("Radius:"), LABEL_W, |ui| {
+            if let Some(x) = widgets::range_field(ui, "tangent-circle-radius", r, lo..=hi, " pt", 2, 96.0) {
+                d.fields.insert("radius".into(), json!(x));
             }
         });
         return false;

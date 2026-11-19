@@ -8253,6 +8253,8 @@ breakText	Glyphs	Glyphes
 # Path Precision Tools add-on: Tangent Circle.
 	Tangent Circle…	Cercle tangent…
 	Tangent Circle	Cercle tangent
+	Tangent Circle Tool	Outil Cercle tangent
+	No tangent circle here	Aucun cercle tangent ici
 	Circle:	Cercle :
 @msg	`ids` names an object twice	`ids` désigne deux fois le même objet
 @msg	select two or three paths or compound paths	sélectionnez deux ou trois tracés ou tracés transparents

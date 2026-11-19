@@ -8242,6 +8242,8 @@ breakText	Glyphs	Glifák
 # Path Precision Tools add-on: Tangent Circle.
 	Tangent Circle…	Érintőkör…
 	Tangent Circle	Érintőkör
+	Tangent Circle Tool	Érintőkör eszköz
+	No tangent circle here	Itt nincs érintőkör
 	Circle:	Kör:
 @msg	`ids` names an object twice	`ids`: egy objektumot kétszer nevez meg
 @msg	select two or three paths or compound paths	jelölj ki két vagy három útvonalat vagy összetett útvonalat
