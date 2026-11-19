@@ -446,13 +446,37 @@ pub(super) type Underlines = std::sync::Arc<Vec<(Point, Point)>>;
 /// [`vectorcraft_tools::text::PORTS_MAX`] such frames selected the tools draw no ports, and only
 /// the lines are drawn here. `zoom`: screen pixels to the document unit.
 pub(super) fn thread_overlays(app: &VectorcraftApp, zoom: f64) -> Vec<Overlay> {
+    use std::collections::HashSet;
+    use vectorcraft_doc::NodeId;
     use vectorcraft_tools::text::{Port, PortState, port_centre, ported, ports_shown, push_port};
     let Some(st) = app.session.active() else { return vec![] };
     let px = 1.0 / zoom.max(1e-9);
     let boxes = ports_shown(&st.doc, &st.selection.objects);
+    let selection = &st.selection.objects;
+    let mut selected: Option<HashSet<NodeId>> = None;
+    // The first two full searches need no index.
+    let mut full_searches = 0;
+    let mut is_selected = |id: &NodeId| {
+        if selection.len() <= 1 {
+            return selection.contains(id);
+        }
+        if full_searches == 0 {
+            full_searches = 1;
+            return selection.contains(id);
+        }
+        // Two early selection hits need no index.
+        if selected.is_none() && selection[..2].contains(id) {
+            return true;
+        }
+        if selected.is_none() && full_searches < 2 {
+            full_searches += 1;
+            return selection.contains(id);
+        }
+        selected.get_or_insert_with(|| selection.iter().copied().collect::<HashSet<_>>()).contains(id)
+    };
     let mut o = vec![];
     for thread in &st.doc.text_threads {
-        if !thread.iter().any(|id| st.selection.objects.contains(id)) {
+        if !thread.iter().any(&mut is_selected) {
             continue;
         }
         let color = st.doc.layer_color(thread[0]);
