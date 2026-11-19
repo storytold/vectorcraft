@@ -27,12 +27,13 @@ use control_bar::{CONTROL_BAR_FLOAT_AT, ISOLATION_BUTTON};
 pub(crate) use control_bar::{Fit, group_separator, left_out, link_reserve};
 #[cfg(test)]
 use hints::hint_segments;
+pub(crate) use hints::tool_hint;
 pub use hints::{hint_bar, hint_strings};
 pub use status_bar::{StatusBarShow, deserialize_status_bar_show, set_status_bar_show, status_bar};
 #[cfg(test)]
 use status_bar::{StatusReadoutWidths, color_profile_name, date_time_label, status_readouts};
 #[cfg(test)]
-use tabs::{CLOSE_BEFORE_TITLE, first_tab_shown, tab_drop, tab_groups, tab_title};
+use tabs::{CLOSE_BEFORE_TITLE, first_tab_shown, leading_tab, shortened_title, tab_drop, tab_groups, tab_room, tab_title};
 pub use tabs::{doc_tabs, isolation_bar, step_document};
 pub(crate) use tabs::{document_window_title, show_document, window_tab};
 

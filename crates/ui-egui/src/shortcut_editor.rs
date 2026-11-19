@@ -802,9 +802,9 @@ fn listed(overrides: &Overrides, e: &Entry) -> bool {
 /// Options, Character, Set Bounds), the exports and saves that give the file back without a `path`
 /// (Save Document gives the file back when the document has no file yet; File › Save takes a key
 /// instead), the undo group's begin and end, and the commands that need a point, a value or a name
-/// (Create Dimension, Edit Freeform Point, Select by Color, Move Brush, Paintbrush). New Symbol is left out
-/// because the Symbols panel runs it through the Symbol Options dialog.
-const NEEDS_A_PARAM: [&str; 75] = [
+/// (Create Dimension, Edit Freeform Point, Select by Color, Move Brush, Paintbrush, Map Art, Quick Pen). New
+/// Symbol is left out because the Symbols panel runs it through the Symbol Options dialog.
+const NEEDS_A_PARAM: [&str; 77] = [
     "transparency.set",
     "transparency.setOpacityMask",
     "stroke.set",
@@ -867,6 +867,7 @@ const NEEDS_A_PARAM: [&str; 75] = [
     "paint.setFill",
     "paint.setGradientGeom",
     "paint.setStroke",
+    "path.quickPen",
     "perspective.grid.define",
     "perspective.grid.set",
     "perspective.plane.move",
@@ -879,6 +880,7 @@ const NEEDS_A_PARAM: [&str; 75] = [
     "text.setFormat",
     "text.setRangeStyle",
     "text.setStyle",
+    "threeD.mapArt",
     "type.ruby",
 ];
 
@@ -1037,13 +1039,28 @@ fn names_a_required_field(params: &str) -> bool {
 /// offset and the number of `{`, `[` and `(` groups open before it. A closing `}`, `]` or `)` comes
 /// with a count that includes the group it closes, and one with no group open counts none.
 pub(crate) fn outside_quotes(text: &str) -> impl Iterator<Item = (usize, char, usize)> + '_ {
-    let (mut depth, mut quoted) = (0usize, false);
+    outside_marks(text, &['"'])
+}
+
+/// [`outside_quotes`], with a span between backticks skipped as well, as the engine's params object
+/// reads it: inside a span opened by a double quote or a backtick, only the same mark closes it.
+pub(crate) fn outside_quotes_and_backticks(text: &str) -> impl Iterator<Item = (usize, char, usize)> + '_ {
+    outside_marks(text, &['"', '`'])
+}
+
+/// Each character of `text` that is not one of `marks` or inside a span a mark opens and the same
+/// mark closes, as [`outside_quotes`] counts them.
+fn outside_marks<'a>(text: &'a str, marks: &'static [char]) -> impl Iterator<Item = (usize, char, usize)> + 'a {
+    let (mut depth, mut quote) = (0usize, None::<char>);
     text.char_indices().filter_map(move |(i, ch)| {
-        if ch == '"' {
-            quoted = !quoted;
+        if let Some(q) = quote {
+            if ch == q {
+                quote = None;
+            }
             return None;
         }
-        if quoted {
+        if marks.contains(&ch) {
+            quote = Some(ch);
             return None;
         }
         let before = depth;
