@@ -165,8 +165,9 @@ impl CircleTool {
             Some(Press::First { .. }) | None => out.extend(self.pointer.filter(|_| self.first.is_some())),
             // A press on the first point adds no point: a drag from it drags out a diameter.
             Some(Press::Second { on_first: true, dragged, .. }) => out.extend(self.pointer.filter(|_| dragged)),
-            // From a center, the second point follows the pointer.
-            Some(Press::Second { .. }) if self.centered => out.extend(self.pointer),
+            // From a center, the second point follows the pointer once the press has been dragged;
+            // until then it is the pressed point, which a release within DRAG_PX draws through.
+            Some(Press::Second { dragged: true, .. }) if self.centered => out.extend(self.pointer),
             Some(Press::Second { at, dragged: false, .. }) => out.push(at),
             Some(Press::Second { snapped, dragged: true, .. }) => {
                 out.push(snapped);
@@ -296,9 +297,8 @@ impl Tool for CircleTool {
                 vec![]
             }
             PointerKind::Up => match (self.press.take(), self.first, self.pointer) {
-                // Once the press has moved DRAG_PX, the release draws the circle the tool shows, also
-                // where the pointer came back nearer the press; where it shows none, the release
-                // draws nothing and starts afresh.
+                // A release DRAG_PX or more from the press draws the circle the tool shows; where it
+                // shows none, the release draws nothing and starts afresh.
                 (Some(Press::First { at, dragged: true, .. }), _, Some(b))
                     if b.distance(at) >= cx.tol(DRAG_PX) || circle_for(&[at, b], self.centered).is_some() =>
                 {
@@ -315,7 +315,7 @@ impl Tool for CircleTool {
                 (Some(Press::Second { on_first: true, dragged: false, .. }), ..) => vec![],
                 (Some(Press::Second { on_first: true, dragged: true, .. }), Some(a), Some(c)) => self.draw(&[a, c]),
                 // From a center: the outline passes through the point the tool shows it on, where
-                // the drag ends or, within DRAG_PX of the press, where the pointer last was.
+                // the drag ends or, within DRAG_PX of the press, the pressed point.
                 (Some(Press::Second { .. }), Some(a), Some(c)) if self.centered => self.draw(&[a, c]),
                 (Some(Press::Second { at, dragged: false, .. }), Some(a), _) => self.draw(&[a, at]),
                 // Three points: Alt's rounding of the diameter does not apply.

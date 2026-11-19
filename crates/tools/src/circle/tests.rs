@@ -473,8 +473,8 @@ fn from_center_two_clicks_draw_the_circle_through_the_second() {
 }
 
 /// With From Center, the release draws the circle the tool shows: a drag from the center ends
-/// where it is let go, and a second press moved less than 2 screen points draws the outline
-/// through the pointer, not through the point of the press.
+/// where it is let go, and a second press moved less than 2 screen points shows and draws the
+/// outline through the point of the press.
 #[test]
 fn from_center_the_release_draws_the_circle_shown() {
     let (d, _) = doc_with_rect();
@@ -488,26 +488,24 @@ fn from_center_the_release_draws_the_circle_shown() {
     t.pointer(&cx, &ev(PointerKind::Down, (330.0, 340.0), Mods::default()));
     t.pointer(&cx, &ev(PointerKind::Drag, (331.0, 340.0), Mods::default()));
     let shown = preview(&t.overlays(&cx)).expect("the circle is shown");
-    let r = Point::new(300.0, 300.0).distance(Point::new(331.0, 340.0));
+    let r = Point::new(300.0, 300.0).distance(Point::new(330.0, 340.0));
     assert!(near(shown, Rect::new(300.0 - r, 300.0 - r, 300.0 + r, 300.0 + r)), "{:?}", t.overlays(&cx));
-    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, (331.0, 340.0), Mods::default())), centered((300.0, 300.0), (331.0, 340.0)));
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, (331.0, 340.0), Mods::default())), centered((300.0, 300.0), (330.0, 340.0)));
 }
 
-/// Once a press has moved 2 screen points, its release draws the circle the tool shows, also when
-/// the pointer comes back nearer than that: from a center and on a diameter. A drag back onto the
-/// press itself shows no circle and places the first point, as a click does.
+/// A first press let go within 2 screen points of where it was pressed is a click also after a
+/// drag that came back to it, from a center and on a diameter: it places the first point.
 #[test]
-fn a_drag_brought_back_near_its_press_draws_the_circle_shown() {
+fn a_first_press_dragged_back_near_its_press_places_the_first_point() {
     let (d, _) = doc_with_rect();
     let (s, p) = (Selection::default(), paint());
     let cx = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
     let mut t = from_center();
-    assert_eq!(drag(&mut t, &cx, (300.0, 300.0), &[(320.0, 300.0), (301.0, 300.0)], Mods::default()), centered((300.0, 300.0), (301.0, 300.0)));
-    assert!(!t.ends_on_escape(&cx), "no center is left pending");
+    assert_eq!(drag(&mut t, &cx, (300.0, 300.0), &[(320.0, 300.0), (301.0, 300.0)], Mods::default()), vec![]);
+    assert!(t.ends_on_escape(&cx), "the center is placed");
+    assert_eq!(click(&mut t, &cx, (380.0, 300.0)), centered((300.0, 300.0), (380.0, 300.0)));
     let mut t = CircleTool::default();
-    assert_eq!(drag(&mut t, &cx, (300.0, 300.0), &[(320.0, 300.0), (301.0, 300.0)], Mods::default()), circle(&[(300.0, 300.0), (301.0, 300.0)]));
-    assert!(!t.ends_on_escape(&cx));
-    assert_eq!(drag(&mut t, &cx, (300.0, 300.0), &[(320.0, 300.0), (300.0, 300.0)], Mods::default()), vec![]);
+    assert_eq!(drag(&mut t, &cx, (300.0, 300.0), &[(320.0, 300.0), (301.0, 300.0)], Mods::default()), vec![]);
     assert!(t.ends_on_escape(&cx), "the first point is placed");
     t.key(&cx, ToolKey::Escape, Mods::default());
     // A drag to a circle past the canvas draws nothing and leaves no point behind.
