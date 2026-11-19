@@ -139,6 +139,7 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("cornerRadius", "General", "", "Corner Radius", len(0.0, 1296.0, General)),
     p!("pasteOffset", "General", "", "Paste Offset", len(0.0, 1296.0, General)),
     p!("disableAutoAddDelete", "General", "Options", "Disable Auto Add/Delete", bool),
+    p!("interpolateControlPoints", "General", "Options", "Interpolate Control Points When Moving Anchors", bool),
     p!("usePreciseCursors", "General", "Options", "Use Precise Cursors", bool),
     p!("showToolTips", "General", "Options", "Show Tool Tips", bool),
     p!("showExternalScriptWarning", "General", "Options", "Show External Script Warning", bool),
@@ -156,6 +157,8 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("scrubNumericFields", "General", "Options", "Scrub Numeric Fields by Dragging", bool),
     p!("trackpadRotateView", "General", "Options", "Trackpad Gesture to Rotate View", bool),
     p!("holdToolKeys", "General", "Options", "Hold a Tool Shortcut to Use the Tool Temporarily", bool),
+    p!("holdShortcuts", "General", "Options", "Hold Shortcuts", bool),
+    p!("keyHoldDelay", "General", "Options", "Hold Shortcut Delay", num(0.2, 1.0, "s")),
     p!("boundingBoxWhileMovingAndDrawing", "General", "Options", "Show Bounding Box While Moving and Drawing", bool),
     // Selection & Anchor Display
     p!("selectionTolerance", "Selection & Anchor Display", "Selection", "Tolerance", num(1.0, 8.0, "px")),
@@ -323,6 +326,14 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("hyphenationExceptions", "Hyphenation", "", "Exceptions (comma separated)", text),
     // Plug-ins & Scratch Disks
     p!("pluginsFolder", "Plug-ins & Scratch Disks", "Plug-ins", "Additional Plug-ins Folder", text),
+    // The instructions each object filter run gets: Large gives at least 250 M besides those for each byte of input.
+    p!(
+        "pluginInstructionBudget",
+        "Plug-ins & Scratch Disks",
+        "Plug-ins",
+        "Plug-in Instruction Budget",
+        choice(&[("normal", "Normal"), ("large", "Large")])
+    ),
     p!("scratchPrimary", "Plug-ins & Scratch Disks", "Scratch Disks", "Primary", text),
     p!("scratchSecondary", "Plug-ins & Scratch Disks", "Scratch Disks", "Secondary", text),
     // User Interface
@@ -368,6 +379,8 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("gpuPerformance", "Performance", "GPU Performance", "GPU Performance", bool),
     p!("animatedZoom", "Performance", "GPU Performance", "Animated Zoom", bool),
     p!("gpuPreference", "Performance", "GPU Performance", "Graphics Processor", choice(GPU_PREFERENCES)),
+    // Read by the desktop app at startup: the window presents without vsync, capped at 240 fps (#6013).
+    p!("lowLatencyDrawing", "Performance", "GPU Performance", "Low-Latency Drawing", bool),
     p!("historyStates", "Performance", "", "History States", int(5, 1000)),
     p!("realTimeDrawing", "Performance", "", "Real-time Drawing and Editing", bool),
     p!("renderThreads", "Performance", "", "Render Threads (-1 = Automatic)", int(-1, 64)),

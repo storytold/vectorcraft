@@ -36,7 +36,7 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
             let mut rows = v.as_str() == Some("rows");
             ui.add_space(4.0);
             egui::Grid::new("text-flow").num_columns(2).spacing([12.0, 8.0]).show(ui, |ui| {
-                let row = ui.label(egui::RichText::new(format!("{}:", tl!("Text Flow"))).color(Tokens::get(ui.ctx()).text));
+                let row = ui.label(egui::RichText::new(crate::i18n::colon(tl!("Text Flow"))).color(Tokens::get(ui.ctx()).text));
                 ui.label_inputs_by(row.id, |ui| {
                     ui.horizontal(|ui| {
                         if widgets::radio(ui, tl!("By Rows"), rows, true) {
@@ -250,8 +250,14 @@ const PATH_ALIGN: form::Choices = &[("Ascender", "ascender"), ("Descender", "des
 const AREA_FIT: form::Choices = &[("None", "none"), ("Auto Size", "autoHeight"), ("Shrink Text to Fit", "shrinkText"), ("Block", "block")];
 
 /// Area Type Options › First Baseline.
-const FIRST_BASELINE: form::Choices =
-    &[("Ascent", "ascent"), ("Cap Height", "capHeight"), ("x Height", "xHeight"), ("Leading", "leading"), ("Fixed", "fixed")];
+const FIRST_BASELINE: form::Choices = &[
+    ("Ascent", "ascent"),
+    ("Cap Height", "capHeight"),
+    ("x Height", "xHeight"),
+    ("Leading", "leading"),
+    ("Em Box Height", "emBoxHeight"),
+    ("Fixed", "fixed"),
+];
 
 /// Area Type Options › Align (vertical alignment of the lines in each row/column).
 const VERTICAL_ALIGN: form::Choices = &[("Top", "top"), ("Center", "center"), ("Bottom", "bottom"), ("Justify", "justify")];
@@ -311,6 +317,35 @@ mod tests {
         crate::dialogs::confirm(&mut app).unwrap();
         let NodeKind::Text(t) = &app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().kind else { panic!("text") };
         assert_eq!(t.area.vertical_align, VerticalAlign::Center);
+    }
+
+    /// Area Type Options › First Baseline offers Em Box Height: OK sets it with its Min, and the
+    /// dialog opens again with it chosen.
+    #[test]
+    fn area_type_options_dialog_sets_the_em_box_height_first_baseline() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+        let id = app.run("text.create", json!({"x": 20, "y": 20, "text": "Hello", "area": {"width": 200, "height": 200}})).unwrap()["id"]
+            .as_u64()
+            .unwrap();
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        // The labels `i18n::tests::first_baseline_choices_are_in_complete_catalogs` checks.
+        let labels: Vec<&str> = choices("text.areaOptions", "firstBaseline").unwrap().iter().map(|(l, _)| *l).collect();
+        assert_eq!(labels, ["Ascent", "Cap Height", "x Height", "Leading", "Em Box Height", "Fixed"]);
+        crate::menus::invoke(&mut app, "text.areaOptions", json!({}));
+        assert_eq!(app.ui.dialog.as_ref().unwrap().str("firstBaseline"), "ascent");
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| crate::dialogs::show(&mut app, ui.ctx()));
+        out.textures_delta.clear();
+        let fields = &mut app.ui.dialog.as_mut().unwrap().fields;
+        fields.insert("firstBaseline".into(), json!("emBoxHeight"));
+        fields.insert("firstBaselineMin".into(), json!(4.0));
+        crate::dialogs::confirm(&mut app).unwrap();
+        let NodeKind::Text(t) = &app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().kind else { panic!("text") };
+        assert_eq!((t.area.first_baseline, t.area.first_baseline_min), (vectorcraft_doc::FirstBaseline::EmBoxHeight, 4.0));
+        crate::menus::invoke(&mut app, "text.areaOptions", json!({}));
+        assert_eq!(app.ui.dialog.as_ref().unwrap().str("firstBaseline"), "emBoxHeight");
     }
 
     /// Area Type Options shows the gutter between rows beside the gutter, and OK sets a gutter
@@ -433,6 +468,47 @@ mod tests {
         assert!(p[0] == p[1] && p[1] == p[2] && p[0] < 128, "red in grayscale: {p:?}");
     }
 
+    /// Object › Rasterize… opens this dialog with its options as parameter labels (#7991): in
+    /// French the heading, every field label and the resolution's unit ("ppp") are drawn in French.
+    #[test]
+    fn rasterize_dialog_is_drawn_in_the_ui_language() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        let entries = crate::menus::menu_entries(&app);
+        let item = entries.iter().find(|e| e.path == ["Object"] && e.label == "Rasterize…").expect("listed");
+        let (cmd, p) = crate::menus::click_target(&item.label, item.command.as_deref().unwrap(), &item.params);
+        crate::menus::invoke(&mut app, &cmd, p);
+        assert_eq!(app.ui.dialog.as_ref().unwrap().str("__label"), "Rasterize");
+        let keys: Vec<String> = app.ui.dialog.as_ref().unwrap().fields.keys().filter(|k| !k.starts_with("__")).cloned().collect();
+        assert_eq!(keys.len(), 6, "{keys:?}");
+        assert_eq!(form::humanize("ppi"), "Resolution:");
+        crate::i18n::set_current(crate::i18n::Lang::from_code("fr").unwrap());
+        let shown = crate::tests_labels::painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
+        let heading = heading_label(app.ui.dialog.as_ref().unwrap());
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        assert_eq!(heading, "Pixelliser");
+        let french = ["Ajouter autour de l’objet", "Lissage", "Arrière-plan", "Masque d’écrêtage", "Modèle colorimétrique", "Résolution", "ppp"];
+        for s in french {
+            assert!(shown.contains(s), "{s} in {shown}");
+        }
+        for s in ["Rasterize", "Add Around", "Anti Alias", "Background", "Clipping Mask", "Color Model", "Resolution", "Ppi", "ppi"] {
+            assert!(!shown.contains(s), "{s} left in English: {shown}");
+        }
+        // Every language with complete menus heads the dialog as the menu item that opened it
+        // reads, and has a row for each label, the unit and the Color Model choices.
+        for lang in crate::i18n::Lang::all().filter(|l| l.complete_menus()) {
+            let menu = crate::i18n::tr(lang, &item.label);
+            assert_ne!(menu, item.label, "{}: menu item", lang.code());
+            assert_eq!(heading_in(lang, "Rasterize"), menu.trim_end_matches('…').trim_end(), "{}: heading", lang.code());
+            let labels = keys.iter().map(|k| form::humanize(k).trim_end_matches(':').to_string());
+            for label in labels.chain(["{n} ppi", "Grayscale", "Bitmap"].map(String::from)) {
+                assert!(crate::i18n::has(lang, &label), "{}: {label}", lang.code());
+            }
+        }
+    }
+
     /// Object › Path › Clean Up… opens this dialog headed "Clean Up", which most catalogs hold only
     /// as the menu label "Clean Up…" (#7991). In French the heading and every option are translated.
     #[test]
@@ -528,6 +604,56 @@ mod tests {
         assert_eq!(app.session.doc().unwrap().history.undo.len(), steps + 1, "one undo step");
         app.run("edit.undo", json!({})).unwrap();
         assert_eq!(cols(&app), 2, "one Undo takes the whole change back");
+    }
+
+    /// Grid Repeat Options labels its column fields Columns and Flip Columns, as the Rows and Flip
+    /// Rows fields beside them are spelled out.
+    #[test]
+    fn grid_repeat_options_spell_out_columns() {
+        let mut app = grid_options_app();
+        let shown = crate::tests_labels::painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
+        for s in ["Rows:", "Columns:", "Flip Rows:", "Flip Columns:"] {
+            assert!(shown.contains(s), "{s} in {shown}");
+        }
+        assert!(!shown.contains("Cols"), "no Cols label: {shown}");
+    }
+
+    /// Object › Create Gradient Mesh… opens this dialog with the menu's rows, cols, appearance and
+    /// highlight. In French the heading and the four labels are translated, and "cols" is labeled
+    /// Columns (#7991).
+    #[test]
+    fn create_gradient_mesh_dialog_is_drawn_in_the_ui_language() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
+        let entries = crate::menus::menu_entries(&app);
+        let item = entries.iter().find(|e| e.path == ["Object"] && e.label == "Create Gradient Mesh…").expect("listed");
+        let (cmd, p) = crate::menus::click_target(&item.label, item.command.as_deref().unwrap(), &item.params);
+        crate::menus::invoke(&mut app, &cmd, p);
+        assert_eq!(app.ui.dialog.as_ref().unwrap().str("__label"), "Create Gradient Mesh");
+        assert_eq!(form::humanize("cols"), "Columns:");
+        crate::i18n::set_current(crate::i18n::Lang::from_code("fr").unwrap());
+        let shown = crate::tests_labels::painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
+        let heading = heading_label(app.ui.dialog.as_ref().unwrap());
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        assert_eq!(heading, "Créer un filet de dégradé");
+        for s in ["Créer un filet de dégradé", "Lignes", "Colonnes", "Aspect"] {
+            assert!(shown.contains(s), "{s} in {shown}");
+        }
+        for s in ["Create Gradient Mesh", "Rows", "Cols", "Columns", "Appearance", "Highlight"] {
+            assert!(!shown.contains(s), "{s} left in English: {shown}");
+        }
+        // Every language with complete menus heads the dialog as the menu item reads and has the
+        // four labels.
+        for lang in crate::i18n::Lang::all().filter(|l| l.complete_menus()) {
+            let menu = crate::i18n::tr(lang, &item.label);
+            assert_ne!(menu, item.label, "{}: menu item", lang.code());
+            assert_eq!(heading_in(lang, "Create Gradient Mesh"), menu.trim_end_matches('…').trim_end(), "{}: heading", lang.code());
+            for key in ["rows", "cols", "appearance", "highlight"] {
+                let label = form::humanize(key);
+                assert!(crate::i18n::has(lang, label.trim_end_matches(':')), "{}: {label}", lang.code());
+            }
+        }
     }
 
     /// Radial and Mirror Repeat Options have no Preview (their public pages list none): their

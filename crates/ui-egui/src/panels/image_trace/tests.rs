@@ -2,7 +2,7 @@ use super::super::tests_long_popups::{
     PopupWindow, assert_last_row_scrolls_into_view, assert_rows_stay_on_one_line, assert_short_list_does_not_scroll,
 };
 use super::*;
-use crate::panels::library_panel;
+use crate::panels::{first_selected, library_panel};
 use egui::{Event, PointerButton, Pos2, Rect, vec2};
 
 /// One headless frame of the panel (and its menu) with `events`: the texts drawn, with where.
@@ -160,7 +160,7 @@ fn a_large_image_traces_and_the_status_bar_says_it_is_slower() {
     let data = vectorcraft_format::base64_encode(&png);
     app.run("file.place", json!({"name": "wide.png", "dataBase64": data, "link": false})).unwrap();
     trace_with(&mut app, "Default");
-    assert!(target(&app).2.is_some(), "the image is traced");
+    assert!(find_target(&app).stored.is_some(), "the image is traced");
     assert!(app.ui.status.contains("1601 × 12") && app.ui.status.contains("more slowly"), "{}", app.ui.status);
 }
 
@@ -208,8 +208,11 @@ fn a_large_image_traced_as_a_flat_logo_shows_the_size_it_was_traced_at() {
     let data = vectorcraft_format::base64_encode(&png);
     app.run("file.place", json!({"name": "logo.png", "dataBase64": data, "link": false})).unwrap();
     trace_with(&mut app, "Flat Logo");
-    assert!(target(&app).2.is_some(), "the image is traced: {}", app.ui.status);
-    assert_eq!(app.ui.status, "Flat Logo traced the image at 801 × 801 pixels, averaged down from 1602 × 1602.");
+    assert!(find_target(&app).stored.is_some(), "the image is traced: {}", app.ui.status);
+    let note = "Flat Logo traced the image at 801 × 801 pixels, averaged down from 1602 × 1602.";
+    let status = format!("Traced with 1 note: {note}");
+    assert_eq!(app.ui.status, status);
+    assert_eq!(app.ui.status_notes, Some((status, vec![note.to_string()])));
 }
 
 #[test]
@@ -327,11 +330,11 @@ fn with_preview_off_a_slider_change_waits_for_trace() {
     assert_eq!(app.session.active().unwrap().history.undo.len(), steps, "no trace while Preview is off");
     assert_eq!(first_selected(&app).unwrap().children().unwrap().len(), 2, "source and ink path, as before");
     let draft: TraceUi = pstate(&ctx, "image-trace");
-    assert_ne!(draft.params["threshold"], target(&app).2.unwrap()["params"]["threshold"], "the change waits in the panel");
+    assert_ne!(draft.params["threshold"], find_target(&app).stored.unwrap()["params"]["threshold"], "the change waits in the panel");
     click(&mut app, &ctx, "Trace");
     assert_eq!(app.session.active().unwrap().history.undo.len(), steps + 1, "Trace applies it as one undo step");
     assert_eq!(first_selected(&app).unwrap().children().unwrap().len(), 1, "only the source remains below the ink's luminance");
-    assert_eq!(target(&app).2.unwrap()["params"], pstate::<TraceUi>(&ctx, "image-trace").params);
+    assert_eq!(find_target(&app).stored.unwrap()["params"], pstate::<TraceUi>(&ctx, "image-trace").params);
     assert!(!app.ui.image_trace_preview, "Trace leaves Preview off");
 }
 
@@ -340,7 +343,7 @@ fn turning_preview_on_traces_the_changes_that_waited() {
     let mut app = traced_app();
     let ctx = egui::Context::default();
     crate::theme::install_fonts(&ctx);
-    let strokes = |app: &VectorcraftApp| target(app).2.map(|t| t["params"]["strokes"].clone());
+    let strokes = |app: &VectorcraftApp| find_target(app).stored.map(|t| t["params"]["strokes"].clone());
     let undo = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
     let steps = undo(&app);
     click(&mut app, &ctx, "Preview");
@@ -357,7 +360,7 @@ fn turning_preview_on_traces_the_changes_that_waited() {
     // A change of view keeps the settings that wait, and Preview turned on with `ui.set` traces them.
     click(&mut app, &ctx, "Preview");
     click(&mut app, &ctx, "Fills");
-    assert_eq!(target(&app).2.unwrap()["params"]["fills"], json!(true));
+    assert_eq!(find_target(&app).stored.unwrap()["params"]["fills"], json!(true));
     click(&mut app, &ctx, "Tracing Result");
     click(&mut app, &ctx, "Outlines");
     assert_eq!(selected_trace(&app).map(|t| t.1), Some(TraceView::Outlines));
@@ -366,7 +369,7 @@ fn turning_preview_on_traces_the_changes_that_waited() {
     assert_eq!(pstate::<TraceUi>(&ctx, "image-trace").params["fills"], json!(false), "the change still waits");
     app.ui.image_trace_preview = true;
     frame(&mut app, &ctx, vec![]);
-    assert_eq!(target(&app).2.unwrap()["params"]["fills"], json!(false), "traced with the waiting change");
+    assert_eq!(find_target(&app).stored.unwrap()["params"]["fills"], json!(false), "traced with the waiting change");
     assert_eq!(selected_trace(&app).map(|t| t.1), Some(TraceView::Outlines), "in the view chosen");
     assert_eq!(undo(&app), steps + 3);
 }
@@ -380,7 +383,7 @@ fn preview_turned_on_with_nothing_selected_traces_when_the_object_is_selected_ag
     let undo = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
     click(&mut app, &ctx, "Preview");
     click(&mut app, &ctx, "Strokes");
-    assert_eq!(target(&app).2.unwrap()["params"]["strokes"], json!(false), "the change waits");
+    assert_eq!(find_target(&app).stored.unwrap()["params"]["strokes"], json!(false), "the change waits");
     app.run("select.none", json!({})).unwrap();
     let steps = undo(&app);
     click(&mut app, &ctx, "Preview");
@@ -388,7 +391,7 @@ fn preview_turned_on_with_nothing_selected_traces_when_the_object_is_selected_ag
     assert_eq!(undo(&app), steps, "nothing to trace with nothing selected");
     app.run("select.set", json!({"ids": [a.0]})).unwrap();
     frame(&mut app, &ctx, vec![]);
-    assert_eq!(target(&app).2.unwrap()["params"]["strokes"], json!(true), "traced with the change that waited");
+    assert_eq!(find_target(&app).stored.unwrap()["params"]["strokes"], json!(true), "traced with the change that waited");
     assert_eq!(undo(&app), steps + 1);
 }
 
@@ -401,7 +404,7 @@ fn settings_that_wait_stay_with_their_object() {
     app.run("edit.duplicate", json!({})).unwrap();
     let b = first_selected(&app).unwrap().id;
     assert_ne!(a, b);
-    assert_eq!(target(&app).2.unwrap()["params"]["strokes"], json!(false), "the copy has the same settings");
+    assert_eq!(find_target(&app).stored.unwrap()["params"]["strokes"], json!(false), "the copy has the same settings");
     app.run("select.set", json!({"ids": [a.0]})).unwrap();
     click(&mut app, &ctx, "Preview");
     click(&mut app, &ctx, "Strokes");
@@ -410,7 +413,7 @@ fn settings_that_wait_stay_with_their_object() {
     frame(&mut app, &ctx, vec![]);
     assert_eq!(pstate::<TraceUi>(&ctx, "image-trace").params["strokes"], json!(false), "the panel shows B's own settings");
     click(&mut app, &ctx, "Trace");
-    assert_eq!(target(&app).2.unwrap()["params"]["strokes"], json!(false), "B is traced with its own settings");
+    assert_eq!(find_target(&app).stored.unwrap()["params"]["strokes"], json!(false), "B is traced with its own settings");
 }
 
 #[test]
@@ -434,7 +437,7 @@ fn settings_that_wait_come_back_when_their_object_is_selected_again() {
     assert_eq!(shown(&ctx), json!(true), "A's change still waits");
     let steps = undo(&app);
     click(&mut app, &ctx, "Trace");
-    assert_eq!(target(&app).2.unwrap()["params"]["strokes"], json!(true), "A is traced with its change");
+    assert_eq!(find_target(&app).stored.unwrap()["params"]["strokes"], json!(true), "A is traced with its change");
     assert_eq!(undo(&app), steps + 1);
     // Preview turned on while B is selected: A is traced with its change when it is selected again.
     let a = first_selected(&app).unwrap().id;
@@ -446,7 +449,7 @@ fn settings_that_wait_come_back_when_their_object_is_selected_again() {
     let steps = undo(&app);
     app.run("select.set", json!({"ids": [a.0]})).unwrap();
     frame(&mut app, &ctx, vec![]);
-    assert_eq!(target(&app).2.unwrap()["params"]["strokes"], json!(false), "traced with the change that waited");
+    assert_eq!(find_target(&app).stored.unwrap()["params"]["strokes"], json!(false), "traced with the change that waited");
     assert_eq!(undo(&app), steps + 1);
     frame(&mut app, &ctx, vec![]);
     assert_eq!(undo(&app), steps + 1, "traced once");
@@ -499,11 +502,11 @@ fn settings_that_wait_are_kept_when_a_plain_image_is_traced_in_between() {
     .unwrap();
     let data = vectorcraft_format::base64_encode(&png);
     app.run("file.place", json!({"name": "plain.png", "dataBase64": data, "link": false})).unwrap();
-    assert!(target(&app).1, "a plain image is selected");
+    assert!(find_target(&app).is_image, "a plain image is selected");
     frame(&mut app, &ctx, vec![]);
     click(&mut app, &ctx, "Strokes");
     click(&mut app, &ctx, "Trace");
-    assert_eq!(target(&app).2.unwrap()["params"]["strokes"], json!(false), "the image is traced with the panel's settings");
+    assert_eq!(find_target(&app).stored.unwrap()["params"]["strokes"], json!(false), "the image is traced with the panel's settings");
     app.run("select.set", json!({"ids": [a.0]})).unwrap();
     frame(&mut app, &ctx, vec![]);
     assert_eq!(pstate::<TraceUi>(&ctx, "image-trace").params["strokes"], json!(true), "A's change still waits");
@@ -532,7 +535,7 @@ fn settings_that_wait_are_dropped_when_their_object_changed_since() {
     app.run("select.set", json!({"ids": [a.0]})).unwrap();
     frame(&mut app, &ctx, vec![]);
     let shown = pstate::<TraceUi>(&ctx, "image-trace");
-    assert_eq!(shown.params, target(&app).2.unwrap()["params"], "the panel shows A's settings as they are now");
+    assert_eq!(shown.params, find_target(&app).stored.unwrap()["params"], "the panel shows A's settings as they are now");
     assert!(shown.drafts.is_empty(), "the change is dropped");
 }
 
@@ -575,7 +578,7 @@ fn sketch_adjustment_sliders_retrace_on_release() {
         let rail = ctx.data(|d| d.get_temp::<Rect>(egui::Id::unique(("trace-slider", label)))).unwrap();
         let at = rail.left_center() + vec2(20.0, 0.0);
         let press = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
-        let before = target(&app).2.unwrap()["params"][key].clone();
+        let before = find_target(&app).stored.unwrap()["params"][key].clone();
         let preset_before = pstate::<TraceUi>(&ctx, "image-trace").preset;
         let steps = app.session.active().unwrap().history.undo.len();
         frame(&mut app, &ctx, vec![Event::PointerMoved(at), press(true)]);
@@ -584,7 +587,7 @@ fn sketch_adjustment_sliders_retrace_on_release() {
         assert_ne!(draft.params[key], before, "{label} updates while held");
         assert_eq!(draft.preset, preset_before, "the preset row stays in place during {label}");
         frame(&mut app, &ctx, vec![press(false)]);
-        let stored = target(&app).2.unwrap();
+        let stored = find_target(&app).stored.unwrap();
         assert_ne!(
             stored["params"][key],
             before,
@@ -814,7 +817,7 @@ fn the_palette_shows_in_color_mode_and_traces_again() {
     let ctx = egui::Context::default();
     crate::theme::install_fonts(&ctx);
     let has = |texts: &[(String, Rect)], s: &str| texts.iter().any(|(t, _)| t == s);
-    let palette = |app: &VectorcraftApp| target(app).2.map(|t| t["params"]["palette"].clone());
+    let palette = |app: &VectorcraftApp| find_target(app).stored.map(|t| t["params"]["palette"].clone());
     assert!(!has(&frame(&mut app, &ctx, vec![]), "Palette:"), "Black and White has no palette");
     app.run("imageTrace.make", json!({"preset": "6 Colors"})).unwrap();
     let texts = frame(&mut app, &ctx, vec![]);
@@ -841,7 +844,7 @@ fn document_library_colors_lists_the_documents_color_groups() {
     let ctx = egui::Context::default();
     crate::theme::install_fonts(&ctx);
     let has = |texts: &[(String, Rect)], s: &str| texts.iter().any(|(t, _)| t == s);
-    let stored = |app: &VectorcraftApp, key: &str| target(app).2.map(|t| t["params"][key].clone());
+    let stored = |app: &VectorcraftApp, key: &str| find_target(app).stored.map(|t| t["params"][key].clone());
     let texts = frame(&mut app, &ctx, vec![]);
     assert!(has(&texts, "Colors:") && has(&texts, "All"), "{texts:?}");
     // The list holds All and the document's groups; a group traces again with its colors.
@@ -850,7 +853,7 @@ fn document_library_colors_lists_the_documents_color_groups() {
     let steps = app.session.active().unwrap().history.undo.len();
     click(&mut app, &ctx, "   Brand");
     assert_eq!(stored(&app, "colorGroup"), Some(json!("Brand")));
-    assert_eq!(target(&app).2.unwrap()["preset"], "Custom");
+    assert_eq!(find_target(&app).stored.unwrap()["preset"], "Custom");
     assert_eq!(app.session.active().unwrap().history.undo.len(), steps + 1);
     assert!(has(&frame(&mut app, &ctx, vec![]), "Brand"));
     // All again.
@@ -895,7 +898,7 @@ fn a_color_group_the_active_document_lacks_is_all() {
     crate::theme::install_fonts(&ctx);
     click(&mut app, &ctx, "All");
     click(&mut app, &ctx, "   Brand");
-    assert_eq!(target(&app).2.map(|t| t["params"]["colorGroup"].clone()), Some(json!("Brand")));
+    assert_eq!(find_target(&app).stored.map(|t| t["params"]["colorGroup"].clone()), Some(json!("Brand")));
     let shows_brand = |app: &mut VectorcraftApp| frame(app, &ctx, vec![]).iter().any(|(t, _)| t == "Brand");
     // Without the group the row shows All; undoing its removal shows it again.
     app.run("swatch.ungroup", json!({"name": "Brand"})).unwrap();
@@ -953,7 +956,7 @@ fn a_color_group_the_active_document_lacks_is_all() {
     assert!(!shows_brand(&mut app));
     // Trace uses every document swatch.
     click(&mut app, &ctx, "Trace");
-    let stored = target(&app).2.unwrap_or_else(|| panic!("not traced: {}", app.ui.status));
+    let stored = find_target(&app).stored.unwrap_or_else(|| panic!("not traced: {}", app.ui.status));
     assert!(stored["params"]["colorGroup"].as_str().is_none_or(str::is_empty), "{stored}");
     assert_eq!(stored["params"]["palette"], "documentLibrary");
 }
@@ -963,7 +966,7 @@ fn create_strokes_traces_again_and_keeps_one_kind_on() {
     let mut app = traced_app();
     let ctx = egui::Context::default();
     crate::theme::install_fonts(&ctx);
-    let create = |app: &VectorcraftApp| target(app).2.map(|t| (t["params"]["fills"].clone(), t["params"]["strokes"].clone()));
+    let create = |app: &VectorcraftApp| find_target(app).stored.map(|t| (t["params"]["fills"].clone(), t["params"]["strokes"].clone()));
     let texts = frame(&mut app, &ctx, vec![]);
     for s in ["Create:", "Fills", "Strokes", "Stroke", "10"] {
         assert!(texts.iter().any(|(t, _)| t == s), "{s}: {texts:?}");
@@ -1444,7 +1447,7 @@ fn each_preset_button_traces_the_selected_object_again_with_its_preset() {
         assert_eq!(selected_trace(&app).unwrap().0, preset, "{label}");
         assert_eq!(undo(&app), steps + 1, "{label} traces as one undo step");
         let all = presets(&mut app, &ctx);
-        assert_eq!(target(&app).2.unwrap()["params"], find_preset(&all, preset).unwrap().1, "{label} traces with the preset's settings");
+        assert_eq!(find_target(&app).stored.unwrap()["params"], find_preset(&all, preset).unwrap().1, "{label} traces with the preset's settings");
         assert_eq!((shown_preset(&ctx), selected_preset_buttons(&ctx)), (preset.to_string(), vec![preset]), "{label}");
     }
     // Undo returns to the object's previous preset, and the buttons follow it.
@@ -1496,7 +1499,7 @@ fn a_preset_button_with_no_image_selected_changes_the_panel_settings_as_the_pres
     frame(&mut app, &ctx, vec![]);
     let by_button: TraceUi = pstate(&ctx, "image-trace");
     assert_eq!(app.session.active().unwrap().history.undo.len(), steps, "nothing is traced");
-    assert!(target(&app).2.is_none(), "no Image Trace object");
+    assert!(find_target(&app).stored.is_none(), "no Image Trace object");
     assert_eq!(selected_preset_buttons(&ctx), ["High Fidelity Photo"]);
 
     let mut menu_app = blank();
@@ -1542,7 +1545,7 @@ fn a_trace_off_the_ui_thread_is_adopted_when_it_lands() {
     crate::theme::install_fonts(&ctx);
     app.adopt_context(&ctx);
     let undo = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
-    let strokes = |app: &VectorcraftApp| target(app).2.map(|t| t["params"]["strokes"].clone());
+    let strokes = |app: &VectorcraftApp| find_target(app).stored.map(|t| t["params"]["strokes"].clone());
     let steps = undo(&app);
     click(&mut app, &ctx, "Preview");
     click(&mut app, &ctx, "Strokes");
@@ -1558,7 +1561,7 @@ fn a_trace_off_the_ui_thread_is_adopted_when_it_lands() {
     assert_eq!(strokes(&app), Some(json!(true)));
     let st: TraceUi = pstate(&ctx, "image-trace");
     assert!(st.info.is_some(), "its counts show");
-    assert_eq!(st.object, target_key(&app));
+    assert_eq!(st.object, find_target(&app).object);
     assert!(st.drafts.is_empty(), "nothing waits for the object it replaced");
     app.ui.image_trace_preview = true;
     frame(&mut app, &ctx, vec![]);
@@ -1568,4 +1571,262 @@ fn a_trace_off_the_ui_thread_is_adopted_when_it_lands() {
     assert!(app.trace_runs.running.is_empty(), "Undo traces nothing");
     assert_eq!(strokes(&app), Some(json!(false)), "the object's own settings");
     assert_eq!(undo(&app), steps);
+}
+
+/// The object Trace acts on as the panel found it before [`find_target`]: every selected object put
+/// in paint order, the first image or Image Trace object among them taken, else the first selected
+/// object.
+fn target_node_sorting_everything(app: &VectorcraftApp) -> Option<Node> {
+    let st = app.session.active()?;
+    let traceable = |n: &&Node| is_trace(n) || matches!(n.kind, NodeKind::Image(_));
+    st.selection
+        .in_paint_order(&st.doc)
+        .into_iter()
+        .find_map(|id| st.doc.node(id).filter(traceable).cloned())
+        .or_else(|| first_selected(app).map(|n| (*n).clone()))
+}
+
+/// [`Target`] from [`target_node_sorting_everything`] and a scan of the whole selection for Image
+/// Trace objects, as the panel read them on every frame before.
+fn target_sorting_everything(app: &VectorcraftApp) -> Target {
+    let any_trace = app.session.active().is_some_and(|st| st.selection.objects.iter().any(|id| st.doc.node(*id).is_some_and(is_trace)));
+    let Some(n) = target_node_sorting_everything(app) else { return Target { any_trace, ..Target::default() } };
+    Target {
+        object: app.session.active().map(|st| (st.uid, n.id)),
+        is_trace: is_trace(&n),
+        is_image: matches!(n.kind, NodeKind::Image(_)),
+        stored: n.extras().trace.as_deref().cloned(),
+        any_trace,
+    }
+}
+
+/// One frame's lookups as the panel made them before [`target`]: the target, then the scan for
+/// Image Trace objects, then the target again for its document and id.
+fn frame_lookups_sorting_everything(app: &VectorcraftApp) -> Target {
+    let mut t = target_sorting_everything(app);
+    t.object = app.session.active().zip(target_node_sorting_everything(app)).map(|(st, n)| (st.uid, n.id));
+    t
+}
+
+/// Select `ids` as they are, repeats and ids the document lacks included, as a new revision.
+fn select_as_is(app: &mut VectorcraftApp, ids: &[NodeId]) {
+    let st = app.session.active_mut().unwrap();
+    st.selection.objects = ids.to_vec();
+    st.revision += 1;
+}
+
+/// A traced document with every kind of object the lookup tells apart, by name: the Image Trace
+/// object (`trace`) and its image (`trace image`), plain images at the back (`back`) and front
+/// (`front`) of the layer, a rectangle (`rect`), an image (`deep`) in a group (`inner`) in a group
+/// (`outer`), a clipping group named Image Trace (`clip`) with an image (`clipped`), a hidden image
+/// (`hidden`), a locked one (`locked`), and an image (`other`) and an Image Trace object (`other
+/// trace`) on a second layer.
+fn lookup_fixture() -> (VectorcraftApp, std::collections::HashMap<&'static str, NodeId>) {
+    let mut app = traced_app();
+    let rect = app.run("shape.rectangle", json!({"x": 80, "y": 80, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+    let st = app.session.active_mut().unwrap();
+    let doc = Arc::make_mut(&mut st.doc);
+    let layer = doc.layers[0].id;
+    let trace: Node = doc.layers[0].children().unwrap().iter().find(|n| is_trace(n)).map(|n| (**n).clone()).unwrap();
+    let image: Node = (*trace.children().unwrap()[0]).clone();
+    let mut ids = std::collections::HashMap::from([("trace", trace.id), ("trace image", image.id), ("rect", NodeId(rect))]);
+    let back = doc.reid(&image);
+    ids.insert("back", doc.insert(Some(layer), 0, back).unwrap());
+    let front = doc.reid(&image);
+    ids.insert("front", doc.insert(Some(layer), usize::MAX, front).unwrap());
+    let deep = doc.reid(&image);
+    ids.insert("deep", deep.id);
+    let inner = Node::group(doc.alloc_id(), vec![Arc::new(deep)]);
+    ids.insert("inner", inner.id);
+    let outer = Node::group(doc.alloc_id(), vec![Arc::new(inner)]);
+    ids.insert("outer", doc.insert(Some(layer), 1, outer).unwrap());
+    let clipped = doc.reid(&image);
+    ids.insert("clipped", clipped.id);
+    let mut clip = Node::new(doc.alloc_id(), NodeKind::Group { children: vec![Arc::new(clipped)], clip: true });
+    clip.name = Some("Image Trace".into());
+    ids.insert("clip", doc.insert(Some(layer), 2, clip).unwrap());
+    let mut hidden = doc.reid(&image);
+    hidden.visible = false;
+    ids.insert("hidden", doc.insert(Some(layer), 3, hidden).unwrap());
+    let mut locked = doc.reid(&image);
+    locked.locked = true;
+    ids.insert("locked", doc.insert(Some(layer), 4, locked).unwrap());
+    let second = doc.add_layer(Some("Second"));
+    let other = doc.reid(&image);
+    ids.insert("other", doc.insert(Some(second), usize::MAX, other).unwrap());
+    let other_trace = doc.reid(&trace);
+    ids.insert("other trace", doc.insert(Some(second), 0, other_trace).unwrap());
+    st.revision += 1;
+    (app, ids)
+}
+
+/// The panel's lookup gives what putting the whole selection in paint order gave, field for field,
+/// for every kind of selection: images in either selection order, an Image Trace object with its
+/// own image, a clipping group named Image Trace, nested groups, hidden and locked images, two
+/// layers, repeated ids, ids the document lacks, and nothing selected. The result kept for a
+/// revision follows each change of the selection, an edit, Undo and a switch of document.
+#[test]
+fn the_target_lookup_matches_sorting_the_whole_selection() {
+    let (mut app, ids) = lookup_fixture();
+    let stale = NodeId(u64::MAX);
+    let cases: &[&[&str]] = &[
+        &[],
+        &["rect"],
+        &["back", "front"],
+        &["front", "back"],
+        &["rect", "front"],
+        &["trace", "trace image"],
+        &["trace image", "trace"],
+        &["rect", "trace image"],
+        &["clip"],
+        &["clip", "clipped"],
+        &["rect", "clipped"],
+        &["outer"],
+        &["outer", "deep"],
+        &["inner", "rect"],
+        &["deep", "back"],
+        &["hidden", "locked"],
+        &["locked", "rect"],
+        &["other", "front"],
+        &["other trace", "trace"],
+        &["rect", "other trace", "other"],
+        &["front", "front"],
+        &["rect", "rect"],
+        &["stale"],
+        &["stale", "rect"],
+        &["stale", "front"],
+        &["rect", "stale"],
+    ];
+    let mut every: Vec<NodeId> = ids.values().copied().collect();
+    every.sort();
+    every.push(stale);
+    let selections = cases.iter().map(|c| c.iter().map(|n| if *n == "stale" { stale } else { ids[n] }).collect::<Vec<_>>()).chain([every]);
+    let ctx = egui::Context::default();
+    let mut objects = std::collections::HashSet::new();
+    for sel in selections {
+        select_as_is(&mut app, &sel);
+        let expected = target_sorting_everything(&app);
+        assert_eq!(frame_lookups_sorting_everything(&app), expected, "{sel:?}");
+        assert_eq!(find_target(&app), expected, "{sel:?}");
+        assert_eq!(target(&app, &ctx), expected, "looked up for the revision: {sel:?}");
+        assert_eq!(target(&app, &ctx), expected, "kept for the revision: {sel:?}");
+        objects.insert(expected.object.map(|(_, id)| id));
+    }
+    assert!(objects.len() >= 8, "the cases reach many different objects: {objects:?}");
+
+    // An edit and Undo.
+    app.run("select.set", json!({"ids": [ids["rect"].0, ids["trace"].0]})).unwrap();
+    let before = target(&app, &ctx);
+    assert_eq!(before.object.map(|o| o.1), Some(ids["trace"]));
+    app.run("imageTrace.make", json!({"preset": "Outline"})).unwrap();
+    let traced = target(&app, &ctx);
+    assert_eq!(traced, target_sorting_everything(&app));
+    assert_ne!(traced.stored, before.stored, "the edit changed the stored settings");
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(target(&app, &ctx), before, "Undo");
+
+    // Another document, then back once it is closed.
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    assert_eq!(target(&app, &ctx), target_sorting_everything(&app));
+    assert_eq!(target(&app, &ctx).object, None, "nothing selected in the new document");
+    app.run("file.close", json!({})).unwrap();
+    assert_eq!(target(&app, &ctx), before, "the first document again");
+
+    // No document.
+    let none = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    assert_eq!(find_target(&none), target_sorting_everything(&none));
+    assert_eq!(target(&none, &ctx), Target::default());
+}
+
+/// The panel and its menu look the object Trace acts on up once for each revision of the document,
+/// however many frames show it, and again once the revision moves.
+#[test]
+fn the_panel_looks_its_target_up_once_per_document_revision() {
+    let mut app = traced_app();
+    let trace_id = first_selected(&app).unwrap().id;
+    let rect = app.run("shape.rectangle", json!({"x": 80, "y": 80, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [rect, trace_id.0]})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let menu_frame = |app: &mut VectorcraftApp| {
+        let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(280.0, 700.0))), ..Default::default() };
+        let mut out = ctx.run_ui(raw, |ui| menu(app, ui));
+        out.textures_delta.clear();
+    };
+    let lookups = || TARGET_LOOKUPS.with(|n| n.get());
+    let revision = |app: &VectorcraftApp| app.session.active().unwrap().revision;
+    frame(&mut app, &ctx, vec![]);
+    frame(&mut app, &ctx, vec![]);
+    let (start, at) = (lookups(), revision(&app));
+    for _ in 0..3 {
+        frame(&mut app, &ctx, vec![]);
+        menu_frame(&mut app);
+    }
+    assert_eq!(revision(&app), at, "the frames change nothing");
+    assert_eq!(lookups(), start, "the frames of one revision reuse its lookup");
+    let uid = app.session.active().unwrap().uid;
+    assert_eq!(target(&app, &ctx).object, Some((uid, trace_id)));
+
+    app.run("select.set", json!({"ids": [rect]})).unwrap();
+    assert_eq!(target(&app, &ctx).object, Some((uid, NodeId(rect))), "a new selection is looked up");
+    assert_eq!(target(&app, &ctx).object, Some((uid, NodeId(rect))));
+    assert_eq!(lookups(), start + 1, "once");
+}
+
+/// Times one frame's lookups as the panel made them before (the whole selection put in paint order
+/// twice, and scanned once more) against the kept result and against a new lookup, on 100,000
+/// selected paths in nested groups and one selected image. Run it with `cargo test --release -p
+/// vectorcraft-ui-egui --lib image_trace_target_lookup_timing -- --ignored --nocapture`.
+#[test]
+#[ignore = "timing, run by hand"]
+fn image_trace_target_lookup_timing() {
+    let mut app = traced_app();
+    app.run("imageTrace.release", json!({})).unwrap();
+    let image = first_selected(&app).unwrap().id;
+    let rect = app.run("shape.rectangle", json!({"x": 80, "y": 80, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+    let st = app.session.active_mut().unwrap();
+    let doc = Arc::make_mut(&mut st.doc);
+    let layer = doc.layers[0].id;
+    let path: Node = doc.node(NodeId(rect)).unwrap().clone();
+    let mut selected = vec![];
+    for _ in 0..100 {
+        let mut groups = vec![];
+        for _ in 0..10 {
+            let paths: Vec<Arc<Node>> = (0..100).map(|_| Arc::new(doc.reid(&path))).collect();
+            selected.extend(paths.iter().map(|p| p.id));
+            groups.push(Arc::new(Node::group(doc.alloc_id(), paths)));
+        }
+        let group = Node::group(doc.alloc_id(), groups);
+        doc.insert(Some(layer), usize::MAX, group).unwrap();
+    }
+    selected.push(image);
+    let count = selected.len();
+    select_as_is(&mut app, &selected);
+    let expected = frame_lookups_sorting_everything(&app);
+    assert_eq!(expected.object.map(|o| o.1), Some(image));
+    assert_eq!(find_target(&app), expected);
+    let ctx = egui::Context::default();
+    assert_eq!(target(&app, &ctx), expected);
+
+    let time = |f: &dyn Fn() -> Target, reps: u32| {
+        let t0 = std::time::Instant::now();
+        for _ in 0..reps {
+            std::hint::black_box(f());
+        }
+        t0.elapsed().as_secs_f64() * 1000.0 / f64::from(reps)
+    };
+    let median = |mut v: Vec<f64>| {
+        v.sort_by(f64::total_cmp);
+        v[v.len() / 2]
+    };
+    let (mut before, mut kept, mut lookup) = (vec![], vec![], vec![]);
+    for _ in 0..7 {
+        before.push(time(&|| frame_lookups_sorting_everything(&app), 10));
+        kept.push(time(&|| target(&app, &ctx), 10_000));
+        lookup.push(time(&|| find_target(&app), 10));
+    }
+    println!("{count} selected objects, ms per frame, 7 runs");
+    println!("whole selection in paint order (before): {before:.3?}, median {:.3}", median(before.clone()));
+    println!("kept result for the revision (after): {kept:.6?}, median {:.6}", median(kept.clone()));
+    println!("new lookup on a new revision (after): {lookup:.3?}, median {:.3}", median(lookup.clone()));
 }

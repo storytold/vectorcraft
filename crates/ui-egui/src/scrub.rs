@@ -1,9 +1,10 @@
-//! Scrubbing numeric fields (#400, beyond Illustrator; Photoshop's scrubby labels): a horizontal
+//! Scrubbing numeric fields (#400): a horizontal
 //! drag on a numeric field's label (`W:`, `Opacity:`, the Character panel's size icon) steps the
 //! field's value by one unit every [`PX_PER_STEP`] points, ten with Shift and a tenth with
 //! Ctrl/Cmd, as the arrow keys step a focused field; a click on the label focuses the field. A
 //! label that is a link (the Control bar's `Stroke:` and `Opacity:`, which open their panels;
-//! #4088) scrubs its field the same way, and a click on it still follows the link. The text box
+//! #4088) or opens a panel (its `X:`, `Y:`, `W:` and `H:`, which open the Transform panel) scrubs
+//! its field the same way, and a click on it still opens the panel. The text box
 //! itself never scrubs, and a field without a label doesn't.
 //!
 //! The panels apply each value the drag passes as they apply a typed one, so the art follows the
@@ -117,12 +118,14 @@ struct Label {
     pass: u64,
     /// The label is a link, this widget: a click follows it instead of focusing the field.
     link: Option<Id>,
+    /// The label is a tab stop of its own (a link; not a [`panel_label`]).
+    tab_stop: bool,
 }
 
 /// Note the label (text or icon) drawn at `rect`: a numeric field drawn right after it on the
 /// same line takes it as its label, which scrubs the field.
 pub(crate) fn note_label(ui: &Ui, rect: Rect) {
-    note(ui, rect, None);
+    note(ui, Label { rect, pass: 0, link: None, tab_stop: false });
 }
 
 /// A link that labels the numeric field drawn after it (it opens a panel when clicked): a drag on
@@ -135,13 +138,27 @@ pub(crate) fn link_label(ui: &mut Ui, text: egui::RichText) -> Response {
             ui.link(text)
         })
         .inner;
-    note(ui, link.rect, Some(link.id));
+    note(ui, Label { rect: link.rect, pass: 0, link: Some(link.id), tab_stop: true });
     link
 }
 
-fn note(ui: &Ui, rect: Rect, link: Option<Id>) {
+/// A field's label that opens a panel when clicked (the Control bar's X:, Y:, W: and H:, which open
+/// the Transform panel): a drag on it scrubs the field after it, and a click stays the label's, as
+/// with [`link_label`]. Unlike a link it is not a tab stop of its own, so Tab still moves from one
+/// field to the next. The pointing hand shows over it.
+pub(crate) fn panel_label(ui: &mut Ui, text: egui::RichText) -> Response {
+    let label = ui.add(egui::Label::new(text).selectable(false).sense(Sense::CLICK));
+    if label.hovered() {
+        ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
+    }
+    note(ui, Label { rect: label.rect, pass: 0, link: Some(label.id), tab_stop: false });
+    label
+}
+
+/// Keep `label` for the field after it, as drawn this pass.
+fn note(ui: &Ui, label: Label) {
     let pass = ui.ctx().cumulative_pass_nr();
-    ui.data_mut(|d| d.insert_temp(label_id(), Label { rect, pass, link }));
+    ui.data_mut(|d| d.insert_temp(label_id(), Label { pass, ..label }));
 }
 
 /// The label noted just before the field at `field`, on its line.
@@ -169,9 +186,11 @@ pub(crate) fn field(ui: &Ui, field: Id, rect: Rect, text: &str, value: Option<f6
     // On top of the label, which may sense clicks itself (selectable text). A link senses drags
     // too and keeps its clicks (and its pointing hand while hovered): a widget laid over it would
     // take them. The zone is not a tab stop of its own (`Sense::click_and_drag` would be): Tab
-    // moves from a field to the next field, not onto the label before it.
+    // moves from a field to the next field, not onto the label before it. A link stays the tab stop
+    // it is, and a [`panel_label`] stays none.
     let resp = match label.link {
-        Some(link) => ui.interact(label.rect, link, Sense::drag()),
+        Some(link) if label.tab_stop => ui.interact(label.rect, link, Sense::drag()),
+        Some(link) => ui.interact(label.rect, link, Sense::DRAG),
         None => ui.interact(label.rect, field.with("scrub-label"), Sense::CLICK | Sense::DRAG),
     };
     drag(ui, &resp, field, text, value, decimals, label.link.is_some()).map(|v| v.max(*bounds.start()).min(*bounds.end()))
