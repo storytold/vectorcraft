@@ -1210,7 +1210,7 @@ pub(super) fn symbol_adjust(s: &mut Session, p: &Value) -> Result<Value> {
         let mut touched = std::collections::BTreeSet::new();
         let mut sides = Sides::new();
         for (j, (q, pressure)) in pts.iter().enumerate() {
-            let delta = if j > 0 { *q - pts[j - 1].0 } else { Vec2::ZERO };
+            let delta = j.checked_sub(1).and_then(|i| pts.get(i)).map_or(Vec2::ZERO, |(prev, _)| *q - *prev);
             // Use Pressure Pen: the pen's pressure at the point is the intensity there.
             let strength = if use_pressure { *pressure } else { intensity };
             // Average: the mean of the instances under the brush, as they are at this point.
