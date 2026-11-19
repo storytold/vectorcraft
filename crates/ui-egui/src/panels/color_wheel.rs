@@ -445,16 +445,25 @@ fn hex_shown(app: &VectorcraftApp, tgt: &Target, color: Option<&Color>) -> Strin
     hex_text(color, live.then_some(o))
 }
 
-/// The Show Hex Field row: a `#` and a field as wide as the row, showing `shown`. A committed text
-/// goes through `color.parse`; a text it refuses shows its error in the status bar and changes
-/// nothing. True when a text was committed.
-fn hex_row(app: &mut VectorcraftApp, ui: &mut Ui, shown: &str) -> bool {
+/// The hex field's id for `tgt`: it names the document, the selected objects or text characters,
+/// the appearance item, the proxy and the gradient stop or freeform point, but not the color, so a
+/// text typed for one of them is dropped when another one is targeted, even one showing the same hex.
+fn hex_field_id(app: &VectorcraftApp, tgt: &Target) -> impl std::hash::Hash + use<> {
+    let o = Owner::of(app, tgt, Color::rgb8(0, 0, 0));
+    ("color-wheel-hex", o.doc, o.selection, o.text_selection, o.appearance_item, o.fill, o.slot)
+}
+
+/// The Show Hex Field row for `tgt`: a `#` and a field as wide as the row, showing `shown`. A
+/// committed text goes through `color.parse`; a text it refuses shows its error in the status bar
+/// and changes nothing. True when a text was committed.
+fn hex_row(app: &mut VectorcraftApp, ui: &mut Ui, tgt: &Target, shown: &str) -> bool {
     let mut typed = None;
+    let id = hex_field_id(app, tgt);
     ui.horizontal(|ui| {
         let t = Tokens::get(ui.ctx());
         ui.label(egui::RichText::new("#").size(15.0).color(t.text));
         let width = ui.available_width();
-        typed = widgets::text_field_named(ui, "color-wheel-hex", Some(tl!("Hex or CSS color")), Some(shown), width, 1);
+        typed = widgets::text_field_named(ui, id, Some(tl!("Hex or CSS color")), Some(shown), width, 1);
     });
     let Some(text) = typed else { return false };
     match app.run("color.parse", json!({ "text": text })) {
@@ -760,7 +769,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         ui.add_space(4.0);
         // A pick or an OKLCH edit read in the frame that commits a text was made on the color
         // before the text, so it is not applied.
-        if hex_row(app, ui, &hex) {
+        if hex_row(app, ui, &tgt, &hex) {
             return;
         }
     }
