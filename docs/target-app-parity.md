@@ -8,7 +8,7 @@
 >
 > Glyphs update (#5514): Alternates for Current Selection applies a variant's OpenType feature to that letter alone (`salt=2`) so an Arabic word stays joined; Entire Font lists unencoded glyphs. A positional variant no supported feature draws can be applied as a glyph choice (#6084). Entire Font uses the selection's font version and variable axes, and the default cell remains available after an unlisted choice even without GSUB alternates. Only Arabic presentation-form characters insert their joining base letter. Scores and estimates unchanged.
 >
-> SVG physical dimensions update (#5450): explicit SVG Options write width and height in mm, cm, in or pt (#4462), retaining scale independently of coordinate precision, including tiny sizes. Without an override, export retains the document's units (#864). Responsive omits dimensions; explicit Pixels keeps bare numbers and CSS pixels are 96/in. Scores and estimates unchanged.
+> SVG physical dimensions update (#5450): explicit SVG Options write width and height in mm, cm, in or pt (#4462), retaining scale independently of coordinate precision, including tiny sizes. Commands accept flat `units` or nested `svg.units`; nested values win and explicit null is rejected. Without an override, export retains the document's units (#864). Responsive omits dimensions; explicit Pixels keeps bare numbers and CSS pixels are 96/in. Scores and estimates unchanged.
 >
 > Live Paint Bucket update (2026-11-12): one drag fills the faces crossed in the same group (#6373).
 >
