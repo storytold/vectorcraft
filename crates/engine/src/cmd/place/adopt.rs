@@ -54,9 +54,29 @@ fn paint_refs(p: &mut Paint, f: &mut impl FnMut(Ref)) {
     });
 }
 
+/// The symbols mapped by supported 3D effects, including effects on individual paints.
+fn effect_symbol_refs(appearance: &mut vectorcraft_doc::Appearance, f: &mut impl FnMut(Ref)) {
+    let items = appearance.items.iter_mut().flat_map(|i| i.effects_mut().iter_mut());
+    for effect in appearance.effects.iter_mut().chain(items) {
+        let key = if vectorcraft_render::effects::takes_graphics(&effect.id) {
+            vectorcraft_render::effects::GRAPHICS
+        } else if vectorcraft_render::effects::takes_map_art(&effect.id) {
+            vectorcraft_render::effects::MAP_ART
+        } else {
+            continue;
+        };
+        for graphic in effect.params.get_mut(key).and_then(serde_json::Value::as_array_mut).into_iter().flatten() {
+            if let Some(serde_json::Value::String(symbol)) = graphic.get_mut("symbol") {
+                f(Ref::Symbol(symbol));
+            }
+        }
+    }
+}
+
 /// Every resource reference in `n` and its descendants.
 fn refs(n: &mut Node, f: &mut impl FnMut(Ref)) {
     each_mut(n, &mut |n| {
+        effect_symbol_refs(&mut n.appearance, f);
         for it in &mut n.appearance.items {
             match it {
                 AppearanceItem::Fill(fl) => paint_refs(&mut fl.paint, f),
@@ -422,6 +442,7 @@ pub(crate) fn adopt(dst: &mut Document, src: &Document, nodes: &mut [Node], cmd:
             // The art takes ids of `dst`: those of `src` may name objects of `dst` already.
             def.art = Arc::new(dst.reid(&def.art));
             dst.symbols.push(def);
+            dst.set_symbol_pixel_aligned(new, src.symbol_pixel_aligned(old));
         }
     }
     for (old, new) in copies(&patterns) {

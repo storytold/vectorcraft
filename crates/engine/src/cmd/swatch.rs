@@ -1466,6 +1466,9 @@ fn swatch_edit_group(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn save_defaults(s: &mut Session, _: &Value) -> Result<Value> {
+    if s.previewing {
+        return Err(bad("swatch.defaults.save", "cannot be previewed"));
+    }
     let data = super::swatchdefaults::capture(s)?;
     let d = &s.doc()?.doc;
     let swatches = d.swatches_iter().count();
@@ -1475,6 +1478,9 @@ fn save_defaults(s: &mut Session, _: &Value) -> Result<Value> {
 }
 
 fn reset_defaults(s: &mut Session, _: &Value) -> Result<Value> {
+    if s.previewing {
+        return Err(bad("swatch.defaults.reset", "cannot be previewed"));
+    }
     let changed = !matches!(s.prefs.default_swatches, Some(crate::SavedSwatchDefaults::Factory));
     s.prefs.default_swatches = Some(crate::SavedSwatchDefaults::Factory);
     Ok(json!({ "reset": true, "changed": changed }))
