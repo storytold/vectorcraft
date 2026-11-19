@@ -780,6 +780,7 @@
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Widok koła
 	Box View	Widok kwadratu
+	Show Out-of-Gamut Colors	Pokaż kolory poza gamutem
 	Box Channel	Kanał kwadratu
 	Color box	Kwadrat koloru
 	Color Wheel Options	Opcje koła kolorów
@@ -4297,6 +4298,11 @@ theme	Appearance	Wygląd
 	Edit Arrowheads	Edytuj groty strzałek
 	Edit Arrowheads…	Edytuj groty strzałek…
 	Reload Arrowheads	Wczytaj ponownie groty strzałek
+	Bevels	Fazy
+	Edit Bevels	Edytuj fazy
+	Edit Bevels…	Edytuj fazy…
+	{name} (document)	{name} (dokument)
+	Reload Bevels	Wczytaj ponownie fazy
 	Stroke Options	Opcje obrysu
 	Width Profiles	Profile szerokości
 	Apply Graphic Style	Zastosuj styl graficzny
@@ -4601,6 +4607,7 @@ font-technology	Variable	Zmienne
 	Recent Commands	Ostatnie polecenia
 	No recent commands	Brak ostatnich poleceń
 	Type to search commands, tools, panels and effects	Pisz, aby szukać poleceń, narzędzi, paneli i efektów
+	Clear Recent Commands	Wyczyść listę ostatnich poleceń
 	Dashed Line	Linia przerywana
 	Panel menu	Menu panelu
 	Unembed…	Wyodrębnij…
@@ -4806,6 +4813,11 @@ font-technology	Variable	Zmienne
 	Cusp	Ostrze
 	Straight segment	Prosty segment
 	Circle too large	Okrąg jest za duży
+	Show Radii	Pokaż promienie
+	Show Diameter	Pokaż średnicę
+	Anchors at Standard Positions	Punkty kontrolne w standardowych położeniach
+	Third Point by Dragging	Trzeci punkt przez przeciągnięcie
+	Gray	Szary
 	Clip to Art	Przytnij do kompozycji
 	Colorize	Koloruj
 	Gamma	Gamma
@@ -6677,7 +6689,10 @@ mark-style	Japanese	Japońskie
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	obiekt nie ma efektu 3D (Wyciągnięcie i fazowanie, Obrót, Nadmuchanie ani Obróć)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` musi być obiektem zawierającym tylko `mode` o wartości shaded lub wireframe
 @msg	its 3D effect builds no solid	jego efekt 3D nie tworzy żadnej bryły
-@msg	bevel must be none or one of {_1}	bevel musi mieć wartość none lub jedną z: {_1}
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel musi mieć wartość none, jedną z: {_1}, albo custom z {BEVEL_PROFILE}
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	bevel custom wymaga {BEVEL_PROFILE}, punktów fazy
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME} musi być ciągiem znaków
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE} musi zawierać od 2 do {most} punktów [x, y], każdy udział od 0 do 1, od [0, 0] (krawędź ściany czołowej) do [1, 1] (ściana boczna)
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} nie może utworzyć brył z tej kompozycji: jej wystąpienia symboli, przejścia i grupy przycinające zawierają zbyt wiele obiektów
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label} nie może utworzyć bryły z wystąpienia symbolu „{symbol}”: kompozycja symbolu jest niedostępna
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}: ścieżka przycinająca jest zbyt złożona, aby przyciąć nią kompozycję
@@ -10632,6 +10647,11 @@ breakText	Glyphs	Glify
 @msg	A panel is not joined to the rest by a crease.	Panel nie jest połączony z resztą żadną linią bigowania.
 @msg	A fold line is on a non-printing layer.	Linia zgięcia znajduje się na warstwie niedrukowanej.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panele: {panels}, zawiasy: {hinges}, błędy: {errors}, ostrzeżenia: {warnings}
+	Vector Packs	Pakiety wektorowe
+	Compass Rose	Róża wiatrów
+	Botanical Sprig	Gałązka botaniczna
+	Facet Diamond	Fasetowany diament
+	Tide Crest	Grzbiet fali
 	Leaf Vine	Liściasta winorośl
 	Blossom Chain	Łańcuch kwiatów
 	Pennant Garland	Girlanda proporczyków

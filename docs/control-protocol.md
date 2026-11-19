@@ -272,12 +272,12 @@ My Themes tab lists the saved themes; every action runs a command (`colorTheme.s
 Color Wheel panel (`window.panel {panel: "colorWheel"}`): a hue ring around a saturation and brightness square. A
 pick runs the commands the Color panel's sliders run: `paint.setFill` or `paint.setStroke` with `keepModel`,
 `paint.editGradient` for a gradient's selected stop, and `paint.freeform.setPoint` for a freeform gradient's selected
-point (the first stop or point when none is selected). `ui.colorWheel {view?, channel?, harmony?, harmonyRule?, vision?}`
-shows the wheel or the box (a color field with a channel strip at its right), picks the box's channel, shows the
-other colors of a harmony rule as markers on the wheel's ring, and shows or hides the color vision row; it returns
-the settings, and `ui.inspect` reports them as `ui.color_wheel`.
-The key `sliders` shows OKLCH Sliders, HSL Sliders or
-neither (`"oklch"`, `"hsl"` or `"none"`; `"oklch"` is an error while the active document's RGB space, its assigned
+point (the first stop or point when none is selected). `ui.colorWheel {view?, channel?, sliders?, gamut?, harmony?,
+harmonyRule?, vision?}` shows the wheel or the box (a color field with a channel strip at its right), picks the box's
+channel, shows OKLCH Sliders, HSL Sliders or neither, grays out the colors the CMYK space cannot print, shows the
+other colors of a harmony rule as markers on the wheel's ring, and shows or hides the color vision row; it returns the
+settings, and `ui.inspect` reports them as `ui.color_wheel`.
+The key `sliders` takes (`"oklch"`, `"hsl"` or `"none"`; `"oklch"` is an error while the active document's RGB space, its assigned
 profile or else the working RGB space, is not sRGB), and the settings carry it too.
 
 Edit Colors dialogs: `ui.colorBalanceDialog` opens Adjust Colors (`colorBalance`: fields `mode` `gray`/`rgb`/`cmyk`/
@@ -928,7 +928,8 @@ when the export refuses the options or the artboard choice, `pens` stays null an
 remembers the options for the next HP-GL Options (not `exportSelection`) and writes the `.plt` file(s), asking for a
 path when there is none (one per artboard with Use Artboards). A canceled save dialog writes nothing and keeps the
 options remembered before; a save dialog shown in line (not as a sheet or off the UI thread) also keeps HP-GL
-Options open.
+Options open. When another document has become the active one since the dialog opened, `ui.dialog.confirm` closes
+it and writes nothing.
 
 TIFF, BMP and Targa Options: Export As… with the TIFF, BMP or Targa format (`file.exportAs {format: "tiff"}`, then
 the save dialog) opens `tiffOptions`, `bmpOptions` or `tgaOptions`: the raster rows of PNG Options (`ppi`,
