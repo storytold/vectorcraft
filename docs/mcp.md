@@ -675,19 +675,25 @@ objects' fills or strokes differ (`fillMixed` / `strokeMixed`, drawn as a "?" pr
 In the app's Color panel and Color Picker, RGB, HSB, hex and Web Safe RGB values describe the active working RGB
 space. RGB edits preserve the other native channels; HSB uses those same working RGB components. Colors outside
 display sRGB retain their native numeric values. `ui.colorPanel` selects the panel mode and `ui.colorPicker`
-opens the picker through `run_command` with the remote backend. `ui.colorPanel {"recentColors": false}` unchecks
-the panel menu's Show Recent Colors, which hides the Color panel's Recent Colors row, and `true` shows it again;
-applied colors still join the list while it is hidden. `ui.colorPanel {"rgbPercent": true}` shows the Color panel's
-RGB fields in percent, as a double-click right of an RGB field does, and `false` shows them from 0 to 255 again.
-`ui.colorRgbPercent` (Toggle RGB Percent in the command palette and Keyboard Shortcuts) switches between the two
-and answers true when the fields show in percent.
+opens the picker through `run_command` with the remote backend. Edit › Keyboard Shortcuts lists `ui.colorPicker` as
+Color Picker… with no default key; a key assigned there opens the picker for the proxy in front, as `{}` does.
+`ui.colorPanel {"recentColors": false}` unchecks the panel menu's Show Recent Colors, which hides the Color panel's
+Recent Colors row, and `true` shows it again; applied colors still join the list while it is hidden.
+`ui.colorPanel {"rgbPercent": true}` shows the Color panel's RGB fields in percent, as a double-click right of an RGB
+field does, and `false` shows them from 0 to 255 again. `ui.colorRgbPercent` (Toggle RGB Percent in the command
+palette and Keyboard Shortcuts) switches between the two and answers true when the fields show in percent.
 `ui.colorWheel {"view": "box", "channel": "red"}` shows the Color Wheel panel's box (a color field with the channel's
 strip at its right) in place of the wheel, as the panel menu's Box View and Box Channel do, and `"view": "wheel"`
-shows the wheel again. `{"harmony": true, "harmonyRule": "triad"}` puts a marker on the wheel's ring for each other
+shows the wheel again. `"gamut": true` grays out the parts of the wheel's square and the box's field whose colors
+the CMYK space cannot print, as the panel menu's Show Out-of-Gamut Colors does, and `false` shows them again. The
+test is the out-of-gamut warning's, which `color.gamutCheck` answers for one color. The shading is approximate: the
+panel tests the color at the center of each cell of a 16 by 16 grid over the square or the field and grays out the
+whole cell or none of it, so a grayed cell can hold printable colors and a clear cell can hold colors that cannot
+print. `{"harmony": true, "harmonyRule": "triad"}` puts a marker on the wheel's ring for each other
 color of a Color Guide harmony rule, as Show Harmony and Harmony Rule do; the wheel takes the 15 rules whose colors
 each have a hue of their own (not `monochromatic`, `shades`, `complementary2`, `triad2`, `triad3` or
 `highContrast2`). Keys left out keep their values. Params that are not an object, another key or a value off
-the list return an error and change nothing. The command returns `{view, channel, harmony, harmonyRule, vision}`,
+the list return an error and change nothing. The command returns `{view, channel, sliders, gamut, harmony, harmonyRule, vision}`,
 and the settings are kept with the preferences.
 
 `ui.colorWheel {"sliders": "oklch"}` shows the Color Wheel panel's OKLCH Sliders (L, C and H rows under the wheel or
@@ -1631,7 +1637,12 @@ their stop opacity and stop where the shading doesn't extend. Text becomes point
 the file's font (by name; fonts that aren't available are listed in `warnings` and show in the fallback font, and
 every export that draws that type — PDF, EPS, EMF/WMF, raster images, SVG with outlined or embedded fonts — says in
 its `warnings` that it wrote the fallback font) — `textAs: "outlines"` keeps the glyph outlines the file draws instead
-(its embedded fonts, installed or not). Lines wrapped in a frame (each wrapped line ending in a space, sharing a left
+(its embedded fonts, installed or not). In the app, the Import PDF and Place PDF dialogs' Text choice (Editable or
+Outlines) sends `textAs`; for a PDF it starts from the `pdfTextAs` preference and OK keeps the choice there (a
+`.ai` or `.ait` file starts from Editable). Outlines clears
+Import PDF pages as links, and a linked place dims the choice: a linked page shows the file's own text. A PDF that opens
+or is placed embedded without the dialog (one page, or Show Import Options off) takes `pdfTextAs` when its params
+give no `textAs`; a `.ai` or `.ait` file, and an open with `linkPages`, open as their params say. Lines wrapped in a frame (each wrapped line ending in a space, sharing a left
 edge, font and leading) come back as one area type object, left aligned or justified, where laying it out breaks the
 lines where the file does; a stroke written as each glyph's outline stroked is the type object's stroke; glyphs set
 apart by gaps wider than a space keep their places. Strokes stay live strokes (width, cap, join, miter limit, dash and paint), and
@@ -4806,7 +4817,13 @@ already walks Image Trace. Short agent entry points:
   Appearance panel's active row changes. The Fill and Stroke proxies (`paint.proxies`) show those colors, never mixed, the Stroke panel shows
   that stroke as it does with nothing selected, and with New Art Has Basic Appearance off the selection's appearance
   does not replace them after a command. They are also the fill and stroke for new art, so another tool chosen
-  afterwards keeps them until a command or a new selection changes them.
+  afterwards keeps them until a command or a new selection changes them. All of this also holds while a Cmd/Ctrl-click
+  with the bucket uses the Selection tool, and while the Eyedropper samples into a stop of the bucket's gradient for
+  the Gradient panel's eyedropper (`tool.select {tool: "eyedropper"}`, then
+  `tool.setOption {tool: "eyedropper", values: {stop: "livePaintBucket"}}`): the stop
+  stays selected, and the click's `paint.sampleColor {color, stop}` recolors that stop of the bucket's gradient and
+  leaves the selection's paint as it is. Once that stop is no longer selected (a Cmd/Ctrl-click selected another
+  object), the next click ends the pick without sampling and switches back to the bucket.
   With the Live Paint Bucket selected and no drag in progress, Left and Right without Shift, Alt or Cmd/Ctrl (which
   keep their shortcuts) run `paint.setFill {swatch, ids: []}` (or
   `paint.setStroke` when the Stroke proxy is in front) with the color swatch before or after the active paint in the
@@ -5786,8 +5803,8 @@ error.
 
 ## Brush libraries
 
-Brush libraries are read-only sets of brushes: fourteen generated in code (Art Ribbons, Ink and Wash, Calligraphic Nibs, Pressure Sensitive with Flex Ribbon, Pulse Stroke, Round Flow and Chisel Flow, Bristle
-Brushes with one bristle brush for each tip shape, Pattern Borders, Scatter Shapes, Stipple with Fine, Dense, Soft and Bold dot textures, Game Trails, Energy Beams, and Dry Media with the Chalk Grain, Graphite Pencil, Wax Crayon and
+Brush libraries are read-only sets of brushes: fifteen generated in code (Art Ribbons, Ink and Wash, Calligraphic Nibs, Pressure Sensitive with Flex Ribbon, Pulse Stroke, Round Flow and Chisel Flow, Bristle
+Brushes with one bristle brush for each tip shape, Pattern Borders, Decorative with Leaf Vine, Blossom Chain, Pennant Garland and Lantern String, Scatter Shapes, Stipple with Fine, Dense, Soft and Bold dot textures, Game Trails, Energy Beams, and Dry Media with the Chalk Grain, Graphite Pencil, Wax Crayon and
 Charcoal Dust art brushes, id `dry-media`, Tech Circuit with Circuit Trace (art), Bus Lines and Terminal Nodes (pattern), id `tech-circuit`, Engraving with Fine Hatching, Dense Hatching, Tapered Hatching and Broken Hatching art brushes, id `engraving`, and Arrows with Solid, Open, Double, Chevron and Dashed Arrow art brushes, id `arrows`), the `.vectorcraft` files in the user library folder of the desktop app (User
 Defined) and the brushes of any document loaded with `brush.loadLibrary` (a document without brushes of its own has
 the default ones). `brush.libraries` lists them (`id`, `name`, `category`: `builtIn`, `user` or `loaded`, `count`) and
@@ -8121,6 +8138,8 @@ Printing / Exporting, `accurate` by default) does the same for RGB raster export
 Print as Bitmap: `rich` draws pure CMYK black as RGB black in the pixels; CMYK ink exports and the document's
 colours stay as they are. `antiAliasedBitmaps` (off by default;
 desktop app): in View › Pixel Preview, on softens placed and embedded bitmaps; off, their pixels stay hard-edged.
+`pdfTextAs` (Preferences › File Handling › PDF Text, `text` by default; `text` or `outlines`): what the text of a PDF
+opened or placed embedded from the app becomes when the open or place gives no `textAs` (see `document.open`).
 `disableAutoAddDelete` (off by default): on, the Pen no longer adds or deletes an anchor when a click lands on a
 segment or an anchor of a selected path.
 

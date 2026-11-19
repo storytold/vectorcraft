@@ -2941,6 +2941,7 @@
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	წრის ხედი
 	Box View	კვადრატის ხედი
+	Show Out-of-Gamut Colors	ფერთა გამის გარეთ მყოფი ფერების ჩვენება
 	Box Channel	კვადრატის არხი
 	Color box	ფერის კვადრატი
 	Color Wheel Options	ფერთა წრის პარამეტრები
@@ -6579,6 +6580,10 @@ font-technology	Variable	ცვლადი
 	Edit type set in fonts that aren't available?	დავარედაქტიროთ მიუწვდომელი შრიფტებით აწყობილი ტექსტი?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	ტილოზე თითოეული ნაჭრის ნომერს აჩვენებს ჩარჩოში მის ზედა მარცხენა კუთხეში; გამორთულისას ნაჭრების კონტურები კვლავ ჩანს.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	მომხმარებლისა და ობიექტის ნაჭრების კონტურებისა და მათი ნომრების ჩარჩოების ფერი; ავტომატური ნაჭრები ამ ფერის უფრო მკრთალ ელფერს იყენებს.
+	In paragraphs with Hyphenate on, a listed word is hyphenated only at the hyphens typed in it, or never when it has none, whatever its language or case.	აბზაცებში, სადაც სიტყვების გადატანა ჩართულია, სიაში მოცემული სიტყვა გადატანის დეფისს მხოლოდ მასში აკრეფილ დეფისებთან იღებს, ან არასდროს, თუ ისინი არ აქვს, მიუხედავად ენისა და რეგისტრისა.
+	On the desktop, this folder's .wasm plug-ins load at startup and when OK sets a new folder, except in Safe Mode; one that asks for permissions loads only after you grant them. The web version loads none.	დესკტოპზე ამ საქაღალდის .wasm პლაგინები იტვირთება გაშვებისას და ახალი საქაღალდის OK-ით დაყენებისას, უსაფრთხო რეჟიმის გარდა; ნებართვების მომთხოვნი კი მათი მიცემის შემდეგ. ვებში არ იტვირთება.
+	Large gives each filter or command plug-in run at least 250 million instructions, with the same time limit; Normal keeps the plug-in's own budget. Live effects, exporters and importers keep theirs.	დიდი ფილტრის ან ბრძანების პლაგინის გაშვებას მინიმუმ 250 მილიონ ინსტრუქციას აძლევს, იგივე დროის ლიმიტით; ჩვეულებრივი ბიუჯეტს ტოვებს. ცოცხალი ეფექტები, ექსპორტერები და იმპორტერები არ იცვლება.
+	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	ახალი ტექსტი იღებს ამ ენას, სანამ დოკუმენტის პარამეტრების ენაა ინგლისური: აშშ; დოკუმენტში უკვე არსებული ტექსტი ინარჩუნებს თავის ენას.
 	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	ახალი ტექსტი იღებს ამ ენას, სანამ დოკუმენტის პარამეტრების ენაა ინგლისური: აშშ და [ჩვეულებრივი სიმბოლოს სტილი] ენას არ ადგენს; დოკუმენტში უკვე არსებული ტექსტი ინარჩუნებს თავის ენას.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	აბზაცებში, სადაც სიტყვების გადატანა ჩართულია, სიაში მოცემული სიტყვა მხოლოდ მასში აკრეფილ დეფისებთან გადაიტანება, ან არსად, თუ ისინი არ აქვს, მიუხედავად ენისა და რეგისტრისა.
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	დესკტოპის ვერსიაში ამ საქაღალდის .wasm პლაგინები იტვირთება გაშვებისას და როცა აქ ახალი საქაღალდით OK-ს დააწკაპუნებთ, გარდა უსაფრთხო რეჟიმისა; ვებ-ვერსია მათ არ ტვირთავს.
@@ -6594,8 +6599,8 @@ font-technology	Variable	ცვლადი
 	Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them.	ხელსაწყოთა ზოლში თითოეული ხელსაწყოების ჯგუფის სახელს მისი ხელსაწყოების ზემოთ აჩვენებს; გამორთულისას ჯგუფები ერთმანეთს მიჰყვება და მათ შორის არაფერია.
 	From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.	ამიერიდან თქვენ მიერ გახსნილი ან შექმნილი დოკუმენტები ჩანართებად იხსნება; გამორთულისას თითოეული მცურავ ფანჯარაში იხსნება. უკვე გახსნილი დოკუმენტები თავის ადგილას რჩება.
 	Makes the document tabs taller and their names larger.	დოკუმენტების ჩანართებს უფრო მაღალს, მათ სახელებს კი უფრო დიდს ხდის.
-	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own.	შემდეგი გაშვებიდან სისტემა ხატავს ფანჯრის სათაურის ზოლს იქ, სადაც VectorCraft სხვა შემთხვევაში საკუთარს დახატავდა.
-	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on.	შემდეგი გაშვებიდან VectorCraft ფანჯრის სათაურის ზოლს იქაც ხატავს, სადაც მას სამუშაო გარემო დახატავდა, თუ სისტემის სათაურის ზოლი არ არის ჩართული.
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own; on Linux and the BSDs, the VECTORCRAFT_TITLEBAR variable takes precedence.	შემდეგი გაშვებიდან სისტემა ხატავს ფანჯრის სათაურის ზოლს იქ, სადაც VectorCraft სხვა შემთხვევაში საკუთარს დახატავდა; Linux-სა და BSD-ზე უპირატესობა VECTORCRAFT_TITLEBAR ცვლადს აქვს.
+	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on or the VECTORCRAFT_TITLEBAR variable chooses it.	შემდეგი გაშვებიდან VectorCraft ფანჯრის სათაურის ზოლს იქაც ხატავს, სადაც მას სამუშაო გარემო დახატავდა, თუ სისტემის სათაურის ზოლი არ არის ჩართული და მას VECTORCRAFT_TITLEBAR ცვლადი არ ირჩევს.
 	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	ინტერფეისს ადიდებს ან ამცირებს; ტილოზე არსებული ნახატი იმავე მასშტაბზე ზომას ინარჩუნებს.
 	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	VectorCraft-ის მიერ დახატული ხელსაწყოების მაჩვენებლები ინტერფეისის მასშტაბირებასთან ერთად იზრდება და მცირდება; გამორთულისას ზომას ინარჩუნებს.
 	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	ინტერფეისის ენა; ავტომატური სისტემის ენას იყენებს. დიალოგი ენას იცვლის, როგორც კი რომელიმეს აირჩევთ.
@@ -6621,6 +6626,9 @@ font-technology	Variable	ცვლადი
 	Open Recent Files and the Home screen list at most this many recent files; 0 lists none, and VectorCraft still remembers up to 30.	„ბოლოს გახსნილი ფაილების გახსნა“ და „საწყისი ეკრანი“ აჩვენებს მაქსიმუმ ამდენ ბოლო ფაილს; 0 არცერთს არ აჩვენებს, VectorCraft კი მაინც იმახსოვრებს 30-მდე ფაილს.
 	When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.	დოკუმენტის გახსნისას მიბმული EPS გამოსახულება, რომელიც თავის შენახულ გადახედვას აჩვენებს, ინარჩუნებს მას EPS ფაილის ხელახლა წაკითხვის ნაცვლად; შეცვლილი ფაილები კვლავ „ბმულების განახლებას“ მისდევს.
 	In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.	„პიქსელების წინასწარ ნახვაში“ გამოსახულებები გლუვად იხატება; გამორთულისას მათი პიქსელები მკვეთრი კიდეებით ჩანს. მის გარეთ გამოსახულებები ყოველთვის გლუვდება.
+	PDF Text	PDF-ის ტექსტი
+	The text of a PDF you open or embed comes in as editable type, or as outlines that look the same on a computer without its fonts.	PDF-ის ტექსტი, რომელსაც ხსნით ან ჩაშენებთ, შემოდის რედაქტირებად ტექსტად ან კონტურებად, რომლებიც ერთნაირად ჩანს კომპიუტერზე მისი შრიფტების გარეშე.
+	Linked pages show the file's own text.	მიბმული გვერდები ფაილის საკუთარ ტექსტს აჩვენებს.
 	When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.	როცა მიბმული ფაილი იცვლება, „ავტომატურად“ მას ხელახლა კითხულობს, „შეკითხვა ცვლილებისას“ ჯერ გეკითხებათ, „ხელით“ კი უცვლელად ტოვებს და სტატუსის ზოლში შენიშვნას აჩვენებს.
 	On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.	დესკტოპის ვერსიაში საქაღალდე, საიდანაც „შაბლონიდან შექმნა…“ და „შაბლონად შენახვა…“ იწყება; დატოვეთ ცარიელი თქვენი დოკუმენტების საქაღალდეში არსებული VectorCraft Templates-ისთვის.
 	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	„ორიგინალის რედაქტირება“ მიბმულ ფაილს მისი ტიპისთვის სისტემის ნაგულისხმევ აპში ხსნის; გამორთულისას მიბმული რასტრული გამოსახულება PhotoCraft-ში იხსნება, თუ ის დაინსტალირებულია.
@@ -11047,6 +11055,10 @@ font-script	Japanese	იაპონური
 @msg	A joint does not close by {gap} pt.	შეერთება არ იხურება {gap} pt-ით.
 @msg	Two panels pass through each other.	ორი პანელი ერთმანეთში გადის.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer უნდა იყოს "singleLine", "everyLine", "standardSingleLine" ან "standardEveryLine"
+	Leaf Vine	ფოთლების ვაზი
+	Blossom Chain	ყვავილების ჯაჭვი
+	Pennant Garland	ალმების გირლანდა
+	Lantern String	ფარნების ჯაჭვი
 	Orbit Lines	ორბიტული ხაზები
 	Petal Garland	ფურცლების გირლანდა
 	Lattice Braid	ბადის ნაწნავი

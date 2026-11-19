@@ -341,10 +341,10 @@ pub(crate) fn current_paints(app: &VectorcraftApp) -> (Paint, Paint) {
 /// document revision, Appearance panel item and picked gradient mesh points (picking points
 /// changes no revision).
 pub(crate) fn mixed_paints(app: &VectorcraftApp, ctx: &egui::Context) -> (bool, bool) {
-    type Key = (u64, u64, Option<usize>, Vec<(NodeId, Vec<usize>)>, &'static str);
+    type Key = (u64, u64, Option<usize>, Vec<(NodeId, Vec<usize>)>, bool);
     let Some(st) = app.session.active() else { return (false, false) };
-    // The tool too: while the Live Paint Bucket is active the proxies show its colors.
-    let key: Key = (st.uid, st.revision, app.session.appearance_item(), app.session.fill_mesh_points(), app.session.tool_id());
+    // Whether the proxies show the Live Paint Bucket's colors too.
+    let key: Key = (st.uid, st.revision, app.session.appearance_item(), app.session.fill_mesh_points(), app.session.bucket_paints());
     match pstate::<Option<(Key, (bool, bool))>>(ctx, "proxy-mixed") {
         Some((k, mixed)) if k == key => mixed,
         _ => {
@@ -373,7 +373,7 @@ pub(crate) fn stroke_mixed(app: &VectorcraftApp, ctx: &egui::Context) -> StrokeM
     if character::text_editing(app).is_some() {
         return StrokeMixed { can_align: true, ..Default::default() };
     }
-    if app.session.tool_id() == "livePaintBucket" {
+    if app.session.bucket_paints() {
         return StrokeMixed { can_align: true, ..Default::default() };
     }
     let Some(st) = app.session.active() else { return StrokeMixed::default() };
@@ -818,6 +818,8 @@ mod tests_brush_libraries;
 mod tests_color_wheel;
 #[cfg(test)]
 mod tests_color_wheel_box;
+#[cfg(test)]
+mod tests_color_wheel_gamut;
 #[cfg(test)]
 mod tests_color_wheel_harmony;
 #[cfg(test)]

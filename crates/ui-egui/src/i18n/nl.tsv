@@ -1397,6 +1397,7 @@ liquify-list-end	{0}, {1}	{0} en {1}
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Wielweergave
 	Box View	Vakweergave
+	Show Out-of-Gamut Colors	Kleuren buiten gamut tonen
 	Box Channel	Kanaal van het vak
 	Color box	Kleurvak
 	Color Wheel Options	Opties voor kleurenwiel
@@ -5192,6 +5193,10 @@ font-technology	Variable	Variabel
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Toont op het canvas het nummer van elke slice in een vakje linksboven in de slice; staat dit uit, dan blijven de omtrekken van de slices zichtbaar.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	De kleur van de omtrekken van gebruikers- en objectslices en van hun nummervakjes; automatische slices gebruiken een vagere tint ervan.
 	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	Nieuwe tekst krijgt deze taal zolang de taal in Documentinstellingen Engels: VS is en [Normale tekenstijl] geen taal instelt; tekst die al in een document staat, behoudt zijn eigen taal.
+	In paragraphs with Hyphenate on, a listed word is hyphenated only at the hyphens typed in it, or never when it has none, whatever its language or case.	In alinea's met Afbreken aan krijgt een opgesomd woord alleen een afbreekstreepje bij de koppeltekens die erin getypt zijn, of nooit als het er geen heeft, ongeacht taal of hoofdletters.
+	On the desktop, this folder's .wasm plug-ins load at startup and when OK sets a new folder, except in Safe Mode; one that asks for permissions loads only after you grant them. The web version loads none.	In de desktopversie worden de .wasm-plug-ins in deze map geladen bij het starten en wanneer OK een nieuwe map instelt, behalve in de veilige modus; een plug-in die om machtigingen vraagt, laadt pas nadat u ze hebt verleend. De webversie laadt er geen.
+	Large gives each filter or command plug-in run at least 250 million instructions, with the same time limit; Normal keeps the plug-in's own budget. Live effects, exporters and importers keep theirs.	Groot geeft elke uitvoering van een filter- of opdrachtplug-in minstens 250 miljoen instructies, met dezelfde tijdslimiet; Normaal houdt het eigen budget van de plug-in. Live-effecten, exporteurs en importeurs houden het hunne.
+	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	Nieuwe tekst krijgt deze taal zolang de taal in Documentinstellingen Engels: VS is; tekst die al in een document staat, behoudt zijn eigen taal.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	In alinea's met Afbreken aan wordt een opgesomd woord alleen afgebroken bij de koppeltekens die erin getypt zijn, of nergens als het er geen heeft, ongeacht taal of hoofdletters.
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	In de desktopversie worden de .wasm-plug-ins in deze map geladen bij het starten en wanneer u hier met een nieuwe map op OK klikt, behalve in de veilige modus; de webversie laadt ze niet.
 	Normal keeps each plug-in's own limits; with Large, a plug-in filter or command may run at least 250 million instructions besides those for its input. The time limit stays the same.	Normaal behoudt de eigen limieten van elke plug-in; met Groot mag een filter of opdracht van een plug-in ten minste 250 miljoen instructies uitvoeren naast die voor de invoer. De tijdslimiet blijft gelijk.
@@ -5206,8 +5211,8 @@ font-technology	Variable	Variabel
 	Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them.	Toont de naam van elke gereedschapgroep boven de gereedschappen in de werkbalk; uit volgen de groepen elkaar op zonder iets ertussen.
 	From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.	Voortaan openen documenten die u opent of maakt als tabbladen; uit opent elk in een zwevend venster. Documenten die al open zijn, blijven waar ze zijn.
 	Makes the document tabs taller and their names larger.	Maakt de tabbladen van documenten hoger en hun namen groter.
-	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own.	Vanaf de volgende start tekent het systeem de titelbalk van het venster waar VectorCraft anders zijn eigen zou tekenen.
-	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on.	Vanaf de volgende start tekent VectorCraft de titelbalk van het venster ook waar het bureaublad die zou tekenen, tenzij Systeemtitelbalk aan staat.
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own; on Linux and the BSDs, the VECTORCRAFT_TITLEBAR variable takes precedence.	Vanaf de volgende start tekent het systeem de titelbalk van het venster waar VectorCraft anders zijn eigen zou tekenen; op Linux en de BSD's gaat de variabele VECTORCRAFT_TITLEBAR voor.
+	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on or the VECTORCRAFT_TITLEBAR variable chooses it.	Vanaf de volgende start tekent VectorCraft de titelbalk van het venster ook waar het bureaublad die zou tekenen, tenzij Systeemtitelbalk aan staat of de variabele VECTORCRAFT_TITLEBAR die kiest.
 	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	Maakt de gebruikersinterface groter of kleiner; illustraties op het canvas houden bij dezelfde zoom hun grootte.
 	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	De gereedschapsaanwijzers die VectorCraft tekent, groeien en krimpen mee met UI-schaling; uit houden ze hun grootte.
 	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	De taal van de gebruikersinterface; Automatisch gebruikt de taal van het systeem. Het dialoogvenster wisselt van taal zodra u er een kiest.
@@ -5233,6 +5238,9 @@ font-technology	Variable	Variabel
 	Open Recent Files and the Home screen list at most this many recent files; 0 lists none, and VectorCraft still remembers up to 30.	Recente bestanden openen en het Home-scherm tonen hoogstens zoveel recente bestanden; 0 toont er geen, en VectorCraft onthoudt er nog steeds tot 30.
 	When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.	Bij het openen van een document houdt een gekoppelde EPS-afbeelding die haar opgeslagen voorvertoning toont die vast, in plaats van het EPS-bestand opnieuw te lezen; gewijzigde bestanden volgen nog steeds Koppelingen bijwerken.
 	In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.	In Pixelvoorbeeld worden afbeeldingen vloeiend getekend; uit tonen hun pixels harde randen. Buiten Pixelvoorbeeld worden afbeeldingen altijd vloeiend getekend.
+	PDF Text	PDF-tekst
+	The text of a PDF you open or embed comes in as editable type, or as outlines that look the same on a computer without its fonts.	De tekst van een PDF die u opent of insluit, komt binnen als bewerkbare tekst of als omlijningen die er op een computer zonder de lettertypen ervan hetzelfde uitzien.
+	Linked pages show the file's own text.	Gekoppelde pagina's tonen de eigen tekst van het bestand.
 	When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.	Als een gekoppeld bestand verandert, leest Automatisch het opnieuw, vraagt Vragen bij wijziging het u eerst, en laat Handmatig het zoals het is met een melding in de statusbalk.
 	On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.	In de desktopversie de map waarin Nieuw van sjabloon… en Opslaan als sjabloon… beginnen; laat leeg voor VectorCraft Templates in uw documentenmap.
 	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	Origineel bewerken opent een gekoppeld bestand in de standaardapp van het systeem voor dat type; uit opent een gekoppelde rasterafbeelding in PhotoCraft als dat geïnstalleerd is.
@@ -10800,6 +10808,10 @@ breakText	Glyphs	Glyphs
 @msg	A panel is not joined to the rest by a crease.	Een paneel is door geen rillijn met de rest verbonden.
 @msg	A fold line is on a non-printing layer.	Een vouwlijn staat op een laag die niet wordt afgedrukt.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panelen: {panels}, scharnieren: {hinges}, fouten: {errors}, waarschuwingen: {warnings}
+	Leaf Vine	Bladrank
+	Blossom Chain	Bloemenketting
+	Pennant Garland	Vlaggetjesslinger
+	Lantern String	Lantaarnslinger
 	Orbit Lines	Baanlijnen
 	Petal Garland	Bloemblaadjesslinger
 	Lattice Braid	Rastervlecht
