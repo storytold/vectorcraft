@@ -10364,6 +10364,11 @@ breakText	Glyphs	Glifler
 	No objects are selected.	Hiçbir nesne seçili değil.
 	Open a document to mark its fold lines.	Katlama çizgilerini işaretlemek için bir belgeyi açın.
 	Remove Fold Line Role	Çizgi Türünü Kaldır
+	Fold Angle	Katlama Açısı
+	Set Fold Angle…	Katlama Açısını Ayarla…
+	Set Fold Angle	Katlama Açısını Ayarla
+	Reset Fold Angle	Katlama Açısını Sıfırla
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	kilitli ya da gizli olmayan bir pilyaj, yarım kesim veya perforaj çizgisi seçin
 	Tap	Kısa Basma
 	Clear Hold	Basılı Tutmayı Temizle
 	Hold Shortcuts	Basılı Tutma Kısayolları

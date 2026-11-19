@@ -510,6 +510,14 @@ pub(super) fn param_fields(
                             changed = true;
                         }
                     }
+                    Value::Number(n) if let Some(range) = super::command::number_range(&d.str("__command"), &k) => {
+                        // Kept within the range as typed, and shown to the places a fold angle keeps.
+                        let places = crate::addons::packaging::angle_places(n.as_f64());
+                        if let Some(x) = crate::widgets::mixed_field_within(ui, ("fx-num", &k), n.as_f64(), "", places, 140.0, range) {
+                            d.fields.insert(k.clone(), typed_number(x));
+                            changed = true;
+                        }
+                    }
                     Value::Number(n) => {
                         // A resolution (Object › Rasterize's `ppi`) shows its unit in the UI language.
                         let suffix = if k == "ppi" { crate::i18n::fill_once(tl!("{n} ppi"), &[("n", "")]) } else { String::new() };

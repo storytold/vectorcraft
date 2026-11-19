@@ -10406,6 +10406,11 @@ breakText	Glyphs	Glyfy
 	No objects are selected.	Nejsou vybrány žádné objekty.
 	Open a document to mark its fold lines.	Otevřete dokument, abyste označili jeho linie skladu.
 	Remove Fold Line Role	Odstranit typ linie
+	Fold Angle	Úhel skladu
+	Set Fold Angle…	Nastavit úhel skladu…
+	Set Fold Angle	Nastavit úhel skladu
+	Reset Fold Angle	Obnovit úhel skladu
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	vyberte linii bigu, částečného řezu nebo perforace, která není zamčená ani skrytá
 	Tap	Krátký stisk
 	Clear Hold	Vymazat podržení
 	Hold Shortcuts	Zkratky podržením

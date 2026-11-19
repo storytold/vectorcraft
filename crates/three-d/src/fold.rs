@@ -46,12 +46,31 @@ impl LineKind {
     }
 }
 
-/// A fold line: the path (document coordinates), its kind, and a key the issues name it by.
+/// A fold line: the path (document coordinates), its kind, a key the issues name it by, and its
+/// own fold angle (degrees), which a line that folds takes instead of its kind's.
 #[derive(Clone, Debug)]
 pub struct FoldLine {
     pub path: PathData,
     pub kind: LineKind,
     pub key: u64,
+    pub angle: Option<f64>,
+}
+
+/// `angle` (degrees) to the whole millionth of a degree, the finest fold angle a line keeps. A fold
+/// that close to flat is flat: the preview tells panels in one plane from panels a millionth of a
+/// degree apart, but not from panels closer than that.
+pub fn kept_angle(angle: f64) -> f64 {
+    (angle * 1e6).round() / 1e6 + 0.0
+}
+
+impl FoldLine {
+    /// The angle (degrees) the line folds at: its own angle when it has one from -180 to 180, to the
+    /// millionth of a degree ([`kept_angle`]), else its kind's ([`LineKind::fold_angle`]); none for
+    /// a Cut, whatever its own angle.
+    pub fn fold_angle(&self) -> Option<f64> {
+        let own = self.angle.filter(|a| (-180.0..=180.0).contains(a)).map(kept_angle);
+        self.kind.fold_angle().map(|default| own.unwrap_or(default))
+    }
 }
 
 /// One blank: its panels, the hinges between them, and its holes.
@@ -79,14 +98,17 @@ impl Panel {
 /// The hinge between panels `a` and `b` (indices into the blank's panels, `a` < `b`): the straight
 /// line from `from` to `to`, made of the lines `keys`. `straight` is false when its pieces are not on
 /// one straight line within the tolerance; `from` and `to` are then on the line through its longest
-/// piece. `angle` (degrees) is the fold angle of the kind of line its longest piece is
-/// ([`LineKind::fold_angle`]).
+/// piece. `angle` (degrees) is the fold angle ([`FoldLine::fold_angle`]) of the line with the most
+/// length in the hinge, the one with the lowest key among lines of equal length. `on` is the middle
+/// of its longest piece, a point where the two panels meet, which a hinge with gaps between its
+/// pieces may not have at the middle of `from` to `to`.
 #[derive(Clone, Debug)]
 pub struct Hinge {
     pub a: usize,
     pub b: usize,
     pub from: Point,
     pub to: Point,
+    pub on: Point,
     pub keys: Vec<u64>,
     pub straight: bool,
     pub angle: f64,
@@ -1297,9 +1319,34 @@ impl Context<'_> {
             let sp = p.path.subpaths.first()?;
             Some((sp.anchors.first()?.p, sp.anchors.last()?.p))
         };
-        let ((p0, p1), longest) =
+        let ((p0, p1), _) =
             group.iter().filter_map(|p| Some((chord(p)?, p))).max_by(|(x, _), (y, _)| x.0.distance(x.1).total_cmp(&y.0.distance(y.1)))?;
-        let angle = longest.lines.iter().filter_map(|&l| self.lines.get(l)?.kind.fold_angle()).next().unwrap_or(90.0);
+        let lengths: Vec<f64> = group.iter().map(|p| p.path.to_bezpath().segments().map(|s| s.arclen(1e-3)).sum::<f64>()).collect();
+        // The angle of the line with the most length in the hinge, the one with the lowest key on a
+        // tie: a line the planar map split into several pieces counts whole.
+        let mut by_line: HashMap<usize, f64> = HashMap::new();
+        for (p, len) in group.iter().zip(&lengths) {
+            // Subpaths of one line on top of each other count once.
+            let mut lines = p.lines.clone();
+            lines.sort_unstable();
+            lines.dedup();
+            for l in lines {
+                *by_line.entry(l).or_default() += len;
+            }
+        }
+        let folding: Vec<(f64, f64, u64)> = by_line
+            .iter()
+            .filter_map(|(&l, &len)| {
+                let line = self.lines.get(l)?;
+                Some((line.fold_angle()?, len, line.key))
+            })
+            .collect();
+        // Lengths summed from pieces in another order differ in their last bits: a few epsilons per
+        // piece, and no more, so a line measurably longer still wins.
+        let most = folding.iter().map(|f| f.1).fold(0.0, f64::max);
+        let pieces = f64::from(u32::try_from(group.len()).unwrap_or(u32::MAX));
+        let rounding = 8.0 * f64::EPSILON * (pieces + 1.0) * most;
+        let angle = folding.iter().filter(|f| f.1 >= most - rounding).min_by_key(|f| f.2).map_or(90.0, |f| f.0);
         let len = p0.distance(p1);
         // The longest piece only sets the direction; the length check is on the whole hinge below.
         if len.is_nan() || len <= 1e-9 {
@@ -1321,7 +1368,7 @@ impl Context<'_> {
         }
         // The pieces' own length, not the span from the first to the last, which takes in the gaps
         // between pieces that lie apart.
-        let length: f64 = group.iter().map(|p| p.path.to_bezpath().segments().map(|s| s.arclen(1e-3)).sum::<f64>()).sum();
+        let length: f64 = lengths.iter().sum();
         if !(lo.is_finite() && hi.is_finite()) || hi - lo < self.tolerance || length.is_nan() || length < self.tolerance {
             return None;
         }
@@ -1331,7 +1378,7 @@ impl Context<'_> {
         let mut keys = self.keys(lines);
         keys.sort_unstable();
         keys.dedup();
-        Some(Hinge { a, b, from: p0 + d * lo, to: p0 + d * hi, keys, straight, angle })
+        Some(Hinge { a, b, from: p0 + d * lo, to: p0 + d * hi, on: p0.midpoint(p1), keys, straight, angle })
     }
 
     /// Creases with no hinge: outside every blank, or dividing no two panels; and creases beside a
@@ -1465,7 +1512,7 @@ pub fn base_panel(panels: &[Panel]) -> Option<usize> {
 
 mod pose;
 pub mod raster;
-pub use pose::{Folded, FoldedHinge, FoldedPanel, MAX_POLYGON_POINTS, Pose, fold, panel_at, pick, polygon};
+pub use pose::{Folded, FoldedHinge, FoldedPanel, MAX_POLYGON_POINTS, Pose, Stack, fold, panel_at, pick, polygon};
 
 #[cfg(test)]
 mod tests;

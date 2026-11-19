@@ -1,8 +1,10 @@
 //! Packaging Tools' submenu (Object › Plug-ins › Packaging Tools) and its Fold Lines panel. The
 //! panel lists the fold line roles, each with its swatch's chip and how many of the selected objects
 //! have it (of the whole document while nothing is selected); clicking a role gives the selected
-//! paths that role (`addon.packaging.setRole`). Its menu's Role Swatches… picks the swatch that
-//! carries a role (`addon.packaging.setRoleSwatch`). Its Check button, like the Check Fold Lines menu
+//! paths that role (`addon.packaging.setRole`). While the selection holds lines that fold, its Fold
+//! Angle field shows the angle they fold at and sets it (`addon.packaging.setFoldAngle`, as Set Fold
+//! Angle… in the submenu does), and Reset takes their own angles away. Its menu's Role Swatches…
+//! picks the swatch that carries a role (`addon.packaging.setRoleSwatch`). Its Check button, like the Check Fold Lines menu
 //! item, checks the fold lines (`addon.packaging.check`) and lists the issues found under it, each
 //! with a Select button; each document's list is kept until that document changes. Its Fold Preview
 //! button, like the Fold Preview menu item, shows the blank folded in 3D ([`preview`], `ui.foldPreview`).
@@ -27,6 +29,18 @@ pub const SET_ROLE: &str = "addon.packaging.setRole";
 pub const SET_ROLE_SWATCH: &str = "addon.packaging.setRoleSwatch";
 /// The command that checks the fold lines.
 pub const CHECK: &str = "addon.packaging.check";
+/// The command that sets or resets the fold angle of fold lines.
+pub const SET_FOLD_ANGLE: &str = "addon.packaging.setFoldAngle";
+
+/// The fold angles `addon.packaging.setFoldAngle` takes, in degrees.
+pub const FOLD_ANGLES: std::ops::RangeInclusive<f64> = -180.0..=180.0;
+/// The places a fold angle field shows `angle` to: all it has, so an angle such as 179.9999999° is
+/// not shown as 180°, which typing 180 into the field would then leave unchanged; at least one, the
+/// place the field's fine steps (a tenth of a degree) round to.
+pub fn angle_places(angle: Option<f64>) -> usize {
+    // f64's Display is the shortest text that reads back as the same number, without an exponent.
+    angle.map_or(0, |a| format!("{a}").split_once('.').map_or(0, |(_, places)| places.len())).max(1)
+}
 /// The command that shows the Fold Preview window.
 pub const PREVIEW: &str = "ui.foldPreview";
 /// The roles by name, as `addon.packaging.setRole` and Role Swatches… take them.
@@ -50,6 +64,7 @@ pub fn menu() -> Vec<Item> {
         make("Make Perforation Line", "perforation"),
         Item::Sep,
         Item::Cmd("Check Fold Lines", CHECK, Value::Null),
+        Item::Cmd("Set Fold Angle…", SET_FOLD_ANGLE, Value::Null),
         Item::Sep,
         Item::Cmd("Fold Preview", PREVIEW, json!({})),
     ]
@@ -211,15 +226,23 @@ struct Rows {
     /// What they were read for: the document, its revision and its selection.
     key: Option<(u64, u64, Vec<u64>)>,
     rows: Vec<Row>,
+    /// Whether the rows count the selection (not the whole document).
+    selection: bool,
+    /// How many lines that fold (Crease, Partial Cut, Perforation) Set Fold Angle can change.
+    fold_lines: u64,
+    /// The angle they all fold at (`None`: they differ, or there are none).
+    angle: Option<f64>,
+    /// How many of them hold a stored angle, readable or not: what Reset takes away.
+    stored_angles: u64,
 }
 
 /// The rows for the active document as it is now, read again only when it changed.
-fn rows(app: &mut VectorcraftApp, ctx: &egui::Context) -> Vec<Row> {
-    let Some(st) = app.session.active() else { return vec![] };
+fn read_rows(app: &mut VectorcraftApp, ctx: &egui::Context) -> Rows {
+    let Some(st) = app.session.active() else { return Rows::default() };
     let key = (st.uid, st.revision, st.selection.objects.iter().map(|id| id.0).collect::<Vec<_>>());
     let mut kept: Rows = pstate(ctx, STATE);
     if kept.key.as_ref() == Some(&key) {
-        return kept.rows;
+        return kept;
     }
     let answer = app.session.execute("addon.packaging.roles", &json!({})).unwrap_or(Value::Null);
     let d = app.session.active().map(|st| st.doc.clone());
@@ -228,9 +251,55 @@ fn rows(app: &mut VectorcraftApp, ctx: &egui::Context) -> Vec<Row> {
         let paint = d.as_ref().and_then(|d| d.swatch(&swatch)).map(|s| s.paint.clone());
         Some((r["role"].as_str()?.to_string(), swatch, paint, r["count"].as_u64()?))
     };
-    kept = Rows { key: Some(key), rows: answer["roles"].as_array().into_iter().flatten().filter_map(row).collect() };
+    kept = Rows {
+        key: Some(key),
+        rows: answer["roles"].as_array().into_iter().flatten().filter_map(row).collect(),
+        selection: answer["scope"] == "selection",
+        fold_lines: answer["foldLines"].as_u64().unwrap_or(0),
+        angle: answer["foldAngle"].as_f64(),
+        stored_angles: answer["storedAngles"].as_u64().unwrap_or(0),
+    };
     set_pstate(ctx, STATE, kept.clone());
-    kept.rows
+    kept
+}
+
+/// The role rows for the active document as it is now.
+fn rows(app: &mut VectorcraftApp, ctx: &egui::Context) -> Vec<Row> {
+    read_rows(app, ctx).rows
+}
+
+/// The fields Set Fold Angle… opens with: `addon.packaging.setFoldAngle`'s options on the angle
+/// the selected lines that it can change all fold at, else 90°. The command's reason while it
+/// can't change any.
+pub(crate) fn dialog_fields(app: &VectorcraftApp) -> Result<Value, String> {
+    let command = vectorcraft_engine::find_command(SET_FOLD_ANGLE).ok_or_else(|| format!("unknown command {SET_FOLD_ANGLE}"))?;
+    (command.enabled)(&app.session)?;
+    let angle = vectorcraft_engine::cmd::selection_fold_angles(&app.session).angle.unwrap_or(90.0);
+    Ok(json!({ "__command": SET_FOLD_ANGLE, "__label": "Set Fold Angle", "angle": angle }))
+}
+
+/// The Fold Angle row, while the selection holds lines that fold and can be changed: the angle
+/// they all fold at (empty when they differ), which sets theirs when changed, and Reset, which
+/// takes away the angles of their own.
+fn show_angle(app: &mut VectorcraftApp, ui: &mut Ui, kept: &Rows) {
+    if !kept.selection || kept.fold_lines == 0 {
+        return;
+    }
+    let mut call = None;
+    ui.horizontal(|ui| {
+        widgets::field_label(ui, tl!("Fold Angle"));
+        if let Some(a) = widgets::mixed_field_within(ui, "fold-angle", kept.angle, "°", angle_places(kept.angle), 64.0, FOLD_ANGLES) {
+            call = Some(json!({ "angle": a }));
+        }
+        if ui.add_enabled_ui(kept.stored_angles > 0, |ui| widgets::flat_button_fit(ui, tl!("Reset"), 56.0)).inner.clicked() {
+            call = Some(json!({ "reset": true }));
+        }
+    });
+    if let Some(p) = call
+        && let Err(e) = app.run(SET_FOLD_ANGLE, p)
+    {
+        app.status(e);
+    }
 }
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
@@ -244,7 +313,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         ui.add_space(4.0);
     }
     let mut picked = None;
-    for (role, swatch, paint, count) in rows(app, ui.ctx()) {
+    let kept = read_rows(app, ui.ctx());
+    for (role, swatch, paint, count) in kept.rows.iter().cloned() {
         let label = ROLES.iter().find(|(_, id)| *id == role).map_or(role.as_str(), |(l, _)| *l);
         let clicked = ui
             .add_enabled_ui(selected, |ui| {
@@ -267,6 +337,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     {
         app.status(e);
     }
+    show_angle(app, ui, &kept);
     show_check(app, ui);
 }
 

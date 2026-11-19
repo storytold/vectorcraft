@@ -163,6 +163,15 @@ pub(super) fn length_range(command: &str, key: &str) -> Option<std::ops::RangeIn
     }
 }
 
+/// The range of a number parameter (not a distance) of the commands this dialog edits, where the
+/// command has one: the field keeps what is typed within it.
+pub(super) fn number_range(command: &str, key: &str) -> Option<std::ops::RangeInclusive<f64>> {
+    match (command, key) {
+        (crate::addons::packaging::SET_FOLD_ANGLE, "angle") => Some(crate::addons::packaging::FOLD_ANGLES),
+        _ => None,
+    }
+}
+
 /// The order the fields of the commands this dialog edits come in, where the order of their
 /// names isn't it (the rest follow, by name).
 fn order(command: &str) -> &'static [&'static str] {

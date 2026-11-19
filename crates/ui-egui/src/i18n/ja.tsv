@@ -10116,6 +10116,11 @@ breakText	Glyphs	字形
 	No objects are selected.	オブジェクトが選択されていません。
 	Open a document to mark its fold lines.	ドキュメントを開くと折り線を設定できます。
 	Remove Fold Line Role	線種を解除
+	Fold Angle	折り角度
+	Set Fold Angle…	折り角度を設定…
+	Set Fold Angle	折り角度を設定
+	Reset Fold Angle	折り角度をリセット
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	ロックも非表示もされていない筋入れ線、半抜き線またはミシン目線を選択してください
 	Tap	短押し
 	Clear Hold	長押しを消去
 	Hold Shortcuts	長押しショートカット

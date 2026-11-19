@@ -10443,6 +10443,11 @@ breakText	Glyphs	Glyphs
 	No objects are selected.	Er zijn geen objecten geselecteerd.
 	Open a document to mark its fold lines.	Open een document om de vouwlijnen te markeren.
 	Remove Fold Line Role	Lijnsoort verwijderen
+	Fold Angle	Vouwhoek
+	Set Fold Angle…	Vouwhoek instellen…
+	Set Fold Angle	Vouwhoek instellen
+	Reset Fold Angle	Vouwhoek herstellen
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	selecteer een rillijn, halve snijlijn of perforatielijn die niet vergrendeld of verborgen is
 	Tap	Kort drukken
 	Clear Hold	Vasthouden wissen
 	Hold Shortcuts	Vasthoudsneltoetsen

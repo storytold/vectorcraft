@@ -10394,6 +10394,11 @@ breakText	Glyphs	Glifák
 	No objects are selected.	Nincs kijelölt objektum.
 	Open a document to mark its fold lines.	Nyiss meg egy dokumentumot a hajtásvonalai megjelöléséhez.
 	Remove Fold Line Role	Vonaltípus eltávolítása
+	Fold Angle	Hajtásszög
+	Set Fold Angle…	Hajtásszög beállítása…
+	Set Fold Angle	Hajtásszög beállítása
+	Reset Fold Angle	Hajtásszög visszaállítása
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	jelöljön ki egy bigvonalat, részleges vágóvonalat vagy perforációs vonalat, amely nincs zárolva és nincs elrejtve
 	Tap	Rövid lenyomás
 	Clear Hold	Nyomva tartás törlése
 	Hold Shortcuts	Nyomva tartásos billentyűparancsok

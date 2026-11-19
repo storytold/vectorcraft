@@ -10269,6 +10269,11 @@ breakText	Glyphs	Glify
 	No objects are selected.	Nie zaznaczono żadnych obiektów.
 	Open a document to mark its fold lines.	Otwórz dokument, aby oznaczyć jego linie zgięcia.
 	Remove Fold Line Role	Usuń rodzaj linii
+	Fold Angle	Kąt zgięcia
+	Set Fold Angle…	Ustaw kąt zgięcia…
+	Set Fold Angle	Ustaw kąt zgięcia
+	Reset Fold Angle	Resetuj kąt zgięcia
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	zaznacz linię bigowania, nacięcia lub perforacji, która nie jest zablokowana ani ukryta
 	Tap	Krótkie naciśnięcie
 	Clear Hold	Wyczyść przytrzymanie
 	Hold Shortcuts	Skróty przytrzymania

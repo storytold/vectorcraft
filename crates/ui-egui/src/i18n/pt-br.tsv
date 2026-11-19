@@ -10478,6 +10478,11 @@ swatch	Yellow Green	Verde-amarelado
 	No objects are selected.	Nenhum objeto selecionado.
 	Open a document to mark its fold lines.	Abra um documento para marcar suas linhas de dobra.
 	Remove Fold Line Role	Remover Tipo de Linha
+	Fold Angle	Ângulo de Dobra
+	Set Fold Angle…	Definir Ângulo de Dobra…
+	Set Fold Angle	Definir Ângulo de Dobra
+	Reset Fold Angle	Redefinir Ângulo de Dobra
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	selecione uma linha de vinco, de meio-corte ou de perfuração que não esteja bloqueada nem oculta
 	Tap	Toque Rápido
 	Clear Hold	Limpar Pressionamento Longo
 	Hold Shortcuts	Atalhos de Pressionamento Longo

@@ -10015,6 +10015,11 @@ breakText	Glyphs	글리프
 	No objects are selected.	선택한 개체가 없습니다.
 	Open a document to mark its fold lines.	접는 선을 지정하려면 문서를 여세요.
 	Remove Fold Line Role	선 종류 제거
+	Fold Angle	접는 각도
+	Set Fold Angle…	접는 각도 설정…
+	Set Fold Angle	접는 각도 설정
+	Reset Fold Angle	접는 각도 재설정
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	잠기거나 숨겨지지 않은 오시선, 하프 컷 선 또는 미싱선을 선택하세요
 	Tap	짧게 누르기
 	Clear Hold	길게 누르기 지우기
 	Hold Shortcuts	길게 누르기 단축키

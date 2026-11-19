@@ -10019,6 +10019,11 @@ breakText	Glyphs	Glyphen
 	No objects are selected.	Es sind keine Objekte ausgewählt.
 	Open a document to mark its fold lines.	Öffnen Sie ein Dokument, um seine Faltlinien festzulegen.
 	Remove Fold Line Role	Linienart entfernen
+	Fold Angle	Faltwinkel
+	Set Fold Angle…	Faltwinkel festlegen…
+	Set Fold Angle	Faltwinkel festlegen
+	Reset Fold Angle	Faltwinkel zurücksetzen
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	Wählen Sie eine Rill-, Teilschnitt- oder Perforationslinie aus, die weder gesperrt noch ausgeblendet ist
 	Tap	Kurz drücken
 	Clear Hold	Halten löschen
 	Hold Shortcuts	Halte-Tastaturbefehle

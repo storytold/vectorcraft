@@ -10012,6 +10012,11 @@ theme	Appearance	अपीयरेंस
 	No objects are selected.	कोई ऑब्जेक्ट सिलेक्ट नहीं है।
 	Open a document to mark its fold lines.	फ़ोल्ड लाइनें मार्क करने के लिए कोई डॉक्यूमेंट ओपन करें।
 	Remove Fold Line Role	लाइन प्रकार हटाएँ
+	Fold Angle	फ़ोल्ड कोण
+	Set Fold Angle…	फ़ोल्ड कोण सेट करें…
+	Set Fold Angle	फ़ोल्ड कोण सेट करें
+	Reset Fold Angle	फ़ोल्ड कोण रीसेट करें
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	ऐसी क्रीज़, आंशिक कट या परफ़ोरेशन लाइन चुनें जो न लॉक हो न छिपी हो
 	Tap	जल्दी दबाना
 	Clear Hold	होल्ड साफ़ करें
 	Hold Shortcuts	होल्ड शॉर्टकट
