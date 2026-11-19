@@ -236,8 +236,12 @@ impl Tool for SymbolismTool {
             PointerKind::Drag if self.active => {
                 // Sprayer: thin the samples to a fraction of the brush; others: every few pixels.
                 let step = if self.id == "symbolSprayer" { (self.diameter * 0.15).max(cx.tol(3.0)) } else { cx.tol(3.0) };
+                // With Use Pressure Pen a change of pressure of at least 0.05 is kept where the pen
+                // stays (the Sprayer does not use the pressure).
+                let pressed = self.use_pressure && self.id != "symbolSprayer";
+                let thinned = self.points.last().is_some_and(|(l, f)| l.distance(p) < step && !(pressed && (sample.1 - f).abs() >= 0.05));
                 // Each preview carries every point so far: a long drag stops growing and previews less often.
-                if self.points.len() >= MAX_STROKE_SAMPLES || self.points.last().is_some_and(|(l, _)| l.distance(p) < step) {
+                if self.points.len() >= MAX_STROKE_SAMPLES || thinned {
                     return vec![];
                 }
                 self.points.push(sample);
@@ -571,6 +575,35 @@ mod tests {
         spinner.set_option("method", &json!("random"));
         let v = press(&mut spinner);
         assert!(v["method"] == "random" && v.get("proportional").is_none(), "{v}");
+    }
+
+    /// With Use Pressure Pen a drag sample where the pen stays is kept when the pressure changes;
+    /// without it, or with the same pressure, the drag keeps thinning the samples by distance.
+    #[test]
+    fn a_pressure_change_where_the_pen_stays_is_kept() {
+        let (d, _) = doc_with_rect();
+        let (s, p) = (Selection::default(), paint());
+        let cx = cx(&d, &s, &p);
+        let stroke = |use_pressure: bool, pressures: [f32; 3]| {
+            let mut t = SymbolismTool::new("symbolSizer");
+            t.set_option("usePressure", &json!(use_pressure));
+            let at = |kind, pressure| PointerEvent { pressure, ..PointerEvent::new(kind, 5.0, 5.0) };
+            let events =
+                [(PointerKind::Down, pressures[0]), (PointerKind::Drag, pressures[1]), (PointerKind::Drag, pressures[2]), (PointerKind::Up, 0.0)];
+            // The points of the last preview, the one the drag commits.
+            let mut last = Value::Null;
+            for (kind, pressure) in events {
+                for a in t.pointer(&cx, &at(kind, pressure)) {
+                    if let Action::Preview(_, v) = a {
+                        last = v["points"].clone();
+                    }
+                }
+            }
+            last
+        };
+        assert_eq!(stroke(true, [0.0, 1.0, 1.0]), json!([[5.0, 5.0, 0.0], [5.0, 5.0, 1.0]]));
+        assert_eq!(stroke(true, [0.5, 0.52, 0.5]), json!([[5.0, 5.0, 0.5]]));
+        assert_eq!(stroke(false, [0.0, 1.0, 1.0]), json!([[5.0, 5.0]]));
     }
 
     /// The Sprayer sends its six options as `attributes`, and the fill color only while Stain is

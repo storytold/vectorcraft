@@ -3790,8 +3790,8 @@ already walks Image Trace. Short agent entry points:
   - `random` gives each instance its own share of the tool's change for the whole stroke, from none of it to twice
     it (the Spinner: a turn either way), the same each time the stroke is applied.
   - `average` moves each instance's value toward the mean of the instances within the brush at that point: the
-    Scruncher its distance from their middle toward their mean distance, the Sizer the geometric mean of their sizes,
-    the Spinner their mean direction, the Stainer and the Styler their mean amount, the Screener their mean opacity.
+    Scruncher its distance from their middle toward their mean distance, the Sizer the geometric mean of their sizes
+    on the page, whatever their symbols, the Spinner their mean direction, the Stainer and the Styler their mean amount, the Screener their mean opacity.
     `alt` does not reverse it. An instance already at the mean is left as it is, and no undo step is added when
     no instance changes. The Screener's average, and the opacity a sprayed instance takes as its average, can be
     below the 5% that the Screener otherwise stops at.
@@ -3801,9 +3801,10 @@ already walks Image Trace. Short agent entry points:
     height) and one point resizes both. With `affectsDensity` an instance also moves away from the point as it grows
     and toward it as it shrinks.
   - A sprayed instance's `average` values are the means of the selected set's instances within `radius` of the
-    stroke point: their spacing, size, rotation and opacity, and the stain or style of the nearest one that has one,
-    at the mean amount. With no instance there it has the symbol's size, no rotation, full opacity and no stain or
-    style. `attributes` left out means `average` for all six.
+    stroke point: their spacing, size on the page (of any symbol), rotation and opacity, and the stain or style of
+    the nearest one that has one, at the mean amount. With no instance there it has the symbol's own size (not
+    `scale`), no rotation, full opacity and no stain or style. New instances are spaced by the size they are placed
+    at. `attributes` left out means `average` for all six.
   - `symbol.setDensity` moves each instance of a set along the line from the middle of the set's instances, to
     (1.15 − 0.1·`to`) / (1.15 − 0.1·`from`) of its distance from it (each factor at least 0.1), as one undo step, and
     adds none when no instance moves and every set already has density `to`. `from` is the density each set was

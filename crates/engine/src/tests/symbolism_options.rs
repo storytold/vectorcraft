@@ -440,6 +440,77 @@ fn the_sprayer_gives_new_instances_the_average_or_the_user_defined_values() {
     assert_eq!(angle(&s, level), 0.0, "Average, with no instance under the brush");
 }
 
+/// Size: Average is a size on the page, the same measure for every symbol: a 20 pt symbol sprayed
+/// beside an 80 pt one is 80 pt, and the Sizer brings the two to 40 pt. With no instance under the
+/// brush a sprayed instance has its symbol's own size, whatever `scale` is.
+#[test]
+fn average_sizes_are_sizes_on_the_page_for_every_symbol() {
+    let mut s = session();
+    s.execute("shape.rectangle", &json!({"x": 0, "y": 200, "width": 80, "height": 80})).unwrap();
+    s.execute("symbol.new", &json!({"name": "Big"})).unwrap();
+    s.select(|_, sel| sel.clear()).unwrap();
+    let set = NodeId(s.execute("symbol.spray", &json!({"name": "Big", "points": [[200, 150]], "radius": 4})).unwrap()["id"].as_u64().unwrap());
+    let big = members(&s, set)[0];
+    assert!((bounds(&s, big).width() - 80.0).abs() < 1e-9);
+    let spray = |s: &mut Session, at: Value| {
+        s.execute("symbol.spray", &json!({"name": "Dot", "points": at, "radius": 30, "scale": 2})).unwrap();
+        *members(s, set).last().unwrap()
+    };
+    let near = spray(&mut s, json!([[215, 150]]));
+    assert!((bounds(&s, near).width() - 80.0).abs() < 1e-9, "{}", bounds(&s, near).width());
+    let far = spray(&mut s, json!([[350, 40]]));
+    assert!((bounds(&s, far).width() - 20.0).abs() < 1e-9, "{}", bounds(&s, far).width());
+    // The Sizer: an unscaled Dot and an unscaled Big meet at the geometric mean of 20 and 80.
+    let mut s = session();
+    s.execute("shape.rectangle", &json!({"x": 0, "y": 200, "width": 80, "height": 80})).unwrap();
+    s.execute("symbol.new", &json!({"name": "Big"})).unwrap();
+    s.select(|_, sel| sel.clear()).unwrap();
+    let small = dot(&mut s, 200.0, 150.0);
+    let big = NodeId(s.execute("symbol.place", &json!({"name": "Big", "x": 220, "y": 150})).unwrap()["id"].as_u64().unwrap());
+    s.select(|_, sel| sel.clear()).unwrap();
+    let between = json!([[210, 150], [210, 150], [210, 150], [210, 150], [210, 150], [210, 150]]);
+    adjust(&mut s, json!({"tool": "size", "points": between, "radius": 30, "intensity": 10, "method": "average"}));
+    let (ws, wb) = (bounds(&s, small).width(), bounds(&s, big).width());
+    assert!(ws > 30.0 && wb < 55.0 && (ws * wb / 1600.0 - 1.0).abs() < 1e-9, "{ws} {wb}");
+    // A symbol without a recorded size is measured by its art: here 80 pt art drawn at its own size.
+    let mut s = session();
+    s.execute("shape.rectangle", &json!({"x": 0, "y": 200, "width": 20, "height": 20})).unwrap();
+    s.execute("symbol.new", &json!({"name": "Loose"})).unwrap();
+    s.edit("Forget size", |d, _| {
+        if let Some(m) = d.unknown.get_mut(vectorcraft_doc::SYMBOL_SIZES).and_then(Value::as_object_mut) {
+            m.remove("Loose");
+        }
+        for sym in d.symbols.iter_mut().filter(|sym| sym.name == "Loose") {
+            std::sync::Arc::make_mut(&mut sym.art).transform(Affine::scale(4.0), false);
+        }
+        Ok(())
+    })
+    .unwrap();
+    s.select(|_, sel| sel.clear()).unwrap();
+    let small = dot(&mut s, 200.0, 150.0);
+    let loose = NodeId(s.execute("symbol.place", &json!({"name": "Loose", "x": 220, "y": 150})).unwrap()["id"].as_u64().unwrap());
+    s.select(|_, sel| sel.clear()).unwrap();
+    // Its width as drawn, measured by its symbol's art.
+    let drawn = |s: &Session| {
+        let d = &s.doc().unwrap().doc;
+        node(s, loose).geometric_bounds_with(&d.symbol_boxes()).unwrap().width()
+    };
+    assert!((drawn(&s) - 80.0).abs() < 1e-9, "{}", drawn(&s));
+    adjust(&mut s, json!({"tool": "size", "points": between, "radius": 30, "intensity": 10, "method": "average"}));
+    let (ws, wl) = (bounds(&s, small).width(), drawn(&s));
+    assert!(ws > 30.0 && wl < 55.0, "{ws} {wl}");
+    // A new set sprayed with Size: Average is spaced by the size it is placed at, not by `scale`.
+    s.select(|_, sel| sel.clear()).unwrap();
+    let stroke: Vec<Value> = (0..50).map(|i| json!([100.0 + 4.0 * f64::from(i), 20.0])).collect();
+    let r = s.execute("symbol.spray", &json!({"name": "Dot", "points": stroke, "radius": 2, "scale": 100})).unwrap();
+    assert!(r["count"].as_u64().unwrap() > 5, "{r}");
+    // The 80 pt art of a symbol without a recorded size spaces new instances by its own size.
+    s.select(|_, sel| sel.clear()).unwrap();
+    let stroke: Vec<Value> = (0..50).map(|i| json!([100.0 + 4.0 * f64::from(i), 280.0])).collect();
+    let r = s.execute("symbol.spray", &json!({"name": "Loose", "points": stroke, "radius": 2})).unwrap();
+    assert!(r["count"].as_u64().unwrap() <= 5, "{r}");
+}
+
 /// Spin: Average turns a new instance to the mean direction of the instances under the brush, and
 /// Scrunch: Average spaces new instances as those under the brush are spaced.
 #[test]

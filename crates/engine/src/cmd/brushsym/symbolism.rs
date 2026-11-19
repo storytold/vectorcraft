@@ -4,8 +4,10 @@
 
 use std::collections::HashMap;
 
-use super::symbols::{instance_center, is_symbol_set};
-use super::{Affine, Document, EngineError, Node, NodeId, NodeKind, Paint, Point, Result, Session, Value, Vec2, bad, ids_json, json, named_ids};
+use super::symbols::{instance_center, is_symbol_set, stored_natural_size};
+use super::{
+    Affine, Document, EngineError, HALF, Node, NodeId, NodeKind, Paint, Point, Result, Session, Value, Vec2, bad, ids_json, json, named_ids,
+};
 
 /// Method: how the Scruncher, Sizer, Spinner, Stainer, Screener and Styler adjust instances.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -114,8 +116,8 @@ pub(super) fn record_set_density(d: &mut Document, sets: &[NodeId], density: f64
 #[derive(Clone, Debug)]
 pub(super) struct Look {
     pub center: Point,
-    /// Its size as a share of its symbol's own size (1: the symbol's size).
-    pub scale: f64,
+    /// Its size on the page: the side of a square with its area, the same measure for every symbol.
+    pub size: f64,
     /// Its rotation in radians.
     pub angle: f64,
     pub opacity: f64,
@@ -123,8 +125,12 @@ pub(super) struct Look {
     pub fill: Option<(Paint, f64)>,
 }
 
+/// The [`natural_side`] of each symbol measured so far in one command, so that one measure serves
+/// every instance of the symbol.
+pub(super) type Sides = HashMap<String, f64>;
+
 /// The [`Look`] of instance `n` (None for another object, or an instance without a size).
-pub(super) fn look(d: &Document, n: &Node) -> Option<Look> {
+pub(super) fn look(d: &Document, n: &Node, sides: &mut Sides) -> Option<Look> {
     let NodeKind::SymbolInstance { symbol, xf } = &n.kind else { return None };
     let [a, b, c, e, ..] = xf.as_coeffs();
     let natural = d.symbol_natural_xf(symbol).as_coeffs();
@@ -133,20 +139,41 @@ pub(super) fn look(d: &Document, n: &Node) -> Option<Look> {
     if !(scale.is_finite() && scale > 0.0) {
         return None;
     }
+    let side = match sides.get(symbol) {
+        Some(side) => *side,
+        None => *sides.entry(symbol.clone()).or_insert_with(|| natural_side(d, symbol)),
+    };
+    let size = scale * side;
+    if !(size.is_finite() && size > 0.0) {
+        return None;
+    }
     Some(Look {
         center: instance_center(n)?,
-        scale,
+        size,
         angle: b.atan2(a),
         opacity: f64::from(n.opacity),
         fill: n.appearance.fill().map(|f| (f.paint.clone(), f64::from(f.opacity))),
     })
 }
 
+/// The [`Look::size`] of an instance of symbol `name` at the symbol's own size. A symbol without a
+/// recorded size draws its art at the art's own size, so its art is measured.
+pub(super) fn natural_side(d: &Document, name: &str) -> f64 {
+    let recorded = stored_natural_size(d, name).is_some_and(|(w, h)| w.is_finite() && h.is_finite() && w > 0.0 && h > 0.0);
+    // Each side's root first, so that a huge size does not overflow.
+    let art = (!recorded).then(|| d.symbol_art_bounds(name)).flatten().map(|r| r.width().sqrt() * r.height().sqrt());
+    if let Some(side) = art.filter(|s| s.is_finite() && *s > 0.0) {
+        return side;
+    }
+    let natural = d.symbol_natural_xf(name).as_coeffs();
+    2.0 * HALF * natural[0].abs().max(1e-9).sqrt() * natural[3].abs().max(1e-9).sqrt()
+}
+
 /// The mean of the [`Look`]s of the instances under the brush.
 #[derive(Clone, Debug)]
 pub(super) struct Mean {
-    /// The geometric mean of the sizes.
-    pub scale: f64,
+    /// The geometric mean of the sizes ([`Look::size`]).
+    pub size: f64,
     /// The mean direction of the rotations.
     pub angle: f64,
     pub opacity: f64,
@@ -226,10 +253,10 @@ pub(super) fn mean(looks: &[&Look], at: Point, with_gap: bool) -> Option<Mean> {
         return None;
     }
     let n = looks.len() as f64;
-    let (mut log_scale, mut sin, mut cos, mut opacity, mut amount, mut middle) = (0.0, 0.0, 0.0, 0.0, 0.0, Vec2::ZERO);
+    let (mut log_size, mut sin, mut cos, mut opacity, mut amount, mut middle) = (0.0, 0.0, 0.0, 0.0, 0.0, Vec2::ZERO);
     let mut paint: Option<(&Paint, f64)> = None;
     for l in looks {
-        log_scale += l.scale.ln();
+        log_size += l.size.ln();
         sin += l.angle.sin();
         cos += l.angle.cos();
         opacity += l.opacity;
@@ -248,7 +275,7 @@ pub(super) fn mean(looks: &[&Look], at: Point, with_gap: bool) -> Option<Mean> {
     // One instance under the brush has no spacing there.
     let gap = (with_gap && looks.len() > 1).then(|| nearest_gaps(looks).iter().sum::<f64>() / n);
     Some(Mean {
-        scale: (log_scale / n).exp(),
+        size: (log_size / n).exp(),
         angle,
         opacity: opacity / n,
         amount: amount / n,
@@ -386,7 +413,7 @@ mod tests {
     use super::*;
 
     fn at(x: f64, y: f64) -> Look {
-        Look { center: Point::new(x, y), scale: 1.0, angle: 0.0, opacity: 1.0, fill: None }
+        Look { center: Point::new(x, y), size: 20.0, angle: 0.0, opacity: 1.0, fill: None }
     }
 
     /// The distance from each instance in `from` to the nearest other one in `refs`, measured
