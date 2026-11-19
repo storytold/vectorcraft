@@ -340,6 +340,10 @@ fn apply(app: &mut VectorcraftApp, ctx: &egui::Context, force: bool) {
         app.canvas.key = None;
         ctx.data_mut(|d| d.insert_temp(id, Some(want)));
     }
+    // Cards show only with Show Tool Tips on: an open card goes away as soon as tool tips are turned off.
+    let p = &app.session.prefs;
+    let cards = crate::toolbar::card::CardPrefs { on: p.show_tool_cards && p.show_tool_tips, animated_zoom: crate::canvas::animated_zoom(p) };
+    crate::toolbar::card::set_prefs(ctx, cards);
     let z = app.session.prefs.ui_scaling.clamp(0.75, 2.0) as f32;
     if (ctx.zoom_factor() - z).abs() > 1e-3 {
         ctx.set_zoom_factor(z);
@@ -560,6 +564,27 @@ impl DescribedRows {
     }
 }
 
+/// Whether the checkbox of the setting `key` is enabled, for a setting that acts only while
+/// another setting allows it and is dimmed otherwise. `None` for every other setting.
+fn bool_enabled(d: &Dialog, key: &str) -> Option<bool> {
+    match key {
+        // General › Scroll Sideways with Cmd/Ctrl + Wheel acts only while Zoom with Mouse Wheel
+        // is off: dimmed while it is on.
+        "ctrlWheelScrollsSideways" => Some(!d.bool("zoomWithMouseWheel")),
+        // Units › Numbers Without Units Are Points only tells points from picas: dimmed
+        // unless a unit is Picas.
+        "numbersWithoutUnitsArePoints" => Some(picas_in_use(d)),
+        // General › Show Tool Cards replaces the tool tips: dimmed while Show Tool Tips is off.
+        "showToolCards" => Some(d.bool("showToolTips")),
+        // Performance › Animated Zoom needs GPU Performance: dimmed while it is off.
+        "animatedZoom" => Some(d.bool("gpuPerformance")),
+        // Type › Show samples on white draws the samples that Enable in-menu font previews
+        // shows: dimmed while previews are off.
+        "fontSamplesOnWhite" => Some(d.bool("fontPreview")),
+        _ => None,
+    }
+}
+
 /// The fields of the category `cat`. → The rows under the pointer and with the keyboard focus.
 fn category_fields(ui: &mut egui::Ui, app: &mut VectorcraftApp, d: &mut Dialog, cat: &str) -> DescribedRows {
     let t = Tokens::get(ui.ctx());
@@ -599,25 +624,10 @@ fn category_fields(ui: &mut egui::Ui, app: &mut VectorcraftApp, d: &mut Dialog, 
         let v = d.fields.get(sp.key).cloned().unwrap_or(Value::Null);
         let top = ui.cursor().top();
         let mark = found_mark(ui, d, sp.key);
+        let enabled = bool_enabled(d, sp.key);
         match sp.kind {
-            // General › Scroll Sideways with Cmd/Ctrl + Wheel acts only while Zoom with Mouse Wheel
-            // is off: dimmed while it is on.
-            PrefKind::Bool if sp.key == "ctrlWheelScrollsSideways" => {
-                ui.add_enabled_ui(!d.bool("zoomWithMouseWheel"), |ui| bool_row(ui, d, sp.key, sp.label));
-            }
-            // Units › Numbers Without Units Are Points only tells points from picas: dimmed
-            // unless a unit is Picas.
-            PrefKind::Bool if sp.key == "numbersWithoutUnitsArePoints" => {
-                ui.add_enabled_ui(picas_in_use(d), |ui| bool_row(ui, d, sp.key, sp.label));
-            }
-            // Performance › Animated Zoom needs GPU Performance: dimmed while it is off.
-            PrefKind::Bool if sp.key == "animatedZoom" => {
-                ui.add_enabled_ui(d.bool("gpuPerformance"), |ui| bool_row(ui, d, sp.key, sp.label));
-            }
-            // Type › Show samples on white draws the samples that Enable in-menu font previews
-            // shows: dimmed while previews are off.
-            PrefKind::Bool if sp.key == "fontSamplesOnWhite" => {
-                ui.add_enabled_ui(d.bool("fontPreview"), |ui| bool_row(ui, d, sp.key, sp.label));
+            PrefKind::Bool if enabled.is_some() => {
+                ui.add_enabled_ui(enabled == Some(true), |ui| bool_row(ui, d, sp.key, sp.label));
             }
             // Windows and Linux only: macOS always has the system's title bar, the web has none.
             PrefKind::Bool if sp.key == "systemTitleBar" => {
