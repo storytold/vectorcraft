@@ -1351,6 +1351,9 @@ liquify-list-end	{0}, {1}	{0} en {1}
 	Box Channel	Kanaal van het vak
 	Color box	Kleurvak
 	Color Wheel Options	Opties voor kleurenwiel
+	Show Harmony	Harmonie tonen
+	Harmony Rule	Harmonieregel
+	Harmony color	Harmoniekleur
 	CSS Properties	CSS-eigenschappen
 	Document Info	Documentinfo
 	Flattener Preview	Afvlakvoorbeeld
