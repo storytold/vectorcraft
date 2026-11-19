@@ -272,9 +272,9 @@ My Themes tab lists the saved themes; every action runs a command (`colorTheme.s
 Color Wheel panel (`window.panel {panel: "colorWheel"}`): a hue ring around a saturation and brightness square. A
 pick runs the commands the Color panel's sliders run: `paint.setFill` or `paint.setStroke` with `keepModel`,
 `paint.editGradient` for a gradient's selected stop, and `paint.freeform.setPoint` for a freeform gradient's selected
-point (the first stop or point when none is selected). `ui.colorWheel {view?, channel?, harmony?, harmonyRule?, vision?, opacity?, hexField?}`
-shows the wheel or the box (a color field with a channel strip at its right), picks the box's channel, shows the
-other colors of a harmony rule as markers on the wheel's ring, shows or hides the color vision row, and checks or
+point (the first stop or point when none is selected). `ui.colorWheel {view?, channel?, gamut?, harmony?, harmonyRule?, vision?, opacity?, hexField?}`
+shows the wheel or the box (a color field with a channel strip at its right), picks the box's channel, grays out the
+colors the CMYK space cannot print, shows the other colors of a harmony rule as markers on the wheel's ring, shows or hides the color vision row, and checks or
 unchecks Show Opacity (an opacity row under the wheel or the box) and Show Hex Field (a field for a hex or CSS color);
 it returns the settings, and `ui.inspect` reports them as `ui.color_wheel`.
 The key `sliders` shows OKLCH Sliders, HSL Sliders or
