@@ -7292,6 +7292,7 @@ axis	Y Axis	Axe Y
 	Inventory Icons	Icônes d’inventaire
 	Skill Icons	Icônes de compétences
 	Weather Icons	Icônes météo
+	Media Controls	Commandes multimédias
 	Attack	Attaque
 	Defend	Défense
 	Heal	Soin
@@ -7665,6 +7666,10 @@ axis	Y Axis	Axe Y
 	Rain	Pluie
 	Thunder	Tonnerre
 	Snow	Neige
+	Play	Lecture
+	Pause	Pause
+	Skip Next	Suivant
+	Shuffle	Aléatoire
 	Save Brush Library…	Enregistrer la bibliothèque de formes…
 @msg	`{_1}` has no brushes to apply	`{_1}` n’a aucune forme à appliquer
 @msg	missing `library` (see brush.libraries)	`library` manquant (voir brush.libraries)

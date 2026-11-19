@@ -6945,6 +6945,7 @@ axis	Y Axis	Trục Y
 	Inventory Icons	Biểu tượng túi đồ
 	Skill Icons	Biểu tượng kỹ năng
 	Weather Icons	Biểu tượng thời tiết
+	Media Controls	Điều khiển đa phương tiện
 	Attack	Tấn công
 	Defend	Phòng thủ
 	Heal	Hồi máu
@@ -7319,6 +7320,10 @@ axis	Y Axis	Trục Y
 	Rain	Mưa
 	Thunder	Sấm
 	Snow	Tuyết
+	Play	Phát
+	Pause	Tạm dừng
+	Skip Next	Chuyển tiếp
+	Shuffle	Xáo trộn
 	Bar	Thanh
 	Hexagon	Lục giác
 	Spectrum	Quang phổ

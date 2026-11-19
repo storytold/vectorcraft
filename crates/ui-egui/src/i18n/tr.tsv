@@ -9186,6 +9186,7 @@ axis	Y Axis	Y ekseni
 	Inventory Icons	Envanter Simgeleri
 	Skill Icons	Yetenek Simgeleri
 	Weather Icons	Hava Durumu Simgeleri
+	Media Controls	Medya Denetimleri
 	Attack	Saldırı
 	Defend	Savunma
 	Heal	İyileştirme
@@ -9559,6 +9560,10 @@ axis	Y Axis	Y ekseni
 	Rain	Yağmur
 	Thunder	Gök Gürültüsü
 	Snow	Kar
+	Play	Oynat
+	Pause	Duraklat
+	Skip Next	Sonrakine Geç
+	Shuffle	Karıştır
 	Save Brush Library…	Fırça Kitaplığını Kaydet…
 @msg	`{_1}` has no brushes to apply	`{_1}` içinde uygulanacak fırça yok
 @msg	missing `library` (see brush.libraries)	`library` eksik (bkz. brush.libraries)

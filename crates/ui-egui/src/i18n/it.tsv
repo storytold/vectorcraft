@@ -6919,6 +6919,7 @@ axis	Y Axis	Asse Y
 	Inventory Icons	Icone inventario
 	Skill Icons	Icone abilità
 	Weather Icons	Icone meteo
+	Media Controls	Controlli multimediali
 	Attack	Attacco
 	Defend	Difesa
 	Heal	Cura
@@ -7293,6 +7294,10 @@ axis	Y Axis	Asse Y
 	Rain	Pioggia
 	Thunder	Tuono
 	Snow	Neve
+	Play	Riproduci
+	Pause	Pausa
+	Skip Next	Passa al successivo
+	Shuffle	Casuale
 	Bar	Barra
 	Hexagon	Esagono
 	Spectrum	Spettro

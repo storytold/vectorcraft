@@ -7360,6 +7360,7 @@ axis	Y Axis	Y-akseli
 	Inventory Icons	Inventaarioikonit
 	Skill Icons	Taitoikonit
 	Weather Icons	Sääikonit
+	Media Controls	Mediasäätimet
 	Attack	Hyökkäys
 	Defend	Puolustus
 	Heal	Parannus
@@ -7733,6 +7734,10 @@ axis	Y Axis	Y-akseli
 	Rain	Sade
 	Thunder	Ukkonen
 	Snow	Lumi
+	Play	Toista
+	Pause	Tauko
+	Skip Next	Ohita seuraavaan
+	Shuffle	Sekoita
 	Save Brush Library…	Tallenna sivellinkirjasto…
 @msg	`{_1}` has no brushes to apply	Kohteessa `{_1}` ei ole käytettäviä siveltimiä
 @msg	missing `library` (see brush.libraries)	`library` puuttuu (katso brush.libraries)

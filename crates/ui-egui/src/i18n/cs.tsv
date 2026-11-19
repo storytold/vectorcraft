@@ -7296,6 +7296,7 @@ axis	Y Axis	osa Y
 	Inventory Icons	Ikony inventáře
 	Skill Icons	Ikony dovedností
 	Weather Icons	Ikony počasí
+	Media Controls	Ovládání médií
 	Attack	Útok
 	Defend	Obrana
 	Heal	Léčení
@@ -7669,6 +7670,10 @@ axis	Y Axis	osa Y
 	Rain	Déšť
 	Thunder	Hrom
 	Snow	Sníh
+	Play	Přehrát
+	Pause	Pozastavit
+	Skip Next	Další
+	Shuffle	Náhodně
 	Save Brush Library…	Uložit knihovnu štětců…
 @msg	`{_1}` has no brushes to apply	`{_1}` nemá žádné štětce k použití
 @msg	missing `library` (see brush.libraries)	chybí `library` (viz brush.libraries)

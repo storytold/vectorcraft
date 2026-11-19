@@ -726,6 +726,10 @@ antiAlias	Sharp	शार्प
 	Rain	बारिश
 	Thunder	गरज
 	Snow	बर्फ़
+	Play	चलाएँ
+	Pause	ठहराएँ
+	Skip Next	अगला
+	Shuffle	क्रमहीन
 	Art using a deleted global swatch keeps its colour.	हटाए गए ग्लोबल स्वॉच वाला आर्टवर्क अपना रंग बनाए रखता है।
 	Artboard	आर्टबोर्ड
 	Artboard {n} of {total}	{total} में से आर्टबोर्ड {n}
@@ -829,6 +833,7 @@ antiAlias	Sharp	शार्प
 	Inventory Icons	इन्वेंटरी आइकन
 	Skill Icons	कौशल आइकन
 	Weather Icons	मौसम आइकन
+	Media Controls	मीडिया नियंत्रण
 	Attack	आक्रमण
 	Defend	रक्षा
 	Heal	उपचार

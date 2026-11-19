@@ -9387,6 +9387,7 @@ axis	Y Axis	Y-akse
 	Inventory Icons	Inventarikoner
 	Skill Icons	Færdighedsikoner
 	Weather Icons	Vejrikoner
+	Media Controls	Mediekontroller
 	Attack	Angreb
 	Defend	Forsvar
 	Heal	Helbredelse
@@ -9754,6 +9755,10 @@ axis	Y Axis	Y-akse
 	Rain	Regn
 	Thunder	Torden
 	Snow	Sne
+	Play	Afspil
+	Pause	Pause
+	Skip Next	Spring til næste
+	Shuffle	Bland
 	Save Brush Library…	Gem penselbibliotek…
 @msg	no empty artboards to delete	ingen tomme tegneflader at slette
 	Scale Presets	Skaleringsforudindstillinger

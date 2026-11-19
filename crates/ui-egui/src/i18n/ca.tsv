@@ -477,6 +477,7 @@ antiAlias	Sharp	Nítid
 	Inventory Icons	Icones d’inventari
 	Skill Icons	Icones d'habilitat
 	Weather Icons	Icones del temps
+	Media Controls	Controls multimèdia
 	Attack	Atac
 	Defend	Defensa
 	Heal	Curació
@@ -4577,6 +4578,10 @@ digits	Malayalam	Malaiàlam
 	Rain	Pluja
 	Thunder	Tro
 	Snow	Neu
+	Play	Reprodueix
+	Pause	Pausa
+	Skip Next	Salta al següent
+	Shuffle	Aleatori
 	Scatter:	Dispersió:
 	Scissors	Tisores
 	Scissors Tool	Eina de tisores

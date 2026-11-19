@@ -6919,6 +6919,7 @@ axis	Y Axis	Ось Y
 	Inventory Icons	Иконки инвентаря
 	Skill Icons	Иконки навыков
 	Weather Icons	Иконки погоды
+	Media Controls	Управление мультимедиа
 	Attack	Атака
 	Defend	Защита
 	Heal	Лечение
@@ -7292,6 +7293,10 @@ axis	Y Axis	Ось Y
 	Rain	Дождь
 	Thunder	Гром
 	Snow	Снег
+	Play	Воспроизвести
+	Pause	Пауза
+	Skip Next	Пропустить вперед
+	Shuffle	Перемешать
 	Save Brush Library…	Сохранить библиотеку кистей…
 @msg	`{_1}` has no brushes to apply	В `{_1}` нет кистей для применения
 @msg	missing `library` (see brush.libraries)	не указан `library` (см. brush.libraries)

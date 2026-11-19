@@ -4664,6 +4664,7 @@ antiAlias	Sharp	શાર્પ
 	Spark Trail	તણખાનો પથ
 	Skill Icons	કૌશલ્ય આઇકન
 	Weather Icons	હવામાન આઇકન
+	Media Controls	મીડિયા નિયંત્રણો
 	Attack	હુમલો
 	Defend	બચાવ
 	Heal	ઉપચાર
@@ -5369,6 +5370,10 @@ swatch	[Registration]	[રજિસ્ટ્રેશન]
 	Rain	વરસાદ
 	Thunder	ગર્જના
 	Snow	બરફ
+	Play	પ્લે કરો
+	Pause	થોભાવો
+	Skip Next	આગળ વધો
+	Shuffle	શફલ
 	Shield	ઢાલ
 	Sword	તલવાર
 	Triangle	ત્રિકોણ

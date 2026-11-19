@@ -7130,6 +7130,7 @@ axis	Y Axis	Y 轴
 	Inventory Icons	物品栏图标
 	Skill Icons	技能图标
 	Weather Icons	天气图标
+	Media Controls	媒体控制
 	Attack	攻击
 	Defend	防御
 	Heal	治疗
@@ -7504,6 +7505,10 @@ axis	Y Axis	Y 轴
 	Rain	雨
 	Thunder	雷
 	Snow	雪
+	Play	播放
+	Pause	暂停
+	Skip Next	跳到下一个
+	Shuffle	随机播放
 	Bar	条形
 	Hexagon	六边形
 	Triangle	三角
