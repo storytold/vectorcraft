@@ -9,8 +9,8 @@ description = "VectorCraft text: font database, shaping, layout, glyph outlines"
 workspace = true
 
 [dependencies]
-# Pending shared extraction; pin the immutable official PR head until it merges.
-craft-font-catalog = { git = "https://github.com/storytold/craft-libs", rev = "d0a9c79933a54883cd5bc3dfe839f1dd699f2c69", default-features = false }
+# The shared font catalog from craft-libs main (it has the outline, bidi and caret helpers used here).
+craft-font-catalog = { git = "https://github.com/storytold/craft-libs", rev = "23acc704933a9a5619a5cd1cddc9bb1fb5a9b2d3", default-features = false }
 vectorcraft-geom = { workspace = true }
 vectorcraft-doc = { workspace = true }
 kurbo = { workspace = true }
