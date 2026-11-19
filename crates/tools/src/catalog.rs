@@ -34,6 +34,7 @@ pub const TOOL_GROUPS: &[&[ToolInfo]] = &[
         t("addAnchor", "Add Anchor Point Tool", Some("+"), "tool-pen-add"),
         t("deleteAnchor", "Delete Anchor Point Tool", Some("-"), "tool-pen-delete"),
         t("anchorPoint", "Anchor Point Tool", Some("Shift+C"), "tool-anchor"),
+        t(crate::quickpen::ID, "Quick Pen Tool", Some("Alt+P"), "tool-quick-pen"),
     ],
     &[t("curvature", "Curvature Tool", Some("Shift+~"), "tool-curvature")],
     &[
@@ -57,6 +58,7 @@ pub const TOOL_GROUPS: &[&[ToolInfo]] = &[
         t("roundedRectangle", "Rounded Rectangle Tool", None, "tool-rounded-rect"),
         t("ellipse", "Ellipse Tool", Some("L"), "tool-ellipse"),
         t(crate::circle::ID, "Circle Tool", None, "tool-circle"),
+        t(crate::curvature_circle::ID, "Curvature Circle Tool", None, "tool-curvature-circle"),
         t("polygon", "Polygon Tool", None, "tool-polygon"),
         t("star", "Star Tool", None, "tool-star"),
         t("flare", "Flare Tool", None, "tool-flare"),

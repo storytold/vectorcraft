@@ -18,6 +18,7 @@ pub mod artboard_options;
 pub mod attributes_panel_options;
 pub mod blend_options;
 mod brush_art_options;
+pub(crate) use brush_art_options::{brush_key_color_canvas, brush_key_color_input, cancel_brush_key_color, refresh_brush_key_color};
 pub mod brush_delete;
 pub mod brush_options;
 pub mod brush_replace_art;
@@ -25,6 +26,7 @@ pub mod bullets_numbering;
 pub mod char_style_options;
 pub mod check_spelling;
 pub mod color_balance;
+pub mod color_group_options;
 pub mod color_guide_options;
 pub(crate) mod color_picker;
 mod command;
@@ -353,6 +355,7 @@ registry! {
     MissingFontEdit: [confirm::MISSING_FONT_EDIT] => confirm::MISSING_FONT_EDIT_SPEC,
     NewSwatch: [new_swatch::KIND] => new_swatch::SPEC,
     NewColorGroup: [new_color_group::KIND] => new_color_group::SPEC,
+    ColorGroupOptions: [color_group_options::KIND] => color_group_options::SPEC,
     GraphData: [graph_data::KIND] => graph_data::SPEC,
     GraphDesign: [graph_design::DESIGN] => graph_design::DESIGN_SPEC,
     GraphColumn: [graph_design::COLUMN] => graph_design::COLUMN_SPEC,
@@ -413,6 +416,7 @@ registry! {
     TextImport: [text_import::KIND] => text_import::SPEC,
     PdfPresets: [pdf_presets::KIND] => pdf_presets::SPEC,
     PdfPreset: [save_pdf::PRESET_KIND] => save_pdf::PRESET_SPEC,
+    PdfFlattenerOptions: [save_pdf::CUSTOM_KIND] => save_pdf::CUSTOM_SPEC,
     SaveOptions: [save_options::KIND] => save_options::SPEC,
     TextExport: [text_export::KIND] => text_export::SPEC,
     OfficeExport: [office_export::KIND] => office_export::SPEC,
@@ -616,8 +620,10 @@ pub fn accepts_field(d: &Dialog, field: &str) -> bool {
 /// Options setting set this way for several rows is sent to every row (Template also sets Lock
 /// and Dim Images, as its checkbox does). A DXF Options preset set this way sets its fields, as
 /// one picked from its menu does, and the preset it shows follows the DXF options set this way.
-/// A Graph Data Column Width set this way sets every column, as Cell Style's does. An Import PDF
-/// `allPages` set this way to the other pick sets Import PDF pages as links back to its default.
+/// A Graph Data Column Width set this way sets every column, as Cell Style's does. A Width Point
+/// Edit side width set this way for several points sets it on every point, as typing it does. An
+/// Import PDF `allPages` set this way to the other pick sets Import PDF pages as links back to its
+/// default.
 pub fn set_field(d: &mut Dialog, field: String, value: Value) {
     if d.kind == brush_options::KIND {
         brush_art_options::note_set(d, &field);
@@ -645,6 +651,7 @@ pub fn set_field(d: &mut Dialog, field: String, value: Value) {
     let dxf = (d.kind == dxf_options::KIND).then(|| field.clone());
     let mosaic = (d.kind == object_mosaic::KIND).then(|| field.clone());
     let graph = (d.kind == graph_data::KIND).then(|| field.clone());
+    let width = (d.kind == width_point::KIND).then(|| field.clone());
     d.fields.insert(field, value);
     if let Some(field) = dxf {
         dxf_options::note_set(d, &field);
@@ -654,6 +661,9 @@ pub fn set_field(d: &mut Dialog, field: String, value: Value) {
     }
     if let Some(field) = graph {
         graph_data::note_set(d, &field);
+    }
+    if let Some(field) = width {
+        width_point::note_set(d, &field);
     }
 }
 
@@ -699,7 +709,7 @@ pub(crate) fn parent(d: &Dialog) -> Option<Dialog> {
 
 /// `ui.dialog.set` changed `field` of the open dialog from `old`: a choice that sets other fields
 /// sets them as choosing it in the dialog does (Export for Screens' `exportPreset`, EPS Options'
-/// `flattenerPreset`, which drops the Custom… options), a change
+/// and Save PDF's `flattenerPreset`, which drop the Custom… options), a change
 /// to Export for Screens' sub-folder controls ends an applied preset's item folders, as it does in
 /// the dialog, Transform Each's Relative / Absolute keeps the Scale fields' size, and Recolor
 /// Artwork's `group` selects that color group and its `groupAction` runs the button at once. Save
@@ -739,6 +749,7 @@ pub(crate) fn field_set(app: &mut VectorcraftApp, field: &str, old: Option<&Valu
 /// Close the open dialog as Cancel does, rolling back a live preview and showing the dialog it was
 /// opened over (`ui.dialog.cancel`).
 pub fn cancel(app: &mut VectorcraftApp) {
+    cancel_brush_key_color(app, true);
     missing_fonts::requeue_replaced(app);
     // More Settings' pop-up and Save Preset end on their own; New Document stays.
     if app.ui.dialog.as_mut().is_some_and(new_document::close_popup) {
@@ -777,6 +788,10 @@ pub fn cancel(app: &mut VectorcraftApp) {
             script_run::picker_cancel(app, &d);
         }
         missing_links::cancelled(app, &d);
+        // Cancel discards Recolor Artwork's own history of color edits with them.
+        if d.kind == recolor::KIND {
+            app.ui.recolor_history = Default::default();
+        }
         // Find Font's next open starts with an empty replacement search.
         if d.kind == "findFont"
             && let Some(ctx) = app.ui_ctx.clone()
@@ -814,6 +829,7 @@ pub(crate) fn reset(app: &mut VectorcraftApp) -> DialogResult {
 
 /// Apply the open dialog (OK).
 pub fn confirm(app: &mut VectorcraftApp) -> DialogResult {
+    cancel_brush_key_color(app, true);
     missing_fonts::requeue_replaced(app);
     let Some(d) = app.ui.dialog.clone() else { return Err("no dialog open".into()) };
     // A file dialog it shows off the UI thread confirms the dialog as it is again.
@@ -854,6 +870,7 @@ pub(crate) fn opened_by_panel(app: &mut VectorcraftApp) {
 /// Draws the active dialog and handles shared initial focus, keyboard shortcuts and actions.
 /// Inline actions and footer buttons use the same confirmation and preview rollback paths.
 pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    refresh_brush_key_color(app);
     crate::shortcuts::hold_back_keys(app, ctx);
     about::show(app, ctx);
     settle(app);
@@ -919,7 +936,8 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let initial = if revolves { egui::vec2((ctx.content_rect().width() / 2.0 - 226.0).max(0.0), -40.0) } else { egui::vec2(0.0, -40.0) };
     let id = egui::Id::unique(("dialog", d.kind.as_str()));
     let id = if revolves { id.with("revolve") } else { id };
-    modal::show_at(ctx, &heading, id, initial, MARGIN, |ui| {
+    let canvas_pick = brush_key_color_canvas(app, ctx);
+    modal::show_at(ctx, &heading, id, initial, MARGIN, canvas_pick, |ui| {
         // Never wider than the window (a large UI scale in a small window): the text wraps.
         let room = (ctx.content_rect().width() - 2.0 * (f32::from(MARGIN) + EDGE_GAP)).max(EDGE_GAP);
         ui.set_min_width(spec.min_width.min(room));

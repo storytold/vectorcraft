@@ -19,8 +19,8 @@ use std::sync::LazyLock;
 
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::Unit;
-use vectorcraft_engine::cmd::FlattenOptions;
 use vectorcraft_engine::cmd::fileio::{SaveMode, pdf};
+use vectorcraft_engine::cmd::{FlattenOptions, FlattenerPreset};
 use vectorcraft_pdf::{
     Changes, Choice, ColorConversion, Compatibility, Downsample, Encryption, ImageCodec, JpegQuality, MarkKind, MonoCodec, Overprint, PdfSettings,
     Printing, ProfileInclusion, Standard,
@@ -38,8 +38,19 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
     body,
     confirm,
     ok: Some("Save PDF"),
-    inputs: |_| &["path"],
+    inputs: |_| &["path", "flattener"],
     reset: Some(reset),
+    ..DialogSpec::FORM
+};
+
+/// Custom Transparency Flattener Options, opened over Save PDF by Custom… beside Flattener preset.
+pub(super) const CUSTOM_KIND: &str = "pdfFlattenerOptions";
+
+pub(super) const CUSTOM_SPEC: DialogSpec = DialogSpec {
+    heading: |_| tl!("Custom Transparency Flattener Options").into(),
+    body: custom_body,
+    confirm: custom_confirm,
+    min_width: 420.0,
     ..DialogSpec::FORM
 };
 
@@ -100,6 +111,19 @@ pub fn open(app: &mut VectorcraftApp, params: &Value) -> Result<Value, String> {
         Some(v) => return Err(format!("useArtboards must be true or false, not {v}")),
     };
     let mut fields = settings_fields(app, params)?;
+    // The PDF settings keep no flattener options: those asked for go over the flattener preset.
+    match params.get("flattener") {
+        None | Some(Value::Null) => {}
+        Some(f @ Value::Object(o)) => {
+            let known = serde_json::to_value(FlattenOptions::default()).unwrap_or_default();
+            if let Some(k) = o.keys().find(|k| known.get(k.as_str()).is_none()) {
+                return Err(format!("flattener.{k} is not a flattener option"));
+            }
+            FlattenOptions::for_export(None, Some(f), &[]).map_err(|e| format!("flattener: {e}"))?;
+            fields.insert("flattener".into(), f.clone());
+        }
+        Some(v) => return Err(format!("flattener must be an object of flattener options, not {v}")),
+    }
     let s = |k: &str| params.get(k).and_then(Value::as_str);
     fields.insert("preset".into(), json!(s("preset").unwrap_or(pdf::DEFAULT_PRESET)));
     fields.insert("__presets".into(), json!(pdf::presets(&app.session)));
@@ -535,6 +559,10 @@ fn preset_rows(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
                 d.fields.remove(SAVE_AS);
             }
         });
+        // `pdf.preset.save` keeps `flattenerPreset` but not `flattener`.
+        if d.fields.contains_key("flattener") {
+            note(ui, tl!("The PDF preset keeps the flattener preset but not the Custom… settings."));
+        }
     }
 }
 
@@ -772,7 +800,8 @@ fn edit_bleed(d: &mut Dialog, side: usize, value: f64) {
 
 /// `ui.dialog.set` set `field` of Save PDF or the PDF preset editor: `__bleedLinked` links or
 /// unlinks the bleed as its button does, and must be true or false; every write of `bleed`, the
-/// same values included, drops the link's state, so the link follows the values set.
+/// same values included, drops the link's state, so the link follows the values set. A flattener
+/// preset set there drops the Custom… options, as choosing it in the dropdown does.
 pub(super) fn field_set(d: &mut Dialog, field: &str) -> Result<(), String> {
     match field {
         BLEED_LINKED => match d.fields.get(BLEED_LINKED).cloned() {
@@ -784,6 +813,10 @@ pub(super) fn field_set(d: &mut Dialog, field: &str) -> Result<(), String> {
         },
         "bleed" => {
             d.fields.remove(BLEED_LINKED);
+            Ok(())
+        }
+        "flattenerPreset" => {
+            d.fields.remove("flattener");
             Ok(())
         }
         _ => Ok(()),
@@ -863,6 +896,103 @@ fn output(ui: &mut egui::Ui, d: &mut Dialog) {
     }
 }
 
+/// The name of the flattener preset Save PDF `d` flattens with: its `flattenerPreset` (High
+/// Resolution when empty), a built-in one named by id (`high`) as its name.
+fn flattener_name(d: &Dialog) -> String {
+    let name = get(d, "flattenerPreset").as_str().map(str::trim).filter(|n| !n.is_empty()).unwrap_or(pdf::DEFAULT_FLATTENER);
+    FlattenOptions::preset_label(&name.to_ascii_lowercase()).unwrap_or(name).to_string()
+}
+
+/// The flattener options Save PDF `d` flattens with: its preset, with the Custom… options over it.
+fn flattener(d: &Dialog, saved: &[FlattenerPreset]) -> Result<FlattenOptions, String> {
+    FlattenOptions::for_export(Some(&flattener_name(d)), d.fields.get("flattener"), saved)
+}
+
+/// The switches the PDF 1.3 writer sets itself, which Custom Transparency Flattener Options show
+/// but can't change: rasterized areas are always clipped to their regions and keep no alpha, and
+/// overprints are kept only with Overprint set to Preserve.
+const FIXED: [&str; 3] = ["clipComplexRegions", "preserveAlpha", "preserveOverprints"];
+
+/// `o` as the PDF 1.3 writer flattens with it (see [`FIXED`]), for Save PDF `parent`.
+fn as_written(o: &mut FlattenOptions, parent: &Dialog) {
+    o.clip_complex_regions = true;
+    o.preserve_alpha = false;
+    o.preserve_overprints &= choice::<Overprint>(parent, "advanced.overprint") != Some(Overprint::Discard);
+}
+
+/// Custom Transparency Flattener Options over Save PDF `parent`, on the options it flattens with
+/// (the default preset's while those are not valid).
+pub(super) fn over(parent: &Dialog, saved: &[FlattenerPreset]) -> Dialog {
+    let mut o = flattener(parent, saved).unwrap_or_else(|_| FlattenOptions::preset(pdf::DEFAULT_FLATTENER).unwrap_or_default());
+    let kept = o.preserve_overprints;
+    as_written(&mut o, parent);
+    let mut d = Dialog::new(CUSTOM_KIND, json!({}));
+    super::flatten::put_options(&mut d.fields, &o);
+    d.fields.insert(KEPT_OVERPRINTS.into(), json!(kept));
+    d.fields.insert(super::PARENT.into(), serde_json::to_value(parent).unwrap_or_default());
+    d
+}
+
+/// The `preserveOverprints` value of the options Custom Transparency Flattener Options opened on,
+/// before Overprint applies to it.
+const KEPT_OVERPRINTS: &str = "__keptOverprints";
+
+/// The options Custom Transparency Flattener Options `d` holds.
+fn custom_options(d: &Dialog) -> Result<FlattenOptions, String> {
+    FlattenOptions::from_params_with(&Value::Object(d.fields.clone()), &[])
+}
+
+/// The flattener options, with the switches of [`FIXED`] showing what the PDF 1.3 writer does.
+fn custom_body(_app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
+    let current = custom_options(d);
+    // Values refused stay as entered, so that changing another option keeps them.
+    let (mut o, unread) = super::flatten::shown_options(&d.fields, &current);
+    if let Some(parent) = super::parent(d) {
+        as_written(&mut o, &parent);
+    }
+    super::flatten::fields_editor(ui, "pdf-flattener", &mut d.fields, &mut o, &unread, &FIXED);
+    if let Err(e) = &current {
+        ui.label(egui::RichText::new(e).color(Tokens::get(ui.ctx()).text_dim).size(11.5));
+    }
+    ui.add_space(8.0);
+    form::caption(ui, tl!("PDF 1.3 files clip rasterized areas to their regions, and Overprint sets whether overprints are kept."));
+    false
+}
+
+/// OK: Save PDF again, flattening with these options over its preset (High Resolution when a saved
+/// preset was deleted meanwhile). Options equal to the preset's leave the preset alone; bad options
+/// keep the dialog open.
+fn custom_confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
+    let mut o = custom_options(d)?;
+    let mut parent = super::parent(d).ok_or("the dialog it was opened over is no longer open")?;
+    let kept = d
+        .fields
+        .get(KEPT_OVERPRINTS)
+        .and_then(Value::as_bool)
+        .or_else(|| flattener(&parent, &app.session.prefs.flattener_presets).ok().map(|before| before.preserve_overprints));
+    let base = match FlattenOptions::find_preset(&flattener_name(&parent), &app.session.prefs.flattener_presets) {
+        Some(base) => base,
+        None => {
+            set(&mut parent, "flattenerPreset", json!(""));
+            FlattenOptions::preset(pdf::DEFAULT_FLATTENER).unwrap_or_default()
+        }
+    };
+    // The writer sets the first two itself, so they take the preset's values: options that
+    // otherwise match the preset leave its name showing. The writer keeps overprints only where the
+    // options and Overprint both keep them, so the options keep the value they opened with, even
+    // when their preset was deleted, changed or made again under its name meanwhile.
+    o.clip_complex_regions = base.clip_complex_regions;
+    o.preserve_alpha = base.preserve_alpha;
+    o.preserve_overprints = kept.unwrap_or(o.preserve_overprints);
+    if o == base {
+        parent.fields.remove("flattener");
+    } else {
+        parent.fields.insert("flattener".into(), serde_json::to_value(&o).map_err(|e| e.to_string())?);
+    }
+    app.ui.dialog = Some(parent);
+    Ok(Value::Null)
+}
+
 fn advanced(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     heading(ui, tl!("Fonts"));
     let outline = get(d, "advanced.outlineText").as_bool() == Some(true);
@@ -880,17 +1010,24 @@ fn advanced(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
         || choice::<Standard>(d, "standard").is_some_and(Standard::flattens);
     row(ui, tl!("Flattener preset:"), |ui| {
         let presets = app.session.flattener_presets();
-        let names: Vec<&str> = presets.iter().map(|p| p.name.as_str()).collect();
-        // The built-in presets come first (translated); the saved ones are names.
-        let builtins = names.len().saturating_sub(app.session.prefs.flattener_presets.len());
-        let name = get(d, "flattenerPreset").as_str().map(str::trim).filter(|n| !n.is_empty()).unwrap_or(pdf::DEFAULT_FLATTENER);
-        // A built-in preset named by id (`high`) shows as its name.
-        let current = FlattenOptions::preset_label(&name.to_ascii_lowercase()).unwrap_or(name).to_string();
+        let saved = &app.session.prefs.flattener_presets;
+        // [Custom] while Custom… options differ from the preset's.
+        let current = flattener(d, saved).ok();
+        // The preset as the list names it: the export finds a name in any case.
+        let name = flattener_name(d);
+        let name = presets.iter().find(|p| p.name.eq_ignore_ascii_case(name.trim())).map_or(name.as_str(), |p| p.name.as_str());
+        let mut custom = false;
         ui.add_enabled_ui(flat, |ui| {
-            if let Some(n) = super::mixed_dropdown(ui, "flattenerPreset", &current, &names, 200.0, |k| k < builtins).and_then(|i| names.get(i)) {
-                set(d, "flattenerPreset", json!(n));
+            if let Some(p) = super::flatten::preset_dropdown(ui, "flattenerPreset", &presets, name, current.as_ref(), 200.0) {
+                set(d, "flattenerPreset", json!(p.name));
+                d.fields.remove("flattener");
             }
+            // PDF presets keep no custom flattener options, so the preset editor has no Custom….
+            custom = d.kind == KIND && widgets::flat_button_fit(ui, tl!("Custom…"), 72.0).clicked();
         });
+        if custom {
+            *d = over(d, saved);
+        }
     });
     if flat {
         let name = get(d, "flattenerPreset").as_str().map(str::trim).filter(|n| !n.is_empty()).unwrap_or(pdf::DEFAULT_FLATTENER);

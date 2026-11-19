@@ -172,6 +172,8 @@ impl VectorcraftApp {
             forwarded_modifiers: None,
             forwarded_modifiers_held: false,
             forwarded_frame: false,
+            forwarded_clipboard: false,
+            forwarded_presses: vec![],
             synthetic_modifiers: false,
             ime_marked: None,
             ime_context: Default::default(),
@@ -201,6 +203,7 @@ impl VectorcraftApp {
             input_frames: vec![],
             shortcuts_frames: vec![],
             held_tool: Vec::new(),
+            alt_tap: Default::default(),
             hold_keys: Default::default(),
             synthetic_injected: false,
             injected_events: vec![],
@@ -640,9 +643,13 @@ impl VectorcraftApp {
         plugin_runs::show(self, &ctx);
         trace_runs::show(self, &ctx);
         opening::show(self, &ctx);
+        placing::show(self, &ctx);
         // After every window this pass may open, and before the palette's field takes the keyboard.
         panel_docking::close_overlays_for_modal(self, &ctx);
         palette::show(self, &ctx);
+        // A shape drawn on the canvas, in a dialog or by a command in this pass shows the Transform
+        // panel (Show on Shape Creation).
+        panels::transform::show_on_shape_creation(self, &ctx);
         crate::toasts::show(self, &ctx);
         // After every panel had its chance to draw in this pass.
         crate::panels::three_d::end_stale_drag(self, &ctx);

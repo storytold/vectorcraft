@@ -2710,8 +2710,8 @@ impl SolidMesh {
 /// The parts of `mesh`, a solid that 3D effect `id` with parameters `p` built about `bounds`, painted
 /// `color` from a fill or stroke at `opacity`: for each planar face that carries graphics (Extrude &
 /// Bevel's caps, the plane), the triangles on it as a mesh of their own with the art point of each
-/// corner ([`MeshGraphics`]), then the rest. Revolve's side, whose graphics are not mapped onto its
-/// mesh, stays plain.
+/// corner ([`MeshGraphics`]), then the rest. Revolve's meshes are split by their side instead
+/// (`revolve::surface_meshes`), so a Revolve's mesh stays plain here.
 fn split_graphics(id: &str, p: &Value, bounds: Rect, mesh: Mesh, (color, opacity): ([f32; 4], f32)) -> Vec<SolidMesh> {
     let list = graphics::mapped_graphics(p);
     if list.is_empty() || !takes_graphics(id) || id == crate::REVOLVE {
