@@ -170,6 +170,8 @@ pub fn mapped_graphics(p: &Value) -> Vec<MappedGraphic> {
 /// Revolve take graphics; a plane has only a front, and Revolve's graphics go on its side, named
 /// the front. Only Extrude & Bevel takes graphics on its side.
 pub fn validate(id: &str, p: &Value) -> Result<(), String> {
+    // Map Art's maps are checked with the graphics: an effect that takes none refuses them.
+    map_art::validate(id, p)?;
     let list = match p.get(GRAPHICS) {
         None => return Ok(()),
         Some(Value::Array(list)) => list,
@@ -200,25 +202,51 @@ pub fn validate(id: &str, p: &Value) -> Result<(), String> {
 /// graphics in `old` (the effect's parameters before an edit) already name: a graphic whose symbol
 /// was deleted may stay.
 pub fn missing_symbol(doc: &Document, p: &Value, old: Option<&Value>) -> Option<String> {
-    let kept = old.map(mapped_graphics).unwrap_or_default();
-    mapped_graphics(p)
-        .into_iter()
-        .map(|g| g.symbol)
-        .find(|name| !doc.symbols.iter().any(|s| s.name == *name) && !kept.iter().any(|g| g.symbol == *name))
+    let names = |p: &Value| -> Vec<String> {
+        mapped_graphics(p).into_iter().map(|g| g.symbol).chain(map_art::surface_maps(p).into_iter().map(|m| m.symbol)).collect()
+    };
+    let kept = old.map(names).unwrap_or_default();
+    names(p).into_iter().find(|name| !doc.symbols.iter().any(|s| s.name == *name) && !kept.contains(name))
 }
 
 /// Does the art of the symbols the graphics in `p` name fit the limits? A graphic whose symbol
 /// `doc` does not have draws nothing and is not counted. With a perspective, each curve counts as
-/// the [`PERSPECTIVE_PIECES`] pieces it is cut into; without one, it counts once.
+/// the [`PERSPECTIVE_PIECES`] pieces it is cut into; without one, it counts once. The symbols Map
+/// Art places count with the graphics.
 pub fn validate_symbols(doc: &Document, p: &Value) -> Result<(), String> {
     let curve = if super::view_options(p).perspective > 0.0 { PERSPECTIVE_PIECES } else { 1 };
     let mut elements = 0usize;
-    for g in mapped_graphics(p) {
-        let Some(symbol) = doc.symbols.iter().find(|s| s.name == g.symbol) else { continue };
+    let names = mapped_graphics(p).into_iter().map(|g| g.symbol).chain(map_art::surface_maps(p).into_iter().map(|m| m.symbol));
+    for name in names {
+        let Some(symbol) = doc.symbols.iter().find(|s| s.name == name) else { continue };
         let pieces = pieces_of(doc, symbol)?;
         elements = elements.saturating_add(pieces.iter().map(|p| drawn_elements(&p.path, curve)).sum());
         if elements > MAX_ELEMENTS {
             return Err("The graphics are too complex: simplify the symbols' art".into());
+        }
+    }
+    Ok(())
+}
+
+/// Does the art Map Art in `p` places on the surfaces that `unrolled` gives a flat center for (by
+/// number, from 1; [`map_art::flat_center`]), with the symbols of `doc`, fit the limits as a wall, a
+/// bevel or Revolve's side draws it: each map's art placed about that center at its scale, cut into
+/// straight pieces, at most [`MAX_ELEMENTS`] points together and within reach? A map whose symbol
+/// `doc` does not have is not counted.
+pub fn validate_unrolled_symbols(doc: &Document, p: &Value, unrolled: &dyn Fn(usize) -> Option<Point>) -> Result<(), String> {
+    const TOO_COMPLEX: &str = "The graphics are too complex: simplify the symbols' art";
+    let mut points = 0usize;
+    for m in map_art::surface_maps(p) {
+        let Some(center) = unrolled(m.surface) else { continue };
+        let Some(symbol) = doc.symbols.iter().find(|s| s.name == m.symbol) else { continue };
+        let pieces = pieces_of(doc, symbol)?;
+        let Some(bounds) = pieces.iter().filter_map(|p| p.path.bounds()).reduce(|a, b| a.union(b)) else { continue };
+        let place = m.placement(bounds, center, false);
+        for piece in &pieces {
+            straight_pieces(&(place * piece.path.to_bezpath()), &mut points).ok_or(TOO_COMPLEX)?;
+        }
+        if points > MAX_ELEMENTS {
+            return Err(TOO_COMPLEX.into());
         }
     }
     Ok(())
@@ -844,7 +872,12 @@ pub(crate) fn surface_parts<F: SurfaceFace>(
             for k in near {
                 let Some(piece) = pieces.get(k) else { continue };
                 let mut path = BezPath::new();
-                // Each contour is cut only where its own bounds reach the triangle.
+                // Each contour is cut only where its own bounds reach the triangle. Each bounds test
+                // counts as one point cut, whether or not the contour reaches it.
+                cut_points = cut_points.saturating_add(piece.boxes.len());
+                if cut_points > MAX_SURFACE_CUTS {
+                    return None;
+                }
                 for (polygon, b) in piece.polygons.iter().zip(&piece.boxes) {
                     if b.x1 < reach.x0 || b.x0 > reach.x1 || b.y1 < reach.y0 || b.y0 > reach.y1 {
                         continue;
@@ -1225,9 +1258,11 @@ pub fn appearance_graphic_symbols(appearance: &Appearance) -> Vec<String> {
     std::iter::once(&appearance.effects)
         .chain(appearance.items.iter().map(AppearanceItem::effects))
         .flatten()
-        .filter(|e| takes_graphics(&e.id))
-        .flat_map(|e| mapped_graphics(&e.params))
-        .map(|g| g.symbol)
+        .filter(|e| takes_graphics(&e.id) || map_art::takes_map_art(&e.id))
+        .flat_map(|e| {
+            let graphics = mapped_graphics(&e.params).into_iter().map(|g| g.symbol).filter(|_| takes_graphics(&e.id));
+            graphics.chain(map_art::surface_maps(&e.params).into_iter().map(|m| m.symbol).filter(|_| map_art::takes_map_art(&e.id)))
+        })
         .collect()
 }
 
@@ -1247,8 +1282,15 @@ pub fn rename_appearance_graphic_symbol(appearance: &mut Appearance, from: &str,
     let (effects, items) = (&mut appearance.effects, &mut appearance.items);
     lists.push(effects);
     lists.extend(items.iter_mut().map(AppearanceItem::effects_mut));
-    for e in lists.into_iter().flatten().filter(|e| takes_graphics(&e.id)) {
-        if let Some(Value::Array(list)) = e.params.get_mut(GRAPHICS) {
+    for e in lists.into_iter().flatten() {
+        let key = if takes_graphics(&e.id) {
+            GRAPHICS
+        } else if map_art::takes_map_art(&e.id) {
+            map_art::MAP_ART
+        } else {
+            continue;
+        };
+        if let Some(Value::Array(list)) = e.params.get_mut(key) {
             for g in list.iter_mut() {
                 if g.get("symbol").and_then(Value::as_str) == Some(from) {
                     g["symbol"] = json!(to);
@@ -1293,6 +1335,9 @@ pub fn with_graphic(p: &Value, g: &MappedGraphic) -> Value {
     out.insert(GRAPHICS.into(), Value::Array(list));
     Value::Object(out)
 }
+
+#[path = "map_art.rs"]
+pub(crate) mod map_art;
 
 #[cfg(test)]
 #[path = "tests_graphics.rs"]

@@ -568,3 +568,57 @@ fn a_long_stroke_pass_does_not_take_the_same_glyphs_filled_by_an_operator_before
     let want = [vec![(format!("A{before}"), true, false)], vec![(format!("A{now}"), true, true)]];
     assert!(looks == want, "{:?}", looks.iter().map(|t| t.iter().map(|r| (r.0.len(), r.1, r.2)).collect::<Vec<_>>()).collect::<Vec<_>>());
 }
+
+/// A page drawing `first`, then `lines` lines of type filled only, each of `glyphs` `A`s, then
+/// `Title` filled and stroked by one `Tj` (mode 2) at 40, 150 in 24-point type, after `between`.
+fn dense_then_title(first: &str, lines: usize, glyphs: usize, between: &str) -> String {
+    let line = format!("({}) Tj 0 -1 Td", "A".repeat(glyphs));
+    let dense = vec![line; lines].join(" ");
+    let title = "/F1 24 Tf 1 0 0 1 40 150 Tm (Title) Tj";
+    format!("BT 0 Tr {first} /F1 1 Tf 1 0 0 1 10 190 Tm {dense} ET {between} BT 2 Tr {title} 0 Tr ET").replace("{title}", title)
+}
+
+/// Type filled and stroked after a page of type filled only, more lines than a fill pass keeps
+/// for its stroke pass, comes in as one type object filled and stroked, with or without a path
+/// drawn between them: neither the lines finished past the 64 kept nor more than 4,096 glyphs'
+/// worth of them make the title's first stroke the start of a stroke pass over them (#8549).
+#[test]
+fn type_filled_and_stroked_after_a_dense_page_of_filled_type_is_filled_and_stroked() {
+    let title = vec![("Title".to_string(), true, true)];
+    for (lines, glyphs) in [(150, 50), (70, 1)] {
+        for between in ["", "0 0 m 10 10 l S"] {
+            let types = type_runs(&dense_then_title("", lines, glyphs, between));
+            assert_eq!(types.len(), lines + 1, "{lines} lines of {glyphs}, {between:?}");
+            assert_eq!(types.last(), Some(&title), "{lines} lines of {glyphs}, {between:?}");
+        }
+    }
+}
+
+/// Type filled and stroked where a glyph filled only stood, on a line finished past the 64 kept,
+/// comes in as one type object filled and stroked when a path is drawn between them: nothing is
+/// drawn between an operator's fill pass and its stroke pass, so the path ends the stroke pass
+/// of every glyph filled before it (#8549).
+#[test]
+fn type_filled_and_stroked_over_a_finished_glyph_after_a_path_is_filled_and_stroked() {
+    let content = dense_then_title("{title}", 70, 1, "0 0 m 10 10 l S");
+    let types = type_runs(&content);
+    assert_eq!(types.len(), 72, "{content}");
+    assert_eq!(types.first(), Some(&vec![("Title".to_string(), true, false)]), "{content}");
+    assert_eq!(types.last(), Some(&vec![("Title".to_string(), true, true)]), "{content}");
+}
+
+/// A `TJ` over more lines than are kept, with a glyph kept as an outline after the lines it
+/// finished past the 64 kept, whose last part draws its first glyph again at the first glyph's
+/// origin, still comes in as a filled object and a stroked one for each part: the glyph after
+/// the outline starts a line in the middle of the fill pass, which keeps the glyphs of the lines
+/// finished, so the stroke over the first glyph doesn't take the last part's fill (#8549).
+#[test]
+fn an_outline_glyph_in_a_tj_over_more_lines_than_are_kept_leaves_fill_and_stroke_apart() {
+    // Helvetica's A is 667 units wide and code 1 draws no character (kept as an outline) and
+    // advances none: 66 As and 65 kerns of 3,500 back to the first A's origin.
+    let parts = vec!["(A)"; 66].join(" -3500 ");
+    let content = format!("BT 2 Tr /F1 4 Tf 20 80 Td [{parts} (\\001) 271522 (A)] TJ 0 Tr ET");
+    let (fill, stroke) = (vec![("A".to_string(), true, false)], vec![("A".to_string(), false, true)]);
+    let want: Vec<_> = std::iter::repeat_n(fill, 67).chain(std::iter::repeat_n(stroke, 67)).collect();
+    assert_eq!(type_runs(&content), want);
+}

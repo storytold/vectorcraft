@@ -751,14 +751,14 @@ fn eraser_size_follows_the_pen_pressure() {
     assert!(err.to_string().contains("sizeMode"), "{err}");
 }
 
-/// Eraser Tool Options' Angle, Roundness and Size variation menus: a value on Rotation, Bearing,
-/// Tilt or Pressure takes what the pen read along the drag, Random stays within its Variation, a
+/// Eraser Tool Options' Angle, Roundness and Size variation menus: a value on Stylus Wheel, Rotation,
+/// Bearing, Tilt or Pressure takes what the pen read along the drag, Random stays within its Variation, a
 /// drag without the reading erases at the value itself, an open path is cut where the varied tip
 /// covers it, and an unknown mode or a variation out of its range is refused with nothing erased.
 #[test]
 fn the_eraser_tip_varies_with_its_modes() {
     // Which of `probes` a level drag through the middle of a 400 by 200 rectangle erases, each of
-    // its points `[x, 100]` followed by `pen` ([pressure, tiltX, tiltY, rotation]).
+    // its points `[x, 100]` followed by `pen` ([pressure, tiltX, tiltY, rotation, wheel]).
     let erased = |tip: serde_json::Value, pen: serde_json::Value, probes: &[(f64, f64)]| -> Vec<bool> {
         let mut s = session();
         rect(&mut s, 0.0, 0.0, 400.0, 200.0);
@@ -785,6 +785,10 @@ fn the_eraser_tip_varies_with_its_modes() {
     // The barrel turned half way round reads the most, which turns the tip upright.
     assert_eq!(erased(on_rotation.clone(), json!([none, none, none, 180]), &probes), [true, true], "Rotation");
     assert_eq!(erased(on_rotation.clone(), json!([]), &probes), [true, false], "Rotation without a reading");
+    // The finger wheel at the far end of its travel reads the most; without a wheel the tip lies level.
+    let on_wheel = with(&level, json!({"angleMode": "stylusWheel", "angleVariation": 90}));
+    assert_eq!(erased(on_wheel.clone(), json!([none, none, none, none, 1.0]), &probes), [true, true], "Stylus Wheel");
+    assert_eq!(erased(on_wheel, json!([none, none, none, none, none]), &probes), [true, false], "Stylus Wheel without a reading");
     // Leaning to the left (a bearing of 180°) reads the most too.
     let on_bearing = with(&level, json!({"angleMode": "bearing", "angleVariation": 90}));
     assert_eq!(erased(on_bearing.clone(), json!([none, -45, 0, none]), &probes), [true, true], "Bearing");
@@ -831,11 +835,11 @@ fn the_eraser_tip_varies_with_its_modes() {
     let id = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
     s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
     let stroke = json!({"points": [[-10, 50], [110, 50]]});
-    let modes = "\"fixed\", \"random\", \"pressure\", \"tilt\", \"bearing\" or \"rotation\"";
+    let modes = "\"fixed\", \"random\", \"pressure\", \"tilt\", \"bearing\", \"rotation\" or \"stylusWheel\"";
     for (extra, want) in [
         (json!({"angleMode": "wheel"}), format!("angleMode is one of {modes}, not `wheel`")),
         (json!({"roundnessMode": 3}), format!("roundnessMode is one of {modes}, not 3")),
-        (json!({"sizeMode": "stylusWheel"}), format!("sizeMode is one of {modes}, not `stylusWheel`")),
+        (json!({"sizeMode": "Pressure"}), format!("sizeMode is one of {modes}, not `Pressure`")),
         (json!({"angleVariation": 181}), "angleVariation must be at most 180".to_string()),
         (json!({"roundnessVariation": 101}), "roundnessVariation must be at most 100".to_string()),
         (json!({"roundnessVariation": -1}), "roundnessVariation must be 0 or more".to_string()),
@@ -3171,8 +3175,9 @@ fn drawing_commands_refuse_a_point_or_pressure_given_as_text() {
 }
 
 /// The drawing tools' commands refuse a pen pressure outside 0 to 1, a tiltX or tiltY outside -90
-/// to 90 and a rotation outside 0 to 360, naming the key, and a point array of more than six
-/// numbers, naming the point; the document, the selection and the undo history stay as they were.
+/// to 90, a rotation outside 0 to 360 and a stylus wheel outside 0 to 1, naming the key, and a
+/// point array of more than seven numbers, naming the point; the document, the selection and the
+/// undo history stay as they were.
 /// The ends of each range, null, one tilt axis alone and a mouse point `[x, y]` still draw.
 #[test]
 fn pen_values_outside_their_ranges_are_refused() {
@@ -3194,7 +3199,8 @@ fn pen_values_outside_their_ranges_are_refused() {
     let tilt_x = "`tiltX` must be from -90 to 90";
     let tilt_y = "`tiltY` must be from -90 to 90";
     let rotation = "`rotation` must be from 0 to 360";
-    let entries = "`points[3]` must be an array of at most 6 entries";
+    let wheel = "`wheel` must be from 0 to 1";
+    let entries = "`points[3]` must be an array of at most 7 entries";
     for cmd in cmds {
         for (bad, want) in [
             (json!([150, 150, -0.01]), pressure),
@@ -3208,8 +3214,11 @@ fn pen_values_outside_their_ranges_are_refused() {
             (json!([150, 150, null, null, null, -1]), rotation),
             (json!({"x": 150, "y": 150, "rotation": 360.5}), rotation),
             (json!([150, 150, null, null, null, 720]), rotation),
-            (json!([150, 150, 0.5, 0, 0, 0, 1]), entries),
-            (json!([150, 150, null, null, null, null, null]), entries),
+            (json!([150, 150, null, null, null, null, -0.01]), wheel),
+            (json!([150, 150, 0.5, 0, 0, 0, 1.5]), wheel),
+            (json!({"x": 150, "y": 150, "wheel": 1e300}), wheel),
+            (json!([150, 150, 0.5, 0, 0, 0, 1, 0]), entries),
+            (json!([150, 150, null, null, null, null, null, null]), entries),
         ] {
             let points: Vec<_> = good.iter().cloned().chain([bad]).collect();
             let sel = s.doc().unwrap().selection.clone();
@@ -3220,8 +3229,8 @@ fn pen_values_outside_their_ranges_are_refused() {
     for (row, cmd) in ["path.freehand", "brush.freehand", "path.blob", "path.eraseRegion"].into_iter().enumerate() {
         let y = 300.0 + 50.0 * row as f64;
         let points = json!([
-            [100, y, 0, -90, 90, 0],
-            [150, y, 1, 90, -90, 360],
+            [100, y, 0, -90, 90, 0, 0],
+            [150, y, 1, 90, -90, 360, 1],
             [200, y, 0.5, null, 30],
             {"x": 250, "y": y, "tiltX": -45, "pressure": null},
             [300, y],
