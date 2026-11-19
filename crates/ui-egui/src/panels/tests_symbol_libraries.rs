@@ -146,7 +146,15 @@ fn the_window_menu_and_the_symbols_panel_open_symbol_libraries() {
         entries.iter().filter(|e| under(e) && e.command.as_deref() == Some("window.symbolLibrary")).map(|e| e.params["library"].clone()).collect();
     assert_eq!(
         opened,
-        [json!("basic-shapes"), json!("ui-frames"), json!("map-markers"), json!("inventory-icons"), json!("skill-icons"), json!("weather-icons")]
+        [
+            json!("basic-shapes"),
+            json!("ui-frames"),
+            json!("map-markers"),
+            json!("inventory-icons"),
+            json!("skill-icons"),
+            json!("weather-icons"),
+            json!("media-controls"),
+        ]
     );
     let has = |cmd: &str| entries.iter().find(|e| under(e) && e.command.as_deref() == Some(cmd)).map(|e| e.enabled);
     assert_eq!(has("window.symbolLibrary.other"), Some(true));

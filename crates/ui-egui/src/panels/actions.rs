@@ -23,6 +23,10 @@ pub struct Action {
     #[serde(skip, default = "next_action_id")]
     pub id: u64,
     pub name: String,
+    /// Use the live selection's reference for Align during playback; stored step params stay as recorded.
+    /// A saved value that is not true or false loads as false.
+    #[serde(default, rename = "automaticAlignTo", skip_serializing_if = "files::is_false", deserialize_with = "deserialize_automatic_align_to")]
+    pub automatic_align_to: bool,
     pub steps: Vec<(String, Value)>,
     /// Step indexes omitted from playback. A sidecar keeps existing recorded command pairs and
     /// their params unchanged; newly recorded steps are included by default.
@@ -40,9 +44,9 @@ pub struct Action {
 }
 
 impl Action {
-    /// An action with a new [`Action::id`], no function key and no color.
+    /// An action with a new [`Action::id`], recorded Align targets, no function key and no color.
     pub fn new(name: impl Into<String>, steps: Vec<(String, Value)>) -> Self {
-        Self { id: next_action_id(), name: name.into(), steps, excluded_steps: BTreeSet::new(), key: None, color: None }
+        Self { id: next_action_id(), name: name.into(), automatic_align_to: false, steps, excluded_steps: BTreeSet::new(), key: None, color: None }
     }
 
     /// A copy of the action with a new [`Action::id`] and no function key, so the key still plays
@@ -73,7 +77,9 @@ impl Action {
 
     /// The included steps as `command.batch` takes them. A recorded `command.batch` step (an action
     /// played, or a panel operation that runs as one batch, while recording) gives its own steps,
-    /// since batches do not nest.
+    /// since batches do not nest. With [`Action::automatic_align_to`], each `object.align` copy, also
+    /// one in a recorded Batch run (`action.batch`), gets `to: "auto"` and loses any stored
+    /// `artboard`; the stored steps keep their recorded params.
     pub(crate) fn included_commands(&self) -> Vec<Value> {
         self.playback_steps().into_iter().map(|s| s.command).collect()
     }
@@ -88,6 +94,17 @@ impl Action {
             .flat_map(|(row, (command, params))| match params.get("commands").and_then(Value::as_array) {
                 Some(steps) if command == "command.batch" => steps.iter().map(|c| PlayStep { row, command: c.clone() }).collect(),
                 _ => vec![PlayStep { row, command: json!({"command": command, "params": params}) }],
+            })
+            .map(|mut play| {
+                if self.automatic_align_to {
+                    automatic_align(&mut play.command);
+                    if play.command.get("command").and_then(Value::as_str) == Some("action.batch")
+                        && let Some(Value::Array(steps)) = play.command.get_mut("params").and_then(|p| p.get_mut("commands"))
+                    {
+                        steps.iter_mut().for_each(automatic_align);
+                    }
+                }
+                play
             })
             .collect()
     }
@@ -163,6 +180,23 @@ pub(crate) fn shown_text(text: &str) -> String {
 struct PlayStep {
     row: usize,
     command: Value,
+}
+
+/// Gives `step`, a command as `command.batch` takes it, `to: "auto"` and no `artboard` when it is
+/// an `object.align` step ([`Action::automatic_align_to`]); other steps stay as they are.
+fn automatic_align(step: &mut Value) {
+    if step.get("command").and_then(Value::as_str) != Some("object.align") {
+        return;
+    }
+    let Some(step) = step.as_object_mut() else { return };
+    let params = step.entry("params").or_insert_with(|| json!({}));
+    if params.is_null() {
+        *params = json!({});
+    }
+    if let Some(params) = params.as_object_mut() {
+        params.insert("to".into(), json!("auto"));
+        params.remove("artboard");
+    }
 }
 
 /// An action id no other action in this run has.
@@ -267,6 +301,12 @@ fn deserialize_key<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<Func
 fn deserialize_color<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<String>, D::Error> {
     let v = <Value as serde::Deserialize>::deserialize(d)?;
     Ok(v.as_str().filter(|c| COLORS.iter().any(|(id, _)| id == c)).map(str::to_string))
+}
+
+/// Serde reader for [`Action::automatic_align_to`]: a value that is not true or false is false.
+fn deserialize_automatic_align_to<'de, D: serde::Deserializer<'de>>(d: D) -> Result<bool, D::Error> {
+    let v = <Value as serde::Deserialize>::deserialize(d)?;
+    Ok(v.as_bool().unwrap_or(false))
 }
 
 /// The color that params `p` give: `color`, one of [`COLORS`], or null or `""` for none.
@@ -917,15 +957,25 @@ pub fn rename_action(app: &mut VectorcraftApp, p: &Value) -> Result<Value, Strin
     Ok(json!({ "name": name }))
 }
 
+/// The optional per-action Align playback choice; null, like omission, leaves the default or kept value.
+fn automatic_align_to_param(p: &Value) -> Result<Option<bool>, String> {
+    match p.get("automaticAlignTo") {
+        None | Some(Value::Null) => Ok(None),
+        Some(value) => value.as_bool().map(Some).ok_or_else(|| "automaticAlignTo must be true or false".into()),
+    }
+}
+
 /// The command that makes an action and records into it ([`new_action`]).
 pub const NEW_ACTION: &str = "ui.action.new";
 
-/// `ui.action.new {set, name, key?, cmd?, shift?, color?}`: adds an action named `name`
+/// `ui.action.new {set, name, key?, cmd?, shift?, color?, automaticAlignTo?}`: adds an action named `name`
 /// (spaces trimmed from both ends) after the last action of set `set` (0 is the top set) and starts
 /// recording into it; Stop Playing/Recording ends the recording. `key` (1 to 15, F1 to F15; 0 or
 /// null for none) with `cmd` (Ctrl, Command on macOS) and `shift` is the function key that plays
 /// it, and `color` (one of [`COLORS`]; null or `""` for none) its Button Mode color. The action's
-/// function key takes priority over command shortcuts. The set becomes current and the only selected set, and the new action is selected. While an
+/// `automaticAlignTo` chooses Align's reference from the live selection at playback, false by default;
+/// its recorded step params stay as they are. The function key takes priority over command shortcuts.
+/// The set becomes current and the only selected set, and the new action is selected. While an
 /// action is recording, and for an index past the last set, an empty name, a key or color that is
 /// not one of them, or an action that would give the set a file that Load Actions… refuses
 /// ([`edit_keeps_set_loadable`]: 1,000 actions, 8 MiB), nothing is added. The New Action dialog's Record runs this. → {set, action}
@@ -941,10 +991,11 @@ pub fn new_action(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> 
     }
     let key = FunctionKey::from_params(p)?;
     let color = color_param(p)?;
+    let automatic_align_to = automatic_align_to_param(p)?.unwrap_or(false);
     if let Some(message) = key.and_then(key_error) {
         return Err(message);
     }
-    let action = Action { key, color, ..Action::new(name.clone(), vec![]) };
+    let action = Action { key, color, automatic_align_to, ..Action::new(name.clone(), vec![]) };
     let id = action.id;
     let Some(mut edited) = app.ui.action_sets.get(set).cloned() else { return Err("no such action set".into()) };
     edited.actions.push(action);
@@ -963,16 +1014,18 @@ pub fn new_action(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> 
 /// The command that changes an action's name, function key and color ([`action_options`]).
 pub const ACTION_OPTIONS: &str = "ui.action.options";
 
-/// `ui.action.options {set, action, name?, key?, cmd?, shift?, color?}`: changes the
+/// `ui.action.options {set, action, name?, key?, cmd?, shift?, color?, automaticAlignTo?}`: changes the
 /// action at index `action` of set `set` (0 is the top set) and keeps its steps. `name` renames it
 /// (spaces trimmed from both ends), `key` (1 to 15, F1 to F15; 0 or null for none) with `cmd`
 /// (Ctrl, Command on macOS) and `shift` sets the function key that plays it, and `color` (one of
 /// [`COLORS`]; null or `""` for none) its Button Mode color; a param left out keeps what the action
-/// has, and `cmd` or `shift` alone changes that modifier of the action's key. The action's function
-/// key takes priority over command shortcuts. An index past the last set or action, an empty name,
+/// has, and `cmd` or `shift` alone changes that modifier of the action's key. `automaticAlignTo`
+/// chooses Align's reference from the live selection at playback; false uses the recorded targets,
+/// and omission or null keeps the choice. Stored steps stay unchanged. The action's function key
+/// takes priority over command shortcuts. An index past the last set or action, an empty name,
 /// a key or color that is not one of them, or a change that would give the set a file that Load
 /// Actions… refuses ([`edit_keeps_set_loadable`]) is an error, and then nothing changes. The panel
-/// menu's Action Options… runs this for the selected action. → {name, key, color}
+/// menu's Action Options… runs this for the selected action. → {name, key, color, automaticAlignTo}
 pub fn action_options(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let index = |k: &str| p.get(k).and_then(Value::as_u64).and_then(|i| usize::try_from(i).ok());
     let (set, at) = index("set").zip(index("action")).ok_or("no such action")?;
@@ -996,6 +1049,7 @@ pub fn action_options(app: &mut VectorcraftApp, p: &Value) -> Result<Value, Stri
         None
     };
     let color = if p.get("color").is_some() { Some(color_param(p)?) } else { None };
+    let automatic_align_to = automatic_align_to_param(p)?;
     if let Some(Some(k)) = key
         && had != Some(k)
         && let Some(message) = key_error(k)
@@ -1013,7 +1067,10 @@ pub fn action_options(app: &mut VectorcraftApp, p: &Value) -> Result<Value, Stri
     if let Some(color) = color {
         action.color = color;
     }
-    let result = json!({ "name": action.name, "key": action.key, "color": action.color });
+    if let Some(automatic_align_to) = automatic_align_to {
+        action.automatic_align_to = automatic_align_to;
+    }
+    let result = json!({ "name": action.name, "key": action.key, "color": action.color, "automaticAlignTo": action.automatic_align_to });
     edit_keeps_set_loadable(app, Some(set), &edited)?;
     app.ui.action_sets[set] = edited;
     Ok(result)
@@ -3019,6 +3076,20 @@ mod tests {
     }
 
     #[test]
+    fn automatic_align_reaches_the_align_steps_of_a_recorded_batch_run() {
+        let key = json!({"command": "object.align", "params": {"horizontal": "center", "to": "key", "artboard": 1}});
+        let moved = json!({"command": "object.move", "params": {"dx": 5, "dy": 0}});
+        let batch = json!({"commands": [key, moved], "label": "Center", "source": "datasets", "destination": "none"});
+        let mut action = Action::new("Batch Center", vec![("action.batch".into(), batch.clone())]);
+        assert_eq!(action.included_commands(), [json!({"command": "action.batch", "params": batch})], "without the option");
+        action.automatic_align_to = true;
+        let auto = json!({"command": "object.align", "params": {"horizontal": "center", "to": "auto"}});
+        let played = json!({"commands": [auto, moved], "label": "Center", "source": "datasets", "destination": "none"});
+        assert_eq!(action.included_commands(), [json!({"command": "action.batch", "params": played})]);
+        assert_eq!(action.steps[0].1, batch, "the stored Batch run keeps its recorded Align target");
+    }
+
+    #[test]
     fn inclusion_controls_expand_and_toggle_steps_without_selecting_the_action() {
         use super::super::tests_appearance::{click, frame_events, text_rect};
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -4702,7 +4773,7 @@ mod tests {
             (json!(long.to_string()), "an action in the action set file has more than 10,000 steps"),
             (json!(" ".repeat(files::MAX_SET_FILE + 1)), "the action set file is larger than 8 MiB"),
             (
-                json!("{\"format\": \"vcactions\", \"version\": 7, \"name\": \"S\", \"actions\": []}"),
+                json!("{\"format\": \"vcactions\", \"version\": 8, \"name\": \"S\", \"actions\": []}"),
                 "the action set file needs a later version of VectorCraft",
             ),
         ] {
@@ -5727,6 +5798,21 @@ mod tests {
             crate::keymap::lookup(&crate::keymap::keymap_with(&ui.shortcut_overrides), &shift_f12.chord().unwrap()).is_some(),
             "the command keeps its shortcut"
         );
+    }
+
+    /// A saved `automaticAlignTo` that is not true or false loads as false, and the rest of the
+    /// preferences still load.
+    #[test]
+    fn loaded_preferences_read_a_damaged_automatic_align_to_as_off() {
+        let app = app_with_sets();
+        let mut saved = serde_json::to_value(&app.ui).unwrap();
+        saved["action_sets"][0]["actions"][0]["automaticAlignTo"] = json!(true);
+        saved["action_sets"][0]["actions"][1]["automaticAlignTo"] = Value::Null;
+        saved["action_sets"][0]["actions"][2]["automaticAlignTo"] = json!("yes");
+        let ui = serde_json::from_value::<crate::UiState>(saved).unwrap();
+        let on = ui.action_sets[0].actions.iter().map(|a| a.automatic_align_to).collect::<Vec<_>>();
+        assert_eq!(on[..3], [true, false, false]);
+        assert_eq!(ui.action_sets.len(), app.ui.action_sets.len());
     }
 
     /// A document with one rectangle selected and the set "Moves" with one action that moves it
@@ -8499,7 +8585,7 @@ mod tests {
                 json!({"format": "vcactions", "version": version, "name": "Old", "actions": [{"name": "A", "steps": [{"command": "object.move"}]}]});
             assert_eq!(files::read_set(&old.to_string(), "Test").unwrap().actions[0].steps.len(), 1, "version {version}");
         }
-        let later = json!({"format": "vcactions", "version": 7, "name": "New", "actions": []});
+        let later = json!({"format": "vcactions", "version": 8, "name": "New", "actions": []});
         assert_eq!(files::read_set(&later.to_string(), "Test").unwrap_err(), "the action set file needs a later version of VectorCraft");
         for params in [json!({"message": 5}), json!({"allowContinue": "yes"}), json!(42)] {
             let stop = json!({"command": "action.stop", "params": params});
