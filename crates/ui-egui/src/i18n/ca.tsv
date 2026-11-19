@@ -456,6 +456,8 @@ antiAlias	Sharp	Nítid
 	Bar	Barra
 	Bar Graph Tool	Eina de gràfic de barres
 	Barbed	Amb pues
+arrowhead	Feather	Ploma
+arrowhead	Target	Diana
 	Bas Relief	Baix relleu
 	Bas Relief…	Baix relleu…
 	Base Along:	Base al llarg de:
@@ -2195,6 +2197,10 @@ digits	Malayalam	Malaiàlam
 	Add Color Tool	Eina Afegeix color
 	Remove Color Tool	Eina Elimina color
 	Remove Color	Elimina el color
+	Set As Base Color	Defineix com a color base
+	Select Shade	Selecciona el to
+	Add New Color	Afegeix un color nou
+	Set Current Color As Base Color	Defineix el color actual com a color base
 	Find the selected colors in the artwork	Troba els colors seleccionats a l’obra
 	Harmony Sets	Conjunts d’harmonia
 	HDTV 1080p	HDTV 1080p
@@ -2606,6 +2612,7 @@ digits	Malayalam	Malaiàlam
 	Limit:	Límit:
 	Limited	Limitat
 	Line	Línia
+	Line Arrow	Fletxa de línies
 	Line Art	Art lineal
 	Line Art and Text Resolution:	Resolució de l’art lineal i del text:
 	Line Breaks	Salts de línia

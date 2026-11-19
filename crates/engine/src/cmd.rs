@@ -907,7 +907,7 @@ pub use gradpresets::{GradientPreset, GradientPresetEntry};
 pub use buildcmds::{TracePreset, TracePresetChange};
 
 /// An Image Trace made off the UI thread, and what it traced (#3098).
-pub use buildcmds::{TraceRun, Traced};
+pub use buildcmds::{TraceRun, Traced, image_trace_target};
 
 /// The saved Image Trace presets' revision and latest changes ([`crate::Session`] keeps them).
 pub(crate) use buildcmds::TracePresetChanges;

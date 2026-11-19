@@ -1654,6 +1654,10 @@ font-technology	Variable	Variabla
 	Add Color Tool	Verktyget Lägg till färg
 	Remove Color Tool	Verktyget Ta bort färg
 	Remove Color	Ta bort färg
+	Set As Base Color	Ange som grundfärg
+	Select Shade	Välj nyans
+	Add New Color	Lägg till ny färg
+	Set Current Color As Base Color	Ange aktuell färg som grundfärg
 	Find the selected colors in the artwork	Hitta de markerade färgerna i teckningen
 	Harmony Sets	Harmoniuppsättningar
 	Height	Höjd
@@ -2032,6 +2036,7 @@ font-technology	Variable	Variabla
 	Limit to Library:	Begränsa till bibliotek:
 	Limit:	Gränsvärde:
 	Line	Linje
+	Line Arrow	Linjepil
 	Line Art and Text Resolution:	Upplösning för streckteckning och text:
 	Line Breaks	Radbrytningar
 	Line Color	Linjefärg
@@ -6400,6 +6405,7 @@ lighting	Light	Ljus
 	B5	B5
 	Bar	Lodstreck
 	Barbed	Hullingförsedd
+arrowhead	Feather	Fjäder
 	Baseline (Standard)	Baseline (standard)
 	Baseline Optimized	Baseline optimerad
 	Basic	Grundläggande

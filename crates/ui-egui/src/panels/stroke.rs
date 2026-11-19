@@ -109,8 +109,14 @@ fn arrow_label(a: Option<&Arrowhead>) -> &'static str {
 fn arrow_name(a: Option<&Arrowhead>) -> String {
     match a {
         Some(Arrowhead::Custom(c)) => c.name.clone(),
-        _ => tl!(arrow_label(a)).to_string(),
+        _ => builtin_arrow_name(arrow_label(a)).to_string(),
     }
+}
+
+/// A built-in arrowhead's name `label` in the interface language. Its `arrowhead` row comes first,
+/// so a name that is also an effect's (Feather) can be translated for each one.
+pub(crate) fn builtin_arrow_name(label: &str) -> &str {
+    crate::i18n::tr_ctx(crate::i18n::current(), "arrowhead", label)
 }
 
 /// The preview cache key of `a`: its name, and for a custom head its art.

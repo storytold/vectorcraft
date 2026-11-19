@@ -1694,6 +1694,10 @@ file-filter	Templates	Vorlagen
 	Add Color Tool	Farbe-hinzufügen-Werkzeug
 	Remove Color Tool	Farbe-entfernen-Werkzeug
 	Remove Color	Farbe entfernen
+	Set As Base Color	Als Grundfarbe festlegen
+	Select Shade	Schattierung auswählen
+	Add New Color	Neue Farbe hinzufügen
+	Set Current Color As Base Color	Aktuelle Farbe als Grundfarbe festlegen
 	Find the selected colors in the artwork	Ausgewählte Farben in der Grafik finden
 	Harmony Sets	Harmoniesätze
 	Height	Höhe
@@ -7601,6 +7605,36 @@ anchor	Points:	Punkte:
 @msg	`{id}` is not a colour adjustment	`{id}` ist keine Farbkorrektur
 @msg	missing `effect`	`effect` fehlt
 @msg	`params` must be an object	`params` muss ein Objekt sein
+# Stroke arrowheads (Stroke panel, Dimension Tool Options and Properties › Arrow Style).
+	Triangle (open)	Dreieck (offen)
+	Circle (open)	Kreis (offen)
+	Square (open)	Quadrat (offen)
+	Arrow (open)	Pfeil (offen)
+	Barbed	Mit Widerhaken
+arrowhead	Feather	Feder
+	Half Arrow (left)	Halber Pfeil (links)
+	Half Arrow (right)	Halber Pfeil (rechts)
+	Double Bar	Doppelbalken
+	Dot on Bar	Punkt auf Balken
+	Chevron	Winkel
+	Plus	Plus
+	Hexagon (open)	Sechseck (offen)
+	Tag	Etikett
+	Tag (open)	Etikett (offen)
+	Half Circle	Halbkreis
+	Drop	Tropfen
+	Slash	Schrägstrich
+	Double Slash	Doppelter Schrägstrich
+	Diamond (open)	Raute (offen)
+	Reverse Triangle	Umgekehrtes Dreieck
+	Swallowtail	Schwalbenschwanz
+	Bracket	Klammer
+	Fork	Gabel
+	Leaf	Blatt
+	Kite	Drachen
+	Triangle to Bar	Dreieck zu Balken
+	Oval	Oval
+	Line Arrow	Linienpfeil
 # Path Precision Tools add-on (Object › Plug-ins › Path Precision Tools): its tools, Anchor Inspector panel, commands and messages.
 	Path Precision Tools	Pfad-Präzisionswerkzeuge
 	Anchor Eraser Brush	Ankerpunkt-Radierpinsel

@@ -1696,6 +1696,10 @@ file-filter	Templates	範本
 	Add Color Tool	新增顏色工具
 	Remove Color Tool	移除顏色工具
 	Remove Color	移除顏色
+	Set As Base Color	設為基色
+	Select Shade	選取色調
+	Add New Color	新增顏色
+	Set Current Color As Base Color	將目前顏色設為基色
 	Find the selected colors in the artwork	在圖稿中尋找所選顏色
 	Harmony Sets	色彩調和組
 	Height	高度
@@ -7669,6 +7673,36 @@ anchor	Points:	點：
 @msg	`{id}` is not a colour adjustment	`{id}` 不是顏色調整
 @msg	missing `effect`	未提供 `effect`
 @msg	`params` must be an object	`params` 必須是物件
+# Stroke arrowheads (Stroke panel, Dimension Tool Options and Properties › Arrow Style).
+	Triangle (open)	三角 (空心)
+	Circle (open)	圓形 (空心)
+	Square (open)	正方形 (空心)
+	Arrow (open)	箭頭 (空心)
+	Barbed	倒鉤
+arrowhead	Feather	羽毛
+	Half Arrow (left)	半箭頭 (左)
+	Half Arrow (right)	半箭頭 (右)
+	Double Bar	雙長條
+	Dot on Bar	長條上的圓點
+	Chevron	人字形
+	Plus	加號
+	Hexagon (open)	六邊形 (空心)
+	Tag	標籤
+	Tag (open)	標籤 (空心)
+	Half Circle	半圓
+	Drop	水滴
+	Slash	斜線
+	Double Slash	雙斜線
+	Diamond (open)	菱形 (空心)
+	Reverse Triangle	倒三角
+	Swallowtail	燕尾
+	Bracket	括號
+	Fork	叉形
+	Leaf	葉形
+	Kite	風箏形
+	Triangle to Bar	三角至長條
+	Oval	橢圓
+	Line Arrow	線條箭頭
 # Path Precision Tools add-on (Object › Plug-ins › Path Precision Tools): its tools, Anchor Inspector panel, commands and messages.
 	Path Precision Tools	路徑精確工具
 	Anchor Eraser Brush	錨點橡皮擦筆刷

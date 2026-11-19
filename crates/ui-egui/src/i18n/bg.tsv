@@ -1630,6 +1630,10 @@ font-technology	Variable	Променливи
 	Add Color Tool	Инструмент „Добавяне на цвят“
 	Remove Color Tool	Инструмент „Премахване на цвят“
 	Remove Color	Премахване на цвят
+	Set As Base Color	Задаване като основен цвят
+	Select Shade	Избор на нюанс
+	Add New Color	Добавяне на нов цвят
+	Set Current Color As Base Color	Задаване на текущия цвят като основен
 	Find the selected colors in the artwork	Намиране на избраните цветове в илюстрацията
 	Harmony Sets	Набори от хармонии
 	Height	Височина
@@ -2010,6 +2014,7 @@ font-technology	Variable	Променливи
 	Limit to Library:	Ограничаване до библиотека:
 	Limit:	Ограничение:
 	Line	Линия
+	Line Arrow	Линейна стрелка
 	Line Art and Text Resolution:	Разделителна способност на линеарна графика и текст:
 	Line Breaks	Паузи на редове
 	Line Color	Цвят на линията
@@ -5844,6 +5849,7 @@ lighting	Light	Светлина
 	B5	B5
 	Bar	Лента
 	Barbed	С кукички
+arrowhead	Feather	Перо
 	Baseline (Standard)	Основна линия (стандартна)
 	Baseline Optimized	Оптимизирана основна линия
 	Basic	Основен

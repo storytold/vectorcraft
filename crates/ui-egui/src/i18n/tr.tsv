@@ -1617,6 +1617,10 @@ font-technology	Variable	Değişken
 	Add Color Tool	Renk Ekle aracı
 	Remove Color Tool	Renk Kaldır aracı
 	Remove Color	Rengi kaldır
+	Set As Base Color	Temel renk olarak ayarla
+	Select Shade	Ton seç
+	Add New Color	Yeni renk ekle
+	Set Current Color As Base Color	Geçerli rengi temel renk olarak ayarla
 	Find the selected colors in the artwork	Seçili renkleri resimde bul
 	Harmony Sets	Armoni Setleri
 	Height	Yükseklik
@@ -1925,6 +1929,7 @@ font-technology	Variable	Değişken
 	Limit to Library:	Kütüphaneyle Sınırlama:
 	Limit:	Sınır:
 	Line	Hat
+	Line Arrow	Çizgi Ok
 	Line Art and Text Resolution:	Çizgi Sanatı ve Metin Çözünürlüğü:
 	Line Breaks	Satır Sonları
 	Line Color	Çizgi Rengi
@@ -6249,6 +6254,7 @@ lighting	Light	Işık
 	B5	B5
 	Bar	Bar
 	Barbed	Dikenli
+arrowhead	Feather	Tüy
 	Baseline (Standard)	Temel (Standart)
 	Baseline Optimized	Temel Optimize Edilmiş
 	Basic	Temel

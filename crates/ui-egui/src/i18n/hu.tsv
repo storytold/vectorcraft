@@ -409,6 +409,8 @@ font-technology	Variable	Változó
 	Bar	Vonal
 	Bar Graph Tool	Sávdiagram
 	Barbed	Szakállas
+arrowhead	Feather	Tollazat
+arrowhead	Target	Céltábla
 	Baseline	Alapvonal
 	Baseline (Standard)	Alapvonali (szabványos)
 	Baseline Optimized	Alapvonali, optimalizált
@@ -2118,6 +2120,10 @@ file-filter	Templates	Sablonok
 	Add Color Tool	Szín hozzáadása eszköz
 	Remove Color Tool	Szín eltávolítása eszköz
 	Remove Color	Szín eltávolítása
+	Set As Base Color	Beállítás alapszínként
+	Select Shade	Árnyalat kiválasztása
+	Add New Color	Új szín hozzáadása
+	Set Current Color As Base Color	Aktuális szín beállítása alapszínként
 	Find the selected colors in the artwork	A kijelölt színek keresése a grafikában
 	Harmony Sets	Harmóniakészletek
 	HDTV 1080p	HDTV 1080p
@@ -2609,6 +2615,7 @@ file-filter	Templates	Sablonok
 	Limit:	Határ:
 	Limited	Korlátozott
 	Line	Vonal
+	Line Arrow	Vonalas nyíl
 	Line Art	Vonalas rajz
 	Line Art and Text Resolution:	Vonalas grafika és szöveg felbontása:
 	Line Breaks	Sortörések

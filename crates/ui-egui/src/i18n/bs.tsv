@@ -3102,6 +3102,10 @@ digits	Malayalam	Malajalam
 	Add Color Tool	Alat za dodavanje boje
 	Remove Color Tool	Alat za uklanjanje boje
 	Remove Color	Ukloni boju
+	Set As Base Color	Postavi kao osnovnu boju
+	Select Shade	Odaberi nijansu
+	Add New Color	Dodaj novu boju
+	Set Current Color As Base Color	Postavi trenutnu boju kao osnovnu
 	Find the selected colors in the artwork	Pronađi odabrane boje u crtežu
 	Harmony Rules	Pravila harmonije
 	Keep this row's colors (exclude)	Zadrži boje ovog reda (isključi)
@@ -6049,6 +6053,7 @@ imageTrace	Outline	Obris
 	Arrow	Strelica
 	Arrow (open)	Strelica (otvorena)
 	Barbed	Bodljikavo
+arrowhead	Feather	Pero
 	Half Arrow (left)	Polustrelica (lijevo)
 	Half Arrow (right)	Polustrelica (desno)
 	Concave	Konkavno
@@ -6076,6 +6081,7 @@ imageTrace	Outline	Obris
 	Kite	Zmaj
 	Triangle to Bar	Trougao u traku
 	Oval	Oval
+	Line Arrow	Linijska strelica
 	Complementary	Komplementarne
 	Complementary 2	Komplementarne 2
 	Split Complementary	Podijeljene komplementarne

@@ -811,6 +811,7 @@ antiAlias	Sharp	शार्प
 	Bar	बार
 	Bar Graph Tool	बार ग्राफ़ टूल
 	Barbed	कंटीले
+arrowhead	Feather	पंख
 	Bas Relief	बास रिलीफ़
 	Bas Relief…	बास रिलीफ़…
 	Base Along:	आधार के साथ:
@@ -3113,6 +3114,7 @@ antiAlias	Sharp	शार्प
 	Limit:	सीमा:
 	Limited	लिमिटेड
 	Line	लाइन
+	Line Arrow	लाइन तीर
 	line {line}	लाइन {line}
 	Line {line}	लाइन {line}
 	Line {line}: {name}: {status}	लाइन {line}: {name}: {status}
@@ -5334,6 +5336,10 @@ antiAlias	Sharp	शार्प
 	Add Color Tool	रंग जोड़ें टूल
 	Remove Color Tool	रंग हटाएँ टूल
 	Remove Color	रंग हटाएँ
+	Set As Base Color	आधार रंग के रूप में सेट करें
+	Select Shade	शेड चुनें
+	Add New Color	नया रंग जोड़ें
+	Set Current Color As Base Color	वर्तमान रंग को आधार रंग के रूप में सेट करें
 	Find the selected colors in the artwork	चयनित रंगों को आर्टवर्क में खोजें
 	Show Color Groups	रंग समूह दिखाएँ
 	Show Color Swatches	रंग स्वॉचेस दिखाएँ

@@ -1707,6 +1707,10 @@ font-technology	Variable	Variables
 	Add Color Tool	Herramienta Añadir color
 	Remove Color Tool	Herramienta Eliminar color
 	Remove Color	Eliminar color
+	Set As Base Color	Establecer como color base
+	Select Shade	Seleccionar matiz
+	Add New Color	Añadir nuevo color
+	Set Current Color As Base Color	Establecer el color actual como color base
 	Find the selected colors in the artwork	Buscar los colores seleccionados en la ilustración
 	Harmony Sets	Conjuntos de armonía
 	Height	Altura
@@ -6453,6 +6457,8 @@ effect	Regular	Regular
 	Arrow	Flecha
 	Arrow (open)	Flecha (abierta)
 	Barbed	Con púas
+arrowhead	Feather	Emplumado
+arrowhead	Target	Diana
 	Half Arrow (left)	Media flecha (izquierda)
 	Half Arrow (right)	Media flecha (derecha)
 	Concave	Cóncava
@@ -6480,6 +6486,7 @@ effect	Regular	Regular
 	Kite	Cometa
 	Triangle to Bar	Triángulo a barra
 	Oval	Óvalo
+	Line Arrow	Flecha de líneas
 	Complementary	Complementario
 	Complementary 2	Complementario 2
 	Split Complementary	Complementario dividido
