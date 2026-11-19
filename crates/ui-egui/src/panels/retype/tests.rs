@@ -103,6 +103,19 @@ fn more_adds_fonts_until_none_is_left() {
     assert!(app.run("retype.find", json!({"more": "yes"})).is_err());
 }
 
+/// A `more` of null is an error, as `retype.find`'s params text says for a `more` that is not true
+/// or false, and leaves the list as it was instead of starting a new search.
+#[test]
+fn a_null_more_is_an_error_and_leaves_the_list() {
+    let mut app = app();
+    let g = outlined(&mut app, json!({"x": 40, "y": 100, "text": "More", "size": 30}));
+    select(&mut app, &[g]);
+    app.run("retype.find", json!({})).unwrap();
+    let added = app.run("retype.find", json!({"more": true})).unwrap();
+    assert_eq!(app.run("retype.find", json!({"more": null})).unwrap_err(), "`more` must be true or false");
+    assert_eq!(app.run("retype.list", json!({})).unwrap(), added);
+}
+
 #[test]
 fn more_shows_the_next_five_the_search_found_whatever_is_selected_now() {
     let mut app = app();

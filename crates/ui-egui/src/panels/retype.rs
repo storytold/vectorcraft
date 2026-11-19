@@ -207,7 +207,12 @@ fn list(v: &View) -> Value {
 /// outlined text, or with `more` add the next five the last search found, whatever is selected
 /// now → what `retype.list` returns. The list stays as it was when the search fails.
 fn find(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
-    let more = crate::menus::opt_bool(p, "more")?.unwrap_or(false);
+    // A `more` of null is an error, as any other value that is not true or false is; only an
+    // omitted one is a new search.
+    let more = match p.get("more") {
+        Some(Value::Null) => return Err("`more` must be true or false".into()),
+        _ => crate::menus::opt_bool(p, "more")?.unwrap_or(false),
+    };
     if more && app.ui.retype.searched {
         // The panel shows first: a failure leaves the list as it was.
         crate::panel_docking::reveal_panel(app, ID)?;
