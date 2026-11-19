@@ -8,6 +8,50 @@ fn the_active_tab_stays_in_view() {
     assert_eq!(super::first_tab_shown(&widths, Some(4), 50.0), 4, "a tab wider than the room still shows");
 }
 
+/// When the tabs shown from a later one to the end leave room, the tab before them takes that room
+/// (#8584).
+#[test]
+fn the_tab_before_the_shown_ones_takes_the_room_they_leave() {
+    let widths = [100.0; 10];
+    assert_eq!(super::leading_tab(&widths, 7, 350.0, 90.0), (7, None), "50 left is less than the least room");
+    assert_eq!(super::leading_tab(&widths, 7, 390.0, 90.0), (6, Some(90.0)), "exactly the least room");
+    assert_eq!(super::leading_tab(&widths, 7, 389.0, 90.0), (7, None), "just under the least room");
+    assert_eq!(super::leading_tab(&widths, 0, 2000.0, 90.0), (0, None), "no tab before the first");
+    assert_eq!(super::leading_tab(&widths, 9, 50.0, 90.0), (9, None), "the tabs shown are wider than the room");
+}
+
+/// After a leading tab, the tabs are drawn whole, even when the strip's running sum leaves a hair
+/// less than a tab's width; without one, a tab has the rest of the strip (#8584).
+#[test]
+fn the_tabs_after_the_leading_one_are_drawn_whole() {
+    assert_eq!(super::tab_room(Some(90.0), true, 200.0, 500.0), 90.0, "the leading tab");
+    assert_eq!(super::tab_room(Some(90.0), false, 120.0, 119.99), 120.0, "a tab after it");
+    assert_eq!(super::tab_room(None, false, 120.0, 119.99), 119.99, "no leading tab");
+}
+
+/// A shortened title shows at every width that holds "…", fractional ones included (#8584).
+#[test]
+fn a_shortened_title_fits_at_fractional_widths() {
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let font = crate::theme::semibold(13.0);
+    let title = "Untitled-12 @ 66.67 % (RGB/Preview)";
+    let mut too_wide = vec![];
+    let mut output = ctx.run_ui(egui::RawInput::default(), |ui| {
+        let (ellipsis, _) = super::shortened_title(ui.ctx(), "…", font.clone(), egui::Color32::WHITE, 1000.0);
+        let mut width = ellipsis.size().x.ceil() + 1.0;
+        while width < 200.0 {
+            let (galley, fits) = super::shortened_title(ui.ctx(), title, font.clone(), egui::Color32::WHITE, width);
+            if !fits {
+                too_wide.push((width, galley.size().x));
+            }
+            width += 0.25;
+        }
+    });
+    output.textures_delta.clear();
+    assert!(too_wide.is_empty(), "shortened titles wider than their room (room, width): {too_wide:?}");
+}
+
 /// Tabs 100 wide at 0, 100, 200…, for documents `docs` (a document listed twice has two views).
 fn slots(docs: &[usize]) -> Vec<(usize, egui::Rect)> {
     docs.iter().enumerate().map(|(k, &d)| (d, egui::Rect::from_min_size(egui::pos2(k as f32 * 100.0, 0.0), egui::vec2(100.0, 30.0)))).collect()
