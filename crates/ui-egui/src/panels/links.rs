@@ -54,7 +54,7 @@ impl Default for Options {
 
 /// `links.list` and the first selected image's `links.info`, with what they were fetched for.
 #[derive(Clone, Default)]
-struct Cache {
+pub(super) struct Cache {
     /// (document uid, revision, show, sort, Show DCS Transparency Interactions).
     key: Option<(u64, u64, &'static str, Option<&'static str>, bool)>,
     at: f64,
@@ -83,23 +83,23 @@ fn set_options(ctx: &egui::Context, f: impl FnOnce(&mut Options)) {
 }
 
 /// The rows to show (cached per document revision, the files looked at again every [`RECHECK`]
-/// seconds) and the Link Info of the first selected image when the section is open.
-fn cached(app: &mut VectorcraftApp, ctx: &egui::Context, o: &Options) -> Option<Cache> {
+/// seconds) and the Link Info of the first selected image when the section is open. A frame that
+/// fetches nothing returns the stored cache without copying it and stores nothing.
+fn cached(app: &mut VectorcraftApp, ctx: &egui::Context, o: &Options) -> Option<std::sync::Arc<Cache>> {
     let st = app.session.active()?;
     let key = Some((st.uid, st.revision, o.show, o.sort, o.dcs));
     let first = selected_links(app, ctx).first().copied();
     let now = ctx.input(|i| i.time);
-    let mut c: Cache = pstate(ctx, "links-cache");
+    let mut c: std::sync::Arc<Cache> = pstate(ctx, "links-cache");
     let stale = c.key != key || now - c.at > RECHECK;
     if stale {
         let same_doc = c.key == key;
-        c.list = app.session.execute("links.list", &json!({ "show": o.show, "sort": o.sort, "dcsTransparency": o.dcs })).ok()?;
-        (c.key, c.at) = (key, now);
+        let list = app.session.execute("links.list", &json!({ "show": o.show, "sort": o.sort, "dcsTransparency": o.dcs })).ok()?;
         // One pass over the stored art for the rows outside the layer tree and the objects whose
         // opacity masks hold them, not one per frame. An object in the layer tree is looked up by
         // its index when drawn.
         let doc = app.session.active().map(|st| &st.doc);
-        let want: std::collections::HashSet<u64> = c.list["links"]
+        let want: std::collections::HashSet<u64> = list["links"]
             .as_array()
             .into_iter()
             .flatten()
@@ -110,18 +110,22 @@ fn cached(app: &mut VectorcraftApp, ctx: &egui::Context, o: &Options) -> Option<
             .collect();
         // The same revision keeps the objects collected for it, so their thumbnails are not drawn
         // again each time the files are looked at.
-        if !(same_doc && want.iter().all(|id| c.nested_node(*id).is_some())) {
-            c.nested = match doc {
+        let nested = if same_doc && want.iter().all(|id| c.nested_node(*id).is_some()) {
+            c.nested.clone()
+        } else {
+            match doc {
                 Some(d) if !want.is_empty() => stored_objects(d, want),
                 _ => vec![],
-            };
-        }
+            }
+        };
+        c = std::sync::Arc::new(Cache { key, at: now, list, info: None, nested });
     }
     let want = first.filter(|_| o.info);
     if stale || c.info.as_ref().map(|(id, _)| *id) != want {
-        c.info = want.and_then(|id| Some((id, app.session.execute("links.info", &json!({ "id": id })).ok()?)));
+        let info = want.and_then(|id| Some((id, app.session.execute("links.info", &json!({ "id": id })).ok()?)));
+        std::sync::Arc::make_mut(&mut c).info = info;
+        set_pstate(ctx, "links-cache", c.clone());
     }
-    set_pstate(ctx, "links-cache", c.clone());
     // Files change on disk without a frame of ours: look again later.
     ctx.request_repaint_after(std::time::Duration::from_secs_f64(RECHECK));
     Some(c)
@@ -332,6 +336,37 @@ pub(crate) fn unembed(app: &mut VectorcraftApp, id: u64, name: &str) {
         let Some(path) = crate::picks::save(app, &crate::FilePick::named(&name)) else { return };
         let r = app.run("links.unembed", json!({ "id": id, "path": path }));
         report(app, r, |v| format!("Unembedded to {}", v["path"].as_str().unwrap_or_default()));
+    });
+}
+
+/// Whether Unembed… can act on `embedded` selected embedded images: one goes to a picked file,
+/// several to a picked folder (the web downloads each one).
+pub(crate) fn can_unembed(app: &VectorcraftApp, embedded: usize) -> bool {
+    match embedded {
+        0 => false,
+        1 => true,
+        _ => app.services.download.is_some() || app.services.pick_folder.is_some(),
+    }
+}
+
+/// Write embedded images `ids` to new files in a picked folder and link each one to its file, in
+/// one undo step (the web downloads each one and links none).
+pub(crate) fn unembed_several(app: &mut VectorcraftApp, ids: Vec<u64>) {
+    if app.services.download.is_some() {
+        for id in ids {
+            unembed(app, id, "");
+        }
+        return;
+    }
+    crate::picks::button(app, move |app| unembed_to_picked_folder(app, ids.clone()));
+}
+
+fn unembed_to_picked_folder(app: &mut VectorcraftApp, ids: Vec<u64>) {
+    let Some(folder) = crate::picks::folder(app) else { return };
+    let r = app.run("links.unembed", json!({ "ids": ids, "folder": folder }));
+    report(app, r, |v| {
+        let n = v["unembedded"].as_array().map_or(0, Vec::len);
+        crate::i18n::msg_n(n as u64, "Unembedded {n} image to {folder}", "Unembedded {n} images to {folder}", &[("folder", &folder)])
     });
 }
 
@@ -788,9 +823,10 @@ fn link_info(ui: &mut Ui, info: Option<&Value>, units: vectorcraft_doc::Unit) {
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let o = options(ui.ctx());
     // The rows the panel shows (the menu opens from it).
-    let list = pstate::<Cache>(ui.ctx(), "links-cache").list;
+    let cache = pstate::<std::sync::Arc<Cache>>(ui.ctx(), "links-cache");
+    let list = &cache.list;
     let selected = selected_links(app, ui.ctx());
-    let sel = selected_rows(&list, &selected);
+    let sel = selected_rows(list, &selected);
     let linked = ids(&sel, |r| r["linked"] == true);
     let embedded: Vec<&Value> = sel.iter().copied().filter(|r| status_is(r, "embedded")).collect();
     let any = !sel.is_empty();
@@ -834,12 +870,16 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
         });
     }
-    if menu_item(ui, tl!("Unembed…"), embedded.len() == 1, false)
-        && let Some(r) = embedded.first()
-        && let Some(id) = r["id"].as_u64()
-    {
-        let name = r["name"].as_str().unwrap_or("Image").to_string();
-        unembed(app, id, &name);
+    if menu_item(ui, tl!("Unembed…"), can_unembed(app, embedded.len()), false) {
+        match &embedded[..] {
+            [r] => {
+                if let Some(id) = r["id"].as_u64() {
+                    let name = r["name"].as_str().unwrap_or("Image").to_string();
+                    unembed(app, id, &name);
+                }
+            }
+            rows => unembed_several(app, rows.iter().filter_map(|r| r["id"].as_u64()).collect()),
+        }
     }
     if menu_item(ui, tl!("Placement Options…"), any, false) {
         crate::menus::invoke(app, "ui.placementOptionsDialog", json!({ "ids": ids(&sel, |_| true) }));

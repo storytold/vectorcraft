@@ -1,9 +1,36 @@
 use super::export::file_url;
 use super::open::{note_recent, open_options};
 use super::{
-    EngineError, FilePick, Format, SAVE_FORMATS, SaveMode, SavePlan, SavedView, Services, TEMPLATE_FORMATS, Value, VectorcraftApp, Writer,
-    background, dialogs, fileio, json, svg_options,
+    EngineError, FilePick, Format, Progress, SAVE_FORMATS, SaveMode, SavePlan, SavedView, Services, TEMPLATE_FORMATS, Value, VectorcraftApp, Writer,
+    background, dialogs, fileio, json, progress, svg_options,
 };
+
+/// The status once a save running in the background was canceled.
+pub const SAVE_CANCELED: &str = "Save canceled";
+
+/// File › Cancel Save (the progress window's Cancel): every save running in the background stops
+/// before it replaces its file. The file stays as it was, and the document keeps its file, format
+/// and modified state → `{cancelled: n}`. A save whose file was already written is reported as saved.
+pub fn cancel_saves(app: &mut VectorcraftApp) -> Value {
+    let n = app.background.cancel_saves();
+    if n > 0 {
+        app.status(SAVE_CANCELED);
+        app.background.save_cancel_line = Some(app.ui.status_sets);
+    }
+    json!({ "cancelled": n })
+}
+
+/// Does the status bar still show Cancel Save's line, or the line a save it reached set after it?
+/// A line set since by another command or another job stays.
+fn cancel_line_shown(app: &VectorcraftApp) -> bool {
+    app.background.save_cancel_line == Some(app.ui.status_sets)
+}
+
+/// The progress window's Continue in Background for saves: they go on, shown in the status bar
+/// only → `{hidden: n}`.
+pub fn hide_saves(app: &mut VectorcraftApp) -> Value {
+    json!({ "hidden": app.background.hide_saves() })
+}
 
 /// A save or an export that didn't write `path`: say so in a dialog that names the file and the
 /// reason and stays until it is closed, as an editor does (#1685). The status bar's line, which
@@ -501,6 +528,16 @@ pub(crate) fn show_with_notes(app: &mut VectorcraftApp, status: String, notes: V
     app.ui.status_notes = (!notes.is_empty()).then(|| (app.ui.status.clone(), notes));
 }
 
+/// Clear the status bar's message and its hover notes when `left` is still what the status bar
+/// shows: a message with notes, and [`crate::state::UiState::status_sets`] when it was shown.
+/// A message set since stays, one with the same text included.
+pub(crate) fn clear_notes_left(app: &mut VectorcraftApp, left: Option<(String, u64)>) {
+    if left.is_some_and(|(status, sets)| status == app.ui.status && sets == app.ui.status_sets) {
+        app.status("");
+        app.ui.status_notes = None;
+    }
+}
+
 /// [`report_saved`]'s message.
 pub(crate) fn saved_status(path: &str, r: &Value) -> String {
     let warnings = notes_of(r);
@@ -513,6 +550,18 @@ pub(crate) fn saved_status(path: &str, r: &Value) -> String {
         ),
         None => format!("Saved {path}"),
     }
+}
+
+/// A string writer's error during a save: [`EngineError::Cancelled`] when the save was canceled and
+/// the writer stopped on that Cancel (its message is the Cancel's own, alone or after the path), so
+/// the file was not put in place. Any other message, such as one naming the copies a failed
+/// replacement kept, stays [`EngineError::Other`].
+fn writer_error(e: String) -> EngineError {
+    use vectorcraft_engine::cancel;
+    let stopped = [EngineError::Cancelled.to_string(), cancel::Cancelled.to_string()]
+        .iter()
+        .any(|c| e == *c || e.strip_suffix(c.as_str()).is_some_and(|rest| rest.ends_with(": ")));
+    if stopped && cancel::is_cancelled() { EngineError::Cancelled } else { EngineError::Other(e) }
 }
 
 /// Write a planned save through the services and report it in the status bar.
@@ -566,7 +615,10 @@ fn write_plan(
     let stream = app.services.stream_shared.clone().filter(|_| job.streams() && !is_web(app));
     let (exists, allowed) = checks_replaced(app);
     let known: Vec<String> = allowed.iter().chain(app.picks.written_beside.get(&uid).into_iter().flatten()).cloned().collect();
-    let work = move |write: Writer| {
+    // The progress window's Cancel: a save canceled before it replaces its file writes nothing.
+    let progress = Progress::new();
+    let (reporting, asked) = (progress.clone(), progress.clone());
+    let write_file = move |write: Writer| {
         let mut own_refused = false;
         let mut observed = |p: &str, r: vectorcraft_engine::Result<()>| {
             own_refused = own_path.as_deref() == Some(p) && matches!(&r, Err(EngineError::ReadOnlyLocation(_)));
@@ -580,19 +632,24 @@ fn write_plan(
         let r = match (save_stream, save_write, stream) {
             (Some(stream), _, _) => job.write_streamed(&mut |p, fill| observed(p, stream(p, fill))),
             (_, Some(write), _) => job.write_unless(check, |p, b| observed(p, write(p, b))),
-            (_, _, Some(stream)) => job.write_streamed(&mut |p, fill| stream(p, fill).map_err(EngineError::Other)),
-            _ => job.write_unless(check, |p, b| write(p, b).map_err(EngineError::Other)),
+            (_, _, Some(stream)) => job.write_streamed(&mut |p, fill| stream(p, fill).map_err(writer_error)),
+            _ => job.write_unless(check, |p, b| write(p, b).map_err(writer_error)),
         };
-        r.map_err(|e| {
-            if let EngineError::ReadOnlyLocation(reason) = &e {
-                refused_by_work.store(own_refused, std::sync::atomic::Ordering::Relaxed);
-                if !by_control {
-                    return reason.clone();
+        match r {
+            // Nothing written: the file is as it was.
+            Err(EngineError::Cancelled) => Ok(json!({ "cancelled": true })),
+            r => r.map_err(|e| {
+                if let EngineError::ReadOnlyLocation(reason) = &e {
+                    refused_by_work.store(own_refused, std::sync::atomic::Ordering::Relaxed);
+                    if !by_control {
+                        return reason.clone();
+                    }
                 }
-            }
-            e.to_string()
-        })
+                e.to_string()
+            }),
+        }
     };
+    let work = move |write: Writer| progress::scope(&reporting, || write_file(write));
     let failed = target.clone().unwrap_or_default();
     // The status line before the save starts: on the worker, the save sets one line ("<label>…")
     // right after this; written right away, it sets none before `then` runs.
@@ -611,6 +668,19 @@ fn write_plan(
                 report_write_error(app, false, &failed, e);
             }
         })?;
+        // Canceled before the file was replaced: the document keeps its file, format and modified
+        // state.
+        if r.get("cancelled").and_then(Value::as_bool) == Some(true) {
+            // A line set since Cancel Save (another command's, another job's) stays.
+            let owned = cancel_line_shown(app);
+            if owned || background::status_unchanged(app, sets, &started_line) {
+                app.status(SAVE_CANCELED);
+            }
+            if owned {
+                app.background.save_cancel_line = Some(app.ui.status_sets);
+            }
+            return Ok(r);
+        }
         // Nothing written either: asked first.
         if let Some(files) = r.get("replaces").and_then(Value::as_array) {
             let files: Vec<String> = files.iter().filter_map(Value::as_str).map(str::to_string).collect();
@@ -626,13 +696,19 @@ fn write_plan(
             let beside: Vec<String> = beside.filter(|p| *p != path).map(str::to_string).collect();
             app.picks.written_beside.insert(uid, beside);
         }
-        // A line set while the file was written (another command's, another job's) stays.
-        if background::status_unchanged(app, sets, &started_line) {
+        // A line set while the file was written (another command's, another job's) stays. A Cancel
+        // that came once the file was being replaced said it was canceled: the file is saved, which
+        // replaces that line while it is still shown, and only then.
+        let owned = asked.cancelled() && cancel_line_shown(app);
+        if owned || background::status_unchanged(app, sets, &started_line) {
             report_saved(app, &path, &r);
+        }
+        if owned {
+            app.background.save_cancel_line = Some(app.ui.status_sets);
         }
         Ok(r)
     };
-    let mut r = background::run(app, enabled, label, Some(uid), work, then)?;
+    let mut r = background::run_saving(app, enabled, label, uid, progress, work, then)?;
     if let Some(path) = target.filter(|_| r.get("path").is_none()) {
         r["path"] = json!(path);
     }

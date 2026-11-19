@@ -87,7 +87,7 @@ fn fx_button(window: &PopupWindow) -> egui::Pos2 {
 
 fn draw_bottom_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
     let node = first_subject(app);
-    bottom(app, ui, node.as_ref(), Sel::None);
+    bottom(app, ui, node.as_deref(), Sel::None);
 }
 
 /// The Add New Effect popup has one row per effect group, plug-in groups included.
@@ -144,8 +144,8 @@ fn a_duplicate_highlights_the_copies_above_the_originals() {
     let duplicate = |app: &mut VectorcraftApp| {
         let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
             let node = first_subject(app);
-            let sel = current_sel(app, ui.ctx(), node.as_ref());
-            duplicate_selected(app, ui, node.as_ref(), sel);
+            let sel = current_sel(app, ui.ctx(), node.as_deref());
+            duplicate_selected(app, ui, node.as_deref(), sel);
         });
         out.textures_delta.clear();
     };
@@ -173,7 +173,7 @@ fn a_duplicate_highlights_the_copies_above_the_originals() {
     set_pstate(&ctx, "ap-multi", Highlight { owner, rows: Rows::Effects(None), order: vec![0], anchor: Some(0), active: Some(0) });
     let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
         let n = first_subject(&app).unwrap();
-        let sel = current_sel(&app, ui.ctx(), Some(&n));
+        let sel = current_sel(&app, ui.ctx(), Some(&*n));
         app.run("effect.duplicate", json!({"item": null, "indices": [4]})).unwrap();
         highlight_copies(&mut app, ui.ctx(), &n, sel, Rows::Effects(None), &[4]);
     });
@@ -197,7 +197,7 @@ fn removing_items_keeps_a_surviving_item_opacity_row_selected() {
     let remove = |app: &mut VectorcraftApp, k: usize| {
         let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
             let n = first_subject(app).unwrap();
-            let sel = current_sel(app, ui.ctx(), Some(&n));
+            let sel = current_sel(app, ui.ctx(), Some(&*n));
             app.run("appearance.removeItem", json!({ "indices": [k] })).unwrap();
             highlight_after_removal(app, ui.ctx(), &n, sel, Rows::Items, &[k]);
         });
@@ -228,9 +228,9 @@ fn deleting_an_opacity_row_sets_it_back_to_default() {
     let delete = |app: &mut VectorcraftApp| {
         let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
             let node = first_subject(app);
-            let sel = current_sel(app, ui.ctx(), node.as_ref());
+            let sel = current_sel(app, ui.ctx(), node.as_deref());
             assert!(sel.deletable() && !sel.editable(), "{sel:?}");
-            delete_selected(app, ui, node.as_ref(), sel);
+            delete_selected(app, ui, node.as_deref(), sel);
         });
         out.textures_delta.clear();
     };
@@ -1015,4 +1015,28 @@ fn a_mixed_selection_lists_what_its_objects_share() {
     let t = run(&mut app, "text.create", json!({"x": 0, "y": 180, "text": "Hi"}))["id"].clone();
     run(&mut app, "select.set", json!({"ids": [ids[0].clone(), t]}));
     assert_eq!(frame(&mut app).iter().find(|t| *t != "?").map(String::as_str), Some("Mixed Objects"));
+}
+
+/// The panel's subject is the `Arc` the document holds for the selected object, a targeted group
+/// or a targeted layer, not a copy of it; nothing with nothing selected.
+#[test]
+fn first_subject_is_the_node_the_document_holds() {
+    let mut app = app_with_a_selected_rectangle();
+    let held = |app: &VectorcraftApp| {
+        let st = app.session.active().unwrap();
+        super::super::layers::node_arc(&st.doc, st.selection.subjects()[0]).unwrap()
+    };
+    assert!(std::sync::Arc::ptr_eq(&first_subject(&app).expect("the rectangle"), &held(&app)), "the selected object");
+    let group = app.run("object.group", json!({})).unwrap()["id"].clone();
+    app.run("layer.target", json!({ "id": group })).unwrap();
+    let n = first_subject(&app).expect("the group");
+    assert_eq!(n.id.0, group.as_u64().unwrap());
+    assert!(std::sync::Arc::ptr_eq(&n, &held(&app)), "the targeted group");
+    let layer = app.session.active().unwrap().doc.layers[0].id;
+    app.run("layer.target", json!({ "id": layer.0 })).unwrap();
+    let n = first_subject(&app).expect("the layer");
+    assert_eq!(n.id, layer);
+    assert!(std::sync::Arc::ptr_eq(&n, &held(&app)), "the targeted layer");
+    app.run("select.none", json!({})).unwrap();
+    assert!(first_subject(&app).is_none(), "nothing selected");
 }

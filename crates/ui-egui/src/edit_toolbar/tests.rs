@@ -354,6 +354,25 @@ fn tools_in_the_toolbar_are_dimmed_in_the_drawer() {
     assert_eq!(cell_at(&shown, drawer, "Artboard Tool").1, dim);
 }
 
+/// The drawer's headings end in the UI language's colon: in French a no-break space and a colon
+/// (#7991), in English a plain colon.
+#[test]
+fn drawer_headings_use_the_language_colon() {
+    let mut app = app();
+    let ctx = ctx();
+    app.run("window.editToolbar", json!({"open": true})).unwrap();
+    for (code, colon) in [("fr", "\u{a0}:"), ("en", ":")] {
+        let lang = crate::i18n::Lang::from_code(code).unwrap();
+        crate::i18n::set_current(lang);
+        frame(&mut app, &ctx, 0.0, vec![]);
+        let shown = frame(&mut app, &ctx, 0.1, vec![]);
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        let drawer = drawer_rect(&ctx).unwrap();
+        let want = format!("{}{colon}", crate::i18n::tr(lang, "Select"));
+        assert!(shown.iter().any(|(s, p, _)| s.trim() == want && drawer.contains(*p)), "{code}: {want:?}");
+    }
+}
+
 /// #1018: tools drag from the drawer onto the toolbar (between two tools, or onto one to join
 /// its group), from the toolbar into the drawer, and within the toolbar, only while the drawer
 /// is open.
@@ -578,6 +597,17 @@ fn the_add_tool_menu_fills_a_new_toolbar_without_a_drag() {
     click(&mut app, &ctx, 40.0, items(&shown, "Lasso Tool")[0].0);
     assert_eq!(mine(&app), [["magicWand"]]);
     assert_eq!(slots(&app), shipped);
+    // In French the menu's headings end in a no-break space and a colon (#7991).
+    open(&mut app, 49.0);
+    let fr = crate::i18n::Lang::from_code("fr").unwrap();
+    crate::i18n::set_current(fr);
+    frame(&mut app, &ctx, 49.7, vec![]);
+    let french = frame(&mut app, &ctx, 49.8, vec![]);
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    for heading in ["Remove Tool", "Select"] {
+        let want = format!("{}\u{a0}:", crate::i18n::tr(fr, heading));
+        assert_eq!(items(&french, &want).len(), 1, "{want:?}");
+    }
 }
 
 /// New Toolbar… in the drawer's menu opens the New Toolbar dialog, which asks for a name.
