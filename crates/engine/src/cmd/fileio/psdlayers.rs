@@ -863,6 +863,8 @@ struct Builder<'a, F> {
     laid_blank: Vec<bool>,
     /// The groups of both, in the order they were found.
     blank_log: Vec<usize>,
+    /// How many times a merge was counted as not made because it needed more memory than allowed.
+    squeezed: usize,
 }
 
 impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
@@ -1274,6 +1276,7 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
 
     /// Count record `i` as a clipped layer left unclipped (once).
     fn unclip(&mut self, i: usize) {
+        self.squeezed += 1;
         if let Some(s) = self.unclipped.get_mut(i)
             && !*s
         {
@@ -1305,6 +1308,7 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
             if self.knocks(&u, &out, level)? {
                 let saved = self.saved();
                 let noted = self.noted_so_far();
+                let squeezed = self.squeezed;
                 let outer = self.try_from_here();
                 let knocked = self.knock(&out, &u)?;
                 self.tried(outer, u.visible && matches!(knocked, Knocked::Merged(_)))?;
@@ -1334,9 +1338,14 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
                         self.restore(saved)?;
                         self.unnote(noted);
                     }
+                    // A merge below it that its held canvas left without the memory it needed may
+                    // be made when they come in without it: what drawing them counted is given back
+                    // and counted again then.
+                    Knocked::Nothing if self.squeezed != squeezed => self.restore(saved)?,
                     Knocked::Nothing => self.refund(saved.spent)?,
                     Knocked::TooLarge => {
                         self.restore(saved)?;
+                        self.squeezed += 1;
                         self.unknock(u.record);
                     }
                 }
@@ -1382,6 +1391,7 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
                 }
             } else {
                 self.restore(saved)?;
+                self.squeezed += 1;
                 self.notes.unmerged += 1;
                 u.blend = Blend::Mode(BlendMode::Normal);
                 out.push(u);
@@ -2025,6 +2035,7 @@ pub(super) fn import(
         blank: vec![None; records.len()],
         laid_blank: vec![false; records.len()],
         blank_log: vec![],
+        squeezed: 0,
     };
     let layers = b.list(&items, Level::Top)?;
     // A drawing for a knockout or a clip leaves hidden layers out; those that came in anyway aren't.

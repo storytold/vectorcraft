@@ -890,6 +890,28 @@ fn a_knockout_merge_past_the_memory_allowed_leaves_the_layers_apart() {
     }
 }
 
+/// A knockout that cuts nothing gives back what drawing the layers below it counted: here a
+/// knockout at 0 fill beside a group, whose own knockout doesn't fit 192 bytes while the outer
+/// knockout's canvas is held, but merges when the group comes in.
+#[test]
+fn a_knockout_that_cuts_nothing_doesnt_keep_what_drawing_below_it_counted() {
+    let cms = |c: [f32; 4]| [c[0], c[1], c[2]];
+    let layers = [
+        group_end(),
+        group_end(),
+        layer("Opaque", [0, 0, 2, 2], [255, 0, 0, 255]),
+        knockout(layer("Inner cut", [0, 0, 1, 2], [0, 0, 255, 255]), 1, 0),
+        group("Inner", b"norm"),
+        knockout(layer("Outer cut", [2, 2, 4, 4], [0, 0, 255, 255]), 1, 0),
+        group("Outer", b"norm"),
+    ];
+    let (doc, warnings) = psdlayers::import(&file(4, 4, &layers, 8, false, false), false, 192, cms).unwrap().unwrap();
+    let outer = doc.layers[0].children().unwrap();
+    assert_eq!(outer.iter().map(|c| name(c)).collect::<Vec<_>>(), ["Inner", "Outer cut"], "{warnings:?}");
+    assert_eq!(outer[0].children().unwrap().iter().map(|c| name(c)).collect::<Vec<_>>(), ["Opaque + Inner cut"], "{warnings:?}");
+    assert!(warnings.is_empty(), "{warnings:?}");
+}
+
 /// A knockout merge that can't be made leaves the import the whole allowance for reading the layers
 /// apart: here the merge decodes 22 layers over one another before the layer beside them makes its
 /// canvas too large, which used up nearly all of eight times 64 KiB. The merge has that allowance

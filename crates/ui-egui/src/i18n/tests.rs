@@ -625,12 +625,15 @@ fn psd_import_strings_are_in_complete_catalogs() {
         for s in &shown {
             let tr = message(lang, s);
             assert_ne!(&tr, s, "{code}");
-            for n in numbers(s) {
-                assert!(tr.contains(&n), "{code}: {tr} lost {n}");
-            }
+            let (mut source, mut translated) = (numbers(s), numbers(&tr));
+            source.sort();
+            translated.sort();
+            assert_eq!(source, translated, "{code}: {tr}");
         }
         for (s, inner) in [(unread_slices, nested), (unread_layers, damaged)] {
-            assert!(!message(lang, s).contains(inner), "{code}: {s}");
+            let reason = message(lang, inner);
+            assert_ne!(reason, inner, "{code}");
+            assert!(message(lang, s).contains(&reason), "{code}: {s}");
         }
         assert!(message(lang, &merged).contains("Hue, Luminosity"), "{code}");
         assert!(message(lang, &opened_with_notes(1, &one)).ends_with(&message(lang, &one)), "{code}");
