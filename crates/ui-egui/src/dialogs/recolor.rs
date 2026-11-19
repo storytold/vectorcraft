@@ -1500,6 +1500,11 @@ fn restart_history(app: &mut VectorcraftApp, d: &Dialog) {
     app.ui.recolor_history = History { opened: Some(snapshot(d)), ..History::default() };
 }
 
+/// The size of `s` as JSON, which [`MAX_STEP_BYTES`] limits.
+fn snapshot_size(s: &Snapshot) -> usize {
+    serde_json::to_vec(s).map_or(0, |b| b.len())
+}
+
 /// The fields of `d` a step restores ([`STEP_FIELDS`] and [`STEP_MARKS`]).
 fn snapshot(d: &Dialog) -> Snapshot {
     STEP_FIELDS.iter().chain(&STEP_MARKS).filter_map(|k| Some((k.to_string(), d.fields.get(*k)?.clone()))).collect()
@@ -1551,16 +1556,15 @@ impl History {
         }
     }
 
-    /// Drop the oldest steps past [`MAX_STEPS`] and [`MAX_STEP_BYTES`] (all of them when the
-    /// current fields alone pass it).
+    /// Drop the oldest steps past [`MAX_STEPS`] and [`MAX_STEP_BYTES`], keeping the newest step
+    /// even when it and the current fields alone pass the byte limit.
     fn trim(&mut self) {
         let extra = self.undo.len().saturating_sub(MAX_STEPS);
         self.undo.drain(..extra);
-        let size = |s: &Snapshot| serde_json::to_vec(s).map_or(0, |b| b.len());
-        let mut total: usize = self.base.iter().chain(&self.undo).map(size).sum();
+        let mut total: usize = self.base.iter().chain(&self.undo).map(snapshot_size).sum();
         let mut gone = 0;
-        while total > MAX_STEP_BYTES && gone < self.undo.len() {
-            total -= size(&self.undo[gone]);
+        while total > MAX_STEP_BYTES && gone + 1 < self.undo.len() {
+            total -= snapshot_size(&self.undo[gone]);
             gone += 1;
         }
         self.undo.drain(..gone);
@@ -3663,8 +3667,8 @@ mod tests {
     }
 
     /// Undo Changes keeps at most [`MAX_STEPS`] steps and [`MAX_STEP_BYTES`] of them, the oldest
-    /// going first; fields that change nothing make no step, and fields larger than the limit
-    /// leave nothing to undo.
+    /// going first; fields that change nothing make no step, and with fields larger than the limit
+    /// only the newest step is kept, so Undo Changes is never on with no step to go to.
     #[test]
     fn undo_changes_keeps_a_bounded_history() {
         let mut d = Dialog::new(KIND, json!({"rows": [], "colors": null}));
@@ -3690,14 +3694,17 @@ mod tests {
         assert!(h.undo.len() < 60 && !h.undo.is_empty(), "{}", h.undo.len());
         assert!(h.step(&mut d, true), "the newest step is kept");
         assert_eq!(d.fields["rows"], big(58));
-        // Current fields past the limit alone: nothing is left to undo before them.
+        // Current fields past the limit alone: only the step to them is kept, so Undo Changes
+        // still goes back one step.
         d.fields.insert("rows".into(), json!([{"from": ["x".repeat(MAX_STEP_BYTES)], "to": null}]));
         h.note(&d);
-        assert!(h.undo.is_empty() && h.redo.is_empty());
-        assert!(!h.can(&d, true));
+        assert!(h.undo.len() == 1 && h.redo.is_empty(), "{}", h.undo.len());
         d.fields.insert("colors".into(), json!(1));
-        assert!(!h.step(&mut d, true), "a step of them is not kept either");
-        assert_eq!(d.fields["colors"], json!(1), "and the fields stay as they are");
+        assert!(h.can(&d, true), "the change to colors is a step too");
+        assert!(h.step(&mut d, true), "and it is kept");
+        assert_eq!(d.fields["colors"], json!(MAX_STEPS + 5), "Undo Changes gives back the colors before it");
+        assert_eq!(h.undo.len(), 0, "the step before it went to keep the newest");
+        assert!(!h.can(&d, true));
     }
 
     /// Sets `field` of the open dialog to `value` as `ui.dialog.set` does: a refused value leaves
