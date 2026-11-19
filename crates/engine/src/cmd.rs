@@ -48,6 +48,7 @@ mod info;
 pub(crate) mod inline;
 mod interactivity;
 mod intertwine;
+pub mod kinsokusets;
 pub(crate) mod layer;
 mod layerpanel;
 pub mod library;
@@ -325,6 +326,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(compoundshape::specs());
         v.extend(typecmd::specs());
         v.extend(retype::specs());
+        v.extend(retype::fonts::specs());
         v.extend(menucmds::specs());
         v.extend(live::specs());
         v.extend(colorcmds::specs());
@@ -335,6 +337,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(textstyles::specs());
         v.extend(fonts::specs());
         v.extend(compositefonts::specs());
+        v.extend(kinsokusets::specs());
         v.extend(fontfiles::specs());
         v.extend(help::specs());
         v.extend(toast::specs());
@@ -848,6 +851,7 @@ pub(crate) use object::bounds_rewrite;
 pub(crate) use object::{keep_aligned_in, refresh_pixel_aligned};
 /// The rules `object.scale`, `object.reflect` and `object.shear` check their params with.
 pub use object::{reflect_axis, scale_factors, shear_tangent};
+pub(crate) use paint::LIVE_PAINT_BUCKET;
 pub use plugin_call::{Location, ParamsPlace, key_location, location_in, location_keys};
 pub use select::SIMILAR;
 pub(crate) use vectorcraft_doc::range::parse_range;
@@ -903,7 +907,7 @@ pub use gradpresets::{GradientPreset, GradientPresetEntry};
 pub use buildcmds::{TracePreset, TracePresetChange};
 
 /// An Image Trace made off the UI thread, and what it traced (#3098).
-pub use buildcmds::{TraceRun, Traced};
+pub use buildcmds::{TraceRun, Traced, image_trace_target};
 
 /// The saved Image Trace presets' revision and latest changes ([`crate::Session`] keeps them).
 pub(crate) use buildcmds::TracePresetChanges;
@@ -922,6 +926,10 @@ pub use buildcmds::live_paint_gaps;
 /// Whether Reset Transformation changes a symbol instance (the Symbols panel menu and the
 /// Control bar enable it when it changes one).
 pub use brushsym::reset_transformation_changes;
+
+/// Whether an object is a symbol set (the Symbolism Tools Options' Symbol Set Density applies to
+/// the selected ones).
+pub use brushsym::is_symbol_set;
 
 /// The Symbols panel's current symbol, as `symbol.list` answers it (the panel reads it on every
 /// frame without running the command).
