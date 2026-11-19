@@ -468,12 +468,14 @@ pub(crate) fn replace_with_image(mut v: Node, image: Node) -> Node {
 }
 
 /// `m` with `image` of its shadows and outer glows painted below its art: the image goes first in
-/// a group or layer (after a layer's clipping path), anything else is grouped with it under its
-/// id, name and transparency.
+/// a group or layer (in a clipping layer, below the art its clipping path clips: above the clipping
+/// path only when that is the bottom member), anything else is grouped with it under its id, name
+/// and transparency.
 pub(crate) fn put_below(d: &mut Document, m: &mut Node, image: Node) {
+    let above_clip = usize::from(m.clipping_path_index() == Some(0));
     match &mut m.kind {
         NodeKind::Group { children, clip: false } => children.insert(0, Arc::new(image)),
-        NodeKind::Layer { children, clip, .. } => children.insert(usize::from(*clip).min(children.len()), Arc::new(image)),
+        NodeKind::Layer { children, .. } => children.insert(above_clip.min(children.len()), Arc::new(image)),
         _ => {
             let mut inner = m.clone();
             inner.id = d.alloc_id();
@@ -875,6 +877,30 @@ mod tests {
     use vectorcraft_doc::NodeKind;
 
     use crate::Session;
+
+    /// The image of a clipping layer's shadows goes below the art its clipping path clips,
+    /// wherever the clipping path sits: on top, as in a document, or at the bottom, as in a file.
+    #[test]
+    fn a_clipping_layers_shadow_goes_below_all_the_clipped_art() {
+        use std::sync::Arc;
+        use vectorcraft_doc::{Appearance, Document, LayerColor, Node, NodeId};
+        use vectorcraft_geom::{Rect, shapes};
+        let square = |id: u64| Node::path(NodeId(id), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default());
+        let mut mask = square(3);
+        mask.set_clipping_path(true);
+        let mut d = Document::new(100.0, 100.0);
+        for on_top in [true, false] {
+            let (a, b, m) = (Arc::new(square(1)), Arc::new(square(2)), Arc::new(mask.clone()));
+            let mut layer = Node::layer(NodeId(9), "Layer", LayerColor::Preset(0));
+            if let NodeKind::Layer { children, clip, .. } = &mut layer.kind {
+                *children = if on_top { vec![a, b, m] } else { vec![m, a, b] };
+                *clip = true;
+            }
+            super::put_below(&mut d, &mut layer, square(20));
+            let ids: Vec<u64> = layer.children().unwrap().iter().map(|c| c.id.0).collect();
+            assert_eq!(ids, if on_top { [20, 1, 2, 3] } else { [3, 20, 1, 2] }, "clipping path on top: {on_top}");
+        }
+    }
 
     #[test]
     fn settings_and_pdf_flattening() {

@@ -94,7 +94,7 @@ impl<'a> Reader<'a> {
             NodeKind::Group { clip, .. } | NodeKind::Layer { clip, .. } => {
                 let members = n.editing_children();
                 if *clip {
-                    let Some((first, rest)) = members.split_first() else { return Ok(None) };
+                    let Some((first, rest)) = vectorcraft_doc::split_clipping_path(members) else { return Ok(None) };
                     let Some(clip) = self.clip_region(first)? else { return Ok(None) };
                     let mut parts = vec![];
                     for c in rest {
@@ -166,7 +166,7 @@ impl<'a> Reader<'a> {
             let Some(mut path) = places.get(id).cloned() else { continue };
             // A clipping path selected on its own stands for the art it shows: its clip group.
             while let (Some(n), Some(up)) = (doc.node_at(&path), path.split_last().map(|(_, up)| up).and_then(|up| doc.node_at(up))) {
-                if !(clips(up) && up.editing_children().first().is_some_and(|f| f.id == n.id)) {
+                if !(clips(up) && clipping_member(up).is_some_and(|f| f.id == n.id)) {
                     break;
                 }
                 path.pop();
@@ -195,7 +195,7 @@ impl<'a> Reader<'a> {
             for depth in (1..path.len()).rev() {
                 let Some(container) = path.get(..depth).and_then(|p| doc.node_at(p)) else { break };
                 if clips(container)
-                    && let Some(first) = container.editing_children().first().filter(|f| f.id != child)
+                    && let Some(first) = clipping_member(container).filter(|f| f.id != child)
                 {
                     let Some(clip) = self.clip_region(first)? else { continue 'ids };
                     region = Region::Clip { clip: Box::new(clip), content: Box::new(region) };
@@ -271,6 +271,13 @@ impl<'a> Reader<'a> {
 
 fn too_many() -> String {
     format!("the selected art has too many outline points to measure (more than {MAX_POINTS})")
+}
+
+/// The clipping path among the members of clip group or clipping layer `n`
+/// ([`vectorcraft_doc::clipping_path_in`]).
+fn clipping_member(n: &Node) -> Option<&Node> {
+    let members = n.editing_children();
+    members.get(vectorcraft_doc::clipping_path_in(members)?).map(|c| &**c)
 }
 
 /// The anchors of a path or compound path node, read without copying its path; 0 for type.

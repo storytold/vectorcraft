@@ -395,7 +395,7 @@ impl<'s, 'd> Drawn<'s, 'd> {
         if !n.clips() {
             return None;
         }
-        let clip = n.children()?.first().filter(|c| c.visible)?;
+        let clip = n.clipping_path().filter(|c| c.visible)?;
         let strokes = self.drawn_art(&clip.clip_paint().stroke?)?;
         Some(Node::group(n.id, vec![Arc::new(unstroked(clip)), Arc::new(strokes)]))
     }

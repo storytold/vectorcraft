@@ -833,3 +833,73 @@ fn try_walk_ends_at_the_break() {
     assert_eq!(flow, ControlFlow::Break(NodeId(3)));
     assert_eq!(seen, [NodeId(1), NodeId(2), NodeId(3)]);
 }
+
+/// A clip group's clipping path is its marked member, wherever it is, else its first member. A
+/// path keeps the mark in its kind; other objects keep it in their extras, which files don't write.
+#[test]
+fn a_clipping_path_is_the_marked_member_else_the_first() {
+    let rect = |id: u64, x: f64| Arc::new(Node::path(NodeId(id), shapes::rectangle(Rect::new(x, 0.0, x + 4.0, 2.0)), Appearance::default_art()));
+    // A path keeps it in its kind, with no extras.
+    let mut p = (*rect(1, 0.0)).clone();
+    p.set_clipping_path(true);
+    assert!(p.is_clipping_path() && matches!(p.kind, NodeKind::Path { clipping: true, .. }) && p.extras_box().is_none());
+    p.set_clipping_path(false);
+    assert!(!p.is_clipping_path());
+    // A compound path keeps it in its extras, which go when it comes off; files don't write it.
+    let mut c = Node::new(NodeId(2), NodeKind::Compound { children: vec![rect(3, 0.0)], rule: FillRule::NonZero });
+    c.set_clipping_path(true);
+    assert!(c.is_clipping_path() && c.extras().clipping);
+    let back: Node = serde_json::from_value(serde_json::to_value(&c).unwrap()).unwrap();
+    assert!(!back.is_clipping_path());
+    c.set_clipping_path(false);
+    assert!(!c.is_clipping_path() && c.extras_box().is_none());
+    // A path that carries the mark in its extras (made from another object) is marked, and taking
+    // it off clears it there too.
+    let mut q = (*rect(4, 0.0)).clone();
+    q.extras_mut().clipping = true;
+    assert!(q.is_clipping_path());
+    q.set_clipping_path(false);
+    assert!(!q.is_clipping_path() && q.extras_box().is_none());
+    // Which member clips.
+    let mut g = Node::group(NodeId(10), vec![rect(11, 0.0), rect(12, 5.0), rect(13, 10.0)]);
+    assert_eq!(g.clipping_path_index(), None, "a plain group doesn't clip");
+    g.set_clips(true);
+    assert_eq!(g.clipping_path_index(), Some(0), "no mark: the first member");
+    if let Some(ch) = g.children_mut() {
+        Arc::make_mut(&mut ch[2]).set_clipping_path(true);
+    }
+    assert_eq!(g.clipping_path_index(), Some(2), "the marked member, though it is on top");
+    assert_eq!(g.clipping_path().map(|c| c.id), Some(NodeId(13)));
+    let mut empty = Node::group(NodeId(20), vec![]);
+    empty.set_clips(true);
+    assert!(empty.clipping_path().is_none());
+    // A clipping layer whose first member is a ruler guide holds no art to clip by.
+    let mut l = Node::layer(NodeId(30), "Layer 1", LayerColor::Preset(0));
+    if let Some(ch) = l.children_mut() {
+        ch.push(Arc::new(Node::new(NodeId(31), NodeKind::RulerGuide { vertical: true, pos: 0.0, artboard: None })));
+    }
+    l.set_clips(true);
+    assert_eq!(l.clipping_path_index(), None);
+}
+
+/// Measured without its guides (while Lock Guides or Hide Guides leaves them out), a clip group
+/// keeps its clipping path though it is a guide, wherever it sits among the members: on top, as
+/// Make Clipping Mask leaves it. The other guides go.
+#[test]
+fn measured_without_guides_a_clip_keeps_its_clipping_path_on_top() {
+    let path = |id: u64, x: f64, guide: bool| {
+        let mut p = Node::path(NodeId(id), shapes::rectangle(Rect::new(x, 0.0, x + 4.0, 2.0)), Appearance::default_art());
+        if let NodeKind::Path { guide: g, .. } = &mut p.kind {
+            *g = guide;
+        }
+        p
+    };
+    let mut clip = path(103, 10.0, true);
+    clip.set_clipping_path(true);
+    let mut g = Node::group(NodeId(100), vec![Arc::new(path(101, 0.0, true)), Arc::new(path(102, 5.0, false)), Arc::new(clip)]);
+    g.set_clips(true);
+    let out = g.without_guides().expect("a guide is left out");
+    let ids: Vec<NodeId> = out.children().unwrap().iter().map(|c| c.id).collect();
+    assert_eq!(ids, [NodeId(102), NodeId(103)], "the guide below the art goes, the clipping path on top stays");
+    assert_eq!(out.clipping_path().map(|c| c.id), Some(NodeId(103)));
+}

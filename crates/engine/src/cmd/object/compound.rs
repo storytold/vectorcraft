@@ -145,33 +145,43 @@ pub(in super::super) fn make_clipping_path(d: &mut Document, top: NodeId) -> Res
     as_clipping_path(d.node_mut(top).ok_or(EngineError::NoNode(top))?)
 }
 
+/// Take the clipping path mark ([`Node::is_clipping_path`]) off the objects `ids` but `keep`, which
+/// becomes their clip's clipping path.
+pub(in super::super) fn unmark_but(d: &mut Document, ids: &[NodeId], keep: NodeId) {
+    for id in ids.iter().filter(|id| **id != keep) {
+        if let Some(n) = d.node_mut(*id)
+            && n.is_clipping_path()
+        {
+            n.set_clipping_path(false);
+        }
+    }
+}
+
 /// Turn path, compound path or text `c` into a clipping path (its paint goes).
 pub(in super::super) fn as_clipping_path(c: &mut Node) -> Result<()> {
     if !matches!(c.kind, NodeKind::Path { guide: false, .. } | NodeKind::Compound { .. } | NodeKind::Text(_)) {
         return Err(EngineError::Other("the top object must be a path, compound path or text object to use as a clipping mask".into()));
     }
     c.appearance = Appearance::basic(Paint::None, Paint::None, 0.0).into();
-    match &mut c.kind {
-        NodeKind::Path { clipping, .. } => *clipping = true,
-        NodeKind::Text(t) => {
-            for r in &mut t.runs {
-                (r.style.fill, r.style.stroke) = (Paint::None, Paint::None);
-            }
+    if let NodeKind::Text(t) = &mut c.kind {
+        for r in &mut t.runs {
+            (r.style.fill, r.style.stroke) = (Paint::None, Paint::None);
         }
-        _ => {}
     }
+    c.set_clipping_path(true);
     Ok(())
 }
 
-/// Stop clip group or clipped layer `id` clipping; its clipping path stays, with its paint.
+/// Stop clip group or clipped layer `id` clipping; its clipping path stays, with its paint, and its
+/// members lose the clipping path mark ([`Node::is_clipping_path`]), which only a clip holds.
 pub(in super::super) fn release_clip(d: &mut Document, id: NodeId) {
     let Some(n) = d.node_mut(id).filter(|n| n.clips()) else { return };
     n.set_clips(false);
-    let clip = n.children().and_then(|c| c.first()).map(|c| c.id);
-    if let Some(c) = clip.and_then(|c| d.node_mut(c))
-        && let NodeKind::Path { clipping, .. } = &mut c.kind
-    {
-        *clipping = false;
+    let marked: Vec<NodeId> = n.children().into_iter().flatten().filter(|c| c.is_clipping_path()).map(|c| c.id).collect();
+    for c in marked {
+        if let Some(c) = d.node_mut(c) {
+            c.set_clipping_path(false);
+        }
     }
 }
 
@@ -180,12 +190,12 @@ pub(super) fn clip_make(s: &mut Session, _: &Value) -> Result<Value> {
     let Some(&top) = ids.last() else { return Err(EngineError::Other("nothing selected".into())) };
     let gid = s.edit("Make Clipping Mask", |d, sel| {
         make_clipping_path(d, top)?;
+        // The topmost object alone clips: another selected object marked as a clipping path (one
+        // moved below the art of its clip and selected with that art) is art in the new clip.
+        unmark_but(d, &ids, top);
         let gid = d.alloc_id();
-        // The topmost object, the clipping path, goes first, and the others follow in paint order.
-        d.wrap(&ids, |mut children| {
-            children.rotate_right(1);
-            Node::new(gid, NodeKind::Group { children, clip: true })
-        })?;
+        // The objects keep their paint order: the clipping path stays on top.
+        d.wrap(&ids, |children| Node::new(gid, NodeKind::Group { children, clip: true }))?;
         sel.set([gid]);
         Ok(gid)
     })?;
@@ -217,10 +227,12 @@ pub(super) fn clip_edit(s: &mut Session, mask: bool) -> Result<Value> {
         let mut cur = Some(id);
         while let Some(c) = cur {
             if let Some(NodeKind::Group { children, clip: true }) = st.doc.node(c).map(|n| &n.kind) {
-                if mask {
-                    ids.extend(children.first().map(|c| c.id));
-                } else {
-                    ids.extend(children.iter().skip(1).map(|c| c.id));
+                if let Some((clip, rest)) = vectorcraft_doc::split_clipping_path(children) {
+                    if mask {
+                        ids.push(clip.id);
+                    } else {
+                        ids.extend(rest.map(|c| c.id));
+                    }
                 }
                 break;
             }

@@ -469,7 +469,8 @@ impl<'a> Theme<'a> {
         }
         // A clip group's clipping path paints whole, over the art it clips: it is read in the
         // marquee as given and under the clip groups around it alone.
-        let clip_child = n.children().and_then(|c| c.first()).filter(|_| n.clips());
+        let clip_at = n.clipping_path_index();
+        let clip_child = n.clipping_path();
         if let Some(first) = clip_child {
             self.read(first, area, depth + 1);
         }
@@ -483,9 +484,7 @@ impl<'a> Theme<'a> {
         // A clip group shows its art where its clipping path's regions and the clip groups around
         // it all show.
         let outer = self.clip.clone();
-        if n.clips()
-            && let Some(first) = n.children().and_then(|c| c.first())
-        {
+        if let Some(first) = clip_child {
             let regions: Vec<Region> = vectorcraft_doc::hit::clip_regions(first);
             self.clip = Some(match &outer {
                 None => regions,
@@ -493,7 +492,7 @@ impl<'a> Theme<'a> {
             });
         }
         // A Shaper Group's original shapes, which the group keeps but does not show, are left out.
-        for (i, c) in n.children().into_iter().flatten().enumerate().skip(usize::from(clip_child.is_some())) {
+        for (i, c) in n.children().into_iter().flatten().enumerate().filter(|&(i, _)| clip_at != Some(i)) {
             if !vectorcraft_doc::hit::shaper_hides(n, i, self.scope) {
                 self.read(c, inner, depth + 1);
             }

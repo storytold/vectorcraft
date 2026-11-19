@@ -161,13 +161,11 @@ fn clipping_mask_of_50000_objects_takes_few_tree_walks() {
     let (mut s, r) = run_soon(s, "object.clippingMask.make", json!({}));
     let g = NodeId(r["id"].as_u64().unwrap());
     assert_eq!(layer(&s, 0), [g]);
-    // The topmost object comes first, as the clipping path, and the others follow in their order.
-    let mut want = ids.clone();
-    want.rotate_right(1);
-    assert!(children(&s, g) == want, "the clip group holds the objects in their order");
+    // The objects keep their order: the topmost, the clipping path, stays on top.
+    assert!(children(&s, g) == ids, "the clip group holds the objects in their order");
     let doc = &s.doc().unwrap().doc;
     assert!(matches!(doc.node(g).unwrap().kind, NodeKind::Group { clip: true, .. }));
-    assert!(matches!(doc.node(want[0]).unwrap().kind, NodeKind::Path { clipping: true, .. }));
+    assert!(matches!(doc.node(*ids.last().unwrap()).unwrap().kind, NodeKind::Path { clipping: true, .. }));
     assert!(selected(&s, &[g]));
     undo_gives_back(&mut s, &before);
 }

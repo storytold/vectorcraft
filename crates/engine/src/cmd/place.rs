@@ -634,12 +634,12 @@ fn replace_xf(d: &Document, old: &Node, natural: Rect, image_xf: bool, new_image
     // [`fileio::file_clipped`]) is measured as the image when the new art is an image; a DCS
     // file's plates are not.
     let image = match &old.kind {
-        NodeKind::Group { children, clip: true } if new_image => match &children[..] {
-            [path, image] if matches!(path.kind, NodeKind::Path { clipping: true, .. }) => match &image.kind {
+        NodeKind::Group { children, clip: true } if new_image => match super::links::lone_clip(children) {
+            Some((_, _, image)) => match &image.kind {
                 NodeKind::Image(im) if d.images.get(&im.key).is_none_or(|b| b.separated().is_none()) => image,
                 _ => old,
             },
-            _ => old,
+            None => old,
         },
         _ => old,
     };
@@ -877,7 +877,10 @@ fn apply(s: &mut Session, read: PlaceRead) -> Result<Value> {
     // take.
     if file_clipped {
         let image = s.doc()?.doc.node(id).and_then(|n| match &n.kind {
-            NodeKind::Group { children, clip: true } => children.get(1).filter(|c| matches!(c.kind, NodeKind::Image(_))).map(|c| c.id),
+            NodeKind::Group { children, clip: true } => vectorcraft_doc::split_clipping_path(children)
+                .and_then(|(_, mut clipped)| clipped.next())
+                .filter(|c| matches!(c.kind, NodeKind::Image(_)))
+                .map(|c| c.id),
             _ => None,
         });
         if let Some(image) = image {

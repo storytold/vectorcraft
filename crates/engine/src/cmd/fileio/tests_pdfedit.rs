@@ -683,7 +683,12 @@ fn transparency_clipping_and_opacity_masks_come_back_from_the_editing_copy() {
     let mut arts = vec![];
     before.walk(|n| arts.extend(n.extras().mask.as_ref().map(|m| matches!(m.art.kind, vectorcraft_doc::NodeKind::Path { .. }))));
     assert_eq!(arts, [true]);
-    let want = see_through_outline(&before);
+    // The editing copy keeps each clipping path first, as files do (opening it puts it on top).
+    let want = {
+        let mut first = before.clone();
+        first.put_clipping_paths(vectorcraft_doc::ClippingPathAt::First);
+        see_through_outline(&first)
+    };
     for opts in [json!({"format": "ai"}), json!({"format": "ai", "compress": false}), json!({"format": "ai", "pdfCompatible": true})] {
         let bytes = b64(&s.execute("document.export", &opts).unwrap());
         assert_eq!(see_through_outline(&editing_copy(&bytes)), want, "{opts}");

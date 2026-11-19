@@ -225,7 +225,7 @@ fn export_selection_across_clip_groups_and_of_whole_ones() {
 fn a_selected_clipping_path_and_a_blend_object_export_on_their_own() {
     let mut s = session();
     let (square, group) = clipped(&mut s);
-    let circle = s.doc().unwrap().doc.node(vectorcraft_doc::NodeId(group)).unwrap().children().unwrap()[0].id.0;
+    let circle = s.doc().unwrap().doc.node(vectorcraft_doc::NodeId(group)).unwrap().clipping_path().unwrap().id.0;
     assert_ne!(circle, square);
     // The clipping path alone: the clip group's other art stays out.
     run(&mut s, "select.set", json!({"ids": [circle]}));
@@ -471,13 +471,13 @@ fn a_text_export_of_the_selection_leaves_out_a_type_clipping_path() {
     let inner = id(&run(&mut s, "text.create", json!({"x": 100, "y": 110, "text": "Inner"})));
     let clip = id(&run(&mut s, "text.create", json!({"x": 100, "y": 100, "text": "Clip"})));
     run(&mut s, "object.clippingMask.make", json!({"ids": [clip, inner]}));
-    let mut first = None;
+    let mut clipping = None;
     s.doc().unwrap().doc.layers[0].walk(&mut |n| {
         if matches!(n.kind, vectorcraft_doc::NodeKind::Group { clip: true, .. }) {
-            first = n.children().and_then(|c| c.first()).map(|c| c.id.0);
+            clipping = n.clipping_path().map(|c| c.id.0);
         }
     });
-    assert_eq!(first, Some(clip), "the type is the clipping path");
+    assert_eq!(clipping, Some(clip), "the type is the clipping path");
     run(&mut s, "select.set", json!({"ids": [inner]}));
     let txt = b64(&run(&mut s, "document.export", json!({"format": "txt", "selectionOnly": true})));
     assert_eq!(String::from_utf8(txt).unwrap(), "Inner\n");

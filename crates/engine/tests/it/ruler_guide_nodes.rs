@@ -74,7 +74,9 @@ fn release_and_clipping_leave_ruler_guides_alone() {
     let (mut s, layer, art, guides) = session();
     // Make Clipping Mask clips by the top object, not by a guide above it.
     assert_eq!(s.execute("layer.clippingMask.toggle", &json!({"id": layer.0})).unwrap()["clip"], json!(true));
-    assert_eq!(children(&s, layer), [art[1], art[0], guides[0], guides[1]]);
+    assert_eq!(children(&s, layer), [art[0], art[1], guides[0], guides[1]], "the top object, on top, under the guides");
+    let clips_by = s.doc().unwrap().doc.node(layer).unwrap().clipping_path().map(|c| c.id);
+    assert_eq!(clips_by, Some(art[1]), "the top object clips, not the first");
     s.execute("edit.undo", &json!({})).unwrap();
 
     // Release to Layers makes layers of the art only, below the guides.

@@ -1130,12 +1130,13 @@ pub fn filter_targets(doc: &Document, selected: &[NodeId]) -> Vec<NodeId> {
 pub fn filter_targets_with(doc: &Document, selected: &[NodeId], kinds: &[InputKind]) -> Vec<NodeId> {
     /// `source`: `list` is inside the clipping object of a clip group.
     fn visit(list: &[Arc<Node>], sel: &HashSet<NodeId>, inside: bool, clips: bool, source: bool, kinds: &[InputKind], out: &mut Vec<NodeId>) {
+        let clip = clips.then(|| vectorcraft_doc::clipping_path_in(list)).flatten();
         for (i, n) in list.iter().enumerate() {
             if !n.visible || n.locked {
                 continue;
             }
             let picked = inside || sel.contains(&n.id);
-            let clipping = source || (clips && i == 0);
+            let clipping = source || Some(i) == clip;
             match &n.kind {
                 NodeKind::Path { guide: false, clipping: false, .. } | NodeKind::Compound { .. } if picked && !clipping && !is_guide(n) => {
                     out.push(n.id)

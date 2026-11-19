@@ -349,24 +349,23 @@ pub fn short_of_bleed(doc: &Document, bleed: [f64; 4], artboards: Option<&[usize
             if !n.visible || *template || !(*printable || non_printing) || n.opacity <= 0.0 || n.extras().mask.is_some() {
                 continue;
             }
-            // A clipping layer's first child clips the others, and its fills and strokes are an
+            // A clipping layer's clipping path clips the others, and its fills and strokes are an
             // object of their own.
-            let (inner, members) = if *clipping {
-                let Some(own) = clip_region(children, &symbols) else { continue };
+            let (inner, members): (_, Vec<&Arc<Node>>) = if *clipping {
+                let Some((path, clipped)) = vectorcraft_doc::split_clipping_path(children) else { continue };
+                let Some(own) = clip_region(path, &symbols) else { continue };
                 let inner = clip.map_or(own, |c| c.intersect(own));
-                if let Some(first) = children.first()
-                    && let Drawn::Bounds(b) = clip_paint_drawn(first, inner, &symbols)
-                {
+                if let Drawn::Bounds(b) = clip_paint_drawn(path, inner, &symbols) {
                     let b = clip.map_or(b, |c| c.intersect(b));
                     if b.area() > 0.0 && trims.iter().any(|t| stops_short(b, *t, bleed)) {
                         count += 1;
                     }
                 }
-                (Some(inner), children.get(1..).unwrap_or_default())
+                (Some(inner), clipped.collect())
             } else {
-                (clip, &children[..])
+                (clip, children.iter().collect())
             };
-            stack.extend(members.iter().map(|c| (&**c, inner)));
+            stack.extend(members.into_iter().map(|c| (&**c, inner)));
             continue;
         }
         let Drawn::Bounds(b) = drawn_bounds(n, &symbols) else { continue };
@@ -432,10 +431,12 @@ fn drawn_bounds(n: &Node, symbols: &vectorcraft_doc::SymbolBoxes) -> Drawn {
             None => return Drawn::Unknown,
         },
         NodeKind::Group { clip: true, children } => {
-            let Some(region) = clip_region(children, symbols) else { return Drawn::Nothing };
-            let Some(art) = members(children.get(1..).unwrap_or_default()) else { return Drawn::Unknown };
+            let Some((path, clipped)) = vectorcraft_doc::split_clipping_path(children) else { return Drawn::Nothing };
+            let Some(region) = clip_region(path, symbols) else { return Drawn::Nothing };
+            let clipped: Vec<Arc<Node>> = clipped.cloned().collect();
+            let Some(art) = members(&clipped) else { return Drawn::Unknown };
             let art = art.map(|a| region.intersect(a)).filter(|b| b.area() > 0.0);
-            match children.first().map_or(Drawn::Nothing, |first| clip_paint_drawn(first, region, symbols)) {
+            match clip_paint_drawn(path, region, symbols) {
                 Drawn::Unknown => return Drawn::Unknown,
                 Drawn::Bounds(b) => vectorcraft_geom::union_opt(art, Some(b)),
                 Drawn::Nothing => art,
@@ -447,10 +448,10 @@ fn drawn_bounds(n: &Node, symbols: &vectorcraft_doc::SymbolBoxes) -> Drawn {
     measured.map_or(Drawn::Nothing, Drawn::Bounds)
 }
 
-/// The region the clipping path of a clip group or clipping layer with `children` clips to: its
-/// geometric bounds, without its strokes.
-fn clip_region(children: &[Arc<Node>], symbols: &vectorcraft_doc::SymbolBoxes) -> Option<vectorcraft_geom::Rect> {
-    children.first()?.geometric_bounds_with(symbols)
+/// The region `clip`, the clipping path of a clip group or clipping layer, clips to: its geometric
+/// bounds, without its strokes.
+fn clip_region(clip: &Node, symbols: &vectorcraft_doc::SymbolBoxes) -> Option<vectorcraft_geom::Rect> {
+    clip.geometric_bounds_with(symbols)
 }
 
 /// What clipping path `clip` paints itself ([`Node::clip_paint`]): its fills inside `region`, the

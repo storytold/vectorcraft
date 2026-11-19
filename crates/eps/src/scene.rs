@@ -638,10 +638,10 @@ impl<'a> Scene<'a> {
         }
     }
 
-    /// A clipping group: the art inside its first child's outline. The clipping path's fills
+    /// A clipping group: the art inside its clipping path's outline. The clipping path's fills
     /// paint behind the art (clipped) and its strokes over it (not clipped).
     fn clip_group(&mut self, children: &[Arc<Node>]) {
-        let Some((clip, rest)) = children.split_first() else { return };
+        let Some((clip, rest)) = vectorcraft_doc::split_clipping_path(children) else { return };
         // Nothing to clip by hides the clipped art.
         let Some((outline, rule)) = vectorcraft_effects::clip_outline(clip) else { return };
         let paint = clip.clip_paint();
@@ -651,7 +651,7 @@ impl<'a> Scene<'a> {
         if let Some(fill) = &paint.fill {
             self.node(fill, false);
         }
-        rest.iter().for_each(|c| self.node(c, false));
+        rest.for_each(|c| self.node(c, false));
         self.line("Q");
         if let Some(stroke) = &paint.stroke {
             self.node(stroke, false);

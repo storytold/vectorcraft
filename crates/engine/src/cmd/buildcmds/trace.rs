@@ -40,9 +40,8 @@ fn is_seam_fills(n: &Node) -> bool {
     match &n.kind {
         NodeKind::Group { clip: true, children } => {
             named
-                || children
-                    .split_first()
-                    .is_some_and(|(_, members)| !members.is_empty() && (members.iter().all(stroke_only) || members.iter().all(fill_only)))
+                || vectorcraft_doc::split_clipping_path(children)
+                    .is_some_and(|(_, mut members)| members.clone().next().is_some() && (members.clone().all(stroke_only) || members.all(fill_only)))
         }
         NodeKind::Group { clip: false, children } => named || (!children.is_empty() && children.iter().all(stroke_only)),
         _ => false,

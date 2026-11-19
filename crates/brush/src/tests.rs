@@ -456,7 +456,9 @@ const AUTO: [CornerSource; 4] = [CornerSource::AutoCentered, CornerSource::AutoB
 fn covers(n: &Node, q: Point) -> bool {
     let inside = |n: &Node| n.path_data().is_some_and(|p| kurbo::Shape::winding(&p.to_bezpath(), q) != 0);
     match &n.kind {
-        NodeKind::Group { children, clip: true } => children.first().is_some_and(|m| inside(m)) && children.iter().skip(1).any(|c| covers(c, q)),
+        NodeKind::Group { children, clip: true } => {
+            vectorcraft_doc::split_clipping_path(children).is_some_and(|(m, mut rest)| inside(m) && rest.any(|c| covers(c, q)))
+        }
         NodeKind::Path { .. } => inside(n),
         _ => n.children().is_some_and(|c| c.iter().any(|c| covers(c, q))),
     }
@@ -765,9 +767,12 @@ fn pattern_auto_sliced_masks_stroked_tiles_at_the_diagonal() {
     for g in clips {
         let kids = g.children().unwrap();
         assert_eq!(kids.len(), 2);
-        assert!(kids[0].appearance.items.is_empty(), "the mask paints nothing");
-        let mask = kids[0].path_data().unwrap().to_bezpath();
-        let tile = kids[1].path_data().unwrap();
+        // The mask by its mark, on top as in a document; the tile it clips.
+        let (mask, mut tile) = vectorcraft_doc::split_clipping_path(kids).unwrap();
+        let tile = tile.next().unwrap();
+        assert!(mask.is_clipping_path() && mask.appearance.items.is_empty(), "the mask paints nothing");
+        let mask = mask.path_data().unwrap().to_bezpath();
+        let tile = tile.path_data().unwrap();
         assert!(
             tile.anchors().any(|(_, _, a)| kurbo::Shape::winding(&mask, a.p) == 0),
             "the tile keeps its outline past the diagonal, where the mask hides it"
@@ -789,11 +794,12 @@ fn pattern_auto_sliced_masks_keep_the_stroke_of_a_squeezed_tile() {
     assert_eq!(clips.len(), 8, "two masked tiles at each corner");
     let center = Point::new(4.0, 4.0);
     for g in clips {
-        let kids = g.children().unwrap();
-        let mask = kids[0].path_data().unwrap().to_bezpath();
-        let half = kids[1].appearance.stroke_width() / 2.0;
+        let (mask, mut tile) = vectorcraft_doc::split_clipping_path(g.children().unwrap()).unwrap();
+        let tile = tile.next().unwrap();
+        let mask = mask.path_data().unwrap().to_bezpath();
+        let half = tile.appearance.stroke_width() / 2.0;
         assert!(half > 0.0);
-        let tile = kids[1].path_data().unwrap();
+        let tile = tile.path_data().unwrap();
         let anchors: Vec<Point> = tile.anchors().map(|(_, _, a)| a.p).collect();
         let mid = anchors.iter().fold(Point::ZERO, |m, a| m + a.to_vec2() / anchors.len() as f64);
         // The tile's corner, and its diagonal through the square's center; each mask keeps one

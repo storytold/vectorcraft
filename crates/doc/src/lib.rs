@@ -114,6 +114,7 @@ pub use live_paint::{GapOptions, GapSize};
 pub use metadata::{CopyrightStatus, DocMetadata};
 pub use node::Knockout;
 pub use node::Scaling;
+pub use node::{Clipped, clipping_path_in, split_clipping_path};
 pub use node::{Extras, ExtrasMut, ImageObject, LAYER_COLORS, LayerColor, LiveShape, Node, NodeExtras, NodeId, NodeKind, OpacityMask};
 pub use node::{ForeignAttribute, ImageMap, MAX_SVG_SCRIPTS, ObjectAttributes, SVG_EVENTS};
 pub use orient::OrientedBox;
@@ -150,6 +151,7 @@ use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 
 mod artboard;
 mod canvas_range;
+mod clipping_paths;
 mod document;
 mod document_ext;
 mod document_guides;
@@ -162,6 +164,7 @@ mod units;
 
 pub use artboard::{ARTBOARD_GAP, Artboard, ArtboardSide, LockedArtboards, RetiredArtboardId, VIDEO_PIXEL_ASPECT_RANGE, VIDEO_SAFE_INSETS};
 pub use canvas_range::BeyondCanvas;
+pub use clipping_paths::ClippingPathAt;
 #[cfg(test)]
 use document_ext::free_id;
 pub use graphic_style::{DEFAULT_GRAPHIC_STYLE, GraphicStyle};

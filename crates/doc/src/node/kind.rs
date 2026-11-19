@@ -38,7 +38,8 @@ pub enum NodeKind {
         #[serde(default = "yes")]
         printable: bool,
         children: Vec<Arc<Node>>,
-        /// Layer clipping mask: the first (bottom-most) child clips the others, as in a clip group.
+        /// Layer clipping mask: its clipping path ([`Node::clipping_path_index`]) clips the others, as in
+        /// a clip group.
         #[serde(default, skip_serializing_if = "crate::skip::is_default")]
         clip: bool,
         /// Layer Options → Preview: off, the layer's art is drawn (and clicked) in outline on screen
@@ -50,7 +51,8 @@ pub enum NodeKind {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         dim_images: Option<u8>,
     },
-    /// A group. With `clip`, the first (bottom-most) child is the clipping path.
+    /// A group. With `clip`, a clip group: its marked child is the clipping path, else its first
+    /// (bottom-most) child ([`Node::clipping_path_index`]).
     Group {
         children: Vec<Arc<Node>>,
         #[serde(default)]
@@ -63,7 +65,8 @@ pub enum NodeKind {
         /// Boxed: few paths are live shapes, and the shape is larger than the rest of the variant.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         live: Option<Box<LiveShape>>,
-        /// This path acts as a clipping path inside a clip group.
+        /// This path is marked as the clipping path of the clip group or clipping layer that holds
+        /// it ([`Node::is_clipping_path`]).
         #[serde(default, skip_serializing_if = "crate::skip::is_default")]
         clipping: bool,
         /// Guide (non-printing) path.

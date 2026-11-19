@@ -39,7 +39,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "New Sublayer…",
             ["Window", "Layers"],
             None,
-            "{parent?: layer id (default: the highlighted row's layer, else the current layer), bottom?: bool, name?, …options as layer.new} a sublayer on top of the parent's contents; `bottom`: under the parent's contents, above a clipping layer's clipping path (Ctrl/Cmd+Alt-click the button); refused while an opacity mask is edited → {id}",
+            "{parent?: layer id (default: the highlighted row's layer, else the current layer), bottom?: bool, name?, …options as layer.new} a sublayer on top of the parent's contents; `bottom`: under the parent's contents (Ctrl/Cmd+Alt-click the button); refused while an opacity mask is edited → {id}",
             super::maskedit::outside_mask_editing,
             new_sublayer
         ),
@@ -183,7 +183,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Make/Release Clipping Mask",
             ["Window", "Layers"],
             None,
-            "{id?: layer or group (default: the one highlighted layer or group row, else the one selected group, else the current layer)} make: its top object (a path, compound path or text, which loses its paint) clips the rest and moves to the bottom (new art added on top is clipped); release: it stops clipping, the clipping path stays unpainted → {clip}",
+            "{id?: layer or group (default: the one highlighted layer or group row, else the one selected group, else the current layer)} make: its top object (a path, compound path or text, which loses its paint) clips the rest and stays on top (new art added over it is clipped too); release: it stops clipping, the clipping path stays unpainted → {clip}",
             has_doc,
             clip_toggle
         ),
@@ -492,8 +492,11 @@ fn clip_toggle(s: &mut Session, p: &Value) -> Result<Value> {
             .and_then(|c| c.iter().rev().find(|c| !c.is_ruler_guide()))
             .map(|c| c.id)
             .ok_or_else(|| EngineError::Other("the layer has no objects to clip by".into()))?;
+        // It stays on top; art added later goes over it and is clipped too. It alone clips: a mark
+        // another member carries comes off.
         super::object::make_clipping_path(d, top)?;
-        d.move_node(top, Some(id), 0)?;
+        let members: Vec<NodeId> = d.node(id).and_then(Node::children).into_iter().flatten().map(|c| c.id).collect();
+        super::object::unmark_but(d, &members, top);
         if let Some(n) = d.node_mut(id) {
             n.set_clips(true);
         }
@@ -509,11 +512,7 @@ fn add_layer(s: &mut Session, p: &Value, cmd: &str, label: &str, place: impl FnO
     check_options(cmd, p, xml_id)?;
     let name = str_param(p, "name").filter(|n| !n.trim().is_empty()).map(str::to_string);
     let id = s.edit(label, |d, _| {
-        let (parent, mut index) = place(d)?;
-        // The clipping path stays at the bottom of a clipping layer.
-        if d.children(parent).is_some_and(|c| !c.is_empty()) && parent.and_then(|p| d.node(p)).is_some_and(Node::clips) {
-            index = index.max(1);
-        }
+        let (parent, index) = place(d)?;
         let mut n = make_layer(d, name.as_deref());
         apply_options(&mut n, p, xml_id);
         Ok(d.insert(parent, index, n)?)
@@ -848,17 +847,13 @@ fn move_rows(s: &mut Session, p: &Value) -> Result<Value> {
             d.remove_many(&ids)?
         };
         let count = d.children(parent).map_or(0, Vec::len);
-        let mut index = match anchor {
+        let index = match anchor {
             None => count,
             Some(a) => {
                 let (_, i, _) = d.position(a).ok_or(EngineError::NoNode(a))?;
                 if place == Place::Above { i + 1 } else { i }
             }
         };
-        // The clipping path stays at the bottom of a clip group or a clipping layer.
-        if count > 0 && parent.and_then(|p| d.node(p)).is_some_and(Node::clips) {
-            index = index.max(1);
-        }
         let out: Vec<NodeId> = nodes.iter().map(|n| n.id).collect();
         let ch = d.children_mut(parent)?;
         let index = index.min(ch.len());
@@ -1386,14 +1381,14 @@ mod tests {
         fn has(c: &Node, s: &SymbolBoxes, rect: Rect) -> bool {
             match &c.kind {
                 NodeKind::Group { children, clip: true } | NodeKind::Layer { children, clip: true, .. } => {
-                    let Some((clip, rest)) = children.split_first() else { return false };
+                    let Some((clip, mut rest)) = vectorcraft_doc::split_clipping_path(children) else { return false };
                     let paint = clip.clip_paint();
                     if (paint.fill.is_some() || paint.stroke.is_some()) && meets(clip.visual_bounds_with(s), rect) {
                         return true;
                     }
                     let Some(b) = c.visual_bounds_with(s).filter(|b| meets(Some(*b), rect)) else { return false };
                     let inside = Rect::new(b.x0.max(rect.x0), b.y0.max(rect.y0), b.x1.min(rect.x1), b.y1.min(rect.y1));
-                    rest.iter().any(|m| has(m, s, inside))
+                    rest.any(|m| has(m, s, inside))
                 }
                 NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } => children.iter().any(|m| has(m, s, rect)),
                 NodeKind::Path { guide: true, .. } => false,

@@ -1810,14 +1810,15 @@ fn paste_in_back_of_a_clipping_path_keeps_it_the_clipping_path() {
     sel(&mut s, &[art2, c]);
     let g2 = id_of(&s.execute("object.clippingMask.make", &json!({})).unwrap());
     for (g, clipping, target, copies) in [(g, mask, mask, vec![loose, group]), (g2, c, a, vec![group])] {
-        assert_eq!(children(&s, g)[0], clipping);
+        assert_eq!(children(&s, g).last(), Some(&clipping), "on top");
         for copied in copies {
             copy(&mut s, &[copied]);
             sel(&mut s, &[target]);
             let pasted = ids_of(&s.execute("edit.pasteInBack", &json!({})).unwrap());
             let ch = children(&s, g);
-            assert_eq!(ch[0], clipping, "the clipping path stays the bottom child");
-            assert_eq!(&ch[1..2], &pasted[..], "right above the clipping path");
+            let k = ch.iter().position(|c| *c == clipping).unwrap();
+            assert_eq!(&ch[k - 1..k], &pasted[..], "right behind the clipping path");
+            assert_eq!(doc(&s).node(g).unwrap().clipping_path().map(|c| c.id), Some(clipping), "which stays the clipping path");
         }
     }
 }

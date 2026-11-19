@@ -475,8 +475,8 @@ fn a_clipping_mask_of_ones_own_stays_when_the_link_is_updated() {
     s.execute("links.update", &json!({ "ids": [id.0] })).unwrap();
     assert_eq!(s.doc().unwrap().doc.parent_of(id), Some(g), "the clipping mask made in the document stays");
     let mask_width = |s: &Session| {
-        let NodeKind::Group { children, .. } = &s.doc().unwrap().doc.node(g).unwrap().kind else { panic!("the mask's group") };
-        children[0].geometric_bounds().map(|b| b.width().round())
+        let mask = s.doc().unwrap().doc.node(g).unwrap().clipping_path().cloned().expect("the mask's group");
+        mask.geometric_bounds().map(|b| b.width().round())
     };
     assert_eq!(mask_width(&s), Some(4.0));
     // The file gains a clipping path: its clip group goes inside the mask, which keeps its path.

@@ -22,7 +22,7 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 use vectorcraft_color::Paint;
-use vectorcraft_doc::{Appearance, AppearanceItem, Document, FillLayer, Node, NodeId, NodeKind, StrokeLayer};
+use vectorcraft_doc::{Appearance, AppearanceItem, ClippingPathAt, Document, FillLayer, Node, NodeId, NodeKind, StrokeLayer};
 use vectorcraft_geom::{BezPath, Rect};
 
 pub use colorize::{art_colors, colorize, instance_art, stain, tint_node};
@@ -1037,11 +1037,24 @@ fn number_repeated_names(lib: &mut [Brush]) {
     }
 }
 
-/// Store `lib` as the document's brush library. When the art of a brush holds images or placed
-/// documents, each object in that art whose id is 0 or repeats another object's is given a new
-/// id ([`stored_art::StoredArt::persist_ids`]), so the Links panel lists it by the same id until it
-/// changes.
+/// Store `lib` as the document's brush library. Each clip in a brush's art keeps its clipping path
+/// first, under its art, as files keep it ([`ClippingPathAt::First`]): the stored art keeps no mark
+/// of a compound path or type, and a clip without a mark clips by its first member. When the art of
+/// a brush holds images or placed documents, each object in that art whose id is 0 or repeats
+/// another object's is given a new id ([`stored_art::StoredArt::persist_ids`]), so the Links panel
+/// lists it by the same id until it changes.
 pub fn store(doc: &mut Document, lib: &[Brush]) {
+    let lib: Vec<Brush> = lib
+        .iter()
+        .cloned()
+        .map(|mut b| {
+            for art in b.art_mut() {
+                art.put_clipping_paths(ClippingPathAt::First);
+            }
+            b
+        })
+        .collect();
+    let lib = lib.as_slice();
     doc.unknown.insert(DOC_KEY.into(), serde_json::to_value(lib).unwrap_or_default());
     if lib.iter().any(|b| b.art().into_iter().any(stored_art::holds_files)) {
         stored_art::StoredArt::persist_ids(doc);
@@ -1078,7 +1091,8 @@ fn tolerance(scale: f64) -> f64 {
 
 /// Filled art for one brushed stroke along `bp`, in `doc`. Pieces are in document space with id
 /// 0, and never draw a brushed stroke (so they never recurse): their own strokes carry no brush,
-/// and what they draw by name that would draw one is left out ([`leave_out_brushed`]).
+/// and what they draw by name that would draw one is left out ([`leave_out_brushed`]). The
+/// clipping path of each clip in them is on top, marked, as in a document.
 /// Stroke-level opacity/blend are the caller's job (`StrokeLayer::opacity`). The stroke's own
 /// brush settings ([`StrokeLayer::brush_options`]) replace the brush's values
 /// ([`Brush::with_stroke_options`]); settings that do not read draw the brush as it is.
@@ -1114,6 +1128,10 @@ pub fn stroke_pieces(doc: &Document, brush: &Brush, bp: &BezPath, stroke: &Strok
         colorize::jitter_hues(&mut out, s.hue_jitter, track::seed_of(bp, &brush.name));
     }
     leave_out_brushed(doc, &mut out, &mut Known::new());
+    // As art in a document: each clip's clipping path on top, marked, wherever the brush keeps it.
+    for n in &mut out {
+        n.put_clipping_paths(ClippingPathAt::Top);
+    }
     out
 }
 
@@ -1293,7 +1311,9 @@ pub fn reach(n: &Node) -> f64 {
 /// ([`vectorcraft_doc::SymbolBoxes::with_brush_art`] measures it).
 pub fn reach_within(n: &Node) -> f64 {
     let members = match &n.kind {
-        NodeKind::Group { children, clip: true } | NodeKind::Layer { children, clip: true, .. } => children.get(..1).unwrap_or_default(),
+        NodeKind::Group { children, clip: true } | NodeKind::Layer { children, clip: true, .. } => {
+            vectorcraft_doc::clipping_path_in(children).and_then(|k| children.get(k..=k)).unwrap_or_default()
+        }
         NodeKind::Compound { .. } => &[],
         _ => n.children().map_or(&[][..], |c| &c[..]),
     };

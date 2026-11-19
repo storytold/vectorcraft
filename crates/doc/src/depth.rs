@@ -132,11 +132,11 @@ fn limit(nodes: &mut Vec<Arc<Node>>, depth: usize) -> bool {
             out.push(a);
             continue;
         }
-        let clip = n.clips();
+        let clip = n.clipping_path_index();
         let (visible, locked) = (n.visible, n.locked);
         let mut held = n.children_mut().map(std::mem::take).unwrap_or_default();
-        if clip && !held.is_empty() {
-            held.remove(0);
+        if let Some(k) = clip.filter(|&k| k < held.len()) {
+            held.remove(k);
         }
         for c in &mut held {
             if (!visible && c.visible) || (locked && !c.locked) {

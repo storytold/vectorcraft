@@ -296,9 +296,12 @@ fn a_clipping_path_that_clips_by_nothing_hides_the_members() {
     let mask = rect(&mut s, 300.0, 300.0, 300.0, 100.0, green());
     let g = clip(&mut s, &[m1, m2, mask]);
     s.edit("empty clipping path", |d, _| {
-        let empty = vectorcraft_doc::Node::group(d.alloc_id(), vec![]);
-        let NodeKind::Group { children, .. } = &mut d.node_mut(g).unwrap().kind else { panic!("not a group") };
-        children[0] = std::sync::Arc::new(empty);
+        let mut empty = vectorcraft_doc::Node::group(d.alloc_id(), vec![]);
+        empty.set_clipping_path(true);
+        let group = d.node_mut(g).unwrap();
+        let at = group.clipping_path_index().unwrap();
+        let NodeKind::Group { children, .. } = &mut group.kind else { panic!("not a group") };
+        children[at] = std::sync::Arc::new(empty);
         Ok(())
     })
     .unwrap();

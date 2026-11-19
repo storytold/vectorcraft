@@ -136,7 +136,10 @@ fn warp_node(n: &mut Node, pr: &Projective) -> Option<Rect> {
             None
         }
         // A clip group is bounded by its clip path.
-        NodeKind::Group { children, clip: true } => warp_children(children, pr, |i| i == 0),
+        NodeKind::Group { children, clip: true } => {
+            let clip_at = vectorcraft_doc::clipping_path_in(children);
+            warp_children(children, pr, |i| clip_at == Some(i))
+        }
         NodeKind::Group { children, .. } | NodeKind::Compound { children, .. } => warp_children(children, pr, |i| i >= skip),
         _ => {
             // No editable points: the affine approximation (which maps the gradients too).

@@ -845,7 +845,7 @@ pub use docinfo::{CATEGORIES, OBJECT_LABELS};
 pub use docmenu::guide_indexes;
 pub(crate) use edit::{Unrecorded, settle_interaction, typing_in_progress};
 pub(crate) use object::bounds_rewrite;
-pub(crate) use object::{keep_aligned_in, refresh_pixel_aligned};
+pub(crate) use object::{keep_aligned_in, refresh_clips, refresh_pixel_aligned};
 /// The rules `object.scale`, `object.reflect` and `object.shear` check their params with.
 pub use object::{reflect_axis, scale_factors, shear_tangent};
 pub use plugin_call::{Location, ParamsPlace, key_location, location_in, location_keys};

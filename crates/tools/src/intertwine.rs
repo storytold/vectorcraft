@@ -42,11 +42,12 @@ pub fn painted_area(n: &Node) -> Option<PathData> {
             Some((PathData::new(subs), *rule))
         }
         NodeKind::Group { children, clip: true } => {
-            let clip = children.first().and_then(|c| match &c.kind {
+            let (clip_path, rest) = vectorcraft_doc::split_clipping_path(children)?;
+            let clip = match &clip_path.kind {
                 NodeKind::Path { path, rule, .. } => Some(po::normalize(path, *rule)),
-                _ => c.geometric_bounds().map(shapes::rectangle),
-            })?;
-            let inside = unite(children.iter().skip(1).filter_map(|c| painted_area(c)).collect())?;
+                _ => clip_path.geometric_bounds().map(shapes::rectangle),
+            }?;
+            let inside = unite(rest.filter_map(|c| painted_area(c)).collect())?;
             return nonempty(po::boolean(&inside, FillRule::NonZero, &clip, FillRule::NonZero, po::BoolOp::Intersect));
         }
         NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } | NodeKind::Intertwine { children } => {

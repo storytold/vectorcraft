@@ -239,12 +239,12 @@ fn painted(d: &mut Document, brushes: &[vectorcraft_brush::Brush], n: &Node, out
             }
         }
         NodeKind::Group { children, clip: true } => {
-            let Some((clip, rest)) = children.split_first() else { return };
+            let Some((clip, rest)) = vectorcraft_doc::split_clipping_path(children) else { return };
             clip_paint(clip).iter().for_each(|part| painted(d, brushes, part, out));
             // Nothing to clip by hides the clipped art, as on the canvas.
             let Some((outline, rule)) = vectorcraft_render::effects::clip_outline(clip) else { return };
             let mut inside = Shapes { anchors: out.anchors, ..Default::default() };
-            rest.iter().for_each(|c| painted(d, brushes, c, &mut inside));
+            rest.for_each(|c| painted(d, brushes, c, &mut inside));
             inside.anchors -= out.anchors;
             out.push_clipped(inside, &PathData::from_bezpath(&outline), rule);
         }
@@ -272,11 +272,11 @@ fn fills_in(n: &Node, out: &mut Shapes) {
     match &n.kind {
         NodeKind::Mesh(_) => mesh_area(n, out),
         NodeKind::Group { children, clip: true } => {
-            let Some((clip, rest)) = children.split_first() else { return };
+            let Some((clip, rest)) = vectorcraft_doc::split_clipping_path(children) else { return };
             clip_paint(clip).iter().for_each(|part| fills_in(part, out));
             let Some((outline, rule)) = vectorcraft_render::effects::clip_outline(clip) else { return };
             let mut inside = Shapes { anchors: out.anchors, ..Default::default() };
-            rest.iter().for_each(|c| fills_in(c, &mut inside));
+            rest.for_each(|c| fills_in(c, &mut inside));
             inside.anchors -= out.anchors;
             out.push_clipped(inside, &PathData::from_bezpath(&outline), rule);
         }

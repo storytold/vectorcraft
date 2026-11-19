@@ -544,6 +544,40 @@ fn raster_and_hidden_effects_leave_the_clip_as_it_is() {
     }
 }
 
+/// A clipping path on top of its art, as in a document, whose fill has a geometry effect: an export
+/// bakes it into the group of its pieces, which stays the clip's clipping path, so the art is still
+/// clipped by the region the canvas clips by and not by the art.
+#[test]
+fn a_clipping_path_on_top_stays_the_clipping_path_when_an_export_bakes_its_fill_effect() {
+    let mut d = Document::new(400.0, 400.0);
+    let layer = d.layers[0].id;
+    let mut clip = clipping_path(2, vec![]);
+    clip.appearance = Appearance::basic(Paint::solid(Color::rgb(0.0, 0.0, 0.0)), Paint::None, 0.0).into();
+    for item in &mut clip.appearance.items {
+        if let vectorcraft_doc::AppearanceItem::Fill(f) = item {
+            f.effects.push(fx("distort.transform", json!({"moveH": 60})));
+        }
+    }
+    let live = bounds(&clip);
+    assert_eq!(live.x1, 210.0, "the moved fill reaches 210");
+    let mut group = clip_group(1, clip);
+    if let NodeKind::Group { children, .. } = &mut group.kind {
+        children.reverse();
+    }
+    assert_eq!(group.clipping_path_index(), Some(1), "on top");
+    d.insert(Some(layer), 0, group).unwrap();
+    let baked = bake_document(&d).unwrap();
+    fn clip_of(n: &Arc<Node>) -> Option<Arc<Node>> {
+        if n.clips() && matches!(n.kind, NodeKind::Group { .. }) {
+            return Some(n.clone());
+        }
+        n.children()?.iter().find_map(clip_of)
+    }
+    let g = baked.layers.iter().find_map(clip_of).unwrap();
+    assert_eq!(g.clipping_path_index(), Some(1), "the baked pieces clip, on top");
+    assert_eq!(bounds(g.clipping_path().unwrap()), live, "the region the canvas clips by, not the art's");
+}
+
 fn blue() -> Paint {
     Paint::solid(Color::rgb(0.0, 0.0, 1.0))
 }
@@ -876,4 +910,87 @@ fn a_clip_groups_placed_gradient_follows_free_distort_by_the_clip_when_its_clipp
         plain.start.distance(stroked.start) < 0.5 && plain.end.distance(stroked.end) < 0.5,
         "the gradient {stroked:?} follows the clip as {plain:?} does"
     );
+}
+
+/// [`clip_group`] with its clipping path on top of the art and marked, as Make Clipping Mask leaves
+/// it in a document.
+fn clip_group_on_top(id: u64, mut clip: Node) -> Node {
+    clip.set_clipping_path(true);
+    let mut g = clip_group(id, clip);
+    if let Some(ch) = g.children_mut() {
+        ch.reverse();
+    }
+    g
+}
+
+/// [`painted_clip`] of the first clip group in `n`, its clipping path found by its mark wherever it
+/// sits: the blue fill art is its bottom member, behind all the art it clips.
+fn painted_clip_by_mark(n: &Node) -> Option<Painted> {
+    let ch = n.children()?;
+    for (i, c) in ch.iter().enumerate() {
+        if let NodeKind::Group { children, clip: true } = &c.kind {
+            let (path, mut clipped) = vectorcraft_doc::split_clipping_path(children)?;
+            let region = clip_outline(path)?.0.bounding_box();
+            let fill = clipped.next().filter(|f| paints(f, true)).and_then(|f| f.geometric_bounds());
+            let stroke = ch.get(i + 1).filter(|s| paints(s, false)).and_then(|s| s.geometric_bounds());
+            let inside = children.iter().any(|m| !Arc::ptr_eq(m, path) && paints(m, false));
+            return Some((region, fill, stroke, inside));
+        }
+        if let Some(found) = painted_clip_by_mark(c) {
+            return Some(found);
+        }
+    }
+    None
+}
+
+#[test]
+fn painted_clipping_type_on_top_clips_with_its_fill_behind_the_art() {
+    // Type that paints a fill, a stroke or both, on top of the red square it clips and marked, as
+    // Make Clipping Mask leaves it, in a group whose Transform moves everything 10 pt down: the
+    // canvas and the export keep it the clipping path, its fill as art behind all the art it clips,
+    // and its stroke as art over the clip group, outside the clip.
+    let plain = clip_outline(&painted_type(3, false, false)).expect("the type clips").0.bounding_box();
+    for (fill, stroke) in [(true, false), (false, true), (true, true)] {
+        let clipped = clip_group_on_top(2, painted_type(3, fill, stroke));
+        let mut outer = Node::group(NodeId(1), vec![Arc::new(clipped)]);
+        outer.appearance.effects.push(fx("distort.transform", json!({"moveV": 10})));
+        let canvas = crate::evaluate_container(None, &outer).unwrap();
+        let mut d = Document::new(400.0, 400.0);
+        let layer = d.layers[0].id;
+        d.insert(Some(layer), 0, outer).unwrap();
+        let baked = bake_document(&d).unwrap();
+        let exported = baked.layers.iter().find_map(|l| painted_clip_by_mark(l));
+        for (what, found) in [("canvas", painted_clip_by_mark(&canvas)), ("export", exported)] {
+            let case = format!("{what}, fill {fill}, stroke {stroke}");
+            let (region, fills, strokes, inside) = found.unwrap_or_else(|| panic!("{case}: no clip group"));
+            assert!((region.y0 - plain.y0 - 10.0).abs() < 0.5 && (region.x0 - plain.x0).abs() < 0.5, "{case}: {region:?} from {plain:?}");
+            assert_eq!(fills.is_some(), fill, "{case}: fill art behind the clipped art {fills:?}");
+            assert_eq!(strokes.is_some(), stroke, "{case}: stroke art {strokes:?}");
+            assert!(!inside, "{case}: the stroke paints outside the clip");
+            for art in fills.into_iter().chain(strokes) {
+                assert!(near_rect(art, region), "{case}: the paint {art:?} follows the clip {region:?}");
+            }
+        }
+    }
+}
+
+#[test]
+fn a_clip_groups_own_fill_goes_behind_its_art_when_its_clipping_type_on_top_strokes() {
+    // A clip group with a yellow fill of its own below its contents and an Offset Path effect,
+    // clipped by type that strokes, on top of the art and marked: the group's fill paints inside the
+    // clip, behind the art it clips, and the type's stroke over the clip group.
+    let yellow = Paint::solid(Color::rgb(1.0, 1.0, 0.0));
+    let mut group = clip_group_on_top(2, painted_type(3, false, true));
+    let mut appearance =
+        Appearance { effects: vec![fx("path.offsetPath", json!({"offset": 0}))], ..Appearance::basic(yellow.clone(), Paint::None, 0.0) };
+    appearance.set_contents_at(1);
+    group.appearance = appearance.into();
+    let canvas = crate::evaluate_container(None, &group).unwrap();
+    let NodeKind::Group { children, clip: false } = &canvas.kind else { panic!("not a group around the clip: {canvas:?}") };
+    let NodeKind::Group { children: clipped, clip: true } = &children[0].kind else { panic!("no clip group first: {children:?}") };
+    let yellow_in = |n: &Node| n.appearance.items.iter().any(|i| matches!(i, vectorcraft_doc::AppearanceItem::Fill(f) if f.paint == yellow));
+    let (_, mut art) = vectorcraft_doc::split_clipping_path(clipped).expect("a clipping path");
+    assert!(art.next().is_some_and(|c| yellow_in(c)), "the group's fill paints inside the clip, behind its art: {clipped:?}");
+    assert!(!children.iter().skip(1).any(|c| yellow_in(c)), "{children:?}");
+    assert!(children.get(1).is_some_and(|s| paints(s, false)), "the type's stroke paints over the clip group: {children:?}");
 }

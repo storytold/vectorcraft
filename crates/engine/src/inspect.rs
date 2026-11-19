@@ -25,6 +25,9 @@ pub struct SummaryOpts {
     /// The node is a member of a compound path, which paints it: it has no paint of its own
     /// to report.
     pub compound_member: bool,
+    /// The node is the clipping path of the clip group or clipping layer that holds it
+    /// ([`Node::clipping_path`]): it says so, as the Layers panel underlines its name.
+    pub clipping_path: bool,
 }
 
 /// Compact tree summary of a node (for `document.inspect`): the whole subtree, symbol instances
@@ -56,6 +59,13 @@ pub fn node_summary_opts(n: &Node, opts: SummaryOpts, symbols: &SymbolBoxes) -> 
     // The angle of its rotated bounding box (counter-clockwise degrees).
     if n.bbox_angle != 0.0 {
         v["rotation"] = json!(n.bbox_angle);
+    }
+    if opts.clipping_path {
+        v["clippingPath"] = json!(true);
+    }
+    // A clip group or clipping layer names its clipping path, wherever that is among its members.
+    if let Some(c) = n.clipping_path() {
+        v["clippingPathId"] = json!(c.id.0);
     }
     if let NodeKind::Text(t) = &n.kind {
         // Type shows its characters' paint: the first run's, as paint.proxies and the Stroke
@@ -126,8 +136,16 @@ pub fn node_summary_opts(n: &Node, opts: SummaryOpts, symbols: &SymbolBoxes) -> 
                 depth: opts.depth.map(|d| d.saturating_sub(1)),
                 child_limit: opts.child_limit,
                 compound_member: matches!(n.kind, NodeKind::Compound { .. }),
+                clipping_path: false,
             };
-            v["children"] = Value::Array(ch.iter().rev().take(take_n).map(|c| node_summary_opts(c, next, symbols)).collect());
+            let clip = n.clipping_path().map(|c| c.id);
+            v["children"] = Value::Array(
+                ch.iter()
+                    .rev()
+                    .take(take_n)
+                    .map(|c| node_summary_opts(c, SummaryOpts { clipping_path: Some(c.id) == clip, ..next }, symbols))
+                    .collect(),
+            );
         }
         if take_n < total || v.get("children").is_none() {
             v["childCount"] = json!(total);
@@ -260,8 +278,10 @@ pub fn document_scoped(s: &Session, opts: SummaryOpts, scope: &Scope) -> Value {
         .skip(skip)
         .take(take)
         .map(|(n, path)| {
-            let member = d.parent_of(n.id).and_then(|p| d.node(p)).is_some_and(|p| matches!(p.kind, NodeKind::Compound { .. }));
-            let mut v = node_summary_opts(n, SummaryOpts { compound_member: member, ..opts }, &symbols);
+            let parent = d.parent_of(n.id).and_then(|p| d.node(p));
+            let member = parent.is_some_and(|p| matches!(p.kind, NodeKind::Compound { .. }));
+            let clipping_path = parent.and_then(Node::clipping_path).is_some_and(|c| c.id == n.id);
+            let mut v = node_summary_opts(n, SummaryOpts { compound_member: member, clipping_path, ..opts }, &symbols);
             if by_kind {
                 v["path"] = json!(path);
             }

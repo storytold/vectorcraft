@@ -1971,8 +1971,7 @@ fn delete_empty_artboards_measures_clipped_art_through_the_clip() {
     s.execute("layer.clippingMask.toggle", &json!({"id": layer.id.0})).unwrap();
     let layer = layer_of(&s);
     assert!(matches!(layer.kind, vectorcraft_doc::NodeKind::Layer { clip: true, .. }));
-    let first = layer.children().unwrap()[0].id;
-    assert_eq!(first, layer_clip, "the layer's first object clips the rest");
+    assert_eq!(layer.clipping_path().map(|c| c.id), Some(layer_clip), "the layer's top object clips the rest");
     assert_eq!(s.execute("artboard.deleteEmpty", &json!({})).unwrap(), json!({"deleted": [1, 3]}));
     assert_eq!(artboard_names(&s), ["Artboard 1", "Artboard 3"]);
 }

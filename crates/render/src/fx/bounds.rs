@@ -749,15 +749,17 @@ fn cull_bounds_in(symbols: &SymbolBoxes, n: &Node, after_reshape: bool, brush: b
 /// past its plain shape, and to where its stroke paints along it. Other objects keep `b`.
 fn with_clip_region(symbols: &SymbolBoxes, n: &Node, b: Rect) -> Rect {
     match &n.kind {
-        NodeKind::Group { children, clip: true } | NodeKind::Layer { children, clip: true, .. } => match children.first() {
-            Some(c) if effects::needs_bake(c) => {
-                let s = c.appearance.outset();
-                let region = effects::clip_outline(c).map(|(bp, _)| bp.bounding_box().inflate(s, s));
-                let painted = if has_fx(c) { visual_bounds(symbols, c) } else { None };
-                vectorcraft_geom::union_opt(vectorcraft_geom::union_opt(Some(b), region), painted).unwrap_or(b)
+        NodeKind::Group { children, clip: true } | NodeKind::Layer { children, clip: true, .. } => {
+            match vectorcraft_doc::clipping_path_in(children).and_then(|k| children.get(k)) {
+                Some(c) if effects::needs_bake(c) => {
+                    let s = c.appearance.outset();
+                    let region = effects::clip_outline(c).map(|(bp, _)| bp.bounding_box().inflate(s, s));
+                    let painted = if has_fx(c) { visual_bounds(symbols, c) } else { None };
+                    vectorcraft_geom::union_opt(vectorcraft_geom::union_opt(Some(b), region), painted).unwrap_or(b)
+                }
+                _ => b,
             }
-            _ => b,
-        },
+        }
         _ => b,
     }
 }

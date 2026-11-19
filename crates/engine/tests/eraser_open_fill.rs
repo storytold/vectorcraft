@@ -459,7 +459,7 @@ fn assert_clip_identity(s: &Session, c: &ClipMaskFixture) {
         NodeKind::Group { children, clip: true } => children,
         other => panic!("expected the original clip group, got {other:?}"),
     };
-    assert_eq!(children.iter().map(|n| n.id).collect::<Vec<_>>(), [c.mask, c.art], "the one mask stays first; no painted siblings or promoted art");
+    assert_eq!(children.iter().map(|n| n.id).collect::<Vec<_>>(), [c.art, c.mask], "the one mask stays on top; no painted siblings or promoted art");
     let mask = d.node(c.mask).unwrap();
     let rule = match (&mask.kind, c.compound) {
         (NodeKind::Path { rule, clipping: true, .. }, false) | (NodeKind::Compound { rule, .. }, true) => *rule,
@@ -1975,7 +1975,7 @@ fn eraser_pinning_only_text_clip_case(stroked: bool, no_stroke: Option<&vectorcr
     let doc = &s.doc().unwrap().doc;
     let node = doc.node(owner).unwrap();
     assert!(node.clips(), "INPUT: the source is a clipping Group");
-    assert_eq!(node.children().unwrap()[0].id, text);
+    assert_eq!(node.clipping_path().map(|c| c.id), Some(text), "INPUT: the type is the clipping path");
     let t = doc.node(text).unwrap();
     let NodeKind::Text(type_) = &t.kind else { panic!("INPUT: the clipping object is type") };
     assert_eq!(type_.plain_text(), "Clip");

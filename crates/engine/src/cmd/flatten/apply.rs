@@ -350,7 +350,7 @@ fn clipped_by_ancestors(src: &Document, id: NodeId, plain: &Node, mut fills: Opt
     let ancestry = src.ancestry(id).unwrap_or_default();
     for pair in ancestry.windows(2).rev() {
         let Some(above) = src.node(pair[0]).filter(|n| n.clips()) else { continue };
-        let Some(clip) = above.children().and_then(|c| c.first()) else { continue };
+        let Some(clip) = above.clipping_path() else { continue };
         // The clipping path itself is not clipped art.
         if clip.id == pair[1] {
             continue;
@@ -361,10 +361,13 @@ fn clipped_by_ancestors(src: &Document, id: NodeId, plain: &Node, mut fills: Opt
             out.visible = false;
             return out;
         };
+        // Each clip group made here marks its clipping path: the fill copied from the clipping
+        // path keeps that path's mark, and would clip in its place.
         let mut path = Node::path(clip.id, PathData::from_bezpath(&outline), Appearance::default());
         if let NodeKind::Path { rule: r, .. } = &mut path.kind {
             *r = rule;
         }
+        path.set_clipping_path(true);
         let mut children = vec![Arc::new(path)];
         // The renderer paints the fill behind the clipped art.
         if let Some((seen, r)) = fills.as_mut()
@@ -373,7 +376,9 @@ fn clipped_by_ancestors(src: &Document, id: NodeId, plain: &Node, mut fills: Opt
         {
             let r = *r;
             seen.push(clip.id);
-            let mut at = Node::group(above.id, vec![Arc::new(Node::path(clip.id, shapes::rectangle(r), Appearance::default())), Arc::new(fill)]);
+            let mut area = Node::path(clip.id, shapes::rectangle(r), Appearance::default());
+            area.set_clipping_path(true);
+            let mut at = Node::group(above.id, vec![Arc::new(area), Arc::new(fill)]);
             at.set_clips(true);
             children.push(Arc::new(at));
         }
@@ -776,7 +781,8 @@ pub(crate) fn flatten_expanded(doc: &Document, o: &FlattenOptions) -> Result<Opt
     let mut roots = vec![];
     for l in d.layers.iter().filter(|l| l.visible && !matches!(l.kind, NodeKind::Layer { template: true, .. })) {
         let children = l.children().map_or(&[][..], Vec::as_slice);
-        roots.extend(children.iter().skip(usize::from(l.clips())).filter(|c| c.visible && !c.is_ruler_guide()).map(|c| c.id));
+        let clip_at = l.clipping_path_index();
+        roots.extend(children.iter().enumerate().filter(|&(i, c)| clip_at != Some(i) && c.visible && !c.is_ruler_guide()).map(|(_, c)| c.id));
     }
     let plan = plan(&d, &roots, o, true)?;
     if plan.flat.is_empty() && !plan.work.iter().any(|k| k.changes) {
@@ -986,7 +992,7 @@ fn place_of(d: &Document, roots: &[NodeId]) -> Option<NodeId> {
     if !clips_count() || roots.len() < 2 {
         return Some(top);
     }
-    let fills = |clip: &NodeId| d.node(*clip).and_then(|n| n.children()?.first().map(|c| c.clip_paint().fill.is_some())).unwrap_or(false);
+    let fills = |clip: &NodeId| d.node(*clip).and_then(|n| n.clipping_path().map(|c| c.clip_paint().fill.is_some())).unwrap_or(false);
     let all: Vec<Vec<NodeId>> = roots.iter().map(|r| clip_ancestors(d, *r)).collect();
     let above = all.last().map_or(&[][..], Vec::as_slice);
     let shared = |mine: &Vec<NodeId>| mine.iter().all(|c| all.iter().all(|theirs| theirs.contains(c)));

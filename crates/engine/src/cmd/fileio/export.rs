@@ -164,8 +164,14 @@ fn selected_part(n: &Arc<Node>, keep: &HashSet<NodeId>, holders: &HashSet<NodeId
         return;
     }
     let Some(children) = n.children().filter(|_| holders.contains(&n.id)) else { return };
+    // Where a clipping group's or layer's clipping path goes among what is kept.
+    let clip_at = n.clipping_path_index();
+    let mut clip_slot = 0;
     let mut kept = vec![];
-    for c in children {
+    for (i, c) in children.iter().enumerate() {
+        if clip_at == Some(i) {
+            clip_slot = kept.len();
+        }
         selected_part(c, keep, holders, shown, &mut kept);
     }
     if !matches!(n.kind, NodeKind::Layer { .. } | NodeKind::Group { .. } | NodeKind::Compound { .. }) {
@@ -175,10 +181,12 @@ fn selected_part(n: &Arc<Node>, keep: &HashSet<NodeId>, holders: &HashSet<NodeId
     if kept.is_empty() {
         return;
     }
-    // A clipping group or layer keeps its clipping path; a Shaper group its source art, which
-    // draws nothing.
-    let first_stays = n.clips() || n.extras().shaper.is_some();
-    if let Some(first) = children.first().filter(|f| first_stays && kept.first().is_none_or(|k| k.id != f.id)) {
+    // A clipping group or layer keeps its clipping path, in its place; a Shaper group its source
+    // art, its first member, which draws nothing.
+    if let Some(clip) = clip_at.and_then(|k| children.get(k)).filter(|c| kept.get(clip_slot).is_none_or(|k| k.id != c.id)) {
+        kept.insert(clip_slot.min(kept.len()), clip.clone());
+    }
+    if let Some(first) = children.first().filter(|f| n.extras().shaper.is_some() && kept.first().is_none_or(|k| k.id != f.id)) {
         kept.insert(0, first.clone());
     }
     let mut part = Node::clone(n);

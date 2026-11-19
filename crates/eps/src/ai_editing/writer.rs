@@ -603,7 +603,7 @@ impl<'a> Writer<'a> {
         // The last flag makes the layer a clipping layer: its top object clips the rest. Only a
         // clipping path or compound path, outside any art cut to a clipping object, is written as
         // one ([`Self::clip_group`] writes the others).
-        let clips = *clip && after.is_empty() && self.clip.is_none() && children.first().is_some_and(|c| clip_path(c).is_some());
+        let clips = *clip && after.is_empty() && self.clip.is_none() && clipping_object(children).is_some_and(|c| clip_path(c).is_some());
         let _ = writeln!(
             self.body,
             "%AI5_BeginLayer\n{} {} {} {} {} 0 1 {index} {r} {g} {b} 0 {dim} {} Lb\n{} Ln",
@@ -1175,8 +1175,9 @@ impl<'a> Writer<'a> {
     /// `Q` sets back the state at `q`. A clipping object of another kind cuts the members instead,
     /// in a group ([`Self::clip_contents`]). A clipping group without members is an empty group.
     fn clip_group(&mut self, children: &[Arc<Node>], xy: Xy) {
-        if self.clip.is_some() || children.first().is_none_or(|c| clip_path(c).is_none()) {
-            self.warn_cut(children.first());
+        let clipping = clipping_object(children);
+        if self.clip.is_some() || clipping.is_none_or(|c| clip_path(c).is_none()) {
+            self.warn_cut(clipping);
             // Inside art cut to a clipping object, a clipping path cuts its art too.
             if self.clip.is_some() && !children.is_empty() {
                 self.warn(CLIPPING);
@@ -1196,13 +1197,13 @@ impl<'a> Writer<'a> {
         self.end_group("Q", xy);
     }
 
-    /// The members of a clipping group or layer, the first one clipping the others: the others,
-    /// then the first one as the clipping path (see [`Self::clip_group`]), its name after it. Fills
-    /// and strokes the clipping path can't paint itself are paths of their own, the fills under the
-    /// others and the strokes over them. Without room for the clipping path, nothing is written
+    /// The members of a clipping group or layer, its clipping path ([`clipping_object`]) clipping
+    /// the others: the others, then the clipping path (see [`Self::clip_group`]), its name after it.
+    /// Fills and strokes the clipping path can't paint itself are paths of their own, the fills under
+    /// the others and the strokes over them. Without room for the clipping path, nothing is written
     /// ([`Self::take_objects`]).
     fn clipped(&mut self, children: &[Arc<Node>]) {
-        let Some((first, rest)) = children.split_first() else { return };
+        let Some((first, rest)) = vectorcraft_doc::split_clipping_path(children) else { return };
         let Some((path, rule)) = clip_path(first) else {
             self.warn_cut(Some(first));
             return self.clip_contents(children);
@@ -1279,13 +1280,13 @@ impl<'a> Writer<'a> {
         self.end_group("U", xy);
     }
 
-    /// A container's members, the first one's outline cutting the others: its fills painted
-    /// behind them (cut to the region outside too), its strokes over them, not cut by it. Its name,
-    /// variables and text wrap options are written once, under them all, with its opacity mask
-    /// ([`Self::object_carrier`]), and not with its fills or strokes, which may be cut or left out
-    /// and keep only the opacity mask they are drawn through.
+    /// A container's members, its clipping object's ([`clipping_object`]) outline cutting the
+    /// others: its fills painted behind them (cut to the region outside too), its strokes over them,
+    /// not cut by it. Its name, variables and text wrap options are written once, under them all,
+    /// with its opacity mask ([`Self::object_carrier`]), and not with its fills or strokes, which may
+    /// be cut or left out and keep only the opacity mask they are drawn through.
     fn clip_contents(&mut self, children: &[Arc<Node>]) {
-        let Some((first, rest)) = children.split_first() else { return };
+        let Some((first, rest)) = vectorcraft_doc::split_clipping_path(children) else { return };
         self.object_carrier(first);
         // Nothing to clip by hides the clipped art.
         let Some((outline, rule)) = vectorcraft_effects::clip_outline(first) else { return };
@@ -1970,8 +1971,14 @@ fn cut_to_clipping_object(doc: &Document, id: NodeId) -> bool {
     let above = ancestry.split_last().map(|(_, a)| a).unwrap_or_default();
     above.iter().filter_map(|a| doc.node(*a)).any(|p| {
         matches!(p.kind, NodeKind::Group { clip: true, .. } | NodeKind::Layer { clip: true, .. })
-            && p.children().and_then(|c| c.first()).is_none_or(|c| clip_path(c).is_none())
+            && p.children().map(Vec::as_slice).and_then(clipping_object).is_none_or(|c| clip_path(c).is_none())
     })
+}
+
+/// The clipping object of a clipping group or clipping layer whose members are `children`: its
+/// marked member, else its first ([`vectorcraft_doc::clipping_path_in`]).
+fn clipping_object(children: &[Arc<Node>]) -> Option<&Arc<Node>> {
+    children.get(vectorcraft_doc::clipping_path_in(children)?)
 }
 
 /// The outline and fill rule a clipping path or compound path `n` clips by; `None` for other

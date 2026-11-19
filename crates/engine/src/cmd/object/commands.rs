@@ -205,7 +205,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Make",
             ["Object", "Clipping Mask"],
             Some("Cmd+7"),
-            "{ids?: [id…] (selected first; default: the selection)} the topmost selected object (a path, compound path or text, which loses its paint) clips the others: compound holes, even-odd fills and glyph outlines clip as drawn. Paint given to the clipping path later (paint commands with its id) shows: its fill behind the clipped art, its stroke over it → {id} of the clip group",
+            "{ids?: [id…] (selected first; default: the selection)} the topmost selected object (a path, compound path or text, which loses its paint, and stays on top) clips the others: compound holes, even-odd fills and glyph outlines clip as drawn. Paint given to the clipping path later (paint commands with its id) shows: its fill behind the clipped art, its stroke over it. The clipping path stays the clipping path wherever it goes among the clip group's members; deleting it or moving it out of the group releases the clip → {id} of the clip group",
             has_multi,
             clip_make
         ),

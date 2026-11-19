@@ -447,7 +447,9 @@ nothing truncated the reply is the plain summary. Both must be non-negative inte
 (the full object JSON is never truncated); anything else is an error.
 
 In the summary an object reports its paint as `fill`, `stroke` (labels) and `strokeWidth`. So does a compound path,
-whose paint is its own: its member paths report `compoundMember: true` instead of a paint they don't have. Every
+whose paint is its own: its member paths report `compoundMember: true` instead of a paint they don't have. A clip
+group or clipping layer reports the id of its clipping path as `clippingPathId`, and the clipping path itself
+`clippingPath: true` (the Layers panel underlines its name), wherever it is among the members. Every
 node (layers and groups too) reports its opacity when it is below 1, in both scales: `opacity` is the 0–1 fraction
 the document stores and `opacityPct` the 0–100 % that `object.setProps`, `transparency.set`, `draw_path` and
 `draw_shape` take (so an agent passes `opacityPct` back, never `opacity`); and `blend` when it isn't Normal, as
@@ -3082,9 +3084,19 @@ rulers back in the General unit from the ruler origin; they stay shown. It retur
 ## Clipping masks
 
 `object.clippingMask.make` clips the selected objects by the topmost one, which may be a path, a compound path or a
-text object (it loses its paint). Compound holes, even-odd fills, glyph outlines and the union of a group's members
+text object (it loses its paint and stays on top of the clip group). Compound holes, even-odd fills, glyph outlines and the union of a group's members
 clip alike on screen, in raster export and in SVG and PDF. `object.clippingMask.release` turns the clip group into a
 plain group and keeps the clipping path with whatever paint it has.
+
+The clipping path stays the clipping path wherever it goes among the members of its clip group or clipping layer
+(`layer.move`, `node.move`, Object › Arrange, art pasted or drawn behind it): what shows does not change. Deleting it,
+or moving it out (into another layer or group, or into a group made of it and art inside the clip), releases the clip
+as `object.clippingMask.release` does; the path it moved is a plain path, and stays one if it goes back. A copy of a
+clipping path alone (pasted or duplicated) is a plain object too.
+
+Files keep each clipping path first among its clip's members, under the art, where versions that take a clip's first
+member as its clipping path find it. Opening a document, from any format, puts every clipping path back on top of its
+art.
 
 A clipping path can be painted after Make (`paint.setFill`, `paint.setStroke`, `stroke.set` with its `ids`): its fill
 paints behind the clipped art and its stroke over it, not clipped, on screen and in SVG and PDF.
@@ -3095,8 +3107,8 @@ paints behind the clipped art and its stroke over it, not clipped, on screen and
 ```
 
 `layer.clippingMask.toggle {id?}` is the Layers panel's clipping mask button: the top object of the layer `id` (default:
-the one highlighted layer or group row, else the one selected group, else the current layer) becomes its clipping path (unpainted, moved to the bottom of the layer,
-so art added later is clipped too); called again it releases the mask. It returns `{clip}`, and the Layers panel
+the one highlighted layer or group row, else the one selected group, else the current layer) becomes its clipping path (unpainted, staying on top of the layer;
+art added later, over it, is clipped too); called again it releases the mask. It returns `{clip}`, and the Layers panel
 underlines clipping-path names.
 
 ## Object selection
@@ -5866,8 +5878,8 @@ and `layerRows`, the rows highlighted in the panel.
 - **Buttons**: `layer.new {name?, top?, below?, …options}` (above the current layer at its level, or directly
   below it in Draw Behind; `top` with Ctrl/Cmd; `below`, directly below the current layer at its level, with
   Ctrl/Cmd+Alt; `top` and `below` apply in every drawing mode),
-  `layer.newSublayer {parent?, bottom?, name?, …options}` (on top of the parent's contents; `bottom`, under them but
-  above a clipping layer's clipping path, with Ctrl/Cmd+Alt; both refused while an opacity mask is edited),
+  `layer.newSublayer {parent?, bottom?, name?, …options}` (on top of the parent's contents; `bottom`, under them,
+  with Ctrl/Cmd+Alt; both refused while an opacity mask is edited),
   `layer.delete {ids?}` (rows with what they hold; the
   last layer stays; it does not ask), `ui.layerDelete {ids?|id?}` (the panel's trash, rows dropped on it, Delete
   Selection, and Delete or Backspace on highlighted rows: when a layer or sublayer among the rows holds art, hidden,

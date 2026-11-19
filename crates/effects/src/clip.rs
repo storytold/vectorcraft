@@ -54,15 +54,30 @@ pub(crate) fn with_clip_effects_applied_while(n: &Node, take: fn() -> bool) -> O
     Some(m)
 }
 
+/// [`effects_applied`], where what takes the place of `n`, a clipping path, stays its clip's
+/// clipping path ([`Node::is_clipping_path`]): the group of the pieces its fills and strokes draw,
+/// or the path its effects make of it, clips as `n` did wherever it lies among the clip's members.
+fn clip_effects_applied(n: &Node, items: bool, take: fn() -> bool) -> Option<Node> {
+    let mut m = effects_applied(n, items, take)?;
+    if n.is_clipping_path() && !m.is_clipping_path() {
+        m.set_clipping_path(true);
+    }
+    Some(m)
+}
+
 /// [`with_clip_effects_applied_while`]; with `items` unset (the paths of a compound path, which
 /// draw with the compound path's fills and strokes), the geometry effects of `n`'s own fills and
 /// strokes are left out.
-fn clip_effects_applied(n: &Node, items: bool, take: fn() -> bool) -> Option<Node> {
+fn effects_applied(n: &Node, items: bool, take: fn() -> bool) -> Option<Node> {
     let mut m: Option<Node> = None;
-    let members: &[std::sync::Arc<Node>] = match &n.kind {
-        NodeKind::Group { children, clip: true } => children.get(..1).unwrap_or_default(),
-        NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } | NodeKind::Compound { children, .. } => children,
-        _ => &[],
+    // The members to visit, from index `base` among `n`'s children (a nested clip group's: its
+    // clipping path alone, wherever it lies).
+    let (base, members): (usize, &[std::sync::Arc<Node>]) = match &n.kind {
+        NodeKind::Group { children, clip: true } => {
+            vectorcraft_doc::clipping_path_in(children).map_or((0, &[][..]), |k| (k, children.get(k..=k).unwrap_or_default()))
+        }
+        NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } | NodeKind::Compound { children, .. } => (0, children),
+        _ => (0, &[]),
     };
     // A group or layer clips by its visible members after its shaper; a compound path by all of
     // its paths, and a nested clip group by its clipping path, shown or hidden
@@ -76,7 +91,7 @@ fn clip_effects_applied(n: &Node, items: bool, take: fn() -> bool) -> Option<Nod
             break;
         }
         if let Some(r) = clip_effects_applied(c, items && !compound, take)
-            && let Some(slot) = m.get_or_insert_with(|| n.clone()).children_mut().and_then(|ch| ch.get_mut(i))
+            && let Some(slot) = m.get_or_insert_with(|| n.clone()).children_mut().and_then(|ch| ch.get_mut(base + i))
         {
             *slot = std::sync::Arc::new(r);
         }

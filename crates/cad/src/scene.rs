@@ -723,19 +723,19 @@ impl<'a> Scene<'a> {
         self.opacity = opacity;
     }
 
-    /// A container's children; a clipping container's first child is its clipping path, which
-    /// paints its fills below the others and its strokes over them.
+    /// A container's children; a clipping container's clipping path paints its fills below the
+    /// others and its strokes over them.
     fn children(&mut self, children: &[std::sync::Arc<Node>], clip: bool) {
-        let Some((first, rest)) = children.split_first().filter(|_| clip) else {
+        let Some((clip_path, rest)) = clip.then(|| vectorcraft_doc::split_clipping_path(children)).flatten() else {
             children.iter().for_each(|c| self.node(c, false));
             return;
         };
         self.warn(CLIPPING);
-        let paint = first.clip_paint();
+        let paint = clip_path.clip_paint();
         if let Some(f) = &paint.fill {
             self.node(f, false);
         }
-        rest.iter().for_each(|c| self.node(c, false));
+        rest.for_each(|c| self.node(c, false));
         if let Some(s) = &paint.stroke {
             self.node(s, false);
         }

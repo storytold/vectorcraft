@@ -126,8 +126,8 @@ impl Node {
                 let o = if visual { self.appearance.outset() } else { 0.0 };
                 b.map(|b| b.inflate(o, o))
             }
-            NodeKind::Group { children, clip: true } => {
-                let clip = children.first()?;
+            NodeKind::Group { clip: true, .. } => {
+                let clip = self.clipping_path()?;
                 let stroked = matches!(clip.kind, NodeKind::Path { .. } | NodeKind::Compound { .. } | NodeKind::Text(_));
                 clip.bounds_in(symbols, a, visual && stroked)
             }

@@ -1065,6 +1065,15 @@ impl Lerp {
             (NodeKind::Group { children: ca, clip: k1 }, NodeKind::Group { children: cb, clip: k2 })
                 if k1 == k2 && !(*k1 && ca.len() != cb.len()) =>
             {
+                // Two clips pair their clipping paths, wherever each is among its members, and their
+                // other members in order; a step has its clipping path on top ([`Self::at_eased`]).
+                let clipped_first = |c: &[Arc<Node>]| -> Vec<Arc<Node>> {
+                    match crate::split_clipping_path(c).filter(|_| *k1) {
+                        Some((path, rest)) => rest.cloned().chain(std::iter::once(path.clone())).collect(),
+                        None => c.to_vec(),
+                    }
+                };
+                let (ca, cb) = (&clipped_first(ca), &clipped_first(cb));
                 let (oa, ob) = (center_of(a), center_of(b));
                 let n = ca.len().max(cb.len());
                 let children = (0..n)
@@ -1109,8 +1118,12 @@ impl Lerp {
         let base = if t < 0.5 { a } else { b };
         let mut n = match &self.shape {
             Shape::Group { children, clip } => {
-                let mut g =
-                    Node::new(NodeId(0), NodeKind::Group { children: children.iter().map(|c| Arc::new(c.at_eased(t, tc))).collect(), clip: *clip });
+                let mut members: Vec<Arc<Node>> = children.iter().map(|c| Arc::new(c.at_eased(t, tc))).collect();
+                // A clip's clipping path, paired on top ([`Self::new`]), marked as in a document.
+                if *clip && let Some(path) = members.last_mut() {
+                    Arc::make_mut(path).set_clipping_path(true);
+                }
+                let mut g = Node::new(NodeId(0), NodeKind::Group { children: members, clip: *clip });
                 g.isolate = base.isolate;
                 g.knockout = base.knockout;
                 g

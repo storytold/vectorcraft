@@ -274,7 +274,7 @@ pub fn held(d: &Document, id: NodeId) -> Option<Held> {
     }
     for (depth, n) in chain.iter().enumerate().rev() {
         let Some(parent) = depth.checked_sub(1).and_then(|up| chain.get(up)) else { break };
-        if matches!(n.kind, NodeKind::Path { clipping: true, .. }) || (parent.clips() && path.get(depth) == Some(&0)) {
+        if matches!(n.kind, NodeKind::Path { clipping: true, .. }) || path.get(depth).is_some_and(|&i| parent.clipping_path_index() == Some(i)) {
             return Some(Held::Clipping);
         }
         if matches!(

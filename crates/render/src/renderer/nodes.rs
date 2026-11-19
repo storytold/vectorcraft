@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use super::{
     Affine, Arc, BezPath, ClipEntry, ClipPaintEntry, Compose, Composite, Document, FillRule, Frame, GeomEntry, ISOLATION_DIM, Ink, MAX_GUIDE_DASHES,
     Node, NodeId, NodeKind, Rect, RenderContext, RenderOptions, Renderer, Shape, SymbolBoxes, TraceView, blend_mode, brush_fx, effects, fx, group,
@@ -513,13 +515,13 @@ impl Renderer {
                 // Nothing to clip by hides the clipped art (as in the SVG and PDF output). A clip
                 // group doesn't isolate: blending inside it reaches the art below. The clipping
                 // path's fill paints behind the clipped art and its stroke over it, unclipped.
-                if let Some((clip, rest)) = children.split_first()
+                if let Some((clip, rest)) = split_clip(children)
                     && let Some(region) = self.clip_of(clip)
                 {
                     let (fill, stroke) = self.clip_paint_of(clip);
                     // An image inside its own frame painted straight into the clipping path, without
                     // a clip layer (envelopes cut distorted images into many such pieces).
-                    if let ([image], None, None) = (rest, &fill, &stroke)
+                    if let ([image], None, None) = (&*rest, &fill, &stroke)
                         && let NodeKind::Image(im) = &image.kind
                         && plain_image(image, im, &region.0)
                     {
@@ -535,7 +537,7 @@ impl Renderer {
                         if let Some(fill) = &fill {
                             r.draw_arc(c, fr, fill);
                         }
-                        r.draw_children(c, fr, rest, knockout)
+                        r.draw_children(c, fr, &rest, knockout)
                     });
                     if let Some(stroke) = &stroke {
                         self.draw_arc(ctx, f, stroke);
@@ -664,7 +666,8 @@ impl Renderer {
                 };
                 (i == 0 || c.name.as_deref() == Some("Seam Fills"))
                     && matches!(&c.kind, NodeKind::Group { clip: true, children }
-                    if children.split_first().is_some_and(|(_, members)| !members.is_empty() && members.iter().all(one_paint)))
+                    if vectorcraft_doc::split_clipping_path(children)
+                        .is_some_and(|(_, mut members)| members.clone().next().is_some() && members.all(one_paint)))
             };
             for (_, c) in shapes.iter().enumerate().filter(|(i, c)| !seam_fills(*i, c)) {
                 self.draw_outline_member(ctx, &frame, c);
@@ -768,4 +771,20 @@ impl Renderer {
     pub(super) fn is_shape(&self, n: &Node) -> bool {
         self.shape_of == n as *const Node as usize
     }
+}
+
+/// A clipping path and the members it clips ([`split_clip`]).
+type ClipSplit<'a> = (&'a Arc<Node>, Cow<'a, [Arc<Node>]>);
+
+/// The clipping path among `children`, the members of a clip group or clipping layer
+/// ([`vectorcraft_doc::clipping_path_in`]), and the members it clips, bottom to top: borrowed when
+/// the clipping path is the bottom or top member, gathered when it lies between others.
+fn split_clip(children: &[Arc<Node>]) -> Option<ClipSplit<'_>> {
+    let (below, from) = children.split_at_checked(vectorcraft_doc::clipping_path_in(children)?)?;
+    let (clip, above) = from.split_first()?;
+    let rest = match (below, above) {
+        ([], rest) | (rest, []) => Cow::Borrowed(rest),
+        _ => Cow::Owned(below.iter().chain(above).cloned().collect()),
+    };
+    Some((clip, rest))
 }

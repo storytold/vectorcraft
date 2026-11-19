@@ -563,10 +563,11 @@ fn apply_plan(s: &mut Session, label: &str, plan: Vec<(NodeId, Vec<PathData>)>) 
         let mut all = vec![];
         let mut cut = Beside::replacing(d, &plan.iter().map(|(id, _)| *id).collect::<Vec<_>>());
         for (id, pieces) in plan {
-            let clipping_path = d.position(id).is_some_and(|(parent, i, _)| i == 0 && parent.and_then(|p| d.node(p)).is_some_and(|p| p.clips()));
+            let clipping_path =
+                d.position(id).is_some_and(|(parent, i, _)| parent.and_then(|p| d.node(p)).is_some_and(|p| p.clipping_path_index() == Some(i)));
             if clipping_path {
-                // Keep every clipping contour in its original first child slot. An empty mask
-                // must also stay there so the clipped artwork cannot become the new mask.
+                // Keep every clipping contour in the clipping path, in its slot. An empty mask must
+                // also stay there so the clipped artwork cannot become the new mask.
                 set_geometry(d, id, PathData::new(pieces.into_iter().flat_map(|p| p.subpaths).collect()))?;
                 all.push(id);
             } else {

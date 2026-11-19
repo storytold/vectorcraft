@@ -43,7 +43,10 @@ fn check_sample(s: &Session) {
     assert_eq!(names(pair), ["Red", ""]);
     assert!(pair[0].visible && !pair[1].visible, "the hidden member stays hidden");
     assert!(matches!(art[1].kind, NodeKind::Compound { .. }));
-    assert!(matches!(&art[2].kind, NodeKind::Group { clip: true, children } if matches!(children[0].kind, NodeKind::Path { clipping: true, .. })));
+    // The clipping path on top, as opening puts it.
+    assert!(
+        matches!(&art[2].kind, NodeKind::Group { clip: true, children } if matches!(children.last().map(|c| &c.kind), Some(NodeKind::Path { clipping: true, .. })))
+    );
     let hidden = &doc.layers[1];
     assert!(!hidden.visible);
     let kids = hidden.children().unwrap();

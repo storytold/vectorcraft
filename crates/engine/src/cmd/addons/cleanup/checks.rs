@@ -188,13 +188,14 @@ fn visit<'a>(n: &'a Node, place: Place, out: &mut Vec<(&'a Node, Place)>) {
     if !n.visible || n.locked || n.is_ruler_guide() || out.len() >= MAX_OBJECTS {
         return;
     }
-    let inner = |clip: bool, i: usize, top: bool| Place { clips: clip && i == 0, top, in_compound: false };
+    let clip_at = n.clipping_path_index();
+    let inner = |i: usize, top: bool| Place { clips: clip_at == Some(i), top, in_compound: false };
     match &n.kind {
         // A layer's objects are top-level ones.
-        NodeKind::Layer { children, clip, .. } => children.iter().enumerate().for_each(|(i, c)| visit(c, inner(*clip, i, true), out)),
-        NodeKind::Group { children, clip } if !is_generated(n) => {
+        NodeKind::Layer { children, .. } => children.iter().enumerate().for_each(|(i, c)| visit(c, inner(i, true), out)),
+        NodeKind::Group { children, .. } if !is_generated(n) => {
             out.push((n, place));
-            children.iter().enumerate().for_each(|(i, c)| visit(c, inner(*clip, i, false), out));
+            children.iter().enumerate().for_each(|(i, c)| visit(c, inner(i, false), out));
         }
         NodeKind::Compound { children, .. } => {
             out.push((n, place));
@@ -206,7 +207,7 @@ fn visit<'a>(n: &'a Node, place: Place, out: &mut Vec<(&'a Node, Place)>) {
 
 /// Is `id` the clipping path of its group or layer?
 fn is_clipping_path(d: &Document, id: NodeId) -> bool {
-    d.position(id).is_some_and(|(parent, i, _)| i == 0 && parent.and_then(|p| d.node(p)).is_some_and(Node::clips))
+    d.position(id).is_some_and(|(parent, i, _)| parent.and_then(|p| d.node(p)).and_then(Node::clipping_path_index) == Some(i))
 }
 
 /// A group that stands for live or generated art: its members aren't loose art to clean.
@@ -329,17 +330,17 @@ fn needless_clip_group(cx: &Context, n: &Node) -> Option<Vec<Node>> {
     if !is_plain(n) {
         return None;
     }
-    let Some((clip, art)) = children.split_first() else { return Some(vec![]) };
+    let Some((clip, art)) = vectorcraft_doc::split_clipping_path(children) else { return Some(vec![]) };
     let paint = clip.clip_paint();
     if paint.fill.is_some() || paint.stroke.is_some() {
         return None;
     }
     let clip_box = clip.geometric_bounds()?;
-    let art_box = art.iter().filter_map(|a| a.visual_bounds_with(&cx.symbols)).reduce(|a, b| a.union(b));
+    let art_box = art.clone().filter_map(|a| a.visual_bounds_with(&cx.symbols)).reduce(|a, b| a.union(b));
     match art_box {
         None => Some(vec![]),
         Some(b) if !meets(clip_box, b) => Some(vec![]),
-        Some(b) if is_rectangle(clip) && inside(b, clip_box.inflate(1e-6, 1e-6)) => Some(art.iter().map(|a| (**a).clone()).collect()),
+        Some(b) if is_rectangle(clip) && inside(b, clip_box.inflate(1e-6, 1e-6)) => Some(art.map(|a| (**a).clone()).collect()),
         _ => None,
     }
 }

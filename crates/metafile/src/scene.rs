@@ -244,17 +244,17 @@ impl<'a> Scene<'a> {
         self.opacity = opacity;
     }
 
-    /// A container's children. A clipping container's first child clips the rest (its fill paints
+    /// A container's children. A clipping container's clipping path clips the rest (its fill paints
     /// below them, its stroke over them); without clipping they are written whole.
     fn children(&mut self, children: &[Arc<Node>], clip: bool) {
-        let Some((first, rest)) = children.split_first().filter(|_| clip) else {
+        let Some((clip_path, rest)) = clip.then(|| vectorcraft_doc::split_clipping_path(children)).flatten() else {
             children.iter().for_each(|c| self.node(c, false));
             return;
         };
-        let paint = first.clip_paint();
+        let paint = clip_path.clip_paint();
         let outline = if self.clips {
             // Nothing to clip by hides the clipped art (as on the canvas).
-            let Some((path, rule)) = vectorcraft_effects::clip_outline(first) else { return };
+            let Some((path, rule)) = vectorcraft_effects::clip_outline(clip_path) else { return };
             Some((path, rule))
         } else {
             self.warn(CLIPPING);
@@ -267,7 +267,7 @@ impl<'a> Scene<'a> {
         if let Some(f) = &paint.fill {
             self.node(f, false);
         }
-        rest.iter().for_each(|c| self.node(c, false));
+        rest.for_each(|c| self.node(c, false));
         if clipped {
             self.ops.push(Op::Unclip);
         }
@@ -515,7 +515,10 @@ fn tiles_apart(def: &vectorcraft_doc::PatternDef) -> bool {
 /// The extent `n` paints: a clipping group's clip path, else its visual bounds.
 fn painted_bounds(n: &Node) -> Option<Rect> {
     match &n.kind {
-        NodeKind::Group { children, clip: true } => children.first().and_then(|c| c.path_data()).map(|p| p.to_bezpath().bounding_box()),
+        NodeKind::Group { children, clip: true } => vectorcraft_doc::clipping_path_in(children)
+            .and_then(|k| children.get(k))
+            .and_then(|c| c.path_data())
+            .map(|p| p.to_bezpath().bounding_box()),
         _ => n.visual_bounds(),
     }
 }

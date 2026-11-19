@@ -72,6 +72,32 @@ fn a_layer_clipping_mask_underlines_its_clipping_path() {
     assert_eq!(underlines(&mut app), 0);
 }
 
+/// A clip group's clipping path is underlined wherever its row is: on top, where Make Clipping
+/// Mask leaves it, and between the art once moved there.
+#[test]
+fn a_clip_groups_clipping_path_row_is_underlined_wherever_it_is() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let run = |app: &mut VectorcraftApp, id: &str, p: serde_json::Value| app.session.execute(id, &p).unwrap();
+    run(&mut app, "file.new", json!({"width": 100, "height": 100}));
+    let rect = |app: &mut VectorcraftApp, x: u64, w: u64| {
+        run(app, "shape.rectangle", json!({"x": x, "y": x, "width": w, "height": w}))["id"].as_u64().unwrap()
+    };
+    let (art, small, mask) = (rect(&mut app, 0, 100), rect(&mut app, 40, 20), rect(&mut app, 25, 50));
+    run(&mut app, "select.set", json!({"ids": [art, small, mask]}));
+    run(&mut app, "object.clippingMask.make", json!({}));
+    run(&mut app, "select.none", json!({}));
+    expand(&mut app, &json!({})).unwrap();
+    // The rows inside the clip group, top down, each with whether it is underlined.
+    let members = |app: &VectorcraftApp| {
+        let st = app.session.active().unwrap();
+        let rows = list_rows(&st.doc, &st.layers_open, &PanelOptions::default(), "", &Filter::default());
+        rows.iter().skip(2).map(|r| (r.node.id.0, r.clip_path)).collect::<Vec<_>>()
+    };
+    assert_eq!(members(&app), [(mask, true), (small, false), (art, false)]);
+    run(&mut app, "layer.move", json!({"ids": [mask], "target": small, "place": "below"}));
+    assert_eq!(members(&app), [(small, false), (mask, true), (art, false)]);
+}
+
 /// One headless frame of the panel with `events` (Alt held when `alt`): the centres of the
 /// target circles, top row first, and the text-coloured line segments (underlines) drawn.
 fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>, alt: bool) -> (Vec<egui::Pos2>, usize) {

@@ -454,7 +454,9 @@ fn first_clip(d: &Document) -> Option<Node> {
         let NodeKind::Group { children, clip } = &n.kind else {
             return n.children().and_then(|ch| ch.iter().find_map(|c| find(c)));
         };
-        let first = children.first().filter(|f| *clip && matches!(f.kind, NodeKind::Path { clipping: true, .. }));
+        let first = vectorcraft_doc::clipping_path_in(children)
+            .and_then(|i| children.get(i))
+            .filter(|f| *clip && matches!(f.kind, NodeKind::Path { clipping: true, .. }));
         if let Some(mut inner) = children.iter().find_map(|c| find(c)) {
             if let Some(f) = first {
                 inner.insert(0, (**f).clone());

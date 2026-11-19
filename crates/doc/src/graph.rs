@@ -615,17 +615,18 @@ fn without_type(n: &crate::Node) -> (Option<Rect>, bool) {
     let mut bounds: Option<Rect> = None;
     let mut had_type = false;
     let mut clip_has_type = false;
+    let clip = matches!(n.kind, Group { clip: true, .. } | Layer { clip: true, .. });
+    let clip_at = if clip { crate::clipping_path_in(children) } else { None };
     let hidden_layer_member = |c: &crate::Node| !c.visible && matches!(n.kind, Layer { clip: false, .. });
     for (i, c) in children.iter().enumerate().filter(|(_, c)| !hidden_layer_member(c)) {
         let (b, t) = without_type(c);
         had_type |= t;
-        clip_has_type |= i == 0 && t;
+        clip_has_type |= Some(i) == clip_at && t;
         bounds = match (bounds, b) {
             (Some(a), Some(b)) => Some(a.union(b)),
             (a, b) => a.or(b),
         };
     }
-    let clip = matches!(n.kind, Group { clip: true, .. } | Layer { clip: true, .. });
     if had_type && (!clip || clip_has_type) { (bounds, true) } else { (n.geometric_bounds(), false) }
 }
 

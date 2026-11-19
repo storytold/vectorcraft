@@ -417,7 +417,7 @@ fn clipped_pf_leaves(d: &Document, n: &Node, clip: Option<&Arc<Clip>>, precision
     if !*clips {
         return children.iter().try_for_each(|c| clipped_pf_leaves(d, c, clip, precision, out));
     }
-    let Some((first, rest)) = children.split_first() else { return Ok(()) };
+    let Some((first, mut rest)) = vectorcraft_doc::split_clipping_path(children) else { return Ok(()) };
     let mut region = match vectorcraft_render::effects::clip_outline(first) {
         Some((outline, rule)) => Clip { path: PathData::from_bezpath(&outline), rule },
         None => Clip { path: PathData::default(), rule: FillRule::NonZero },
@@ -431,7 +431,7 @@ fn clipped_pf_leaves(d: &Document, n: &Node, clip: Option<&Arc<Clip>>, precision
         region = Clip { path, rule: FillRule::NonZero };
     }
     let region = Arc::new(region);
-    rest.iter().try_for_each(|c| clipped_pf_leaves(d, c, Some(&region), precision, out))
+    rest.try_for_each(|c| clipped_pf_leaves(d, c, Some(&region), precision, out))
 }
 
 /// `path`, filled by `rule`, where `clip` shows it: its area intersected with the region, filled
@@ -1666,11 +1666,11 @@ fn clean_up(s: &mut Session, p: &Value) -> Result<Value> {
     let found = {
         let d = &s.doc()?.doc;
         let mut v = vec![];
-        fn visit(n: &Node, parent_compound: bool, parent_clip: bool, first: bool, v: &mut Vec<NodeId>, opts: (bool, bool, bool)) {
+        fn visit(n: &Node, parent_compound: bool, parent_clip: bool, clip_path: bool, v: &mut Vec<NodeId>, opts: (bool, bool, bool)) {
             let (stray, unpainted, empty_text) = opts;
             match &n.kind {
                 NodeKind::Path { path, clipping, guide, .. } => {
-                    if *guide || *clipping || (parent_clip && first) {
+                    if *guide || *clipping || (parent_clip && clip_path) {
                         return;
                     }
                     if (stray && path.anchor_count() <= 1) || (unpainted && !parent_compound && !is_painted(&n.appearance)) {
@@ -1678,7 +1678,7 @@ fn clean_up(s: &mut Session, p: &Value) -> Result<Value> {
                     }
                 }
                 NodeKind::Compound { children, .. } => {
-                    if unpainted && !(parent_clip && first) && !is_painted(&n.appearance) {
+                    if unpainted && !(parent_clip && clip_path) && !is_painted(&n.appearance) {
                         v.push(n.id);
                         return;
                     }
@@ -1693,8 +1693,9 @@ fn clean_up(s: &mut Session, p: &Value) -> Result<Value> {
                     }
                 }
                 NodeKind::Group { children, clip } => {
+                    let clip_at = vectorcraft_doc::clipping_path_in(children);
                     for (i, c) in children.iter().enumerate() {
-                        visit(c, false, *clip, i == 0, v, opts);
+                        visit(c, false, *clip, clip_at == Some(i), v, opts);
                     }
                 }
                 _ => {}

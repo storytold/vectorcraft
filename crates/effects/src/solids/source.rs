@@ -218,7 +218,7 @@ impl Resolver<'_> {
                 Ok(self.list(&steps, depth + 1)?.0)
             }
             _ if n.clips() => {
-                let Some((first, rest)) = kids(n).split_first() else { return Ok(vec![]) };
+                let Some((first, rest)) = vectorcraft_doc::split_clipping_path(kids(n)) else { return Ok(vec![]) };
                 if clip_nested_past(first, MAX_DEPTH.saturating_sub(depth)) {
                     return Err(self.too_deep());
                 }
@@ -231,7 +231,8 @@ impl Resolver<'_> {
                 inner_shown.bounds = inner_shown.bounds.intersect(here);
                 inner_shown.clips.push(clip.clone());
                 self.shown = Some(inner_shown);
-                let listed = self.list(rest, depth + 1);
+                let rest: Vec<Arc<Node>> = rest.cloned().collect();
+                let listed = self.list(&rest, depth + 1);
                 self.shown = outer;
                 let (inner, _) = listed?;
                 let mut out = vec![];
@@ -461,7 +462,7 @@ fn nested_past(n: &Node, levels: usize) -> bool {
 }
 
 /// Does the clipping path `n` reach objects nested more than `levels` deep along the members that
-/// [`Node::clip_shapes`] visits: the first member of a clipping group, the shown members of other
+/// [`Node::clip_shapes`] visits: the clipping path of a clipping group, the shown members of other
 /// groups and layers (not a group's shaper), and every member of a live object. Walked without
 /// recursion.
 fn clip_nested_past(n: &Node, levels: usize) -> bool {
@@ -471,7 +472,9 @@ fn clip_nested_past(n: &Node, levels: usize) -> bool {
             return true;
         }
         match &n.kind {
-            NodeKind::Group { children, clip: true } => stack.extend(children.first().map(|c| (&**c, level + 1))),
+            NodeKind::Group { children, clip: true } => {
+                stack.extend(vectorcraft_doc::clipping_path_in(children).and_then(|k| children.get(k)).map(|c| (&**c, level + 1)))
+            }
             NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } => {
                 let skip = usize::from(n.extras().shaper.is_some());
                 stack.extend(children.iter().skip(skip).filter(|c| c.visible).map(|c| (&**c, level + 1)));
