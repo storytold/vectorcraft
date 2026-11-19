@@ -801,7 +801,7 @@ fn narrow_status_bars_preserve_the_message_and_hide_optional_readouts() {
     // The optional snapping controls reserve room too. Measure the same three readout stages
     // instead of fixing their thresholds to the former status-bar contents.
     let mut widths = [None; 3];
-    for width in (600..=1600).step_by(10).rev().map(|w| w as f32) {
+    for width in (600..=1600).rev().step_by(10).map(|w| w as f32) {
         let texts = status_readout_frame(&mut app, &ctx, width);
         let coords = texts.iter().any(|t| t.text.starts_with("X:"));
         let perf = texts.iter().any(|t| t.text.starts_with("render"));
@@ -5170,7 +5170,7 @@ fn review_8687_status_snapping_fits_full_menu_and_omitted_real_frames() {
     let mut origin = None;
     let mut info_origin = None;
     let zoom = crate::state::zoom_label(app.view().map(|v| v.zoom).unwrap_or(1.0), app.session.prefs.display_print_size);
-    for width in (400..=1600).step_by(10).rev().map(|w| w as f32) {
+    for width in (400..=1600).rev().step_by(10).map(|w| w as f32) {
         let (texts, nodes) = review_8687_frame(&mut app, &ctx, width);
         let direct: Vec<_> = ["Smart Guides", "Snap to Point", "Snap to Grid"]
             .into_iter()
