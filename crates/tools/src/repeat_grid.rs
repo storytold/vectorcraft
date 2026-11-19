@@ -392,4 +392,24 @@ mod tests {
         assert_eq!(cursor(&c, g.rows_at), Some(Cursor::ResizeV));
         assert_eq!(cursor(&c, g.corner_at), Some(Cursor::ResizeNwSe));
     }
+
+    #[test]
+    fn a_tool_switch_cancels_a_grid_handle_drag() {
+        use crate::{PointerEvent, PointerKind, Tool};
+        let (doc, selection) = grid();
+        let paint = paint();
+        let c = cx(&doc, &selection, &paint);
+        let g = GridHandles::of(&doc, &selection, crate::select::selection_box(&c), c.zoom).unwrap();
+        let mut t = crate::select::SelectionTool::default();
+        assert!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, g.rows_at.x, g.rows_at.y)).is_empty());
+        let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, g.rows_at.x, g.rows_at.y + 150.0));
+        assert!(preview(&a).is_some(), "{a:?}");
+        assert_eq!(t.deactivate(&c), vec![Action::Cancel]);
+        assert!(!t.busy());
+        // A press that has not changed the grid leaves nothing to cancel.
+        t.pointer(&c, &PointerEvent::new(PointerKind::Down, g.rows_at.x, g.rows_at.y));
+        assert!(t.busy());
+        assert!(t.deactivate(&c).is_empty());
+        assert!(!t.busy());
+    }
 }

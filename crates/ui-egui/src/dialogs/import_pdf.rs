@@ -297,7 +297,11 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     };
     match r {
         Ok(()) => {
-            app.ui.dialog = None;
+            // Opening may have asked something else (the profile of the document); only this
+            // dialog closes.
+            if app.ui.dialog.as_ref().is_some_and(|x| x.kind == KIND) {
+                app.ui.dialog = None;
+            }
             Ok(Value::Null)
         }
         Err(e) => {

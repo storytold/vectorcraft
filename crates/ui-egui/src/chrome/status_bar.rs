@@ -277,7 +277,7 @@ pub(super) fn clipped_label(ui: &mut Ui, text: impl Into<egui::WidgetText>) -> e
 }
 
 /// Show `text` on hover in a tooltip that wraps to fit inside the window.
-fn full_text_tooltip(response: egui::Response, text: impl Into<egui::WidgetText>) -> egui::Response {
+pub(super) fn full_text_tooltip(response: egui::Response, text: impl Into<egui::WidgetText>) -> egui::Response {
     let text = text.into();
     response.on_hover_ui(|ui| {
         let margins = ui.spacing().menu_margin.sum().x + 2.0 * ui.spacing().item_spacing.x;

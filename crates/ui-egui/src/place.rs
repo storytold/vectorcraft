@@ -742,8 +742,9 @@ pub fn drop_files(app: &mut VectorcraftApp, mut files: Vec<(DropTarget, DropFile
             }
             DropTarget::Open => match path.as_deref() {
                 Some(path) if app.services.read.is_some() => io::open_path(app, path).map(|_| ()),
-                _ => io::open_bytes(app, &name, &bytes, path.clone()).map(|_| {
-                    if let Some(path) = &path {
+                _ => io::open_bytes(app, &name, &bytes, path.clone()).map(|r| {
+                    // A document that asks a question first goes on the recent files once it opens.
+                    if let Some(path) = path.as_ref().filter(|_| !io::asks_first(&r)) {
                         io::note_recent(app, path);
                     }
                 }),
