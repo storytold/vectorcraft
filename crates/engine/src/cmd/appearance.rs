@@ -278,6 +278,28 @@ impl ItemTarget {
         }
     }
 
+    /// [`ItemTarget::targets`] of a fill (`fill`) or a stroke edit: on the topmost fill or stroke, a
+    /// Live Paint group stands for its faces in a fill edit and for its edges in a stroke edit
+    /// ([`super::paint::live_paint_parts_skipped`]).
+    pub(crate) fn targets_for(self, s: &Session, p: &Value, fill: bool) -> Result<Vec<NodeId>> {
+        Ok(self.targets_and_skipped(s, p, fill)?.0)
+    }
+
+    /// [`ItemTarget::targets_for`], and whether it left out any object inside a Live Paint group: a
+    /// group with no part of the edited kind was still given or selected, so the edit does not go
+    /// to new art.
+    pub(crate) fn targets_and_skipped(self, s: &Session, p: &Value, fill: bool) -> Result<(Vec<NodeId>, bool)> {
+        let mut ids = self.targets(s, p)?;
+        let mut skipped_any = false;
+        if self == ItemTarget::Top {
+            let skipped = super::paint::live_paint_parts_skipped(&s.doc()?.doc, &super::targets(s, p)?, fill);
+            let before = ids.len();
+            ids.retain(|id| !skipped.contains(id));
+            skipped_any = ids.len() != before;
+        }
+        Ok((ids, skipped_any))
+    }
+
     /// The target of a fill (`fill`) or stroke edit: the panel's active item stands only for edits
     /// of its own kind, so a fill row leaves stroke edits on the topmost stroke of the painted
     /// leaves (as without an active item) and vice versa. Explicit items are kept (and checked).
