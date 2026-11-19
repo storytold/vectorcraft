@@ -10602,7 +10602,6 @@ breakText	Glyphs	Glyphs
 	Concept to Vector	Concept naar vector
 	Concept to Vector…	Concept naar vector…
 	Cancel Concept to Vector Job	Taak Concept naar vector annuleren
-@msg	Concept to Vector results are not saved, so a recorded insert does not play again: generate again	Resultaten van Concept naar vector worden niet bewaard, dus een opgenomen invoeging wordt niet opnieuw afgespeeld: genereer ze opnieuw
 	Cancel Concept to Vector	Concept naar vector annuleren
 	Concept to Vector Providers	Aanbieders voor Concept naar vector
 	Concept to Vector Results	Resultaten van Concept naar vector
@@ -10624,7 +10623,8 @@ breakText	Glyphs	Glyphs
 @msg	`variations` must list different style ids of job {job}	`variations` moet verschillende stijl-id's van taak {job} bevatten
 @msg	a provider with the id `{id}` is registered already	er is al een aanbieder met de id `{id}` geregistreerd
 @msg	job {job} has no results to insert: it was canceled	taak {job} heeft geen resultaten om in te voegen: de taak is geannuleerd
-@msg	job {job} no longer applies: its document, image or image placement changed, so generate again	taak {job} geldt niet meer: het document, de afbeelding of de plaatsing van de afbeelding is gewijzigd, dus genereer opnieuw
+@msg	job {job} no longer applies: its document, image or image placement changed, so generate again	taak {job} geldt niet meer: het document, de afbeelding of de plaatsing van de afbeelding is gewijzigd, dus maak de resultaten opnieuw
+@msg	Concept to Vector results are not saved, so a recorded insert does not play again: generate again	Resultaten van Concept naar vector worden niet bewaard, dus een opgenomen invoeging wordt niet opnieuw afgespeeld: maak ze opnieuw
 @msg	missing `provider` (see conceptVector.providers)	`provider` ontbreekt (zie conceptVector.providers)
 @msg	no Concept to Vector job {job}: it was never made, or was dropped (see conceptVector.results)	geen taak {job} van Concept naar vector: de taak is nooit gemaakt of is verwijderd (zie conceptVector.results)
 @msg	no Concept to Vector provider `{name}` (see conceptVector.providers)	geen aanbieder `{name}` voor Concept naar vector (zie conceptVector.providers)
