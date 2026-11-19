@@ -439,14 +439,6 @@ fn extra_samples(d: &mut tiff::decoder::Decoder<Cursor<&[u8]>>) -> Vec<u16> {
     d.find_tag_unsigned_vec::<u16>(tiff::tags::Tag::ExtraSamples).ok().flatten().unwrap_or_default()
 }
 
-/// Does `kind`, the color type of the TIFF `d` reads, hold inks that Open and Place keep: CMYK of 8
-/// or 16 bits, with no extra sample that the file names as alpha? The decoder gives a CMYK color
-/// type to a file whose alpha follows another extra sample. [`ImageBlob::cmyk`] reads the inks of
-/// such a file all the same: a document saved with one as a CMYK image keeps it.
-fn cmyk_inks(kind: tiff::ColorType, d: &mut tiff::decoder::Decoder<Cursor<&[u8]>>) -> bool {
-    matches!(kind, tiff::ColorType::CMYK(8 | 16)) && !extra_samples(d).iter().any(|e| matches!(e, 1 | 2))
-}
-
 /// Most samples a pixel of a TIFF is read with, its color and extra samples included, as the
 /// file's SamplesPerPixel counts them: VectorCraft's own limit.
 const MAX_EXTRA_SAMPLES_PIXEL: usize = 64;
@@ -673,19 +665,29 @@ struct CmykSource {
 
 /// The samples of CMYK TIFF `bytes` (8 or 16 bits), their inks together or one plane per ink, with
 /// the TIFF's CMYK ICC profile; `None` for other images, CMYK ones with alpha, ones larger than
-/// [`MAX_CMYK_PIXELS`], and, before any decoding, ones with more than [`MAX_EXTRA_SAMPLES_PIXEL`]
-/// samples a pixel (their SamplesPerPixel), ones whose samples aren't unsigned integers (a
-/// SampleFormat other than 1) and ones whose samples with the row the decoder reads each strip or
-/// tile into ([`row_buffer`]) take more than [`crate::MAX_RASTER_ALLOC`].
+/// [`MAX_CMYK_PIXELS`], truncated ones, and ones whose samples take more than
+/// [`crate::MAX_RASTER_ALLOC`].
 fn tiff_source(bytes: &[u8]) -> Option<CmykSource> {
-    let (kind, mut d) = tiff(bytes)?;
-    if !cmyk_inks(kind, &mut d) {
+    if !is_tiff(bytes) || oversized_tiff(bytes).is_some() {
         return None;
     }
-    let (width, height) = d.dimensions().ok()?;
-    let n = usize::try_from(pixels(width, height)?).ok()?;
-    let icc = cmyk_icc(tiff_icc(&mut d));
-    let samples = read_samples_at_depth(&mut d, n, 4)?;
+    let limits =
+        craft_image_codecs::Limits { max_pixels: MAX_CMYK_PIXELS, max_alloc: crate::MAX_RASTER_ALLOC, ..craft_image_codecs::Limits::default() };
+    let opts = craft_image_codecs::DecodeOptions { limits, keep_orientation: true };
+    let img = craft_image_codecs::decode_as_with(craft_image_codecs::Format::Tiff, bytes, &opts).ok()?;
+    if img.layout() != craft_image_codecs::ChannelLayout::Cmyk
+        || img.warnings.iter().any(|w| matches!(w, craft_image_codecs::DecodeWarning::Truncated))
+    {
+        return None;
+    }
+    let (width, height) = img.dimensions();
+    pixels(width, height)?;
+    let icc = cmyk_icc(img.icc.clone()).filter(|p| p.len() <= MAX_TIFF_ICC as usize);
+    let samples = match img.sample_type() {
+        craft_image_codecs::SampleType::U8 => Samples::Eight(img.into_data()),
+        craft_image_codecs::SampleType::U16 => Samples::Sixteen(img.to_u16_samples()?),
+        _ => return None,
+    };
     Some(CmykSource { width, height, samples, icc })
 }
 
@@ -700,57 +702,25 @@ fn jpeg_source(bytes: &[u8]) -> Option<CmykSource> {
 /// above 0, and carrying `icc` as tag 34675 (ICCProfile, of type UNDEFINED); `None` when it can't be
 /// written.
 fn write_cmyk_tiff(width: u32, height: u32, samples: SampleSlice<'_>, ppi: Option<(f64, f64)>, icc: Option<&[u8]>) -> Option<Vec<u8>> {
-    use tiff::encoder::colortype::{CMYK8, CMYK16, ColorType};
-    use tiff::encoder::{Compression, ImageEncoder, Rational, TiffEncoder, TiffKind, compression::DeflateLevel};
-    use tiff::tags::{ResolutionUnit, Tag};
-    fn tags<W: std::io::Write + std::io::Seek, C: ColorType, K: TiffKind>(
-        img: &mut ImageEncoder<'_, W, C, K>,
-        ppi: Option<(f64, f64)>,
-        icc: Option<&[u8]>,
-    ) -> Option<()> {
-        if let Some((x, y)) = ppi.filter(|(x, y)| [x, y].iter().all(|v| v.is_finite() && **v > 0.0)) {
-            // Ten-thousandths of a pixel per inch.
-            let r = |v: f64| Rational { n: (v * 10_000.0).round() as u32, d: 10_000 };
-            img.encoder().write_tag(Tag::XResolution, r(x)).ok()?;
-            img.encoder().write_tag(Tag::YResolution, r(y)).ok()?;
-            img.encoder().write_tag(Tag::ResolutionUnit, ResolutionUnit::Inch).ok()?;
-        }
-        if let Some(icc) = icc {
-            img.encoder().write_tag(Tag::IccProfile, Undefined(icc)).ok()?;
-        }
-        Some(())
-    }
-    let mut out = Cursor::new(Vec::new());
-    let mut enc = TiffEncoder::new(&mut out).ok()?.with_compression(Compression::Deflate(DeflateLevel::Balanced));
-    match samples {
-        SampleSlice::Eight(data) => {
-            let mut img = enc.new_image::<CMYK8>(width, height).ok()?;
-            tags(&mut img, ppi, icc)?;
-            img.write_data(data).ok()?;
-        }
-        SampleSlice::Sixteen(data) => {
-            let mut img = enc.new_image::<CMYK16>(width, height).ok()?;
-            tags(&mut img, ppi, icc)?;
-            img.write_data(data).ok()?;
-        }
-    }
-    Some(out.into_inner())
-}
-
-/// Bytes written as a TIFF field of type UNDEFINED, the type of an embedded ICC profile.
-struct Undefined<'a>(&'a [u8]);
-
-impl tiff::encoder::TiffValue for Undefined<'_> {
-    const BYTE_LEN: u8 = 1;
-    const FIELD_TYPE: tiff::tags::Type = tiff::tags::Type::UNDEFINED;
-
-    fn count(&self) -> usize {
-        self.0.len()
-    }
-
-    fn data(&self) -> std::borrow::Cow<'_, [u8]> {
-        std::borrow::Cow::Borrowed(self.0)
-    }
+    use craft_image_codecs::{ChannelLayout, EncodeOptions, Format, Image, SampleType, TiffCompression, encode_as_with};
+    let (sample_type, data) = match samples {
+        SampleSlice::Eight(data) => (SampleType::U8, data.to_vec()),
+        SampleSlice::Sixteen(data) => (SampleType::U16, data.iter().flat_map(|s| s.to_ne_bytes()).collect()),
+    };
+    let mut img = Image::new(width, height, ChannelLayout::Cmyk, sample_type, data).ok()?;
+    img.icc = icc.map(<[u8]>::to_vec);
+    let dpi = ppi
+        .filter(|(x, y)| [x, y].iter().all(|v| v.is_finite() && **v > 0.0))
+        .map(|(x, y)| (x as f32, y as f32))
+        .filter(|(x, y)| *x > 0.0 && *y > 0.0);
+    img.meta.dpi = dpi;
+    let opts = EncodeOptions {
+        tiff_compression: TiffCompression::Deflate,
+        embed_icc: icc.is_some(),
+        embed_metadata: dpi.is_some(),
+        ..EncodeOptions::default()
+    };
+    encode_as_with(Format::Tiff, &img, &opts).ok()
 }
 
 impl ImageBlob {
@@ -880,6 +850,15 @@ fn jpeg_inks(bytes: &[u8]) -> Option<Inks> {
 /// aren't unsigned integers, or samples that with the decoder's row take more than
 /// [`crate::MAX_RASTER_ALLOC`].
 fn tiff_inks(bytes: &[u8]) -> Option<Inks> {
+    if let Some(source) = tiff_source(bytes) {
+        let data = match source.samples {
+            Samples::Eight(v) => v,
+            Samples::Sixteen(v) => v.into_iter().map(|s| u8::try_from((u32::from(s) + 128) / 257).unwrap_or(u8::MAX)).collect(),
+        };
+        return Inks::new(source.width, source.height, data);
+    }
+    // A CMYK TIFF whose alpha follows another extra sample (e.g. ExtraSamples [0, 1]) is given
+    // ColorType::CMYK by the `tiff` crate, so ImageBlob::is_cmyk() is true and its inks are kept.
     let (kind, mut d) = tiff(bytes)?;
     let (w, h) = d.dimensions().ok()?;
     if !matches!(kind, tiff::ColorType::CMYK(8 | 16)) {
