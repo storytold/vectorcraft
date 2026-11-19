@@ -598,6 +598,28 @@ fn several_lines_become_one_area_type_object() {
 }
 
 #[test]
+fn lines_a_quarter_of_the_size_apart_join_and_closer_ones_do_not() {
+    // At 20 pt, 5 pt is the least leading that joins lines.
+    // 4.9999999 pt is 5 pt to the rounding of the outlines' positions.
+    for (leading, objects) in [(5.0, 1), (4.9999999, 1), (4.9, 2)] {
+        let mut s = session();
+        let text = "One\nTwo";
+        let (_, r) = retyped(&mut s, json!({"x": 40, "y": 100, "text": text, "size": 20}), &[json!({"leading": leading})]);
+        assert_eq!(r["texts"].as_array().unwrap().len(), objects, "{leading}: {r}");
+    }
+}
+
+#[test]
+fn a_two_glyph_line_takes_the_tracking_of_the_lines_around_it() {
+    let mut s = session();
+    let text = "MMM\nMM\nMMM";
+    let (before, r) = retyped(&mut s, json!({"x": 40, "y": 100, "text": text, "size": 24}), &[json!({"tracking": 50})]);
+    assert_eq!(r["texts"], json!([text]), "{r}");
+    assert_eq!(r["fonts"][0]["tracking"], json!(50.0), "{r}");
+    assert_same_places(&before, &text_of(&s, r["ids"][0].as_u64().unwrap()));
+}
+
+#[test]
 fn lines_keep_their_leading_and_alignment() {
     for justify in ["left", "center", "right"] {
         let mut s = session();

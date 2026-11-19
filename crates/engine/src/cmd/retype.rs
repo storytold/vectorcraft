@@ -821,7 +821,8 @@ impl Block {
         let n = self.lines.len() as f64;
         // The mean distance between the baselines so far, which this line's must continue.
         let leading = if self.lines.len() == 1 { down } else { self.leading };
-        if !(leading > size * 0.25 && leading <= size * MAX_LEADING) || (down - n * leading).abs() > tol {
+        // A quarter of the size is the least leading; the outlines' positions are rounded.
+        if !(leading >= size * 0.25 * (1.0 - 1e-6) && leading <= size * MAX_LEADING) || (down - n * leading).abs() > tol {
             return Some(l);
         }
         let leading = down / n;
@@ -932,6 +933,32 @@ impl Block {
             opacity: first.opacity,
             blend: first.blend,
         }]
+    }
+}
+
+/// A line of two untracked glyphs has one gap, too few to measure a tracking by
+/// ([`Line::tracked`]). It is set at the tracking of the nearest tracked line of the same font,
+/// size and turn, so the layout check ([`verified`]) tries it as that line is set: the check falls
+/// back to the line untracked, and then splits it, when the pair is not spaced so. A pair that
+/// untracked type already draws in place keeps its text, and negative tracking goes only to a pair
+/// that paints the same as one object ([`paints_as_one`]).
+fn share_tracking(lines: &mut [Line], system_layout: bool) {
+    for i in 0..lines.len() {
+        let Some(l) = lines.get(i).filter(|l| l.pieces.len() == 2 && l.tracking == 0.0) else { continue };
+        if l.first_mismatch(&l.probe(system_layout)).is_none() {
+            continue;
+        }
+        let like = |o: &Line| {
+            o.tracking != 0.0
+                && o.parent == l.parent
+                && o.face.id() == l.face.id()
+                && (o.scale - l.scale).abs() <= l.scale * 1e-4
+                && ((o.angle - l.angle + PI).rem_euclid(TAU) - PI).abs() < 1e-5
+        };
+        let nearest = lines.iter().enumerate().filter(|(_, o)| like(o)).min_by_key(|(j, _)| j.abs_diff(i)).map(|(_, o)| o.tracking);
+        if let Some(p) = nearest.filter(|t| *t > 0.0 || paints_as_one(l)).and_then(|t| l.respaced(0, 2, t)) {
+            lines[i] = p;
+        }
     }
 }
 
@@ -1147,7 +1174,8 @@ fn retype(s: &mut Session, p: &Value) -> Result<Value> {
         // glyphs), so every line has what its measure can take.
         let mut budget =
             lines.iter().map(|l| l.text.chars().count().saturating_add(l.pieces.len().saturating_mul(393))).fold(256usize, usize::saturating_add);
-        let lines = lines.into_iter().map(|l| l.tracked(system_layout, &mut budget)).collect();
+        let mut lines: Vec<Line> = lines.into_iter().map(|l| l.tracked(system_layout, &mut budget)).collect();
+        share_tracking(&mut lines, system_layout);
         let mut lines = verified(lines, system_layout, &mut unmatched);
         if pieces.len() > 1 {
             lines.retain(|l| {

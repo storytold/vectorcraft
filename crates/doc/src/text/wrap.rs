@@ -7,6 +7,12 @@ use vectorcraft_geom::{PathData, shapes};
 use super::{TextKind, TextObject, WrapShape};
 use crate::{Document, Node, NodeId, NodeKind};
 
+#[cfg(test)]
+thread_local! {
+    /// How many wrap outlines [`each_text`] has made on this thread (for tests).
+    pub(super) static OUTLINES_MADE: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// Outline of a wrap object in document coordinates: its paths, or its bounds for other art.
 fn outline(n: &Node, out: &mut PathData) {
     match &n.kind {
@@ -133,9 +139,15 @@ fn each_text<'a>(layer: &'a Node, mut f: impl FnMut(&'a Node, &[(&'a Node, WrapS
     let mut items = vec![];
     collect(layer, &mut items);
     let mut above: Vec<(&Node, WrapShape)> = vec![];
-    for it in items.iter().rev() {
+    // A wrap object below every area text object of the layer wraps none of them: its outline is
+    // not made.
+    let first_text = items.iter().position(|it| matches!(it, Item::Text(_)));
+    for (i, it) in items.iter().enumerate().rev() {
         match it {
+            Item::Wrap(_) if first_text.is_none_or(|t| i < t) => {}
             Item::Wrap(n) => {
+                #[cfg(test)]
+                OUTLINES_MADE.with(|c| c.set(c.get() + 1));
                 let mut pd = PathData::default();
                 outline(n, &mut pd);
                 if !pd.is_empty() {
