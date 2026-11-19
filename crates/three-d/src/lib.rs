@@ -478,6 +478,15 @@ fn surface_span(sweep: f64, edge: Edge) -> f64 {
     }
 }
 
+/// Where the four corners of the quad that the profile's edge from `a` to `b` sweeps in one step
+/// about `axis` lie on the side surface ([`SurfaceCell`]), in the quad's order (`a`, `b`, then `b`
+/// and `a` one step on): y is `along`, the surface y of each end of the edge, and x is the step's
+/// surface angle at each end, `angle`, times the corner's own distance from the axis.
+fn surface_corners(a: Point, b: Point, axis: f64, [va, vb]: [f64; 2], [t0, t1]: [f64; 2]) -> [Point; 4] {
+    let (ra, rb) = ((a.x - axis).abs(), (b.x - axis).abs());
+    [Point::new(t0 * ra, va), Point::new(t0 * rb, vb), Point::new(t1 * rb, vb), Point::new(t1 * ra, va)]
+}
+
 /// The surface y ([`SurfaceCell`]) of each end of each piece of a contour's profile `profile`
 /// about `axis`: the length along the profile from its middle, counted from just after the
 /// pieces that lie on the axis (which sweep no surface and add no length) on a closed contour.
@@ -1077,12 +1086,7 @@ fn keep_profile(
             let (dr, dy) = ((b.x - a.x) * turn, (b.y - a.y) * turn);
             let (sin, cos) = (at.sweep * (j as f64 + 0.5) / steps as f64).sin_cos();
             // The corners on the side surface, as the drawn faces place them.
-            let uv = surface.map(|(along, angle)| {
-                let [va, vb] = along.get(i).copied().unwrap_or_default();
-                let [t0, t1] = angle(j);
-                let (ra, rb) = ((a.x - at.axis).abs(), (b.x - at.axis).abs());
-                [Point::new(t0 * ra, va), Point::new(t0 * rb, vb), Point::new(t1 * rb, vb), Point::new(t1 * ra, va)]
-            });
+            let uv = surface.map(|(along, angle)| surface_corners(*a, *b, at.axis, along.get(i).copied().unwrap_or_default(), angle(j)));
             keep(vec![v0, v1, v2, v3], o.rotate(V3(dy * cos, -dr, dy * sin)), uv)?;
         }
     }
@@ -1600,7 +1604,7 @@ fn revolve_sweep(
         for (i, ((pair, [ta, tb]), hole)) in profile.windows(2).zip(drawn.tangents.iter().copied()).zip(drawn.holes.iter().copied()).enumerate() {
             let [a, b] = pair else { continue };
             let turn = if hole { -turn } else { turn };
-            let [va, vb] = along.get(i).copied().unwrap_or_default();
+            let ends = along.get(i).copied().unwrap_or_default();
             if ![a.x, a.y, b.x, b.y].iter().all(|v| v.is_finite() && v.abs() <= 1e8) {
                 return Err("Revolve profile contains invalid coordinates".into());
             }
@@ -1610,10 +1614,7 @@ fn revolve_sweep(
                 let last = (i + 2 == profile.len()).then(|| rings.last().and_then(Option::as_ref).and_then(|r| r.arcs.get(j))).flatten();
                 // Where the corners lie on the unrolled side surface, and whether the face shows
                 // its outside: the edge's outward normal swept to the middle of the step.
-                // x is the angle times the corner's own distance from the axis.
-                let [t0, t1] = surface_angle(j);
-                let (ra, rb) = ((a.x - axis).abs(), (b.x - axis).abs());
-                let corners = [Point::new(t0 * ra, va), Point::new(t0 * rb, vb), Point::new(t1 * rb, vb), Point::new(t1 * ra, va)];
+                let corners = surface_corners(*a, *b, axis, ends, surface_angle(j));
                 let on_surface = surface_contour == Some(contour);
                 let outward = {
                     let (dr, dy) = ((b.x - a.x) * turn, (b.y - a.y) * turn);
