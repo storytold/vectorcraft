@@ -109,9 +109,17 @@ impl TestDirectory {
         static NEXT: AtomicUsize = AtomicUsize::new(0);
         let base = PathBuf::from(env!("CARGO_TARGET_TMPDIR"));
         std::fs::create_dir_all(&base).unwrap();
-        let dir = base.join(format!("vc-swatch-defaults-{}-{}", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed)));
-        std::fs::create_dir(&dir).unwrap();
-        Self(dir)
+        // Interrupted earlier runs may leave a PID/counter name behind. Retry only collisions;
+        // never remove a directory this attempt did not create.
+        for _ in 0..64 {
+            let dir = base.join(format!("vc-swatch-defaults-{}-{}", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed)));
+            match std::fs::create_dir(&dir) {
+                Ok(()) => return Self(dir),
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+                Err(error) => panic!("CONTROL: create this test's unique directory: {error}"),
+            }
+        }
+        panic!("CONTROL: no unused test directory after 64 attempts")
     }
 }
 
@@ -301,7 +309,7 @@ fn assert_removed(paint: &Paint) {
     assert_eq!(*color, Color::rgb(0.1, 0.7, 0.2).tinted(0.7), "unlink retains its cached color");
 }
 
-fn assert_resources(doc: &Document, bytes: &[u8], profile: &Document) {
+fn assert_resources(doc: &Document, bytes: &[u8], profile: &Document, source: &Document) {
     let Paint::Pattern { pattern, .. } = &doc.swatch("Dots").unwrap().paint else { panic!("saved pattern absent") };
     assert_ne!(pattern, "Dots", "a different existing profile pattern is not overwritten");
     let retained = doc.pattern("Dots").unwrap();
@@ -354,13 +362,29 @@ fn assert_resources(doc: &Document, bytes: &[u8], profile: &Document) {
     for name in symbol_names {
         assert_ne!(name, "Badge");
         assert!(doc.symbols.iter().any(|s| s.name == name));
+        review_598487_badge_definition(doc, &name, source);
     }
+    review_598487_badge_definition(doc, "Badge", profile);
     for id in styles {
         assert_ne!(id, 7);
         assert!(doc.graphic_styles.iter().any(|s| s.id == id));
     }
     let mut ids = HashSet::new();
     doc.visit_stored(|node, _| assert!(ids.insert(node.id), "stored node IDs remain unique"));
+}
+
+/// This fixture's Badge is one path: only its imported name and root ID may change.
+fn review_598487_badge_definition(doc: &Document, name: &str, source: &Document) {
+    let actual = doc.symbols.iter().find(|s| s.name == name).unwrap();
+    let mut expected = source.symbols.iter().find(|s| s.name == "Badge").unwrap().clone();
+    assert!(matches!(&expected.art.kind, NodeKind::Path(_)), "CONTROL: the source Badge is one path");
+    expected.name = name.to_string();
+    Arc::make_mut(&mut expected.art).id = actual.art.id;
+    assert_eq!(actual, &expected, "Badge geometry, paint and dynamic option survive the supported ID/name remap");
+    assert_eq!(doc.symbol_registration(name), source.symbol_registration("Badge"));
+    assert_eq!(doc.symbol_export_type(name), source.symbol_export_type("Badge"));
+    assert_eq!(doc.symbol_nine_slice(name), source.symbol_nine_slice("Badge"));
+    assert_eq!(doc.symbol_pixel_aligned(name), source.symbol_pixel_aligned("Badge"));
 }
 
 #[test]
@@ -400,7 +424,7 @@ fn default_swatches_full_resources_replace_customized_category_after_restart() {
     assert_eq!(result["profile"], "Print", "the customized category actually participates");
     let d = &target.doc().unwrap().doc;
     assert_palette(d, &before);
-    assert_resources(d, &bytes, &profile);
+    assert_resources(d, &bytes, &profile, &before);
     assert_eq!(d.ruler_origin, profile.ruler_origin);
     assert_eq!(d.spot_use_lab, profile.spot_use_lab);
     assert_eq!(d.color_profiles, profile.color_profiles, "assigned profile settings survive palette replacement");
@@ -1838,10 +1862,10 @@ fn review_598379_reset_recovery(s: &mut Session, params: &serde_json::Value) {
     assert_eq!(&*d.swatch_groups, &groups);
 }
 
-/// One ordinary 512px image supplies more than the inline budget without a large node graph.
+/// A modest embedded image crosses the encoded budget while its native source stays below it.
 fn review_598379_image_palette() -> Document {
     let mut random = 0x6d2b_79f5u32;
-    let pixels = image::RgbaImage::from_fn(512, 512, |_, _| {
+    let pixels = image::RgbaImage::from_fn(448, 448, |_, _| {
         random ^= random << 13;
         random ^= random >> 17;
         random ^= random << 5;
@@ -1851,14 +1875,15 @@ fn review_598379_image_palette() -> Document {
     image::DynamicImage::ImageRgba8(pixels).write_to(&mut out, image::ImageFormat::Png).unwrap();
     let bytes = out.into_inner();
     let decoded = image::load_from_memory(&bytes).unwrap();
-    assert_eq!((decoded.width(), decoded.height()), (512, 512), "CONTROL: valid ordinary PNG image");
-    assert!(bytes.len() > 1024 * 1024, "CONTROL: the lossless image alone exceeds the encoded preference budget");
+    assert_eq!((decoded.width(), decoded.height()), (448, 448), "CONTROL: valid ordinary PNG image");
+    assert!(bytes.len() < 1024 * 1024, "CONTROL: decoded image bytes are below the preference budget");
+    assert!(vectorcraft_format::base64_encode(&bytes).len() > 1024 * 1024, "CONTROL: encoding this image alone crosses the budget");
     let mut d = raw_palette();
     d.images.insert("pixels".into(), ImageBlob { mime: "image/png".into(), bytes: Arc::new(bytes), proxy: None });
     let mut image = image_node(&mut d, None);
     let NodeKind::Image(im) = &mut image.kind else { panic!("image fixture") };
-    im.width = 512;
-    im.height = 512;
+    im.width = 448;
+    im.height = 448;
     d.patterns.push(PatternDef::new("Inline budget image", vec![Arc::new(image)]));
     d.swatches.push(Swatch {
         name: "Inline budget image".into(),
@@ -1867,6 +1892,13 @@ fn review_598379_image_palette() -> Document {
         spot: false,
     });
     d.fix_next_id();
+    // This public serialization measures the source document, not the private captured capsule.
+    // A companion swatchdefaults unit case checks the actual capture boundary directly.
+    let native =
+        vectorcraft_format::save_with(&d, &vectorcraft_format::SaveOptions { include_linked: true, precision: None, ..Default::default() }).unwrap();
+    assert!(native.len() < 1024 * 1024, "CONTROL: the valid native source is below the decoded-byte budget");
+    assert!(vectorcraft_format::base64_encode(&native).len() > 1024 * 1024, "CONTROL: its encoded representation exceeds the budget");
+    assert!(vectorcraft_format::load_file(&native).is_ok(), "CONTROL: the below-limit native source is readable");
     d
 }
 

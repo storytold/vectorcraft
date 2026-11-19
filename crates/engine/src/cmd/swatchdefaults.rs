@@ -407,3 +407,69 @@ pub(crate) fn apply(d: &mut Document, defaults: &SavedSwatchDefaults) -> Result<
     *d = next;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Cursor;
+    use vectorcraft_doc::{ImageBlob, ImageObject, PatternDef};
+    use vectorcraft_geom::Affine;
+
+    fn review_598487_image_palette() -> Document {
+        let mut random = 0x6d2b_79f5u32;
+        let pixels = image::RgbaImage::from_fn(448, 448, |_, _| {
+            random ^= random << 13;
+            random ^= random >> 17;
+            random ^= random << 5;
+            image::Rgba(random.to_le_bytes())
+        });
+        let mut out = Cursor::new(Vec::new());
+        image::DynamicImage::ImageRgba8(pixels).write_to(&mut out, image::ImageFormat::Png).unwrap();
+        let bytes = out.into_inner();
+        let mut d = Document::new(1.0, 1.0);
+        d.images.insert("pixels".into(), ImageBlob { mime: "image/png".into(), bytes: Arc::new(bytes), proxy: None });
+        let image = Node::new(
+            d.alloc_id(),
+            NodeKind::Image(Box::new(ImageObject {
+                key: "pixels".into(),
+                width: 448,
+                height: 448,
+                xf: Affine::IDENTITY,
+                link: None,
+                placement: Default::default(),
+                pixels: None,
+            })),
+        );
+        d.patterns.push(PatternDef::new("Inline budget image", vec![Arc::new(image)]));
+        d.swatches.push(Swatch {
+            name: "Inline budget image".into(),
+            paint: Paint::Pattern { pattern: "Inline budget image".into(), xf: Affine::IDENTITY },
+            global: false,
+            spot: false,
+        });
+        d.fix_next_id();
+        d
+    }
+
+    #[test]
+    fn review_598487_encoded_limit_uses_actual_capsule_bytes() {
+        if !crate::tests::in_own_process("cmd::swatchdefaults::tests::review_598487_encoded_limit_uses_actual_capsule_bytes") {
+            return;
+        }
+        let mut s = Session::new();
+        s.add_document(Document::new(1.0, 1.0), None);
+        s.execute("swatch.defaults.save", &json!({})).unwrap();
+        let previous = s.prefs.to_json();
+        assert!(previous["defaultSwatches"]["data"].as_str().unwrap().len() < 1024 * 1024, "CONTROL: an ordinary palette saves");
+        s.add_document(review_598487_image_palette(), None);
+        let encoded = capture(&s).unwrap();
+        let native = vectorcraft_format::base64_decode(&encoded).unwrap();
+        assert!(native.len() < 1024 * 1024, "the actual captured native palette stays below the decoded-byte limit: {}", native.len());
+        assert!(encoded.len() > 1024 * 1024, "the actual encoded capture exceeds the preference limit: {}", encoded.len());
+        let capsule = vectorcraft_format::load_file(&native).unwrap();
+        assert!(capsule.doc.pattern("Inline budget image").is_some(), "CONTROL: actual capture contains the embedded pattern");
+        let error = s.execute("swatch.defaults.save", &json!({})).unwrap_err().to_string();
+        assert!(error.contains("1048576 encoded bytes") && error.contains("previous default palette was kept"), "{error}");
+        assert_eq!(s.prefs.to_json(), previous, "encoded-limit rejection preserves the previous successful choice");
+    }
+}

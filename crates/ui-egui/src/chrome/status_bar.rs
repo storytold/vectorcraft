@@ -481,12 +481,30 @@ fn notes_popup(response: &egui::Response, text: &str, notes: &[String]) {
             .max_height((screen.height() - margins.y).max(0.0))
             .auto_shrink([false, true])
             .show(ui, |ui| {
-                let lang = crate::i18n::current();
-                for note in notes {
-                    ui.add(egui::Label::new(format!("• {}", crate::i18n::message(lang, note))).wrap());
+                if notes.is_empty() {
+                    ui.add(egui::Label::new(text).wrap());
+                } else {
+                    let lang = crate::i18n::current();
+                    for note in notes {
+                        ui.add(egui::Label::new(format!("• {}", crate::i18n::message(lang, note))).wrap());
+                    }
                 }
             });
     });
+}
+
+/// A long plain message (including an all-skipped Place error) uses the same full viewer.
+fn full_message_popup(response: egui::Response, text: String) {
+    let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
+    response.widget_info(|| {
+        let mut info = egui::WidgetInfo::labeled(egui::Role::Button, true, tl!("Click to view the full message"));
+        info.current_text_value = Some(text.clone());
+        info
+    });
+    notes_popup(&response, &text, &[]);
+    if response.hovered() {
+        full_text_tooltip(response, text);
+    }
 }
 
 fn full_notes_value(text: &str, notes: &[String]) -> String {
@@ -516,9 +534,14 @@ fn status_field_with_notes(ui: &mut Ui, id: &str, rect: egui::Rect, text: String
     let at = egui::pos2(rect.left(), rect.center().y - galley.size().y / 2.0);
     let elided = galley.elided;
     ui.painter().with_clip_rect(ui.clip_rect().intersect(rect)).galley(at, galley, color);
-    let sense = if notes.is_empty() { Sense::hover() } else { Sense::click() };
+    let full_message = id == "message" && elided;
+    let sense = if notes.is_empty() && !full_message { Sense::hover() } else { Sense::click() };
     let response = ui.interact(rect, ui.scope_id().with(("status-field", id)), sense);
     if notes.is_empty() {
+        if full_message {
+            full_message_popup(response, text);
+            return;
+        }
         response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, &text));
         if elided {
             full_text_tooltip(response, text);
