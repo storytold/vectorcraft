@@ -81,6 +81,7 @@ pub use tool_overlays::{HiddenChars, SpellingMarks};
 use tool_overlays::{
     grid_repeat_overlay, hidden_chars_overlay, live_paint_gap_overlays, mirror_axis_overlay, nine_slice_overlay, original_path_overlay,
     print_tiling_overlay, radial_repeat_overlay, rotate_view_dial, shaper_widget_overlay, slice_overlay, spelling_overlay, thread_overlays,
+    trace_split_overlay,
 };
 pub(crate) use view::animated_zoom;
 pub(crate) use view::drag_rotation;
@@ -250,6 +251,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // The meshes of the tools' shared paths. Likewise, a frame that does not draw the tools'
     // overlays drops them.
     let mut shared_paths = std::mem::take(&mut app.canvas.shared_paths);
+    let sampler_cancelled = crate::panels::image_trace::refresh_ignore_sampler(app);
     // A release ends the Image Trace panel's eye-button hold, also when the panel is no longer
     // drawn, so a later press elsewhere does not show the source image.
     if app.ui.trace_hold_source.is_some() && !ui.input(|i| i.pointer.any_down()) {
@@ -262,7 +264,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if app.ui.home.is_some_and(|k| k != crate::menus::home_key(app)) {
         app.ui.home = None;
     }
-    if crate::menus::home_showing(app) {
+    let home_showing = crate::menus::home_showing(app);
+    observe_hidden_ignore_sampler_pointer(app, ui, home_showing);
+    if home_showing {
         // No IME owner this pass (`ime_caret_rect` stays None): the end-of-pass observation marks
         // the context absent and keeps any marked text as typed.
         home(app, ui, full);
@@ -297,7 +301,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         scroll_bars(app, ui, rect, outer, &t);
     }
     let resp = ui.interact(rect, egui::Id::unique("canvas"), Sense::click_and_drag());
-    canvas_input(app, ui, &resp, rect);
+    input_after_sampler_refresh(app, ui, &resp, rect, sampler_cancelled);
     let v = *app.view().unwrap_or(&View::default());
     let xf = Xf::at(rect, &v, app.canvas_ui_zoom);
     // While the view pans, zooms or turns under the pointer, the art under it isn't hit-tested.
@@ -426,7 +430,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         draw_overlays(&painter, &xf, &overlays, &t, HandleLook::of(&app.session.prefs), &mut shared_paths);
         app.canvas.shared_paths = shared_paths;
         crate::panels::tabs::paint_stop_guide(app, &painter, &xf);
-        overlay_hover_text(ui, &xf, &overlays, ui.data(|d| d.get_temp::<Drag>(drag_id())).is_some());
+        // The tooltips say what a click does, so none shows where the click does something else:
+        // while Space lends a view tool, or over an artboard's name.
+        let space = ui.input(|i| drag::space_lends_view_tools(app, i.modifiers, i.key_down(egui::Key::Space)));
+        let quiet = space || ui.data(|d| d.get_temp::<Drag>(drag_id())).is_some();
+        overlay_hover_text(ui, &xf, &overlays, quiet, |p| artboards::artboard_name_at(app, ui, &xf, p).is_some());
         if !revolve_edit {
             shaper_widget_overlay(app, &painter, &xf);
             crate::panels::three_d::paint_graphic_handles(app, &painter, &xf);
@@ -463,6 +471,272 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if resp.hovered() {
         canvas_cursor(app, ui, view_info, hover_still);
     }
+}
+
+#[derive(Clone, Copy, Default)]
+struct CanvasClick {
+    count: u8,
+    at: Option<Pos2>,
+}
+
+fn pointer_before_input_id(viewport: egui::ViewportId) -> egui::Id {
+    egui::Id::unique("canvas-pointer-before-input").with(viewport)
+}
+
+/// The existing host hook calls this before egui updates the pointer for this batch.
+pub(crate) fn capture_pointer_before_input(ctx: &egui::Context, viewport: egui::ViewportId) {
+    let pointer = ctx.input_for(viewport, |i| i.pointer.clone());
+    ctx.data_mut(|data| data.insert_temp(pointer_before_input_id(viewport), pointer));
+}
+
+/// Each release keeps egui's own qualification, including earlier releases in this batch.
+fn canvas_pointer_releases(ui: &Ui) -> Vec<IgnoreSamplerRelease> {
+    let previous = ui.data(|data| data.get_temp::<egui::PointerState>(pointer_before_input_id(ui.ctx().viewport_id()))).unwrap_or_default();
+    let options = ui.ctx().options(|o| o.input_options);
+    let pixels_per_point = ui.ctx().pixels_per_point();
+    ui.input(|i| {
+        let mut counts = [0usize; egui::NUM_POINTER_BUTTONS];
+        for event in &i.events {
+            if let egui::Event::PointerButton { button, pressed: false, .. } = event {
+                counts[*button as usize] += 1;
+            }
+        }
+        i.events
+            .iter()
+            .enumerate()
+            .filter_map(|(index, event)| {
+                let egui::Event::PointerButton { pos, button, pressed: false, .. } = event else { return None };
+                let clicked = if counts[*button as usize] == 1 {
+                    i.pointer.button_clicked(*button)
+                } else {
+                    // Aggregated flags cannot identify a later non-click release. Replay only
+                    // an ambiguous button's prefix, before its Up, through egui's public API.
+                    let mut before = i.clone();
+                    before.pointer = previous.clone();
+                    let raw = egui::RawInput { time: Some(i.time), events: i.events[..index].to_vec(), ..i.raw.clone() };
+                    before.begin_pass(raw, false, pixels_per_point, options).pointer.could_any_button_be_click()
+                };
+                Some(IgnoreSamplerRelease { button: *button, at: *pos, clicked })
+            })
+            .collect()
+    })
+}
+
+/// Two non-sampler clicks replace egui's last two click times after a consumed pick.
+#[derive(Clone, Copy, Default)]
+struct IgnoreSamplerClicks {
+    last: Option<(f64, Pos2)>,
+    remaining: u8,
+}
+
+fn ignore_sampler_primary_id(id: egui::Id) -> egui::Id {
+    id.with("image-trace-consumed-primary")
+}
+
+fn ignore_sampler_owns_primary(ui: &Ui, id: egui::Id) -> bool {
+    ui.data(|data| data.get_temp::<bool>(ignore_sampler_primary_id(id)).unwrap_or(false))
+}
+
+fn reset_ignore_sampler_clicks(ui: &Ui, id: egui::Id) {
+    ui.data_mut(|data| data.insert_temp(id.with("image-trace-clicks"), IgnoreSamplerClicks { last: None, remaining: 2 }));
+}
+
+/// Reclassify only the two clicks whose raw history can still contain a consumed pick.
+/// Other widgets' clicks count too, as they do in egui; its pointer state stays untouched.
+fn ignore_sampler_clicks(ui: &Ui, id: egui::Id, consumed: bool, releases: &[IgnoreSamplerRelease]) {
+    ui.data_mut(|data| data.remove::<CanvasClick>(id.with("image-trace-click-count")));
+    if !releases.iter().any(|release| release.clicked) {
+        return;
+    }
+    if consumed {
+        reset_ignore_sampler_clicks(ui, id);
+        return;
+    }
+    let time = ui.input(|i| i.time);
+    for release in releases.iter().filter(|release| release.clicked) {
+        record_ignore_sampler_click(ui, id, release.at, time, release.button == egui::PointerButton::Primary);
+    }
+}
+
+fn record_ignore_sampler_click(ui: &Ui, id: egui::Id, at: Pos2, time: f64, primary: bool) {
+    let (delay, distance) = ui.ctx().options(|o| (o.input_options.max_double_click_delay, o.input_options.max_click_dist));
+    ui.data_mut(|data| {
+        let history_id = id.with("image-trace-clicks");
+        let Some(mut clicks) = data.remove_temp::<IgnoreSamplerClicks>(history_id) else {
+            if primary {
+                data.remove::<CanvasClick>(id.with("image-trace-click-count"));
+            }
+            return;
+        };
+        let double = clicks.last.is_some_and(|(last, pos)| time - last < delay && pos.distance_sq(at) < distance * distance);
+        if primary {
+            data.insert_temp(id.with("image-trace-click-count"), CanvasClick { count: if double { 2 } else { 1 }, at: Some(at) });
+        }
+        clicks.last = Some((time, at));
+        clicks.remaining -= 1;
+        if clicks.remaining != 0 {
+            data.insert_temp(history_id, clicks);
+        }
+    });
+}
+
+fn primary_click(ui: &Ui, resp: &egui::Response) -> CanvasClick {
+    if !resp.clicked_by(egui::PointerButton::Primary) {
+        return CanvasClick::default();
+    }
+    ui.data(|data| data.get_temp::<CanvasClick>(resp.id.with("image-trace-click-count"))).unwrap_or_else(|| {
+        let count = if resp.triple_clicked() {
+            3
+        } else if resp.double_clicked() {
+            2
+        } else {
+            1
+        };
+        let at = ui.data(|data| data.get_temp::<Pos2>(resp.id.with("canvas-qualified-primary-release")));
+        CanvasClick { count, at }
+    })
+}
+
+fn primary_click_count(ui: &Ui, resp: &egui::Response) -> u8 {
+    primary_click(ui, resp).count
+}
+
+/// Remove only the pointer sequence acquired by this sampler, never a view or tool drag.
+fn clear_ignore_sampler_gesture(ui: &Ui, id: egui::Id) {
+    ui.data_mut(|data| {
+        data.remove::<bool>(ignore_sampler_primary_id(id));
+        if matches!(data.get_temp::<Drag>(drag::drag_id()), Some(Drag::Gesture)) {
+            data.remove::<Drag>(drag::drag_id());
+            data.remove::<Pos2>(drag::drag_pos_id());
+            data.remove::<Point>(drag::tool_drag_doc_id());
+            data.remove::<Point>(drag::tool_press_doc_id());
+        }
+    });
+}
+
+#[derive(Clone, Copy)]
+struct IgnoreSamplerRelease {
+    button: egui::PointerButton,
+    at: Pos2,
+    clicked: bool,
+}
+
+#[derive(Default)]
+struct IgnoreSamplerPointer {
+    owned: bool,
+    replaced: bool,
+    ordinary_pressed: bool,
+    consumed_release: bool,
+    releases: Vec<IgnoreSamplerRelease>,
+}
+
+/// Attribute a fresh press after an owned release before egui's per-frame flags lose their order.
+fn ignore_sampler_pointer_frame(ui: &Ui, id: egui::Id, cancelled: bool, releases: &[IgnoreSamplerRelease]) -> IgnoreSamplerPointer {
+    let owned = ignore_sampler_owns_primary(ui, id);
+    if !owned && !cancelled {
+        return IgnoreSamplerPointer::default();
+    }
+    ui.input(|i| {
+        let mut frame = IgnoreSamplerPointer { owned, ..Default::default() };
+        let mut first_press_owned = cancelled;
+        let mut releases = releases.iter();
+        for event in &i.events {
+            if let egui::Event::PointerButton { pos, button, pressed, .. } = event {
+                if *pressed {
+                    if *button == egui::PointerButton::Primary {
+                        frame.replaced |= frame.owned;
+                        // An observed old Up ends that cancelled sequence; without it,
+                        // a fresh invalid press keeps the existing cancellation gate.
+                        frame.owned = first_press_owned && !frame.consumed_release;
+                        first_press_owned = false;
+                        frame.ordinary_pressed |= !frame.owned;
+                    }
+                } else {
+                    let clicked = releases.next().is_some_and(|release| release.clicked);
+                    ignore_sampler_release(&mut frame, *button, *pos, clicked);
+                }
+            }
+        }
+        frame
+    })
+}
+
+fn ignore_sampler_release(frame: &mut IgnoreSamplerPointer, button: egui::PointerButton, at: Pos2, clicked: bool) {
+    if button == egui::PointerButton::Primary && frame.owned {
+        frame.consumed_release = true;
+        frame.releases.clear();
+    } else if frame.consumed_release {
+        frame.releases.push(IgnoreSamplerRelease { button, at, clicked });
+    }
+}
+
+fn ignore_sampler_frame_clicks(ui: &Ui, id: egui::Id, frame: &IgnoreSamplerPointer, consumed: bool, releases: &[IgnoreSamplerRelease]) {
+    if !frame.consumed_release || !frame.ordinary_pressed {
+        ignore_sampler_clicks(ui, id, consumed, releases);
+        return;
+    }
+    // Consume the old sequence, then classify only subsequent ordinary releases. A new Down
+    // still reaches the tool when the last release belongs to the consumed sequence.
+    reset_ignore_sampler_clicks(ui, id);
+    ui.data_mut(|data| data.insert_temp(id.with("image-trace-click-count"), CanvasClick::default()));
+    let time = ui.input(|i| i.time);
+    for release in &frame.releases {
+        let primary = release.button == egui::PointerButton::Primary;
+        if release.clicked {
+            record_ignore_sampler_click(ui, id, release.at, time, primary);
+        }
+    }
+}
+
+fn begin_ignore_sampler_pointer(ui: &Ui, id: egui::Id, cancelled: bool) -> (bool, bool) {
+    let releases = canvas_pointer_releases(ui);
+    ui.data_mut(|data| {
+        let position_id = id.with("canvas-qualified-primary-release");
+        data.remove::<Pos2>(position_id);
+        if let Some(release) = releases.iter().rev().find(|release| release.clicked && release.button == egui::PointerButton::Primary) {
+            data.insert_temp(position_id, release.at);
+        }
+    });
+    let frame = ignore_sampler_pointer_frame(ui, id, cancelled, &releases);
+    if frame.replaced {
+        // This also replaces an abandoned sampler Down whose release was not observed.
+        clear_ignore_sampler_gesture(ui, id);
+    }
+    if frame.owned {
+        ui.data_mut(|data| data.insert_temp(ignore_sampler_primary_id(id), true));
+    }
+    let consumed = frame.owned && ui.input(|i| i.pointer.primary_pressed() || i.pointer.primary_released() || i.pointer.primary_down());
+    ignore_sampler_frame_clicks(ui, id, &frame, consumed, &releases);
+    (consumed, frame.ordinary_pressed)
+}
+
+fn end_ignore_sampler_pointer(ui: &Ui, id: egui::Id) {
+    // A valid Down can acquire ownership and complete in the same frame.
+    if ignore_sampler_owns_primary(ui, id) && !ui.input(|i| i.pointer.primary_down()) {
+        if ui.input(|i| i.pointer.button_clicked(egui::PointerButton::Primary)) {
+            reset_ignore_sampler_clicks(ui, id);
+        }
+        clear_ignore_sampler_gesture(ui, id);
+    }
+}
+
+fn observe_hidden_ignore_sampler_pointer(app: &VectorcraftApp, ui: &Ui, home_showing: bool) {
+    if home_showing || app.session.active().is_none() {
+        // Home and the empty window still advance egui's click history. Observe the same
+        // correction there so it retires after the two ordinary clicks that replace a pick.
+        let id = egui::Id::unique("canvas");
+        begin_ignore_sampler_pointer(ui, id, false);
+        end_ignore_sampler_pointer(ui, id);
+    }
+}
+
+/// A sampler press keeps its release, even if its Down completes or its binding expires held.
+fn input_after_sampler_refresh(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: egui::Rect, cancelled: bool) {
+    let (consumed, ordinary_pressed) = begin_ignore_sampler_pointer(ui, resp.id, cancelled);
+    if !consumed && (ordinary_pressed || !cancelled || !ui.input(|i| i.pointer.any_pressed())) {
+        canvas_input(app, ui, resp, rect);
+    }
+    end_ignore_sampler_pointer(ui, resp.id);
 }
 
 /// The pointer on the canvas: the tool's input, unless the context menu or the 3D gizmo has the press.
@@ -638,7 +912,6 @@ fn cache_key(
         rich_black: app.session.prefs.black_on_screen == "rich",
         // A tool's drag on the canvas, during an interaction (not a dialog's preview).
         dragging: app.session.in_interaction() && ui.data(|d| d.get_temp::<Drag>(drag_id())) == Some(Drag::Tool),
-        // The Image Trace panel's eye button, while it is held.
         trace_source: app.ui.trace_hold_source.clone(),
         // Preferences › Performance › Use Monitor Profile for Canvas.
         display: app.display_profile.key(app.session.prefs.monitor_profile_display),
@@ -1352,6 +1625,7 @@ fn selection_visuals(
         mirror_axis_overlay(app, painter, xf);
         grid_repeat_overlay(app, painter, xf);
         radial_repeat_overlay(app, painter, xf);
+        trace_split_overlay(app, painter, xf);
         if app.ui.view.text_threads {
             // Under the tools' overlays: a selected frame's own ports are drawn over its thread's.
             let mut threads = thread_overlays(app, xf.zoom);
@@ -1381,5 +1655,7 @@ fn selection_visuals(
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_edge_scroll;
 #[cfg(test)]
 mod tests_ui_scaling;

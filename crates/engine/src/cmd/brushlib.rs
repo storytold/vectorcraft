@@ -16,7 +16,7 @@ use vectorcraft_brush::{
     Variation,
 };
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::{Appearance, AppearanceItem, Document, FillLayer, Node, NodeId, NodeKind, PatternDef, Symbol};
+use vectorcraft_doc::{Appearance, AppearanceItem, Document, FillLayer, ImageBlob, ImageObject, Node, NodeId, NodeKind, PatternDef, Symbol};
 use vectorcraft_geom::{Affine, FillRule, PathData, Point, Rect, SubPath, shapes};
 
 use super::brushsym::{apply_brush, brush_targets, roots, stroke_paint};
@@ -177,11 +177,14 @@ pub const BUILTIN: &[BuiltinBrushLibrary] = &[
     BuiltinBrushLibrary { id: "bristle-brushes", name: "Bristle Brushes", make: bristle_brushes },
     BuiltinBrushLibrary { id: "pattern-borders", name: "Pattern Borders", make: pattern_borders },
     BuiltinBrushLibrary { id: "scatter-shapes", name: "Scatter Shapes", make: scatter_shapes },
+    BuiltinBrushLibrary { id: "stipple", name: "Stipple", make: stipple },
     BuiltinBrushLibrary { id: "game-trails", name: "Game Trails", make: game_trails },
     BuiltinBrushLibrary { id: "energy-beams", name: "Energy Beams", make: energy_beams },
     BuiltinBrushLibrary { id: "dry-media", name: "Dry Media", make: dry_media },
     BuiltinBrushLibrary { id: "tech-circuit", name: "Tech Circuit", make: tech_circuit },
+    BuiltinBrushLibrary { id: "engraving", name: "Engraving", make: engraving },
     BuiltinBrushLibrary { id: "arrows", name: "Arrows", make: arrows },
+    BuiltinBrushLibrary { id: "image-brush", name: "Image Brush", make: image_brush },
 ];
 
 /// Built-in library `id`, made once.
@@ -233,6 +236,49 @@ fn ring(c: Point, outer: f64, inner: f64) -> Node {
 
 fn art(name: &str, art: Node, colorization: Colorization) -> Brush {
     Brush { name: name.into(), kind: BrushKind::Art(ArtBrush { art, colorization, ..Default::default() }) }
+}
+
+/// Original fine-line art for an engraving-style brush library.
+fn engraving() -> BrushLibrary {
+    let lines = |count: usize, width: f64, spacing: f64| {
+        group(
+            (0..count)
+                .map(|i| {
+                    let y = (i as f64 - (count - 1) as f64 / 2.0) * spacing;
+                    black(shapes::rectangle(Rect::new(0.0, y - width / 2.0, 100.0, y + width / 2.0)))
+                })
+                .collect(),
+        )
+    };
+    let taper = group(
+        (0..5)
+            .map(|i| {
+                let y = (i as f64 - 2.0) * 2.2;
+                black(polygon(&[(0.0, y - 0.35), (80.0, y - 0.35), (100.0, y), (80.0, y + 0.35), (0.0, y + 0.35)]))
+            })
+            .collect(),
+    );
+    let broken = group(
+        (0..5)
+            .flat_map(|row| {
+                (0..4).map(move |segment| {
+                    let x = segment as f64 * 25.0 + if row % 2 == 0 { 0.0 } else { 8.0 };
+                    let y = (row as f64 - 2.0) * 2.2;
+                    black(shapes::rectangle(Rect::new(x, y - 0.3, (x + 16.0).min(100.0), y + 0.3)))
+                })
+            })
+            .collect(),
+    );
+    built(
+        "Engraving",
+        Document::new(100.0, 100.0),
+        vec![
+            art("Fine Hatching", lines(5, 0.65, 2.2), Colorization::Tints),
+            art("Dense Hatching", lines(9, 0.42, 1.2), Colorization::Tints),
+            art("Tapered Hatching", taper, Colorization::Tints),
+            art("Broken Hatching", broken, Colorization::Tints),
+        ],
+    )
 }
 
 /// An Arrows brush whose art stretches only between `start` and `end` (fractions of its length).
@@ -571,6 +617,80 @@ fn scatter(name: &str, art: Node, s: Scatter) -> Brush {
     Brush { name: name.into(), kind: BrushKind::Scatter(Scatter { art, ..s }) }
 }
 
+/// Four original raster stamps. Scatter brushes preserve their image art while placing a copy
+/// along the path; art brushes bend their art and cannot bend an image. Each 24 px stamp is placed
+/// 6 pt wide, the size of the Scatter Shapes art, so a 1 pt stroke on a 10 pt line shows a stamp.
+fn image_brush() -> BrushLibrary {
+    const SIDE: u32 = 24;
+    const PT_PER_PX: f64 = 0.25;
+    let mut doc = Document::new(100.0, 100.0);
+    let mut brushes = Vec::new();
+    for (index, name) in ["Soft Bloom", "Halftone Field", "Solar Grain", "Color Flecks"].into_iter().enumerate() {
+        let mut pixels = Vec::with_capacity((SIDE * SIDE * 4) as usize);
+        for y in 0..SIDE {
+            for x in 0..SIDE {
+                let (dx, dy) = (x as f64 - 11.5, y as f64 - 11.5);
+                let r = dx.hypot(dy);
+                let angle = dy.atan2(dx);
+                let rgba = match index {
+                    0 => {
+                        let edge = 7.0 + 3.0 * (5.0 * angle).cos();
+                        [199, 69, 139, (220.0 * ((edge - r) / 2.5).clamp(0.0, 1.0)) as u8]
+                    }
+                    1 => {
+                        let (gx, gy) = ((x % 6) as f64 - 2.5, (y % 6) as f64 - 2.5);
+                        [39, 139, 175, if r < 11.0 && gx.hypot(gy) < 1.9 { 225 } else { 0 }]
+                    }
+                    2 => {
+                        let ray = (9.0 * angle).cos().abs();
+                        [234, 144, 40, if r < 3.5 || (r < 10.5 && ray > 0.72) { 235 } else { 0 }]
+                    }
+                    _ => {
+                        let seed = (x * 37 + y * 71 + x * y * 13) % 19;
+                        [if seed % 2 == 0 { 67 } else { 114 }, 79, 167, if r < 11.0 && seed < 5 { 210 } else { 0 }]
+                    }
+                };
+                pixels.extend_from_slice(&rgba);
+            }
+        }
+        let Ok(image) =
+            craft_image_codecs::Image::from_raw(SIDE, SIDE, craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, pixels)
+        else {
+            continue;
+        };
+        let Ok(png) = craft_image_codecs::encode(&image, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()) else {
+            continue;
+        };
+        let key = format!("image-brush-{index}");
+        doc.images.insert(key.clone(), ImageBlob::png(png));
+        let art = Node::new(
+            NodeId(0),
+            NodeKind::Image(Box::new(ImageObject {
+                key,
+                width: SIDE,
+                height: SIDE,
+                xf: Affine::scale(PT_PER_PX) * Affine::translate((-12.0, -12.0)),
+                link: None,
+                placement: Default::default(),
+                pixels: None,
+            })),
+        );
+        brushes.push(scatter(
+            name,
+            art,
+            Scatter {
+                size: (90.0, 110.0),
+                spacing: (125.0, 155.0),
+                scatter: (-20.0, 20.0),
+                rotation: (-15.0, 15.0),
+                colorization: Colorization::None,
+                ..Default::default()
+            },
+        ));
+    }
+    built("Image Brush", doc, brushes)
+}
+
 /// Scatter Shapes: scatter brushes of shapes drawn here; Sparkles scatters the library's own
 /// symbol, Sparkle.
 fn scatter_shapes() -> BrushLibrary {
@@ -625,6 +745,44 @@ fn scatter_shapes() -> BrushLibrary {
         ),
     ];
     built("Scatter Shapes", doc, brushes)
+}
+
+/// Stipple: original dot-based scatter brushes for fine and broad shading along a path.
+fn stipple() -> BrushLibrary {
+    let dot = |x: f64, y: f64, r: f64, opacity: f32| {
+        Node::path(
+            NodeId(0),
+            shapes::ellipse(Rect::new(x - r, y - r, x + r, y + r)),
+            Appearance {
+                items: vec![AppearanceItem::Fill(FillLayer { opacity, ..FillLayer::new(Paint::solid(Color::BLACK)) })],
+                ..Default::default()
+            },
+        )
+    };
+    let base = Scatter { colorization: Colorization::Tints, ..Default::default() };
+    let brushes = vec![
+        scatter(
+            "Fine Stipple",
+            dot(0.0, 0.0, 0.8, 1.0),
+            Scatter { size: (70.0, 110.0), spacing: (80.0, 130.0), scatter: (-100.0, 100.0), ..base.clone() },
+        ),
+        scatter(
+            "Dense Stipple",
+            group(vec![dot(-1.7, -1.4, 1.0, 1.0), dot(1.5, 0.5, 0.8, 1.0), dot(-0.5, 1.8, 0.65, 1.0)]),
+            Scatter { size: (80.0, 120.0), spacing: (55.0, 90.0), scatter: (-70.0, 70.0), ..base.clone() },
+        ),
+        scatter(
+            "Soft Stipple",
+            group(vec![dot(-1.2, -0.8, 1.0, 0.45), dot(1.2, 1.1, 0.7, 0.35)]),
+            Scatter { size: (55.0, 135.0), spacing: (80.0, 140.0), scatter: (-140.0, 140.0), ..base.clone() },
+        ),
+        scatter(
+            "Bold Stipple",
+            group(vec![dot(-1.5, -1.0, 1.8, 1.0), dot(1.6, 1.3, 1.4, 1.0)]),
+            Scatter { size: (80.0, 125.0), spacing: (75.0, 115.0), scatter: (-95.0, 95.0), ..base },
+        ),
+    ];
+    built("Stipple", Document::new(100.0, 100.0), brushes)
 }
 
 /// Game Trails: art brushes for motion lines and impact streaks (original game HUD / VFX art).

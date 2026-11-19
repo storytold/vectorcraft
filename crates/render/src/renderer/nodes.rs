@@ -308,7 +308,11 @@ impl Renderer {
         let image_left_out = self.image_left_out.replace(false);
         let failures = crate::paint::decode_failures();
         let pattern_images_left_out = crate::pattern::images_left_out();
-        self.draw_kept_node(&mut mctx, &Frame { mt: false, ink: Ink::Display, ..*f }, &m.art);
+        // A proof that preserves the colors' numbers leaves the mask's images as they are, as it
+        // leaves its colors: the frame's, or the ink's in a pattern's tile drawn for that proof.
+        let preserving = crate::proof::preserving(f.opts).is_some() || crate::ink::proof_of(f.ink).is_some_and(|p| crate::proof::preserves(&p));
+        let plates = if preserving { None } else { f.plates };
+        self.draw_kept_node(&mut mctx, &Frame { mt: false, ink: Ink::Display, plates, ..*f }, &m.art);
         let incomplete = self.image_left_out.unwrap_or(false)
             || crate::pattern::images_left_out() > pattern_images_left_out
             || (!f.opts.mark_undecoded_images && crate::paint::decode_failures() > failures);
@@ -499,7 +503,7 @@ impl Renderer {
     fn draw_content(&mut self, ctx: &mut RenderContext, f: &Frame, n: &Node, knockout: bool) {
         match &n.kind {
             NodeKind::Group { children, clip: false } if f.opts.trace_views && !f.opts.outline && Self::trace_view(f, n) != TraceView::Result => {
-                self.draw_trace_view(ctx, f, children, Self::trace_view(f, n), knockout)
+                self.draw_trace_view(ctx, f, children, (Self::trace_view(f, n), n.trace_split()), knockout)
             }
             NodeKind::Layer { children, clip: false, .. } | NodeKind::Group { children, clip: false } => {
                 self.draw_children(ctx, f, children, knockout)
@@ -641,9 +645,56 @@ impl Renderer {
     }
 
     /// An Image Trace object's `children` (the hidden source image, then the traced shapes) as
-    /// `view` shows them on screen.
-    fn draw_trace_view(&mut self, ctx: &mut RenderContext, f: &Frame, children: &[Arc<Node>], view: TraceView, knockout: bool) {
+    /// `view` shows them on screen, with `split`, the Split view's divider
+    /// ([`TraceView::split_of`]).
+    fn draw_trace_view(&mut self, ctx: &mut RenderContext, f: &Frame, children: &[Arc<Node>], (view, split): (TraceView, f64), knockout: bool) {
         let Some((source, shapes)) = children.split_first() else { return };
+        if view == TraceView::Split {
+            // Each side is drawn once under a plain clip (no layer and no second render), in the
+            // image's own pixels so the divider turns with the image: the source image on the part
+            // of the image left of the divider, and the traced shapes everywhere else, art past any
+            // of the image's edges included. Without an image, with one of no size or that can't
+            // be inverted, or with the divider at the image's left edge, the traced shapes draw as
+            // they are.
+            let NodeKind::Image(im) = &source.kind else { return self.draw_children(ctx, f, shapes, knockout) };
+            let (w, h) = (f64::from(im.width), f64::from(im.height));
+            let at = w * split.clamp(0.0, 1.0);
+            let det = im.xf.determinant();
+            if w <= 0.0 || h <= 0.0 || at <= 0.0 || !det.is_finite() || det.abs() < 1e-12 {
+                return self.draw_children(ctx, f, shapes, knockout);
+            }
+            // The result's side covers the image and the traced shapes' cached bounds, two screen
+            // pixels more so anti-aliased edges are not cut, in the image's pixels, less the
+            // source's side.
+            let inverse = im.xf.inverse();
+            let (mut x0, mut x1, mut y0, mut y1) = (0.0_f64, w, 0.0_f64, h);
+            for c in shapes {
+                if let Some(b) = self.bounds_of(f.symbols, c).map(|b| b.inflate(f.px * 2.0, f.px * 2.0)) {
+                    for q in [(b.x0, b.y0), (b.x1, b.y0), (b.x1, b.y1), (b.x0, b.y1)] {
+                        let p = inverse * kurbo::Point::new(q.0, q.1);
+                        if p.x.is_finite() && p.y.is_finite() {
+                            (x0, x1, y0, y1) = (x0.min(p.x), x1.max(p.x), y0.min(p.y), y1.max(p.y));
+                        }
+                    }
+                }
+            }
+            let part = |p: &mut BezPath, x0: f64, x1: f64, y0: f64, y1: f64| {
+                p.move_to(im.xf * kurbo::Point::new(x0, y0));
+                p.line_to(im.xf * kurbo::Point::new(x1, y0));
+                p.line_to(im.xf * kurbo::Point::new(x1, y1));
+                p.line_to(im.xf * kurbo::Point::new(x0, y1));
+                p.close_path();
+            };
+            let (mut left, mut right) = (BezPath::new(), BezPath::new());
+            part(&mut left, 0.0, at, 0.0, h);
+            part(&mut right, x0, x1, y0, y1);
+            part(&mut right, 0.0, at, 0.0, h);
+            let comp = Composite { clip: Some((&left, FillRule::NonZero)), blends: true, ..Default::default() };
+            self.group(ctx, f, comp, &mut |r, c, fr| r.draw_forced_arc(c, fr, source));
+            let comp = Composite { clip: Some((&right, FillRule::EvenOdd)), blends: true, ..Default::default() };
+            self.group(ctx, f, comp, &mut |r, c, fr| r.draw_children(c, fr, shapes, knockout));
+            return;
+        }
         if view.shows_source() && matches!(source.kind, NodeKind::Image(_)) {
             self.draw_forced_arc(ctx, f, source);
         }

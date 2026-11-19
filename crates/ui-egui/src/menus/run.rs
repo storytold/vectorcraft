@@ -116,6 +116,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         .or_else(|| crate::custom_toolbars::command(app, id, p))
         .or_else(|| crate::panels::learn::command(app, id, p))
         .or_else(|| crate::panels::discover::command(app, id, p))
+        .or_else(|| crate::panels::retype::command(app, id, p))
     {
         return Some(r);
     }
@@ -187,6 +188,7 @@ fn run_ui_part1(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         "file.saveInBackground" => Ok(io::hide_saves(app)),
         "file.cancelOpen" => Ok(crate::opening::cancel_all(app)),
         "file.openInBackground" => Ok(crate::opening::hide_all(app)),
+        "file.cancelPlace" => Ok(crate::placing::cancel_all(app)),
         id if id.starts_with("file.openRecent") => match recent_slot(app, id).filter(|path| recent_readable(path)).cloned() {
             Some(path) => io::open_reporting(app, &path),
             None => Err("no such recent file".into()),
@@ -292,6 +294,12 @@ fn run_ui_part3(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         "view.pixelPreview" => flag(&mut app.ui.view.pixel_preview),
         "view.trimView" => flag(&mut app.ui.view.trim_view),
         "view.cornerWidget" => flag(&mut app.ui.view.corner_widgets),
+        // Hide/Show Shape Widgets: `on` sets the state, and without it the state flips.
+        "view.shapeWidgets" => opt_bool(p, "on").map(|on| {
+            let v = &mut app.ui.view.shape_widgets;
+            *v = on.unwrap_or(!*v);
+            json!(*v)
+        }),
         // New View: the engine stores the current zoom, centre and rotation under the given name.
         "view.saved.new" if p.get("zoom").is_none() => {
             let Some(v) = app.view().copied() else { return Some(Err("no document".into())) };
@@ -569,6 +577,11 @@ fn run_ui_part5(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             }
         }
         "window.toolbar" => flag(&mut app.ui.toolbar),
+        "window.toolbarCompact" => opt_bool(p, "on").map(|on| {
+            let on = on.unwrap_or(!app.ui.toolbar_compact);
+            app.ui.toolbar_compact = on;
+            json!(on)
+        }),
         "window.toolbarColumns" => {
             let toolbar = match crate::custom_toolbars::target(&app.ui, p) {
                 Ok(t) => t,
@@ -704,6 +717,10 @@ fn run_ui_part6(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             let switched = if app.session.tool_id() == id { Ok(()) } else { app.try_select_tool(id) };
             switched.map(|()| json!({"tool": app.session.tool_id()}))
         }
+        "tool.switchSelectionTools" => {
+            let tool = if app.session.tool_id() == "selection" { "directSelection" } else { "selection" };
+            app.try_select_tool(tool).map(|()| json!({"tool": app.session.tool_id()}))
+        }
         crate::touch::TOGGLE_MODE => crate::touch::toggle_mode(app),
         crate::addons::pathtools::corner::COMMAND => crate::addons::pathtools::corner::open(app),
         crate::addons::pathtools::shared_edge::COMMAND => crate::addons::pathtools::shared_edge::open(app),
@@ -788,6 +805,7 @@ fn run_ui_part7(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             let names = p.get("swatches").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).collect());
             crate::dialogs::new_color_group::open(app, names.unwrap_or_default())
         }
+        "ui.colorGroupOptions" => crate::dialogs::color_group_options::open(app, p),
         "ui.colorPicker" => crate::dialogs::open_color_picker(app, p),
         "ui.sampleScreenColor" => crate::screen_color::start(app, p),
         "ui.graphicStyleOptions" => crate::dialogs::graphic_style_options::open(app, s("name").as_deref()),
@@ -845,6 +863,10 @@ fn run_ui_part8(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         }
         "ui.saturateDialog" => {
             crate::dialogs::saturate::open(app);
+            Ok(Value::Null)
+        }
+        "ui.proofSetupDialog" => {
+            crate::dialogs::proof_setup::open(app);
             Ok(Value::Null)
         }
         "ui.indexedColorDialog" => {
@@ -951,6 +973,8 @@ fn run_ui_part10(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
         "ui.simplifyAuto" => crate::dialogs::simplify_slider::auto(app),
         "ui.simplifyMoreOptions" => crate::dialogs::simplify_slider::more_options(app),
         "ui.smoothAuto" => crate::dialogs::smooth_slider::auto(app),
+        "ui.recolorUndo" => crate::dialogs::recolor::step(app, true),
+        "ui.recolorRedo" => crate::dialogs::recolor::step(app, false),
         "ui.dialogReset" => crate::dialogs::reset(app),
         "attributes.openUrl" => crate::panels::attributes::open_url(app, p),
         "ui.javascriptFilesDialog" => crate::panels::svg_interactivity::files_dialog(app, p),
@@ -983,6 +1007,7 @@ fn run_ui_part10(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
         "ui.colorRgbPercent" => crate::panels::color::rgb_percent_command(app, p),
         "ui.colorWheel" => crate::panels::color_wheel::command(app, p),
         "ui.savePdfDialog" => crate::dialogs::open_save_pdf(app, p),
+        crate::dialogs::SAVE_PDF_SUMMARY => crate::dialogs::save_pdf_summary(app, p),
         "file.exportAs" if s("path").is_none() => {
             crate::dialogs::open_export_as(app, s("format").as_deref(), p);
             Ok(Value::Null)
@@ -1068,6 +1093,11 @@ fn run_ui_part12(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
         "ui.epsOptionsDialog" if app.session.active().is_none() => Err("no document".into()),
         "ui.epsOptionsDialog" => {
             crate::dialogs::eps_options::open(app, p);
+            Ok(Value::Null)
+        }
+        "ui.hpglOptionsDialog" if app.session.active().is_none() => Err("no document".into()),
+        "ui.hpglOptionsDialog" => {
+            crate::dialogs::hpgl_options::open(app, p);
             Ok(Value::Null)
         }
         // Save for Web: its dialog; with settings, write the files.

@@ -115,7 +115,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Drop Artwork",
             [],
             None,
-            "{sourceDocument: uid, ids: [id…], grab: [x,y], at: [x,y]} copy 1–10000 editable source objects from an open document to the active document, preserving the grab point and clipboard, as one undo step",
+            "{sourceDocument: uid, ids: [id…], grab: [x,y], at: [x,y], profileMismatch?: as edit.paste} copy 1–10000 editable source objects from an open document to the active document, preserving the grab point and clipboard, as one undo step; colors from a document with another RGB or CMYK profile keep their numbers or convert as profileMismatch says, else as edit.colorSettings' policy of their model says (as edit.paste; clipboard.profileMismatch {sourceDocument, ids} lists them, and with askMismatchPaste on the desktop app asks first) → {ids, added, merged, renamed, profileMismatch?}",
             has_doc,
             drop_selection
         ),
@@ -180,7 +180,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Paste",
             ["Edit"],
             Some("Cmd+V"),
-            "{center?: [x, y], artboardsAt?: [x, y], dx?, dy?, swatchConflict?} paste centred on `center` (the app passes the view centre), else offset by dx/dy (default: the Paste Offset preference). Pasting brings the image blobs, symbols, patterns, global and spot swatches (with the tint swatches of the tints used), gradient swatches, graphic styles, character and paragraph styles and brushes the objects use; one of the same name that differs comes in renamed. swatchConflict, for a swatch whose name the document gives another colour (clipboard.conflicts): \"merge\" (default: the objects take the document's swatch; legend labels in a pie's wedges that it turns dark or light take a redraw's contrast, unless their fill is their own) | \"add\" (the pasted swatch comes in renamed) | {name: \"merge\"|\"add\"}. With Paste Remembers Layers on (layer.pasteRemembersLayers), objects go back into the layers and sublayers they came from (by the names of the layer and the layers around it in another document; a missing sublayer is made inside its layer; a hidden or locked one is an error and nothing is pasted). Artboards copied with artboard.copy come with their art, together right of the last artboard as they lay, or centered on `artboardsAt` (the Artboard tool's canvas menu passes the right-click point; a value that is not [x, y] is an error) (the other paste commands but Paste on All Artboards: where they were), their art back in the layers it came from, and the Artboard tool, when chosen, selects them. In Draw Inside (view.drawMode) the objects go inside the object drawn into, as new art does, and Paste Remembers Layers doesn't apply; edit.pasteInPlace and edit.pasteOnAllArtboards do the same, and in Draw Behind they go behind the selection as edit.pasteInBack puts them; edit.pasteInFront and edit.pasteInBack ignore the drawing mode → {ids, artboard: the first new artboard's index or null, artboards: the new artboards' indices, added: resources added, merged: conflicts merged, renamed: [{kind, from, to}]}",
+            "{center?: [x, y], artboardsAt?: [x, y], dx?, dy?, swatchConflict?, profileMismatch?: \"preserveNumbers\"|\"convert\"|{rgb?, cmyk?}} paste centred on `center` (the app passes the view centre), else offset by dx/dy (default: the Paste Offset preference). Pasting brings the image blobs, symbols, patterns, global and spot swatches (with the tint swatches of the tints used), gradient swatches, graphic styles, character and paragraph styles and brushes the objects use; one of the same name that differs comes in renamed. swatchConflict, for a swatch whose name the document gives another colour (clipboard.conflicts): \"merge\" (default: the objects take the document's swatch; legend labels in a pie's wedges that it turns dark or light take a redraw's contrast, unless their fill is their own) | \"add\" (the pasted swatch comes in renamed) | {name: \"merge\"|\"add\"}. profileMismatch, for colors copied from a document whose RGB or CMYK profile is not this document's (clipboard.profileMismatch): \"preserveNumbers\" keeps their numbers, \"convert\" converts them into this document's profile with the working intent, and {rgb?, cmyk?} gives one of those for each model (default, also for a model left out and for null: as the model's policy of edit.colorSettings says; any other value is an error; colors whose source or destination profile is not available keep their numbers, also with \"convert\" (clipboard.profileMismatch's convertible: false); every paste command takes it, and the reply's profileMismatch lists [{model, clipboard, document, choice}]). With Paste Remembers Layers on (layer.pasteRemembersLayers), objects go back into the layers and sublayers they came from (by the names of the layer and the layers around it in another document; a missing sublayer is made inside its layer; a hidden or locked one is an error and nothing is pasted). Artboards copied with artboard.copy come with their art, together right of the last artboard as they lay, or centered on `artboardsAt` (the Artboard tool's canvas menu passes the right-click point; a value that is not [x, y] is an error) (the other paste commands but Paste on All Artboards: where they were), their art back in the layers it came from, and the Artboard tool, when chosen, selects them. In Draw Inside (view.drawMode) the objects go inside the object drawn into, as new art does, and Paste Remembers Layers doesn't apply; edit.pasteInPlace and edit.pasteOnAllArtboards do the same, and in Draw Behind they go behind the selection as edit.pasteInBack puts them; edit.pasteInFront and edit.pasteInBack ignore the drawing mode → {ids, artboard: the first new artboard's index or null, artboards: the new artboards' indices, added: resources added, merged: conflicts merged, renamed: [{kind, from, to}]}",
             has_clipboard,
             |s, p| paste(s, p, PasteMode::Offset)
         ),
@@ -189,7 +189,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Paste in Front",
             ["Edit"],
             Some("Cmd+F"),
-            "{swatchConflict?, artboard?: index (the active artboard: the objects go where they were on the artboard they were copied from, on this one), artboards?: [index…] (a copy on each of these artboards, placed as on `artboard`, the copies in artboard order; `artboard` wins when both are given; default while the Artboard tool is chosen with several artboards selected: those; art copied from no artboard keeps its place on the first and its offset to it on the others; an index the document lacks, a repeated one or an empty list is an error)} paste in place just above the top selected object, or on top of the current layer when nothing is selected (resources and layers as edit.paste) → {ids, added, merged, renamed}",
+            "{swatchConflict?, profileMismatch? (as edit.paste), artboard?: index (the active artboard: the objects go where they were on the artboard they were copied from, on this one), artboards?: [index…] (a copy on each of these artboards, placed as on `artboard`, the copies in artboard order; `artboard` wins when both are given; default while the Artboard tool is chosen with several artboards selected: those; art copied from no artboard keeps its place on the first and its offset to it on the others; an index the document lacks, a repeated one or an empty list is an error)} paste in place just above the top selected object, or on top of the current layer when nothing is selected (resources and layers as edit.paste) → {ids, added, merged, renamed}",
             has_clipboard,
             |s, p| paste(s, p, PasteMode::Front)
         ),
@@ -198,7 +198,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Paste in Back",
             ["Edit"],
             Some("Cmd+B"),
-            "{swatchConflict?, artboard?: index, artboards?: [index…] (both as edit.pasteInFront)} paste in place just below the bottom selected object, or at the bottom of the current layer when nothing is selected (resources and layers as edit.paste) → {ids, added, merged, renamed}",
+            "{swatchConflict?, profileMismatch?, artboard?: index, artboards?: [index…] (as edit.pasteInFront)} paste in place just below the bottom selected object, or at the bottom of the current layer when nothing is selected (resources and layers as edit.paste) → {ids, added, merged, renamed}",
             has_clipboard,
             |s, p| paste(s, p, PasteMode::Back)
         ),
@@ -207,7 +207,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Paste in Place",
             ["Edit"],
             Some("Cmd+Shift+V"),
-            "{swatchConflict?, artboard?: index, artboards?: [index…] (both as edit.pasteInFront)} paste where the objects were copied (resources, layers and drawing modes as edit.paste) → {ids, added, merged, renamed}",
+            "{swatchConflict?, profileMismatch?, artboard?: index, artboards?: [index…] (as edit.pasteInFront)} paste where the objects were copied (resources, layers and drawing modes as edit.paste) → {ids, added, merged, renamed}",
             has_clipboard,
             |s, p| paste(s, p, PasteMode::InPlace)
         ),
@@ -216,7 +216,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Paste on All Artboards",
             ["Edit"],
             Some("Cmd+Alt+Shift+V"),
-            "{swatchConflict?} paste a copy on every artboard at the offset the objects had to the artboard they were copied from (resources, layers and drawing modes as edit.paste) → {ids, added, merged, renamed}",
+            "{swatchConflict?, profileMismatch? (as edit.paste)} paste a copy on every artboard at the offset the objects had to the artboard they were copied from (resources, layers and drawing modes as edit.paste) → {ids, added, merged, renamed}",
             has_clipboard,
             |s, p| paste(s, p, PasteMode::AllArtboards)
         ),
@@ -1278,26 +1278,12 @@ fn clear(s: &mut Session, p: &Value) -> Result<Value> {
 /// Document ids scope node ids: two tabs may contain objects with the same node id.
 fn drop_selection(s: &mut Session, p: &Value) -> Result<Value> {
     const CMD: &str = "edit.dropSelection";
-    let uid = u64_req(p, "sourceDocument", CMD)?;
+    u64_req(p, "sourceDocument", CMD)?;
     let point = |key: &str| finite_numbers::<2>(&p[key]).ok_or_else(|| bad(CMD, format!("{key} must be [x, y] with finite coordinates")));
     let grab = point("grab")?;
     let at = point("at")?;
-    let source = s.documents().iter().find(|d| d.uid == uid).ok_or_else(|| bad(CMD, "that document is no longer open"))?;
-    let key = "ids";
-    let values = p[key].as_array().ok_or_else(|| bad(CMD, format!("{key} must be an array of non-negative integer object ids")))?;
-    if values.is_empty() || values.len() > 10000 {
-        return Err(bad(CMD, "ids must contain 1–10000 object ids"));
-    }
-    let ids = values
-        .iter()
-        .map(|value| value.as_u64().map(NodeId).ok_or_else(|| bad(CMD, format!("invalid object id {value}: expected a non-negative integer"))))
-        .collect::<Result<Vec<_>>>()?;
-    // Validate the entire batch in one walk; node ids are local to the source document.
-    let paths = source.doc.index_paths(ids.iter().copied());
-    if let Some(id) = ids.iter().find(|id| !paths.contains_key(id)) {
-        return Err(EngineError::NoNode(*id));
-    }
-    let clip = Clipboard::copy(source, &roots_of(&source.doc, ids), false);
+    let profile = super::colormgmt::PasteProfile::param(p, CMD)?;
+    let clip = drop_clip(s, p, CMD)?;
     let bounds = clip.bounds().ok_or_else(|| bad(CMD, "the art has no bounds"))?;
     let center = bounds.center() + Vec2::new(at[0] - grab[0], at[1] - grab[1]);
     if !center.x.is_finite() || !center.y.is_finite() {
@@ -1305,7 +1291,38 @@ fn drop_selection(s: &mut Session, p: &Value) -> Result<Value> {
     }
     // A drop preserves the source colours even when the flyer has same-named swatches.
     let choices = SwatchChoices::parse(PasteMode::Drag.label(), &json!({"swatchConflict": "add"}))?;
-    paste_clip(s, &json!({"center": [center.x, center.y]}), PasteMode::Drag, &clip, &choices)
+    // Colors from another profile keep their numbers or convert, as `profileMismatch` says, else as
+    // the policies say.
+    let (converted, report) = super::colormgmt::paste_profiles(&clip, &s.doc()?.doc, profile, true);
+    let mut r = paste_clip(s, &json!({"center": [center.x, center.y]}), PasteMode::Drag, converted.as_ref().unwrap_or(&clip), &choices);
+    if let Ok(v) = &mut r
+        && !report.is_empty()
+    {
+        v["profileMismatch"] = json!(report);
+    }
+    r
+}
+
+/// The objects `ids` of the open document `sourceDocument` that `edit.dropSelection` drops, copied
+/// as a clipboard is (errors name command `cmd`).
+pub(crate) fn drop_clip(s: &Session, p: &Value, cmd: &str) -> Result<Clipboard> {
+    let uid = u64_req(p, "sourceDocument", cmd)?;
+    let source = s.documents().iter().find(|d| d.uid == uid).ok_or_else(|| bad(cmd, "that document is no longer open"))?;
+    let key = "ids";
+    let values = p[key].as_array().ok_or_else(|| bad(cmd, format!("{key} must be an array of non-negative integer object ids")))?;
+    if values.is_empty() || values.len() > 10000 {
+        return Err(bad(cmd, "ids must contain 1–10000 object ids"));
+    }
+    let ids = values
+        .iter()
+        .map(|value| value.as_u64().map(NodeId).ok_or_else(|| bad(cmd, format!("invalid object id {value}: expected a non-negative integer"))))
+        .collect::<Result<Vec<_>>>()?;
+    // Validate the entire batch in one walk; node ids are local to the source document.
+    let paths = source.doc.index_paths(ids.iter().copied());
+    if let Some(id) = ids.iter().find(|id| !paths.contains_key(id)) {
+        return Err(EngineError::NoNode(*id));
+    }
+    Ok(Clipboard::copy(source, &roots_of(&source.doc, ids), false))
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -1340,10 +1357,23 @@ fn paste(s: &mut Session, p: &Value, mode: PasteMode) -> Result<Value> {
     if mode == PasteMode::Offset {
         check_numbers(p, &["dx", "dy"], "edit.paste")?;
     }
+    let profile = super::colormgmt::PasteProfile::param(p, mode.label())?;
     // Taken out of the session for the edit (and put back whatever happens).
     let clip = std::mem::take(&mut s.clipboard);
-    let r = paste_clip(s, p, mode, &clip, &choices);
+    // Colors copied from a document with other profiles keep their numbers or convert
+    // (Edit › Color Settings' policies, or `profileMismatch`). Paste on All Artboards leaves the
+    // copied artboards, and so their backgrounds, behind.
+    let (converted, report) = match s.doc() {
+        Ok(st) => super::colormgmt::paste_profiles(&clip, &st.doc, profile, mode != PasteMode::AllArtboards),
+        Err(_) => (None, vec![]),
+    };
+    let mut r = paste_clip(s, p, mode, converted.as_ref().unwrap_or(&clip), &choices);
     s.clipboard = clip;
+    if let Ok(v) = &mut r
+        && !report.is_empty()
+    {
+        v["profileMismatch"] = json!(report);
+    }
     r
 }
 
@@ -1520,6 +1550,8 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
         vec![Affine::IDENTITY]
     };
     let (ids, imported, artboards, into) = s.edit(mode.label(), |d, sel| {
+        // Converted colors are compared with the document's resources, as another document's are
+        // (`Clipboard::import_into`); its images are still the document's own.
         let imported = clip.import_into(d, choices, same_doc)?;
         // Draw Inside: the clip group of the object drawn into, made on the first paste.
         let into = inside.map(|t| super::create::draw_inside_group(d, t)).transpose()?;
