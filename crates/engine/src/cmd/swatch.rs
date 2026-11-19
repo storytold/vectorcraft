@@ -113,7 +113,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Color Group Options",
             ["Window", "Swatches"],
             None,
-            "{group: color group, name: its new name (trimmed)} rename a color group, as one undo step; its swatches, their colors and the art linked to them stay as they are. Swatches and color groups share one set of names, so a name another color group or a swatch has is an error, as is an empty name; the group's own name records no undo step → {name}",
+            "{group: color group, name: its new name (trimmed)} rename a color group, as one undo step; its swatches, their colors and the art linked to them stay as they are. Swatches and color groups share one set of names, so a name another color group or a swatch has is an error, as is an empty name; the group's own name records no undo step. A drag still in progress becomes an undo step of its own first → {name}",
             has_doc,
             swatch_rename_group
         ),
@@ -1227,6 +1227,10 @@ fn swatch_rename_group(s: &mut Session, p: &Value) -> Result<Value> {
     }
     if d.swatch_name_taken(&name) {
         return Err(bad(C, format!("a swatch or color group named `{name}` already exists")));
+    }
+    // A drag still in progress is a step of its own, so canceling or undoing it leaves the rename.
+    if !s.previewing && s.batch_stash.is_none() && s.in_interaction() {
+        super::settle_interaction(s)?;
     }
     s.edit("Color Group Options", |d, _| {
         let g = d.swatch_groups.iter_mut().find(|g| g.name == group).ok_or_else(|| bad(C, format!("no colour group `{group}`")))?;

@@ -1459,6 +1459,76 @@ fn color_group_options_opens_on_a_sole_selected_group() {
     assert_eq!((selected(&ctx), pstate::<String>(&ctx, "swatch-anchor")), (vec!["Ash".to_string()], "Ash".to_string()));
 }
 
+/// Color Group Options from the command palette (no `group`) opens on the color group selected
+/// alone in the panel; without one it opens nothing and reports the missing group.
+#[test]
+fn color_group_options_without_a_group_opens_on_the_selected_group() {
+    let mut app = app();
+    let ctx = context();
+    app.ui_ctx = Some(ctx.clone());
+    for sel in [vec![], vec!["Red"], vec!["Brights", "Grays"]] {
+        set_pstate(&ctx, "swatch-selected", sel.iter().map(|s| s.to_string()).collect::<Vec<_>>());
+        assert!(app.run("ui.colorGroupOptions", json!({})).is_err() && app.ui.dialog.is_none(), "{sel:?}");
+    }
+    set_pstate(&ctx, "swatch-selected", vec!["Grays".to_string()]);
+    app.run("ui.colorGroupOptions", json!({})).unwrap();
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.str("__group")).as_deref(), Some("Grays"));
+    crate::dialogs::cancel(&mut app);
+    // The panel showed the selection in this document; another document made active since then
+    // does not take it.
+    let uid = app.session.active().unwrap().uid;
+    set_pstate(&ctx, "swatch-focus", (Some(Some((uid, Vec::<u64>::new()))), None::<String>));
+    app.run("ui.colorGroupOptions", json!({})).unwrap();
+    crate::dialogs::cancel(&mut app);
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    assert!(app.run("ui.colorGroupOptions", json!({})).is_err() && app.ui.dialog.is_none(), "another document");
+}
+
+/// Renames in a batch move the selection to another group neither after an Ungroup of the
+/// selected group nor in another document; a batch step that keeps the groups (Sort by Kind) does
+/// not stop the selection from following a rename, and Delete Swatch on the group ends it.
+#[test]
+fn a_batch_moves_the_selection_only_with_its_group() {
+    let mut app = app();
+    let ctx = context();
+    app.ui_ctx = Some(ctx.clone());
+    let select = |sel: &str| {
+        set_pstate(&ctx, "swatch-selected", vec![sel.to_string()]);
+        set_pstate(&ctx, "swatch-anchor", sel.to_string());
+    };
+    select("Brights");
+    let steps = json!([
+        {"command": "swatch.ungroup", "params": {"name": "Brights"}},
+        {"command": "swatch.renameGroup", "params": {"group": "Grays", "name": "Brights"}},
+        {"command": "swatch.renameGroup", "params": {"group": "Brights", "name": "Vivid"}},
+    ]);
+    app.run("command.batch", json!({"commands": steps})).unwrap();
+    assert_eq!((selected(&ctx), pstate::<String>(&ctx, "swatch-anchor")), (Vec::<String>::new(), String::new()), "Ungroup ends the selection");
+    // A step that keeps the groups, then a rename of the selected group.
+    select("Vivid");
+    let steps = json!([
+        {"command": "swatch.sortByKind", "params": {}},
+        {"command": "swatch.renameGroup", "params": {"group": "Vivid", "name": "Bold"}},
+    ]);
+    app.run("command.batch", json!({"commands": steps})).unwrap();
+    assert_eq!((selected(&ctx), pstate::<String>(&ctx, "swatch-anchor")), (vec!["Bold".to_string()], "Bold".to_string()));
+    app.run("swatch.delete", json!({"name": "Bold"})).unwrap();
+    assert_eq!((selected(&ctx), pstate::<String>(&ctx, "swatch-anchor")), (Vec::<String>::new(), String::new()), "Delete Swatch ends the selection");
+    // Brights selected in one new document, renamed in another.
+    for _ in 0..2 {
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    }
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    select("Brights");
+    let steps = json!([
+        {"command": "document.activate", "params": {"index": 2}},
+        {"command": "swatch.renameGroup", "params": {"group": "Brights", "name": "Vivid"}},
+        {"command": "document.activate", "params": {"index": 1}},
+    ]);
+    app.run("command.batch", json!({"commands": steps})).unwrap();
+    assert_eq!((selected(&ctx), pstate::<String>(&ctx, "swatch-anchor")), (vec!["Brights".to_string()], "Brights".to_string()));
+}
+
 /// The panel menu's Show Recent Colors hides and shows the panel's Recent Colors row (#6617):
 /// checked by default, applied colors still join the list while the row is hidden, and the Color
 /// panel keeps its own row and setting.

@@ -35,7 +35,7 @@ pub(super) fn selected_group(app: &VectorcraftApp, sel: &[String]) -> Option<Str
 }
 
 /// The selected color group when it is the whole selection (Color Group Options).
-fn sole_group(app: &VectorcraftApp, sel: &[String]) -> Option<String> {
+pub(super) fn sole_group(app: &VectorcraftApp, sel: &[String]) -> Option<String> {
     match sel {
         [_] => selected_group(app, sel),
         _ => None,

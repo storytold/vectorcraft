@@ -5077,8 +5077,6 @@ liquify-list-end	{0}, {1}	{0}, {1}
 @msg	a gradient needs at least two stops	un degradado necesita al menos dos paradas
 @msg	a graphic style named `{to}` already exists	ya existe un estilo gráfico llamado `{to}`
 @msg	a swatch or color group named `{name}` already exists	ya existe una muestra o un grupo de colores llamado `{name}`
-@msg	missing `group`	falta `group`
-@msg	no colour group `{group}`	no existe el grupo de colores `{group}`
 @msg	a key object sits on that point	hay un objeto clave en ese punto
 @msg	a page is missing	falta una página
 @msg	a page out of range	una página fuera de rango

@@ -1103,7 +1103,7 @@ names Select All Unused selects; a spot swatch counts as used while an image pla
 its ink), `swatch.merge {names}` (the first is kept; gradient stops linked to the others drop their process
 plates), `swatch.ungroup {name}`, `swatch.renameGroup {group, name}` (Color Group Options: renames the group alone
 in one undo step; the name is trimmed, and a name that is empty or that another color group or a swatch has is an
-error; the group's own name records no undo step) and
+error; the group's own name records no undo step, and a drag still in progress becomes an undo step of its own first) and
 `swatch.sortByKind`.
 `brush.move {name | names, to?, type?}` reorders brushes among the brushes of their type, as dragging one onto
 another of its type in the Brushes panel does. `to` is an index among the brushes of that type in `brush.list`

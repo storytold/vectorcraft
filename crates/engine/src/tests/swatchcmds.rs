@@ -617,6 +617,24 @@ fn rename_group_renames_only_the_group_in_one_undo_step() {
     }
 }
 
+/// A color group renamed while a drag is still in progress keeps its new name when the drag is
+/// canceled: the drag becomes a step of its own first, and the rename is the next step.
+#[test]
+fn rename_group_during_a_drag_is_a_step_of_its_own() {
+    let mut s = session();
+    rect_filled(&mut s, json!({"swatch": "Bright Red"}));
+    let undo = undo_len(&s);
+    s.begin_interaction("Move").unwrap();
+    s.preview("object.move", &json!({"dx": 7, "dy": 0})).unwrap();
+    run(&mut s, "swatch.renameGroup", json!({"group": "Brights", "name": "Vivid"}));
+    s.cancel_interaction().ok();
+    assert!(doc(&s).swatch_groups.iter().any(|g| g.name == "Vivid"), "canceling the drag keeps the rename");
+    assert_eq!(undo_len(&s), undo + 2, "the drag and the rename are two steps");
+    run(&mut s, "edit.undo", json!({}));
+    assert!(doc(&s).swatch_groups.iter().any(|g| g.name == "Brights"), "Undo takes back the rename alone");
+    assert_eq!(undo_len(&s), undo + 1);
+}
+
 #[test]
 fn a_cmyk_document_starts_with_cmyk_swatches_and_stores_new_colours_as_cmyk() {
     use vectorcraft_color::Color;
