@@ -3021,6 +3021,11 @@ digits	Malayalam	Malajalam
 	Place the pages with the placement again	Ponownie rozmieść strony według położenia
 	Placement:	Położenie:
 	Preserve CMYK Numbers	Zachowaj wartości CMYK
+	Preserve RGB Numbers	Zachowaj wartości RGB
+	Device to Simulate:	Symulowane urządzenie:
+	Simulate Paper Color	Symuluj kolor papieru
+	Simulate Black Ink	Symuluj czarną farbę
+	Load…	Wczytaj…
 	Previous page	Poprzednia strona
 	Print Layers:	Drukuj warstwy:
 	Print Preset:	Ustawienie drukowania:
@@ -3095,6 +3100,10 @@ digits	Malayalam	Malajalam
 	Add Color Tool	Narzędzie Dodaj kolor
 	Remove Color Tool	Narzędzie Usuń kolor
 	Remove Color	Usuń kolor
+	Set As Base Color	Ustaw jako kolor bazowy
+	Select Shade	Wybierz odcień
+	Add New Color	Dodaj nowy kolor
+	Set Current Color As Base Color	Ustaw bieżący kolor jako bazowy
 	Find the selected colors in the artwork	Znajdź zaznaczone kolory w kompozycji
 	Keep this row's colors (exclude)	Zachowaj kolory tego wiersza (wyklucz)
 	Limit to Library:	Ogranicz do biblioteki:
@@ -4579,6 +4588,7 @@ font-technology	Variable	Zmienne
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} z {n} wyniku. Pisz dalej, aby je zawęzić.|{shown} z {n} wyników. Pisz dalej, aby je zawęzić.|{shown} z {n} wyników. Pisz dalej, aby je zawęzić.
 	Recent Commands	Ostatnie polecenia
 	No recent commands	Brak ostatnich poleceń
+	Type to search commands, tools, panels and effects	Pisz, aby szukać poleceń, narzędzi, paneli i efektów
 	Dashed Line	Linia przerywana
 	Panel menu	Menu panelu
 	Unembed…	Wyodrębnij…
@@ -4702,6 +4712,7 @@ font-technology	Variable	Zmienne
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	W akapitach z włączoną opcją Dziel wyrazy wyraz z listy jest dzielony tylko w miejscach wpisanych w nim łączników albo wcale, jeśli ich nie ma, bez względu na język i wielkość liter.
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	W wersji na komputer wtyczki .wasm z tego folderu są wczytywane przy uruchomieniu i po kliknięciu OK z nowym folderem tutaj, z wyjątkiem trybu awaryjnego; wersja internetowa ich nie wczytuje.
 	Normal keeps each plug-in's own limits; with Large, a plug-in filter or command may run at least 250 million instructions besides those for its input. The time limit stays the same.	Normalny zachowuje własne limity każdej wtyczki; przy ustawieniu Duże filtr lub polecenie wtyczki może wykonać co najmniej 250 milionów instrukcji oprócz tych na swoje dane wejściowe. Limit czasu pozostaje bez zmian.
+	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	Ile instrukcji może zużyć każde uruchomienie filtra obiektów z wtyczki; Duże pozwala na więcej niż Normalny przy tym samym limicie 60 sekund. Ciężkie filtry zachowują własny budżet.
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Pierwszy wybór dysku roboczego: Startup, None lub ścieżka folderu; VectorCraft go zapisuje, ale jeszcze nie używa dysków roboczych.
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Drugi wybór dysku roboczego: Startup, None lub ścieżka folderu; VectorCraft go zapisuje, ale jeszcze nie używa dysków roboczych.
 	How light or dark the interface is.	Jak jasny lub ciemny jest interfejs.
@@ -4722,6 +4733,7 @@ font-technology	Variable	Zmienne
 	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	Od następnego uruchomienia wersja na komputer rysuje tym rodzajem procesora graficznego; Automatycznie wybiera najpierw ten, który obsługuje ekran. Wersja internetowa go nie używa.
 	From the next start, the desktop version shows the canvas through this kind of graphics processor; the artwork is drawn on the CPU either way. Automatic prefers the integrated one on Windows and macOS. The web version does not use it.	Od następnego uruchomienia wersja na komputer wyświetla obszar roboczy przez ten rodzaj procesora graficznego; kompozycja jest zawsze rysowana na CPU. Automatycznie w systemach Windows i macOS wybiera najpierw zintegrowany. Wersja internetowa go nie używa.
 	From the next start, the window shows each frame without waiting for the display's refresh where the graphics driver allows, at most 240 frames a second.	Od następnego uruchomienia okno wyświetla każdą klatkę bez czekania na odświeżenie ekranu, jeśli pozwala na to sterownik grafiki, najwyżej 240 klatek na sekundę.
+	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	Od następnego uruchomienia okno pokazuje klatki bez czekania na odświeżenie ekranu, najwyżej 240 na sekundę; po wyłączeniu tempo wyznacza ekran. Tryb prezentacji ustawiony przy uruchomieniu ma pierwszeństwo.
 	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	Największa liczba kroków cofania, które zachowuje każdy dokument; mniejsza liczba usuwa najstarsze kroki po kliknięciu OK. Kroki mogą też zniknąć wcześniej, gdy zajmują zbyt dużo pamięci.
 	Shows the artwork changing while you drag; off, outlines follow the drag and the artwork changes when you release. A ruler guide always moves as you drag.	Pokazuje zmiany kompozycji podczas przeciągania; po wyłączeniu kontury podążają za przeciąganiem, a kompozycja zmienia się po puszczeniu. Linia pomocnicza z linijki zawsze porusza się podczas przeciągania.
 	How many worker threads draw the artwork; -1 uses one fewer than the cores VectorCraft may use, at most 8, and 0 uses none. The web version always uses none.	Ile wątków roboczych rysuje kompozycję; -1 używa o jeden mniej niż rdzeni, których VectorCraft może używać, najwyżej 8, a 0 żadnego. Wersja internetowa nigdy żadnego nie używa.
@@ -4749,6 +4761,10 @@ font-technology	Variable	Zmienne
 	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft zapisuje ten wybór, ale Kopiuj i Wytnij nie używają jeszcze formatu starszego schowka wektorowego.
 	Preserve Paths or Preserve Appearance and Overprints for the legacy vector clipboard; VectorCraft stores the choice but does not use it yet.	Zachowaj ścieżki lub Zachowaj wygląd i nadruki dla starszego schowka wektorowego; VectorCraft zapisuje wybór, ale jeszcze go nie używa.
 	Keep Formatting keeps the styles of text copied from VectorCraft type when it is pasted into type; Keep Plain Text gives it the style where it lands.	Zachowaj formatowanie zachowuje style tekstu skopiowanego z obiektu tekstowego VectorCraft po wklejeniu do obiektu tekstowego; Zachowaj zwykły tekst nadaje mu styl miejsca, w które trafia.
+	Display All Blacks as Rich Black shows pure CMYK black (black ink alone at 100%) as RGB black on the canvas; Display All Blacks Accurately converts it through the CMYK working space.	Wyświetlaj wszystkie czernie jako czerń głęboką pokazuje czystą czerń CMYK (sam czarny atrament w 100%) na obszarze roboczym jako czerń RGB; Wyświetlaj wszystkie czernie dokładnie przekształca ją przez roboczą przestrzeń CMYK.
+	Output All Blacks as Rich Black draws pure CMYK black as RGB black in RGB and grayscale raster exports and Print as Bitmap; it does not change vector exports, CMYK JPEG, TIFF and PSD, or other printing.	Wyprowadzaj wszystkie czernie jako czerń głęboką rysuje czystą czerń CMYK jako czerń RGB w rastrowych eksportach RGB i w skali szarości oraz przy Drukuj jako bitmapę; nie zmienia eksportów wektorowych, plików JPEG, TIFF i PSD CMYK ani innego drukowania.
+	On a touch screen, switches to the Touch workspace; turning this off, or losing the touch screen, goes back to the workspace it switched from.	Na ekranie dotykowym przełącza na dotykowy obszar roboczy; wyłączenie opcji lub utrata ekranu dotykowego przywraca obszar roboczy sprzed przełączenia.
+	A two-finger tap on the canvas undoes, or switches between selection and drawing tools in the Touch workspace, and a three-finger tap redoes; neither works in Presentation Mode.	Stuknięcie dwoma palcami w obszar roboczy cofa, a w dotykowym obszarze roboczym przełącza między narzędziami zaznaczania i rysowania; stuknięcie trzema palcami ponawia. Żadne nie działa w trybie prezentacji.
 	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	Nowy tekst otrzymuje ten język, dopóki językiem w Ustawieniach dokumentu jest Angielski: USA, a [Normalny styl znakowy] nie ustawia języka; tekst, który już jest w dokumencie, zachowuje swój język.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	W akapitach z włączoną opcją Dziel wyrazy wyraz z listy jest dzielony tylko w miejscach wpisanych w nim łączników albo wcale, jeśli ich nie ma, bez względu na wielkość liter; wyrazy koreańskie nie dostają łącznika, a wyrazy w językach indyjskich nie są dzielone wewnątrz grupy znaków.
 	Reset all preferences to their defaults?	Przywrócić domyślne wartości wszystkich preferencji?
@@ -5534,6 +5550,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	no native format	brak formatu natywnego
 @msg	no pages	brak stron
 @msg	no pattern `{name}`	brak wzorka `{name}`
+@msg	art painted with `{name}` can't be its tile	kompozycja malowana wzorkiem `{name}` nie może być jego kafelkiem
 @msg	no perspective grid preset named `{name}`	brak ustawienia siatki perspektywy o nazwie `{name}`
 @msg	no plug-in {0} is installed	wtyczka {0} nie jest zainstalowana
 @msg	no plug-in {id} is installed	wtyczka {id} nie jest zainstalowana
@@ -6356,6 +6373,7 @@ variable-list-end	{0}, {1}	{0} i {1}
 	Arrow	Strzałka
 	Arrow (open)	Strzałka (otwarta)
 	Barbed	Zadziorowata
+arrowhead	Feather	Pióro
 	Half Arrow (left)	Pół strzałki (lewa)
 	Half Arrow (right)	Pół strzałki (prawa)
 	Concave	Wklęsła
@@ -6383,6 +6401,7 @@ variable-list-end	{0}, {1}	{0} i {1}
 	Kite	Latawiec
 	Triangle to Bar	Trójkąt z kreską
 	Oval	Owal
+	Line Arrow	Strzałka liniowa
 	Complementary	Dopełniające
 	Complementary 2	Dopełniające 2
 	Split Complementary	Rozdzielone dopełniające
@@ -8156,6 +8175,7 @@ breakText	Glyphs	Glify
 	Remove Strokes	Usuń obrysy
 	Place Brush Art	Umieść kompozycję pędzla
 	Replace Brush Art	Zastąp kompozycję pędzla
+	Replace Pattern Art	Zastąp kompozycję wzorka
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Obrysy używają tego pędzla. Zastosować nową kompozycję do tych obrysów, czy pozostawić je bez zmian i dodać kopię pędzla z nową kompozycją?
 	Apply to Strokes	Zastosuj do obrysów
 	Leave Strokes	Pozostaw obrysy
@@ -10584,6 +10604,11 @@ breakText	Glyphs	Glify
 @msg	A panel is not joined to the rest by a crease.	Panel nie jest połączony z resztą żadną linią bigowania.
 @msg	A fold line is on a non-printing layer.	Linia zgięcia znajduje się na warstwie niedrukowanej.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panele: {panels}, zawiasy: {hinges}, błędy: {errors}, ostrzeżenia: {warnings}
+	Engraving	Grawerowanie
+	Fine Hatching	Drobne kreskowanie
+	Dense Hatching	Gęste kreskowanie
+	Tapered Hatching	Zwężane kreskowanie
+	Broken Hatching	Przerywane kreskowanie
 	Image Brush	Pędzle obrazkowe
 	Soft Bloom	Miękki kwiat
 	Halftone Field	Pole półtonów
