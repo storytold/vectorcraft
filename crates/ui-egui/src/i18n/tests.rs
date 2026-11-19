@@ -1405,6 +1405,11 @@ fn is_gujarati(c: char) -> bool {
     matches!(c as u32, 0x0A80..=0x0AFF)
 }
 
+#[cfg(feature = "interface-fonts")]
+fn is_hebrew(c: char) -> bool {
+    matches!(c as u32, 0x0590..=0x05FF | 0xFB1D..=0xFB4F)
+}
+
 /// The UI fonts draw every character the catalogs use, in every family the UI draws text with
 /// (the web build has no system fonts to fall back to). Chinese and Japanese characters come from
 /// the craft-fonts build input, which is optional: without it they are left to the installed
@@ -1419,6 +1424,7 @@ fn bundled_fonts_cover_the_catalogs() {
     let georgian_ui_font = vectorcraft_text::CRAFT_FONTS.iter().any(|f| f.is_georgian());
     let devanagari_ui_font = vectorcraft_text::CRAFT_FONTS.iter().any(|f| f.scripts.contains(&"Deva"));
     let gujarati_ui_font = vectorcraft_text::CRAFT_FONTS.iter().any(|f| f.scripts.contains(&"Gujr"));
+    let hebrew_ui_font = vectorcraft_text::CRAFT_FONTS.iter().any(|f| f.scripts.contains(&"Hebr"));
     let ctx = egui::Context::default();
     crate::theme::install_fonts(&ctx);
     let mut output = ctx.run_ui(egui::RawInput::default(), |_| {});
@@ -1443,6 +1449,7 @@ fn bundled_fonts_cover_the_catalogs() {
                         && (georgian_ui_font || !is_georgian(*c))
                         && (devanagari_ui_font || !is_devanagari(*c))
                         && (gujarati_ui_font || !is_gujarati(*c))
+                        && (hebrew_ui_font || !is_hebrew(*c))
                 })
                 .collect();
             for family in &families {
@@ -6750,8 +6757,8 @@ fn translated_messages_keep_the_field_names_and_values_their_english_lists() {
 /// Languages whose catalogs translate status and error messages; [`untranslated_report`] lists
 /// the messages each one lacks.
 const COMPLETE_MESSAGES: &[&str] = &[
-    "cs", "de", "el", "es", "fr", "he", "hi", "hu", "id", "it", "ja", "ka", "ko", "pl", "pt-br", "ru", "sv", "uk", "vi", "zh-hans", "zh-hant",
-    "fi", "tr", "ca", "nl", "da",
+    "cs", "de", "el", "es", "fr", "he", "hi", "hu", "id", "it", "ja", "ka", "ko", "pl", "pt-br", "ru", "sv", "uk", "vi", "zh-hans", "zh-hant", "fi",
+    "tr", "ca", "nl", "da",
 ];
 
 /// Crates whose error and status messages reach the status bar, the crates whose errors the
