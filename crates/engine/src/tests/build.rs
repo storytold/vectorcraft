@@ -4162,6 +4162,269 @@ fn live_paint_group_stroke_panel_edits_change_its_edges() {
     assert_eq!(node(&s, g).appearance.stroke().map(|st| st.width), Some(1.0));
 }
 
+/// A face or edge selected before its Live Paint group counts with the group: the Fill proxy shows
+/// the faces' fill and the Stroke panel the edges' stroke, whatever the order of the selection.
+#[test]
+fn live_paint_group_proxies_do_not_depend_on_the_selection_order() {
+    let mut s = session();
+    let g = live(&mut s);
+    s.execute("select.set", &json!({"ids": [g.0]})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ff00ff"})).unwrap();
+    s.execute("stroke.set", &json!({"weight": 6})).unwrap();
+    let magenta = serde_json::to_value(Paint::solid(Color::from_hex("#ff00ff").unwrap())).unwrap();
+    let edge = vectorcraft_tools::builder::edges(&node(&s, g))[0].id;
+    s.execute("select.set", &json!({"ids": [edge.0, g.0]})).unwrap();
+    assert_eq!(s.execute("paint.proxies", &json!({})).unwrap()["fill"], magenta, "an edge first shows the faces' fill");
+    // A face with a stroke of its own (from a file, say), selected first, shows the edges' stroke.
+    let face = vectorcraft_tools::builder::faces(&node(&s, g))[0].id;
+    s.edit("t", |d, _| {
+        let n = d.node_mut(face).unwrap();
+        n.appearance.set_stroke(Paint::solid(Color::BLACK));
+        n.appearance.stroke_at_mut(None).unwrap().width = 2.0;
+        Ok(())
+    })
+    .unwrap();
+    s.execute("select.set", &json!({"ids": [face.0, g.0]})).unwrap();
+    assert_eq!(s.shown_stroke().map(|st| st.width), Some(6.0), "a face first shows the edges' stroke");
+}
+
+/// The Eyedropper onto a whole selected Live Paint group, or reversed onto a clicked one, gives the
+/// picked fill attributes to its faces and the picked stroke attributes to its edges; its hidden
+/// source paths keep their paint.
+#[test]
+fn live_paint_group_eyedropper_gives_the_fill_to_faces_and_the_stroke_to_edges() {
+    for reverse in [false, true] {
+        let mut s = session();
+        let g = live(&mut s);
+        let src = rect(&mut s, 400.0, 0.0, 50.0, 50.0);
+        s.execute("paint.setFill", &json!({"ids": [src.0], "color": "#ff00ff"})).unwrap();
+        s.execute("paint.setStroke", &json!({"ids": [src.0], "color": "#0000ff"})).unwrap();
+        s.execute("stroke.set", &json!({"ids": [src.0], "weight": 3})).unwrap();
+        let (faces0, edges0) = part_looks(&s, g);
+        let sources0 = sources_looks(&s, g);
+        if reverse {
+            s.execute("select.set", &json!({"ids": [src.0]})).unwrap();
+            s.execute("appearance.copyFrom", &json!({"source": g.0, "reverse": true})).unwrap();
+        } else {
+            s.execute("select.set", &json!({"ids": [g.0]})).unwrap();
+            s.execute("appearance.copyFrom", &json!({"source": src.0})).unwrap();
+        }
+        let (faces1, edges1) = part_looks(&s, g);
+        let magenta = Paint::solid(Color::from_hex("#ff00ff").unwrap());
+        let blue = Paint::solid(Color::from_hex("#0000ff").unwrap());
+        for (f, f0) in faces1.iter().zip(&faces0) {
+            assert_eq!(f.fill_paint(), magenta, "reverse {reverse}: a face takes the fill");
+            assert_eq!((f.stroke_paint(), f.stroke_width()), (f0.stroke_paint(), f0.stroke_width()), "reverse {reverse}: a face takes no stroke");
+        }
+        for (e, e0) in edges1.iter().zip(&edges0) {
+            assert_eq!((e.stroke_paint(), e.stroke_width()), (blue.clone(), 3.0), "reverse {reverse}: an edge takes the stroke");
+            assert_eq!(e.fill_paint(), e0.fill_paint(), "reverse {reverse}: an edge takes no fill");
+        }
+        assert_eq!(sources_looks(&s, g), sources0, "reverse {reverse}: the hidden source paths keep their paint");
+    }
+}
+
+/// A whole-appearance Eyedropper pick of a source with several fills and strokes gives each face
+/// of a selected Live Paint group every fill row and each edge every stroke row.
+#[test]
+fn live_paint_group_eyedropper_gives_every_fill_and_stroke_row() {
+    let mut s = session();
+    let g = live(&mut s);
+    let src = rect(&mut s, 400.0, 0.0, 50.0, 50.0);
+    s.execute("paint.setFill", &json!({"ids": [src.0], "color": "#ff00ff"})).unwrap();
+    s.execute("paint.setStroke", &json!({"ids": [src.0], "color": "#0000ff"})).unwrap();
+    s.execute("appearance.addFill", &json!({"ids": [src.0]})).unwrap();
+    s.execute("appearance.addStroke", &json!({"ids": [src.0]})).unwrap();
+    let kinds = |a: &vectorcraft_doc::Appearance, fill: bool| a.items.iter().filter(|it| it.is_fill() == fill).count();
+    let source = (*node(&s, src).appearance).clone();
+    assert_eq!((kinds(&source, true), kinds(&source, false)), (2, 2));
+    // A face with a stroke row below its fill keeps that row below the picked fills.
+    let face = vectorcraft_tools::builder::faces(&node(&s, g))[0].id;
+    s.edit("t", |d, _| {
+        let n = d.node_mut(face).unwrap();
+        n.appearance.items.insert(0, vectorcraft_doc::AppearanceItem::Stroke(vectorcraft_doc::StrokeLayer::new(Paint::solid(Color::BLACK), 9.0)));
+        Ok(())
+    })
+    .unwrap();
+    let (faces0, edges0) = part_looks(&s, g);
+    s.execute("select.set", &json!({"ids": [g.0]})).unwrap();
+    s.execute("appearance.copyFrom", &json!({"source": src.0})).unwrap();
+    let (faces1, edges1) = part_looks(&s, g);
+    let order: Vec<bool> = faces1[0].items.iter().map(|it| it.is_fill()).collect();
+    assert_eq!(order.first(), Some(&false), "the face's lower stroke row stays below its fills: {order:?}");
+    for (f, f0) in faces1.iter().zip(&faces0) {
+        assert_eq!(kinds(f, true), 2, "a face takes every fill row");
+        assert_eq!(kinds(f, false), kinds(f0, false), "a face keeps its strokes");
+    }
+    for (e, e0) in edges1.iter().zip(&edges0) {
+        assert_eq!(kinds(e, false), 2, "an edge takes every stroke row");
+        assert_eq!(kinds(e, true), kinds(e0, true), "an edge keeps its fills");
+    }
+}
+
+/// The Appearance panel's edits of a Live Paint group's contents (`target: "contents"`) follow the
+/// group's rule: a new fill goes on its faces, a new stroke on its edges, and its hidden source paths
+/// keep their appearance under every contents edit.
+#[test]
+fn live_paint_group_contents_edits_follow_the_group_rule() {
+    let mut s = session();
+    let g = live(&mut s);
+    s.execute("select.set", &json!({"ids": [g.0]})).unwrap();
+    let (faces0, edges0) = part_looks(&s, g);
+    let sources0 = sources_looks(&s, g);
+    s.execute("appearance.addFill", &json!({"target": "contents"})).unwrap();
+    let (faces1, edges1) = part_looks(&s, g);
+    assert!(faces1.iter().zip(&faces0).all(|(f, f0)| f.items.len() == f0.items.len() + 1), "every face takes a new fill");
+    assert_eq!(edges1, edges0, "edges take no new fill");
+    s.execute("appearance.addStroke", &json!({"target": "contents"})).unwrap();
+    let (faces2, edges2) = part_looks(&s, g);
+    assert_eq!(faces2, faces1, "faces take no new stroke");
+    assert!(edges2.iter().zip(&edges1).all(|(e, e0)| e.items.len() == e0.items.len() + 1), "every edge takes a new stroke");
+    // A stroke row edit of the contents reaches the edges, not the faces.
+    s.execute("stroke.set", &json!({"target": "contents", "item": 0, "weight": 7})).unwrap();
+    let (faces3, edges3) = part_looks(&s, g);
+    assert_eq!(faces3, faces2, "faces keep their rows");
+    assert!(edges3.iter().all(|e| e.stroke_at(Some(0)).map(|st| st.width) == Some(7.0)), "every edge's stroke row takes the weight");
+    s.execute("appearance.clear", &json!({"target": "contents"})).unwrap();
+    assert_eq!(sources_looks(&s, g), sources0, "the hidden source paths keep their appearance");
+}
+
+/// Fill edits of a Live Paint group's contents with an `item` (a gradient vector, Invert, Overprint
+/// Fill) change its faces and leave an edge's fill row as it is, and Overprint on the whole group goes
+/// to the faces' fills and the edges' strokes, leaving the hidden source paths as they are.
+#[test]
+fn live_paint_group_item_edits_and_overprint_follow_the_group_rule() {
+    let mut s = session();
+    let g = live(&mut s);
+    s.execute("select.set", &json!({"ids": [g.0]})).unwrap();
+    s.execute("paint.setFill", &json!({"gradient": {}})).unwrap();
+    // Each edge gets a copy of a face's gradient fill row, below its stroke.
+    let n = node(&s, g);
+    let face_row = vectorcraft_tools::builder::faces(&n)[0].appearance.items[0].clone();
+    let edge_ids: Vec<NodeId> = vectorcraft_tools::builder::edges(&n).iter().map(|e| e.id).collect();
+    let mut face_ids: Vec<u64> = vectorcraft_tools::builder::faces(&n).iter().map(|f| f.id.0).collect();
+    face_ids.sort_unstable();
+    s.edit("t", |d, _| {
+        for e in &edge_ids {
+            d.node_mut(*e).unwrap().appearance.items.insert(0, face_row.clone());
+        }
+        Ok(())
+    })
+    .unwrap();
+    let (faces0, edges0) = part_looks(&s, g);
+    let sources0 = sources_looks(&s, g);
+    let r = s.execute("paint.setGradientGeom", &json!({"stroke": false, "item": 0, "target": "contents", "start": [0, 0], "end": [100, 0]})).unwrap();
+    let mut changed: Vec<u64> = r["ids"].as_array().unwrap().iter().map(|v| v.as_u64().unwrap()).collect();
+    changed.sort_unstable();
+    assert_eq!(changed, face_ids, "only the faces take the vector");
+    assert_eq!(part_looks(&s, g).1, edges0, "an edge's fill row keeps its vector");
+    let stops = |a: &vectorcraft_doc::Appearance| match a.fill_paint() {
+        Paint::Gradient(gr) => gr.gradient.stops.iter().map(|st| st.color).collect::<Vec<_>>(),
+        _ => vec![],
+    };
+    let before: Vec<_> = part_looks(&s, g).0.iter().map(stops).collect();
+    s.execute("paint.invert", &json!({"stroke": false, "item": 0, "target": "contents"})).unwrap();
+    for (f, b) in part_looks(&s, g).0.iter().zip(&before) {
+        assert_eq!(stops(f), b.iter().rev().copied().collect::<Vec<_>>(), "the black-to-white stops of a face's fill are inverted");
+    }
+    assert_ne!(part_looks(&s, g).0, faces0);
+    assert_eq!(part_looks(&s, g).1, edges0, "an edge's fill row is not inverted");
+    s.execute("object.setOverprint", &json!({"fill": true, "item": 0, "target": "contents"})).unwrap();
+    let (faces1, edges1) = part_looks(&s, g);
+    assert!(faces1.iter().all(|f| f.items[0].overprint()), "the faces' fill overprints");
+    assert_eq!(edges1, edges0, "an edge's fill row does not overprint");
+    s.execute("object.setOverprint", &json!({"fill": true, "stroke": true})).unwrap();
+    let (_, edges2) = part_looks(&s, g);
+    assert!(edges2.iter().all(|e| e.items.iter().all(|it| it.overprint() != it.is_fill())), "only the edges' strokes overprint");
+    assert_eq!(sources_looks(&s, g), sources0, "the hidden source paths keep their flags");
+}
+
+/// A face selected before an ordinary group that holds its Live Paint group counts with that group:
+/// the Stroke panel shows the edges' stroke.
+#[test]
+fn live_paint_group_inside_a_selected_group_keeps_the_proxies_independent_of_order() {
+    let mut s = session();
+    let g = live(&mut s);
+    s.execute("select.set", &json!({"ids": [g.0]})).unwrap();
+    s.execute("stroke.set", &json!({"weight": 6})).unwrap();
+    let outer = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let face = vectorcraft_tools::builder::faces(&node(&s, g))[0].id;
+    s.edit("t", |d, _| {
+        let n = d.node_mut(face).unwrap();
+        n.appearance.set_stroke(Paint::solid(Color::BLACK));
+        n.appearance.stroke_at_mut(None).unwrap().width = 2.0;
+        Ok(())
+    })
+    .unwrap();
+    s.execute("select.set", &json!({"ids": [face.0, outer.0]})).unwrap();
+    assert_eq!(s.shown_stroke().map(|st| st.width), Some(6.0), "a face first shows the edges' stroke");
+    assert!(!s.active().unwrap().stroke_mixed().weight, "the face's own stroke does not make the weight mixed");
+    // An unfilled edge selected with the outer group does not make the faces' fill mixed.
+    s.execute("select.set", &json!({"ids": [g.0]})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    let edge = vectorcraft_tools::builder::edges(&node(&s, g))[0].id;
+    s.execute("select.set", &json!({"ids": [edge.0, outer.0]})).unwrap();
+    let r = s.execute("paint.proxies", &json!({})).unwrap();
+    assert_eq!(r["fill"], serde_json::to_value(Paint::solid(Color::from_hex("#ff0000").unwrap())).unwrap());
+    assert_eq!(r["fillMixed"], false, "the edge counts with its group");
+}
+
+/// The Eyedropper picks up a whole Live Paint group as its faces' fill under its edges' stroke, and
+/// `append` onto a whole group adds the picked fills and strokes without the picked effects.
+#[test]
+fn live_paint_group_eyedropper_picks_up_the_group_and_appends_without_effects() {
+    let mut s = session();
+    let g = live(&mut s);
+    s.execute("select.set", &json!({"ids": [g.0]})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ff00ff"})).unwrap();
+    s.execute("paint.setStroke", &json!({"color": "#0000ff"})).unwrap();
+    s.execute("stroke.set", &json!({"weight": 5})).unwrap();
+    s.edit("t", |d, _| {
+        d.node_mut(g).unwrap().opacity = 0.5;
+        Ok(())
+    })
+    .unwrap();
+    let target = rect(&mut s, 400.0, 0.0, 50.0, 50.0);
+    s.execute("select.set", &json!({"ids": [g.0]})).unwrap();
+    s.execute("appearance.copyFrom", &json!({"source": target.0, "reverse": true})).unwrap();
+    let a = (*node(&s, target).appearance).clone();
+    assert_eq!(a.fill_paint(), Paint::solid(Color::from_hex("#ff00ff").unwrap()), "the faces' fill");
+    assert_eq!((a.stroke_paint(), a.stroke_width()), (Paint::solid(Color::from_hex("#0000ff").unwrap()), 5.0), "the edges' stroke");
+    assert_eq!(node(&s, target).opacity, 0.5, "the group's own opacity");
+    // A Live Paint group with no face and no edge is not picked up: the next selected object is.
+    let empty = rect(&mut s, 600.0, 0.0, 50.0, 50.0);
+    s.execute("select.set", &json!({"ids": [empty.0]})).unwrap();
+    let e = NodeId(s.execute("livePaint.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let en = node(&s, e);
+    let parts: Vec<NodeId> =
+        vectorcraft_tools::builder::faces(&en).iter().chain(vectorcraft_tools::builder::edges(&en).iter()).map(|p| p.id).collect();
+    assert!(!parts.is_empty());
+    s.edit("t", |d, _| {
+        d.node_mut(e).unwrap().children_mut().unwrap().retain(|c| !parts.contains(&c.id));
+        Ok(())
+    })
+    .unwrap();
+    assert!(vectorcraft_tools::builder::is_live_paint(&node(&s, e)));
+    let other = rect(&mut s, 700.0, 0.0, 50.0, 50.0);
+    s.execute("paint.setFill", &json!({"ids": [other.0], "color": "#00ff00"})).unwrap();
+    s.execute("select.set", &json!({"ids": [e.0, other.0]})).unwrap();
+    s.execute("appearance.copyFrom", &json!({"source": target.0, "reverse": true})).unwrap();
+    assert_eq!(node(&s, target).appearance.fill_paint(), Paint::solid(Color::from_hex("#00ff00").unwrap()), "the next selected object's fill");
+    // Append a source with a drop shadow onto the whole group.
+    let src = rect(&mut s, 500.0, 0.0, 50.0, 50.0);
+    s.execute("select.set", &json!({"ids": [src.0]})).unwrap();
+    s.execute("effect.apply", &json!({"effect": "stylize.dropShadow", "item": null})).unwrap();
+    assert!(!node(&s, src).appearance.effects.is_empty());
+    let (faces0, edges0) = part_looks(&s, g);
+    s.execute("select.set", &json!({"ids": [g.0]})).unwrap();
+    s.execute("appearance.copyFrom", &json!({"source": src.0, "append": true})).unwrap();
+    let (faces1, edges1) = part_looks(&s, g);
+    for (p, p0) in faces1.iter().chain(&edges1).zip(faces0.iter().chain(&edges0)) {
+        assert_eq!(p.effects, p0.effects, "a face or edge takes no effect");
+    }
+    assert!(faces1.iter().zip(&faces0).all(|(f, f0)| f.items.len() > f0.items.len()), "every face takes the fill");
+}
+
 /// A selected Live Paint group with no part of the edited kind is still a selection: a stroke edit
 /// of a group without edges, or a fill gradient edit of a group without faces, changes nothing and
 /// leaves the settings for new art as they are.
@@ -4183,6 +4446,8 @@ fn live_paint_group_without_parts_of_the_edited_kind_leaves_new_art_alone() {
     s.execute("stroke.set", &json!({"weight": 4})).unwrap();
     s.execute("stroke.weightUp", &json!({})).unwrap();
     s.execute("stroke.setAdvanced", &json!({"arrowScale": [200, 150]})).unwrap();
+    // A stroke row edit of the group's contents finds no edge either.
+    s.execute("stroke.set", &json!({"target": "contents", "item": 0, "weight": 9})).unwrap();
     assert_eq!((s.paint.clone(), s.new_art_stroke()), (paint0, stroke0), "new art keeps its stroke");
     assert_eq!(part_looks(&s, g), looks);
 
