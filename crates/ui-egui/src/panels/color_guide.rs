@@ -116,10 +116,11 @@ pub(crate) fn before_command(app: &VectorcraftApp) -> LinkBefore {
     let group =
         st.zip(s).and_then(|(st, s)| st.doc.swatch_groups.iter().find(|g| g.swatches.iter().any(|w| w.name == s.swatch)).map(|g| g.name.clone()));
     let docs = if s.is_some() { app.session.documents().iter().map(|d| d.uid).collect() } else { Vec::new() };
-    // The color it shows: its swatch's tint in its document, while that is a spot color there.
+    // The color it shows: its swatch's tint in its document, while that is a spot color there and
+    // the link does not rest (a resting link shows the color it last showed).
     let shown = st
         .zip(s)
-        .filter(|(st, s)| st.doc.swatch(&s.swatch).is_some_and(|w| w.spot))
+        .filter(|(st, s)| !s.resting && st.doc.swatch(&s.swatch).is_some_and(|w| w.spot))
         .and_then(|(st, s)| st.doc.tint_paint(&s.swatch, s.tint)?.color());
     let color = s.map(|_| shown.unwrap_or_else(|| base_color(app)));
     LinkBefore { active, group, color, docs, active_index: app.session.active_index() }
@@ -225,7 +226,7 @@ fn follow_batch(app: &VectorcraftApp, base: u64, name: String, steps: &[Value], 
     for (i, step) in steps.iter().enumerate() {
         let sid = step["command"].as_str().unwrap_or_default();
         let (p, r) = (&step["params"], results.get(i).unwrap_or(&Value::Null));
-        if sid.starts_with("script.") || sid.starts_with("plugin.") {
+        if runs_code(sid) {
             return None;
         }
         match docs.in_base() {
@@ -268,15 +269,23 @@ fn follow_batch(app: &VectorcraftApp, base: u64, name: String, steps: &[Value], 
     spots.next().is_none().then_some(first)
 }
 
+/// Whether command `id` runs a script or a plug-in (Run Script, a plug-in filter or a plug-in's own
+/// command), whose commands the panel does not follow.
+fn runs_code(id: &str) -> bool {
+    matches!(id, "script.run" | "plugin.run") || vectorcraft_engine::cmd::plugin::is_command_id(id)
+}
+
 /// Command `id` ran with `params` and replied `reply`: a spot color base linked to a swatch that
 /// Swatch Options renamed links to the new name, and one whose swatch a command deleted or made a
 /// process color is no longer linked to it, so a later spot color of the same name does not
 /// become the base; the base keeps the color it showed. A `command.batch`'s steps are followed in
-/// order ([`follow_batch`]).
+/// order ([`follow_batch`]). A script or a plug-in may do anything, so it ends the link.
 pub(crate) fn after_command(app: &mut VectorcraftApp, id: &str, params: &Value, reply: &Value, before: LinkBefore) {
     let Some(s) = app.ui.color_guide_spot.as_ref() else { return };
     let (base, n) = (s.doc, s.swatch.clone());
-    let name = if id == "command.batch" {
+    let name = if runs_code(id) {
+        None
+    } else if id == "command.batch" {
         let steps = params["commands"].as_array().map(Vec::as_slice).unwrap_or_default();
         let results = reply["results"].as_array().map(Vec::as_slice).unwrap_or_default();
         follow_batch(app, base, n, steps, results, &before)
@@ -1386,6 +1395,45 @@ mod tests {
         frame(&mut app, &ctx);
         assert!(!linked(&app, &ctx), "a new spot color with an earlier name");
         assert_eq!(spot_name(&app).as_deref(), Some("Ink U"));
+    }
+
+    /// While the link rests, a new spot color of the same name that the panel did not follow does
+    /// not give the base its color when the next command ends the link.
+    #[test]
+    fn a_resting_link_keeps_the_color_it_showed() {
+        let mut app = spot_app(1.0);
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx);
+        let shown = base_color(&app);
+        app.session.execute("swatch.delete", &json!({"name": "Ink"})).unwrap();
+        frame(&mut app, &ctx);
+        app.session.execute("swatch.new", &json!({"name": "Ink", "color": "#00cc66", "spot": true})).unwrap();
+        frame(&mut app, &ctx);
+        assert!(app.ui.color_guide_spot.as_ref().is_some_and(|s| s.resting), "resting");
+        assert_eq!(base_color(&app), shown, "a resting link shows the color it showed");
+        app.run("swatch.new", json!({"name": "Spare", "color": "#999999"})).unwrap();
+        assert!(app.ui.color_guide_spot.is_none(), "another command ends it");
+        assert_eq!(base_color(&app), shown, "the base keeps the color it showed");
+    }
+
+    /// A script run ends the link: a script that deletes the spot color and makes another of the
+    /// same name does not make the new one the base, and the base keeps the color it showed. Listing
+    /// scripts or plug-ins keeps it.
+    #[test]
+    fn a_script_run_ends_the_link() {
+        let mut app = spot_app(1.0);
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx);
+        // Commands that only list scripts or plug-ins keep the link, also as batch steps.
+        app.run("script.engines", json!({})).unwrap();
+        app.run("plugin.list", json!({})).unwrap();
+        app.run("command.batch", json!({"commands": [{"command": "script.engines"}]})).unwrap();
+        assert!(app.ui.color_guide_spot.is_some(), "a script or plug-in listing");
+        let shown = base_color(&app);
+        let source = "vc.run('swatch.delete', {name: 'Ink'}); vc.run('swatch.new', {name: 'Ink', color: '#00cc66', spot: true});";
+        app.run("script.run", json!({"source": source, "name": "t.js"})).unwrap();
+        assert!(app.ui.color_guide_spot.is_none(), "a script ran");
+        assert_eq!(base_color(&app), shown, "the base keeps the color it showed");
     }
 
     /// A `command.batch` that switches, opens, closes or moves documents follows the spot color

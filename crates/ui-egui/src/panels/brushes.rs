@@ -7,6 +7,7 @@
 //! on macOS) onto such a brush replaces its art. Brush libraries open in library panels
 //! ([`BrushLibraries`]).
 
+use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -23,7 +24,7 @@ use vectorcraft_engine::cmd::swatchlib::LibraryInfo;
 
 use super::library_panel::{self, LibraryKind, LibraryRef, Row};
 use super::memo::Memo;
-use super::{first_selected, pstate, set_pstate};
+use super::{first_node, pstate, set_pstate};
 use crate::VectorcraftApp;
 use crate::dialogs::brush_options;
 use crate::menus::Item;
@@ -168,7 +169,7 @@ pub(crate) fn definition_chip(ui: &Ui, r: egui::Rect, st: Option<&DocState>, def
 }
 
 fn selected_brush(app: &VectorcraftApp) -> Option<String> {
-    first_selected(app).and_then(|n| n.appearance.stroke().and_then(|s| s.brush.clone()))
+    first_node(app).and_then(|n| n.appearance.stroke().and_then(|s| s.brush.clone()))
 }
 
 /// What the panel's last click was made with: the document, its selected objects and the current
@@ -523,6 +524,12 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     {
         app.status(e);
     }
+    // The selected brushed paths' own settings: the brush stays as it is.
+    if menu_item(ui, tl!("Options of Selected Object…"), brush_options::object_available(app), false)
+        && let Err(e) = app.run("ui.brushObjectOptions", json!({}))
+    {
+        app.status(e);
+    }
     ui.separator();
     // Selects the brushes no stroke paints with, for Delete Brush and Duplicate Brush.
     if menu_item(ui, tl!("Select All Unused"), app.session.active().is_some(), false)
@@ -654,8 +661,8 @@ impl LibraryKind for BrushLibraries {
     }
     /// A built-in library's brush in the UI language; a User Defined or loaded library's brush as
     /// it is named.
-    fn label<'a>(id: &str, name: &'a str) -> &'a str {
-        super::label_or_name(name, brushlib::BUILTIN.iter().any(|b| b.id == id))
+    fn label<'a>(id: &str, name: &'a str) -> Cow<'a, str> {
+        super::label_or_name(name, brushlib::BUILTIN.iter().any(|b| b.id == id)).into()
     }
     /// The brush's stroke preview, drawn with the library's resources.
     fn draw(_: &VectorcraftApp, ui: &Ui, r: egui::Rect, b: &LibBrush, selected: bool, hovered: bool) {

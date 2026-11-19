@@ -54,24 +54,19 @@ pub(super) fn action_batch(s: &mut Session, p: &Value) -> Result<Value> {
     }
     for (i, c) in cmds.iter().enumerate() {
         let id = c.get("command").and_then(Value::as_str).unwrap_or("");
+        let refuse = |reason: &str| bad(C, action_step(i, id, reason));
         if id.is_empty() {
-            return Err(bad(C, format!("commands[{i}]: missing `command`")));
+            return Err(refuse("missing `command`"));
         }
         if id == "command.batch" || id == "action.batch" {
-            return Err(bad(C, "batches cannot nest"));
+            return Err(refuse("batches cannot nest"));
         }
         // `command.batch` refuses the batch when it reaches this step, which would fail every file or data set it plays.
         if id == "prefs.import" {
-            return Err(bad(C, format!("commands[{i}]: `prefs.import` runs on its own, not as a batch step")));
+            return Err(refuse("`prefs.import` runs on its own, not as a batch step"));
         }
         if find_command(id).is_none() {
-            return Err(bad(
-                C,
-                match super::super::params::nearest_command(id) {
-                    Some(near) => format!("commands[{i}]: unknown command `{id}`; did you mean `{near}`?"),
-                    None => format!("commands[{i}]: unknown command `{id}`"),
-                },
-            ));
+            return Err(refuse(&super::super::params::unknown_command(id).to_string()));
         }
     }
     // Every option is checked before the destination folder is made.
@@ -160,7 +155,7 @@ pub fn batch_overwrites_one_file(s: &Session, p: &Value) -> bool {
             Some(f) => own_format.is_some_and(|own| super::format(f).is_some_and(|f| f.id == own)),
         };
         match c.get("command").and_then(Value::as_str).unwrap_or("") {
-            "document.save" | "file.save" => !save && (path || own_file()),
+            "document.save" => !save && (path || own_file()),
             "file.saveAs" => !save && path,
             "file.saveCopy" | "file.saveAsTemplate" => path,
             "document.export" | "document.exportSelection" => !export && path,
@@ -184,7 +179,7 @@ fn saves_move_to_each_file(steps: &[Value], redirected: bool) -> bool {
 /// in the destination folder when `redirected`) and makes that file the document's own: a save in
 /// the native template format writes a copy and leaves the document's file as it was.
 fn retargeting_save(c: &Value, redirected: bool) -> bool {
-    if !matches!(c.get("command").and_then(Value::as_str), Some("document.save" | "file.save" | "file.saveAs")) {
+    if !matches!(c.get("command").and_then(Value::as_str), Some("document.save" | "file.saveAs")) {
         return false;
     }
     let params = c.get("params");
@@ -219,7 +214,7 @@ fn batch_folder(s: &mut Session, cmd: &str, p: &Value, override_open: bool, run:
     // open, so its artboard files count ([`dataset_output_paths`]). No output takes the name of a
     // source file in the destination folder, other than that file's own output, or of a subfolder
     // of the destination folder that holds source files.
-    let (steps, places) = filter_steps(run.steps, override_open, false);
+    let (steps, places) = filter_steps(run.steps, override_open);
     let run = Run { steps: &steps, ..*run };
     let in_dest: Vec<Option<(String, bool)>> = files.iter().map(|path| name_in_folder(path, run.dest_folder)).collect();
     let mut picker =
@@ -272,7 +267,7 @@ fn batch_datasets(s: &mut Session, cmd: &str, run: &Run<'_>) -> Result<Value> {
     }
     let doc_stem = st.path.as_deref().and_then(|p| std::path::Path::new(p).file_stem().and_then(|s| s.to_str())).unwrap_or("Untitled").to_string();
     let stems = dataset_stems(&names, &doc_stem, run.dataset_file_naming, run, &st.doc)?;
-    let (steps, places) = filter_steps(run.steps, true, false);
+    let (steps, places) = filter_steps(run.steps, true);
     let run = Run { steps: &steps, ..*run };
     let mut processed = Vec::new();
     let mut failed = 0usize;
@@ -353,22 +348,13 @@ impl StemPicker {
     }
 }
 
-/// Drop Open (and optionally Close) steps when the batch supplies the file itself → the steps that
-/// stay, and the index of each in `cmds`.
+/// Drop the `document.open` steps when `drop_open` (the batch opens each source file itself) → the
+/// steps that stay, and the index of each in `cmds`.
 #[cfg(not(target_arch = "wasm32"))]
-fn filter_steps(cmds: &[Value], drop_open: bool, drop_close: bool) -> (Vec<Value>, Vec<usize>) {
+fn filter_steps(cmds: &[Value], drop_open: bool) -> (Vec<Value>, Vec<usize>) {
     cmds.iter()
         .enumerate()
-        .filter(|(_, c)| {
-            let id = c.get("command").and_then(Value::as_str).unwrap_or("");
-            if drop_open && matches!(id, "document.open" | "file.open") {
-                return false;
-            }
-            if drop_close && matches!(id, "file.close" | "document.close") {
-                return false;
-            }
-            true
-        })
+        .filter(|(_, c)| !(drop_open && c.get("command").and_then(Value::as_str) == Some("document.open")))
         .map(|(i, c)| (c.clone(), i))
         .unzip()
 }
@@ -385,10 +371,22 @@ fn play_steps(s: &mut Session, run: &Run<'_>, places: &[usize], commands: Vec<Va
         let Some((n, id, reason)) = batch_step_failure(&text) else { return e };
         let same = run.steps.get(n).and_then(|c| c.get("command")).and_then(Value::as_str) == Some(id);
         match places.get(n) {
-            Some(place) if same => EngineError::Other(format!("action step {} (`{id}`) failed: {reason}", place + 1)),
+            Some(&place) if same => EngineError::Other(action_step(place, id, reason)),
             _ => e,
         }
     })
+}
+
+/// The text naming the member at `index` of an `action.batch`'s `commands`, counted from 1, with
+/// its command id when it has one, and `reason`: ``action step 2 (`object.move`) failed: …``. The
+/// checks before a batch runs and the errors of its steps as they run give the same text.
+pub(crate) fn action_step(index: usize, id: &str, reason: &str) -> String {
+    let n = index.saturating_add(1);
+    if id.is_empty() {
+        format!("action step {n} failed: {reason}")
+    } else {
+        format!("action step {n} (`{}`) failed: {reason}", vectorcraft_apischema::shown_key(id))
+    }
 }
 
 /// The step number, command id and reason in the error `command.batch` gives when one of its steps
@@ -540,7 +538,7 @@ fn dataset_output_extensions(run: &Run<'_>, doc: &vectorcraft_doc::Document, def
             outputs.push(DatasetOutput { ext: String::new(), artboards: false, joiner: "-", folder: true });
             continue;
         }
-        let writes = (run.override_save && matches!(id, "document.save" | "file.save" | "file.saveAs"))
+        let writes = (run.override_save && matches!(id, "document.save" | "file.saveAs"))
             || (run.override_export && matches!(id, "document.export" | "document.exportSelection"));
         if writes {
             let format = step.get("params").and_then(|p| p.get("format")).and_then(Value::as_str).filter(|f| !f.is_empty());
@@ -551,7 +549,7 @@ fn dataset_output_extensions(run: &Run<'_>, doc: &vectorcraft_doc::Document, def
             };
             if safe_extension(&ext) {
                 let format_id = super::format(format.unwrap_or(default_ext)).map(|f| f.id).unwrap_or("vectorcraft");
-                let is_save = matches!(id, "document.save" | "file.save" | "file.saveAs");
+                let is_save = matches!(id, "document.save" | "file.saveAs");
                 let artboards = if is_save {
                     !doc.artboards.is_empty() && matches!(format_id, "vectorcraft" | "template" | "ai" | "ait")
                 } else {
@@ -693,7 +691,7 @@ fn rewrite_paths(
         .map(|c| {
             let id = c.get("command").and_then(Value::as_str).unwrap_or("");
             let mut c = c.clone();
-            let rewrite = (override_save && matches!(id, "document.save" | "file.save" | "file.saveAs"))
+            let rewrite = (override_save && matches!(id, "document.save" | "file.saveAs"))
                 || (override_export && matches!(id, "document.export" | "document.exportForScreens" | "document.exportSelection" | "assets.export"));
             if !rewrite {
                 return c;
@@ -2385,8 +2383,95 @@ mod tests {
         let mut s = Session::new();
         let p = json!({"folder": src.to_string_lossy(), "commands": [{"command": "object.unlockAll"}, {"command": "prefs.import", "params": {}}]});
         let e = s.execute("action.batch", &p).unwrap_err().to_string();
-        assert!(e.contains("commands[1]: `prefs.import` runs on its own, not as a batch step"), "{e}");
+        assert!(e.contains("action step 2 (`prefs.import`) failed: `prefs.import` runs on its own, not as a batch step"), "{e}");
         assert!(s.active().is_none(), "no file was opened");
+    }
+
+    /// Each step the checks before the batch refuse is named by its place in `commands`, from 1,
+    /// as a step that fails as it runs is, and no source file is opened.
+    #[test]
+    fn a_refused_step_is_named_by_its_place_from_1() {
+        let src = tmp("step-number-refused-src");
+        write_svg(&src, "a.svg", "#f00");
+        let prefix = "invalid parameters for `action.batch`: ";
+        let cases = [
+            (json!({"params": {}}), "action step 2 failed: missing `command`"),
+            (json!({"command": "select.al"}), "action step 2 (`select.al`) failed: unknown command `select.al`; did you mean `select.all`?"),
+            (json!({"command": "command.batch", "params": {"commands": []}}), "action step 2 (`command.batch`) failed: batches cannot nest"),
+            (json!({"command": "action.batch", "params": {}}), "action step 2 (`action.batch`) failed: batches cannot nest"),
+            (
+                json!({"command": "view.saved.new", "params": {"center": [0, 0], "zoom": 0}}),
+                "action step 2 (`view.saved.new`) failed: invalid parameters for `view.saved.new`: `zoom` must be a number > 0, not 0",
+            ),
+        ];
+        for (step, want) in cases {
+            let mut s = Session::new();
+            let p = json!({"folder": src.to_string_lossy(), "commands": [{"command": "object.unlockAll"}, step]});
+            let e = s.execute("action.batch", &p).unwrap_err().to_string();
+            assert_eq!(e, format!("{prefix}{want}"), "{step}");
+            assert!(s.active().is_none(), "{step}: a file was opened");
+            assert!(s.journal.is_empty(), "{step}: a step ran");
+        }
+    }
+
+    /// The parameter check of an `action.batch` names the step whose params it refuses, from 1;
+    /// that of a `command.batch` passes the step's error on as it is.
+    #[test]
+    fn the_parameter_check_names_the_refused_step() {
+        let bad_view = json!({"command": "view.saved.new", "params": {"center": [0, 0], "zoom": 0}});
+        let commands = json!([{"command": "object.unlockAll"}, {"command": "select.all"}, bad_view]);
+        let own = "invalid parameters for `view.saved.new`: `zoom` must be a number > 0, not 0";
+        let e = crate::cmd::params::check_params("action.batch", &json!({"commands": commands})).unwrap_err().to_string();
+        assert_eq!(e, format!("invalid parameters for `action.batch`: action step 3 (`view.saved.new`) failed: {own}"));
+        let e = crate::cmd::params::check_params("command.batch", &json!({"commands": commands})).unwrap_err().to_string();
+        assert_eq!(e, own);
+    }
+
+    /// The ids of the File menu's Open… and Save in the app (`file.open`, `file.save`) and
+    /// `document.close` are not engine commands, so a step with one is refused before the batch
+    /// starts, with Override Open and Override Save on or off.
+    #[test]
+    fn steps_with_ids_that_are_not_engine_commands_are_refused() {
+        let src = tmp("step-number-aliases-src");
+        write_svg(&src, "a.svg", "#f00");
+        for id in ["file.open", "file.save", "document.close"] {
+            for overrides in [true, false] {
+                let mut s = Session::new();
+                let p = json!({
+                    "folder": src.to_string_lossy(),
+                    "overrideOpen": overrides,
+                    "overrideSave": overrides,
+                    "commands": [{"command": "object.unlockAll"}, {"command": id, "params": {}}],
+                });
+                let e = s.execute("action.batch", &p).unwrap_err().to_string();
+                assert!(
+                    e.starts_with(&format!("invalid parameters for `action.batch`: action step 2 (`{id}`) failed: unknown command `{id}`")),
+                    "{e}"
+                );
+                assert!(s.active().is_none(), "{id}: a file was opened");
+            }
+        }
+    }
+
+    /// `command.batch` keeps its own numbering, from 0, for a step that fails.
+    #[test]
+    fn command_batch_keeps_its_own_step_numbers() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({})).unwrap();
+        let e = s
+            .execute("command.batch", &json!({"commands": [{"command": "object.unlockAll"}, {"command": "object.align", "params": {}}]}))
+            .unwrap_err();
+        assert!(e.to_string().starts_with("batch step 1 (`object.align`) failed: "), "{e}");
+    }
+
+    /// A step's id in the error is cut short, as an unknown key's is.
+    #[test]
+    fn a_long_step_id_is_cut_short() {
+        let id = "x".repeat(10_000);
+        let shown = action_step(0, &id, "why");
+        assert!(shown.len() < 1_000, "{}", shown.len());
+        assert!(shown.starts_with("action step 1 (`xxx") && shown.ends_with("…`) failed: why"), "{shown}");
+        assert_eq!(action_step(usize::MAX, "", "why"), format!("action step {} failed: why", usize::MAX));
     }
 
     /// Only the error `command.batch` gives for a failed step is read as one.

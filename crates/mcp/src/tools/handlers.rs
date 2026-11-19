@@ -247,6 +247,16 @@ pub(super) fn select_ids(b: &mut dyn Backend, a: &Args) -> Result<(), String> {
 
 pub(super) fn add_text(b: &mut dyn Backend, a: &Args) -> Result<Value, String> {
     let text = a.get("text").and_then(Value::as_str).ok_or("missing string argument `text`")?;
+    // Creating type on a path replaces the path. Refuse an invalid effect before editing.
+    let path_effect = match a.get("pathEffect") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(effect)) if vectorcraft_doc::PathEffect::parse(effect).is_some() => Some(effect),
+        Some(Value::String(effect)) => return Err(format!("unknown path effect `{effect}`")),
+        Some(_) => return Err("`pathEffect` must be a string".into()),
+    };
+    if path_effect.is_some() && (!a.contains_key("path") || a.get("mode").is_some_and(|m| !matches!(m.as_str(), Some("onPath" | "path")))) {
+        return Err("`pathEffect` requires type on a path".into());
+    }
     let mut style = json!({});
     for k in ["size", "font", "color", "justify", "vertical"] {
         if let Some(v) = a.get(k) {
@@ -276,12 +286,12 @@ pub(super) fn add_text(b: &mut dyn Backend, a: &Args) -> Result<Value, String> {
         }
         exec(b, "text.create", p)?
     };
-    if let Some(e) = a.get("pathEffect").and_then(Value::as_str) {
+    if let Some(e) = path_effect {
         exec(b, "type.pathOptions", json!({"effect": e}))?;
     }
     let mut made = json!({"id": r.get("id")});
     // A path effect is applied after the text is made: ask again how it fits then.
-    let overflow = match r.get("id").filter(|_| a.get("pathEffect").is_some()) {
+    let overflow = match r.get("id").filter(|_| path_effect.is_some()) {
         Some(id) => exec(b, "document.node", json!({"id": id, "summary": true}))?.get("overflow").and_then(Value::as_bool) == Some(true),
         None => r.get("overflow").is_some(),
     };
@@ -292,9 +302,42 @@ pub(super) fn add_text(b: &mut dyn Backend, a: &Args) -> Result<Value, String> {
 }
 
 pub(super) fn transform(b: &mut dyn Backend, a: &Args) -> Result<Value, String> {
+    // Each operation is its own command: check the params the later ones refuse before the first
+    // runs, so a refused request changes nothing. The `transform` arm of `dispatch` has already
+    // refused a `dx`, `dy`, `rotate`, `scale`, `scaleX`, `scaleY` or `shear` that is not a number.
+    fn bad(cmd: &'static str) -> impl Fn(String) -> String {
+        move |e| format!("invalid parameters for `{cmd}`: {e}")
+    }
+    let s = a.get("scale").and_then(Value::as_f64);
+    let (sx, sy) = (a.get("scaleX").and_then(Value::as_f64).or(s), a.get("scaleY").and_then(Value::as_f64).or(s));
+    if sx.is_some() || sy.is_some() {
+        vectorcraft_engine::cmd::scale_factors(sx.unwrap_or(100.0), sy.unwrap_or(100.0)).map_err(bad("object.scale"))?;
+    }
+    // A null `reflect`, `copy` or `origin` is left out.
+    let reflect = match a.get("reflect") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(axis)) => Some(axis.as_str()),
+        Some(v) => return Err(format!("invalid parameters for `object.reflect`: axis must be \"vertical\" or \"horizontal\", not `{v}`")),
+    };
+    if let Some(axis) = reflect {
+        vectorcraft_engine::cmd::reflect_axis(Some(&json!(axis))).map_err(bad("object.reflect"))?;
+    }
+    let shear = a.get("shear").and_then(Value::as_f64);
+    if let Some(sh) = shear {
+        vectorcraft_engine::cmd::shear_tangent(sh).map_err(bad("object.shear"))?;
+    }
+    let copy = match a.get("copy") {
+        None | Some(Value::Null) => false,
+        Some(v) => v.as_bool().ok_or_else(|| format!("`copy` must be true or false, not {v}"))?,
+    };
+    if let Some(o) = a.get("origin").filter(|o| !o.is_null())
+        && !o.as_array().is_some_and(|xy| xy.len() == 2 && xy.iter().all(Value::is_number))
+    {
+        return Err(format!("`origin` must be [x, y], not {o}"));
+    }
     select_ids(b, a)?;
     // With `copy`, the first operation duplicates and the rest transform the copy (the new selection).
-    let copy = std::cell::Cell::new(a.get("copy").and_then(Value::as_bool).unwrap_or(false));
+    let copy = std::cell::Cell::new(copy);
     let with = |mut p: Value| {
         if let Some(o) = a.get("origin") {
             p["origin"] = o.clone();
@@ -312,17 +355,15 @@ pub(super) fn transform(b: &mut dyn Backend, a: &Args) -> Result<Value, String> 
         exec(b, "object.rotate", with(json!({"angle": r})))?;
         done.push("rotate");
     }
-    let s = a.get("scale").and_then(Value::as_f64);
-    let (sx, sy) = (a.get("scaleX").and_then(Value::as_f64).or(s), a.get("scaleY").and_then(Value::as_f64).or(s));
     if sx.is_some() || sy.is_some() {
         exec(b, "object.scale", with(json!({"sx": sx.unwrap_or(100.0), "sy": sy.unwrap_or(100.0)})))?;
         done.push("scale");
     }
-    if let Some(axis) = a.get("reflect").and_then(Value::as_str) {
+    if let Some(axis) = reflect {
         exec(b, "object.reflect", with(json!({"axis": axis})))?;
         done.push("reflect");
     }
-    if let Some(sh) = a.get("shear").and_then(Value::as_f64) {
+    if let Some(sh) = shear {
         exec(b, "object.shear", with(json!({"angle": sh})))?;
         done.push("shear");
     }
