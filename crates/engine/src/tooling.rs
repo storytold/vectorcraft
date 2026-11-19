@@ -35,6 +35,9 @@ pub struct ViewInfo {
     pub snap_to_glyph: bool,
     /// View → Show Corner Widget.
     pub corner_widgets: bool,
+    /// The Control bar's Show Shape Widgets: selected live shapes show their corner, pie and side
+    /// widgets to the Selection tool and the shape tools.
+    pub shape_widgets: bool,
     /// The document window (none headless): screen-fixed widgets sit in it.
     pub screen: Option<vectorcraft_tools::ScreenFrame>,
     /// The view's active artboard (an index): artboard rulers measure from it.
@@ -55,6 +58,7 @@ impl Default for ViewInfo {
             snap_to_point: true,
             snap_to_glyph: false,
             corner_widgets: true,
+            shape_widgets: true,
             screen: None,
             artboard: 0,
         }
@@ -188,8 +192,7 @@ impl Session {
             .then(|| self.tool.options().get("meshPoints").cloned())
             .flatten()
             .filter(|v| v.as_array().is_some_and(|a| !a.is_empty()));
-        let acts = self.with_tool_cx(view, |t, cx| t.deactivate(cx));
-        self.apply_actions(acts)?;
+        self.deactivate_tool(view)?;
         self.keep_tool_settings();
         self.tool = self.make_tool(id);
         if let Some(selection) = text_selection {
@@ -202,6 +205,18 @@ impl Session {
             self.last_selection_tool = Some(self.tool.id());
             self.select_whole_instance(id);
         }
+        Ok(())
+    }
+
+    /// Deactivate the tool and apply the actions it returns. In a batch, a Cancel is left out: the
+    /// batch settled the tool's drag when it began, and the open interaction holds the batch's
+    /// steps, which the batch keeps or rolls back as a whole.
+    pub(crate) fn deactivate_tool(&mut self, view: ViewInfo) -> Result<()> {
+        let mut acts = self.with_tool_cx(view, |t, cx| t.deactivate(cx));
+        if self.batch_stash.is_some() {
+            acts.retain(|a| !matches!(a, Action::Cancel));
+        }
+        self.apply_actions(acts)?;
         Ok(())
     }
 
@@ -297,8 +312,7 @@ impl Session {
         // them all (#8090). Group Selection picks no mesh points, so the Eyedropper keeps its own.
         let mesh_points =
             (lender.id() == "eyedropper" && self.tool.id() != "groupSelection").then(|| self.tool.options().get("meshPoints").cloned()).flatten();
-        let acts = self.with_tool_cx(view, |t, cx| t.deactivate(cx));
-        let r = self.apply_actions(acts);
+        let r = self.deactivate_tool(view);
         self.keep_tool_settings();
         self.tool = lender;
         if let Some(points) = mesh_points {
@@ -311,7 +325,7 @@ impl Session {
             self.lent_selection = left;
         }
         self.after_command(None);
-        r.map(drop)
+        r
     }
 
     /// A fresh `id` tool with the options it keeps ([`settings`]): its last values, from this
@@ -410,6 +424,7 @@ impl Session {
             snap_to_glyph: view.snap_to_glyph && smart_guides && !view.snap_to_grid,
             glyph_snap: self.prefs.glyph_snap,
             corner_widgets: view.corner_widgets,
+            shape_widgets: view.shape_widgets,
             fill_active: self.fill_active,
             gradient_stop: self.selected_stop(),
             appearance_item: self.appearance_item(),
@@ -466,6 +481,7 @@ impl Session {
             plane_targets: self.prefs.perspective_widget.targets(),
             precise_cursors: self.precise_cursors(),
             global_edit: st.global_edit.as_ref().map_or(&[], |g| g.members.as_slice()),
+            interaction_doc: st.interaction.as_ref().map(|it| &*it.doc),
         };
         let tool = &mut self.tool;
         match crate::guard::catch_panic(|| f(tool.as_mut(), &cx)) {
@@ -1403,6 +1419,7 @@ impl Session {
         }
         // Every value is checked before any is set, so an invalid one changes nothing.
         vectorcraft_tools::builder::check_builder_options(id, &values)?;
+        vectorcraft_tools::symbolism::check_options(id, &values)?;
         if id == vectorcraft_tools::cropimage::ID {
             use vectorcraft_tools::cropimage as crop;
             // The most the selected image can be cropped to, when one is selected.

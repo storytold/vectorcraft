@@ -1045,6 +1045,20 @@ version = "0.1.0"
 source = "git+https://github.com/storytold/craft-libs?rev=64b181977a0488e4d1e167bc5cc8cfededc2ed4b#64b181977a0488e4d1e167bc5cc8cfededc2ed4b"
 
 [[package]]
+name = "craft-font-catalog"
+version = "0.1.0"
+source = "git+https://github.com/storytold/craft-libs?rev=23acc704933a9a5619a5cd1cddc9bb1fb5a9b2d3#23acc704933a9a5619a5cd1cddc9bb1fb5a9b2d3"
+dependencies = [
+ "harfrust 0.13.3",
+ "kurbo 0.13.1",
+ "skrifa 0.47.0",
+ "thiserror 2.0.21",
+ "unicode-bidi",
+ "unicode-segmentation",
+ "windows-registry",
+]
+
+[[package]]
 name = "craft-fonts-build"
 version = "0.1.0"
 source = "git+https://github.com/storytold/craft-libs?rev=64b181977a0488e4d1e167bc5cc8cfededc2ed4b#64b181977a0488e4d1e167bc5cc8cfededc2ed4b"
@@ -6630,6 +6644,7 @@ dependencies = [
  "webbrowser",
  "windows",
  "winit",
+ "winreg",
  "winresource",
  "winsafe",
  "wl-clipboard-rs",
@@ -6683,6 +6698,16 @@ dependencies = [
  "vectorcraft-geom 0.24.1",
  "vectorcraft-pathops 0.24.1",
  "vectorcraft-text",
+]
+
+[[package]]
+name = "vectorcraft-cdr"
+version = "0.24.1"
+dependencies = [
+ "crc32fast",
+ "flate2",
+ "proptest",
+ "vectorcraft-cdr",
 ]
 
 [[package]]
@@ -6799,6 +6824,7 @@ dependencies = [
  "vectorcraft-apischema",
  "vectorcraft-brush",
  "vectorcraft-cad",
+ "vectorcraft-cdr",
  "vectorcraft-color",
  "vectorcraft-doc",
  "vectorcraft-eps",
@@ -7109,6 +7135,7 @@ dependencies = [
 name = "vectorcraft-text"
 version = "0.24.1"
 dependencies = [
+ "craft-font-catalog",
  "craft-proof",
  "harfrust 0.13.3",
  "icu_segmenter",

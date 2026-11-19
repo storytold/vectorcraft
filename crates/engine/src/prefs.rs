@@ -57,6 +57,9 @@ pub struct Prefs {
     pub interpolate_control_points: bool,
     pub use_precise_cursors: bool,
     pub show_tool_tips: bool,
+    /// General › Show Tool Cards: with tool tips on, a tool button's tool tip is a card with what the
+    /// tool does and its keys, for tools that have a description.
+    pub show_tool_cards: bool,
     /// Other Script… warns before it runs a chosen script.
     pub show_external_script_warning: bool,
     pub anti_aliased_artwork: bool,
@@ -97,6 +100,13 @@ pub struct Prefs {
     /// A single-key tool shortcut held down chooses its tool until the key is let go, and then the
     /// tool active before comes back; a quick press chooses the tool for good.
     pub hold_tool_keys: bool,
+    /// Hold shortcuts act (Edit › Keyboard Shortcuts › Hold Shortcuts, off by default): a key with a
+    /// hold shortcut runs it when held for [`Self::key_hold_delay`], and its own shortcut when let go
+    /// sooner. Off, every key runs on its press and the dialog shows no Hold column.
+    pub hold_shortcuts: bool,
+    /// Seconds a key with a hold shortcut must stay down before the hold shortcut runs (Hold
+    /// Shortcut Delay, 0.2 to 1.0). VectorCraft's own default, 0.35.
+    pub key_hold_delay: f64,
     /// With View › Show Bounding Box on, the bounding box stays visible while a drag moves the
     /// selection, and the shape tools that show it draw it around the shape being drawn. Off (the
     /// default), it hides during a move and while a shape is drawn, except that a Selection tool
@@ -393,6 +403,11 @@ pub struct Prefs {
     /// selected, the panel and the Properties panel's Transform section measure and transform it
     /// from its symbol's registration point instead of the reference point.
     pub use_registration_point_for_symbol: bool,
+    /// The Transform panel menu's Show on Shape Creation: drawing a shape with the Rectangle,
+    /// Rounded Rectangle, Ellipse, Polygon, Star or Line Segment tool (a drag or OK in the tool's
+    /// dialog, also on the active perspective plane), a shape the Shaper tool recognizes, or running
+    /// one of [`crate::DRAWS_SHAPE`], shows the Transform panel.
+    pub show_on_shape_creation: bool,
     /// The tools' persistent options by store (a tool id, or a store a family shares: `liquify`
     /// holds the Liquify tools' Global Brush Dimensions), see [`vectorcraft_tools::settings`]:
     /// kept across tool switches and saved with the preferences. Not a Preferences dialog field:
@@ -420,6 +435,21 @@ pub struct Prefs {
     pub import_matches: Vec<cmd::importmatches::ImportMatch>,
 }
 
+/// The default Hold Shortcut Delay, in seconds (VectorCraft's own value).
+pub const KEY_HOLD_DELAY: f64 = 0.35;
+/// The range of the Hold Shortcut Delay, in seconds.
+pub const KEY_HOLD_DELAY_RANGE: (f64, f64) = (0.2, 1.0);
+
+impl Prefs {
+    /// The Hold Shortcut Delay in seconds, inside its range. A restored settings file is not
+    /// checked against the range, so a value outside it is brought inside, and one that is not a
+    /// number gives the default.
+    pub fn key_hold_delay(&self) -> f64 {
+        let (min, max) = KEY_HOLD_DELAY_RANGE;
+        if self.key_hold_delay.is_finite() { self.key_hold_delay.clamp(min, max) } else { KEY_HOLD_DELAY }
+    }
+}
+
 impl Default for Prefs {
     fn default() -> Self {
         let s = |v: &str| v.to_string();
@@ -431,6 +461,7 @@ impl Default for Prefs {
             interpolate_control_points: false,
             use_precise_cursors: false,
             show_tool_tips: true,
+            show_tool_cards: false,
             show_external_script_warning: true,
             anti_aliased_artwork: true,
             select_same_tint_percent: false,
@@ -451,6 +482,8 @@ impl Default for Prefs {
             scrub_numeric_fields: true,
             trackpad_rotate_view: true,
             hold_tool_keys: true,
+            hold_shortcuts: false,
+            key_hold_delay: KEY_HOLD_DELAY,
             bounding_box_while_moving_and_drawing: false,
             paste_offset: 10.0,
             selection_tolerance: 3.0,
@@ -597,6 +630,7 @@ impl Default for Prefs {
             single_corner_radius: true,
             transform_panel_patterns: "default".to_string(),
             use_registration_point_for_symbol: false,
+            show_on_shape_creation: false,
             tool_settings: Default::default(),
             perspective_presets: vec![],
             blend_options: None,
