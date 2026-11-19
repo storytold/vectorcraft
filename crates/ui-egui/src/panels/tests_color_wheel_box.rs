@@ -167,10 +167,10 @@ fn the_strip_takes_the_arrow_keys_and_screen_readers_actions() {
 #[test]
 fn ui_color_wheel_sets_and_reads_the_view_and_the_channel() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    let rest = json!({"sliders": "none", "harmony": false, "harmonyRule": "complementary", "vision": false});
+    let harmony = json!({"sliders": "none", "harmony": false, "harmonyRule": "complementary", "vision": false});
     let with = |v: serde_json::Value| {
         let mut v = v;
-        v.as_object_mut().unwrap().extend(rest.as_object().unwrap().clone());
+        v.as_object_mut().unwrap().extend(harmony.as_object().unwrap().clone());
         v
     };
     assert_eq!(app.run("ui.colorWheel", json!({})).unwrap(), with(json!({"view": "wheel", "channel": "hue"})));
@@ -293,7 +293,7 @@ fn the_settings_are_kept_and_read_leniently() {
     let mut odd = saved.clone();
     odd["color_wheel"] = json!({"view": "box", "channel": 7});
     let back: crate::UiState = serde_json::from_value(odd).unwrap();
-    assert_eq!(back.color_wheel, Settings { view: View::Box, ..Default::default() });
+    assert_eq!(back.color_wheel, Settings { view: View::Box, channel: Channel::default(), ..Default::default() });
     let mut odd = saved.clone();
     odd["color_wheel"] = json!({"view": "triangle", "channel": "blue"});
     let back: crate::UiState = serde_json::from_value(odd).unwrap();

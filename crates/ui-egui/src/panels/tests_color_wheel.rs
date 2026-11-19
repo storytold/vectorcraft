@@ -12,7 +12,7 @@ use vectorcraft_color::{Color, Paint};
 use vectorcraft_engine::Session;
 
 use super::color_wheel::{
-    ID, Settings, Sliders, chroma_tick, display_hsb, oklch_rows, oklch_track, remembered_hsb, remembered_oklch, set, show, stored,
+    ID, Settings, Sliders, chroma_tick, display_hsb, oklch_rows, oklch_track, remembered_hsb, remembered_hsl, remembered_oklch, set, show, stored,
 };
 use crate::VectorcraftApp;
 
@@ -691,6 +691,15 @@ fn the_oklch_tracks_dim_the_colors_outside_srgb_and_the_tick_marks_the_largest_c
     let [r, g, b] = stored.map(|v| (f64::from(v).clamp(0.0, 1.0) * 255.0).round() as u8);
     assert!(lowered);
     assert_eq!(oklch_track([0.98, 0.2, h], None), egui::Color32::from_rgb(r, g, b).gamma_multiply(0.3));
+    // At blue's L and H the ray leaves sRGB below the largest chroma and comes back at blue: the C
+    // track dims that gap and shows the color a pick there stores.
+    let [bl, _, bh] = vectorcraft_color::oklab::to_oklch([0.0, 0.0, 1.0]);
+    let blue_max = vectorcraft_color::oklab::max_chroma(bl, bh);
+    let (stored, lowered) = vectorcraft_color::oklab::from_oklch(bl, 0.29, bh);
+    let [r, g, b] = stored.map(|v| (f64::from(v).clamp(0.0, 1.0) * 255.0).round() as u8);
+    assert!(lowered && blue_max > 0.3);
+    assert_eq!(oklch_track([bl, 0.29, bh], Some(blue_max)), egui::Color32::from_rgb(r, g, b).gamma_multiply(0.3));
+    assert_eq!(oklch_track([bl, blue_max, bh], Some(blue_max)).a(), 255, "blue itself is inside sRGB");
     assert!((chroma_tick(max) - (max / 0.4) as f32).abs() < 1e-6 && chroma_tick(max) > 0.1 && chroma_tick(max) < 1.0);
     assert_eq!((chroma_tick(0.0), chroma_tick(0.5)), (0.0, 1.0));
 }
@@ -755,6 +764,49 @@ fn oklch_sliders_are_gray_after_the_working_space_changes() {
     assert!(oklch_slider(&h, "Lightness").accesskit_node().is_disabled());
 }
 
+/// A drag on an OKLCH row during which Edit › Color Settings picks a working RGB space other than
+/// sRGB keeps the color the drag previewed as one undo step and leaves no interaction open, though
+/// the gray rows report no release.
+#[test]
+fn a_working_space_change_during_an_oklch_drag_keeps_its_color_as_one_undo_step() {
+    const CHILD: &str = "VECTORCRAFT_TEST_COLOR_WHEEL_P3_DRAG";
+    if std::env::var_os(CHILD).is_none() {
+        // Color settings are process-wide: change them in a separate test process.
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "panels::tests_color_wheel::a_working_space_change_during_an_oklch_drag_keeps_its_color_as_one_undo_step",
+                "--nocapture",
+            ])
+            .env(CHILD, "1")
+            .output()
+            .unwrap();
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            output.status.success() && stdout.contains("test result: ok. 1 passed; 0 failed;"),
+            "isolated working space test failed:\n{stdout}\n{}",
+            String::from_utf8_lossy(&output.stderr),
+        );
+        return;
+    }
+    let mut h = oklch_harness(app(json!("#ff8000")));
+    let rail = oklch_slider(&h, "Lightness").rect();
+    let undo = undo_len(h.state());
+    press(&mut h, on_rail(rail, 0.5), true, Modifiers::NONE);
+    for _ in 0..2 {
+        h.event(Event::PointerMoved(on_rail(rail, 0.25)));
+        h.run_steps(1);
+    }
+    assert!(h.state().session.in_interaction(), "the drag previews");
+    let previewed = fill(h.state());
+    h.state_mut().run("edit.colorSettings", json!({"rgb": cms::DISPLAY_P3})).unwrap();
+    h.run_steps(2);
+    assert!(oklch_slider(&h, "Lightness").accesskit_node().is_disabled());
+    press(&mut h, on_rail(rail, 0.25), false, Modifiers::NONE);
+    assert!(!h.state().session.in_interaction(), "the interaction ended");
+    assert_eq!((fill(h.state()), undo_len(h.state())), (previewed, undo + 1));
+}
+
 /// A CMYK fill's L, C and H are those of its display color, not of its naive separation.
 #[test]
 fn a_cmyk_fills_oklch_is_that_of_its_display_color() {
@@ -807,16 +859,17 @@ fn oklch_sliders_need_srgb_as_the_working_space() {
         move |ui, app: &mut VectorcraftApp| {
             let tgt = super::color::wheel_target(app, ui);
             let color = tgt.color();
-            let _ = oklch_rows(app, ui, &tgt, color, &p3);
+            let picked = oklch_rows(app, ui, &tgt, color, &p3);
+            assert!(picked.is_none(), "a gray row picks nothing: {picked:?}");
         },
         app(json!("#ff0000")),
     );
     h.run_steps(2);
     assert!(oklch_slider(&h, "Lightness").accesskit_node().is_disabled());
-    let undo = undo_len(h.state());
     let rail = oklch_slider(&h, "Lightness").rect();
     click(&mut h, on_rail(rail, 0.2), Modifiers::NONE);
-    assert_eq!(undo_len(h.state()), undo, "a gray row picks nothing");
+    key(&mut h, egui::Key::ArrowRight, Modifiers::NONE);
+    set_slider_value(&mut h, "Lightness", 20.0);
 }
 
 /// The rows show what they asked for while the color displays as it did, and the color's own
@@ -832,15 +885,193 @@ fn the_remembered_oklch_follows_a_change_of_working_space() {
     assert_eq!(remembered_oklch(&p3, &c, shown, asked), vectorcraft_color::oklab::to_oklch(p3.display_rgb(&c)));
 }
 
+/// The panel with HSL Sliders shown, in a flyout tall enough for the rows. `oklch_slider` and
+/// `oklch_harness_shown` find and draw any slider row, the HSL rows included.
+fn hsl_harness(mut app: VectorcraftApp) -> Harness<'static, VectorcraftApp> {
+    app.run("ui.colorWheel", json!({"sliders": "hsl"})).unwrap();
+    oklch_harness_shown(app)
+}
+
+fn fill_hsl(app: &VectorcraftApp) -> [f32; 3] {
+    vectorcraft_color::rgb_to_hsl(cms::active().display_rgb(&fill(app)))
+}
+
+/// Sets the slider row named `name` to `v` as a screen reader does.
+fn set_slider_value(h: &mut Harness<'static, VectorcraftApp>, name: &str, v: f64) {
+    let (target_node, target_tree) = oklch_slider(h, name).accesskit_node().locate();
+    let data = Some(ActionData::NumericValue(v));
+    h.event(Event::AccessKitActionRequest(ActionRequest { target_node, target_tree, action: Action::SetValue, data }));
+    // The frame that takes the request draws the row before it applies it.
+    h.run_steps(2);
+}
+
+/// `ui.colorWheel {sliders: "hsl"}` shows H, S and L rows with the fill's HSL, CSS Color 4's
+/// `hsl()` of its display sRGB, and the panel keeps the setting with the preferences.
+#[test]
+fn hsl_sliders_show_the_fills_hue_saturation_and_lightness() {
+    let h = hsl_harness(app(json!("#ff8000")));
+    assert_eq!(h.state().ui.color_wheel.sliders, Sliders::Hsl);
+    let value = |name: &str| oklch_slider(&h, name).accesskit_node().numeric_value().unwrap();
+    assert_eq!((value("HSL Hue"), value("HSL Saturation"), value("HSL Lightness")), (30.0, 100.0, 50.0));
+    assert!(h.query_by_label("Chroma").is_none(), "OKLCH Sliders are hidden");
+    let saved = serde_json::to_value(&h.state().ui).unwrap();
+    assert_eq!(saved["color_wheel"]["sliders"], json!("hsl"));
+}
+
+/// In Box View with the Saturation channel, screen readers tell the box strip's HSB saturation
+/// from the S row's HSL saturation by their names.
+#[test]
+fn the_hsl_rows_names_differ_from_the_box_strips() {
+    let mut app = app(json!("#996633"));
+    app.run("ui.colorWheel", json!({"view": "box", "channel": "saturation"})).unwrap();
+    let h = hsl_harness(app);
+    let sliders = |name: &str| h.query_all_by_label(name).filter(|n| n.accesskit_node().role() == egui::accesskit::Role::Slider).count();
+    assert_eq!((sliders("Saturation"), sliders("HSL Saturation")), (1, 1));
+    let strip = oklch_slider(&h, "Saturation").accesskit_node().numeric_value().unwrap();
+    let row = oklch_slider(&h, "HSL Saturation").accesskit_node().numeric_value().unwrap();
+    assert_ne!(strip, row, "HSB and HSL saturation differ for this color");
+}
+
+/// A drag on L changes the lightness and keeps the hue and the saturation.
+#[test]
+fn a_drag_on_hsl_lightness_keeps_the_hue_and_saturation() {
+    let mut h = hsl_harness(app(json!("#ff8000")));
+    let rail = oklch_slider(&h, "HSL Lightness").rect();
+    let undo = undo_len(h.state());
+    drag(&mut h, &[on_rail(rail, 0.5), on_rail(rail, 0.25)], Modifiers::NONE);
+    assert!(near(fill_hsl(h.state()), [30.0, 1.0, 0.25], [1.0, 0.01, 0.01]), "{:?}", fill_hsl(h.state()));
+    assert_eq!(undo_len(h.state()), undo + 1, "a drag is one undo step");
+}
+
+/// A press on S gives it the keyboard focus, and → raises it by 1 % as one undo step. Each row
+/// reports its range and the adjust actions to screen readers.
+#[test]
+fn the_hsl_rows_take_the_arrow_keys_and_screen_readers_actions() {
+    let mut h = hsl_harness(app(json!("#996633")));
+    for (name, max) in [("HSL Hue", 360.0), ("HSL Saturation", 100.0), ("HSL Lightness", 100.0)] {
+        let node = oklch_slider(&h, name).accesskit_node();
+        assert_eq!((node.min_numeric_value(), node.max_numeric_value(), node.numeric_value_step()), (Some(0.0), Some(max), Some(1.0)), "{name}");
+        assert!([Action::Increment, Action::Decrement, Action::SetValue].iter().all(|a| node.data().supports_action(*a)), "{name}");
+    }
+    let rail = oklch_slider(&h, "HSL Saturation").rect();
+    let s = fill_hsl(h.state())[1];
+    click(&mut h, on_rail(rail, s), Modifiers::NONE);
+    let before = fill_hsl(h.state());
+    let undo = undo_len(h.state());
+    key(&mut h, egui::Key::ArrowRight, Modifiers::NONE);
+    let after = fill_hsl(h.state());
+    let raised = ((before[1] * 100.0).round() + 1.0) / 100.0;
+    assert!(near(after, [before[0], raised, before[2]], [1.0, 0.008, 0.003]), "{before:?} → {after:?}");
+    assert_eq!(undo_len(h.state()), undo + 1, "one undo step");
+}
+
+/// A gray has no hue: a hue given to it stays on the H row while the color is unchanged, and a
+/// saturation picked next uses that hue.
+#[test]
+fn a_gray_keeps_the_hsl_hue_it_was_given() {
+    let mut h = hsl_harness(app(json!("#808080")));
+    let (gray, undo) = (fill(h.state()), undo_len(h.state()));
+    set_slider_value(&mut h, "HSL Hue", 200.0);
+    assert_eq!(oklch_slider(&h, "HSL Hue").accesskit_node().numeric_value(), Some(200.0), "a gray keeps the hue it was given");
+    assert_eq!((fill(h.state()), undo_len(h.state())), (gray, undo), "a hue on a gray changes nothing and records no undo step");
+    set_slider_value(&mut h, "HSL Saturation", 60.0);
+    let got = fill_hsl(h.state());
+    assert!(near(got, [200.0, 0.6, 0.5], [1.0, 0.01, 0.01]), "{got:?}");
+}
+
+/// In a working RGB space wider than sRGB, an HSL pick goes from display sRGB into that space
+/// through the color settings: the fill displays the HSL asked for, and its stored RGB numbers are
+/// those of the working space, not the sRGB numbers of that HSL.
+#[test]
+fn an_hsl_pick_in_display_p3_goes_into_the_working_space() {
+    const CHILD: &str = "VECTORCRAFT_TEST_COLOR_WHEEL_HSL_P3";
+    if std::env::var_os(CHILD).is_none() {
+        // Color settings are process-wide: change them in a separate test process.
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "panels::tests_color_wheel::an_hsl_pick_in_display_p3_goes_into_the_working_space", "--nocapture"])
+            .env(CHILD, "1")
+            .output()
+            .unwrap();
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            output.status.success() && stdout.contains("test result: ok. 1 passed; 0 failed;"),
+            "isolated working space test failed:\n{stdout}\n{}",
+            String::from_utf8_lossy(&output.stderr),
+        );
+        return;
+    }
+    let mut app = app(json!("#996633"));
+    app.run("edit.colorSettings", json!({"rgb": cms::DISPLAY_P3})).unwrap();
+    let mut h = hsl_harness(app);
+    let [hue, sat, _] = fill_hsl(h.state());
+    let undo = undo_len(h.state());
+    set_slider_value(&mut h, "HSL Lightness", 60.0);
+    let asked = [hue, sat, 0.6];
+    assert!(near(fill_hsl(h.state()), asked, [0.5, 0.005, 0.005]), "{asked:?} → {:?}", fill_hsl(h.state()));
+    assert_eq!(undo_len(h.state()), undo + 1, "one undo step");
+    let Color::Rgb { r, g, b } = fill(h.state()) else { panic!("an RGB fill stays RGB") };
+    let srgb = vectorcraft_color::hsl_to_rgb(asked);
+    assert!((0..3).any(|i| ([r, g, b][i] - srgb[i]).abs() > 0.01), "{:?} is stored as the sRGB numbers {srgb:?}", [r, g, b]);
+}
+
+/// Panel menu › HSL Sliders shows the H, S and L rows in place of OKLCH Sliders and, checked,
+/// hides them; it is offered in any working RGB space.
+#[test]
+fn the_panel_menu_shows_and_hides_the_hsl_rows() {
+    let mut fonts = false;
+    let mut app = app(json!("#ff0000"));
+    app.run("ui.colorWheel", json!({"sliders": "oklch"})).unwrap();
+    let mut h = Harness::builder().with_size(vec2(260.0, 200.0)).build_ui_state(
+        move |ui, app: &mut VectorcraftApp| {
+            // The fonts, which hold the check mark, take effect from the next frame.
+            if !fonts {
+                crate::theme::install_fonts(ui.ctx());
+                fonts = true;
+                return;
+            }
+            super::color_wheel::menu(app, ui);
+        },
+        app,
+    );
+    h.run_steps(3);
+    h.get_by_label("   HSL Sliders").click();
+    h.run_steps(2);
+    assert_eq!(h.state().ui.color_wheel.sliders, Sliders::Hsl);
+    assert!(h.query_by_label("✓ OKLCH Sliders").is_none(), "the two slider sets show one at a time");
+    h.get_by_label("✓ HSL Sliders").click();
+    h.run_steps(2);
+    assert_eq!(h.state().ui.color_wheel.sliders, Sliders::None);
+    let p3 = Cms::new(&ColorSettings { rgb: cms::DISPLAY_P3.into(), ..ColorSettings::default() }).unwrap();
+    let mut settings = Settings::default();
+    set(&mut settings, &json!({"sliders": "hsl"}), &p3).unwrap();
+    assert_eq!(settings.sliders, Sliders::Hsl, "HSL needs no particular working space");
+}
+
+/// The rows show what they asked for while the color displays as it did, and the color's own HSL
+/// after the color settings change its display.
+#[test]
+fn the_remembered_hsl_follows_a_change_of_working_space() {
+    let srgb = Cms::default();
+    let p3 = Cms::new(&ColorSettings { rgb: cms::DISPLAY_P3.into(), ..ColorSettings::default() }).unwrap();
+    let c = Color::rgb(0.5, 0.3, 0.2);
+    let asked = [20.0, 0.43, 0.35];
+    let shown = srgb.display_rgb(&c);
+    assert_eq!(remembered_hsl(&srgb, &c, shown, asked), asked);
+    assert_eq!(remembered_hsl(&p3, &c, shown, asked), vectorcraft_color::rgb_to_hsl(p3.display_rgb(&c)));
+}
+
 /// Saved settings are read key by key: a value this version does not know (one a newer version
 /// wrote) gives the default, and the other preferences still load.
 #[test]
 fn saved_color_wheel_settings_are_read_leniently() {
     let mut saved = serde_json::to_value(crate::UiState::default()).unwrap();
     saved["color_rgb_percent"] = json!(true);
-    for (value, sliders) in
-        [(json!({"sliders": "oklch"}), Sliders::Oklch), (json!({"sliders": "hsl", "view": "box"}), Sliders::None), (json!(5), Sliders::None)]
-    {
+    for (value, sliders) in [
+        (json!({"sliders": "oklch"}), Sliders::Oklch),
+        (json!({"sliders": "hsl"}), Sliders::Hsl),
+        (json!({"sliders": "hwb", "view": "box"}), Sliders::None),
+        (json!(5), Sliders::None),
+    ] {
         saved["color_wheel"] = value.clone();
         let ui: crate::UiState = serde_json::from_value(saved.clone()).unwrap();
         assert_eq!((ui.color_wheel.sliders, ui.color_rgb_percent), (sliders, true), "{value}");
@@ -854,11 +1085,12 @@ fn ui_color_wheel_sets_and_reads_the_sliders() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.run("ui.colorWheel", json!({"view": "box", "channel": "red"})).unwrap();
     assert_eq!(app.run("ui.colorWheel", json!({})).unwrap()["sliders"], json!("none"));
-    assert_eq!(app.run("ui.colorWheel", json!({"sliders": "hsl"})).unwrap_err(), "`sliders` must be none or oklch");
+    assert_eq!(app.run("ui.colorWheel", json!({"sliders": "hwb"})).unwrap_err(), "`sliders` must be none, oklch or hsl");
     let got = app.run("ui.colorWheel", json!({"sliders": "oklch"})).unwrap();
-    assert_eq!(got, json!({"view": "box", "channel": "red", "sliders": "oklch"}));
-    let e = app.run("ui.colorWheel", json!({"view": "wheel", "sliders": "hsl"})).unwrap_err();
-    assert_eq!(e, "`sliders` must be none or oklch");
+    let want = json!({"view": "box", "channel": "red", "harmony": false, "harmonyRule": "complementary", "vision": false, "sliders": "oklch"});
+    assert_eq!(got, want);
+    let e = app.run("ui.colorWheel", json!({"view": "wheel", "sliders": "hwb"})).unwrap_err();
+    assert_eq!(e, "`sliders` must be none, oklch or hsl");
     assert_eq!(app.ui.color_wheel.view, crate::panels::color_wheel::View::Box, "an error changes nothing");
 }
 
@@ -866,7 +1098,10 @@ fn ui_color_wheel_sets_and_reads_the_sliders() {
 /// values.
 #[test]
 fn ui_color_wheel_sliders_errors_are_translated() {
-    let errors = [("`sliders` must be none or oklch", &["none", "oklch"][..]), ("OKLCH needs sRGB as the working RGB space", &["OKLCH", "sRGB"][..])];
+    let errors = [
+        ("`sliders` must be none, oklch or hsl", &["none", "oklch", "hsl"][..]),
+        ("OKLCH needs sRGB as the working RGB space", &["OKLCH", "sRGB"][..]),
+    ];
     for code in [
         "bg", "bs", "ca", "cs", "da", "de", "el", "es", "fi", "fr", "gu", "hi", "hu", "id", "it", "ja", "ka", "ko", "nl", "pl", "pt-br", "ru", "sv",
         "tr", "uk", "vi", "zh-hans", "zh-hant",
@@ -877,5 +1112,80 @@ fn ui_color_wheel_sliders_errors_are_translated() {
             assert_ne!(shown, error, "{code}");
             assert!(values.iter().all(|v| shown.contains(v)), "{code}: {shown}");
         }
+    }
+}
+
+/// A hue given to a Gray color does not change how it displays, so its paint stays a Gray color
+/// and no undo step is recorded; the hue row keeps the hue.
+#[test]
+fn a_hue_on_a_gray_color_leaves_its_paint_gray() {
+    for (rows, hue) in [("hsl", "HSL Hue"), ("oklch", "Hue")] {
+        let mut app = app(json!({"gray": 0.5}));
+        app.run("ui.colorWheel", json!({"sliders": rows})).unwrap();
+        let mut h = oklch_harness_shown(app);
+        let (gray, undo) = (fill(h.state()), undo_len(h.state()));
+        assert!(matches!(gray, Color::Gray { .. }), "{gray:?}");
+        set_slider_value(&mut h, hue, 200.0);
+        assert_eq!(oklch_slider(&h, hue).accesskit_node().numeric_value(), Some(200.0), "{rows}");
+        assert_eq!((fill(h.state()), undo_len(h.state())), (gray, undo), "{rows}: the Gray fill stays as it was");
+    }
+}
+
+/// For a fill outside sRGB, the HSL and OKLCH rows show the components of its display color
+/// clipped to sRGB, the color the panel shows, not of the unclipped one.
+#[test]
+fn the_rows_show_a_color_outside_srgb_clipped_to_srgb() {
+    let rgb = json!([1.6, 0.2, -0.4]);
+    let raw = cms::active().display_rgb(&fill(&app(rgb.clone())));
+    let clipped = raw.map(|v| v.clamp(0.0, 1.0));
+    assert_ne!(raw, clipped, "the fill lies outside sRGB");
+    let want_hsl = (f64::from(vectorcraft_color::rgb_to_hsl(clipped)[2]) * 100.0).round();
+    assert_ne!(want_hsl, (f64::from(vectorcraft_color::rgb_to_hsl(raw)[2]) * 100.0).round(), "the unclipped lightness differs");
+    let h = hsl_harness(app(rgb.clone()));
+    assert_eq!(oklch_slider(&h, "HSL Lightness").accesskit_node().numeric_value(), Some(want_hsl));
+    let want_l = (vectorcraft_color::oklab::to_oklch(clipped)[0] * 100.0).round();
+    assert_ne!(want_l, (vectorcraft_color::oklab::to_oklch(raw)[0] * 100.0).round(), "the unclipped OKLCH lightness differs");
+    let h = oklch_harness(app(rgb));
+    assert_eq!(oklch_slider(&h, "Lightness").accesskit_node().numeric_value(), Some(want_l));
+}
+
+/// The hue given to a gray is dropped once the panel shows another color, so the same gray applied
+/// again later shows its own hue, 0°.
+#[test]
+fn a_remembered_hue_is_dropped_after_the_paint_changes() {
+    for (rows, hue) in [("hsl", "HSL Hue"), ("oklch", "Hue")] {
+        let mut app = app(json!("#808080"));
+        app.run("ui.colorWheel", json!({"sliders": rows})).unwrap();
+        let mut h = oklch_harness_shown(app);
+        set_slider_value(&mut h, hue, 240.0);
+        assert_eq!(oklch_slider(&h, hue).accesskit_node().numeric_value(), Some(240.0), "{rows}");
+        h.state_mut().run("paint.setFill", json!({"color": "#ff0000"})).unwrap();
+        h.run_steps(2);
+        h.state_mut().run("paint.setFill", json!({"color": "#808080"})).unwrap();
+        h.run_steps(2);
+        assert_eq!(oklch_slider(&h, hue).accesskit_node().numeric_value(), Some(0.0), "{rows}: the gray's own hue");
+    }
+}
+
+/// Hiding the rows, or showing the other rows, during a drag on a row keeps the color the drag
+/// previewed as one undo step and leaves no interaction open.
+#[test]
+fn hiding_the_rows_during_a_drag_keeps_its_color_as_one_undo_step() {
+    for rows in ["none", "oklch"] {
+        let mut h = hsl_harness(app(json!("#ff8000")));
+        let rail = oklch_slider(&h, "HSL Lightness").rect();
+        let undo = undo_len(h.state());
+        press(&mut h, on_rail(rail, 0.5), true, Modifiers::NONE);
+        for _ in 0..2 {
+            h.event(Event::PointerMoved(on_rail(rail, 0.25)));
+            h.run_steps(1);
+        }
+        assert!(h.state().session.in_interaction(), "{rows}: the drag previews");
+        let previewed = fill(h.state());
+        h.state_mut().run("ui.colorWheel", json!({"sliders": rows})).unwrap();
+        h.run_steps(2);
+        press(&mut h, on_rail(rail, 0.25), false, Modifiers::NONE);
+        assert!(!h.state().session.in_interaction(), "{rows}: the interaction ended");
+        assert_eq!((fill(h.state()), undo_len(h.state())), (previewed, undo + 1), "{rows}");
     }
 }
