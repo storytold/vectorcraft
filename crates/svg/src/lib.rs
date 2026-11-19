@@ -228,6 +228,10 @@ impl SizeUnit {
     }
 }
 
+fn explicit_size_unit<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<SizeUnit>, D::Error> {
+    SizeUnit::deserialize(d).map(Some)
+}
+
 /// The SVG profile written (SVG Options → SVG Profile).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Profile {
@@ -274,9 +278,10 @@ pub struct ExportOptions {
     pub minify: bool,
     /// Omit `width`/`height` so the SVG scales to its container.
     pub responsive: bool,
-    /// The unit `width` and `height` are written in (ignored when `responsive`). `px`, the
-    /// default, writes bare numbers.
-    pub units: SizeUnit,
+    /// Override the document's unit for `width` and `height` (ignored when `responsive`).
+    /// Absent follows the document; explicit `px` writes bare numbers. Null is invalid.
+    #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "explicit_size_unit")]
+    pub units: Option<SizeUnit>,
     /// Fonts → Convert to Outlines: text becomes paths (portable, no font needed to view it).
     pub outline_text: bool,
     /// Embed the native document (passed to [`export_full`]) in `<metadata>` so VectorCraft
@@ -314,7 +319,7 @@ impl Default for ExportOptions {
             images: ImageMode::Embed,
             minify: false,
             responsive: false,
-            units: SizeUnit::Px,
+            units: None,
             outline_text: false,
             preserve_editing: false,
             metadata: false,

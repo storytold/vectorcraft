@@ -702,11 +702,12 @@ fn options_decimals_minify_responsive_artboard() {
 #[test]
 fn svg_in_physical_units_reopens_at_the_same_size() {
     let mut d = Document::new(200.0, 100.0);
+    d.units = vectorcraft_doc::Unit::Millimeters;
     let n = rect_node(&mut d, Rect::new(10.0, 10.0, 60.0, 50.0), Appearance::default_art());
     let l = d.layers[0].id;
     d.insert(Some(l), usize::MAX, n).unwrap();
     for units in [SizeUnit::Mm, SizeUnit::Cm, SizeUnit::In, SizeUnit::Pt] {
-        let s = export(&d, &ExportOptions { units, ..Default::default() });
+        let s = export(&d, &ExportOptions { units: Some(units), ..Default::default() });
         let back = import(&s).unwrap_or_else(|e| panic!("{units:?}: {e}\n{s}"));
         let r = back.artboards[0].rect;
         assert!((r.width() - 200.0).abs() < 0.1 && (r.height() - 100.0).abs() < 0.1, "{units:?}: {r:?}\n{s}");
@@ -723,7 +724,7 @@ fn physical_units_preserve_rendered_extent_at_low_coordinate_precision() {
         let layer = d.layers[0].id;
         d.insert(Some(layer), usize::MAX, n).unwrap();
         for units in [SizeUnit::Mm, SizeUnit::Cm, SizeUnit::In, SizeUnit::Pt] {
-            let svg = export(&d, &ExportOptions { units, decimals, ..Default::default() });
+            let svg = export(&d, &ExportOptions { units: Some(units), decimals, ..Default::default() });
             let tree = usvg::Tree::from_str(&svg, &usvg::Options::default()).unwrap();
             let extent = tree.root().abs_bounding_box();
             // CSS consumers render physical lengths at 96 px/in, document geometry is 72 pt/in.

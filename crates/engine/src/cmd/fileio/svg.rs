@@ -53,8 +53,8 @@ pub const OPTIONS: &[FormatOption] = &[
     FormatOption {
         name: "units",
         ty: "string",
-        default: "\"px\"",
-        description: "the unit of width and height: px (bare numbers, one per point) | pt | mm | cm | in (the viewBox stays in points; not with responsive)",
+        default: "null",
+        description: "override the document unit for width and height: px (bare numbers, one per point) | pt | mm | cm | in; omit to follow the document unit, not null (the viewBox stays in points; not with responsive)",
     },
     FormatOption {
         name: "preserveEditing",
