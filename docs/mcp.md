@@ -5409,10 +5409,11 @@ Defined copy made with `swatch.library.copyToUser` holds the swatches alone, so 
 swatches, patterns, symbols, styles, brushes and images its art uses, in the same undo step as the graph change.
 `graph.design {library, add: name | [names]}` copies designs without applying them and returns `{added, existing}`, and
 `graph.design {library}` lists the library's designs. A design the document already has under the same name stays as it
-is. With no `design`, `graph.column`, `graph.marker` and `graph.design` list the loaded libraries that hold designs as
-`libraries: [{library, name, designs}]`. Copying a graph and pasting it into another document brings the designs its series
+is. `graph.column` and `graph.marker` with no `design`, and `graph.design {}`, list the loaded libraries that hold
+designs as `libraries: [{library, name, designs}]`. Copying a graph and pasting it into another document brings the designs its series
 draw with in the same way; a pasted graph is drawn again with the document's design of that name when that design
-would draw it otherwise.
+would draw it otherwise. The graphs already in the document that draw with a design the copy or paste adds, one a copied
+design's art uses included, are drawn again with it.
 `swatch.library.copyToUser {library}` copies a loaded library into the user library folder of the desktop
 app (a library file as it is; a document's swatches or a library loaded from `data` or `dataBase64`
 as `.vcswatches`; a library with pattern swatches is refused) under a name no file there has, and lists it as User

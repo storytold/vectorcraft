@@ -762,6 +762,22 @@ fn same_art(r: &Relink, ours: &[Arc<Node>], theirs: &[Arc<Node>]) -> bool {
     ours.len() == theirs.len() && ours.iter().zip(theirs).all(|(a, b)| relinked(&unlinked, a) == relinked(r, b))
 }
 
+/// `n` with the ids of its objects, those of opacity-mask art included, all 0: art drawn again
+/// compares equal to art drawn the same way, whatever ids each drawing gave it.
+fn without_ids(n: &Node) -> Node {
+    let mut n = n.clone();
+    n.id = vectorcraft_doc::NodeId(0);
+    if let Some(mask) = n.extras_if_any().and_then(|e| e.mask.as_deref_mut()) {
+        mask.art = Arc::new(without_ids(&mask.art));
+    }
+    if let Some(children) = n.children_mut() {
+        for c in children.iter_mut() {
+            *c = Arc::new(without_ids(c));
+        }
+    }
+    n
+}
+
 /// Is `ours` (a document brush) brush `theirs` (a pasted one) once the art of that is relinked by
 /// `r`? Graphic style links don't count, as in [`same_art`].
 fn same_brush(r: &Relink, ours: &Brush, theirs: &Brush) -> bool {
@@ -1051,6 +1067,8 @@ pub(crate) struct Imported {
     /// The names of the symbols added to the document, whose art may hold graphs that draw with
     /// [`Self::kept_designs`].
     pub added_symbols: BTreeSet<String>,
+    /// The names of the graph designs added to the document.
+    pub added_designs: BTreeSet<String>,
     /// The global and spot colors that took the document's color (merged).
     merged_swatches: BTreeSet<String>,
 }
@@ -1275,11 +1293,18 @@ impl Clipboard {
                             .collect(),
                         None => HashMap::new(),
                     };
+                    // A symbol whose graphs the paste draws again with the document's designs is
+                    // also the document's one that holds its art drawn that way (an earlier paste
+                    // added it).
+                    let redrawn = (!fresh && d.symbols.iter().any(|s| copy_of(&def.name, &s.name)))
+                        .then(|| self.redrawn_art(d, &def.art, &out.relink))
+                        .flatten();
                     let r = &out.relink;
                     let p = place(&mut d.symbols, def, same_doc, |a, b| {
                         !fresh
                             && options.is_none_or(|o| theirs.get(&a.name) == Some(o))
-                            && same_art(r, std::slice::from_ref(&a.art), std::slice::from_ref(&b.art))
+                            && (same_art(r, std::slice::from_ref(&a.art), std::slice::from_ref(&b.art))
+                                || redrawn.as_ref().is_some_and(|art| without_ids(&a.art) == *art))
                     });
                     if let Some(name) = p.new_name(&def.name) {
                         if let Some(o) = options {
@@ -1499,6 +1524,27 @@ impl Clipboard {
         }
     }
 
+    /// Symbol art `art` relinked by `relink` with its graphs drawn again with the designs `d` holds
+    /// under a name whose design the clipboard lacks or holds with other art, as a paste that adds
+    /// the symbol draws it, its ids left out ([`without_ids`]). `None` when no graph of it draws
+    /// with such a design.
+    fn redrawn_art(&self, d: &mut Document, art: &Arc<Node>, relink: &Relink) -> Option<Node> {
+        let theirs = |n: &str| self.graph_designs.iter().find(|g| g.name == n);
+        let differs: BTreeSet<String> = d
+            .graph_designs
+            .iter()
+            .filter(|x| theirs(&x.name).is_none_or(|g| !Arc::ptr_eq(&g.art, &x.art) && g.art != x.art))
+            .map(|x| x.name.clone())
+            .collect();
+        if differs.is_empty() || !crate::cmd::graph::holds_designs(art, &differs) {
+            return None;
+        }
+        let mut n = (**art).clone();
+        relink.node(&mut n);
+        crate::cmd::graph::redraw_detached(d, &mut n, &differs);
+        Some(without_ids(&n))
+    }
+
     /// Graph designs: the document's design of a name stays as it is and the pasted graphs draw
     /// with it ([`Imported::kept_designs`]); a design the document lacks is added under its name, its art following the
     /// resources placed above, with fresh ids. Called once every other resource is placed.
@@ -1538,6 +1584,7 @@ impl Clipboard {
             let art = d.reid(&art);
             d.graph_designs.push(GraphDesign { name: g.name.clone(), art: Arc::new(art) });
             out.placed(Res::GraphDesign, &g.name, &Placed::Added);
+            out.added_designs.insert(g.name.clone());
         }
         Ok(())
     }
@@ -1632,15 +1679,16 @@ pub(crate) fn graph_design_library(src: &Document) -> Option<Document> {
 /// Add graph designs `names` of `src` to `d`, with the swatches, patterns, symbols, styles,
 /// brushes and images their art uses, placed as Paste places them ([`Clipboard::import_into`]; a
 /// global or spot color whose name `d` gives another color is `d`'s). A design `d` has under the
-/// same name stays as it is. → each name, and whether its design was added. An error, with `d`
-/// unchanged, when `d` would hold more than [`GraphDesign::MAX`] designs.
-pub(crate) fn import_graph_designs(src: &Document, d: &mut Document, names: &[String]) -> Result<Vec<(String, bool)>> {
+/// same name stays as it is, and the art of `src`'s design of that name is not followed. → the
+/// names of the designs added: those of `names` `d` lacked, and those their art uses. An error,
+/// with `d` unchanged, when `d` would hold more than [`GraphDesign::MAX`] designs.
+pub(crate) fn import_graph_designs(src: &Document, d: &mut Document, names: &[String]) -> Result<BTreeSet<String>> {
     let library = OnceCell::new();
-    let used = designs_used(&Defs::of(src, &library), names);
+    let held = |n: &str| d.graph_designs.iter().any(|x| x.name == n);
+    let followed: Vec<GraphDesign> = src.graph_designs.iter().filter(|g| names.contains(&g.name) || !held(&g.name)).cloned().collect();
+    let used = designs_used(&Defs { graph_designs: &followed, ..Defs::of(src, &library) }, names);
     let clip = Clipboard::with_used(src, &used, &library, vec![]);
-    let before: HashSet<String> = d.graph_designs.iter().map(|g| g.name.clone()).collect();
-    clip.import_used(d, &used, &SwatchChoices::default(), false)?;
-    Ok(names.iter().map(|n| (n.clone(), !before.contains(n))).collect())
+    Ok(clip.import_used(d, &used, &SwatchChoices::default(), false)?.added_designs)
 }
 
 /// Swatch `w` in `d` ([`existing`]), else added under a free name (swatches and colour groups

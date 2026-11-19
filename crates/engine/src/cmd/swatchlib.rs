@@ -17,7 +17,7 @@ use vectorcraft_color::swatch::REGISTRATION;
 use vectorcraft_color::{Paint, Swatch, SwatchGroup, SwatchLibrary, default_swatches};
 use vectorcraft_doc::pattern::pattern_paint;
 
-use super::fileio::{create_dir, extension, read_file, write_file, write_new_file};
+use super::fileio::{create_dir, extension, read_file, read_file_head, write_file, write_new_file};
 use super::menucmds::squash;
 use super::package::free_name;
 use super::patternlib;
@@ -393,12 +393,32 @@ impl<L: LibraryFile> Libraries<L> {
     /// or a file with the same extension and bytes as one there, is that User Defined library;
     /// others are listed as loaded until the app quits.
     pub(crate) fn load(&mut self, p: &Value, cmd: &str, parse: impl FnOnce(&[u8], &str) -> Result<L>) -> Result<(LibraryInfo, Arc<L>)> {
+        self.load_within(p, cmd, None, parse)
+    }
+
+    /// [`Self::load`], with a file at `path` read up to `max` bytes and refused when it is longer.
+    pub(crate) fn load_within(
+        &mut self,
+        p: &Value,
+        cmd: &str,
+        max: Option<usize>,
+        parse: impl FnOnce(&[u8], &str) -> Result<L>,
+    ) -> Result<(LibraryInfo, Arc<L>)> {
         let path = text_param(p, "path", cmd)?;
         let data = text_param(p, "data", cmd)?;
         let data_base64 = text_param(p, "dataBase64", cmd)?;
         let name = text_param(p, "name", cmd)?;
         let bytes = match (path, data, data_base64) {
-            (Some(path), ..) => read_file(path)?,
+            (Some(path), ..) => match max {
+                Some(max) => {
+                    let bytes = read_file_head(path, max.saturating_add(1))?;
+                    if bytes.len() > max {
+                        return Err(bad(cmd, too_big_message(max)));
+                    }
+                    bytes
+                }
+                None => read_file(path)?,
+            },
             (None, Some(text), _) => text.as_bytes().to_vec(),
             (None, None, Some(b64)) => vectorcraft_format::base64_decode(b64).ok_or_else(|| bad(cmd, "bad dataBase64"))?,
             _ => return Err(bad(cmd, "give `path`, `data` or `dataBase64`")),
@@ -816,27 +836,38 @@ fn save(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(out)
 }
 
-fn load(s: &mut Session, p: &Value) -> Result<Value> {
-    const C: &str = "swatch.library.load";
-    // The size is checked before the file is read, copied or decoded.
-    let max = super::place::document::MAX_FILE;
-    let too_big = match text_param(p, "path", C)? {
+/// The error for a library file larger than `max` bytes.
+fn too_big_message(max: usize) -> String {
+    format!("the file is larger than {} MB", max >> 20)
+}
+
+/// Whether the library `p` gives (`path`, `data` or `dataBase64`) is larger than `max` bytes,
+/// checked before the file is read, copied or decoded.
+pub(crate) fn library_too_big(p: &Value, cmd: &str, max: usize) -> Result<bool> {
+    Ok(match text_param(p, "path", cmd)? {
         Some(path) => super::fileio::file_stamp(path).is_some_and(|(len, _)| len > max as u64),
-        None => match text_param(p, "data", C)? {
+        None => match text_param(p, "data", cmd)? {
             Some(text) => text.len() > max,
             // Base64 holds 3 bytes in every 4 characters (padding and white space hold none).
             None => {
-                text_param(p, "dataBase64", C)?.is_some_and(|b| b.bytes().filter(|c| *c != b'=' && !c.is_ascii_whitespace()).count() * 3 / 4 > max)
+                text_param(p, "dataBase64", cmd)?.is_some_and(|b| b.bytes().filter(|c| *c != b'=' && !c.is_ascii_whitespace()).count() * 3 / 4 > max)
             }
         },
-    };
-    if too_big {
-        return Err(bad(C, format!("the file is larger than {} MB", max >> 20)));
+    })
+}
+
+fn load(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "swatch.library.load";
+    let max = super::place::document::MAX_FILE;
+    if library_too_big(p, C, max)? {
+        return Err(bad(C, too_big_message(max)));
     }
     let mut designs = None;
     // The document a library with pattern swatches was read from, which holds their patterns.
     let mut patterns = None;
-    let (info, lib) = s.swatch_libraries.load(p, C, |bytes, file| {
+    // The file is read no further than the limit, so a file that grew since it was checked is
+    // refused too.
+    let (info, lib) = s.swatch_libraries.load_within(p, C, Some(max), |bytes, file| {
         // A library file, or a document whose swatches become the library and whose graph
         // designs the Graph Column and Graph Marker dialogs offer.
         if palette_io::sniff_bytes(bytes) {

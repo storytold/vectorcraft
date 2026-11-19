@@ -1625,6 +1625,11 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
             super::graph::redraw_with_designs(d, &new_ids, &imported.kept_designs)?;
             super::graph::redraw_symbols_with_designs(d, &imported.added_symbols, &imported.kept_designs);
         }
+        // The graphs already in the document that draw with a design the paste added are drawn
+        // again with it; the pasted ones already draw with it.
+        if !imported.added_designs.is_empty() {
+            super::graph::refresh_graphs(d, &imported.added_designs, &new_ids, &imported.added_symbols)?;
+        }
         sel.set(new_ids.iter().copied());
         // Copied ruler guides (#3226): on the layer new art goes to, moved as the objects are (a
         // paste of guides alone keeps them where they were, but onto another artboard or every
