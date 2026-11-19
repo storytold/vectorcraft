@@ -32,6 +32,8 @@ Draft enhancement #5804: Preferences › File Handling can select a raster edito
 
 M4: Explicitly requested editing data keeps a single artboard larger than its 14,400 pt capped PDF page (#6865). Scores and estimates unchanged.
 
+M12 Concept to Vector (#7051): the feature is implemented in part. The built-in provider makes 1 to 5 offline Image Trace styles of one image side by side, and a request to any provider makes up to 8 variations, one per selected style. The ticked ones are inserted beside the image as one undo step, and other providers are plugged in by id. Prompt-led generation and raster output are pending. Scores and estimates unchanged.
+
 Numeric fields step on wheel hover without taking keyboard focus (#5949). Arrow keys still require focus; modifiers, units, limits, mixed values and existing rounding stay in the shared stepping path. Headless regressions in `tests/numfields.rs` cover hovered unfocused fields, focused fields, trackpad accumulation and panel scroll exclusion. Scores and estimates unchanged.
 
 Raster rendering fits and preflattens curved stroke outlines more tightly only below four times the raster tolerance, retaining thin-band coverage without changing stroke weight or vector export geometry. Current cached character/object outlines, cropped long strokes, gradient clips and effect rasters share the helper; cropped-region reuse and guarded flattening remain. The unchanged `fractional_curved_strokes_retain_coverage_between_notches` regression covers fractional weights, rotation, phase, opacity and f32-rounded endpoints. This is a quality/cost tradeoff, not a speed claim. Scores and estimates unchanged.
@@ -151,8 +153,6 @@ Hindi interface follow-up (2026-11-06): the catalog and zero/one plural rule are
 native wording review, layout checks and a web Devanagari font remain. [Notes](localization-hi.md).
 
 Gujarati interface follow-up (2026-11-14): the catalog and zero/one plural rule are implemented. The original 4,286 rows remain unchanged; all 387 additions are contributor-reviewed and approved, with 11 wording corrections. Status/error messages remain partial, and a bundled Gujarati web font remains to be supplied.
-
-M12 Concept to Vector (#7051): the feature is implemented in part. The built-in provider offers 5 offline Image Trace styles, and a request generates up to 8 variations of one image side by side, one per selected style. The ticked ones are inserted beside the image as one undo step, and providers are plugged in by id. Prompt-led generation and raster output are pending.
 
 ## Current focus
 

@@ -10798,7 +10798,7 @@ breakText	Glyphs	Glyffer
 @msg	a provider with the id `{id}` is registered already	en udbyder med id’et `{id}` er allerede registreret
 @msg	job {job} has no results to insert: it was canceled	job {job} har ingen resultater at indsætte: det blev annulleret
 @msg	job {job} no longer applies: its document, image or image placement changed, so generate again	job {job} gælder ikke længere: dets dokument, billede eller billedets placering er ændret, så lav det igen
-@msg	Concept to Vector results are not saved, so a recorded insert does not play again: generate again	resultater fra Koncept til vektor gemmes ikke, så en optaget indsættelse afspilles ikke igen: lav dem igen
+@msg	Concept to Vector results are not saved, so a recorded insert does not play again: generate again	Resultater fra Koncept til vektor gemmes ikke, så en optaget indsættelse afspilles ikke igen: lav dem igen
 @msg	missing `provider` (see conceptVector.providers)	`provider` mangler (se conceptVector.providers)
 @msg	no Concept to Vector job {job}: it was never made, or was dropped (see conceptVector.results)	intet job {job} i Koncept til vektor: det blev aldrig lavet eller er fjernet (se conceptVector.results)
 @msg	no Concept to Vector provider `{name}` (see conceptVector.providers)	ingen udbyder `{name}` til Koncept til vektor (se conceptVector.providers)
