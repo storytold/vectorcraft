@@ -636,8 +636,8 @@ pub const DEFAULT_FLATTENER: &str = "High Resolution";
 /// `doc` with its transparency flattened for a PDF 1.3 file (asked for, or PDF/X-1a and PDF/X-3,
 /// whose files have none), with `flattenerPreset` (default High Resolution) and `p`'s `flattener`
 /// options over it; images with see-through pixels and colorized images, including those in
-/// pattern tiles, count as transparency. Rasterized areas are clipped to their regions, and
-/// discarded overprints are dropped. Layers the pages leave out (non-printing ones, unless asked
+/// pattern tiles, count as transparency. Rasterized areas are clipped to their regions and keep no
+/// alpha, and discarded overprints are dropped. Layers the pages leave out (non-printing ones, unless asked
 /// for) are left out of the flattening, hidden. → the document to write (`None`: `doc` as it is)
 /// and whether its transparency was flattened.
 fn flatten_for(cmd: &str, doc: &Document, set: &PdfSettings, p: &Value) -> Result<(Option<Document>, Option<FlattenOptions>)> {
@@ -655,8 +655,9 @@ fn flatten_for(cmd: &str, doc: &Document, set: &PdfSettings, p: &Value) -> Resul
     o.preserve_overprints &= set.advanced.overprint == Overprint::Preserve;
     o.no_transparency = Some(see_through_images(doc));
     // Without soft masks a rasterized area can't be a rectangle with see-through pixels around
-    // its art: it is clipped to its regions (opaque inside them).
+    // its art: it is clipped to its regions (opaque inside them). Rasters keep no alpha either.
     o.clip_complex_regions = true;
+    o.preserve_alpha = false;
     Ok(match flatten_document(shown.as_ref().unwrap_or(doc), &o)? {
         Some(flat) => (Some(flat), Some(o)),
         None => (shown, None),
