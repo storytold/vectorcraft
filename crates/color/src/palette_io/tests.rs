@@ -2,12 +2,11 @@ use super::*;
 use crate::{Gradient, GradientPaint, GradientStop};
 use proptest::prelude::*;
 
-// The swatch exchange file's signature, block types and entry cap, which craft-cms keeps private.
+// The swatch exchange file's signature and block types, which craft-cms keeps private.
 const ASE_SIGNATURE: &[u8] = b"ASEF";
 const ASE_GROUP_START: u16 = 0xC001;
 const ASE_GROUP_END: u16 = 0xC002;
 const ASE_COLOR: u16 = 0x0001;
-const ASE_MAX_ENTRIES: usize = 100_000;
 
 #[test]
 fn gpl_blank_name_keeps_fallback() {
