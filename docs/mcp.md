@@ -4734,6 +4734,21 @@ already walks Image Trace. Short agent entry points:
   dialog's OK) when every group already has the options and `closeGaps` finds no gap, and `livePaint.make` or
   `livePaint.merge` given one Live Paint group alone, which they select. Such a fill or stroke also leaves the recent
   colors and the last color as they are. `livePaint.gapOptions` makes a group's faces again, with new ids, only when it adds a path or when Gap Detection is turned on or off or given a new size while it is on.
+  With a tool other than the Live Paint Bucket, a whole Live Paint group that is selected, given in `ids`, or inside a
+  selected group takes a fill on its faces only and a stroke on its edges only, and its hidden source paths keep their
+  paint. Without an `item`, `paint.setFill`, `paint.setStroke`, `paint.lastColor`, `paint.lastGradient` and
+  `paint.none` paint the faces or the edges. `paint.editGradient`, `paint.setGradientGeom` and the `paint.freeform`
+  point and line edits change the faces' or the edges' gradients, `paint.invert` and `paint.complement` recolor the
+  faces' fills or the edges' strokes, and `stroke.set`, `stroke.weightUp`, `stroke.weightDown` and
+  `stroke.setAdvanced` change the edges. The Fill proxy shows the faces' fill, and the Stroke proxy, the Stroke panel
+  and the Control bar show the edges' stroke. A face or edge selected or given together with its whole group follows
+  the group's rule: a fill does not reach an edge, and a stroke does not reach a face. `paint.swap` gives the faces
+  the stroke the edges share and gives the edges the fill the faces share, with a gradient fitted to each face or
+  edge. It leaves a group as it is when its faces' fills or its edges' strokes differ, when any of them is a freeform
+  gradient, or when it has no face or no edge. `paint.default` replaces each face's appearance with no fill and each
+  edge's appearance with a 0.5 pt black stroke, also when the document's Default Graphic Style is redefined. With
+  only Live Paint groups selected or given, the fill and stroke for new art become no fill and a 0.5 pt black stroke;
+  with New Art Has Basic Appearance off, new art then takes the selection's appearance, as after any command.
 
 `brush.selectionArt {ids?|id?}` (a query) replies `{art}`: the object that `brush.new` given the same `ids` or `id`,
 or the same selection, takes as a new scatter or art brush's art and as a new pattern brush's side tile. Several
