@@ -48,6 +48,8 @@ pub struct SymbolismTool {
     active: bool,
     hover: Option<Point>,
     alt: bool,
+    /// Shift was held when the drag began (the Shifter, Sizer, Stainer and Styler have a Shift form).
+    shift: bool,
     /// Brush diameter in points.
     pub diameter: f64,
     /// 1..10.
@@ -113,6 +115,7 @@ impl SymbolismTool {
             active: false,
             hover: None,
             alt: false,
+            shift: false,
             diameter: 80.0,
             intensity: 5.0,
             density: 5.0,
@@ -196,6 +199,9 @@ impl SymbolismTool {
             v["proportional"] = json!(self.proportional);
             v["affectsDensity"] = json!(self.affects_density);
         }
+        if self.shift && matches!(tool, "shift" | "size" | "stain" | "style") {
+            v["shift"] = json!(true);
+        }
         ("symbol.adjust".into(), v)
     }
 }
@@ -230,6 +236,7 @@ impl Tool for SymbolismTool {
                 self.previewed = 1;
                 self.active = true;
                 self.alt = ev.mods.alt;
+                self.shift = ev.mods.shift;
                 let (c, v) = self.command(cx);
                 vec![Action::Begin(self.label().into()), Action::Preview(c, v)]
             }
@@ -575,6 +582,39 @@ mod tests {
         spinner.set_option("method", &json!("random"));
         let v = press(&mut spinner);
         assert!(v["method"] == "random" && v.get("proportional").is_none(), "{v}");
+    }
+
+    /// A drag begun with Shift sends `shift` with the Shifter, Sizer, Stainer and Styler, and only
+    /// with them; one begun without it sends none.
+    #[test]
+    fn shift_reaches_the_tools_that_have_a_shift_form() {
+        let (d, _) = doc_with_rect();
+        let (s, p) = (Selection::default(), paint());
+        let cx = cx(&d, &s, &p);
+        let shifted = Mods { shift: true, ..Default::default() };
+        for (id, sends) in [
+            ("symbolShifter", true),
+            ("symbolSizer", true),
+            ("symbolStainer", true),
+            ("symbolStyler", true),
+            ("symbolScruncher", false),
+            ("symbolSpinner", false),
+            ("symbolScreener", false),
+            ("symbolSprayer", false),
+        ] {
+            let mut t = SymbolismTool::new(id);
+            let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 5.0, 5.0).with_mods(shifted));
+            let Action::Preview(_, v) = &a[1] else { panic!("{a:?}") };
+            assert_eq!(v.get("shift"), sends.then_some(&json!(true)), "{id}");
+            // The drag keeps the Shift it began with.
+            let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 60.0, 5.0));
+            let Action::Preview(_, v) = &a[0] else { panic!("{a:?}") };
+            assert_eq!(v.get("shift"), sends.then_some(&json!(true)), "{id} drag");
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 60.0, 5.0));
+            let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 5.0, 5.0));
+            let Action::Preview(_, v) = &a[1] else { panic!("{a:?}") };
+            assert!(v.get("shift").is_none(), "{id} without Shift: {v}");
+        }
     }
 
     /// With Use Pressure Pen a drag sample where the pen stays is kept when the pressure changes;

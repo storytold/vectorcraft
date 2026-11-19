@@ -998,6 +998,9 @@ fn mosaic_plan(s: &Session, p: &Value) -> Result<MosaicPlan> {
         .ok_or_else(|| bad(C, "select an image"))?;
     let node = st.doc.node(id).ok_or(EngineError::NoNode(id))?;
     let NodeKind::Image(im) = &node.kind else { return Err(bad(C, "select an image")) };
+    if node.is_distorted_image() {
+        return Err(super::xform::distorted_image_error(C, id));
+    }
     if !st.doc.images.get(&im.key).is_some_and(|b| !b.bytes.is_empty()) {
         return Err(bad(C, "the image has no embedded pixels"));
     }
@@ -1285,6 +1288,9 @@ fn crop_image(s: &mut Session, p: &Value) -> Result<Value> {
         .ok_or_else(|| bad(C, "select an image"))?;
     let node = st.doc.node(id).cloned().ok_or(EngineError::NoNode(id))?;
     let NodeKind::Image(im) = &node.kind else { return Err(bad(C, "select an image")) };
+    if node.is_distorted_image() {
+        return Err(super::xform::distorted_image_error(C, id));
+    }
     if switch_or(p, "trim", false, C)? {
         if p.get("ppi").is_some_and(|v| !v.is_null()) {
             return Err(bad(C, "trim keeps the image's pixels as they are: leave out ppi"));
@@ -1495,11 +1501,16 @@ fn mask_image(s: &mut Session, _: &Value) -> Result<Value> {
         .selection
         .objects
         .iter()
-        .find_map(|id| match st.doc.node(*id).map(|n| &n.kind) {
-            Some(NodeKind::Image(im)) => {
-                Some((*id, vectorcraft_geom::shapes::rectangle(Rect::new(0.0, 0.0, im.width as f64, im.height as f64)).transformed(im.xf)))
+        .find_map(|id| {
+            let n = st.doc.node(*id)?;
+            match &n.kind {
+                // A distorted image's outline joins its corners.
+                NodeKind::Image(_) if n.is_distorted_image() => Some((*id, PathData::from_bezpath(&n.image_frame()?))),
+                NodeKind::Image(im) => {
+                    Some((*id, vectorcraft_geom::shapes::rectangle(Rect::new(0.0, 0.0, im.width as f64, im.height as f64)).transformed(im.xf)))
+                }
+                _ => None,
             }
-            _ => None,
         })
         .ok_or_else(|| bad("object.maskImage", "select an image"))?;
     let (gid, pid) = s.edit("Mask", |d, sel| {

@@ -98,6 +98,7 @@
 	Add to Selection	加入選取範圍
 	Add to Swatches	新增至色票
 	Add Used Colors	新增使用中的顏色
+	Add Selected Colors	新增所選顏色
 	Additional Plug-ins Folder	額外的增效模組資料夾
 	Plug-in Instruction Budget	增效模組指令預算
 	Additional Fonts Folder	額外的字體資料夾
@@ -197,6 +198,10 @@ font-technology	Variable	可變
 	Arc	弧形
 	Arc Lower…	下弧形…
 	Arc Tool	弧形工具
+	Three-Point Arc Tool	三點弧形工具
+	Three-Point Arc	三點弧形
+	Arc too large	弧形過大
+	Third Point Sets Direction	第三點指示方向
 	Arc Upper…	上弧形…
 	Arch…	拱形…
 	Arc…	弧形…
@@ -615,6 +620,8 @@ font-technology	Variable	可變
 	Contextual Task Bar	快捷工作列
 	Pin Bar Position	釘選工作列位置
 	Reset Bar Position	重設工作列位置
+	Bar Actions	工作列動作
+	Reset Bar Actions	重設工作列動作
 	Resize	調整大小
 	Contrast	對比
 	Control	控制
@@ -1696,6 +1703,10 @@ file-filter	Templates	範本
 	Add Color Tool	新增顏色工具
 	Remove Color Tool	移除顏色工具
 	Remove Color	移除顏色
+	Set As Base Color	設為基色
+	Select Shade	選取色調
+	Add New Color	新增顏色
+	Set Current Color As Base Color	將目前顏色設為基色
 	Find the selected colors in the artwork	在圖稿中尋找所選顏色
 	Harmony Sets	色彩調和組
 	Height	高度
@@ -2216,6 +2227,10 @@ file-filter	Templates	範本
 @msg	a guide has no curvature circle	參考線沒有曲率圓
 @msg	the circle that matches the path there would reach past the canvas	在該處與路徑曲率相符的圓會超出畫布
 @msg	no circle passes through these points: two are the same or all three lie on one line	沒有圓通過這些點：有兩點相同，或三點共線
+@msg	`at` must be "start" or "end"	`at` 必須是 "start" 或 "end"
+@msg	give exactly one of `through` and `toward`	`through` 與 `toward` 必須且只能指定一個
+@msg	no arc fits these points: two are the same or all three lie on one line	沒有弧形符合這些點：有兩點相同，或三點共線
+@msg	give `at` only with `toward`	`at` 只能與 `toward` 一起指定
 @msg	select at least two objects	請選取至少兩個物件
 @msg	exit isolation mode first	請先結束隔離模式
 @msg	no saved presets	沒有已儲存的預設集
@@ -2262,6 +2277,7 @@ file-filter	Templates	範本
 @msg	{label} produced an empty result: a line or other open path encloses no area; to include it, apply Object › Path › Outline Stroke to it first	{label} 產生了空的結果：直線或其他開放路徑不圍成區域；若要納入，請先對其套用「物件 › 路徑 › 外框筆畫」
 @msg	already editing a pattern	已在編輯圖樣
 @msg	no pattern `{name}`	沒有圖樣 `{name}`
+@msg	art painted with `{name}` can't be its tile	以 `{name}` 上色的圖稿不能作為它的拼貼
 @msg	not in pattern editing mode	不在圖樣編輯模式中
 @msg	finish editing the pattern first	請先完成圖樣編輯
 @msg	pattern missing	找不到圖樣
@@ -2669,6 +2685,8 @@ file-filter	Templates	範本
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` 必須是 grayscale、rgb、hsb、cmyk 或 websafe
 @msg	`view` must be wheel or box	`view` 必須是 wheel 或 box
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` 必須是 hue、saturation、brightness、red、green 或 blue
+@msg	`sliders` must be none, oklch or hsl	`sliders` 必須是 none、oklch 或 hsl
+@msg	OKLCH needs sRGB as the working RGB space	OKLCH 需要將 sRGB 用作 RGB 工作空間
 @msg	`{key}` must be true or false	`{key}` 必須是 true 或 false
 @msg	`top` and `below` can't both be true	`top` 和 `below` 不能同時為 true
 @msg	`select` must be true or false	`select` 必須是 true 或 false
@@ -2700,6 +2718,10 @@ file-filter	Templates	範本
 @msg	no such view	沒有這個檢視
 @msg	printing isn't available here	此處無法列印
 @msg	select an image	請選取影像
+@msg	object {_1} is an image changed by Perspective Distort or Free Distort, which this command does not work on	物件 {_1} 是經過透視扭曲或隨意扭曲的影像，此指令無法用於它
+@msg	image {_1} cannot be distorted this way: its corners would not make a convex shape	無法這樣扭曲影像 {_1}：其角點不會構成凸形
+@msg	image {_1} cannot be distorted this way: its corners would cross the warp's horizon	無法這樣扭曲影像 {_1}：其角點會越過扭曲的地平線
+@msg	image {_1} cannot be distorted this way: its corners would be too close together for a perspective map	無法這樣扭曲影像 {_1}：其角點會太靠近，無法進行透視對應
 @msg	`background` must be edges, corners or colors	`background` 必須為 edges、corners 或 colors
 @msg	`match` must be distance or channels	`match` 必須為 distance 或 channels
 @msg	`{key}` must be from 0 to 100	`{key}` 必須介於 0 到 100 之間
@@ -3325,6 +3347,11 @@ liquify-list-end	{0}, {1}	{0}和{1}
 	Knife	美工刀
 	Knockout Group	去底群組
 	Lab	Lab
+	OKLCH Sliders	OKLCH 滑桿
+	HSL Sliders	HSL 滑桿
+	Chroma	色度
+	The largest chroma sRGB holds at this lightness and hue	sRGB 在此亮度和色相下可容納的最大色度
+	OKLCH needs sRGB as the working RGB space	OKLCH 需要將 sRGB 用作 RGB 工作空間
 	Lab Spot Colors:	Lab 特別色：
 	Lab Values	Lab 值
 	Landscape	橫向
@@ -4186,6 +4213,11 @@ diagnostics	ui	介面
 	Preserve Alpha Transparency	保留 Alpha 透明度
 	Preserve Appearance and Overprints	保留外觀與疊印
 	Preserve CMYK Numbers	保留 CMYK 數值
+	Preserve RGB Numbers	保留 RGB 數值
+	Device to Simulate:	要模擬的裝置：
+	Simulate Paper Color	模擬紙張顏色
+	Simulate Black Ink	模擬黑色油墨
+	Load…	載入…
 	Preserve Editing Capabilities	保留編輯功能
 	Preserve editing capabilities	保留編輯功能
 	Preserve Lightness	保留亮度
@@ -4694,9 +4726,10 @@ digits	Malayalam	馬來亞拉姆數字
 	Edit type set in fonts that aren't available?	要編輯使用了無法使用之字體的文字嗎？
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	在畫布上於每個切片左上角的方框中顯示其編號；關閉時，切片輪廓仍會顯示。
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	使用者切片和物件切片的輪廓及其編號方框的顏色；自動切片使用此顏色較淡的色調。
-	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	當文件設定的語言為英文：美國時，新文字使用此語言；文件中已有的文字保留自己的語言。
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	在開啟使用連字號的段落中，清單中的單字只在其中輸入的連字號處斷開，沒有連字號則不斷開，與語言和大小寫無關。
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	在桌面版中，此資料夾中的 .wasm 增效模組會在啟動時以及在此指定新資料夾並按一下「確定」時載入，安全模式除外；網頁版不會載入它們。
+	Normal keeps each plug-in's own limits; with Large, a plug-in filter or command may run at least 250 million instructions besides those for its input. The time limit stays the same.	「正常」保留每個增效模組自身的限制；選擇「大」時，增效模組的濾鏡或命令除處理其輸入所需的指令外，至少可執行 2.5 億條指令。時間限制不變。
+	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	增效模組的物件濾鏡每次執行可使用的指令數；「大」比「正常」允許更多，60 秒的時間限制不變。重型濾鏡保留自己的預算。
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	第一個暫存磁碟選擇：Startup、None 或資料夾路徑；VectorCraft 會儲存它，但尚未使用暫存磁碟。
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	第二個暫存磁碟選擇：Startup、None 或資料夾路徑；VectorCraft 會儲存它，但尚未使用暫存磁碟。
 	How light or dark the interface is.	介面的明暗程度。
@@ -4714,7 +4747,10 @@ digits	Malayalam	馬來亞拉姆數字
 	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	介面的語言；「自動」使用系統的語言。選擇一種語言後，對話方塊會立即切換為該語言。
 	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	只有開啟此選項時，動畫縮放才會起作用；關閉此選項時，動畫縮放會顯示為灰色，縮放不帶動畫。
 	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	用滾輪縮放時會平滑過渡，縮放工具在你向側邊拖曳或按住不放時進行縮放；關閉此選項時，縮放工具會縮放到你拖曳過的區域。
+	From the next start, the desktop version shows the canvas through this kind of graphics processor; the artwork is drawn on the CPU either way. Automatic prefers the integrated one on Windows and macOS. The web version does not use it.	從下次啟動起，桌面版透過這類圖形處理器顯示畫布；圖稿一律在 CPU 上繪製。「自動」在 Windows 和 macOS 上優先使用內建圖形處理器。網頁版不使用此選項。
+	From the next start, the window shows each frame without waiting for the display's refresh where the graphics driver allows, at most 240 frames a second.	從下次啟動起，在圖形驅動程式允許時，視窗顯示每一影格而不等待顯示器重新整理，最多每秒 240 影格。
 	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	從下次啟動起，桌面版使用這類圖形處理器繪製；「自動」優先使用驅動顯示器的圖形處理器。網頁版不使用此選項。
+	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	從下次啟動起，視窗不等待顯示器重新整理就顯示畫面，每秒最多 240 格；關閉時由顯示器決定畫面的節奏。啟動時設定的呈現模式優先。
 	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	每份文件保留的最大復原步驟數；調低後，按一下「確定」時會刪除最早的步驟。步驟佔用過多記憶體時也可能更早被刪除。
 	Shows the artwork changing while you drag; off, outlines follow the drag and the artwork changes when you release. A ruler guide always moves as you drag.	拖曳時顯示圖稿的變化；關閉此選項時，由外框跟隨拖曳，放開後圖稿才改變。尺標參考線在拖曳時總是跟著移動。
 	How many worker threads draw the artwork; -1 uses one fewer than the cores VectorCraft may use, at most 8, and 0 uses none. The web version always uses none.	繪製圖稿的工作執行緒數；-1 使用比 VectorCraft 可用核心數少一個的執行緒，最多 8 個，0 則不使用。網頁版始終不使用。
@@ -4741,6 +4777,10 @@ digits	Malayalam	馬來亞拉姆數字
 	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft 會儲存此選項，但複製和剪下尚未使用舊版向量剪貼簿格式。
 	Preserve Paths or Preserve Appearance and Overprints for the legacy vector clipboard; VectorCraft stores the choice but does not use it yet.	舊版向量剪貼簿的「保留路徑」或「保留外觀與疊印」；VectorCraft 會儲存所選項目，但尚未使用。
 	Keep Formatting keeps the styles of text copied from VectorCraft type when it is pasted into type; Keep Plain Text gives it the style where it lands.	將從 VectorCraft 文字物件複製的文字貼到文字物件時，「保留格式」保留其樣式，「保留純文字」則使用貼上位置的樣式。
+	Display All Blacks as Rich Black shows pure CMYK black (black ink alone at 100%) as RGB black on the canvas; Display All Blacks Accurately converts it through the CMYK working space.	「將所有黑色顯示為濃黑」在畫布上將純 CMYK 黑色（僅 100% 黑色油墨）顯示為 RGB 黑色；「精確顯示所有黑色」則透過工作 CMYK 色彩空間轉換。
+	Output All Blacks as Rich Black draws pure CMYK black as RGB black in RGB and grayscale raster exports and Print as Bitmap; it does not change vector exports, CMYK JPEG, TIFF and PSD, or other printing.	「以濃黑輸出所有黑色」在 RGB 和灰階點陣匯出和「以點陣圖列印」中將純 CMYK 黑色繪製為 RGB 黑色；不改變向量匯出、CMYK JPEG、TIFF 和 PSD 以及其他列印。
+	On a touch screen, switches to the Touch workspace; turning this off, or losing the touch screen, goes back to the workspace it switched from.	在觸控螢幕上切換至觸控工作區；關閉此選項或觸控螢幕不再可用時，返回切換前的工作區。
+	A two-finger tap on the canvas undoes, or switches between selection and drawing tools in the Touch workspace, and a three-finger tap redoes; neither works in Presentation Mode.	在畫布上雙指輕點會復原，在觸控工作區中則在選取工具和繪圖工具之間切換；三指輕點會重做。兩者在簡報模式下均無作用。
 	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	當文件設定的語言為英文：美國且 [正常字元樣式] 未設定語言時，新文字使用此語言；文件中已有的文字保留自己的語言。
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	在開啟使用連字號的段落中，清單中的單字只在其中輸入的連字號處斷開，沒有連字號則不斷開，與大小寫無關；韓文單字不加連字號，印度語言的單字不會在字元叢集內部斷開。
 	Reset all preferences to their defaults?	要將所有偏好設定重設為預設值嗎？
@@ -4985,6 +5025,7 @@ digits	Malayalam	馬來亞拉姆數字
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	共 {n} 個結果，顯示 {shown} 個。繼續輸入以縮小範圍。
 	Recent Commands	最近使用的指令
 	No recent commands	沒有最近使用的指令
+	Type to search commands, tools, panels and effects	輸入以搜尋指令、工具、面板與效果
 	Search commands	搜尋指令
 	Search Commands…	搜尋指令…
 	Secondary	次要
@@ -7677,6 +7718,36 @@ anchor	Points:	點：
 @msg	`{id}` is not a colour adjustment	`{id}` 不是顏色調整
 @msg	missing `effect`	未提供 `effect`
 @msg	`params` must be an object	`params` 必須是物件
+# Stroke arrowheads (Stroke panel, Dimension Tool Options and Properties › Arrow Style).
+	Triangle (open)	三角 (空心)
+	Circle (open)	圓形 (空心)
+	Square (open)	正方形 (空心)
+	Arrow (open)	箭頭 (空心)
+	Barbed	倒鉤
+arrowhead	Feather	羽毛
+	Half Arrow (left)	半箭頭 (左)
+	Half Arrow (right)	半箭頭 (右)
+	Double Bar	雙長條
+	Dot on Bar	長條上的圓點
+	Chevron	人字形
+	Plus	加號
+	Hexagon (open)	六邊形 (空心)
+	Tag	標籤
+	Tag (open)	標籤 (空心)
+	Half Circle	半圓
+	Drop	水滴
+	Slash	斜線
+	Double Slash	雙斜線
+	Diamond (open)	菱形 (空心)
+	Reverse Triangle	倒三角
+	Swallowtail	燕尾
+	Bracket	括號
+	Fork	叉形
+	Leaf	葉形
+	Kite	風箏形
+	Triangle to Bar	三角至長條
+	Oval	橢圓
+	Line Arrow	線條箭頭
 # Path Precision Tools add-on (Object › Plug-ins › Path Precision Tools): its tools, Anchor Inspector panel, commands and messages.
 	Path Precision Tools	路徑精確工具
 	Anchor Eraser Brush	錨點橡皮擦筆刷
@@ -7967,6 +8038,7 @@ breakText	Glyphs	字符
 	Remove Strokes	移除筆畫
 	Place Brush Art	置入筆刷圖稿
 	Replace Brush Art	取代筆刷圖稿
+	Replace Pattern Art	取代圖樣圖稿
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	有筆畫使用了此筆刷。要將新圖稿套用到這些筆畫，還是保留筆畫不變並加入一個使用新圖稿的筆刷複本？
 	Apply to Strokes	套用至筆畫
 	Leave Strokes	保留筆畫
@@ -10355,6 +10427,21 @@ breakText	Glyphs	字符
 @msg	A joint does not close by {gap} pt.	有一處接縫相差 {gap} pt 未閉合。
 @msg	Two panels pass through each other.	兩個面板相互穿插。
 @msg	{what} would print on more than {MAX_TILES} tiles: scale it down	{what} 會列印在超過 {MAX_TILES} 個拼貼上：請縮小
+	Orbit Lines	軌道線
+	Petal Garland	花瓣花環
+	Lattice Braid	格紋編織
+	Facet Sweep	切面筆觸
+	Artistic Brushes	藝術筆刷
+	Paint	繪畫
+	Flat Sweep	平刷
+	Dry Drag	乾拖
+	Loaded Stroke	厚塗筆觸
+	Fan Sweep	扇形筆觸
+	Engraving	雕刻
+	Fine Hatching	細線排線
+	Dense Hatching	密集排線
+	Tapered Hatching	漸細排線
+	Broken Hatching	斷續排線
 	Image Brush	影像筆刷
 	Soft Bloom	柔和花朵
 	Halftone Field	半色調區域

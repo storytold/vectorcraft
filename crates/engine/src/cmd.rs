@@ -892,6 +892,9 @@ pub use compoundshape::OPEN_PATHS_ADD_NO_AREA;
 /// Pathfinder Options (`Prefs::pathfinder`).
 pub use pathops::{PATHFINDER_PRECISION_RANGE, PathfinderOptions};
 
+/// The Pathfinder Options a new Pathfinder effect takes (`effect.apply`).
+pub use effectcmd::pathfinder_effect_options;
+
 /// The Attributes panel's state ([`Session::attributes_info`]) and how many recent URLs it keeps.
 pub use attributes::RECENT_URLS;
 pub use overprint::AttributesInfo;
@@ -909,7 +912,7 @@ pub use gradpresets::{GradientPreset, GradientPresetEntry};
 pub use buildcmds::{TracePreset, TracePresetChange};
 
 /// An Image Trace made off the UI thread, and what it traced (#3098).
-pub use buildcmds::{TraceRun, Traced};
+pub use buildcmds::{TraceRun, Traced, image_trace_target};
 
 /// The saved Image Trace presets' revision and latest changes ([`crate::Session`] keeps them).
 pub(crate) use buildcmds::TracePresetChanges;
