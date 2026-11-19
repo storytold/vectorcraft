@@ -1000,6 +1000,42 @@ fn overprinting_paints_keep_their_faint_ink_on_postscript_plates() {
 }
 
 #[test]
+fn a_near_black_stop_of_an_overprinting_gradient_puts_no_cyan_on_postscript_plates() {
+    // 0.4% cyan beside 100% K counts as black on a PostScript plate stop by stop, as a solid fill
+    // of it does: the cyan plate draws that stop of an overprinting gradient as paper white. A
+    // PDF plate and a gradient that does not overprint keep the 0.4%.
+    let stops = vec![GradientStop::new(0.0, Color::cmyk(0.004, 0.0, 0.0, 1.0)), GradientStop::new(1.0, Color::cmyk(0.5, 0.0, 0.0, 0.0))];
+    let fade = Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, stops))));
+    let square = |x: f64, overprint: bool| {
+        let r = shapes::rectangle(Rect::new(x, 15.0, x + 20.0, 35.0));
+        let mut n = Node::path(vectorcraft_doc::NodeId(0), r, Appearance::basic(fade.clone(), Paint::None, 0.0));
+        if let Some(f) = n.appearance.fill_mut() {
+            f.overprint = overprint;
+        }
+        n
+    };
+    let d = over_cyan(vec![square(10.0, true), square(40.0, false)]);
+    // The cyan plate's stops of each gradient, in thousandths of the ink.
+    let stops = |postscript: bool| {
+        let opts = PrintOptions { settings: settings(json!({"output": {"mode": "separations"}})), postscript, ..Default::default() };
+        let p = plan(&d, &opts).unwrap();
+        let mut all = vec![];
+        p.plates[0].walk(|n| {
+            if let Some(Paint::Gradient(g)) = n.appearance.fill().map(|f| &f.paint) {
+                let gray = |s: &GradientStop| match s.color {
+                    Color::Gray { k } if s.swatch.is_none() => (k * 1000.0).round(),
+                    c => panic!("{c:?}"),
+                };
+                all.push(g.gradient.stops.iter().map(gray).collect::<Vec<_>>());
+            }
+        });
+        all
+    };
+    assert_eq!(stops(true), [[0.0, 500.0], [4.0, 500.0]], "PostScript: the overprinting gradient, the other");
+    assert_eq!(stops(false), [[4.0, 500.0], [4.0, 500.0]], "PDF");
+}
+
+#[test]
 fn overprinting_type_leaves_the_inks_below_on_separations() {
     let style = vectorcraft_doc::CharStyle { fill: Paint::solid(Color::cmyk(0.0, 0.0, 0.0, 1.0)), ..Default::default() };
     let text = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(20.0, 60.0), "Hi", style);
