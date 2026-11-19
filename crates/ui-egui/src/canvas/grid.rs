@@ -222,7 +222,14 @@ pub(super) fn ruler_input(app: &mut VectorcraftApp, ui: &Ui, full: egui::Rect, c
         if resp.clicked_by(egui::PointerButton::Primary) {
             ui.data_mut(|d| d.insert_temp(last_click, now));
         }
-        if resp.double_clicked_by(egui::PointerButton::Primary)
+        // Trim View hides the guides (#8363): a guide made now could not be seen, so none is.
+        let trim_view = app.ui.view.trim_view;
+        let refuse = |app: &mut VectorcraftApp| app.status(crate::menus::TRIM_VIEW_HIDES.to_string());
+        if trim_view && first_here && resp.double_clicked_by(egui::PointerButton::Primary) {
+            refuse(app);
+        }
+        if !trim_view
+            && resp.double_clicked_by(egui::PointerButton::Primary)
             && first_here
             && let Some(p) = resp.interact_pointer_pos().or_else(|| ui.input(|i| i.pointer.latest_pos()))
         {
@@ -253,8 +260,19 @@ pub(super) fn ruler_input(app: &mut VectorcraftApp, ui: &Ui, full: egui::Rect, c
         } else {
             continue;
         };
+        if trim_view {
+            if resp.drag_started() {
+                refuse(app);
+            }
+            // No guide is dragged out, so none previews. One already dragged when Trim View
+            // turned on ends as a release off the canvas does: no guide, no undo step.
+            if !app.session.ruler_guide_dragging() {
+                continue;
+            }
+        }
+        let kind = if trim_view { PointerKind::Up } else { kind };
         let p = resp.interact_pointer_pos().or_else(|| ui.input(|i| i.pointer.latest_pos()));
-        let on_canvas = p.is_some_and(|p| canvas.contains(p));
+        let on_canvas = !trim_view && p.is_some_and(|p| canvas.contains(p));
         if on_canvas {
             // The new guide shows even if guides were hidden.
             app.ui.view.guides = true;

@@ -15344,3 +15344,80 @@ fn trim_view_deselects_selected_guide_paths() {
 
     assert!(app.session.active().unwrap().selection.objects.is_empty());
 }
+
+/// #8363: Trim View hides the guides, so a guide dragged or double-clicked out of a ruler while it
+/// is on would be made but never seen. None is: no preview line, no guide, no undo step, the
+/// stored Show/Hide Guides choice is left alone, and the status line says why. A drag already
+/// going when Trim View turns on ends as a release off the canvas does.
+#[test]
+fn trim_view_makes_no_guide_from_the_rulers() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.ui.view.rulers = true;
+    app.ui.view.guides = false;
+    app.ui.view.smart_guides = false;
+    app.ui.view.snap_to_point = false;
+    app.ui.view.trim_view = true;
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let rect = app.canvas_rect.unwrap();
+    let from = pos2(rect.center().x, rect.top() - RULER / 2.0);
+    let at = pos2(rect.center().x, rect.top() + 120.0);
+    let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    let across = |s: &Shape| {
+        matches!(s, Shape::LineSegment { points, .. }
+            if (points[0].y - at.y).abs() <= 2.0 && points[0].y == points[1].y && (points[1].x - points[0].x).abs() >= rect.width() - 0.5)
+    };
+    let count = |app: &VectorcraftApp| app.session.active().unwrap().doc.ruler_guides().len();
+    let steps = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
+    let before = steps(&app);
+
+    // A drag: nothing previews and nothing is made.
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from)]);
+    frame(&mut app, &ctx, vec![button(from, true)]);
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at)]);
+    assert!(!shapes(&mut app, &ctx).iter().any(across), "no guide previews");
+    assert!(!app.session.ruler_guide_dragging());
+    frame(&mut app, &ctx, vec![button(at, false)]);
+    assert_eq!(count(&app), 0, "no guide from a drag");
+    assert!(!app.ui.view.guides, "the stored choice is left alone");
+    assert_eq!(app.ui.status, crate::menus::TRIM_VIEW_HIDES);
+
+    // A double-click: nothing either.
+    app.ui.status.clear();
+    let click = |app: &mut VectorcraftApp| {
+        frame(app, &ctx, vec![egui::Event::PointerMoved(from)]);
+        frame(app, &ctx, vec![button(from, true)]);
+        frame(app, &ctx, vec![button(from, false)]);
+    };
+    click(&mut app);
+    click(&mut app);
+    assert_eq!(count(&app), 0, "no guide from a double-click");
+    assert!(!app.ui.view.guides);
+    assert_eq!(app.ui.status, crate::menus::TRIM_VIEW_HIDES);
+    assert_eq!(steps(&app), before, "no undo step");
+
+    // Trim View turned on during a drag: the drag ends without a guide.
+    app.ui.view.trim_view = false;
+    let from2 = pos2(rect.center().x + 30.0, rect.top() - RULER / 2.0);
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from2)]);
+    frame(&mut app, &ctx, vec![button(from2, true)]);
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at)]);
+    assert!(app.session.ruler_guide_dragging(), "the drag started with Trim View off");
+    app.ui.view.trim_view = true;
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(pos2(at.x + 5.0, at.y))]);
+    assert!(!app.session.ruler_guide_dragging(), "ended");
+    assert!(!shapes(&mut app, &ctx).iter().any(across), "no guide previews");
+    frame(&mut app, &ctx, vec![button(at, false)]);
+    assert_eq!(count(&app), 0, "no guide from the drag Trim View interrupted");
+    assert_eq!(steps(&app), before, "no undo step");
+
+    // With Trim View off again, a drag makes a guide as before.
+    app.ui.view.trim_view = false;
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from)]);
+    frame(&mut app, &ctx, vec![button(from, true)]);
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at)]);
+    frame(&mut app, &ctx, vec![button(at, false)]);
+    assert_eq!(count(&app), 1);
+    assert!(app.ui.view.guides, "the new guide shows");
+}

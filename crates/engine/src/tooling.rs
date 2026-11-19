@@ -839,6 +839,12 @@ impl Session {
         self.ruler_origin = None;
     }
 
+    /// A guide is being dragged out of a ruler ([`Session::ruler_guide`]): its first event came
+    /// and its release has not.
+    pub fn ruler_guide_dragging(&self) -> bool {
+        self.ruler_guide.is_some()
+    }
+
     /// Time passed while the pointer button is held (`dt` seconds; see [`Tool::tick`]): the
     /// desktop app ticks every frame of a press, agents with `holdMs` on a pointer event.
     pub fn tool_tick(&mut self, dt: f64, view: ViewInfo) -> Result<Vec<UiRequest>> {

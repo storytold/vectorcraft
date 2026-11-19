@@ -136,7 +136,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
 }
 
 /// Why Show/Hide Guides and Show/Hide Grid refuse to run while Trim View is on.
-const TRIM_VIEW_HIDES: &str = "Trim View hides the guides and the grid; turn it off first";
+pub(crate) const TRIM_VIEW_HIDES: &str = "Trim View hides the guides and the grid; turn it off first";
 
 /// Drops the selection when it holds ruler guides or guide paths that no longer draw (Hide Guides,
 /// Trim View): their selection overlay would otherwise reveal the geometry just hidden.

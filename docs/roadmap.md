@@ -232,7 +232,7 @@ not take the artwork yet. Overflow-menu drag remains separate. Scores and hours 
 
 | Date | Change | Summary |
 |---|---|---|
-| 2026-11-19 | minor | M11: View › Trim View hides the ruler guides, guide paths and the grid while it is on and greys out Show/Hide Guides and Show/Hide Grid (#8363). Scores and estimates unchanged |
+| 2026-11-19 | minor | M11: View › Trim View hides the ruler guides, guide paths and the grid while it is on and greys out Show/Hide Guides and Show/Hide Grid; a ruler drag or double-click makes no guide meanwhile (#8363). Scores and estimates unchanged |
 | 2026-11-18 | minor | M10/G5: Media Controls joins Basic Shapes, UI Frames, Map Markers, Inventory Icons, Skill Icons and Weather Icons as a seventh built-in symbol library (Play, Pause, Stop, Skip Next, Shuffle, Repeat; original procedural vector symbols generated in code, no default 9-slice); G5 estimate decremented to 2–12 h, milestone estimates unchanged |
 | 2026-11-18 | minor | M7/G4: Retype phase 1 (#4934): `type.retype` turns outlined text that exactly matches an available font back into point text. Scores and estimates unchanged |
 | 2026-11-18 | minor | M1: Lock Guides: a selection marquee (Selection, Direct Selection, Group Selection, Enclosing Lasso) leaves out paths made into guides inside groups and compound paths too, as clicks do (#3074), so a group is no longer selected by a locked guide in it; an enclosing marquee measures a group without its locked or hidden guides, and Direct Selection takes no anchor or segment of a guide that can't be picked; a guide in a group still moves with its group (#8538). Scores and estimates unchanged. |
