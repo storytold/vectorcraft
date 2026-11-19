@@ -1861,7 +1861,7 @@ fn review_8758_layout(double: bool) {
     review_8758_click(&mut app, &ctx, 3.0, search.center());
     assert!(app.ui.palette_open, "the actual toolbar button opens the existing command palette");
     assert!(app.ui.palette_query.is_empty(), "the existing command clears the previous query");
-    assert!(ctx.wants_keyboard_input(), "the palette search has keyboard input");
+    assert!(ctx.egui_wants_keyboard_input(), "the palette search has keyboard input");
     assert!(!app.ui.tools_drawer, "Search is distinct from Edit Toolbar");
     assert_eq!(review_8758_unchanged_content(&app), before, "opening Search changes no document, history, selection or toolbar membership");
     assert_eq!(app.session.tool_id(), tool);
