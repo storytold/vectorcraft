@@ -552,4 +552,7 @@ impl Tool for FillAreaTool {
         }
         self.hover = None;
     }
+    fn check_option(&self, key: &str, v: &Value) -> Result<(), String> {
+        check_builder_options(self.id(), &serde_json::Map::from_iter([(key.to_string(), v.clone())]))
+    }
 }
