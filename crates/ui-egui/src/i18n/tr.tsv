@@ -5200,6 +5200,7 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	`pieces` must be a list of at most 10000 pieces	`pieces` en fazla 10000 parçadan oluşan bir liste olmalıdır
 @msg	give either `start` for a new path or `id`, not both	yeni bir yol için `start` ya da `id` verin, ikisini birden değil
 @msg	`subpath` and `keep` need `id`	`subpath` ve `keep` için `id` gerekir
+@msg	the end is not a straight line or a circular arc	uç ne düz bir çizgi ne de bir çember yayı
 @msg	no such user library	böyle bir kullanıcı kütüphanesi yok
 @msg	no such view	öyle bir görüş yok
 @msg	no such width point	böyle bir genişlik noktası yok

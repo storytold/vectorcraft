@@ -5727,6 +5727,7 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	`pieces` must be a list of at most 10000 pieces	`pieces`-arvon on oltava luettelo, jossa on enintään 10000 osaa
 @msg	give either `start` for a new path or `id`, not both	anna joko `start` uutta polkua varten tai `id`, ei molempia
 @msg	`subpath` and `keep` need `id`	`subpath` ja `keep` edellyttävät `id`-arvoa
+@msg	the end is not a straight line or a circular arc	pää ei ole suora viiva eikä ympyränkaari
 @msg	no such user library	käyttäjäkirjastoa ei ole
 @msg	no such view	näkymää ei ole
 @msg	no such width point	leveyspistettä ei ole

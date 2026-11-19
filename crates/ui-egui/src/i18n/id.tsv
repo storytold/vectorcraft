@@ -7991,6 +7991,7 @@ anchor	Points:	Titik:
 @msg	`id` is not a path	`id` bukan jalur
 @msg	the path has no open subpath	jalur tidak punya subjalur terbuka
 @msg	the subpath is closed	subjalur sudah tertutup
+@msg	the end is not a straight line or a circular arc	ujungnya bukan garis lurus maupun busur lingkaran
 @msg	the subpath is closed or too short to close	subjalur sudah tertutup atau terlalu pendek untuk ditutup
 @msg	the path is too short to remove a point from	jalur terlalu pendek untuk dihapus titiknya
 @msg	the segment can't be bent that far	segmen tidak dapat dibengkokkan sejauh itu

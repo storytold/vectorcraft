@@ -5808,6 +5808,7 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	`pieces` must be a list of at most 10000 pieces	`pieces` musí být seznam nejvýše 10000 dílů
 @msg	give either `start` for a new path or `id`, not both	zadejte buď `start` pro novou cestu, nebo `id`, ne obojí
 @msg	`subpath` and `keep` need `id`	`subpath` a `keep` vyžadují `id`
+@msg	the end is not a straight line or a circular arc	konec není rovná čára ani kruhový oblouk
 @msg	no such user library	taková uživatelská knihovna neexistuje
 @msg	no such view	takové zobrazení neexistuje
 @msg	no such width point	takový bod šířky neexistuje

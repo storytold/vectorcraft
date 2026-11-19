@@ -11,17 +11,25 @@
 //! point closes the path, a click on an end of an open path goes on drawing from it, and Escape
 //! or Enter ends the path. The path's points show as circles, without handles, and a preview
 //! shows the piece the next click adds. Points snap to Smart Guides. Each piece is one undo step.
+//!
+//! A handle stands beyond each end of the path being drawn, or, while none is, of the selected
+//! path, where that end is a straight line or a circular arc. Dragging it makes the line or arc
+//! longer or shorter, as one undo step (`path.quickPenLength`): a line keeps its direction, and
+//! an arc keeps its circle. The dragged end stays on its line or circle and does not snap to Smart
+//! Guides. A click on a handle that does not drag is an ordinary click: it adds a point, closes the
+//! path or starts one.
 
 use std::f64::consts::{FRAC_PI_2, PI};
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{NodeId, NodeKind};
+use vectorcraft_doc::{MAX_COORD, NodeId, NodeKind};
 use vectorcraft_geom::{Anchor, AnchorKind, BezPath, Point, SubPath, Vec2};
 
 use crate::draw2::FEEDBACK;
 use crate::guides::{DrawSnap, Leave};
 use crate::pen::{continue_from, open_end_at};
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
+use length::EndPiece;
 
 /// The tool's id.
 pub const ID: &str = "quickPen";
@@ -34,8 +42,12 @@ pub const TURN_STEP: f64 = 15.0;
 /// The smallest and largest arc size (degrees).
 pub const MIN_TURN: f64 = 1.0;
 pub const MAX_TURN: f64 = 359.0;
+/// The command that makes the line or arc at an end of a path longer or shorter.
+pub const LENGTH_COMMAND: &str = "path.quickPenLength";
 /// Screen points the pointer moves after a press before the press drags.
 const DRAG_PX: f64 = 3.0;
+/// Screen points a length handle stands beyond the end of the path, along the way it leaves the end.
+pub const LENGTH_HANDLE_PX: f64 = 20.0;
 /// A continuous arc whose end lies within this angle (radians) of straight ahead, or of straight
 /// behind, is drawn as a line: no circle runs there in the path's direction.
 const STRAIGHT: f64 = 1e-6;
@@ -230,6 +242,36 @@ impl Drawing {
     fn drawn(&self) -> Option<SubPath> {
         Some(build(self.base.as_ref()?, &self.pieces, false))
     }
+
+    /// The last piece as drawn in `drawn` (the path [`Self::drawn`] builds): the points from where
+    /// it starts to the end of the path.
+    fn last_tail(&self, drawn: &SubPath) -> Option<SubPath> {
+        let (_, rest) = self.pieces.split_last()?;
+        let from = build(self.base.as_ref()?, rest, false).anchors.len().checked_sub(1)?;
+        Some(SubPath::new(drawn.anchors.get_range(from..)?, false))
+    }
+
+    /// Splits `changed`, the drawn path with its start changed, into a base and the most pieces at
+    /// its end that build it again point for point, so the pieces a drag did not touch stay pieces
+    /// (C and `[` `]` go on changing the last one). None when no piece builds it again.
+    fn rebase(&self, changed: &SubPath) -> Option<(SubPath, Vec<Piece>)> {
+        let base = self.base.as_ref()?;
+        let m = changed.anchors.len();
+        let total = build(base, &self.pieces, false).anchors.len();
+        for k in 0..self.pieces.len() {
+            let (before, kept) = self.pieces.split_at(k);
+            let added = total.checked_sub(build(base, before, false).anchors.len())?;
+            let Some(keep) = m.checked_sub(added) else { continue };
+            if keep == 0 {
+                continue;
+            }
+            let new_base = SubPath::new(changed.anchors.get_range(..keep)?, false);
+            if build(&new_base, kept, false).anchors == changed.anchors {
+                return Some((new_base, kept.to_vec()));
+            }
+        }
+        None
+    }
 }
 
 /// The press in progress: where it went down, whether it has dragged, and whether it began an undo
@@ -241,18 +283,43 @@ struct Press {
     begun: bool,
 }
 
+/// A length handle: the line or arc at one end of subpath `si` of `id`, and where its handle is.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct LengthHandle {
+    id: NodeId,
+    si: usize,
+    at_start: bool,
+    piece: EndPiece,
+    at: Point,
+}
+
+/// A length handle being dragged: the handle as the press found it, the length the drag has set,
+/// whether the press has moved far enough to drag, and whether the drag began an undo step.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct LengthDrag {
+    handle: LengthHandle,
+    press: Point,
+    length: f64,
+    dragged: bool,
+    begun: bool,
+    /// The last piece of the path being drawn as it was before the drag, when the handle is at the
+    /// end of that piece: the drag changes the piece, so C and [ ] still shape it afterwards.
+    last: Option<Piece>,
+}
+
 pub struct QuickPenTool {
     action: Stroke,
     turn: f64,
     drawing: Option<Drawing>,
     press: Option<Press>,
+    length: Option<LengthDrag>,
     hover: Option<Point>,
     snap: DrawSnap,
 }
 
 impl Default for QuickPenTool {
     fn default() -> Self {
-        Self { action: Stroke::Line, turn: DEFAULT_TURN, drawing: None, press: None, hover: None, snap: DrawSnap::default() }
+        Self { action: Stroke::Line, turn: DEFAULT_TURN, drawing: None, press: None, length: None, hover: None, snap: DrawSnap::default() }
     }
 }
 
@@ -260,6 +327,11 @@ impl Default for QuickPenTool {
 fn selected_alone(cx: &ToolContext, id: NodeId) -> bool {
     let sel = cx.selection.objects.as_slice();
     sel == [id] || cx.doc.parent_of(id).is_some_and(|p| sel == [p] && cx.doc.node(p).is_some_and(|n| matches!(n.kind, NodeKind::Compound { .. })))
+}
+
+/// Whether every point and handle of `sp` lies on the canvas.
+fn on_canvas(sp: &SubPath) -> bool {
+    sp.anchors.iter().all(|a| [a.p, a.h_in, a.h_out].iter().all(|q| q.x.abs() <= MAX_COORD && q.y.abs() <= MAX_COORD))
 }
 
 fn point_tol(cx: &ToolContext) -> f64 {
@@ -325,6 +397,18 @@ impl QuickPenTool {
         if self.drawing.is_some() && self.active(cx).is_none() {
             self.drawing = None;
         }
+        // A press on a length handle waits to see whether it drags; one let go without dragging is
+        // the click `click` makes.
+        if let Some(handle) = self.length_handle_at(cx, p) {
+            let last = self.drawn_last_piece(cx, &handle);
+            self.length = Some(LengthDrag { handle, press: p, length: handle.piece.length, dragged: false, begun: false, last });
+            return vec![];
+        }
+        self.click(cx, p)
+    }
+
+    /// What a press away from a length handle, or a click on one, draws.
+    fn click(&mut self, cx: &ToolContext, p: Point) -> Vec<Action> {
         let tol = point_tol(cx);
         if let Some((id, sp)) = self.active(cx) {
             let (first, last) = match (sp.anchors.first(), sp.anchors.last()) {
@@ -395,6 +479,112 @@ impl QuickPenTool {
         SubPath::new(added, false).to_bezpath_into(&mut bp);
         Some(bp)
     }
+
+    /// The length handles: at both ends of the path being drawn, or, while none is, of each open
+    /// subpath of the one editable path selected, wherever the end is a line or an arc.
+    fn length_handles(&self, cx: &ToolContext) -> Vec<LengthHandle> {
+        // At the end of the path being drawn, the handle changes the last piece drawn alone, even
+        // where the piece before it goes on around the same circle.
+        let mut tail = None;
+        let subpaths: Vec<(NodeId, usize, &SubPath)> = if let Some((id, sp)) = self.active(cx) {
+            tail = self.drawing.as_ref().and_then(|dr| dr.last_tail(sp));
+            self.drawing.as_ref().map(|dr| (id, dr.si, sp)).into_iter().collect()
+        } else if let [id] = cx.selection.objects.as_slice()
+            && cx.doc.is_editable(*id)
+            && let Some(pd) = cx.doc.node(*id).and_then(|n| n.path_data())
+        {
+            pd.subpaths.iter().enumerate().filter(|(_, sp)| !sp.closed).map(|(si, sp)| (*id, si, sp)).collect()
+        } else {
+            vec![]
+        };
+        let off = cx.tol(LENGTH_HANDLE_PX);
+        let mut out = vec![];
+        for (id, si, sp) in subpaths {
+            for at_start in [false, true] {
+                let piece = match &tail {
+                    Some(t) if !at_start => length::end_piece(t, false),
+                    _ => length::end_piece(sp, at_start),
+                };
+                if let Some(piece) = piece {
+                    out.push(LengthHandle { id, si, at_start, piece, at: piece.end + piece.out * off });
+                }
+            }
+        }
+        out
+    }
+
+    /// The length handle under `p`, the nearest when several are.
+    fn length_handle_at(&self, cx: &ToolContext, p: Point) -> Option<LengthHandle> {
+        let tol = point_tol(cx);
+        self.length_handles(cx).into_iter().filter(|h| h.at.distance(p) <= tol).min_by(|a, b| a.at.distance(p).total_cmp(&b.at.distance(p)))
+    }
+
+    /// The last piece of the path being drawn, when `handle` is at its end and the piece is the
+    /// line or arc there.
+    fn drawn_last_piece(&self, cx: &ToolContext, handle: &LengthHandle) -> Option<Piece> {
+        let (id, _) = self.active(cx)?;
+        let dr = self.drawing.as_ref()?;
+        if handle.at_start || id != handle.id || dr.si != handle.si {
+            return None;
+        }
+        let (last, rest) = dr.pieces.split_last()?;
+        let from = build(dr.base.as_ref()?, rest, false).anchors.last()?.p;
+        let same = match handle.piece.shape {
+            length::EndShape::Line => last.stroke == Stroke::Line,
+            length::EndShape::Arc { .. } => last.stroke != Stroke::Line,
+        };
+        (same && from.distance(handle.piece.fixed) <= 1e-9).then_some(*last)
+    }
+
+    /// Puts back the last piece a length drag changed, when the drag is taken back.
+    fn restore_last_piece(&mut self, drag: &LengthDrag) {
+        if let (Some(last), Some(l)) = (drag.last, self.drawing.as_mut().and_then(|dr| dr.pieces.last_mut())) {
+            *l = last;
+        }
+    }
+
+    /// `path.quickPenLength`'s params for the length drag.
+    fn length_params(drag: &LengthDrag) -> Value {
+        let h = &drag.handle;
+        json!({"id": h.id.0, "subpath": h.si, "end": if h.at_start { "start" } else { "end" }, "length": drag.length})
+    }
+
+    /// A length drag let go: once it changed the path being drawn, the drawing goes on from the
+    /// changed path, which `path.quickPenLength` made from the same points. A press on a handle let
+    /// go without dragging is a click there.
+    fn end_length_drag(&mut self, cx: &ToolContext) -> Vec<Action> {
+        let Some(drag) = self.length.take() else { return vec![] };
+        if !drag.dragged {
+            let mut out = self.click(cx, drag.press);
+            if self.press.take().is_some_and(|pr| pr.begun) {
+                out.push(Action::Commit);
+            }
+            self.snap.clear();
+            return out;
+        }
+        if !drag.begun {
+            return vec![];
+        }
+        // The command leaves a piece that already has the length unchanged; a drag that drew the
+        // last piece again has already changed the drawing.
+        let changed = (drag.length - drag.handle.piece.length).abs() > 1e-9 * drag.length.max(1.0);
+        if changed
+            && drag.last.is_none()
+            && let Some(dr) = self.drawing.as_mut()
+            && dr.id == Some(drag.handle.id)
+            && dr.si == drag.handle.si
+            && let Some(drawn) = dr.drawn()
+        {
+            match length::with_length(&drawn, drag.handle.at_start, drag.length) {
+                Some(changed) => {
+                    let (base, pieces) = dr.rebase(&changed).unwrap_or((changed, vec![]));
+                    (dr.base, dr.pieces) = (Some(base), pieces);
+                }
+                None => self.drawing = None,
+            }
+        }
+        vec![Action::Commit]
+    }
 }
 
 impl Tool for QuickPenTool {
@@ -403,7 +593,7 @@ impl Tool for QuickPenTool {
     }
 
     fn busy(&self) -> bool {
-        self.press.is_some()
+        self.press.is_some() || self.length.is_some()
     }
 
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
@@ -415,10 +605,69 @@ impl Tool for QuickPenTool {
                 vec![]
             }
             PointerKind::Down => {
-                if self.press.is_some() {
+                if self.press.is_some() || self.length.is_some() {
                     return vec![];
                 }
                 self.press_down(cx, p)
+            }
+            PointerKind::Drag if self.length.is_some() => {
+                let Some(mut drag) = self.length else { return vec![] };
+                if !drag.dragged && p.distance(drag.press) < cx.tol(DRAG_PX) {
+                    return vec![];
+                }
+                drag.dragged = true;
+                self.length = Some(drag);
+                // The end follows the pointer, as far behind it as the press was.
+                let piece = drag.handle.piece;
+                let mut length = piece.length_dragged(drag.press, p, drag.length);
+                // The last piece drawn goes on being a piece of the drawing, drawn again to its new
+                // end; an arc piece keeps an arc size of at least 1°.
+                let mut redrawn = None;
+                let before = self.drawing.as_ref().and_then(|dr| {
+                    let mut dr = dr.clone();
+                    *dr.pieces.last_mut()? = drag.last?;
+                    dr.last_tail(&dr.drawn()?)
+                });
+                let changed = if let (Some(last), Some(drawn)) = (drag.last, before) {
+                    if let length::EndShape::Arc { radius, .. } = piece.shape {
+                        length = length.max(MIN_TURN.to_radians() * radius);
+                    }
+                    let changed = length::with_length(&drawn, false, length);
+                    redrawn = changed.as_ref().and_then(|sp| sp.anchors.last().map(|a| a.p)).map(|to| {
+                        let turn = match piece.shape {
+                            length::EndShape::Arc { radius, .. } => (length / radius).to_degrees().clamp(MIN_TURN, MAX_TURN),
+                            length::EndShape::Line => last.turn,
+                        };
+                        Piece { to, turn, ..last }
+                    });
+                    changed
+                } else {
+                    let h = &drag.handle;
+                    let sp = cx.doc.node(h.id).and_then(|n| n.path_data()).and_then(|pd| pd.subpaths.get(h.si));
+                    sp.and_then(|sp| length::with_length(sp, h.at_start, length))
+                };
+                // A length that would take the path past the canvas is not taken: the end stays
+                // where the drag last put it.
+                if !changed.is_some_and(|sp| on_canvas(&sp)) {
+                    return vec![];
+                }
+                let mut out = vec![];
+                if !drag.begun {
+                    drag.begun = true;
+                    out.push(Action::Begin("Quick Pen".into()));
+                }
+                drag.length = length;
+                self.length = Some(drag);
+                match redrawn {
+                    Some(pc) => {
+                        if let Some(l) = self.drawing.as_mut().and_then(|dr| dr.pieces.last_mut()) {
+                            *l = pc;
+                        }
+                        out.push(Action::Preview(COMMAND.into(), self.params(false)));
+                    }
+                    None => out.push(Action::Preview(LENGTH_COMMAND.into(), Self::length_params(&drag))),
+                }
+                out
             }
             PointerKind::Drag => {
                 let Some(mut pr) = self.press else { return vec![] };
@@ -440,6 +689,9 @@ impl Tool for QuickPenTool {
             }
             PointerKind::Up => {
                 self.snap.clear();
+                if self.length.is_some() {
+                    return self.end_length_drag(cx);
+                }
                 match self.press.take() {
                     Some(pr) if pr.begun => vec![Action::Commit],
                     _ => vec![],
@@ -476,6 +728,9 @@ impl Tool for QuickPenTool {
 
     /// A dropped press does not end the path being drawn: the piece it added goes.
     fn drop_press(&mut self, _cx: &ToolContext) -> Vec<Action> {
+        if let Some(drag) = self.length.take() {
+            self.restore_last_piece(&drag);
+        }
         if self.press.take().is_some_and(|pr| pr.begun)
             && let Some(dr) = self.drawing.as_mut()
         {
@@ -487,6 +742,16 @@ impl Tool for QuickPenTool {
 
     fn key(&mut self, cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {
         match key {
+            // Escape during a length drag takes the drag back and leaves the path being drawn; Enter
+            // does nothing until the drag ends.
+            ToolKey::Escape if self.length.is_some() => match self.length.take() {
+                Some(drag) if drag.begun => {
+                    self.restore_last_piece(&drag);
+                    vec![Action::Cancel]
+                }
+                _ => vec![],
+            },
+            ToolKey::Enter if self.length.is_some() => vec![],
             ToolKey::Escape | ToolKey::Enter => self.end(),
             ToolKey::Letter('c') => {
                 if self.last_sharp_arc(cx).is_none() {
@@ -532,6 +797,9 @@ impl Tool for QuickPenTool {
     fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
         self.drawing = None;
         self.snap.clear();
+        if self.length.take().is_some_and(|drag| drag.begun) {
+            return vec![Action::Commit];
+        }
         match self.press.take() {
             Some(pr) if pr.begun => vec![Action::Commit],
             _ => vec![],
@@ -551,8 +819,27 @@ impl Tool for QuickPenTool {
 
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
         let mut o = self.snap.guides().to_vec();
+        // The length handles: a line from each end to a handle circle beyond it; during a drag, the
+        // one being dragged, where the changed end is.
+        let handles: Vec<(Point, Point)> = match &self.length {
+            Some(drag) => {
+                let h = &drag.handle;
+                let sp = cx.doc.node(h.id).and_then(|n| n.path_data()).and_then(|pd| pd.subpaths.get(h.si));
+                let piece = sp.and_then(|sp| length::end_piece(sp, h.at_start));
+                piece.map(|pc| (pc.end, pc.end + pc.out * cx.tol(LENGTH_HANDLE_PX))).into_iter().collect()
+            }
+            None if self.press.is_none() => self.length_handles(cx).iter().map(|h| (h.piece.end, h.at)).collect(),
+            None => vec![],
+        };
+        for &(a, b) in &handles {
+            o.push(Overlay::Line { a, b, color: FEEDBACK, dashed: false });
+            o.push(Overlay::Handle { p: b, color: FEEDBACK });
+        }
         let Some((id, sp)) = self.active(cx) else { return o };
+        let on_handle = self.hover.is_some_and(|h| handles.iter().any(|&(_, at)| at.distance(h) <= point_tol(cx)));
         if self.press.is_none()
+            && self.length.is_none()
+            && !on_handle
             && let Some(h) = self.hover
         {
             if cx.pen_rubber_band
@@ -576,6 +863,9 @@ impl Tool for QuickPenTool {
 
     fn cursor(&self, cx: &ToolContext, p: Point, _m: Mods) -> Cursor {
         let tol = point_tol(cx);
+        if self.length.is_some() || self.length_handle_at(cx, p).is_some() {
+            return Cursor::Move;
+        }
         if let Some((_, sp)) = self.active(cx) {
             let close = sp.anchors.len() >= 2 && sp.anchors.first().is_some_and(|f| f.p.distance(p) <= tol);
             return if close { Cursor::PenClose } else { Cursor::PenDrawing };
@@ -611,6 +901,8 @@ impl Tool for QuickPenTool {
         }
     }
 }
+
+pub mod length;
 
 #[cfg(test)]
 mod tests;

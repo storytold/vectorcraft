@@ -6192,6 +6192,7 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	`pieces` must be a list of at most 10000 pieces	`pieces`: legfeljebb 10000 darabból álló lista kell
 @msg	give either `start` for a new path or `id`, not both	adja meg vagy a `start` értéket egy új útvonalhoz, vagy az `id` értéket, de ne mindkettőt
 @msg	`subpath` and `keep` need `id`	a `subpath` és a `keep` mellé `id` kell
+@msg	the end is not a straight line or a circular arc	a végpont nem egyenes vonal és nem is körív
 @msg	no such user library	nincs ilyen felhasználói könyvtár
 @msg	no such view	nincs ilyen nézet
 @msg	no such width point	nincs ilyen szélességi pont

@@ -2114,6 +2114,7 @@ file-filter	Templates	範本
 @msg	`pieces` must be a list of at most 10000 pieces	`pieces` 必須是最多 10000 個片段的清單
 @msg	give either `start` for a new path or `id`, not both	請為新路徑指定 `start`，或指定 `id`，不可同時指定
 @msg	`subpath` and `keep` need `id`	`subpath` 與 `keep` 需要 `id`
+@msg	the end is not a straight line or a circular arc	端點既不是直線也不是圓弧
 @msg	object {id} is not a path	物件 {id} 不是路徑
 @msg	object {id} is not a selected top-level object	物件 {id} 不是已選取的最上層物件
 @msg	nothing to redo	沒有可重做的動作

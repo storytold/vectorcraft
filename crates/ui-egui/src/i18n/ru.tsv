@@ -5518,6 +5518,7 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	`pieces` must be a list of at most 10000 pieces	`pieces` должен быть списком не более чем из 10000 фрагментов
 @msg	give either `start` for a new path or `id`, not both	укажите либо `start` для нового контура, либо `id`, но не оба
 @msg	`subpath` and `keep` need `id`	для `subpath` и `keep` нужен `id`
+@msg	the end is not a straight line or a circular arc	конец не является ни прямой линией, ни дугой окружности
 @msg	no such user library	такой пользовательской библиотеки нет
 @msg	no such view	такого вида нет
 @msg	no such width point	такой точки ширины нет

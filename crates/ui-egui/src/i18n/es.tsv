@@ -5496,6 +5496,7 @@ liquify-list-end	{0}, {1}	{0}, {1}
 @msg	`pieces` must be a list of at most 10000 pieces	`pieces` debe ser una lista de como máximo 10000 tramos
 @msg	give either `start` for a new path or `id`, not both	indica `start` para un trazado nuevo o `id`, pero no ambos
 @msg	`subpath` and `keep` need `id`	`subpath` y `keep` necesitan `id`
+@msg	the end is not a straight line or a circular arc	el extremo no es una línea recta ni un arco circular
 @msg	no such user library	no existe esa biblioteca de usuario
 @msg	no such view	no existe esa vista
 @msg	no such width point	no existe ese punto de anchura

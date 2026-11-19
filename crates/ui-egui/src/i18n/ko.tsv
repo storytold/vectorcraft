@@ -4988,6 +4988,7 @@ variable-list-end	{0}, {1}	{0} 및 {1}
 @msg	`pieces` must be a list of at most 10000 pieces	`pieces`는 최대 10000개 조각의 목록이어야 합니다
 @msg	give either `start` for a new path or `id`, not both	새 패스의 `start`와 `id` 중 하나만 지정하세요
 @msg	`subpath` and `keep` need `id`	`subpath`와 `keep`에는 `id`가 필요합니다
+@msg	the end is not a straight line or a circular arc	끝이 직선도 원호도 아닙니다
 @msg	object {id} is not a path	개체 {id}은(는) 패스가 아닙니다
 @msg	object {id} is not a selected top-level object	개체 {id}은(는) 선택된 최상위 개체가 아닙니다
 @msg	nothing to redo	다시 실행할 항목이 없습니다
