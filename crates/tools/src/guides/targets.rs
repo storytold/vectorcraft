@@ -1839,11 +1839,11 @@ impl Targets {
                 valid((local.x - origin.x) / d0.x, sx) && valid((local.y - origin.y) / d0.y, sy)
             };
             let anchor = self.nearest_point(p, tol);
-            let stroke = self.free_corner_stroke_contact(anchor, &valid_contact, || {
+            let stroke = self.free_corner_stroke_contact(anchor, valid_contact, || {
                 // The existing corner solver accepts the current OPEN sign region, with no
                 // post-snap minimum scale. Bound it by the rotated query square, not a new floor.
                 let domain = Self::free_corner_contact_domain(to_local, p, origin, d0, (sx, sy), tol);
-                self.stroke_contours.nearest_with_domain(p, tol, Some(&domain), Vec2::ZERO, &valid_contact)
+                self.stroke_contours.nearest_with_domain(p, tol, Some(&domain), Vec2::ZERO, valid_contact)
             });
             let direct = anchor.into_iter().chain(stroke).map(|(q, k)| (Some((q.x, q)), Some((q.y, q)), Some((q, k))));
             for (tx, ty, at) in direct.chain([(hx, hy, None), (hx, None, None), (None, hy, None)]) {
