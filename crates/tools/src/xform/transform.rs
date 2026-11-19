@@ -337,30 +337,29 @@ impl TransformTool {
                 }
             },
             || {
-                if ev.mods.shift {
-                    return None;
-                }
                 let frame = OrientedBox { angle, rect: Rect::ZERO }.to_doc();
                 let to_local = frame.inverse() * Affine::translate(-d.origin.to_vec2());
-                let from = to_local * d.pick;
-                if from.x.abs() <= 1e-6 || from.y.abs() <= 1e-6 {
+                let from = frame.inverse() * (d.pick - d.origin).to_point();
+                // Shift replaces the independent ratios with one projected factor.
+                // A fixed solver has no supplemental interval to search.
+                if ev.mods.shift && from.to_vec2().hypot2() <= 1e-12 {
                     return None;
                 }
-                let minimum = Vec2::new(from.x.abs() * 1e-4, from.y.abs() * 1e-4);
-                // The solver permits either sign on each free axis, not just the current sign.
-                let regions = [-1.0, 1.0]
+                let ranges = |lever: f64| {
+                    let active = if ev.mods.shift { lever != 0.0 } else { lever.abs() > 1e-6 };
+                    if active {
+                        let minimum = lever.abs() * 1e-4;
+                        vec![(f64::NEG_INFINITY, -minimum), (minimum, f64::INFINITY)]
+                    } else {
+                        vec![(f64::NEG_INFINITY, f64::INFINITY)]
+                    }
+                };
+                // Both solver signs remain reachable on every active axis; an
+                // inactive grabbed coordinate adds no bound of its own.
+                let ys = ranges(from.y);
+                let regions = ranges(from.x)
                     .into_iter()
-                    .flat_map(|x| {
-                        [-1.0, 1.0].into_iter().map(move |y| DomainRect {
-                            bounds: Rect::new(
-                                if x > 0.0 { minimum.x } else { f64::NEG_INFINITY },
-                                if y > 0.0 { minimum.y } else { f64::NEG_INFINITY },
-                                if x < 0.0 { -minimum.x } else { f64::INFINITY },
-                                if y < 0.0 { -minimum.y } else { f64::INFINITY },
-                            ),
-                            open: [false; 4],
-                        })
-                    })
+                    .flat_map(|(x0, x1)| ys.iter().map(move |&(y0, y1)| DomainRect { bounds: Rect::new(x0, y0, x1, y1), open: [false; 4] }))
                     .collect();
                 Some(ContactDomain { to_local, regions })
             },

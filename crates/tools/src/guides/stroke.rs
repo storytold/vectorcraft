@@ -144,6 +144,40 @@ impl Contours {
             .min_by(|a, b| a.distance_squared(near).total_cmp(&b.distance_squared(near)))
     }
 
+    /// A non-ray trajectory with explicit feasible handle regions. The ordinary exact
+    /// closest contact keeps priority; a rejected one can expose a nearer feasible interior.
+    pub(super) fn on_line_in_domain(
+        &self,
+        at: Point,
+        dir: Vec2,
+        near: Point,
+        tol: f64,
+        domain: (&ContactDomain, Vec2),
+        valid: impl Fn(Point) -> bool,
+    ) -> Option<Point> {
+        let len = dir.hypot();
+        if !finite_point(at) || !finite_point(near) || !len.is_finite() || len == 0.0 || !tol.is_finite() || tol < 0.0 {
+            return None;
+        }
+        let (domain, offset) = domain;
+        if !domain.to_local.as_coeffs().iter().all(|n| n.is_finite()) || !offset.x.is_finite() || !offset.y.is_finite() {
+            return self.on_line_with(at, dir, near, tol, false, valid);
+        }
+        let u = dir / len;
+        let center = at + u * (near - at).dot(u);
+        let line = Line::new(center - u * tol, center + u * tol);
+        if line.p0 == line.p1 {
+            return self.on_line_with(at, dir, near, tol, false, valid);
+        }
+        let query = DomainQuery::new(domain, offset);
+        self.contours
+            .iter()
+            .filter(|c| contains_closed(c.bounds.inflate(tol, tol), near))
+            .flat_map(|c| &c.segments)
+            .filter_map(|seg| constrained_domain_contact(*seg, line, near, tol, &query, &valid))
+            .min_by(|a, b| a.distance_squared(near).total_cmp(&b.distance_squared(near)))
+    }
+
     /// The nearest contact of a rectangle's finite boundary and a contour.
     /// Point/line bounds use the same geometric query without zero-length
     /// segment division in kurbo's segment-pair solver.
@@ -421,6 +455,35 @@ fn intersections(seg: PathSeg, line: Line) -> Vec<Point> {
         .map(|x| seg.eval(x.segment_t))
         .filter(|q| finite_point(*q))
         .collect()
+}
+
+/// Supplement a collinear overlap only after its true closest ordinary sample is rejected.
+/// Farther accepted overlap extrema still compete with the feasible original-curve contact.
+fn constrained_domain_contact(
+    seg: PathSeg,
+    line: Line,
+    near: Point,
+    tol: f64,
+    domain: &DomainQuery<'_>,
+    valid: &impl Fn(Point) -> bool,
+) -> Option<Point> {
+    let samples = intersections(seg, line);
+    let closest_valid = samples.first().is_some_and(|q| q.distance(near) <= tol && valid(*q));
+    let best = samples
+        .into_iter()
+        .filter(|q| q.distance(near) <= tol && valid(*q))
+        .min_by(|a, b| a.distance_squared(near).total_cmp(&b.distance_squared(near)));
+    let v = line.p1 - line.p0;
+    let normal = Vec2::new(-v.y, v.x);
+    if closest_valid || !controls(seg).iter().all(|p| normal.dot(*p - line.p0) == 0.0) {
+        return best;
+    }
+    let feasible = domain.nearest(seg, near, tol * tol, valid).map(|(_, q)| q).filter(|q| q.distance(near) <= tol);
+    match (best, feasible) {
+        (Some(old), Some(new)) if new.distance_squared(near) < old.distance_squared(near) => Some(new),
+        (None, new) => new,
+        (old, _) => old,
+    }
 }
 
 fn projected_extrema(seg: PathSeg, normal: Vec2) -> Vec<f64> {
@@ -1058,5 +1121,66 @@ mod review_597185_domain_after {
             Some(ordinary),
             "a callback-accepted ordinary nearest point keeps its exact numeric-collar priority"
         );
+    }
+}
+#[cfg(test)]
+mod review_597368_collinear_after {
+    use super::*;
+    use vectorcraft_geom::kurbo::{CubicBez, QuadBez};
+
+    fn review_597368_contour(seg: PathSeg) -> Contours {
+        Contours {
+            contours: vec![Contour { bounds: vectorcraft_geom::kurbo::Shape::bounding_box(&seg), segments: vec![seg] }],
+            segments: 1,
+            exhausted: false,
+        }
+    }
+
+    #[test]
+    fn review_597368_collinear_domain_searches_original_primitives_and_keeps_ordinary_contacts() {
+        let region = ContactDomain {
+            to_local: Affine::IDENTITY,
+            regions: vec![DomainRect { bounds: Rect::new(1.0, f64::NEG_INFINITY, f64::INFINITY, f64::INFINITY), open: [false; 4] }],
+        };
+        let dir = Vec2::new(1.0, 0.0);
+        let near = Point::new(0.5, 50.0);
+        let valid = |q: Point| q.x >= 1.0;
+        for seg in [
+            PathSeg::Line(Line::new((-5.0, 50.0), (10.0, 50.0))),
+            PathSeg::Quad(QuadBez::new((-5.0, 50.0), (7.0, 50.0), (10.0, 50.0))),
+            PathSeg::Cubic(CubicBez::new((-5.0, 50.0), (-4.0, 50.0), (8.0, 50.0), (10.0, 50.0))),
+        ] {
+            let contours = review_597368_contour(seg);
+            assert_eq!(contours.on_line_with(near, dir, near, 4.0, false, valid), Some(Point::new(4.5, 50.0)));
+            let q = contours.on_line_in_domain(near, dir, near, 4.0, (&region, Vec2::ZERO), valid).unwrap();
+            assert!(q.distance(Point::new(1.0, 50.0)) <= NEAREST_ACCURACY, "near feasible interior beats the accepted far extremum: {q:?}");
+            assert!(valid(q) && seg.nearest(q, NEAREST_ACCURACY).distance_sq <= NEAREST_ACCURACY * NEAREST_ACCURACY);
+            let accepted = Point::new(2.0, 50.0);
+            let old = contours.on_line_with(accepted, dir, accepted, 4.0, false, valid);
+            assert_eq!(
+                contours.on_line_in_domain(accepted, dir, accepted, 4.0, (&region, Vec2::ZERO), valid),
+                old,
+                "accepted true nearest stays exact"
+            );
+            let invalid = ContactDomain { to_local: Affine::new([f64::NAN, 0.0, 0.0, 1.0, 0.0, 0.0]), regions: vec![] };
+            assert_eq!(contours.on_line_in_domain(near, dir, near, 4.0, (&invalid, Vec2::ZERO), valid), Some(Point::new(4.5, 50.0)));
+        }
+        let mapped = review_597368_contour(PathSeg::Line(Line::new((10.0, 20.0), (14.0, 20.0))));
+        let mapped_region = ContactDomain {
+            to_local: Affine::new([0.0, 2.0, -1.0, 0.0, 0.0, 0.0]),
+            regions: vec![DomainRect { bounds: Rect::new(f64::NEG_INFINITY, 4.0, f64::INFINITY, f64::INFINITY), open: [false; 4] }],
+        };
+        let p = Point::new(10.0, 20.0);
+        let q = mapped.on_line_in_domain(p, dir, p, 4.0, (&mapped_region, Vec2::new(10.0, 20.0)), |q| q.x >= 12.0).unwrap();
+        assert_eq!(q, Point::new(12.0, 20.0), "world contact minus offset is mapped by the actual affine");
+        let crossing = review_597368_contour(PathSeg::Line(Line::new((2.0, 48.0), (2.0, 52.0))));
+        assert_eq!(
+            crossing.on_line_in_domain(near, dir, near, 4.0, (&region, Vec2::ZERO), valid),
+            crossing.on_line_with(near, dir, near, 4.0, false, valid)
+        );
+        assert_eq!(crossing.on_line_in_domain(near, dir, near, 1.0, (&region, Vec2::ZERO), valid), None, "ordinary exact-distance guard remains");
+        let at = Point::new(2.0, 50.0);
+        assert_eq!(crossing.on_line_in_domain(at, dir, at, 0.0, (&region, Vec2::ZERO), valid), crossing.on_line_with(at, dir, at, 0.0, false, valid));
+        assert_eq!(crossing.on_line_in_domain(at, Vec2::ZERO, at, 4.0, (&region, Vec2::ZERO), valid), None);
     }
 }

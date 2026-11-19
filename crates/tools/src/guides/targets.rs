@@ -810,18 +810,23 @@ impl Targets {
         domain: impl FnOnce() -> Option<ContactDomain>,
         valid_contact: impl Fn(Point) -> bool,
     ) -> (Point, Vec<Overlay>) {
-        if self.nearest_point(raw, tol).is_some_and(|(q, _)| valid_contact(q))
-            || self.crossing(raw, tol).is_some()
-            || self.on_segment(raw, tol).is_some()
-        {
+        if self.nearest_point(raw, tol).is_some_and(|(q, _)| valid_contact(q)) {
             return self.snap_from_inner(raw, None, tol, false);
         }
-        if let Some((contact, guides)) = self.snap_stroke_point_with_domain((raw, actual), &[], along, tol, domain, |handle, _| valid_contact(handle))
-        {
-            return (contact, guides);
+        let Some(stroke) = self.snap_stroke_point_with_domain((raw, actual), &[], along, tol, domain, |handle, _| valid_contact(handle)) else {
+            // Without an eligible painted contact, preserve the ordinary legacy route exactly.
+            return self.snap_from_inner(raw, None, tol, false);
+        };
+        if let Some((q, kind)) = self.nearest_point_with(raw, tol, &valid_contact) {
+            return (q, self.label(q, kind.label()).into_iter().collect());
         }
-        // A missed or infeasible constrained contact must not fall back to a free stroke snap.
-        self.snap_from_inner(raw, None, tol, false)
+        if let Some(q) = self.crossing_with_filter(raw, tol, &self.rulers, &valid_contact) {
+            return (q, self.label(q, "intersect").into_iter().collect());
+        }
+        if let Some((_, q)) = self.nearest_segment_with(raw, tol, valid_contact) {
+            return (q, self.label(q, Kind::Edge.label()).into_iter().collect());
+        }
+        stroke
     }
 
     fn snap_from_inner(&self, p: Point, from: Option<&Leave>, tol: f64, stroke_edges: bool) -> (Point, Vec<Overlay>) {
@@ -1050,10 +1055,14 @@ impl Targets {
     }
 
     pub(super) fn nearest_point(&self, p: Point, tol: f64) -> Option<(Point, Kind)> {
+        self.nearest_point_with(p, tol, |_| true)
+    }
+
+    fn nearest_point_with(&self, p: Point, tol: f64, valid: impl Fn(Point) -> bool) -> Option<(Point, Kind)> {
         within(&self.points, |q| q.0.x, p.x, tol)
             .iter()
             .copied()
-            .filter(|(q, _)| q.distance(p) <= tol)
+            .filter(|(q, _)| q.distance(p) <= tol && valid(*q))
             .min_by(|a, b| a.0.distance(p).total_cmp(&b.0.distance(p)))
     }
 
@@ -1108,19 +1117,17 @@ impl Targets {
         self.line(from, q).into_iter().chain(self.label(q, "align")).collect()
     }
 
-    /// A point `p` near no target anchor or center landed where two target paths cross
-    /// ("intersect"), else on the nearest target path ("path"), within `tol`: the point and its
-    /// label, as [`Self::snap_point`] lands it. The ruler guides of `rulers` count as paths that
-    /// cross ([`Self::rulers`]). None when no path is in reach, or the targets hold no segments.
+    /// A point `p` near no target anchor or center lands on a legacy path crossing or
+    /// nearest path when actual segments exist, then on a painted stroke contour independently.
+    /// The ruler guides of `rulers` participate only in the legacy segment route.
     pub(crate) fn snap_onto_path(&self, p: Point, tol: f64, rulers: Option<&Targets>) -> Option<(Point, Vec<Overlay>)> {
-        if self.segments.is_empty() && (!self.stroke_points || self.stroke_contours.is_empty()) {
-            return None;
-        }
-        if let Some(q) = self.crossing_with(p, tol, rulers.map_or(&self.rulers, |r| &r.rulers)) {
-            return Some((q, self.label(q, "intersect").into_iter().collect()));
-        }
-        if let Some(q) = self.on_segment(p, tol) {
-            return Some((q, self.label(q, Kind::Edge.label()).into_iter().collect()));
+        if !self.segments.is_empty() {
+            if let Some(q) = self.crossing_with(p, tol, rulers.map_or(&self.rulers, |r| &r.rulers)) {
+                return Some((q, self.label(q, "intersect").into_iter().collect()));
+            }
+            if let Some(q) = self.on_segment(p, tol) {
+                return Some((q, self.label(q, Kind::Edge.label()).into_iter().collect()));
+            }
         }
         let q = self.stroke_points.then(|| self.stroke_contours.nearest(p, tol)).flatten()?;
         Some((q, self.label(q, "stroke edge").into_iter().collect()))
@@ -1197,11 +1204,15 @@ impl Targets {
 
     /// [`Self::on_segment`], with the segment the point is on.
     fn nearest_segment(&self, p: Point, tol: f64) -> Option<(PathSeg, Point)> {
+        self.nearest_segment_with(p, tol, |_| true)
+    }
+
+    fn nearest_segment_with(&self, p: Point, tol: f64, valid: impl Fn(Point) -> bool) -> Option<(PathSeg, Point)> {
         self.segments
             .iter()
             .filter(|(b, _)| b.inflate(tol, tol).contains(p))
             .map(|(_, c)| (c, c.nearest(p, 1e-6)))
-            .filter(|(_, n)| n.distance_sq <= tol * tol)
+            .filter(|(c, n)| n.distance_sq <= tol * tol && valid(c.eval(n.t)))
             .min_by(|a, b| a.1.distance_sq.total_cmp(&b.1.distance_sq))
             .map(|(c, n)| (*c, c.eval(n.t)))
     }
@@ -1214,6 +1225,10 @@ impl Targets {
 
     /// [`Self::crossing`] with the ruler guides `rulers`.
     fn crossing_with(&self, p: Point, tol: f64, rulers: &[Ruler]) -> Option<Point> {
+        self.crossing_with_filter(p, tol, rulers, |_| true)
+    }
+
+    fn crossing_with_filter(&self, p: Point, tol: f64, rulers: &[Ruler], valid: impl Fn(Point) -> bool) -> Option<Point> {
         // A ruler guide running past, as a short line through the reach of `p`.
         let ruler = |r: &Ruler| {
             let (pos, ..) = r.line_at(p, tol)?;
@@ -1239,7 +1254,7 @@ impl Targets {
                     _ => meeting(a, b, p).into_iter().collect(),
                 };
                 for q in hits {
-                    if q.distance(p) <= tol && best.is_none_or(|b| q.distance(p) < b.distance(p)) {
+                    if q.distance(p) <= tol && valid(q) && best.is_none_or(|b| q.distance(p) < b.distance(p)) {
                         best = Some(q);
                     }
                 }
@@ -1330,7 +1345,10 @@ impl Targets {
             let probe = at + offset;
             let accept = |contact: Point| valid(contact - offset, contact);
             let contact = match along {
-                Some(dir) => self.stroke_contours.on_line_with(probe, dir, probe, tol, false, accept),
+                Some(dir) => match domain.as_ref() {
+                    Some(domain) => self.stroke_contours.on_line_in_domain(probe, dir, probe, tol, (domain, offset), accept),
+                    None => self.stroke_contours.on_line_with(probe, dir, probe, tol, false, accept),
+                },
                 None => self.stroke_contours.nearest_with_domain(probe, tol, domain.as_ref(), offset, accept),
             };
             let Some(q) = contact else { continue };

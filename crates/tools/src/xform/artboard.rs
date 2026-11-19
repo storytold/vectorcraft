@@ -254,9 +254,7 @@ impl ArtboardTool {
                     && valid_scale
                     && reaches
             };
-            let domain = || {
-                if !proportional && handle.is_corner() { corner_contact_domain(rect, handle, current, mods.alt) } else { None }
-            };
+            let domain = || resize_contact_domain(rect, handle, current, proportional, mods.alt);
             if let Some((q, ov)) = t.snap_stroke_point_with_domain((p, at), stroke_offsets, along, cx.snap_tol(), domain, valid) {
                 self.guides = ov;
                 return q;
@@ -350,30 +348,43 @@ fn placed_bleed_offset(cx: &ToolContext, rect: Rect, handle: Handle, transform: 
     bleed_offset(cx, rect, placed)
 }
 
-/// Exact reachable free-corner handle positions in the current scale-sign quadrant.
+/// Reachable resize-handle positions in the current scale-sign region.
 /// The contour query translates each contact back by its own handle/bleed offset.
-fn corner_contact_domain(rect: Rect, handle: Handle, current: Affine, from_center: bool) -> Option<ContactDomain> {
+fn resize_contact_domain(rect: Rect, handle: Handle, current: Affine, proportional: bool, from_center: bool) -> Option<ContactDomain> {
     let origin = if from_center { rect.center() } else { handle.opposite().pos(rect) };
     let d0 = handle.pos(rect) - origin;
+    let (ax, ay) = handle.axes();
     let (width, height) = (rect.width(), rect.height());
     if !rect.is_finite()
         || !width.is_finite()
         || width <= 0.0
         || !height.is_finite()
         || height <= 0.0
-        || d0.x.abs() <= 1e-9
-        || d0.y.abs() <= 1e-9
+        || (ax && d0.x.abs() <= 1e-9)
+        || (ay && d0.y.abs() <= 1e-9)
         || !current.as_coeffs().iter().all(|value| value.is_finite())
     {
         return None;
     }
     let [sx, _, _, sy, _, _] = current.as_coeffs();
-    let minimum = Vec2::new(d0.x.abs() * (MIN_SIDE / width).max(1e-4), d0.y.abs() * (MIN_SIDE / height).max(1e-4));
-    let limits = |direction: f64, minimum: f64| {
-        if direction > 0.0 { (minimum, f64::INFINITY) } else { (f64::NEG_INFINITY, -minimum) }
+    // A proportional side also changes the other dimension, even though that
+    // grabbed coordinate is fixed. Its minimum side constrains the active factor.
+    let coupled = (MIN_SIDE / width).max(MIN_SIDE / height).max(1e-4);
+    let minimum = Vec2::new(
+        d0.x.abs() * if proportional { coupled } else { (MIN_SIDE / width).max(1e-4) },
+        d0.y.abs() * if proportional { coupled } else { (MIN_SIDE / height).max(1e-4) },
+    );
+    let limits = |active: bool, direction: f64, minimum: f64| {
+        if !active {
+            (f64::NEG_INFINITY, f64::INFINITY)
+        } else if direction > 0.0 {
+            (minimum, f64::INFINITY)
+        } else {
+            (f64::NEG_INFINITY, -minimum)
+        }
     };
-    let (x0, x1) = limits(sx * d0.x, minimum.x);
-    let (y0, y1) = limits(sy * d0.y, minimum.y);
+    let (x0, x1) = limits(ax, sx * d0.x, minimum.x);
+    let (y0, y1) = limits(ay, sy * d0.y, minimum.y);
     Some(ContactDomain {
         to_local: Affine::translate(-origin.to_vec2()),
         regions: vec![DomainRect { bounds: Rect::new(x0, y0, x1, y1), open: [false; 4] }],
