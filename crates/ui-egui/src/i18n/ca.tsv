@@ -221,6 +221,7 @@
 	Add to Symbols	Afegeix als símbols
 	Add to the Current Shortcuts	Afegeix a les dreceres actuals
 	Add Used Colors	Afegeix els colors utilitzats
+	Add Selected Colors	Afegeix els colors seleccionats
 	Additional Fonts Folder	Carpeta addicional de tipus de lletra
 	Additional Plug-ins Folder	Carpeta addicional de complements
 	Plug-in Instruction Budget	Pressupost d’instruccions dels complements
@@ -344,6 +345,10 @@ antiAlias	Sharp	Nítid
 	Arc Lower…	Arc inferior…
 	Arc Segment Tool Options	Opcions de l’eina de segment d’arc
 	Arc Tool	Eina d’arc
+	Three-Point Arc Tool	Eina d’arc per tres punts
+	Three-Point Arc	Arc per tres punts
+	Arc too large	Arc massa gran
+	Third Point Sets Direction	El tercer punt indica la direcció
 	Arc Upper…	Arc superior…
 	Arch…	Arqueja…
 	Arc…	Arc…
@@ -456,6 +461,8 @@ antiAlias	Sharp	Nítid
 	Bar	Barra
 	Bar Graph Tool	Eina de gràfic de barres
 	Barbed	Amb pues
+arrowhead	Feather	Ploma
+arrowhead	Target	Diana
 	Bas Relief	Baix relleu
 	Bas Relief…	Baix relleu…
 	Base Along:	Base al llarg de:
@@ -2199,6 +2206,10 @@ digits	Malayalam	Malaiàlam
 	Add Color Tool	Eina Afegeix color
 	Remove Color Tool	Eina Elimina color
 	Remove Color	Elimina el color
+	Set As Base Color	Defineix com a color base
+	Select Shade	Selecciona el to
+	Add New Color	Afegeix un color nou
+	Set Current Color As Base Color	Defineix el color actual com a color base
 	Find the selected colors in the artwork	Troba els colors seleccionats a l’obra
 	Harmony Sets	Conjunts d’harmonia
 	HDTV 1080p	HDTV 1080p
@@ -2492,6 +2503,11 @@ digits	Malayalam	Malaiàlam
 	Knife	Ganivet
 	Knockout Group	Grup knockout
 	Lab	Lab
+	OKLCH Sliders	Controls lliscants OKLCH
+	HSL Sliders	Controls lliscants HSL
+	Chroma	Croma
+	The largest chroma sRGB holds at this lightness and hue	El croma més gran que sRGB admet amb aquesta lluminositat i aquest to
+	OKLCH needs sRGB as the working RGB space	OKLCH necessita sRGB com a espai RGB de treball
 	Lab Spot Colors	Colors directes Lab
 	Lab Spot Colors:	Colors directes Lab:
 	Lab Values	Valors Lab
@@ -2610,6 +2626,7 @@ digits	Malayalam	Malaiàlam
 	Limit:	Límit:
 	Limited	Limitat
 	Line	Línia
+	Line Arrow	Fletxa de línies
 	Line Art	Art lineal
 	Line Art and Text Resolution:	Resolució de l’art lineal i del text:
 	Line Breaks	Salts de línia
@@ -3569,6 +3586,11 @@ digits	Malayalam	Malaiàlam
 	Preserve Appearance	Conserva l’aparença
 	Preserve Appearance and Overprints	Conserva l’aparença i les sobrempressions
 	Preserve CMYK Numbers	Conserva els valors CMYK
+	Preserve RGB Numbers	Conserva els valors RGB
+	Device to Simulate:	Dispositiu que se simula:
+	Simulate Paper Color	Simula el color del paper
+	Simulate Black Ink	Simula la tinta negra
+	Load…	Carrega…
 	Preserve Editing Capabilities	Conserva les capacitats d’edició
 	Preserve editing capabilities	Conserva les capacitats d’edició
 	Preserve Lightness	Conserva la lluminositat
@@ -3936,6 +3958,8 @@ digits	Malayalam	Malaiàlam
 	Reset all Revolve settings to their defaults.	Restableix tots els paràmetres de revolució als valors predeterminats.
 	Reset Automation	Restableix Automation
 	Reset Bar Position	Restableix la posició de la barra
+	Bar Actions	Accions de la barra
+	Reset Bar Actions	Restableix les accions de la barra
 	Reset Bounding Box	Restableix el quadre delimitador
 	Rotate Bounding Box	Gira el quadre delimitador
 	Rotate Bounding Box…	Gira el quadre delimitador…
@@ -4119,6 +4143,7 @@ digits	Malayalam	Malaiàlam
 	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	El text nou pren aquest idioma mentre l’idioma de Configuració del document sigui Anglès: EUA; el text que ja és en un document conserva el seu idioma.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	En els paràgrafs amb Particiona activat, una paraula de la llista es parteix només als guionets que s’hi han escrit, o enlloc si no en té, sigui quin sigui el seu idioma o l’ús de majúscules.
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	A la versió d’escriptori, els complements .wasm d’aquesta carpeta es carreguen en iniciar i quan feu clic a D’acord amb una carpeta nova aquí, excepte en Mode segur; la versió web no els carrega.
+	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	Quantes instruccions pot fer servir cada execució d’un filtre d’objectes d’un complement; Gran en permet més que Normal amb el mateix límit de 60 segons. Els filtres pesants conserven el seu pressupost.
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	La primera opció de disc d’intercanvi: Startup, None o el camí d’una carpeta; VectorCraft la desa, però encara no fa servir discs d’intercanvi.
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	La segona opció de disc d’intercanvi: Startup, None o el camí d’una carpeta; VectorCraft la desa, però encara no fa servir discs d’intercanvi.
 	How light or dark the interface is.	Com de clara o fosca és la interfície.
@@ -4137,6 +4162,7 @@ digits	Malayalam	Malaiàlam
 	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	El Zoom animat només funciona mentre això està activat; desactivat, el Zoom animat apareix atenuat i el zoom no s’anima.
 	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	El zoom amb la roda llisca suaument, i l’Eina de zoom fa zoom mentre arrossegueu de costat o la manteniu premuda; desactivat, l’Eina de zoom fa zoom a l’àrea que arrossegueu.
 	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	A partir del pròxim inici, la versió d’escriptori dibuixa amb aquest tipus de processador gràfic; Automàtic prefereix el que controla la pantalla. La versió web no l’utilitza.
+	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	A partir del pròxim inici, la finestra mostra els fotogrames sense esperar que la pantalla es refresqui, com a màxim 240 per segon; desactivat, la pantalla marca el ritme. Un mode de presentació definit en iniciar té prioritat.
 	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	El màxim de passos de desfer que conserva cada document; un nombre més baix elimina els passos més antics quan feu clic a D’acord. Els passos també poden desaparèixer abans si ocupen massa memòria.
 	Shows the artwork changing while you drag; off, outlines follow the drag and the artwork changes when you release. A ruler guide always moves as you drag.	Mostra com canvia l’art mentre arrossegueu; desactivat, els contorns segueixen l’arrossegament i l’art canvia quan deixeu anar. Una guia de regle sempre es mou mentre arrossegueu.
 	How many worker threads draw the artwork; -1 uses one fewer than the cores VectorCraft may use, at most 8, and 0 uses none. The web version always uses none.	Quants fils de treball dibuixen l’art; -1 en fa servir un menys que els nuclis que VectorCraft pot usar, com a màxim 8, i 0 cap. La versió web no en fa servir mai cap.
@@ -4163,6 +4189,10 @@ digits	Malayalam	Malaiàlam
 	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft desa aquesta opció, però Copia i Retalla encara no fan servir cap format de porta-retalls vectorial heredat.
 	Preserve Paths or Preserve Appearance and Overprints for the legacy vector clipboard; VectorCraft stores the choice but does not use it yet.	Conserva els traçats o Conserva l’aparença i les sobrempressions per al porta-retalls vectorial heredat; VectorCraft desa l’opció però encara no la fa servir.
 	Keep Formatting keeps the styles of text copied from VectorCraft type when it is pasted into type; Keep Plain Text gives it the style where it lands.	Conserva el format manté els estils del text copiat d’un objecte de text de VectorCraft quan s’enganxa en un objecte de text; Conserva el text sense format li dona l’estil del lloc on va a parar.
+	Display All Blacks as Rich Black shows pure CMYK black (black ink alone at 100%) as RGB black on the canvas; Display All Blacks Accurately converts it through the CMYK working space.	Mostra tots els negres com a negre ric mostra el negre CMYK pur (només tinta negra al 100%) com a negre RGB al llenç; Mostra tots els negres amb precisió el converteix a través de l’espai CMYK de treball.
+	Output All Blacks as Rich Black draws pure CMYK black as RGB black in RGB and grayscale raster exports and Print as Bitmap; it does not change vector exports, CMYK JPEG, TIFF and PSD, or other printing.	Genera tots els negres com a negre ric dibuixa el negre CMYK pur com a negre RGB a les exportacions ràster RGB i en escala de grisos i amb Imprimeix com a mapa de bits; no canvia les exportacions vectorials, els JPEG, TIFF i PSD CMYK ni la resta d’impressions.
+	On a touch screen, switches to the Touch workspace; turning this off, or losing the touch screen, goes back to the workspace it switched from.	En una pantalla tàctil, canvia a l’espai de treball tàctil; si es desactiva o es perd la pantalla tàctil, torna a l’espai de treball d’abans del canvi.
+	A two-finger tap on the canvas undoes, or switches between selection and drawing tools in the Touch workspace, and a three-finger tap redoes; neither works in Presentation Mode.	Un toc amb dos dits al llenç desfà o, a l’espai de treball tàctil, alterna entre les eines de selecció i de dibuix, i un toc amb tres dits refà; cap dels dos funciona en el mode de presentació.
 	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	El text nou pren aquest idioma mentre l’idioma de Configuració del document sigui Anglès: EUA i [Estil de caràcter normal] no en defineixi cap; el text que ja és en un document conserva el seu idioma.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	En els paràgrafs amb Particiona activat, una paraula de la llista es parteix només als guionets que s’hi han escrit, o enlloc si no en té, sigui quin sigui l’ús de majúscules; les paraules coreanes no prenen guionet, i les paraules en llengües índies no es parteixen dins d’un grup de caràcters.
 	Reset all preferences to their defaults?	Voleu restablir totes les preferències als valors predeterminats?
@@ -4750,6 +4780,7 @@ digits	Malayalam	Malaiàlam
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} de {n} resultat. Continueu escrivint per reduir-los.|{shown} de {n} resultats. Continueu escrivint per reduir-los.
 	Recent Commands	Ordres recents
 	No recent commands	No hi ha ordres recents
+	Type to search commands, tools, panels and effects	Escriviu per cercar ordres, eines, panells i efectes
 	Search commands	Cerca ordres
 	Search Commands…	Cerca ordres…
 	Search Fonts Folder	Cerca a la carpeta de tipus de lletra
@@ -6124,6 +6155,8 @@ digits	Malayalam	Malaiàlam
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` ha de ser grayscale, rgb, hsb, cmyk o websafe
 @msg	`view` must be wheel or box	`view` ha de ser wheel o box
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` ha de ser hue, saturation, brightness, red, green o blue
+@msg	`sliders` must be none, oklch or hsl	`sliders` ha de ser none, oklch o hsl
+@msg	OKLCH needs sRGB as the working RGB space	OKLCH necessita sRGB com a espai RGB de treball
 @msg	`name` is empty	`name` és buit
 @msg	`newName` is empty	`newName` és buit
 @msg	`pathfinder` must be an object	`pathfinder` ha de ser un objecte
@@ -6783,6 +6816,10 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	a guide has no curvature circle	una guia no té cercle de curvatura
 @msg	the circle that matches the path there would reach past the canvas	el cercle que coincideix amb el traçat en aquest punt sortiria del llenç
 @msg	no circle passes through these points: two are the same or all three lie on one line	cap cercle no passa per aquests punts: dos són iguals o tots tres són en una mateixa recta
+@msg	`at` must be "start" or "end"	`at` ha de ser "start" o "end"
+@msg	give exactly one of `through` and `toward`	indiqueu exactament un de `through` i `toward`
+@msg	no arc fits these points: two are the same or all three lie on one line	cap arc no s’ajusta a aquests punts: dos són iguals o tots tres són en una mateixa recta
+@msg	give `at` only with `toward`	indiqueu `at` només amb `toward`
 @msg	no app to open files here	aquí no hi ha cap aplicació per obrir fitxers
 @msg	no artboard	no hi ha tauler
 @msg	no artboard {i} (0-based; the document has {_1})	no hi ha el tauler {i} (basat en 0; el document en té {_1})
@@ -6841,6 +6878,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	no native format	no hi ha format natiu
 @msg	no pages	no hi ha pàgines
 @msg	no pattern `{name}`	no hi ha el motiu `{name}`
+@msg	art painted with `{name}` can't be its tile	un art pintat amb `{name}` no pot ser el seu mosaic
 @msg	no pattern swatch `{name}`	no hi ha la mostra de motiu `{name}`
 @msg	no perspective grid preset named `{name}`	no hi ha cap preajust de quadrícula de perspectiva anomenat `{name}`
 @msg	no plug-in {0} is installed	no hi ha instal·lat el complement {0}
@@ -8317,6 +8355,7 @@ breakText	Glyphs	Glifs
 	Remove Strokes	Elimina els traços
 	Place Brush Art	Col·loca l’art del pinzell
 	Replace Brush Art	Substitueix l’art del pinzell
+	Replace Pattern Art	Substitueix l’art del motiu
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Hi ha traços que fan servir aquest pinzell. Voleu aplicar l’art nou a aquests traços, o deixar-los com estan i afegir una còpia del pinzell amb l’art nou?
 	Apply to Strokes	Aplica als traços
 	Leave Strokes	Deixa els traços
@@ -8896,6 +8935,21 @@ breakText	Glyphs	Glifs
 @msg	A joint does not close by {gap} pt.	Una unió no es tanca per {gap} pt.
 @msg	Two panels pass through each other.	Dos panells es travessen l’un a l’altre.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer ha de ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"
+	Orbit Lines	Línies orbitals
+	Petal Garland	Garlanda de pètals
+	Lattice Braid	Trena reticular
+	Facet Sweep	Traç facetat
+	Artistic Brushes	Pinzells artístics
+	Paint	Pintura
+	Flat Sweep	Traç pla
+	Dry Drag	Arrossegament sec
+	Loaded Stroke	Traç carregat
+	Fan Sweep	Traç en ventall
+	Engraving	Gravat
+	Fine Hatching	Ratllat fi
+	Dense Hatching	Ratllat dens
+	Tapered Hatching	Ratllat afilat
+	Broken Hatching	Ratllat interromput
 	Image Brush	Pinzells d'imatge
 	Soft Bloom	Floració suau
 	Halftone Field	Camp de semitons
