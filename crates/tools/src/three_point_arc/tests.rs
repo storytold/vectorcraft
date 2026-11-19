@@ -188,6 +188,44 @@ fn the_direction_option_takes_a_bool() {
     assert_eq!(t.options(), json!({ "direction": false }));
 }
 
+/// `]` pressed while the third point is held down places the point as the new mode keeps it: the
+/// point Shift kept on the direction line goes back to where the pointer is, and the other way.
+#[test]
+fn bracket_during_a_press_places_the_third_point_in_the_new_mode() {
+    let (d, _) = doc_with_rect();
+    let (s, p) = (Selection::default(), paint());
+    let cx = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    let mut t = ThreePointArcTool::default();
+    let shift = Mods { shift: true, ..Mods::default() };
+    t.set_option("direction", &json!(true));
+    drag(&mut t, &cx, (300.0, 300.0), &[(380.0, 300.0)], Mods::default());
+    t.pointer(&cx, &ev(PointerKind::Down, (303.0, 250.0), shift));
+    t.key(&cx, ToolKey::BracketRight, Mods::default());
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, (303.0, 250.0), shift)), through((300.0, 300.0), (380.0, 300.0), (303.0, 250.0)));
+    // Through mode first, switched to direction mode during the press: Shift keeps the line upright.
+    drag(&mut t, &cx, (300.0, 300.0), &[(380.0, 300.0)], Mods::default());
+    t.pointer(&cx, &ev(PointerKind::Down, (303.0, 250.0), shift));
+    t.key(&cx, ToolKey::BracketRight, Mods::default());
+    let acts = t.pointer(&cx, &ev(PointerKind::Up, (303.0, 250.0), shift));
+    let [Action::Exec(_, params)] = acts.as_slice() else { panic!("{acts:?}") };
+    assert!(params["toward"][0].as_f64().is_some_and(|x| (x - 300.0).abs() < 1e-9) && params["at"] == "start", "{params}");
+}
+
+/// With Snap to Point, a first press that snaps to the rectangle's corner, 1.5 pt from the
+/// pointer, and moves 1.9 pt before it is let go is a click: the drag is measured from the press,
+/// not from the corner, so only the first end is placed.
+#[test]
+fn a_short_move_from_a_snapped_press_is_not_a_drag() {
+    let (d, _) = doc_with_rect();
+    let (s, p) = (Selection::default(), paint());
+    let cx = ToolContext { smart_guides: false, snap_to_point: true, ..cx(&d, &s, &p) };
+    let mut t = ThreePointArcTool::default();
+    t.pointer(&cx, &ev(PointerKind::Down, (201.5, 200.0), Mods::default()));
+    t.pointer(&cx, &ev(PointerKind::Drag, (203.4, 200.0), Mods::default()));
+    t.pointer(&cx, &ev(PointerKind::Up, (203.4, 200.0), Mods::default()));
+    assert_eq!((t.start, t.end), (Some(Point::new(200.0, 200.0)), None));
+}
+
 /// A release away from the last drag event places the point where the pointer is let go, for
 /// the second end and for the third point.
 #[test]

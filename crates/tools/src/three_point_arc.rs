@@ -38,8 +38,9 @@ pub const TOO_LARGE: &str = "Arc too large";
 /// The press in progress.
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum Press {
-    /// The first end, pressed at `at`: a release after a drag places the second end there.
-    Start { at: Point, dragged: bool },
+    /// The first end, placed at `at` by a press at `from` (before snapping): a release after a
+    /// drag places the second end there. The drag is measured from `from`.
+    Start { at: Point, from: Point, dragged: bool },
     /// The second end, pressed after a click placed the first: the release places it.
     End,
     /// The third point, pressed once both ends are placed: the release draws the arc.
@@ -112,8 +113,8 @@ impl ThreePointArcTool {
         let moved = self.raw.is_none_or(|(p, _)| p != ev.pos);
         self.raw = Some((ev.pos, ev.mods));
         match &mut self.press {
-            Some(Press::Start { at, dragged }) => {
-                *dragged |= moved && ev.pos.distance(*at) >= cx.tol(DRAG_PX);
+            Some(Press::Start { at, from, dragged }) => {
+                *dragged |= moved && ev.pos.distance(*from) >= cx.tol(DRAG_PX);
                 let leave = Leave::segment(cx, *at, ev.mods.shift);
                 self.pointer = Some(self.snap.drag(cx, ev.pos, Some(&leave)));
             }
@@ -157,7 +158,7 @@ impl Tool for ThreePointArcTool {
                     (None, _) => {
                         let at = self.snap.press(cx, ev.pos, &[], None);
                         self.start = Some(at);
-                        self.press = Some(Press::Start { at, dragged: false });
+                        self.press = Some(Press::Start { at, from: ev.pos, dragged: false });
                         self.pointer = Some(at);
                     }
                     (Some(a), None) => {
@@ -189,7 +190,7 @@ impl Tool for ThreePointArcTool {
                     self.follow(cx, ev);
                 }
                 match (self.press.take(), self.start, self.pointer) {
-                    (Some(Press::Start { at, dragged: true }), _, Some(b)) if b.distance(at) >= cx.tol(DRAG_PX) => self.end = Some(b),
+                    (Some(Press::Start { at, dragged: true, .. }), _, Some(b)) if b.distance(at) >= cx.tol(DRAG_PX) => self.end = Some(b),
                     (Some(Press::End), Some(a), Some(b)) if b.distance(a) > cx.tol(REACH_PX) => self.end = Some(b),
                     (Some(Press::Third), Some(a), Some(c)) => {
                         let Some(b) = self.end else { return vec![] };
@@ -212,10 +213,16 @@ impl Tool for ThreePointArcTool {
         }
     }
 
-    fn key(&mut self, _cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {
+    fn key(&mut self, cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {
         match key {
             ToolKey::Escape => self.clear(),
-            ToolKey::BracketRight if self.start.is_some() => self.direction = !self.direction,
+            ToolKey::BracketRight if self.start.is_some() => {
+                self.direction = !self.direction;
+                // A press in progress: the point being placed keeps to the new mode.
+                if let (Some(_), Some((p, mods))) = (self.press, self.raw) {
+                    self.follow(cx, &PointerEvent::new(PointerKind::Drag, p.x, p.y).with_mods(mods));
+                }
+            }
             _ => {}
         }
         vec![]
@@ -303,6 +310,14 @@ impl Tool for ThreePointArcTool {
             && let Some(on) = value.as_bool()
         {
             self.direction = on;
+        }
+    }
+
+    fn check_option(&self, key: &str, v: &Value) -> Result<(), String> {
+        use crate::option_check as c;
+        match key {
+            "direction" => c::boolean(key, v),
+            _ => Err(c::unknown(key)),
         }
     }
 }

@@ -198,3 +198,23 @@ fn three_clicks_with_the_tool_draw_the_arc() {
     let id = *s.doc().unwrap().selection.objects.first().unwrap();
     assert!(farthest_from_path(&s, id, &[Point::new(140.0, 260.0)]) < 1e-9);
 }
+
+/// `tool.setOption` (the Tool Options dialog's Save) sets the tool's `direction` option, and
+/// refuses a value that is not true or false, or an option the tool doesn't have.
+#[test]
+fn set_option_sets_the_direction_and_refuses_bad_values() {
+    let mut s = session();
+    for on in [true, false] {
+        let set = s.set_tool_option_cmd(&json!({"tool": "threePointArc", "values": {"direction": on}})).unwrap();
+        assert_eq!(set["direction"], json!(on));
+        assert_eq!(s.tool_options_of("threePointArc")["direction"], json!(on));
+    }
+    let cases = [
+        (json!({"tool": "threePointArc", "key": "direction", "value": "yes"}), "tool `threePointArc`: `direction` must be true or false"),
+        (json!({"tool": "threePointArc", "key": "bogus", "value": true}), "tool `threePointArc`: unknown option `bogus`"),
+    ];
+    for (p, want) in cases {
+        assert_eq!(s.set_tool_option_cmd(&p).unwrap_err(), want, "{p}");
+    }
+    assert_eq!(s.tool_options_of("threePointArc")["direction"], json!(false));
+}
