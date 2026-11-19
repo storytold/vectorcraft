@@ -872,6 +872,75 @@ fn proof_setups_are_listed_among_many_other_files() {
     assert_eq!(r["setups"][0]["name"], "Press");
 }
 
+/// The listing names only files that `name` loads (`<name>.vcproof`, a name `save` can give), in
+/// the order of those names, and the limit keeps the first by name; a folder that can't be read is
+/// an error, not an empty listing.
+#[test]
+fn proof_setups_are_listed_by_names_that_load_them() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let _v = DefaultView::new();
+    let mut s = session();
+    let dir = vectorcraft_testkit::TempDir::new("proof-setup-list-names");
+    let folder = dir.join("Proof Setups");
+    std::fs::create_dir_all(&folder).unwrap();
+    s.attach_proof_setups(folder.clone());
+    let ok = r#"{"format": "vectorcraft-proof-setup", "version": 1, "target": "workingCmyk", "intent": "relative"}"#;
+    for file in ["Press.vcproof", "Press Matte.vcproof", "Loud.VCPROOF", " Lead.vcproof"] {
+        std::fs::write(folder.join(file), ok).unwrap();
+    }
+    let names = |r: &Value| r["setups"].as_array().unwrap().iter().filter_map(|e| e["name"].as_str().map(str::to_string)).collect::<Vec<_>>();
+    let r = s.execute("view.proofSetup.list", &json!({})).unwrap();
+    assert_eq!((names(&r), r["truncated"].as_bool()), (vec!["Press".to_string(), "Press Matte".to_string()], Some(false)));
+    for name in names(&r) {
+        s.execute("view.proofSetup.read", &json!({ "name": name })).unwrap();
+    }
+    // `Press` and `Press Matte` compete for the last place: the first by name keeps it.
+    for i in 0..99 {
+        std::fs::write(folder.join(format!("A{i:02}.vcproof")), "x").unwrap();
+    }
+    let r = s.execute("view.proofSetup.list", &json!({})).unwrap();
+    let listed = names(&r);
+    assert_eq!((listed.len(), listed.last().map(String::as_str), r["truncated"].as_bool()), (100, Some("Press"), Some(true)));
+    // A folder that is not one can't be listed.
+    let file = dir.join("not a folder");
+    std::fs::write(&file, "x").unwrap();
+    s.attach_proof_setups(file);
+    refused(&mut s, "view.proofSetup.list", json!({}), "not a folder");
+}
+
+/// A file name that is not valid Unicode is left out of the listing, which then says it is
+/// incomplete: a path made from a lossy copy of the name would name another file.
+#[test]
+fn proof_setup_names_that_are_not_unicode_are_left_out() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let _v = DefaultView::new();
+    let mut s = session();
+    let dir = vectorcraft_testkit::TempDir::new("proof-setup-list-bytes");
+    let folder = dir.join("Proof Setups");
+    std::fs::create_dir_all(&folder).unwrap();
+    #[cfg(unix)]
+    let odd = {
+        use std::os::unix::ffi::OsStringExt;
+        std::ffi::OsString::from_vec(b"Odd\xff.vcproof".to_vec())
+    };
+    #[cfg(windows)]
+    let odd = {
+        use std::os::windows::ffi::OsStringExt;
+        std::ffi::OsString::from_wide(&"Odd?.vcproof".encode_utf16().map(|u| if u == u16::from(b'?') { 0xD800 } else { u }).collect::<Vec<_>>())
+    };
+    // A file system that refuses such a name has nothing to leave out.
+    if std::fs::write(folder.join(odd), "x").is_err() {
+        return;
+    }
+    std::fs::write(folder.join("Press.vcproof"), "x").unwrap();
+    s.attach_proof_setups(folder);
+    let r = s.execute("view.proofSetup.list", &json!({})).unwrap();
+    assert_eq!(
+        (r["setups"].as_array().map(Vec::len), r["setups"][0]["name"].as_str(), r["truncated"].as_bool()),
+        (Some(1), Some("Press"), Some(true))
+    );
+}
+
 /// Whether the content has a DeviceCMYK fill/stroke operator (`c m y k k` / `K`).
 fn has_cmyk_op(pdf: &str) -> bool {
     let toks: Vec<&str> = pdf.split_ascii_whitespace().collect();

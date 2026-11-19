@@ -672,6 +672,30 @@ fn ui_inspect_leaves_out_paths_outside_the_read_root() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// `ui.inspect` leaves out the file of a saved proof setup that an open Insert Menu Item dialog
+/// picked when it is outside the read root, and shows one inside it.
+#[test]
+fn ui_inspect_leaves_out_an_insert_menu_item_path_outside_the_read_root() {
+    let (mut app, tx, base) = confined("inspect-insert-menu-item");
+    let load = crate::dialogs::proof_setup::LOAD;
+    let (inside, outside) = (s(base.join("in/Press.vcproof")), s(base.join("outside/Press.vcproof")));
+    let dialog = |path: &str| {
+        let fields = json!({"find": "", "command": load, "params": {"path": path}, "note": ""});
+        Some(crate::state::Dialog::new(crate::dialogs::action_insert_menu_item::KIND, fields))
+    };
+    app.ui.dialog = dialog(&outside);
+    let ctx = egui::Context::default();
+    assert_eq!(crate::control::inspect(&app, &ctx)["ui"]["dialog"]["fields"]["params"]["path"], outside, "the person sees it");
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    let fields = &r["result"]["ui"]["dialog"]["fields"];
+    assert_eq!((fields["command"].as_str(), fields["params"].get("path")), (Some(load), None), "{r}");
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.fields["params"]["path"].clone()), Some(json!(outside)), "the UI state is not changed");
+    app.ui.dialog = dialog(&inside);
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    assert_eq!(r["result"]["ui"]["dialog"]["fields"]["params"]["path"], inside, "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// `ui.inspect` checks a folder preference as it is written: the read root's path with a space before
 /// it is a relative path, outside the root, and is left out.
 #[test]

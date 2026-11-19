@@ -58,7 +58,9 @@ fn file_path(s: &Session, p: &Value, cmd: &str) -> Result<(String, bool)> {
         (None, Some(name)) => {
             let name = setup_name(name, cmd)?;
             let dir = s.proof_setup_dir().ok_or_else(|| bad(cmd, "saved proof setups need the preferences folder, which this run doesn't have"))?;
-            Ok((dir.join(format!("{name}.{EXT}")).to_string_lossy().into_owned(), true))
+            let path = dir.join(format!("{name}.{EXT}"));
+            let path = path.to_str().ok_or_else(|| bad(cmd, format!("{}: the folder's path is not valid Unicode", dir.display())))?;
+            Ok((path.to_string(), true))
         }
         (Some(_), Some(_)) => Err(bad(cmd, "give `path` or `name`, not both")),
         (None, None) => Err(bad(cmd, "missing `path` or `name`")),
@@ -219,27 +221,54 @@ pub fn listed(_: &std::path::Path) -> Result<Option<Value>> {
 /// request that may not read it. The app calls it on another thread, without a session.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn listed(dir: &std::path::Path) -> Result<Option<Value>> {
+    const C: &str = "view.proofSetup.list";
     let folder = dir.to_string_lossy().into_owned();
     // A request that may not read the folder learns nothing of it, nor where it is.
     if crate::file_access::check_read(&folder).is_err() {
         return Ok(None);
     }
-    // No folder yet: nothing has been saved.
-    let Ok(entries) = std::fs::read_dir(dir) else { return Ok(Some(json!({"folder": folder, "setups": [], "truncated": false}))) };
-    // The setup files' names, the first MAX_LISTED by name; other entries are passed over before
-    // the limit applies. A link is not followed.
+    // The listed paths are text: a folder whose path is not valid Unicode can't be named in them.
+    if dir.to_str().is_none() {
+        return Err(bad(C, format!("{folder}: the folder's path is not valid Unicode")));
+    }
+    let entries = match std::fs::read_dir(dir) {
+        Ok(entries) => entries,
+        // No folder yet: nothing has been saved.
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Some(json!({"folder": folder, "setups": [], "truncated": false}))),
+        Err(e) => return Err(bad(C, format!("{folder}: {e}"))),
+    };
+    // The setups' names, the first MAX_LISTED by name; other entries are passed over before the
+    // limit applies. A link is not followed. A file is listed only when it is named
+    // `<name>.vcproof` and `name` takes that name unchanged, so each listed name loads its own
+    // file. An entry that can't be read, or whose file name is not valid Unicode, leaves the
+    // listing incomplete.
     let (mut names, mut truncated) = (Vec::<String>::new(), false);
-    for (i, e) in entries.flatten().enumerate() {
+    for (i, e) in entries.enumerate() {
         if i == MAX_SCANNED {
             truncated = true;
             break;
         }
-        let name = e.file_name().to_string_lossy().into_owned();
-        let setup = name.rsplit_once('.').is_some_and(|(stem, ext)| ext.eq_ignore_ascii_case(EXT) && !stem.trim().is_empty());
-        if !setup || !e.file_type().is_ok_and(|t| t.is_file()) {
+        let Ok(e) = e else {
+            truncated = true;
+            continue;
+        };
+        let Ok(file) = e.file_name().into_string() else {
+            truncated = true;
+            continue;
+        };
+        let Some(name) = file.strip_suffix(EXT).and_then(|s| s.strip_suffix('.')) else { continue };
+        if setup_name(name, C).ok() != Some(name) {
             continue;
         }
-        names.push(name);
+        match e.file_type() {
+            Ok(t) if t.is_file() => {}
+            Ok(_) => continue,
+            Err(_) => {
+                truncated = true;
+                continue;
+            }
+        }
+        names.push(name.to_string());
         if names.len() > 2 * MAX_LISTED {
             names.sort();
             names.truncate(MAX_LISTED);
@@ -249,7 +278,6 @@ pub fn listed(dir: &std::path::Path) -> Result<Option<Value>> {
     names.sort();
     truncated |= names.len() > MAX_LISTED;
     names.truncate(MAX_LISTED);
-    let setups: Vec<Value> =
-        names.iter().filter_map(|name| Some(json!({"name": name.rsplit_once('.')?.0, "path": dir.join(name).to_string_lossy()}))).collect();
+    let setups: Vec<Value> = names.iter().map(|name| json!({"name": name, "path": dir.join(format!("{name}.{EXT}")).to_string_lossy()})).collect();
     Ok(Some(json!({"folder": folder, "setups": setups, "truncated": truncated})))
 }

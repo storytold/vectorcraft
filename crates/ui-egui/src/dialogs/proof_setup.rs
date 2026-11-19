@@ -4,9 +4,10 @@
 //! Preview shows the proof on the canvas while the dialog is open; OK sets the proof setup and
 //! turns Proof Colors on (`view.proofSetup`), and Cancel puts the earlier proof view back. Save…
 //! writes the dialog's settings to a proof setup file (`view.proofSetup.save`) and Load… reads one
-//! into the dialog (`view.proofSetup.read`); both pickers start in the Proof Setups
-//! folder next to the preferences, whose setups View → Proof Setup lists below Customize…
-//! ([`saved_items`]).
+//! into the dialog (`view.proofSetup.read`). Both are desktop only. Their pickers start in the
+//! Proof Setups folder next to the preferences, whose setups View → Proof Setup lists below
+//! Customize… ([`saved_items`]): Save… makes the folder when it may be written, and Load…'s picker
+//! starts in its own default folder until the folder exists.
 //!
 //! Fields: `device` (`workingCmyk`, `cmyk:<profile>` or `rgb:<profile>`), `preserveNumbers`,
 //! `intent`, `simulatePaper`, `simulateBlack` and `preview`.
@@ -311,14 +312,19 @@ fn save(app: &mut VectorcraftApp, d: &mut Dialog) -> Result<(), String> {
         o.insert("path".into(), json!(path));
     }
     app.run("view.proofSetup.save", p)?;
-    refresh_saved(app, None);
+    // The read asks for a frame when it ends, so an idle window lists the setup.
+    refresh_saved(app, app.ui_ctx.as_ref());
     app.status(format!("Saved {path}"));
     Ok(())
 }
 
 /// Load…: the picked file's settings fill the dialog (Preview then shows them).
 fn load(app: &mut VectorcraftApp, d: &mut Dialog) -> Result<(), String> {
-    let pick = pick(app, String::new());
+    let mut pick = pick(app, String::new());
+    // Before a setup is saved there is no folder, and the picker starts in its own default folder.
+    if pick.folder.as_deref().is_some_and(|f| !std::path::Path::new(f).is_dir()) {
+        pick.folder = None;
+    }
     // A canceled picker leaves the dialog as it is.
     let Some(path) = crate::picks::open(app, &pick) else { return Ok(()) };
     let r = app.run("view.proofSetup.read", json!({ "path": path }))?;
@@ -911,6 +917,34 @@ mod tests {
         assert!(file.is_file(), "the picked file is saved");
     }
 
+    /// The listing Save… starts asks for a frame when it ends, so an idle window takes it in.
+    #[test]
+    fn the_listing_after_a_save_asks_for_a_frame() {
+        let _v = DefaultView::new();
+        let (mut app, _) = app();
+        let dir = vectorcraft_testkit::TempDir::new("proof-setup-dialog-frame");
+        let folder = dir.join("Proof Setups");
+        app.session.attach_proof_setups(folder.clone());
+        app.run("ui.proofSetupDialog", json!({})).unwrap();
+        let mut d = app.ui.dialog.take().unwrap();
+        d.fields.insert("preview".into(), json!(false));
+        let path = folder.join("Screen").to_string_lossy().to_string();
+        app.services.pick_save = Some(Box::new(move |_: &FilePick| Some(path.clone())));
+        let ctx = egui::Context::default();
+        let (tx, frames) = std::sync::mpsc::channel();
+        ctx.set_request_repaint_callback(move |_| {
+            let _ = tx.send(());
+        });
+        app.ui_ctx = Some(ctx);
+        save(&mut app, &mut d).unwrap();
+        // With the app's copy of the context dropped, only the listing's thread can still ask for
+        // a frame; the channel closes without one when that thread ends without asking.
+        app.ui_ctx = None;
+        assert_eq!(frames.recv(), Ok(()), "the finished listing asks for a frame");
+        wait();
+        assert_eq!(saved_items().len(), 1);
+    }
+
     /// A saved setup whose name ends in an ellipsis still loads when its menu item is chosen.
     #[test]
     fn a_saved_setup_named_with_an_ellipsis_loads() {
@@ -926,6 +960,30 @@ mod tests {
         let shown = crate::menus::display_label(&app, LOAD, "Save…");
         crate::i18n::set_current(crate::i18n::Lang::EN);
         assert_eq!(shown, "Save…");
+    }
+
+    /// Load…'s picker starts in the Proof Setups folder once it exists, and in its own default
+    /// folder before; Load… does not make the folder.
+    #[test]
+    fn load_starts_in_the_folder_once_it_exists() {
+        let _v = DefaultView::new();
+        let (mut app, _) = app();
+        let dir = vectorcraft_testkit::TempDir::new("proof-setup-dialog-load-folder");
+        let folder = dir.join("Proof Setups");
+        app.session.attach_proof_setups(folder.clone());
+        app.run("ui.proofSetupDialog", json!({})).unwrap();
+        let mut d = app.ui.dialog.take().unwrap();
+        let picked = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+        let seen = picked.clone();
+        app.services.pick_open = Some(Box::new(move |p: &FilePick| {
+            seen.borrow_mut().push(p.folder.clone());
+            None
+        }));
+        load(&mut app, &mut d).unwrap();
+        assert!(!folder.exists(), "Load… does not make the folder");
+        std::fs::create_dir_all(&folder).unwrap();
+        load(&mut app, &mut d).unwrap();
+        assert_eq!(*picked.borrow(), [None, Some(folder.to_string_lossy().into_owned())]);
     }
 
     /// Load… of a file whose device is not loaded leaves the dialog's settings as they were.
