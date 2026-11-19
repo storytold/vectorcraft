@@ -288,7 +288,7 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
             if mixed {
                 items.push((tl!("Make Clipping Mask"), "dc-pf-crop", "object.clippingMask.make", none()));
             } else {
-                items.push((tl!("Unite"), "squares-unite", "object.pathfinder.unite", none()));
+                items.push((tl!("Unite"), "squares-unite", TASK_BAR_UNITE, none()));
             }
         } else if is_trace {
             items.push((tl!("Expand"), "maximize-2", "imageTrace.expand", none()));
@@ -543,6 +543,12 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
         // The convert buttons convert the direct-selected anchors, as the Control bar's buttons do.
         Some((TASK_BAR_TO_CORNER, _)) => crate::menus::invoke(app, "path.convertAnchors", json!({"to": "corner"})),
         Some((TASK_BAR_TO_SMOOTH, _)) => crate::menus::invoke(app, "path.convertAnchors", json!({"to": "smooth"})),
+        // Unite is the Pathfinder panel's Shape Mode: Alt and the Compound Shapes setting make a
+        // compound shape, and selected members take the mode (#6333).
+        Some((TASK_BAR_UNITE, _)) => {
+            let members = !vectorcraft_engine::cmd::selected_member_modes(&app.session).is_empty();
+            crate::panels::pathfinder::shape_mode(app, ui, "unite", vectorcraft_doc::ShapeMode::Add, members);
+        }
         // Fidelity listed in More Options, on a canvas too narrow for its field: the Smooth tool's
         // Tool Options, which show it.
         Some((TASK_BAR_FIDELITY, _)) => crate::menus::invoke(app, "tool.options", json!({"tool": "smooth"})),
@@ -883,3 +889,6 @@ const TASK_BAR_TO_CORNER: &str = "taskBar.toCorner";
 /// anchors or a path selected whole with Direct Selection. The bar's Smooth button runs
 /// `object.path.smooth` instead.
 const TASK_BAR_TO_SMOOTH: &str = "taskBar.toSmooth";
+
+/// The Contextual Task Bar's Unite button for two or more selected objects.
+const TASK_BAR_UNITE: &str = "taskBar.unite";
