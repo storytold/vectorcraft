@@ -146,6 +146,24 @@ pub(super) fn tab_room(lead: Option<f32>, leading: bool, w: f32, left: f32) -> f
     }
 }
 
+/// `title` in one line at most `max_width` wide, ending in "…" when it is cut short, and whether
+/// it fits in `max_width`. egui rounds a wrap width to the nearest point, so the width is rounded
+/// down first.
+pub(super) fn shortened_title(
+    ctx: &egui::Context,
+    title: &str,
+    font: egui::FontId,
+    color: egui::Color32,
+    max_width: f32,
+) -> (std::sync::Arc<egui::Galley>, bool) {
+    let max_width = max_width.max(0.0);
+    let mut job = egui::text::LayoutJob::simple_singleline(title.to_owned(), font, color);
+    job.wrap = egui::text::TextWrapping { max_width: max_width.floor(), max_rows: 1, break_anywhere: true, overflow_character: Some('…') };
+    let galley = ctx.fonts_mut(|f| f.layout_job(job));
+    let fits = galley.size().x <= max_width;
+    (galley, fits)
+}
+
 /// The × of a document tab `w` wide, drawn in `xr` and clicked within 3 pt of it, or `None` for a
 /// tab shortened narrower than the × and its click area.
 fn tab_close_box(ui: &Ui, t: &Tokens, xr: egui::Rect, w: f32, id: egui::Id) -> Option<egui::Response> {
@@ -227,11 +245,7 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
                 break;
             }
             let color = if Some(*win) == shown { t.text_strong } else { t.text_dim };
-            let mut job = egui::text::LayoutJob::simple_singleline(title.clone(), theme::semibold(title_size), color);
-            let max_width = (left - TAB_PADDING).max(0.0);
-            job.wrap = egui::text::TextWrapping { max_width, max_rows: 1, break_anywhere: true, overflow_character: Some('…') };
-            let galley = ui.painter().layout_job(job);
-            let fits = galley.size().x <= max_width;
+            let (galley, fits) = shortened_title(ui.ctx(), title, theme::semibold(title_size), color, left - TAB_PADDING);
             (galley, left.max(0.0), true, fits)
         } else {
             (galley.clone(), *w, false, true)
