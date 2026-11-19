@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 use vectorcraft_doc::{LiveCorners, LiveShape, NodeId};
 use vectorcraft_geom::shapes::CornerKind;
 use vectorcraft_geom::{AnchorKind, PathData, Point, SubPath};
-use vectorcraft_tools::{PointerEvent, PointerKind};
+use vectorcraft_tools::{Action, Overlay, PointerEvent, PointerKind};
 
 use crate::{Session, ViewInfo};
 
@@ -1053,6 +1053,37 @@ fn the_slide_tool_previews_and_commits_one_step() {
     assert!(steps(&s) == n + 1 && at(&s).distance(Point::new(280.0, 100.0)) < 1e-3);
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(at(&s), Point::new(200.0, 100.0));
+}
+
+/// The Tangent Circle tool's release draws the circle and then tells the tool, which forgets the
+/// first segment. When the command fails the session does not tell the tool, so the first segment
+/// stays picked: the circle shows again over the second segment. The second click draws it in one
+/// undo step.
+#[test]
+fn the_tangent_circle_tool_keeps_its_first_segment_when_drawing_fails() {
+    let mut s = session();
+    line(&mut s, &[(100.0, 100.0), (300.0, 100.0)], false);
+    line(&mut s, &[(100.0, 140.0), (300.0, 140.0)], false);
+    let view = ViewInfo { smart_guides: false, ..ViewInfo::default() };
+    s.select_tool("tangentCircle", view).unwrap();
+    let at = |s: &mut Session, kind, x, y| s.pointer(&PointerEvent::new(kind, x, y), view);
+    let shown = |s: &mut Session| {
+        at(s, PointerKind::Move, 200.0, 139.0).unwrap();
+        s.overlays(view).iter().any(|o| matches!(o, Overlay::Measure { text, .. } if text.starts_with("R: 20.00")))
+    };
+    at(&mut s, PointerKind::Down, 150.0, 101.0).unwrap();
+    at(&mut s, PointerKind::Up, 150.0, 101.0).unwrap();
+    assert!(shown(&mut s), "the first segment is picked");
+    // The tool's release with a command that fails: three points on one line.
+    let n = steps(&s);
+    let failing = Action::Exec("shape.circleThroughPoints".into(), json!({"points": [[0, 0], [10, 0], [20, 0]]}));
+    assert!(s.apply_actions(vec![failing, Action::Notify("tangentCircle.drawn".into())]).is_err());
+    assert_eq!(steps(&s), n, "nothing drawn");
+    assert!(shown(&mut s), "the first segment is still picked");
+    at(&mut s, PointerKind::Down, 200.0, 139.0).unwrap();
+    at(&mut s, PointerKind::Up, 200.0, 139.0).unwrap();
+    assert_eq!(steps(&s), n + 1, "one undo step");
+    assert!(!shown(&mut s), "the first segment is forgotten once the circle is drawn");
 }
 
 fn ids(v: &Value) -> Vec<NodeId> {

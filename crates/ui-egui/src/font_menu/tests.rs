@@ -1729,3 +1729,27 @@ fn a_new_preview_size_keeps_the_list_on_its_rows() {
     assert!((large.0 - expected).abs() < 0.5, "the view starts {rows_down} rows down: offset {} for {expected}", large.0);
     super::wait_for_samples(&ctx);
 }
+
+/// Finished samples that are not drawn again (the sample text changed while they rendered) do not
+/// keep new samples from starting.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn finished_samples_no_longer_drawn_do_not_block_new_ones() {
+    let ctx = egui::Context::default();
+    super::SAMPLES.with(|s| {
+        let mut s = s.borrow_mut();
+        for i in 0..super::MAX_PENDING {
+            let (tx, rx) = std::sync::mpsc::channel();
+            tx.send(None).unwrap();
+            s.pending.insert((format!("Old {i}"), "Regular".to_string(), "typed".to_string(), 20), rx);
+        }
+    });
+    assert!(super::sample_texture(&ctx, "Source Sans 3", Some("Regular"), Some("typed more"), 20.0).is_none());
+    let (started, kept) = super::SAMPLES.with(|s| {
+        let s = s.borrow();
+        (s.pending.keys().any(|k| k.2 == "typed more"), s.ready.keys().filter(|k| k.0.starts_with("Old ")).count())
+    });
+    assert!(started, "the new sample is rendering");
+    assert_eq!(kept, super::MAX_PENDING, "the finished samples are kept");
+    super::wait_for_samples(&ctx);
+}
