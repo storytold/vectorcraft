@@ -10808,6 +10808,11 @@ breakText	Glyphs	Glyffer
 @msg	A joint does not close by {gap} pt.	En samling lukker ikke med {gap} pt.
 @msg	Two panels pass through each other.	To paneler går gennem hinanden.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer skal være "singleLine", "everyLine", "standardSingleLine" eller "standardEveryLine"
+	Paint	Maling
+	Flat Sweep	Fladt strøg
+	Dry Drag	Tørt træk
+	Loaded Stroke	Fyldigt strøg
+	Fan Sweep	Viftestrøg
 	Engraving	Gravering
 	Fine Hatching	Fin skravering
 	Dense Hatching	Tæt skravering
