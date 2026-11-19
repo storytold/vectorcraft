@@ -6644,6 +6644,7 @@ dependencies = [
  "webbrowser",
  "windows",
  "winit",
+ "winreg",
  "winresource",
  "winsafe",
  "wl-clipboard-rs",
@@ -6697,6 +6698,16 @@ dependencies = [
  "vectorcraft-geom 0.24.1",
  "vectorcraft-pathops 0.24.1",
  "vectorcraft-text",
+]
+
+[[package]]
+name = "vectorcraft-cdr"
+version = "0.24.1"
+dependencies = [
+ "crc32fast",
+ "flate2",
+ "proptest",
+ "vectorcraft-cdr",
 ]
 
 [[package]]
@@ -6813,6 +6824,7 @@ dependencies = [
  "vectorcraft-apischema",
  "vectorcraft-brush",
  "vectorcraft-cad",
+ "vectorcraft-cdr",
  "vectorcraft-color",
  "vectorcraft-doc",
  "vectorcraft-eps",

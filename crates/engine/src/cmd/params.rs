@@ -382,6 +382,7 @@ pub fn check_keys(id: &str, doc: &'static str, params: &Value) -> Result<()> {
 const EXCLUSIVE_KEYS: &[(&str, &str, &str)] = &[
     ("addon.pathtools.cornerSet", "items", "ids"),
     ("addon.pathtools.cornerRemove", "items", "ids"),
+    ("addon.pathtools.bridge", "radius", "gap"),
     ("links.unembed", "id", "ids"),
     ("links.unembed", "path", "folder"),
 ];

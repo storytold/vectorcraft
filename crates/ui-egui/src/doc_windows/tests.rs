@@ -514,9 +514,10 @@ fn dragging_a_tab_off_the_strip_floats_its_document_at_the_pointer() {
     let shapes = frame(&mut app, &ctx, vec![]);
     let title = app.session.documents()[0].title();
     let tab = tab_at(&shapes, &title);
-    // A short drag, and a drag along the strip, leave the tabs as they are.
+    // A short drag, and a drag along the strip short of the next tab's middle, leave the tabs as
+    // they are.
     drag(&mut app, &ctx, tab, tab + vec2(0.0, 35.0 + TEAR_OFF - 10.0 - tab.y));
-    drag(&mut app, &ctx, tab, tab + vec2(300.0, 0.0));
+    drag(&mut app, &ctx, tab, tab + vec2(40.0, 0.0));
     assert!(app.ui.floating.is_empty(), "the document stays under its tab");
     assert_eq!(app.session.active_index(), Some(2), "a drag is not a click");
     // Dragged well below the strip, it floats in a window under the pointer and becomes current.

@@ -7,6 +7,7 @@
 //! on macOS) onto such a brush replaces its art. Brush libraries open in library panels
 //! ([`BrushLibraries`]).
 
+use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -108,8 +109,9 @@ fn preview(ui: &Ui, doc: &Document, def: &Value, key: u64, size: egui::Vec2) -> 
 /// What a stroke preview of brush definition `def`, `w` × `h` pt, renders: a copy of `resources`
 /// (a document whose patterns, symbols, swatches and images the brush art may use) without its art,
 /// and a stroke painted with the brush across it. The stroke goes from light to heavy pen pressure
-/// and back, from an upright pen to one lying flat and back, and once round every bearing and barrel
-/// rotation, so brushes that vary with the pen show how they vary.
+/// and back, from an upright pen to one lying flat and back, once round every bearing and barrel
+/// rotation, and from one end of an airbrush pen's finger wheel to the other and back, so brushes
+/// that vary with the pen show how they vary.
 fn preview_doc(resources: &Document, def: &Value, w: f64, h: f64) -> Option<Document> {
     let mut doc = resources.clone();
     let layer = doc.alloc_id();
@@ -123,6 +125,7 @@ fn preview_doc(resources: &Document, def: &Value, w: f64, h: f64) -> Option<Docu
     st.tilt = Some(PressureProfile::sample());
     st.bearing = Some(AngleProfile::sample());
     st.rotation = Some(AngleProfile::sample());
+    st.wheel = Some(PressureProfile::sample());
     // A gentle S-curve across the swatch (square tiles keep a quarter of it either side).
     let mut bp = vectorcraft_geom::BezPath::new();
     let margin = (h * 0.5).min(w * 0.25);
@@ -660,8 +663,8 @@ impl LibraryKind for BrushLibraries {
     }
     /// A built-in library's brush in the UI language; a User Defined or loaded library's brush as
     /// it is named.
-    fn label<'a>(id: &str, name: &'a str) -> &'a str {
-        super::label_or_name(name, brushlib::BUILTIN.iter().any(|b| b.id == id))
+    fn label<'a>(id: &str, name: &'a str) -> Cow<'a, str> {
+        super::label_or_name(name, brushlib::BUILTIN.iter().any(|b| b.id == id)).into()
     }
     /// The brush's stroke preview, drawn with the library's resources.
     fn draw(_: &VectorcraftApp, ui: &Ui, r: egui::Rect, b: &LibBrush, selected: bool, hovered: bool) {
