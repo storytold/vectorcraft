@@ -1856,25 +1856,41 @@ fn a_text_shows_only_while_its_center_is_inside_its_clip() {
 /// with their rectangles, and the description of the accessibility node with the keyboard focus, if
 /// it has one.
 fn description_frame(a: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> (Vec<(String, egui::Rect)>, Option<String>) {
+    frame_texts(a, ctx, events, |clip, r| shows_in_clip(r, clip))
+}
+
+/// [`description_frame`], keeping only the texts whose whole rectangle is inside their clip
+/// rectangle, so that the pointer can reach the center of each one.
+fn whole_texts_frame(a: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> Vec<(String, egui::Rect)> {
+    frame_texts(a, ctx, events, |clip, r| clip.contains_rect(r)).0
+}
+
+/// [`description_frame`] with the texts that `keep(clip rectangle, text rectangle)` accepts.
+fn frame_texts(
+    a: &mut VectorcraftApp,
+    ctx: &egui::Context,
+    events: Vec<egui::Event>,
+    keep: fn(egui::Rect, egui::Rect) -> bool,
+) -> (Vec<(String, egui::Rect)>, Option<String>) {
     let time = ctx.input(|i| i.time) + 0.25;
     let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 900.0)));
     let raw = egui::RawInput { screen_rect, events, time: Some(time), ..Default::default() };
     let mut out = ctx.run_ui(raw, |ui| show(a, ui.ctx()));
     out.textures_delta.clear();
-    fn walk(s: &egui::Shape, clip: egui::Rect, v: &mut Vec<(String, egui::Rect)>) {
+    fn walk(s: &egui::Shape, clip: egui::Rect, keep: fn(egui::Rect, egui::Rect) -> bool, v: &mut Vec<(String, egui::Rect)>) {
         match s {
             egui::Shape::Text(t) => {
                 let r = egui::Rect::from_min_size(t.pos, t.galley.size());
-                if shows_in_clip(r, clip) {
+                if keep(clip, r) {
                     v.push((t.galley.text().to_string(), r));
                 }
             }
-            egui::Shape::Vec(s) => s.iter().for_each(|s| walk(s, clip, v)),
+            egui::Shape::Vec(s) => s.iter().for_each(|s| walk(s, clip, keep, v)),
             _ => {}
         }
     }
     let mut texts = vec![];
-    out.shapes.iter().for_each(|c| walk(&c.shape, c.clip_rect, &mut texts));
+    out.shapes.iter().for_each(|c| walk(&c.shape, c.clip_rect, keep, &mut texts));
     let focused = out.platform_output.accesskit_update.and_then(|u| {
         let focus = u.focus;
         u.nodes.into_iter().find(|(id, _)| *id == focus).and_then(|(_, n)| n.description().map(str::to_string))
@@ -2517,7 +2533,8 @@ fn hovering_a_user_interface_row_shows_its_description() {
     let ctx = egui::Context::default();
     crate::theme::install_fonts(&ctx);
     description_frame(&mut a, &ctx, vec![]);
-    let (texts, _) = description_frame(&mut a, &ctx, vec![]);
+    // Only rows the list shows whole: the pointer goes to the center of a row it can reach.
+    let texts = whole_texts_frame(&mut a, &ctx, vec![]);
     let row = |texts: &[(String, egui::Rect)], label: &str| {
         texts.iter().find(|(t, _)| t == label).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no `{label}` in {texts:?}"))
     };
@@ -2535,7 +2552,7 @@ fn hovering_a_user_interface_row_shows_its_description() {
         ("Language:", "interfaceLanguage"),
     ];
     let sentences: Vec<_> = rows.iter().map(|(_, key)| descriptions::description(key).unwrap_or_else(|| panic!("`{key}` has a sentence"))).collect();
-    // The Language row is under the bottom of the list: the wheel scrolls it into view.
+    // The Language row is under the bottom of the list: the wheel scrolls it wholly into view.
     let wheel = egui::Event::MouseWheel {
         unit: egui::MouseWheelUnit::Point,
         delta: egui::vec2(0.0, -40.0),
@@ -2549,7 +2566,7 @@ fn hovering_a_user_interface_row_shows_its_description() {
             if texts.iter().any(|(t, _)| t == label) {
                 break;
             }
-            texts = description_frame(&mut a, &ctx, vec![wheel.clone()]).0;
+            texts = whole_texts_frame(&mut a, &ctx, vec![wheel.clone()]);
         }
         // The wheel scrolls smoothly over several frames: wait until the row stays put.
         for _ in 0..60 {

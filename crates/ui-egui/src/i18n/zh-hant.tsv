@@ -4721,6 +4721,10 @@ digits	Malayalam	馬來亞拉姆數字
 	Edit type set in fonts that aren't available?	要編輯使用了無法使用之字體的文字嗎？
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	在畫布上於每個切片左上角的方框中顯示其編號；關閉時，切片輪廓仍會顯示。
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	使用者切片和物件切片的輪廓及其編號方框的顏色；自動切片使用此顏色較淡的色調。
+	In paragraphs with Hyphenate on, a listed word is hyphenated only at the hyphens typed in it, or never when it has none, whatever its language or case.	在開啟使用連字號的段落中，清單中的單字只在其中輸入的連字號處加上斷字連字號，沒有連字號則從不斷字，與語言和大小寫無關。
+	On the desktop, this folder's .wasm plug-ins load at startup and when OK sets a new folder, except in Safe Mode; one that asks for permissions loads only after you grant them. The web version loads none.	在桌面版中，此資料夾中的 .wasm 增效模組會在啟動時以及透過「確定」設定新資料夾時載入，安全模式除外；要求權限的增效模組只在您授予權限後載入。網頁版不載入任何增效模組。
+	Large gives each filter or command plug-in run at least 250 million instructions, with the same time limit; Normal keeps the plug-in's own budget. Live effects, exporters and importers keep theirs.	「大」為濾鏡或指令增效模組的每次執行提供至少 2.5 億個指令，時間限制不變；「正常」保留增效模組自己的預算。即時效果、轉存器和匯入器保留各自的預算。
+	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	當文件設定的語言為英文：美國時，新文字使用此語言；文件中已有的文字保留自己的語言。
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	在開啟使用連字號的段落中，清單中的單字只在其中輸入的連字號處斷開，沒有連字號則不斷開，與語言和大小寫無關。
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	在桌面版中，此資料夾中的 .wasm 增效模組會在啟動時以及在此指定新資料夾並按一下「確定」時載入，安全模式除外；網頁版不會載入它們。
 	Normal keeps each plug-in's own limits; with Large, a plug-in filter or command may run at least 250 million instructions besides those for its input. The time limit stays the same.	「正常」保留每個增效模組自身的限制；選擇「大」時，增效模組的濾鏡或命令除處理其輸入所需的指令外，至少可執行 2.5 億條指令。時間限制不變。
@@ -4735,8 +4739,8 @@ digits	Malayalam	馬來亞拉姆數字
 	Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them.	在工具列中將每個工具組的名稱顯示在其工具上方；關閉此選項時，各組依序排列，中間沒有任何內容。
 	From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.	從現在起，開啟或新增的文件會以分頁開啟；關閉此選項時，每份文件會在浮動視窗中開啟。已開啟的文件保持原位。
 	Makes the document tabs taller and their names larger.	讓文件頁籤更高，頁籤上的名稱更大。
-	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own.	從下次啟動起，在 VectorCraft 原本會自行繪製標題列的地方，改由系統繪製視窗的標題列。
-	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on.	從下次啟動起，即使桌面會繪製視窗的標題列，VectorCraft 也會自行繪製，除非開啟了系統標題列。
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own; on Linux and the BSDs, the VECTORCRAFT_TITLEBAR variable takes precedence.	從下次啟動起，在 VectorCraft 原本會自行繪製標題列的地方，改由系統繪製視窗的標題列；在 Linux 和 BSD 上，VECTORCRAFT_TITLEBAR 變數優先。
+	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on or the VECTORCRAFT_TITLEBAR variable chooses it.	從下次啟動起，即使桌面會繪製視窗的標題列，VectorCraft 也會自行繪製，除非開啟了系統標題列或 VECTORCRAFT_TITLEBAR 變數選擇了標題列。
 	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	放大或縮小介面；在相同縮放比例下，畫布上的圖稿保持原有大小。
 	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	VectorCraft 繪製的工具指標會隨介面縮放一起變大變小；關閉此選項時，指標保持原有大小。
 	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	介面的語言；「自動」使用系統的語言。選擇一種語言後，對話方塊會立即切換為該語言。
