@@ -735,6 +735,8 @@ fn input_after_sampler_refresh(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::R
     let (consumed, ordinary_pressed) = begin_ignore_sampler_pointer(ui, resp.id, cancelled);
     if !consumed && (ordinary_pressed || !cancelled || !ui.input(|i| i.pointer.any_pressed())) {
         canvas_input(app, ui, resp, rect);
+    } else if consumed {
+        canvas_navigation(app, ui, resp, rect);
     }
     end_ignore_sampler_pointer(ui, resp.id);
 }
@@ -753,15 +755,32 @@ pub(crate) fn canvas_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
         // open, has the press: the drag moves the graphic, not the object.
     } else {
         handle_input(app, ui, resp, rect);
-        // `hover_doc` is the document point under the pointer in the view `handle_input` left. The
-        // wheel, a pan, a Rotate View drag, the Zoom tool and a Presentation Mode click move the view
-        // there. A dialog, floating panel or menu over the canvas hides it (Object Highlighting
-        // showed through them: #4518), unless a drag that began on the canvas goes on there.
-        let moved = Xf::at(rect, app.view().unwrap_or(&View::default()), app.canvas_ui_zoom);
-        let dragging = ui.data(|d| d.get_temp::<Drag>(drag_id()).is_some());
-        app.hover_doc =
-            ui.input(|i| i.pointer.hover_pos()).filter(|p| rect.contains(*p) && (dragging || drag::on_canvas(ui, resp, *p))).map(|p| moved.to_doc(p));
+        update_hover_doc(app, ui, resp, rect);
     }
+}
+
+/// A consumed sampler primary frame may still carry independent view navigation.
+fn canvas_navigation(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: egui::Rect) {
+    if app.ui.dialog.as_ref().is_some_and(crate::dialogs::revolve_gizmo::active)
+        || (resp.context_menu_opened() && resp.hovered() && ui.input(|i| i.pointer.any_pressed()))
+        || crate::panels::three_d::graphic_handle_drag_active(ui.ctx())
+    {
+        // Keep the existing gesture gates without closing a popup or dispatching a handle press.
+        return;
+    }
+    input::handle_navigation(app, ui, resp, rect);
+    update_hover_doc(app, ui, resp, rect);
+}
+
+fn update_hover_doc(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: egui::Rect) {
+    // `hover_doc` is the document point under the pointer in the view canvas input left. The
+    // wheel, a pan, a Rotate View drag, the Zoom tool and a Presentation Mode click move the view
+    // there. A dialog, floating panel or menu over the canvas hides it (Object Highlighting
+    // showed through them: #4518), unless a drag that began on the canvas goes on there.
+    let moved = Xf::at(rect, app.view().unwrap_or(&View::default()), app.canvas_ui_zoom);
+    let dragging = ui.data(|d| d.get_temp::<Drag>(drag_id()).is_some());
+    app.hover_doc =
+        ui.input(|i| i.pointer.hover_pos()).filter(|p| rect.contains(*p) && (dragging || drag::on_canvas(ui, resp, *p))).map(|p| moved.to_doc(p));
 }
 
 /// The pointer over the canvas: the view tools' cursors, else the tool's own.
