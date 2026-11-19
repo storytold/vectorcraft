@@ -783,6 +783,19 @@ impl<'a> Reader<'a> {
         {
             head.registration = Some(*r);
         }
+        if self.frames.len() == 1
+            && let Some(head) = self.symbol.as_mut()
+            && o.nums(crate::ai_editing::DYNAMIC_KEY).first().is_some_and(|v| *v != 0.0)
+        {
+            head.dynamic = true;
+        }
+        if let Some(text) = o.text(crate::ai_editing::OVERRIDES_KEY)
+            && let Some(bytes) = crate::ai_editing::hex_decode(&text)
+            && let Ok(list) = serde_json::from_slice::<Vec<vectorcraft_doc::SymbolOverride>>(&bytes)
+            && let Some(n) = self.last_object().filter(|n| matches!(n.kind, NodeKind::SymbolInstance { .. }))
+        {
+            n.extras_mut().symbol_overrides = list.into_iter().filter(|s| !s.is_empty()).collect();
+        }
         self.constraint_art(o);
         self.placed_page(o);
         // A blend's key object or spine.
