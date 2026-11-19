@@ -3100,6 +3100,10 @@ digits	Malayalam	Malajalam
 	Add Color Tool	Narzędzie Dodaj kolor
 	Remove Color Tool	Narzędzie Usuń kolor
 	Remove Color	Usuń kolor
+	Set As Base Color	Ustaw jako kolor bazowy
+	Select Shade	Wybierz odcień
+	Add New Color	Dodaj nowy kolor
+	Set Current Color As Base Color	Ustaw bieżący kolor jako bazowy
 	Find the selected colors in the artwork	Znajdź zaznaczone kolory w kompozycji
 	Keep this row's colors (exclude)	Zachowaj kolory tego wiersza (wyklucz)
 	Limit to Library:	Ogranicz do biblioteki:
@@ -4584,6 +4588,7 @@ font-technology	Variable	Zmienne
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} z {n} wyniku. Pisz dalej, aby je zawęzić.|{shown} z {n} wyników. Pisz dalej, aby je zawęzić.|{shown} z {n} wyników. Pisz dalej, aby je zawęzić.
 	Recent Commands	Ostatnie polecenia
 	No recent commands	Brak ostatnich poleceń
+	Type to search commands, tools, panels and effects	Pisz, aby szukać poleceń, narzędzi, paneli i efektów
 	Dashed Line	Linia przerywana
 	Panel menu	Menu panelu
 	Unembed…	Wyodrębnij…
@@ -5535,6 +5540,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	no native format	brak formatu natywnego
 @msg	no pages	brak stron
 @msg	no pattern `{name}`	brak wzorka `{name}`
+@msg	art painted with `{name}` can't be its tile	kompozycja malowana wzorkiem `{name}` nie może być jego kafelkiem
 @msg	no perspective grid preset named `{name}`	brak ustawienia siatki perspektywy o nazwie `{name}`
 @msg	no plug-in {0} is installed	wtyczka {0} nie jest zainstalowana
 @msg	no plug-in {id} is installed	wtyczka {id} nie jest zainstalowana
@@ -6357,6 +6363,7 @@ variable-list-end	{0}, {1}	{0} i {1}
 	Arrow	Strzałka
 	Arrow (open)	Strzałka (otwarta)
 	Barbed	Zadziorowata
+arrowhead	Feather	Pióro
 	Half Arrow (left)	Pół strzałki (lewa)
 	Half Arrow (right)	Pół strzałki (prawa)
 	Concave	Wklęsła
@@ -6384,6 +6391,7 @@ variable-list-end	{0}, {1}	{0} i {1}
 	Kite	Latawiec
 	Triangle to Bar	Trójkąt z kreską
 	Oval	Owal
+	Line Arrow	Strzałka liniowa
 	Complementary	Dopełniające
 	Complementary 2	Dopełniające 2
 	Split Complementary	Rozdzielone dopełniające
@@ -8157,6 +8165,7 @@ breakText	Glyphs	Glify
 	Remove Strokes	Usuń obrysy
 	Place Brush Art	Umieść kompozycję pędzla
 	Replace Brush Art	Zastąp kompozycję pędzla
+	Replace Pattern Art	Zastąp kompozycję wzorka
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Obrysy używają tego pędzla. Zastosować nową kompozycję do tych obrysów, czy pozostawić je bez zmian i dodać kopię pędzla z nową kompozycją?
 	Apply to Strokes	Zastosuj do obrysów
 	Leave Strokes	Pozostaw obrysy
@@ -10585,6 +10594,11 @@ breakText	Glyphs	Glify
 @msg	A panel is not joined to the rest by a crease.	Panel nie jest połączony z resztą żadną linią bigowania.
 @msg	A fold line is on a non-printing layer.	Linia zgięcia znajduje się na warstwie niedrukowanej.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panele: {panels}, zawiasy: {hinges}, błędy: {errors}, ostrzeżenia: {warnings}
+	Engraving	Grawerowanie
+	Fine Hatching	Drobne kreskowanie
+	Dense Hatching	Gęste kreskowanie
+	Tapered Hatching	Zwężane kreskowanie
+	Broken Hatching	Przerywane kreskowanie
 	Image Brush	Pędzle obrazkowe
 	Soft Bloom	Miękki kwiat
 	Halftone Field	Pole półtonów

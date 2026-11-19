@@ -124,8 +124,8 @@ use vectorcraft_color::swatch::Swatch;
 use vectorcraft_color::{BlendMode, Paint};
 use vectorcraft_doc::cmyk::Inks;
 use vectorcraft_doc::{
-    Appearance, AppearanceItem, Artboard, ColorMode, Dash, Document, FillLayer, ImageBlob, ImageObject, Knockout, LayerColor, LineCap, LineJoin,
-    LinkInfo, Node, NodeId, NodeKind, OpacityMask, PageBox, PatternDef, StrokeLayer, Unit,
+    Appearance, AppearanceItem, Artboard, ColorMode, CustomArrowhead, Dash, Document, FillLayer, ImageBlob, ImageObject, Knockout, LayerColor,
+    LineCap, LineJoin, LinkInfo, Node, NodeId, NodeKind, OpacityMask, PageBox, PatternDef, StrokeLayer, Unit,
 };
 use vectorcraft_geom::{AnchorKind, FillRule, PathData};
 
@@ -544,6 +544,10 @@ struct Reader<'a> {
     symbol_bounds: HashMap<String, Rect>,
     /// The symbols read, by their name in the file → their name in the document.
     symbol_names: HashMap<String, String>,
+    /// The heads of the arrowhead symbols the art styles' strokes name, by the symbol's name in
+    /// the file (`None`: not a symbol read, or not one read as a head), read with the styles
+    /// ([`Reader::read_arrowheads`]).
+    arrowheads: HashMap<String, Option<Arc<CustomArrowhead>>>,
     /// The names the symbols read have in the document, and for each name read more than once,
     /// the number its next copy is tried with.
     symbol_taken: HashSet<String>,
@@ -843,6 +847,7 @@ impl<'a> Reader<'a> {
             unread: Vec::new(),
             symbol_bounds: HashMap::new(),
             symbol_names: HashMap::new(),
+            arrowheads: HashMap::new(),
             symbol_taken: HashSet::new(),
             symbol_suffix: HashMap::new(),
             symbol_art_bounds: HashMap::new(),

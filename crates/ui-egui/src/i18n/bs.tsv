@@ -3107,6 +3107,10 @@ digits	Malayalam	Malajalam
 	Add Color Tool	Alat za dodavanje boje
 	Remove Color Tool	Alat za uklanjanje boje
 	Remove Color	Ukloni boju
+	Set As Base Color	Postavi kao osnovnu boju
+	Select Shade	Odaberi nijansu
+	Add New Color	Dodaj novu boju
+	Set Current Color As Base Color	Postavi trenutnu boju kao osnovnu
 	Find the selected colors in the artwork	Pronađi odabrane boje u crtežu
 	Harmony Rules	Pravila harmonije
 	Keep this row's colors (exclude)	Zadrži boje ovog reda (isključi)
@@ -4632,6 +4636,7 @@ font-technology	Variable	Varijabilni
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} od {n} rezultata. Nastavite kucati da ih suzite.|{shown} od {n} rezultata. Nastavite kucati da ih suzite.|{shown} od {n} rezultata. Nastavite kucati da ih suzite.
 	Recent Commands	Nedavne naredbe
 	No recent commands	Nema nedavnih naredbi
+	Type to search commands, tools, panels and effects	Upišite za pretragu naredbi, alata, panela i efekata
 	Dashed Line	Isprekidana linija
 	Panel menu	Meni panela
 	Unembed…	Poništi ugrađivanje…
@@ -6054,6 +6059,7 @@ imageTrace	Outline	Obris
 	Arrow	Strelica
 	Arrow (open)	Strelica (otvorena)
 	Barbed	Bodljikavo
+arrowhead	Feather	Pero
 	Half Arrow (left)	Polustrelica (lijevo)
 	Half Arrow (right)	Polustrelica (desno)
 	Concave	Konkavno
@@ -6081,6 +6087,7 @@ imageTrace	Outline	Obris
 	Kite	Zmaj
 	Triangle to Bar	Trougao u traku
 	Oval	Oval
+	Line Arrow	Linijska strelica
 	Complementary	Komplementarne
 	Complementary 2	Komplementarne 2
 	Split Complementary	Podijeljene komplementarne
@@ -7501,6 +7508,7 @@ shape	Open	Otvoren
 	Remove Strokes	Ukloni poteze
 	Place Brush Art	Postavi crtež četkice
 	Replace Brush Art	Zamijeni crtež četkice
+	Replace Pattern Art	Zamijeni crtež uzorka
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Potezi koriste ovu četkicu. Primijeniti novi crtež na te poteze ili ih ostaviti kakvi jesu i dodati kopiju četkice s novim crtežom?
 	Apply to Strokes	Primijeni na poteze
 	Leave Strokes	Ostavi poteze
@@ -7922,6 +7930,11 @@ shape	Open	Otvoren
 @msg	A joint does not close by {gap} pt.	Spoj se ne zatvara za {gap} pt.
 @msg	Two panels pass through each other.	Dva panela prolaze jedan kroz drugi.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer mora biti "singleLine", "everyLine", "standardSingleLine" ili "standardEveryLine"
+	Engraving	Gravura
+	Fine Hatching	Fino šrafiranje
+	Dense Hatching	Gusto šrafiranje
+	Tapered Hatching	Suženo šrafiranje
+	Broken Hatching	Isprekidano šrafiranje
 	Image Brush	Slikovni kistovi
 	Soft Bloom	Meko cvjetanje
 	Halftone Field	Polutonsko polje

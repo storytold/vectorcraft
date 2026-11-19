@@ -1659,6 +1659,10 @@ file-filter	Templates	模板
 	Add Color Tool	添加颜色工具
 	Remove Color Tool	删除颜色工具
 	Remove Color	删除颜色
+	Set As Base Color	设为基色
+	Select Shade	选择色调
+	Add New Color	添加新颜色
+	Set Current Color As Base Color	将当前颜色设为基色
 	Find the selected colors in the artwork	在图稿中查找所选颜色
 	Harmony Sets	色彩调和组
 	Height	高度
@@ -3517,6 +3521,7 @@ digits	Malayalam	马拉雅拉姆数字
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	共 {n} 个结果，显示 {shown} 个。继续输入以缩小范围。
 	Recent Commands	最近使用的命令
 	No recent commands	没有最近使用的命令
+	Type to search commands, tools, panels and effects	输入以搜索命令、工具、面板和效果
 	Search commands	搜索命令
 	Search Commands…	搜索命令…
 	Secondary	次要
@@ -4884,6 +4889,7 @@ imageTrace	Outline	轮廓
 @msg	{label} produced an empty result: a line or other open path encloses no area; to include it, apply Object › Path › Outline Stroke to it first	{label} 生成了空结果：直线或其他开放路径不围成区域；要包含它，请先对其应用“对象 › 路径 › 轮廓化描边”
 @msg	already editing a pattern	已在编辑图案
 @msg	no pattern `{name}`	没有图案 `{name}`
+@msg	art painted with `{name}` can't be its tile	使用 `{name}` 上色的图稿不能作为它的拼贴
 @msg	not in pattern editing mode	不在图案编辑模式中
 @msg	finish editing the pattern first	请先完成图案编辑
 @msg	pattern missing	缺少图案
@@ -7852,6 +7858,36 @@ anchor	Points:	点：
 @msg	`{id}` is not a colour adjustment	`{id}` 不是颜色调整
 @msg	missing `effect`	缺少 `effect`
 @msg	`params` must be an object	`params` 必须是对象
+# Stroke arrowheads (Stroke panel, Dimension Tool Options and Properties › Arrow Style).
+	Triangle (open)	三角 (空心)
+	Circle (open)	圆形 (空心)
+	Square (open)	正方形 (空心)
+	Arrow (open)	箭头 (空心)
+	Barbed	倒钩
+arrowhead	Feather	羽毛
+	Half Arrow (left)	半箭头 (左)
+	Half Arrow (right)	半箭头 (右)
+	Double Bar	双条形
+	Dot on Bar	条形上的圆点
+	Chevron	人字形
+	Plus	加号
+	Hexagon (open)	六边形 (空心)
+	Tag	标签
+	Tag (open)	标签 (空心)
+	Half Circle	半圆
+	Drop	水滴
+	Slash	斜线
+	Double Slash	双斜线
+	Diamond (open)	菱形 (空心)
+	Reverse Triangle	倒三角
+	Swallowtail	燕尾
+	Bracket	括号
+	Fork	叉形
+	Leaf	叶形
+	Kite	风筝形
+	Triangle to Bar	三角至条形
+	Oval	椭圆
+	Line Arrow	线条箭头
 # Path Precision Tools add-on (Object › Plug-ins › Path Precision Tools): its tools, Anchor Inspector panel, commands and messages.
 	Path Precision Tools	路径精确工具
 	Anchor Eraser Brush	锚点橡皮擦画笔
@@ -8141,6 +8177,7 @@ breakText	Glyphs	字形
 	Remove Strokes	移除描边
 	Place Brush Art	置入画笔图稿
 	Replace Brush Art	替换画笔图稿
+	Replace Pattern Art	替换图案图稿
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	有描边使用了此画笔。要将新图稿应用到这些描边，还是保留描边不变并添加一个使用新图稿的画笔副本？
 	Apply to Strokes	应用于描边
 	Leave Strokes	保留描边
@@ -10537,6 +10574,11 @@ breakText	Glyphs	字形
 @msg	A joint does not close by {gap} pt.	有一处接缝相差 {gap} pt 未闭合。
 @msg	Two panels pass through each other.	两个面板相互穿插。
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} 像素对 PSD 而言过大 (每边最多 {MAX_SIDE} 像素)：请降低分辨率
+	Engraving	雕刻
+	Fine Hatching	细线排线
+	Dense Hatching	密集排线
+	Tapered Hatching	渐细排线
+	Broken Hatching	断续排线
 	Image Brush	图像画笔
 	Soft Bloom	柔和花朵
 	Halftone Field	半色调区域

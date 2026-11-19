@@ -409,6 +409,8 @@ font-technology	Variable	Változó
 	Bar	Vonal
 	Bar Graph Tool	Sávdiagram
 	Barbed	Szakállas
+arrowhead	Feather	Tollazat
+arrowhead	Target	Céltábla
 	Baseline	Alapvonal
 	Baseline (Standard)	Alapvonali (szabványos)
 	Baseline Optimized	Alapvonali, optimalizált
@@ -2118,6 +2120,10 @@ file-filter	Templates	Sablonok
 	Add Color Tool	Szín hozzáadása eszköz
 	Remove Color Tool	Szín eltávolítása eszköz
 	Remove Color	Szín eltávolítása
+	Set As Base Color	Beállítás alapszínként
+	Select Shade	Árnyalat kiválasztása
+	Add New Color	Új szín hozzáadása
+	Set Current Color As Base Color	Aktuális szín beállítása alapszínként
 	Find the selected colors in the artwork	A kijelölt színek keresése a grafikában
 	Harmony Sets	Harmóniakészletek
 	HDTV 1080p	HDTV 1080p
@@ -2609,6 +2615,7 @@ file-filter	Templates	Sablonok
 	Limit:	Határ:
 	Limited	Korlátozott
 	Line	Vonal
+	Line Arrow	Vonalas nyíl
 	Line Art	Vonalas rajz
 	Line Art and Text Resolution:	Vonalas grafika és szöveg felbontása:
 	Line Breaks	Sortörések
@@ -4288,6 +4295,7 @@ mark-style	Japanese	Japán
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} találatból {shown} látható. Gépeljen tovább a szűkítéshez.
 	Recent Commands	Legutóbbi parancsok
 	No recent commands	Nincsenek legutóbbi parancsok
+	Type to search commands, tools, panels and effects	Gépeljen parancsok, eszközök, panelek és effektusok kereséséhez
 	Search commands	Parancsok keresése
 	Search Commands…	Parancsok keresése…
 	Search Fonts Folder	Keresés betűtípusmappában
@@ -6096,6 +6104,7 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	no native format	nincs natív formátum
 @msg	no pages	nincsenek oldalak
 @msg	no pattern `{name}`	nincs ilyen mintázat: `{name}`
+@msg	art painted with `{name}` can't be its tile	a(z) `{name}` mintázattal festett grafika nem lehet annak csempéje
 @msg	no perspective grid preset named `{name}`	nincs ilyen nevű perspektivikusrács-előbeállítás: `{name}`
 @msg	no plug-in {0} is installed	nincs telepítve ilyen bővítmény: {0}
 @msg	no plug-in {id} is installed	nincs telepítve ilyen bővítmény: {id}
@@ -8285,6 +8294,7 @@ breakText	Glyphs	Glifák
 	Remove Strokes	Körvonalak eltávolítása
 	Place Brush Art	Ecsetgrafika elhelyezése
 	Replace Brush Art	Ecsetgrafika cseréje
+	Replace Pattern Art	Mintázatgrafika cseréje
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Körvonalak használják ezt az ecsetet. Alkalmazod az új grafikát ezekre a körvonalakra, vagy változatlanul hagyod őket, és hozzáadod az ecset egy másolatát az új grafikával?
 	Apply to Strokes	Alkalmazás a körvonalakra
 	Leave Strokes	Körvonalak megtartása
@@ -10710,6 +10720,11 @@ breakText	Glyphs	Glifák
 @msg	A panel is not joined to the rest by a crease.	Egy panelt egyetlen bigvonal sem köt a többihez.
 @msg	A fold line is on a non-printing layer.	Egy hajtásvonal nem nyomtatható rétegen van.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panelek: {panels}, zsanérok: {hinges}, hibák: {errors}, figyelmeztetések: {warnings}
+	Engraving	Metszet
+	Fine Hatching	Finom vonalkázás
+	Dense Hatching	Sűrű vonalkázás
+	Tapered Hatching	Elvékonyodó vonalkázás
+	Broken Hatching	Szaggatott vonalkázás
 	Image Brush	Képecsetek
 	Soft Bloom	Lágy virágzás
 	Halftone Field	Féltónusmező

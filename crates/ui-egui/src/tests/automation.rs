@@ -1334,7 +1334,9 @@ fn ui_inspect_script_report_leaves_out_files_outside_the_read_root() {
     std::fs::write(base.join("outside/bad.jsxinc"), "\nthrow new Error('stopped here');\n").unwrap();
     finish(&mut app, json!({"path": s(base.join("outside/run.jsx"))}));
     let person = crate::control::inspect(&app, &ctx);
-    assert_eq!(person["scriptReport"]["file"], json!(s(base.join("outside/bad.jsxinc"))), "{person}");
+    // The report names the file by its real path (on macOS the temp folder is reached through a link).
+    let bad = std::fs::canonicalize(base.join("outside/bad.jsxinc")).unwrap();
+    assert_eq!(person["scriptReport"]["file"], json!(s(bad)), "{person}");
     let r = request(&mut app, &tx, "ui.inspect", json!({}));
     assert_eq!(r["result"]["scriptReport"]["file"], "bad.jsxinc", "{r}");
     assert!(r["result"]["scriptReport"]["console"].to_string().contains("bad.jsxinc:2:"), "{r}");

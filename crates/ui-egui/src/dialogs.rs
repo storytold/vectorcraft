@@ -625,7 +625,8 @@ pub fn accepts_field(d: &Dialog, field: &str) -> bool {
 /// A Graph Data Column Width set this way sets every column, as Cell Style's does. A Width Point
 /// Edit side width set this way for several points sets it on every point, as typing it does. An
 /// Import PDF `allPages` set this way to the other pick sets Import PDF pages as links back to its
-/// default.
+/// default. A Dimension Tool Options `arrowStyle` set this way clears `arrowHead`, and a built-in
+/// `arrowHead` set this way sets both values of its Arrow Style entry, as that menu does.
 pub fn set_field(d: &mut Dialog, field: String, value: Value) {
     if d.kind == brush_options::KIND {
         brush_art_options::note_set(d, &field);
@@ -638,6 +639,9 @@ pub fn set_field(d: &mut Dialog, field: String, value: Value) {
     }
     if d.kind == import_pdf::KIND {
         import_pdf::note_set(d, &field, &value);
+    }
+    if d.kind == dimension::KIND && dimension::note_set(d, &field, &value) {
+        return;
     }
     if d.kind == "preferences" {
         crate::prefs_dialog::note_set(d, &field, &value);
