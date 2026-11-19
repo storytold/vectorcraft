@@ -182,16 +182,16 @@ fn exports_that_draw_type_in_a_missing_font_say_it_is_the_fallback_font() {
     assert!(!warned(&mut s, json!({"format": "pdf"})), "replaced: nothing is substituted");
 }
 
-/// A page with "Hamburg Zoo" in a font the file carries that no machine has (`Zyxwvu-Serif`: a
+/// A page in a font the file carries that no machine has (`Zyxwvu-Serif`: a
 /// simple TrueType font in WinAnsiEncoding, its program the bundled Source Serif 4's).
-fn carried_font_pdf() -> Vec<u8> {
+fn carried_font_pdf(content: &str, height: f64) -> Vec<u8> {
     let data = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/fonts/SourceSerif4-Regular.ttf")).unwrap();
     let face = vectorcraft_text::FontDb::global().face("Source Serif 4", "Regular").unwrap();
     let widths: Vec<String> =
         (32u8..=126).map(|c| format!("{:.0}", face.advance(face.glyph_for(char::from(c))) * 1000.0 / face.units_per_em())).collect();
     let hex: String = data.iter().map(|b| format!("{b:02x}")).collect();
     let n = first_extra(1);
-    let page = PdfPage { resources: format!("/Font << /F1 {n} 0 R >>"), ..PdfPage::new(300.0, 100.0, "BT /F1 24 Tf 20 50 Td (Hamburg Zoo) Tj ET") };
+    let page = PdfPage { resources: format!("/Font << /F1 {n} 0 R >>"), ..PdfPage::new(300.0, height, content) };
     let font = format!(
         "<< /Type /Font /Subtype /TrueType /BaseFont /ABCDEF+Zyxwvu-Serif /FirstChar 32 /LastChar 126 /Widths [{}] /Encoding /WinAnsiEncoding /FontDescriptor {} 0 R >>",
         widths.join(" "),
@@ -227,7 +227,7 @@ fn glyphs(s: &Session) -> (Vec<kurbo::Point>, usize) {
 #[test]
 fn type_in_a_font_the_pdf_carries_keeps_its_look_until_edited() {
     let mut s = Session::new();
-    let r = open(&mut s, &carried_font_pdf(), json!({})).unwrap();
+    let r = open(&mut s, &carried_font_pdf("BT /F1 24 Tf 20 50 Td (Hamburg Zoo) Tj ET", 100.0), json!({})).unwrap();
     let fonts = s.execute("text.fonts", &json!({})).unwrap();
     let family = fonts[0]["family"].as_str().unwrap().to_string();
     assert_eq!(fonts[0]["status"], "missing", "{fonts}");
@@ -249,13 +249,62 @@ fn type_in_a_font_the_pdf_carries_keeps_its_look_until_edited() {
             id = Some(n.id);
         }
     });
-    s.execute("text.setText", &json!({"id": id.unwrap(), "text": "Hamburg Zoo!"})).unwrap();
+    let id = id.unwrap();
+    let preflight = |s: &mut Session| s.execute("document.preflight", &json!({})).unwrap()["findings"].clone();
+    assert!(!preflight(&mut s).to_string().contains(&family), "carried font is not substituted");
+    s.execute("text.setText", &json!({"id": id, "text": "Hamburg Zoo!"})).unwrap();
     assert_eq!(glyphs(&s).1, 0, "edited: no glyph from the file's font");
     assert!(warned(&mut s), "edited: substituted");
+    let findings = preflight(&mut s);
+    assert!(
+        findings.as_array().unwrap().iter().any(|f| f["code"] == "missingFont"
+            && f["name"].as_str().is_some_and(|n| n.contains(&family))
+            && f["ids"].as_array().is_some_and(|ids| ids.contains(&json!(id.0)))),
+        "preflight identifies the substituted text owner: {findings}"
+    );
     assert!(s.execute("text.missingFonts", &json!({})).unwrap()["fonts"].to_string().contains(&family));
     // Undone: the file's look again.
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(glyphs(&s), (at, carried));
+    assert!(!preflight(&mut s).to_string().contains(&family), "undo restores the carried font");
+}
+
+#[test]
+fn wrapped_carried_font_keeps_pdf_positions_after_native_reopen() {
+    let db = vectorcraft_text::FontDb::global();
+    let serif = db.face("Source Serif 4", "Regular").unwrap();
+    let fallback = db.face(vectorcraft_text::FALLBACK_FAMILY, "Regular").unwrap();
+    let advance = |face: &vectorcraft_text::FontFace| face.advance(face.glyph_for('H')) / face.units_per_em();
+    assert!((advance(&serif) - advance(&fallback)).abs() > 0.01, "fixture must differ from the substitute");
+    let content = "BT /F1 24 Tf 20 160 Td (Hamburg Zoo ) Tj ET BT /F1 24 Tf 20 100 Td (Hamburg Zoo ) Tj ET BT /F1 24 Tf 20 40 Td (Hamburg Zoo) Tj ET";
+    let bytes = carried_font_pdf(content, 200.0);
+    let mut reference = Session::new();
+    open(&mut reference, &bytes, json!({"textAs": "outlines"})).unwrap();
+    let want = glyph_ink(&reference, false);
+    assert_eq!(want.len(), 3);
+    let mut s = Session::new();
+    open(&mut s, &bytes, json!({})).unwrap();
+    let compare = |s: &Session| {
+        let mut areas = 0;
+        s.doc().unwrap().doc.walk(|n| {
+            if let NodeKind::Text(t) = &n.kind {
+                assert!(matches!(t.kind, vectorcraft_doc::TextKind::Area { .. }), "wrapped text must stay one area");
+                assert_eq!(vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t).lines.len(), 3);
+                areas += 1;
+            }
+        });
+        assert_eq!(areas, 1);
+        let got = glyph_ink(s, false);
+        assert_eq!(got.len(), want.len());
+        for (got, want) in got.iter().zip(&want) {
+            let off = (got.x0 - want.x0).abs().max((got.x1 - want.x1).abs()).max((got.y0 - want.y0).abs()).max((got.y1 - want.y1).abs());
+            assert!(off < 0.25, "{got:?} is {off} pt from {want:?}");
+        }
+    };
+    compare(&s);
+    let native = s.execute("document.serialize", &json!({"format": "vectorcraft"})).unwrap()["dataBase64"].as_str().unwrap().to_string();
+    s.execute("document.open", &json!({"name": "wrapped.vectorcraft", "dataBase64": native})).unwrap();
+    compare(&s);
 }
 
 fn owned_font_document(family: &str, width: f64) -> (vectorcraft_doc::Document, vectorcraft_doc::ImageBlob, vectorcraft_doc::NodeId) {
@@ -447,17 +496,14 @@ fn placed_carried_fonts_survive_break_link_and_older_version_save() {
     }
 }
 
-/// A page of the glyphs of `a`, `b` and `a` again on three lines (40, 100 and 160 pt from the top),
-/// set in a font the file carries that no machine has, each glyph named `a` by the font's ToUnicode
-/// map: two different glyphs of one embedded font for one character.
-fn two_glyphs_for_one_character_pdf() -> Vec<u8> {
+/// Glyphs `a`, `b`, `a` in an unavailable carried font, all named `a` by ToUnicode.
+fn two_glyphs_for_one_character_pdf(content: &str) -> Vec<u8> {
     let data = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/fonts/SourceSerif4-Regular.ttf")).unwrap();
     let face = vectorcraft_text::FontDb::global().face("Source Serif 4", "Regular").unwrap();
     let widths: Vec<String> =
         (32u8..=126).map(|c| format!("{:.0}", face.advance(face.glyph_for(char::from(c))) * 1000.0 / face.units_per_em())).collect();
     let hex: String = data.iter().map(|b| format!("{b:02x}")).collect();
     let n = first_extra(1);
-    let content = "BT /F1 30 Tf 20 160 Td (a) Tj ET BT /F1 30 Tf 20 100 Td (b) Tj ET BT /F1 30 Tf 20 40 Td (a) Tj ET";
     let page = PdfPage { resources: format!("/Font << /F1 {n} 0 R >>"), ..PdfPage::new(400.0, 200.0, content) };
     let font = format!(
         "<< /Type /Font /Subtype /TrueType /BaseFont /ABCDEF+Zyxwvu-Serif /FirstChar 32 /LastChar 126 /Widths [{}] /Encoding /WinAnsiEncoding /FontDescriptor {} 0 R /ToUnicode {} 0 R >>",
@@ -475,10 +521,8 @@ fn two_glyphs_for_one_character_pdf() -> Vec<u8> {
     pdf_with(&[page], &[&font, &descriptor, &file, &tounicode], None)
 }
 
-/// The ink box of the glyph on each of the three lines of [`two_glyphs_for_one_character_pdf`] as the
-/// active document draws it: type laid out, and outline paths (an import may merge them into one
-/// path, so their subpaths are told apart by the line they lie on).
-fn glyph_ink(s: &Session) -> Vec<kurbo::Rect> {
+/// The three glyph ink boxes, grouped by x for the TJ fixture or by y for separate lines.
+fn glyph_ink(s: &Session, across: bool) -> Vec<kurbo::Rect> {
     use kurbo::Shape;
     let db = vectorcraft_text::FontDb::global();
     let mut lines: [Option<kurbo::Rect>; 3] = [None; 3];
@@ -487,7 +531,11 @@ fn glyph_ink(s: &Session) -> Vec<kurbo::Rect> {
         let mut start = 0;
         for end in (1..=els.len()).filter(|&e| e == els.len() || matches!(els[e], kurbo::PathEl::MoveTo(_))) {
             let ink = kurbo::BezPath::from_vec(els[start..end].to_vec()).bounding_box();
-            let line = usize::from(ink.center().y > 70.0) + usize::from(ink.center().y > 130.0);
+            let line = if across {
+                usize::from(ink.center().x > 90.0) + usize::from(ink.center().x > 230.0)
+            } else {
+                usize::from(ink.center().y > 70.0) + usize::from(ink.center().y > 130.0)
+            };
             lines[line] = Some(lines[line].map_or(ink, |l| l.union(ink)));
             start = end;
         }
@@ -506,10 +554,21 @@ fn glyph_ink(s: &Session) -> Vec<kurbo::Rect> {
 /// where it draws it: the same page opened as outlines is the reference.
 #[test]
 fn two_glyphs_for_one_character_survive_a_native_save_and_reopen() {
-    let bytes = two_glyphs_for_one_character_pdf();
+    let content = "BT /F1 30 Tf 20 160 Td (a) Tj ET BT /F1 30 Tf 20 100 Td (b) Tj ET BT /F1 30 Tf 20 40 Td (a) Tj ET";
+    assert_carried_glyph_roundtrip(content, false);
+}
+
+#[test]
+fn conflicting_carried_glyphs_in_a_filled_and_stroked_tj_survive_native_reopen() {
+    let content = "BT 2 Tr /F1 30 Tf 20 100 Td [(a) -3500 (b) -3500 (a)] TJ 0 Tr ET";
+    assert_carried_glyph_roundtrip(content, true);
+}
+
+fn assert_carried_glyph_roundtrip(content: &str, across: bool) {
+    let bytes = two_glyphs_for_one_character_pdf(content);
     let mut reference_session = Session::new();
     open(&mut reference_session, &bytes, json!({"textAs": "outlines"})).unwrap();
-    let reference = glyph_ink(&reference_session);
+    let reference = glyph_ink(&reference_session, across);
     assert_eq!(reference.len(), 3, "the file draws three glyphs: {reference:?}");
     assert!((reference[0].height() - reference[1].height()).abs() > 2.0, "the file's two glyphs differ in shape: {reference:?}");
     assert!((reference[0].height() - reference[2].height()).abs() < 0.01, "the first and third are the same glyph: {reference:?}");
@@ -522,7 +581,7 @@ fn two_glyphs_for_one_character_survive_a_native_save_and_reopen() {
         live_texts(&s)
     );
     let close = |s: &Session, what: &str| {
-        let got = glyph_ink(s);
+        let got = glyph_ink(s, across);
         assert_eq!(got.len(), reference.len(), "{what}: {got:?}");
         for (got, want) in got.iter().zip(&reference) {
             let off = (got.x0 - want.x0).abs().max((got.x1 - want.x1).abs()).max((got.y0 - want.y0).abs()).max((got.y1 - want.y1).abs());

@@ -1558,6 +1558,28 @@ fn a_random_brush_in_the_tile_art_draws_every_tile_alike() {
 }
 
 #[test]
+fn a_path_set_to_random_by_its_own_brush_options_draws_every_tile_alike() {
+    // The brush scatters at fixed values; the tile path's own settings (Options of Selected
+    // Object) make it scatter at random, so the expanded tiles must still match the canvas.
+    let mut s = session();
+    let tile = run(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 12, "height": 12}))["id"].as_u64().unwrap();
+    run(&mut s, "paint.setFill", json!({"none": true}));
+    run(&mut s, "paint.setStroke", json!({"color": "#000000"}));
+    run(&mut s, "brush.apply", json!({"name": "Confetti"}));
+    run(&mut s, "brush.options", json!({"name": "Confetti", "params": {"modes": ["fixed", "fixed", "fixed", "fixed"]}}));
+    run(&mut s, "brush.objectOptions", json!({"ids": [tile], "params": {"modes": ["random", "random", "random", "random"]}}));
+    run(&mut s, "object.pattern.make", json!({"ids": [tile], "name": "Confetti", "width": 60, "height": 60, "edit": false}));
+    run(&mut s, "select.set", json!({"ids": [tile]}));
+    run(&mut s, "edit.clear", json!({}));
+    run(&mut s, "shape.rectangle", json!({"x": 20, "y": 20, "width": 160, "height": 160}));
+    run(&mut s, "paint.setFill", json!({"swatch": "Confetti"}));
+    run(&mut s, "paint.setStroke", json!({"none": true}));
+    let before = render(&s);
+    expand_to_tiles(&mut s);
+    assert_eq!(differing(&before, &render(&s), 64), 0, "every tile as on the canvas");
+}
+
+#[test]
 fn roughen_in_the_tile_art_of_a_scaled_pattern_keeps_its_detail() {
     // Roughen's detail is per inch: the canvas roughens the 10 pt square and scales the tile, so
     // the expanded square has as many points as the canvas draws, not twice as many.

@@ -456,6 +456,99 @@ fn list_levels_count_their_own_numbers_and_save_only_past_the_first() {
     assert_eq!(opened.list_level_counts, (1..=8).collect::<Vec<u32>>(), "a file keeps only the counts of levels 2 to 9");
 }
 
+/// A numbered paragraph given a number shows it, and the numbered paragraphs after it at its level
+/// count on from it; deeper levels still count from 1 after it, a bulleted or empty paragraph does
+/// not use the number, and a paragraph in no list still starts the count again. The file saves the
+/// number only when it is set, and a saved number outside 1 to 999999999 reads as the nearest one.
+#[test]
+fn a_numbered_paragraph_given_a_number_starts_its_level_count_there() {
+    let num = |level, start| Some(ParaList::numbered(NumberStyle::Arabic).at_level(level).starting_at(start));
+    let dot = Some(ParaList::bulleted(Bullet::Dot).starting_at(Some(7)));
+    let mut counts = ListCounts::default();
+    let markers: Vec<Option<String>> = [
+        (num(1, None), false),
+        (num(1, Some(5)), false),
+        (num(1, None), false),
+        (num(2, None), false),
+        (num(2, Some(1)), false),
+        (num(2, None), false),
+        (num(1, None), false),
+        (num(1, Some(9)), true),
+        (num(1, None), false),
+        (dot, false),
+        (num(1, Some(1)), false),
+        (None, false),
+        (num(1, None), false),
+    ]
+    .iter()
+    .map(|&(l, empty)| ParaList::next_marker(l, empty, &mut counts))
+    .collect();
+    let want = ["1.", "5.", "6.", "1.", "1.", "2.", "7.", "", "8.", "\u{2022}", "1.", "", "1."];
+    assert_eq!(markers.iter().map(|m| m.as_deref().unwrap_or("")).collect::<Vec<_>>(), want);
+    let mut counts = ListCounts::default();
+    let roman = Some(ParaList::numbered(NumberStyle::UpperRoman).starting_at(Some(MAX_LIST_START)));
+    assert_eq!(ParaList::next_marker(roman, false, &mut counts).as_deref(), Some("999999999."));
+    let zero = Some(ParaList::numbered(NumberStyle::Arabic).starting_at(Some(0)));
+    assert_eq!(ParaList::next_marker(zero, false, &mut counts).as_deref(), Some("1."), "a number below 1 counts as 1");
+    assert_eq!(serde_json::to_value(num(1, None)).unwrap(), serde_json::json!({"bullet": "dot", "number": "arabic"}));
+    assert_eq!(serde_json::to_value(num(1, Some(5))).unwrap(), serde_json::json!({"bullet": "dot", "number": "arabic", "start": 5}));
+    let read = |v: serde_json::Value| serde_json::from_value::<ParaList>(v).unwrap().start;
+    assert_eq!(read(serde_json::json!({"number": "arabic", "start": 5})), Some(5));
+    assert_eq!(read(serde_json::json!({"number": "arabic"})), None);
+    assert_eq!(read(serde_json::json!({"number": "arabic", "start": null})), None);
+    let starts = [serde_json::json!(0), serde_json::json!(-3), serde_json::json!(5_000_000_000_u64), serde_json::json!(u64::MAX)];
+    assert_eq!(
+        starts.map(|s| read(serde_json::json!({ "number": "arabic", "start": s }))),
+        [Some(1), Some(1), Some(MAX_LIST_START), Some(MAX_LIST_START)],
+        "a saved number outside 1 to 999999999 reads as the nearest one"
+    );
+    for bad in [serde_json::json!(2.5), serde_json::json!("5"), serde_json::json!(true)] {
+        assert!(serde_json::from_value::<ParaList>(serde_json::json!({ "start": bad })).is_err(), "{bad}");
+    }
+}
+
+/// Return in a paragraph that its list gives a number makes paragraphs without it, also while
+/// every paragraph shares one style; Return at the start of its text moves the number with the
+/// text, and Return elsewhere leaves it where it was.
+#[test]
+fn return_does_not_copy_a_paragraphs_number() {
+    let five = ParaStyle { list: Some(ParaList::numbered(NumberStyle::Arabic).starting_at(Some(5))), ..ParaStyle::default() };
+    let starts = |t: &TextObject| t.paragraph_styles().iter().map(|p| p.list.and_then(|l| l.start)).collect::<Vec<_>>();
+    // One style for the whole text: Return after "one" splits it.
+    let mut t = TextObject::point(Point::ZERO, "onetwo", CharStyle::default());
+    t.set_all_paras(five);
+    t.splice_paras(3, 3, "\n");
+    t.runs[0].text.insert(3, '\n');
+    t.normalize_paras();
+    assert_eq!(starts(&t), [Some(5), None]);
+    assert!(t.para_at(1).list.is_some_and(|l| l.number == Some(NumberStyle::Arabic)), "the new paragraph stays in the list");
+    // Return at the start of "two" (a paragraph with a number of its own): the number moves on
+    // with the text, and the empty paragraph left before it has none.
+    t.edit_paras(Some(1..2), |p| p.list = p.list.map(|l| l.starting_at(Some(8))));
+    t.splice_paras(4, 4, "\n\n");
+    t.runs[0].text.insert_str(4, "\n\n");
+    t.normalize_paras();
+    assert_eq!(t.plain_text(), "one\n\n\ntwo");
+    assert_eq!(starts(&t), [Some(5), None, None, Some(8)]);
+    // A whole paragraph pasted at the start of "two": the number stays with "two".
+    t.splice_paras(6, 6, "Pasted\n");
+    t.runs[0].text.insert_str(6, "Pasted\n");
+    t.normalize_paras();
+    assert_eq!(t.plain_text(), "one\n\n\nPasted\ntwo");
+    assert_eq!(starts(&t), [Some(5), None, None, None, Some(8)]);
+    // "two" replaced by two paragraphs: none of its text is left, so the first new one keeps it.
+    t.splice_paras(13, 16, "A\nB");
+    t.runs[0].text.replace_range(13..16, "A\nB");
+    t.normalize_paras();
+    assert_eq!(t.plain_text(), "one\n\n\nPasted\nA\nB");
+    assert_eq!(starts(&t), [Some(5), None, None, None, Some(8), None]);
+    // Text without a number keeps one style for every paragraph.
+    let mut t = TextObject::point(Point::ZERO, "onetwo", CharStyle::default());
+    t.set_all_paras(ParaStyle { list: Some(ParaList::numbered(NumberStyle::Arabic)), ..ParaStyle::default() });
+    t.splice_paras(3, 3, "\n");
+    assert!(t.paras.is_empty());
+}
+
 /// In a threaded frame whose first paragraph continues from the frame before, the text at the
 /// frame's start is not the start of a paragraph, so typing a list's start there starts nothing.
 /// The paragraphs after it still start lists.
@@ -552,6 +645,20 @@ fn text_flow_is_saved_only_when_by_rows() {
     assert_eq!(by_rows["flow"], "rows");
     assert_eq!(serde_json::from_value::<AreaOptions>(by_rows).unwrap().flow, TextFlow::Rows);
     assert!(serde_json::from_value::<AreaOptions>(serde_json::json!({"flow": "diagonal"})).is_err());
+}
+
+/// First Baseline Em Box Height saves as `emBoxHeight` with its minimum and reads back; files from
+/// before it read their own first baseline as they did, Ascent when they have none.
+#[test]
+fn em_box_height_first_baseline_is_saved_and_read_back() {
+    let set = AreaOptions { first_baseline: FirstBaseline::EmBoxHeight, first_baseline_min: 9.0, ..AreaOptions::default() };
+    let saved = serde_json::to_value(&set).unwrap();
+    assert_eq!((saved["firstBaseline"].as_str(), saved["firstBaselineMin"].as_f64()), (Some("emBoxHeight"), Some(9.0)));
+    assert_eq!(serde_json::from_value::<AreaOptions>(saved).unwrap(), set);
+    let old = serde_json::json!({"firstBaseline": "leading", "firstBaselineMin": 3.0});
+    assert_eq!(serde_json::from_value::<AreaOptions>(old).unwrap().first_baseline, FirstBaseline::Leading);
+    assert_eq!(serde_json::from_value::<AreaOptions>(serde_json::json!({})).unwrap().first_baseline, FirstBaseline::Ascent);
+    assert!(serde_json::from_value::<AreaOptions>(serde_json::json!({"firstBaseline": "emBox"})).is_err());
 }
 
 /// 120 × 40 area type at (40, 40), its text drawn at twice its size.

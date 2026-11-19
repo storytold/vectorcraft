@@ -7,8 +7,8 @@
 //! Each glyph comes as the interpreter draws it (an outline in thousandths of an em, whatever the
 //! font program: Type 1, CFF or TrueType, simple or CID-keyed) with the width the file gives it, for
 //! the character the file says it shows (its `ToUnicode` map, or what the import reads from the
-//! font program). The first glyph of each character is kept: a font that draws one character with
-//! two glyphs (a vertical form, an alternate) shows the first one for both.
+//! font program). The first glyph of each character is kept; a line using a different glyph for
+//! that character is imported as outlines instead.
 
 use std::collections::HashMap;
 

@@ -63,7 +63,7 @@ use std::sync::Arc;
 use kurbo::Affine;
 use vectorcraft_brush::{ArtBrush, ArtScale, Bristle, Brush, BrushKind, Calligraphic, Colorization, Scatter, Variation};
 use vectorcraft_color::Paint;
-use vectorcraft_doc::{AppearanceItem, Node, NodeKind};
+use vectorcraft_doc::{AppearanceItem, Node, NodeKind, Scaling};
 
 use super::lex::{Lexer, Tok};
 use super::obj::Names;
@@ -475,10 +475,11 @@ pub(super) fn parse_tool_object(kind: Tool, name: &str, params: &str) -> Result<
     Ok(BrushDraft { name: name.to_string(), kind })
 }
 
-/// Turn `art` over (y for -y) with the art of all its opacity masks, those that don't move with
-/// their objects too: the art changes the space it is in, and no object moves over its mask.
+/// Turn `art` over (y for -y) with its pattern fills' tiles and the art of all its opacity masks,
+/// those that don't move with their objects too: the art changes the space it is in, and no object
+/// moves over its tiles or its mask.
 pub(crate) fn turn_over(art: &mut Node) {
-    art.transform(Affine::scale_non_uniform(1.0, -1.0), false);
+    art.transform(Affine::scale_non_uniform(1.0, -1.0), Scaling { patterns: true, ..Scaling::default() });
     turn_unlinked_masks(art);
 }
 
@@ -574,7 +575,12 @@ pub(super) fn finish_brushes_within(
         let kind = match d.kind {
             _ if !kept => None,
             DraftKind::Calligraphic(c) => Some(BrushKind::Calligraphic(c)),
-            DraftKind::Scatter { brush, art: name } => copy(&name).map(|a| BrushKind::Scatter(Scatter { art: a, ..brush })),
+            DraftKind::Scatter { brush, art: name } => copy(&name).map(|mut a| {
+                // Each copy is the section turned over: its side with y up draws down the page
+                // before the copy's rotation, and a brush draws art's y (down here) down the page.
+                turn_over(&mut a);
+                BrushKind::Scatter(Scatter { art: a, ..brush })
+            }),
             DraftKind::Art { mut brush, art: name, settings } => copy(&name).map(|mut a| {
                 // The side of the section with y up draws on the right of the path, and a brush
                 // draws art's y (down here) on the left of the path.
@@ -799,14 +805,16 @@ impl BrushesRead {
         Self { drafts, by_name, bending }
     }
 
-    /// Does the reader read every stroke of art style `style` in `section` (the text between
-    /// `%AI9_BeginArtStyles` and its end) that names a brush with that brush on it, at the brush's
-    /// own settings? A style the reader doesn't read, or that names a brush no object gives, or an
-    /// Art brush in a style with effects, isn't read so.
-    pub(crate) fn style_reads(&self, section: &[u8], style: &str) -> bool {
+    /// Does the reader read every stroke of art style `parsed` ([`crate::import::parse_art_style`])
+    /// that names a brush with that brush on it, at the brush's own settings? A style the reader
+    /// doesn't read, or that names a brush no object gives, or an Art brush in a style with effects,
+    /// isn't read so.
+    pub(crate) fn style_reads(&self, parsed: &crate::import::ParsedStyle) -> bool {
         use super::style::StyleItem;
-        let styles = super::style::art_styles(section);
-        let Some(st) = styles.get(style).filter(|st| st.plain) else { return false };
+        let st = &parsed.style;
+        if !st.plain {
+            return false;
+        }
         st.items.iter().all(|item| match item {
             StyleItem::Stroke { brush: Some((name, settings)), .. } => {
                 let Some(draft) = self.by_name.get(name).and_then(|i| self.drafts.get(*i)) else { return false };

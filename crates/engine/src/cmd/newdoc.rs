@@ -814,6 +814,10 @@ pub(crate) fn file_new(s: &mut Session, p: &Value) -> Result<Value> {
     // The profile's links keep their relative paths, which name places from the profile's file, as
     // a new document from a history state keeps its source's.
     s.doc_mut()?.links_from = links_from;
+    // A profile whose Default Graphic Style was redefined gives new art in the document that style.
+    if super::newart::redefined_default_style(&s.doc()?.doc).is_some() {
+        super::newart::reset(s);
+    }
     // Overprint Preview is the engine's (the UI turns Pixel Preview on from `previewMode`). Both
     // are views of the whole app, so Default leaves them as they are.
     if settings.preview_mode == PreviewMode::Overprint {
