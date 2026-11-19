@@ -1868,7 +1868,7 @@ mod tests {
         // 3. Apply Style A to the active art and verify Break Link
         h.state_mut().run("graphicStyle.apply", json!({"name": "Style A"})).unwrap();
         // Modify appearance so style is out of sync (not linked)
-        h.state_mut().run("paint.fill", json!({"color": "#ff0000"})).unwrap();
+        h.state_mut().run("paint.setFill", json!({"color": "#ff0000"})).unwrap();
         h.run_steps(2);
 
         let pos_a = h.get_by_label("Style A").rect().center();
