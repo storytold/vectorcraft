@@ -1155,11 +1155,7 @@ fn review_resource_linked_native_case(
     let mut regressions = vec![];
     let path = directory.join(if collision { "family-collision.vectorcraft" } else { "family.vectorcraft" });
     let loaded = write_linked_native_fixture(&path, native_doc, true);
-    assert_eq!(
-        CompositeFont::named(&loaded.composite_fonts, &incoming_font.name),
-        Some(incoming_font),
-        "CONTROL: native bytes carry the definition"
-    );
+    assert_eq!(CompositeFont::named(&loaded.composite_fonts, &incoming_font.name), Some(incoming_font), "CONTROL: native bytes carry the definition");
 
     if !collision {
         review_resource_unlinked_native_placement(&path, incoming_font);
@@ -1212,11 +1208,7 @@ fn review_resource_linked_native_case(
     assert_eq!(review_resource_family(d, "Native lettering", "Installed"), "Source Sans 3", "CONTROL: ordinary installed family survives");
     assert!(CompositeFont::named(&d.composite_fonts, "Source Sans 3").is_none(), "CONTROL: no synthetic installed-family definition");
     if let Some(profile) = &profile {
-        assert_eq!(
-            CompositeFont::named(&d.composite_fonts, &existing_font.name),
-            Some(existing_font),
-            "CONTROL: destination family is unchanged"
-        );
+        assert_eq!(CompositeFont::named(&d.composite_fonts, &existing_font.name), Some(existing_font), "CONTROL: destination family is unchanged");
         let actual = &d.symbols.iter().find(|s| s.name == "Existing destination lettering").unwrap().art;
         let expected = &profile.symbols.iter().find(|s| s.name == "Existing destination lettering").unwrap().art;
         let (NodeKind::Text(actual), NodeKind::Text(expected)) = (&actual.kind, &expected.kind) else {
@@ -1228,9 +1220,7 @@ fn review_resource_linked_native_case(
         assert_eq!(CompositeFont::named(&d.composite_fonts, &family), Some(existing_font), "CONTROL: outer palette meaning is unchanged");
     }
     let family = review_resource_family(d, "Native lettering", "Ab");
-    if CompositeFont::named(&d.composite_fonts, &family)
-        .is_none_or(|font| font.parts != incoming_font.parts || font.custom != incoming_font.custom)
-    {
+    if CompositeFont::named(&d.composite_fonts, &family).is_none_or(|font| font.parts != incoming_font.parts || font.custom != incoming_font.custom) {
         regressions.push(format!("collision={collision}: linked native text family {family:?} lost its original parts/custom definition"));
     }
     regressions
