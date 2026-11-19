@@ -16,6 +16,8 @@ pub(super) struct HoverContext {
     pub(super) center: Point,
     pub(super) zoom: f64,
     pub(super) rotation: f64,
+    /// A pen turning in place changes a Bristle tip even when its pointer stays still.
+    pub(super) pen: Option<PenPose>,
     /// The active document's id and revision (which moves with every edit, undo and selection
     /// change).
     pub(super) doc: Option<(u64, u64)>,
@@ -317,7 +319,7 @@ pub(super) fn drag_art_out(app: &VectorcraftApp, ui: &Ui, resp: &egui::Response,
     // The art the drag started with: the release rolls the move back to it, and an Alt-copy's
     // copies, selected while it previews, go with that.
     let ids = it.selection.objects.clone();
-    egui::DragAndDrop::set_payload(ui.ctx(), widgets::PanelDrag::Art(ids));
+    widgets::drag_art(ui.ctx(), st.uid, ids);
     true
 }
 

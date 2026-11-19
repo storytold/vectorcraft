@@ -526,7 +526,7 @@ fn listed_when_opened(doc: &Document, open: &OpenRows, opts: &PanelOptions, quer
     rows.iter().any(|r| r.node.id == id && r.guide.is_none() && !r.spine)
 }
 
-/// The active document's uid and its last selected object, the one Locate Object locates.
+/// The active document's uid and its last selected object.
 fn last_selected(app: &VectorcraftApp) -> Option<(u64, Option<NodeId>)> {
     app.session.active().map(|st| (st.uid, st.selection.objects.last().copied()))
 }
