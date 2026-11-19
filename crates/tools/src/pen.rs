@@ -53,6 +53,8 @@ pub struct PenTool {
     hover: Option<Point>,
     /// The pointer at the last hover before snapping: a press picks anchors there first.
     hover_raw: Option<Point>,
+    /// The modifiers at the last hover: with Alt a press may go to the Anchor Point tool.
+    hover_mods: Mods,
     /// The incoming handle of the anchor being dragged out, as last previewed.
     in_h: Point,
     /// The first anchor, as it was when a press on it began closing the path, and its outgoing
@@ -300,6 +302,7 @@ impl Tool for PenTool {
             PointerKind::Move => {
                 self.hover = Some(p);
                 self.hover_raw = Some(ev.pos);
+                self.hover_mods = ev.mods;
                 vec![]
             }
             PointerKind::Down => {
@@ -340,7 +343,9 @@ impl Tool for PenTool {
                         }
                     }
                     // An end of another open path: the two become one, and the path is finished.
-                    if let Some((other, other_si, at_first)) = raw_other.or_else(|| open_end_at(cx, p, tol, Some((id, si)))) {
+                    if let Some((other, other_si, at_first)) =
+                        raw_other.or_else(|| if p != ev.pos { open_end_at(cx, p, tol, Some((id, si))) } else { None })
+                    {
                         self.stop();
                         let end = if at_first { "first" } else { "last" };
                         let mut params = json!({"ids": [id.0, other.0], "ends": ["last", end]});
@@ -527,11 +532,14 @@ impl Tool for PenTool {
             && self.handle.is_none()
             && let (Some((id, si, first, last, out)), Some(h)) = (self.active(cx), self.hover)
         {
-            if cx.pen_rubber_band {
-                // The segment a click at `h` adds: it leaves the last anchor along its outgoing
-                // handle and arrives at the anchor the click ends it on, with that anchor's handle.
-                let raw = self.hover_raw.unwrap_or(h);
-                let (end, end_h) = click_end(cx, id, si, first, last, raw, h);
+            // The segment a click at `h` adds, if any: it leaves the last anchor along its outgoing
+            // handle and arrives at the anchor the click ends it on, with that anchor's handle.
+            let raw = self.hover_raw.unwrap_or(h);
+            let segment =
+                if cx.pen_rubber_band || cx.measurement_labels { click_end(cx, (id, si, first, last), raw, h, self.hover_mods) } else { None };
+            if cx.pen_rubber_band
+                && let Some((end, end_h)) = segment
+            {
                 let mut bp = BezPath::new();
                 bp.move_to(last);
                 if out.distance(last) > 1e-9 || end_h.distance(end) > 1e-9 {
@@ -541,8 +549,11 @@ impl Tool for PenTool {
                 }
                 o.push(Overlay::Path { path: bp, color: cx.doc.layer_color(id), width: 1.0, dashed: false });
             }
-            if cx.measurement_labels && last.distance(h) > 1e-9 {
-                o.push(Overlay::Measure { p: h + Vec2::new(cx.tol(12.0), cx.tol(12.0)), text: cx.segment_measure_label(last, h) });
+            if cx.measurement_labels
+                && let Some((end, _)) = segment
+                && last.distance(end) > 1e-9
+            {
+                o.push(Overlay::Measure { p: h + Vec2::new(cx.tol(12.0), cx.tol(12.0)), text: cx.segment_measure_label(last, end) });
             }
         }
         o.extend_from_slice(self.snap.guides());
@@ -652,27 +663,38 @@ impl PenTool {
 /// first anchor the path closes, with that anchor's incoming handle retracted
 /// ([`PenTool::begin_close`]). On an end of another open path the two join, and the segment arrives
 /// with that end's own handle on the joining side. Anywhere else the click adds a corner anchor at `h`.
-fn click_end(cx: &ToolContext, id: NodeId, si: usize, first: Point, last: Point, raw: Point, h: Point) -> (Point, Point) {
+/// None where the click adds no segment: on the last anchor (its outgoing handle retracts), with
+/// Alt over the path (the Anchor Point tool takes the press, [`alt_converts`]), and on an end of
+/// another path that lies on the last anchor (`path.join` merges the two ends into one anchor).
+fn click_end(cx: &ToolContext, (id, si, first, last): (NodeId, usize, Point, Point), raw: Point, h: Point, m: Mods) -> Option<(Point, Point)> {
     let tol = cx.tol(5.0).max(cx.point_tol());
     let closing_end = last_anchor(cx, id, Some(si)).filter(|(_, ai)| *ai > 0).map(|_| first);
     match pick_endpoint(closing_end, last, raw, tol, Endpoint::First) {
-        Some(Endpoint::First) => return (first, first),
-        Some(Endpoint::Last) => return (h, h),
+        Some(Endpoint::First) => return Some((first, first)),
+        Some(Endpoint::Last) => return None,
         None => {}
+    }
+    if alt_converts(cx, raw, m) {
+        return None;
     }
     let raw_other = open_end_at(cx, raw, tol, Some((id, si)));
     if raw_other.is_none() && h != raw {
         match pick_endpoint(closing_end, last, h, tol, Endpoint::First) {
-            Some(Endpoint::First) => return (first, first),
-            Some(Endpoint::Last) => return (h, h),
+            Some(Endpoint::First) => return Some((first, first)),
+            Some(Endpoint::Last) => return None,
             None => {}
         }
     }
-    let joined = raw_other.or_else(|| open_end_at(cx, h, tol, Some((id, si)))).and_then(|(other, osi, at_first)| {
+    let other = raw_other.or_else(|| if h != raw { open_end_at(cx, h, tol, Some((id, si))) } else { None });
+    let joined = other.and_then(|(other, osi, at_first)| {
         let sp = cx.doc.node(other)?.path_data()?.subpaths.get(osi)?;
         if at_first { sp.anchors.first().map(|a| (a.p, a.h_in)) } else { sp.anchors.last().map(|a| (a.p, a.h_out)) }
     });
-    joined.unwrap_or((h, h))
+    match joined {
+        Some((end, _)) if end.distance(last) < 1e-6 => None,
+        Some(joined) => Some(joined),
+        None => Some((h, h)),
+    }
 }
 
 /// The first anchor of subpath `si` of path `id`.
