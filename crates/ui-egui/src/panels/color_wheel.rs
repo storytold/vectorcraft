@@ -307,9 +307,9 @@ fn strip_number(ch: Channel, hsb: [f32; 3]) -> (f64, &'static str, f64) {
 }
 
 /// The box in a `size` × `size` area: the field of channel `ch` and its strip, on HSB `hsb`, with
-/// markers when `marked`. Returns the HSB a click, a drag, a key or a screen reader's action picks,
+/// markers when `marked`. Returns what a click, a drag, a key or a screen reader's action picks,
 /// and its phase.
-fn show_box(ui: &mut Ui, ch: Channel, hsb: [f32; 3], marked: bool, size: f32) -> Option<([f32; 3], Live)> {
+fn show_box(ui: &mut Ui, ch: Channel, hsb: [f32; 3], marked: bool, size: f32) -> Option<(Picked, Live)> {
     let (z, x, y) = box_pos(ch, hsb);
     let mut pick = None;
     ui.horizontal_top(|ui| {
@@ -317,19 +317,48 @@ fn show_box(ui: &mut Ui, ch: Channel, hsb: [f32; 3], marked: bool, size: f32) ->
         let field = vec2((size - STRIP_GAP - STRIP).max(1.0), size);
         let at = |x: f32, y: f32| widgets::hsb32(box_pick(ch, z, x, y, hsb));
         if let (Some((x, y)), phase) = widgets::color_field(ui, "color-wheel-box", (tl!("Color box"), ch.field_axes()), field, (x, y), marked, &at) {
-            pick = Some((box_pick(ch, z, x, y, hsb), phase));
+            pick = Some((Picked::Field(ch, x, y), phase));
         }
         // The hue strip shows the whole spectrum; the others change only their own component.
         let track = |z: f32| widgets::hsb32(if ch == Channel::Hue { [z * 360.0, 1.0, 1.0] } else { box_pick(ch, z, x, y, hsb) });
         let (v, suffix, max) = strip_number(ch, hsb);
         let shown = SliderValue::field(v, 0.0..=max, suffix, 0);
         match widgets::channel_slider_stepped(ui, "color-wheel-strip", ch.name(), Some(shown), z, marked, vec2(STRIP, size), &track) {
-            (Some(z), phase, _) => pick = Some((box_pick(ch, z, x, y, hsb), phase)),
-            (None, _, Some(v)) => pick = Some((box_pick(ch, (v / max) as f32, x, y, hsb), Live::Released)),
+            (Some(z), phase, _) => pick = Some((Picked::Strip(ch, z), phase)),
+            (None, _, Some(v)) => pick = Some((Picked::Strip(ch, (v / max) as f32), Live::Released)),
             _ => {}
         }
     });
     pick
+}
+
+/// What a press, a drag, a key or a screen reader's action sets on the wheel or the box: the
+/// components it gives, the others coming from the HSB it is applied to ([`Picked::hsb`]).
+#[derive(Clone, Copy)]
+enum Picked {
+    /// The hue ring's hue.
+    Hue(f32),
+    /// The square's saturation and brightness.
+    Square(f32, f32),
+    /// The box's field point (x across, y down) in channel `ch`.
+    Field(Channel, f32, f32),
+    /// The box's strip value in channel `ch`.
+    Strip(Channel, f32),
+}
+
+impl Picked {
+    /// The HSB this pick gives on a color showing HSB `was`.
+    fn hsb(self, was: [f32; 3]) -> [f32; 3] {
+        match self {
+            Picked::Hue(h) => [h, was[1], was[2]],
+            Picked::Square(s, b) => [was[0], s, b],
+            Picked::Field(ch, x, y) => box_pick(ch, box_pos(ch, was).0, x, y, was),
+            Picked::Strip(ch, z) => {
+                let (_, x, y) = box_pos(ch, was);
+                box_pick(ch, z, x, y, was)
+            }
+        }
+    }
 }
 
 /// The opacity (0 to 1) the row shows for `tgt` and whether the row can set it: the selected
@@ -461,24 +490,28 @@ fn hex_shown(app: &VectorcraftApp, tgt: &Target, color: Option<&Color>) -> Strin
 }
 
 /// The hex field's id for `tgt`: it names the document, the selected objects or text characters,
-/// the appearance item, the proxy and the gradient stop or freeform point, but not the color, so a
-/// text typed for one of them is dropped when another one is targeted, even one showing the same hex.
+/// the object selected in a symbol instance, the appearance item, the proxy and the gradient stop or
+/// freeform point, but not the color, so a text typed for one of them is dropped when another one is
+/// targeted, even one showing the same hex.
 fn hex_field_id(app: &VectorcraftApp, tgt: &Target) -> impl std::hash::Hash + use<> {
     let o = Owner::of(app, tgt, Color::rgb8(0, 0, 0));
-    ("color-wheel-hex", o.doc, o.selection, o.text_selection, o.appearance_item, o.fill, o.slot)
+    let part = app.session.active().and_then(|d| d.selection.symbol_part.as_ref().map(|p| (p.instance, p.path.clone())));
+    ("color-wheel-hex", o.doc, o.selection, part, o.text_selection, o.appearance_item, o.fill, o.slot)
 }
 
 /// The Show Hex Field row for `tgt`: a `#` and a field as wide as the row, showing `shown`. A
-/// committed text goes through `color.parse`; a text it refuses shows its error in the status bar
-/// and changes nothing. True when a text was committed.
-fn hex_row(app: &mut VectorcraftApp, ui: &mut Ui, tgt: &Target, shown: &str) -> bool {
+/// committed text goes through `color.parse` as typed; a text it refuses shows its error in the
+/// status bar and changes nothing. The text's alpha is not applied when `opacity_set` (the opacity
+/// row set the opacity in this frame), so a press on that row that commits the text keeps the
+/// opacity it set. True when a text was committed.
+fn hex_row(app: &mut VectorcraftApp, ui: &mut Ui, tgt: &Target, shown: &str, opacity_set: bool) -> bool {
     let mut typed = None;
     let id = hex_field_id(app, tgt);
     ui.horizontal(|ui| {
         let t = Tokens::get(ui.ctx());
         ui.label(egui::RichText::new("#").size(15.0).color(t.text));
         let width = ui.available_width();
-        typed = widgets::text_field_named(ui, id, Some(tl!("Hex or CSS color")), Some(shown), width, 1);
+        typed = widgets::exact_text_field_named(ui, id, Some(tl!("Hex or CSS color")), shown, width);
     });
     let Some(text) = typed else { return false };
     match app.run("color.parse", json!({ "text": text })) {
@@ -490,7 +523,7 @@ fn hex_row(app: &mut VectorcraftApp, ui: &mut Ui, tgt: &Target, shown: &str) -> 
             // The document's RGB numbers, in the model a pick would store them in.
             let cmyk_doc = app.session.active().is_some_and(|d| d.doc.color_mode == ColorMode::Cmyk);
             let c = stored_rgb(&cms::active(), rgb, replaced(app, tgt, false).as_ref(), cmyk_doc);
-            let alpha = r["opacity"].as_f64().map(|o| (o / 100.0) as f32);
+            let alpha = r["opacity"].as_f64().map(|o| (o / 100.0) as f32).filter(|_| !opacity_set);
             apply_typed(app, tgt, c, alpha);
         }
         Err(e) => app.status(e),
@@ -701,8 +734,9 @@ pub(crate) fn chroma_tick(max_chroma: f64) -> f32 {
 /// Each track shows the colors its slider reaches and dims the part outside sRGB, and a tick on the
 /// C track marks the largest chroma sRGB holds at the row's L and H. The rows are gray with no
 /// color to edit and while the working RGB space is not sRGB. Returns the OKLCH a drag, an arrow
-/// key, a screen reader or a field asks for, and its phase.
-pub(crate) fn oklch_rows(app: &VectorcraftApp, ui: &mut Ui, tgt: &Target, color: Option<Color>, cms: &Cms) -> Option<([f64; 3], Live)> {
+/// key, a screen reader or a field asks for, the index of the row that set it (0 for L, 1 for C, 2
+/// for H) and its phase.
+pub(crate) fn oklch_rows(app: &VectorcraftApp, ui: &mut Ui, tgt: &Target, color: Option<Color>, cms: &Cms) -> Option<([f64; 3], usize, Live)> {
     let t = Tokens::get(ui.ctx());
     let enabled = color.is_some() && cms.rgb_is_srgb();
     let lch = match (color, pstate::<Option<(Owner, [f32; 3], [f64; 3])>>(ui.ctx(), OKLCH_MEMORY)) {
@@ -749,13 +783,13 @@ pub(crate) fn oklch_rows(app: &VectorcraftApp, ui: &mut Ui, tgt: &Target, color:
                         .on_hover_text(tl!("The largest chroma sRGB holds at this lightness and hue"));
                 }
                 if let Some(x) = dragged {
-                    out = Some((at(x), phase));
+                    out = Some((at(x), i, phase));
                 }
                 if let Some(k) = keyed {
-                    out = Some((with(i, k), Live::Released));
+                    out = Some((with(i, k), i, Live::Released));
                 }
                 if let Some(f) = widgets::plain_field_named(ui, ("color-wheel-oklch-field", i), Some(name), v, suffix, 0, field_w) {
-                    out = Some((with(i, f), Live::Released));
+                    out = Some((with(i, f), i, Live::Released));
                 }
             });
         }
@@ -774,7 +808,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         (c, _) => display_hsb(&cms, &c.unwrap_or(app.session.last_solid)),
     };
     let marked = color.is_some();
-    let mut pick: Option<([f32; 3], Live)> = None;
+    let mut pick: Option<(Picked, Live)> = None;
     ui.horizontal_top(|ui| {
         ui.vertical(|ui| {
             ui.set_width(44.0);
@@ -794,7 +828,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         let name = tl!("Saturation and brightness");
         let (field, field_phase) = widgets::color_field(&mut field_ui, "field", (name, axes), square.size(), (hsb[1], 1.0 - hsb[2]), marked, &at);
         if let Some((h, phase)) = ring.hue {
-            pick = Some(([h, hsb[1], hsb[2]], phase));
+            pick = Some((Picked::Hue(h), phase));
         }
         // A press between the square and the ring picks the closest point of the square, which
         // takes the keyboard focus.
@@ -802,10 +836,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             let field_id = widgets::id_with(field_ui.scope_id(), "field");
             field_ui.memory_mut(|m| m.request_focus(field_id));
             let f = |v: f32, lo: f32, len: f32| ((v - lo) / len).clamp(0.0, 1.0);
-            pick = Some(([hsb[0], f(p.x, square.left(), square.width()), 1.0 - f(p.y, square.top(), square.height())], phase));
+            pick = Some((Picked::Square(f(p.x, square.left(), square.width()), 1.0 - f(p.y, square.top(), square.height())), phase));
         }
         if let Some((x, y)) = field {
-            pick = Some(([hsb[0], x, 1.0 - y], field_phase));
+            pick = Some((Picked::Square(x, 1.0 - y), field_phase));
         }
     });
     if app.ui.color_wheel.vision {
@@ -843,20 +877,28 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
         }
     }
+    let mut committed = false;
     if let Some(hex) = hex {
         ui.add_space(4.0);
-        // A pick or an OKLCH edit read in the frame that commits a text was made on the color
-        // before the text, so it is not applied.
-        if hex_row(app, ui, &tgt, &hex) {
-            return;
-        }
+        committed = hex_row(app, ui, &tgt, &hex, opacity_set);
     }
-    // A pick or an OKLCH edit read in the frame of an opacity edit goes to the stops as that edit
-    // left them, so the stop keeps both.
-    let tgt = if opacity_set { wheel_target(app, ui) } else { tgt };
+    // A pick or an OKLCH edit read in the frame of an opacity edit or of a text commit goes to the
+    // target as that edit or text left it, so a stop keeps both. After a text commit that changed
+    // the color, the components the pick or the row does not set come from the color the text
+    // applied; a text that left the color as it was keeps the remembered hue.
+    let tgt = if opacity_set || committed { wheel_target(app, ui) } else { tgt };
+    let now = tgt.color().filter(|c| committed && Some(*c) != color);
     let behind = super::alt_held(ui);
     let cmyk_doc = app.session.active().is_some_and(|d| d.doc.color_mode == ColorMode::Cmyk);
-    if let Some((lch, phase)) = picked_lch {
+    if let Some((asked, row, phase)) = picked_lch {
+        let lch = match now {
+            Some(c) => {
+                let mut lch = oklab::to_oklch(cms.display_rgb(&c));
+                lch[row] = asked[row];
+                lch
+            }
+            None => asked,
+        };
         let (srgb, _) = oklab::from_oklch(lch[0], lch[1], lch[2]);
         let c = stored_srgb(&cms, srgb, replaced(app, &tgt, behind).as_ref(), cmyk_doc);
         apply(app, &tgt, c, phase, behind);
@@ -865,7 +907,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
         return;
     }
-    let Some((hsb, phase)) = pick else { return };
+    let Some((picked, phase)) = pick else { return };
+    let hsb = picked.hsb(now.map_or(hsb, |c| display_hsb(&cms, &c)));
     let c = stored(&cms, hsb, replaced(app, &tgt, behind).as_ref(), cmyk_doc);
     apply(app, &tgt, c, phase, behind);
     if !behind {

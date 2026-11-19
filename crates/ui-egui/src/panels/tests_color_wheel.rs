@@ -803,20 +803,23 @@ fn oklch_sliders_need_srgb_as_the_working_space() {
     assert_eq!(settings.sliders, Sliders::Oklch);
     set(&mut settings, &json!({"sliders": "none"}), &p3).unwrap();
     assert_eq!(settings.sliders, Sliders::None, "the rows can be hidden in any working space");
+    let asked = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let seen = asked.clone();
     let mut h = Harness::builder().with_size(vec2(260.0, 200.0)).build_ui_state(
         move |ui, app: &mut VectorcraftApp| {
             let tgt = super::color::wheel_target(app, ui);
             let color = tgt.color();
-            let _ = oklch_rows(app, ui, &tgt, color, &p3);
+            if oklch_rows(app, ui, &tgt, color, &p3).is_some() {
+                seen.store(true, std::sync::atomic::Ordering::Relaxed);
+            }
         },
         app(json!("#ff0000")),
     );
     h.run_steps(2);
     assert!(oklch_slider(&h, "Lightness").accesskit_node().is_disabled());
-    let undo = undo_len(h.state());
     let rail = oklch_slider(&h, "Lightness").rect();
     click(&mut h, on_rail(rail, 0.2), Modifiers::NONE);
-    assert_eq!(undo_len(h.state()), undo, "a gray row picks nothing");
+    assert!(!asked.load(std::sync::atomic::Ordering::Relaxed), "a gray row asks for no OKLCH");
 }
 
 /// The rows show what they asked for while the color displays as it did, and the color's own
@@ -860,4 +863,19 @@ fn ui_color_wheel_sets_and_reads_the_sliders() {
     let e = app.run("ui.colorWheel", json!({"view": "wheel", "sliders": "hsl"})).unwrap_err();
     assert_eq!(e, "`sliders` must be none or oklch");
     assert_eq!(app.ui.color_wheel.view, crate::panels::color_wheel::View::Box, "an error changes nothing");
+}
+
+/// An explicit null for any `ui.colorWheel` key keeps that key's value, as leaving the key out does,
+/// and the other keys of the same call still apply.
+#[test]
+fn ui_color_wheel_keeps_a_key_given_as_null() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let set = json!({"view": "box", "channel": "red", "opacity": true, "hexField": true, "sliders": "oklch", "vision": true});
+    let all = app.run("ui.colorWheel", set.clone()).unwrap();
+    assert_eq!(all, set);
+    for key in ["view", "channel", "opacity", "hexField", "sliders", "vision"] {
+        assert_eq!(app.run("ui.colorWheel", json!({ key: null })).unwrap(), all, "{key}: null");
+    }
+    let got = app.run("ui.colorWheel", json!({"view": null, "channel": "blue", "opacity": null, "hexField": false})).unwrap();
+    assert_eq!(got, json!({"view": "box", "channel": "blue", "opacity": true, "hexField": false, "sliders": "oklch", "vision": true}));
 }
