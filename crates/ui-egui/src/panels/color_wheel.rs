@@ -846,10 +846,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             picked_hsl = hsl_rows(app, ui, &tgt, color, &cms);
         }
     }
-    // A row drag whose rows were hidden or replaced (`ui.colorWheel {sliders}`) reports no release:
-    // its preview is kept as one undo step and the interaction ends.
+    // A row drag whose rows were hidden or replaced (`ui.colorWheel {sliders}`), or turned gray
+    // (OKLCH rows after the working RGB space stops being sRGB), reports no release: its preview is
+    // kept as one undo step and the interaction ends.
     let live = pstate::<Option<Sliders>>(ui.ctx(), ROWS_LIVE);
-    if live.is_some_and(|rows| rows != app.ui.color_wheel.sliders) {
+    if live.is_some_and(|rows| rows != app.ui.color_wheel.sliders || (rows == Sliders::Oklch && !cms.rgb_is_srgb())) {
         if app.session.in_interaction()
             && let Err(e) = app.session.commit_interaction()
         {

@@ -749,6 +749,49 @@ fn oklch_sliders_are_gray_after_the_working_space_changes() {
     assert!(oklch_slider(&h, "Lightness").accesskit_node().is_disabled());
 }
 
+/// A drag on an OKLCH row during which Edit › Color Settings picks a working RGB space other than
+/// sRGB keeps the color the drag previewed as one undo step and leaves no interaction open, though
+/// the gray rows report no release.
+#[test]
+fn a_working_space_change_during_an_oklch_drag_keeps_its_color_as_one_undo_step() {
+    const CHILD: &str = "VECTORCRAFT_TEST_COLOR_WHEEL_P3_DRAG";
+    if std::env::var_os(CHILD).is_none() {
+        // Color settings are process-wide: change them in a separate test process.
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "panels::tests_color_wheel::a_working_space_change_during_an_oklch_drag_keeps_its_color_as_one_undo_step",
+                "--nocapture",
+            ])
+            .env(CHILD, "1")
+            .output()
+            .unwrap();
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            output.status.success() && stdout.contains("test result: ok. 1 passed; 0 failed;"),
+            "isolated working space test failed:\n{stdout}\n{}",
+            String::from_utf8_lossy(&output.stderr),
+        );
+        return;
+    }
+    let mut h = oklch_harness(app(json!("#ff8000")));
+    let rail = oklch_slider(&h, "Lightness").rect();
+    let undo = undo_len(h.state());
+    press(&mut h, on_rail(rail, 0.5), true, Modifiers::NONE);
+    for _ in 0..2 {
+        h.event(Event::PointerMoved(on_rail(rail, 0.25)));
+        h.run_steps(1);
+    }
+    assert!(h.state().session.in_interaction(), "the drag previews");
+    let previewed = fill(h.state());
+    h.state_mut().run("edit.colorSettings", json!({"rgb": cms::DISPLAY_P3})).unwrap();
+    h.run_steps(2);
+    assert!(oklch_slider(&h, "Lightness").accesskit_node().is_disabled());
+    press(&mut h, on_rail(rail, 0.25), false, Modifiers::NONE);
+    assert!(!h.state().session.in_interaction(), "the interaction ended");
+    assert_eq!((fill(h.state()), undo_len(h.state())), (previewed, undo + 1));
+}
+
 /// A CMYK fill's L, C and H are those of its display color, not of its naive separation.
 #[test]
 fn a_cmyk_fills_oklch_is_that_of_its_display_color() {
@@ -1029,7 +1072,8 @@ fn ui_color_wheel_sets_and_reads_the_sliders() {
     assert_eq!(app.run("ui.colorWheel", json!({})).unwrap()["sliders"], json!("none"));
     assert_eq!(app.run("ui.colorWheel", json!({"sliders": "hwb"})).unwrap_err(), "`sliders` must be none, oklch or hsl");
     let got = app.run("ui.colorWheel", json!({"sliders": "oklch"})).unwrap();
-    assert_eq!(got, json!({"view": "box", "channel": "red", "sliders": "oklch"}));
+    let want = json!({"view": "box", "channel": "red", "harmony": false, "harmonyRule": "complementary", "vision": false, "sliders": "oklch"});
+    assert_eq!(got, want);
     let e = app.run("ui.colorWheel", json!({"view": "wheel", "sliders": "hwb"})).unwrap_err();
     assert_eq!(e, "`sliders` must be none, oklch or hsl");
     assert_eq!(app.ui.color_wheel.view, crate::panels::color_wheel::View::Box, "an error changes nothing");
