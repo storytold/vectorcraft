@@ -26,6 +26,7 @@ pub(crate) use export::{
     EXPORT_SELECTION, export_files, exported_with_notes, file_url, open_in_app, open_original, reveal_path, run_to_file, save_command_output_named,
     selection_path, take_selection,
 };
+pub(crate) use open::asks_first;
 pub(crate) use open::report_installed;
 pub(crate) use open::{EXPORT_PRESETS, import_presets, open_notes, open_with_on, opened, opened_after_notice, show_opened};
 pub use open::{
