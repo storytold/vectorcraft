@@ -7891,6 +7891,11 @@ breakText	Glyphs	Глифи
 	Botanical Sprig	Ботаническо клонче
 	Facet Diamond	Фасетиран ромб
 	Tide Crest	Гребен на вълна
+	Paint	Боя
+	Flat Sweep	Плосък замах
+	Dry Drag	Сухо влачене
+	Loaded Stroke	Плътен мазок
+	Fan Sweep	Ветрилообразен замах
 @msg	`at` must be "start" or "end"	`at` трябва да е "start" или "end"
 @msg	give exactly one of `through` and `toward`	посочете точно едно от `through` и `toward`
 @msg	no arc fits these points: two are the same or all three lie on one line	няма дъга през тези точки: две съвпадат или и трите лежат на една права

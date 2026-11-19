@@ -8589,6 +8589,11 @@ breakText	Glyphs	Glif
 	Botanical Sprig	Ranting Botani
 	Facet Diamond	Berlian Berfaset
 	Tide Crest	Puncak Gelombang
+	Paint	Cat
+	Flat Sweep	Sapuan Datar
+	Dry Drag	Tarikan Kering
+	Loaded Stroke	Sapuan Tebal
+	Fan Sweep	Sapuan Kipas
 @msg	`at` must be "start" or "end"	`at` harus "start" atau "end"
 @msg	give exactly one of `through` and `toward`	berikan tepat satu dari `through` dan `toward`
 @msg	no arc fits these points: two are the same or all three lie on one line	tidak ada busur yang cocok dengan titik-titik ini: dua titik sama atau ketiganya segaris
