@@ -1874,6 +1874,17 @@ pub(crate) fn menu_item_sample(ui: &Ui, slot: egui::Rect, family: &str, on_white
     }
 }
 
+/// A sample of `family` in `style` drawn in `slot`: `text` set in it (a generic sample when it is
+/// `None` or the font lacks its characters), filling the slot's height (the Retype panel's rows).
+/// With `on_white` (Show samples on white), the sample is drawn in dark type on a white slot.
+pub(crate) fn styled_sample(ui: &Ui, slot: egui::Rect, family: &str, style: &str, text: Option<&str>, on_white: bool) {
+    let ink = sample_ink(on_white, Tokens::get(ui.ctx()).text);
+    let area = sample_area(ui, slot, ink, PAPER_INSET);
+    if let Some(tex) = sample_texture(ui.ctx(), family, Some(style), text, area.height()) {
+        paint_sample(ui, area, &tex, ink);
+    }
+}
+
 /// What a sample is drawn on with Show samples on white.
 pub(crate) const SAMPLE_PAPER: Color32 = Color32::WHITE;
 
@@ -1993,6 +2004,23 @@ fn sample_texture(ctx: &egui::Context, family: &str, style: Option<&str>, sample
                 let tex = img.map(texture);
                 s.ready.insert(key, tex.clone());
                 return tex;
+            }
+            if s.pending.len() >= MAX_PENDING {
+                // Finished samples join the ready ones, so samples nobody asks for again (their
+                // text or size changed) do not keep new ones from starting.
+                let mut done = vec![];
+                for (k, rx) in &s.pending {
+                    match rx.try_recv() {
+                        Err(std::sync::mpsc::TryRecvError::Empty) => {}
+                        Ok(img) => done.push((k.clone(), img)),
+                        Err(std::sync::mpsc::TryRecvError::Disconnected) => done.push((k.clone(), None)),
+                    }
+                }
+                for (k, img) in done {
+                    s.pending.remove(&k);
+                    let tex = img.map(|img| ctx.load_texture(format!("font-sample-{}-{}", k.0, k.3), img, egui::TextureOptions::LINEAR));
+                    s.ready.insert(k, tex);
+                }
             }
             if s.pending.len() >= MAX_PENDING || !s.take_budget(ctx) {
                 return None;
