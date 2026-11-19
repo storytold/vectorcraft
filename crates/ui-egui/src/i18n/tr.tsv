@@ -480,6 +480,9 @@ font-technology	Variable	Değişken
 	Choose…	Seç…
 	Circle	daire
 	Circle Tool	Daire Aracı
+	Curvature Circle Tool	Eğrilik Çemberi Aracı
+	Cusp	Sivri nokta
+	Straight segment	Düz segment
 	Circle too large	Daire çok büyük
 	Classic Defaults	Klasik Varsayılanlar
 	Clean Up…	Temizleme…
@@ -586,6 +589,9 @@ font-technology	Variable	Değişken
 	Box Channel	Kutu Kanalı
 	Color box	Renk kutusu
 	Color Wheel Options	Renk Tekerleği Seçenekleri
+	Show Harmony	Uyumu Göster
+	Harmony Rule	Uyum Kuralı
+	Harmony color	Uyum rengi
 	Color Type:	Renk Türü:
 	Color:	Renk:
 	Colorize	Renklendir
@@ -1009,10 +1015,25 @@ font-technology	Variable	Değişken
 	Duplicate Symbol	Yinelenen Sembol
 	Duplicate {kind} Style	Çoğaltılmış {kind} Stili
 	Dutch	Hollandaca
+	PSD Import Options	PSD İçe Aktarma Seçenekleri
+	Place PSD	PSD Yerleştir
+	Convert Layers to Objects	Katmanları Nesnelere Dönüştür
+	Import Hidden Layers	Gizli Katmanları İçe Aktar
+	Flatten Layers to a Single Image	Katmanları Tek Görüntüde Düzleştir
+	Import Slices	Dilimleri İçe Aktar
 	DXF Import Options	DXF İçe Aktarma Seçenekleri
 	DXF Info	DXF Bilgisi
 	DXF Options	DXF Seçenekleri
 	DXF Options Dialog	DXF Seçenekleri İletişim Kutusu
+	HP-GL Options	HP-GL Seçenekleri
+	HP-GL Options Dialog	HP-GL Seçenekleri İletişim Kutusu
+	Curve Tolerance:	Eğri Toleransı:
+	Origin:	Başlangıç Noktası:
+	Pens:	Kalemler:
+	One Pen per Color	Her Renk İçin Bir Kalem
+	Pen Table	Kalem Tablosu
+	Draw the Nearest Path Next	Sonra En Yakın Yolu Çiz
+	Draw Inner Paths First	Önce İç Yolları Çiz
 	e.g. 1-3, 5	örneğin 1-3, 5
 	Each page prints as one image, at the document's raster effects resolution.	Her sayfa, belgenin tarama efektleri çözünürlüğünde tek bir görüntü olarak yazdırılır.
 	Earth Tones	Toprak Tonları
@@ -1237,6 +1258,15 @@ font-technology	Variable	Değişken
 	Shading Color	Gölgeleme Rengi
 	Black Overprint	Siyah Üst Baskı
 	Draw Hidden Faces	Gizli Yüzleri Çiz
+	Map Art…	Çizimi Eşle…
+	Map Art	Çizimi Eşle
+	First Surface	İlk Yüzey
+	Previous Surface	Önceki Yüzey
+	Next Surface	Sonraki Yüzey
+	Last Surface	Son Yüzey
+	Scale to Fit	Sığacak Şekilde Ölçekle
+	Shade Artwork	Çizimi Gölgelendir
+	Invisible Geometry	Görünmez Geometri
 	Eyedropper	Damlalık
 	Sample Color from Screen	Ekrandan Örnek Renk
 	This system has no screen color sampler	Bu sistemin ekran rengi örnekleyicisi yok
@@ -1300,6 +1330,20 @@ font-technology	Variable	Değişken
 @msg	no match of `find` at bytes {_1}..{_2} of object {_3}	{_3} nesnesinin {_1}..{_2} baytlarında `find` eşleşmesi yok
 	Find Font	Yazı Tipi Bul
 	Find Font…	Yazı Tipi Bul…
+	Retype	Yeniden Yaz
+	Find Matching Fonts	Eşleşen Yazı Tiplerini Bul
+	Find more font matches	Daha fazla eşleşen yazı tipi bul
+	Type your text to preview	Önizleme için metninizi yazın
+	Select outlined text, then Find Matching Fonts.	Anahatlara dönüştürülmüş metni seçin, ardından Eşleşen Yazı Tiplerini Bul komutunu seçin.
+	No font matches the selected shapes.	Seçili şekillerle eşleşen yazı tipi yok.
+	Shapes past the first 2,048, or more than 16 groups deep, were not compared.	İlk 2.048 şeklin ötesindeki veya 16 gruptan daha derindeki şekiller karşılaştırılmadı.
+	Reset Retype Panel	Yeniden Yaz Panelini Sıfırla
+	List Matching Fonts	Eşleşen Yazı Tiplerini Listele
+	Retype Preview	Yeniden Yaz Paneli Önizlemesi
+@msg	`count` must be a whole number from 1 to 96	`count` 1 ile 96 arasında bir tam sayı olmalıdır
+@msg	`size` must be small, medium or large	`size` small, medium veya large olmalıdır
+@msg	`text` must be a string of at most 100 characters	`text` en fazla 100 karakterlik bir dize olmalıdır
+@msg	Retype: select outlined text (paths or compound paths)	Yeniden Yaz: anahatlara dönüştürülmüş metni seçin (yollar veya bileşik yollar)
 	Find Next	Sonrakini Bul
 	Find Objects	Nesneleri Bul
 	Compare with Image	Görüntüyle Karşılaştır
@@ -1348,6 +1392,17 @@ font-technology	Variable	Değişken
 	Largest:	En büyük:
 	Direction:	Yön:
 	Symbolism Tools Options	Sembolizm Araçları Seçenekleri
+	Tool:	Araç:
+	Symbol Set Density	Sembol Seti Yoğunluğu
+	Symbol Sprayer Options	Sembol Püskürtücü Seçenekleri
+	Scrunch:	Sıkıştırma:
+	Spin:	Döndürme:
+	Screen:	Saydamlaştırma:
+	Stain:	Renklendirme:
+	Symbol Sizer Options	Sembol Boyutlandırıcı Seçenekleri
+	Proportional Resizing	Orantılı Yeniden Boyutlandırma
+	Resizing Affects Density	Yeniden Boyutlandırma Yoğunluğu Etkiler
+	Show Brush Size and Intensity	Fırça Boyutunu ve Yoğunluğunu Göster
 	Symbol Set Density:	Sembol Seti Yoğunluğu:
 	Flat Image	Düz Resim
 	Flat Logo	Düz Logo
@@ -1578,6 +1633,8 @@ font-technology	Variable	Değişken
 	More Options	Daha Fazla Seçenek
 	Show Properties Panel	Özellikler Panelini Göster
 	Hide Corner Widget	Köşe Widget'ını Gizle
+	Hide Shape Widgets	Şekil Widget'larını Gizle
+	Show Shape Widgets	Şekil Widget'larını Göster
 	Hide Corner Widget for angles greater than	Şu değerden daha büyük açılar için Köşe Widget'ını gizle:
 	Hide Edges	Kenarları Gizle
 	Hide Gradient Annotator	Degrade Açıklayıcıyı Gizle
@@ -2039,6 +2096,15 @@ font-technology	Variable	Değişken
 	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Kinsoku Seti
 	Kinsoku Shori Type	Kinsoku Shori Türü
+	Kinsoku Shori Settings…	Kinsoku Shori Ayarları…
+	Kinsoku Shori Settings	Kinsoku Shori Ayarları
+	Kinsoku Sets	Kinsoku Setleri
+	Kinsoku Set Base	Kinsoku Seti Temeli
+	Based on:	Temel:
+	Cannot Start Line	Satır Başlatamaz
+	Cannot End Line	Satır Bitiremez
+	Hanging Punctuation	Asılı Noktalama
+	Inseparable Characters	Ayrılmaz Karakterler
 	Push In First	Önce İçeri
 	Push Out First	Önce Dışarı
 	Push Out Only	Yalnızca Dışarı
@@ -2147,6 +2213,7 @@ font-technology	Variable	Değişken
 	Pressure	Basınç
 	Tilt	Eğim
 	Bearing	Yön
+	Stylus Wheel	Kalem tekerleği
 	Shape:	Şekil:
 	Bristle Length:	Kıl Uzunluğu:
 	Bristle Density:	Kıl Yoğunluğu:
@@ -2415,6 +2482,8 @@ shape	Open	Açık
 	Overprint and Transparency Flattener Options	Üst Baskı ve Asetat Düzleştirici Seçenekleri
 	Custom…	Özel…
 	Custom Transparency Flattener Options	Özel Şeffaflık Düzleştirici Seçenekleri
+	The PDF preset keeps the flattener preset but not the Custom… settings.	PDF ön ayarı düzleştirici ön ayarını korur, ancak Özel… ayarlarını korumaz.
+	PDF 1.3 files clip rasterized areas to their regions, and Overprint sets whether overprints are kept.	PDF 1.3 dosyaları rasterleştirilmiş alanları kendi bölgelerine kırpar ve Üst baskı, üst baskıların korunup korunmayacağını belirler.
 	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	EPS'de alfa şeffaflığı yoktur ve Üst baskılar, üst baskıların korunup korunmayacağını belirler.
 	Overprint Black…	Üst Baskı Siyah…
 	Overprint Fill	Üst Baskı Dolgusu
@@ -2486,6 +2555,8 @@ shape	Open	Açık
 	PDF/A files carry their own output intent.	PDF/A dosyaları kendi çıktı amaçlarını taşır.
 	PDF/X-1a files are CMYK: every colour is converted to the destination (blank: the output intent's CMYK profile), untagged.	PDF/X-1a dosyaları CMYK'dir: her renk hedefe dönüştürülür (boş: çıktı hedefinin CMYK profili), etiketsiz.
 	Pen Tool	Kalem Aracı
+	Quick Pen Tool	Hızlı Kalem Aracı
+	Quick Pen	Hızlı Kalem
 	Pencil	Kalem
 	Pencil Tool	Kurşun Kalem Aracı
 	per slice	dilim başına
@@ -2923,6 +2994,9 @@ digits	Malayalam	Malayalam
 	Rotate View to Selection	Görünümü Seçime Döndür
 	Reset the rows to the artwork's colors	Satırları resmin renklerine göre sıfırlayın
 	Color Theme Picker	Renk Teması Seçici
+	Undo Changes	Değişiklikleri Geri Al
+	Redo Changes	Değişiklikleri Yinele
+@msg	Recolor Artwork is not open	Resmi Yeniden Renklendir açık değil
 	Click or drag across the art to pick its colors; Shift adds more	Renklerini almak için resme tıklayın veya üzerinde sürükleyin; Shift daha fazlasını ekler
 	Prominent Colors	Belirgin Renkler
 	Save All Colors	Tüm Renkleri Kaydet
@@ -2977,6 +3051,7 @@ digits	Malayalam	Malayalam
 	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	Canlı bir dikdörtgenin özellikleri dört köşenin tümü için tek bir Köşe Yarıçapı alanı gösterir; kapalıyken her köşenin kendi alanı olur.
 	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	Dönüştür panelindeki düzenlemelerin neyi dönüştürdüğü: nesneyi, desen döşemelerini veya ikisini; Varsayılan, Desen Döşemelerini Dönüştür'ü izler.
 	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	Bir sembol örneği seçiliyken Dönüştür paneli, sembolün kayıt noktasını referans noktası olarak kullanır.
+	Drawing a rectangle, ellipse, polygon, star or line opens the Transform panel if it is closed.	Dikdörtgen, elips, çokgen, yıldız veya çizgi çizmek, kapalıysa Dönüştür panelini açar.
 	Darkens the canvas outside the artboards while the Artboard tool is active.	Çalışma Yüzeyi aracı etkinken çalışma yüzeylerinin dışındaki tuvali karartır.
 	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	Çalışma Yüzeyi Dışındaki Bölgeyi Karart açıkken, Çalışma Yüzeyi aracıyla sürüklerken çalışma yüzeylerinin dışındaki alan karanlık kalır.
 	How near, in pixels, the pointer must be to an object, anchor or handle for a click to select it.	Bir tıklamanın nesneyi, bağlantı noktasını veya tutamacı seçmesi için işaretçinin ona piksel cinsinden ne kadar yakın olması gerektiği.
@@ -3052,6 +3127,55 @@ digits	Malayalam	Malayalam
 	Edit type set in fonts that aren't available?	Mevcut olmayan yazı tiplerindeki metin düzenlensin mi?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Tuvalde her dilimin numarasını sol üst köşesindeki bir kutuda gösterir; kapalıyken dilimlerin dış çizgileri görünmeye devam eder.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Kullanıcı ve nesne dilimlerinin dış çizgilerinin ve numara kutularının rengi; otomatik dilimler bu rengin daha soluk bir tonunu kullanır.
+	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	Belge Kurulumu'nun dili İngilizce: ABD olduğu sürece yeni metin bu dili alır; bir belgede zaten bulunan metin kendi dilini korur.
+	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	Tireleme açık paragraflarda listedeki bir sözcük yalnızca içine yazılan tirelerden bölünür, tire yoksa hiç bölünmez; dili ve büyük/küçük harf durumu fark etmez.
+	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	Masaüstü sürümünde bu klasördeki .wasm eklentileri başlangıçta ve burada yeni bir klasörle Tamam'a tıkladığınızda yüklenir, Güvenli Mod hariç; web sürümü bunları yüklemez.
+	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	İlk geçici disk seçimi: Startup, None veya bir klasör yolu; VectorCraft bunu saklar ancak henüz geçici disk kullanmaz.
+	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	İkinci geçici disk seçimi: Startup, None veya bir klasör yolu; VectorCraft bunu saklar ancak henüz geçici disk kullanmaz.
+	How light or dark the interface is.	Arayüzün ne kadar açık veya koyu olduğu.
+	The set of colors the interface is drawn in.	Arayüzün çizildiği renk kümesi.
+	The color of controls that are on, chosen or focused; the menu is dimmed while the Color Scheme has an accent of its own.	Açık, seçili veya odaklanmış denetimlerin rengi; Renk Şeması kendi vurgu rengine sahipken menü soluk görünür.
+	The color of the canvas around the artboards; Match User Interface Brightness takes it from Brightness. Outline view always shows it white.	Çalışma yüzeylerinin çevresindeki kanvasın rengi; Kullanıcı Arayüzü Parlaklığını Eşleştir bu rengi Parlaklık ayarından alır. Taslak görünümü onu her zaman beyaz gösterir.
+	A panel opened from its icon closes when you press Esc or click outside it; off, it stays open until you click an icon.	Simgesinden açılan bir panel, Esc tuşuna bastığınızda veya dışına tıkladığınızda kapanır; kapalıyken bir simgeye tıklayana kadar açık kalır.
+	Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them.	Araç çubuğunda her araç grubunun adını araçlarının üstünde gösterir; kapalıyken gruplar arada hiçbir şey olmadan birbirini izler.
+	From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.	Bundan sonra açtığınız veya oluşturduğunuz belgeler sekme olarak açılır; kapalıyken her biri kayan bir pencerede açılır. Zaten açık olan belgeler yerinde kalır.
+	Makes the document tabs taller and their names larger.	Belge sekmelerini daha yüksek, adlarını daha büyük yapar.
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own.	Bir sonraki başlatmadan itibaren sistem, VectorCraft'ın aksi halde kendi başlık çubuğunu çizeceği yerde pencerenin başlık çubuğunu çizer.
+	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on.	Bir sonraki başlatmadan itibaren VectorCraft, masaüstünün çizeceği yerlerde bile pencerenin başlık çubuğunu çizer; Sistem Başlık Çubuğu açıksa çizmez.
+	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	Arayüzü büyütür veya küçültür; kanvastaki çizim aynı yakınlaştırmada boyutunu korur.
+	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	VectorCraft'ın çizdiği araç işaretçileri Kullanıcı Arayüzü Ölçeklendirme ile büyüyüp küçülür; kapalıyken boyutlarını korur.
+	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	Arayüzün dili; Otomatik, sistemin dilini kullanır. İletişim kutusu, bir dil seçer seçmez o dile geçer.
+	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	Animasyonlu Yakınlaştırma yalnızca bu açıkken çalışır; kapalıyken Animasyonlu Yakınlaştırma soluk görünür ve yakınlaştırma animasyonlu olmaz.
+	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	Tekerlekle yakınlaştırma yumuşakça kayar, Yakınlaştırma Aracı ise yana sürüklerken veya basılı tutarken yakınlaştırır; kapalıyken Yakınlaştırma Aracı sürüklediğiniz alana yakınlaştırır.
+	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	Bir sonraki başlatmadan itibaren masaüstü sürümü bu tür grafik işlemciyle çizer; Otomatik, ekranı süren işlemciyi tercih eder. Web sürümü bunu kullanmaz.
+	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	Her belgenin sakladığı en fazla geri alma adımı sayısı; daha düşük bir sayı, Tamam'a tıkladığınızda en eski adımları kaldırır. Adımlar çok fazla bellek kullanırsa daha erken de gidebilir.
+	Shows the artwork changing while you drag; off, outlines follow the drag and the artwork changes when you release. A ruler guide always moves as you drag.	Sürüklerken çizimin değişmesini gösterir; kapalıyken sürüklemeyi ana hatlar izler ve çizim bıraktığınızda değişir. Cetvel kılavuzu sürüklerken her zaman hareket eder.
+	How many worker threads draw the artwork; -1 uses one fewer than the cores VectorCraft may use, at most 8, and 0 uses none. The web version always uses none.	Çizimi kaç çalışan iş parçacığının çizdiği; -1, VectorCraft'ın kullanabileceği çekirdeklerden bir eksiğini, en fazla 8'i kullanır, 0 ise hiçbirini. Web sürümü hiçbir zaman kullanmaz.
+	From the next start on a Wayland desktop, X11 (XWayland) opens the window through XWayland; the other choices do so only when a pen is attached.	Bir sonraki başlatmadan itibaren Wayland masaüstünde X11 (XWayland), pencereyi XWayland üzerinden açar; diğer seçenekler bunu yalnızca bir kalem takılıyken yapar.
+	From the next start, the desktop version shows frames without waiting for the display's refresh, at most 240 a second; off, the display paces them.	Bir sonraki başlatmadan itibaren masaüstü sürümü kareleri ekranın yenilenmesini beklemeden, saniyede en fazla 240 kare gösterir; kapalıyken kare hızını ekran belirler.
+	The larger budget raises each object filter run's base instructions fivefold and keeps the same allowance per input byte; heavy filters, live effects, exporters and importers keep their own limits.	Daha büyük bütçe, bir nesne filtresinin her çalıştırmasındaki temel talimatları beş katına çıkarır ve giriş baytı başına aynı payı korur; ağır filtreler, canlı efektler, dışa aktarıcılar ve içe aktarıcılar kendi sınırlarını korur.
+	Converts the artwork and artboards on the canvas to the display's color profile where the system does not already do so; off, the canvas is drawn in sRGB.	Sistemin henüz yapmadığı yerde kanvastaki çizimi ve çalışma yüzeylerini ekranın renk profiline dönüştürür; kapalıyken kanvas sRGB olarak çizilir.
+	On the desktop, a save to a file is written in the background while you keep editing; off, you wait until it is written.	Masaüstü sürümünde bir dosyaya kaydetme, siz düzenlemeye devam ederken arka planda yazılır; kapalıyken yazılana kadar beklersiniz.
+	On the desktop, exports to files and packages are written in the background while you keep editing, except 3D exports; off, you wait for them.	Masaüstü sürümünde dosyalara dışa aktarmalar ve paketler, 3D dışa aktarmalar hariç, siz düzenlemeye devam ederken arka planda yazılır; kapalıyken onları beklersiniz.
+	Every few minutes, keeps a recovery copy of each document with unsaved changes made since its last copy; off, no timed copies are made.	Birkaç dakikada bir, son kopyasından beri kaydedilmemiş değişikliği olan her belgenin kurtarma kopyasını alır; kapalıyken zamanlı kopya alınmaz.
+	How many minutes pass between recovery copies while Automatically Save Recovery Data is on.	Kurtarma Verilerini Otomatik Olarak Kaydet açıkken kurtarma kopyaları arasında kaç dakika geçtiği.
+	On the desktop, the folder recovery copies are kept in; leave it blank for VectorCraft's own folder. The web version keeps them in the browser.	Masaüstü sürümünde kurtarma kopyalarının tutulduğu klasör; VectorCraft'ın kendi klasörü için boş bırakın. Web sürümü onları tarayıcıda tutar.
+	No timed recovery copies are made of documents with more than 20,000 objects.	20.000'den fazla nesnesi olan belgelerin zamanlı kurtarma kopyası alınmaz.
+	Open Recent Files and the Home screen list at most this many recent files; 0 lists none, and VectorCraft still remembers up to 30.	Son Dosyaları Aç ve Ana Sayfa ekranı en fazla bu kadar son dosyayı listeler; 0 hiçbirini listelemez ve VectorCraft yine de 30'a kadarını hatırlar.
+	When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.	Bir belge açılırken, kayıtlı önizlemesini gösteren bağlı bir EPS görüntüsü EPS dosyasını yeniden okumak yerine bu önizlemeyi korur; değişen dosyalar yine Bağlantıları Güncelle ayarını izler.
+	In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.	Piksel Önizlemesi'nde görüntüler yumuşatılarak çizilir; kapalıyken pikselleri keskin kenarlı görünür. Piksel Önizlemesi dışında görüntüler her zaman yumuşatılır.
+	When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.	Bağlı bir dosya değiştiğinde Otomatik olarak onu yeniden okur, Değiştirildiğinde Sor önce size sorar, Manuel olarak ise onu olduğu gibi bırakıp durum çubuğunda bir not gösterir.
+	On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.	Masaüstü sürümünde Şablondan yeni… ve Şablon Olarak Kaydet… komutlarının başladığı klasör; belgeler klasörünüzdeki VectorCraft Templates için boş bırakın.
+	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	Orijinali Düzenle, bağlı bir dosyayı sistemin o tür için varsayılan uygulamasında açar; kapalıyken bağlı bir raster görüntü, kuruluysa PhotoCraft'ta açılır.
+	A file saved by an older VectorCraft version opens with [Converted] after its name, and Save asks where to save it; off, Save replaces the file.	VectorCraft'ın eski bir sürümüyle kaydedilmiş bir dosya, adının ardında [Converted] ile açılır ve Kaydet nereye kaydedileceğini sorar; kapalıyken Kaydet dosyanın üzerine yazar.
+	VectorCraft files and templates are saved compressed, so they are smaller, unless a save says otherwise; saves for versions that cannot open compressed files stay uncompressed.	VectorCraft dosyaları ve şablonları, bir kayıt aksini belirtmedikçe sıkıştırılarak ve böylece daha küçük kaydedilir; sıkıştırılmış dosyaları açamayan sürümler için yapılan kayıtlar sıkıştırılmadan kalır.
+	Copy and Cut also give other apps SVG code of the art; on the desktop, the code is not copied as text when the art embeds more than 1 MiB of images.	Kopyala ve Kes, çizimin SVG kodunu da diğer uygulamalara verir; masaüstünde, çizim 1 MiB'tan fazla görüntü gömdüğünde kod metin olarak kopyalanmaz.
+	On Windows, Copy and Cut also give other apps a PDF of the art; the other platforms do not copy a PDF yet.	Windows'ta Kopyala ve Kes, çizimin PDF'ini de diğer uygulamalara verir; diğer platformlar henüz PDF kopyalamaz.
+	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft bu seçimi kaydeder, ancak Kopyala ve Kes henüz eski vektör panosu biçimini kullanmaz.
+	Preserve Paths or Preserve Appearance and Overprints for the legacy vector clipboard; VectorCraft stores the choice but does not use it yet.	Eski vektör panosu için Yolları Koru veya Görünümü ve Üst Baskıları Koru; VectorCraft seçimi kaydeder ama henüz kullanmaz.
+	Keep Formatting keeps the styles of text copied from VectorCraft type when it is pasted into type; Keep Plain Text gives it the style where it lands.	Biçimlendirmeye Devam Et seçeneği, VectorCraft metin nesnesinden kopyalanan metin bir metin nesnesine yapıştırıldığında stillerini korur; Düz Metni Koru ona yapıştırıldığı yerin stilini verir.
+	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	Belge Kurulumu'nun dili İngilizce: ABD olduğu ve [Normal Karakter Stili] bir dil belirlemediği sürece yeni metin bu dili alır; bir belgede zaten bulunan metin kendi dilini korur.
+	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	Tireleme açık paragraflarda listedeki bir sözcük yalnızca içine yazılan tirelerden bölünür, tire yoksa hiç bölünmez; büyük/küçük harf durumu fark etmez, Korece sözcükler tire almaz ve Hint dillerindeki sözcükler bir karakter grubunun içinden bölünmez.
 	Reset all preferences to their defaults?	Tüm tercihler varsayılanlarına sıfırlansın mı?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Varsayılanlar, Tercihler'de Tamam'a tıkladığınızda uygulanır. Oradaki İptal, mevcut tercihlerinizi korur.
 	Restore Recovered Documents	Kurtarılan Belgeleri Geri Yükle
@@ -3149,6 +3273,7 @@ digits	Malayalam	Malayalam
 	Save Preset	Ön Ayarı Kaydet
 	Save Document Preset	Belge Ön Ayarını Kaydet
 	Save Preset…	Ön Ayarı Kaydet…
+	Save Summary…	Özeti Kaydet…
 	Save Print Preset	Yazdırma Ön Ayarını Kaydet
 	Save Recovery Data	Kurtarma Verilerini Kaydet
 	Save Save for Web Preset	Kaydet Web Ön Ayarı için Kaydet
@@ -3482,6 +3607,7 @@ digits	Malayalam	Malayalam
 	Show Modified	Değiştirilenleri Göster
 	Show Note	Notu Göster
 	Show Options	Seçenekleri Göster
+	Show on Shape Creation	Şekil Oluştururken Göster
 	Show Recent Colors	Son Renkleri Göster
 	Toggle RGB Percent	RGB Yüzde Gösterimini Değiştir
 	Show Original Path	Orijinal Yolu Göster
@@ -3506,6 +3632,7 @@ digits	Malayalam	Malayalam
 	Show Thumbnails	Küçük Resimleri Göster
 	Show Tile Edge	Döşeme Kenarını Göster
 	Show Tints/Shades	Renk Tonlarını/Gölgeleri Göster
+	Show Tool Cards	Araç Kartlarını Göster
 	Show Tool Tips	Araç İpuçlarını Göster
 	Show Transparency Grid	Şeffaflık Izgarasını Göster
 	Show Video Rulers	Video Cetvellerini Göster
@@ -3589,6 +3716,8 @@ digits	Malayalam	Malayalam
 	Outlines	Ana hatlar
 	Outlines with Source Image	Kaynak Resimli Ana Hatlar
 	Source Image	Kaynak Resim
+	Split View	Bölünmüş Görünüm
+	Divider	Ayırıcı
 	Press and hold to view the source image	Kaynak resmi görmek için basılı tutun
 	Image Trace View	Görüntü İzleme Görünümü
 	Snap Options	Yapış Seçenekleri
@@ -4024,6 +4153,8 @@ digits	Malayalam	Malayalam
 	Unembed…	Gömmeyi kaldır…
 	Ungroup	Grubu Çöz
 	Ungroup Color Group	Renk Grubunun Grubunu Çöz
+	Color Group Options	Renk Grubu Seçenekleri
+	Color Group Options…	Renk Grubu Seçenekleri…
 	Unicode	Unicode
 	Unicode (UTF-16)	Unicode (UTF-16)
 	Unicode (UTF-8)	Unicode (UTF-8)
@@ -4784,6 +4915,7 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	a freeform gradient keeps at least one point	serbest biçimli bir degrade en az bir noktayı korur
 @msg	a gradient needs at least two stops	bir degradenin en az iki durağa ihtiyacı vardır
 @msg	a graphic style named `{to}` already exists	`{to}` adlı bir grafik stili zaten mevcut
+@msg	a swatch or color group named `{name}` already exists	`{name}` adlı bir renk örneği veya renk grubu zaten mevcut
 @msg	a page is missing	bir sayfa eksik
 @msg	a page out of range	aralık dışında bir sayfa
 @msg	a page tree kid isn't a reference	sayfa ağacı çocuğu bir referans değildir
@@ -4929,6 +5061,11 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	no anchor points selected	bağlantı noktası seçilmedi
 @msg	`points` must be two or three [x, y] pairs of numbers	`points` iki veya üç [x, y] sayı çifti olmalıdır
 @msg	direct-select two or three anchor points, or give `points`	iki veya üç bağlantı noktasını doğrudan seçin veya `points` verin
+@msg	the path is straight there, so no circle matches its curvature	yol orada düz, bu yüzden hiçbir çember eğriliğiyle eşleşmiyor
+@msg	the path has a cusp there, so it has no single curvature	yolun orada sivri bir noktası var, bu yüzden tek bir eğriliği yok
+@msg	the path has a corner there, so it has no single curvature	yolun orada bir köşesi var, bu yüzden tek bir eğriliği yok
+@msg	a guide has no curvature circle	bir kılavuzun eğrilik çemberi yoktur
+@msg	the circle that matches the path there would reach past the canvas	yolla orada eşleşen çember tuvalin dışına taşardı
 @msg	no circle passes through these points: two are the same or all three lie on one line	bu noktalardan geçen bir çember yok: ikisi aynı ya da üçü de aynı doğru üzerinde
 @msg	no app to open files here	burada dosyaları açacak uygulama yok
 @msg	no artboard	çalışma yüzeyi yok
@@ -5022,6 +5159,9 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	no such saved selection	böyle kayıtlı bir seçim yok
 @msg	no such segment	öyle bir bölüm yok
 @msg	no such subpath	böyle bir alt yol yok
+@msg	`pieces` must be a list of at most 10000 pieces	`pieces` en fazla 10000 parçadan oluşan bir liste olmalıdır
+@msg	give either `start` for a new path or `id`, not both	yeni bir yol için `start` ya da `id` verin, ikisini birden değil
+@msg	`subpath` and `keep` need `id`	`subpath` ve `keep` için `id` gerekir
 @msg	no such user library	böyle bir kullanıcı kütüphanesi yok
 @msg	no such view	öyle bir görüş yok
 @msg	no such width point	böyle bir genişlik noktası yok
@@ -5196,6 +5336,7 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	the PDF is password-protected: give its password	PDF şifre korumalıdır: şifresini verin
 @msg	the PDF password is wrong	PDF şifresi yanlış
 @msg	the Save PDF dialog didn't open	PDF'yi Kaydet iletişim kutusu açılmadı
+@msg	the Save PDF dialog is not open	PDF'yi Kaydet iletişim kutusu açık değil
 @msg	the WMF header is damaged	WMF başlığı hasarlı
 @msg	the art could not be sampled	sanat örneği alınamadı
 @msg	the art has no bounds	sanatın sınırı yoktur
@@ -5401,6 +5542,7 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	onto must name a panel floating in another group	onto başka bir grupta yüzen bir paneli adlandırmalıdır
 @msg	below and above must name a panel floating in another group	below ve above başka bir grupta yüzen bir paneli adlandırmalıdır
 @msg	give only one of onto, below and above	onto, below ve above değerlerinden yalnızca birini verin
+@msg	give only one of `index`, `indices` and `t`	`index`, `indices` ve `t` değerlerinden yalnızca birini verin
 @msg	column must be true or a number from 1	column true veya 1'den başlayan bir sayı olmalıdır
 @msg	x and y must both be numbers	x ve y'nin her ikisi de sayı olmalıdır
 @msg	"{0}" is not a colour: write it as #rrggbb	"{0}" bir renk değildir: #rrggbb olarak yazın
@@ -5556,6 +5698,26 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	the HEIC or HEIF file can't be read	HEIC veya HEIF dosyası okunamıyor
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	HEIC veya HEIF dosyası okunamayan türde bir görüntü içeriyor
 @msg	HEIC and HEIF images can't be opened in this build	HEIC ve HEIF görüntüleri bu derlemede açılamıyor
+@msg	CDR {version} drawings can't be opened: VectorCraft reads versions 1 to 27	CDR {version} çizimleri açılamıyor: VectorCraft 1 ile 27 arasındaki sürümleri okur
+@msg	this CDR drawing can't be read ({why})	bu CDR çizimi okunamıyor ({why})
+@msg	CDR text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out	VectorCraft'ın henüz okumadığı CDR metinleri, bit eşlemleri, karışımları, konturları, fırça darbeleri ve diğer nesneleri dışarıda bırakıldı
+@msg	CDR fountain, pattern, texture and PostScript fills were left out	CDR geçişli, desenli, dokulu ve PostScript dolguları dışarıda bırakıldı
+@msg	colors in CDR color models VectorCraft doesn't read were opened as black	VectorCraft'ın okumadığı CDR renk modellerindeki renkler siyah olarak açıldı
+@msg	CDR library colors that the drawing stores only by number were opened as black spot colors	çizimin yalnızca numarayla sakladığı CDR kitaplık renkleri siyah nokta renkleri olarak açıldı
+@msg	CDR outline arrowheads were left out	CDR anahatlarının ok uçları dışarıda bırakıldı
+@msg	CDR envelopes were not applied, and the shapes under them keep their outlines	CDR zarfları uygulanmadı ve altlarındaki şekiller anahatlarını korur
+@msg	CDR lenses and object transparency were not applied, and the objects they are on show opaque	CDR mercekleri ve nesne saydamlığı uygulanmadı ve bulundukları nesneler opak görünür
+@msg	parts of the drawing nested too deeply, or past the import limits, were left out	çizimin fazla derin iç içe geçmiş veya içe aktarma sınırlarının ötesindeki kısımları dışarıda bırakıldı
+@msg	damaged parts of the drawing were left out	çizimin hasarlı kısımları dışarıda bırakıldı
+@msg	CDR pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	163.830 pt'den uzun CDR sayfaları bu uzunlukta açıldı ve kenarlarına yakın çizimler çalışma yüzeyinin dışında kalıyor
+@msg	this CMX file can't be read ({why})	bu CMX dosyası okunamıyor ({why})
+@msg	CMX text, images, rectangles, ellipses, clipping paths and other objects VectorCraft doesn't read yet were left out	VectorCraft'ın henüz okumadığı CMX metinleri, görüntüleri, dikdörtgenleri, elipsleri, kırpma yolları ve diğer nesneleri dışarıda bırakıldı
+@msg	CMX fills other than uniform colors were left out	düz renkler dışındaki CMX dolguları dışarıda bırakıldı
+@msg	colors in CMX color models VectorCraft doesn't read were opened as black	VectorCraft'ın okumadığı CMX renk modellerindeki renkler siyah olarak açıldı
+@msg	CMX library colors that the file stores only by number were opened as black spot colors	dosyanın yalnızca numarayla sakladığı CMX kitaplık renkleri siyah nokta renkleri olarak açıldı
+@msg	CMX outline arrowheads were left out	CMX anahatlarının ok uçları dışarıda bırakıldı
+@msg	CMX lenses were not applied	CMX mercekleri uygulanmadı
+@msg	CMX pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	163.830 pt'den uzun CMX sayfaları bu uzunlukta açıldı ve kenarlarına yakın çizimler çalışma yüzeyinin dışında kalıyor
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD görüntüsü okunamayacak kadar büyük ({_1} × {_2} piksel)
 @msg	zipped 1-bit PSD image data with prediction can't be read	Tahmin içeren sıkıştırılmış 1 bit PSD görüntü verileri okunamıyor
 @msg	the PSD file's layer data uses an unknown compression ({m})	PSD dosyasının katman verileri bilinmeyen bir sıkıştırma kullanıyor ({m})
@@ -5563,6 +5725,49 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	the PSD file's layer groups are nested too deeply	PSD dosyasının katman grupları çok derin iç içe geçmiş
 @msg	a layer of the PSD file is too large to read	PSD dosyasının bir katmanı okunamayacak kadar büyük
 @msg	the PSD file's layers take more memory to read than allowed	PSD dosyasının katmanlarını okumak izin verilenden fazla bellek gerektiriyor
+@msg	the file is no longer loaded	dosya artık yüklü değil
+@msg	the layers can't be read ({e}): the file was placed as its merged image	katmanlar okunamıyor ({e}): dosya birleştirilmiş görüntüsü olarak yerleştirildi
+@msg	1 type layer came in as pixels: the text isn't editable	1 metin katmanı piksel olarak geldi: metin düzenlenemez
+@msg	{n} type layers came in as pixels: the text isn't editable	{n} metin katmanı piksel olarak geldi: metin düzenlenemez
+@msg	1 adjustment layer was not applied	1 ayarlama katmanı uygulanmadı
+@msg	{n} adjustment layers were not applied	{n} ayarlama katmanı uygulanmadı
+@msg	1 fill layer was not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	1 dolgu katmanı çizilmedi (degrade veya desen dolgusu, okunamayan bir renk ya da piksel saklamayan bir şekil)
+@msg	{n} fill layers were not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	{n} dolgu katmanı çizilmedi (degrade veya desen dolgusu, okunamayan bir renk ya da piksel saklamayan bir şekil)
+@msg	the layer effects of 1 layer weren't drawn	1 katmanın katman efektleri çizilmedi
+@msg	the layer effects of {n} layers weren't drawn	{n} katmanın katman efektleri çizilmedi
+@msg	the vector masks of 1 layer weren't applied	1 katmanın vektör maskeleri uygulanmadı
+@msg	the vector masks of {n} layers weren't applied	{n} katmanın vektör maskeleri uygulanmadı
+@msg	the knockout of 1 layer wasn't applied	1 katmanın boşaltması uygulanmadı
+@msg	the knockout of {n} layers wasn't applied	{n} katmanın boşaltması uygulanmadı
+@msg	1 layer was left out (hidden layers and the layers clipped to them)	1 katman dışarıda bırakıldı (gizli katmanlar ve onlara kırpılmış katmanlar)
+@msg	{n} layers were left out (hidden layers and the layers clipped to them)	{n} katman dışarıda bırakıldı (gizli katmanlar ve onlara kırpılmış katmanlar)
+@msg	1 layer clipped to a fill layer that wasn't drawn was left out	çizilmeyen bir dolgu katmanına kırpılmış 1 katman dışarıda bırakıldı
+@msg	{n} layers clipped to fill layers that weren't drawn were left out	çizilmeyen dolgu katmanlarına kırpılmış {n} katman dışarıda bırakıldı
+@msg	layers in blend modes VectorCraft doesn't have ({modes}) were merged with the layers below them	VectorCraft’ta olmayan karışım modlarındaki katmanlar ({modes}) altlarındaki katmanlarla birleştirildi
+@msg	1 layer in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	VectorCraft’ta olmayan bir karışım modundaki 1 katman Normal olarak geldi: birleştirme izin verilenden fazla bellek gerektiriyor
+@msg	{n} layers in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	VectorCraft’ta olmayan karışım modlarındaki {n} katman Normal olarak geldi: birleştirme izin verilenden fazla bellek gerektiriyor
+@msg	1 layer clipped to the layer below came in unclipped: the merge needs more memory than allowed	alttaki katmana kırpılmış 1 katman kırpılmadan geldi: birleştirme izin verilenden fazla bellek gerektiriyor
+@msg	{n} layers clipped to the layer below came in unclipped: the merge needs more memory than allowed	alttaki katmana kırpılmış {n} katman kırpılmadan geldi: birleştirme izin verilenden fazla bellek gerektiriyor
+@msg	hiddenLayers applies to a PSD file placed with layers: true	hiddenLayers, layers: true ile yerleştirilen bir PSD dosyası için geçerlidir
+@msg	importSlices: a linked PSD file is placed as its flat image; give link: false to embed it with its slices	importSlices: bağlı bir PSD dosyası düz görüntüsü olarak yerleştirilir; dilimleriyle birlikte gömmek için link: false verin
+@msg	layers: a linked PSD file is placed as its flat image; leave link out or give link: false	layers: bağlı bir PSD dosyası düz görüntüsü olarak yerleştirilir; link’i belirtmeyin ya da link: false verin
+@msg	the slices can't be read ({e}) and were left out	dilimler okunamıyor ({e}) ve dışarıda bırakıldı
+@msg	1 slice lies outside the canvas or has no size and was left out	1 dilim tuvalin dışında kalıyor ya da boyutu yok ve dışarıda bırakıldı
+@msg	{n} slices lie outside the canvas or have no size and were left out	{n} dilim tuvalin dışında kalıyor ya da boyutu yok ve dışarıda bırakıldı
+@msg	1 slice would lie outside the canvas and was left out	1 dilim tuvalin dışında kalacaktı ve dışarıda bırakıldı
+@msg	{n} slices would lie outside the canvas and were left out	{n} dilim tuvalin dışında kalacaktı ve dışarıda bırakıldı
+@msg	the slices' descriptor holds too many values	dilimlerin tanımlayıcısı çok fazla değer içeriyor
+@msg	the slices' descriptor has a version other than 16	dilimlerin tanımlayıcısının sürümü 16 değil
+@msg	the slices are stored in version {v}, which isn't read	dilimler okunmayan {v} sürümünde saklanmış
+@msg	the file has {count} slices, more than the {MAX_SLICES} read	dosyada {count} dilim var, okunan {MAX_SLICES} dilimden fazla
+@msg	the slices' descriptor has no list of slices	dilimlerin tanımlayıcısında dilim listesi yok
+@msg	the slices' descriptor lists something other than a slice	dilimlerin tanımlayıcısı dilim dışında bir şey listeliyor
+@msg	a slice in the slices' descriptor has no bounds	dilimlerin tanımlayıcısındaki bir dilimin sınırları yok
+@msg	a slice's bounds in the slices' descriptor aren't numbers	dilimlerin tanımlayıcısındaki bir dilimin sınırları sayı değil
+@msg	a text in the slices has more than the {MAX_TEXT} characters read	dilimlerdeki bir metin okunan {MAX_TEXT} karakterden uzun
+@msg	the slices' descriptor nests too deep	dilimlerin tanımlayıcısı çok derin iç içe geçmiş
+@msg	the slices' descriptor has a reference of an unknown kind ({_1})	dilimlerin tanımlayıcısında bilinmeyen türde bir başvuru var ({_1})
+@msg	the slices' descriptor has a value of an unknown type ({_1})	dilimlerin tanımlayıcısında bilinmeyen tipte bir değer var ({_1})
 @msg	the layers can't be read ({e}): the file opened as its merged image	katmanlar okunamıyor ({e}): dosya birleştirilmiş görüntüsü olarak açıldı
 @msg	{depth}-bit PSD files in this colour mode can't be read	Bu renk modunda {depth}-bit PSD dosyaları okunamaz
 @msg	the PSD file is cut short	PSD dosyası kısa kesildi
@@ -5627,6 +5832,25 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 	Preserve Embedded Profiles	Gömülü Profilleri Koru
 	Convert to Working Space	Çalışma Alanına Dönüştür
 	Preserve Numbers	Sayıları Koru
+	Profile Mismatches:	Profil Uyuşmazlıkları:
+	Ask When Opening	Açarken Sor
+	Ask When Pasting	Yapıştırırken Sor
+	Missing Profiles:	Eksik Profiller:
+	Embedded Profile Mismatch	Gömülü Profil Uyuşmazlığı
+	Missing Profile	Eksik Profil
+	Paste Profile Mismatch	Yapıştırma Profili Uyuşmazlığı
+	“{name}” is not tagged with a {model} profile.	“{name}” bir {model} profiline sahip değil.
+	“{name}” is tagged with the {model} profile “{profile}”, which is not the {model} working space “{working}”.	“{name}”, {model} çalışma alanı “{working}” olmayan “{profile}” {model} profiline sahip.
+	Use the embedded profile	Gömülü profili kullan
+	Convert the colors to the working space	Renkleri çalışma alanına dönüştür
+	Discard the embedded profile	Gömülü profili at
+	Leave as is	Olduğu gibi bırak
+	Assign the working space	Çalışma alanını ata
+	Assign profile:	Profil ata:
+	Preserve the color numbers	Renk değerlerini koru
+	Convert to keep the colors' appearance	Renklerin görünümünü korumak için dönüştür
+@msg	`{path}` goes with `{key}`: "assign" only	`{path}` yalnızca `{key}`: "assign" ile kullanılır
+	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	Yapıştırılan renkler {model} profili “{from}” olan bir belgeden geliyor; bu belgeninki “{to}”.
 	Texture	Doku
 	Craquelure…	Küçük çatlak…
 	Grain…	Tahıl…
@@ -6861,6 +7085,9 @@ theme	Appearance	Görünüm
 	embedding for preview and print	önizleme ve yazdırma için gömme
 	embedding allowed	gömmeye izin veriliyor
 	{file}; {embedding}	{file}; {embedding}
+	unknown type	bilinmeyen tür
+	{type}; {uses}	{type}; {uses}
+@plural	{n} use|{n} uses	{n} kullanım
 	substituted: shown in {family} {style} ({detail})	yerine konan: {family} {style} ile gösteriliyor ({detail})
 	missing: shown in {family} {style}	eksik: {family} {style} ile gösteriliyor
 	missing	eksik
@@ -9154,6 +9381,10 @@ axis	Y Axis	Y ekseni
 	Create New Action	Yeni Eylem Oluştur
 	Play Action	Eylemi Oynat
 	Action Set:	Eylem Seti:
+	Choose Align To at playback	Oynatma sırasında hizalama hedefini seç
+	Align steps use the key object, key anchor or key guide when one is set.	Hizalama adımları, ayarlıysa anahtar nesneyi, anahtar bağlantı noktasını veya anahtar kılavuzu kullanır.
+	With one whole object selected and no key, they use the artboard.	Tek bir nesnenin tamamı seçiliyken ve anahtar yokken çalışma yüzeyini kullanırlar.
+	Otherwise they use the selection.	Aksi halde seçimi kullanırlar.
 	Function Key:	İşlev Tuşu:
 	Record	Kayıt
 	Create New Set	Yeni Set Oluştur
@@ -9186,6 +9417,7 @@ axis	Y Axis	Y ekseni
 	Inventory Icons	Envanter Simgeleri
 	Skill Icons	Yetenek Simgeleri
 	Weather Icons	Hava Durumu Simgeleri
+	Media Controls	Medya Denetimleri
 	Attack	Saldırı
 	Defend	Savunma
 	Heal	İyileştirme
@@ -9559,6 +9791,10 @@ axis	Y Axis	Y ekseni
 	Rain	Yağmur
 	Thunder	Gök Gürültüsü
 	Snow	Kar
+	Play	Oynat
+	Pause	Duraklat
+	Skip Next	Sonrakine Geç
+	Shuffle	Karıştır
 	Save Brush Library…	Fırça Kitaplığını Kaydet…
 @msg	`{_1}` has no brushes to apply	`{_1}` içinde uygulanacak fırça yok
 @msg	missing `library` (see brush.libraries)	`library` eksik (bkz. brush.libraries)
@@ -10016,6 +10252,8 @@ breakText	Glyphs	Glifler
 # Path Precision Tools add-on: Tangent Circle.
 	Tangent Circle…	Teğet Daire…
 	Tangent Circle	Teğet Daire
+	Tangent Circle Tool	Teğet Daire Aracı
+	No tangent circle here	Burada teğet daire yok
 	Circle:	Daire:
 @msg	`ids` names an object twice	`ids` bir nesneyi iki kez belirtiyor
 @msg	select two or three paths or compound paths	iki veya üç yol ya da bileşik yol seçin
@@ -10031,6 +10269,16 @@ breakText	Glyphs	Glifler
 @msg	`circle` is past the last circle found ({found})	`circle` bulunan son dairenin ötesinde ({found})
 @msg	object {value} is not a path or compound path	{value} nesnesi bir yol veya bileşik yol değil
 @msg	these shapes are too small to measure	bu şekiller ölçülemeyecek kadar küçük
+# Path Precision Tools add-on: Add Bounding Rectangle and Add Bounding Circle.
+	Add Bounding Rectangle	Çevreleyen Dikdörtgen Ekle
+	Add Bounding Circle	Çevreleyen Daire Ekle
+	Add Bounding Rectangle…	Çevreleyen Dikdörtgen Ekle…
+	Add Bounding Circle…	Çevreleyen Daire Ekle…
+	One per Object	Nesne başına bir
+@msg	nothing to enclose	çevrelenecek hiçbir şey yok
+@msg	`offset` must be 0 or more	`offset` 0 veya daha büyük olmalıdır
+@msg	the shape would have no size	şeklin boyutu olmayacaktır
+@msg	the shape would reach past the edge of the canvas	şekil tuvalin kenarını aşacaktır
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Belge Araçları
 	Save a Timestamped Copy	Zaman Damgalı Bir Kopya Kaydet
@@ -10364,6 +10612,39 @@ breakText	Glyphs	Glifler
 	No objects are selected.	Hiçbir nesne seçili değil.
 	Open a document to mark its fold lines.	Katlama çizgilerini işaretlemek için bir belgeyi açın.
 	Remove Fold Line Role	Çizgi Türünü Kaldır
+# Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	Araç çubuğundaki bir aracın ve tuşlarının ne yaptığını ipucu yerine bir kartta gösterir; Araç İpuçlarını Göster gerekir.
+	Selects whole objects and groups to move, resize or rotate them.	Taşımak, yeniden boyutlandırmak veya döndürmek için nesnelerin ve grupların tamamını seçer.
+	Selects anchor points and path segments to reshape a path.	Bir yolu yeniden şekillendirmek için bağlantı noktalarını ve yol parçalarını seçer.
+	Draws paths point by point, with straight segments and smooth curves.	Düz parçalar ve yumuşak eğrilerle noktadan noktaya yollar çizer.
+	Draws smooth curves through the points you click.	Tıkladığınız noktalardan geçen yumuşak eğriler çizer.
+	Adds text at a point, or in a frame you drag.	Bir noktaya veya sürükleyerek çizdiğiniz bir çerçeveye metin ekler.
+	Draws rectangles and squares.	Dikdörtgenler ve kareler çizer.
+	Draws rectangles with rounded corners.	Köşeleri yuvarlatılmış dikdörtgenler çizer.
+	Draws ellipses and circles.	Elipsler ve daireler çizer.
+	Draws polygons with sides of equal length.	Kenarları eşit uzunlukta çokgenler çizer.
+	Draws stars.	Yıldızlar çizer.
+	Turns objects around a reference point.	Nesneleri bir referans noktası etrafında döndürür.
+	Flips objects across an axis through a reference point.	Nesneleri bir referans noktasından geçen bir eksene göre yansıtır.
+	Resizes objects from a reference point.	Nesneleri bir referans noktasından yeniden boyutlandırır.
+	Slants objects from a reference point.	Nesneleri bir referans noktasından eğer.
+	Moves the view of the document.	Belgenin görünümünü kaydırır.
+	Magnifies or reduces the view.	Görünümü büyütür veya küçültür.
+	Copies the color and other attributes of one object to the selection.	Bir nesnenin rengini ve diğer niteliklerini seçime kopyalar.
+	Sets the direction and length of a gradient.	Bir degradenin yönünü ve uzunluğunu ayarlar.
+	Creates, selects and resizes artboards.	Çalışma yüzeyleri oluşturur, seçer ve yeniden boyutlandırır.
+	Changes the width of a stroke along its length.	Bir konturun genişliğini uzunluğu boyunca değiştirir.
+	Bends art by dragging pins placed on it.	Üzerine yerleştirilen raptiyeleri sürükleyerek resmi büker.
+	Pushes the outlines of paths in the direction you drag.	Yolların dış hatlarını sürüklediğiniz yöne iter.
+	Twists the outlines of paths into swirls.	Yolların dış hatlarını girdaplar halinde büker.
+	Pulls the outlines of paths in toward the brush.	Yolların dış hatlarını fırçaya doğru çeker.
+	Pushes the outlines of paths out from the brush.	Yolların dış hatlarını fırçadan dışarı doğru iter.
+	Adds curved details along the outlines of paths.	Yolların dış hatları boyunca kavisli ayrıntılar ekler.
+	Adds spiky details along the outlines of paths.	Yolların dış hatları boyunca sivri ayrıntılar ekler.
+	Adds wrinkles along the outlines of paths.	Yolların dış hatları boyunca kırışıklıklar ekler.
+	Moves, copies and resizes objects on the perspective grid.	Perspektif ızgarasındaki nesneleri taşır, kopyalar ve yeniden boyutlandırır.
+	Makes a series of steps between two or more objects.	İki veya daha fazla nesne arasında bir dizi adım oluşturur.
+	Places dimension lines that show measured lengths.	Ölçülen uzunlukları gösteren ölçü çizgileri yerleştirir.
 	Tap	Kısa Basma
 	Clear Hold	Basılı Tutmayı Temizle
 	Hold Shortcuts	Basılı Tutma Kısayolları
@@ -10399,7 +10680,23 @@ breakText	Glyphs	Glifler
 	Filigree Arrow	Telkari ok
 	Petal Sweep	Yaprakçık kıvrımı
 	Twin Curl	Çift kıvrım
+	Image Brush	Görsel Fırçaları
+	Soft Bloom	Yumuşak Çiçek
+	Halftone Field	Yarı Ton Alanı
+	Solar Grain	Güneş Tanesi
+	Color Flecks	Renk Benekleri
+	Paper Cutouts	Kağıt Kesikleri
+	Coral Layers	Mercan Katmanları
+	Mint Layers	Nane Katmanları
+	Midnight Layers	Gece Yarısı Katmanları
+	Sunflower Sheet	Ayçiçeği Yaprağı
+	Rose Layers	Gül Katmanları
+	Monochrome Stack	Tek Renkli Yığın
 	Dashed Arrow	Kesikli Ok
+	Fine Stipple	İnce noktalı gölgelendirme
+	Dense Stipple	Yoğun noktalı gölgelendirme
+	Soft Stipple	Yumuşak noktalı gölgelendirme
+	Bold Stipple	Kalın noktalı gölgelendirme
 	Pressure Sensitive	Basınca Duyarlı
 	Flex Ribbon	Esnek Şerit
 	Pulse Stroke	Atımlı Çizgi
@@ -10415,3 +10712,7 @@ breakText	Glyphs	Glifler
 @msg	Other blanks not shown: {count}	Gösterilmeyen diğer açınımlar: {count}
 @msg	A joint does not close by {gap} pt.	Bir birleşim {gap} pt kadar kapanmıyor.
 @msg	Two panels pass through each other.	İki panel birbirinin içinden geçiyor.
+
+# #5804 native-picked raster editor (draft translations; native review welcome).
+	Edit Original with:	Orijinali şununla düzenle:
+file-filter	Applications	Uygulamalar
