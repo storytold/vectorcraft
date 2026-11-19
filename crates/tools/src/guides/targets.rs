@@ -1156,9 +1156,21 @@ impl Targets {
         if !l2.is_finite() || l2 == 0.0 {
             return None;
         }
-        // Only this nearby point's own alignment may grant it forward priority;
-        // an unrelated line cannot make an unreachable point suppress paint.
-        if self.nearest_point_with(near, tol, |point| !ray || self.slide_with(at, dir, near, tol, true, |from| from == point).is_some()).is_some() {
+        // Point equality treats both signs of zero alike; origin keys must do so too.
+        let origin_key = |p: Point| (if p.x == 0.0 { 0 } else { p.x.to_bits() }, if p.y == 0.0 { 0 } else { p.y.to_bits() });
+        let has_anchor = if ray {
+            let origins: std::collections::HashSet<_> = within(&self.points, |q| q.0.x, near.x, tol)
+                .iter()
+                .filter(|(point, _)| point.distance(near) <= tol)
+                .map(|(point, _)| origin_key(*point))
+                .collect();
+            // Query the real guide candidates once, rather than rescanning them per nearby point.
+            // Unrelated origins still cannot grant an unusable point priority over paint.
+            !origins.is_empty() && self.slide_with(at, dir, near, tol, true, |from| origins.contains(&origin_key(from))).is_some()
+        } else {
+            self.nearest_point(near, tol).is_some()
+        };
+        if has_anchor {
             return None;
         }
         self.stroke_contours.on_line(at, dir, near, tol, ray).map(|q| (q, Kind::StrokeEdge))
