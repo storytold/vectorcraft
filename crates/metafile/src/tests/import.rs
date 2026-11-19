@@ -1126,22 +1126,6 @@ fn opaque_backgrounds_fill_behind_the_character_cells() {
     assert_eq!(kinds, [false, true, true]);
     let b = layer[0].geometric_bounds().unwrap();
     assert!((b.x0 - 10.0 * mm).abs() < 0.01 && (b.x1 - 145.0 * mm).abs() < 0.01, "{b:?}");
-    // A NUL after a line break moves the start of the line it begins, as it moves the first
-    // line's: "\0B" on a line of its own is placed and filled as the same record alone.
-    // Where the last text object's first glyph starts, and the left edges of the backgrounds.
-    let placed = |layer: &[std::sync::Arc<Node>]| {
-        let last = layer.iter().rev().find_map(|n| match &n.kind {
-            NodeKind::Text(t) => Some(glyph_xs(t).0[0]),
-            _ => None,
-        });
-        let backs: Vec<f64> =
-            layer.iter().filter(|n| matches!(n.kind, NodeKind::Path { .. })).filter_map(|n| n.geometric_bounds()).map(|b| b.x0).collect();
-        (last.unwrap(), backs)
-    };
-    let (b_alone, _) = placed(&opaque(arial(), "\0B", &[2000, 1000]));
-    let (b_together, backs) = placed(&opaque(arial(), "A\n\0B", &[1000, 0, 2000, 1000]));
-    assert!((b_alone - 30.0 * mm).abs() < 0.01 && (b_together - b_alone).abs() < 0.01, "{b_alone} {b_together}");
-    assert!(backs.len() == 2 && backs.iter().all(|x| (x - 10.0 * mm).abs() < 0.01), "{backs:?}");
 }
 
 #[test]
@@ -1156,13 +1140,13 @@ fn opaque_backgrounds_reach_as_far_as_the_advances() {
     let NodeKind::Path { path, .. } = &layer[0].kind else { panic!("a path") };
     let rects = path.to_bezpath().elements().iter().filter(|e| matches!(e, vectorcraft_geom::PathEl::MoveTo(_))).count();
     assert_eq!(rects, 2);
-    // Without advances, a line is aligned as long as its advances, trailing spaces included, and
-    // its cells run across them: right aligned at 40 mm, "Hi " and its cells end there.
+    // Without advances, one line's cells run across its glyphs' advances, trailing spaces
+    // included: right aligned, they run from the "H" to the end of the space after the "i".
     let layer = aligned(2, 26, 4000, arial(), "Hi ", &[]);
     let NodeKind::Text(t) = &layer[1].kind else { panic!("text") };
     let (xs, end) = glyph_xs(t);
     let b = layer[0].geometric_bounds().unwrap();
-    assert!(xs.len() == 3 && (end - 40.0 * mm).abs() < 0.01, "{xs:?} {end}");
+    assert!(xs.len() == 3, "{xs:?} {end}");
     assert!((b.x0 - xs[0]).abs() < 0.01 && (b.x1 - end).abs() < 0.01, "{b:?} {xs:?} {end}");
     // On more than one line, each line is aligned without its trailing spaces, and so are its
     // cells: right aligned at 40 mm, neither passes it.
@@ -1190,11 +1174,9 @@ fn opaque_backgrounds_reach_as_far_as_the_advances() {
     let b = layer[0].geometric_bounds().unwrap();
     assert!((b.x0 - 10.0 * mm).abs() < 0.01 && b.x1 > 10.0 * mm, "{b:?}");
     assert!(drawn(1, arial(), " \t", &[]).is_empty());
-    // Underlined blanks draw their underline, on a transparent background too.
-    for mode in [1, 2] {
-        let layer = drawn(mode, font_of("Arial", true), "  ", &[]);
-        assert!(layer.iter().any(|n| matches!(&n.kind, NodeKind::Text(t) if t.runs[0].style.underline)), "{mode}");
-    }
+    // NULs alone in an underlined font fill their cells and add no type.
+    let layer = opaque(font_of("Arial", true), "\0", &[2000]);
+    assert!(layer.len() == 1 && matches!(layer[0].kind, NodeKind::Path { .. }), "{layer:?}");
     // A file that never sets the mode draws in the opaque mode a playback starts in.
     let layer = drawn(0, arial(), "Hi", &[]);
     assert_eq!(fill_rgb(&layer[0]), Some([0, 255, 0]));

@@ -16,13 +16,11 @@
 //!   range reaches, or a tab) are point type of their own, and an underline or strikethrough is carried across the space between.
 //!   It is also carried on to the end of the last character's advance. Type on more than one line
 //!   is placed a line at a time: each line is aligned by its own advances and split as a single
-//!   line is. NULs at the start, or after a line break, move the start of their line. A
-//!   character cell runs from the font's OS/2 usWinAscent above the baseline to its usWinDescent
-//!   below it, and top or bottom aligned text has the top or the bottom of its cells at the
-//!   reference point. One line without advances is aligned as long as its glyphs' advances,
-//!   trailing spaces included. Text drawn in the opaque background mode (the mode a playback
-//!   starts in) has one rectangle of the background color behind the character cells of each
-//!   line, as far as its advances reach.
+//!   line is. A character cell runs from the font's OS/2 usWinAscent above the baseline to its
+//!   usWinDescent below it, and top or bottom aligned text has the top or the bottom of its cells
+//!   at the reference point. Text drawn in the opaque background mode (the mode a playback starts
+//!   in) has one rectangle of the background color behind the character cells of each line, as
+//!   far as its advances reach.
 //! - Clip regions and clip paths become clipping groups around what they clip; a rectangle around
 //!   the whole picture clips nothing and is left out.
 //!
@@ -545,22 +543,20 @@ impl Mapper {
     fn text(&mut self, t: &craft_metafile::Text, chain: Vec<Arc<Clip>>) {
         // The characters without NULs, and each one's advance (text units) when the file gives
         // one for every character: a NUL's advance goes to the character before it, or moves the
-        // start when the string, or a line after a line break, begins with one.
+        // start when the string begins with one.
         let advances = t.dx.len() == t.text.chars().count() && t.dx.iter().all(|d| d.is_finite());
         let (mut s, mut dx) = (String::new(), Vec::new());
         // How far before and after its start each character's advances (its own and the NULs'
-        // after it) reach (text units): an advance may be negative. And before each character,
-        // the advance of the NULs that move its line's start, with how far they reach.
-        let (mut reach, mut leads) = (Vec::new(), Vec::new());
+        // after it) reach (text units): an advance may be negative. And the advance of the NULs
+        // that move the start, with how far they reach.
+        let mut reach = Vec::new();
         let mut lead = Lead::default();
-        let breaks = |c: char| matches!(c, '\n' | '\r' | '\u{b}' | '\u{c}' | '\u{85}' | '\u{2028}' | '\u{2029}');
         for (c, d) in t.text.chars().zip(t.dx.iter().map(|d| f64::from(*d)).chain(std::iter::repeat(0.0))) {
             if c != '\0' {
                 s.push(c);
                 dx.push(d);
                 reach.push((d.min(0.0), d.max(0.0)));
-                leads.push(std::mem::take(&mut lead));
-            } else if let (Some(last), Some(r), false) = (dx.last_mut(), reach.last_mut(), s.chars().next_back().is_none_or(breaks)) {
+            } else if let (Some(last), Some(r)) = (dx.last_mut(), reach.last_mut()) {
                 *last += d;
                 *r = (r.0.min(*last), r.1.max(*last));
             } else {
@@ -571,15 +567,13 @@ impl Mapper {
         if !advances {
             dx.clear();
             reach.clear();
-            leads.clear();
             lead = Lead::default();
         }
-        // The leading NULs of the first line, or of a string of NULs alone.
-        let first = leads.first().copied().unwrap_or(lead);
-        // Type that draws nothing still fills its character cells on an opaque background. Blanks
-        // draw when they are underlined or struck through.
+        // The leading NULs, of the text or of a string of NULs alone.
+        let first = lead;
+        // Type that draws nothing still fills its character cells on an opaque background.
         let background = t.background.filter(|c| c[3] > 0);
-        let shows = (!s.trim().is_empty() || t.font.underline || t.font.strike) && t.color[3] > 0;
+        let shows = !s.trim().is_empty() && t.color[3] > 0;
         // A string of NULs only fills the cells across its advances.
         let nuls = s.is_empty() && first.reach.0 < first.reach.1 && background.is_some();
         if (s.is_empty() && !nuls) || !(shows || background.is_some()) {
@@ -692,23 +686,25 @@ impl Mapper {
         if dx.is_empty() {
             let mut text = whole;
             let laid = vectorcraft_text::layout(db, &text);
-            // One line is as long as its advances, its trailing blanks included, where the
-            // alignment puts a line that long.
+            // Where one line's glyphs start, and the sum of their advances, its trailing blanks
+            // included.
             let along = laid
                 .glyphs
                 .iter()
                 .fold((f64::INFINITY, 0.0), |(from, width), g| (from.min(g.origin.x.min(g.origin.x + g.advance)), width + g.advance));
             let one = laid.lines.len() == 1 && along.0.is_finite() && along.1.is_finite();
-            let shift = if one { aligned(0.0, along.1, &t.h_align) - along.0 } else { 0.0 };
-            text.xf = base * Affine::translate((if shift.is_finite() { shift } else { 0.0 }, drop));
+            text.xf = base * Affine::translate((0.0, drop));
             text.cached_bounds = Some(laid.bounds);
-            // The cells of one line run across its advances, those of more than one across each
-            // line's glyphs. NULs alone span their advances, where the alignment puts them.
+            // The cells of one line run across its advances, from where its type starts, or for
+            // blanks alone, which draw no type, where the alignment puts a line that long. Those
+            // of more than one line run across each line's glyphs. NULs alone span their
+            // advances, where the alignment puts them.
             let cells = if nuls {
                 let start = aligned(first.by * k, 0.0, &t.h_align) - first.by * k;
                 cell_rect(start + first.reach.0 * k, start + first.reach.1 * k, 0.0, cell)
             } else if one {
-                cell_rect(along.0, along.0 + along.1, laid.glyphs.first().map_or(0.0, |g| g.origin.y), cell)
+                let x0 = if shows { along.0 } else { aligned(0.0, along.1, &t.h_align) };
+                cell_rect(x0, x0 + along.1, laid.glyphs.first().map_or(0.0, |g| g.origin.y), cell)
             } else {
                 cells(&laid, &s, cell, &t.h_align)
             };
@@ -734,11 +730,11 @@ impl Mapper {
             let starts: Vec<usize> = s.char_indices().map(|(at, _)| at).collect();
             let count = |to: usize| starts.partition_point(|at| *at < to);
             let top = laid.lines.first().map_or(0.0, |l| l.baseline);
-            for l in &laid.lines {
+            for (n, l) in laid.lines.iter().enumerate() {
                 let (from, to) = (count(l.start), count(l.end));
                 let (Some(cs), Some(dx), Some(reach)) = (chars.get(from..to), dx.get(from..to), reach.get(from..to)) else { continue };
-                // The NULs before the line's first character, at the start or after a line break.
-                let lead = leads.get(from).copied().unwrap_or_default().scaled(k);
+                // A leading NUL's advance comes before the first line only.
+                let lead = if n == 0 { first.scaled(k) } else { Lead::default() };
                 let down = l.baseline - top;
                 self.line(&line, cs, Advances { dx, reach, lead }, if down.is_finite() { down } else { 0.0 }, &mut out);
             }

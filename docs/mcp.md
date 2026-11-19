@@ -9875,11 +9875,9 @@ images and point type in the font the file names. Type keeps the file's characte
 kerning off. On a single left to right line, an advance that tracking can't give (wider than its range, or a tab)
 starts a new point type object at the position the advance gives, and an underline or strikethrough is filled across the space between and on to the end
 of the last character's advance. Type on more than one line is placed a line at a time: each line is aligned by its own advances and
-split as a single line is. NULs at the start of the text, or after a line break, move the start of their line by their
-advances. Blanks that are underlined or struck through draw their bars. A character cell runs from the font's OS/2
+split as a single line is. A character cell runs from the font's OS/2
 `usWinAscent` above the baseline to its `usWinDescent` below it: top and bottom aligned text has the top or the
-bottom of its cells at the reference point. A single line without character advances is aligned as long as its
-glyphs' advances, trailing spaces included. Text drawn in the opaque background mode, which a file is in until it
+bottom of its cells at the reference point. Text drawn in the opaque background mode, which a file is in until it
 sets the mode to transparent, gets one filled rectangle of the background color behind the character cells of each
 line, as far as its advances reach (NULs' included), placed before the type. An EMF that
 draws with EMF+ records is read from them. Hatched and pattern brushes fill with their average color. Records VectorCraft doesn't read are skipped with one warning.
