@@ -37,7 +37,7 @@ fn check_live_paint_takes(d: &Document, roots: &[NodeId]) -> Result<()> {
 fn make_live(d: &mut Document, sel: &mut Selection, roots: &[NodeId]) -> Result<(NodeId, usize, usize)> {
     check_live_paint_takes(d, roots)?;
     if roots.iter().any(|r| d.node(*r).is_some_and(is_live_paint)) {
-        return merge_live(d, sel, roots);
+        return merge_live(d, sel, roots, false);
     }
     let mut sources = vec![];
     for r in roots {
@@ -178,8 +178,10 @@ impl Carried {
 
 /// Add the other `roots` (back → front) to the first Live Paint group among them, which keeps its
 /// id, the paint of its faces and edges, and its own properties apart from the Gap Options, which
-/// are merged; returns (group, faces, edges).
-fn merge_live(d: &mut Document, sel: &mut Selection, roots: &[NodeId]) -> Result<(NodeId, usize, usize)> {
+/// are merged; returns (group, faces, edges). When the groups and paths hold no path outline
+/// between them, `keep_empty` leaves the group with its paths in its sources group and no faces or
+/// edges; without it, that is an error.
+fn merge_live(d: &mut Document, sel: &mut Selection, roots: &[NodeId], keep_empty: bool) -> Result<(NodeId, usize, usize)> {
     let target = roots
         .iter()
         .copied()
@@ -212,7 +214,14 @@ fn merge_live(d: &mut Document, sel: &mut Selection, roots: &[NodeId]) -> Result
     // Merge applies the Gap Options' merge rules to the groups' options, bottom-most first.
     let groups: Vec<GapOptions> = roots.iter().filter_map(|r| d.node(*r)).filter(|n| is_live_paint(n)).map(Node::gap_options).collect();
     let options = merged_gap_options(&groups);
-    let (children, nf, ne) = build_children(d, sources, options.max_gap())?;
+    let (children, nf, ne) = if keep_empty && source_shapes(&sources).0.is_empty() {
+        let mut src = Node::group(d.alloc_id(), sources);
+        src.name = Some(SOURCES_NAME.into());
+        src.visible = false;
+        (vec![Arc::new(src)], 0, 0)
+    } else {
+        build_children(d, sources, options.max_gap())?
+    };
     // The group keeps its name, lock, visibility, transparency, appearance, opacity mask, graphic
     // style link and the rest; its children are made again and its Gap Options set to the merged ones.
     let mut g = old;
@@ -266,7 +275,7 @@ pub(super) fn lp_merge(s: &mut Session, p: &Value) -> Result<Value> {
     if let Some(reply) = lone_live_group(s, &roots)? {
         return Ok(reply);
     }
-    let (id, faces, edges) = s.edit("Merge Live Paint", |d, sel| merge_live(d, sel, &roots))?;
+    let (id, faces, edges) = s.edit("Merge Live Paint", |d, sel| merge_live(d, sel, &roots, false))?;
     Ok(json!({ "id": id.0, "faces": faces, "edges": edges }))
 }
 
@@ -301,7 +310,7 @@ pub(crate) fn merge_drawn_in_isolation(s: &mut Session, g: NodeId) -> Result<boo
         return Ok(false);
     }
     let roots: Vec<NodeId> = std::iter::once(g).chain(drawn).collect();
-    s.edit("Merge Live Paint", |d, sel| merge_live(d, sel, &roots))?;
+    s.edit("Merge Live Paint", |d, sel| merge_live(d, sel, &roots, false))?;
     Ok(true)
 }
 
@@ -346,12 +355,31 @@ fn enclosing_live_paints(d: &Document, g: NodeId) -> Vec<NodeId> {
     out
 }
 
+/// Whether a shown row whose parent is `parent`, among Live Paint group `g`'s paths, gives `g` faces
+/// and edges: every group between it and `g`'s sources group is shown.
+fn shown_in_sources(d: &Document, parent: Option<NodeId>, g: NodeId) -> bool {
+    let src = d.node(g).and_then(b::sources).map(|s| s.id);
+    let mut at = parent;
+    while let Some(x) = at {
+        if Some(x) == src {
+            return true;
+        }
+        if !d.node(x).is_some_and(|n| n.visible) {
+            return false;
+        }
+        at = d.parent_of(x);
+    }
+    true
+}
+
 /// What moving rows in the Layers panel (`layer.move`, `node.move`) does to Live Paint groups.
 /// Rows that go into a Live Paint group from elsewhere are added to it as `livePaint.merge` adds
 /// paths. Rows that go into or leave a group's paths (its sources group) change those paths, and
 /// the group's faces and edges are made again from them, keeping the paint of the faces and edges
 /// that stay, and so are those of every Live Paint group that holds a changed group among its
-/// paths. Rows moved within one group's paths, or among a group's own children, change no faces.
+/// paths. Rows moved within one group's paths change no faces unless a shown row goes into or out
+/// of a hidden group there; rows moved among a group's own children change no faces. A group's
+/// sources group itself stays in the group.
 pub(crate) struct LivePaintMove {
     /// The Live Paint group the rows go into, and for each row whether it joins the group's paths.
     join: Option<(NodeId, Vec<bool>)>,
@@ -365,16 +393,29 @@ pub(crate) struct LivePaintMove {
 impl LivePaintMove {
     /// Plan moving `rows` (with `copy`, copies of them) into `parent`, before anything changes.
     /// Refuses rows Live Paint can't take ([`b::live_paint_takes`]) that would go among a group's
-    /// paths, with the message Make and Merge give.
+    /// paths, with the message Make and Merge give, and a group's sources group moved out of the
+    /// group.
     pub(crate) fn plan(d: &Document, rows: &[NodeId], parent: Option<NodeId>, copy: bool) -> Result<Self> {
+        if !copy {
+            for r in rows {
+                if let Some(g) = d.parent_of(*r)
+                    && parent != Some(g)
+                    && d.node(g).filter(|n| is_live_paint(n)).and_then(b::sources).is_some_and(|s| s.id == *r)
+                {
+                    return Err(EngineError::Other("a Live Paint group's sources group stays in the group: move the paths in it instead".into()));
+                }
+            }
+        }
         let to = spot_in(d, parent);
         let from: Vec<Spot> = rows.iter().map(|r| if copy { Spot::Outside } else { spot_in(d, d.parent_of(*r)) }).collect();
         let mut rebuild = vec![];
-        for f in &from {
-            if let Spot::Source(g) = *f
-                && *f != to
-                && !rebuild.contains(&g)
-            {
+        for (r, f) in rows.iter().zip(&from) {
+            let Spot::Source(g) = *f else { continue };
+            // A shown row that goes into or out of a hidden group among the same paths starts or
+            // stops giving the group faces and edges.
+            let shown_changes =
+                *f == to && d.node(*r).is_some_and(|n| n.visible) && shown_in_sources(d, d.parent_of(*r), g) != shown_in_sources(d, parent, g);
+            if (*f != to || shown_changes) && !rebuild.contains(&g) {
                 rebuild.push(g);
             }
         }
@@ -444,7 +485,9 @@ impl LivePaintMove {
         for g in groups {
             if Some(g) == join_group {
                 let roots: Vec<NodeId> = std::iter::once(g).chain(joined.iter().copied()).collect();
-                merge_live(d, sel, &roots)?;
+                // Rows that join a group with no path outline among them keep the move: the group
+                // is left with no faces or edges, as when its last path leaves it.
+                merge_live(d, sel, &roots, true)?;
             } else if d.node(g).is_some() {
                 rebuild_paths(d, g)?;
             }
