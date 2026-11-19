@@ -334,6 +334,9 @@ pub(super) fn isolate(s: &mut Session, p: &Value) -> Result<Value> {
         if matches!(st.doc.node(id).ok_or(EngineError::NoNode(id))?.kind, NodeKind::Text(_)) {
             return Err(bad("object.isolate", "type objects can't be isolated"));
         }
+        if st.doc.node(id).is_some_and(|n| n.is_ruler_guide()) {
+            return Err(bad("object.isolate", "ruler guides can't be isolated"));
+        }
         let isolation =
             st.doc.node(id).filter(|n| n.extras().shaper.is_some()).and_then(|n| n.children()).and_then(|c| c.first()).map_or(id, |n| n.id);
         // A hidden or locked object, one in a hidden or locked group or layer, and a guide path while
