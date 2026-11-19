@@ -625,6 +625,143 @@ pub fn arc(a: Point, b: Point, slope: f64, closed: bool, _base_along_x: bool) ->
     PathData::single(SubPath::new(anchors, closed))
 }
 
+/// A circular arc from `start` to `end`: its circle's `center` and `radius`, and the turn from
+/// `start` to `end` about the center in radians, positive the way the angle `atan2(y, x)` grows
+/// (clockwise on the y-down page). The turn is never 0 and never a whole turn.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CircularArc {
+    pub start: Point,
+    pub end: Point,
+    pub center: Point,
+    pub radius: f64,
+    pub sweep: f64,
+}
+
+impl CircularArc {
+    /// The arc from `start` to `end` that passes through `through`. `None` when two of the points
+    /// are the same or the three lie on one line ([`circle_through`]).
+    pub fn through(start: Point, end: Point, through: Point) -> Option<Self> {
+        let (center, radius) = circle_through(start, end, through)?;
+        let angle = |p: Point| (p.y - center.y).atan2(p.x - center.x);
+        let a = angle(start);
+        let to_end = (angle(end) - a).rem_euclid(TAU);
+        let to_through = (angle(through) - a).rem_euclid(TAU);
+        // The turn that goes past `through` on its way to `end`.
+        let sweep = if to_through < to_end { to_end } else { to_end - TAU };
+        Self::checked(start, end, center, radius, sweep)
+    }
+
+    /// The arc that leaves `start` heading along `direction` (its tangent there) and ends at
+    /// `end`. `None` when `start` and `end` are the same, `direction` is zero, or `end` lies on the
+    /// line through `start` along `direction` (no circle touches that line at `start` and passes
+    /// through `end`). The same test as [`circle_through`] decides that: twice the area of the
+    /// triangle `start`, `end` and `start + direction` scaled to the chord's length is at most
+    /// 10⁻¹⁰ of the chord's length squared.
+    pub fn leaving(start: Point, direction: Vec2, end: Point) -> Option<Self> {
+        let len = direction.hypot();
+        let chord = end - start;
+        let c2 = chord.hypot2();
+        if !(len.is_finite() && len > 0.0 && c2.is_finite() && c2 > 0.0) {
+            return None;
+        }
+        let t = direction / len;
+        // Twice the triangle's area with the tangent as long as the chord.
+        let cross = t.cross(chord);
+        if cross.is_nan() || (cross * c2.sqrt()).abs() <= 1e-10 * c2 {
+            return None;
+        }
+        // The center lies on the normal at `start` on the side `end` is: `start + n * s` with
+        // `|n * s - chord| = |s|`, so `s = |chord|² / (2 n·chord)`.
+        let n = Vec2::new(-t.y, t.x);
+        let s = c2 / (2.0 * n.dot(chord));
+        let center = start + n * s;
+        let radius = s.abs();
+        let angle = |p: Point| (p.y - center.y).atan2(p.x - center.x);
+        let a = angle(start);
+        let to_end = (angle(end) - a).rem_euclid(TAU);
+        // Leaving along `t`: the turn grows when `t` points the way the angle grows at `start`.
+        let grows = Vec2::new(-(start.y - center.y), start.x - center.x).dot(t) > 0.0;
+        let sweep = if grows { to_end } else { to_end - TAU };
+        Self::checked(start, end, center, radius, sweep)
+    }
+
+    /// The arc that ends at `end` arriving along `direction` and starts at `start`: [`Self::leaving`]
+    /// from `end` back along `-direction`, turned round.
+    pub fn arriving(start: Point, end: Point, direction: Vec2) -> Option<Self> {
+        let back = Self::leaving(end, -direction, start)?;
+        Some(Self { start, end, center: back.center, radius: back.radius, sweep: -back.sweep })
+    }
+
+    fn checked(start: Point, end: Point, center: Point, radius: f64, sweep: f64) -> Option<Self> {
+        let ok = center.is_finite() && radius.is_finite() && radius > 0.0 && sweep.is_finite() && sweep != 0.0 && sweep.abs() < TAU;
+        ok.then_some(Self { start, end, center, radius, sweep })
+    }
+
+    /// The point at `t` (0 at `start`, 1 at `end`) along the arc.
+    pub fn at(&self, t: f64) -> Point {
+        let a = (self.start.y - self.center.y).atan2(self.start.x - self.center.x) + self.sweep * t;
+        Point::new(self.center.x + self.radius * a.cos(), self.center.y + self.radius * a.sin())
+    }
+
+    /// The open path of the arc: an anchor at `start`, at `end`, and between them as many smooth
+    /// anchors, evenly spaced, as keep each cubic piece to a quarter turn at most. The ends are the
+    /// given points exactly.
+    pub fn to_path(&self) -> PathData {
+        let quarter = std::f64::consts::FRAC_PI_2;
+        // A quarter turn and a hair more is still one piece.
+        let pieces = ((self.sweep.abs() / quarter) - 1e-9).ceil().clamp(1.0, 4.0) as u32;
+        let step = self.sweep / f64::from(pieces);
+        // The handle length of a cubic that follows a circle through the turn `step`, per unit
+        // of radius; negative when the arc runs the other way.
+        let k = 4.0 / 3.0 * (step / 4.0).tan();
+        let a0 = (self.start.y - self.center.y).atan2(self.start.x - self.center.x);
+        let mut anchors = Vec::with_capacity(pieces as usize + 1);
+        for i in 0..=pieces {
+            let a = a0 + step * f64::from(i);
+            let p = if i == 0 {
+                self.start
+            } else if i == pieces {
+                self.end
+            } else {
+                Point::new(self.center.x + self.radius * a.cos(), self.center.y + self.radius * a.sin())
+            };
+            // The handle along the tangent the way the arc runs.
+            let d = Vec2::new(-a.sin(), a.cos()) * (self.radius * k);
+            let h_in = if i == 0 { p } else { p - d };
+            let h_out = if i == pieces { p } else { p + d };
+            let kind = if i == 0 || i == pieces { AnchorKind::Corner } else { AnchorKind::Smooth };
+            anchors.push(Anchor { p, h_in, h_out, kind });
+        }
+        PathData::single(SubPath::new(anchors, false))
+    }
+
+    /// [`Self::to_path`] with a smooth anchor at `via`, a point on the arc such as the one
+    /// [`Self::through`] passes through, so the path passes through it exactly: the arc to `via`
+    /// and the arc on from it, each cut into quarter turns at most. A `via` at an end, or off the
+    /// stretch between the ends, gives [`Self::to_path`].
+    pub fn to_path_via(&self, via: Point) -> PathData {
+        let angle = |p: Point| (p.y - self.center.y).atan2(p.x - self.center.x);
+        let turn = (angle(via) - angle(self.start)).rem_euclid(TAU);
+        // The turn from `start` to `via` the way the arc runs.
+        let to_via = if self.sweep > 0.0 { turn } else { turn - TAU };
+        let share = to_via / self.sweep;
+        if !(share > 0.0 && share < 1.0) || via == self.start || via == self.end {
+            return self.to_path();
+        }
+        let first = Self { end: via, sweep: to_via, ..*self }.to_path();
+        let second = Self { start: via, sweep: self.sweep - to_via, ..*self }.to_path();
+        let (Some(a), Some(b)) = (first.subpaths.into_iter().next(), second.subpaths.into_iter().next()) else { return self.to_path() };
+        let mut anchors: Vec<Anchor> = a.anchors.iter().copied().collect();
+        let mut rest = b.anchors.iter().copied();
+        if let (Some(joint), Some(next)) = (anchors.last_mut(), rest.next()) {
+            joint.h_out = next.h_out;
+            joint.kind = AnchorKind::Smooth;
+        }
+        anchors.extend(rest);
+        PathData::single(SubPath::new(anchors, false))
+    }
+}
+
 /// Logarithmic spiral with decay per full wind (`segments` quarter turns).
 pub fn spiral(center: Point, radius: f64, decay_percent: f64, segments: u32, clockwise: bool) -> PathData {
     let decay = (decay_percent / 100.0).clamp(0.05, 0.9999);
@@ -899,6 +1036,144 @@ mod tests {
         let far = Vec2::new(3.0e6, -2.0e6);
         let (c, radius) = circle_through(o + far, a + far, b + far).unwrap();
         assert!(c.distance(Point::new(4.0, 3.0) + far) < 1e-6 && (radius - 5.0).abs() < 1e-6, "{c:?} {radius}");
+    }
+
+    /// Every point of `path`'s cubics lies on the arc's circle (to 3·10⁻⁴ of the radius, the
+    /// quarter-turn cubic's error), and the path runs from the arc's start to its end.
+    fn assert_on_circle(arc: &CircularArc) {
+        use kurbo::ParamCurve;
+        let path = arc.to_path();
+        let sp = &path.subpaths[0];
+        assert!(!sp.closed);
+        assert_eq!(sp.anchors.first().map(|a| a.p), Some(arc.start));
+        assert_eq!(sp.anchors.last().map(|a| a.p), Some(arc.end));
+        for seg in path.to_bezpath().segments() {
+            for i in 0..=8 {
+                let p = seg.eval(f64::from(i) / 8.0);
+                assert!((p.distance(arc.center) - arc.radius).abs() <= 3e-4 * arc.radius, "{p:?} off the circle");
+            }
+        }
+    }
+
+    /// The arc through a third point: from (0, 0) to (8, 0) through (4, -2) (above the chord on the
+    /// page) bulges up; through (4, 2) it bulges down; each has the circle through the three points
+    /// and goes past the third point. Through (4, 10) it is the larger part of its circle.
+    #[test]
+    fn the_arc_through_a_point_passes_through_it() {
+        let (a, b) = (Point::ORIGIN, Point::new(8.0, 0.0));
+        for (c, major) in
+            [(Point::new(4.0, -2.0), false), (Point::new(4.0, 2.0), false), (Point::new(4.0, 10.0), true), (Point::new(-1.0, -3.0), true)]
+        {
+            let arc = CircularArc::through(a, b, c).unwrap();
+            let (center, radius) = circle_through(a, b, c).unwrap();
+            assert!(arc.center.distance(center) < 1e-12 && (arc.radius - radius).abs() < 1e-12);
+            assert_eq!(arc.sweep.abs() > PI, major, "{c:?}: {}", arc.sweep);
+            // The third point is on the arc: some point along it is the third point.
+            let nearest = (0..=10_000).map(|i| arc.at(f64::from(i) / 10_000.0).distance(c)).fold(f64::INFINITY, f64::min);
+            assert!(nearest < 0.01, "{c:?}: {nearest}");
+            assert!(arc.at(0.0).distance(a) < 1e-12 && arc.at(1.0).distance(b) < 1e-9);
+            assert_on_circle(&arc);
+        }
+        // A half circle: two pieces, its middle anchor at the third point.
+        let arc = CircularArc::through(a, b, Point::new(4.0, -4.0)).unwrap();
+        let path = arc.to_path();
+        assert_eq!(path.subpaths[0].anchors.len(), 3);
+        assert!(path.subpaths[0].anchors[1].p.distance(Point::new(4.0, -4.0)) < 1e-12);
+        assert_eq!(path.subpaths[0].anchors[1].kind, AnchorKind::Smooth);
+        // Almost a whole circle: four pieces.
+        let arc = CircularArc::through(a, Point::new(0.0, 0.01), Point::new(8.0, 0.0)).unwrap();
+        assert_eq!(arc.to_path().subpaths[0].anchors.len(), 5);
+        assert_on_circle(&arc);
+    }
+
+    /// With an anchor at the third point, the path passes through it exactly, whichever way the
+    /// arc runs, even where one cubic would miss it (a quarter turn of radius 1000 misses a point
+    /// 20° along by about 0.27). Each part keeps to a quarter turn, the anchor there is smooth, and
+    /// a point at an end leaves the path as `to_path` makes it.
+    #[test]
+    fn the_path_via_the_third_point_passes_through_it_exactly() {
+        let center = Point::new(0.0, 0.0);
+        let on = |deg: f64| Point::new(1000.0 * deg.to_radians().cos(), 1000.0 * deg.to_radians().sin());
+        for (a, b, c) in [(0.0, 90.0, 20.0), (90.0, 0.0, 20.0), (0.0, 300.0, 170.0), (300.0, 0.0, 10.0)] {
+            let arc = CircularArc::through(on(a), on(b), on(c)).unwrap();
+            assert!(arc.center.distance(center) < 1e-6);
+            let path = arc.to_path_via(on(c));
+            let sp = &path.subpaths[0];
+            let joint = sp.anchors.iter().find(|x| x.p == on(c)).expect("an anchor at the third point");
+            assert_eq!(joint.kind, AnchorKind::Smooth);
+            assert_eq!((sp.anchors.first().map(|x| x.p), sp.anchors.last().map(|x| x.p)), (Some(arc.start), Some(arc.end)));
+            // No piece turns more than a quarter turn.
+            let points: Vec<Point> = sp.anchors.iter().map(|x| x.p).collect();
+            for w in points.windows(2) {
+                let (u, v) = (w[0] - arc.center, w[1] - arc.center);
+                assert!(u.cross(v).atan2(u.dot(v)).abs() <= std::f64::consts::FRAC_PI_2 + 1e-9, "{a} {b} {c}");
+            }
+            use kurbo::ParamCurve;
+            for seg in path.to_bezpath().segments() {
+                for i in 0..=8 {
+                    let p = seg.eval(f64::from(i) / 8.0);
+                    assert!((p.distance(arc.center) - arc.radius).abs() <= 0.3, "{p:?} off the circle");
+                }
+            }
+        }
+        // A third point a hair from an end is still an anchor.
+        let near = Point::new(1000.0, 0.0000005);
+        let arc = CircularArc::through(on(0.0), on(90.0), near).unwrap();
+        assert!(arc.to_path_via(near).subpaths[0].anchors.iter().any(|x| x.p == near));
+        let arc = CircularArc::through(on(0.0), on(90.0), on(20.0)).unwrap();
+        assert_eq!(arc.to_path_via(on(0.0)), arc.to_path());
+        assert_eq!(arc.to_path_via(on(180.0)), arc.to_path());
+    }
+
+    /// The arc that leaves its start along a direction: from (0, 0) heading up the page (-y) to
+    /// (8, 0) is the upper half circle about (4, 0); heading down, the lower one. Its tangent at the
+    /// start is the direction, and arriving at the end mirrors it.
+    #[test]
+    fn the_arc_leaving_along_a_direction_has_that_tangent() {
+        let (a, b) = (Point::ORIGIN, Point::new(8.0, 0.0));
+        let up = CircularArc::leaving(a, Vec2::new(0.0, -3.0), b).unwrap();
+        assert!(up.center.distance(Point::new(4.0, 0.0)) < 1e-12 && (up.radius - 4.0).abs() < 1e-12);
+        assert!(up.at(0.5).distance(Point::new(4.0, -4.0)) < 1e-9, "{:?}", up.at(0.5));
+        let down = CircularArc::leaving(a, Vec2::new(0.0, 3.0), b).unwrap();
+        assert!(down.at(0.5).distance(Point::new(4.0, 4.0)) < 1e-9, "{:?}", down.at(0.5));
+        // Leaving at 45° up and right: a quarter circle, tangent along the direction.
+        for d in [Vec2::new(1.0, -1.0), Vec2::new(1.0, 1.0), Vec2::new(-1.0, -0.2), Vec2::new(-1.0, 3.0)] {
+            let arc = CircularArc::leaving(a, d, b).unwrap();
+            let first = &arc.to_path().subpaths[0].anchors[0];
+            let tangent = first.h_out - first.p;
+            assert!((tangent.normalize().dot(d.normalize()) - 1.0).abs() < 1e-12, "{d:?}: {tangent:?}");
+            assert_on_circle(&arc);
+            // Arriving along a direction at the end: the tangent into the end is the direction.
+            let arc = CircularArc::arriving(a, b, d).unwrap();
+            let last = arc.to_path().subpaths[0].anchors.last().copied().unwrap();
+            let tangent = last.p - last.h_in;
+            assert!((tangent.normalize().dot(d.normalize()) - 1.0).abs() < 1e-12, "{d:?}: {tangent:?}");
+            assert_eq!((arc.start, arc.end), (a, b));
+            assert_on_circle(&arc);
+        }
+    }
+
+    /// No arc for points that are the same, a third point on the chord's line, a zero or not
+    /// finite direction, or a direction along the chord's line.
+    #[test]
+    fn degenerate_points_give_no_arc() {
+        let (a, b) = (Point::new(1.0, 2.0), Point::new(5.0, 7.0));
+        assert_eq!(CircularArc::through(a, a, b), None);
+        assert_eq!(CircularArc::through(a, b, b), None);
+        assert_eq!(CircularArc::through(a, b, a.midpoint(b)), None);
+        assert_eq!(CircularArc::through(a, b, a + (b - a) * 3.0), None);
+        assert_eq!(CircularArc::through(a, b, Point::new(f64::INFINITY, 0.0)), None);
+        assert_eq!(CircularArc::leaving(a, Vec2::new(1.0, 0.0), a), None);
+        assert_eq!(CircularArc::leaving(a, Vec2::ZERO, b), None);
+        assert_eq!(CircularArc::leaving(a, Vec2::new(f64::NAN, 1.0), b), None);
+        assert_eq!(CircularArc::leaving(a, b - a, b), None);
+        assert_eq!(CircularArc::leaving(a, a - b, b), None);
+        assert_eq!(CircularArc::arriving(a, b, b - a), None);
+        // Off the line by 10⁻⁴ over a chord of 2000 still makes an arc.
+        let (p, q) = (Point::new(-1000.0, 0.0), Point::new(1000.0, 0.0));
+        assert!(CircularArc::leaving(p, Vec2::new(2000.0, 1e-4), q).is_some());
+        // Off the line by 10⁻¹² of the chord is in line: no arc, rather than a circle 10¹² chords wide.
+        assert_eq!(CircularArc::leaving(p, Vec2::new(1.0, 1e-12), q), None);
     }
 
     /// Two points that are the same, or three on one line, give no circle.
