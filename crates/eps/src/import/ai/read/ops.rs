@@ -2,9 +2,12 @@ use super::containers::close;
 use super::document::slot_of;
 use super::types::{BLENDS, FLIP, Frame, GRAPH_UNENDED, IGNORED, Kind, MAX_DEPTH, MAX_NODES, MAX_TAG_TEXT, MAX_TAGS, Place, URL_TAG, line_width};
 use super::{
-    Affine, Appearance, AppearanceItem, Arc, BlendMode, BrushesKept, Dash, FillLayer, FillRule, Global, Gradient, GradientDef, HashMap, HashSet,
-    Instance, Knockout, LayerColor, LineCap, LineJoin, Node, NodeId, NodeKind, Paint, Reader, Rect, ShownNames, StrokeLayer, V, obj, paint,
+    Affine, Appearance, AppearanceItem, Arc, BlendMode, BrushesKept, CustomArrowhead, Dash, FillLayer, FillRule, Global, Gradient, GradientDef,
+    HashMap, HashSet, Instance, Knockout, LayerColor, LineCap, LineJoin, Node, NodeId, NodeKind, Paint, Reader, Rect, ShownNames, StrokeLayer, V,
+    obj, paint,
 };
+use vectorcraft_doc::{ArrowAlign, Arrowhead};
+use vectorcraft_geom::PathData;
 
 impl<'a> Reader<'a> {
     // ---- operators -------------------------------------------------------------------------
@@ -707,6 +710,30 @@ impl<'a> Reader<'a> {
         self.note_state();
     }
 
+    /// Read the heads of the arrowhead symbols the art styles' strokes name into
+    /// [`Reader::arrowheads`] ([`crate::import::ai::arrowhead::head`]), each symbol once. Called
+    /// when the styles are read and again when the symbols have all been read ([`Self::check_symbols`]),
+    /// for a file that defines its symbols after its styles: a name with no symbol read yet is
+    /// left for then.
+    pub(super) fn read_arrowheads(&mut self) {
+        use crate::import::ai::style::StyleItem;
+        for st in self.styles.values() {
+            for item in &st.items {
+                let StyleItem::Stroke { arrows: Some(arrows), .. } = item else { continue };
+                for name in arrows.symbols() {
+                    if self.arrowheads.contains_key(name) {
+                        continue;
+                    }
+                    let symbol = self.symbol_names.get(name).and_then(|named| self.doc.symbols.iter().find(|s| &s.name == named));
+                    if let Some(s) = symbol {
+                        let head = crate::import::ai::arrowhead::head(name, &s.art).map(Arc::new);
+                        self.arrowheads.insert(name.to_string(), head);
+                    }
+                }
+            }
+        }
+    }
+
     /// Brings [`Reader::brushes_kept`] up to date with the brushes and brush art read so far.
     fn note_brushes_kept(&mut self) {
         use super::super::brush;
@@ -818,6 +845,7 @@ impl<'a> Reader<'a> {
                     brushes: &self.brush_drafts,
                     kept: &self.brushes_kept.kept,
                     bending: &self.brushes_kept.bending,
+                    arrowheads: &self.arrowheads,
                     space,
                 },
             )
@@ -1061,6 +1089,8 @@ struct StylePaints<'a> {
     kept: &'a [bool],
     /// The art an Art brush draws as the file does, with its length ([`super::super::brush::bending_art`]).
     bending: &'a HashMap<String, f64>,
+    /// The heads of the arrowhead symbols strokes name ([`Reader::arrowheads`]).
+    arrowheads: &'a HashMap<String, Option<Arc<CustomArrowhead>>>,
     space: Affine,
 }
 
@@ -1411,7 +1441,7 @@ fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, p
                         return None;
                     }
                 }
-                stroke_layer(item)?
+                stroke_layer(item, paints.arrowheads)?
             }
         };
         if let Some(look) = st.looks.get(n) {
@@ -1429,6 +1459,88 @@ fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, p
     // only where they draw the outline the drawn look has.
     if !slot && st.effects.iter().any(|e| e.id == "distort.zigZag") && !draws_look_outline(object, &appearance, look) {
         return None;
+    }
+    heads_placed(object, look, appearance, paints.space)
+}
+
+/// What `appearance` paints on path or compound path `object`: its fills' outline and its strokes'
+/// areas, heads included, measured exactly (a node's visual bounds allow a head its whole reach on
+/// every side). `None` for another object or an appearance that paints nothing.
+fn painted_bounds(object: &Node, appearance: &Appearance) -> Option<Rect> {
+    let (path, rule) = match &object.kind {
+        NodeKind::Path { path, rule, .. } => (path.clone(), *rule),
+        NodeKind::Compound { children, rule } => {
+            (PathData::new(children.iter().filter_map(|c| c.path_data()).flat_map(|p| p.subpaths.iter().cloned()).collect()), *rule)
+        }
+        _ => return None,
+    };
+    let mut out = None;
+    for item in &appearance.items {
+        let painted = match item {
+            AppearanceItem::Fill(f) if f.visible && !f.paint.is_none() => path.bounds(),
+            AppearanceItem::Stroke(s) if s.visible && !s.paint.is_none() => vectorcraft_effects::stroke::outline_region(&path, rule, s).bounds(),
+            _ => None,
+        };
+        out = vectorcraft_geom::union_opt(out, painted);
+    }
+    out
+}
+
+/// `appearance` (on `object`, whose drawn look is `look`, in a space `space` takes to the
+/// document) with its strokes' arrowheads placed as the look draws them: the tips on the ends of
+/// the path, or past them by the line's length under each head (Extend), whichever gives the
+/// object the look's bounds within a quarter of the least distance a head moves between the two
+/// (at least 0.05 pt, at most 0.5 pt). `None`
+/// when neither does (the file draws the heads elsewhere: on other subpaths, say), or when both do
+/// and any head moves 0.2 pt or more between them (the bounds can't tell which the file draws).
+fn heads_placed(object: &Node, look: &Node, mut appearance: Appearance, space: Affine) -> Option<Appearance> {
+    let k = space.determinant().abs().sqrt();
+    let k = if k.is_finite() && k > 0.0 { k } else { 1.0 };
+    // How far each head moves between the placements (its line's length under it): the least and
+    // the most.
+    let (mut shift, mut most) = (f64::INFINITY, 0.0f64);
+    for item in &appearance.items {
+        let AppearanceItem::Stroke(s) = item else { continue };
+        for (head, end) in [(&s.start_arrow, false), (&s.end_arrow, true)] {
+            if let Some(Arrowhead::Custom(c)) = head {
+                let moves = c.stop() * s.arrow_weight(end) * k;
+                (shift, most) = (shift.min(moves), most.max(moves));
+            }
+        }
+    }
+    if shift.is_infinite() {
+        return Some(appearance);
+    }
+    let want = look.visual_bounds()?;
+    // Well under the distance between the placements, and under half a point: a look without
+    // those heads, or with them elsewhere, is off by more.
+    let tolerance = (shift / 4.0).clamp(0.05, 0.5);
+    let mut fits = vec![];
+    for align in [ArrowAlign::Tip, ArrowAlign::Extend] {
+        for item in &mut appearance.items {
+            if let AppearanceItem::Stroke(s) = item {
+                s.arrow_align = align;
+            }
+        }
+        let mut scaled = appearance.clone();
+        scaled.scale_strokes(k);
+        let got = painted_bounds(object, &scaled)?;
+        let off = [got.x0 - want.x0, got.y0 - want.y0, got.x1 - want.x1, got.y1 - want.y1].iter().fold(0.0f64, |m, d| m.max(d.abs()));
+        if off <= tolerance {
+            fits.push(align);
+        }
+    }
+    // Both fit when the bounds can't tell the placements apart (the end inside the bounds of the
+    // line's other segments), unless every head moves so little that either draws alike.
+    let align = match fits.as_slice() {
+        [one] => *one,
+        [first, _] if most < 0.2 => *first,
+        _ => return None,
+    };
+    for item in &mut appearance.items {
+        if let AppearanceItem::Stroke(s) = item {
+            s.arrow_align = align;
+        }
     }
     Some(appearance)
 }
@@ -1559,7 +1671,11 @@ fn draws_look_outline(object: &Node, appearance: &Appearance, look: &Node) -> bo
 /// A style that is one paint is its fill and stroke ([`crate::import::ai::style::ArtStyle::one_paint`]).
 /// A style keeps only its gradients' names and angles, so each one's gradient, by VectorCraft's own
 /// rule, is fitted to the bounds of whatever object the style is applied to, at its angle.
-pub(super) fn appearance_from_art_style(st: &crate::import::ai::style::ArtStyle, gradients: &HashMap<String, Gradient>) -> Option<Appearance> {
+pub(super) fn appearance_from_art_style(
+    st: &crate::import::ai::style::ArtStyle,
+    gradients: &HashMap<String, Gradient>,
+    arrowheads: &HashMap<String, Option<Arc<CustomArrowhead>>>,
+) -> Option<Appearance> {
     use crate::import::ai::style::StyleItem;
     if !st.plain {
         return None;
@@ -1574,7 +1690,7 @@ pub(super) fn appearance_from_art_style(st: &crate::import::ai::style::ArtStyle,
             StyleItem::Fill(paint) => AppearanceItem::Fill(FillLayer::new(paint.clone())),
             // A graphic style's brush isn't checked against the file's brushes: it is left out.
             StyleItem::Stroke { brush: Some(_), .. } => return None,
-            StyleItem::Stroke { .. } => stroke_layer(item)?,
+            StyleItem::Stroke { .. } => stroke_layer(item, arrowheads)?,
             StyleItem::Gradient { name, angle } => AppearanceItem::Fill(FillLayer::new(named_gradient(name.as_deref()?, *angle, gradients)?)),
             StyleItem::Pattern { .. } => return None,
         };
@@ -1665,7 +1781,7 @@ pub(crate) fn read_parsed_style(parsed: &ParsedStyle, own_gradient: Option<&Pain
         .collect();
     // No gradient is taken by name: on an object, one that isn't its own is placed where its drawn
     // look has it.
-    let mut appearance = appearance_from_art_style(&st, &HashMap::new())?;
+    let mut appearance = appearance_from_art_style(&st, &HashMap::new(), &HashMap::new())?;
     for (item, brush) in appearance.items.iter_mut().zip(brushes) {
         if let (AppearanceItem::Stroke(s), Some(brush)) = (item, brush) {
             s.brush = Some(brush);
@@ -1680,12 +1796,27 @@ pub(crate) fn parsed_moves_with(parsed: &ParsedStyle, object: &Node) -> bool {
     !parsed.style.moves_outline() || moves_with(object, &parsed.style)
 }
 
-/// A style's stroke as an appearance item (`None` for a fill).
-fn stroke_layer(item: &crate::import::ai::style::StyleItem) -> Option<AppearanceItem> {
-    let crate::import::ai::style::StyleItem::Stroke { paint, width, cap, join, miter, dash, profile, align, brush } = item else { return None };
+/// A style's stroke as an appearance item, its arrowheads the heads of `arrowheads` by symbol
+/// name, each tip on its end of the path (where [`heads_placed`] finds the file draws them on an
+/// object; a graphic style keeps that). `None` for a fill, or for a stroke
+/// whose arrowhead symbol has no head there or whose head's weight would be under the least one
+/// draws at ([`StrokeLayer::arrow_weight`]), so the head would draw larger than in the file.
+fn stroke_layer(item: &crate::import::ai::style::StyleItem, arrowheads: &HashMap<String, Option<Arc<CustomArrowhead>>>) -> Option<AppearanceItem> {
+    let crate::import::ai::style::StyleItem::Stroke { paint, width, cap, join, miter, dash, profile, align, brush, arrows } = item else {
+        return None;
+    };
     let mut layer = StrokeLayer::new(paint.clone(), line_width(*width));
     (layer.cap, layer.join, layer.miter_limit, layer.dash, layer.profile, layer.align) = (*cap, *join, *miter, dash.clone(), profile.clone(), *align);
     layer.brush = brush.as_ref().map(|(name, _)| name.clone());
+    if let Some(arrows) = arrows {
+        let head = |end: &Option<(String, f64)>| -> Option<(Option<Arrowhead>, f64)> {
+            let Some((name, pct)) = end else { return Some((None, 100.0)) };
+            let head = arrowheads.get(name)?.clone()?;
+            (layer.width * pct / 100.0 >= StrokeLayer::LEAST_ARROW_WEIGHT).then_some((Some(Arrowhead::Custom(head)), *pct))
+        };
+        let ((start, start_pct), (end, end_pct)) = (head(&arrows.start)?, head(&arrows.end)?);
+        (layer.start_arrow, layer.end_arrow, layer.arrow_scale, layer.arrow_align) = (start, end, (start_pct, end_pct), ArrowAlign::Tip);
+    }
     Some(AppearanceItem::Stroke(layer))
 }
 
@@ -1914,6 +2045,7 @@ mod tests {
             brushes: &brushes,
             kept: &[true],
             bending: &bending,
+            arrowheads: &HashMap::new(),
             space: Affine::IDENTITY,
         };
         let look = Node::group(NodeId(1), vec![square(2, Paint::solid(vectorcraft_color::Color::rgb(1.0, 0.0, 0.0)))]);
@@ -1960,6 +2092,7 @@ mod tests {
             brushes: &[],
             kept: &[],
             bending: &bending,
+            arrowheads: &HashMap::new(),
             space: Affine::IDENTITY,
         };
         let look = Node::group(NodeId(1), vec![square(2, Paint::solid(vectorcraft_color::Color::rgb(1.0, 0.0, 0.0)))]);

@@ -573,6 +573,27 @@ fn objects_on_path_detach_strings_are_in_complete_catalogs() {
     }
 }
 
+/// View › Proof Setup › Customize's labels.
+#[test]
+fn proof_setup_dialog_labels_are_in_complete_catalogs() {
+    let labels = [
+        "Proof Setup",
+        "Device to Simulate:",
+        "Preserve CMYK Numbers",
+        "Preserve RGB Numbers",
+        "Rendering intent:",
+        "Simulate Paper Color",
+        "Simulate Black Ink",
+        "Save…",
+        "Load…",
+    ];
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        for label in labels {
+            assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
+        }
+    }
+}
+
 /// The PSD Import Options dialog's labels, and the warnings and errors of opening and placing a
 /// PSD or PSB file with its layers and slices: each complete catalog translates every one, keeping
 /// its numbers, and translates a reason given inside one.
@@ -770,6 +791,21 @@ fn built_in_library_style_names_are_in_complete_catalogs() {
     );
     assert_eq!(names.len(), 92, "{names:?}");
     let bad = lacking(&names, |c, n| c.plain(n).is_some());
+    assert!(bad.is_empty(), "{}", bad.join("\n"));
+}
+
+/// The Stroke panel and the Dimension tool's Arrow Style list the built-in arrowheads by name, so
+/// each name has a row in each complete catalog: an `arrowhead` row, or a plain one. Feather needs
+/// its `arrowhead` row, since its plain row may name the Feather effect.
+#[test]
+fn built_in_arrowhead_names_are_in_complete_catalogs() {
+    use vectorcraft_doc::Arrowhead;
+    let names = distinct(Arrowhead::ALL.iter().map(|h| h.label().to_string()).collect());
+    assert_eq!(names.len(), 41, "{names:?}");
+    // Spanish's plain Target row names a destination; its arrowhead row names the shape.
+    let es = crate::i18n::Lang::from_code("es").expect("es registered");
+    assert_eq!(crate::i18n::tr_ctx(es, "arrowhead", "Target"), "Diana");
+    let bad = lacking(&names, |c, n| c.contextual("arrowhead", n).is_some() || (n != "Feather" && c.plain(n).is_some()));
     assert!(bad.is_empty(), "{}", bad.join("\n"));
 }
 
