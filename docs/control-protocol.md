@@ -283,6 +283,9 @@ point (the first stop or point when none is selected). `ui.colorWheel {view?, ch
 shows the wheel or the box (a color field with a channel strip at its right), picks the box's channel, shows the
 other colors of a harmony rule as markers on the wheel's ring, and shows or hides the color vision row; it returns
 the settings, and `ui.inspect` reports them as `ui.color_wheel`.
+The key `sliders` shows OKLCH Sliders, HSL Sliders or
+neither (`"oklch"`, `"hsl"` or `"none"`; `"oklch"` is an error while the active document's RGB space, its assigned
+profile or else the working RGB space, is not sRGB), and the settings carry it too.
 
 Edit Colors dialogs: `ui.colorBalanceDialog` opens Adjust Colors (`colorBalance`: fields `mode` `gray`/`rgb`/`cmyk`/
 `global`, the channels `r` `g` `b` / `c` `m` `y` `k` / `gray` / `tint` (global mode) from −100 to 100, `convert`, `fill`, `stroke`,

@@ -49,6 +49,7 @@ pub const TOOL_GROUPS: &[&[ToolInfo]] = &[
     &[
         t("lineSegment", "Line Segment Tool", Some("\\"), "tool-line"),
         t("arc", "Arc Tool", None, "tool-arc"),
+        t(crate::three_point_arc::ID, "Three-Point Arc Tool", None, "tool-three-point-arc"),
         t("spiral", "Spiral Tool", None, "tool-spiral"),
         t("rectangularGrid", "Rectangular Grid Tool", None, "tool-rect-grid"),
         t("polarGrid", "Polar Grid Tool", None, "tool-polar-grid"),
