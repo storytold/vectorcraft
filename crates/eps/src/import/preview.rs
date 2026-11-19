@@ -86,8 +86,39 @@ fn metafile_doc(wmf: &[u8], frame: Rect) -> Option<Document> {
 
 /// The EPSI preview in `ps`'s comments (`%%BeginPreview: width height depth lines`, hex rows,
 /// 0 white and the largest value black).
+/// The shared decoder intentionally tolerates blank preview lines and CR-only line endings;
+/// unlike the former local parser, neither changes the decoded samples.
 fn epsi(ps: &[u8]) -> Option<image::RgbaImage> {
     let bitmap = craft_eps::epsi(ps)?;
     let rgba = bitmap.gray.into_iter().flat_map(|g| [g, g, g, 255]).collect();
     image::RgbaImage::from_raw(bitmap.width, bitmap.height, rgba)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::epsi;
+
+    #[test]
+    fn shared_epsi_depths_keep_row_padding_and_opaque_grayscale() {
+        for (depth, row, gray) in [(1, "40", [255, 0, 255]), (2, "18", [255, 170, 85]), (4, "05a0", [255, 170, 85]), (8, "0055aa", [255, 170, 85])] {
+            let source = format!("%%BeginPreview: 3 2 {depth} 2\n% {row}\n% {row}\n%%EndPreview\n");
+            let image = epsi(source.as_bytes()).expect("ordinary EPSI preview");
+            assert_eq!(image.dimensions(), (3, 2));
+            let expected: Vec<u8> = gray.into_iter().cycle().take(6).flat_map(|g| [g, g, g, 255]).collect();
+            assert_eq!(image.as_raw(), &expected, "depth {depth}");
+        }
+    }
+
+    #[test]
+    fn shared_epsi_intentionally_accepts_blank_and_cr_only_lines() {
+        let ordinary = "%%BeginPreview: 3 2 2 2\n% 18\n% e4\n%%EndPreview\n";
+        let expected = epsi(ordinary.as_bytes()).expect("ordinary preview");
+        for source in [ordinary.replace('\n', "\r"), ordinary.replace("% e4", "\n% e4")] {
+            let image = epsi(source.as_bytes()).expect("documented shared decoder tolerance");
+            assert_eq!(image, expected);
+        }
+        let gray = [255, 170, 85, 0, 85, 170];
+        let rgba: Vec<u8> = gray.into_iter().flat_map(|g| [g, g, g, 255]).collect();
+        assert_eq!(expected.as_raw(), &rgba);
+    }
 }
