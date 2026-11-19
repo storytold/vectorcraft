@@ -130,7 +130,8 @@ type Region = (vectorcraft_geom::BezPath, vectorcraft_geom::FillRule);
 #[derive(Clone)]
 struct ImageRead<'a> {
     blob: &'a vectorcraft_doc::ImageBlob,
-    xf: vectorcraft_geom::Affine,
+    /// Pixel space to the page: the image's transform, or a distorted image's projective map.
+    map: vectorcraft_geom::Homography,
     size: (f64, f64),
     area: Option<Rect>,
     clip: Option<Vec<Region>>,
@@ -261,9 +262,9 @@ impl<'a> Theme<'a> {
             let keeps: Vec<Box<dyn Fn(f64, f64) -> bool + '_>> = group
                 .iter()
                 .map(|r| {
-                    let (xf, (w, h), area, clip, cost, tested) = (r.xf, r.size, r.area, &r.clip, elements(r), &tested);
+                    let (map, (w, h), area, clip, cost, tested) = (r.map, r.size, r.area, &r.clip, elements(r), &tested);
                     Box::new(move |u: f64, v: f64| {
-                        let p = xf * Point::new(u * w, v * h);
+                        let Some(p) = map.apply(Point::new(u * w, v * h)) else { return false };
                         area.is_none_or(|a| a.contains(p))
                             && clip.as_ref().is_none_or(|rs| {
                                 tested.set(tested.get().saturating_add(cost));
@@ -278,7 +279,7 @@ impl<'a> Theme<'a> {
                 .map(|(r, keep)| {
                     use vectorcraft_geom::kurbo::Shape;
                     let (w, h) = r.size;
-                    let inv = r.xf.inverse();
+                    let inv = r.map.inverse();
                     // The box sampled: the marquee, cut to the clipping paths' bounds, so a small
                     // region a clip shows of a large image is still sampled densely.
                     let clip_box = r.clip.as_ref().map(|rs| rs.iter().map(|(bp, _)| bp.bounding_box()).reduce(|a, b| a.union(b)).unwrap_or_default());
@@ -286,12 +287,16 @@ impl<'a> Theme<'a> {
                         (Some(a), Some(c)) => Some(a.intersect(c)),
                         (a, c) => a.or(c),
                     };
-                    let box_uv = region.map(|a| {
-                        let uv: Vec<Point> =
-                            [(a.x0, a.y0), (a.x1, a.y0), (a.x0, a.y1), (a.x1, a.y1)].into_iter().map(|(x, y)| inv * Point::new(x, y)).collect();
+                    // A region that crosses a distorted image's horizon has no box: the whole
+                    // image is sampled, and `keep` tests each pixel.
+                    let box_uv = region.zip(inv).and_then(|(a, inv)| {
+                        let uv: Vec<Point> = [(a.x0, a.y0), (a.x1, a.y0), (a.x0, a.y1), (a.x1, a.y1)]
+                            .into_iter()
+                            .map(|(x, y)| inv.apply(Point::new(x, y)))
+                            .collect::<Option<_>>()?;
                         let low = |f: fn(&Point) -> f64| uv.iter().map(f).fold(f64::INFINITY, f64::min);
                         let high = |f: fn(&Point) -> f64| uv.iter().map(f).fold(f64::NEG_INFINITY, f64::max);
-                        [low(|p| p.x) / w, low(|p| p.y) / h, high(|p| p.x) / w, high(|p| p.y) / h]
+                        Some([low(|p| p.x) / w, low(|p| p.y) / h, high(|p| p.x) / w, high(|p| p.y) / h])
                     });
                     (box_uv, if r.clip.is_some() { clipped } else { budget }, keep.as_ref())
                 })
@@ -401,7 +406,9 @@ impl<'a> Theme<'a> {
                     None
                 };
                 let size = (f64::from(im.width.max(1)), f64::from(im.height.max(1)));
-                self.queue_image(ImageRead { blob, xf: im.xf, size, area, clip: self.clip.clone(), colorize });
+                // A distorted image's pixels are where its projective map puts them.
+                let map = n.image_map().unwrap_or_else(|| vectorcraft_geom::Homography::from_affine(im.xf));
+                self.queue_image(ImageRead { blob, map, size, area, clip: self.clip.clone(), colorize });
                 return;
             }
             NodeKind::SymbolInstance { symbol, xf } => {
@@ -2051,7 +2058,14 @@ mod tests {
         bp.line_to((size, size));
         bp.line_to((0.0, size));
         bp.close_path();
-        ImageRead { blob, xf: Affine::IDENTITY, size: (size, size), area: None, clip: Some(vec![(bp, FillRule::NonZero)]), colorize: None }
+        ImageRead {
+            blob,
+            map: vectorcraft_geom::Homography::from_affine(Affine::IDENTITY),
+            size: (size, size),
+            area: None,
+            clip: Some(vec![(bp, FillRule::NonZero)]),
+            colorize: None,
+        }
     }
 
     /// The reads of one image inside clip groups share the work limit: three reads of a 64 px

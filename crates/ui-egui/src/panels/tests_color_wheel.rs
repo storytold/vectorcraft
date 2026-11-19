@@ -1073,8 +1073,8 @@ fn ui_color_wheel_sets_and_reads_the_sliders() {
     assert_eq!(app.run("ui.colorWheel", json!({"sliders": "hwb"})).unwrap_err(), "`sliders` must be none, oklch or hsl");
     let got = app.run("ui.colorWheel", json!({"sliders": "oklch"})).unwrap();
     let want = json!({
-        "view": "box", "channel": "red", "harmony": false, "harmonyRule": "complementary", "contrast": false, "contrastFor": "normalText",
-        "contrastBackground": null, "vision": false, "sliders": "oklch"
+        "view": "box", "channel": "red", "gamut": false, "harmony": false, "harmonyRule": "complementary", "contrast": false,
+        "contrastFor": "normalText", "contrastBackground": null, "vision": false, "sliders": "oklch"
     });
     assert_eq!(got, want);
     let e = app.run("ui.colorWheel", json!({"view": "wheel", "sliders": "hwb"})).unwrap_err();

@@ -74,6 +74,10 @@ pub struct Session {
     /// While Cmd lends `tool` (a selection tool) for a drag: the tool it was lent to, which comes
     /// back as it was at the release ([`Session::pointer`]).
     pub(crate) lender: Option<Box<dyn Tool>>,
+    /// Set while tool actions that end by switching back to the Live Paint Bucket are applied (the
+    /// Eyedropper's sample into a stop of the bucket's gradient): their paint commands change the
+    /// colors the bucket paints with ([`Session::bucket_paints`]).
+    pub(crate) back_to_bucket: bool,
     /// Pointer and key input that came while the tool computed an edit on another thread, each with
     /// its number and view, made in order once the edit is applied.
     held_input: std::collections::VecDeque<(u64, tooling::HeldInput, ViewInfo)>,
@@ -160,6 +164,8 @@ pub struct Session {
     pub brush_libraries: cmd::brushlib::Libraries,
     /// The custom arrowheads of the arrowheads file (`stroke.arrowheads.*`); none without one.
     pub arrowheads: cmd::arrowheads::Arrowheads,
+    /// The custom bevels of the bevels file (`threeD.bevels.*`); none without one.
+    pub bevels: cmd::bevels::Bevels,
     /// The id each loaded library outside a request's read roots has been shown under, by its own id
     /// ([`cmd::swatchlib::concealed_library_ids`]), kept for the session.
     shown_library_ids: std::sync::Mutex<std::collections::BTreeMap<String, String>>,

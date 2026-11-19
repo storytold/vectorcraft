@@ -455,6 +455,10 @@ fn places(map: Affine) -> bool {
 /// member).
 pub(crate) fn replace_with_image(mut v: Node, image: Node) -> Node {
     if !v.is_layer() {
+        // The new pixels already show a distorted image's distortion.
+        if let Some(e) = v.extras_if_any() {
+            e.image_quad = None;
+        }
         return Node { kind: image.kind, appearance: Default::default(), ..v };
     }
     v.appearance = Default::default();
