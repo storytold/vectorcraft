@@ -3431,6 +3431,9 @@ mark-style	Japanese	일본식
 	Open Recent Files and the Home screen list at most this many recent files; 0 lists none, and VectorCraft still remembers up to 30.	최근 파일 열기와 홈 화면에 표시하는 최근 파일의 최대 개수입니다. 0이면 표시하지 않지만 VectorCraft는 여전히 최대 30개를 기억합니다.
 	When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.	문서를 열 때 저장된 미리 보기를 표시하는 연결된 EPS 이미지는 EPS 파일을 다시 읽지 않고 그 미리 보기를 유지합니다. 변경된 파일은 계속 링크 업데이트 설정을 따릅니다.
 	In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.	픽셀 미리 보기에서 이미지를 매끄럽게 그립니다. 끄면 픽셀 가장자리가 선명하게 보입니다. 픽셀 미리 보기 밖에서는 이미지가 항상 매끄럽습니다.
+	PDF Text	PDF 텍스트
+	The text of a PDF you open or embed comes in as editable type, or as outlines that look the same on a computer without its fonts.	열거나 포함하는 PDF의 텍스트를 편집 가능한 텍스트로, 또는 글꼴이 없는 컴퓨터에서도 똑같이 보이는 윤곽선으로 가져옵니다.
+	Linked pages show the file's own text.	연결된 페이지는 파일 자체의 텍스트를 표시합니다.
 	When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.	연결된 파일이 바뀌면 자동으로는 다시 읽고, 수정 시 확인은 먼저 묻고, 수동은 그대로 두고 상태 표시줄에 메모를 표시합니다.
 	On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.	데스크톱 버전에서 템플릿에서 새로 만들기…와 템플릿으로 저장…이 처음 여는 폴더입니다. 비워 두면 문서 폴더의 VectorCraft Templates를 사용합니다.
 	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	원본 편집은 연결된 파일을 해당 유형에 대한 시스템 기본 앱에서 엽니다. 끄면 연결된 래스터 이미지는 PhotoCraft가 설치되어 있을 때 PhotoCraft에서 열립니다.
