@@ -144,6 +144,8 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 
 macOS cursor delivery (#2292) is narrowed to a native host adapter using the existing artwork and aligned 1×/2× representations. Headless tests cover visible fallbacks, preparation and ownership; native focus/menu/handback timing, mixed displays, Spotlight and full-screen Spaces remain open validation work (see [hardware parity](hardware-parity.md)). This does not close the interaction-fidelity gap or change its score/estimate.
 
+- **Temporary handle mirroring (#7842):** with Direct Selection, add Control (Command on macOS) after a direction-handle drag begins to mirror the opposite handle at equal length. This includes ordinary paths, type on a path and blend spines; a missing opposite handle is pulled out while the modifier is held. At an open end, where no segment leaves the anchor on the other side, the handle moves as it does without the modifier. Letting go returns to the drag's normal handle behavior, Shift constrains before mirroring, and Alt takes independent-handle priority. The existing Control/Command-before-press Selection-tool loan is unchanged, and the Control/Command press that lends Direct Selection while another tool, such as the Pen, is chosen does not mirror until it is let go and pressed again. This does not add a persistent coupling mode or change Pen, mesh or warp gestures; the broader G1 scope and estimates remain.
+
 - **Selection fill eligibility (#6625):** Path and compound-path interiors use any enabled non-None fill row (#6625). A lower visible fill remains selectable beneath a top None row in the same object; hidden-only and true-None interiors miss. Zero-opacity fills remain selectable. Original CPU-render and document-hit regressions in `crates/engine/tests/path_fill_hits.rs` cover seven Path and five Compound cases, including stroke edges, geometric outlines, Outline/path-only modes and compound holes. Hidden-fill and no-fill stroked paths must respect butt, round and square caps and bevel, round and miter joins. Focused cap/join CPU regressions passed. Scores and estimates unchanged.
 
 - **Panel collapse controls (#5925, in part):** The small » in a floating tab-group header moves that group into the side icon rail, reusing the existing rail or creating one. An opened rail panel has the same control to fold its flyout back into the rail, including after a tab switch. Both controls preserve the tab group and its menu; other floating groups and full-width docked headers stay as they were. Pointer regressions in `crates/ui-egui/src/panel_docking/tests.rs` cover grouped tabs, reopening, separate groups, a missing rail, the menu and flyout closure after switching tabs; `native_tests.rs` covers the native-window click and removal of the empty palette. Scores and estimates unchanged.
@@ -715,8 +717,8 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
   libraries ([public source](https://helpx.adobe.com/illustrator/desktop/paint-and-fill/apply-and-edit-strokes/create-new-brush-libraries.html),
   [import](https://helpx.adobe.com/illustrator/desktop/paint-and-fill/apply-and-edit-strokes/import-brushes-from-brush-libraries-or-other-files.html)):
   Window › Brush Libraries and the Brushes panel's Brush Libraries Menu open each library in a library panel of
-  its own (thirteen original libraries generated in code: Art Ribbons, Ink and Wash, Calligraphic Nibs, Pressure Sensitive, Bristle Brushes (one
-  bristle brush for each tip shape), Pattern Borders, Scatter Shapes, Stipple (Fine, Dense, Soft and Bold dot textures), Game Trails, Energy Beams, Dry Media (grainy chalk, pencil, crayon and charcoal art brushes), Tech Circuit (Circuit Trace, Bus Lines and Terminal Nodes) and Arrows (Solid, Open, Double, Chevron and Dashed Arrow); User Defined; Other Library… reads the brushes of any document VectorCraft opens); a
+  its own (fourteen original libraries generated in code: Art Ribbons, Ink and Wash, Calligraphic Nibs, Pressure Sensitive, Bristle Brushes (one
+  bristle brush for each tip shape), Pattern Borders, Scatter Shapes, Stipple (Fine, Dense, Soft and Bold dot textures), Game Trails, Energy Beams, Dry Media (grainy chalk, pencil, crayon and charcoal art brushes), Tech Circuit (Circuit Trace, Bus Lines and Terminal Nodes), Engraving (Fine, Dense, Tapered and Broken Hatching) and Arrows (Solid, Open, Double, Chevron and Dashed Arrow); User Defined; Other Library… reads the brushes of any document VectorCraft opens); a
   click adds a
   brush to the document's Brushes with the patterns, symbols and other resources its art uses, as one undo
   step (applied to the selected paths in the same step), dragging one onto a path adds and applies it and
@@ -739,7 +741,7 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
   painted with the texture effects, and Paper Cutouts with six original layered-paper styles, two colored cut edges
   and crisp cast shadows; User Defined; Other Library…; `graphicStyle.libraries`,
   `graphicStyle.addFromLibrary`).
-- **Missing:** more built-in brush libraries beyond the eleven shipped (and further graphic-style libraries beyond the twelve shipped, and further symbol libraries beyond Basic
+- **Missing:** more built-in brush libraries beyond the fourteen shipped (and further graphic-style libraries beyond the twelve shipped, and further symbol libraries beyond Basic
   Shapes, UI Frames, Map Markers, Inventory Icons, Skill Icons and Weather Icons; original, generated in code, never Adobe's); dynamic symbols' `.ai` read and write.
 - **Estimate:** 3–13 h (estimated).
 
