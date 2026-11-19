@@ -901,6 +901,7 @@ fn right_click_context_menu_in_brushes_panel() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
     app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();
+    app.run("brush.apply", json!({"name": "Tapered Stroke"})).unwrap();
 
     let mut h = egui_kittest::Harness::builder().with_size(vec2(260.0, 500.0)).with_accessibility_check(false).build_ui_state(
         |ui, app: &mut VectorcraftApp| {
@@ -919,7 +920,8 @@ fn right_click_context_menu_in_brushes_panel() {
         h.run_steps(2);
     };
 
-    // 1. Initial state: Charcoal is not current (first brush e.g. 5 pt. Round is current)
+    // 1. Initial state: artwork uses Tapered Stroke; Charcoal is not current
+    assert_eq!(selected_brush(h.state()).as_deref(), Some("Tapered Stroke"));
     assert_ne!(brushes(h.state_mut()).1.as_deref(), Some("Charcoal"));
 
     // Right-click unselected "Charcoal"
@@ -927,7 +929,11 @@ fn right_click_context_menu_in_brushes_panel() {
 
     // Right-clicking selects Charcoal in panel without applying it to the selected artwork
     assert_eq!(brushes(h.state_mut()).1.as_deref(), Some("Charcoal"));
-    assert_ne!(selected_brush(h.state()).as_deref(), Some("Charcoal"), "right-click must not apply brush to artwork");
+    assert_eq!(selected_brush(h.state()).as_deref(), Some("Tapered Stroke"), "right-click must not apply brush to artwork");
+    let (multi_sel, _): (Option<Vec<String>>, Option<ClickKey>) = pstate(&h.ctx, "br-selected");
+    assert_eq!(multi_sel, Some(vec!["Charcoal".to_string()]), "right-clicked brush is recorded as panel selection");
+    let (b_list, b_cur) = brushes(h.state_mut());
+    assert_eq!(targets(h.state(), &h.ctx, &b_list, b_cur.as_deref()), vec!["Charcoal".to_string()]);
 
     // Context menu displays Brush Options…, Duplicate Brush, Delete Brush
     let opt = h.get_by_label("   Brush Options…");

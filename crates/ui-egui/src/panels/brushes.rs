@@ -426,8 +426,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             let mut pick = |resp: egui::Response, name: &String| {
                 if resp.secondary_clicked() {
                     let is_selected = match &multi {
-                        Some(m) if m.len() > 1 => m.iter().any(|b| b == name),
-                        _ => sel_brush.as_deref() == Some(name) || (sel_brush.is_none() && current.as_deref() == Some(name)),
+                        Some(m) => m.iter().any(|b| b == name),
+                        None => sel_brush.as_deref() == Some(name) || (sel_brush.is_none() && current.as_deref() == Some(name)),
                     };
                     if !is_selected {
                         set_pstate(&resp.ctx, "br-anchor", name.clone());
@@ -436,7 +436,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                         }
                         let now = brushes(app).1;
                         let key = click_key(app, now.as_deref());
-                        set_pstate(&resp.ctx, "br-selected", (None::<Vec<String>>, key));
+                        set_pstate(&resp.ctx, "br-selected", (Some(vec![name.clone()]), key));
                         secondary_selected = Some(name.clone());
                     }
                 }
@@ -490,8 +490,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     {
         app.status(e);
     }
-    if secondary_selected.is_some() {
-        multi = None;
+    if let Some(name) = secondary_selected {
+        multi = Some(vec![name]);
     }
     let highlighted = sel_brush.clone().or(current.clone());
     match clicked {
