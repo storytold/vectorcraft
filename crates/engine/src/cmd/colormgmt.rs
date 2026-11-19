@@ -84,7 +84,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Convert Color",
             [],
             None,
-            "{color (#rrggbbaa and #rgba are refused), to: \"rgb\"|\"cmyk\"|\"gray\"|\"lab\", intent?} → {model, values, hex, lab: [L,a,b], outOfGamut, deltaE}",
+            "{color (#rrggbbaa and #rgba are refused), to: \"rgb\"|\"cmyk\"|\"gray\"|\"lab\"|\"oklch\", intent?} → {model, values, hex, lab: [L,a,b], outOfGamut, deltaE}; oklch values are [L (0..100 %), C, H (0..360°)] of the color's display sRGB (CSS Color 4 OKLCH: https://www.w3.org/TR/css-color-4/#specifying-oklab-oklch), with H 0 for a gray; a color outside sRGB (a Lab color, a CMYK color or an RGB color in a wider working RGB space) is clipped to sRGB first",
             always,
             convert_color
         ),
@@ -1362,10 +1362,15 @@ fn convert_color(_: &mut Session, p: &Value) -> Result<Value> {
     let intent = intent_param(p, C)?.unwrap_or(c.settings().intent);
     let lab = c.lab(&col);
     let (model, vals) = match text_param(p, "to", C)?.unwrap_or("rgb") {
-        "rgb" => ("rgb", values(&c.convert(&col, Model::Rgb, intent))),
-        "cmyk" => ("cmyk", values(&c.convert(&col, Model::Cmyk, intent))),
-        "gray" | "grayscale" => ("gray", values(&c.convert(&col, Model::Gray, intent))),
-        "lab" => ("lab", vec![lab.l, lab.a, lab.b]),
+        "rgb" => ("rgb", json!(values(&c.convert(&col, Model::Rgb, intent)))),
+        "cmyk" => ("cmyk", json!(values(&c.convert(&col, Model::Cmyk, intent)))),
+        "gray" | "grayscale" => ("gray", json!(values(&c.convert(&col, Model::Gray, intent)))),
+        "lab" => ("lab", json!([lab.l, lab.a, lab.b])),
+        "oklch" => {
+            // RGB numbers past 0..1 ([2, 2, 2]) display clipped, as `hex` reports them.
+            let [l, ch, h] = vectorcraft_color::oklab::to_oklch(c.display_rgb(&col).map(|v| v.clamp(0.0, 1.0)));
+            ("oklch", json!([l * 100.0, ch, h]))
+        }
         other => return Err(bad(C, format!("unknown model `{other}`"))),
     };
     let de = c.gamut_error(&col);
