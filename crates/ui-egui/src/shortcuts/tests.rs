@@ -1638,6 +1638,45 @@ fn polygonal_lasso_takes_backspace_delete_enter_and_escape_while_a_loop_is_open(
     assert_eq!(sel.anchors.get(&id).map(|a| a.len()), Some(1), "only the corner inside the loop");
 }
 
+/// Color Picker… (`ui.colorPicker`) has no default key. Keyboard Shortcuts lists it, and a key
+/// assigned there opens the picker for the proxy in front: with no document open, with nothing
+/// selected and with an object selected, and for the stroke while the Stroke proxy is in front,
+/// with or without a document open.
+#[test]
+fn a_key_assigned_to_the_color_picker_opens_it_for_the_proxy_in_front() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    crate::shortcut_editor::sync(&app.ui);
+    assert_eq!(crate::shortcut_editor::default_command_shortcut("ui.colorPicker"), None);
+    let listed = app.run("shortcuts.list", json!({"query": "ui.colorPicker"})).unwrap();
+    let rows: Vec<_> = listed.as_array().expect("rows").iter().map(|r| r["label"].clone()).collect();
+    assert_eq!(rows, [json!("Color Picker…")], "Keyboard Shortcuts lists it");
+    app.run("shortcuts.set", json!({"id": "ui.colorPicker", "shortcut": "Cmd+Alt+Shift+F12"})).unwrap();
+    crate::shortcut_editor::sync(&app.ui);
+    let key = || press(Key::F12, Modifiers::COMMAND | Modifiers::ALT | Modifiers::SHIFT);
+    let opened = |app: &mut VectorcraftApp| {
+        let stroke = app.ui.dialog.as_ref().filter(|d| d.kind == "colorPicker").map(|d| d.bool("stroke"));
+        app.ui.dialog = None;
+        stroke
+    };
+    frame(&mut app, key());
+    assert_eq!(opened(&mut app), Some(false), "no document: the fill");
+    app.run("paint.toggleActive", json!({"fill": false})).unwrap();
+    frame(&mut app, key());
+    assert_eq!(opened(&mut app), Some(true), "no document, the Stroke proxy in front: the stroke");
+    app.run("paint.toggleActive", json!({"fill": true})).unwrap();
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    frame(&mut app, key());
+    assert_eq!(opened(&mut app), Some(false), "nothing selected: the fill");
+    let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    frame(&mut app, key());
+    assert_eq!(opened(&mut app), Some(false), "an object selected: the fill");
+    app.run("paint.toggleActive", json!({})).unwrap();
+    frame(&mut app, key());
+    assert_eq!(opened(&mut app), Some(true), "the Stroke proxy in front: the stroke");
+    crate::shortcut_editor::sync(&crate::state::UiState::default());
+}
+
 /// Binds Show Grid to `chord`, or with `None` leaves every command its default shortcut.
 fn bind_grid(app: &mut VectorcraftApp, chord: Option<&str>) {
     app.ui.shortcut_overrides.clear();

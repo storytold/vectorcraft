@@ -374,7 +374,8 @@ impl Exporter<'_> {
         let (mut pushes, isolated_children) = transparency(s, n, page, container, knockout);
         let mask = n.extras().mask.as_deref().filter(|m| !m.disabled);
         let alpha = match (&n.kind, mask) {
-            (NodeKind::Image(im), Some(m)) => self.masked_image(im, m, !n.extras().pixelated),
+            // The mask's image shares the pixel grid only when it has the same corners (or none).
+            (NodeKind::Image(im), Some(m)) if n.image_quad() == m.art.image_quad() => self.masked_image(im, m, !n.extras().pixelated),
             _ => None,
         };
         if let Some(m) = mask
@@ -427,7 +428,7 @@ impl Exporter<'_> {
                 self.shape(s, n, &bp, *rule, page);
             }
             NodeKind::Text(t) => self.text(s, n, t, page),
-            NodeKind::Image(im) => match (n.extras().colorize.as_deref(), self.doc.shown_image(n, im)) {
+            NodeKind::Image(im) if !n.is_distorted_image() => match (n.extras().colorize.as_deref(), self.doc.shown_image(n, im)) {
                 (Some(p @ Paint::Solid { .. }), im) if self.doc.image_blob(&im).is_none_or(vectorcraft_doc::ImageBlob::takes_colorize) => {
                     let im = &*im;
                     if writable(s, im.xf, Rect::new(0.0, 0.0, im.width.max(1).into(), im.height.max(1).into())) {
@@ -442,7 +443,11 @@ impl Exporter<'_> {
                         self.warn(super::exporter::UNWRITABLE_IMAGE);
                     }
                 }
-                (_, im) => self.image(s, &im, alpha, n.extras().pixelated),
+                (_, im) => {
+                    // A piece of a distorted image draws the image its mask was written into.
+                    let alpha = alpha.or_else(|| self.piece_image.as_ref().filter(|(key, _)| *key == im.key).map(|(_, i)| i.clone()));
+                    self.image(s, &im, alpha, n.extras().pixelated)
+                }
             },
             NodeKind::SymbolInstance { symbol, xf } => {
                 // Within the objects a frame may draw of symbol instances, as on screen: nested
@@ -488,16 +493,27 @@ impl Exporter<'_> {
             }
             // A gradient mesh is a smooth patch shading where it can be written as one.
             NodeKind::Mesh(m) if self.mesh(s, m) => {}
-            // Live blends/envelopes/meshes export their evaluated (expanded) form.
+            // Live blends/envelopes/meshes (and distorted images) export their evaluated
+            // (expanded) form.
             NodeKind::Blend { .. }
             | NodeKind::Envelope { .. }
             | NodeKind::Mesh(_)
             | NodeKind::Repeat(_)
             | NodeKind::PlacedDocument(_)
-            | NodeKind::Intertwine { .. } => {
+            | NodeKind::Intertwine { .. }
+            | NodeKind::Image(_) => {
                 let g = vectorcraft_effects::expand_live_deep(Some(self.doc), n);
+                // The pieces draw the image as it is shown, under its color mask's key.
+                let piece = match (&n.kind, &alpha) {
+                    (NodeKind::Image(im), Some(img)) => Some((self.doc.shown_image(n, im).key.clone(), img.clone())),
+                    _ => None,
+                };
+                let outer = piece.map(|p| self.piece_image.replace(p));
                 for c in g.children().into_iter().flatten() {
                     self.node(s, c, page, false);
+                }
+                if let Some(outer) = outer {
+                    self.piece_image = outer;
                 }
             }
             // Ruler guides draw on screen only.

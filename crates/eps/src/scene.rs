@@ -585,7 +585,7 @@ impl<'a> Scene<'a> {
                 self.shape(n, &bp, *rule);
             }
             NodeKind::Text(t) => self.text(n, t),
-            NodeKind::Image(im) => {
+            NodeKind::Image(im) if !n.is_distorted_image() => {
                 let shown = self.doc.shown_image(n, im);
                 let im = &*shown;
                 let blob = self.doc.image_blob(im);
@@ -606,13 +606,15 @@ impl<'a> Scene<'a> {
                     self.nest -= 1;
                 }
             }
-            // Live blends, envelopes, meshes and repeats are written as their evaluated art.
+            // Live blends, envelopes, meshes and repeats (and distorted images) are written as
+            // their evaluated art.
             NodeKind::Blend { .. }
             | NodeKind::Envelope { .. }
             | NodeKind::Mesh(_)
             | NodeKind::Repeat(_)
             | NodeKind::PlacedDocument(_)
-            | NodeKind::Intertwine { .. } => {
+            | NodeKind::Intertwine { .. }
+            | NodeKind::Image(_) => {
                 let g = vectorcraft_effects::expand_live_deep(Some(self.doc), n);
                 for c in g.children().into_iter().flatten() {
                     self.node(c, false);
