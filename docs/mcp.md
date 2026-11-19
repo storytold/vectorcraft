@@ -3892,23 +3892,34 @@ already walks Image Trace. Short agent entry points:
   [the archived manual](https://help.adobe.com/archive/en_US/illustrator/cs5/illustrator_cs5_help.pdf#page=118)):
   `symbol.adjust` takes `method` (`userDefined`, `average` or `random`; not used by `shift`), `usePressure` with
   `points` as `[x, y, pressure]` (each point's pen pressure, 0..1, is the intensity there), and for `size`
-  `proportional` (true) and `affectsDensity` (false). `symbol.spray` takes `attributes`
+  `proportional` (true) and `affectsDensity` (false). With `tool: style`, the style goes on by the brush's strength at
+  each instance: one sample applies it in full only at the brush's center at intensity 10 or full pressure, and the
+  samples of a stroke add up (two samples at the center at intensity 5 apply it in full). With `alt`, `userDefined`
+  and `random` remove all of an instance's appearance items under the brush at once, whatever the brush's strength.
+  A `style` name the document
+  has no graphic style for counts as none (the document's first style after the default one). The Symbol Styler and the
+  Symbol Sprayer (its User Defined Style) send the style last clicked into the Graphic Styles panel's selection. `tool.setOption` on a symbolism tool refuses a `method` or
+  Symbol Sprayer option that is not one of its names, a non-number `diameter`, `intensity` or `density`, a
+  `diameter` outside 2..2000 or an `intensity` or `density` outside 1..10, a non-boolean switch, and a `symbol` or
+  `style` that is neither a name nor null, and sets none of the values. The options dialog's OK checks the same way
+  before it changes any symbol set's density.
+  `symbol.spray` takes `attributes`
   `{scrunch?, size?, spin?, screen?, stain?, style?}`, each `average` or `userDefined`, with `color`, `keepModel` and
   `style` for the User Defined stain and style (with `style: userDefined`, a `style` the document does not have is an
   error). `symbol.setDensity {from, to, ids?|id?}` gives the selected symbol
   sets a new Symbol Set Density. VectorCraft's own rules:
   - `random` gives each instance its own share of the tool's change for the whole stroke, from none of it to twice
-    it (the Spinner: a turn either way), the same each time the stroke is applied.
+    it (the Spinner: a turn either way; the Styler without `shift`: from none to the `userDefined` amount), the same
+    each time the stroke is applied.
   - `average` moves each instance's value toward the mean of the instances within the brush at that point: the
     Scruncher its distance from their middle toward their mean distance, the Sizer the geometric mean of their sizes
     on the page, whatever their symbols, the Spinner their mean direction, the Stainer and the Styler their mean amount, the Screener their mean opacity.
     `alt` does not reverse it. An instance already at the mean is left as it is, and no undo step is added when
     no instance changes. The Screener's average, and the opacity a sprayed instance takes as its average, can be
     below the 5% that the Screener otherwise stops at.
-  - With `userDefined` the Styler gives each instance under the brush the whole style, whatever the intensity or the
-    pen pressure; `random` scales each instance's share by the brush strength there.
-  - With `proportional` false a drag resizes along its own direction (a level drag the width, an upright one the
-    height) and one point resizes both. With `affectsDensity` an instance also moves away from the point as it grows
+  - With `proportional` false a drag resizes along its own direction: the width by the drag's horizontal share and
+    the height by its vertical share (a level drag the width, an upright one the height, a 45° drag both alike), and
+    one point resizes both. With `affectsDensity` an instance also moves away from the point as it grows
     and toward it as it shrinks.
   - A sprayed instance's `average` values are the means of the selected set's instances within `radius` of the
     stroke point: their spacing, size on the page (of any symbol), rotation and opacity, and the stain or style of
@@ -3918,15 +3929,31 @@ already walks Image Trace. Short agent entry points:
   - `symbol.setDensity` moves each instance of a set along the line from the middle of the set's instances, to
     (1.15 − 0.1·`to`) / (1.15 − 0.1·`from`) of its distance from it (each factor at least 0.1), as one undo step, and
     adds none when no instance moves and every set already has density `to`. `from` is the density each set was
-    created at or last given, and the `from` passed applies only to a set without one (a group named "Symbol Set" by
+    created at or last given (a set duplicated has its source's, and a pasted set the one its source had at Copy),
+    and the `from` passed applies only to a set without one (a group named "Symbol Set" by
     hand); every set then has density `to`, also one whose instances do not move (one instance, or each locked). A
     locked or hidden instance stays where it is. It returns `{ids, count}`: the sets changed and the
     instances moved.
   - A `method` or an attribute outside these values, a point's third number that isn't a number (in `symbol.spray`
     too, which does not use it), a `from` or `to` of `symbol.setDensity` outside 1..10, or no symbol set among its
-    objects, is an error and changes nothing.
+    objects, is an error and changes nothing. `symbol.spray` takes a `density` number outside 1..10 as the nearer end.
   - Average leaves an instance without a size (a scale of 0) as it is; the other methods change it. A stroke that
     changes no instance counts none and adds no undo step.
+- The symbolism tools with Shift held ([the manual](https://web.archive.org/web/20210601162814/https://helpx.adobe.com/pdf/illustrator_reference.pdf#page=199),
+  [the CS6 reference](https://web.archive.org/web/20220911143322/https://helpx.adobe.com/pdf/cs6/illustrator_reference.pdf#page=136)) send
+  `shift: true` with `symbol.adjust`: a Shift-click with the Symbol Shifter brings the instances under the brush
+  forward in the stacking order and Alt+Shift sends them backward; the Symbol Sizer keeps the set's density while it
+  resizes; the Symbol Stainer and the Symbol Styler keep the amount of stain or style and move the color or style
+  toward the current fill or the selected style. VectorCraft's own rules:
+  - The Shifter moves each instance within `radius` of any stroke point one place forward among its siblings (with
+    `alt`, one place backward), past the next one that is not under the brush, once for the whole stroke. It does not
+    move them on the canvas. It returns `{count}`, the instances that moved.
+  - The Sizer keeps each instance's center where it is, even with `affectsDensity`.
+  - The Stainer moves an instance's paint toward `color` by the tool's amount at its distance from the point, and the
+    Styler toward the style by the brush's strength there, whatever `method` is. A paint with no form between it and
+    the new one (a solid color and a pattern) takes the new one at once. An instance without a stain or style is left
+    as it is, and `alt` has no effect.
+  - No undo step is added when nothing moves or changes.
 - Dynamic symbols: an instance of a symbol whose `type` is `dynamic` changes the appearance of objects in the symbol's
   art for itself only and stays linked. `symbol.instance.setAppearance {id?, path, fill?, stroke?, opacity?, blend?}`
   names the object by `path`, child indices in paint order from the art's root down through its groups (`[]` is the
