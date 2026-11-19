@@ -283,6 +283,10 @@
 	Arc Lower…	નીચે આર્ક…
 	Arc Segment Tool Options	આર્ક સેગમેન્ટ ટૂલ વિકલ્પો
 	Arc Tool	આર્ક ટૂલ
+	Three-Point Arc Tool	ત્રણ-પૉઇન્ટ આર્ક ટૂલ
+	Three-Point Arc	ત્રણ-પૉઇન્ટ આર્ક
+	Arc too large	આર્ક ખૂબ મોટો છે
+	Third Point Sets Direction	ત્રીજો પૉઇન્ટ દિશા નક્કી કરે છે
 	Arc Upper…	ઉપર આર્ક…
 	Arch…	કમાન…
 	Arc…	આર્ક…
@@ -2037,6 +2041,7 @@
 	Knockout Group	નૉકઆઉટ ગ્રૂપ
 	LZW Compression	LZW કમ્પ્રેશન
 	OKLCH Sliders	OKLCH સ્લાઇડર્સ
+	HSL Sliders	HSL સ્લાઇડર્સ
 	Chroma	ક્રોમા
 	The largest chroma sRGB holds at this lightness and hue	આ લાઇટનેસ અને હ્યૂ પર sRGB સમાવી શકે તે સૌથી વધુ ક્રોમા
 	OKLCH needs sRGB as the working RGB space	OKLCH માટે કાર્યકારી RGB સ્પેસ તરીકે sRGB જરૂરી છે
@@ -3297,6 +3302,8 @@ arrowhead	Feather	પીંછું
 	Reselect	ફરી પસંદ કરો
 	Reset	રીસેટ કરો
 	Reset Bar Position	બાર સ્થિતિ રીસેટ કરો
+	Bar Actions	બાર ક્રિયાઓ
+	Reset Bar Actions	બાર ક્રિયાઓ રીસેટ કરો
 	Reset Bounding Box	બાઉન્ડિંગ બોક્સ રીસેટ કરો
 	Rotate Bounding Box	બાઉન્ડિંગ બોક્સ ફેરવો
 	Rotate Bounding Box…	બાઉન્ડિંગ બોક્સ ફેરવો…
@@ -5647,6 +5654,20 @@ swatch	[Registration]	[રજિસ્ટ્રેશન]
 	Standard Single-line Composer	સ્ટાન્ડર્ડ સિંગલ-લાઇન કમ્પોઝર
 	Standard Every-line Composer	સ્ટાન્ડર્ડ એવરી-લાઇન કમ્પોઝર
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer આમાંથી એક હોવું જોઈએ: "singleLine", "everyLine", "standardSingleLine" અથવા "standardEveryLine"
+	Orbit Lines	ભ્રમણકક્ષાની રેખાઓ
+	Petal Garland	પાંખડીઓની માળા
+	Lattice Braid	જાળી વેણી
+	Facet Sweep	પાસાદાર રેખા
+	Artistic Brushes	કલાત્મક બ્રશ
+	Paint	રંગકામ
+	Flat Sweep	સપાટ લસરકો
+	Dry Drag	સૂકો ઘસારો
+	Loaded Stroke	ઘાટો પીંછીનો ઘસારો
+	Fan Sweep	પંખા જેવો લસરકો
+@msg	`at` must be "start" or "end"	`at` "start" અથવા "end" હોવું જોઈએ
+@msg	give exactly one of `through` and `toward`	`through` અને `toward` માંથી બરાબર એક આપો
+@msg	no arc fits these points: two are the same or all three lie on one line	આ પૉઇન્ટ્સમાં કોઈ આર્ક બેસતો નથી: બે એકસરખા છે અથવા ત્રણેય એક જ રેખા પર છે
+@msg	give `at` only with `toward`	`at` ફક્ત `toward` સાથે જ આપો
 	Engraving	કોતરણી
 	Fine Hatching	ઝીણી રેખાઓ
 	Dense Hatching	ગાઢ રેખાઓ

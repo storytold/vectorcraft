@@ -807,6 +807,8 @@
 	Contextual Task Bar	Kontekstuaalinen tehtäväpalkki
 	Pin Bar Position	Kiinnitä palkin sijainti
 	Reset Bar Position	Palauta palkin sijainti
+	Bar Actions	Palkin toiminnot
+	Reset Bar Actions	Palauta palkin toiminnot
 	Resize	Muuta kokoa
 	Tools	Työkalut
 	Toolbars	Työkalurivit
@@ -1514,6 +1516,10 @@ lighting	Light	Valo
 	Add Anchor Point Tool	Lisää ankkuripiste -työkalu
 	Anchor Point Tool	Ankkuripistetyökalu
 	Arc Tool	Kaarityökalu
+	Three-Point Arc Tool	Kolmen pisteen kaaren työkalu
+	Three-Point Arc	Kolmen pisteen kaari
+	Arc too large	Kaari on liian suuri
+	Third Point Sets Direction	Kolmas piste määrää suunnan
 	Area Graph Tool	Aluekaaviotyökalu
 	Area Type Tool	Aluetekstityökalu
 	Artboard Tool	Piirtoalustatyökalu
@@ -4577,6 +4583,7 @@ axis	Both	Molemmat
 	Ink	Muste
 	Lab	Lab
 	OKLCH Sliders	OKLCH-liukusäätimet
+	HSL Sliders	HSL-liukusäätimet
 	Chroma	Kroma
 	The largest chroma sRGB holds at this lightness and hue	Suurin kroma, jonka sRGB sisältää tällä vaaleudella ja sävyllä
 	OKLCH needs sRGB as the working RGB space	OKLCH vaatii sRGB:n RGB-työväriavaruudeksi
@@ -5622,6 +5629,10 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	a guide has no curvature circle	apuviivalla ei ole kaarevuusympyrää
 @msg	the circle that matches the path there would reach past the canvas	ympyrä, joka vastaa polkua siinä kohdassa, ylittäisi kankaan
 @msg	no circle passes through these points: two are the same or all three lie on one line	näiden pisteiden kautta ei kulje ympyrää: kaksi pisteistä on samoja tai kaikki kolme ovat samalla suoralla
+@msg	`at` must be "start" or "end"	`at` on oltava "start" tai "end"
+@msg	give exactly one of `through` and `toward`	anna täsmälleen yksi parametreista `through` ja `toward`
+@msg	no arc fits these points: two are the same or all three lie on one line	näihin pisteisiin ei sovi kaarta: kaksi pisteistä on samoja tai kaikki kolme ovat samalla suoralla
+@msg	give `at` only with `toward`	anna `at` vain yhdessä parametrin `toward` kanssa
 @msg	no app to open files here	täällä ei ole sovellusta tiedostojen avaamiseen
 @msg	no artboard	ei piirtoalustaa
 @msg	no artboard {i} (0-based; the document has {_1})	ei piirtoalustaa {i} (0-pohjainen; asiakirjassa on {_1})
@@ -6996,7 +7007,7 @@ mark-style	Japanese	Japanilainen
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode`-arvon on oltava grayscale, rgb, hsb, cmyk tai websafe
 @msg	`view` must be wheel or box	`view`-arvon on oltava wheel tai box
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel`-arvon on oltava hue, saturation, brightness, red, green tai blue
-@msg	`sliders` must be none or oklch	`sliders` on oltava none tai oklch
+@msg	`sliders` must be none, oklch or hsl	`sliders` on oltava none, oklch tai hsl
 @msg	OKLCH needs sRGB as the working RGB space	OKLCH vaatii sRGB:n RGB-työväriavaruudeksi
 @msg	`notation` must be hex, hexAlpha, rgb, hsl, oklch or cmyk	`notation` on oltava hex, hexAlpha, rgb, hsl, oklch tai cmyk
 @msg	Copied the color as {text}	Väri kopioitiin muodossa {text}
@@ -8996,6 +9007,16 @@ breakText	Glyphs	Merkit
 @msg	A joint does not close by {gap} pt.	Liitos ei sulkeudu, rako {gap} pt.
 @msg	Two panels pass through each other.	Kaksi paneelia kulkee toistensa läpi.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer on oltava "singleLine", "everyLine", "standardSingleLine" tai "standardEveryLine"
+	Orbit Lines	Kiertoradan viivat
+	Petal Garland	Terälehtiköynnös
+	Lattice Braid	Ristikkopunos
+	Facet Sweep	Särmikäs veto
+	Artistic Brushes	Taidesiveltimet
+	Paint	Maalaus
+	Flat Sweep	Tasainen veto
+	Dry Drag	Kuiva veto
+	Loaded Stroke	Runsas siveltimenveto
+	Fan Sweep	Viuhkaveto
 	Engraving	Kaiverrus
 	Fine Hatching	Hieno viivoitus
 	Dense Hatching	Tiheä viivoitus

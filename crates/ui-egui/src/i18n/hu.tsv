@@ -322,6 +322,10 @@ font-technology	Variable	Változó
 	Arc	Ív
 	Arc Lower…	Alsó ív…
 	Arc Tool	Ív
+	Three-Point Arc Tool	Hárompontos ív eszköz
+	Three-Point Arc	Hárompontos ív
+	Arc too large	Az ív túl nagy
+	Third Point Sets Direction	A harmadik pont adja meg az irányt
 	Arc Upper…	Felső ív…
 	Arch…	Boltív…
 	Arc…	Ív…
@@ -2518,6 +2522,7 @@ file-filter	Templates	Sablonok
 	Knockout Group	Kiütő csoport
 	Lab	Lab
 	OKLCH Sliders	OKLCH csúszkák
+	HSL Sliders	HSL csúszkák
 	Chroma	Króma
 	The largest chroma sRGB holds at this lightness and hue	A legnagyobb króma, amelyet az sRGB ezen a világosságon és színárnyalaton tartalmaz
 	OKLCH needs sRGB as the working RGB space	Az OKLCH-hoz sRGB munka-RGB-színtér szükséges
@@ -3800,6 +3805,8 @@ mark-style	Japanese	Japán
 	Reset all Revolve settings to their defaults.	A tengely körüli forgatás minden beállítását visszaállítja az alapértékre.
 	Reset Automation	Automation visszaállítása
 	Reset Bar Position	Sáv helyének visszaállítása
+	Bar Actions	Sáv műveletei
+	Reset Bar Actions	Sáv műveleteinek visszaállítása
 	Reset Bounding Box	Befoglaló keret visszaállítása
 	Rotate Bounding Box	Befoglaló keret elforgatása
 	Rotate Bounding Box…	Befoglaló keret elforgatása…
@@ -5535,7 +5542,7 @@ imageTrace	Outline	Körvonal
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode`: grayscale, rgb, hsb, cmyk vagy websafe kell
 @msg	`view` must be wheel or box	`view`: wheel vagy box kell
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel`: hue, saturation, brightness, red, green vagy blue kell
-@msg	`sliders` must be none or oklch	A `sliders` értéke none vagy oklch lehet
+@msg	`sliders` must be none, oklch or hsl	A `sliders` értéke none, oklch vagy hsl lehet
 @msg	OKLCH needs sRGB as the working RGB space	Az OKLCH-hoz sRGB munka-RGB-színtér szükséges
 @msg	`notation` must be hex, hexAlpha, rgb, hsl, oklch or cmyk	A `notation` értéke hex, hexAlpha, rgb, hsl, oklch vagy cmyk lehet
 @msg	Copied the color as {text}	A szín másolva ebben a formában: {text}
@@ -6081,6 +6088,10 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	a guide has no curvature circle	a segédvonalnak nincs görbületi köre
 @msg	the circle that matches the path there would reach past the canvas	az útvonalhoz ott illeszkedő kör túlnyúlna a vásznon
 @msg	no circle passes through these points: two are the same or all three lie on one line	ezeken a pontokon nem halad át kör: kettő egybeesik, vagy mindhárom egy egyenesen van
+@msg	`at` must be "start" or "end"	`at`: "start" vagy "end" kell
+@msg	give exactly one of `through` and `toward`	pontosan egyet adjon meg a `through` és a `toward` közül
+@msg	no arc fits these points: two are the same or all three lie on one line	ezekre a pontokra nem illeszkedik ív: kettő egybeesik, vagy mindhárom egy egyenesen van
+@msg	give `at` only with `toward`	az `at` csak a `toward` mellett adható meg
 @msg	no app to open files here	itt nincs fájlmegnyitó alkalmazás
 @msg	no artboard	nincs rajztábla
 @msg	no artboard {i} (0-based; the document has {_1})	nincs ilyen sorszámú rajztábla: {i} (0-tól számozva; a dokumentumban ennyi van: {_1})
@@ -10753,6 +10764,16 @@ breakText	Glyphs	Glifák
 @msg	A panel is not joined to the rest by a crease.	Egy panelt egyetlen bigvonal sem köt a többihez.
 @msg	A fold line is on a non-printing layer.	Egy hajtásvonal nem nyomtatható rétegen van.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panelek: {panels}, zsanérok: {hinges}, hibák: {errors}, figyelmeztetések: {warnings}
+	Orbit Lines	Pályavonalak
+	Petal Garland	Sziromfüzér
+	Lattice Braid	Rácsfonat
+	Facet Sweep	Fazettás vonás
+	Artistic Brushes	Művészi ecsetek
+	Paint	Festék
+	Flat Sweep	Lapos húzás
+	Dry Drag	Száraz húzás
+	Loaded Stroke	Telített ecsetvonás
+	Fan Sweep	Legyezővonás
 	Engraving	Metszet
 	Fine Hatching	Finom vonalkázás
 	Dense Hatching	Sűrű vonalkázás

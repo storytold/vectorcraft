@@ -241,7 +241,7 @@ fn ui_color_wheel_sets_and_reads_the_settings() {
     assert_eq!(app.run("ui.colorWheel", json!(5)).unwrap_err(), "the params must be an object, not 5");
     assert_eq!(
         app.run("ui.colorWheel", json!({"visoin": false})).unwrap_err(),
-        "unknown parameter `visoin`; the command takes: view, channel, harmony, harmonyRule, vision, opacity, hexField, sliders"
+        "unknown parameter `visoin`; the command takes: view, channel, sliders, harmony, harmonyRule, vision, opacity, hexField"
     );
     assert!(app.ui.color_wheel.vision);
     assert_eq!(app.run("ui.colorWheel", json!({"vision": null})).unwrap()["vision"], true);

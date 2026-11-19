@@ -338,14 +338,23 @@ fn convert_to_oklch_answers_lightness_chroma_and_hue() {
     let cyan = s.execute("color.convert", &json!({"color": ink, "to": "oklch"})).unwrap();
     let shown = vectorcraft_color::oklab::to_oklch(cms::active().display_rgb(&Color::cmyk(1.0, 0.0, 0.0, 0.0)));
     let naive = vectorcraft_color::oklab::to_oklch([0.0, 1.0, 1.0]);
-    let l = cyan["values"][0].as_f64().unwrap() / 100.0;
-    assert!((l - shown[0]).abs() < 1e-9 && (l - naive[0]).abs() > 0.02, "{cyan} {shown:?} {naive:?}");
+    let c: Vec<f64> = cyan["values"].as_array().unwrap().iter().map(|v| v.as_f64().unwrap()).collect();
+    let got = [c[0] / 100.0, c[1], c[2]];
+    assert!((0..3).all(|i| (got[i] - shown[i]).abs() < 1e-9) && shown[1] > 0.05, "{cyan} {shown:?}");
+    assert!((got[0] - naive[0]).abs() > 0.02, "{cyan} {naive:?}");
     // A Lab color outside sRGB answers the OKLCH of its color clipped to sRGB.
     let vivid = s.execute("color.convert", &json!({"color": {"l": 50.0, "a": 100.0, "b": 0.0}, "to": "oklch"})).unwrap();
     let w: Vec<f64> = vivid["values"].as_array().unwrap().iter().map(|v| v.as_f64().unwrap()).collect();
-    let clipped = vectorcraft_color::oklab::to_oklch(cms::active().display_rgb(&Color::lab(50.0, 100.0, 0.0)));
+    let shown = cms::active().display_rgb(&Color::lab(50.0, 100.0, 0.0)).map(|v| v.clamp(0.0, 1.0));
+    let clipped = vectorcraft_color::oklab::to_oklch(shown);
     assert!((w[0] / 100.0 - clipped[0]).abs() < 1e-9 && (w[1] - clipped[1]).abs() < 1e-9, "{vivid} {clipped:?}");
+    assert!((w[2] - clipped[2]).abs() < 1e-9 && (0.0..360.0).contains(&w[2]), "{vivid} {clipped:?}");
     assert!(vectorcraft_color::oklab::in_srgb(vectorcraft_color::oklab::oklch_to_srgb(w[0] / 100.0, w[1], w[2])), "{vivid}");
+    // RGB numbers past 0..1 answer the OKLCH of the clipped color `hex` reports: white.
+    let past = s.execute("color.convert", &json!({"color": [2.0, 2.0, 2.0], "to": "oklch"})).unwrap();
+    assert_eq!(past["hex"], "#ffffff");
+    let l = past["values"][0].as_f64().unwrap();
+    assert!((l - 100.0).abs() < 0.01 && past["values"][1].as_f64().unwrap() < 1e-3, "{past}");
 }
 
 /// `color.parse` reads each notation into an RGB color, its hex and the alpha as a percentage (null
