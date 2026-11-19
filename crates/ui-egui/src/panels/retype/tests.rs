@@ -97,6 +97,10 @@ fn more_adds_fonts_until_none_is_left() {
     }
     assert_eq!(last["more"], json!(false), "{last}");
     assert_eq!(app.run("retype.find", json!({"more": true})).unwrap(), last, "nothing is left to add");
+    // A null more is omitted: a new search lists the first ten again. A font added to the list
+    // tells the new search apart from adding more when ten or fewer fonts match.
+    app.ui.retype.fonts.push(super::Found { family: "Not Found".into(), style: "Regular".into(), matched: 0 });
+    assert_eq!(app.run("retype.find", json!({"more": null})).unwrap(), first);
     // Before any search, more is a first search.
     app.run("retype.reset", json!({})).unwrap();
     assert_eq!(app.run("retype.find", json!({"more": true})).unwrap(), first);

@@ -752,6 +752,8 @@ impl<'a> Reader<'a> {
         if std::mem::replace(&mut self.symbols_checked, true) {
             return;
         }
+        // The symbols are all read now: the heads of those defined after the styles.
+        self.read_arrowheads();
         // Each symbol's name in the file (none for one named as an earlier one), and the names its
         // instances use.
         let files: HashMap<&str, &str> = self.symbol_names.iter().map(|(file, named)| (named.as_str(), file.as_str())).collect();
