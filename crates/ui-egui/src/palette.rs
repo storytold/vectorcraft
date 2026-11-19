@@ -1206,6 +1206,13 @@ pub(crate) fn recent_list_open(ctx: &egui::Context) -> bool {
     egui::Popup::is_id_open(ctx, recent_list_id())
 }
 
+/// Opens the palette with an empty search when it is closed, and closes it when it is open.
+pub(crate) fn toggle(app: &mut VectorcraftApp) {
+    app.ui.palette_open = !app.ui.palette_open;
+    app.ui.palette_query.clear();
+    app.ui.palette_toggled = true;
+}
+
 pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     // The widget that had the keyboard focus when the palette opened takes it back when the palette
     // closes, unless a modal window is up (a pick opened a dialog, which focuses its own first
@@ -1214,6 +1221,11 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let focus_id = egui::Id::unique("palette-focus-before");
     let field_id = egui::Id::unique("palette-field");
     let sel_id = egui::Id::unique("palette-selected");
+    // A toggle can close the palette and open it again before it is drawn closed, as two runs of its
+    // command in one step do, so the palette forgets its highlight after any toggle.
+    if std::mem::take(&mut app.ui.palette_toggled) {
+        ctx.data_mut(|d| d.remove::<Highlight>(sel_id));
+    }
     // The Recent Commands rows drawn in the last frame, so a pick with the keyboard, which leaves the
     // focus on its row, gives the focus back too.
     let rows_id = egui::Id::unique("palette-recent-rows");
@@ -1962,6 +1974,10 @@ mod tests {
             remember(&mut list, id, |_| true);
         }
         assert_eq!(list, ["j", "i", "h", "g", "f", "e", "d", "c"]);
+        // A palette toggle saved before its picks were left out takes none of the eight places.
+        let mut list: Vec<String> = [PALETTE_TOGGLE, "a", "b", "c", "d", "e", "f", "g"].map(str::to_string).into();
+        remember(&mut list, "h", |_| true);
+        assert_eq!(list, ["h", "a", "b", "c", "d", "e", "f", "g"]);
         let entries = build(Lang::EN);
         let many: Vec<String> = entries.iter().take(MAX_RECENT_COMMANDS + 2).map(|e| e.id.clone()).collect();
         assert_eq!(recent(&entries, &many).len(), MAX_RECENT_COMMANDS);
@@ -2665,6 +2681,30 @@ mod tests {
         open.frame(vec![egui::Event::PointerMoved(at), button(true), button(false)]);
         assert!(!open.app.ui.palette_open, "the click outside closes the palette");
         open.app.ui.palette_open = true;
+        open.frame(vec![]);
+        assert_eq!(open.highlighted(), 0);
+        let before = open.app.session.active().unwrap().history.undo.len();
+        open.press(egui::Key::Enter, 1);
+        assert!(!open.app.ui.palette_open, "the palette closes");
+        assert_eq!(open.app.session.active().unwrap().history.undo.len(), before + 1, "{}", open.app.ui.status);
+        assert_eq!(open.app.ui.recent_commands, ["paint.swap", "object.group"]);
+    }
+
+    /// A palette that its command closes and opens again before it is drawn closed starts at its
+    /// first row, so Enter on an empty search runs the last pick.
+    #[test]
+    fn the_palette_toggled_closed_and_open_between_frames_starts_at_its_first_row() {
+        let mut open = Open::new("", WINDOW);
+        open.app = VectorcraftApp::new(vectorcraft_testkit::fixtures::Fixture::Multi.session(), crate::Services::default());
+        open.app.ui.recent_commands = vec!["paint.swap".into(), "object.group".into()];
+        open.app.ui.palette_open = true;
+        open.frame(vec![]);
+        open.press(egui::Key::ArrowDown, 1);
+        assert_eq!(open.highlighted(), 1);
+        open.app.run("help.commandPalette", json!({})).unwrap();
+        assert!(!open.app.ui.palette_open, "the command closes the palette");
+        open.app.run("help.commandPalette", json!({})).unwrap();
+        assert!(open.app.ui.palette_open, "and opens it again");
         open.frame(vec![]);
         assert_eq!(open.highlighted(), 0);
         let before = open.app.session.active().unwrap().history.undo.len();

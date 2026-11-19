@@ -794,8 +794,7 @@ fn run_ui_part7(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         "help.safeMode" => crate::dialogs::safe_mode::open(app),
         "help.copyTroubleshootingInfo" => crate::troubleshooting::copy(app),
         "help.commandPalette" => {
-            app.ui.palette_open = !app.ui.palette_open;
-            app.ui.palette_query.clear();
+            crate::palette::toggle(app);
             Ok(Value::Null)
         }
         // A pick of it in the search is recorded and counted first, and then cleared with the rest.
