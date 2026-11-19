@@ -5614,6 +5614,10 @@ variable-list-end	{0}, {1}	{0} 및 {1}
 @msg	no such view	해당 보기가 없습니다
 @msg	printing isn't available here	여기서는 인쇄할 수 없습니다
 @msg	select an image	이미지를 선택하세요
+@msg	object {_1} is an image changed by Perspective Distort or Free Distort, which this command does not work on	개체 {_1}은(는) 원근 왜곡 또는 자유 왜곡으로 변경된 이미지이므로 이 명령을 사용할 수 없습니다
+@msg	image {_1} cannot be distorted this way: its corners would not make a convex shape	이미지 {_1}을(를) 이렇게 왜곡할 수 없습니다: 모서리가 볼록한 모양을 이루지 않습니다
+@msg	image {_1} cannot be distorted this way: its corners would cross the warp's horizon	이미지 {_1}을(를) 이렇게 왜곡할 수 없습니다: 모서리가 왜곡의 지평선을 넘습니다
+@msg	image {_1} cannot be distorted this way: its corners would be too close together for a perspective map	이미지 {_1}을(를) 이렇게 왜곡할 수 없습니다: 모서리가 원근 매핑을 하기에 너무 가깝습니다
 @msg	`background` must be edges, corners or colors	`background`는 edges, corners 또는 colors여야 합니다
 @msg	`match` must be distance or channels	`match`는 distance 또는 channels여야 합니다
 @msg	`{key}` must be from 0 to 100	`{key}`는 0에서 100 사이여야 합니다

@@ -7144,6 +7144,10 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	exit isolation mode first	surt primer del mode d’aïllament
 @msg	select an envelope	selecciona un embolcall
 @msg	select an image	selecciona una imatge
+@msg	object {_1} is an image changed by Perspective Distort or Free Distort, which this command does not work on	l'objecte {_1} és una imatge modificada amb Distorsió de perspectiva o Distorsió lliure, amb la qual aquesta ordre no funciona
+@msg	image {_1} cannot be distorted this way: its corners would not make a convex shape	la imatge {_1} no es pot distorsionar així: les seves cantonades no formarien una forma convexa
+@msg	image {_1} cannot be distorted this way: its corners would cross the warp's horizon	la imatge {_1} no es pot distorsionar així: les seves cantonades creuarien l'horitzó de la distorsió
+@msg	image {_1} cannot be distorted this way: its corners would be too close together for a perspective map	la imatge {_1} no es pot distorsionar així: les seves cantonades estarien massa juntes per a una projecció en perspectiva
 @msg	`background` must be edges, corners or colors	`background` ha de ser edges, corners o colors
 @msg	`match` must be distance or channels	`match` ha de ser distance o channels
 @msg	`{key}` must be from 0 to 100	`{key}` ha d’estar entre 0 i 100

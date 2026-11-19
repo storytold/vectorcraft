@@ -650,7 +650,16 @@ fn prepare(s: &Session, c: &str, p: &Value) -> Result<Prepared> {
         None if is(tr::preset(named)) || is(tr::enhanced_preset(named)) => named.to_string(),
         None => "Custom".to_string(),
     };
+    // The image (inside a trace group, or selected directly).
     let (target, image) = target_image(s, c, p)?;
+    // The traced shapes are placed by the image's transform, which a distortion overrides: the
+    // command stops before any pixels are read.
+    let distorted = s.doc()?.doc.node(target).is_some_and(|n| {
+        n.is_distorted_image() || (is_trace_group(n) && n.children().and_then(|c| c.first()).is_some_and(|i| i.is_distorted_image()))
+    });
+    if distorted {
+        return Err(crate::cmd::xform::distorted_image_error(c, target));
+    }
     if by_color && s.doc()?.doc.node(target).is_some_and(vectorcraft_render::effects::has_pathfinder) {
         return Err(bad(c, LIVE_PATHFINDER_BY_COLOR));
     }

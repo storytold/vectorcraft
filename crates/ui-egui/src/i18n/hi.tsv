@@ -8905,6 +8905,10 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	select a text object	एक टेक्स्ट ऑब्जेक्ट चुनें
 @msg	select an envelope	एक लिफाफे सिलेक्ट करें
 @msg	select an image	एक इमेज चुनें
+@msg	object {_1} is an image changed by Perspective Distort or Free Distort, which this command does not work on	ऑब्जेक्ट {_1} पर्सपेक्टिव या फ़्री डिस्टॉर्ट से बदली गई इमेज है, जिस पर यह कमांड काम नहीं करता
+@msg	image {_1} cannot be distorted this way: its corners would not make a convex shape	इमेज {_1} को इस तरह डिस्टॉर्ट नहीं किया जा सकता: इसके कोने उत्तल आकार नहीं बनाएँगे
+@msg	image {_1} cannot be distorted this way: its corners would cross the warp's horizon	इमेज {_1} को इस तरह डिस्टॉर्ट नहीं किया जा सकता: इसके कोने डिस्टॉर्ट के क्षितिज को पार कर जाएँगे
+@msg	image {_1} cannot be distorted this way: its corners would be too close together for a perspective map	इमेज {_1} को इस तरह डिस्टॉर्ट नहीं किया जा सकता: इसके कोने पर्सपेक्टिव मैपिंग के लिए एक-दूसरे के बहुत पास होंगे
 @msg	`background` must be edges, corners or colors	`background` edges, corners या colors होना चाहिए
 @msg	`match` must be distance or channels	`match` distance या channels होना चाहिए
 @msg	`{key}` must be from 0 to 100	`{key}` 0 से 100 तक होना चाहिए

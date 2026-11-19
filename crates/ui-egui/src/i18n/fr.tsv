@@ -5564,6 +5564,10 @@ liquify-list-end	{0}, {1}	{0} et {1}
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	cette vectorisation créerait plus de {max} points d’ancrage, plus que le document ne peut afficher de façon fluide : augmentez Bruit, réduisez Tracés ou Couleurs, ou choisissez un paramètre prédéfini moins fidèle
 @msg	select an envelope	sélectionnez une enveloppe
 @msg	select an image	sélectionnez une image
+@msg	object {_1} is an image changed by Perspective Distort or Free Distort, which this command does not work on	l’objet {_1} est une image modifiée par Distorsion de perspective ou Distorsion manuelle, sur laquelle cette commande ne fonctionne pas
+@msg	image {_1} cannot be distorted this way: its corners would not make a convex shape	l’image {_1} ne peut pas être déformée ainsi, car ses coins ne formeraient pas une forme convexe
+@msg	image {_1} cannot be distorted this way: its corners would cross the warp's horizon	l’image {_1} ne peut pas être déformée ainsi, car ses coins franchiraient l’horizon de la déformation
+@msg	image {_1} cannot be distorted this way: its corners would be too close together for a perspective map	l’image {_1} ne peut pas être déformée ainsi, car ses coins seraient trop proches pour une projection en perspective
 @msg	`background` must be edges, corners or colors	`background` doit valoir edges, corners ou colors
 @msg	`match` must be distance or channels	`match` doit valoir distance ou channels
 @msg	`{key}` must be from 0 to 100	`{key}` doit être compris entre 0 et 100

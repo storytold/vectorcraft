@@ -5629,6 +5629,10 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	эта трассировка создала бы более {max} опорных точек, что больше, чем документ может плавно отобразить: увеличьте «Шум», уменьшите «Контуры» или «Цвета» либо выберите набор с меньшей точностью
 @msg	select an envelope	выделите оболочку
 @msg	select an image	выделите изображение
+@msg	object {_1} is an image changed by Perspective Distort or Free Distort, which this command does not work on	объект {_1} — изображение, изменённое с помощью «Искажение перспективы» или «Свободная деформация», и эта команда с ним не работает
+@msg	image {_1} cannot be distorted this way: its corners would not make a convex shape	изображение {_1} нельзя так деформировать: его углы не образуют выпуклую фигуру
+@msg	image {_1} cannot be distorted this way: its corners would cross the warp's horizon	изображение {_1} нельзя так деформировать: его углы пересекут горизонт деформации
+@msg	image {_1} cannot be distorted this way: its corners would be too close together for a perspective map	изображение {_1} нельзя так деформировать: его углы окажутся слишком близко друг к другу для перспективного отображения
 @msg	`background` must be edges, corners or colors	`background` должен быть edges, corners или colors
 @msg	`match` must be distance or channels	`match` должен быть distance или channels
 @msg	`{key}` must be from 0 to 100	`{key}` должен быть от 0 до 100

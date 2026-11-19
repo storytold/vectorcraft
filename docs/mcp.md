@@ -7376,6 +7376,47 @@ warped (`from`, or the selection's bounds) change nothing and add no undo step. 
 {"name":"run_command","arguments":{"command":"object.distort","params":{"from":[-100,0,0,100],"angle":90,"corners":[[0,100],[0,0],[120,-20],[100,100]]}}}
 ```
 
+## Perspective Distort and Free Distort on images
+
+`object.distort` moves an image's four corners exactly where the warp takes them, alone or with other objects, and
+draws its pixels in perspective between them. The image is bounded, selected and clicked by the shape its corners
+make, and moving, scaling, rotating or shearing it later, or a Transform effect on it, takes the corners along.
+Outline view draws its frame through the corners. Blends, the Eyedropper, the Color Theme Picker of Recolor Artwork
+and the weed box of Weed Box and Lines (`addon.cutting.weed`) read the image where its corners put it. When the
+corners make a parallelogram, the image is placed by its transform as before. Otherwise the native file saves them in
+the image's `image_quad` field (top left, top right, bottom right and bottom left of its pixels, in page
+coordinates); files without the field open as before. The canvas, printing and every export except DXF, WMF and HP-GL
+(an HP-GL plot leaves images out) draw a distorted image as a mesh of affine image pieces, clipped by the corners; no warped copy of the pixels is stored. In
+printing and exports the mesh takes as many cells as it needs for the pieces to stay within 0.05 pt of the exact
+perspective at the points it checks, with cells at least 2 pt long on the corners' longest side, and each piece reaches
+0.5 pt into its neighbors. The canvas cuts the mesh for the zoom, by the view's largest stretch: within a quarter of a
+screen pixel at the points it checks, with cells at least 4 pixels long, and each piece reaches 2 pixels into its
+neighbors. Either way the mesh takes no more than 64 by 64 cells, and no more cells across than the image has pixels on
+its longer side (or 8, if that is more). A stronger perspective, or a smaller image, is drawn with the cells it is
+allowed. In EMF each piece stores only the pixels inside its clip, with a pixel more on each side. DXF and WMF cannot
+clip, so they write the image as the parallelogram nearest its corners and warn. Corners that would fold the image over
+itself, put three corners on one line, join two corners, cross the warp's horizon or lie too close together for a
+perspective map are an error, and nothing changes. A transform that squeezes the corners past what a perspective map
+can place leaves the image at the parallelogram nearest them. A file whose `image_quad` holds other than four points,
+or breaks these rules, opens with the image placed by its transform. A drag is one undo step, and a distort that leaves
+the corners where they are records none. Image info (`image.info`) gives a distorted image's resolution at its middle, and Link
+Info (`links.info`) gives its scale and rotation there.
+
+Crop Image (`object.cropImage`), Image Trace (`imageTrace.make`, `imageTrace.makeAndExpand`), Relink (`links.relink`),
+Embed (`links.embed`), Unembed (`links.unembed`), Create Object Mosaic (`object.createObjectMosaic`) and Place with
+Replace (`file.place` with `replace`) of anything but a text file refuse a distorted image with an error that names the
+distortion; Place with Replace does not refuse a clipping group that holds a distorted image of a DCS file's plates. Relink and Unembed refuse a named or selected distorted image before they search a folder or write a file.
+Create Gradient Mesh (`object.mesh.create`) converts the other objects it is given and lists each distorted image it
+leaves as it is in `skipped`, with its `id` and the error as `reason`; with nothing else to convert, it returns that
+error. Update Links (`links.update`) puts a changed file's pixels between a distorted
+image's corners, without applying its Placement Options. Mask (`object.maskImage`) draws its clipping path through the
+image's corners. Rasterize (`object.rasterize`) draws the image between its corners and makes a plain image of the
+result. These rules are VectorCraft's own.
+
+```json
+{"name":"run_command","arguments":{"command":"object.distort","params":{"corners":[[40,0],[60,0],[100,100],[0,100]]}}}
+```
+
 ## Transform Each: Relative and Absolute
 
 `object.transformEach` scales by percentages of each object's size (the dialog's Relative, the default), or with

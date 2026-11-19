@@ -5329,6 +5329,10 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	bu iz, {max} bağlantı noktalarından daha fazlasını, yani belgenin düzgün bir şekilde gösterebileceğinden daha fazlasını oluşturur: Gürültüyü artırın, Yolları veya Renkleri düşürün veya aslına uygunluğu daha düşük bir ön ayar seçin
 @msg	select an envelope	bir zarf seç
 @msg	select an image	bir resim seç
+@msg	object {_1} is an image changed by Perspective Distort or Free Distort, which this command does not work on	{_1} nesnesi Perspektif Deformasyonu veya Serbest Deformasyon ile değiştirilmiş bir görüntüdür ve bu komut onunla çalışmaz
+@msg	image {_1} cannot be distorted this way: its corners would not make a convex shape	{_1} görüntüsü bu şekilde deforme edilemez: köşeleri dışbükey bir şekil oluşturmaz
+@msg	image {_1} cannot be distorted this way: its corners would cross the warp's horizon	{_1} görüntüsü bu şekilde deforme edilemez: köşeleri deformasyonun ufkunu geçer
+@msg	image {_1} cannot be distorted this way: its corners would be too close together for a perspective map	{_1} görüntüsü bu şekilde deforme edilemez: köşeleri perspektif eşleme için birbirine çok yakın olur
 @msg	`background` must be edges, corners or colors	`background` edges, corners veya colors olmalıdır
 @msg	`match` must be distance or channels	`match` distance veya channels olmalıdır
 @msg	`{key}` must be from 0 to 100	`{key}` 0 ile 100 arasında olmalıdır

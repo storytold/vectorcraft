@@ -5483,6 +5483,10 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	spårningen skulle ge fler än {max} ankarpunkter, fler än dokumentet kan visa smidigt: höj Brus, sänk Banor eller Färger, eller välj en förinställning med lägre återgivning
 @msg	select an envelope	markera ett kuvert
 @msg	select an image	markera en bild
+@msg	object {_1} is an image changed by Perspective Distort or Free Distort, which this command does not work on	objekt {_1} är en bild som ändrats med Perspektivförvrängning eller Fri förvrängning, och det här kommandot fungerar inte på den
+@msg	image {_1} cannot be distorted this way: its corners would not make a convex shape	bild {_1} kan inte förvrängas så: dess hörn skulle inte bilda en konvex form
+@msg	image {_1} cannot be distorted this way: its corners would cross the warp's horizon	bild {_1} kan inte förvrängas så: dess hörn skulle korsa förvrängningens horisont
+@msg	image {_1} cannot be distorted this way: its corners would be too close together for a perspective map	bild {_1} kan inte förvrängas så: dess hörn skulle ligga för nära varandra för en perspektivavbildning
 @msg	`background` must be edges, corners or colors	`background` måste vara edges, corners eller colors
 @msg	`match` must be distance or channels	`match` måste vara distance eller channels
 @msg	`{key}` must be from 0 to 100	`{key}` måste vara från 0 till 100
