@@ -135,6 +135,26 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         .or_else(|| run_ui_part13(app, id, p))
 }
 
+/// Why Show/Hide Guides and Show/Hide Grid refuse to run while Trim View is on.
+pub(crate) const TRIM_VIEW_HIDES: &str = "Trim View hides the guides and the grid; turn it off first";
+
+/// Drops the selection when it holds ruler guides or guide paths that no longer draw (Hide Guides,
+/// Trim View): their selection overlay would otherwise reveal the geometry just hidden.
+fn deselect_hidden_guides(app: &mut VectorcraftApp) {
+    let hidden_selection = !app.ui.view.guides_shown()
+        && app.session.active().is_some_and(|d| {
+            !d.selection.guides.is_empty()
+                || d.selection
+                    .objects
+                    .iter()
+                    .any(|id| matches!(d.doc.node(*id).map(|n| &n.kind), Some(vectorcraft_doc::NodeKind::Path { guide: true, .. })))
+        });
+    if hidden_selection {
+        // Deselecting a document that is open cannot fail.
+        let _ = app.run("select.none", json!({}));
+    }
+}
+
 /// UI commands, part 1.
 fn run_ui_part1(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<Value, String>> {
     let s = |k: &str| p.get(k).and_then(Value::as_str).map(str::to_string);
@@ -292,7 +312,12 @@ fn run_ui_part3(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
     };
     let r = match id {
         "view.pixelPreview" => flag(&mut app.ui.view.pixel_preview),
-        "view.trimView" => flag(&mut app.ui.view.trim_view),
+        // Trim View hides the guides while it is on (#8363), and hidden guides cannot stay selected.
+        "view.trimView" => {
+            let r = flag(&mut app.ui.view.trim_view);
+            deselect_hidden_guides(app);
+            r
+        }
         "view.cornerWidget" => flag(&mut app.ui.view.corner_widgets),
         // Hide/Show Shape Widgets: `on` sets the state, and without it the state flips.
         "view.shapeWidgets" => opt_bool(p, "on").map(|on| {
@@ -403,22 +428,12 @@ fn run_ui_part4(app: &mut VectorcraftApp, id: &str, _p: &Value) -> Option<Result
             Ok(json!(show))
         }
         "view.boundingBox" => flag(&mut app.ui.view.bounding_box),
+        // Trim View hides the guides and the grid while it is on, and their Show/Hide items wait
+        // until it is off (#8363).
+        "view.guides" | "view.grid" if app.ui.view.trim_view => Err(TRIM_VIEW_HIDES.into()),
         "view.guides" => {
             let r = flag(&mut app.ui.view.guides);
-            // Hidden ruler guides and guide paths cannot stay selected: their selection overlay
-            // would otherwise reveal geometry that Hide Guides just hid.
-            let hidden_selection = !app.ui.view.guides
-                && app.session.active().is_some_and(|d| {
-                    !d.selection.guides.is_empty()
-                        || d.selection
-                            .objects
-                            .iter()
-                            .any(|id| matches!(d.doc.node(*id).map(|n| &n.kind), Some(vectorcraft_doc::NodeKind::Path { guide: true, .. })))
-                });
-            if hidden_selection {
-                // Deselecting a document that is open cannot fail.
-                let _ = app.run("select.none", json!({}));
-            }
+            deselect_hidden_guides(app);
             r
         }
         "view.smartGuides" => flag(&mut app.ui.view.smart_guides),
@@ -652,6 +667,64 @@ fn run_ui_part6(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             app.ui.task_bar_place = Default::default();
             Ok(Value::Null)
         }
+        // More Options › Bar Actions: one of the bar's actions or chips on or off.
+        "window.taskBar.actions" => match (s("action").filter(|a| crate::canvas::is_task_bar_action(a)), opt_bool(p, "visible")) {
+            (None, _) => {
+                let ids = crate::canvas::TASK_BAR_ACTIONS.iter().map(|a| a.0).chain(crate::canvas::TASK_BAR_CHIPS);
+                Err(format!("`action` must be one of {}", ids.collect::<Vec<_>>().join(", ")))
+            }
+            (_, Err(e)) => Err(e),
+            (Some(action), Ok(visible)) => {
+                let hidden = &mut app.ui.task_bar_hidden_actions;
+                let visible = visible.unwrap_or_else(|| hidden.contains(&action));
+                if visible {
+                    hidden.remove(&action);
+                } else {
+                    hidden.insert(action.clone());
+                }
+                Ok(json!({ "action": action, "visible": visible }))
+            }
+        },
+        // More Options › Reset Bar Actions: every action and chip shows again.
+        "window.taskBar.resetActions" => Ok(json!(std::mem::take(&mut app.ui.task_bar_hidden_actions))),
+        "window.quickPenToolbar" => flag(&mut app.ui.quick_pen_bar),
+        "window.quickPenToolbar.pin" => {
+            let place = &mut app.ui.quick_pen_bar_place;
+            opt_bool(p, "pinned").map(|pinned| {
+                let pinned = pinned.unwrap_or(!place.pinned);
+                if pinned && !place.pinned {
+                    place.pin_at = place.shown_at;
+                }
+                place.pinned = pinned;
+                json!(pinned)
+            })
+        }
+        "window.quickPenToolbar.reset" => {
+            app.ui.quick_pen_bar_place = Default::default();
+            Ok(Value::Null)
+        }
+        "tool.quickPen.flipArc" => {
+            // C's flip, for the toolbar's Flip Arc button: false, with nothing changed beyond the
+            // edit finished first, while the last piece of the path being drawn is not a sharp-corner
+            // arc. Input held for an edit is finished first, so the key is made now rather than
+            // held; when that fails the error is returned and the flip is not made.
+            match app.session.finish_tool_edit() {
+                Ok(reqs) => crate::canvas::apply_requests(app, Ok(reqs)),
+                Err(e) => return Some(Err(e.to_string())),
+            }
+            let view = app.view_info();
+            let key = vectorcraft_tools::ToolKey::Letter('c');
+            if app.session.tool_id() != vectorcraft_tools::quickpen::ID || !app.session.tool_claims_key(key, view) {
+                return Some(Ok(json!(false)));
+            }
+            match app.session.tool_key(key, vectorcraft_tools::Mods::default(), view) {
+                Ok(reqs) => {
+                    crate::canvas::apply_requests(app, Ok(reqs));
+                    Ok(json!(true))
+                }
+                Err(e) => Err(e.to_string()),
+            }
+        }
         "window.dock" => {
             let ui = &mut app.ui;
             // The bars the last Tab hid show again, unless the toolbar or the Control bar was shown
@@ -774,8 +847,13 @@ fn run_ui_part7(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         "help.safeMode" => crate::dialogs::safe_mode::open(app),
         "help.copyTroubleshootingInfo" => crate::troubleshooting::copy(app),
         "help.commandPalette" => {
-            app.ui.palette_open = !app.ui.palette_open;
-            app.ui.palette_query.clear();
+            crate::palette::toggle(app);
+            Ok(Value::Null)
+        }
+        // A pick of it in the search is recorded and counted first, and then cleared with the rest.
+        "help.clearRecentCommands" => {
+            app.ui.recent_commands.clear();
+            app.ui.command_uses = Default::default();
             Ok(Value::Null)
         }
         // Closing asks Save / Don't Save / Cancel for modified documents first (`unsaved`).
@@ -918,6 +996,10 @@ fn run_ui_part9(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             Ok(Value::Null)
         }
         "ui.imageTracePresetDialog" => crate::dialogs::trace_presets::open(app, p),
+        "ui.tracingPresetsDialog" => {
+            crate::dialogs::tracing_presets::open(app, s("selected").as_deref());
+            Ok(Value::Null)
+        }
         "ui.flattenerPreview" => crate::panels::flattener_preview::command(app, p),
         "ui.foldPreview" => crate::addons::packaging::preview::command(app, p),
         "ui.copyScriptConsole" => crate::panels::script_console::copy(app, p),

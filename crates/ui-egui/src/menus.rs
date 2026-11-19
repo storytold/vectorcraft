@@ -49,6 +49,7 @@ mod invoke;
 mod keyboard;
 mod labels;
 mod run;
+pub(crate) use run::TRIM_VIEW_HIDES;
 mod slots;
 mod state;
 mod submenus;
@@ -82,6 +83,7 @@ pub use run::{check_params, run_ui_command};
 pub(crate) use run::{normalize_panel, opt_bool, opt_index, opt_number};
 #[cfg(test)]
 use slots::RECENT_FONT_IDS;
+pub(crate) use state::why_off;
 pub use state::{checked, enabled, plugin_revision, shortcut_of, shown_state};
 pub(crate) use submenus::PATH_EFFECTS;
 pub(crate) use tree::arrange_documents_items;

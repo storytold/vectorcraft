@@ -1,8 +1,9 @@
 //! The document resources copied objects use, and adding them to the document they're pasted into.
 //!
 //! Objects refer to resources by name (image blobs, symbols, patterns, swatches, character and
-//! paragraph styles, brushes) and to graphic styles by id. Copy follows those references, also
-//! through the symbols, patterns, styles and brush art it finds, and keeps what they lead to.
+//! paragraph styles, brushes, graph designs) and to graphic styles by id. Copy follows those
+//! references, also through the symbols, patterns, styles, brush art and graph design art it finds,
+//! and keeps what they lead to.
 //!
 //! Pasting matches each resource by name: an identical one in the document is used, a missing one
 //! is added, and a different one of the same name is added under a free name, which the pasted
@@ -22,8 +23,8 @@ use vectorcraft_brush::Brush;
 use vectorcraft_color::{Color, Paint, Swatch};
 use vectorcraft_doc::text::{KINSOKU_NAME_MAX, KINSOKU_SETS_MAX};
 use vectorcraft_doc::{
-    Appearance, AppearanceItem, Document, Effect, GraphicStyle, Kinsoku, KinsokuSet, Node, NodeKind, PatternDef, Symbol, SymbolExportType,
-    SymbolNineSlice, SymbolRegistration, TextStyleDef,
+    Appearance, AppearanceItem, Document, Effect, GraphDesign, GraphicStyle, Kinsoku, KinsokuSet, Node, NodeKind, PatternDef, Symbol,
+    SymbolExportType, SymbolNineSlice, SymbolRegistration, TextStyleDef,
 };
 
 use super::super::brushsym::{set_natural_size, stored_natural_size};
@@ -44,6 +45,7 @@ enum Res {
     ParaStyle,
     Brush,
     GraphicStyle,
+    GraphDesign,
 }
 
 impl Res {
@@ -57,6 +59,7 @@ impl Res {
             Res::ParaStyle => "paraStyle",
             Res::Brush => "brush",
             Res::GraphicStyle => "graphicStyle",
+            Res::GraphDesign => "graphDesign",
         }
     }
 }
@@ -139,6 +142,10 @@ fn node_refs(n: &Node, f: Visit) {
             for s in [&l.values_para, &l.categories_para, &l.legend_para].into_iter().flatten().filter_map(|pa| pa.style_name.as_ref()) {
                 f(Ref::Name(Res::ParaStyle, s));
             }
+            // The designs its series draw their markers, columns or bars with.
+            for d in g.series_markers.iter().flatten().chain(g.series_columns.iter().flatten().map(|c| &c.design)) {
+                f(Ref::Name(Res::GraphDesign, d));
+            }
         }
         match &m.kind {
             NodeKind::Text(t) => {
@@ -217,6 +224,7 @@ struct Defs<'a> {
     char_styles: &'a [TextStyleDef],
     para_styles: &'a [TextStyleDef],
     brushes: Brushes<'a>,
+    graph_designs: &'a [GraphDesign],
     /// Where each name is defined, built the first time a kind is followed.
     index: DefIndex,
 }
@@ -236,6 +244,7 @@ struct DefIndex {
     char_styles: OnceCell<NameIndex>,
     para_styles: OnceCell<NameIndex>,
     brushes: OnceCell<NameIndex>,
+    graph_designs: OnceCell<NameIndex>,
 }
 
 /// The items of `list` named `name`, in order, `index` holding their positions (built from
@@ -279,6 +288,7 @@ impl<'a> Defs<'a> {
             char_styles: &d.char_styles,
             para_styles: &d.para_styles,
             brushes: Brushes::Lazy(d, brushes),
+            graph_designs: &d.graph_designs,
             index: DefIndex::default(),
         }
     }
@@ -376,6 +386,7 @@ impl Used {
             Res::ParaStyle => todo.extend(named(&ix.para_styles, defs.para_styles, |s| &s.name, name).map(|s| Source::Attrs(&s.attrs))),
             // A scatter or art brush's art, a pattern brush's tiles.
             Res::Brush => todo.extend(named(&ix.brushes, defs.brushes.get(), |b| &b.name, name).flat_map(|b| b.art().into_iter().map(Source::Node))),
+            Res::GraphDesign => todo.extend(named(&ix.graph_designs, defs.graph_designs, |g| &g.name, name).map(|g| Source::Node(&g.art))),
             _ => {}
         }
     }
@@ -406,7 +417,7 @@ pub struct ArtResources {
 /// The resources `art` uses in `doc`, through the definitions they lead to as Copy follows them
 /// ([`Used`]): images, symbols, patterns (tile type, overlap and spacing too), swatches (linked
 /// colours, tints, gradient swatches; colour groups' included), character and paragraph styles,
-/// brushes and graphic styles, and the document's Spot Colors option. Art and image bytes count
+/// brushes, graph designs and graphic styles, and the document's Spot Colors option. Art and image bytes count
 /// by identity, the other definitions by their saved form: working the key out walks `art` and
 /// the definitions it leads to, and never reads an image's bytes.
 pub fn art_resources<'a>(doc: &'a Document, art: impl IntoIterator<Item = &'a Node>) -> ArtResources {
@@ -451,6 +462,7 @@ pub fn art_resources<'a>(doc: &'a Document, art: impl IntoIterator<Item = &'a No
                 Res::CharStyle => doc.char_styles.iter().filter(|s| s.name == *name).for_each(|s| saved(&mut h, s)),
                 Res::ParaStyle => doc.para_styles.iter().filter(|s| s.name == *name).for_each(|s| saved(&mut h, s)),
                 Res::Brush => defs.brushes.get().iter().filter(|b| b.name == *name).for_each(|b| saved(&mut h, b)),
+                Res::GraphDesign => doc.graph_designs.iter().filter(|g| g.name == *name).for_each(|g| node(&mut h, &mut kept.0, &g.art)),
                 // Swatches below (tints count too); graphic styles go by id.
                 Res::Swatch | Res::GraphicStyle => {}
             }
@@ -824,6 +836,22 @@ fn same_art(r: &Relink, ours: &[Arc<Node>], theirs: &[Arc<Node>]) -> bool {
     ours.len() == theirs.len() && ours.iter().zip(theirs).all(|(a, b)| relinked(&unlinked, a) == relinked(r, b))
 }
 
+/// `n` with the ids of its objects, those of opacity-mask art included, all 0: art drawn again
+/// compares equal to art drawn the same way, whatever ids each drawing gave it.
+fn without_ids(n: &Node) -> Node {
+    let mut n = n.clone();
+    n.id = vectorcraft_doc::NodeId(0);
+    if let Some(mask) = n.extras_if_any().and_then(|e| e.mask.as_deref_mut()) {
+        mask.art = Arc::new(without_ids(&mask.art));
+    }
+    if let Some(children) = n.children_mut() {
+        for c in children.iter_mut() {
+            *c = Arc::new(without_ids(c));
+        }
+    }
+    n
+}
+
 /// Is `ours` (a document brush) brush `theirs` (a pasted one) once the art of that is relinked by
 /// `r`? Graphic style links don't count, as in [`same_art`].
 fn same_brush(r: &Relink, ours: &Brush, theirs: &Brush) -> bool {
@@ -1106,6 +1134,17 @@ pub(crate) struct Imported {
     /// `{kind, from, to}` for every resource the pasted objects now know under another name: added
     /// renamed, or a copy added renamed by an earlier paste.
     pub renamed: Vec<Value>,
+    /// The graph designs the pasted graphs draw with that the document has under the same name
+    /// and that would draw them otherwise than the art they were pasted with: the document keeps
+    /// its own, and the pasted graphs are drawn again with it.
+    pub kept_designs: BTreeSet<String>,
+    /// The names of the symbols added to the document, whose art may hold graphs that draw with
+    /// [`Self::kept_designs`].
+    pub added_symbols: BTreeSet<String>,
+    /// The names of the graph designs added to the document.
+    pub added_designs: BTreeSet<String>,
+    /// The global and spot colors that took the document's color (merged).
+    merged_swatches: BTreeSet<String>,
 }
 
 impl Imported {
@@ -1161,14 +1200,24 @@ impl Clipboard {
             char_styles: pick(Res::CharStyle, &src.char_styles),
             para_styles: pick(Res::ParaStyle, &src.para_styles),
             brushes,
+            graph_designs: src.graph_designs.iter().filter(|g| used.has(Res::GraphDesign, &g.name)).cloned().collect(),
+            set_densities: src.set_densities_of(&nodes),
             nodes,
             ..Default::default()
         }
     }
 
-    /// The resources the objects use now (Paste without Formatting leaves text styles behind).
-    pub(super) fn used(&self) -> Used {
-        let defs = Defs {
+    /// The resources the objects use now (Paste without Formatting leaves text styles behind),
+    /// pasted into `d`: the art of a graph design `d` has under the same name is not followed, as
+    /// `d` keeps its own design.
+    pub(super) fn used(&self, d: &Document) -> Used {
+        let designs: Vec<GraphDesign> = self.graph_designs.iter().filter(|g| !d.graph_designs.iter().any(|x| x.name == g.name)).cloned().collect();
+        Used::of(&self.defs(&designs), &self.nodes)
+    }
+
+    /// The clipboard's definitions, with graph designs `designs`.
+    fn defs<'a>(&'a self, designs: &'a [GraphDesign]) -> Defs<'a> {
+        Defs {
             swatches: self.swatches.iter().collect(),
             symbols: &self.symbols,
             patterns: &self.patterns,
@@ -1176,9 +1225,9 @@ impl Clipboard {
             char_styles: &self.char_styles,
             para_styles: &self.para_styles,
             brushes: Brushes::Ready(&self.brushes),
+            graph_designs: designs,
             index: DefIndex::default(),
-        };
-        Used::of(&defs, &self.nodes)
+        }
     }
 
     /// The used global and spot colours whose name `d` gives another one: (pasted, document).
@@ -1199,7 +1248,8 @@ impl Clipboard {
     /// paste ([`Self::colors_converted`]), its color-bearing resources are compared as another
     /// document's are, while its image blobs are still the document's own under their keys.
     pub(crate) fn import_into(&self, d: &mut Document, choices: &SwatchChoices, same_doc: bool) -> Result<Imported> {
-        self.import_used_with_images(d, &self.used(), choices, same_doc && !self.colors_converted, same_doc)
+        let used = self.used(d);
+        self.import_used_with_images(d, &used, choices, same_doc && !self.colors_converted, same_doc)
     }
 
     /// Give the objects' colors linked to a global or spot swatch whose conflict with `d`
@@ -1210,7 +1260,7 @@ impl Clipboard {
         if same_doc {
             return;
         }
-        let used = self.used();
+        let used = self.used(d);
         let colors: BTreeMap<String, Color> = self
             .conflicts(d, &used)
             .into_iter()
@@ -1247,6 +1297,11 @@ impl Clipboard {
     ) -> Result<Imported> {
         let mut out = Imported::default();
         out.relink.filters = self.filter_links(d, same_doc)?;
+        let held = |name: &str| d.graph_designs.iter().any(|x| x.name == name);
+        let new_designs = self.graph_designs.iter().filter(|g| used.has(Res::GraphDesign, &g.name) && !held(&g.name)).count();
+        if new_designs > 0 && d.graph_designs.len().saturating_add(new_designs) > GraphDesign::MAX {
+            return Err(EngineError::Other(format!("a document keeps at most {} graph designs", GraphDesign::MAX)));
+        }
         self.import_images(d, used, same_doc_images, &mut out);
         self.import_swatches(d, used, choices, same_doc, &mut out);
         self.import_kinsoku_sets(d, used, same_doc, &mut out);
@@ -1330,11 +1385,18 @@ impl Clipboard {
                             .collect(),
                         None => HashMap::new(),
                     };
+                    // A symbol whose graphs the paste draws again with the document's designs is
+                    // also the document's one that holds its art drawn that way (an earlier paste
+                    // added it).
+                    let redrawn = (!fresh && d.symbols.iter().any(|s| copy_of(&def.name, &s.name)))
+                        .then(|| self.redrawn_art(d, &def.art, &out.relink))
+                        .flatten();
                     let r = &out.relink;
                     let p = place(&mut d.symbols, def, same_doc, |a, b| {
                         !fresh
                             && options.is_none_or(|o| theirs.get(&a.name) == Some(o))
-                            && same_art(r, std::slice::from_ref(&a.art), std::slice::from_ref(&b.art))
+                            && (same_art(r, std::slice::from_ref(&a.art), std::slice::from_ref(&b.art))
+                                || redrawn.as_ref().is_some_and(|art| without_ids(&a.art) == *art))
                     });
                     if let Some(name) = p.new_name(&def.name) {
                         if let Some(o) = options {
@@ -1370,6 +1432,7 @@ impl Clipboard {
             }
         }
         self.import_graphic_styles(d, used, same_doc, &mut out);
+        self.import_graph_designs(d, used, same_doc, &mut out)?;
         for (r, name, def) in added_styles {
             let theirs = if r == Res::CharStyle { &mut d.char_styles } else { &mut d.para_styles };
             if let Some(s) = theirs.iter_mut().find(|s| s.name == name) {
@@ -1380,6 +1443,7 @@ impl Clipboard {
         for s in d.symbols.iter_mut().filter(|s| added_symbols.contains(&s.name)) {
             out.relink.node(Arc::make_mut(&mut s.art));
         }
+        out.added_symbols = added_symbols.into_iter().collect();
         for p in d.patterns.iter_mut().filter(|p| added_patterns.contains(&p.name)) {
             for a in &mut p.art {
                 out.relink.node(Arc::make_mut(a));
@@ -1496,6 +1560,10 @@ impl Clipboard {
         for a in self.brushes.iter().flat_map(Brush::art) {
             node_filters(a, &mut found);
         }
+        // A design the document has under the same name stays its own, so its art here is not pasted.
+        for g in self.graph_designs.iter().filter(|g| !d.graph_designs.iter().any(|x| x.name == g.name)) {
+            node_filters(&g.art, &mut found);
+        }
         for g in &self.graphic_styles {
             appearance_filters(&g.appearance, &mut found);
         }
@@ -1574,6 +1642,7 @@ impl Clipboard {
         for w in &bases {
             let p = if conflicts.contains(&w.name) && choices.of(&w.name) == SwatchChoice::Merge {
                 out.merged += 1;
+                out.merged_swatches.insert(w.name.clone());
                 Placed::Existing
             } else {
                 add_swatch(d, w, same_doc)
@@ -1623,6 +1692,71 @@ impl Clipboard {
             out.relink.styles.insert(g.id, d.graphic_style_id(i));
         }
     }
+
+    /// Symbol art `art` relinked by `relink` with its graphs drawn again with the designs `d` holds
+    /// under a name whose design the clipboard lacks or holds with other art, as a paste that adds
+    /// the symbol draws it, its ids left out ([`without_ids`]). `None` when no graph of it draws
+    /// with such a design.
+    fn redrawn_art(&self, d: &mut Document, art: &Arc<Node>, relink: &Relink) -> Option<Node> {
+        let theirs = |n: &str| self.graph_designs.iter().find(|g| g.name == n);
+        let differs: BTreeSet<String> = d
+            .graph_designs
+            .iter()
+            .filter(|x| theirs(&x.name).is_none_or(|g| !Arc::ptr_eq(&g.art, &x.art) && g.art != x.art))
+            .map(|x| x.name.clone())
+            .collect();
+        if differs.is_empty() || !crate::cmd::graph::holds_designs(art, &differs) {
+            return None;
+        }
+        let mut n = (**art).clone();
+        relink.node(&mut n);
+        crate::cmd::graph::redraw_detached(d, &mut n, &differs);
+        Some(without_ids(&n))
+    }
+
+    /// Graph designs: the document's design of a name stays as it is and the pasted graphs draw
+    /// with it ([`Imported::kept_designs`]); a design the document lacks is added under its name, its art following the
+    /// resources placed above, with fresh ids. Called once every other resource is placed.
+    fn import_graph_designs(&self, d: &mut Document, used: &Used, same_doc: bool, out: &mut Imported) -> Result<()> {
+        // Every name the pasted graphs draw with whose design in the document would draw them
+        // otherwise: another design of that name, one the clipboard holds no design for (deleted
+        // and made again), or, from another document, the same art when a resource came in renamed
+        // or a swatch took the document's color, that the design's art uses. (An SVG filter effect
+        // carries its definition, so a filter that draws otherwise makes the art differ.)
+        let defs = self.defs(&self.graph_designs);
+        let moved = |n: &str| {
+            if same_doc || (out.relink.renames.is_empty() && out.merged_swatches.is_empty()) {
+                return false;
+            }
+            let uses = designs_used(&defs, &[n.to_string()]);
+            out.relink.renames.iter().any(|(r, names)| names.keys().any(|from| uses.has(*r, from)))
+                || out.merged_swatches.iter().any(|w| uses.has(Res::Swatch, w))
+        };
+        let differs = |n: &str| {
+            let ours = d.graph_designs.iter().find(|x| x.name == n);
+            let theirs = self.graph_designs.iter().find(|g| g.name == n);
+            ours.is_some_and(|x| theirs.is_none_or(|g| !Arc::ptr_eq(&g.art, &x.art) && g.art != x.art) || moved(n))
+        };
+        let named = used.names.get(&Res::GraphDesign).into_iter().flatten();
+        let kept: Vec<String> = named.filter(|n| differs(n)).cloned().collect();
+        out.kept_designs.extend(kept);
+        for g in self.graph_designs.iter().filter(|g| used.has(Res::GraphDesign, &g.name)) {
+            if d.graph_designs.iter().any(|x| x.name == g.name) {
+                out.placed(Res::GraphDesign, &g.name, &Placed::Existing);
+                continue;
+            }
+            if d.graph_designs.len() >= GraphDesign::MAX {
+                return Err(EngineError::Other(format!("a document keeps at most {} graph designs", GraphDesign::MAX)));
+            }
+            let mut art = (*g.art).clone();
+            out.relink.node(&mut art);
+            let art = d.reid(&art);
+            d.graph_designs.push(GraphDesign { name: g.name.clone(), art: Arc::new(art) });
+            out.placed(Res::GraphDesign, &g.name, &Placed::Added);
+            out.added_designs.insert(g.name.clone());
+        }
+        Ok(())
+    }
 }
 
 /// Where a loaded text style is in the document ([`import_text_styles`]).
@@ -1660,6 +1794,72 @@ pub(crate) fn import_text_styles(src: &Document, d: &mut Document, chars: bool, 
         }
     }
     Ok(placed)
+}
+
+/// The resources graph designs `names` of `src` use, through the definitions they lead to.
+fn designs_used(defs: &Defs<'_>, names: &[String]) -> Used {
+    let mut used = Used::default();
+    let mut todo = vec![];
+    for n in names {
+        used.note(defs, Ref::Name(Res::GraphDesign, n), &mut todo);
+    }
+    used.follow(defs, todo);
+    used
+}
+
+/// A document holding `src`'s graph designs and the swatches, patterns, symbols, styles, brushes
+/// and images their art uses, and nothing else: what a document opened as a library keeps for the
+/// Graph Column and Graph Marker dialogs. `None` when `src` has no graph designs.
+pub(crate) fn graph_design_library(src: &Document) -> Option<Document> {
+    if src.graph_designs.is_empty() {
+        return None;
+    }
+    let names: Vec<String> = src.graph_designs.iter().map(|g| g.name.clone()).collect();
+    let library = OnceCell::new();
+    let used = designs_used(&Defs::of(src, &library), &names);
+    let clip = Clipboard::with_used(src, &used, &library, vec![]);
+    let mut d = clip.to_document();
+    // A new document's default swatches and graphic styles give way to the source's of the same
+    // name or id, so a design draws with the source's.
+    let defaults = d.swatches.len().saturating_sub(clip.swatches.len());
+    let mut i = 0;
+    d.swatches.retain(|s| {
+        i += 1;
+        i > defaults || !clip.swatches.iter().any(|c| c.name == s.name)
+    });
+    // The swatch groups are all a new document's.
+    for g in d.swatch_groups.iter_mut() {
+        g.swatches.retain(|s| !clip.swatches.iter().any(|c| c.name == s.name));
+    }
+    let defaults = d.graphic_styles.len().saturating_sub(clip.graphic_styles.len());
+    let mut i = 0;
+    d.graphic_styles.retain(|g| {
+        i += 1;
+        i > defaults || !clip.graphic_styles.iter().any(|c| (c.id != 0 && c.id == g.id) || c.name == g.name)
+    });
+    // The symbols keep their Symbol Options, which the document keeps by name.
+    for (name, options) in &clip.symbol_options {
+        options.give(&mut d, name);
+    }
+    d.title = src.title.clone();
+    Some(d)
+}
+
+/// Add graph designs `names` of `src` to `d`, with the swatches, patterns, symbols, styles,
+/// brushes and images their art uses, placed as Paste places them ([`Clipboard::import_into`]; a
+/// global or spot color whose name `d` gives another color is `d`'s). A design `d` has under the
+/// same name stays as it is, and the art of `src`'s design of that name is not followed. → the
+/// names of the designs added ([`Imported::added_designs`]): those of `names` `d` lacked, and those
+/// their art uses; with the symbols added and the designs `d` kept that their art draws with
+/// ([`Imported::added_symbols`], [`Imported::kept_designs`]). An error, with `d` unchanged, when `d`
+/// would hold more than [`GraphDesign::MAX`] designs.
+pub(crate) fn import_graph_designs(src: &Document, d: &mut Document, names: &[String]) -> Result<Imported> {
+    let library = OnceCell::new();
+    let held = |n: &str| d.graph_designs.iter().any(|x| x.name == n);
+    let followed: Vec<GraphDesign> = src.graph_designs.iter().filter(|g| names.contains(&g.name) || !held(&g.name)).cloned().collect();
+    let used = designs_used(&Defs { graph_designs: &followed, ..Defs::of(src, &library) }, names);
+    let clip = Clipboard::with_used(src, &used, &library, vec![]);
+    clip.import_used(d, &used, &SwatchChoices::default(), false)
 }
 
 /// Swatch `w` in `d` ([`existing`]), else added under a free name (swatches and colour groups

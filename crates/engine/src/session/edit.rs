@@ -323,7 +323,7 @@ impl Session {
         }
         // While the Live Paint Bucket is active, paint previews change only the bucket's colors, so
         // each preview starts from the colors the interaction began with.
-        let bucket = self.tool_id() == cmd::LIVE_PAINT_BUCKET;
+        let bucket = self.bucket_paints();
         let (paint, restore_paint) = {
             let menu = self.menu.clone();
             let st = self.doc_mut()?;
@@ -485,7 +485,7 @@ impl Session {
         self.pending_paint = None;
         // While the Live Paint Bucket is active, a previewed color is the bucket's color, which the
         // cancel puts back as well.
-        let bucket = self.tool_id() == cmd::LIVE_PAINT_BUCKET;
+        let bucket = self.bucket_paints();
         if let Some(paint) = self
             .active()
             .and_then(|st| st.interaction.as_ref())

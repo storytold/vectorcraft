@@ -937,17 +937,27 @@ pub(crate) fn menu_target(id: &str) -> Option<(String, Value)> {
 /// status line ([`dimmed`]), as for Remove Background… with no image selected.
 pub(crate) fn menu_target_now(app: &VectorcraftApp, id: &str) -> Option<Result<(String, Value), String>> {
     let target = menu_target(id)?;
-    Some(if menus::enabled(app, id) { Ok(target) } else { dimmed(app, id) })
+    Some(match dimmed(app, id, id) {
+        None => Ok(target),
+        Some(why) => Err(why),
+    })
 }
 
-/// What [`menu_target_now`] gives for command `id` while its menu bar item is dimmed: the status
-/// line, with the engine's reason when it gives one. The app's own rules ([`menus::enabled`]) dim
-/// UI commands, and some commands the engine would run, without giving a reason.
-pub(crate) fn dimmed(app: &VectorcraftApp, id: &str) -> Result<(String, Value), String> {
-    let Some(why) = vectorcraft_engine::find_command(id).and_then(|c| (c.enabled)(&app.session).err()) else {
-        return Err(format!("command `{id}` is not available right now"));
+/// What [`menu_target_now`] gives for command `id` while its menu bar item is dimmed, or `None`
+/// while the item is not dimmed: the status line, which calls the command `name` (its id on the
+/// status line), with the engine's reason when it gives one. The app's own rules
+/// ([`menus::enabled`]) dim UI commands, and some commands the engine would run, without giving a
+/// reason. The engine's check runs at most once.
+pub(crate) fn dimmed(app: &VectorcraftApp, id: &str, name: &str) -> Option<String> {
+    let why = match menus::why_off(app, id)? {
+        Some(why) => Some(why),
+        // Dimmed before the engine was asked (no Appearance subject, an input method composing).
+        None => vectorcraft_engine::find_command(id).and_then(|c| (c.enabled)(&app.session).err()),
     };
-    Err(vectorcraft_engine::EngineError::Disabled(id.to_string(), why).to_string())
+    Some(match why {
+        Some(why) => vectorcraft_engine::EngineError::Disabled(name.to_string(), why).to_string(),
+        None => format!("command `{name}` is not available right now"),
+    })
 }
 
 /// Is `key` a command with no default shortcut that a key press can't run: no item of the menu
@@ -992,9 +1002,10 @@ fn listed_on_its_own(c: &vectorcraft_engine::CommandSpec) -> bool {
 /// Is UI command `id` (default key `sc`, params doc `params`) listed in Edit › Keyboard Shortcuts
 /// whether or not an item of the menu bar runs it? It is when it has a default key or a params doc
 /// of `{}` or `{path…}`. Rename has no default key, and a key press names the selection: it needs
-/// no `id`.
+/// no `id`. Color Picker… has no default key either, and a key press opens it for the proxy in
+/// front.
 fn ui_listed_on_its_own(id: &str, sc: &str, params: &str) -> bool {
-    !sc.is_empty() || params.starts_with("{}") || params.starts_with("{path") || id == "ui.rename"
+    !sc.is_empty() || params.starts_with("{}") || params.starts_with("{path") || id == "ui.rename" || id == "ui.colorPicker"
 }
 
 /// Does a menu bar item run the command with no params, so that it does what its label says and opens
@@ -3365,13 +3376,19 @@ mod tests {
         use vectorcraft_testkit::fixtures::Fixture;
         let none = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
         assert!(!menus::enabled(&none, "edit.findReplace"));
-        assert_eq!(dimmed(&none, "edit.findReplace"), Err("command `edit.findReplace` is not available right now: no document open".into()));
+        let why = "command `edit.findReplace` is not available right now: no document open";
+        assert_eq!(dimmed(&none, "edit.findReplace", "edit.findReplace").as_deref(), Some(why));
+        // A name to show takes the id's place.
+        let shown = "command `Edit › Find and Replace…` is not available right now: no document open";
+        assert_eq!(dimmed(&none, "edit.findReplace", "Edit › Find and Replace…").as_deref(), Some(shown));
         let empty = VectorcraftApp::new(Fixture::Empty.session(), crate::Services::default());
         for id in ["appearance.addFill", "ui.cropImage"] {
             assert!(!menus::enabled(&empty, id), "{id}");
             assert!(vectorcraft_engine::find_command(id).is_none_or(|c| (c.enabled)(&empty.session).is_ok()), "{id}: the engine gives no reason");
-            assert_eq!(dimmed(&empty, id), Err(format!("command `{id}` is not available right now")));
+            assert_eq!(dimmed(&empty, id, id), Some(format!("command `{id}` is not available right now")));
         }
+        assert!(menus::enabled(&empty, "edit.findReplace"));
+        assert_eq!(dimmed(&empty, "edit.findReplace", "edit.findReplace"), None, "not dimmed");
     }
 
     /// Every command the editor lists, run as a key press runs it on a document with one or with

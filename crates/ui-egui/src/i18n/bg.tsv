@@ -489,6 +489,10 @@ font-technology	Variable	Променливи
 	Circle	Кръг
 	Circle Tool	Инструмент Кръг
 	Circle too large	Кръгът е твърде голям
+	Show Radii	Показване на радиуси
+	Show Diameter	Показване на диаметър
+	Anchors at Standard Positions	Опорни точки в стандартни позиции
+	Third Point by Dragging	Трета точка чрез плъзгане
 	Classic Defaults	Класически по подразбиране
 	Clean Up…	Почистване…
 	Clear	Изчистване
@@ -586,9 +590,14 @@ font-technology	Variable	Променливи
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Изглед „Колело“
 	Box View	Изглед „Квадрат“
+	Show Out-of-Gamut Colors	Показване на цветовете извън цветовата гама
 	Box Channel	Канал на квадрата
 	Color box	Цветови квадрат
 	Color Wheel Options	Опции на цветното колело
+	Show Document Colors	Показване на цветовете на документа
+	Document Colors	Цветове на документа
+	Selection Colors	Цветове на селекцията
+@plural	Used {n} time|Used {n} times	Използван {n} път|Използван {n} пъти
 	Show Harmony	Показване на хармонията
 	Harmony Rule	Правило за хармония
 	Harmony color	Цвят от хармонията
@@ -632,6 +641,8 @@ font-technology	Variable	Променливи
 	Contextual Task Bar	Контекстна лента със задачи
 	Pin Bar Position	Закачане на позицията на лентата
 	Reset Bar Position	Нулиране на позицията на лентата
+	Bar Actions	Действия на лентата
+	Reset Bar Actions	Нулиране на действията на лентата
 	Resize	Преоразмеряване
 	Contrast	Контраст
 	Control	Контрол
@@ -1828,6 +1839,10 @@ font-technology	Variable	Променливи
 	Rename Preset	Преименуване на предварителна настройка
 	Save Image Trace Preset	Запази предварителна настройка за трасиране на изображения
 	Delete Image Trace Preset	Изтриване на предварителна настройка за трасиране на изображения
+	Tracing Presets…	Предварителни настройки за трасиране…
+	Import Image Trace Presets	Импортиране на предварителни настройки за трасиране на изображения
+	Export Image Trace Presets	Експортиране на предварителни настройки за трасиране на изображения
+	Replace the saved presets that have these names?	Да се заменят ли запазените предварителни настройки с тези имена?
 	Image Trace Presets	Предварителни настройки за трасиране на изображения
 	Image:	Изображение:
 	Images:	Изображения:
@@ -1958,6 +1973,11 @@ font-technology	Variable	Променливи
 	Knife	Нож
 	Knockout Group	Група с изрязване
 	Lab	Lab
+	OKLCH Sliders	Плъзгачи OKLCH
+	HSL Sliders	Плъзгачи HSL
+	Chroma	Хрома
+	The largest chroma sRGB holds at this lightness and hue	Най-голямата хрома, която sRGB побира при тази светлина и този оттенък
+	OKLCH needs sRGB as the working RGB space	OKLCH изисква sRGB като работно RGB пространство
 	Lab Spot Colors:	Спот цветове по Lab:
 	Lab Values	Стойности по Lab
 	Landscape	Пейзаж
@@ -2694,6 +2714,13 @@ font-technology	Variable	Променливи
 	Pen Tool	Инструмент „Перо“
 	Quick Pen Tool	Инструмент „Бързо перо“
 	Quick Pen	Бързо перо
+	Quick Pen Toolbar	Лента на бързото перо
+	Continuous Arc	Непрекъсната дъга
+	Sharp Corner Arc	Дъга с остър ъгъл
+	Flip Arc	Обръщане на дъгата
+	Hide Toolbar	Скриване на лентата с инструменти
+	Pin Toolbar Position	Закачане на позицията на лентата с инструменти
+	Reset Toolbar Position	Нулиране на позицията на лентата с инструменти
 	Pencil	Молив
 	Pencil Tool	Инструмент „Молив“
 	per slice	на отрязък
@@ -3134,6 +3161,11 @@ digits	Malayalam	Малаялам
 	Edit Arrowheads	Редактиране на върхове на стрелки
 	Edit Arrowheads…	Редактиране на върхове на стрелки…
 	Reload Arrowheads	Презареждане на върхове на стрелки
+	Bevels	Фаски
+	Edit Bevels	Редактиране на фаски
+	Edit Bevels…	Редактиране на фаски…
+	{name} (document)	{name} (документ)
+	Reload Bevels	Презареждане на фаски
 	Reset Rotate View	Нулиране на изгледа на завъртане
 	Rotate View to Selection	Завъртане на изгледа спрямо селекцията
 	Reset the rows to the artwork's colors	Нулиране на редовете към цветовете на илюстрацията
@@ -3271,9 +3303,14 @@ digits	Malayalam	Малаялам
 	Edit type set in fonts that aren't available?	Да се редактира ли текст с шрифтове, които не са налични?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Показва номера на всяка отрязана част в каре в горния ѝ ляв ъгъл върху платното; когато е изключено, контурите на отрязаните части остават видими.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Цветът на контурите на потребителските и обектните отрязани части и на каретата с номерата им; автоматичните отрязани части използват по-блед нюанс на този цвят.
+	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	Новият текст получава този език, докато езикът в Настройка на документ е Английски: САЩ и [Нормален стил на знак] не задава език; текстът, който вече е в документа, запазва своя език.
+	In paragraphs with Hyphenate on, a listed word is hyphenated only at the hyphens typed in it, or never when it has none, whatever its language or case.	В абзаците с включено Пренасяне на думи изброената дума получава пренос само при въведените в нея тирета или никога, ако няма такива, независимо от езика и регистъра ѝ.
+	On the desktop, this folder's .wasm plug-ins load at startup and when OK sets a new folder, except in Safe Mode; one that asks for permissions loads only after you grant them. The web version loads none.	В настолната версия .wasm приставките от тази папка се зареждат при стартиране и когато ОК зададе нова папка, освен в Безопасен режим; приставка, която иска разрешения, се зарежда едва след като ги дадете. Уеб версията не зарежда нито една.
+	Large gives each filter or command plug-in run at least 250 million instructions, with the same time limit; Normal keeps the plug-in's own budget. Live effects, exporters and importers keep theirs.	Голям дава на всяко изпълнение на приставка за филтър или команда поне 250 милиона инструкции при същия лимит на време; Нормално запазва собствения бюджет на приставката. Живите ефекти, експортерите и импортерите запазват своя.
 	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	Новият текст получава този език, докато езикът в Настройка на документ е Английски: САЩ; текстът, който вече е в документа, запазва своя език.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	В абзаците с включено Пренасяне на думи изброената дума се пренася само при въведените в нея тирета или никъде, ако няма такива, независимо от езика и регистъра ѝ.
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	В настолната версия .wasm приставките в тази папка се зареждат при стартиране и когато щракнете върху ОК с нова папка тук, освен в Безопасен режим; уеб версията не ги зарежда.
+	Normal keeps each plug-in's own limits; with Large, a plug-in filter or command may run at least 250 million instructions besides those for its input. The time limit stays the same.	„Нормално“ запазва собствените ограничения на всеки плъгин; с „Голям“ филтър или команда на плъгин може да изпълни поне 250 милиона инструкции освен тези за входните си данни. Ограничението по време остава същото.
 	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	Колко инструкции може да използва всяко изпълнение на филтър за обекти от плъгин; „Голям“ позволява повече от „Нормално“ при същия лимит от 60 секунди. Тежките филтри запазват своя бюджет.
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Първият избор на временен диск: Startup, None или път до папка; VectorCraft го запазва, но все още не използва временни дискове.
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Вторият избор на временен диск: Startup, None или път до папка; VectorCraft го запазва, но все още не използва временни дискове.
@@ -3285,13 +3322,15 @@ digits	Malayalam	Малаялам
 	Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them.	Показва името на всяка група инструменти над инструментите ѝ в лентата с инструменти; изключено, групите следват една след друга без нищо между тях.
 	From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.	Отсега нататък документите, които отваряте или създавате, се отварят като подпрозорци; изключено, всеки се отваря в плаващ прозорец. Вече отворените документи остават на мястото си.
 	Makes the document tabs taller and their names larger.	Прави подпрозорците на документите по-високи, а имената им по-големи.
-	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own.	От следващото стартиране системата изчертава заглавната лента на прозореца там, където иначе VectorCraft би изчертал своя.
-	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on.	От следващото стартиране VectorCraft изчертава заглавната лента на прозореца дори там, където работният плот би я изчертал, освен ако Заглавна лента на системата е включена.
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own; on Linux and the BSDs, the VECTORCRAFT_TITLEBAR variable takes precedence.	От следващото стартиране системата изчертава заглавната лента на прозореца там, където иначе VectorCraft би изчертал своя; в Linux и BSD системите променливата VECTORCRAFT_TITLEBAR има предимство.
+	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on or the VECTORCRAFT_TITLEBAR variable chooses it.	От следващото стартиране VectorCraft изчертава заглавната лента на прозореца дори там, където работният плот би я изчертал, освен ако Заглавна лента на системата е включена или променливата VECTORCRAFT_TITLEBAR я избира.
 	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	Уголемява или смалява интерфейса; рисунката в платното запазва размера си при същия мащаб.
 	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	Показалците на инструментите, които VectorCraft изчертава, растат и се смаляват с Мащабиране на потребителския интерфейс; изключено, запазват размера си.
 	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	Езикът на интерфейса; Автоматично използва езика на системата. Диалоговият прозорец сменя езика веднага щом изберете някой.
 	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	„Анимирано мащабиране“ работи само докато това е включено; изключено, „Анимирано мащабиране“ е затъмнено и мащабирането не е анимирано.
 	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	Мащабирането с колелцето се плъзга плавно, а инструментът „Мащаб“ мащабира, докато плъзгате настрани или го задържите; изключено, той мащабира до областта, през която плъзнете.
+	From the next start, the desktop version shows the canvas through this kind of graphics processor; the artwork is drawn on the CPU either way. Automatic prefers the integrated one on Windows and macOS. The web version does not use it.	От следващото стартиране настолната версия показва платното чрез този вид графичен процесор; графиката винаги се рисува от централния процесор. „Автоматично“ предпочита интегрирания под Windows и macOS. Уеб версията не го използва.
+	From the next start, the window shows each frame without waiting for the display's refresh where the graphics driver allows, at most 240 frames a second.	От следващото стартиране прозорецът показва всеки кадър, без да чака опресняването на дисплея, където графичният драйвер позволява, най-много 240 кадъра в секунда.
 	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	От следващото стартиране настолната версия рисува с този вид графичен процесор; „Автоматично“ предпочита този, който управлява дисплея. Уеб версията не го използва.
 	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	От следващото стартиране прозорецът показва кадрите, без да чака опресняването на дисплея, най-много 240 в секунда; изключено, темпото задава дисплеят. Режим на представяне, зададен при стартиране, има предимство.
 	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	Най-многото стъпки за отмяна, които всеки документ пази; по-малко число премахва най-старите стъпки, когато щракнете върху ОК. Стъпки може да отпаднат и по-рано, ако заемат твърде много памет.
@@ -3310,6 +3349,9 @@ digits	Malayalam	Малаялам
 	Open Recent Files and the Home screen list at most this many recent files; 0 lists none, and VectorCraft still remembers up to 30.	„Скорошни файлове“ и екранът „Начало“ показват най-много толкова скорошни файла; 0 не показва нито един, а VectorCraft пак помни до 30.
 	When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.	При отваряне на документ свързано EPS изображение, което показва запазения си преглед, го запазва, вместо да чете EPS файла отново; променените файлове пак следват „Актуализиране на връзките“.
 	In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.	В „Пикселен преглед“ изображенията се рисуват изгладени; изключено, пикселите им имат остри ръбове. Извън „Пикселен преглед“ изображенията винаги се изглаждат.
+	PDF Text	Текст на PDF
+	The text of a PDF you open or embed comes in as editable type, or as outlines that look the same on a computer without its fonts.	Текстът на PDF, който отваряте или вграждате, идва като редактируем текст или като контури, които изглеждат същите на компютър без шрифтовете му.
+	Linked pages show the file's own text.	Свързаните страници показват собствения текст на файла.
 	When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.	Когато свързан файл се промени, „Автоматично“ го прочита отново, „Питане при промяна“ първо ви пита, а „Ръчно“ го оставя както е и показва бележка в лентата на състоянието.
 	On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.	В настолната версия папката, в която започват „Нов от шаблон…“ и „Запази като шаблон…“; оставете я празна за VectorCraft Templates в папката ви с документи.
 	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	„Редактиране на оригинал“ отваря свързан файл в стандартното приложение на системата за неговия тип; изключено, свързано растерно изображение се отваря в PhotoCraft, ако е инсталиран.
@@ -3324,7 +3366,6 @@ digits	Malayalam	Малаялам
 	Output All Blacks as Rich Black draws pure CMYK black as RGB black in RGB and grayscale raster exports and Print as Bitmap; it does not change vector exports, CMYK JPEG, TIFF and PSD, or other printing.	„Изход на чисто черно като наситено черно“ рисува чистото CMYK черно като RGB черно в растерните RGB и черно-бели експорти и при „Печат като растерно изображение“; не променя векторните експорти, CMYK JPEG, TIFF и PSD и другия печат.
 	On a touch screen, switches to the Touch workspace; turning this off, or losing the touch screen, goes back to the workspace it switched from.	На сензорен екран превключва към работното пространство за докосване; изключването на настройката или изчезването на сензорния екран връща работното пространство отпреди това.
 	A two-finger tap on the canvas undoes, or switches between selection and drawing tools in the Touch workspace, and a three-finger tap redoes; neither works in Presentation Mode.	Докосване с два пръста върху платното отменя, а в работното пространство за докосване превключва между инструментите за селекция и за рисуване; докосване с три пръста повтаря. Нито едното не действа в режим на презентация.
-	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	Новият текст получава този език, докато езикът в Настройка на документ е Английски: САЩ и [Нормален стил на знак] не задава език; текстът, който вече е в документа, запазва своя език.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	В абзаците с включено Пренасяне на думи изброената дума се пренася само при въведените в нея тирета или никъде, ако няма такива, независимо от регистъра ѝ; корейските думи не получават тире, а думите на индийски езици не се пренасят вътре в група от знаци.
 	Reset all preferences to their defaults?	Да се нулират ли всички настройки до стойностите по подразбиране?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Стойностите по подразбиране се прилагат, когато щракнете върху ОК в Настройки. Отказ там запазва текущите ви настройки.
@@ -3555,6 +3596,7 @@ digits	Malayalam	Малаялам
 	Recent Commands	Последни команди
 	No recent commands	Няма последни команди
 	Type to search commands, tools, panels and effects	Въведете текст, за да търсите команди, инструменти, панели и ефекти
+	Clear Recent Commands	Изчистване на последните команди
 	Search commands	Търсене на команди
 	Search Commands…	Търсене на команди…
 	Secondary	Вторичен
@@ -4753,6 +4795,8 @@ axis	Both	И двете
 @msg	`aspect` must be a number (%)	`aspect` трябва да бъде число (%)
 @msg	`at` must be [x, y]	`at` трябва да бъде [x, y]
 @msg	`color` must be a colour	`color` трябва да бъде цвят
+@msg	`sliders` must be none, oklch or hsl	`sliders` трябва да бъде none, oklch или hsl
+@msg	OKLCH needs sRGB as the working RGB space	OKLCH изисква sRGB като работно RGB пространство
 @msg	`command` must be a command whose menu item opens a dialog (see ui.menuDialog)	`command` трябва да бъде команда, чийто елемент от менюто отваря диалогов прозорец (вижте ui.menuDialog)
 @msg	`freeform.points` must be an array	`freeform.points` трябва да бъде масив
 @msg	`freeform.lines` must be an array	`freeform.lines` трябва да бъде масив
@@ -7886,6 +7930,20 @@ breakText	Glyphs	Глифи
 @msg	A joint does not close by {gap} pt.	Една връзка не се затваря с {gap} pt.
 @msg	Two panels pass through each other.	Два панела минават един през друг.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer трябва да е "singleLine", "everyLine", "standardSingleLine" или "standardEveryLine"
+	Vector Packs	Векторни пакети
+	Compass Rose	Роза на компаса
+	Botanical Sprig	Ботаническо клонче
+	Facet Diamond	Фасетиран ромб
+	Tide Crest	Гребен на вълна
+	Leaf Vine	Листна лоза
+	Blossom Chain	Цветна верига
+	Pennant Garland	Гирлянд от знаменца
+	Lantern String	Низ от фенери
+	Orbit Lines	Орбитални линии
+	Petal Garland	Гирлянд от венчелистчета
+	Lattice Braid	Решетъчна плетка
+	Facet Sweep	Фасетен щрих
+	Artistic Brushes	Художествени четки
 	Paint	Боя
 	Flat Sweep	Плосък замах
 	Dry Drag	Сухо влачене

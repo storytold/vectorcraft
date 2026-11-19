@@ -399,6 +399,10 @@ digits	Malayalam	マラヤーラム数字
 	Rename Preset	プリセット名を変更
 	Save Image Trace Preset	画像トレースプリセットを保存
 	Delete Image Trace Preset	画像トレースプリセットを削除
+	Tracing Presets…	トレースプリセット…
+	Import Image Trace Presets	画像トレースプリセットを読み込み
+	Export Image Trace Presets	画像トレースプリセットを書き出し
+	Replace the saved presets that have these names?	これらの名前の保存済みプリセットを置き換えますか？
 	Text Wrap	テキストの回り込み
 	Text Wrap Options…	テキストの回り込みオプション…
 	Clipping Mask	クリッピングマスク
@@ -846,6 +850,8 @@ digits	Malayalam	マラヤーラム数字
 	Contextual Task Bar	コンテキストタスクバー
 	Pin Bar Position	バーの位置を固定
 	Reset Bar Position	バーの位置をリセット
+	Bar Actions	バーのアクション
+	Reset Bar Actions	バーのアクションをリセット
 	Resize	サイズを変更
 	Tools	ツール
 	Toolbars	ツールバー
@@ -866,9 +872,14 @@ digits	Malayalam	マラヤーラム数字
 	{name1} {value1}, {name2} {value2}	{name1} {value1}、{name2} {value2}
 	Wheel View	ホイール表示
 	Box View	ボックス表示
+	Show Out-of-Gamut Colors	色域外のカラーを表示
 	Box Channel	ボックスのチャンネル
 	Color box	カラーボックス
 	Color Wheel Options	カラーホイールオプション
+	Show Document Colors	ドキュメントのカラーを表示
+	Document Colors	ドキュメントのカラー
+	Selection Colors	選択範囲のカラー
+@plural	Used {n} time|Used {n} times	{n} 回使用
 	Show Harmony	ハーモニーを表示
 	Harmony Rule	ハーモニールール
 	Harmony color	ハーモニーカラー
@@ -1412,6 +1423,11 @@ antiAlias	Sharp	シャープ
 	Cusp	尖点
 	Straight segment	直線セグメント
 	Circle too large	円が大きすぎます
+	Show Radii	半径を表示
+	Show Diameter	直径を表示
+	Anchors at Standard Positions	アンカーポイントを標準位置に配置
+	Third Point by Dragging	3 点目をドラッグで指定
+	Gray	グレー
 	Clear All Tabs	すべてのタブを消去
 	Above Text	テキストの上
 	Position Panel Above Text	テキストの上にパネルを配置
@@ -2935,6 +2951,13 @@ antiAlias	Sharp	シャープ
 	Pen Tool	ペンツール
 	Quick Pen Tool	クイックペンツール
 	Quick Pen	クイックペン
+	Quick Pen Toolbar	クイックペンツールバー
+	Continuous Arc	連続円弧
+	Sharp Corner Arc	鋭角円弧
+	Flip Arc	円弧を反転
+	Hide Toolbar	ツールバーを隠す
+	Pin Toolbar Position	ツールバーの位置を固定
+	Reset Toolbar Position	ツールバーの位置をリセット
 	Pencil	鉛筆
 	Pencil Tool	鉛筆ツール
 	Percent:	パーセント:
@@ -3267,6 +3290,11 @@ mark-style	Japanese	日本式
 	Edit Arrowheads	矢印を編集
 	Edit Arrowheads…	矢印を編集…
 	Reload Arrowheads	矢印を再読み込み
+	Bevels	ベベル一覧
+	Edit Bevels	ベベルを編集
+	Edit Bevels…	ベベルを編集…
+	{name} (document)	{name} (ドキュメント)
+	Reload Bevels	ベベルを再読み込み
 	Reset the rows to the artwork's colors	行をアートワークのカラーにリセット
 	Color Theme Picker	カラーテーマピッカー
 	Undo Changes	変更を取り消し
@@ -3398,9 +3426,13 @@ mark-style	Japanese	日本式
 	Edit type set in fonts that aren't available?	使用できないフォントのテキストを編集しますか？
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	カンバス上で、各スライスの番号をスライスの左上のボックスに表示します。オフでもスライスの輪郭は表示されます。
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	ユーザースライスとオブジェクトスライスの輪郭、およびその番号のボックスの色です。自動スライスにはこの色の淡い色合いが使われます。
+	In paragraphs with Hyphenate on, a listed word is hyphenated only at the hyphens typed in it, or never when it has none, whatever its language or case.	ハイフネーションがオンの段落では、リストの単語は入力したハイフンの位置でのみハイフネーションされ、ハイフンがなければハイフネーションされません。言語や大文字小文字は問いません。
+	On the desktop, this folder's .wasm plug-ins load at startup and when OK sets a new folder, except in Safe Mode; one that asks for permissions loads only after you grant them. The web version loads none.	デスクトップ版では、このフォルダーの .wasm プラグインが起動時と、OK で新しいフォルダーを設定したときに読み込まれます (セーフモードを除く)。権限を求めるプラグインは、権限を許可した後にのみ読み込まれます。Web 版では読み込まれません。
+	Large gives each filter or command plug-in run at least 250 million instructions, with the same time limit; Normal keeps the plug-in's own budget. Live effects, exporters and importers keep theirs.	大では、フィルターまたはコマンドのプラグインの各実行に、同じ制限時間で 2 億 5,000 万以上の命令を与えます。通常では、プラグイン独自の予算を使います。ライブ効果、書き出し、読み込みはそれぞれの予算を使います。
 	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	ドキュメント設定の言語が英語 (米国) の間は、新しいテキストにこの言語が設定されます。ドキュメント内の既存のテキストは自身の言語を保ちます。
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	ハイフネーションがオンの段落では、リストの単語は入力したハイフンの位置でのみ分割され、ハイフンがなければ分割されません。言語や大文字小文字は問いません。
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	デスクトップ版では、このフォルダーの .wasm プラグインが起動時と、ここに新しいフォルダーを指定して OK をクリックしたときに読み込まれます (セーフモードを除く)。Web 版では読み込まれません。
+	Normal keeps each plug-in's own limits; with Large, a plug-in filter or command may run at least 250 million instructions besides those for its input. The time limit stays the same.	通常では各プラグイン自身の制限が使われます。大では、プラグインのフィルターやコマンドは入力のための命令に加えて少なくとも 2 億 5000 万命令を実行できます。時間の制限は変わりません。
 	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	プラグインのオブジェクトフィルターを 1 回実行するときに使える命令の数です。大では通常より多く使え、60 秒の制限は変わりません。重いフィルターは独自の予算を保ちます。
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	1 つ目の仮想記憶ディスクの選択です。Startup、None またはフォルダーのパスを指定します。VectorCraft は保存しますが、仮想記憶ディスクはまだ使用しません。
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	2 つ目の仮想記憶ディスクの選択です。Startup、None またはフォルダーのパスを指定します。VectorCraft は保存しますが、仮想記憶ディスクはまだ使用しません。
@@ -3412,13 +3444,15 @@ mark-style	Japanese	日本式
 	Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them.	ツールバーで、各ツールグループの名前をそのツールの上に表示します。オフの場合、グループは間に何も入らずに続けて並びます。
 	From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.	今後開くまたは作成するドキュメントをタブで開きます。オフの場合は、それぞれフローティングウィンドウで開きます。すでに開いているドキュメントはそのままです。
 	Makes the document tabs taller and their names larger.	ドキュメントのタブを高くし、名前を大きく表示します。
-	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own.	次回の起動から、VectorCraft が独自のタイトルバーを描画する場所で、代わりにシステムがウィンドウのタイトルバーを描画します。
-	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on.	次回の起動から、デスクトップがタイトルバーを描画する場所でも VectorCraft がウィンドウのタイトルバーを描画します。ただし、システムのタイトルバーがオンの場合を除きます。
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own; on Linux and the BSDs, the VECTORCRAFT_TITLEBAR variable takes precedence.	次回の起動から、VectorCraft が独自のタイトルバーを描画する場所で、代わりにシステムがウィンドウのタイトルバーを描画します。Linux と BSD では VECTORCRAFT_TITLEBAR 変数が優先されます。
+	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on or the VECTORCRAFT_TITLEBAR variable chooses it.	次回の起動から、デスクトップがタイトルバーを描画する場所でも VectorCraft がウィンドウのタイトルバーを描画します。ただし、システムのタイトルバーがオンの場合と、VECTORCRAFT_TITLEBAR 変数が選択する場合を除きます。
 	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	インターフェイスを拡大または縮小します。同じズームでは、カンバス上のアートワークのサイズは変わりません。
 	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	VectorCraft が描画するツールのポインターを UI のスケーリングに合わせて拡大・縮小します。オフの場合はサイズを保ちます。
 	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	インターフェイスの言語です。自動ではシステムの言語を使います。言語を選ぶとすぐにダイアログの表示が切り替わります。
 	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	アニメーションズームは、これがオンのときだけ働きます。オフの場合、アニメーションズームは淡色表示になり、ズームはアニメーションしません。
 	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	ホイールによるズームはなめらかに動き、ズームツールは横にドラッグするか押したままにするとズームします。オフの場合、ズームツールはドラッグした範囲にズームします。
+	From the next start, the desktop version shows the canvas through this kind of graphics processor; the artwork is drawn on the CPU either way. Automatic prefers the integrated one on Windows and macOS. The web version does not use it.	次回の起動から、デスクトップ版はこの種類のグラフィックプロセッサーを通してカンバスを表示します。アートワーク自体は常に CPU で描画されます。自動では Windows と macOS で内蔵のものが優先されます。Web 版では使われません。
+	From the next start, the window shows each frame without waiting for the display's refresh where the graphics driver allows, at most 240 frames a second.	次回の起動から、グラフィックドライバーが許す場合、ウィンドウはディスプレイのリフレッシュを待たずに各フレームを表示します。最大で毎秒 240 フレームです。
 	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	次回の起動から、デスクトップ版はこの種類のグラフィックプロセッサーで描画します。自動ではディスプレイを駆動しているものが優先されます。Web 版では使われません。
 	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	次回の起動から、ウィンドウはディスプレイの更新を待たずにフレームを表示します。上限は毎秒 240 フレームです。オフにすると、ディスプレイがフレームの間隔を決めます。起動時に指定した表示モードが優先されます。
 	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	各ドキュメントが保持する取り消しステップの最大数です。値を下げると、OK をクリックしたときに古いステップから削除されます。メモリを使いすぎる場合は、さらに早く削除されることがあります。
@@ -3437,6 +3471,9 @@ mark-style	Japanese	日本式
 	Open Recent Files and the Home screen list at most this many recent files; 0 lists none, and VectorCraft still remembers up to 30.	最近使用したファイルを開くとホーム画面に表示する最近のファイルの最大数です。0 では表示しませんが、VectorCraft は最大 30 個まで覚えています。
 	When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.	ドキュメントを開くとき、保存済みのプレビューを表示しているリンクされた EPS 画像は、EPS ファイルを読み直さずにそのプレビューを保ちます。変更されたファイルには引き続きリンクを更新の設定が適用されます。
 	In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.	ピクセルプレビューで画像を滑らかに描画します。オフの場合、ピクセルの端がはっきり表示されます。ピクセルプレビュー以外では画像は常に滑らかです。
+	PDF Text	PDF のテキスト
+	The text of a PDF you open or embed comes in as editable type, or as outlines that look the same on a computer without its fonts.	開く PDF や埋め込む PDF のテキストを、編集可能なテキストとして、またはフォントのないコンピューターでも同じに見えるアウトラインとして読み込みます。
+	Linked pages show the file's own text.	リンクしたページにはファイル自体のテキストが表示されます。
 	When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.	リンクされたファイルが変更されたとき、自動では読み直し、変更時に確認では先に確認し、手動ではそのままにしてステータスバーにメモを表示します。
 	On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.	デスクトップ版で、テンプレートから新規…とテンプレートとして保存…が最初に開くフォルダーです。空欄にすると書類フォルダー内の VectorCraft Templates を使います。
 	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	オリジナルを編集で、リンクされたファイルを種類に応じたシステムの既定のアプリで開きます。オフの場合、リンクされたラスター画像はインストールされていれば PhotoCraft で開きます。
@@ -3597,6 +3634,7 @@ mark-style	Japanese	日本式
 	Recent Commands	最近使ったコマンド
 	No recent commands	最近使ったコマンドはありません
 	Type to search commands, tools, panels and effects	入力してコマンド、ツール、パネル、効果を検索
+	Clear Recent Commands	最近使ったコマンドを消去
 	Search commands	コマンドを検索
 	Secondary	セカンダリ
 	Select All Art on Layer	レイヤー上のすべてのアートを選択
@@ -4416,6 +4454,11 @@ file-filter	Templates	テンプレート
 	Keep the pasted color as a new swatch with a numbered name.	ペーストしたカラーを、番号付きの名前で新規スウォッチとして残します。
 	Keep:	保持:
 	Lab	Lab
+	OKLCH Sliders	OKLCH スライダー
+	HSL Sliders	HSL スライダー
+	Chroma	クロマ
+	The largest chroma sRGB holds at this lightness and hue	この明度と色相で sRGB に収まる最大のクロマ
+	OKLCH needs sRGB as the working RGB space	OKLCH には作業用 RGB スペースとして sRGB が必要です
 	Lab Values	Lab 値
 	Large List View	大きいリスト表示
 	Large Thumbnail View	大きいサムネール表示
@@ -5640,6 +5683,8 @@ variable-list-end	{0}, {1}	{0}、{1}
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` には grayscale、rgb、hsb、cmyk、websafe のいずれかを指定してください
 @msg	`view` must be wheel or box	`view` には wheel、box のいずれかを指定してください
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` には hue、saturation、brightness、red、green、blue のいずれかを指定してください
+@msg	`sliders` must be none, oklch or hsl	`sliders` には none、oklch、hsl のいずれかを指定してください
+@msg	OKLCH needs sRGB as the working RGB space	OKLCH には作業用 RGB スペースとして sRGB が必要です
 @msg	`{key}` must be true or false	`{key}` には true または false を指定してください
 @msg	`top` and `below` can't both be true	`top` と `below` を同時に true にすることはできません
 @msg	`select` must be true or false	`select` には true または false を指定してください
@@ -5674,6 +5719,10 @@ variable-list-end	{0}, {1}	{0}、{1}
 @msg	no such view	指定された表示が見つかりません
 @msg	printing isn't available here	この環境ではプリントできません
 @msg	select an image	画像を選択してください
+@msg	object {_1} is an image changed by Perspective Distort or Free Distort, which this command does not work on	オブジェクト {_1} は遠近変形または自由変形で変更された画像のため、このコマンドは使用できません
+@msg	image {_1} cannot be distorted this way: its corners would not make a convex shape	角が凸形状にならないため、画像 {_1} はこのように変形できません
+@msg	image {_1} cannot be distorted this way: its corners would cross the warp's horizon	角が変形の地平線を越えるため、画像 {_1} はこのように変形できません
+@msg	image {_1} cannot be distorted this way: its corners would be too close together for a perspective map	角が近すぎて遠近法で配置できないため、画像 {_1} はこのように変形できません
 @msg	`background` must be edges, corners or colors	`background` は edges、corners または colors にしてください
 @msg	`match` must be distance or channels	`match` は distance または channels にしてください
 @msg	`{key}` must be from 0 to 100	`{key}` は 0 から 100 までの値にしてください
@@ -6492,7 +6541,10 @@ lighting	Light	ライト
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	オブジェクトに 3D 効果 (押し出しとベベル、回転体、膨張、回転) がありません
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` は `mode` だけを持ち、その値が shaded または wireframe のオブジェクトにしてください
 @msg	its 3D effect builds no solid	3D 効果からソリッドが作成されません
-@msg	bevel must be none or one of {_1}	bevel には none または {_1} のいずれかを指定してください
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel には none、{_1} のいずれか、または {BEVEL_PROFILE} を付けた custom を指定してください
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	bevel custom にはベベルのポイントを表す {BEVEL_PROFILE} が必要です
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME} は文字列にしてください
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE} には 2 個から {most} 個の [x, y] ポイントを、各値を 0 から 1 までの割合として、[0, 0] (端面の縁) から [1, 1] (側面の壁) まで指定してください
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} はこのアートからソリッドを作成できません。シンボルインスタンス、ブレンド、クリッピンググループに含まれるオブジェクトが多すぎます
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label} はシンボル「{symbol}」のインスタンスからソリッドを作成できません。シンボルのアートを使用できません
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}: クリッピングパスが複雑すぎるため、アートを切り抜けません
@@ -10486,6 +10538,20 @@ breakText	Glyphs	字形
 @msg	A panel is not joined to the rest by a crease.	パネルがどの筋入れ線でも他とつながっていません。
 @msg	A fold line is on a non-printing layer.	折り線が印刷しないレイヤーにあります。
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	パネル: {panels}、ヒンジ: {hinges}、エラー: {errors}、警告: {warnings}
+	Vector Packs	ベクターパック
+	Compass Rose	羅針盤のバラ
+	Botanical Sprig	植物の小枝
+	Facet Diamond	多面体ダイヤ
+	Tide Crest	波の頂
+	Leaf Vine	葉のつる
+	Blossom Chain	花の連なり
+	Pennant Garland	三角旗のガーランド
+	Lantern String	ランタンの連なり
+	Orbit Lines	軌道線
+	Petal Garland	花びらのガーランド
+	Lattice Braid	格子編み
+	Facet Sweep	多面体のストローク
+	Artistic Brushes	アートブラシ
 	Paint	ペイント
 	Flat Sweep	平筆の一掃き
 	Dry Drag	ドライドラッグ
