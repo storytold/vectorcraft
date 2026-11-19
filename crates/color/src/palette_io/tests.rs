@@ -593,7 +593,7 @@ fn ase_write_refuses_more_entries_than_the_reader_takes() {
     assert_eq!((back.len(), back.groups.len()), (ASE_MAX_ENTRIES - 1, 1));
     lib.swatches.push(gray(0));
     let e = write(&lib, PaletteFormat::Ase).unwrap_err();
-    assert!(e.contains("reads at most 100000 colors and groups from a swatch exchange file, and this library has 100001"), "{e}");
+    assert!(e.contains("at most 100000 colors and groups are supported in a swatch exchange file, and this library has 100001"), "{e}");
     // A gradient is left out and is not counted.
     lib.swatches.last_mut().unwrap().paint = sample().swatches[1].paint.clone();
     assert!(write(&lib, PaletteFormat::Ase).is_ok());
