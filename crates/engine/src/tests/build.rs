@@ -3189,6 +3189,283 @@ fn live_paint_stroke_edge() {
     assert!(s.execute("livePaint.strokeEdge", &json!({"group": g.0, "point": [300, 300]})).is_err());
 }
 
+/// While the Live Paint Bucket is active, a fill or stroke color chosen without `ids`, `id` or
+/// `item` becomes the color the bucket paints with: the selected Live Paint group and other
+/// selected art keep their paint, and the next bucket click paints one face in that color. Given
+/// `ids`, the paint still goes to those objects.
+#[test]
+fn live_paint_bucket_color_choice_leaves_the_selection_unpainted() {
+    use vectorcraft_tools::builder::{edges, faces};
+    let mut s = session();
+    let g = live(&mut s);
+    let rect = rect(&mut s, 300.0, 300.0, 40.0, 40.0);
+    let rect_fill = node(&s, rect).appearance.fill_paint();
+    s.execute("select.set", &json!({"ids": [g.0, rect.0]})).unwrap();
+    s.select_tool("livePaintBucket", ViewInfo::default()).unwrap();
+    let before = node(&s, g);
+    let steps = s.doc().unwrap().history.undo.len();
+    let magenta = Paint::solid(Color::from_hex("#ff00ff").unwrap());
+    let r = s.execute("paint.setFill", &json!({"color": "#ff00ff"})).unwrap();
+    assert_eq!(r["objects"], 0);
+    s.execute("paint.setStroke", &json!({"color": "#0000ff"})).unwrap();
+    assert_eq!(s.paint.fill, magenta, "the bucket's fill color");
+    assert_eq!(s.paint.stroke, Paint::solid(Color::from_hex("#0000ff").unwrap()));
+    assert_eq!(node(&s, g), before, "the group keeps its paint");
+    assert_eq!(node(&s, rect).appearance.fill_paint(), rect_fill, "other selected art keeps its paint");
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps, "no undo step");
+    // The proxies show the bucket's colors, not the selection's.
+    assert_eq!(s.proxy_paints(), (magenta.clone(), s.paint.stroke.clone()));
+    assert_eq!(s.proxy_mixed(), (false, false));
+    // Invert recolors the bucket's color, not the selection.
+    s.execute("paint.invert", &json!({"stroke": false})).unwrap();
+    assert_eq!(s.paint.fill, Paint::solid(Color::from_hex("#00ff00").unwrap()));
+    assert_eq!(node(&s, g), before, "Invert leaves the group as it was");
+    // A previewed color (the Color Picker) that is canceled puts the bucket's color back.
+    s.begin_interaction("Fill Color").unwrap();
+    s.preview("paint.setFill", &json!({"color": "#123456"})).unwrap();
+    assert_eq!(s.paint.fill, Paint::solid(Color::from_hex("#123456").unwrap()));
+    s.cancel_interaction().unwrap();
+    assert_eq!(s.paint.fill, Paint::solid(Color::from_hex("#00ff00").unwrap()), "the canceled color is not kept");
+    // With New Art Has Basic Appearance off, the selection's appearance does not replace them.
+    s.execute("appearance.setNewArtBasic", &json!({"on": false})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ff00ff"})).unwrap();
+    assert_eq!(s.paint.fill, magenta, "the bucket's fill color stays");
+    // The bucket paints the face it clicks in the color chosen.
+    let r = s.execute("livePaint.fill", &json!({"group": g.0, "point": [75, 50]})).unwrap();
+    let face = NodeId(r["face"].as_u64().unwrap());
+    let gn = node(&s, g);
+    assert_eq!(faces(&gn).iter().filter(|f| f.appearance.fill_paint() == magenta).map(|f| f.id).collect::<Vec<_>>(), vec![face]);
+    assert!(edges(&gn).iter().all(|e| e.appearance.fill_paint().is_none()));
+    // Named objects still take the paint.
+    s.execute("paint.setFill", &json!({"color": "#00ff00", "ids": [rect.0]})).unwrap();
+    assert_eq!(node(&s, rect).appearance.fill_paint(), Paint::solid(Color::from_hex("#00ff00").unwrap()));
+}
+
+/// While the Live Paint Bucket is active, each paint and stroke command run without `ids`, `id` or
+/// `item` changes only the fill, stroke or weight the bucket paints with: the selection keeps its
+/// paint and no undo step is recorded. Each command runs in its own session, and every command that
+/// fails is listed.
+#[test]
+fn live_paint_bucket_paint_and_stroke_commands_leave_the_selection_unpainted() {
+    let red = Paint::solid(Color::from_hex("#ff0000").unwrap());
+    let cyan = Paint::solid(Color::from_hex("#00ffff").unwrap());
+    let blue = Color::from_hex("#0000ff").unwrap();
+    let is_gradient = |p: &Paint| matches!(p, Paint::Gradient(_));
+    type Check = Box<dyn Fn(&Session) -> bool>;
+    let cases: Vec<(&str, Value, Check)> = vec![
+        (
+            "paint.swap",
+            json!({}),
+            Box::new({
+                let red = red.clone();
+                move |s: &Session| s.paint.stroke == red
+            }),
+        ),
+        ("paint.default", json!({}), Box::new(|s: &Session| s.paint.fill == Paint::solid(Color::WHITE))),
+        ("paint.none", json!({}), Box::new(|s: &Session| s.paint.fill == Paint::None)),
+        ("paint.lastColor", json!({"stroke": false}), Box::new(move |s: &Session| s.paint.fill == Paint::solid(blue))),
+        ("paint.lastGradient", json!({"stroke": false}), Box::new(move |s: &Session| is_gradient(&s.paint.fill))),
+        (
+            "paint.complement",
+            json!({"stroke": false}),
+            Box::new({
+                let cyan = cyan.clone();
+                move |s: &Session| s.paint.fill == cyan
+            }),
+        ),
+        (
+            "paint.sampleColor",
+            json!({"color": "#00ffff", "stroke": false}),
+            Box::new({
+                let cyan = cyan.clone();
+                move |s: &Session| s.paint.fill == cyan
+            }),
+        ),
+        // A null `ids` or `id` names no object, as it does for every other command.
+        ("paint.setFill", json!({"color": "#00ffff", "ids": null, "id": null}), Box::new(move |s: &Session| s.paint.fill == cyan)),
+        ("paint.editGradient", json!({"stroke": false, "angle": 45}), Box::new(move |s: &Session| is_gradient(&s.paint.fill))),
+        (
+            "paint.editGradient",
+            json!({"stroke": true, "strokeMode": "along"}),
+            Box::new(move |s: &Session| {
+                is_gradient(&s.paint.stroke) && s.new_art_stroke().gradient_mode == vectorcraft_doc::StrokeGradientMode::Along
+            }),
+        ),
+        ("stroke.set", json!({"weight": 5}), Box::new(|s: &Session| s.paint.stroke_width == 5.0 && s.shown_stroke().map(|st| st.width) == Some(5.0))),
+        ("stroke.weightUp", json!({}), Box::new(|s: &Session| s.paint.stroke_width == 3.0)),
+        ("stroke.weightDown", json!({}), Box::new(|s: &Session| s.paint.stroke_width == 1.0)),
+        ("stroke.set", json!({"weight": 6, "ids": null}), Box::new(|s: &Session| s.paint.stroke_width == 6.0)),
+        ("stroke.weightUp", json!({"id": null}), Box::new(|s: &Session| s.paint.stroke_width == 3.0)),
+        (
+            "stroke.setAdvanced",
+            json!({"arrowScale": [150, 200]}),
+            Box::new(|s: &Session| s.shown_stroke().map(|st| st.arrow_scale) == Some((150.0, 200.0))),
+        ),
+    ];
+    let mut failed = vec![];
+    for (cmd, params, check) in cases {
+        let mut s = session();
+        let g = live(&mut s);
+        let rect = rect(&mut s, 300.0, 300.0, 40.0, 40.0);
+        s.execute("select.set", &json!({"ids": [g.0, rect.0]})).unwrap();
+        s.select_tool("livePaintBucket", ViewInfo::default()).unwrap();
+        s.paint.fill = red.clone();
+        s.paint.stroke_width = 2.0;
+        s.last_solid = blue;
+        let (group, art) = (node(&s, g), node(&s, rect));
+        let steps = s.doc().unwrap().history.undo.len();
+        if let Err(e) = s.execute(cmd, &params) {
+            failed.push(format!("{cmd}: {e}"));
+            continue;
+        }
+        if !check(&s) {
+            failed.push(format!("{cmd}: the bucket's paint did not change as expected"));
+        }
+        if node(&s, g) != group || node(&s, rect) != art {
+            failed.push(format!("{cmd}: the selection was painted"));
+        }
+        if s.doc().unwrap().history.undo.len() != steps {
+            failed.push(format!("{cmd}: an undo step was recorded"));
+        }
+    }
+    assert!(failed.is_empty(), "{failed:#?}");
+}
+
+/// With the Live Paint Bucket active, objects named with `ids` still take a stroke, and a brush
+/// still goes to the selection.
+#[test]
+fn live_paint_bucket_named_objects_and_brushes_still_take_the_stroke() {
+    let mut s = session();
+    let g = live(&mut s);
+    let rect = rect(&mut s, 300.0, 300.0, 40.0, 40.0);
+    s.execute("select.set", &json!({"ids": [g.0, rect.0]})).unwrap();
+    s.select_tool("livePaintBucket", ViewInfo::default()).unwrap();
+    s.execute("stroke.set", &json!({"weight": 4, "ids": [rect.0]})).unwrap();
+    assert_eq!(node(&s, rect).appearance.stroke_width(), 4.0);
+    // A brush still goes to the selection.
+    s.execute("select.set", &json!({"ids": [rect.0]})).unwrap();
+    s.execute("stroke.setAdvanced", &json!({"brush": "3 pt. Round"})).unwrap();
+    assert_eq!(node(&s, rect).appearance.stroke().and_then(|st| st.brush.clone()).as_deref(), Some("3 pt. Round"));
+}
+
+/// While the Live Paint Bucket is active and the Fill proxy is in front, a gradient preset and a
+/// color sampled into a gradient stop change the bucket's fill, even when the selection's active
+/// Appearance row is a stroke.
+#[test]
+fn live_paint_bucket_gradient_preset_and_sampled_stop_follow_the_active_proxy() {
+    let mut s = session();
+    live(&mut s);
+    let rect = rect(&mut s, 300.0, 300.0, 40.0, 40.0);
+    s.execute("select.set", &json!({"ids": [rect.0]})).unwrap();
+    s.execute("appearance.setActiveItem", &json!({"index": 1})).unwrap();
+    s.select_tool("livePaintBucket", ViewInfo::default()).unwrap();
+    s.execute("paint.toggleActive", &json!({"fill": true})).unwrap();
+    assert_eq!(s.appearance_item(), Some(1), "the stroke row stays active");
+    let (art, stroke) = (node(&s, rect), s.paint.stroke.clone());
+    s.execute("gradient.presets.apply", &json!({"name": "vignette"})).unwrap();
+    let Paint::Gradient(g) = &s.paint.fill else { panic!("the bucket's fill is not a gradient") };
+    assert_eq!(g.gradient.kind, vectorcraft_color::GradientKind::Radial);
+    assert_eq!(s.paint.stroke, stroke, "the bucket's stroke stays");
+    s.execute("paint.sampleColor", &json!({"color": "#00ffff", "stop": 0})).unwrap();
+    let Paint::Gradient(g) = &s.paint.fill else { panic!("the bucket's fill is not a gradient") };
+    assert_eq!(g.gradient.stops[0].color, Color::from_hex("#00ffff").unwrap(), "the sampled stop");
+    assert_eq!(node(&s, rect), art, "the selection keeps its paint");
+}
+
+/// A gradient stop selected on the selection's gradient is not selected once the Live Paint
+/// Bucket is active (its proxies show the default paint), and one selected on the bucket's
+/// gradient is not selected once another tool is chosen.
+#[test]
+fn live_paint_bucket_and_the_selection_keep_their_own_selected_stop() {
+    let mut s = session();
+    live(&mut s);
+    let rect = rect(&mut s, 300.0, 300.0, 40.0, 40.0);
+    s.execute("select.set", &json!({"ids": [rect.0]})).unwrap();
+    s.execute("paint.editGradient", &json!({"stroke": false, "kind": "linear"})).unwrap();
+    s.execute("gradient.selectStop", &json!({"index": 1})).unwrap();
+    assert_eq!(s.selected_stop(), Some(1));
+    s.select_tool("livePaintBucket", ViewInfo::default()).unwrap();
+    assert_eq!(s.selected_stop(), None, "the selection's stop is not the bucket's");
+    s.execute("paint.editGradient", &json!({"stroke": false, "kind": "linear"})).unwrap();
+    s.execute("gradient.selectStop", &json!({"index": 0})).unwrap();
+    assert_eq!(s.selected_stop(), Some(0));
+    s.select_tool("selection", ViewInfo::default()).unwrap();
+    assert_eq!(s.selected_stop(), None, "the bucket's stop is not the selection's");
+}
+
+/// While the Live Paint Bucket is active, a paint or stroke command with a bad `target` or
+/// `aligned` is refused, as it is with the Selection tool, and the bucket's fill, stroke and weight
+/// stay.
+#[test]
+fn live_paint_bucket_refuses_a_bad_target_or_aligned() {
+    let refused = [
+        ("paint.setFill", json!({"color": "#00ffff", "target": "bogus"})),
+        ("paint.invert", json!({"ids": null, "aligned": "bad"})),
+        ("paint.complement", json!({"aligned": "bad"})),
+        ("stroke.set", json!({"weight": 6, "target": "bogus"})),
+        ("stroke.set", json!({"weight": 6, "aligned": "bad"})),
+        ("stroke.weightUp", json!({"target": "bogus"})),
+        ("stroke.weightUp", json!({"aligned": "bad"})),
+        ("stroke.weightDown", json!({"target": "bogus"})),
+        ("stroke.weightDown", json!({"aligned": "bad"})),
+        ("paint.swap", json!({"aligned": "bad"})),
+        ("paint.default", json!({"target": "bogus"})),
+    ];
+    for tool in ["selection", "livePaintBucket"] {
+        let mut s = session();
+        let g = live(&mut s);
+        s.execute("select.set", &json!({"ids": [g.0]})).unwrap();
+        s.select_tool(tool, ViewInfo::default()).unwrap();
+        let before = (s.paint.fill.clone(), s.paint.stroke.clone(), s.paint.stroke_width);
+        for (cmd, p) in &refused {
+            assert!(s.execute(cmd, p).is_err(), "{tool}: {cmd} {p}");
+            assert_eq!((s.paint.fill.clone(), s.paint.stroke.clone(), s.paint.stroke_width), before, "{tool}: {cmd} {p}");
+        }
+    }
+}
+
+/// While the Live Paint Bucket is active, each preview of a paint command in one interaction starts
+/// from the colors the interaction began with, so previewing a swap twice and committing swaps once.
+#[test]
+fn live_paint_bucket_previews_start_from_the_interaction_colors() {
+    let mut s = session();
+    let g = live(&mut s);
+    s.execute("select.set", &json!({"ids": [g.0]})).unwrap();
+    s.select_tool("livePaintBucket", ViewInfo::default()).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    s.execute("paint.setStroke", &json!({"color": "#0000ff"})).unwrap();
+    let (fill, stroke) = (s.paint.fill.clone(), s.paint.stroke.clone());
+    s.begin_interaction("Swap").unwrap();
+    s.preview("paint.swap", &json!({})).unwrap();
+    s.preview("paint.swap", &json!({})).unwrap();
+    s.commit_interaction().unwrap();
+    assert_eq!((s.paint.fill.clone(), s.paint.stroke.clone()), (stroke, fill), "one swap");
+}
+
+/// A color chosen with the Live Paint Bucket is the current fill: a tool held for a moment (the
+/// Hand) and let go leaves it in place, so the bucket paints with it afterwards, with New Art Has
+/// Basic Appearance off and on.
+#[test]
+fn a_held_tool_keeps_the_live_paint_bucket_color() {
+    for basic in [false, true] {
+        let mut s = session();
+        live(&mut s);
+        let rect = rect(&mut s, 300.0, 300.0, 40.0, 40.0);
+        s.execute("paint.setFill", &json!({"color": "#00ff00", "ids": [rect.0]})).unwrap();
+        s.execute("appearance.setNewArtBasic", &json!({"on": basic})).unwrap();
+        s.execute("select.set", &json!({"ids": [rect.0]})).unwrap();
+        s.select_tool("livePaintBucket", ViewInfo::default()).unwrap();
+        s.execute("paint.setFill", &json!({"color": "#ff00ff"})).unwrap();
+        let magenta = Paint::solid(Color::from_hex("#ff00ff").unwrap());
+        s.select_tool("hand", ViewInfo::default()).unwrap();
+        assert_eq!(s.paint.fill, magenta, "basic {basic}: the Hand keeps the current fill");
+        s.switch_tool("livePaintBucket", ViewInfo::default()).unwrap();
+        assert_eq!(s.paint.fill, magenta, "basic {basic}: the bucket paints with its color");
+        assert_eq!(s.proxy_paints().0, magenta, "basic {basic}: the Fill proxy shows it");
+        assert_eq!(node(&s, rect).appearance.fill_paint(), Paint::solid(Color::from_hex("#00ff00").unwrap()), "basic {basic}");
+    }
+}
+
 /// The undo and redo depths, the unsaved state and the revision of the active document.
 fn history_state(s: &Session) -> (usize, usize, bool, u64) {
     let st = s.doc().unwrap();
