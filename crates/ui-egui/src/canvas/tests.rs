@@ -15421,3 +15421,78 @@ fn trim_view_makes_no_guide_from_the_rulers() {
     assert_eq!(count(&app), 1);
     assert!(app.ui.view.guides, "the new guide shows");
 }
+
+/// #8363: a guide drag Trim View cancelled stays cancelled until the button is released. Trim
+/// View turned off again before the release does not start a new guide: the release makes none
+/// and adds no undo step. The next drag works as before.
+#[test]
+fn a_ruler_drag_trim_view_cancelled_stays_cancelled_until_released() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.ui.view.rulers = true;
+    app.ui.view.smart_guides = false;
+    app.ui.view.snap_to_point = false;
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let rect = app.canvas_rect.unwrap();
+    let from = pos2(rect.center().x, rect.top() - RULER / 2.0);
+    let at = pos2(rect.center().x, rect.top() + 120.0);
+    let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    let count = |app: &VectorcraftApp| app.session.active().unwrap().doc.ruler_guides().len();
+    let steps = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
+    let before = steps(&app);
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from)]);
+    frame(&mut app, &ctx, vec![button(from, true)]);
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at)]);
+    assert!(app.session.ruler_guide_dragging());
+    app.ui.view.trim_view = true;
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(pos2(at.x, at.y + 5.0))]);
+    assert!(!app.session.ruler_guide_dragging(), "Trim View ends the drag");
+    app.ui.view.trim_view = false;
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(pos2(at.x, at.y + 10.0))]);
+    assert!(!app.session.ruler_guide_dragging(), "turned off again, no new guide starts");
+    frame(&mut app, &ctx, vec![button(pos2(at.x, at.y + 10.0), false)]);
+    assert_eq!(count(&app), 0, "the release makes no guide");
+    assert_eq!(steps(&app), before, "no undo step");
+    // The next drag makes a guide.
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from)]);
+    frame(&mut app, &ctx, vec![button(from, true)]);
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at)]);
+    frame(&mut app, &ctx, vec![button(at, false)]);
+    assert_eq!(count(&app), 1);
+}
+
+/// #8363: Trim View turned on or off during a drag of the rulers' origin out of their corner
+/// cancels it, as hiding the rulers does: the snap targets gathered at its start would hold
+/// guides Trim View hides. The origin is left where it was. A drag wholly with Trim View on, or
+/// wholly off, sets it.
+#[test]
+fn trim_view_toggled_during_a_ruler_origin_drag_cancels_it() {
+    for (start, end, sets) in [(false, true, false), (true, false, false), (true, true, true), (false, false, true)] {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        app.session.execute("guide.add", &json!({"vertical": true, "pos": 150})).unwrap();
+        app.ui.view.rulers = true;
+        app.ui.view.trim_view = start;
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        let rect = app.canvas_rect.unwrap();
+        let xf = Xf::new(rect, app.view().unwrap());
+        let origin = |app: &VectorcraftApp| {
+            let d = &app.session.active().unwrap().doc;
+            format!("{:?} {:?}", d.ruler_origin, d.artboard_ruler_origins)
+        };
+        let was = origin(&app);
+        let from = pos2(rect.left() - RULER / 2.0, rect.top() - RULER / 2.0);
+        let at = xf.to_screen(Point::new(151.0, 100.0));
+        let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from)]);
+        frame(&mut app, &ctx, vec![button(from, true)]);
+        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at)]);
+        assert!(crate::canvas::ruler_origin_dragging(&ctx), "{start} {end}: dragging");
+        app.ui.view.trim_view = end;
+        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at + vec2(1.0, 0.0))]);
+        frame(&mut app, &ctx, vec![button(at + vec2(1.0, 0.0), false)]);
+        assert_eq!(origin(&app) != was, sets, "Trim View {start} then {end}: origin set {sets}");
+    }
+}
