@@ -114,10 +114,6 @@ fn swatches_from_cms(list: Vec<PaletteSwatch>) -> Vec<Swatch> {
     list.into_iter().map(|w| Swatch { name: w.name, paint: Paint::solid(color_from_cms(w.color)), global: w.global, spot: w.spot }).collect()
 }
 
-/// The most colors and groups one swatch exchange file holds, read or written (craft-cms reads
-/// as many).
-const ASE_MAX_ENTRIES: usize = 100_000;
-
 fn to_cms_palette(lib: &SwatchLibrary) -> Palette {
     Palette {
         name: lib.name.clone(),
@@ -152,17 +148,7 @@ pub fn write(lib: &SwatchLibrary, format: PaletteFormat) -> Result<Vec<u8>, Stri
             serde_json::to_string_pretty(&file).unwrap_or_default()
         }
         PaletteFormat::Gpl => return cms_palette::write_palette(&to_cms_palette(lib), cms_palette::PaletteFormat::Gpl),
-        PaletteFormat::Ase => {
-            let p = to_cms_palette(lib);
-            // Counted here, so the message is VectorCraft's own and its translations apply.
-            let entries = p.swatches.len() + p.groups.iter().map(|g| 1 + g.swatches.len()).sum::<usize>();
-            if entries > ASE_MAX_ENTRIES {
-                return Err(format!(
-                    "VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}"
-                ));
-            }
-            return cms_palette::write_palette(&p, cms_palette::PaletteFormat::Ase);
-        }
+        PaletteFormat::Ase => return cms_palette::write_palette(&to_cms_palette(lib), cms_palette::PaletteFormat::Ase),
         PaletteFormat::Css => write_css(lib, keep),
     };
     Ok(text.into_bytes())
