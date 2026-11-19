@@ -322,7 +322,8 @@ impl Session {
             return Err(EngineError::Busy);
         }
         // While the Live Paint Bucket is active, paint previews change only the bucket's colors, so
-        // each preview starts from the colors the interaction began with.
+        // each preview starts from the colors the interaction began with; so does a preview with
+        // `defaultsOnly: true`, and one after it.
         let bucket = self.bucket_paints();
         let (paint, restore_paint) = {
             let menu = self.menu.clone();
@@ -339,7 +340,8 @@ impl Session {
             // the paints the interaction began with.
             let restore_paint = bucket
                 || cmd == "command.batch"
-                || it.preview.as_ref().is_some_and(|(id, _)| id == "command.batch")
+                || cmd::asks_defaults_only(params)
+                || it.preview.as_ref().is_some_and(|(id, p)| id == "command.batch" || cmd::asks_defaults_only(p))
                 || it.color_mode_paints.is_some();
             let paint = it.paint.clone();
             it.preview_paint = None;
@@ -484,12 +486,16 @@ impl Session {
         self.decoded_images.empty();
         self.pending_paint = None;
         // While the Live Paint Bucket is active, a previewed color is the bucket's color, which the
-        // cancel puts back as well.
+        // cancel puts back as well, as it does a color previewed with `defaultsOnly: true`.
         let bucket = self.bucket_paints();
         if let Some(paint) = self
             .active()
             .and_then(|st| st.interaction.as_ref())
-            .filter(|it| bucket || it.preview.as_ref().is_some_and(|(id, _)| id == "command.batch") || it.color_mode_paints.is_some())
+            .filter(|it| {
+                bucket
+                    || it.preview.as_ref().is_some_and(|(id, p)| id == "command.batch" || cmd::asks_defaults_only(p))
+                    || it.color_mode_paints.is_some()
+            })
             .map(|it| it.paint.clone())
         {
             self.paint = paint;
