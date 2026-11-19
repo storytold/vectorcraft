@@ -4883,15 +4883,23 @@ already walks Image Trace. Short agent entry points:
   `paint.none` paint the faces or the edges. `paint.editGradient`, `paint.setGradientGeom` and the `paint.freeform`
   point and line edits change the faces' or the edges' gradients, `paint.invert` and `paint.complement` recolor the
   faces' fills or the edges' strokes, and `stroke.set`, `stroke.weightUp`, `stroke.weightDown` and
-  `stroke.setAdvanced` change the edges. The Fill proxy shows the faces' fill, and the Stroke proxy, the Stroke panel
-  and the Control bar show the edges' stroke. A face or edge selected or given together with its whole group follows
-  the group's rule: a fill does not reach an edge, and a stroke does not reach a face. `paint.swap` gives the faces
-  the stroke the edges share and gives the edges the fill the faces share, with a gradient fitted to each face or
-  edge. It leaves a group as it is when its faces' fills or its edges' strokes differ, when any of them is a freeform
-  gradient, or when it has no face or no edge. `paint.default` replaces each face's appearance with no fill and each
-  edge's appearance with a 0.5 pt black stroke, also when the document's Default Graphic Style is redefined. With
-  only Live Paint groups selected or given, the fill and stroke for new art become no fill and a 0.5 pt black stroke;
-  with New Art Has Basic Appearance off, new art then takes the selection's appearance, as after any command.
+  `stroke.setAdvanced` change the edges. `object.setOverprint` sets the faces' fill overprint and the edges' stroke
+  overprint. `appearance.copyFrom` (the Eyedropper) gives the picked fill attributes to the faces and the picked
+  stroke attributes to the edges, also onto a group given as `source` with `reverse`. A whole-appearance pick gives
+  each face every picked fill row and each edge every picked stroke row, and the faces and edges keep their rows of
+  the other kind and their effects; `append` adds the source's rows to them but not its object effects. A whole group
+  picked up as the source (given as `source`, or selected first with `reverse`) gives its first face's fills with its
+  first edge's strokes above them, and the group's own opacity, blend mode and effects. The Fill proxy shows the
+  faces' fill, and the Stroke proxy, the Stroke panel and the Control bar show the edges' stroke, whatever the order of
+  a selection that holds the group, directly or inside a selected group, and some of its parts. A face or edge
+  selected or given together with its whole group follows the group's rule: a fill does not reach an edge, and a
+  stroke does not reach a face. `paint.swap` gives the faces the stroke the edges share and gives the edges the fill
+  the faces share, with a gradient fitted to each face or edge. It leaves a group as it is when its faces' fills or its
+  edges' strokes differ, when any of them is a freeform gradient, or when it has no face or no edge. `paint.default`
+  replaces each face's appearance with no fill and each edge's appearance with a 0.5 pt black stroke, also when the
+  document's Default Graphic Style is redefined. With only Live Paint groups selected or given, the fill and stroke
+  for new art become no fill and a 0.5 pt black stroke; with New Art Has Basic Appearance off, new art then takes the
+  selection's appearance, as after any command.
 
 `brush.selectionArt {ids?|id?}` (a query) replies `{art}`: the object that `brush.new` given the same `ids` or `id`,
 or the same selection, takes as a new scatter or art brush's art and as a new pattern brush's side tile. Several
@@ -5689,7 +5697,13 @@ fills and strokes above it paint over the members (characters), those below unde
 `contents` to say where the row ends up in the same undo step; `document.node` shows the slot as
 `appearance.contents_index`. The `appearance.*`, `effect.*` and `graphicStyle.apply` commands edit the selected
 objects themselves (a group's own stack; layers through `ids`) or, with `target: "contents"`, the objects inside the
-groups and layers. `appearance.targetContents` selects a group's members (double-clicking the Contents row).
+groups and layers. In a Live Paint group those are its faces and edges, not its hidden source paths.
+`appearance.addFill` adds a fill to the faces only, and `appearance.addStroke` adds a stroke to the edges only; a selected group left with only its hidden source paths is returned without a change. A
+fill or stroke command with an `item` and `target: "contents"` (such as `paint.setFill`, `stroke.set`,
+`paint.invert`, `paint.setGradientGeom` and `object.setOverprint`) changes the faces for a fill row and the edges for
+a stroke row. The row commands (`appearance.setItem`, `appearance.removeItem` and the others) find their rows on each
+face and edge as on any other object in the contents.
+`appearance.targetContents` selects a group's members (double-clicking the Contents row).
 SVG and PDF export bake a group's own fills, strokes and geometry effects into paths; its raster effects stay a
 filter on the whole group in SVG and become an image of the whole group in PDF.
 A geometry effect on one of type's own fills or strokes (`effect.apply` with `item`) reshapes the whole outline that
