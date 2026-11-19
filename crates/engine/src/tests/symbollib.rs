@@ -84,7 +84,7 @@ fn the_builtin_library_is_original_art_generated_in_code() {
     let mut s = Session::new();
     let list = run(&mut s, "symbol.libraries", json!({}));
     let libs = list["libraries"].as_array().unwrap();
-    assert_eq!(libs.len(), 7, "{libs:?}");
+    assert_eq!(libs.len(), 8, "{libs:?}");
     assert_eq!((libs[0]["id"].as_str(), libs[0]["category"].as_str()), (Some("basic-shapes"), Some("builtIn")));
     assert_eq!(
         (libs[1]["id"].as_str(), libs[1]["name"].as_str(), libs[1]["category"].as_str()),
@@ -109,6 +109,10 @@ fn the_builtin_library_is_original_art_generated_in_code() {
     assert_eq!(
         (libs[6]["id"].as_str(), libs[6]["name"].as_str(), libs[6]["category"].as_str()),
         (Some("nature-icons"), Some("Nature Icons"), Some("builtIn"))
+    );
+    assert_eq!(
+        (libs[7]["id"].as_str(), libs[7]["name"].as_str(), libs[7]["category"].as_str()),
+        (Some("media-controls"), Some("Media Controls"), Some("builtIn"))
     );
     let lib = run(&mut s, "symbol.library", json!({"library": "basic shapes"}));
     let names: Vec<&str> = lib["symbols"].as_array().unwrap().iter().map(|x| x["name"].as_str().unwrap()).collect();
@@ -276,6 +280,42 @@ fn nature_icons_library_places_and_survives_save() {
     let bytes = vectorcraft_format::base64_decode(saved["dataBase64"].as_str().unwrap()).unwrap();
     let reopened = vectorcraft_format::load(&bytes).unwrap();
     assert_eq!(reopened.symbols.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(), names);
+}
+
+#[test]
+fn media_controls_library_lists_and_places() {
+    let mut s = session();
+    let lib = run(&mut s, "symbol.library", json!({"library": "media-controls"}));
+    let symbols = lib["symbols"].as_array().unwrap();
+    assert_eq!(symbols.len(), 6, "media-controls must load with exactly 6 symbols");
+    let names: Vec<&str> = symbols.iter().map(|x| x["name"].as_str().unwrap()).collect();
+    assert_eq!(names, ["Play", "Pause", "Stop", "Skip Next", "Shuffle", "Repeat"]);
+    let mut placed = Vec::new();
+    for (i, name) in names.iter().enumerate() {
+        let r = run(
+            &mut s,
+            "symbol.addFromLibrary",
+            json!({"library": "media-controls", "name": name, "place": true, "x": 100.0 + 80.0 * i as f64, "y": 100.0}),
+        );
+        assert_eq!(r["added"], json!([name]));
+        placed.push(r["placed"].as_u64().unwrap());
+    }
+    let d = doc(&s);
+    for (i, name) in names.iter().enumerate() {
+        assert_eq!(d.symbol_nine_slice(name), None, "{name} should not carry 9-slice guides");
+        assert!(matches!(
+            d.node(NodeId(placed[i])).map(|n| &n.kind),
+            Some(NodeKind::SymbolInstance { symbol, .. }) if symbol == *name
+        ));
+        let sym = d.symbols.iter().find(|s| s.name == *name).expect("symbol exists in document");
+        assert!(matches!(sym.art.kind, NodeKind::Path { .. }), "{name} art should be a path");
+        if let NodeKind::Path { path, .. } = &sym.art.kind {
+            assert!(!path.subpaths.is_empty(), "{name} path data must have subpaths");
+            for sp in &path.subpaths {
+                assert!(!sp.anchors.is_empty(), "{name} subpath must contain anchor points");
+            }
+        }
+    }
 }
 
 #[test]
