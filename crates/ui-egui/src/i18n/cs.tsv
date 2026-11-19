@@ -563,6 +563,15 @@
 	Shading Color	Barva stínování
 	Black Overprint	Přetisk černou
 	Draw Hidden Faces	Kreslit skryté stěny
+	Map Art…	Mapovat kresbu…
+	Map Art	Mapovat kresbu
+	First Surface	První povrch
+	Previous Surface	Předchozí povrch
+	Next Surface	Další povrch
+	Last Surface	Poslední povrch
+	Scale to Fit	Změnit velikost podle povrchu
+	Shade Artwork	Stínovat kresbu
+	Invisible Geometry	Neviditelná geometrie
 	Revolve…	Rotační těleso…
 	Inflate…	Nafouknutí…
 	Materials…	Materiály…
@@ -807,6 +816,9 @@
 	Box Channel	Kanál čtverce
 	Color box	Barevný čtverec
 	Color Wheel Options	Možnosti barevného kola
+	Show Harmony	Zobrazit harmonii
+	Harmony Rule	Pravidlo harmonie
+	Harmony color	Barva harmonie
 	CSS Properties	Vlastnosti CSS
 	Document Info	Informace o dokumentu
 	Flattener Preview	Náhled sloučení
@@ -1060,6 +1072,25 @@
 	Preserve Embedded Profiles	Zachovat vložené profily
 	Convert to Working Space	Převést do pracovního prostoru
 	Preserve Numbers	Zachovat čísla
+	Profile Mismatches:	Nesoulad profilů:
+	Ask When Opening	Ptát se při otevírání
+	Ask When Pasting	Ptát se při vkládání
+	Missing Profiles:	Chybějící profily:
+	Embedded Profile Mismatch	Nesoulad vloženého profilu
+	Missing Profile	Chybějící profil
+	Paste Profile Mismatch	Nesoulad profilu při vkládání
+	“{name}” is not tagged with a {model} profile.	„{name}“ nemá přiřazen profil {model}.
+	“{name}” is tagged with the {model} profile “{profile}”, which is not the {model} working space “{working}”.	„{name}“ má profil {model} „{profile}“, který není pracovním prostorem {model} „{working}“.
+	Use the embedded profile	Použít vložený profil
+	Convert the colors to the working space	Převést barvy do pracovního prostoru
+	Discard the embedded profile	Zahodit vložený profil
+	Leave as is	Ponechat beze změny
+	Assign the working space	Přiřadit pracovní prostor
+	Assign profile:	Přiřadit profil:
+	Preserve the color numbers	Zachovat hodnoty barev
+	Convert to keep the colors' appearance	Převést a zachovat vzhled barev
+@msg	`{path}` goes with `{key}`: "assign" only	`{path}` patří jen k `{key}`: "assign"
+	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	Vložené barvy pocházejí z dokumentu s profilem {model} „{from}“; tento dokument má „{to}“.
 	CMYK	CMYK
 	Texture	Textura
 	Craquelure…	Krakelování…
@@ -1147,6 +1178,15 @@ lighting	Light	Světlo
 	Document Raster Effects Settings Dialog	Dialogové okno Nastavení rastrových efektů dokumentu
 	Drop Shadow	Vržený stín
 	DXF Options Dialog	Dialogové okno Možnosti DXF
+	HP-GL Options	Možnosti HP-GL
+	HP-GL Options Dialog	Dialogové okno Možnosti HP-GL
+	Curve Tolerance:	Tolerance křivek:
+	Origin:	Počátek:
+	Pens:	Pera:
+	One Pen per Color	Jedno pero pro každou barvu
+	Pen Table	Tabulka per
+	Draw the Nearest Path Next	Jako další kreslit nejbližší cestu
+	Draw Inner Paths First	Nejdřív kreslit vnitřní cesty
 	Edit Toolbar	Upravit panel nástrojů
 	Edit Views	Upravit zobrazení
 	Effect…	Efekt…
@@ -1727,6 +1767,7 @@ digits	Malayalam	Malajálamské
 	Roman Baseline	Latinková účaří
 	Select a text object to edit its character attributes.	Vyberte textový objekt, abyste mohli upravit atributy jeho znaků.
 	Show Options	Zobrazit možnosti
+	Show on Shape Creation	Zobrazit při vytvoření tvaru
 	Show Recent Colors	Zobrazit nedávné barvy
 	Toggle RGB Percent	Přepnout RGB v procentech
 	Color Panel Options	Možnosti panelu Barva
@@ -2077,6 +2118,8 @@ digits	Malayalam	Malajálamské
 	Snap Curves To Lines	Přichytit křivky k úsečkám
 	Tracing Result with Outlines	Výsledek vektorizace s obrysy
 	Source Image	Zdrojový obraz
+	Split View	Rozdělené zobrazení
+	Divider	Dělicí čára
 	Threshold	Práh
 	Trace	Vektorizovat
 	Trace the image with the Default preset	Vektorizovat obraz s přednastavením Výchozí
@@ -2224,6 +2267,15 @@ digits	Malayalam	Malajálamské
 	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Sada Kinsoku
 	Kinsoku Shori Type	Typ Kinsoku Shori
+	Kinsoku Shori Settings…	Nastavení Kinsoku Shori…
+	Kinsoku Shori Settings	Nastavení Kinsoku Shori
+	Kinsoku Sets	Sady Kinsoku
+	Kinsoku Set Base	Základ sady Kinsoku
+	Based on:	Založeno na:
+	Cannot Start Line	Nemůže začínat řádek
+	Cannot End Line	Nemůže končit řádek
+	Hanging Punctuation	Visící interpunkce
+	Inseparable Characters	Neoddělitelné znaky
 	Push In First	Nejprve vtáhnout
 	Push Out First	Nejprve vysunout
 	Push Out Only	Pouze vysunout
@@ -2628,6 +2680,12 @@ digits	Malayalam	Malajálamské
 	Units:	Jednotky:
 	Use Typographer's Quotes	Používat typografické uvozovky
 	Center Artwork	Vystředit kresbu
+	PSD Import Options	Možnosti importu PSD
+	Place PSD	Umístit PSD
+	Convert Layers to Objects	Převést vrstvy na objekty
+	Import Hidden Layers	Importovat skryté vrstvy
+	Flatten Layers to a Single Image	Sloučit vrstvy do jednoho obrazu
+	Import Slices	Importovat řezy
 	DXF Import Options	Možnosti importu DXF
 	Layout:	Rozvržení:
 	Merge Layers	Sloučit vrstvy
@@ -2783,6 +2841,7 @@ digits	Malayalam	Malajálamské
 	Save As Preset…	Uložit jako předvolbu…
 	Save Changes	Uložit změny
 	Save Preset…	Uložit přednastavení…
+	Save Summary…	Uložit souhrn…
 	Vectors	Vektory
 	A saved copy of the selected preset	Uložená kopie vybraného přednastavení
 	Built-in presets don't change: New makes a copy you can edit.	Vestavěná přednastavení se nemění: tlačítko Nový vytvoří kopii, kterou lze upravit.
@@ -3409,6 +3468,17 @@ antiAlias	Sharp	Ostré
 	Swatch Name:	Název položky vzorníku:
 	Diameter:	Průměr:
 	Symbolism Tools Options	Možnosti nástrojů symbolů
+	Tool:	Nástroj:
+	Symbol Set Density	Hustota sady symbolů
+	Symbol Sprayer Options	Volby rozprašovače symbolů
+	Scrunch:	Zhuštění:
+	Spin:	Otáčení:
+	Screen:	Průhlednost:
+	Stain:	Obarvení:
+	Symbol Sizer Options	Volby velikosti symbolů
+	Proportional Resizing	Proporcionální změna velikosti
+	Resizing Affects Density	Změna velikosti ovlivňuje hustotu
+	Show Brush Size and Intensity	Zobrazit velikost a intenzitu štětce
 	Symbol Set Density:	Hustota sady symbolů:
 	Intensity:	Intenzita:
 	Place PDF	Umístit PDF
@@ -3507,6 +3577,7 @@ antiAlias	Sharp	Ostré
 # Command labels and other interface strings
 	Art	Obrazový
 	Bearing	Azimut
+	Stylus Wheel	Kolečko pera
 	Bristle	Štětinový
 	Calligraphic	Kaligrafický
 	Dots	Body
@@ -3652,6 +3723,9 @@ theme	Appearance	Motiv
 	embedding for preview and print	vkládání pro náhled a tisk
 	embedding allowed	vkládání povoleno
 	{file}; {embedding}	{file}; {embedding}
+	unknown type	neznámý typ
+	{type}; {uses}	{type}; {uses}
+@plural	{n} use|{n} uses	{n} použití|{n} použití|{n} použití
 	substituted: shown in {family} {style} ({detail})	nahrazeno: zobrazeno písmem {family} {style} ({detail})
 	missing: shown in {family} {style}	chybí: zobrazeno písmem {family} {style}
 	missing	chybí
@@ -4245,6 +4319,7 @@ theme	Appearance	Motiv
 	Show Pixel Grid (Above 600% Zoom)	Zobrazit mřížku obrazových bodů (nad 600 %)
 	Show Slice Numbers	Zobrazit čísla řezů
 	Show The Home Screen When No Documents Are Open	Zobrazit domovskou obrazovku, když nejsou otevřeny dokumenty
+	Show Tool Cards	Zobrazovat karty nástrojů
 	Show Tool Tips	Zobrazovat popisky nástrojů
 	Size/Leading	Velikost/proklad
 	Snapping Tolerance	Tolerance přichytávání
@@ -4679,6 +4754,7 @@ font-technology	Variable	Variabilní
 	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	Vlastnosti živého obdélníku zobrazí jedno pole Poloměr rohu pro všechny čtyři rohy; když je vypnuto, má každý roh vlastní pole.
 	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	Co úpravy v panelu Transformace transformují: objekt, dlaždice jeho vzorku nebo obojí; Výchozí se řídí volbou Transformovat dlaždice vzorku.
 	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	Když je vybraná jedna instance symbolu, panel Transformace použije registrační bod symbolu jako referenční bod.
+	Drawing a rectangle, ellipse, polygon, star or line opens the Transform panel if it is closed.	Nakreslení obdélníku, elipsy, mnohoúhelníku, hvězdy nebo čáry otevře panel Transformace, pokud je zavřený.
 	Darkens the canvas outside the artboards while the Artboard tool is active.	Ztmaví plátno mimo pracovní plochy, dokud je aktivní nástroj Pracovní plocha.
 	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	Když je zapnuto Ztmavit oblast mimo pracovní plochu, zůstane oblast mimo pracovní plochy tmavá i při tažení nástrojem Pracovní plocha.
 	How near, in pixels, the pointer must be to an object, anchor or handle for a click to select it.	Jak blízko v obrazových bodech musí být ukazatel k objektu, kotevnímu bodu nebo úchytu, aby jej kliknutí vybralo.
@@ -5763,6 +5839,7 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	the PDF is password-protected: give its password	PDF je chráněno heslem: zadejte heslo
 @msg	the PDF password is wrong	heslo k PDF je chybné
 @msg	the Save PDF dialog didn't open	dialogové okno Uložit PDF se neotevřelo
+@msg	the Save PDF dialog is not open	dialogové okno Uložit PDF není otevřené
 @msg	the WMF header is damaged	hlavička WMF je poškozená
 @msg	the art could not be sampled	z kresby nelze nabrat vzorek
 @msg	the art has no bounds	kresba nemá hranice
@@ -6103,6 +6180,49 @@ variable-list-end	{0}, {1}	{0} a {1}
 @msg	the PSD file's layer groups are nested too deeply	skupiny vrstev souboru PSD jsou vnořené příliš hluboko
 @msg	a layer of the PSD file is too large to read	vrstva souboru PSD je příliš velká na přečtení
 @msg	the PSD file's layers take more memory to read than allowed	vrstvy souboru PSD potřebují ke čtení víc paměti, než je povoleno
+@msg	the file is no longer loaded	soubor už není načtený
+@msg	the layers can't be read ({e}): the file was placed as its merged image	vrstvy nelze přečíst ({e}): soubor byl umístěn jako sloučený obraz
+@msg	1 type layer came in as pixels: the text isn't editable	1 textová vrstva byla načtena jako pixely: text nelze upravovat
+@msg	{n} type layers came in as pixels: the text isn't editable	textové vrstvy načtené jako pixely: {n}; text nelze upravovat
+@msg	1 adjustment layer was not applied	1 vrstva úprav nebyla použita
+@msg	{n} adjustment layers were not applied	nepoužité vrstvy úprav: {n}
+@msg	1 fill layer was not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	1 vrstva výplně nebyla vykreslena (přechodová nebo vzorková výplň, barva, kterou nelze přečíst, nebo tvar bez uložených pixelů)
+@msg	{n} fill layers were not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	nevykreslené vrstvy výplně: {n} (přechodová nebo vzorková výplň, barva, kterou nelze přečíst, nebo tvar bez uložených pixelů)
+@msg	the layer effects of 1 layer weren't drawn	efekty vrstvy u 1 vrstvy nebyly vykresleny
+@msg	the layer effects of {n} layers weren't drawn	efekty vrstev nebyly vykresleny; počet vrstev: {n}
+@msg	the vector masks of 1 layer weren't applied	vektorové masky 1 vrstvy nebyly použity
+@msg	the vector masks of {n} layers weren't applied	vektorové masky vrstev nebyly použity; počet vrstev: {n}
+@msg	the knockout of 1 layer wasn't applied	vykrojení 1 vrstvy nebylo použito
+@msg	the knockout of {n} layers wasn't applied	vykrojení vrstev nebylo použito; počet vrstev: {n}
+@msg	1 layer was left out (hidden layers and the layers clipped to them)	1 vrstva byla vynechána (skryté vrstvy a vrstvy k nim oříznuté)
+@msg	{n} layers were left out (hidden layers and the layers clipped to them)	vynechané vrstvy: {n} (skryté vrstvy a vrstvy k nim oříznuté)
+@msg	1 layer clipped to a fill layer that wasn't drawn was left out	1 vrstva oříznutá k nevykreslené vrstvě výplně byla vynechána
+@msg	{n} layers clipped to fill layers that weren't drawn were left out	vynechané vrstvy oříznuté k nevykresleným vrstvám výplně: {n}
+@msg	layers in blend modes VectorCraft doesn't have ({modes}) were merged with the layers below them	vrstvy v režimech prolnutí, které VectorCraft nemá ({modes}), byly sloučeny s vrstvami pod nimi
+@msg	1 layer in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	1 vrstva v režimu prolnutí, který VectorCraft nemá, byla načtena jako Normální: sloučení potřebuje víc paměti, než je povoleno
+@msg	{n} layers in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	vrstvy v režimech prolnutí, které VectorCraft nemá, načtené jako Normální: {n}; sloučení potřebuje víc paměti, než je povoleno
+@msg	1 layer clipped to the layer below came in unclipped: the merge needs more memory than allowed	1 vrstva oříznutá k vrstvě pod ní byla načtena bez oříznutí: sloučení potřebuje víc paměti, než je povoleno
+@msg	{n} layers clipped to the layer below came in unclipped: the merge needs more memory than allowed	vrstvy oříznuté k vrstvě pod nimi načtené bez oříznutí: {n}; sloučení potřebuje víc paměti, než je povoleno
+@msg	hiddenLayers applies to a PSD file placed with layers: true	hiddenLayers platí pro soubor PSD umístěný s layers: true
+@msg	importSlices: a linked PSD file is placed as its flat image; give link: false to embed it with its slices	importSlices: propojený soubor PSD se umístí jako plochý obraz; zadejte link: false, aby se vložil i s řezy
+@msg	layers: a linked PSD file is placed as its flat image; leave link out or give link: false	layers: propojený soubor PSD se umístí jako plochý obraz; vynechte link nebo zadejte link: false
+@msg	the slices can't be read ({e}) and were left out	řezy nelze přečíst ({e}) a byly vynechány
+@msg	1 slice lies outside the canvas or has no size and was left out	1 řez leží mimo plátno nebo nemá velikost a byl vynechán
+@msg	{n} slices lie outside the canvas or have no size and were left out	vynechané řezy, které leží mimo plátno nebo nemají velikost: {n}
+@msg	1 slice would lie outside the canvas and was left out	1 řez by ležel mimo plátno a byl vynechán
+@msg	{n} slices would lie outside the canvas and were left out	vynechané řezy, které by ležely mimo plátno: {n}
+@msg	the slices' descriptor holds too many values	deskriptor řezů obsahuje příliš mnoho hodnot
+@msg	the slices' descriptor has a version other than 16	deskriptor řezů má jinou verzi než 16
+@msg	the slices are stored in version {v}, which isn't read	řezy jsou uložené ve verzi {v}, která se nečte
+@msg	the file has {count} slices, more than the {MAX_SLICES} read	počet řezů v souboru je {count}, víc než čtených {MAX_SLICES}
+@msg	the slices' descriptor has no list of slices	deskriptor řezů nemá seznam řezů
+@msg	the slices' descriptor lists something other than a slice	deskriptor řezů uvádí něco jiného než řez
+@msg	a slice in the slices' descriptor has no bounds	řez v deskriptoru řezů nemá hranice
+@msg	a slice's bounds in the slices' descriptor aren't numbers	hranice řezu v deskriptoru řezů nejsou čísla
+@msg	a text in the slices has more than the {MAX_TEXT} characters read	text v řezech má víc než čtených {MAX_TEXT} znaků
+@msg	the slices' descriptor nests too deep	deskriptor řezů je vnořený příliš hluboko
+@msg	the slices' descriptor has a reference of an unknown kind ({_1})	deskriptor řezů má odkaz neznámého druhu ({_1})
+@msg	the slices' descriptor has a value of an unknown type ({_1})	deskriptor řezů má hodnotu neznámého typu ({_1})
 @msg	the layers can't be read ({e}): the file opened as its merged image	vrstvy nelze přečíst ({e}): soubor se otevřel jako sloučený obraz
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}bitové soubory PSD v tomto barevném režimu nelze přečíst
 @msg	the PSD file is cut short	soubor PSD je useknutý
@@ -10406,6 +10526,39 @@ breakText	Glyphs	Glyfy
 	No objects are selected.	Nejsou vybrány žádné objekty.
 	Open a document to mark its fold lines.	Otevřete dokument, abyste označili jeho linie skladu.
 	Remove Fold Line Role	Odstranit typ linie
+# Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	Místo popisku zobrazí kartu s tím, co dělá nástroj z panelu a co dělají jeho klávesy; vyžaduje Zobrazovat popisky nástrojů.
+	Selects whole objects and groups to move, resize or rotate them.	Vybírá celé objekty a skupiny, abyste je mohli přesunout, změnit jejich velikost nebo je otočit.
+	Selects anchor points and path segments to reshape a path.	Vybírá kotevní body a segmenty cesty, abyste mohli změnit tvar cesty.
+	Draws paths point by point, with straight segments and smooth curves.	Kreslí cesty bod po bodu, s rovnými segmenty a hladkými křivkami.
+	Draws smooth curves through the points you click.	Kreslí hladké křivky procházející body, na které kliknete.
+	Adds text at a point, or in a frame you drag.	Přidá text v bodě nebo v rámečku, který natáhnete.
+	Draws rectangles and squares.	Kreslí obdélníky a čtverce.
+	Draws rectangles with rounded corners.	Kreslí obdélníky se zaoblenými rohy.
+	Draws ellipses and circles.	Kreslí elipsy a kruhy.
+	Draws polygons with sides of equal length.	Kreslí mnohoúhelníky se stejně dlouhými stranami.
+	Draws stars.	Kreslí hvězdy.
+	Turns objects around a reference point.	Otáčí objekty kolem referenčního bodu.
+	Flips objects across an axis through a reference point.	Zrcadlí objekty podle osy procházející referenčním bodem.
+	Resizes objects from a reference point.	Mění velikost objektů od referenčního bodu.
+	Slants objects from a reference point.	Zkosí objekty od referenčního bodu.
+	Moves the view of the document.	Posouvá zobrazení dokumentu.
+	Magnifies or reduces the view.	Zvětšuje nebo zmenšuje zobrazení.
+	Copies the color and other attributes of one object to the selection.	Zkopíruje barvu a další atributy jednoho objektu do výběru.
+	Sets the direction and length of a gradient.	Nastaví směr a délku přechodu.
+	Creates, selects and resizes artboards.	Vytváří, vybírá a mění velikost pracovních ploch.
+	Changes the width of a stroke along its length.	Mění šířku tahu podél jeho délky.
+	Bends art by dragging pins placed on it.	Ohýbá kresbu tažením špendlíků, které na ni umístíte.
+	Pushes the outlines of paths in the direction you drag.	Posouvá obrysy cest ve směru tažení.
+	Twists the outlines of paths into swirls.	Zkroutí obrysy cest do vírů.
+	Pulls the outlines of paths in toward the brush.	Stahuje obrysy cest směrem ke štětci.
+	Pushes the outlines of paths out from the brush.	Vytlačuje obrysy cest směrem od štětce.
+	Adds curved details along the outlines of paths.	Přidává zaoblené detaily podél obrysů cest.
+	Adds spiky details along the outlines of paths.	Přidává ostré detaily podél obrysů cest.
+	Adds wrinkles along the outlines of paths.	Přidává vrásky podél obrysů cest.
+	Moves, copies and resizes objects on the perspective grid.	Přesouvá, kopíruje a mění velikost objektů v perspektivní mřížce.
+	Makes a series of steps between two or more objects.	Vytvoří řadu kroků mezi dvěma nebo více objekty.
+	Places dimension lines that show measured lengths.	Umísťuje kótovací čáry, které ukazují naměřené délky.
 	Tap	Krátký stisk
 	Clear Hold	Vymazat podržení
 	Hold Shortcuts	Zkratky podržením
@@ -10452,3 +10605,7 @@ breakText	Glyphs	Glyfy
 @msg	Other blanks not shown: {count}	Další přířezy nejsou zobrazeny: {count}
 @msg	A joint does not close by {gap} pt.	Spoj se nezavírá o {gap} pt.
 @msg	Two panels pass through each other.	Dva panely procházejí jeden druhým.
+
+# #5804 native-picked raster editor (draft translations; native review welcome).
+	Edit Original with:	Upravit originál v:
+file-filter	Applications	Aplikace

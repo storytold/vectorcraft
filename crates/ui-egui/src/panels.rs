@@ -810,6 +810,8 @@ mod tests_color_wheel;
 #[cfg(test)]
 mod tests_color_wheel_box;
 #[cfg(test)]
+mod tests_color_wheel_harmony;
+#[cfg(test)]
 mod tests_color_wheel_vision;
 #[cfg(test)]
 mod tests_constrain;

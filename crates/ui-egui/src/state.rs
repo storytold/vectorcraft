@@ -733,6 +733,9 @@ pub struct UiState {
     /// Engine preferences (Edit → Preferences), persisted alongside the UI state.
     #[serde(default)]
     pub engine_prefs: Value,
+    /// Native-picker-only raster editor; never exposed as an engine preference or dialog field.
+    #[serde(default)]
+    pub original_editor: crate::OriginalEditorChoice,
     /// Color Guide panel: variation kind, steps and amount (Color Guide Options).
     #[serde(default)]
     pub color_guide: vectorcraft_color::harmony::GuideOptions,
@@ -844,6 +847,9 @@ pub struct UiState {
     /// The EPS Options chosen last (`document.exportEps` options; null: never used).
     #[serde(default)]
     pub eps_options: Value,
+    /// The HP-GL Options chosen last (`document.export` HP-GL options; null: never used).
+    #[serde(default)]
+    pub hpgl_options: Value,
     /// The Offset Path fields confirmed last (offset, joins, miterLimit; null: never used): its
     /// dialog opens on them (#1152).
     #[serde(default)]
@@ -1293,6 +1299,7 @@ impl Default for UiState {
             recent_commands: vec![],
             favorite_fonts: vec![],
             engine_prefs: Value::Null,
+            original_editor: Default::default(),
             color_guide: Default::default(),
             library_panels: vec![],
             flattener_preview: Default::default(),
@@ -1321,6 +1328,7 @@ impl Default for UiState {
             links_search: None,
             dxf_options: Value::Null,
             eps_options: Value::Null,
+            hpgl_options: Value::Null,
             offset_path: Value::Null,
             smart_punctuation: Value::Null,
             average_join: Value::Null,
