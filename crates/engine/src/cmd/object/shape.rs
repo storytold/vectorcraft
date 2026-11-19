@@ -361,6 +361,11 @@ pub(super) fn set_live_shape(s: &mut Session, p: &Value) -> Result<Value> {
         for id in &ids {
             super::pixelgrid::resnap(d, *id);
         }
+        // A shape named in `ids` and not selected is not checked after the edit: one that a turn or
+        // a new radius would take past the coordinate limit is an error here, and nothing changes.
+        if !crate::sanity::objects_in_range(d, &ids) {
+            return Err(bad("object.setLiveShape", format!("coordinate out of range (limit ±{MAX_COORD} pt)")));
+        }
         Ok(())
     })?;
     ok()

@@ -164,6 +164,8 @@ impl LiveShape {
         if !angle.is_finite() {
             return;
         }
+        // Brought into [0, 360) first: `now - angle` loses `now` for a very large angle.
+        let angle = angle.rem_euclid(360.0);
         let (xf, local) = match self {
             LiveShape::Rectangle { w, h, xf, .. } | LiveShape::Ellipse { w, h, xf, .. } => (xf, Point::new(*w / 2.0, *h / 2.0)),
             LiveShape::Polygon { xf, .. } => (xf, Point::ZERO),

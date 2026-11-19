@@ -171,19 +171,37 @@ fn a_rectangle_and_an_ellipse_show_their_angle() {
             ids.push(id);
         }
         app.run("select.set", json!({"ids": [ids[0]]})).unwrap();
-        for draw in [show as fn(&mut VectorcraftApp, &mut Ui), crate::panels::properties::transform_section] {
-            let shown = texts(&mut app, draw);
-            for t in ["Angle:", "0°", "30°"] {
-                assert!(shown.iter().any(|s| s == t), "{t} in {shown:?}");
-            }
+        for (draw, rotate) in [(show as fn(&mut VectorcraftApp, &mut Ui), "Rotate"), (crate::panels::properties::transform_section, "Rotation")] {
+            assert_eq!(field_text(&mut app, draw, rotate), "0°", "{shape}: {rotate}");
+            assert_eq!(field_text(&mut app, draw, "Angle:"), "30°", "{shape}: {rotate}");
         }
         assert!(texts(&mut app, show).iter().any(|s| s == heading), "{heading}");
         app.run("select.set", json!({"ids": ids})).unwrap();
-        let shown = texts(&mut app, show);
-        assert!(shown.iter().any(|s| s == "Angle:") && !shown.iter().any(|s| s == "30°" || s == "60°"), "{shape}: {shown:?}");
+        assert_eq!(field_text(&mut app, show, "Angle:"), "", "{shape}: mixed angles");
         app.run("select.set", json!({"ids": [ids[1]]})).unwrap();
-        assert!(texts(&mut app, show).iter().any(|s| s == "60°"), "{shape}");
+        assert_eq!(field_text(&mut app, show, "Angle:"), "60°", "{shape}");
     }
+}
+
+/// The text in `draw`'s input named `label`, read from the accessibility tree of a headless frame.
+fn field_text(app: &mut VectorcraftApp, draw: fn(&mut VectorcraftApp, &mut Ui), label: &str) -> String {
+    use egui_kittest::kittest::Queryable;
+    let state = std::mem::replace(app, VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default()));
+    let mut fonts = false;
+    let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(320.0, 900.0)).with_accessibility_check(false).build_ui_state(
+        move |ui, app: &mut VectorcraftApp| {
+            if !std::mem::replace(&mut fonts, true) {
+                crate::theme::install_fonts(ui.ctx());
+                return;
+            }
+            draw(app, ui);
+        },
+        state,
+    );
+    h.run_steps(3);
+    let text = h.get_by_role_and_label(egui::accesskit::Role::TextInput, label).value().unwrap_or_default();
+    *app = h.into_state();
+    text
 }
 
 /// Ellipse Properties' Constrain Pie Angle link, in the Transform panel and the Properties panel's

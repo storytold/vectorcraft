@@ -663,6 +663,28 @@ fn a_rectangle_and_an_ellipse_take_their_angle() {
     assert!(close(angle(&s, rect), 20.0) && close(before.x, after.x) && close(before.y, after.y), "{before:?} → {after:?}");
 }
 
+/// A shape named in `ids` that a turn would take past the coordinate limit (±4,000,000 pt) is an
+/// error that changes nothing, whether or not it is selected.
+#[test]
+fn a_turn_past_the_coordinate_limit_is_an_error() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let mut add = |cmd: &str, p: Value| s.execute(cmd, &p).unwrap()["id"].as_u64().unwrap();
+    // Each reaches within 10 pt of the limit and past it when turned.
+    let rect = add("shape.rectangle", json!({"x": 3_999_890, "y": 100, "width": 100, "height": 100}));
+    let ellipse = add("shape.ellipse", json!({"x": 3_999_950, "y": 100, "width": 40, "height": 100}));
+    let polygon = add("shape.polygon", json!({"cx": 3_999_955, "cy": 200, "radius": 50, "sides": 6}));
+    for (id, key, angle) in [(rect, "rectangleAngle", 45), (ellipse, "ellipseAngle", 90), (polygon, "polygonAngle", 90)] {
+        for selected in [false, true] {
+            s.execute("select.set", &json!({"ids": if selected { vec![id] } else { vec![] }})).unwrap();
+            let (doc, steps) = (s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len());
+            let e = s.execute("object.setLiveShape", &json!({"ids": [id], key: angle})).unwrap_err();
+            assert!(e.to_string().contains("out of range"), "{key}, selected {selected}: {e}");
+            assert!(*s.doc().unwrap().doc == *doc && s.doc().unwrap().history.undo.len() == steps, "{key}, selected {selected}: changed");
+        }
+    }
+}
+
 /// A live line's Line Properties: Line Length keeps its first end in place, Line Angle (degrees
 /// counterclockwise, any finite value brought into 0 to 360) turns it about its midpoint, the
 /// length applies before the angle, every selected line takes them in one undo step, and a value
