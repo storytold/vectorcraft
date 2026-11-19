@@ -146,8 +146,13 @@ fn set_rectangle_corners(app: &mut VectorcraftApp, mut p: Value, corner: Option<
     p["corners"] = corner.map_or(json!([0, 1, 2, 3]), |k| json!([k]));
     // The edit the tool computes on another thread comes first: the rectangles are the ones
     // selected after it.
-    let r = app.session.finish_tool_edit();
-    crate::canvas::apply_requests(app, r);
+    match app.session.finish_tool_edit() {
+        Ok(reqs) => crate::canvas::apply_requests(app, Ok(reqs)),
+        Err(e) => {
+            app.status(e.to_string());
+            return;
+        }
+    }
     if app.session.active().is_none() {
         return;
     }
