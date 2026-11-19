@@ -1003,6 +1003,59 @@ fn glyphs_type_cannot_draw_do_not_use_up_the_tracking_measure() {
 }
 
 #[test]
+fn irregular_gaps_before_a_long_tracked_run_do_not_split_the_run() {
+    // The first eight gaps each take another tracking, and the 92 glyphs after them are tracked
+    // 300: measuring the rest after each irregular gap must not use up the budget the run needs,
+    // so the run is one object with its tracking.
+    let mut s = session();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 100, "text": "i".repeat(100), "size": 6})).unwrap()["id"].as_u64().unwrap();
+    s.execute("text.setRangeStyle", &json!({"id": id, "tracking": 300})).unwrap();
+    for (i, t) in [50, 170, 90, 230, 130, 410, 20, 520].into_iter().enumerate() {
+        s.execute("text.setRangeStyle", &json!({"id": id, "start": i, "end": i + 1, "tracking": t})).unwrap();
+    }
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let g = s.execute("type.createOutlines", &json!({})).unwrap()["ids"][0].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [g]})).unwrap();
+    let r = s.execute("type.retype", &json!({})).unwrap();
+    let texts: Vec<&str> = r["texts"].as_array().unwrap().iter().map(|t| t.as_str().unwrap()).collect();
+    assert_eq!(texts.concat(), "i".repeat(100), "{r}");
+    assert_eq!(r["unmatched"], json!([]));
+    assert!(texts.len() <= 9, "at most one object per irregular gap, then the run: {texts:?}");
+    let run = text_of(&s, r["ids"].as_array().unwrap().last().unwrap().as_u64().unwrap());
+    assert_eq!(run.plain_text().chars().count(), 92, "{texts:?}");
+    assert!(run.runs.iter().all(|r| r.style.tracking == 300.0), "{texts:?}");
+}
+
+#[test]
+fn a_long_tightly_tracked_rest_keeps_its_word_spaces_after_a_split() {
+    // Tracking as tight as a space is wide leaves the space no advance, and only the kerning it
+    // breaks shows it is there: the word space past the glyphs the rest's tracking is measured
+    // from is read by that measure too.
+    let mut s = session();
+    let text = format!("{} {}", "AV".repeat(20), "AV".repeat(5));
+    let id = s.execute("text.create", &json!({"x": 10, "y": 100, "text": text, "size": 10})).unwrap()["id"].as_u64().unwrap();
+    let face = text_of(&s, id).runs[0].style.font_family.clone();
+    let probe = s.execute("text.create", &json!({"x": 10, "y": 200, "text": "AV", "size": 10})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [probe]})).unwrap();
+    let pg = s.execute("type.createOutlines", &json!({})).unwrap()["ids"][0].as_u64().unwrap();
+    let pl = lines_in(&s, pg).into_iter().next().unwrap();
+    assert_eq!(pl.face.family, face);
+    let tracking = -(super::space_advance(&pl.face) / pl.face.units_per_em() * 1000.0).round();
+    s.execute("text.setRangeStyle", &json!({"id": id, "tracking": tracking})).unwrap();
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let g = s.execute("type.createOutlines", &json!({})).unwrap()["ids"][0].as_u64().unwrap();
+    let mut budget = 100_000;
+    let mut l = lines_in(&s, g).into_iter().next().unwrap().tracked(false, &mut budget);
+    assert_eq!((l.text.as_str(), l.tracking), (text.as_str(), tracking));
+    l.matches[0].gid += 1;
+    let mut unmatched = vec![];
+    let out = super::verified(vec![l], false, &mut unmatched);
+    assert_eq!(unmatched.len(), 1);
+    let texts: Vec<(&str, f64)> = out.iter().map(|l| (l.text.as_str(), l.tracking)).collect();
+    assert_eq!(texts, vec![(&text[1..], tracking)]);
+}
+
+#[test]
 fn tightly_tracked_type_keeps_its_tracking() {
     // Tracking tighter than a space: the space moves the next glyph back.
     // M MM: of its two gaps, the word space is the tighter, and the lower median.
