@@ -265,7 +265,7 @@ fn the_window_menu_and_the_brushes_panel_open_brush_libraries() {
     assert_eq!((r["open"].as_str(), r["count"].as_u64()), (Some("paint"), Some(4)));
     let path = app.run("shape.line", json!({"x1": 10, "y1": 140, "x2": 180, "y2": 140})).unwrap()["id"].as_u64().unwrap();
     let undo = undo_len(&app);
-    click(&mut app, &ctx, "Flat Sweep", Modifiers::NONE, 4.0);
+    click(&mut app, &ctx, "Flat Sweep", Modifiers::NONE, 5.0);
     assert!(has(&app, "Flat Sweep") && !has(&app, "Dry Drag"));
     assert_eq!(undo_len(&app), undo + 1);
     assert_eq!(
@@ -275,7 +275,7 @@ fn the_window_menu_and_the_brushes_panel_open_brush_libraries() {
     let r = app.run("window.brushLibrary", json!({"library": "Image Brush"})).unwrap();
     assert_eq!((r["open"].as_str(), r["count"].as_u64()), (Some("image-brush"), Some(4)));
     let undo = undo_len(&app);
-    click(&mut app, &ctx, "Soft Bloom", Modifiers::NONE, 5.0);
+    click(&mut app, &ctx, "Soft Bloom", Modifiers::NONE, 6.0);
     assert!(has(&app, "Soft Bloom") && !has(&app, "Color Flecks"));
     assert_eq!(undo_len(&app), undo + 1);
     // Without brushes there is nothing to save.
