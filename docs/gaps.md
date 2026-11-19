@@ -41,6 +41,7 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 | Date | Change | Summary |
 |---|---|---|
 | 2026-11-18 | minor | G11: SVG export writes physical unit suffixes on the root <svg width="..." height="..."> for documents with physical units (mm, cm, in, pc), preventing drawings from scaling to 75% in external tools and preserving units across round-trips (#864; general unit preference on restart remains open under #864). Estimate 8–15 → 6–13 h. |
+| 2026-11-18 | minor | G5: Media Controls joins Basic Shapes, UI Frames, Map Markers, Inventory Icons, Skill Icons and Weather Icons as a seventh built-in symbol library (Play, Pause, Stop, Skip Next, Shuffle, Repeat; original procedural vector symbols generated in code, no default 9-slice); estimate decremented (3–13 → 2–12 h). |
 | 2026-11-18 | minor | G12: Layers panel ruler guide and blend spine row context menus (#8592): Hide/Show, Lock/Unlock, Release Guides, Delete and Locate Object on guide rows; Select, Blend Options…, Reverse Spine, Reverse Front to Back, Expand, Release and Locate Object on blend spine rows. Scores and estimates unchanged. |
 | 2026-11-18 | minor | G19: PDF export writes the document language chosen in Document Setup as the catalog's `/Lang` (its BCP 47 tag, `en-US` by default) and the XMP packet's `dc:language`, in exported and printed PDFs (#3644); `/MarkInfo` stays with tagged PDF (#3643). Scores and estimates unchanged. |
 | 2026-11-16 | minor | G1: Recolor Artwork - native Lab entry in Color Picker, swatch libraries access in Color Picker, and row right-click context menu ("Pick from Swatches", "Limit to Library") (#4028); scores and estimates unchanged. |
@@ -109,7 +110,7 @@ stage ([ROADMAP.md](../ROADMAP.md)).
 | 8 | [G2 Photoshop-style raster effects and the Effect Gallery](#g2-photoshop-style-raster-effects-and-the-effect-gallery) | 0 | no | [effects-parity.md](effects-parity.md) |
 | 9 | [G13 Illustrator 2026 (30.x) additions](#g13-illustrator-2026-30x-additions) | 13–23 | no | [target-app-parity.md](target-app-parity.md) |
 | 10 | [G14 Pen hardware beyond Windows pressure](#g14-pen-hardware-beyond-windows-pressure) | 4–10 | Wayland pressure | [hardware-parity.md](hardware-parity.md) |
-| 11 | [G5 Brushes, symbols and libraries](#g5-brushes-symbols-and-libraries) | 3–13 | no | [target-app-parity.md](target-app-parity.md) |
+| 11 | [G5 Brushes, symbols and libraries](#g5-brushes-symbols-and-libraries) | 2–12 | no | [target-app-parity.md](target-app-parity.md) |
 | 12 | [G3 3D and Materials](#g3-3d-and-materials) | 25–45 | no | [effects-parity.md](effects-parity.md) |
 | 13 | [G7 Views and windows](#g7-views-and-windows) | 15–25 | no | [ui-parity.md](ui-parity.md) |
 | 14 | [G6 Automation and scripting](#g6-automation-and-scripting) | 4–8 | no | [target-app-parity.md](target-app-parity.md) |
@@ -681,10 +682,11 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
   symbol static drops them; stored in the native format.
   Color eyedropper for scatter, art and pattern brushes (Hue Shift colorization; samples canvas art);
   symbol libraries ([public source](https://helpx.adobe.com/illustrator/desktop/manage-objects/traces-mockups-symbols/create-or-import-symbol-libraries.html)): Window › Symbol Libraries and the Symbols panel's Symbol
-  Libraries Menu open each library in a library panel of its own (six original libraries generated in code,
+  Libraries Menu open each library in a library panel of its own (seven original libraries generated in code,
   Basic Shapes, UI Frames with default 9-slice guides on Panel, Button and Bar, Map Markers with Pin,
   Flag, Crosshair and Checkpoint, Inventory Icons with Sword, Shield, Potion, Key and Gem, Skill Icons with
-  Attack, Defend, Heal, Buff and Ult, and Weather Icons with Sun, Moon, Cloud, Rain, Thunder and Snow; User Defined; Other
+  Attack, Defend, Heal, Buff and Ult, Weather Icons with Sun, Moon, Cloud, Rain, Thunder and Snow, and Media Controls with
+  Play, Pause, Stop, Skip Next, Shuffle and Repeat; User Defined; Other
   Library… reads the symbols of any document VectorCraft opens); a click
   adds a symbol to the document's Symbols with its Symbol Options and the resources it uses, as one undo
   step, and dragging one onto the canvas also places it; Save Symbols / Save Symbol Library writes the
@@ -717,8 +719,8 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
   painted with the texture effects; User Defined; Other Library…; `graphicStyle.libraries`,
   `graphicStyle.addFromLibrary`).
 - **Missing:** more built-in brush libraries beyond the eleven shipped (and further graphic-style libraries beyond the eleven shipped, and further symbol libraries beyond Basic
-  Shapes, UI Frames, Map Markers, Inventory Icons, Skill Icons and Weather Icons; original, generated in code, never Adobe's); dynamic symbols' `.ai` read and write.
-- **Estimate:** 3–13 h (estimated).
+  Shapes, UI Frames, Map Markers, Inventory Icons, Skill Icons, Weather Icons and Media Controls; original, generated in code, never Adobe's); dynamic symbols' `.ai` read and write.
+- **Estimate:** 2–12 h (estimated).
 
 ## G3 3D and Materials
 
@@ -927,6 +929,7 @@ trap, and the defaults (0.25 pt, 100%, 40%) are VectorCraft's own, the pages giv
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-18 | minor | G5: Media Controls joins Basic Shapes, UI Frames, Map Markers, Inventory Icons, Skill Icons and Weather Icons as a seventh built-in symbol library (Play, Pause, Stop, Skip Next, Shuffle, Repeat; original procedural vector symbols generated in code, no default 9-slice); estimate decremented (3–13 → 2–12 h). |
 | 2026-11-18 | minor | G4 type: Retype phase 1 (#4934), `type.retype` for outlined text that exactly matches an available font; near matches, the ranked font list and images remain. Scores and estimates unchanged |
 | 2026-11-18 | minor | Production Preflight: output-aware fonts, text overflow, linked files and effective image resolution, clickable findings and automatic rechecking; scores and estimates unchanged. See [production-preflight.md](production-preflight.md) for scope and limits. |
 | 2026-11-16 | minor | Recolor Artwork follow-up (#8031, remaining #4028): native Lab input, picker swatch libraries and Assign-row menus; UI interaction regression coverage; scores and estimates unchanged. |
