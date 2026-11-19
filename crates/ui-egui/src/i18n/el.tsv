@@ -477,6 +477,10 @@ font-technology	Variable	Μεταβλητές
 	Cusp	Ακίδα
 	Straight segment	Ευθύ τμήμα
 	Circle too large	Ο κύκλος είναι πολύ μεγάλος
+	Show Radii	Εμφάνιση ακτίνων
+	Show Diameter	Εμφάνιση διαμέτρου
+	Anchors at Standard Positions	Σημεία αγκύρωσης σε τυπικές θέσεις
+	Third Point by Dragging	Τρίτο σημείο με σύρσιμο
 	Classic Defaults	Κλασικές προεπιλογές
 	Clean Up…	Εκκαθάριση…
 	Clear	Εκκαθάριση

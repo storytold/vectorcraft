@@ -7119,8 +7119,9 @@ slider back to the Auto-Smooth level.
 
 ## Circle through two or three points
 
-`shape.circleThroughPoints {points?: [[x, y], [x, y]] or [[x, y], [x, y], [x, y]]}` draws the circle whose edge passes
-through the points, as a live ellipse with the current paint, and selects it. Two points are the ends of a diameter.
+`shape.circleThroughPoints {points?: [[x, y], [x, y]] or [[x, y], [x, y], [x, y]], anchors?}` draws the circle whose
+edge passes through the points, with the current paint, and selects it: a live ellipse with the default
+`anchors: "standard"`, and a plain path with `anchors: "points"`. Two points are the ends of a diameter.
 Without `points`, it uses the two or three selected anchor points, from one path or several: anchor points selected with
 Direct Selection, or all the anchor points of a path selected whole, such as a triangle. The ends of selected segments
 do not count. The result is `{id, cx, cy, radius}`, and one undo removes the circle. The circle is not pixel-aligned,
@@ -7129,6 +7130,12 @@ through the points. The command returns an error and draws nothing when two poin
 one line (twice the triangle's area at most 10⁻¹⁰ of its longest side squared), when the circle would reach past the
 canvas (4,000,000 pt from the origin), when `points` is not two or three pairs of numbers, and when `points` is left
 out and the selection does not hold two or three anchor points of paths.
+
+`anchors` sets where the circle's anchors go. With `"standard"`, the default, the circle has four anchors at 0°, 90°,
+180° and 270°. With `"points"`, the circle is a plain path with an anchor exactly at each point, and more anchors
+between them, evenly spaced, so that no curve turns more than a quarter of the circle: two points give four anchors,
+and three points give four to six. Any other `anchors` value is an error (`` `anchors` must be one of standard, points ``), and nothing
+is drawn.
 
 The Circle tool, after the Ellipse tool in its toolbar group, draws with this command. A drag from one point to
 another, or a click on each, draws the circle with the two points as the ends of a diameter. A click on a first point,
@@ -7144,6 +7151,28 @@ A press let go within 2 screen points of where it was pressed is a click, also a
 Escape, a dropped press, and an edit, Undo or Redo made outside the tool drop the first point. A second press within 3
 screen points of the first point, or one that snaps to it, is a press on it: let go there (a double-click), it places no second point, and
 dragged out, it draws the circle on the diameter it drags out.
+
+Circle Tool Options (`tool.options {tool: "circle"}`, or a double-click on the tool, dialog `circleOptions`) sets the
+tool's options, which `tool.setOption {tool: "circle", values}` also sets and the preferences keep. All are on by
+default, and `color` is `"blue"`:
+
+- `center`, `radii` and `diameter` (Show Center, Show Radii, Show Diameter) show or hide the cross at the center, the
+  lines from the center to the points and the diameter label. The diameter label also needs Measurement Labels on.
+- `color` (Color) is the color of the cross and the lines: `"red"`, `"blue"`, `"magenta"`, `"green"`, `"black"` or
+  `"gray"`. The outline stays blue.
+- `standardAnchors` (Anchors at Standard Positions) off draws the circle with `anchors: "points"`, so its anchors are
+  at the points it was drawn through.
+- `dragThird` (Third Point by Dragging) off changes how the points are placed. A click on a second point places it, and
+  a click on a third point draws the circle through the three. A click on the second point again, as the second click
+  of a double-click there is, draws the circle on the two points. An Alt-click places the second point where Alt's
+  rounding of the diameter puts it, and both circles pass through it there. A click on the first point, or a second
+  point dragged back and let go on it, places nothing, and a click on the line through the first two points draws
+  nothing and keeps them. A drag from the first point still draws the circle on the diameter it drags out, and a drag
+  from a second point places it where it is let go. Switching `dragThird` drops the points placed so far.
+
+`tool.setOption` returns an error and changes none of the options when a value is not one the option takes
+(`` `radii` must be true or false ``, `` `color` must be one of red, blue, magenta, green, black, gray ``) or the key is
+not one of these (`` unknown Circle tool option `size` ``).
 
 With the Ellipse tool, the first two Shift-clicks place points, and the third draws the circle through the three with
 this command. After two points the tool previews the circle through them and the pointer as a dashed outline. Once a

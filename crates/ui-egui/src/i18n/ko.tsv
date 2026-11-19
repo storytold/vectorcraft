@@ -1405,6 +1405,11 @@ antiAlias	Sharp	날카롭게
 	Cusp	뾰족점
 	Straight segment	직선 세그먼트
 	Circle too large	원이 너무 큽니다
+	Show Radii	반지름 표시
+	Show Diameter	지름 표시
+	Anchors at Standard Positions	표준 위치에 앵커 포인트
+	Third Point by Dragging	드래그로 세 번째 점 지정
+	Gray	회색
 	Clear All Tabs	모든 탭 지우기
 	Above Text	문자 위
 	Position Panel Above Text	패널을 문자 위에 배치

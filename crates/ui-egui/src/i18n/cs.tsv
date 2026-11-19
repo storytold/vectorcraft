@@ -4969,6 +4969,10 @@ font-technology	Variable	Variabilní
 	Cusp	Hrot
 	Straight segment	Přímý segment
 	Circle too large	Kruh je příliš velký
+	Show Radii	Zobrazit poloměry
+	Show Diameter	Zobrazit průměr
+	Anchors at Standard Positions	Kotevní body ve standardních polohách
+	Third Point by Dragging	Třetí bod tažením
 	Clip to Art	Oříznout podle kresby
 	Colorize	Obarvit
 	Gamma	Gama

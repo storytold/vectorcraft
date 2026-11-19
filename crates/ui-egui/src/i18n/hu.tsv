@@ -673,6 +673,10 @@ arrowhead	Target	Céltábla
 	Cusp	Csúcspont
 	Straight segment	Egyenes szakasz
 	Circle too large	A kör túl nagy
+	Show Radii	Sugarak megjelenítése
+	Show Diameter	Átmérő megjelenítése
+	Anchors at Standard Positions	Horgonypontok szabványos helyeken
+	Third Point by Dragging	Harmadik pont húzással
 	Circle (open)	Kör (nyitott)
 	Classic Defaults	Klasszikus alapértékek
 	Clean Up…	Tisztítás…
