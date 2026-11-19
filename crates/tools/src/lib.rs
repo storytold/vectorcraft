@@ -679,6 +679,19 @@ pub(crate) mod testutil {
             global_edit: &[],
         }
     }
+
+    /// Held for reading by tests that count the layouts the Type tool keeps, and for writing by
+    /// tests that change what layout reads (fonts, hyphenation exceptions): tests run in parallel,
+    /// and a count must not include a refresh another test caused.
+    static LAYOUT_INPUTS: std::sync::RwLock<()> = std::sync::RwLock::new(());
+
+    pub fn steady_layout_inputs() -> std::sync::RwLockReadGuard<'static, ()> {
+        LAYOUT_INPUTS.read().unwrap_or_else(|e| e.into_inner())
+    }
+
+    pub fn changing_layout_inputs() -> std::sync::RwLockWriteGuard<'static, ()> {
+        LAYOUT_INPUTS.write().unwrap_or_else(|e| e.into_inner())
+    }
 }
 
 #[cfg(test)]
