@@ -73,7 +73,10 @@ pub fn arc_of(start: Point, end: Point, third: Point, direction: bool, at_end: b
         (true, false) => CircularArc::leaving(start, third - start, end).map(|arc| (arc, arc.to_path())),
         (true, true) => CircularArc::arriving(start, end, end - third).map(|arc| (arc, arc.to_path())),
     }?;
-    let on_canvas = path.anchors().all(|(_, _, a)| [a.p, a.h_in, a.h_out].iter().all(|q| q.x.abs() <= MAX_COORD && q.y.abs() <= MAX_COORD));
+    // The curve is measured, not its handles, which can reach past the canvas while the curve stays
+    // inside, as the document's own range check measures a path.
+    let inside = |x: f64, y: f64| x.abs() <= MAX_COORD && y.abs() <= MAX_COORD;
+    let on_canvas = path.bounds().is_some_and(|r| inside(r.x0, r.y0) && inside(r.x1, r.y1));
     on_canvas.then_some((arc, path))
 }
 

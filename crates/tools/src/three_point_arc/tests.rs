@@ -115,6 +115,25 @@ fn a_third_point_in_line_with_the_ends_draws_nothing() {
     assert_eq!(click(&mut t, &cx, (340.0, 340.0)), through((300.0, 300.0), (380.0, 300.0), (340.0, 340.0)));
 }
 
+/// An arc near the canvas edge fits while its curve stays inside, even where a handle reaches past
+/// the edge, and gives no arc once the curve reaches past it.
+#[test]
+fn an_arc_near_the_canvas_edge_is_measured_by_its_curve() {
+    // A 60° arc of radius 1000 whose rightmost point is `edge`: the handles at its ends reach about
+    // 45 pt further right.
+    let arc = |edge: f64| {
+        let (r, c) = (1000.0, edge - 1000.0);
+        let (dx, dy) = (r * 30f64.to_radians().cos(), r * 30f64.to_radians().sin());
+        let start = Point::new(c + dx, -dy);
+        let end = Point::new(c + dx, dy);
+        arc_of(start, end, start + Vec2::new(0.5, 3f64.sqrt() / 2.0) * 100.0, true, false)
+    };
+    let Some((_, path)) = arc(MAX_COORD - 1.0) else { panic!("an arc inside the canvas fits") };
+    assert!(path.control_bounds().is_some_and(|r| r.x1 > MAX_COORD), "a handle reaches past the edge");
+    assert!(path.bounds().is_some_and(|r| r.x1 <= MAX_COORD && (r.x1 - (MAX_COORD - 1.0)).abs() < 1e-6));
+    assert!(arc(MAX_COORD + 1.0).is_none(), "an arc reaching past the canvas does not fit");
+}
+
 /// In direction mode, Shift keeps the direction line at 45° steps from the end it starts at.
 #[test]
 fn shift_keeps_the_direction_at_45_degree_steps() {
