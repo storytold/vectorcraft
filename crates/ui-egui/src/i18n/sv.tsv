@@ -1654,6 +1654,10 @@ font-technology	Variable	Variabla
 	Add Color Tool	Verktyget Lägg till färg
 	Remove Color Tool	Verktyget Ta bort färg
 	Remove Color	Ta bort färg
+	Set As Base Color	Ange som grundfärg
+	Select Shade	Välj nyans
+	Add New Color	Lägg till ny färg
+	Set Current Color As Base Color	Ange aktuell färg som grundfärg
 	Find the selected colors in the artwork	Hitta de markerade färgerna i teckningen
 	Harmony Sets	Harmoniuppsättningar
 	Height	Höjd

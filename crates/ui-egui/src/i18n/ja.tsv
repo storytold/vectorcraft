@@ -2115,6 +2115,10 @@ antiAlias	Sharp	シャープ
 	Add Color Tool	カラー追加ツール
 	Remove Color Tool	カラー削除ツール
 	Remove Color	カラーを削除
+	Set As Base Color	ベースカラーに設定
+	Select Shade	シェードを選択
+	Add New Color	新規カラーを追加
+	Set Current Color As Base Color	現在のカラーをベースカラーに設定
 	Find the selected colors in the artwork	選択したカラーをアートワーク内で検索
 	Height	高さ
 	Height:	高さ:
