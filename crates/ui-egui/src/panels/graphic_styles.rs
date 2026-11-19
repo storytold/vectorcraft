@@ -25,8 +25,8 @@ use vectorcraft_color::{BlendMode, Color, Paint};
 use vectorcraft_doc::style_libs::STYLE_LIBRARIES;
 use vectorcraft_doc::text::{CharStyle, TextObject};
 use vectorcraft_doc::{
-    Appearance, AppearanceItem, DEFAULT_GRAPHIC_STYLE, Document, FillLayer, GraphicStyle, Node, NodeId, NodeKind,
-    PatternDef, StrokeLayer, StyleLibrary,
+    Appearance, AppearanceItem, DEFAULT_GRAPHIC_STYLE, Document, FillLayer, GraphicStyle, Node, NodeId, NodeKind, PatternDef, StrokeLayer,
+    StyleLibrary,
 };
 use vectorcraft_engine::cmd::stylelib;
 use vectorcraft_engine::cmd::swatchlib::LibraryInfo;
@@ -493,11 +493,7 @@ fn item_context_menu(app: &mut VectorcraftApp, ui: &mut Ui, name: &str, sel: &[S
     let is_multi = sel.len() > 1 && sel.contains(&name.to_string());
     let targets: Vec<String> = if is_multi {
         let doc = app.session.active().map(|st| st.doc.clone());
-        if let Some(d) = &doc {
-            d.graphic_styles.iter().filter(|g| sel.contains(&g.name)).map(|g| g.name.clone()).collect()
-        } else {
-            sel.to_vec()
-        }
+        if let Some(d) = &doc { d.graphic_styles.iter().filter(|g| sel.contains(&g.name)).map(|g| g.name.clone()).collect() } else { sel.to_vec() }
     } else {
         vec![name.to_string()]
     };
@@ -536,7 +532,7 @@ fn item_context_menu(app: &mut VectorcraftApp, ui: &mut Ui, name: &str, sel: &[S
         }
         ui.close();
     }
-    let is_linked = app.session.selection_graphic_style().is_some_and(|(g, _)| g.name == name);
+    let is_linked = app.session.selection_graphic_style().is_some_and(|(g, linked)| linked && g.name == name);
     if menu_item(ui, tl!("Break Link to Graphic Style"), is_linked, false) {
         if let Err(e) = app.run("graphicStyle.breakLink", json!({})) {
             app.status(e);
@@ -1827,15 +1823,12 @@ mod tests {
         app.run("graphicStyle.new", json!({"name": "Style A"})).unwrap();
         app.run("graphicStyle.new", json!({"name": "Style B"})).unwrap();
 
-        let mut h = egui_kittest::Harness::builder()
-            .with_size(vec2(260.0, 400.0))
-            .with_accessibility_check(false)
-            .build_ui_state(
-                |ui, app: &mut VectorcraftApp| {
-                    show(app, ui);
-                },
-                app,
-            );
+        let mut h = egui_kittest::Harness::builder().with_size(vec2(260.0, 400.0)).with_accessibility_check(false).build_ui_state(
+            |ui, app: &mut VectorcraftApp| {
+                show(app, ui);
+            },
+            app,
+        );
         h.run_steps(2);
 
         // Initially "Style B" was added last; "Style A" is unselected.
@@ -1874,6 +1867,8 @@ mod tests {
 
         // 3. Apply Style A to the active art and verify Break Link
         h.state_mut().run("graphicStyle.apply", json!({"name": "Style A"})).unwrap();
+        // Modify appearance so style is out of sync (not linked)
+        h.state_mut().run("paint.fill", json!({"color": "#ff0000"})).unwrap();
         h.run_steps(2);
 
         let pos_a = h.get_by_label("Style A").rect().center();
@@ -1883,7 +1878,24 @@ mod tests {
         h.run_steps(2);
 
         let break_link = h.get_by_label("   Break Link to Graphic Style");
-        assert!(!break_link.accesskit_node().is_disabled());
+        assert!(break_link.accesskit_node().is_disabled(), "Break link is disabled when style is out of sync");
+
+        // Close menu
+        h.event(egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() });
+        h.run_steps(2);
+
+        // Reapply Style A so it is in sync
+        h.state_mut().run("graphicStyle.apply", json!({"name": "Style A"})).unwrap();
+        h.run_steps(2);
+
+        let pos_a = h.get_by_label("Style A").rect().center();
+        h.event(egui::Event::PointerMoved(pos_a));
+        h.event(egui::Event::PointerButton { pos: pos_a, button: egui::PointerButton::Secondary, pressed: true, modifiers: Default::default() });
+        h.event(egui::Event::PointerButton { pos: pos_a, button: egui::PointerButton::Secondary, pressed: false, modifiers: Default::default() });
+        h.run_steps(2);
+
+        let break_link = h.get_by_label("   Break Link to Graphic Style");
+        assert!(!break_link.accesskit_node().is_disabled(), "Break link is enabled when style is in sync");
         break_link.click();
         h.run_steps(3);
 
@@ -1915,15 +1927,12 @@ mod tests {
         use egui_kittest::kittest::{NodeT, Queryable};
 
         let app = app();
-        let mut h = egui_kittest::Harness::builder()
-            .with_size(vec2(260.0, 400.0))
-            .with_accessibility_check(false)
-            .build_ui_state(
-                |ui, app: &mut VectorcraftApp| {
-                    show(app, ui);
-                },
-                app,
-            );
+        let mut h = egui_kittest::Harness::builder().with_size(vec2(260.0, 400.0)).with_accessibility_check(false).build_ui_state(
+            |ui, app: &mut VectorcraftApp| {
+                show(app, ui);
+            },
+            app,
+        );
         h.run_steps(2);
 
         let pos_def = h.get_by_label(DEFAULT_GRAPHIC_STYLE).rect().center();
@@ -1950,15 +1959,12 @@ mod tests {
         app.run("graphicStyle.new", json!({"name": "Style 1"})).unwrap();
         app.run("graphicStyle.new", json!({"name": "Style 2"})).unwrap();
 
-        let mut h = egui_kittest::Harness::builder()
-            .with_size(vec2(260.0, 400.0))
-            .with_accessibility_check(false)
-            .build_ui_state(
-                |ui, app: &mut VectorcraftApp| {
-                    show(app, ui);
-                },
-                app,
-            );
+        let mut h = egui_kittest::Harness::builder().with_size(vec2(260.0, 400.0)).with_accessibility_check(false).build_ui_state(
+            |ui, app: &mut VectorcraftApp| {
+                show(app, ui);
+            },
+            app,
+        );
         h.run_steps(2);
 
         set_pstate(&h.ctx, "gs-sel", vec!["Style 1".to_string(), "Style 2".to_string()]);
