@@ -2706,6 +2706,8 @@ font-technology	Variable	Variabla
 	PDF/A files carry their own output intent.	PDF/A-filer har sin egen utgångsavsikt.
 	PDF/X-1a files are CMYK: every colour is converted to the destination (blank: the output intent's CMYK profile), untagged.	PDF/X-1a-filer är CMYK: alla färger konverteras till målet (tomt: utgångsavsiktens CMYK-profil), otaggade.
 	Pen Tool	Pennverktyg
+	Quick Pen Tool	Snabbpennverktyg
+	Quick Pen	Snabbpenna
 	Pencil	Blyertspenna
 	Pencil Tool	Blyertsverktyg
 	per slice	per skiva
@@ -5340,6 +5342,9 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	`link` places a handle: give `handle`	`link` placerar ett handtag: ange `handle`
 @msg	no such spine segment	ryggradssegmentet finns inte
 @msg	no such subpath	delbanan finns inte
+@msg	`pieces` must be a list of at most 10000 pieces	`pieces` måste vara en lista med högst 10000 delar
+@msg	give either `start` for a new path or `id`, not both	ange antingen `start` för en ny bana eller `id`, inte båda
+@msg	`subpath` and `keep` need `id`	`subpath` och `keep` kräver `id`
 @msg	no such user library	användarbiblioteket finns inte
 @msg	no such view	vyn finns inte
 @msg	no such width point	breddpunkten finns inte

@@ -155,6 +155,7 @@ mod printps;
 mod printtiling;
 mod proxyitems;
 mod puppetwarp;
+mod quickpen;
 mod rasterfilters;
 mod rastersettings;
 mod recolor;

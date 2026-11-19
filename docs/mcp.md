@@ -6982,6 +6982,48 @@ toggles a point with `path.convertAnchor`; an Alt-click on an end of an open sub
 {"name":"run_command","arguments":{"command":"path.curvatureEdit","params":{"id":12,"op":"extend","x":650,"y":60,"from":"smooth"}}}
 ```
 
+## Drawing with the Quick Pen tool
+
+The Quick Pen tool (`quickPen`, in the Pen tool's group, Alt+P or Option+P on macOS) draws paths of straight lines and
+circular arcs ([Draw with the Quick Pen tool](https://helpx.adobe.com/illustrator/web/add-and-edit-artwork/draw-and-edit-paths/draw-with-quick-pen-tool.html),
+[Quick Pen tool keyboard shortcuts](https://helpx.adobe.com/illustrator/web/add-and-edit-artwork/draw-and-edit-paths/quick-pen-tool-keyboard-shortcuts.html)).
+A click sets the start point. Each click after it, or a press dragged to where it is let go, adds a piece from the
+path's last point, drawn with the tool's `action` option:
+
+- `"line"` (the default): a straight line.
+- `"continuousArc"`: an arc that leaves the last point in the direction the path arrives there, so the two join
+  smoothly. The first piece of a path has no direction and is drawn as a sharp-corner arc; an end straight ahead of or
+  straight behind the last point gives a line.
+- `"sharpArc"`: an arc that turns through the tool's `turn` option (degrees, 1 to 359, 180 by default: a half circle)
+  and bulges to the left of the direction drawn, meeting the path before it at a corner.
+
+Alt (Option on macOS) pressed and let go with no other key, click or wheel turn in between switches to the next action:
+Line, Continuous Arc, Sharp Corner Arc, and back to Line. C flips the last piece, while it is a sharp-corner arc, to
+the other side of its chord. `[` and `]` make the arc size 15° smaller or larger, for the last sharp-corner arc and the
+arcs after it. A click on the first point closes the path, and a click on an end of an open path goes on drawing from
+that end. Escape or Enter ends the path, and so does an edit made to it by another command. The path's points show as circles without handles, and a preview shows the
+piece the next click adds. Points snap to Smart Guides. Each piece, flip and size change is one undo step. The arc
+size of 180°, its 15° steps, the side an arc bulges to and Enter ending the path are VectorCraft's own rules. The
+tool keeps `action` and `turn` with the preferences (`tool.setOption {tool: "quickPen", key, value}`).
+
+`path.quickPen {start?: [x, y], id?, subpath?, keep?, pieces?, closed?}` draws such a path and selects it, as one
+undo step, and answers `{id}`. With `start`, it makes a new path with the current paint (a black stroke when the paint
+has neither fill nor stroke). With `id`, it draws on the open subpath `subpath` (0 when left out) of that path: its
+first `keep` points stay (all of them when left out) and the pieces follow. Each piece is
+`{x, y, action?, turn?, flip?}`: it ends at `x`, `y`, `action` is `"line"` when left out, `turn` is 180 when left out,
+and `flip` puts a sharp-corner arc on the right of the direction drawn. A piece that ends where the path does adds
+nothing. With `closed: true`, a last piece that ends on the first point joins it; otherwise a straight segment closes
+the path. The command returns an error and changes nothing when both or neither of `start` and `id` are given
+(`` give either `start` for a new path or `id`, not both ``), when `subpath` or `keep` comes without `id`, when
+`pieces` is not a list of at most 10000 pieces, when a point's x or y is not a number or is 1e9 or more in size, for
+an unknown `action`, a `turn` outside 1 to 359, a `flip` or `closed` that is not true or false, a `keep` outside 1 to
+the subpath's points, and for a closed subpath, a locked or hidden path or an `id` that is not a path.
+
+```json
+{"name":"run_command","arguments":{"command":"path.quickPen","params":{"start":[100,100],"pieces":[{"x":200,"y":100},{"x":300,"y":200,"action":"continuousArc"},{"x":300,"y":300,"action":"sharpArc","turn":90,"flip":true}]}}}
+{"name":"run_command","arguments":{"command":"tool.setOption","params":{"tool":"quickPen","key":"action","value":"sharpArc"}}}
+```
+
 ## Registration and trim marks
 
 Every document has the built-in `[Registration]` swatch (listed after None by `swatch.list`): a colour that prints on
