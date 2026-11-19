@@ -629,6 +629,24 @@ impl<W: std::io::Write> std::io::Write for Counted<W> {
     }
 }
 
+/// A writer that fails once the work running on this thread is canceled
+/// ([`crate::cancel::is_cancelled`]), so a streamed save stops writing into its temporary file.
+/// It sits under the stream's buffer: it is checked once per buffer written, not per write.
+struct StopsWhenCancelled<W>(W);
+
+impl<W: std::io::Write> std::io::Write for StopsWhenCancelled<W> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        if crate::cancel::is_cancelled() {
+            return Err(std::io::Error::other(crate::cancel::Cancelled));
+        }
+        self.0.write(buf)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.0.flush()
+    }
+}
+
 /// The artboards a native or `.ai` save also writes to files of their own: with
 /// `separateArtboards`, those `range` names (default all).
 fn separate_boards(cmd: &str, f: &Format, doc: &Document, p: &Value) -> Result<Vec<usize>> {
@@ -896,7 +914,10 @@ fn job_for_stamped(s: &Session, st: &DocState, plan: SavePlan, stamped: Option<i
         params.entry("hiddenLayers").or_insert(Value::Bool(true));
     }
     let params = Value::Object(params);
-    super::check_linked_images(cmd, plan.format.id, st, &own, &params)?;
+    // Other formats are checked below, with the options the encoder reads.
+    if is_svg(plan.format) {
+        super::check_linked_images(cmd, plan.format.id, st, &own, &params)?;
+    }
     // The file the document is saved as (else its own) titles it if New's name is all it has.
     let file = plan.path.as_deref().filter(|_| plan.retargets()).or(st.path.as_deref());
     if let Some(d) = super::titled_for_export(&own, file, plan.format.id) {
@@ -941,6 +962,7 @@ fn job_for_stamped(s: &Session, st: &DocState, plan: SavePlan, stamped: Option<i
         _ => std::borrow::Cow::Borrowed(&params),
     };
     super::check_linked_scripts(cmd, plan.format.id, st, &checked)?;
+    super::access::check_native_images(cmd, plan.format.id, &st.doc, crate::cmd::links::LinkBase::of(st), &checked)?;
     Ok(SaveJob { plan, doc, params, snapshot, source: st.doc.clone(), stamped, boards })
 }
 
@@ -1022,10 +1044,15 @@ impl SaveJob {
     }
 
     /// [`SaveJob::write`], once `stop` has seen the paths of every file it writes to a path, in
-    /// order: when `stop` returns a value, nothing is written and that value is returned.
+    /// order: when `stop` returns a value, nothing is written and that value is returned. Work
+    /// canceled ([`crate::cancel`]) before the first file is written returns
+    /// [`crate::EngineError::Cancelled`] and writes nothing; once the first file is written, the
+    /// others are written too.
     pub fn write_unless(&self, stop: impl FnOnce(&[&str]) -> Option<Value>, mut write: impl FnMut(&str, &[u8]) -> Result<()>) -> Result<Value> {
         let (plan, doc) = (&self.plan, &*self.doc);
+        crate::cancel::check()?;
         let enc = self.encode()?;
+        crate::cancel::check()?;
         let extra = json!({ "format": plan.format.id, "warnings": enc.notes() });
         let Some(path) = &plan.path else {
             let mut out = write_encoded(None, &plan.name, doc, &enc, extra)?;
@@ -1042,8 +1069,13 @@ impl SaveJob {
         if let Some(stopped) = stop(&files.iter().map(|(p, _)| p.as_str()).collect::<Vec<_>>()) {
             return Ok(stopped);
         }
-        for (p, bytes) in &files {
-            write(p, bytes)?;
+        for (i, (p, bytes)) in files.iter().enumerate() {
+            if i == 0 {
+                write(p, bytes)?;
+            } else {
+                // Once a file is in place, a Cancel no longer stops the save: the set is written whole.
+                crate::cancel::scope(&crate::cancel::CancelToken::new(), None, || write(p, bytes))?;
+            }
         }
         let bytes = files.first().map_or(0, |f| f.1.len());
         let mut out = super::merge(json!({ "path": path, "bytes": bytes }), extra);
@@ -1066,11 +1098,15 @@ impl SaveJob {
     /// [`SaveJob::write`] through `stream`, which writes the file at a path with what the filler
     /// it is given writes (atomically, as [`vectorcraft_format::write_atomic_with`]). A native
     /// file goes into it as it is encoded ([`SaveJob::streams`]), never held whole in memory;
-    /// other files are encoded first, then written into it.
+    /// other files are encoded first, then written into it. Work canceled ([`crate::cancel`])
+    /// while the native file is encoded, or before its filler returns, returns
+    /// [`crate::EngineError::Cancelled`]: the filler fails, so `stream` keeps the file as it was
+    /// (the atomic writer checks once more before it puts the file in place).
     pub fn write_streamed(&self, stream: StreamWrite) -> Result<Value> {
         let (Some(path), true) = (&self.plan.path, self.streams()) else {
             return self.write(|p, b| stream(p, &mut |w| w.write_all(b)));
         };
+        crate::cancel::check()?;
         let (cmd, f) = (self.plan.mode.command(), self.plan.format);
         let doc = self.doc.without_edit_modes();
         let doc = match f.id {
@@ -1087,16 +1123,22 @@ impl SaveJob {
         let mut failed = None;
         let mut written = 0u64;
         let mut fill = |w: &mut dyn std::io::Write| {
-            let mut out = Counted { inner: std::io::BufWriter::with_capacity(STREAM_BUFFER, w), n: 0 };
+            let mut out = Counted { inner: std::io::BufWriter::with_capacity(STREAM_BUFFER, StopsWhenCancelled(w)), n: 0 };
             let r = super::native::encode_to(cmd, f, &doc, &self.params, &mut out);
             written = out.n;
-            match r {
+            let r = match r {
                 Ok(()) => out.inner.flush(),
                 Err(e) => {
                     failed = Some(e);
                     Err(std::io::Error::other("the file couldn't be encoded"))
                 }
+            };
+            // The last check before the file is replaced: a canceled save leaves it as it was.
+            if crate::cancel::is_cancelled() {
+                failed = Some(crate::EngineError::Cancelled);
+                return Err(std::io::Error::other(crate::cancel::Cancelled));
             }
+            r
         };
         let r = stream(path, &mut fill);
         r.map_err(|e| failed.take().unwrap_or(e))?;

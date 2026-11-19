@@ -45,6 +45,7 @@ mod lighting_presets;
 mod live;
 mod marks;
 pub mod pixel;
+mod placement;
 pub mod preview;
 mod raster;
 mod reshape;
@@ -75,12 +76,13 @@ pub use bake::{
 pub use clip::{WarpSeams, clip_outline, knockout_silhouette, reshaped_clip_outline, warp_pieces_translucent};
 pub use group::{
     OutlineHook, PATHFINDER_EFFECTS, compound_shape_area, compound_shape_art, evaluate_container, has_container_appearance, has_pathfinder,
-    is_pathfinder, member_leaves, member_shapes, paints, pathfinder_children, shape_art,
+    is_pathfinder, member_leaves, member_shapes, paints, pathfinder_children, pinned_container_appearance, shape_art,
 };
 pub use lighting_presets::{LIGHTING_PRESETS, LightingPreset, lighting_preset_params, matching_lighting_preset};
 pub use live::{expand_live, expand_live_deep, expanded_live_group, outline_object, text_outliner};
 pub use marks::{CROP_MARKS, crop_marks_art, has_crop_marks};
 pub use pixel::{PIXEL_EFFECTS, PixelFx, PixelSpace};
+pub use placement::pinned_gradient_item;
 pub use raster::{
     RASTERIZE, RasterFx, Rasterize, color_param, follow_items, item_effects_in, outset, raster_effects, rasterize_stage, stage_maps, staged_effects,
     without_geometry,
@@ -103,8 +105,8 @@ pub use solids::{
     validate_three_d_params, view_options, with_graphic,
 };
 pub use solids::{
-    GRAPHIC_MAX_OFFSET, GRAPHIC_SCALE_RANGE, GRAPHICS_NOT_TAKEN, appearance_graphic_symbols, exports_three_d, graphic_frame_at,
-    graphics_reshaped_after, rename_appearance_graphic_symbol,
+    GRAPHIC_MAX_OFFSET, GRAPHIC_SCALE_RANGE, GRAPHICS_NOT_TAKEN, appearance_graphic_symbols, exports_three_d, graphic_fitting_scale,
+    graphic_frame_at, graphic_side_size, graphics_reshaped_after, rename_appearance_graphic_symbol,
 };
 pub use stylize::{ScribbleSetting, scribble_setting_id, scribble_settings};
 pub use svg_filter::SVG_FILTER;
