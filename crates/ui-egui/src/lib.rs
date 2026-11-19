@@ -55,6 +55,9 @@ pub mod layout_migration;
 pub mod menus;
 pub mod native_menu;
 pub mod opening;
+mod original_editor;
+#[doc(hidden)]
+pub use original_editor::Choice as OriginalEditorChoice;
 pub mod palette;
 mod panel_docking;
 pub mod panels;
@@ -79,6 +82,7 @@ pub mod sysclip;
 pub mod theme;
 pub mod thumb_worker;
 pub mod titlebar;
+pub mod toasts;
 pub mod toolbar;
 mod tools_float;
 pub mod touch;
@@ -269,6 +273,7 @@ pub struct VectorcraftApp {
     system_paste_at: f64,
     /// File dialogs shown off the UI thread and what runs again with their answers.
     pub(crate) picks: picks::Picks,
+    pub(crate) original_editor: original_editor::Draft,
     /// The screen color sampler shown and not answered yet, and where its color goes.
     pub(crate) screen_sampler: Option<screen_color::Waiting>,
     /// The look for fonts installed or removed meanwhile, running
@@ -292,6 +297,8 @@ pub struct VectorcraftApp {
     pub placing: placing::Placing,
     /// Image Traces running off the UI thread ([`trace_runs`]).
     pub trace_runs: trace_runs::TraceRuns,
+    /// The messages shown over the window ([`toasts`]).
+    pub toasts: toasts::Shown,
     /// Data Recovery's timer and startup question ([`recovery`]).
     pub recovery: recovery::Timer,
     /// Modifiers the keyboard holds (from the host's input), given back after synthetic input.
@@ -305,6 +312,13 @@ pub struct VectorcraftApp {
     /// This host iteration's input carries forwarded keys: they are the main window's although
     /// its OS window doesn't have the keyboard (see `shortcuts::handle`).
     pub(crate) forwarded_frame: bool,
+    /// The forwarded keys of this host iteration hold a Copy or Cut: it copies the art, not text
+    /// selected in this window's labels (see `shortcuts::handle_clipboard`).
+    pub(crate) forwarded_clipboard: bool,
+    /// The key presses among this host iteration's forwarded keys: a Copy or Cut one of them runs
+    /// (F3 and F2 off macOS) copies the art, not text selected in this window's labels (see
+    /// `shortcuts::clipboard_key_to_labels`).
+    pub(crate) forwarded_presses: Vec<egui::Event>,
     /// Synthetic input set the modifiers egui holds (see [`Self::raw_input_hook`]).
     synthetic_modifiers: bool,
     /// The marked text the system IME last sent (`None` once it commits or clears). When the Type
@@ -346,6 +360,12 @@ pub struct VectorcraftApp {
     /// The plug-in install the approval dialog asks about, kept out of the dialog's fields, which
     /// `ui.dialog.set` writes.
     pub(crate) pending_plugin_install: Option<dialogs::plugin::PendingInstall>,
+    /// The file File › Open read that waits for the answer to its profile question
+    /// ([`dialogs::profile_mismatch`]), kept out of the dialog's fields.
+    pub(crate) pending_profile_open: Option<dialogs::profile_mismatch::PendingOpen>,
+    /// Files File › Open read while another one's profile question was open, each asking its own
+    /// question in turn.
+    pub(crate) queued_profile_opens: std::collections::VecDeque<dialogs::profile_mismatch::PendingOpen>,
     /// The paths Choose… picked in a script's file dialog, kept out of the dialog's fields, which
     /// `ui.dialog.set` writes.
     pub(crate) script_picked: Vec<String>,
@@ -375,6 +395,11 @@ pub struct VectorcraftApp {
     /// The single-key tool shortcuts held down, the last held last, and the tool each goes back to
     /// when it is let go ([`shortcuts::HeldTool`]).
     pub(crate) held_tool: Vec<shortcuts::HeldTool>,
+    /// Alt held down on its own since a frame saw it go down ([`shortcuts::AltTap`]).
+    pub(crate) alt_tap: shortcuts::AltTap,
+    /// A key with a hold shortcut that waits for its release, and the keys whose repeats are held
+    /// back until they are let go ([`shortcuts::HoldKeys`]).
+    pub(crate) hold_keys: shortcuts::HoldKeys,
     /// A synthetic batch is in the host's raw input and no settled UI pass has taken it yet.
     synthetic_injected: bool,
     /// The exact events of [`Self::synthetic_injected`], to remove them if the state they belong

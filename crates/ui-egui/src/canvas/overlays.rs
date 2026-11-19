@@ -216,15 +216,16 @@ pub(super) fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf:
             anchor_square(p, xf.to_screen(a.p), color, false, anchor(direct));
         }
     }
-    // Live Corners widgets (Selection and the shape tools on a live rectangle or polygon, Direct
-    // Selection on any path).
+    // Live Corners widgets (Selection and the shape tools on a live rectangle or polygon while Show
+    // Shape Widgets is on, Direct Selection on any path).
+    let shape_widgets = app.ui.view.shape_widgets;
     if (matches!(tool, "selection" | "directSelection") || (shape_tool && !drawing))
         && let Some(w) = vectorcraft_tools::corners::CornerWidgets::showing(
             &st.doc,
             &st.selection,
             xf.zoom,
             tool == "directSelection",
-            app.ui.view.corner_widgets,
+            app.ui.view.corner_widgets && (tool == "directSelection" || shape_widgets),
             app.session.prefs.hide_corner_widget_above,
         )
     {
@@ -255,10 +256,22 @@ pub(super) fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf:
             p.circle_filled(c, r, if w.area { color } else { Color32::WHITE });
             p.circle_stroke(c, r, Stroke::new(1.0, color));
         }
+        // A live polygon's side widget: a diamond beside the middle of the box's right side, drawn
+        // only while the box and the shape widgets are drawn (the box hides during a turn and during
+        // a drag of the widget).
+        if !drawing_boxed
+            && shape_widgets
+            && let Some(w) = vectorcraft_tools::sidewidget::SideWidget::of(&st.doc, &st.selection, &b, xf.zoom)
+        {
+            let (c, r) = (xf.to_screen(w.at), vectorcraft_tools::sidewidget::RADIUS_PX);
+            let diamond = vec![c + vec2(0.0, -r), c + vec2(r, 0.0), c + vec2(0.0, r), c + vec2(-r, 0.0)];
+            p.add(Shape::convex_polygon(diamond, Color32::WHITE, Stroke::new(1.0, color)));
+        }
     }
-    // Pie widgets (Selection tool, with View › Show Bounding Box, on live ellipses): each joined
-    // by a line to the outline's point at its angle. They stay while one is dragged.
-    if (tool == "selection" || (shape_tool && !drawing)) && app.ui.view.bounding_box {
+    // Pie widgets (Selection tool, with View › Show Bounding Box and Show Shape Widgets, on live
+    // ellipses): each joined by a line to the outline's point at its angle. They stay while one is
+    // dragged.
+    if (tool == "selection" || (shape_tool && !drawing)) && app.ui.view.bounding_box && shape_widgets {
         for w in vectorcraft_tools::pie::PieWidget::of(&st.doc, &st.selection, xf.zoom) {
             let (on, c, r, color) = (xf.to_screen(w.on), xf.to_screen(w.at), vectorcraft_tools::pie::RADIUS_PX, c32(st.doc.layer_color(w.id)));
             p.line_segment([on, c], Stroke::new(1.0, color));
@@ -596,6 +609,35 @@ pub(super) fn draw_overlays(p: &egui::Painter, xf: &Xf, overlays: &[Overlay], t:
                     p.circle_stroke(c, 8.0, Stroke::new(2.0, t.accent));
                 }
             }
+            // Shown as a tooltip by `overlay_hover_text`; nothing is drawn.
+            Overlay::HoverText { .. } => {}
+        }
+    }
+}
+
+/// The tooltips of the tool's [`Overlay::HoverText`] regions. Each region is a hover-only widget
+/// over the canvas, which keeps the clicks and drags; while the pointer rests inside a region's
+/// disc, egui shows its text, translated, after its usual tooltip delay. Only the part of a disc
+/// inside the canvas (`xf.rect`) has a tooltip, not the part under the rulers or scroll bars. No
+/// tooltip shows while `quiet` (a canvas drag, or Space lending a view tool), while a pointer
+/// button is down, or where `taken` says a press goes elsewhere (an artboard's name).
+pub(super) fn overlay_hover_text(ui: &egui::Ui, xf: &Xf, overlays: &[Overlay], quiet: bool, taken: impl Fn(Pos2) -> bool) {
+    let pressed = ui.input(|i| i.pointer.any_down());
+    for (i, o) in overlays.iter().enumerate() {
+        let Overlay::HoverText { center, radius, text } = o else { continue };
+        let c = xf.to_screen(*center);
+        let r = (*radius * xf.zoom) as f32;
+        if !(r.is_finite() && r > 0.0 && c.is_finite()) {
+            continue;
+        }
+        let area = egui::Rect::from_center_size(c, vec2(2.0 * r, 2.0 * r)).intersect(xf.rect);
+        if !area.is_positive() {
+            continue;
+        }
+        let id = egui::Id::unique("canvas-hover-text").with(i);
+        let resp = ui.interact(area, id, egui::Sense::hover());
+        if !quiet && !pressed && resp.hover_pos().is_some_and(|p| p.distance(c) <= r && xf.rect.contains(p) && !taken(p)) {
+            resp.on_hover_text(crate::i18n::t(text));
         }
     }
 }
