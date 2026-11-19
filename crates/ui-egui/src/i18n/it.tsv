@@ -509,6 +509,11 @@ font-technology	Variable	Variabili
 	Cusp	Cuspide
 	Straight segment	Segmento diritto
 	Circle too large	Cerchio troppo grande
+	Show Radii	Mostra raggi
+	Show Diameter	Mostra diametro
+	Anchors at Standard Positions	Punti di ancoraggio in posizioni standard
+	Third Point by Dragging	Terzo punto trascinando
+	Gray	Grigio
 	Classic Defaults	Valori predefiniti classici
 	Clean Up…	Pulisci…
 	Clear	Cancella
@@ -612,6 +617,7 @@ font-technology	Variable	Variabili
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Vista ruota
 	Box View	Vista riquadro
+	Show Out-of-Gamut Colors	Mostra colori fuori gamma
 	Box Channel	Canale del riquadro
 	Color box	Riquadro colore
 	Color Wheel Options	Opzioni ruota dei colori
@@ -3294,6 +3300,11 @@ digits	Malayalam	Malayalam
 	Edit Arrowheads	Modifica punte di freccia
 	Edit Arrowheads…	Modifica punte di freccia…
 	Reload Arrowheads	Ricarica punte di freccia
+	Bevels	Smussi
+	Edit Bevels	Modifica smussi
+	Edit Bevels…	Modifica smussi…
+	{name} (document)	{name} (documento)
+	Reload Bevels	Ricarica smussi
 	Rotate View	Ruota vista
 	Reset Rotate View	Reimposta rotazione vista
 	Rotate View to Selection	Ruota vista in base alla selezione
@@ -3741,6 +3752,7 @@ digits	Malayalam	Malayalam
 	Recent Commands	Comandi recenti
 	No recent commands	Nessun comando recente
 	Type to search commands, tools, panels and effects	Digita per cercare comandi, strumenti, pannelli ed effetti
+	Clear Recent Commands	Cancella comandi recenti
 	Search commands	Cerca comandi
 	Search Commands…	Cerca comandi…
 	Secondary	Secondario
@@ -6465,7 +6477,10 @@ lighting	Light	Luce
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	l'oggetto non ha alcun effetto 3D (Estrusione e smusso, Rivoluzione, Gonfia o Ruota)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` deve essere un oggetto che contiene solo `mode`, con valore shaded o wireframe
 @msg	its 3D effect builds no solid	il suo effetto 3D non costruisce alcun solido
-@msg	bevel must be none or one of {_1}	bevel deve essere none o uno dei seguenti: {_1}
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel deve essere none, uno dei seguenti: {_1}, oppure custom con {BEVEL_PROFILE}
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	bevel custom richiede {BEVEL_PROFILE}, i punti dello smusso
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME} deve essere una stringa
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE} deve contenere da 2 a {most} punti [x, y], ogni proporzione tra 0 e 1, da [0, 0] (il bordo della faccia) a [1, 1] (la parete laterale)
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} non può costruire solidi da questo disegno: le sue istanze di simbolo, fusioni e gruppi di ritaglio contengono troppi oggetti
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label} non può costruire un solido dall'istanza del simbolo «{symbol}»: il disegno del simbolo non è disponibile
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}: il tracciato di ritaglio è troppo complesso per ritagliare il disegno
@@ -10443,6 +10458,15 @@ breakText	Glyphs	Glifi
 @msg	A panel is not joined to the rest by a crease.	Un pannello non è unito al resto da alcuna linea di cordonatura.
 @msg	A fold line is on a non-printing layer.	Una linea di piega si trova su un livello non stampabile.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Pannelli: {panels}, cerniere: {hinges}, errori: {errors}, avvisi: {warnings}
+	Vector Packs	Pacchetti vettoriali
+	Compass Rose	Rosa dei venti
+	Botanical Sprig	Rametto botanico
+	Facet Diamond	Diamante sfaccettato
+	Tide Crest	Cresta dell'onda
+	Leaf Vine	Tralcio di foglie
+	Blossom Chain	Catena di fiori
+	Pennant Garland	Ghirlanda di bandierine
+	Lantern String	Fila di lanterne
 	Orbit Lines	Linee orbitali
 	Petal Garland	Ghirlanda di petali
 	Lattice Braid	Intreccio a reticolo
