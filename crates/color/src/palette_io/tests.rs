@@ -2,12 +2,6 @@ use super::*;
 use crate::{Gradient, GradientPaint, GradientStop};
 use proptest::prelude::*;
 
-// The swatch exchange file's signature and block types, which craft-cms keeps private.
-const ASE_SIGNATURE: &[u8] = b"ASEF";
-const ASE_GROUP_START: u16 = 0xC001;
-const ASE_GROUP_END: u16 = 0xC002;
-const ASE_COLOR: u16 = 0x0001;
-
 #[test]
 fn gpl_blank_name_keeps_fallback() {
     let blank = "GIMP Palette\nName: \nColumns: 0\n#\n  1   2   3\tx\n";
