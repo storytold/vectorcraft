@@ -1003,7 +1003,7 @@ impl PasteProfile {
                 if o.keys().any(|k| k != "rgb" && k != "cmyk") {
                     return Err(refuse());
                 }
-                let model = |m: &str| o.get(m).map(&one).transpose();
+                let model = |m: &str| o.get(m).map(one).transpose();
                 Ok(Some(PasteChoice { rgb: model("rgb")?, cmyk: model("cmyk")? }))
             }
             Some(v) => {
