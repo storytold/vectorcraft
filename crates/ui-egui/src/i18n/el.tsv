@@ -1301,6 +1301,20 @@ font-technology	Variable	Μεταβλητές
 @msg	no match of `find` at bytes {_1}..{_2} of object {_3}	καμία αντιστοιχία του `find` στα byte {_1}..{_2} του αντικειμένου {_3}
 	Find Font	Εύρεση γραμματοσειράς
 	Find Font…	Εύρεση γραμματοσειράς…
+	Retype	Επαναπληκτρολόγηση
+	Find Matching Fonts	Εύρεση αντίστοιχων γραμματοσειρών
+	Find more font matches	Εύρεση περισσότερων αντίστοιχων γραμματοσειρών
+	Type your text to preview	Πληκτρολογήστε κείμενο για προεπισκόπηση
+	Select outlined text, then Find Matching Fonts.	Επιλέξτε κείμενο που έχει μετατραπεί σε περιγράμματα και μετά Εύρεση αντίστοιχων γραμματοσειρών.
+	No font matches the selected shapes.	Καμία γραμματοσειρά δεν αντιστοιχεί στα επιλεγμένα σχήματα.
+	Shapes past the first 2,048, or more than 16 groups deep, were not compared.	Τα σχήματα μετά τα πρώτα 2.048 ή σε βάθος πάνω από 16 ομάδες δεν συγκρίθηκαν.
+	Reset Retype Panel	Επαναφορά πίνακα Επαναπληκτρολόγησης
+	List Matching Fonts	Λίστα αντίστοιχων γραμματοσειρών
+	Retype Preview	Προεπισκόπηση πίνακα Επαναπληκτρολόγησης
+@msg	`count` must be a whole number from 1 to 96	Το `count` πρέπει να είναι ακέραιος από 1 έως 96
+@msg	`size` must be small, medium or large	Το `size` πρέπει να είναι small, medium ή large
+@msg	`text` must be a string of at most 100 characters	Το `text` πρέπει να είναι συμβολοσειρά έως 100 χαρακτήρων
+@msg	Retype: select outlined text (paths or compound paths)	Επαναπληκτρολόγηση: επιλέξτε κείμενο που έχει μετατραπεί σε περιγράμματα (διαδρομές ή σύνθετες διαδρομές)
 	Find Next	Εύρεση επόμενου
 	Find Objects	Εύρεση αντικειμένων
 	Compare with Image	Σύγκριση με εικόνα
@@ -2134,6 +2148,8 @@ font-technology	Variable	Μεταβλητές
 	Paths	Διαδρομές
 	Pattern	Μοτίβο
 	Pen Tool	Πένα (Pen Tool)
+	Quick Pen Tool	Εργαλείο γρήγορης πένας
+	Quick Pen	Γρήγορη πένα
 	Pencil	Μολύβι
 	Pencil Tool	Μολύβι (Pencil Tool)
 	Percent:	Ποσοστό:
@@ -4162,6 +4178,55 @@ digits	Malayalam	Μαλαγιάλαμ
 	Edit type set in fonts that aren't available?	Επεξεργασία κειμένου σε γραμματοσειρές που δεν είναι διαθέσιμες;
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Εμφανίζει στον καμβά τον αριθμό κάθε τομής σε ένα πλαίσιο πάνω αριστερά της· όταν είναι απενεργοποιημένο, τα περιγράμματα των τομών εξακολουθούν να εμφανίζονται.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Το χρώμα των περιγραμμάτων των τομών χρήστη και αντικειμένου και των πλαισίων με τους αριθμούς τους· οι αυτόματες τομές χρησιμοποιούν μια πιο αχνή απόχρωσή του.
+	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	Το νέο κείμενο παίρνει αυτήν τη γλώσσα όσο η γλώσσα στη Ρύθμιση εγγράφου είναι Αγγλικά: ΗΠΑ· το κείμενο που υπάρχει ήδη σε ένα έγγραφο κρατά τη δική του γλώσσα.
+	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	Σε παραγράφους με ενεργό τον Συλλαβισμό, μια λέξη της λίστας χωρίζεται μόνο στα ενωτικά που έχουν πληκτρολογηθεί σε αυτήν ή πουθενά αν δεν έχει, ανεξάρτητα από τη γλώσσα ή τα πεζά-κεφαλαία της.
+	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	Στην έκδοση για υπολογιστή, τα πρόσθετα .wasm αυτού του φακέλου φορτώνονται κατά την εκκίνηση και όταν κάνετε κλικ στο Εντάξει με νέο φάκελο εδώ, εκτός από την Ασφαλή λειτουργία· η έκδοση web δεν τα φορτώνει.
+	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Η πρώτη επιλογή δίσκου προσωρινής αποθήκευσης: Startup, None ή διαδρομή φακέλου· το VectorCraft την αποθηκεύει, αλλά δεν χρησιμοποιεί ακόμη δίσκους προσωρινής αποθήκευσης.
+	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Η δεύτερη επιλογή δίσκου προσωρινής αποθήκευσης: Startup, None ή διαδρομή φακέλου· το VectorCraft την αποθηκεύει, αλλά δεν χρησιμοποιεί ακόμη δίσκους προσωρινής αποθήκευσης.
+	How light or dark the interface is.	Πόσο φωτεινό ή σκοτεινό είναι το περιβάλλον χρήστη.
+	The set of colors the interface is drawn in.	Το σύνολο χρωμάτων με το οποίο σχεδιάζεται το περιβάλλον χρήστη.
+	The color of controls that are on, chosen or focused; the menu is dimmed while the Color Scheme has an accent of its own.	Το χρώμα των στοιχείων ελέγχου που είναι ενεργά, επιλεγμένα ή εστιασμένα· το μενού είναι αχνό όσο ο Χρωματικός συνδυασμός έχει δικό του χρώμα έμφασης.
+	The color of the canvas around the artboards; Match User Interface Brightness takes it from Brightness. Outline view always shows it white.	Το χρώμα του καμβά γύρω από τους πίνακες σχεδίασης· η Προσαρμογή στη φωτεινότητα περιβάλλοντος χρήστη το παίρνει από τη Φωτεινότητα. Η προβολή Περίγραμμα το δείχνει πάντα λευκό.
+	A panel opened from its icon closes when you press Esc or click outside it; off, it stays open until you click an icon.	Ένας πίνακας που άνοιξε από το εικονίδιό του κλείνει όταν πατάτε Esc ή κάνετε κλικ έξω από αυτόν· όταν είναι ανενεργό, μένει ανοιχτός μέχρι να κάνετε κλικ σε ένα εικονίδιο.
+	Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them.	Εμφανίζει το όνομα κάθε ομάδας εργαλείων πάνω από τα εργαλεία της στη γραμμή εργαλείων· όταν είναι ανενεργό, οι ομάδες ακολουθούν η μία την άλλη χωρίς τίποτα ανάμεσα.
+	From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.	Από εδώ και πέρα, τα έγγραφα που ανοίγετε ή δημιουργείτε ανοίγουν σε καρτέλες· όταν είναι ανενεργό, το καθένα ανοίγει σε αιωρούμενο παράθυρο. Τα ήδη ανοιχτά έγγραφα μένουν εκεί που είναι.
+	Makes the document tabs taller and their names larger.	Κάνει τις καρτέλες των εγγράφων ψηλότερες και τα ονόματά τους μεγαλύτερα.
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own.	Από την επόμενη εκκίνηση, το σύστημα σχεδιάζει τη γραμμή τίτλου του παραθύρου εκεί όπου αλλιώς το VectorCraft θα σχεδίαζε τη δική του.
+	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on.	Από την επόμενη εκκίνηση, το VectorCraft σχεδιάζει τη γραμμή τίτλου του παραθύρου ακόμη κι εκεί όπου θα τη σχεδίαζε η επιφάνεια εργασίας, εκτός αν είναι ενεργή η Γραμμή τίτλου συστήματος.
+	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	Μεγαλώνει ή μικραίνει το περιβάλλον χρήστη· το έργο στον καμβά κρατά το μέγεθός του στο ίδιο ζουμ.
+	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	Οι δείκτες εργαλείων που σχεδιάζει το VectorCraft μεγαλώνουν και μικραίνουν με την Κλιμάκωση περιβάλλοντος χρήστη· όταν είναι ανενεργό, κρατούν το μέγεθός τους.
+	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	Η γλώσσα του περιβάλλοντος χρήστη· το Αυτόματα χρησιμοποιεί τη γλώσσα του συστήματος. Ο διάλογος αλλάζει γλώσσα μόλις επιλέξετε μία.
+	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	Η Κινούμενη μεγέθυνση λειτουργεί μόνο όσο αυτό είναι ενεργό· όταν είναι ανενεργό, η Κινούμενη μεγέθυνση είναι αχνή και η μεγέθυνση δεν κινείται.
+	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	Η μεγέθυνση με τον τροχό γλιστρά ομαλά, και το εργαλείο Μεγέθυνση μεγεθύνει καθώς σύρετε στο πλάι ή το κρατάτε πατημένο· όταν είναι ανενεργό, μεγεθύνει στην περιοχή που σύρετε.
+	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	Από την επόμενη εκκίνηση, η έκδοση για υπολογιστή σχεδιάζει με αυτό το είδος επεξεργαστή γραφικών· το Αυτόματο προτιμά αυτόν που οδηγεί την οθόνη. Η έκδοση web δεν το χρησιμοποιεί.
+	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	Τα περισσότερα βήματα αναίρεσης που κρατά κάθε έγγραφο· μικρότερος αριθμός αφαιρεί τα παλαιότερα βήματα όταν κάνετε κλικ στο Εντάξει. Βήματα μπορεί να φύγουν και νωρίτερα αν πιάνουν πολλή μνήμη.
+	Shows the artwork changing while you drag; off, outlines follow the drag and the artwork changes when you release. A ruler guide always moves as you drag.	Δείχνει το έργο να αλλάζει όσο σύρετε· όταν είναι ανενεργό, περιγράμματα ακολουθούν τη μεταφορά και το έργο αλλάζει όταν αφήσετε. Ένας οδηγός χάρακα κινείται πάντα όσο σύρετε.
+	How many worker threads draw the artwork; -1 uses one fewer than the cores VectorCraft may use, at most 8, and 0 uses none. The web version always uses none.	Πόσα νήματα εργασίας σχεδιάζουν το έργο· το -1 χρησιμοποιεί ένα λιγότερο από τους πυρήνες που επιτρέπονται στο VectorCraft, έως 8, και το 0 κανένα. Η έκδοση web δεν χρησιμοποιεί ποτέ.
+	From the next start on a Wayland desktop, X11 (XWayland) opens the window through XWayland; the other choices do so only when a pen is attached.	Από την επόμενη εκκίνηση σε επιφάνεια εργασίας Wayland, το X11 (XWayland) ανοίγει το παράθυρο μέσω XWayland· οι άλλες επιλογές το κάνουν μόνο όταν είναι συνδεδεμένη γραφίδα.
+	From the next start, the desktop version shows frames without waiting for the display's refresh, at most 240 a second; off, the display paces them.	Από την επόμενη εκκίνηση, η έκδοση για υπολογιστή εμφανίζει καρέ χωρίς να περιμένει την ανανέωση της οθόνης, έως 240 το δευτερόλεπτο· όταν είναι ανενεργό, η οθόνη ορίζει τον ρυθμό τους.
+	The larger budget raises each object filter run's base instructions fivefold and keeps the same allowance per input byte; heavy filters, live effects, exporters and importers keep their own limits.	Ο μεγαλύτερος προϋπολογισμός πενταπλασιάζει τις βασικές εντολές κάθε εκτέλεσης ενός φίλτρου αντικειμένων και κρατά την ίδια προσαύξηση ανά byte εισόδου· τα βαριά φίλτρα, τα ζωντανά εφέ, οι εξαγωγείς και οι εισαγωγείς κρατούν τα δικά τους όρια.
+	Converts the artwork and artboards on the canvas to the display's color profile where the system does not already do so; off, the canvas is drawn in sRGB.	Μετατρέπει το έργο και τους πίνακες σχεδίασης στον καμβά στο προφίλ χρωμάτων της οθόνης όπου το σύστημα δεν το κάνει ήδη· όταν είναι ανενεργό, ο καμβάς σχεδιάζεται σε sRGB.
+	On the desktop, a save to a file is written in the background while you keep editing; off, you wait until it is written.	Στην έκδοση για υπολογιστή, μια αποθήκευση σε αρχείο γράφεται στο παρασκήνιο ενώ συνεχίζετε την επεξεργασία· όταν είναι ανενεργό, περιμένετε μέχρι να γραφτεί.
+	On the desktop, exports to files and packages are written in the background while you keep editing, except 3D exports; off, you wait for them.	Στην έκδοση για υπολογιστή, οι εξαγωγές σε αρχεία και οι συσκευασίες γράφονται στο παρασκήνιο ενώ συνεχίζετε την επεξεργασία, εκτός από τις εξαγωγές 3D· όταν είναι ανενεργό, τις περιμένετε.
+	Every few minutes, keeps a recovery copy of each document with unsaved changes made since its last copy; off, no timed copies are made.	Κάθε λίγα λεπτά κρατά ένα αντίγραφο ανάκτησης κάθε εγγράφου με μη αποθηκευμένες αλλαγές από το τελευταίο του αντίγραφο· όταν είναι ανενεργό, δεν γίνονται περιοδικά αντίγραφα.
+	How many minutes pass between recovery copies while Automatically Save Recovery Data is on.	Πόσα λεπτά περνούν ανάμεσα στα αντίγραφα ανάκτησης όσο είναι ενεργή η Αυτόματη αποθήκευση δεδομένων ανάκτησης.
+	On the desktop, the folder recovery copies are kept in; leave it blank for VectorCraft's own folder. The web version keeps them in the browser.	Στην έκδοση για υπολογιστή, ο φάκελος όπου φυλάσσονται τα αντίγραφα ανάκτησης· αφήστε τον κενό για τον φάκελο του VectorCraft. Η έκδοση web τα φυλά στο πρόγραμμα περιήγησης.
+	No timed recovery copies are made of documents with more than 20,000 objects.	Δεν γίνονται περιοδικά αντίγραφα ανάκτησης για έγγραφα με περισσότερα από 20.000 αντικείμενα.
+	Open Recent Files and the Home screen list at most this many recent files; 0 lists none, and VectorCraft still remembers up to 30.	Το Άνοιγμα πρόσφατων αρχείων και η Αρχική οθόνη δείχνουν το πολύ τόσα πρόσφατα αρχεία· το 0 δεν δείχνει κανένα, και το VectorCraft θυμάται ακόμη έως 30.
+	When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.	Όταν ανοίγει ένα έγγραφο, μια συνδεδεμένη εικόνα EPS που δείχνει την αποθηκευμένη προεπισκόπησή της την κρατά αντί να διαβάσει ξανά το αρχείο EPS· τα αλλαγμένα αρχεία ακολουθούν πάντα την Ενημέρωση συνδέσμων.
+	In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.	Στην Προεπισκόπηση εικονοστοιχείων οι εικόνες σχεδιάζονται εξομαλυμένες· όταν είναι ανενεργό, τα εικονοστοιχεία τους έχουν αιχμηρές άκρες. Εκτός Προεπισκόπησης εικονοστοιχείων οι εικόνες εξομαλύνονται πάντα.
+	When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.	Όταν αλλάζει ένα συνδεδεμένο αρχείο, το Αυτόματα το διαβάζει ξανά, το Ερώτηση όταν τροποποιηθεί σας ρωτά πρώτα και το Χειροκίνητα το αφήνει ως έχει και δείχνει μια σημείωση στη γραμμή κατάστασης.
+	On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.	Στην έκδοση για υπολογιστή, ο φάκελος όπου ξεκινούν το Νέο από πρότυπο… και η Αποθήκευση ως πρότυπο…· αφήστε τον κενό για το VectorCraft Templates στον φάκελο εγγράφων σας.
+	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	Η Επεξεργασία πρωτοτύπου ανοίγει ένα συνδεδεμένο αρχείο στην προεπιλεγμένη εφαρμογή του συστήματος για τον τύπο του· όταν είναι ανενεργό, μια συνδεδεμένη εικόνα raster ανοίγει στο PhotoCraft, αν είναι εγκατεστημένο.
+	A file saved by an older VectorCraft version opens with [Converted] after its name, and Save asks where to save it; off, Save replaces the file.	Ένα αρχείο αποθηκευμένο από παλαιότερη έκδοση του VectorCraft ανοίγει με [Converted] μετά το όνομά του, και η Αποθήκευση ρωτά πού να το αποθηκεύσει· όταν είναι ανενεργό, η Αποθήκευση αντικαθιστά το αρχείο.
+	VectorCraft files and templates are saved compressed, so they are smaller, unless a save says otherwise; saves for versions that cannot open compressed files stay uncompressed.	Τα αρχεία και τα πρότυπα του VectorCraft αποθηκεύονται συμπιεσμένα, άρα μικρότερα, εκτός αν μια αποθήκευση ορίζει κάτι άλλο· οι αποθηκεύσεις για εκδόσεις που δεν ανοίγουν συμπιεσμένα αρχεία μένουν ασυμπίεστες.
+	Copy and Cut also give other apps SVG code of the art; on the desktop, the code is not copied as text when the art embeds more than 1 MiB of images.	Η Αντιγραφή και η Αποκοπή δίνουν και κώδικα SVG του σχεδίου σε άλλες εφαρμογές· στην επιφάνεια εργασίας ο κώδικας δεν αντιγράφεται ως κείμενο όταν το σχέδιο ενσωματώνει εικόνες άνω του 1 MiB.
+	On Windows, Copy and Cut also give other apps a PDF of the art; the other platforms do not copy a PDF yet.	Στα Windows, η Αντιγραφή και η Αποκοπή δίνουν και ένα PDF του σχεδίου σε άλλες εφαρμογές· οι άλλες πλατφόρμες δεν αντιγράφουν ακόμη PDF.
+	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	Το VectorCraft αποθηκεύει αυτή την επιλογή, αλλά η Αντιγραφή και η Αποκοπή δεν χρησιμοποιούν ακόμη μορφή του πρόχειρου διανυσμάτων παλαιού τύπου.
+	Preserve Paths or Preserve Appearance and Overprints for the legacy vector clipboard; VectorCraft stores the choice but does not use it yet.	Διατήρηση διαδρομών ή Διατήρηση εμφάνισης και υπερεκτυπώσεων για το πρόχειρο διανυσμάτων παλαιού τύπου· το VectorCraft αποθηκεύει την επιλογή αλλά δεν τη χρησιμοποιεί ακόμη.
+	Keep Formatting keeps the styles of text copied from VectorCraft type when it is pasted into type; Keep Plain Text gives it the style where it lands.	Η Διατήρηση μορφοποίησης κρατά τα στυλ κειμένου από αντικείμενο κειμένου του VectorCraft όταν επικολλάται σε αντικείμενο κειμένου· η Διατήρηση απλού κειμένου του δίνει το στυλ του σημείου όπου καταλήγει.
+	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	Το νέο κείμενο παίρνει αυτήν τη γλώσσα όσο η γλώσσα στη Ρύθμιση εγγράφου είναι Αγγλικά: ΗΠΑ και το [Κανονικό στυλ χαρακτήρων] δεν ορίζει γλώσσα· το κείμενο που υπάρχει ήδη σε ένα έγγραφο κρατά τη δική του γλώσσα.
+	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	Με Συλλαβισμό, μια λέξη της λίστας χωρίζεται μόνο στα ενωτικά της ή πουθενά αν δεν έχει, με πεζά ή κεφαλαία· οι κορεατικές λέξεις δεν παίρνουν ενωτικό, οι λέξεις ινδικών γλωσσών δεν χωρίζονται μέσα σε ομάδα χαρακτήρων.
 	Reset all preferences to their defaults?	Επαναφορά όλων των προτιμήσεων στις προεπιλογές τους;
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Οι προεπιλογές εφαρμόζονται όταν κάνετε κλικ στο Εντάξει στις Προτιμήσεις. Το Ακύρωση εκεί διατηρεί τις τρέχουσες προτιμήσεις σας.
 	Restore Recovered Documents	Επαναφορά ανακτημένων εγγράφων
@@ -5339,6 +5404,9 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	`link` places a handle: give `handle`	το `link` τοποθετεί μια λαβή: δώστε `handle`
 @msg	no such spine segment	δεν υπάρχει τέτοιο τμήμα κεντρικής καμπύλης
 @msg	no such subpath	δεν υπάρχει τέτοια υποδιαδρομή
+@msg	`pieces` must be a list of at most 10000 pieces	το `pieces` πρέπει να είναι λίστα με έως 10000 τμήματα
+@msg	give either `start` for a new path or `id`, not both	δώστε είτε `start` για νέα διαδρομή είτε `id`, όχι και τα δύο
+@msg	`subpath` and `keep` need `id`	τα `subpath` και `keep` απαιτούν `id`
 @msg	no such user library	δεν υπάρχει τέτοια βιβλιοθήκη χρήστη
 @msg	no such view	δεν υπάρχει τέτοια προβολή
 @msg	no such width point	δεν υπάρχει τέτοιο σημείο πλάτους
@@ -7413,6 +7481,10 @@ axis	Y Axis	Άξονας Y
 	Create New Action	Δημιουργία νέας ενέργειας
 	Play Action	Αναπαραγωγή ενέργειας
 	Action Set:	Σύνολο ενεργειών:
+	Choose Align To at playback	Επιλογή «Στοίχιση ως προς» κατά την αναπαραγωγή
+	Align steps use the key object, key anchor or key guide when one is set.	Τα βήματα στοίχισης χρησιμοποιούν το βασικό αντικείμενο, το βασικό σημείο αγκύρωσης ή τον βασικό οδηγό, όταν έχει οριστεί.
+	With one whole object selected and no key, they use the artboard.	Με ένα ολόκληρο επιλεγμένο αντικείμενο χωρίς βασικό, χρησιμοποιούν τον πίνακα σχεδίασης.
+	Otherwise they use the selection.	Διαφορετικά χρησιμοποιούν την επιλογή.
 	Function Key:	Πλήκτρο λειτουργίας:
 	Record	Καταγραφή
 	Create New Set	Δημιουργία νέου συνόλου
@@ -7445,6 +7517,7 @@ axis	Y Axis	Άξονας Y
 	Inventory Icons	Εικονίδια αποθέματος
 	Skill Icons	Εικονίδια δεξιοτήτων
 	Weather Icons	Εικονίδια καιρού
+	Media Controls	Στοιχεία ελέγχου πολυμέσων
 	Attack	Επίθεση
 	Defend	Άμυνα
 	Heal	Θεραπεία
@@ -7818,6 +7891,10 @@ axis	Y Axis	Άξονας Y
 	Rain	Βροχή
 	Thunder	Βροντή
 	Snow	Χιόνι
+	Play	Αναπαραγωγή
+	Pause	Παύση
+	Skip Next	Επόμενο
+	Shuffle	Τυχαία σειρά
 	Save Brush Library…	Αποθήκευση βιβλιοθήκης πινέλων…
 @msg	`{_1}` has no brushes to apply	Η `{_1}` δεν έχει πινέλα για εφαρμογή
 @msg	missing `library` (see brush.libraries)	λείπει το `library` (δείτε brush.libraries)
@@ -8789,6 +8866,11 @@ breakText	Glyphs	Γλύφοι
 @msg	A joint does not close by {gap} pt.	Μια ένωση δεν κλείνει κατά {gap} pt.
 @msg	Two panels pass through each other.	Δύο πάνελ διαπερνούν το ένα το άλλο.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	το composer πρέπει να είναι "singleLine", "everyLine", "standardSingleLine" ή "standardEveryLine"
+	Image Brush	Πινέλα εικόνας
+	Soft Bloom	Απαλό άνθος
+	Halftone Field	Πεδίο ημιτόνων
+	Solar Grain	Ηλιακός κόκκος
+	Color Flecks	Χρωματικές πιτσιλιές
 	Fine Stipple	Λεπτή στιγμογραφία
 	Dense Stipple	Πυκνή στιγμογραφία
 	Soft Stipple	Απαλή στιγμογραφία

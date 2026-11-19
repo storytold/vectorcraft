@@ -691,12 +691,16 @@ fn art_carried_through_a_tab_drops_into_a_third_documents_pane() {
     app.run("window.arrange.tile", json!({})).unwrap();
     let source = app.session.documents()[0].doc.clone();
     let third = app.session.documents()[2].doc.clone();
+    // A tab's title starts with its document's name (an inactive tab shows the name alone).
+    let names: Vec<String> = app.session.documents().iter().map(|d| d.title()).collect();
     let titles = |out: egui::FullOutput| -> Vec<egui::Rect> {
         let mut t: Vec<_> = out
             .shapes
             .iter()
             .filter_map(|s| match &s.shape {
-                Shape::Text(t) if t.galley.text().contains(" @ ") => Some(egui::Rect::from_min_size(t.pos, t.galley.size())),
+                Shape::Text(t) if names.iter().any(|n| t.galley.text().starts_with(n.as_str())) => {
+                    Some(egui::Rect::from_min_size(t.pos, t.galley.size()))
+                }
                 _ => None,
             })
             .collect();

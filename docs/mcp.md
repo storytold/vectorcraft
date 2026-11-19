@@ -4227,18 +4227,20 @@ already walks Image Trace. Short agent entry points:
   `stepIndex` from 0, and `batchStep` is the command's place in a `command.batch` step), and `unknownCount`, how many
   there are; the status bar names the first and the count, with control characters replaced and long names cut at 80
   characters. These are VectorCraft's own rules. An action set file (`.vcactions`) is JSON:
-  `{"format": "vcactions", "version": 1 to 6, "name", "actions": [{"name", "steps": [{"command", "params", "excluded"?}]}]}`, each step
+  `{"format": "vcactions", "version": 1 to 7, "name", "actions": [{"name", "steps": [{"command", "params", "excluded"?}], "automaticAlignTo"?}]}`, each step
   a command id and its params as `command.batch` takes them, or a stop: the command `action.stop` with
   `{message, allowContinue}`. A Select Object step is the command `select.byNote` with `{note, caseSensitive,
   wholeWord}`, and a Select Path step is the command `select.storedPath` with `{id, fingerprint}`. A View menu step is
   the id of a View menu command that the app runs itself (`view.outline`, `view.zoomIn`, `view.rotate` and the others
   `ui.action.insertMenuItem` lists) with the item's params. `excluded: true` preserves a step but omits it from playback;
-  an absent or false flag includes the step. Files with View menu steps use version 6, files with Select Path steps and
-  no View menu step use version 5, files with Select Object steps and neither use version 4, files with stops and none
+  an absent or false flag includes the step. Files with an action whose `automaticAlignTo` is true, or with an
+  `object.align` step (excluded, or inside a `command.batch` or `action.batch` step, too) whose `to` is `"auto"`, use
+  version 7. Other files with View menu steps use version 6, files with Select Path steps and no View menu step use
+  version 5, files with Select Object steps and neither use version 4, files with stops and none
   of these use version 3, and files with excluded steps and none of these use version 2, so older builds refuse them
   instead of playing the excluded steps or failing at a stop, a Select Object step, a Select Path step or a View menu
-  step; other files use version 1, and version 1 to 5 files still load. A file with another `format` or a `version` other than
-  1 to 6, a stop whose message is not text or whose `allowContinue` is not true or false, a Select Object step whose params `ui.action.insertSelectObject` would refuse, a View menu step whose params are not an object, a file larger than 8 MiB, one with more than 1,000 actions and one with an action of more than 10,000 steps are
+  step; other files use version 1, and version 1 to 6 files still load. A file with another `format` or a `version` other than
+  1 to 7, a stop whose message is not text or whose `allowContinue` is not true or false, a Select Object step whose params `ui.action.insertSelectObject` would refuse, a View menu step whose params are not an object, a file larger than 8 MiB, one with more than 1,000 actions and one with an action of more than 10,000 steps are
   refused, and no set is added. So is a file whose set `ui.actionSet.save` would write larger than 8 MiB (a file with
   less white space, a set name that gets a number, or an `.aia` set), with the error `the action set would be larger
   than 8 MiB`. The Actions panel menu's Save Actions… and Load Actions… run these; Load Actions… is
@@ -4269,18 +4271,28 @@ already walks Image Trace. Short agent entry points:
   exclusion that would give the set's action set file more than 8 MiB, counting the steps the recording in progress
   adds to the set; it is an error. A change that leaves the file as large or makes it smaller is never refused. The
   panel's checkmarks run this command; normal playback and Batch… skip excluded steps.
-- Actions: `ui.action.new {set, name, key?, cmd?, shift?, color?}` adds an action named `name` (spaces
+- Actions: `ui.action.new {set, name, key?, cmd?, shift?, color?, automaticAlignTo?}` adds an action named `name` (spaces
   trimmed) after the last action of set `set` (0 is the top set), starts recording into it and returns
   `{set, action}`; Stop Playing/Recording (`ui.action.stop`) ends the recording. `key` 1 to 15 is the function key F1 to F15 that plays the
   action (0 or null for none), with `cmd` (Ctrl, Command on macOS) and `shift`. `color` is its Button Mode color
   (`red`, `yellow`, `green`, `blue` or `violet`; null or `""` for none), the color of its button in Button Mode
-  (`ui.action.buttonMode`). Action function
+  (`ui.action.buttonMode`). `automaticAlignTo: true` makes playback run each of the action's `object.align` steps,
+  those in a recorded Batch run (`action.batch`) included, with `to: "auto"` (see [Align to Artboard](#align-to-artboard)):
+  the key object, key anchor or key guide, else the artboard for one whole selected object, else the selection.
+  Playback also leaves out an `artboard` the step stores, so the step uses the active artboard, as `object.align`
+  without `artboard` does. A Batch run passes no active artboard to its steps, so when an `object.align` step in a
+  Batch run aligns to the artboard, it uses the artboard under the center of the selection, or the first artboard when
+  none is there. `object.distribute` and `object.distributeSpacing` steps play with the `to` they were recorded with.
+  The stored steps keep the `to` they were recorded with, and the action plays them as recorded again when the option
+  is turned off. It is false when left out or null, and a value that is not true, false or null is an error. These are
+  VectorCraft's own rules. Action function
   keys take priority over command shortcuts and preserve the command's binding. On Windows F1, Ctrl+F4 and Ctrl+F6
   cannot be used. While an action is recording, and for an index past the last set,
   an empty name, or a key or color that is not one of these, it is an error and nothing is added. So is an action that
   would give the set more than 1,000 actions (`the action set file holds more than 1,000 actions`) or a file larger
   than 8 MiB (`the action set would be larger than 8 MiB`), and then no recording starts. The panel's Create
-  New Action button and menu's New Action… open the `actionNew` dialog, whose Record runs this.
+  New Action button and menu's New Action… open the `actionNew` dialog, whose Record runs this; its Choose Align To at
+  playback checkbox sets `automaticAlignTo`.
 - Actions: `ui.action.record {set?, action?, after?}` starts recording a new action in the chosen set, or the current
   set when `set` is left out, and returns `{set, name}`. With no sets, it creates Set 1. The action gets the next
   available `Action N` name in that set. With `action`, it records into the action at `action` in set `set` instead
@@ -4301,11 +4313,12 @@ already walks Image Trace. Short agent entry points:
   `ui.action.stop` keeps the steps that fit. A stop that playback reaches
   then is not recorded, and the status bar shows the reason. `ui.action.stop` leaves out any recorded steps still past
   either limit and shows which one in the status bar.
-- Actions: `ui.action.options {set, action, name?, key?, cmd?, shift?, color?}` changes the action at
+- Actions: `ui.action.options {set, action, name?, key?, cmd?, shift?, color?, automaticAlignTo?}` changes the action at
   `action` in set `set` and keeps its steps: `name` renames it, `key` with `cmd` and `shift` sets its function key,
-  and `color` its Button Mode color, as `ui.action.new` takes them; a param left out keeps what the action has, and
-  `cmd` or `shift` alone changes that modifier of its key. It
-  returns `{name, key, color}`. The panel menu's Action Options… runs this for the selected action. A function key
+  `color` its Button Mode color and `automaticAlignTo` how its Align steps play, as `ui.action.new` takes them; a param
+  left out (or a null `automaticAlignTo`) keeps what the action has, and `cmd` or `shift` alone changes that modifier
+  of its key. It returns `{name, key, color, automaticAlignTo}`. The panel menu's Action Options… runs this for the
+  selected action, and its dialog has the same checkbox as New Action…. A function key
   plays its action from the keyboard; like command shortcuts, it does nothing while a dialog, the command palette or
   a text field has the keyboard, or while a tool is busy. Editing command shortcuts (`shortcuts.set`, Keyboard Shortcuts), loading preferences and
   `ui.actionSet.load` preserve action function keys. When several actions have the same key, the first in panel order
@@ -4373,7 +4386,8 @@ already walks Image Trace. Short agent entry points:
   toggle, an Actions command, a Perspective Grid preset of the preferences or a recent-font, saved-selection or saved-view slot. Disabled items are listed, and playback checks the step when it runs. An Object › Align item's step
   keeps the `to` its click sends at insertion (`key` while the selection has a key object or key guide, `artboard` for one selected
   object or with Align to Artboard, else `selection`), so a later Align To choice does not change it, and a step that
-  aligns to the key object fails in playback when the selection has no key then. With anchor points selected the click
+  aligns to the key object fails in playback when the selection has no key then. In an action with `automaticAlignTo`
+  on (`ui.action.new`), playback sends `to: "auto"` for every `object.align` step instead. With anchor points selected the click
   sends no `to`, and neither does the step. These are VectorCraft's own rules. A
   View menu step plays as `ui.action.play` describes. With `set` and `action`, the
   step goes into that action, after step `step`, else after its last step, becomes the panel's selected step, and the
@@ -4720,6 +4734,21 @@ already walks Image Trace. Short agent entry points:
   dialog's OK) when every group already has the options and `closeGaps` finds no gap, and `livePaint.make` or
   `livePaint.merge` given one Live Paint group alone, which they select. Such a fill or stroke also leaves the recent
   colors and the last color as they are. `livePaint.gapOptions` makes a group's faces again, with new ids, only when it adds a path or when Gap Detection is turned on or off or given a new size while it is on.
+  With a tool other than the Live Paint Bucket, a whole Live Paint group that is selected, given in `ids`, or inside a
+  selected group takes a fill on its faces only and a stroke on its edges only, and its hidden source paths keep their
+  paint. Without an `item`, `paint.setFill`, `paint.setStroke`, `paint.lastColor`, `paint.lastGradient` and
+  `paint.none` paint the faces or the edges. `paint.editGradient`, `paint.setGradientGeom` and the `paint.freeform`
+  point and line edits change the faces' or the edges' gradients, `paint.invert` and `paint.complement` recolor the
+  faces' fills or the edges' strokes, and `stroke.set`, `stroke.weightUp`, `stroke.weightDown` and
+  `stroke.setAdvanced` change the edges. The Fill proxy shows the faces' fill, and the Stroke proxy, the Stroke panel
+  and the Control bar show the edges' stroke. A face or edge selected or given together with its whole group follows
+  the group's rule: a fill does not reach an edge, and a stroke does not reach a face. `paint.swap` gives the faces
+  the stroke the edges share and gives the edges the fill the faces share, with a gradient fitted to each face or
+  edge. It leaves a group as it is when its faces' fills or its edges' strokes differ, when any of them is a freeform
+  gradient, or when it has no face or no edge. `paint.default` replaces each face's appearance with no fill and each
+  edge's appearance with a 0.5 pt black stroke, also when the document's Default Graphic Style is redefined. With
+  only Live Paint groups selected or given, the fill and stroke for new art become no fill and a 0.5 pt black stroke;
+  with New Art Has Basic Appearance off, new art then takes the selection's appearance, as after any command.
 
 `brush.selectionArt {ids?|id?}` (a query) replies `{art}`: the object that `brush.new` given the same `ids` or `id`,
 or the same selection, takes as a new scatter or art brush's art and as a new pattern brush's side tile. Several
@@ -5636,8 +5665,8 @@ left out.
 
 ## Symbol libraries
 
-Symbol libraries are read-only sets of symbols: six generated in code (Basic Shapes, UI Frames, Map Markers,
-Inventory Icons, Skill Icons, Weather Icons), the `.vectorcraft` files in
+Symbol libraries are read-only sets of symbols: seven generated in code (Basic Shapes, UI Frames, Map Markers,
+Inventory Icons, Skill Icons, Weather Icons, Media Controls), the `.vectorcraft` files in
 the user library folder of the desktop app (User Defined) and the symbols of any document loaded with
 `symbol.loadLibrary`. `symbol.libraries` lists them (`id`, `name`, `category`: `builtIn`, `user` or `loaded`, `count`)
 and `symbol.library {library}` returns one's symbols (`name`, `size`, `registration`, `exportType`; `library` is an
@@ -6968,6 +6997,48 @@ toggles a point with `path.convertAnchor`; an Alt-click on an end of an open sub
 {"name":"run_command","arguments":{"command":"path.curvatureEdit","params":{"id":12,"op":"extend","x":650,"y":60,"from":"smooth"}}}
 ```
 
+## Drawing with the Quick Pen tool
+
+The Quick Pen tool (`quickPen`, in the Pen tool's group, Alt+P or Option+P on macOS) draws paths of straight lines and
+circular arcs ([Draw with the Quick Pen tool](https://helpx.adobe.com/illustrator/web/add-and-edit-artwork/draw-and-edit-paths/draw-with-quick-pen-tool.html),
+[Quick Pen tool keyboard shortcuts](https://helpx.adobe.com/illustrator/web/add-and-edit-artwork/draw-and-edit-paths/quick-pen-tool-keyboard-shortcuts.html)).
+A click sets the start point. Each click after it, or a press dragged to where it is let go, adds a piece from the
+path's last point, drawn with the tool's `action` option:
+
+- `"line"` (the default): a straight line.
+- `"continuousArc"`: an arc that leaves the last point in the direction the path arrives there, so the two join
+  smoothly. The first piece of a path has no direction and is drawn as a sharp-corner arc; an end straight ahead of or
+  straight behind the last point gives a line.
+- `"sharpArc"`: an arc that turns through the tool's `turn` option (degrees, 1 to 359, 180 by default: a half circle)
+  and bulges to the left of the direction drawn, meeting the path before it at a corner.
+
+Alt (Option on macOS) pressed and let go with no other key, click or wheel turn in between switches to the next action:
+Line, Continuous Arc, Sharp Corner Arc, and back to Line. C flips the last piece, while it is a sharp-corner arc, to
+the other side of its chord. `[` and `]` make the arc size 15° smaller or larger, for the last sharp-corner arc and the
+arcs after it. A click on the first point closes the path, and a click on an end of an open path goes on drawing from
+that end. Escape or Enter ends the path, and so does an edit made to it by another command. The path's points show as circles without handles, and a preview shows the
+piece the next click adds. Points snap to Smart Guides. Each piece, flip and size change is one undo step. The arc
+size of 180°, its 15° steps, the side an arc bulges to and Enter ending the path are VectorCraft's own rules. The
+tool keeps `action` and `turn` with the preferences (`tool.setOption {tool: "quickPen", key, value}`).
+
+`path.quickPen {start?: [x, y], id?, subpath?, keep?, pieces?, closed?}` draws such a path and selects it, as one
+undo step, and answers `{id}`. With `start`, it makes a new path with the current paint (a black stroke when the paint
+has neither fill nor stroke). With `id`, it draws on the open subpath `subpath` (0 when left out) of that path: its
+first `keep` points stay (all of them when left out) and the pieces follow. Each piece is
+`{x, y, action?, turn?, flip?}`: it ends at `x`, `y`, `action` is `"line"` when left out, `turn` is 180 when left out,
+and `flip` puts a sharp-corner arc on the right of the direction drawn. A piece that ends where the path does adds
+nothing. With `closed: true`, a last piece that ends on the first point joins it; otherwise a straight segment closes
+the path. The command returns an error and changes nothing when both or neither of `start` and `id` are given
+(`` give either `start` for a new path or `id`, not both ``), when `subpath` or `keep` comes without `id`, when
+`pieces` is not a list of at most 10000 pieces, when a point's x or y is not a number or is 1e9 or more in size, for
+an unknown `action`, a `turn` outside 1 to 359, a `flip` or `closed` that is not true or false, a `keep` outside 1 to
+the subpath's points, and for a closed subpath, a locked or hidden path or an `id` that is not a path.
+
+```json
+{"name":"run_command","arguments":{"command":"path.quickPen","params":{"start":[100,100],"pieces":[{"x":200,"y":100},{"x":300,"y":200,"action":"continuousArc"},{"x":300,"y":300,"action":"sharpArc","turn":90,"flip":true}]}}}
+{"name":"run_command","arguments":{"command":"tool.setOption","params":{"tool":"quickPen","key":"action","value":"sharpArc"}}}
+```
+
 ## Registration and trim marks
 
 Every document has the built-in `[Registration]` swatch (listed after None by `swatch.list`): a colour that prints on
@@ -7309,6 +7380,10 @@ below 3 or above 1000 counts as 3 or 1000, and a fractional or negative `sides` 
 ```
 
 ## Align to Artboard
+
+`object.align {to: "auto"}` chooses the target each time it runs: the key object, key anchor or key guide when the
+selection has one, else the artboard when exactly one object is selected and no anchor points are, else the
+selection. It then aligns as that `to` value does, and it changes neither the selection nor the key. These are VectorCraft's own rules.
 
 `object.align {to: "artboard", artboard?}` aligns the selected objects to artboard `artboard` (a 0-based index).
 Without `artboard`, or with an index the document doesn't have, it aligns them to the artboard under the center of the
@@ -12077,6 +12152,40 @@ on an open path that are not drawn because they fall before the path's start can
 
 ```json
 {"name":"run_command","arguments":{"command":"text.touchType","params":{"id":7,"start":1,"dx":10,"dy":4}}}
+```
+
+## Retype panel
+
+`type.retypeFonts {count?}` lists the fonts whose glyphs match the selected outlined text. It compares each selected path
+and compound path, inside groups too, with the glyphs of up to 96 loaded fonts, those of the document's live type
+first, by the matching `type.retype` uses, and it counts only exact matches. When two versions of a font are loaded,
+only the version its family and style name gives is compared, which is the version that choosing the font sets. The
+fonts rank by how many shapes each matches, then by the mean distance left after fitting, then by family and style
+name. `count` is a whole number from 1 to 96 (default 10); any other value is an error. The reply is
+`{fonts: [{family, style, matched}], shapes, more, truncated}`: `matched` is the number of shapes the font matches,
+`shapes` the number of shapes compared, `more` is true when more fonts match than `count`, and `truncated` is true when
+shapes past the limits of `type.retype` were left out. Shapes that `type.retype` would keep as outlines because of
+their paint still count. The command does not change the document and records no undo step. With no path or compound
+path selected it is an error.
+
+Window › Retype shows the Retype panel. Find Matching Fonts runs `retype.find {}`, which shows the panel, ranks up to
+96 fonts and lists the first ten. Find more font matches, at the end of the list when `more` is true, runs
+`retype.find {more: true}`, which adds the next five fonts that search found, whatever is selected now. Before any
+search, `retype.find {more: true}` runs a first search. A search that fails is an error and leaves the list as it
+was. Each row shows the font's family and style over a sample of the font. While live type is selected or edited, a
+click on a row sets that font on it, as the font menus do; live type inside a selected group counts too. The list
+stays when the selection changes.
+
+`retype.list {}` → `{searched, fonts: [{family, style, matched}], shapes, more, truncated, size, text}`. `searched` is
+false until a search runs and after a reset. `truncated` is true when the last search left out shapes past the limits
+of `type.retype` (2,048 shapes, 16 nested groups); the panel then says that some shapes were not compared.
+`size` is `small`, `medium` or `large`, and `text` is the samples' text (empty for a generic sample). The panel menu's Small, Medium and Large items and the sample field run
+`retype.preview {size?, text?}`. `text` holds at most 100 characters; any other value of either key is an error and
+changes nothing. Reset Retype Panel in the panel menu runs `retype.reset {}`, which clears the list and keeps the size
+and text. `retype.find`, `retype.preview` and `retype.reset` return what `retype.list` returns.
+
+```json
+{"name":"run_command","arguments":{"command":"type.retypeFonts","params":{"count":5}}}
 ```
 
 ## Alternate glyphs

@@ -326,6 +326,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(compoundshape::specs());
         v.extend(typecmd::specs());
         v.extend(retype::specs());
+        v.extend(retype::fonts::specs());
         v.extend(menucmds::specs());
         v.extend(live::specs());
         v.extend(colorcmds::specs());

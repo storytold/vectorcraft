@@ -395,6 +395,8 @@ pub struct VectorcraftApp {
     /// The single-key tool shortcuts held down, the last held last, and the tool each goes back to
     /// when it is let go ([`shortcuts::HeldTool`]).
     pub(crate) held_tool: Vec<shortcuts::HeldTool>,
+    /// Alt held down on its own since a frame saw it go down ([`shortcuts::AltTap`]).
+    pub(crate) alt_tap: shortcuts::AltTap,
     /// A key with a hold shortcut that waits for its release, and the keys whose repeats are held
     /// back until they are let go ([`shortcuts::HoldKeys`]).
     pub(crate) hold_keys: shortcuts::HoldKeys,

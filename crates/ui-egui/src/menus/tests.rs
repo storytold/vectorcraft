@@ -1706,3 +1706,42 @@ fn window_menu_panels_are_sorted_alphabetically_in_active_language() {
 
     set_current(prev);
 }
+
+/// A command reports the same failed valid tool choice as `tool.select`, rather than success
+/// with the old tool. The existing failure hook exercises the activation error boundary.
+#[test]
+fn selection_tools_toggle_propagates_a_failed_valid_choice() {
+    let failure = "selection tool choice failed";
+    let mut failures = Vec::new();
+    for (from, to) in [("selection", "directSelection"), ("directSelection", "selection")] {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+        assert!(vectorcraft_tools::tool_info(from).is_some() && vectorcraft_tools::tool_info(to).is_some());
+        app.run("tool.select", json!({"tool": from})).unwrap();
+        // The real successful command chooses the other valid selection tool.
+        assert_eq!(app.run("tool.switchSelectionTools", json!({})).unwrap(), json!({"tool": to}));
+        app.run("tool.select", json!({"tool": from})).unwrap();
+        app.ui.touch_drawing_tool = Some("paintbrush".into());
+        let snapshot = |app: &VectorcraftApp| {
+            let st = app.session.active().unwrap();
+            (serde_json::to_value(st.doc.as_ref()).unwrap(), st.selection.clone(), st.history.undo.len(), st.history.redo.len())
+        };
+        let before = snapshot(&app);
+        let groups = app.ui.group_tool.clone();
+        let drawing = app.ui.touch_drawing_tool.clone();
+        app.fail_next_tool_choice = Some(failure.into());
+        let result = app.run("tool.switchSelectionTools", json!({}));
+        assert!(app.fail_next_tool_choice.is_none(), "the valid activation consumed the failure hook");
+        assert_eq!(app.session.tool_id(), from, "a failed choice keeps the current tool");
+        assert_eq!(snapshot(&app), before, "failed choice preserves document, selection and history");
+        assert_eq!(app.ui.group_tool, groups, "failed choice does not remember the requested tool");
+        assert_eq!(app.ui.touch_drawing_tool, drawing);
+        // The hook is one-shot: ordinary success and the return direction still work afterwards.
+        assert_eq!(app.run("tool.switchSelectionTools", json!({})).unwrap(), json!({"tool": to}));
+        assert_eq!(app.run("tool.switchSelectionTools", json!({})).unwrap(), json!({"tool": from}));
+        assert_eq!(snapshot(&app), before, "successful selection toggles do not edit the artwork");
+        failures.push(result);
+    }
+    assert_eq!(failures, vec![Err(failure.to_string()), Err(failure.to_string())], "both failed valid choices must reach the command caller");
+}

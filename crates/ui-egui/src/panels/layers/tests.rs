@@ -408,6 +408,50 @@ fn clicking_a_target_circle_targets_the_layer() {
     assert_eq!(app.session.active().unwrap().selection.objects, vec![a]);
 }
 
+/// The rows whose target circle shows as targeted (its inner ring drawn), as indexes into the
+/// circles [`frame`] returns.
+fn targeted_rows(app: &mut VectorcraftApp, ctx: &egui::Context) -> Vec<usize> {
+    let (circles, _) = frame(app, ctx, vec![], false);
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui));
+    out.textures_delta.clear();
+    let rings: Vec<egui::Pos2> = out
+        .shapes
+        .iter()
+        .filter(|c| matches!(&c.shape, egui::Shape::Circle(cs) if cs.radius == 2.8))
+        .map(|c| c.shape.visual_bounding_rect().center())
+        .collect();
+    circles.iter().enumerate().filter(|(_, c)| rings.iter().any(|r| r.distance(**c) < 0.5)).map(|(i, _)| i).collect()
+}
+
+/// A layer added to the selection from its target circle shows as targeted, as an object added
+/// the same way does (#8646): with nothing targeted, a layer's circle shows its inner ring while
+/// all of its visible, unlocked art is selected, and not while only part of it is.
+#[test]
+fn a_layer_added_from_its_target_circle_shows_as_targeted() {
+    let (mut app, [layer, sub, g, b, a, c]) = nested();
+    let ctx = egui::Context::default();
+    // Rows top down, as `rows_at_every_depth_are_clickable` lists them.
+    let ids = [layer, sub, g, b, a, c];
+    let row = |id: NodeId| ids.iter().position(|r| *r == id).unwrap();
+    assert_eq!(frame(&mut app, &ctx, vec![], false).0.len(), ids.len());
+    // c, then the sublayer added: its art (the group and a) is selected, nothing is targeted.
+    app.session.execute("layer.target", &json!({"id": c.0})).unwrap();
+    app.session.execute("layer.target", &json!({"id": sub.0, "add": true})).unwrap();
+    let st = app.session.active().unwrap();
+    assert_eq!(st.selection.target, None);
+    let mut want = vec![row(sub), row(g), row(a), row(c), row(layer)];
+    want.sort();
+    // The top layer's art is all selected too, so it shows as targeted; b, inside the selected
+    // group, is not selected itself.
+    assert_eq!(targeted_rows(&mut app, &ctx), want);
+    assert!(!targeted_rows(&mut app, &ctx).contains(&row(b)));
+    // With only part of the sublayer's art selected, neither layer shows as targeted.
+    app.session.execute("select.set", &json!({"ids": [a.0, c.0]})).unwrap();
+    let mut want = vec![row(a), row(c)];
+    want.sort();
+    assert_eq!(targeted_rows(&mut app, &ctx), want);
+}
+
 #[test]
 fn dragging_a_target_circle_moves_or_copies_the_appearance() {
     let (mut app, layer, [a, b]) = two_rects();
@@ -3166,6 +3210,35 @@ fn guide_rows_list_by_index_whatever_the_node_order() {
     let rows = list_rows(&st.doc, st.isolation, &st.layers_open, &PanelOptions::default(), "", &Filter::default());
     let indexes: Vec<usize> = rows.iter().filter_map(|r| r.guide).collect();
     assert_eq!(indexes, [2, 1, 0]);
+}
+
+#[test]
+fn guide_row_highlight_stays_selected_without_hover() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    let rect = NodeId(app.session.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap());
+    app.session.execute("guide.add", &json!({"vertical": true, "pos": 50})).unwrap();
+    app.session.execute("select.none", &json!({})).unwrap();
+    expand(&mut app, &json!({})).unwrap();
+    let ctx = egui::Context::default();
+    let (circles, _) = frame(&mut app, &ctx, vec![], false);
+    assert_eq!(circles.len(), 2); // Layer, rectangle; guide has no target circle.
+    let guide = egui::pos2(150.0, (circles[0].y + circles[1].y) / 2.0);
+    let ordinary = egui::pos2(150.0, circles[1].y);
+    let highlighted_at = |app: &mut VectorcraftApp, at: egui::Pos2| {
+        // Clear hover so a hover rectangle cannot satisfy selected-fill proof.
+        let mut out = ctx.run_ui(egui::RawInput { events: vec![egui::Event::PointerGone], ..Default::default() }, |ui| show(app, ui));
+        out.textures_delta.clear();
+        let selected = Tokens::get(&ctx).row_selected;
+        out.shapes.iter().any(|c| matches!(&c.shape, egui::Shape::Rect(r) if r.fill == selected && r.rect.contains(at) && r.rect.width() > 200.0))
+    };
+    assert!(!highlighted_at(&mut app, guide), "an unselected guide is not highlighted");
+    click_with(&mut app, &ctx, guide, egui::Modifiers::NONE);
+    assert_eq!(vectorcraft_engine::cmd::guide_indexes(&app.session.active().unwrap().doc, &app.session.active().unwrap().selection.guides), [0]);
+    assert!(highlighted_at(&mut app, guide), "selected guide has the ordinary row fill without hover");
+    click_with(&mut app, &ctx, ordinary, egui::Modifiers::NONE);
+    assert_eq!(app.session.active().unwrap().highlighted_rows(), [rect]);
+    assert!(highlighted_at(&mut app, ordinary), "ordinary row painting remains intact");
 }
 
 /// Right-clicking a row that is not highlighted selects it.

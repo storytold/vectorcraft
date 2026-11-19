@@ -15,6 +15,14 @@ pub struct TraceIgnoreSampler {
     pub back: String,
 }
 
+/// A Brush Options Key Color click, owned by its dialog and document until release or cancel.
+#[derive(Clone, Debug)]
+pub struct BrushKeyColorPick {
+    pub doc: u64,
+    pub back: String,
+    pub press: Option<Point>,
+}
+
 /// Per-document view (camera).
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct View {
@@ -236,6 +244,7 @@ pub const ICON_PANELS: &[(&str, &str, &str)] = &[
     (crate::panels::script_console::ID, "Script Console", "message-circle"),
     (crate::panels::learn::ID, "Learn", "graduation-cap"),
     (crate::panels::discover::ID, "VectorCraft Help…", "search"),
+    (crate::panels::retype::ID, "Retype", "type"),
     (crate::addons::cleanup::ID, "Artwork Cleanup", "sparkles"),
     (crate::addons::color::ID, "Color Effects", "sun"),
     (crate::addons::packaging::ID, "Fold Lines", "scissors"),
@@ -450,6 +459,9 @@ pub struct UiState {
     pub learn: crate::panels::learn::View,
     #[serde(skip)]
     pub discover: crate::panels::discover::View,
+    /// The Retype panel's list of matching fonts and its sample settings, kept while the app runs.
+    #[serde(skip)]
+    pub retype: crate::panels::retype::View,
     /// The tool whose place a Learn tutorial step's link shows (`learn.locateTool`), while its mark
     /// is on screen. Not saved.
     #[serde(skip)]
@@ -478,6 +490,9 @@ pub struct UiState {
     pub control_bar_hidden_groups: std::collections::BTreeSet<String>,
     pub toolbar: bool,
     pub toolbar_double: bool,
+    /// Smaller cells and panel width for the main Tools panel, independent of its column count.
+    #[serde(default)]
+    pub toolbar_compact: bool,
     /// Advanced toolbar (every tool group) instead of the categorized Basic toolbar.
     #[serde(default)]
     pub toolbar_advanced: bool,
@@ -594,6 +609,8 @@ pub struct UiState {
     pub tab_hid: Option<TabHid>,
     pub view: ViewFlags,
     pub dialog: Option<Dialog>,
+    #[serde(skip)]
+    pub brush_key_color_pick: Option<BrushKeyColorPick>,
     /// Messages to show in a dialog once the open one is closed (`dialogs::confirm::tell`), in
     /// the order they came.
     #[serde(skip)]
@@ -1233,6 +1250,7 @@ impl Default for UiState {
             constrain_pie_angle: false,
             learn: Default::default(),
             discover: Default::default(),
+            retype: Default::default(),
             learn_locate: None,
             learn_practice: Default::default(),
             learn_progress: Default::default(),
@@ -1243,6 +1261,7 @@ impl Default for UiState {
             control_bar_hidden_groups: Default::default(),
             toolbar: true,
             toolbar_double: false,
+            toolbar_compact: false,
             toolbar_advanced: false,
             task_bar: true,
             task_bar_place: TaskBarPlace::default(),
@@ -1277,6 +1296,7 @@ impl Default for UiState {
             tab_hid: None,
             view: ViewFlags::default(),
             dialog: None,
+            brush_key_color_pick: None,
             told: vec![],
             answering_control: false,
             flyout: None,
