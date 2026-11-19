@@ -1160,6 +1160,30 @@ fn opaque_backgrounds_reach_as_far_as_the_advances() {
     let first = layer[0].geometric_bounds().unwrap();
     assert!((first.x0 - 10.0 * mm).abs() < 0.01 && (first.x1 - 30.0 * mm).abs() < 0.01, "{first:?}");
     assert!(matches!(layer[1].kind, NodeKind::Path { .. }) && matches!(layer[2].kind, NodeKind::Text(_)), "{layer:?}");
+    // An underlined line of blanks between two others draws its bar across its glyphs, and its
+    // cells run across the same glyphs.
+    let layer = opaque(font_of("Arial", true), "A\n   \nB", &[]);
+    let (NodeKind::Path { path, .. }, NodeKind::Text(t)) = (&layer[0].kind, &layer[1].kind) else { panic!("a path and type") };
+    let mut rects: Vec<(f64, f64, f64)> = Vec::new();
+    for el in path.to_bezpath().elements() {
+        let p = match el {
+            vectorcraft_geom::PathEl::MoveTo(p) => {
+                rects.push((p.x, p.x, p.y));
+                *p
+            }
+            vectorcraft_geom::PathEl::LineTo(p) => *p,
+            _ => continue,
+        };
+        if let Some(r) = rects.last_mut() {
+            *r = (r.0.min(p.x), r.1.max(p.x), r.2.min(p.y));
+        }
+    }
+    rects.sort_by(|a, b| a.2.total_cmp(&b.2));
+    let laid = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+    let spaces: Vec<(f64, f64)> =
+        laid.glyphs.iter().filter(|g| g.line == 1).map(|g| ((t.xf * g.origin).x, (t.xf * g.origin).x + g.advance)).collect();
+    let (from, to) = spaces.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(a, b), (x0, x1)| (a.min(*x0), b.max(*x1)));
+    assert!(rects.len() == 3 && (rects[1].0 - from).abs() < 0.01 && (rects[1].1 - to).abs() < 0.01, "{rects:?} {spaces:?}");
     // NULs whose advances go forward and back again still fill as far as they reach.
     let layer = opaque(arial(), "\0\0", &[1000, -1000]);
     assert_eq!(layer.len(), 1);

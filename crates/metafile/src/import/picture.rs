@@ -686,29 +686,31 @@ impl Mapper {
         if dx.is_empty() {
             let mut text = whole;
             let laid = vectorcraft_text::layout(db, &text);
-            // Where one line's glyphs start, and the sum of their advances, its trailing blanks
-            // included.
-            let along = laid
-                .glyphs
-                .iter()
-                .fold((f64::INFINITY, 0.0), |(from, width), g| (from.min(g.origin.x.min(g.origin.x + g.advance)), width + g.advance));
-            let one = laid.lines.len() == 1 && along.0.is_finite() && along.1.is_finite();
             text.xf = base * Affine::translate((0.0, drop));
             text.cached_bounds = Some(laid.bounds);
-            // The cells of one line run across its advances, from where its type starts, or for
-            // blanks alone, which draw no type, where the alignment puts a line that long. Those
-            // of more than one line run across each line's glyphs. NULs alone span their
-            // advances, where the alignment puts them.
-            let cells = if nuls {
-                let start = aligned(first.by * k, 0.0, &t.h_align) - first.by * k;
-                cell_rect(start + first.reach.0 * k, start + first.reach.1 * k, 0.0, cell)
-            } else if one {
-                let x0 = if shows { along.0 } else { aligned(0.0, along.1, &t.h_align) };
-                cell_rect(x0, x0 + along.1, laid.glyphs.first().map_or(0.0, |g| g.origin.y), cell)
-            } else {
-                cells(&laid, &s, cell, &t.h_align)
-            };
-            out.backs.extend(self.background(&line, cells, text.xf));
+            if background.is_some() {
+                // Where one line's glyphs start, and the sum of their advances, its trailing
+                // blanks included.
+                let along = laid
+                    .glyphs
+                    .iter()
+                    .fold((f64::INFINITY, 0.0), |(from, width), g| (from.min(g.origin.x.min(g.origin.x + g.advance)), width + g.advance));
+                let one = laid.lines.len() == 1 && along.0.is_finite() && along.1.is_finite();
+                // The cells of one line run across its advances, from where its type starts, or
+                // for blanks alone, which draw no type, where the alignment puts a line that long.
+                // Those of more than one line run across each line's glyphs. NULs alone span
+                // their advances, where the alignment puts them.
+                let cells = if nuls {
+                    let start = aligned(first.by * k, 0.0, &t.h_align) - first.by * k;
+                    cell_rect(start + first.reach.0 * k, start + first.reach.1 * k, 0.0, cell)
+                } else if one {
+                    let x0 = if shows { along.0 } else { aligned(0.0, along.1, &t.h_align) };
+                    cell_rect(x0, x0 + along.1, laid.glyphs.first().map_or(0.0, |g| g.origin.y), cell)
+                } else {
+                    cells(&laid, &s, cell, &t.h_align, shows && line.decorated)
+                };
+                out.backs.extend(self.background(&line, cells, text.xf));
+            }
             if shows {
                 let mut n = Node::new(NodeId(0), NodeKind::Text(Box::new(text)));
                 n.opacity = opacity;
@@ -778,13 +780,15 @@ impl Mapper {
         // start, which the alignment puts where it puts a line as long as its advances. A line
         // of leading NULs alone fills the cells across their advances.
         let start = aligned(lead.by, dx.iter().sum(), line.align);
-        let (mut lo, mut hi, mut pos) = (lead.reach.0 - lead.by, lead.reach.1 - lead.by, 0.0f64);
-        for (d, r) in dx.iter().zip(reach) {
-            (lo, hi) = (lo.min(pos + r.0), hi.max(pos + r.1));
-            pos += d;
+        if line.background.is_some() {
+            let (mut lo, mut hi, mut pos) = (lead.reach.0 - lead.by, lead.reach.1 - lead.by, 0.0f64);
+            for (d, r) in dx.iter().zip(reach) {
+                (lo, hi) = (lo.min(pos + r.0), hi.max(pos + r.1));
+                pos += d;
+            }
+            let xf = line.base * Affine::translate((0.0, line.drop + down));
+            out.backs.extend(self.background(line, cell_rect(start + lo, start + hi, 0.0, line.cell), xf));
         }
-        let xf = line.base * Affine::translate((0.0, line.drop + down));
-        out.backs.extend(self.background(line, cell_rect(start + lo, start + hi, 0.0, line.cell), xf));
         let blank = |cs: &[char]| cs.iter().all(|c| c.is_whitespace());
         // A piece's type draws when it shows: blanks only when underlined or struck through.
         let draws = |cs: &[char]| line.shows && (!blank(cs) || line.decorated);
@@ -956,9 +960,10 @@ fn cell_rect(x0: f64, x1: f64, y: f64, cell: (f64, f64)) -> BezPath {
 /// The character cells of `laid` (the type `s` laid out on more than one line), `cell.0` above
 /// and `cell.1` below each baseline (points), as one rectangle a line: across the line as layout
 /// places it and across its glyphs' advances, its trailing blanks included (layout leaves them
-/// out of the width it aligns), or for a line of blanks alone as wide as their advances, where
-/// `align` puts a line that long.
-fn cells(laid: &vectorcraft_text::TextLayout, s: &str, cell: (f64, f64), align: &HAlign) -> BezPath {
+/// out of the width it aligns). A line of blanks alone runs across its glyphs' advances when
+/// the type draws its underline or strikethrough (`decorated`), and otherwise as wide as their
+/// advances, where `align` puts a line that long.
+fn cells(laid: &vectorcraft_text::TextLayout, s: &str, cell: (f64, f64), align: &HAlign, decorated: bool) -> BezPath {
     // Each line's baseline, the sum of its glyphs' advances, how far before and after the
     // reference point they reach, and whether they are all blanks. Glyphs come line by line.
     type Row = (usize, f64, f64, (f64, f64), bool);
@@ -979,6 +984,7 @@ fn cells(laid: &vectorcraft_text::TextLayout, s: &str, cell: (f64, f64), align: 
     for (line, y, width, reach, blank) in lines {
         let (x0, x1) = match laid.lines.get(line) {
             Some(l) if !blank => (l.x0.min(reach.0), l.x1.max(reach.1)),
+            _ if decorated => reach,
             _ => {
                 let x0 = aligned(0.0, width, align);
                 (x0, x0 + width)
