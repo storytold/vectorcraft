@@ -138,7 +138,7 @@ pub fn open_document(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: O
     let update_links = app.session.prefs.update_links == "automatically";
     let low_res_proxy_eps = app.session.prefs.low_res_proxy_eps;
     let file = fileio::read_for_open_asking(name, bytes, path.clone(), p, update_links, low_res_proxy_eps, true).map_err(|e| e.to_string())?;
-    dialogs::profile_mismatch::open_or_ask(app, file, path)
+    dialogs::profile_mismatch::open_or_ask(app, file, path, false)
 }
 
 /// Did an open answer that it asks a question first (`{dialog}`), so the file isn't open yet?

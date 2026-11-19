@@ -61,6 +61,10 @@ pub(crate) struct PendingOpen {
     /// The automation roots in force where the open was asked for: its linked files are read, and
     /// the document is installed, under them and those of the caller that confirms.
     scope: ScopeHandle,
+    /// It was read off the UI thread ([`crate::opening`]): the rest of its read is done there too
+    /// once the question is answered. An open that answers at once (a path a caller asked for)
+    /// finishes before OK returns.
+    background: bool,
 }
 
 /// The choices of a mismatch (`missing`: of a missing profile), as (`choice`, label).
@@ -85,15 +89,16 @@ fn paste_choices() -> [(&'static str, &'static str); 2] {
 /// Settings asks about its profile ([`ReadFile::ask`]): then the dialog asks first, and the result
 /// is `{dialog}`. A file read while another one's question is open waits for its own question
 /// until that one is answered (`{dialog, queued: true}`). Opened, the views follow and the file
-/// goes on the recent files ([`crate::io::opened`]).
-pub fn open_or_ask(app: &mut VectorcraftApp, file: ReadFile, path: Option<String>) -> Result<Value, String> {
-    ask_or_open(app, PendingOpen { file, path, scope: ScopeHandle::capture() })
+/// goes on the recent files ([`crate::io::opened`]). `background`: the file was read off the UI
+/// thread, and the rest of its read after an answer is done there too.
+pub fn open_or_ask(app: &mut VectorcraftApp, file: ReadFile, path: Option<String>, background: bool) -> Result<Value, String> {
+    ask_or_open(app, PendingOpen { file, path, scope: ScopeHandle::capture(), background })
 }
 
 /// [`open_or_ask`] for a file that has its scope already.
 fn ask_or_open(app: &mut VectorcraftApp, mut pending: PendingOpen) -> Result<Value, String> {
     let Some(q) = pending.file.ask() else {
-        let PendingOpen { file, path, scope } = pending;
+        let PendingOpen { file, path, scope, .. } = pending;
         return scope.run(|| {
             let r = fileio::open_read(&mut app.session, file).map_err(|e| e.to_string())?;
             crate::io::opened(app, &r);
@@ -213,10 +218,24 @@ fn open_confirm(app: &mut VectorcraftApp, d: &Dialog) -> DialogResult {
     open_pending(app, pending, scope)
 }
 
-/// Open `pending`, answered or without a question, under `scope`; a failure is reported.
+/// Open `pending`, answered or without a question, under `scope`; a failure is reported. A file read
+/// off the UI thread does the rest of its read (its linked files and type) there too
+/// ([`crate::opening::finish_answered`]).
 fn open_pending(app: &mut VectorcraftApp, pending: PendingOpen, scope: ScopeHandle) -> DialogResult {
-    let PendingOpen { file, path, .. } = pending;
+    let PendingOpen { file, path, background, .. } = pending;
     let name = file.name();
+    let file = match &path {
+        Some(p) if background && crate::opening::available() => match crate::opening::finish_answered(app, p, file, scope.clone()) {
+            Ok(r) => return Ok(r),
+            Err(Some(file)) => *file,
+            Err(None) => {
+                let e = "the file stopped being read (please report this bug)".to_string();
+                crate::io::report_open_error(app, &name, &e);
+                return Err(e);
+            }
+        },
+        _ => file,
+    };
     scope.run(|| match fileio::open_read(&mut app.session, file) {
         Ok(r) => {
             crate::io::opened(app, &r);

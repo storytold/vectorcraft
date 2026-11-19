@@ -253,17 +253,24 @@ impl ScopeHandle {
     }
 
     /// The captured scope narrowed to what the calling thread may reach as well: the roots of both
-    /// are in force ([`AutomationRoots::intersect`]), and without roots in either, none are.
+    /// are in force ([`AutomationRoots::intersect`]), and without roots in either, none are. The
+    /// script gates of both are in force too, and reads are exempt from them only where both are.
     pub fn within_current(self) -> Self {
         let here = Self::capture();
-        let roots = match (self.roots(), here.roots()) {
-            (None, None) => return self,
-            (Some(r), None) | (None, Some(r)) => r,
-            (Some(a), Some(b)) if Arc::ptr_eq(&a, &b) => a,
-            (Some(a), Some(b)) => a.intersect(&b),
+        let gate = match (self.1.clone(), here.1.clone()) {
+            (None, None) => None,
+            (Some(g), None) | (None, Some(g)) => Some(g),
+            (Some(a), Some(b)) if Arc::ptr_eq(&a, &b) => Some(a),
+            (Some(a), Some(b)) => Some(Arc::new(ScriptGate { also: Some(b), ..(*a).clone() })),
         };
-        let Self(_, gate, exempt) = self;
-        Self(Some(Scope::Confined(roots)), gate, exempt)
+        let exempt = self.2 && here.2;
+        let scope = match (self.roots(), here.roots()) {
+            (None, None) => self.0,
+            (Some(r), None) | (None, Some(r)) => Some(Scope::Confined(r)),
+            (Some(a), Some(b)) if Arc::ptr_eq(&a, &b) => Some(Scope::Confined(a)),
+            (Some(a), Some(b)) => Some(Scope::Confined(a.intersect(&b))),
+        };
+        Self(scope, gate, exempt)
     }
 }
 
@@ -277,10 +284,15 @@ pub(crate) struct ScriptGate {
     pub(crate) write: ScriptScope,
     /// The paths of the open documents' files, as the documents hold them.
     pub(crate) documents: Vec<String>,
+    /// Another gate a path must pass as well ([`ScopeHandle::within_current`]).
+    pub(crate) also: Option<Arc<ScriptGate>>,
 }
 
 impl ScriptGate {
     fn check(&self, path: &str, access: Access) -> Result<(), String> {
+        if let Some(also) = &self.also {
+            also.check(path, access)?;
+        }
         let real = if ScriptScope::refused_by_name(Path::new(path)) { None } else { resolve(path).ok() };
         let allowed = real.is_some_and(|real| {
             let scoped = match access {
@@ -886,6 +898,31 @@ mod tests {
         assert_eq!(within(ScopeHandle(Some(Scope::Confined(roots.clone())), None, false), None), Some(roots.describe()), "the saved roots stay");
         assert_eq!(within(ScopeHandle(Some(Scope::Confined(roots.clone())), None, false), Some(&narrow)), Some(both.describe()));
         assert!(unconfined.run(|| current().is_none()));
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    /// A scope narrowed to the calling thread keeps the script gate of both: a script command that
+    /// carries on work saved without a gate reads only what its gate allows, and with a gate saved
+    /// too, only what both allow; reads are exempt only where both scopes exempt them.
+    #[test]
+    fn a_narrowed_scope_keeps_the_script_gates_of_both() {
+        let (base, _) = folders("narrowed-gate");
+        let gate =
+            |dir: &str| ScriptGate { read: ScriptScope::of_folder(&base.join(dir)), write: ScriptScope::default(), documents: vec![], also: None };
+        let (inside, other) = (s(base.join("in/a.svg")), s(base.join("outside/secret.svg")));
+        let reads = |saved: ScopeHandle, gate_here: Option<ScriptGate>| {
+            let narrowed = match gate_here {
+                Some(g) => with_script_gate(g, || saved.within_current()),
+                None => saved.within_current(),
+            };
+            narrowed.run(|| (check_read(&inside).is_ok(), check_read(&other).is_ok()))
+        };
+        let plain = ScopeHandle(None, None, false);
+        assert_eq!(reads(plain.clone(), Some(gate("in"))), (true, false), "the confirming command's gate");
+        assert_eq!(reads(ScopeHandle(None, Some(Arc::new(gate("in"))), false), None), (true, false), "the saved gate");
+        assert_eq!(reads(ScopeHandle(None, Some(Arc::new(gate("in"))), false), Some(gate("outside"))), (false, false), "both gates");
+        assert_eq!(reads(ScopeHandle(None, None, true), Some(gate("in"))), (true, false), "exempt only where both are");
+        assert_eq!(reads(plain, None), (true, true));
         let _ = std::fs::remove_dir_all(base);
     }
 

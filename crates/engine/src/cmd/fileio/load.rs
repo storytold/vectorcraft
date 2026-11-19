@@ -698,6 +698,9 @@ pub struct ReadFile {
     /// The profile question as it was last asked ([`ReadFile::ask`]): an answer is taken only while
     /// the question is still the same.
     asked: Option<crate::cmd::colormgmt::ProfileQuestion>,
+    /// Update Links and the low-resolution EPS proxy setting, while the linked files and the type
+    /// are left to do after the answer ([`ReadFile::finish_read`]).
+    links_left: Option<(bool, bool)>,
 }
 
 /// The part of [`read_for_open`] a file waiting for a profile answer has left to do.
@@ -772,6 +775,7 @@ pub fn read_for_open_asking(
         rest: Some(Rest { update_links, low_res_proxy_eps, color_mode }),
         answered: None,
         asked: None,
+        links_left: None,
     };
     if ask && file.choice.is_none() && file.ask().is_some() {
         return Ok(file);
@@ -802,11 +806,12 @@ impl ReadFile {
         self.asked.clone()
     }
 
-    /// Answer the profile question with `choice` and do the rest of the read: the policies (the
-    /// answer in place of the one of the document's color mode), the color mode, the linked files
-    /// and the type. An error leaves the file waiting: a profile to assign that is not one of that
-    /// model, or Color Settings changed since the question was asked ([`Self::ask`]) so that the
-    /// question, its model, the profile it is about or the working space differ.
+    /// Answer the profile question with `choice` and apply it: the policies (the answer in place of
+    /// the one of the document's color mode) and the color mode. The linked files and the type are
+    /// left for [`Self::finish_read`] or [`open_read`]. An error leaves the file waiting: a profile
+    /// to assign that is not one of that model, or Color Settings changed since the question was
+    /// asked ([`Self::ask`]) so that the question, its model, the profile it is about or the working
+    /// space differ.
     pub fn answer(&mut self, choice: crate::cmd::colormgmt::ProfileChoice) -> Result<()> {
         if let Some(asked) = &self.asked
             && self.rest.is_some()
@@ -818,7 +823,7 @@ impl ReadFile {
             }
         }
         let before = self.choice.replace(choice);
-        let r = self.finish_read();
+        let r = self.apply_answer();
         if r.is_err() {
             self.choice = before;
         }
@@ -826,8 +831,26 @@ impl ReadFile {
     }
 
     /// The rest of [`read_for_open_asking`], once: the color management policies with the profile
-    /// answer, the color mode `colorMode` asks for, the linked files and the type.
-    fn finish_read(&mut self) -> Result<()> {
+    /// answer (or as the policy says without one), the color mode `colorMode` asks for, the linked
+    /// files and the type. The app runs it off the UI thread once the question is answered.
+    pub fn finish_read(&mut self) -> Result<()> {
+        self.apply_answer()?;
+        self.finish_links();
+        Ok(())
+    }
+
+    /// Read the linked files and lay out the type of a file whose profile answer is applied
+    /// ([`Self::answer`]), once. A file still waiting for its answer is left as it is.
+    fn finish_links(&mut self) {
+        let Some((update_links, low_res_proxy_eps)) = self.links_left.take() else { return };
+        let base = crate::cmd::links::LinkBase::file(self.path.as_deref());
+        self.links = crate::cmd::links::resolve(&mut self.loaded.doc, base, update_links, low_res_proxy_eps);
+        Session::refresh_text_bounds(&mut self.loaded.doc);
+    }
+
+    /// The policies with the profile answer and the color mode `colorMode` asks for, once; the
+    /// linked files and the type are left for [`Self::finish_read`].
+    fn apply_answer(&mut self) -> Result<()> {
         if self.rest.is_none() {
             return Ok(());
         }
@@ -850,9 +873,7 @@ impl ReadFile {
                 super::super::colormgmt::set_color_mode(doc, mode, true, None, grays);
             });
         }
-        let base = crate::cmd::links::LinkBase::file(self.path.as_deref());
-        self.links = crate::cmd::links::resolve(&mut self.loaded.doc, base, rest.update_links, rest.low_res_proxy_eps);
-        Session::refresh_text_bounds(&mut self.loaded.doc);
+        self.links_left = Some((rest.update_links, rest.low_res_proxy_eps));
         Ok(())
     }
 }
