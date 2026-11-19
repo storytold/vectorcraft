@@ -1236,9 +1236,7 @@ pub(super) fn symbol_adjust(s: &mut Session, p: &Value) -> Result<Value> {
                 // instance without one, or without a size, is left as it is.
                 if let Some((to, step)) = &recolor {
                     let fill = d.node(*id).and_then(|n| look(d, n, &mut sides)).and_then(|l| l.fill);
-                    if recolor_keeping_amount(d, *id, fill, to, step * w) {
-                        touched.insert(*id);
-                    }
+                    touched.extend(recolor_keeping_amount(d, *id, fill, to, step * w).then_some(*id));
                     continue;
                 }
                 // Average needs the instance's own values, so it leaves an instance without a size
