@@ -229,3 +229,39 @@ fn a_wheel_scroll_under_a_still_press_near_the_edge_does_not_start_edge_scrollin
     assert_eq!(center(&app).x, wheeled.x, "no edge scrolling");
     frame(&mut app, &ctx, vec![button(at, false)]);
 }
+
+/// The press is where the button went down, not where the frame's input left the pointer: a press
+/// well inside the canvas and a move to the edge in the same input batch has dragged, so holding
+/// the pointer still there scrolls.
+#[test]
+fn a_press_and_a_move_to_the_edge_in_one_frame_scroll_once_held() {
+    let (mut app, ctx, _) = zoomed_in("selection");
+    let rect = app.canvas_rect.unwrap();
+    let start = pos2(rect.center().x, rect.bottom() - 30.0);
+    let edge = pos2(start.x, rect.bottom() - 4.0);
+    let c0 = center(&app);
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(start), button(start, true), egui::Event::PointerMoved(edge)]);
+    for _ in 0..3 {
+        frame(&mut app, &ctx, vec![]);
+    }
+    assert!(center(&app).y > c0.y, "the view scrolls down: {:?} vs {c0:?}", center(&app));
+    frame(&mut app, &ctx, vec![button(edge, false)]);
+}
+
+/// A move away from the press and back within one frame still dragged: the press held near the
+/// edge then scrolls, though the pointer ends the frame where it was pressed.
+#[test]
+fn a_move_away_and_back_within_a_frame_still_arms_edge_scrolling() {
+    let (mut app, ctx, _) = zoomed_in("selection");
+    let rect = app.canvas_rect.unwrap();
+    let at = pos2(rect.right() - 4.0, rect.center().y);
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at), button(at, true)]);
+    let c0 = center(&app);
+    let away = at - vec2(8.0, 0.0);
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(away), egui::Event::PointerMoved(at + vec2(-0.5, 0.0))]);
+    for _ in 0..3 {
+        frame(&mut app, &ctx, vec![]);
+    }
+    assert!(center(&app).x > c0.x, "the view scrolls right: {:?} vs {c0:?}", center(&app));
+    frame(&mut app, &ctx, vec![button(at, false)]);
+}

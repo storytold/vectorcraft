@@ -359,6 +359,8 @@ fn begin_drag(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, p: Pos2) {
     if !tool_holds(d) {
         app.session.tool_hover_ended(view);
     }
+    // Read before `data_mut`: the context is locked inside it.
+    let edge = edge_scroll_at_press(ui, p);
     ui.data_mut(|dd| {
         dd.insert_temp(drag_id(), d);
         dd.insert_temp(drag_pos_id(), p);
@@ -367,7 +369,7 @@ fn begin_drag(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, p: Pos2) {
         dd.remove::<Point>(tool_drag_doc_id());
         dd.insert_temp(tool_press_doc_id(), xf.to_doc(p));
         // Edge scrolling waits for the pointer to move away from the press ([`edge_scroll_held`]).
-        dd.insert_temp(edge_scroll_id(), EdgeScroll { press: p, armed: false, rest: (0.0, 0.0) });
+        dd.insert_temp(edge_scroll_id(), edge);
         // Space held at the press (Cmd+Space lends the Zoom tool) sizes the marquee until
         // it is let go ([`zoom_marquee_start`]).
         if matches!(d, Drag::ZoomBox { .. }) {
@@ -499,16 +501,37 @@ fn edge_scroll_id() -> egui::Id {
     egui::Id::unique("canvas-edge-scroll")
 }
 
+/// A tool press's edge scrolling as it begins at `p`, the pointer's position at the end of the
+/// frame: the press is where the primary button went down, which an input batch can leave behind
+/// `p`, and the moves after it in the same frame may already have gone [`EDGE_SCROLL_SLOP`] from it.
+fn edge_scroll_at_press(ui: &Ui, p: Pos2) -> EdgeScroll {
+    let (press, moved) = ui.input(|i| {
+        let down = i.events.iter().rposition(|e| matches!(e, egui::Event::PointerButton { button: egui::PointerButton::Primary, pressed: true, .. }));
+        let press = down.and_then(|k| match i.events.get(k) {
+            Some(egui::Event::PointerButton { pos, .. }) => Some(*pos),
+            _ => None,
+        });
+        let press = press.unwrap_or(p);
+        let after = down.map_or(0, |k| k + 1);
+        let moved = i.events.iter().skip(after).any(|e| matches!(e, egui::Event::PointerMoved(q) if (*q - press).length() >= EDGE_SCROLL_SLOP));
+        (press, moved)
+    });
+    EdgeScroll { press, armed: moved || (p - press).length() >= EDGE_SCROLL_SLOP, rest: (0.0, 0.0) }
+}
+
 /// Scroll the view for a tool drag held at `p` near an edge of the canvas ([`edge_scroll`]), and
 /// return the canvas's transform after it; `None` when the view did not move. Only once the pointer
-/// has moved [`EDGE_SCROLL_SLOP`] from the press on screen (a click near the edge stays a click, and
+/// has moved [`EDGE_SCROLL_SLOP`] from the press on screen, in any move of a frame (a click near the edge stays a click, and
 /// a view scrolled by the wheel under a still press is not a drag), with the pointer over the
 /// canvas itself (over a panel the Selection tools hand the art to the panels), and not under a
 /// modal dialog. The view moves by whole device pixels; the part of a pixel left over waits for the
 /// next frame on an axis that scrolls on, and stays as it is on one that does not.
 fn edge_scroll_held(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, p: Pos2) -> Option<Xf> {
     let mut st = ui.data(|d| d.get_temp::<EdgeScroll>(edge_scroll_id()))?;
-    if !st.armed && (p - st.press).length() >= EDGE_SCROLL_SLOP {
+    // Any move of the frame counts, not only where the pointer ends up: one that went away and came
+    // back to the press still dragged.
+    let moved = |q: Pos2| (q - st.press).length() >= EDGE_SCROLL_SLOP;
+    if !st.armed && (moved(p) || ui.input(|i| i.events.iter().any(|e| matches!(e, egui::Event::PointerMoved(q) if moved(*q))))) {
         st.armed = true;
         ui.data_mut(|d| d.insert_temp(edge_scroll_id(), st));
     }
