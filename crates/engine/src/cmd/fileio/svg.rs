@@ -51,6 +51,12 @@ pub const OPTIONS: &[FormatOption] = &[
     FormatOption { name: "minify", ty: "boolean", default: "false", description: "no XML declaration, indentation or line breaks" },
     FormatOption { name: "responsive", ty: "boolean", default: "false", description: "no width/height: the SVG scales to its container" },
     FormatOption {
+        name: "units",
+        ty: "string",
+        default: "null",
+        description: "override the document unit for width and height: px (bare numbers, one per point) | pt | mm | cm | in; omit to follow the document unit, not null (the viewBox stays in points; not with responsive)",
+    },
+    FormatOption {
         name: "preserveEditing",
         ty: "boolean",
         default: "false",
@@ -121,7 +127,7 @@ pub fn options_map(p: &Value) -> Result<Map<String, Value>, String> {
     let mut m = Map::new();
     let Some(o) = p.as_object() else { return Ok(m) };
     for opt in OPTIONS.iter().filter(|opt| opt.name != "svg") {
-        if let Some(v) = o.get(opt.name).filter(|v| !v.is_null()) {
+        if let Some(v) = o.get(opt.name).filter(|v| opt.name == "units" || !v.is_null()) {
             m.insert(opt.name.into(), v.clone());
         }
     }

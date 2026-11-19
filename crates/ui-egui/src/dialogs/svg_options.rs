@@ -1,5 +1,5 @@
 //! SVG Options (Export As SVG, Save As / Save a Copy to .svg): profile, styling, fonts, images,
-//! object ids, decimals, encoding, minify, responsive, embedded fonts, artboards (export) or
+//! object ids, decimals, encoding, units, minify, responsive, embedded fonts, artboards (export) or
 //! editing data (save), and a read-only view of the code. OK remembers the choices for next time and runs the export or save command with
 //! them as `svg: {…}`. Show in Browser (`file.export.svg.browser`) writes the SVG the choices give
 //! to a temporary folder and opens it in the default browser, leaving the dialog open.
@@ -73,15 +73,17 @@ const IMAGES: [(&str, &str); 2] = [("embed", "Embed"), ("link", "Link")];
 const OBJECT_IDS: [(&str, &str); 3] = [("layerNames", "Layer Names"), ("minimal", "Minimal"), ("unique", "Unique")];
 const PROFILES: [(&str, &str); 2] = [("svg11", "SVG 1.1"), ("tiny12", "SVG Tiny 1.2")];
 const ENCODINGS: [(&str, &str); 3] = [("utf8", "Unicode (UTF-8)"), ("utf16", "Unicode (UTF-16)"), ("latin1", "ISO 8859-1")];
+const UNITS: [(&str, &str); 5] = [("px", "Pixels"), ("pt", "Points"), ("mm", "Millimeters"), ("cm", "Centimeters"), ("in", "Inches")];
 
 /// Dialog fields that are not SVG options.
 const UI_KEYS: [&str; 5] = ["mode", "path", "showCode", "allArtboards", "range"];
 
-/// The options a first SVG Options dialog starts from: the engine's defaults with Internal CSS
-/// and Responsive on (as the reference app's Export As starts). Hidden layers are left to the
-/// command (Save keeps them, Export leaves them out).
+/// The options a first SVG Options dialog starts from: the engine's defaults with Pixels,
+/// Internal CSS and Responsive on (as the reference app's Export As starts). Hidden layers are
+/// left to the command (Save keeps them, Export leaves them out).
 pub(super) fn first_use() -> Map<String, Value> {
-    let mut m = serde_json::to_value(vectorcraft_svg::ExportOptions::default()).ok().and_then(|v| v.as_object().cloned()).unwrap_or_default();
+    let opts = vectorcraft_svg::ExportOptions { units: Some(vectorcraft_svg::SizeUnit::Px), ..Default::default() };
+    let mut m = serde_json::to_value(opts).ok().and_then(|v| v.as_object().cloned()).unwrap_or_default();
     m.remove("hiddenLayers");
     m.insert("styling".into(), json!("css"));
     m.insert("responsive".into(), json!(true));
@@ -223,7 +225,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     false
 }
 
-/// The SVG options: styling, fonts, images, object ids, decimals, minify, responsive, `<tspan>`s
+/// The SVG options: styling, fonts, images, object ids, decimals, units, minify, responsive, `<tspan>`s
 /// and metadata. `screens` (Export for Screens' Format Settings) leaves out Images: a linked
 /// image is another file.
 pub(super) fn option_fields(ui: &mut egui::Ui, d: &mut Dialog, screens: bool) {
@@ -246,6 +248,9 @@ pub(super) fn option_fields(ui: &mut egui::Ui, d: &mut Dialog, screens: bool) {
         }
         ui.end_row();
         choice(ui, d, "encoding", tl!("Encoding:"), &ENCODINGS, None);
+        // Responsive omits width and height, so the unit has nothing to act on: show it dimmed.
+        let (units, responsive) = (d.str("units"), d.bool("responsive"));
+        choice(ui, d, "units", tl!("Units:"), &UNITS, responsive.then_some(units.as_str()));
     });
     ui.add_space(6.0);
     ui.horizontal(|ui| {
