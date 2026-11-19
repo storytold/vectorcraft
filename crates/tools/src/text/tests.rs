@@ -1401,6 +1401,26 @@ fn creates(acts: &[Action]) -> bool {
     acts.iter().any(|a| matches!(a, Action::Exec(cmd, _) if cmd == "text.create" || cmd == "text.createInPath"))
 }
 
+/// A click in the empty part of an area type frame, below its one line, edits that type: the
+/// selection tools pass such clicks through to the art behind (#7274), the Type tool does not.
+#[test]
+fn a_click_in_an_area_frame_below_its_text_edits_it() {
+    let mut d = Document::new(500.0, 500.0);
+    let l = d.layers[0].id;
+    let id = d.alloc_id();
+    let mut t = TextObject::point(Point::new(100.0, 100.0), "Hi", CharStyle { size: 20.0, ..Default::default() });
+    t.kind = TextKind::Area { frame: vectorcraft_geom::PathData::from_bezpath(&Rect::new(0.0, 0.0, 200.0, 200.0).to_path(0.1)) };
+    t.cached_bounds = Some(Rect::new(0.0, 0.0, 30.0, 24.0));
+    d.insert(Some(l), 0, Node::new(id, NodeKind::Text(Box::new(t)))).unwrap();
+    let (sel, p) = (Selection::default(), paint());
+    let c = cx(&d, &sel, &p);
+    assert!(vectorcraft_doc::hit::hit_test(&d, Point::new(250.0, 250.0), c.selection_hit_options()).is_none(), "selection tools: passes through");
+    let mut tool = TypeTool::new("type");
+    let acts = click(&mut tool, &c, 250.0, 250.0);
+    assert!(!creates(&acts), "{acts:?}");
+    assert_eq!(tool.editing, Some(id));
+}
+
 /// While type is being edited, a click on blank canvas ends the editing and makes no new type;
 /// the Type tool stays, and the next click makes point type (#2871, #2854). The same holds when
 /// the editing began with a double-click from a selection tool.
@@ -2234,6 +2254,22 @@ fn a_click_on_type_in_a_missing_font_asks_before_editing() {
     let acts = click(&mut tool, &c, at.x, at.y);
     assert!(!acts.iter().any(|a| matches!(a, Action::Dialog(..))), "{acts:?}");
     assert_eq!((tool.editing, tool.caret), (Some(id), 1));
+}
+
+/// `tool.setOption` checks each option first: the answer to the question is a whole-number token
+/// and a true or false `ok`, so a client can give it through that command.
+#[test]
+fn the_answer_to_the_missing_font_question_passes_the_option_check() {
+    let tool = TypeTool::new("type");
+    assert_eq!(tool.check_option("missingFontEdit", &json!({"token": 7, "ok": true})), Ok(()));
+    assert_eq!(tool.check_option("missingFontEdit", &json!({"token": 7, "ok": false})), Ok(()));
+    for bad in [json!({"token": "7", "ok": true}), json!({"token": 7, "ok": 1}), json!({"ok": true}), json!({"token": -1, "ok": true}), json!(null)] {
+        assert_eq!(
+            tool.check_option("missingFontEdit", &bad),
+            Err("`missingFontEdit` must be {token, ok} with a whole number and true or false".to_string()),
+            "{bad}"
+        );
+    }
 }
 
 /// Cancel starts no edit, and the edit in progress on other type goes on; an answer that names
