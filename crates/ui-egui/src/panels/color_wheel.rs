@@ -729,14 +729,32 @@ pub(crate) fn chroma_tick(max_chroma: f64) -> f32 {
     (max_chroma / CHROMA_FULL).clamp(0.0, 1.0) as f32
 }
 
+/// The OKLCH rows' edits of one frame with row `i`'s edit added: row `i` takes its value from
+/// `asked`, on top of `out` (the other rows' edits so far, or none on top of `lch`). A drag on one
+/// row stays in progress when another row's field commits in the same frame.
+pub(crate) fn oklch_row_edit(
+    out: Option<([f64; 3], [bool; 3], Live)>,
+    lch: [f64; 3],
+    asked: [f64; 3],
+    i: usize,
+    phase: Live,
+) -> ([f64; 3], [bool; 3], Live) {
+    let (mut base, mut rows, was) = out.unwrap_or((lch, [false; 3], phase));
+    base[i] = asked[i];
+    rows[i] = true;
+    let phase = if matches!(was, Live::Dragging) { Live::Dragging } else { phase };
+    (base, rows, phase)
+}
+
 /// The L, C and H rows of OKLCH Sliders for the target's `color` through `cms`: lightness from 0 to
 /// 100 %, chroma from 0 to 100 % of 0.4 (as CSS reads a chroma percentage) and hue from 0 to 360°.
 /// Each track shows the colors its slider reaches and dims the part outside sRGB, and a tick on the
 /// C track marks the largest chroma sRGB holds at the row's L and H. The rows are gray with no
 /// color to edit and while the working RGB space is not sRGB. Returns the OKLCH a drag, an arrow
-/// key, a screen reader or a field asks for, the index of the row that set it (0 for L, 1 for C, 2
-/// for H) and its phase.
-pub(crate) fn oklch_rows(app: &VectorcraftApp, ui: &mut Ui, tgt: &Target, color: Option<Color>, cms: &Cms) -> Option<([f64; 3], usize, Live)> {
+/// key, a screen reader or a field asks for, which rows set it (L, C and H in that order) and the
+/// phase of the last edit. A field that commits when a click on another row takes its focus keeps
+/// its value along with the click's.
+pub(crate) fn oklch_rows(app: &VectorcraftApp, ui: &mut Ui, tgt: &Target, color: Option<Color>, cms: &Cms) -> Option<([f64; 3], [bool; 3], Live)> {
     let t = Tokens::get(ui.ctx());
     let enabled = color.is_some() && cms.rgb_is_srgb();
     let lch = match (color, pstate::<Option<(Owner, [f32; 3], [f64; 3])>>(ui.ctx(), OKLCH_MEMORY)) {
@@ -757,7 +775,8 @@ pub(crate) fn oklch_rows(app: &VectorcraftApp, ui: &mut Ui, tgt: &Target, color:
         }
         out
     };
-    let mut out = None;
+    let mut out: Option<([f64; 3], [bool; 3], Live)> = None;
+    let mut set = |asked: [f64; 3], i: usize, phase: Live| out = Some(oklch_row_edit(out, lch, asked, i, phase));
     ui.add_enabled_ui(enabled, |ui| {
         let field_w = 48.0;
         let slider_w = (ui.available_width() - field_w - 12.0 - 3.0 * ui.spacing().item_spacing.x).max(60.0);
@@ -783,13 +802,13 @@ pub(crate) fn oklch_rows(app: &VectorcraftApp, ui: &mut Ui, tgt: &Target, color:
                         .on_hover_text(tl!("The largest chroma sRGB holds at this lightness and hue"));
                 }
                 if let Some(x) = dragged {
-                    out = Some((at(x), i, phase));
+                    set(at(x), i, phase);
                 }
                 if let Some(k) = keyed {
-                    out = Some((with(i, k), i, Live::Released));
+                    set(with(i, k), i, Live::Released);
                 }
                 if let Some(f) = widgets::plain_field_named(ui, ("color-wheel-oklch-field", i), Some(name), v, suffix, 0, field_w) {
-                    out = Some((with(i, f), i, Live::Released));
+                    set(with(i, f), i, Live::Released);
                 }
             });
         }
@@ -890,11 +909,13 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let now = tgt.color().filter(|c| committed && Some(*c) != color);
     let behind = super::alt_held(ui);
     let cmyk_doc = app.session.active().is_some_and(|d| d.doc.color_mode == ColorMode::Cmyk);
-    if let Some((asked, row, phase)) = picked_lch {
+    if let Some((asked, rows, phase)) = picked_lch {
         let lch = match now {
             Some(c) => {
                 let mut lch = oklab::to_oklch(cms.display_rgb(&c));
-                lch[row] = asked[row];
+                for row in (0..3).filter(|r| rows[*r]) {
+                    lch[row] = asked[row];
+                }
                 lch
             }
             None => asked,

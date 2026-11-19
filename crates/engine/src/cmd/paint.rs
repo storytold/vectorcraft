@@ -21,7 +21,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Fill",
             [],
             None,
-            "{color?: \"#rrggbb\"|[r,g,b]|{c,m,y,k}|{gray}|{l,a,b} (CIE Lab; #rrggbbaa and #rgba are refused), none?: true, swatch?: name (a global or spot colour stays linked, so swatch edits recolour it; a tint swatch links to its base at its tint; a gradient swatch is recorded as the gradient's swatch and fits each object, keeping its aspect; the built-in \"[Registration]\" prints on every plate), tint?: 0..100 (% of a global or spot `swatch`; default 100, or a tint swatch's own), gradient?: {kind?: linear|radial|conic|diamond|freeform (conic, also accepted as angle or conical: the stops sweep once around the center `start`, clockwise from the vector; diamond: the stops run from the center `start` out to a square with a corner at `end`), method?: classic|perceptual|hue-clockwise|hue-counterclockwise (as paint.editGradient; default classic), spread?: pad|repeat|reflect (as paint.editGradient; default pad), repeats?: 1..100 (as paint.editGradient; default 1), stops?: [{offset 0..1, color, opacity? 0..1 (or 0..100), midpoint? 0.13..0.87, swatch?: global or spot colour (or tint) swatch the stop links to (its colour comes from the swatch), tint?: 0..100}] (at least 2; default white→black), angle?: deg counter-clockwise (0: the gradient runs left to right), start?: [x,y], end?: [x,y] (the vector in document coordinates, both or neither; type objects keep it in text space), aspect?: % (radial, conic and diamond; a negative one mirrors a conic's sweep, counterclockwise, and is an error for the other kinds; without start/end the gradient is placed on each object's bounds), focal?: [x,y] (radial, with start/end: the focal point, where the first stop sits; an error with a conic or diamond), dither?: bool (linear, radial, conic and diamond fills: drawn with fine noise that hides banding, and as pixels in SVG and PDF exports; strokes ignore it), swatch?: linked gradient swatch name}, item?: appearance item index|null (omitted: the Appearance panel's active item if it is a fill, else the top fill), aligned?: bool (index and item are rows of the first target's stack: each other target edits its equal one, as the Appearance panel does for a mixed selection; with the art of a graph design in a series given first, rows of the art's stack: docs/mcp.md), opacity?: 0..100 (a percentage, as transparency.set's; the opacity of that fill item on each target, in the undo step of the paint, or alone without color, none, swatch or gradient, when it changes neither the defaults nor the recent colors; the gradient mesh points picked with the Mesh tool, Direct Selection or the Lasso take it themselves; with no paint, a target without that fill item is left as it is (a paint given with the opacity creates the item, which then takes it), and an opacity that no target takes is an error that also leaves the paint undone; type characters have no opacity of their own, so an opacity that only characters would take is an error, and so are one with nothing selected and no ids and one for an object selected in a symbol instance), ids?|id?, focus?: true (false keeps the active proxy), keepModel?: false (in a CMYK document, RGB colours and gradient stops are stored as CMYK unless true; Gray stays Gray), target?: \"object\"|\"contents\", span?: \"object\" (default: each target fits a gradient to its own bounds)|\"selection\" (a linear, radial, conic or diamond `gradient` without start/end is placed once on the union of the targets' bounds, so it runs across them)} sets the selection's fill and the default (new art fits a gradient to itself); a solid color recolors only the gradient mesh points picked with the Mesh tool, Direct Selection or the Lasso (unless an `item` index is given or the Appearance panel's active item is a fill); while the Type tool has characters selected (and no ids, id or item are given), the paint goes to those characters only; without `item`, a grayscale or 1-bit image takes a solid color as the color it is drawn in (white pixels transparent; `none` takes it off; an image with an alpha channel takes only a spot color, black or white; a colorized image whose link is missing takes a solid color as its new colorize color, and refuses a process color while its color is a spot color, black or white); with an object of a dynamic symbol instance selected by Direct Selection and no ids, id or item, that object's fill changes for this instance only (solid, none, gradient or pattern). On a path directly in a graph series, the graph also stores the paint of the topmost visible fill when the command wrote that row or changed it, and its opacity when `opacity` changed it (exceptions: docs/mcp.md); on a graph label, the graph stores the paint for every label of its kind, as a character fill when the characters took it and with the label's rows when a row did; on a graph's axis line, tick mark or radar ring, its rows for every line of its kind → {objects: how many objects took the paint (the objects inside a group, unless an appearance item of the group's own is targeted; 0 when only the default changed)}",
+            "{color?: \"#rrggbb\"|[r,g,b]|{c,m,y,k}|{gray}|{l,a,b} (CIE Lab; #rrggbbaa and #rgba are refused), none?: true, swatch?: name (a global or spot colour stays linked, so swatch edits recolour it; a tint swatch links to its base at its tint; a gradient swatch is recorded as the gradient's swatch and fits each object, keeping its aspect; the built-in \"[Registration]\" prints on every plate), tint?: 0..100 (% of a global or spot `swatch`; default 100, or a tint swatch's own), gradient?: {kind?: linear|radial|conic|diamond|freeform (conic, also accepted as angle or conical: the stops sweep once around the center `start`, clockwise from the vector; diamond: the stops run from the center `start` out to a square with a corner at `end`), method?: classic|perceptual|hue-clockwise|hue-counterclockwise (as paint.editGradient; default classic), spread?: pad|repeat|reflect (as paint.editGradient; default pad), repeats?: 1..100 (as paint.editGradient; default 1), stops?: [{offset 0..1, color, opacity? 0..1 (or 0..100), midpoint? 0.13..0.87, swatch?: global or spot colour (or tint) swatch the stop links to (its colour comes from the swatch), tint?: 0..100}] (at least 2; default white→black), angle?: deg counter-clockwise (0: the gradient runs left to right), start?: [x,y], end?: [x,y] (the vector in document coordinates, both or neither; type objects keep it in text space), aspect?: % (radial, conic and diamond; a negative one mirrors a conic's sweep, counterclockwise, and is an error for the other kinds; without start/end the gradient is placed on each object's bounds), focal?: [x,y] (radial, with start/end: the focal point, where the first stop sits; an error with a conic or diamond), dither?: bool (linear, radial, conic and diamond fills: drawn with fine noise that hides banding, and as pixels in SVG and PDF exports; strokes ignore it), swatch?: linked gradient swatch name}, item?: appearance item index|null (omitted: the Appearance panel's active item if it is a fill, else the top fill), aligned?: bool (index and item are rows of the first target's stack: each other target edits its equal one, as the Appearance panel does for a mixed selection; with the art of a graph design in a series given first, rows of the art's stack: docs/mcp.md), opacity?: 0..100 (a percentage, as transparency.set's; the opacity of that fill item on each target, in the undo step of the paint, or alone without color, none, swatch or gradient, when it changes neither the defaults nor the recent colors; the gradient mesh points picked with the Mesh tool, Direct Selection or the Lasso take it themselves; with no paint, a target without that fill item is left as it is (a paint given with the opacity creates the item, which then takes it), and an opacity that no target takes is an error that also leaves the paint undone; type characters have no opacity of their own, so an opacity that only characters would take is an error, and so are one with nothing selected and no ids and one for an object selected in a symbol instance), ids?|id?, focus?: true (false keeps the active proxy), keepModel?: false (in a CMYK document, RGB colours and gradient stops are stored as CMYK unless true; Gray stays Gray), target?: \"object\"|\"contents\", span?: \"object\" (default: each target fits a gradient to its own bounds)|\"selection\" (a linear, radial, conic or diamond `gradient` without start/end is placed once on the union of the targets' bounds, so it runs across them)} sets the selection's fill and the default (new art fits a gradient to itself); a solid color recolors only the gradient mesh points picked with the Mesh tool, Direct Selection or the Lasso (unless an `item` index is given or the Appearance panel's active item is a fill); while the Type tool has characters selected (and no item, and no ids or id other than null, are given), the paint goes to those characters only; without `item`, a grayscale or 1-bit image takes a solid color as the color it is drawn in (white pixels transparent; `none` takes it off; an image with an alpha channel takes only a spot color, black or white; a colorized image whose link is missing takes a solid color as its new colorize color, and refuses a process color while its color is a spot color, black or white); with an object of a dynamic symbol instance selected by Direct Selection and no ids, id or item, that object's fill changes for this instance only (solid, none, gradient or pattern). On a path directly in a graph series, the graph also stores the paint of the topmost visible fill when the command wrote that row or changed it, and its opacity when `opacity` changed it (exceptions: docs/mcp.md); on a graph label, the graph stores the paint for every label of its kind, as a character fill when the characters took it and with the label's rows when a row did; on a graph's axis line, tick mark or radar ring, its rows for every line of its kind → {objects: how many objects took the paint (the objects inside a group, unless an appearance item of the group's own is targeted; 0 when only the default changed), or with an opacity alone how many took the opacity}",
             has_doc,
             |s, p| set_paint(s, p, true)
         ),
@@ -257,7 +257,8 @@ impl Session {
             let targets = super::graph::series_group_marks_where(&st.doc, subjects, |n| n.extras().series_index.is_some());
             return targets.iter().filter(editable).filter_map(|id| st.doc.node(*id)).find_map(|n| of(n, active));
         }
-        let leaves = super::leaf_targets(self, subjects).ok()?;
+        // The command's targets: a targeted layer stands for its visible, unlocked art.
+        let leaves = super::paint_targets(self, &Value::Null).ok()?;
         leaves.iter().filter(editable).filter_map(|id| st.doc.node(*id)).find_map(|n| of(n, None))
     }
 
@@ -537,6 +538,11 @@ fn opacity_param(p: &Value, cmd: &str) -> Result<Option<f32>> {
     }
 }
 
+/// Whether `p` gives `key` a value other than null.
+fn names(p: &Value, key: &str) -> bool {
+    p.get(key).is_some_and(|v| !v.is_null())
+}
+
 /// The error for an `opacity` that would go to type characters, which have no opacity of their own.
 fn characters_have_no_opacity(cmd: &str) -> EngineError {
     bad(cmd, "type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke")
@@ -565,10 +571,15 @@ fn apply_paint_opacity(s: &mut Session, p: &Value, paint: Option<Paint>, opacity
     let focus = switch_or(p, "focus", true, cmd)?;
     // An opacity alone places no gradient, so `span` may only be "object" with it.
     let span = spans_targets(p, paint.as_ref().unwrap_or(&Paint::None)).map_err(|e| bad(cmd, e))?;
-    // Characters selected with the Type tool take the paint, not the whole type object (#1063).
-    if p.get("ids").is_none()
-        && p.get("id").is_none()
-        && p.get("item").is_none()
+    // Characters selected with the Type tool take the paint, not the whole type object (#1063). A
+    // null `ids` or `id` names no object, as the targets read it.
+    let on_characters = !names(p, "ids") && !names(p, "id") && p.get("item").is_none();
+    // An opacity for the characters is refused before their typing session ends, so the session
+    // and its undo step stay as they are.
+    if on_characters && opacity.is_some() && super::textedit::selected_range(s).is_some_and(|(_, a, b)| a != b) {
+        return Err(characters_have_no_opacity(cmd));
+    }
+    if on_characters
         && let Some((id, a, b)) = super::textedit::editing_range(s)?
         && a != b
     {
@@ -687,8 +698,8 @@ fn apply_paint_opacity(s: &mut Session, p: &Value, paint: Option<Paint>, opacity
     // The type objects whose characters took the paint (no row targeted): only those change what a graph's labels keep
     // for their characters; a row edit is kept with the label's rows.
     let characters = std::cell::RefCell::new(Vec::new());
-    // Whether a target took the opacity, and whether one would have given it to its characters.
-    let (took_opacity, characters_skipped) = (std::cell::Cell::new(false), std::cell::Cell::new(false));
+    // The targets that took the opacity, and whether one would have given it to its characters.
+    let (took_opacity, characters_skipped) = (std::cell::RefCell::new(std::collections::BTreeSet::new()), std::cell::Cell::new(false));
     let paint_one = |n: &mut Node, index: Option<usize>, paint: &Paint| -> Result<()> {
         if index.is_none() && matches!(n.kind, NodeKind::Text(_)) {
             characters.borrow_mut().push(n.id);
@@ -764,7 +775,7 @@ fn apply_paint_opacity(s: &mut Session, p: &Value, paint: Option<Paint>, opacity
             for i in points {
                 if let Some(q) = m.points.get_mut(*i) {
                     q.opacity = o;
-                    took_opacity.set(true);
+                    took_opacity.borrow_mut().insert(n.id);
                 }
             }
             return;
@@ -773,7 +784,7 @@ fn apply_paint_opacity(s: &mut Session, p: &Value, paint: Option<Paint>, opacity
             if fill { n.appearance.fill_at_mut(index).map(|f| &mut f.opacity) } else { n.appearance.stroke_at_mut(index).map(|s| &mut s.opacity) };
         if let Some(item) = item {
             *item = o;
-            took_opacity.set(true);
+            took_opacity.borrow_mut().insert(n.id);
         }
     };
     // The objects counted: with a design's art, those with a row equal to the art's.
@@ -796,7 +807,7 @@ fn apply_paint_opacity(s: &mut Session, p: &Value, paint: Option<Paint>, opacity
         },
         |before, d, changed| {
             // An opacity that no target took is an error, which also takes back the paint given with it.
-            if opacity.is_some() && !took_opacity.get() {
+            if opacity.is_some() && took_opacity.borrow().is_empty() {
                 if characters_skipped.get() {
                     return Err(characters_have_no_opacity(cmd));
                 }
@@ -829,14 +840,17 @@ fn apply_paint_opacity(s: &mut Session, p: &Value, paint: Option<Paint>, opacity
         paint_new_art(s, paint, fill);
         s.remember_paint(paint);
     }
-    Ok(json!({"objects": ids.iter().collect::<std::collections::BTreeSet<_>>().len()}))
+    // An opacity alone counts only the objects that took it.
+    let took = took_opacity.into_inner();
+    let counted: std::collections::BTreeSet<_> = ids.iter().filter(|id| paint.is_some() || took.contains(*id)).collect();
+    Ok(json!({"objects": counted.len()}))
 }
 
 /// The instance whose object is selected with Direct Selection, and that object's path
 /// ([`super::brushsym::selected_part`]), when `p` names no `ids`, `id` or `item`: the paint commands
 /// then change that object. A bad `target` or `aligned` is refused as it is for any other selection.
 fn selected_part_target(s: &Session, p: &Value, cmd: &str) -> Result<Option<(NodeId, Vec<u32>)>> {
-    if p.get("ids").is_some() || p.get("id").is_some() || p.get("item").is_some() {
+    if names(p, "ids") || names(p, "id") || p.get("item").is_some() {
         return Ok(None);
     }
     let part = super::brushsym::selected_part(s)?;
