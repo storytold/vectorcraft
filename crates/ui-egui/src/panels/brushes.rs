@@ -331,9 +331,7 @@ fn item_context_menu(app: &mut VectorcraftApp, ui: &mut Ui, name: &str) {
             ui.close();
         }
         if menu_item(ui, tl!("Delete Brushes"), can_delete, false) {
-            if let Err(e) = app.run("brush.delete", json!({ "names": targets })) {
-                app.status(e);
-            }
+            delete(app, &targets, true);
             ui.close();
         }
     } else {
@@ -351,9 +349,7 @@ fn item_context_menu(app: &mut VectorcraftApp, ui: &mut Ui, name: &str) {
             ui.close();
         }
         if menu_item(ui, tl!("Delete Brush"), can_delete, false) {
-            if let Err(e) = app.run("brush.delete", json!({ "name": name })) {
-                app.status(e);
-            }
+            delete(app, &[name.to_string()], true);
             ui.close();
         }
     }
@@ -429,15 +425,14 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             // options; a right-click selects if unselected and displays its item context menu.
             let mut pick = |resp: egui::Response, name: &String| {
                 if resp.secondary_clicked() {
-                    let is_in_multi = multi.as_ref().is_some_and(|m| m.len() > 1 && m.iter().any(|b| b == name));
-                    let is_current = sel_brush.as_deref() == Some(name) || (sel_brush.is_none() && current.as_deref() == Some(name));
-                    if !is_in_multi && !is_current {
+                    let is_selected = match &multi {
+                        Some(m) if m.len() > 1 => m.iter().any(|b| b == name),
+                        _ => sel_brush.as_deref() == Some(name) || (sel_brush.is_none() && current.as_deref() == Some(name)),
+                    };
+                    if !is_selected {
                         set_pstate(&resp.ctx, "br-anchor", name.clone());
-                        let has_sel = app.session.active().is_some_and(|d| !d.selection.is_empty());
-                        if has_sel {
-                            app.run("brush.apply", json!({ "name": name })).ok();
-                        } else {
-                            app.run("brush.setCurrent", json!({ "name": name })).ok();
+                        if let Err(e) = app.run("brush.setCurrent", json!({ "name": name })) {
+                            app.status(e);
                         }
                         let now = brushes(app).1;
                         let key = click_key(app, now.as_deref());

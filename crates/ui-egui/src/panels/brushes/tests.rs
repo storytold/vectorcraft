@@ -900,6 +900,7 @@ fn right_click_context_menu_in_brushes_panel() {
 
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();
 
     let mut h = egui_kittest::Harness::builder().with_size(vec2(260.0, 500.0)).with_accessibility_check(false).build_ui_state(
         |ui, app: &mut VectorcraftApp| {
@@ -924,8 +925,9 @@ fn right_click_context_menu_in_brushes_panel() {
     // Right-click unselected "Charcoal"
     right_click(&mut h, "Charcoal");
 
-    // Right-clicking selects Charcoal
+    // Right-clicking selects Charcoal in panel without applying it to the selected artwork
     assert_eq!(brushes(h.state_mut()).1.as_deref(), Some("Charcoal"));
+    assert_ne!(selected_brush(h.state()).as_deref(), Some("Charcoal"), "right-click must not apply brush to artwork");
 
     // Context menu displays Brush Options…, Duplicate Brush, Delete Brush
     let opt = h.get_by_label("   Brush Options…");
@@ -988,10 +990,20 @@ fn right_click_context_menu_in_brushes_panel() {
     h.run_steps(2);
 
     let all_names = names(h.state_mut());
-    assert!(all_names.contains(&"Charcoal copy 2".to_string()) || all_names.contains(&"Charcoal copy".to_string()));
+    assert!(all_names.contains(&"Charcoal copy 2".to_string()));
     assert!(all_names.contains(&"Tapered Stroke copy".to_string()));
 
-    // 6. Delete Brush is disabled when it is the last brush in the library
+    // 6. Delete a brush in use by artwork prompts with the brushDelete confirmation dialog
+    h.state_mut().run("brush.apply", json!({ "name": "Tapered Stroke" })).unwrap();
+    assert_eq!(selected_brush(h.state()).as_deref(), Some("Tapered Stroke"));
+    right_click(&mut h, "Tapered Stroke");
+    h.get_by_label("   Delete Brush").click();
+    h.run_steps(2);
+    assert_eq!(h.state().ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(crate::dialogs::brush_delete::KIND));
+    crate::dialogs::cancel(h.state_mut());
+    assert!(names(h.state_mut()).contains(&"Tapered Stroke".to_string()));
+
+    // 7. Delete Brush is disabled when it is the last brush in the library
     let current_brushes = names(h.state_mut());
     let to_delete: Vec<String> = current_brushes.into_iter().filter(|n| n != "Charcoal").collect();
     h.state_mut().run("brush.delete", json!({ "names": to_delete })).unwrap();
