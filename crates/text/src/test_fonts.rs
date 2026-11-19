@@ -63,6 +63,12 @@ pub const VARIABLE_WIDEN: f32 = 0.25;
 /// `Version 1.000`. `None` when it can't
 /// be built.
 pub fn variable_font() -> Option<Vec<u8>> {
+    variable_font_named(VARIABLE_FAMILY, "VaritestSans-Regular", "Version 1.000")
+}
+
+/// [`variable_font`] as family `family`, its default instance's PostScript name `postscript` and
+/// its version `version`.
+fn variable_font_named(family: &str, postscript: &str, version: &str) -> Option<Vec<u8>> {
     const BASE: &[u8] = include_bytes!("../../../assets/fonts/SourceSans3-Regular.ttf");
     let font = skrifa::FontRef::new(BASE).ok()?;
     let (glyf, loca) = (font.glyf().ok()?, font.loca(None).ok()?);
@@ -103,12 +109,13 @@ pub fn variable_font() -> Option<Vec<u8>> {
     };
     let instances = vec![instance(257, 400), instance(258, 550), instance(259, 700), instance(260, 600), instance(261, 650)];
     let fvar = Fvar::new(AxisInstanceArrays::new(vec![axis], instances));
+    let full = format!("{family} Regular");
     let name = name_table(&[
-        (1, VARIABLE_FAMILY),
+        (1, family),
         (2, "Regular"),
-        (4, "Varitest Sans Regular"),
-        (5, "Version 1.000"),
-        (6, "VaritestSans-Regular"),
+        (4, &full),
+        (5, version),
+        (6, postscript),
         (256, "Weight"),
         (257, "Normal"),
         (258, "SemiBold"),
@@ -126,6 +133,30 @@ pub fn variable_font() -> Option<Vec<u8>> {
         }
     }
     Some(builder.build())
+}
+
+/// The family of [`shadowed_fonts`].
+pub const SHADOWED_FAMILY: &str = "Shadowtest Sans";
+
+/// Two fonts of family [`SHADOWED_FAMILY`] whose Regular faces share the PostScript name
+/// `ShadowtestSans-Regular`: [`variable_font`] as that family (`Version 2.000`), and a static
+/// Source Sans 3 Regular of that family and style (`Version 1.500`), as when a static font and the
+/// variable font of the same family are both installed. `None` when they can't be built.
+pub fn shadowed_fonts() -> Option<(Vec<u8>, Vec<u8>)> {
+    const BASE: &[u8] = include_bytes!("../../../assets/fonts/SourceSans3-Regular.ttf");
+    let postscript = "ShadowtestSans-Regular";
+    let variable = variable_font_named(SHADOWED_FAMILY, postscript, "Version 2.000")?;
+    let font = skrifa::FontRef::new(BASE).ok()?;
+    let name = name_table(&[(1, SHADOWED_FAMILY), (2, "Regular"), (4, "Shadowtest Sans Regular"), (5, "Version 1.500"), (6, postscript)])?;
+    let mut builder = FontBuilder::new();
+    builder.add_raw(Tag::new(b"name"), name);
+    for r in font.table_directory.table_records() {
+        let tag = Tag::new(&r.tag().to_be_bytes());
+        if !builder.contains(tag) {
+            builder.add_raw(tag, font.table_data(r.tag())?.as_bytes());
+        }
+    }
+    Some((variable, builder.build()))
 }
 
 /// The family of [`unlisted_variable_font`].
