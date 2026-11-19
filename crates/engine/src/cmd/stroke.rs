@@ -235,7 +235,7 @@ fn stroke_set(s: &mut Session, p: &Value) -> Result<Value> {
     let change = StrokeChange::parse(p, C)?;
     // The stroke the Live Paint Bucket paints with changes; the selection keeps its own, and its
     // active Appearance row is not a target.
-    let bucket_p = super::paint::bucket_color_params(s, p);
+    let bucket_p = super::paint::bucket_color_params(s, p, C)?;
     let bucket = bucket_p.is_some();
     let p = bucket_p.as_ref().unwrap_or(p);
     let item = item_target(s, p, C)?.of_kind(s, false);
@@ -382,9 +382,10 @@ pub(crate) fn step_weight(w: f64, unit: Unit, up: bool) -> f64 {
 fn stroke_step(s: &mut Session, p: &Value, up: bool) -> Result<Value> {
     let c = if up { "stroke.weightUp" } else { "stroke.weightDown" };
     let unit = s.stroke_unit();
-    let item = item_target(s, p, c)?.of_kind(s, false);
-    // The weight the Live Paint Bucket paints with changes; the selection keeps its own.
+    // The weight the Live Paint Bucket paints with changes; the selection keeps its own, and its
+    // active Appearance row is not a target.
     let bucket = super::paint::for_bucket(s, p);
+    let item = if bucket { ItemTarget::Top } else { item_target(s, p, c)?.of_kind(s, false) };
     let ids = if bucket { vec![] } else { item.targets(s, p)? };
     if bucket || no_targets(&ids, p) {
         let w = step_weight(s.paint.stroke_width, unit, up);
@@ -587,7 +588,7 @@ fn stroke_advanced(s: &mut Session, p: &Value) -> Result<Value> {
     }
     // As stroke.set: the stroke the Live Paint Bucket paints with changes; the selection keeps its own.
     // A brush still goes to the selection.
-    let bucket_p = if brush.is_none() { super::paint::bucket_color_params(s, p) } else { None };
+    let bucket_p = if brush.is_none() { super::paint::bucket_color_params(s, p, C)? } else { None };
     let bucket = bucket_p.is_some();
     let p = bucket_p.as_ref().unwrap_or(p);
     let item = item_target(s, p, C)?.of_kind(s, false);

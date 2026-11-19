@@ -490,7 +490,7 @@ fn apply_to_proxy(s: &mut Session, p: &Value, paint: Paint, cmd: &str) -> Result
 /// remember the paint. Replies `{objects}`: how many objects took the paint.
 pub(crate) fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) -> Result<Value> {
     let cmd = if fill { "paint.setFill" } else { "paint.setStroke" };
-    let bucket = bucket_color_params(s, p);
+    let bucket = bucket_color_params(s, p, cmd)?;
     let p = bucket.as_ref().unwrap_or(p);
     let focus = switch_or(p, "focus", true, cmd)?;
     let span = spans_targets(p, &paint).map_err(|e| bad(cmd, e))?;
@@ -700,16 +700,21 @@ pub(crate) fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) 
 /// stroke or stroke weight chosen then is what the bucket paints with, so it goes to the defaults
 /// and the selection keeps its paint.
 pub(crate) fn for_bucket(s: &Session, p: &Value) -> bool {
-    s.tool_id() == LIVE_PAINT_BUCKET && ["ids", "id", "item"].iter().all(|k| p.get(k).is_none())
+    // A null `ids` or `id` is no target, as `given_nodes` reads it; `item: null` names the top row.
+    s.tool_id() == LIVE_PAINT_BUCKET && ["ids", "id"].iter().all(|k| p.get(k).is_none_or(Value::is_null)) && p.get("item").is_none()
 }
 
 /// `p` with `ids: []` when [`for_bucket`]: the paint goes to the defaults only. None otherwise.
-pub(crate) fn bucket_color_params(s: &Session, p: &Value) -> Option<Value> {
-    for_bucket(s, p).then(|| {
-        let mut v = p.as_object().cloned().unwrap_or_default();
-        v.insert("ids".into(), json!([]));
-        Value::Object(v)
-    })
+/// A bad `target` or `aligned` is refused first, as it is without the bucket.
+pub(crate) fn bucket_color_params(s: &Session, p: &Value, cmd: &str) -> Result<Option<Value>> {
+    if !for_bucket(s, p) {
+        return Ok(None);
+    }
+    super::appearance::aligned(p, cmd)?;
+    super::appearance::targets_contents(p)?;
+    let mut v = p.as_object().cloned().unwrap_or_default();
+    v.insert("ids".into(), json!([]));
+    Ok(Some(Value::Object(v)))
 }
 
 /// The instance whose object is selected with Direct Selection, and that object's path
@@ -1017,7 +1022,7 @@ pub(super) fn restore_unpainted_stroke(ap: &mut Appearance, index: Option<usize>
 }
 
 fn swap(s: &mut Session, p: &Value) -> Result<Value> {
-    let bucket = bucket_color_params(s, p);
+    let bucket = bucket_color_params(s, p, "paint.swap")?;
     let p = bucket.as_ref().unwrap_or(p);
     let targets = paint_targets(s, p)?;
     let given = !targets.is_empty();
@@ -1060,7 +1065,7 @@ fn swap(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn default_paint(s: &mut Session, p: &Value) -> Result<Value> {
-    let bucket = bucket_color_params(s, p);
+    let bucket = bucket_color_params(s, p, "paint.default")?;
     let p = bucket.as_ref().unwrap_or(p);
     let targets = paint_targets(s, p)?;
     let given = !targets.is_empty();
@@ -1112,7 +1117,7 @@ fn default_paint(s: &mut Session, p: &Value) -> Result<Value> {
 /// default when there are none) and remember the first target's new paint. The Appearance panel's
 /// active item of the proxy's kind is recoloured in each selected object's own stack instead.
 fn proxy_recolor(s: &mut Session, p: &Value, cmd: &str, label: &str, f: &dyn Fn(Color) -> Color) -> Result<Value> {
-    let bucket = bucket_color_params(s, p);
+    let bucket = bucket_color_params(s, p, cmd)?;
     let p = bucket.as_ref().unwrap_or(p);
     let stroke = stroke_param(s, p, cmd)?;
     // An object of a dynamic symbol instance's art selected with Direct Selection: the solid color

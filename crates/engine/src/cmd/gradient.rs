@@ -42,7 +42,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Select Gradient Stop",
             [],
             None,
-            "{index: stop index (0 = the start) | null to clear} select a stop of the gradient behind the active proxy (the first selected object's, else the default paint): the stop the Gradient tool's annotator, the Gradient and Color panels and Delete/arrow keys act on; refused while an object of a symbol instance's art is selected → {index}",
+            "{index: stop index (0 = the start) | null to clear} select a stop of the gradient behind the active proxy (the first selected object's, else the default paint; the default paint's while the Live Paint Bucket is the active tool): the stop the Gradient tool's annotator, the Gradient and Color panels and Delete/arrow keys act on; refused while an object of a symbol instance's art is selected, except while the Live Paint Bucket is the active tool → {index}",
             always,
             select_stop
         ),
@@ -532,7 +532,7 @@ fn apply_gradient_edit_in_model(
 fn edit_gradient(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "paint.editGradient";
     // While the Live Paint Bucket is active, the gradient it paints with changes; the selection keeps its own.
-    let bucket = super::paint::bucket_color_params(s, p);
+    let bucket = super::paint::bucket_color_params(s, p, C)?;
     let p = bucket.as_ref().unwrap_or(p);
     let item = item_target(s, p, C)?;
     let stroke = edits_stroke(s, p, item, !s.fill_active, C)?;

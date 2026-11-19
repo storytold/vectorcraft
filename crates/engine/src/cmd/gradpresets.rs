@@ -209,7 +209,7 @@ fn apply(s: &mut Session, p: &Value) -> Result<Value> {
     let preset = s.gradient_preset(name).ok_or_else(|| bad(C, format!("no gradient preset `{name}` (see gradient.presets.list)")))?;
     // While the Live Paint Bucket is active, the gradient it paints with changes, chosen by the
     // active proxy rather than the selection's Appearance row (as paint.editGradient chooses).
-    let bucket = super::paint::bucket_color_params(s, p);
+    let bucket = super::paint::bucket_color_params(s, p, C)?;
     let p = bucket.as_ref().unwrap_or(p);
     let stroke = edits_stroke(s, p, item_target(s, p, C)?, !s.fill_active, C)?;
     let g = &preset.gradient;

@@ -3273,7 +3273,16 @@ fn live_paint_bucket_paint_and_stroke_commands_leave_the_selection_unpainted() {
                 move |s: &Session| s.paint.fill == cyan
             }),
         ),
-        ("paint.sampleColor", json!({"color": "#00ffff", "stroke": false}), Box::new(move |s: &Session| s.paint.fill == cyan)),
+        (
+            "paint.sampleColor",
+            json!({"color": "#00ffff", "stroke": false}),
+            Box::new({
+                let cyan = cyan.clone();
+                move |s: &Session| s.paint.fill == cyan
+            }),
+        ),
+        // A null `ids` or `id` names no object, as it does for every other command.
+        ("paint.setFill", json!({"color": "#00ffff", "ids": null, "id": null}), Box::new(move |s: &Session| s.paint.fill == cyan)),
         ("paint.editGradient", json!({"stroke": false, "angle": 45}), Box::new(move |s: &Session| is_gradient(&s.paint.fill))),
         (
             "paint.editGradient",
@@ -3380,6 +3389,25 @@ fn live_paint_bucket_and_the_selection_keep_their_own_selected_stop() {
     assert_eq!(s.selected_stop(), Some(0));
     s.select_tool("selection", ViewInfo::default()).unwrap();
     assert_eq!(s.selected_stop(), None, "the bucket's stop is not the selection's");
+}
+
+/// While the Live Paint Bucket is active, a paint command with a bad `target` or `aligned` is
+/// refused, as it is with any other tool, and the bucket's color stays.
+#[test]
+fn live_paint_bucket_refuses_a_bad_target() {
+    let mut s = session();
+    let g = live(&mut s);
+    s.execute("select.set", &json!({"ids": [g.0]})).unwrap();
+    s.select_tool("livePaintBucket", ViewInfo::default()).unwrap();
+    let fill = s.paint.fill.clone();
+    for (cmd, p) in [
+        ("paint.setFill", json!({"color": "#00ffff", "target": "bogus"})),
+        ("paint.invert", json!({"ids": null, "aligned": "bad"})),
+        ("paint.complement", json!({"aligned": "bad"})),
+    ] {
+        assert!(s.execute(cmd, &p).is_err(), "{cmd} {p}");
+        assert_eq!(s.paint.fill, fill, "{cmd} {p}");
+    }
 }
 
 /// While the Live Paint Bucket is active, each preview of a paint command in one interaction starts
