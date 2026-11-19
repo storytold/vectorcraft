@@ -835,6 +835,7 @@ pub(super) fn transform_items() -> Vec<Node> {
         c("Shear…", "object.shear"),
         Sep,
         c("Transform Each…", "object.transformEach"),
+        c("Step and Repeat…", "object.stepAndRepeat"),
         Sep,
         c("Reset Bounding Box", "object.resetBoundingBox"),
         cp("Rotate Bounding Box…", "object.rotateBoundingBox", json!({"angle": 0})),

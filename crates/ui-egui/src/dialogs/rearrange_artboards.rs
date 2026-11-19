@@ -116,7 +116,7 @@ impl RearrangeValues {
 }
 
 /// The length unit a document unit shows as.
-fn length_kind(unit: Unit) -> UnitKind {
+pub(super) fn length_kind(unit: Unit) -> UnitKind {
     match unit {
         Unit::Picas => UnitKind::Picas,
         Unit::Inches => UnitKind::Inches,

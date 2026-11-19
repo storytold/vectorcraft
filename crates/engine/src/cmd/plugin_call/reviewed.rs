@@ -414,6 +414,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "object.textWrap.release",
     "object.transform",
     "object.transformAgain",
+    "object.stepAndRepeat",
     "object.transformEach",
     "object.ungroup",
     "object.unlockAll",

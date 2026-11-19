@@ -107,6 +107,7 @@ mod textedit;
 
 pub use textedit::effective_kerning;
 mod retype;
+mod stepandrepeat;
 pub mod textstyles;
 pub(crate) mod textwrap;
 pub(crate) mod threads;
@@ -323,6 +324,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(layerpanel::specs());
         v.extend(draw2::specs());
         v.extend(xform::specs());
+        v.extend(stepandrepeat::specs());
         v.extend(effectcmd::specs());
         v.extend(bevels::specs());
         v.extend(wireframe::specs());

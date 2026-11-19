@@ -144,6 +144,7 @@ pub mod shortcut_import;
 pub(crate) mod simplify_slider;
 pub mod slices;
 pub mod smart_punctuation;
+pub mod step_repeat;
 pub(crate) mod smooth_slider;
 pub mod spot_colors;
 pub mod svg_filter;
