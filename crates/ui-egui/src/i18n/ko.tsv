@@ -3223,6 +3223,9 @@ mark-style	Japanese	일본식
 	Reload Arrowheads	화살촉 다시 불러오기
 	Reset the rows to the artwork's colors	행을 아트웍 색상으로 재설정
 	Color Theme Picker	색상 테마 피커
+	Undo Changes	변경 내용 실행 취소
+	Redo Changes	변경 내용 다시 실행
+@msg	Recolor Artwork is not open	아트웍 색상 재지정이 열려 있지 않습니다
 	Click or drag across the art to pick its colors; Shift adds more	아트웍을 클릭하거나 드래그하여 색상을 가져옵니다. Shift 키로 더 추가합니다
 	Prominent Colors	주요 색상
 	Save All Colors	모든 색상 저장

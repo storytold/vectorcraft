@@ -5687,6 +5687,9 @@ digits	Malayalam	Malayalam
 	Recolor this row	Omfarv denne række
 	Reset the rows to the artwork's colors	Nulstil rækkerne til grafikkens farver
 	Color Theme Picker	Farvetemavælger
+	Undo Changes	Fortryd ændringer
+	Redo Changes	Gentag ændringer
+@msg	Recolor Artwork is not open	Omfarv grafik er ikke åben
 	Click or drag across the art to pick its colors; Shift adds more	Klik eller træk hen over grafikken for at hente dens farver; Skift tilføjer flere
 	Prominent Colors	Fremtrædende farver
 	Save All Colors	Gem alle farver

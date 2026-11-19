@@ -5417,6 +5417,24 @@ dimmed, so art that mixes colors dims only its other colors, and nothing is dimm
 selected. Find changes only what the canvas shows: it records no undo step, Cancel leaves the art as it was, and OK
 applies every row to the art as it does with Find off.
 
+The Undo Changes and Redo Changes buttons beside the Color Theme Picker (`ui.recolorUndo` and `ui.recolorRedo`) go
+back and forward one color edit made in the open dialog; Undo Changes has nothing to undo after the dialog is opened
+again ([Recolor options overview](https://helpx.adobe.com/illustrator/desktop/manage-colors/modify-colors/recolor-options-overview.html)).
+A step restores the rows, `colors`, `method`, the Preserve options, `limitTo`, `rule`, `globalAdjust`, `themePicks`
+and `weights`, and the art previews the result. Both commands return `{changed, canUndo, canRedo}` and are an error
+when Recolor Artwork is not open. VectorCraft's own rules: the dialog's history is separate from the document's undo
+history, which changes when OK records the recolor as one undo step and when a color group is saved (below); Cancel
+discards the history with the edits. A change is one step once the pointer is released, so a drag on the wheel, a
+slider or the Prominent Colors bar is one step, and an action that changes none of those fields is no step. Fields set
+with `ui.dialog.set` become a step at the dialog's next frame with the pointer up or the next `ui.recolorUndo` or
+`ui.recolorRedo`, so fields set before either are one step together, also across frames drawn while the pointer is
+down. Reset is a step of its own, which Undo
+Changes reverses. A new edit after Undo Changes leaves nothing to redo. Switching tabs, displays or slider modes,
+selecting rows, Find and Preview make no step. The dialog keeps at most 64 steps and 4 MiB of them as JSON, dropping
+the oldest first, and always keeps the newest step. A button with no step to go to is disabled. Selecting another color group (or no group) and Save
+Changes leave nothing to undo or redo, and an edit after either is a step back to the fields as they were then. Save All Colors and Save Prominent Colors add a color
+group to the document at once, as its own undo step, and Cancel and Undo Changes leave that group in place.
+
 The `recolor.*` commands refuse parameters of the wrong form. A `limitTo` or `method` that is not a string gets the
 error for an unknown library or method. Other wrong-form parameters get an error that names them.
 `includeImages`, `includePatterns`, a row's `exclude`, `order`, `saturationBrightness` and the `white`, `black` and

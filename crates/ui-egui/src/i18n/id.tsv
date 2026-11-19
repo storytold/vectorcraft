@@ -3579,6 +3579,9 @@ digits	Malayalam	Malayalam
 	Recolor this row	Warnai ulang baris ini
 	Reset the rows to the artwork's colors	Setel ulang baris ke warna karya seni
 	Color Theme Picker	Pemilih tema warna
+	Undo Changes	Urungkan perubahan
+	Redo Changes	Ulangi perubahan
+@msg	Recolor Artwork is not open	Warnai ulang karya seni tidak terbuka
 	Click or drag across the art to pick its colors; Shift adds more	Klik atau seret melintasi karya seni untuk mengambil warnanya; Shift menambahkan lagi
 	Prominent Colors	Warna menonjol
 	Save All Colors	Simpan semua warna

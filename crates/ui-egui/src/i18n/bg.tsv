@@ -3102,6 +3102,9 @@ digits	Malayalam	Малаялам
 	Rotate View to Selection	Завъртане на изгледа спрямо селекцията
 	Reset the rows to the artwork's colors	Нулиране на редовете към цветовете на илюстрацията
 	Color Theme Picker	Избор на цветова тема
+	Undo Changes	Отмяна на промените
+	Redo Changes	Повторение на промените
+@msg	Recolor Artwork is not open	„Преоцветяване на илюстрацията“ не е отворено
 	Click or drag across the art to pick its colors; Shift adds more	Щракнете или плъзнете през илюстрацията, за да вземете цветовете ѝ; Shift добавя още
 	Prominent Colors	Преобладаващи цветове
 	Save All Colors	Запази всички цветове

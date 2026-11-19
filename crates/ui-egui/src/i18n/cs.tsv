@@ -3183,6 +3183,9 @@ digits	Malayalam	Malajálamské
 	Recolor this row	Přebarvit tento řádek
 	Reset the rows to the artwork's colors	Obnovit řádky na barvy kresby
 	Color Theme Picker	Výběr barevného motivu
+	Undo Changes	Vrátit změny
+	Redo Changes	Zopakovat změny
+@msg	Recolor Artwork is not open	Přebarvit kresbu není otevřené
 	Click or drag across the art to pick its colors; Shift adds more	Klepnutím nebo tažením přes kresbu převezmete její barvy; Shift přidá další
 	Prominent Colors	Převládající barvy
 	Save All Colors	Uložit všechny barvy

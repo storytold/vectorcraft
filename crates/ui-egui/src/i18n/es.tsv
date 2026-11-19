@@ -3209,6 +3209,9 @@ digits	Malayalam	Malayálam
 	Rotate View to Selection	Rotar vista según la selección
 	Reset the rows to the artwork's colors	Restablecer las filas a los colores de la ilustración
 	Color Theme Picker	Selector de tema de color
+	Undo Changes	Deshacer cambios
+	Redo Changes	Rehacer cambios
+@msg	Recolor Artwork is not open	Volver a colorear ilustración no está abierto
 	Click or drag across the art to pick its colors; Shift adds more	Haga clic o arrastre sobre la ilustración para tomar sus colores; Mayús añade más
 	Prominent Colors	Colores destacados
 	Save All Colors	Guardar todos los colores

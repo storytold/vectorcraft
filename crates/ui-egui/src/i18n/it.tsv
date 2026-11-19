@@ -3257,6 +3257,9 @@ digits	Malayalam	Malayalam
 	Rotate View to Selection	Ruota vista in base alla selezione
 	Reset the rows to the artwork's colors	Reimposta le righe sui colori della grafica
 	Color Theme Picker	Selettore tema colore
+	Undo Changes	Annulla modifiche
+	Redo Changes	Ripeti modifiche
+@msg	Recolor Artwork is not open	Ricolora grafica non è aperto
 	Click or drag across the art to pick its colors; Shift adds more	Fai clic o trascina sulla grafica per prelevarne i colori; Maiusc ne aggiunge altri
 	Prominent Colors	Colori prominenti
 	Save All Colors	Salva tutti i colori

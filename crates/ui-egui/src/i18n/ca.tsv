@@ -3942,6 +3942,9 @@ digits	Malayalam	Malaiàlam
 	Reset Ruler Origin	Restableix l’origen de les regles
 	Reset the rows to the artwork's colors	Restableix les files als colors de l’obra
 	Color Theme Picker	Selector de tema de colors
+	Undo Changes	Desfés els canvis
+	Redo Changes	Refés els canvis
+@msg	Recolor Artwork is not open	Recoloreix la il·lustració no és obert
 	Click or drag across the art to pick its colors; Shift adds more	Feu clic o arrossegueu sobre l’obra per agafar-ne els colors; Maj n’afegeix més
 	Prominent Colors	Colors predominants
 	Save All Colors	Desa tots els colors

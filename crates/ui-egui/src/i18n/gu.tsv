@@ -4828,6 +4828,9 @@ antiAlias	Sharp	શાર્પ
 	Edit Arrowheads…	એરોહેડ્સ સંપાદિત કરો…
 	Reload Arrowheads	એરોહેડ્સ ફરી લોડ કરો
 	Color Theme Picker	કલર થીમ પિકર
+	Undo Changes	ફેરફારો પૂર્વવત્ કરો
+	Redo Changes	ફેરફારો ફરીથી કરો
+@msg	Recolor Artwork is not open	કલાકૃતિનો રંગ બદલો ખુલ્લું નથી
 	Click or drag across the art to pick its colors; Shift adds more	આર્ટના રંગો પસંદ કરવા તેના પર ક્લિક કરો અથવા ડ્રેગ કરો; Shiftથી વધુ ઉમેરાય છે
 	Prominent Colors	મુખ્ય રંગો
 	Save All Colors	બધા રંગો સાચવો

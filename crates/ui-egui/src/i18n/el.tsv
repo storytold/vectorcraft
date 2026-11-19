@@ -4028,6 +4028,9 @@ digits	Malayalam	Μαλαγιάλαμ
 	Rotate View to Selection	Περιστροφή προβολής ως προς την επιλογή
 	Reset the rows to the artwork's colors	Επαναφορά γραμμών στα χρώματα του σχεδίου
 	Color Theme Picker	Επιλογέας χρωματικού θέματος
+	Undo Changes	Αναίρεση αλλαγών
+	Redo Changes	Επανάληψη αλλαγών
+@msg	Recolor Artwork is not open	ο Επαναχρωματισμός σχεδίου δεν είναι ανοιχτός
 	Click or drag across the art to pick its colors; Shift adds more	Κάντε κλικ ή σύρετε πάνω στο σχέδιο για να πάρετε τα χρώματά του· το Shift προσθέτει κι άλλα
 	Prominent Colors	Κυρίαρχα χρώματα
 	Save All Colors	Αποθήκευση όλων των χρωμάτων

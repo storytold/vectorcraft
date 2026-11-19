@@ -3125,6 +3125,9 @@ digits	Malayalam	Malajalam
 	Recolor this row	Väritä tämä rivi uudelleen
 	Reset the rows to the artwork's colors	Palauta rivit kuvituksen väreihin
 	Color Theme Picker	Väriteeman valitsin
+	Undo Changes	Kumoa muutokset
+	Redo Changes	Tee muutokset uudelleen
+@msg	Recolor Artwork is not open	Väritä kuvitus uudelleen ei ole auki
 	Click or drag across the art to pick its colors; Shift adds more	Napsauta tai vedä kuvituksen yli poimiaksesi sen värit; Vaihto lisää useampia
 	Prominent Colors	Hallitsevat värit
 	Save All Colors	Tallenna kaikki värit

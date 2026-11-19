@@ -3239,6 +3239,9 @@ digits	Malayalam	Малаялам
 	Rotate View to Selection	Повернуть вид по выделению
 	Reset the rows to the artwork's colors	Сбросить строки к цветам рисунка
 	Color Theme Picker	Выбор цветовой темы
+	Undo Changes	Отменить изменения
+	Redo Changes	Повторить изменения
+@msg	Recolor Artwork is not open	Окно «Перекрасить рисунок» не открыто
 	Click or drag across the art to pick its colors; Shift adds more	Щёлкните или проведите по рисунку, чтобы взять его цвета; Shift добавляет ещё
 	Prominent Colors	Преобладающие цвета
 	Save All Colors	Сохранить все цвета

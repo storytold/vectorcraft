@@ -3561,6 +3561,9 @@ mark-style	Japanese	Kiểu Nhật
 	Reset Ruler Origin	Đặt lại gốc thước
 	Reset the rows to the artwork's colors	Đặt lại các hàng về màu của tác phẩm
 	Color Theme Picker	Bộ chọn bộ màu
+	Undo Changes	Hoàn tác thay đổi
+	Redo Changes	Làm lại thay đổi
+@msg	Recolor Artwork is not open	Tô màu lại tác phẩm chưa được mở
 	Click or drag across the art to pick its colors; Shift adds more	Nhấp hoặc kéo qua tác phẩm để lấy màu của nó; Shift để thêm
 	Prominent Colors	Màu nổi bật
 	Save All Colors	Lưu tất cả màu
