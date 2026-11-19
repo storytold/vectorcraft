@@ -163,9 +163,20 @@ impl Tool for CircleTool {
         if ev.kind == PointerKind::Up {
             if self.drags(cx, ev) {
                 self.pointer(cx, &PointerEvent { kind: PointerKind::Drag, ..*ev });
-            } else if let Some(Press::First { at, dragged, .. } | Press::Second { at, dragged, .. }) = &mut self.press {
-                *dragged = false;
-                self.pointer = Some(*at);
+            } else if let Some(press) = &mut self.press {
+                let (at, on_first) = match press {
+                    Press::First { at, dragged, .. } => {
+                        *dragged = false;
+                        (*at, false)
+                    }
+                    Press::Second { at, on_first, dragged, .. } => {
+                        *dragged = false;
+                        (*at, *on_first)
+                    }
+                };
+                // A click on the first point places nothing: the pointer goes back to that point, so
+                // the tool shows no circle.
+                self.pointer = if on_first { self.first } else { Some(at) };
                 self.snap.clear();
             }
         }

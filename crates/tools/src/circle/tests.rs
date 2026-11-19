@@ -150,6 +150,23 @@ fn a_release_near_the_press_is_a_click_after_a_drag() {
     assert!(t.ends_on_escape(&cx));
 }
 
+/// A click within 3 screen points of the first point, also one dragged away and let go where it
+/// was pressed, places nothing and leaves no circle shown.
+#[test]
+fn a_click_near_the_first_point_shows_no_circle() {
+    let (d, _) = doc_with_rect();
+    let (s, p) = (Selection::default(), paint());
+    let cx = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    let mut t = CircleTool::default();
+    click(&mut t, &cx, (300.0, 300.0));
+    assert_eq!(drag(&mut t, &cx, (302.0, 300.0), &[(302.0, 380.0), (302.0, 300.0)], Mods::default()), vec![]);
+    assert_eq!(preview(&t.overlays(&cx)), None);
+    assert_eq!(click(&mut t, &cx, (302.0, 300.0)), vec![]);
+    assert_eq!(preview(&t.overlays(&cx)), None);
+    assert!(t.ends_on_escape(&cx), "the first point stays");
+    assert_eq!(click(&mut t, &cx, (380.0, 360.0)), circle(&[(300.0, 300.0), (380.0, 360.0)]));
+}
+
 /// A press on the first point, dragged to snap to the rectangle's corner anchor and let go near
 /// the press, leaves no guides of the drag.
 #[test]
