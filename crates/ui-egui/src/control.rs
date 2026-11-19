@@ -268,6 +268,11 @@ pub fn inspect(app: &VectorcraftApp, ctx: &egui::Context) -> Value {
             "pinned": app.ui.task_bar_place.pinned,
             "rect": crate::canvas::task_bar_rect(ctx).map(|r| json!([r.left(), r.top(), r.width(), r.height()])),
         },
+        // The Quick Pen toolbar: pinned (not saved either) and where it shows.
+        "quickPenToolbar": {
+            "pinned": app.ui.quick_pen_bar_place.pinned,
+            "rect": crate::canvas::quick_pen_bar_rect(ctx).map(|r| json!([r.left(), r.top(), r.width(), r.height()])),
+        },
         // The Free Transform tool's widget, where it shows.
         "freeTransformWidget": crate::free_transform::rect(ctx).map(|r| json!([r.left(), r.top(), r.width(), r.height()])),
         "view": app.view().map(|v| serde_json::to_value(v).unwrap_or_default()),

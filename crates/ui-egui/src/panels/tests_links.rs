@@ -458,6 +458,13 @@ fn a_nested_rows_tooltip_names_what_holds_it() {
     // A row in the layers says only its file.
     let row = json!({"id": 9, "name": "a.png", "status": "ok", "path": "/x/a.png"});
     assert_eq!(super::links::status_tip(&row, None), "/x/a.png");
+    // The labels take the UI language's colon (#7991).
+    let fr = crate::i18n::Lang::from_code("fr").unwrap();
+    crate::i18n::set_current(fr);
+    let french = tip(json!({"kind": "symbol", "name": "Mark", "maskOf": 7}), None);
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let (symbols, mask) = (crate::i18n::tr(fr, "Symbols"), crate::i18n::tr(fr, "Opacity Mask"));
+    assert_eq!(french, format!("/x/a.png\n{symbols}\u{a0}: Mark\n{mask}\u{a0}: 7"));
 }
 
 /// The tooltip of an image in the opacity mask of an object inside a symbol names that object,
@@ -735,4 +742,94 @@ fn the_links_menu_items_run_commands() {
     };
     assert!(ids("Edit").contains("links.editOriginal"));
     assert!(ids("Window").contains(super::links::ID));
+}
+
+#[test]
+fn right_click_context_menu_in_links_panel() {
+    use egui::vec2;
+    use egui_kittest::Harness;
+    use egui_kittest::kittest::{NodeT, Queryable};
+
+    let dir = Folder::new("context-menu");
+    let (mut app, linked, embedded) = app(&dir);
+
+    let revealed: Rc<RefCell<Vec<String>>> = Rc::default();
+    let rev = revealed.clone();
+    app.services.reveal = Some(Box::new(move |p: &str| {
+        rev.borrow_mut().push(p.to_string());
+        Ok(())
+    }));
+
+    // Initially embedded is selected, linked is unselected
+    assert_eq!(selected(&app), vec![embedded]);
+
+    let mut h = Harness::builder().with_size(vec2(280.0, 500.0)).with_accessibility_check(false).build_ui_state(
+        |ui, app: &mut VectorcraftApp| {
+            super::links::show(app, ui);
+        },
+        app,
+    );
+    h.run_steps(2);
+
+    let right_click = |h: &mut Harness<'static, VectorcraftApp>, label: &str| {
+        let node = h.get_all_by_label(label).find(|n| n.accesskit_node().role() == egui::accesskit::Role::ListItem).unwrap();
+        let pos = node.rect().center();
+        h.event(egui::Event::PointerMoved(pos));
+        h.event(egui::Event::PointerButton { pos, button: egui::PointerButton::Secondary, pressed: true, modifiers: Default::default() });
+        h.event(egui::Event::PointerButton { pos, button: egui::PointerButton::Secondary, pressed: false, modifiers: Default::default() });
+        h.run_steps(2);
+    };
+
+    // 1. Right-click unselected "linked.png": selects it and opens context menu
+    right_click(&mut h, "linked.png");
+    assert_eq!(selected(h.state()), vec![linked], "right-clicking unselected row selects that row first");
+
+    let relink = h.get_by_label("   Relink…");
+    let go_to = h.get_by_label("   Go To Link");
+    let update = h.get_by_label("   Update Link");
+    let edit_orig = h.get_by_label("   Edit Original");
+    let show_folder = h.get_by_label("   Show in Folder");
+    let embed_img = h.get_by_label("   Embed Image");
+
+    // "Relink…" is disabled because app has no pick_open service by default
+    assert!(relink.accesskit_node().is_disabled());
+    // "Go To Link" is enabled because linked node is in canvas document
+    assert!(!go_to.accesskit_node().is_disabled());
+    // "Update Link" is disabled because linked file is not modified
+    assert!(update.accesskit_node().is_disabled());
+    // "Edit Original" and "Show in Folder" are enabled because linked file exists
+    assert!(!edit_orig.accesskit_node().is_disabled());
+    assert!(!show_folder.accesskit_node().is_disabled());
+    // "Embed Image" is enabled because it is a linked image
+    assert!(!embed_img.accesskit_node().is_disabled());
+
+    // 2. Click "Show in Folder" dispatches links.reveal
+    show_folder.click();
+    h.run_steps(2);
+    assert_eq!(revealed.borrow().len(), 1);
+    assert!(revealed.borrow()[0].ends_with("linked.png"));
+
+    // 3. Multi-selection: select both linked and embedded
+    h.state_mut().run("select.set", json!({"ids": [linked, embedded]})).unwrap();
+    assert_eq!(selected(h.state()), vec![linked, embedded]);
+
+    // Right-click "linked.png" while already selected in multi-selection: preserves selection
+    right_click(&mut h, "linked.png");
+    assert_eq!(selected(h.state()), vec![linked, embedded], "right-clicking selected row preserves multi-selection");
+
+    // 4. Click "Go To Link" focuses the art on canvas via go_to
+    let go_to_btn = h.get_by_label("   Go To Link");
+    assert!(!go_to_btn.accesskit_node().is_disabled());
+    go_to_btn.click();
+    h.run_steps(2);
+    assert_eq!(selected(h.state()), vec![linked]);
+    assert!(h.state().view().unwrap().fitted);
+
+    // 5. Right-click embedded image: displays "Unembed…" while "Edit Original" and "Show in Folder" are disabled
+    right_click(&mut h, "embedded.png");
+    assert_eq!(selected(h.state()), vec![embedded]);
+    let unembed_btn = h.get_by_label("   Unembed…");
+    assert!(!unembed_btn.accesskit_node().is_disabled());
+    assert!(h.get_by_label("   Edit Original").accesskit_node().is_disabled());
+    assert!(h.get_by_label("   Show in Folder").accesskit_node().is_disabled());
 }

@@ -237,7 +237,7 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
     // Plug-ins & Scratch Disks
     (
         "pluginsFolder",
-        "On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.",
+        "On the desktop, this folder's .wasm plug-ins load at startup and when OK sets a new folder, except in Safe Mode; one that asks for permissions loads only after you grant them. The web version loads none.",
     ),
     (
         "pluginInstructionBudget",
@@ -263,10 +263,13 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
         "From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.",
     ),
     ("largeTabs", "Makes the document tabs taller and their names larger."),
-    ("systemTitleBar", "From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own."),
+    (
+        "systemTitleBar",
+        "From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own; on Linux and the BSDs, the VECTORCRAFT_TITLEBAR variable takes precedence.",
+    ),
     (
         "appTitleBar",
-        "From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on.",
+        "From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on or the VECTORCRAFT_TITLEBAR variable chooses it.",
     ),
     ("uiScaling", "Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom."),
     ("scaleCursorWithUi", "The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size."),
@@ -279,7 +282,7 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
     ),
     (
         "gpuPreference",
-        "From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.",
+        "From the next start, the desktop version shows the canvas through this kind of graphics processor; the artwork is drawn on the CPU either way. Automatic prefers the integrated one on Windows and macOS. The web version does not use it.",
     ),
     (
         "lowLatencyDrawing",
@@ -336,6 +339,10 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
     (
         "updateLinks",
         "When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.",
+    ),
+    (
+        "pdfTextAs",
+        "The text of a PDF you open or embed comes in as editable type, or as outlines that look the same on a computer without its fonts.",
     ),
     (
         "templatesFolder",

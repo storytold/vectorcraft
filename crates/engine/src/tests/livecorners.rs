@@ -59,6 +59,107 @@ fn a_whole_rectangle_rounds_all_corners_and_given_corners_alone() {
     assert_eq!(corners(&s, id).1[3], CornerKind::Chamfer);
 }
 
+/// The Corner menus of Rectangle Properties: a kind for all four corners or one, set on corners
+/// with no radius too and leaving the radii as they are, in one undo step; the kind the corners
+/// already have adds no step.
+#[test]
+fn rectangle_kind_menu_targets_all_or_one_corner_and_skips_noop_undo() {
+    let (mut s, id) = session();
+    run(&mut s, json!({"corners": [1], "radius": 12}));
+    let steps = |s: &Session| s.doc().unwrap().history.undo.len();
+    let undo = steps(&s);
+    run(&mut s, json!({"corners": [0, 1, 2, 3], "kind": "invertedRound"}));
+    assert_eq!(corners(&s, id).0, [0.0, 12.0, 0.0, 0.0]);
+    assert_eq!(corners(&s, id).1, [CornerKind::InvertedRound; 4]);
+    assert_eq!(steps(&s), undo + 1);
+    run(&mut s, json!({"corners": [0, 1, 2, 3], "kind": "invertedRound"}));
+    run(&mut s, json!({"corners": [2], "kind": "invertedRound"}));
+    assert_eq!(steps(&s), undo + 1, "no step when nothing changes");
+    run(&mut s, json!({"corners": [2], "kind": "chamfer"}));
+    assert_eq!(corners(&s, id).1, [CornerKind::InvertedRound, CornerKind::InvertedRound, CornerKind::Chamfer, CornerKind::InvertedRound]);
+    assert_eq!(corners(&s, id).0, [0.0, 12.0, 0.0, 0.0]);
+    assert_eq!(steps(&s), undo + 2);
+}
+
+/// A kind the corners already have leaves a rectangle saved stretched by an older version as it
+/// is, alone or beside a rectangle the kind changes: its scale stays in its transform.
+#[test]
+fn a_kind_the_corners_have_leaves_a_stretched_rectangle() {
+    let (mut s, id) = session();
+    let other = NodeId(s.execute("shape.rectangle", &json!({"x": 200, "y": 10, "width": 40, "height": 40})).unwrap()["id"].as_u64().unwrap());
+    let stretched = LiveShape::Rectangle {
+        w: 50.0,
+        h: 60.0,
+        radii: [10.0; 4],
+        kinds: [CornerKind::Chamfer; 4],
+        radii_relative: false,
+        xf: Affine::translate((10.0, 10.0)) * Affine::scale_non_uniform(2.0, 1.0),
+    };
+    {
+        let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        let NodeKind::Path { path, live: Some(live), .. } = &mut d.node_mut(id).unwrap().kind else { panic!("not live") };
+        **live = stretched.clone();
+        *path = live.to_path();
+    }
+    let live = |s: &Session| node_path(s, id).1;
+    let steps = |s: &Session| s.doc().unwrap().history.undo.len();
+    let undo = steps(&s);
+    run(&mut s, json!({"ids": [id.0], "kind": "chamfer"}));
+    assert_eq!(live(&s), Some(stretched.clone()));
+    assert_eq!(steps(&s), undo, "no step when nothing changes");
+    run(&mut s, json!({"ids": [id.0, other.0], "kind": "chamfer"}));
+    assert_eq!(live(&s), Some(stretched));
+    assert_eq!(corners(&s, other).1, [CornerKind::Chamfer; 4]);
+    assert_eq!(steps(&s), undo + 1);
+}
+
+/// A radius is stored on a corner that stores a larger radius drawn at the new value, alone or
+/// beside another rectangle; the radius every target already stores adds no undo step.
+#[test]
+fn a_radius_reaches_a_rectangle_that_already_draws_it() {
+    let (mut s, id) = session();
+    let other = NodeId(s.execute("shape.rectangle", &json!({"x": 200, "y": 10, "width": 100, "height": 60})).unwrap()["id"].as_u64().unwrap());
+    // 80 pt on every corner draws at 30 pt, half the 60 pt side.
+    run(&mut s, json!({"ids": [id.0], "radius": 80}));
+    assert_eq!(corners(&s, id).0, [80.0; 4]);
+    let (path, live) = node_path(&s, id);
+    let drawn = LiveCorners::new(&path, live.as_ref()).unwrap().drawn_radius(0);
+    assert!((drawn - 30.0).abs() < 1e-9, "draws at {drawn}");
+    let steps = |s: &Session| s.doc().unwrap().history.undo.len();
+    let undo = steps(&s);
+    run(&mut s, json!({"ids": [id.0], "corners": [1], "radius": 30}));
+    assert_eq!(corners(&s, id).0, [80.0, 30.0, 80.0, 80.0]);
+    assert_eq!(steps(&s), undo + 1);
+    run(&mut s, json!({"ids": [id.0, other.0], "corners": [0], "radius": 30}));
+    assert_eq!(corners(&s, id).0[0], 30.0);
+    assert_eq!(corners(&s, other).0[0], 30.0);
+    // The radius both already store adds no step.
+    run(&mut s, json!({"ids": [id.0, other.0], "corners": [0], "radius": 30}));
+    assert_eq!(steps(&s), undo + 2);
+}
+
+/// `rectanglesOnly` sets the live rectangles among the selection and leaves a polygon as it is; an
+/// action that records it holds no ids, so playing it sets the rectangles selected then.
+#[test]
+fn rectangles_only_sets_the_selected_rectangles_when_an_action_plays() {
+    let (mut s, id) = session();
+    let polygon = NodeId(s.execute("shape.polygon", &json!({"cx": 300, "cy": 300, "radius": 40, "sides": 6})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [id.0, polygon.0]})).unwrap();
+    let start = s.journal.len();
+    run(&mut s, json!({"rectanglesOnly": true, "corners": [0], "kind": "chamfer"}));
+    assert_eq!(corners(&s, id).1[0], CornerKind::Chamfer);
+    let NodeKind::Path { live: Some(l), .. } = &s.doc().unwrap().doc.node(polygon).unwrap().kind else { panic!("not live") };
+    let LiveShape::Polygon { kinds, .. } = &**l else { panic!("not a polygon") };
+    assert!(kinds.iter().all(|k| *k == CornerKind::Round), "the polygon keeps its corners: {kinds:?}");
+    let action = s.journal_for_action(start);
+    assert_eq!(action.len(), 1);
+    assert_eq!(action[0].1.get("ids"), None);
+    let other = NodeId(s.execute("shape.rectangle", &json!({"x": 200, "y": 10, "width": 40, "height": 40})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [other.0, polygon.0]})).unwrap();
+    s.replay(&action[0].0, &action[0].1).unwrap();
+    assert_eq!(corners(&s, other).1[0], CornerKind::Chamfer);
+}
+
 /// #938: `items` rounds several objects in one step, each its own corners (or all of them).
 #[test]
 fn items_round_several_objects_each_its_own_corners() {

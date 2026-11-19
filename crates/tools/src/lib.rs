@@ -226,9 +226,20 @@ pub trait Tool: Send {
     fn ends_on_escape(&self, _cx: &ToolContext) -> bool {
         false
     }
+    /// The point a path the tool is drawing goes on from, and the direction the path arrives there
+    /// in (none for a path of one point), while the tool draws one: the Quick Pen toolbar sits
+    /// beside it.
+    fn drawing_end(&self, _cx: &ToolContext) -> Option<(Point, Option<Vec2>)> {
+        None
+    }
     /// Does the tool want typed text (Type tool editing)? Single-key shortcuts are suppressed.
     fn wants_text(&self) -> bool {
         false
+    }
+    /// The tool a gradient stop's one-shot pick switches back to after its click (the Eyedropper
+    /// armed by the Gradient panel's eyedropper); None when no such pick is armed.
+    fn returns_to(&self) -> Option<&str> {
+        None
     }
     fn text_input(&mut self, _cx: &ToolContext, _s: &str) -> Vec<Action> {
         vec![]

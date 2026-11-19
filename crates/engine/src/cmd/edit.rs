@@ -1568,6 +1568,8 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
         for xf in placements {
             for (k, n) in clip.nodes.iter().enumerate() {
                 let mut c = d.reid(n);
+                // A pasted symbol set packs from the density recorded for it at Copy.
+                d.carry_set_densities(n, &c, &clip.set_densities);
                 imported.apply(&mut c);
                 let sc = vectorcraft_doc::Scaling { patterns: mode == PasteMode::Drag, ..Default::default() };
                 if xf != Affine::IDENTITY {
@@ -1650,6 +1652,17 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
         }
         for id in &new_ids {
             super::object::keep_compound_aligned(d, *id, vectorcraft_doc::Scaling::default());
+        }
+        // A pasted graph whose design the document has under the same name draws with the document's,
+        // in the pasted objects and in the art of the symbols the paste added.
+        if !imported.kept_designs.is_empty() {
+            super::graph::redraw_with_designs(d, &new_ids, &imported.kept_designs)?;
+            super::graph::redraw_symbols_with_designs(d, &imported.added_symbols, &imported.kept_designs);
+        }
+        // The graphs already in the document that draw with a design the paste added are drawn
+        // again with it; the pasted ones already draw with it.
+        if !imported.added_designs.is_empty() {
+            super::graph::refresh_graphs(d, &imported.added_designs, &new_ids, &imported.added_symbols)?;
         }
         sel.set(new_ids.iter().copied());
         // Copied ruler guides (#3226): on the layer new art goes to, moved as the objects are (a
