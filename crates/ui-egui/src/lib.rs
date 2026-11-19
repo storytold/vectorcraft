@@ -47,6 +47,7 @@ pub mod graphics;
 pub mod hang_beacon;
 pub mod i18n;
 pub mod icon_data;
+pub mod icon_data_quiet;
 pub mod icons;
 pub(crate) mod ime;
 pub mod io;

@@ -508,10 +508,10 @@ const KIND_ICON: f32 = 14.0;
 const HOME_TEXT: f32 = 11.0;
 
 /// The kind of result `e` is: the icon its row starts with and the word screen readers read
-/// first, in the UI language. A tool shows its own icon.
+/// first, in the UI language. A tool supplies its catalogue icon name, resolved for the scheme at paint time.
 fn kind_of(e: &Entry) -> (&'static str, &'static str) {
     match e.id.split_once(':') {
-        Some(("tool", tool)) => (vectorcraft_tools::tool_info(tool).map_or("square-dashed", |t| crate::icons::tool_icon(t.icon)), tl!("Tool")),
+        Some(("tool", tool)) => (vectorcraft_tools::tool_info(tool).map_or("square-dashed", |t| t.icon), tl!("Tool")),
         Some(("panel", _)) => ("layout-grid", tl!("Panel")),
         Some(("effect", _)) => ("dc-fx", tl!("Effect")),
         Some(("plugin", _)) => ("dc-filter", tl!("Filter")),
@@ -1252,7 +1252,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                                 egui::pos2(rect.left() + 8.0 + KIND_ICON / 2.0, rect.center().y),
                                 egui::Vec2::splat(KIND_ICON),
                             );
-                            crate::icons::paint(ui, kind_of(e).0, icon, t.icon);
+                            crate::icons::paint(ui, crate::icons::tool_icon_for(ui.ctx(), kind_of(e).0), icon, t.icon);
                             let name_at = icon.right() + 6.0;
                             let (label, home, cut) = row_galleys(p, e, &home, font, t.text, t.text_dim, name_end - name_at);
                             let home_at = name_at + label.size().x + 10.0;

@@ -3,7 +3,7 @@ use egui::IntoAtoms as _;
 use super::drag::PanelDrag;
 use super::labels::{PreviousLabel, label_field, name_field, take_previous_label};
 use super::text::take_armed_focus;
-use super::{CornerRadius, HashOnly, Rect, Response, Sense, Stroke, StrokeKind, Tokens, Ui, Vec2, id_with, vec2};
+use super::{HashOnly, Rect, Response, Sense, Stroke, StrokeKind, Tokens, Ui, Vec2, id_with, vec2};
 
 /// A compact dropdown of interface labels (shown in the UI language). Returns the chosen index.
 pub fn dropdown(ui: &mut Ui, id: impl std::hash::Hash, current: &str, options: &[&str], width: f32) -> Option<usize> {
@@ -188,7 +188,7 @@ fn combo_atoms_named<'a, R>(
     egui::Frame::NONE
         .fill(t.input)
         .stroke(Stroke::new(1.0, t.input_border))
-        .corner_radius(CornerRadius::same(3))
+        .corner_radius(t.cr())
         .show(ui, |ui| {
             let button_id = combo_button_id(ui, &id);
             // A list whose options are `option_row`s opens with its current option in view, or at
@@ -304,7 +304,7 @@ pub(crate) fn combo_menu_field_named<R>(
     egui::Frame::NONE
         .fill(t.input)
         .stroke(Stroke::new(1.0, t.input_border))
-        .corner_radius(CornerRadius::same(3))
+        .corner_radius(t.cr())
         .show(ui, |ui| {
             let armed = take_armed_focus(ui, &id);
             let resp = combo_field(ui, id_with(ui.scope_id(), id), label, name, current, width - 4.0);

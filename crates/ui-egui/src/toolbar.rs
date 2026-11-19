@@ -7,7 +7,7 @@
 
 use std::sync::Arc;
 
-use egui::{Color32, CornerRadius, Sense, Stroke, Ui, pos2, vec2};
+use egui::{Color32, Sense, Stroke, Ui, pos2, vec2};
 use serde_json::{Value, json};
 use vectorcraft_color::Paint;
 use vectorcraft_tools::{Mods, TOOL_GROUPS, ToolInfo, ToolKey, tool_info};
@@ -177,13 +177,13 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     match app.ui.toolbar_pos {
         None => {
             // The card's outer gap faces the edge it docks at.
-            let (panel, margin) = if app.ui.toolbar_right {
-                (egui::Panel::right("toolbar"), egui::Margin { left: 0, right: 6, top: 6, bottom: 6 })
+            let (panel, margin, inner) = if app.ui.toolbar_right {
+                (egui::Panel::right("toolbar"), egui::Margin { left: 0, right: 6, top: 6, bottom: 6 }, crate::theme::Edge::Left)
             } else {
-                (egui::Panel::left("toolbar"), egui::Margin { left: 6, right: 0, top: 6, bottom: 6 })
+                (egui::Panel::left("toolbar"), egui::Margin { left: 6, right: 0, top: 6, bottom: 6 }, crate::theme::Edge::Right)
             };
             let docked = panel.resizable(false).exact_size(w + 6.0).frame(egui::Frame::NONE).show(ui, |ui| {
-                crate::theme::card(ui, &t, margin, |ui| body(app, ui, cols, None));
+                crate::theme::card(ui, &t, margin, inner, |ui| body(app, ui, cols, None));
             });
             ui.ctx().data_mut(|d| d.insert_temp(docked_rect_id(), docked.response.rect));
         }
@@ -316,12 +316,12 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, cols: usize, floating: Option<egu
                     crate::palette::note_spot(ui, rect, || crate::palette::SpotAt::Slot(None, slot.iter().map(|s| s.to_string()).collect()));
                     let well = egui::Rect::from_center_size(rect.center(), metrics.well);
                     if is_active {
-                        ui.painter().rect_filled(well, CornerRadius::same(6), t.tool_active);
+                        ui.painter().rect_filled(well, t.cr(), t.tool_active);
                     } else if resp.hovered() {
-                        ui.painter().rect_filled(well, CornerRadius::same(6), t.hover);
+                        ui.painter().rect_filled(well, t.cr(), t.hover);
                     }
                     let ir = egui::Rect::from_center_size(rect.center(), vec2(18.0, 18.0));
-                    icons::paint(ui, icons::tool_icon(shown.icon), ir, if is_active { t.text_strong } else { t.icon });
+                    icons::paint(ui, icons::tool_icon_for(ui.ctx(), shown.icon), ir, if is_active { t.text_strong } else { t.icon });
                     if slot.len() > 1 {
                         let c = rect.center() + vec2(12.5, 10.0);
                         ui.painter().add(egui::Shape::convex_polygon(vec![c, c + vec2(-3.5, 0.0), c + vec2(0.0, -3.5)], t.icon, Stroke::NONE));
@@ -931,7 +931,7 @@ fn tool_rows(ui: &mut Ui, t: &Tokens, active: &str, tools: &[String], locate: Op
             ui.painter().rect_filled(egui::Rect::from_center_size(r.left_center() + vec2(12.0, 0.0), vec2(5.0, 5.0)), 0.0, t.text);
         }
         let ir = egui::Rect::from_min_size(r.min + vec2(24.0, 6.0), vec2(18.0, 18.0));
-        icons::paint(ui, icons::tool_icon(tool.icon), ir, t.icon);
+        icons::paint(ui, icons::tool_icon_for(ui.ctx(), tool.icon), ir, t.icon);
         let color = color(tool);
         ui.painter().galley(pos2(r.left() + NAME_X, r.center().y - name.size().y / 2.0), name, color);
         if let Some(sc) = shortcut {
@@ -1010,12 +1010,12 @@ fn tool_strip(
         crate::palette::note_spot(ui, r, || crate::palette::SpotAt::Strip(toolbar.map(str::to_string), tool.id.to_string()));
         let well = r.shrink(1.0);
         if active == tool.id {
-            ui.painter().rect_filled(well, CornerRadius::same(6), t.tool_active);
+            ui.painter().rect_filled(well, t.cr(), t.tool_active);
         } else if resp.hovered() {
-            ui.painter().rect_filled(well, CornerRadius::same(6), t.hover);
+            ui.painter().rect_filled(well, t.cr(), t.hover);
         }
         let ir = egui::Rect::from_center_size(r.center(), vec2(18.0, 18.0));
-        icons::paint(ui, icons::tool_icon(tool.icon), ir, if active == tool.id { t.text_strong } else { t.icon });
+        icons::paint(ui, icons::tool_icon_for(ui.ctx(), tool.icon), ir, if active == tool.id { t.text_strong } else { t.icon });
         resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, ui.is_enabled(), active == tool.id, tip(tool)));
         if card::hover(resp, tool, card::Side::Below, Some(tip(tool))).clicked() {
             chosen = Some(tool.id);

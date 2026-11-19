@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+  <g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <g transform="translate(6.3 6.3) rotate(125)">
+    <ellipse cx="0" cy="-2.4" rx="3.3" ry="1.4"/>
+    <path d="M-3.3 -2.4 -2.5 2.2C-2.2 3.4 2.2 3.4 2.5 2.2L3.3 -2.4"/>
+    </g>
+    <path d="M9.71 12.8L20.29 11.4M18.68 10.1L19.52 20.5M20.9 18.97L9.1 19.23M10.46 20.69L11.34 11.11"/>
+    <path d="M12.59 13.93 12.25 17.66 17.78 17.54 17.43 13.29Z" fill="currentColor" stroke="none" fill-rule="evenodd"/>
+  </g>
+</svg>
