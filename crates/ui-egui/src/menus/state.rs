@@ -73,6 +73,7 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
             .is_some_and(|g| crate::chrome::CONTROL_BAR_GROUPS.contains(&g) && !app.ui.control_bar_hidden_groups.contains(g)),
         "window.toolbar" => app.ui.toolbar,
         "window.toolbarAdvanced" => app.ui.toolbar_advanced,
+        "window.toolbarCompact" => app.ui.toolbar_compact,
         "window.toolsBesideCanvas" => app.ui.tools_beside_canvas,
         "window.toolbarColumns" => match p.get("toolbar").and_then(Value::as_str) {
             None => app.ui.toolbar_double,
@@ -240,6 +241,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "file.cancelSave" | "file.saveInBackground" => app.background.running(crate::background::Kind::Save),
         "file.cancelOpen" => !app.opening.pending.is_empty(),
         "file.openInBackground" => crate::opening::any_shown(app),
+        "file.cancelPlace" => crate::placing::can_cancel(app),
         "plugin.cancelRuns" => crate::plugin_runs::any_running(app),
         "plugin.hideRuns" => crate::plugin_runs::any_shown(app),
         "imageTrace.cancelRuns" => crate::trace_runs::any_running(app),
@@ -281,7 +283,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         }
         "ui.missingFontsDialog" => !cfg!(target_arch = "wasm32") && app.session.active().is_some(),
         "ui.findFontsInFolder" => crate::picks::can(app, &crate::picks::PickRequest::Folder) && app.session.active().is_some(),
-        "ui.swatchOptions" | "ui.newSwatch" | "ui.newColorGroup" => app.session.active().is_some(),
+        "ui.swatchOptions" | "ui.newSwatch" | "ui.newColorGroup" | "ui.colorGroupOptions" => app.session.active().is_some(),
         "ui.graphicStyleOptions" | "ui.charStyleOptions" | "ui.paraStyleOptions" | "ui.newCharStyle" | "ui.newParaStyle" => {
             app.session.active().is_some()
         }
@@ -320,6 +322,8 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "ui.menuDialog" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
         "ui.simplifyAuto" | "ui.simplifyMoreOptions" => crate::dialogs::simplify_slider::showing(app),
         "ui.smoothAuto" => crate::dialogs::smooth_slider::showing(app),
+        "ui.recolorUndo" => crate::dialogs::recolor::can_step(app, true),
+        "ui.recolorRedo" => crate::dialogs::recolor::can_step(app, false),
         "ui.dialogReset" => crate::dialogs::can_reset(app),
         "ui.dxfOptionsDialog" => app.session.active().is_some(),
         "links.editOriginal" | "links.reveal" => selected_image(app, |im| im.link.is_some()) || selected_placed(app),

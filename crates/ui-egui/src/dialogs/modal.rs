@@ -14,18 +14,44 @@ use crate::theme::{self, Tokens};
 /// screen's centre until it is moved, with `margin` inside its frame. `add` draws the contents and
 /// should start with [`heading`] (or [`drag_band`]) so the window can be moved.
 pub(crate) fn show<R>(ctx: &egui::Context, title: &str, id: Id, nudge: f32, margin: i8, add: impl FnOnce(&mut egui::Ui) -> R) -> Option<R> {
-    show_at(ctx, title, id, egui::vec2(0.0, nudge), margin, add)
+    show_at(ctx, title, id, egui::vec2(0.0, nudge), margin, None, add)
 }
 
 /// A modal that starts at a chosen offset, then keeps the user's dragged position.
-pub(crate) fn show_at<R>(ctx: &egui::Context, title: &str, id: Id, initial: Vec2, margin: i8, add: impl FnOnce(&mut egui::Ui) -> R) -> Option<R> {
+pub(crate) fn show_at<R>(
+    ctx: &egui::Context,
+    title: &str,
+    id: Id,
+    initial: Vec2,
+    margin: i8,
+    canvas_pick: Option<Rect>,
+    add: impl FnOnce(&mut egui::Ui) -> R,
+) -> Option<R> {
     let t = Tokens::get(ctx);
     let dim = backdrop();
-    egui::Area::new(dim.id).order(dim.order).fixed_pos(egui::Pos2::ZERO).show(ctx, |ui| {
-        // Modal, but the canvas isn't dimmed so previews stay readable (as in the reference app).
-        // Not focusable (`Sense::click()` is): Tab goes through the dialog's controls, not the backdrop.
-        ui.allocate_rect(ctx.content_rect(), egui::Sense::CLICK);
-    });
+    if let Some(canvas) = canvas_pick {
+        let screen = ctx.content_rect();
+        let canvas = canvas.intersect(screen);
+        // Separate areas keep their hit rectangles outside the canvas. One area around a hole
+        // would still cover the canvas with its enclosing rectangle.
+        let regions = [
+            Rect::from_min_max(screen.min, egui::pos2(screen.right(), canvas.top())),
+            Rect::from_min_max(egui::pos2(screen.left(), canvas.top()), egui::pos2(canvas.left(), canvas.bottom())),
+            Rect::from_min_max(egui::pos2(canvas.right(), canvas.top()), egui::pos2(screen.right(), canvas.bottom())),
+            Rect::from_min_max(egui::pos2(screen.left(), canvas.bottom()), screen.max),
+        ];
+        for (index, region) in regions.into_iter().enumerate().filter(|(_, region)| region.width() > 0.0 && region.height() > 0.0) {
+            egui::Area::new(dim.id.with(index)).order(dim.order).fixed_pos(region.min).show(ctx, |ui| {
+                ui.allocate_rect(region, egui::Sense::CLICK);
+            });
+        }
+    } else {
+        egui::Area::new(dim.id).order(dim.order).fixed_pos(egui::Pos2::ZERO).show(ctx, |ui| {
+            // Modal, but the canvas isn't dimmed so previews stay readable (as in the reference app).
+            // Not focusable (`Sense::click()` is): Tab goes through the dialog's controls, not the backdrop.
+            ui.allocate_rect(ctx.content_rect(), egui::Sense::CLICK);
+        });
+    }
     let opened = opened(ctx, id);
     let shown = egui::Window::new(title)
         .id(id)

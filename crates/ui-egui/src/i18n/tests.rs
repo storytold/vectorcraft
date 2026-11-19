@@ -765,7 +765,7 @@ fn built_in_library_style_names_are_in_complete_catalogs() {
             .flat_map(|(_, lib)| lib.styles.iter().map(|s| s.name.clone()).collect::<Vec<_>>())
             .collect(),
     );
-    assert_eq!(names.len(), 86, "{names:?}");
+    assert_eq!(names.len(), 92, "{names:?}");
     let bad = lacking(&names, |c, n| c.plain(n).is_some());
     assert!(bad.is_empty(), "{}", bad.join("\n"));
 }
@@ -783,7 +783,7 @@ fn built_in_library_symbol_names_are_in_complete_catalogs() {
             .flat_map(|(_, lib)| lib.doc.symbols.iter().map(|s| s.name.clone()).collect::<Vec<_>>())
             .collect(),
     );
-    assert_eq!(names.len(), 32, "{names:?}");
+    assert_eq!(names.len(), 38, "{names:?}");
     let bad = lacking(&names, |c, n| c.plain(n).is_some());
     assert!(bad.is_empty(), "{}", bad.join("\n"));
 }
@@ -856,6 +856,15 @@ fn marquee_selection_labels_are_in_complete_catalogs() {
         for label in ["Marquee Selection", "Touching", "Fully Enclosed", "Drag Direction"] {
             assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
         }
+    }
+}
+
+/// The note the Tangent Circle tool shows on the canvas over a segment that gives no circle.
+#[test]
+fn tangent_circle_tool_note_is_in_complete_catalogs() {
+    let label = vectorcraft_tools::addons::tangent_circle::NO_CIRCLE;
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
     }
 }
 
@@ -1073,6 +1082,16 @@ fn painted_and_sketched_style_names_are_in_every_catalog() {
     assert_eq!(labels.len(), 8);
     for lang in LANGUAGES.iter().filter(|lang| !lang.source.is_empty()) {
         for label in &labels {
+            assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
+        }
+    }
+}
+
+#[test]
+fn paper_cutout_style_names_are_in_every_catalog() {
+    let lib = vectorcraft_doc::style_libs::builtin_style_library("paper-cutouts").expect("built in");
+    for lang in LANGUAGES.iter().filter(|lang| !lang.source.is_empty()) {
+        for label in std::iter::once(lib.name.as_str()).chain(lib.styles.iter().map(|g| g.name.as_str())) {
             assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
         }
     }
@@ -2312,6 +2331,7 @@ fn toggled_labels() -> Vec<String> {
         "view.outline",
         "view.edges",
         "view.cornerWidget",
+        "view.shapeWidgets",
         "view.textThreads",
         "type.hiddenCharacters",
         "view.gradientAnnotator",
@@ -3182,6 +3202,44 @@ fn svg_variable_kinds_left_out_translate_in_every_complete_catalog() {
     assert_eq!(message(Lang::EN, &english), english);
 }
 
+/// The Retype panel's labels and the errors its commands give.
+#[test]
+fn retype_panel_strings_are_in_complete_catalogs() {
+    let mut missing = vec![];
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        for label in [
+            "Retype",
+            "Find Matching Fonts",
+            "Find more font matches",
+            "Type your text to preview",
+            "Select outlined text, then Find Matching Fonts.",
+            "No font matches the selected shapes.",
+            "Shapes past the first 2,048, or more than 16 groups deep, were not compared.",
+            "Reset Retype Panel",
+            "List Matching Fonts",
+            "Retype Preview",
+        ] {
+            if lang.catalog().plain(label).is_none() {
+                missing.push(format!("{} {label}", lang.code));
+            }
+        }
+    }
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        for m in [
+            "`count` must be a whole number from 1 to 96",
+            "`size` must be small, medium or large",
+            "`text` must be a string of at most 100 characters",
+            "Retype: select outlined text (paths or compound paths)",
+        ] {
+            if message(lang, m) == m {
+                missing.push(format!("{code} @msg {m}"));
+            }
+        }
+    }
+    assert!(missing.is_empty(), "{missing:?}");
+}
+
 /// Every complete-message catalog has a row for each error that `type.compositeFonts.set`,
 /// `.export` and `.import`, the composite font checks behind them and the Composite Fonts dialog
 /// give, and translates them with the font name, the key and the class key kept, and the reason
@@ -3730,6 +3788,50 @@ fn warped_type_note_is_translated() {
         let shown = message(lang, note);
         assert_ne!(shown, note, "{code}");
         assert!(shown.contains('3'), "{code}: {shown}");
+    }
+}
+
+/// The notes a CDR import adds to its warnings are translated in every complete catalog.
+/// They are constants, which the scan of message literals doesn't see.
+#[test]
+fn cdr_import_notes_are_translated() {
+    let notes = [
+        "CDR text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out",
+        "CDR fountain, pattern, texture and PostScript fills were left out",
+        "colors in CDR color models VectorCraft doesn't read were opened as black",
+        "CDR library colors that the drawing stores only by number were opened as black spot colors",
+        "CDR outline arrowheads were left out",
+        "CDR envelopes were not applied, and the shapes under them keep their outlines",
+        "CDR lenses and object transparency were not applied, and the objects they are on show opaque",
+        "parts of the drawing nested too deeply, or past the import limits, were left out",
+        "damaged parts of the drawing were left out",
+        "CDR pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard",
+    ];
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        for note in notes {
+            assert_ne!(message(lang, note), note, "{code}: {note}");
+        }
+    }
+}
+
+/// The notes a CMX import adds to its warnings are translated in every complete catalog.
+#[test]
+fn cmx_import_notes_are_translated() {
+    let notes = [
+        "CMX text, images, rectangles, ellipses, clipping paths and other objects VectorCraft doesn't read yet were left out",
+        "CMX fills other than uniform colors were left out",
+        "colors in CMX color models VectorCraft doesn't read were opened as black",
+        "CMX library colors that the file stores only by number were opened as black spot colors",
+        "CMX outline arrowheads were left out",
+        "CMX lenses were not applied",
+        "CMX pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard",
+    ];
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        for note in notes {
+            assert_ne!(message(lang, note), note, "{code}: {note}");
+        }
     }
 }
 
@@ -6649,7 +6751,7 @@ fn translated_messages_keep_the_field_names_and_values_their_english_lists() {
 /// the messages each one lacks.
 const COMPLETE_MESSAGES: &[&str] = &[
     "cs", "de", "el", "es", "fr", "hi", "hu", "it", "ja", "ka", "ko", "pl", "pt-br", "ru", "sv", "uk", "vi", "zh-hans", "zh-hant", "fi", "tr", "ca",
-    "nl", "da",
+    "nl", "da", "id",
 ];
 
 /// Crates whose error and status messages reach the status bar, the crates whose errors the

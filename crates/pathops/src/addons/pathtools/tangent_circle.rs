@@ -10,12 +10,18 @@
 //! from a point to an outline changes by at most the distance the point moves, so a cell whose
 //! center is too far from every condition holds no center and is dropped. The cells left are
 //! refined with Newton's method on the exact curves.
+//!
+//! The Tangent Circle tool's circles on two picked segments are [`circles_through`] and
+//! [`circles_of_radius`].
 
 use kurbo::{CubicBez, ParamCurve, Point, Vec2};
 use vectorcraft_geom::PathData;
 
+mod on_segments;
 #[cfg(test)]
 mod tests;
+
+pub use on_segments::{SegmentCircle, circles_of_radius, circles_through};
 
 /// Most segments the shapes may hold together, counted by [`tangent_circle_segments`].
 pub const MAX_TANGENT_CIRCLE_SEGMENTS: usize = 2_000;

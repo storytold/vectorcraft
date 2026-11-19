@@ -832,11 +832,12 @@ pub(crate) fn revolve_meshes(n: &Node, total: &mut usize, limit: usize) -> Resul
     }
     let (path, rule) = object_profile(n, "Revolve")?;
     let ctx = GeomContext::of(n);
-    let mesh = |path: &PathData, fx: &Effect, item: &AppearanceItem| -> Result<crate::SolidMesh, String> {
+    let mut keep = |out: &mut Vec<crate::SolidMesh>, path: &PathData, fx: &Effect, item: &AppearanceItem| -> Result<(), String> {
         let b = path.bounds().ok_or("Revolve requires a shape with at least two anchors")?;
         let (paint, opacity, _) = paint_of(item);
-        let mesh = vectorcraft_three_d::revolve_mesh(path, rule, b, fx_options(fx))?;
-        Ok(crate::SolidMesh::plain(mesh, crate::solids::mesh_color(&paint, opacity)))
+        surface_meshes(path, rule, b, fx, fx_options(fx), (&paint, opacity, 1.0), true)?
+            .into_iter()
+            .try_for_each(|m| crate::solids::keep_mesh(out, total, m, limit))
     };
     if let Some(index) = n.appearance.effects.iter().position(|e| e.visible && is_revolve(&e.id)) {
         let before = n.appearance.effects.get(..index).unwrap_or_default();
@@ -845,7 +846,7 @@ pub(crate) fn revolve_meshes(n: &Node, total: &mut usize, limit: usize) -> Resul
         let paints = solid_paints(n);
         let item = surface_item(&paints).ok_or("the revolved object has no fill or stroke")?;
         let mut out = vec![];
-        crate::solids::keep_mesh(&mut out, total, mesh(&path, fx, item)?, limit)?;
+        keep(&mut out, &path, fx, item)?;
         return Ok(out);
     }
     let path = geometry(&path, &n.appearance.effects, &ctx);
@@ -855,8 +856,65 @@ pub(crate) fn revolve_meshes(n: &Node, total: &mut usize, limit: usize) -> Resul
             && let Some(fx) = item.effects().get(index)
         {
             let p = geometry(&path, item.effects().get(..index).unwrap_or_default(), &ctx.item(item));
-            crate::solids::keep_mesh(&mut out, total, mesh(&p, fx, item)?, limit)?;
+            keep(&mut out, &p, fx, item)?;
         }
+    }
+    Ok(out)
+}
+
+/// The surface Revolve `fx` sweeps from `path` (filled under `rule`) about the axis of `b` with
+/// `options`, painted `paint` at `opacity` in a group member of opacity `member` (1 for an object
+/// of its own), as meshes. When `graphics` and `fx` maps graphics onto the side, the side's
+/// triangles are a mesh of their own with the point of the unrolled side surface each corner shows
+/// ([`crate::MeshGraphics`]), the points the canvas places the graphics by
+/// ([`crate::solids::graphics::surface_parts`]), after a mesh of the rest (the end caps and the cut
+/// sides). As on the canvas, the graphics take `opacity`, and `member` applies to the side and its
+/// graphics together. Otherwise the surface is one plain mesh.
+fn surface_meshes(
+    path: &PathData,
+    rule: FillRule,
+    b: Rect,
+    fx: &Effect,
+    options: Revolve,
+    (paint, opacity, member): (&Paint, f32, f32),
+    graphics: bool,
+) -> Result<Vec<crate::SolidMesh>, String> {
+    let color = crate::solids::mesh_color(paint, opacity * member);
+    let list: Vec<crate::MappedGraphic> = if graphics && fx.id == REVOLVE && options.map_surface {
+        crate::solids::mapped_graphics(&merged_params(&fx.id, &fx.params)).into_iter().filter(|g| g.face == crate::PlanarFace::Front).collect()
+    } else {
+        vec![]
+    };
+    if list.is_empty() {
+        return Ok(vec![crate::SolidMesh::plain(vectorcraft_three_d::revolve_mesh(path, rule, b, options)?, color)]);
+    }
+    let (mesh, on) = vectorcraft_three_d::revolve_mesh_surface(path, rule, b, options)?;
+    let (mut side, mut rest, mut art) = (vectorcraft_three_d::Mesh::default(), vectorcraft_three_d::Mesh::default(), vec![]);
+    for (t, points) in mesh.triangles.iter().zip(&on) {
+        let corner = |i: u32| mesh.positions.get(i as usize).copied().zip(mesh.normals.get(i as usize).copied());
+        let Some(corners) = t.iter().map(|&i| corner(i)).collect::<Option<Vec<_>>>() else { continue };
+        let into = match points {
+            Some(points) => {
+                art.extend(points);
+                &mut side
+            }
+            None => &mut rest,
+        };
+        let base = into.positions.len() as u32;
+        for (p, n) in corners {
+            into.positions.push(p);
+            into.normals.push(n);
+        }
+        into.triangles.push([base, base + 1, base + 2]);
+    }
+    let mut out = vec![];
+    if !rest.is_empty() {
+        out.push(crate::SolidMesh::plain(rest, color));
+    }
+    if !side.is_empty() {
+        let graphics =
+            crate::MeshGraphics { face: crate::PlanarFace::Front, graphics: list, center: Point::ZERO, art, opacity, object: member.clamp(0.0, 1.0) };
+        out.push(crate::SolidMesh { mesh: side, color, graphics: Some(graphics) });
     }
     Ok(out)
 }
@@ -954,12 +1012,15 @@ fn group_meshes(n: &Node, total: &mut usize, limit: usize) -> Result<Vec<crate::
     reshape_members(n, n.appearance.effects.get(..index).unwrap_or_default(), &mut shapes);
     let b = union_bounds(&shapes).ok_or("Revolve requires a group holding a shape with at least two anchors")?;
     let options = shared_options(&shapes, fx_options(fx))?;
+    // The graphics go on the side of the member with the longest profile, as the canvas draws them.
+    let longest = if options.map_surface { graphics_member(&shapes, b, options) } else { None };
     let mut out = vec![];
-    for s in &shapes {
+    for (k, s) in shapes.iter().enumerate() {
         let Some(item) = surface_item(&s.items) else { continue };
         let (paint, opacity, _) = paint_of(item);
-        let mesh = vectorcraft_three_d::revolve_mesh(&s.path, s.rule, b, options)?;
-        crate::solids::keep_mesh(&mut out, total, crate::SolidMesh::plain(mesh, crate::solids::mesh_color(&paint, opacity * s.opacity)), limit)?;
+        for mesh in surface_meshes(&s.path, s.rule, b, fx, options, (&paint, opacity, s.opacity), longest == Some(k))? {
+            crate::solids::keep_mesh(&mut out, total, mesh, limit)?;
+        }
     }
     Ok(out)
 }

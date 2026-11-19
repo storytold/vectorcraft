@@ -776,6 +776,73 @@ fn compact_picker_shrinks_then_scrolls_without_enlarging_the_window() {
     }
 }
 
+/// #5941: in a window short enough to scroll the picker, at any width, its scroll bar shows
+/// inside the window and the content fits beside it: no label is cut off at the side.
+#[test]
+fn a_scrolling_picker_shows_its_bar_and_fits_its_content_beside_it() {
+    fn sideways_clipped(shape: &egui::Shape, clip: Rect, out: &mut Vec<String>) {
+        match shape {
+            egui::Shape::Text(t) => {
+                let r = t.visual_bounding_rect();
+                let rows_shown = clip.top() <= r.top() && r.bottom() <= clip.bottom();
+                if rows_shown && !t.galley.text().trim().is_empty() && (r.left() < clip.left() - 1.0 || r.right() > clip.right() + 1.0) {
+                    out.push(format!("{:?} {r:?} in {clip:?}", t.galley.text()));
+                }
+            }
+            egui::Shape::Vec(v) => v.iter().for_each(|s| sideways_clipped(s, clip, out)),
+            _ => {}
+        }
+    }
+    for width in (400..=800).step_by(8) {
+        let size = vec2(width as f32, 380.0);
+        let (ctx, mut app) = (context(), app());
+        app.run("ui.colorPicker", json!({"color": "#0000ff"})).unwrap();
+        settled(&ctx, &mut app, size);
+        let input = egui::RawInput { screen_rect: Some(Rect::from_min_size(egui::Pos2::ZERO, size)), ..Default::default() };
+        let mut out = ctx.run_ui(input, |ui| super::super::show(&mut app, ui.ctx()));
+        out.textures_delta.clear();
+        let mut clipped = vec![];
+        for s in &out.shapes {
+            sideways_clipped(&s.shape, s.clip_rect, &mut clipped);
+        }
+        assert!(clipped.is_empty(), "{size:?}: {clipped:?}");
+        let outer = ctx.memory(|m| m.area_rect(egui::Id::unique(("dialog", KIND)))).unwrap();
+        assert!(outer.left() >= -0.5 && outer.right() <= size.x + 0.5, "{size:?}: the window {outer:?} stays on screen");
+        // The content's scroll bar: a narrow filled rectangle taller than a row, inside the window.
+        let mut bars = vec![];
+        let mut walk = vec![];
+        out.shapes.iter().for_each(|c| walk.push(c.shape.clone()));
+        while let Some(s) = walk.pop() {
+            match s {
+                egui::Shape::Vec(v) => walk.extend(v),
+                egui::Shape::Rect(r) if r.fill.a() > 0 && r.rect.width() <= 8.0 && r.rect.height() > 40.0 => bars.push(r.rect),
+                _ => {}
+            }
+        }
+        assert!(bars.iter().any(|b| outer.contains_rect(*b)), "{size:?}: the content scrolls and its bar shows in {outer:?}: {bars:?}");
+    }
+}
+
+/// #5941: while the body scrolls, the heading sets the dialog's width to the one the body lays its
+/// field and columns out in, with the scroll bar's column, so the body measures the same layout from
+/// it and does not leave out the bar's column a second time.
+#[test]
+fn the_heading_leaves_the_body_the_width_of_the_layout_it_measured() {
+    let ctx = context();
+    for width in (400..=800).step_by(4) {
+        let size = vec2(width as f32, 380.0);
+        let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(egui::Pos2::ZERO, size)), ..Default::default() };
+        let mut out = ctx.run_ui(raw, |ui| {
+            let (side, _, _, stacked, bar) = layout_size(ui);
+            assert!(bar > 0.0, "{size:?}: the body scrolls");
+            header(ui, "Color Picker");
+            let (body_side, _, _, body_stacked, _) = layout_size(ui);
+            assert_eq!((body_side, body_stacked), (side, stacked), "{size:?}: the body lays out the field and columns the heading measured");
+        });
+        out.textures_delta.clear();
+    }
+}
+
 /// Type all three Lab components through the numeric fields, then apply the picked color.
 #[test]
 fn native_lab_entry_in_color_picker() {
