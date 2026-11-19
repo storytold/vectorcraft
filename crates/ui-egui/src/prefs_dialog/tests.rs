@@ -1691,9 +1691,29 @@ fn ok_refuses_a_typed_folder_outside_the_automation_roots_before_looking_at_it()
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// Whether a text painted in `rect` shows inside its `clip`: its center is inside the clip, so the
+/// pointer on that center reaches the text's row.
+fn shows_in_clip(rect: egui::Rect, clip: egui::Rect) -> bool {
+    clip.contains(rect.center())
+}
+
+/// A text whose top or bottom edge the clip cuts off shows only while its center is inside the
+/// clip: a row half scrolled out of the list is not yet one the pointer can be moved onto.
+#[test]
+fn a_text_shows_only_while_its_center_is_inside_its_clip() {
+    let clip = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(100.0, 100.0));
+    let text = |y: f32| egui::Rect::from_min_size(egui::pos2(10.0, y), egui::vec2(50.0, 20.0));
+    assert!(shows_in_clip(text(40.0), clip));
+    assert!(shows_in_clip(text(85.0), clip), "the center is 5 pt above the bottom");
+    assert!(!shows_in_clip(text(95.0), clip), "the top is inside, the center below the bottom");
+    assert!(!shows_in_clip(text(-15.0), clip), "the bottom is inside, the center above the top");
+    assert!(!shows_in_clip(text(200.0), clip));
+}
+
 /// One frame of the open Preferences dialog with `events`, a quarter second after the last. → The
-/// texts it painted where they show (a text its clip rectangle hides is left out), with their
-/// rectangles, and the description of the accessibility node with the keyboard focus, if it has one.
+/// texts it painted where they show (a text whose center its clip rectangle hides is left out),
+/// with their rectangles, and the description of the accessibility node with the keyboard focus, if
+/// it has one.
 fn description_frame(a: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> (Vec<(String, egui::Rect)>, Option<String>) {
     let time = ctx.input(|i| i.time) + 0.25;
     let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 900.0)));
@@ -1704,7 +1724,7 @@ fn description_frame(a: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<eg
         match s {
             egui::Shape::Text(t) => {
                 let r = egui::Rect::from_min_size(t.pos, t.galley.size());
-                if r.intersects(clip) {
+                if shows_in_clip(r, clip) {
                     v.push((t.galley.text().to_string(), r));
                 }
             }
@@ -2271,8 +2291,8 @@ fn keyboard_focus_on_a_hyphenation_row_shows_its_description() {
     assert!(described.iter().any(|d| d == exceptions), "the focused field carries the sentence: {described:?}");
 }
 
-/// The pointer over each row of Plug-ins & Scratch Disks, Additional Plug-ins Folder, Primary and
-/// Secondary, shows that row's sentence and neither of the others.
+/// The pointer over each row of Plug-ins & Scratch Disks, Additional Plug-ins Folder, Plug-in
+/// Instruction Budget, Primary and Secondary, shows that row's sentence and none of the others.
 #[test]
 fn hovering_a_plugins_and_scratch_disks_row_shows_its_description() {
     let mut a = app();
@@ -2284,7 +2304,12 @@ fn hovering_a_plugins_and_scratch_disks_row_shows_its_description() {
     let row = |texts: &[(String, egui::Rect)], label: &str| {
         texts.iter().find(|(t, _)| t.starts_with(label)).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no `{label}` in {texts:?}"))
     };
-    let rows = [("Additional Plug-ins Folder:", "pluginsFolder"), ("Primary:", "scratchPrimary"), ("Secondary:", "scratchSecondary")];
+    let rows = [
+        ("Additional Plug-ins Folder:", "pluginsFolder"),
+        ("Plug-in Instruction Budget", "pluginInstructionBudget"),
+        ("Primary:", "scratchPrimary"),
+        ("Secondary:", "scratchSecondary"),
+    ];
     let sentences: Vec<_> = rows.iter().map(|(_, key)| descriptions::description(key).unwrap_or_else(|| panic!("`{key}` has a sentence"))).collect();
     for (i, (label, _)) in rows.iter().enumerate() {
         description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(row(&texts, label))]);
@@ -2423,7 +2448,8 @@ fn the_display_server_and_monitor_profile_settings_have_a_description_on_every_p
 }
 
 /// The pointer over each Performance row this platform shows, from GPU Performance to Use Monitor
-/// Profile for Canvas on the desktop, shows that row's sentence and no other row's.
+/// Profile for Canvas on the desktop, Low-Latency Drawing included there, shows that row's sentence
+/// and no other row's.
 #[test]
 fn hovering_a_performance_row_shows_its_description() {
     let mut a = app();
@@ -2444,6 +2470,9 @@ fn hovering_a_performance_row_shows_its_description() {
         ("Real-time Drawing and Editing", "realTimeDrawing"),
         ("Render Threads (-1 = Automatic):", "renderThreads"),
     ];
+    if !cfg!(target_arch = "wasm32") {
+        rows.insert(3, ("Low-Latency Drawing", "lowLatencyDrawing"));
+    }
     if cfg!(target_os = "linux") {
         rows.push(("Linux Display Server:", "linuxDisplayServer"));
     }
@@ -2467,11 +2496,21 @@ fn hovering_a_performance_row_shows_its_description() {
             }
             texts = description_frame(&mut a, &ctx, vec![wheel.clone()]).0;
         }
+        // The wheel scrolls smoothly over several frames: wait until the row stays put.
+        for _ in 0..60 {
+            let next = description_frame(&mut a, &ctx, vec![]).0;
+            let still = row(&next, label) == row(&texts, label);
+            texts = next;
+            if still {
+                break;
+            }
+        }
         description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(row(&texts, label))]);
         let (after, _) = description_frame(&mut a, &ctx, vec![]);
         for (j, sentence) in sentences.iter().enumerate() {
             assert_eq!(painted(&after, sentence), i == j, "pointer over `{label}`, sentence {j}: {after:?}");
         }
+        texts = after;
     }
 }
 
