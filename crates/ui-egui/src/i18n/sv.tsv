@@ -487,6 +487,9 @@ font-technology	Variable	Variabla
 	Choose…	Välj…
 	Circle	Cirkel
 	Circle Tool	Cirkelverktyg
+	Curvature Circle Tool	Krökningscirkelverktyg
+	Cusp	Spets
+	Straight segment	Rakt segment
 	Circle too large	Cirkeln är för stor
 	Classic Defaults	Klassiska standardvärden
 	Clean Up…	Rensa upp…
@@ -5168,6 +5171,11 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	no anchor points selected	inga ankarpunkter är markerade
 @msg	`points` must be two or three [x, y] pairs of numbers	`points` måste vara två eller tre talpar [x, y]
 @msg	direct-select two or three anchor points, or give `points`	direktmarkera två eller tre ankarpunkter eller ange `points`
+@msg	the path is straight there, so no circle matches its curvature	banan är rak där, så ingen cirkel matchar dess krökning
+@msg	the path has a cusp there, so it has no single curvature	banan har en spets där, så den har ingen entydig krökning
+@msg	the path has a corner there, so it has no single curvature	banan har ett hörn där, så den har ingen entydig krökning
+@msg	a guide has no curvature circle	en stödlinje har ingen krökningscirkel
+@msg	the circle that matches the path there would reach past the canvas	cirkeln som matchar banan där skulle nå utanför arbetsytan
 @msg	no circle passes through these points: two are the same or all three lie on one line	ingen cirkel går genom de här punkterna: två är samma punkt eller så ligger alla tre på en linje
 @msg	no app to open files here	det finns ingen app för att öppna filer här
 @msg	no artboard	ingen rityta
