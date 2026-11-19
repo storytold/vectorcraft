@@ -128,6 +128,14 @@ pub(super) fn first_tab_shown(widths: &[f32], active: Option<usize>, room: f32) 
     first
 }
 
+/// When the tabs `widths` wide from `first` to the last one leave at least `least` of `room` before
+/// the » button, the tab before `first` fills that room with its title shortened (#8584). → the
+/// first tab the strip shows and, when it is that tab, the width it gets.
+fn leading_tab(widths: &[f32], first: usize, room: f32, least: f32) -> (usize, Option<f32>) {
+    let rest: f32 = widths.get(first..).map_or(0.0, |w| w.iter().sum());
+    if first > 0 && room - rest >= least { (first - 1, Some(room - rest)) } else { (first, None) }
+}
+
 /// The × of a document tab `w` wide, drawn in `xr` and clicked within 3 pt of it, or `None` for a
 /// tab shortened narrower than the × and its click area.
 fn tab_close_box(ui: &Ui, t: &Tokens, xr: egui::Rect, w: f32, id: egui::Id) -> Option<egui::Response> {
@@ -145,8 +153,9 @@ fn tab_close_box(ui: &Ui, t: &Tokens, xr: egui::Rect, w: f32, id: egui::Id) -> O
 /// taller, with larger titles. Tabs that don't fit are reached from a » button at the strip's
 /// right end, which lists every open document, and the active tab is always in view (#746). The
 /// first tab that doesn't fit whole fills the room left before the » button with its title
-/// shortened, when that room holds some of the title (#8584), and an active tab wider than the
-/// whole strip is shortened to it.
+/// shortened, when that room holds some of the title (#8584). When the active tab is among the last
+/// ones and the tabs from it to the end leave room, the tab before them fills that room instead. An
+/// active tab wider than the whole strip is shortened to it.
 /// Each view Window › New Window opened has a tab of its own. Windows floating have no tab
 /// ([`crate::doc_windows`]); while the current window is a floating one, the tab of the window the
 /// strip shows is the highlighted one. A tab dragged more than [`crate::doc_windows::TEAR_OFF`]
@@ -168,22 +177,22 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.painter().line_segment([strip.left_bottom(), strip.right_bottom()], Stroke::new(1.0, t.border));
     // On the Home screen no tab is the current one.
     let shown = crate::doc_windows::tab_window(app).filter(|_| app.ui.home.is_none());
-    // The windows under the tabs; `active` is the position of the highlighted one.
-    let docked = crate::doc_windows::docked_windows(app);
-    let active = docked.iter().position(|w| Some(*w) == shown);
-    let tabs: Vec<(String, std::sync::Arc<egui::Galley>)> = docked
-        .iter()
-        .filter_map(|w| Some((*w, app.session.documents().get(w.0)?)))
+    // The windows under the tabs, with their titles; `active` is the position of the highlighted one.
+    let tabs: Vec<(crate::doc_windows::Win, String, std::sync::Arc<egui::Galley>)> = crate::doc_windows::docked_windows(app)
+        .into_iter()
+        .filter_map(|w| Some((w, app.session.documents().get(w.0)?)))
         .map(|(w, d)| {
             let title = window_tab_title(app, w, d);
             let color = if Some(w) == shown { t.text_strong } else { t.text_dim };
-            (title.clone(), ui.painter().layout_no_wrap(title, theme::semibold(title_size), color))
+            (w, title.clone(), ui.painter().layout_no_wrap(title, theme::semibold(title_size), color))
         })
         .collect();
-    let widths: Vec<f32> = tabs.iter().map(|(_, g)| g.size().x + TAB_PADDING).collect();
+    let active = tabs.iter().position(|(w, _, _)| Some(*w) == shown);
+    let widths: Vec<f32> = tabs.iter().map(|(_, _, g)| g.size().x + TAB_PADDING).collect();
     let overflow = widths.iter().sum::<f32>() > strip.width();
     let room = strip.width() - if overflow { MORE } else { 0.0 };
     let first = if overflow { first_tab_shown(&widths, active, room) } else { 0 };
+    let (first, lead) = leading_tab(&widths, first, room, TAB_PADDING + MIN_TITLE);
     let mut x = strip.left();
     let mut activate = None;
     let mut close = None;
@@ -193,18 +202,20 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
     // the drag just ended), for moving it along the strip.
     let mut slots: Vec<(usize, egui::Rect)> = vec![];
     let mut dragged = None;
-    for (k, ((title, galley), w)) in tabs.iter().zip(&widths).enumerate().skip(first) {
+    for (k, ((win, title, galley), w)) in tabs.iter().zip(&widths).enumerate().skip(first) {
         // A tab that doesn't fit whole takes the rest of the strip with its title shortened, as
         // long as some of the title fits (#8584); its tooltip shows the whole title. The active
-        // tab always shows, shortened to the strip when it is wider than the whole strip.
-        let left = strip.left() + room - x;
+        // tab always shows, shortened to the strip when it is wider than the whole strip. The
+        // leading tab before the ones that fit whole takes only the room they leave.
+        let left = lead.filter(|_| k == first).unwrap_or(strip.left() + room - x);
+        let is_active = Some(k) == active;
         // A shortened title too wide for its room even as "…" is not drawn, so it stays clear of
         // the ×.
         let (galley, w, shortened, title_fits) = if *w > left {
-            if left < TAB_PADDING + MIN_TITLE && Some(k) != active {
+            if left < TAB_PADDING + MIN_TITLE && !is_active {
                 break;
             }
-            let color = if Some(k) == active { t.text_strong } else { t.text_dim };
+            let color = if Some(*win) == shown { t.text_strong } else { t.text_dim };
             let mut job = egui::text::LayoutJob::simple_singleline(title.clone(), theme::semibold(title_size), color);
             let max_width = (left - TAB_PADDING).max(0.0);
             job.wrap = egui::text::TextWrapping { max_width, max_rows: 1, break_anywhere: true, overflow_character: Some('…') };
@@ -214,9 +225,8 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
         } else {
             (galley.clone(), *w, false, true)
         };
-        let Some(&win) = docked.get(k) else { break };
+        let win = *win;
         let i = win.0;
-        let is_active = Some(k) == active;
         let r = egui::Rect::from_min_size(egui::pos2(x, strip.top()), vec2(w, strip.height() - 1.0));
         let resp = ui.interact(r, ui.scope_id().with(("tab", i, win.1)), Sense::click_and_drag());
         let resp = if shortened { super::status_bar::full_text_tooltip(resp, title.as_str()) } else { resp };

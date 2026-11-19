@@ -67,9 +67,8 @@ fn the_tab_that_does_not_fit_whole_fills_the_rest_of_the_strip() {
     tabs.sort_by(|a, b| a.1.left().total_cmp(&b.1.left()));
     let whole = tabs.iter().filter(|(t, _)| !t.ends_with('…')).count();
     let (short, r) = tabs.last().cloned().unwrap_or_else(|| panic!("tabs are drawn: {tabs:?}"));
-    assert!((2..8).contains(&whole), "some tabs fit whole and some don't: {tabs:?}");
+    assert_eq!((whole, tabs.len()), (3, 4), "3 tabs fit whole and one more is shortened: {tabs:?}");
     assert!(short.ends_with('…'), "a tab with a shortened title follows the whole ones: {tabs:?}");
-    assert_eq!(tabs.len(), whole + 1, "one tab is shortened: {tabs:?}");
     // The strip ends 8 pt from the window's edge, and the » button takes its last 30 pt; the tab's
     // padding (50 pt with the ×) and less than one character are left over.
     let more_left = SIZE.x - 8.0 - 30.0;
@@ -84,6 +83,32 @@ fn the_tab_that_does_not_fit_whole_fills_the_rest_of_the_strip() {
         texts.iter().any(|(t, _)| t.starts_with(name) && !t.ends_with('…') && t.contains("(RGB/Preview)")),
         "the tooltip shows the whole title: {texts:?}"
     );
+}
+
+/// With the last document active, the tabs that end the strip leave room before the » button, and
+/// the tab before them fills it with its title shortened instead of the strip starting with that
+/// room empty (#8584).
+#[test]
+fn with_the_last_document_active_the_tab_before_the_shown_ones_fills_the_room() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    for i in 0..8 {
+        app.run("file.new", json!({"width": 100, "height": 100, "name": format!("Tab test {i}")})).unwrap();
+    }
+    app.session.set_active(7);
+    app.sync_views();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let texts = frame(&mut app, &ctx, 0.0, vec![]);
+    let mut tabs: Vec<(String, egui::Rect)> = texts.into_iter().filter(|(t, _)| t.starts_with("Tab test")).collect();
+    tabs.sort_by(|a, b| a.1.left().total_cmp(&b.1.left()));
+    let whole = tabs.iter().filter(|(t, _)| !t.ends_with('…')).count();
+    assert_eq!((whole, tabs.len()), (3, 4), "3 tabs fit whole and one more is shortened: {tabs:?}");
+    let (lead, r) = tabs.first().cloned().unwrap_or_else(|| panic!("tabs are drawn: {tabs:?}"));
+    assert!(lead.starts_with("Tab test 4") && lead.ends_with('…'), "the tab before the shown ones comes first, shortened: {tabs:?}");
+    // The strip starts 8 pt from the window's edge, and the title 14 pt into the tab (32 pt on
+    // macOS, after the ×).
+    assert!(r.left() <= 8.0 + 32.0 + 1.0, "the shortened tab starts the strip: {r:?}");
+    assert!(tabs.last().is_some_and(|(t, _)| t.starts_with("Tab test 7")), "the active tab ends the strip: {tabs:?}");
 }
 
 /// The active tab with a title wider than the whole strip is shortened to end before the » button,
