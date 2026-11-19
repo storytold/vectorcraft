@@ -16,8 +16,12 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
         feed.bind_repaint(ui.ctx());
     }
     // A modal dialog takes the canvas's presses, finger taps, long touches and view navigation, from the frame it opens.
+    let cancelled = crate::dialogs::refresh_brush_key_color(app);
     let modal = crate::panel_docking::modal_open(app, ui.ctx());
     let (pointer, m, space, hover) = wheel_view(app, ui, resp, rect, modal);
+    if (cancelled && pointer.primary_pressed()) || crate::dialogs::brush_key_color_input(app, ui, resp, rect) {
+        return;
+    }
     let v = *app.view().unwrap_or(&View::default());
     let xf = Xf::at(rect, &v, app.canvas_ui_zoom);
     // A lifted pen or finger takes the pointer away in the frame it lifts (egui's `PointerGone`),
