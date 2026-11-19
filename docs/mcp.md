@@ -692,8 +692,9 @@ whole cell or none of it, so a grayed cell can hold printable colors and a clear
 print. `{"harmony": true, "harmonyRule": "triad"}` puts a marker on the wheel's ring for each other
 color of a Color Guide harmony rule, as Show Harmony and Harmony Rule do; the wheel takes the 15 rules whose colors
 each have a hue of their own (not `monochromatic`, `shades`, `complementary2`, `triad2`, `triad3` or
-`highContrast2`). Keys left out keep their values. Params that are not an object, another key or a value off
-the list return an error and change nothing. The command returns `{view, channel, sliders, gamut, harmony, harmonyRule, vision}`,
+`highContrast2`). `{"documentColors": true}` shows the row the panel menu's Show Document Colors adds under the wheel
+or the box. Keys left out keep their values. Params that are not an object, another key or a value off
+the list return an error and change nothing. The command returns `{view, channel, sliders, gamut, harmony, harmonyRule, vision, documentColors}`,
 and the settings are kept with the preferences.
 
 `ui.colorWheel {"sliders": "oklch"}` shows the Color Wheel panel's OKLCH Sliders (L, C and H rows under the wheel or
@@ -711,6 +712,10 @@ does: a row of four chips under the wheel or the box shows the current color thr
 and tritanopia simulations of `view.proofSetup`, and for achromatopsia as the gray with the color's CIE L*. Each
 chip reports its name and hex value to screen readers, and a click on a chip does not apply its color. `false`
 hides the row, and `null` keeps the setting. Any other value returns an error and changes nothing.
+`ui.colorWheel {"documentColors": true}` shows the Color Wheel panel's row of the colors the selection uses, or with
+nothing selected the colors of the art `select.all` takes, in the order `color.used {}` lists them. A click on a color
+applies it to the active proxy, keeping its link to a global swatch. The answer includes `documentColors`
+with the other settings, and the setting is kept with the preferences.
 
 In remote desktop mode, `invoke_menu` with `{"command":"ui.sampleScreenColor","params":{}}` shows the system's
 screen color sampler and returns `null` before a color is picked: the system's sampler on macOS, the XDG desktop
@@ -4684,8 +4689,23 @@ already walks Image Trace. Short agent entry points:
   `builtIn: true`, then the saved ones with `builtIn: false`, and returns a `revision` that grows each time the saved
   presets change. `imageTrace.make {preset}` takes a saved preset's name, with ASCII letters matching in either case.
   Its journal entry records the saved preset's settings as `savedPreset`, so a replay traces with them after the preset
-  is changed, renamed or deleted. In the app,
-  `ui.imageTracePresetDialog {params?, rename?}` opens the Image Trace panel's Save as New Preset… or Rename… dialog.
+  is changed, renamed or deleted. `imageTrace.presets.export {names?, path?}` writes saved presets (default: every one;
+  a built-in preset's name is an error) as a `.vctracepresets` file, VectorCraft's own JSON layout
+  (`{"format": "vctracepresets", "version": 1, "presets": [{"name", "params"}]}`), to `path`, else returns its text as
+  `data`; it refuses more than 1,000 presets or a file over 4 MiB, the limits of the import.
+  `imageTrace.presets.import {path? | data? | dataBase64?, replace?}` adds the presets of such a file (at most
+  4 MiB and 1,000 presets) → `{imported, replaced, skipped}`: a preset with a saved preset's name is skipped unless
+  `replace` is true. Every preset in the file is checked first, and a file with a built-in preset's or `Custom`'s name,
+  two presets of one name, a preset without a name or `params`, settings `imageTrace.presets.save` refuses, or a newer
+  `version` changes nothing. In the app, opening a `.vctracepresets` file (File › Open, a drop, or the file picked
+  for Import… on the web) imports it as Import… does. Also in the app,
+  `ui.imageTracePresetDialog {params?, rename?}` opens the Image Trace panel's Save as New Preset… or Rename… dialog,
+  and `ui.tracingPresetsDialog {selected?}` opens Edit › Tracing Presets…: the built-in presets in brackets (read-only)
+  and the saved ones, with the selected preset's settings. Its New… (from the selected preset) and Edit… (a saved
+  preset) open an editor with the Image Trace panel's settings; OK saves with `imageTrace.presets.save` and Cancel saves
+  nothing, and a built-in preset's name, `Custom` or another saved preset's name keeps the editor open. Delete selects
+  the saved preset below the deleted one, else the one above it, else Default. Import… asks whether to replace saved presets whose names the file holds (Cancel
+  keeps them), and Export… writes every saved preset.
 - Live Paint: `livePaint.make`, `livePaint.merge`, `livePaint.fill {group?, point}`, `livePaint.strokeEdge`,
   `livePaint.info {group?|id?}`, `livePaint.release`, `livePaint.expand`, and `livePaint.gapOptions {ids?, detect?, size?,
   color?, closeGaps?}` (Object › Live Paint › Gap Options). Make gives each covered face the fill rows that draw of
@@ -4863,15 +4883,23 @@ already walks Image Trace. Short agent entry points:
   `paint.none` paint the faces or the edges. `paint.editGradient`, `paint.setGradientGeom` and the `paint.freeform`
   point and line edits change the faces' or the edges' gradients, `paint.invert` and `paint.complement` recolor the
   faces' fills or the edges' strokes, and `stroke.set`, `stroke.weightUp`, `stroke.weightDown` and
-  `stroke.setAdvanced` change the edges. The Fill proxy shows the faces' fill, and the Stroke proxy, the Stroke panel
-  and the Control bar show the edges' stroke. A face or edge selected or given together with its whole group follows
-  the group's rule: a fill does not reach an edge, and a stroke does not reach a face. `paint.swap` gives the faces
-  the stroke the edges share and gives the edges the fill the faces share, with a gradient fitted to each face or
-  edge. It leaves a group as it is when its faces' fills or its edges' strokes differ, when any of them is a freeform
-  gradient, or when it has no face or no edge. `paint.default` replaces each face's appearance with no fill and each
-  edge's appearance with a 0.5 pt black stroke, also when the document's Default Graphic Style is redefined. With
-  only Live Paint groups selected or given, the fill and stroke for new art become no fill and a 0.5 pt black stroke;
-  with New Art Has Basic Appearance off, new art then takes the selection's appearance, as after any command.
+  `stroke.setAdvanced` change the edges. `object.setOverprint` sets the faces' fill overprint and the edges' stroke
+  overprint. `appearance.copyFrom` (the Eyedropper) gives the picked fill attributes to the faces and the picked
+  stroke attributes to the edges, also onto a group given as `source` with `reverse`. A whole-appearance pick gives
+  each face every picked fill row and each edge every picked stroke row, and the faces and edges keep their rows of
+  the other kind and their effects; `append` adds the source's rows to them but not its object effects. A whole group
+  picked up as the source (given as `source`, or selected first with `reverse`) gives its first face's fills with its
+  first edge's strokes above them, and the group's own opacity, blend mode and effects. The Fill proxy shows the
+  faces' fill, and the Stroke proxy, the Stroke panel and the Control bar show the edges' stroke, whatever the order of
+  a selection that holds the group, directly or inside a selected group, and some of its parts. A face or edge
+  selected or given together with its whole group follows the group's rule: a fill does not reach an edge, and a
+  stroke does not reach a face. `paint.swap` gives the faces the stroke the edges share and gives the edges the fill
+  the faces share, with a gradient fitted to each face or edge. It leaves a group as it is when its faces' fills or its
+  edges' strokes differ, when any of them is a freeform gradient, or when it has no face or no edge. `paint.default`
+  replaces each face's appearance with no fill and each edge's appearance with a 0.5 pt black stroke, also when the
+  document's Default Graphic Style is redefined. With only Live Paint groups selected or given, the fill and stroke
+  for new art become no fill and a 0.5 pt black stroke; with New Art Has Basic Appearance off, new art then takes the
+  selection's appearance, as after any command.
 
 `brush.selectionArt {ids?|id?}` (a query) replies `{art}`: the object that `brush.new` given the same `ids` or `id`,
 or the same selection, takes as a new scatter or art brush's art and as a new pattern brush's side tile. Several
@@ -5669,7 +5697,13 @@ fills and strokes above it paint over the members (characters), those below unde
 `contents` to say where the row ends up in the same undo step; `document.node` shows the slot as
 `appearance.contents_index`. The `appearance.*`, `effect.*` and `graphicStyle.apply` commands edit the selected
 objects themselves (a group's own stack; layers through `ids`) or, with `target: "contents"`, the objects inside the
-groups and layers. `appearance.targetContents` selects a group's members (double-clicking the Contents row).
+groups and layers. In a Live Paint group those are its faces and edges, not its hidden source paths.
+`appearance.addFill` adds a fill to the faces only, and `appearance.addStroke` adds a stroke to the edges only; a selected group left with only its hidden source paths is returned without a change. A
+fill or stroke command with an `item` and `target: "contents"` (such as `paint.setFill`, `stroke.set`,
+`paint.invert`, `paint.setGradientGeom` and `object.setOverprint`) changes the faces for a fill row and the edges for
+a stroke row. The row commands (`appearance.setItem`, `appearance.removeItem` and the others) find their rows on each
+face and edge as on any other object in the contents.
+`appearance.targetContents` selects a group's members (double-clicking the Contents row).
 SVG and PDF export bake a group's own fills, strokes and geometry effects into paths; its raster effects stay a
 filter on the whole group in SVG and become an image of the whole group in PDF.
 A geometry effect on one of type's own fills or strokes (`effect.apply` with `item`) reshapes the whole outline that
@@ -5758,15 +5792,28 @@ document's swatches, as a library to add from. From an `.ase` file it reads RGB,
 spot or process swatches and keeps their color groups. A color book (such as a Pantone book you own) gives its RGB,
 CMYK or Lab colors named with the book's prefix and suffix ("PANTONE 185 C"), as spot colors unless the book marks
 them as process colors; `.acb` files are read, never written. A file in the user library folder, or a file with the
-same extension and bytes as one there, loads as that User Defined library (category `user`).
+same extension and bytes as one there, loads as that User Defined library (category `user`). A file larger than 256 MB
+is refused before it is read.
 From a document, such as a `.ai` or `.eps` swatch library, it reads the colors, tints, gradients and pattern swatches
 in the document's order and color groups; `swatch.library.add` brings a pattern swatch's pattern, with its tile and
 art, into the document as a pattern swatch under the library swatch's name and in its color group. A global or spot
 color the pattern's art links to keeps the library's color: when the document gives its name another color, it comes
 in under a numbered name ("Ink 2") and the pattern links to that. A document with
 no swatches, and a `.ai`, `.eps` or PostScript file whose swatches are only the default ones, are refused with
-"`<file>` has no swatches of its own". The Swatch Libraries filter of Other Library… lists `.ai`, `.ait` and `.eps`
-(`.epsf`) files as well as the library files.
+"`<file>` has no swatches of its own", unless the document has graph designs: it then loads with no swatches. The
+Swatch Libraries filter of Other Library… lists `.ai`, `.ait` and `.eps` (`.epsf`) files as well as the library files.
+A document's graph designs come with it: the reply's `graphDesigns` counts them, and
+`graph.column`, `graph.marker` and `graph.design` take the library's id as `library` until the app quits (a User
+Defined copy made with `swatch.library.copyToUser` holds the swatches alone, so the designs stay under the loaded id).
+`graph.column {design, library}` and `graph.marker {design, library}` copy a design the document lacks into it, with the
+swatches, patterns, symbols, styles, brushes and images its art uses, in the same undo step as the graph change.
+`graph.design {library, add: name | [names]}` copies designs without applying them and returns `{added, existing}`, and
+`graph.design {library}` lists the library's designs. A design the document already has under the same name stays as it
+is. `graph.column` and `graph.marker` with no `design`, and `graph.design {}`, list the loaded libraries that hold
+designs as `libraries: [{library, name, designs}]`. Copying a graph and pasting it into another document brings the designs its series
+draw with in the same way; a pasted graph is drawn again with the document's design of that name when that design
+would draw it otherwise. The graphs already in the document that draw with a design the copy or paste adds, one a copied
+design's art uses included, are drawn again with it.
 `swatch.library.copyToUser {library}` copies a loaded library into the user library folder of the desktop
 app (a library file as it is; a document's swatches or a library loaded from `data` or `dataBase64`
 as `.vcswatches`; a library with pattern swatches is refused) under a name no file there has, and lists it as User
@@ -7268,6 +7315,26 @@ arc size of 180°, its 15° steps, the side an arc bulges to, what C and `[` `]`
 path are VectorCraft's own rules. The tool keeps `action` and `turn` with the preferences
 (`tool.setOption {tool: "quickPen", key, value}`).
 
+Selecting the tool shows its toolbar on the canvas: Straight Line, Continuous Arc and Sharp Corner Arc set `action`,
+Flip Arc flips the last sharp-corner arc as C does (`tool.quickPen.flipArc {}`, which first finishes any pending tool edit,
+which can change the document, then returns false and changes nothing more when the Quick Pen tool is not active
+or the last piece is not a sharp-corner arc), and More Options (…) has Hide
+Toolbar (`window.quickPenToolbar`, which toggles; the toolbar stays hidden until the tool is selected again) and Reset
+Toolbar Position (`window.quickPenToolbar.reset`), as the help page describes.
+The handle at its left end drags it. While a path is being drawn, the toolbar sits beside the path's last point, 24
+screen points off it diagonally whatever the zoom, on the side the path heads toward (to the right and below for a path
+drawn right and down), away from what was drawn, as the
+[design write-up](https://adobe.design/ideas/behind-the-design-adobe-illustrator-s-quick-pen-tool) describes. The
+following are VectorCraft's own rules. Where the side the path heads toward runs off the canvas, the toolbar goes on the
+other side; with no path being drawn, it sits at the bottom center of the canvas. A drag's offset moves it from its
+place beside the drawing, or from its resting place, in the document it was made in, and not where it would cover the
+path's last point. More Options also has Pin Toolbar Position (`window.quickPenToolbar.pin {pinned?}`, omitted
+toggles), which holds the toolbar at its place in the canvas window while the view scrolls or zooms, and Window › Quick
+Pen Toolbar shows or hides it. It hides while a press drags on the canvas, and in a canvas pane narrower than the
+toolbar its controls wrap onto more rows. `ui.inspect` gives `quickPenToolbar` (`pinned`, and `rect` while it shows); its position,
+the pin and whether it shows are not saved. These commands run in the desktop app; the headless host does not run them,
+so they need `--connect`.
+
 `path.quickPen {start?: [x, y], id?, subpath?, keep?, pieces?, closed?}` draws such a path and selects it, as one
 undo step, and answers `{id}`. With `start`, it makes a new path with the current paint (a black stroke when the paint
 has neither fill nor stroke). With `id`, it draws on the open subpath `subpath` (0 when left out) of that path: its
@@ -7825,7 +7892,7 @@ commands are listed this way:
   (Object › Perspective), under Perspective;
 - `text.spelling.dictionary` (Edit › Edit Custom Dictionary…), under Text;
 - the UI commands `ui.recolorDialog` (Edit › Edit Colors › Recolor Artwork…), `ui.flattenerPresetsDialog`,
-  `ui.printPresetsDialog`, `ui.pdfPresetsDialog`, `ui.perspectivePresetsDialog`, `ui.svgFilterDialog`,
+  `ui.printPresetsDialog`, `ui.pdfPresetsDialog`, `ui.tracingPresetsDialog`, `ui.perspectivePresetsDialog`, `ui.svgFilterDialog`,
   `ui.saveSwatchLibrary`, `ui.saveBrushLibrary`, `ui.saveGraphicStyleLibrary` and `ui.saveSymbolLibrary`, under Ui;
   `file.exportAs` and `file.exportSelection`, under File; `links.editOriginal`, under Links; `type.applyBullets` and
   `type.applyNumbers`, under Type; and `window.toolbar.new`, `window.toolbarColumns`, `window.toolsBesideCanvas`,

@@ -835,6 +835,10 @@
 	Box Channel	Kanál čtverce
 	Color box	Barevný čtverec
 	Color Wheel Options	Možnosti barevného kola
+	Show Document Colors	Zobrazit barvy dokumentu
+	Document Colors	Barvy dokumentu
+	Selection Colors	Barvy výběru
+@plural	Used {n} time|Used {n} times	Použito {n}krát|Použito {n}krát|Použito {n}krát
 	Show Harmony	Zobrazit harmonii
 	Harmony Rule	Pravidlo harmonie
 	Harmony color	Barva harmonie
@@ -2126,6 +2130,10 @@ digits	Malayalam	Malajálamské
 	Rename Preset	Přejmenovat přednastavení
 	Save Image Trace Preset	Uložit přednastavení vektorizace obrazu
 	Delete Image Trace Preset	Odstranit přednastavení vektorizace obrazu
+	Tracing Presets…	Přednastavení vektorizace…
+	Import Image Trace Presets	Importovat přednastavení vektorizace obrazu
+	Export Image Trace Presets	Exportovat přednastavení vektorizace obrazu
+	Replace the saved presets that have these names?	Nahradit uložená přednastavení s těmito názvy?
 	Method:	Metoda:
 	Pad	Prodloužit
 	Repeats	Počet opakování
@@ -4318,6 +4326,13 @@ theme	Appearance	Motiv
 	Pen Tool	Nástroj Pero
 	Quick Pen Tool	Nástroj Rychlé pero
 	Quick Pen	Rychlé pero
+	Quick Pen Toolbar	Panel nástrojů rychlého pera
+	Continuous Arc	Plynulý oblouk
+	Sharp Corner Arc	Oblouk s ostrým rohem
+	Flip Arc	Překlopit oblouk
+	Hide Toolbar	Skrýt panel nástrojů
+	Pin Toolbar Position	Připnout polohu panelu nástrojů
+	Reset Toolbar Position	Obnovit polohu panelu nástrojů
 	Picas	Pica
 	Portuguese	Portugalština
 	Preserve Appearance and Overprints	Zachovat vzhled a přetisky

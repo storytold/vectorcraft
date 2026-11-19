@@ -3535,6 +3535,10 @@ liquify-list-end	{0}, {1}	{0} og {1}
 	Box Channel	Kvadratets kanal
 	Color box	Farvekvadrat
 	Color Wheel Options	Indstillinger for farvehjul
+	Show Document Colors	Vis dokumentfarver
+	Document Colors	Dokumentfarver
+	Selection Colors	Markeringens farver
+@plural	Used {n} time|Used {n} times	Brugt {n} gang|Brugt {n} gange
 	Show Harmony	Vis harmoni
 	Harmony Rule	Harmoniregel
 	Harmony color	Harmonifarve
@@ -4696,6 +4700,10 @@ digits	Malayalam	Malayalam
 	Rename Preset	Omdøb forudindstilling
 	Save Image Trace Preset	Gem forudindstilling til billedsporing
 	Delete Image Trace Preset	Slet forudindstilling til billedsporing
+	Tracing Presets…	Vektoriseringsforudindstillinger…
+	Import Image Trace Presets	Importér forudindstillinger til billedsporing
+	Export Image Trace Presets	Eksportér forudindstillinger til billedsporing
+	Replace the saved presets that have these names?	Vil du erstatte de gemte forudindstillinger med disse navne?
 	Method:	Metode:
 	Pad	Forlæng
 	Repeats	Gentagelser
@@ -6775,6 +6783,13 @@ theme	Appearance	Udseende
 	Pen Tool	Pen-værktøj
 	Quick Pen Tool	Hurtigpen-værktøj
 	Quick Pen	Hurtigpen
+	Quick Pen Toolbar	Hurtigpennens værktøjslinje
+	Continuous Arc	Fortløbende bue
+	Sharp Corner Arc	Bue med skarpt hjørne
+	Flip Arc	Vend bue
+	Hide Toolbar	Skjul værktøjslinjen
+	Pin Toolbar Position	Fastgør værktøjslinjens placering
+	Reset Toolbar Position	Nulstil værktøjslinjens placering
 	Picas	Pica
 	Portuguese	Portugisisk
 	Preserve Appearance and Overprints	Bevar udseende og overprint

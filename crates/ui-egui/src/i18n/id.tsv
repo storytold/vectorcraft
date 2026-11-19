@@ -1412,6 +1412,10 @@
 	Box Channel	Saluran kotak
 	Color box	Kotak warna
 	Color Wheel Options	Opsi roda warna
+	Show Document Colors	Tampilkan warna dokumen
+	Document Colors	Warna dokumen
+	Selection Colors	Warna pilihan
+@plural	Used {n} time|Used {n} times	Dipakai {n} kali
 	Show Harmony	Tampilkan harmoni
 	Harmony Rule	Aturan harmoni
 	Harmony color	Warna harmoni
@@ -2575,6 +2579,10 @@ digits	Malayalam	Malayalam
 	Rename Preset	Ganti nama preset
 	Save Image Trace Preset	Simpan preset telusur gambar
 	Delete Image Trace Preset	Hapus preset telusur gambar
+	Tracing Presets…	Preset penelusuran…
+	Import Image Trace Presets	Impor preset telusur gambar
+	Export Image Trace Presets	Ekspor preset telusur gambar
+	Replace the saved presets that have these names?	Ganti preset tersimpan yang memiliki nama-nama ini?
 	Method:	Metode:
 	Pad	Perpanjang
 	Repeats	Jumlah ulangan
@@ -4643,6 +4651,13 @@ theme	Appearance	Tampilan
 	Pen Tool	Alat pena
 	Quick Pen Tool	Alat pena cepat
 	Quick Pen	Pena cepat
+	Quick Pen Toolbar	Bilah alat Pena cepat
+	Continuous Arc	Busur bersambung
+	Sharp Corner Arc	Busur sudut tajam
+	Flip Arc	Balik busur
+	Hide Toolbar	Sembunyikan bilah alat
+	Pin Toolbar Position	Sematkan posisi bilah alat
+	Reset Toolbar Position	Atur ulang posisi bilah alat
 	Picas	Pica
 	Portuguese	Portugis
 	Preserve Appearance and Overprints	Pertahankan tampilan dan overprint

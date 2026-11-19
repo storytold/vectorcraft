@@ -583,6 +583,10 @@ font-technology	Variable	可變
 	Box Channel	方塊色版
 	Color box	顏色方塊
 	Color Wheel Options	色輪選項
+	Show Document Colors	顯示文件顏色
+	Document Colors	文件顏色
+	Selection Colors	所選物件的顏色
+@plural	Used {n} time|Used {n} times	使用 {n} 次
 	Show Harmony	顯示色彩調和
 	Harmony Rule	色彩調和規則
 	Harmony color	調和色彩
@@ -1917,6 +1921,10 @@ file-filter	Templates	範本
 	Rename Preset	重新命名預設集
 	Save Image Trace Preset	儲存影像描圖預設集
 	Delete Image Trace Preset	刪除影像描圖預設集
+	Tracing Presets…	描圖預設集…
+	Import Image Trace Presets	匯入影像描圖預設集
+	Export Image Trace Presets	匯出影像描圖預設集
+	Replace the saved presets that have these names?	要取代具有這些名稱的已儲存預設集嗎？
 	Image Trace Presets	影像描圖預設集
 	Image:	影像：
 	Images:	影像：
@@ -4139,6 +4147,13 @@ liquify-list-end	{0}, {1}	{0}和{1}
 	Pen Tool	筆型工具
 	Quick Pen Tool	快速筆型工具
 	Quick Pen	快速筆型
+	Quick Pen Toolbar	快速筆型工具列
+	Continuous Arc	連續弧線
+	Sharp Corner Arc	尖角弧線
+	Flip Arc	翻轉弧線
+	Hide Toolbar	隱藏工具列
+	Pin Toolbar Position	釘選工具列位置
+	Reset Toolbar Position	重設工具列位置
 	Pencil	鉛筆
 	Pencil Tool	鉛筆工具
 	per slice	每個切片
