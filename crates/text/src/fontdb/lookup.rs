@@ -10,10 +10,7 @@ use super::names::{norm, norm_chars, script_families};
 #[cfg(not(target_arch = "wasm32"))]
 use super::scan::{enumerate_faces, font_files};
 use super::traits::{Alias, FontMatch, FontTraits, regular_rank};
-use super::{
-    Arc, BezPath, CANONICAL_CACHE_MAX, Color, ColourContent, FontDb, GlyphId, GlyphImage, MetadataProvider, NEXT_ID, OUTLINE_CACHE_MAX, Ordering,
-    Size,
-};
+use super::{Arc, BezPath, CANONICAL_CACHE_MAX, Color, ColourContent, FontDb, GlyphImage, MetadataProvider, NEXT_ID, OUTLINE_CACHE_MAX, Ordering};
 
 /// The most faces [`FontDb::postscript_faces`] gives, and the most families it loads.
 const MAX_POSTSCRIPT_FACES: usize = 16;
@@ -368,6 +365,12 @@ impl FontDb {
         loaded.or_else(|| self.instance_by_id(id))
     }
 
+    /// The faces loaded so far (the bundled fonts and the installed ones type has used), in load
+    /// order. Installed fonts that nothing has asked for yet are not among them.
+    pub fn loaded_faces(&self) -> Vec<Arc<FontFace>> {
+        self.read_faces().clone()
+    }
+
     /// The face of character style `st`: [`Self::face_version`] of its font, instanced at its
     /// Variable Font settings ([`Self::instance`]).
     pub fn style_face(&self, st: &vectorcraft_doc::CharStyle) -> Option<Arc<FontFace>> {
@@ -654,19 +657,24 @@ impl FontDb {
         if let Some(p) = self.outlines.lock().unwrap_or_else(|e| e.into_inner()).get(&key) {
             return p.clone();
         }
-        let mut pen = FlipPen(BezPath::new());
-        if let Some(f) = face.skrifa()
-            && let Some(g) = f.outline_glyphs().get(GlyphId::new(gid))
-        {
-            let _ = g.draw(DrawSettings::unhinted(Size::unscaled(), face.location()), &mut pen);
-        }
-        let p = Arc::new(pen.0);
+        let p = Arc::new(self.outline_uncached(face, gid));
         let mut cache = self.outlines.lock().unwrap_or_else(|e| e.into_inner());
         if cache.len() >= OUTLINE_CACHE_MAX {
             cache.clear();
         }
         cache.insert(key, p.clone());
         p
+    }
+
+    /// [`Self::outline`] without the cache: for reading many glyphs once (Retype's index), which
+    /// would otherwise push out the outlines the canvas keeps there.
+    pub fn outline_uncached(&self, face: &FontFace, gid: u32) -> BezPath {
+        let mut pen = FlipPen(BezPath::new());
+        if let Ok(font) = craft_font_catalog::FontOutline::from_bytes(face.data(), face.index(), face.variations()) {
+            // As before, keep the prefix emitted before a malformed glyph reports an error.
+            let _ = font.draw_to(gid, &mut pen);
+        }
+        pen.0
     }
 
     /// Glyph `gid`'s colour bitmap (`sbix`, `CBDT`) in `face`, cached per (face, glyph).

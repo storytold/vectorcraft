@@ -186,6 +186,7 @@ fn a_piece_cut_from_a_face_draws_its_own_part() {
             end: None,
             surface: Some(vectorcraft_three_d::SurfaceCell { page: square, uv, outward: true }),
             plane: Some(vectorcraft_three_d::DepthPlane { normal, offset, center: Point::ZERO, eye: None }),
+            cell: None,
         }
     };
     let wall = facet(0.0, [0.0, 0.0, 1.0], 0.0);
