@@ -573,6 +573,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ),
     ("window.toolbarAdvanced", "Toolbar: Advanced / Basic", "", "{}"),
     (
+        "window.toolbarCompact",
+        "Compact Tools",
+        "",
+        "{on?: bool} use smaller tool cells and a narrower main Tools panel (true), restore its regular spacing (false), or toggle (omitted or null); the choice starts off and is kept with the workspace, independently of one/two columns and Basic/Advanced or edited tools. Tool icons and footer controls keep their size; tool flyouts, torn-off groups and named custom toolbars keep their spacing. A value other than true, false or null is an error and changes nothing; returns the new state",
+    ),
+    (
         "window.toolsBesideCanvas",
         "Keep Tools Beside the Canvas",
         "",
@@ -828,6 +834,30 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{} clear the Learn panel's progress, every tutorial finished and every step marked done, as Reset progress under the list of skills does; open documents, opened practice samples and the Learn view stay as they are; returns what learn.list returns",
     ),
+    (
+        "retype.find",
+        "Find Matching Fonts",
+        "",
+        "{more?: bool} show the Retype panel and list the fonts whose glyphs match the selected outlined text, compared and ranked as type.retypeFonts does (up to 96 loaded fonts, those of the document's live type first): ten, as Find Matching Fonts does, or with more: true the next five fonts the last search found (whatever is selected now; before any search, a first search), as Find more font matches does; the document does not change; a search with no path or compound path selected, or a more that is not true or false, is an error and leaves the list as it was; returns what retype.list returns",
+    ),
+    (
+        "retype.list",
+        "List Matching Fonts",
+        "",
+        "{} what the Retype panel shows: {searched (a search ran since the last reset), fonts: [{family, style, matched (shapes it matches)}], shapes (shapes the last search compared), more (more fonts match than the list holds), truncated (the last search left out shapes past type.retype's limits), size: small|medium|large, text (the samples' text; empty for a generic sample)}",
+    ),
+    (
+        "retype.preview",
+        "Retype Preview",
+        "",
+        "{size?: small|medium|large, text?: string} the size of the Retype panel's samples, as its panel menu sets it, and the text they show, as its sample field sets it (at most 100 characters; empty for a generic sample); any other value is an error and changes nothing; returns what retype.list returns",
+    ),
+    (
+        "retype.reset",
+        "Reset Retype Panel",
+        "",
+        "{} clear the Retype panel's list of matching fonts, as Reset Retype Panel in its panel menu does; the samples' size and text stay; returns what retype.list returns",
+    ),
     ("window.brightness", "UI Brightness", "", "{brightness: dark|mediumDark|mediumLight|light}"),
     (
         "window.workspace",
@@ -900,6 +930,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Select Last Selection Tool",
         "Cmd+~",
         "{} choose the selection tool chosen last (Selection, Direct Selection or Group Selection; none yet: the Selection tool), keeping the active tool when it is that tool; choosing Magic Wand, Lasso or any other tool does not change which one it chooses → {tool}. Default shortcut Ctrl+` on Windows and Linux, none on macOS, where Cmd+` switches windows",
+    ),
+    (
+        "tool.switchSelectionTools",
+        "Switch Selection Tools",
+        "",
+        "{} choose Direct Selection while Selection is active, otherwise choose Selection; this is a persistent explicit tool choice, as selecting the tool from the toolbar, and can be assigned a key in Keyboard Shortcuts with no default key. Normal tool deactivation finishes pending work; returns the actual active {tool}",
     ),
     (
         "tool.setOption",

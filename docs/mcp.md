@@ -5650,8 +5650,8 @@ left out.
 
 ## Symbol libraries
 
-Symbol libraries are read-only sets of symbols: six generated in code (Basic Shapes, UI Frames, Map Markers,
-Inventory Icons, Skill Icons, Weather Icons), the `.vectorcraft` files in
+Symbol libraries are read-only sets of symbols: seven generated in code (Basic Shapes, UI Frames, Map Markers,
+Inventory Icons, Skill Icons, Weather Icons, Media Controls), the `.vectorcraft` files in
 the user library folder of the desktop app (User Defined) and the symbols of any document loaded with
 `symbol.loadLibrary`. `symbol.libraries` lists them (`id`, `name`, `category`: `builtIn`, `user` or `loaded`, `count`)
 and `symbol.library {library}` returns one's symbols (`name`, `size`, `registration`, `exportType`; `library` is an
@@ -12095,6 +12095,40 @@ on an open path that are not drawn because they fall before the path's start can
 
 ```json
 {"name":"run_command","arguments":{"command":"text.touchType","params":{"id":7,"start":1,"dx":10,"dy":4}}}
+```
+
+## Retype panel
+
+`type.retypeFonts {count?}` lists the fonts whose glyphs match the selected outlined text. It compares each selected path
+and compound path, inside groups too, with the glyphs of up to 96 loaded fonts, those of the document's live type
+first, by the matching `type.retype` uses, and it counts only exact matches. When two versions of a font are loaded,
+only the version its family and style name gives is compared, which is the version that choosing the font sets. The
+fonts rank by how many shapes each matches, then by the mean distance left after fitting, then by family and style
+name. `count` is a whole number from 1 to 96 (default 10); any other value is an error. The reply is
+`{fonts: [{family, style, matched}], shapes, more, truncated}`: `matched` is the number of shapes the font matches,
+`shapes` the number of shapes compared, `more` is true when more fonts match than `count`, and `truncated` is true when
+shapes past the limits of `type.retype` were left out. Shapes that `type.retype` would keep as outlines because of
+their paint still count. The command does not change the document and records no undo step. With no path or compound
+path selected it is an error.
+
+Window › Retype shows the Retype panel. Find Matching Fonts runs `retype.find {}`, which shows the panel, ranks up to
+96 fonts and lists the first ten. Find more font matches, at the end of the list when `more` is true, runs
+`retype.find {more: true}`, which adds the next five fonts that search found, whatever is selected now. Before any
+search, `retype.find {more: true}` runs a first search. A search that fails is an error and leaves the list as it
+was. Each row shows the font's family and style over a sample of the font. While live type is selected or edited, a
+click on a row sets that font on it, as the font menus do; live type inside a selected group counts too. The list
+stays when the selection changes.
+
+`retype.list {}` → `{searched, fonts: [{family, style, matched}], shapes, more, truncated, size, text}`. `searched` is
+false until a search runs and after a reset. `truncated` is true when the last search left out shapes past the limits
+of `type.retype` (2,048 shapes, 16 nested groups); the panel then says that some shapes were not compared.
+`size` is `small`, `medium` or `large`, and `text` is the samples' text (empty for a generic sample). The panel menu's Small, Medium and Large items and the sample field run
+`retype.preview {size?, text?}`. `text` holds at most 100 characters; any other value of either key is an error and
+changes nothing. Reset Retype Panel in the panel menu runs `retype.reset {}`, which clears the list and keeps the size
+and text. `retype.find`, `retype.preview` and `retype.reset` return what `retype.list` returns.
+
+```json
+{"name":"run_command","arguments":{"command":"type.retypeFonts","params":{"count":5}}}
 ```
 
 ## Alternate glyphs

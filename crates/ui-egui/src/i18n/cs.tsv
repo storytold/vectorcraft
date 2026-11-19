@@ -450,6 +450,20 @@
 	Break Thread	Přerušit zřetězení
 	Fit Headline	Přizpůsobit titulek
 	Find Font…	Najít písmo…
+	Retype	Přepsat
+	Find Matching Fonts	Najít odpovídající písma
+	Find more font matches	Najít další odpovídající písma
+	Type your text to preview	Zadejte text pro náhled
+	Select outlined text, then Find Matching Fonts.	Vyberte text převedený na křivky a pak zvolte Najít odpovídající písma.
+	No font matches the selected shapes.	Vybraným tvarům neodpovídá žádné písmo.
+	Shapes past the first 2,048, or more than 16 groups deep, were not compared.	Tvary za prvními 2 048 nebo vnořené hlouběji než 16 skupin nebyly porovnány.
+	Reset Retype Panel	Obnovit panel Přepsat
+	List Matching Fonts	Vypsat odpovídající písma
+	Retype Preview	Náhled v panelu Přepsat
+@msg	`count` must be a whole number from 1 to 96	`count` musí být celé číslo od 1 do 96
+@msg	`size` must be small, medium or large	`size` musí být small, medium nebo large
+@msg	`text` must be a string of at most 100 characters	`text` musí být řetězec o nejvýše 100 znacích
+@msg	Retype: select outlined text (paths or compound paths)	Přepsat: vyberte text převedený na křivky (cesty nebo složené cesty)
 	Change Case	Změnit velikost písmen
 	UPPERCASE	VELKÁ PÍSMENA
 	lowercase	malá písmena
@@ -4839,6 +4853,53 @@ font-technology	Variable	Variabilní
 	Edit type set in fonts that aren't available?	Upravit text v písmech, která nejsou k dispozici?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Zobrazí na plátně číslo každého řezu v rámečku v jeho levém horním rohu; když je vypnuto, obrysy řezů zůstanou zobrazené.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Barva obrysů uživatelských a objektových řezů a rámečků s jejich čísly; automatické řezy používají tlumenější odstín této barvy.
+	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	Nový text dostane tento jazyk, dokud je jazyk v Nastavení dokumentu Angličtina: USA; text, který už v dokumentu je, si ponechá svůj jazyk.
+	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	V odstavcích se zapnutou volbou Dělit slova se uvedené slovo dělí jen u spojovníků, které v něm napíšete, nebo nikde, pokud žádné nemá, bez ohledu na jazyk a velikost písmen.
+	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	V desktopové verzi se zásuvné moduly .wasm z této složky načtou při spuštění a po klepnutí na OK s novou složkou zde, kromě nouzového režimu; webová verze je nenačítá.
+	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	První volba odkládacího disku: Startup, None nebo cesta ke složce; VectorCraft ji uloží, ale odkládací disky zatím nepoužívá.
+	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Druhá volba odkládacího disku: Startup, None nebo cesta ke složce; VectorCraft ji uloží, ale odkládací disky zatím nepoužívá.
+	How light or dark the interface is.	Jak světlé nebo tmavé je rozhraní.
+	The set of colors the interface is drawn in.	Sada barev, kterými se rozhraní vykresluje.
+	The color of controls that are on, chosen or focused; the menu is dimmed while the Color Scheme has an accent of its own.	Barva ovládacích prvků, které jsou zapnuté, zvolené nebo mají fokus; nabídka je ztlumená, dokud má Barevné schéma vlastní barvu zvýraznění.
+	The color of the canvas around the artboards; Match User Interface Brightness takes it from Brightness. Outline view always shows it white.	Barva plátna kolem pracovních ploch; Odpovídat jasu uživatelského rozhraní ji přebírá z Jasu. Zobrazení Obrys ho vždy ukazuje bílé.
+	A panel opened from its icon closes when you press Esc or click outside it; off, it stays open until you click an icon.	Panel otevřený ze své ikony se zavře, když stisknete Esc nebo kliknete mimo něj; při vypnutí zůstane otevřený, dokud nekliknete na ikonu.
+	Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them.	Zobrazuje název každé skupiny nástrojů nad jejími nástroji v panelu nástrojů; při vypnutí skupiny následují jedna za druhou bez ničeho mezi nimi.
+	From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.	Dokumenty, které od teď otevřete nebo vytvoříte, se otevírají jako karty; při vypnutí se každý otevře v plovoucím okně. Už otevřené dokumenty zůstanou, kde jsou.
+	Makes the document tabs taller and their names larger.	Karty dokumentů budou vyšší a jejich názvy větší.
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own.	Od příštího spuštění kreslí záhlaví okna systém tam, kde by jinak VectorCraft kreslil své vlastní.
+	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on.	Od příštího spuštění kreslí VectorCraft záhlaví okna i tam, kde by ho kreslilo pracovní prostředí, pokud není zapnuté Systémové záhlaví okna.
+	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	Zvětší nebo zmenší rozhraní; kresba na plátně si při stejném zvětšení zachová velikost.
+	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	Ukazatele nástrojů, které kreslí VectorCraft, se zvětšují a zmenšují s Měřítkem rozhraní; při vypnutí si zachovají velikost.
+	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	Jazyk rozhraní; Automaticky použije jazyk systému. Dialog přepne jazyk, jakmile nějaký zvolíte.
+	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	Animované zvětšení funguje, jen když je toto zapnuto; při vypnutí je Animované zvětšení zašedlé a zvětšování není animované.
+	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	Zvětšení kolečkem plynule dojede a Nástroj Lupa zvětšuje, když táhnete do strany nebo ho podržíte; při vypnutí Nástroj Lupa zvětší oblast, přes kterou táhnete.
+	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	Od příštího spuštění kreslí desktopová verze tímto druhem grafického procesoru; Automaticky dává přednost tomu, který řídí displej. Webová verze ho nepoužívá.
+	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	Nejvyšší počet kroků zpět, které si každý dokument ponechá; nižší číslo po klepnutí na OK odstraní nejstarší kroky. Kroky mohou zmizet i dříve, když zabírají příliš paměti.
+	Shows the artwork changing while you drag; off, outlines follow the drag and the artwork changes when you release. A ruler guide always moves as you drag.	Ukazuje, jak se kresba mění, zatímco táhnete; při vypnutí sledují tažení obrysy a kresba se změní, až pustíte. Vodítko z pravítka se při tažení pohybuje vždy.
+	How many worker threads draw the artwork; -1 uses one fewer than the cores VectorCraft may use, at most 8, and 0 uses none. The web version always uses none.	Kolik pracovních vláken kreslí kresbu; -1 použije o jedno méně, než je jader, která VectorCraft smí použít, nejvýše 8, a 0 žádné. Webová verze nepoužívá žádné.
+	From the next start on a Wayland desktop, X11 (XWayland) opens the window through XWayland; the other choices do so only when a pen is attached.	Od příštího spuštění na ploše Wayland otevře X11 (XWayland) okno přes XWayland; ostatní volby tak učiní, jen když je připojeno pero.
+	From the next start, the desktop version shows frames without waiting for the display's refresh, at most 240 a second; off, the display paces them.	Od příštího spuštění zobrazuje desktopová verze snímky bez čekání na obnovení displeje, nejvýše 240 za sekundu; při vypnutí určuje tempo displej.
+	The larger budget raises each object filter run's base instructions fivefold and keeps the same allowance per input byte; heavy filters, live effects, exporters and importers keep their own limits.	Větší rozpočet pětinásobně zvyšuje základní počet instrukcí každého spuštění filtru objektů a ponechává stejný příděl na bajt vstupu; těžké filtry, živé efekty, exportéry a importéry si ponechávají vlastní limity.
+	Converts the artwork and artboards on the canvas to the display's color profile where the system does not already do so; off, the canvas is drawn in sRGB.	Převádí kresbu a pracovní plochy na plátně do barevného profilu displeje tam, kde to systém už nedělá; při vypnutí se plátno kreslí v sRGB.
+	On the desktop, a save to a file is written in the background while you keep editing; off, you wait until it is written.	V desktopové verzi se uložení do souboru zapisuje na pozadí, zatímco dál upravujete; při vypnutí čekáte, až se zapíše.
+	On the desktop, exports to files and packages are written in the background while you keep editing, except 3D exports; off, you wait for them.	V desktopové verzi se exporty do souborů a balíčky zapisují na pozadí, zatímco dál upravujete, kromě 3D exportů; při vypnutí na ně čekáte.
+	Every few minutes, keeps a recovery copy of each document with unsaved changes made since its last copy; off, no timed copies are made.	Každých pár minut uloží kopii pro obnovení každého dokumentu s neuloženými změnami od jeho poslední kopie; při vypnutí se pravidelné kopie nedělají.
+	How many minutes pass between recovery copies while Automatically Save Recovery Data is on.	Kolik minut uplyne mezi kopiemi pro obnovení, dokud je zapnuto Automaticky ukládat data pro obnovení.
+	On the desktop, the folder recovery copies are kept in; leave it blank for VectorCraft's own folder. The web version keeps them in the browser.	V desktopové verzi složka, kde se kopie pro obnovení uchovávají; nechte ji prázdnou pro vlastní složku VectorCraftu. Webová verze je uchovává v prohlížeči.
+	No timed recovery copies are made of documents with more than 20,000 objects.	Z dokumentů s více než 20 000 objekty se pravidelné kopie pro obnovení nedělají.
+	Open Recent Files and the Home screen list at most this many recent files; 0 lists none, and VectorCraft still remembers up to 30.	Otevřít nedávné soubory a obrazovka Domů uvádějí nejvýše tolik nedávných souborů; 0 neuvádí žádný a VectorCraft si i tak pamatuje až 30.
+	When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.	Při otevření dokumentu si propojený obraz EPS, který ukazuje svůj uložený náhled, tento náhled ponechá a soubor EPS znovu nečte; změněné soubory se dál řídí volbou Aktualizovat propojení.
+	In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.	V Náhledu obrazových bodů se obrazy kreslí vyhlazené; při vypnutí mají jejich obrazové body ostré hrany. Mimo Náhled obrazových bodů se obrazy vyhlazují vždy.
+	When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.	Když se propojený soubor změní, Automaticky ho načte znovu, Při změně se zeptat se vás nejdřív zeptá a Ručně ho nechá být a zobrazí upozornění ve stavovém řádku.
+	On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.	V desktopové verzi složka, ve které začínají Nový ze šablony… a Uložit jako šablonu…; nechte ji prázdnou pro VectorCraft Templates ve vaší složce dokumentů.
+	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	Upravit originál otevře propojený soubor ve výchozí aplikaci systému pro jeho typ; při vypnutí se propojený rastrový obraz otevře v PhotoCraftu, pokud je nainstalován.
+	A file saved by an older VectorCraft version opens with [Converted] after its name, and Save asks where to save it; off, Save replaces the file.	Soubor uložený starší verzí VectorCraftu se otevře s [Converted] za názvem a Uložit se zeptá, kam ho uložit; při vypnutí Uložit soubor nahradí.
+	VectorCraft files and templates are saved compressed, so they are smaller, unless a save says otherwise; saves for versions that cannot open compressed files stay uncompressed.	Soubory a šablony VectorCraftu se ukládají komprimované, a proto menší, pokud uložení neurčí jinak; uložení pro verze, které komprimované soubory neotevřou, zůstávají nekomprimovaná.
+	Copy and Cut also give other apps SVG code of the art; on the desktop, the code is not copied as text when the art embeds more than 1 MiB of images.	Kopírovat a Vyjmout předají ostatním aplikacím i kód SVG kresby; na desktopu se kód nekopíruje jako text, když kresba vkládá obrazy o více než 1 MiB.
+	On Windows, Copy and Cut also give other apps a PDF of the art; the other platforms do not copy a PDF yet.	Ve Windows Kopírovat a Vyjmout předají ostatním aplikacím i PDF kresby; ostatní platformy PDF zatím nekopírují.
+	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft tuto volbu uloží, ale Kopírovat a Vyjmout zatím nepoužívají formát starší vektorové schránky.
+	Preserve Paths or Preserve Appearance and Overprints for the legacy vector clipboard; VectorCraft stores the choice but does not use it yet.	Zachovat cesty nebo Zachovat vzhled a přetisky pro starší vektorovou schránku; VectorCraft volbu uloží, ale zatím ji nepoužívá.
+	Keep Formatting keeps the styles of text copied from VectorCraft type when it is pasted into type; Keep Plain Text gives it the style where it lands.	Zachovat formátování ponechá styly textu zkopírovaného z textového objektu ve VectorCraftu při vložení do textového objektu; Zachovat prostý text mu dá styl místa, kam se vloží.
 	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	Nový text dostane tento jazyk, dokud je jazyk v Nastavení dokumentu Angličtina: USA a [Normální styl znaků] žádný jazyk nenastavuje; text, který už v dokumentu je, si ponechá svůj jazyk.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	V odstavcích se zapnutou volbou Dělit slova se uvedené slovo dělí jen u spojovníků, které v něm napíšete, nebo nikde, pokud žádné nemá, bez ohledu na velikost písmen; korejská slova spojovník nedostanou a slova v indických jazycích se nedělí uvnitř skupiny znaků.
 	Reset all preferences to their defaults?	Obnovit všechny předvolby na výchozí hodnoty?
@@ -7461,6 +7522,7 @@ axis	Y Axis	osa Y
 	Inventory Icons	Ikony inventáře
 	Skill Icons	Ikony dovedností
 	Weather Icons	Ikony počasí
+	Media Controls	Ovládání médií
 	Attack	Útok
 	Defend	Obrana
 	Heal	Léčení
@@ -7834,6 +7896,10 @@ axis	Y Axis	osa Y
 	Rain	Déšť
 	Thunder	Hrom
 	Snow	Sníh
+	Play	Přehrát
+	Pause	Pozastavit
+	Skip Next	Další
+	Shuffle	Náhodně
 	Save Brush Library…	Uložit knihovnu štětců…
 @msg	`{_1}` has no brushes to apply	`{_1}` nemá žádné štětce k použití
 @msg	missing `library` (see brush.libraries)	chybí `library` (viz brush.libraries)
@@ -10646,6 +10712,11 @@ breakText	Glyphs	Glyfy
 @msg	A panel is not joined to the rest by a crease.	Panel není se zbytkem spojen žádnou linií bigu.
 @msg	A fold line is on a non-printing layer.	Linie skladu je na netisknutelné vrstvě.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panely: {panels}, panty: {hinges}, chyby: {errors}, upozornění: {warnings}
+	Image Brush	Obrazové štětce
+	Soft Bloom	Jemný květ
+	Halftone Field	Polotónové pole
+	Solar Grain	Sluneční zrno
+	Color Flecks	Barevné skvrny
 	Paper Cutouts	Papírové výřezy
 	Coral Layers	Korálové vrstvy
 	Mint Layers	Mátové vrstvy

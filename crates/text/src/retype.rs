@@ -187,6 +187,14 @@ impl RetypeIndex {
     /// the upright-most comes first and the others are kept in [`GlyphMatch::alts`]. The line
     /// around the shape chooses among them. At most [`MAX_CANDIDATES`].
     pub fn matches(&self, shape: &BezPath) -> Vec<GlyphMatch> {
+        let mut out = self.all_matches(shape);
+        out.truncate(MAX_CANDIDATES);
+        out
+    }
+
+    /// Every glyph `shape` fits exactly, in every face, in the order of [`RetypeIndex::matches`],
+    /// which returns the first [`MAX_CANDIDATES`] of them.
+    pub fn all_matches(&self, shape: &BezPath) -> Vec<GlyphMatch> {
         let variants = signatures(shape, true);
         let Some(first) = variants.first() else { return vec![] };
         let Some(list) = self.buckets.get(&first.contours) else { return vec![] };
@@ -247,7 +255,6 @@ impl RetypeIndex {
         out.sort_by(|a, b| {
             upright(&a.1).cmp(&upright(&b.1)).then(a.1.residual.total_cmp(&b.1.residual)).then(a.0.cmp(&b.0)).then(a.1.ch.cmp(&b.1.ch))
         });
-        out.truncate(MAX_CANDIDATES);
         out.into_iter().map(|(_, m)| m).collect()
     }
 }
@@ -907,5 +914,32 @@ mod tests {
         let bow = poly(&[(0.0, 0.0), (100.0, 100.0), (100.0, 0.0), (0.0, 100.0)]);
         assert!(!outlines_agree(&square, &bow, 1.0), "every corner lies on the other, the edges do not");
         assert!(outlines_agree(&square, &square, 1.0));
+    }
+
+    /// A glyph that more than [`MAX_CANDIDATES`] faces share: `matches` gives the first
+    /// [`MAX_CANDIDATES`] fits, and `all_matches` gives the fits in every face.
+    #[test]
+    fn all_matches_lists_every_face_a_shape_fits() {
+        let db = FontDb::with_font_dirs(vec![]);
+        let copies = MAX_CANDIDATES + 4;
+        let mut faces = vec![];
+        for i in 0..copies {
+            let (family, postscript) = (format!("Copytest {i:02}"), format!("Copytest{i:02}-Regular"));
+            assert_eq!(db.add_font(crate::test_fonts::named_copy(false, (&family, "Regular", "Version 1.000", &postscript)).unwrap()), 1);
+            faces.push(db.face(&family, "Regular").unwrap());
+        }
+        let face = faces[0].clone();
+        let shape = Affine::scale(0.03) * db.outline_uncached(&face, face.glyph_for('o'));
+        let keys = std::iter::once(shape_key(&shape).unwrap()).collect();
+        let index = RetypeIndex::build(&db, faces, &keys);
+        let ids = |ms: &[GlyphMatch]| ms.iter().map(|m| m.face.id()).collect::<std::collections::BTreeSet<_>>().len();
+        assert_eq!(index.matches(&shape).len(), MAX_CANDIDATES);
+        assert!(ids(&index.matches(&shape)) < copies);
+        let all = index.all_matches(&shape);
+        assert_eq!(ids(&all), copies, "every copy of the font fits the o");
+        assert_eq!(
+            all[..MAX_CANDIDATES].iter().map(|m| m.face.id()).collect::<Vec<_>>(),
+            index.matches(&shape).iter().map(|m| m.face.id()).collect::<Vec<_>>()
+        );
     }
 }

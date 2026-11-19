@@ -1358,6 +1358,20 @@ font-technology	Variable	可變
 @msg	no match of `find` at bytes {_1}..{_2} of object {_3}	物件 {_3} 的位元組 {_1}..{_2} 處沒有 `find` 的相符項目
 	Find Font	尋找字體
 	Find Font…	尋找字體…
+	Retype	重新鍵入
+	Find Matching Fonts	尋找相符字體
+	Find more font matches	尋找更多相符字體
+	Type your text to preview	輸入要預覽的文字
+	Select outlined text, then Find Matching Fonts.	選取已轉為外框的文字，然後尋找相符字體。
+	No font matches the selected shapes.	沒有字體與所選形狀相符。
+	Shapes past the first 2,048, or more than 16 groups deep, were not compared.	前 2,048 個之後的形狀，以及巢狀超過 16 層群組的形狀，未進行比較。
+	Reset Retype Panel	重設重新鍵入面板
+	List Matching Fonts	列出相符字體
+	Retype Preview	重新鍵入面板預覽
+@msg	`count` must be a whole number from 1 to 96	`count` 必須是介於 1 到 96 的整數
+@msg	`size` must be small, medium or large	`size` 必須是 small、medium 或 large
+@msg	`text` must be a string of at most 100 characters	`text` 必須是不超過 100 個字元的字串
+@msg	Retype: select outlined text (paths or compound paths)	重新鍵入：選取已轉為外框的文字（路徑或複合路徑）
 	Find Next	尋找下一個
 	Find Objects	尋找物件
 	Compare with Image	與影像比較
@@ -4670,6 +4684,53 @@ digits	Malayalam	馬來亞拉姆數字
 	Edit type set in fonts that aren't available?	要編輯使用了無法使用之字體的文字嗎？
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	在畫布上於每個切片左上角的方框中顯示其編號；關閉時，切片輪廓仍會顯示。
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	使用者切片和物件切片的輪廓及其編號方框的顏色；自動切片使用此顏色較淡的色調。
+	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	當文件設定的語言為英文：美國時，新文字使用此語言；文件中已有的文字保留自己的語言。
+	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	在開啟使用連字號的段落中，清單中的單字只在其中輸入的連字號處斷開，沒有連字號則不斷開，與語言和大小寫無關。
+	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	在桌面版中，此資料夾中的 .wasm 增效模組會在啟動時以及在此指定新資料夾並按一下「確定」時載入，安全模式除外；網頁版不會載入它們。
+	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	第一個暫存磁碟選擇：Startup、None 或資料夾路徑；VectorCraft 會儲存它，但尚未使用暫存磁碟。
+	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	第二個暫存磁碟選擇：Startup、None 或資料夾路徑；VectorCraft 會儲存它，但尚未使用暫存磁碟。
+	How light or dark the interface is.	介面的明暗程度。
+	The set of colors the interface is drawn in.	繪製介面所用的一組顏色。
+	The color of controls that are on, chosen or focused; the menu is dimmed while the Color Scheme has an accent of its own.	處於開啟、選取或焦點狀態的控制項顏色；當配色方案有自己的強調色時，此選單會呈灰色。
+	The color of the canvas around the artboards; Match User Interface Brightness takes it from Brightness. Outline view always shows it white.	工作區域周圍畫布的顏色；「符合使用者介面亮度」會依亮度取得顏色。外框檢視一律將其顯示為白色。
+	A panel opened from its icon closes when you press Esc or click outside it; off, it stays open until you click an icon.	從圖示開啟的面板會在按下 Esc 或按一下其外部時關閉；關閉此選項時，面板會保持開啟，直到按一下某個圖示。
+	Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them.	在工具列中將每個工具組的名稱顯示在其工具上方；關閉此選項時，各組依序排列，中間沒有任何內容。
+	From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.	從現在起，開啟或新增的文件會以分頁開啟；關閉此選項時，每份文件會在浮動視窗中開啟。已開啟的文件保持原位。
+	Makes the document tabs taller and their names larger.	讓文件頁籤更高，頁籤上的名稱更大。
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own.	從下次啟動起，在 VectorCraft 原本會自行繪製標題列的地方，改由系統繪製視窗的標題列。
+	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on.	從下次啟動起，即使桌面會繪製視窗的標題列，VectorCraft 也會自行繪製，除非開啟了系統標題列。
+	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	放大或縮小介面；在相同縮放比例下，畫布上的圖稿保持原有大小。
+	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	VectorCraft 繪製的工具指標會隨介面縮放一起變大變小；關閉此選項時，指標保持原有大小。
+	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	介面的語言；「自動」使用系統的語言。選擇一種語言後，對話方塊會立即切換為該語言。
+	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	只有開啟此選項時，動畫縮放才會起作用；關閉此選項時，動畫縮放會顯示為灰色，縮放不帶動畫。
+	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	用滾輪縮放時會平滑過渡，縮放工具在你向側邊拖曳或按住不放時進行縮放；關閉此選項時，縮放工具會縮放到你拖曳過的區域。
+	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	從下次啟動起，桌面版使用這類圖形處理器繪製；「自動」優先使用驅動顯示器的圖形處理器。網頁版不使用此選項。
+	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	每份文件保留的最大復原步驟數；調低後，按一下「確定」時會刪除最早的步驟。步驟佔用過多記憶體時也可能更早被刪除。
+	Shows the artwork changing while you drag; off, outlines follow the drag and the artwork changes when you release. A ruler guide always moves as you drag.	拖曳時顯示圖稿的變化；關閉此選項時，由外框跟隨拖曳，放開後圖稿才改變。尺標參考線在拖曳時總是跟著移動。
+	How many worker threads draw the artwork; -1 uses one fewer than the cores VectorCraft may use, at most 8, and 0 uses none. The web version always uses none.	繪製圖稿的工作執行緒數；-1 使用比 VectorCraft 可用核心數少一個的執行緒，最多 8 個，0 則不使用。網頁版始終不使用。
+	From the next start on a Wayland desktop, X11 (XWayland) opens the window through XWayland; the other choices do so only when a pen is attached.	從下次啟動起，在 Wayland 桌面上，X11 (XWayland) 會透過 XWayland 開啟視窗；其他選項只在連接了筆時才這樣做。
+	From the next start, the desktop version shows frames without waiting for the display's refresh, at most 240 a second; off, the display paces them.	從下次啟動起，桌面版不等待顯示器重新整理即顯示影格，每秒最多 240 格；關閉此選項時，由顯示器控制影格的節奏。
+	The larger budget raises each object filter run's base instructions fivefold and keeps the same allowance per input byte; heavy filters, live effects, exporters and importers keep their own limits.	較大的預算將物件濾鏡每次執行的基礎指令數提高到五倍，每個輸入位元組的額外配額不變；重型濾鏡、即時效果、匯出器和匯入器保留各自的限制。
+	Converts the artwork and artboards on the canvas to the display's color profile where the system does not already do so; off, the canvas is drawn in sRGB.	在系統尚未進行轉換時，將畫布上的圖稿和工作區域轉換為顯示器的色彩描述檔；關閉此選項時，畫布以 sRGB 繪製。
+	On the desktop, a save to a file is written in the background while you keep editing; off, you wait until it is written.	在桌面版中，儲存到檔案時會在背景寫入，您可以繼續編輯；關閉此選項時，需等到寫入完成。
+	On the desktop, exports to files and packages are written in the background while you keep editing, except 3D exports; off, you wait for them.	在桌面版中，匯出到檔案和封裝會在背景寫入，您可以繼續編輯（3D 匯出除外）；關閉此選項時，需等它們完成。
+	Every few minutes, keeps a recovery copy of each document with unsaved changes made since its last copy; off, no timed copies are made.	每隔幾分鐘，為自上次副本以來有未儲存變更的每份文件保留一份復原副本；關閉此選項時，不再定時製作副本。
+	How many minutes pass between recovery copies while Automatically Save Recovery Data is on.	開啟「自動儲存復原資料」時，兩份復原副本之間相隔的分鐘數。
+	On the desktop, the folder recovery copies are kept in; leave it blank for VectorCraft's own folder. The web version keeps them in the browser.	在桌面版中，存放復原副本的資料夾；留空則使用 VectorCraft 自己的資料夾。網頁版將它們存放在瀏覽器中。
+	No timed recovery copies are made of documents with more than 20,000 objects.	物件超過 20,000 個的文件不會定時製作復原副本。
+	Open Recent Files and the Home screen list at most this many recent files; 0 lists none, and VectorCraft still remembers up to 30.	「開啟最近使用的檔案」和首頁畫面最多列出這麼多最近的檔案；設為 0 時不列出，但 VectorCraft 仍會記住最多 30 個。
+	When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.	開啟文件時，顯示已儲存預視的連結 EPS 影像會保留該預視，而不重新讀取 EPS 檔案；已變更的檔案仍依「更新連結」處理。
+	In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.	在像素預視中，影像以平滑方式繪製；關閉此選項時，像素邊緣清晰銳利。像素預視以外，影像一律平滑顯示。
+	When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.	連結的檔案變更時，「自動」會重新讀取，「修改時詢問」會先詢問您，「手動」則保持不變並在狀態列顯示提示。
+	On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.	在桌面版中，「從範本新增…」和「另存範本…」開啟時所在的資料夾；留空則使用文件資料夾中的 VectorCraft Templates。
+	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	「編輯原稿」以系統中該類型的預設應用程式開啟連結的檔案；關閉此選項時，若已安裝 PhotoCraft，連結的點陣影像會在 PhotoCraft 中開啟。
+	A file saved by an older VectorCraft version opens with [Converted] after its name, and Save asks where to save it; off, Save replaces the file.	由舊版 VectorCraft 儲存的檔案開啟時名稱後會加上 [Converted]，「儲存」會詢問儲存位置；關閉此選項時，「儲存」會取代該檔案。
+	VectorCraft files and templates are saved compressed, so they are smaller, unless a save says otherwise; saves for versions that cannot open compressed files stay uncompressed.	除非儲存時另有指定，VectorCraft 檔案和範本以壓縮形式儲存，因此較小；為無法開啟壓縮檔的版本儲存時不壓縮。
+	Copy and Cut also give other apps SVG code of the art; on the desktop, the code is not copied as text when the art embeds more than 1 MiB of images.	複製和剪下也會將圖稿的 SVG 程式碼提供給其他應用程式；在桌面版中，圖稿內嵌的影像超過 1 MiB 時，程式碼不會以文字複製。
+	On Windows, Copy and Cut also give other apps a PDF of the art; the other platforms do not copy a PDF yet.	在 Windows 上，複製和剪下也會將圖稿的 PDF 提供給其他應用程式；其他平台尚不複製 PDF。
+	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft 會儲存此選項，但複製和剪下尚未使用舊版向量剪貼簿格式。
+	Preserve Paths or Preserve Appearance and Overprints for the legacy vector clipboard; VectorCraft stores the choice but does not use it yet.	舊版向量剪貼簿的「保留路徑」或「保留外觀與疊印」；VectorCraft 會儲存所選項目，但尚未使用。
+	Keep Formatting keeps the styles of text copied from VectorCraft type when it is pasted into type; Keep Plain Text gives it the style where it lands.	將從 VectorCraft 文字物件複製的文字貼到文字物件時，「保留格式」保留其樣式，「保留純文字」則使用貼上位置的樣式。
 	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	當文件設定的語言為英文：美國且 [正常字元樣式] 未設定語言時，新文字使用此語言；文件中已有的文字保留自己的語言。
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	在開啟使用連字號的段落中，清單中的單字只在其中輸入的連字號處斷開，沒有連字號則不斷開，與大小寫無關；韓文單字不加連字號，印度語言的單字不會在字元叢集內部斷開。
 	Reset all preferences to their defaults?	要將所有偏好設定重設為預設值嗎？
@@ -7115,6 +7176,7 @@ axis	Y Axis	Y 軸
 	Inventory Icons	物品欄圖示
 	Skill Icons	技能圖示
 	Weather Icons	天氣圖示
+	Media Controls	媒體控制
 	Attack	攻擊
 	Defend	防禦
 	Heal	治療
@@ -7489,6 +7551,10 @@ axis	Y Axis	Y 軸
 	Rain	雨
 	Thunder	雷
 	Snow	雪
+	Play	播放
+	Pause	暫停
+	Skip Next	跳到下一個
+	Shuffle	隨機播放
 	Bar	長條
 	Hexagon	六邊形
 	Spectrum	光譜
@@ -10276,6 +10342,11 @@ breakText	Glyphs	字符
 @msg	A joint does not close by {gap} pt.	有一處接縫相差 {gap} pt 未閉合。
 @msg	Two panels pass through each other.	兩個面板相互穿插。
 @msg	{what} would print on more than {MAX_TILES} tiles: scale it down	{what} 會列印在超過 {MAX_TILES} 個拼貼上：請縮小
+	Image Brush	影像筆刷
+	Soft Bloom	柔和花朵
+	Halftone Field	半色調區域
+	Solar Grain	太陽顆粒
+	Color Flecks	彩色斑點
 	Fine Stipple	細密點描
 	Dense Stipple	濃密點描
 	Soft Stipple	柔和點描
