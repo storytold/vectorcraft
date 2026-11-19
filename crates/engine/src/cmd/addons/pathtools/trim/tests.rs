@@ -782,3 +782,45 @@ fn bad_params_are_refused_and_change_nothing() {
     assert_eq!(steps(&s), n);
     assert!(*s.doc().unwrap().doc == *before);
 }
+
+#[test]
+fn a_line_ending_on_a_curve_that_was_cut_still_divides_it_there() {
+    // An open egg-shaped curve, lines across it whose stubs on the left are trimmed away, so each
+    // line ends on the curve, and the curve's bottom trimmed off below the last line, which cuts
+    // its segments there. A click on the curve between the last two lines removes only that
+    // stretch: the lines' ends on it still divide it, however the curve was cut. Twenty placements,
+    // as how near a cut end lies to the curve depends on the coordinates.
+    for shift in 0..20 {
+        let dx = shift as f64 * 7.31;
+        let mut s = session();
+        let egg = json!({"anchors": [
+            {"x": 160.0 + dx, "y": 40.0, "out": [110.0 + dx, 80.0]},
+            {"x": 92.3 + dx, "y": 190.7, "in": [88.0 + dx, 140.0], "out": [97.0 + dx, 240.0]},
+            {"x": 170.0 + dx, "y": 268.0, "in": [130.0 + dx, 265.0], "out": [210.0 + dx, 271.0]},
+            {"x": 236.4 + dx, "y": 170.2, "in": [238.0 + dx, 230.0], "out": [233.0 + dx, 110.0]},
+            {"x": 150.0 + dx, "y": 20.0, "in": [200.0 + dx, 40.0]}
+        ], "closed": false});
+        let egg = NodeId(s.execute("path.create", &egg).unwrap()["id"].as_u64().unwrap());
+        s.execute("select.none", &json!({})).unwrap();
+        let ys: Vec<f64> = (0..8).map(|k| 70.0 + k as f64 * 23.17 + shift as f64 * 0.37).collect();
+        let lines: Vec<NodeId> = ys.iter().map(|y| line(&mut s, &[(40.0 + dx, *y), (300.0 + dx, *y)], false)).collect();
+        for y in &ys {
+            assert_eq!(s.execute(TRIM, &json!({"at": [50.0 + dx, y], "tolerance": 0.5})).unwrap()["removed"], json!(1));
+        }
+        assert_eq!(s.execute(TRIM, &json!({"at": [170.0 + dx, 268.0], "tolerance": 0.5})).unwrap()["removed"], json!(1));
+        let start = |id: NodeId| path(&s, id).subpaths[0].anchors[0].p;
+        let ends: Vec<Point> = lines.iter().map(|id| start(*id)).collect();
+        // Off every path but the lines: the curve's pieces.
+        let off_curve = |s: &Session, p: Point| {
+            stack(s).into_iter().filter(|id| !lines.contains(id)).filter_map(|id| path(s, id).nearest(p)).map(|n| n.4).fold(f64::INFINITY, f64::min)
+        };
+        let (a, b) = (ends[6], ends[7]);
+        let click = path(&s, egg).nearest(a.midpoint(b)).unwrap().3;
+        assert!(off_curve(&s, a) < 1e-3 && off_curve(&s, click) < 1e-3);
+        assert_eq!(s.execute(TRIM, &json!({"at": [click.x, click.y], "tolerance": 0.5})).unwrap()["removed"], json!(1));
+        assert!(off_curve(&s, click) > 0.5, "{shift}: the stretch clicked is left");
+        for (k, e) in ends.iter().enumerate().take(7) {
+            assert!(off_curve(&s, *e) < 1e-3, "{shift}: the curve no longer reaches line {k}'s end");
+        }
+    }
+}

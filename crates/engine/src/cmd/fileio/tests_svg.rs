@@ -117,6 +117,8 @@ fn junk_options_are_rejected() {
         json!({"useArtboards": "yes"}),
         json!({"units": "furlong"}),
         json!({"units": 7}),
+        json!({"units": null}),
+        json!({"svg": {"units": null}}),
     ] {
         let mut q = p.clone();
         q["format"] = json!("svg");

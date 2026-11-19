@@ -127,7 +127,7 @@ pub fn options_map(p: &Value) -> Result<Map<String, Value>, String> {
     let mut m = Map::new();
     let Some(o) = p.as_object() else { return Ok(m) };
     for opt in OPTIONS.iter().filter(|opt| opt.name != "svg") {
-        if let Some(v) = o.get(opt.name).filter(|v| !v.is_null()) {
+        if let Some(v) = o.get(opt.name).filter(|v| opt.name == "units" || !v.is_null()) {
             m.insert(opt.name.into(), v.clone());
         }
     }
@@ -189,13 +189,7 @@ pub(super) fn lost_artboards_warning(doc: &Document, p: &Value, label: &str) -> 
 /// The native document Preserve Editing embeds: `doc`, without an Export for Screens `folder`
 /// outside the read roots of the request being served (the open document keeps it).
 fn native_attachment(doc: &Document) -> Vec<u8> {
-    let settings = super::screens::leave_out_unreadable_settings_folder(doc.export_settings.clone());
-    if settings.len() == doc.export_settings.len() {
-        return vectorcraft_format::save(doc, false);
-    }
-    let mut kept = doc.clone();
-    kept.export_settings = settings;
-    vectorcraft_format::save(&kept, false)
+    vectorcraft_format::save(&super::access::with_readable_settings_folder(doc), false)
 }
 
 /// Encode `doc` as SVG (or gzipped, SVGZ): one file per chosen artboard, with the images they
