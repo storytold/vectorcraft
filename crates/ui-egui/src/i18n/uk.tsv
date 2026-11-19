@@ -601,6 +601,9 @@ font-technology	Variable	Варіативні
 	Box Channel	Канал квадрата
 	Color box	Колірний квадрат
 	Color Wheel Options	Параметри колірного кола
+	Show Harmony	Показати гармонію
+	Harmony Rule	Правило гармонії
+	Harmony color	Колір гармонії
 	Color Type:	Тип кольору:
 	Color:	Колір:
 	Colorize	Тонувати
@@ -1034,10 +1037,25 @@ font-technology	Variable	Варіативні
 	Duplicate Symbol	Дублювати символ
 	Duplicate {kind} Style	Дублювати стиль {kind}
 	Dutch	Нідерландська
+	PSD Import Options	Параметри імпорту PSD
+	Place PSD	Помістити PSD
+	Convert Layers to Objects	Перетворити шари на об’єкти
+	Import Hidden Layers	Імпортувати приховані шари
+	Flatten Layers to a Single Image	Звести шари в одне зображення
+	Import Slices	Імпортувати фрагменти
 	DXF Import Options	Параметри імпорту DXF
 	DXF Info	Відомості про DXF
 	DXF Options	Параметри DXF
 	DXF Options Dialog	Діалогове вікно «Параметри DXF»
+	HP-GL Options	Параметри HP-GL
+	HP-GL Options Dialog	Діалогове вікно «Параметри HP-GL»
+	Curve Tolerance:	Допуск кривих:
+	Origin:	Початок координат:
+	Pens:	Пера:
+	One Pen per Color	Одне перо на колір
+	Pen Table	Таблиця пер
+	Draw the Nearest Path Next	Наступним малювати найближчий контур
+	Draw Inner Paths First	Спершу малювати внутрішні контури
 	e.g. 1-3, 5	напр. 1-3, 5
 	Each page prints as one image, at the document's raster effects resolution.	Кожна сторінка друкується як одне зображення з роздільною здатністю растрових ефектів документа.
 	Earth Tones	Земляні тони
@@ -1276,6 +1294,15 @@ font-technology	Variable	Варіативні
 	Shading Color	Колір затінення
 	Black Overprint	Чорний із накладенням
 	Draw Hidden Faces	Малювати приховані грані
+	Map Art…	Накладання графіки…
+	Map Art	Накладання графіки
+	First Surface	Перша поверхня
+	Previous Surface	Попередня поверхня
+	Next Surface	Наступна поверхня
+	Last Surface	Остання поверхня
+	Scale to Fit	Масштабувати за розміром
+	Shade Artwork	Затінювати графіку
+	Invisible Geometry	Невидима геометрія
 	Eyedropper	Піпетка
 	Sample Color from Screen	Взяти колір з екрана
 	This system has no screen color sampler	У цій системі немає засобу вибору кольору з екрана
@@ -1405,6 +1432,17 @@ font-technology	Variable	Варіативні
 	Largest:	Найбільше:
 	Direction:	Напрямок:
 	Symbolism Tools Options	Параметри інструментів символів
+	Tool:	Інструмент:
+	Symbol Set Density	Щільність набору символів
+	Symbol Sprayer Options	Параметри розпилювача символів
+	Scrunch:	Стиск:
+	Spin:	Обертання:
+	Screen:	Прозорість:
+	Stain:	Тонування:
+	Symbol Sizer Options	Параметри розміру символів
+	Proportional Resizing	Пропорційна зміна розміру
+	Resizing Affects Density	Зміна розміру впливає на щільність
+	Show Brush Size and Intensity	Показувати розмір та інтенсивність пензля
 	Symbol Set Density:	Щільність набору символів:
 	Flat Image	Плоске зображення
 	Flat Logo	Плоский логотип
@@ -2258,6 +2296,15 @@ file-filter	Templates	Шаблони
 	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Набір kinsoku
 	Kinsoku Shori Type	Тип kinsoku shori
+	Kinsoku Shori Settings…	Налаштування kinsoku shori…
+	Kinsoku Shori Settings	Налаштування kinsoku shori
+	Kinsoku Sets	Набори kinsoku
+	Kinsoku Set Base	Основа набору kinsoku
+	Based on:	На основі:
+	Cannot Start Line	Не може починати рядок
+	Cannot End Line	Не може закінчувати рядок
+	Hanging Punctuation	Висяча пунктуація
+	Inseparable Characters	Нероздільні символи
 	Push In First	Спершу втягувати
 	Push Out First	Спершу виштовхувати
 	Push Out Only	Лише виштовхувати
@@ -2374,6 +2421,7 @@ file-filter	Templates	Шаблони
 	Pressure	Натиск
 	Tilt	Нахил
 	Bearing	Азимут
+	Stylus Wheel	Коліщатко пера
 	Shape:	Форма:
 	Bristle Length:	Довжина щетинок:
 	Bristle Density:	Щільність щетинок:
@@ -2404,6 +2452,9 @@ file-filter	Templates	Шаблони
 	embedding for preview and print	вбудовування для перегляду й друку
 	embedding allowed	вбудовування дозволено
 	{file}; {embedding}	{file}; {embedding}
+	unknown type	невідомий тип
+	{type}; {uses}	{type}; {uses}
+@plural	{n} use|{n} uses	{n} використання|{n} використання|{n} використань
 	substituted: shown in {family} {style} ({detail})	замінено: показано шрифтом {family} {style} ({detail})
 	missing: shown in {family} {style}	відсутній: показано шрифтом {family} {style}
 	missing	відсутній
@@ -3428,6 +3479,7 @@ digits	Malayalam	Малаялам
 	Save Document Preset	Зберегти набір документа
 	Preset {number}	Набір {number}
 	Save Preset…	Зберегти набір…
+	Save Summary…	Зберегти зведення…
 	Save Print Preset	Зберегти набір друку
 	Save Recovery Data	Зберегти дані відновлення
 	Save Save for Web Preset	Зберегти набір «Зберегти для Інтернету»
@@ -3763,6 +3815,7 @@ digits	Malayalam	Малаялам
 	Show Thumbnails	Показати мініатюри
 	Show Tile Edge	Показати край плитки
 	Show Tints/Shades	Показати відтінки/тіні
+	Show Tool Cards	Показувати картки інструментів
 	Show Tool Tips	Показувати підказки
 	Show Transparency Grid	Показати сітку прозорості
 	Show Video Rulers	Показати відео-лінійки
@@ -5481,6 +5534,7 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	the PDF is password-protected: give its password	PDF захищений паролем: вкажіть його пароль
 @msg	the PDF password is wrong	неправильний пароль PDF
 @msg	the Save PDF dialog didn't open	діалогове вікно «Зберегти PDF» не відкрилося
+@msg	the Save PDF dialog is not open	діалогове вікно «Зберегти PDF» не відкрите
 @msg	the WMF header is damaged	заголовок WMF пошкоджений
 @msg	the art could not be sampled	не вдалося взяти зразок малюнка
 @msg	the art has no bounds	малюнок не має меж
@@ -5847,6 +5901,49 @@ variable-list-end	{0}, {1}	{0} і {1}
 @msg	the PSD file's layer groups are nested too deeply	групи шарів файлу PSD вкладено надто глибоко
 @msg	a layer of the PSD file is too large to read	шар файлу PSD завеликий для читання
 @msg	the PSD file's layers take more memory to read than allowed	для читання шарів файлу PSD потрібно більше пам’яті, ніж дозволено
+@msg	the file is no longer loaded	файл більше не завантажено
+@msg	the layers can't be read ({e}): the file was placed as its merged image	не вдається прочитати шари ({e}): файл поміщено як зведене зображення
+@msg	1 type layer came in as pixels: the text isn't editable	1 текстовий шар імпортовано як пікселі: текст не можна редагувати
+@msg	{n} type layers came in as pixels: the text isn't editable	текстових шарів, імпортованих як пікселі: {n}; текст не можна редагувати
+@msg	1 adjustment layer was not applied	1 коригувальний шар не застосовано
+@msg	{n} adjustment layers were not applied	не застосовано коригувальних шарів: {n}
+@msg	1 fill layer was not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	1 шар заливки не намальовано (градієнтна чи візерункова заливка, колір, який не вдається прочитати, або фігура без збережених пікселів)
+@msg	{n} fill layers were not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	не намальовано шарів заливки: {n} (градієнтна чи візерункова заливка, колір, який не вдається прочитати, або фігура без збережених пікселів)
+@msg	the layer effects of 1 layer weren't drawn	ефекти шару для 1 шару не намальовано
+@msg	the layer effects of {n} layers weren't drawn	ефекти шарів не намальовано; кількість шарів: {n}
+@msg	the vector masks of 1 layer weren't applied	векторні маски 1 шару не застосовано
+@msg	the vector masks of {n} layers weren't applied	векторні маски шарів не застосовано; кількість шарів: {n}
+@msg	the knockout of 1 layer wasn't applied	вибивання 1 шару не застосовано
+@msg	the knockout of {n} layers wasn't applied	вибивання шарів не застосовано; кількість шарів: {n}
+@msg	1 layer was left out (hidden layers and the layers clipped to them)	1 шар пропущено (приховані шари й обрізані за ними шари)
+@msg	{n} layers were left out (hidden layers and the layers clipped to them)	пропущено шарів: {n} (приховані шари й обрізані за ними шари)
+@msg	1 layer clipped to a fill layer that wasn't drawn was left out	1 шар, обрізаний за ненамальованим шаром заливки, пропущено
+@msg	{n} layers clipped to fill layers that weren't drawn were left out	пропущено шарів, обрізаних за ненамальованими шарами заливки: {n}
+@msg	layers in blend modes VectorCraft doesn't have ({modes}) were merged with the layers below them	шари в режимах накладання, яких немає у VectorCraft ({modes}), зведено з шарами під ними
+@msg	1 layer in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	1 шар у режимі накладання, якого немає у VectorCraft, імпортовано як Звичайний: для зведення потрібно більше пам’яті, ніж дозволено
+@msg	{n} layers in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	шарів у режимах накладання, яких немає у VectorCraft, імпортовано як Звичайний: {n}; для зведення потрібно більше пам’яті, ніж дозволено
+@msg	1 layer clipped to the layer below came in unclipped: the merge needs more memory than allowed	1 шар, обрізаний за нижнім шаром, імпортовано без обрізання: для зведення потрібно більше пам’яті, ніж дозволено
+@msg	{n} layers clipped to the layer below came in unclipped: the merge needs more memory than allowed	шарів, обрізаних за нижнім шаром та імпортованих без обрізання: {n}; для зведення потрібно більше пам’яті, ніж дозволено
+@msg	hiddenLayers applies to a PSD file placed with layers: true	hiddenLayers стосується PSD-файлу, який поміщається з layers: true
+@msg	importSlices: a linked PSD file is placed as its flat image; give link: false to embed it with its slices	importSlices: зв’язаний PSD-файл поміщається як пласке зображення; вкажіть link: false, щоб вбудувати його з фрагментами
+@msg	layers: a linked PSD file is placed as its flat image; leave link out or give link: false	layers: зв’язаний PSD-файл поміщається як пласке зображення; не вказуйте link або вкажіть link: false
+@msg	the slices can't be read ({e}) and were left out	не вдається прочитати фрагменти ({e}), їх пропущено
+@msg	1 slice lies outside the canvas or has no size and was left out	1 фрагмент лежить поза полотном або не має розміру й пропущений
+@msg	{n} slices lie outside the canvas or have no size and were left out	пропущено фрагментів поза полотном або без розміру: {n}
+@msg	1 slice would lie outside the canvas and was left out	1 фрагмент опинився б поза полотном і пропущений
+@msg	{n} slices would lie outside the canvas and were left out	пропущено фрагментів, які опинилися б поза полотном: {n}
+@msg	the slices' descriptor holds too many values	дескриптор фрагментів містить забагато значень
+@msg	the slices' descriptor has a version other than 16	версія дескриптора фрагментів відрізняється від 16
+@msg	the slices are stored in version {v}, which isn't read	фрагменти збережено у версії {v}, яка не читається
+@msg	the file has {count} slices, more than the {MAX_SLICES} read	фрагментів у файлі: {count}, більше за {MAX_SLICES}, що читаються
+@msg	the slices' descriptor has no list of slices	у дескрипторі фрагментів немає списку фрагментів
+@msg	the slices' descriptor lists something other than a slice	дескриптор фрагментів перелічує щось, крім фрагмента
+@msg	a slice in the slices' descriptor has no bounds	фрагмент у дескрипторі фрагментів не має меж
+@msg	a slice's bounds in the slices' descriptor aren't numbers	межі фрагмента в дескрипторі фрагментів не є числами
+@msg	a text in the slices has more than the {MAX_TEXT} characters read	текст у фрагментах довший за {MAX_TEXT} символів, що читаються
+@msg	the slices' descriptor nests too deep	дескриптор фрагментів вкладено надто глибоко
+@msg	the slices' descriptor has a reference of an unknown kind ({_1})	у дескрипторі фрагментів є посилання невідомого виду ({_1})
+@msg	the slices' descriptor has a value of an unknown type ({_1})	у дескрипторі фрагментів є значення невідомого типу ({_1})
 @msg	the layers can't be read ({e}): the file opened as its merged image	не вдається прочитати шари ({e}): файл відкрито як зведене зображення
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}-бітні файли PSD у цьому колірному режимі не читаються
 @msg	the PSD file is cut short	файл PSD обрізаний
@@ -5874,6 +5971,25 @@ variable-list-end	{0}, {1}	{0} і {1}
 	Preserve Embedded Profiles	Зберігати вбудовані профілі
 	Convert to Working Space	Перетворювати в робочий простір
 	Preserve Numbers	Зберігати числа
+	Profile Mismatches:	Невідповідність профілів:
+	Ask When Opening	Питати під час відкриття
+	Ask When Pasting	Питати під час вставлення
+	Missing Profiles:	Відсутні профілі:
+	Embedded Profile Mismatch	Невідповідність вбудованого профілю
+	Missing Profile	Відсутній профіль
+	Paste Profile Mismatch	Невідповідність профілю під час вставлення
+	“{name}” is not tagged with a {model} profile.	«{name}» не має профілю {model}.
+	“{name}” is tagged with the {model} profile “{profile}”, which is not the {model} working space “{working}”.	«{name}» має профіль {model} «{profile}», який не є робочим простором {model} «{working}».
+	Use the embedded profile	Використати вбудований профіль
+	Convert the colors to the working space	Перетворити кольори в робочий простір
+	Discard the embedded profile	Відкинути вбудований профіль
+	Leave as is	Залишити як є
+	Assign the working space	Призначити робочий простір
+	Assign profile:	Призначити профіль:
+	Preserve the color numbers	Зберегти числові значення кольорів
+	Convert to keep the colors' appearance	Перетворити, зберігши вигляд кольорів
+@msg	`{path}` goes with `{key}`: "assign" only	`{path}` використовується лише з `{key}`: "assign"
+	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	Вставлені кольори взято з документа з профілем {model} «{from}»; профіль цього документа «{to}».
 	Texture	Текстура
 	Craquelure…	Кракелюри…
 	Grain…	Зерно…
@@ -10028,6 +10144,39 @@ breakText	Glyphs	Гліфи
 	No objects are selected.	Об’єкти не виділено.
 	Open a document to mark its fold lines.	Відкрийте документ, щоб позначити його лінії згину.
 	Remove Fold Line Role	Прибрати тип лінії
+# Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	Замість підказки показує картку з тим, що роблять інструмент панелі та його клавіші; потрібно Показувати підказки.
+	Selects whole objects and groups to move, resize or rotate them.	Виділяє об’єкти й групи цілком, щоб переміщувати, масштабувати або обертати їх.
+	Selects anchor points and path segments to reshape a path.	Виділяє опорні точки й сегменти контуру, щоб змінити форму контуру.
+	Draws paths point by point, with straight segments and smooth curves.	Малює контури точка за точкою, з прямими сегментами й плавними кривими.
+	Draws smooth curves through the points you click.	Малює плавні криві через точки, на яких ви клацаєте.
+	Adds text at a point, or in a frame you drag.	Додає текст у точці або в рамці, яку ви розтягуєте.
+	Draws rectangles and squares.	Малює прямокутники й квадрати.
+	Draws rectangles with rounded corners.	Малює прямокутники із заокругленими кутами.
+	Draws ellipses and circles.	Малює еліпси й кола.
+	Draws polygons with sides of equal length.	Малює багатокутники з рівними сторонами.
+	Draws stars.	Малює зірки.
+	Turns objects around a reference point.	Обертає об’єкти навколо опорної точки.
+	Flips objects across an axis through a reference point.	Дзеркально відбиває об’єкти відносно осі, що проходить через опорну точку.
+	Resizes objects from a reference point.	Масштабує об’єкти від опорної точки.
+	Slants objects from a reference point.	Нахиляє об’єкти від опорної точки.
+	Moves the view of the document.	Переміщує вигляд документа.
+	Magnifies or reduces the view.	Збільшує або зменшує масштаб вигляду.
+	Copies the color and other attributes of one object to the selection.	Копіює колір та інші атрибути одного об’єкта на виділення.
+	Sets the direction and length of a gradient.	Задає напрямок і довжину градієнта.
+	Creates, selects and resizes artboards.	Створює, виділяє й масштабує монтажні області.
+	Changes the width of a stroke along its length.	Змінює ширину обведення вздовж його довжини.
+	Bends art by dragging pins placed on it.	Згинає графіку перетягуванням шпильок, розставлених на ній.
+	Pushes the outlines of paths in the direction you drag.	Зсуває обриси контурів у напрямку перетягування.
+	Twists the outlines of paths into swirls.	Закручує обриси контурів у вихори.
+	Pulls the outlines of paths in toward the brush.	Стягує обриси контурів до пензля.
+	Pushes the outlines of paths out from the brush.	Роздуває обриси контурів від пензля назовні.
+	Adds curved details along the outlines of paths.	Додає вигнуті деталі вздовж обрисів контурів.
+	Adds spiky details along the outlines of paths.	Додає гострі деталі вздовж обрисів контурів.
+	Adds wrinkles along the outlines of paths.	Додає складки вздовж обрисів контурів.
+	Moves, copies and resizes objects on the perspective grid.	Переміщує, копіює й масштабує об’єкти на сітці перспективи.
+	Makes a series of steps between two or more objects.	Створює ряд переходів між двома або більше об’єктами.
+	Places dimension lines that show measured lengths.	Розміщує розмірні лінії з виміряними довжинами.
 	Tap	Коротке натискання
 	Clear Hold	Очистити утримання
 	Hold Shortcuts	Клавіші утримання
@@ -10074,3 +10223,7 @@ breakText	Glyphs	Гліфи
 @msg	Other blanks not shown: {count}	Інші розгортки не показано: {count}
 @msg	A joint does not close by {gap} pt.	Стик не змикається на {gap} pt.
 @msg	Two panels pass through each other.	Дві панелі проходять одна крізь одну.
+
+# #5804 native-picked raster editor (draft translations; native review welcome).
+	Edit Original with:	Редагувати оригінал у:
+file-filter	Applications	Програми

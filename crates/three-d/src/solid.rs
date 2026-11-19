@@ -28,7 +28,7 @@ pub(crate) use build::PLANES;
 #[cfg(test)]
 use build::{Camera, cuts, edge_distance, newell, section};
 pub(crate) use build::{Face3, Keep, extrude_faces, plane_faces};
-pub use build::{extrude, extrude_side_size, plane};
+pub use build::{extrude, extrude_side_size, extrude_surfaces, plane};
 pub use face_map::{FaceMap, MeshFace, extrude_face_map, extrude_mesh_face, plane_face_map, plane_mesh_face};
 #[cfg(test)]
 use inflate::GRID_WORK;
@@ -219,6 +219,9 @@ pub struct Extrude {
     /// Keep the faces of a closed solid that are turned away from the viewer (Draw Hidden Faces,
     /// and the classic Wireframe surface), drawn behind the faces turned toward it.
     pub hidden: bool,
+    /// Lay out the solid's numbered surfaces ([`extrude_surfaces`]): each facet of a wall or a
+    /// bevel band then carries its [`MapCell`]. A solid with a twist or a taper has none.
+    pub map_surfaces: bool,
     /// Graphics are mapped onto the side: the pieces of the walls and bevels of the solid's longest
     /// contour carry a [`Facet::surface`]. Off by default, which leaves the facets without one.
     pub map_surface: bool,
@@ -226,8 +229,42 @@ pub struct Extrude {
 
 impl Default for Extrude {
     fn default() -> Self {
-        Self { depth: 50.0, twist: 0.0, taper: 1.0, cap: true, bevel: None, hidden: false, map_surface: false }
+        Self { depth: 50.0, twist: 0.0, taper: 1.0, cap: true, bevel: None, hidden: false, map_surfaces: false, map_surface: false }
     }
+}
+
+/// Where a facet lies on one of its solid's numbered surfaces, laid out flat: the surface's index,
+/// the facet's corners on the page, and the point of the flat surface at each corner, in points
+/// (x along the surface from its left edge as it is seen from outside the solid, y from the edge
+/// nearer the front of the solid).
+#[derive(Clone, Debug, PartialEq)]
+pub struct MapCell {
+    pub surface: usize,
+    pub page: Vec<Point>,
+    pub uv: Vec<Point>,
+}
+
+/// What a numbered surface of a solid is.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SurfaceKind {
+    /// The front or back cap, or a plane's only face.
+    End(PlanarFace),
+    /// A side wall: the part of the side between two corners of the outline.
+    Wall,
+    /// The bevel between the front cap and a side wall.
+    Bevel,
+    /// Revolve's swept side.
+    Side,
+}
+
+/// One numbered surface of a solid: its kind and its size laid out flat, in points. An end also
+/// has the center of its bounds in the art's plane.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SolidSurface {
+    pub kind: SurfaceKind,
+    pub width: f64,
+    pub height: f64,
+    pub center: Option<Point>,
 }
 
 /// Inflate's options.
@@ -311,6 +348,10 @@ pub struct Facet {
     /// point of the drawing ([`Facet::depth_at`]). `None` for a face whose corners lie more than
     /// 0.001 pt off one plane (a piece of a twisted wall) or reach the eye.
     pub plane: Option<DepthPlane>,
+    /// Where the facet lies on one of its solid's numbered surfaces. `None` unless the solid was
+    /// built with its surfaces laid out ([`Extrude::map_surfaces`], [`Revolve::map_surface`]),
+    /// and for the ends, whose art is placed through a [`FaceMap`].
+    pub cell: Option<Box<MapCell>>,
     /// The contours in view space, before projection, for tests that measure depths.
     #[cfg(test)]
     view: Vec<Vec<V3>>,
@@ -383,7 +424,11 @@ impl Facet {
     /// Revolve's face `face` as a facet: its polygon, curved outline, depth, plane, normal and lighting.
     /// A face that joins the profile's ends round the axis is a side; a cap is an end.
     pub(crate) fn of_face(face: crate::Face) -> Self {
+        // The side is the surface's only numbered surface. A face that shows its inside carries
+        // no cell.
+        let cell = face.surface.filter(|c| c.outward && !face.cap).map(|c| Box::new(MapCell { surface: 0, page: c.page, uv: c.uv }));
         Facet {
+            cell,
             contours: vec![face.points],
             depth: face.depth,
             brightness: face.brightness,

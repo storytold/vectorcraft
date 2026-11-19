@@ -62,11 +62,13 @@ pub mod graph_design;
 pub mod graph_type;
 pub mod graphic_style_options;
 pub mod halftone;
+pub mod hpgl_options;
 pub mod hyphenation;
 pub mod import_pdf;
 pub mod indexed_color;
 pub mod javascript_files;
 pub mod justification;
+pub mod kinsoku_sets;
 pub mod layer_options;
 pub mod layers_panel_options;
 pub mod liquify;
@@ -101,6 +103,7 @@ pub mod plugin;
 mod png_options;
 pub mod print;
 pub mod print_presets;
+pub mod profile_mismatch;
 pub mod psd_import;
 mod psd_options;
 pub mod raster_effects;
@@ -174,6 +177,7 @@ pub(crate) use form::{humanize, number_list_text, plugin_color_button, ppi_suffi
 pub use new_document::{create_without_dialog as new_document_without_dialog, open as open_new_document, preset_card};
 pub(crate) use new_document::{popup_open as new_document_popup_open, preset_name};
 pub use png_options::open as open_raster_options;
+pub(crate) use save_pdf::{SAVE_SUMMARY as SAVE_PDF_SUMMARY, save_summary as save_pdf_summary, summary_open as pdf_summary_open};
 pub use save_pdf::{open as open_save_pdf, open_preset as open_pdf_preset};
 pub use tools::open_tool_dialog;
 
@@ -385,6 +389,7 @@ registry! {
     TateChuYokoSettings: [tate_chu_yoko::KIND] => tate_chu_yoko::SPEC,
     WarichuSettings: [warichu::KIND] => warichu::SPEC,
     CompositeFonts: [composite_fonts::KIND] => composite_fonts::SPEC,
+    KinsokuSets: [kinsoku_sets::KIND] => kinsoku_sets::SPEC,
     SavePdf: [save_pdf::KIND] => save_pdf::SPEC,
     SvgOptions: [svg_options::KIND] => svg_options::SPEC,
     JavaScriptFiles: [javascript_files::KIND] => javascript_files::SPEC,
@@ -396,6 +401,8 @@ registry! {
     ExportAs: ["exportAs"] => export_as::SPEC,
     ImportPdf: [import_pdf::KIND] => import_pdf::SPEC,
     SwatchConflict: [swatch_conflict::KIND] => swatch_conflict::SPEC,
+    ProfileMismatchOpen: [profile_mismatch::OPEN_KIND] => profile_mismatch::OPEN_SPEC,
+    ProfileMismatchPaste: [profile_mismatch::PASTE_KIND] => profile_mismatch::PASTE_SPEC,
     FileInfo: [file_info::KIND] => file_info::SPEC,
     RasterEffectsSettings: [raster_effects::KIND] => raster_effects::SPEC,
     EffectGallery: [effect_gallery::KIND] => effect_gallery::SPEC,
@@ -425,6 +432,7 @@ registry! {
     DivideSlices: [slices::DIVIDE] => slices::DIVIDE_SPEC,
     EpsOptions: [eps_options::KIND] => eps_options::SPEC,
     EpsFlattenerOptions: [eps_options::CUSTOM_KIND] => eps_options::CUSTOM_SPEC,
+    HpglOptions: [hpgl_options::KIND] => hpgl_options::SPEC,
     Recovery: [crate::recovery::KIND] => recovery::SPEC,
     PluginStopped: [safe_mode::STOPPED] => safe_mode::STOPPED_SPEC,
     SafeMode: [safe_mode::KIND] => safe_mode::SPEC,
@@ -737,7 +745,16 @@ pub fn cancel(app: &mut VectorcraftApp) {
         return;
     }
     if let Some(d) = app.ui.dialog.take() {
+        if d.kind == "preferences" {
+            crate::original_editor::cancel(app);
+        }
         if d.kind == swatch_conflict::KIND {
+            crate::placing::cancel_swatch_paste(app);
+        }
+        if d.kind == profile_mismatch::OPEN_KIND {
+            profile_mismatch::cancel_open(app);
+        }
+        if d.kind == profile_mismatch::PASTE_KIND {
             crate::placing::cancel_swatch_paste(app);
         }
         if d.kind == plugin::INSTALL_KIND {
@@ -813,6 +830,7 @@ pub fn confirm(app: &mut VectorcraftApp) -> DialogResult {
 /// time).
 pub(crate) fn settle(app: &mut VectorcraftApp) {
     crate::placing::settle_swatch_paste(app);
+    profile_mismatch::settle(app);
     missing_fonts::requeue_replaced(app);
     missing_fonts::stop_when_closed(app);
     find_links::stop_when_closed(app);
@@ -896,6 +914,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let revolves = revolve_gizmo::active(&d);
     if revolves {
         revolve_gizmo::show(app, ctx, &mut d);
+        three_d_classic::surface_outline(app, ctx, &d);
     }
     let initial = if revolves { egui::vec2((ctx.content_rect().width() / 2.0 - 226.0).max(0.0), -40.0) } else { egui::vec2(0.0, -40.0) };
     let id = egui::Id::unique(("dialog", d.kind.as_str()));

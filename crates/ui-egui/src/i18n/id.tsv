@@ -516,6 +516,17 @@
 	Shading Color	Warna pengarsiran
 	Black Overprint	Hitam overprint
 	Draw Hidden Faces	Gambar sisi tersembunyi
+	Map Art…	Petakan karya seni…
+	Map Art	Petakan karya seni
+	First Surface	Permukaan pertama
+	Previous Surface	Permukaan sebelumnya
+	Next Surface	Permukaan berikutnya
+	Last Surface	Permukaan terakhir
+	Horizontal Scale	Skala horizontal
+	Vertical Scale	Skala vertikal
+	Scale to Fit	Skalakan agar pas
+	Shade Artwork	Beri bayangan karya seni
+	Invisible Geometry	Geometri tak terlihat
 	Revolve…	Revolusi…
 	Inflate…	Gelembungkan…
 	Materials…	Material…
@@ -746,6 +757,9 @@
 	Box Channel	Saluran kotak
 	Color box	Kotak warna
 	Color Wheel Options	Opsi roda warna
+	Show Harmony	Tampilkan harmoni
+	Harmony Rule	Aturan harmoni
+	Harmony color	Warna harmoni
 	CSS Properties	Properti CSS
 	Document Info	Info dokumen
 	Flattener Preview	Pratinjau perata
@@ -977,6 +991,25 @@
 	Preserve Embedded Profiles	Pertahankan Profil Tersemat
 	Convert to Working Space	Konversi ke Ruang Kerja
 	Preserve Numbers	Pertahankan Angka
+	Profile Mismatches:	Ketidakcocokan Profil:
+	Ask When Opening	Tanya Saat Membuka
+	Ask When Pasting	Tanya Saat Menempel
+	Missing Profiles:	Profil yang Hilang:
+	Embedded Profile Mismatch	Ketidakcocokan Profil Tersemat
+	Missing Profile	Profil Hilang
+	Paste Profile Mismatch	Ketidakcocokan Profil Saat Menempel
+	“{name}” is not tagged with a {model} profile.	“{name}” tidak memiliki profil {model}.
+	“{name}” is tagged with the {model} profile “{profile}”, which is not the {model} working space “{working}”.	“{name}” memiliki profil {model} “{profile}”, yang bukan ruang kerja {model} “{working}”.
+	Use the embedded profile	Gunakan profil tersemat
+	Convert the colors to the working space	Konversi warna ke ruang kerja
+	Discard the embedded profile	Buang profil tersemat
+	Leave as is	Biarkan apa adanya
+	Assign the working space	Tetapkan ruang kerja
+	Assign profile:	Tetapkan profil:
+	Preserve the color numbers	Pertahankan angka warna
+	Convert to keep the colors' appearance	Konversi agar tampilan warna tetap sama
+@msg	`{path}` goes with `{key}`: "assign" only	`{path}` hanya dipakai dengan `{key}`: "assign"
+	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	Warna yang ditempel berasal dari dokumen dengan profil {model} “{from}”; profil dokumen ini “{to}”.
 	CMYK	CMYK
 	Texture	Tekstur
 	Craquelure…	Craquelure…
@@ -1058,6 +1091,15 @@ lighting	Light	Cahaya
 	Document Raster Effects Settings Dialog	Dialog pengaturan efek raster dokumen
 	Drop Shadow	Bayangan jatuh
 	DXF Options Dialog	Dialog opsi DXF
+	HP-GL Options	Opsi HP-GL
+	HP-GL Options Dialog	Dialog opsi HP-GL
+	Curve Tolerance:	Toleransi kurva:
+	Origin:	Titik asal:
+	Pens:	Pena:
+	One Pen per Color	Satu pena per warna
+	Pen Table	Tabel pena
+	Draw the Nearest Path Next	Gambar jalur terdekat berikutnya
+	Draw Inner Paths First	Gambar jalur bagian dalam lebih dulu
 	Edit Toolbar	Edit bilah alat
 	Edit Views	Edit tampilan
 	Effect…	Efek…
@@ -1970,6 +2012,15 @@ digits	Malayalam	Malayalam
 	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Set Kinsoku
 	Kinsoku Shori Type	Jenis Kinsoku Shori
+	Kinsoku Shori Settings…	Pengaturan Kinsoku Shori…
+	Kinsoku Shori Settings	Pengaturan Kinsoku Shori
+	Kinsoku Sets	Daftar Set Kinsoku
+	Kinsoku Set Base	Dasar Set Kinsoku
+	Based on:	Berdasarkan:
+	Cannot Start Line	Tidak dapat memulai baris
+	Cannot End Line	Tidak dapat mengakhiri baris
+	Hanging Punctuation	Tanda baca gantung
+	Inseparable Characters	Karakter tak terpisahkan
 	Push In First	Dorong masuk dahulu
 	Push Out First	Dorong keluar dahulu
 	Push Out Only	Hanya dorong keluar
@@ -2369,6 +2420,12 @@ digits	Malayalam	Malayalam
 	Units:	Satuan:
 	Use Typographer's Quotes	Gunakan tanda kutip tipografis
 	Center Artwork	Pusatkan karya seni
+	PSD Import Options	Opsi impor PSD
+	Place PSD	Tempatkan PSD
+	Convert Layers to Objects	Ubah lapisan menjadi objek
+	Import Hidden Layers	Impor lapisan tersembunyi
+	Flatten Layers to a Single Image	Ratakan lapisan menjadi satu gambar
+	Import Slices	Impor slice
 	DXF Import Options	Opsi impor DXF
 	Layout:	Tata letak:
 	Merge Layers	Gabungkan lapisan
@@ -2513,6 +2570,7 @@ digits	Malayalam	Malayalam
 	Save As Preset…	Simpan sebagai Preset…
 	Save Changes	Simpan Perubahan
 	Save Preset…	Simpan preset…
+	Save Summary…	Simpan ringkasan…
 	Vectors	Vektor
 	A saved copy of the selected preset	Salinan tersimpan dari preset terpilih
 	Built-in presets don't change: New makes a copy you can edit.	Preset bawaan tidak berubah: Baru membuat salinan yang dapat Anda edit.
@@ -3128,6 +3186,17 @@ antiAlias	Sharp	Tajam
 	Swatch Name:	Nama swatch:
 	Diameter:	Diameter:
 	Symbolism Tools Options	Opsi alat simbolisme
+	Tool:	Alat:
+	Symbol Set Density	Kepadatan set simbol
+	Symbol Sprayer Options	Opsi penyemprot simbol
+	Scrunch:	Perapatan:
+	Spin:	Putaran:
+	Screen:	Penyaringan:
+	Stain:	Pewarnaan:
+	Symbol Sizer Options	Opsi pengubah ukuran simbol
+	Proportional Resizing	Ubah ukuran secara proporsional
+	Resizing Affects Density	Perubahan ukuran memengaruhi kepadatan
+	Show Brush Size and Intensity	Tampilkan ukuran dan intensitas kuas
 	Symbol Set Density:	Kepadatan set simbol:
 	Intensity:	Intensitas:
 	Place PDF	Tempatkan PDF
@@ -3188,6 +3257,7 @@ antiAlias	Sharp	Tajam
 	Width Point Edit	Edit titik lebar
 	Art	Seni
 	Bearing	Arah
+	Stylus Wheel	Roda stylus
 	Bristle	Bristle
 	Calligraphic	Kaligrafis
 	Dots	Titik
@@ -3318,6 +3388,9 @@ theme	Appearance	Tampilan
 	embedding for preview and print	penyematan untuk pratinjau dan cetak
 	embedding allowed	penyematan diizinkan
 	{file}; {embedding}	{file}; {embedding}
+	unknown type	jenis tidak dikenal
+	{type}; {uses}	{type}; {uses}
+@plural	{n} use|{n} uses	{n} penggunaan
 	substituted: shown in {family} {style} ({detail})	diganti: ditampilkan dengan {family} {style} ({detail})
 	missing: shown in {family} {style}	tidak ada: ditampilkan dengan {family} {style}
 	missing	tidak ada
@@ -3888,6 +3961,7 @@ theme	Appearance	Tampilan
 	Show Pixel Grid (Above 600% Zoom)	Tampilkan grid piksel (di atas zoom 600%)
 	Show Slice Numbers	Tampilkan nomor irisan
 	Show The Home Screen When No Documents Are Open	Tampilkan layar beranda saat tidak ada dokumen terbuka
+	Show Tool Cards	Tampilkan kartu alat
 	Show Tool Tips	Tampilkan tips alat
 	Size/Leading	Ukuran/Leading
 	Snapping Tolerance	Toleransi kancing
@@ -5095,6 +5169,7 @@ imageTrace	Outline	Kontur
 @msg	the PDF is password-protected: give its password	PDF dilindungi kata sandi: berikan kata sandinya
 @msg	the PDF password is wrong	kata sandi PDF salah
 @msg	the Save PDF dialog didn't open	dialog Simpan PDF tidak terbuka
+@msg	the Save PDF dialog is not open	dialog Simpan PDF tidak sedang terbuka
 @msg	the WMF header is damaged	header WMF rusak
 @msg	the art could not be sampled	karya seni tidak dapat diambil sampelnya
 @msg	the art has no bounds	karya seni tidak memiliki batas
@@ -7699,6 +7774,39 @@ breakText	Glyphs	Glif
 @msg	A joint does not close by {gap} pt.	Sebuah sambungan tidak menutup sejauh {gap} pt.
 @msg	Two panels pass through each other.	Dua panel saling menembus.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer harus "singleLine", "everyLine", "standardSingleLine", atau "standardEveryLine"
+# Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	Menampilkan kartu berisi fungsi alat di bilah alat dan tombolnya sebagai pengganti tipnya; memerlukan Tampilkan tips alat.
+	Selects whole objects and groups to move, resize or rotate them.	Memilih objek dan grup utuh untuk dipindahkan, diubah ukurannya, atau diputar.
+	Selects anchor points and path segments to reshape a path.	Memilih titik jangkar dan segmen jalur untuk mengubah bentuk jalur.
+	Draws paths point by point, with straight segments and smooth curves.	Menggambar jalur titik demi titik, dengan segmen lurus dan lengkungan halus.
+	Draws smooth curves through the points you click.	Menggambar lengkungan halus melalui titik yang Anda klik.
+	Adds text at a point, or in a frame you drag.	Menambahkan teks di suatu titik atau di dalam bingkai yang Anda seret.
+	Draws rectangles and squares.	Menggambar persegi panjang dan persegi.
+	Draws rectangles with rounded corners.	Menggambar persegi panjang dengan sudut membulat.
+	Draws ellipses and circles.	Menggambar elips dan lingkaran.
+	Draws polygons with sides of equal length.	Menggambar poligon dengan sisi yang sama panjang.
+	Draws stars.	Menggambar bintang.
+	Turns objects around a reference point.	Memutar objek di sekitar titik referensi.
+	Flips objects across an axis through a reference point.	Mencerminkan objek terhadap sumbu yang melalui titik referensi.
+	Resizes objects from a reference point.	Mengubah ukuran objek dari titik referensi.
+	Slants objects from a reference point.	Memiringkan objek dari titik referensi.
+	Moves the view of the document.	Menggeser tampilan dokumen.
+	Magnifies or reduces the view.	Memperbesar atau memperkecil tampilan.
+	Copies the color and other attributes of one object to the selection.	Menyalin warna dan atribut lain dari satu objek ke pilihan.
+	Sets the direction and length of a gradient.	Mengatur arah dan panjang gradien.
+	Creates, selects and resizes artboards.	Membuat, memilih, dan mengubah ukuran artboard.
+	Changes the width of a stroke along its length.	Mengubah lebar stroke di sepanjang panjangnya.
+	Bends art by dragging pins placed on it.	Membengkokkan karya seni dengan menyeret pin yang dipasang padanya.
+	Pushes the outlines of paths in the direction you drag.	Mendorong garis luar jalur ke arah yang Anda seret.
+	Twists the outlines of paths into swirls.	Memelintir garis luar jalur menjadi pusaran.
+	Pulls the outlines of paths in toward the brush.	Menarik garis luar jalur ke arah kuas.
+	Pushes the outlines of paths out from the brush.	Mendorong garis luar jalur keluar dari kuas.
+	Adds curved details along the outlines of paths.	Menambahkan detail melengkung di sepanjang garis luar jalur.
+	Adds spiky details along the outlines of paths.	Menambahkan detail runcing di sepanjang garis luar jalur.
+	Adds wrinkles along the outlines of paths.	Menambahkan kerutan di sepanjang garis luar jalur.
+	Moves, copies and resizes objects on the perspective grid.	Memindahkan, menyalin, dan mengubah ukuran objek pada kisi perspektif.
+	Makes a series of steps between two or more objects.	Membuat serangkaian langkah di antara dua objek atau lebih.
+	Places dimension lines that show measured lengths.	Menempatkan garis dimensi yang menunjukkan panjang hasil pengukuran.
 	Tap	Tekan singkat
 	Clear Hold	Hapus Tahan
 	Hold Shortcuts	Pintasan tahan
@@ -7715,3 +7823,7 @@ breakText	Glyphs	Glif
 	Pulse Stroke	Goresan Berdenyut
 	Round Flow	Aliran Bulat
 	Chisel Flow	Aliran Serong
+
+# #5804 native-picked raster editor (draft translations; native review welcome).
+	Edit Original with:	Edit asli dengan:
+file-filter	Applications	Aplikasi

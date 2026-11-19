@@ -588,6 +588,9 @@ font-technology	Variable	Variabla
 	Box Channel	Rutans kanal
 	Color box	Färgruta
 	Color Wheel Options	Alternativ för färghjulet
+	Show Harmony	Visa harmoni
+	Harmony Rule	Harmoniregel
+	Harmony color	Harmonifärg
 	Color Type:	Färgtyp:
 	Color:	Färg:
 	Colorize	Färglägg
@@ -1013,10 +1016,25 @@ font-technology	Variable	Variabla
 	Duplicate Symbol	Duplicera symbol
 	Duplicate {kind} Style	Duplicera {kind}-stil
 	Dutch	Nederländska
+	PSD Import Options	Importalternativ för PSD
+	Place PSD	Placera PSD
+	Convert Layers to Objects	Konvertera lager till objekt
+	Import Hidden Layers	Importera dolda lager
+	Flatten Layers to a Single Image	Platta till lager till en enda bild
+	Import Slices	Importera skivor
 	DXF Import Options	Importalternativ för DXF
 	DXF Info	DXF-info
 	DXF Options	DXF-alternativ
 	DXF Options Dialog	Dialogruta för DXF-alternativ
+	HP-GL Options	HP-GL-alternativ
+	HP-GL Options Dialog	Dialogruta för HP-GL-alternativ
+	Curve Tolerance:	Kurvtolerans:
+	Origin:	Origo:
+	Pens:	Pennor:
+	One Pen per Color	En penna per färg
+	Pen Table	Penntabell
+	Draw the Nearest Path Next	Rita den närmaste banan härnäst
+	Draw Inner Paths First	Rita inre banor först
 	e.g. 1-3, 5	t.ex. 1-3, 5
 	Each page prints as one image, at the document's raster effects resolution.	Varje sida skrivs ut som en bild, med dokumentets upplösning för rastereffekter.
 	Earth Tones	Jordtoner
@@ -1239,6 +1257,15 @@ font-technology	Variable	Variabla
 	Shading Color	Skuggningsfärg
 	Black Overprint	Svart övertryck
 	Draw Hidden Faces	Rita dolda ytor
+	Map Art…	Mappa bildmaterial…
+	Map Art	Mappa bildmaterial
+	First Surface	Första ytan
+	Previous Surface	Föregående yta
+	Next Surface	Nästa yta
+	Last Surface	Sista ytan
+	Scale to Fit	Skala för att passa
+	Shade Artwork	Skugga bildmaterial
+	Invisible Geometry	Osynlig geometri
 	Eyedropper	Pipett
 	Eyedropper Applies:	Pipetten tillämpar:
 	Eyedropper Options	Pipettalternativ
@@ -1346,6 +1373,17 @@ font-technology	Variable	Variabla
 	Largest:	Störst:
 	Direction:	Riktning:
 	Symbolism Tools Options	Alternativ för symbolverktyg
+	Tool:	Verktyg:
+	Symbol Set Density	Täthet för symboluppsättning
+	Symbol Sprayer Options	Alternativ för symbolspruta
+	Scrunch:	Dra ihop:
+	Spin:	Rotera:
+	Screen:	Opacitet:
+	Stain:	Färga:
+	Symbol Sizer Options	Alternativ för symbolstorlek
+	Proportional Resizing	Proportionell storleksändring
+	Resizing Affects Density	Storleksändring påverkar tätheten
+	Show Brush Size and Intensity	Visa penselstorlek och intensitet
 	Symbol Set Density:	Täthet för symboluppsättning:
 	Flat Image	Platt bild
 	Flat Logo	Platt logotyp
@@ -2152,6 +2190,15 @@ font-technology	Variable	Variabla
 	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Kinsoku-uppsättning
 	Kinsoku Shori Type	Kinsoku Shori-typ
+	Kinsoku Shori Settings…	Kinsoku Shori-inställningar…
+	Kinsoku Shori Settings	Kinsoku Shori-inställningar
+	Kinsoku Sets	Kinsoku-uppsättningar
+	Kinsoku Set Base	Grund för Kinsoku-uppsättning
+	Based on:	Baserad på:
+	Cannot Start Line	Kan inte inleda rad
+	Cannot End Line	Kan inte avsluta rad
+	Hanging Punctuation	Hängande skiljetecken
+	Inseparable Characters	Oskiljbara tecken
 	Push In First	Skjut in först
 	Push Out First	Skjut ut först
 	Push Out Only	Skjut endast ut
@@ -2268,6 +2315,7 @@ font-technology	Variable	Variabla
 	Pressure	Tryck
 	Tilt	Lutning
 	Bearing	Riktning
+	Stylus Wheel	Pennhjul
 	Shape:	Form:
 	Bristle Length:	Borstlängd:
 	Bristle Density:	Borsttäthet:
@@ -2298,6 +2346,9 @@ font-technology	Variable	Variabla
 	embedding for preview and print	inbäddning för förhandsvisning och utskrift
 	embedding allowed	inbäddning tillåten
 	{file}; {embedding}	{file}; {embedding}
+	unknown type	okänd typ
+	{type}; {uses}	{type}; {uses}
+@plural	{n} use|{n} uses	{n} användning|{n} användningar
 	substituted: shown in {family} {style} ({detail})	ersatt: visas med {family} {style} ({detail})
 	missing: shown in {family} {style}	saknas: visas med {family} {style}
 	missing	saknas
@@ -3306,6 +3357,7 @@ digits	Malayalam	Malayalam
 	Save Preset	Spara förinställning
 	Save Document Preset	Spara dokumentförinställning
 	Save Preset…	Spara förinställning…
+	Save Summary…	Spara sammanfattning…
 	Save Print Preset	Spara utskriftsförinställning
 	Save Recovery Data	Spara återställningsdata
 	Save Save for Web Preset	Spara förinställning för Spara för webben
@@ -3624,6 +3676,7 @@ digits	Malayalam	Malayalam
 	Show Thumbnails	Visa miniatyrer
 	Show Tile Edge	Visa rutkant
 	Show Tints/Shades	Visa ljusa/mörka toner
+	Show Tool Cards	Visa verktygskort
 	Show Tool Tips	Visa verktygstips
 	Show Transparency Grid	Visa transparensrutnät
 	Show Video Rulers	Visa videolinjaler
@@ -5349,6 +5402,7 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	the PDF is password-protected: give its password	PDF-filen är lösenordsskyddad: ange lösenordet
 @msg	the PDF password is wrong	PDF-lösenordet är fel
 @msg	the Save PDF dialog didn't open	dialogrutan Spara PDF öppnades inte
+@msg	the Save PDF dialog is not open	dialogrutan Spara PDF är inte öppen
 @msg	the WMF header is damaged	WMF-huvudet är skadat
 @msg	the art could not be sampled	grafiken kunde inte samplas
 @msg	the art has no bounds	grafiken har ingen avgränsning
@@ -5735,6 +5789,49 @@ variable-list-end	{0}, {1}	{0} och {1}
 @msg	the PSD file's layer groups are nested too deeply	PSD-filens lagergrupper är kapslade för djupt
 @msg	a layer of the PSD file is too large to read	ett lager i PSD-filen är för stort för att läsas
 @msg	the PSD file's layers take more memory to read than allowed	PSD-filens lager kräver mer minne för att läsas än vad som tillåts
+@msg	the file is no longer loaded	filen är inte längre inläst
+@msg	the layers can't be read ({e}): the file was placed as its merged image	lagren kan inte läsas ({e}): filen placerades som sin sammanslagna bild
+@msg	1 type layer came in as pixels: the text isn't editable	1 textlager kom in som pixlar: texten går inte att redigera
+@msg	{n} type layers came in as pixels: the text isn't editable	{n} textlager kom in som pixlar: texten går inte att redigera
+@msg	1 adjustment layer was not applied	1 justeringslager tillämpades inte
+@msg	{n} adjustment layers were not applied	{n} justeringslager tillämpades inte
+@msg	1 fill layer was not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	1 fyllningslager ritades inte (en övertonings- eller mönsterfyllning, en färg som inte kan läsas eller en form som inte lagrar några pixlar)
+@msg	{n} fill layers were not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	{n} fyllningslager ritades inte (en övertonings- eller mönsterfyllning, en färg som inte kan läsas eller en form som inte lagrar några pixlar)
+@msg	the layer effects of 1 layer weren't drawn	lagereffekterna för 1 lager ritades inte
+@msg	the layer effects of {n} layers weren't drawn	lagereffekterna för {n} lager ritades inte
+@msg	the vector masks of 1 layer weren't applied	vektormaskerna för 1 lager tillämpades inte
+@msg	the vector masks of {n} layers weren't applied	vektormaskerna för {n} lager tillämpades inte
+@msg	the knockout of 1 layer wasn't applied	utsparningen för 1 lager tillämpades inte
+@msg	the knockout of {n} layers wasn't applied	utsparningen för {n} lager tillämpades inte
+@msg	1 layer was left out (hidden layers and the layers clipped to them)	1 lager utelämnades (dolda lager och de lager som är urklippta mot dem)
+@msg	{n} layers were left out (hidden layers and the layers clipped to them)	{n} lager utelämnades (dolda lager och de lager som är urklippta mot dem)
+@msg	1 layer clipped to a fill layer that wasn't drawn was left out	1 lager urklippt mot ett fyllningslager som inte ritades utelämnades
+@msg	{n} layers clipped to fill layers that weren't drawn were left out	{n} lager urklippta mot fyllningslager som inte ritades utelämnades
+@msg	layers in blend modes VectorCraft doesn't have ({modes}) were merged with the layers below them	lager i blandningslägen som VectorCraft inte har ({modes}) slogs samman med lagren under dem
+@msg	1 layer in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	1 lager i ett blandningsläge som VectorCraft inte har kom in som Normal: sammanslagningen kräver mer minne än tillåtet
+@msg	{n} layers in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	{n} lager i blandningslägen som VectorCraft inte har kom in som Normal: sammanslagningen kräver mer minne än tillåtet
+@msg	1 layer clipped to the layer below came in unclipped: the merge needs more memory than allowed	1 lager urklippt mot lagret under kom in utan urklipp: sammanslagningen kräver mer minne än tillåtet
+@msg	{n} layers clipped to the layer below came in unclipped: the merge needs more memory than allowed	{n} lager urklippta mot lagret under kom in utan urklipp: sammanslagningen kräver mer minne än tillåtet
+@msg	hiddenLayers applies to a PSD file placed with layers: true	hiddenLayers gäller en PSD-fil som placeras med layers: true
+@msg	importSlices: a linked PSD file is placed as its flat image; give link: false to embed it with its slices	importSlices: en länkad PSD-fil placeras som sin platta bild; ange link: false för att bädda in den med dess skivor
+@msg	layers: a linked PSD file is placed as its flat image; leave link out or give link: false	layers: en länkad PSD-fil placeras som sin platta bild; utelämna link eller ange link: false
+@msg	the slices can't be read ({e}) and were left out	skivorna kan inte läsas ({e}) och utelämnades
+@msg	1 slice lies outside the canvas or has no size and was left out	1 skiva ligger utanför arbetsytan eller saknar storlek och utelämnades
+@msg	{n} slices lie outside the canvas or have no size and were left out	{n} skivor ligger utanför arbetsytan eller saknar storlek och utelämnades
+@msg	1 slice would lie outside the canvas and was left out	1 skiva skulle ligga utanför arbetsytan och utelämnades
+@msg	{n} slices would lie outside the canvas and were left out	{n} skivor skulle ligga utanför arbetsytan och utelämnades
+@msg	the slices' descriptor holds too many values	skivornas deskriptor innehåller för många värden
+@msg	the slices' descriptor has a version other than 16	skivornas deskriptor har en annan version än 16
+@msg	the slices are stored in version {v}, which isn't read	skivorna är sparade i version {v}, som inte läses
+@msg	the file has {count} slices, more than the {MAX_SLICES} read	filen har {count} skivor, fler än de {MAX_SLICES} som läses
+@msg	the slices' descriptor has no list of slices	skivornas deskriptor har ingen lista över skivor
+@msg	the slices' descriptor lists something other than a slice	skivornas deskriptor listar något annat än en skiva
+@msg	a slice in the slices' descriptor has no bounds	en skiva i skivornas deskriptor saknar gränser
+@msg	a slice's bounds in the slices' descriptor aren't numbers	gränserna för en skiva i skivornas deskriptor är inte tal
+@msg	a text in the slices has more than the {MAX_TEXT} characters read	en text i skivorna har fler än de {MAX_TEXT} tecken som läses
+@msg	the slices' descriptor nests too deep	skivornas deskriptor är kapslad för djupt
+@msg	the slices' descriptor has a reference of an unknown kind ({_1})	skivornas deskriptor har en referens av okänt slag ({_1})
+@msg	the slices' descriptor has a value of an unknown type ({_1})	skivornas deskriptor har ett värde av okänd typ ({_1})
 @msg	the layers can't be read ({e}): the file opened as its merged image	lagren kan inte läsas ({e}): filen öppnades som sin sammanslagna bild
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}-bitars PSD-filer i det här färgläget kan inte läsas
 @msg	the PSD file is cut short	PSD-filen är avkortad
@@ -5762,6 +5859,25 @@ variable-list-end	{0}, {1}	{0} och {1}
 	Preserve Embedded Profiles	Behåll inbäddade profiler
 	Convert to Working Space	Konvertera till arbetsfärgrymd
 	Preserve Numbers	Behåll värden
+	Profile Mismatches:	Profilavvikelser:
+	Ask When Opening	Fråga vid öppning
+	Ask When Pasting	Fråga vid inklistring
+	Missing Profiles:	Profiler som saknas:
+	Embedded Profile Mismatch	Avvikande inbäddad profil
+	Missing Profile	Profil saknas
+	Paste Profile Mismatch	Profilavvikelse vid inklistring
+	“{name}” is not tagged with a {model} profile.	”{name}” har ingen {model}-profil.
+	“{name}” is tagged with the {model} profile “{profile}”, which is not the {model} working space “{working}”.	”{name}” har {model}-profilen ”{profile}”, som inte är {model}-arbetsfärgrymden ”{working}”.
+	Use the embedded profile	Använd den inbäddade profilen
+	Convert the colors to the working space	Konvertera färgerna till arbetsfärgrymden
+	Discard the embedded profile	Ignorera den inbäddade profilen
+	Leave as is	Lämna som det är
+	Assign the working space	Tilldela arbetsfärgrymden
+	Assign profile:	Tilldela profil:
+	Preserve the color numbers	Behåll färgvärdena
+	Convert to keep the colors' appearance	Konvertera så att färgerna ser likadana ut
+@msg	`{path}` goes with `{key}`: "assign" only	`{path}` hör bara ihop med `{key}`: "assign"
+	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	De inklistrade färgerna kommer från ett dokument med {model}-profilen ”{from}”; det här dokumentets är ”{to}”.
 	Texture	Textur
 	Craquelure…	Krakelering…
 	Grain…	Korn…
@@ -10127,6 +10243,39 @@ digits	Hindi	Hindi
 @msg	A joint does not close by {gap} pt.	En fog sluter inte med {gap} pt.
 @msg	Two panels pass through each other.	Två paneler går igenom varandra.
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} pixlar är för stort för PSD (högst {MAX_SIDE} pixlar per sida): sänk upplösningen
+# Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	Visar ett kort med vad ett verktyg i verktygsfältet och dess tangenter gör i stället för dess tips; kräver Visa verktygstips.
+	Selects whole objects and groups to move, resize or rotate them.	Markerar hela objekt och grupper för att flytta, skala eller rotera dem.
+	Selects anchor points and path segments to reshape a path.	Markerar ankarpunkter och bansegment för att ändra formen på en bana.
+	Draws paths point by point, with straight segments and smooth curves.	Ritar banor punkt för punkt, med raka segment och mjuka kurvor.
+	Draws smooth curves through the points you click.	Ritar mjuka kurvor genom punkterna du klickar på.
+	Adds text at a point, or in a frame you drag.	Lägger till text vid en punkt eller i en ram som du drar upp.
+	Draws rectangles and squares.	Ritar rektanglar och kvadrater.
+	Draws rectangles with rounded corners.	Ritar rektanglar med rundade hörn.
+	Draws ellipses and circles.	Ritar ellipser och cirklar.
+	Draws polygons with sides of equal length.	Ritar polygoner med lika långa sidor.
+	Draws stars.	Ritar stjärnor.
+	Turns objects around a reference point.	Roterar objekt runt en referenspunkt.
+	Flips objects across an axis through a reference point.	Spegelvänder objekt över en axel genom en referenspunkt.
+	Resizes objects from a reference point.	Skalar objekt från en referenspunkt.
+	Slants objects from a reference point.	Lutar objekt från en referenspunkt.
+	Moves the view of the document.	Flyttar vyn av dokumentet.
+	Magnifies or reduces the view.	Förstorar eller förminskar vyn.
+	Copies the color and other attributes of one object to the selection.	Kopierar färgen och andra attribut från ett objekt till markeringen.
+	Sets the direction and length of a gradient.	Anger riktning och längd för en gradient.
+	Creates, selects and resizes artboards.	Skapar, markerar och skalar ritytor.
+	Changes the width of a stroke along its length.	Ändrar bredden på en kontur längs dess längd.
+	Bends art by dragging pins placed on it.	Böjer teckningar genom att dra i nålar som placerats på dem.
+	Pushes the outlines of paths in the direction you drag.	Skjuter banornas konturer i den riktning du drar.
+	Twists the outlines of paths into swirls.	Vrider banornas konturer till virvlar.
+	Pulls the outlines of paths in toward the brush.	Drar banornas konturer in mot penseln.
+	Pushes the outlines of paths out from the brush.	Skjuter banornas konturer ut från penseln.
+	Adds curved details along the outlines of paths.	Lägger till böjda detaljer längs banornas konturer.
+	Adds spiky details along the outlines of paths.	Lägger till spetsiga detaljer längs banornas konturer.
+	Adds wrinkles along the outlines of paths.	Lägger till rynkor längs banornas konturer.
+	Moves, copies and resizes objects on the perspective grid.	Flyttar, kopierar och skalar objekt på perspektivrutnätet.
+	Makes a series of steps between two or more objects.	Skapar en serie steg mellan två eller flera objekt.
+	Places dimension lines that show measured lengths.	Placerar måttlinjer som visar uppmätta längder.
 	Tap	Kort tryck
 	Clear Hold	Rensa håll
 	Hold Shortcuts	Hållkortkommandon
@@ -10143,3 +10292,7 @@ digits	Hindi	Hindi
 	Pulse Stroke	Pulserande drag
 	Round Flow	Runt flöde
 	Chisel Flow	Snedflöde
+
+# #5804 native-picked raster editor (draft translations; native review welcome).
+	Edit Original with:	Redigera original med:
+file-filter	Applications	Program

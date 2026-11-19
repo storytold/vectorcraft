@@ -142,6 +142,7 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("interpolateControlPoints", "General", "Options", "Interpolate Control Points When Moving Anchors", bool),
     p!("usePreciseCursors", "General", "Options", "Use Precise Cursors", bool),
     p!("showToolTips", "General", "Options", "Show Tool Tips", bool),
+    p!("showToolCards", "General", "Options", "Show Tool Cards", bool),
     p!("showExternalScriptWarning", "General", "Options", "Show External Script Warning", bool),
     p!("antiAliasedArtwork", "General", "Options", "Anti-aliased Artwork", bool),
     p!("selectSameTintPercent", "General", "Options", "Select Same Tint %", bool),

@@ -152,6 +152,7 @@ impl VectorcraftApp {
             system_paste_at: f64::NEG_INFINITY,
             clipboard_probe: None,
             picks: picks::Picks::default(),
+            original_editor: Default::default(),
             screen_sampler: None,
             font_check: None,
             #[cfg(not(target_arch = "wasm32"))]
@@ -186,6 +187,8 @@ impl VectorcraftApp {
             automation_roots: None,
             synthetic_frame: false,
             pending_plugin_install: None,
+            pending_profile_open: None,
+            queued_profile_opens: Default::default(),
             script_picked: Vec::new(),
             script_picked_left_out: false,
             pen_end: Default::default(),

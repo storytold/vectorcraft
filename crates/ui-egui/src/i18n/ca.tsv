@@ -490,6 +490,7 @@ antiAlias	Sharp	Nítid
 	Batch	Lot
 	Batch…	Lot…
 	Bearing	Orientació
+	Stylus Wheel	Roda del llapis
 	Before Last:	Abans de l’últim:
 	Begin Recording	Comença a enregistrar
 	Exclude from playback	Exclou de la reproducció
@@ -792,6 +793,25 @@ antiAlias	Sharp	Nítid
 	Preserve Embedded Profiles	Conserva els perfils incrustats
 	Convert to Working Space	Converteix a l'espai de treball
 	Preserve Numbers	Conserva els números
+	Profile Mismatches:	Discrepàncies de perfil:
+	Ask When Opening	Pregunta en obrir
+	Ask When Pasting	Pregunta en enganxar
+	Missing Profiles:	Perfils que falten:
+	Embedded Profile Mismatch	Discrepància del perfil incrustat
+	Missing Profile	Falta el perfil
+	Paste Profile Mismatch	Discrepància de perfil en enganxar
+	“{name}” is not tagged with a {model} profile.	“{name}” no té cap perfil {model}.
+	“{name}” is tagged with the {model} profile “{profile}”, which is not the {model} working space “{working}”.	“{name}” té el perfil {model} “{profile}”, que no és l’espai de treball {model} “{working}”.
+	Use the embedded profile	Utilitza el perfil incrustat
+	Convert the colors to the working space	Converteix els colors a l’espai de treball
+	Discard the embedded profile	Descarta el perfil incrustat
+	Leave as is	Deixa-ho tal com està
+	Assign the working space	Assigna l’espai de treball
+	Assign profile:	Assigna el perfil:
+	Preserve the color numbers	Conserva els valors dels colors
+	Convert to keep the colors' appearance	Converteix per conservar l’aspecte dels colors
+@msg	`{path}` goes with `{key}`: "assign" only	`{path}` només va amb `{key}`: "assign"
+	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	Els colors enganxats provenen d’un document amb el perfil {model} “{from}”; el d’aquest document és “{to}”.
 	Coarse Dots	Punts gruixuts
 	Collapse Panel Group	Replega el grup de panells
 	Cycle Display Sizes	Alterna les mides de visualització
@@ -859,6 +879,9 @@ antiAlias	Sharp	Nítid
 	Box Channel	Canal del quadre
 	Color box	Quadre de color
 	Color Wheel Options	Opcions de la roda de colors
+	Show Harmony	Mostra l’harmonia
+	Harmony Rule	Regla d’harmonia
+	Harmony color	Color de l’harmonia
 	Color Type:	Tipus de color:
 	Color wheel	Roda de color
 	Color:	Color:
@@ -1465,10 +1488,25 @@ antiAlias	Sharp	Nítid
 	Duplication	Duplicació
 	Dutch	Neerlandès
 	DWG (use DXF)	DWG (feu servir DXF)
+	PSD Import Options	Opcions d’importació de PSD
+	Place PSD	Col·loca un PSD
+	Convert Layers to Objects	Converteix les capes en objectes
+	Import Hidden Layers	Importa les capes amagades
+	Flatten Layers to a Single Image	Aplana les capes en una sola imatge
+	Import Slices	Importa els talls
 	DXF Import Options	Opcions d’importació de DXF
 	DXF Info	Informació del DXF
 	DXF Options	Opcions del DXF
 	DXF Options Dialog	Diàleg d’opcions del DXF
+	HP-GL Options	Opcions de l’HP-GL
+	HP-GL Options Dialog	Diàleg d’opcions de l’HP-GL
+	Curve Tolerance:	Tolerància de les corbes:
+	Origin:	Origen:
+	Pens:	Plomes:
+	One Pen per Color	Una ploma per color
+	Pen Table	Taula de plomes
+	Draw the Nearest Path Next	Dibuixa després el traçat més proper
+	Draw Inner Paths First	Dibuixa primer els traçats interiors
 	e.g. 1-3, 5	p. ex. 1-3, 5
 	Each Design Represents:	Cada disseny representa:
 	Each entry of the file is matched to a VectorCraft tool, command or panel. Check the matches and answer what is left.	Cada entrada del fitxer s’associa a una eina, una ordre o un panell del VectorCraft. Comprova les coincidències i respon a les que quedin.
@@ -1717,6 +1755,15 @@ antiAlias	Sharp	Nítid
 	Shading Color	Color de l’ombra
 	Black Overprint	Negre en sobreimpressió
 	Draw Hidden Faces	Dibuixa les cares ocultes
+	Map Art…	Mapatge d’art…
+	Map Art	Mapatge d’art
+	First Surface	Primera superfície
+	Previous Surface	Superfície anterior
+	Next Surface	Superfície següent
+	Last Surface	Última superfície
+	Scale to Fit	Escala per ajustar
+	Shade Artwork	Ombreja l’art
+	Invisible Geometry	Geometria invisible
 	Eyedropper	Comptagotes
 	Eyedropper Applies:	El comptagotes aplica:
 	Eyedropper Options	Opcions del comptagotes
@@ -2410,6 +2457,15 @@ digits	Malayalam	Malaiàlam
 	Kind	Tipus
 	Kinsoku Set	Conjunt Kinsoku
 	Kinsoku Shori Type	Tipus de Kinsoku Shori
+	Kinsoku Shori Settings…	Configuració de Kinsoku Shori…
+	Kinsoku Shori Settings	Configuració de Kinsoku Shori
+	Kinsoku Sets	Conjunts Kinsoku
+	Kinsoku Set Base	Base del conjunt Kinsoku
+	Based on:	Basat en:
+	Cannot Start Line	No pot començar la línia
+	Cannot End Line	No pot acabar la línia
+	Hanging Punctuation	Puntuació penjant
+	Inseparable Characters	Caràcters inseparables
 	Kite	Estel
 	Knife	Ganivet
 	Knockout Group	Grup knockout
@@ -3317,6 +3373,9 @@ digits	Malayalam	Malaiàlam
 	embedding for preview and print	incrustació per a la visualització i la impressió
 	embedding allowed	incrustació permesa
 	{file}; {embedding}	{file}; {embedding}
+	unknown type	tipus desconegut
+	{type}; {uses}	{type}; {uses}
+@plural	{n} use|{n} uses	{n} ús|{n} usos
 	substituted: shown in {family} {style} ({detail})	substituït: es mostra amb {family} {style} ({detail})
 	missing: shown in {family} {style}	absent: es mostra amb {family} {style}
 	missing	absent
@@ -4180,6 +4239,7 @@ digits	Malayalam	Malaiàlam
 	Save Preset	Desa el preajust
 	Save Document Preset	Desa el preajust de document
 	Save Preset…	Desa el preajust…
+	Save Summary…	Desa el resum…
 	Save Print Preset	Desa el preajust d’impressió
 	Save Recovery Data	Desa les dades de recuperació
 	Save Save for Web Preset	Desa el preajust Desa per a web
@@ -4911,6 +4971,7 @@ digits	Malayalam	Malaiàlam
 	Show Tile Edge	Mostra la vora del mosaic
 	Show Tints/Shades	Mostra els tons/ombres
 	Show Tool Group Labels	Mostra les etiquetes dels grups d’eines
+	Show Tool Cards	Mostra les fitxes d’eines
 	Show Tool Tips	Mostra els consells d’eines
 	Show Transparency Grid	Mostra la quadrícula de transparència
 	Show Video Rulers	Mostra les regles de vídeo
@@ -5227,6 +5288,17 @@ digits	Malayalam	Malaiàlam
 	Symbol Screener Tool	Eina de filtre de símbols
 	Symbol Scruncher	Compressor de símbols
 	Symbol Scruncher Tool	Eina de compressor de símbols
+	Tool:	Eina:
+	Symbol Set Density	Densitat del conjunt de símbols
+	Symbol Sprayer Options	Opcions del ruixador de símbols
+	Scrunch:	Compressió:
+	Spin:	Gir:
+	Screen:	Filtre:
+	Stain:	Tint:
+	Symbol Sizer Options	Opcions de l’escalador de símbols
+	Proportional Resizing	Canvi de mida proporcional
+	Resizing Affects Density	El canvi de mida afecta la densitat
+	Show Brush Size and Intensity	Mostra la mida i la intensitat del pinzell
 	Symbol Set Density:	Densitat del conjunt de símbols:
 	Symbol Shifter	Desplaçador de símbols
 	Symbol Shifter Tool	Eina de desplaçador de símbols
@@ -6574,6 +6646,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	missing `library` (see brush.libraries)	falta `library` (vegeu brush.libraries)
 @msg	missing `library` (see symbol.libraries)	falta `library` (vegeu symbol.libraries)
 @msg	missing `name`	falta `name`
+@msg	missing `path`	falta `path`
 @msg	missing `tool`	falta `tool`
 @msg	missing index	falta l’index
 @msg	missing integer `{key}`	falta el nombre enter `{key}`
@@ -7180,6 +7253,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	the PSD file's image data uses an unknown compression ({m})	les dades d’imatge del fitxer PSD utilitzen una compressió desconeguda ({m})
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	la imatge PSD és massa gran per llegir-la ({_1} × {_2} píxels)
 @msg	the Save PDF dialog didn't open	el diàleg Desa PDF no s’ha obert
+@msg	the Save PDF dialog is not open	el diàleg Desa PDF no està obert
 @msg	the scale is not a usable number	l’escala no és un nombre utilitzable
 @msg	the screen color sampler is already open	el mostrejador de color de pantalla ja és obert
 @msg	the search couldn't start: try again in a moment	la cerca no s’ha pogut iniciar: torna-ho a provar d’aquí a un moment
@@ -7337,6 +7411,49 @@ variable-list-end	{0}, {1}	{0} i {1}
 @msg	the PSD file's layer groups are nested too deeply	els grups de capes del fitxer PSD estan imbricats massa profundament
 @msg	a layer of the PSD file is too large to read	una capa del fitxer PSD és massa gran per llegir-la
 @msg	the PSD file's layers take more memory to read than allowed	les capes del fitxer PSD necessiten més memòria de la permesa per llegir-les
+@msg	the file is no longer loaded	el fitxer ja no està carregat
+@msg	the layers can't be read ({e}): the file was placed as its merged image	no es poden llegir les capes ({e}): el fitxer s’ha col·locat com a imatge combinada
+@msg	1 type layer came in as pixels: the text isn't editable	1 capa de text s’ha importat com a píxels: el text no és editable
+@msg	{n} type layers came in as pixels: the text isn't editable	{n} capes de text s’han importat com a píxels: el text no és editable
+@msg	1 adjustment layer was not applied	no s’ha aplicat 1 capa d’ajust
+@msg	{n} adjustment layers were not applied	no s’han aplicat {n} capes d’ajust
+@msg	1 fill layer was not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	no s’ha dibuixat 1 capa d’emplenament (un emplenament de degradat o de motiu, un color que no es pot llegir o una forma que no desa píxels)
+@msg	{n} fill layers were not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	no s’han dibuixat {n} capes d’emplenament (un emplenament de degradat o de motiu, un color que no es pot llegir o una forma que no desa píxels)
+@msg	the layer effects of 1 layer weren't drawn	no s’han dibuixat els efectes de capa d’1 capa
+@msg	the layer effects of {n} layers weren't drawn	no s’han dibuixat els efectes de capa de {n} capes
+@msg	the vector masks of 1 layer weren't applied	no s’han aplicat les màscares vectorials d’1 capa
+@msg	the vector masks of {n} layers weren't applied	no s’han aplicat les màscares vectorials de {n} capes
+@msg	the knockout of 1 layer wasn't applied	no s’ha aplicat el buidatge d’1 capa
+@msg	the knockout of {n} layers wasn't applied	no s’ha aplicat el buidatge de {n} capes
+@msg	1 layer was left out (hidden layers and the layers clipped to them)	s’ha omès 1 capa (capes amagades i les capes retallades a elles)
+@msg	{n} layers were left out (hidden layers and the layers clipped to them)	s’han omès {n} capes (capes amagades i les capes retallades a elles)
+@msg	1 layer clipped to a fill layer that wasn't drawn was left out	s’ha omès 1 capa retallada a una capa d’emplenament que no s’ha dibuixat
+@msg	{n} layers clipped to fill layers that weren't drawn were left out	s’han omès {n} capes retallades a capes d’emplenament que no s’han dibuixat
+@msg	layers in blend modes VectorCraft doesn't have ({modes}) were merged with the layers below them	les capes en modes de fusió que VectorCraft no té ({modes}) s’han combinat amb les capes de sota
+@msg	1 layer in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	1 capa en un mode de fusió que VectorCraft no té s’ha importat com a Normal: la combinació necessita més memòria de la permesa
+@msg	{n} layers in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	{n} capes en modes de fusió que VectorCraft no té s’han importat com a Normal: la combinació necessita més memòria de la permesa
+@msg	1 layer clipped to the layer below came in unclipped: the merge needs more memory than allowed	1 capa retallada a la capa de sota s’ha importat sense retallar: la combinació necessita més memòria de la permesa
+@msg	{n} layers clipped to the layer below came in unclipped: the merge needs more memory than allowed	{n} capes retallades a la capa de sota s’han importat sense retallar: la combinació necessita més memòria de la permesa
+@msg	hiddenLayers applies to a PSD file placed with layers: true	hiddenLayers s’aplica a un fitxer PSD col·locat amb layers: true
+@msg	importSlices: a linked PSD file is placed as its flat image; give link: false to embed it with its slices	importSlices: un fitxer PSD enllaçat es col·loca com a imatge aplanada; indiqueu link: false per incrustar-lo amb els seus talls
+@msg	layers: a linked PSD file is placed as its flat image; leave link out or give link: false	layers: un fitxer PSD enllaçat es col·loca com a imatge aplanada; ometeu link o indiqueu link: false
+@msg	the slices can't be read ({e}) and were left out	no es poden llegir els talls ({e}) i s’han omès
+@msg	1 slice lies outside the canvas or has no size and was left out	1 tall és fora del llenç o no té mida i s’ha omès
+@msg	{n} slices lie outside the canvas or have no size and were left out	{n} talls són fora del llenç o no tenen mida i s’han omès
+@msg	1 slice would lie outside the canvas and was left out	1 tall quedaria fora del llenç i s’ha omès
+@msg	{n} slices would lie outside the canvas and were left out	{n} talls quedarien fora del llenç i s’han omès
+@msg	the slices' descriptor holds too many values	el descriptor dels talls conté massa valors
+@msg	the slices' descriptor has a version other than 16	el descriptor dels talls té una versió diferent de 16
+@msg	the slices are stored in version {v}, which isn't read	els talls estan desats a la versió {v}, que no es llegeix
+@msg	the file has {count} slices, more than the {MAX_SLICES} read	el fitxer té {count} talls, més dels {MAX_SLICES} que es llegeixen
+@msg	the slices' descriptor has no list of slices	el descriptor dels talls no té cap llista de talls
+@msg	the slices' descriptor lists something other than a slice	el descriptor dels talls enumera una cosa que no és un tall
+@msg	a slice in the slices' descriptor has no bounds	un tall del descriptor dels talls no té límits
+@msg	a slice's bounds in the slices' descriptor aren't numbers	els límits d’un tall del descriptor dels talls no són nombres
+@msg	a text in the slices has more than the {MAX_TEXT} characters read	un text dels talls té més dels {MAX_TEXT} caràcters que es llegeixen
+@msg	the slices' descriptor nests too deep	el descriptor dels talls està imbricat massa a fons
+@msg	the slices' descriptor has a reference of an unknown kind ({_1})	el descriptor dels talls té una referència d’un tipus desconegut ({_1})
+@msg	the slices' descriptor has a value of an unknown type ({_1})	el descriptor dels talls té un valor d’un tipus desconegut ({_1})
 @msg	the layers can't be read ({e}): the file opened as its merged image	no es poden llegir les capes ({e}): el fitxer s’ha obert com a imatge combinada
 @msg	zone must be a string	zone ha de ser una cadena
 @msg	zone must be tab, center, left, right, top or bottom	zone ha de ser tab, center, left, right, top o bottom
@@ -8641,6 +8758,39 @@ breakText	Glyphs	Glifs
 @msg	A joint does not close by {gap} pt.	Una unió no es tanca per {gap} pt.
 @msg	Two panels pass through each other.	Dos panells es travessen l’un a l’altre.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer ha de ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"
+# Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	Mostra una fitxa amb el que fa una eina de la barra i el que fan les seves tecles en lloc del seu consell; cal Mostra els consells d’eines.
+	Selects whole objects and groups to move, resize or rotate them.	Selecciona objectes i grups sencers per moure’ls, canviar-ne la mida o girar-los.
+	Selects anchor points and path segments to reshape a path.	Selecciona punts d’ancoratge i segments de traçat per canviar la forma d’un traçat.
+	Draws paths point by point, with straight segments and smooth curves.	Dibuixa traçats punt a punt, amb segments rectes i corbes suaus.
+	Draws smooth curves through the points you click.	Dibuixa corbes suaus que passen pels punts on feu clic.
+	Adds text at a point, or in a frame you drag.	Afegeix text en un punt o dins d’un marc que arrossegueu.
+	Draws rectangles and squares.	Dibuixa rectangles i quadrats.
+	Draws rectangles with rounded corners.	Dibuixa rectangles amb les cantonades arrodonides.
+	Draws ellipses and circles.	Dibuixa el·lipses i cercles.
+	Draws polygons with sides of equal length.	Dibuixa polígons amb els costats de la mateixa longitud.
+	Draws stars.	Dibuixa estrelles.
+	Turns objects around a reference point.	Gira objectes al voltant d’un punt de referència.
+	Flips objects across an axis through a reference point.	Reflecteix objectes respecte d’un eix que passa per un punt de referència.
+	Resizes objects from a reference point.	Canvia la mida d’objectes des d’un punt de referència.
+	Slants objects from a reference point.	Inclina objectes des d’un punt de referència.
+	Moves the view of the document.	Desplaça la vista del document.
+	Magnifies or reduces the view.	Amplia o redueix la vista.
+	Copies the color and other attributes of one object to the selection.	Copia el color i altres atributs d’un objecte a la selecció.
+	Sets the direction and length of a gradient.	Defineix la direcció i la longitud d’un degradat.
+	Creates, selects and resizes artboards.	Crea, selecciona i canvia la mida de les taules de treball.
+	Changes the width of a stroke along its length.	Canvia l’amplada d’un traç al llarg de la seva longitud.
+	Bends art by dragging pins placed on it.	Doblega la il·lustració arrossegant agulles col·locades a sobre.
+	Pushes the outlines of paths in the direction you drag.	Empeny els contorns dels traçats en la direcció en què arrossegueu.
+	Twists the outlines of paths into swirls.	Retorça els contorns dels traçats en remolins.
+	Pulls the outlines of paths in toward the brush.	Atreu els contorns dels traçats cap al pinzell.
+	Pushes the outlines of paths out from the brush.	Empeny els contorns dels traçats cap enfora des del pinzell.
+	Adds curved details along the outlines of paths.	Afegeix detalls corbs al llarg dels contorns dels traçats.
+	Adds spiky details along the outlines of paths.	Afegeix detalls punxeguts al llarg dels contorns dels traçats.
+	Adds wrinkles along the outlines of paths.	Afegeix arrugues al llarg dels contorns dels traçats.
+	Moves, copies and resizes objects on the perspective grid.	Mou, copia i canvia la mida d’objectes a la quadrícula de perspectiva.
+	Makes a series of steps between two or more objects.	Crea una sèrie de passos entre dos o més objectes.
+	Places dimension lines that show measured lengths.	Col·loca línies de cota que mostren longituds mesurades.
 	Tap	Pulsació breu
 	Clear Hold	Esborra la pulsació llarga
 	Hold Shortcuts	Dreceres de pulsació llarga
@@ -8659,3 +8809,7 @@ breakText	Glyphs	Glifs
 	Round Flow	Flux rodó
 	Chisel Flow	Flux bisellat
 @msg	text.{key} `{v}`: use "{_1}" or "{_2}"	text.{key} `{v}`: utilitzeu "{_1}" o "{_2}"
+
+# #5804 native-picked raster editor (draft translations; native review welcome).
+	Edit Original with:	Edita l’original amb:
+file-filter	Applications	Aplicacions

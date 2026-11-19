@@ -1,6 +1,6 @@
 # Control protocol
 
-> **Last updated:** 2026-11-15 · **Change:** completed the `ui.resize` and `ui.focus` entries and removed a duplicate `ui.render` row; previously: text style commands take a feature with a value (`"features": ["salt=2"]`), the font's alternate number, and shape runs that differ only in features as one piece of text; previously: Confining file access refuses a `:` in a name after the drive on Windows, an NTFS alternate data stream such as `x.svg:evil` (#3604); previously: Object → Expand… dimmed while the selection has an appearance Expand Appearance expands (`object.expand.info`'s `appearance`, #3089); previously: brush library panels (`window.brushLibrary`, `window.brushLibrary.other`, `ui.saveBrushLibrary`); previously: Transform Each opens on the values it was last confirmed with; its Copy button confirms with `copy: true` (#1732); previously: panel docking on craft-ui's layout: `ui.docking`, the parameters of `window.panel.float` and `window.panel.dock`; previously: `ui.screenshot`'s 64 MiB inline-PNG cap and its path-plus-data downgrade; symbol library panels (`window.symbolLibrary`, `window.symbolLibrary.other`, `ui.saveSymbolLibrary`); synthetic input budgets (#1709); bounded transport waits (#1726).
+> **Last updated:** 2026-11-19 · **Change:** #5804 native-picked raster editor merged with main; scores and estimates unchanged; previously: completed the `ui.resize` and `ui.focus` entries and removed a duplicate `ui.render` row; previously: text style commands take a feature with a value (`"features": ["salt=2"]`), the font's alternate number, and shape runs that differ only in features as one piece of text; previously: Confining file access refuses a `:` in a name after the drive on Windows, an NTFS alternate data stream such as `x.svg:evil` (#3604); previously: Object → Expand… dimmed while the selection has an appearance Expand Appearance expands (`object.expand.info`'s `appearance`, #3089); previously: brush library panels (`window.brushLibrary`, `window.brushLibrary.other`, `ui.saveBrushLibrary`); previously: Transform Each opens on the values it was last confirmed with; its Copy button confirms with `copy: true` (#1732); previously: panel docking on craft-ui's layout: `ui.docking`, the parameters of `window.panel.float` and `window.panel.dock`; previously: `ui.screenshot`'s 64 MiB inline-PNG cap and its path-plus-data downgrade; symbol library panels (`window.symbolLibrary`, `window.symbolLibrary.other`, `ui.saveSymbolLibrary`); synthetic input budgets (#1709); bounded transport waits (#1726).
 
 `vectorcraft --control <port>` listens on `127.0.0.1:<port>` (loopback only). The port must be a number
 from 1 to 65535 (`--control=<port>` works too), given once; otherwise the app prints an error and exits
@@ -268,9 +268,10 @@ My Themes tab lists the saved themes; every action runs a command (`colorTheme.s
 Color Wheel panel (`window.panel {panel: "colorWheel"}`): a hue ring around a saturation and brightness square. A
 pick runs the commands the Color panel's sliders run: `paint.setFill` or `paint.setStroke` with `keepModel`,
 `paint.editGradient` for a gradient's selected stop, and `paint.freeform.setPoint` for a freeform gradient's selected
-point (the first stop or point when none is selected). `ui.colorWheel {view?, channel?, vision?}` shows the wheel or
-the box (a color field with a channel strip at its right), picks the box's channel and shows or hides the color vision
-row; it returns the settings, and `ui.inspect` reports them as `ui.color_wheel`.
+point (the first stop or point when none is selected). `ui.colorWheel {view?, channel?, harmony?, harmonyRule?, vision?}`
+shows the wheel or the box (a color field with a channel strip at its right), picks the box's channel, shows the
+other colors of a harmony rule as markers on the wheel's ring, and shows or hides the color vision row; it returns
+the settings, and `ui.inspect` reports them as `ui.color_wheel`.
 
 Edit Colors dialogs: `ui.colorBalanceDialog` opens Adjust Colors (`colorBalance`: fields `mode` `gray`/`rgb`/`cmyk`/
 `global`, the channels `r` `g` `b` / `c` `m` `y` `k` / `gray` / `tint` (global mode) from −100 to 100, `convert`, `fill`, `stroke`,
@@ -812,6 +813,8 @@ PhotoCraft, looked for only where it installs (the Applications folders on macOS
 registers under App Paths, then `ArtCraft\PhotoCraft` in the per-user and per-machine program folders, then the `PATH`;
 the `PATH` elsewhere), and any other file, or a raster image without PhotoCraft installed, in the system's default app.
 
+Draft #5804 adds a local, native-picker-only raster editor override when Use System Defaults is off. Its saved choice and Preferences draft are outside engine preferences and `Dialog::fields`: `prefs.set` (including bulk values), `ui.dialog.set` and `ui.set` cannot assign it. The chooser refuses control requests and synthetic input. If the chosen application is missing, Edit Original tries PhotoCraft and then the system default; validation or launch errors are reported. The existing refusal of automated external Edit Original remains. No executable arguments or shell command are accepted.
+
 Package: File → Package… (`ui.packageDialog`) opens the `package` dialog for a saved document (a document never saved
 gets a `confirm` dialog whose OK runs `file.saveAs`). Fields: `folder` (the location), `name` (the package folder),
 `copyLinks`, `linksFolder`, `relink`, `copyFonts`, `report`. `ui.dialog.confirm` saves unsaved changes (when that save
@@ -879,8 +882,20 @@ EMF and WMF: Export As… lists both formats (`file.exportAs {format: "emf"}` or
 dialog, so `ui.dialog.confirm` asks for the path and writes the file (one per artboard with Use Artboards). Open and
 Place read `.emf` and `.wmf`; a paste of `image/emf` from a system clipboard service runs `clipboard.importEmf`.
 
-HP-GL: Export As… lists it (`file.exportAs {format: "hpgl"}`); it has no options dialog, so `ui.dialog.confirm` asks
-for the path and writes the `.plt` file with the default options (one per artboard with Use Artboards).
+HP-GL Options: Export As… with the HP-GL format (`file.exportAs {format: "hpgl"}`, then the save dialog), or
+`ui.hpglOptionsDialog {path?, …HP-GL options}` for agents, opens the `hpglOptions` dialog. Its fields are
+`document.export` params: `hpglVersion` (`hpgl`, `hpgl2`), `curveTolerance` (points, 0.01 to 10), `origin`
+(`bottomLeft`, `center`), `pens` (null for One Pen per Color, or the pen table's `"#rrggbb"` colors, pen 1's first),
+`sortPaths` and `insideFirst`, plus `path` and the artboard choice (`useArtboards`, `range`). A typed Curve
+Tolerance is kept within 0.01 to 10. Choosing Pen Table fills the table with the table set aside when One Pen per
+Color was chosen, else with the pens One Pen per Color gives the art this export plots (its artboards, the art's
+bounds, or the selection from Export Selection or with `selectedOnly`), or one black pen when that art draws nothing;
+when the export refuses the options or the artboard choice, `pens` stays null and the dialog shows the error.
+`ui.dialog.confirm` checks the options and the artboard choice (one the export refuses keeps the dialog open),
+remembers the options for the next HP-GL Options (not `exportSelection`) and writes the `.plt` file(s), asking for a
+path when there is none (one per artboard with Use Artboards). A canceled save dialog writes nothing and keeps the
+options remembered before; a save dialog shown in line (not as a sheet or off the UI thread) also keeps HP-GL
+Options open.
 
 TIFF, BMP and Targa Options: Export As… with the TIFF, BMP or Targa format (`file.exportAs {format: "tiff"}`, then
 the save dialog) opens `tiffOptions`, `bmpOptions` or `tgaOptions`: the raster rows of PNG Options (`ppi`,

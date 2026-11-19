@@ -683,9 +683,12 @@ RGB fields in percent, as a double-click right of an RGB field does, and `false`
 and answers true when the fields show in percent.
 `ui.colorWheel {"view": "box", "channel": "red"}` shows the Color Wheel panel's box (a color field with the channel's
 strip at its right) in place of the wheel, as the panel menu's Box View and Box Channel do, and `"view": "wheel"`
-shows the wheel again. Keys left out keep their values. Params that are not an object, another key or a value off
-the list return an error and change nothing. The command returns `{view, channel, vision}`, and the settings are
-kept with the preferences.
+shows the wheel again. `{"harmony": true, "harmonyRule": "triad"}` puts a marker on the wheel's ring for each other
+color of a Color Guide harmony rule, as Show Harmony and Harmony Rule do; the wheel takes the 15 rules whose colors
+each have a hue of their own (not `monochromatic`, `shades`, `complementary2`, `triad2`, `triad3` or
+`highContrast2`). Keys left out keep their values. Params that are not an object, another key or a value off
+the list return an error and change nothing. The command returns `{view, channel, harmony, harmonyRule, vision}`,
+and the settings are kept with the preferences.
 `ui.colorWheel {"vision": true}` turns on the Color Wheel panel's Show Color Vision Preview, as its panel menu
 does: a row of four chips under the wheel or the box shows the current color through the protanopia, deuteranopia
 and tritanopia simulations of `view.proofSetup`, and for achromatopsia as the gray with the color's CIE L*. Each
@@ -713,8 +716,8 @@ ends the wait, so the sampler can be shown again. The BSDs and headless sessions
 | `inspect_document` | `{depth?, childLimit?, ids?, kind?, limit?, offset?}` | Artboards (with `color`, `#rrggbb`, for one with a background color), layer tree (ids, kinds, bounds, paint), selection, history, tool. A type node's `fill`, `stroke` and `strokeWidth` are the paint its characters show (its first run's); fills and strokes of the type object itself come as `objectFill`, `objectStroke` and `objectStrokeWidth`. Paint comes as a label (`"#ff0000"`, `"None"`, `"G1 40% (#ff9999)"` for a swatch at a tint); `paint.proxies` gives it as an object. |
 | `inspect_ui` | `{}` | UI state. Remote mode only. |
 | `select_tool` | `{tool}` | `selection`, `directSelection`, `pen`, `rectangle`, `ellipse`, `polygon`, `star`, `lineSegment`, … |
-| `pointer_gesture` | `{events:[{kind,x,y,mods?,backquote?,pressure?,tiltX?,tiltY?,rotation?,holdMs?}], tool?, mods?, backquote?}` | `kind` is one of `down`, `drag`, `up`, `move`, `doubleclick`, `tripleclick` (`doubleclick` follows the second click's `up`, and `tripleclick` the third's). `backquote` is the held state for each event; the top-level value supplies its default, and a `backquote` that is not a boolean is an error. Events go through the same path as the mouse. Headless, a `move` replies after the tool's highlight under the pointer is ready, including the Shape Builder's and the Live Paint Bucket's regions of a large selection, which the desktop app finds off the UI thread and highlights after the reply. The release of a Shape Builder click or drag over such a selection replies once the merge is applied, headless and in the desktop app, which computes the merge off the UI thread. In the desktop app, a gesture sent before then is made after the merge, and its reply comes once it is made; a command that can edit, select, save or redraw the documents (a preference, the proof and separations views), sent before then, waits for the merge and runs after it. |
-| `pointer_gesture` | `{events:[{kind,x,y,mods?,backquote?,pressure?,tiltX?,tiltY?,rotation?,holdMs?}], tool?, mods?, backquote?}` | `kind` is one of `down`, `drag`, `up`, `move`, `doubleclick`, `tripleclick` (`doubleclick` follows the second click's `up`, and `tripleclick` the third's). `backquote` is the held state for each event; the top-level value supplies its default. Events go through the same path as the mouse. Headless, a `move` replies after the tool's highlight under the pointer is ready, including the Shape Builder's and the Live Paint Bucket's regions of a large selection, which the desktop app finds off the UI thread and highlights after the reply. Remote, the events wait until the keys and other input sent before them (`press_key`, `type_text`) have reached the app, so a key pressed between two calls of one drag applies before the release. When that input is dropped because the document, a dialog or the focus changed first, the call fails and its events are not sent. The release of a Shape Builder click or drag over such a selection replies once the merge is applied, headless and in the desktop app, which computes the merge off the UI thread. In the desktop app, a gesture sent before then is made after the merge, and its reply comes once it is made; a command that can edit, select, save or redraw the documents (a preference, the proof and separations views), sent before then, waits for the merge and runs after it. |
+| `pointer_gesture` | `{events:[{kind,x,y,mods?,backquote?,pressure?,tiltX?,tiltY?,rotation?,wheel?,holdMs?}], tool?, mods?, backquote?}` | `kind` is one of `down`, `drag`, `up`, `move`, `doubleclick`, `tripleclick` (`doubleclick` follows the second click's `up`, and `tripleclick` the third's). `backquote` is the held state for each event; the top-level value supplies its default, and a `backquote` that is not a boolean is an error. Events go through the same path as the mouse. Headless, a `move` replies after the tool's highlight under the pointer is ready, including the Shape Builder's and the Live Paint Bucket's regions of a large selection, which the desktop app finds off the UI thread and highlights after the reply. The release of a Shape Builder click or drag over such a selection replies once the merge is applied, headless and in the desktop app, which computes the merge off the UI thread. In the desktop app, a gesture sent before then is made after the merge, and its reply comes once it is made; a command that can edit, select, save or redraw the documents (a preference, the proof and separations views), sent before then, waits for the merge and runs after it. |
+| `pointer_gesture` | `{events:[{kind,x,y,mods?,backquote?,pressure?,tiltX?,tiltY?,rotation?,wheel?,holdMs?}], tool?, mods?, backquote?}` | `kind` is one of `down`, `drag`, `up`, `move`, `doubleclick`, `tripleclick` (`doubleclick` follows the second click's `up`, and `tripleclick` the third's). `backquote` is the held state for each event; the top-level value supplies its default. Events go through the same path as the mouse. Headless, a `move` replies after the tool's highlight under the pointer is ready, including the Shape Builder's and the Live Paint Bucket's regions of a large selection, which the desktop app finds off the UI thread and highlights after the reply. Remote, the events wait until the keys and other input sent before them (`press_key`, `type_text`) have reached the app, so a key pressed between two calls of one drag applies before the release. When that input is dropped because the document, a dialog or the focus changed first, the call fails and its events are not sent. The release of a Shape Builder click or drag over such a selection replies once the merge is applied, headless and in the desktop app, which computes the merge off the UI thread. In the desktop app, a gesture sent before then is made after the merge, and its reply comes once it is made; a command that can edit, select, save or redraw the documents (a preference, the proof and separations views), sent before then, waits for the merge and runs after it. |
 | `draw_path` | `{points \| d, closed?, fill?, stroke?, strokeWidth?, dash?, cap?, join?, opacity?, name?, effects?}` | `points` is `[[x,y],…]` or `[{x,y,in?,out?,smooth?},…]`. `d` is SVG path data. The options are below. |
 | `draw_shape` | `{shape, …geometry, fill?, stroke?, strokeWidth?, dash?, cap?, join?, opacity?, name?, effects?}` | `rectangle`/`ellipse`: `x,y,width,height` (plus `radius` for corners; an ellipse takes `anchors`, 2–1000, default 4). `polygon`: `cx,cy,radius,sides`. `star`: `cx,cy,radius1,radius2,points`. Polygons and stars take `rotation` in degrees clockwise (0: a corner or point straight up). `line`: `x1,y1,x2,y2`. |
 | `set_paint` | `{fill?, stroke?, strokeWidth?, ids?}` | Applies to the selection (or `ids`) and becomes the default for new art. Returns `{applied, objects}`: `objects` is the number of objects painted, as the `objects` of the `paint.setFill`, `paint.setStroke` and `stroke.set` replies (the largest of them): a selected group counts the objects inside it. When it is 0, a `note` says that only the paint for new art changed. |
@@ -1408,6 +1411,14 @@ PDF/X-4, where an image in the output intent's profile is DeviceCMYK): a CMYK JP
 resampled and compressed again (CMYK JPEG or ZIP). `output.conversion` converts them like CMYK colours: `destination`
 to another CMYK profile or to RGB, `preserveNumbers` (and PDF/X-1a) keeps their numbers in a CMYK destination.
 `document.pdfSettings` lists the options that differ from the preset and the warnings without writing a file.
+The Summary section's Save Summary… button writes what the section shows to a text file (UTF-8 without a byte order
+mark, LF line endings), and its save panel suggests `<document> PDF Summary.txt` in the document's folder; the web
+downloads the file under that name. `ui.pdfSummary.save {path}` writes the same text for the open Save PDF dialog or
+PDF preset editor to `path` and returns `{path, bytes}`. It uses the Summary the section last drew for the same fields,
+document, saved PDF and flattener presets, loaded color profiles and available fonts, and computes the settings only
+when there is none. No such dialog open, a `path` that is missing, empty
+or not a string, a path outside the automation write roots and settings that
+`document.pdfSettings` refuses are errors that write nothing. The dialog stays open and the document does not change.
 `thumbnails: true` embeds each page drawn small (106 px on its long side, without the layers the page leaves out) as
 its `/Thumb` image. `fastWebView: true` writes a linearised file (the linearization dictionary first, then the first
 page with hint tables saying where every other page's objects are), which stays linearised when a password encrypts it.
@@ -1873,6 +1884,31 @@ preferences (the folder the desktop app uses, so both see the same ones; `VECTOR
   target of `view.proofSetup` simulates the working CMYK space in such a document too. `color.convert`'s
   `outOfGamut` and `deltaE`, `color.gamutCheck`, and the out-of-gamut warning of the Color panel, the Color Picker,
   Swatch Options and New Swatch check against the assigned CMYK profile, else the working CMYK space; the warning updates when either changes.
+- **Profile Mismatches and Missing Profiles** (`edit.colorSettings {askMismatchOpen, askMismatchPaste,
+  askMissingOpen}`, all off by default and kept in `Color Settings.json`): with `askMismatchOpen` on, the desktop
+  app's File › Open asks before a document opens when the profile of its color mode is not the working space (use
+  the embedded profile, convert the colors to the working space, or discard the profile); with `askMissingOpen` on,
+  it asks when the document has no profile of its color mode (leave it, assign the working space, or assign a
+  profile). Each question starts on what the model's policy does, and Cancel leaves the file closed. Files opened
+  together ask one at a time, each opening only after its own answer. When Color Settings change the question
+  while it is open (another working space), OK asks the new question instead of opening. `document.open` never
+  asks: `profileChoice` (`useEmbedded`, `convert`, `discard`; `leave`, `assignWorking`, `assign` with
+  `assignProfile`) states the answer, else the policy applies. The reply's `profileChoice` names the choice given
+  for the document's question, not what it did: `convert` from a profile that is not available keeps the profile,
+  and a warning says the colors were not converted. Copy remembers the profiles the colors showed through (a
+  document's assigned profile that was removed since counts as the working space it draws through); pasting them
+  into a document with another RGB or CMYK profile keeps their numbers or converts them, as `profileMismatch` on the
+  paste commands and `edit.dropSelection` says (`preserveNumbers` or `convert` for both models, or `{rgb?, cmyk?}`
+  with one for each; `null` is the same as leaving it out), else as the model's policy does (`convert` converts, the
+  others keep the numbers). Colors whose source or destination profile is not available keep their numbers, also
+  with `convert`. `clipboard.profileMismatch` lists the models that differ, only those whose colors the copied
+  objects use (with `sourceDocument` and `ids`, the objects a drop brings; with `allArtboards: true`, without the
+  background colors of copied artboards, which Paste on All Artboards leaves behind), and gives `convertible: false`
+  for a model whose colors can't convert. With `askMismatchPaste` on, the desktop app asks first on Paste and on a
+  drag between documents, and offers only Preserve Numbers for a model that can't convert. A question about both
+  models has a choice for each, each starting on its model's policy. When the profiles a paste brings or the swatch
+  conflicts it raises change while the paste question or Swatch Conflict is open, OK asks again about them. New from
+  Template and File › Revert follow the policies without asking.
 
 Not remembered: the document, anything else. Nothing is read or written when
 `VECTORCRAFT_NO_PREFS` is set, and a server confined with `--automation-read-root` or
@@ -2002,7 +2038,7 @@ control channel's `ui.key`, `ui.move`, `ui.wheel`, `ui.click`, `ui.drag`, `ui.po
 `ui.render` and `ui.set` for their numbers, switches and `mods`, and the headless session's key, pointer and screenshot
 calls. Omitting a param or giving null keeps its default, with two exceptions: `ui.click`'s `count` and `ui.drag`'s
 `count` and `steps` refuse null, and a headless pointer event needs its `x` and `y`. A pointer event's `pressure`,
-`holdMs`, `tiltX`, `tiltY` and `rotation` must be numbers and its `space` must be `doc` or `screen`. A pointer packet
+`holdMs`, `tiltX`, `tiltY`, `rotation` and `wheel` must be numbers and its `space` must be `doc` or `screen`. A pointer packet
 with one malformed event sends none of its events:
 
 ```json
@@ -2258,7 +2294,7 @@ and `text.createInPath`; `underline`, `strikethrough`, `allCaps`, `proportionalM
 in `text.setRangeStyle` and `text.setFormat`, which also checks `hyphenate`, `hyphenateCapitalized` and
 `romanHangingPunctuation`; `effective` and `story` in `text.getRange`; `story` in `text.setRangeStyle`; `on` in `type.opticalMarginAlignment`, `type.dynamicText`, `type.systemLayout`
 and `type.fractionalWidths`; `flip` in `type.dynamicTextPreset`; `remove` and `overhang` in `type.ruby`; `expandInstances` in `symbol.delete`; `alt` in
-`symbol.spray` and `symbol.adjust`; `spot` and `global` in `swatch.new` and `swatch.edit`; `unlink` in
+`symbol.spray` and `symbol.adjust`; `usePressure`, `proportional` and `affectsDensity` in `symbol.adjust`; `spot` and `global` in `swatch.new` and `swatch.edit`; `unlink` in
 `swatch.delete`; `fromArtwork`, `toGlobal` and `includeTints` in `swatch.newGroup`; `global` and `selection` in
 `swatch.addUsedColors`; `visible` in `appearance.setItem`; `copy` in `appearance.transfer`; `reverse` and `append` in
 `appearance.copyFrom`; `reverse` and `stroke` in `paint.editGradient`; `stroke` in `paint.setGradientGeom` and in
@@ -3778,6 +3814,45 @@ already walks Image Trace. Short agent entry points:
   symbol's scale are left as they are, and no undo step is added when nothing changes; an id that names no object, or
   objects without a symbol instance, is an error. It returns `{ids}`, the instances it changed. The menu item and the
   button are enabled only while a selected instance would change.
+- The symbolism tools' options ([Symbolism tool options](https://helpx.adobe.com/illustrator/desktop/manage-objects/traces-mockups-symbols/symbolism-tool-options.html),
+  [the archived manual](https://help.adobe.com/archive/en_US/illustrator/cs5/illustrator_cs5_help.pdf#page=118)):
+  `symbol.adjust` takes `method` (`userDefined`, `average` or `random`; not used by `shift`), `usePressure` with
+  `points` as `[x, y, pressure]` (each point's pen pressure, 0..1, is the intensity there), and for `size`
+  `proportional` (true) and `affectsDensity` (false). `symbol.spray` takes `attributes`
+  `{scrunch?, size?, spin?, screen?, stain?, style?}`, each `average` or `userDefined`, with `color`, `keepModel` and
+  `style` for the User Defined stain and style (with `style: userDefined`, a `style` the document does not have is an
+  error). `symbol.setDensity {from, to, ids?|id?}` gives the selected symbol
+  sets a new Symbol Set Density. VectorCraft's own rules:
+  - `random` gives each instance its own share of the tool's change for the whole stroke, from none of it to twice
+    it (the Spinner: a turn either way), the same each time the stroke is applied.
+  - `average` moves each instance's value toward the mean of the instances within the brush at that point: the
+    Scruncher its distance from their middle toward their mean distance, the Sizer the geometric mean of their sizes
+    on the page, whatever their symbols, the Spinner their mean direction, the Stainer and the Styler their mean amount, the Screener their mean opacity.
+    `alt` does not reverse it. An instance already at the mean is left as it is, and no undo step is added when
+    no instance changes. The Screener's average, and the opacity a sprayed instance takes as its average, can be
+    below the 5% that the Screener otherwise stops at.
+  - With `userDefined` the Styler gives each instance under the brush the whole style, whatever the intensity or the
+    pen pressure; `random` scales each instance's share by the brush strength there.
+  - With `proportional` false a drag resizes along its own direction (a level drag the width, an upright one the
+    height) and one point resizes both. With `affectsDensity` an instance also moves away from the point as it grows
+    and toward it as it shrinks.
+  - A sprayed instance's `average` values are the means of the selected set's instances within `radius` of the
+    stroke point: their spacing, size on the page (of any symbol), rotation and opacity, and the stain or style of
+    the nearest one that has one, at the mean amount. With no instance there it has the symbol's own size (not
+    `scale`), no rotation, full opacity and no stain or style. New instances are spaced by the size they are placed
+    at. `attributes` left out means `average` for all six.
+  - `symbol.setDensity` moves each instance of a set along the line from the middle of the set's instances, to
+    (1.15 − 0.1·`to`) / (1.15 − 0.1·`from`) of its distance from it (each factor at least 0.1), as one undo step, and
+    adds none when no instance moves and every set already has density `to`. `from` is the density each set was
+    created at or last given, and the `from` passed applies only to a set without one (a group named "Symbol Set" by
+    hand); every set then has density `to`, also one whose instances do not move (one instance, or each locked). A
+    locked or hidden instance stays where it is. It returns `{ids, count}`: the sets changed and the
+    instances moved.
+  - A `method` or an attribute outside these values, a point's third number that isn't a number (in `symbol.spray`
+    too, which does not use it), a `from` or `to` of `symbol.setDensity` outside 1..10, or no symbol set among its
+    objects, is an error and changes nothing.
+  - Average leaves an instance without a size (a scale of 0) as it is; the other methods change it. A stroke that
+    changes no instance counts none and adds no undo step.
 - Dynamic symbols: an instance of a symbol whose `type` is `dynamic` changes the appearance of objects in the symbol's
   art for itself only and stays linked. `symbol.instance.setAppearance {id?, path, fill?, stroke?, opacity?, blend?}`
   names the object by `path`, child indices in paint order from the art's root down through its groups (`[]` is the
@@ -3953,6 +4028,18 @@ already walks Image Trace. Short agent entry points:
   Tilt goes from its first value with the pen lying flat to its second upright, and on Bearing or Rotation from its
   first value at −180° to its second at 180°. A stroke without that input draws the brush's own value (a Scatter
   brush's value half way between the two).
+- Airbrush finger wheel: `path.freehand` and `brush.freehand` take a point's wheel seventh,
+  `[x, y, pressure, tiltX, tiltY, rotation, wheel]`, or as `{…, wheel?}`, and a `pointer_gesture` event takes `wheel`,
+  which the Paintbrush records. The wheel is 0..1 from one end of the wheel's travel to the other. In a point, a
+  value outside it, or one that is neither a number nor null, is refused; a `pointer_gesture` event's wheel outside
+  it is clamped, as its pressure is. The stroke keeps it as `wheel` (a point without
+  one counts as half way). Calligraphic and Scatter `modes` and an Art brush's `width_mode` take `stylusWheel`: the
+  value goes from the value less the variation (a Scatter brush's first value, an Art brush's `width`) at 0 to the
+  value plus the variation (the second value, `width_max`) at 1, and a stroke without a wheel draws the value half
+  way. Brush Options offers Stylus Wheel for a Calligraphic or Scatter brush's Size and an Art brush's Width. The
+  desktop app reads the wheel from XInput2 (`Abs Wheel`) under X11 and from AppKit (`tangentialPressure`) on macOS;
+  it does not read it on Windows or in the web build. `.ai` brush definitions read and write the wheel as variation
+  code 3.
 - Freehand Fidelity: the `fidelity` of `path.freehand` and `brush.freehand` is in points, 1.5 pt when left out. A
   value must be from 0.000015625 pt (0.01 / 640) to 100 / 0.0313 pt (about 3194.89 pt), and a value outside that range
   is rejected with an error. The Pencil and the Paintbrush give Fidelity in screen pixels, 0.01 to 100 px, and send it
@@ -5060,6 +5147,52 @@ another shading color is refused with an error and the document is not changed.
 
 ```json
 {"name":"run_command","arguments":{"command":"effect.apply","params":{"effect":"threeD.classicRotate","item":null,"params":{"rotationX":0,"rotationY":40,"rotationZ":0,"surface":"diffuse","blendSteps":64}}}}
+```
+
+## Map Art
+
+`threeD.mapArt {surface?, symbol?, x?, y?, scaleX?, scaleY?, rotation?, fit?, clearAll?, shade?, invisible?, index?, item?, ids?|id?}`
+is the Map Art… button of the Extrude & Bevel (Classic) and Revolve (Classic) dialogs. It maps a document symbol onto
+one numbered surface of each selected object's classic 3D effect, edits that map or removes it, in one undo step
+([Map artwork to a 3D object](https://web.archive.org/web/20210601162814/https://helpx.adobe.com/pdf/illustrator_reference.pdf#page=189)).
+Rotate (Classic) and the other 3D effects take no map.
+
+- `surface` is a whole number from 1 to the object's surface count. Extrude & Bevel (Classic) numbers the surfaces
+  through the object's solids in the order they are built: each solid's front cap and back cap, then each side wall
+  from corner to corner of the outline, then the bevel above each wall. A hollow solid (`cap` false) has no caps, so
+  its numbering starts at its first side wall, and a solid whose bevel is as deep as the solid has no walls, so its
+  bevels follow its caps. A side wall is laid out at its own length, and a bevel at the length of
+  the wall below it. Revolve (Classic) has one surface, its swept
+  side; on a group it is the side of the member with the longest profile, and the other members take no map. The
+  numbering is VectorCraft's own.
+- `symbol` names the symbol mapped onto the surface, and `null` removes the surface's map, also a map kept past the
+  object's surface count; `null` with `x`, `y`,
+  `scaleX`, `scaleY`, `rotation` or `fit: true` is refused. Omitted, the surface keeps its map's symbol, even one the
+  document no longer has; a surface with no map then is refused. A symbol the document does not have is refused when
+  `symbol` names it.
+- `x` and `y` (points, -1000000..1000000) place the center of the art from the center of the surface laid out flat,
+  `scaleX` and `scaleY` (1..10000%) scale it from the symbol's own size, and `rotation` (-360..360 degrees) turns it
+  counterclockwise. A new map starts at 0, 0, 100%, 100% and 0°.
+- `fit` (Scale to Fit) centers the art and scales it to fill the surface.
+- `clearAll` (Clear All) removes every map first, so with `surface` only that surface's map is left.
+- `shade` (Shade Artwork) gives the mapped art the tone and highlight of its face, and `invisible` (Invisible
+  Geometry) draws only the mapped art.
+
+One of `surface`, `clearAll`, `shade` and `invisible` is required. Without `index` each object's first Extrude &
+Bevel (Classic) or Revolve (Classic) is edited, its own before its fills' and strokes'; `item` needs `index`. A surface
+past the count (except to remove a map kept there), an unknown symbol, a value out of range, an unknown key or an object without one of the two effects is
+refused, and nothing changes. When nothing changes, no undo step is recorded. It returns `{ids, maps}`: the objects
+changed and the first object's maps.
+
+The maps are the effects' `mapArt` (up to 64 `{surface, symbol, x, y, scaleX, scaleY, rotation}` objects),
+`mapShade` and `mapInvisible` parameters, which `effect.setParams` also edits. A map past the object's surface count
+draws nothing, as the archived reference describes; the Wireframe surface draws no mapped art. The canvas, exports and
+`effect.expandAppearance` draw the mapped art the same way, and renaming a symbol renames it in the maps. The limits
+and the shading of the mapped art are VectorCraft's own; see [three-d.md](three-d.md#map-art).
+
+```json
+{"name":"run_command","arguments":{"command":"threeD.mapArt","params":{"surface":1,"symbol":"Label","fit":true}}}
+{"name":"run_command","arguments":{"command":"threeD.mapArt","params":{"surface":3,"symbol":null}}}
 ```
 
 
@@ -6255,7 +6388,7 @@ objects differ) and `recentUrls`. `attributes.set {overprintFill?, overprintStro
 note?, ids?}` sets them in one undo step; `path.setFillRule {rule: "nonZero"|"evenOdd"}` sets the fill rule of the
 paths and compound paths, and `path.reverse {reversed?}` makes subpaths run counter-clockwise (true) or clockwise
 (false). When every subpath of a path or compound path turns alike, its strokes' width profiles (left and right swapped) and pen
-pressure, tilt, bearing and rotation turn with it, so the strokes draw as before. SVG export wraps an object with a URL in `<a xlink:href>`, and SVG import reads `<a href>` links back.
+pressure, tilt, bearing, rotation and wheel turn with it, so the strokes draw as before. SVG export wraps an object with a URL in `<a xlink:href>`, and SVG import reads `<a href>` links back.
 
 `recentUrls` keeps the 30 newest distinct URLs given in the session, newest first. The panel's URL menu lists the
 first 10 of them by default; the panel menu's Panel Options… opens the `attributesPanelOptions` dialog (field `count`),
@@ -6502,16 +6635,16 @@ focal points stay highlighted where it left them; Escape during a drag puts the 
 switching to another tool clears them.
 
 `path.freehand`, `brush.freehand`, `path.knife`, `path.eraseRegion`, `path.eraseSegments`, `path.smoothRegion`,
-`path.joinScrub` and `path.blob` refuse a pen `pressure` outside 0 to 1, a `tiltX` or `tiltY` outside -90 to 90 and a
-`rotation` outside 0 to 360 with an error such as `` `tiltX` must be from -90 to 90 ``, naming the key, and a point
-given as an array of more than six numbers with `` `points[3]` must be an array of at most 6 entries ``, naming the
-point. `path.blob` and `path.eraseRegion` refuse a `size` outside 0.1 to 1000 pt with
+`path.joinScrub` and `path.blob` refuse a pen `pressure` outside 0 to 1, a `tiltX` or `tiltY` outside -90 to 90, a
+`rotation` outside 0 to 360 and a stylus `wheel` outside 0 to 1 with an error such as
+`` `tiltX` must be from -90 to 90 ``, naming the key, and a point given as an array of more than seven numbers with
+`` `points[3]` must be an array of at most 7 entries ``, naming the point. `path.blob` and `path.eraseRegion` refuse a `size` outside 0.1 to 1000 pt with
 `` `size` must be from 0.1 to 1000 `` and a `sizeVariation` over 1000 pt with
 `` `sizeVariation` must be from 0 to 1000 ``, in every `sizeMode` and when it is left out. `path.blob` refuses a
 negative `sizeVariation` with the same message, and `path.eraseRegion` with "sizeVariation must be 0 or more". The
 document and the selection do not change and no undo step is recorded. A null is read as a key left out, and a point given as `[x, y]`
 has no pen values. The pressure and tilt ranges are those of
-[Pointer Events](https://www.w3.org/TR/pointerevents3/); the rotation, size and size variation ranges are
+[Pointer Events](https://www.w3.org/TR/pointerevents3/); the rotation, wheel, size and size variation ranges are
 VectorCraft's own values.
 
 `path.eraseRegion` (the Eraser) takes a variation mode for each of its tip's values, as the variation menus of
@@ -6519,13 +6652,14 @@ Eraser Tool Options set them ([Erase paths using the Eraser
 tool](https://helpx.adobe.com/illustrator/desktop/draw-shapes-and-paths/modify-paths/erase-paths-using-eraser-tool.html)):
 `angleMode` with `angleVariation` (degrees, 0 to 180), `roundnessMode` with `roundnessVariation` (percent, 0 to 100)
 and `sizeMode` with `sizeVariation` (points, 0 to 1000), each `"fixed"` (the default), `"random"`, `"pressure"`,
-`"tilt"`, `"bearing"` or `"rotation"`. A value that varies takes up to its variation either way. Random draws one
-value for the drag. Pressure goes from the value less the variation where the pen presses lightest to the value plus
-it where the pen presses hardest. Tilt goes from less with the pen lying flat to more with it upright. Bearing and
-Rotation go from less at −180° to more at 180° of the way the pen leans or its barrel turns. The tip at each point of
-the drag takes what the pen read there (the points' pressure, tilt and rotation, as `path.freehand` takes them); a
-drag without that reading, such as a mouse drag, erases at the value itself. One Random value per drag, which way
-Tilt, Bearing and Rotation run, and the value itself without a reading are VectorCraft's own rules.
+`"tilt"`, `"bearing"`, `"rotation"` or `"stylusWheel"`. A value that varies takes up to its variation either way.
+Random draws one value for the drag. Pressure goes from the value less the variation where the pen presses lightest to
+the value plus it where the pen presses hardest. Tilt goes from less with the pen lying flat to more with it upright.
+Bearing and Rotation go from less at −180° to more at 180° of the way the pen leans or its barrel turns. Stylus Wheel
+goes from less at 0 to more at 1 of an airbrush pen's finger wheel. The tip at each point of the drag takes what the
+pen read there (the points' pressure, tilt, rotation and wheel, as `path.freehand` takes them); a drag without that
+reading, such as a mouse drag, erases at the value itself. One Random value per drag, which way Tilt, Bearing,
+Rotation and Stylus Wheel run, and the value itself without a reading are VectorCraft's own rules.
 The command refuses another mode, and a variation below 0 or past its range, and erases nothing. In the desktop app
 the Eraser's tip outline at the pointer takes the angle, roundness and size the pen gives while it erases, and the
 outline of the area a drag covers takes, at each step, the tip the pen's readings give halfway along it. A Random
@@ -6553,9 +6687,9 @@ and `dx`, `dy`, `tol` and `radius` in `path.reshape`. A null is read as a key le
 an `x` without a `y`, or a `y` without an `x`, with "x and y must be given together". `path.freehand`,
 `path.curvature`, `path.knife`, `path.eraseRegion`, `path.eraseSegments`, `path.smoothRegion`, `path.joinScrub` and
 `path.blob` refuse a point in `points` whose x or y is not a number, such as `["10", 10]` or a point written as a
-string, with "x and y must both be numbers". All of them except `path.curvature` refuse a pen pressure, tilt or
-rotation that is neither a number nor null with `` `pressure` must be a number, not "0.5" ``, naming the key
-(`pressure`, `tiltX`, `tiltY` or `rotation`). `path.close` refuses an `at`, `in` or `out` that is not `[x, y]`
+string, with "x and y must both be numbers". All of them except `path.curvature` refuse a pen pressure, tilt,
+rotation or wheel that is neither a number nor null with `` `pressure` must be a number, not "0.5" ``, naming the key
+(`pressure`, `tiltX`, `tiltY`, `rotation` or `wheel`). `path.close` refuses an `at`, `in` or `out` that is not `[x, y]`
 with `` `in` must be [x, y] ``, naming the key.
 
 `path.eraseRegion` refuses an `angle` outside -180° to 180° with `` `angle` must be from -180 to 180 degrees `` and a
@@ -7582,6 +7716,9 @@ wheel zooms about the pointer, Shift-wheel scrolls up and down, Cmd/Ctrl-wheel s
 `ui.wheel` turns the wheel), `trackpadRotateView` (on by default: a two-finger rotation on a Mac trackpad, in the
 macOS app or in Safari, turns the view about the pointer once it reaches 5°; with it off, the gesture does not turn
 the view), `zoomToSelection` (on: Zoom In and Zoom Out centre the selection), `showToolTips`,
+`showToolCards` (off by default: with `showToolTips` on, resting the pointer on a tool button shows a card with what
+the tool does and the keys its hint-bar text lists, for the tools that have a description; a press, drag, key,
+modifier key, scroll or pinch puts the card away),
 `anchorSize` (1–7), `gridColor`, `gridStyle`, `gridsInBack`, `guideColor`, `guideStyle`, `showPixelGrid` (on by
 default: in View › Pixel Preview at 600% zoom and above, a line at every document pixel over the art),
 `recentFontsCount`, `antiAliasedArtwork` (on by default; off, the canvas draws the art with hard edges — a pixel is
@@ -9197,6 +9334,8 @@ the panel, in the order `links.list` gives them; the panel menu passes the selec
 them. An embedded image gives the name its row shows. An id that is not an image or a placed document, a
 malformed `ids`, or nothing to copy is an error, and the clipboard is left as it was.
 
+Draft #5804 adds a local, native-picker-only raster editor override when Use System Defaults is off. Its saved choice and Preferences draft are outside engine preferences and `Dialog::fields`: `prefs.set` (including bulk values), `ui.dialog.set` and `ui.set` cannot assign it. The chooser refuses control requests and synthetic input. If the chosen application is missing, Edit Original tries PhotoCraft and then the system default; validation or launch errors are reported. The existing refusal of automated external Edit Original remains. No executable arguments or shell command are accepted.
+
 ```json
 {"name":"run_command","arguments":{"command":"links.list","params":{"show":"missing"}}}
 {"name":"run_command","arguments":{"command":"links.placementOptions","params":{"ids":[12],"preserve":"fit","align":"top"}}}
@@ -9223,9 +9362,14 @@ result carries the same files as a zip (`{name: "<name>.zip", dataBase64}`, entr
 `document.info {selectionOnly?, category?, format?: "text"}` adds `sections` (`[{id, title, rows: [[label, value]]}]`:
 document, objects, graphicStyles, brushes, spotColors, patterns, gradients, symbols, fonts, fontDetails, linkedImages,
 embeddedImages, repeats), `fonts` (the fonts the document's type uses, the type in opacity masks and in the art of
-its symbols and pattern swatches included, which the fonts and fontDetails categories list; with `selectionOnly`, the
-fonts of the selected type), `fontDetails` (`[{font, match, family, style, file, embedding}]`: each font of `fonts`,
-in order, as the fontDetails category's rows give it: `match` is `exact`, `style` (a style the family lacks, shown in
+its symbols and pattern swatches included, type in a composite font giving the fonts of the parts its characters fall
+in, which the fonts and fontDetails categories list; with `selectionOnly`, the fonts of the selected type),
+`fontUses` (`[{font, type, uses}]`: each font of `fonts`, in order, as the fonts
+category's rows give it, such as `TrueType; 2 uses`: `type` is `truetype` or `opentype` by the outlines of the face
+the type is drawn in (`glyf`, or `CFF` or `CFF2`), `unknown` for a font not installed in the family and style it
+names; `uses` is the number of text objects set in the font, each counted once however many of its runs use it, the
+type in a mask or in a symbol's or pattern's art once however many objects show it), `fontDetails`
+(`[{font, match, family, style, file, embedding}]`: each font of `fonts`, in order, as the fontDetails category's rows give it: `match` is `exact`, `style` (a style the family lacks, shown in
 `family` `style`), `missingWithFallback` (not installed, shown in `family` `style`) or `missing`; `file` is the face's
 file name, null for a built-in face; `embedding` is `allowed`, `editing`, `previewPrint` or `forbidden`, null when no
 face is found), `imageObjects` (`[{name, width, height, linked, file}]`: the image objects in the order the
@@ -9754,6 +9898,15 @@ a warning.
 {"name":"run_command","arguments":{"command":"document.export","params":{"format":"hpgl","path":"/tmp/sheet.plt","useArtboards":true,"hpglVersion":"hpgl2","pens":["#000000","#ff0000"],"sortPaths":true}}}
 {"name":"run_command","arguments":{"command":"document.export","params":{"format":"hpgl","path":"/tmp/stencil.plt","sortPaths":true,"insideFirst":true}}}
 ```
+
+In the app, Export As… with the HP-GL format opens HP-GL Options (`ui.hpglOptionsDialog` opens it too): Version,
+Curve Tolerance, Origin (Bottom Left or Center), Pens (One Pen per Color, or Pen Table with a row per pen to type
+its color, remove it or add one), Draw the Nearest Path Next (`sortPaths`) and Draw Inner Paths First
+(`insideFirst`). Pen Table starts from the pens One Pen per Color gives the art this export plots (the chosen
+artboards, the bounds of the art, or the selection with Export Selection or Export Selected Art Only), or one black
+pen when that art draws nothing. When the export refuses the options or the artboard choice, One Pen per Color stays
+chosen and the dialog shows why. OK checks the options and the artboard choice, and remembers the options for the
+next export; a canceled save panel writes nothing and keeps the options remembered before.
 
 ## TIFF, BMP and Targa export
 
@@ -10918,10 +11071,48 @@ which Japanese characters may not start or end a line. **Hard** (the default; ne
 setting) keeps closing brackets, commas, full stops, middle dots, iteration marks, the prolonged sound mark ー and small
 kana off the line start, and opening brackets off the line end. **Soft** lets 々, ー and small kana start a line, as
 JLREQ's level 3 line-breaking rules do (https://www.w3.org/TR/jlreq/#addendum_a3); the rest of the set stays.
-**None** applies no kinsoku. `hard` isn't saved. One undo step.
+**None** applies no kinsoku. `hard` isn't saved. The name of a custom set of the document (`type.kinsokuSets.list`, any
+case) gives each paragraph a copy of that set, saved with the paragraph (`kinsoku_set` in `para`) beside Hard, so an
+older build reads the paragraph as Hard; a name the document has no set of fails the call and changes nothing.
+Paragraph styles carry the set; `paraStyle.new` and `paraStyle.setAttrs` given `kinsoku_set` with `kinsoku` None or Soft,
+or with a blank or built-in set name, fail and change nothing. One undo step.
 
 ```json
 {"name":"run_command","arguments":{"command":"text.setFormat","params":{"kinsoku":"soft"}}}
+```
+
+## Kinsoku Shori Settings
+
+`type.kinsokuSets.set {sets: [{name, from?, cannotStart?, cannotEnd?, hanging?, inseparable?}]}` (Type › Kinsoku Shori
+Settings…'s OK, shown with the East Asian options) replaces the active document's custom Kinsoku Shori sets as one undo
+step, and records none when nothing changes. `cannotStart` lists the characters that never start a line, `cannotEnd`
+those that never end one, and `hanging` the punctuation that Burasagari hangs outside a line's end, each as text, one
+character after another. `inseparable` lists sequences of 2 to 16 characters that a line never breaks inside while
+Bunri-Kinshi is on. `cannotStart`, `cannotEnd` and `hanging` keep each character once, sorted; `inseparable` keeps each
+sequence once, sorted, so a sequence may repeat a character (`……`). Each category holds at most 4096 characters (a
+sequence counts each of its characters); a control or space character in a category fails the call. Names are trimmed, 1 to 128 characters, unique in any
+case and never None, Hard or Soft; a document holds at most 256 sets. These limits are VectorCraft's own. A set with
+the name of a set the document has (any case) and no `from` edits that set; `from` names the set it renames. Every
+paragraph and paragraph style using an edited set takes its new characters and name, and those using a set left out
+take Hard. An unknown key, a null value, a name used twice, a `from` the document has no set of and a sequence of one
+character fail the call and change nothing. The built-in None, Hard and Soft are not stored and can't be changed. → `{sets}`.
+
+`type.kinsokuSets.list` returns the sets with how many paragraphs (`paragraphs`), paragraph styles (`styles`) and graphs
+(`graphs`, in the paragraph attributes a graph keeps for its labels) use each. `type.kinsokuSets.base {base: "hard"|"soft"|"none"|name, name?}` returns the categories a new set based on a
+built-in or custom set starts with: Hard and Soft list the characters they keep off a line's start and end, the East
+Asian comma and full stop as hanging punctuation and the Bunri-Kinshi pairs; None lists nothing.
+
+Type › Kinsoku Shori Settings… opens a dialog on the document's sets: Kinsoku Set picks one, New adds a set based on
+the choice in Based on (Hard, Soft, None or a set of the dialog), Delete takes the one picked out, the four fields edit
+its categories (inseparable sequences separated by spaces), and Unicode with Add puts the character of a code point
+(`U+3001` or `3001`) into Cannot Start Line, Cannot End Line or Hanging Punctuation. Nothing changes until OK, which
+runs `type.kinsokuSets.set`; a refused set keeps the dialog open. The Paragraph panel's Kinsoku Set lists the custom
+sets after None, Hard and Soft, and its last entry opens the dialog. Importing and exporting sets is not available.
+The help page:
+https://helpx.adobe.com/illustrator/desktop/design-with-text/edit-format-text/use-kinsoku-for-japanese-line-breaking.html
+
+```json
+{"name":"run_command","arguments":{"command":"type.kinsokuSets.set","params":{"sets":[{"name":"Tight","cannotStart":"、。」ー","cannotEnd":"「（","hanging":"、。","inseparable":["——","……"]}]}}}
 ```
 
 ## Kinsoku Shori Type
@@ -10936,8 +11127,8 @@ of the character before it and by at most a tenth of that em; a line that cannot
 tab, pushes out instead. **Push Out First** pushes in
 the same way only when pushing out would leave the line more than an em, of the character before the break, short of
 its measure. **Push Out Only** (the default: new type and documents from before the setting) moves the
-character before a prohibited line start to the next line with it. With Burasagari on, an overflowing comma or full
-stop may hang outside the margin first, leaving the preceding character on the line. With Kinsoku Set None the setting
+character before a prohibited line start to the next line with it. With Burasagari on, overflowing hanging punctuation
+of the Kinsoku Set may hang outside the margin first, leaving the preceding character on the line. With Kinsoku Set None the setting
 does nothing. When Push In First or Push Out First is selected and a paragraph contains a prohibited line-start or
 line-end character, the whole paragraph is broken line by line, as the Single-line Composer breaks it, even if no line
 ends up pushing a character in. The setting is saved
@@ -10955,10 +11146,13 @@ on or off for the paragraphs of the selected type (or `ids`, or the paragraphs a
 line never breaks inside an inseparable pair: two em dashes (U+2014), two horizontal ellipses (U+2026), two two-dot
 leaders (U+2025), or the upper half of a vertical kana repeat mark (U+3033 or U+3034) followed by its lower half
 (U+3035), the pairs W3C JLREQ lists for its class cl-08 (https://www.w3.org/TR/jlreq/#cl-08), which are VectorCraft's
-set. A chain of em dashes stays together as well. A pair is two neighboring characters, whatever their fonts and
-styles; a forced line break between them ends the line as before. Both composers, vertical type, Kinsoku Shori Type,
-hyphenation and No Break follow it, and a pair wider than the line stays whole on it. Justification adds no space inside
-a pair. The setting works only with a Kinsoku Set: with Kinsoku Set None the paragraph keeps the value without effect,
+set for Hard and Soft. A chain of em dashes stays together as well. With a custom Kinsoku Set, the set's inseparable
+sequences (Kinsoku Shori Settings) replace these pairs: a line never breaks between two characters of an occurrence of
+one of them, such as `AB` or `あいう`, and occurrences may overlap. A custom set keeps a built-in pair together only
+when it lists that pair, as a set based on Hard or Soft does. A pair or sequence is neighboring characters, whatever
+their fonts and styles; a forced line break between them ends the line as before. Both composers, vertical type,
+Kinsoku Shori Type, hyphenation and No Break follow it, and a pair or sequence wider than the line stays whole on it.
+Justification adds no space inside a pair or sequence. The setting works only with a Kinsoku Set: with Kinsoku Set None the paragraph keeps the value without effect,
 and the menu item is unavailable. Off by default, for new type and for paragraphs saved before the option. It is saved
 with the paragraph (`bunri_kinshi` in `para`) only when on, paragraph styles carry it (Paragraph Style Options › East
 Asian Composition Settings), and Reset Panel turns it off. A value that is not true or false is refused. One undo
@@ -11017,9 +11211,11 @@ help page: https://helpx.adobe.com/illustrator/desktop/design-with-text/fonts-an
 ## Hanging punctuation (burasagari)
 
 `text.setFormat {burasagari: "none"|"standard"|"forced"}` sets the Paragraph panel menu's Burasagari (None / Regular /
-Force) of the selected type (or `ids`): an East Asian comma or full stop ending an area type line (、。，．, half-width
-､｡) hangs outside the frame, Regular only when it doesn't fit, Force always (the rest of the line then fills the
-measure). Closing brackets and Latin punctuation don't hang; point type, right-to-left and hyphenated lines are left as
+Force) of the selected type (or `ids`): hanging punctuation ending an area type line hangs outside the frame, Regular
+only when it doesn't fit, Force always (the rest of the line then fills the measure). With the Kinsoku Sets None, Hard
+and Soft, the hanging punctuation is the East Asian comma and full stop (、。，．, half-width ､｡), and closing brackets and
+Latin punctuation don't hang. A custom Kinsoku Set hangs the characters in its `hanging` category instead (Kinsoku Shori
+Settings), closing brackets and Latin punctuation included. Point type, right-to-left and hyphenated lines are left as
 they are. The hanging mark is as wide as its punctuation spacing makes it (`mojikumi`). New type (the Type tools,
 `text.create`) takes `standard`; documents from before it and imported text keep `none`, except legacy `.ai` type
 with binding punctuation (`Tg`) on, which opens as `forced`. `none` isn't saved. One undo step.
@@ -12460,7 +12656,13 @@ tool keeps last across tool switches (and documents) and are saved with the pref
 `prefs.get`'s full object), as the reference app keeps them: the Liquify tools' brush and tool options, Mirror & Cut's
 axis and side, Puppet Warp's mesh, the Symbolism brush, the line, grid, pencil, brush and eraser tools' options,
 polygon sides and star points, the Flare Tool Options and the Shape Builder Tool Options. The Liquify tools share one set of Global Brush Dimensions (width, height, angle,
-intensity), and the Symbolism tools one brush. Interaction state (pins, a reference point) starts afresh. In the
+intensity), and the Symbolism tools one brush: `diameter` (80), `intensity` (5), `density` (5), `usePressure` (false),
+`method` (`userDefined`), `showBrush` (true), `sprayScrunch`, `spraySize`, `spraySpin`, `sprayScreen`, `sprayStain`
+and `sprayStyle` (each `average`), `proportional` (true) and `affectsDensity` (false); these starting values are
+VectorCraft's own. With `showBrush` the brush's outline follows the pointer, with a dashed ring inside it at
+`intensity`/10 of its radius (no ring at 10, with `usePressure` or for the Symbol Sprayer, which uses neither). For a
+Symbolism tool, a `method` or Symbol Sprayer value not in those lists, or a `usePressure`, `showBrush`, `proportional`
+or `affectsDensity` that is not true or false, is an error that sets none of the values. Interaction state (pins, a reference point) starts afresh. In the
 desktop app, while the Artboard tool is in use, a change to its `selected` or `active` makes the artboard it then has
 active the active artboard (the navigator's and the Artboards panel's).
 
@@ -12514,7 +12716,12 @@ options' counts and growth, without a `ringSeed`. The Artboard tool's are the ac
 are the artboard's top-left corner in document points, while the dialog shows X and Y at the reference point the
 Transform panel uses, counted from the ruler origin), a graph tool's
 the selected graph's Graph Type (dialog `graphType`, described below; an error without one), a Symbolism tool's the Symbolism Tools Options (dialog
-`symbolismOptions`: `diameter` in points, `intensity` and `density` 1–10, one brush for the eight tools) and the
+`symbolismOptions`: `tool` (the tool whose options show, which the Tool row changes), `diameter` in points,
+`intensity` and `density` 1–10, `usePressure`, `method` (`userDefined`, `average` or `random`), `showBrush`, the
+Symbol Sprayer's `sprayScrunch`, `spraySize`, `spraySpin`, `sprayScreen`, `sprayStain` and `sprayStyle` (each
+`average` or `userDefined`) and the Symbol Sizer's `proportional` and `affectsDensity`: one brush for the eight
+tools. OK runs `tool.setOption {tool, values}`, and with symbol sets selected and a new `density` it first runs
+`symbol.setDensity` from the density the dialog opened with) and the
 Magic Wand tool's its panel. `ui.newArtboard` (Alt-click on the Artboards panel's New Artboard) opens Artboard Options
 for a new artboard, with `new: true` and the name, position and size that `artboard.new {}` would give it. OK runs
 `artboard.new` with the fields and makes the new artboard the active one, and Cancel adds no artboard.
@@ -13000,8 +13207,8 @@ step, and `press_key` Escape or a switch to another tool during it puts the valu
 
 How blends interpolate: closed shapes start where they twist least unless `starts` picks the anchors; strokes
 interpolate weight, dashes (a solid stroke counts as the dashed one with its gaps closed), miter limit, arrowhead scale,
-width profiles and the pen pressure, tilt, bearing and rotation recorded with the Paintbrush (a stroke without a
-recording counts as half pressure, half tilt and 0°, as brushes read it; angles turn the shorter way round; a key's
+width profiles and the pen pressure, tilt, bearing, rotation and wheel recorded with the Paintbrush (a stroke without
+a recording counts as half pressure, half tilt, 0° and the wheel half way, as brushes read it; angles turn the shorter way round; a key's
 profiles, recordings, arrowheads, dashes and gradient along or across the stroke turn with its path when the blend
 starts it at another anchor), while caps, joins, alignment, arrowheads and brushes switch halfway; gradients of one
 kind with different stop counts resample to a common set of stops, keeping each step (two stops at one offset). Groups pair their members in stacking order (members only

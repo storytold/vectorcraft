@@ -983,6 +983,7 @@ fn run_ui_part10(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
         "ui.colorRgbPercent" => crate::panels::color::rgb_percent_command(app, p),
         "ui.colorWheel" => crate::panels::color_wheel::command(app, p),
         "ui.savePdfDialog" => crate::dialogs::open_save_pdf(app, p),
+        crate::dialogs::SAVE_PDF_SUMMARY => crate::dialogs::save_pdf_summary(app, p),
         "file.exportAs" if s("path").is_none() => {
             crate::dialogs::open_export_as(app, s("format").as_deref(), p);
             Ok(Value::Null)
@@ -1068,6 +1069,11 @@ fn run_ui_part12(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
         "ui.epsOptionsDialog" if app.session.active().is_none() => Err("no document".into()),
         "ui.epsOptionsDialog" => {
             crate::dialogs::eps_options::open(app, p);
+            Ok(Value::Null)
+        }
+        "ui.hpglOptionsDialog" if app.session.active().is_none() => Err("no document".into()),
+        "ui.hpglOptionsDialog" => {
+            crate::dialogs::hpgl_options::open(app, p);
             Ok(Value::Null)
         }
         // Save for Web: its dialog; with settings, write the files.

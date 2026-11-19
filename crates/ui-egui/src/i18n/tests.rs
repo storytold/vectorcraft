@@ -570,6 +570,88 @@ fn objects_on_path_detach_strings_are_in_complete_catalogs() {
     }
 }
 
+/// The PSD Import Options dialog's labels, and the warnings and errors of opening and placing a
+/// PSD or PSB file with its layers and slices: each complete catalog translates every one, keeping
+/// its numbers, and translates a reason given inside one.
+#[test]
+fn psd_import_strings_are_in_complete_catalogs() {
+    use crate::io::opened_with_notes;
+    use vectorcraft_engine::cmd::fileio::{PSD_LAYER_WARNINGS, PSD_MERGED_WARNING};
+    let labels =
+        ["Place PSD", "PSD Import Options", "Convert Layers to Objects", "Import Hidden Layers", "Flatten Layers to a Single Image", "Import Slices"];
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        for label in labels {
+            assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
+        }
+    }
+    let (nested, damaged) = ("the slices' descriptor nests too deep", "the PSD file's layer records are damaged");
+    let unread_slices = "the slices can't be read (the slices' descriptor nests too deep) and were left out";
+    let unread_layers = "the layers can't be read (the PSD file's layer records are damaged): the file was placed as its merged image";
+    let merged = PSD_MERGED_WARNING.replace("{modes}", "Hue, Luminosity");
+    let (one, many) = PSD_LAYER_WARNINGS[1];
+    let (one, many) = (one.to_string(), many.replace("{n}", "3"));
+    let mut shown: Vec<String> = PSD_LAYER_WARNINGS.iter().flat_map(|(one, many)| [one.to_string(), many.replace("{n}", "3")]).collect();
+    shown.push(merged.clone());
+    shown.extend(
+        [
+            "the file is no longer loaded",
+            unread_layers,
+            "hiddenLayers applies to a PSD file placed with layers: true",
+            "importSlices: a linked PSD file is placed as its flat image; give link: false to embed it with its slices",
+            "layers: a linked PSD file is placed as its flat image; leave link out or give link: false",
+            unread_slices,
+            "1 slice lies outside the canvas or has no size and was left out",
+            "3 slices lie outside the canvas or have no size and were left out",
+            "1 slice would lie outside the canvas and was left out",
+            "3 slices would lie outside the canvas and were left out",
+            "the slices' descriptor holds too many values",
+            "the slices' descriptor has a version other than 16",
+            "the slices are stored in version 9, which isn't read",
+            "the file has 10001 slices, more than the 10000 read",
+            "the slices' descriptor has no list of slices",
+            "the slices' descriptor lists something other than a slice",
+            "a slice in the slices' descriptor has no bounds",
+            "a slice's bounds in the slices' descriptor aren't numbers",
+            "a text in the slices has more than the 65536 characters read",
+            nested,
+            "the slices' descriptor has a reference of an unknown kind (abcd)",
+            "the slices' descriptor has a value of an unknown type (abcd)",
+        ]
+        .map(String::from),
+    );
+    let numbers = |s: &str| {
+        let mut all = s.split(|c: char| !c.is_ascii_digit()).filter(|n| !n.is_empty()).map(String::from).collect::<Vec<_>>();
+        all.sort();
+        all
+    };
+    let (note, notes) = ("Opened with {n} note: {first}", "Opened with {n} notes: {first}");
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        for s in &shown {
+            let tr = message(lang, s);
+            assert_ne!(&tr, s, "{code}");
+            assert_eq!(numbers(&tr), numbers(s), "{code}: {s} -> {tr}");
+        }
+        for (s, inner) in [(unread_slices, nested), (unread_layers, damaged)] {
+            let (tr, inner_tr) = (message(lang, s), message(lang, inner));
+            assert_ne!(inner_tr, inner, "{code}: {inner}");
+            assert!(tr.contains(&inner_tr) && !tr.contains(inner), "{code}: {s} -> {tr}");
+        }
+        assert!(message(lang, &merged).contains("Hue, Luminosity"), "{code}");
+        let opened = opened_with_notes(1, &one);
+        let (forms, _) = lang.catalog().message_forms(&opened).expect("the Open heading has a row");
+        let heading = &forms[(lang.0.plural)(1).min(forms.len() - 1)];
+        assert!(heading != note && heading != notes, "{code}");
+        assert_eq!(message(lang, &opened), fmt(heading, &[("n", "1"), ("first", &message(lang, &one))]), "{code}");
+    }
+    assert_eq!(message(de(), &many), "3 Einstellungsebenen wurden nicht angewendet");
+    assert_eq!(message(de(), &opened_with_notes(1, &one)), "Mit 1 Hinweis geöffnet: 1 Einstellungsebene wurde nicht angewendet");
+    assert_eq!(
+        message(de(), unread_slices),
+        "die Slices können nicht gelesen werden (der Deskriptor der Slices ist zu tief verschachtelt) und wurden weggelassen"
+    );
+}
+
 /// Make Compound Shape's warning for a member that adds no area, which the status bar shows and
 /// the message scan doesn't read, is translated in each language of [`COMPLETE_MESSAGES`].
 #[test]
@@ -578,6 +660,21 @@ fn compound_shape_no_area_warning_is_translated() {
     for code in COMPLETE_MESSAGES {
         let lang = Lang::from_code(code).expect("registered");
         assert_ne!(message(lang, warning), warning, "{code}");
+    }
+}
+
+/// The Save PDF dialog's Save Summary… button and `ui.pdfSummary.save`'s error when no such
+/// dialog is open.
+#[test]
+fn pdf_save_summary_strings_are_in_complete_catalogs() {
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        assert!(lang.catalog().plain("Save Summary…").is_some(), "{} is missing Save Summary…", lang.code);
+    }
+    let closed = "the Save PDF dialog is not open";
+    assert!(message_literals().contains(closed));
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        assert_ne!(message(lang, closed), closed, "{code}");
     }
 }
 
@@ -726,6 +823,21 @@ fn numbered_labels_translate_the_name_before_the_number() {
     assert_eq!(numbered_label(Lang::EN, "Grays 12"), "Grays 12");
 }
 
+/// General › Show Tool Cards and every tool's description on its card.
+#[test]
+fn tool_card_strings_are_in_complete_catalogs() {
+    let mut bad = vec![];
+    let descriptions = vectorcraft_tools::catalog::all_tools().filter_map(|t| vectorcraft_tools::catalog::tool_description(t.id));
+    let strings: Vec<&str> = std::iter::once("Show Tool Cards").chain(descriptions).collect();
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        let missing: Vec<&&str> = strings.iter().filter(|s| lang.catalog().plain(s).is_none()).collect();
+        if !missing.is_empty() {
+            bad.push(format!("{} is missing {missing:?}", lang.code));
+        }
+    }
+    assert!(bad.is_empty(), "{}", bad.join("\n"));
+}
+
 /// Window › Arrange's Tile layouts and the application bar's Arrange Documents button.
 #[test]
 fn tile_layout_labels_are_in_complete_catalogs() {
@@ -872,11 +984,13 @@ fn document_info_labels_are_in_complete_catalogs() {
 
 /// The values Document Info makes and shows in the interface language: the font states and
 /// embedding permissions, the templates of the font, image, raster effects and Repeat object
-/// values, the names of gradients named by their kind, the counted instances, rows and columns, and
-/// the transparency settings' values.
+/// values, the names of gradients named by their kind, the counted uses, instances, rows and
+/// columns, and the transparency settings' values.
 #[test]
 fn document_info_values_are_in_complete_catalogs() {
-    const VALUES: [&str; 20] = [
+    const VALUES: [&str; 22] = [
+        "unknown type",
+        "{type}; {uses}",
         "built in",
         "embedding not allowed",
         "embedding for editing",
@@ -898,7 +1012,8 @@ fn document_info_values_are_in_complete_catalogs() {
         "Diamond gradient",
         "Freeform gradient",
     ];
-    const COUNTED: [(&str, &str); 3] = [("{n} instance", "{n} instances"), ("{n} row", "{n} rows"), ("{n} column", "{n} columns")];
+    const COUNTED: [(&str, &str); 4] =
+        [("{n} use", "{n} uses"), ("{n} instance", "{n} instances"), ("{n} row", "{n} rows"), ("{n} column", "{n} columns")];
     // The transparency settings' values: the grid's sizes and color presets, on and off, and the
     // built-in flattener presets.
     let transparency = ["Small", "Medium", "Large", "On", "Off", "High Resolution", "Medium Resolution", "Low Resolution"]
@@ -979,6 +1094,16 @@ fn eps_option_menu_names_are_in_complete_catalogs() {
         .collect();
     for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
         for label in &names {
+            assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
+        }
+    }
+}
+
+/// HP-GL Options' Origin menu names (drawn translated by the dropdown, not through `tl!`).
+#[test]
+fn hpgl_origin_menu_names_are_in_complete_catalogs() {
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        for label in crate::dialogs::hpgl_options::ORIGIN_NAMES {
             assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
         }
     }

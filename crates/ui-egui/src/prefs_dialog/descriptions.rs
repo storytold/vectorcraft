@@ -16,6 +16,7 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
     ("disableAutoAddDelete", "Stops the Pen tool from deleting the anchor you click on a selected path, or adding one where you click its segment."),
     ("usePreciseCursors", "Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on."),
     ("showToolTips", "Shows a tip when the pointer rests on a button or field that has one."),
+    ("showToolCards", "Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips."),
     ("showExternalScriptWarning", "Shows a warning before a script you choose runs."),
     ("antiAliasedArtwork", "Smooths the edges of artwork on the canvas."),
     (
