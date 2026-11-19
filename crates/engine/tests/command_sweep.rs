@@ -1012,6 +1012,8 @@ fn structured_junk() {
         ("addon.pathtools.bridge", json!({"radius": 1e-308, "keepOriginals": "x"})),
         ("addon.pathtools.bridge", json!({"radius": 1000, "keepOriginals": true, "ids": [0, 1, 2, 3, u64::MAX]})),
         ("addon.pathtools.bridge", json!({"radius": f64::MAX, "ids": [1, 1], "junk": [0]})),
+        ("addon.pathtools.bridge", json!({"gap": -1e308, "reach": f64::MAX, "ids": [0, 1, 2]})),
+        ("addon.pathtools.bridge", json!({"gap": 1000, "reach": 10000, "radius": null, "keepOriginals": true})),
         // Refused before anything is written: no format of that name, a time that is no time.
         ("addon.document.saveTimestampedCopy", json!({"format": "png", "folder": 7})),
         ("addon.document.saveTimestampedCopy", json!({"format": "svg", "time": [1e308], "folder": null})),
