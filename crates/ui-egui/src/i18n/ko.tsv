@@ -4935,6 +4935,7 @@ variable-list-end	{0}, {1}	{0} 및 {1}
 @msg	`points` must be two or three [x, y] pairs of numbers	`points`는 숫자 쌍 [x, y] 두 개 또는 세 개여야 합니다
 @msg	`center` must be an [x, y] pair of numbers, with one [x, y] pair in `points`	`center`는 숫자 쌍 [x, y]이고 `points`에는 [x, y] 쌍이 하나 있어야 합니다
 @msg	the point in `points` is on `center`	`points`의 점이 `center`에 있습니다
+@msg	the circle is too small to draw at these coordinates	원이 너무 작아 이 좌표에서 그릴 수 없습니다
 @msg	direct-select two or three anchor points, or give `points`	앵커 포인트 두 개 또는 세 개를 직접 선택하거나 `points`를 지정하세요
 @msg	no circle passes through these points: two are the same or all three lie on one line	이 점들을 지나는 원이 없습니다: 두 점이 같거나 세 점이 모두 한 직선 위에 있습니다
 @msg	select at least two objects	개체를 두 개 이상 선택하세요

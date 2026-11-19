@@ -48,6 +48,32 @@ fn circle_from_center_persists() {
     assert_eq!(next.tool_options(), json!({"fromCenter": true}));
 }
 
+/// An option set during a press (`tool.setOption`, or a Control bar change) is kept when the press
+/// is dropped: the drop gives back only what the press itself changed.
+#[test]
+fn an_option_set_during_a_dropped_press_is_kept() {
+    let v = ViewInfo::default();
+    let mut s = session();
+    select(&mut s, "circle");
+    s.set_tool_option("fromCenter", &json!(true));
+    s.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 100.0), v).unwrap();
+    s.set_tool_option_cmd(&json!({"key": "fromCenter", "value": false})).unwrap();
+    s.drop_tool_press(v).unwrap();
+    assert_eq!(s.tool_options(), json!({"fromCenter": false}));
+    assert_eq!(s.prefs.tool_settings["circle"]["fromCenter"], json!(false));
+    s.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 100.0), v).unwrap();
+    s.set_tool_option("fromCenter", &json!(true));
+    s.drop_tool_press(v).unwrap();
+    assert_eq!(s.tool_options(), json!({"fromCenter": true}));
+    assert_eq!(s.prefs.tool_settings["circle"]["fromCenter"], json!(true));
+    // Setting a Parametric Shape's kind also puts its numbers back to that kind's: those are kept too.
+    select(&mut s, "parametricShape");
+    s.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 100.0), v).unwrap();
+    let set = s.set_tool_option_cmd(&json!({"key": "kind", "value": "star"})).unwrap();
+    s.drop_tool_press(v).unwrap();
+    assert_eq!(s.tool_options(), set);
+}
+
 #[test]
 fn options_survive_a_tool_switch() {
     let mut s = session();

@@ -5163,6 +5163,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	`points` must be two or three [x, y] pairs of numbers	το `points` πρέπει να είναι δύο ή τρία ζεύγη αριθμών [x, y]
 @msg	`center` must be an [x, y] pair of numbers, with one [x, y] pair in `points`	το `center` πρέπει να είναι ένα ζεύγος αριθμών [x, y], με ένα ζεύγος [x, y] στο `points`
 @msg	the point in `points` is on `center`	το σημείο στο `points` βρίσκεται πάνω στο `center`
+@msg	the circle is too small to draw at these coordinates	ο κύκλος είναι πολύ μικρός για να σχεδιαστεί σε αυτές τις συντεταγμένες
 @msg	direct-select two or three anchor points, or give `points`	επιλέξτε άμεσα δύο ή τρία σημεία αγκύρωσης ή δώστε `points`
 @msg	no circle passes through these points: two are the same or all three lie on one line	κανένας κύκλος δεν περνά από αυτά τα σημεία: δύο είναι ίδια ή και τα τρία βρίσκονται σε μία ευθεία
 @msg	no app to open files here	δεν υπάρχει εφαρμογή για άνοιγμα αρχείων εδώ

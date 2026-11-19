@@ -6699,7 +6699,9 @@ out and the selection does not hold two or three anchor points of paths.
 `shape.circleThroughPoints {center: [x, y], points: [[x, y]]}` draws the circle centered at `center` whose edge passes
 through the one point in `points`: its radius is the distance between them. It returns an error and draws nothing when
 the point is on `center`, when the circle would reach past the canvas, and when `center` is not a pair of numbers or
-`points` does not hold exactly one pair. With `center`, the selected anchor points are not used.
+`points` does not hold exactly one pair. With `center`, the selected anchor points are not used. With or without
+`center`, a circle whose radius is so small beside its coordinates that its opposite edges round to the same number is
+an error, and nothing is drawn.
 
 The Circle tool, after the Ellipse tool in its toolbar group, draws with this command. A drag from one point to
 another, or a click on each, draws the circle with the two points as the ends of a diameter. A click on a first point,

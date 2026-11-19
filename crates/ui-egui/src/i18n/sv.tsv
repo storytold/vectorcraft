@@ -5103,6 +5103,7 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	`points` must be two or three [x, y] pairs of numbers	`points` måste vara två eller tre talpar [x, y]
 @msg	`center` must be an [x, y] pair of numbers, with one [x, y] pair in `points`	`center` måste vara ett talpar [x, y], med ett talpar [x, y] i `points`
 @msg	the point in `points` is on `center`	punkten i `points` ligger på `center`
+@msg	the circle is too small to draw at these coordinates	cirkeln är för liten för att ritas vid dessa koordinater
 @msg	direct-select two or three anchor points, or give `points`	direktmarkera två eller tre ankarpunkter eller ange `points`
 @msg	no circle passes through these points: two are the same or all three lie on one line	ingen cirkel går genom de här punkterna: två är samma punkt eller så ligger alla tre på en linje
 @msg	no app to open files here	det finns ingen app för att öppna filer här

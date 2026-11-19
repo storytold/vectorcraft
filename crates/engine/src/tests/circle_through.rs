@@ -166,6 +166,20 @@ fn a_center_and_a_point_on_the_edge_give_the_circle() {
     assert_eq!((undo_len(&s), object_count(&s)), (undo, count));
 }
 
+/// A circle so small beside its coordinates that its left and right edges round to the same
+/// number (radius 10⁻¹¹ pt at x = 1,048,576, where doubles step by about 2.3 × 10⁻¹⁰) is refused,
+/// from a center and on a diameter alike; nothing is drawn and no undo step is recorded.
+#[test]
+fn a_circle_with_no_width_at_document_precision_is_refused() {
+    let mut s = session();
+    let (undo, count) = (undo_len(&s), object_count(&s));
+    for p in [json!({"center": [1_048_576, 0], "points": [[1_048_576, 1e-11]]}), json!({"points": [[1_048_576, 0], [1_048_576, 2e-11]]})] {
+        let e = s.execute(C, &p).unwrap_err().to_string();
+        assert!(e.contains("the circle is too small to draw at these coordinates"), "{p}: {e}");
+    }
+    assert_eq!((undo_len(&s), object_count(&s)), (undo, count));
+}
+
 /// Points that are not two or three pairs of finite numbers are an error, not a fallback.
 #[test]
 fn malformed_points_are_refused() {

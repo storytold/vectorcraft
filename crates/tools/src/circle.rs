@@ -82,9 +82,10 @@ fn command(points: &[Point], centered: bool) -> (String, Value) {
     }
 }
 
-/// Is the circle at `c` with radius `r` inside the canvas?
+/// Is the circle at `c` with radius `r` inside the canvas, with its opposite edges on different
+/// numbers (as `shape.circleThroughPoints` requires)?
 fn on_canvas(c: Point, r: f64) -> bool {
-    [c.x - r, c.y - r, c.x + r, c.y + r].iter().all(|v| v.abs() <= MAX_COORD)
+    [c.x - r, c.y - r, c.x + r, c.y + r].iter().all(|v| v.abs() <= MAX_COORD) && c.x - r < c.x + r && c.y - r < c.y + r
 }
 
 /// The circle through two points (the ends of a diameter) or three, as `shape.circleThroughPoints`
@@ -275,8 +276,16 @@ impl Tool for CircleTool {
                 vec![]
             }
             PointerKind::Up => match (self.press.take(), self.first, self.pointer) {
-                (Some(Press::First { at, dragged: true, .. }), _, Some(b)) if b.distance(at) >= cx.tol(DRAG_PX) => self.draw(&[at, b]),
-                // A click places the first point; the guides of the press go.
+                // Once the press has moved DRAG_PX, the release draws the circle the tool shows, also
+                // where the pointer came back nearer the press; where it shows none, the release
+                // draws nothing and starts afresh.
+                (Some(Press::First { at, dragged: true, .. }), _, Some(b))
+                    if b.distance(at) >= cx.tol(DRAG_PX) || circle_for(&[at, b], self.centered).is_some() =>
+                {
+                    self.draw(&[at, b])
+                }
+                // A click, or a drag back onto the press, places the first point; the guides of the
+                // press go.
                 (Some(Press::First { .. }), ..) => {
                     self.snap.clear();
                     vec![]
@@ -308,6 +317,11 @@ impl Tool for CircleTool {
         if let ("fromCenter", Some(on)) = (key, value.as_bool()) {
             self.from_center = on;
         }
+    }
+
+    /// [`check_options`] for one option.
+    fn check_option(&self, key: &str, value: &Value) -> Result<(), String> {
+        check_options(&Map::from_iter([(key.to_string(), value.clone())]))
     }
 
     fn key(&mut self, _cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {

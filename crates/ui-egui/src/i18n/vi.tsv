@@ -5575,6 +5575,7 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	`points` must be two or three [x, y] pairs of numbers	`points` phải là hai hoặc ba cặp số [x, y]
 @msg	`center` must be an [x, y] pair of numbers, with one [x, y] pair in `points`	`center` phải là một cặp số [x, y], với một cặp [x, y] trong `points`
 @msg	the point in `points` is on `center`	điểm trong `points` nằm tại `center`
+@msg	the circle is too small to draw at these coordinates	hình tròn quá nhỏ để vẽ tại các tọa độ này
 @msg	direct-select two or three anchor points, or give `points`	hãy chọn trực tiếp hai hoặc ba điểm neo hoặc cung cấp `points`
 @msg	no circle passes through these points: two are the same or all three lie on one line	không có đường tròn nào đi qua các điểm này: hai điểm trùng nhau hoặc cả ba điểm thẳng hàng
 @msg	no app to open files here	không có ứng dụng để mở tệp ở đây

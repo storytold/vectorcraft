@@ -5328,6 +5328,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	`points` must be two or three [x, y] pairs of numbers	`points` musi zawierać dwie lub trzy pary liczb [x, y]
 @msg	`center` must be an [x, y] pair of numbers, with one [x, y] pair in `points`	`center` musi być parą liczb [x, y], a `points` musi zawierać jedną parę [x, y]
 @msg	the point in `points` is on `center`	punkt w `points` leży w `center`
+@msg	the circle is too small to draw at these coordinates	okrąg jest zbyt mały, aby go narysować w tych współrzędnych
 @msg	direct-select two or three anchor points, or give `points`	zaznacz bezpośrednio dwa lub trzy punkty kontrolne lub podaj `points`
 @msg	no circle passes through these points: two are the same or all three lie on one line	przez te punkty nie przechodzi żaden okrąg: dwa są takie same albo wszystkie trzy leżą na jednej prostej
 @msg	no app to open files here	brak aplikacji do otwierania plików

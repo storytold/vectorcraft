@@ -5239,6 +5239,7 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	`points` must be two or three [x, y] pairs of numbers	`points` должен содержать две или три пары чисел [x, y]
 @msg	`center` must be an [x, y] pair of numbers, with one [x, y] pair in `points`	`center` должен быть парой чисел [x, y], а `points` должен содержать одну пару [x, y]
 @msg	the point in `points` is on `center`	точка в `points` совпадает с `center`
+@msg	the circle is too small to draw at these coordinates	круг слишком мал, чтобы нарисовать его в этих координатах
 @msg	direct-select two or three anchor points, or give `points`	выделите прямым выделением две или три опорные точки или задайте `points`
 @msg	no circle passes through these points: two are the same or all three lie on one line	через эти точки не проходит ни одна окружность: две точки совпадают или все три лежат на одной прямой
 @msg	no app to open files here	здесь нет приложения для открытия файлов

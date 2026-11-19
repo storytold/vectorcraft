@@ -5511,6 +5511,7 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	`points` must be two or three [x, y] pairs of numbers	`points` musí být dvě nebo tři dvojice čísel [x, y]
 @msg	`center` must be an [x, y] pair of numbers, with one [x, y] pair in `points`	`center` musí být dvojice čísel [x, y] a `points` musí obsahovat jednu dvojici [x, y]
 @msg	the point in `points` is on `center`	bod v `points` leží na `center`
+@msg	the circle is too small to draw at these coordinates	kruh je na těchto souřadnicích příliš malý na vykreslení
 @msg	direct-select two or three anchor points, or give `points`	vyberte přímým výběrem dva nebo tři kotevní body, nebo zadejte `points`
 @msg	no circle passes through these points: two are the same or all three lie on one line	těmito body neprochází žádná kružnice: dva jsou stejné nebo všechny tři leží na jedné přímce
 @msg	no app to open files here	zde chybí aplikace pro otevírání souborů

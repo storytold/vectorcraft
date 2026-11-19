@@ -6609,6 +6609,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	`points` must be two or three [x, y] pairs of numbers	`points` han de ser dos o tres parells de nombres [x, y]
 @msg	`center` must be an [x, y] pair of numbers, with one [x, y] pair in `points`	`center` ha de ser un parell de nombres [x, y], amb un parell [x, y] a `points`
 @msg	the point in `points` is on `center`	el punt de `points` és a `center`
+@msg	the circle is too small to draw at these coordinates	el cercle és massa petit per dibuixar-lo en aquestes coordenades
 @msg	direct-select two or three anchor points, or give `points`	seleccioneu directament dos o tres punts d’ancoratge o indiqueu `points`
 @msg	no circle passes through these points: two are the same or all three lie on one line	cap cercle no passa per aquests punts: dos són iguals o tots tres són en una mateixa recta
 @msg	no app to open files here	aquí no hi ha cap aplicació per obrir fitxers

@@ -5006,6 +5006,7 @@ variable-list-end	{0}, {1}	{0}、{1}
 @msg	`points` must be two or three [x, y] pairs of numbers	`points` は 2 組または 3 組の数値 [x, y] にしてください
 @msg	`center` must be an [x, y] pair of numbers, with one [x, y] pair in `points`	`center` は数値の組 [x, y] にし、`points` には [x, y] を 1 組指定してください
 @msg	the point in `points` is on `center`	`points` の点が `center` と同じ位置にあります
+@msg	the circle is too small to draw at these coordinates	円が小さすぎるため、この座標には描画できません
 @msg	direct-select two or three anchor points, or give `points`	アンカーポイントを 2 つまたは 3 つダイレクト選択するか、`points` を指定してください
 @msg	no circle passes through these points: two are the same or all three lie on one line	これらの点を通る円はありません: 2 つの点が同じか、3 点すべてが一直線上にあります
 @msg	select at least two objects	オブジェクトを 2 つ以上選択してください

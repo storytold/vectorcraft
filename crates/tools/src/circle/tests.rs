@@ -430,6 +430,28 @@ fn from_center_the_release_draws_the_circle_shown() {
     assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, (331.0, 340.0), Mods::default())), centered((300.0, 300.0), (331.0, 340.0)));
 }
 
+/// Once a press has moved 2 screen points, its release draws the circle the tool shows, also when
+/// the pointer comes back nearer than that: from a center and on a diameter. A drag back onto the
+/// press itself shows no circle and places the first point, as a click does.
+#[test]
+fn a_drag_brought_back_near_its_press_draws_the_circle_shown() {
+    let (d, _) = doc_with_rect();
+    let (s, p) = (Selection::default(), paint());
+    let cx = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    let mut t = from_center();
+    assert_eq!(drag(&mut t, &cx, (300.0, 300.0), &[(320.0, 300.0), (301.0, 300.0)], Mods::default()), centered((300.0, 300.0), (301.0, 300.0)));
+    assert!(!t.ends_on_escape(&cx), "no center is left pending");
+    let mut t = CircleTool::default();
+    assert_eq!(drag(&mut t, &cx, (300.0, 300.0), &[(320.0, 300.0), (301.0, 300.0)], Mods::default()), circle(&[(300.0, 300.0), (301.0, 300.0)]));
+    assert!(!t.ends_on_escape(&cx));
+    assert_eq!(drag(&mut t, &cx, (300.0, 300.0), &[(320.0, 300.0), (300.0, 300.0)], Mods::default()), vec![]);
+    assert!(t.ends_on_escape(&cx), "the first point is placed");
+    t.key(&cx, ToolKey::Escape, Mods::default());
+    // A drag to a circle past the canvas draws nothing and leaves no point behind.
+    assert_eq!(drag(&mut t, &cx, (300.0, 300.0), &[(4.1e6, 300.0)], Mods::default()), vec![]);
+    assert!(!t.ends_on_escape(&cx), "nothing is left pending");
+}
+
 /// With From Center, Shift keeps the point at 45° steps from the center, and Alt rounds the
 /// diameter, twice the radius, to the rulers' ticks (every 5 pt at 100% in points).
 #[test]
@@ -467,6 +489,10 @@ fn from_center_holds_for_the_circle_being_drawn() {
     assert_eq!(drag(&mut t, &cx, (300.0, 300.0), &[(380.0, 360.0)], Mods::default()), circle(&[(300.0, 300.0), (380.0, 360.0)]));
     assert_eq!(circle_for(&[Point::new(1.0, 1.0), Point::new(1.0, 1.0)], true), None);
     assert!(too_large(&[Point::new(0.0, 0.0), Point::new(4.1e6, 0.0)], true));
+    // Edges that round to one number at document precision, as `shape.circleThroughPoints` refuses.
+    let x = 1_048_576.0;
+    assert_eq!(circle_for(&[Point::new(x, 0.0), Point::new(x, 1e-11)], true), None);
+    assert_eq!(circle_of(&[Point::new(x, 0.0), Point::new(x, 2e-11)]), None);
     t.set_option("fromCenter", &json!("yes"));
     assert_eq!(t.options(), json!({ "fromCenter": false }), "a value that is not true or false is ignored");
 }
@@ -478,6 +504,10 @@ fn the_options_are_checked() {
     assert_eq!(check_options(&map(json!({ "fromCenter": true }))), Ok(()));
     assert_eq!(check_options(&map(json!({ "fromCenter": 1 }))), Err("`fromCenter` must be true or false".into()));
     assert_eq!(check_options(&map(json!({ "radius": 5 }))), Err("unknown Circle tool option `radius`".into()));
+    let t = CircleTool::default();
+    assert_eq!(t.check_option("fromCenter", &json!(false)), Ok(()));
+    assert_eq!(t.check_option("fromCenter", &json!(1)), Err("`fromCenter` must be true or false".into()));
+    assert_eq!(t.check_option("radius", &json!(5)), Err("unknown Circle tool option `radius`".into()));
 }
 
 /// The tool is in the Ellipse tool's group, after the Ellipse tool.

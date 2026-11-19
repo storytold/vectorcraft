@@ -71,7 +71,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Circle Through Points",
             [],
             None,
-            "{points?: [[x, y], [x, y]] or [[x, y], [x, y], [x, y]] (two: the ends of a diameter; left out: the two or three selected anchor points, where a path selected whole counts all its anchors and selected segments' ends do not count), center?: [x, y] (the circle's center; `points` then holds the one point its edge passes through, [[x, y]])} → {id, cx, cy, radius}: a circle with the current paint whose edge passes through the points, not pixel-aligned even while Align New Objects to Pixel Grid is on; two points that are the same, a point on `center`, three on one line, or a circle reaching past the canvas are an error, and nothing is drawn",
+            "{points?: [[x, y], [x, y]] or [[x, y], [x, y], [x, y]] (two: the ends of a diameter; left out: the two or three selected anchor points, where a path selected whole counts all its anchors and selected segments' ends do not count), center?: [x, y] (the circle's center; `points` then holds the one point its edge passes through, [[x, y]])} → {id, cx, cy, radius}: a circle with the current paint whose edge passes through the points, not pixel-aligned even while Align New Objects to Pixel Grid is on; two points that are the same, a point on `center`, three on one line, a circle reaching past the canvas, or one too small for its edges to differ at its coordinates are an error, and nothing is drawn",
             has_doc,
             circle_through_points
         ),
@@ -455,6 +455,10 @@ fn circle_through_points(s: &mut Session, p: &Value) -> Result<Value> {
         }
     };
     let r = Rect::new(center.x - radius, center.y - radius, center.x + radius, center.y + radius);
+    // A radius below the step between doubles at the center leaves opposite edges on one number.
+    if !(r.width() > 0.0 && r.height() > 0.0) {
+        return Err(bad(C, "the circle is too small to draw at these coordinates"));
+    }
     let live = LiveShape::Ellipse { w: r.width(), h: r.height(), pie: (0.0, 360.0), xf: Affine::translate(r.origin().to_vec2()) };
     // Not pixel-aligned: the circle stays through the points.
     let mut out = add_art_unaligned(s, "Ellipse", path_kind(live.to_path(), Some(live)))?;

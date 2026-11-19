@@ -4474,6 +4474,7 @@ axis	Both	Ambos
 @msg	`points` must be two or three [x, y] pairs of numbers	`points` deve ter dois ou três pares de números [x, y]
 @msg	`center` must be an [x, y] pair of numbers, with one [x, y] pair in `points`	`center` deve ser um par de números [x, y], com um par [x, y] em `points`
 @msg	the point in `points` is on `center`	o ponto em `points` está em `center`
+@msg	the circle is too small to draw at these coordinates	o círculo é pequeno demais para ser desenhado nessas coordenadas
 @msg	direct-select two or three anchor points, or give `points`	selecione diretamente dois ou três pontos de ancoragem ou informe `points`
 @msg	no circle passes through these points: two are the same or all three lie on one line	nenhum círculo passa por esses pontos: dois são iguais ou os três estão na mesma reta
 @msg	no app to open files here	nenhum aplicativo para abrir arquivos aqui

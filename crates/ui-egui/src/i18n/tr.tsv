@@ -4931,6 +4931,7 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	`points` must be two or three [x, y] pairs of numbers	`points` iki veya üç [x, y] sayı çifti olmalıdır
 @msg	`center` must be an [x, y] pair of numbers, with one [x, y] pair in `points`	`center` bir [x, y] sayı çifti olmalı ve `points` bir [x, y] çifti içermelidir
 @msg	the point in `points` is on `center`	`points` içindeki nokta `center` üzerinde
+@msg	the circle is too small to draw at these coordinates	daire bu koordinatlarda çizilemeyecek kadar küçük
 @msg	direct-select two or three anchor points, or give `points`	iki veya üç bağlantı noktasını doğrudan seçin veya `points` verin
 @msg	no circle passes through these points: two are the same or all three lie on one line	bu noktalardan geçen bir çember yok: ikisi aynı ya da üçü de aynı doğru üzerinde
 @msg	no app to open files here	burada dosyaları açacak uygulama yok

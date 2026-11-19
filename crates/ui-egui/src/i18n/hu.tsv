@@ -5882,6 +5882,7 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	`points` must be two or three [x, y] pairs of numbers	a `points` két vagy három [x, y] számpár legyen
 @msg	`center` must be an [x, y] pair of numbers, with one [x, y] pair in `points`	a `center` egy [x, y] számpár legyen, a `points` pedig egy [x, y] párt tartalmazzon
 @msg	the point in `points` is on `center`	a `points` pontja a `center` helyén van
+@msg	the circle is too small to draw at these coordinates	a kör túl kicsi ahhoz, hogy ezeken a koordinátákon megrajzolható legyen
 @msg	direct-select two or three anchor points, or give `points`	jelölj ki közvetlen kijelöléssel két vagy három horgonypontot, vagy add meg a `points` értéket
 @msg	no circle passes through these points: two are the same or all three lie on one line	ezeken a pontokon nem halad át kör: kettő egybeesik, vagy mindhárom egy egyenesen van
 @msg	no app to open files here	itt nincs fájlmegnyitó alkalmazás

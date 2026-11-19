@@ -5560,6 +5560,7 @@ imageTrace	Outline	Contour
 @msg	`points` must be two or three [x, y] pairs of numbers	`points` moet uit twee of drie getallenparen [x, y] bestaan
 @msg	`center` must be an [x, y] pair of numbers, with one [x, y] pair in `points`	`center` moet een getallenpaar [x, y] zijn, met één paar [x, y] in `points`
 @msg	the point in `points` is on `center`	het punt in `points` ligt op `center`
+@msg	the circle is too small to draw at these coordinates	de cirkel is te klein om op deze coördinaten te tekenen
 @msg	direct-select two or three anchor points, or give `points`	selecteer met directe selectie twee of drie ankerpunten of geef `points` op
 @msg	no circle passes through these points: two are the same or all three lie on one line	er gaat geen cirkel door deze punten: twee zijn gelijk of alle drie liggen op één lijn
 @msg	no app to open files here	hier is geen app om bestanden mee te openen

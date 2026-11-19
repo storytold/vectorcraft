@@ -2152,6 +2152,7 @@ file-filter	Templates	範本
 @msg	`points` must be two or three [x, y] pairs of numbers	`points` 必須是兩組或三組數字 [x, y]
 @msg	`center` must be an [x, y] pair of numbers, with one [x, y] pair in `points`	`center` 必須是一組數字 [x, y]，且 `points` 中須有一組 [x, y]
 @msg	the point in `points` is on `center`	`points` 中的點與 `center` 重合
+@msg	the circle is too small to draw at these coordinates	圓太小，無法在這些座標處繪製
 @msg	direct-select two or three anchor points, or give `points`	請以直接選取方式選取兩個或三個錨點，或提供 `points`
 @msg	no circle passes through these points: two are the same or all three lie on one line	沒有圓通過這些點：有兩點相同，或三點共線
 @msg	select at least two objects	請選取至少兩個物件

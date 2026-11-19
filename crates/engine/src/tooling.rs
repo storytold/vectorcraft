@@ -605,7 +605,8 @@ impl Session {
     /// Escape, as during a drag, for most tools), and a release returns the tool to rest. Of what
     /// the tool asks for along the way, only a cancel and a notify run, so a marquee selects
     /// nothing and a click opens no size dialog. The tool gets back the persistent options it had
-    /// when the press began, and none of the press's changes to them are stored. A dropped Type
+    /// when the press began, and none of the press's changes to them are stored; an option set on
+    /// it during the press (`tool.setOption`, the Control bar) is kept. A dropped Type
     /// press restores the prior selection. The freeform gradient point selected once the tool
     /// took the press is selected again. A press held while the tool computes an edit on another
     /// thread has not reached the tool: it is removed from the held input with the pointer events
@@ -1303,9 +1304,31 @@ impl Session {
         if key == "queue" && self.tool.id() == "place" {
             self.note_place_queue_roots();
         }
+        let was = self.tool.options();
         self.tool.set_option(key, v);
         self.tool_set_since_reset = true;
         self.keep_tool_settings();
+        self.keep_option_writes_past_a_dropped_press(&was, [key]);
+    }
+
+    /// Options set on the active tool during a press are written into the options the press began
+    /// with, so a dropped press ([`Self::drop_tool_press`]) gives back only what the press changed:
+    /// the options `keys` names, and every other option the write changed from `was` (setting a
+    /// Parametric Shape's `kind` resets its numbers).
+    fn keep_option_writes_past_a_dropped_press<'a>(&mut self, was: &Value, keys: impl IntoIterator<Item = &'a str>) {
+        let now = self.tool.options();
+        if let Some((id, before)) = self.press_options.as_mut()
+            && id == self.tool.id()
+        {
+            let keys: Vec<&str> = keys.into_iter().collect();
+            for (key, slot) in before.iter_mut() {
+                if let Some(v) = now.get(key)
+                    && (keys.contains(&key.as_str()) || was.get(key) != Some(v))
+                {
+                    *slot = v.clone();
+                }
+            }
+        }
     }
 
     /// Keep the automation roots in force now as those the place cursor's queue, being loaded,
@@ -1359,6 +1382,7 @@ impl Session {
         // kind puts the shape's other numbers back to that kind's, and those given with it are its.
         let first = |k: &str| k == "queue" || k == "kind";
         let ordered = || values.iter().filter(|(k, _)| first(k)).chain(values.iter().filter(|(k, _)| !first(k)));
+        let was = self.tool.options();
         let mut other = (!active).then(|| self.make_tool(id.unwrap_or_default()));
         let t = other.as_deref_mut().unwrap_or(self.tool.as_mut());
         for (k, v) in ordered() {
@@ -1386,6 +1410,9 @@ impl Session {
             // are, also in the middle of a drag that Escape can cancel.
             let set = other.id();
             Self::restore_stores(&self.prefs, self.tool.as_mut(), |store| settings::stores(set).any(|(s, _)| s == store));
+        }
+        if active {
+            self.keep_option_writes_past_a_dropped_press(&was, values.keys().map(String::as_str));
         }
         out
     }
