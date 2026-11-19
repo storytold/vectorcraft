@@ -246,8 +246,8 @@ fn an_empty_export_as_range_shows_an_example() {
 
 /// #5941: the Format list showed no scroll bar until the pointer came over it, so nothing told
 /// the user that more formats lay below the last one shown, and it opened again where it was last
-/// scrolled, with its first formats out of view. Opened with the pointer elsewhere and the last
-/// format chosen, a list that does not show every format shows its bar, the chosen format shows
+/// scrolled, with its first formats out of view. Opened with the pointer elsewhere and a format
+/// near the end chosen, a list that does not show every format shows its bar, the chosen format shows
 /// whole, and a list opened again after a scroll shows the same rows as when it first opened.
 #[test]
 fn the_format_list_shows_its_scroll_bar_at_rest_and_opens_with_the_chosen_format_in_view() {
@@ -260,9 +260,13 @@ fn the_format_list_shows_its_scroll_bar_at_rest_and_opens_with_the_chosen_format
         }
     }
     let labels: Vec<&str> = export_as::formats().iter().map(|f| f.label).collect();
-    let last = export_as::formats().last().copied().expect("Export As lists formats");
+    // A built-in format six from the end of the built-in ones: out of view when the list opens at
+    // its top, and far enough from the end that a plug-in format another test adds after the
+    // built-in ones does not move the rows shown around it.
+    let built_in: Vec<_> = fileio::FORMATS.iter().filter(|f| f.write && !matches!(f.id, "vectorcraft" | "ai")).collect();
+    let chosen = built_in.len().checked_sub(6).and_then(|i| built_in.get(i)).copied().expect("Export As lists formats");
     let (mut app, _) = app(1);
-    app.run("file.exportAs", json!({"format": last.id})).unwrap();
+    app.run("file.exportAs", json!({"format": chosen.id})).unwrap();
     let ctx = egui::Context::default();
     theme::install_fonts(&ctx);
     theme::apply(&ctx, Default::default());
@@ -281,7 +285,7 @@ fn the_format_list_shows_its_scroll_bar_at_rest_and_opens_with_the_chosen_format
     let away = egui::Event::PointerMoved(egui::pos2(1.0, 1.0));
     run(&mut app, vec![away.clone()]);
     let (texts, _) = run(&mut app, vec![]);
-    let field = texts.iter().find(|(s, ..)| s == last.label).map(|(_, r, _)| r.center()).expect("the Format field shows the last format");
+    let field = texts.iter().find(|(s, ..)| s == chosen.label).map(|(_, r, _)| r.center()).expect("the Format field shows the chosen format");
     let click_at = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
     // Opens the list, moves the pointer away and returns the list's rect, the format names drawn in
     // it with their clip rects, and the bars drawn.
@@ -308,7 +312,7 @@ fn the_format_list_shows_its_scroll_bar_at_rest_and_opens_with_the_chosen_format
     let tops = |rows: &[(String, egui::Rect, egui::Rect)]| rows.iter().map(|(s, r, _)| (s.clone(), r.top().round())).collect::<Vec<_>>();
     let (list, rows, bars) = open(&mut run, &mut app);
     assert!(!rows.is_empty(), "the Format list is open");
-    assert!(whole(&rows, last.label), "the chosen format shows whole: {:?}", tops(&rows));
+    assert!(whole(&rows, chosen.label), "the chosen format shows whole: {:?}", tops(&rows));
     // A list that shows every format needs no bar; one that does not shows its bar.
     if rows.len() < labels.len() {
         assert!(
@@ -340,7 +344,7 @@ fn the_format_list_shows_its_scroll_bar_at_rest_and_opens_with_the_chosen_format
         assert_ne!(tops(&scrolled), tops(&rows), "the wheel scrolled the list");
     }
     assert_eq!(tops(&reopened), tops(&rows), "the reopened list shows the rows it first opened with");
-    assert!(whole(&reopened, last.label), "the chosen format shows whole: {:?}", tops(&reopened));
+    assert!(whole(&reopened, chosen.label), "the chosen format shows whole: {:?}", tops(&reopened));
 }
 
 #[test]

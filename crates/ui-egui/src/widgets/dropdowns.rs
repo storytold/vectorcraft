@@ -124,8 +124,8 @@ fn opening_list_id() -> egui::Id {
 }
 
 /// One option of a dropdown list, `selected` for the current one. On the pass the list opens and
-/// the next one, the current option scrolls to the middle of the list, or as near to it as the list's ends allow, so
-/// that it shows whole (#5941).
+/// the next one, the current option scrolls to the middle of the list, or as near to it as the
+/// list's ends allow, so that it shows whole (#5941).
 fn option_row<'a>(ui: &mut Ui, enabled: bool, selected: bool, atoms: impl egui::IntoAtoms<'a>) -> Response {
     let response = ui.add_enabled(enabled, egui::Button::selectable(selected, atoms));
     if selected && ui.data(|d| d.get_temp::<bool>(opening_list_id())).unwrap_or(false) {
