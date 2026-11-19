@@ -1725,6 +1725,10 @@ file-filter	Templates	Шаблони
 	Add Color Tool	Інструмент «Додати колір»
 	Remove Color Tool	Інструмент «Вилучити колір»
 	Remove Color	Вилучити колір
+	Set As Base Color	Зробити базовим кольором
+	Select Shade	Вибрати відтінок
+	Add New Color	Додати новий колір
+	Set Current Color As Base Color	Зробити поточний колір базовим
 	Find the selected colors in the artwork	Знайти вибрані кольори в малюнку
 	Harmony Sets	Набори гармонії
 	Height	Висота
@@ -2903,6 +2907,11 @@ diagnostics	ui	інтерфейс
 	Preserve Alpha Transparency	Зберігати альфа-прозорість
 	Preserve Appearance and Overprints	Зберігати оформлення та накладення
 	Preserve CMYK Numbers	Зберігати значення CMYK
+	Preserve RGB Numbers	Зберігати значення RGB
+	Device to Simulate:	Імітований пристрій:
+	Simulate Paper Color	Імітувати колір паперу
+	Simulate Black Ink	Імітувати чорну фарбу
+	Load…	Завантажити…
 	Preserve Editing Capabilities	Зберігати можливості редагування
 	Preserve editing capabilities	Зберігати можливості редагування
 	Preserve Lightness	Зберігати світлоту
@@ -3696,6 +3705,7 @@ digits	Malayalam	Малаялам
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} з {n} результату. Продовжуйте вводити, щоб звузити їх.|{shown} з {n} результатів. Продовжуйте вводити, щоб звузити їх.|{shown} з {n} результатів. Продовжуйте вводити, щоб звузити їх.
 	Recent Commands	Нещодавні команди
 	No recent commands	Немає нещодавніх команд
+	Type to search commands, tools, panels and effects	Почніть вводити для пошуку команд, інструментів, панелей та ефектів
 	Search commands	Пошук команд
 	Search Commands…	Пошук команд…
 	Secondary	Вторинний
@@ -5411,6 +5421,7 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	no native format	немає власного формату
 @msg	no pages	немає сторінок
 @msg	no pattern `{name}`	немає візерунка `{name}`
+@msg	art painted with `{name}` can't be its tile	графіка, зафарбована візерунком `{name}`, не може бути його плиткою
 @msg	no perspective grid preset named `{name}`	немає набору сітки перспективи з ім’ям `{name}`
 @msg	no plug-in {0} is installed	модуль {0} не встановлений
 @msg	no plug-in {id} is installed	модуль {id} не встановлений
@@ -7620,6 +7631,37 @@ anchor	Points:	Точки:
 @msg	`{id}` is not a colour adjustment	`{id}` не є корекцією кольору
 @msg	missing `effect`	відсутня `effect`
 @msg	`params` must be an object	`params` має бути об’єктом
+# Stroke arrowheads (Stroke panel, Dimension Tool Options and Properties › Arrow Style).
+	Triangle (open)	Трикутник (контурний)
+	Circle (open)	Коло (контурне)
+	Square (open)	Квадрат (контурний)
+	Arrow (open)	Стрілка (контурна)
+	Barbed	Зазубрена
+arrowhead	Feather	Оперення
+arrowhead	Target	Мішень
+	Half Arrow (left)	Половина стрілки (ліворуч)
+	Half Arrow (right)	Половина стрілки (праворуч)
+	Double Bar	Подвійна смуга
+	Dot on Bar	Крапка на смузі
+	Chevron	Шеврон
+	Plus	Плюс
+	Hexagon (open)	Шестикутник (контурний)
+	Tag	Ярлик
+	Tag (open)	Ярлик (контурний)
+	Half Circle	Півколо
+	Drop	Крапля
+	Slash	Скісна риска
+	Double Slash	Подвійна скісна риска
+	Diamond (open)	Ромб (контурний)
+	Reverse Triangle	Обернений трикутник
+	Swallowtail	Ластівчин хвіст
+	Bracket	Дужка
+	Fork	Вилка
+	Leaf	Листок
+	Kite	Дельтоїд
+	Triangle to Bar	Трикутник до смуги
+	Oval	Овал
+	Line Arrow	Лінійна стрілка
 # Path Precision Tools add-on (Object › Plug-ins › Path Precision Tools): its tools, Anchor Inspector panel, commands and messages.
 	Path Precision Tools	Інструменти точного редагування контурів
 	Anchor Eraser Brush	Пензель-гумка опорних точок
@@ -7910,6 +7952,7 @@ breakText	Glyphs	Гліфи
 	Remove Strokes	Забрати обведення
 	Place Brush Art	Розмістити малюнок пензля
 	Replace Brush Art	Замінити малюнок пензля
+	Replace Pattern Art	Замінити малюнок візерунка
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Обведення використовують цей пензель. Застосувати новий малюнок до цих обведень чи залишити їх як є і додати копію пензля з новим малюнком?
 	Apply to Strokes	Застосувати до обведень
 	Leave Strokes	Залишити обведення
@@ -10339,6 +10382,11 @@ breakText	Glyphs	Гліфи
 @msg	A panel is not joined to the rest by a crease.	Панель не з’єднана з рештою жодною лінією біговки.
 @msg	A fold line is on a non-printing layer.	Лінія згину лежить на шарі, що не друкується.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Панелі: {panels}, шарніри: {hinges}, помилки: {errors}, попередження: {warnings}
+	Engraving	Гравіювання
+	Fine Hatching	Тонке штрихування
+	Dense Hatching	Щільне штрихування
+	Tapered Hatching	Звужене штрихування
+	Broken Hatching	Переривчасте штрихування
 	Image Brush	Пензлі зображень
 	Soft Bloom	М’яке цвітіння
 	Halftone Field	Напівтонове поле

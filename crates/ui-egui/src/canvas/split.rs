@@ -158,7 +158,49 @@ pub(super) fn press_on_divider(app: &VectorcraftApp, ui: &Ui, resp: &egui::Respo
     enabled(app)
         && !ui.data(|d| d.get_temp::<Drag>(drag::drag_id()).is_some())
         && !ui.input(|i| i.pointer.button_down(egui::PointerButton::Middle))
-        && primary_press_pos(ui).is_some_and(|p| drag::on_canvas(ui, resp, p) && app.view().is_some_and(|v| hit(rect, v.split, p)))
+        && primary_press_pos(ui).is_some_and(|p| divider_press_at(app, ui, resp, rect, p))
+}
+
+fn divider_press_at(app: &VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: egui::Rect, p: Pos2) -> bool {
+    drag::on_canvas(ui, resp, p) && app.view().is_some_and(|v| hit(rect, v.split, p))
+}
+
+/// The first completed divider press before this frame's latest Down. This read-only query
+/// also keeps fresh mapped handles from taking a later Down before the divider can finish.
+pub(super) fn completed_press_on_divider(app: &VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: egui::Rect) -> bool {
+    completed_divider_press(app, ui, resp, rect, None).is_some()
+}
+
+fn completed_divider_press(
+    app: &VectorcraftApp,
+    ui: &Ui,
+    resp: &egui::Response,
+    rect: egui::Rect,
+    after: Option<usize>,
+) -> Option<(usize, Pos2, Pos2)> {
+    if !enabled(app) || ui.data(|d| d.get_temp::<Drag>(drag::drag_id()).is_some()) || ui.input(|i| i.pointer.button_down(egui::PointerButton::Middle))
+    {
+        return None;
+    }
+    let (latest, _) = primary_press(ui)?;
+    let presses = ui.input(|i| {
+        i.events
+            .iter()
+            .enumerate()
+            .filter_map(|(index, event)| match event {
+                egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed: true, .. }
+                    if index < latest && after.is_none_or(|up| index > up) =>
+                {
+                    Some((index, *pos))
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+    });
+    presses.into_iter().find_map(|(down, p)| {
+        let (up, released) = primary_release(ui, Some(down))?;
+        (up < latest && divider_press_at(app, ui, resp, rect, p)).then_some((up, p, released))
+    })
 }
 
 /// Whether divider input owned this frame, or ended an old press before a later Down.
@@ -170,7 +212,15 @@ pub(super) enum DividerInput {
 
 /// Called after wheel/touch navigation, before any art/name press. An existing art press keeps
 /// its owner even when it crosses the divider.
-pub(super) fn divider_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: egui::Rect, modal: bool, space: bool) -> DividerInput {
+pub(super) fn divider_input(
+    app: &mut VectorcraftApp,
+    ui: &Ui,
+    resp: &egui::Response,
+    rect: egui::Rect,
+    modal: bool,
+    space: bool,
+    mut after: Option<usize>,
+) -> DividerInput {
     let Some(st) = app.session.active() else {
         forget(ui.ctx());
         return DividerInput::Ignored;
@@ -179,7 +229,7 @@ pub(super) fn divider_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Resp
     let Some((_, view)) = crate::doc_windows::current(app) else { return DividerInput::Ignored };
     let Some(settings) = app.view().map(|v| v.split).filter(|_| enabled(app)) else { return DividerInput::Ignored };
     let held = ui.data(|d| d.get_temp::<DividerDrag>(divider_id()));
-    let handoff = if let Some(held) = held {
+    let mut handoff = if let Some(held) = held {
         if held.doc != uid || held.view != view || held.orientation != settings.orientation || modal {
             ui.data_mut(|d| d.remove::<DividerDrag>(divider_id()));
             return DividerInput::Ignored;
@@ -206,12 +256,18 @@ pub(super) fn divider_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Resp
         if !release.is_some_and(|(up, _)| primary_press(ui).is_some_and(|(down, _)| down > up)) {
             return DividerInput::Consumed;
         }
+        after = release.map(|(up, _)| up);
         true
     } else {
-        false
+        after.is_some()
     };
+    // Earlier completed divider pairs apply their own Up before ordinary latest-Down admission.
+    if !modal && !space && !crate::touch::finger_navigates_only() {
+        after = finish_completed_dividers(app, ui, resp, rect, after);
+        handoff |= after.is_some();
+    }
     let Some(settings) = app.view().map(|v| v.split) else { return DividerInput::Ignored };
-    let press = primary_press(ui);
+    let press = primary_press(ui).filter(|(down, _)| after.is_none_or(|up| *down > up));
     let on = if press.is_some() { press_on_divider(app, ui, resp, rect) } else { on_divider(app, ui, resp, rect) };
     if modal || space || crate::touch::finger_navigates_only() || !on {
         return if handoff { DividerInput::Handoff } else { DividerInput::Ignored };
@@ -233,6 +289,22 @@ pub(super) fn divider_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Resp
     app.session.tool_hover_ended(app.view_info());
     ui.data_mut(|d| d.insert_temp(egui::Id::unique("canvas-hovered"), false));
     DividerInput::Consumed
+}
+
+/// Each completed pair is hit-tested against the seam left by the previous pair.
+fn finish_completed_dividers(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: egui::Rect, mut after: Option<usize>) -> Option<usize> {
+    while let Some((up, p, released)) = completed_divider_press(app, ui, resp, rect, after) {
+        let Some(settings) = app.view().map(|v| v.split) else { break };
+        if released != p {
+            move_divider(app, rect, settings.orientation, released);
+            ui.ctx().request_repaint();
+        }
+        ui.ctx().memory_mut(|mem| mem.stop_text_input());
+        app.ui.flyout = None;
+        app.session.tool_press_elsewhere();
+        after = Some(up);
+    }
+    after
 }
 
 fn move_divider(app: &mut VectorcraftApp, rect: egui::Rect, orientation: SplitOrientation, p: Pos2) {

@@ -1670,12 +1670,28 @@ fn review_597489_completed_handle(coalesced: bool) {
     let history = s.app.session.active().unwrap().history.undo.len();
     assert!(s.app.session.active().unwrap().history.redo.is_empty());
     let release = handle + vec2(24.0, 0.0);
+    let moved = handle + vec2(12.0, 4.0);
+    let hover = release + vec2(15.0, 10.0);
+    let expected_graphics = {
+        let doc = &s.app.session.active().unwrap().doc;
+        let node = doc.node(s.rectangle).unwrap();
+        let frame = vectorcraft_effects::graphic_frame_at(Some(doc), node, None, 0).expect("CONTROL: the mapped plane has a graphic frame");
+        let list = vectorcraft_effects::mapped_graphics(&node.appearance.effects[0].params);
+        let (at, seen) = frame.handle(&list[0]).expect("CONTROL: the mapped graphic has a visible handle");
+        assert!(seen);
+        let grab = s.xf().to_doc(handle) - at;
+        let (x, y) = frame.offset_at(list[0].face, s.xf().to_doc(release) - grab).expect("CONTROL: Up maps onto the graphic's face");
+        let mut expected = graphics.clone();
+        expected[0]["x"] = json!((x * 10.0).round() / 10.0);
+        expected[0]["y"] = json!((y * 10.0).round() / 10.0);
+        expected
+    };
     assert!(s.rect().contains(release) && release.x < s.point_on_divider().x - 8.0, "CONTROL: the release is on the canvas, away from the divider");
     s.review8211_materials_frame(vec![Event::PointerMoved(handle)]);
     let down = Event::PointerButton { pos: handle, button: PointerButton::Primary, pressed: true, modifiers: Modifiers::NONE };
     let up = Event::PointerButton { pos: release, button: PointerButton::Primary, pressed: false, modifiers: Modifiers::NONE };
     if coalesced {
-        s.review8211_materials_frame(vec![down, Event::PointerMoved(release), up]);
+        s.review8211_materials_frame(vec![down, Event::PointerMoved(moved), up, Event::PointerMoved(hover)]);
     } else {
         s.review8211_materials_frame(vec![down]);
         s.review8211_materials_frame(vec![Event::PointerMoved(release)]);
@@ -1685,6 +1701,7 @@ fn review_597489_completed_handle(coalesced: bool) {
     assert!(!s.ctx.input(|i| i.pointer.primary_down()));
     let released = s.document();
     let released_graphics = review8211_graphics(&s);
+    assert_eq!(released_graphics, expected_graphics, "REGRESSION: the full mapped graphic must commit at Up, not the last move or later hover");
     assert_ne!(released_graphics, graphics, "REGRESSION: a mapped-handle press, move and release must complete at its release even in one frame");
     assert_ne!(released, before);
     assert_eq!(s.app.session.active().unwrap().history.undo.len(), history + 1, "the completed handle drag commits exactly once at release");
@@ -1770,6 +1787,306 @@ synchronous_test!(review_597489_mapped_handle_finishes_a_coalesced_press_and_rel
     let _globals = Globals::new();
     review_597489_completed_handle(false); // Ordinary separate-frame mapped-handle control first.
     review_597489_completed_handle(true);
-    // This routing tail is unreached on Before if the preceding completion oracle fails.
+});
+
+synchronous_test!(review_597489_divider_release_before_mapped_press_is_independent, {
+    let _globals = Globals::new();
     review_597489_divider_release_before_mapped_press();
+});
+
+fn review_597704_zoom_scene() -> Scene {
+    let mut s = Scene::new();
+    s.enable();
+    s.command("view.splitPreview");
+    s.app.run("prefs.set", json!({"key":"animatedZoom","value":false})).unwrap();
+    s.app.select_tool("zoom");
+    s.idle();
+    assert_eq!(s.app.session.tool_id(), "zoom");
+    assert!(!s.app.session.prefs.animated_zoom);
+    s
+}
+
+fn review_597704_zoom_expected(s: &Scene, p: Pos2, up: Pos2) -> (Point, f64) {
+    let r = Rect::from_two_pos(p, up);
+    assert!(r.width() > 8.0 && r.height() > 8.0, "CONTROL: a real zoom rectangle, not a click zoom");
+    let fill = (s.rect().width() / r.width()).min(s.rect().height() / r.height());
+    (s.xf().to_doc(r.center()), (s.app.view().unwrap().zoom * f64::from(fill)).clamp(0.0313, 640.0))
+}
+
+fn review_597704_assert_camera(s: &Scene, expected: (Point, f64), label: &str) {
+    let v = s.app.view().unwrap();
+    assert!(v.center.distance(expected.0) < 1e-6, "{label}: center {:?}, expected {:?}", v.center, expected.0);
+    assert!((v.zoom - expected.1).abs() < 1e-6, "{label}: zoom {}, expected {}", v.zoom, expected.1);
+}
+
+fn review_597704_zoom_release_then_divider(coalesced: bool) {
+    let mut s = review_597704_zoom_scene();
+    let document = s.snapshot();
+    let p = s.rect().left_top() + vec2(70.0, 70.0);
+    let up = p + vec2(110.0, 65.0);
+    let expected = review_597704_zoom_expected(&s, p, up);
+    let original = (s.app.view().unwrap().center, s.app.view().unwrap().zoom);
+    s.press(p, PointerButton::Primary);
+    s.frame(vec![Event::PointerMoved(up)]);
+    review_597704_assert_camera(&s, original, "CONTROL: preview does not apply the zoom before Up");
+    assert_eq!(s.fraction(), 0.5);
+    let divider = s.point_on_divider();
+    if coalesced {
+        s.frame(vec![review_597489_primary(up, false), review_597489_primary(divider, true)]);
+    } else {
+        s.release(up, PointerButton::Primary);
+        review_597704_assert_camera(&s, expected, "CONTROL: separate old Zoom release");
+        s.press(divider, PointerButton::Primary);
+    }
+    review_597704_assert_camera(&s, expected, "REGRESSION: old Zoom completes before fresh divider admission");
+    let moved = review_597489_divider_point(&s, 0.7);
+    s.frame(vec![Event::PointerMoved(moved)]);
+    assert!((s.fraction() - 0.7).abs() < 1e-6, "the fresh press owns the divider, not another zoom");
+    s.release(moved, PointerButton::Primary);
+    review_597704_assert_camera(&s, expected, "divider completion cannot apply another zoom");
+    assert_eq!(s.snapshot(), document, "view gestures change no art, selection or history");
+}
+
+fn review_597704_old_zoom_up_before_alt_down(coalesced: bool) -> (Point, f64) {
+    let mut s = review_597704_zoom_scene();
+    let before = s.snapshot();
+    let p = s.rect().left_top() + vec2(70.0, 70.0);
+    let initial_zoom = s.app.view().unwrap().zoom;
+    s.press(p, PointerButton::Primary);
+    let divider = s.point_on_divider();
+    let alt_down = Event::PointerButton { pos: divider, button: PointerButton::Primary, pressed: true, modifiers: Modifiers::ALT };
+    if coalesced {
+        s.frame(vec![review_597489_primary(p, false), Event::ModifiersChanged(Modifiers::ALT), alt_down]);
+    } else {
+        s.release(p, PointerButton::Primary);
+        assert!(s.app.view().unwrap().zoom > initial_zoom, "CONTROL: the old no-Alt stationary Zoom release zooms in");
+        s.frame(vec![Event::ModifiersChanged(Modifiers::ALT), alt_down]);
+    }
+    assert!(s.app.view().unwrap().zoom > initial_zoom, "REGRESSION: a later Alt Down cannot turn the old no-Alt Zoom Up into zoom-out");
+    let expected = (s.app.view().unwrap().center, s.app.view().unwrap().zoom);
+    let moved = review_597489_divider_point(&s, 0.7);
+    s.frame(vec![Event::PointerMoved(moved)]);
+    assert!((s.fraction() - 0.7).abs() < 1e-6, "the Alt press still belongs to the fresh divider");
+    s.release(moved, PointerButton::Primary);
+    review_597704_assert_camera(&s, expected, "the fresh divider cannot modify the old zoom");
+    assert_eq!(s.snapshot(), before);
+    expected
+}
+
+synchronous_test!(review_597704_old_zoom_release_precedes_fresh_divider, {
+    let _globals = Globals::new();
+    // No release: crossing the seam cannot transfer an existing Zoom owner.
+    let mut held = review_597704_zoom_scene();
+    let p = held.rect().left_top() + vec2(70.0, 70.0);
+    let up = held.point_on_divider();
+    let expected = review_597704_zoom_expected(&held, p, up);
+    let original = (held.app.view().unwrap().center, held.app.view().unwrap().zoom);
+    held.press(p, PointerButton::Primary);
+    held.frame(vec![Event::PointerMoved(up)]);
+    review_597704_assert_camera(&held, original, "CONTROL: unreleased Zoom stays held");
+    assert_eq!(held.fraction(), 0.5);
+    held.release(up, PointerButton::Primary);
+    review_597704_assert_camera(&held, expected, "CONTROL: held Zoom still completes at its own Up");
+    review_597704_zoom_release_then_divider(false);
+    review_597704_zoom_release_then_divider(true);
+    let expected = review_597704_old_zoom_up_before_alt_down(false);
+    let actual = review_597704_old_zoom_up_before_alt_down(true);
+    assert!(actual.0.distance(expected.0) < 1e-6);
+    assert!((actual.1 - expected.1).abs() < 1e-6, "coalesced old Up then Alt Down matches the split-frame no-Alt release");
+});
+
+fn review_597704_handoff_completed_zoom(coalesced: bool, space_after_up: bool) {
+    let mut s = review_597704_zoom_scene();
+    let document = s.snapshot();
+    let start = s.point_on_divider();
+    s.press(start, PointerButton::Primary);
+    s.frame(vec![Event::PointerMoved(review_597489_divider_point(&s, 0.6))]);
+    assert!((s.fraction() - 0.6).abs() < 1e-6, "CONTROL: a real divider owner is held");
+    let old_up = review_597489_divider_point(&s, 0.65);
+    let p = s.rect().left_top() + vec2(70.0, 70.0);
+    let q = p + vec2(50.0, 25.0);
+    let up = p + vec2(110.0, 65.0);
+    let hover = p + vec2(180.0, 120.0);
+    let expected = review_597704_zoom_expected(&s, p, up);
+    if coalesced {
+        let mut events =
+            vec![review_597489_primary(old_up, false), review_597489_primary(p, true), Event::PointerMoved(q), review_597489_primary(up, false)];
+        if space_after_up {
+            events.push(key(Key::Space, true));
+        }
+        events.push(Event::PointerMoved(hover));
+        s.frame(events);
+    } else {
+        s.release(old_up, PointerButton::Primary);
+        assert!((s.fraction() - 0.65).abs() < 1e-6);
+        s.press(p, PointerButton::Primary);
+        s.frame(vec![Event::PointerMoved(q)]);
+        s.release(up, PointerButton::Primary);
+        let mut events = vec![];
+        if space_after_up {
+            events.push(key(Key::Space, true));
+        }
+        events.push(Event::PointerMoved(hover));
+        s.frame(events);
+    }
+    assert!(!s.ctx.input(|i| i.pointer.primary_down()));
+    assert!((s.fraction() - 0.65).abs() < 1e-6, "old divider ends only at its own Up");
+    review_597704_assert_camera(&s, expected, "REGRESSION: new Zoom finishes at its associated Up in this frame");
+    s.frame(vec![Event::PointerMoved(hover + vec2(15.0, 10.0))]);
+    review_597704_assert_camera(&s, expected, "button-up hover cannot finish a stale ZoomBox");
+    assert_eq!(s.snapshot(), document);
+}
+
+fn review_597704_handoff_completed_tool(coalesced: bool) {
+    let mut s = review_597489_divider_scene();
+    let before = s.document();
+    let history = s.app.session.active().unwrap().history.undo.len();
+    let start = s.point_on_divider();
+    s.press(start, PointerButton::Primary);
+    let old_up = review_597489_divider_point(&s, 0.65);
+    let p = review_597489_divider_point(&s, 0.8);
+    let q = p + vec2(12.0, 5.0);
+    let up = p + vec2(30.0, 12.0);
+    let hover = p + vec2(50.0, 20.0);
+    let before_bounds = s.bounds();
+    let delta = s.xf().to_doc(up) - s.xf().to_doc(p);
+    if coalesced {
+        s.frame(vec![
+            review_597489_primary(old_up, false),
+            review_597489_primary(p, true),
+            Event::PointerMoved(q),
+            review_597489_primary(up, false),
+            Event::PointerMoved(hover),
+        ]);
+    } else {
+        s.release(old_up, PointerButton::Primary);
+        s.press(p, PointerButton::Primary);
+        s.frame(vec![Event::PointerMoved(q)]);
+        s.release(up, PointerButton::Primary);
+        s.frame(vec![Event::PointerMoved(hover)]);
+    }
+    let bounds = s.bounds();
+    assert!(
+        (bounds.x0 - before_bounds.x0 - delta.x).abs() < 1e-6,
+        "the new ordinary Tool previews and commits its own final Up, not either owner's hover"
+    );
+    assert!((bounds.y0 - before_bounds.y0 - delta.y).abs() < 1e-6);
+    assert!((s.fraction() - 0.65).abs() < 1e-6);
+    assert_eq!(s.app.session.active().unwrap().history.undo.len(), history + 1);
+    let after = s.document();
+    s.frame(vec![Event::PointerMoved(hover + vec2(5.0, 5.0))]);
+    assert_eq!(s.document(), after);
+    s.app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(s.document(), before, "one Undo restores the whole new Tool edit");
+    assert_eq!(s.app.session.active().unwrap().history.undo.len(), history);
+}
+
+fn review_597704_handoff_stationary_tool_click() {
+    let mut s = review_597489_divider_scene();
+    let before = s.document();
+    let history = s.app.session.active().unwrap().history.undo.len();
+    let start = s.point_on_divider();
+    s.press(start, PointerButton::Primary);
+    let old_up = review_597489_divider_point(&s, 0.65);
+    let p = review_597489_divider_point(&s, 0.8);
+    s.frame(vec![review_597489_primary(old_up, false), review_597489_primary(p, true), Event::PointerMoved(p), review_597489_primary(p, false)]);
+    assert_eq!(
+        s.app.session.active().unwrap().selection.objects,
+        vec![s.rectangle],
+        "CONTROL: the stationary ordinary click selects the real object"
+    );
+    assert_eq!(s.document(), before, "a same-point click must not invent a drag");
+    assert_eq!(s.app.session.active().unwrap().history.undo.len(), history);
+    s.frame(vec![Event::PointerMoved(p + vec2(30.0, 12.0))]);
+    assert_eq!(s.document(), before, "the completed click leaves no stale ordinary owner");
+    assert!((s.fraction() - 0.65).abs() < 1e-6);
+}
+
+fn review_597704_handoff_view_only(coalesced: bool, tool: &str) -> (Point, f64) {
+    let mut s = review_597704_zoom_scene();
+    s.app.select_tool(tool);
+    if tool == "zoom" {
+        s.app.run("prefs.set", json!({"key":"animatedZoom","value":true})).unwrap();
+        s.app.run("prefs.set", json!({"key":"gpuPerformance","value":true})).unwrap();
+        assert!(s.app.session.prefs.animated_zoom && s.app.session.prefs.gpu_performance, "CONTROL: this is actual animated ZoomScrub");
+    }
+    s.idle();
+    let document = s.snapshot();
+    let initial = (s.app.view().unwrap().center, s.app.view().unwrap().zoom);
+    let start = s.point_on_divider();
+    s.press(start, PointerButton::Primary);
+    let old_up = review_597489_divider_point(&s, 0.65);
+    let p = s.rect().left_top() + vec2(70.0, 70.0);
+    let up = p + vec2(70.0, 0.0);
+    let hover = up + vec2(45.0, 25.0);
+    if coalesced {
+        s.frame(vec![
+            review_597489_primary(old_up, false),
+            review_597489_primary(p, true),
+            Event::PointerMoved(up),
+            review_597489_primary(up, false),
+            Event::PointerMoved(hover),
+        ]);
+    } else {
+        s.release(old_up, PointerButton::Primary);
+        s.press(p, PointerButton::Primary);
+        s.frame(vec![Event::PointerMoved(up)]);
+        s.release(up, PointerButton::Primary);
+        s.frame(vec![Event::PointerMoved(hover)]);
+    }
+    let expected = (s.app.view().unwrap().center, s.app.view().unwrap().zoom);
+    if tool == "hand" {
+        assert!(expected.0.distance(initial.0) > 1e-6, "the real Hand gesture applies its pan before release");
+    } else {
+        assert!((expected.1 - initial.1).abs() > 1e-6, "a moved animated Zoom gesture applies its scrub, not a click");
+    }
+    assert!((s.fraction() - 0.65).abs() < 1e-6);
+    s.frame(vec![Event::PointerMoved(hover + vec2(15.0, 10.0))]);
+    review_597704_assert_camera(&s, expected, "the released view-only owner cannot move on later hover");
+    assert_eq!(s.snapshot(), document, "view-only completion changes no art, selection or history");
+    expected
+}
+
+synchronous_test!(review_597704_divider_handoff_completes_new_zoom_at_its_own_up, {
+    let _globals = Globals::new();
+    review_597704_handoff_completed_zoom(false, false);
+    review_597704_handoff_completed_zoom(true, false);
+    review_597704_handoff_completed_zoom(false, true);
+    review_597704_handoff_completed_zoom(true, true);
+    review_597704_handoff_completed_tool(false);
+    review_597704_handoff_completed_tool(true);
+    review_597704_handoff_stationary_tool_click();
+    for tool in ["hand", "zoom"] {
+        let expected = review_597704_handoff_view_only(false, tool);
+        let actual = review_597704_handoff_view_only(true, tool);
+        assert!(actual.0.distance(expected.0) < 1e-6, "{tool}: associated-Up preview matches separate frames");
+        assert!((actual.1 - expected.1).abs() < 1e-6, "{tool}: coalescing cannot change the final zoom");
+    }
+});
+
+fn review_597704_completed_divider_then_down(coalesced: bool, on_divider: bool) {
+    let mut s = review_597489_divider_scene();
+    let before = s.snapshot();
+    let first = review_597489_divider_point(&s, if on_divider { 0.5 } else { 0.2 });
+    let up = review_597489_divider_point(&s, 0.7);
+    let fresh = review_597489_divider_point(&s, 0.8);
+    let fraction = if on_divider { 0.7 } else { 0.5 };
+    if coalesced {
+        s.frame(vec![review_597489_primary(first, true), review_597489_primary(up, false), review_597489_primary(fresh, true)]);
+    } else {
+        s.press(first, PointerButton::Primary);
+        s.release(up, PointerButton::Primary);
+        assert!((s.fraction() - fraction).abs() < 1e-6, "CONTROL: completed pair's separate-frame result");
+        assert_eq!(s.snapshot(), before);
+        s.press(fresh, PointerButton::Primary);
+    }
+    assert!((s.fraction() - fraction).abs() < 1e-6, "REGRESSION: earlier completed qualifying divider applies before latest Down");
+    review_597489_ordinary_drag(&mut s, fraction);
+}
+
+synchronous_test!(review_597704_initial_completed_divider_precedes_latest_canvas_down, {
+    let _globals = Globals::new();
+    review_597704_completed_divider_then_down(false, true);
+    review_597704_completed_divider_then_down(true, false); // Off-seam earlier press is not a divider.
+    review_597704_completed_divider_then_down(true, true);
 });

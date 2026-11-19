@@ -1169,6 +1169,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{} open Saturate for the selection (dialog `saturate`, fields `intensity` −100..100, `preview`): previews live, OK runs edit.colors.saturate as one undo step",
     ),
     (
+        "ui.proofSetupDialog",
+        "Customize…",
+        "",
+        "{} open View › Proof Setup › Customize (dialog `proofSetup`, fields `device` (\"workingCmyk\", \"cmyk:<profile>\" or \"rgb:<profile>\": any CMYK or RGB profile), `preserveNumbers`, `intent` (used while preserveNumbers is off), `simulatePaper` and `simulateBlack` (CMYK devices only), `preview` (on): Preview shows the proof on the canvas, OK runs view.proofSetup with these and proof: true, Cancel puts the earlier proof view back; on the desktop only, Save… writes these to a picked proof setup file with view.proofSetup.save and Load… fills them from one with view.proofSetup.read, both starting in the Proof Setups folder (Load… once a save has made it), whose setups View › Proof Setup lists below Customize…)",
+    ),
+    (
         "ui.indexedColorDialog",
         "Convert to Indexed Color…",
         "",

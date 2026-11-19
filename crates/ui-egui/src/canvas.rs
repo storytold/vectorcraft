@@ -783,7 +783,10 @@ fn input_after_sampler_refresh(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::R
 
 /// The pointer on the canvas: the tool's input, unless the context menu or the 3D gizmo has the press.
 pub(crate) fn canvas_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: egui::Rect) {
-    let block_fresh = split::dragging(ui.ctx()) || (ui.input(|i| i.pointer.primary_pressed()) && split::press_on_divider(app, ui, resp, rect));
+    let block_fresh = split::dragging(ui.ctx())
+        || ui.data(|d| d.get_temp::<Drag>(drag_id()).is_some())
+        || (ui.input(|i| i.pointer.primary_pressed())
+            && (split::press_on_divider(app, ui, resp, rect) || split::completed_press_on_divider(app, ui, resp, rect)));
     if app.ui.dialog.as_ref().is_some_and(crate::dialogs::revolve_gizmo::active) {
         // The artboard's 3D gizmo owns these gestures while its options are open.
         // Do not let a ring drag also move or deselect the editable source path.

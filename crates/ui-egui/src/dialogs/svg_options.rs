@@ -354,7 +354,8 @@ fn encode_page<'a>(
 /// the default browser (desktop) → `{path, warnings}`. Nothing is written to the chosen
 /// destination, and the document, its path and the remembered choices are left as they were.
 /// When the export has warnings, the status bar shows them as [`io::report_saved`] shows a save's
-/// notes. Nothing opens when a check, the encoding or a write fails.
+/// notes. Nothing opens when a check, the encoding or a write fails, and a failed write removes
+/// the new folder.
 pub(crate) fn browser_preview(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     if io::is_web(app) {
         return Err("no file system here".into());
@@ -370,7 +371,7 @@ pub(crate) fn browser_preview(app: &mut VectorcraftApp, p: &Value) -> Result<Val
         let target = format!("{dir}/{}.svg", super::save_for_web::preview_name(&stem));
         let named = enc.named(&doc, &target);
         for (p, bytes) in &named {
-            io::write_to(&mut app.services, p, bytes)?;
+            io::write_to(&mut app.services, p, bytes).inspect_err(|_| super::save_for_web::remove_preview_folder(&dir))?;
         }
         (named.first().map_or(target, |(p, _)| p.clone()), enc.notes())
     };
@@ -480,13 +481,24 @@ mod tests {
 
     type Opened = Rc<RefCell<Vec<String>>>;
 
-    /// [`app`] whose browser records each URL it is asked to open.
+    /// [`app`] whose browser records each URL it is asked to open. Its previews go to a temporary
+    /// folder of the test's own ([`preview_tmp`]), not the system's.
     fn browsing(picked: &str) -> (VectorcraftApp, Written, Opened) {
+        static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let tmp = vectorcraft_testkit::temp_dir(&format!("svg-browser-{}", N.fetch_add(1, std::sync::atomic::Ordering::Relaxed)));
+        super::super::save_for_web::TEST_TMP.set(Some(tmp));
         let (mut app, written) = app(picked);
         let opened = Opened::default();
         let o = opened.clone();
         app.services.open_url = Some(Box::new(move |u: &str| o.borrow_mut().push(u.to_string())));
         (app, written, opened)
+    }
+
+    /// The SVG preview folder inside this test's temporary folder ([`browsing`]), with `/` between
+    /// its parts.
+    fn preview_tmp() -> String {
+        let tmp = super::super::save_for_web::TEST_TMP.with_borrow(Clone::clone).expect("browsing sets the temporary folder");
+        tmp.join(PREVIEW_ROOT).to_string_lossy().replace('\\', "/")
     }
 
     /// Show in Browser for the open dialog's current choices, as its button runs it.
@@ -510,7 +522,7 @@ mod tests {
         let remembered = app.ui.svg_options.clone();
         let r = show_in_browser(&mut app).unwrap_or_else(|e| panic!("{e}"));
         let path = r["path"].as_str().unwrap().to_string();
-        assert!(path.contains("/VectorCraft SVG Preview/") && path.ends_with("/Untitled-1.svg"), "{path}");
+        assert!(path.starts_with(&format!("{}/", preview_tmp())) && path.ends_with("/Untitled-1.svg"), "{path}");
         assert_eq!(*opened.borrow(), [io::file_url(&path)]);
         assert_eq!(written.borrow().len(), 1);
         assert_eq!(written.borrow()[0].0, path);
@@ -536,6 +548,18 @@ mod tests {
         assert!(show_in_browser(&mut app).is_err());
         assert!(written.borrow().is_empty() && opened.borrow().is_empty());
         assert!(app.ui.dialog.is_some());
+    }
+
+    /// A write that fails opens nothing and removes the folder made for that preview.
+    #[test]
+    fn show_in_browser_removes_its_folder_when_a_write_fails() {
+        let (mut app, _, opened) = browsing("/tmp/out.svg");
+        app.services.write = Some(Box::new(|_: &str, _: &[u8]| Err("disk full".to_string())));
+        app.run("file.export.svg", Value::Null).unwrap();
+        assert!(show_in_browser(&mut app).unwrap_err().contains("disk full"));
+        assert!(opened.borrow().is_empty());
+        let left: Vec<_> = std::fs::read_dir(preview_tmp()).map(|d| d.flatten().map(|e| e.file_name()).collect()).unwrap_or_default();
+        assert!(left.is_empty(), "{left:?}");
     }
 
     /// Under Export Selection the preview is the selection alone, cropped to it, as OK writes it.
@@ -606,7 +630,9 @@ mod tests {
         app.ui.answering_control = true;
         assert!(show_in_browser(&mut app).unwrap_err().contains("opens another app"));
         app.ui.answering_control = false;
+        assert!(crate::menus::enabled(&app, BROWSER));
         app.services.download = Some(Box::new(|_: &str, _: &[u8]| Ok(())));
+        assert!(!crate::menus::enabled(&app, BROWSER), "the command palette and menus show it disabled on the web");
         assert!(show_in_browser(&mut app).is_err());
         assert!(written.borrow().is_empty() && opened.borrow().is_empty());
     }

@@ -914,6 +914,11 @@ pub struct UiState {
     /// [`crate::dialogs::settle`] opens the choice again once no dialog is open.
     #[serde(skip)]
     pub stopped_plugin: Option<Value>,
+    /// The proof view the Proof Setup dialog found, and the view its preview shows on the canvas,
+    /// while the preview shows. When another dialog takes its place, [`crate::dialogs::settle`]
+    /// puts the first view back, unless the view has changed from the preview since.
+    #[serde(skip)]
+    pub proof_preview: Option<(Value, vectorcraft_render::proof::ProofView)>,
     /// The search the Missing Fonts dialog started (`text.findFontFiles`'s `id`), stopped once the
     /// dialog is gone.
     #[serde(skip)]
@@ -1415,6 +1420,7 @@ impl Default for UiState {
             pending_fonts: vec![],
             fonts_dialog: None,
             stopped_plugin: None,
+            proof_preview: None,
             dialog_search: None,
             links_search: None,
             dxf_options: Value::Null,
