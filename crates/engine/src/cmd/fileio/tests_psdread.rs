@@ -98,6 +98,132 @@ fn every_colour_mode_and_depth_reads() {
 }
 
 #[test]
+fn cmyk_psd_place_keeps_the_native_ink_samples() {
+    let f = psd(1, 4, (2, 1), 8, 4, &[], &[], &[], &raw(&[&[191, 255], &[127, 0], &[63, 127], &[223, 0]]));
+    let p = json!({"name": "inks.psd", "dataBase64": vectorcraft_format::base64_encode(&f)});
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 40, "height": 20})).unwrap();
+    let info = s.execute("file.place.info", &p).unwrap();
+    assert_eq!(info["colorMode"], "CMYK");
+    let placed = s.execute("file.place", &p).unwrap();
+    let id = NodeId(placed["ids"][0].as_u64().unwrap());
+    let d = &s.doc().unwrap().doc;
+    let NodeKind::Image(im) = &d.node(id).unwrap().kind else { panic!("placed PSD is an image") };
+    let blob = d.images.get(&im.key).unwrap();
+    assert!(blob.is_cmyk());
+    assert_eq!(blob.cmyk().unwrap().data, [64, 128, 192, 32, 0, 255, 128, 255]);
+}
+
+#[test]
+fn cmyk_psd_native_budget_keeps_the_rgba_fallback_available() {
+    let bytes = psd(1, 4, (2, 1), 16, 4, &[], &[], &[], &raw(&[&[0xff; 4], &[0xff; 4], &[0xff; 4], &[0; 4]]));
+    assert!(super::psdread::decode_cmyk(&bytes, 24).unwrap().is_none());
+    assert_eq!(decode(&bytes, 24, naive).unwrap().into_raw(), [0, 0, 0, 255, 0, 0, 0, 255]);
+    assert!(decode(&bytes, 1, naive).is_err());
+}
+
+#[test]
+fn cmyk_psd_depth_and_compression_preserve_exact_samples() {
+    for version in [1, 2] {
+        for depth in [8, 16] {
+            let values = if depth == 8 { [191u16, 127, 63, 223] } else { [0xcdef, 0x89ab, 0x4567, 0x0123] };
+            let planes: Vec<Vec<u8>> = values.iter().map(|v| if depth == 8 { vec![*v as u8] } else { v.to_be_bytes().to_vec() }).collect();
+            let uncompressed = planes.concat();
+            for method in 0..=3u16 {
+                let mut data = method.to_be_bytes().to_vec();
+                match method {
+                    0 => data.extend(&uncompressed),
+                    1 => {
+                        for p in &planes {
+                            let count = (p.len() + 1) as u32;
+                            if version == 2 { data.extend(count.to_be_bytes()) } else { data.extend((count as u16).to_be_bytes()) }
+                        }
+                        for p in &planes {
+                            data.push((p.len() - 1) as u8);
+                            data.extend(p);
+                        }
+                    }
+                    _ => {
+                        // One sample per row has the same bytes with or without prediction.
+                        let mut z = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::default());
+                        std::io::Write::write_all(&mut z, &uncompressed).unwrap();
+                        data.extend(z.finish().unwrap());
+                    }
+                }
+                let bytes = psd(version, 4, (1, 1), depth, 4, &[], &[], &[], &data);
+                let img = raster_image(&bytes).unwrap();
+                assert!(img.blob.is_cmyk(), "version {version}, depth {depth}, compression {method}");
+                assert_eq!(img.blob.is_cmyk16(), depth == 16);
+                let decoded = craft_image_codecs::decode(&img.blob.bytes).unwrap();
+                let expected: Vec<u8> =
+                    values.iter().flat_map(|v| if depth == 8 { vec![255 - *v as u8] } else { (65535 - v).to_ne_bytes().to_vec() }).collect();
+                assert_eq!(decoded.data(), expected);
+                assert!(super::psdread::decode_cmyk(&bytes, 1).unwrap().is_none());
+                assert!(super::psdread::decode_cmyk(&bytes[..bytes.len() - data.len() + 2], 1 << 30).is_err());
+            }
+        }
+    }
+    let planes: [&[u8]; 5] = [&[255], &[255], &[255], &[255], &[128]];
+    let saved = psd(1, 5, (1, 1), 8, 4, &[], &[], &[], &raw(&planes));
+    assert!(raster_image(&saved).unwrap().blob.is_cmyk(), "a saved selection is not transparency");
+    let alpha = psd(1, 5, (1, 1), 8, 4, &[], &[], &layer_count(-1, false), &raw(&planes));
+    let img = raster_image(&alpha).unwrap();
+    assert!(!img.blob.is_cmyk());
+    assert_eq!(craft_image_codecs::decode(&img.blob.bytes).unwrap().to_rgba8()[3], 128);
+}
+
+#[test]
+fn cmyk_psd_links_keep_inks_profile_resolution_and_clipping() {
+    let profile = vectorcraft_color::cms::icc_bytes(vectorcraft_color::cms::GENERIC_CMYK).unwrap();
+    let mut res = Vec::new();
+    res.extend((144u32 << 16).to_be_bytes());
+    res.extend([0, 1, 0, 1]);
+    res.extend((144u32 << 16).to_be_bytes());
+    res.extend([0, 1, 0, 1]);
+    let make = |clip: &[u8], ink: u8| {
+        let resources = [resource(1039, b"", &profile), resource(1005, b"", &res), clip.to_vec()].concat();
+        psd(1, 4, (2, 1), 8, 4, &[], &resources, &[], &raw(&[&[255 - ink; 2], &[127; 2], &[63; 2], &[223; 2]]))
+    };
+    let dir = vectorcraft_testkit::TempDir::new("psd-cmyk-links");
+    let cut = write_file(&dir, "cut.psd", &make(&triangle_resources(), 64));
+    let square = write_file(&dir, "square.psd", &make(&square_resources(), 96));
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 20, "height": 10, "colorMode": "cmyk"})).unwrap();
+    assert_eq!(s.execute("file.place.info", &json!({"path": cut})).unwrap()["colorMode"], "CMYK");
+    let r = s.execute("file.place", &json!({"path": cut, "at": [0.5, 0.25]})).unwrap();
+    let group = NodeId(r["ids"][0].as_u64().unwrap());
+    let id = r["image"].as_u64().unwrap();
+    assert_eq!(r["width"], 1.0);
+    assert_eq!(r["height"], 0.5);
+    let check = |s: &mut Session, ink, linked| {
+        let info = s.execute("links.info", &json!({"id": id})).unwrap();
+        assert_eq!(info["colorMode"], "CMYK");
+        assert_eq!(info["linked"], linked);
+        assert_eq!(info["ppi"], json!([144.0, 144.0]));
+        let d = &s.doc().unwrap().doc;
+        let NodeKind::Image(im) = &d.node(NodeId(id)).unwrap().kind else { panic!("placed image") };
+        let blob = d.images.get(&im.key).unwrap();
+        assert_eq!(blob.cmyk().unwrap().data, [ink, 128, 192, 32, ink, 128, 192, 32]);
+        assert_eq!(blob.cmyk_icc_profile().as_deref(), Some(profile.as_ref()));
+        assert_eq!(
+            super::load::image_clip(blob),
+            Some(clipping_path(&make(&if ink == 64 { triangle_resources() } else { square_resources() }, ink)).unwrap())
+        );
+    };
+    check(&mut s, 64, true);
+    let triangle = clip_group(&s.doc().unwrap().doc, group);
+    s.execute("links.relink", &json!({"ids": [id], "path": square})).unwrap();
+    check(&mut s, 96, true);
+    assert_ne!(clip_group(&s.doc().unwrap().doc, group).0, triangle.0);
+    std::fs::write(&square, make(&triangle_resources(), 64)).unwrap();
+    s.execute("links.update", &json!({"ids": [id]})).unwrap();
+    check(&mut s, 64, true);
+    assert_eq!(clip_group(&s.doc().unwrap().doc, group), triangle);
+    s.execute("links.embed", &json!({"ids": [id]})).unwrap();
+    check(&mut s, 64, false);
+}
+
+#[test]
 fn transparency_comes_back_straight_and_extra_channels_without_it_stay_out() {
     // Half-transparent red, stored on white: (255, 127, 127) with alpha 128.
     let planes: [&[u8]; 4] = [&[255], &[127], &[127], &[128]];
@@ -215,7 +341,24 @@ fn exported(s: &mut Session, p: Value) -> Vec<u8> {
 #[test]
 fn psd_exports_open_and_place_again() {
     let mut s = art();
-    let png = image::load_from_memory(&exported(&mut s, json!({"format": "png"}))).unwrap().to_rgba8();
+    let png = craft_image_codecs::decode(&exported(&mut s, json!({"format": "png"})))
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8();
     for (options, what) in [(json!({}), "layered RGB"), (json!({"layers": false}), "flat RGB"), (json!({"colorModel": "gray"}), "grey")] {
         let f = exported(&mut s, merge(json!({"format": "psd"}), options));
         let back = decode(&f, 1 << 30, naive).unwrap();
@@ -412,6 +555,148 @@ fn a_plain_image_replacing_a_clipped_psd_keeps_its_rotation() {
     let r = s.execute("file.place", &json!({"name": "plain.psd", "dataBase64": plain, "replace": true})).unwrap();
     let after = xf(&s, NodeId(r["ids"][0].as_u64().unwrap()));
     assert!(after.iter().zip(before).all(|(a, b)| (a - b).abs() < 1e-9), "{after:?} != {before:?}");
+}
+
+/// A square saved as "Square" and the clipping path naming it.
+fn square_resources() -> Vec<u8> {
+    let square = saved_path(false, &[(true, &[[0.25, 0.25], [0.75, 0.25], [0.75, 0.75], [0.25, 0.75]])]);
+    [resource(2000, b"Square", &square), clipping_name(b"Square")].concat()
+}
+
+/// `bytes` written as `name` in `dir`, by its path.
+fn write_file(dir: &std::path::Path, name: &str, bytes: &[u8]) -> String {
+    let p = dir.join(name);
+    std::fs::write(&p, bytes).unwrap();
+    p.to_string_lossy().into_owned()
+}
+
+/// links.relink and links.update put a linked PSD file's image in the clip group of the clipping
+/// path its new file names, take that clip group's clipping path away when the new file names
+/// none, and give it back when a later file names one again.
+#[test]
+fn relink_and_update_follow_the_clipping_path_of_a_linked_psd() {
+    let dir = vectorcraft_testkit::TempDir::new("psd-relink-clip");
+    let cut = write_file(&dir, "cut.psd", &red_psd(&triangle_resources()));
+    let square = write_file(&dir, "square.psd", &red_psd(&square_resources()));
+    let plain = write_file(&dir, "plain.psd", &red_psd(&[]));
+    let triangle = vec![[50.0, 0.0], [100.0, 50.0], [0.0, 50.0]];
+    let squared = vec![[25.0, 12.5], [75.0, 12.5], [75.0, 37.5], [25.0, 37.5]];
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 50})).unwrap();
+    let r = s.execute("file.place", &json!({"path": cut, "at": [50, 25]})).unwrap();
+    let (group, image) = (NodeId(r["ids"][0].as_u64().unwrap()), r["image"].as_u64().unwrap());
+    assert_eq!(clip_group(&s.doc().unwrap().doc, group), (triangle.clone(), true, NodeId(image)));
+    s.execute("links.relink", &json!({"ids": [image], "path": square})).unwrap();
+    assert_eq!(clip_group(&s.doc().unwrap().doc, group), (squared.clone(), true, NodeId(image)), "the new file's clipping path");
+    s.execute("links.relink", &json!({"ids": [image], "path": plain})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    match d.node(group).map(|n| &n.kind) {
+        Some(NodeKind::Group { children, clip: false }) => assert_eq!(children.iter().map(|c| c.id.0).collect::<Vec<_>>(), [image]),
+        other => panic!("a plain group of the image: {other:?}"),
+    }
+    s.execute("links.relink", &json!({"ids": [image], "path": cut})).unwrap();
+    assert_eq!(clip_group(&s.doc().unwrap().doc, group), (triangle.clone(), true, NodeId(image)), "clipped again");
+    // The file is saved again with another clipping path.
+    std::fs::write(&cut, red_psd(&square_resources())).unwrap();
+    s.execute("links.update", &json!({"ids": [image]})).unwrap();
+    assert_eq!(clip_group(&s.doc().unwrap().doc, group), (squared, true, NodeId(image)), "links.update reads the clipping path again");
+}
+
+/// Unembed keeps the clip group of the clipping path an embedded PSD file's image came with, with a
+/// path and with a folder, and so do relinking to the written file, placing it and opening it.
+#[test]
+fn unembed_keeps_the_clipping_path_of_an_embedded_psd() {
+    let dir = vectorcraft_testkit::TempDir::new("psd-unembed-clip");
+    // An RGB file is kept as a PNG, a CMYK one as a TIFF.
+    let cmyk = psd(1, 4, (100, 50), 8, 4, &[], &triangle_resources(), &[], &raw(&[&[0; 5000], &[255; 5000], &[255; 5000], &[0; 5000]]));
+    let files = [("rgb", red_psd(&triangle_resources())), ("cmyk", cmyk)];
+    for ((kind, file), folder) in files.iter().flat_map(|f| [(f, false), (f, true)]) {
+        let data = vectorcraft_format::base64_encode(file);
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 100, "height": 50})).unwrap();
+        let r = s.execute("file.place", &json!({"name": "cut.psd", "dataBase64": data, "at": [50, 25]})).unwrap();
+        let (group, image) = (NodeId(r["ids"][0].as_u64().unwrap()), NodeId(r["image"].as_u64().unwrap()));
+        let before = clip_group(&s.doc().unwrap().doc, group);
+        // Without an extension the image is written in the format it is stored in.
+        let path = if folder {
+            let out = dir.join(format!("folder-{kind}"));
+            std::fs::create_dir_all(&out).unwrap();
+            let r = s.execute("links.unembed", &json!({"ids": [image.0], "folder": out})).unwrap();
+            r["unembedded"][0]["path"].as_str().unwrap().to_string()
+        } else {
+            let r = s.execute("links.unembed", &json!({"id": image.0, "path": dir.join(format!("written-{kind}"))})).unwrap();
+            r["path"].as_str().unwrap().to_string()
+        };
+        let ext = if *kind == "rgb" { ["png"].as_slice() } else { ["tif", "tiff"].as_slice() };
+        assert!(ext.contains(&super::extension(&path).as_str()), "{kind}: {path}");
+        for step in ["unembed", "relink"] {
+            if step == "relink" {
+                s.execute("links.relink", &json!({"ids": [image.0], "path": path})).unwrap();
+            }
+            let d = &s.doc().unwrap().doc;
+            let NodeKind::Image(im) = &d.node(image).unwrap().kind else { panic!("an image") };
+            assert!(im.link.is_some(), "linked to the file written");
+            assert_eq!(clip_group(d, group), before, "{kind}, {step}, folder: {folder}");
+        }
+        // Placing the written file gives the same clip group as placing the PSD file did.
+        let r = s.execute("file.place", &json!({"path": path, "at": [50, 25]})).unwrap();
+        let placed = NodeId(r["ids"][0].as_u64().unwrap());
+        let (anchors, even_odd, _) = clip_group(&s.doc().unwrap().doc, placed);
+        assert_eq!((anchors, even_odd), (before.0.clone(), true), "{kind}, place");
+        // Opening it gives a document of the image in that clip group.
+        s.execute("document.open", &json!({"path": path})).unwrap();
+        let d = &s.doc().unwrap().doc;
+        let top = d.layers[0].children().and_then(|c| c.first()).map(|c| c.id).expect("an object");
+        let (anchors, even_odd, _) = clip_group(d, top);
+        assert_eq!((anchors, even_odd), (before.0.clone(), true), "{kind}, open");
+    }
+}
+
+/// The PNG a PSD file's merged image is kept as holds the clipping path the file names, and only a
+/// text chunk within the size limit that reads as a path gives one back.
+#[test]
+fn the_kept_png_holds_the_clipping_path_within_bounds() {
+    let img = raster_image(&red_psd(&triangle_resources())).unwrap();
+    let (path, rule) = img.clip.clone().expect("the file's clipping path");
+    assert_eq!(rule, vectorcraft_geom::FillRule::EvenOdd);
+    assert_eq!(super::load::png_clip(&img.blob.bytes), Some(path));
+    let plain = raster_image(&red_psd(&[])).unwrap();
+    assert!(plain.clip.is_none() && super::load::png_clip(&plain.blob.bytes).is_none());
+    let with = |text: String| vectorcraft_render::encode::png::with_text(plain.blob.bytes.to_vec(), &[("VectorCraft clip", text.into())]);
+    assert_eq!(super::load::png_clip(&with("not a path".into())), None);
+    assert_eq!(super::load::png_clip(&with(" ".repeat((16 << 20) + 1))), None, "a chunk past the limit is not read");
+}
+
+/// A plain image relinked to a PSD file that names a clipping path goes into a clip group of that
+/// path, under the even-odd rule; a clipping mask made in the document stays around it.
+#[test]
+fn a_plain_image_relinked_to_a_clipped_psd_is_clipped_by_its_path() {
+    let dir = vectorcraft_testkit::TempDir::new("psd-relink-plain");
+    let plain = write_file(&dir, "plain.psd", &red_psd(&[]));
+    let cut = write_file(&dir, "cut.psd", &red_psd(&triangle_resources()));
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 50})).unwrap();
+    let r = s.execute("file.place", &json!({"path": plain, "at": [50, 25]})).unwrap();
+    let image = NodeId(r["ids"][0].as_u64().unwrap());
+    s.execute("links.relink", &json!({"ids": [image.0], "path": cut})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    let group = d.parent_of(image).expect("a clip group");
+    assert_eq!(clip_group(d, group), (vec![[50.0, 0.0], [100.0, 50.0], [0.0, 50.0]], true, image));
+    // The clipping path's fill rule changed in the document makes it the document's own mask: a
+    // relink keeps it and puts the file's clip group inside it.
+    let clip = match d.node(group).map(|n| &n.kind) {
+        Some(NodeKind::Group { children, .. }) => children[0].id,
+        other => panic!("{other:?}"),
+    };
+    let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    if let Some(vectorcraft_doc::Node { kind: NodeKind::Path { rule, .. }, .. }) = doc.node_mut(clip) {
+        *rule = vectorcraft_geom::FillRule::NonZero;
+    }
+    s.execute("links.relink", &json!({"ids": [image.0], "path": cut})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    let inner = d.parent_of(image).unwrap();
+    assert_eq!(d.parent_of(inner), Some(group), "the document's mask holds the file's clip group");
+    assert!(clip_group(d, inner).1, "the file's clip group is even-odd");
 }
 
 #[test]

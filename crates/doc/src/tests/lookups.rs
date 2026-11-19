@@ -157,6 +157,58 @@ fn cached_lookups_follow_any_edit_of_the_tree() {
     }
 }
 
+/// Every node whose id is in `ids`, by walking the tree.
+fn every_node(d: &Document, ids: &[NodeId]) -> Vec<*const Node> {
+    let mut out = vec![];
+    d.walk(|n| {
+        if ids.contains(&n.id) {
+            out.push(n as *const Node);
+        }
+    });
+    out
+}
+
+/// [`Document::nodes_in_order`] gives every node with each id in tree order, repeated ids
+/// included, with the cache built and without it, for a few ids (cached paths) and for many (a
+/// walk).
+#[test]
+fn nodes_in_order_match_a_walk() {
+    for seed in 1..40 {
+        let (d, ids) = tree(seed);
+        let few: Vec<NodeId> = ids.iter().copied().step_by(17).collect();
+        for cold in [true, false] {
+            if cold {
+                d.drop_lookup_cache();
+            } else {
+                d.node(ids[0]);
+            }
+            for list in [&ids[..], &few[..], &ids[ids.len() / 2..ids.len() / 2 + 1], &[]] {
+                let found: Vec<*const Node> = d.nodes_in_order(list.iter().copied()).into_iter().map(|n| n as *const Node).collect();
+                assert_eq!(found, every_node(&d, list), "seed {seed}, cold {cold}, {list:?}");
+            }
+        }
+        // An id that the tree repeats: every node with it.
+        let Some(dup) = ids.iter().enumerate().find(|(i, id)| ids[..*i].contains(id)).map(|(_, id)| *id) else { continue };
+        assert!(d.nodes_in_order([dup]).len() >= 2, "seed {seed}: {dup:?} is in the tree more than once");
+        // A second node given an id once held once, after the cache was built: the lookup finds the
+        // cached node, which has that id; with the cache built afresh, both.
+        let mut d = d;
+        let once = ids.iter().copied().find(|id| every_node(&d, &[*id]).len() == 1 && d.node(*id).is_some_and(|n| !n.is_layer()));
+        let Some(once) = once else { continue };
+        d.node(once);
+        let copy = Arc::new(Node::path(once, shapes::rectangle(Rect::new(0.0, 0.0, 2.0, 2.0)), Appearance::default_art()));
+        if let Some(ch) = Arc::make_mut(&mut d.layers[0]).children_mut() {
+            ch.insert(0, copy);
+        }
+        let found = d.nodes_in_order([once]);
+        assert!(!found.is_empty() && found.iter().all(|n| n.id == once), "seed {seed}: {once:?}");
+        d.drop_lookup_cache();
+        d.node(once);
+        let found: Vec<*const Node> = d.nodes_in_order([once]).into_iter().map(|n| n as *const Node).collect();
+        assert_eq!(found, every_node(&d, &[once]), "seed {seed}: {once:?} cached afresh");
+    }
+}
+
 /// Nodes of `d` picked and ordered by `seed`. None lies inside another, and each of them, and each
 /// node it is in, appears in the tree once.
 fn picks(d: &Document, seed: u64) -> Vec<NodeId> {
@@ -281,4 +333,113 @@ fn edits_of_many_refuse_missing_repeated_and_nested_ids() {
         }
         assert_eq!(serde_json::to_string(&b).ok(), saved, "{what}: the document stays as it was");
     }
+}
+
+/// The nearest node passing `pred` at or above `id`, as `ancestry` read from the end with `node`
+/// for each id finds it.
+fn nearest_by_ancestry(d: &Document, id: NodeId, pred: impl Fn(&Node) -> bool) -> Option<*const Node> {
+    d.ancestry(id).unwrap_or_default().into_iter().rev().find_map(|a| d.node(a).filter(|n| pred(n))).map(|n| n as *const Node)
+}
+
+/// [`Document::nearest_finder`] gives what [`nearest_by_ancestry`] gives for every id, on a clone
+/// each, so both start from the same cache.
+fn nearest_agrees(d: &Document, ids: &[NodeId], what: &str) {
+    type Pred = fn(&Node) -> bool;
+    let preds: [(&str, Pred); 5] = [
+        ("group", |n| matches!(n.kind, NodeKind::Group { .. })),
+        ("layer", |n| n.is_layer()),
+        ("any", |_| true),
+        ("none", |_| false),
+        ("id divisible by 3", |n| n.id.0 % 3 == 0),
+    ];
+    for (name, pred) in preds {
+        let (a, b) = (d.clone(), d.clone());
+        let want: Vec<_> = ids.iter().map(|id| nearest_by_ancestry(&a, *id, pred)).collect();
+        let mut find = b.nearest_finder();
+        let got: Vec<_> = ids.iter().map(|id| find.nearest(*id, pred).map(|n| n as *const Node)).collect();
+        assert_eq!(got, want, "{what}: {name}");
+    }
+}
+
+#[test]
+fn nearest_finder_matches_the_ancestry_walk() {
+    for seed in 1..30 {
+        let (mut d, ids) = tree(seed);
+        nearest_agrees(&d, &ids, "no cache");
+        d.node(ids[0]);
+        nearest_agrees(&d, &ids, "cached");
+        // Every path in the first layer shifts: the cache is stale there.
+        let extra = d.alloc_id();
+        let leaf = Arc::new(Node::path(extra, shapes::rectangle(Rect::new(0.0, 0.0, 1.0, 1.0)), Appearance::default_art()));
+        if let Some(ch) = Arc::make_mut(&mut d.layers[0]).children_mut() {
+            ch.insert(0, leaf);
+        }
+        nearest_agrees(&d, &ids, "a stale cache");
+        // A group with the id of a node in the last layer, earlier in tree order than it, put in
+        // after the cache was built.
+        d.drop_lookup_cache();
+        d.node(ids[0]);
+        let last = d.layers.len() - 1;
+        let dup = d.layers[last].children().and_then(|c| c.last()).map(|n| n.id);
+        if let Some(dup) = dup
+            && let Some(ch) = Arc::make_mut(&mut d.layers[0]).children_mut()
+        {
+            ch.insert(0, Arc::new(Node::group(dup, vec![])));
+        }
+        nearest_agrees(&d, &ids, "a duplicate put in after the cache was built");
+        d.drop_lookup_cache();
+        nearest_agrees(&d, &ids, "a duplicate, cached afresh");
+    }
+}
+
+/// An id on the path that an earlier node of another kind also has: the earlier node is the one
+/// tested, as `node` gives it.
+#[test]
+fn nearest_finder_tests_the_first_node_with_a_repeated_id() {
+    let mut d = Document::new(612.0, 792.0);
+    let layer = d.layers[0].id;
+    let leaf = |id: u64| Arc::new(Node::path(NodeId(id), shapes::rectangle(Rect::new(0.0, 0.0, 5.0, 5.0)), Appearance::default_art()));
+    d.insert(Some(layer), 0, Node::group(NodeId(500), vec![leaf(501)])).unwrap();
+    d.insert(Some(layer), 1, Node::path(NodeId(600), shapes::rectangle(Rect::new(0.0, 0.0, 5.0, 5.0)), Appearance::default_art())).unwrap();
+    // A group that has the path's id, after the path in tree order.
+    d.insert(Some(layer), 2, Node::group(NodeId(600), vec![leaf(601)])).unwrap();
+    let is_group = |n: &Node| matches!(n.kind, NodeKind::Group { .. });
+    for cached in [false, true] {
+        d.drop_lookup_cache();
+        if cached {
+            d.node(layer);
+        }
+        let mut find = d.nearest_finder();
+        assert_eq!(find.nearest(NodeId(501), is_group).map(|n| n.id), Some(NodeId(500)), "cached {cached}");
+        assert_eq!(find.nearest(NodeId(601), is_group).map(|n| n.id), None, "cached {cached}: id 600 is the path");
+        assert_eq!(find.nearest(NodeId(999_999), is_group).map(|n| n.id), None, "cached {cached}: not in the tree");
+    }
+}
+
+/// With the cache built, finding the nearest group of every object of a large tree looks no id up
+/// and walks the tree no time.
+#[test]
+fn nearest_finder_reads_one_path_per_object() {
+    let mut d = Document::new(612.0, 792.0);
+    let layer = d.layers[0].id;
+    let mut leaves = vec![];
+    for g in 0..2_000 {
+        let kids: Vec<Arc<Node>> = (0..3)
+            .map(|_| {
+                let id = d.alloc_id();
+                leaves.push(id);
+                Arc::new(Node::path(id, shapes::rectangle(Rect::new(0.0, 0.0, 5.0, 5.0)), Appearance::default_art()))
+            })
+            .collect();
+        let gid = d.alloc_id();
+        d.insert(Some(layer), g, Node::group(gid, kids)).unwrap();
+    }
+    d.drop_lookup_cache();
+    d.node(layer);
+    let (lookups, walks) = (path_lookups(), tree_walks());
+    let mut find = d.nearest_finder();
+    let found = leaves.iter().filter(|id| find.nearest(**id, |n| matches!(n.kind, NodeKind::Group { .. })).is_some()).count();
+    assert_eq!(found, leaves.len());
+    assert_eq!(path_lookups() - lookups, 0, "lookups by id");
+    assert_eq!(tree_walks() - walks, 0, "walks of the tree");
 }

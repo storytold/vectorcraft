@@ -14,8 +14,8 @@
 //! (the selected ones when anchors are selected; Alt-click cycles their kind, double-click opens
 //! the Corners dialog).
 //! Group Selection: click selects the leaf; each further click on it adds the next enclosing group;
-//! its marquee works as Direct Selection's, and E pressed during the drag makes it select only the
-//! objects entirely inside it (members of groups too), whole.
+//! its marquee selects every object it touches (members of groups too), whole, and E pressed during
+//! the drag makes it select only the objects entirely inside it, whole.
 //! In isolation mode both pick only the isolated object and what is inside it: anchors, segments,
 //! paths and groups outside it stay put.
 //! Both move objects selected as a whole as the Selection tool does, snapping alike. When the
@@ -25,8 +25,9 @@
 //! Both pick the key objects of a blend, and click or drag ruler guides ([`crate::rulerguide`]).
 //! A Cmd/Ctrl+Shift double-click with either one releases the ruler guide or guide path under the
 //! pointer ([`release_guide_at`]).
-//! Direct Selection also edits a blend's spine: drag its points (Shift-click picks several, which
-//! drag together; a key object on a point moves with it) and, once a point is clicked, its
+//! Direct Selection also edits a blend's spine: drag its points (Shift-click and, on a selected
+//! blend, the marquee pick several, which drag together; a key object on a point moves with it)
+//! and, once a point is clicked, its
 //! handles; and the points of selected gradient meshes
 //! and of mesh and warp envelopes and their handles ([`MeshEdit`]): Shift-clicks and the marquee pick several,
 //! a click on a gradient mesh's line picks its two ends and one inside a patch the four points
@@ -192,7 +193,8 @@ pub struct DirectSelectionTool {
     moved: Option<Vec2>,
     /// The spine point last clicked (blend, anchor): its handles show and can be dragged.
     spine: Option<(NodeId, usize)>,
-    /// Other points of that spine picked with it (Shift-click adds or takes one away); dragging
+    /// Other points of that spine picked with it (Shift-click adds or takes one away, and a
+    /// marquee picks those inside it); dragging
     /// a picked point moves them all (#5285).
     spine_more: Vec<usize>,
     mesh: MeshEdit,
@@ -382,6 +384,18 @@ pub(crate) fn spines(cx: &ToolContext) -> Vec<(NodeId, PathData)> {
     v
 }
 
+/// [`spines`] of the blends that are themselves selected, topmost first. When no selected object
+/// is a blend, it returns an empty list without walking the document or building any spine.
+pub(crate) fn selected_spines(cx: &ToolContext) -> Vec<(NodeId, PathData)> {
+    let is_blend = |id: &NodeId| cx.doc.node(*id).is_some_and(|n| matches!(n.kind, NodeKind::Blend { .. }));
+    if !cx.selection.objects.iter().any(is_blend) {
+        return vec![];
+    }
+    let mut v = spines(cx);
+    v.retain(|(id, _)| cx.selection.contains(*id));
+    v
+}
+
 /// The spine point under `p`: (blend, anchor, where it is).
 fn hit_spine_point(cx: &ToolContext, p: Point, tol: f64) -> Option<(NodeId, usize, Point)> {
     spines(cx).into_iter().find_map(|(id, path)| {
@@ -393,7 +407,7 @@ fn hit_spine_point(cx: &ToolContext, p: Point, tol: f64) -> Option<(NodeId, usiz
 /// The segment of a selected blend's spine passing within `tol` of `p`: (blend, segment, t, whether
 /// it is straight).
 pub(crate) fn hit_spine_segment(cx: &ToolContext, p: Point, tol: f64) -> Option<(NodeId, usize, f64, bool)> {
-    spines(cx).into_iter().filter(|(id, _)| cx.selection.contains(*id)).find_map(|(id, path)| {
+    selected_spines(cx).into_iter().find_map(|(id, path)| {
         let (si, seg, t, _, dist) = path.nearest(p)?;
         (dist <= tol).then(|| (id, seg, t, path.subpaths.get(si).is_some_and(|sp| sp.segment_is_line(seg))))
     })
@@ -713,6 +727,23 @@ fn part_picked(cx: &ToolContext, id: NodeId) -> bool {
     cx.selection.symbol_part.as_ref().is_some_and(|sp| sp.instance == id)
 }
 
+/// Whether multiple anchor points are selected (across one or more paths) with Direct Selection.
+fn has_multiple_selected_anchors(cx: &ToolContext) -> bool {
+    let direct_count: usize = cx.selection.anchors.values().map(|s| s.len()).sum();
+    if direct_count >= 2 {
+        return true;
+    }
+    if direct_count >= 1 {
+        let has_whole_path = cx.selection.objects.iter().any(|id| {
+            !cx.selection.anchors.contains_key(id) && cx.doc.node(*id).and_then(|n| n.path_data()).is_some_and(|p| p.anchors().next().is_some())
+        });
+        if has_whole_path {
+            return true;
+        }
+    }
+    false
+}
+
 /// The segment of path `id` nearest to `p`, where the hit test found its stroke.
 fn segment_at(cx: &ToolContext, id: NodeId, p: Point) -> Option<SegmentHit> {
     let pd = cx.doc.node(id)?.path_data()?;
@@ -743,6 +774,13 @@ impl Tool for DirectSelectionTool {
     fn options(&self) -> Value {
         self.mesh.options()
     }
+    /// Direct Selection picks the gradient mesh points the Eyedropper held (`meshPoints`); Group
+    /// Selection, which selects whole objects, does not.
+    fn set_option(&mut self, key: &str, value: &Value) {
+        if key == "meshPoints" && !self.group {
+            self.mesh.set_options(value);
+        }
+    }
     /// Escape during a drag (anchors, handles, segments, objects, type areas, blend spines, mesh
     /// points, corner widgets, the brackets of type on a path, a marquee) cancels it: what it moved
     /// goes back and the tool waits for the next press (#1743).
@@ -769,6 +807,9 @@ impl Tool for DirectSelectionTool {
         if key == ToolKey::Escape && self.guide.busy() {
             return self.guide.cancel();
         }
+        if key == ToolKey::Escape && matches!(self.state, State::Idle) && cx.selection.key_anchor.is_some() {
+            return vec![Action::Exec("select.key".into(), json!({}))];
+        }
         if key != ToolKey::Escape || matches!(self.state, State::Idle) {
             return vec![];
         }
@@ -788,6 +829,7 @@ impl Tool for DirectSelectionTool {
             || self.claims_letter(key)
             || self.mesh_nudge(cx, key, Mods::default()).is_some()
             || self.frame_nudge(cx, key, Mods::default()).is_some()
+            || (key == ToolKey::Escape && (cx.selection.key_anchor.is_some() || !matches!(self.state, State::Idle)))
     }
     fn notify(&mut self, cx: &ToolContext, what: &str) {
         if what == FRAME_PICKED {
@@ -894,6 +936,10 @@ impl Tool for DirectSelectionTool {
                 if let Some(out) = self.press_hidden(cx, ev, p) {
                     return out;
                 }
+                // The spine points picked before stay picked while the marquee is drawn: its
+                // release replaces them (with Shift, toggles them), and Escape keeps them.
+                self.spine = held;
+                self.spine_more = if held.is_some() { more } else { vec![] };
                 self.state = State::Marquee { start: p, cur: p, toggle: ev.mods.shift, enclosed: false, whole: ev.mods.alt };
                 vec![]
             }
@@ -1314,7 +1360,7 @@ impl DirectSelectionTool {
         if hit.as_ref().and_then(|h| cx.doc.node(h.leaf)).is_some_and(|n| matches!(n.kind, NodeKind::Text(_))) {
             return vec![Action::SwitchTool("type".into())];
         }
-        // Outside the isolated art it leaves isolation mode, as with the Selection tool (#4466).
+        // Outside the isolated art it runs Exit Isolation Mode, as with the Selection tool (#4466).
         if hit.is_none() && cx.isolation.is_some() {
             return vec![Action::Exec("object.exitIsolation".into(), json!({}))];
         }
@@ -1600,7 +1646,15 @@ impl DirectSelectionTool {
             (true, ..) => vec![Action::Commit],
             (false, Some(id), _, _) => vec![Action::Exec("select.toggle".into(), json!({"id": id.0}))],
             (false, None, Some((id, si, ai)), _) => {
-                vec![Action::Exec("select.anchors".into(), json!({"id": id.0, "anchors": [[si, ai]], "mode": "set"}))]
+                if has_multiple_selected_anchors(cx) {
+                    if cx.selection.key_anchor == Some((id, (si, ai))) {
+                        vec![Action::Exec("select.key".into(), json!({}))]
+                    } else {
+                        vec![Action::Exec("select.key".into(), json!({"id": id.0, "anchor": [si, ai]}))]
+                    }
+                } else {
+                    vec![Action::Exec("select.anchors".into(), json!({"id": id.0, "anchors": [[si, ai]], "mode": "set"}))]
+                }
             }
             (false, None, None, Some((id, si, seg))) => {
                 vec![Action::Exec("select.segments".into(), json!({"id": id.0, "segments": [[si, seg]]}))]
@@ -1616,13 +1670,15 @@ impl DirectSelectionTool {
                 return vec![];
             }
             self.frame.clear();
+            (self.spine, self.spine_more) = (None, vec![]);
             return vec![Action::Exec("select.none".into(), json!({}))];
         }
         // With Group Selection's enclosed marquee, the tool selects the objects inside it
-        // (members of groups too), each whole, as a click selects one; with an Alt-marquee, every
-        // object it touches, each whole.
-        if enclosed || whole {
-            let mut touched = vectorcraft_doc::hit::marquee_in_view(cx.doc, r, cx.isolation, true, cx.outline);
+        // (members of groups too), each whole, as a click selects one; with Group Selection's
+        // marquee or an Alt-marquee, every object it touches, each whole (#8047).
+        if enclosed || whole || self.group {
+            (self.spine, self.spine_more) = (None, vec![]);
+            let mut touched = vectorcraft_doc::hit::marquee_in_view(cx.doc, r, cx.isolation, true, cx.outline, !cx.guides);
             let editable = cx.doc.editable();
             touched.retain(|id| editable(*id));
             let picked = if enclosed { crate::select::inside(cx, r, touched) } else { touched };
@@ -1632,8 +1688,11 @@ impl DirectSelectionTool {
         }
         // Anchors inside the rect, on editable paths inside isolation mode.
         let mut sel: Vec<(NodeId, Vec<AnchorRef>)> = vec![];
+        // Guide paths only while guides can be picked: not while they are locked or hidden (#8538).
         walk_pickable(cx.doc, cx.isolation, |n| {
-            if let NodeKind::Path { path, .. } = &n.kind {
+            if let NodeKind::Path { path, guide, .. } = &n.kind
+                && (cx.guides || !*guide)
+            {
                 let v: Vec<AnchorRef> = path.anchors().filter(|(_, _, a)| r.contains(a.p)).map(|(s, i, _)| (s, i)).collect();
                 if !v.is_empty() {
                     sel.push((n.id, v));
@@ -1677,6 +1736,33 @@ impl DirectSelectionTool {
                 }
             }
         }
+        // Direct Selection: the points of a selected blend's spine inside the rect are picked, on
+        // the topmost such blend; with Shift they are toggled. The blend stays selected. A plain
+        // marquee that holds none of them drops the points picked before.
+        let mut spined: Option<NodeId> = None;
+        if !self.group {
+            let found = selected_spines(cx).into_iter().find_map(|(id, path)| {
+                let inside: BTreeSet<usize> = path.anchors().filter(|(s, _, a)| *s == 0 && r.contains(a.p)).map(|(_, i, _)| i).collect();
+                (!inside.is_empty()).then_some((id, inside))
+            });
+            match found {
+                Some((id, inside)) => {
+                    let held = self.spine.filter(|(h, _)| toggle && *h == id);
+                    let before: BTreeSet<usize> = held.map(|(_, a)| self.spine_more.iter().copied().chain([a]).collect()).unwrap_or_default();
+                    let picked: BTreeSet<usize> = if toggle { before.symmetric_difference(&inside).copied().collect() } else { inside };
+                    let focus = held.map(|(_, a)| a).filter(|a| picked.contains(a)).or_else(|| picked.last().copied());
+                    self.spine = focus.map(|a| (id, a));
+                    self.spine_more = picked.into_iter().filter(|a| Some(*a) != focus).collect();
+                    spined = Some(id);
+                    if !toggle {
+                        sel.push((id, vec![]));
+                    }
+                }
+                None if !toggle => (self.spine, self.spine_more) = (None, vec![]),
+                // With Shift, the blend holding the picked points stays selected with them.
+                None => spined = self.spine.map(|(id, _)| id),
+            }
+        }
         let mut marked: BTreeMap<NodeId, BTreeSet<AnchorRef>> =
             if toggle { self.frame_anchors(cx).into_iter().map(|(id, v)| (id, v.into_iter().collect())).collect() } else { BTreeMap::new() };
         for (id, inside) in &framed {
@@ -1694,9 +1780,9 @@ impl DirectSelectionTool {
         }
         // Objects without anchors to pick (type, images, symbols…) are selected whole when
         // the marquee touches them, as with the Selection tool (#927).
-        for id in vectorcraft_doc::hit::marquee_in_view(cx.doc, r, cx.isolation, true, cx.outline) {
+        for id in vectorcraft_doc::hit::marquee_in_view(cx.doc, r, cx.isolation, true, cx.outline, !cx.guides) {
             let whole = cx.doc.node(id).is_some_and(|n| !matches!(n.kind, NodeKind::Path { .. } | NodeKind::Compound { .. }));
-            if whole && !sel.iter().any(|(s, _)| *s == id) && !framed.iter().any(|(f, _)| *f == id) && !meshed.contains(&id) {
+            if whole && !sel.iter().any(|(s, _)| *s == id) && !framed.iter().any(|(f, _)| *f == id) && !meshed.contains(&id) && spined != Some(id) {
                 sel.push((id, vec![]));
             }
         }
@@ -1706,7 +1792,8 @@ impl DirectSelectionTool {
         let mut crossed: Vec<(NodeId, Vec<AnchorRef>)> = vec![];
         if !self.group {
             walk_pickable(cx.doc, cx.isolation, |n| {
-                if let NodeKind::Path { path, .. } = &n.kind
+                if let NodeKind::Path { path, guide, .. } = &n.kind
+                    && (cx.guides || !*guide)
                     && editable(n.id)
                 {
                     let segs = crossed_segments(path, r);

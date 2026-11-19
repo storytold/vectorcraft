@@ -14,13 +14,15 @@ pub mod cmyk;
 pub mod color_mask;
 pub mod compound_shape;
 pub mod corners;
+pub mod decode;
 pub mod depth;
 pub mod dimension;
+pub mod flare;
 pub mod graph;
 mod halftone_radii;
 pub mod hit;
 mod id_index;
-pub use id_index::tree_walks;
+pub use id_index::{path_lookups, tree_walks};
 pub mod inks;
 mod inline;
 pub mod intertwine;
@@ -28,8 +30,9 @@ pub mod shared;
 mod symbol_export_type;
 mod symbol_nine_slice;
 pub mod symbol_overrides;
+mod symbol_pixel_aligned;
 mod symbol_registration;
-pub use inline::{SYMBOL_HALF, SYMBOL_SIZES};
+pub use inline::{InlineMeasured, InlinePass, SYMBOL_HALF, SYMBOL_SIZES};
 pub use shared::Shared;
 pub use symbol_export_type::{SYMBOL_EXPORT_TYPE, SymbolExportType};
 pub use symbol_nine_slice::{
@@ -37,6 +40,7 @@ pub use symbol_nine_slice::{
     SymbolNineSlice, charge_symbol_art,
 };
 pub use symbol_overrides::SymbolOverride;
+pub use symbol_pixel_aligned::SYMBOL_PIXEL_ALIGNED;
 pub use symbol_registration::{SYMBOL_REGISTRATION, SymbolRegistration};
 pub mod links;
 pub mod live;
@@ -45,6 +49,8 @@ pub mod marks;
 mod mem;
 pub use mem::{appearance_heap_bytes, paint_heap_bytes};
 pub mod metadata;
+mod nearest;
+pub use nearest::NearestFinder;
 pub mod node;
 pub mod objects_on_path;
 pub mod orient;
@@ -52,7 +58,7 @@ pub mod overprint;
 pub mod pattern;
 pub mod perspective;
 mod pixels;
-pub use pixels::{GraySource, MAX_RASTER_ALLOC, PixelPick};
+pub use pixels::{GraySource, MAX_RASTER_ALLOC, PixelPick, header_size};
 pub mod placed_document;
 pub mod plugin_data;
 pub mod ppi;
@@ -72,6 +78,9 @@ pub mod style_libs;
 pub mod swatches;
 mod symbols;
 pub use symbols::SymbolBoxes;
+#[cfg(any(test, feature = "symbol-read-count"))]
+#[doc(hidden)]
+pub use symbols::symbols_read;
 pub mod text;
 pub mod trace;
 pub mod twist;
@@ -94,8 +103,9 @@ pub use compound_shape::ShapeMode;
 pub use corners::LiveCorners;
 pub use depth::{MAX_DEPTH, MAX_SYMBOL_NODES};
 pub use graph::{
-    ColumnDesign, ColumnType, Fractions, GraphDesign, GraphKind, GraphSpec, LabelRows, LabelStyles, MAX_GRAPH_CATEGORIES, MAX_GRAPH_SERIES,
-    PiePosition, PieSort, SeriesPaint, TickLength, ValueAxisSide,
+    ColumnDesign, ColumnType, DEFAULT_FILLED_LINE_WIDTH, FILLED_LINE_OUTLINE_WIDTH, Fractions, GraphDesign, GraphKind, GraphSpec, LabelRows,
+    LabelStyles, MAX_FILLED_LINE_WIDTH, MAX_GRAPH_CATEGORIES, MAX_GRAPH_SERIES, MIN_FILLED_LINE_WIDTH, PiePosition, PieSort, SeriesPaint, TickLength,
+    ValueAxisSide,
 };
 pub use hit::{Hit, HitKind};
 pub use links::{LinkInfo, PlacementOptions};
@@ -164,7 +174,7 @@ use limits::MAX_NEXT_ID;
 pub use limits::{DocError, FORMAT_VERSION, MAX_COORD};
 pub use records::{ImageBlob, MaskEdit, NewArtIds, SavedSelection, SavedView, SvgFilter, Symbol, SymbolEdit};
 pub use stored_art::{StoredPlace, StoredRoot};
-pub use units::{ColorMode, Unit, parse_number};
+pub use units::{ColorMode, Unit, arithmetic_signs, decimal_point, finite_in_every_unit, parse_number};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Document {

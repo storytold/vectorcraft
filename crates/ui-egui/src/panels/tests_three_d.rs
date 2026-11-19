@@ -426,6 +426,49 @@ fn a_mixed_checkbox_shows_a_dash_and_another_change_keeps_each_effects_value() {
     assert!(named(&controls(&mut app, &ctx), "Add Light").is_disabled());
 }
 
+/// The Bevel heading's Reset sets every bevel setting back to its default on each selected Extrude &
+/// Bevel, as one undo step, and leaves Depth and the rotation as each effect has them. With every
+/// bevel setting at its default it is off and records nothing.
+#[test]
+fn the_bevel_reset_restores_only_the_bevel_settings_of_each_selected_effect() {
+    use crate::panels::tests_appearance::click;
+    let mut app = app();
+    let bevelled = json!({"bevel": "rounded", "bevelWidth": 9.0, "bevelHeight": 6.0, "bevelRepeat": 3, "bevelSpace": 20.0, "bevelInside": true, "bevelBothSides": true, "depth": 70.0, "rotationX": 15.0});
+    app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null, "params": bevelled})).unwrap();
+    let a = app.session.active().unwrap().selection.objects[0].0;
+    let b = app.run("shape.rectangle", json!({"x": 250, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null, "params": {"bevel": "cove", "bevelWidth": 2.0, "depth": 30.0}}))
+        .unwrap();
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    ctx.enable_accesskit();
+    let nodes = controls(&mut app, &ctx);
+    let reset = named(&nodes, "Reset");
+    assert!(!reset.is_disabled(), "changed bevel settings turn Reset on");
+    let at = reset.bounds().map(|r| egui::pos2(((r.x0 + r.x1) / 2.0) as f32, ((r.y0 + r.y1) / 2.0) as f32)).unwrap();
+    let history = undo_len(&app);
+    click(&ctx, &mut app, at, show);
+    assert_eq!(undo_len(&app), history + 1, "one undo step for both objects");
+    let defaults = vectorcraft_effects::default_params("threeD.extrude").unwrap();
+    let merged = |app: &VectorcraftApp, id: u64| {
+        let params = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.effects[0].params.clone();
+        vectorcraft_effects::merged_params("threeD.extrude", &params)
+    };
+    for id in [a, b] {
+        for key in ["bevel", "bevelWidth", "bevelHeight", "bevelRepeat", "bevelSpace", "bevelInside", "bevelBothSides"] {
+            assert_eq!(merged(&app, id)[key], defaults[key], "{key} of {id}");
+        }
+    }
+    assert_eq!((merged(&app, a)["depth"].clone(), merged(&app, b)["depth"].clone()), (json!(70.0), json!(30.0)));
+    assert_eq!(merged(&app, a)["rotationX"], 15.0);
+    let nodes = controls(&mut app, &ctx);
+    assert!(named(&nodes, "Reset").is_disabled(), "every bevel setting at its default: Reset is off");
+    let history = undo_len(&app);
+    click(&ctx, &mut app, at, show);
+    assert_eq!(undo_len(&app), history, "an unavailable Reset records nothing");
+}
+
 /// Revolve's Cap checkbox shows a dash when the selected effects disagree on it.
 #[test]
 fn a_mixed_revolve_cap_shows_a_dash() {
@@ -839,9 +882,15 @@ fn quick_actions_show_on_the_object_tab_only() {
 /// An app with an Extrude & Bevel square given `params`, and the panel on its Lighting tab with the
 /// accessibility tree on.
 fn lighting_app(params: Value) -> (VectorcraftApp, egui::Context) {
+    lighting_app_of("threeD.extrude", params)
+}
+
+/// An app with a square given 3D effect `effect` with `params`, and the panel on its Lighting tab
+/// with the accessibility tree on.
+fn lighting_app_of(effect: &str, params: Value) -> (VectorcraftApp, egui::Context) {
     use crate::panels::tests_appearance::{click, frame_events, text_rect};
     let mut app = app();
-    app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null, "params": params})).unwrap();
+    app.run("effect.apply", json!({"effect": effect, "item": null, "params": params})).unwrap();
     let ctx = egui::Context::default();
     crate::theme::install_fonts(&ctx);
     ctx.enable_accesskit();
@@ -1026,6 +1075,84 @@ fn the_arrow_keys_move_the_light_pressed_last() {
     assert_eq!(rotations, [json!(0.0), json!(-179.0)]);
 }
 
+/// The Lighting tab of Extrude & Bevel (Classic) has the lighting sphere: dragging its light is one
+/// undo step, the button below it moves the light behind the object, Add Light adds a light at the
+/// front center of the sphere, and Delete Light removes the selected light but never the last one.
+#[test]
+fn the_classic_lighting_tab_has_the_lighting_sphere() {
+    use crate::dialogs::revolve_lights::RADIUS;
+    use crate::panels::tests_appearance::{click, frame_events, text_rect};
+    use vectorcraft_effects::CLASSIC_EXTRUDE;
+    let (mut app, ctx) = lighting_app_of(CLASSIC_EXTRUDE, json!({}));
+    let (name, from) = light_node(&mut app, &ctx, 1);
+    assert_eq!(name, "Light 1: Rotation 125.3°, Height 30.0°");
+    let light = crate::dialogs::revolve_lights::lights(&crate::state::Dialog::new(
+        "x",
+        json!({"__effect": CLASSIC_EXTRUDE, "lightRotation": vectorcraft_three_d::DEFAULT_LIGHT.0, "lightHeight": 30.0}),
+    ))[0];
+    let center = from - light.offset() * RADIUS;
+    let history = undo_len(&app);
+    let rim = center + egui::vec2(RADIUS, 0.0);
+    for event in [pointer(from, None), pointer(from, Some(true)), pointer(rim, None)] {
+        frame_events(&ctx, &mut app, vec![event], show);
+    }
+    assert_eq!(merged_light(&app), (0.0, 0.0), "the light follows the pointer while it is down");
+    assert_eq!(undo_len(&app), history);
+    frame_events(&ctx, &mut app, vec![pointer(rim, Some(false))], show);
+    frame_events(&ctx, &mut app, vec![], show);
+    assert_eq!(undo_len(&app), history + 1);
+    let texts = frame_events(&ctx, &mut app, vec![], show);
+    click(&ctx, &mut app, text_rect(&texts, "Move Light to Back").center(), show);
+    assert_eq!(undo_len(&app), history + 2);
+    assert_eq!(effect(&app).1["lightBehind"], json!(true));
+    let texts = frame_events(&ctx, &mut app, vec![], show);
+    click(&ctx, &mut app, text_rect(&texts, "Add Light").center(), show);
+    assert_eq!(undo_len(&app), history + 3);
+    let (name, _) = light_node(&mut app, &ctx, 2);
+    assert_eq!(name, "Light 2: Rotation 0.0°, Height 90.0°", "a new light is at the front center");
+    let count = |app: &VectorcraftApp| effect(app).1["lights"].as_array().map_or(1, Vec::len);
+    assert_eq!(count(&app), 2);
+    let texts = frame_events(&ctx, &mut app, vec![], show);
+    click(&ctx, &mut app, text_rect(&texts, "Delete Light").center(), show);
+    assert_eq!(count(&app), 1);
+    assert_eq!(undo_len(&app), history + 4);
+    let (name, _) = light_node(&mut app, &ctx, 1);
+    assert_eq!(name, "Light 1: Rotation 0.0°, Height 0.0°, Light behind the object", "the selected light was deleted");
+    // One light stays: Delete Light does nothing then.
+    let texts = frame_events(&ctx, &mut app, vec![], show);
+    click(&ctx, &mut app, text_rect(&texts, "Delete Light").center(), show);
+    assert_eq!(count(&app), 1);
+    assert_eq!(undo_len(&app), history + 4);
+}
+
+/// The 3D (Classic) options dialog shows the lighting sphere on its Lighting tab too, and the
+/// sphere draws a 3D (Classic) effect's lights white, since those effects shade without light color.
+#[test]
+fn the_classic_options_dialog_has_the_lighting_sphere_with_white_lights() {
+    use crate::panels::tests_appearance::frame_events;
+    use vectorcraft_effects::{CLASSIC_REVOLVE, EXTRUDE};
+    let mut app = app();
+    app.run("effect.dialog", json!({"effect": CLASSIC_REVOLVE, "item": null})).unwrap();
+    app.ui.dialog.as_mut().unwrap().fields.insert("__gizmo".into(), json!("light"));
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    ctx.enable_accesskit();
+    let dialog = |app: &mut VectorcraftApp, ui: &mut egui::Ui| crate::dialogs::show(app, ui.ctx());
+    frame_events(&ctx, &mut app, vec![], dialog);
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| dialog(&mut app, ui));
+    out.textures_delta.clear();
+    let nodes: Vec<_> = out.platform_output.accesskit_update.map(|u| u.nodes.into_iter().map(|(_, n)| n).collect()).unwrap_or_default();
+    assert!(
+        nodes.iter().any(|n| n.role() == egui::accesskit::Role::Slider && n.label() == Some("Light 1: Rotation 125.3°, Height 30.0°")),
+        "the dialog shows the sphere"
+    );
+    let red = json!([{"color": "#ff0000", "rotation": 0.0, "height": 30.0}]);
+    let color =
+        |effect: &str| crate::dialogs::revolve_lights::lights(&crate::state::Dialog::new("x", json!({"__effect": effect, "lights": red})))[0].color;
+    assert_eq!(color(CLASSIC_REVOLVE), egui::Color32::WHITE);
+    assert_eq!(color(EXTRUDE), egui::Color32::from_rgb(255, 0, 0));
+}
+
 fn assets(app: &mut VectorcraftApp) -> Vec<Value> {
     app.run("assets.list", json!({})).unwrap()["assets"].as_array().unwrap().clone()
 }
@@ -1038,8 +1165,9 @@ fn export_3d_object_adds_the_selected_3d_objects_to_asset_export() {
     let mut app = app();
     assert!(painted_text(&mut app, show).contains("Export 3D Object"));
     let ctx = egui::Context::default();
-    // Without a 3D object: an error, nothing recorded, no asset.
+    // Without a 3D object: the button is dimmed, and an error, nothing recorded, no asset.
     let history = undo_len(&app);
+    assert!(!super::can_export_3d(&app));
     assert!(super::export_3d_object(&mut app, &ctx).is_err());
     assert_eq!((undo_len(&app), assets(&mut app).len()), (history, 0));
     let a = app.session.active().unwrap().selection.objects[0].0;
@@ -1051,9 +1179,10 @@ fn export_3d_object_adds_the_selected_3d_objects_to_asset_export() {
     let hidden = app.run("shape.rectangle", json!({"x": 100, "y": 250, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
     app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null})).unwrap();
     app.run("effect.setParams", json!({"index": 0, "item": null, "visible": false})).unwrap();
+    assert!(!super::can_export_3d(&app));
     assert!(super::export_3d_object(&mut app, &ctx).is_err());
     app.run("select.set", json!({"ids": [plain, a, hidden]})).unwrap();
-    assert_eq!(super::selected_3d_objects(&app), [a]);
+    assert!(super::can_export_3d(&app));
     assert!(!crate::panel_docking::visible(&app.ui, crate::panels::asset_export::ID));
     let history = undo_len(&app);
     super::export_3d_object(&mut app, &ctx).unwrap();
@@ -1090,7 +1219,218 @@ fn export_3d_object_leaves_out_a_3d_object_inside_another() {
     app.run("select.set", json!({"ids": [inner, group]})).unwrap();
     let selected: Vec<u64> = app.session.active().unwrap().selection.objects.iter().map(|id| id.0).collect();
     assert!(selected.contains(&inner) && selected.contains(&group), "{selected:?}");
-    assert_eq!(super::selected_3d_objects(&app), [group]);
+    super::export_3d_object(&mut app, &egui::Context::default()).unwrap();
+    let list = assets(&mut app);
+    assert_eq!(list.iter().map(|a| a["nodes"].clone()).collect::<Vec<_>>(), [json!([group])]);
+}
+
+/// A 3D effect on a group's fill draws nothing to export: the button is dimmed for that group
+/// alone, and beside a 3D object the group is left out instead of refusing them both.
+#[test]
+fn export_3d_object_leaves_out_a_group_with_a_3d_fill() {
+    let mut app = app();
+    let a = app.session.active().unwrap().selection.objects[0].0;
+    let other = app.run("shape.rectangle", json!({"x": 250, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [other]})).unwrap();
+    let group = app.run("object.group", json!({})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [group]})).unwrap();
+    app.run("appearance.addFill", json!({})).unwrap();
+    app.run("effect.apply", json!({"effect": "threeD.extrude"})).unwrap();
+    // `effect.apply` puts a group's 3D effect on the group itself; a file can hold one on its fill.
+    app.session
+        .edit("fill", |d, _| {
+            let n = d.node_mut(vectorcraft_doc::NodeId(group)).unwrap();
+            let fx = n.appearance.effects.remove(0);
+            n.appearance.items[0].effects_mut().push(fx);
+            Ok(())
+        })
+        .unwrap();
+    assert!(
+        vectorcraft_effects::has_solid(app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(group)).unwrap()),
+        "the fill holds the effect"
+    );
+    assert!(!super::can_export_3d(&app));
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    set_type(&mut app, "extrude").unwrap();
+    app.run("select.set", json!({"ids": [a, group]})).unwrap();
+    assert!(super::can_export_3d(&app));
+    super::export_3d_object(&mut app, &egui::Context::default()).unwrap();
+    let list = assets(&mut app);
+    assert_eq!(list.iter().map(|a| a["nodes"].clone()).collect::<Vec<_>>(), [json!([a])]);
+}
+
+/// Whether Export 3D Object is available as the panel reads it ([`super::can_export_3d_shown`]),
+/// checked against the state worked out from scratch ([`super::can_export_3d`]); with a document
+/// open, the panel keeps it for the document's uid and revision.
+fn exportable(app: &mut VectorcraftApp, why: &str) -> bool {
+    let fresh = super::can_export_3d(app);
+    assert_eq!(super::can_export_3d_shown(app), fresh, "{why}");
+    if let Some(key) = app.session.active().map(|st| (st.uid, st.revision)) {
+        assert_eq!(app.canvas.three_d_exportable, Some((key, fresh)), "{why}");
+    }
+    fresh
+}
+
+/// The Export 3D Object state the panel keeps for a revision equals the state worked out from
+/// scratch: with no document and no selection, for plain paths, with a 3D object selected first or
+/// last, for a path of a compound path whose compound path has the effect, after the effect is
+/// hidden, Undo and Redo, in another document and back, and for a group whose 3D effect moves onto
+/// its fill.
+#[test]
+fn export_3d_object_state_kept_for_a_revision_equals_a_fresh_one() {
+    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    assert!(!exportable(&mut app, "no document"));
+    app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+    assert!(!exportable(&mut app, "no selection"));
+    let rect = |app: &mut VectorcraftApp, x: f64| {
+        app.run("shape.rectangle", json!({"x": x, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap()
+    };
+    let (p, q) = (rect(&mut app, 10.0), rect(&mut app, 40.0));
+    app.run("select.set", json!({"ids": [p, q]})).unwrap();
+    assert!(!exportable(&mut app, "plain paths"));
+    let solid = rect(&mut app, 70.0);
+    app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null})).unwrap();
+    app.run("select.set", json!({"ids": [solid, p, q]})).unwrap();
+    assert!(exportable(&mut app, "a 3D object first"));
+    app.run("select.set", json!({"ids": [p, q]})).unwrap();
+    assert!(!exportable(&mut app, "plain paths again"));
+    app.run("select.set", json!({"ids": [p, q, solid]})).unwrap();
+    assert!(exportable(&mut app, "a 3D object last"));
+    let (a, b) = (rect(&mut app, 100.0), rect(&mut app, 110.0));
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    app.run("object.compoundPath.make", json!({})).unwrap();
+    let compound = app.session.active().unwrap().selection.objects[0].0;
+    app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null})).unwrap();
+    let member = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(compound)).unwrap().children().unwrap()[0].id.0;
+    app.run("select.set", json!({"ids": [p, q]})).unwrap();
+    assert!(!exportable(&mut app, "plain paths before the compound path's member"));
+    app.run("select.set", json!({"ids": [p, member]})).unwrap();
+    assert!(exportable(&mut app, "a path of a 3D compound path"));
+    // An edit that leaves the selection as it is.
+    app.run("effect.setParams", json!({"ids": [compound], "index": 0, "item": null, "visible": false})).unwrap();
+    assert!(!exportable(&mut app, "the compound path's 3D effect hidden"));
+    app.run("edit.undo", json!({})).unwrap();
+    assert!(exportable(&mut app, "Undo"));
+    app.run("edit.redo", json!({})).unwrap();
+    assert!(!exportable(&mut app, "Redo"));
+    app.run("edit.undo", json!({})).unwrap();
+    assert!(exportable(&mut app, "Undo again"));
+    app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+    assert!(!exportable(&mut app, "a new document"));
+    app.session.set_active(0);
+    assert!(exportable(&mut app, "back to the first document"));
+    // A group's own 3D effect exports; the same effect on its fill does not.
+    app.run("select.set", json!({"ids": [p, q]})).unwrap();
+    let group = app.run("object.group", json!({})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [group]})).unwrap();
+    app.run("appearance.addFill", json!({})).unwrap();
+    app.run("effect.apply", json!({"effect": "threeD.extrude"})).unwrap();
+    assert!(exportable(&mut app, "a group with its own 3D effect"));
+    app.session
+        .edit("fill", |d, _| {
+            let n = d.node_mut(vectorcraft_doc::NodeId(group)).unwrap();
+            let fx = n.appearance.effects.remove(0);
+            n.appearance.items[0].effects_mut().push(fx);
+            Ok(())
+        })
+        .unwrap();
+    assert!(!exportable(&mut app, "a group with a 3D effect on its fill"));
+}
+
+/// A frame of the panel works out the Export 3D Object state once and keeps it for the document's
+/// revision: later frames read it, and a new revision works it out again.
+#[test]
+fn export_3d_object_state_is_worked_out_once_per_revision() {
+    let key = |app: &VectorcraftApp| app.session.active().map(|st| (st.uid, st.revision)).unwrap();
+    let mut app = app();
+    painted_text(&mut app, show);
+    assert_eq!(app.canvas.three_d_exportable, Some((key(&app), false)));
+    // A wrong answer planted for this revision is what the panel reads: nothing works it out again.
+    app.canvas.three_d_exportable = Some((key(&app), true));
+    assert!(super::can_export_3d_shown(&mut app));
+    painted_text(&mut app, show);
+    assert_eq!(app.canvas.three_d_exportable, Some((key(&app), true)));
+    app.run("select.none", json!({})).unwrap();
+    painted_text(&mut app, show);
+    assert_eq!(app.canvas.three_d_exportable, Some((key(&app), false)));
+}
+
+/// The thread's CPU time in nanoseconds, where Linux gives it.
+fn thread_cpu_ns() -> Option<u128> {
+    std::fs::read_to_string("/proc/thread-self/schedstat").ok()?.split_whitespace().next()?.parse().ok()
+}
+
+/// Time the Export 3D Object state with 200,000 selected paths: worked out from scratch on every
+/// frame ([`super::can_export_3d`]), by [`super::can_export_3d_shown`] on the first frame of a
+/// revision, and by [`super::can_export_3d_shown`] on later frames of the same revision. The first
+/// case selects plain paths alone; the second adds a path of a compound path with Extrude & Bevel,
+/// selected last. The sides alternate, and the median time per frame of 7 runs is printed.
+/// Run with `cargo test --release -p vectorcraft-ui-egui --lib export_3d_object_state_timing -- --ignored --nocapture`.
+#[test]
+#[ignore = "manual timing probe; performance depends on machine load"]
+fn export_3d_object_state_timing() {
+    const PATHS: usize = 200_000;
+    const MEASURES: u32 = 20;
+    const KEPT: u32 = 1_000_000;
+    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    app.run("file.new", json!({"width": 2000, "height": 2000})).unwrap();
+    let rect = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+    let rect = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(rect)).cloned().unwrap();
+    app.session
+        .edit("Fill", |d, _| {
+            let layer = d.layers[0].id;
+            for _ in 0..PATHS - 1 {
+                let mut n = rect.clone();
+                n.id = d.alloc_id();
+                d.insert(Some(layer), usize::MAX, n)?;
+            }
+            Ok(())
+        })
+        .unwrap();
+    app.run("select.all", json!({})).unwrap();
+    let plain: Vec<u64> = app.session.active().unwrap().selection.objects.iter().map(|id| id.0).collect();
+    let a = app.run("shape.rectangle", json!({"x": 0, "y": 1000, "width": 30, "height": 30})).unwrap()["id"].clone();
+    let b = app.run("shape.rectangle", json!({"x": 5, "y": 1005, "width": 10, "height": 10})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    app.run("object.compoundPath.make", json!({})).unwrap();
+    let compound = app.session.active().unwrap().selection.objects[0];
+    app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null})).unwrap();
+    let member = app.session.active().unwrap().doc.node(compound).unwrap().children().unwrap()[0].id.0;
+    let mut last = plain.clone();
+    last.push(member);
+    let median = |v: &mut Vec<f64>| {
+        v.sort_by(f64::total_cmp);
+        v[v.len() / 2]
+    };
+    let clock = if thread_cpu_ns().is_some() { "thread CPU time" } else { "wall-clock time" };
+    for (name, ids, expected) in [("plain paths", plain, false), ("plain paths, then a path of a 3D compound path", last, true)] {
+        app.run("select.set", json!({"ids": &ids})).unwrap();
+        let selected: Vec<u64> = app.session.active().unwrap().selection.objects.iter().map(|id| id.0).collect();
+        assert_eq!(selected.len(), ids.len(), "{name}");
+        assert_eq!(selected.last(), ids.last(), "{name}");
+        assert_eq!(super::can_export_3d(&app), expected, "{name}");
+        let mut time = |frames: u32, f: &mut dyn FnMut(&mut VectorcraftApp) -> bool| {
+            let (cpu, wall) = (thread_cpu_ns(), std::time::Instant::now());
+            for _ in 0..frames {
+                assert_eq!(f(&mut app), expected);
+            }
+            let ns = thread_cpu_ns().zip(cpu).map_or_else(|| wall.elapsed().as_nanos(), |(b, a)| b - a);
+            ns as f64 / f64::from(frames) / 1000.0
+        };
+        let (mut full, mut first, mut kept) = (vec![], vec![], vec![]);
+        for _ in 0..7 {
+            full.push(time(MEASURES, &mut |app| super::can_export_3d(app)));
+            first.push(time(MEASURES, &mut |app| {
+                app.canvas.three_d_exportable = None;
+                super::can_export_3d_shown(app)
+            }));
+            kept.push(time(KEPT, &mut super::can_export_3d_shown));
+        }
+        eprintln!("{name}: {} objects selected, available: {expected}; {clock} per frame, median of 7 runs", selected.len());
+        eprintln!("every frame worked out ({MEASURES} frames a run): {:>12.3} us  {full:.3?}", median(&mut full));
+        eprintln!("first frame of a revision ({MEASURES} a run):     {:>12.3} us  {first:.3?}", median(&mut first));
+        eprintln!("later frames ({KEPT} frames a run):            {:>12.4} us  {kept:.4?}", median(&mut kept));
+    }
 }
 
 #[test]

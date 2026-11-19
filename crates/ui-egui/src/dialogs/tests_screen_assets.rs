@@ -114,7 +114,23 @@ fn the_assets_tab_exports_the_checked_assets_into_the_folder() {
     let r = confirm(&mut app).unwrap();
     // Create Sub-folders is on by default: a folder per scale.
     assert_eq!(r["files"], json!([format!("{folder}/2x/Asset-2@2x.png")]));
-    let png = image::load_from_memory(&std::fs::read(dir.join("2x").join("Asset-2@2x.png")).unwrap()).unwrap();
+    let png = craft_image_codecs::decode(&std::fs::read(dir.join("2x").join("Asset-2@2x.png")).unwrap())
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap();
     assert_eq!((png.width(), png.height()), (60, 40), "the asset's art at 2x");
     assert_eq!(log.borrow().len(), 1, "Open Location shows the file");
     // The rows are remembered for the dialog and the Asset Export panel alike.

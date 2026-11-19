@@ -250,9 +250,11 @@ fn trace_paths(img: &Raster, params: &TraceParams, max_anchors: usize, steps: &(
     let (mut q, rare) = quantize::quantize_keeping(without.as_ref().unwrap_or(img), params);
     go_on()?;
     // The semi-transparent edge of a cut-out image traces as the color beside it.
-    if matches!(params.mode, Mode::Color | Mode::Grayscale) {
-        quantize::settle_cut_edges(&mut q, img, params.mode == Mode::Grayscale);
-    }
+    let blended = if matches!(params.mode, Mode::Color | Mode::Grayscale) {
+        quantize::settle_cut_edges(&mut q, img, params.mode == Mode::Grayscale)
+    } else {
+        Vec::new()
+    };
     drop(without);
     // Each gradient is a palette entry of its own (its colour: the gradient's middle).
     let mut gradients: Vec<Option<TracedGradient>> = vec![None; q.palette.len()];
@@ -270,7 +272,12 @@ fn trace_paths(img: &Raster, params: &TraceParams, max_anchors: usize, steps: &(
     drop(grays);
     // Noise clears specks, not the regions of a rare colour Automatic kept on purpose.
     let keep: Vec<bool> = q.palette.iter().map(|c| rare.contains(c)).collect();
-    quantize::denoise_keeping(&mut q.labels, w, h, params.noise as usize, &keep);
+    // A speck far from the color around it joins the color beside it nearest its own pixels.
+    let labs = quantize::palette_labs(&q.palette);
+    let source =
+        quantize::Source { labs: &labs, rgba: &img.rgba, blended: &blended, gray: matches!(params.mode, Mode::Grayscale | Mode::BlackAndWhite) };
+    quantize::denoise_nearest(&mut q.labels, w, h, params.noise as usize, &keep, Some(&source));
+    drop(blended);
     go_on()?;
     // Ignore Color, background only: the labels traced, with the ignored color's areas that reach
     // the edge left out. Its other areas are traced with the rest. Edges are still placed by

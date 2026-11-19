@@ -20,10 +20,12 @@ use vectorcraft_text::{FontDb, layout as layout_text};
 use crate::bbox::Handle;
 use crate::{GlyphSnap, Overlay, ScreenFrame, ToolContext};
 
+mod bitangent;
 mod snap;
 mod stroke;
 mod targets;
 
+pub(crate) use bitangent::TangentLine;
 pub use snap::{
     DEFAULT_CONSTRUCTION_ANGLES, DrawSnap, HandleSnap, Leave, PointSnap, construction_angles, distance_guides, snap_draw, snap_pick, square,
 };

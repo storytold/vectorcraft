@@ -1,6 +1,6 @@
 use super::*;
 use crate::testutil::*;
-use vectorcraft_doc::Selection;
+use vectorcraft_doc::{Document, NodeKind, Selection};
 
 /// While an opacity mask is edited, a press on a selected Shaper original shape moves it, over the
 /// art the group shows and over a part of the shape the group does not show. A press on an original
@@ -144,6 +144,66 @@ fn a_press_where_a_mask_hides_a_selected_object_drags_it() {
     d.insert(Some(l), 2, vectorcraft_doc::Node::path(front, square, vectorcraft_doc::Appearance::default_art())).unwrap();
     let a = SelectionTool::default().pointer(&cx(&d, &picked, &p), &ev(PointerKind::Down, 370.0, 450.0));
     assert!(a.iter().any(|a| matches!(a, Action::Exec(c, v) if c == "select.set" && v["ids"] == json!([front.0]))), "{a:?}");
+}
+
+/// #8538: while guides are locked or hidden (`guides` off), a Selection tool marquee that touches
+/// only a guide path in a group selects nothing, so a drag can't move the guide; one that touches
+/// the group's other member selects the group. With guides unlocked, the guide takes the group.
+#[test]
+fn a_marquee_over_a_locked_guide_in_a_group_selects_nothing() {
+    let mut d = Document::new(800.0, 600.0);
+    let l = d.layers[0].id;
+    let (gid, guide_id, art_id) = (d.alloc_id(), d.alloc_id(), d.alloc_id());
+    let mut guide = vectorcraft_doc::Node::path(
+        guide_id,
+        vectorcraft_geom::shapes::rectangle(Rect::new(100.0, 100.0, 120.0, 120.0)),
+        vectorcraft_doc::Appearance::default_art(),
+    );
+    if let NodeKind::Path { guide, .. } = &mut guide.kind {
+        *guide = true;
+    }
+    let art = vectorcraft_doc::Node::path(
+        art_id,
+        vectorcraft_geom::shapes::rectangle(Rect::new(300.0, 100.0, 320.0, 120.0)),
+        vectorcraft_doc::Appearance::default_art(),
+    );
+    d.insert(Some(l), 0, vectorcraft_doc::Node::group(gid, vec![std::sync::Arc::new(guide), std::sync::Arc::new(art)])).unwrap();
+    let (none, p) = (Selection::default(), paint());
+    let marquee = |guides: bool, x0: f64, x1: f64| {
+        let c = ToolContext { guides, ..cx(&d, &none, &p) };
+        let mut t = SelectionTool::default();
+        t.pointer(&c, &ev(PointerKind::Down, x0, 50.0));
+        t.pointer(&c, &ev(PointerKind::Drag, x1, 110.0));
+        let up = t.pointer(&c, &ev(PointerKind::Up, x1, 110.0));
+        up.iter().find_map(|a| match a {
+            Action::Exec(c, v) if c == "select.set" => Some(v["ids"].clone()),
+            _ => None,
+        })
+    };
+    assert_eq!(marquee(false, 90.0, 130.0), Some(json!([])), "locked: only the guide");
+    assert_eq!(marquee(false, 290.0, 330.0), Some(json!([gid.0])), "locked: the group's art");
+    assert_eq!(marquee(true, 90.0, 130.0), Some(json!([gid.0])), "unlocked: the guide");
+}
+
+/// #8538: an enclosing marquee measures a group without the locked or hidden guides in it, as the
+/// marquee leaves them out: a group whose art lies inside is taken though a guide in it reaches
+/// past the marquee. While guides can be picked, the guide counts.
+#[test]
+fn an_enclosing_marquee_measures_a_group_without_its_locked_guides() {
+    let mut d = Document::new(800.0, 600.0);
+    let l = d.layers[0].id;
+    let (gid, guide_id, art_id) = (d.alloc_id(), d.alloc_id(), d.alloc_id());
+    let square = |id, r| vectorcraft_doc::Node::path(id, vectorcraft_geom::shapes::rectangle(r), vectorcraft_doc::Appearance::default_art());
+    let mut guide = square(guide_id, Rect::new(500.0, 100.0, 520.0, 120.0));
+    if let NodeKind::Path { guide, .. } = &mut guide.kind {
+        *guide = true;
+    }
+    let art = square(art_id, Rect::new(100.0, 100.0, 120.0, 120.0));
+    d.insert(Some(l), 0, vectorcraft_doc::Node::group(gid, vec![std::sync::Arc::new(guide), std::sync::Arc::new(art)])).unwrap();
+    let (none, p) = (Selection::default(), paint());
+    let r = Rect::new(50.0, 50.0, 200.0, 200.0);
+    assert_eq!(crate::select::inside(&ToolContext { guides: false, ..cx(&d, &none, &p) }, r, vec![gid]), [gid], "locked or hidden");
+    assert!(crate::select::inside(&ToolContext { guides: true, ..cx(&d, &none, &p) }, r, vec![gid]).is_empty(), "shown and unlocked");
 }
 
 /// #955: grabbed by an anchor and dropped near another object's anchor, the anchor lands
@@ -2197,6 +2257,110 @@ fn a_click_on_the_out_port_loads_the_text_and_the_next_click_or_drag_threads_it(
     assert_eq!(t.pointer(&cx, &ev(PointerKind::Down, corner.x, corner.y)), vec![Action::Begin("Resize Type Area".into())]);
 }
 
+/// Loaded text shows the link cursor over an object a click threads it into (a closed path,
+/// area type in no thread), and the loaded text elsewhere: empty canvas, an open path, point type,
+/// the frame it came from and a frame already in a thread, where a click makes a new frame
+/// instead. Held down on a target, the press keeps the link cursor until its drag draws a frame;
+/// placing the text or Escape ends both.
+#[test]
+fn loaded_text_shows_the_link_cursor_where_a_click_threads_it_into_the_object() {
+    use vectorcraft_doc::{Node, NodeKind, TextKind, TextObject};
+    use vectorcraft_geom::shapes;
+    let (mut d, id, rect, port) = overflowing_area_type();
+    let l = d.layers[0].id;
+    let add = |d: &mut vectorcraft_doc::Document, n: NodeKind| {
+        let nid = d.alloc_id();
+        d.insert(Some(l), 0, Node::new(nid, n)).unwrap();
+        nid
+    };
+    let area = |x: f64, y: f64| {
+        let mut t = TextObject::point(Point::new(x, y), "", Default::default());
+        t.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(0.0, 0.0, 120.0, 40.0)) };
+        NodeKind::Text(Box::new(t))
+    };
+    let free = add(&mut d, area(300.0, 100.0));
+    let threaded = add(&mut d, area(100.0, 380.0));
+    let next = add(&mut d, area(250.0, 440.0));
+    d.text_threads.push(vec![threaded, next]);
+    let line = vectorcraft_geom::kurbo::Line::new((50.0, 250.0), (250.0, 250.0));
+    let open = Node::path(
+        d.alloc_id(),
+        vectorcraft_geom::PathData::from_bezpath(&vectorcraft_geom::kurbo::Shape::to_path(&line, 0.1)),
+        vectorcraft_doc::Appearance::default_art(),
+    );
+    d.insert(Some(l), 0, open).unwrap();
+    let point = TextObject::point(Point::new(40.0, 480.0), "Point", Default::default());
+    let point_at = point.bounds().expect("point type has bounds").center();
+    add(&mut d, NodeKind::Text(Box::new(point)));
+    let mut s = Selection::default();
+    s.set([id]);
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = SelectionTool::default();
+    let load = |t: &mut SelectionTool| {
+        t.pointer(&cx, &ev(PointerKind::Down, port.x, port.y));
+        t.pointer(&cx, &ev(PointerKind::Up, port.x, port.y));
+    };
+    let at = |t: &SelectionTool, x: f64, y: f64| t.cursor(&cx, Point::new(x, y), Mods::default());
+    let thread = |params: Value| vec![Action::Exec("text.thread.add".into(), params)];
+    load(&mut t);
+    assert_eq!(at(&t, 150.0, 150.0), Cursor::LoadedTextLink, "a closed path");
+    assert_eq!(at(&t, 360.0, 120.0), Cursor::LoadedTextLink, "area type in no thread");
+    assert_eq!(at(&t, 30.0, 420.0), Cursor::LoadedText, "empty canvas");
+    assert_eq!(at(&t, 150.0, 250.0), Cursor::LoadedText, "an open path");
+    assert_eq!(at(&t, point_at.x, point_at.y), Cursor::LoadedText, "point type");
+    assert_eq!(at(&t, 360.0, 320.0), Cursor::LoadedText, "the frame the text came from");
+    assert_eq!(at(&t, 160.0, 400.0), Cursor::LoadedText, "a frame already in a thread");
+    // A click where the pointer shows the loaded text makes a new frame there.
+    t.pointer(&cx, &ev(PointerKind::Down, 160.0, 400.0));
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 160.0, 400.0)), thread(json!({"from": id.0, "at": [160.0, 400.0]})));
+    load(&mut t);
+    t.pointer(&cx, &ev(PointerKind::Down, 150.0, 150.0));
+    assert_eq!(at(&t, 150.0, 150.0), Cursor::LoadedTextLink, "held down on the path");
+    t.pointer(&cx, &ev(PointerKind::Drag, 151.0, 151.0));
+    assert_eq!(at(&t, 151.0, 151.0), Cursor::LoadedTextLink, "a drag too small to draw a frame");
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 151.0, 151.0)), thread(json!({"from": id.0, "to": rect.0})));
+    assert!(!matches!(at(&t, 150.0, 150.0), Cursor::LoadedText | Cursor::LoadedTextLink), "the text is placed");
+    load(&mut t);
+    t.pointer(&cx, &ev(PointerKind::Down, 150.0, 150.0));
+    t.pointer(&cx, &ev(PointerKind::Drag, 230.0, 240.0));
+    assert_eq!(at(&t, 230.0, 240.0), Cursor::LoadedText, "the drag draws a new frame");
+    t.pointer(&cx, &ev(PointerKind::Up, 230.0, 240.0));
+    load(&mut t);
+    t.pointer(&cx, &ev(PointerKind::Down, 360.0, 120.0));
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 360.0, 120.0)), thread(json!({"from": id.0, "to": free.0})));
+    load(&mut t);
+    assert!(t.key(&cx, ToolKey::Escape, Mods::default()).is_empty());
+    assert!(!matches!(at(&t, 150.0, 150.0), Cursor::LoadedText | Cursor::LoadedTextLink), "Escape drops the text");
+}
+
+/// In an isolated compound path, loaded text shows no link cursor over a member path, which
+/// `text.thread.add` does not take for `to`: a click there makes a new frame.
+#[test]
+fn loaded_text_shows_no_link_cursor_over_a_compound_paths_member() {
+    use vectorcraft_doc::{Appearance, Node, NodeKind};
+    let (mut d, id, _, port) = overflowing_area_type();
+    let l = d.layers[0].id;
+    let (c, member) = (d.alloc_id(), d.alloc_id());
+    let path = Node::path(member, vectorcraft_geom::shapes::rectangle(Rect::new(300.0, 100.0, 400.0, 200.0)), Appearance::default_art());
+    let mut compound = Node::new(c, NodeKind::Compound { children: vec![std::sync::Arc::new(path)], rule: Default::default() });
+    compound.appearance = Appearance::default_art().into();
+    d.insert(Some(l), 0, compound).unwrap();
+    let mut s = Selection::default();
+    s.set([id]);
+    let p = paint();
+    let cx = ToolContext { isolation: Some(c), ..cx(&d, &s, &p) };
+    let mut t = SelectionTool::default();
+    t.pointer(&cx, &ev(PointerKind::Down, port.x, port.y));
+    t.pointer(&cx, &ev(PointerKind::Up, port.x, port.y));
+    assert_eq!(t.cursor(&cx, Point::new(350.0, 150.0), Mods::default()), Cursor::LoadedText);
+    t.pointer(&cx, &ev(PointerKind::Down, 350.0, 150.0));
+    assert_eq!(
+        t.pointer(&cx, &ev(PointerKind::Up, 350.0, 150.0)),
+        vec![Action::Exec("text.thread.add".into(), json!({"from": id.0, "at": [350.0, 150.0]}))]
+    );
+}
+
 /// Loaded text clicked just inside a layer's clipping mask, where art is drawn over the mask's
 /// edge, threads into that art, not into the unpainted mask: placing text acts on what is drawn,
 /// so it takes the ordinary hit, not the selection tools' clipping-path outline.
@@ -2664,4 +2828,73 @@ fn outline_view_marquees_measure_a_clip_group_by_its_plain_clipping_path() {
     };
     assert_eq!(marquee(true), vec![Action::Exec("select.set".into(), json!({"ids": [g.0]}))]);
     assert_eq!(marquee(false), vec![Action::Exec("select.set".into(), json!({"ids": []}))]);
+}
+
+/// Objects selected inside a group (with Group Selection, say) stay selected when the Selection
+/// tool presses on one of them: the press shows the move pointer and a drag moves only them, not
+/// the group around them. A press on a member that is not selected still selects the whole group.
+#[test]
+fn a_press_on_a_selected_member_of_a_group_moves_the_selected_members() {
+    use vectorcraft_doc::{Appearance, Document, Node};
+    use vectorcraft_geom::shapes;
+    let mut d = Document::new(500.0, 500.0);
+    let l = d.layers[0].id;
+    let (outer, inner, a, b, c) = (d.alloc_id(), d.alloc_id(), d.alloc_id(), d.alloc_id(), d.alloc_id());
+    let path = |id: NodeId, x: f64| Node::path(id, shapes::rectangle(Rect::new(x, 100.0, x + 50.0, 150.0)), Appearance::default_art());
+    d.insert(Some(l), 0, Node::group(outer, vec![])).unwrap();
+    d.insert(Some(outer), 0, Node::group(inner, vec![])).unwrap();
+    d.insert(Some(inner), 0, path(a, 100.0)).unwrap();
+    d.insert(Some(inner), 1, path(b, 200.0)).unwrap();
+    d.insert(Some(outer), 1, path(c, 300.0)).unwrap();
+    let p = paint();
+    let is_select = |out: &[Action]| out.iter().any(|a| matches!(a, Action::Exec(id, _) if id.starts_with("select.")));
+    for picked in [vec![a], vec![a, b], vec![inner]] {
+        let mut s = Selection::default();
+        s.set(picked.iter().copied());
+        let c = cx(&d, &s, &p);
+        let mut t = SelectionTool::default();
+        assert_eq!(t.cursor(&c, Point::new(125.0, 125.0), Mods::default()), Cursor::Move, "{picked:?}");
+        let down = t.pointer(&c, &ev(PointerKind::Down, 125.0, 125.0));
+        assert!(!is_select(&down), "{picked:?}: {down:?}");
+        let drag = t.pointer(&c, &ev(PointerKind::Drag, 145.0, 125.0));
+        assert!(drag.iter().any(|a| matches!(a, Action::Preview(c, _) if c == "object.transform")), "{picked:?}: {drag:?}");
+        // Shift: a drag moves the selected members, constrained, and a click takes the member
+        // pressed (or the selected group holding it) out of the selection, not the outer group.
+        let shift = |kind, x, y| ev(kind, x, y).with_mods(Mods { shift: true, ..Mods::default() });
+        let mut t = SelectionTool::default();
+        let down = t.pointer(&c, &shift(PointerKind::Down, 125.0, 125.0));
+        assert!(!is_select(&down), "Shift, {picked:?}: {down:?}");
+        let drag = t.pointer(&c, &shift(PointerKind::Drag, 145.0, 125.0));
+        assert!(drag.iter().any(|a| matches!(a, Action::Preview(c, _) if c == "object.transform")), "Shift, {picked:?}: {drag:?}");
+        let mut t = SelectionTool::default();
+        t.pointer(&c, &shift(PointerKind::Down, 125.0, 125.0));
+        let up = t.pointer(&c, &shift(PointerKind::Up, 125.0, 125.0));
+        assert_eq!(up, vec![Action::Exec("select.toggle".into(), json!({"id": picked[0].0}))], "Shift-click, {picked:?}");
+        // Alt over a selected member measures no Distance Guides to the group holding it.
+        let mut t = SelectionTool::default();
+        t.pointer(&c, &alt(PointerKind::Move, 125.0, 125.0));
+        assert!(distances(&t, &c).0.is_empty(), "Alt over a selected member, {picked:?}");
+    }
+    // A member that is not selected: the press selects the outermost group.
+    let mut s = Selection::default();
+    s.set([a]);
+    let c = cx(&d, &s, &p);
+    let down = SelectionTool::default().pointer(&c, &ev(PointerKind::Down, 325.0, 125.0));
+    assert_eq!(down, vec![Action::Exec("select.set".into(), json!({"ids": [outer.0]}))]);
+    // A member with only some anchors selected (a Direct Selection marquee) is not selected whole:
+    // the press selects the outermost group, as before.
+    let mut s = Selection::default();
+    s.set([a]);
+    s.anchors.insert(a, [(0, 0)].into_iter().collect());
+    let c = cx(&d, &s, &p);
+    let down = SelectionTool::default().pointer(&c, &ev(PointerKind::Down, 125.0, 125.0));
+    assert_eq!(down, vec![Action::Exec("select.set".into(), json!({"ids": [outer.0]}))]);
+    // Every anchor of the member picked (as `select.anchors` and `select.key` leave it) selects
+    // it whole: the press moves it.
+    s.anchors.insert(a, [(0, 0), (0, 1), (0, 2), (0, 3)].into_iter().collect());
+    let c = cx(&d, &s, &p);
+    let mut t = SelectionTool::default();
+    assert_eq!(t.cursor(&c, Point::new(125.0, 125.0), Mods::default()), Cursor::Move, "every anchor");
+    let down = t.pointer(&c, &ev(PointerKind::Down, 125.0, 125.0));
+    assert!(!is_select(&down), "every anchor: {down:?}");
 }

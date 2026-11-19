@@ -8,9 +8,11 @@
 //! variable name per column, which export writes with `#` before a visibility variable and `@`
 //! before an image variable); import replaces the datasets, names the rows Data Set 1, 2…,
 //! also reads tab-separated files, and reads header cells that define new variables (`#` for
-//! visibility, `@` for image, no prefix for text). `variable.loadLibrary` replaces the variables and data sets with the
+//! visibility, `@` for image, `%` for graph, whose cells name graph data files, no prefix for
+//! text). `variable.loadLibrary` replaces the variables and data sets with the
 //! variables and data sets of a variable library, the XML file of the reference app's Save
 //! Variable Library, and `variable.saveLibrary` writes the variables and data sets as one.
+//! `variable.import` (the panel's Import…) runs one of the two readers by the file's extension.
 //! Agents reach every command through `run_command`, like all engine commands.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -865,6 +867,22 @@ fn dataset_step(s: &mut Session, cmd: &str, forward: bool) -> Result<Value> {
     apply_dataset(s, &name)
 }
 
+/// The Variables panel's Import…: a data source file read by its extension, a CSV, TSV or TXT
+/// file as `dataset.import` reads it and an XML file as `variable.loadLibrary` reads it. The
+/// result is that command's, with `format` set to `csv` or `xml`.
+fn variable_import(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "variable.import";
+    let path = str_param(p, "path").ok_or_else(|| bad(C, "missing `path`"))?;
+    let ext = std::path::Path::new(path).extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase);
+    let (format, mut out) = match ext.as_deref() {
+        Some("csv" | "tsv" | "txt") => ("csv", dataset_import(s, &json!({"path": path}))?),
+        Some("xml") => ("xml", load_library(s, &json!({"path": path}))?),
+        _ => return Err(bad(C, "Import reads a data source file ending in .csv, .tsv, .txt or .xml")),
+    };
+    out["format"] = json!(format);
+    Ok(out)
+}
+
 pub fn specs() -> Vec<CommandSpec> {
     vec![
         cmd!(
@@ -1053,9 +1071,18 @@ pub fn specs() -> Vec<CommandSpec> {
             "Import Data Sets…",
             ["Window", "Variables"],
             None,
-            "{path? | data? | dataBase64? | csv?} replace every dataset with the rows of a CSV, comma- or tab-separated, in UTF-16 (with a byte-order mark, or without one when at least half of its two-byte units hold a NUL byte and only one byte order reads a line break; any other file with NUL bytes is refused), UTF-8 or else Windows-1252 (header: one variable name per column, whatever its case; one row per dataset, named Data Set 1, 2… in file order). The document's variables and their bindings stay. A header that names no variable defines one, unbound: `#Name` defines a visibility variable, `@Name` defines an image variable, and a header without a prefix defines a text variable. A prefixed header whose name is a variable of another kind, and a `%` header that isn't a variable's exact name (graph data files), are refused, and so are two headers that name one variable and a header that would define a variable while the variables are locked. An import that leaves the variables and data sets as they were adds no undo step → {imported, names, defined, deletedDataSets}",
+            "{path? | data? | dataBase64? | csv?, base?: folder} replace every dataset with the rows of a CSV, comma- or tab-separated, in UTF-16 (with a byte-order mark, or without one when at least half of its two-byte units hold a NUL byte and only one byte order reads a line break; any other file with NUL bytes is refused), UTF-8 or else Windows-1252 (header: one variable name per column, whatever its case; one row per dataset, named Data Set 1, 2… in file order). The document's variables and their bindings stay. A header that names no variable defines one, unbound: `#Name` defines a visibility variable, `@Name` defines an image variable, `%Name` defines a graph variable, and a header without a prefix defines a text variable. A `%Name` column's cells are paths of graph data files, each read as Graph Data's Import Data reads one (at most 1 MB; tab-separated when a line holds a tab, else comma-separated; UTF-16 by dataset.import's rule, else UTF-8, with bytes that aren't UTF-8 read as replacement characters; the first row holds the series labels and the first column the category labels) and kept as the data set's graph value, which applies as graph.setData applies it. The files are read at import. A relative path is taken from `base`, else from the folder of the CSV file at `path`; with neither, it is refused (an `@Name` column's relative paths are kept as they are and taken from the document's folder when a data set is selected). A path on another computer, or on a network share other than the one `base` or the CSV is on, a device and a URL other than a `file:` URL without a host are refused, as image variables' paths are, before anything is read. A file that is missing, can't be read or is larger than 1 MB, a file that gives a graph value longer than 256 KB, and `%` columns whose files and graph values hold more than 256 MB in all (each file counted once, each cell's value every time) refuse the import, naming the line and the column. A prefixed header whose name is a variable of another kind is refused, and so are two headers that name one variable and a header that would define a variable while the variables are locked. An import that leaves the variables and data sets as they were adds no undo step → {imported, names, defined, deletedDataSets}",
             has_doc,
             dataset_import
+        ),
+        cmd!(
+            "variable.import",
+            "Import…",
+            ["Window", "Variables"],
+            None,
+            "{path} import a data source file, chosen by its extension (any case): a .csv, .tsv or .txt file is read as dataset.import reads it, and an .xml file as variable.loadLibrary reads it, with their refusals and undo steps; any other extension, or none, is refused before the file is read → the result of that command with `format`: `csv` or `xml`",
+            has_doc,
+            variable_import
         ),
         cmd!(
             query "dataset.export",
