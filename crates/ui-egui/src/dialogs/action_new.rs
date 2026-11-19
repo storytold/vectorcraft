@@ -4,7 +4,8 @@
 //! Fields: `set` (the index of the set the action goes into), `name`, `key` (0 for none, 1 to 15
 //! for F1 to F15), `cmd` (Ctrl, Command on macOS), `shift`, `color` (a value of
 //! [`crate::panels::actions::COLORS`], `""` for none). An invalid set or function key is an error:
-//! Record then adds nothing and the dialog stays open.
+//! Record then adds nothing and the dialog stays open. `automaticAlignTo` (false) chooses the live
+//! selection's reference for Align at playback while keeping recorded step targets.
 
 use serde_json::{Value, json};
 
@@ -46,7 +47,7 @@ pub fn open(app: &mut VectorcraftApp) -> Result<(), String> {
     let Some(s) = app.ui.action_sets.get(set) else { return Err("no such action set".into()) };
     let taken = |n: usize| s.actions.iter().any(|a| a.name == format!("Action {n}"));
     let n = (s.actions.len() + 1..).find(|&n| !taken(n)).unwrap_or(1);
-    let fields = json!({"set": set, "name": format!("Action {n}"), "key": 0, "cmd": false, "shift": false, "color": ""});
+    let fields = json!({"set": set, "name": format!("Action {n}"), "key": 0, "cmd": false, "shift": false, "color": "", "automaticAlignTo": false});
     app.ui.dialog = Some(Dialog::new(KIND, fields));
     Ok(())
 }
@@ -64,6 +65,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         }
     });
     key_and_color(ui, d);
+    automatic_align_options(ui, d);
     false
 }
 
@@ -94,6 +96,14 @@ pub(super) fn key_and_color(ui: &mut egui::Ui, d: &mut Dialog) {
     super::form::choice(ui, d, "color", "Color:", (LABEL_W, 120.0), &colors);
 }
 
+/// The Align playback option shared by New Action and Action Options.
+pub(super) fn automatic_align_options(ui: &mut egui::Ui, d: &mut Dialog) {
+    super::form::check(ui, d, "automaticAlignTo", "Choose Align To at playback");
+    widgets::dim_label(ui, "Align steps use the key object, key anchor or key guide when one is set.");
+    widgets::dim_label(ui, "With one whole object selected and no key, they use the artboard.");
+    widgets::dim_label(ui, "Otherwise they use the selection.");
+}
+
 /// The function key and color params the dialog's fields give, as `ui.action.new` and
 /// `ui.action.options` take them.
 pub(super) fn key_and_color_params(d: &Dialog) -> Value {
@@ -114,6 +124,9 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let mut p = key_and_color_params(d);
     p["set"] = d.fields.get("set").cloned().unwrap_or(Value::Null);
     p["name"] = json!(name);
+    if let Some(value) = d.fields.get("automaticAlignTo") {
+        p["automaticAlignTo"] = value.clone();
+    }
     app.run(crate::panels::actions::NEW_ACTION, p)?;
     app.ui.dialog = None;
     Ok(Value::Null)

@@ -54,10 +54,10 @@ impl SideWidget {
         (at.x.is_finite() && at.y.is_finite()).then_some(Self { id, at, sides: *sides })
     }
 
-    /// The widget the tool can drag (its bounding box showing).
+    /// The widget the tool can drag (its bounding box and the shape widgets showing).
     pub fn for_tool(cx: &ToolContext) -> Option<(Self, OrientedBox)> {
         // One object or none: a larger selection's box is not measured.
-        if cx.selection.objects.len() != 1 {
+        if !cx.shape_widgets || cx.selection.objects.len() != 1 {
             return None;
         }
         let bx = shown_box(cx)?;
@@ -276,8 +276,12 @@ mod tests {
         assert!(w.at.distance(want(1.0)) < 1e-9, "{w:?} {bx:?}");
         assert!(SideWidget::of(&d, &s, &bx, 4.0).unwrap().at.distance(want(4.0)) < 1e-9);
         assert!(over_widget(&c, w.at) && !over_widget(&c, w.at + vectorcraft_geom::Vec2::new(0.0, 8.0)));
-        // Hidden with the bounding box hidden, with an anchor or segment selected, or with no zoom.
+        // Hidden with the bounding box or the shape widgets hidden, with an anchor or segment
+        // selected, or with no zoom.
         assert!(SideWidget::for_tool(&ToolContext { show_bbox: false, ..cx(&d, &s, &p) }).is_none());
+        let hidden = ToolContext { shape_widgets: false, ..cx(&d, &s, &p) };
+        assert!(SideWidget::for_tool(&hidden).is_none() && !over_widget(&hidden, w.at));
+        assert!(SideDrag::hit(&hidden, &PointerEvent::new(PointerKind::Down, w.at.x, w.at.y)).is_none());
         let mut part = s.clone();
         part.segments.insert(id, Default::default());
         assert!(SideWidget::of(&d, &part, &bx, 1.0).is_none());
@@ -428,5 +432,68 @@ mod tests {
         assert!(!t.busy() && !t.transforming());
         assert!(!t.overlays(&c).iter().any(|o| matches!(o, Overlay::Measure { .. })));
         assert!(t.pointer(&c, &ev(PointerKind::Up, w.at)).is_empty());
+    }
+
+    /// Switching tools during a drag puts the count back, as Escape does; a press that changed
+    /// nothing sends nothing.
+    #[test]
+    fn switching_tools_cancels_a_side_widget_drag() {
+        let (d, _, s) = polygon_doc(5, Affine::translate((300.0, 300.0)));
+        let p = paint();
+        let c = cx(&d, &s, &p);
+        let (w, _) = SideWidget::for_tool(&c).unwrap();
+        let mut t = SelectionTool::default();
+        t.pointer(&c, &ev(PointerKind::Down, w.at));
+        assert_eq!(sides_of(&t.pointer(&c, &ev(PointerKind::Drag, w.at + vectorcraft_geom::Vec2::new(0.0, 30.0)))), [7]);
+        assert_eq!(t.deactivate(&c), vec![Action::Cancel]);
+        assert!(!t.busy() && !t.transforming());
+        t.pointer(&c, &ev(PointerKind::Down, w.at));
+        assert!(t.pointer(&c, &ev(PointerKind::Drag, w.at + vectorcraft_geom::Vec2::new(0.0, 6.0))).is_empty());
+        assert!(t.deactivate(&c).is_empty());
+        assert!(!t.busy() && !t.transforming());
+    }
+
+    /// The release is read where it happens, with or without a drag event there first: back at the
+    /// start the polygon keeps its count with no undo step, and further down it takes the new count.
+    #[test]
+    fn the_release_position_sets_the_sides() {
+        let (d, id, s) = polygon_doc(5, Affine::translate((300.0, 300.0)));
+        let p = paint();
+        let c = cx(&d, &s, &p);
+        let (w, _) = SideWidget::for_tool(&c).unwrap();
+        let at = |px: f64| w.at + vectorcraft_geom::Vec2::new(0.0, px);
+        let mut t = SelectionTool::default();
+        t.pointer(&c, &ev(PointerKind::Down, w.at));
+        assert_eq!(sides_of(&t.pointer(&c, &ev(PointerKind::Drag, at(12.0)))), [6]);
+        assert_eq!(
+            t.pointer(&c, &ev(PointerKind::Up, w.at)),
+            vec![Action::Preview("object.setLiveShape".into(), json!({ "id": id.0, "sides": 5 })), Action::Cancel]
+        );
+        assert!(!t.busy() && !t.transforming());
+        t.pointer(&c, &ev(PointerKind::Down, w.at));
+        assert_eq!(sides_of(&t.pointer(&c, &ev(PointerKind::Drag, at(12.0)))), [6]);
+        assert_eq!(
+            t.pointer(&c, &ev(PointerKind::Up, at(24.0))),
+            vec![Action::Preview("object.setLiveShape".into(), json!({ "id": id.0, "sides": 7 })), Action::Commit]
+        );
+    }
+
+    /// A double-click on the widget with the Selection tool does nothing to the artwork under it.
+    #[test]
+    fn a_double_click_on_the_widget_leaves_the_artwork_under_it_alone() {
+        let (mut d, _, s) = polygon_doc(5, Affine::translate((300.0, 300.0)));
+        let p = paint();
+        let (w, _) = SideWidget::for_tool(&cx(&d, &s, &p)).unwrap();
+        let l = d.layers[0].id;
+        let under = d.alloc_id();
+        let at = d.layers[0].children().map_or(0, |c| c.len());
+        let r = vectorcraft_geom::Rect::new(w.at.x - 20.0, w.at.y - 20.0, w.at.x + 20.0, w.at.y + 20.0);
+        d.insert(Some(l), at, Node::path(under, vectorcraft_geom::shapes::rectangle(r), Appearance::default_art())).unwrap();
+        let c = cx(&d, &s, &p);
+        assert!(over_widget(&c, w.at));
+        let mut t = SelectionTool::default();
+        assert!(t.pointer(&c, &ev(PointerKind::DoubleClick, w.at)).is_empty());
+        // Beside the widget, the double-click reaches the artwork.
+        assert!(!t.pointer(&c, &ev(PointerKind::DoubleClick, w.at + vectorcraft_geom::Vec2::new(0.0, 15.0))).is_empty());
     }
 }
