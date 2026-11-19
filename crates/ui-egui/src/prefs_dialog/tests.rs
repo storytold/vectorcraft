@@ -2433,14 +2433,15 @@ fn hovering_a_performance_row_shows_its_description() {
     let row = |texts: &[(String, egui::Rect)], label: &str| {
         texts.iter().rev().find(|(t, _)| t == label).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no `{label}` in {texts:?}"))
     };
-    let mut rows = vec![
-        ("GPU Performance", "gpuPerformance"),
-        ("Animated Zoom", "animatedZoom"),
-        ("Graphics Processor:", "gpuPreference"),
+    let mut rows = vec![("GPU Performance", "gpuPerformance"), ("Animated Zoom", "animatedZoom"), ("Graphics Processor:", "gpuPreference")];
+    if !cfg!(target_arch = "wasm32") {
+        rows.push(("Low-Latency Drawing", "lowLatencyDrawing"));
+    }
+    rows.extend([
         ("History States:", "historyStates"),
         ("Real-time Drawing and Editing", "realTimeDrawing"),
         ("Render Threads (-1 = Automatic):", "renderThreads"),
-    ];
+    ]);
     if cfg!(target_os = "linux") {
         rows.push(("Linux Display Server:", "linuxDisplayServer"));
     }
