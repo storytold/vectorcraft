@@ -423,7 +423,7 @@ pub(crate) fn status_message(app: &VectorcraftApp) -> String {
     crate::i18n::msg(status)
 }
 
-/// Most notes the status message's hover and access information list.
+/// Most notes in the compact status-message hover; the full viewer is uncapped.
 const MAX_LISTED_NOTES: usize = 30;
 
 /// The notes behind the status message (an open's, a save's or an export's,
@@ -455,16 +455,44 @@ fn notes_tooltip(response: egui::Response, field: egui::Rect, text: &str, notes:
         let margins = ui.spacing().menu_margin.sum() + 2.0 * ui.spacing().item_spacing;
         let width = ui.spacing().tooltip_width.min(screen.width() - margins.x).max(0.0);
         ui.set_max_width(width);
-        let room = (field.top() - screen.top()).max(screen.bottom() - field.bottom()) - 2.0 * margins.y;
         let tip = |most: usize| format!("{text}\n{}", listed_notes(notes, most));
         let height =
             |s: &str| egui::WidgetText::from(s).into_galley(ui, Some(egui::TextWrapMode::Wrap), width, egui::FontSelection::Default).size().y;
+        let hint = tl!("Click to view all notes");
+        let room = (field.top() - screen.top()).max(screen.bottom() - field.bottom()) - 2.0 * margins.y - height(hint) - ui.spacing().item_spacing.y;
         let mut most = notes.len().min(MAX_LISTED_NOTES);
         while most > 0 && height(&tip(most)) > room {
             most -= 1;
         }
         ui.add(egui::Label::new(tip(most)).wrap());
+        ui.label(hint);
     })
+}
+
+/// Unlike tooltips, a popup remains open while its scroll area consumes wheel input.
+fn notes_popup(response: &egui::Response, text: &str, notes: &[String]) {
+    egui::Popup::menu(response).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
+        let screen = ui.ctx().content_rect();
+        let margins = ui.spacing().menu_margin.sum() + 2.0 * ui.spacing().item_spacing;
+        let width = ui.spacing().tooltip_width.min(screen.width() - margins.x).max(0.0);
+        ui.set_width(width);
+        egui::ScrollArea::vertical()
+            .id_salt(("status-all-notes", text))
+            .max_height((screen.height() - margins.y).max(0.0))
+            .auto_shrink([false, true])
+            .show(ui, |ui| {
+                let lang = crate::i18n::current();
+                for note in notes {
+                    ui.add(egui::Label::new(format!("• {}", crate::i18n::message(lang, note))).wrap());
+                }
+            });
+    });
+}
+
+fn full_notes_value(text: &str, notes: &[String]) -> String {
+    let lang = crate::i18n::current();
+    let notes = notes.iter().map(|note| format!("• {}", crate::i18n::message(lang, note))).collect::<Vec<_>>().join("\n");
+    format!("{text}\n{notes}")
 }
 
 /// A field never grows with its text. Clipping also bounds over-wide glyphs; hover and access
@@ -488,7 +516,8 @@ fn status_field_with_notes(ui: &mut Ui, id: &str, rect: egui::Rect, text: String
     let at = egui::pos2(rect.left(), rect.center().y - galley.size().y / 2.0);
     let elided = galley.elided;
     ui.painter().with_clip_rect(ui.clip_rect().intersect(rect)).galley(at, galley, color);
-    let response = ui.interact(rect, ui.scope_id().with(("status-field", id)), Sense::hover());
+    let sense = if notes.is_empty() { Sense::hover() } else { Sense::click() };
+    let response = ui.interact(rect, ui.scope_id().with(("status-field", id)), sense);
     if notes.is_empty() {
         response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, &text));
         if elided {
@@ -496,8 +525,14 @@ fn status_field_with_notes(ui: &mut Ui, id: &str, rect: egui::Rect, text: String
         }
         return;
     }
-    // The list is made only for a hover or a screen reader.
-    response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, format!("{text}\n{}", listed_notes(notes, MAX_LISTED_NOTES))));
+    // The complete value is made only when access information is requested.
+    let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
+    response.widget_info(|| {
+        let mut info = egui::WidgetInfo::labeled(egui::Role::Button, true, tl!("Click to view all notes"));
+        info.current_text_value = Some(full_notes_value(&text, notes));
+        info
+    });
+    notes_popup(&response, &text, notes);
     if response.hovered() {
         notes_tooltip(response, rect, &text, notes);
     }

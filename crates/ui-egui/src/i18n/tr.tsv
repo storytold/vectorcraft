@@ -489,6 +489,10 @@ font-technology	Variable	Değişken
 	Cusp	Sivri nokta
 	Straight segment	Düz segment
 	Circle too large	Daire çok büyük
+	Show Radii	Yarıçapları Göster
+	Show Diameter	Çapı Göster
+	Anchors at Standard Positions	Standart Konumlarda Bağlantı Noktaları
+	Third Point by Dragging	Sürükleyerek Üçüncü Nokta
 	Classic Defaults	Klasik Varsayılanlar
 	Clean Up…	Temizleme…
 	Clear	Temizle

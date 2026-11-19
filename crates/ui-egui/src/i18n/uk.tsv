@@ -503,6 +503,11 @@ font-technology	Variable	Варіативні
 	Cusp	Точка звороту
 	Straight segment	Прямий сегмент
 	Circle too large	Коло завелике
+	Show Radii	Показати радіуси
+	Show Diameter	Показати діаметр
+	Anchors at Standard Positions	Опорні точки в стандартних позиціях
+	Third Point by Dragging	Третя точка перетягуванням
+	Gray	Сірий
 	Classic Defaults	Класичні значення за промовчанням
 	Clean Up…	Очистити…
 	Clear	Очистити

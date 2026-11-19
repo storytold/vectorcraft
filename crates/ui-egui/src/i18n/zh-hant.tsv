@@ -471,6 +471,11 @@ font-technology	Variable	可變
 	Cusp	尖點
 	Straight segment	直線段
 	Circle too large	圓形過大
+	Show Radii	顯示半徑
+	Show Diameter	顯示直徑
+	Anchors at Standard Positions	錨點位於標準位置
+	Third Point by Dragging	拖曳放置第三點
+	Gray	灰
 	Classic Defaults	經典預設值
 	Clean Up…	清除…
 	Clear	清除

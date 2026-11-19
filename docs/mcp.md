@@ -7119,8 +7119,9 @@ slider back to the Auto-Smooth level.
 
 ## Circle through two or three points
 
-`shape.circleThroughPoints {points?: [[x, y], [x, y]] or [[x, y], [x, y], [x, y]]}` draws the circle whose edge passes
-through the points, as a live ellipse with the current paint, and selects it. Two points are the ends of a diameter.
+`shape.circleThroughPoints {points?: [[x, y], [x, y]] or [[x, y], [x, y], [x, y]], anchors?}` draws the circle whose
+edge passes through the points, with the current paint, and selects it: a live ellipse with the default
+`anchors: "standard"`, and a plain path with `anchors: "points"`. Two points are the ends of a diameter.
 Without `points`, it uses the two or three selected anchor points, from one path or several: anchor points selected with
 Direct Selection, or all the anchor points of a path selected whole, such as a triangle. The ends of selected segments
 do not count. The result is `{id, cx, cy, radius}`, and one undo removes the circle. The circle is not pixel-aligned,
@@ -7129,6 +7130,12 @@ through the points. The command returns an error and draws nothing when two poin
 one line (twice the triangle's area at most 10⁻¹⁰ of its longest side squared), when the circle would reach past the
 canvas (4,000,000 pt from the origin), when `points` is not two or three pairs of numbers, and when `points` is left
 out and the selection does not hold two or three anchor points of paths.
+
+`anchors` sets where the circle's anchors go. With `"standard"`, the default, the circle has four anchors at 0°, 90°,
+180° and 270°. With `"points"`, the circle is a plain path with an anchor exactly at each point, and more anchors
+between them, evenly spaced, so that no curve turns more than a quarter of the circle: two points give four anchors,
+and three points give four to six. Any other `anchors` value is an error (`` `anchors` must be one of standard, points ``), and nothing
+is drawn.
 
 The Circle tool, after the Ellipse tool in its toolbar group, draws with this command. A drag from one point to
 another, or a click on each, draws the circle with the two points as the ends of a diameter. A click on a first point,
@@ -7144,6 +7151,28 @@ A press let go within 2 screen points of where it was pressed is a click, also a
 Escape, a dropped press, and an edit, Undo or Redo made outside the tool drop the first point. A second press within 3
 screen points of the first point, or one that snaps to it, is a press on it: let go there (a double-click), it places no second point, and
 dragged out, it draws the circle on the diameter it drags out.
+
+Circle Tool Options (`tool.options {tool: "circle"}`, or a double-click on the tool, dialog `circleOptions`) sets the
+tool's options, which `tool.setOption {tool: "circle", values}` also sets and the preferences keep. All are on by
+default, and `color` is `"blue"`:
+
+- `center`, `radii` and `diameter` (Show Center, Show Radii, Show Diameter) show or hide the cross at the center, the
+  lines from the center to the points and the diameter label. The diameter label also needs Measurement Labels on.
+- `color` (Color) is the color of the cross and the lines: `"red"`, `"blue"`, `"magenta"`, `"green"`, `"black"` or
+  `"gray"`. The outline stays blue.
+- `standardAnchors` (Anchors at Standard Positions) off draws the circle with `anchors: "points"`, so its anchors are
+  at the points it was drawn through.
+- `dragThird` (Third Point by Dragging) off changes how the points are placed. A click on a second point places it, and
+  a click on a third point draws the circle through the three. A click on the second point again, as the second click
+  of a double-click there is, draws the circle on the two points. An Alt-click places the second point where Alt's
+  rounding of the diameter puts it, and both circles pass through it there. A click on the first point, or a second
+  point dragged back and let go on it, places nothing, and a click on the line through the first two points draws
+  nothing and keeps them. A drag from the first point still draws the circle on the diameter it drags out, and a drag
+  from a second point places it where it is let go. Switching `dragThird` drops the points placed so far.
+
+`tool.setOption` returns an error and changes none of the options when a value is not one the option takes
+(`` `radii` must be true or false ``, `` `color` must be one of red, blue, magenta, green, black, gray ``) or the key is
+not one of these (`` unknown Circle tool option `size` ``).
 
 With the Ellipse tool, the first two Shift-clicks place points, and the third draws the circle through the three with
 this command. After two points the tool previews the circle through them and the pointer as a dashed outline. Once a
@@ -7227,11 +7256,17 @@ path's last point, drawn with the tool's `action` option:
 Alt (Option on macOS) pressed and let go with no other key, click or wheel turn in between switches to the next action:
 Line, Continuous Arc, Sharp Corner Arc, and back to Line. C flips the last piece, while it is a sharp-corner arc, to
 the other side of its chord. `[` and `]` make the arc size 15° smaller or larger, for the last sharp-corner arc and the
-arcs after it. A click on the first point closes the path, and a click on an end of an open path goes on drawing from
-that end. Escape or Enter ends the path, and so does an edit made to it by another command. The path's points show as circles without handles, and a preview shows the
-piece the next click adds. Points snap to Smart Guides. Each piece, flip and size change is one undo step. The arc
-size of 180°, its 15° steps, the side an arc bulges to and Enter ending the path are VectorCraft's own rules. The
-tool keeps `action` and `turn` with the preferences (`tool.setOption {tool: "quickPen", key, value}`).
+arcs after it. During a drag, C and `[` `]` change the sharp-corner arc being dragged, and Alt switches its action. A
+dragged piece ends where the press is let go. A click on the first point closes the path, and a click on an end of an
+open path goes on drawing from that end. Escape or Enter ends the path, and so does an edit made to it by another
+command. An edit made by another command during a drag, to the path or to other art, also ends the path: the edit
+stays, and the piece stays as last shown. With the `realTimeDrawing` preference off, a press during which another
+command edits the document adds no piece, and the edit stays. The path's points show as circles without handles, and a
+preview shows the piece the next click adds. Points snap to Smart Guides. Each piece is one undo step, together with the
+flips and size changes made during its drag, and each flip or size change made between presses is one undo step. The
+arc size of 180°, its 15° steps, the side an arc bulges to, what C and `[` `]` do during a drag and Enter ending the
+path are VectorCraft's own rules. The tool keeps `action` and `turn` with the preferences
+(`tool.setOption {tool: "quickPen", key, value}`).
 
 `path.quickPen {start?: [x, y], id?, subpath?, keep?, pieces?, closed?}` draws such a path and selects it, as one
 undo step, and answers `{id}`. With `start`, it makes a new path with the current paint (a black stroke when the paint
@@ -10377,7 +10412,8 @@ its color, remove it or add one), Draw the Nearest Path Next (`sortPaths`) and D
 artboards, the bounds of the art, or the selection with Export Selection or Export Selected Art Only), or one black
 pen when that art draws nothing. When the export refuses the options or the artboard choice, One Pen per Color stays
 chosen and the dialog shows why. OK checks the options and the artboard choice, and remembers the options for the
-next export; a canceled save panel writes nothing and keeps the options remembered before.
+next export; a canceled save panel writes nothing and keeps the options remembered before. When another document has
+become the active one since the dialog opened, OK closes it and writes nothing.
 
 ## TIFF, BMP and Targa export
 

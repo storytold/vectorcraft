@@ -505,6 +505,10 @@ font-technology	Variable	Вариативные
 	Cusp	Точка возврата
 	Straight segment	Прямой сегмент
 	Circle too large	Круг слишком большой
+	Show Radii	Показать радиусы
+	Show Diameter	Показать диаметр
+	Anchors at Standard Positions	Опорные точки в стандартных позициях
+	Third Point by Dragging	Третья точка перетаскиванием
 	Classic Defaults	Классические значения по умолчанию
 	Clean Up…	Очистить…
 	Clear	Очистить

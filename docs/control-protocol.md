@@ -928,7 +928,8 @@ when the export refuses the options or the artboard choice, `pens` stays null an
 remembers the options for the next HP-GL Options (not `exportSelection`) and writes the `.plt` file(s), asking for a
 path when there is none (one per artboard with Use Artboards). A canceled save dialog writes nothing and keeps the
 options remembered before; a save dialog shown in line (not as a sheet or off the UI thread) also keeps HP-GL
-Options open.
+Options open. When another document has become the active one since the dialog opened, `ui.dialog.confirm` closes
+it and writes nothing.
 
 TIFF, BMP and Targa Options: Export As… with the TIFF, BMP or Targa format (`file.exportAs {format: "tiff"}`, then
 the save dialog) opens `tiffOptions`, `bmpOptions` or `tgaOptions`: the raster rows of PNG Options (`ppi`,

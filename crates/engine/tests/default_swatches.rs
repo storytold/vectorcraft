@@ -531,7 +531,7 @@ fn default_swatches_missing_full_brush_image_keeps_the_previous_saved_palette() 
 fn default_swatches_unreadable_saved_palette_adds_no_partial_document() {
     let _cms = color_context();
     let dir = TestDirectory::new();
-    save_profile(&dir.0, &customized_profile());
+    review_598452_save_warning_profile(&dir.0);
     // Both a damaged encoding and a readable encoding of invalid native data retain a full baseline.
     let invalid_native = b"unreadable saved palette";
     let native_reason = vectorcraft_format::load_file(invalid_native).err().unwrap().to_string();
@@ -1741,6 +1741,25 @@ mod review_5970498365 {
     }
 }
 
+const REVIEW_598452_BAD_PROFILE: &str = "Unusable embedded RGB for the saved-palette warning control";
+
+/// The real profile loader must report this file's invalid embedded ICC before palette recovery.
+fn review_598452_save_warning_profile(directory: &Path) {
+    assert!(cms::profile(REVIEW_598452_BAD_PROFILE).is_none(), "CONTROL: the invalid fixture is not an installed profile");
+    let mut profile = customized_profile();
+    profile.color_profiles.rgb = Some(REVIEW_598452_BAD_PROFILE.into());
+    let bytes = vectorcraft_format::save_with(
+        &profile,
+        &vectorcraft_format::SaveOptions {
+            include_linked: true,
+            profiles: [(REVIEW_598452_BAD_PROFILE.to_string(), b"not an ICC profile".to_vec())].into(),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    std::fs::write(directory.join("Print.vectorcraft"), bytes).unwrap();
+}
+
 /// Compare the independent successful profile/factory baseline, including resources not in its palette.
 fn review_598379_fallback_resources(actual: &Document, expected: &Document) {
     assert_eq!(actual.swatches, expected.swatches);
@@ -1765,6 +1784,13 @@ fn review_598379_unreadable_fallback(directory: &Path, profile: Option<&str>, da
     let control = baseline.execute("file.new", &params).unwrap();
     assert!(control.get("swatchDefaultsError").is_none(), "CONTROL: normal creation has no saved-palette error");
     assert_eq!(control.get("profile").and_then(serde_json::Value::as_str), profile, "CONTROL: the selected category participates");
+    if profile.is_some() {
+        let warnings = control["warnings"].as_array().expect("CONTROL: the Print profile emits its actual embedded-profile warning");
+        assert!(!warnings.is_empty(), "CONTROL: the profile warning must precede the palette warning");
+        let warning = warnings[0].as_str().unwrap();
+        assert!(warning.contains(REVIEW_598452_BAD_PROFILE) && warning.contains("can't be used"), "CONTROL: {warning}");
+        assert!(cms::profile(REVIEW_598452_BAD_PROFILE).is_none(), "the unusable ICC must not enter the profile registry");
+    }
     let expected = baseline.doc().unwrap().doc.clone();
 
     let mut s = Session::new();
