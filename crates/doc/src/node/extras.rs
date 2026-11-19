@@ -41,6 +41,9 @@ pub struct NodeExtras {
     /// Dimension object: the live measurement it draws; its ordinary group children hold its
     /// exportable appearance (Object › Dimensions, the Dimension tool).
     pub dimension: Option<Box<crate::dimension::Dimension>>,
+    /// Flare object: the settings its group was drawn with (the Flare tool); its ordinary group
+    /// children hold its art.
+    pub flare: Option<Box<crate::flare::FlareSpec>>,
     /// Object › Intertwine: as a member of an Intertwine group, the area (document coordinates,
     /// filled non-zero) where this object is drawn over the group's other members.
     pub intertwine: Option<Box<PathData>>,
@@ -100,6 +103,7 @@ pub(super) static NO_EXTRAS: NodeExtras = NodeExtras {
     slice: None,
     perspective: None,
     dimension: None,
+    flare: None,
     intertwine: None,
     intertwine_tiers: Vec::new(),
     live_paint_gaps: None,

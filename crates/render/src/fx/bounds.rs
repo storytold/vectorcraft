@@ -397,9 +397,7 @@ fn shape_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
         // effects in a symbol's art and a live object's content paint past it.
         _ if has_object_fx(n) => {
             let symbol = match &n.kind {
-                NodeKind::SymbolInstance { symbol, .. } => {
-                    symbols.document().symbols.iter().find(|s| s.name == *symbol).map(|s| dynamic_art(&s.art, n))
-                }
+                NodeKind::SymbolInstance { symbol, .. } => symbols.symbol(symbol).map(|s| dynamic_art(&s.art, n)),
                 _ => None,
             };
             let reshaped = effects::reshape(Some(symbols.document()), n, symbol.as_ref());
@@ -466,7 +464,7 @@ fn pieces_within(symbols: &SymbolBoxes, art: &Node, depth: usize, budget: &mut u
         NodeKind::Path { .. } | NodeKind::Compound { .. } if has_fx(art) => visual_bounds(symbols, art),
         NodeKind::SymbolInstance { symbol, .. } if depth < vectorcraft_doc::depth::MAX_DEPTH && has_instance_row_effects(art) => {
             let doc = symbols.document();
-            let reshaped = doc.symbols.iter().find(|s| s.name == *symbol).and_then(|s| {
+            let reshaped = symbols.symbol(symbol).and_then(|s| {
                 let count = s.art.count() as u64;
                 if count > *budget {
                     return None;
@@ -501,13 +499,15 @@ pub(crate) fn painted_reach(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
 /// The outline the renderer clips `n`'s Feather, Inner Glow and Rasterize with Create Clipping
 /// Mask to: a path's or compound path's geometry with its object-level geometry effects applied,
 /// the outline of the art [`Renderer::fx_art`] makes for an object with object effects, and with
-/// Crop Marks the object's own. For other objects it is [`effects::clip_outline`].
-pub(crate) fn drawn_outline(doc: &Document, n: &Node) -> Option<(BezPath, FillRule)> {
+/// Crop Marks the object's own. For other objects it is [`effects::clip_outline`]. The symbols of
+/// instances are found in `symbols`.
+pub(crate) fn drawn_outline(symbols: &SymbolBoxes, n: &Node) -> Option<(BezPath, FillRule)> {
+    let doc = symbols.document();
     if let Some(art) = effects::crop_marks_art(n) {
-        return drawn_outline(doc, art.children()?.first()?);
+        return drawn_outline(symbols, art.children()?.first()?);
     }
     if has_object_fx(n) {
-        let art = Renderer::new().fx_art(doc, &Arc::new(n.clone()), false);
+        let art = Renderer::new().fx_art(symbols, &Arc::new(n.clone()), false);
         return effects::clip_outline(&art);
     }
     match &n.kind {
@@ -545,7 +545,7 @@ pub(crate) fn drawn_outlines(doc: &Document, symbols: &SymbolBoxes, n: &Node, le
         if is_container(n) && !makes_art && !effects::has_item_geometry(n) {
             object.appearance.items.clear();
         }
-        let art = Renderer::new().fx_art(doc, &Arc::new(object), false);
+        let art = Renderer::new().fx_art(symbols, &Arc::new(object), false);
         if art.children().is_some() && !has_object_fx(&art) {
             return evaluated_outlines(doc, symbols, &art, left, out);
         }
@@ -570,7 +570,7 @@ pub(crate) fn drawn_outlines(doc: &Document, symbols: &SymbolBoxes, n: &Node, le
         NodeKind::SymbolInstance { .. } => {
             push_outline(n.geometric_bounds_with(symbols).map(|b| vectorcraft_geom::shapes::rectangle(b).to_bezpath()), left, out)
         }
-        _ => push_outline(drawn_outline(doc, n).map(|(path, _)| path), left, out),
+        _ => push_outline(drawn_outline(symbols, n).map(|(path, _)| path), left, out),
     }
 }
 
@@ -690,9 +690,7 @@ fn cull_bounds_in(symbols: &SymbolBoxes, n: &Node, after_reshape: bool, brush: b
         // symbol instance's art paint past that art.
         _ if has_object_fx(n) => {
             let symbol = match &n.kind {
-                NodeKind::SymbolInstance { symbol, .. } => {
-                    symbols.document().symbols.iter().find(|s| s.name == *symbol).map(|s| dynamic_art(&s.art, n))
-                }
+                NodeKind::SymbolInstance { symbol, .. } => symbols.symbol(symbol).map(|s| dynamic_art(&s.art, n)),
                 _ => None,
             };
             let reshaped = effects::reshape(Some(symbols.document()), n, symbol.as_ref());
@@ -727,6 +725,12 @@ fn cull_bounds_in(symbols: &SymbolBoxes, n: &Node, after_reshape: bool, brush: b
             let b = n.visual_bounds_with(symbols)?;
             let a = art_effects_reach(symbols, n);
             Some(b.inflate(a, a))
+        }
+        // A spine can rotate a blend's keys and steps past their unrotated visual bounds.
+        NodeKind::Blend { .. } => {
+            let b = n.reach_bounds_with(symbols)?;
+            let a = live_content_reach(symbols, n);
+            vectorcraft_geom::union_opt(Some(b.inflate(a, a)), placed_blend_effect_bounds(symbols, n))
         }
         _ => {
             let b = n.visual_bounds_with(symbols)?;
@@ -806,14 +810,41 @@ pub(crate) fn with_own_raster_reach(symbols: &SymbolBoxes, n: &Node, b: Rect) ->
     b.inflate(o, o)
 }
 
-/// `n`'s own visual box, type's grown to hold its glyphs ([`glyphs_box`]): what it draws when its
-/// object effects leave it as it is (Revolve builds no art from type).
+/// `n`'s own box, type's grown to hold its glyphs ([`glyphs_box`]) and a blend's to hold its
+/// spine-placed keys and steps: what it draws when its object effects leave it as it is
+/// (Revolve builds no art from type).
 fn own_box(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
-    let b = n.visual_bounds_with(symbols)?;
+    let b = match &n.kind {
+        NodeKind::Blend { .. } => vectorcraft_geom::union_opt(n.reach_bounds_with(symbols), placed_blend_effect_bounds(symbols, n)),
+        _ => n.visual_bounds_with(symbols),
+    }?;
     Some(match &n.kind {
         NodeKind::Text(t) => vectorcraft_geom::union_opt(Some(b), glyphs_box(t, n.appearance.outset())).unwrap_or(b),
         _ => b,
     })
+}
+
+/// A rotated blend's effect-bearing content, measured after spine placement. Geometry effects
+/// run on the placed shapes, so their reach on the original keys need not cover what they paint.
+/// Effect-free blends keep the quick rail envelope without evaluating their steps.
+fn placed_blend_effect_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
+    let NodeKind::Blend { spec, .. } = &n.kind else { return None };
+    if spec.orientation != vectorcraft_doc::BlendOrientation::AlignToPath {
+        return None;
+    }
+    let mut has_effects = false;
+    n.walk(&mut |c| {
+        has_effects |= has_fx(c)
+            || has_object_fx(c)
+            || match &c.kind {
+                NodeKind::SymbolInstance { symbol, .. } => symbols.has_effects(symbol),
+                _ => false,
+            };
+    });
+    if !has_effects {
+        return None;
+    }
+    effects::expand_live(Some(symbols.document()), n).iter().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, cull_bounds(symbols, c)))
 }
 
 /// The box of type `t`'s glyphs as laid out (its layout bounds, else laid out now), grown by its
