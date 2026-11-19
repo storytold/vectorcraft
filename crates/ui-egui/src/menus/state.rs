@@ -369,6 +369,9 @@ fn ui_enabled(app: &VectorcraftApp, id: &str) -> bool {
         "file.exportSelection" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
         "css.copy" | "css.exportFile" => app.session.active().is_some(),
         "print.printerSetup" => app.services.print.as_ref().is_some_and(|s| s.has_setup()),
+        // Trim View hides the guides and the grid while it is on, so their Show/Hide items wait
+        // until it is off (#8363).
+        "view.guides" | "view.grid" => !app.ui.view.trim_view,
         "view.refreshMonitorProfile" => app.session.prefs.monitor_profile_display && app.display_profile.has_reader(),
         "plugin.dialog" => app.session.active().is_some(),
         "ui.perspectiveGridDialog" | "ui.savePerspectivePreset" => app.session.active().is_some(),

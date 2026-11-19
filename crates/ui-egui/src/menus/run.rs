@@ -135,6 +135,26 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         .or_else(|| run_ui_part13(app, id, p))
 }
 
+/// Why Show/Hide Guides and Show/Hide Grid refuse to run while Trim View is on.
+pub(crate) const TRIM_VIEW_HIDES: &str = "Trim View hides the guides and the grid; turn it off first";
+
+/// Drops the selection when it holds ruler guides or guide paths that no longer draw (Hide Guides,
+/// Trim View): their selection overlay would otherwise reveal the geometry just hidden.
+fn deselect_hidden_guides(app: &mut VectorcraftApp) {
+    let hidden_selection = !app.ui.view.guides_shown()
+        && app.session.active().is_some_and(|d| {
+            !d.selection.guides.is_empty()
+                || d.selection
+                    .objects
+                    .iter()
+                    .any(|id| matches!(d.doc.node(*id).map(|n| &n.kind), Some(vectorcraft_doc::NodeKind::Path { guide: true, .. })))
+        });
+    if hidden_selection {
+        // Deselecting a document that is open cannot fail.
+        let _ = app.run("select.none", json!({}));
+    }
+}
+
 /// UI commands, part 1.
 fn run_ui_part1(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<Value, String>> {
     let s = |k: &str| p.get(k).and_then(Value::as_str).map(str::to_string);
@@ -292,7 +312,12 @@ fn run_ui_part3(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
     };
     let r = match id {
         "view.pixelPreview" => flag(&mut app.ui.view.pixel_preview),
-        "view.trimView" => flag(&mut app.ui.view.trim_view),
+        // Trim View hides the guides while it is on (#8363), and hidden guides cannot stay selected.
+        "view.trimView" => {
+            let r = flag(&mut app.ui.view.trim_view);
+            deselect_hidden_guides(app);
+            r
+        }
         "view.cornerWidget" => flag(&mut app.ui.view.corner_widgets),
         // Hide/Show Shape Widgets: `on` sets the state, and without it the state flips.
         "view.shapeWidgets" => opt_bool(p, "on").map(|on| {
@@ -403,22 +428,12 @@ fn run_ui_part4(app: &mut VectorcraftApp, id: &str, _p: &Value) -> Option<Result
             Ok(json!(show))
         }
         "view.boundingBox" => flag(&mut app.ui.view.bounding_box),
+        // Trim View hides the guides and the grid while it is on, and their Show/Hide items wait
+        // until it is off (#8363).
+        "view.guides" | "view.grid" if app.ui.view.trim_view => Err(TRIM_VIEW_HIDES.into()),
         "view.guides" => {
             let r = flag(&mut app.ui.view.guides);
-            // Hidden ruler guides and guide paths cannot stay selected: their selection overlay
-            // would otherwise reveal geometry that Hide Guides just hid.
-            let hidden_selection = !app.ui.view.guides
-                && app.session.active().is_some_and(|d| {
-                    !d.selection.guides.is_empty()
-                        || d.selection
-                            .objects
-                            .iter()
-                            .any(|id| matches!(d.doc.node(*id).map(|n| &n.kind), Some(vectorcraft_doc::NodeKind::Path { guide: true, .. })))
-                });
-            if hidden_selection {
-                // Deselecting a document that is open cannot fail.
-                let _ = app.run("select.none", json!({}));
-            }
+            deselect_hidden_guides(app);
             r
         }
         "view.smartGuides" => flag(&mut app.ui.view.smart_guides),
