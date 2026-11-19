@@ -224,6 +224,10 @@ font-technology	Variable	Променливи
 	Arc	Дъга
 	Arc Lower…	Дъга надолу…
 	Arc Tool	Инструмент „Дъга“
+	Three-Point Arc Tool	Инструмент „Дъга през три точки“
+	Three-Point Arc	Дъга през три точки
+	Arc too large	Дъгата е твърде голяма
+	Third Point Sets Direction	Третата точка задава посоката
 	Arc Upper…	Дъга нагоре…
 	Arch…	Извиване…
 	Arc…	Дъга…
@@ -7882,6 +7886,10 @@ breakText	Glyphs	Глифи
 @msg	A joint does not close by {gap} pt.	Една връзка не се затваря с {gap} pt.
 @msg	Two panels pass through each other.	Два панела минават един през друг.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer трябва да е "singleLine", "everyLine", "standardSingleLine" или "standardEveryLine"
+@msg	`at` must be "start" or "end"	`at` трябва да е "start" или "end"
+@msg	give exactly one of `through` and `toward`	посочете точно едно от `through` и `toward`
+@msg	no arc fits these points: two are the same or all three lie on one line	няма дъга през тези точки: две съвпадат или и трите лежат на една права
+@msg	give `at` only with `toward`	задайте `at` само заедно с `toward`
 	Engraving	Гравюра
 	Fine Hatching	Фино щриховане
 	Dense Hatching	Гъсто щриховане

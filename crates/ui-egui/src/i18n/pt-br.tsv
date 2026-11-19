@@ -233,6 +233,10 @@ antiAlias	Sharp	Nítido
 	Arc	Arco
 	Arc Lower…	Arco Inferior…
 	Arc Tool	Ferramenta Arco
+	Three-Point Arc Tool	Ferramenta Arco por três pontos
+	Three-Point Arc	Arco por três pontos
+	Arc too large	Arco grande demais
+	Third Point Sets Direction	O terceiro ponto indica a direção
 	Arc Upper…	Arco Superior…
 	Arch…	Abóbada…
 	Arc…	Arco…
@@ -4647,6 +4651,10 @@ axis	Both	Ambos
 @msg	a guide has no curvature circle	uma guia não tem círculo de curvatura
 @msg	the circle that matches the path there would reach past the canvas	o círculo que corresponde ao caminho nesse ponto ultrapassaria a tela
 @msg	no circle passes through these points: two are the same or all three lie on one line	nenhum círculo passa por esses pontos: dois são iguais ou os três estão na mesma reta
+@msg	`at` must be "start" or "end"	`at` deve ser "start" ou "end"
+@msg	give exactly one of `through` and `toward`	informe exatamente um entre `through` e `toward`
+@msg	no arc fits these points: two are the same or all three lie on one line	nenhum arco se ajusta a esses pontos: dois são iguais ou os três estão na mesma reta
+@msg	give `at` only with `toward`	informe `at` somente com `toward`
 @msg	no app to open files here	nenhum aplicativo para abrir arquivos aqui
 @msg	no artboard	nenhuma prancheta
 @msg	no artboard {i} (0-based; the document has {_1})	nenhuma prancheta {i} (base 0; o documento tem {_1})
