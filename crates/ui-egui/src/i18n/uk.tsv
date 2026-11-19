@@ -234,6 +234,10 @@ font-technology	Variable	Варіативні
 	Arc	Дуга
 	Arc Lower…	Дуга знизу…
 	Arc Tool	Інструмент «Дуга»
+	Three-Point Arc Tool	Інструмент «Дуга за трьома точками»
+	Three-Point Arc	Дуга за трьома точками
+	Arc too large	Дуга завелика
+	Third Point Sets Direction	Третя точка задає напрямок
 	Arc Upper…	Дуга зверху…
 	Arch…	Арка…
 	Arc…	Дуга…
@@ -649,6 +653,8 @@ font-technology	Variable	Варіативні
 	Contextual Task Bar	Контекстна панель завдань
 	Pin Bar Position	Закріпити положення панелі
 	Reset Bar Position	Скинути положення панелі
+	Bar Actions	Дії панелі
+	Reset Bar Actions	Скинути дії панелі
 	Resize	Змінити розмір
 	Contrast	Контраст
 	Control	Панель керування
@@ -2069,6 +2075,11 @@ file-filter	Templates	Шаблони
 	Knife	Ніж
 	Knockout Group	Група з вирізуванням
 	Lab	Lab
+	OKLCH Sliders	Повзунки OKLCH
+	HSL Sliders	Повзунки HSL
+	Chroma	Хрома
+	The largest chroma sRGB holds at this lightness and hue	Найбільша хрома, яку вміщує sRGB за цієї світлоти й відтінку
+	OKLCH needs sRGB as the working RGB space	Для OKLCH робочим простором RGB має бути sRGB
 	Lab Spot Colors:	Плашкові кольори Lab:
 	Lab Values	Значення Lab
 	Landscape	Альбомна
@@ -5191,6 +5202,8 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` має бути grayscale, rgb, hsb, cmyk або websafe
 @msg	`view` must be wheel or box	`view` має бути wheel або box
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` має бути hue, saturation, brightness, red, green або blue
+@msg	`sliders` must be none, oklch or hsl	`sliders` має бути none, oklch або hsl
+@msg	OKLCH needs sRGB as the working RGB space	Для OKLCH робочим простором RGB має бути sRGB
 @msg	`{k}` must be [x, y]	`{k}` має бути [x, y]
 @msg	`{name}` has no options	`{name}` не має параметрів
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` - вбудоване робоче середовище; виберіть інше ім’я
@@ -5384,6 +5397,10 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	a guide has no curvature circle	напрямна не має кола кривини
 @msg	the circle that matches the path there would reach past the canvas	коло, що відповідає контуру в цьому місці, вийшло б за межі полотна
 @msg	no circle passes through these points: two are the same or all three lie on one line	через ці точки не проходить жодне коло: дві точки збігаються або всі три лежать на одній прямій
+@msg	`at` must be "start" or "end"	`at` має бути "start" або "end"
+@msg	give exactly one of `through` and `toward`	вкажіть рівно один із параметрів `through` і `toward`
+@msg	no arc fits these points: two are the same or all three lie on one line	жодна дуга не підходить до цих точок: дві точки збігаються або всі три лежать на одній прямій
+@msg	give `at` only with `toward`	вказуйте `at` лише разом із `toward`
 @msg	no app to open files here	тут немає програми для відкриття файлів
 @msg	no artboard	немає монтажної області
 @msg	no artboard {i} (0-based; the document has {_1})	немає монтажної області {i} (рахунок з 0; у документі {_1})
@@ -10390,6 +10407,16 @@ breakText	Glyphs	Гліфи
 @msg	A panel is not joined to the rest by a crease.	Панель не з’єднана з рештою жодною лінією біговки.
 @msg	A fold line is on a non-printing layer.	Лінія згину лежить на шарі, що не друкується.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Панелі: {panels}, шарніри: {hinges}, помилки: {errors}, попередження: {warnings}
+	Orbit Lines	Орбітальні лінії
+	Petal Garland	Гірлянда пелюсток
+	Lattice Braid	Ґратчасте плетіння
+	Facet Sweep	Гранований мазок
+	Artistic Brushes	Художні пензлі
+	Paint	Фарба
+	Flat Sweep	Плоский мазок
+	Dry Drag	Сухий протяг
+	Loaded Stroke	Густий мазок
+	Fan Sweep	Віяловий мазок
 	Engraving	Гравіювання
 	Fine Hatching	Тонке штрихування
 	Dense Hatching	Щільне штрихування

@@ -1384,6 +1384,8 @@
 	Contextual Task Bar	Bilah tugas kontekstual
 	Pin Bar Position	Sematkan posisi bilah
 	Reset Bar Position	Atur ulang posisi bilah
+	Bar Actions	Tindakan bilah
+	Reset Bar Actions	Atur ulang tindakan bilah
 	Tools	Alat
 	Toolbars	Bilah alat
 	Advanced	Lanjutan
@@ -2062,6 +2064,10 @@ lighting	Light	Cahaya
 	Add Anchor Point Tool	Alat tambah titik jangkar
 	Anchor Point Tool	Alat titik jangkar
 	Arc Tool	Alat busur
+	Three-Point Arc Tool	Alat busur tiga titik
+	Three-Point Arc	Busur tiga titik
+	Arc too large	Busur terlalu besar
+	Third Point Sets Direction	Titik ketiga menentukan arah
 	Area Graph Tool	Alat grafik area
 	Area Type Tool	Alat teks area
 	Artboard Tool	Alat artboard
@@ -4966,6 +4972,11 @@ axis	Both	Keduanya
 	Image	Gambar
 	Ink	Tinta
 	Lab	Lab
+	OKLCH Sliders	Penggeser OKLCH
+	HSL Sliders	Penggeser HSL
+	Chroma	Kroma
+	The largest chroma sRGB holds at this lightness and hue	Kroma terbesar yang dapat dimuat sRGB pada kecerahan dan rona ini
+	OKLCH needs sRGB as the working RGB space	OKLCH memerlukan sRGB sebagai ruang RGB kerja
 	Medium	Sedang
 	Name	Nama
 	None	Nihil
@@ -6894,6 +6905,8 @@ mark-style	Japanese	Jepang
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` harus grayscale, rgb, hsb, cmyk atau websafe
 @msg	`view` must be wheel or box	`view` harus wheel atau box
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` harus hue, saturation, brightness, red, green atau blue
+@msg	`sliders` must be none, oklch or hsl	`sliders` harus none, oklch, atau hsl
+@msg	OKLCH needs sRGB as the working RGB space	OKLCH memerlukan sRGB sebagai ruang RGB kerja
 @msg	the Color Picker is not open	Pemilih Warna tidak terbuka
 @msg	the screen color sampler is already open	pengambil warna layar sudah terbuka
 @msg	this system has no screen color sampler	sistem ini tidak memiliki pengambil warna layar
@@ -8581,6 +8594,20 @@ breakText	Glyphs	Glif
 @msg	A joint does not close by {gap} pt.	Sebuah sambungan tidak menutup sejauh {gap} pt.
 @msg	Two panels pass through each other.	Dua panel saling menembus.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer harus "singleLine", "everyLine", "standardSingleLine", atau "standardEveryLine"
+	Orbit Lines	Garis Orbit
+	Petal Garland	Rangkaian Kelopak
+	Lattice Braid	Anyaman Kisi
+	Facet Sweep	Sapuan Berfaset
+	Artistic Brushes	Kuas Artistik
+	Paint	Cat
+	Flat Sweep	Sapuan Datar
+	Dry Drag	Tarikan Kering
+	Loaded Stroke	Sapuan Tebal
+	Fan Sweep	Sapuan Kipas
+@msg	`at` must be "start" or "end"	`at` harus "start" atau "end"
+@msg	give exactly one of `through` and `toward`	berikan tepat satu dari `through` dan `toward`
+@msg	no arc fits these points: two are the same or all three lie on one line	tidak ada busur yang cocok dengan titik-titik ini: dua titik sama atau ketiganya segaris
+@msg	give `at` only with `toward`	berikan `at` hanya bersama `toward`
 	Engraving	Ukiran
 	Fine Hatching	Arsiran halus
 	Dense Hatching	Arsiran rapat

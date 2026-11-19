@@ -184,6 +184,10 @@ antiAlias	Sharp	锐利
 	Arc	弧形
 	Arc Lower…	下弧形…
 	Arc Tool	弧形工具
+	Three-Point Arc Tool	三点弧形工具
+	Three-Point Arc	三点弧形
+	Arc too large	弧形过大
+	Third Point Sets Direction	第三点指示方向
 	Arc Upper…	上弧形…
 	Arch…	拱形…
 	Arc…	弧形…
@@ -600,6 +604,8 @@ antiAlias	Sharp	锐利
 	Contextual Task Bar	上下文任务栏
 	Pin Bar Position	固定任务栏位置
 	Reset Bar Position	重置任务栏位置
+	Bar Actions	任务栏操作
+	Reset Bar Actions	重置任务栏操作
 	Resize	调整大小
 	Contrast	对比
 	Control	控制栏
@@ -1951,6 +1957,11 @@ file-filter	Templates	模板
 	Knife	刻刀
 	Knockout Group	挖空组
 	Lab	Lab
+	OKLCH Sliders	OKLCH 滑块
+	HSL Sliders	HSL 滑块
+	Chroma	色度
+	The largest chroma sRGB holds at this lightness and hue	sRGB 在此亮度和色相下可容纳的最大色度
+	OKLCH needs sRGB as the working RGB space	OKLCH 需要将 sRGB 用作 RGB 工作空间
 	Lab Spot Colors:	Lab 专色：
 	Lab Values	Lab 值
 	Landscape	横向
@@ -4851,6 +4862,10 @@ imageTrace	Outline	轮廓
 @msg	a guide has no curvature circle	参考线没有曲率圆
 @msg	the circle that matches the path there would reach past the canvas	在该处与路径曲率相符的圆会超出画布
 @msg	no circle passes through these points: two are the same or all three lie on one line	没有圆经过这些点：有两点相同，或三点共线
+@msg	`at` must be "start" or "end"	`at` 必须是 "start" 或 "end"
+@msg	give exactly one of `through` and `toward`	`through` 和 `toward` 必须且只能指定一个
+@msg	no arc fits these points: two are the same or all three lie on one line	没有弧形符合这些点：有两点相同，或三点共线
+@msg	give `at` only with `toward`	`at` 只能与 `toward` 一起指定
 @msg	select at least two objects	请至少选择两个对象
 @msg	exit isolation mode first	请先退出隔离模式
 @msg	no saved presets	没有已保存的预设
@@ -5302,6 +5317,8 @@ imageTrace	Outline	轮廓
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` 必须是 grayscale、rgb、hsb、cmyk 或 websafe
 @msg	`view` must be wheel or box	`view` 必须是 wheel 或 box
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` 必须是 hue、saturation、brightness、red、green 或 blue
+@msg	`sliders` must be none, oklch or hsl	`sliders` 必须是 none、oklch 或 hsl
+@msg	OKLCH needs sRGB as the working RGB space	OKLCH 需要将 sRGB 用作 RGB 工作空间
 @msg	`{key}` must be true or false	`{key}` 必须是 true 或 false
 @msg	`top` and `below` can't both be true	`top` 和 `below` 不能同时为 true
 @msg	`select` must be true or false	`select` 必须是 true 或 false
@@ -10582,6 +10599,16 @@ breakText	Glyphs	字形
 @msg	A joint does not close by {gap} pt.	有一处接缝相差 {gap} pt 未闭合。
 @msg	Two panels pass through each other.	两个面板相互穿插。
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} 像素对 PSD 而言过大 (每边最多 {MAX_SIDE} 像素)：请降低分辨率
+	Orbit Lines	轨道线
+	Petal Garland	花瓣花环
+	Lattice Braid	格纹编织
+	Facet Sweep	切面笔触
+	Artistic Brushes	艺术画笔
+	Paint	绘画
+	Flat Sweep	平刷
+	Dry Drag	干拖
+	Loaded Stroke	厚涂笔触
+	Fan Sweep	扇形笔触
 	Engraving	雕刻
 	Fine Hatching	细线排线
 	Dense Hatching	密集排线
