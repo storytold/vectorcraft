@@ -4819,6 +4819,73 @@ fn the_control_bar_transform_fields_respect_the_reference_point() {
     assert!((bx.rect.y0 - 40.0).abs() < 1e-6, "top-left y0 moved to 40, got {:?}", bx.rect);
 }
 
+/// With Use Registration Point for Symbol on and one symbol instance selected, the Control bar's
+/// reference point locator shows the instance's registration point read-only, so a click on
+/// another point stores no choice that would wait to move the next ordinary selection instead;
+/// with the preference off the locator takes the click again.
+#[test]
+fn the_control_bar_locator_is_read_only_while_a_symbols_registration_point_decides_the_reference() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300, "units": "Points"})).unwrap();
+    app.run("shape.rectangle", json!({"x": 20, "y": 20, "width": 40, "height": 30})).unwrap();
+    let id = app.run("symbol.new", json!({"name": "Centre", "registration": 4})).unwrap()["id"].clone();
+    app.run("select.set", json!({ "ids": [id] })).unwrap();
+    app.session.prefs.use_registration_point_for_symbol = true;
+
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(2400.0, 300.0));
+    // The frame's painted texts and its accessibility nodes.
+    let frame = |app: &mut crate::VectorcraftApp, events: Vec<egui::Event>| {
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| {
+            super::control_bar(app, ui);
+        });
+        out.textures_delta.clear();
+        let texts =
+            out.shapes.iter().filter_map(|c| if let egui::epaint::Shape::Text(t) = &c.shape { Some(t.galley.text().to_owned()) } else { None });
+        (texts.collect::<Vec<_>>().join(" "), out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default())
+    };
+    // The Control bar's locator square `name`: where it is and whether it takes no click.
+    let square = |nodes: &[(egui::accesskit::NodeId, egui::accesskit::Node)], name: &str| {
+        nodes
+            .iter()
+            .find(|(_, n)| n.role() == egui::accesskit::Role::RadioButton && n.label() == Some(name))
+            .and_then(|(_, n)| n.bounds().map(|b| (egui::pos2(((b.x0 + b.x1) * 0.5) as f32, ((b.y0 + b.y1) * 0.5) as f32), n.is_disabled())))
+            .unwrap_or_else(|| panic!("no {name:?} in the Control bar's Reference Point locator"))
+    };
+    let click = |app: &mut crate::VectorcraftApp, at: egui::Pos2| {
+        let btn = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(app, vec![egui::Event::PointerMoved(at), btn(true)]);
+        frame(app, vec![btn(false)]);
+    };
+    let reference = || ctx.data(|d| d.get_temp::<usize>(egui::Id::unique("refpt")));
+
+    frame(&mut app, vec![]);
+    let (_, nodes) = frame(&mut app, vec![]);
+    let group = nodes.iter().find(|(_, n)| n.role() == egui::accesskit::Role::RadioGroup).expect("the Reference Point locator");
+    assert_eq!(group.1.value(), Some("Center"), "the locator shows the registration point");
+    let (at, disabled) = square(&nodes, "Top Left");
+    assert!(disabled, "the locator takes no choice while the registration point decides the reference");
+    // Hovering it says why.
+    ctx.global_style_mut(|s| s.interaction.tooltip_delay = 0.0);
+    frame(&mut app, vec![egui::Event::PointerMoved(at)]);
+    let (texts, _) = frame(&mut app, vec![]);
+    assert!(texts.contains("the registration point is the reference point"), "the locator says why: {texts:?}");
+    click(&mut app, at);
+    assert_eq!(reference(), None, "the click stores no reference point for a later selection");
+
+    // An ordinary selection keeps the locator editable.
+    app.session.prefs.use_registration_point_for_symbol = false;
+    frame(&mut app, vec![]);
+    let (_, nodes) = frame(&mut app, vec![]);
+    let (at, disabled) = square(&nodes, "Top Left");
+    assert!(!disabled, "the locator takes a click without the registration point");
+    click(&mut app, at);
+    assert_eq!(reference(), Some(0), "the click chose the top left");
+}
+
 /// A click on the Control bar's X:, Y:, W: or H: label opens the Transform panel in a popover under
 /// it, as the Transform link does, and a second click closes it. The click leaves the selection and
 /// its bounds as they were, and no field takes the keyboard. A drag on W: still scrubs the width and

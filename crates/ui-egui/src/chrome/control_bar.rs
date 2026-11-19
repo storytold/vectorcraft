@@ -257,7 +257,7 @@ fn inline_transform_fields(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, b:
     let units = app.session.general_unit();
     let reference = crate::panels::transform::panel_reference(app, ui, b);
     let (refi, rp) = (reference.index, reference.point);
-    crate::panels::transform::reference_locator(ui, refi);
+    crate::panels::transform::selection_reference_locator(ui, &reference);
     let origin = app.ruler_origin();
     let link = crate::panels::transform::proportional(app, ui);
     let copy = crate::panels::transform::alt_enter_copies(app, ui);
