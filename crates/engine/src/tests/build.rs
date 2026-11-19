@@ -3434,6 +3434,65 @@ fn live_paint_bucket_gradient_preset_and_sampled_stop_follow_the_active_proxy() 
     assert_eq!(node(&s, rect), art, "the selection keeps its paint");
 }
 
+/// The Gradient panel's eyedropper, used on a stop of the Live Paint Bucket's gradient, samples the
+/// color clicked into that stop of the bucket's fill, and the selection keeps its paint. A Cmd-click
+/// with the bucket, or with the Eyedropper armed for it, which the selection tool takes, leaves the
+/// bucket's colors as they were.
+#[test]
+fn live_paint_bucket_keeps_its_colors_through_the_stop_eyedropper_and_a_cmd_click() {
+    let v = ViewInfo::default();
+    let click = |s: &mut Session, mods: Mods| {
+        for kind in [PointerKind::Down, PointerKind::Up] {
+            s.pointer(&PointerEvent::new(kind, 320.0, 320.0).with_mods(mods), v).unwrap();
+        }
+    };
+    let mut s = session();
+    live(&mut s);
+    let rect = rect(&mut s, 300.0, 300.0, 40.0, 40.0);
+    s.execute("paint.setFill", &json!({"color": "#00ff00", "ids": [rect.0]})).unwrap();
+    s.execute("appearance.setNewArtBasic", &json!({"on": false})).unwrap();
+    s.execute("select.set", &json!({"ids": [rect.0]})).unwrap();
+    s.select_tool("livePaintBucket", v).unwrap();
+    s.execute("paint.editGradient", &json!({"stroke": false, "kind": "linear"})).unwrap();
+    s.execute("gradient.selectStop", &json!({"index": 1})).unwrap();
+    let art = node(&s, rect);
+    // The panel's eyedropper (`stop_eyedropper`): the Eyedropper, set to switch back to the bucket.
+    s.select_tool("eyedropper", v).unwrap();
+    s.set_tool_option("stop", &json!("livePaintBucket"));
+    assert_eq!(s.selected_stop(), Some(1), "the bucket's stop stays selected for the pick");
+    // A Cmd-click while the pick is armed selects the rectangle and leaves the bucket's gradient.
+    let fill = s.paint.fill.clone();
+    s.execute("select.set", &json!({"ids": []})).unwrap();
+    click(&mut s, Mods { cmd: true, ..Mods::default() });
+    assert_eq!(s.doc().unwrap().selection.objects, vec![rect], "the selection tool took the click");
+    assert_eq!((s.paint.fill.clone(), s.selected_stop()), (fill, Some(1)), "the bucket's fill and stop stay");
+    click(&mut s, Mods::default());
+    let Paint::Gradient(g) = &s.paint.fill else { panic!("the bucket's fill is not a gradient") };
+    assert_eq!(g.gradient.stops[1].color, Color::from_hex("#00ff00").unwrap(), "the sampled stop");
+    assert_eq!(node(&s, rect), art, "the selection keeps its paint");
+    // A Cmd-click selects the rectangle; the bucket keeps its gradient.
+    s.select_tool("livePaintBucket", v).unwrap();
+    let fill = s.paint.fill.clone();
+    s.execute("select.set", &json!({"ids": []})).unwrap();
+    click(&mut s, Mods { cmd: true, ..Mods::default() });
+    assert_eq!(s.doc().unwrap().selection.objects, vec![rect], "the selection tool took the click");
+    assert_eq!(s.paint.fill, fill, "the bucket's fill stays");
+    // Armed again, a Cmd-click on another object deselects the stop; the next click (a Shift-click,
+    // which would sample a color) ends the pick and leaves the bucket's gradient.
+    let other = self::rect(&mut s, 400.0, 400.0, 40.0, 40.0);
+    s.execute("select.set", &json!({"ids": [rect.0]})).unwrap();
+    s.execute("gradient.selectStop", &json!({"index": 1})).unwrap();
+    s.select_tool("eyedropper", v).unwrap();
+    s.set_tool_option("stop", &json!("livePaintBucket"));
+    for mods in [Mods { cmd: true, ..Mods::default() }, Mods { shift: true, ..Mods::default() }] {
+        for kind in [PointerKind::Down, PointerKind::Up] {
+            s.pointer(&PointerEvent::new(kind, 420.0, 420.0).with_mods(mods), v).unwrap();
+        }
+    }
+    assert_eq!(s.doc().unwrap().selection.objects, vec![other], "the Cmd-click selected the other object");
+    assert_eq!((s.paint.fill.clone(), s.tool_returns_to()), (fill, None), "the pick ended without a sample");
+}
+
 /// A gradient stop selected on the selection's gradient is not selected once the Live Paint
 /// Bucket is active (its proxies show the default paint), and one selected on the bucket's
 /// gradient is not selected once another tool is chosen.
@@ -9221,6 +9280,111 @@ fn image_trace_built_in_presets_cannot_be_saved_over_or_deleted() {
     assert_eq!(six["params"], serde_json::to_value(vectorcraft_trace::preset("6 Colors").unwrap()).unwrap());
 }
 
+/// Saved tracing presets go out to a .vctracepresets file and come back with their names and
+/// settings; a hand-written file in the documented layout imports too.
+#[test]
+fn image_trace_presets_export_and_import_round_trip() {
+    let mut s = session();
+    assert!(s.execute("imageTrace.presets.export", &json!({})).unwrap_err().to_string().contains("no saved tracing presets"));
+    s.execute("imageTrace.presets.save", &json!({"name": "Poster", "preset": "6 Colors", "params": {"noise": 40, "ignoreWhite": true}})).unwrap();
+    s.execute("imageTrace.presets.save", &json!({"name": "Ink", "params": {"threshold": 90, "fills": false, "strokes": true}})).unwrap();
+    let e = s.execute("imageTrace.presets.export", &json!({"names": ["Default"]})).unwrap_err().to_string();
+    assert!(e.contains("only saved presets are exported"), "{e}");
+    assert!(s.execute("imageTrace.presets.export", &json!({"names": ["Nope"]})).is_err());
+    let all = s.execute("imageTrace.presets.export", &json!({})).unwrap();
+    assert_eq!(all["count"], 2);
+    let one = s.execute("imageTrace.presets.export", &json!({"names": ["poster", "Poster"]})).unwrap();
+    assert_eq!(one["count"], 1);
+    let file: Value = serde_json::from_str(all["data"].as_str().unwrap()).unwrap();
+    assert_eq!((file["format"].as_str(), file["version"].as_u64()), (Some("vctracepresets"), Some(1)));
+    let saved = s.prefs.trace_presets.clone();
+    // Into a session without them: the same names and settings, and a new revision the panel follows.
+    let mut t = session();
+    let before = t.trace_presets_revision();
+    let r = t.execute("imageTrace.presets.import", &json!({"data": all["data"]})).unwrap();
+    assert_eq!(r, json!({"imported": ["Poster", "Ink"], "replaced": [], "skipped": []}));
+    assert_eq!(t.prefs.trace_presets, saved);
+    assert_eq!(t.trace_presets_revision(), before + 2);
+    // A file written by hand in the documented layout: missing settings are Default's.
+    let hand = r#"{"format": "vctracepresets", "version": 1, "presets": [{"name": "Hand", "params": {"mode": "grayscale", "colors": 12}}]}"#;
+    t.execute("imageTrace.presets.import", &json!({ "dataBase64": vectorcraft_format::base64_encode(hand.as_bytes()) })).unwrap();
+    let hand = t.trace_preset("hand").unwrap().params.clone();
+    assert_eq!((hand.mode, hand.colors, hand.threshold), (vectorcraft_trace::Mode::Grayscale, 12, 128));
+}
+
+/// Export writes no file that import would refuse (more than 1,000 presets, or more than 4 MiB),
+/// and no more than 1,000 tracing presets can be saved.
+#[test]
+fn image_trace_presets_export_keeps_to_what_import_reads() {
+    let mut s = session();
+    let params = vectorcraft_trace::preset("Default").unwrap();
+    let preset = |name: String| crate::cmd::TracePreset { name, params: params.clone() };
+    s.prefs.trace_presets = (1..=1001).map(|i| preset(format!("P{i}"))).collect();
+    let e = s.execute("imageTrace.presets.export", &json!({})).unwrap_err().to_string();
+    assert!(e.contains("more than one file holds (1000)"), "{e}");
+    s.prefs.trace_presets.pop();
+    let all = s.execute("imageTrace.presets.export", &json!({})).unwrap();
+    assert_eq!(all["count"], 1000);
+    let mut t = session();
+    assert_eq!(t.execute("imageTrace.presets.import", &json!({"data": all["data"]})).unwrap()["imported"].as_array().map(Vec::len), Some(1000));
+    // No more can be saved or imported then, so every saved preset still fits in one file; a
+    // saved preset can still change, and a file of saved names still replaces them.
+    let e = t.execute("imageTrace.presets.save", &json!({"name": "One More"})).unwrap_err().to_string();
+    assert!(e.contains("delete one first"), "{e}");
+    t.execute("imageTrace.presets.save", &json!({"name": "P1", "params": {"noise": 9}})).unwrap();
+    let one = json!({"format": "vctracepresets", "version": 1, "presets": [{"name": "Fresh", "params": {}}]}).to_string();
+    let e = t.execute("imageTrace.presets.import", &json!({ "data": one })).unwrap_err().to_string();
+    assert!(e.contains("more than 1000 saved"), "{e}");
+    let again = json!({"format": "vctracepresets", "version": 1, "presets": [{"name": "P2", "params": {}}]}).to_string();
+    assert_eq!(t.execute("imageTrace.presets.import", &json!({"data": again, "replace": true})).unwrap()["replaced"], json!(["P2"]));
+    assert_eq!(t.prefs.trace_presets.len(), 1000);
+    s.prefs.trace_presets = vec![preset("x".repeat(4 << 20))];
+    let e = s.execute("imageTrace.presets.export", &json!({})).unwrap_err().to_string();
+    assert!(e.contains("larger than 4 MiB"), "{e}");
+}
+
+/// A saved preset of the same name is skipped unless `replace` is on; a file with a fault, or one
+/// too large, changes nothing.
+#[test]
+fn image_trace_presets_import_checks_the_whole_file_first() {
+    let mut s = session();
+    s.execute("imageTrace.presets.save", &json!({"name": "Poster", "params": {"noise": 40}})).unwrap();
+    let file = |rows: Value| json!({"format": "vctracepresets", "version": 1, "presets": rows}).to_string();
+    let data = file(json!([{"name": "poster", "params": {"noise": 7}}, {"name": "Fresh", "params": {}}]));
+    let r = s.execute("imageTrace.presets.import", &json!({ "data": data })).unwrap();
+    assert_eq!(r, json!({"imported": ["Fresh"], "replaced": [], "skipped": ["poster"]}));
+    assert_eq!(s.trace_preset("Poster").unwrap().params.noise, 40);
+    let r = s.execute("imageTrace.presets.import", &json!({"data": data, "replace": true})).unwrap();
+    assert_eq!(r, json!({"imported": [], "replaced": ["Poster", "Fresh"], "skipped": []}));
+    assert_eq!(s.trace_preset("Poster").unwrap().params.noise, 7);
+    assert!(s.execute("imageTrace.presets.import", &json!({"data": data, "replace": "yes"})).is_err());
+    let saved = s.prefs.trace_presets.clone();
+    let revision = s.trace_presets_revision();
+    let bad_files = [
+        (file(json!([{"name": "New One", "params": {}}, {"name": "[Default]", "params": {}}])), "built-in preset"),
+        (file(json!([{"name": "custom", "params": {}}])), "built-in preset"),
+        (file(json!([{"name": "Twice", "params": {}}, {"name": "twice", "params": {}}])), "two presets named"),
+        (file(json!([{"name": " ", "params": {}}])), "has no name"),
+        (file(json!([{"name": "No Params"}])), "has no `params`"),
+        (file(json!([{"name": "Neither", "params": {"fills": false, "strokes": false}}])), "Create needs fills"),
+        (file(json!([{"name": "Typo", "params": {"nosie": 3}}])), "nosie"),
+        (json!({"format": "vctracepresets", "version": 2, "presets": []}).to_string(), "newer"),
+        (json!({"format": "vcflattener", "version": 1, "presets": []}).to_string(), "not a tracing presets file"),
+        ("{".to_string(), "not a tracing presets file"),
+        (file(Value::Array(vec![json!({"name": "x", "params": {}}); 1001])), "more than 1000"),
+        (" ".repeat((4 << 20) + 1), "larger than 4 MiB"),
+    ];
+    for (data, why) in bad_files {
+        let e = s.execute("imageTrace.presets.import", &json!({ "data": data })).unwrap_err().to_string();
+        assert!(e.contains(why), "{why}: {e}");
+    }
+    let big = vectorcraft_format::base64_encode(&vec![b' '; (4 << 20) + 1]);
+    assert!(s.execute("imageTrace.presets.import", &json!({ "dataBase64": big })).unwrap_err().to_string().contains("larger than 4 MiB"));
+    assert!(s.execute("imageTrace.presets.import", &json!({})).is_err());
+    assert_eq!(s.prefs.trace_presets, saved, "nothing changed");
+    assert_eq!(s.trace_presets_revision(), revision);
+}
+
 /// Saved tracing presets are kept with the preferences, are not a preference key, and survive
 /// resetting the preferences.
 #[test]
@@ -9491,9 +9655,12 @@ fn image_trace_split_view_keeps_and_validates_its_divider() {
     assert_eq!((back.node(g).unwrap().trace_view(), back.node(g).unwrap().trace_split()), (vectorcraft_doc::TraceView::Split, 0.25));
     // Bad dividers are refused and change nothing.
     let steps = s.doc().unwrap().history.undo.len();
-    for bad in [json!(-0.1), json!(1.01), json!("0.5"), json!(true), json!([0.5])] {
+    for bad in [json!(-0.1), json!(1.01), json!("0.5"), json!(true), json!([0.5]), json!(null)] {
         assert!(s.execute("imageTrace.setView", &json!({"view": "split", "split": bad})).is_err(), "{bad}");
     }
+    // A null divider with another view is refused too, and the view stays.
+    assert!(s.execute("imageTrace.setView", &json!({"view": "outlines", "split": null})).is_err());
+    assert_eq!(node(&s, g).trace_view(), vectorcraft_doc::TraceView::Split);
     assert_eq!((s.doc().unwrap().history.undo.len(), node(&s, g).trace_split()), (steps, 0.25));
     for edge in [0.0, 1.0] {
         s.execute("imageTrace.setView", &json!({"view": "split", "split": edge})).unwrap();

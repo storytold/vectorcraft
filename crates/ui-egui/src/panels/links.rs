@@ -519,11 +519,11 @@ pub(super) fn status_tip(r: &Value, mask: Option<String>) -> String {
         _ => None,
     };
     let tip = match art {
-        Some(kind) => format!("{tip}\n{kind}: {name}"),
+        Some(kind) => format!("{tip}\n{} {name}", crate::i18n::colon(kind)),
         None => tip,
     };
     match owner["maskOf"].as_u64() {
-        Some(id) => format!("{tip}\n{}: {}", tl!("Opacity Mask"), mask.unwrap_or_else(|| id.to_string())),
+        Some(id) => format!("{tip}\n{} {}", crate::i18n::colon(tl!("Opacity Mask")), mask.unwrap_or_else(|| id.to_string())),
         None => tip,
     }
 }
@@ -622,7 +622,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let Some(st) = app.session.active() else { return };
     let doc = st.doc.clone();
     let thumbs = super::layers::ThumbSource::of(app, st, &doc);
-    let selected = selected_links(app, ui.ctx());
+    let mut selected = selected_links(app, ui.ctx());
     let rows: &[Value] = cache.list["links"].as_array().map_or(&[], Vec::as_slice);
     let mut clicked: Option<(u64, egui::Modifiers, bool)> = None;
     widgets::list_box(ui, |ui| {
@@ -698,6 +698,14 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     .and_then(|m| doc.node(NodeId(m)).or_else(|| cache.nested_node(m).map(|n| &**n)))
                     .map(|n| super::layers::shown_name(app, n, crate::i18n::current()));
                 let resp = resp.on_hover_text(status_tip(r, mask));
+                resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::ListItem, ui.is_enabled(), selected.contains(&id), name));
+                if resp.secondary_clicked() && !selected.contains(&id) {
+                    click(app, ui.ctx(), rows, id, egui::Modifiers::NONE);
+                    selected = selected_links(app, ui.ctx());
+                }
+                resp.context_menu(|ui| {
+                    row_context_menu(app, ui, r, id, &cache.list);
+                });
                 if resp.double_clicked() {
                     clicked = Some((id, egui::Modifiers::NONE, true));
                 } else if resp.clicked() {
@@ -765,6 +773,78 @@ fn break_link(app: &mut VectorcraftApp, ids: Vec<u64>) {
             )
         }
     });
+}
+
+/// Embed images `ids` (`links.embed`).
+fn embed_images(app: &mut VectorcraftApp, ids: Vec<u64>) {
+    let r = app.run("links.embed", json!({ "ids": ids }));
+    report(app, r, |v| {
+        let missing = v["missing"].as_array().map_or(0, Vec::len);
+        let n = v["embedded"].as_array().map_or(0, Vec::len);
+        if missing == 0 {
+            crate::i18n::msg_n(n as u64, "Embedded {n} image", "Embedded {n} images", &[])
+        } else {
+            crate::i18n::msg_n(
+                n as u64,
+                "Embedded {n} image; {missing} missing: relink them first",
+                "Embedded {n} images; {missing} missing: relink them first",
+                &[("missing", &missing.to_string())],
+            )
+        }
+    });
+}
+
+/// An item's right-click context menu in the Links panel.
+fn row_context_menu(app: &mut VectorcraftApp, ui: &mut Ui, r: &Value, id: u64, list: &Value) {
+    let selected = selected_links(app, ui.ctx());
+    let sel = selected_rows(list, &selected);
+    let linked = ids(&sel, |r| r["linked"] == true);
+    let embedded: Vec<&Value> = sel.iter().copied().filter(|r| status_is(r, "embedded")).collect();
+    let modified = ids(&sel, |r| status_is(r, "modified") || (r["preview"] == true && !status_is(r, "missing")));
+    let can_edit = sel.iter().any(|r| r["linked"] == true && !status_is(r, "missing"));
+    let in_canvas = app.session.active().is_some_and(|st| st.doc.node(NodeId(id)).is_some()) && !nested_row(r);
+
+    if menu_item(ui, tl!("Relink…"), !sel.is_empty() && can_pick(app), false) {
+        crate::menus::invoke(app, "ui.relinkDialog", json!({ "ids": ids(&sel, |_| true) }));
+        ui.close();
+    }
+    if menu_item(ui, tl!("Go To Link"), in_canvas, false) {
+        go_to(app, id);
+        ui.close();
+    }
+    if menu_item(ui, tl!("Update Link"), !modified.is_empty(), false) {
+        let r = app.run("links.update", json!({ "ids": modified }));
+        report(app, r, |v| updated_status(v["updated"].as_array().map_or(0, Vec::len)));
+        ui.close();
+    }
+    if menu_item(ui, tl!("Edit Original"), can_edit, false) {
+        let file_arg = if r["linked"] == true && !status_is(r, "missing") { json!({ "id": id }) } else { file_row(&sel) };
+        crate::menus::invoke(app, "links.editOriginal", file_arg);
+        ui.close();
+    }
+    if menu_item(ui, tl!("Show in Folder"), can_edit, false) {
+        let file_arg = if r["linked"] == true && !status_is(r, "missing") { json!({ "id": id }) } else { file_row(&sel) };
+        crate::menus::invoke(app, "links.reveal", file_arg);
+        ui.close();
+    }
+    ui.separator();
+    if status_is(r, "embedded") {
+        if menu_item(ui, tl!("Unembed…"), can_unembed(app, embedded.len()), false) {
+            match &embedded[..] {
+                [r] => {
+                    if let Some(id) = r["id"].as_u64() {
+                        let name = r["name"].as_str().unwrap_or("Image").to_string();
+                        unembed(app, id, &name);
+                    }
+                }
+                rows => unembed_several(app, rows.iter().filter_map(|r| r["id"].as_u64()).collect()),
+            }
+            ui.close();
+        }
+    } else if menu_item(ui, tl!("Embed Image"), !linked.is_empty(), false) {
+        embed_images(app, linked);
+        ui.close();
+    }
 }
 
 /// The params of Edit Original and Show in Folder for the selected rows `sel`: the first linked
@@ -893,21 +973,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     ui.separator();
     if menu_item(ui, tl!("Embed Image(s)"), !linked.is_empty(), false) {
-        let r = app.run("links.embed", json!({ "ids": linked }));
-        report(app, r, |v| {
-            let missing = v["missing"].as_array().map_or(0, Vec::len);
-            let n = v["embedded"].as_array().map_or(0, Vec::len);
-            if missing == 0 {
-                crate::i18n::msg_n(n as u64, "Embedded {n} image", "Embedded {n} images", &[])
-            } else {
-                crate::i18n::msg_n(
-                    n as u64,
-                    "Embedded {n} image; {missing} missing: relink them first",
-                    "Embedded {n} images; {missing} missing: relink them first",
-                    &[("missing", &missing.to_string())],
-                )
-            }
-        });
+        embed_images(app, linked);
     }
     if menu_item(ui, tl!("Unembed…"), can_unembed(app, embedded.len()), false) {
         match &embedded[..] {

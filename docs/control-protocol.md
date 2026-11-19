@@ -272,12 +272,12 @@ My Themes tab lists the saved themes; every action runs a command (`colorTheme.s
 Color Wheel panel (`window.panel {panel: "colorWheel"}`): a hue ring around a saturation and brightness square. A
 pick runs the commands the Color panel's sliders run: `paint.setFill` or `paint.setStroke` with `keepModel`,
 `paint.editGradient` for a gradient's selected stop, and `paint.freeform.setPoint` for a freeform gradient's selected
-point (the first stop or point when none is selected). `ui.colorWheel {view?, channel?, harmony?, harmonyRule?, vision?}`
-shows the wheel or the box (a color field with a channel strip at its right), picks the box's channel, shows the
-other colors of a harmony rule as markers on the wheel's ring, and shows or hides the color vision row; it returns
-the settings, and `ui.inspect` reports them as `ui.color_wheel`.
-The key `sliders` shows OKLCH Sliders, HSL Sliders or
-neither (`"oklch"`, `"hsl"` or `"none"`; `"oklch"` is an error while the active document's RGB space, its assigned
+point (the first stop or point when none is selected). `ui.colorWheel {view?, channel?, sliders?, gamut?, harmony?,
+harmonyRule?, vision?}` shows the wheel or the box (a color field with a channel strip at its right), picks the box's
+channel, shows OKLCH Sliders, HSL Sliders or neither, grays out the colors the CMYK space cannot print, shows the
+other colors of a harmony rule as markers on the wheel's ring, and shows or hides the color vision row; it returns the
+settings, and `ui.inspect` reports them as `ui.color_wheel`.
+The key `sliders` takes (`"oklch"`, `"hsl"` or `"none"`; `"oklch"` is an error while the active document's RGB space, its assigned
 profile or else the working RGB space, is not sRGB), and the settings carry it too.
 
 Edit Colors dialogs: `ui.colorBalanceDialog` opens Adjust Colors (`colorBalance`: fields `mode` `gray`/`rgb`/`cmyk`/
@@ -335,6 +335,16 @@ The dialog previews
 `recolor.apply` on the canvas; confirm keeps it as one undo step (with a group, the group is rewritten in the same
 step; with no art selected only the group changes). In the Swatches panel, double-clicking a colour group's folder,
 or the options button while a group is selected, opens it.
+
+`color.used {selection?, limit?}` lists the colors of the selection, or with nothing selected the colors of the art
+`select.all` takes, most used first, as `recolor.colors {}` counts them. Each entry adds `color`, the color in its own
+model as the paint commands take it, and `tint`, the percent of its global `swatch` it is, to three decimals. The
+swatch and tint come from the color's first linked use in paint order; a plain use goes before a gradient stop that
+mixes a spot ink with process inks, and a color only such stops link has no `swatch` here. `selection: false` reads
+the art `select.all` takes while something is selected, and the answer's `selection` says whether the colors are
+the selection's. `limit` keeps only the most used entries, and the answer's `uses` counts the uses of every color.
+The selection does not change. The Color Wheel panel's Show Document Colors row (`ui.colorWheel {documentColors:
+true}`) shows these colors.
 
 Library panel: `engine.execute {command: "window.swatchLibrary", params: {library}}` opens the read-only library
 panel on a swatch library (`ui.inspect` shows it as `library_panel: {kind, id}`; `library: null` closes it).
@@ -934,7 +944,8 @@ when the export refuses the options or the artboard choice, `pens` stays null an
 remembers the options for the next HP-GL Options (not `exportSelection`) and writes the `.plt` file(s), asking for a
 path when there is none (one per artboard with Use Artboards). A canceled save dialog writes nothing and keeps the
 options remembered before; a save dialog shown in line (not as a sheet or off the UI thread) also keeps HP-GL
-Options open.
+Options open. When another document has become the active one since the dialog opened, `ui.dialog.confirm` closes
+it and writes nothing.
 
 TIFF, BMP and Targa Options: Export As… with the TIFF, BMP or Targa format (`file.exportAs {format: "tiff"}`, then
 the save dialog) opens `tiffOptions`, `bmpOptions` or `tgaOptions`: the raster rows of PNG Options (`ppi`,

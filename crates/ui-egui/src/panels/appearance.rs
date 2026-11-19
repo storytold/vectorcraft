@@ -488,7 +488,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             _ => None,
         };
         let label = match style {
-            Some(name) => std::borrow::Cow::Owned(format!("{label}: {name}")),
+            Some(name) => std::borrow::Cow::Owned(format!("{} {name}", crate::i18n::colon(label))),
             None => std::borrow::Cow::Borrowed(label),
         };
         if !hide_thumb {
@@ -1239,9 +1239,10 @@ fn effect_row(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, k: usi
     (row_rect, resp)
 }
 
-/// Does the effect have a dialog (any parameters)?
+/// Does the effect have a dialog (any parameters, or a Pathfinder effect's Pathfinder Options)?
 fn has_options(id: &str) -> bool {
-    vectorcraft_effects::default_params(id).is_some_and(|d| d.as_object().is_some_and(|o| !o.is_empty()))
+    vectorcraft_effects::takes_pathfinder_options(id)
+        || vectorcraft_effects::default_params(id).is_some_and(|d| d.as_object().is_some_and(|o| !o.is_empty()))
 }
 
 /// Inline editor for an applied effect's parameters, labeled as the effect dialogs' generic fields

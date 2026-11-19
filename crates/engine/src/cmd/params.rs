@@ -516,7 +516,30 @@ pub fn check_effect_params(id: &str, effect: &str, params: &Value) -> Result<()>
     }
     check_effect_color(id, effect, params)?;
     check_effect_channel(id, effect, params)?;
-    check_effect_center(id, effect, params)
+    check_effect_center(id, effect, params)?;
+    check_effect_pathfinder(id, effect, params)
+}
+
+/// The Pathfinder Options in `params` of a Pathfinder effect (`effect`), as command `id` was given
+/// them: `precision` a number of points from 0.001 to 10, and `removeRedundantPoints` and
+/// `removeUnpainted` true or false. `effect.apply` and `effect.setParams` run this themselves
+/// before they edit, as they run [`check_effect_color`].
+pub(crate) fn check_effect_pathfinder(id: &str, effect: &str, params: &Value) -> Result<()> {
+    use vectorcraft_render::effects;
+    if !effects::takes_pathfinder_options(effect) {
+        return Ok(());
+    }
+    if let Some(v) = params.get("precision")
+        && !v.as_f64().is_some_and(|p| effects::PATHFINDER_EFFECT_PRECISION.contains(&p))
+    {
+        return Err(bad(id, "precision must be from 0.001 to 10 pt"));
+    }
+    for key in ["removeRedundantPoints", "removeUnpainted"] {
+        if params.get(key).is_some_and(|v| !v.is_boolean()) {
+            return Err(bad(id, format!("`{key}` must be true or false")));
+        }
+    }
+    Ok(())
 }
 
 /// The type of the values in `params` of effect `effect`, as command `id` was given them: a key
@@ -557,9 +580,11 @@ fn check_effect_types(id: &str, effect: &str, params: &Value) -> Result<()> {
 /// A value of the type effect `effect` reads for `key`, a parameter its params description names
 /// without a dialog default: the earlier 3D Perspective and light (`perspective`, `lightAzimuth`,
 /// `lightElevation`) and Scribble `variation` are numbers, an Outline Stroke's `width` is a number
-/// and a Gaussian Blur's `linear` is true or false. A Glass, Texturizer or Rough Pastels
-/// `textureImage`, an SVG filter's `name` and `xml`, a Warp's `version` and the `style` of Crop
-/// Marks have checks of their own; they aren't listed.
+/// and a Gaussian Blur's `linear` is true or false. A Pathfinder effect's `precision` is a number and
+/// its `removeRedundantPoints` and `removeUnpainted` are true or false. A Glass, Texturizer or Rough
+/// Pastels `textureImage`, an SVG filter's `name` and `xml`, a Warp's `version`, the `style` of Crop
+/// Marks and an Extrude & Bevel's custom `bevelName` and `bevelProfile` have checks of their own;
+/// they aren't listed.
 pub(crate) fn undefaulted_type(effect: &str, key: &str) -> Option<Value> {
     use vectorcraft_render::effects;
     let number = || Some(Value::from(0.0));
@@ -568,6 +593,8 @@ pub(crate) fn undefaulted_type(effect: &str, key: &str) -> Option<Value> {
         "variation" if effect == "stylize.scribble" => number(),
         "width" if effect == "path.outlineStroke" => number(),
         "linear" if effect == "blur.gaussian" => Some(Value::Bool(false)),
+        "precision" if effects::takes_pathfinder_options(effect) => number(),
+        "removeRedundantPoints" | "removeUnpainted" if effects::takes_pathfinder_options(effect) => Some(Value::Bool(false)),
         _ => None,
     }
 }

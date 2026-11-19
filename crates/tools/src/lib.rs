@@ -236,6 +236,11 @@ pub trait Tool: Send {
     fn wants_text(&self) -> bool {
         false
     }
+    /// The tool a gradient stop's one-shot pick switches back to after its click (the Eyedropper
+    /// armed by the Gradient panel's eyedropper); None when no such pick is armed.
+    fn returns_to(&self) -> Option<&str> {
+        None
+    }
     fn text_input(&mut self, _cx: &ToolContext, _s: &str) -> Vec<Action> {
         vec![]
     }
