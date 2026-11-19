@@ -283,7 +283,7 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
     ),
     (
         "lowLatencyDrawing",
-        "From the next start, the desktop version shows frames without waiting for the display's refresh, at most 240 a second; off, the display paces them.",
+        "From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.",
     ),
     (
         "historyStates",
@@ -367,6 +367,24 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
     (
         "pasteTextFormatting",
         "Keep Formatting keeps the styles of text copied from VectorCraft type when it is pasted into type; Keep Plain Text gives it the style where it lands.",
+    ),
+    // Appearance of Black
+    (
+        "blackOnScreen",
+        "Display All Blacks as Rich Black shows pure CMYK black (black ink alone at 100%) as RGB black on the canvas; Display All Blacks Accurately converts it through the CMYK working space.",
+    ),
+    (
+        "blackOutput",
+        "Output All Blacks as Rich Black draws pure CMYK black as RGB black in RGB and grayscale raster exports and Print as Bitmap; it does not change vector exports, CMYK JPEG, TIFF and PSD, or other printing.",
+    ),
+    // Devices
+    (
+        "touchWorkspace",
+        "On a touch screen, switches to the Touch workspace; turning this off, or losing the touch screen, goes back to the workspace it switched from.",
+    ),
+    (
+        "touchGestures",
+        "A two-finger tap on the canvas undoes, or switches between selection and drawing tools in the Touch workspace, and a three-finger tap redoes; neither works in Presentation Mode.",
     ),
 ];
 
