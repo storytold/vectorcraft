@@ -1186,7 +1186,22 @@ mod review_597585_adoption_options {
     fn review597585_options_source(sliced: bool) -> Document {
         let mut d = Document::new(80.0, 60.0);
         let art = rectangle(&mut d, Paint::solid(Color::rgb8(29, 71, 113)));
-        d.symbols.push(Symbol { name: SYMBOL.into(), art: Arc::new(art), dynamic: false });
+        if sliced {
+            // Stored natural size describes the app's normalized20x20 symbol space. Use
+            // the real constructor so Align to Pixel Grid sees its original8x6 geometry.
+            let id = art.id;
+            put(&mut d, art);
+            let mut builder = Session::new();
+            builder.add_document(d, None);
+            builder.execute("select.set", &json!({"ids": [id.0]})).expect("CONTROL: the source rectangle is selected for New Symbol");
+            builder
+                .execute("symbol.new", &json!({"name": SYMBOL, "ids": [id.0], "keepArt": true}))
+                .expect("CONTROL: the public symbol constructor normalizes the sliced source");
+            d = document(&builder).clone();
+            d.remove(id).unwrap();
+        } else {
+            d.symbols.push(Symbol { name: SYMBOL.into(), art: Arc::new(art), dynamic: false });
+        }
         let user = Node::new(
             d.alloc_id(),
             NodeKind::SymbolInstance { symbol: SYMBOL.into(), xf: Affine::translate((12.0, 16.0)) * Affine::scale_non_uniform(2.0, 1.5) },
@@ -1205,14 +1220,7 @@ mod review_597585_adoption_options {
                 )
                 .expect("CONTROL: non-default registration/export/guides are accepted");
         }
-        let mut result = document(&session).clone();
-        if sliced {
-            // The document model's existing stored-natural-size record, read by Clipboard.
-            result
-                .unknown
-                .insert(vectorcraft_doc::SYMBOL_SIZES.into(), Value::Object(serde_json::Map::from_iter([(SYMBOL.to_string(), json!([8.0, 6.0]))])));
-        }
-        result
+        document(&session).clone()
     }
 
     fn review597585_options_capture(directory: &Path, label: &str, native: &Document, mut outer: Document) -> Vec<Document> {
@@ -1452,15 +1460,6 @@ fn review_597585_failed_async_replace_keeps_the_pre_completion_selection() {
     assert_eq!(after["journal"], before["journal"], "failed reselection/placement leaves no successful replay entry behind");
 }
 
-fn review_597585_rollback_snapshot(session: &Session) -> Value {
-    let st = session.doc().unwrap();
-    json!({"doc":st.doc.as_ref(),"selection":st.selection,
-        "undo":st.history.undo.iter().map(|entry|json!({"label":entry.label,"doc":entry.doc.as_ref(),"selection":entry.selection.as_ref()})).collect::<Vec<_>>(),
-        "redo":st.history.redo.iter().map(|entry|json!({"label":entry.label,"doc":entry.doc.as_ref(),"selection":entry.selection.as_ref()})).collect::<Vec<_>>(),
-        "step":st.history.step(),"journal":{"first":session.journal.first_kept(),"len":session.journal.len(),
-            "held":session.journal.held(),"entries":session.journal.iter().cloned().collect::<Vec<_>>()}})
-}
-
 fn review_597585_rollback_font_destination(held: &CompositeFont) -> Session {
     let mut session = Session::new();
     session.add_document(Document::new(100.0, 80.0), None);
@@ -1533,7 +1532,7 @@ fn review_597585_native_font_previews_restore_registry_on_cancel_and_replacement
     let mut observations = Vec::new();
     for cancel in [true, false] {
         let mut session = review_597585_rollback_font_destination(&held);
-        let before = review_597585_rollback_snapshot(&session);
+        let before = review_597585_replace_snapshot(&session);
         let registry = review_batch_font_registry();
         let menu = session.execute("text.fontList", &json!({})).unwrap();
         assert!(review_597585_rollback_menu_has(&menu, &held.name));
@@ -1543,7 +1542,7 @@ fn review_597585_native_font_previews_restore_registry_on_cancel_and_replacement
             session.cancel_interaction().unwrap();
             // Read immediately, before another command's usual post-sync could mask the leak.
             let restored = review_batch_font_registry() == registry;
-            assert_eq!(review_597585_rollback_snapshot(&session), before, "cancel restores the entire art/selection/history/journal first");
+            assert_eq!(review_597585_replace_snapshot(&session), before, "cancel restores the entire art/selection/history/journal first");
             let menu = session.execute("text.fontList", &json!({})).unwrap();
             (restored, !review_597585_rollback_menu_has(&menu, &incoming.name))
         } else {
@@ -1552,7 +1551,7 @@ fn review_597585_native_font_previews_restore_registry_on_cancel_and_replacement
             let menu = session.preview("text.fontList", &json!({})).unwrap();
             assert!(review_597585_rollback_menu_has(&menu, &held.name));
             let consumer_restored = !review_597585_rollback_menu_has(&menu, &incoming.name);
-            assert_eq!(review_597585_rollback_snapshot(&session), before, "replacement restores art/selection/history/journal before the query");
+            assert_eq!(review_597585_replace_snapshot(&session), before, "replacement restores art/selection/history/journal before the query");
             let restored = review_batch_font_registry() == registry;
             session.cancel_interaction().unwrap();
             (restored, consumer_restored)
