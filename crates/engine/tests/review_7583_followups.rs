@@ -603,3 +603,434 @@ fn review7583_equivalent_lab_spot_gradient_is_compared_after_color_refresh_contr
     assert_eq!(paint.gradient.stops[0].tint, 0.4);
     assert!(paint.gradient.stops.iter().all(|stop| stop.plates.is_none()), "CONTROL: this does not exercise or change mixed-ink policy");
 }
+
+mod review_5972993766_adoption {
+    use super::*;
+    use vectorcraft_doc::{CharStyle, Effect, InlineArt, TextObject, TextRun};
+
+    const BADGE: &str = "Review adopted Badge";
+    const LOGO: &str = "Review mapped Logo";
+    const TILE: &str = "Review adopted native tile";
+
+    fn adoption_same_node(actual: &Node, expected: &Node) -> bool {
+        let mut expected = expected.clone();
+        expected.id = actual.id;
+        serde_json::to_value(actual).unwrap() == serde_json::to_value(expected).unwrap()
+    }
+
+    fn adoption_named_symbol<'a>(d: &'a Document, name: &str) -> &'a Symbol {
+        d.symbols.iter().find(|s| s.name == name).expect("CONTROL: fixture symbol exists")
+    }
+
+    fn adoption_seed_symbol(d: &mut Document, name: &str, aligned: bool) -> Symbol {
+        let art = rectangle(d, Paint::solid(Color::rgb8(190, 20, 30)));
+        let symbol = Symbol { name: name.into(), art: Arc::new(art), dynamic: false };
+        d.symbols.push(symbol.clone());
+        d.set_symbol_pixel_aligned(name, aligned);
+        // A separate retained palette consumer keeps the destination definition and option alive.
+        let user = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: name.into(), xf: Affine::translate((2.0, 3.0)) });
+        let tile = format!("Existing {name} tile");
+        d.patterns.push(PatternDef::new(tile.clone(), vec![Arc::new(user)]));
+        d.swatches.push(Swatch { name: tile.clone(), paint: Paint::Pattern { pattern: tile, xf: Affine::IDENTITY }, global: false, spot: false });
+        symbol
+    }
+
+    fn adoption_assert_existing(d: &Document, expected: &Symbol, aligned: bool) {
+        let actual = adoption_named_symbol(d, &expected.name);
+        assert!(adoption_same_node(&actual.art, &expected.art), "CONTROL: existing destination symbol payload is unchanged");
+        assert_eq!(actual.dynamic, expected.dynamic);
+        assert_eq!(d.symbol_pixel_aligned(&expected.name), aligned, "CONTROL: existing destination option is unchanged");
+        let tile = d.pattern(&format!("Existing {} tile", expected.name)).unwrap();
+        assert!(
+            matches!(&tile.art[0].kind, NodeKind::SymbolInstance { symbol, xf } if symbol == &expected.name && *xf == Affine::translate((2.0, 3.0))),
+            "CONTROL: existing destination user is unchanged"
+        );
+    }
+
+    fn adoption_capture_native(directory: &Path, label: &str, native: &Document, mut outer: Document) -> Vec<Document> {
+        let path = directory.join(format!("{label}.vectorcraft"));
+        write_native(&path, native);
+        outer.fix_next_id();
+        let mut source = Session::new();
+        source.add_document(outer, None);
+        let placed = source.execute("file.place", &json!({"path": path, "link": true})).expect("CONTROL: native link placement succeeds");
+        assert_eq!(placed["linked"], true);
+        let id = placed["ids"][0].as_u64().unwrap();
+        assert!(matches!(document(&source).node(NodeId(id)).unwrap().kind, NodeKind::PlacedDocument(_)));
+        source.execute("object.pattern.make", &json!({"ids": [id], "name": TILE, "edit": false})).unwrap();
+        source.execute("select.set", &json!({"ids": [id]})).unwrap();
+        source.execute("edit.clear", &json!({})).unwrap();
+        let original = document(&source).clone();
+        source.execute("swatch.defaults.save", &json!({})).expect("CONTROL: capture reaches retained-resource oracles");
+        assert_eq!(document(&source), &original, "CONTROL: capture leaves its source document unchanged");
+        let prefs = source.prefs.to_json();
+        let bytes = vectorcraft_format::base64_decode(prefs["defaultSwatches"]["data"].as_str().unwrap()).unwrap();
+        let capsule = vectorcraft_format::load_file(&bytes).expect("CONTROL: saved native capsule loads").doc;
+        std::fs::remove_file(&path).unwrap();
+        assert!(!path.exists(), "CONTROL: source file is unavailable before restart");
+        let mut fresh = restarted(&source);
+        fresh.execute("file.new", &json!({"profile": null})).expect("CONTROL: new document loads before resource oracles");
+        vec![capsule, document(&fresh).clone()]
+    }
+
+    fn adoption_tile_user(d: &Document, inline: bool) -> Node {
+        let Paint::Pattern { pattern, .. } = &d.swatch(TILE).expect("CONTROL: saved native tile swatch exists").paint else {
+            panic!("CONTROL: saved tile remains a pattern")
+        };
+        let tile = d.pattern(pattern).expect("CONTROL: saved tile pattern resolves");
+        let mut users = Vec::new();
+        for root in &tile.art {
+            root.walk(&mut |n| {
+                if matches!(&n.kind, NodeKind::Text(_) if inline) || matches!(&n.kind, NodeKind::SymbolInstance { .. } if !inline) {
+                    users.push(n.clone());
+                }
+            });
+        }
+        assert_eq!(users.len(), 1, "CONTROL: one native symbol consumer survives expansion");
+        users.remove(0)
+    }
+
+    fn adoption_user_name(user: &Node) -> &str {
+        match &user.kind {
+            NodeKind::Text(t) => {
+                assert_eq!(t.runs.len(), 1);
+                &t.runs[0].inline.as_ref().expect("CONTROL: native inline graphic survives").symbol
+            }
+            NodeKind::SymbolInstance { symbol, .. } => symbol,
+            _ => panic!("CONTROL: native symbol consumer kind is unchanged"),
+        }
+    }
+
+    fn adoption_mapped_effect(art: &Node, paint: bool) -> &Effect {
+        let effects = if paint { art.appearance.items[0].effects() } else { &art.appearance.effects };
+        assert_eq!(effects.len(), 1, "CONTROL: one native mapped effect survives");
+        &effects[0]
+    }
+
+    #[test]
+    fn review_597299_adoption_mapped_inline_symbols_survive_capture_and_collision() {
+        let _context = FixtureContext::hold();
+        let directory = TestDirectory::new();
+        let mut regressions = Vec::new();
+        for paint in [false, true] {
+            for collision in [false, true] {
+                let mut native = Document::new(80.0, 60.0);
+                let logo = rectangle(&mut native, Paint::solid(Color::rgb8(29, 71, 113)));
+                native.symbols.push(Symbol { name: LOGO.into(), art: Arc::new(logo), dynamic: false });
+                let mut badge = rectangle(&mut native, Paint::solid(Color::rgb8(90, 140, 40)));
+                let effect =
+                    Effect { id: vectorcraft_render::effects::ROTATE.into(), params: json!({"graphics": [{"symbol": LOGO}]}), visible: true };
+                vectorcraft_render::effects::validate_three_d_at_in(Some(&native), &badge, &effect.id, &effect.params, (paint.then_some(0), 0))
+                    .expect("CONTROL: the small native graphic is valid on this actual appearance location");
+                if paint {
+                    badge.appearance.items[0].effects_mut().push(effect)
+                } else {
+                    badge.appearance.effects.push(effect)
+                }
+                native.symbols.push(Symbol { name: BADGE.into(), art: Arc::new(badge), dynamic: false });
+                let mut text = TextObject::point(Point::new(12.0, 16.0), "", CharStyle::default());
+                text.runs = vec![TextRun::inline(InlineArt::new(BADGE), CharStyle::default())];
+                let text = Node::new(native.alloc_id(), NodeKind::Text(Box::new(text)));
+                put(&mut native, text);
+                let path = directory.0.join(format!("mapped-input-{paint}-{collision}.vectorcraft"));
+                let loaded = write_native(&path, &native);
+                let expected_badge = adoption_named_symbol(&loaded, BADGE);
+                let expected_logo = adoption_named_symbol(&loaded, LOGO);
+                let input_effect = adoption_mapped_effect(&expected_badge.art, paint);
+                assert_eq!(input_effect.params["graphics"][0]["symbol"], LOGO);
+                vectorcraft_render::effects::validate_three_d_at_in(
+                    Some(&loaded),
+                    &expected_badge.art,
+                    &input_effect.id,
+                    &input_effect.params,
+                    (paint.then_some(0), 0),
+                )
+                .expect("CONTROL: native reading retains valid supported mapped art and its effect location");
+                assert_eq!(vectorcraft_render::effects::appearance_graphic_symbols(&expected_badge.art.appearance), vec![LOGO.to_string()]);
+                assert_eq!(loaded.symbols.len(), 2, "CONTROL: Logo has no independent symbol-instance seed");
+                let mut outer = Document::new(80.0, 60.0);
+                outer.swatches.clear();
+                outer.swatch_groups.clear();
+                let existing = collision.then(|| adoption_seed_symbol(&mut outer, LOGO, true));
+                for (stage, d) in
+                    adoption_capture_native(&directory.0, &format!("mapped-{paint}-{collision}"), &loaded, outer).into_iter().enumerate()
+                {
+                    if let Some(existing) = &existing {
+                        adoption_assert_existing(&d, existing, true);
+                    }
+                    let user = adoption_tile_user(&d, true);
+                    let Some(adopted) = d.symbols.iter().find(|s| s.name == adoption_user_name(&user)) else {
+                        regressions.push(format!("paint={paint}, collision={collision}, stage={stage}: inline Badge missing"));
+                        continue;
+                    };
+                    let effect = adoption_mapped_effect(&adopted.art, paint);
+                    let name = effect.params["graphics"][0]["symbol"].as_str().expect("CONTROL: native mapped symbol name survives");
+                    let kept = d.symbols.iter().find(|s| s.name == name);
+                    if kept.is_none_or(|s| !adoption_same_node(&s.art, &expected_logo.art)) || (name == LOGO) == collision {
+                        regressions.push(format!(
+                            "paint={paint}, collision={collision}, stage={stage}: mapped Logo missing or resolves to wrong source payload/name"
+                        ));
+                    }
+                    let mut expected = expected_badge.art.as_ref().clone();
+                    let effects = if paint { expected.appearance.items[0].effects_mut() } else { &mut expected.appearance.effects };
+                    effects[0].params["graphics"][0]["symbol"] = json!(name);
+                    assert!(
+                        adoption_same_node(&adopted.art, &expected),
+                        "CONTROL: only allocated ID and verified mapped resource name differ in native Badge"
+                    );
+                }
+            }
+        }
+        assert!(regressions.is_empty(), "REGRESSION: native mapped-symbol dependency/remap failed: {regressions:?}");
+    }
+
+    #[test]
+    fn review_597299_adoption_symbol_pixel_options_survive_capture_and_collision() {
+        let _context = FixtureContext::hold();
+        let directory = TestDirectory::new();
+        let mut regressions = Vec::new();
+        for aligned in [false, true] {
+            for collision in [false, true] {
+                let mut native = Document::new(80.0, 60.0);
+                let badge = rectangle(&mut native, Paint::solid(Color::rgb8(29, 71, 113)));
+                native.symbols.push(Symbol { name: BADGE.into(), art: Arc::new(badge), dynamic: false });
+                native.set_symbol_pixel_aligned(BADGE, aligned);
+                let instance = Node::new(native.alloc_id(), NodeKind::SymbolInstance { symbol: BADGE.into(), xf: Affine::translate((12.0, 16.0)) });
+                put(&mut native, instance);
+                let path = directory.0.join(format!("pixel-input-{aligned}-{collision}.vectorcraft"));
+                let loaded = write_native(&path, &native);
+                assert_eq!(loaded.symbol_pixel_aligned(BADGE), aligned, "CONTROL: native read retains the actual source option");
+                let expected = adoption_named_symbol(&loaded, BADGE);
+                let mut outer = Document::new(80.0, 60.0);
+                outer.swatches.clear();
+                outer.swatch_groups.clear();
+                let existing = collision.then(|| adoption_seed_symbol(&mut outer, BADGE, !aligned));
+                for (stage, d) in
+                    adoption_capture_native(&directory.0, &format!("pixel-{aligned}-{collision}"), &loaded, outer).into_iter().enumerate()
+                {
+                    if let Some(existing) = &existing {
+                        adoption_assert_existing(&d, existing, !aligned);
+                    }
+                    let user = adoption_tile_user(&d, false);
+                    let name = adoption_user_name(&user);
+                    let adopted = adoption_named_symbol(&d, name);
+                    assert!(adoption_same_node(&adopted.art, &expected.art), "CONTROL: source Badge art is retained independently of its option");
+                    assert_eq!(name == BADGE, !collision, "CONTROL: only a real name collision allocates an alias");
+                    if d.symbol_pixel_aligned(name) != aligned {
+                        regressions.push(format!(
+                            "aligned={aligned}, collision={collision}, stage={stage}: native option lost at actual adopted name {name}"
+                        ));
+                    }
+                }
+            }
+        }
+        assert!(regressions.is_empty(), "REGRESSION: native adopted symbol pixel-alignment option failed: {regressions:?}");
+    }
+}
+
+fn review_batch_font_registry() -> Vec<CompositeFont> {
+    let db = FontDb::global();
+    let mut fonts: Vec<_> = db.composite_font_names().iter().map(|name| (*db.composite_font(name).unwrap()).clone()).collect();
+    fonts.sort_by(|a, b| a.name.cmp(&b.name));
+    fonts
+}
+
+fn review_batch_font_destination(font: &CompositeFont) -> (Session, NodeId, Node) {
+    let mut old = font.clone();
+    old.parts.roman.size = 100.0;
+    let mut session = Session::new();
+    session.add_document(Document::new(100.0, 80.0), None);
+    session.execute("type.compositeFonts.set", &json!({"fonts": [old]})).unwrap();
+    let result = session.execute("text.create", &json!({"x": 2, "y": 12, "text": "Destination", "font": font.name})).unwrap();
+    let id = NodeId(result["id"].as_u64().unwrap());
+    let node = document(&session).node(id).unwrap().clone();
+    (session, id, node)
+}
+
+fn review_batch_font_geometry_contrast(source: &Document, font: &CompositeFont) {
+    let mut text = None;
+    source.layers[0].walk(&mut |node| {
+        if let NodeKind::Text(value) = &node.kind {
+            assert!(text.is_none(), "CONTROL: one source lettering object");
+            text = Some((**value).clone());
+        }
+    });
+    let text = text.unwrap();
+    let db = FontDb::global();
+    let intended = {
+        let _loan = db.lend_document_composite_fonts(std::slice::from_ref(font));
+        vectorcraft_text::layout(db, &text)
+    };
+    let fallback = {
+        let _loan = db.lend_document_composite_fonts(&[]);
+        vectorcraft_text::layout(db, &text)
+    };
+    assert!(!intended.glyphs.is_empty() && !fallback.glyphs.is_empty(), "CONTROL: both layouts produce real glyphs");
+    assert!(
+        (intended.bounds.width() - fallback.bounds.width()).abs() > 0.1,
+        "CONTROL: the valid 125% composite has observably different geometry from a missing-family fallback"
+    );
+}
+
+fn review_batch_font_steps(path: &Path) -> Vec<Value> {
+    vec![
+        json!({"command": "file.place", "params": {"path": path, "link": false, "at": [50, 40]}}),
+        json!({"command": "type.createOutlines", "params": {}}),
+    ]
+}
+
+fn review_batch_font_rollback(session: &mut Session, path: &Path, font: &CompositeFont, alias: &str) {
+    let before = document(session).clone();
+    let selection = session.doc().unwrap().selection.clone();
+    let history = session.doc().unwrap().history.clone();
+    let registry = review_batch_font_registry();
+    let mut bad = font.clone();
+    bad.parts.roman.size = 9.0;
+    let expected = bad.check().expect_err("CONTROL: the final batch step has a real font validation error");
+    let mut steps = review_batch_font_steps(path);
+    steps.push(json!({"command": "type.compositeFonts.set", "params": {"fonts": [bad]}}));
+    let error = session.execute("command.batch", &json!({"commands": steps})).expect_err("CONTROL: the last step rejects the batch");
+    assert!(error.to_string().contains(&expected), "CONTROL: intended validation failure: {error}");
+    assert_eq!(document(session), &before, "CONTROL: failed batch restores the whole document");
+    let state = session.doc().unwrap();
+    assert_eq!(state.selection, selection, "CONTROL: failed batch restores selection");
+    assert_eq!((state.history.undo.len(), state.history.redo.len()), (history.undo.len(), history.redo.len()));
+    for (actual, expected) in state.history.undo.iter().chain(&state.history.redo).zip(history.undo.iter().chain(&history.redo)) {
+        assert_eq!(actual.label, expected.label);
+        assert_eq!(actual.doc, expected.doc, "CONTROL: original history document meanings remain");
+        assert_eq!(actual.selection, expected.selection);
+        assert_eq!(actual.bytes, expected.bytes);
+    }
+    assert_eq!(review_batch_font_registry(), registry, "CONTROL: failed batch restores all registered font meanings");
+    assert!(FontDb::global().composite_font(alias).is_none(), "CONTROL: rollback leaves no unused imported alias");
+}
+
+fn review_batch_font_paths(session: &Session, outlined: &Value) -> Vec<vectorcraft_geom::PathData> {
+    let mut paths = vec![];
+    let ids = outlined["ids"].as_array().unwrap();
+    assert_eq!(ids.len(), 1, "CONTROL: only the placed source lettering was outlined");
+    let node = document(session).node(NodeId(ids[0].as_u64().unwrap())).unwrap();
+    node.walk(&mut |node| {
+        if let NodeKind::Path { path, .. } = &node.kind {
+            paths.push(path.clone());
+        }
+    });
+    assert!(!paths.is_empty(), "CONTROL: outlining produced actual path geometry");
+    paths
+}
+
+fn review_batch_font_keeps_destination(session: &Session, id: NodeId, node: &Node, font: &CompositeFont) {
+    let mut old = font.clone();
+    old.parts.roman.size = 100.0;
+    assert_eq!(document(session).node(id), Some(node), "CONTROL: existing destination lettering is exact");
+    assert_eq!(CompositeFont::named(&document(session).composite_fonts, &font.name), Some(&old));
+}
+
+#[test]
+fn review_597299_batch_adoption_registers_fonts_before_outlining() {
+    let _context = FixtureContext::hold();
+    let directory = TestDirectory::new();
+    let path = directory.0.join("batch-lettering.vectorcraft");
+    let mut incoming = CompositeFont::new("ReviewBatchStepLettering", "Source Sans 3", "Regular");
+    incoming.parts.roman.size = 125.0;
+    incoming.check().expect("CONTROL: the source definition is valid");
+    let source = write_native(&path, &font_document(&incoming));
+    review_batch_font_geometry_contrast(&source, &incoming);
+    let (mut batch, old_id, old_node) = review_batch_font_destination(&incoming);
+    let alias = format!("{} 2", incoming.name);
+    let db = FontDb::global();
+    assert!(!db.has_installed_family(&alias) && db.composite_font(&alias).is_none(), "CONTROL: the first collision alias is cold");
+    review_batch_font_rollback(&mut batch, &path, &incoming, &alias);
+    let cold_registry = review_batch_font_registry();
+    let result = batch.execute("command.batch", &json!({"commands": review_batch_font_steps(&path)})).unwrap();
+    assert_eq!(result["results"][0]["linked"], false, "CONTROL: the real native placement is editable");
+    let actual = review_batch_font_paths(&batch, &result["results"][1]);
+    review_batch_font_keeps_destination(&batch, old_id, &old_node, &incoming);
+    let imported = CompositeFont::named(&document(&batch).composite_fonts, &alias).expect("CONTROL: the conflict creates the fresh alias");
+    assert_eq!(imported.parts, incoming.parts);
+    assert_eq!(imported.custom, incoming.custom);
+    assert!(!cold_registry.iter().any(|font| CompositeFont::same_name(&font.name, &imported.name)));
+    assert_eq!(*db.composite_font(&alias).unwrap(), *imported, "CONTROL: the outer command eventually registers the imported meaning");
+    // Only now run the ordinary control: it cannot prewarm the batch's alias.
+    let (mut ordinary, old_id, old_node) = review_batch_font_destination(&incoming);
+    let placed = ordinary.execute("file.place", &json!({"path": path, "link": false, "at": [50, 40]})).unwrap();
+    assert_eq!(placed_family(&ordinary, &placed), alias);
+    assert_eq!(*db.composite_font(&alias).unwrap(), *imported, "CONTROL: the ordinary placement registers the correct alias before outlining");
+    let outlined = ordinary.execute("type.createOutlines", &json!({})).unwrap();
+    let expected = review_batch_font_paths(&ordinary, &outlined);
+    review_batch_font_keeps_destination(&ordinary, old_id, &old_node, &incoming);
+    assert_eq!(actual, expected, "REGRESSION: the batch must outline in the adopted composite, before its top-level sync");
+}
+
+#[test]
+fn review_597299_cancelled_previews_cannot_choose_application_swatch_defaults() {
+    let _context = FixtureContext::hold();
+    // Ordinary application choices remain supported even with an interaction open.
+    // These are immediate commands, not preview calls or scripts.
+    let mut control = Session::new();
+    control.add_document(Document::new(80.0, 60.0), None);
+    control.execute("swatch.new", &json!({"name": "Ordinary saved choice", "color": "#2468ac"})).unwrap();
+    let ordinary_palette = document(&control).swatches.clone();
+    let ordinary_groups = document(&control).swatch_groups.clone();
+    control.begin_interaction("Ordinary Save control").unwrap();
+    control.execute("swatch.defaults.save", &json!({})).expect("CONTROL: immediate Save is allowed during an interaction");
+    control.cancel_interaction().unwrap();
+    control.execute("file.new", &json!({"profile": null})).unwrap();
+    assert_eq!(document(&control).swatches, ordinary_palette, "CONTROL: immediate Save selects the actual palette");
+    assert_eq!(document(&control).swatch_groups, ordinary_groups);
+    control.begin_interaction("Ordinary Reset control").unwrap();
+    control.execute("swatch.defaults.reset", &json!({})).expect("CONTROL: immediate Reset is allowed during an interaction");
+    control.cancel_interaction().unwrap();
+    control.execute("file.new", &json!({"profile": null})).unwrap();
+    assert!(document(&control).swatch("Ordinary saved choice").is_none(), "CONTROL: immediate Reset restores factory defaults");
+
+    for batch in [false, true] {
+        for command in ["swatch.defaults.save", "swatch.defaults.reset"] {
+            let mut session = Session::new();
+            session.add_document(Document::new(80.0, 60.0), None);
+            session.execute("swatch.new", &json!({"name": "Previously chosen palette", "color": "#2468ac"})).unwrap();
+            session.execute("swatch.defaults.save", &json!({})).unwrap();
+            let chosen_palette = document(&session).swatches.clone();
+            let chosen_groups = document(&session).swatch_groups.clone();
+            let chosen_prefs = session.prefs.to_json();
+            // The current document now differs from the earlier explicit application choice.
+            session.execute("swatch.new", &json!({"name": "Tentative current palette", "color": "#ac6824"})).unwrap();
+            let art = session.execute("shape.rectangle", &json!({"x": 2, "y": 3, "width": 12, "height": 9})).unwrap();
+            session.execute("select.set", &json!({"ids": [art["id"]]})).unwrap();
+            let original = session.doc().unwrap().doc.clone();
+            let selection = session.doc().unwrap().selection.clone();
+            let undo = session.doc().unwrap().history.undo.len();
+            let redo = session.doc().unwrap().history.redo.len();
+            assert!(undo > 0 && !selection.objects.is_empty(), "CONTROL: cancellation preserves real selected art and existing history");
+            assert_ne!(document(&session).swatches, chosen_palette, "CONTROL: Save would select a genuinely different palette");
+            assert_eq!(session.prefs.to_json(), chosen_prefs, "CONTROL: ordinary document edits do not select application defaults");
+            let (id, params) =
+                if batch { ("command.batch", json!({"commands": [{"command": command, "params": {}}]})) } else { (command, json!({})) };
+            session.begin_interaction("Cancellable application-default preview").unwrap();
+            let preview = session.preview(id, &params);
+            session.cancel_interaction().unwrap();
+            // Check cancellation's real state FIRST, before checking the new refusal policy.
+            // Before must expose the leaked preference, not just an expected-error assertion.
+            assert_eq!(session.doc().unwrap().doc, original, "{command}, batch={batch}: cancellation preserves the document");
+            assert_eq!(session.doc().unwrap().selection, selection);
+            assert_eq!(session.doc().unwrap().history.undo.len(), undo);
+            assert_eq!(session.doc().unwrap().history.redo.len(), redo);
+            assert!(!session.in_interaction());
+            assert_eq!(
+                session.prefs.to_json(),
+                chosen_prefs,
+                "REGRESSION: {command}, batch={batch}: a cancelled preview must retain the earlier application palette"
+            );
+            session.execute("file.new", &json!({"profile": null})).unwrap();
+            assert_eq!(
+                document(&session).swatches,
+                chosen_palette,
+                "REGRESSION: {command}, batch={batch}: the next document retains the earlier choice"
+            );
+            assert_eq!(document(&session).swatch_groups, chosen_groups);
+            assert!(document(&session).swatch("Tentative current palette").is_none());
+            assert!(preview.is_err(), "{command}, batch={batch}: application preference changes do not support preview");
+            assert!(preview.unwrap_err().to_string().contains("cannot be previewed"));
+        }
+    }
+}
