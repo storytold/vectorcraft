@@ -1,7 +1,8 @@
 //! Pattern Options panel: active in pattern editing mode (Object → Pattern → Make / Edit
-//! Pattern). Name, Tile Type, Brick Offset, Width/Height, Size Tile to Art with H/V spacing, Move
-//! Tile with Art, Overlap, Copies, Dim Copies, Show Tile Edge, Show Swatch Bounds; Save a Copy / Done / Cancel. Outside editing
-//! mode it lists the document's patterns with an Edit button.
+//! Pattern). Name, Tile Type, Brick Offset, Width/Height with the W/H link, Size Tile to Art with
+//! H/V spacing, Move Tile with Art, Overlap, Copies, Dim Copies, Show Tile Edge, Show Swatch
+//! Bounds; Save a Copy / Done / Cancel. Outside editing mode it lists the document's patterns with
+//! an Edit button.
 
 use egui::Ui;
 use serde_json::{Value, json};
@@ -77,19 +78,28 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         });
     });
     let sized = def.size_tile_to_art;
-    row(ui, tl!("Width:"), |ui| {
-        ui.add_enabled_ui(!sized, |ui| {
-            if let Some(v) = widgets::num_field(ui, "po-w", Some(def.tile.width()), unit, 90.0) {
-                set(app, &name, json!({"width": v}));
-            }
+    // Width and Height, with the Constrain Width and Height Proportions link of the Transform
+    // panel beside them: while it is on (or Ctrl/Cmd+Enter applies the value), a new width or
+    // height changes the other in proportion (#8566).
+    let link = super::transform::proportional(app, ui);
+    ui.horizontal(|ui| {
+        ui.vertical(|ui| {
+            row(ui, tl!("Width:"), |ui| {
+                ui.add_enabled_ui(!sized, |ui| {
+                    if let Some(v) = widgets::size_field(ui, "po-w", Some(def.tile.width()), unit, 90.0) {
+                        set(app, &name, json!({"width": v, "proportional": link}));
+                    }
+                });
+            });
+            row(ui, tl!("Height:"), |ui| {
+                ui.add_enabled_ui(!sized, |ui| {
+                    if let Some(v) = widgets::size_field(ui, "po-h", Some(def.tile.height()), unit, 90.0) {
+                        set(app, &name, json!({"height": v, "proportional": link}));
+                    }
+                });
+            });
         });
-    });
-    row(ui, tl!("Height:"), |ui| {
-        ui.add_enabled_ui(!sized, |ui| {
-            if let Some(v) = widgets::num_field(ui, "po-h", Some(def.tile.height()), unit, 90.0) {
-                set(app, &name, json!({"height": v}));
-            }
-        });
+        ui.add_enabled_ui(!sized, |ui| super::transform::constrain_link(app, ui));
     });
     if widgets::check(ui, tl!("Size Tile to Art"), sized, true) {
         set(app, &name, json!({"sizeTileToArt": !sized}));
@@ -279,6 +289,94 @@ mod tests {
         frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at), click(true)]);
         frame(&mut app, &ctx, vec![click(false)]);
         assert!(app.session.active().unwrap().doc.pattern("Dots").unwrap().show_swatch_bounds);
+    }
+
+    /// The Constrain Width and Height Proportions link sits right of the Width and Height fields,
+    /// between them. A click turns it on (the preference the Transform panel's link sets), and then
+    /// a new width changes the height in proportion (#8566). With the link off, Ctrl/Cmd+Enter in a
+    /// field keeps the proportions too. While Size Tile to Art is on, the link is disabled with the
+    /// fields.
+    #[test]
+    fn the_size_link_keeps_the_tile_proportions() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
+        app.run("object.pattern.make", json!({"name": "Dots", "width": 20, "height": 10})).unwrap();
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        crate::theme::install_fonts(&ctx);
+        let size = |app: &VectorcraftApp| {
+            let t = app.session.active().unwrap().doc.pattern("Dots").unwrap().tile;
+            (t.width(), t.height())
+        };
+        // The texts drawn, and the link's place and whether it is disabled.
+        let mut time = 0.0;
+        let mut step = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+            time += 1.0;
+            let mut out = ctx.run_ui(egui::RawInput { events, time: Some(time), ..Default::default() }, |ui| show(app, ui));
+            out.textures_delta.clear();
+            let texts: Vec<(String, egui::Rect)> = out
+                .shapes
+                .iter()
+                .filter_map(|c| match &c.shape {
+                    egui::Shape::Text(t) => Some((t.galley.text().to_string(), t.visual_bounding_rect())),
+                    _ => None,
+                })
+                .collect();
+            let link = out
+                .platform_output
+                .accesskit_update
+                .and_then(|u| u.nodes.into_iter().map(|(_, n)| n).find(|n| n.label() == Some("Constrain Width and Height Proportions")));
+            let link = link.map(|n| {
+                let b = n.bounds().expect("bounds");
+                (egui::Rect::from_min_max(egui::pos2(b.x0 as f32, b.y0 as f32), egui::pos2(b.x1 as f32, b.y1 as f32)), n.is_disabled())
+            });
+            (texts, link)
+        };
+        step(&mut app, vec![]);
+        let (texts, link) = step(&mut app, vec![]);
+        let at = |text: &str| texts.iter().find(|(t, _)| t == text).map(|(_, r)| *r).unwrap_or_else(|| panic!("no `{text}` in {texts:?}"));
+        let (w, h) = (at("20 pt"), at("10 pt"));
+        let (link, disabled) = link.expect("the link is shown");
+        assert!(!disabled);
+        assert!(link.left() > w.right() && link.left() > h.right(), "right of the fields: {link:?}, {w:?}, {h:?}");
+        assert!(link.top() < h.center().y && link.bottom() > w.center().y, "between them: {link:?}, {w:?}, {h:?}");
+        let click = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        let key = |key, modifiers| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers };
+        assert!(!app.session.prefs.constrain_proportions);
+        let c = link.center();
+        for events in [vec![egui::Event::PointerMoved(c), click(c, true), click(c, false)], vec![]] {
+            step(&mut app, events);
+        }
+        assert!(app.session.prefs.constrain_proportions, "the click turned the link on");
+        let c = w.center();
+        for events in [
+            vec![egui::Event::PointerMoved(c), click(c, true)],
+            vec![click(c, false)],
+            vec![key(egui::Key::A, egui::Modifiers::COMMAND), egui::Event::Text("40".into())],
+            vec![key(egui::Key::Enter, egui::Modifiers::NONE)],
+            vec![],
+        ] {
+            step(&mut app, events);
+        }
+        assert_eq!(size(&app), (40.0, 20.0), "a new width changed the height in proportion");
+        app.run("prefs.set", json!({"key": "constrainProportions", "value": false})).unwrap();
+        let (texts, _) = step(&mut app, vec![]);
+        let c = texts.iter().find(|(t, _)| t == "20 pt").expect("the Height field").1.center();
+        for events in [
+            vec![egui::Event::PointerMoved(c), click(c, true)],
+            vec![click(c, false)],
+            vec![key(egui::Key::A, egui::Modifiers::COMMAND), egui::Event::Text("10".into())],
+            vec![key(egui::Key::Enter, egui::Modifiers::COMMAND)],
+            vec![],
+        ] {
+            step(&mut app, events);
+        }
+        assert_eq!(size(&app), (20.0, 10.0), "Ctrl/Cmd+Enter kept the proportions with the link off");
+        app.run("pattern.options", json!({"sizeTileToArt": true})).unwrap();
+        step(&mut app, vec![]);
+        let (_, link) = step(&mut app, vec![]);
+        assert!(link.expect("the link is shown").1, "disabled with Size Tile to Art");
     }
 
     /// The Move Tile with Art checkbox sits under Size Tile to Art and turns the option on and off.

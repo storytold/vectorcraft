@@ -671,9 +671,10 @@ pub fn link_width(ui: &Ui) -> f32 {
 /// The width and height of [`constrain_link`]'s button.
 pub const CONSTRAIN_LINK_SIZE: f32 = 22.0;
 
-/// The link between W and H (Transform panel, Properties panel, Control bar): one toggle, the
-/// `constrainProportions` preference, which the size fields pass on as `proportional`. It is drawn
-/// after the fields it sits between, so Tab reaches the fields first and the link after them.
+/// The link between W and H (Transform panel, Properties panel, Control bar, Pattern Options
+/// panel): one toggle, the `constrainProportions` preference, which the size fields pass on as
+/// `proportional`. It is drawn after the fields it sits between, so Tab reaches the fields first
+/// and the link after them.
 pub fn constrain_link(app: &mut VectorcraftApp, ui: &mut Ui) {
     let (_, resp) = ui.allocate_exact_size(egui::Vec2::splat(CONSTRAIN_LINK_SIZE), egui::Sense::click());
     constrain_link_at(app, ui, resp);
@@ -705,8 +706,8 @@ pub fn alt_enter_copies(app: &VectorcraftApp, ui: &Ui) -> bool {
 }
 
 /// The `proportional` param of the W and H fields of the Transform panel (the artboard's too), the
-/// Properties panel's Transform section and the Control bar: the Constrain Width and Height
-/// Proportions link, or true when Ctrl/Cmd+Enter applied the value.
+/// Properties panel's Transform section, the Control bar and the Pattern Options panel: the
+/// Constrain Width and Height Proportions link, or true when Ctrl/Cmd+Enter applied the value.
 pub fn proportional(app: &VectorcraftApp, ui: &Ui) -> bool {
     app.session.prefs.constrain_proportions || widgets::enter_modifiers(ui).is_some_and(|m| m.command)
 }
