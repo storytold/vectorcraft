@@ -371,7 +371,7 @@ pub(crate) fn stroke_mixed(app: &VectorcraftApp, ctx: &egui::Context) -> StrokeM
         return StrokeMixed { can_align: true, ..Default::default() };
     }
     if app.session.tool_id() == "livePaintBucket" {
-        return StrokeMixed::default();
+        return StrokeMixed { can_align: true, ..Default::default() };
     }
     let Some(st) = app.session.active() else { return StrokeMixed::default() };
     let key = (st.uid, st.revision);

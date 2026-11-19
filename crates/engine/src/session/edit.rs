@@ -321,6 +321,9 @@ impl Session {
         if self.script_running() {
             return Err(EngineError::Busy);
         }
+        // While the Live Paint Bucket is active, paint previews change only the bucket's colors, so
+        // each preview starts from the colors the interaction began with.
+        let bucket = self.tool_id() == cmd::LIVE_PAINT_BUCKET;
         let (paint, restore_paint) = {
             let menu = self.menu.clone();
             let st = self.doc_mut()?;
@@ -334,8 +337,10 @@ impl Session {
             st.doc = it.doc.clone();
             // A batch, or a preview that changed the new-art paints (a pattern rename), started from
             // the paints the interaction began with.
-            let restore_paint =
-                cmd == "command.batch" || it.preview.as_ref().is_some_and(|(id, _)| id == "command.batch") || it.color_mode_paints.is_some();
+            let restore_paint = bucket
+                || cmd == "command.batch"
+                || it.preview.as_ref().is_some_and(|(id, _)| id == "command.batch")
+                || it.color_mode_paints.is_some();
             let paint = it.paint.clone();
             it.preview_paint = None;
             it.color_mode_paints = None;

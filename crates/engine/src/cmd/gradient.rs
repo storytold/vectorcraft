@@ -61,7 +61,9 @@ pub(crate) fn active_gradient(s: &Session) -> Option<GradientPaint> {
 fn select_stop(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "gradient.selectStop";
     // No document is needed for the default paint's gradient, so this does not use `refuse_symbol_part`.
-    if s.active().is_some_and(|st| st.selection.symbol_part.is_some()) {
+    // While the Live Paint Bucket is active the proxies show the default paint, whose stops can be
+    // selected with a part picked.
+    if s.tool_id() != super::paint::LIVE_PAINT_BUCKET && s.active().is_some_and(|st| st.selection.symbol_part.is_some()) {
         return Err(super::brushsym::part_only());
     }
     let index = match p.get("index") {
@@ -82,8 +84,10 @@ fn select_stop(s: &mut Session, p: &Value) -> Result<Value> {
 
 /// Whose gradient a selected stop belongs to: the active document, its first selected object
 /// (None: the default paint), whether a part of a symbol instance's art is picked, the proxy in
-/// front and the Appearance panel's active item. Selecting other art, picking a part of the
-/// instance, toggling the proxy or picking another item leaves no stop selected.
+/// front, the Appearance panel's active item and whether the Live Paint Bucket is the active tool
+/// (its proxies show the default paint). Selecting other art, picking a part of the instance,
+/// toggling the proxy, picking another item or choosing the bucket or leaving it leaves no stop
+/// selected.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct StopOwner {
     doc: Option<usize>,
@@ -91,6 +95,7 @@ pub(crate) struct StopOwner {
     part: bool,
     fill: bool,
     item: Option<usize>,
+    bucket: bool,
 }
 
 impl StopOwner {
@@ -102,6 +107,7 @@ impl StopOwner {
             part: st.is_some_and(|d| d.selection.symbol_part.is_some()),
             fill: s.fill_active,
             item: s.appearance_item(),
+            bucket: s.tool_id() == super::paint::LIVE_PAINT_BUCKET,
         }
     }
 }
