@@ -4165,6 +4165,8 @@ theme	Appearance	Wygląd
 	Paste Offset	Przesunięcie wklejania
 	Pattern Editing	Edycja wzorka
 	Pen Tool	Narzędzie Pióro
+	Quick Pen Tool	Narzędzie Szybkie pióro
+	Quick Pen	Szybkie pióro
 	Picas	Pica
 	Portuguese	Portugalski
 	Preserve Appearance and Overprints	Zachowaj wygląd i nadruki
@@ -5583,6 +5585,9 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	`link` places a handle: give `handle`	`link` umieszcza uchwyt: podaj `handle`
 @msg	no such spine segment	brak takiego segmentu grzbietu
 @msg	no such subpath	brak takiej ścieżki podrzędnej
+@msg	`pieces` must be a list of at most 10000 pieces	`pieces` musi być listą co najwyżej 10000 fragmentów
+@msg	give either `start` for a new path or `id`, not both	podaj `start` dla nowej ścieżki albo `id`, ale nie oba
+@msg	`subpath` and `keep` need `id`	`subpath` i `keep` wymagają `id`
 @msg	no such user library	brak takiej biblioteki użytkownika
 @msg	no such view	brak takiego widoku
 @msg	no such width point	brak takiego punktu szerokości

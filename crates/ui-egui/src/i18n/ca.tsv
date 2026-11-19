@@ -3438,6 +3438,8 @@ digits	Malayalam	Malaiàlam
 	PDF/X-4:2010	PDF/X-4:2010
 	Pen	Ploma
 	Pen Tool	Eina de ploma
+	Quick Pen Tool	Eina de ploma ràpida
+	Quick Pen	Ploma ràpida
 	Pencil	Llapis
 	Pencil Tool	Eina de llapis
 	Pentagram	Pentagrama
@@ -6899,6 +6901,9 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	`link` places a handle: give `handle`	`link` col·loca una nansa: indiqueu `handle`
 @msg	no such spine segment	no existeix aquest segment de l’espina
 @msg	no such subpath	no existeix aquest subtraçat
+@msg	`pieces` must be a list of at most 10000 pieces	`pieces` ha de ser una llista d’un màxim de 10000 trams
+@msg	give either `start` for a new path or `id`, not both	indica `start` per a un traçat nou o bé `id`, però no tots dos
+@msg	`subpath` and `keep` need `id`	`subpath` i `keep` necessiten `id`
 @msg	no such user library	no existeix aquesta biblioteca d’usuari
 @msg	no such view	no existeix aquesta vista
 @msg	no such width point	no existeix aquest punt d’amplada

@@ -11,6 +11,7 @@ use vectorcraft_tools::{Mods, SurroundingUnit, ToolKey};
 
 use crate::VectorcraftApp;
 
+mod alt_tap;
 mod held_tool;
 mod hold_keys;
 mod labels;
@@ -18,6 +19,7 @@ mod paste;
 mod presentation;
 mod typing;
 
+pub(crate) use alt_tap::AltTap;
 pub(crate) use held_tool::{HeldTool, note_tool_use};
 pub(crate) use hold_keys::HoldKeys;
 #[cfg(test)]
@@ -215,6 +217,7 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
     hold_keys::guard(app, ctx, focused);
     // A held tool shortcut that is let go returns to the tool active before it.
     held_tool::follow(app, ctx, focused);
+    let alt_tapped = alt_tap::follow(&mut app.alt_tap, ctx, focused);
     if !focused {
         crate::ime::controls_without_editor(app, ctx);
         return;
@@ -379,6 +382,11 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
     }
     crate::ime::controls_without_editor(app, ctx);
     let to_labels = handle_clipboard(app, ctx, textless_paste);
+    // Alt tapped on its own: the Quick Pen tool's next action.
+    if alt_tapped && app.session.tool_claims_key(ToolKey::AltTap, view) {
+        let r = app.session.tool_key(ToolKey::AltTap, Mods::default(), view);
+        crate::canvas::apply_requests(app, r);
+    }
     if busy {
         busy_tool_keys(app, ctx, view);
         return;
