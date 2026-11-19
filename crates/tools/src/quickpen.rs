@@ -25,7 +25,7 @@ use std::sync::Arc;
 
 use serde_json::{Value, json};
 use vectorcraft_doc::{Document, MAX_COORD, Node, NodeId, NodeKind};
-use vectorcraft_geom::{Anchor, AnchorKind, BezPath, Point, SubPath, Vec2};
+use vectorcraft_geom::{Anchor, AnchorKind, BezPath, PathData, Point, SubPath, Vec2};
 
 use crate::draw2::FEEDBACK;
 use crate::guides::{DrawSnap, Leave};
@@ -363,9 +363,12 @@ fn selected_alone(cx: &ToolContext, id: NodeId) -> bool {
     sel == [id] || cx.doc.parent_of(id).is_some_and(|p| sel == [p] && cx.doc.node(p).is_some_and(|n| matches!(n.kind, NodeKind::Compound { .. })))
 }
 
-/// Whether every point and handle of `sp` lies on the canvas.
+/// Whether `sp` lies on the canvas: every point and handle does, or else the curve itself (its
+/// extrema, not its handles) does.
 fn on_canvas(sp: &SubPath) -> bool {
-    sp.anchors.iter().all(|a| [a.p, a.h_in, a.h_out].iter().all(|q| q.x.abs() <= MAX_COORD && q.y.abs() <= MAX_COORD))
+    let within = |v: f64| v.abs() <= MAX_COORD;
+    sp.anchors.iter().all(|a| [a.p, a.h_in, a.h_out].iter().all(|q| within(q.x) && within(q.y)))
+        || PathData::new(vec![sp.clone()]).bounds().is_some_and(|b| [b.x0, b.y0, b.x1, b.y1].into_iter().all(within))
 }
 
 fn point_tol(cx: &ToolContext) -> f64 {

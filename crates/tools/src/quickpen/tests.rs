@@ -317,3 +317,23 @@ fn other_ends_have_no_piece() {
     closed.closed = true;
     assert_eq!(length::end_piece(&closed, false), None);
 }
+
+/// A control point may lie past the canvas while the curve stays on it; a curve that reaches past
+/// the canvas is refused.
+#[test]
+fn the_canvas_check_measures_the_curve_not_its_control_points() {
+    let m = MAX_COORD;
+    let cubic = |out_x: f64| {
+        let mut a = Anchor::corner(pt(m - 100.0, 0.0));
+        a.h_out = pt(out_x, 0.0);
+        let mut b = Anchor::corner(pt(m - 100.0, 100.0));
+        b.h_in = b.p;
+        SubPath::new(vec![a, b], false)
+    };
+    assert!(on_canvas(&cubic(m - 100.0)));
+    assert!(on_canvas(&cubic(m + 100.0)));
+    assert!(!on_canvas(&cubic(m + 1000.0)));
+    let mut far = start(pt(m + 1.0, 0.0));
+    far.anchors.push(Anchor::corner(pt(0.0, 0.0)));
+    assert!(!on_canvas(&far));
+}
