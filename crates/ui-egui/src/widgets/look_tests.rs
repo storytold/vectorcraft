@@ -187,6 +187,137 @@ fn a_dropdown_in_a_short_window_opens_with_its_current_option_in_view() {
     }
 }
 
+// #5941: a drop-down list that draws its own rows (warp styles, tracing presets) has no current
+// option for the drop-down to scroll to, so it opens where it was scrolled when it last closed, and
+// a row picked below the first ones is still in view when the list opens again. That holds for a
+// field in the middle of a short window too, where the list is taller on the pass it opens than
+// beside the field, and for a list scrolled to its end.
+#[test]
+fn a_dropdown_that_draws_its_own_rows_opens_where_it_was_scrolled() {
+    // (window height, space above the field, wheel, a row the wheel brings into view)
+    for (height, above, wheel, row) in [(300.0, 20.0, -300.0, "Row 15"), (260.0, 117.0, -2000.0, "Row 19")] {
+        own_rows_reopen(height, above, wheel, row);
+    }
+}
+
+fn own_rows_reopen(height: f32, above: f32, wheel: f32, row: &str) {
+    let case = format!("{height} pt window, {above} pt above the field");
+    let items: Vec<String> = (0..20).map(|i| format!("Row {i:02}")).collect();
+    let ctx = themed(Default::default());
+    let field = std::cell::Cell::new(Rect::NOTHING);
+    let current = std::cell::RefCell::new(String::from("Row 00"));
+    let mut add = |ui: &mut Ui| {
+        ui.add_space(above);
+        let shown = current.borrow().clone();
+        let r = ui.horizontal(|ui| {
+            combo(ui, "own-rows", &shown, 160.0, |ui| {
+                let mut chosen = None;
+                for (i, s) in items.iter().enumerate() {
+                    if ui.selectable_label(*s == shown, s.as_str()).clicked() {
+                        chosen = Some(i);
+                    }
+                }
+                chosen
+            })
+        });
+        if let Some(i) = r.inner {
+            current.replace(items[i].clone());
+        }
+        field.set(r.response.rect);
+    };
+    let mut time = 0.0;
+    let mut run = |events: Vec<egui::Event>| {
+        time += 0.1;
+        let raw = egui::RawInput {
+            time: Some(time),
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(600.0, height))),
+            events,
+            ..Default::default()
+        };
+        let mut out = ctx.run_ui(raw, &mut add);
+        out.textures_delta.clear();
+        out.shapes
+    };
+    // The rows that show whole, with their tops: inside the open list and the clip they are painted
+    // in.
+    let rows = |clipped: Vec<egui::epaint::ClippedShape>| -> Vec<(String, f32)> {
+        let list = ctx
+            .memory(|m| {
+                m.layer_ids().filter(|l| l.order == egui::Order::Foreground && m.areas().is_visible(l)).last().and_then(|l| m.area_rect(l.id))
+            })
+            .expect("the list is open");
+        let mut shapes = vec![];
+        fn flat(s: egui::Shape, clip: Rect, out: &mut Vec<(egui::Shape, Rect)>) {
+            match s {
+                egui::Shape::Vec(v) => v.into_iter().for_each(|s| flat(s, clip, out)),
+                s => out.push((s, clip)),
+            }
+        }
+        clipped.into_iter().for_each(|c| flat(c.shape, c.clip_rect, &mut shapes));
+        shapes
+            .iter()
+            .filter_map(|(s, clip)| match s {
+                egui::Shape::Text(t) if list.contains_rect(t.visual_bounding_rect()) && clip.contains_rect(t.visual_bounding_rect()) => {
+                    Some((t.galley.text().to_owned(), t.visual_bounding_rect().top().round()))
+                }
+                _ => None,
+            })
+            .collect()
+    };
+    let has = |rows: &[(String, f32)], name: &str| rows.iter().any(|(s, _)| s == name);
+    run(vec![]);
+    let at = field.get().center();
+    let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    let open = |run: &mut dyn FnMut(Vec<egui::Event>) -> Vec<egui::epaint::ClippedShape>| {
+        run(vec![egui::Event::PointerMoved(at), press(true)]);
+        run(vec![press(false)]);
+        let mut clipped = vec![];
+        for _ in 0..4 {
+            clipped = run(vec![]);
+        }
+        clipped
+    };
+    let first = rows(open(&mut run));
+    assert!(has(&first, "Row 00") && !has(&first, row), "{case}: the list opens at its top: {first:?}");
+    // Scrolled down to `row` and closed.
+    let list = ctx
+        .memory(|m| m.layer_ids().filter(|l| l.order == egui::Order::Foreground && m.areas().is_visible(l)).last().and_then(|l| m.area_rect(l.id)))
+        .expect("the list is open");
+    run(vec![egui::Event::PointerMoved(list.center())]);
+    let wheel = egui::Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Point,
+        delta: vec2(0.0, wheel),
+        modifiers: Default::default(),
+        phase: egui::TouchPhase::Move,
+        source: egui::MouseWheelSource::Unknown,
+    };
+    run(vec![wheel]);
+    let mut clipped = vec![];
+    for _ in 0..4 {
+        clipped = run(vec![]);
+    }
+    let scrolled = rows(clipped);
+    assert!(has(&scrolled, row), "{case}: the wheel scrolls {row} into view: {scrolled:?}");
+    // Closed and opened again twice: each time its rows are where they were when it closed.
+    for time in ["first", "second"] {
+        run(vec![egui::Event::PointerMoved(at), press(true)]);
+        run(vec![press(false)]);
+        run(vec![]);
+        let reopened = rows(open(&mut run));
+        assert_eq!(reopened, scrolled, "{case}: the list opens again where it was scrolled, the {time} time");
+    }
+    // `row` picked: the field shows it, and the list opens again where it was when it was picked.
+    let top = scrolled.iter().find(|(s, _)| s == row).map(|(_, top)| *top).expect("the row shows");
+    let on_row = pos2(list.left() + 30.0, top + 6.0);
+    let click = |pressed| egui::Event::PointerButton { pos: on_row, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    run(vec![egui::Event::PointerMoved(on_row), click(true)]);
+    run(vec![click(false)]);
+    run(vec![]);
+    assert_eq!(*current.borrow(), row, "{case}: the click picks {row}");
+    let reopened = rows(open(&mut run));
+    assert_eq!(reopened, scrolled, "{case}: the list opens again where {row} was picked");
+}
+
 // Regression test for #5941: the toolbar's and the dock icon column's scroll bar showed nothing
 // until the pointer came over the column. Its slim line shows at rest, still at most 4 points
 // wide (#808).

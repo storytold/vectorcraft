@@ -69,8 +69,14 @@ fn grid_cols(ui: &Ui, w: f32, cell: f32, count: usize, list_h: f32) -> usize {
     let gap = ui.spacing().item_spacing.y;
     let cols = fit(w);
     // The height `ScrollArea::show_rows` gives the rows: the gaps between them, none after the last.
-    let content_h = count.div_ceil(cols) as f32 * (cell + gap) - gap;
+    let content_h = count.div_ceil(cols) as f32 * (row_height(ui, cell) + gap) - gap;
     if list_h.min(ui.available_height()).ceil() < content_h { fit(w - ui.spacing().scroll.allocated_width()) } else { cols }
+}
+
+/// The height of a row of cells of side `cell`: a row laid out with `Ui::horizontal` is at least as
+/// tall as a button, so the two smallest cell sizes give rows taller than their cells.
+fn row_height(ui: &Ui, cell: f32) -> f32 {
+    cell.max(ui.spacing().interact_size.y)
 }
 
 /// Character subsets offered by the Show menu.
@@ -402,14 +408,14 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         && let Ok(i) = chars.binary_search_by_key(&c, |x| x.0)
         && !shown.contains(&(i / cols))
     {
-        let row_h = cell + ui.spacing().item_spacing.y;
+        let row_h = row_height(ui, cell) + ui.spacing().item_spacing.y;
         area = area.vertical_scroll_offset((((i / cols) as f32 + 0.5) * row_h - list_h * 0.5).max(0.0));
     }
     // A pick in a cell's pop-up of alternates: the character (none for a glyph no character maps),
     // the glyph of its cell, the glyph picked.
     let mut popup_pick: Option<(Option<char>, u32, u32)> = None;
     let shown =
-        area.show_rows(ui, cell, rows, |ui, range| {
+        area.show_rows(ui, row_height(ui, cell), rows, |ui, range| {
             for r in range.clone() {
                 ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
@@ -626,7 +632,7 @@ fn alternates(app: &mut VectorcraftApp, ui: &mut Ui, w: f32) {
         .max_height(list_h)
         .min_scrolled_height(list_h.min(64.0))
         .auto_shrink([false, false]);
-    area.show_rows(ui, cell, rows, |ui, range| {
+    area.show_rows(ui, row_height(ui, cell), rows, |ui, range| {
         for r in range {
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
@@ -2597,6 +2603,30 @@ mod tests {
             }
         }
         assert!(scrolled > 0 && fitted > 0, "both layouts are drawn: {scrolled} scrolled, {fitted} fitted");
+    }
+
+    /// #5941: at the smallest cell sizes a row of the grid is as tall as a button, taller than its
+    /// cells. A list tall enough for four rows of cells but not for four rows as drawn scrolls, so
+    /// its cells go beside the bar, at a width that holds a whole number of cells too.
+    #[test]
+    fn small_cells_leave_room_for_the_bar_when_their_rows_as_drawn_run_past_the_list() {
+        let ctx = egui::Context::default();
+        crate::theme::apply(&ctx, Default::default());
+        let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(800.0, 800.0))), ..Default::default() };
+        let mut out = ctx.run_ui(raw, |ui| {
+            let gap = ui.spacing().item_spacing.y;
+            let bar = ui.spacing().scroll.allocated_width();
+            for cell in [CELL_STEPS[0], CELL_STEPS[1]] {
+                let drawn = ui.spacing().interact_size.y;
+                assert!(drawn > cell, "{cell} pt cells: rows are {drawn} pt as drawn");
+                let w = 6.0 * cell;
+                // Four rows of six: they fit at the cells' own height, not at the rows' drawn height.
+                let list_h = 4.0 * (cell + drawn) / 2.0 + 3.0 * gap;
+                let beside = ((w - bar) / cell).floor() as usize;
+                assert_eq!(grid_cols(ui, w, cell, 24, list_h), beside, "{cell} pt cells in a list {list_h} pt tall");
+            }
+        });
+        out.textures_delta.clear();
     }
 
     /// Show › Entire Font also lists the glyphs no character maps.

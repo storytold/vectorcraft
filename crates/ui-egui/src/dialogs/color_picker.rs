@@ -346,22 +346,23 @@ fn button_width(ui: &Ui) -> f32 {
     })
 }
 
-/// A compact width shared by the heading and body, bounded by the available window width. While
-/// the body scrolls, the width leaves out the column of its scroll bar, so the body and its bar fit
-/// in the window side by side.
-fn layout_size(ui: &Ui) -> (f32, f32, f32, bool) {
+/// A compact width shared by the heading and body, bounded by the available window width, and the
+/// width of the body's scroll bar column. While the body scrolls, the width leaves out that column,
+/// so the body and its bar fit in the window side by side.
+fn layout_size(ui: &Ui) -> (f32, f32, f32, bool, f32) {
     let button_w = button_width(ui);
     let values_w = PREVIEW_W + COLUMN_GAP + button_w;
     let fixed_w = SLIDER_GAP + SLIDER_W + COLUMN_GAP + values_w;
     let fit = |room: f32| ((room - fixed_w).clamp(MIN_FIELD, FIELD), room < MIN_FIELD + fixed_w);
     let (side, stacked) = fit(ui.available_width());
     // The margin keeps the bar's column whenever the body may scroll, as its height is estimated.
-    let (side, stacked) = if body_height(ui, side, stacked) + 40.0 > scroll_height(ui) {
-        fit(ui.available_width() - ui.spacing().scroll.allocated_width())
+    if body_height(ui, side, stacked) + 40.0 > scroll_height(ui) {
+        let bar = ui.spacing().scroll.allocated_width();
+        let (side, stacked) = fit(ui.available_width() - bar);
+        (side, values_w, button_w, stacked, bar)
     } else {
-        (side, stacked)
-    };
-    (side, values_w, button_w, stacked)
+        (side, values_w, button_w, stacked, 0.0)
+    }
 }
 
 /// The tallest the body's scrolling content is drawn.
@@ -380,10 +381,11 @@ fn body_height(ui: &Ui, side: f32, stacked: bool) -> f32 {
 
 /// Full-width, draggable title band using the app's existing theme colours.
 fn header(ui: &mut Ui, title: &str) {
-    let (side, values_w, _, stacked) = layout_size(ui);
+    let (side, values_w, _, stacked, bar) = layout_size(ui);
     let field_w = side + SLIDER_GAP + SLIDER_W;
     let width = if stacked { field_w.max(values_w) } else { field_w + COLUMN_GAP + values_w };
-    ui.set_width(width.min(ui.available_width()));
+    // The width includes the bar's column: the body measures from it and leaves the column out.
+    ui.set_width((width + bar).min(ui.available_width()));
     let margin = f32::from(super::MARGIN);
     let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), HEADER_H - margin), Sense::hover());
     let band = Rect::from_min_max(r.min - vec2(margin, margin), r.max + vec2(margin, 0.0));
@@ -407,7 +409,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> DialogAction {
     let original = d.fields.get("original").and_then(color_value).unwrap_or(p.color);
     let gamut = gamut_fix(app, ui.ctx(), "picker-gamut", &p.color);
     super::modal::fits_itself(ui);
-    let (side, values_w, button_w, stacked) = layout_size(ui);
+    let (side, values_w, button_w, stacked, _) = layout_size(ui);
     let field_w = side + SLIDER_GAP + SLIDER_W;
     let content_w = if stacked { field_w.max(values_w) } else { field_w + COLUMN_GAP + values_w };
     let mut pick: Option<Picked> = None;

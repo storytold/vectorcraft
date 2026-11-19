@@ -823,6 +823,26 @@ fn a_scrolling_picker_shows_its_bar_and_fits_its_content_beside_it() {
     }
 }
 
+/// #5941: while the body scrolls, the heading sets the dialog's width to the one the body lays its
+/// field and columns out in, with the scroll bar's column, so the body measures the same layout from
+/// it and does not leave out the bar's column a second time.
+#[test]
+fn the_heading_leaves_the_body_the_width_of_the_layout_it_measured() {
+    let ctx = context();
+    for width in (400..=800).step_by(4) {
+        let size = vec2(width as f32, 380.0);
+        let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(egui::Pos2::ZERO, size)), ..Default::default() };
+        let mut out = ctx.run_ui(raw, |ui| {
+            let (side, _, _, stacked, bar) = layout_size(ui);
+            assert!(bar > 0.0, "{size:?}: the body scrolls");
+            header(ui, "Color Picker");
+            let (body_side, _, _, body_stacked, _) = layout_size(ui);
+            assert_eq!((body_side, body_stacked), (side, stacked), "{size:?}: the body lays out the field and columns the heading measured");
+        });
+        out.textures_delta.clear();
+    }
+}
+
 /// Type all three Lab components through the numeric fields, then apply the picked color.
 #[test]
 fn native_lab_entry_in_color_picker() {
