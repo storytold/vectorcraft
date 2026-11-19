@@ -1630,6 +1630,10 @@ font-technology	Variable	Променливи
 	Add Color Tool	Инструмент „Добавяне на цвят“
 	Remove Color Tool	Инструмент „Премахване на цвят“
 	Remove Color	Премахване на цвят
+	Set As Base Color	Задаване като основен цвят
+	Select Shade	Избор на нюанс
+	Add New Color	Добавяне на нов цвят
+	Set Current Color As Base Color	Задаване на текущия цвят като основен
 	Find the selected colors in the artwork	Намиране на избраните цветове в илюстрацията
 	Harmony Sets	Набори от хармонии
 	Height	Височина
@@ -2014,6 +2018,7 @@ font-technology	Variable	Променливи
 	Limit to Library:	Ограничаване до библиотека:
 	Limit:	Ограничение:
 	Line	Линия
+	Line Arrow	Линейна стрелка
 	Line Art and Text Resolution:	Разделителна способност на линеарна графика и текст:
 	Line Breaks	Паузи на редове
 	Line Color	Цвят на линията
@@ -5848,6 +5853,7 @@ lighting	Light	Светлина
 	B5	B5
 	Bar	Лента
 	Barbed	С кукички
+arrowhead	Feather	Перо
 	Baseline (Standard)	Основна линия (стандартна)
 	Baseline Optimized	Оптимизирана основна линия
 	Basic	Основен
@@ -7451,6 +7457,7 @@ breakText	Glyphs	Глифи
 	Remove Strokes	Премахване на щрихи
 	Place Brush Art	Поставяне на графика на четка
 	Replace Brush Art	Замяна на графика на четка
+	Replace Pattern Art	Замяна на графика на мостра
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Щрихи използват тази четка. Да се приложи ли новата графика към тези щрихи, или те да останат както са и да се добави копие на четката с новата графика?
 	Apply to Strokes	Прилагане към щрихите
 	Leave Strokes	Оставяне на щрихите
@@ -7866,6 +7873,11 @@ breakText	Glyphs	Глифи
 @msg	A joint does not close by {gap} pt.	Една връзка не се затваря с {gap} pt.
 @msg	Two panels pass through each other.	Два панела минават един през друг.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer трябва да е "singleLine", "everyLine", "standardSingleLine" или "standardEveryLine"
+	Engraving	Гравюра
+	Fine Hatching	Фино щриховане
+	Dense Hatching	Гъсто щриховане
+	Tapered Hatching	Изтъняващо щриховане
+	Broken Hatching	Прекъснато щриховане
 	Image Brush	Четки за изображения
 	Soft Bloom	Мек цъфтеж
 	Halftone Field	Полутоново поле

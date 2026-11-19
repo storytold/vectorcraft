@@ -5071,6 +5071,10 @@ digits	Malayalam	მალაიალამური
 	Add Color Tool	ფერის დამატების ხელსაწყო
 	Remove Color Tool	ფერის წაშლის ხელსაწყო
 	Remove Color	ფერის წაშლა
+	Set As Base Color	საბაზო ფერად დაყენება
+	Select Shade	ელფერის არჩევა
+	Add New Color	ახალი ფერის დამატება
+	Set Current Color As Base Color	მიმდინარე ფერის საბაზო ფერად დაყენება
 	Find the selected colors in the artwork	მონიშნული ფერების ძებნა ნახატში
 	Keep this row's colors (exclude)	ამ სტრიქონის ფერების შენარჩუნება (გამორიცხვა)
 	Limit to Library:	ბიბლიოთეკით შეზღუდვა:
@@ -7172,6 +7176,7 @@ font-technology	Variable	ცვლადი
 @msg	no native format	საკუთარი ფორმატი არ არის
 @msg	no pages	გვერდები არ არის
 @msg	no pattern `{name}`	პატერნი `{name}` არ არის
+@msg	art painted with `{name}` can't be its tile	`{name}`-ით შეღებილი ნახატი მისი ფილა ვერ იქნება
 @msg	no perspective grid preset named `{name}`	პერსპექტივის ბადის პრესეტი სახელით `{name}` არ არის
 @msg	no plug-in {0} is installed	პლაგინი {0} დაინსტალირებული არ არის
 @msg	no plug-in {id} is installed	პლაგინი {id} დაინსტალირებული არ არის
@@ -7874,6 +7879,7 @@ font-technology	Variable	ცვლადი
 	Arrow	ისარი
 	Arrow (open)	ისარი (ღია)
 	Barbed	წვეტიანი
+arrowhead	Feather	ბუმბული
 	Half Arrow (left)	ნახევარი ისარი (მარცხენა)
 	Half Arrow (right)	ნახევარი ისარი (მარჯვენა)
 	Concave	ჩაზნექილი
@@ -7901,6 +7907,7 @@ font-technology	Variable	ცვლადი
 	Kite	ფრანი
 	Triangle to Bar	სამკუთხედიდან ზოლამდე
 	Oval	ოვალი
+	Line Arrow	ხაზოვანი ისარი
 	Complementary	დამატებითი
 	Complementary 2	დამატებითი 2
 	Split Complementary	გაყოფილი დამატებითი
@@ -10473,6 +10480,7 @@ breakText	Glyphs	გლიფები
 	Remove Strokes	კონტურების მოხსნა
 	Place Brush Art	ფუნჯის ნახატის განთავსება
 	Replace Brush Art	ფუნჯის ნახატის ჩანაცვლება
+	Replace Pattern Art	პატერნის ნახატის ჩანაცვლება
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	კონტურები იყენებს ამ ფუნჯს. გამოყენებულ იქნას ახალი ნახატი ამ კონტურებზე, თუ დარჩეს ისინი როგორც არის და დაემატოს ფუნჯის ასლი ახალი ნახატით?
 	Apply to Strokes	კონტურებზე გამოყენება
 	Leave Strokes	კონტურების დატოვება
@@ -11007,6 +11015,11 @@ font-script	Japanese	იაპონური
 @msg	A joint does not close by {gap} pt.	შეერთება არ იხურება {gap} pt-ით.
 @msg	Two panels pass through each other.	ორი პანელი ერთმანეთში გადის.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer უნდა იყოს "singleLine", "everyLine", "standardSingleLine" ან "standardEveryLine"
+	Engraving	გრავიურა
+	Fine Hatching	წვრილი შტრიხები
+	Dense Hatching	მჭიდრო შტრიხები
+	Tapered Hatching	შევიწროებული შტრიხები
+	Broken Hatching	წყვეტილი შტრიხები
 	Image Brush	გამოსახულების ფუნჯები
 	Soft Bloom	რბილი ყვავილი
 	Halftone Field	ნახევარტონური ველი

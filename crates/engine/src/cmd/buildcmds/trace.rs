@@ -765,6 +765,30 @@ struct Prepared {
     library: Vec<([u8; 3], Paint)>,
 }
 
+/// The object `imageTrace.make` would trace, without preparing settings or reading image bytes.
+pub fn image_trace_target(s: &Session, p: &Value) -> Result<NodeId> {
+    target_image(s, "imageTrace.make", p).map(|(target, _)| target)
+}
+
+fn target_image(s: &Session, c: &str, p: &Value) -> Result<(NodeId, Box<ImageObject>)> {
+    let roots = root_ids(s, p)?;
+    let d = &s.doc()?.doc;
+    roots
+        .iter()
+        .find_map(|r| {
+            let n = d.node(*r)?;
+            match &n.kind {
+                NodeKind::Image(i) => Some((*r, i.clone())),
+                _ if is_trace_group(n) => match &n.children()?.first()?.kind {
+                    NodeKind::Image(i) => Some((*r, i.clone())),
+                    _ => None,
+                },
+                _ => None,
+            }
+        })
+        .ok_or_else(|| bad(c, "select an image (or an Image Trace group)"))
+}
+
 /// What command `c` with params `p` traces, and how, from the session: everything but the trace.
 fn prepare(s: &Session, c: &str, p: &Value) -> Result<Prepared> {
     let mut params = trace_params(s, c, p)?;
@@ -784,25 +808,7 @@ fn prepare(s: &Session, c: &str, p: &Value) -> Result<Prepared> {
         None if is(tr::preset(named)) || is(tr::enhanced_preset(named)) => named.to_string(),
         None => "Custom".to_string(),
     };
-    let roots = root_ids(s, p)?;
-    // The image (inside a trace group, or selected directly).
-    let (target, image) = {
-        let d = &s.doc()?.doc;
-        roots
-            .iter()
-            .find_map(|r| {
-                let n = d.node(*r)?;
-                match &n.kind {
-                    NodeKind::Image(i) => Some((*r, i.clone())),
-                    _ if is_trace_group(n) => match &n.children()?.first()?.kind {
-                        NodeKind::Image(i) => Some((*r, i.clone())),
-                        _ => None,
-                    },
-                    _ => None,
-                }
-            })
-            .ok_or_else(|| bad(c, "select an image (or an Image Trace group)"))?
-    };
+    let (target, image) = target_image(s, c, p)?;
     if by_color && s.doc()?.doc.node(target).is_some_and(vectorcraft_render::effects::has_pathfinder) {
         return Err(bad(c, LIVE_PATHFINDER_BY_COLOR));
     }

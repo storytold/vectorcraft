@@ -911,7 +911,7 @@ pub use buildcmds::{TracePreset, TracePresetChange};
 pub use buildcmds::{TRACE_PRESET_EXTS, TRACE_PRESET_FORMAT, TRACE_PRESET_MAX_BYTES};
 
 /// An Image Trace made off the UI thread, and what it traced (#3098).
-pub use buildcmds::{TraceRun, Traced};
+pub use buildcmds::{TraceRun, Traced, image_trace_target};
 
 /// The saved Image Trace presets' revision and latest changes ([`crate::Session`] keeps them).
 pub(crate) use buildcmds::TracePresetChanges;
