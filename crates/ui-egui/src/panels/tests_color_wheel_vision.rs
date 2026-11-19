@@ -225,24 +225,26 @@ fn the_panel_menu_turns_the_row_on_and_off() {
 #[test]
 fn ui_color_wheel_sets_and_reads_the_settings() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    assert_eq!(app.run("ui.colorWheel", json!({})).unwrap(), json!({"view": "wheel", "channel": "hue", "vision": false}));
-    assert_eq!(app.run("ui.colorWheel", json!({"vision": true})).unwrap(), json!({"view": "wheel", "channel": "hue", "vision": true}));
+    let settings =
+        |view: &str, vision: bool| json!({"view": view, "channel": "hue", "harmony": false, "harmonyRule": "complementary", "vision": vision});
+    assert_eq!(app.run("ui.colorWheel", json!({})).unwrap(), settings("wheel", false));
+    assert_eq!(app.run("ui.colorWheel", json!({"vision": true})).unwrap(), settings("wheel", true));
     assert_eq!(crate::control::inspect(&app, &egui::Context::default())["ui"]["color_wheel"]["vision"], true);
     assert_eq!(app.run("ui.colorWheel", json!({"vision": "no"})).unwrap_err(), "`vision` must be true or false");
     assert_eq!(app.run("ui.colorWheel", json!({"view": "box", "channel": "red", "vision": 1})).unwrap_err(), "`vision` must be true or false");
-    assert_eq!(app.run("ui.colorWheel", json!({})).unwrap(), json!({"view": "wheel", "channel": "hue", "vision": true}));
+    assert_eq!(app.run("ui.colorWheel", json!({})).unwrap(), settings("wheel", true));
     assert_eq!(app.run("ui.colorWheel", json!("junk")).unwrap_err(), "the params must be an object, not \"junk\"");
     assert_eq!(app.run("ui.colorWheel", json!(5)).unwrap_err(), "the params must be an object, not 5");
     assert_eq!(
         app.run("ui.colorWheel", json!({"visoin": false})).unwrap_err(),
-        "unknown parameter `visoin`; the command takes: view, channel, vision"
+        "unknown parameter `visoin`; the command takes: view, channel, harmony, harmonyRule, vision"
     );
     assert!(app.ui.color_wheel.vision);
     assert_eq!(app.run("ui.colorWheel", json!({"vision": null})).unwrap()["vision"], true);
     assert_eq!(app.run("ui.colorWheel", Value::Null).unwrap()["vision"], true);
     // Setting the view or the channel keeps the row, and setting the row keeps them.
     assert_eq!(app.run("ui.colorWheel", json!({"view": "box"})).unwrap()["vision"], true);
-    assert_eq!(app.run("ui.colorWheel", json!({"vision": false})).unwrap(), json!({"view": "box", "channel": "hue", "vision": false}));
+    assert_eq!(app.run("ui.colorWheel", json!({"vision": false})).unwrap(), settings("box", false));
 }
 
 /// `ui.colorWheel` answers every junk parameter, with and without a document, without a panic.
