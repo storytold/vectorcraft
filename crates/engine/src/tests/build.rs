@@ -3331,6 +3331,58 @@ fn live_paint_bucket_paint_and_stroke_commands_leave_the_selection_unpainted() {
     assert!(failed.is_empty(), "{failed:#?}");
 }
 
+/// `paint.editGradient` with an `aspect` and no object to edit (the Live Paint Bucket's gradient,
+/// or nothing selected) is an error that leaves the default gradient as it was, since a gradient
+/// fitted to each object has no aspect of its own. Named objects still take the aspect.
+#[test]
+fn edit_gradient_aspect_without_objects_is_an_error() {
+    let aspect = |n: &Node| match n.appearance.fill_paint() {
+        Paint::Gradient(g) => g.geom.map(|x| x.aspect),
+        _ => None,
+    };
+    let mut s = session();
+    let g = live(&mut s);
+    let rect = rect(&mut s, 300.0, 300.0, 40.0, 40.0);
+    s.execute("select.set", &json!({"ids": [g.0, rect.0]})).unwrap();
+    s.select_tool("livePaintBucket", ViewInfo::default()).unwrap();
+    s.execute("gradient.presets.apply", &json!({"name": "vignette"})).unwrap();
+    let (group, art, fill) = (node(&s, g), node(&s, rect), s.paint.fill.clone());
+    let steps = s.doc().unwrap().history.undo.len();
+    assert!(!s.gradient_edit_has_objects(false), "the bucket edits its own gradient");
+    for params in [json!({"stroke": false, "aspect": 50}), json!({"stroke": false, "aspect": 50, "reverse": true})] {
+        assert!(s.execute("paint.editGradient", &params).is_err(), "{params}");
+        assert_eq!(s.paint.fill, fill, "{params}: the bucket's gradient stays");
+    }
+    assert_eq!((node(&s, g), node(&s, rect)), (group, art), "the selection keeps its paint");
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps, "no undo step");
+    // Named objects take it.
+    s.execute("paint.editGradient", &json!({"stroke": false, "kind": "radial", "aspect": 50, "ids": [rect.0]})).unwrap();
+    assert_eq!(aspect(&node(&s, rect)), Some(0.5));
+    // Without the bucket and with nothing selected, the default gradient has no aspect either.
+    s.select_tool("selection", ViewInfo::default()).unwrap();
+    s.execute("select.set", &json!({"ids": []})).unwrap();
+    let fill = s.paint.fill.clone();
+    assert!(!s.gradient_edit_has_objects(false));
+    assert!(s.execute("paint.editGradient", &json!({"stroke": false, "aspect": 50})).is_err());
+    assert_eq!(s.paint.fill, fill, "the default gradient stays");
+    // An empty group has nothing to paint.
+    let empty = s
+        .edit("Group", |d, _| {
+            let id = d.alloc_id();
+            d.insert(d.default_layer(), 0, Node::group(id, vec![]))?;
+            Ok(id)
+        })
+        .unwrap();
+    s.execute("select.set", &json!({"ids": [empty.0]})).unwrap();
+    assert!(!s.gradient_edit_has_objects(false), "an empty group");
+    assert!(s.execute("paint.editGradient", &json!({"stroke": false, "aspect": 50})).is_err());
+    // A selected object takes it.
+    s.execute("select.set", &json!({"ids": [rect.0]})).unwrap();
+    assert!(s.gradient_edit_has_objects(false) && s.gradient_edit_has_objects(true));
+    s.execute("paint.editGradient", &json!({"stroke": false, "aspect": 25})).unwrap();
+    assert_eq!(aspect(&node(&s, rect)), Some(0.25));
+}
+
 /// With the Live Paint Bucket active, objects named with `ids` still take a stroke, and a brush
 /// still goes to the selection.
 #[test]
