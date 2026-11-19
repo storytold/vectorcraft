@@ -672,6 +672,41 @@ fn run_ui_part6(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         },
         // More Options › Reset Bar Actions: every action and chip shows again.
         "window.taskBar.resetActions" => Ok(json!(std::mem::take(&mut app.ui.task_bar_hidden_actions))),
+        "window.quickPenToolbar" => flag(&mut app.ui.quick_pen_bar),
+        "window.quickPenToolbar.pin" => {
+            let place = &mut app.ui.quick_pen_bar_place;
+            opt_bool(p, "pinned").map(|pinned| {
+                let pinned = pinned.unwrap_or(!place.pinned);
+                if pinned && !place.pinned {
+                    place.pin_at = place.shown_at;
+                }
+                place.pinned = pinned;
+                json!(pinned)
+            })
+        }
+        "window.quickPenToolbar.reset" => {
+            app.ui.quick_pen_bar_place = Default::default();
+            Ok(Value::Null)
+        }
+        "tool.quickPen.flipArc" => {
+            // C's flip, for the toolbar's Flip Arc button: false, with nothing changed, while the
+            // last piece of the path being drawn is not a sharp-corner arc. Input held for an edit
+            // first, so the key is made now rather than held.
+            let r = app.session.finish_tool_edit();
+            crate::canvas::apply_requests(app, r);
+            let view = app.view_info();
+            let key = vectorcraft_tools::ToolKey::Letter('c');
+            if app.session.tool_id() != vectorcraft_tools::quickpen::ID || !app.session.tool_claims_key(key, view) {
+                return Some(Ok(json!(false)));
+            }
+            match app.session.tool_key(key, vectorcraft_tools::Mods::default(), view) {
+                Ok(reqs) => {
+                    crate::canvas::apply_requests(app, Ok(reqs));
+                    Ok(json!(true))
+                }
+                Err(e) => Err(e.to_string()),
+            }
+        }
         "window.dock" => {
             let ui = &mut app.ui;
             // The bars the last Tab hid show again, unless the toolbar or the Control bar was shown

@@ -2725,6 +2725,13 @@ font-technology	Variable	Variabla
 	Pen Tool	Pennverktyg
 	Quick Pen Tool	Snabbpennverktyg
 	Quick Pen	Snabbpenna
+	Quick Pen Toolbar	Snabbpennans verktygsfält
+	Continuous Arc	Kontinuerlig båge
+	Sharp Corner Arc	Båge med skarpt hörn
+	Flip Arc	Vänd båge
+	Hide Toolbar	Dölj verktygsfältet
+	Pin Toolbar Position	Fäst verktygsfältets position
+	Reset Toolbar Position	Återställ verktygsfältets position
 	Pencil	Blyertspenna
 	Pencil Tool	Blyertsverktyg
 	per slice	per skiva

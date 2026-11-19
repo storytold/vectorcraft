@@ -127,6 +127,25 @@ fn c_flips_and_brackets_size_the_last_sharp_arc() {
     assert!(!s.tool_claims_key(ToolKey::Letter('c'), view()));
 }
 
+/// The drawing end (where the Quick Pen toolbar sits beside) is the path's last point with the
+/// direction it arrives in: none before the first click, no direction for one point, and none
+/// once Escape ends the path.
+#[test]
+fn the_drawing_end_is_the_last_point_and_its_direction() {
+    let mut s = session();
+    quick_pen(&mut s);
+    assert_eq!(s.tool_drawing_end(view()), None);
+    click(&mut s, 100.0, 100.0);
+    assert_eq!(s.tool_drawing_end(view()), Some((pt(100.0, 100.0), None)));
+    click(&mut s, 100.0, 200.0);
+    let (p, dir) = s.tool_drawing_end(view()).unwrap();
+    assert_eq!(p, pt(100.0, 200.0));
+    let dir = dir.unwrap();
+    assert!(dir.x.abs() < 1e-9 && dir.y > 0.99, "arrives heading down: {dir:?}");
+    key(&mut s, ToolKey::Escape);
+    assert_eq!(s.tool_drawing_end(view()), None);
+}
+
 /// Alt tapped during a drag draws the piece with the next action: a continuous arc becomes a
 /// sharp-corner arc with a corner where it starts, and the path goes on drawing after it.
 #[test]

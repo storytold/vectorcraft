@@ -7124,6 +7124,25 @@ piece the next click adds. Points snap to Smart Guides. Each piece, flip and siz
 size of 180°, its 15° steps, the side an arc bulges to and Enter ending the path are VectorCraft's own rules. The
 tool keeps `action` and `turn` with the preferences (`tool.setOption {tool: "quickPen", key, value}`).
 
+Selecting the tool shows its toolbar on the canvas: Straight Line, Continuous Arc and Sharp Corner Arc set `action`,
+Flip Arc flips the last sharp-corner arc as C does (`tool.quickPen.flipArc {}`, which returns false and changes nothing
+when the Quick Pen tool is not active or the last piece is not a sharp-corner arc), and More Options (…) has Hide
+Toolbar (`window.quickPenToolbar`, which toggles; the toolbar stays hidden until the tool is selected again) and Reset
+Toolbar Position (`window.quickPenToolbar.reset`), as the help page describes.
+The handle at its left end drags it. While a path is being drawn, the toolbar sits beside the path's last point, 24
+screen points off it diagonally whatever the zoom, on the side the path heads toward (to the right and below for a path
+drawn right and down), away from what was drawn, as the
+[design write-up](https://adobe.design/ideas/behind-the-design-adobe-illustrator-s-quick-pen-tool) describes. The
+following are VectorCraft's own rules. Where the side the path heads toward runs off the canvas, the toolbar goes on the
+other side; with no path being drawn, it sits at the bottom center of the canvas. A drag's offset moves it from its
+place beside the drawing, or from its resting place, in the document it was made in, and not where it would cover the
+path's last point. More Options also has Pin Toolbar Position (`window.quickPenToolbar.pin {pinned?}`, omitted
+toggles), which holds the toolbar at its place in the canvas window while the view scrolls or zooms, and Window › Quick
+Pen Toolbar shows or hides it. It hides while a press drags on the canvas, and in a canvas pane narrower than the
+toolbar its controls wrap onto more rows. `ui.inspect` gives `quickPenToolbar` (`pinned`, and `rect` while it shows); its position,
+the pin and whether it shows are not saved. These commands run in the desktop app; the headless host does not run them,
+so they need `--connect`.
+
 `path.quickPen {start?: [x, y], id?, subpath?, keep?, pieces?, closed?}` draws such a path and selects it, as one
 undo step, and answers `{id}`. With `start`, it makes a new path with the current paint (a black stroke when the paint
 has neither fill nor stroke). With `id`, it draws on the open subpath `subpath` (0 when left out) of that path: its

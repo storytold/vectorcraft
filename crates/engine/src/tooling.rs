@@ -1256,6 +1256,12 @@ impl Session {
         self.with_tool_cx(view, |t, cx| t.ends_on_escape(cx))
     }
 
+    /// The point a path the active tool is drawing goes on from, and the direction the path
+    /// arrives there in (see `Tool::drawing_end`).
+    pub fn tool_drawing_end(&mut self, view: ViewInfo) -> Option<(Point, Option<vectorcraft_geom::Vec2>)> {
+        self.with_tool_cx(view, |t, cx| t.drawing_end(cx))
+    }
+
     pub fn overlays(&mut self, view: ViewInfo) -> Vec<Overlay> {
         // The Blend tool's first pick is not marked after an edit that dropped it.
         self.tell_tool_history_moved();

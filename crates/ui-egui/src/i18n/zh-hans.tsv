@@ -2691,6 +2691,13 @@ file-filter	Templates	模板
 	Pen Tool	钢笔工具
 	Quick Pen Tool	快速钢笔工具
 	Quick Pen	快速钢笔
+	Quick Pen Toolbar	快速钢笔工具栏
+	Continuous Arc	连续弧线
+	Sharp Corner Arc	尖角弧线
+	Flip Arc	翻转弧线
+	Hide Toolbar	隐藏工具栏
+	Pin Toolbar Position	固定工具栏位置
+	Reset Toolbar Position	重置工具栏位置
 	Pencil	铅笔
 	Pencil Tool	铅笔工具
 	per slice	每个切片

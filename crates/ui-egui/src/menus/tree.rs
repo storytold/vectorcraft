@@ -684,6 +684,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 c("Control", "window.control"),
                 c("Help Bar", "window.helpBar"),
                 c("Contextual Task Bar", "window.taskBar"),
+                c("Quick Pen Toolbar", "window.quickPenToolbar"),
                 c("Tools", "window.toolbar"),
                 sub("Toolbars", crate::custom_toolbars::menu_items()),
                 Sep,

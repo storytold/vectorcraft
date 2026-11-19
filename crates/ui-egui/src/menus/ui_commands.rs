@@ -701,6 +701,25 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{} show every Contextual Task Bar action and chip that Bar Actions turned off, as the bar's More Options › Reset Bar Actions does; returns the ids shown again",
     ),
     (
+        "window.quickPenToolbar",
+        "Quick Pen Toolbar",
+        "",
+        "{} show or hide the toolbar the Quick Pen tool shows on the canvas (toggles; returns whether it shows), as Window › Quick Pen Toolbar and the toolbar's More Options › Hide Toolbar do; selecting the Quick Pen tool shows it again",
+    ),
+    (
+        "window.quickPenToolbar.pin",
+        "Pin Toolbar Position",
+        "",
+        "{pinned?: bool} keep the Quick Pen toolbar where it is in the canvas window instead of following the drawing (true), let it follow the drawing again from where it is (false) or toggle (omitted), as the toolbar's More Options menu does; returns the new state",
+    ),
+    ("window.quickPenToolbar.reset", "Reset Toolbar Position", "", "{} unpin the Quick Pen toolbar and put it back beside the drawing"),
+    (
+        "tool.quickPen.flipArc",
+        "Flip Arc",
+        "",
+        "{} flip the last sharp-corner arc of the path the Quick Pen tool is drawing to the other side of its chord, as C and the toolbar's Flip Arc button do, as one undo step; returns false, changing nothing, when the Quick Pen tool is not active, no path is being drawn or the last piece is not a sharp-corner arc",
+    ),
+    (
         "window.dock",
         "Panels",
         "Tab",

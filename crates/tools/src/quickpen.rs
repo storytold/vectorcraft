@@ -465,6 +465,11 @@ impl Tool for QuickPenTool {
         self.active(cx).is_some()
     }
 
+    fn drawing_end(&self, cx: &ToolContext) -> Option<(Point, Option<Vec2>)> {
+        let (_, sp) = self.active(cx)?;
+        Some((sp.anchors.last()?.p, arrival(sp)))
+    }
+
     fn claims_key(&self, cx: &ToolContext, key: ToolKey) -> bool {
         match key {
             ToolKey::Letter('c') => self.last_sharp_arc(cx).is_some(),

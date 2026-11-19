@@ -2830,6 +2830,13 @@ file-filter	Templates	Шаблоны
 	Pen Tool	Инструмент «Перо»
 	Quick Pen Tool	Инструмент «Быстрое перо»
 	Quick Pen	Быстрое перо
+	Quick Pen Toolbar	Панель быстрого пера
+	Continuous Arc	Непрерывная дуга
+	Sharp Corner Arc	Дуга с острым углом
+	Flip Arc	Отразить дугу
+	Hide Toolbar	Скрыть панель инструментов
+	Pin Toolbar Position	Закрепить положение панели инструментов
+	Reset Toolbar Position	Сбросить положение панели инструментов
 	Pencil	Карандаш
 	Pencil Tool	Инструмент «Карандаш»
 	per slice	на фрагмент
