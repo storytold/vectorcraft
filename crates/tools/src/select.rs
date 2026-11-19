@@ -45,7 +45,7 @@ use vectorcraft_doc::hit::{Hit, HitKind, hit_test, marquee_in_view, objects_at, 
 use vectorcraft_doc::{NodeId, OrientedBox};
 use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 
-use crate::bbox::{Handle, hit_handle, in_rotate_zone, move_delta, rotate_for_drag, scale_for_drag};
+use crate::bbox::{Handle, hit_handle, in_rotate_zone, move_delta, rotate_for_drag, scale_for_drag, slide_along};
 use crate::blendwidget::{self, BlendWidgetDrag};
 use crate::corners::{self, CornerDrag, over_widget};
 use crate::guides::{PointSnap, Targets, distance_guides, hold_on_path};
@@ -397,16 +397,7 @@ impl MoveSnap {
             return (d, vec![]);
         }
         let u = d / len;
-        // The way along the line that takes away the offset `pull` on one axis: on the axis the
-        // line runs along, the shorter way of the two.
-        let along = |pull: Vec2| {
-            [(pull.x, u.x), (pull.y, u.y)]
-                .into_iter()
-                .filter(|(_, c)| c.abs() > 1e-9)
-                .map(|(p, c)| p / c)
-                .min_by(|a, b| a.abs().total_cmp(&b.abs()))
-                .unwrap_or(0.0)
-        };
+        let along = |pull: Vec2| slide_along(pull, u);
         let (targets, points) = if copy { (&self.copy_targets, &self.copy_points) } else { (&self.targets, &self.points) };
         if let Some(ov) = targets.as_ref().and_then(|t| t.snap_back(self.bounds, d, cx.snap_tol())) {
             return (Vec2::ZERO, ov);

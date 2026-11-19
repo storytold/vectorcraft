@@ -1146,9 +1146,9 @@ fn leave_out_unreadable_values(v: &mut Value, place: ParamsPlace) {
 
 /// Takes out of `ui.inspect`'s copy of the UI state the paths the request may not read: recent files,
 /// a library panel's file, folder preferences (saved, and in an open Preferences dialog) and the paths
-/// in recorded actions' steps outside the read root. The file selected in an open JavaScript Files
-/// dialog is named as `svgInteractivity.info` names the active document's linked files. The UI state
-/// itself is not changed.
+/// in recorded actions' steps and in the item an open Insert Menu Item dialog picked, outside the
+/// read root. The file selected in an open JavaScript Files dialog is named as `svgInteractivity.info`
+/// names the active document's linked files. The UI state itself is not changed.
 fn leave_out_unreadable_paths(app: &VectorcraftApp, ui: &mut serde_json::Map<String, Value>) {
     if let Some(Value::Array(files)) = ui.get_mut("recent_files") {
         files.retain(|f| f.as_str().is_some_and(readable));
@@ -1171,6 +1171,16 @@ fn leave_out_unreadable_paths(app: &VectorcraftApp, ui: &mut serde_json::Map<Str
         && let Some(Value::Object(fields)) = dialog.get_mut("fields")
     {
         leave_out_unreadable_folders(fields);
+    }
+    // The menu item picked in an open Insert Menu Item dialog, such as a saved proof setup's file.
+    if let Some(Value::Object(dialog)) = ui.get_mut("dialog")
+        && dialog.get("kind").and_then(Value::as_str) == Some(crate::dialogs::action_insert_menu_item::KIND)
+        && let Some(Value::Object(fields)) = dialog.get_mut("fields")
+    {
+        let command = fields.get("command").and_then(Value::as_str).unwrap_or_default().to_string();
+        if let Some(Value::Object(params)) = fields.get_mut("params") {
+            leave_out_unreadable_step(&command, params);
+        }
     }
     if let Some(Value::Object(dialog)) = ui.get_mut("dialog")
         && dialog.get("kind").and_then(Value::as_str) == Some(crate::dialogs::javascript_files::KIND)
