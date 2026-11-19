@@ -1139,8 +1139,8 @@ mod review_597585_adoption_mapping {
                     assert_eq!(document(&session), &before, "CONTROL: font rejection preserves the destination");
                     continue;
                 }
-                if !accepted && result.is_err() {
-                    regressions.push(format!("classic={classic}: ignored record rejected visible rectangle: {}", result.unwrap_err()));
+                if !accepted && let Err(error) = &result {
+                    regressions.push(format!("classic={classic}: ignored record rejected visible rectangle: {error}"));
                     continue;
                 }
                 let placed = result.expect("CONTROL: valid mapped native placement succeeds");
