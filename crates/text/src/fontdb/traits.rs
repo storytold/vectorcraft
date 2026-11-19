@@ -433,9 +433,11 @@ impl FontMatch {
     }
 }
 
-/// The CSS generic font families (CSS Fonts Module Level 4), which SVG and HTML files name in place
-/// of a font and no font file provides; compared in any ASCII case ([`is_generic_family`]). The
-/// list leaves out `fangsong`, which is also the family name of a Chinese font (FangSong).
+/// The generic font family names that SVG and HTML files name in place of a font and no font file
+/// provides; compared in any ASCII case ([`is_generic_family`]). The names follow CSS Fonts Module
+/// Level 4, except `emoji`, which that module dropped and this list keeps. The list does not match
+/// the functional `generic(...)` forms, and it leaves out `fangsong`, which is also the family name
+/// of a Chinese font (FangSong).
 pub const GENERIC_FAMILIES: &[&str] = &[
     "serif",
     "sans-serif",
